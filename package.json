@@ -1,0 +1,26 @@
+{
+  "name": "myjs",
+  "version": "0.0.0",
+  "description": "An isomorphic, in-process MySQL for JavaScript — MySQL wire-protocol compatible, InnoDB-format aware, OPFS in the browser and the filesystem on Node. Currently research and design; see docs/.",
+  "type": "module",
+  "license": "MIT",
+  "private": true,
+  "engines": {
+    "node": ">=20"
+  },
+  "files": [
+    "docs"
+  ],
+  "scripts": {
+    "test": "node --test"
+  },
+  "keywords": [
+    "mysql",
+    "innodb",
+    "opfs",
+    "embedded",
+    "database",
+    "isomorphic",
+    "wire-protocol"
+  ]
+}

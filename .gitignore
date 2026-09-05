@@ -1,0 +1,9 @@
+# Reference source trees (cloned locally for research; never committed)
+reference/
+node_modules/
+dist/
+coverage/
+*.log
+.DS_Store
+.tmp/
+scratch/
