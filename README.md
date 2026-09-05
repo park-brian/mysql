@@ -81,8 +81,12 @@ copied into this repository — MySQL is GPLv2 and this project is MIT.
 
 ## Next
 
-[docs/44-roadmap.md](./docs/44-roadmap.md). The first milestone is the wire
-protocol: it is fully specified, it is the smallest thing that is independently
-useful (a MySQL protocol server toolkit for JavaScript does not currently
-exist), and it forces the right architectural boundary to exist before anything
-grows around it.
+[docs/44-roadmap.md](./docs/44-roadmap.md) — the living plan. It carries the
+milestones and their work items, the decision log, the open questions, and the
+compatibility scoreboard, and it is updated in the same commit as the work it
+describes. Its status table is the fastest way to see where the project is.
+
+The first milestone is the wire protocol: it is fully specified, it is the
+smallest thing that is independently useful (a MySQL protocol server toolkit for
+JavaScript does not currently exist), and it forces the right architectural
+boundary to exist before anything grows around it.

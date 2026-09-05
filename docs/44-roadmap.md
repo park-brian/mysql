@@ -4,124 +4,499 @@ Ordered by dependency, not by excitement. Each milestone ends with something
 demonstrable, because a database project that cannot be demonstrated for six
 months is a database project that gets abandoned.
 
+**This file is the living plan.** Docs 00–43 say what the formats are and why we
+chose this shape; this one says what we are doing about it, what we have
+decided, what we have finished, and what we still do not know. It is edited in
+the same commit as the work it describes. If you want to know the state of the
+project, read this file and nothing else.
+
+---
+
+## How to use this document
+
+**Status glyphs.** `☐` not started · `◐` in progress · `☑` done · `⊘` deferred
+or out of scope.
+
+**Work items are append-only.** `M4.7` means `M4.7` forever. If an item turns
+out to be wrong, mark it `⊘` with a reason and add a new one; never renumber,
+because commit messages and issue titles reference these ids.
+
+**Decisions are superseded, never edited.** A `D-NN` row is a historical record.
+Changing your mind means adding `D-NN+1` and filling in the `Supersedes` column.
+The reasoning that was wrong is as useful as the reasoning that was right.
+
+**The scoreboard moves in the same commit as the code.** A compatibility claim
+that is updated by hand, occasionally, is marketing. One that CI writes is an
+engineering artefact (doc 43 §8).
+
+**Open questions are pinned to the milestone that must resolve them.** A `Q-NN`
+with no milestone is a note; with a milestone it is a blocker with a deadline.
+
+---
+
+## Status at a glance
+
+| | Milestone | Theme | Done | Status |
+|---|---|---|---|---|
+| **M0** | [Foundations](#m0--foundations) | bytes, VFS interface, CI | 0 / 10 | ☐ |
+| **M1** | [Speak the protocol](#m1--speak-the-protocol) | the whole client ecosystem, for a few thousand lines | 0 / 24 | ☐ |
+| **M2** | [Types and collations](#m2--types-and-collations) | the part everyone else gets wrong | 0 / 15 | ☐ |
+| **M3** | [Parse SQL](#m3--parse-sql) | lexer, parser, AST | 0 / 10 | ☐ |
+| **M4** | [The storage engine](#m4--the-storage-engine) | pages, B+tree, WAL, MVCC | 0 / 25 | ☐ |
+| **M5** | [Execute](#m5--execute) | operators, planner, functions | 0 / 16 | ☐ |
+| **M6** | [The browser](#m6--the-browser) | OPFS, workers, leader election | 0 / 10 | ☐ |
+| **M7** | [InnoDB interchange](#m7--innodb-interchange) | read and write real `.ibd` | 0 / 13 | ☐ |
+| **M8** | [Beyond](#m8--beyond) | as demand arrives | 0 / 10 | ☐ |
+| | | **Total** | **0 / 133** | |
+
+---
+
+## Decision log
+
+Append-only. These are lifted out of the design docs so that "what did we decide
+about page size" is one lookup rather than a re-read of eleven documents. The
+`Docs` column is where the argument lives; this table records only the
+conclusion.
+
+| # | Date | Decision | Why | Docs | Supersedes |
+|---|---|---|---|---|---|
+| D-01 | 2026-09-05 | **Author TypeScript; run it with Node's type stripping.** No build step for tests. Only erasable syntax: no `enum`, no `namespace`, no parameter properties, no decorators — enforced by `erasableSyntaxOnly` + `verbatimModuleSyntax`. `tsc --emitDeclarationOnly` produces `.d.ts` for publishing; a bundler produces the browser artefact. `engines.node` becomes `>=22.18`. | Byte-level codecs and a type system are exactly the code that benefits most from types, and type stripping buys that without a build step between "edit" and `node --test`. | — | — |
+| D-02 | 2026-09-05 | **npm workspaces monorepo from the first commit**, `packages/*` exactly as doc 03's table. | The boundaries in doc 03 are load-bearing. Enforcing them later means discovering they were violated. `@myjs/protocol` and `@myjs/innodb` are independently useful and should be independently publishable. | [03](./03-architecture.md) | — |
+| D-03 | 2026-09-05 | **This file is the single roadmap.** No second planning document. | Two roadmaps drift; the stale one is always the one someone reads. | — | — |
+| D-04 | 2026-09-05 | **Granularity is milestone → work item → acceptance assertion.** Every item names its docs, its dependencies, and one falsifiable "done when". | "Implement MVCC" is not a task. An item you can finish in a sitting and prove you finished is. | — | — |
+| D-05 | — | **The wire protocol is the primary compatibility contract**, ahead of SQL semantics, ahead of file format. | It is small, fully specified, and it buys the entire driver and ORM ecosystem at once — and those drivers then become the conformance suite. | [00](./00-goals-and-scope.md), [02](./02-strategy.md) | — |
+| D-06 | — | **Reimplement in JavaScript; do not port MySQL to WASM.** | No single-user mode; InnoDB starts ~20 mandatory threads; the build pulls in ICU/OpenSSL/protobuf/Boost; and MySQL is GPLv2, which would infect every consumer. | [02](./02-strategy.md) | — |
+| D-07 | — | **Native storage is our own format. InnoDB is interchange, not our on-disk format.** We read and write single `.ibd` + `.cfg` tablespaces; we never attempt to write a whole datadir. | Transportable tablespaces are the boundary MySQL itself documents and supports. A whole datadir means a version-specific internal data dictionary and redo log — a compatibility surface MySQL does not promise even to itself. | [02](./02-strategy.md), [27](./27-data-dictionary.md) | — |
+| D-08 | — | **Single writer, many concurrent readers.** No lock manager, no deadlock detection, no lock escalation, no two-phase locking. | OPFS sync access handles are exclusive and `readwrite-unsafe` is Chrome-only, so a multi-writer browser design is unshippable. It also matches the deployment — one app, one database — and removes the bug class where database engines actually go wrong. | [41](./41-durability-and-concurrency.md) | — |
+| D-09 | — | **Still report `ER_LOCK_DEADLOCK` (1213/40001), `ER_LOCK_WAIT_TIMEOUT` (1205), `ER_DUP_ENTRY` (1062/23000)** even though there is no lock manager. | ORMs and application retry loops are keyed to these numbers. Reporting them means existing recovery logic works. | [41](./41-durability-and-concurrency.md), [25](./25-mvcc-and-undo.md) | — |
+| D-10 | — | **Target MySQL 8.0/8.4 behaviour**, default collation `utf8mb4_0900_ai_ci`. Advertise `8.4.0-myjs`; never a MariaDB-shaped version string; set `CLIENT_LONG_PASSWORD` and zero the reserved bytes so MariaDB-aware clients do not read extended capabilities out of them. | Clients sniff the version string and branch on it. | [00](./00-goals-and-scope.md), [12](./12-connection-phase.md) | — |
+| D-11 | — | **`caching_sha2_password` is the default plugin; `mysql_native_password` is supported.** In-process connections are treated as already secure, so the full path degenerates to compare-and-go — no RSA, no key management. The RSA branch exists only for the Node TCP listener. Never implement `mysql_old_password`. | Auth is not the security boundary for an embedded database; it exists so that drivers work. Treating in-process as secure removes a whole dependency without weakening anything real. | [13](./13-authentication.md) | — |
+| D-12 | — | **Never advertise `CLIENT_COMPRESS` or `CLIENT_SSL` in-process.** zstd never in-process or in the browser; zlib optional on the Node TCP listener. In the browser, `wss://` provides transport security and the connection is simply reported as secure to the auth layer. | It costs CPU to compress a `memcpy`. | [17](./17-protocol-extras.md) | — |
+| D-13 | — | **`CLIENT_MULTI_STATEMENTS` is honoured when negotiated but gated behind an engine-level switch defaulting off.** | It turns a SQL-injection point into arbitrary statement execution. | [14](./14-command-phase.md) | — |
+| D-14 | — | **The error table is generated from `share/messages_to_clients.txt`**, not transcribed by hand. | ~1,200 codes with SQLSTATEs. Transcription is how you get 1451 and 1452 the wrong way round. | [14](./14-command-phase.md) | — |
+| D-15 | — | **JS type mapping matches `mysql2` exactly**: DECIMAL and TIME as strings, BLOB/BINARY as `Uint8Array`, BIGINT as number-if-safe else `BigInt`, JSON parsed, zero dates as `null` unless `dateStrings`. | Swapping a real connection for ours must change nothing in the application. | [15](./15-wire-types.md) | — |
+| D-16 | — | **Keep InnoDB's 16 KiB page size, but use 4 KiB WAL blocks** (not InnoDB's 512 B). | 16 KiB gives a one-to-one mapping for imported pages and three tree levels over a billion rows. 512-byte log blocks would be 8× the header overhead for no atomicity benefit on any storage we target. | [21](./21-innodb-file-layout.md), [26](./26-redo-and-recovery.md) | — |
+| D-17 | — | **CRC32 for reading InnoDB pages (accepting the legacy variants); CRC32C for our own WAL blocks.** A block that does not verify did not happen. | InnoDB has used CRC32 since 5.6 and it is the only variant worth writing. Our WAL must be self-verifying because OPFS `flush()` is best-effort. | [21](./21-innodb-file-layout.md), [26](./26-redo-and-recovery.md), [40](./40-vfs.md) | — |
+| D-18 | — | **Full-page images in the WAL after each checkpoint, instead of a doublewrite file.** Plus two alternating superblocks, a monotonic LSN per block, and LSN at head *and* tail of every data page. | Our WAL is already sequential and already being flushed; a second file buys nothing. These four properties together degrade "best-effort flush" from "the database may be corrupt" to "we may lose the last few commits", which is a guarantee we can state honestly. | [26](./26-redo-and-recovery.md), [41](./41-durability-and-concurrency.md) | — |
+| D-19 | — | **Bitmap allocator, not InnoDB's on-disk linked lists. Dense page directory, not InnoDB's sparse 4-to-8-owned design. No change buffer.** | The linked lists and the sparse directory are 1990s optimisations for storage we do not target. A dense `Uint16Array` directory is a pure binary search with no linear tail. | [21](./21-innodb-file-layout.md), [22](./22-innodb-page-formats.md) | — |
+| D-20 | — | **Implement COMPACT and DYNAMIC; REDUNDANT read-only for old imports; COMPRESSED never.** Our own records adopt DYNAMIC's atomic-BLOB semantics — a large value is a pointer, with no local prefix. | COMPACT and DYNAMIC cover every MySQL 5.7+ table. Whole-page compression at the VFS layer is the better answer to COMPRESSED (see Q-08). | [23](./23-innodb-row-formats.md) | — |
+| D-21 | — | **Do not build instant DDL into the record format.** Use a page-level schema version instead, so a page stays independently decodable. | InnoDB's per-record version byte makes the null bitmap's *size* version-dependent, which couples every record decode to the dictionary. | [23](./23-innodb-row-formats.md) | — |
+| D-22 | — | **Adopt MySQL's binary JSON and every doc-24 column encoding byte-for-byte, even inside our own format.** | They are shared with binlog row images and with `.ibd` files, so one codec serves the engine, the importer and the change stream. Binlog and `.ibd` compatibility come free. | [24](./24-column-encodings.md), [28](./28-json-binary.md) | — |
+| D-23 | — | **Generate MySQL's own collation weight tables; reject `Intl.Collator` as the primary source** (fallback only, with a loud warning). | `Intl.Collator` does not implement MySQL's tailorings, gives no sort key, and its semantics move with the JS engine version — which would make stored index bytes engine-version-dependent. | [29](./29-charsets-and-collations.md) | — |
+| D-24 | — | **Storage engines in scope: `native`, `memory`, `innodb-ro`, `csv`.** MyISAM read-only and later; ARCHIVE skipped; BLACKHOLE/FEDERATED/NDB/MERGE out. | An embedded database does not need an engine zoo; it needs enough import formats. | [30](./30-other-engines.md) | — |
+| D-25 | — | **The WAL record format must carry logical before/after row images from its first version.** This is a blocking decision inside M4, not a note (M4.13). | Change streams and live queries (M8) are a projection of the WAL. Retrofitting logical information onto a purely physical log is painful, and doc 26 says to decide it *now*. | [18](./18-binlog.md), [26](./26-redo-and-recovery.md) | — |
+| D-26 | — | **The catalog format is explicitly versioned, with a documented migration per change**, from its first commit (M4.23). | Same reason SQLite publishes a file format document. A store whose format is undocumented cannot be migrated, only abandoned. | [27](./27-data-dictionary.md) | — |
+
+---
+
+## Ground rules
+
+These apply to every milestone. No item below repeats them.
+
+1. **`Uint8Array` and `DataView` only above the VFS.** No `Buffer`, no `node:*`.
+   This is what "isomorphic" actually costs, and it is cheap if enforced from
+   the first commit — so it is enforced by a lint rule, not by good intentions.
+2. **Bytes in, bytes out, at every layer boundary.** Wire packets, page images,
+   index keys, undo records. No hidden object graphs crossing layers, so every
+   layer can be fuzzed and snapshot-tested.
+3. **Async at the edges, sync in the core.** OPFS sync access handles and Node's
+   `readSync` are both synchronous. No `await` inside a page split.
+4. **Every format constant cites its header.** A comment naming the MySQL header
+   it came from, so it can be re-verified against a newer tree.
+5. **Typed errors, always.** A malformed input produces a typed error — never a
+   crash, never a hang, never an out-of-bounds read. This is the fuzzing
+   invariant and it applies to every parser we write.
+6. **The memory VFS is the reference implementation.** Every unit test runs
+   against it. If a bug reproduces only on OPFS, the VFS is at fault, not the
+   engine.
+7. **Nothing from `reference/` is copied into this repository.** MySQL is
+   GPLv2, this project is MIT. `mysql-test` is fetched in CI, never vendored.
+
+---
+
+## Repository layout
+
+Per D-02. The `Since` column is the milestone that creates the package.
+
+| Package | Responsibility | Depends on | Publishable alone | Since |
+|---|---|---|---|---|
+| `@myjs/bytes` | Cursor/writer over `Uint8Array`; LE/BE ints, varints, length-encoded values | — | yes | M0 |
+| `@myjs/vfs` | The one storage interface + memory / Node / OPFS backends | — | yes | M0 |
+| `@myjs/protocol` | Packet framing, every packet type both directions, auth plugins | `bytes`, crypto shim | **yes — the M1 release** | M1 |
+| `@myjs/charsets` | Charset ids, encoders/decoders, collation key transforms | — | yes | M2 |
+| `@myjs/types` | Value model, coercion, comparison, index key encoding | `charsets` | yes | M2 |
+| `@myjs/parser` | Lexer + parser → AST; `sql_mode`-aware | — | yes | M3 |
+| `@myjs/engine` | Pages, B+tree, MVCC, WAL, recovery, catalog | `vfs`, `types` | no | M4 |
+| `@myjs/core` | Wires it together; the `MySQL` class | all of the above | no (this is `myjs`) | M1 |
+| `@myjs/server` | Node TCP server, WebSocket bridge, worker host | `core`, `protocol` | yes | M1 |
+| `@myjs/innodb` | Real `.ibd` and SDI codec — import/export only | `bytes`, `types` | **yes** | M7 |
+
+`@myjs/innodb` deliberately does not sit under `@myjs/engine`. It is a codec,
+not a storage backend: someone should be able to install it purely to parse a
+tablespace they found on a dead server.
+
+Tests live in the tree doc 43 specifies:
+
+```
+test/
+  unit/          per-module, memory VFS, fast
+  protocol/      trace replay + real client integration
+  format/        golden vectors, property tests, real .ibd files
+  mysqltest/     the .test interpreter and the curated allowlist
+  differential/  against a real mysqld in Docker
+  crash/         fault injection
+  browser/       Playwright, real OPFS
+  bench/         performance regression
+```
+
+`npm test` runs unit, protocol, format and mysqltest — everything needing no
+Docker and no browser — and stays under a minute. The rest runs in CI.
+
+---
+
 ## M0 — Foundations
 
 *Nothing works yet, but everything after this is easy.*
 
-- `@myjs/bytes` — reader/writer, all integer widths, length-encoded values,
-  bounds checking. Fuzzed from day one.
-- `@myjs/vfs` — the interface plus the **memory** backend.
-- Repository shape: ESM, `type: module`, no `Buffer`, no `node:*` above the VFS.
-- CI: unit tests, lint, bundle-size budget.
-
-**Done when**: property tests round-trip every protocol primitive, and the
+**Exit criterion.** Property tests round-trip every protocol primitive, and the
 bundle-size gate is enforcing a real number.
+
+| # | Work item | Pkg | Docs | Deps | St | Done when |
+|---|---|---|---|---|---|---|
+| M0.1 | Workspace scaffolding: npm workspaces, `packages/*`, root `tsconfig` with `erasableSyntaxOnly` + `verbatimModuleSyntax`, `engines.node >=22.18` | — | D-01, D-02 | — | ☐ | `node --test` runs a `.ts` test file with no build step |
+| M0.2 | Lint gate: no `Buffer` or `node:*` outside `packages/vfs`; no non-erasable TS syntax | — | [03](./03-architecture.md) | M0.1 | ☐ | a deliberate `node:buffer` import in `packages/types` fails CI |
+| M0.3 | `Reader` — the contract written out in doc 11: all widths, `u24`/`u48`, `u64 → BigInt`, lenenc int and bytes, NUL and EOF strings | bytes | [11](./11-protocol-primitives.md) | M0.1 | ☐ | every read bounds-checks against `remaining`; `0xFB` returns `null`, never `251` |
+| M0.4 | `Writer` — geometric growth, reserves the 4-byte packet header, canonical shortest lenenc | bytes | [11](./11-protocol-primitives.md) | M0.3 | ☐ | `lenEnc(250)` is 1 byte, `lenEnc(251)` is 3 — required for byte-exact trace comparison |
+| M0.5 | `ProtocolError` and the typed-error base | bytes | [11](./11-protocol-primitives.md) | — | ☐ | no path in `bytes` throws a bare `Error` |
+| M0.6 | Bitmap helpers with the offset parameter | bytes | [11](./11-protocol-primitives.md) | M0.3 | ☐ | offset 2 and offset 0 both round-trip; the asymmetry is a test, not a comment |
+| M0.7 | Property tests: round-trip every primitive | bytes | [43 §4](./43-testing.md) | M0.3, M0.4 | ☐ | `fast-check` covers all int widths, lenenc, and all four string forms |
+| M0.8 | Fuzz target: arbitrary bytes into `Reader` | bytes | [43 §6](./43-testing.md) | M0.3 | ☐ | 10⁶ random inputs, zero crashes and hangs, only `ProtocolError` |
+| M0.9 | `Vfs` / `VfsFile` interfaces from doc 40, with erratum E-02 applied | vfs | [40](./40-vfs.md) | M0.1 | ☐ | `durability` lives on `Vfs`; a conformance suite exists that any backend must pass |
+| M0.10 | Memory VFS — the reference backend — plus CI: unit tests, lint, bundle-size budget | vfs | [40](./40-vfs.md), [43 §7](./43-testing.md) | M0.9 | ☐ | memory passes the conformance suite; the size gate fails a commit that exceeds the committed number |
+
+---
 
 ## M1 — Speak the protocol
 
 *The most valuable milestone per unit of effort. Do it first.*
 
-- Packet framing: the 4-byte header, sequence ids, >16 MiB splitting.
-- Connection phase: `HandshakeV10`, `HandshakeResponse41`, capability
-  negotiation.
-- Auth: `mysql_native_password` and `caching_sha2_password` (fast path plus the
-  "already secure" full path).
-- Command phase: `COM_QUERY`, `COM_PING`, `COM_QUIT`, `COM_INIT_DB`,
-  `COM_STMT_*`, `COM_RESET_CONNECTION`.
-- OK / ERR / EOF, text and binary resultsets, column definitions.
-- `execProtocol()`, `createStream()`, and a Node TCP `serve()`.
-- Behind it: a stub executor that answers a fixed set of queries.
+This milestone alone is a genuinely useful artefact — a MySQL protocol server
+toolkit for JavaScript, which does not currently exist as a standalone package.
+It ships as `@myjs/protocol` 0.1 (see [Release plan](#release-plan)).
 
-**Done when**: `mysql -h 127.0.0.1` connects, authenticates with
+**Exit criterion.** `mysql -h 127.0.0.1` connects, authenticates with
 `caching_sha2_password`, runs `SELECT 1`, and quits cleanly; and `mysql2`'s
 connection tests pass against the stub.
 
-This milestone alone is a genuinely useful artefact — a MySQL protocol server
-toolkit for JavaScript, which does not currently exist as a standalone package.
+| # | Work item | Pkg | Docs | Deps | St | Done when |
+|---|---|---|---|---|---|---|
+| M1.1 | Packet framer: 4-byte header, >16 MiB reassembly, `max_allowed_packet` enforced *during* reassembly | protocol | [10](./10-protocol-overview.md), [17](./17-protocol-extras.md) | M0.4 | ☐ | a 16777215-byte payload emits `ff ff ff n` **plus an empty packet**, and decodes back |
+| M1.2 | Sequence ids owned by the framer: reset per command, continuous through the connection phase | protocol | [10](./10-protocol-overview.md) | M1.1 | ☐ | a mismatch raises `ER_NET_PACKETS_OUT_OF_ORDER`, and the counter is not visible to packet types |
+| M1.3 | Capability constants; the negotiated set as one immutable value | protocol | [12](./12-connection-phase.md) | — | ☐ | every reader and writer takes it as a parameter; none reads mutable session state |
+| M1.4 | Response discriminator resolved by **length**, not by byte value | protocol | [10](./10-protocol-overview.md) | M1.3 | ☐ | a `0xFE` payload of ≥9 bytes parses as a lenenc integer, not as EOF |
+| M1.5 | OK / ERR / EOF writers, capability-conditional, including the OK-as-EOF form | protocol | [10](./10-protocol-overview.md) | M1.3 | ☐ | the minimal OK is byte-identical to `07 00 00 02 00 00 00 02 00 00 00` |
+| M1.6 | Error table generated from `share/messages_to_clients.txt` (D-14) | protocol | [14](./14-command-phase.md) | — | ☐ | 1062 → `ER_DUP_ENTRY`/`23000`; the generator is re-runnable and its source hash is checked in |
+| M1.7 | Crypto shim: `getRandomValues`, SHA-1, SHA-256, constant-time compare, RSA-OAEP-SHA1 | protocol | [13](./13-authentication.md) | — | ☐ | one module, identical API on Node and in the browser; nothing above it imports `node:crypto` |
+| M1.8 | `HandshakeV10` writer; 20-byte scramble split 8 + 12 with a trailing NUL | protocol | [12](./12-connection-phase.md) | M1.5, M1.7 | ☐ | `mysql2` parses it; `CLIENT_LONG_PASSWORD` set and reserved bytes zeroed (D-10) |
+| M1.9 | `SSLRequest` and `HandshakeResponse41` parsers; connection attributes with size and count caps | protocol | [12](./12-connection-phase.md) | M1.3 | ☐ | oversized attributes are rejected before authentication — this is unauthenticated input |
+| M1.10 | Auth framing: `AuthSwitchRequest`, `AuthSwitchResponse`, `AuthMoreData`, `AuthNextFactor` | protocol | [13](./13-authentication.md) | M1.8 | ☐ | `AuthNextFactor` produces a clear error rather than a hang |
+| M1.11 | `mysql_native_password` verification | protocol | [13](./13-authentication.md) | M1.10 | ☐ | the empty-password zero-length-response case is handled on both sides |
+| M1.12 | `caching_sha2_password` fast path | protocol | [13](./13-authentication.md) | M1.10 | ☐ | `0x03` is sent as its **own packet before** the OK; a client expecting OK immediately would desync, and does not |
+| M1.13 | `caching_sha2_password` full path, secure-channel branch (D-11) | protocol | [13](./13-authentication.md) | M1.12 | ☐ | in-process connections take this branch and never touch RSA |
+| M1.14 | `caching_sha2_password` RSA branch, TCP listener only | protocol, server | [13](./13-authentication.md) | M1.13 | ☐ | the `mysql` CLI authenticates over TCP against a fresh, uncached account |
+| M1.15 | Uniform access-denied (`1045`/`28000`) and failure rate-limiting on the TCP path | protocol | [13](./13-authentication.md) | M1.11 | ☐ | unknown user and wrong password are indistinguishable in timing and in bytes |
+| M1.16 | `COM_*` dispatcher; `COM_PING` implemented first; unknown → `ER_UNKNOWN_COM_ERROR`/`08S01` | protocol | [14](./14-command-phase.md) | M1.5 | ☐ | a pool's ping loop runs 10 000 times without desynchronising |
+| M1.17 | No-response commands: `COM_STMT_SEND_LONG_DATA`, `COM_STMT_CLOSE`, `COM_QUIT` | protocol | [14](./14-command-phase.md), [16](./16-prepared-statements.md) | M1.16 | ☐ | nothing is written, not even on error — a reply desynchronises every client |
+| M1.18 | The command-phase quirks: `COM_FIELD_LIST` (no column-count prefix), `COM_SET_OPTION` (EOF-shaped), `COM_STATISTICS` (bare `string<EOF>`) | protocol | [14](./14-command-phase.md) | M1.16 | ☐ | each matches a captured trace from a real server |
+| M1.19 | `ColumnDefinition41` writer | protocol | [15](./15-wire-types.md) | M1.3 | ☐ | `VARCHAR(255)` utf8mb4 reports `column_length` 1020; charset 63 distinguishes BLOB from TEXT |
+| M1.20 | Text resultset writer and text value renderers | protocol | [14](./14-command-phase.md), [15](./15-wire-types.md) | M1.19 | ☐ | DECIMAL keeps trailing zeros to scale; multi-resultset sets `SERVER_MORE_RESULTS_EXISTS` on every terminator but the last |
+| M1.21 | Binary resultset writer and binary value codecs; null bitmap at **offset 2** | protocol | [15](./15-wire-types.md) | M1.19 | ☐ | doc 15's temporal byte dumps encode and decode exactly, shortest form on write; `INT24` occupies 4 bytes |
+| M1.22 | `COM_QUERY` and `COM_STMT_EXECUTE` parsers with query attributes; null bitmap at **offset 0** | protocol | [14](./14-command-phase.md), [16](./16-prepared-statements.md) | M1.21 | ☐ | doc 16's worked `COM_STMT_EXECUTE` example parses to the parameters it documents |
+| M1.23 | `COM_STMT_*` and the `PreparedStatement` state class: sticky bound types, long-data merge, cursors with a timeout, `max_prepared_stmt_count` 16382 | protocol | [16](./16-prepared-statements.md) | M1.22 | ☐ | `new_params_bind_flag === 0` works against a client that never sets it; an abandoned cursor is reclaimed |
+| M1.24 | `execProtocol()`, `createStream()`, `createPort()`, `serve()`, and a stub executor | core, server | [03](./03-architecture.md), [42](./42-public-api.md) | M1.20 | ☐ | `mysql2.createConnection({ stream: db.createStream() })` completes a full session unpatched; `serve()` refuses a non-loopback bind without a configured password |
+
+Trace-replay fixtures (doc 43 §3) are built alongside M1.12 and are the
+acceptance mechanism for M1.1–M1.23, not a separate item: an item is not done
+until its trace replays byte-identically.
+
+---
 
 ## M2 — Types and collations
 
-- `@myjs/types`: the value model, all storage encodings from doc 24, key
-  encoding, coercion and comparison rules.
-- `@myjs/charsets`: `binary`, `utf8mb4_bin`, `utf8mb4_general_ci`,
-  `latin1_swedish_ci`; the generator script for the rest.
-- `DECIMAL`, the temporal family, `ENUM`/`SET`, `BIT`, binary `JSON` (doc 28).
+*Where most "MySQL-compatible" projects quietly fail.* Collation is not a
+display concern — it determines index order, `ORDER BY` results, `=` semantics
+and unique-constraint violations.
 
-**Done when**: the `memcmp`-ordering property test passes for every type, and
-the golden vectors from MySQL's own source comments all decode correctly.
+**Exit criterion.** The `memcmp`-ordering property test passes for every type,
+and the golden vectors from MySQL's own source comments all decode correctly.
+
+| # | Work item | Pkg | Docs | Deps | St | Done when |
+|---|---|---|---|---|---|---|
+| M2.1 | Collation registry and the `Collation` interface (`sortKey`, `compare`, `padAttribute`) | charsets | [29](./29-charsets-and-collations.md) | M0.1 | ☐ | ids 8, 33, 45, 46, 63, 224, 246, 255, 278 resolve to a collation or a typed "unsupported" |
+| M2.2 | `binary` (63) and `utf8mb4_bin` (46) — pure `memcmp` | charsets | [29](./29-charsets-and-collations.md) | M2.1 | ☐ | enough to build and test the entire B+tree; ordering equals `memcmp` on arbitrary bytes |
+| M2.3 | Charset encode/decode over `TextEncoder`/`TextDecoder`; MySQL name → WHATWG label | charsets | [29](./29-charsets-and-collations.md) | M2.1 | ☐ | `latin1` maps to `windows-1252`, so `0x80` decodes to `€` |
+| M2.4 | `mbminlen`/`mbmaxlen` table and the limits it drives | charsets | [29](./29-charsets-and-collations.md) | M2.1 | ☐ | `VARCHAR(16383)` is the utf8mb4 row-limit boundary; `KEY (col(255))` budgets 1020 bytes |
+| M2.5 | Weight-table generator: re-runnable, source hash checked in | charsets | [29](./29-charsets-and-collations.md) | M2.1 | ☐ | re-running against the pinned MySQL tree reproduces the committed tables bit for bit |
+| M2.6 | `utf8mb4_general_ci` and `latin1_swedish_ci` (PAD SPACE) | charsets | [29](./29-charsets-and-collations.md) | M2.5 | ☐ | `'ä' = 'a'` and `'ß' ≠ 'ss'`; `'a' = 'a '` is true |
+| M2.7 | `utf8mb4_0900_ai_ci` (UCA 9.0.0, NO PAD), lazily loaded | charsets | [29](./29-charsets-and-collations.md) | M2.5 | ☐ | `'a' = 'a '` is false; a differential `ORDER BY` against a real 8.4 matches row for row |
+| M2.8 | Integer transform: big-endian, sign bit flipped unless unsigned | types | [24](./24-column-encodings.md) | M0.3 | ☐ | doc 24's four worked `INT` lines reproduce byte for byte |
+| M2.9 | FLOAT and DOUBLE: little-endian IEEE-754, compared **numerically** | types | [24](./24-column-encodings.md) | M2.8 | ☐ | the ordering property test knows these are the exception and does not assert `memcmp` |
+| M2.10 | `decimal2bin` | types | [24](./24-column-encodings.md) | M2.8 | ☐ | `DECIMAL(14,4) 1234567890.1234 → 81 0D FB 38 D2 04 D2`, and its negative |
+| M2.11 | Temporal family: DATETIME2, TIMESTAMP2, TIME2, DATE, YEAR, plus the legacy decoders | types | [24](./24-column-encodings.md) | M2.8 | ☐ | `DATETIMEF_INT_OFS` and `year*13 + month` are right; all fractional widths round-trip |
+| M2.12 | ENUM and SET (forced unsigned, **no** sign flip), BIT, CHAR/VARCHAR/BINARY padding | types | [24](./24-column-encodings.md) | M2.8 | ☐ | ENUM indexes are 1-based; `CHAR` latin1 space-pads, `BINARY` zero-pads |
+| M2.13 | Binary JSON codec | types | [28](./28-json-binary.md) | M2.12 | ☐ | small/large switches per container; key order is length-then-bytes; `custom-data` reaches back into `decode` |
+| M2.14 | Index key encoding: NULL flag byte, prefix keys, collation sort keys | types | [24](./24-column-encodings.md) | M2.12, M2.2 | ☐ | the memcmp-ordering property holds for every non-float type |
+| M2.15 | Golden-vector and property suite | test | [43 §4](./43-testing.md) | all | ☐ | every byte dump quoted anywhere in docs 15, 24 and 28 is a test case |
+
+---
 
 ## M3 — Parse SQL
 
-- Lexer (charset-aware, `sql_mode`-aware for `ANSI_QUOTES` and
-  `NO_BACKSLASH_ESCAPES`) and parser → AST.
-- Coverage: `SELECT` with joins, subqueries, `GROUP BY`, `ORDER BY`, `LIMIT`;
-  `INSERT`/`UPDATE`/`DELETE`/`REPLACE`; `CREATE`/`ALTER`/`DROP TABLE`, indexes,
-  views; `SET`, `USE`, `SHOW`, `EXPLAIN`; transaction control.
-- Accept and store — but do not yet execute — routines, triggers, events.
+**Exit criterion.** Every `CREATE TABLE` in MySQL's own test suite parses.
 
-**Done when**: every `CREATE TABLE` in MySQL's own test suite parses.
+| # | Work item | Pkg | Docs | Deps | St | Done when |
+|---|---|---|---|---|---|---|
+| M3.1 | Lexer: charset-aware, `ANSI_QUOTES`, `NO_BACKSLASH_ESCAPES` | parser | [29](./29-charsets-and-collations.md) | M2.3 | ☐ | a `gbk` or `sjis` lead byte cannot swallow a backslash to escape a quote |
+| M3.2 | Expression parser: MySQL precedence, operators, literals, `?` placeholders | parser | — | M3.1 | ☐ | precedence matches a real server across a generated expression corpus |
+| M3.3 | `SELECT`: joins, subqueries, CTEs, `GROUP BY`/`HAVING`, `ORDER BY`, `LIMIT`, window functions | parser | — | M3.2 | ☐ | round-trips through a deparser to semantically equivalent SQL |
+| M3.4 | `INSERT` (incl. `ON DUPLICATE KEY UPDATE`), `UPDATE`, `DELETE`, `REPLACE` | parser | — | M3.2 | ☐ | multi-row and `SELECT`-sourced forms included |
+| M3.5 | `CREATE`/`ALTER`/`DROP` for tables, indexes and views; column types with charset and collation | parser | [29](./29-charsets-and-collations.md) | M3.2 | ☐ | the milestone exit criterion |
+| M3.6 | `SET`, `USE`, `SHOW`, `EXPLAIN`, transaction control | parser | [14](./14-command-phase.md) | M3.2 | ☐ | `SET NAMES` and `SET sql_mode` reach the session |
+| M3.7 | `sql_mode` threaded through lexer and parser | parser | — | M3.1 | ☐ | the same text parses differently under `ANSI_QUOTES`, proven by test |
+| M3.8 | Accept and store — do not execute — routines, triggers, events | parser | [00](./00-goals-and-scope.md) | M3.6 | ☐ | `CREATE PROCEDURE` stores; `CALL` errors with a clear "not yet supported" |
+| M3.9 | Parse errors as `ER_PARSE_ERROR` (1064/42000) with position | parser | [14](./14-command-phase.md) | M3.2 | ☐ | message shape matches MySQL's "near '…' at line N" |
+| M3.10 | Parser fuzz target | test | [43 §6](./43-testing.md) | M3.3 | ☐ | arbitrary strings never crash, hang, or read out of bounds |
+
+---
 
 ## M4 — The storage engine
 
-*The big one.*
+*The big one.* Ordered in six tiers rather than as one list, because the
+dependency structure is real: records need pages, the tree needs records, the
+WAL wraps the tree, and MVCC needs all three.
 
-- Page format, buffer pool with the young/old LRU split.
-- B+tree: search, insert, delete, split, merge; clustered and secondary indexes.
-- Record encoding (doc 23's design, our variant).
-- WAL: block format, CRC32C, LSNs, mini-transaction grouping, full-page images.
-- Recovery: forward scan, idempotent apply, undo-based rollback.
-- MVCC: `DB_TRX_ID`/`DB_ROLL_PTR`, undo records, read views, purge.
-- The catalog as system tables plus a bootstrap descriptor (doc 27).
-
-**Done when**: the fault-injection suite runs 10,000 crash points with zero
+**Exit criterion.** The fault-injection suite runs 10,000 crash points with zero
 inconsistencies and zero lost acknowledged commits.
+
+### Tier 1 — page frame and buffer pool
+
+| # | Work item | Pkg | Docs | Deps | St | Done when |
+|---|---|---|---|---|---|---|
+| M4.1 | CRC32C, table-driven (see E-01) | engine | [26](./26-redo-and-recovery.md) | M0.1 | ☐ | matches the RFC 3720 test vectors |
+| M4.2 | Page frame: 16 KiB, self-identifying header, LSN at head **and** tail | engine | [21](./21-innodb-file-layout.md), [41](./41-durability-and-concurrency.md) | M4.1 | ☐ | a torn page is detected without consulting the log |
+| M4.3 | Buffer pool: young/old LRU split over one `ArrayBuffer`; dirty list in LSN order; commit backpressure | engine | [41](./41-durability-and-concurrency.md) | M4.2 | ☐ | scanning 10× the pool does not evict the working set; commits block before dirty pages grow unbounded |
+
+### Tier 2 — records
+
+| # | Work item | Pkg | Docs | Deps | St | Done when |
+|---|---|---|---|---|---|---|
+| M4.4 | **Decision (not code):** design the page-level schema version that replaces instant DDL. Resolves Q-03; implements D-21 | engine | [22](./22-innodb-page-formats.md), [23](./23-innodb-row-formats.md) | M4.2 | ☐ | the page header reserves the field and the design is written back into doc 22 |
+| M4.5 | Record encoding: null bitmap plus a variable-length array storing **lengths, not offsets**; DYNAMIC atomic-BLOB semantics | engine | [23](./23-innodb-row-formats.md) | M4.4, M2.14 | ☐ | round-trip property over arbitrary generated schemas |
+| M4.6 | Overflow pages: a large value is a pointer, no local prefix | engine | [23](./23-innodb-row-formats.md) | M4.5 | ☐ | a 1 MB value round-trips and its pages are freed on delete |
+
+### Tier 3 — B+tree
+
+| # | Work item | Pkg | Docs | Deps | St | Done when |
+|---|---|---|---|---|---|---|
+| M4.7 | Dense page directory and binary search | engine | [22](./22-innodb-page-formats.md) | M4.5 | ☐ | lookup is pure binary search with no linear tail (D-19) |
+| M4.8 | B+tree search, insert, split; node pointers and the leftmost-record flag | engine | [22](./22-innodb-page-formats.md) | M4.7 | ☐ | descending the left spine of a four-level tree reaches the correct leaf |
+| M4.9 | Delete, merge, page reorganise, free-list reuse | engine | [22](./22-innodb-page-formats.md) | M4.8 | ☐ | a randomised insert/delete workload leaves no unreachable page |
+| M4.10 | The `PAGE_DIRECTION` split heuristic — 100/0 sequential, 50/50 random | engine | [22](./22-innodb-page-formats.md) | M4.8 | ☐ | sequential primary-key inserts fill pages ≥95%; random inserts do not |
+| M4.11 | Clustered and secondary indexes; secondary leaves carry the primary key | engine | [20](./20-storage-overview.md), [23](./23-innodb-row-formats.md) | M4.8 | ☐ | a non-covering secondary lookup costs exactly one extra descent, and the test proves it |
+| M4.12 | Extent-based bitmap allocator; separate leaf and internal segments | engine | [21](./21-innodb-file-layout.md) | M4.2 | ☐ | growth is extent-granular and freed extents are reused (D-19) |
+
+### Tier 4 — WAL and recovery
+
+| # | Work item | Pkg | Docs | Deps | St | Done when |
+|---|---|---|---|---|---|---|
+| M4.13 | **Decision (not code):** the WAL record format, carrying logical before/after row images. Implements D-25; blocks M8.1 | engine | [18](./18-binlog.md), [26](./26-redo-and-recovery.md) | — | ☐ | the record specification is written down and reviewed **before** M4.14 begins |
+| M4.14 | WAL block codec: 4 KiB, 20-byte header, CRC32C, monotonic LSN, first-record-group offset | engine | [26](./26-redo-and-recovery.md), [40](./40-vfs.md) | M4.13, M4.1 | ☐ | a mutated block fails verification and is treated as end-of-log; an LSN gap stops recovery there |
+| M4.15 | Mini-transaction grouping | engine | [26](./26-redo-and-recovery.md) | M4.14 | ☐ | a page split is never half-applied after a crash at any point inside it |
+| M4.16 | Full-page images after each checkpoint | engine | [26](./26-redo-and-recovery.md), [41](./41-durability-and-concurrency.md) | M4.15 | ☐ | a torn data page is reconstructed from the log alone, with no doublewrite file |
+| M4.17 | Two alternating superblocks and the fuzzy checkpointer | engine | [26](./26-redo-and-recovery.md), [41](./41-durability-and-concurrency.md) | M4.16 | ☐ | a crash at any point during a checkpoint still leaves one valid superblock |
+| M4.18 | Recovery: forward scan, idempotent LSN-guarded apply, undo-based rollback | engine | [26](./26-redo-and-recovery.md) | M4.17 | ☐ | injected faults at every write offset recover to a consistent state |
+| M4.19 | `flushLogAtTrxCommit` 0 / 1 / 2 | engine | [41](./41-durability-and-concurrency.md) | M4.17 | ☐ | at `1`, the crash suite loses no acknowledged commit; the guarantee text in doc 41 is true as written |
+
+### Tier 5 — MVCC
+
+| # | Work item | Pkg | Docs | Deps | St | Done when |
+|---|---|---|---|---|---|---|
+| M4.20 | `DB_TRX_ID` / `DB_ROLL_PTR`, differential undo records, version-chain walk | engine | [25](./25-mvcc-and-undo.md) | M4.5, M4.15 | ☐ | doc 25's roll-pointer bit layout round-trips; an older version rebuilds correctly |
+| M4.21 | Read views and `isVisible`; READ COMMITTED, REPEATABLE READ, and RR's "current read" rule; the `PAGE_MAX_TRX_ID` fast path | engine | [25](./25-mvcc-and-undo.md), [41](./41-durability-and-concurrency.md) | M4.20 | ☐ | doc 25's `isVisible` truth table holds for every combination; `SELECT … FOR UPDATE` sees the latest committed version under RR |
+| M4.22 | Purge, observable history length, maximum-transaction-age abort | engine | [25](./25-mvcc-and-undo.md), [41](./41-durability-and-concurrency.md) | M4.21 | ☐ | `db.stats()` reports history length; an over-age transaction is aborted rather than allowed to grow the store (resolves Q-09) |
+
+### Tier 6 — catalog and interface
+
+| # | Work item | Pkg | Docs | Deps | St | Done when |
+|---|---|---|---|---|---|---|
+| M4.23 | Catalog: `_myjs_*` system tables, a fixed-page bootstrap descriptor, a per-table JSON definition page, and an **explicit format version** (D-26) | engine | [27](./27-data-dictionary.md) | M4.21 | ☐ | opening a database written by an older catalog version either migrates it or refuses with a clear message — never silently misreads it |
+| M4.24 | The `StorageEngine` / `Table` interface from doc 30, plus the `native` and `memory` implementations | engine | [30](./30-other-engines.md) | M4.11 | ☐ | the executor cannot tell the two apart |
+| M4.25 | `FaultInjectingVfs` and the 10,000-crash-point suite | test | [43 §5](./43-testing.md) | M4.18 | ☐ | the milestone exit criterion |
+
+---
 
 ## M5 — Execute
 
-- Volcano-style operators: scan, index scan, filter, project, nested-loop join,
-  hash join, sort, aggregate, limit.
-- A cost-based-enough planner: index selection, join ordering for small joins,
-  predicate pushdown.
-- The function library, prioritised by what real applications use: string, math,
-  date/time, aggregate, `JSON_*`, `CASE`/`IF`/`COALESCE`.
-- `INFORMATION_SCHEMA`, `SHOW`, `EXPLAIN`.
+**Exit criterion.** Drizzle's and Prisma's MySQL test suites pass end to end.
 
-**Done when**: Drizzle's and Prisma's MySQL test suites pass end to end.
+| # | Work item | Pkg | Docs | Deps | St | Done when |
+|---|---|---|---|---|---|---|
+| M5.1 | Name resolution and type inference over the AST | core | [03](./03-architecture.md) | M3.3, M2.14 | ☐ | column references resolve through joins, subqueries and CTEs |
+| M5.2 | Coercion and comparison rules — MySQL's quirks, not SQL's ideals | types | [24](./24-column-encodings.md), [29](./29-charsets-and-collations.md) | M5.1 | ☐ | a differential run over an implicit-coercion corpus matches a real 8.4 |
+| M5.3 | Volcano operators: table scan, index scan, filter, project, limit | core | [03](./03-architecture.md) | M4.24 | ☐ | each operator is independently testable over a fixed row source |
+| M5.4 | Nested-loop and hash joins | core | — | M5.3 | ☐ | a three-table join returns MySQL's row order for the same plan |
+| M5.5 | Sort (spilling when large), aggregate, `GROUP BY`/`HAVING`, `DISTINCT` | core | [29](./29-charsets-and-collations.md) | M5.3 | ☐ | sorting respects collation, not code-point order |
+| M5.6 | Window functions | core | — | M5.5 | ☐ | frame semantics match a real server on the ORM corpora |
+| M5.7 | Planner: index selection, predicate pushdown, join ordering for small joins | core | — | M5.4 | ☐ | `EXPLAIN` names the index a MySQL DBA would expect on the test schemas |
+| M5.8 | DML execution: `ON DUPLICATE KEY UPDATE`, `REPLACE`, `AUTO_INCREMENT` | core | [00](./00-goals-and-scope.md) | M5.3 | ☐ | `affectedRows` is 2 for an updated upsert, as MySQL reports it; `insertId` matches |
+| M5.9 | DDL execution; `SHOW CREATE TABLE` | core | [27](./27-data-dictionary.md) | M4.23 | ☐ | `SHOW CREATE TABLE` output matches a real server's bytes |
+| M5.10 | Function library: string, math, date/time, `CASE`/`IF`/`COALESCE` | core | — | M5.2 | ☐ | prioritised by measured usage frequency across the ORM test suites |
+| M5.11 | Aggregate and `JSON_*` functions | core | [28](./28-json-binary.md) | M5.10 | ☐ | `JSON_KEYS()` returns keys in MySQL's length-then-bytes order |
+| M5.12 | `INFORMATION_SCHEMA` (resolves Q-06) | core | [27](./27-data-dictionary.md) | M5.9 | ☐ | Prisma and Drizzle introspection reconstruct the schema exactly, multi-column indexes included |
+| M5.13 | `SHOW`, `EXPLAIN`, and the `db.explain()` / `db.stats()` / introspection API | core | [42](./42-public-api.md) | M5.7 | ☐ | doc 42's introspection methods all return real data |
+| M5.14 | Real transactions: `db.transaction()` with bounded 1213 retry, savepoints, `db.begin()` | core | [42](./42-public-api.md), [41](./41-durability-and-concurrency.md) | M4.21 | ☐ | commits on return, rolls back on throw, and the retry limit is configurable and documented |
+| M5.15 | `mysqltest` interpreter, curated allowlist, pass-rate reporting | test | [43 §1](./43-testing.md) | M5.10 | ☐ | the scoreboard number is produced by CI, not by hand; the suite is fetched, never vendored |
+| M5.16 | Differential harness against MySQL 8.4 in Docker | test | [43 §2](./43-testing.md) | M5.10 | ☐ | rows and their order, column metadata, `affectedRows`, errno and SQLSTATE all compared |
+
+---
 
 ## M6 — The browser
 
-- The OPFS VFS with the access-handle pool (doc 40).
-- The dedicated-Worker host, Web Locks leader election, `BroadcastChannel`
-  discovery, `MessagePort` transport.
-- IndexedDB and in-memory fallbacks (Safari private browsing needs this).
-- `dump()`/`load()` for seeding from a build artefact.
-- Bundle splitting: collations and optional features loaded on demand.
-
-**Done when**: a Playwright test runs the full suite in Chrome, Firefox and
+**Exit criterion.** A Playwright test runs the full suite in Chrome, Firefox and
 Safari, including a mid-transaction page kill and recovery.
+
+| # | Work item | Pkg | Docs | Deps | St | Done when |
+|---|---|---|---|---|---|---|
+| M6.1 | OPFS VFS over `FileSystemSyncAccessHandle` | vfs | [40](./40-vfs.md) | M0.10 | ☐ | passes the same conformance suite as the memory backend |
+| M6.2 | Access-handle pool: `.pool/NNNN` plus a manifest | vfs | [40](./40-vfs.md) | M6.1 | ☐ | opening a logical file after startup is synchronous; the pool grows when exhausted |
+| M6.3 | Handle re-acquisition after tab suspension | vfs | [40](./40-vfs.md) | M6.2 | ☐ | a suspended-then-resumed tab continues without data loss or a thrown handle error |
+| M6.4 | OPFS async fallback via `createWritable()` | vfs | [40](./40-vfs.md) | M6.1 | ☐ | works outside a dedicated worker, with its different atomicity documented |
+| M6.5 | IndexedDB block store | vfs | [40](./40-vfs.md) | M6.1 | ☐ | the full suite passes in Safari private browsing, where OPFS does not exist |
+| M6.6 | Dedicated-worker host; `MySQLWorker` with the same interface as `MySQL` | server | [42](./42-public-api.md), [03](./03-architecture.md) | M1.24 | ☐ | swapping `MySQL` for `MySQLWorker` changes no application code |
+| M6.7 | Web Locks leader election, `BroadcastChannel` discovery, re-election | server | [41](./41-durability-and-concurrency.md) | M6.6 | ☐ | killing the leader tab promotes another and clients reconnect automatically |
+| M6.8 | `dump()` and `MySQL.load()` | core | [42](./42-public-api.md) | M4.23 | ☐ | a database seeded from a build artefact opens without running recovery |
+| M6.9 | Bundle splitting: collations and optional features loaded on demand | — | [29](./29-charsets-and-collations.md), [43 §7](./43-testing.md) | M2.7 | ☐ | the core stays inside the M0.10 budget shipping only `binary` and `utf8mb4_bin` |
+| M6.10 | Playwright suite across Chrome, Firefox and Safari, with a mid-transaction page kill | test | [43 §5](./43-testing.md) | M6.5 | ☐ | the milestone exit criterion |
+
+---
 
 ## M7 — InnoDB interchange
 
-- `@myjs/innodb`: page and record decoding, SDI reading, all the column
-  encodings.
-- Import: `.ibd` + `.cfg` → a native table.
-- Export: a native table → `.ibd` + `.cfg` that a real MySQL 8.4 imports.
-- A `mysqldump` reader and writer.
+Note the ordering inversion that makes this milestone unlike M4: for **reading**
+a real tablespace the dictionary comes *first*, not last. Doc 27's open sequence
+is page 0 → SDI root → inflate the zlib JSON → build the descriptor → read each
+index's root page out of `se_private_data` → descend the B+tree. You cannot
+decode a record without the dictionary, because ENUM and SET member lists and
+the legacy temporal types exist only there.
 
-**Done when**: a table round-trips through a real MySQL 8.4 server in CI, in
-both directions, with byte-identical values.
+**Exit criterion.** A table round-trips through a real MySQL 8.4 server in CI,
+in both directions, with byte-identical values.
+
+| # | Work item | Pkg | Docs | Deps | St | Done when |
+|---|---|---|---|---|---|---|
+| M7.1 | FIL header and trailer; CRC32 primary with the legacy variants accepted on read | innodb | [21](./21-innodb-file-layout.md) | M0.3 | ☐ | `innochecksum` agrees with us on a corpus of real files |
+| M7.2 | `FSP_SPACE_FLAGS`, the FSP header, page-type dispatch | innodb | [21](./21-innodb-file-layout.md) | M7.1 | ☐ | flags are decoded before anything else, as doc 21 insists |
+| M7.3 | XDES array and segment INODE readers | innodb | [21](./21-innodb-file-layout.md) | M7.2 | ☐ | the free/used extent picture matches what the server reports |
+| M7.4 | SDI reader: locate the tree, `(type, id)` keys, inflate the zlib JSON | innodb | [27](./27-data-dictionary.md) | M7.2 | ☐ | output matches `ibd2sdi` on the same file |
+| M7.5 | SDI → table descriptor, including `se_private_data` index root pages | innodb | [27](./27-data-dictionary.md) | M7.4 | ☐ | index roots resolve — without this not a single row can be read |
+| M7.6 | INDEX page parser: header, directory, record chain, infimum/supremum | innodb | [22](./22-innodb-page-formats.md) | M7.2 | ☐ | doc 22's `parseIndexPage` contract is satisfied on real pages |
+| M7.7 | COMPACT and DYNAMIC record decoder, including both instant-DDL mechanisms | innodb | [23](./23-innodb-row-formats.md) | M7.6, M7.5 | ☐ | the variable-length array is unit-tested against real files — doc 23 calls this the single highest-value test here |
+| M7.8 | REDUNDANT decoder, read-only | innodb | [23](./23-innodb-row-formats.md) | M7.7 | ☐ | a pre-5.7 tablespace reads |
+| M7.9 | External field references and both LOB page families | innodb | [23](./23-innodb-row-formats.md) | M7.7 | ☐ | a 1 MB BLOB reassembles from a real file |
+| M7.10 | Import: `.ibd` + `.cfg` → a native table | innodb, core | [27](./27-data-dictionary.md) | M7.9 | ☐ | a table exported from MySQL 8.4 in CI imports and every value matches |
+| M7.11 | Export: native table → `.ibd` + `.cfg` | innodb, core | [27](./27-data-dictionary.md) | M7.10 | ☐ | `ALTER TABLE … IMPORT TABLESPACE` accepts it on a real 8.4 |
+| M7.12 | `mysqldump` reader and writer | core | [42](./42-public-api.md) | M5.9 | ☐ | a real `mysqldump` file restores here, and ours restores into a real server |
+| M7.13 | `innodb-ro` and `csv` engines behind the doc-30 interface | innodb | [30](./30-other-engines.md) | M4.24, M7.7 | ☐ | the executor queries an imported `.ibd` without copying it into native storage |
+
+---
 
 ## M8 — Beyond
 
-Roughly in the order the demand is likely to arrive:
+Roughly in the order the demand is likely to arrive. Deliberately unsequenced —
+these are pulled forward by users, not pushed by the plan.
 
-- Change streams and live queries (doc 18), then a sync protocol.
-- Stored procedures, functions, triggers.
-- Full-text search.
-- Foreign key enforcement (accepted and stored earlier; enforced here).
-- Generated columns, `CHECK` constraints.
-- Spatial types, beyond storage round-tripping.
-- Partitioning.
+| # | Work item | Docs | Deps | St |
+|---|---|---|---|---|
+| M8.1 | Change streams and live queries — a projection of the WAL | [18](./18-binlog.md), [42](./42-public-api.md) | M4.13 | ☐ |
+| M8.2 | `@myjs/binlog` — a standalone binlog reader, useful on its own for migration | [18](./18-binlog.md) | M2.15 | ☐ |
+| M8.3 | `COM_BINLOG_DUMP` over the change stream | [18](./18-binlog.md) | M8.1, M8.2 | ☐ |
+| M8.4 | A sync protocol built on the change stream | [18](./18-binlog.md) | M8.1 | ☐ |
+| M8.5 | Stored procedures, functions and triggers — execution, not just storage | [00](./00-goals-and-scope.md) | M3.8, M5.10 | ☐ |
+| M8.6 | Foreign key enforcement (accepted and stored from M3) | [00](./00-goals-and-scope.md) | M5.8 | ☐ |
+| M8.7 | Generated columns and `CHECK` constraints | [00](./00-goals-and-scope.md) | M5.10 | ☐ |
+| M8.8 | Full-text search | [00](./00-goals-and-scope.md) | M5.10 | ☐ |
+| M8.9 | Spatial types beyond storage round-tripping; partitioning | [24](./24-column-encodings.md) | M5.10 | ☐ |
+| M8.10 | MyISAM read-only import (`.MYD`, `.MYI`, `.frm`) | [30](./30-other-engines.md) | M7.13 | ☐ |
+
+---
+
+## Release plan
+
+Milestones map to npm releases, so there is a shipping story long before M8.
+
+| Version | Ships | Gate |
+|---|---|---|
+| **0.1** | `@myjs/protocol` + `@myjs/bytes` — a MySQL protocol server toolkit for JavaScript, which does not currently exist as a standalone package | M1 exit criterion |
+| **0.2** | `@myjs/charsets`, `@myjs/types`, `@myjs/parser` | M2 and M3 exit criteria |
+| **0.3** | `myjs` itself — `MySQL.open()`, real storage, real execution, Node only | M4 and M5 exit criteria |
+| **0.4** | The browser: OPFS, workers, `myjs/worker` | M6 exit criterion |
+| **0.5** | `@myjs/innodb` and import/export | M7 exit criterion |
+| **1.0** | — | Every scoreboard target below met, and the API frozen |
+
+Until 0.3 the packages are published but `myjs` is not: shipping a package named
+`myjs` that cannot open a database would be a worse first impression than
+shipping nothing.
+
+---
+
+## Scoreboard
+
+The compatibility claim, as a number, updated by CI in the same commit as the
+code that moves it (doc 43 §8). A claim without a number is marketing.
+
+| Metric | Today | Target for 1.0 |
+|---|---|---|
+| MySQL `mysql-test` files passing | 0 / 1,543 | ≥ 800 |
+| `mysql2` test suite | 0 / 253 | ≥ 245 |
+| Drizzle MySQL suite | — | pass |
+| Prisma MySQL suite | — | pass |
+| Protocol traces replayed byte-identically | 0 / 0 | 100% |
+| InnoDB round-trip, by type | 0 / 17 | 17 / 17 |
+| Crash injection points, inconsistencies | 0 / 0 | 10,000 points, 0 |
+| Core bundle, gzipped | — | < 500 KB |
+| Cold start, browser | — | published, tracked |
+
+---
+
+## Open questions
+
+Each pinned to the milestone that must answer it. A question with no milestone
+is a note; with one, it is a blocker with a deadline.
+
+| # | Question | Resolve by | Notes |
+|---|---|---|---|
+| Q-01 | What is the undo spill threshold — at what size does an in-memory undo log move to a page file? | M4 | Doc 25 says "spilled … when it exceeds a threshold" and does not name one. |
+| Q-02 | How is `ER_LOCK_DEADLOCK` actually detected under optimistic concurrency, with no lock manager? | M4 | Doc 41 says "an optimistic conflict detected at commit"; the detection mechanism is undesigned. D-09 requires we report it. |
+| Q-03 | What does the page-level schema version look like, concretely? | M4 (owned by M4.4) | D-21 rejects InnoDB's per-record version byte, but doc 22's page-header proposal reserves no field for the replacement. |
+| Q-04 | How do the `general_ci` weight tables get from ~1.1 MB of source weights to "a few tens of KB"? | M2 | Doc 29 asserts it compresses "with the right structure" and does not say which structure. |
+| Q-05 | Do our index pages get prefix compression? | M4 (may defer) | Doc 30 notes MyISAM's saves 30–50% on string keys. Explicitly not decided. |
+| Q-06 | How faithful must `INFORMATION_SCHEMA` be? | M5 (owned by M5.12) | Doc 15 raises it and does not settle it. Migration tools query it directly, and `MULTIPLE_KEY_FLAG` is set only on an index's first column, so clients cannot reconstruct indexes from flags alone. |
+| Q-07 | How are legacy temporals disambiguated when their byte lengths overlap the modern forms? | M7 | Doc 24 says the dictionary's declared type decides, without naming the SDI field that carries it. |
+| Q-08 | Is whole-page compression at the VFS layer the answer to COMPACT/COMPRESSED parity? | M6 or M8 | Proposed in doc 21 as the COMPRESSED replacement (D-20), with no design. |
+| Q-09 | What is the history-length policy — what API exposes it, and what does the max-age abort actually do? | M4 (owned by M4.22) | Doc 25 says "report the history length, and let an application choose"; the knob is undefined. |
+| Q-10 | Do we ever parse a real redo log? If so, the `OBSOLETE_*_8027` type-number mapping must be transcribed. | M7, only if needed | Currently we do not: we read tablespaces, not datadirs (D-07). Recorded so the gap is not rediscovered. |
+
+### Errata in the design docs
+
+Corrections to be made to docs 20–43. Recorded here rather than fixed silently,
+so the correction has a reason attached.
+
+| # | Doc | Error | Correction |
+|---|---|---|---|
+| E-01 | [26](./26-redo-and-recovery.md) | Suggests `crypto.subtle.digest` for CRC32C "where a hardware path exists". | WebCrypto offers no CRC32C — it has no CRC at all. The implementation is table-driven, full stop. Applied by M4.1. |
+| E-02 | [40](./40-vfs.md) | Declares `durability` on the `Vfs` interface, but the prose exposes it on `VfsFile`. | Keep it on `Vfs`; a backend's durability is a property of the backend, not of one open file. Applied by M0.9. |
+
+---
 
 ## Sequencing notes
 
@@ -145,13 +520,55 @@ against memory and Node until the interface is proven.
 dependents. It is also the piece most likely to be someone else's favourite part,
 so it is a natural first external contribution.
 
+### Parallel tracks
+
+The milestone numbering is a dependency order, not a schedule. The dependency
+graph has four independent roots — `bytes`, `charsets`, `parser`, `vfs` — and
+the M0→M3 sequence serialises them more than the code requires. Work that can
+proceed concurrently once M0.1–M0.5 exist:
+
+```
+M0.3–M0.8  bytes ────┬──▶ M1  protocol
+                     │
+M0.9–M0.10 vfs ──────┼────────────────────▶ M4  engine
+                     │                      ▲
+M2.1–M2.7  charsets ─┴──▶ M2.8–M2.15 types ─┘
+                             │
+M3.1–M3.10 parser ◀──────────┘
+```
+
+Two specific unblockings worth naming:
+
+- **The parser needs the type system only for literal folding and collation
+  resolution.** M3.1 and M3.2 can start as soon as M2.3 (charset decode) exists;
+  they do not wait for the UCA collations.
+- **The B+tree needs only `memcmp` collations.** Doc 29 is explicit that
+  `binary` and `*_bin` are enough to build and test the entire tree, because
+  ordering there is `memcmp`. So M4 waits on M2.14 (key encoding) and M2.2, not
+  on M2.7.
+
+---
+
 ## Risks, and what we do about them
 
 | Risk | Mitigation |
 |---|---|
-| SQL semantics are a bottomless pit | Fix scope by *test pass rate*, not by feature list. Publish the number (doc 43). |
-| Collation tables bloat the bundle | Generate them; load them on demand; ship only `binary` + `utf8mb4_bin` in the core. |
-| OPFS durability is weaker than assumed | Self-verifying WAL, full-page images, fault injection. Assume nothing (docs 40, 41). |
+| SQL semantics are a bottomless pit | Fix scope by *test pass rate*, not by feature list. Publish the number (the [scoreboard](#scoreboard), doc 43). |
+| Collation tables bloat the bundle | Generate them; load them on demand; ship only `binary` + `utf8mb4_bin` in the core (M6.9). |
+| OPFS durability is weaker than assumed | Self-verifying WAL, full-page images, fault injection. Assume nothing (docs 40, 41; D-17, D-18). |
 | Performance disappoints against native | Be honest about the target: an embedded database for one application, not a server. Benchmark cold start and bundle size as first-class metrics. |
-| The engine drifts from MySQL over time | Differential testing against a real server in CI, on every commit. |
+| The engine drifts from MySQL over time | Differential testing against a real server in CI, on every commit (M5.16). |
 | Scope creep into a general SQL engine | The three compatibility contracts in doc 00 are the scope. Anything that serves none of them is out. |
+| Type stripping constrains the code we can write | No `enum`, `namespace`, parameter properties or decorators. Enforced by `erasableSyntaxOnly` (M0.1) so the constraint fails at commit time, not at publish time. If it ever becomes genuinely limiting, adding a build step is a one-line change — the source is already TypeScript. |
+| The GPL boundary is crossed by accident | `reference/` stays gitignored; `mysql-test` is fetched in CI and never vendored; no MySQL source is copied into this MIT repository. Ground rule 7, checked in review. |
+
+---
+
+## Change log
+
+Newest first. One entry per milestone completion or significant decision; work
+items record their own progress in the tables above.
+
+| Date | Entry |
+|---|---|
+| 2026-09-05 | Roadmap rewritten as the project's living plan: work items with acceptance assertions, the decision log (D-01…D-26), ground rules, repository layout, release plan, scoreboard, open questions (Q-01…Q-10) and errata (E-01, E-02). No code yet; M0 is next. |

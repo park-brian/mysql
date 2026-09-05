@@ -65,7 +65,7 @@ Reference trees are cloned into `reference/` (gitignored) — see
 | 41 | [Durability and concurrency](./41-durability-and-concurrency.md) | WAL design, fsync reality, single-writer model, multi-tab leadership |
 | 42 | [Public API](./42-public-api.md) | The surface we expose, and how existing drivers plug into it |
 | 43 | [Testing and compatibility](./43-testing.md) | `mysql-test` reuse, differential testing, protocol conformance, fuzzing |
-| 44 | [Roadmap](./44-roadmap.md) | Milestones, in dependency order |
+| 44 | [Roadmap](./44-roadmap.md) | **The living plan**: milestones in dependency order, work items with acceptance criteria, the decision log, open questions, and the compatibility scoreboard |
 
 **Appendix**: [References](./90-references.md) · [Glossary](./91-glossary.md)
 
