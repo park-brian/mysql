@@ -1,0 +1,71 @@
+# M0.10 — CI: unit tests, lint, bundle-size budget.
+#
+# The fast job is everything that needs no Docker and no browser, and doc 43
+# says it should stay under a minute. The Docker-backed protocol conformance
+# job (doc 43 §2, §3) runs separately because it pulls a real MySQL 8.4.
+name: CI
+
+on:
+  push:
+    branches: ['**']
+  pull_request:
+
+jobs:
+  check:
+    name: lint, typecheck, test, size
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          # D-01: type stripping without a build step needs >=22.18.
+          node-version: '22.18'
+          cache: npm
+      - run: npm ci
+
+      # Ground rule 1, enforced rather than intended.
+      - name: isomorphic lint
+        run: npm run lint
+
+      # erasableSyntaxOnly: no enum, namespace, parameter properties, decorators.
+      - name: typecheck
+        run: npm run typecheck
+
+      - name: test
+        run: npm test
+
+      # doc 43 §7 — the ratcheting budget.
+      - name: bundle size budget
+        run: npm run size
+
+  fuzz:
+    name: fuzz parsers
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22.18'
+          cache: npm
+      - run: npm ci
+      # Ground rule 5: a typed error, never a crash, never a hang.
+      - name: Reader fuzz (10^6 inputs)
+        run: npm run fuzz
+
+  error-table:
+    name: generated error table is reproducible
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22.18'
+          cache: npm
+      - run: npm ci
+      # D-14: the table is generated from MySQL's own source, never
+      # transcribed. Ground rule 7: that source is fetched, never vendored.
+      # Re-running must reproduce the committed output byte for byte.
+      - name: regenerate and diff
+        run: |
+          npm run gen:errors
+          git diff --exit-code -- packages/protocol/src/errors/

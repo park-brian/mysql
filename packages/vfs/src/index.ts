@@ -1,0 +1,6 @@
+export { DEFAULT_PAGE_SIZE, VfsError, fileNotFound, fileClosed, badPage } from './vfs.ts'
+export type { Vfs, VfsFile, Lock } from './vfs.ts'
+export { MemoryVfs } from './memory.ts'
+export type { MemoryVfsOptions } from './memory.ts'
+export { vfsConformanceCases, runVfsConformance } from './conformance.ts'
+export type { ConformanceCase, VfsFactory } from './conformance.ts'

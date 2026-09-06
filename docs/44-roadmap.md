@@ -38,7 +38,7 @@ with no milestone is a note; with a milestone it is a blocker with a deadline.
 
 | | Milestone | Theme | Done | Status |
 |---|---|---|---|---|
-| **M0** | [Foundations](#m0--foundations) | bytes, VFS interface, CI | 8 / 10 | ◐ |
+| **M0** | [Foundations](#m0--foundations) | bytes, VFS interface, CI | 10 / 10 | ☑ |
 | **M1** | [Speak the protocol](#m1--speak-the-protocol) | the whole client ecosystem, for a few thousand lines | 0 / 24 | ☐ |
 | **M2** | [Types and collations](#m2--types-and-collations) | the part everyone else gets wrong | 0 / 15 | ☐ |
 | **M3** | [Parse SQL](#m3--parse-sql) | lexer, parser, AST | 0 / 10 | ☐ |
@@ -47,7 +47,7 @@ with no milestone is a note; with a milestone it is a blocker with a deadline.
 | **M6** | [The browser](#m6--the-browser) | OPFS, workers, leader election | 0 / 10 | ☐ |
 | **M7** | [InnoDB interchange](#m7--innodb-interchange) | read and write real `.ibd` | 0 / 13 | ☐ |
 | **M8** | [Beyond](#m8--beyond) | as demand arrives | 0 / 10 | ☐ |
-| | | **Total** | **8 / 133** | |
+| | | **Total** | **10 / 133** | |
 
 ---
 
@@ -173,8 +173,8 @@ bundle-size gate is enforcing a real number.
 | M0.6 | Bitmap helpers with the offset parameter | bytes | [11](./11-protocol-primitives.md) | M0.3 | ☑ | offset 2 and offset 0 both round-trip; the asymmetry is a test, not a comment |
 | M0.7 | Property tests: round-trip every primitive | bytes | [43 §4](./43-testing.md) | M0.3, M0.4 | ☑ | `fast-check` covers all int widths, lenenc, and all four string forms |
 | M0.8 | Fuzz target: arbitrary bytes into `Reader` | bytes | [43 §6](./43-testing.md) | M0.3 | ☑ | 10⁶ random inputs, zero crashes and hangs, only `ProtocolError` |
-| M0.9 | `Vfs` / `VfsFile` interfaces from doc 40, with erratum E-02 applied | vfs | [40](./40-vfs.md) | M0.1 | ☐ | `durability` lives on `Vfs`; a conformance suite exists that any backend must pass |
-| M0.10 | Memory VFS — the reference backend — plus CI: unit tests, lint, bundle-size budget | vfs | [40](./40-vfs.md), [43 §7](./43-testing.md) | M0.9 | ☐ | memory passes the conformance suite; the size gate fails a commit that exceeds the committed number |
+| M0.9 | `Vfs` / `VfsFile` interfaces from doc 40, with erratum E-02 applied | vfs | [40](./40-vfs.md) | M0.1 | ☑ | `durability` lives on `Vfs`; a conformance suite exists that any backend must pass |
+| M0.10 | Memory VFS — the reference backend — plus CI: unit tests, lint, bundle-size budget | vfs | [40](./40-vfs.md), [43 §7](./43-testing.md) | M0.9 | ☑ | memory passes the conformance suite; the size gate fails a commit that exceeds the committed number |
 
 ---
 
@@ -497,6 +497,8 @@ so the correction has a reason attached.
 |---|---|---|---|
 | E-01 | [26](./26-redo-and-recovery.md) | Suggests `crypto.subtle.digest` for CRC32C "where a hardware path exists". | WebCrypto offers no CRC32C — it has no CRC at all. The implementation is table-driven, full stop. Applied by M4.1. |
 | E-02 | [40](./40-vfs.md) | Declares `durability` on the `Vfs` interface, but the prose exposes it on `VfsFile`. | Keep it on `Vfs`; a backend's durability is a property of the backend, not of one open file. Applied by M0.9. |
+| E-03 | [40](./40-vfs.md) | The durability table says memory's real guarantee is "none", but the `Vfs.durability` union is `'strong' \| 'best-effort'` and §Memory says to report `'best-effort'`. | Report `'best-effort'`, as §Memory says. The table means "no platform guarantee"; a third union member would make every consumer branch on a case only a test backend can produce. Applied by M0.10. |
+| E-04 | [40](./40-vfs.md) | `Vfs.lock()` returns `Promise<Lock>`, and `Lock` is never declared anywhere in the docs. | Declared in M0.9: `path`, `held`, `release()` and `[Symbol.dispose]()`, so a lock can be released from a `finally` or a `using`. A second `release()` is a no-op, not an error. |
 
 ---
 
@@ -573,5 +575,6 @@ items record their own progress in the tables above.
 
 | Date | Entry |
 |---|---|
+| 2026-09-06 | **M0 complete (10 / 10).** `@myjs/vfs`: doc 40's interfaces with E-02 applied, the `Lock` type E-04 was missing, the memory reference backend, and a conformance suite exported from the package so the Node, OPFS and fault-injecting backends run the identical body. CI runs lint, typecheck, tests, the 10⁶-input fuzz, and a ratcheting gzipped size gate whose committed numbers are in `size-budget.json`. Added E-03 and E-04. The scoreboard's bundle row stays `—` until `@myjs/core` exists in M1. |
 | 2026-09-06 | M0.1–M0.8 done. Workspace, `tsconfig` (`erasableSyntaxOnly` + `verbatimModuleSyntax`), the isomorphic lint gate, and `@myjs/bytes` — `Reader`, `Writer`, `ProtocolError`, bitmap helpers — with property tests and the 10⁶-input fuzz target. Added D-27 and D-30. Two deviations from the item text: M0.2's negative fixture uses `packages/protocol` rather than `packages/types`, which does not exist until M2, and the linter takes `--root` so the fixture lives in a temp tree instead of permanently failing the repository; M0.8 uses a seeded generator rather than a third-party fuzzer, since doc 43 §6 names none. |
 | 2026-09-05 | Roadmap rewritten as the project's living plan: work items with acceptance assertions, the decision log (D-01…D-26), ground rules, repository layout, release plan, scoreboard, open questions (Q-01…Q-10) and errata (E-01, E-02). No code yet; M0 is next. |
