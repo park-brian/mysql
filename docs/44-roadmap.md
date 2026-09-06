@@ -39,7 +39,7 @@ with no milestone is a note; with a milestone it is a blocker with a deadline.
 | | Milestone | Theme | Done | Status |
 |---|---|---|---|---|
 | **M0** | [Foundations](#m0--foundations) | bytes, VFS interface, CI | 10 / 10 | ☑ |
-| **M1** | [Speak the protocol](#m1--speak-the-protocol) | the whole client ecosystem, for a few thousand lines | 7 / 24 | ◐ |
+| **M1** | [Speak the protocol](#m1--speak-the-protocol) | the whole client ecosystem, for a few thousand lines | 14 / 24 | ◐ |
 | **M2** | [Types and collations](#m2--types-and-collations) | the part everyone else gets wrong | 0 / 15 | ☐ |
 | **M3** | [Parse SQL](#m3--parse-sql) | lexer, parser, AST | 0 / 10 | ☐ |
 | **M4** | [The storage engine](#m4--the-storage-engine) | pages, B+tree, WAL, MVCC | 0 / 25 | ☐ |
@@ -47,7 +47,7 @@ with no milestone is a note; with a milestone it is a blocker with a deadline.
 | **M6** | [The browser](#m6--the-browser) | OPFS, workers, leader election | 0 / 10 | ☐ |
 | **M7** | [InnoDB interchange](#m7--innodb-interchange) | read and write real `.ibd` | 0 / 13 | ☐ |
 | **M8** | [Beyond](#m8--beyond) | as demand arrives | 0 / 10 | ☐ |
-| | | **Total** | **17 / 133** | |
+| | | **Total** | **24 / 133** | |
 
 ---
 
@@ -201,14 +201,14 @@ connection tests pass against the stub.
 | M1.5 | OK / ERR / EOF writers, capability-conditional, including the OK-as-EOF form | protocol | [10](./10-protocol-overview.md) | M1.3 | ☑ | the minimal OK is byte-identical to `07 00 00 02 00 00 00 02 00 00 00` |
 | M1.6 | Error table generated from `share/messages_to_clients.txt` (D-14) | protocol | [14](./14-command-phase.md) | — | ☑ | 1062 → `ER_DUP_ENTRY`/`23000`; the generator is re-runnable and its source hash is checked in |
 | M1.7 | Crypto shim: `getRandomValues`, SHA-1, SHA-256, constant-time compare, RSA-OAEP-SHA1 | protocol | [13](./13-authentication.md) | — | ☑ | one module, identical API on Node and in the browser; nothing above it imports `node:crypto` |
-| M1.8 | `HandshakeV10` writer; 20-byte scramble split 8 + 12 with a trailing NUL | protocol | [12](./12-connection-phase.md) | M1.5, M1.7 | ☐ | `mysql2` parses it; `CLIENT_LONG_PASSWORD` set and reserved bytes zeroed (D-10) |
-| M1.9 | `SSLRequest` and `HandshakeResponse41` parsers; connection attributes with size and count caps | protocol | [12](./12-connection-phase.md) | M1.3 | ☐ | oversized attributes are rejected before authentication — this is unauthenticated input |
-| M1.10 | Auth framing: `AuthSwitchRequest`, `AuthSwitchResponse`, `AuthMoreData`, `AuthNextFactor` | protocol | [13](./13-authentication.md) | M1.8 | ☐ | `AuthNextFactor` produces a clear error rather than a hang |
-| M1.11 | `mysql_native_password` verification | protocol | [13](./13-authentication.md) | M1.10 | ☐ | the empty-password zero-length-response case is handled on both sides |
-| M1.12 | `caching_sha2_password` fast path | protocol | [13](./13-authentication.md) | M1.10 | ☐ | `0x03` is sent as its **own packet before** the OK; a client expecting OK immediately would desync, and does not |
-| M1.13 | `caching_sha2_password` full path, secure-channel branch (D-11) | protocol | [13](./13-authentication.md) | M1.12 | ☐ | in-process connections take this branch and never touch RSA |
-| M1.14 | `caching_sha2_password` RSA branch, TCP listener only | protocol, server | [13](./13-authentication.md) | M1.13 | ☐ | the `mysql` CLI authenticates over TCP against a fresh, uncached account |
-| M1.15 | Uniform access-denied (`1045`/`28000`) and failure rate-limiting on the TCP path | protocol | [13](./13-authentication.md) | M1.11 | ☐ | unknown user and wrong password are indistinguishable in timing and in bytes |
+| M1.8 | `HandshakeV10` writer; 20-byte scramble split 8 + 12 with a trailing NUL | protocol | [12](./12-connection-phase.md) | M1.5, M1.7 | ☑ | `mysql2` parses it; `CLIENT_LONG_PASSWORD` set and reserved bytes zeroed (D-10) |
+| M1.9 | `SSLRequest` and `HandshakeResponse41` parsers; connection attributes with size and count caps | protocol | [12](./12-connection-phase.md) | M1.3 | ☑ | oversized attributes are rejected before authentication — this is unauthenticated input |
+| M1.10 | Auth framing: `AuthSwitchRequest`, `AuthSwitchResponse`, `AuthMoreData`, `AuthNextFactor` | protocol | [13](./13-authentication.md) | M1.8 | ☑ | `AuthNextFactor` produces a clear error rather than a hang |
+| M1.11 | `mysql_native_password` verification | protocol | [13](./13-authentication.md) | M1.10 | ☑ | the empty-password zero-length-response case is handled on both sides |
+| M1.12 | `caching_sha2_password` fast path | protocol | [13](./13-authentication.md) | M1.10 | ☑ | `0x03` is sent as its **own packet before** the OK; a client expecting OK immediately would desync, and does not |
+| M1.13 | `caching_sha2_password` full path, secure-channel branch (D-11) | protocol | [13](./13-authentication.md) | M1.12 | ☑ | in-process connections take this branch and never touch RSA |
+| M1.14 | `caching_sha2_password` RSA branch, TCP listener only | protocol, server | [13](./13-authentication.md) | M1.13 | ◐ | the `mysql` CLI authenticates over TCP against a fresh, uncached account |
+| M1.15 | Uniform access-denied (`1045`/`28000`) and failure rate-limiting on the TCP path | protocol | [13](./13-authentication.md) | M1.11 | ☑ | unknown user and wrong password are indistinguishable in timing and in bytes |
 | M1.16 | `COM_*` dispatcher; `COM_PING` implemented first; unknown → `ER_UNKNOWN_COM_ERROR`/`08S01` | protocol | [14](./14-command-phase.md) | M1.5 | ☐ | a pool's ping loop runs 10 000 times without desynchronising |
 | M1.17 | No-response commands: `COM_STMT_SEND_LONG_DATA`, `COM_STMT_CLOSE`, `COM_QUIT` | protocol | [14](./14-command-phase.md), [16](./16-prepared-statements.md) | M1.16 | ☐ | nothing is written, not even on error — a reply desynchronises every client |
 | M1.18 | The command-phase quirks: `COM_FIELD_LIST` (no column-count prefix), `COM_SET_OPTION` (EOF-shaped), `COM_STATISTICS` (bare `string<EOF>`) | protocol | [14](./14-command-phase.md) | M1.16 | ☐ | each matches a captured trace from a real server |
@@ -579,6 +579,7 @@ items record their own progress in the tables above.
 
 | Date | Entry |
 |---|---|
+| 2026-09-06 | M1.8–M1.13 and M1.15 done; M1.14 in progress. The connection phase and both auth plugins: `HandshakeV10` with the 8 + 12 scramble split, `SSLRequest`/`HandshakeResponse41` with D-31's caps enforced before authentication, the auth-switch dance, `mysql_native_password`, and `caching_sha2_password` on all three branches — fast path, secure-channel full path, and RSA. Accounts store `SHA1(SHA1(pw))` and `SHA256(SHA256(pw))` and no cleartext; the salted digest doc 13 mentions proves unnecessary, since the cached digest verifies the full path too. M1.14 stays `◐` until the real `mysql` CLI authenticates over TCP, which its acceptance assertion names and the M1 exit criterion covers. |
 | 2026-09-06 | M1.1–M1.7 done. `@myjs/protocol`: the streaming packet framer with the 16 MiB split and its mandatory trailing empty packet, framer-owned sequence ids, the negotiated capability value, the discriminate-by-length rule, OK/ERR/EOF writers byte-identical to doc 10's worked examples, the error table generated from `mysql-server@e174239c` (2,132 entries), and the WebCrypto shim with an injectable random source. Added D-29, D-31, E-05 and E-06. |
 | 2026-09-06 | **M0 complete (10 / 10).** `@myjs/vfs`: doc 40's interfaces with E-02 applied, the `Lock` type E-04 was missing, the memory reference backend, and a conformance suite exported from the package so the Node, OPFS and fault-injecting backends run the identical body. CI runs lint, typecheck, tests, the 10⁶-input fuzz, and a ratcheting gzipped size gate whose committed numbers are in `size-budget.json`. Added E-03 and E-04. The scoreboard's bundle row stays `—` until `@myjs/core` exists in M1. |
 | 2026-09-06 | M0.1–M0.8 done. Workspace, `tsconfig` (`erasableSyntaxOnly` + `verbatimModuleSyntax`), the isomorphic lint gate, and `@myjs/bytes` — `Reader`, `Writer`, `ProtocolError`, bitmap helpers — with property tests and the 10⁶-input fuzz target. Added D-27 and D-30. Two deviations from the item text: M0.2's negative fixture uses `packages/protocol` rather than `packages/types`, which does not exist until M2, and the linter takes `--root` so the fixture lives in a temp tree instead of permanently failing the repository; M0.8 uses a seeded generator rather than a third-party fuzzer, since doc 43 §6 names none. |
