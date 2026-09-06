@@ -39,7 +39,7 @@ with no milestone is a note; with a milestone it is a blocker with a deadline.
 | | Milestone | Theme | Done | Status |
 |---|---|---|---|---|
 | **M0** | [Foundations](#m0--foundations) | bytes, VFS interface, CI | 10 / 10 | ☑ |
-| **M1** | [Speak the protocol](#m1--speak-the-protocol) | the whole client ecosystem, for a few thousand lines | 0 / 24 | ☐ |
+| **M1** | [Speak the protocol](#m1--speak-the-protocol) | the whole client ecosystem, for a few thousand lines | 7 / 24 | ◐ |
 | **M2** | [Types and collations](#m2--types-and-collations) | the part everyone else gets wrong | 0 / 15 | ☐ |
 | **M3** | [Parse SQL](#m3--parse-sql) | lexer, parser, AST | 0 / 10 | ☐ |
 | **M4** | [The storage engine](#m4--the-storage-engine) | pages, B+tree, WAL, MVCC | 0 / 25 | ☐ |
@@ -47,7 +47,7 @@ with no milestone is a note; with a milestone it is a blocker with a deadline.
 | **M6** | [The browser](#m6--the-browser) | OPFS, workers, leader election | 0 / 10 | ☐ |
 | **M7** | [InnoDB interchange](#m7--innodb-interchange) | read and write real `.ibd` | 0 / 13 | ☐ |
 | **M8** | [Beyond](#m8--beyond) | as demand arrives | 0 / 10 | ☐ |
-| | | **Total** | **10 / 133** | |
+| | | **Total** | **17 / 133** | |
 
 ---
 
@@ -88,6 +88,8 @@ conclusion.
 | D-26 | — | **The catalog format is explicitly versioned, with a documented migration per change**, from its first commit (M4.23). | Same reason SQLite publishes a file format document. A store whose format is undocumented cannot be migrated, only abandoned. | [27](./27-data-dictionary.md) | — |
 | D-27 | 2026-09-06 | **The isomorphic lint gate exempts `packages/vfs`, `packages/server` and `packages/core/src/host/*`** — everything else is `Uint8Array`/`DataView` only. | Ground rule 1 names only `packages/vfs`, but `@myjs/server` must open TCP sockets, and the `mysql2`-facing duplex must emit Node `Buffer`s: `mysql2`'s `PacketParser.executePayload` calls `chunk.copy()`, which `Uint8Array` does not have. Confining that to conditional-export host files keeps every other package provably portable. | [03](./03-architecture.md), [42](./42-public-api.md) | — |
 | D-30 | 2026-09-06 | **Typed-error taxonomy**: `MyjsError` is the base carrying `code`, and optionally `errno`/`sqlState`; `ProtocolError` covers framing and parse faults; `SqlError` (M1) carries `mysql2`'s exact shape. `@myjs/bytes` never resolves error numbers — it has no dependencies, so `@myjs/protocol` supplies them from the generated table. | Ground rule 5 requires a typed error from every parser, and doc 42 requires `err.code`/`err.errno`/`err.sqlState`/`err.sqlMessage` to match `mysql2` so existing `catch` blocks keep working. Doc 11 names `ProtocolError` without giving it a shape. | [11](./11-protocol-primitives.md), [42](./42-public-api.md) | — |
+| D-29 | 2026-09-06 | **The generated error table carries facts only — error number, symbol and SQLSTATE — never MySQL's English message text.** Messages for the codes we emit are authored in `packages/protocol/src/errors/messages.ts`. | D-14 says generate rather than transcribe, and ground rule 7 keeps GPLv2 material out of this MIT repository. Numbers and SQLSTATEs are facts; the message templates are expression. The source is fetched at generation time, hashed, and discarded. | [14](./14-command-phase.md) | — |
+| D-31 | 2026-09-06 | **Numeric caps on unauthenticated input**: `max_allowed_packet` 64 MiB, enforced per chunk *during* reassembly rather than on the finished buffer; connection attributes ≤ 64 KiB and ≤ 128 pairs, rejected before authentication; accumulated `COM_STMT_SEND_LONG_DATA` capped at `max_allowed_packet`. | Docs 12, 16 and 17 all require caps and name no numbers. Every one of these bounds an allocation a peer can force before it has proved anything about itself. | [12](./12-connection-phase.md), [16](./16-prepared-statements.md), [17](./17-protocol-extras.md) | — |
 
 ---
 
@@ -192,13 +194,13 @@ connection tests pass against the stub.
 
 | # | Work item | Pkg | Docs | Deps | St | Done when |
 |---|---|---|---|---|---|---|
-| M1.1 | Packet framer: 4-byte header, >16 MiB reassembly, `max_allowed_packet` enforced *during* reassembly | protocol | [10](./10-protocol-overview.md), [17](./17-protocol-extras.md) | M0.4 | ☐ | a 16777215-byte payload emits `ff ff ff n` **plus an empty packet**, and decodes back |
-| M1.2 | Sequence ids owned by the framer: reset per command, continuous through the connection phase | protocol | [10](./10-protocol-overview.md) | M1.1 | ☐ | a mismatch raises `ER_NET_PACKETS_OUT_OF_ORDER`, and the counter is not visible to packet types |
-| M1.3 | Capability constants; the negotiated set as one immutable value | protocol | [12](./12-connection-phase.md) | — | ☐ | every reader and writer takes it as a parameter; none reads mutable session state |
-| M1.4 | Response discriminator resolved by **length**, not by byte value | protocol | [10](./10-protocol-overview.md) | M1.3 | ☐ | a `0xFE` payload of ≥9 bytes parses as a lenenc integer, not as EOF |
-| M1.5 | OK / ERR / EOF writers, capability-conditional, including the OK-as-EOF form | protocol | [10](./10-protocol-overview.md) | M1.3 | ☐ | the minimal OK is byte-identical to `07 00 00 02 00 00 00 02 00 00 00` |
-| M1.6 | Error table generated from `share/messages_to_clients.txt` (D-14) | protocol | [14](./14-command-phase.md) | — | ☐ | 1062 → `ER_DUP_ENTRY`/`23000`; the generator is re-runnable and its source hash is checked in |
-| M1.7 | Crypto shim: `getRandomValues`, SHA-1, SHA-256, constant-time compare, RSA-OAEP-SHA1 | protocol | [13](./13-authentication.md) | — | ☐ | one module, identical API on Node and in the browser; nothing above it imports `node:crypto` |
+| M1.1 | Packet framer: 4-byte header, >16 MiB reassembly, `max_allowed_packet` enforced *during* reassembly | protocol | [10](./10-protocol-overview.md), [17](./17-protocol-extras.md) | M0.4 | ☑ | a 16777215-byte payload emits `ff ff ff n` **plus an empty packet**, and decodes back |
+| M1.2 | Sequence ids owned by the framer: reset per command, continuous through the connection phase | protocol | [10](./10-protocol-overview.md) | M1.1 | ☑ | a mismatch raises `ER_NET_PACKETS_OUT_OF_ORDER`, and the counter is not visible to packet types |
+| M1.3 | Capability constants; the negotiated set as one immutable value | protocol | [12](./12-connection-phase.md) | — | ☑ | every reader and writer takes it as a parameter; none reads mutable session state |
+| M1.4 | Response discriminator resolved by **length**, not by byte value | protocol | [10](./10-protocol-overview.md) | M1.3 | ☑ | a `0xFE` payload of ≥9 bytes parses as a lenenc integer, not as EOF |
+| M1.5 | OK / ERR / EOF writers, capability-conditional, including the OK-as-EOF form | protocol | [10](./10-protocol-overview.md) | M1.3 | ☑ | the minimal OK is byte-identical to `07 00 00 02 00 00 00 02 00 00 00` |
+| M1.6 | Error table generated from `share/messages_to_clients.txt` (D-14) | protocol | [14](./14-command-phase.md) | — | ☑ | 1062 → `ER_DUP_ENTRY`/`23000`; the generator is re-runnable and its source hash is checked in |
+| M1.7 | Crypto shim: `getRandomValues`, SHA-1, SHA-256, constant-time compare, RSA-OAEP-SHA1 | protocol | [13](./13-authentication.md) | — | ☑ | one module, identical API on Node and in the browser; nothing above it imports `node:crypto` |
 | M1.8 | `HandshakeV10` writer; 20-byte scramble split 8 + 12 with a trailing NUL | protocol | [12](./12-connection-phase.md) | M1.5, M1.7 | ☐ | `mysql2` parses it; `CLIENT_LONG_PASSWORD` set and reserved bytes zeroed (D-10) |
 | M1.9 | `SSLRequest` and `HandshakeResponse41` parsers; connection attributes with size and count caps | protocol | [12](./12-connection-phase.md) | M1.3 | ☐ | oversized attributes are rejected before authentication — this is unauthenticated input |
 | M1.10 | Auth framing: `AuthSwitchRequest`, `AuthSwitchResponse`, `AuthMoreData`, `AuthNextFactor` | protocol | [13](./13-authentication.md) | M1.8 | ☐ | `AuthNextFactor` produces a clear error rather than a hang |
@@ -499,6 +501,8 @@ so the correction has a reason attached.
 | E-02 | [40](./40-vfs.md) | Declares `durability` on the `Vfs` interface, but the prose exposes it on `VfsFile`. | Keep it on `Vfs`; a backend's durability is a property of the backend, not of one open file. Applied by M0.9. |
 | E-03 | [40](./40-vfs.md) | The durability table says memory's real guarantee is "none", but the `Vfs.durability` union is `'strong' \| 'best-effort'` and §Memory says to report `'best-effort'`. | Report `'best-effort'`, as §Memory says. The table means "no platform guarantee"; a third union member would make every consumer branch on a case only a test backend can produce. Applied by M0.10. |
 | E-04 | [40](./40-vfs.md) | `Vfs.lock()` returns `Promise<Lock>`, and `Lock` is never declared anywhere in the docs. | Declared in M0.9: `path`, `held`, `release()` and `[Symbol.dispose]()`, so a lock can be released from a `finally` or a `using`. A second `release()` is a no-op, not an error. |
+| E-05 | [13](./13-authentication.md) | Suggests constant-time comparison "via `crypto.subtle.timingSafeEqual` where available and a manual constant-time loop otherwise". | WebCrypto has no `timingSafeEqual` on any platform — the method exists only on Node's `node:crypto`, which ground rule 1 forbids above the VFS. The manual loop is the implementation, full stop. Applied by M1.7. |
+| E-06 | [15](./15-wire-types.md) | Describes a parameter's unsigned flag as "the high bit of the high byte (`0x80`)", while docs 14 and 16 say `0x8000`. | The same bit. State it once as `typeWord & 0x8000` over the whole `int<2>`; the `0x80` form reads as a mask over the word when quoted out of context. Applied by M1.3. |
 
 ---
 
@@ -575,6 +579,7 @@ items record their own progress in the tables above.
 
 | Date | Entry |
 |---|---|
+| 2026-09-06 | M1.1–M1.7 done. `@myjs/protocol`: the streaming packet framer with the 16 MiB split and its mandatory trailing empty packet, framer-owned sequence ids, the negotiated capability value, the discriminate-by-length rule, OK/ERR/EOF writers byte-identical to doc 10's worked examples, the error table generated from `mysql-server@e174239c` (2,132 entries), and the WebCrypto shim with an injectable random source. Added D-29, D-31, E-05 and E-06. |
 | 2026-09-06 | **M0 complete (10 / 10).** `@myjs/vfs`: doc 40's interfaces with E-02 applied, the `Lock` type E-04 was missing, the memory reference backend, and a conformance suite exported from the package so the Node, OPFS and fault-injecting backends run the identical body. CI runs lint, typecheck, tests, the 10⁶-input fuzz, and a ratcheting gzipped size gate whose committed numbers are in `size-budget.json`. Added E-03 and E-04. The scoreboard's bundle row stays `—` until `@myjs/core` exists in M1. |
 | 2026-09-06 | M0.1–M0.8 done. Workspace, `tsconfig` (`erasableSyntaxOnly` + `verbatimModuleSyntax`), the isomorphic lint gate, and `@myjs/bytes` — `Reader`, `Writer`, `ProtocolError`, bitmap helpers — with property tests and the 10⁶-input fuzz target. Added D-27 and D-30. Two deviations from the item text: M0.2's negative fixture uses `packages/protocol` rather than `packages/types`, which does not exist until M2, and the linter takes `--root` so the fixture lives in a temp tree instead of permanently failing the repository; M0.8 uses a seeded generator rather than a third-party fuzzer, since doc 43 §6 names none. |
 | 2026-09-05 | Roadmap rewritten as the project's living plan: work items with acceptance assertions, the decision log (D-01…D-26), ground rules, repository layout, release plan, scoreboard, open questions (Q-01…Q-10) and errata (E-01, E-02). No code yet; M0 is next. |
