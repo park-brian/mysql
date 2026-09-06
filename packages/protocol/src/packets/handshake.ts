@@ -213,7 +213,12 @@ export function parseHandshakeResponse(payload: Uint8Array): SslRequest | Handsh
     authResponse = r.bytes(r.u8())
   }
 
-  const database = (clientCaps & CLIENT.CONNECT_WITH_DB) !== 0 ? fromUtf8(r.nulString()) : null
+  // An empty name means "no database", not "the database called ''" — mysql2
+  // sets CLIENT_CONNECT_WITH_DB and sends an empty string when none is
+  // configured, and MySQL leaves such a session with DATABASE() as NULL.
+  // `parseComChangeUser` makes the same mapping.
+  const declaredDatabase = (clientCaps & CLIENT.CONNECT_WITH_DB) !== 0 ? fromUtf8(r.nulString()) : null
+  const database = declaredDatabase === '' ? null : declaredDatabase
   const clientPluginName = (clientCaps & CLIENT.PLUGIN_AUTH) !== 0 ? fromUtf8(r.nulString()) : ''
 
   const connectAttrs = new Map<string, string>()

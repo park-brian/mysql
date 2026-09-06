@@ -16,6 +16,7 @@ import {
 } from './framing.ts'
 import {
   DUMMY_ACCOUNT_PASSWORD,
+  isEmptyPasswordResponse,
   makeAccount,
   verifyCleartext,
   verifyNative,
@@ -142,6 +143,23 @@ export interface AuthenticatorOptions {
   /** Required only for the RSA branch, which is the TCP listener's alone. */
   readonly rsa?: RsaKeyPair | null
   readonly cache?: Sha2Cache
+  /**
+   * Treat every known account as already cached, so the fast path always
+   * applies and the full path is never entered.
+   *
+   * This is what makes D-11's "in-process connections ... never touch RSA"
+   * true against a real client rather than only against our own. `mysql2`
+   * decides whether a channel is secure from `config.ssl || config.socketPath`
+   * (`lib/auth_plugins/caching_sha2_password.js`), and a stream-based
+   * connection has neither — so on `0x04` it would request a public key and
+   * encrypt, no matter what the server believes about the channel.
+   *
+   * It weakens nothing: the fast path still verifies the scramble against the
+   * stored digest, so a wrong password fails exactly as before. All it skips
+   * is "has this account connected once already", which is a round-trip
+   * optimisation for a network and means nothing in-process.
+   */
+  readonly assumeCached?: boolean
   readonly limiter?: FailureLimiter
   /** Identifies the peer for rate-limiting and for the access-denied message. */
   readonly clientHost?: string
@@ -257,7 +275,20 @@ export class ServerAuthenticator {
     }
 
     // caching_sha2_password.
-    if (this.#cache.has(this.#user) || account.emptyPassword) {
+
+    // The empty-password short-circuit sends **no marker at all**. The C
+    // client, having sent an empty response, returns from its plugin
+    // immediately and expects the next packet to be the final OK or ERR — so a
+    // `fast_auth_success` here is read as a malformed packet
+    // (`ERROR 2027 (HY000)`) rather than as a step in the exchange. `mysql2`
+    // happens to tolerate it, which is exactly why this needed a real C client
+    // to find. Recorded as E-10.
+    if (isEmptyPasswordResponse(response)) {
+      if (!account.emptyPassword || !this.#userExists) return this.#denied()
+      return this.#succeed()
+    }
+
+    if (this.#options.assumeCached === true || this.#cache.has(this.#user)) {
       const ok = await verifySha2Scramble(account, this.#options.scramble, response)
       if (!ok || !this.#userExists) return this.#denied()
       // M1.12: `0x03` is sent as its **own packet before** the OK. A client
@@ -313,7 +344,12 @@ export class ServerAuthenticator {
     if (account === null) return this.#denied()
     const ok = await verifyCleartext(account, passwordWithNul)
     if (!ok || !this.#userExists) return this.#denied()
-    return this.#succeed([fastAuthSuccess()])
+    // No `0x03` here. `fast_auth_success` belongs to the *fast* path alone:
+    // having completed full authentication, the client is in its final state
+    // and expects the OK packet next. `mysql2` rejects a further AuthMoreData
+    // outright ("Unexpected data in AuthMoreData packet ... in STATE_FINAL"),
+    // and a real server sends only the OK.
+    return this.#succeed()
   }
 }
 

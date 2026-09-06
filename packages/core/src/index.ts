@@ -1,0 +1,6 @@
+export { MySQL } from './mysql.ts'
+export type { MySQLOptions, DriverStream } from './mysql.ts'
+export { ProtocolConnection, DEFAULT_SERVER_VERSION } from './connection.ts'
+export type { ConnectionOptions } from './connection.ts'
+export { StubExecutor } from './stub.ts'
+export type { StubOptions } from './stub.ts'

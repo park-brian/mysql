@@ -236,3 +236,54 @@ export function parseComStmtPrepare(payload: Uint8Array): string {
   r.u8()
   return fromUtf8(r.restBytes())
 }
+
+export interface ComChangeUser {
+  readonly username: string
+  readonly authResponse: Uint8Array
+  readonly database: string | null
+  readonly characterSet: number
+  readonly clientPluginName: string
+  readonly connectAttrs: ReadonlyMap<string, string>
+}
+
+/**
+ * `COM_CHANGE_USER` — full re-authentication on an existing connection.
+ *
+ * It is shaped like the tail of `HandshakeResponse41`, and it re-enters the
+ * connection phase: the auth exchange that follows continues from *this*
+ * command's sequence 0 rather than resetting again (doc 12).
+ */
+export function parseComChangeUser(payload: Uint8Array, caps: Capabilities): ComChangeUser {
+  const r = new Reader(payload)
+  const command = r.u8()
+  if (command !== COM.CHANGE_USER) {
+    throw protocolError('ER_MALFORMED_PACKET', `expected COM_CHANGE_USER, got 0x${command.toString(16)}`)
+  }
+  const username = fromUtf8(r.nulString())
+  const authResponse = hasCap(caps, CLIENT.PLUGIN_AUTH_LENENC_CLIENT_DATA)
+    ? (r.lenEncBytes() ?? new Uint8Array(0))
+    : r.bytes(r.u8())
+  const database = fromUtf8(r.nulString())
+  const characterSet = r.remaining >= 2 ? r.u16() : 0
+  const clientPluginName = hasCap(caps, CLIENT.PLUGIN_AUTH) && r.remaining > 0 ? fromUtf8(r.nulString()) : ''
+  const connectAttrs = new Map<string, string>()
+  if (hasCap(caps, CLIENT.CONNECT_ATTRS) && r.remaining > 0) {
+    const total = Number(r.lenEncInt() ?? 0n)
+    if (total > r.remaining) {
+      throw protocolError('ER_MALFORMED_PACKET', 'connection attributes overrun the packet')
+    }
+    const end = r.position + total
+    while (r.position < end) {
+      const key = fromUtf8(r.lenEncBytes() ?? new Uint8Array(0))
+      connectAttrs.set(key, fromUtf8(r.lenEncBytes() ?? new Uint8Array(0)))
+    }
+  }
+  return {
+    username,
+    authResponse,
+    database: database === '' ? null : database,
+    characterSet,
+    clientPluginName,
+    connectAttrs,
+  }
+}

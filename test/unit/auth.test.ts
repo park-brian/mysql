@@ -189,6 +189,7 @@ test('an in-process connection takes the secure branch and never touches RSA', a
   // The client sends `password ‖ 0x00` in the clear inside the secure channel.
   const done = await auth.next(concat([utf8('s3cret'), new Uint8Array([0])]))
   assert.equal(done.status, 'success')
+  assert.deepEqual(sent(done), [], 'the OK follows directly, with no 0x03 marker')
   assert.equal(cache.has('alice'), true, 'and the account is cached for next time')
 })
 
@@ -249,7 +250,12 @@ test('an insecure channel drives the full RSA exchange', async () => {
   const ciphertext = await rsaEncrypt(await importPublicKeyPem(pem), obscured)
   const done = await auth.next(ciphertext)
   assert.equal(done.status, 'success')
-  assert.deepEqual([...parseAuthMoreData(sent(done)[0] as Uint8Array)], [SHA2.FAST_AUTH_SUCCESS])
+  assert.deepEqual(
+    sent(done),
+    [],
+    'the full path sends the OK directly: 0x03 belongs to the fast path, and a ' +
+      'client in its final state rejects a further AuthMoreData',
+  )
 })
 
 test('a wrong password over RSA fails without crashing', async () => {
@@ -397,4 +403,55 @@ test('a successful login clears the failure record', async () => {
   })
   assert.equal((await auth.begin(response({ authResponse: await sha2Scramble('s3cret', NONCE) }))).status, 'success')
   assert.equal(limiter.failureCount('10.0.0.2'), 0)
+})
+
+// --- what a real C client actually does (E-09, E-10) ---------------------
+
+test('the C clients one-byte 0x00 counts as an empty-password response (E-09)', async () => {
+  // Doc 13 says an empty password produces a zero-length response, and that is
+  // what mysql2 sends. The `mysql` CLI sends a single 0x00 byte instead —
+  // observed on the wire as the length-encoded pair `01 00`. A real scramble
+  // is 20 or 32 bytes, so accepting both forms is unambiguous.
+  const accounts = new MapAccountStore()
+  await accounts.add('root', '')
+  for (const authResponse of [new Uint8Array(0), new Uint8Array([0])]) {
+    const auth = new ServerAuthenticator({
+      accounts,
+      scramble: NONCE,
+      secureChannel: false,
+      cache: new Sha2Cache(),
+    })
+    const step = await auth.begin(response({ username: 'root', authResponse }))
+    assert.equal(step.status, 'success', `a ${authResponse.length}-byte response must authenticate`)
+  }
+})
+
+test('the empty-password short-circuit sends no marker at all (E-10)', async () => {
+  // The C client returns from its plugin as soon as it has sent the empty
+  // response and expects the next packet to be the final OK. A
+  // `fast_auth_success` here is read as a malformed packet — ERROR 2027 — and
+  // mysql2's tolerance of it is exactly why this needed a real C client to
+  // find.
+  const accounts = new MapAccountStore()
+  await accounts.add('root', '')
+  const auth = new ServerAuthenticator({
+    accounts,
+    scramble: NONCE,
+    secureChannel: false,
+    cache: new Sha2Cache(),
+  })
+  const step = await auth.begin(response({ username: 'root', authResponse: new Uint8Array([0]) }))
+  assert.equal(step.status, 'success')
+  assert.deepEqual(sent(step), [], 'the OK follows directly')
+})
+
+test('an empty response still cannot authenticate an account that has a password', async () => {
+  const auth = new ServerAuthenticator({
+    accounts: await store('alice', 's3cret'),
+    scramble: NONCE,
+    secureChannel: false,
+    cache: new Sha2Cache(),
+  })
+  const step = await auth.begin(response({ authResponse: new Uint8Array([0]) }))
+  assert.equal(step.status, 'failure')
 })
