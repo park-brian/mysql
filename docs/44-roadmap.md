@@ -461,13 +461,13 @@ code that moves it (doc 43 §8). A claim without a number is marketing.
 | Metric | Today | Target for 1.0 |
 |---|---|---|
 | MySQL `mysql-test` files passing | 0 / 1,543 | ≥ 800 |
-| `mysql2` test suite | 0 / 253 | ≥ 245 |
+| `mysql2` test suite | 0 / 253 — not yet run: it queries real tables, so it needs M5 | ≥ 245 |
 | Drizzle MySQL suite | — | pass |
 | Prisma MySQL suite | — | pass |
-| Protocol traces replayed byte-identically | 0 / 0 | 100% |
+| Protocol traces replayed byte-identically | 9 / 9 | 100% |
 | InnoDB round-trip, by type | 0 / 17 | 17 / 17 |
 | Crash injection points, inconsistencies | 0 / 0 | 10,000 points, 0 |
-| Core bundle, gzipped | — | < 500 KB |
+| Core bundle, gzipped | 40.5 KB (`@myjs/protocol` 39.6 KB) | < 500 KB |
 | Cold start, browser | — | published, tracked |
 
 ---
@@ -503,8 +503,8 @@ so the correction has a reason attached.
 | E-04 | [40](./40-vfs.md) | `Vfs.lock()` returns `Promise<Lock>`, and `Lock` is never declared anywhere in the docs. | Declared in M0.9: `path`, `held`, `release()` and `[Symbol.dispose]()`, so a lock can be released from a `finally` or a `using`. A second `release()` is a no-op, not an error. |
 | E-05 | [13](./13-authentication.md) | Suggests constant-time comparison "via `crypto.subtle.timingSafeEqual` where available and a manual constant-time loop otherwise". | WebCrypto has no `timingSafeEqual` on any platform — the method exists only on Node's `node:crypto`, which ground rule 1 forbids above the VFS. The manual loop is the implementation, full stop. Applied by M1.7. |
 | E-06 | [15](./15-wire-types.md) | Describes a parameter's unsigned flag as "the high bit of the high byte (`0x80`)", while docs 14 and 16 say `0x8000`. | The same bit. State it once as `typeWord & 0x8000` over the whole `int<2>`; the `0x80` form reads as a mask over the word when quoted out of context. Applied by M1.3. |
-| E-07 | [15](./15-wire-types.md) | The third binary `TIME` dump prints `01` for the all-zero value, contradicting the layout three lines above it, which allows a length byte of only 0, 8 or 12. | Encode the all-zero `TIME` as a bare `00`, as the layout requires; `01` is a transcription slip. Applied by M1.21, and confirmed against a real 8.4 by the trace fixtures. |
-| E-08 | [16](./16-prepared-statements.md) | The worked `COM_STMT_EXECUTE` example encodes the parameter's type word as `0f 00` while calling it `VAR_STRING`; doc 15's table gives `VAR_STRING` = `0xfd`, and `0x0f` is `VARCHAR`, which is internal-only. | Parse what is on the wire rather than "correcting" it — the example is transcribed from upstream. What a real 8.4 sends is settled by the trace fixtures, not by the example. Noted by M1.22. |
+| E-07 | [15](./15-wire-types.md) | The third binary `TIME` dump prints `01` for the all-zero value, contradicting the layout three lines above it, which allows a length byte of only 0, 8 or 12. | Encode the all-zero `TIME` as a bare `00`, as the layout requires; `01` is a transcription slip. Applied by M1.21 and **confirmed**: MySQL 8.0.46 encodes `CAST('00:00:00' AS TIME)` as a bare `00` in a binary row (`test/protocol/fixtures/binary-temporals-prepared.json`). |
+| E-08 | [16](./16-prepared-statements.md) | The worked `COM_STMT_EXECUTE` example encodes the parameter's type word as `0f 00` while calling it `VAR_STRING`; doc 15's table gives `VAR_STRING` = `0xfd`, and `0x0f` is `VARCHAR`, which is internal-only. | Parse what is on the wire rather than "correcting" it — the example is transcribed from upstream. **Settled**: `mysql2` against MySQL 8.0.46 sends `fd 00` for a string parameter (`test/protocol/fixtures/binary-scalars-prepared.json`), so `0x0f` is an artefact of the transcription. Noted by M1.22. |
 | E-09 | [13](./13-authentication.md) | "Empty password ⇒ empty response" (zero-length). The C client — and so the `mysql` CLI — sends a **single `0x00` byte** instead, seen on the wire as the length-encoded pair `01 00`. | Accept both. A real scramble is 20 bytes (native) or 32 (sha2), so neither empty form can collide with one. Applied by M1.11/M1.12. |
 | E-10 | [13](./13-authentication.md) | Describes the empty-password short-circuit without saying that it must skip `fast_auth_success`. | Send the OK directly, with no `0x03`. Having sent an empty response the C client returns from its plugin at once and expects the final OK; an AuthMoreData there is read as a malformed packet (`ERROR 2027`). `mysql2` tolerates it, which is why only a real C client finds this. Applied by M1.12. |
 
@@ -583,6 +583,7 @@ items record their own progress in the tables above.
 
 | Date | Entry |
 |---|---|
+| 2026-09-06 | Trace capture and replay (doc 43 §3). `tools/capture-traces.mjs` proxies the real `mysql` CLI and `mysql2` to a real MySQL 8.0.46 and records both directions; 13 fixtures are committed and our readers parse every byte of them. `tools/freeze-traces.mjs` freezes our own answers to real clients with a fixed nonce, and 9 traces now replay **byte-identically**. Two errata settled by evidence rather than argument: E-07 (the all-zero binary `TIME` really is a bare `00`) and E-08 (a real client really does send `fd`, not `0f`). Scoreboard updated: protocol traces 9 / 9, core bundle 40.5 KB gzipped. |
 | 2026-09-06 | **M1 complete (24 / 24).** M1.24: the `execProtocol` boundary (D-28), `ProtocolConnection` as doc 43 §3's `feed`/`take` pair, `createStream()`/`createPort()`, `serve()` with its non-loopback refusal, and the stub executor. M1.14 closed with the real `mysql` CLI over TCP. **The M1 exit criterion is met**: the CLI connects, authenticates with `caching_sha2_password` on all three branches, runs `SELECT 1` and quits cleanly (`node tools/exit-criterion.mjs`), and unpatched `mysql2` completes a full session in-process and over a socket. Two errata that only a real C client could surface: E-09 and E-10. |
 | 2026-09-06 | M1.16–M1.23 done. The `COM_*` dispatcher with the no-response set and the three quirks centralised rather than left to each handler; `ColumnDefinition41`; text and binary resultsets; the binary value codecs against doc 15's byte dumps; `COM_QUERY`/`COM_STMT_EXECUTE` parsing including query attributes; and prepared-statement state covering all four of doc 16's pitfalls. Added the `Executor` interface — doc 03's `Statement + params ⇄ Resultset` edge made concrete — so `@myjs/protocol` is usable on its own with the engine supplied by the caller. Added E-07 and E-08. |
 | 2026-09-06 | M1.8–M1.13 and M1.15 done; M1.14 in progress. The connection phase and both auth plugins: `HandshakeV10` with the 8 + 12 scramble split, `SSLRequest`/`HandshakeResponse41` with D-31's caps enforced before authentication, the auth-switch dance, `mysql_native_password`, and `caching_sha2_password` on all three branches — fast path, secure-channel full path, and RSA. Accounts store `SHA1(SHA1(pw))` and `SHA256(SHA256(pw))` and no cleartext; the salted digest doc 13 mentions proves unnecessary, since the cached digest verifies the full path too. M1.14 stays `◐` until the real `mysql` CLI authenticates over TCP, which its acceptance assertion names and the M1 exit criterion covers. |

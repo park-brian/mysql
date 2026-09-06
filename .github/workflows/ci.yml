@@ -69,3 +69,50 @@ jobs:
         run: |
           npm run gen:errors
           git diff --exit-code -- packages/protocol/src/errors/
+
+  exit-criterion:
+    name: the real mysql client connects
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22.18'
+          cache: npm
+      - run: npm ci
+      # The C client, not a JavaScript one: it sends
+      # `SELECT @@version_comment LIMIT 1` before anything the user typed, it
+      # does not set new_params_bind_flag on every execute, and over a plain
+      # socket it will not hand over a password without RSA.
+      - name: install the mysql client
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends mysql-client
+      - name: M1 exit criterion
+        run: npm run exit-criterion
+
+  trace-capture:
+    name: re-capture traces against a real MySQL
+    runs-on: ubuntu-latest
+    # Not a gate: the committed fixtures are replayed by `npm test`. This job
+    # exists so that a newer server's bytes are noticed rather than assumed.
+    continue-on-error: true
+    services:
+      mysql:
+        image: mysql:8.4
+        env:
+          MYSQL_ROOT_PASSWORD: root
+        ports: ['3306:3306']
+        options: >-
+          --health-cmd="mysqladmin ping" --health-interval=10s
+          --health-timeout=5s --health-retries=10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22.18'
+          cache: npm
+      - run: npm ci
+      - run: sudo apt-get update && sudo apt-get install -y --no-install-recommends mysql-client
+      - name: capture and diff
+        run: |
+          npm run capture:traces
+          git diff --stat -- test/protocol/fixtures/

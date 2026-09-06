@@ -1,7 +1,7 @@
 {
   "name": "myjs-monorepo",
   "version": "0.0.0",
-  "description": "An isomorphic, in-process MySQL for JavaScript — MySQL wire-protocol compatible, InnoDB-format aware, OPFS in the browser and the filesystem on Node. See docs/.",
+  "description": "An isomorphic, in-process MySQL for JavaScript \u2014 MySQL wire-protocol compatible, InnoDB-format aware, OPFS in the browser and the filesystem on Node. See docs/.",
   "type": "module",
   "license": "MIT",
   "private": true,
@@ -20,7 +20,10 @@
     "lint": "node tools/lint-isomorphic.mjs",
     "fuzz": "node tools/fuzz-reader.mjs",
     "size": "node tools/size-budget.mjs",
-    "gen:errors": "node tools/gen-errors.mjs"
+    "gen:errors": "node tools/gen-errors.mjs",
+    "capture:traces": "node tools/capture-traces.mjs --all",
+    "freeze:traces": "node tools/freeze-traces.mjs",
+    "exit-criterion": "node tools/exit-criterion.mjs"
   },
   "keywords": [
     "mysql",
