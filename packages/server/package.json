@@ -1,0 +1,11 @@
+{
+  "name": "@myjs/server",
+  "version": "0.0.0",
+  "description": "Node TCP server, WebSocket bridge, worker host",
+  "type": "module",
+  "license": "MIT",
+  "engines": { "node": ">=22.18" },
+  "exports": { ".": "./src/index.ts" },
+  "files": ["src"],
+  "dependencies": { "@myjs/core": "0.0.0", "@myjs/protocol": "0.0.0" }
+}

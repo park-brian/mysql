@@ -38,7 +38,7 @@ with no milestone is a note; with a milestone it is a blocker with a deadline.
 
 | | Milestone | Theme | Done | Status |
 |---|---|---|---|---|
-| **M0** | [Foundations](#m0--foundations) | bytes, VFS interface, CI | 0 / 10 | ☐ |
+| **M0** | [Foundations](#m0--foundations) | bytes, VFS interface, CI | 8 / 10 | ◐ |
 | **M1** | [Speak the protocol](#m1--speak-the-protocol) | the whole client ecosystem, for a few thousand lines | 0 / 24 | ☐ |
 | **M2** | [Types and collations](#m2--types-and-collations) | the part everyone else gets wrong | 0 / 15 | ☐ |
 | **M3** | [Parse SQL](#m3--parse-sql) | lexer, parser, AST | 0 / 10 | ☐ |
@@ -47,7 +47,7 @@ with no milestone is a note; with a milestone it is a blocker with a deadline.
 | **M6** | [The browser](#m6--the-browser) | OPFS, workers, leader election | 0 / 10 | ☐ |
 | **M7** | [InnoDB interchange](#m7--innodb-interchange) | read and write real `.ibd` | 0 / 13 | ☐ |
 | **M8** | [Beyond](#m8--beyond) | as demand arrives | 0 / 10 | ☐ |
-| | | **Total** | **0 / 133** | |
+| | | **Total** | **8 / 133** | |
 
 ---
 
@@ -86,6 +86,8 @@ conclusion.
 | D-24 | — | **Storage engines in scope: `native`, `memory`, `innodb-ro`, `csv`.** MyISAM read-only and later; ARCHIVE skipped; BLACKHOLE/FEDERATED/NDB/MERGE out. | An embedded database does not need an engine zoo; it needs enough import formats. | [30](./30-other-engines.md) | — |
 | D-25 | — | **The WAL record format must carry logical before/after row images from its first version.** This is a blocking decision inside M4, not a note (M4.13). | Change streams and live queries (M8) are a projection of the WAL. Retrofitting logical information onto a purely physical log is painful, and doc 26 says to decide it *now*. | [18](./18-binlog.md), [26](./26-redo-and-recovery.md) | — |
 | D-26 | — | **The catalog format is explicitly versioned, with a documented migration per change**, from its first commit (M4.23). | Same reason SQLite publishes a file format document. A store whose format is undocumented cannot be migrated, only abandoned. | [27](./27-data-dictionary.md) | — |
+| D-27 | 2026-09-06 | **The isomorphic lint gate exempts `packages/vfs`, `packages/server` and `packages/core/src/host/*`** — everything else is `Uint8Array`/`DataView` only. | Ground rule 1 names only `packages/vfs`, but `@myjs/server` must open TCP sockets, and the `mysql2`-facing duplex must emit Node `Buffer`s: `mysql2`'s `PacketParser.executePayload` calls `chunk.copy()`, which `Uint8Array` does not have. Confining that to conditional-export host files keeps every other package provably portable. | [03](./03-architecture.md), [42](./42-public-api.md) | — |
+| D-30 | 2026-09-06 | **Typed-error taxonomy**: `MyjsError` is the base carrying `code`, and optionally `errno`/`sqlState`; `ProtocolError` covers framing and parse faults; `SqlError` (M1) carries `mysql2`'s exact shape. `@myjs/bytes` never resolves error numbers — it has no dependencies, so `@myjs/protocol` supplies them from the generated table. | Ground rule 5 requires a typed error from every parser, and doc 42 requires `err.code`/`err.errno`/`err.sqlState`/`err.sqlMessage` to match `mysql2` so existing `catch` blocks keep working. Doc 11 names `ProtocolError` without giving it a shape. | [11](./11-protocol-primitives.md), [42](./42-public-api.md) | — |
 
 ---
 
@@ -163,14 +165,14 @@ bundle-size gate is enforcing a real number.
 
 | # | Work item | Pkg | Docs | Deps | St | Done when |
 |---|---|---|---|---|---|---|
-| M0.1 | Workspace scaffolding: npm workspaces, `packages/*`, root `tsconfig` with `erasableSyntaxOnly` + `verbatimModuleSyntax`, `engines.node >=22.18` | — | D-01, D-02 | — | ☐ | `node --test` runs a `.ts` test file with no build step |
-| M0.2 | Lint gate: no `Buffer` or `node:*` outside `packages/vfs`; no non-erasable TS syntax | — | [03](./03-architecture.md) | M0.1 | ☐ | a deliberate `node:buffer` import in `packages/types` fails CI |
-| M0.3 | `Reader` — the contract written out in doc 11: all widths, `u24`/`u48`, `u64 → BigInt`, lenenc int and bytes, NUL and EOF strings | bytes | [11](./11-protocol-primitives.md) | M0.1 | ☐ | every read bounds-checks against `remaining`; `0xFB` returns `null`, never `251` |
-| M0.4 | `Writer` — geometric growth, reserves the 4-byte packet header, canonical shortest lenenc | bytes | [11](./11-protocol-primitives.md) | M0.3 | ☐ | `lenEnc(250)` is 1 byte, `lenEnc(251)` is 3 — required for byte-exact trace comparison |
-| M0.5 | `ProtocolError` and the typed-error base | bytes | [11](./11-protocol-primitives.md) | — | ☐ | no path in `bytes` throws a bare `Error` |
-| M0.6 | Bitmap helpers with the offset parameter | bytes | [11](./11-protocol-primitives.md) | M0.3 | ☐ | offset 2 and offset 0 both round-trip; the asymmetry is a test, not a comment |
-| M0.7 | Property tests: round-trip every primitive | bytes | [43 §4](./43-testing.md) | M0.3, M0.4 | ☐ | `fast-check` covers all int widths, lenenc, and all four string forms |
-| M0.8 | Fuzz target: arbitrary bytes into `Reader` | bytes | [43 §6](./43-testing.md) | M0.3 | ☐ | 10⁶ random inputs, zero crashes and hangs, only `ProtocolError` |
+| M0.1 | Workspace scaffolding: npm workspaces, `packages/*`, root `tsconfig` with `erasableSyntaxOnly` + `verbatimModuleSyntax`, `engines.node >=22.18` | — | D-01, D-02 | — | ☑ | `node --test` runs a `.ts` test file with no build step |
+| M0.2 | Lint gate: no `Buffer` or `node:*` outside `packages/vfs`; no non-erasable TS syntax | — | [03](./03-architecture.md) | M0.1 | ☑ | a deliberate `node:buffer` import in `packages/types` fails CI |
+| M0.3 | `Reader` — the contract written out in doc 11: all widths, `u24`/`u48`, `u64 → BigInt`, lenenc int and bytes, NUL and EOF strings | bytes | [11](./11-protocol-primitives.md) | M0.1 | ☑ | every read bounds-checks against `remaining`; `0xFB` returns `null`, never `251` |
+| M0.4 | `Writer` — geometric growth, reserves the 4-byte packet header, canonical shortest lenenc | bytes | [11](./11-protocol-primitives.md) | M0.3 | ☑ | `lenEnc(250)` is 1 byte, `lenEnc(251)` is 3 — required for byte-exact trace comparison |
+| M0.5 | `ProtocolError` and the typed-error base | bytes | [11](./11-protocol-primitives.md) | — | ☑ | no path in `bytes` throws a bare `Error` |
+| M0.6 | Bitmap helpers with the offset parameter | bytes | [11](./11-protocol-primitives.md) | M0.3 | ☑ | offset 2 and offset 0 both round-trip; the asymmetry is a test, not a comment |
+| M0.7 | Property tests: round-trip every primitive | bytes | [43 §4](./43-testing.md) | M0.3, M0.4 | ☑ | `fast-check` covers all int widths, lenenc, and all four string forms |
+| M0.8 | Fuzz target: arbitrary bytes into `Reader` | bytes | [43 §6](./43-testing.md) | M0.3 | ☑ | 10⁶ random inputs, zero crashes and hangs, only `ProtocolError` |
 | M0.9 | `Vfs` / `VfsFile` interfaces from doc 40, with erratum E-02 applied | vfs | [40](./40-vfs.md) | M0.1 | ☐ | `durability` lives on `Vfs`; a conformance suite exists that any backend must pass |
 | M0.10 | Memory VFS — the reference backend — plus CI: unit tests, lint, bundle-size budget | vfs | [40](./40-vfs.md), [43 §7](./43-testing.md) | M0.9 | ☐ | memory passes the conformance suite; the size gate fails a commit that exceeds the committed number |
 
@@ -571,4 +573,5 @@ items record their own progress in the tables above.
 
 | Date | Entry |
 |---|---|
+| 2026-09-06 | M0.1–M0.8 done. Workspace, `tsconfig` (`erasableSyntaxOnly` + `verbatimModuleSyntax`), the isomorphic lint gate, and `@myjs/bytes` — `Reader`, `Writer`, `ProtocolError`, bitmap helpers — with property tests and the 10⁶-input fuzz target. Added D-27 and D-30. Two deviations from the item text: M0.2's negative fixture uses `packages/protocol` rather than `packages/types`, which does not exist until M2, and the linter takes `--root` so the fixture lives in a temp tree instead of permanently failing the repository; M0.8 uses a seeded generator rather than a third-party fuzzer, since doc 43 §6 names none. |
 | 2026-09-05 | Roadmap rewritten as the project's living plan: work items with acceptance assertions, the decision log (D-01…D-26), ground rules, repository layout, release plan, scoreboard, open questions (Q-01…Q-10) and errata (E-01, E-02). No code yet; M0 is next. |

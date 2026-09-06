@@ -1,0 +1,10 @@
+{
+  "name": "@myjs/bytes",
+  "version": "0.0.0",
+  "description": "Cursor/writer over Uint8Array: LE ints, varints, length-encoded values, bitmaps",
+  "type": "module",
+  "license": "MIT",
+  "engines": { "node": ">=22.18" },
+  "exports": { ".": "./src/index.ts" },
+  "files": ["src"]
+}

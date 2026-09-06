@@ -1,0 +1,10 @@
+{
+  "name": "@myjs/vfs",
+  "version": "0.0.0",
+  "description": "The one storage interface plus memory / Node / OPFS backends",
+  "type": "module",
+  "license": "MIT",
+  "engines": { "node": ">=22.18" },
+  "exports": { ".": "./src/index.ts" },
+  "files": ["src"]
+}

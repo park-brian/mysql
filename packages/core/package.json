@@ -1,0 +1,11 @@
+{
+  "name": "@myjs/core",
+  "version": "0.0.0",
+  "description": "Wires it together; the MySQL class and the execProtocol boundary",
+  "type": "module",
+  "license": "MIT",
+  "engines": { "node": ">=22.18" },
+  "exports": { ".": "./src/index.ts" },
+  "files": ["src"],
+  "dependencies": { "@myjs/bytes": "0.0.0", "@myjs/protocol": "0.0.0", "@myjs/vfs": "0.0.0" }
+}
