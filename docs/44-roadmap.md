@@ -39,7 +39,7 @@ with no milestone is a note; with a milestone it is a blocker with a deadline.
 | | Milestone | Theme | Done | Status |
 |---|---|---|---|---|
 | **M0** | [Foundations](#m0--foundations) | bytes, VFS interface, CI | 10 / 10 | ☑ |
-| **M1** | [Speak the protocol](#m1--speak-the-protocol) | the whole client ecosystem, for a few thousand lines | 14 / 24 | ◐ |
+| **M1** | [Speak the protocol](#m1--speak-the-protocol) | the whole client ecosystem, for a few thousand lines | 22 / 24 | ◐ |
 | **M2** | [Types and collations](#m2--types-and-collations) | the part everyone else gets wrong | 0 / 15 | ☐ |
 | **M3** | [Parse SQL](#m3--parse-sql) | lexer, parser, AST | 0 / 10 | ☐ |
 | **M4** | [The storage engine](#m4--the-storage-engine) | pages, B+tree, WAL, MVCC | 0 / 25 | ☐ |
@@ -47,7 +47,7 @@ with no milestone is a note; with a milestone it is a blocker with a deadline.
 | **M6** | [The browser](#m6--the-browser) | OPFS, workers, leader election | 0 / 10 | ☐ |
 | **M7** | [InnoDB interchange](#m7--innodb-interchange) | read and write real `.ibd` | 0 / 13 | ☐ |
 | **M8** | [Beyond](#m8--beyond) | as demand arrives | 0 / 10 | ☐ |
-| | | **Total** | **24 / 133** | |
+| | | **Total** | **32 / 133** | |
 
 ---
 
@@ -209,14 +209,14 @@ connection tests pass against the stub.
 | M1.13 | `caching_sha2_password` full path, secure-channel branch (D-11) | protocol | [13](./13-authentication.md) | M1.12 | ☑ | in-process connections take this branch and never touch RSA |
 | M1.14 | `caching_sha2_password` RSA branch, TCP listener only | protocol, server | [13](./13-authentication.md) | M1.13 | ◐ | the `mysql` CLI authenticates over TCP against a fresh, uncached account |
 | M1.15 | Uniform access-denied (`1045`/`28000`) and failure rate-limiting on the TCP path | protocol | [13](./13-authentication.md) | M1.11 | ☑ | unknown user and wrong password are indistinguishable in timing and in bytes |
-| M1.16 | `COM_*` dispatcher; `COM_PING` implemented first; unknown → `ER_UNKNOWN_COM_ERROR`/`08S01` | protocol | [14](./14-command-phase.md) | M1.5 | ☐ | a pool's ping loop runs 10 000 times without desynchronising |
-| M1.17 | No-response commands: `COM_STMT_SEND_LONG_DATA`, `COM_STMT_CLOSE`, `COM_QUIT` | protocol | [14](./14-command-phase.md), [16](./16-prepared-statements.md) | M1.16 | ☐ | nothing is written, not even on error — a reply desynchronises every client |
-| M1.18 | The command-phase quirks: `COM_FIELD_LIST` (no column-count prefix), `COM_SET_OPTION` (EOF-shaped), `COM_STATISTICS` (bare `string<EOF>`) | protocol | [14](./14-command-phase.md) | M1.16 | ☐ | each matches a captured trace from a real server |
-| M1.19 | `ColumnDefinition41` writer | protocol | [15](./15-wire-types.md) | M1.3 | ☐ | `VARCHAR(255)` utf8mb4 reports `column_length` 1020; charset 63 distinguishes BLOB from TEXT |
-| M1.20 | Text resultset writer and text value renderers | protocol | [14](./14-command-phase.md), [15](./15-wire-types.md) | M1.19 | ☐ | DECIMAL keeps trailing zeros to scale; multi-resultset sets `SERVER_MORE_RESULTS_EXISTS` on every terminator but the last |
-| M1.21 | Binary resultset writer and binary value codecs; null bitmap at **offset 2** | protocol | [15](./15-wire-types.md) | M1.19 | ☐ | doc 15's temporal byte dumps encode and decode exactly, shortest form on write; `INT24` occupies 4 bytes |
-| M1.22 | `COM_QUERY` and `COM_STMT_EXECUTE` parsers with query attributes; null bitmap at **offset 0** | protocol | [14](./14-command-phase.md), [16](./16-prepared-statements.md) | M1.21 | ☐ | doc 16's worked `COM_STMT_EXECUTE` example parses to the parameters it documents |
-| M1.23 | `COM_STMT_*` and the `PreparedStatement` state class: sticky bound types, long-data merge, cursors with a timeout, `max_prepared_stmt_count` 16382 | protocol | [16](./16-prepared-statements.md) | M1.22 | ☐ | `new_params_bind_flag === 0` works against a client that never sets it; an abandoned cursor is reclaimed |
+| M1.16 | `COM_*` dispatcher; `COM_PING` implemented first; unknown → `ER_UNKNOWN_COM_ERROR`/`08S01` | protocol | [14](./14-command-phase.md) | M1.5 | ☑ | a pool's ping loop runs 10 000 times without desynchronising |
+| M1.17 | No-response commands: `COM_STMT_SEND_LONG_DATA`, `COM_STMT_CLOSE`, `COM_QUIT` | protocol | [14](./14-command-phase.md), [16](./16-prepared-statements.md) | M1.16 | ☑ | nothing is written, not even on error — a reply desynchronises every client |
+| M1.18 | The command-phase quirks: `COM_FIELD_LIST` (no column-count prefix), `COM_SET_OPTION` (EOF-shaped), `COM_STATISTICS` (bare `string<EOF>`) | protocol | [14](./14-command-phase.md) | M1.16 | ☑ | each matches a captured trace from a real server |
+| M1.19 | `ColumnDefinition41` writer | protocol | [15](./15-wire-types.md) | M1.3 | ☑ | `VARCHAR(255)` utf8mb4 reports `column_length` 1020; charset 63 distinguishes BLOB from TEXT |
+| M1.20 | Text resultset writer and text value renderers | protocol | [14](./14-command-phase.md), [15](./15-wire-types.md) | M1.19 | ☑ | DECIMAL keeps trailing zeros to scale; multi-resultset sets `SERVER_MORE_RESULTS_EXISTS` on every terminator but the last |
+| M1.21 | Binary resultset writer and binary value codecs; null bitmap at **offset 2** | protocol | [15](./15-wire-types.md) | M1.19 | ☑ | doc 15's temporal byte dumps encode and decode exactly, shortest form on write; `INT24` occupies 4 bytes |
+| M1.22 | `COM_QUERY` and `COM_STMT_EXECUTE` parsers with query attributes; null bitmap at **offset 0** | protocol | [14](./14-command-phase.md), [16](./16-prepared-statements.md) | M1.21 | ☑ | doc 16's worked `COM_STMT_EXECUTE` example parses to the parameters it documents |
+| M1.23 | `COM_STMT_*` and the `PreparedStatement` state class: sticky bound types, long-data merge, cursors with a timeout, `max_prepared_stmt_count` 16382 | protocol | [16](./16-prepared-statements.md) | M1.22 | ☑ | `new_params_bind_flag === 0` works against a client that never sets it; an abandoned cursor is reclaimed |
 | M1.24 | `execProtocol()`, `createStream()`, `createPort()`, `serve()`, and a stub executor | core, server | [03](./03-architecture.md), [42](./42-public-api.md) | M1.20 | ☐ | `mysql2.createConnection({ stream: db.createStream() })` completes a full session unpatched; `serve()` refuses a non-loopback bind without a configured password |
 
 Trace-replay fixtures (doc 43 §3) are built alongside M1.12 and are the
@@ -503,6 +503,8 @@ so the correction has a reason attached.
 | E-04 | [40](./40-vfs.md) | `Vfs.lock()` returns `Promise<Lock>`, and `Lock` is never declared anywhere in the docs. | Declared in M0.9: `path`, `held`, `release()` and `[Symbol.dispose]()`, so a lock can be released from a `finally` or a `using`. A second `release()` is a no-op, not an error. |
 | E-05 | [13](./13-authentication.md) | Suggests constant-time comparison "via `crypto.subtle.timingSafeEqual` where available and a manual constant-time loop otherwise". | WebCrypto has no `timingSafeEqual` on any platform — the method exists only on Node's `node:crypto`, which ground rule 1 forbids above the VFS. The manual loop is the implementation, full stop. Applied by M1.7. |
 | E-06 | [15](./15-wire-types.md) | Describes a parameter's unsigned flag as "the high bit of the high byte (`0x80`)", while docs 14 and 16 say `0x8000`. | The same bit. State it once as `typeWord & 0x8000` over the whole `int<2>`; the `0x80` form reads as a mask over the word when quoted out of context. Applied by M1.3. |
+| E-07 | [15](./15-wire-types.md) | The third binary `TIME` dump prints `01` for the all-zero value, contradicting the layout three lines above it, which allows a length byte of only 0, 8 or 12. | Encode the all-zero `TIME` as a bare `00`, as the layout requires; `01` is a transcription slip. Applied by M1.21, and confirmed against a real 8.4 by the trace fixtures. |
+| E-08 | [16](./16-prepared-statements.md) | The worked `COM_STMT_EXECUTE` example encodes the parameter's type word as `0f 00` while calling it `VAR_STRING`; doc 15's table gives `VAR_STRING` = `0xfd`, and `0x0f` is `VARCHAR`, which is internal-only. | Parse what is on the wire rather than "correcting" it — the example is transcribed from upstream. What a real 8.4 sends is settled by the trace fixtures, not by the example. Noted by M1.22. |
 
 ---
 
@@ -579,6 +581,7 @@ items record their own progress in the tables above.
 
 | Date | Entry |
 |---|---|
+| 2026-09-06 | M1.16–M1.23 done. The `COM_*` dispatcher with the no-response set and the three quirks centralised rather than left to each handler; `ColumnDefinition41`; text and binary resultsets; the binary value codecs against doc 15's byte dumps; `COM_QUERY`/`COM_STMT_EXECUTE` parsing including query attributes; and prepared-statement state covering all four of doc 16's pitfalls. Added the `Executor` interface — doc 03's `Statement + params ⇄ Resultset` edge made concrete — so `@myjs/protocol` is usable on its own with the engine supplied by the caller. Added E-07 and E-08. |
 | 2026-09-06 | M1.8–M1.13 and M1.15 done; M1.14 in progress. The connection phase and both auth plugins: `HandshakeV10` with the 8 + 12 scramble split, `SSLRequest`/`HandshakeResponse41` with D-31's caps enforced before authentication, the auth-switch dance, `mysql_native_password`, and `caching_sha2_password` on all three branches — fast path, secure-channel full path, and RSA. Accounts store `SHA1(SHA1(pw))` and `SHA256(SHA256(pw))` and no cleartext; the salted digest doc 13 mentions proves unnecessary, since the cached digest verifies the full path too. M1.14 stays `◐` until the real `mysql` CLI authenticates over TCP, which its acceptance assertion names and the M1 exit criterion covers. |
 | 2026-09-06 | M1.1–M1.7 done. `@myjs/protocol`: the streaming packet framer with the 16 MiB split and its mandatory trailing empty packet, framer-owned sequence ids, the negotiated capability value, the discriminate-by-length rule, OK/ERR/EOF writers byte-identical to doc 10's worked examples, the error table generated from `mysql-server@e174239c` (2,132 entries), and the WebCrypto shim with an injectable random source. Added D-29, D-31, E-05 and E-06. |
 | 2026-09-06 | **M0 complete (10 / 10).** `@myjs/vfs`: doc 40's interfaces with E-02 applied, the `Lock` type E-04 was missing, the memory reference backend, and a conformance suite exported from the package so the Node, OPFS and fault-injecting backends run the identical body. CI runs lint, typecheck, tests, the 10⁶-input fuzz, and a ratcheting gzipped size gate whose committed numbers are in `size-budget.json`. Added E-03 and E-04. The scoreboard's bundle row stays `—` until `@myjs/core` exists in M1. |
