@@ -40,14 +40,14 @@ with no milestone is a note; with a milestone it is a blocker with a deadline.
 |---|---|---|---|---|
 | **M0** | [Foundations](#m0--foundations) | bytes, VFS interface, CI | 10 / 10 | ☑ |
 | **M1** | [Speak the protocol](#m1--speak-the-protocol) | the whole client ecosystem, for a few thousand lines | 24 / 24 | ☑ |
-| **M2** | [Types and collations](#m2--types-and-collations) | the part everyone else gets wrong | 0 / 15 | ☐ |
+| **M2** | [Types and collations](#m2--types-and-collations) | the part everyone else gets wrong | 1 / 16 | ◐ |
 | **M3** | [Parse SQL](#m3--parse-sql) | lexer, parser, AST | 0 / 10 | ☐ |
 | **M4** | [The storage engine](#m4--the-storage-engine) | pages, B+tree, WAL, MVCC | 0 / 25 | ☐ |
 | **M5** | [Execute](#m5--execute) | operators, planner, functions | 0 / 16 | ☐ |
 | **M6** | [The browser](#m6--the-browser) | OPFS, workers, leader election | 0 / 10 | ☐ |
 | **M7** | [InnoDB interchange](#m7--innodb-interchange) | read and write real `.ibd` | 0 / 13 | ☐ |
 | **M8** | [Beyond](#m8--beyond) | as demand arrives | 0 / 10 | ☐ |
-| | | **Total** | **34 / 133** | |
+| | | **Total** | **35 / 134** | |
 
 ---
 
@@ -90,6 +90,7 @@ conclusion.
 | D-30 | 2026-09-06 | **Typed-error taxonomy**: `MyjsError` is the base carrying `code`, and optionally `errno`/`sqlState`; `ProtocolError` covers framing and parse faults; `SqlError` (M1) carries `mysql2`'s exact shape. `@myjs/bytes` never resolves error numbers — it has no dependencies, so `@myjs/protocol` supplies them from the generated table. | Ground rule 5 requires a typed error from every parser, and doc 42 requires `err.code`/`err.errno`/`err.sqlState`/`err.sqlMessage` to match `mysql2` so existing `catch` blocks keep working. Doc 11 names `ProtocolError` without giving it a shape. | [11](./11-protocol-primitives.md), [42](./42-public-api.md) | — |
 | D-29 | 2026-09-06 | **The generated error table carries facts only — error number, symbol and SQLSTATE — never MySQL's English message text.** Messages for the codes we emit are authored in `packages/protocol/src/errors/messages.ts`. | D-14 says generate rather than transcribe, and ground rule 7 keeps GPLv2 material out of this MIT repository. Numbers and SQLSTATEs are facts; the message templates are expression. The source is fetched at generation time, hashed, and discarded. | [14](./14-command-phase.md) | — |
 | D-31 | 2026-09-06 | **Numeric caps on unauthenticated input**: `max_allowed_packet` 64 MiB, enforced per chunk *during* reassembly rather than on the finished buffer; connection attributes ≤ 64 KiB and ≤ 128 pairs, rejected before authentication; accumulated `COM_STMT_SEND_LONG_DATA` capped at `max_allowed_packet`. | Docs 12, 16 and 17 all require caps and name no numbers. Every one of these bounds an allocation a peer can force before it has proved anything about itself. | [12](./12-connection-phase.md), [16](./16-prepared-statements.md), [17](./17-protocol-extras.md) | — |
+| D-32 | 2026-09-08 | **The neutral value structs live in `@myjs/bytes`, not in `@myjs/types`.** `SqlValue`, `MysqlDateTime`, `MysqlTime` and their two guards move down; `@myjs/protocol` and `@myjs/types` both re-export them. `@myjs/types` owns the *rules* — it defines a separate engine-facing `StorageValue` and a named `toDriverValue()` for D-15, rather than widening `SqlValue`. | Two packages above need to *name* these structs and neither may depend on the other: the release plan ships `@myjs/protocol` at 0.1 and `@myjs/charsets`/`@myjs/types` at 0.2, so a protocol→types edge would make the 0.1 artefact unpublishable as specified. D-30 set the precedent when it put `MyjsError` in `bytes` for the same reason. The move is type-only apart from the two guards. | [11](./11-protocol-primitives.md), [15](./15-wire-types.md), [24](./24-column-encodings.md) | — |
 
 ---
 
@@ -124,9 +125,9 @@ Per D-02. The `Since` column is the milestone that creates the package.
 
 | Package | Responsibility | Depends on | Publishable alone | Since |
 |---|---|---|---|---|
-| `@myjs/bytes` | Cursor/writer over `Uint8Array`; LE/BE ints, varints, length-encoded values | — | yes | M0 |
+| `@myjs/bytes` | Cursor/writer over `Uint8Array`; LE/BE ints, varints, length-encoded values; the neutral value structs both packages above name (D-32) | — | yes | M0 |
 | `@myjs/vfs` | The one storage interface + memory / Node / OPFS backends | — | yes | M0 |
-| `@myjs/protocol` | Packet framing, every packet type both directions, auth plugins | `bytes`, crypto shim | **yes — the M1 release** | M1 |
+| `@myjs/protocol` | Packet framing, every packet type both directions, auth plugins | `bytes`, crypto shim — load-bearing, per D-32 and D-33 | **yes — the M1 release** | M1 |
 | `@myjs/charsets` | Charset ids, encoders/decoders, collation key transforms | — | yes | M2 |
 | `@myjs/types` | Value model, coercion, comparison, index key encoding | `charsets` | yes | M2 |
 | `@myjs/parser` | Lexer + parser → AST; `sql_mode`-aware | — | yes | M3 |
@@ -251,6 +252,7 @@ and the golden vectors from MySQL's own source comments all decode correctly.
 | M2.13 | Binary JSON codec | types | [28](./28-json-binary.md) | M2.12 | ☐ | small/large switches per container; key order is length-then-bytes; `custom-data` reaches back into `decode` |
 | M2.14 | Index key encoding: NULL flag byte, prefix keys, collation sort keys | types | [24](./24-column-encodings.md) | M2.12, M2.2 | ☐ | the memcmp-ordering property holds for every non-float type |
 | M2.15 | Golden-vector and property suite | test | [43 §4](./43-testing.md) | all | ☐ | every byte dump quoted anywhere in docs 15, 24 and 28 is a test case |
+| M2.16 | Relocate the value model to `@myjs/bytes` so `@myjs/types` can name it (D-32) | bytes, protocol | [15](./15-wire-types.md) | — | ☑ | the 9 frozen traces still replay byte-identically; no package's `dependencies` field changes |
 
 ---
 
@@ -585,6 +587,7 @@ items record their own progress in the tables above.
 
 | Date | Entry |
 |---|---|
+| 2026-09-08 | M2.16. The neutral value structs (`SqlValue`, `MysqlDateTime`, `MysqlTime`) move down into `@myjs/bytes` so that `@myjs/protocol` and `@myjs/types` can both name them without a dependency edge in either direction — D-32, and the same argument D-30 used for `MyjsError`. Two things the move surfaced: `renderTime` was exported and called by nothing, because `FIELD_TYPE.TIME` was missing from the text renderer's temporal list, so a TIME column printed its own microsecond count as an integer; and `toFixed(0)` returns exponential notation at 1e21, which is never valid SQL. Both fixed, and `renderTextValue` — previously covered only incidentally through the frozen traces — now has a direct test. |
 | 2026-09-06 | Added Q-11 (does `execProtocol` need a streaming variant?) and Q-12 (what byte-identity against a real server can honestly mean), both pinned to M5. |
 | 2026-09-06 | Trace capture and replay (doc 43 §3). `tools/capture-traces.mjs` proxies the real `mysql` CLI and `mysql2` to a real MySQL 8.0.46 and records both directions; 13 fixtures are committed and our readers parse every byte of them. `tools/freeze-traces.mjs` freezes our own answers to real clients with a fixed nonce, and 9 traces now replay **byte-identically**. Two errata settled by evidence rather than argument: E-07 (the all-zero binary `TIME` really is a bare `00`) and E-08 (a real client really does send `fd`, not `0f`). Scoreboard updated: protocol traces 9 / 9, core bundle 40.5 KB gzipped. |
 | 2026-09-06 | **M1 complete (24 / 24).** M1.24: the `execProtocol` boundary (D-28), `ProtocolConnection` as doc 43 §3's `feed`/`take` pair, `createStream()`/`createPort()`, `serve()` with its non-loopback refusal, and the stub executor. M1.14 closed with the real `mysql` CLI over TCP. **The M1 exit criterion is met**: the CLI connects, authenticates with `caching_sha2_password` on all three branches, runs `SELECT 1` and quits cleanly (`node tools/exit-criterion.mjs`), and unpatched `mysql2` completes a full session in-process and over a socket. Two errata that only a real C client could surface: E-09 and E-10. |

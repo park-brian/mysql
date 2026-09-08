@@ -13,41 +13,20 @@
 // `Date`-shaped mapping D-15 specifies belongs at the driver boundary, not in
 // the codec.
 
-import { Reader, Writer } from '@myjs/bytes'
+import { isMysqlDateTime, isMysqlTime, Reader, Writer } from '@myjs/bytes'
+import type { MysqlDateTime, MysqlTime, SqlValue } from '@myjs/bytes'
 import { FIELD_TYPE } from './constants/types.ts'
 import { protocolError } from './errors/index.ts'
 import { fromUtf8, utf8 } from './text.ts'
-import type { SqlValue } from './values.ts'
 
-export interface MysqlDateTime {
-  readonly year: number
-  readonly month: number
-  readonly day: number
-  readonly hour: number
-  readonly minute: number
-  readonly second: number
-  readonly microsecond: number
-}
-
-export interface MysqlTime {
-  readonly negative: boolean
-  readonly days: number
-  readonly hour: number
-  readonly minute: number
-  readonly second: number
-  readonly microsecond: number
-}
+// D-32: the structs themselves live in `@myjs/bytes`, so `@myjs/types` can
+// name them without either package depending on the other. Re-exported here
+// because they are part of this package's published surface.
+export { isMysqlDateTime, isMysqlTime }
+export type { MysqlDateTime, MysqlTime }
 
 /** Anything the binary codec can carry. */
 export type BinaryValue = SqlValue | MysqlDateTime | MysqlTime
-
-export function isMysqlDateTime(v: unknown): v is MysqlDateTime {
-  return typeof v === 'object' && v !== null && 'year' in v && 'month' in v
-}
-
-export function isMysqlTime(v: unknown): v is MysqlTime {
-  return typeof v === 'object' && v !== null && 'negative' in v && 'days' in v
-}
 
 const LENENC_TYPES: readonly number[] = [
   FIELD_TYPE.STRING,

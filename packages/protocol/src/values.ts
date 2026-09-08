@@ -8,18 +8,15 @@
 // The full value model and its coercion rules are `@myjs/types` (M2). This is
 // only what the wire needs: a JS value in, the bytes MySQL would print out.
 
+import type { SqlValue } from '@myjs/bytes'
 import { FIELD_TYPE } from './constants/types.ts'
 import { utf8 } from './text.ts'
 import type { ColumnDefinition } from './packets/column.ts'
 
-/**
- * What crosses the protocol/executor seam.
- *
- * D-15 fixes the JS side of this mapping: DECIMAL and TIME arrive as strings,
- * BLOB and BINARY as `Uint8Array`, BIGINT as a number when safe and a `BigInt`
- * otherwise, JSON already parsed.
- */
-export type SqlValue = null | number | bigint | string | boolean | Uint8Array | Date
+// D-32: `SqlValue` is declared in `@myjs/bytes` so that `@myjs/types` can name
+// it without a dependency edge in either direction. Re-exported because it is
+// part of this package's published surface.
+export type { SqlValue }
 
 /**
  * Shortest round-trippable float, in MySQL's spelling.
@@ -84,6 +81,11 @@ const TEMPORAL_TYPES: readonly number[] = [
   FIELD_TYPE.NEWDATE,
 ]
 
+/** `decimals` is 0x1f — "not fixed" — for anything without a declared scale. */
+function scaleOf(decimals: number): number {
+  return decimals === 0x1f ? 0 : decimals
+}
+
 /**
  * Render one value for the text protocol. `null` means "write `0xFB`", which
  * is the caller's job because it replaces the whole length-encoded string.
@@ -94,17 +96,28 @@ export function renderTextValue(value: SqlValue, column: Pick<ColumnDefinition, 
   if (value instanceof Date) {
     if (column.type === FIELD_TYPE.DATE) return utf8(renderDate(value))
     if (TEMPORAL_TYPES.includes(column.type)) {
-      return utf8(renderDateTime(value, column.decimals === 0x1f ? 0 : column.decimals))
+      return utf8(renderDateTime(value, scaleOf(column.decimals)))
     }
     return utf8(renderDateTime(value))
   }
   if (typeof value === 'boolean') return utf8(value ? '1' : '0')
-  if (typeof value === 'bigint') return utf8(value.toString())
+  if (typeof value === 'bigint') {
+    // TIME is a duration, so a `bigint` on a TIME column is microseconds — not
+    // an integer to print. Without this branch `19:27:30` renders as
+    // `70050000000`, which is a wrong answer rather than a missing one.
+    if (column.type === FIELD_TYPE.TIME) return utf8(renderTime(value, scaleOf(column.decimals)))
+    return utf8(value.toString())
+  }
   if (typeof value === 'number') {
     if (column.type === FIELD_TYPE.FLOAT || column.type === FIELD_TYPE.DOUBLE) {
       return utf8(renderFloat(value))
     }
-    return utf8(Number.isInteger(value) ? value.toFixed(0) : renderFloat(value))
+    if (!Number.isInteger(value)) return utf8(renderFloat(value))
+    // `toFixed(0)` gives up and returns exponential notation at 1e21, which is
+    // never valid SQL. Out of contract for an integer column — BIGINT tops out
+    // at ~9.22e18 and D-15 sends anything unsafe as a `bigint` — but a wrong
+    // answer is worse than a slow one, so print it exactly.
+    return utf8(Math.abs(value) < 1e21 ? value.toFixed(0) : BigInt(value).toString())
   }
   // Strings pass through: DECIMAL keeps its trailing zeros to the declared
   // scale precisely because the executor hands us the rendered string rather

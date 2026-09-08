@@ -10,3 +10,5 @@ export {
   RESULTSET_ROW_OFFSET,
   PARAMETER_OFFSET,
 } from './bitmap.ts'
+export { isMysqlDateTime, isMysqlTime } from './values.ts'
+export type { SqlValue, MysqlDateTime, MysqlTime } from './values.ts'

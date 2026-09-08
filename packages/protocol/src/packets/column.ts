@@ -14,7 +14,7 @@
 //   utf8mb4 reports 1020.
 
 import { Reader, Writer } from '@myjs/bytes'
-import { CHARSET_BINARY, COLUMN_FLAG, FIELD_TYPE } from '../constants/types.ts'
+import { CHARSET_BINARY, CHARSET_UTF8MB4_0900_AI_CI, COLUMN_FLAG, FIELD_TYPE } from '../constants/types.ts'
 import { protocolError } from '../errors/index.ts'
 import { fromUtf8, utf8 } from '../text.ts'
 
@@ -163,7 +163,7 @@ export function column(
   return {
     name,
     type,
-    characterSet: numeric ? CHARSET_BINARY : 255,
+    characterSet: numeric ? CHARSET_BINARY : CHARSET_UTF8MB4_0900_AI_CI,
     columnLength: 0,
     flags: numeric ? COLUMN_FLAG.NUM : 0,
     decimals: 0,
