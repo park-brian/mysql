@@ -1,0 +1,11 @@
+{
+  "name": "@myjs/charsets",
+  "version": "0.0.0",
+  "description": "MySQL charset ids, encoders/decoders, collation key transforms",
+  "type": "module",
+  "license": "MIT",
+  "engines": { "node": ">=22.18" },
+  "exports": { ".": "./src/index.ts" },
+  "files": ["src"],
+  "dependencies": { "@myjs/bytes": "0.0.0" }
+}

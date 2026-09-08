@@ -21,6 +21,7 @@
     "fuzz": "node tools/fuzz-reader.mjs",
     "size": "node tools/size-budget.mjs",
     "gen:errors": "node tools/gen-errors.mjs",
+    "gen:charsets": "node tools/gen-charsets.mjs",
     "capture:traces": "node tools/capture-traces.mjs --all",
     "freeze:traces": "node tools/freeze-traces.mjs",
     "exit-criterion": "node tools/exit-criterion.mjs"

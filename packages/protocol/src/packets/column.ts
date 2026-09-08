@@ -15,6 +15,7 @@
 
 import { Reader, Writer } from '@myjs/bytes'
 import { CHARSET_BINARY, CHARSET_UTF8MB4_0900_AI_CI, COLUMN_FLAG, FIELD_TYPE } from '../constants/types.ts'
+import { mbMaxLenOf } from '../constants/charset-widths.ts'
 import { protocolError } from '../errors/index.ts'
 import { fromUtf8, utf8 } from '../text.ts'
 
@@ -116,10 +117,18 @@ export function parseColumnDefinition41(
  * the charset's maximum bytes per character.
  *
  * utf8mb4 is 4, so `VARCHAR(255)` reports 1020 — M1.19's acceptance assertion.
- * The real `mbmaxlen` table arrives with `@myjs/charsets` in M2.4.
+ *
+ * M2.4: `mbMaxLen` is now looked up from the generated width table when a
+ * collation id is given instead. The two-argument form stays, because a caller
+ * that already knows the width should not have to invent an id for it.
  */
 export function columnLengthForChars(charLength: number, mbMaxLen: number): number {
   return charLength * mbMaxLen
+}
+
+/** The same, from the collation id a `ColumnDefinition` actually carries. */
+export function columnLengthForCollation(charLength: number, collationId: number): number {
+  return charLength * mbMaxLenOf(collationId)
 }
 
 /** True when this column carries bytes rather than text. */
