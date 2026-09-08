@@ -24,9 +24,11 @@ import {
   type PreparedInfo,
   type Session,
   type SqlValue,
+  utf8Transcoder,
   type StatementResult,
 } from '@myjs/protocol'
 import { DEFAULT_SERVER_VERSION } from './connection.ts'
+import { charsetVariables, parseSetNames } from './transcoder.ts'
 
 export interface StubOptions {
   readonly serverVersion?: string
@@ -79,12 +81,6 @@ export class StubExecutor implements Executor {
     this.#vars = new Map<string, SqlValue>([
       ['version', options.serverVersion ?? DEFAULT_SERVER_VERSION],
       ['version_comment', options.versionComment ?? 'myjs — an in-process MySQL for JavaScript'],
-      ['character_set_client', 'utf8mb4'],
-      ['character_set_connection', 'utf8mb4'],
-      ['character_set_results', 'utf8mb4'],
-      ['character_set_server', 'utf8mb4'],
-      ['collation_connection', 'utf8mb4_0900_ai_ci'],
-      ['collation_server', 'utf8mb4_0900_ai_ci'],
       ['sql_mode', 'STRICT_TRANS_TABLES,NO_ENGINE_SUBSTITUTION'],
       ['autocommit', 1],
       ['time_zone', 'SYSTEM'],
@@ -147,6 +143,16 @@ export class StubExecutor implements Executor {
       if (upper.startsWith('USE ')) {
         session.database = stripQuotes(trimmed.slice(4).trim())
       }
+      // M2.18: `SET NAMES` is the only `SET` with a real effect here. Doc 29:
+      // `HandshakeV10` carries one byte for the collation id, so a client
+      // cannot reach `utf8mb4_0900_ai_ci` (255) any other way.
+      const change = parseSetNames(trimmed)
+      if (change === 'unknown') {
+        throw sqlError('ER_UNKNOWN_CHARACTER_SET', messages.unsupportedCharset(0))
+      }
+      if (change !== null && session !== undefined) {
+        session.characterSet = change.collationId
+      }
       return { affectedRows: 0 }
     }
 
@@ -188,7 +194,7 @@ export class StubExecutor implements Executor {
 
     if (expr === '?') {
       const v = parameter?.value ?? null
-      return v instanceof Uint8Array || v === null || typeof v === 'object' ? decodeParam(v) : v
+      return v instanceof Uint8Array || v === null || typeof v === 'object' ? decodeParam(v, session) : v
     }
 
     if (/^-?\d+$/.test(expr)) return Number(expr)
@@ -198,6 +204,11 @@ export class StubExecutor implements Executor {
 
     if (expr.startsWith('@@')) {
       const name = expr.replace(/^@@(session\.|global\.)?/i, '').toLowerCase()
+      // M2.18: the `character_set_*` and `collation_*` variables are derived
+      // from the session rather than hardcoded, so a client that issues
+      // `SET NAMES latin1` and then reads them back sees latin1.
+      const charsetVar = session === undefined ? undefined : charsetVariables(session.characterSet)[name]
+      if (charsetVar !== undefined) return charsetVar
       const found = this.#vars.get(name)
       if (found === undefined) {
         throw sqlError('ER_UNKNOWN_SYSTEM_VARIABLE', `Unknown system variable '${name}'`)
@@ -232,9 +243,18 @@ export class StubExecutor implements Executor {
   }
 }
 
-function decodeParam(v: unknown): SqlValue {
+function decodeParam(v: unknown, session?: Session): SqlValue {
   if (v === null) return null
-  if (v instanceof Uint8Array) return new TextDecoder().decode(v)
+  // M2.18: `readBinaryValue` hands back raw bytes for every length-encoded
+  // type, so the charset decision belongs here — and it is the session's, not
+  // a hardcoded UTF-8.
+  if (v instanceof Uint8Array) {
+    // No session only in a direct unit-test call; `utf8Transcoder` is the same
+    // default `Session` would have installed.
+    return session === undefined
+      ? utf8Transcoder.decode(v, CHARSET_UTF8MB4_0900_AI_CI)
+      : session.transcoder.decode(v, session.characterSet)
+  }
   return v as SqlValue
 }
 

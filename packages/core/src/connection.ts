@@ -39,6 +39,7 @@ import {
   type RsaKeyPair,
 } from '@myjs/protocol'
 import { MyjsError, ProtocolError, Writer } from '@myjs/bytes'
+import { charsetTranscoder } from './transcoder.ts'
 
 export const DEFAULT_SERVER_VERSION = '8.4.0-myjs-0.1.0'
 
@@ -213,6 +214,9 @@ export class ProtocolConnection {
       user: parsed.username,
       database: parsed.database,
       characterSet: parsed.characterSet,
+      // M2.18 / D-33: `@myjs/protocol` cannot depend on `@myjs/charsets`, so
+      // the real transcoder is supplied from here, where both are available.
+      transcoder: charsetTranscoder,
       // D-13: the negotiated flag AND the engine switch.
       multipleStatements:
         (this.#options.multipleStatements ?? false) && hasCap(this.#capabilities, CLIENT.MULTI_STATEMENTS),

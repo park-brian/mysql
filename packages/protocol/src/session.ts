@@ -10,6 +10,7 @@ import { DEFAULT_MAX_ALLOWED_PACKET } from './constants/commands.ts'
 import { CHARSET_UTF8MB4_0900_AI_CI } from './constants/types.ts'
 import { SERVER_STATUS, type Capabilities } from './constants/capabilities.ts'
 import { StatementTable } from './statement.ts'
+import { utf8Transcoder, type Transcoder } from './text.ts'
 import type { ColumnDefinition } from './packets/column.ts'
 import type { StatementResult } from './packets/resultset.ts'
 import type { Parameter } from './commands.ts'
@@ -20,6 +21,15 @@ export interface SessionOptions {
   readonly user?: string
   readonly database?: string | null
   readonly characterSet?: number
+  /**
+   * M2.18 / D-33: how session-charset text is encoded and decoded.
+   *
+   * Defaults to a UTF-8-only implementation that raises a typed error for any
+   * other charset. `@myjs/core` supplies one backed by `@myjs/charsets`, which
+   * is how `SET NAMES latin1` starts working without this package depending on
+   * that one.
+   */
+  readonly transcoder?: Transcoder
   readonly sqlMode?: string
   /**
    * D-13: `CLIENT_MULTI_STATEMENTS` is honoured when negotiated but gated
@@ -41,6 +51,8 @@ export class Session {
   database: string | null
   characterSet: number
   sqlMode: string
+  /** M2.18: session-charset text. See `SessionOptions.transcoder`. */
+  readonly transcoder: Transcoder
   autocommit = true
   inTransaction = false
   warnings = 0
@@ -64,6 +76,7 @@ export class Session {
     this.user = options.user ?? ''
     this.database = options.database ?? null
     this.characterSet = options.characterSet ?? CHARSET_UTF8MB4_0900_AI_CI
+    this.transcoder = options.transcoder ?? utf8Transcoder
     this.sqlMode = options.sqlMode ?? 'STRICT_TRANS_TABLES,NO_ENGINE_SUBSTITUTION'
     this.multipleStatementsEnabled = options.multipleStatements ?? false
     this.#initial = {

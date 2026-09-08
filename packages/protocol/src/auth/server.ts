@@ -26,6 +26,7 @@ import {
   type AuthPluginName,
 } from './accounts.ts'
 import type { HandshakeResponse41 } from '../packets/handshake.ts'
+import { utf8 } from '../text.ts'
 
 export type AuthStep =
   | { readonly status: 'continue'; readonly send: readonly Uint8Array[] }
@@ -312,7 +313,7 @@ export class ServerAuthenticator {
       }
       this.#state = 'awaiting-encrypted-password'
       const w = new Writer(600)
-      writeAuthMoreData(w, new TextEncoder().encode(rsa.publicKeyPem))
+      writeAuthMoreData(w, utf8(rsa.publicKeyPem))
       return { status: 'continue', send: [w.toBytes()] }
     }
 

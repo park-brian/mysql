@@ -33,6 +33,8 @@ export const messages = {
     "Multiple statements are disabled; enable them with the engine's multipleStatements option",
   unsupportedCharset: (id: number): string =>
     `Character set id ${id} is not supported for the connection character set`,
+  noTranscoder: (id: number): string =>
+    `Character set id ${id} needs a transcoder; supply one from @myjs/charsets (D-33)`,
   connectAttrsTooLarge: (limit: number): string =>
     `Connection attributes exceed the ${limit}-byte limit`,
 } as const
