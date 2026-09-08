@@ -1,0 +1,11 @@
+{
+  "name": "@myjs/types",
+  "version": "0.0.0",
+  "description": "Value model, storage encodings, comparison, index key encoding",
+  "type": "module",
+  "license": "MIT",
+  "engines": { "node": ">=22.18" },
+  "exports": { ".": "./src/index.ts" },
+  "files": ["src"],
+  "dependencies": { "@myjs/bytes": "0.0.0", "@myjs/charsets": "0.0.0" }
+}
