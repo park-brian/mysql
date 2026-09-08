@@ -165,7 +165,7 @@ last few committed transactions after a crash" — which is an acceptable and
 *documentable* guarantee — rather than "the database may be corrupt", which is
 not.
 
-`VfsFile.durability` is exposed to the application so it can decide: a strict
+`Vfs.durability` is exposed to the application so it can decide: a strict
 application can refuse to run on a best-effort VFS, or reduce its commit
 batching.
 

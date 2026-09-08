@@ -1,18 +1,29 @@
 {
-  "name": "myjs",
+  "name": "myjs-monorepo",
   "version": "0.0.0",
-  "description": "An isomorphic, in-process MySQL for JavaScript — MySQL wire-protocol compatible, InnoDB-format aware, OPFS in the browser and the filesystem on Node. Currently research and design; see docs/.",
+  "description": "An isomorphic, in-process MySQL for JavaScript \u2014 MySQL wire-protocol compatible, InnoDB-format aware, OPFS in the browser and the filesystem on Node. See docs/.",
   "type": "module",
   "license": "MIT",
   "private": true,
-  "engines": {
-    "node": ">=20"
-  },
-  "files": [
-    "docs"
+  "workspaces": [
+    "packages/*"
   ],
+  "engines": {
+    "node": ">=22.18"
+  },
   "scripts": {
-    "test": "node --test"
+    "test": "node --test \"test/unit/**/*.test.ts\" \"test/format/**/*.test.ts\" \"test/protocol/**/*.test.ts\"",
+    "test:unit": "node --test \"test/unit/**/*.test.ts\"",
+    "test:format": "node --test \"test/format/**/*.test.ts\"",
+    "test:protocol": "node --test \"test/protocol/**/*.test.ts\"",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "lint": "node tools/lint-isomorphic.mjs",
+    "fuzz": "node tools/fuzz-reader.mjs",
+    "size": "node tools/size-budget.mjs",
+    "gen:errors": "node tools/gen-errors.mjs",
+    "capture:traces": "node tools/capture-traces.mjs --all",
+    "freeze:traces": "node tools/freeze-traces.mjs",
+    "exit-criterion": "node tools/exit-criterion.mjs"
   },
   "keywords": [
     "mysql",
@@ -22,5 +33,12 @@
     "database",
     "isomorphic",
     "wire-protocol"
-  ]
+  ],
+  "devDependencies": {
+    "@types/node": "^26.4.1",
+    "esbuild": "^0.28.2",
+    "fast-check": "^4.9.0",
+    "mysql2": "^3.24.3",
+    "typescript": "^7.0.2"
+  }
 }

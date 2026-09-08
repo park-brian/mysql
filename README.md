@@ -1,8 +1,22 @@
 # myjs — an isomorphic, in-process MySQL for JavaScript
 
-> **Status: research and design.** There is no working engine yet. What exists
-> is a complete, source-verified specification of the formats we need and an
-> argued architecture. Start at **[docs/README.md](./docs/README.md)**.
+> **Status: the wire protocol works; there is no storage engine yet.**
+> M0 and M1 are complete (34 / 133 work items). `@myjs/protocol` speaks the
+> MySQL wire protocol well enough that the real `mysql` client and an unpatched
+> `mysql2` complete full sessions against it — but every query is answered by a
+> stub, because the parser, type system and engine are M2–M5. Start at
+> **[docs/44-roadmap.md](./docs/44-roadmap.md)** for the state of the project,
+> or **[docs/README.md](./docs/README.md)** for the specifications.
+
+```console
+$ npm run exit-criterion
+  ok   mysql -h 127.0.0.1 ... -e "SELECT 1"
+  ok   caching_sha2_password full path over TCP (RSA, uncached)
+  ok   caching_sha2_password fast path (cached)
+  ok   a wrong password is refused with 1045
+  ...
+M1 exit criterion: met
+```
 
 The goal: something you `npm install` and `import` that creates and serves
 MySQL databases with no server process — SQLite's ergonomics, PGlite's delivery
@@ -17,6 +31,10 @@ const db = await MySQL.open(':memory:')        // either
 
 const [rows] = await db.execute('SELECT * FROM users WHERE id = ?', [1])
 ```
+
+*(`db.execute()` arrives with the executor in 0.3. Today `MySQL.open()`,
+`execProtocol()`, `createStream()`, `createPort()` and `serve()` are real, and
+the route to running SQL is a driver — which is the point.)*
 
 …and, because the engine speaks the real MySQL wire protocol, the whole existing
 driver ecosystem works against it unchanged:

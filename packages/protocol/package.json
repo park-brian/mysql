@@ -1,0 +1,11 @@
+{
+  "name": "@myjs/protocol",
+  "version": "0.0.0",
+  "description": "MySQL wire protocol: packet framing, every packet type both directions, auth plugins",
+  "type": "module",
+  "license": "MIT",
+  "engines": { "node": ">=22.18" },
+  "exports": { ".": "./src/index.ts" },
+  "files": ["src"],
+  "dependencies": { "@myjs/bytes": "0.0.0" }
+}
