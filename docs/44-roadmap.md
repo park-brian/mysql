@@ -40,14 +40,14 @@ with no milestone is a note; with a milestone it is a blocker with a deadline.
 |---|---|---|---|---|
 | **M0** | [Foundations](#m0--foundations) | bytes, VFS interface, CI | 10 / 10 | ☑ |
 | **M1** | [Speak the protocol](#m1--speak-the-protocol) | the whole client ecosystem, for a few thousand lines | 24 / 24 | ☑ |
-| **M2** | [Types and collations](#m2--types-and-collations) | the part everyone else gets wrong | 6 / 23 | ◐ |
+| **M2** | [Types and collations](#m2--types-and-collations) | the part everyone else gets wrong | 7 / 23 | ◐ |
 | **M3** | [Parse SQL](#m3--parse-sql) | lexer, parser, AST | 0 / 10 | ☐ |
 | **M4** | [The storage engine](#m4--the-storage-engine) | pages, B+tree, WAL, MVCC | 0 / 25 | ☐ |
 | **M5** | [Execute](#m5--execute) | operators, planner, functions | 0 / 16 | ☐ |
 | **M6** | [The browser](#m6--the-browser) | OPFS, workers, leader election | 0 / 10 | ☐ |
 | **M7** | [InnoDB interchange](#m7--innodb-interchange) | read and write real `.ibd` | 0 / 13 | ☐ |
 | **M8** | [Beyond](#m8--beyond) | as demand arrives | 0 / 10 | ☐ |
-| | | **Total** | **40 / 141** | |
+| | | **Total** | **41 / 141** | |
 
 ---
 
@@ -245,7 +245,7 @@ and the golden vectors from MySQL's own source comments all decode correctly.
 | # | Work item | Pkg | Docs | Deps | St | Done when |
 |---|---|---|---|---|---|---|
 | M2.1 | Collation registry and the `Collation` interface (`sortKey`, `compare`, `padAttribute`) | charsets | [29](./29-charsets-and-collations.md) | M2.17 | ☑ | ids 8, 33, 45, 46, 63, 224, 246, 255, 278 resolve to a collation or a typed "unsupported" |
-| M2.2 | `binary` (63) and `utf8mb4_bin` (46) — pure `memcmp` | charsets | [29](./29-charsets-and-collations.md) | M2.1 | ☐ | enough to build and test the entire B+tree; ordering equals `memcmp` on arbitrary bytes |
+| M2.2 | `binary` (63) and `utf8mb4_bin` (46) — pure `memcmp` | charsets | [29](./29-charsets-and-collations.md) | M2.1 | ☑ | enough to build and test the entire B+tree; ordering equals `memcmp` on arbitrary bytes |
 | M2.3 | Charset encode/decode over `TextEncoder`/`TextDecoder`; MySQL name → WHATWG label | charsets | [29](./29-charsets-and-collations.md) | M2.1 | ☑ | `latin1` maps to `windows-1252`, so `0x80` decodes to `€` |
 | M2.4 | `mbminlen`/`mbmaxlen` table and the limits it drives | charsets, protocol | [29](./29-charsets-and-collations.md) | M2.17 | ☑ | `VARCHAR(16383)` is the utf8mb4 row-limit boundary; `KEY (col(255))` budgets 1020 bytes |
 | M2.5 | Weight-table generator for the **simple** collations, re-runnable, source hash checked in. UCA is M2.20 | charsets | [29](./29-charsets-and-collations.md) | M2.17 | ☐ | re-running against the pinned MySQL tree reproduces the committed tables bit for bit |
@@ -601,6 +601,7 @@ items record their own progress in the tables above.
 
 | Date | Entry |
 |---|---|
+| 2026-09-08 | M2.2. The `memcmp` collations — `binary`, `utf8mb4_bin`, `latin1_bin`, `ascii_bin`, `utf8mb3_bin` — which doc 29 says are enough to build and test the entire B+tree. The subtlety is that every one of them except `binary` is **PAD SPACE**: `utf8mb4_bin` compares `'a'` equal to `'a '` even though the bytes differ, so the comparator pads and the sort key deliberately does not. An unimplemented collation now raises `ER_COLLATION_NOT_IMPLEMENTED` rather than falling back to byte order, because a silent fallback for `utf8mb4_0900_ai_ci` would build an index in the wrong order and surface much later as wrong query results. |
 | 2026-09-08 | M2.1, M2.3, M2.4, M2.17, M2.22 — `@myjs/charsets` exists. The registry is generated from MySQL's own `CHARSET_INFO` definitions across 17 `strings/ctype-*.cc` files: 288 collations with their charset, `mbminlen`/`mbmaxlen` and pad attribute, fetched and hashed and discarded per ground rule 7. D-33 keeps `@myjs/protocol` free of a dependency on it — the same parse emits the byte widths the protocol needs before authentication, and a test asserts the two artefacts agree on every id. The generated rule immediately caught what D-14 predicted it would: id 159, `ucs2_general_mysql500_ci`, is a two-byte charset that the hand-written `PROHIBITED_CONNECTION_CHARSETS` ranges had missed, so it was being accepted as a connection charset. Also M2.22: the size gate discovered `@myjs/charsets` would have landed with no committed number and no gate at all, printing `[no budget yet]` and passing — it now measures every package with a browser entry point and fails on one without a number. Added D-33 and D-34. |
 | 2026-09-08 | M2.16. The neutral value structs (`SqlValue`, `MysqlDateTime`, `MysqlTime`) move down into `@myjs/bytes` so that `@myjs/protocol` and `@myjs/types` can both name them without a dependency edge in either direction — D-32, and the same argument D-30 used for `MyjsError`. Two things the move surfaced: `renderTime` was exported and called by nothing, because `FIELD_TYPE.TIME` was missing from the text renderer's temporal list, so a TIME column printed its own microsecond count as an integer; and `toFixed(0)` returns exponential notation at 1e21, which is never valid SQL. Both fixed, and `renderTextValue` — previously covered only incidentally through the frozen traces — now has a direct test. |
 | 2026-09-06 | Added Q-11 (does `execProtocol` need a streaming variant?) and Q-12 (what byte-identity against a real server can honestly mean), both pinned to M5. |

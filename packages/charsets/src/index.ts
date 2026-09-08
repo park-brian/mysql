@@ -26,4 +26,5 @@ export {
   varcharLengthBytes,
   maxPrefixCharacters,
 } from './limits.ts'
+export { collation, hasCollation, memcmp, memcmpPadSpace, MEMCMP_COLLATION_IDS } from './collations/memcmp.ts'
 export { COLLATION_TABLE_SOURCE, COLLATION_TABLE_SOURCE_SHA256, PACKED_COLLATIONS } from './registry.ts'
