@@ -15,6 +15,7 @@
   ],
   "dependencies": {
     "@myjs/bytes": "0.0.0",
+    "@myjs/charsets": "0.0.0",
     "@myjs/protocol": "0.0.0",
     "@myjs/vfs": "0.0.0"
   },

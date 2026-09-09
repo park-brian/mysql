@@ -1,13 +1,15 @@
 # myjs — an isomorphic, in-process MySQL for JavaScript
 
 > **Status: the wire protocol works and the type system is landing; there is
-> no storage engine yet.** M0, M1 and the first slices of M2 are complete
-> (48 / 141 work items). `@myjs/protocol` speaks the MySQL wire protocol well
+> no storage engine yet.** M0, M1 and most of M2 are complete
+> (51 / 142 work items). `@myjs/protocol` speaks the MySQL wire protocol well
 > enough that the real `mysql` client and an unpatched `mysql2` complete full
-> sessions against it; `@myjs/charsets` and `@myjs/types` now carry the
-> generated collation registry and every byte-exact column encoding in doc 24.
-> Queries are still answered by a stub, because the parser and engine are
-> M3–M5. Start at **[docs/44-roadmap.md](./docs/44-roadmap.md)** for the state
+> sessions against it; `@myjs/charsets` and `@myjs/types` carry the generated
+> collation registry, the generated weight tables for 80 collations, and every
+> byte-exact column encoding in doc 24. The UCA collations — including the
+> 8.0 default, `utf8mb4_0900_ai_ci` — are still generated-but-not-yet, and
+> refuse rather than guessing. Queries are answered by a stub, because the
+> parser and engine are M3–M5. Start at **[docs/44-roadmap.md](./docs/44-roadmap.md)** for the state
 > of the project, or **[docs/README.md](./docs/README.md)** for the
 > specifications.
 

@@ -49,6 +49,16 @@ export interface Collation extends CollationInfo {
   /** A byte string such that `memcmp(sortKey(a), sortKey(b)) === compare(a, b)`. */
   sortKey(bytes: Uint8Array): Uint8Array
   compare(a: Uint8Array, b: Uint8Array): number
+  /**
+   * One character of padding, in sort-key bytes — the sort key of a single
+   * space.
+   *
+   * A PAD SPACE collation compares `'a'` equal to `'a '`, which `sortKey`
+   * alone cannot express: it does not know how wide the column is. The key
+   * encoder pads with this to the declared width, which is what makes the two
+   * agree (D-35). One byte for an 8-bit collation, two for a weight collation.
+   */
+  readonly padUnit: Uint8Array
 }
 
 // --- the generated table, expanded on first use -----------------------------
