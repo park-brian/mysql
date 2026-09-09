@@ -52,8 +52,8 @@ jobs:
       - name: Reader fuzz (10^6 inputs)
         run: npm run fuzz
 
-  error-table:
-    name: generated error table is reproducible
+  generated:
+    name: generated tables are reproducible
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -62,13 +62,20 @@ jobs:
           node-version: '22.18'
           cache: npm
       - run: npm ci
-      # D-14: the table is generated from MySQL's own source, never
+      # D-14: these tables are generated from MySQL's own source, never
       # transcribed. Ground rule 7: that source is fetched, never vendored.
       # Re-running must reproduce the committed output byte for byte.
-      - name: regenerate and diff
+      - name: regenerate the error table and diff
         run: |
           npm run gen:errors
           git diff --exit-code -- packages/protocol/src/errors/
+      # M2.17 / D-33: one parse of MySQL's `CHARSET_INFO` definitions emits
+      # both the full registry and the byte widths `@myjs/protocol` needs, so
+      # the two cannot drift apart.
+      - name: regenerate the collation registry and diff
+        run: |
+          npm run gen:charsets
+          git diff --exit-code -- packages/charsets/src/registry.ts packages/protocol/src/constants/charset-metrics.ts
 
   exit-criterion:
     name: the real mysql client connects

@@ -9,7 +9,7 @@
 // Run with --update to re-commit the numbers after a deliberate growth.
 import { build } from 'esbuild'
 import { gzipSync } from 'node:zlib'
-import { readFileSync, writeFileSync, existsSync } from 'node:fs'
+import { readFileSync, writeFileSync, existsSync, readdirSync } from 'node:fs'
 
 const ROOT = new URL('..', import.meta.url).pathname
 // `--budget-file <path>` lets the gate's own test point at a throwaway budget,
@@ -17,10 +17,21 @@ const ROOT = new URL('..', import.meta.url).pathname
 const budgetFlag = process.argv.indexOf('--budget-file')
 const BUDGET_FILE = budgetFlag === -1 ? ROOT + 'size-budget.json' : process.argv[budgetFlag + 1]
 
-// Only the packages we intend to publish for the browser. @myjs/server is a
-// Node host and @myjs/core is not shippable until 0.3, so they are measured
-// but not yet gated (budget `null`).
-const PACKAGES = ['bytes', 'vfs', 'protocol', 'core']
+// M2.22: discovered, not listed. A hardcoded array means a new package lands
+// with no committed number and no gate, and nothing says so — which is exactly
+// what would have happened to `@myjs/charsets` and `@myjs/types` in M2. Every
+// package with a browser entry point is measured, and every measured package
+// must carry a committed number (see the check at the bottom).
+//
+// `@myjs/server` is the exception, and for the same reason D-27 exempts it
+// from the isomorphic lint: it opens TCP sockets, so there is no browser
+// bundle of it to measure. Listing it here is a deliberate opt-out, not a
+// package someone forgot.
+const HOST_ONLY = ['server']
+const PACKAGES = readdirSync(ROOT + 'packages')
+  .filter((name) => !HOST_ONLY.includes(name))
+  .filter((name) => existsSync(`${ROOT}packages/${name}/src/index.ts`))
+  .sort()
 
 // Headroom so that a one-byte comment change does not fail CI; a real
 // regression is far larger than this.
@@ -82,10 +93,22 @@ if (failures.length > 0) {
   process.exit(1)
 }
 
-// The gate is only real if a number is actually committed.
-const gated = PACKAGES.filter((p) => measured[p] && typeof budgets[p]?.gzip === 'number')
-if (gated.length === 0) {
-  console.error('\nno committed size budget: run `npm run size -- --update` and commit size-budget.json')
+// The gate is only real if a number is actually committed — for every package,
+// not merely for one. A measured package with no number used to print
+// `[no budget yet]` and pass, which is a gate that silently stops gating as
+// soon as the workspace grows (M2.22).
+const measuredNames = PACKAGES.filter((p) => measured[p])
+const ungated = measuredNames.filter((p) => typeof budgets[p]?.gzip !== 'number')
+if (measuredNames.length === 0) {
+  console.error('\nno package has a browser entry point: nothing to measure')
   process.exit(1)
 }
+if (ungated.length > 0) {
+  console.error(
+    `\nno committed size budget for: ${ungated.join(', ')}\n` +
+      'run `npm run size -- --update` and commit size-budget.json',
+  )
+  process.exit(1)
+}
+const gated = measuredNames
 console.log(`\nsize budget: ${gated.length} package(s) gated`)

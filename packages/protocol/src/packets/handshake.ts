@@ -15,6 +15,7 @@ import {
   type Capabilities,
 } from '../constants/capabilities.ts'
 import { CHARSET_UTF8MB4_GENERAL_CI } from '../constants/types.ts'
+import { charsetWidths } from '../constants/charset-widths.ts'
 import { messages } from '../errors/messages.ts'
 import { protocolError } from '../errors/index.ts'
 import { fromUtf8, utf8 } from '../text.ts'
@@ -133,27 +134,24 @@ export function parseHandshakeV10(payload: Uint8Array): HandshakeV10 {
 }
 
 /**
- * Collation ids whose charset has `mbminlen > 1`.
+ * Doc 12: multibyte connection charsets (UCS2/UTF16/UTF32) are refused,
+ * because the NUL-terminated fields of `HandshakeResponse41` would be
+ * ambiguous under them. The rule is exactly `mbminlen > 1`.
  *
- * Doc 12: "Multibyte connection charsets (UCS2/UTF16/UTF32) are not supported
- * here — the specification says so explicitly, because the NUL-terminated
- * fields would be ambiguous. Reject them." Ids from `strings/ctype-*.cc`;
- * `@myjs/charsets` (M2) replaces this list with the generated registry.
+ * M2.17 replaced a hand-written list of id ranges here with a lookup into the
+ * generated width table — and the generated rule immediately caught id 159,
+ * `ucs2_general_mysql500_ci`, which the hand-written ranges had missed. That
+ * is D-14's argument for generating rather than transcribing, arriving on
+ * schedule.
+ *
+ * This runs before authentication, on input nobody has proved anything about,
+ * which is why it uses the table generated into this package rather than
+ * `@myjs/charsets` (D-33). An unknown id is not prohibited: it fails later,
+ * with `ER_UNKNOWN_COLLATION` from the layer that has the names.
  */
-const PROHIBITED_CONNECTION_CHARSETS: ReadonlyArray<readonly [number, number]> = [
-  [35, 35], // ucs2_general_ci
-  [90, 90], // ucs2_bin
-  [128, 151], // ucs2_* collations
-  [54, 55], // utf16_general_ci, utf16_bin
-  [101, 124], // utf16_* collations
-  [56, 56], // utf16le_general_ci
-  [62, 62], // utf16le_bin
-  [60, 61], // utf32_general_ci, utf32_bin
-  [160, 183], // utf32_* collations
-]
-
 export function isProhibitedConnectionCharset(id: number): boolean {
-  return PROHIBITED_CONNECTION_CHARSETS.some(([lo, hi]) => id >= lo && id <= hi)
+  const widths = charsetWidths(id)
+  return widths !== undefined && widths.mbminlen > 1
 }
 
 /** D-31: caps on attacker-controlled, pre-authentication input. */

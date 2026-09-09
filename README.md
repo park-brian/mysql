@@ -1,12 +1,15 @@
 # myjs — an isomorphic, in-process MySQL for JavaScript
 
-> **Status: the wire protocol works; there is no storage engine yet.**
-> M0 and M1 are complete (34 / 133 work items). `@myjs/protocol` speaks the
-> MySQL wire protocol well enough that the real `mysql` client and an unpatched
-> `mysql2` complete full sessions against it — but every query is answered by a
-> stub, because the parser, type system and engine are M2–M5. Start at
-> **[docs/44-roadmap.md](./docs/44-roadmap.md)** for the state of the project,
-> or **[docs/README.md](./docs/README.md)** for the specifications.
+> **Status: the wire protocol works and the type system is landing; there is
+> no storage engine yet.** M0, M1 and the first slices of M2 are complete
+> (48 / 141 work items). `@myjs/protocol` speaks the MySQL wire protocol well
+> enough that the real `mysql` client and an unpatched `mysql2` complete full
+> sessions against it; `@myjs/charsets` and `@myjs/types` now carry the
+> generated collation registry and every byte-exact column encoding in doc 24.
+> Queries are still answered by a stub, because the parser and engine are
+> M3–M5. Start at **[docs/44-roadmap.md](./docs/44-roadmap.md)** for the state
+> of the project, or **[docs/README.md](./docs/README.md)** for the
+> specifications.
 
 ```console
 $ npm run exit-criterion

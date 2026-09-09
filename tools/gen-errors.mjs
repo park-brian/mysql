@@ -15,22 +15,13 @@
 // The source is pinned to the exact tree docs 10–30 were written against
 // (doc 90), so re-running reproduces the committed output byte for byte — the
 // property CI checks with `git diff --exit-code`.
-import { createHash } from 'node:crypto'
 import { writeFileSync } from 'node:fs'
+import { REF, REPO, fetchPinned } from './lib/gen-common.mjs'
 
-const REPO = 'mysql/mysql-server'
-const REF = 'e174239c' // doc 90: the tree every constant in docs 10–30 cites
 const PATH = 'share/messages_to_clients.txt'
-const URL_ = `https://raw.githubusercontent.com/${REPO}/${REF}/${PATH}`
 const OUT = new URL('../packages/protocol/src/errors/table.ts', import.meta.url).pathname
 
-const response = await fetch(URL_)
-if (!response.ok) {
-  console.error(`gen-errors: fetching ${URL_} failed with ${response.status}`)
-  process.exit(1)
-}
-const source = await response.text()
-const sha256 = createHash('sha256').update(source, 'utf8').digest('hex')
+const { text: source, sha256 } = await fetchPinned(PATH)
 
 // Grammar (verified against the pinned file):
 //   column 0, lowercase  -> a directive (`start-error-number N`, `languages`,
