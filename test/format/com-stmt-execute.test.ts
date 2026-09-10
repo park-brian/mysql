@@ -86,7 +86,7 @@ test('COM_QUERY carries named attributes when CLIENT_QUERY_ATTRIBUTES is negotia
   w.bytes(utf8('SELECT 1'))
 
   const parsed = parseComQuery(w.toBytes(), WITH_ATTRS)
-  assert.equal(parsed.sql, 'SELECT 1')
+  assert.equal(fromUtf8(parsed.sqlBytes), 'SELECT 1')
   assert.equal(parsed.attributes.length, 1)
   assert.equal(parsed.attributes[0]?.name, 'trace_id')
   assert.equal(parsed.attributes[0]?.value, 99)
@@ -98,13 +98,13 @@ test('a COM_QUERY with no attributes is just the SQL', () => {
   w.lenEncInt(0)
   w.lenEncInt(1)
   w.bytes(utf8('SELECT 2'))
-  assert.equal(parseComQuery(w.toBytes(), WITH_ATTRS).sql, 'SELECT 2')
+  assert.equal(fromUtf8(parseComQuery(w.toBytes(), WITH_ATTRS).sqlBytes), 'SELECT 2')
 
   // And without the capability, the counts are not there to read at all.
   const plain = new Writer()
   plain.u8(COM.QUERY)
   plain.bytes(utf8('SELECT 3'))
-  assert.equal(parseComQuery(plain.toBytes(), NO_ATTRS).sql, 'SELECT 3')
+  assert.equal(fromUtf8(parseComQuery(plain.toBytes(), NO_ATTRS).sqlBytes), 'SELECT 3')
 })
 
 test('a parameter_set_count other than 1 is refused rather than guessed at', () => {

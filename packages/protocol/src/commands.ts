@@ -102,7 +102,26 @@ export function readParameters(r: Reader, options: ReadParametersOptions): Param
 }
 
 export interface ComQuery {
-  readonly sql: string
+  /**
+   * The statement, **undecoded**.
+   *
+   * Not a `string`, because this package cannot turn it into one correctly.
+   * The bytes are in the session's charset — the one the client named in
+   * `HandshakeResponse41` or last set with `SET NAMES` — and resolving that to
+   * a decoder needs the registry, which D-33 keeps out of `@myjs/protocol`.
+   * The dispatcher has the session and does the decoding with its `Transcoder`.
+   *
+   * This used to be `fromUtf8(r.restBytes())`, which is right for the common
+   * case and silently wrong for every other: a `latin1` session's `0x80` came
+   * back as U+FFFD, and a `gbk` one had multi-byte characters mangled. That is
+   * E-11's mistake one layer up — assuming one charset for everything — and
+   * doc 14's own sketch already wrote `parseComQuery(session, payload)`.
+   *
+   * Keeping the bytes also matters for the parser M3 is building: a lexer must
+   * see the original sequence to know that a `gbk` lead byte's `0x5C` trail is
+   * part of a character rather than a backslash escape.
+   */
+  readonly sqlBytes: Uint8Array
   /** Named attributes, when `CLIENT_QUERY_ATTRIBUTES` is negotiated. */
   readonly attributes: readonly Parameter[]
 }
@@ -126,7 +145,7 @@ export function parseComQuery(payload: Uint8Array, caps: Capabilities): ComQuery
       attributes = readParameters(r, { count, named: true }).parameters
     }
   }
-  return { sql: fromUtf8(r.restBytes()), attributes }
+  return { sqlBytes: r.restBytes(), attributes }
 }
 
 export function parseComInitDb(payload: Uint8Array): string {
@@ -231,10 +250,13 @@ export function parseStatementId(payload: Uint8Array): number {
   return r.u32()
 }
 
-export function parseComStmtPrepare(payload: Uint8Array): string {
+/**
+ * The statement to prepare, undecoded — see `ComQuery.sqlBytes` for why.
+ */
+export function parseComStmtPrepare(payload: Uint8Array): Uint8Array {
   const r = new Reader(payload)
   r.u8()
-  return fromUtf8(r.restBytes())
+  return r.restBytes()
 }
 
 export interface ComChangeUser {

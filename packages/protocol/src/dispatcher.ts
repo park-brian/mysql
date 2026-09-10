@@ -63,6 +63,25 @@ export interface DispatchResult {
 
 const NOTHING: DispatchResult = { packets: [] }
 
+/**
+ * A statement's bytes as text, in the session's own charset.
+ *
+ * Every SQL string a client sends arrives in the charset it named — in
+ * `HandshakeResponse41`, or in the last `SET NAMES`. Decoding it as UTF-8
+ * regardless is right for the default and silently wrong for the rest, which
+ * is what this package used to do: `parseComQuery` called `fromUtf8` on the
+ * body and the session's `Transcoder` was never consulted. A `latin1` client
+ * sending `WHERE name = '<0x80>'` got U+FFFD, and the query ran against the
+ * wrong value rather than failing.
+ *
+ * The default `utf8Transcoder` still refuses anything it cannot serve, so a
+ * caller that has not injected a real one gets a typed error instead of the
+ * mojibake it used to get (M2.18's posture, one layer up).
+ */
+function sqlText(session: Session, bytes: Uint8Array): string {
+  return session.transcoder.decode(bytes, session.characterSet)
+}
+
 export async function dispatch(payload: Uint8Array, ctx: DispatchContext): Promise<DispatchResult> {
   if (payload.length === 0) {
     return errPackets(ctx, 'ER_MALFORMED_PACKET', messages.malformedPacket('empty command packet'))
@@ -191,14 +210,18 @@ async function handle(command: number, payload: Uint8Array, ctx: DispatchContext
 
     // --- text protocol -----------------------------------------------------
     case COM.QUERY: {
-      const { sql, attributes } = parseComQuery(payload, caps)
-      const results = await executor.query(session, sql, attributes)
+      const { sqlBytes, attributes } = parseComQuery(payload, caps)
+      // The session decides the charset, not this package (D-33). `Session`
+      // carries the `Transcoder` precisely so the decode can happen here,
+      // where the session is in scope, rather than being guessed as UTF-8 in
+      // the packet parser.
+      const results = await executor.query(session, sqlText(session, sqlBytes), attributes)
       return { packets: responseFor(ctx, results, false) }
     }
 
     // --- prepared statements ----------------------------------------------
     case COM.STMT_PREPARE: {
-      const sql = parseComStmtPrepare(payload)
+      const sql = sqlText(session, parseComStmtPrepare(payload))
       const info = await executor.prepare(session, sql)
       const stmt = session.statements.create(sql, info.paramCount, info.columns)
       return { packets: preparePackets(caps, stmt.id, info.paramCount, info.columns) }
