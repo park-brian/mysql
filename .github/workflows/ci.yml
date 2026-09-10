@@ -149,19 +149,6 @@ jobs:
     # real 8.4, so the fixtures are uploaded as an artifact for a human to
     # commit rather than pushed from CI.
     continue-on-error: true
-    services:
-      mysql:
-        image: mysql:8.4
-        env:
-          MYSQL_ROOT_PASSWORD: root
-        ports: ['3306:3306']
-        # D-34 needs FULL row images: without it an INSERT logs only the
-        # columns that changed and every vector would be silently partial.
-        options: >-
-          --health-cmd="mysqladmin ping" --health-interval=10s
-          --health-timeout=5s --health-retries=10
-          --log-bin=binlog --binlog-row-image=FULL --binlog-format=ROW
-          --server-id=1
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -169,8 +156,33 @@ jobs:
           node-version: '22.18'
           cache: npm
       - run: npm ci
-      # `mysqlbinlog` ships in the client package, which this already installs.
+      # `mysqlbinlog` ships in the client package.
       - run: sudo apt-get update && sudo apt-get install -y --no-install-recommends mysql-client
+      # Started here rather than as a `services:` container, because a service's
+      # `options:` are passed to `docker create` — so `--binlog-row-image=FULL`
+      # is read as a Docker flag and the container refuses to start with
+      # "unknown flag: --log-bin". Server arguments have to follow the image
+      # name, which only `docker run` allows.
+      #
+      # D-34 needs FULL row images: without them an INSERT logs only the columns
+      # that changed and every captured vector would be silently partial.
+      - name: start MySQL 8.4 with full row images
+        run: |
+          docker run -d --name mysql84 \
+            -e MYSQL_ROOT_PASSWORD=root \
+            -p 3306:3306 \
+            mysql:8.4 \
+            --log-bin=binlog --binlog-row-image=FULL --binlog-format=ROW --server-id=1
+          for _ in $(seq 1 60); do
+            if docker exec mysql84 mysqladmin ping -uroot -proot --silent 2>/dev/null; then
+              echo 'mysqld is up'
+              exit 0
+            fi
+            sleep 2
+          done
+          echo 'mysqld did not become ready'
+          docker logs mysql84
+          exit 1
       - name: capture and diff
         run: |
           npm run capture:types

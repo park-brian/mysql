@@ -138,13 +138,33 @@ async function captureColumn(column) {
     DROP TABLE IF EXISTS ${table};
     CREATE TABLE ${table} (v ${column.ddl}) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
   `)
-  const start = (await sql("SHOW MASTER STATUS")).trim().split('\t')
-  const [file, position] = [start[0], start[1]]
+  const [file, position] = await binlogPosition()
   for (const v of column.values) {
     await sql(`USE ${DB}; INSERT INTO ${table} VALUES (${v});`)
   }
   const dump = await hexdump(file, position)
   return { column: column.name, ddl: column.ddl, values: column.values, rows: parseRowImages(dump) }
+}
+
+/**
+ * Where the binary log is right now.
+ *
+ * MySQL 8.4 *removed* `SHOW MASTER STATUS`; `SHOW BINARY LOG STATUS` is its
+ * replacement. Both are tried rather than one being assumed, so the tool works
+ * against the 8.0 servers the trace fixtures were captured from as well as the
+ * 8.4 the CI job runs.
+ */
+async function binlogPosition() {
+  for (const statement of ['SHOW BINARY LOG STATUS', 'SHOW MASTER STATUS']) {
+    try {
+      const row = (await sql(statement)).trim().split('\t')
+      if (row.length >= 2) return [row[0], row[1]]
+    } catch {
+      // Not this server's spelling; try the other.
+    }
+  }
+  console.error('neither SHOW BINARY LOG STATUS nor SHOW MASTER STATUS worked — is the binary log on?')
+  process.exit(1)
 }
 
 /** `mysqlbinlog --hexdump` over the range the inserts landed in. */
