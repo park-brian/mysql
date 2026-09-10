@@ -25,6 +25,7 @@
     "gen:uca": "node tools/gen-uca.mjs",
     "capture:traces": "node tools/capture-traces.mjs --all",
     "capture:types": "node tools/capture-types.mjs",
+    "capture:precedence": "node tools/capture-precedence.mjs",
     "freeze:traces": "node tools/freeze-traces.mjs",
     "exit-criterion": "node tools/exit-criterion.mjs"
   },

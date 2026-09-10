@@ -139,7 +139,7 @@ jobs:
           git diff --stat -- test/protocol/fixtures/
 
   type-vectors:
-    name: re-capture storage vectors against a real MySQL
+    name: re-capture vectors against a real MySQL
     runs-on: ubuntu-latest
     # M2.21 / D-34. Not a gate, for the same reason `trace-capture` is not: the
     # committed fixtures are replayed offline by `npm test`, and this job exists
@@ -193,6 +193,11 @@ jobs:
       - name: capture and diff
         run: |
           npm run capture:types
+          # M3.2's corpus comes off the same server rather than a second
+          # container: it is 400 one-row `SELECT`s against a MySQL that is
+          # already up, and spinning a second 8.4 to ask it what `1+2*3` is
+          # would cost thirty seconds to learn nothing extra.
+          npm run capture:precedence
           git diff --stat -- test/format/fixtures/
       - name: upload the captured fixtures
         uses: actions/upload-artifact@v4

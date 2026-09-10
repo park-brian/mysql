@@ -16,4 +16,22 @@ export type { SqlMode } from './sql-mode.ts'
 export { TOKEN, OPERATORS } from './tokens.ts'
 export type { Token, TokenKind } from './tokens.ts'
 export { decodeStatement, lex, lexBytes } from './lexer.ts'
+export { NODE, LITERAL } from './ast.ts'
+export type {
+  BinaryNode,
+  CallNode,
+  CaseNode,
+  ColumnNode,
+  Expression,
+  IntervalNode,
+  LiteralNode,
+  LiteralType,
+  NodeKind,
+  PlaceholderNode,
+  RowNode,
+  UnaryNode,
+  VariableNode,
+} from './ast.ts'
+export { parseExpression } from './expression.ts'
+export type { ParseExpressionOptions } from './expression.ts'
 export type { LexOptions } from './lexer.ts'
