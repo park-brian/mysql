@@ -11,6 +11,7 @@ import fc from 'fast-check'
 import { collation, encodeCharset, loadCollation, memcmp } from '@myjs/charsets'
 import {
   TypeError as MyjsTypeError,
+  declaredKeyWidth,
   encodeDateField,
   encodeDatetime2,
   encodeDecimal,
@@ -123,7 +124,7 @@ for (const [id, name] of [
 ] as const) {
   test(`M2.14/D-35: key order matches ${name}`, () => {
     const c = collation(id)
-    const part = keyed(id, 32)
+    const part = keyed(id, declaredKeyWidth(id, 10))
     fc.assert(
       fc.property(awkward(), awkward(), (a, b) => {
         const ba = encodeCharset(a, 'utf8mb4')
@@ -198,7 +199,7 @@ test('M2.14/D-35: the pair that inverted without padding', () => {
   // *greater* than 'a\x01' — 0x20 > 0x01. Raw `memcmp` of the values says the
   // opposite. This is the concrete case the property above generalises.
   const c = collation(46)
-  const part = keyed(46, 8)
+  const part = keyed(46, declaredKeyWidth(46, 4))
   const a = encodeCharset('a', 'utf8mb4')
   const b = encodeCharset('a\u0001', 'utf8mb4')
   assert.equal(sign(c.compare(a, b)), 1)
@@ -207,7 +208,7 @@ test('M2.14/D-35: the pair that inverted without padding', () => {
 })
 
 test('M2.14/D-35: PAD SPACE gives equal values identical key bytes', () => {
-  const part = keyed(46, 8)
+  const part = keyed(46, declaredKeyWidth(46, 4))
   assert.deepEqual(
     encodeKeyPart(encodeCharset('a', 'utf8mb4'), part),
     encodeKeyPart(encodeCharset('a   ', 'utf8mb4'), part),
@@ -231,7 +232,7 @@ test('M2.14/D-35: a text part without a width is refused', () => {
 })
 
 test('M2.14/D-35: a value wider than its declared width is refused', () => {
-  assert.throws(() => encodeKeyPart(encodeCharset('abcdef', 'utf8mb4'), keyed(46, 4)), MyjsTypeError)
+  assert.throws(() => encodeKeyPart(encodeCharset('abcdef', 'utf8mb4'), keyed(46, declaredKeyWidth(46, 1))), MyjsTypeError)
 })
 
 test('M2.14/D-35: a variable-length part before another part is refused', () => {
@@ -250,9 +251,13 @@ test('M2.14: a text prefix counts characters, a byte prefix counts bytes', () =>
   // declared prefix is in characters, and truncating the *bytes* at 255 would
   // cut a multi-byte character in half. `utf8mb4_bin`'s sort key is the value,
   // so the four bytes of 'hél' are visible in the key before padding.
-  const text: KeyPart = { kind: 'text', nullable: false, collationId: 46, prefix: 3, width: 4 }
+  const text: KeyPart = { kind: 'text', nullable: false, collationId: 46, prefix: 3, width: declaredKeyWidth(46, 3) }
   const value = encodeCharset('h\u00e9llo', 'utf8mb4') // h(1) é(2) l(1) l(1) o(1)
-  assert.equal(hex(encodeKeyPart(value, text)), '68 C3 A9 6C')
+  // Three *characters* of key, nine bytes: `utf8mb4_bin` writes each code
+  // point as three big-endian bytes (M2.21), so `é` is `00 00 E9` rather than
+  // its two UTF-8 bytes. Truncating the bytes at three would have produced
+  // `68 C3 A9` — half of a character — which is the mistake under test.
+  assert.equal(hex(encodeKeyPart(value, text)), '00 00 68 00 00 E9 00 00 6C')
   const bytes: KeyPart = { kind: 'bytes', nullable: false, prefix: 3 }
   assert.equal(encodeKeyPart(value, bytes).length, 3)
 })
@@ -261,16 +266,21 @@ test('M2.14: a prefix never splits a multi-byte character', () => {
   // Stated as "the key is the first two *characters*, encoded" rather than as
   // "the key does not decode to a replacement character" — the latter is what
   // this test used to say, and it is not the property: a value that already
-  // contains U+FFFD satisfies the encoder and fails the assertion. `utf8mb4_bin`
-  // makes the sort key the value, so the comparison can be exact.
-  const part: KeyPart = { kind: 'text', nullable: false, collationId: 46, prefix: 2, width: 8 }
+  // contains U+FFFD satisfies the encoder and fails the assertion. Under
+  // `utf8mb4_bin` the sort key is one three-byte weight per code point, so the
+  // comparison can still be exact — the expected key is the first two
+  // characters put through the same collation.
+  const part: KeyPart = { kind: 'text', nullable: false, collationId: 46, prefix: 2, width: declaredKeyWidth(46, 2) }
+  const bin = collation(46)
   fc.assert(
     fc.property(fc.string({ unit: 'grapheme' }), (s) => {
-      const expected = encodeCharset([...s].slice(0, 2).join(''), 'utf8mb4')
+      const expected = bin.sortKey(encodeCharset([...s].slice(0, 2).join(''), 'utf8mb4'))
       const key = encodeKeyPart(encodeCharset(s, 'utf8mb4'), part)
       assert.deepEqual(key.subarray(0, expected.length), expected, JSON.stringify(s))
       for (let i = expected.length; i < key.length; i++) {
-        assert.equal(key[i], 0x20, 'everything past the prefix is pad')
+        // Pad is whole `00 00 20` characters, in phase with the key's end —
+        // which is the invariant `encodeKeyPart` now refuses a width for.
+        assert.equal(key[i], bin.padUnit[(i - expected.length) % bin.padUnit.length], 'past the prefix is pad')
       }
     }),
     { numRuns: 4000 },

@@ -52,4 +52,9 @@ export { WEIGHT_TABLE_SOURCE_SHA256, PACKED_BYTE_WEIGHTS, PACKED_UNICASE_WEIGHTS
 // nothing — unlike the UCA weights above, which must stay unnamed.
 export { ENCODING_TABLE_SOURCE_SHA256, PACKED_CHARSET_TO_UNI } from './encodings.ts'
 export { expandRuns } from './runs.ts'
-export { COLLATION_TABLE_SOURCE, COLLATION_TABLE_SOURCE_SHA256, PACKED_COLLATIONS } from './registry.ts'
+export {
+  BIN_KEY_WIDTHS,
+  COLLATION_TABLE_SOURCE,
+  COLLATION_TABLE_SOURCE_SHA256,
+  PACKED_COLLATIONS,
+} from './registry.ts'

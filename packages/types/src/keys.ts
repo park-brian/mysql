@@ -143,6 +143,24 @@ function padToWidth(key: Uint8Array, width: number, unit: Uint8Array | null): Ui
   return out
 }
 
+/**
+ * The width to declare for a `'text'` key part over `chars` characters (D-35).
+ *
+ * A declared width is bytes, but a column is declared in characters, and the
+ * ratio is the collation's — not the charset's. That distinction is the whole
+ * reason this function exists: `CHAR(4)` in `utf8mb4` holds at most 16 bytes,
+ * so `mbmaxlen * chars` looks like the answer, but the *key* is 12 bytes under
+ * `utf8mb4_bin` (three per code point) and 8 under `utf8mb4_0900_ai_ci` (one
+ * two-byte weight per character). Declaring 16 wastes four bytes per key in
+ * one case and, worse, declaring 8 for `utf8mb4_bin` rejects legal values.
+ *
+ * `padUnit` is already defined as one character's worth of key, so its length
+ * is the ratio and there is nothing else to keep in sync.
+ */
+export function declaredKeyWidth(collationId: number, chars: number): number {
+  return collation(collationId).padUnit.length * chars
+}
+
 /** One column's contribution to a key, sort key, padding and NULL flag included. */
 export function encodeKeyPart(value: Uint8Array | null, part: KeyPart): Uint8Array {
   if (part.kind === 'float') {
@@ -160,7 +178,18 @@ export function encodeKeyPart(value: Uint8Array | null, part: KeyPart): Uint8Arr
   if (part.kind === 'text') {
     const c = collationFor(part)
     const padded = c.padAttribute === 'PAD SPACE' ? c.padUnit : null
-    encoded = padToWidth(c.sortKey(truncated), part.width as number, padded)
+    const width = part.width as number
+    // A width that is not a whole number of characters would be padded with a
+    // *fragment* of the pad character — `00 00` of `utf8mb4_bin`'s `00 00 20`
+    // — and two keys padded to different phases no longer compare the way
+    // their values do. Cheap to check, and impossible to see in a hex dump.
+    if (padded !== null && width % padded.length !== 0) {
+      throw badValue(
+        'index key',
+        `a declared width of ${width} is not a whole number of ${padded.length}-byte characters — see declaredKeyWidth()`,
+      )
+    }
+    encoded = padToWidth(c.sortKey(truncated), width, padded)
   } else {
     encoded = part.width === undefined ? truncated : padToWidth(truncated, part.width, null)
   }

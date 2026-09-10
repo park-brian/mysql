@@ -14,6 +14,8 @@
 // Source:  mysql/mysql-server@e174239c strings/ctype-gb18030.cc
 // Source:  mysql/mysql-server@e174239c strings/ctype-gbk.cc
 // Source:  mysql/mysql-server@e174239c strings/ctype-latin1.cc
+// Source:  mysql/mysql-server@e174239c strings/ctype-mb.cc
+// Source:  mysql/mysql-server@e174239c strings/ctype-simple.cc
 // Source:  mysql/mysql-server@e174239c strings/ctype-sjis.cc
 // Source:  mysql/mysql-server@e174239c strings/ctype-tis620.cc
 // Source:  mysql/mysql-server@e174239c strings/ctype-uca.cc
@@ -28,7 +30,7 @@ export const COLLATION_TABLE_SOURCE = 'mysql/mysql-server@e174239c strings/ctype
 
 /** SHA-256 over every source file's own hash. CI regenerates and diffs. */
 export const COLLATION_TABLE_SOURCE_SHA256 =
-  'e24d1217176edb4bd1c340551fa5951f93155ed99cdc92d01c5acc8592bace83'
+  'b00392630713ac249eddd5f45df836d2cc03a63a58c73443e0caf465ce54248f'
 
 /** Number of collations MySQL e174239c compiles in. */
 export const COLLATION_TABLE_SIZE = 288
@@ -328,3 +330,28 @@ export const PACKED_COLLATIONS = `1 big5_chinese_ci big5 1 2 d
 321 utf8mb4_gl_0900_as_cs utf8mb4 1 4 n
 322 utf8mb4_mn_cyrl_0900_ai_ci utf8mb4 1 4 n
 323 utf8mb4_mn_cyrl_0900_as_cs utf8mb4 1 4 n`
+
+/**
+ * The `*_bin` collations whose sort key is **not** the value, and how many
+ * bytes each code point becomes.
+ *
+ * Every 8-bit `*_bin` collation copies its input — `my_strnxfrm_8bit_bin_*`
+ * is a `memcpy` — so "the sort key is the value" holds for all of them and
+ * they are absent here. The Unicode ones do not: `utf8mb4_bin` runs
+ * `my_strnxfrm_unicode_full_bin`, which writes each code point as three
+ * big-endian bytes, and `utf8mb3_bin` runs `my_strnxfrm_unicode`, which
+ * writes two. `WEIGHT_STRING('a' COLLATE utf8mb4_bin)` is `0x000061` on a
+ * real 8.4, not `0x61` — which is how M2.21's captured corpus found this.
+ *
+ * Read from each collation's `MY_COLLATION_HANDLER`, not from its name or
+ * its flags: `utf8mb3_bin` and `utf8mb4_bin` carry identical flags and have
+ * different key widths.
+ */
+export const BIN_KEY_WIDTHS: Readonly<Record<number, number>> = {
+  46: 3, // utf8mb4_bin
+  55: 3, // utf16_bin
+  61: 3, // utf32_bin
+  62: 3, // utf16le_bin
+  83: 2, // utf8mb3_bin
+  90: 2, // ucs2_bin
+}

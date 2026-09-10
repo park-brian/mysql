@@ -3,7 +3,13 @@
 // Doc 29 §Priorities: "`binary` and `utf8mb4_bin` — enough to build and test
 // the entire B+tree, because ordering is `memcmp`." That is why these come
 // first and why M4 does not wait on the UCA work: the tree only ever needs a
-// `sortKey`, and here the sort key is the value.
+// `sortKey`, and here the sort key is (almost always) the value.
+//
+// "Almost always" is M2.21's correction. Every 8-bit `*_bin` collation copies
+// its input, but the Unicode ones re-encode: `utf8mb4_bin` writes each code
+// point as three big-endian bytes and `utf8mb3_bin` as two, so
+// `WEIGHT_STRING('a' COLLATE utf8mb4_bin)` is `0x000061`. We returned `0x61`
+// until a real 8.4 said otherwise — see `BIN_KEY_WIDTHS` and E-12.
 //
 // The one subtlety is `PAD SPACE`. `utf8mb4_bin`, `latin1_bin` and the rest are
 // PAD SPACE collations in MySQL 8 (the registry says so — they predate the
@@ -20,6 +26,7 @@
 // own — it does not know the column's width — so the key encoder does it, and
 // `padUnit` is what it pads with.
 import { allCollations, requireCollationInfo, type Collation, type CollationInfo } from '../collation.ts'
+import { BIN_KEY_WIDTHS } from '../registry.ts'
 
 /** Unsigned byte comparison — the ordering every `*_bin` collation has. */
 export function memcmp(a: Uint8Array, b: Uint8Array): number {
@@ -92,6 +99,78 @@ function binaryCollation(info: CollationInfo): Collation {
 }
 
 /**
+ * The code points of a UTF-8 byte string, each as `width` big-endian bytes.
+ *
+ * This is `my_strnxfrm_unicode_full_bin` (width 3) and the `MY_CS_BINSORT`
+ * branch of `my_strnxfrm_unicode` (width 2). MySQL does not copy the value for
+ * these — it re-encodes, so `WEIGHT_STRING('a' COLLATE utf8mb4_bin)` is
+ * `0x000061` rather than `0x61`, and `'ä'` is `0x0000E4` rather than its two
+ * UTF-8 bytes. M2.21's captured corpus is what established that; we returned
+ * the value for years and were only ever checked against ourselves.
+ *
+ * A byte that does not start a well-formed sequence is taken as its own code
+ * point rather than being rejected. `sortKey` has no way to raise a typed
+ * error — it is called from inside the key encoder, synchronously, on bytes an
+ * index already holds — and ordering ill-formed input consistently is more
+ * useful there than ordering it not at all.
+ */
+function codePointKey(bytes: Uint8Array, width: number): Uint8Array {
+  const out = new Uint8Array(bytes.length * width)
+  let n = 0
+  for (let i = 0; i < bytes.length; ) {
+    const b = bytes[i] as number
+    let cp = b
+    let len = 1
+    if (b >= 0xc2 && b <= 0xdf) [cp, len] = [b & 0x1f, 2]
+    else if (b >= 0xe0 && b <= 0xef) [cp, len] = [b & 0x0f, 3]
+    else if (b >= 0xf0 && b <= 0xf4) [cp, len] = [b & 0x07, 4]
+    if (len > 1 && i + len <= bytes.length) {
+      let ok = true
+      for (let k = 1; k < len; k++) {
+        const c = bytes[i + k] as number
+        if ((c & 0xc0) !== 0x80) {
+          ok = false
+          break
+        }
+        cp = (cp << 6) | (c & 0x3f)
+      }
+      if (!ok) [cp, len] = [b, 1]
+    } else if (len > 1) {
+      ;[cp, len] = [b, 1]
+    }
+    for (let k = width - 1; k >= 0; k--) out[n + k] = (cp >>> ((width - 1 - k) * 8)) & 0xff
+    n += width
+    i += len
+  }
+  return out.subarray(0, n)
+}
+
+/**
+ * A Unicode `*_bin` collation, whose sort key is its code points rather than
+ * its bytes.
+ *
+ * `compare` runs on the keys, not on the raw bytes. MySQL's own
+ * `my_strnncollsp_mb_bin` compares the bytes — which gives the same ordering,
+ * because UTF-8 is order-preserving — but D-35's lesson was that a `compare`
+ * and a `sortKey` which merely *happen* to agree eventually stop agreeing.
+ * Deriving one from the other makes the property structural.
+ */
+function unicodeBinCollation(info: CollationInfo, width: number): Collation {
+  const padUnit = new Uint8Array(width)
+  padUnit[width - 1] = 0x20
+  const padded = info.padAttribute === 'PAD SPACE'
+  const key = (bytes: Uint8Array) => codePointKey(bytes, width)
+  return {
+    ...info,
+    padUnit,
+    sortKey: key,
+    compare: padded
+      ? (a, b) => comparePadded(key(a), key(b), padUnit)
+      : (a, b) => memcmp(key(a), key(b)),
+  }
+}
+
+/**
  * Every collation MySQL marks `MY_CS_BINSORT`, restricted to the charsets whose
  * space is one byte.
  *
@@ -117,7 +196,9 @@ export function isMemcmpCollation(id: number): boolean {
 export function binaryCollationFor(id: number): Collation {
   const cached = cache.get(id)
   if (cached !== undefined) return cached
-  const c = binaryCollation(requireCollationInfo(id))
+  const info = requireCollationInfo(id)
+  const width = BIN_KEY_WIDTHS[id]
+  const c = width === undefined ? binaryCollation(info) : unicodeBinCollation(info, width)
   cache.set(id, c)
   return c
 }

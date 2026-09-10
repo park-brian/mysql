@@ -8,8 +8,11 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import fc from 'fast-check'
 import {
+  BIN_KEY_WIDTHS,
   MEMCMP_COLLATION_IDS,
   CharsetError,
+  comparePadded,
+  encodeCharset,
   collation,
   collationAvailability,
   hasCollation,
@@ -33,8 +36,15 @@ test('M2.2: ordering equals memcmp on arbitrary bytes', () => {
   )
 })
 
-test('M2.2: the sort key is the value, so a B+tree can memcmp stored keys', () => {
+test('M2.2: an 8-bit *_bin sort key is the value, so a B+tree can memcmp stored keys', () => {
+  // Narrowed in M2.21. This was asserted of every `*_bin` collation, which is
+  // what MySQL's `my_strnxfrm_8bit_bin_*` does — but the Unicode ones run
+  // `my_strnxfrm_unicode*` instead and re-encode. `BIN_KEY_WIDTHS` is the
+  // generated list of the exceptions, so this test excludes exactly the
+  // collations MySQL's own handler structs say are exceptions rather than a
+  // list someone typed.
   for (const id of MEMCMP_COLLATION_IDS) {
+    if (BIN_KEY_WIDTHS[id] !== undefined) continue
     const c = collation(id)
     fc.assert(
       fc.property(bytes(), (v) => {
@@ -43,6 +53,39 @@ test('M2.2: the sort key is the value, so a B+tree can memcmp stored keys', () =
       { numRuns: 200 },
     )
   }
+})
+
+test('M2.21: a Unicode *_bin sort key is code points, not bytes', () => {
+  // The four vectors a real MySQL 8.4 produced (see
+  // `test/format/fixtures/weight-strings.json`), plus the utf8mb3 width the
+  // same handler parse establishes. `'ä'` is the interesting one: two UTF-8
+  // bytes in, one three-byte weight out, so a key that were merely the value
+  // would be the wrong *length* and not just the wrong bytes.
+  const hex = (u: Uint8Array) => [...u].map((x) => x.toString(16).padStart(2, '0').toUpperCase()).join('')
+  const utf8mb4Bin = collation(46)
+  assert.equal(hex(utf8mb4Bin.sortKey(encodeCharset('a', 'utf8mb4'))), '000061')
+  assert.equal(hex(utf8mb4Bin.sortKey(encodeCharset('A', 'utf8mb4'))), '000041')
+  assert.equal(hex(utf8mb4Bin.sortKey(encodeCharset('ä', 'utf8mb4'))), '0000E4')
+  // Outside the BMP, where a key that copied the value would be four bytes.
+  assert.equal(hex(utf8mb4Bin.sortKey(encodeCharset('\u{1F600}', 'utf8mb4'))), '01F600')
+
+  const utf8mb3Bin = collation(83)
+  assert.equal(hex(utf8mb3Bin.sortKey(encodeCharset('a', 'utf8mb3'))), '0061')
+  assert.equal(hex(utf8mb3Bin.sortKey(encodeCharset('ä', 'utf8mb3'))), '00E4')
+})
+
+test('M2.21: a Unicode *_bin compare still agrees with its own sort key', () => {
+  // The D-35 property, re-asserted for the collations whose key stopped being
+  // the value. `compare` is derived from `sortKey` in `memcmp.ts` precisely so
+  // this cannot drift, and this is the test that would notice if someone
+  // un-derived it for speed.
+  const c = collation(46)
+  fc.assert(
+    fc.property(bytes(), bytes(), (a, b) => {
+      assert.equal(sign(c.compare(a, b)), sign(comparePadded(c.sortKey(a), c.sortKey(b), c.padUnit)))
+    }),
+    { numRuns: 2000 },
+  )
 })
 
 test('memcmp is a total order: antisymmetric, transitive, and reflexive', () => {

@@ -13,9 +13,17 @@
 //   exists (D-34). The fixture records its framing, because a binlog row image
 //   differs from the `.ibd` form in two documented ways.
 //
-//   `weight-strings.json` — `HEX(WEIGHT_STRING(s LEVELS 1))`, which is exactly
+//   `weight-strings.json` — `HEX(WEIGHT_STRING(s COLLATE c))`, which is exactly
 //   what `Collation.sortKey()` must produce. This is the external check on the
 //   UCA tables M2.20 generated, and M2.7's outstanding acceptance clause.
+//   (D-34 writes `LEVELS 1`; the keyword is `LEVEL`, and the clause is
+//   unnecessary — see M2.21.)
+//
+// It has already earned its place. The first corpus it produced disagreed with
+// us on `utf8mb4_bin`: MySQL answers `0x000061` for `'a'` and we answered
+// `0x61`, because `my_strnxfrm_unicode_full_bin` writes code points rather
+// than copying the value. Nothing we could have checked ourselves would have
+// found that — every other test compared us against our own reading of a doc.
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { existsSync, readFileSync, readdirSync } from 'node:fs'
@@ -75,6 +83,7 @@ test('M2.21: our sort keys are the server’s sort keys', async () => {
     latin1_swedish_ci: 8,
   }
 
+  let checked = 0
   for (const v of fixture.vectors) {
     const id = byName[v.collation]
     if (id === undefined) continue // a collation we do not implement yet
@@ -86,19 +95,25 @@ test('M2.21: our sort keys are the server’s sort keys', async () => {
       v.weightString,
       `${v.collation} sortKey(${JSON.stringify(v.string)}) disagrees with ${fixture.capturedAgainst}`,
     )
+    checked++
   }
+  // M2.22's lesson again: a loop that skips every vector passes. The count is
+  // pinned so that dropping a collation from `byName`, or renaming one in the
+  // capture tool, fails here instead of quietly checking nothing.
+  assert.equal(checked, 24, 'every vector in a collation we implement must be checked')
 })
 
 interface ColumnVectors {
   readonly column: string
   readonly ddl: string
   readonly values: readonly string[]
-  readonly rows: readonly (readonly number[])[]
+  readonly rows: readonly (readonly number[] | null)[]
 }
 
 interface EncodingFixture {
   readonly capturedAgainst: string
   readonly framing: string
+  readonly checksum: string
   readonly columns: readonly ColumnVectors[]
 }
 
@@ -112,9 +127,21 @@ test('M2.21: the storage-encoding corpus is well formed and records its framing'
   // not say which form it was in would be unusable.
   assert.equal(fixture.framing, 'binlog-row-image')
   assert.match(fixture.capturedAgainst, /mysql-server/)
+  // Whether the server appended a CRC32, because that is four bytes on the end
+  // of every event body and stripping it is the parser's call, not the
+  // reader's.
+  assert.match(fixture.checksum, /^(CRC32|NONE)$/)
   assert.ok(fixture.columns.length > 0)
   for (const c of fixture.columns) {
     assert.ok(c.ddl.length > 0, `${c.column} must record its DDL`)
-    assert.ok(c.rows.length > 0, `${c.column} captured no row images`)
+    // One row image per value inserted. The first corpus this test accepted
+    // had three columns with none at all and the rest one event out of step,
+    // because the only assertion was `length > 0` — which a parser that
+    // returns the wrong bytes satisfies just as well as one that works.
+    assert.equal(
+      c.rows.length,
+      c.values.length,
+      `${c.column} inserted ${c.values.length} value(s) and captured ${c.rows.length} row image(s)`,
+    )
   }
 })

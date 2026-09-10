@@ -48,6 +48,11 @@ const SOURCES = [
   'strings/ctype-gb18030.cc',
   'strings/ctype-gbk.cc',
   'strings/ctype-latin1.cc',
+  // Not a charset file: `ctype-mb.cc` and `ctype-simple.cc` define the shared
+  // `MY_COLLATION_HANDLER` structs that the charset files point at, and the
+  // handler is what says what shape a sort key has (M2.21).
+  'strings/ctype-mb.cc',
+  'strings/ctype-simple.cc',
   'strings/ctype-sjis.cc',
   'strings/ctype-tis620.cc',
   'strings/ctype-uca.cc',
@@ -141,6 +146,12 @@ function parseCharsetInfo(source) {
     // is commented `/* tab_to_uni */` in the hand-written files and
     // `/* to_uni */` in the generated one, so both spellings are accepted.
     const toUni = /\b(\w*to_uni\w*)\s*,\s*\/\*\s*(?:tab_)?to_uni/.exec(body)?.[1] ?? null
+    // M2.21: which `MY_COLLATION_HANDLER` this collation points at. The
+    // handler is what decides the *shape* of a sort key, and the shape is not
+    // guessable from the flags: `utf8mb4_bin` and `utf8mb3_bin` are both
+    // `MY_CS_BINSORT` over a Unicode charset and their keys are different
+    // widths. Resolved against the handler structs below.
+    const handler = /&(my_collation_\w+_handler)/.exec(body)?.[1] ?? null
 
     check(strings.length >= 2, `gen-charsets: id ${id} has no charset/collation name`)
     check(mbminlen !== null && mbmaxlen !== null, `gen-charsets: id ${id} (${strings[1]}) has no mbminlen/mbmaxlen`)
@@ -158,10 +169,53 @@ function parseCharsetInfo(source) {
       sortOrder,
       caseinfo,
       toUni: toUni === 'nullptr' ? null : toUni,
+      handler,
       usesUca,
       lowerSort: flags.has('MY_CS_LOWER_SORT'),
       hidden: flags.has('MY_CS_HIDDEN'),
     })
+  }
+  return found
+}
+
+/**
+ * Every `MY_COLLATION_HANDLER` in a source file, mapped to its `strnxfrm`.
+ *
+ * `strnxfrm` is the function that produces a sort key, so its name is the one
+ * fact that says what shape a `*_bin` key has — and the shape is not what the
+ * flags suggest. `my_strnxfrm_8bit_bin_*` copies the value, which is why every
+ * 8-bit `*_bin` collation's sort key is its bytes. But `utf8mb4_bin` uses
+ * `my_strnxfrm_unicode_full_bin`, which writes each code point as three
+ * big-endian bytes, and `utf8mb3_bin` uses `my_strnxfrm_unicode`, which writes
+ * two. Neither is the value. M2.21's captured `WEIGHT_STRING` corpus caught
+ * that we were returning the value for all three.
+ *
+ * The struct is a positional initializer; `strnxfrm` is field 4, after `init`,
+ * an unnamed slot, `strnncoll` and `strnncollsp`.
+ */
+function parseCollationHandlers(source) {
+  const found = new Map()
+  const re = /MY_COLLATION_HANDLER\s+(my_collation_\w+)\s*=\s*\{/g
+  let m
+  while ((m = re.exec(source)) !== null) {
+    const open = m.index + m[0].length - 1
+    let depth = 0
+    let end = -1
+    for (let i = open; i < source.length; i++) {
+      if (source[i] === '{') depth++
+      else if (source[i] === '}' && --depth === 0) {
+        end = i
+        break
+      }
+    }
+    check(end !== -1, `gen-charsets: unterminated MY_COLLATION_HANDLER ${m[1]}`)
+    const fields = source
+      .slice(open + 1, end)
+      .replace(/\/\*[\s\S]*?\*\//g, '')
+      .split(',')
+      .map((f) => f.trim())
+    check(fields.length > 5, `gen-charsets: ${m[1]} has too few fields to carry a strnxfrm`)
+    found.set(m[1], fields[4])
   }
   return found
 }
@@ -179,7 +233,6 @@ for (const s of sources) {
   }
 }
 const collations = [...byId.values()].sort((a, b) => a.id - b.id)
-
 // Self-checks before emitting. These are M2.1's acceptance list, plus the two
 // facts the rest of the codebase already asserts and the one the hand-written
 // list got wrong.
@@ -205,6 +258,55 @@ expect(278, 'utf8mb4_0900_as_cs', 'utf8mb4', 4, 'NO PAD')
 check(by(63).isBinary, 'gen-charsets: id 63 must be a binary collation')
 check(by(255).isDefault, 'gen-charsets: id 255 must be utf8mb4 default')
 check(by(159)?.mbminlen === 2, 'gen-charsets: id 159 (ucs2_general_mysql500_ci) must be multibyte')
+
+const strnxfrmOf = new Map()
+for (const s of sources) {
+  for (const [handler, strnxfrm] of parseCollationHandlers(s.text)) strnxfrmOf.set(handler, strnxfrm)
+}
+check(strnxfrmOf.size > 20, `gen-charsets: only ${strnxfrmOf.size} collation handlers parsed`)
+
+/**
+ * How many bytes of sort key one code point produces, for the collations whose
+ * key is *not* the value.
+ *
+ * Only the two `my_strnxfrm_unicode*` families qualify. Everything else either
+ * copies the value (the `8bit_bin` and `utf8mb4_0900_bin` handlers) or has a
+ * weight table, which is a different mechanism entirely. A handler defined in
+ * a file this generator does not fetch resolves to `undefined` and is left
+ * alone rather than assumed — `check` below makes sure that never silently
+ * covers a collation we implement.
+ */
+function binKeyWidth(c) {
+  if (!c.isBinary || c.handler === null) return null
+  const strnxfrm = strnxfrmOf.get(c.handler)
+  if (strnxfrm === 'my_strnxfrm_unicode_full_bin') return 3
+  if (strnxfrm === 'my_strnxfrm_unicode') return 2
+  return null
+}
+
+const binKeyWidths = collations.map((c) => [c.id, binKeyWidth(c)]).filter(([, w]) => w !== null)
+console.log(`  bin key widths: ${binKeyWidths.map(([id, w]) => `${by(id).collation}=${w}`).join(', ')}`)
+
+// The two the codebase implements, pinned by name so a MySQL that moved
+// `utf8mb4_bin` to a different handler fails here rather than in production.
+check(
+  binKeyWidth(by(46)) === 3,
+  `gen-charsets: utf8mb4_bin must use my_strnxfrm_unicode_full_bin, got ${strnxfrmOf.get(by(46)?.handler)}`,
+)
+check(
+  binKeyWidth(by(83)) === 2,
+  `gen-charsets: utf8mb3_bin must use my_strnxfrm_unicode, got ${strnxfrmOf.get(by(83)?.handler)}`,
+)
+// Every `*_bin` collation `memcmp.ts` accepts (mbminlen 1) must have a
+// resolved handler, so "the key is the value" is a fact about the rest of them
+// rather than an absence of evidence.
+for (const c of collations) {
+  if (!c.isBinary || c.mbminlen !== 1) continue
+  check(
+    c.handler !== null && strnxfrmOf.has(c.handler),
+    `gen-charsets: ${c.collation} (${c.id}) points at ${c.handler}, which no fetched source defines`,
+  )
+}
 
 const sha256 = combinedSha256(sources)
 
@@ -248,6 +350,26 @@ export const COLLATION_TABLE_SIZE = ${collations.length}
  * literal of ${collations.length} entries costs several times this in the bundle.
  */
 export const PACKED_COLLATIONS = ${packed(registryLines)}
+
+/**
+ * The \`*_bin\` collations whose sort key is **not** the value, and how many
+ * bytes each code point becomes.
+ *
+ * Every 8-bit \`*_bin\` collation copies its input — \`my_strnxfrm_8bit_bin_*\`
+ * is a \`memcpy\` — so "the sort key is the value" holds for all of them and
+ * they are absent here. The Unicode ones do not: \`utf8mb4_bin\` runs
+ * \`my_strnxfrm_unicode_full_bin\`, which writes each code point as three
+ * big-endian bytes, and \`utf8mb3_bin\` runs \`my_strnxfrm_unicode\`, which
+ * writes two. \`WEIGHT_STRING('a' COLLATE utf8mb4_bin)\` is \`0x000061\` on a
+ * real 8.4, not \`0x61\` — which is how M2.21's captured corpus found this.
+ *
+ * Read from each collation's \`MY_COLLATION_HANDLER\`, not from its name or
+ * its flags: \`utf8mb3_bin\` and \`utf8mb4_bin\` carry identical flags and have
+ * different key widths.
+ */
+export const BIN_KEY_WIDTHS: Readonly<Record<number, number>> = {
+${binKeyWidths.map(([id, w]) => `  ${id}: ${w}, // ${by(id).collation}`).join('\n')}
+}
 `,
 )
 

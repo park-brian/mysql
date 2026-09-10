@@ -29,6 +29,8 @@ import { mkdirSync, writeFileSync, readdirSync, existsSync } from 'node:fs'
 import { join } from 'node:path'
 import { execFile } from 'node:child_process'
 import { promisify } from 'node:util'
+import { check } from './lib/gen-common.mjs'
+import { parseRowImages } from './lib/binlog-hexdump.mjs'
 
 const run = promisify(execFile)
 
@@ -144,7 +146,17 @@ async function captureColumn(column) {
     await sql(`USE ${DB}; INSERT INTO ${table} VALUES (${v});`)
   }
   const dump = await hexdump(file, position)
-  return { column: column.name, ddl: column.ddl, values: column.values, rows: parseRowImages(dump) }
+  const rows = parseRowImages(dump, checksummed)
+  // The capture asserts its own completeness. The corpus this replaced looked
+  // plausible in the JSON — arrays of bytes, one per column — and was one
+  // event out of step throughout, with three columns silently empty. A fixture
+  // that is wrong is worse than one that is missing, because the test built on
+  // it passes.
+  check(
+    rows.length === column.values.length,
+    `capture-types: ${column.name} inserted ${column.values.length} value(s) but ${rows.length} row image(s) came back`,
+  )
+  return { column: column.name, ddl: column.ddl, values: column.values, rows }
 }
 
 /**
@@ -190,36 +202,6 @@ async function hexdump(file, position) {
     { encoding: 'utf8', maxBuffer: 128 * 1024 * 1024 },
   )
   return stdout
-}
-
-/**
- * Pull the row-image bytes out of `--hexdump` output.
- *
- * The hexdump annotates each event with a `# Position Timestamp ...` header
- * followed by lines of `# nnnnnn  xx xx xx  |ascii|`. Only the hex column is
- * taken, and only from Write_rows events — everything else in the log is
- * framing we do not want in a fixture.
- */
-function parseRowImages(dump) {
-  const rows = []
-  let current = null
-  for (const line of dump.split('\n')) {
-    if (/Write_rows/.test(line)) {
-      current = []
-      rows.push(current)
-      continue
-    }
-    if (current === null) continue
-    if (/^# +\d+ /.test(line)) {
-      const hex = line.replace(/^# +\d+ +/, '').replace(/\|.*$/, '').trim()
-      for (const byte of hex.split(/\s+/)) {
-        if (/^[0-9A-Fa-f]{2}$/.test(byte)) current.push(parseInt(byte, 16))
-      }
-      continue
-    }
-    if (line.trim() === '' || line.startsWith('###')) current = null
-  }
-  return rows.filter((r) => r.length > 0)
 }
 
 // --- the sort keys, out of WEIGHT_STRING -----------------------------------
@@ -278,6 +260,12 @@ if (rowImage !== 'FULL') {
   process.exit(1)
 }
 
+// Whether events carry a four-byte CRC32 trailer. Read rather than assumed:
+// `CRC32` is the default in 8.0 and 8.4 but `NONE` is still settable, and the
+// difference is four bytes on the end of every vector.
+const checksum = (await sql('SELECT @@binlog_checksum')).trim()
+const checksummed = checksum !== 'NONE'
+
 const columns = []
 for (const column of COLUMNS) {
   columns.push(await captureColumn(column))
@@ -291,6 +279,7 @@ for (const column of COLUMNS) {
 const encodings = writeFixture('storage-encodings', 'Binlog row images under binlog_row_image=FULL (D-34). Binlog integers are little-endian and unflipped, and a binlog VARCHAR keeps its length prefix — both documented divergences from the .ibd form.', {
   ...provenance,
   framing: 'binlog-row-image',
+  checksum,
   columns,
 })
 console.log(`storage encodings -> ${encodings}`)
