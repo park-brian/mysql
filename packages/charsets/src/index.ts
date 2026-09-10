@@ -44,6 +44,7 @@ export { isUcaCollation, loadUcaTables, ucaTablesLoaded, UCA_COLLATION_IDS } fro
 // module that can synchronously *resolve*, because that one carries every
 // weight table in the package. See the note in `collations/preload.ts`.
 export { preloadCollation } from './collations/preload.ts'
+export { intlCollationFor, isIntlFallbackEnabled, noSortKey, setIntlFallbackEnabled } from './collations/intl.ts'
 export { isWeightedCollation, weightedCollationIds } from './collations/weighted.ts'
 export { WEIGHT_TABLE_SOURCE_SHA256, PACKED_BYTE_WEIGHTS, PACKED_UNICASE_WEIGHTS } from './collations/weights.ts'
 export { COLLATION_TABLE_SOURCE, COLLATION_TABLE_SOURCE_SHA256, PACKED_COLLATIONS } from './registry.ts'

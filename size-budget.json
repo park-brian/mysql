@@ -4,20 +4,20 @@
     "gzip": 2041
   },
   "charsets": {
-    "raw": 41427,
-    "gzip": 13521
+    "raw": 43044,
+    "gzip": 14208
   },
   "core": {
-    "raw": 145779,
-    "gzip": 45842
+    "raw": 145781,
+    "gzip": 45839
   },
   "protocol": {
     "raw": 129854,
     "gzip": 41191
   },
   "types": {
-    "raw": 49613,
-    "gzip": 16186
+    "raw": 52214,
+    "gzip": 17316
   },
   "vfs": {
     "raw": 10945,

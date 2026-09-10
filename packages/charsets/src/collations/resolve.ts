@@ -1,9 +1,11 @@
 // Resolving an id to something that can order values.
 //
-// Four outcomes, in this order: a `*_bin` collation is `memcmp` (M2.2), a
+// Five outcomes, in this order: a `*_bin` collation is `memcmp` (M2.2), a
 // collation the generated weight tables cover gets those weights (M2.6), a
 // UCA collation gets the DUCET tables *if they have been loaded* (M2.7), and
-// anything else raises a typed "not implemented" naming what is missing.
+// anything else either raises a typed "not implemented" naming what is
+// missing, or — if the application has explicitly opted in — gets an
+// `Intl.Collator` comparator that refuses to produce a sort key (M2.23).
 //
 // The refusal is the point. A silent fallback to byte order for
 // `utf8mb4_0900_ai_ci` would build an index in the wrong order and surface
@@ -22,6 +24,7 @@ import { collationNotLoaded, unsupportedCollation } from '../errors.ts'
 import { binaryCollationFor, isMemcmpCollation } from './memcmp.ts'
 import { isWeightedCollation, weightedCollationFor } from './weighted.ts'
 import { isUcaCollation, loadUcaTables, ucaCollationFor, ucaTablesLoaded } from './uca.ts'
+import { intlCollationFor, isIntlFallbackEnabled } from './intl.ts'
 
 /**
  * What `collation(id)` would do right now.
@@ -47,6 +50,11 @@ export function collation(id: number): Collation {
     if (ucaTablesLoaded()) return ucaCollationFor(id)
     throw collationNotLoaded(id, requireCollationInfo(id).name)
   }
+  // M2.23 / D-23: off by default, because a silent fallback turns "not
+  // implemented" into "approximately ordered", which is far harder to notice.
+  // Even switched on it supplies `compare` only — `sortKey` throws, so no
+  // runtime-dependent bytes can reach an index.
+  if (isIntlFallbackEnabled()) return intlCollationFor(id)
   const info = requireCollationInfo(id)
   throw unsupportedCollation(
     id,
