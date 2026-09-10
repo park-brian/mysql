@@ -19,6 +19,7 @@ interface Census {
   readonly selection: readonly string[]
   readonly totals: {
     readonly files: number
+    readonly measured: number
     readonly statements: number
     readonly lexed: number
     readonly parsed: number
@@ -26,6 +27,7 @@ interface Census {
     readonly directives: number
   }
   readonly byKeyword: Readonly<Record<string, number>>
+  readonly notMeasured: readonly { readonly file: string; readonly reason: string }[]
   readonly failures: readonly { readonly file: string; readonly kind: string }[]
 }
 
@@ -58,6 +60,31 @@ test('M3.11: every statement in the corpus lexes', () => {
   const c = census()
   assert.equal(c.totals.lexed, c.totals.statements, `${c.totals.statements - c.totals.lexed} statement(s) failed to lex`)
   assert.deepEqual(c.failures, [], 'a file that will not lex means the statement boundaries could not be found')
+})
+
+test('M3.11: a file the census did not measure says why', () => {
+  // The first run reported eight "file will not lex" failures and **none of
+  // them was a lexer bug**: five files are pure `--source` wrappers with no SQL
+  // in them, one is Shift-JIS on purpose, and two were the extractor feeding
+  // the lexer half of a multi-line `--assert`. A census that reports a defect
+  // for each of those trains its reader to ignore it.
+  //
+  // So each unmeasured file carries a reason, and the reasons are a closed set:
+  // a new one means the tool learned something it should be saying out loud.
+  const c = census()
+  const allowed = new Set(['no-sql', 'not-utf8'])
+  for (const { file, reason } of c.notMeasured) {
+    assert.ok(allowed.has(reason), `${file}: ${reason} is not a reason this census knows how to explain`)
+  }
+  assert.equal(c.totals.measured, c.totals.files - c.notMeasured.length)
+
+  // And the escape hatch is bounded. `no-sql` is a legitimate outcome and also
+  // the one way this tool could stop looking at the corpus while still
+  // reporting 100% lexed — M2.22's lesson, which this project keeps relearning.
+  assert.ok(
+    c.totals.measured >= c.totals.files * 0.9,
+    `only ${c.totals.measured}/${c.totals.files} files measured — the census is looking away`,
+  )
 })
 
 test('M3.11: the corpus is big enough for the number to mean something', () => {

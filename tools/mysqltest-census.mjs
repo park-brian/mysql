@@ -21,6 +21,15 @@
 //   *breakdown*: the keyword census says what the corpus actually contains, in
 //   frequency order, which is a far better build order than a wish list.
 //
+// Not every selected file is measurable, and the reasons are recorded rather
+// than counted as defects. A `.test` file may be a pure `--source` wrapper —
+// `derived_condition_pushdown.test` is two lines, both of them includes — or it
+// may not be UTF-8, as `ctype_sjis.test` deliberately is not. Following
+// `--source include/*.inc` would reach the SQL behind the wrappers and is worth
+// doing; it needs the `--character_set` directive honoured at the same time, so
+// that a Shift-JIS include is decoded rather than mangled, which is M5's half of
+// this tool rather than M3's.
+//
 // **Ground rule 7 governs what may be committed.** `mysql-test` is GPLv2 and
 // this repository is MIT: the suite is fetched, never vendored. So the emitted
 // fixture carries *facts only* — file names, hashes, counts, keyword
@@ -36,6 +45,7 @@ import { mkdirSync, readFileSync, writeFileSync, existsSync } from 'node:fs'
 import { join } from 'node:path'
 import { REPO, REF, fetchPinned, combinedSha256 } from './lib/gen-common.mjs'
 import { lex, ParseError } from '@myjs/parser'
+import { extract } from './lib/mysqltest-extract.mjs'
 
 function arg(name, fallback) {
   const i = process.argv.indexOf(`--${name}`)
@@ -122,135 +132,6 @@ async function listCandidates() {
   return picked
 }
 
-// --- extraction -------------------------------------------------------------
-
-/**
- * Bare `mysqltest` commands — the ones written without a leading `--`.
- *
- * Directives are usually `--disable_warnings` and the like, but the same verbs
- * are legal bare at command position. Missing one means feeding `connection
- * default` to the SQL lexer and recording a spurious failure.
- */
-const COMMANDS =
-  /^(let|if|while|echo|connection|connect|disconnect|send|reap|source|sleep|real_sleep|inc|dec|die|exit|skip|end|eval|error|replace_result|replace_column|replace_regex|enable_\w+|disable_\w+|sync_slave_with_master|save_master_pos|start_transaction|delimiter|remove_file|write_file|append_file|copy_file|chmod|mkdir|rmdir|cat_file|diff_files|perl|output|lowercase_result|assert)\b/i
-
-/**
- * Split one `.test` file into SQL statements.
- *
- * Approximate, deliberately, and the approximation is measured rather than
- * hidden: the returned counts say how many lines were dropped as directives and
- * how many statements were skipped for containing `$variables`, so a reader can
- * see how much of the file this actually looked at.
- *
- * Statement boundaries come from **our own lexer** rather than from splitting
- * on `;`, because a naive split breaks on `INSERT INTO t VALUES ('a;b')` — the
- * semicolon inside a string literal is not a terminator. Dogfooding the lexer
- * here is also the point: if it cannot find the boundaries in real SQL, that is
- * the bug this tool exists to surface.
- */
-function extract(text) {
-  const lines = text.split('\n')
-  const sql = []
-  let directives = 0
-  let delimiter = ';'
-  let inHeredoc = false
-
-  for (const line of lines) {
-    const trimmed = line.trim()
-    // `perl;`, `write_file x;` and friends open a block that runs to `EOF`.
-    // Its contents are Perl or file data, not SQL, and letting them through
-    // means measuring something that is not the corpus. Rare — about 1.5% of
-    // what the first version emitted — but "rare non-SQL that happens to lex"
-    // is precisely the way a census flatters itself.
-    if (inHeredoc) {
-      directives++
-      if (trimmed === 'EOF') inHeredoc = false
-      continue
-    }
-    if (/^(perl|write_file|append_file)\b/i.test(trimmed)) {
-      directives++
-      inHeredoc = true
-      continue
-    }
-    if (trimmed === '') continue
-    // A directive, a comment, or a bare command. `--` at column 0 in a `.test`
-    // file is mysqltest's prefix, not SQL's comment marker.
-    if (trimmed.startsWith('--') || trimmed.startsWith('#') || COMMANDS.test(trimmed)) {
-      directives++
-      const d = /^(?:--)?delimiter\s+(\S+)/i.exec(trimmed)
-      if (d !== null) delimiter = d[1].replace(/;$/, '') || ';'
-      continue
-    }
-    if (trimmed === '{' || trimmed === '}') {
-      directives++
-      continue
-    }
-    sql.push(line)
-  }
-
-  const joined = sql.join('\n')
-  if (joined.trim() === '') return { statements: [], directives, skipped: 0, lexFailed: true }
-
-  // A file that will not lex as a whole is reported rather than worked around:
-  // falling back to a naive split would hide exactly the failure worth seeing.
-  let tokens
-  try {
-    tokens = lex(joined)
-  } catch {
-    return { statements: [], directives, skipped: 0, lexFailed: true }
-  }
-
-  const statements = []
-  let skipped = 0
-  let start = 0
-  let held = []
-  const emit = (from, to) => {
-    const text = joined.slice(from, to).trim()
-    if (text === '' || held.length === 0) {
-      held = []
-      return
-    }
-    // `$var` is a mysqltest substitution, not SQL. Counted, not parsed.
-    if (text.includes('$')) {
-      skipped++
-      held = []
-      return
-    }
-    statements.push({ text, keyword: keywordOf(held) })
-    held = []
-  }
-  for (const t of tokens) {
-    if (t.kind === 'operator' && t.text === ';') {
-      emit(start, t.start)
-      start = t.end
-      continue
-    }
-    if (t.kind !== 'eof') held.push(t)
-  }
-  emit(start, joined.length)
-  return { statements, directives, skipped, lexFailed: false, delimiter }
-}
-
-/**
- * What kind of statement this is, from its **tokens** rather than its text.
- *
- * Classifying with a regex over the raw source looked equivalent and was not:
- * a trailing `# comment` on the previous statement's line lands at the front of
- * the next statement's slice, so `INSERT ...` was filed under `(other)`. The
- * lexer has already skipped that comment, so reading the first token instead is
- * both simpler and right.
- *
- * A leading `(` is skipped, because `(SELECT ...) ORDER BY a` is a `SELECT`.
- */
-function keywordOf(tokens) {
-  for (const t of tokens) {
-    if (t.kind === 'operator' && t.text === '(') continue
-    if (t.kind === 'identifier' && t.quoted !== true) return t.text.toUpperCase()
-    return '(other)'
-  }
-  return '(other)'
-}
-
 // --- main -------------------------------------------------------------------
 
 const previous = existsSync(FIXTURE) ? JSON.parse(readFileSync(FIXTURE, 'utf8')) : null
@@ -275,14 +156,25 @@ let directives = 0
 const byKeyword = new Map()
 /** File and line only — never the statement, which is GPLv2 (ground rule 7). */
 const failures = []
+/** Files the census deliberately did not measure, by reason. */
+const notMeasured = []
 
 for (const source of sources) {
   const name = source.path.slice(DIRECTORY.length + 1)
   const result = extract(source.text)
   directives += result.directives
   skipped += result.skipped
-  if (result.lexFailed) {
+  if (result.outcome === 'no-sql' || result.outcome === 'not-utf8') {
+    // A fact about the file, not a defect. Recorded so the measured count and
+    // the selected count can differ without the difference going unexplained.
+    notMeasured.push({ file: name, reason: result.outcome })
+    continue
+  }
+  if (result.outcome !== 'ok') {
     failures.push({ file: name, kind: 'file-lex' })
+    // Printed, never committed: the offending SQL is GPLv2 and the CI log is
+    // ephemeral. The fixture records only that this file failed.
+    console.error(`  file will not lex: ${name} — ${result.detail}`)
     continue
   }
   for (const { text, keyword } of result.statements) {
@@ -304,9 +196,13 @@ for (const source of sources) {
 }
 
 const ranked = [...byKeyword].sort((a, b) => b[1] - a[1])
-console.log(`${sources.length} file(s), ${directives} directive line(s) skipped`)
+const measured = sources.length - notMeasured.length
+console.log(`${sources.length} file(s), ${measured} measured, ${directives} directive line(s) skipped`)
 console.log(`${statements} statement(s): ${lexed} lexed, ${parsed} parsed, ${skipped} skipped for $variables`)
 console.log(`top keywords: ${ranked.slice(0, 15).map(([k, n]) => `${k} ${n}`).join(', ')}`)
+// Said out loud rather than buried in the fixture: a census that quietly
+// stopped measuring half its files would otherwise still report 100% lexed.
+for (const { file, reason } of notMeasured) console.log(`  not measured: ${file} — ${reason}`)
 if (failures.length > 0) console.log(`${failures.length} failure(s)`)
 
 mkdirSync(OUT_DIR, { recursive: true })
@@ -321,8 +217,17 @@ writeFileSync(
       source: `${REPO}@${REF} ${DIRECTORY}`,
       sourceSha256: combinedSha256(sources),
       selection,
-      totals: { files: sources.length, statements, lexed, parsed, skippedWithVariables: skipped, directives },
+      totals: {
+        files: sources.length,
+        measured,
+        statements,
+        lexed,
+        parsed,
+        skippedWithVariables: skipped,
+        directives,
+      },
       byKeyword: Object.fromEntries(ranked),
+      notMeasured,
       failures,
     },
     null,
@@ -343,6 +248,18 @@ if (lexed !== statements || failures.length > 0) {
     `\n${statements - lexed} statement(s) and ${failures.filter((f) => f.kind === 'file-lex').length} whole file(s) failed to lex.\n` +
       '  Every statement in the corpus must tokenise. The failing SQL is printed above —\n' +
       '  it is GPLv2, so it appears only in this log and is never written to a file.',
+  )
+  process.exit(1)
+}
+
+// The other half of the gate, and the one M2.22 keeps teaching: a census that
+// measured nothing would satisfy every line above. `no-sql` and `not-utf8` are
+// legitimate outcomes, but they are also the two ways this tool could quietly
+// stop looking at the corpus — so cap them rather than trusting them.
+if (measured < sources.length * 0.9) {
+  console.error(
+    `\nonly ${measured}/${sources.length} file(s) were measured. Either the selection has drifted\n` +
+      '  toward wrappers and non-UTF-8 files, or the directive extractor is eating SQL.',
   )
   process.exit(1)
 }

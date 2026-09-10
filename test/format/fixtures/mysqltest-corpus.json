@@ -15,11 +15,12 @@
   ],
   "totals": {
     "files": 8,
-    "statements": 3869,
-    "lexed": 3869,
+    "measured": 8,
+    "statements": 3868,
+    "lexed": 3868,
     "parsed": 0,
     "skippedWithVariables": 3,
-    "directives": 2597
+    "directives": 2598
   },
   "byKeyword": {
     "SELECT": 1091,
@@ -49,12 +50,12 @@
     "UNLOCK": 2,
     "QUERY_VERTICAL": 2,
     "WITH": 1,
-    "T1": 1,
     "FROM": 1,
     "REPEAT": 1,
     "UNTIL": 1,
     "TRUNCATE": 1,
     "CHECK": 1
   },
+  "notMeasured": [],
   "failures": []
 }
