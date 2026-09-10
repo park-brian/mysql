@@ -80,6 +80,12 @@ jobs:
           git diff --exit-code -- packages/charsets/src/registry.ts \
             packages/charsets/src/collations/weights.ts \
             packages/protocol/src/constants/charset-metrics.ts
+      # M2.20: the UCA 9.0.0 tables are a separate parse of a separate file —
+      # 7.4 MB of it — so they carry their own hash and their own step.
+      - name: regenerate the UCA weights and diff
+        run: |
+          npm run gen:uca
+          git diff --exit-code -- packages/charsets/src/collations/uca900.ts
 
   exit-criterion:
     name: the real mysql client connects
