@@ -46,17 +46,19 @@ const PASSWORD = arg('password', 'root')
 const DB = arg('db', 'typevectors')
 const OUT_DIR = arg('out', new URL('../test/format/fixtures/', import.meta.url).pathname)
 
-const CONNECT = [
-  '-h',
-  HOST,
-  '-P',
-  String(PORT),
-  '--protocol=TCP',
-  '--ssl-mode=DISABLED',
-  '-u',
-  USER,
-  `-p${PASSWORD}`,
-]
+/**
+ * How every query in this tool connects.
+ *
+ * TCP, because a service container's Unix socket is inside the container. And
+ * *without* `--ssl-mode=DISABLED`: `caching_sha2_password` refuses its full
+ * handshake over plaintext (`ERROR 2061 (HY000): Authentication requires
+ * secure connection`) unless the account is already cached or the client asks
+ * for the RSA key. This used to disable TLS and worked only because the CI
+ * job's readiness probe connects over TLS first and warms the server's cache —
+ * a dependency on the order of two unrelated commands, which is not a thing to
+ * rely on. Nothing here is a recorded byte stream, so TLS costs nothing.
+ */
+const CONNECT = ['-h', HOST, '-P', String(PORT), '--protocol=TCP', '-u', USER, `-p${PASSWORD}`]
 
 /** Run SQL and return stdout, tab-separated and unquoted (`-N -B`). */
 async function sql(statements) {

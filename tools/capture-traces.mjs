@@ -39,6 +39,15 @@ const OUT_DIR = arg('out', new URL('../test/protocol/fixtures/', import.meta.url
  * first command with `ERROR 2002 (HY000): Can't connect to local MySQL server
  * through socket`. `capture-types.mjs` connects the same way for the same
  * reason.
+ *
+ * Note what is *absent*: `--ssl-mode=DISABLED`, which `cli()` below needs and
+ * this must not have. `caching_sha2_password` refuses its full handshake over
+ * a plaintext channel — `ERROR 2061 (HY000): Authentication requires secure
+ * connection` — unless the account is already in the server's cache or the
+ * client asks for the RSA key. Disabling TLS here was the second thing wrong
+ * with this connection and it was hidden behind the first. Nothing on this
+ * connection is recorded, so there is no reason to refuse TLS on it; `cli()`
+ * refuses it because a recorded session must stay readable.
  */
 const ADMIN = [
   '-h',
@@ -46,7 +55,6 @@ const ADMIN = [
   '-P',
   String(UPSTREAM_PORT),
   '--protocol=TCP',
-  '--ssl-mode=DISABLED',
   '-u',
   arg('user', 'root'),
   `-p${arg('password', 'root')}`,
@@ -197,11 +205,23 @@ async function flushAuthCache() {
  */
 async function requireAccounts() {
   const wanted = ['nopw', 'trace']
-  const found = (
-    await run('mysql', [...ADMIN, '-N', '-B', '-e', `SELECT user FROM mysql.user WHERE user IN ('nopw','trace')`], {
-      encoding: 'utf8',
-    })
-  ).stdout
+  let found
+  try {
+    found = (
+      await run('mysql', [...ADMIN, '-N', '-B', '-e', `SELECT user FROM mysql.user WHERE user IN ('nopw','trace')`], {
+        encoding: 'utf8',
+      })
+    ).stdout
+  } catch (e) {
+    // Reported rather than thrown, because an unhandled rejection here prints
+    // a Node stack dump with the real message buried in the middle of it —
+    // which is how a plain `ERROR 2061` cost a CI round to read.
+    console.error(
+      `capture-traces: cannot reach ${UPSTREAM_HOST}:${UPSTREAM_PORT} as an administrator.\n  ` +
+        String(e.stderr ?? e.message).trim().split('\n').join('\n  '),
+    )
+    process.exit(1)
+  }
   const missing = wanted.filter((u) => !found.split(/\s+/).includes(u))
   if (missing.length > 0) {
     console.error(
