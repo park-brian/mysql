@@ -97,6 +97,13 @@ function evaluate(e: Expression): Value | null {
         if ((l !== null && l.n !== 0n) || (r !== null && r.n !== 0n)) return bool(true)
         return l === null || r === null ? null : bool(false)
       }
+      // `<=>` is null-*safe* equality and so is also not null-propagating:
+      // `NULL <=> NULL` is 1 and `NULL <=> 7` is 0, never NULL. The corpus
+      // caught this — `6 % - 0 <=> 7` is NULL on the left of a `<=>`, and the
+      // server said 0 while this evaluator said NULL. It was the only
+      // disagreement in 328 vectors, and it was the evaluator that was wrong,
+      // which is the kind of thing a differential test exists to find.
+      if (e.op === '<=>') return bool(l === null && r === null ? true : l !== null && r !== null && l.n === r.n)
       if (l === null || r === null) return null
 
       switch (e.op) {
@@ -127,7 +134,6 @@ function evaluate(e: Expression): Value | null {
           return unsigned(bits(r) >= 64n ? 0n : bits(l) >> bits(r))
 
         case '=':
-        case '<=>':
           return bool(l.n === r.n)
         case '<':
           return bool(l.n < r.n)

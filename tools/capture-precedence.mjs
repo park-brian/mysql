@@ -37,7 +37,7 @@ const PORT = arg('port', '3306')
 const USER = arg('user', 'root')
 const PASSWORD = arg('password', 'root')
 const OUT_DIR = arg('out', new URL('../test/format/fixtures/', import.meta.url).pathname)
-const COUNT = Number(arg('count', '400'))
+const COUNT = Number(arg('count', '1200'))
 const SEED = Number(arg('seed', '20260910'))
 
 // No `--ssl-mode=DISABLED`: `caching_sha2_password` refuses its full handshake
@@ -64,14 +64,40 @@ async function clientVersion() {
 // --- the corpus -------------------------------------------------------------
 
 /**
- * Binary operators, grouped so the generator can mix levels rather than
- * producing a flat run of one precedence — the interesting cases are the ones
- * that straddle two levels.
+ * Binary operators, **grouped by precedence level**.
  *
- * `^` is here because it is a frequent misreading: in MySQL it is bitwise XOR,
- * not exponentiation, and it binds *tighter* than `*`.
+ * The grouping is what makes the corpus worth capturing. A generator picking
+ * uniformly from a flat list of seventeen operators rarely puts two *adjacent*
+ * operators from *different* levels next to each other — and that is the only
+ * shape that can detect a precedence bug at all. The first version of this was
+ * flat, and swapping `*` with `+` in the parser's table disagreed on just 2 of
+ * 328 vectors: caught, but by a margin thin enough to be luck. Picking from two
+ * different groups on purpose is the fix.
+ *
+ * `^` is in its own group because it is a frequent misreading: in MySQL it is
+ * bitwise XOR, not exponentiation, and it binds *tighter* than `*`.
  */
-const BINARY = ['+', '-', '*', 'DIV', '%', '|', '&', '^', '<<', '>>', '=', '<', '>', '<=>', 'AND', 'OR', 'XOR']
+const LEVELS = [
+  ['OR'],
+  ['XOR'],
+  ['AND'],
+  ['=', '<', '>', '<=>'],
+  ['|'],
+  ['&'],
+  ['<<', '>>'],
+  ['+', '-'],
+  ['*', 'DIV', '%'],
+  ['^'],
+]
+const BINARY = LEVELS.flat()
+
+/** Two operators from different levels, which is the case worth generating. */
+function twoLevels() {
+  const a = Math.floor(rnd() * LEVELS.length)
+  let b = Math.floor(rnd() * LEVELS.length)
+  if (b === a) b = (b + 1) % LEVELS.length
+  return [pick(LEVELS[a]), pick(LEVELS[b])]
+}
 
 /** Prefix operators. `NOT` is the one whose precedence `sql_mode` can move. */
 const UNARY = ['-', '~', '!', 'NOT']
@@ -94,10 +120,18 @@ const pick = (xs) => xs[Math.floor(rnd() * xs.length)]
  * produces numbers near 2^64, so it is only ever applied to a leaf.
  */
 function expression(depth) {
-  if (depth <= 0 || rnd() < 0.3) return leaf()
+  if (depth <= 0 || rnd() < 0.25) return leaf()
   const roll = rnd()
-  if (roll < 0.18) return `${pick(UNARY)} ${expression(depth - 1)}`
-  if (roll < 0.28) return `(${expression(depth - 1)})`
+  if (roll < 0.12) return `${pick(UNARY)} ${expression(depth - 1)}`
+  if (roll < 0.2) return `(${expression(depth - 1)})`
+  // The majority case: a flat three-operand chain whose two operators come
+  // from *different* precedence levels, so the grouping is observable. Without
+  // this most vectors have one operator, or two from the same level, and
+  // neither can tell a correct table from a scrambled one.
+  if (roll < 0.75) {
+    const [a, b] = twoLevels()
+    return `${leaf()} ${a} ${leaf()} ${b} ${leaf()}`
+  }
   return `${expression(depth - 1)} ${pick(BINARY)} ${expression(depth - 1)}`
 }
 
