@@ -15,7 +15,8 @@
 //                       `NOT` binds tighter than comparison, as it did before
 //                       5.0, so `NOT a = b` regroups from `NOT (a = b)` to
 //                       `(NOT a) = b`.
-import { parseError, tooDeep } from './errors.ts'
+import { tooDeep } from './errors.ts'
+import { Cursor } from './cursor.ts'
 import { TOKEN, type Token } from './tokens.ts'
 import { NODE, LITERAL, type Expression, type LiteralType } from './ast.ts'
 import { lex, type LexOptions } from './lexer.ts'
@@ -75,6 +76,9 @@ const NOT_LEVEL = 4
 /** Words that are operators rather than identifiers. */
 const WORD_OPERATORS = new Set(['AND', 'OR', 'XOR', 'DIV', 'MOD', 'NOT', 'IS', 'BETWEEN', 'IN', 'LIKE', 'REGEXP', 'RLIKE'])
 
+/** Keywords that type the string literal after them — `DATE'2019-10-01'`. */
+const TEMPORAL_KEYWORDS = new Set(['DATE', 'TIME', 'TIMESTAMP', 'DATETIME'])
+
 /** Words that end an expression and must never be eaten as a column name. */
 const STOP_WORDS = new Set(['THEN', 'WHEN', 'ELSE', 'END', 'ESCAPE', 'AND', 'FROM', 'WHERE'])
 
@@ -92,20 +96,30 @@ export interface ParseExpressionOptions extends LexOptions {
 /** Parse one expression from SQL text. Throws if anything is left over. */
 export function parseExpression(sql: string, options: ParseExpressionOptions = {}): Expression {
   const mode = options.sqlMode ?? NO_SQL_MODE
-  const parser = new ExpressionParser(lex(sql, options), mode)
-  const expr = parser.parse()
-  parser.expectEnd()
+  const cursor = new Cursor(lex(sql, options))
+  const expr = new ExpressionParser(cursor, mode).parse()
+  if (!cursor.atEnd()) cursor.fail()
   return expr
 }
 
+/**
+ * Parse one expression from a cursor another parser is already driving.
+ *
+ * The DDL parser needs this: `DEFAULT (a + 1)`, `GENERATED ALWAYS AS (…)` and
+ * `CHECK (…)` are expressions embedded in a statement, and they must advance
+ * the same cursor rather than being handed a re-lexed substring.
+ */
+export function parseExpressionFrom(cursor: Cursor, mode: SqlMode): Expression {
+  return new ExpressionParser(cursor, mode).parse()
+}
+
 class ExpressionParser {
-  readonly #tokens: readonly Token[]
+  readonly #c: Cursor
   readonly #mode: SqlMode
-  #at = 0
   #depth = 0
 
-  constructor(tokens: readonly Token[], mode: SqlMode) {
-    this.#tokens = tokens
+  constructor(cursor: Cursor, mode: SqlMode) {
+    this.#c = cursor
     this.#mode = mode
   }
 
@@ -113,59 +127,42 @@ class ExpressionParser {
     return this.#binary(0)
   }
 
-  expectEnd(): void {
-    if (this.#peek().kind !== TOKEN.EOF) this.#fail()
-  }
-
-  // --- token helpers -------------------------------------------------------
+  // --- token helpers, all delegating to the shared cursor -------------------
 
   #peek(ahead = 0): Token {
-    // The lexer guarantees a trailing EOF, so this is always in bounds for
-    // `ahead === 0` — and for a larger lookahead the clamp keeps it so.
-    const i = Math.min(this.#at + ahead, this.#tokens.length - 1)
-    return this.#tokens[i] as Token
+    return this.#c.peek(ahead)
   }
 
   #take(): Token {
-    const t = this.#peek()
-    if (t.kind !== TOKEN.EOF) this.#at++
-    return t
+    return this.#c.take()
   }
 
   #fail(): never {
-    const t = this.#peek()
-    throw parseError(t.kind === TOKEN.EOF ? '' : t.text, t.line, t.start)
+    this.#c.fail()
   }
 
-  /** An unquoted identifier matching `word`, case-insensitively — i.e. a keyword. */
   #atWord(word: string, ahead = 0): boolean {
-    const t = this.#peek(ahead)
-    return t.kind === TOKEN.IDENTIFIER && t.quoted !== true && t.text.toUpperCase() === word
+    return this.#c.atWord(word, ahead)
   }
 
   #takeWord(word: string): boolean {
-    if (!this.#atWord(word)) return false
-    this.#at++
-    return true
+    return this.#c.takeWord(word)
   }
 
   #expectWord(word: string): void {
-    if (!this.#takeWord(word)) this.#fail()
+    this.#c.expectWord(word)
   }
 
   #atOp(op: string, ahead = 0): boolean {
-    const t = this.#peek(ahead)
-    return t.kind === TOKEN.OPERATOR && t.text === op
+    return this.#c.atOp(op, ahead)
   }
 
   #takeOp(op: string): boolean {
-    if (!this.#atOp(op)) return false
-    this.#at++
-    return true
+    return this.#c.takeOp(op)
   }
 
   #expectOp(op: string): void {
-    if (!this.#takeOp(op)) this.#fail()
+    this.#c.expectOp(op)
   }
 
   // --- precedence climbing -------------------------------------------------
@@ -259,7 +256,7 @@ class ExpressionParser {
       const negated =
         this.#atWord('NOT') &&
         (this.#atWord('BETWEEN', 1) || this.#atWord('IN', 1) || this.#atWord('LIKE', 1) || this.#atWord('REGEXP', 1) || this.#atWord('RLIKE', 1))
-      if (negated) this.#at++
+      if (negated) this.#c.skip()
 
       if (this.#takeWord('BETWEEN')) {
         // The upper bound is parsed *above* the AND level, or the `AND` that
@@ -300,7 +297,7 @@ class ExpressionParser {
       }
 
       if (this.#atWord('REGEXP') || this.#atWord('RLIKE')) {
-        this.#at++
+        this.#c.skip()
         const pattern = this.#binary(COMPARISON_LEVEL + 1)
         left = { kind: NODE.BINARY, op: negated ? 'NOT REGEXP' : 'REGEXP', left, right: pattern, at }
         continue
@@ -334,7 +331,7 @@ class ExpressionParser {
     const t = this.#peek()
 
     if (this.#mode.highNotPrecedence && this.#atWord('NOT')) {
-      this.#at++
+      this.#c.skip()
       return { kind: NODE.UNARY, op: 'NOT', operand: this.#unary(), at: t.start }
     }
     if (this.#atOp('-') || this.#atOp('+') || this.#atOp('~') || this.#atOp('!')) {
@@ -342,15 +339,15 @@ class ExpressionParser {
       return { kind: NODE.UNARY, op, operand: this.#unary(), at: t.start }
     }
     if (this.#atWord('BINARY')) {
-      this.#at++
+      this.#c.skip()
       return { kind: NODE.UNARY, op: 'BINARY', operand: this.#unary(), at: t.start }
     }
     if (this.#atWord('INTERVAL')) {
-      this.#at++
+      this.#c.skip()
       const value = this.#binary(COMPARISON_LEVEL + 1)
       const unit = this.#peek()
       if (unit.kind !== TOKEN.IDENTIFIER || !INTERVAL_UNITS.has(unit.text.toUpperCase())) this.#fail()
-      this.#at++
+      this.#c.skip()
       return { kind: NODE.INTERVAL, value, unit: unit.text.toUpperCase(), at: t.start }
     }
     return this.#postfixCollate(this.#primary())
@@ -359,10 +356,10 @@ class ExpressionParser {
   /** `expr COLLATE utf8mb4_bin`, which binds tighter than anything binary. */
   #postfixCollate(expr: Expression): Expression {
     if (!this.#atWord('COLLATE')) return expr
-    this.#at++
+    this.#c.skip()
     const name = this.#peek()
     if (name.kind !== TOKEN.IDENTIFIER && name.kind !== TOKEN.STRING) this.#fail()
-    this.#at++
+    this.#c.skip()
     if (expr.kind === NODE.LITERAL) return { ...expr, collation: name.text }
     return { kind: NODE.UNARY, op: 'COLLATE', operand: expr, at: expr.at }
   }
@@ -372,10 +369,10 @@ class ExpressionParser {
 
     switch (t.kind) {
       case TOKEN.NUMBER:
-        this.#at++
+        this.#c.skip()
         return { kind: NODE.LITERAL, ...numericLiteral(t.text), at: t.start }
       case TOKEN.STRING: {
-        this.#at++
+        this.#c.skip()
         // Adjacent string literals concatenate — `'a' 'b'` is `'ab'`, which is
         // SQL-standard and which MySQL does at the lexical level.
         let value = t.text
@@ -383,16 +380,16 @@ class ExpressionParser {
         return { kind: NODE.LITERAL, type: LITERAL.STRING, value, at: t.start }
       }
       case TOKEN.HEX:
-        this.#at++
+        this.#c.skip()
         return { kind: NODE.LITERAL, type: LITERAL.HEX, value: hexBytes(t.text), at: t.start }
       case TOKEN.BIT:
-        this.#at++
+        this.#c.skip()
         return { kind: NODE.LITERAL, type: LITERAL.BIT, value: t.text === '' ? 0n : BigInt('0b' + t.text), at: t.start }
       case TOKEN.PLACEHOLDER:
-        this.#at++
+        this.#c.skip()
         return { kind: NODE.PLACEHOLDER, index: t.index ?? 0, at: t.start }
       case TOKEN.VARIABLE:
-        this.#at++
+        this.#c.skip()
         return { kind: NODE.VARIABLE, name: t.text, at: t.start }
       case TOKEN.OPERATOR:
         if (t.text === '(') return this.#parenthesised()
@@ -426,11 +423,11 @@ class ExpressionParser {
 
     if (t.quoted !== true) {
       if (upper === 'NULL') {
-        this.#at++
+        this.#c.skip()
         return { kind: NODE.LITERAL, type: LITERAL.NULL, value: null, at: t.start }
       }
       if (upper === 'TRUE' || upper === 'FALSE') {
-        this.#at++
+        this.#c.skip()
         return { kind: NODE.LITERAL, type: LITERAL.BOOL, value: upper === 'TRUE', at: t.start }
       }
       if (upper === 'CASE') return this.#case()
@@ -438,7 +435,7 @@ class ExpressionParser {
       // kind; here the lexer leaves it an identifier and the shape is
       // recognised at the point where it can only mean one thing.
       if (t.text.startsWith('_') && this.#peek(1).kind === TOKEN.STRING) {
-        this.#at++
+        this.#c.skip()
         const s = this.#take()
         return {
           kind: NODE.LITERAL,
@@ -448,31 +445,51 @@ class ExpressionParser {
           at: t.start,
         }
       }
+      // A typed temporal literal: `DATE'2019-10-01'`, and its `TIME` and
+      // `TIMESTAMP` siblings. The keyword types the string beside it, so this
+      // is a DATE rather than the string it is written with — which is why
+      // `DEFAULT DATE'…'` is legal on a DATE column where a bare string is
+      // not. Found by M3.11's census in `default.test`.
+      if (TEMPORAL_KEYWORDS.has(upper) && this.#peek(1).kind === TOKEN.STRING) {
+        this.#c.skip()
+        const s = this.#take()
+        return { kind: NODE.LITERAL, type: LITERAL.TEMPORAL, value: s.text, unit: upper, at: t.start }
+      }
       // A word that ends an expression is never a column reference. Without
       // this, `CASE WHEN a THEN b END` reads `THEN` as a column and the whole
       // construct falls apart in a way that is hard to trace back here.
       if (STOP_WORDS.has(upper)) this.#fail()
     }
 
-    // `name(` is a call. MySQL requires no space between them unless
-    // `IGNORE_SPACE` is set, which is exactly what that mode means.
-    if (this.#atOp('(', 1) && (this.#mode.ignoreSpace || this.#peek(1).start === t.end)) {
-      return this.#call()
-    }
+    // `name(` is a call, **and a space before the `(` is allowed**.
+    //
+    // This started life as the opposite rule, on the strength of the manual's
+    // "there must be no whitespace between a function name and the following
+    // parenthesis". M3.11's census disagreed: `default_as_expr.test` contains
+    //
+    //     something VARCHAR(64) NOT NULL DEFAULT (CONCAT ('[', data, ']'))
+    //
+    // with no `--error` in front of it, so a real 8.4 accepts it. The manual's
+    // rule applies only to the builtin functions that are *also grammar
+    // keywords* — `COUNT`, `LEFT`, `IF` and their like — which become reserved
+    // under `IGNORE_SPACE`. Modelling that list needs the reserved-word list
+    // M3.3 will bring; until then the permissive reading is the one the corpus
+    // supports, and the strict one silently refused valid SQL.
+    if (this.#atOp('(', 1)) return this.#call()
 
     // A qualified name: `a`, `t.a`, `db.t.a`, or `t.*`.
-    this.#at++
+    this.#c.skip()
     const parts = [t.text]
     while (this.#atOp('.')) {
-      this.#at++
+      this.#c.skip()
       if (this.#atOp('*')) {
-        this.#at++
+        this.#c.skip()
         parts.push('*')
         break
       }
       const next = this.#peek()
       if (next.kind !== TOKEN.IDENTIFIER) this.#fail()
-      this.#at++
+      this.#c.skip()
       parts.push(next.text)
     }
     return { kind: NODE.COLUMN, parts, at: t.start }
@@ -485,7 +502,7 @@ class ExpressionParser {
     const args: Expression[] = []
     if (this.#atOp('*') && !distinct) {
       // `COUNT(*)` — the only place a bare star is an argument.
-      this.#at++
+      this.#c.skip()
       args.push({ kind: NODE.COLUMN, parts: ['*'], at: this.#peek().start })
     } else if (!this.#atOp(')')) {
       do args.push(this.#binary(0))

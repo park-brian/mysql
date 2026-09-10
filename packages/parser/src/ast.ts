@@ -37,6 +37,17 @@ export const LITERAL = {
   BIT: 'bit',
   NULL: 'null',
   BOOL: 'bool',
+  /**
+   * A typed temporal literal: `DATE'2019-10-01'`, `TIME'01:02:03'`,
+   * `TIMESTAMP'2019-10-01 01:02:03'`.
+   *
+   * Not the same as the string beside it. `DATE'2019-10-01'` is a DATE, so it
+   * compares and sorts as one, and a `DEFAULT DATE'…'` on a DATE column is
+   * legal where a bare string default is not. The distinction is in the type,
+   * which is why it is a literal type rather than a call — found by M3.11's
+   * census, in `default.test`.
+   */
+  TEMPORAL: 'temporal',
 } as const
 
 export type LiteralType = (typeof LITERAL)[keyof typeof LITERAL]
@@ -51,6 +62,8 @@ export interface LiteralNode {
   readonly value: bigint | number | string | Uint8Array | boolean | null
   /** A `_latin1'…'` introducer, when one was written. */
   readonly charset?: string
+  /** For `TEMPORAL`: which keyword introduced it — `DATE`, `TIME`, `TIMESTAMP`. */
+  readonly unit?: string
   /** A `COLLATE` clause attached to the literal. */
   readonly collation?: string
   readonly at: number

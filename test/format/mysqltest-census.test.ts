@@ -27,10 +27,16 @@ interface Census {
     readonly directives: number
     readonly unreadLines: number
     readonly unreadCharsets: readonly string[]
+    readonly expectedToFail: number
+    readonly expectedToFailAndDid: number
   }
   readonly byKeyword: Readonly<Record<string, number>>
   readonly byCharset: Readonly<Record<string, number>>
   readonly refusedCharsetSwitches: Readonly<Record<string, number>>
+  readonly parsedByKeyword: Readonly<Record<string, number>>
+  readonly unsupported: Readonly<Record<string, number>>
+  readonly parseFailuresByKeyword: Readonly<Record<string, number>>
+  readonly wronglyAcceptedByKeyword: Readonly<Record<string, number>>
   readonly notMeasured: readonly { readonly file: string; readonly reason: string }[]
   readonly failures: readonly { readonly file: string; readonly kind: string }[]
 }
@@ -143,6 +149,44 @@ test('M3.12: a charset switch a real server refuses is refused here too', () => 
       `${reason} is not a refusal this census knows how to explain`,
     )
   }
+})
+
+test('M3.5: every statement MySQL accepts, in a form this parser implements, parses', () => {
+  // **M3's exit criterion**, and the phrasing matters. "Every `CREATE TABLE` in
+  // MySQL's own test suite parses" is not "every CREATE statement parses",
+  // because the suite is full of statements MySQL itself rejects — 102 of them
+  // carry `--error ER_PARSE_ERROR`, and refusing those is correct rather than a
+  // miss. What is left over is the real claim.
+  const c = census()
+  assert.deepEqual(
+    c.parseFailuresByKeyword,
+    {},
+    'a statement MySQL accepts, in a form this parser implements, failed to parse',
+  )
+
+  const create = c.byKeyword['CREATE'] ?? 0
+  const parsedCreate = c.parsedByKeyword['CREATE'] ?? 0
+  const createSelect = c.unsupported['CREATE TABLE ... SELECT'] ?? 0
+  console.log(
+    `  [mysqltest] ${c.totals.parsed}/${c.totals.statements} parsed; ` +
+      `CREATE ${parsedCreate}/${create}, with ${createSelect} more waiting on M3.3's query parser`,
+  )
+  assert.ok(parsedCreate > 2000, `only ${parsedCreate} CREATE statements parsed`)
+})
+
+test('M3.5: being more permissive than the server is a divergence too', () => {
+  // The direction a parse rate cannot see. Accepting SQL a real MySQL rejects
+  // is as wrong as refusing SQL it accepts, and only the corpus's own `--error`
+  // directives can tell us — which is why the extractor tracks them.
+  //
+  // Two remain, and both need machinery M3.5 does not own: MySQL's
+  // reserved-word list (`create table lateral(…)`) and its rules for which
+  // characters may appear in an unquoted identifier. Both arrive with M3.3.
+  // The bound is a ratchet — it may fall, and a rise means a new one.
+  const c = census()
+  const wrong = Object.values(c.wronglyAcceptedByKeyword).reduce((a, b) => a + b, 0)
+  assert.ok(wrong <= 2, `${wrong} statement(s) parsed that MySQL rejects: ${JSON.stringify(c.wronglyAcceptedByKeyword)}`)
+  assert.equal(c.totals.expectedToFail - c.totals.expectedToFailAndDid, wrong)
 })
 
 test('M3.11: the corpus is big enough for the number to mean something', () => {

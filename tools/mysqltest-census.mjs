@@ -44,7 +44,7 @@
 import { mkdirSync, readFileSync, writeFileSync, existsSync } from 'node:fs'
 import { join } from 'node:path'
 import { REPO, REF, fetchPinnedBytes, combinedSha256 } from './lib/gen-common.mjs'
-import { lex, ParseError } from '@myjs/parser'
+import { lex, parseStatement, ParseError } from '@myjs/parser'
 import { extract } from './lib/mysqltest-extract.mjs'
 
 function arg(name, fallback) {
@@ -154,6 +154,10 @@ for (const name of selection) sources.push(await fetchPinnedBytes(`${DIRECTORY}/
 let statements = 0
 let lexed = 0
 let parsed = 0
+let parseFailed = 0
+let permissive = 0
+/** Statements we accept that MySQL rejects — a divergence the other way. */
+const tooPermissive = new Map()
 let skipped = 0
 let directives = 0
 const byKeyword = new Map()
@@ -165,6 +169,15 @@ const notMeasured = []
 const byCharset = new Map()
 /** Charset switches a real server would refuse, by reason (M3.12). */
 const refused = new Map()
+/** Statements the corpus marks `--error`: MySQL rejects them, and so should we. */
+let expectedToFail = 0
+let expectedToFailAndDid = 0
+/** Statements a real parser would accept and this one does not implement yet. */
+const unsupported = new Map()
+/** Statements that lexed and would not parse, by leading keyword. */
+const parseFailures = new Map()
+/** Parsed, by leading keyword — the exit criterion lives in this table. */
+const parsedByKeyword = new Map()
 /** Lines in a charset this build will not decode. Coverage lost, and counted. */
 let unreadLines = 0
 const unreadCharsets = new Set()
@@ -190,7 +203,7 @@ for (const source of sources) {
     console.error(`  file will not lex: ${name} — ${result.detail}`)
     continue
   }
-  for (const { text, keyword, charset } of result.statements) {
+  for (const { text, keyword, charset, expectedError } of result.statements) {
     statements++
     byKeyword.set(keyword, (byKeyword.get(keyword) ?? 0) + 1)
     byCharset.set(charset, (byCharset.get(charset) ?? 0) + 1)
@@ -204,8 +217,38 @@ for (const source of sources) {
       if (failures.length <= 25) console.error(`  lex failed in ${name}: ${String(e.message).slice(0, 140)}`)
       continue
     }
-    // M3.3–M3.6 will make this climb. Until a statement parser exists the
-    // number is 0 by construction, and saying so is better than omitting it.
+    // M3.5 makes this climb. The three outcomes are counted apart on purpose:
+    // a statement this parser does not *implement* is not the same as one it
+    // cannot parse, and folding them together would make the exit criterion's
+    // number mean "what M3.5 happens to cover" rather than "what parses".
+    // A statement the corpus marks `--error ER_PARSE_ERROR` is one MySQL itself
+    // rejects, and refusing it is the correct outcome rather than a miss. This
+    // is what turns the census from "how much parses" into "how much of what
+    // MySQL accepts parses" — the question M3's exit criterion actually asks,
+    // and the difference between 80.8% and the real number.
+    const shouldFail = expectedError === 'ER_PARSE_ERROR' || expectedError === '1064'
+    if (shouldFail) expectedToFail++
+    try {
+      parseStatement(text)
+      parsed++
+      parsedByKeyword.set(keyword, (parsedByKeyword.get(keyword) ?? 0) + 1)
+      if (shouldFail) {
+        // We accepted something MySQL rejects. Not a crash, but a divergence,
+        // and the only one this census can see in that direction.
+        tooPermissive.set(keyword, (tooPermissive.get(keyword) ?? 0) + 1)
+        if (permissive++ < 20) console.error(`  accepted but MySQL rejects, in ${name}: ${text.replace(/\s+/g, ' ').slice(0, 120)}`)
+      }
+    } catch (e) {
+      if (shouldFail) {
+        expectedToFailAndDid++
+      } else if (e instanceof ParseError && e.code === 'ER_NOT_SUPPORTED_YET') {
+        const what = /support '([^']*)'/.exec(String(e.message))?.[1] ?? '(unknown)'
+        unsupported.set(what, (unsupported.get(what) ?? 0) + 1)
+      } else {
+        parseFailures.set(keyword, (parseFailures.get(keyword) ?? 0) + 1)
+        if (parseFailed++ < 400) console.error(`  parse failed in ${name}: ${text.replace(/\s+/g, ' ').slice(0, 400)}`)
+      }
+    }
   }
 }
 
@@ -214,6 +257,23 @@ const measured = sources.length - notMeasured.length
 console.log(`${sources.length} file(s), ${measured} measured, ${directives} directive line(s) skipped`)
 console.log(`${statements} statement(s): ${lexed} lexed, ${parsed} parsed, ${skipped} skipped for $variables`)
 console.log(`top keywords: ${ranked.slice(0, 15).map(([k, n]) => `${k} ${n}`).join(', ')}`)
+// M3's exit criterion is "every `CREATE TABLE` in MySQL's own test suite
+// parses", so the per-keyword rate is the criterion's own scoreboard rather
+// than a curiosity. Printed for the keywords that lead the census.
+const rate = (k) => {
+  const total = byKeyword.get(k) ?? 0
+  const ok = parsedByKeyword.get(k) ?? 0
+  return `${k} ${ok}/${total} (${total === 0 ? 0 : ((ok / total) * 100).toFixed(1)}%)`
+}
+console.log(`parsed by keyword: ${ranked.slice(0, 8).map(([k]) => rate(k)).join(', ')}`)
+const topUnsupported = [...unsupported].sort((a, b) => b[1] - a[1]).slice(0, 12)
+console.log(`not implemented yet: ${topUnsupported.map(([k, n]) => `${k} ${n}`).join(', ') || 'none'}`)
+const topParseFailures = [...parseFailures].sort((a, b) => b[1] - a[1]).slice(0, 12)
+console.log(`would not parse: ${topParseFailures.map(([k, n]) => `${k} ${n}`).join(', ') || 'none'}`)
+console.log(
+  `${expectedToFail} statement(s) the corpus expects to fail; we refuse ${expectedToFailAndDid} of them` +
+    (tooPermissive.size === 0 ? '' : `, and wrongly accept ${[...tooPermissive].map(([k, n]) => `${k} ${n}`).join(', ')}`),
+)
 // Said out loud rather than buried in the fixture: a census that quietly
 // stopped measuring half its files would otherwise still report 100% lexed.
 for (const { file, reason } of notMeasured) console.log(`  not measured: ${file} — ${reason}`)
@@ -255,8 +315,14 @@ writeFileSync(
         directives,
         unreadLines,
         unreadCharsets: [...unreadCharsets].sort(),
+        expectedToFail,
+        expectedToFailAndDid,
       },
       byKeyword: Object.fromEntries(ranked),
+      parsedByKeyword: Object.fromEntries([...parsedByKeyword].sort((a, b) => b[1] - a[1])),
+      unsupported: Object.fromEntries([...unsupported].sort((a, b) => b[1] - a[1])),
+      parseFailuresByKeyword: Object.fromEntries([...parseFailures].sort((a, b) => b[1] - a[1])),
+      wronglyAcceptedByKeyword: Object.fromEntries([...tooPermissive].sort((a, b) => b[1] - a[1])),
       byCharset: Object.fromEntries(charsetRanked),
       refusedCharsetSwitches: Object.fromEntries([...refused].sort((a, b) => b[1] - a[1])),
       notMeasured,
@@ -280,6 +346,40 @@ if (lexed !== statements || failures.length > 0) {
     `\n${statements - lexed} statement(s) and ${failures.filter((f) => f.kind === 'file-lex').length} whole file(s) failed to lex.\n` +
       '  Every statement in the corpus must tokenise. The failing SQL is printed above —\n' +
       '  it is GPLv2, so it appears only in this log and is never written to a file.',
+  )
+  process.exit(1)
+}
+
+// M3's exit criterion, enforced rather than merely reported.
+//
+// "Every `CREATE TABLE` in MySQL's own test suite parses" is not the same
+// claim as "every CREATE statement parses", because the suite is full of
+// statements MySQL itself rejects — 102 of them carry `--error
+// ER_PARSE_ERROR`. So the criterion is: **a statement the corpus expects to
+// succeed, in a form this parser implements, must parse.** Anything else is a
+// divergence from the server, in one direction or the other.
+const wouldNotParse = [...parseFailures.values()].reduce((a, b) => a + b, 0)
+if (wouldNotParse > 0) {
+  console.error(
+    `\n${wouldNotParse} statement(s) that MySQL accepts failed to parse. The failing SQL is\n` +
+      '  printed above — it is GPLv2, so it appears only in this log and is never written\n' +
+      '  to a file. A statement this parser does not implement is reported separately and\n' +
+      '  does not reach here.',
+  )
+  process.exit(1)
+}
+
+// The divergence in the other direction, which the expected-failure accounting
+// is the only thing that can see: SQL we accept and a real server rejects.
+// Two remain and both need machinery M3.5 does not own — MySQL's reserved-word
+// list (`create table lateral(…)`) and its rules for which characters may
+// appear in an unquoted identifier. Both arrive with M3.3. The bound is a
+// ratchet: it may fall, and a rise means a new one.
+const wronglyAccepted = [...tooPermissive.values()].reduce((a, b) => a + b, 0)
+if (wronglyAccepted > 2) {
+  console.error(
+    `\n${wronglyAccepted} statement(s) parsed that MySQL rejects, and the ratchet allows 2.\n` +
+      '  Being more permissive than the server is a divergence like any other.',
   )
   process.exit(1)
 }

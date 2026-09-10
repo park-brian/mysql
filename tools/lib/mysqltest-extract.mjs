@@ -104,6 +104,8 @@ const DEFAULT_CHARSET = 'utf8mb4'
  * here is ASCII and anchored at the start of the line.
  */
 const CHARSET_DIRECTIVE = /^(?:--)?character_set\s+(\S+)/i
+/** `--error ER_PARSE_ERROR` or `--error 1064`, possibly a comma-separated list. */
+const EXPECTED_ERROR = /^(?:--)?error\s+([A-Za-z0-9_]+)/i
 const SET_NAMES = /^set\s+names\s+'?([A-Za-z0-9_]+)'?/i
 const SET_CLIENT = /^set\s+(?:@@)?(?:session\.|global\.|local\.)?character_set_client\s*=\s*'?([A-Za-z0-9_]+)'?/i
 
@@ -217,7 +219,9 @@ export function extract(bytes) {
   let charset = DEFAULT_CHARSET
   let collationId = resolveCharset(DEFAULT_CHARSET).collationId
   let readable = true
-  let current = { charset, collationId, readable, lines: [] }
+  let current = { charset, collationId, readable, lines: [], errors: [] }
+  /** A `--error` directive waiting for the statement it applies to. */
+  let pendingError = null
   /** Lines in a charset this build will not decode — coverage lost, counted. */
   let unreadLines = 0
   const unreadCharsets = new Set()
@@ -263,7 +267,7 @@ export function extract(bytes) {
     collationId = resolved.collationId
     readable = resolved.readable
     charsets.add(charset)
-    current = { charset, collationId, readable, lines: [] }
+    current = { charset, collationId, readable, lines: [], errors: [] }
   }
 
   for (const raw of lines) {
@@ -309,6 +313,19 @@ export function extract(bytes) {
       // mysqltest's own directive: it takes effect here, before the next line.
       const cs = CHARSET_DIRECTIVE.exec(trimmed)
       if (cs !== null) switchTo(cs[1])
+      // `--error ER_PARSE_ERROR` says the *next* statement is expected to fail,
+      // and that turns the census from "how much parses" into "how much of what
+      // MySQL accepts parses" — which is the question M3's exit criterion asks.
+      // Without it a corpus full of deliberate syntax errors makes a correct
+      // parser look incomplete.
+      const err = EXPECTED_ERROR.exec(trimmed)
+      if (err !== null) pendingError = err[1].toUpperCase()
+      // …and it applies to the next *command*, not to the next statement. A
+      // directive in between consumes it: `--error ER_X` followed by
+      // `eval $query;` arms the error for the eval, and the `DROP TABLE` three
+      // lines later is an ordinary statement. Carrying it over made the census
+      // report that we wrongly accepted a plain `DROP TABLE t1`.
+      else if (!trimmed.startsWith('#')) pendingError = null
       if (CONTINUES.test(trimmed) && advance(line, open)) continuation = 1
       continue
     }
@@ -316,6 +333,8 @@ export function extract(bytes) {
       directives++
       continue
     }
+    current.errors[current.lines.length] = pendingError
+    pendingError = null
     current.lines.push(raw)
     // `SET NAMES` is SQL: it belongs to the region it was written in, and only
     // the bytes *after* it are in the new charset. Hence the push above first.
@@ -373,6 +392,22 @@ export function extract(bytes) {
       return result('lex-failed', `${region.charset} line ${line}: ${context.slice(0, 120)}`)
     }
 
+    // Character offset of the first character of each line, so a statement's
+    // starting line — and therefore the `--error` that preceded it — can be
+    // found from its offset in the joined region.
+    const lineStarts = [0]
+    for (let i = 0; i < sql.length; i++) if (sql.charCodeAt(i) === 10) lineStarts.push(i + 1)
+    const lineAt = (offset) => {
+      let lo = 0
+      let hi = lineStarts.length - 1
+      while (lo < hi) {
+        const mid = (lo + hi + 1) >> 1
+        if (lineStarts[mid] <= offset) lo = mid
+        else hi = mid - 1
+      }
+      return lo
+    }
+
     let start = 0
     let held = []
     const emit = (from, to) => {
@@ -387,7 +422,17 @@ export function extract(bytes) {
         held = []
         return
       }
-      statements.push({ text, keyword: keywordOf(held), charset: region.charset })
+      // `from` sits just after the previous `;`, so it points at the whitespace
+      // before this statement rather than at the statement. The `--error`
+      // belongs to the line the *text* starts on.
+      const textStart = from + (sql.slice(from, to).length - sql.slice(from, to).trimStart().length)
+      const expected = region.errors[lineAt(textStart)]
+      statements.push({
+        text,
+        keyword: keywordOf(held),
+        charset: region.charset,
+        ...(expected === undefined || expected === null ? {} : { expectedError: expected }),
+      })
       held = []
     }
     for (const t of tokens) {

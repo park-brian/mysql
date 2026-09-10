@@ -84,6 +84,26 @@ export function tooDeep(limit: number): ParseError {
 }
 
 /**
+ * A statement this parser does not implement **yet**.
+ *
+ * Distinct from `ER_PARSE_ERROR` on purpose, and the distinction is not
+ * cosmetic. `SELECT 1` is valid SQL; telling a client its syntax is wrong would
+ * be a lie, and telling M3.11's census that the statement failed to parse would
+ * make the exit criterion's number mean "what M3.5 happens to cover" rather
+ * than "what parses". A refusal that names the missing feature keeps both
+ * honest.
+ *
+ * `ER_NOT_SUPPORTED_YET` is 1235 / 42000, the same error a real MySQL raises
+ * for a statement its parser accepts and its executor does not.
+ */
+export function unsupportedStatement(what: string): ParseError {
+  return new ParseError('ER_NOT_SUPPORTED_YET', `This version of myjs doesn't yet support '${what}'`, {
+    errno: 1235,
+    sqlState: '42000',
+  })
+}
+
+/**
  * A `sql_mode` value that is not a mode name.
  *
  * `ER_WRONG_VALUE_FOR_VAR` is 1231 / 42000 — the same error a real server gives

@@ -81,10 +81,16 @@ test('M3.2: calls, qualified names and the bare star', () => {
   assert.equal(tree('f()'), 'f()')
   assert.equal(tree('db.t.a'), 'db.t.a')
   assert.equal(tree('t.*'), 't.*')
-  // Without IGNORE_SPACE a space between the name and `(` means this is not a
-  // call — which is exactly what that mode is for. `f` parses as a column and
-  // `(1)` is then leftover input, which is refused rather than dropped.
-  assert.throws(() => parseExpression('f (1)'), ParseError)
+  // **A space before the `(` is allowed**, and this assertion used to say the
+  // opposite. The manual's "there must be no whitespace between a function
+  // name and the following parenthesis" reads like a general rule and is not
+  // one: M3.11's census found `DEFAULT (CONCAT ('[', data, ']'))` in
+  // `default_as_expr.test` with no `--error` in front of it, so a real 8.4
+  // accepts it. The rule applies to the builtins that are also grammar
+  // keywords, which `IGNORE_SPACE` makes reserved; modelling that list needs
+  // the reserved words M3.3 brings. Until then the permissive reading is the
+  // one the corpus supports, and the strict one refused valid SQL.
+  assert.equal(tree('f (1)'), 'f(1)')
   assert.equal(tree('f (1)', 'IGNORE_SPACE'), 'f(1)')
 })
 
