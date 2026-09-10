@@ -2,15 +2,17 @@
 
 > **Status: the wire protocol works and the type system is landing; there is
 > no storage engine yet.** M0, M1 and most of M2 are complete
-> (54 / 143 work items). `@myjs/protocol` speaks the MySQL wire protocol well
+> (57 / 143 work items). `@myjs/protocol` speaks the MySQL wire protocol well
 > enough that the real `mysql` client and an unpatched `mysql2` complete full
 > sessions against it; `@myjs/charsets` and `@myjs/types` carry the generated
 > collation registry, generated weight tables, and every byte-exact column
 > encoding in doc 24. **`utf8mb4_0900_ai_ci`, the MySQL 8.0 default, now
 > orders values** — UCA 9.0.0 level 1, generated from MySQL's own tables and
-> loaded on demand so its 49 KB never reaches an initial bundle. Binary JSON
-> and the golden-vector suite are the rest of M2. Queries are still answered
-> by a stub, because the parser and engine are M3–M5. Start at
+> loaded on demand so its 49 KB never reaches an initial bundle. `@myjs/types`
+> now carries D-15's driver mapping and MySQL's binary JSON, and every byte
+> dump in docs 15, 24 and 28 is a test case that CI checks rather than a claim
+> someone maintains. Queries are still answered by a stub, because the parser
+> and engine are M3–M5. Start at
 > **[docs/44-roadmap.md](./docs/44-roadmap.md)** for the state
 > of the project, or **[docs/README.md](./docs/README.md)** for the
 > specifications.

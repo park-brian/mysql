@@ -25,6 +25,7 @@ import {
 } from '@myjs/types'
 
 const roundTrip = (v: JsonValue): JsonValue => decodeJson(encodeJson(v))
+const hex = (u: Uint8Array) => [...u].map((b) => b.toString(16).padStart(2, '0').toUpperCase()).join(' ')
 
 test('M2.13: scalars round-trip, and pick the narrowest type that holds them', () => {
   assert.equal(roundTrip(null), null)
@@ -226,4 +227,54 @@ test('M2.13: negative zero stays a double, because float8store keeps its sign', 
   assert.equal(encodeJson(0)[0], JSON_TYPE.INT16)
   assert.ok(Object.is(decodeJson(encodeJson(-0)), -0))
   assert.ok(Object.is(decodeJson(encodeJson(0)), 0))
+})
+
+test('M2.13/M2.15: the spec-derived byte vectors doc 28 does not itself quote', () => {
+  // Doc 28 contains no hex dumps — four fenced blocks, all grammar and
+  // pseudocode — so M2.15's "every byte dump is a test case" is vacuous for
+  // it. These are the vectors that fill that gap, and they are *derived from
+  // the grammar* rather than from our own output, so they are a check on the
+  // encoder rather than a photograph of it.
+  //
+  // `{"a":1}`, worked through doc 28's `object ::= element-count size
+  // key-entry* value-entry* key* value*`:
+  //
+  //   00           small object
+  //   01 00        element-count = 1        (uint16, small)
+  //   0C 00        size = 12                (the container's own byte length)
+  //   0B 00 01 00  key-entry: offset 11, length 1
+  //   05 01 00     value-entry: INT16, inlined value 1
+  //   61           the key, 'a'
+  //
+  // The offset is 11 because the entries end there: 4 bytes of header, 4 of
+  // key-entry, 3 of value-entry. Container-relative, so it counts from the
+  // element-count and not from the type byte.
+  assert.equal(hex(encodeJson({ a: 1 })), '00 01 00 0C 00 0B 00 01 00 05 01 00 61')
+
+  //   02           small array
+  //   01 00        element-count = 1
+  //   07 00        size = 7
+  //   05 01 00     value-entry: INT16, inlined value 1
+  assert.equal(hex(encodeJson([1])), '02 01 00 07 00 05 01 00')
+
+  // Empty containers are the header alone, which is the smallest a container
+  // can be and the case an off-by-one in the entry arithmetic breaks first.
+  assert.equal(hex(encodeJson([])), '02 00 00 04 00')
+  assert.equal(hex(encodeJson({})), '00 00 00 04 00')
+
+  // A bare scalar document has no entry to be inlined into, so the value
+  // follows the type byte in its own right.
+  assert.equal(hex(encodeJson(null)), '04 00')
+  assert.equal(hex(encodeJson(true)), '04 01')
+  assert.equal(hex(encodeJson(false)), '04 02')
+
+  //   0C           string
+  //   02           length varint = 2
+  //   61 62        'ab'
+  assert.equal(hex(encodeJson('ab')), '0C 02 61 62')
+
+  // And every one of them decodes back, so the vectors pin both directions.
+  for (const v of [{ a: 1 }, [1], [], {}, null, true, false, 'ab'] as JsonValue[]) {
+    assert.deepEqual(decodeJson(encodeJson(v)), v)
+  }
 })
