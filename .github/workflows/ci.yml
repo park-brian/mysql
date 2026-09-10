@@ -173,14 +173,21 @@ jobs:
             -p 3306:3306 \
             mysql:8.4 \
             --log-bin=binlog --binlog-row-image=FULL --binlog-format=ROW --server-id=1
-          for _ in $(seq 1 60); do
-            if docker exec mysql84 mysqladmin ping -uroot -proot --silent 2>/dev/null; then
-              echo 'mysqld is up'
+          # Probed over TCP from the runner, not with `docker exec`, because
+          # those are not the same question. MySQL's entrypoint runs a
+          # *temporary* server on the socket alone while it initialises the
+          # data directory, so an in-container ping answers long before the
+          # port is listening — and the capture then dies with
+          # "Lost connection ... reading initial communication packet". Wait on
+          # the path the tool actually uses.
+          for _ in $(seq 1 90); do
+            if mysqladmin ping -h 127.0.0.1 -P 3306 --protocol=TCP -uroot -proot --silent 2>/dev/null; then
+              echo 'mysqld is accepting TCP connections'
               exit 0
             fi
             sleep 2
           done
-          echo 'mysqld did not become ready'
+          echo 'mysqld did not start accepting TCP connections'
           docker logs mysql84
           exit 1
       - name: capture and diff
