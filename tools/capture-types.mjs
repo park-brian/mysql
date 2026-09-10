@@ -232,17 +232,23 @@ function parseRowImages(dump) {
  * own weights rather than about our packing.
  */
 const WEIGHT_CASES = [
-  { collation: 'utf8mb4_0900_ai_ci', strings: ['a', 'A', 'ä', 'ß', 'ss', 'æ', 'ae', 'é', 'e', 'a ', '一', '가'] },
-  { collation: 'utf8mb4_general_ci', strings: ['a', 'A', 'ä', 'ß', 'ss', 'z'] },
-  { collation: 'latin1_swedish_ci', strings: ['a', 'A', 'z'] },
-  { collation: 'utf8mb4_bin', strings: ['a', 'A', 'ä'] },
+  { collation: 'utf8mb4_0900_ai_ci', charset: 'utf8mb4', strings: ['a', 'A', 'ä', 'ß', 'ss', 'æ', 'ae', 'é', 'e', 'a ', '一', '가'] },
+  { collation: 'utf8mb4_general_ci', charset: 'utf8mb4', strings: ['a', 'A', 'ä', 'ß', 'ss', 'z'] },
+  // ASCII only, so the literal is representable in latin1 — and the
+  // introducer must be `_latin1`, since `_utf8mb4'a' COLLATE latin1_swedish_ci`
+  // is a charset/collation mismatch MySQL rejects outright.
+  { collation: 'latin1_swedish_ci', charset: 'latin1', strings: ['a', 'A', 'z'] },
+  { collation: 'utf8mb4_bin', charset: 'utf8mb4', strings: ['a', 'A', 'ä'] },
 ]
 
 async function captureWeights() {
   const out = []
-  for (const { collation, strings } of WEIGHT_CASES) {
+  for (const { collation, charset, strings } of WEIGHT_CASES) {
     for (const s of strings) {
-      const literal = `_utf8mb4'${s.replace(/'/g, "''")}' COLLATE ${collation}`
+      // The introducer has to name the collation's *own* charset: a literal
+      // introduced as one charset and collated as another is an error, not a
+      // conversion.
+      const literal = `_${charset}'${s.replace(/'/g, "''")}' COLLATE ${collation}`
       // No `LEVEL` clause. D-34 writes `WEIGHT_STRING(s LEVELS 1)`, but the
       // keyword is `LEVEL` (singular) and 8.4 rejects `LEVELS` outright — and
       // the clause is unnecessary anyway: bare `WEIGHT_STRING` returns exactly
