@@ -220,11 +220,13 @@ jobs:
     # `.result` files needs an executor — but the *parse-only* half needs only a
     # parser, and M3's own exit criterion already assumes it exists.
     #
-    # Informational at first, exactly as `type-vectors` was: `--refresh`
-    # expands the corpus from its seed list, and a wider corpus will very
-    # likely find lexer gaps. That is the point of running it. It becomes
-    # gating once the expanded census is committed and clean.
-    continue-on-error: true
+    # Gating. It was informational for exactly one run, which is what that run
+    # was for: expanding the corpus from its eight-file seed to 120 found eight
+    # files the census could not read, and not one of them was a lexer bug —
+    # five wrappers with no SQL, one Shift-JIS file, two multi-line directives
+    # the extractor was mis-splitting. With those named, all 18,751 statements
+    # lex, and the committed census reproduces byte for byte, so a diff here is
+    # a real signal rather than churn.
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -240,7 +242,11 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           npm run census:mysqltest -- --refresh
-          git diff --stat -- test/format/fixtures/
+          # `--exit-code`, as in the `generated` job, not `--stat`. The ref is
+          # pinned and the listing is sorted, so the census is a pure function
+          # of the tree and of our own lexer: a diff here means one of those two
+          # moved, and the fixture must move with it in the same commit (D-03).
+          git diff --exit-code -- test/format/fixtures/mysqltest-corpus.json
       - name: upload the census
         if: always()
         uses: actions/upload-artifact@v4

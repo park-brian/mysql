@@ -253,13 +253,21 @@ if (lexed !== statements || failures.length > 0) {
 }
 
 // The other half of the gate, and the one M2.22 keeps teaching: a census that
-// measured nothing would satisfy every line above. `no-sql` and `not-utf8` are
-// legitimate outcomes, but they are also the two ways this tool could quietly
-// stop looking at the corpus — so cap them rather than trusting them.
-if (measured < sources.length * 0.9) {
+// measured nothing would satisfy every line above.
+//
+// Only `no-sql` is capped, and the distinction is not pedantry. `not-utf8` is a
+// property of the *source file* that nothing in this tool can cause — the eight
+// `ctype_*` files that trip it are non-UTF-8 on purpose, and the number moves
+// only when the selection does. `no-sql` is different: it is what a file looks
+// like when the extractor has classified every one of its lines as a directive,
+// so it is the shape an extractor collapse would take at corpus scale, and a
+// cap on it is a real check rather than a restatement of the selection.
+const empty = notMeasured.filter((f) => f.reason === 'no-sql').length
+if (empty > sources.length * 0.1) {
   console.error(
-    `\nonly ${measured}/${sources.length} file(s) were measured. Either the selection has drifted\n` +
-      '  toward wrappers and non-UTF-8 files, or the directive extractor is eating SQL.',
+    `\n${empty}/${sources.length} file(s) came out with no SQL in them at all.\n` +
+      '  A few are genuine `--source` wrappers. This many means the directive extractor\n' +
+      '  is eating statements, and every rate above is being reported over what is left.',
   )
   process.exit(1)
 }

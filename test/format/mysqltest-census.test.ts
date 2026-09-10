@@ -78,13 +78,24 @@ test('M3.11: a file the census did not measure says why', () => {
   }
   assert.equal(c.totals.measured, c.totals.files - c.notMeasured.length)
 
-  // And the escape hatch is bounded. `no-sql` is a legitimate outcome and also
-  // the one way this tool could stop looking at the corpus while still
-  // reporting 100% lexed — M2.22's lesson, which this project keeps relearning.
-  assert.ok(
-    c.totals.measured >= c.totals.files * 0.9,
-    `only ${c.totals.measured}/${c.totals.files} files measured — the census is looking away`,
-  )
+  // And one of the two is bounded. `no-sql` is what a file looks like when the
+  // extractor has classified every line in it as a directive, so it is the
+  // shape an extractor collapse takes at corpus scale — M2.22's lesson, which
+  // this project keeps relearning. `not-utf8` is a property of the source file
+  // that nothing here can cause, so capping it would only restate the
+  // selection.
+  const empty = c.notMeasured.filter((f) => f.reason === 'no-sql').length
+  assert.ok(empty <= c.totals.files * 0.1, `${empty}/${c.totals.files} files came out with no SQL at all`)
+
+  // Printed because it is a live gap rather than a curiosity: the files the
+  // census cannot read are the `ctype_*` ones, which are non-UTF-8 on purpose —
+  // and those are precisely the files that would exercise M3.1's charset-aware
+  // lexing against real SQL. Reading them means fetching bytes rather than text
+  // and honouring each file's `SET NAMES`, which is M3.12's work.
+  const mangled = c.notMeasured.filter((f) => f.reason === 'not-utf8')
+  if (mangled.length > 0) {
+    console.log(`  [mysqltest] ${mangled.length} file(s) not read as UTF-8 — the charset tests, still unmeasured (M3.12)`)
+  }
 })
 
 test('M3.11: the corpus is big enough for the number to mean something', () => {
