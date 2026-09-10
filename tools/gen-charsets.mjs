@@ -46,6 +46,12 @@ const SOURCES = [
   'strings/ctype-euc_kr.cc',
   'strings/ctype-extra.cc',
   'strings/ctype-gb18030.cc',
+  // Found missing by M3.12: `func_like.test` runs `SET NAMES gb2312`, and
+  // gb2312 was absent from the registry entirely — ids 24 and 86 resolved to
+  // nothing, so a gb2312 client got `unknown collation` rather than either
+  // service or an honest refusal. `APPROXIMATE_CHARSETS` had been naming a
+  // charset the registry could not produce.
+  'strings/ctype-gb2312.cc',
   'strings/ctype-gbk.cc',
   'strings/ctype-latin1.cc',
   // Not a charset file: `ctype-mb.cc` and `ctype-simple.cc` define the shared

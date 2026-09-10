@@ -24,6 +24,7 @@
 // Source:  mysql/mysql-server@e174239c strings/ctype-euc_kr.cc
 // Source:  mysql/mysql-server@e174239c strings/ctype-extra.cc
 // Source:  mysql/mysql-server@e174239c strings/ctype-gb18030.cc
+// Source:  mysql/mysql-server@e174239c strings/ctype-gb2312.cc
 // Source:  mysql/mysql-server@e174239c strings/ctype-gbk.cc
 // Source:  mysql/mysql-server@e174239c strings/ctype-latin1.cc
 // Source:  mysql/mysql-server@e174239c strings/ctype-mb.cc
@@ -40,7 +41,7 @@
 
 /** SHA-256 over every source file's own hash — the same value the registry carries. */
 export const ENCODING_TABLE_SOURCE_SHA256 =
-  'b00392630713ac249eddd5f45df836d2cc03a63a58c73443e0caf465ce54248f'
+  '037f18f34aac7c6d3eed67a3d3763202ab89824c8972627f96364fbe052aa473'
 
 /**
  * `charset code-points`, one single-byte charset per line.

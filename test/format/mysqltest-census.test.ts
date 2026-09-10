@@ -25,8 +25,12 @@ interface Census {
     readonly parsed: number
     readonly skippedWithVariables: number
     readonly directives: number
+    readonly unreadLines: number
+    readonly unreadCharsets: readonly string[]
   }
   readonly byKeyword: Readonly<Record<string, number>>
+  readonly byCharset: Readonly<Record<string, number>>
+  readonly refusedCharsetSwitches: Readonly<Record<string, number>>
   readonly notMeasured: readonly { readonly file: string; readonly reason: string }[]
   readonly failures: readonly { readonly file: string; readonly kind: string }[]
 }
@@ -65,14 +69,14 @@ test('M3.11: every statement in the corpus lexes', () => {
 test('M3.11: a file the census did not measure says why', () => {
   // The first run reported eight "file will not lex" failures and **none of
   // them was a lexer bug**: five files are pure `--source` wrappers with no SQL
-  // in them, one is Shift-JIS on purpose, and two were the extractor feeding
-  // the lexer half of a multi-line `--assert`. A census that reports a defect
-  // for each of those trains its reader to ignore it.
+  // in them, one is Shift-JIS on purpose (M3.12 now reads it), and two were the
+  // extractor feeding the lexer half of a multi-line `--assert`. A census that
+  // reports a defect for each of those trains its reader to ignore it.
   //
   // So each unmeasured file carries a reason, and the reasons are a closed set:
   // a new one means the tool learned something it should be saying out loud.
   const c = census()
-  const allowed = new Set(['no-sql', 'not-utf8'])
+  const allowed = new Set(['no-sql', 'undecodable'])
   for (const { file, reason } of c.notMeasured) {
     assert.ok(allowed.has(reason), `${file}: ${reason} is not a reason this census knows how to explain`)
   }
@@ -81,20 +85,63 @@ test('M3.11: a file the census did not measure says why', () => {
   // And one of the two is bounded. `no-sql` is what a file looks like when the
   // extractor has classified every line in it as a directive, so it is the
   // shape an extractor collapse takes at corpus scale — M2.22's lesson, which
-  // this project keeps relearning. `not-utf8` is a property of the source file
-  // that nothing here can cause, so capping it would only restate the
+  // this project keeps relearning. `undecodable` is a property of the source
+  // file that nothing here can cause, so capping it would only restate the
   // selection.
   const empty = c.notMeasured.filter((f) => f.reason === 'no-sql').length
   assert.ok(empty <= c.totals.files * 0.1, `${empty}/${c.totals.files} files came out with no SQL at all`)
 
-  // Printed because it is a live gap rather than a curiosity: the files the
-  // census cannot read are the `ctype_*` ones, which are non-UTF-8 on purpose —
-  // and those are precisely the files that would exercise M3.1's charset-aware
-  // lexing against real SQL. Reading them means fetching bytes rather than text
-  // and honouring each file's `SET NAMES`, which is M3.12's work.
-  const mangled = c.notMeasured.filter((f) => f.reason === 'not-utf8')
-  if (mangled.length > 0) {
-    console.log(`  [mysqltest] ${mangled.length} file(s) not read as UTF-8 — the charset tests, still unmeasured (M3.12)`)
+  // What remains unread, said out loud. `binary` is a legal connection charset
+  // this build will not decode, so those lines are skipped rather than guessed
+  // at — and the count is the difference between "100% lexed" and "100% of what
+  // we could read", which are not the same claim.
+  if (c.totals.unreadLines > 0) {
+    console.log(
+      `  [mysqltest] ${c.totals.unreadLines} line(s) unread in ${c.totals.unreadCharsets.join(', ')} — ` +
+        'a charset this build refuses to guess at',
+    )
+  }
+})
+
+test('M3.12: the corpus is read in the charset it was written in', () => {
+  // The item's whole point, and the reason it existed. Before it, every file
+  // was decoded as UTF-8 and the eight `ctype_*` files — MySQL's own tests for
+  // the multi-byte lexing M3.1 was built for — were skipped as unreadable. A
+  // census that had quietly gone back to reading everything as utf8mb4 would
+  // still report 100% lexed, so the charsets themselves are the assertion.
+  const c = census()
+  const ranked = Object.entries(c.byCharset).sort((a, b) => b[1] - a[1])
+  console.log(`  [mysqltest] by charset: ${ranked.map(([k, n]) => `${k} ${n}`).join(', ')}`)
+
+  const total = ranked.reduce((sum, [, n]) => sum + n, 0)
+  assert.equal(total, c.totals.statements, 'every statement must be attributed to the charset it was read in')
+  assert.ok(ranked.length >= 5, `only ${ranked.length} charset(s) — the corpus is being read as one encoding again`)
+
+  // The multi-byte family is the part that matters: these are the charsets
+  // where a lead byte can carry an ASCII backslash in its trail, which is the
+  // injection M3.1's acceptance clause names. Reading MySQL's own tests for
+  // them as utf8mb4 fails `ctype_sjis.test`, checked by doing it.
+  const multiByte = ['sjis', 'gbk', 'big5', 'euckr']
+  for (const cs of multiByte) {
+    assert.ok((c.byCharset[cs] ?? 0) > 0, `no statement was read as ${cs} — M3.1's own case is untested again`)
+  }
+})
+
+test('M3.12: a charset switch a real server refuses is refused here too', () => {
+  // `SET NAMES ucs2` is an error on a real server — doc 12: a multi-byte
+  // connection charset breaks the NUL-terminated handshake fields — and
+  // `ctype_ucs.test` runs it on purpose. Following it would misread every line
+  // after it, so the refusals are recorded rather than being invisible.
+  const c = census()
+  const reasons = Object.entries(c.refusedCharsetSwitches)
+  if (reasons.length > 0) {
+    console.log(`  [mysqltest] charset switches refused: ${reasons.map(([r, n]) => `${r} ${n}`).join(', ')}`)
+  }
+  for (const [reason] of reasons) {
+    assert.ok(
+      reason === 'prohibited' || reason === 'not-a-charset',
+      `${reason} is not a refusal this census knows how to explain`,
+    )
   }
 })
 

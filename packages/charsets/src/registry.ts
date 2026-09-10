@@ -12,6 +12,7 @@
 // Source:  mysql/mysql-server@e174239c strings/ctype-euc_kr.cc
 // Source:  mysql/mysql-server@e174239c strings/ctype-extra.cc
 // Source:  mysql/mysql-server@e174239c strings/ctype-gb18030.cc
+// Source:  mysql/mysql-server@e174239c strings/ctype-gb2312.cc
 // Source:  mysql/mysql-server@e174239c strings/ctype-gbk.cc
 // Source:  mysql/mysql-server@e174239c strings/ctype-latin1.cc
 // Source:  mysql/mysql-server@e174239c strings/ctype-mb.cc
@@ -23,24 +24,24 @@
 // Source:  mysql/mysql-server@e174239c strings/ctype-ujis.cc
 // Source:  mysql/mysql-server@e174239c strings/ctype-utf8.cc
 // Source:  mysql/mysql-server@e174239c strings/ctype-win1250ch.cc
-// Collations: 288
+// Collations: 290
 
 /** The upstream files this registry was generated from, for re-verification. */
 export const COLLATION_TABLE_SOURCE = 'mysql/mysql-server@e174239c strings/ctype-*.cc'
 
 /** SHA-256 over every source file's own hash. CI regenerates and diffs. */
 export const COLLATION_TABLE_SOURCE_SHA256 =
-  'b00392630713ac249eddd5f45df836d2cc03a63a58c73443e0caf465ce54248f'
+  '037f18f34aac7c6d3eed67a3d3763202ab89824c8972627f96364fbe052aa473'
 
 /** Number of collations MySQL e174239c compiles in. */
-export const COLLATION_TABLE_SIZE = 288
+export const COLLATION_TABLE_SIZE = 290
 
 /**
  * One collation per line: `id collation charset mbminlen mbmaxlen [flags]`.
  *
  * Flags are a subset of `n` (NO PAD), `d` (the charset's default collation)
  * and `b` (binary). Expanded lazily by `registry` — a minified object
- * literal of 288 entries costs several times this in the bundle.
+ * literal of 290 entries costs several times this in the bundle.
  */
 export const PACKED_COLLATIONS = `1 big5_chinese_ci big5 1 2 d
 2 latin2_czech_cs latin2 1 1
@@ -65,6 +66,7 @@ export const PACKED_COLLATIONS = `1 big5_chinese_ci big5 1 2 d
 21 latin2_hungarian_ci latin2 1 1
 22 koi8u_general_ci koi8u 1 1 d
 23 cp1251_ukrainian_ci cp1251 1 1
+24 gb2312_chinese_ci gb2312 1 2 d
 25 greek_general_ci greek 1 1 d
 26 cp1250_general_ci cp1250 1 1 d
 27 latin2_croatian_ci latin2 1 1
@@ -126,6 +128,7 @@ export const PACKED_COLLATIONS = `1 big5_chinese_ci big5 1 2 d
 83 utf8mb3_bin utf8mb3 1 3 b
 84 big5_bin big5 1 2 b
 85 euckr_bin euckr 1 2 b
+86 gb2312_bin gb2312 1 2 b
 87 gbk_bin gbk 1 2 b
 88 sjis_bin sjis 1 2 b
 89 tis620_bin tis620 1 1 b

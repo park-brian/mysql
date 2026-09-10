@@ -2,7 +2,7 @@
   "name": "mysqltest-corpus",
   "note": "Facts about MySQL's own test corpus — names, hashes and counts, never its SQL. Ground rule 7: mysql-test is fetched in CI, never vendored.",
   "source": "mysql/mysql-server@e174239c mysql-test/t",
-  "sourceSha256": "087076eeb3e8170db97996966cb467725c0688379f6031e6a8554417681807b5",
+  "sourceSha256": "ea7be99bca23111b285a003bfd2ba72aa60c17690ee77a9b6e30e64e3bb55ad9",
   "selection": [
     "alias.test",
     "delete.test",
@@ -127,38 +127,42 @@
   ],
   "totals": {
     "files": 120,
-    "measured": 107,
-    "statements": 18751,
-    "lexed": 18751,
+    "measured": 115,
+    "statements": 21240,
+    "lexed": 21240,
     "parsed": 0,
     "skippedWithVariables": 40,
-    "directives": 13751
+    "directives": 15445,
+    "unreadLines": 68,
+    "unreadCharsets": [
+      "binary"
+    ]
   },
   "byKeyword": {
-    "SELECT": 5687,
-    "CREATE": 3164,
-    "INSERT": 2910,
-    "DROP": 2286,
-    "ALTER": 1089,
-    "SET": 914,
-    "SHOW": 674,
-    "EXPLAIN": 658,
-    "ANALYZE": 211,
-    "EXECUTE": 193,
-    "DELETE": 186,
-    "UPDATE": 99,
-    "DO": 83,
-    "PREPARE": 79,
+    "SELECT": 6523,
+    "INSERT": 3506,
+    "CREATE": 3469,
+    "DROP": 2580,
+    "SET": 1164,
+    "ALTER": 1137,
+    "SHOW": 728,
+    "EXPLAIN": 687,
+    "ANALYZE": 218,
+    "EXECUTE": 204,
+    "DELETE": 200,
+    "UPDATE": 106,
+    "DO": 85,
+    "PREPARE": 84,
     "FLUSH": 57,
-    "CALL": 53,
+    "CALL": 54,
     "WITH": 51,
-    "DEALLOCATE": 40,
+    "DEALLOCATE": 42,
+    "CHECK": 37,
+    "USE": 37,
     "DESCRIBE": 35,
     "UNLOCK": 31,
-    "USE": 31,
     "LOCK": 29,
     "REPLACE": 22,
-    "CHECK": 18,
     "DESC": 14,
     "WHERE": 13,
     "HANDLER": 13,
@@ -167,11 +171,11 @@
     "RETURN": 10,
     "GRANT": 10,
     "(other)": 9,
+    "LOAD": 7,
     "DECLARE": 6,
     "COMMIT": 5,
     "RENAME": 5,
     "ROLLBACK": 5,
-    "LOAD": 4,
     "QUERY_VERTICAL": 4,
     "EOF": 4,
     "FROM": 3,
@@ -191,39 +195,25 @@
     "REVOKE": 1,
     "END": 1
   },
+  "byCharset": {
+    "utf8mb4": 17705,
+    "latin1": 2237,
+    "utf8mb3": 984,
+    "latin2": 135,
+    "sjis": 46,
+    "gbk": 37,
+    "big5": 36,
+    "euckr": 27,
+    "koi8r": 19,
+    "gb2312": 7,
+    "gb18030": 5,
+    "swe7": 2
+  },
+  "refusedCharsetSwitches": {
+    "prohibited": 3,
+    "not-a-charset": 1
+  },
   "notMeasured": [
-    {
-      "file": "ctype_big5.test",
-      "reason": "not-utf8"
-    },
-    {
-      "file": "ctype_collate.test",
-      "reason": "not-utf8"
-    },
-    {
-      "file": "ctype_latin1.test",
-      "reason": "not-utf8"
-    },
-    {
-      "file": "ctype_latin1_de.test",
-      "reason": "not-utf8"
-    },
-    {
-      "file": "ctype_sjis.test",
-      "reason": "not-utf8"
-    },
-    {
-      "file": "ctype_ucs.test",
-      "reason": "not-utf8"
-    },
-    {
-      "file": "ctype_utf8.test",
-      "reason": "not-utf8"
-    },
-    {
-      "file": "ctype_utf8mb4.test",
-      "reason": "not-utf8"
-    },
     {
       "file": "ctype_utf8mb4_heap.test",
       "reason": "no-sql"

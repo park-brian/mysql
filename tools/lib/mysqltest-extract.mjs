@@ -1,4 +1,4 @@
-// The `.test` file extractor for M3.11's census, split out so it can be tested.
+// The `.test` file extractor for the corpus census (M3.11, M3.12).
 //
 // `mysqltest-census.mjs` needs the network — it fetches `mysql-test/t` at the
 // pinned ref — so nothing in it could be exercised by `npm test`. The rules for
@@ -7,9 +7,20 @@
 // drives them with snippets written for the purpose. Same split, and the same
 // reason, as `tools/lib/binlog-hexdump.mjs`.
 //
+// **This works on bytes, not text** (M3.12). A `.test` file is not necessarily
+// UTF-8: `ctype_latin1.test` is latin1, `ctype_sjis.test` is Shift-JIS, and
+// `ctype_utf8.test` switches charset twenty times as it goes. Reading them
+// through `Response.text()` turned every one of those bytes into U+FFFD, which
+// is why the first census skipped the eight files that would have tested what
+// the lexer was built for. Each region of a file is decoded in the charset that
+// region is written in, and handed to the lexer as characters — which is
+// `lexBytes`, and so the gbk lead-byte case M3.1's clause names is finally
+// exercised against MySQL's own tests for it rather than against ours.
+//
 // Ground rule 7 applies to the test as much as to the census: every snippet in
 // it is written here rather than copied out of MySQL's corpus.
-import { lex } from '@myjs/parser'
+import { canDecode, defaultCollationOf, isProhibitedConnectionCollation } from '@myjs/charsets'
+import { decodeStatement, lex } from '@myjs/parser'
 
 /**
  * Bare `mysqltest` commands — the ones written without a leading `--`.
@@ -19,7 +30,7 @@ import { lex } from '@myjs/parser'
  * default` to the SQL lexer and recording a spurious failure.
  */
 const COMMANDS =
-  /^(let|if|while|echo|connection|connect|disconnect|send|reap|source|sleep|real_sleep|inc|dec|die|exit|skip|end|eval|error|replace_result|replace_column|replace_regex|enable_\w+|disable_\w+|sync_slave_with_master|save_master_pos|start_transaction|delimiter|remove_file|write_file|append_file|copy_file|chmod|mkdir|rmdir|cat_file|diff_files|perl|output|lowercase_result|assert)\b/i
+  /^(let|if|while|echo|connection|connect|disconnect|send|reap|source|sleep|real_sleep|inc|dec|die|exit|skip|end|eval|error|replace_result|replace_column|replace_regex|enable_\w+|disable_\w+|sync_slave_with_master|save_master_pos|start_transaction|delimiter|remove_file|write_file|append_file|copy_file|chmod|mkdir|rmdir|cat_file|diff_files|perl|output|lowercase_result|assert|character_set)\b/i
 
 /**
  * Does this line leave a bracket or a backtick open?
@@ -49,7 +60,7 @@ const COMMANDS =
  * directive that ended on its own line. A heuristic that silently *removes*
  * corpus is worse than the miscount it was fixing, since the census would keep
  * reporting 100% lexed over less and less SQL. `CONTINUES` is why the check
- * below verifies what the rule absorbed rather than only what it fixed.
+ * that found it looked at what the rule absorbed rather than at what it fixed.
  */
 export function advance(line, state) {
   for (const ch of line) {
@@ -77,8 +88,110 @@ const CONTINUES = /^(?:--)?(let|assert|expr|if|while)\b/i
 /** How far one of those may run before the continuation is assumed spurious. */
 const MAX_CONTINUATION = 20
 
+/** The charset a `.test` file is read in before it says otherwise. */
+const DEFAULT_CHARSET = 'utf8mb4'
+
 /**
- * Split one `.test` file into SQL statements.
+ * The three ways a `.test` file changes the charset its bytes are written in.
+ *
+ * `--character_set` is mysqltest's own directive and takes effect immediately.
+ * The other two are SQL — they are statements in their own right, executed in
+ * the charset in force *before* them, which is why the switch happens after the
+ * line is added to the current region rather than before.
+ *
+ * All three are matched against the line's bytes read as Latin-1, so a
+ * multi-byte character's trail byte cannot spell one of these: every keyword
+ * here is ASCII and anchored at the start of the line.
+ */
+const CHARSET_DIRECTIVE = /^(?:--)?character_set\s+(\S+)/i
+const SET_NAMES = /^set\s+names\s+'?([A-Za-z0-9_]+)'?/i
+const SET_CLIENT = /^set\s+(?:@@)?(?:session\.|global\.|local\.)?character_set_client\s*=\s*'?([A-Za-z0-9_]+)'?/i
+
+/**
+ * Resolve a charset name to the collation id its bytes should be read with.
+ *
+ * Returns a `reason` instead of a charset when the switch must **not** happen,
+ * and those cases are the interesting ones rather than the leftovers. All three
+ * are things a real server does, so leaving the charset alone is not a
+ * workaround — it is what actually happens:
+ *
+ *   - **`prohibited`.** `ucs2` may not be a connection charset (doc 12: a
+ *     multi-byte connection charset breaks the NUL-terminated handshake
+ *     fields), so `SET NAMES ucs2` is an error and the session charset does not
+ *     change. `ctype_ucs.test` runs exactly that, four times over, on purpose;
+ *     honouring it would misread every line after it.
+ *   - **`not-a-charset`.** `SET character_set_client = CONCAT('ucs', …)` is a
+ *     value this cannot evaluate, which `ctype_ucs.test` also does deliberately.
+ *
+ * A charset this build cannot *decode* — `gb2312` and `binary`, which
+ * `func_like.test` and `ctype_binary.test` switch to — is **not** refused here.
+ * A real server accepts those, so pretending the switch did not happen would
+ * mean reading the next region's bytes in the wrong charset, which is the one
+ * outcome worse than reading none of them. The region is entered and then
+ * skipped at decode time, and its lines are counted as unread, so the cost is
+ * visible instead of silently absorbed.
+ *
+ * Two names resolve rather than refuse, and both would be silent mis-reads if
+ * they did not: MySQL 8's `utf8` is an alias for `utf8mb3`, and `DEFAULT` is
+ * the server's own default charset, which D-10 pins at 8.4 — so `SET NAMES
+ * DEFAULT` is a real reset to `utf8mb4` and not an unknown name. Resolving
+ * rather than recording the name as written is also what lets the census count
+ * `SET NAMES utf8` and `SET NAMES utf8mb3` as the one charset they are.
+ */
+export function resolveCharset(name) {
+  const lower = name.toLowerCase()
+  const charset = lower === 'utf8' ? 'utf8mb3' : lower === 'default' ? DEFAULT_CHARSET : lower
+  const info = defaultCollationOf(charset)
+  if (info === undefined) return { reason: 'not-a-charset' }
+  if (isProhibitedConnectionCollation(info.id)) return { reason: 'prohibited' }
+  return { charset: info.charset, collationId: info.id, readable: canDecode(info.charset) }
+}
+
+/** Split on `0x0A`, which no MySQL charset can produce as a trail byte. */
+function splitLines(bytes) {
+  const lines = []
+  let start = 0
+  for (let i = 0; i < bytes.length; i++) {
+    if (bytes[i] === 0x0a) {
+      lines.push(bytes.subarray(start, i))
+      start = i + 1
+    }
+  }
+  lines.push(bytes.subarray(start))
+  return lines
+}
+
+/**
+ * A line's bytes as Latin-1, for classification only.
+ *
+ * Never for lexing. Latin-1 is the one encoding that is total and reversible
+ * over bytes, so a directive can be recognised before the file has said what
+ * charset it is in — and a multi-byte character simply becomes some high
+ * characters that no directive pattern matches. The SQL itself is decoded
+ * properly, per region, further down.
+ */
+const asLatin1 = (bytes) => {
+  let out = ''
+  for (const b of bytes) out += String.fromCharCode(b)
+  return out
+}
+
+/** Join a region's lines back into one byte buffer, newlines included. */
+function joinLines(lines) {
+  let total = 0
+  for (const l of lines) total += l.length + 1
+  const out = new Uint8Array(Math.max(0, total - 1))
+  let at = 0
+  for (let i = 0; i < lines.length; i++) {
+    if (i > 0) out[at++] = 0x0a
+    out.set(lines[i], at)
+    at += lines[i].length
+  }
+  return out
+}
+
+/**
+ * Split one `.test` file's bytes into SQL statements.
  *
  * Approximate, deliberately, and the approximation is measured rather than
  * hidden: the returned counts say how many lines were dropped as directives and
@@ -91,31 +204,70 @@ const MAX_CONTINUATION = 20
  * here is also the point: if it cannot find the boundaries in real SQL, that is
  * the bug this tool exists to surface.
  *
- * The outcome is named rather than boolean. `no-sql` and `not-utf8` are facts
+ * The outcome is named rather than boolean. `no-sql` and `undecodable` are facts
  * about the *file*, not defects in the lexer, and lumping them in with a real
  * lexer failure is how a census gets a scary number for an uninteresting
  * reason — five of the first run's eight failures were `--source` wrappers
  * containing no SQL at all.
  */
-export function extract(text) {
-  // `fetchPinned` decodes with `Response.text()`, which is UTF-8 with
-  // replacement. `ctype_sjis.test` is Shift-JIS on purpose, so its bytes come
-  // back as U+FFFD and lexing them measures the decoder, not the lexer. The
-  // charset-specific `ctype_*` files are M5's business, once the census can
-  // read a file's `--character_set` directive and decode it accordingly.
-  if (text.includes('�')) {
-    return { statements: [], directives: 0, skipped: 0, outcome: 'not-utf8', detail: 'not UTF-8 at the source' }
-  }
+export function extract(bytes) {
+  const lines = splitLines(bytes)
+  /** Runs of SQL lines, each with the collation its bytes are written in. */
+  const regions = []
+  let charset = DEFAULT_CHARSET
+  let collationId = resolveCharset(DEFAULT_CHARSET).collationId
+  let readable = true
+  let current = { charset, collationId, readable, lines: [] }
+  /** Lines in a charset this build will not decode — coverage lost, counted. */
+  let unreadLines = 0
+  const unreadCharsets = new Set()
+  const charsets = new Set([charset])
+  /** Charset switches the file asked for and a real server would refuse, by reason. */
+  const refused = new Map()
 
-  const lines = text.split('\n')
-  const sql = []
   let directives = 0
   let delimiter = ';'
   let inHeredoc = false
   const open = { depth: 0, tick: false }
   let continuation = 0
 
-  for (const line of lines) {
+  /**
+   * Every exit from this function goes through here.
+   *
+   * The four returns below used to spell the result out separately, and adding
+   * one field to it produced two copies of that field in three of them. A shape
+   * repeated four times is a shape that will drift.
+   */
+  const result = (outcome, detail, extra = {}) => ({
+    statements: [],
+    directives,
+    skipped: 0,
+    outcome,
+    detail,
+    charsets: [...charsets],
+    refused: Object.fromEntries(refused),
+    unreadLines,
+    unreadCharsets: [...unreadCharsets],
+    ...extra,
+  })
+
+  const switchTo = (name) => {
+    const resolved = resolveCharset(name)
+    if (resolved.collationId === undefined) {
+      refused.set(resolved.reason, (refused.get(resolved.reason) ?? 0) + 1)
+      return
+    }
+    if (resolved.collationId === collationId) return
+    if (current.lines.length > 0) regions.push(current)
+    charset = resolved.charset
+    collationId = resolved.collationId
+    readable = resolved.readable
+    charsets.add(charset)
+    current = { charset, collationId, readable, lines: [] }
+  }
+
+  for (const raw of lines) {
+    const line = asLatin1(raw)
     const trimmed = line.trim()
     // A directive that has not closed its brackets yet. A fresh `--` line ends
     // the run, because that can only mean the detection was wrong.
@@ -154,6 +306,9 @@ export function extract(text) {
       directives++
       const d = /^(?:--)?delimiter\s+(\S+)/i.exec(trimmed)
       if (d !== null) delimiter = d[1].replace(/;$/, '') || ';'
+      // mysqltest's own directive: it takes effect here, before the next line.
+      const cs = CHARSET_DIRECTIVE.exec(trimmed)
+      if (cs !== null) switchTo(cs[1])
       if (CONTINUES.test(trimmed) && advance(line, open)) continuation = 1
       continue
     }
@@ -161,69 +316,92 @@ export function extract(text) {
       directives++
       continue
     }
-    sql.push(line)
+    current.lines.push(raw)
+    // `SET NAMES` is SQL: it belongs to the region it was written in, and only
+    // the bytes *after* it are in the new charset. Hence the push above first.
+    const named = SET_NAMES.exec(trimmed) ?? SET_CLIENT.exec(trimmed)
+    if (named !== null) switchTo(named[1])
   }
+  if (current.lines.length > 0) regions.push(current)
 
-  const joined = sql.join('\n')
-  if (joined.trim() === '') {
+  if (regions.length === 0) {
     // Not a failure. Several files in the corpus are pure `--source` wrappers
     // that set a variable and include a shared body — `ctype_utf8mb4_heap.test`
     // is three directives long. There is nothing there to lex.
-    return { statements: [], directives, skipped: 0, outcome: 'no-sql', detail: 'no SQL lines outside directives' }
-  }
-
-  // A file that will not lex as a whole is reported rather than worked around:
-  // falling back to a naive split would hide exactly the failure worth seeing.
-  //
-  // The error and the offending line come back with it. The first version
-  // returned a bare flag, so a run that found eight broken files said only
-  // "eight" — and the header of this file promises the failing SQL is printed.
-  // A diagnostic that reports a count and withholds the reason is the same
-  // mistake as a gate that passes without checking.
-  let tokens
-  try {
-    tokens = lex(joined)
-  } catch (e) {
-    const line = Number(/at line (\d+)/.exec(String(e.message))?.[1] ?? 0)
-    const context = sql[line - 1]?.trim() ?? ''
-    return {
-      statements: [],
-      directives,
-      skipped: 0,
-      outcome: 'lex-failed',
-      detail: `line ${line}: ${context.slice(0, 120)}`,
-    }
+    return result('no-sql', 'no SQL lines outside directives')
   }
 
   const statements = []
   let skipped = 0
-  let start = 0
-  let held = []
-  const emit = (from, to) => {
-    const text = joined.slice(from, to).trim()
-    if (text === '' || held.length === 0) {
-      held = []
-      return
-    }
-    // `$var` is a mysqltest substitution, not SQL. Counted, not parsed.
-    if (text.includes('$')) {
-      skipped++
-      held = []
-      return
-    }
-    statements.push({ text, keyword: keywordOf(held) })
-    held = []
-  }
-  for (const t of tokens) {
-    if (t.kind === 'operator' && t.text === ';') {
-      emit(start, t.start)
-      start = t.end
+
+  for (const region of regions) {
+    // A region in a charset this build will not decode faithfully. M2.18's
+    // posture is to refuse rather than guess, and the refusal is *counted*
+    // rather than quietly dropped — otherwise the census would report 100%
+    // lexed over whatever it happened to be able to read.
+    if (!region.readable) {
+      unreadLines += region.lines.length
+      unreadCharsets.add(region.charset)
       continue
     }
-    if (t.kind !== 'eof') held.push(t)
+
+    // The charset-aware step, and the one M3.12 exists for: these bytes are
+    // decoded in the charset they were written in, then lexed as characters.
+    // That is `lexBytes` in two halves, split only so a decode failure can be
+    // told apart from a lex failure.
+    let sql
+    try {
+      sql = decodeStatement(joinLines(region.lines), region.collationId)
+    } catch (e) {
+      return result('undecodable', `${region.charset}: ${String(e.message).slice(0, 100)}`)
+    }
+
+    // A region that will not lex is reported rather than worked around: falling
+    // back to a naive split would hide exactly the failure worth seeing.
+    //
+    // The error and the offending line come back with it. The first version
+    // returned a bare flag, so a run that found eight broken files said only
+    // "eight" — and the census promises the failing SQL is printed. A diagnostic
+    // that reports a count and withholds the reason is the same mistake as a
+    // gate that passes without checking.
+    let tokens
+    try {
+      tokens = lex(sql)
+    } catch (e) {
+      const line = Number(/at line (\d+)/.exec(String(e.message))?.[1] ?? 0)
+      const context = sql.split('\n')[line - 1]?.trim() ?? ''
+      return result('lex-failed', `${region.charset} line ${line}: ${context.slice(0, 120)}`)
+    }
+
+    let start = 0
+    let held = []
+    const emit = (from, to) => {
+      const text = sql.slice(from, to).trim()
+      if (text === '' || held.length === 0) {
+        held = []
+        return
+      }
+      // `$var` is a mysqltest substitution, not SQL. Counted, not parsed.
+      if (text.includes('$')) {
+        skipped++
+        held = []
+        return
+      }
+      statements.push({ text, keyword: keywordOf(held), charset: region.charset })
+      held = []
+    }
+    for (const t of tokens) {
+      if (t.kind === 'operator' && t.text === ';') {
+        emit(start, t.start)
+        start = t.end
+        continue
+      }
+      if (t.kind !== 'eof') held.push(t)
+    }
+    emit(start, sql.length)
   }
-  emit(start, joined.length)
-  return { statements, directives, skipped, outcome: 'ok', detail: '', delimiter }
+
+  return result('ok', '', { statements, skipped, delimiter })
 }
 
 /**

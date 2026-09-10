@@ -43,7 +43,7 @@
 //   node tools/mysqltest-census.mjs --refresh   # re-list the directory (needs a token)
 import { mkdirSync, readFileSync, writeFileSync, existsSync } from 'node:fs'
 import { join } from 'node:path'
-import { REPO, REF, fetchPinned, combinedSha256 } from './lib/gen-common.mjs'
+import { REPO, REF, fetchPinnedBytes, combinedSha256 } from './lib/gen-common.mjs'
 import { lex, ParseError } from '@myjs/parser'
 import { extract } from './lib/mysqltest-extract.mjs'
 
@@ -145,8 +145,11 @@ if (selection.length === 0) {
   process.exit(1)
 }
 
+// Bytes, not text (M3.12). A `.test` file is written in whatever charset it
+// declares, so decoding all 120 of them as UTF-8 destroyed exactly the bytes
+// the `ctype_*` files exist to test.
 const sources = []
-for (const name of selection) sources.push(await fetchPinned(`${DIRECTORY}/${name}`))
+for (const name of selection) sources.push(await fetchPinnedBytes(`${DIRECTORY}/${name}`))
 
 let statements = 0
 let lexed = 0
@@ -158,13 +161,23 @@ const byKeyword = new Map()
 const failures = []
 /** Files the census deliberately did not measure, by reason. */
 const notMeasured = []
+/** How many statements were read in each charset — M3.12's whole point. */
+const byCharset = new Map()
+/** Charset switches a real server would refuse, by reason (M3.12). */
+const refused = new Map()
+/** Lines in a charset this build will not decode. Coverage lost, and counted. */
+let unreadLines = 0
+const unreadCharsets = new Set()
 
 for (const source of sources) {
   const name = source.path.slice(DIRECTORY.length + 1)
-  const result = extract(source.text)
+  const result = extract(source.bytes)
   directives += result.directives
   skipped += result.skipped
-  if (result.outcome === 'no-sql' || result.outcome === 'not-utf8') {
+  for (const [reason, n] of Object.entries(result.refused)) refused.set(reason, (refused.get(reason) ?? 0) + n)
+  unreadLines += result.unreadLines
+  for (const c of result.unreadCharsets) unreadCharsets.add(c)
+  if (result.outcome === 'no-sql' || result.outcome === 'undecodable') {
     // A fact about the file, not a defect. Recorded so the measured count and
     // the selected count can differ without the difference going unexplained.
     notMeasured.push({ file: name, reason: result.outcome })
@@ -177,9 +190,10 @@ for (const source of sources) {
     console.error(`  file will not lex: ${name} — ${result.detail}`)
     continue
   }
-  for (const { text, keyword } of result.statements) {
+  for (const { text, keyword, charset } of result.statements) {
     statements++
     byKeyword.set(keyword, (byKeyword.get(keyword) ?? 0) + 1)
+    byCharset.set(charset, (byCharset.get(charset) ?? 0) + 1)
     try {
       lex(text)
       lexed++
@@ -203,6 +217,20 @@ console.log(`top keywords: ${ranked.slice(0, 15).map(([k, n]) => `${k} ${n}`).jo
 // Said out loud rather than buried in the fixture: a census that quietly
 // stopped measuring half its files would otherwise still report 100% lexed.
 for (const { file, reason } of notMeasured) console.log(`  not measured: ${file} — ${reason}`)
+// M3.12's number. A corpus read entirely as utf8mb4 would say so here, and that
+// is the state this item was created to leave behind.
+const charsetRanked = [...byCharset].sort((a, b) => b[1] - a[1])
+console.log(`by charset: ${charsetRanked.map(([c, n]) => `${c} ${n}`).join(', ')}`)
+console.log(
+  `charset switches refused: ${[...refused].map(([r, n]) => `${r} ${n}`).join(', ') || 'none'}`,
+)
+// The honest cost of M2.18's posture, in lines rather than in prose: a charset
+// this build will not decode faithfully is not read at all, and saying how much
+// that is stops "100% lexed" from meaning "100% of what we could read".
+console.log(
+  `${unreadLines} line(s) unread in ${unreadCharsets.size} charset(s)` +
+    (unreadCharsets.size > 0 ? `: ${[...unreadCharsets].join(', ')}` : ''),
+)
 if (failures.length > 0) console.log(`${failures.length} failure(s)`)
 
 mkdirSync(OUT_DIR, { recursive: true })
@@ -225,8 +253,12 @@ writeFileSync(
         parsed,
         skippedWithVariables: skipped,
         directives,
+        unreadLines,
+        unreadCharsets: [...unreadCharsets].sort(),
       },
       byKeyword: Object.fromEntries(ranked),
+      byCharset: Object.fromEntries(charsetRanked),
+      refusedCharsetSwitches: Object.fromEntries([...refused].sort((a, b) => b[1] - a[1])),
       notMeasured,
       failures,
     },
