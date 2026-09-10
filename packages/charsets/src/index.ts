@@ -22,6 +22,7 @@ export {
   encodeCharset,
   decodeCollation,
   encodeCollation,
+  rejectsLatin1Substitute,
 } from './encoding.ts'
 export {
   MAX_ROW_BYTES,
@@ -47,4 +48,8 @@ export { preloadCollation } from './collations/preload.ts'
 export { intlCollationFor, isIntlFallbackEnabled, noSortKey, setIntlFallbackEnabled } from './collations/intl.ts'
 export { isWeightedCollation, weightedCollationIds } from './collations/weighted.ts'
 export { WEIGHT_TABLE_SOURCE_SHA256, PACKED_BYTE_WEIGHTS, PACKED_UNICASE_WEIGHTS } from './collations/weights.ts'
+// B0: already a static import of `encoding.ts`, so naming it here costs
+// nothing — unlike the UCA weights above, which must stay unnamed.
+export { ENCODING_TABLE_SOURCE_SHA256, PACKED_CHARSET_TO_UNI } from './encodings.ts'
+export { expandRuns } from './runs.ts'
 export { COLLATION_TABLE_SOURCE, COLLATION_TABLE_SOURCE_SHA256, PACKED_COLLATIONS } from './registry.ts'

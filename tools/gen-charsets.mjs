@@ -60,6 +60,7 @@ const SOURCES = [
 const REGISTRY_OUT = new URL('../packages/charsets/src/registry.ts', import.meta.url).pathname
 const WEIGHTS_OUT = new URL('../packages/charsets/src/collations/weights.ts', import.meta.url).pathname
 const METRICS_OUT = new URL('../packages/protocol/src/constants/charset-metrics.ts', import.meta.url).pathname
+const ENCODINGS_OUT = new URL('../packages/charsets/src/encodings.ts', import.meta.url).pathname
 
 // The UCA collations share their state flags through a macro, so expand those
 // before reading the flags. Definitions are in `ctype-uca.cc`.
@@ -135,6 +136,11 @@ function parseCharsetInfo(source) {
     // `MY_UNICASE_INFO` whose pages carry a weight per code point.
     const sortOrder = /\bsort_order_\w+\b/.exec(body)?.[0] ?? null
     const caseinfo = /&(my_unicase_\w+)/.exec(body)?.[1] ?? null
+    // B0 / M2.3: the byte -> code point table, read out of the struct's own
+    // `tab_to_uni` field rather than guessed from the charset name. The field
+    // is commented `/* tab_to_uni */` in the hand-written files and
+    // `/* to_uni */` in the generated one, so both spellings are accepted.
+    const toUni = /\b(\w*to_uni\w*)\s*,\s*\/\*\s*(?:tab_)?to_uni/.exec(body)?.[1] ?? null
 
     check(strings.length >= 2, `gen-charsets: id ${id} has no charset/collation name`)
     check(mbminlen !== null && mbmaxlen !== null, `gen-charsets: id ${id} (${strings[1]}) has no mbminlen/mbmaxlen`)
@@ -151,6 +157,7 @@ function parseCharsetInfo(source) {
       isBinary: flags.has('MY_CS_BINSORT'),
       sortOrder,
       caseinfo,
+      toUni: toUni === 'nullptr' ? null : toUni,
       usesUca,
       lowerSort: flags.has('MY_CS_LOWER_SORT'),
       hidden: flags.has('MY_CS_HIDDEN'),
@@ -162,7 +169,7 @@ function parseCharsetInfo(source) {
 const sources = await fetchAllPinned(SOURCES)
 const byId = new Map()
 for (const s of sources) {
-  for (const c of parseCharsetInfo(s.text)) {
+  for (const c of parseCharsetInfo(s.text).map((c) => ({ ...c, source: s.path }))) {
     const seen = byId.get(c.id)
     check(
       seen === undefined || seen.collation === c.collation,
@@ -475,10 +482,140 @@ export const PACKED_CHARSET_METRICS = ${packed(metricLines)}
 `,
 )
 
+// ---------------------------------------------------------------------------
+// B0 / M2.3 — the byte -> code point tables for the single-byte charsets.
+//
+// These exist because trusting the host's `TextDecoder` for them was a real
+// bug, not a hypothetical one. On a Node built without full ICU,
+// `new TextDecoder('windows-1252')` *succeeds* and quietly behaves as
+// ISO-8859-1, so MySQL's `latin1` decoded 0x80 to U+0080 instead of the euro
+// sign, and the reverse table built from that decoder encoded the euro as
+// `?`. No error anywhere. CI caught it; a full-ICU laptop never would.
+//
+// Generating them removes the host from a code path whose output is *stored* —
+// the same argument D-23 makes about `Intl.Collator`. Bytes that land in a
+// database must not depend on which build of which engine wrote them.
+//
+// Parsed per file rather than over the concatenation, because the array name
+// is not always unique: `cs_to_uni` is declared in both `ctype-latin1.cc` and
+// `ctype-tis620.cc`, and joining the sources would silently pick whichever
+// came first.
+
+/** `file -> array name -> 256 code points`, for every single-byte to_uni table. */
+const uniTablesByFile = new Map()
+for (const src of sources) {
+  const found = new Map()
+  const decl = /static const (?:unsigned short|uint16_t) (\w*to_uni\w*)\[\d*\]\s*=\s*\{/g
+  let d
+  while ((d = decl.exec(src.text)) !== null) {
+    const open = src.text.indexOf('{', d.index)
+    const close = src.text.indexOf('};', open)
+    check(close !== -1, `gen-charsets: unterminated ${d[1]} in ${src.path}`)
+    const values = [...src.text.slice(open + 1, close).matchAll(/0x([0-9A-Fa-f]+)|\b(\d+)\b/g)].map((v) =>
+      v[1] !== undefined ? parseInt(v[1], 16) : Number(v[2]),
+    )
+    // The multi-byte charsets have to_uni tables too, tens of thousands of
+    // entries wide. Those stay on `TextDecoder`; only the flat 256-entry ones
+    // are cheap enough to carry.
+    if (values.length === 256) found.set(d[1], values)
+  }
+  uniTablesByFile.set(src.path, found)
+}
+
+/** `charset -> 256 code points`. Keyed by charset, since collations share one. */
+const charsetToUni = new Map()
+for (const c of collations) {
+  if (c.mbmaxlen !== 1 || c.toUni === null) continue
+  const table = uniTablesByFile.get(c.source)?.get(c.toUni)
+  if (table === undefined) continue
+  const existing = charsetToUni.get(c.charset)
+  if (existing === undefined) {
+    charsetToUni.set(c.charset, table)
+    continue
+  }
+  // Every collation of a charset must agree about what its bytes mean. If two
+  // ever disagreed, one of them would be decoding a different charset.
+  check(
+    existing.every((v, i) => v === table[i]),
+    `gen-charsets: ${c.charset} has two different to_uni tables (${c.collation} names ${c.toUni})`,
+  )
+}
+
+check(charsetToUni.size > 0, 'gen-charsets: no single-byte to_uni tables found')
+check(
+  charsetToUni.get('latin1')?.[0x80] === 0x20ac,
+  "gen-charsets: MySQL's latin1 must map 0x80 to the euro sign — it is cp1252, not ISO-8859-1",
+)
+check(charsetToUni.get('ascii')?.[0x41] === 0x41, 'gen-charsets: ascii must map 0x41 to A')
+
+// Which single-byte charsets did *not* get a table, and why. Exactly two, and
+// both for a reason rather than by omission:
+//
+//   `binary` has no code points at all — it is bytes, uninterpreted, and doc 29
+//   is explicit that id 63 "is not a text collation".
+//
+//   `tis620` has a table in its source file, but MySQL reads it through a
+//   custom `mb_wc` handler and leaves the struct's `tab_to_uni` field null. We
+//   read the struct rather than guessing from names (the discipline M2.5
+//   established), so we do not pick it up — and inferring it would mean
+//   choosing between two files that both declare `cs_to_uni`. It stays on
+//   `TextDecoder`, covered by the behavioural probe in `encoding.ts`.
+//
+// Asserted as an exact list so an upstream change is a build failure rather
+// than a silent gap.
+const singleByteCharsets = [...new Set(collations.filter((c) => c.mbmaxlen === 1).map((c) => c.charset))]
+const untabled = singleByteCharsets.filter((cs) => !charsetToUni.has(cs)).sort()
+check(
+  untabled.join(',') === 'binary,tis620',
+  `gen-charsets: single-byte charsets with no to_uni table changed: ${untabled.join(', ')}`,
+)
+
+const encodingLines = [...charsetToUni]
+  .sort(([a], [b]) => (a < b ? -1 : 1))
+  .map(([cs, table]) => `${cs} ${runs(table, 0)}`)
+  .join('\n')
+
+writeFileSync(
+  ENCODINGS_OUT,
+  `${banner({
+    script: 'npm run gen:charsets',
+    why: `B0 / M2.3: byte -> code point tables for the single-byte charsets, read
+out of each \`CHARSET_INFO\`'s own \`tab_to_uni\` field.
+
+These replace \`TextDecoder\` for every charset listed here, because trusting it
+was a real bug: on a runtime without full ICU, \`new TextDecoder('windows-1252')\`
+succeeds and silently behaves as ISO-8859-1, so MySQL's latin1 decoded 0x80 to
+U+0080 rather than the euro sign and no error was raised anywhere.
+
+Format: \`<charset> <256 code points>\`, delta-plus-run against the byte value
+itself — the same codec and the same \`expandRuns\` decoder the weight tables
+use. The ASCII half of every one of these tables is identity, so it collapses
+to a single run.
+
+\`tis620\` is deliberately absent: MySQL leaves its struct's \`tab_to_uni\` null
+and reads the table through a custom handler, so it stays on \`TextDecoder\`.`,
+    sources,
+    counts: { 'Single-byte charsets': charsetToUni.size, 'Left on TextDecoder': untabled.join(' ') },
+  })}
+
+/** SHA-256 over every source file's own hash — the same value the registry carries. */
+export const ENCODING_TABLE_SOURCE_SHA256 =
+  '${sha256}'
+
+/**
+ * \`charset code-points\`, one single-byte charset per line.
+ *
+ * Delta-plus-run, the same codec \`collations/weights.ts\` uses.
+ */
+export const PACKED_CHARSET_TO_UNI = ${packed(encodingLines)}
+`,
+)
+
 console.log(
   `gen-charsets: ${collations.length} collations, ${classes.size} width classes\n` +
     `  ${usedByteTables.length} byte weight tables, ${unicasePages.size} unicase pages, ` +
     `${byteWeighted.length + unicaseWeighted.length} weighted collations\n` +
-    `  -> ${REGISTRY_OUT}\n  -> ${WEIGHTS_OUT}\n  -> ${METRICS_OUT}\n` +
+    `  ${charsetToUni.size} single-byte encoding tables\n` +
+    `  -> ${REGISTRY_OUT}\n  -> ${WEIGHTS_OUT}\n  -> ${METRICS_OUT}\n  -> ${ENCODINGS_OUT}\n` +
     `  source ${REPO}@${REF} ${SOURCES.length} files\n  sha256 ${sha256}`,
 )

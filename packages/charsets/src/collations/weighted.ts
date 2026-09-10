@@ -24,29 +24,12 @@
 import { requireCollationInfo, type Collation, type CollationInfo } from '../collation.ts'
 import { comparePadded, memcmp } from './memcmp.ts'
 import { utf8CodePoints } from './utf8.ts'
+import { expandRuns } from '../runs.ts'
 import { PACKED_BYTE_WEIGHTS, PACKED_UNICASE_WEIGHTS, PACKED_WEIGHTED_COLLATIONS } from './weights.ts'
 
 /** Code points above `my_unicase_default`'s `maxchar` all weigh this. */
 const REPLACEMENT_WEIGHT = 0xfffd
 
-/**
- * Expand one delta-plus-run line.
- *
- * A run is `[count*]delta`, the delta signed hex and relative to the identity
- * weight — so an unfolded stretch of Unicode is one run of zeros and a
- * 26-letter case fold is one run of `-20`.
- */
-function expandRuns(spec: string, base: number, length: number): number[] {
-  const out: number[] = []
-  for (const run of spec.split(',')) {
-    const star = run.indexOf('*')
-    const count = star === -1 ? 1 : Number(run.slice(0, star))
-    const delta = Number.parseInt(star === -1 ? run : run.slice(star + 1), 16)
-    for (let i = 0; i < count; i++) out.push(base + out.length + delta)
-  }
-  if (out.length !== length) throw new Error(`weight table has ${out.length} entries, not ${length}`)
-  return out
-}
 
 let byteTables: Map<string, Uint8Array> | null = null
 function byteWeightTable(name: string): Uint8Array {
