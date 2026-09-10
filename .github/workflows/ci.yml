@@ -137,3 +137,47 @@ jobs:
         run: |
           npm run capture:traces
           git diff --stat -- test/protocol/fixtures/
+
+  type-vectors:
+    name: re-capture storage vectors against a real MySQL
+    runs-on: ubuntu-latest
+    # M2.21 / D-34. Not a gate, for the same reason `trace-capture` is not: the
+    # committed fixtures are replayed offline by `npm test`, and this job exists
+    # so a newer server's bytes are noticed rather than assumed.
+    #
+    # It is also how the corpus is *created*. These vectors can only come from a
+    # real 8.4, so the fixtures are uploaded as an artifact for a human to
+    # commit rather than pushed from CI.
+    continue-on-error: true
+    services:
+      mysql:
+        image: mysql:8.4
+        env:
+          MYSQL_ROOT_PASSWORD: root
+        ports: ['3306:3306']
+        # D-34 needs FULL row images: without it an INSERT logs only the
+        # columns that changed and every vector would be silently partial.
+        options: >-
+          --health-cmd="mysqladmin ping" --health-interval=10s
+          --health-timeout=5s --health-retries=10
+          --log-bin=binlog --binlog-row-image=FULL --binlog-format=ROW
+          --server-id=1
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22.18'
+          cache: npm
+      - run: npm ci
+      # `mysqlbinlog` ships in the client package, which this already installs.
+      - run: sudo apt-get update && sudo apt-get install -y --no-install-recommends mysql-client
+      - name: capture and diff
+        run: |
+          npm run capture:types
+          git diff --stat -- test/format/fixtures/
+      - name: upload the captured fixtures
+        uses: actions/upload-artifact@v4
+        with:
+          name: type-vectors
+          path: test/format/fixtures/
+          if-no-files-found: warn
