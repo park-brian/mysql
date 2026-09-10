@@ -16,6 +16,12 @@
 //
 // So this module's contract is narrow and load-bearing: everything it emits is
 // `memcmp`-ordered. A float column cannot go through it, and says so.
+//
+// D-35 is what makes that contract actually true for a character column. A
+// PAD SPACE collation compares `'a'` *greater* than `'a\x01'` — the shorter
+// value is extended with spaces and 0x20 > 0x01 — which no variable-length
+// sort key can express, and concatenating variable-length parts is ambiguous
+// besides. Both are fixed by the same thing: a declared width, padded to.
 import { collation, type Collation } from '@myjs/charsets'
 import { badValue, unsupportedType } from './errors.ts'
 import { compareFloat } from './floats.ts'
@@ -47,6 +53,26 @@ export interface KeyPart {
    * `KEY (col(255))` on utf8mb4 budgets 1020 bytes and not 255.
    */
   readonly prefix?: number
+  /**
+   * The byte width this part's key occupies, before the NULL flag (D-35).
+   *
+   * **Required for every `'text'` part**, for two independent reasons.
+   *
+   * A PAD SPACE collation compares `'a'` equal to `'a '`, and — less
+   * obviously — compares `'a'` *greater* than `'a\x01'`, because the shorter
+   * value is extended with spaces and 0x20 > 0x01. Neither is expressible by a
+   * variable-length sort key: only bringing both keys to a common width makes
+   * `memcmp` agree with the collation, which is what MySQL's `strnxfrm` does
+   * with `nweights`.
+   *
+   * And a variable-length part is ambiguous in a multi-part key regardless of
+   * padding: `'ab' + 'c'` and `'a' + 'bc'` concatenate to the same bytes.
+   *
+   * A fixed-length part — an integer, a temporal, DECIMAL — needs no width:
+   * its encoding is already a constant size, so concatenation is unambiguous
+   * and there is nothing to pad. Set it only where the length can vary.
+   */
+  readonly width?: number
 }
 
 /**
@@ -87,17 +113,57 @@ function applyPrefix(value: Uint8Array, part: KeyPart): Uint8Array {
   return value.subarray(0, Math.min(at, value.length))
 }
 
-/** One column's contribution to a key, sort key and NULL flag included. */
+/**
+ * Bring a key to its declared width (D-35).
+ *
+ * PAD SPACE pads with the collation's own pad character and stops there: two
+ * values that compare equal now have identical bytes, and trailing pad is
+ * insignificant by definition, so nothing more is needed.
+ *
+ * Everything else pads with NUL and appends the unpadded length. The length is
+ * not decoration: NUL padding alone cannot tell `'a'` from `'a\x00'`, which
+ * under NO PAD are different values, and a unique index that confused them
+ * would reject a row MySQL accepts. A *suffix* rather than a prefix, because a
+ * leading length would order `'b'` before `'aa'`.
+ */
+function padToWidth(key: Uint8Array, width: number, unit: Uint8Array | null): Uint8Array {
+  if (key.length > width) {
+    throw badValue('index key', `a ${key.length}-byte key does not fit a declared width of ${width}`)
+  }
+  if (unit !== null) {
+    const out = new Uint8Array(width)
+    out.set(key)
+    for (let i = key.length; i < width; i++) out[i] = unit[(i - key.length) % unit.length] as number
+    return out
+  }
+  const out = new Uint8Array(width + 2)
+  out.set(key)
+  out[width] = (key.length >> 8) & 0xff
+  out[width + 1] = key.length & 0xff
+  return out
+}
+
+/** One column's contribution to a key, sort key, padding and NULL flag included. */
 export function encodeKeyPart(value: Uint8Array | null, part: KeyPart): Uint8Array {
   if (part.kind === 'float') {
     throw unsupportedType('a FLOAT or DOUBLE index key part — it is not memcmp-ordered (doc 24 Rule 2)')
+  }
+  if (part.kind === 'text' && part.width === undefined) {
+    throw badValue('index key', "a 'text' key part needs a declared width (D-35)")
   }
   if (value === null) {
     if (!part.nullable) throw badValue('index key', 'null value for a NOT NULL key part')
     return Uint8Array.from([NULL_FLAG])
   }
   const truncated = applyPrefix(value, part)
-  const encoded = part.kind === 'text' ? collationFor(part).sortKey(truncated) : truncated
+  let encoded: Uint8Array
+  if (part.kind === 'text') {
+    const c = collationFor(part)
+    const padded = c.padAttribute === 'PAD SPACE' ? c.padUnit : null
+    encoded = padToWidth(c.sortKey(truncated), part.width as number, padded)
+  } else {
+    encoded = part.width === undefined ? truncated : padToWidth(truncated, part.width, null)
+  }
   if (!part.nullable) return encoded
   const out = new Uint8Array(encoded.length + 1)
   out[0] = PRESENT_FLAG
@@ -109,11 +175,22 @@ export function encodeKeyPart(value: Uint8Array | null, part: KeyPart): Uint8Arr
  * A whole index key: the parts concatenated in index order.
  *
  * The result is `memcmp`-comparable against any other key built from the same
- * parts, which is the property M4's B+tree is built on.
+ * parts, which is the property M4's B+tree is built on — and which, before
+ * D-35, was not actually true for a character column: see `KeyPart.width`.
  */
 export function encodeKey(values: ReadonlyArray<Uint8Array | null>, parts: readonly KeyPart[]): Uint8Array {
   if (values.length !== parts.length) {
     throw badValue('index key', `${values.length} values for ${parts.length} key parts`)
+  }
+  // A variable-length part before another part makes the concatenation
+  // ambiguous — `'ab' + 'c'` and `'a' + 'bc'` are the same bytes — so a
+  // truncating `'bytes'` part must declare its width unless it is last.
+  // `'text'` parts always declare one, checked in `encodeKeyPart`.
+  for (let i = 0; i < parts.length - 1; i++) {
+    const part = parts[i] as KeyPart
+    if (part.kind === 'bytes' && part.prefix !== undefined && part.width === undefined) {
+      throw badValue('index key', `key part ${i} is variable-length and not last, so it needs a width (D-35)`)
+    }
   }
   const encoded = parts.map((part, i) => encodeKeyPart(values[i] ?? null, part))
   let total = 0

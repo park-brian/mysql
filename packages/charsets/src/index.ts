@@ -26,5 +26,8 @@ export {
   varcharLengthBytes,
   maxPrefixCharacters,
 } from './limits.ts'
-export { collation, hasCollation, memcmp, memcmpPadSpace, MEMCMP_COLLATION_IDS } from './collations/memcmp.ts'
+export { memcmp, memcmpPadSpace, comparePadded, MEMCMP_COLLATION_IDS } from './collations/memcmp.ts'
+export { collation, hasCollation } from './collations/resolve.ts'
+export { isWeightedCollation, weightedCollationIds } from './collations/weighted.ts'
+export { WEIGHT_TABLE_SOURCE_SHA256, PACKED_BYTE_WEIGHTS, PACKED_UNICASE_WEIGHTS } from './collations/weights.ts'
 export { COLLATION_TABLE_SOURCE, COLLATION_TABLE_SOURCE_SHA256, PACKED_COLLATIONS } from './registry.ts'
