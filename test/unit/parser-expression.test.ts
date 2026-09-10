@@ -179,3 +179,26 @@ test('M3.9: a word operator is not mistaken for a column name', () => {
   assert.equal(tree('a AND b'), '(a AND b)')
   assert.throws(() => parseExpression('a b'), ParseError)
 })
+
+test('M3.10 / ground rule 5: deep nesting is refused, not a stack overflow', () => {
+  // Found by reading rather than by fuzzing, because the fuzzer's nesting
+  // bound sat just under the depth that crashes — the generator's bounds are
+  // part of what it tests, and that one has been raised.
+  //
+  // `'('.repeat(1000) + '1' + ')'.repeat(1000)` is eleven bytes of typing and
+  // used to throw a `RangeError` from anyone who could send a query. A
+  // `RangeError` is not a typed error, so this was a ground-rule-5 violation
+  // and a trivial denial of service.
+  for (const depth of [200, 1000, 100_000]) {
+    const sql = '('.repeat(depth) + '1' + ')'.repeat(depth)
+    assert.throws(
+      () => parseExpression(sql),
+      (e: unknown) => e instanceof ParseError && (e as ParseError).errno === 1436,
+      `depth ${depth} must be a typed refusal`,
+    )
+  }
+  // A chain of unary operators nests too, through a different path.
+  assert.throws(() => parseExpression('-'.repeat(100_000) + '1'), ParseError)
+  // And the limit is generous enough that real SQL never reaches it.
+  assert.equal(tree('('.repeat(50) + '1 + 2' + ')'.repeat(50)), '(1 + 2)')
+})

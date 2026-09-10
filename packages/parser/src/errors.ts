@@ -64,6 +64,26 @@ export function unknownCharset(charset: string): ParseError {
 }
 
 /**
+ * An expression nested deeper than this parser will recurse.
+ *
+ * Not a nicety: without it, `'('.repeat(1000) + '1' + ')'.repeat(1000)` blows
+ * the JavaScript stack and throws a `RangeError`, which is a crash from
+ * ordinary input reachable by anyone who can send a query. Ground rule 5 says a
+ * malformed input produces a typed error, and a `RangeError` is not one.
+ *
+ * `ER_STACK_OVERRUN_NEED_MORE` is 1436 / HY000, which is what a real MySQL
+ * raises when its own parser runs out of thread stack — the same condition,
+ * reported the same way.
+ */
+export function tooDeep(limit: number): ParseError {
+  return new ParseError(
+    'ER_STACK_OVERRUN_NEED_MORE',
+    `Thread stack overrun: expression nested more than ${limit} levels deep`,
+    { errno: 1436, sqlState: 'HY000' },
+  )
+}
+
+/**
  * A `sql_mode` value that is not a mode name.
  *
  * `ER_WRONG_VALUE_FOR_VAR` is 1231 / 42000 — the same error a real server gives

@@ -50,7 +50,12 @@ jobs:
       - run: npm ci
       # Ground rule 5: a typed error, never a crash, never a hang.
       - name: Reader fuzz (10^6 inputs)
-        run: npm run fuzz
+        run: npm run fuzz:reader
+      # M3.10 / doc 43 §6, which names "SQL text — arbitrary strings to the
+      # parser" as an attack surface. This job has been called "fuzz parsers"
+      # since M0.8 while running one target; now it runs two.
+      - name: Parser fuzz (10^6 inputs)
+        run: npm run fuzz:parser
 
   generated:
     name: generated tables are reproducible

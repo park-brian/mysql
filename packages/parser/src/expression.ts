@@ -15,7 +15,7 @@
 //                       `NOT` binds tighter than comparison, as it did before
 //                       5.0, so `NOT a = b` regroups from `NOT (a = b)` to
 //                       `(NOT a) = b`.
-import { parseError } from './errors.ts'
+import { parseError, tooDeep } from './errors.ts'
 import { TOKEN, type Token } from './tokens.ts'
 import { NODE, LITERAL, type Expression, type LiteralType } from './ast.ts'
 import { lex, type LexOptions } from './lexer.ts'
@@ -47,6 +47,25 @@ const LEVELS: readonly (readonly string[])[] = [
   // PIPES_AS_CONCAT puts `||` here, between `^` and the unary operators.
   // Unary -, ~, !, BINARY, COLLATE and INTERVAL bind tighter still.
 ]
+
+/**
+ * How deeply an expression may nest before the parser refuses.
+ *
+ * Without a limit, `'('.repeat(1000) + '1' + ')'.repeat(1000)` throws a
+ * `RangeError` — a crash from ordinary input, reachable by anyone who can send
+ * a query, and exactly what ground rule 5 forbids.
+ *
+ * The number is small because a nesting level is expensive: `#binary` descends
+ * one frame per precedence level, so a single `(` costs about fifteen. Measured
+ * here, V8 gives up at roughly 390 levels; a limit of 400 was therefore no
+ * limit at all, since 399 still crashed. 100 leaves a wide margin for a smaller
+ * stack on another runtime, and is far past anything real SQL contains —
+ * MySQL's own limit on nested `SELECT`s is 63.
+ *
+ * Raising it meaningfully is not a matter of changing this number: it needs the
+ * per-level descent to become a loop rather than a recursion.
+ */
+const MAX_DEPTH = 100
 
 /** The index into `LEVELS` of the comparison level, which needs naming twice. */
 const COMPARISON_LEVEL = 4
@@ -83,6 +102,7 @@ class ExpressionParser {
   readonly #tokens: readonly Token[]
   readonly #mode: SqlMode
   #at = 0
+  #depth = 0
 
   constructor(tokens: readonly Token[], mode: SqlMode) {
     this.#tokens = tokens
@@ -293,7 +313,24 @@ class ExpressionParser {
 
   // --- unary and primary ---------------------------------------------------
 
+  /**
+   * Prefix operators and the operand they apply to.
+   *
+   * The depth counter lives here because every nesting level passes through
+   * this method — a parenthesised subexpression reaches `#parenthesised` via
+   * `#primary`, and a chain of unary operators recurses directly — so one
+   * counter in one place bounds both.
+   */
   #unary(): Expression {
+    if (++this.#depth > MAX_DEPTH) throw tooDeep(MAX_DEPTH)
+    try {
+      return this.#unaryInner()
+    } finally {
+      this.#depth--
+    }
+  }
+
+  #unaryInner(): Expression {
     const t = this.#peek()
 
     if (this.#mode.highNotPrecedence && this.#atWord('NOT')) {

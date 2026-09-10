@@ -10,7 +10,7 @@
 //
 // It depends on `@myjs/bytes`, `@myjs/charsets` and `@myjs/types` — never on
 // `@myjs/protocol`, which sits above it.
-export { ParseError, parseError, unknownCharset, badMode } from './errors.ts'
+export { ParseError, parseError, unknownCharset, badMode, tooDeep } from './errors.ts'
 export { DEFAULT_SQL_MODE, NO_SQL_MODE, parseSqlMode } from './sql-mode.ts'
 export type { SqlMode } from './sql-mode.ts'
 export { TOKEN, OPERATORS } from './tokens.ts'
