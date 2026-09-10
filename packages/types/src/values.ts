@@ -46,6 +46,12 @@ import {
   decodeYear,
 } from './temporal.ts'
 import { decodeBit, decodeEnum, decodeSet, enumMember, setMembers } from './strings.ts'
+// A cycle: `json.ts` imports `decodeStorageValue` from here for its
+// `custom-data` tag, and this needs `decodeJson` for a JSON column. ESM
+// handles it because neither module calls the other while it is evaluating —
+// both only call at run time — and the alternative, folding one into the
+// other, would put doc 28's format in the same file as doc 15's mapping.
+import { decodeJson } from './json.ts'
 
 /**
  * A TIMESTAMP as MySQL stores it: seconds since the epoch, in UTC.
@@ -287,7 +293,13 @@ export function toDriverValue(value: StorageValue, meta: ColumnMeta, options: Dr
     }
 
     case FIELD_TYPE.JSON:
-      return JSON.parse(typeof value === 'string' ? value : new TextDecoder().decode(value as Uint8Array)) as SqlValue
+      // D-15: "JSON parsed". The bytes are binary JSON when they came from
+      // storage (M2.13) and JSON text when they came off the wire, where doc
+      // 15 says JSON travels as `string<lenenc>` — so both are accepted, and
+      // the type tag tells them apart without a flag from the caller. A text
+      // document cannot start with 0x00–0x0f: the smallest is `0` or `"`.
+      if (typeof value === 'string') return JSON.parse(value) as SqlValue
+      return decodeJsonValue(value as Uint8Array)
 
     default:
       // DECIMAL is already a string, FLOAT/DOUBLE/YEAR are already numbers,
@@ -296,6 +308,16 @@ export function toDriverValue(value: StorageValue, meta: ColumnMeta, options: Dr
       // one of them.
       return value as SqlValue
   }
+}
+
+/** Parse a JSON column's bytes, whichever form they arrived in. */
+function decodeJsonValue(bytes: Uint8Array): SqlValue {
+  if (bytes.length === 0) return null
+  const tag = bytes[0] as number
+  // Binary JSON's type tags are 0x00–0x0f; JSON text always starts with a
+  // printable character, so the first byte is an unambiguous discriminator.
+  if (tag <= 0x0f) return decodeJson(bytes) as SqlValue
+  return JSON.parse(new TextDecoder().decode(bytes)) as SqlValue
 }
 
 function bitsToBytes(value: bigint, bits: number): Uint8Array {

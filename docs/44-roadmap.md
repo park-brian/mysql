@@ -40,14 +40,14 @@ with no milestone is a note; with a milestone it is a blocker with a deadline.
 |---|---|---|---|---|
 | **M0** | [Foundations](#m0--foundations) | bytes, VFS interface, CI | 10 / 10 | ☑ |
 | **M1** | [Speak the protocol](#m1--speak-the-protocol) | the whole client ecosystem, for a few thousand lines | 24 / 24 | ☑ |
-| **M2** | [Types and collations](#m2--types-and-collations) | the part everyone else gets wrong | 21 / 24 | ◐ |
+| **M2** | [Types and collations](#m2--types-and-collations) | the part everyone else gets wrong | 22 / 24 | ◐ |
 | **M3** | [Parse SQL](#m3--parse-sql) | lexer, parser, AST | 0 / 10 | ☐ |
 | **M4** | [The storage engine](#m4--the-storage-engine) | pages, B+tree, WAL, MVCC | 0 / 26 | ☐ |
 | **M5** | [Execute](#m5--execute) | operators, planner, functions | 0 / 16 | ☐ |
 | **M6** | [The browser](#m6--the-browser) | OPFS, workers, leader election | 0 / 10 | ☐ |
 | **M7** | [InnoDB interchange](#m7--innodb-interchange) | read and write real `.ibd` | 0 / 13 | ☐ |
 | **M8** | [Beyond](#m8--beyond) | as demand arrives | 0 / 10 | ☐ |
-| | | **Total** | **55 / 143** | |
+| | | **Total** | **56 / 143** | |
 
 ---
 
@@ -259,7 +259,7 @@ and the golden vectors from MySQL's own source comments all decode correctly.
 | M2.10 | `decimal2bin` | types | [24](./24-column-encodings.md) | M2.8 | ☑ | `DECIMAL(14,4) 1234567890.1234 → 81 0D FB 38 D2 04 D2`, and its negative |
 | M2.11 | Temporal family: DATETIME2, TIMESTAMP2, TIME2, DATE, YEAR, plus the legacy decoders | types | [24](./24-column-encodings.md) | M2.8 | ☑ | `DATETIMEF_INT_OFS` and `year*13 + month` are right; all fractional widths round-trip |
 | M2.12 | ENUM and SET (forced unsigned, **no** sign flip), BIT, CHAR/VARCHAR/BINARY padding | types | [24](./24-column-encodings.md) | M2.8 | ☑ | ENUM indexes are 1-based; `CHAR` latin1 space-pads, `BINARY` zero-pads |
-| M2.13 | Binary JSON codec | types | [28](./28-json-binary.md) | M2.11, M2.12 | ☐ | small/large switches per container; key order is length-then-bytes; `custom-data` reaches back into `decode` |
+| M2.13 | Binary JSON codec | types | [28](./28-json-binary.md) | M2.11, M2.12, M2.24 | ☑ | small/large switches per container; key order is length-then-bytes; `custom-data` reaches back into `decodeStorageValue`. Two things the property test found: a stored `__proto__` key was prototype pollution reachable from a table row, and `-0` must stay a double because `float8store` keeps its sign |
 | M2.14 | Index key encoding: NULL flag byte, prefix keys, collation sort keys | types | [24](./24-column-encodings.md) | M2.12, M2.2 | ☑ | the memcmp-ordering property holds for every non-float type, and character columns compare on the *sort key* rather than the value — revised by D-35, which added the declared width a PAD SPACE part needs for that property to actually hold |
 | M2.15 | Golden-vector and property suite | test | [43 §4](./43-testing.md) | all | ☐ | every byte dump quoted anywhere in docs 15, 24 and 28 is a test case |
 | M2.16 | Relocate the value model to `@myjs/bytes` so `@myjs/types` can name it (D-32) | bytes, protocol | [15](./15-wire-types.md) | — | ☑ | the 9 frozen traces still replay byte-identically; no package's `dependencies` field changes |

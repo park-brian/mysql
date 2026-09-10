@@ -1,4 +1,4 @@
-export { TypeError_ as TypeError, outOfRange, badValue, unsupportedType } from './errors.ts'
+export { TypeError_ as TypeError, outOfRange, badValue, invalidJson, unsupportedType } from './errors.ts'
 export {
   INT_BYTES,
   signedRange,
@@ -69,5 +69,7 @@ export type { ColumnMeta, DriverOptions, MysqlTimestamp, StorageValue } from './
 // always did and this one never got round to it.
 export { isMysqlDateTime, isMysqlTime, renderMysqlDateTime, renderMysqlTime } from '@myjs/bytes'
 export type { MysqlDateTime, MysqlTime, SqlValue } from '@myjs/bytes'
+export { JSON_TYPE, compareJsonKeys, decodeJson, encodeJson } from './json.ts'
+export type { JsonValue } from './json.ts'
 export { encodeKey, encodeKeyPart } from './keys.ts'
 export type { KeyPart, KeyPartKind } from './keys.ts'

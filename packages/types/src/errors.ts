@@ -18,3 +18,14 @@ export function badValue(what: string, why: string): TypeError_ {
 export function unsupportedType(what: string): TypeError_ {
   return new TypeError_('ER_NOT_SUPPORTED_YET', `${what} is not supported yet`, { errno: 1235, sqlState: '0A000' })
 }
+
+/**
+ * Malformed binary JSON.
+ *
+ * Its own constructor rather than `badValue`, which hardcodes 1292/22007 —
+ * MySQL has a dedicated code for this and reusing a wrong errno would break
+ * exactly the `catch` blocks D-15 exists to keep working.
+ */
+export function invalidJson(why: string): TypeError_ {
+  return new TypeError_('ER_INVALID_JSON_BINARY_DATA', `invalid binary JSON: ${why}`, { errno: 3142 })
+}
