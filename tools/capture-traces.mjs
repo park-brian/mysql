@@ -27,6 +27,32 @@ const [UPSTREAM_HOST, UPSTREAM_PORT] = (arg('to', '127.0.0.1:3306')).split(':')
 const OUT_DIR = arg('out', new URL('../test/protocol/fixtures/', import.meta.url).pathname)
 
 /**
+ * The administrative connection — for `SELECT VERSION()` and `FLUSH
+ * PRIVILEGES`, not for anything that gets recorded.
+ *
+ * Over TCP to the same upstream the proxy forwards to, because that is the
+ * only endpoint that is guaranteed to exist. This used to be
+ * `--protocol=socket -u root` with no password, which works against a MySQL
+ * installed on the same machine and fails against every other kind: the
+ * `trace-capture` job runs a *service container*, whose Unix socket lives
+ * inside the container and whose root has a password, so the job died on its
+ * first command with `ERROR 2002 (HY000): Can't connect to local MySQL server
+ * through socket`. `capture-types.mjs` connects the same way for the same
+ * reason.
+ */
+const ADMIN = [
+  '-h',
+  UPSTREAM_HOST,
+  '-P',
+  String(UPSTREAM_PORT),
+  '--protocol=TCP',
+  '--ssl-mode=DISABLED',
+  '-u',
+  arg('user', 'root'),
+  `-p${arg('password', 'root')}`,
+]
+
+/**
  * Capture one scenario by proxying a real client to a real server.
  *
  * Every chunk is recorded as it crosses, in order, with its direction. The
@@ -90,7 +116,7 @@ async function capture(name, driver) {
 let cachedVersion = null
 async function serverVersion() {
   cachedVersion ??= (
-    await run('mysql', ['--protocol=socket', '-u', 'root', '-N', '-B', '-e', 'SELECT VERSION()'], {
+    await run('mysql', [...ADMIN, '-N', '-B', '-e', 'SELECT VERSION()'], {
       encoding: 'utf8',
     })
   ).stdout.trim()
@@ -146,12 +172,52 @@ const cli = (port, extra, sql) =>
  * exact thing that makes M1.14 hard to test by accident.
  */
 async function flushAuthCache() {
-  await run('mysql', ['--protocol=socket', '-u', 'root', '-e', 'FLUSH PRIVILEGES'], {
+  await run('mysql', [...ADMIN, '-e', 'FLUSH PRIVILEGES'], {
     encoding: 'utf8',
   })
 }
 
+/**
+ * Refuse to capture against a server the scenarios do not fit.
+ *
+ * Every scenario below authenticates as `nopw` or `trace`, and `cli()`
+ * deliberately swallows a non-zero exit so that `access-denied` can be
+ * captured at all. Against a server with neither account that swallowing is a
+ * trap: all nine captures "succeed", nine fixtures are overwritten with
+ * authentication failures, and the CI job's `git diff --stat` reports a large
+ * diff and a **green** step. A check that passes on garbage is the thing doc
+ * 43 §8 and M2.22 are both about, so this stops first and says what is
+ * missing.
+ *
+ * The accounts are not created here. What plugin `trace` uses and what
+ * `nopw` is granted is part of what the frozen fixtures *record*; a tool that
+ * invented them would be re-baselining the corpus rather than checking it, and
+ * that is a decision for whoever re-baselines, not a side effect of running a
+ * capture.
+ */
+async function requireAccounts() {
+  const wanted = ['nopw', 'trace']
+  const found = (
+    await run('mysql', [...ADMIN, '-N', '-B', '-e', `SELECT user FROM mysql.user WHERE user IN ('nopw','trace')`], {
+      encoding: 'utf8',
+    })
+  ).stdout
+  const missing = wanted.filter((u) => !found.split(/\s+/).includes(u))
+  if (missing.length > 0) {
+    console.error(
+      `capture-traces: this server has no ${missing.join(' or ')} account, so every capture would record\n` +
+        `  an authentication failure instead of the exchange it names. The scenarios need:\n` +
+        `    nopw  — empty password\n` +
+        `    trace — password 'tracepw', caching_sha2_password, with a tracedb it may see\n` +
+        `  Provision them on the target server and re-run. See test/protocol/fixtures/ for what\n` +
+        `  the committed traces were captured against.`,
+    )
+    process.exit(1)
+  }
+}
+
 if (process.argv.includes('--all')) {
+  await requireAccounts()
   // Each scenario isolates one thing an M1 item claims to get right.
   await capture('handshake-empty-password', (p) => cli(p, ['-u', 'nopw'], 'SELECT 1'))
   await flushAuthCache()
