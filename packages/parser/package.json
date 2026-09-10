@@ -1,0 +1,15 @@
+{
+  "name": "@myjs/parser",
+  "version": "0.0.0",
+  "description": "MySQL SQL lexer and parser: charset-aware, sql_mode-aware, AST out",
+  "type": "module",
+  "license": "MIT",
+  "engines": { "node": ">=22.18" },
+  "exports": { ".": "./src/index.ts" },
+  "files": ["src"],
+  "dependencies": {
+    "@myjs/bytes": "0.0.0",
+    "@myjs/charsets": "0.0.0",
+    "@myjs/types": "0.0.0"
+  }
+}
