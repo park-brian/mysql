@@ -210,3 +210,41 @@ jobs:
           name: type-vectors
           path: test/format/fixtures/
           if-no-files-found: warn
+
+  mysqltest-census:
+    name: parse MySQL's own test corpus
+    runs-on: ubuntu-latest
+    # M3.11. Doc 43 §1 calls `mysql-test` the single highest-value testing asset
+    # available to us, and ground rule 7 already says how to use it: fetched in
+    # CI, never vendored. The full interpreter is M5.15 because diffing
+    # `.result` files needs an executor — but the *parse-only* half needs only a
+    # parser, and M3's own exit criterion already assumes it exists.
+    #
+    # Informational at first, exactly as `type-vectors` was: `--refresh`
+    # expands the corpus from its seed list, and a wider corpus will very
+    # likely find lexer gaps. That is the point of running it. It becomes
+    # gating once the expanded census is committed and clean.
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22.18'
+          cache: npm
+      - run: npm ci
+      - name: census and diff
+        env:
+          # Listing the directory uses the GitHub API, which allows sixty
+          # requests an hour unauthenticated — a shared runner burns that
+          # immediately. Fetching the files themselves does not need this.
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          npm run census:mysqltest -- --refresh
+          git diff --stat -- test/format/fixtures/
+      - name: upload the census
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: mysqltest-census
+          path: test/format/fixtures/mysqltest-corpus.json
+          if-no-files-found: warn
