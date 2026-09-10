@@ -14,8 +14,9 @@
 //   prefix. Recording which framing a vector is in is what makes doc 24's
 //   "both steps matter" sentence executable.
 //
-//   `SELECT HEX(WEIGHT_STRING(s LEVELS 1))` yields exactly what
-//   `Collation.sortKey()` must produce. That is the first *external* check on
+//   `SELECT HEX(WEIGHT_STRING(s COLLATE c))` yields exactly what
+//   `Collation.sortKey()` must produce. (D-34 writes `LEVELS 1`; the keyword
+//   is `LEVEL`, and the clause is unnecessary for a level-1 collation.) That is the first *external* check on
 //   the UCA tables M2.20 generated — a real 8.4 saying whether our sort keys
 //   are its sort keys, which is M2.7's outstanding acceptance clause.
 //
@@ -242,7 +243,13 @@ async function captureWeights() {
   for (const { collation, strings } of WEIGHT_CASES) {
     for (const s of strings) {
       const literal = `_utf8mb4'${s.replace(/'/g, "''")}' COLLATE ${collation}`
-      const hex = (await sql(`SELECT HEX(WEIGHT_STRING(${literal} LEVELS 1))`)).trim()
+      // No `LEVEL` clause. D-34 writes `WEIGHT_STRING(s LEVELS 1)`, but the
+      // keyword is `LEVEL` (singular) and 8.4 rejects `LEVELS` outright — and
+      // the clause is unnecessary anyway: bare `WEIGHT_STRING` returns exactly
+      // what that collation's `strnxfrm` produces, which is exactly what
+      // `Collation.sortKey()` must produce. Naming a level would be redundant
+      // for an `_ai_ci` collation and wrong for a multi-level one.
+      const hex = (await sql(`SELECT HEX(WEIGHT_STRING(${literal}))`)).trim()
       out.push({ collation, string: s, weightString: hex })
     }
   }
@@ -271,6 +278,10 @@ for (const column of COLUMNS) {
   console.log(`  ${column.name.padEnd(10)} ${column.values.length} value(s)`)
 }
 
+// Written before the weight capture runs, not after. The two corpora are
+// independent, and an earlier version lost a complete set of storage vectors
+// because a single `WEIGHT_STRING` query had a syntax error — 23 columns of
+// work discarded for a reason that had nothing to do with them.
 const encodings = writeFixture('storage-encodings', 'Binlog row images under binlog_row_image=FULL (D-34). Binlog integers are little-endian and unflipped, and a binlog VARCHAR keeps its length prefix — both documented divergences from the .ibd form.', {
   ...provenance,
   framing: 'binlog-row-image',
@@ -278,7 +289,7 @@ const encodings = writeFixture('storage-encodings', 'Binlog row images under bin
 })
 console.log(`storage encodings -> ${encodings}`)
 
-const weights = writeFixture('weight-strings', 'SELECT HEX(WEIGHT_STRING(s LEVELS 1)) — exactly what Collation.sortKey() must produce.', {
+const weights = writeFixture('weight-strings', 'SELECT HEX(WEIGHT_STRING(s COLLATE c)) — exactly what Collation.sortKey() must produce.', {
   ...provenance,
   vectors: await captureWeights(),
 })
