@@ -10,8 +10,17 @@
 import { build } from 'esbuild'
 import { gzipSync } from 'node:zlib'
 import { readFileSync, writeFileSync, existsSync, readdirSync } from 'node:fs'
+import { relative } from 'node:path'
+import { check } from './lib/gen-common.mjs'
 
-const ROOT = new URL('..', import.meta.url).pathname
+// `--root <dir>` mirrors `lint-isomorphic.mjs`: proving that the gate excludes
+// a lazily imported chunk needs a workspace containing one, and that fixture
+// belongs in a temp tree rather than permanently in `packages/`.
+const rootFlag = process.argv.indexOf('--root')
+const ROOT =
+  rootFlag === -1
+    ? new URL('..', import.meta.url).pathname
+    : process.argv[rootFlag + 1].replace(/\/?$/, '/')
 // `--budget-file <path>` lets the gate's own test point at a throwaway budget,
 // so proving the gate fails does not mean editing the committed numbers.
 const budgetFlag = process.argv.indexOf('--budget-file')
@@ -39,6 +48,16 @@ const TOLERANCE = 0.02
 
 const update = process.argv.includes('--update')
 
+// M2.20: the number is the ENTRY CHUNK, not the whole build.
+//
+// Without `splitting`, esbuild inlines an `await import()` target into the one
+// output file — so deferring the UCA weight tables behind a dynamic import
+// would not move this number by a single byte, and "an esbuild bundle of
+// `packages/charsets/src/index.ts` contains no UCA weights, proven by the size
+// gate" would be proven by nothing. Splitting gives each dynamically imported
+// module its own chunk; we measure only what a consumer pays to *load* the
+// package, and report the deferred remainder so it is visible rather than
+// merely absent.
 async function measure(pkg) {
   const entry = `${ROOT}packages/${pkg}/src/index.ts`
   if (!existsSync(entry)) return null
@@ -49,13 +68,49 @@ async function measure(pkg) {
     platform: 'browser',
     target: 'es2023',
     minify: true,
+    // `outdir` is required by `splitting` and names the chunks; with
+    // `write: false` nothing reaches the disk.
     write: false,
+    splitting: true,
+    outdir: `${ROOT}packages/${pkg}/.size-out`,
+    metafile: true,
     // Workspace siblings are bundled in, so each number is the real cost of
     // installing that package alone.
     logLevel: 'silent',
   })
-  const out = result.outputFiles[0].contents
-  return { raw: out.length, gzip: gzipSync(out, { level: 9 }).length }
+
+  // The entry chunk is the output esbuild attributes to *our* entry point.
+  // Matching on "has an entryPoint at all" is not enough: under `splitting`
+  // esbuild gives every dynamically imported module its own entry too, which
+  // is precisely the set we want to exclude.
+  const wanted = relative(process.cwd(), entry)
+  const outputs = result.metafile.outputs
+  let entryPath = null
+  for (const [path, info] of Object.entries(outputs)) {
+    if (info.entryPoint === wanted) {
+      check(entryPath === null, `size-budget: ${pkg} produced two entry chunks`)
+      entryPath = path
+    }
+  }
+  check(entryPath !== null, `size-budget: ${pkg} has no output for ${wanted}`)
+
+  let entryContents = null
+  let deferredRaw = 0
+  for (const file of result.outputFiles) {
+    // esbuild reports metafile keys relative to cwd and outputFiles paths
+    // absolutely, so compare on the basename-bearing tail rather than on
+    // either form directly.
+    if (file.path.endsWith(entryPath.slice(entryPath.lastIndexOf('/')))) entryContents = file.contents
+    else deferredRaw += file.contents.length
+  }
+  check(entryContents !== null, `size-budget: ${pkg} entry chunk has no contents`)
+
+  return {
+    raw: entryContents.length,
+    gzip: gzipSync(entryContents, { level: 9 }).length,
+    deferredRaw,
+    deferredChunks: result.outputFiles.length - 1,
+  }
 }
 
 const budgets = existsSync(BUDGET_FILE) ? JSON.parse(readFileSync(BUDGET_FILE, 'utf8')) : {}
@@ -70,10 +125,15 @@ for (const pkg of PACKAGES) {
   const limit = typeof budget === 'number' ? Math.ceil(budget * (1 + TOLERANCE)) : null
   const status =
     limit === null ? 'new' : size.gzip <= limit ? 'ok' : 'OVER'
+  const deferred =
+    size.deferredChunks > 0
+      ? `  [+${size.deferredChunks} lazy chunk(s), ${size.deferredRaw} B raw, not counted]`
+      : ''
   console.log(
     `${pkg.padEnd(10)} ${String(size.gzip).padStart(7)} B gzipped ` +
       `(${String(size.raw).padStart(7)} B raw)  ` +
-      (limit === null ? '[no budget yet]' : `budget ${budget} (+${Math.round(TOLERANCE * 100)}% = ${limit})  ${status}`),
+      (limit === null ? '[no budget yet]' : `budget ${budget} (+${Math.round(TOLERANCE * 100)}% = ${limit})  ${status}`) +
+      deferred,
   )
   if (status === 'OVER') {
     failures.push(`${pkg}: ${size.gzip} B gzipped exceeds the committed ${budget} B`)
@@ -81,7 +141,12 @@ for (const pkg of PACKAGES) {
 }
 
 if (update) {
-  writeFileSync(BUDGET_FILE, JSON.stringify(measured, null, 2) + '\n')
+  // The committed schema stays `{raw, gzip}` per package. The deferred figures
+  // describe a build, not a budget: they move whenever a lazy module is added,
+  // which is the thing we want to be free rather than ratcheted.
+  const committed = {}
+  for (const [pkg, size] of Object.entries(measured)) committed[pkg] = { raw: size.raw, gzip: size.gzip }
+  writeFileSync(BUDGET_FILE, JSON.stringify(committed, null, 2) + '\n')
   console.log(`\nwrote ${BUDGET_FILE}`)
   process.exit(0)
 }
