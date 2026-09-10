@@ -13,7 +13,14 @@
 // `Date`-shaped mapping D-15 specifies belongs at the driver boundary, not in
 // the codec.
 
-import { isMysqlDateTime, isMysqlTime, Reader, Writer } from '@myjs/bytes'
+import {
+  isMysqlDateTime,
+  isMysqlTime,
+  Reader,
+  renderMysqlDateTime,
+  renderMysqlTime,
+  Writer,
+} from '@myjs/bytes'
 import type { MysqlDateTime, MysqlTime, SqlValue } from '@myjs/bytes'
 import { FIELD_TYPE } from './constants/types.ts'
 import { protocolError } from './errors/index.ts'
@@ -253,17 +260,11 @@ export function dateToMysql(d: Date): MysqlDateTime {
 /** Render a decoded binary value the way the text protocol would print it. */
 export function binaryValueToText(value: BinaryValue): string {
   if (value === null) return 'NULL'
-  if (isMysqlTime(value)) {
-    const hours = value.days * 24 + value.hour
-    const base = `${value.negative ? '-' : ''}${hours}:${String(value.minute).padStart(2, '0')}:${String(value.second).padStart(2, '0')}`
-    return value.microsecond === 0 ? base : `${base}.${String(value.microsecond).padStart(6, '0')}`
-  }
-  if (isMysqlDateTime(value)) {
-    const date = `${String(value.year).padStart(4, '0')}-${String(value.month).padStart(2, '0')}-${String(value.day).padStart(2, '0')}`
-    if (value.hour === 0 && value.minute === 0 && value.second === 0 && value.microsecond === 0) return date
-    const time = `${String(value.hour).padStart(2, '0')}:${String(value.minute).padStart(2, '0')}:${String(value.second).padStart(2, '0')}`
-    return value.microsecond === 0 ? `${date} ${time}` : `${date} ${time}.${String(value.microsecond).padStart(6, '0')}`
-  }
+  // D-37: the temporal renderers moved to `@myjs/bytes` beside the structs, so
+  // this and `@myjs/types`' driver mapping print a value the same way rather
+  // than two ways that happen to agree today.
+  if (isMysqlTime(value)) return renderMysqlTime(value, value.microsecond === 0 ? 0 : 6)
+  if (isMysqlDateTime(value)) return renderMysqlDateTime(value, value.microsecond === 0 ? 0 : 6)
   if (value instanceof Uint8Array) return fromUtf8(value)
   return String(value)
 }

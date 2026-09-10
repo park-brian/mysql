@@ -59,5 +59,15 @@ export {
   trimTrailingSpaces,
   trimTrailingNuls,
 } from './strings.ts'
+export {
+  decodeStorageValue,
+  isMysqlTimestamp,
+  toDriverValue,
+} from './values.ts'
+export type { ColumnMeta, DriverOptions, MysqlTimestamp, StorageValue } from './values.ts'
+// D-32 says both packages above re-export the neutral structs; `@myjs/protocol`
+// always did and this one never got round to it.
+export { isMysqlDateTime, isMysqlTime, renderMysqlDateTime, renderMysqlTime } from '@myjs/bytes'
+export type { MysqlDateTime, MysqlTime, SqlValue } from '@myjs/bytes'
 export { encodeKey, encodeKeyPart } from './keys.ts'
 export type { KeyPart, KeyPartKind } from './keys.ts'

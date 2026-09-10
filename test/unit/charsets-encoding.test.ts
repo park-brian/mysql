@@ -128,7 +128,21 @@ test('B0: the probe rejects a decoder that is really the Latin-1 substitute', ()
   } as unknown as TextDecoder
   assert.equal(rejectsLatin1Substitute(trueLatin1), false, 'C1 bytes decoding to C1 controls means Latin-1')
   assert.equal(rejectsLatin1Substitute(new TextDecoder('utf-8')), true)
-  assert.equal(rejectsLatin1Substitute(new TextDecoder('windows-1252')), true, 'a real cp1252 passes')
+
+  // The positive direction is built rather than requested for the same reason:
+  // on a runtime without full ICU, `new TextDecoder('windows-1252')` *is* the
+  // substitute, so asking for one would assert a fact about the host instead
+  // of a fact about the probe. This one maps 0x80 to the euro sign, as a real
+  // cp1252 decoder does.
+  const realCp1252 = {
+    encoding: 'windows-1252',
+    decode(bytes?: Uint8Array): string {
+      let out = ''
+      for (const b of bytes ?? []) out += String.fromCharCode(b === 0x80 ? 0x20ac : b)
+      return out
+    },
+  } as unknown as TextDecoder
+  assert.equal(rejectsLatin1Substitute(realCp1252), true, 'a real cp1252 passes')
 })
 
 test('B0: a byte the charset does not define decodes to U+FFFD, not to NUL', () => {
