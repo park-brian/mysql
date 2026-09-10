@@ -68,8 +68,14 @@ function evaluate(e: Expression): Value | null {
     case NODE.UNARY: {
       const v = evaluate(e.operand)
       switch (e.op) {
+        // Negating an unsigned BIGINT **saturates**. `~4` is
+        // 18446744073709551611 unsigned, and its negation does not fit a signed
+        // BIGINT, so MySQL clamps to -2^63 rather than wrapping. The corpus
+        // caught this: `3 | - ~ 4` is 9223372036854775811 on a real server,
+        // which is 0x8000000000000003 — the clamp, then the `| 3`.
         case '-':
-          return v === null ? null : signed(-v.n)
+          if (v === null) return null
+          return v.unsigned && v.n > (1n << 63n) - 1n ? signed(-(1n << 63n)) : signed(-v.n)
         case '+':
           return v
         // Bitwise NOT is where unsignedness enters.
@@ -115,11 +121,17 @@ function evaluate(e: Expression): Value | null {
         case '*':
           return l.unsigned || r.unsigned ? unsigned(l.n * r.n) : signed(l.n * r.n)
         // Division by zero is NULL, not an error, and not a crash.
+        //
+        // Unlike `+`, `-` and `*`, these two do **not** promote to unsigned
+        // when either side is: the result follows the *dividend*, so
+        // `-5 % (0 ^ 2)` is -1 even though `0 ^ 2` is unsigned. The corpus
+        // caught this too — modelling it as a promotion turned -1 into
+        // 18446744073709551615, which is 0 mod 5 and so flipped an `XOR`.
         case 'DIV':
-          return r.n === 0n ? null : l.unsigned || r.unsigned ? unsigned(l.n / r.n) : signed(l.n / r.n)
+          return r.n === 0n ? null : l.unsigned ? unsigned(l.n / r.n) : signed(l.n / r.n)
         case '%':
         case 'MOD':
-          return r.n === 0n ? null : l.unsigned || r.unsigned ? unsigned(l.n % r.n) : signed(l.n % r.n)
+          return r.n === 0n ? null : l.unsigned ? unsigned(l.n % r.n) : signed(l.n % r.n)
 
         // Bitwise operators always return unsigned, whatever went in.
         case '|':

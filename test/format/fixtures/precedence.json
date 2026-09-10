@@ -14,51 +14,55 @@
       "value": "0"
     },
     {
-      "expr": "6 << 1 XOR 2 < 3 > 0",
-      "value": "0"
-    },
-    {
-      "expr": "(3) = 3 >> ! NOT 1 ^ 5",
-      "error": "ERROR 1064 (42000) at line 1: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'NOT 1 ^ 5)' at line 1"
-    },
-    {
-      "expr": "- 7",
-      "value": "-7"
-    },
-    {
-      "expr": "- 5 > 5 > ! 2 | 7",
-      "value": "0"
-    },
-    {
-      "expr": "2 - ! 6 - ~ 2",
-      "error": "ERROR 1690 (22003) at line 1: BIGINT UNSIGNED value is out of range in '((2 - (0 = 6)) - ~(2))'"
-    },
-    {
-      "expr": "~ 6 ^ 5 > ~ 1 | 0",
-      "value": "0"
-    },
-    {
-      "expr": "(7 <=> 7 OR - 3 >> 2)",
+      "expr": "7 AND 6 DIV 1",
       "value": "1"
     },
     {
-      "expr": "- ! 1 XOR 5",
+      "expr": "3 | ~ 5 >> 4",
+      "value": "1152921504606846975"
+    },
+    {
+      "expr": "3 | 4 & 0 | (7)",
+      "value": "7"
+    },
+    {
+      "expr": "7 * 5 XOR - 6",
+      "value": "0"
+    },
+    {
+      "expr": "3 + 0 >> 1 > 2 ^ 0 & 0 DIV ~ 0",
       "value": "1"
     },
     {
-      "expr": "3",
+      "expr": "2",
+      "value": "2"
+    },
+    {
+      "expr": "(7 | 5 >> 5)",
+      "value": "7"
+    },
+    {
+      "expr": "(3)",
       "value": "3"
-    },
-    {
-      "expr": "4 XOR 4 = ! 7 <=> 4",
-      "value": "1"
     },
     {
       "expr": "4",
       "value": "4"
     },
     {
-      "expr": "5 <=> ! 0 <=> 7",
+      "expr": "3",
+      "value": "3"
+    },
+    {
+      "expr": "2 ^ 6 AND - 3",
+      "value": "1"
+    },
+    {
+      "expr": "! 5 | 4 & 1",
+      "value": "0"
+    },
+    {
+      "expr": "6 + 3 XOR 2",
       "value": "0"
     },
     {
@@ -66,83 +70,107 @@
       "value": "7"
     },
     {
-      "expr": "(2 > ~ 3) * 3 * ! 2 % ~ 0",
+      "expr": "5 >> 1 + ! 4",
+      "value": "2"
+    },
+    {
+      "expr": "6 >> 0 OR 0 * (7) ^ 6 AND ~ 3 < 1",
+      "value": "1"
+    },
+    {
+      "expr": "5 & - 2 XOR 3 + 7",
       "value": "0"
     },
     {
-      "expr": "7 OR 5 | 1 + NOT NOT 6",
-      "error": "ERROR 1064 (42000) at line 1: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'NOT NOT 6)' at line 1"
-    },
-    {
-      "expr": "~ ! 1",
-      "value": "18446744073709551615"
-    },
-    {
-      "expr": "5 << 3 & 3 ^ ~ 7 - 0",
-      "value": "40"
-    },
-    {
-      "expr": "NOT 2",
-      "value": "0"
-    },
-    {
-      "expr": "- 3 << 4 * 0 > NOT NOT ~ 2",
-      "error": "ERROR 1064 (42000) at line 1: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'NOT NOT ~ 2)' at line 1"
-    },
-    {
-      "expr": "5 % ~ 2 <=> 1",
-      "value": "0"
-    },
-    {
-      "expr": "(NOT 4 | 0)",
-      "value": "0"
-    },
-    {
-      "expr": "! 0 XOR 2 = 0 << 6 DIV 0 & 3 & 5 & 0",
+      "expr": "6 > 1 % 0",
       "value": "NULL"
     },
     {
-      "expr": "1 = 7",
-      "value": "0"
+      "expr": "6",
+      "value": "6"
     },
     {
-      "expr": "6 - 6 | 7 < ! 7",
-      "value": "0"
+      "expr": "- 5",
+      "value": "-5"
     },
     {
-      "expr": "- 7 <=> 6 > 5 >> ! 1",
-      "value": "0"
+      "expr": "4 & 4 ^ 3",
+      "value": "4"
     },
     {
-      "expr": "- NOT 5",
-      "error": "ERROR 1064 (42000) at line 1: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'NOT 5)' at line 1"
-    },
-    {
-      "expr": "NOT 6 > 6 - ! 6",
+      "expr": "1 | 7 <=> 7",
       "value": "1"
     },
     {
-      "expr": "! 5 >> 5 AND ~ NOT 1 DIV ~ 6",
-      "error": "ERROR 1064 (42000) at line 1: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'NOT 1 DIV ~ 6)' at line 1"
-    },
-    {
-      "expr": "1",
-      "value": "1"
-    },
-    {
-      "expr": "! 1 DIV 7 = 3",
+      "expr": "(4 > 7 & - 3)",
       "value": "0"
     },
     {
-      "expr": "! 6 DIV (1 AND 0)",
-      "value": "NULL"
+      "expr": "4 & NOT 5 XOR NOT 4",
+      "error": "ERROR 1064 (42000) at line 1: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'NOT 5 XOR NOT 4)' at line 1"
     },
     {
-      "expr": "NOT 0 + 0 > 5 + 6",
+      "expr": "~ 6 OR ~ 6 << 2",
       "value": "1"
     },
     {
-      "expr": "2 OR 5 << 1 << ~ 3",
+      "expr": "- NOT 6 | 5 | 7 < 5",
+      "error": "ERROR 1064 (42000) at line 1: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'NOT 6 | 5 | 7 < 5)' at line 1"
+    },
+    {
+      "expr": "0 AND 4 & 3",
+      "value": "0"
+    },
+    {
+      "expr": "3 = 6 | 5",
+      "value": "0"
+    },
+    {
+      "expr": "2 <=> 1 OR NOT 4",
+      "value": "0"
+    },
+    {
+      "expr": "6 ^ NOT 1 & 2",
+      "error": "ERROR 1064 (42000) at line 1: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'NOT 1 & 2)' at line 1"
+    },
+    {
+      "expr": "4 XOR 4 - 4",
+      "value": "1"
+    },
+    {
+      "expr": "0 * 1 XOR 0 - 2",
+      "value": "1"
+    },
+    {
+      "expr": "1 OR NOT 4 XOR 3",
+      "value": "1"
+    },
+    {
+      "expr": "~ 6 - 0 <=> 6",
+      "value": "0"
+    },
+    {
+      "expr": "4 & 2 << 0",
+      "value": "0"
+    },
+    {
+      "expr": "~ NOT 1 = ~ 6 XOR - 5",
+      "error": "ERROR 1064 (42000) at line 1: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'NOT 1 = ~ 6 XOR - 5)' at line 1"
+    },
+    {
+      "expr": "1 OR 1 + 5 OR 0 = 1 ^ 1",
+      "value": "1"
+    },
+    {
+      "expr": "(- 2 ^ NOT 4)",
+      "error": "ERROR 1064 (42000) at line 1: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'NOT 4))' at line 1"
+    },
+    {
+      "expr": "- 5 >> 4 ^ 2 OR 0 - (5)",
+      "value": "1"
+    },
+    {
+      "expr": "4 * 1 AND 3",
       "value": "1"
     },
     {
@@ -150,443 +178,439 @@
       "value": "-2"
     },
     {
-      "expr": "! NOT 0 AND 5 + - 4",
-      "error": "ERROR 1064 (42000) at line 1: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'NOT 0 AND 5 + - 4)' at line 1"
-    },
-    {
-      "expr": "6 >> 0",
-      "value": "6"
-    },
-    {
-      "expr": "1 * 6 % 7",
-      "value": "6"
-    },
-    {
-      "expr": "1 AND (6) < 2",
-      "value": "0"
-    },
-    {
-      "expr": "(3)",
-      "value": "3"
-    },
-    {
-      "expr": "6 OR (2 < - 2)",
+      "expr": "(6 + - 2 XOR - 4 XOR - 6)",
       "value": "1"
     },
     {
-      "expr": "4 <=> NOT 0 * 6",
-      "error": "ERROR 1064 (42000) at line 1: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'NOT 0 * 6)' at line 1"
+      "expr": "2 OR ~ 1 & 1",
+      "value": "1"
+    },
+    {
+      "expr": "2 AND 4 OR ! 2",
+      "value": "1"
+    },
+    {
+      "expr": "6 + 2",
+      "value": "8"
+    },
+    {
+      "expr": "2 AND 6 | 7",
+      "value": "1"
     },
     {
       "expr": "5",
       "value": "5"
     },
     {
-      "expr": "- NOT - 1 = - NOT 3",
-      "error": "ERROR 1064 (42000) at line 1: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'NOT - 1 = - NOT 3)' at line 1"
-    },
-    {
-      "expr": "6 >> 0 << (- 1)",
-      "value": "0"
-    },
-    {
-      "expr": "- 2 ^ 2 - - 2",
-      "value": "18446744073709551614"
-    },
-    {
-      "expr": "0 XOR 5 + ~ 5",
+      "expr": "6 << 1 AND 5",
       "value": "1"
     },
     {
-      "expr": "- 7 ^ 5 | 7 > ~ 1",
+      "expr": "(6 | 0 OR 5)",
       "value": "1"
     },
     {
-      "expr": "NOT (4) AND 2",
-      "value": "0"
-    },
-    {
-      "expr": "NOT NOT 3 = NOT 6",
-      "error": "ERROR 1064 (42000) at line 1: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'NOT 6)' at line 1"
-    },
-    {
-      "expr": "- ~ 5 * - 1",
-      "value": "18446744073709551610"
-    },
-    {
-      "expr": "- 1 = 6 OR (1 % 5)",
-      "value": "1"
-    },
-    {
-      "expr": "NOT 5",
-      "value": "0"
-    },
-    {
-      "expr": "6 > 7 + 5 + 2",
-      "value": "0"
-    },
-    {
-      "expr": "- 5",
-      "value": "-5"
-    },
-    {
-      "expr": "5 | 6",
-      "value": "7"
-    },
-    {
-      "expr": "(2)",
-      "value": "2"
-    },
-    {
-      "expr": "6",
-      "value": "6"
-    },
-    {
-      "expr": "5 | 2 > 3",
-      "value": "1"
-    },
-    {
-      "expr": "! 2 XOR 2",
-      "value": "1"
-    },
-    {
-      "expr": "NOT 0",
-      "value": "1"
-    },
-    {
-      "expr": "- ! 6 DIV 1 + 2 > ~ 6 <=> 4 OR NOT 4",
-      "value": "0"
-    },
-    {
-      "expr": "5 AND NOT ! 4 = ~ 7",
-      "value": "1"
-    },
-    {
-      "expr": "! 6",
-      "value": "0"
-    },
-    {
-      "expr": "NOT 6",
-      "value": "0"
-    },
-    {
-      "expr": "1 XOR 0 DIV ! 1 < 5 | ~ 6 = 7",
-      "value": "NULL"
-    },
-    {
-      "expr": "0 ^ 2 + 3 >> 0 < 1",
-      "value": "0"
-    },
-    {
-      "expr": "~ 1 < 5 DIV 4 | 3 * 4 >> ~ 4 << 7 AND ~ 4",
-      "value": "0"
-    },
-    {
-      "expr": "5 < - 6 & ! 4",
-      "value": "0"
-    },
-    {
-      "expr": "! 2 = NOT 2",
-      "error": "ERROR 1064 (42000) at line 1: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'NOT 2)' at line 1"
-    },
-    {
-      "expr": "- 0",
-      "value": "0"
-    },
-    {
-      "expr": "! 6 = ~ 1 + 3",
-      "error": "ERROR 1690 (22003) at line 1: BIGINT UNSIGNED value is out of range in '(~(1) + 3)'"
-    },
-    {
-      "expr": "~ 3",
-      "value": "18446744073709551612"
-    },
-    {
-      "expr": "6 XOR 3 <=> 3 < 3",
-      "value": "0"
-    },
-    {
-      "expr": "3 > 2",
-      "value": "1"
-    },
-    {
-      "expr": "! 0 - 7 * 7",
-      "value": "-48"
-    },
-    {
-      "expr": "- 7 | (0) * 3",
-      "value": "18446744073709551609"
-    },
-    {
-      "expr": "(NOT 4) % 2 XOR 3",
-      "value": "1"
-    },
-    {
-      "expr": "(! - 0 = 7)",
-      "value": "0"
-    },
-    {
-      "expr": "6 XOR ! 5 = 4 ^ 6 XOR ! 0 DIV 3",
-      "value": "1"
-    },
-    {
-      "expr": "! 6 % 4 DIV ~ - 2",
-      "value": "0"
-    },
-    {
-      "expr": "5 >> 2 > - 0 + 0 OR 4 - 0",
-      "value": "1"
-    },
-    {
-      "expr": "NOT 4 | ! 4 ^ (7)",
-      "value": "0"
-    },
-    {
-      "expr": "2",
-      "value": "2"
-    },
-    {
-      "expr": "3 < 4 DIV 6 = 4 | 1",
-      "value": "0"
-    },
-    {
-      "expr": "- - 2 | (3 AND NOT 0)",
-      "value": "3"
-    },
-    {
-      "expr": "(6 = 7) & 4",
-      "value": "0"
-    },
-    {
-      "expr": "! 5 & 3 + 1 DIV 1",
-      "value": "0"
-    },
-    {
-      "expr": "- 6 AND NOT 1 >> 4 & 0 + (6)",
-      "value": "1"
-    },
-    {
-      "expr": "4 + 0 & 1 < ~ 6",
-      "value": "1"
-    },
-    {
-      "expr": "! 5 = 1 XOR (NOT 4)",
-      "value": "0"
-    },
-    {
-      "expr": "- 3 + 6",
-      "value": "3"
-    },
-    {
-      "expr": "~ 0",
-      "value": "18446744073709551615"
-    },
-    {
-      "expr": "~ 5 & 5",
-      "value": "0"
-    },
-    {
-      "expr": "(4 XOR 3) | 0",
-      "value": "0"
-    },
-    {
-      "expr": "6 ^ 0 % 4 DIV 1",
-      "value": "2"
-    },
-    {
-      "expr": "! 0",
-      "value": "1"
-    },
-    {
-      "expr": "- 6 XOR 5 & 0 ^ 1 <=> NOT 7 | 3",
-      "error": "ERROR 1064 (42000) at line 1: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'NOT 7 | 3)' at line 1"
-    },
-    {
-      "expr": "3 * 6",
-      "value": "18"
-    },
-    {
-      "expr": "(~ 1)",
-      "value": "18446744073709551614"
-    },
-    {
-      "expr": "~ 5",
-      "value": "18446744073709551610"
-    },
-    {
-      "expr": "6 = 5 | NOT 3",
+      "expr": "1 OR - 3 ^ NOT 3",
       "error": "ERROR 1064 (42000) at line 1: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'NOT 3)' at line 1"
     },
     {
-      "expr": "- 7 - 5 AND 1 + 7 = 7",
+      "expr": "4 XOR NOT 2 DIV 3",
       "value": "0"
     },
     {
-      "expr": "(6) > 4 AND - ! 1",
+      "expr": "- 1",
+      "value": "-1"
+    },
+    {
+      "expr": "- ! 7 AND ~ 0 < 6 << 1 XOR NOT 7 OR 0",
       "value": "0"
     },
     {
-      "expr": "(0) - (! 1) < (7 ^ 2)",
-      "value": "1"
+      "expr": "(3) % NOT 5 << 6 <=> ~ 3",
+      "error": "ERROR 1064 (42000) at line 1: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'NOT 5 << 6 <=> ~ 3)' at line 1"
     },
     {
-      "expr": "(0 + 5 & 2 XOR 4)",
-      "value": "1"
-    },
-    {
-      "expr": "3 OR 5",
-      "value": "1"
-    },
-    {
-      "expr": "~ 2 * 0 = ~ 4 + NOT 5 <=> 1 AND NOT 0",
-      "error": "ERROR 1064 (42000) at line 1: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'NOT 5 <=> 1 AND NOT 0)' at line 1"
-    },
-    {
-      "expr": "NOT 5 & ~ 0 << NOT 4 | 6 < 2",
-      "error": "ERROR 1064 (42000) at line 1: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'NOT 4 | 6 < 2)' at line 1"
-    },
-    {
-      "expr": "((2)) <=> 2 + 4",
+      "expr": "0 AND 4 >> 7",
       "value": "0"
     },
     {
-      "expr": "6 > - 7 * 5 > ! 0 ^ 2",
+      "expr": "- 6 OR 7 - ~ 4",
+      "value": "1"
+    },
+    {
+      "expr": "1 XOR 2 << 4",
       "value": "0"
     },
     {
-      "expr": "- 0 <=> 1 >> 5",
+      "expr": "- 6 AND 2 = ! 7 ^ 2 OR 4 AND ! 5 & 7 AND 7",
       "value": "1"
     },
     {
-      "expr": "0 < 3 | NOT 3 % ! 2",
-      "error": "ERROR 1064 (42000) at line 1: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'NOT 3 % ! 2)' at line 1"
-    },
-    {
-      "expr": "! ! 6",
+      "expr": "- 5 OR 7 < 2",
       "value": "1"
     },
     {
-      "expr": "0 << 4 AND ~ 6 DIV NOT 3 OR 0",
-      "error": "ERROR 1064 (42000) at line 1: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'NOT 3 OR 0)' at line 1"
+      "expr": "~ 1 OR 5 - 0",
+      "value": "1"
     },
     {
-      "expr": "~ 7 = 0 DIV ! 2",
+      "expr": "6 << 0 - 5",
+      "value": "0"
+    },
+    {
+      "expr": "! 2 ^ 2",
+      "value": "2"
+    },
+    {
+      "expr": "(- 7 OR 6 << ! 6)",
+      "value": "1"
+    },
+    {
+      "expr": "1",
+      "value": "1"
+    },
+    {
+      "expr": "6 + 2 DIV 4 << 7",
+      "value": "768"
+    },
+    {
+      "expr": "0 >> 6 % ! 4",
       "value": "NULL"
     },
     {
-      "expr": "~ (4)",
-      "value": "18446744073709551611"
-    },
-    {
-      "expr": "5 XOR 2 AND 0 XOR 7",
-      "value": "0"
-    },
-    {
-      "expr": "- 5 % NOT 6",
-      "error": "ERROR 1064 (42000) at line 1: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'NOT 6)' at line 1"
-    },
-    {
-      "expr": "! 1 AND 0 AND 7 >> 2 ^ 5 % 3 <=> 4",
-      "value": "0"
-    },
-    {
-      "expr": "- 7 XOR 0 OR 7 DIV 7 << (0 - 5)",
+      "expr": "NOT 2 OR (1 OR - 6)",
       "value": "1"
     },
     {
-      "expr": "NOT 7 & ~ 3 <=> 4 + ~ 6 = 0",
-      "value": "0"
-    },
-    {
-      "expr": "(NOT 5) % 2 << NOT 6 > 5",
-      "error": "ERROR 1064 (42000) at line 1: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'NOT 6 > 5)' at line 1"
-    },
-    {
-      "expr": "0 ^ NOT 3 > NOT 1 | 3 ^ 0",
-      "error": "ERROR 1064 (42000) at line 1: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'NOT 3 > NOT 1 | 3 ^ 0)' at line 1"
-    },
-    {
-      "expr": "7 << 0 <=> ! 0 < ! 0",
+      "expr": "NOT 7 DIV ~ 7 & 1",
       "value": "1"
     },
     {
-      "expr": "3 > 5",
+      "expr": "6 + 7 AND ~ 6",
+      "value": "1"
+    },
+    {
+      "expr": "7 XOR ! 1 OR 3 | 6 AND 5 & 0",
+      "value": "1"
+    },
+    {
+      "expr": "(4 & 0 >> 5)",
       "value": "0"
     },
     {
-      "expr": "2 % 2 % 0 % 6 | NOT 4 < - 3 - (6)",
-      "error": "ERROR 1064 (42000) at line 1: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'NOT 4 < - 3 - (6))' at line 1"
+      "expr": "(! 7 & 3 | 2)",
+      "value": "2"
     },
     {
-      "expr": "6 >> ! (1)",
-      "value": "6"
+      "expr": "2 & 7 XOR 6",
+      "value": "0"
     },
     {
       "expr": "- 3",
       "value": "-3"
     },
     {
-      "expr": "(7)",
+      "expr": "5 + - 0 = 7 % 1",
+      "value": "0"
+    },
+    {
+      "expr": "0 AND 0 > - 0",
+      "value": "0"
+    },
+    {
+      "expr": "! 6",
+      "value": "0"
+    },
+    {
+      "expr": "~ 0 XOR 5 | ~ 3 >> 3 | ~ 6 % 6 = 3 = 0 + 7",
+      "value": "1"
+    },
+    {
+      "expr": "7 > NOT 1 XOR 1",
+      "error": "ERROR 1064 (42000) at line 1: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'NOT 1 XOR 1)' at line 1"
+    },
+    {
+      "expr": "0 % 0 % ~ 1 << 2",
+      "value": "NULL"
+    },
+    {
+      "expr": "4 AND 2 - ~ 2",
+      "error": "ERROR 1690 (22003) at line 1: BIGINT UNSIGNED value is out of range in '(2 - ~(2))'"
+    },
+    {
+      "expr": "1 = 6 | - 0 >> 5 DIV 6 % ! 5 ^ 4",
+      "value": "0"
+    },
+    {
+      "expr": "7 - 0 | 2",
       "value": "7"
     },
     {
-      "expr": "NOT ~ 7 * 3 = NOT 2 = 6 > 5 OR 6",
-      "error": "ERROR 1064 (42000) at line 1: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'NOT 2 = 6 > 5 OR 6)' at line 1"
-    },
-    {
-      "expr": "(~ 5 << 7) << 1",
-      "value": "18446744073709550080"
-    },
-    {
-      "expr": "1 AND 3 ^ ! 7 >> - (6)",
+      "expr": "5 > 4 XOR 5",
       "value": "0"
     },
     {
-      "expr": "2 << NOT 1 ^ ~ 3 OR NOT 7 & - 0 + 3 OR 2",
-      "error": "ERROR 1064 (42000) at line 1: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'NOT 1 ^ ~ 3 OR NOT 7 & - 0 + 3 OR 2)' at line 1"
-    },
-    {
-      "expr": "~ 7",
-      "value": "18446744073709551608"
-    },
-    {
-      "expr": "7 - NOT 6 + 5 DIV 1 < 7 * 1",
-      "error": "ERROR 1064 (42000) at line 1: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'NOT 6 + 5 DIV 1 < 7 * 1)' at line 1"
-    },
-    {
-      "expr": "3 DIV 5 OR 3 AND 3 ^ 4 OR 1 * ! 3",
-      "value": "1"
-    },
-    {
-      "expr": "NOT - 3 + ! ~ 2 * - 3",
+      "expr": "- 2 XOR 2 ^ 7",
       "value": "0"
     },
     {
-      "expr": "2 < 3 ^ 3 < 7",
-      "value": "1"
-    },
-    {
-      "expr": "(0 ^ (1))",
-      "value": "1"
-    },
-    {
-      "expr": "0 <=> NOT 4 AND 3 << - 4",
-      "error": "ERROR 1064 (42000) at line 1: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'NOT 4 AND 3 << - 4)' at line 1"
-    },
-    {
-      "expr": "! 2 OR 5 <=> 5 - (4 > 3)",
+      "expr": "- 0 ^ 0 AND 5",
       "value": "0"
     },
     {
-      "expr": "7 * 7",
-      "value": "49"
-    },
-    {
-      "expr": "1 << 5 DIV 2 < 3 < 2",
+      "expr": "! 2 ^ 6 OR 0",
       "value": "1"
     },
     {
-      "expr": "~ 0 XOR 3 DIV (2)",
+      "expr": "0 & 3 AND 2",
+      "value": "0"
+    },
+    {
+      "expr": "2 - 2 ^ 4 | NOT 1",
+      "error": "ERROR 1064 (42000) at line 1: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'NOT 1)' at line 1"
+    },
+    {
+      "expr": "7 << ~ 1 - 5",
+      "value": "0"
+    },
+    {
+      "expr": "- - 3 = 2 DIV NOT 0",
+      "error": "ERROR 1064 (42000) at line 1: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'NOT 0)' at line 1"
+    },
+    {
+      "expr": "4 AND 1 | 6",
+      "value": "1"
+    },
+    {
+      "expr": "4 ^ 4 + 3",
+      "value": "3"
+    },
+    {
+      "expr": "6 OR - 1 >> - 3",
+      "value": "1"
+    },
+    {
+      "expr": "6 ^ 6 = 6",
+      "value": "0"
+    },
+    {
+      "expr": "0 > 0 << 1",
+      "value": "0"
+    },
+    {
+      "expr": "3 DIV 5 & 4",
+      "value": "0"
+    },
+    {
+      "expr": "- 0 XOR 6 + 1",
+      "value": "1"
+    },
+    {
+      "expr": "2 ^ 4 OR 1",
+      "value": "1"
+    },
+    {
+      "expr": "0 XOR (6)",
+      "value": "1"
+    },
+    {
+      "expr": "((NOT 0))",
+      "value": "1"
+    },
+    {
+      "expr": "NOT 6 XOR ! 2 = 0",
+      "value": "1"
+    },
+    {
+      "expr": "! 3 << 7 > 3",
+      "value": "0"
+    },
+    {
+      "expr": "5 OR 0 - 1",
+      "value": "1"
+    },
+    {
+      "expr": "- 7 OR 1 & ! 7",
+      "value": "1"
+    },
+    {
+      "expr": "~ - 6 ^ 7 OR 6",
+      "value": "1"
+    },
+    {
+      "expr": "2 OR 7 & 1",
+      "value": "1"
+    },
+    {
+      "expr": "3 AND 6",
+      "value": "1"
+    },
+    {
+      "expr": "2 XOR 0 AND 3",
+      "value": "1"
+    },
+    {
+      "expr": "2 | 0 AND 3",
+      "value": "1"
+    },
+    {
+      "expr": "(3) % ! 3 > 1",
+      "value": "NULL"
+    },
+    {
+      "expr": "4 >> 7 ^ 1",
+      "value": "0"
+    },
+    {
+      "expr": "1 ^ 0 * 1 OR 7 | 0 * 0",
+      "value": "1"
+    },
+    {
+      "expr": "! 1",
+      "value": "0"
+    },
+    {
+      "expr": "7 AND 2 | 3",
+      "value": "1"
+    },
+    {
+      "expr": "0 * 6 >> 7",
+      "value": "0"
+    },
+    {
+      "expr": "~ 5 ^ 6 & 0",
+      "value": "0"
+    },
+    {
+      "expr": "2 | 1 & ! 1",
+      "value": "2"
+    },
+    {
+      "expr": "0 XOR 6 | - 6 <=> 4 XOR NOT 7 * 4",
+      "value": "0"
+    },
+    {
+      "expr": "3 = ! 4 OR 0",
+      "value": "0"
+    },
+    {
+      "expr": "2 + 3 DIV 5",
+      "value": "2"
+    },
+    {
+      "expr": "~ 6 AND - 2 % 4",
+      "value": "1"
+    },
+    {
+      "expr": "6 | 5 - 0",
+      "value": "7"
+    },
+    {
+      "expr": "! 7 OR 7 < - 0 * 2 OR ! 4 XOR NOT 4",
+      "value": "0"
+    },
+    {
+      "expr": "0 AND 5 * 3",
+      "value": "0"
+    },
+    {
+      "expr": "3 * 1 & 0",
+      "value": "0"
+    },
+    {
+      "expr": "! 6 - 7 OR 2",
+      "value": "1"
+    },
+    {
+      "expr": "5 & (3) % 6",
+      "value": "1"
+    },
+    {
+      "expr": "NOT 1 ^ ! 4 XOR 3",
+      "value": "1"
+    },
+    {
+      "expr": "0 <=> 1 ^ 0",
+      "value": "0"
+    },
+    {
+      "expr": "! 1 + 2 OR ! 6",
+      "value": "1"
+    },
+    {
+      "expr": "~ 6 & 7 | 7 % 0",
+      "value": "NULL"
+    },
+    {
+      "expr": "! 3 AND 6 % 3",
+      "value": "0"
+    },
+    {
+      "expr": "NOT 2 ^ 3 OR ! 2",
+      "value": "0"
+    },
+    {
+      "expr": "6 & ~ 2 AND NOT 4",
+      "value": "0"
+    },
+    {
+      "expr": "4 >> NOT 0 + 0",
+      "error": "ERROR 1064 (42000) at line 1: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'NOT 0 + 0)' at line 1"
+    },
+    {
+      "expr": "7 | 4 ^ 2",
+      "value": "7"
+    },
+    {
+      "expr": "NOT 5",
+      "value": "0"
+    },
+    {
+      "expr": "- 7",
+      "value": "-7"
+    },
+    {
+      "expr": "NOT 7 & 3 < 0",
+      "value": "1"
+    },
+    {
+      "expr": "! NOT 3",
+      "error": "ERROR 1064 (42000) at line 1: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'NOT 3)' at line 1"
+    },
+    {
+      "expr": "~ 3 XOR 2 > 6 DIV 3 - 2 XOR 4",
+      "value": "1"
+    },
+    {
+      "expr": "0 | 3 DIV 0",
+      "value": "NULL"
+    },
+    {
+      "expr": "2 & 6 XOR ~ 1",
+      "value": "0"
+    },
+    {
+      "expr": "7 - NOT 4 ^ 6",
+      "error": "ERROR 1064 (42000) at line 1: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'NOT 4 ^ 6)' at line 1"
+    },
+    {
+      "expr": "5 OR ~ 7 << 7",
+      "value": "1"
+    },
+    {
+      "expr": "2 & 2 - 4",
+      "value": "2"
+    },
+    {
+      "expr": "6 OR 7 | 6",
+      "value": "1"
+    },
+    {
+      "expr": "(6 | 6 OR 7)",
+      "value": "1"
+    },
+    {
+      "expr": "5 = 4",
       "value": "0"
     },
     {
@@ -594,59 +618,255 @@
       "value": "18446744073709551614"
     },
     {
-      "expr": "~ 4 <=> NOT 5 - 5 & - 4 <=> - 7",
-      "error": "ERROR 1064 (42000) at line 1: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'NOT 5 - 5 & - 4 <=> - 7)' at line 1"
+      "expr": "5 * ~ 7 & 1",
+      "error": "ERROR 1690 (22003) at line 1: BIGINT UNSIGNED value is out of range in '(5 * ~(7))'"
     },
     {
-      "expr": "5 & 4 = 6 << 4",
+      "expr": "NOT 2 | 4 % 3",
       "value": "0"
     },
     {
-      "expr": "7 + 5 > 6 <=> NOT 6 OR 7 < ! 4",
-      "error": "ERROR 1064 (42000) at line 1: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'NOT 6 OR 7 < ! 4)' at line 1"
+      "expr": "2 - 2 >> 1",
+      "value": "0"
     },
     {
-      "expr": "~ 2",
-      "value": "18446744073709551613"
-    },
-    {
-      "expr": "NOT 5 OR 1 AND 5 << (1)",
+      "expr": "3 OR NOT 1 AND 5",
       "value": "1"
     },
     {
-      "expr": "2 * (0)",
-      "value": "0"
-    },
-    {
-      "expr": "NOT NOT NOT 4 * 4 << 3",
-      "value": "0"
-    },
-    {
-      "expr": "6 AND ! 5 < 0 XOR 7 < 6",
-      "value": "0"
-    },
-    {
-      "expr": "! 2",
-      "value": "0"
-    },
-    {
-      "expr": "4 AND 2",
+      "expr": "7 XOR 2 + 1 << - 2 % 5 <=> 2",
       "value": "1"
     },
     {
-      "expr": "! 4 >> 1 + 0",
+      "expr": "4 OR 1 ^ 7",
+      "value": "1"
+    },
+    {
+      "expr": "~ 1 * 5 + 0",
+      "error": "ERROR 1690 (22003) at line 1: BIGINT UNSIGNED value is out of range in '(~(1) * 5)'"
+    },
+    {
+      "expr": "(NOT 6)",
       "value": "0"
     },
     {
-      "expr": "2 >> 4",
+      "expr": "~ 7 - 0 << 0",
+      "value": "18446744073709551608"
+    },
+    {
+      "expr": "3 OR 6 > 1",
+      "value": "1"
+    },
+    {
+      "expr": "1 | 1 ^ 0",
+      "value": "1"
+    },
+    {
+      "expr": "3 | 1 & 5",
+      "value": "3"
+    },
+    {
+      "expr": "7 | 3 % 3",
+      "value": "7"
+    },
+    {
+      "expr": "1 XOR 4 DIV NOT 5 ^ 0",
+      "error": "ERROR 1064 (42000) at line 1: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'NOT 5 ^ 0)' at line 1"
+    },
+    {
+      "expr": "! NOT 3 XOR ~ 0 << 6",
+      "error": "ERROR 1064 (42000) at line 1: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'NOT 3 XOR ~ 0 << 6)' at line 1"
+    },
+    {
+      "expr": "2 > 5 DIV 6",
+      "value": "1"
+    },
+    {
+      "expr": "1 >> 6 OR 2",
+      "value": "1"
+    },
+    {
+      "expr": "! 1 XOR 7 + NOT 1",
+      "error": "ERROR 1064 (42000) at line 1: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'NOT 1)' at line 1"
+    },
+    {
+      "expr": "6 << 3 - 0 OR 6",
+      "value": "1"
+    },
+    {
+      "expr": "1 & 2 OR 5",
+      "value": "1"
+    },
+    {
+      "expr": "6 DIV 4 OR 6",
+      "value": "1"
+    },
+    {
+      "expr": "1 & 7 AND 3",
+      "value": "1"
+    },
+    {
+      "expr": "7 - 5 | 1",
+      "value": "3"
+    },
+    {
+      "expr": "5 DIV 6 & 3",
       "value": "0"
     },
     {
-      "expr": "7 * 5",
-      "value": "35"
+      "expr": "2 & 1 XOR - 4 AND ~ 4 & 6 * 2",
+      "value": "1"
     },
     {
-      "expr": "6 + 0 << 2 < 1 + 0",
+      "expr": "! 7",
+      "value": "0"
+    },
+    {
+      "expr": "NOT 0 << 0 ^ 1",
+      "value": "1"
+    },
+    {
+      "expr": "4 XOR 5 << 4",
+      "value": "0"
+    },
+    {
+      "expr": "4 AND 5 & 3 % 5",
+      "value": "1"
+    },
+    {
+      "expr": "NOT 6 & 7 % NOT 4",
+      "error": "ERROR 1064 (42000) at line 1: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'NOT 4)' at line 1"
+    },
+    {
+      "expr": "1 OR 0 & 6",
+      "value": "1"
+    },
+    {
+      "expr": "7 >> 7 XOR 1",
+      "value": "1"
+    },
+    {
+      "expr": "~ 0 | 2 & 2",
+      "value": "18446744073709551615"
+    },
+    {
+      "expr": "NOT 7 | - 1 + 6",
+      "value": "0"
+    },
+    {
+      "expr": "6 = (1 & NOT 2 < 5)",
+      "error": "ERROR 1064 (42000) at line 1: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'NOT 2 < 5))' at line 1"
+    },
+    {
+      "expr": "5 >> 0 = 7",
+      "value": "0"
+    },
+    {
+      "expr": "1 * 7 < 1 <=> ~ ! 7 - 6 DIV 4",
+      "value": "0"
+    },
+    {
+      "expr": "(- 2)",
+      "value": "-2"
+    },
+    {
+      "expr": "(1 & - 1 OR 6)",
+      "value": "1"
+    },
+    {
+      "expr": "0 XOR 6 ^ 3",
+      "value": "1"
+    },
+    {
+      "expr": "NOT 2 OR 4 ^ 2",
+      "value": "1"
+    },
+    {
+      "expr": "6 XOR ~ 3 = 1",
+      "value": "1"
+    },
+    {
+      "expr": "! 0",
+      "value": "1"
+    },
+    {
+      "expr": "1 AND 0 >> 2",
+      "value": "0"
+    },
+    {
+      "expr": "6 | 7 * 5",
+      "value": "39"
+    },
+    {
+      "expr": "4 - NOT 2 * 5",
+      "error": "ERROR 1064 (42000) at line 1: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'NOT 2 * 5)' at line 1"
+    },
+    {
+      "expr": "6 + 0 DIV 0",
+      "value": "NULL"
+    },
+    {
+      "expr": "3 & - 2 >> 3 > 6",
+      "value": "0"
+    },
+    {
+      "expr": "0 XOR 1 & 6",
+      "value": "0"
+    },
+    {
+      "expr": "4 DIV 6 | 5",
+      "value": "5"
+    },
+    {
+      "expr": "! 5 >> ! 1 & 3",
+      "value": "0"
+    },
+    {
+      "expr": "0 <=> 2 >> 4 + 4 <=> 1 XOR 6 | 0",
+      "value": "0"
+    },
+    {
+      "expr": "! 4",
+      "value": "0"
+    },
+    {
+      "expr": "~ 6",
+      "value": "18446744073709551609"
+    },
+    {
+      "expr": "2 << 3 OR ! 6 >> 3 OR ~ 2",
+      "value": "1"
+    },
+    {
+      "expr": "1 + 2 < 6",
+      "value": "1"
+    },
+    {
+      "expr": "- 7 AND 3 OR 2 OR 6 << 2 ^ 1",
+      "value": "1"
+    },
+    {
+      "expr": "4 = 5 << 4 & - 4",
+      "value": "0"
+    },
+    {
+      "expr": "1 OR 7 < 6",
+      "value": "1"
+    },
+    {
+      "expr": "! 5 AND ! 2 | 0",
+      "value": "0"
+    },
+    {
+      "expr": "5 % 7",
+      "value": "5"
+    },
+    {
+      "expr": "7 XOR 4 AND 7 AND 2 - 0 & 0 AND 2",
+      "value": "1"
+    },
+    {
+      "expr": "NOT 7 ^ 7 XOR - 4",
       "value": "0"
     },
     {
@@ -654,123 +874,79 @@
       "value": "-4"
     },
     {
-      "expr": "(! (4))",
-      "value": "0"
-    },
-    {
-      "expr": "NOT 3 >> 2 <=> 4 & 7",
+      "expr": "(1)",
       "value": "1"
     },
     {
-      "expr": "~ 6 - ~ 1 AND 4 * 4 XOR - 3",
-      "error": "ERROR 1690 (22003) at line 1: BIGINT UNSIGNED value is out of range in '(~(6) - ~(1))'"
+      "expr": "7 | 3 >> 1",
+      "value": "7"
     },
     {
-      "expr": "NOT ! 2 + (2)",
-      "value": "0"
-    },
-    {
-      "expr": "5 << 6 > 5 >> ! 6 - - ! 4 OR 1",
-      "value": "1"
-    },
-    {
-      "expr": "5 > 0 | 2 OR 7 <=> NOT 0 XOR ! 3 - ! 4",
-      "error": "ERROR 1064 (42000) at line 1: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'NOT 0 XOR ! 3 - ! 4)' at line 1"
-    },
-    {
-      "expr": "~ 6",
-      "value": "18446744073709551609"
-    },
-    {
-      "expr": "2 >> 3 + (! 5)",
-      "value": "0"
-    },
-    {
-      "expr": "5 << 1",
-      "value": "10"
-    },
-    {
-      "expr": "1 & 2 | 5 ^ 7 * 1",
-      "value": "2"
-    },
-    {
-      "expr": "~ ! 2 AND 7",
-      "value": "1"
-    },
-    {
-      "expr": "1 ^ (1 >> 4)",
-      "value": "1"
-    },
-    {
-      "expr": "1 >> 2 << 6",
-      "value": "0"
-    },
-    {
-      "expr": "5 > 3 % (! 0)",
-      "value": "1"
-    },
-    {
-      "expr": "5 OR 7",
-      "value": "1"
-    },
-    {
-      "expr": "1 % 5 & 7 * 0 % 4 << ! 0",
-      "value": "0"
-    },
-    {
-      "expr": "! 7",
-      "value": "0"
-    },
-    {
-      "expr": "6 << ~ 7 = - 4",
-      "value": "0"
-    },
-    {
-      "expr": "- 6",
-      "value": "-6"
-    },
-    {
-      "expr": "2 << 1 % 6 XOR 0 ^ 2",
-      "value": "0"
-    },
-    {
-      "expr": "- 7 & (NOT 6 ^ 1)",
-      "value": "0"
-    },
-    {
-      "expr": "4 DIV 5 - 6 & ~ 7 > 6",
-      "value": "1"
-    },
-    {
-      "expr": "! 6 & 3 > 6 * 2 ^ 6 ^ 5",
-      "value": "0"
-    },
-    {
-      "expr": "0 << 4 | 0 | 3 + NOT 1",
+      "expr": "0 >> ~ 3 - NOT 1",
       "error": "ERROR 1064 (42000) at line 1: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'NOT 1)' at line 1"
     },
     {
-      "expr": "6 OR 2 | 3 < 1 AND - 3",
+      "expr": "((3))",
+      "value": "3"
+    },
+    {
+      "expr": "NOT ((0))",
       "value": "1"
     },
     {
-      "expr": "1 - (5) DIV 1",
-      "value": "-4"
-    },
-    {
-      "expr": "2 * 2 > ! 4 OR 3 + 2",
-      "value": "1"
-    },
-    {
-      "expr": "(5 < 4)",
+      "expr": "4 = 0 > 6 | 4",
       "value": "0"
     },
     {
-      "expr": "0 ^ 6 OR 5 <=> 0 + ~ 5",
+      "expr": "~ 5 AND 4 >> 5 <=> 3 | 6",
+      "value": "0"
+    },
+    {
+      "expr": "5 > - 0 DIV 4",
       "value": "1"
     },
     {
-      "expr": "NOT 3 AND ! 0 XOR 6 + 3 DIV 4 + 0",
+      "expr": "7 OR 3 % 6",
+      "value": "1"
+    },
+    {
+      "expr": "1 | - 3 & 0",
+      "value": "1"
+    },
+    {
+      "expr": "(5 ^ 3 % 2 <=> 2)",
+      "value": "0"
+    },
+    {
+      "expr": "6 & - 3 >> 6",
+      "value": "6"
+    },
+    {
+      "expr": "1 XOR 1 << 5 = 5",
+      "value": "1"
+    },
+    {
+      "expr": "7 = 3 ^ ! 4",
+      "value": "0"
+    },
+    {
+      "expr": "7 << 2 OR ! 5",
+      "value": "1"
+    },
+    {
+      "expr": "4 OR 0 & 3",
+      "value": "1"
+    },
+    {
+      "expr": "5 | 6 % NOT 7",
+      "error": "ERROR 1064 (42000) at line 1: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'NOT 7)' at line 1"
+    },
+    {
+      "expr": "~ 5",
+      "value": "18446744073709551610"
+    },
+    {
+      "expr": "NOT 0 <=> 7 * 6 - 6 OR 4 = ~ 0",
       "value": "1"
     },
     {
@@ -778,243 +954,303 @@
       "value": "5"
     },
     {
-      "expr": "7 + ~ 4 % 5 & NOT 3 << ~ 3 >> 4",
-      "error": "ERROR 1064 (42000) at line 1: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'NOT 3 << ~ 3 >> 4)' at line 1"
+      "expr": "0 ^ ! 2 - 2 <=> 4 XOR 3 ^ 0 << ~ 0 % NOT 2 + ~ 0",
+      "error": "ERROR 1064 (42000) at line 1: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'NOT 2 + ~ 0)' at line 1"
     },
     {
-      "expr": "- 3 + - ~ 6 > 3",
+      "expr": "3 | - ~ 4",
+      "value": "9223372036854775811"
+    },
+    {
+      "expr": "NOT 6 & 6 - 4 | 4",
       "value": "0"
     },
     {
-      "expr": "NOT 7 % 5 ^ 6 AND 4",
-      "value": "0"
+      "expr": "4 * 4 << 3",
+      "value": "128"
     },
     {
-      "expr": "! 0 >> 4 << ! 1 ^ ~ 0 & 7 & 2 + 1",
-      "value": "0"
-    },
-    {
-      "expr": "NOT 4",
-      "value": "0"
-    },
-    {
-      "expr": "0 OR ! 0 * 0",
-      "value": "0"
-    },
-    {
-      "expr": "- 4 AND - 0 << - 2 XOR 7",
+      "expr": "3 + 5 OR 2 > - ! 0",
       "value": "1"
     },
     {
-      "expr": "1 AND 7 OR 1",
+      "expr": "! 7 AND ! 6 OR 0",
+      "value": "0"
+    },
+    {
+      "expr": "~ 2",
+      "value": "18446744073709551613"
+    },
+    {
+      "expr": "- - 6 | 1 ^ 4",
+      "value": "7"
+    },
+    {
+      "expr": "- 1 <=> 6 ^ 7 % 1",
+      "value": "0"
+    },
+    {
+      "expr": "! ! 7 & 2 OR 5",
       "value": "1"
     },
     {
-      "expr": "! - 5 - 6 & NOT 4",
+      "expr": "NOT 6 OR 5 AND 0",
+      "value": "0"
+    },
+    {
+      "expr": "- 7 AND 6 | - 6 < 6",
+      "value": "0"
+    },
+    {
+      "expr": "0 >> NOT 0 OR 0 % NOT 7 * NOT 1 ^ 0 <=> 6 ^ 5 | 2 XOR 0",
+      "error": "ERROR 1064 (42000) at line 1: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'NOT 0 OR 0 % NOT 7 * NOT 1 ^ 0 <=> 6 ^ 5 | 2 XOR 0)' at line 1"
+    },
+    {
+      "expr": "6 ^ 0 = 1",
+      "value": "0"
+    },
+    {
+      "expr": "5 ^ 6 & 3",
+      "value": "3"
+    },
+    {
+      "expr": "4 << 5 + ~ 7",
+      "value": "0"
+    },
+    {
+      "expr": "- 7 OR 3 ^ 0 OR 4 * 1 XOR 6",
+      "value": "1"
+    },
+    {
+      "expr": "(NOT 2 ^ NOT 6 | 4 ^ 0 + 2)",
+      "error": "ERROR 1064 (42000) at line 1: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'NOT 6 | 4 ^ 0 + 2))' at line 1"
+    },
+    {
+      "expr": "! 5 | 6 & ~ 3",
+      "value": "4"
+    },
+    {
+      "expr": "4 <=> ~ 0 & 0 = 1",
+      "value": "0"
+    },
+    {
+      "expr": "- 7 ^ 4 OR 7",
+      "value": "1"
+    },
+    {
+      "expr": "5 DIV 2 & ! 1 OR NOT 3 * - 1 >> 7 ^ 2 <=> 6 - ! 1 <=> 0",
+      "value": "0"
+    },
+    {
+      "expr": "~ 3 AND 0 + 2",
+      "value": "1"
+    },
+    {
+      "expr": "(5 | 3 OR 0 DIV NOT 2)",
+      "error": "ERROR 1064 (42000) at line 1: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'NOT 2))' at line 1"
+    },
+    {
+      "expr": "(NOT 4 % 4 << 4)",
+      "value": "1"
+    },
+    {
+      "expr": "2 - 6 % 6",
+      "value": "2"
+    },
+    {
+      "expr": "! 2 XOR ! 0 AND 3 > 2 DIV NOT 6",
+      "error": "ERROR 1064 (42000) at line 1: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'NOT 6)' at line 1"
+    },
+    {
+      "expr": "1 ^ 4 >> 6",
+      "value": "0"
+    },
+    {
+      "expr": "6 - NOT 7 ^ 3 % 1 >> ! 5 XOR NOT 5 % NOT 1",
+      "error": "ERROR 1064 (42000) at line 1: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'NOT 7 ^ 3 % 1 >> ! 5 XOR NOT 5 % NOT 1)' at line 1"
+    },
+    {
+      "expr": "~ 6 - 5 XOR 1",
+      "value": "0"
+    },
+    {
+      "expr": "(3 ^ ! 1 OR 7)",
+      "value": "1"
+    },
+    {
+      "expr": "2 OR - 6 AND 7",
+      "value": "1"
+    },
+    {
+      "expr": "4 XOR ~ 1 AND ! 0",
+      "value": "0"
+    },
+    {
+      "expr": "3 AND 0 > 1",
+      "value": "0"
+    },
+    {
+      "expr": "1 = 7 | 0 - 4 + 4 AND 1",
+      "value": "0"
+    },
+    {
+      "expr": "6 << 6 <=> ! 4",
+      "value": "0"
+    },
+    {
+      "expr": "4 OR 3",
+      "value": "1"
+    },
+    {
+      "expr": "(5 + 5 AND 0)",
+      "value": "0"
+    },
+    {
+      "expr": "7 | 2 >> 6 DIV 6 - 3 AND 7",
+      "value": "1"
+    },
+    {
+      "expr": "- 0",
+      "value": "0"
+    },
+    {
+      "expr": "1 DIV ! 0 ^ 3 ^ 7",
+      "value": "0"
+    },
+    {
+      "expr": "- 5 - 2 AND 1",
+      "value": "1"
+    },
+    {
+      "expr": "1 + 1 * 0",
+      "value": "1"
+    },
+    {
+      "expr": "NOT 3",
+      "value": "0"
+    },
+    {
+      "expr": "7 AND NOT 7 = ~ 7",
+      "value": "1"
+    },
+    {
+      "expr": "4 = 2 * - 2",
+      "value": "0"
+    },
+    {
+      "expr": "5 & ~ 5 OR 2",
+      "value": "1"
+    },
+    {
+      "expr": "3 OR 4 % 4",
+      "value": "1"
+    },
+    {
+      "expr": "! 7 AND 0 = NOT 4",
       "error": "ERROR 1064 (42000) at line 1: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'NOT 4)' at line 1"
     },
     {
-      "expr": "2 >> 0 ^ ! 0 AND 1 - 1",
+      "expr": "- 6 ^ 4 * 7 % 1",
+      "error": "ERROR 1690 (22003) at line 1: BIGINT UNSIGNED value is out of range in '((-(6) ^ 4) * 7)'"
+    },
+    {
+      "expr": "2 << - 2 | 7",
+      "value": "7"
+    },
+    {
+      "expr": "NOT 6",
       "value": "0"
     },
     {
-      "expr": "- 6 % 6",
-      "value": "0"
-    },
-    {
-      "expr": "(! 4) OR - 4 XOR 6",
-      "value": "0"
-    },
-    {
-      "expr": "NOT 7",
-      "value": "0"
-    },
-    {
-      "expr": "NOT 2 * 1 - 2 >> 2 * 2 * 5 DIV NOT 3 > 0",
-      "error": "ERROR 1064 (42000) at line 1: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'NOT 3 > 0)' at line 1"
-    },
-    {
-      "expr": "! 6 << 6 & (4) > ~ 7",
-      "value": "0"
-    },
-    {
-      "expr": "7 + - 3 + ~ 0 XOR 4",
-      "error": "ERROR 1690 (22003) at line 1: BIGINT UNSIGNED value is out of range in '((7 + -(3)) + ~(0))'"
-    },
-    {
-      "expr": "3 | 1 - 6 + 5 XOR ! 6",
+      "expr": "2 OR 5 & 7",
       "value": "1"
     },
     {
-      "expr": "- 3 = 0 <=> ~ 3 = ! 4 >> - 2",
-      "value": "1"
-    },
-    {
-      "expr": "NOT ! 0 > 7 + 3 OR ! 7 | 6",
-      "value": "1"
-    },
-    {
-      "expr": "6 % - 0 <=> 7",
+      "expr": "6 >> 5 * 2",
       "value": "0"
     },
     {
-      "expr": "(- 1 OR 2)",
+      "expr": "4 OR 3 & 5",
       "value": "1"
     },
     {
-      "expr": "6 & ! 1 - 0 XOR 4 > 1",
+      "expr": "~ 3 OR ~ 1",
       "value": "1"
+    },
+    {
+      "expr": "5 * 5 & 4",
+      "value": "0"
+    },
+    {
+      "expr": "2 + 3 AND ! 1",
+      "value": "0"
+    },
+    {
+      "expr": "1 & 6 ^ 7",
+      "value": "1"
+    },
+    {
+      "expr": "0 < 3 & 1",
+      "value": "1"
+    },
+    {
+      "expr": "5 | 3 - 4",
+      "value": "18446744073709551615"
+    },
+    {
+      "expr": "0 * ! NOT 1 | 3 ^ 7",
+      "error": "ERROR 1064 (42000) at line 1: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'NOT 1 | 3 ^ 7)' at line 1"
+    },
+    {
+      "expr": "- 5 = 7 ^ 1",
+      "value": "0"
+    },
+    {
+      "expr": "6 | 0 & 7 AND NOT 4 % 0 >> 1",
+      "value": "NULL"
+    },
+    {
+      "expr": "6 - NOT 0 & 4",
+      "error": "ERROR 1064 (42000) at line 1: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'NOT 0 & 4)' at line 1"
+    },
+    {
+      "expr": "NOT ~ 3",
+      "value": "0"
+    },
+    {
+      "expr": "! 0 + 0 & 5",
+      "value": "1"
+    },
+    {
+      "expr": "7 | 7 % 3",
+      "value": "7"
     },
     {
       "expr": "~ 4",
       "value": "18446744073709551611"
     },
     {
-      "expr": "- 5 & ~ ~ 0",
+      "expr": "((NOT 7 | 2 ^ 4))",
       "value": "0"
     },
     {
-      "expr": "~ (NOT 7)",
-      "value": "18446744073709551615"
+      "expr": "- 3 AND 4 XOR 6",
+      "value": "0"
     },
     {
-      "expr": "6 < 6 XOR (6) AND 0 <=> - 4 OR (- 6)",
+      "expr": "6 ^ 3 OR 4",
       "value": "1"
     },
     {
-      "expr": "1 | NOT 6 + 5 = 5 DIV 6 AND 4 > 6 XOR NOT 7",
-      "error": "ERROR 1064 (42000) at line 1: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'NOT 6 + 5 = 5 DIV 6 AND 4 > 6 XOR NOT 7)' at line 1"
-    },
-    {
-      "expr": "(- 1 >> NOT 3)",
-      "error": "ERROR 1064 (42000) at line 1: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'NOT 3))' at line 1"
-    },
-    {
-      "expr": "(- 7 <=> NOT 5 >> ~ 6)",
-      "error": "ERROR 1064 (42000) at line 1: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'NOT 5 >> ~ 6))' at line 1"
-    },
-    {
-      "expr": "2 * ~ 3 << 0",
-      "error": "ERROR 1690 (22003) at line 1: BIGINT UNSIGNED value is out of range in '(2 * ~(3))'"
-    },
-    {
-      "expr": "0 XOR ~ 2 <=> 0",
-      "value": "0"
-    },
-    {
-      "expr": "6 < (7)",
+      "expr": "4 <=> 1 XOR 1",
       "value": "1"
     },
     {
-      "expr": "1 + 5",
-      "value": "6"
-    },
-    {
-      "expr": "(! 0 * 5)",
-      "value": "5"
-    },
-    {
-      "expr": "~ 1 OR - 5 | (4 = 2)",
-      "value": "1"
-    },
-    {
-      "expr": "NOT 6 > 1 + 3 DIV 0 < 0 ^ ~ 5",
-      "value": "NULL"
-    },
-    {
-      "expr": "2 > 0 > 2 = 5",
+      "expr": "NOT 2",
       "value": "0"
     },
     {
-      "expr": "3 ^ NOT 5 <=> NOT 5 >> - 1",
-      "error": "ERROR 1064 (42000) at line 1: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'NOT 5 <=> NOT 5 >> - 1)' at line 1"
-    },
-    {
-      "expr": "4 - 4 * ((7))",
-      "value": "-24"
-    },
-    {
-      "expr": "- (5) > 2",
-      "value": "0"
-    },
-    {
-      "expr": "(- 1 % NOT NOT 5)",
-      "error": "ERROR 1064 (42000) at line 1: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'NOT NOT 5))' at line 1"
-    },
-    {
-      "expr": "2 + NOT ~ 7 * ! 4",
-      "error": "ERROR 1064 (42000) at line 1: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'NOT ~ 7 * ! 4)' at line 1"
-    },
-    {
-      "expr": "(4) DIV 2 <=> - 2",
-      "value": "0"
-    },
-    {
-      "expr": "~ 5 >> 7",
-      "value": "144115188075855871"
-    },
-    {
-      "expr": "5 - 4 >> 1 DIV 7 * - 5",
-      "value": "1"
-    },
-    {
-      "expr": "0 > NOT 3 & 4 OR ~ 1 <=> 3",
-      "error": "ERROR 1064 (42000) at line 1: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'NOT 3 & 4 OR ~ 1 <=> 3)' at line 1"
-    },
-    {
-      "expr": "(! NOT 6)",
-      "error": "ERROR 1064 (42000) at line 1: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'NOT 6))' at line 1"
-    },
-    {
-      "expr": "(4)",
-      "value": "4"
-    },
-    {
-      "expr": "4 & 5 > 6 < ! 5 ^ 4 | (5)",
-      "value": "1"
-    },
-    {
-      "expr": "7 AND (4) % ~ 2 < ! 1 & 5",
-      "value": "0"
-    },
-    {
-      "expr": "(4 AND 0) ^ 1",
-      "value": "1"
-    },
-    {
-      "expr": "5 & 4 AND NOT 0 <=> ! 4 OR - 1 XOR 3 XOR 2 XOR 1",
-      "value": "0"
-    },
-    {
-      "expr": "- (5)",
-      "value": "-5"
-    },
-    {
-      "expr": "1 | 0 OR NOT 5 = NOT 0 DIV 1 << 5",
-      "error": "ERROR 1064 (42000) at line 1: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'NOT 0 DIV 1 << 5)' at line 1"
-    },
-    {
-      "expr": "0 >> 6 ^ ~ 2",
-      "value": "0"
-    },
-    {
-      "expr": "- 0 = 0 < 4 <=> 4 OR 7",
-      "value": "1"
-    },
-    {
-      "expr": "(~ 4)",
-      "value": "18446744073709551611"
-    },
-    {
-      "expr": "NOT 2 = ~ 0 ^ NOT 2 <=> 6 % 1 OR 4",
-      "error": "ERROR 1064 (42000) at line 1: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'NOT 2 <=> 6 % 1 OR 4)' at line 1"
-    },
-    {
-      "expr": "NOT 6 > 3 < 4",
-      "value": "0"
-    },
-    {
-      "expr": "0 ^ 4",
+      "expr": "0 | 4",
       "value": "4"
     },
     {
@@ -1022,588 +1258,3552 @@
       "value": "0"
     },
     {
-      "expr": "7 > 4 * 3 ^ 1 ^ 4 + 1 * 3",
-      "value": "0"
-    },
-    {
-      "expr": "NOT 0 = 4 & 7 > - 0 DIV 6 | (3)",
-      "value": "1"
-    },
-    {
-      "expr": "3 DIV (4) * 4",
-      "value": "0"
-    },
-    {
-      "expr": "7 < ! 2 DIV 6 DIV 6",
-      "value": "0"
-    },
-    {
-      "expr": "! - 3 | 2 << 5 <=> 2",
-      "value": "0"
-    },
-    {
-      "expr": "NOT 0 + - 6",
-      "value": "0"
-    },
-    {
-      "expr": "! - 5 * 4 OR 6 ^ 7",
-      "value": "1"
-    },
-    {
-      "expr": "(2 & ~ 6) ^ (1)",
-      "value": "1"
-    },
-    {
-      "expr": "2 > 3 << 3 < 1 + 1 > 0 >> 0 > ~ 0",
-      "value": "0"
-    },
-    {
-      "expr": "3 = 1 > ~ 7 DIV 4 OR 5 <=> NOT 7",
-      "error": "ERROR 1064 (42000) at line 1: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'NOT 7)' at line 1"
-    },
-    {
-      "expr": "- 1",
-      "value": "-1"
-    },
-    {
-      "expr": "((6 | 7))",
+      "expr": "7 | 6 & ! 7",
       "value": "7"
     },
     {
-      "expr": "~ 2 = NOT - 7 DIV 1",
-      "error": "ERROR 1064 (42000) at line 1: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'NOT - 7 DIV 1)' at line 1"
+      "expr": "3 = ! 3 | ~ 6",
+      "value": "0"
     },
     {
-      "expr": "~ 5 > 6 % (2 % 2)",
-      "value": "NULL"
-    },
-    {
-      "expr": "NOT - 0",
+      "expr": "((- 0 <=> 6 ^ 6))",
       "value": "1"
     },
     {
-      "expr": "6 AND 2 + NOT 2 + 3 | (6 OR 2)",
-      "error": "ERROR 1064 (42000) at line 1: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'NOT 2 + 3 | (6 OR 2))' at line 1"
+      "expr": "5 | 6 XOR 2 AND 2 >> 0",
+      "value": "0"
     },
     {
-      "expr": "~ 4 < 6 << NOT 4 <=> 7 < 5",
-      "error": "ERROR 1064 (42000) at line 1: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'NOT 4 <=> 7 < 5)' at line 1"
+      "expr": "! 2 + 1 << - 7",
+      "value": "0"
     },
     {
-      "expr": "- 4 >> 2 > 7",
+      "expr": "7 AND 5 XOR 7",
+      "value": "0"
+    },
+    {
+      "expr": "~ 7 OR 6 >> 1 << ! 5",
       "value": "1"
     },
     {
-      "expr": "~ 3 DIV 1 + ! 4 <=> 2 XOR ~ 3",
+      "expr": "(2 = 3 | 5 + 2 > 4)",
+      "value": "0"
+    },
+    {
+      "expr": "! 4 + 7 XOR 2 ^ 7 ^ ~ 6",
+      "value": "0"
+    },
+    {
+      "expr": "2 - 6 = 1",
+      "value": "0"
+    },
+    {
+      "expr": "5 | 3 < 3 + 4 | 1 OR NOT 6 << 1 XOR 7 * 6",
       "value": "1"
     },
     {
-      "expr": "- 1 OR - 5",
+      "expr": "4 | ~ 7 = 7",
+      "value": "0"
+    },
+    {
+      "expr": "2 & NOT 4 % 7",
+      "error": "ERROR 1064 (42000) at line 1: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'NOT 4 % 7)' at line 1"
+    },
+    {
+      "expr": "6 & 2 XOR - 4",
+      "value": "0"
+    },
+    {
+      "expr": "5 XOR NOT 3 | 7",
       "value": "1"
     },
     {
-      "expr": "4 AND 5 <=> ! 2 OR 5 | 4 * - 5 AND ~ 3",
+      "expr": "NOT NOT 5",
       "value": "1"
     },
     {
-      "expr": "- 7 << (0)",
-      "value": "18446744073709551609"
+      "expr": "4 DIV 1 OR 7 - 3",
+      "value": "1"
     },
     {
-      "expr": "7 DIV 3 & ~ 5",
+      "expr": "0 AND - 1 > 1",
+      "value": "0"
+    },
+    {
+      "expr": "3 < NOT 6 | NOT 0 * 6 * 2 | 2",
+      "error": "ERROR 1064 (42000) at line 1: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'NOT 6 | NOT 0 * 6 * 2 | 2)' at line 1"
+    },
+    {
+      "expr": "4 & 6 << 6",
+      "value": "0"
+    },
+    {
+      "expr": "2 >> 6 AND ~ 2",
+      "value": "0"
+    },
+    {
+      "expr": "4 + 4 * 4",
+      "value": "20"
+    },
+    {
+      "expr": "2 OR 0 % 4",
+      "value": "1"
+    },
+    {
+      "expr": "4 XOR 2 AND ! 4",
+      "value": "1"
+    },
+    {
+      "expr": "3 - 3 ^ - 7",
+      "error": "ERROR 1690 (22003) at line 1: BIGINT UNSIGNED value is out of range in '(3 - (3 ^ -(7)))'"
+    },
+    {
+      "expr": "1 | 5 DIV 6 * ! 5 DIV 4 <=> 1",
+      "value": "1"
+    },
+    {
+      "expr": "~ ! 1 = 3 % NOT 1",
+      "error": "ERROR 1064 (42000) at line 1: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'NOT 1)' at line 1"
+    },
+    {
+      "expr": "(6) = 5 = 3 ^ ~ 2 | ! 3 <=> 5 AND ! 1",
+      "value": "0"
+    },
+    {
+      "expr": "2 = 4 | 5",
+      "value": "0"
+    },
+    {
+      "expr": "(! 5 ^ 2 & 1)",
+      "value": "0"
+    },
+    {
+      "expr": "- 7 + 2 * ~ 5",
+      "error": "ERROR 1690 (22003) at line 1: BIGINT UNSIGNED value is out of range in '(2 * ~(5))'"
+    },
+    {
+      "expr": "4 OR 4 + 1",
+      "value": "1"
+    },
+    {
+      "expr": "4 - 2 % 7",
       "value": "2"
     },
     {
-      "expr": "~ 0 AND 3 DIV 5 * 0 << 2",
+      "expr": "NOT 7",
       "value": "0"
     },
     {
-      "expr": "NOT 3 > 7 > 0 & ! 0",
+      "expr": "! 6 % 7 | 1",
       "value": "1"
     },
     {
-      "expr": "2 - 2 < NOT 3",
-      "error": "ERROR 1064 (42000) at line 1: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'NOT 3)' at line 1"
+      "expr": "~ 2 + 5 | 5",
+      "error": "ERROR 1690 (22003) at line 1: BIGINT UNSIGNED value is out of range in '(~(2) + 5)'"
     },
     {
-      "expr": "NOT (4) = (2 AND 4)",
-      "value": "1"
+      "expr": "7 & 2 >> 0",
+      "value": "2"
     },
     {
-      "expr": "1 + - 6 <=> 6 > 3 * 1 | 5",
+      "expr": "3 AND 5 XOR 5",
       "value": "0"
     },
     {
-      "expr": "5 AND 7 | ! 7 DIV 7",
+      "expr": "5 << 3 ^ 2",
+      "value": "10"
+    },
+    {
+      "expr": "(0) <=> (- 0)",
       "value": "1"
     },
     {
-      "expr": "1 AND 5 = (6) << (4 << - 1)",
-      "value": "0"
-    },
-    {
-      "expr": "NOT NOT 0 XOR 0",
-      "value": "0"
-    },
-    {
-      "expr": "4 - 7 ^ 1 % 4 OR ! 7",
+      "expr": "5 OR 2 >> 7",
       "value": "1"
     },
     {
-      "expr": "3 DIV 0 < - 4 DIV 2 + ~ 6 >> 7",
+      "expr": "- 3 | 7 OR 4",
+      "value": "1"
+    },
+    {
+      "expr": "5 * 5 ^ NOT 1 | 5",
+      "error": "ERROR 1064 (42000) at line 1: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'NOT 1 | 5)' at line 1"
+    },
+    {
+      "expr": "1 + NOT 5 & 3",
+      "error": "ERROR 1064 (42000) at line 1: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'NOT 5 & 3)' at line 1"
+    },
+    {
+      "expr": "5 AND 3 OR 4",
+      "value": "1"
+    },
+    {
+      "expr": "0 % 3 >> 7",
+      "value": "0"
+    },
+    {
+      "expr": "- 6 << 2 & 3",
+      "value": "0"
+    },
+    {
+      "expr": "1 << 4 DIV ! 1",
       "value": "NULL"
     },
     {
-      "expr": "5 % 6 <=> ! 3 AND 1 ^ 0 AND 5",
-      "value": "0"
-    },
-    {
-      "expr": "7 >> 1 >> (1) - (! 1)",
+      "expr": "((6 AND 3 OR 0))",
       "value": "1"
     },
     {
-      "expr": "~ 7 + 7 << 6 * ~ (5)",
-      "error": "ERROR 1690 (22003) at line 1: BIGINT UNSIGNED value is out of range in '(6 * ~(5))'"
+      "expr": "0 * 5 ^ 5 XOR 0",
+      "value": "0"
+    },
+    {
+      "expr": "1 XOR ! 4 % 7",
+      "value": "1"
+    },
+    {
+      "expr": "1 OR 5 AND ! 1 & 6",
+      "value": "1"
+    },
+    {
+      "expr": "- 0 & 0 < 0",
+      "value": "0"
+    },
+    {
+      "expr": "0 & 3 AND 0 DIV 2 + 6 XOR 5 & 4",
+      "value": "1"
+    },
+    {
+      "expr": "0 | 6 AND 6",
+      "value": "1"
+    },
+    {
+      "expr": "0 & - 4 XOR ~ 4",
+      "value": "1"
+    },
+    {
+      "expr": "(NOT 2)",
+      "value": "0"
+    },
+    {
+      "expr": "~ 0 XOR ! 0 >> 7",
+      "value": "1"
+    },
+    {
+      "expr": "4 >> 3 + ~ 6 DIV NOT 0 XOR 6 ^ 0",
+      "error": "ERROR 1064 (42000) at line 1: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'NOT 0 XOR 6 ^ 0)' at line 1"
+    },
+    {
+      "expr": "- 6 ^ 5 AND 2",
+      "value": "1"
+    },
+    {
+      "expr": "6 * 7 ^ 6",
+      "value": "6"
+    },
+    {
+      "expr": "~ 7 ^ 3 OR 7",
+      "value": "1"
+    },
+    {
+      "expr": "- 7 * 5 << 0",
+      "value": "18446744073709551581"
+    },
+    {
+      "expr": "3 - 1 * ! 0 >> 6 <=> ~ 3 AND ~ 7",
+      "value": "0"
+    },
+    {
+      "expr": "(5) + ! - 7 | (1)",
+      "value": "5"
+    },
+    {
+      "expr": "0 OR 0 ^ 6",
+      "value": "1"
+    },
+    {
+      "expr": "NOT 0 ^ 6 AND 0 XOR 0 & ! 1 ^ 4",
+      "value": "0"
+    },
+    {
+      "expr": "4 & - 3 OR 5",
+      "value": "1"
+    },
+    {
+      "expr": "1 >> 2 AND 5 & (6) % 3",
+      "value": "0"
+    },
+    {
+      "expr": "6 & 5 ^ 3 >> 5 ^ 0 | - 3 AND 7 * 0 = 1",
+      "value": "0"
+    },
+    {
+      "expr": "NOT 7 OR 0 <=> 4",
+      "value": "0"
+    },
+    {
+      "expr": "! 6 OR 4 | 1 XOR 1 | 6 * 4 ^ ~ 3 ^ NOT 3 + NOT 1",
+      "error": "ERROR 1064 (42000) at line 1: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'NOT 3 + NOT 1)' at line 1"
+    },
+    {
+      "expr": "0 ^ ~ 5 OR 4",
+      "value": "1"
+    },
+    {
+      "expr": "(7)",
+      "value": "7"
+    },
+    {
+      "expr": "2 XOR 7 | 2",
+      "value": "0"
+    },
+    {
+      "expr": "(7 & 5 XOR 0 = - 0)",
+      "value": "0"
+    },
+    {
+      "expr": "~ 6 = - 2 | 7",
+      "value": "0"
+    },
+    {
+      "expr": "(2)",
+      "value": "2"
+    },
+    {
+      "expr": "6 ^ 0 & 1 DIV 3 ^ 6 | 7",
+      "value": "7"
+    },
+    {
+      "expr": "2 OR 3 AND ! 3",
+      "value": "1"
+    },
+    {
+      "expr": "1 > 3 XOR 2",
+      "value": "1"
+    },
+    {
+      "expr": "3 * 0 OR 7",
+      "value": "1"
+    },
+    {
+      "expr": "5 & 1 XOR 1 = (7)",
+      "value": "1"
+    },
+    {
+      "expr": "3 & 0 << 4",
+      "value": "0"
+    },
+    {
+      "expr": "(! 7) - 2 ^ 1 >> 7",
+      "error": "ERROR 1690 (22003) at line 1: BIGINT UNSIGNED value is out of range in '((0 = 7) - (2 ^ 1))'"
+    },
+    {
+      "expr": "7 >> 5 ^ 6",
+      "value": "0"
+    },
+    {
+      "expr": "7 << 3 AND 5 << 4",
+      "value": "1"
+    },
+    {
+      "expr": "- 0 % 7 & 6",
+      "value": "0"
+    },
+    {
+      "expr": "NOT 4 ^ 4 DIV NOT 0",
+      "error": "ERROR 1064 (42000) at line 1: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'NOT 0)' at line 1"
+    },
+    {
+      "expr": "NOT 2 DIV ! 7 OR 3",
+      "value": "1"
+    },
+    {
+      "expr": "6 AND 2 >> 6",
+      "value": "0"
+    },
+    {
+      "expr": "2 XOR 4 AND 7",
+      "value": "0"
+    },
+    {
+      "expr": "- 6",
+      "value": "-6"
+    },
+    {
+      "expr": "(2 | 4 ^ - 4)",
+      "value": "18446744073709551610"
+    },
+    {
+      "expr": "7 - 7 * 6 DIV 1",
+      "value": "-35"
+    },
+    {
+      "expr": "! NOT 0 + 0 | 4",
+      "error": "ERROR 1064 (42000) at line 1: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'NOT 0 + 0 | 4)' at line 1"
+    },
+    {
+      "expr": "7 AND 7 % 5",
+      "value": "1"
+    },
+    {
+      "expr": "7 | - 5 ^ 1",
+      "value": "18446744073709551615"
+    },
+    {
+      "expr": "7 OR - 0 & 2",
+      "value": "1"
+    },
+    {
+      "expr": "- 2 | 2 AND 7 OR (7) + 0 AND 0 <=> 5",
+      "value": "1"
+    },
+    {
+      "expr": "- 7 <=> ! 2 - ! 4",
+      "value": "0"
+    },
+    {
+      "expr": "3 OR 7 * NOT 7 << 4",
+      "error": "ERROR 1064 (42000) at line 1: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'NOT 7 << 4)' at line 1"
+    },
+    {
+      "expr": "0 & 3 | 0",
+      "value": "0"
+    },
+    {
+      "expr": "4 + ~ 7 & 4",
+      "value": "4"
+    },
+    {
+      "expr": "1 AND 7 % 4",
+      "value": "1"
+    },
+    {
+      "expr": "- 4 AND - 5 > 4",
+      "value": "0"
+    },
+    {
+      "expr": "NOT 7 XOR 5 << 7",
+      "value": "1"
+    },
+    {
+      "expr": "1 & ! 2 << ! 6",
+      "value": "0"
+    },
+    {
+      "expr": "0 << - 0 OR 6 OR 6 OR 0 - 4",
+      "value": "1"
+    },
+    {
+      "expr": "! 1 | 5 & 4 DIV 2",
+      "value": "0"
+    },
+    {
+      "expr": "5 + NOT 2 * 1 XOR 1",
+      "error": "ERROR 1064 (42000) at line 1: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'NOT 2 * 1 XOR 1)' at line 1"
+    },
+    {
+      "expr": "0 DIV - 5 + 7",
+      "value": "7"
+    },
+    {
+      "expr": "~ 0 + ~ 4 XOR 0",
+      "error": "ERROR 1690 (22003) at line 1: BIGINT UNSIGNED value is out of range in '(~(0) + ~(4))'"
+    },
+    {
+      "expr": "2 ^ NOT 6 + 6",
+      "error": "ERROR 1064 (42000) at line 1: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'NOT 6 + 6)' at line 1"
+    },
+    {
+      "expr": "- 5 & 7 XOR 3",
+      "value": "0"
+    },
+    {
+      "expr": "(3 | 6 XOR 6)",
+      "value": "0"
+    },
+    {
+      "expr": "3 OR 4 > 2",
+      "value": "1"
+    },
+    {
+      "expr": "0 - 6 > ~ 0",
+      "value": "0"
+    },
+    {
+      "expr": "4 AND 7 & 2 + 0 = 1 - 3",
+      "value": "0"
+    },
+    {
+      "expr": "3 < 2",
+      "value": "0"
+    },
+    {
+      "expr": "5 AND 5 ^ 3",
+      "value": "1"
+    },
+    {
+      "expr": "5 < 2 + 3 >> ! 6",
+      "value": "0"
+    },
+    {
+      "expr": "0 > 7 * 3",
+      "value": "0"
+    },
+    {
+      "expr": "2 > 7 - ! 1",
+      "value": "0"
+    },
+    {
+      "expr": "NOT ! 5 < - 5 XOR 6",
+      "value": "0"
+    },
+    {
+      "expr": "~ 0 * 5 * 1 & 3 & ~ 4 AND 3",
+      "error": "ERROR 1690 (22003) at line 1: BIGINT UNSIGNED value is out of range in '(~(0) * 5)'"
+    },
+    {
+      "expr": "6 | 3 & 1",
+      "value": "7"
+    },
+    {
+      "expr": "5 XOR 1 << 5",
+      "value": "0"
+    },
+    {
+      "expr": "3 + 3 AND 0",
+      "value": "0"
+    },
+    {
+      "expr": "1 XOR 0 AND ! 1",
+      "value": "1"
+    },
+    {
+      "expr": "7 <=> - 3 & 0 >> 6 | NOT 3",
+      "error": "ERROR 1064 (42000) at line 1: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'NOT 3)' at line 1"
+    },
+    {
+      "expr": "! NOT 2 * 2 XOR 0 > 7 % ~ 4",
+      "error": "ERROR 1064 (42000) at line 1: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'NOT 2 * 2 XOR 0 > 7 % ~ 4)' at line 1"
+    },
+    {
+      "expr": "5 | 5 AND 1",
+      "value": "1"
+    },
+    {
+      "expr": "(1) - - 3 % 5 OR ! 1 * 2",
+      "value": "1"
+    },
+    {
+      "expr": "NOT 6 AND 0 | 7",
+      "value": "0"
+    },
+    {
+      "expr": "7 & 2 + 6",
+      "value": "0"
+    },
+    {
+      "expr": "3 AND (~ 4) >> - 1 > 0",
+      "value": "0"
+    },
+    {
+      "expr": "~ 7 & ! 2 > 7",
+      "value": "0"
+    },
+    {
+      "expr": "7 > 3 & 5",
+      "value": "1"
+    },
+    {
+      "expr": "! 4 * 1 XOR 4",
+      "value": "1"
+    },
+    {
+      "expr": "(0 OR 0 - 7) % 2 | 4 >> 0",
+      "value": "5"
+    },
+    {
+      "expr": "6 * 6 XOR 6 AND 4",
+      "value": "0"
+    },
+    {
+      "expr": "(2 * 6 >> 6 ^ 5 OR 3)",
+      "value": "1"
+    },
+    {
+      "expr": "- NOT 2",
+      "error": "ERROR 1064 (42000) at line 1: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'NOT 2)' at line 1"
+    },
+    {
+      "expr": "7 ^ 1 >> 4",
+      "value": "0"
+    },
+    {
+      "expr": "- 4 OR 4 & ~ 3 DIV 3 AND ~ 4 | 6 % 1",
+      "value": "1"
+    },
+    {
+      "expr": "~ 5 % 7 AND 6",
+      "value": "1"
+    },
+    {
+      "expr": "! - 4",
+      "value": "0"
+    },
+    {
+      "expr": "- 4 << 6 XOR 0",
+      "value": "1"
+    },
+    {
+      "expr": "4 = 3 AND 3",
+      "value": "0"
+    },
+    {
+      "expr": "1 & 3 >> 5 <=> 7 > ! 3 DIV 6 < 4 OR 4 * 3 < 7 & - 7",
+      "value": "1"
+    },
+    {
+      "expr": "7 AND 6 <=> ~ 7",
+      "value": "0"
+    },
+    {
+      "expr": "3 | 4 & 1",
+      "value": "3"
+    },
+    {
+      "expr": "5 ^ 2 < 7",
+      "value": "0"
+    },
+    {
+      "expr": "(0 + ~ 7 DIV - 6 AND 4)",
+      "error": "ERROR 1690 (22003) at line 1: BIGINT UNSIGNED value is out of range in '(~(7) DIV -(6))'"
+    },
+    {
+      "expr": "3 ^ 2 & 4 + 5 << ! 3 + 5",
+      "value": "0"
+    },
+    {
+      "expr": "~ NOT 6 > 3",
+      "error": "ERROR 1064 (42000) at line 1: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'NOT 6 > 3)' at line 1"
+    },
+    {
+      "expr": "~ (2 XOR 6 AND 4)",
+      "value": "18446744073709551615"
+    },
+    {
+      "expr": "0 + 7 OR 2",
+      "value": "1"
+    },
+    {
+      "expr": "(0 ^ 5 XOR 6 OR 0)",
+      "value": "0"
+    },
+    {
+      "expr": "1 AND 4 OR 6",
+      "value": "1"
+    },
+    {
+      "expr": "NOT 5 & 5 >> 4",
+      "value": "1"
+    },
+    {
+      "expr": "3 & 1 << - 0",
+      "value": "1"
+    },
+    {
+      "expr": "2 ^ 7 & 5",
+      "value": "5"
+    },
+    {
+      "expr": "0 - 0 ^ 4",
+      "error": "ERROR 1690 (22003) at line 1: BIGINT UNSIGNED value is out of range in '(0 - (0 ^ 4))'"
+    },
+    {
+      "expr": "0 XOR 1 & 1",
+      "value": "1"
+    },
+    {
+      "expr": "7 AND 4 * ~ 1",
+      "error": "ERROR 1690 (22003) at line 1: BIGINT UNSIGNED value is out of range in '(4 * ~(1))'"
+    },
+    {
+      "expr": "6 ^ 0 OR 4",
+      "value": "1"
+    },
+    {
+      "expr": "6 < 3 | NOT 6",
+      "error": "ERROR 1064 (42000) at line 1: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'NOT 6)' at line 1"
+    },
+    {
+      "expr": "(1 XOR ! 3 & 0)",
+      "value": "1"
+    },
+    {
+      "expr": "3 + 3 XOR 5",
+      "value": "0"
+    },
+    {
+      "expr": "7 ^ 6 AND 6",
+      "value": "1"
+    },
+    {
+      "expr": "5 | NOT 3 & 6",
+      "error": "ERROR 1064 (42000) at line 1: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'NOT 3 & 6)' at line 1"
+    },
+    {
+      "expr": "~ (5)",
+      "value": "18446744073709551610"
+    },
+    {
+      "expr": "NOT 7 & 7 + 4",
+      "value": "0"
+    },
+    {
+      "expr": "NOT 4 - 1 & 2 & 1 & 6 DIV 3",
+      "value": "1"
+    },
+    {
+      "expr": "~ 0 | 1 & 7 | ~ 1 DIV 6 < 7 = (0)",
+      "value": "1"
+    },
+    {
+      "expr": "4 ^ 2 + 4 AND - 7 ^ 4 | 4",
+      "value": "1"
+    },
+    {
+      "expr": "5 >> 1 - 4",
+      "value": "0"
+    },
+    {
+      "expr": "3 % 1 - 4",
+      "value": "-4"
+    },
+    {
+      "expr": "~ ! 7",
+      "value": "18446744073709551615"
+    },
+    {
+      "expr": "5 AND 1 DIV 4 | 0 < 5 OR 5",
+      "value": "1"
+    },
+    {
+      "expr": "4 XOR 6 % ! 7",
+      "value": "NULL"
+    },
+    {
+      "expr": "~ 2 & 5 << 3",
+      "value": "40"
+    },
+    {
+      "expr": "0 + 0 | 7",
+      "value": "7"
+    },
+    {
+      "expr": "0 * 5 & NOT 4",
+      "error": "ERROR 1064 (42000) at line 1: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'NOT 4)' at line 1"
+    },
+    {
+      "expr": "! 6 | - 6 OR 2",
+      "value": "1"
+    },
+    {
+      "expr": "7 * 1 & ~ 6 < 0 XOR ~ 0 - 6",
+      "value": "1"
+    },
+    {
+      "expr": "! 3 > NOT 6 % 0",
+      "error": "ERROR 1064 (42000) at line 1: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'NOT 6 % 0)' at line 1"
+    },
+    {
+      "expr": "(! 6 ^ 7 XOR 2)",
+      "value": "0"
+    },
+    {
+      "expr": "2 | 2 DIV 2 % NOT 2 + - 6 <=> 4 OR 6",
+      "error": "ERROR 1064 (42000) at line 1: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'NOT 2 + - 6 <=> 4 OR 6)' at line 1"
+    },
+    {
+      "expr": "(7 >> 3 <=> 7 + ! 2 >> 5 XOR NOT 5)",
+      "value": "1"
+    },
+    {
+      "expr": "(3 OR 4 <=> 2)",
+      "value": "1"
+    },
+    {
+      "expr": "5 ^ 4 * 6",
+      "value": "6"
+    },
+    {
+      "expr": "NOT 1 AND 2 | 1",
+      "value": "0"
+    },
+    {
+      "expr": "2 ^ 4 & ! 2",
+      "value": "0"
+    },
+    {
+      "expr": "6 - 4 > 1",
+      "value": "1"
+    },
+    {
+      "expr": "5 & 0 * 2",
+      "value": "0"
+    },
+    {
+      "expr": "! 0 OR 4 AND 2",
+      "value": "1"
+    },
+    {
+      "expr": "1 <=> 0 >> 2",
+      "value": "0"
+    },
+    {
+      "expr": "5 AND 6 XOR 1",
+      "value": "0"
+    },
+    {
+      "expr": "4 + 4 DIV 7",
+      "value": "4"
+    },
+    {
+      "expr": "NOT 7 AND 3 & 4 << 1 >> 2 + ~ 3 ^ NOT 3 * 7 = 4 << 0",
+      "error": "ERROR 1064 (42000) at line 1: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'NOT 3 * 7 = 4 << 0)' at line 1"
+    },
+    {
+      "expr": "4 * ~ 1 DIV ! 7 AND 6 ^ 4",
+      "error": "ERROR 1690 (22003) at line 1: BIGINT UNSIGNED value is out of range in '(4 * ~(1))'"
+    },
+    {
+      "expr": "2 = ! 1 ^ 4",
+      "value": "0"
+    },
+    {
+      "expr": "- (1) XOR 7 % 2 | 4",
+      "value": "0"
+    },
+    {
+      "expr": "- - 2",
+      "value": "2"
+    },
+    {
+      "expr": "3 AND 3 + 4",
+      "value": "1"
+    },
+    {
+      "expr": "- 0 AND 7 & 6 < (0 ^ 3 + - 2)",
+      "value": "0"
+    },
+    {
+      "expr": "4 > 0",
+      "value": "1"
+    },
+    {
+      "expr": "(- 6)",
+      "value": "-6"
+    },
+    {
+      "expr": "2 | 6 OR 4 DIV 4",
+      "value": "1"
+    },
+    {
+      "expr": "2 XOR 3 <=> 3",
+      "value": "0"
+    },
+    {
+      "expr": "(- 2 > 0 >> 3)",
+      "value": "0"
+    },
+    {
+      "expr": "0 < 6 OR - 2",
+      "value": "1"
+    },
+    {
+      "expr": "((0 AND 7 ^ 7))",
+      "value": "0"
+    },
+    {
+      "expr": "~ 0 | 1 * 3",
+      "value": "18446744073709551615"
+    },
+    {
+      "expr": "(3) + - 7 XOR 5",
+      "value": "0"
+    },
+    {
+      "expr": "4 & 0 XOR 0",
+      "value": "0"
+    },
+    {
+      "expr": "2 OR 0 ^ 6",
+      "value": "1"
+    },
+    {
+      "expr": "2 & 2 >> 2 % - 2 * NOT 5 XOR 2",
+      "error": "ERROR 1064 (42000) at line 1: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'NOT 5 XOR 2)' at line 1"
+    },
+    {
+      "expr": "- 5 ^ 3 ^ NOT 0 * 4",
+      "error": "ERROR 1064 (42000) at line 1: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'NOT 0 * 4)' at line 1"
+    },
+    {
+      "expr": "- 2 | 2 XOR - 5 % 0 ^ 2 % 5",
+      "value": "0"
+    },
+    {
+      "expr": "5 * 3 XOR 6",
+      "value": "0"
+    },
+    {
+      "expr": "5 OR 4 ^ 6",
+      "value": "1"
+    },
+    {
+      "expr": "! 3 ^ 4 > 5",
+      "value": "0"
+    },
+    {
+      "expr": "- 3 - - 7",
+      "value": "4"
+    },
+    {
+      "expr": "6 DIV 3 AND 0",
+      "value": "0"
+    },
+    {
+      "expr": "5 OR 0 % 6",
+      "value": "1"
+    },
+    {
+      "expr": "7 % ~ 5 XOR 0",
+      "value": "1"
+    },
+    {
+      "expr": "2 AND 2 <=> 7",
+      "value": "0"
+    },
+    {
+      "expr": "7 AND 7 < 7 * 1 DIV 4",
+      "value": "0"
+    },
+    {
+      "expr": "7 | 0 - 2",
+      "value": "18446744073709551615"
+    },
+    {
+      "expr": "! 2 ^ 5 XOR 0 >> ! 6 % 6",
+      "value": "1"
+    },
+    {
+      "expr": "6 * ~ 2 & 0 XOR - 0",
+      "error": "ERROR 1690 (22003) at line 1: BIGINT UNSIGNED value is out of range in '(6 * ~(2))'"
+    },
+    {
+      "expr": "0 * NOT 0 - 7",
+      "error": "ERROR 1064 (42000) at line 1: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'NOT 0 - 7)' at line 1"
+    },
+    {
+      "expr": "(- 0 << 2 & 5)",
+      "value": "0"
+    },
+    {
+      "expr": "(4 OR 6 ^ 0)",
+      "value": "1"
+    },
+    {
+      "expr": "3 >> 3 + 0",
+      "value": "0"
+    },
+    {
+      "expr": "4 & - 3 + NOT 0",
+      "error": "ERROR 1064 (42000) at line 1: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'NOT 0)' at line 1"
+    },
+    {
+      "expr": "! - - - 4",
+      "value": "0"
+    },
+    {
+      "expr": "5 + 4 AND 6",
+      "value": "1"
+    },
+    {
+      "expr": "(1 % ! 0 + 3 > 4 | 5 DIV 2)",
+      "value": "0"
+    },
+    {
+      "expr": "6 & - 3 % 1",
+      "value": "0"
+    },
+    {
+      "expr": "! 5 & 6 >> 3",
+      "value": "0"
+    },
+    {
+      "expr": "3 AND 6 OR 1",
+      "value": "1"
+    },
+    {
+      "expr": "NOT 2 = NOT 1",
+      "error": "ERROR 1064 (42000) at line 1: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'NOT 1)' at line 1"
+    },
+    {
+      "expr": "7 % 6 OR 5",
+      "value": "1"
+    },
+    {
+      "expr": "6 XOR ~ 3 OR 1",
+      "value": "1"
+    },
+    {
+      "expr": "! 7 ^ 4 OR 6",
+      "value": "1"
+    },
+    {
+      "expr": "5 + 0 * 2",
+      "value": "5"
+    },
+    {
+      "expr": "6 & 3 ^ 3",
+      "value": "0"
+    },
+    {
+      "expr": "1 << 5 + 3",
+      "value": "256"
+    },
+    {
+      "expr": "2 OR 7 * 7",
+      "value": "1"
+    },
+    {
+      "expr": "7 = 2 & 2 < 7 * 1 | ~ 1 DIV NOT 4 ^ 5",
+      "error": "ERROR 1064 (42000) at line 1: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'NOT 4 ^ 5)' at line 1"
+    },
+    {
+      "expr": "1 << 0 - NOT 6",
+      "error": "ERROR 1064 (42000) at line 1: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'NOT 6)' at line 1"
+    },
+    {
+      "expr": "~ 6 ^ NOT 1 XOR 4",
+      "error": "ERROR 1064 (42000) at line 1: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'NOT 1 XOR 4)' at line 1"
+    },
+    {
+      "expr": "- (0 % 1 & 0)",
+      "value": "0"
+    },
+    {
+      "expr": "! 0 % 4 < 3 | NOT 2 << 2 XOR 2 AND 0",
+      "error": "ERROR 1064 (42000) at line 1: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'NOT 2 << 2 XOR 2 AND 0)' at line 1"
+    },
+    {
+      "expr": "2 | 2 > 6",
+      "value": "0"
+    },
+    {
+      "expr": "- 3 ^ 5 << 7",
+      "value": "18446744073709550592"
+    },
+    {
+      "expr": "- 0 << 3 - 0",
+      "value": "0"
+    },
+    {
+      "expr": "0 AND 3 | 1",
+      "value": "0"
+    },
+    {
+      "expr": "4 | 2 + 1",
+      "value": "7"
+    },
+    {
+      "expr": "7 OR 7 << 4",
+      "value": "1"
+    },
+    {
+      "expr": "2 DIV ~ 1 >> 7",
+      "value": "0"
+    },
+    {
+      "expr": "0 XOR 2 >> ! 2 % - 1",
+      "value": "1"
+    },
+    {
+      "expr": "5 ^ 5 DIV - 6 AND 3 * 1 - 4 XOR ! 7 OR ! 1",
+      "value": "0"
+    },
+    {
+      "expr": "(! 5 << ~ 0) XOR 6 | 7 DIV 1",
+      "value": "1"
+    },
+    {
+      "expr": "1 & 4 AND 6",
+      "value": "0"
+    },
+    {
+      "expr": "! 6 & 3 << 1 - - 0 | - 5 OR ~ 5",
+      "value": "1"
+    },
+    {
+      "expr": "0 & 3 - NOT 7",
+      "error": "ERROR 1064 (42000) at line 1: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'NOT 7)' at line 1"
+    },
+    {
+      "expr": "NOT 4 + 5 | 3 - 0 ^ 7 | 4",
+      "error": "ERROR 1690 (22003) at line 1: BIGINT UNSIGNED value is out of range in '(3 - (0 ^ 7))'"
+    },
+    {
+      "expr": "~ 7",
+      "value": "18446744073709551608"
+    },
+    {
+      "expr": "- - 4",
+      "value": "4"
+    },
+    {
+      "expr": "2 < 2 OR 6",
+      "value": "1"
+    },
+    {
+      "expr": "2 OR 7 > ! 4",
+      "value": "1"
+    },
+    {
+      "expr": "2 + 7 & 4",
+      "value": "0"
+    },
+    {
+      "expr": "NOT 4",
+      "value": "0"
+    },
+    {
+      "expr": "6 OR 3 ^ 3",
+      "value": "1"
+    },
+    {
+      "expr": "~ - 0",
+      "value": "18446744073709551615"
+    },
+    {
+      "expr": "7 + NOT 2 ^ 0",
+      "error": "ERROR 1064 (42000) at line 1: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'NOT 2 ^ 0)' at line 1"
+    },
+    {
+      "expr": "NOT 0 + 6 XOR 2 ^ 1 << 1 > 6 & 6 ^ ! 6",
+      "value": "0"
+    },
+    {
+      "expr": "~ 3 - NOT 0 DIV 6 ^ 5 OR NOT 2 <=> 3 OR 4 XOR 6",
+      "error": "ERROR 1064 (42000) at line 1: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'NOT 0 DIV 6 ^ 5 OR NOT 2 <=> 3 OR 4 XOR 6)' at line 1"
+    },
+    {
+      "expr": "- 3 XOR ! 7 ^ 0",
+      "value": "1"
+    },
+    {
+      "expr": "1 - 1 AND 3",
+      "value": "0"
+    },
+    {
+      "expr": "4 AND ! 0 DIV ~ 5 - 5",
+      "error": "ERROR 1690 (22003) at line 1: BIGINT UNSIGNED value is out of range in '(((0 = 0) DIV ~(5)) - 5)'"
+    },
+    {
+      "expr": "7 | 3 ^ 4",
+      "value": "7"
+    },
+    {
+      "expr": "(3 & 0 = 0)",
+      "value": "1"
+    },
+    {
+      "expr": "- 1 <=> 0 OR 0",
+      "value": "0"
+    },
+    {
+      "expr": "4 + 1 | ! 5",
+      "value": "5"
+    },
+    {
+      "expr": "3 & NOT 1 ^ 2",
+      "error": "ERROR 1064 (42000) at line 1: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'NOT 1 ^ 2)' at line 1"
+    },
+    {
+      "expr": "(1 & 3 - 2)",
+      "value": "1"
+    },
+    {
+      "expr": "5 | 4 & 4 XOR 3",
+      "value": "0"
+    },
+    {
+      "expr": "- 0 + 0 ^ 4",
+      "value": "4"
+    },
+    {
+      "expr": "3 AND 0 OR 2",
+      "value": "1"
+    },
+    {
+      "expr": "- 3 AND 3 & 5",
+      "value": "1"
+    },
+    {
+      "expr": "2 AND 2 - 1",
+      "value": "1"
+    },
+    {
+      "expr": "0 AND 2 OR 0",
+      "value": "0"
+    },
+    {
+      "expr": "4 AND 4 | ! 0",
+      "value": "1"
+    },
+    {
+      "expr": "1 AND 4 - 2",
+      "value": "1"
+    },
+    {
+      "expr": "7 DIV 2 < 6 | (4) ^ - 4",
+      "value": "1"
+    },
+    {
+      "expr": "3 * ! 2",
+      "value": "0"
+    },
+    {
+      "expr": "3 << - 1 - 2 XOR 4 OR 1 > 7 AND 5 AND 2 % ! 7",
+      "value": "1"
+    },
+    {
+      "expr": "NOT 2 & 6 = 5",
+      "value": "1"
+    },
+    {
+      "expr": "0 AND 3 XOR 3",
+      "value": "1"
+    },
+    {
+      "expr": "3 OR NOT 7 < 1",
+      "value": "1"
+    },
+    {
+      "expr": "5 + 4 & 2 <=> 3",
+      "value": "0"
+    },
+    {
+      "expr": "4 ^ 0 XOR 3",
+      "value": "0"
+    },
+    {
+      "expr": "(- 3)",
+      "value": "-3"
+    },
+    {
+      "expr": "NOT 3 <=> 3 ^ 4",
+      "value": "1"
+    },
+    {
+      "expr": "! 3 ^ 3 >> 1",
+      "value": "1"
+    },
+    {
+      "expr": "1 ^ 4 XOR 4",
+      "value": "0"
+    },
+    {
+      "expr": "6 XOR 7 OR 5",
+      "value": "1"
+    },
+    {
+      "expr": "2 - 0 & 5",
+      "value": "0"
+    },
+    {
+      "expr": "5 ^ 5 | 5",
+      "value": "5"
+    },
+    {
+      "expr": "- 4 = 1 AND 6",
+      "value": "0"
+    },
+    {
+      "expr": "! 0 < 0 << 6",
+      "value": "0"
+    },
+    {
+      "expr": "1 AND 3 << ~ 6",
+      "value": "0"
+    },
+    {
+      "expr": "- 0 AND 6 + 5",
+      "value": "0"
+    },
+    {
+      "expr": "NOT 7 XOR 2 & NOT 6",
+      "error": "ERROR 1064 (42000) at line 1: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'NOT 6)' at line 1"
+    },
+    {
+      "expr": "7 ^ 1 AND 2",
+      "value": "1"
+    },
+    {
+      "expr": "0 <=> 1 ^ 3",
+      "value": "0"
+    },
+    {
+      "expr": "6 <=> ~ 5 | ! 6",
+      "value": "0"
+    },
+    {
+      "expr": "- - 4 ^ 0 <=> ~ 7 OR ! 0 XOR 1 & ! 4",
+      "value": "1"
+    },
+    {
+      "expr": "5 | 5 & 4",
+      "value": "5"
+    },
+    {
+      "expr": "1 | NOT 5 & 3 DIV ! 0 XOR - 5 | 7",
+      "error": "ERROR 1064 (42000) at line 1: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'NOT 5 & 3 DIV ! 0 XOR - 5 | 7)' at line 1"
+    },
+    {
+      "expr": "7 * 5 >> 5",
+      "value": "1"
+    },
+    {
+      "expr": "2 > 4 OR 4",
+      "value": "1"
+    },
+    {
+      "expr": "7 < 2 | 4",
+      "value": "0"
+    },
+    {
+      "expr": "(NOT 7 | 2 * - 7)",
+      "value": "0"
+    },
+    {
+      "expr": "0 >> 4 ^ 2",
+      "value": "0"
+    },
+    {
+      "expr": "1 XOR 2 ^ 7",
+      "value": "0"
+    },
+    {
+      "expr": "5 OR 0 >> ~ 2",
+      "value": "1"
+    },
+    {
+      "expr": "! 4 + - 3",
+      "value": "-3"
+    },
+    {
+      "expr": "(~ (! 1))",
+      "value": "18446744073709551615"
+    },
+    {
+      "expr": "! 0 OR NOT 5 > 0 | 1 >> 7 & 2 OR 7 ^ 4 XOR 5 AND 0",
+      "value": "1"
+    },
+    {
+      "expr": "NOT 1 ^ 3 OR 2 & 4 ^ 4 & ! 3 <=> 3",
+      "value": "0"
+    },
+    {
+      "expr": "1 ^ NOT 0 - 6",
+      "error": "ERROR 1064 (42000) at line 1: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'NOT 0 - 6)' at line 1"
+    },
+    {
+      "expr": "3 AND 4 OR 2 & 6",
+      "value": "1"
+    },
+    {
+      "expr": "6 AND 5 < 6",
+      "value": "1"
+    },
+    {
+      "expr": "- 5 + 5 ^ 7",
+      "error": "ERROR 1690 (22003) at line 1: BIGINT UNSIGNED value is out of range in '(-(5) + (5 ^ 7))'"
+    },
+    {
+      "expr": "! ~ 7 | NOT 1 ^ - 6 > (2)",
+      "error": "ERROR 1064 (42000) at line 1: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'NOT 1 ^ - 6 > (2))' at line 1"
+    },
+    {
+      "expr": "(0 | ! 1 <=> NOT 5)",
+      "error": "ERROR 1064 (42000) at line 1: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'NOT 5))' at line 1"
+    },
+    {
+      "expr": "NOT 3 > 0 >> 0 & 5",
+      "value": "0"
+    },
+    {
+      "expr": "5 & 3 >> 1",
+      "value": "1"
+    },
+    {
+      "expr": "4 <=> 3 AND 3 & 2 + 5 OR 4",
+      "value": "1"
+    },
+    {
+      "expr": "- 7 & 4 AND 5",
+      "value": "0"
+    },
+    {
+      "expr": "6 | 1 ^ 1 < (1 ^ 6)",
+      "value": "1"
+    },
+    {
+      "expr": "7 OR 2 << 6 + 5 * 4",
+      "value": "1"
+    },
+    {
+      "expr": "4 >> 1 + 5",
+      "value": "0"
+    },
+    {
+      "expr": "1 XOR 1 | 7",
+      "value": "0"
+    },
+    {
+      "expr": "- 4 * 7 ^ ~ 1",
+      "error": "ERROR 1690 (22003) at line 1: BIGINT UNSIGNED value is out of range in '(-(4) * (7 ^ ~(1)))'"
+    },
+    {
+      "expr": "NOT - 6 AND 3 + 5",
+      "value": "0"
+    },
+    {
+      "expr": "0 & 2 << 3",
+      "value": "0"
+    },
+    {
+      "expr": "5 OR 2 ^ 3",
+      "value": "1"
+    },
+    {
+      "expr": "- 6 XOR ! 5 + 6 XOR 1 AND 3",
+      "value": "1"
+    },
+    {
+      "expr": "NOT 1 AND 2 & 2 > 4 | ! 3",
+      "value": "0"
+    },
+    {
+      "expr": "~ ~ 4 DIV 0 & NOT 3 DIV 3",
+      "error": "ERROR 1064 (42000) at line 1: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'NOT 3 DIV 3)' at line 1"
+    },
+    {
+      "expr": "0 % 5 ^ 7",
+      "value": "0"
+    },
+    {
+      "expr": "1 ^ 7 * 5 = 4",
+      "value": "0"
+    },
+    {
+      "expr": "2 | 3 + 5",
+      "value": "10"
+    },
+    {
+      "expr": "3 < 1",
+      "value": "0"
+    },
+    {
+      "expr": "(NOT 3 > - 4)",
+      "value": "0"
+    },
+    {
+      "expr": "4 XOR 6 DIV 7 AND 1 DIV 4",
+      "value": "1"
+    },
+    {
+      "expr": "4 AND 1 | 4",
+      "value": "1"
+    },
+    {
+      "expr": "2 | - 1 << 3",
+      "value": "18446744073709551610"
+    },
+    {
+      "expr": "7 | 6 XOR 7",
+      "value": "0"
+    },
+    {
+      "expr": "! 7 AND (4 = 7)",
+      "value": "0"
+    },
+    {
+      "expr": "4 OR 4 DIV 0",
+      "value": "1"
+    },
+    {
+      "expr": "3 * 3 | 7",
+      "value": "15"
+    },
+    {
+      "expr": "3 + 5 | 2",
+      "value": "10"
+    },
+    {
+      "expr": "5 & - 3 < 0",
+      "value": "0"
+    },
+    {
+      "expr": "2 * - 7 - 7 << - 5 > 7",
+      "value": "0"
+    },
+    {
+      "expr": "! NOT 4 % - 4",
+      "error": "ERROR 1064 (42000) at line 1: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'NOT 4 % - 4)' at line 1"
+    },
+    {
+      "expr": "2 << 1 + ! 1 < 0 AND 5 XOR 6",
+      "value": "1"
+    },
+    {
+      "expr": "6 << 4 + 0",
+      "value": "96"
+    },
+    {
+      "expr": "1 OR 0 * 1",
+      "value": "1"
+    },
+    {
+      "expr": "- 2 - 5 * ~ 1",
+      "error": "ERROR 1690 (22003) at line 1: BIGINT UNSIGNED value is out of range in '(5 * ~(1))'"
+    },
+    {
+      "expr": "2 - 1 OR 5",
+      "value": "1"
+    },
+    {
+      "expr": "NOT 0 - 7 << 5 >> 4 AND ! 6 DIV ~ 0",
+      "value": "0"
+    },
+    {
+      "expr": "3 ^ 5 OR 6",
+      "value": "1"
+    },
+    {
+      "expr": "0 < 5 <=> 2 ^ 2 DIV 3 % 4 ^ 2",
+      "value": "0"
+    },
+    {
+      "expr": "7 XOR - 7 % NOT 3",
+      "error": "ERROR 1064 (42000) at line 1: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'NOT 3)' at line 1"
+    },
+    {
+      "expr": "! 4 << 4 AND 0",
+      "value": "0"
+    },
+    {
+      "expr": "- 5 + 1 XOR 7",
+      "value": "0"
+    },
+    {
+      "expr": "7 & 5 >> 0",
+      "value": "5"
+    },
+    {
+      "expr": "4 | 2 < 0",
+      "value": "0"
+    },
+    {
+      "expr": "2 < 7 & 0",
+      "value": "0"
     },
     {
       "expr": "(6)",
       "value": "6"
     },
     {
-      "expr": "(5 XOR 3 + - 1)",
+      "expr": "- 4 | 5 << 2 * 2",
+      "value": "18446744073709551612"
+    },
+    {
+      "expr": "5 DIV 1 XOR NOT 1",
+      "value": "1"
+    },
+    {
+      "expr": "! 4 & 6 >> 2",
       "value": "0"
     },
     {
-      "expr": "- 6 + - 4 <=> 5",
+      "expr": "6 = 2 XOR ! 1",
       "value": "0"
     },
     {
-      "expr": "! NOT 6 % 3 % 2 + ! 2 AND 0",
-      "error": "ERROR 1064 (42000) at line 1: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'NOT 6 % 3 % 2 + ! 2 AND 0)' at line 1"
-    },
-    {
-      "expr": "0 < 6 - 0",
-      "value": "1"
-    },
-    {
-      "expr": "(0 <=> 7) | (6) + ! 1 - 2",
-      "value": "4"
-    },
-    {
-      "expr": "(- - 2 >> 1 ^ 6)",
+      "expr": "- 0 = 4 | 5",
       "value": "0"
     },
     {
-      "expr": "4 & 3 * 3 * NOT 7 + 7",
-      "error": "ERROR 1064 (42000) at line 1: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'NOT 7 + 7)' at line 1"
-    },
-    {
-      "expr": "~ - 7 AND 6",
+      "expr": "7 OR 0 AND 1",
       "value": "1"
     },
     {
-      "expr": "1 AND 5 <=> 3 OR 0 & ~ 7 | NOT 6",
-      "error": "ERROR 1064 (42000) at line 1: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'NOT 6)' at line 1"
+      "expr": "~ 0 & 3 << 6 < NOT 0 << 3 DIV 6",
+      "error": "ERROR 1064 (42000) at line 1: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'NOT 0 << 3 DIV 6)' at line 1"
     },
     {
-      "expr": "5 >> 0",
-      "value": "5"
+      "expr": "7 & 0 AND 3",
+      "value": "0"
     },
     {
-      "expr": "~ 4 | 1 + 4 % 6 AND 1 OR 0",
+      "expr": "3 + ! ~ 0",
+      "value": "3"
+    },
+    {
+      "expr": "(5 % ~ 7 ^ ~ 5)",
       "value": "1"
     },
     {
-      "expr": "! 4 < 5 * 3",
+      "expr": "5 | 7 ^ ! 2 >> 4 >> 6 < 4 >> 5 OR 6 ^ 5",
       "value": "1"
     },
     {
-      "expr": "7 & NOT 4",
+      "expr": "7 & 1 - NOT 2",
+      "error": "ERROR 1064 (42000) at line 1: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'NOT 2)' at line 1"
+    },
+    {
+      "expr": "4 & ~ 1 >> NOT 0",
+      "error": "ERROR 1064 (42000) at line 1: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'NOT 0)' at line 1"
+    },
+    {
+      "expr": "5 ^ ~ 6 OR 0",
+      "value": "1"
+    },
+    {
+      "expr": "! 1 DIV 2 | ! 6 XOR ~ 3 >> 0 DIV NOT 7",
+      "error": "ERROR 1064 (42000) at line 1: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'NOT 7)' at line 1"
+    },
+    {
+      "expr": "(2 * 6 ^ 3 * 7 * 5 > NOT 1)",
+      "error": "ERROR 1064 (42000) at line 1: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'NOT 1))' at line 1"
+    },
+    {
+      "expr": "6 XOR ! 6 - 7",
+      "value": "0"
+    },
+    {
+      "expr": "7 > 4 & 1 <=> 1",
+      "value": "1"
+    },
+    {
+      "expr": "0 <=> 0 << 3",
+      "value": "1"
+    },
+    {
+      "expr": "4 OR 3 AND 5",
+      "value": "1"
+    },
+    {
+      "expr": "~ ! 0 XOR 6 | (7)",
+      "value": "0"
+    },
+    {
+      "expr": "6 XOR 3 + 4",
+      "value": "0"
+    },
+    {
+      "expr": "NOT 7 > 7 AND - 7 OR 6 + 4 AND 0",
+      "value": "1"
+    },
+    {
+      "expr": "3 | 4 OR 0",
+      "value": "1"
+    },
+    {
+      "expr": "5 - 5 DIV 2",
+      "value": "3"
+    },
+    {
+      "expr": "(4) AND ! 1 * 7",
+      "value": "0"
+    },
+    {
+      "expr": "(1 << 4 * 6)",
+      "value": "16777216"
+    },
+    {
+      "expr": "5 % 6 ^ 5",
+      "value": "2"
+    },
+    {
+      "expr": "6 ^ 0 % 1",
+      "value": "0"
+    },
+    {
+      "expr": "6 | 7 XOR NOT 0 DIV 0 | ! 5 XOR ~ 2 - 3 = - 7",
+      "value": "NULL"
+    },
+    {
+      "expr": "5 AND 0 <=> 1",
+      "value": "0"
+    },
+    {
+      "expr": "3 << 3 + 4 << 7",
+      "value": "49152"
+    },
+    {
+      "expr": "0 XOR 1 - 3",
+      "value": "1"
+    },
+    {
+      "expr": "- 6 | 0 + ! 5",
+      "value": "18446744073709551610"
+    },
+    {
+      "expr": "7 & 6 << 5 > 2 OR 2 & 3",
+      "value": "1"
+    },
+    {
+      "expr": "2 = 7",
+      "value": "0"
+    },
+    {
+      "expr": "NOT NOT 0 XOR 5",
+      "value": "1"
+    },
+    {
+      "expr": "- - 2 OR 2",
+      "value": "1"
+    },
+    {
+      "expr": "4 >> 4 = 3",
+      "value": "0"
+    },
+    {
+      "expr": "4 AND ! 6 OR 0 AND 5 AND 2 - ! 2",
+      "value": "0"
+    },
+    {
+      "expr": "7 % ! 6 | - 3 XOR 4",
+      "value": "NULL"
+    },
+    {
+      "expr": "2 << 0 | 2",
+      "value": "2"
+    },
+    {
+      "expr": "- 0 XOR ! 1 & 3",
+      "value": "0"
+    },
+    {
+      "expr": "2 AND ~ 3 | 3",
+      "value": "1"
+    },
+    {
+      "expr": "1 % 5 | 0",
+      "value": "1"
+    },
+    {
+      "expr": "1 % 0 ^ ~ 2 > 4 ^ 5 <=> 7",
+      "value": "0"
+    },
+    {
+      "expr": "~ 7 OR 5 | 2",
+      "value": "1"
+    },
+    {
+      "expr": "1 AND 3 - 2",
+      "value": "1"
+    },
+    {
+      "expr": "- ! 6",
+      "value": "0"
+    },
+    {
+      "expr": "5 < 2 | 4",
+      "value": "1"
+    },
+    {
+      "expr": "1 ^ 6 & ! 7 = 5",
+      "value": "0"
+    },
+    {
+      "expr": "~ 4 & ! 4 + ! 1",
+      "value": "0"
+    },
+    {
+      "expr": "! 2",
+      "value": "0"
+    },
+    {
+      "expr": "3 XOR ! 3 DIV 3 XOR 3 - - 6 AND ! 6",
+      "value": "1"
+    },
+    {
+      "expr": "5 ^ 5 - ~ 6",
+      "error": "ERROR 1690 (22003) at line 1: BIGINT UNSIGNED value is out of range in '((5 ^ 5) - ~(6))'"
+    },
+    {
+      "expr": "5 XOR 4 - 0",
+      "value": "0"
+    },
+    {
+      "expr": "2 AND 4 ^ 5",
+      "value": "1"
+    },
+    {
+      "expr": "4 ^ 7 XOR ~ 3",
+      "value": "0"
+    },
+    {
+      "expr": "! ! 3 AND 2 + ~ 4",
+      "value": "1"
+    },
+    {
+      "expr": "4 = 7 * 1",
+      "value": "0"
+    },
+    {
+      "expr": "3 ^ 6 AND 6",
+      "value": "1"
+    },
+    {
+      "expr": "3 = 0 + 5 * - 7 * 4 AND 5 = 3",
+      "value": "0"
+    },
+    {
+      "expr": "(2 & 0 - NOT 5 <=> 2 & ! 4 + ! 2)",
+      "error": "ERROR 1064 (42000) at line 1: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'NOT 5 <=> 2 & ! 4 + ! 2))' at line 1"
+    },
+    {
+      "expr": "3 | 2 > NOT 7",
+      "error": "ERROR 1064 (42000) at line 1: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'NOT 7)' at line 1"
+    },
+    {
+      "expr": "0 = ! - 6 AND 7 XOR ~ 1",
+      "value": "0"
+    },
+    {
+      "expr": "0 OR 6 | NOT 4",
       "error": "ERROR 1064 (42000) at line 1: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'NOT 4)' at line 1"
     },
     {
-      "expr": "(7) << NOT 0 <=> ~ 7",
-      "error": "ERROR 1064 (42000) at line 1: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'NOT 0 <=> ~ 7)' at line 1"
+      "expr": "2 ^ 4 AND 3 XOR 5 = 4 OR 5",
+      "value": "1"
     },
     {
-      "expr": "! 3 DIV 4",
+      "expr": "- 5 XOR 3 + - 6",
       "value": "0"
     },
     {
-      "expr": "! 7 << (1) > 6 = 2 XOR 7",
-      "value": "1"
-    },
-    {
-      "expr": "(6) OR 3 <=> (3) OR 6 > 5",
-      "value": "1"
-    },
-    {
-      "expr": "(5) + 1",
+      "expr": "6 | 0 & 2",
       "value": "6"
     },
     {
-      "expr": "- 0 * 1 % 3",
+      "expr": "3 DIV 7 OR ! 1 < 0 > 1 DIV 6 ^ 2",
       "value": "0"
     },
     {
-      "expr": "NOT 6 >> 7 > 0 - ! 6",
+      "expr": "0 AND 6 - 5",
+      "value": "0"
+    },
+    {
+      "expr": "2 AND 5 >> 3 <=> NOT 0 <=> 4 OR 3 << 4",
+      "error": "ERROR 1064 (42000) at line 1: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'NOT 0 <=> 4 OR 3 << 4)' at line 1"
+    },
+    {
+      "expr": "0 AND 1 < 2 - 5 << 5 << - 0",
+      "value": "0"
+    },
+    {
+      "expr": "~ 1 & 0 OR NOT 6",
+      "value": "0"
+    },
+    {
+      "expr": "1 + 2 % 3 & - 7 < 0 | 3",
       "value": "1"
     },
     {
-      "expr": "! 1 << - 3 > 7 | 7",
+      "expr": "- 1 + ! 2 | 3",
+      "value": "18446744073709551615"
+    },
+    {
+      "expr": "! 2 * 2 ^ 6",
       "value": "0"
     },
     {
-      "expr": "(~ (- 6))",
+      "expr": "(4)",
+      "value": "4"
+    },
+    {
+      "expr": "NOT 7 & 4 XOR 3",
+      "value": "1"
+    },
+    {
+      "expr": "4 >> 1 + 1 << 7 > 3 % 5",
+      "value": "1"
+    },
+    {
+      "expr": "NOT 7 - 7 AND ! 5",
+      "value": "0"
+    },
+    {
+      "expr": "- - 1 XOR 1 OR 4",
+      "value": "1"
+    },
+    {
+      "expr": "0 AND 2 & 7",
+      "value": "0"
+    },
+    {
+      "expr": "3 | 6 DIV - 6",
+      "value": "18446744073709551615"
+    },
+    {
+      "expr": "3 AND 4 >> 6",
+      "value": "0"
+    },
+    {
+      "expr": "5 AND 4 > ~ 3 % 1 - - 4 | 3",
+      "value": "0"
+    },
+    {
+      "expr": "! 0 * ! 6 >> 1 > (3)",
+      "value": "0"
+    },
+    {
+      "expr": "! ~ 7 + 2 XOR 6",
+      "value": "0"
+    },
+    {
+      "expr": "~ 0 ^ 1 < ~ 4 | 0 ^ 0 OR 1",
+      "value": "1"
+    },
+    {
+      "expr": "6 & 4 | 1",
       "value": "5"
     },
     {
-      "expr": "NOT 0 > 3 >> - (5)",
+      "expr": "~ 1 | 0 OR - 1",
       "value": "1"
     },
     {
-      "expr": "4 DIV ~ 4 % 7 = ! 1",
+      "expr": "- 4 % 1 XOR ! 7",
+      "value": "0"
+    },
+    {
+      "expr": "7 | 5 > 6",
       "value": "1"
     },
     {
-      "expr": "7 ^ ! ~ 6 | 0",
+      "expr": "- 5 - 3 AND 7",
+      "value": "1"
+    },
+    {
+      "expr": "4 + 2 | 0",
+      "value": "6"
+    },
+    {
+      "expr": "! ~ 6 ^ 6 < 1",
+      "value": "0"
+    },
+    {
+      "expr": "2 OR ! 4 <=> NOT 0",
+      "error": "ERROR 1064 (42000) at line 1: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'NOT 0)' at line 1"
+    },
+    {
+      "expr": "0 & NOT 6 + 3",
+      "error": "ERROR 1064 (42000) at line 1: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'NOT 6 + 3)' at line 1"
+    },
+    {
+      "expr": "1 << 3",
+      "value": "8"
+    },
+    {
+      "expr": "2 > 4 AND 2",
+      "value": "0"
+    },
+    {
+      "expr": "7 % 5 XOR ~ 1",
+      "value": "0"
+    },
+    {
+      "expr": "6 & 4 AND 1",
+      "value": "1"
+    },
+    {
+      "expr": "2 <=> 1 AND 0",
+      "value": "0"
+    },
+    {
+      "expr": "7 | 6 <=> 0",
+      "value": "0"
+    },
+    {
+      "expr": "5 >> - 1 AND - 5 = 5 | 6 + - 7",
+      "value": "0"
+    },
+    {
+      "expr": "0 + 0 OR 5",
+      "value": "1"
+    },
+    {
+      "expr": "3 >> ~ 2 | 7",
       "value": "7"
     },
     {
-      "expr": "1 AND 7 = 2 OR 1",
+      "expr": "5 << 2 ^ 1 AND 2",
       "value": "1"
     },
     {
-      "expr": "3 << 4 XOR 6 + 1 << 2",
-      "value": "0"
-    },
-    {
-      "expr": "4 > (1 ^ 7)",
-      "value": "0"
-    },
-    {
-      "expr": "1 + 5 * 1 DIV - 2 = 4",
-      "value": "0"
-    },
-    {
-      "expr": "! 2 XOR 3 XOR 5 << 6",
-      "value": "0"
-    },
-    {
-      "expr": "(1 - NOT 0) DIV 4 XOR 3 < 3 > 1",
-      "error": "ERROR 1064 (42000) at line 1: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'NOT 0) DIV 4 XOR 3 < 3 > 1)' at line 1"
-    },
-    {
-      "expr": "! 4 < 2 AND - 0 - 7 <=> 7 < 2 = 2",
-      "value": "0"
-    },
-    {
-      "expr": "- 0 >> NOT 2 XOR 5",
-      "error": "ERROR 1064 (42000) at line 1: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'NOT 2 XOR 5)' at line 1"
-    },
-    {
-      "expr": "((5)) >> 4",
-      "value": "0"
-    },
-    {
-      "expr": "NOT - 6 & 1 % - 2",
+      "expr": "! 2 >> ! 7 | 1",
       "value": "1"
     },
     {
-      "expr": "((6)) <=> - 7 > 6",
+      "expr": "2 XOR 6 AND ~ 3",
       "value": "0"
     },
     {
-      "expr": "(1) DIV 7 + ! 3 - 0 - 2 < 2",
+      "expr": "NOT 7 % 3 ^ 5",
+      "value": "0"
+    },
+    {
+      "expr": "(6 > ~ 4) << NOT 2 * 0 - 4",
+      "error": "ERROR 1064 (42000) at line 1: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'NOT 2 * 0 - 4)' at line 1"
+    },
+    {
+      "expr": "0 = 3 - 7",
+      "value": "0"
+    },
+    {
+      "expr": "4 < 1",
+      "value": "0"
+    },
+    {
+      "expr": "(5) >> 3 <=> 7 OR ! 4 DIV 5 ^ 1",
+      "value": "0"
+    },
+    {
+      "expr": "NOT 0 - 5 & - 1",
+      "value": "0"
+    },
+    {
+      "expr": "3 <=> 3 + 1",
+      "value": "0"
+    },
+    {
+      "expr": "NOT 2 << 3 ^ 7",
+      "value": "0"
+    },
+    {
+      "expr": "(- 5)",
+      "value": "-5"
+    },
+    {
+      "expr": "2 >> - 3 | 0 | 3 < 7 | 1 ^ ~ 3 * 2",
+      "error": "ERROR 1690 (22003) at line 1: BIGINT UNSIGNED value is out of range in '((1 ^ ~(3)) * 2)'"
+    },
+    {
+      "expr": "1 ^ 1 XOR 4",
       "value": "1"
     },
     {
-      "expr": "~ 7 > 5 OR 6 XOR ! 1 + 0 OR 5",
+      "expr": "~ 5 <=> 6 OR ! 2",
+      "value": "0"
+    },
+    {
+      "expr": "4 AND 1 OR ~ 4",
       "value": "1"
     },
     {
-      "expr": "! 4",
-      "value": "0"
+      "expr": "6 - 7 & 4",
+      "value": "4"
     },
     {
-      "expr": "1 | 6 << 3 & (~ 1)",
-      "value": "49"
+      "expr": "- NOT 5 >> 7 ^ NOT 7",
+      "error": "ERROR 1064 (42000) at line 1: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'NOT 5 >> 7 ^ NOT 7)' at line 1"
     },
     {
-      "expr": "! 7 < 3 AND ~ 3",
+      "expr": "- 0 - 7 DIV NOT 2",
+      "error": "ERROR 1064 (42000) at line 1: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'NOT 2)' at line 1"
+    },
+    {
+      "expr": "~ 4 OR 2 >> 5",
       "value": "1"
     },
     {
-      "expr": "7 XOR 1 % 4 - (NOT 5) > 3",
+      "expr": "NOT 5 | 7",
+      "value": "0"
+    },
+    {
+      "expr": "2 - 7 % 3",
       "value": "1"
     },
     {
-      "expr": "NOT (4) | 4",
-      "value": "0"
-    },
-    {
-      "expr": "7 % 3",
+      "expr": "7 OR 1 DIV 1 < 7 * 6 + 7",
       "value": "1"
     },
     {
-      "expr": "NOT ~ 7 >> 3 % 6",
+      "expr": "NOT 3 OR NOT 7 << 6",
       "value": "0"
     },
     {
-      "expr": "(NOT 1 % 1 <=> 2 | 4)",
+      "expr": "~ 6 >> 5 XOR 5 OR 4",
       "value": "1"
     },
     {
-      "expr": "~ ! NOT 7 * 7 >> 5",
-      "error": "ERROR 1064 (42000) at line 1: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'NOT 7 * 7 >> 5)' at line 1"
-    },
-    {
-      "expr": "! 1 & 4",
-      "value": "0"
-    },
-    {
-      "expr": "3 + - 1 <=> 5",
-      "value": "0"
-    },
-    {
-      "expr": "3 | ! 1 OR 3",
+      "expr": "2 | 5 + 7 OR ~ 1 XOR 3 | 2",
       "value": "1"
     },
     {
-      "expr": "4 | 2 << ! 2 XOR - 7",
+      "expr": "3 | 1 & - 7",
+      "value": "3"
+    },
+    {
+      "expr": "- 7 > 5 ^ 7",
       "value": "0"
     },
     {
-      "expr": "! 6 * 1",
+      "expr": "~ 4 = 7 - 1",
       "value": "0"
     },
     {
-      "expr": "~ 0 > NOT 0 << ~ 2 > 1",
-      "error": "ERROR 1064 (42000) at line 1: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'NOT 0 << ~ 2 > 1)' at line 1"
-    },
-    {
-      "expr": "NOT 3",
-      "value": "0"
-    },
-    {
-      "expr": "2 <=> 0 > 4 - 3 > 0",
-      "value": "0"
-    },
-    {
-      "expr": "7 ^ 0 << 6",
-      "value": "448"
-    },
-    {
-      "expr": "2 > 2 > 2 | 0 <=> - 7",
-      "value": "0"
-    },
-    {
-      "expr": "! NOT 6 = 3 | 0 DIV 6",
-      "error": "ERROR 1064 (42000) at line 1: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'NOT 6 = 3 | 0 DIV 6)' at line 1"
-    },
-    {
-      "expr": "(3 % 2)",
+      "expr": "6 * 0 XOR ~ 2",
       "value": "1"
     },
     {
-      "expr": "7 & (3 + 2)",
-      "value": "5"
+      "expr": "0 % 6 + 3",
+      "value": "3"
     },
     {
-      "expr": "(3 < 6) < (NOT 0)",
-      "value": "0"
-    },
-    {
-      "expr": "2 >> 6 = ! 1 <=> 6",
-      "value": "0"
-    },
-    {
-      "expr": "3 < 5",
+      "expr": "~ 0 & 1 OR 4",
       "value": "1"
     },
     {
-      "expr": "NOT 6 - NOT 2 <=> 5 <=> 1",
-      "error": "ERROR 1064 (42000) at line 1: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'NOT 2 <=> 5 <=> 1)' at line 1"
-    },
-    {
-      "expr": "6 ^ 0 & 4 & 6 ^ NOT 6 | ! 6",
-      "error": "ERROR 1064 (42000) at line 1: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'NOT 6 | ! 6)' at line 1"
-    },
-    {
-      "expr": "2 < 5",
-      "value": "1"
-    },
-    {
-      "expr": "(3 & NOT 7) << ~ NOT 2",
-      "error": "ERROR 1064 (42000) at line 1: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'NOT 7) << ~ NOT 2)' at line 1"
-    },
-    {
-      "expr": "NOT 7 << 5 <=> - 0",
-      "value": "1"
-    },
-    {
-      "expr": "~ 7 XOR ! NOT 2 <=> (1)",
-      "error": "ERROR 1064 (42000) at line 1: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'NOT 2 <=> (1))' at line 1"
-    },
-    {
-      "expr": "NOT 7 OR ~ 4 >> 2 ^ 5",
-      "value": "1"
-    },
-    {
-      "expr": "6 XOR 7",
+      "expr": "7 & 5 << 3",
       "value": "0"
     },
     {
-      "expr": "(- NOT 2 >> 2)",
-      "error": "ERROR 1064 (42000) at line 1: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'NOT 2 >> 2))' at line 1"
-    },
-    {
-      "expr": "! 1",
-      "value": "0"
-    },
-    {
-      "expr": "NOT 6 <=> 0 ^ 7",
+      "expr": "~ 2 OR 4 - 4",
       "value": "1"
     },
     {
-      "expr": "7 % 3 <=> 7 DIV 3 * ! 2",
+      "expr": "6 & 7 >> 3",
       "value": "0"
     },
     {
-      "expr": "- 1 - - 3",
+      "expr": "! 1 * 3 OR 2 | 2 OR ~ 3 | 6",
+      "value": "1"
+    },
+    {
+      "expr": "- 7 XOR 1 - 2",
+      "value": "0"
+    },
+    {
+      "expr": "1 ^ 5 OR 7",
+      "value": "1"
+    },
+    {
+      "expr": "~ ~ 3",
+      "value": "3"
+    },
+    {
+      "expr": "NOT (2) | 2",
+      "value": "0"
+    },
+    {
+      "expr": "5 % 7 AND 7",
+      "value": "1"
+    },
+    {
+      "expr": "~ 6 < ! 5 ^ 0",
+      "value": "0"
+    },
+    {
+      "expr": "NOT - 2 ^ - 0 AND 1",
+      "value": "0"
+    },
+    {
+      "expr": "6 AND 0 - - 6 = 3 AND 6 ^ 3",
+      "value": "0"
+    },
+    {
+      "expr": "! 4 DIV 6 | 1",
+      "value": "1"
+    },
+    {
+      "expr": "5 - 4 | 0",
+      "value": "1"
+    },
+    {
+      "expr": "2 ^ 3 << 4",
+      "value": "16"
+    },
+    {
+      "expr": "0 << ~ 2 - 4",
+      "value": "0"
+    },
+    {
+      "expr": "6 AND 7 OR 0 % 3 ^ 7 & 1",
+      "value": "1"
+    },
+    {
+      "expr": "4 | 7 >> 6",
+      "value": "4"
+    },
+    {
+      "expr": "4 AND - 1 << 2",
+      "value": "1"
+    },
+    {
+      "expr": "4 XOR 4 + 3",
+      "value": "0"
+    },
+    {
+      "expr": "(4 AND 2 XOR 1)",
+      "value": "0"
+    },
+    {
+      "expr": "0 <=> NOT ~ 4",
+      "error": "ERROR 1064 (42000) at line 1: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'NOT ~ 4)' at line 1"
+    },
+    {
+      "expr": "4 OR 4 AND NOT 3",
+      "value": "1"
+    },
+    {
+      "expr": "~ 2 AND 3 & 1",
+      "value": "1"
+    },
+    {
+      "expr": "0 AND 3 >> 0 << 0",
+      "value": "0"
+    },
+    {
+      "expr": "~ 0 ^ ! 7 AND 4 | 5 = 1 | 0",
+      "value": "0"
+    },
+    {
+      "expr": "- 4 = 0 DIV 3 AND 7 | 2 <=> 2",
+      "value": "0"
+    },
+    {
+      "expr": "4 <=> NOT 2 OR 7",
+      "error": "ERROR 1064 (42000) at line 1: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'NOT 2 OR 7)' at line 1"
+    },
+    {
+      "expr": "- 3 OR ! 4 XOR 7",
+      "value": "1"
+    },
+    {
+      "expr": "4 & 2 << 4 = 4 + 4 < 2 < 6 AND ! 3 XOR 6",
+      "value": "1"
+    },
+    {
+      "expr": "! 7 AND 6 ^ 5",
+      "value": "0"
+    },
+    {
+      "expr": "4 << 0 OR 6",
+      "value": "1"
+    },
+    {
+      "expr": "2 OR 1 < 4 AND 2 << 7 OR 2 << 4",
+      "value": "1"
+    },
+    {
+      "expr": "NOT 7 AND 4 | 3 <=> 1 ^ - 1 OR - 7",
+      "value": "1"
+    },
+    {
+      "expr": "- 4 % 5 >> NOT 4",
+      "error": "ERROR 1064 (42000) at line 1: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'NOT 4)' at line 1"
+    },
+    {
+      "expr": "2 OR 1 AND 5",
+      "value": "1"
+    },
+    {
+      "expr": "- 1 << 4 XOR 1",
+      "value": "0"
+    },
+    {
+      "expr": "4 XOR 3 * 6",
+      "value": "0"
+    },
+    {
+      "expr": "! 6 AND 1 >> 1",
+      "value": "0"
+    },
+    {
+      "expr": "NOT 3 AND 0 ^ 6 >> 5 & 5 - 4",
+      "value": "0"
+    },
+    {
+      "expr": "NOT 2 << ! 3 + 6 OR ~ 0 + 0",
+      "value": "1"
+    },
+    {
+      "expr": "2 + ! 2 ^ 5",
+      "value": "7"
+    },
+    {
+      "expr": "6 + 3 <=> NOT 7",
+      "error": "ERROR 1064 (42000) at line 1: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'NOT 7)' at line 1"
+    },
+    {
+      "expr": "6 + 6 ^ 1",
+      "value": "13"
+    },
+    {
+      "expr": "5 = 6 * 3 + 0 & 4 + 6 XOR ! 3",
+      "value": "0"
+    },
+    {
+      "expr": "2 OR 5 XOR 6",
+      "value": "1"
+    },
+    {
+      "expr": "6 OR 7 DIV 1",
+      "value": "1"
+    },
+    {
+      "expr": "6 XOR 6 AND - 1",
+      "value": "0"
+    },
+    {
+      "expr": "0 ^ NOT 6 << 7",
+      "error": "ERROR 1064 (42000) at line 1: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'NOT 6 << 7)' at line 1"
+    },
+    {
+      "expr": "7 ^ 0 OR 4",
+      "value": "1"
+    },
+    {
+      "expr": "2 OR ~ 3 XOR 7",
+      "value": "1"
+    },
+    {
+      "expr": "6 & 7",
+      "value": "6"
+    },
+    {
+      "expr": "2 OR 2 DIV 6",
+      "value": "1"
+    },
+    {
+      "expr": "0 >> 4 OR 2",
+      "value": "1"
+    },
+    {
+      "expr": "- (6 > 2)",
+      "value": "-1"
+    },
+    {
+      "expr": "NOT 2 & ~ 7 << ! 4",
+      "value": "1"
+    },
+    {
+      "expr": "4 >> 6 = 1",
+      "value": "0"
+    },
+    {
+      "expr": "2 | 0 >> - 3",
       "value": "2"
     },
     {
-      "expr": "0 | 0 XOR 3 >> 4 XOR 5 XOR ~ 0 >> 0",
-      "value": "0"
-    },
-    {
-      "expr": "NOT 1 = 0 << ! 0",
+      "expr": "- 2 - 4 XOR 4 <=> ~ - 1 DIV 0 ^ 1",
       "value": "1"
     },
     {
-      "expr": "3 AND (4) AND 7",
+      "expr": "1 > 3 | 5",
+      "value": "0"
+    },
+    {
+      "expr": "~ 2 OR 3 << 2",
       "value": "1"
     },
     {
-      "expr": "NOT ! 1 > 6 <=> - 6 & 1",
-      "value": "0"
-    },
-    {
-      "expr": "6 = 6 = 2 XOR 1 AND 5",
+      "expr": "! ! - 3 OR 1",
       "value": "1"
     },
     {
-      "expr": "6 <=> ~ 0",
-      "value": "0"
-    },
-    {
-      "expr": "NOT 1",
-      "value": "0"
-    },
-    {
-      "expr": "! 3 OR 0 * ! 0",
-      "value": "0"
-    },
-    {
-      "expr": "3 < ~ 3 ^ NOT 5 AND ~ 6 * ~ 3",
-      "error": "ERROR 1064 (42000) at line 1: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'NOT 5 AND ~ 6 * ~ 3)' at line 1"
-    },
-    {
-      "expr": "(((5)))",
-      "value": "5"
-    },
-    {
-      "expr": "! 1 - - 7 & 1 >> ~ 2 OR 3",
+      "expr": "1 XOR 7 AND 0",
       "value": "1"
     },
     {
-      "expr": "! 0 >> 7 AND 4 - 7 >> 3 > 2 < 5 DIV 5",
-      "value": "0"
+      "expr": "4 - 5 | 2",
+      "value": "18446744073709551615"
     },
     {
-      "expr": "(0 << 2 % 3 % 7)",
-      "value": "0"
-    },
-    {
-      "expr": "0 < 3 OR (~ 7) >> 4 OR 3",
+      "expr": "6 | ! 1 OR 3",
       "value": "1"
     },
     {
-      "expr": "7 = 5 % 6 OR NOT 3",
+      "expr": "NOT 2 - - 1",
       "value": "0"
     },
     {
-      "expr": "(6 + ~ 4 XOR 2)",
-      "error": "ERROR 1690 (22003) at line 1: BIGINT UNSIGNED value is out of range in '(6 + ~(4))'"
-    },
-    {
-      "expr": "(7 <=> 2 | 4 < 3)",
+      "expr": "7 AND ~ 7 = 6 OR ! 0 OR 1 XOR 2",
       "value": "1"
     },
     {
-      "expr": "! 1 > 5 + 7 OR 2 % ~ 6",
+      "expr": "6 OR (3) DIV 3 <=> ~ 2 ^ 1",
       "value": "1"
     },
     {
-      "expr": "~ - 1",
-      "value": "0"
-    },
-    {
-      "expr": "6 = - 6 << 4 <=> ! - 7 ^ - 5 AND 0",
-      "value": "0"
-    },
-    {
-      "expr": "NOT 1 + 2 % ~ 0 & 2",
-      "value": "0"
-    },
-    {
-      "expr": "6 & 3 = 4 - (- 4)",
-      "value": "0"
-    },
-    {
-      "expr": "~ 2 OR 1 % (7 + NOT 5)",
-      "error": "ERROR 1064 (42000) at line 1: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'NOT 5))' at line 1"
-    },
-    {
-      "expr": "4 XOR 4 OR 5",
+      "expr": "! 6 ^ 0 XOR 5",
       "value": "1"
     },
     {
-      "expr": "(4 % ~ 1 AND - 7)",
-      "value": "1"
-    },
-    {
-      "expr": "3 <=> 3 <=> 7 DIV 4 << 7",
+      "expr": "(- 0 + 4) = - (2)",
       "value": "0"
     },
     {
-      "expr": "(7) % 7 XOR NOT 2 OR 6",
+      "expr": "1 - 1 * 0",
       "value": "1"
     },
     {
-      "expr": "- 2 * (1 << 1)",
-      "error": "ERROR 1690 (22003) at line 1: BIGINT UNSIGNED value is out of range in '(-(2) * (1 << 1))'"
+      "expr": "6 <=> 6 >> 4",
+      "value": "0"
     },
     {
-      "expr": "(7 + 3) DIV 5",
+      "expr": "6 - 6 & ~ 3",
+      "value": "0"
+    },
+    {
+      "expr": "4 < ~ 0 - 7",
+      "value": "1"
+    },
+    {
+      "expr": "3 ^ 0 % 3 AND 0 * - 6 + 7 * 6",
+      "value": "0"
+    },
+    {
+      "expr": "6 | 5 OR 2",
+      "value": "1"
+    },
+    {
+      "expr": "- 3 + 0 AND 3",
+      "value": "1"
+    },
+    {
+      "expr": "0 OR - 7 | 1",
+      "value": "1"
+    },
+    {
+      "expr": "2 ^ 0 < - 7",
+      "value": "0"
+    },
+    {
+      "expr": "3 & 6 XOR 2",
+      "value": "0"
+    },
+    {
+      "expr": "NOT 4 ^ 0 <=> 3",
+      "value": "1"
+    },
+    {
+      "expr": "~ 3 | 3 AND 0",
+      "value": "0"
+    },
+    {
+      "expr": "NOT 6 DIV NOT 1 ^ 7",
+      "error": "ERROR 1064 (42000) at line 1: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'NOT 1 ^ 7)' at line 1"
+    },
+    {
+      "expr": "6 DIV 1 DIV 4 <=> 1 OR 4 ^ 0 * 2 XOR 2 AND ! 6",
+      "value": "1"
+    },
+    {
+      "expr": "6 AND 1 <=> 0 > 5 = ! 2 > 6 ^ 4 & 1",
+      "value": "1"
+    },
+    {
+      "expr": "~ 4 & - 1 | 5 % 1 AND 1 - (2)",
+      "value": "1"
+    },
+    {
+      "expr": "(7) AND 1 DIV ~ 6 ^ 6",
+      "value": "0"
+    },
+    {
+      "expr": "~ 0 - ! 2 & - 0",
+      "value": "0"
+    },
+    {
+      "expr": "4 - ! 3 AND 6",
+      "value": "1"
+    },
+    {
+      "expr": "2 ^ 3 AND 2",
+      "value": "1"
+    },
+    {
+      "expr": "5 & NOT 5 | 7",
+      "error": "ERROR 1064 (42000) at line 1: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'NOT 5 | 7)' at line 1"
+    },
+    {
+      "expr": "6 DIV 1 | 7 XOR 2 << NOT 0 XOR 1 >> 2",
+      "error": "ERROR 1064 (42000) at line 1: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'NOT 0 XOR 1 >> 2)' at line 1"
+    },
+    {
+      "expr": "7 & 5 XOR 7",
+      "value": "0"
+    },
+    {
+      "expr": "1 XOR 0 OR 3",
+      "value": "1"
+    },
+    {
+      "expr": "~ 3",
+      "value": "18446744073709551612"
+    },
+    {
+      "expr": "2 - 0",
       "value": "2"
     },
     {
-      "expr": "NOT NOT 6 ^ 7 << 0 < 7",
+      "expr": "4 >> 0 OR 2",
       "value": "1"
     },
     {
-      "expr": "4 << 2 << 4 OR 3 | 5 = 0 << 4 DIV 0",
+      "expr": "NOT 3 >> ~ 6 - 3",
       "value": "1"
     },
     {
-      "expr": "6 | - 3 ^ 7 DIV - 6 << 5",
-      "error": "ERROR 1690 (22003) at line 1: BIGINT UNSIGNED value is out of range in '((-(3) ^ 7) DIV -(6))'"
+      "expr": "~ 7 <=> 4 AND 5 & 3 < 7",
+      "value": "0"
     },
     {
-      "expr": "4 = 6 & (1) - 4",
+      "expr": "- 3 & 5",
+      "value": "5"
+    },
+    {
+      "expr": "7 > 1 - 1",
       "value": "1"
+    },
+    {
+      "expr": "NOT 2 >> 3 AND 1",
+      "value": "1"
+    },
+    {
+      "expr": "- 1 <=> (3)",
+      "value": "0"
+    },
+    {
+      "expr": "- 3 | ! 4 - - 7 < 0 <=> 4 | 4 > 7 XOR 4 & ~ 4",
+      "value": "0"
+    },
+    {
+      "expr": "- 1 < 3 - 0",
+      "value": "1"
+    },
+    {
+      "expr": "NOT 4 AND 2 | NOT 7 XOR 3 + 1",
+      "error": "ERROR 1064 (42000) at line 1: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'NOT 7 XOR 3 + 1)' at line 1"
+    },
+    {
+      "expr": "6 ^ 4 & 3",
+      "value": "2"
+    },
+    {
+      "expr": "1 < 6 ^ 7",
+      "value": "0"
+    },
+    {
+      "expr": "3 % 7 ^ 0",
+      "value": "3"
+    },
+    {
+      "expr": "4 XOR ! 6 - ! 5",
+      "value": "1"
+    },
+    {
+      "expr": "6 = 4 & 1 + NOT 7 XOR 7 & 4",
+      "error": "ERROR 1064 (42000) at line 1: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'NOT 7 XOR 7 & 4)' at line 1"
+    },
+    {
+      "expr": "NOT 0 OR ~ 0 | 5 ^ 4 << (6)",
+      "value": "1"
+    },
+    {
+      "expr": "5 OR 6 ^ 1 >> 2 - ! 3 AND 3 & 5",
+      "value": "1"
+    },
+    {
+      "expr": "2 << 0 <=> 4",
+      "value": "0"
+    },
+    {
+      "expr": "0 % 6 XOR 1",
+      "value": "1"
+    },
+    {
+      "expr": "~ - 2 < - 3 & NOT 5",
+      "error": "ERROR 1064 (42000) at line 1: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'NOT 5)' at line 1"
+    },
+    {
+      "expr": "2 OR 5 % 6 << 2 & 5 OR 7 | 6",
+      "value": "1"
+    },
+    {
+      "expr": "7 OR NOT 4 XOR 0",
+      "value": "1"
+    },
+    {
+      "expr": "0 - 6 DIV 7",
+      "value": "0"
+    },
+    {
+      "expr": "~ 0 OR 3 | 4",
+      "value": "1"
+    },
+    {
+      "expr": "- 3 ^ - 0 | ! 3",
+      "value": "18446744073709551613"
+    },
+    {
+      "expr": "! 7 & 3 >> ! 7",
+      "value": "0"
+    },
+    {
+      "expr": "7 ^ 5 + 3",
+      "value": "5"
+    },
+    {
+      "expr": "(0 & 5 | 6) <=> 2 & 7 DIV 5",
+      "value": "0"
+    },
+    {
+      "expr": "6 AND 5 >> 4",
+      "value": "0"
+    },
+    {
+      "expr": "6 + 3 % 3",
+      "value": "6"
+    },
+    {
+      "expr": "~ 5 < ~ 7 AND 3",
+      "value": "0"
+    },
+    {
+      "expr": "1 | (5 + 6)",
+      "value": "11"
+    },
+    {
+      "expr": "NOT 4 | 6 & 4",
+      "value": "0"
+    },
+    {
+      "expr": "! 1 >> 0 + ~ 1",
+      "value": "0"
+    },
+    {
+      "expr": "3 + 7 DIV 3",
+      "value": "5"
+    },
+    {
+      "expr": "2 AND ! 5 OR 3",
+      "value": "1"
+    },
+    {
+      "expr": "3 AND 0 ^ 7",
+      "value": "1"
+    },
+    {
+      "expr": "1 <=> 1 - 1 % 6 DIV 2 << 2",
+      "value": "0"
+    },
+    {
+      "expr": "3 OR 4 % 2 * 4 + 0 AND NOT 5",
+      "value": "1"
+    },
+    {
+      "expr": "~ 6 >> 3 % 5",
+      "value": "2305843009213693951"
+    },
+    {
+      "expr": "7 OR ! 4 | 3",
+      "value": "1"
+    },
+    {
+      "expr": "1 + 0 <=> 1",
+      "value": "1"
+    },
+    {
+      "expr": "5 ^ ~ 1 AND 7",
+      "value": "1"
+    },
+    {
+      "expr": "~ 7 AND 1 = ~ 5",
+      "value": "0"
+    },
+    {
+      "expr": "3 ^ 1 <=> NOT 7 OR 7",
+      "error": "ERROR 1064 (42000) at line 1: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'NOT 7 OR 7)' at line 1"
+    },
+    {
+      "expr": "1 ^ 5 < 0",
+      "value": "0"
+    },
+    {
+      "expr": "! NOT 1 >> 2 & 1",
+      "error": "ERROR 1064 (42000) at line 1: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'NOT 1 >> 2 & 1)' at line 1"
+    },
+    {
+      "expr": "6 + 4 % 6",
+      "value": "10"
+    },
+    {
+      "expr": "! 4 - ! 5 | 1 XOR 3",
+      "value": "0"
+    },
+    {
+      "expr": "2 AND - 0 & 5",
+      "value": "0"
+    },
+    {
+      "expr": "7 AND ! 5 < 2",
+      "value": "1"
+    },
+    {
+      "expr": "0 OR 2 * 0 - 4 * 2",
+      "value": "1"
+    },
+    {
+      "expr": "NOT 0 OR NOT 3 XOR 6",
+      "value": "1"
+    },
+    {
+      "expr": "- 1 | 7 & 5",
+      "value": "18446744073709551615"
+    },
+    {
+      "expr": "(! 3 & 3 * 2)",
+      "value": "0"
+    },
+    {
+      "expr": "~ (~ 7)",
+      "value": "7"
+    },
+    {
+      "expr": "0 XOR 1 | 2",
+      "value": "1"
+    },
+    {
+      "expr": "~ 1 - 5",
+      "value": "18446744073709551609"
+    },
+    {
+      "expr": "0 & 1 OR 5",
+      "value": "1"
+    },
+    {
+      "expr": "3 - - 4 OR 7",
+      "value": "1"
+    },
+    {
+      "expr": "2 = 2 AND NOT 1",
+      "value": "0"
+    },
+    {
+      "expr": "! 3 OR 3 % 7",
+      "value": "1"
+    },
+    {
+      "expr": "5 | 4 XOR 6",
+      "value": "0"
+    },
+    {
+      "expr": "7 DIV 4 XOR 5",
+      "value": "0"
+    },
+    {
+      "expr": "6 OR 3 & 5",
+      "value": "1"
+    },
+    {
+      "expr": "! 4 + - 7 AND NOT 6",
+      "value": "0"
+    },
+    {
+      "expr": "(6 > 7 >> ! 0)",
+      "value": "1"
+    },
+    {
+      "expr": "0 & 7 OR ! 0",
+      "value": "1"
+    },
+    {
+      "expr": "0 | 1 & 0",
+      "value": "0"
+    },
+    {
+      "expr": "2 AND 0 + 1",
+      "value": "1"
+    },
+    {
+      "expr": "4 - 2 = 4",
+      "value": "0"
+    },
+    {
+      "expr": "2 OR 1 << ! 7",
+      "value": "1"
+    },
+    {
+      "expr": "0 * 2 AND ~ 4",
+      "value": "0"
+    },
+    {
+      "expr": "~ 2 & 6 < 5",
+      "value": "1"
+    },
+    {
+      "expr": "7 + 0 & 6",
+      "value": "6"
+    },
+    {
+      "expr": "3 ^ 0 DIV 3 * 1 XOR 3 <=> 0",
+      "value": "1"
+    },
+    {
+      "expr": "! 4 & 3 - 1 + 1",
+      "value": "0"
+    },
+    {
+      "expr": "2 XOR 2 OR ~ 7",
+      "value": "1"
+    },
+    {
+      "expr": "~ 2 + 7 XOR - 2",
+      "error": "ERROR 1690 (22003) at line 1: BIGINT UNSIGNED value is out of range in '(~(2) + 7)'"
+    },
+    {
+      "expr": "(NOT 7 | - 1 = 0)",
+      "value": "1"
+    },
+    {
+      "expr": "(NOT ~ 6 >> ! 2 ^ 0)",
+      "value": "0"
+    },
+    {
+      "expr": "4 | 2 ^ 1",
+      "value": "7"
+    },
+    {
+      "expr": "5 XOR 0 << NOT 6",
+      "error": "ERROR 1064 (42000) at line 1: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'NOT 6)' at line 1"
+    },
+    {
+      "expr": "4 - 7 ^ 2",
+      "error": "ERROR 1690 (22003) at line 1: BIGINT UNSIGNED value is out of range in '(4 - (7 ^ 2))'"
+    },
+    {
+      "expr": "2 | 3 & 2 | (2 ^ 3 AND ! 7)",
+      "value": "2"
+    },
+    {
+      "expr": "- 1 DIV - 2 OR 7 + NOT 7 XOR 0 AND 2",
+      "error": "ERROR 1064 (42000) at line 1: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'NOT 7 XOR 0 AND 2)' at line 1"
+    },
+    {
+      "expr": "1 OR 6 < 2",
+      "value": "1"
+    },
+    {
+      "expr": "! NOT 5 & ! 7 >> 0",
+      "error": "ERROR 1064 (42000) at line 1: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'NOT 5 & ! 7 >> 0)' at line 1"
+    },
+    {
+      "expr": "4 & 7 XOR 1",
+      "value": "0"
+    },
+    {
+      "expr": "3 & 7 XOR 1",
+      "value": "0"
+    },
+    {
+      "expr": "7 & 6 + 3",
+      "value": "1"
+    },
+    {
+      "expr": "- 1 >> 1 | NOT 5",
+      "error": "ERROR 1064 (42000) at line 1: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'NOT 5)' at line 1"
+    },
+    {
+      "expr": "~ 2 & 4 >> 3",
+      "value": "0"
+    },
+    {
+      "expr": "2 ^ 7 OR 5",
+      "value": "1"
+    },
+    {
+      "expr": "3 < 7 ^ 6 > 3 XOR 2",
+      "value": "1"
+    },
+    {
+      "expr": "7 - 2 | - 5",
+      "value": "18446744073709551615"
+    },
+    {
+      "expr": "2 AND 6 * 2 << 0 DIV - 5 < 6 ^ 4",
+      "value": "0"
+    },
+    {
+      "expr": "3 XOR 3 & 1",
+      "value": "0"
+    },
+    {
+      "expr": "~ 0 ^ 5 | 3 * 7",
+      "value": "18446744073709551615"
+    },
+    {
+      "expr": "! 7 = 5 * 2 > 5 XOR 0",
+      "value": "0"
+    },
+    {
+      "expr": "1 + 7 ^ 4",
+      "value": "4"
+    },
+    {
+      "expr": "0 < ~ 2 AND 1 XOR 2 * 5 * 7 << 1",
+      "value": "0"
+    },
+    {
+      "expr": "7 & 0 ^ 6",
+      "value": "6"
+    },
+    {
+      "expr": "5 + 0 ^ 2 <=> ! 2 << 6 | - 6",
+      "value": "0"
+    },
+    {
+      "expr": "1 * ! 5 & 5",
+      "value": "0"
+    },
+    {
+      "expr": "4 + 5 ^ 6 > (3 XOR 4 ^ 7)",
+      "value": "1"
+    },
+    {
+      "expr": "7 * 5 | NOT 0",
+      "error": "ERROR 1064 (42000) at line 1: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'NOT 0)' at line 1"
+    },
+    {
+      "expr": "1 AND 4 ^ 0",
+      "value": "1"
+    },
+    {
+      "expr": "3 XOR 7 & 4",
+      "value": "0"
+    },
+    {
+      "expr": "~ 1 < 0 ^ 7",
+      "value": "0"
+    },
+    {
+      "expr": "1 | 2 & NOT 6",
+      "error": "ERROR 1064 (42000) at line 1: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'NOT 6)' at line 1"
+    },
+    {
+      "expr": "NOT 0 OR 0 & 7",
+      "value": "1"
+    },
+    {
+      "expr": "~ 3 * 5 <=> ! 3 - 4",
+      "error": "ERROR 1690 (22003) at line 1: BIGINT UNSIGNED value is out of range in '(~(3) * 5)'"
+    },
+    {
+      "expr": "2 << 1 + 7",
+      "value": "512"
+    },
+    {
+      "expr": "! - 6",
+      "value": "0"
+    },
+    {
+      "expr": "(0 XOR 3 <=> 4)",
+      "value": "0"
+    },
+    {
+      "expr": "6 % 5",
+      "value": "1"
+    },
+    {
+      "expr": "0 << 4 AND 5",
+      "value": "0"
+    },
+    {
+      "expr": "1 - 2 XOR 5",
+      "value": "0"
+    },
+    {
+      "expr": "6 >> 5 AND - 5",
+      "value": "0"
+    },
+    {
+      "expr": "! 6 ^ 0 >> 4 OR 0 ^ ! 1",
+      "value": "0"
+    },
+    {
+      "expr": "4 ^ 7 DIV - 7",
+      "value": "0"
+    },
+    {
+      "expr": "6 <=> 5 % 5 ^ 3 + - 1 + 0 | 4",
+      "value": "0"
+    },
+    {
+      "expr": "6 < 3 + ! 3",
+      "value": "0"
+    },
+    {
+      "expr": "3 | 7 XOR - 4",
+      "value": "0"
+    },
+    {
+      "expr": "6 - 4 XOR ~ 6",
+      "value": "0"
+    },
+    {
+      "expr": "6 XOR 3 > 7",
+      "value": "1"
+    },
+    {
+      "expr": "5 + 3 % 5",
+      "value": "8"
+    },
+    {
+      "expr": "(6 > 3 OR 4 - 2 % 1)",
+      "value": "1"
+    },
+    {
+      "expr": "(! 4 % 1) | 6 OR 3 ^ 2",
+      "value": "1"
+    },
+    {
+      "expr": "4 = - 1 - ~ 3",
+      "error": "ERROR 1690 (22003) at line 1: BIGINT UNSIGNED value is out of range in '(-(1) - ~(3))'"
+    },
+    {
+      "expr": "3 << 3 % 1",
+      "value": "3"
+    },
+    {
+      "expr": "1 OR 1 % 3",
+      "value": "1"
+    },
+    {
+      "expr": "(0 << 7 AND 7)",
+      "value": "0"
+    },
+    {
+      "expr": "- - 3 & 7 > 7 < 3",
+      "value": "1"
+    },
+    {
+      "expr": "1 AND NOT 5 >> 6",
+      "value": "1"
+    },
+    {
+      "expr": "! 3 XOR 4 << 2",
+      "value": "1"
+    },
+    {
+      "expr": "4 AND 6 ^ 1",
+      "value": "1"
+    },
+    {
+      "expr": "7 ^ 3 % 7",
+      "value": "4"
+    },
+    {
+      "expr": "3 | 5 >> NOT 4",
+      "error": "ERROR 1064 (42000) at line 1: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'NOT 4)' at line 1"
+    },
+    {
+      "expr": "3 XOR 0 & 4 & (6)",
+      "value": "1"
+    },
+    {
+      "expr": "- 4 < 3 OR ~ 0",
+      "value": "1"
+    },
+    {
+      "expr": "(NOT 0 - - 4)",
+      "value": "0"
+    },
+    {
+      "expr": "5 AND ! 4 | 0",
+      "value": "0"
+    },
+    {
+      "expr": "5 = 7 - 0",
+      "value": "0"
+    },
+    {
+      "expr": "5 >> 6 OR 0",
+      "value": "0"
+    },
+    {
+      "expr": "~ 0 ^ 4 DIV 1",
+      "value": "18446744073709551611"
+    },
+    {
+      "expr": "7 << 7 XOR - 3",
+      "value": "0"
+    },
+    {
+      "expr": "1 & ~ 0 OR 2",
+      "value": "1"
+    },
+    {
+      "expr": "(~ 5)",
+      "value": "18446744073709551610"
+    },
+    {
+      "expr": "1 <=> 3 % 6",
+      "value": "0"
+    },
+    {
+      "expr": "7 & 1 XOR 1",
+      "value": "0"
+    },
+    {
+      "expr": "! 6 % 0 | 2",
+      "value": "NULL"
+    },
+    {
+      "expr": "2 % 7 & 5",
+      "value": "0"
+    },
+    {
+      "expr": "0 - 7 | ! 5",
+      "value": "18446744073709551609"
+    },
+    {
+      "expr": "7 ^ 2 AND NOT 2 AND 2",
+      "value": "0"
+    },
+    {
+      "expr": "5 ^ 3 OR 5",
+      "value": "1"
+    },
+    {
+      "expr": "2 OR 0 XOR 7",
+      "value": "1"
+    },
+    {
+      "expr": "6 = 0 + - 2",
+      "value": "0"
+    },
+    {
+      "expr": "~ 0 AND 1 - 7",
+      "value": "1"
+    },
+    {
+      "expr": "0 + 4 | 6",
+      "value": "6"
+    },
+    {
+      "expr": "5 > ~ 1 | 6",
+      "value": "0"
+    },
+    {
+      "expr": "- 0 AND 6 ^ 3",
+      "value": "0"
+    },
+    {
+      "expr": "(6 * 5 XOR 5)",
+      "value": "0"
+    },
+    {
+      "expr": "7 AND 2 DIV ! 3 >> - 5 OR 3 < 5 DIV ! 5",
+      "value": "NULL"
+    },
+    {
+      "expr": "NOT 4 ^ 7 XOR 3",
+      "value": "1"
+    },
+    {
+      "expr": "3 | ~ 4 >> 4 XOR NOT 3 <=> 1 <=> 7 XOR ~ 4 ^ 7",
+      "value": "1"
+    },
+    {
+      "expr": "7 < 6 ^ 0",
+      "value": "0"
+    },
+    {
+      "expr": "2 + 1 AND 3",
+      "value": "1"
+    },
+    {
+      "expr": "4 + 0 DIV 3",
+      "value": "4"
+    },
+    {
+      "expr": "! 5 - - 2 & 4",
+      "value": "0"
+    },
+    {
+      "expr": "5 << 5 - NOT 2",
+      "error": "ERROR 1064 (42000) at line 1: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'NOT 2)' at line 1"
+    },
+    {
+      "expr": "6 AND - 4 & 1",
+      "value": "0"
+    },
+    {
+      "expr": "NOT 7 >> 0 * NOT 1",
+      "error": "ERROR 1064 (42000) at line 1: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'NOT 1)' at line 1"
+    },
+    {
+      "expr": "! 7 + 6 DIV ! 3",
+      "value": "NULL"
+    },
+    {
+      "expr": "(NOT 7 XOR 4 AND 0)",
+      "value": "0"
+    },
+    {
+      "expr": "5 < 7 >> 5",
+      "value": "0"
+    },
+    {
+      "expr": "6 + ! 4 XOR 4",
+      "value": "0"
+    },
+    {
+      "expr": "0 OR 0 XOR ~ 3",
+      "value": "1"
+    },
+    {
+      "expr": "7 | 3 >> 4 + ! NOT 2",
+      "error": "ERROR 1064 (42000) at line 1: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'NOT 2)' at line 1"
+    },
+    {
+      "expr": "4 = 7 ^ NOT 7",
+      "error": "ERROR 1064 (42000) at line 1: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'NOT 7)' at line 1"
+    },
+    {
+      "expr": "5 & 1 XOR 1",
+      "value": "0"
+    },
+    {
+      "expr": "NOT 4 % 5 XOR 7",
+      "value": "1"
+    },
+    {
+      "expr": "5 | 1 ^ 7 AND 0 | 0 ^ 5",
+      "value": "1"
+    },
+    {
+      "expr": "1 XOR 2 ^ 1",
+      "value": "0"
+    },
+    {
+      "expr": "1 & 5 XOR 3",
+      "value": "0"
+    },
+    {
+      "expr": "5 | (- 0)",
+      "value": "5"
+    },
+    {
+      "expr": "4 < 5 - 7",
+      "value": "0"
+    },
+    {
+      "expr": "- 4 AND 4 <=> ! 6 < NOT 4 - 4 AND 6 XOR 0",
+      "error": "ERROR 1064 (42000) at line 1: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'NOT 4 - 4 AND 6 XOR 0)' at line 1"
+    },
+    {
+      "expr": "6 AND NOT 5 XOR NOT 0",
+      "value": "1"
+    },
+    {
+      "expr": "5 XOR 5 + 5",
+      "value": "0"
+    },
+    {
+      "expr": "- 1 XOR 2 AND 4",
+      "value": "0"
+    },
+    {
+      "expr": "3 DIV 3 & 6",
+      "value": "0"
+    },
+    {
+      "expr": "1 - 7 OR 2 & NOT 5 AND 0 | 0",
+      "error": "ERROR 1064 (42000) at line 1: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'NOT 5 AND 0 | 0)' at line 1"
+    },
+    {
+      "expr": "6 < 7 * 3 | NOT 5 XOR 6 << - 7",
+      "error": "ERROR 1064 (42000) at line 1: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'NOT 5 XOR 6 << - 7)' at line 1"
+    },
+    {
+      "expr": "3 & 2 ^ NOT 5",
+      "error": "ERROR 1064 (42000) at line 1: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'NOT 5)' at line 1"
+    },
+    {
+      "expr": "2 & 1 | 0",
+      "value": "0"
+    },
+    {
+      "expr": "6 & 4 * 0",
+      "value": "0"
+    },
+    {
+      "expr": "5 << 4 | 1 = NOT 4",
+      "error": "ERROR 1064 (42000) at line 1: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'NOT 4)' at line 1"
+    },
+    {
+      "expr": "0 AND 0 OR 5 | 3 >> NOT 6 & 2 - 2",
+      "error": "ERROR 1064 (42000) at line 1: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'NOT 6 & 2 - 2)' at line 1"
+    },
+    {
+      "expr": "(~ 5 - 0 | 0)",
+      "value": "18446744073709551610"
+    },
+    {
+      "expr": "5 | 5 XOR 2",
+      "value": "0"
+    },
+    {
+      "expr": "1 > 2 - 5",
+      "value": "1"
+    },
+    {
+      "expr": "5 XOR 2 | 7",
+      "value": "0"
+    },
+    {
+      "expr": "2 ^ 6 AND 6",
+      "value": "1"
+    },
+    {
+      "expr": "NOT 0 << 3",
+      "value": "1"
+    },
+    {
+      "expr": "7 DIV 2 << 0",
+      "value": "3"
+    },
+    {
+      "expr": "3 OR ! 4 & 3",
+      "value": "1"
+    },
+    {
+      "expr": "NOT 5 > 2 << 7 >> 4",
+      "value": "1"
+    },
+    {
+      "expr": "- 1 DIV - 4 ^ 0",
+      "value": "0"
+    },
+    {
+      "expr": "NOT 4 << 7 DIV 0",
+      "value": "NULL"
+    },
+    {
+      "expr": "NOT 0 & 7 >> 3",
+      "value": "1"
+    },
+    {
+      "expr": "~ 5 DIV 1 - 3",
+      "value": "18446744073709551607"
+    },
+    {
+      "expr": "- 2 + 7 ^ 0",
+      "value": "5"
+    },
+    {
+      "expr": "NOT 0 | 3 XOR 3",
+      "value": "1"
+    },
+    {
+      "expr": "(- - 1 XOR 7 - NOT 2 | 2)",
+      "error": "ERROR 1064 (42000) at line 1: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'NOT 2 | 2))' at line 1"
+    },
+    {
+      "expr": "2 | ~ 5 << ~ 3",
+      "value": "2"
+    },
+    {
+      "expr": "7 DIV 4 ^ 2",
+      "value": "1"
+    },
+    {
+      "expr": "~ 3 XOR 3 | 7",
+      "value": "0"
+    },
+    {
+      "expr": "4 ^ 6 | ! 0",
+      "value": "3"
+    },
+    {
+      "expr": "(3 > 1 | 0)",
+      "value": "1"
+    },
+    {
+      "expr": "NOT 1 XOR 3 OR 3",
+      "value": "1"
+    },
+    {
+      "expr": "3 = 5 ^ - 2 < 1",
+      "value": "1"
+    },
+    {
+      "expr": "1 & 2 OR NOT 0",
+      "value": "1"
+    },
+    {
+      "expr": "1 ^ 0 XOR 6",
+      "value": "0"
+    },
+    {
+      "expr": "(1) XOR 6 - ! 0",
+      "value": "0"
+    },
+    {
+      "expr": "(6 ^ 3 & 3) - (3) <=> 2",
+      "error": "ERROR 1690 (22003) at line 1: BIGINT UNSIGNED value is out of range in '(((6 ^ 3) & 3) - 3)'"
+    },
+    {
+      "expr": "NOT 6 OR 2 XOR 2",
+      "value": "0"
+    },
+    {
+      "expr": "5 << 4 | 5 << 2",
+      "value": "84"
+    },
+    {
+      "expr": "- 4 OR 5 & ! 3 AND ~ 1",
+      "value": "1"
+    },
+    {
+      "expr": "! 5 | 1 ^ - 7",
+      "value": "18446744073709551608"
+    },
+    {
+      "expr": "4 + 5 AND 5 ^ 0",
+      "value": "1"
+    },
+    {
+      "expr": "5 + - 0",
+      "value": "5"
+    },
+    {
+      "expr": "3 - 0 XOR 7",
+      "value": "0"
+    },
+    {
+      "expr": "5 | 0 + ! 4",
+      "value": "5"
+    },
+    {
+      "expr": "0 = ~ 7 OR 4",
+      "value": "1"
+    },
+    {
+      "expr": "! 0 < 2 = NOT 6",
+      "error": "ERROR 1064 (42000) at line 1: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'NOT 6)' at line 1"
+    },
+    {
+      "expr": "3 >> 3 AND 4 = NOT 6",
+      "error": "ERROR 1064 (42000) at line 1: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'NOT 6)' at line 1"
+    },
+    {
+      "expr": "2 AND 4 << 4",
+      "value": "1"
+    },
+    {
+      "expr": "6 & 0 ^ 4",
+      "value": "4"
+    },
+    {
+      "expr": "0 > 0 XOR 3",
+      "value": "1"
+    },
+    {
+      "expr": "(1 & 5 ^ 1)",
+      "value": "0"
+    },
+    {
+      "expr": "NOT (1 >> 0 & 5)",
+      "value": "0"
+    },
+    {
+      "expr": "(3 > 4 AND - 5)",
+      "value": "0"
+    },
+    {
+      "expr": "3 * 5 >> 5",
+      "value": "0"
+    },
+    {
+      "expr": "~ NOT 7 ^ - 5 + 0 OR 2",
+      "error": "ERROR 1064 (42000) at line 1: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'NOT 7 ^ - 5 + 0 OR 2)' at line 1"
+    },
+    {
+      "expr": "(7 < NOT 1 >> ! 2)",
+      "error": "ERROR 1064 (42000) at line 1: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'NOT 1 >> ! 2))' at line 1"
+    },
+    {
+      "expr": "(NOT 0)",
+      "value": "1"
+    },
+    {
+      "expr": "1 & NOT 2 XOR 3",
+      "error": "ERROR 1064 (42000) at line 1: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'NOT 2 XOR 3)' at line 1"
+    },
+    {
+      "expr": "3 < 1 | 7",
+      "value": "1"
+    },
+    {
+      "expr": "(NOT 5 XOR 3 AND 7)",
+      "value": "1"
+    },
+    {
+      "expr": "(2 AND 5 DIV 2) AND NOT (1)",
+      "value": "0"
+    },
+    {
+      "expr": "! 2 & 4 ^ 3",
+      "value": "0"
+    },
+    {
+      "expr": "(6 OR 0 | 1) % - 7",
+      "value": "1"
+    },
+    {
+      "expr": "~ 3 & 3 >> - 5",
+      "value": "0"
+    },
+    {
+      "expr": "2 + 7 >> 2",
+      "value": "2"
+    },
+    {
+      "expr": "7 >> 6 + 0",
+      "value": "0"
+    },
+    {
+      "expr": "5 < 1 XOR 7",
+      "value": "1"
+    },
+    {
+      "expr": "4 ^ 6 AND 6",
+      "value": "1"
+    },
+    {
+      "expr": "7 > 1 | 2",
+      "value": "1"
+    },
+    {
+      "expr": "0 AND ~ 6 DIV 1",
+      "value": "0"
+    },
+    {
+      "expr": "4 AND 6 + 3 & 2",
+      "value": "0"
     }
   ]
 }
