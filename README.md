@@ -13,7 +13,8 @@
 > dump in docs 15, 24 and 28 is a test case that CI checks rather than a claim
 > someone maintains. And the collations are now checked against a **real MySQL
 > 8.4** in CI rather than only against our reading of the docs — which caught
-> `utf8mb4_bin` producing the wrong sort key on the first run.
+> `utf8mb4_bin` producing the wrong sort key on the first run — and 45 storage
+> vectors captured from that server all decode to the value it stored.
 > Queries are still answered by a stub, because the parser
 > and engine are M3–M5. Start at
 > **[docs/44-roadmap.md](./docs/44-roadmap.md)** for the state

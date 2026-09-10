@@ -28,6 +28,8 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { existsSync, readFileSync, readdirSync } from 'node:fs'
 import { encodeCharset, loadCollation } from '@myjs/charsets'
+import { FIELD_TYPE } from '@myjs/bytes'
+import { decodeJson, decodeStorageValue, type ColumnMeta } from '@myjs/types'
 
 const FIXTURES = new URL('./fixtures/', import.meta.url).pathname
 
@@ -144,4 +146,188 @@ test('M2.21: the storage-encoding corpus is well formed and records its framing'
       `${c.column} inserted ${c.values.length} value(s) and captured ${c.rows.length} row image(s)`,
     )
   }
+})
+
+// --- replaying the storage corpus ------------------------------------------
+
+/**
+ * Binlog framing → the `.ibd` framing our decoders take.
+ *
+ * D-34 accepted binlog row images as a stand-in for `.ibd` records on the
+ * strength of doc 24's claim that the `decimal2bin` form is used identically
+ * in both, and named the two places that is *not* true. This is those two
+ * places, written out — which is the whole reason the fixture records its
+ * framing rather than just its bytes.
+ */
+const framings = {
+  /** Identical in both forms: DECIMAL, the floats, the temporals, ENUM/SET/BIT. */
+  direct: (b: Uint8Array) => b,
+  /**
+   * Doc 24 Rule 1, in reverse. A binlog integer is plain little-endian two's
+   * complement; a stored one is big-endian with the sign bit flipped, so that
+   * `memcmp` orders it. Both steps matter, and doing only one of them is doc
+   * 24's own worked warning.
+   */
+  int: (b: Uint8Array) => {
+    const be = Uint8Array.from([...b].reverse())
+    be[0] = (be[0] as number) ^ 0x80
+    return be
+  },
+  /** Unsigned integers get the byte reversal and no sign flip. */
+  uint: (b: Uint8Array) => Uint8Array.from([...b].reverse()),
+  /** A binlog CHAR/VARCHAR keeps a length prefix a stored one does not. */
+  len1: (b: Uint8Array) => b.subarray(1),
+  /** A binlog BLOB — and so a JSON column — carries a four-byte one. */
+  len4: (b: Uint8Array) => b.subarray(4),
+} as const
+
+interface ColumnCase {
+  readonly type: number
+  readonly meta?: Omit<ColumnMeta, 'type'>
+  readonly framing: keyof typeof framings
+  /** One expected `StorageValue` per value the fixture inserted. */
+  readonly expect: readonly unknown[]
+}
+
+const dt = (year: number, month: number, day: number, hour = 0, minute = 0, second = 0, microsecond = 0) => ({
+  year,
+  month,
+  day,
+  hour,
+  minute,
+  second,
+  microsecond,
+})
+
+const CASES: Record<string, ColumnCase> = {
+  i8: { type: FIELD_TYPE.TINY, framing: 'int', expect: [-128n, 0n, 127n] },
+  u8: { type: FIELD_TYPE.TINY, meta: { unsigned: true }, framing: 'uint', expect: [0n, 255n] },
+  i32: { type: FIELD_TYPE.LONG, framing: 'int', expect: [-1n, 0n, 1n, -2147483648n, 2147483647n] },
+  u32: { type: FIELD_TYPE.LONG, meta: { unsigned: true }, framing: 'uint', expect: [0n, 1n, 4294967295n] },
+  i64: {
+    type: FIELD_TYPE.LONGLONG,
+    framing: 'int',
+    expect: [-9223372036854775808n, 0n, 9223372036854775807n],
+  },
+  // The one that matters most: doc 24's worked `DECIMAL(14,4)` example, now
+  // confirmed by a server rather than by a source comment.
+  dec: {
+    type: FIELD_TYPE.NEWDECIMAL,
+    meta: { precision: 14, scale: 4 },
+    framing: 'direct',
+    expect: ['1234567890.1234', '-1234567890.1234', '0.0000'],
+  },
+  dec_max: {
+    type: FIELD_TYPE.NEWDECIMAL,
+    meta: { precision: 65, scale: 30 },
+    framing: 'direct',
+    expect: ['1.500000000000000000000000000000'],
+  },
+  f32: { type: FIELD_TYPE.FLOAT, framing: 'direct', expect: [1.5, -1.5, 0] },
+  f64: { type: FIELD_TYPE.DOUBLE, framing: 'direct', expect: [1.5, -1.5, 0] },
+  d: {
+    type: FIELD_TYPE.DATE,
+    framing: 'direct',
+    expect: [dt(2010, 10, 17), dt(1999, 12, 31), dt(2000, 1, 1)],
+  },
+  dt0: { type: FIELD_TYPE.DATETIME2, framing: 'direct', expect: [dt(2010, 10, 17, 19, 27, 30)] },
+  dt6: {
+    type: FIELD_TYPE.DATETIME2,
+    meta: { decimals: 6 },
+    framing: 'direct',
+    expect: [dt(2010, 10, 17, 19, 27, 30, 1)],
+  },
+  // TIMESTAMP is stored UTC and converted by the session `time_zone` (doc 15),
+  // so the decoder returns the neutral struct and this asserts the UTC instant
+  // — which also means a container running on a non-UTC clock fails here
+  // rather than silently shifting a vector.
+  ts6: {
+    type: FIELD_TYPE.TIMESTAMP2,
+    meta: { decimals: 6 },
+    framing: 'direct',
+    expect: [{ epochSeconds: Date.UTC(2010, 9, 17, 19, 27, 30) / 1000, microsecond: 1 }],
+  },
+  t0: {
+    type: FIELD_TYPE.TIME2,
+    framing: 'direct',
+    expect: [
+      { negative: false, days: 0, hour: 19, minute: 27, second: 30, microsecond: 0 },
+      { negative: true, days: 5, hour: 0, minute: 19, second: 27, microsecond: 0 },
+    ],
+  },
+  t6: {
+    type: FIELD_TYPE.TIME2,
+    meta: { decimals: 6 },
+    framing: 'direct',
+    expect: [{ negative: true, days: 5, hour: 0, minute: 19, second: 27, microsecond: 1 }],
+  },
+  y: { type: FIELD_TYPE.YEAR, framing: 'direct', expect: [2010] },
+  e: {
+    type: FIELD_TYPE.ENUM,
+    meta: { members: ['small', 'medium', 'large'] },
+    framing: 'direct',
+    expect: ['small', 'large'],
+  },
+  s: {
+    type: FIELD_TYPE.SET,
+    meta: { members: ['a', 'b', 'c'] },
+    framing: 'direct',
+    expect: [['a', 'c'], []],
+  },
+  b: { type: FIELD_TYPE.BIT, framing: 'direct', expect: [0b101010101n] },
+  ch: { type: FIELD_TYPE.STRING, meta: { collationId: 255 }, framing: 'len1', expect: ['ab'] },
+  vc: { type: FIELD_TYPE.VAR_STRING, meta: { collationId: 255 }, framing: 'len1', expect: ['ab', 'café'] },
+  // Collation 63 is `binary`, which is doc 15's only way to tell VARBINARY
+  // from VARCHAR — so this vector is what makes that rule externally checked.
+  bin: {
+    type: FIELD_TYPE.STRING,
+    meta: { collationId: 63 },
+    framing: 'len1',
+    expect: [Uint8Array.of(0x61, 0x62)],
+  },
+}
+
+test('M2.21: every captured storage vector decodes to the value that was inserted', () => {
+  const fixture = load<EncodingFixture>('storage-encodings')
+  if (fixture === null) return
+
+  let checked = 0
+  for (const column of fixture.columns) {
+    const spec = CASES[column.column]
+    if (spec === undefined) continue // handled separately, or not yet decodable
+    for (const [i, row] of column.rows.entries()) {
+      assert.notEqual(row, null, `${column.column}[${i}] came back NULL`)
+      const bytes = framings[spec.framing](Uint8Array.from(row as readonly number[]))
+      const actual = decodeStorageValue(spec.type, bytes, { type: spec.type, ...spec.meta })
+      assert.deepEqual(
+        actual,
+        spec.expect[i],
+        `${column.column} ${column.ddl} value ${column.values[i]} (${fixture.capturedAgainst})`,
+      )
+      checked++
+    }
+  }
+  // Pinned, so a fixture that loses a column or a case that loses an entry
+  // fails here rather than checking less and passing.
+  assert.equal(checked, 45, 'every vector in a type we decode must be checked')
+})
+
+test('M2.21: the captured JSON columns are the binary JSON M2.13 reads', () => {
+  // Doc 28 quotes no byte dumps at all (M2.15), so until now every JSON vector
+  // was derived from its grammar by hand. These three came off a server.
+  const fixture = load<EncodingFixture>('storage-encodings')
+  if (fixture === null) return
+  const js = fixture.columns.find((c) => c.column === 'js')
+  assert.ok(js !== undefined, 'the corpus must carry a JSON column')
+
+  const decoded = js.rows.map((r) => decodeJson(framings.len4(Uint8Array.from(r as readonly number[]))))
+  // Small integers come back as `number` and only an int64 becomes a
+  // `BigInt` — doc 28's inline-literal types are int16/int32, and widening them
+  // all to BigInt would make every JSON row awkward to use for no gain.
+  assert.deepEqual(decoded[0], { b: 1, a: [1, 2, null] })
+  assert.deepEqual(decoded[1], [])
+  // The reason this one is in the corpus: 2^53 + 1 is the first integer a
+  // double cannot hold, so a reader that goes through `number` returns
+  // 9007199254740992 and loses the row's value silently.
+  assert.deepEqual(decoded[2], { n: 9007199254740993n })
 })
