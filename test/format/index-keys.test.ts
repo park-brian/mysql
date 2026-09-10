@@ -8,7 +8,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import fc from 'fast-check'
-import { collation, encodeCharset, memcmp } from '@myjs/charsets'
+import { collation, encodeCharset, loadCollation, memcmp } from '@myjs/charsets'
 import {
   TypeError as MyjsTypeError,
   encodeDateField,
@@ -138,6 +138,60 @@ for (const [id, name] of [
     )
   })
 }
+
+test('M2.14/D-35: key order matches utf8mb4_0900_ai_ci (NO PAD, expanding)', async () => {
+  // The case D-35 was written for and has never had until now. `binary` above
+  // is NO PAD but its sort key is the value, so a key part could not be longer
+  // than the value it came from. `utf8mb4_0900_ai_ci` breaks that: one
+  // character can weigh several collation elements, so the sort key expands —
+  // sharp s alone becomes four bytes — and the declared width has to absorb it.
+  //
+  // It is also the collation this project actually defaults to (D-10), so if
+  // the key encoder is wrong for anything, being wrong for this one is worst.
+  const c = await loadCollation(255)
+  const part = keyed(255, 160)
+  fc.assert(
+    fc.property(awkward(), awkward(), (a, b) => {
+      const ba = encodeCharset(a, 'utf8mb4')
+      const bb = encodeCharset(b, 'utf8mb4')
+      assert.equal(
+        sign(memcmp(encodeKeyPart(ba, part), encodeKeyPart(bb, part))),
+        sign(c.compare(ba, bb)),
+        `${JSON.stringify(a)} vs ${JSON.stringify(b)}`,
+      )
+    }),
+    { numRuns: 3000 },
+  )
+})
+
+test('M2.14/D-35: an expanding NO PAD key distinguishes values that pad alike', async () => {
+  const c = await loadCollation(255)
+  const part = keyed(255, 32)
+  const key = (s: string) => encodeKeyPart(encodeCharset(s, 'utf8mb4'), part)
+  // NO PAD, so a trailing space is data: the keys differ and the shorter sorts
+  // first. Under `utf8mb4_general_ci` the same two values key identically,
+  // which is the upgrade surprise doc 29 warns about, made concrete.
+  assert.notDeepEqual(key('a'), key('a '))
+  assert.equal(sign(memcmp(key('a'), key('a '))), -1)
+  const general = keyed(45, 32)
+  assert.deepEqual(
+    encodeKeyPart(encodeCharset('a', 'utf8mb4'), general),
+    encodeKeyPart(encodeCharset('a ', 'utf8mb4'), general),
+  )
+  // And the expansion is visible in the key: sharp s keys exactly as 'ss'.
+  assert.deepEqual(key('\u00df'), key('ss'))
+  assert.equal(sign(c.compare(encodeCharset('\u00df', 'utf8mb4'), encodeCharset('ss', 'utf8mb4'))), 0)
+})
+
+test('M2.14/D-35: an expanding sort key that overflows its width is refused', async () => {
+  // A declared width too small for the sort key is a schema error, and it must
+  // be an error: silently truncating would produce a key that compares wrongly
+  // rather than one that fails loudly. Only reachable now that a sort key can
+  // be longer than its value.
+  await loadCollation(255)
+  const narrow = keyed(255, 2)
+  assert.throws(() => encodeKeyPart(encodeCharset('\u00df', 'utf8mb4'), narrow), MyjsTypeError)
+})
 
 test('M2.14/D-35: the pair that inverted without padding', () => {
   // Under PAD SPACE the shorter value is extended with spaces, so 'a' is

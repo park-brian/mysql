@@ -28,7 +28,7 @@ import {
   type StatementResult,
 } from '@myjs/protocol'
 import { DEFAULT_SERVER_VERSION } from './connection.ts'
-import { charsetVariables, parseSetNames } from './transcoder.ts'
+import { charsetVariables, ensureCollationResident, parseSetNames } from './transcoder.ts'
 
 export interface StubOptions {
   readonly serverVersion?: string
@@ -96,6 +96,7 @@ export class StubExecutor implements Executor {
   }
 
   async query(session: Session, sql: string): Promise<StatementResult | StatementResult[]> {
+    await this.#preload(session, sql)
     return this.#run(session, sql)
   }
 
@@ -116,6 +117,7 @@ export class StubExecutor implements Executor {
     sql: string,
     parameters: readonly Parameter[],
   ): Promise<StatementResult | StatementResult[]> {
+    await this.#preload(session, sql)
     return this.#run(session, sql, parameters)
   }
 
@@ -129,6 +131,24 @@ export class StubExecutor implements Executor {
       `Flush tables: 1  Open tables: 0  Queries per second avg: 0.000  ` +
       `Connection: ${session.connectionId}`
     )
+  }
+
+  /**
+   * The async half of D-36, on the one statement that can reach a collation
+   * whose tables are not resident.
+   *
+   * `SET NAMES utf8mb4 COLLATE utf8mb4_0900_ai_ci` is how a client reaches the
+   * 8.0 default at all — `HandshakeV10` carries one byte for the collation id,
+   * so 255 cannot be negotiated. Loading here, on the async edge, is what lets
+   * every later `collation()` on the hot path stay synchronous.
+   *
+   * `#run` itself stays synchronous, which is the point: an executor is not
+   * allowed to need an `await` in the middle of ordering rows.
+   */
+  async #preload(session: Session | undefined, sql: string): Promise<void> {
+    if (session === undefined) return
+    const change = parseSetNames(sql)
+    if (change !== null && change !== 'unknown') await ensureCollationResident(change.collationId)
   }
 
   #run(session: Session, sql: string, parameters: readonly Parameter[] = []): StatementResult {

@@ -5,7 +5,14 @@
 // (the release plan gives them different versions). `@myjs/core` depends on
 // both, so this is where the two meet: the registry supplies the charset name
 // for a collation id, and the encoder/decoder pair follows from that.
-import { decodeCollation, encodeCollation, collationInfo, collationInfoByName, defaultCollationOf } from '@myjs/charsets'
+import {
+  collationInfo,
+  collationInfoByName,
+  decodeCollation,
+  defaultCollationOf,
+  encodeCollation,
+  preloadCollation,
+} from '@myjs/charsets'
 import type { Transcoder } from '@myjs/protocol'
 
 /** A `Transcoder` backed by the full charset registry. */
@@ -63,6 +70,19 @@ export function parseSetNames(sql: string): CharsetChange | null | 'unknown' {
   const info = defaultCollationOf(charset)
   if (info === undefined) return 'unknown'
   return { collationId: info.id, charset: info.charset, collation: info.name }
+}
+
+/**
+ * Make a collation's ordering usable, loading its weight tables if need be.
+ *
+ * Delegates to `preloadCollation` rather than testing `collationAvailability`
+ * itself, and that is not a stylistic choice: `collationAvailability` lives
+ * beside the synchronous resolver, so importing it here would pull all 42
+ * legacy 8-bit weight tables into `@myjs/core`'s bundle — 10 KB gzipped that
+ * nothing in this package orders anything with. Measured, not guessed.
+ */
+export async function ensureCollationResident(collationId: number): Promise<void> {
+  await preloadCollation(collationId)
 }
 
 /** The `character_set_*` / `collation_*` values a session should report. */

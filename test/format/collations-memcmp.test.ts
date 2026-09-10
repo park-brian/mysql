@@ -11,6 +11,7 @@ import {
   MEMCMP_COLLATION_IDS,
   CharsetError,
   collation,
+  collationAvailability,
   hasCollation,
   memcmp,
   memcmpPadSpace,
@@ -108,13 +109,34 @@ test('PAD SPACE is a total order too', () => {
 })
 
 test('an unimplemented collation refuses rather than falling back to byte order', () => {
-  // A silent fallback to memcmp for `utf8mb4_0900_ai_ci` would build an index
-  // in the wrong order and only show up as wrong query results much later.
-  assert.equal(hasCollation(255), false)
-  assert.throws(() => collation(255), (err: unknown) => {
+  // A silent fallback to memcmp would build an index in the wrong order and
+  // only show up as wrong query results much later. `ucs2_bin` is the shape
+  // that still refuses outright: a two-byte pad character, which the padded
+  // comparator would need as its unit.
+  assert.equal(hasCollation(90), false)
+  assert.equal(collationAvailability(90), 'unsupported')
+  assert.throws(() => collation(90), (err: unknown) => {
     assert.ok(err instanceof CharsetError)
     assert.equal((err as CharsetError).code, 'ER_COLLATION_NOT_IMPLEMENTED')
-    assert.match((err as Error).message, /utf8mb4_0900_ai_ci/)
+    assert.match((err as Error).message, /ucs2_bin/)
     return true
   })
+})
+
+test('a UCA collation refuses differently: not unsupported, just not loaded', () => {
+  // D-36. `utf8mb4_0900_ai_ci` has tables, they are simply 50 KB away behind
+  // an `await import()`. Saying "not implemented" here would be a lie that
+  // sends a caller looking for a missing feature instead of a missing await —
+  // so the two refusals carry different codes.
+  // Whether the tables are already resident depends on test ordering, so this
+  // asserts the *pair* of states is coherent rather than one of them.
+  assert.notEqual(collationAvailability(255), 'unsupported')
+  if (collationAvailability(255) === 'loadable') {
+    assert.throws(() => collation(255), (err: unknown) => {
+      assert.ok(err instanceof CharsetError)
+      assert.equal((err as CharsetError).code, 'ER_COLLATION_NOT_LOADED')
+      assert.match((err as Error).message, /utf8mb4_0900_ai_ci/)
+      return true
+    })
+  }
 })

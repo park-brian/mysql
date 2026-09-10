@@ -19,6 +19,7 @@ import {
   collation,
   encodeCharset,
   hasCollation,
+  isWeightedCollation,
   memcmp,
   requireCollationInfo,
   weightedCollationIds,
@@ -156,10 +157,12 @@ test('M2.2: the memcmp set is now every single-byte *_bin collation', () => {
   assert.throws(() => collation(90), CharsetError)
 })
 
-test('M2.6: the default collation still refuses rather than guessing', () => {
-  // `utf8mb4_0900_ai_ci` is UCA (M2.7). A silent fallback to byte order here
-  // would build an index in the wrong order and surface as wrong results much
-  // later, so the path that would produce those bytes refuses to run.
+test('M2.6: the weight tables do not serve the UCA default', () => {
+  // `utf8mb4_0900_ai_ci` is UCA (M2.7), and its tables are not these. Nothing
+  // in this file loads them, so it is still not resident here — and a silent
+  // fallback to byte order would build an index in the wrong order and surface
+  // as wrong results much later, so the synchronous path refuses to run.
+  assert.equal(isWeightedCollation(255), false)
   assert.equal(hasCollation(255), false)
   assert.throws(() => collation(255), CharsetError)
 })
