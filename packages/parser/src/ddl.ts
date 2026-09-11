@@ -72,6 +72,13 @@ const TABLE_OPTIONS = new Set([
   'TABLESPACE',
   'UNION',
   'AUTOEXTEND_SIZE',
+  // `SECONDARY_ENGINE` was missing while `SECONDARY_ENGINE_ATTRIBUTE` was
+  // present — the shape of gap a name list gets when it is written from the
+  // manual rather than measured. The corpus found it in `order_by_limit.test`
+  // once the census could see the whole tree, and a local 8.4.11 accepts all
+  // four spellings the generic path below already handles: a bare word, `=`
+  // and a word, `NULL`, and a quoted string.
+  'SECONDARY_ENGINE',
   'SECONDARY_ENGINE_ATTRIBUTE',
   'ENGINE_ATTRIBUTE',
   'START',

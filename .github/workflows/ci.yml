@@ -138,10 +138,26 @@ jobs:
           cache: npm
       - run: npm ci
       - run: sudo apt-get update && sudo apt-get install -y --no-install-recommends mysql-client
-      - name: capture and diff
-        run: |
-          npm run capture:traces
-          git diff --stat -- test/protocol/fixtures/
+      # `capture-traces.mjs` requires a `nopw` and a `trace` account and refuses
+      # to invent them — rightly, since "a tool that invented them would be
+      # re-baselining the corpus rather than checking it". But nothing else
+      # created them either, so this job aborted on **every run** since it was
+      # written and `continue-on-error` made the abort look like a pass. The
+      # accounts are a separate, explicit step, which is what that argument asks
+      # for; `mysql-local.mjs` creates the identical set locally.
+      - name: provision the trace accounts
+        run: node tools/mysql-local.mjs provision
+      - name: capture
+        # Not `continue-on-error` at this level: the *tool* aborting and the
+        # *bytes* differing are different events, and folding them together is
+        # what hid the missing accounts. A failed capture fails the step.
+        run: npm run capture:traces
+      - name: diff
+        # Advisory, as before. A newer server's bytes may legitimately differ
+        # and Q-12 is open about what byte-identity can even mean here; the
+        # committed fixtures are replayed offline by `npm test`.
+        continue-on-error: true
+        run: git diff --stat -- test/protocol/fixtures/
 
   type-vectors:
     name: re-capture vectors against a real MySQL
@@ -236,9 +252,12 @@ jobs:
       - run: npm ci
       - name: census and diff
         env:
-          # Listing the directory uses the GitHub API, which allows sixty
-          # requests an hour unauthenticated — a shared runner burns that
-          # immediately. Fetching the files themselves does not need this.
+          # Only the *fallback* needs this now. With a local clone the listing
+          # is `git ls-tree` over the pinned commit, which needs no token, no
+          # network and no rate limit — and which fixed a real defect: the
+          # contents API returns at most 1,000 entries per page, so the census
+          # had been selecting from the first 1,000 filenames alphabetically
+          # rather than from the directory. See E-14.
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           npm run census:mysqltest -- --refresh

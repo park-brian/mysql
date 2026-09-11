@@ -22,6 +22,8 @@ interface Census {
     readonly measured: number
     readonly statements: number
     readonly lexed: number
+    /** Refused at the lexer, as MySQL refuses them — `--error ER_PARSE_ERROR`. */
+    readonly refusedAtLex: number
     readonly parsed: number
     readonly skippedWithVariables: number
     readonly directives: number
@@ -67,9 +69,32 @@ test('M3.11: every statement in the corpus lexes', () => {
   // yet — that is M3.5 — but a statement it cannot split into tokens is a bug
   // in M3.1, and this is the first time that claim has been tested against
   // real-world SQL rather than against cases someone thought to write.
+  //
+  // `refusedAtLex` is the one statement class that is not a miss: SQL the
+  // corpus marks `--error ER_PARSE_ERROR`, which a real server rejects and we
+  // reject at the lexer rather than the parser. `SELECT \N;` in `null.test` is
+  // the case — MySQL removed `\N` in WL#7247, the corpus asserts the removal,
+  // and a local 8.4.11 answers 1064. It is counted apart rather than folded
+  // into `lexed` because "tokenised" and "correctly refused" are different
+  // facts, and one number covering both would be a worse number.
   const c = census()
-  assert.equal(c.totals.lexed, c.totals.statements, `${c.totals.statements - c.totals.lexed} statement(s) failed to lex`)
+  const accounted = c.totals.lexed + c.totals.refusedAtLex
+  assert.equal(accounted, c.totals.statements, `${c.totals.statements - accounted} statement(s) failed to lex`)
   assert.deepEqual(c.failures, [], 'a file that will not lex means the statement boundaries could not be found')
+})
+
+test('M3.11: a lexer refusal is only ever one the corpus predicted', () => {
+  // The ratchet on the recovery rule. A statement may be refused at the lexer
+  // only when the corpus marks it `--error ER_PARSE_ERROR`; every such refusal
+  // is therefore also counted in `expectedToFailAndDid`. Without this, the
+  // recovery could quietly absorb a genuine lexer bug — which is exactly the
+  // failure mode the file-level report was written to prevent, so removing
+  // that report has to bring its guarantee along.
+  const c = census()
+  assert.ok(
+    c.totals.refusedAtLex <= c.totals.expectedToFailAndDid,
+    'a lexer refusal must be one MySQL also refuses',
+  )
 })
 
 test('M3.11: a file the census did not measure says why', () => {

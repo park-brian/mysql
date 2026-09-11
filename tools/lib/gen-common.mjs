@@ -19,16 +19,89 @@
 // so `node:` imports here are fine, while everything they *emit* into
 // `packages/` must stay `Uint8Array`-only.
 import { createHash } from 'node:crypto'
+import { execFileSync } from 'node:child_process'
+import { existsSync } from 'node:fs'
+import { fileURLToPath } from 'node:url'
 
 /** doc 90: the tree every constant in docs 10–30 cites. */
 export const REPO = 'mysql/mysql-server'
 export const REF = 'e174239c'
 
 /**
+ * A local clone of the pinned tree, when there is one.
+ *
+ * Ground rule 7 is about what may be *committed*, not about how a generator
+ * reaches upstream: `reference/` is gitignored and nothing from it is copied
+ * into this repository. What a clone buys is that every generator and the
+ * census become a pure function of a commit that is already on disk — no
+ * network, no `api.github.com` rate limit, and re-running offline reproduces
+ * the committed output byte for byte, which is the property CI checks.
+ *
+ * The blob bytes `git show <REF>:<path>` hands back are the same bytes
+ * `raw.githubusercontent.com` serves for that commit, so the two paths are
+ * interchangeable and the hashes do not move. `MYJS_MYSQL_SRC` overrides the
+ * default location; a tree that does not contain `REF` is ignored rather than
+ * trusted, because a clone at a *different* commit would silently generate
+ * different tables.
+ */
+const LOCAL_TREE = resolveLocalTree()
+
+function resolveLocalTree() {
+  const configured = process.env.MYJS_MYSQL_SRC
+  const dir =
+    configured === undefined || configured === ''
+      ? fileURLToPath(new URL('../../reference/mysql/', import.meta.url))
+      : configured
+  if (!existsSync(dir)) return null
+  try {
+    execFileSync('git', ['-C', dir, 'cat-file', '-e', `${REF}^{commit}`], { stdio: 'ignore' })
+    return dir
+  } catch {
+    console.error(`reference tree ${dir} does not contain ${REF}; fetching over HTTPS instead`)
+    return null
+  }
+}
+
+/** Where the last `fetchPinned*` call read from — reported so a run says which. */
+export function sourceMode() {
+  return LOCAL_TREE === null ? 'https' : `local ${LOCAL_TREE}`
+}
+
+/** Read one pinned blob out of the local clone, or `null` if there is not one. */
+function localBytes(path) {
+  if (LOCAL_TREE === null) return null
+  try {
+    const out = execFileSync('git', ['-C', LOCAL_TREE, 'show', `${REF}:${path}`], {
+      maxBuffer: 256 * 1024 * 1024,
+      encoding: 'buffer',
+    })
+    return new Uint8Array(out.buffer, out.byteOffset, out.byteLength)
+  } catch {
+    // A path absent from the tree is a real error, but it is the same error
+    // over HTTPS and the message there is better. Fall through.
+    return null
+  }
+}
+
+/**
+ * `Response.text()` is a UTF-8 decode that strips a leading BOM. `TextDecoder`
+ * with its defaults is the same operation, so the local and remote paths agree
+ * on the text — and therefore on the hash — rather than agreeing by accident.
+ */
+function decodeUtf8(bytes) {
+  return new TextDecoder().decode(bytes)
+}
+
+/**
  * Fetch one pinned upstream file, hash it, and hand back both. The text is
  * returned to the caller and never written anywhere.
  */
 export async function fetchPinned(path) {
+  const local = localBytes(path)
+  if (local !== null) {
+    const text = decodeUtf8(local)
+    return { path, text, sha256: createHash('sha256').update(text, 'utf8').digest('hex') }
+  }
   const url = `https://raw.githubusercontent.com/${REPO}/${REF}/${path}`
   const response = await fetch(url)
   if (!response.ok) {
@@ -51,6 +124,10 @@ export async function fetchPinned(path) {
  * mangling rather than the file.
  */
 export async function fetchPinnedBytes(path) {
+  const local = localBytes(path)
+  if (local !== null) {
+    return { path, bytes: local, sha256: createHash('sha256').update(local).digest('hex') }
+  }
   const url = `https://raw.githubusercontent.com/${REPO}/${REF}/${path}`
   const response = await fetch(url)
   if (!response.ok) {
@@ -109,4 +186,21 @@ export function banner({ script, why, sources, counts = {} }) {
 export function packed(text) {
   check(!/[`\\]|\$\{/.test(text), 'packed data contains a character that would break a template literal')
   return `\`${text}\``
+}
+
+/**
+ * The `.test`-style file names in one pinned directory, from the local clone.
+ *
+ * `null` when there is no clone, so a caller can fall back to the GitHub
+ * contents API. That API is what made this worth writing: it allows sixty
+ * unauthenticated requests an hour, it needs a token on a shared runner, and
+ * in a sandbox that blocks it the census cannot be refreshed at all.
+ */
+export function listPinnedDirectory(directory) {
+  if (LOCAL_TREE === null) return null
+  const out = execFileSync('git', ['-C', LOCAL_TREE, 'ls-tree', '--name-only', `${REF}:${directory}`], {
+    maxBuffer: 64 * 1024 * 1024,
+    encoding: 'utf8',
+  })
+  return out.split('\n').filter((n) => n !== '')
 }

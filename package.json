@@ -25,6 +25,8 @@
     "gen:errors": "node tools/gen-errors.mjs",
     "gen:charsets": "node tools/gen-charsets.mjs",
     "gen:uca": "node tools/gen-uca.mjs",
+    "fetch:reference": "node tools/fetch-reference.mjs",
+    "mysql:local": "node tools/mysql-local.mjs",
     "capture:traces": "node tools/capture-traces.mjs --all",
     "capture:types": "node tools/capture-types.mjs",
     "capture:precedence": "node tools/capture-precedence.mjs",

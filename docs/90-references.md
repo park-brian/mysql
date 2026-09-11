@@ -5,6 +5,17 @@
 Cloned into `reference/`, which is **gitignored** — these are GPL/other-licensed
 trees and must not be vendored into this repository. Reproduce them with:
 
+The MySQL tree is also what the generators and the census read — since M3.13
+they resolve `reference/mysql` before the network, so `npm run gen:*` and
+`npm run census:mysqltest -- --refresh` are hermetic and need no GitHub token.
+One command fetches exactly the pinned commit:
+
+```bash
+npm run fetch:reference     # tools/fetch-reference.mjs
+```
+
+The rest of the trees are research aids, cloned by hand:
+
 ```bash
 mkdir -p reference && cd reference
 
