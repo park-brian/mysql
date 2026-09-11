@@ -18,8 +18,11 @@
 // Source:  mysql/mysql-server@e174239c strings/ctype-euc_kr.cc
 // Source:  mysql/mysql-server@e174239c strings/ctype-extra.cc
 // Source:  mysql/mysql-server@e174239c strings/ctype-gb18030.cc
+// Source:  mysql/mysql-server@e174239c strings/ctype-gb2312.cc
 // Source:  mysql/mysql-server@e174239c strings/ctype-gbk.cc
 // Source:  mysql/mysql-server@e174239c strings/ctype-latin1.cc
+// Source:  mysql/mysql-server@e174239c strings/ctype-mb.cc
+// Source:  mysql/mysql-server@e174239c strings/ctype-simple.cc
 // Source:  mysql/mysql-server@e174239c strings/ctype-sjis.cc
 // Source:  mysql/mysql-server@e174239c strings/ctype-tis620.cc
 // Source:  mysql/mysql-server@e174239c strings/ctype-uca.cc
@@ -33,7 +36,7 @@
 
 /** SHA-256 over every source file's own hash — the same value the registry carries. */
 export const WEIGHT_TABLE_SOURCE_SHA256 =
-  'e24d1217176edb4bd1c340551fa5951f93155ed99cdc92d01c5acc8592bace83'
+  '037f18f34aac7c6d3eed67a3d3763202ab89824c8972627f96364fbe052aa473'
 
 /**
  * The 8-bit weight tables: `name runs`, one per line.

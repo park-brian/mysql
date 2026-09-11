@@ -18,8 +18,11 @@
 // Source:  mysql/mysql-server@e174239c strings/ctype-euc_kr.cc
 // Source:  mysql/mysql-server@e174239c strings/ctype-extra.cc
 // Source:  mysql/mysql-server@e174239c strings/ctype-gb18030.cc
+// Source:  mysql/mysql-server@e174239c strings/ctype-gb2312.cc
 // Source:  mysql/mysql-server@e174239c strings/ctype-gbk.cc
 // Source:  mysql/mysql-server@e174239c strings/ctype-latin1.cc
+// Source:  mysql/mysql-server@e174239c strings/ctype-mb.cc
+// Source:  mysql/mysql-server@e174239c strings/ctype-simple.cc
 // Source:  mysql/mysql-server@e174239c strings/ctype-sjis.cc
 // Source:  mysql/mysql-server@e174239c strings/ctype-tis620.cc
 // Source:  mysql/mysql-server@e174239c strings/ctype-uca.cc
@@ -27,22 +30,22 @@
 // Source:  mysql/mysql-server@e174239c strings/ctype-ujis.cc
 // Source:  mysql/mysql-server@e174239c strings/ctype-utf8.cc
 // Source:  mysql/mysql-server@e174239c strings/ctype-win1250ch.cc
-// Collations: 288
+// Collations: 290
 // Classes: 8
 
 /** SHA-256 over every source file's own hash — the same value the registry carries. */
 export const CHARSET_METRICS_SOURCE_SHA256 =
-  'e24d1217176edb4bd1c340551fa5951f93155ed99cdc92d01c5acc8592bace83'
+  '037f18f34aac7c6d3eed67a3d3763202ab89824c8972627f96364fbe052aa473'
 
 /**
  * `mbminlen mbmaxlen id-ranges`, one width class per line.
  *
- * Only a handful of distinct widths exist across 288 collations and the ids
+ * Only a handful of distinct widths exist across 290 collations and the ids
  * within a class are mostly contiguous, so ranges beat one line per id by an
  * order of magnitude.
  */
 export const PACKED_CHARSET_METRICS = `1 1 2-11,14-16,18,20-23,25-27,29-32,34,36-44,47-53,57-59,63-75,77-82,89,92-94,99
-1 2 1,13,19,28,84-85,87-88,95-96
+1 2 1,13,19,24,28,84-88,95-96
 1 3 12,33,76,83,91,97-98,192-215,223
 1 4 45-46,224-250,255-300,303-308,310-323
 1 5 17

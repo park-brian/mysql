@@ -24,3 +24,19 @@ export function unsupportedCharset(name: string): CharsetError {
     sqlState: '42000',
   })
 }
+
+/**
+ * A collation whose tables exist but are not resident (D-36).
+ *
+ * Distinct from `unsupportedCollation` on purpose: that one means "we will
+ * never order this", and this one means "call `loadCollation` first". Carrying
+ * no errno, because it is a caller mistake rather than anything a SQL client
+ * did — the tables load on the async edge, and something reached a synchronous
+ * `sortKey` before that happened.
+ */
+export function collationNotLoaded(id: number, name: string): CharsetError {
+  return new CharsetError(
+    'ER_COLLATION_NOT_LOADED',
+    `collation ${name} (${id}) has weight tables that are not loaded: await loadCollation(${id}) first`,
+  )
+}

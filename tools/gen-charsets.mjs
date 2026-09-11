@@ -46,8 +46,19 @@ const SOURCES = [
   'strings/ctype-euc_kr.cc',
   'strings/ctype-extra.cc',
   'strings/ctype-gb18030.cc',
+  // Found missing by M3.12: `func_like.test` runs `SET NAMES gb2312`, and
+  // gb2312 was absent from the registry entirely — ids 24 and 86 resolved to
+  // nothing, so a gb2312 client got `unknown collation` rather than either
+  // service or an honest refusal. `APPROXIMATE_CHARSETS` had been naming a
+  // charset the registry could not produce.
+  'strings/ctype-gb2312.cc',
   'strings/ctype-gbk.cc',
   'strings/ctype-latin1.cc',
+  // Not a charset file: `ctype-mb.cc` and `ctype-simple.cc` define the shared
+  // `MY_COLLATION_HANDLER` structs that the charset files point at, and the
+  // handler is what says what shape a sort key has (M2.21).
+  'strings/ctype-mb.cc',
+  'strings/ctype-simple.cc',
   'strings/ctype-sjis.cc',
   'strings/ctype-tis620.cc',
   'strings/ctype-uca.cc',
@@ -60,6 +71,7 @@ const SOURCES = [
 const REGISTRY_OUT = new URL('../packages/charsets/src/registry.ts', import.meta.url).pathname
 const WEIGHTS_OUT = new URL('../packages/charsets/src/collations/weights.ts', import.meta.url).pathname
 const METRICS_OUT = new URL('../packages/protocol/src/constants/charset-metrics.ts', import.meta.url).pathname
+const ENCODINGS_OUT = new URL('../packages/charsets/src/encodings.ts', import.meta.url).pathname
 
 // The UCA collations share their state flags through a macro, so expand those
 // before reading the flags. Definitions are in `ctype-uca.cc`.
@@ -135,6 +147,17 @@ function parseCharsetInfo(source) {
     // `MY_UNICASE_INFO` whose pages carry a weight per code point.
     const sortOrder = /\bsort_order_\w+\b/.exec(body)?.[0] ?? null
     const caseinfo = /&(my_unicase_\w+)/.exec(body)?.[1] ?? null
+    // B0 / M2.3: the byte -> code point table, read out of the struct's own
+    // `tab_to_uni` field rather than guessed from the charset name. The field
+    // is commented `/* tab_to_uni */` in the hand-written files and
+    // `/* to_uni */` in the generated one, so both spellings are accepted.
+    const toUni = /\b(\w*to_uni\w*)\s*,\s*\/\*\s*(?:tab_)?to_uni/.exec(body)?.[1] ?? null
+    // M2.21: which `MY_COLLATION_HANDLER` this collation points at. The
+    // handler is what decides the *shape* of a sort key, and the shape is not
+    // guessable from the flags: `utf8mb4_bin` and `utf8mb3_bin` are both
+    // `MY_CS_BINSORT` over a Unicode charset and their keys are different
+    // widths. Resolved against the handler structs below.
+    const handler = /&(my_collation_\w+_handler)/.exec(body)?.[1] ?? null
 
     check(strings.length >= 2, `gen-charsets: id ${id} has no charset/collation name`)
     check(mbminlen !== null && mbmaxlen !== null, `gen-charsets: id ${id} (${strings[1]}) has no mbminlen/mbmaxlen`)
@@ -151,6 +174,8 @@ function parseCharsetInfo(source) {
       isBinary: flags.has('MY_CS_BINSORT'),
       sortOrder,
       caseinfo,
+      toUni: toUni === 'nullptr' ? null : toUni,
+      handler,
       usesUca,
       lowerSort: flags.has('MY_CS_LOWER_SORT'),
       hidden: flags.has('MY_CS_HIDDEN'),
@@ -159,10 +184,52 @@ function parseCharsetInfo(source) {
   return found
 }
 
+/**
+ * Every `MY_COLLATION_HANDLER` in a source file, mapped to its `strnxfrm`.
+ *
+ * `strnxfrm` is the function that produces a sort key, so its name is the one
+ * fact that says what shape a `*_bin` key has — and the shape is not what the
+ * flags suggest. `my_strnxfrm_8bit_bin_*` copies the value, which is why every
+ * 8-bit `*_bin` collation's sort key is its bytes. But `utf8mb4_bin` uses
+ * `my_strnxfrm_unicode_full_bin`, which writes each code point as three
+ * big-endian bytes, and `utf8mb3_bin` uses `my_strnxfrm_unicode`, which writes
+ * two. Neither is the value. M2.21's captured `WEIGHT_STRING` corpus caught
+ * that we were returning the value for all three.
+ *
+ * The struct is a positional initializer; `strnxfrm` is field 4, after `init`,
+ * an unnamed slot, `strnncoll` and `strnncollsp`.
+ */
+function parseCollationHandlers(source) {
+  const found = new Map()
+  const re = /MY_COLLATION_HANDLER\s+(my_collation_\w+)\s*=\s*\{/g
+  let m
+  while ((m = re.exec(source)) !== null) {
+    const open = m.index + m[0].length - 1
+    let depth = 0
+    let end = -1
+    for (let i = open; i < source.length; i++) {
+      if (source[i] === '{') depth++
+      else if (source[i] === '}' && --depth === 0) {
+        end = i
+        break
+      }
+    }
+    check(end !== -1, `gen-charsets: unterminated MY_COLLATION_HANDLER ${m[1]}`)
+    const fields = source
+      .slice(open + 1, end)
+      .replace(/\/\*[\s\S]*?\*\//g, '')
+      .split(',')
+      .map((f) => f.trim())
+    check(fields.length > 5, `gen-charsets: ${m[1]} has too few fields to carry a strnxfrm`)
+    found.set(m[1], fields[4])
+  }
+  return found
+}
+
 const sources = await fetchAllPinned(SOURCES)
 const byId = new Map()
 for (const s of sources) {
-  for (const c of parseCharsetInfo(s.text)) {
+  for (const c of parseCharsetInfo(s.text).map((c) => ({ ...c, source: s.path }))) {
     const seen = byId.get(c.id)
     check(
       seen === undefined || seen.collation === c.collation,
@@ -172,7 +239,6 @@ for (const s of sources) {
   }
 }
 const collations = [...byId.values()].sort((a, b) => a.id - b.id)
-
 // Self-checks before emitting. These are M2.1's acceptance list, plus the two
 // facts the rest of the codebase already asserts and the one the hand-written
 // list got wrong.
@@ -198,6 +264,55 @@ expect(278, 'utf8mb4_0900_as_cs', 'utf8mb4', 4, 'NO PAD')
 check(by(63).isBinary, 'gen-charsets: id 63 must be a binary collation')
 check(by(255).isDefault, 'gen-charsets: id 255 must be utf8mb4 default')
 check(by(159)?.mbminlen === 2, 'gen-charsets: id 159 (ucs2_general_mysql500_ci) must be multibyte')
+
+const strnxfrmOf = new Map()
+for (const s of sources) {
+  for (const [handler, strnxfrm] of parseCollationHandlers(s.text)) strnxfrmOf.set(handler, strnxfrm)
+}
+check(strnxfrmOf.size > 20, `gen-charsets: only ${strnxfrmOf.size} collation handlers parsed`)
+
+/**
+ * How many bytes of sort key one code point produces, for the collations whose
+ * key is *not* the value.
+ *
+ * Only the two `my_strnxfrm_unicode*` families qualify. Everything else either
+ * copies the value (the `8bit_bin` and `utf8mb4_0900_bin` handlers) or has a
+ * weight table, which is a different mechanism entirely. A handler defined in
+ * a file this generator does not fetch resolves to `undefined` and is left
+ * alone rather than assumed — `check` below makes sure that never silently
+ * covers a collation we implement.
+ */
+function binKeyWidth(c) {
+  if (!c.isBinary || c.handler === null) return null
+  const strnxfrm = strnxfrmOf.get(c.handler)
+  if (strnxfrm === 'my_strnxfrm_unicode_full_bin') return 3
+  if (strnxfrm === 'my_strnxfrm_unicode') return 2
+  return null
+}
+
+const binKeyWidths = collations.map((c) => [c.id, binKeyWidth(c)]).filter(([, w]) => w !== null)
+console.log(`  bin key widths: ${binKeyWidths.map(([id, w]) => `${by(id).collation}=${w}`).join(', ')}`)
+
+// The two the codebase implements, pinned by name so a MySQL that moved
+// `utf8mb4_bin` to a different handler fails here rather than in production.
+check(
+  binKeyWidth(by(46)) === 3,
+  `gen-charsets: utf8mb4_bin must use my_strnxfrm_unicode_full_bin, got ${strnxfrmOf.get(by(46)?.handler)}`,
+)
+check(
+  binKeyWidth(by(83)) === 2,
+  `gen-charsets: utf8mb3_bin must use my_strnxfrm_unicode, got ${strnxfrmOf.get(by(83)?.handler)}`,
+)
+// Every `*_bin` collation `memcmp.ts` accepts (mbminlen 1) must have a
+// resolved handler, so "the key is the value" is a fact about the rest of them
+// rather than an absence of evidence.
+for (const c of collations) {
+  if (!c.isBinary || c.mbminlen !== 1) continue
+  check(
+    c.handler !== null && strnxfrmOf.has(c.handler),
+    `gen-charsets: ${c.collation} (${c.id}) points at ${c.handler}, which no fetched source defines`,
+  )
+}
 
 const sha256 = combinedSha256(sources)
 
@@ -241,6 +356,26 @@ export const COLLATION_TABLE_SIZE = ${collations.length}
  * literal of ${collations.length} entries costs several times this in the bundle.
  */
 export const PACKED_COLLATIONS = ${packed(registryLines)}
+
+/**
+ * The \`*_bin\` collations whose sort key is **not** the value, and how many
+ * bytes each code point becomes.
+ *
+ * Every 8-bit \`*_bin\` collation copies its input — \`my_strnxfrm_8bit_bin_*\`
+ * is a \`memcpy\` — so "the sort key is the value" holds for all of them and
+ * they are absent here. The Unicode ones do not: \`utf8mb4_bin\` runs
+ * \`my_strnxfrm_unicode_full_bin\`, which writes each code point as three
+ * big-endian bytes, and \`utf8mb3_bin\` runs \`my_strnxfrm_unicode\`, which
+ * writes two. \`WEIGHT_STRING('a' COLLATE utf8mb4_bin)\` is \`0x000061\` on a
+ * real 8.4, not \`0x61\` — which is how M2.21's captured corpus found this.
+ *
+ * Read from each collation's \`MY_COLLATION_HANDLER\`, not from its name or
+ * its flags: \`utf8mb3_bin\` and \`utf8mb4_bin\` carry identical flags and have
+ * different key widths.
+ */
+export const BIN_KEY_WIDTHS: Readonly<Record<number, number>> = {
+${binKeyWidths.map(([id, w]) => `  ${id}: ${w}, // ${by(id).collation}`).join('\n')}
+}
 `,
 )
 
@@ -475,10 +610,140 @@ export const PACKED_CHARSET_METRICS = ${packed(metricLines)}
 `,
 )
 
+// ---------------------------------------------------------------------------
+// B0 / M2.3 — the byte -> code point tables for the single-byte charsets.
+//
+// These exist because trusting the host's `TextDecoder` for them was a real
+// bug, not a hypothetical one. On a Node built without full ICU,
+// `new TextDecoder('windows-1252')` *succeeds* and quietly behaves as
+// ISO-8859-1, so MySQL's `latin1` decoded 0x80 to U+0080 instead of the euro
+// sign, and the reverse table built from that decoder encoded the euro as
+// `?`. No error anywhere. CI caught it; a full-ICU laptop never would.
+//
+// Generating them removes the host from a code path whose output is *stored* —
+// the same argument D-23 makes about `Intl.Collator`. Bytes that land in a
+// database must not depend on which build of which engine wrote them.
+//
+// Parsed per file rather than over the concatenation, because the array name
+// is not always unique: `cs_to_uni` is declared in both `ctype-latin1.cc` and
+// `ctype-tis620.cc`, and joining the sources would silently pick whichever
+// came first.
+
+/** `file -> array name -> 256 code points`, for every single-byte to_uni table. */
+const uniTablesByFile = new Map()
+for (const src of sources) {
+  const found = new Map()
+  const decl = /static const (?:unsigned short|uint16_t) (\w*to_uni\w*)\[\d*\]\s*=\s*\{/g
+  let d
+  while ((d = decl.exec(src.text)) !== null) {
+    const open = src.text.indexOf('{', d.index)
+    const close = src.text.indexOf('};', open)
+    check(close !== -1, `gen-charsets: unterminated ${d[1]} in ${src.path}`)
+    const values = [...src.text.slice(open + 1, close).matchAll(/0x([0-9A-Fa-f]+)|\b(\d+)\b/g)].map((v) =>
+      v[1] !== undefined ? parseInt(v[1], 16) : Number(v[2]),
+    )
+    // The multi-byte charsets have to_uni tables too, tens of thousands of
+    // entries wide. Those stay on `TextDecoder`; only the flat 256-entry ones
+    // are cheap enough to carry.
+    if (values.length === 256) found.set(d[1], values)
+  }
+  uniTablesByFile.set(src.path, found)
+}
+
+/** `charset -> 256 code points`. Keyed by charset, since collations share one. */
+const charsetToUni = new Map()
+for (const c of collations) {
+  if (c.mbmaxlen !== 1 || c.toUni === null) continue
+  const table = uniTablesByFile.get(c.source)?.get(c.toUni)
+  if (table === undefined) continue
+  const existing = charsetToUni.get(c.charset)
+  if (existing === undefined) {
+    charsetToUni.set(c.charset, table)
+    continue
+  }
+  // Every collation of a charset must agree about what its bytes mean. If two
+  // ever disagreed, one of them would be decoding a different charset.
+  check(
+    existing.every((v, i) => v === table[i]),
+    `gen-charsets: ${c.charset} has two different to_uni tables (${c.collation} names ${c.toUni})`,
+  )
+}
+
+check(charsetToUni.size > 0, 'gen-charsets: no single-byte to_uni tables found')
+check(
+  charsetToUni.get('latin1')?.[0x80] === 0x20ac,
+  "gen-charsets: MySQL's latin1 must map 0x80 to the euro sign — it is cp1252, not ISO-8859-1",
+)
+check(charsetToUni.get('ascii')?.[0x41] === 0x41, 'gen-charsets: ascii must map 0x41 to A')
+
+// Which single-byte charsets did *not* get a table, and why. Exactly two, and
+// both for a reason rather than by omission:
+//
+//   `binary` has no code points at all — it is bytes, uninterpreted, and doc 29
+//   is explicit that id 63 "is not a text collation".
+//
+//   `tis620` has a table in its source file, but MySQL reads it through a
+//   custom `mb_wc` handler and leaves the struct's `tab_to_uni` field null. We
+//   read the struct rather than guessing from names (the discipline M2.5
+//   established), so we do not pick it up — and inferring it would mean
+//   choosing between two files that both declare `cs_to_uni`. It stays on
+//   `TextDecoder`, covered by the behavioural probe in `encoding.ts`.
+//
+// Asserted as an exact list so an upstream change is a build failure rather
+// than a silent gap.
+const singleByteCharsets = [...new Set(collations.filter((c) => c.mbmaxlen === 1).map((c) => c.charset))]
+const untabled = singleByteCharsets.filter((cs) => !charsetToUni.has(cs)).sort()
+check(
+  untabled.join(',') === 'binary,tis620',
+  `gen-charsets: single-byte charsets with no to_uni table changed: ${untabled.join(', ')}`,
+)
+
+const encodingLines = [...charsetToUni]
+  .sort(([a], [b]) => (a < b ? -1 : 1))
+  .map(([cs, table]) => `${cs} ${runs(table, 0)}`)
+  .join('\n')
+
+writeFileSync(
+  ENCODINGS_OUT,
+  `${banner({
+    script: 'npm run gen:charsets',
+    why: `B0 / M2.3: byte -> code point tables for the single-byte charsets, read
+out of each \`CHARSET_INFO\`'s own \`tab_to_uni\` field.
+
+These replace \`TextDecoder\` for every charset listed here, because trusting it
+was a real bug: on a runtime without full ICU, \`new TextDecoder('windows-1252')\`
+succeeds and silently behaves as ISO-8859-1, so MySQL's latin1 decoded 0x80 to
+U+0080 rather than the euro sign and no error was raised anywhere.
+
+Format: \`<charset> <256 code points>\`, delta-plus-run against the byte value
+itself — the same codec and the same \`expandRuns\` decoder the weight tables
+use. The ASCII half of every one of these tables is identity, so it collapses
+to a single run.
+
+\`tis620\` is deliberately absent: MySQL leaves its struct's \`tab_to_uni\` null
+and reads the table through a custom handler, so it stays on \`TextDecoder\`.`,
+    sources,
+    counts: { 'Single-byte charsets': charsetToUni.size, 'Left on TextDecoder': untabled.join(' ') },
+  })}
+
+/** SHA-256 over every source file's own hash — the same value the registry carries. */
+export const ENCODING_TABLE_SOURCE_SHA256 =
+  '${sha256}'
+
+/**
+ * \`charset code-points\`, one single-byte charset per line.
+ *
+ * Delta-plus-run, the same codec \`collations/weights.ts\` uses.
+ */
+export const PACKED_CHARSET_TO_UNI = ${packed(encodingLines)}
+`,
+)
+
 console.log(
   `gen-charsets: ${collations.length} collations, ${classes.size} width classes\n` +
     `  ${usedByteTables.length} byte weight tables, ${unicasePages.size} unicase pages, ` +
     `${byteWeighted.length + unicaseWeighted.length} weighted collations\n` +
-    `  -> ${REGISTRY_OUT}\n  -> ${WEIGHTS_OUT}\n  -> ${METRICS_OUT}\n` +
+    `  ${charsetToUni.size} single-byte encoding tables\n` +
+    `  -> ${REGISTRY_OUT}\n  -> ${WEIGHTS_OUT}\n  -> ${METRICS_OUT}\n  -> ${ENCODINGS_OUT}\n` +
     `  source ${REPO}@${REF} ${SOURCES.length} files\n  sha256 ${sha256}`,
 )

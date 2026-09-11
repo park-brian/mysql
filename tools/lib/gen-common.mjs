@@ -39,6 +39,28 @@ export async function fetchPinned(path) {
   return { path, text, sha256: createHash('sha256').update(text, 'utf8').digest('hex') }
 }
 
+/**
+ * Fetch one pinned upstream file as **bytes**, hashed as bytes.
+ *
+ * `fetchPinned` decodes with `Response.text()`, which is UTF-8 with
+ * replacement — fine for MySQL's C sources, which are ASCII, and wrong for
+ * anything that is not. `mysql-test/t/ctype_latin1.test` is latin1 and
+ * `ctype_sjis.test` is Shift-JIS, on purpose, so decoding either as UTF-8
+ * destroys exactly the bytes those files exist to test (M3.12). The hash is
+ * over the bytes for the same reason: hashing a mangled decode identifies the
+ * mangling rather than the file.
+ */
+export async function fetchPinnedBytes(path) {
+  const url = `https://raw.githubusercontent.com/${REPO}/${REF}/${path}`
+  const response = await fetch(url)
+  if (!response.ok) {
+    console.error(`fetch ${url} failed with ${response.status}`)
+    process.exit(1)
+  }
+  const bytes = new Uint8Array(await response.arrayBuffer())
+  return { path, bytes, sha256: createHash('sha256').update(bytes).digest('hex') }
+}
+
 /** Fetch several, in parallel, preserving order. */
 export async function fetchAllPinned(paths) {
   return Promise.all(paths.map(fetchPinned))

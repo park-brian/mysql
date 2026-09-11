@@ -22,6 +22,7 @@ import {
   capabilities,
   classify,
   parseColumnDefinition41,
+  fromUtf8,
   parseComQuery,
   parseComStmtExecute,
   parseComStmtPrepare,
@@ -228,8 +229,8 @@ test("we parse a real client's COM_QUERY, including query attributes", () => {
     .map((p) => parseComQuery(p, caps))
   assert.ok(queries.length >= 1)
   assert.ok(
-    queries.some((q) => /SELECT 1, 'two', NULL, 3\.5/.test(q.sql)),
-    `parsed: ${queries.map((q) => q.sql).join(' | ')}`,
+    queries.some((q) => /SELECT 1, 'two', NULL, 3\.5/.test(fromUtf8(q.sqlBytes))),
+    `parsed: ${queries.map((q) => fromUtf8(q.sqlBytes)).join(' | ')}`,
   )
 })
 
@@ -243,7 +244,7 @@ test('E-08 confirmed: a real client sends VAR_STRING (0xfd), not doc 16s 0x0f', 
 
   const prepare = c2s.find((p) => p[0] === COM.STMT_PREPARE)
   assert.ok(prepare !== undefined)
-  assert.match(parseComStmtPrepare(prepare), /SELECT \? \+ 0 AS n, \? AS s/)
+  assert.match(fromUtf8(parseComStmtPrepare(prepare)), /SELECT \? \+ 0 AS n, \? AS s/)
 
   const execute = c2s.find((p) => p[0] === COM.STMT_EXECUTE)
   assert.ok(execute !== undefined)

@@ -10,5 +10,7 @@ export {
   RESULTSET_ROW_OFFSET,
   PARAMETER_OFFSET,
 } from './bitmap.ts'
-export { isMysqlDateTime, isMysqlTime } from './values.ts'
+export { isMysqlDateTime, isMysqlTime, renderMysqlDateTime, renderMysqlTime } from './values.ts'
 export type { SqlValue, MysqlDateTime, MysqlTime } from './values.ts'
+export { FIELD_TYPE, COLUMN_FLAG, CHARSET_BINARY } from './field-types.ts'
+export type { FieldTypeCode } from './field-types.ts'

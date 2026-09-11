@@ -1,0 +1,128 @@
+{
+  "name": "weight-strings",
+  "note": "SELECT HEX(WEIGHT_STRING(s COLLATE c)) — exactly what Collation.sortKey() must produce.",
+  "capturedAgainst": "mysql-server 8.4.11",
+  "capturedWith": "mysql  Ver 8.0.46-0ubuntu0.24.04.4 for Linux on x86_64 ((Ubuntu))",
+  "vectors": [
+    {
+      "collation": "utf8mb4_0900_ai_ci",
+      "string": "a",
+      "weightString": "1C47"
+    },
+    {
+      "collation": "utf8mb4_0900_ai_ci",
+      "string": "A",
+      "weightString": "1C47"
+    },
+    {
+      "collation": "utf8mb4_0900_ai_ci",
+      "string": "ä",
+      "weightString": "1C47"
+    },
+    {
+      "collation": "utf8mb4_0900_ai_ci",
+      "string": "ß",
+      "weightString": "1E711E71"
+    },
+    {
+      "collation": "utf8mb4_0900_ai_ci",
+      "string": "ss",
+      "weightString": "1E711E71"
+    },
+    {
+      "collation": "utf8mb4_0900_ai_ci",
+      "string": "æ",
+      "weightString": "1C471CAA"
+    },
+    {
+      "collation": "utf8mb4_0900_ai_ci",
+      "string": "ae",
+      "weightString": "1C471CAA"
+    },
+    {
+      "collation": "utf8mb4_0900_ai_ci",
+      "string": "é",
+      "weightString": "1CAA"
+    },
+    {
+      "collation": "utf8mb4_0900_ai_ci",
+      "string": "e",
+      "weightString": "1CAA"
+    },
+    {
+      "collation": "utf8mb4_0900_ai_ci",
+      "string": "a ",
+      "weightString": "1C470209"
+    },
+    {
+      "collation": "utf8mb4_0900_ai_ci",
+      "string": "一",
+      "weightString": "FB40CE00"
+    },
+    {
+      "collation": "utf8mb4_0900_ai_ci",
+      "string": "가",
+      "weightString": "3BF53C73"
+    },
+    {
+      "collation": "utf8mb4_general_ci",
+      "string": "a",
+      "weightString": "0041"
+    },
+    {
+      "collation": "utf8mb4_general_ci",
+      "string": "A",
+      "weightString": "0041"
+    },
+    {
+      "collation": "utf8mb4_general_ci",
+      "string": "ä",
+      "weightString": "0041"
+    },
+    {
+      "collation": "utf8mb4_general_ci",
+      "string": "ß",
+      "weightString": "0053"
+    },
+    {
+      "collation": "utf8mb4_general_ci",
+      "string": "ss",
+      "weightString": "00530053"
+    },
+    {
+      "collation": "utf8mb4_general_ci",
+      "string": "z",
+      "weightString": "005A"
+    },
+    {
+      "collation": "latin1_swedish_ci",
+      "string": "a",
+      "weightString": "41"
+    },
+    {
+      "collation": "latin1_swedish_ci",
+      "string": "A",
+      "weightString": "41"
+    },
+    {
+      "collation": "latin1_swedish_ci",
+      "string": "z",
+      "weightString": "5A"
+    },
+    {
+      "collation": "utf8mb4_bin",
+      "string": "a",
+      "weightString": "000061"
+    },
+    {
+      "collation": "utf8mb4_bin",
+      "string": "A",
+      "weightString": "000041"
+    },
+    {
+      "collation": "utf8mb4_bin",
+      "string": "ä",
+      "weightString": "0000E4"
+    }
+  ]
+}

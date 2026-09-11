@@ -57,3 +57,42 @@ export function isMysqlDateTime(v: unknown): v is MysqlDateTime {
 export function isMysqlTime(v: unknown): v is MysqlTime {
   return typeof v === 'object' && v !== null && 'negative' in v && 'days' in v
 }
+
+/**
+ * Render a `MysqlDateTime` the way MySQL prints it.
+ *
+ * Here rather than in `@myjs/protocol` for D-37's reason: this is a *fact
+ * about the format*, not wire behaviour. The same string appears in a text
+ * resultset, in `mysqldump` output, and in the text rendering of a JSON
+ * document — so more than one package above needs it, which is exactly the
+ * test for whether something belongs in this package.
+ *
+ * It also collapses a duplication rather than adding to one: `renderDateTime`
+ * and `binaryValueToText` in `@myjs/protocol` were two independent renderers
+ * of the same value, reached from different directions.
+ */
+export function renderMysqlDateTime(v: MysqlDateTime, decimals = 0): string {
+  const date = `${pad(v.year, 4)}-${pad(v.month, 2)}-${pad(v.day, 2)}`
+  if (decimals <= 0 && v.hour === 0 && v.minute === 0 && v.second === 0 && v.microsecond === 0) return date
+  const time = `${pad(v.hour, 2)}:${pad(v.minute, 2)}:${pad(v.second, 2)}`
+  if (decimals <= 0) return `${date} ${time}`
+  return `${date} ${time}.${pad(v.microsecond, 6).slice(0, decimals)}`
+}
+
+/**
+ * Render a `MysqlTime` the way MySQL prints it.
+ *
+ * A duration, not a clock time: the hours field carries `days * 24 + hour`
+ * and may exceed 24, and the whole value may be negative — which is why doc 15
+ * says mapping TIME to a `Date` is wrong and D-15 maps it to a string.
+ */
+export function renderMysqlTime(v: MysqlTime, decimals = 0): string {
+  const hours = v.days * 24 + v.hour
+  const base = `${v.negative ? '-' : ''}${hours}:${pad(v.minute, 2)}:${pad(v.second, 2)}`
+  if (decimals <= 0) return base
+  return `${base}.${pad(v.microsecond, 6).slice(0, decimals)}`
+}
+
+function pad(n: number, width: number): string {
+  return String(n).padStart(width, '0')
+}

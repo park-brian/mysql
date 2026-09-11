@@ -8,9 +8,13 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import fc from 'fast-check'
 import {
+  BIN_KEY_WIDTHS,
   MEMCMP_COLLATION_IDS,
   CharsetError,
+  comparePadded,
+  encodeCharset,
   collation,
+  collationAvailability,
   hasCollation,
   memcmp,
   memcmpPadSpace,
@@ -32,8 +36,15 @@ test('M2.2: ordering equals memcmp on arbitrary bytes', () => {
   )
 })
 
-test('M2.2: the sort key is the value, so a B+tree can memcmp stored keys', () => {
+test('M2.2: an 8-bit *_bin sort key is the value, so a B+tree can memcmp stored keys', () => {
+  // Narrowed in M2.21. This was asserted of every `*_bin` collation, which is
+  // what MySQL's `my_strnxfrm_8bit_bin_*` does — but the Unicode ones run
+  // `my_strnxfrm_unicode*` instead and re-encode. `BIN_KEY_WIDTHS` is the
+  // generated list of the exceptions, so this test excludes exactly the
+  // collations MySQL's own handler structs say are exceptions rather than a
+  // list someone typed.
   for (const id of MEMCMP_COLLATION_IDS) {
+    if (BIN_KEY_WIDTHS[id] !== undefined) continue
     const c = collation(id)
     fc.assert(
       fc.property(bytes(), (v) => {
@@ -42,6 +53,39 @@ test('M2.2: the sort key is the value, so a B+tree can memcmp stored keys', () =
       { numRuns: 200 },
     )
   }
+})
+
+test('M2.21: a Unicode *_bin sort key is code points, not bytes', () => {
+  // The four vectors a real MySQL 8.4 produced (see
+  // `test/format/fixtures/weight-strings.json`), plus the utf8mb3 width the
+  // same handler parse establishes. `'ä'` is the interesting one: two UTF-8
+  // bytes in, one three-byte weight out, so a key that were merely the value
+  // would be the wrong *length* and not just the wrong bytes.
+  const hex = (u: Uint8Array) => [...u].map((x) => x.toString(16).padStart(2, '0').toUpperCase()).join('')
+  const utf8mb4Bin = collation(46)
+  assert.equal(hex(utf8mb4Bin.sortKey(encodeCharset('a', 'utf8mb4'))), '000061')
+  assert.equal(hex(utf8mb4Bin.sortKey(encodeCharset('A', 'utf8mb4'))), '000041')
+  assert.equal(hex(utf8mb4Bin.sortKey(encodeCharset('ä', 'utf8mb4'))), '0000E4')
+  // Outside the BMP, where a key that copied the value would be four bytes.
+  assert.equal(hex(utf8mb4Bin.sortKey(encodeCharset('\u{1F600}', 'utf8mb4'))), '01F600')
+
+  const utf8mb3Bin = collation(83)
+  assert.equal(hex(utf8mb3Bin.sortKey(encodeCharset('a', 'utf8mb3'))), '0061')
+  assert.equal(hex(utf8mb3Bin.sortKey(encodeCharset('ä', 'utf8mb3'))), '00E4')
+})
+
+test('M2.21: a Unicode *_bin compare still agrees with its own sort key', () => {
+  // The D-35 property, re-asserted for the collations whose key stopped being
+  // the value. `compare` is derived from `sortKey` in `memcmp.ts` precisely so
+  // this cannot drift, and this is the test that would notice if someone
+  // un-derived it for speed.
+  const c = collation(46)
+  fc.assert(
+    fc.property(bytes(), bytes(), (a, b) => {
+      assert.equal(sign(c.compare(a, b)), sign(comparePadded(c.sortKey(a), c.sortKey(b), c.padUnit)))
+    }),
+    { numRuns: 2000 },
+  )
 })
 
 test('memcmp is a total order: antisymmetric, transitive, and reflexive', () => {
@@ -108,13 +152,34 @@ test('PAD SPACE is a total order too', () => {
 })
 
 test('an unimplemented collation refuses rather than falling back to byte order', () => {
-  // A silent fallback to memcmp for `utf8mb4_0900_ai_ci` would build an index
-  // in the wrong order and only show up as wrong query results much later.
-  assert.equal(hasCollation(255), false)
-  assert.throws(() => collation(255), (err: unknown) => {
+  // A silent fallback to memcmp would build an index in the wrong order and
+  // only show up as wrong query results much later. `ucs2_bin` is the shape
+  // that still refuses outright: a two-byte pad character, which the padded
+  // comparator would need as its unit.
+  assert.equal(hasCollation(90), false)
+  assert.equal(collationAvailability(90), 'unsupported')
+  assert.throws(() => collation(90), (err: unknown) => {
     assert.ok(err instanceof CharsetError)
     assert.equal((err as CharsetError).code, 'ER_COLLATION_NOT_IMPLEMENTED')
-    assert.match((err as Error).message, /utf8mb4_0900_ai_ci/)
+    assert.match((err as Error).message, /ucs2_bin/)
     return true
   })
+})
+
+test('a UCA collation refuses differently: not unsupported, just not loaded', () => {
+  // D-36. `utf8mb4_0900_ai_ci` has tables, they are simply 50 KB away behind
+  // an `await import()`. Saying "not implemented" here would be a lie that
+  // sends a caller looking for a missing feature instead of a missing await —
+  // so the two refusals carry different codes.
+  // Whether the tables are already resident depends on test ordering, so this
+  // asserts the *pair* of states is coherent rather than one of them.
+  assert.notEqual(collationAvailability(255), 'unsupported')
+  if (collationAvailability(255) === 'loadable') {
+    assert.throws(() => collation(255), (err: unknown) => {
+      assert.ok(err instanceof CharsetError)
+      assert.equal((err as CharsetError).code, 'ER_COLLATION_NOT_LOADED')
+      assert.match((err as Error).message, /utf8mb4_0900_ai_ci/)
+      return true
+    })
+  }
 })

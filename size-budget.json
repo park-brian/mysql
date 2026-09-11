@@ -1,23 +1,27 @@
 {
   "bytes": {
-    "raw": 5973,
-    "gzip": 2041
+    "raw": 7132,
+    "gzip": 2641
   },
   "charsets": {
-    "raw": 38403,
-    "gzip": 12393
+    "raw": 52193,
+    "gzip": 17440
   },
   "core": {
-    "raw": 145825,
-    "gzip": 46035
+    "raw": 154427,
+    "gzip": 49480
+  },
+  "parser": {
+    "raw": 52421,
+    "gzip": 16688
   },
   "protocol": {
-    "raw": 129854,
-    "gzip": 41191
+    "raw": 129879,
+    "gzip": 41311
   },
   "types": {
-    "raw": 47168,
-    "gzip": 15315
+    "raw": 71804,
+    "gzip": 24424
   },
   "vfs": {
     "raw": 10945,
