@@ -4,8 +4,9 @@
 // search, not its split logic — so a bug in the tree cannot hide in the check.
 // It holds every structural claim the engine makes:
 //
-//   - every page verifies, is the type and level it should be, and belongs to
-//     its index;
+//   - every page is the type and level it should be and belongs to its index.
+//     Its checksum is the pool's to check, on the read from storage; a page
+//     already resident was checked then and is not re-checked here;
 //   - keys are strictly ascending within a page, and every key lies within the
 //     bounds its ancestors' separators set: at least the separator to its left,
 //     below the separator to its right. Bounds, not equality, because deleting
@@ -44,9 +45,11 @@ const fail = (what: string): never => {
 
 export function verifyStore(store: Store, options: VerifyOptions = {}): void {
   const pool = store.pool
-  const reached = new Set<number>([0, 1])
+  // Pages 0–2 of every group are the system's: the superblocks and the first
+  // map in group 0, a map and two reserved pages in each group after.
+  const reached = new Set<number>()
   const groupPages = extentsPerMap(pool.pageSize) * EXTENT
-  for (let start = 0; start < store.alloc.pageCount; start += groupPages) reached.add(start + 2)
+  for (let start = 0; start < store.alloc.pageCount; start += groupPages) for (let p = start; p < start + 3; p++) reached.add(p)
 
   const trees = [{ indexId: 0, root: store.directory.root }, ...store.trees()]
   for (const { indexId, root } of trees) verifyTree(store, indexId, root, reached, options)
@@ -92,14 +95,12 @@ function verifyTree(store: Store, indexId: number, root: number, reached: Set<nu
         if (effective !== undefined && lo !== undefined && ip.compareBytes(effective, lo) < 0) fail(`page ${pageNo}: a key below its separator`)
         if (effective !== undefined && hi !== undefined && ip.compareBytes(effective, hi) >= 0) fail(`page ${pageNo}: a key at or above the next separator`)
         if (level > 0) {
-          if (i === 0 && key.length !== 0) fail(`internal page ${pageNo} does not start with the empty key`)
           const next = i + 1 < n ? ip.keyAt(page, i + 1).slice() : hi
           children.push([ip.childAt(page, i), i === 0 ? lo : key.slice(), next])
         } else if (options.overflowRefs !== undefined) {
           for (const ref of options.overflowRefs(indexId, value)) for (const p of chainPages(pool, decodeRef(ref))) claim(p, SEGMENT.OVERFLOW)
         }
       }
-      if (level > 0 && n === 0) fail(`internal page ${pageNo} has no children`)
       const v = ip.schemaVersion(page)
       if (level > 0 && v !== 0) fail(`internal page ${pageNo} carries schema version ${v}`)
       if (level === 0 && v > version) fail(`leaf ${pageNo} is at schema version ${v}, ahead of its index's ${version}`)

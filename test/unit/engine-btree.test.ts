@@ -207,3 +207,50 @@ test('M4.4: a leaf behind the schema version is re-encoded before any write, thr
   verifyStore(store, versions)
   for (const [, v] of v2.entries()) assert.equal(v.length, 20)
 })
+
+test('review: an upgrade that makes records too big is refused with every row in place', async () => {
+  const file = await freshFile()
+  let store = Store.create(file, { frames: 32 })
+  const v1 = store.createTree({ schemaVersion: 1, upgrade: (v) => v })
+  for (let i = 0; i < 60; i++) v1.put(be(i), new Uint8Array(200))
+  store.flush()
+  store = Store.open(file, { frames: 32 })
+  const grow = (v: Uint8Array) => new Uint8Array(Math.ceil(v.length * 1.8))
+  const v2 = store.openTree(v1.indexId, { schemaVersion: 2, upgrade: grow })
+  assert.throws(() => v2.put(be(1000), new Uint8Array(1)), (e: EngineError) => e.code === 'ER_TOO_BIG_ROWSIZE')
+  assert.equal([...v2.entries()].length, 60)
+  verifyStore(store, { schemaVersion: () => 2 })
+})
+
+test('review: deletes across leaves an upgrade has grown 2.5× rebalance only where the halves fit', async () => {
+  const file = await freshFile()
+  let store = Store.create(file, { frames: 32 })
+  const v1 = store.createTree({ schemaVersion: 1, upgrade: (v) => v })
+  for (let i = 0; i < 60; i++) v1.put(be(i), new Uint8Array(60))
+  store.flush()
+  store = Store.open(file, { frames: 32 })
+  const v2 = store.openTree(v1.indexId, { schemaVersion: 2, upgrade: (v) => new Uint8Array(Math.ceil(v.length * 2.5)) })
+  for (let i = 59; i >= 0; i--) {
+    v2.delete(be(i))
+    verifyStore(store, { schemaVersion: () => 2 })
+  }
+})
+
+test('review: a tree opened at an older schema version than its leaves refuses them', async () => {
+  const file = await freshFile()
+  const store = Store.create(file, { frames: 32 })
+  const v2 = store.createTree({ schemaVersion: 2, upgrade: (v) => v })
+  v2.put(be(1), new Uint8Array(4))
+  const stale = store.openTree(v2.indexId)
+  assert.throws(() => stale.put(be(2), new Uint8Array(4)), (e: EngineError) => e.code === 'ENGINE_MISUSE')
+  assert.throws(() => stale.get(be(1)), (e: EngineError) => e.code === 'ENGINE_MISUSE')
+})
+
+test('review: a file of more than one allocation group verifies', async () => {
+  // At 512-byte pages a group is 40 extents, so a few thousand rows cross it.
+  const file = await new MemoryVfs({ pageSize: 512 }).open('d', { create: true })
+  const store = Store.create(file, { frames: 32 })
+  const tree = store.createTree()
+  for (let i = 0; store.alloc.pageCount <= 2560; i++) tree.put(be(i), new Uint8Array(100))
+  verifyStore(store)
+})

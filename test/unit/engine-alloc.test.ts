@@ -87,3 +87,13 @@ test('M4.12: the in-memory view is rebuilt from the maps on open', async () => {
   assert.equal(reopened.allocate(4, counts.get(4) ?? 0).page, alloc.allocate(4, counts.get(4) ?? 0).page)
   assert.throws(() => alloc.free(pages[198] as number), (e: EngineError) => e.code === 'ENGINE_MISUSE', 'a double free is refused')
 })
+
+test('review: a map that frees a group\'s system pages is refused on open, not trusted', async () => {
+  const { pool, lsn, alloc } = await setup()
+  const page = pool.fetch(2)
+  new DataView(page.buffer, page.byteOffset).setUint32(24 + 8, 0)
+  pool.markDirty(page, lsn.next())
+  pool.release(page)
+  pool.flush()
+  assert.throws(() => Allocator.open(new BufferPool(pool.file, { frames: 16 }), lsn, alloc.pageCount), (e: EngineError) => e.code === 'ENGINE_CORRUPT_PAGE')
+})

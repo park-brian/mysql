@@ -33,6 +33,8 @@ export const DIRECTION_NONE = 0
 export const DIRECTION_ASC = 1
 export const DIRECTION_DESC = 2
 export const NO_SLOT = 0xffff
+/** Bytes per slot in the directory. */
+export const SLOT = 2
 
 const view = (page: Uint8Array): DataView => new DataView(page.buffer, page.byteOffset, page.byteLength)
 
@@ -274,7 +276,9 @@ export function validateIndexPage(p: Uint8Array, pageNo: number): void {
     if (previous !== null && compareBytes(previous, key) >= 0) throw corrupt(pageNo, `keys out of order at slot ${i}`)
     previous = key
     if (level(p) > 0 && val[0] !== 4) throw corrupt(pageNo, `internal cell ${i} does not hold a child page`)
+    if (level(p) > 0 && i === 0 && k[0] !== 0) throw corrupt(pageNo, 'an internal page that does not start with the empty key')
   }
+  if (level(p) > 0 && n === 0) throw corrupt(pageNo, 'an internal page with no children')
   spans.sort((a, b) => a[0] - b[0])
   for (let i = 1; i < spans.length; i++) {
     if ((spans[i] as [number, number])[0] < (spans[i - 1] as [number, number])[1]) throw corrupt(pageNo, 'cells overlap')

@@ -21,7 +21,7 @@
 // room — is rebuilt from the map pages on open, so the maps are the only truth.
 import { corrupt, misuse } from './errors.ts'
 import type { LsnClock } from './lsn.ts'
-import { FRAME_HEADER, PAGE_TYPE, initPage } from './page.ts'
+import { FRAME_HEADER, PAGE_TYPE, initPage, pageType } from './page.ts'
 import type { BufferPool } from './pool.ts'
 
 export const EXTENT = 64
@@ -64,6 +64,11 @@ export class Allocator {
     if (pageCount % EXTENT !== 0 || pageCount === 0) throw corrupt(0, `page count ${pageCount} is not a whole number of extents`)
     const a = new Allocator(pool, lsn, pageCount)
     a.#forEachDescriptor((extent, owner, used) => {
+      // A group's system pages are taken for good. A map that says otherwise
+      // would hand out the superblock or a map page as a tree node.
+      if (extent % a.#perMap === 0 && (owner !== SHARED || !used.has(0) || !used.has(1) || !used.has(2))) {
+        throw corrupt(a.#mapPage(extent), `the system extent of group ${extent / a.#perMap} is not reserved`)
+      }
       if (owner === FREE) {
         if (!used.empty()) throw corrupt(a.#mapPage(extent), `free extent ${extent} has pages in use`)
         a.#free.push(extent)
@@ -229,6 +234,7 @@ export class Allocator {
     for (let start = 0; start < extents; start += this.#perMap) {
       const page = this.#pool.fetch(this.#mapPage(start))
       try {
+        if (pageType(page) !== PAGE_TYPE.ALLOC_MAP) throw corrupt(this.#mapPage(start), 'not an allocation map page')
         const v = new DataView(page.buffer, page.byteOffset, page.byteLength)
         for (let e = start; e < Math.min(extents, start + this.#perMap); e++) {
           const at = FRAME_HEADER + (e - start) * DESCRIPTOR

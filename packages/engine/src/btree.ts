@@ -205,6 +205,13 @@ export class BTree {
       this.space.pool.release(page)
       throw corrupt(pageNo, `not a level-${level ?? '?'} page of index ${this.indexId}`)
     }
+    // A leaf written at a newer version than this tree was opened with would be
+    // read as the wrong layout and, on its next write, stamped with the older
+    // version: its records upgraded twice later. Refused instead.
+    if (ip.level(page) === 0 && ip.schemaVersion(page) > this.#version) {
+      this.space.pool.release(page)
+      throw misuse(`leaf ${pageNo} is at schema version ${ip.schemaVersion(page)}; the tree was opened at ${this.#version}`)
+    }
     return page
   }
 
@@ -284,6 +291,11 @@ export class BTree {
     this.#write(this.root, (root) => {
       if (this.space.alloc.free(pageNo).fragment) ip.setFragments(root, segment, ip.fragments(root, segment) - 1)
     })
+  }
+
+  /** The bytes `cells` take on a page, slots included. */
+  static #bytes(cells: readonly Cell[]): number {
+    return cells.reduce((sum, c) => sum + ip.cellSize(c.key, c.value) + ip.SLOT, 0)
   }
 
   /** Every cell of a page, copied out. */
@@ -450,20 +462,21 @@ export class BTree {
    * the two fit in one page, otherwise share their cells out evenly.
    */
   #rebalance(parentNo: number, i: number): void {
-    const { n, sepIndex, a, b } = this.#read(parentNo, (p) => {
+    const pair = this.#read(parentNo, (p) => {
       const n = ip.cellCount(p)
+      // A parent with one child has no sibling to offer.
+      if (n < 2) return null
       const j = i + 1 < n ? i : i - 1
-      return { n, sepIndex: j + 1, a: ip.childAt(p, j), b: ip.childAt(p, j + 1) }
+      return { sepIndex: j + 1, a: ip.childAt(p, j), b: ip.childAt(p, j + 1), separator: ip.keyAt(p, j + 1).slice(), level: ip.level(p) - 1 }
     })
-    if (n < 2) return
-    const separator = this.#read(parentNo, (p) => ip.keyAt(p, sepIndex).slice())
-    const level = this.#read(parentNo, (p) => ip.level(p)) - 1
+    if (pair === null) return
+    const { sepIndex, a, b, separator, level } = pair
     const cellsA = this.#read(a, (p) => this.#current(p), level)
     const cellsB = this.#read(b, (p) => this.#current(p), level)
     // An internal page's first cell has the empty key; between two pages it
     // takes back the separator it stood for.
     const combined = level === 0 ? [...cellsA, ...cellsB] : [...cellsA, { key: separator, value: (cellsB[0] as Cell).value }, ...cellsB.slice(1)]
-    const bytes = combined.reduce((sum, c) => sum + ip.cellSize(c.key, c.value) + 2, 0)
+    const bytes = BTree.#bytes(combined)
 
     if (bytes <= ip.usableSpace(this.space.pool.pageSize)) {
       const after = this.#read(b, (p) => ip.rightSibling(p))
@@ -483,6 +496,9 @@ export class BTree {
     if (!fitsParent) return
     const left = combined.slice(0, at)
     const right = level === 0 ? combined.slice(at) : [{ key: EMPTY, value: (combined[at] as Cell).value }, ...combined.slice(at + 1)]
+    // Upgraded records can make two pages' worth of cells more than two pages
+    // hold; then there is no even split, and the rebalance is skipped too.
+    if (BTree.#bytes(left) > ip.usableSpace(this.space.pool.pageSize) || BTree.#bytes(right) > ip.usableSpace(this.space.pool.pageSize)) return
     this.#write(a, (p) => this.#fill(p, a, level, left))
     this.#write(b, (p) => this.#fill(p, b, level, right))
     this.#write(parentNo, (p) => {
@@ -524,7 +540,11 @@ export class BTree {
     const behind = this.#read(leafNo, (p) => ip.schemaVersion(p) < this.#version)
     if (!behind) return
     const cells = this.#read(leafNo, (p) => this.#current(p))
-    const bytes = cells.reduce((sum, c) => sum + ip.cellSize(c.key, c.value) + 2, 0)
+    // Checked before the leaf is touched: a record the upgrade has made too big
+    // for any page is refused with every row still in place.
+    const max = ip.maxCellSize(this.space.pool.pageSize)
+    if (cells.some((c) => ip.cellSize(c.key, c.value) > max)) throw rowTooBig(max)
+    const bytes = BTree.#bytes(cells)
     if (bytes <= ip.usableSpace(this.space.pool.pageSize)) {
       this.#write(leafNo, (p) => this.#fill(p, leafNo, 0, cells))
       return

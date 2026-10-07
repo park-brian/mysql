@@ -101,9 +101,11 @@ export function chainPages(pool: BufferPool, ref: ExternalRef): number[] {
 
 export function readChain(pool: BufferPool, refBytes: Uint8Array): Uint8Array {
   const ref = decodeRef(refBytes)
+  // Walked and checked before the buffer is sized by a length it vouches for.
+  const pages = chainPages(pool, ref)
   const out = new Uint8Array(ref.length)
   let at = 0
-  for (const pageNo of chainPages(pool, ref)) {
+  for (const pageNo of pages) {
     const page = pool.fetch(pageNo)
     try {
       const used = new DataView(page.buffer, page.byteOffset, page.byteLength).getUint32(USED)

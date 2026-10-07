@@ -88,3 +88,13 @@ test('M4.7: a corrupt page is a typed error, whatever its bytes', () => {
     { numRuns: 2000 },
   )
 })
+
+test('review: an internal page with no children, or without the empty first key, is corrupt', () => {
+  const empty = new Uint8Array(PAGE)
+  ip.initIndexPage(empty, 4, 1, 1)
+  assert.throws(() => ip.validateIndexPage(empty, 4), /no children/)
+  const keyed = new Uint8Array(PAGE)
+  ip.initIndexPage(keyed, 4, 1, 1)
+  ip.insertCell(keyed, 0, Uint8Array.of(5), ip.childValue(9))
+  assert.throws(() => ip.validateIndexPage(keyed, 4), /empty key/)
+})
