@@ -56,6 +56,11 @@ jobs:
       # since M0.8 while running one target; now it runs two.
       - name: Parser fuzz (10^6 inputs)
         run: npm run fuzz:parser
+      # M4: every engine decoder — page frame, superblock, index page, record,
+      # and a whole store with one sealed page corrupted — answers arbitrary
+      # bytes with an EngineError and nothing else.
+      - name: Engine fuzz (10^6 inputs)
+        run: npm run fuzz:engine
 
   generated:
     name: generated tables are reproducible
