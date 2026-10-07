@@ -119,7 +119,12 @@ const STATEMENT_START = /^[A-Za-z]/
 
 /** How far a skipped let value may run looking for its delimiter. */
 const MAX_LET_LINES = 40
-const EVAL_VAR = /^(?:--\s*)?eval\s+\$(\w+)\s*;?\s*$/i
+// `eval $q` and `eval EXPLAIN [ANALYZE | FORMAT=…] $q`: an EXPLAIN of a
+// statement with a syntax error is a syntax error, so its `--error` is the
+// statement's. `subquery_scalar_to_derived_correlated.test` predicts
+// ER_PARSE_ERROR for `LIMIT @one` that way, and without it the census counted
+// that statement as one MySQL accepts.
+const EVAL_VAR = /^(?:--\s*)?eval\s+(?:explain\s+(?:analyze\s+|format\s*=\s*\w+\s+)?)?\$(\w+)\s*;?\s*$/i
 
 /**
  * How many lex refusals one region may absorb before the file is reported.
@@ -349,15 +354,19 @@ export function extract(bytes) {
     continuation = 0
     open.depth = 0
     open.tick = false
-    if (skippingLet > 0 && !trimmed.startsWith('--')) {
-      directives++
-      skippingLet = trimmed.endsWith(delimiter) ? 0 : skippingLet - 1
-      continue
+    // A let value being skipped ends at its delimiter, at its bound, or — like
+    // every continuation here — at a fresh `--` directive.
+    if (skippingLet > 0) {
+      if (trimmed.startsWith('--')) skippingLet = 0
+      else {
+        directives++
+        skippingLet = trimmed.endsWith(delimiter) ? 0 : skippingLet - 1
+        continue
+      }
     }
-    skippingLet = 0
-    if (/^--(disable|enable)_testcase\b/i.test(trimmed)) {
+    if (/^--\s*(disable|enable)_testcase\b/i.test(trimmed)) {
       directives++
-      disabled = /^--disable/i.test(trimmed)
+      disabled = /^--\s*disable/i.test(trimmed)
       continue
     }
     if (disabled) {

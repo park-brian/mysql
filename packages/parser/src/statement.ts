@@ -81,7 +81,7 @@ function dispatch(c: Cursor, sqlMode: SqlMode): Statement {
     const withClause = parseWithFrom(c, sqlMode)
     if (c.atWord('UPDATE')) return parseUpdate(c, sqlMode, withClause, at)
     if (c.atWord('DELETE')) return parseDelete(c, sqlMode, withClause, at)
-    return parseQueryFrom(c, sqlMode, true, withClause)
+    return parseQueryFrom(c, sqlMode, true, withClause, at)
   }
 
   // A query is a statement: `SELECT`, `VALUES ROW`, `TABLE t`, and any of

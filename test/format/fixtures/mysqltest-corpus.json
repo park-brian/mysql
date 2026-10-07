@@ -131,15 +131,15 @@
     "statements": 17681,
     "lexed": 17680,
     "refusedAtLex": 1,
-    "parsed": 14340,
+    "parsed": 14339,
     "skippedWithVariables": 34,
     "directives": 13013,
     "unreadLines": 69,
     "unreadCharsets": [
       "binary"
     ],
-    "expectedToFail": 54,
-    "expectedToFailAndDid": 53
+    "expectedToFail": 55,
+    "expectedToFailAndDid": 54
   },
   "byKeyword": {
     "SELECT": 6187,
@@ -191,7 +191,7 @@
     "ORDER": 1
   },
   "parsedByKeyword": {
-    "SELECT": 6156,
+    "SELECT": 6155,
     "INSERT": 3305,
     "CREATE": 2579,
     "DROP": 1886,

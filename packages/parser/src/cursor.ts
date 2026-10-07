@@ -12,6 +12,7 @@
 import { parseError, tooDeep } from './errors.ts'
 import { RESERVED } from './keywords.ts'
 import { TOKEN, type Token } from './tokens.ts'
+import type { TableName } from './statement-ast.ts'
 
 /**
  * How deeply a statement may nest before the parser refuses.
@@ -187,6 +188,33 @@ export class Cursor {
   expectNamePart(): string {
     const t = this.peek()
     if (t.kind !== TOKEN.IDENTIFIER) this.fail()
+    return this.take().text
+  }
+
+  /** `t` or `db.t`. */
+  expectTableName(): TableName {
+    const first = this.expectIdentifier()
+    if (!this.takeOp('.')) return { name: first }
+    return { schema: first, name: this.expectNamePart() }
+  }
+
+  /** `(a, b, c)` — one or more names in parentheses. */
+  expectNameList(): string[] {
+    this.expectOp('(')
+    const out = [this.expectIdentifier()]
+    while (this.takeOp(',')) out.push(this.expectIdentifier())
+    this.expectOp(')')
+    return out
+  }
+
+  /**
+   * One string literal's text. Adjacent literals concatenate only inside an
+   * expression, which reads them itself; here — a `COMMENT`, a file name — a
+   * second literal is a second token.
+   */
+  expectString(): string {
+    const t = this.peek()
+    if (t.kind !== TOKEN.STRING) this.fail()
     return this.take().text
   }
 

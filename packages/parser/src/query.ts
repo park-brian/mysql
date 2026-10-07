@@ -83,8 +83,8 @@ export function atParenthesisedQuery(c: Cursor): boolean {
  * table or CTE with ER_MISPLACED_INTO, and refuses it on a branch of a `UNION`
  * other than the last.
  */
-export function parseQueryFrom(c: Cursor, mode: SqlMode, statement = false, withClause?: With): QueryExpression {
-  return new QueryParser(c, mode, statement).query(withClause)
+export function parseQueryFrom(c: Cursor, mode: SqlMode, statement = false, withClause?: With, at?: number): QueryExpression {
+  return new QueryParser(c, mode, statement).query(withClause, at)
 }
 
 /**
@@ -150,9 +150,10 @@ class QueryParser {
 
   // --- query expressions ----------------------------------------------------
 
-  query(already?: With): QueryExpression {
+  /** `already` and `at` are a `WITH` the dispatcher has read, and where it began. */
+  query(already?: With, start?: number): QueryExpression {
     return this.#c.nested(() => {
-      const at = this.#c.peek().start
+      const at = start ?? this.#c.peek().start
       const withClause = already ?? (this.#c.atWord('WITH') ? this.with() : undefined)
       const body = this.#setOperation(this.#intersection(this.#primary()))
       return this.#tail(at, withClause, body)
@@ -261,7 +262,7 @@ class QueryParser {
     if (c.atWord('VALUES')) return this.#values()
     if (c.atWord('TABLE')) {
       const at = c.take().start
-      return { kind: QUERY.TABLE, table: this.#tableName(), at }
+      return { kind: QUERY.TABLE, table: this.#c.expectTableName(), at }
     }
     return c.fail()
   }
@@ -273,7 +274,7 @@ class QueryParser {
     const tables: CommonTable[] = []
     do {
       const name = c.expectIdentifier()
-      const columns = c.atOp('(') ? this.#nameList() : undefined
+      const columns = c.atOp('(') ? this.#c.expectNameList() : undefined
       c.expectWord('AS')
       c.expectOp('(')
       const query = this.#nestedQuery()
@@ -436,43 +437,17 @@ class QueryParser {
   #limit(): Limit {
     const c = this.#c
     c.expectWord('LIMIT')
-    const first = this.#limitValue()
-    if (c.takeOp(',')) return { count: this.#limitValue(), offset: first }
-    if (c.takeWord('OFFSET')) return { count: first, offset: this.#limitValue() }
+    const first = parseLimitValue(c)
+    if (c.takeOp(',')) return { count: parseLimitValue(c), offset: first }
+    if (c.takeWord('OFFSET')) return { count: first, offset: parseLimitValue(c) }
     return { count: first }
-  }
-
-  /**
-   * A number, a `?`, or — inside a stored program — a variable name. Not an
-   * arbitrary expression: `LIMIT 1 + 1` is a syntax error.
-   */
-  #limitValue(): Expression {
-    const c = this.#c
-    const t = c.peek()
-    if (t.kind === TOKEN.NUMBER && /^\d+$/.test(t.text)) {
-      c.skip()
-      return { kind: NODE.LITERAL, type: 'int', value: BigInt(t.text), at: t.start }
-    }
-    if (t.kind === TOKEN.PLACEHOLDER) {
-      c.skip()
-      return { kind: NODE.PLACEHOLDER, index: t.index ?? 0, at: t.start }
-    }
-    if (t.kind === TOKEN.VARIABLE) {
-      c.skip()
-      return { kind: NODE.VARIABLE, name: t.text, at: t.start }
-    }
-    if (c.atIdentifier()) {
-      c.skip()
-      return { kind: NODE.COLUMN, parts: [t.text], at: t.start }
-    }
-    return c.fail()
   }
 
   #into(): Into | undefined {
     const c = this.#c
     if (!c.takeWord('INTO')) return undefined
     if (c.takeWord('OUTFILE')) {
-      const file = this.#string()
+      const file = this.#c.expectString()
       let charset: string | undefined
       if (c.takeWords('CHARACTER', 'SET') || c.takeWord('CHARSET')) charset = this.#word().toLowerCase()
       const options: Record<string, string> = {}
@@ -480,17 +455,17 @@ class QueryParser {
         if (!c.takeWord(section)) continue
         const key = section === 'COLUMNS' ? 'FIELDS' : section
         for (;;) {
-          if (c.takeWords('TERMINATED', 'BY')) options[`${key} TERMINATED BY`] = this.#string()
-          else if (c.takeWords('OPTIONALLY', 'ENCLOSED', 'BY')) options[`${key} OPTIONALLY ENCLOSED BY`] = this.#string()
-          else if (c.takeWords('ENCLOSED', 'BY')) options[`${key} ENCLOSED BY`] = this.#string()
-          else if (c.takeWords('ESCAPED', 'BY')) options[`${key} ESCAPED BY`] = this.#string()
-          else if (c.takeWords('STARTING', 'BY')) options[`${key} STARTING BY`] = this.#string()
+          if (c.takeWords('TERMINATED', 'BY')) options[`${key} TERMINATED BY`] = this.#c.expectString()
+          else if (c.takeWords('OPTIONALLY', 'ENCLOSED', 'BY')) options[`${key} OPTIONALLY ENCLOSED BY`] = this.#c.expectString()
+          else if (c.takeWords('ENCLOSED', 'BY')) options[`${key} ENCLOSED BY`] = this.#c.expectString()
+          else if (c.takeWords('ESCAPED', 'BY')) options[`${key} ESCAPED BY`] = this.#c.expectString()
+          else if (c.takeWords('STARTING', 'BY')) options[`${key} STARTING BY`] = this.#c.expectString()
           else break
         }
       }
       return { kind: 'outfile', file, ...(charset === undefined ? {} : { charset }), options }
     }
-    if (c.takeWord('DUMPFILE')) return { kind: 'dumpfile', file: this.#string() }
+    if (c.takeWord('DUMPFILE')) return { kind: 'dumpfile', file: this.#c.expectString() }
     const targets: Expression[] = []
     do {
       const t = c.peek()
@@ -514,7 +489,7 @@ class QueryParser {
     let of: TableName[] | undefined
     if (c.takeWord('OF')) {
       of = []
-      do of.push(this.#tableName())
+      do of.push(this.#c.expectTableName())
       while (c.takeOp(','))
     }
     let wait: 'NOWAIT' | 'SKIP LOCKED' | undefined
@@ -634,7 +609,7 @@ class QueryParser {
         if (c.takeWord('ON')) {
           left = { kind: REF.JOIN, type, left, right, on: this.#expr(), at }
         } else if (c.takeWord('USING')) {
-          left = { kind: REF.JOIN, type, left, right, using: this.#nameList(), at }
+          left = { kind: REF.JOIN, type, left, right, using: this.#c.expectNameList(), at }
         } else {
           // An outer join must say how; an inner one need not — and an inner
           // one that does not is re-hung on its right side's leftmost table.
@@ -686,15 +661,15 @@ class QueryParser {
       // take the alias the inner one did not.
       if (items.length === 1 && first.kind === REF.DERIVED && first.alias === undefined && (c.atWord('AS') || c.atIdentifier())) {
         const alias = this.#alias() as string
-        const columns = c.atOp('(') ? this.#nameList() : undefined
+        const columns = c.atOp('(') ? this.#c.expectNameList() : undefined
         return { ...first, alias, ...(columns === undefined ? {} : { columns }) }
       }
       return { kind: REF.LIST, items, at }
     }
     if (c.atWord('JSON_TABLE')) throw unsupportedStatement('JSON_TABLE')
-    const table = this.#tableName()
+    const table = this.#c.expectTableName()
     let partitions: string[] | undefined
-    if (c.takeWord('PARTITION')) partitions = this.#nameList()
+    if (c.takeWord('PARTITION')) partitions = this.#c.expectNameList()
     const alias = this.#alias()
     const indexHints = this.#indexHints()
     return {
@@ -712,7 +687,7 @@ class QueryParser {
     const c = this.#c
     c.expectOp(')')
     const alias = this.#alias()
-    const columns = alias !== undefined && c.atOp('(') ? this.#nameList() : undefined
+    const columns = alias !== undefined && c.atOp('(') ? this.#c.expectNameList() : undefined
     return {
       kind: REF.DERIVED,
       query,
@@ -761,30 +736,6 @@ class QueryParser {
 
   // --- small pieces ---------------------------------------------------------
 
-  #tableName(): TableName {
-    const c = this.#c
-    const first = c.expectIdentifier()
-    if (!c.takeOp('.')) return { name: first }
-    return { schema: first, name: c.expectNamePart() }
-  }
-
-  #nameList(): string[] {
-    const c = this.#c
-    c.expectOp('(')
-    const out: string[] = []
-    do out.push(c.expectIdentifier())
-    while (c.takeOp(','))
-    c.expectOp(')')
-    return out
-  }
-
-  #string(): string {
-    const t = this.#c.peek()
-    if (t.kind !== TOKEN.STRING) this.#c.fail()
-    this.#c.skip()
-    return t.text
-  }
-
   #word(): string {
     const t = this.#c.peek()
     if (t.kind !== TOKEN.IDENTIFIER && t.kind !== TOKEN.STRING) this.#c.fail()
@@ -813,6 +764,31 @@ function hangCrossJoin(ref: TableReference, make: (leaf: TableReference) => Tabl
   for (const join of spine.reverse()) out = { ...join, left: out }
   return out
 }
+
+/**
+ * One `LIMIT` value: a number, a `?`, or — inside a stored program — a
+ * variable name. Not an arbitrary expression: `LIMIT 1 + 1` is a syntax error. The
+ * same grammar (`limit_option`) serves `SELECT`, `UPDATE` and `DELETE`.
+ */
+export function parseLimitValue(c: Cursor): Expression {
+  const t = c.peek()
+  if (t.kind === TOKEN.NUMBER && /^\d+$/.test(t.text)) {
+    c.skip()
+    return { kind: NODE.LITERAL, type: 'int', value: BigInt(t.text), at: t.start }
+  }
+  if (t.kind === TOKEN.PLACEHOLDER) {
+    c.skip()
+    return { kind: NODE.PLACEHOLDER, index: t.index ?? 0, at: t.start }
+  }
+  // A stored program's local variable is a plain name; a user variable,
+  // `LIMIT @a`, is ER_PARSE_ERROR on 8.4.11.
+  if (c.atIdentifier()) {
+    c.skip()
+    return { kind: NODE.COLUMN, parts: [t.text], at: t.start }
+  }
+  return c.fail()
+}
+
 
 /** For the DML parser: one value of a `VALUES` row, which may be `DEFAULT`. */
 export function parseValueOrDefault(c: Cursor, mode: SqlMode): Expression {

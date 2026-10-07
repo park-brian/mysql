@@ -12,11 +12,11 @@
 //     is the same statement as `DELETE t FROM …`.
 import { NODE, type ColumnNode, type Expression } from './ast.ts'
 import type { Cursor } from './cursor.ts'
-import { TOKEN } from './tokens.ts'
 import { parseExpressionFrom } from './expression.ts'
 import {
   atParenthesisedQuery,
   atQueryStart,
+  parseLimitValue,
   parseOrderBy,
   parseQueryFrom,
   parseTableReference,
@@ -44,8 +44,8 @@ export function parseInsert(c: Cursor, mode: SqlMode): InsertNode {
   else if (!replace && c.takeWord('HIGH_PRIORITY')) priority = 'HIGH_PRIORITY'
   const ignore = !replace && c.takeWord('IGNORE')
   c.takeWord('INTO')
-  const table = tableName(c)
-  const partitions = c.takeWord('PARTITION') ? nameList(c) : undefined
+  const table = c.expectTableName()
+  const partitions = c.takeWord('PARTITION') ? c.expectNameList() : undefined
 
   // `(a, b)` is a column list unless a query starts inside it:
   // `INSERT INTO t (SELECT …)`.
@@ -82,7 +82,7 @@ export function parseInsert(c: Cursor, mode: SqlMode): InsertNode {
   let rowAlias: InsertNode['rowAlias']
   if (query === undefined && c.takeWord('AS')) {
     const name = c.expectIdentifier()
-    rowAlias = c.atOp('(') ? { name, columns: nameList(c) } : { name }
+    rowAlias = c.atOp('(') ? { name, columns: c.expectNameList() } : { name }
   }
   let onDuplicate: Assignment[] | undefined
   if (!replace && c.takeWords('ON', 'DUPLICATE', 'KEY', 'UPDATE')) onDuplicate = assignments(c, mode)
@@ -187,22 +187,7 @@ export function parseDelete(c: Cursor, mode: SqlMode, withClause?: With, at = c.
 function tail(c: Cursor, mode: SqlMode): { where?: Expression; orderBy?: OrderItem[]; limit?: Expression } {
   const where = c.takeWord('WHERE') ? parseExpressionFrom(c, mode) : undefined
   const orderBy = c.atWords('ORDER', 'BY') ? parseOrderBy(c, mode) : undefined
-  let limit: Expression | undefined
-  if (c.takeWord('LIMIT')) {
-    const t = c.peek()
-    if (t.kind === TOKEN.NUMBER && /^\d+$/.test(t.text)) {
-      c.skip()
-      limit = { kind: NODE.LITERAL, type: 'int', value: BigInt(t.text), at: t.start }
-    } else if (t.kind === TOKEN.PLACEHOLDER) {
-      c.skip()
-      limit = { kind: NODE.PLACEHOLDER, index: t.index ?? 0, at: t.start }
-    } else if (t.kind === TOKEN.VARIABLE) {
-      c.skip()
-      limit = { kind: NODE.VARIABLE, name: t.text, at: t.start }
-    } else {
-      c.fail()
-    }
-  }
+  const limit = c.takeWord('LIMIT') ? parseLimitValue(c) : undefined
   return {
     ...(where === undefined ? {} : { where }),
     ...(orderBy === undefined ? {} : { orderBy }),
@@ -263,7 +248,7 @@ function singleTable(c: Cursor, table: TableName, at: number): TableReference {
   let alias: string | undefined
   if (c.takeWord('AS')) alias = c.expectIdentifier()
   else if (c.atIdentifier()) alias = c.take().text
-  const partitions = c.takeWord('PARTITION') ? nameList(c) : undefined
+  const partitions = c.takeWord('PARTITION') ? c.expectNameList() : undefined
   return {
     kind: REF.TABLE,
     table,
@@ -277,20 +262,5 @@ function references(c: Cursor, mode: SqlMode): TableReference[] {
   const out: TableReference[] = []
   do out.push(parseTableReference(c, mode))
   while (c.takeOp(','))
-  return out
-}
-
-function tableName(c: Cursor): TableName {
-  const first = c.expectIdentifier()
-  if (!c.takeOp('.')) return { name: first }
-  return { schema: first, name: c.expectNamePart() }
-}
-
-function nameList(c: Cursor): string[] {
-  c.expectOp('(')
-  const out: string[] = []
-  do out.push(c.expectIdentifier())
-  while (c.takeOp(','))
-  c.expectOp(')')
   return out
 }

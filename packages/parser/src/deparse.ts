@@ -39,23 +39,23 @@ import {
   type WindowSpec,
 } from './query-ast.ts'
 import {
-  STATEMENT,
   KEY,
+  STATEMENT,
+  type Assignment,
   type CheckConstraint,
   type ColumnDefinition,
   type CreateTableNode,
   type CreateViewNode,
   type Definer,
-  type Assignment,
   type DeleteNode,
-  type InsertNode,
-  type UpdateNode,
   type DropNode,
   type IndexColumn,
+  type InsertNode,
   type KeyDefinition,
   type Reference,
   type Statement,
   type TableName,
+  type UpdateNode,
 } from './statement-ast.ts'
 
 export interface DeparseOptions {

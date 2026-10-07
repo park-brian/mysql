@@ -343,3 +343,8 @@ test('M3.3: a let value takes the --error of the eval that sends it', () => {
 test('M3.3: a disabled testcase is not run, so it is not measured', () => {
   assert.deepEqual(texts(file('--disable_testcase BUG#0000', 'SELECT FROM WHERE;', '--enable_testcase', 'SELECT 1;')), ['SELECT 1'])
 })
+
+test('M3.3 review: an EXPLAIN of a let value carries its --error too', () => {
+  const out = extract(file('let $q =', 'SELECT 1 LIMIT @one;', '--error ER_PARSE_ERROR', 'eval EXPLAIN FORMAT=tree $q;'))
+  assert.equal(out.statements[0]?.expectedError, 'ER_PARSE_ERROR')
+})

@@ -282,6 +282,8 @@ test('M3.3 review: forms a real 8.4 refuses, and so do we', () => {
     'SELECT a := 1 FROM t', // only a user variable is assigned
     'SELECT @@sql_mode := 1',
     'SELECT a = 1 := 2 FROM t',
+    'SELECT 1 FROM t LIMIT @a', // `limit_option` takes no user variable
+    'DELETE FROM t LIMIT @a',
   ]) {
     assert.throws(() => parseStatement(sql), (e: unknown) => e instanceof ParseError && e.errno === 1064, sql)
   }

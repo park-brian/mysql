@@ -110,16 +110,16 @@ export function parseCreateTable(c: Cursor, options: DdlOptions): CreateTableNod
   const temporary = c.takeWord('TEMPORARY')
   c.expectWord('TABLE')
   const ifNotExists = c.takeWords('IF', 'NOT', 'EXISTS')
-  const table = tableName(c)
+  const table = c.expectTableName()
 
   // `CREATE TABLE a LIKE b`, and its parenthesised spelling. No body follows.
   if (c.takeWord('LIKE')) {
-    return { kind: STATEMENT.CREATE_TABLE, table, ...flag('temporary', temporary), ...flag('ifNotExists', ifNotExists), like: tableName(c), columns: [], keys: [], checks: [], options: {}, at }
+    return { kind: STATEMENT.CREATE_TABLE, table, ...flag('temporary', temporary), ...flag('ifNotExists', ifNotExists), like: c.expectTableName(), columns: [], keys: [], checks: [], options: {}, at }
   }
   if (c.atOp('(') && c.atWord('LIKE', 1)) {
     c.skip()
     c.skip()
-    const like = tableName(c)
+    const like = c.expectTableName()
     c.expectOp(')')
     return { kind: STATEMENT.CREATE_TABLE, table, ...flag('temporary', temporary), ...flag('ifNotExists', ifNotExists), like, columns: [], keys: [], checks: [], options: {}, at }
   }
@@ -201,14 +201,8 @@ export function parseCreateView(c: Cursor, options: DdlOptions): CreateViewNode 
     else c.fail()
   }
   c.expectWord('VIEW')
-  const view = tableName(c)
-  let columns: string[] | undefined
-  if (c.takeOp('(')) {
-    columns = []
-    do columns.push(c.expectIdentifier())
-    while (c.takeOp(','))
-    c.expectOp(')')
-  }
+  const view = c.expectTableName()
+  const columns = c.atOp('(') ? c.expectNameList() : undefined
   c.expectWord('AS')
   const query = parseQueryFrom(c, options.sqlMode)
   let checkOption: CreateViewNode['checkOption']
@@ -268,11 +262,11 @@ export function parseDrop(c: Cursor): DropNode {
   else c.fail()
 
   const ifExists = c.takeWords('IF', 'EXISTS')
-  const names: TableName[] = [tableName(c)]
+  const names: TableName[] = [c.expectTableName()]
 
   if (object === DROP_OBJECT.INDEX) {
     c.expectWord('ON')
-    const on = tableName(c)
+    const on = c.expectTableName()
     // `ALGORITHM` and `LOCK` are accepted and mean nothing to a parser: they
     // ask the *server* how to perform the change. Consumed rather than
     // recorded, and consumed rather than left, since leaving them would make
@@ -281,7 +275,7 @@ export function parseDrop(c: Cursor): DropNode {
     return { kind: STATEMENT.DROP, object, names, ...flag('ifExists', ifExists), on, at }
   }
 
-  while (c.takeOp(',')) names.push(tableName(c))
+  while (c.takeOp(',')) names.push(c.expectTableName())
   let behaviour: string | undefined
   if (c.takeWord('RESTRICT')) behaviour = 'RESTRICT'
   else if (c.takeWord('CASCADE')) behaviour = 'CASCADE'
@@ -465,7 +459,7 @@ function columnDefinition(c: Cursor, options: DdlOptions, at: number): ColumnDef
       continue
     }
     if (c.takeWord('COMMENT')) {
-      comment = stringLiteral(c)
+      comment = c.expectString()
       continue
     }
     // A `COLLATE` after other attributes is the type's collation written
@@ -661,7 +655,7 @@ function indexOptions(c: Cursor): { using?: string; comment?: string } {
       continue
     }
     if (c.takeWord('COMMENT')) {
-      comment = stringLiteral(c)
+      comment = c.expectString()
       continue
     }
     if (c.takeWords('WITH', 'PARSER')) {
@@ -681,7 +675,7 @@ function indexOptions(c: Cursor): { using?: string; comment?: string } {
 
 function parseReferences(c: Cursor, options: DdlOptions): Reference {
   c.expectWord('REFERENCES')
-  const table = tableName(c)
+  const table = c.expectTableName()
   const columns = c.atOp('(') ? indexColumns(c, options) : []
   let match: string | undefined
   if (c.takeWord('MATCH')) {
@@ -760,7 +754,7 @@ function parseTableOptions(c: Cursor): Record<string, string> {
       c.takeOp('=')
       c.expectOp('(')
       const members: string[] = []
-      do members.push(tableName(c).name)
+      do members.push(c.expectTableName().name)
       while (c.takeOp(','))
       c.expectOp(')')
       out['UNION'] = members.join(',')
@@ -784,19 +778,6 @@ function parseTableOptions(c: Cursor): Record<string, string> {
 }
 
 // --- small shared pieces ----------------------------------------------------
-
-function tableName(c: Cursor): TableName {
-  const first = c.expectIdentifier()
-  if (!c.takeOp('.')) return { name: first }
-  return { schema: first, name: c.expectNamePart() }
-}
-
-function stringLiteral(c: Cursor): string {
-  const t = c.peek()
-  if (t.kind !== TOKEN.STRING) c.fail()
-  c.skip()
-  return t.text
-}
 
 /** A value that may be written as a bare word, a quoted string, or a number. */
 function nameOrString(c: Cursor): string {
