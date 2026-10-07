@@ -130,6 +130,10 @@ test('M3.5: ENUM members keep their order, and may be written as hex or bits', (
   // literals, which are string constants spelled another way. Refusing them
   // failed nine `CREATE`s for a syntax MySQL accepts.
   assert.equal(column("SET('b',0xc3a6) CHARSET utf8mb3").type.values?.length, 2)
+  // …and such a member is its bytes, not its digits: `0xc3a6` is `æ` in
+  // utf8mb4, and recording `'c3a6'` made it the same member as the string
+  // `'c3a6'`.
+  assert.deepEqual(column("ENUM('c3a6', 0xc3a6, b'1000001')").type.values, ['c3a6', new Uint8Array([0xc3, 0xa6]), new Uint8Array([0x41])])
   assert.equal(column("ENUM(b'1001001') BYTE").type.binary, true)
 })
 

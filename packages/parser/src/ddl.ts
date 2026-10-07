@@ -330,7 +330,7 @@ function checkConstraint(
 
 function columnDefinition(c: Cursor, options: DdlOptions, at: number): ColumnDefinition {
   const name = c.expectIdentifier()
-  const type = parseDataType(c, options.sqlMode)
+  let type = parseDataType(c, options.sqlMode)
 
   let notNull: boolean | undefined
   let nullable: boolean | undefined
@@ -340,7 +340,6 @@ function columnDefinition(c: Cursor, options: DdlOptions, at: number): ColumnDef
   let unique: boolean | undefined
   let primary: boolean | undefined
   let comment: string | undefined
-  let collation: string | undefined
   let generated: { expr: Expression; stored: boolean } | undefined
   let invisible: boolean | undefined
   let srid: number | undefined
@@ -386,8 +385,13 @@ function columnDefinition(c: Cursor, options: DdlOptions, at: number): ColumnDef
       comment = stringLiteral(c)
       continue
     }
+    // A `COLLATE` after other attributes is the type's collation written
+    // late, not a second one: `a VARCHAR(5) NOT NULL COLLATE x` and
+    // `a VARCHAR(5) COLLATE x NOT NULL` are the same column, so both land on
+    // the type. Recording the late one on the column made them two trees for
+    // one definition (found by the deparser's round-trip, M3.3).
     if (c.takeWord('COLLATE')) {
-      collation = nameOrString(c)
+      type = { ...type, collation: nameOrString(c).toLowerCase() }
       continue
     }
     if (c.takeWord('INVISIBLE')) {
@@ -462,7 +466,6 @@ function columnDefinition(c: Cursor, options: DdlOptions, at: number): ColumnDef
     ...(unique === undefined ? {} : { unique }),
     ...(primary === undefined ? {} : { primary }),
     ...(comment === undefined ? {} : { comment }),
-    ...(collation === undefined ? {} : { collation }),
     ...(generated === undefined ? {} : { generated }),
     ...(invisible === undefined ? {} : { invisible }),
     ...(srid === undefined ? {} : { srid }),
@@ -509,7 +512,9 @@ function defaultExpression(c: Cursor, options: DdlOptions): Expression {
         }
         c.expectOp(')')
       }
-      return { kind: NODE.CALL, name: word, args, at: t.start }
+      // The name as written, as the expression parser records it — so
+      // `DEFAULT now()` and `DEFAULT (now())` are the same call.
+      return { kind: NODE.CALL, name: t.text, args, at: t.start }
     }
   }
   return parseExpressionFrom(c, options.sqlMode)

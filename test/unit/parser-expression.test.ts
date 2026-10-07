@@ -48,6 +48,8 @@ function show(e: Expression): string {
         .join(' ')}${e.else === undefined ? '' : ` else ${show(e.else)}`})`
     case NODE.INTERVAL:
       return `INTERVAL(${show(e.value)} ${e.unit})`
+    case NODE.COLLATE:
+      return `(${show(e.expr)} COLLATE ${e.collation})`
   }
 }
 
@@ -124,7 +126,10 @@ test('M3.2: introducers, COLLATE and adjacent string concatenation', () => {
   assert.equal(tree("_latin1'x'"), '_latin1x')
   assert.equal(tree("'a' 'b'"), 'ab', 'adjacent string literals concatenate, as in standard SQL')
   assert.equal(tree("'a' COLLATE utf8mb4_bin"), 'a COLLATE utf8mb4_bin')
-  assert.equal(tree('a COLLATE utf8mb4_bin'), '(COLLATE a)')
+  // This line used to read `'(COLLATE a)'` — the test asserted the tree that
+  // had dropped the collation's name, so it passed for as long as the bug did.
+  assert.equal(tree('a COLLATE utf8mb4_bin'), '(a COLLATE utf8mb4_bin)')
+  assert.notEqual(tree('a COLLATE latin1_bin'), tree('a COLLATE utf8mb4_bin'))
 })
 
 test('M3.2: INTERVAL is an operand, not an operator', () => {

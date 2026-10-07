@@ -20,6 +20,7 @@ import { RESERVED } from './keywords.ts'
 import { TOKEN, type Token } from './tokens.ts'
 import { NODE, LITERAL, type Expression, type LiteralType } from './ast.ts'
 import { lex, type LexOptions } from './lexer.ts'
+import { hexBytes } from './data-type.ts'
 import { NO_SQL_MODE, type SqlMode } from './sql-mode.ts'
 
 /**
@@ -360,7 +361,7 @@ class ExpressionParser {
     if (name.kind !== TOKEN.IDENTIFIER && name.kind !== TOKEN.STRING) this.#fail()
     this.#c.skip()
     if (expr.kind === NODE.LITERAL) return { ...expr, collation: name.text }
-    return { kind: NODE.UNARY, op: 'COLLATE', operand: expr, at: expr.at }
+    return { kind: NODE.COLLATE, expr, collation: name.text, at: expr.at }
   }
 
   #primary(): Expression {
@@ -559,14 +560,4 @@ function numericLiteral(text: string): { type: LiteralType; value: bigint | numb
   if (/[eE]/.test(text)) return { type: LITERAL.DOUBLE, value: Number(text) }
   if (text.includes('.')) return { type: LITERAL.DECIMAL, value: text }
   return { type: LITERAL.INT, value: BigInt(text) }
-}
-
-/** `x'4A'` is a binary string, so its value is bytes rather than a number. */
-function hexBytes(text: string): Uint8Array {
-  // An odd digit count is left-padded, which is what MySQL does: `x'4'` is
-  // `0x04` rather than an error.
-  const even = text.length % 2 === 0 ? text : '0' + text
-  const out = new Uint8Array(even.length / 2)
-  for (let i = 0; i < out.length; i++) out[i] = Number.parseInt(even.slice(i * 2, i * 2 + 2), 16)
-  return out
 }

@@ -21,6 +21,7 @@ export type {
   BinaryNode,
   CallNode,
   CaseNode,
+  CollateNode,
   ColumnNode,
   Expression,
   IntervalNode,
@@ -40,6 +41,8 @@ export type { DataType } from './data-type.ts'
 export { parseCreateTable, parseDrop } from './ddl.ts'
 export type { DdlOptions } from './ddl.ts'
 export { parseStatement, parseStatementBytes } from './statement.ts'
+export { deparse, quoteName } from './deparse.ts'
+export type { DeparseOptions } from './deparse.ts'
 export type { ParseStatementOptions } from './statement.ts'
 export { DROP_OBJECT, KEY, STATEMENT } from './statement-ast.ts'
 export type {

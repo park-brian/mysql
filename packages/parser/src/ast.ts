@@ -16,6 +16,7 @@ export const NODE = {
   CASE: 'case',
   ROW: 'row',
   INTERVAL: 'interval',
+  COLLATE: 'collate',
 } as const
 
 export type NodeKind = (typeof NODE)[keyof typeof NODE]
@@ -139,6 +140,22 @@ export interface IntervalNode {
   readonly at: number
 }
 
+/**
+ * `expr COLLATE name` on anything but a literal, which carries its collation
+ * itself.
+ *
+ * M3.2 parsed this to a unary node with no field for the name, so
+ * `a COLLATE utf8mb4_bin` and `a COLLATE latin1_bin` were the same tree — the
+ * name was read and dropped. The deparser's round-trip found it (M3.3), since a
+ * name the tree does not hold is a name the deparser cannot write back.
+ */
+export interface CollateNode {
+  readonly kind: typeof NODE.COLLATE
+  readonly expr: Expression
+  readonly collation: string
+  readonly at: number
+}
+
 export type Expression =
   | LiteralNode
   | PlaceholderNode
@@ -150,3 +167,4 @@ export type Expression =
   | CaseNode
   | RowNode
   | IntervalNode
+  | CollateNode

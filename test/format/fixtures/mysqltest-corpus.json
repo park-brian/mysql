@@ -270,6 +270,7 @@
   "wronglyAcceptedByKeyword": {
     "CREATE": 1
   },
+  "roundTripFailuresByKeyword": {},
   "byCharset": {
     "utf8mb4": 14124,
     "latin1": 2281,

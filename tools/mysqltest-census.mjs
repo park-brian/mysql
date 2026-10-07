@@ -45,6 +45,7 @@ import { mkdirSync, readFileSync, writeFileSync, existsSync } from 'node:fs'
 import { join } from 'node:path'
 import { REPO, REF, fetchPinnedBytes, combinedSha256, listPinnedDirectory, sourceMode } from './lib/gen-common.mjs'
 import { lex, parseStatement, ParseError } from '@myjs/parser'
+import { roundTrip } from './lib/round-trip.mjs'
 import { extract } from './lib/mysqltest-extract.mjs'
 
 function arg(name, fallback) {
@@ -193,6 +194,13 @@ let expectedToFailAndDid = 0
 const unsupported = new Map()
 /** Statements that lexed and would not parse, by leading keyword. */
 const parseFailures = new Map()
+/**
+ * Statements that parsed and did not survive `parse(deparse(ast))` (M3.3), by
+ * leading keyword. Gated at zero: a tree the deparser cannot write back holds
+ * less than the statement said, or the deparser writes something else.
+ */
+const roundTripFailures = new Map()
+let roundTripPrinted = 0
 /** Parsed, by leading keyword — the exit criterion lives in this table. */
 const parsedByKeyword = new Map()
 /** Lines in a charset this build will not decode. Coverage lost, and counted. */
@@ -261,8 +269,16 @@ for (const source of sources) {
     // and the difference between 80.8% and the real number.
     if (shouldFail) expectedToFail++
     try {
-      parseStatement(text)
+      const ast = parseStatement(text)
       parsed++
+      const broken = roundTrip(ast)
+      if (broken !== null) {
+        roundTripFailures.set(keyword, (roundTripFailures.get(keyword) ?? 0) + 1)
+        // Printed, not committed, like every other line of corpus SQL here.
+        if (roundTripPrinted++ < 40) {
+          console.error(`  round-trip failed (${broken.error}) in ${name}:\n    ${text.replace(/\s+/g, ' ').slice(0, 300)}\n    ${broken.sql.slice(0, 300)}`)
+        }
+      }
       parsedByKeyword.set(keyword, (parsedByKeyword.get(keyword) ?? 0) + 1)
       if (shouldFail) {
         // We accepted something MySQL rejects. Not a crash, but a divergence,
@@ -359,6 +375,7 @@ writeFileSync(
       unsupported: Object.fromEntries([...unsupported].sort((a, b) => b[1] - a[1])),
       parseFailuresByKeyword: Object.fromEntries([...parseFailures].sort((a, b) => b[1] - a[1])),
       wronglyAcceptedByKeyword: Object.fromEntries([...tooPermissive].sort((a, b) => b[1] - a[1])),
+      roundTripFailuresByKeyword: Object.fromEntries([...roundTripFailures].sort((a, b) => b[1] - a[1])),
       byCharset: Object.fromEntries(charsetRanked),
       refusedCharsetSwitches: Object.fromEntries([...refused].sort((a, b) => b[1] - a[1])),
       notMeasured,
@@ -418,6 +435,17 @@ if (wouldNotParse > 0) {
 // identifier (`ctype_latin1.test`'s `CREATE TABLE „a`). The other, `create
 // table lateral(…)`, fell to M3.15's reserved-word list. The bound is a
 // ratchet: it may fall, and a rise means a new one.
+// M3.3's acceptance clause, at corpus scale: every statement that parses must
+// survive the deparser.
+const roundTripsBroken = [...roundTripFailures.values()].reduce((a, b) => a + b, 0)
+if (roundTripsBroken > 0) {
+  console.error(
+    `\n${roundTripsBroken} parsed statement(s) did not survive parse(deparse(ast)).\n` +
+      '  Either the tree dropped something the statement said, or the deparser wrote something else.',
+  )
+  process.exit(1)
+}
+
 const wronglyAccepted = [...tooPermissive.values()].reduce((a, b) => a + b, 0)
 if (wronglyAccepted > 1) {
   console.error(

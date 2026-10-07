@@ -381,13 +381,21 @@ class Lexer {
     return this.#token(kind, body, start, startLine)
   }
 
-  /** `@user`, `@@system`, `@@global.system`, and `@'quoted'`. */
+  /**
+   * `@user`, `@@system`, `@@global.system`, and `@'quoted'`.
+   *
+   * The text keeps its `@` or `@@` in every spelling. A quoted name used to
+   * come back as the bare inner text, so `@'a'` was the token `a` — the same
+   * text as a column named `a`, and without the prefix that says whether it
+   * is a user or a system variable.
+   */
   #variable(start: number, startLine: number): Token {
     this.#advance()
     if (this.#peek() === '@') this.#advance()
     if (this.#peek() === '`' || this.#peek() === "'" || this.#peek() === '"') {
+      const prefix = this.#sql.slice(start, this.#at)
       const inner = this.#quotedIdentifier(this.#peek(), this.#at, startLine)
-      return this.#token(TOKEN.VARIABLE, inner.text, start, startLine)
+      return this.#token(TOKEN.VARIABLE, prefix + inner.text, start, startLine)
     }
     // A system variable may be qualified: `@@session.sql_mode`.
     while (this.#at < this.#sql.length && (isIdentPart(this.#peek()) || this.#peek() === '.')) this.#advance()

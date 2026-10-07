@@ -211,8 +211,16 @@ export interface DataType {
   readonly scale?: number
   readonly unsigned?: boolean
   readonly zerofill?: boolean
-  /** `ENUM`/`SET` members, in declaration order — index 1 is the first. */
-  readonly values?: readonly string[]
+  /**
+   * `ENUM`/`SET` members, in declaration order — index 1 is the first.
+   *
+   * A member written as a hex or bit literal is its **bytes**, because that is
+   * what it is: `ENUM(0xc3a6)` has the one member `æ` in utf8mb4, and which
+   * character those bytes are is only known once the column's charset is
+   * resolved (M4). Recording the digits as a string, as M3.5 first did, made
+   * it the same member as `ENUM('c3a6')`.
+   */
+  readonly values?: readonly (string | Uint8Array)[]
   readonly charset?: string
   readonly collation?: string
   /**
@@ -255,7 +263,7 @@ export function parseDataType(c: Cursor, mode: SqlMode): DataType {
   let canonical = spec.as ?? name
   let length: number | undefined
   let scale: number | undefined
-  let values: readonly string[] | undefined
+  let values: readonly (string | Uint8Array)[] | undefined
 
   // `REAL` is the one type whose meaning `sql_mode` changes. The flag has been
   // parsed since M3.7 and read by nothing until here.
@@ -440,9 +448,9 @@ function numberList(c: Cursor, max: number): number[] {
  * meaning. That is why they are kept as written rather than sorted or
  * de-duplicated here.
  */
-function valueList(c: Cursor): string[] {
+function valueList(c: Cursor): (string | Uint8Array)[] {
   c.expectOp('(')
-  const out: string[] = []
+  const out: (string | Uint8Array)[] = []
   do {
     const t = c.peek()
     // Usually a string, and sometimes not: `ENUM(0xc3a6, 0xc3b8)` and
@@ -452,8 +460,34 @@ function valueList(c: Cursor): string[] {
     // the corpus for a syntax MySQL accepts.
     if (t.kind !== TOKEN.STRING && t.kind !== TOKEN.HEX && t.kind !== TOKEN.BIT) c.fail()
     c.skip()
-    out.push(t.text)
+    if (t.kind === TOKEN.STRING) {
+      // Adjacent literals concatenate here as they do in an expression.
+      let text = t.text
+      while (c.peek().kind === TOKEN.STRING) text += c.take().text
+      out.push(text)
+    } else {
+      out.push(t.kind === TOKEN.HEX ? hexBytes(t.text) : bitBytes(t.text))
+    }
   } while (c.takeOp(','))
   c.expectOp(')')
   return out
+}
+
+/** `x'c3a6'` as bytes. An odd digit count is left-padded, as MySQL does. */
+export function hexBytes(digits: string): Uint8Array {
+  const even = digits.length % 2 === 0 ? digits : '0' + digits
+  const out = new Uint8Array(even.length / 2)
+  for (let i = 0; i < out.length; i++) out[i] = Number.parseInt(even.slice(i * 2, i * 2 + 2), 16)
+  return out
+}
+
+/** `b'1001001'` as bytes, big-endian and as short as the value allows. */
+export function bitBytes(digits: string): Uint8Array {
+  let value = digits === '' ? 0n : BigInt('0b' + digits)
+  const out: number[] = []
+  do {
+    out.unshift(Number(value & 0xffn))
+    value >>= 8n
+  } while (value > 0n)
+  return Uint8Array.from(out)
 }

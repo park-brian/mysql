@@ -52,8 +52,6 @@ export interface ColumnDefinition {
   /** `PRIMARY KEY` written inline on the column. */
   readonly primary?: boolean
   readonly comment?: string
-  /** A `COLLATE` clause written after the column's other attributes. */
-  readonly collation?: string
   /** `GENERATED ALWAYS AS (…) [VIRTUAL|STORED]`, or the `AS (…)` shorthand. */
   readonly generated?: { readonly expr: Expression; readonly stored: boolean }
   /** 8.0.23's `INVISIBLE`: the column is omitted from `SELECT *`. */
