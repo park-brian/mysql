@@ -199,3 +199,106 @@ And what to change:
 - **Keep `PAGE_LEVEL`, `PAGE_INDEX_ID`, `PAGE_N_RECS`** — cheap, and they make
   a page self-describing enough to verify offline. A format you can validate
   page-by-page without the rest of the database is a format you can debug.
+
+## Our index page (M4.2, M4.4, M4.7 — D-43, D-44)
+
+The format `@myjs/engine` writes. The offsets are ours, so no MySQL header
+is cited. Every page starts with the same **frame**:
+
+| Offset | Size | Field |
+|---|---|---|
+| 0 | 4 | CRC32C over bytes `[4, size)` — everything after itself (D-44) |
+| 4 | 4 | page number — a page copied to the wrong place is caught |
+| 8 | 8 | LSN of the last change, as two big-endian `u32`s |
+| 16 | 1 | page type: 1 superblock, 2 allocation map, 3 index, 4 overflow |
+| 17 | 7 | reserved, zero |
+| size − 8 | 8 | the same LSN again |
+
+A page is **torn** if its checksum fails, or if its head LSN and tail LSN
+differ. Either check alone catches most tears, and together they need nothing
+from the log (M4.2). The checksum is computed once, when the buffer pool writes
+the page out, not on every change. A page that was never written reads back as
+zeros and fails verification, so it can never be mistaken for an empty node.
+
+An **index page** adds a 36-byte header after the frame:
+
+| Offset | Size | Field |
+|---|---|---|
+| 24 | 2 | level — 0 for a leaf |
+| 26 | 2 | number of cells |
+| 28 | 2 | heap top: the end of the cell heap |
+| 30 | 2 | garbage: bytes of dead cells inside the heap |
+| 32 | 4 | index id |
+| 36 | 4 | schema version (M4.4, below) — 0 except on a clustered leaf |
+| 40 | 4 | left sibling, 0 for none (page 0 is the superblock, so 0 is never a node) |
+| 44 | 4 | right sibling |
+| 48 | 2 | slot of the last insert, `0xFFFF` for none |
+| 50 | 2 | how many inserts in a row went in the same direction |
+| 52 | 1 | that direction: 0 none, 1 ascending, 2 descending (M4.10) |
+| 53 | 1 | reserved |
+| 54 | 6 | on a root only: the tree's fragment-page counts, leaf, internal and overflow (M4.12) |
+
+Cells grow up from offset 60. The **slot array** grows down from the trailer:
+slot *i* is a `u16` cell offset at `size − 8 − 2(i + 1)`, and the slots are kept
+in key order. A cell is `varint keyLength · varint valueLength · key · value`.
+On an internal page the value is the 4-byte child page number.
+
+Three decisions, each against the text above:
+
+- **No record chain and no infimum/supremum (D-43).** Once the directory is
+  dense and sorted (D-19), a next-record chain is a second copy of the same
+  order. The two sentinels exist for the chain's boundary cases and for gap
+  locking, and D-08 removes locking. An insert moves at most the slot array,
+  which is under 1 KiB.
+- **The leftmost child has the empty key.** Every internal page's first cell
+  carries the zero-length key, which `memcmp` orders before every other key.
+  So every internal cell has the same `(key, child)` shape, and InnoDB's
+  `REC_INFO_MIN_REC_FLAG` (M4.8's "leftmost-record flag") is a property of the
+  data rather than a bit.
+- **Keys are bytes and compare with `memcmp` (D-42).** The tree never sees a
+  type or a collation. The index layer builds keys with `encodeKey`, and the
+  tree is an ordered map from `Uint8Array` to `Uint8Array`.
+
+A cell may be at most a third of the usable space, less its slot. A leaf then
+always holds at least two cells and an internal page three children, so a
+split always has somewhere to put both halves. Index key widths are static, so
+the limit on a key is checked when the index is defined (`ER_TOO_LONG_KEY`). A
+record that would exceed it moves its longest columns off-page (M4.5, M4.6).
+
+### The page-level schema version (M4.4, Q-03)
+
+D-21 rejects InnoDB's per-record version byte. Ours is per page: **every record
+on a clustered leaf is encoded in the schema version its header names.** The
+tree takes the current version and an `upgrade(value, fromVersion)` function
+from the layer above, and stays ignorant of what a version means. Before **any
+write** to a leaf whose version is older, it re-encodes every record on the leaf
+through `upgrade`. That covers inserts, deletes and the merge of two leaves of
+different versions. The re-encode goes through the ordinary insert path, since
+an added column can make records longer and the page may have to split.
+
+The cost is paid once per page rather than once per row, and a page stays
+decodable on its own: its header says how to read it. Internal pages,
+secondary indexes and overflow pages hold no records and write 0. A version
+must stay in the catalog until no page uses it, which is a requirement M4.23
+inherits.
+
+### Records (M4.5)
+
+A record is a null bitmap, then a **length** for each variable-length field
+that is not null, then the field bytes in column order. Field bytes are doc
+24's storage encodings, untouched (D-22). A length is one byte when it is under
+128 and the field is inline. Otherwise it is two bytes: the high bit set, the
+next bit marking an off-page field, and 14 bits of length. Lengths rather than
+offsets, as COMPACT chose over REDUNDANT.
+
+An off-page field (DYNAMIC's atomic BLOB, D-20) is replaced inline by an
+8-byte reference, `u32` first overflow page and `u32` total length, with no
+local prefix. Which fields go off-page is DYNAMIC's rule: while the record is
+over its budget, the longest inline variable-length field of more than 40 bytes
+moves off-page. A record that still does not fit is `ER_TOO_BIG_ROWSIZE`.
+
+### Overflow pages (M4.6)
+
+An overflow page is the frame, a `u32` next page (0 at the end of the chain), a
+`u32` byte count, and then data. A chain belongs to its tree's overflow segment
+and is freed page by page when its record is deleted or replaced.
