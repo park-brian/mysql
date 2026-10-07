@@ -48,6 +48,18 @@ function show(e: Expression): string {
         .join(' ')}${e.else === undefined ? '' : ` else ${show(e.else)}`})`
     case NODE.INTERVAL:
       return `INTERVAL(${show(e.value)} ${e.unit})`
+    case NODE.COLLATE:
+      return `(${show(e.expr)} COLLATE ${e.collation})`
+    case NODE.SUBQUERY:
+      return `${e.quantifier ?? ''}(subquery)`
+    case NODE.CAST:
+      return `CAST(${show(e.expr)} AS ${e.type.name})`
+    case NODE.CONVERT:
+      return `CONVERT(${show(e.expr)} USING ${e.charset})`
+    case NODE.KEYWORD:
+      return e.word
+    case NODE.MATCH:
+      return `MATCH(${e.columns.map(show).join(', ')}) AGAINST(${show(e.against)})`
   }
 }
 
@@ -124,7 +136,10 @@ test('M3.2: introducers, COLLATE and adjacent string concatenation', () => {
   assert.equal(tree("_latin1'x'"), '_latin1x')
   assert.equal(tree("'a' 'b'"), 'ab', 'adjacent string literals concatenate, as in standard SQL')
   assert.equal(tree("'a' COLLATE utf8mb4_bin"), 'a COLLATE utf8mb4_bin')
-  assert.equal(tree('a COLLATE utf8mb4_bin'), '(COLLATE a)')
+  // This line used to read `'(COLLATE a)'` — the test asserted the tree that
+  // had dropped the collation's name, so it passed for as long as the bug did.
+  assert.equal(tree('a COLLATE utf8mb4_bin'), '(a COLLATE utf8mb4_bin)')
+  assert.notEqual(tree('a COLLATE latin1_bin'), tree('a COLLATE utf8mb4_bin'))
 })
 
 test('M3.2: INTERVAL is an operand, not an operator', () => {
@@ -207,4 +222,25 @@ test('M3.10 / ground rule 5: deep nesting is refused, not a stack overflow', () 
   assert.throws(() => parseExpression('-'.repeat(100_000) + '1'), ParseError)
   // And the limit is generous enough that real SQL never reaches it.
   assert.equal(tree('('.repeat(50) + '1 + 2' + ')'.repeat(50)), '(1 + 2)')
+})
+
+test('M3.15: a reserved word ends an expression, unless it names a function', () => {
+  // What lets a query parser stop an expression at `FROM`, `GROUP` or `UNION`
+  // without a hand-kept list of stop words: MySQL's own reserved list.
+  for (const word of ['FROM', 'WHERE', 'GROUP', 'ORDER', 'LIMIT', 'UNION', 'JOIN', 'ON', 'THEN']) {
+    assert.throws(() => parseExpression(`a + ${word}`), ParseError, word)
+  }
+  // `END` is not reserved, so it is a column like any other.
+  assert.equal(tree('end + 1'), '(end + 1)')
+  // Reserved words that are builtin functions.
+  assert.equal(parseExpression('IF(a, b, c)').kind, NODE.CALL)
+  assert.equal(parseExpression('LEFT(s, 2)').kind, NODE.CALL)
+  assert.throws(() => parseExpression('WHERE(1)'), ParseError)
+  // A niladic keyword is the same call with or without its parentheses.
+  const bare = parseExpression('CURRENT_TIMESTAMP')
+  const called = parseExpression('CURRENT_TIMESTAMP()')
+  assert.deepEqual({ ...bare, at: 0 }, { ...called, at: 0 })
+  // After a dot, anything is a name.
+  assert.deepEqual(parseExpression('t.select'), { kind: NODE.COLUMN, parts: ['t', 'select'], at: 0 })
+  assert.deepEqual(parseExpression('`select`'), { kind: NODE.COLUMN, parts: ['select'], at: 0 })
 })

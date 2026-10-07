@@ -279,3 +279,12 @@ test('M3.9: the parser’s hardcoded errnos agree with the generated table', () 
     assert.equal(err.sqlState, sqlState)
   }
 })
+
+test('M3.3: a variable keeps its @ however its name is written', () => {
+  // `@'a'` used to come back as the token `a` — the same text as a column
+  // named `a`, with nothing left to say it was a user variable.
+  assert.equal(only("@'a b'").text, '@a b')
+  assert.equal(only('@`a`').text, '@a')
+  assert.equal(only('@a').text, '@a')
+  assert.equal(only("@@'x'").text, '@@x')
+})

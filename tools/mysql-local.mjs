@@ -146,7 +146,15 @@ async function start() {
     if (running()) break
     await new Promise((r) => setTimeout(r, 1000))
   }
-  grantTcp()
+  // Retried, and checked by asking the question rather than trusting the
+  // first attempt. On a fresh datadir the socket can answer a ping before the
+  // server accepts the `ALTER USER`, and `quiet()` swallows that failure — so
+  // the first `start` on a new machine reported "up, but not answering" and
+  // every capture tool then failed with ER_HOST_NOT_PRIVILEGED.
+  for (let i = 0; i < 30 && !running(); i++) {
+    grantTcp()
+    if (!running()) await new Promise((r) => setTimeout(r, 1000))
+  }
   status()
 }
 
@@ -161,7 +169,10 @@ function grantTcp() {
     CREATE USER IF NOT EXISTS 'root'@'%' IDENTIFIED WITH caching_sha2_password BY '${PASSWORD}';
     GRANT ALL PRIVILEGES ON *.* TO 'root'@'%' WITH GRANT OPTION;
     FLUSH PRIVILEGES;`
-  quiet('mysql', [`--socket=${SOCKET}`, '-uroot'], { input: sql })
+  // Without a password first, as `--initialize-insecure` leaves it; with one
+  // on a retry, since the `ALTER USER` may already have landed.
+  quiet('mysql', [`--socket=${SOCKET}`, '-uroot'], { input: sql }) ??
+    quiet('mysql', [`--socket=${SOCKET}`, '-uroot', `-p${PASSWORD}`], { input: sql })
 }
 
 /**

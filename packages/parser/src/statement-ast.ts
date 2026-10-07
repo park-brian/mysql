@@ -11,12 +11,19 @@
 //
 // `const` objects and unions rather than `enum`s, because `erasableSyntaxOnly`
 // is on. Same shape as `NODE` in `ast.ts`.
-import type { Expression } from './ast.ts'
+import type { ColumnNode, Expression } from './ast.ts'
 import type { DataType } from './data-type.ts'
+import type { OrderItem, QueryExpression, TableReference, With } from './query-ast.ts'
 
 export const STATEMENT = {
   CREATE_TABLE: 'createTable',
+  CREATE_VIEW: 'createView',
   DROP: 'drop',
+  /** A query as a statement: `SELECT`, `WITH`, `VALUES`, `TABLE`, `(…)`. */
+  QUERY: 'query',
+  INSERT: 'insert',
+  UPDATE: 'update',
+  DELETE: 'delete',
 } as const
 
 export type StatementKind = (typeof STATEMENT)[keyof typeof STATEMENT]
@@ -52,8 +59,6 @@ export interface ColumnDefinition {
   /** `PRIMARY KEY` written inline on the column. */
   readonly primary?: boolean
   readonly comment?: string
-  /** A `COLLATE` clause written after the column's other attributes. */
-  readonly collation?: string
   /** `GENERATED ALWAYS AS (…) [VIRTUAL|STORED]`, or the `AS (…)` shorthand. */
   readonly generated?: { readonly expr: Expression; readonly stored: boolean }
   /** 8.0.23's `INVISIBLE`: the column is omitted from `SELECT *`. */
@@ -140,6 +145,30 @@ export interface CreateTableNode {
    * what every column without its own charset inherits.
    */
   readonly options: Readonly<Record<string, string>>
+  /**
+   * `CREATE TABLE t … SELECT …`: the query whose rows fill the table, and
+   * whose columns are appended to any the body declares.
+   */
+  readonly query?: QueryExpression
+  /** For `query`: what a duplicate key does — skip the row, or replace the old one. */
+  readonly duplicates?: 'IGNORE' | 'REPLACE'
+  readonly at: number
+}
+
+/** `'u'@'h'`, `u@h`, `'u'` (any host), or `CURRENT_USER`. */
+export type Definer = 'CURRENT_USER' | { readonly user: string; readonly host?: string }
+
+export interface CreateViewNode {
+  readonly kind: typeof STATEMENT.CREATE_VIEW
+  readonly view: TableName
+  readonly orReplace?: boolean
+  readonly algorithm?: 'UNDEFINED' | 'MERGE' | 'TEMPTABLE'
+  readonly definer?: Definer
+  readonly security?: 'DEFINER' | 'INVOKER'
+  readonly columns?: readonly string[]
+  readonly query: QueryExpression
+  /** `WITH CHECK OPTION` is `CASCADED`, MySQL's default. */
+  readonly checkOption?: 'CASCADED' | 'LOCAL'
   readonly at: number
 }
 
@@ -166,4 +195,87 @@ export interface DropNode {
   readonly at: number
 }
 
-export type Statement = CreateTableNode | DropNode
+/**
+ * `col = value` in `SET`, `UPDATE … SET` and `ON DUPLICATE KEY UPDATE`. The
+ * value may be the bare keyword `DEFAULT`, which is a keyword node.
+ */
+export interface Assignment {
+  readonly column: ColumnNode
+  readonly value: Expression
+}
+
+/**
+ * `INSERT` and `REPLACE`, which share a grammar and differ in what a duplicate
+ * key does. Exactly one of `values`, `set` and `query` is the source of rows.
+ *
+ * Four spellings of a row list are one shape here — `VALUES (1)`,
+ * `VALUE (1)`, `VALUES ROW(1)` and the empty `VALUES ()` — because they are
+ * one thing; `INSERT … SELECT`, `INSERT … TABLE u` and `INSERT … (SELECT …)`
+ * are a query.
+ */
+export interface InsertNode {
+  readonly kind: typeof STATEMENT.INSERT
+  /** `REPLACE`: a row with a duplicate key replaces the old one. */
+  readonly replace?: boolean
+  readonly priority?: 'LOW_PRIORITY' | 'DELAYED' | 'HIGH_PRIORITY'
+  readonly ignore?: boolean
+  readonly table: TableName
+  readonly partitions?: readonly string[]
+  /** The column list, when one is written — `()` is an empty one. */
+  readonly columns?: readonly ColumnNode[]
+  readonly values?: readonly (readonly Expression[])[]
+  readonly set?: readonly Assignment[]
+  readonly query?: QueryExpression
+  /** 8.0.19's `AS new [(a, b)]`, which `ON DUPLICATE KEY UPDATE` refers to. */
+  readonly rowAlias?: { readonly name: string; readonly columns?: readonly string[] }
+  readonly onDuplicate?: readonly Assignment[]
+  readonly at: number
+}
+
+/**
+ * `UPDATE`. One shape for the single- and multi-table forms: the tables are a
+ * list of references either way. `ORDER BY` and `LIMIT` are legal only with
+ * one table, which the server checks after parsing (ER_WRONG_USAGE), not the
+ * grammar.
+ */
+export interface UpdateNode {
+  readonly kind: typeof STATEMENT.UPDATE
+  readonly with?: With
+  readonly priority?: 'LOW_PRIORITY'
+  readonly ignore?: boolean
+  readonly tables: readonly TableReference[]
+  readonly set: readonly Assignment[]
+  readonly where?: Expression
+  readonly orderBy?: readonly OrderItem[]
+  /** A row count only: `LIMIT 1, 2` is a syntax error here. */
+  readonly limit?: Expression
+  readonly at: number
+}
+
+/**
+ * `DELETE`. A single-table delete names one table in `tables`; a multi-table
+ * one also names its `targets` — the tables rows are removed from — and its two
+ * spellings, `DELETE t FROM …` and `DELETE FROM t USING …`, are one shape.
+ */
+export interface DeleteNode {
+  readonly kind: typeof STATEMENT.DELETE
+  readonly with?: With
+  readonly priority?: 'LOW_PRIORITY'
+  readonly quick?: boolean
+  readonly ignore?: boolean
+  readonly targets?: readonly TableName[]
+  readonly tables: readonly TableReference[]
+  readonly where?: Expression
+  readonly orderBy?: readonly OrderItem[]
+  readonly limit?: Expression
+  readonly at: number
+}
+
+export type Statement =
+  | CreateTableNode
+  | CreateViewNode
+  | DropNode
+  | QueryExpression
+  | InsertNode
+  | UpdateNode
+  | DeleteNode

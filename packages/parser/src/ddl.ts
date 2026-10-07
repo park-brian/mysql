@@ -20,7 +20,9 @@ import type { Cursor } from './cursor.ts'
 import { TOKEN } from './tokens.ts'
 import { NODE, type Expression } from './ast.ts'
 import { parseExpressionFrom } from './expression.ts'
-import { atDataType, parseDataType } from './data-type.ts'
+import { parseDataType } from './data-type.ts'
+import { atParenthesisedQuery, atQueryStart, parseQueryFrom } from './query.ts'
+import type { QueryExpression } from './query-ast.ts'
 import type { SqlMode } from './sql-mode.ts'
 import {
   DROP_OBJECT,
@@ -29,6 +31,8 @@ import {
   type CheckConstraint,
   type ColumnDefinition,
   type CreateTableNode,
+  type CreateViewNode,
+  type Definer,
   type DropNode,
   type DropObject,
   type IndexColumn,
@@ -94,11 +98,11 @@ export interface DdlOptions {
 /**
  * Parse a `CREATE TABLE`, with the cursor on `CREATE`.
  *
- * `CREATE TABLE ... SELECT` and `CREATE TABLE ... AS SELECT` are refused rather
- * than half-parsed: the body is a query and M3.3 owns those. Refusing is what
- * makes the census number honest — a `CREATE TABLE ... SELECT` counted as
- * parsed because the column list happened to be empty would inflate the exit
- * criterion with statements nothing understood.
+ * `CREATE TABLE ... [AS] SELECT` carries its query (M3.3). Until the query
+ * parser existed these were refused rather than half-parsed, which is what
+ * kept the census honest: one counted as parsed because its column list
+ * happened to be empty would have inflated the exit criterion with statements
+ * nothing understood.
  */
 export function parseCreateTable(c: Cursor, options: DdlOptions): CreateTableNode {
   const at = c.peek().start
@@ -106,16 +110,16 @@ export function parseCreateTable(c: Cursor, options: DdlOptions): CreateTableNod
   const temporary = c.takeWord('TEMPORARY')
   c.expectWord('TABLE')
   const ifNotExists = c.takeWords('IF', 'NOT', 'EXISTS')
-  const table = tableName(c)
+  const table = c.expectTableName()
 
   // `CREATE TABLE a LIKE b`, and its parenthesised spelling. No body follows.
   if (c.takeWord('LIKE')) {
-    return { kind: STATEMENT.CREATE_TABLE, table, ...flag('temporary', temporary), ...flag('ifNotExists', ifNotExists), like: tableName(c), columns: [], keys: [], checks: [], options: {}, at }
+    return { kind: STATEMENT.CREATE_TABLE, table, ...flag('temporary', temporary), ...flag('ifNotExists', ifNotExists), like: c.expectTableName(), columns: [], keys: [], checks: [], options: {}, at }
   }
   if (c.atOp('(') && c.atWord('LIKE', 1)) {
     c.skip()
     c.skip()
-    const like = tableName(c)
+    const like = c.expectTableName()
     c.expectOp(')')
     return { kind: STATEMENT.CREATE_TABLE, table, ...flag('temporary', temporary), ...flag('ifNotExists', ifNotExists), like, columns: [], keys: [], checks: [], options: {}, at }
   }
@@ -124,7 +128,8 @@ export function parseCreateTable(c: Cursor, options: DdlOptions): CreateTableNod
   const keys: KeyDefinition[] = []
   const checks: CheckConstraint[] = []
 
-  if (c.takeOp('(')) {
+  // `CREATE TABLE t (SELECT …)` — the parenthesis is the query's, not a body's.
+  if (!atParenthesisedQuery(c) && c.takeOp('(')) {
     do {
       // No `if (atOp(')')) break` here, and that absence is deliberate: an
       // earlier version allowed a trailing comma, and `create table t1 (a int,)`
@@ -141,20 +146,18 @@ export function parseCreateTable(c: Cursor, options: DdlOptions): CreateTableNod
 
   const tableOptions = parseTableOptions(c)
 
-  // `CREATE TABLE ... SELECT` and `CREATE TABLE ... AS SELECT`. The DDL half
-  // above parsed; what is left is a query, and queries are M3.3's. Reported as
-  // *unimplemented* rather than as a parse error, because that is what it is —
-  // and because counting 363 of these as syntax failures would have made the
-  // exit criterion's number describe M3.3's absence rather than M3.5's
-  // coverage. They are 363 of the corpus's 3,469 `CREATE`s.
-  // `IGNORE` and `REPLACE` select the duplicate-key behaviour of the copy and
-  // sit between the table definition and the query.
-  c.takeWord('IGNORE') || c.takeWord('REPLACE')
-  c.takeWord('AS')
-  if (c.atWord('SELECT') || c.atWord('WITH') || c.atOp('(')) {
-    throw unsupportedStatement('CREATE TABLE ... SELECT')
-  }
   if (c.atWord('PARTITION')) throw unsupportedStatement('CREATE TABLE ... PARTITION BY')
+
+  // `CREATE TABLE ... [IGNORE | REPLACE] [AS] SELECT`. `IGNORE` and `REPLACE`
+  // choose what a duplicate key does to the copied rows, and sit between the
+  // table definition and the query.
+  let duplicates: 'IGNORE' | 'REPLACE' | undefined
+  if (c.takeWord('IGNORE')) duplicates = 'IGNORE'
+  else if (c.takeWord('REPLACE')) duplicates = 'REPLACE'
+  const as = c.takeWord('AS')
+  let query: QueryExpression | undefined
+  if (atQueryStart(c) || atParenthesisedQuery(c)) query = parseQueryFrom(c, options.sqlMode)
+  else if (duplicates !== undefined || as) c.fail()
 
   if (!c.atEnd() && !c.atOp(';')) c.fail()
 
@@ -167,8 +170,82 @@ export function parseCreateTable(c: Cursor, options: DdlOptions): CreateTableNod
     keys,
     checks,
     options: tableOptions,
+    ...(query === undefined ? {} : { query }),
+    ...(duplicates === undefined ? {} : { duplicates }),
     at,
   }
+}
+
+/**
+ * Parse a `CREATE VIEW`, with the cursor on `CREATE`.
+ *
+ * The clauses before `VIEW` say how the view is stored and whose privileges it
+ * runs with; the query after `AS` is the view. `WITH CHECK OPTION` without a
+ * scope is `CASCADED`, so it is recorded as that.
+ */
+export function parseCreateView(c: Cursor, options: DdlOptions): CreateViewNode {
+  const at = c.peek().start
+  c.expectWord('CREATE')
+  const orReplace = c.takeWords('OR', 'REPLACE')
+  let algorithm: CreateViewNode['algorithm']
+  if (c.takeWord('ALGORITHM')) {
+    c.expectOp('=')
+    for (const a of ['UNDEFINED', 'MERGE', 'TEMPTABLE'] as const) if (c.takeWord(a)) algorithm = a
+    if (algorithm === undefined) c.fail()
+  }
+  const definer = c.takeWord('DEFINER') ? parseDefiner(c) : undefined
+  let security: CreateViewNode['security']
+  if (c.takeWords('SQL', 'SECURITY')) {
+    if (c.takeWord('DEFINER')) security = 'DEFINER'
+    else if (c.takeWord('INVOKER')) security = 'INVOKER'
+    else c.fail()
+  }
+  c.expectWord('VIEW')
+  const view = c.expectTableName()
+  const columns = c.atOp('(') ? c.expectNameList() : undefined
+  c.expectWord('AS')
+  const query = parseQueryFrom(c, options.sqlMode)
+  let checkOption: CreateViewNode['checkOption']
+  if (c.takeWord('WITH')) {
+    checkOption = c.takeWord('LOCAL') ? 'LOCAL' : (c.takeWord('CASCADED'), 'CASCADED')
+    c.expectWord('CHECK')
+    c.expectWord('OPTION')
+  }
+  return {
+    kind: STATEMENT.CREATE_VIEW,
+    view,
+    ...flag('orReplace', orReplace),
+    ...(algorithm === undefined ? {} : { algorithm }),
+    ...(definer === undefined ? {} : { definer }),
+    ...(security === undefined ? {} : { security }),
+    ...(columns === undefined ? {} : { columns }),
+    query,
+    ...(checkOption === undefined ? {} : { checkOption }),
+    at,
+  }
+}
+
+/**
+ * `= 'u'@'h'`, `= u@h`, `= 'u'`, `= CURRENT_USER[()]`.
+ *
+ * The lexer reads `@'h'` as a variable token, since that is what it is
+ * everywhere else, so the host is that token with its `@` removed.
+ */
+export function parseDefiner(c: Cursor): Definer {
+  c.expectOp('=')
+  if (c.takeWord('CURRENT_USER')) {
+    if (c.takeOp('(')) c.expectOp(')')
+    return 'CURRENT_USER'
+  }
+  const u = c.peek()
+  if (u.kind !== TOKEN.STRING && u.kind !== TOKEN.IDENTIFIER) c.fail()
+  c.skip()
+  const h = c.peek()
+  if (h.kind === TOKEN.VARIABLE && h.text.startsWith('@') && !h.text.startsWith('@@')) {
+    c.skip()
+    return { user: u.text, host: h.text.slice(1) }
+  }
+  return { user: u.text }
 }
 
 /** Parse a `DROP`, with the cursor on `DROP`. */
@@ -185,11 +262,11 @@ export function parseDrop(c: Cursor): DropNode {
   else c.fail()
 
   const ifExists = c.takeWords('IF', 'EXISTS')
-  const names: TableName[] = [tableName(c)]
+  const names: TableName[] = [c.expectTableName()]
 
   if (object === DROP_OBJECT.INDEX) {
     c.expectWord('ON')
-    const on = tableName(c)
+    const on = c.expectTableName()
     // `ALGORITHM` and `LOCK` are accepted and mean nothing to a parser: they
     // ask the *server* how to perform the change. Consumed rather than
     // recorded, and consumed rather than left, since leaving them would make
@@ -198,7 +275,7 @@ export function parseDrop(c: Cursor): DropNode {
     return { kind: STATEMENT.DROP, object, names, ...flag('ifExists', ifExists), on, at }
   }
 
-  while (c.takeOp(',')) names.push(tableName(c))
+  while (c.takeOp(',')) names.push(c.expectTableName())
   let behaviour: string | undefined
   if (c.takeWord('RESTRICT')) behaviour = 'RESTRICT'
   else if (c.takeWord('CASCADE')) behaviour = 'CASCADE'
@@ -238,10 +315,7 @@ function tableElement(c: Cursor, options: DdlOptions): TableElement {
   if (c.atWord('CONSTRAINT')) {
     c.skip()
     // The symbol is optional: `CONSTRAINT PRIMARY KEY (a)` names nothing.
-    const symbol =
-      c.peek().kind === TOKEN.IDENTIFIER && !c.atWord('CHECK') && !startsKeyOrCheck(c)
-        ? c.expectIdentifier()
-        : undefined
+    const symbol = c.atIdentifier() ? c.expectIdentifier() : undefined
     if (c.atWord('CHECK')) return { what: 'check', check: checkConstraint(c, options, at, symbol) }
     const key = keyDefinition(c, options, at)
     return { what: 'key', key: symbol === undefined ? key : { ...key, constraint: symbol } }
@@ -256,41 +330,19 @@ function tableElement(c: Cursor, options: DdlOptions): TableElement {
 /**
  * True when the cursor is at a word that introduces a key rather than a column.
  *
- * `PRIMARY`, `FULLTEXT` and `SPATIAL` are unambiguous. `KEY`, `INDEX` and
- * `UNIQUE` are not, because all three are legal column names — so they only
- * count as a key introducer when the token after them is not a type, which is
- * exactly what would follow a column of that name.
+ * All seven are reserved (M3.15), so none of them can begin a column definition
+ * unquoted and the test is a lookup. M3.5 first believed `KEY`, `INDEX` and
+ * `UNIQUE` were legal column names and told them apart from a key by what
+ * followed — `KEY timestamp (timestamp)` against `key TIMESTAMP(6)` — but the
+ * column in the corpus was `` `key` ``, in backticks, and a real 8.4 refuses
+ * `CREATE TABLE t (key INT)` outright. The lookahead was guarding a case MySQL
+ * does not have.
  */
 function startsKeyOrCheck(c: Cursor): boolean {
-  if (c.atWord('PRIMARY') || c.atWord('FULLTEXT') || c.atWord('SPATIAL') || c.atWord('FOREIGN')) return true
-  if (!c.atWord('KEY') && !c.atWord('INDEX') && !c.atWord('UNIQUE')) return false
-  const save = c.at
-  c.skip()
-  let isKey: boolean
-  if (c.atOp('(')) {
-    // `KEY (a)` — an unnamed key. A column can never look like this, since a
-    // column needs a type.
-    isKey = true
-  } else if (!atDataType(c)) {
-    // `KEY token (…)` — the next word is not a type, so it is the key's name.
-    isKey = true
-  } else {
-    // The genuinely ambiguous case, and one the corpus contains:
-    //
-    //     KEY timestamp (timestamp)          -- a key named `timestamp`
-    //     key TIMESTAMP(6)                   -- a column named `key`
-    //
-    // Both are a key-ish word, then a type name, then `(`. What separates them
-    // is what is *inside* the parentheses: a type's argument is a number, and
-    // an index's is a column name. Reading this wrong cost `type_ranges` and
-    // three other files a `CREATE TABLE` each, and the failure was invisible
-    // until MySQL's own tests named a column `timestamp`.
-    c.skip()
-    isKey = c.atOp('(') && c.peek(1).kind !== TOKEN.NUMBER
-  }
-  c.at = save
-  return isKey
+  return KEY_INTRODUCERS.some((w) => c.atWord(w))
 }
+
+const KEY_INTRODUCERS = ['PRIMARY', 'UNIQUE', 'KEY', 'INDEX', 'FULLTEXT', 'SPATIAL', 'FOREIGN']
 
 function keyDefinition(c: Cursor, options: DdlOptions, at: number): KeyDefinition {
   let type: KeyType
@@ -316,7 +368,7 @@ function keyDefinition(c: Cursor, options: DdlOptions, at: number): KeyDefinitio
   }
 
   // A name, unless the next thing is the column list or an index type.
-  const name = c.peek().kind === TOKEN.IDENTIFIER && !c.atWord('USING') ? c.expectIdentifier() : undefined
+  const name = c.atIdentifier() ? c.expectIdentifier() : undefined
   const using = indexType(c)
   const columns = indexColumns(c, options)
 
@@ -355,7 +407,7 @@ function checkConstraint(
 
 function columnDefinition(c: Cursor, options: DdlOptions, at: number): ColumnDefinition {
   const name = c.expectIdentifier()
-  const type = parseDataType(c, options.sqlMode)
+  let type = parseDataType(c, options.sqlMode)
 
   let notNull: boolean | undefined
   let nullable: boolean | undefined
@@ -365,7 +417,6 @@ function columnDefinition(c: Cursor, options: DdlOptions, at: number): ColumnDef
   let unique: boolean | undefined
   let primary: boolean | undefined
   let comment: string | undefined
-  let collation: string | undefined
   let generated: { expr: Expression; stored: boolean } | undefined
   let invisible: boolean | undefined
   let srid: number | undefined
@@ -408,11 +459,16 @@ function columnDefinition(c: Cursor, options: DdlOptions, at: number): ColumnDef
       continue
     }
     if (c.takeWord('COMMENT')) {
-      comment = stringLiteral(c)
+      comment = c.expectString()
       continue
     }
+    // A `COLLATE` after other attributes is the type's collation written
+    // late, not a second one: `a VARCHAR(5) NOT NULL COLLATE x` and
+    // `a VARCHAR(5) COLLATE x NOT NULL` are the same column, so both land on
+    // the type. Recording the late one on the column made them two trees for
+    // one definition (found by the deparser's round-trip, M3.3).
     if (c.takeWord('COLLATE')) {
-      collation = nameOrString(c)
+      type = { ...type, collation: nameOrString(c).toLowerCase() }
       continue
     }
     if (c.takeWord('INVISIBLE')) {
@@ -487,7 +543,6 @@ function columnDefinition(c: Cursor, options: DdlOptions, at: number): ColumnDef
     ...(unique === undefined ? {} : { unique }),
     ...(primary === undefined ? {} : { primary }),
     ...(comment === undefined ? {} : { comment }),
-    ...(collation === undefined ? {} : { collation }),
     ...(generated === undefined ? {} : { generated }),
     ...(invisible === undefined ? {} : { invisible }),
     ...(srid === undefined ? {} : { srid }),
@@ -508,12 +563,11 @@ function columnDefinition(c: Cursor, options: DdlOptions, at: number): ColumnDef
 function defaultExpression(c: Cursor, options: DdlOptions): Expression {
   const t = c.peek()
   if (c.atOp('(')) {
+    // `DEFAULT (SELECT …)` is a subquery, which MySQL parses and then rejects
+    // for a default. The parentheses are the subquery's own, so the
+    // expression parser reads them.
+    if (atQueryStart(c, 1)) return parseExpressionFrom(c, options.sqlMode)
     c.skip()
-    // `DEFAULT (SELECT …)` is a subquery, which MySQL rejects for a default and
-    // parses anyway. Reported as unimplemented rather than malformed, since
-    // what is missing here is M3.3's query parser and not this statement's
-    // syntax.
-    if (c.atWord('SELECT')) throw unsupportedStatement('DEFAULT (SELECT …)')
     const expr = parseExpressionFrom(c, options.sqlMode)
     c.expectOp(')')
     return expr
@@ -534,7 +588,9 @@ function defaultExpression(c: Cursor, options: DdlOptions): Expression {
         }
         c.expectOp(')')
       }
-      return { kind: NODE.CALL, name: word, args, at: t.start }
+      // The name as written, as the expression parser records it — so
+      // `DEFAULT now()` and `DEFAULT (now())` are the same call.
+      return { kind: NODE.CALL, name: t.text, args, at: t.start }
     }
   }
   return parseExpressionFrom(c, options.sqlMode)
@@ -599,7 +655,7 @@ function indexOptions(c: Cursor): { using?: string; comment?: string } {
       continue
     }
     if (c.takeWord('COMMENT')) {
-      comment = stringLiteral(c)
+      comment = c.expectString()
       continue
     }
     if (c.takeWords('WITH', 'PARSER')) {
@@ -619,7 +675,7 @@ function indexOptions(c: Cursor): { using?: string; comment?: string } {
 
 function parseReferences(c: Cursor, options: DdlOptions): Reference {
   c.expectWord('REFERENCES')
-  const table = tableName(c)
+  const table = c.expectTableName()
   const columns = c.atOp('(') ? indexColumns(c, options) : []
   let match: string | undefined
   if (c.takeWord('MATCH')) {
@@ -698,7 +754,7 @@ function parseTableOptions(c: Cursor): Record<string, string> {
       c.takeOp('=')
       c.expectOp('(')
       const members: string[] = []
-      do members.push(tableName(c).name)
+      do members.push(c.expectTableName().name)
       while (c.takeOp(','))
       c.expectOp(')')
       out['UNION'] = members.join(',')
@@ -722,19 +778,6 @@ function parseTableOptions(c: Cursor): Record<string, string> {
 }
 
 // --- small shared pieces ----------------------------------------------------
-
-function tableName(c: Cursor): TableName {
-  const first = c.expectIdentifier()
-  if (!c.takeOp('.')) return { name: first }
-  return { schema: first, name: c.expectIdentifier() }
-}
-
-function stringLiteral(c: Cursor): string {
-  const t = c.peek()
-  if (t.kind !== TOKEN.STRING) c.fail()
-  c.skip()
-  return t.text
-}
 
 /** A value that may be written as a bare word, a quoted string, or a number. */
 function nameOrString(c: Cursor): string {

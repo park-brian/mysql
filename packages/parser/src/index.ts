@@ -21,6 +21,12 @@ export type {
   BinaryNode,
   CallNode,
   CaseNode,
+  CastNode,
+  CollateNode,
+  ConvertNode,
+  KeywordNode,
+  MatchNode,
+  SubqueryNode,
   ColumnNode,
   Expression,
   IntervalNode,
@@ -37,16 +43,50 @@ export type { ParseExpressionOptions } from './expression.ts'
 export { Cursor } from './cursor.ts'
 export { atDataType, parseDataType } from './data-type.ts'
 export type { DataType } from './data-type.ts'
-export { parseCreateTable, parseDrop } from './ddl.ts'
+export { parseCreateTable, parseCreateView, parseDrop } from './ddl.ts'
+export { parseDelete, parseInsert, parseUpdate } from './dml.ts'
 export type { DdlOptions } from './ddl.ts'
 export { parseStatement, parseStatementBytes } from './statement.ts'
+export { deparse, quoteName } from './deparse.ts'
+export type { DeparseOptions } from './deparse.ts'
 export type { ParseStatementOptions } from './statement.ts'
 export { DROP_OBJECT, KEY, STATEMENT } from './statement-ast.ts'
+export { QUERY, REF } from './query-ast.ts'
+export type {
+  CommonTable,
+  DerivedTableNode,
+  FrameBound,
+  GroupBy,
+  IndexHint,
+  Into,
+  JoinNode,
+  Limit,
+  Locking,
+  OrderItem,
+  QueryBody,
+  QueryExpression,
+  SelectItem,
+  SelectNode,
+  SetOperationNode,
+  TableListNode,
+  TableRefNode,
+  TableReference,
+  TableStatementNode,
+  ValuesNode,
+  WindowSpec,
+  With,
+} from './query-ast.ts'
 export type {
   CheckConstraint,
   ColumnDefinition,
   CreateTableNode,
+  Assignment,
+  CreateViewNode,
+  Definer,
+  DeleteNode,
   DropNode,
+  InsertNode,
+  UpdateNode,
   DropObject,
   IndexColumn,
   KeyDefinition,

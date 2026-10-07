@@ -309,3 +309,42 @@ test('M3.12: gb2312 resolves at all, which it did not before this item', () => {
   const gb = resolveCharset('gb2312')
   assert.ok('collationId' in gb && gb.collationId === 24, 'gb2312_chinese_ci is collation 24')
 })
+
+test('M3.3: a command word inside a statement is SQL', () => {
+  // `END` closing a `CASE` on its own line, and `IF(…)` opening one, are both
+  // bare mysqltest command words. Read as commands, the line vanished and the
+  // census measured a statement nobody wrote: `CASE … ELSE c FROM t`, and
+  // `UPDATE b = SELECT …` where the `IF(` had been.
+  assert.deepEqual(texts(file('SELECT CASE WHEN a THEN b', 'END', 'FROM t;')), ['SELECT CASE WHEN a THEN b\nEND\nFROM t'])
+  assert.deepEqual(texts(file('UPDATE t SET b =', 'IF(a, 1, 2);')), ['UPDATE t SET b =\nIF(a, 1, 2)'])
+  // At command position the same words are still commands.
+  assert.deepEqual(texts(file('if ($x)', '{', 'SELECT 1;', '}')), ['SELECT 1'])
+})
+
+test('M3.3: a let value takes the --error of the eval that sends it', () => {
+  // The `--error` is written before the `eval`, not the `let`; without
+  // carrying it back, a statement MySQL refuses on purpose was counted as one
+  // this parser failed to parse.
+  const out = extract(file('let $q =', 'SELECT 1 LIMIT 1.3;', '--error ER_PARSE_ERROR', 'eval $q;', 'SELECT 2;'))
+  assert.deepEqual(
+    out.statements.map((s) => [s.text, s.expectedError ?? null]),
+    [
+      ['SELECT 1 LIMIT 1.3', 'ER_PARSE_ERROR'],
+      ['SELECT 2', null],
+    ],
+  )
+  // A value that starts on the `let` line and runs on is one statement, not a
+  // directive followed by a fragment…
+  assert.deepEqual(texts(file('let $q = SELECT a,', 'b FROM t;', 'SELECT 2;')), ['SELECT a,\nb FROM t', 'SELECT 2'])
+  // …unless it is a piece of a statement to be spliced into an `eval`.
+  assert.deepEqual(texts(file('let $rest = (t1 join t2', 'on 1) on 1;', 'SELECT 2;')), ['SELECT 2'])
+})
+
+test('M3.3: a disabled testcase is not run, so it is not measured', () => {
+  assert.deepEqual(texts(file('--disable_testcase BUG#0000', 'SELECT FROM WHERE;', '--enable_testcase', 'SELECT 1;')), ['SELECT 1'])
+})
+
+test('M3.3 review: an EXPLAIN of a let value carries its --error too', () => {
+  const out = extract(file('let $q =', 'SELECT 1 LIMIT @one;', '--error ER_PARSE_ERROR', 'eval EXPLAIN FORMAT=tree $q;'))
+  assert.equal(out.statements[0]?.expectedError, 'ER_PARSE_ERROR')
+})
