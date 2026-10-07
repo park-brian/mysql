@@ -18,6 +18,8 @@ import type { Limit, OrderItem, QueryExpression, TableReference, With } from './
 export const STATEMENT = {
   CREATE_TABLE: 'createTable',
   CREATE_VIEW: 'createView',
+  ALTER_TABLE: 'alterTable',
+  CREATE_DATABASE: 'createDatabase',
   DROP: 'drop',
   /** A query as a statement: `SELECT`, `WITH`, `VALUES`, `TABLE`, `(…)`. */
   QUERY: 'query',
@@ -167,6 +169,104 @@ export interface CreateTableNode {
   readonly query?: QueryExpression
   /** For `query`: what a duplicate key does — skip the row, or replace the old one. */
   readonly duplicates?: 'IGNORE' | 'REPLACE'
+  readonly partition?: Partitioning
+  readonly at: number
+}
+
+/**
+ * How a table is split, from `PARTITION BY`. Parsed, not executed: partitioning
+ * is M8.9's.
+ *
+ * `HASH` and `RANGE`/`LIST` take an expression, while `KEY` and the `COLUMNS`
+ * forms take a list of columns, which may be empty for `KEY ()`, meaning the
+ * primary key. Exactly one of `expr` and `columns` is set. The method's
+ * algorithm (`KEY ALGORITHM = 1|2`) is the only number the grammar itself
+ * bounds.
+ */
+export interface PartitionMethod {
+  readonly linear?: boolean
+  readonly method: 'HASH' | 'KEY' | 'RANGE' | 'LIST'
+  readonly expr?: Expression
+  readonly columns?: readonly string[]
+  readonly algorithm?: number
+  /** `PARTITIONS n` / `SUBPARTITIONS n`. */
+  readonly count?: number
+}
+
+export interface Partitioning extends PartitionMethod {
+  readonly sub?: PartitionMethod
+  readonly partitions?: readonly PartitionDefinition[]
+}
+
+/**
+ * `PARTITION p VALUES LESS THAN (…)` or `VALUES IN (…)`, with its options and
+ * subpartitions. `MAXVALUE` is a keyword node, and `LESS THAN MAXVALUE`
+ * without parentheses is the same tree as `LESS THAN (MAXVALUE)`.
+ */
+export interface PartitionDefinition {
+  readonly name: string
+  readonly lessThan?: readonly Expression[]
+  readonly in?: readonly Expression[]
+  readonly options: Readonly<Record<string, string>>
+  readonly subpartitions?: readonly { readonly name: string; readonly options: Readonly<Record<string, string>> }[]
+}
+
+/** `FIRST` or `AFTER c`: where an added or changed column goes. */
+export type ColumnPosition = 'FIRST' | { readonly after: string }
+
+/**
+ * One change in an `ALTER TABLE` list.
+ *
+ * Spellings that are one change are one action: `MODIFY c def` is
+ * `CHANGE c c def`, `ADD (a INT, b INT)` is `ADD a INT, ADD b INT`, and
+ * `DROP KEY` is `DROP INDEX`. `DROP CHECK` and `DROP CONSTRAINT` are kept
+ * apart, because the second drops a constraint of any kind.
+ */
+export type AlterAction =
+  | { readonly type: 'addColumn'; readonly column: ColumnDefinition; readonly position?: ColumnPosition }
+  | { readonly type: 'addKey'; readonly key: KeyDefinition }
+  | { readonly type: 'addCheck'; readonly check: CheckConstraint }
+  | {
+      readonly type: 'changeColumn'
+      readonly name: string
+      readonly column: ColumnDefinition
+      readonly position?: ColumnPosition
+    }
+  | {
+      readonly type: 'drop'
+      readonly what: 'COLUMN' | 'INDEX' | 'PRIMARY KEY' | 'FOREIGN KEY' | 'CHECK' | 'CONSTRAINT'
+      /** Absent only for `PRIMARY KEY`. */
+      readonly name?: string
+    }
+  | { readonly type: 'setDefault'; readonly column: string; readonly value: Expression }
+  | { readonly type: 'dropDefault'; readonly column: string }
+  | { readonly type: 'columnVisibility'; readonly column: string; readonly visible: boolean }
+  | { readonly type: 'indexVisibility'; readonly index: string; readonly visible: boolean }
+  | { readonly type: 'enforce'; readonly what: 'CHECK' | 'CONSTRAINT'; readonly name: string; readonly enforced: boolean }
+  | { readonly type: 'rename'; readonly to: TableName }
+  | { readonly type: 'renameColumn'; readonly from: string; readonly to: string }
+  | { readonly type: 'renameIndex'; readonly from: string; readonly to: string }
+  | { readonly type: 'orderBy'; readonly columns: readonly IndexColumn[] }
+  /** `CONVERT TO CHARACTER SET cs [COLLATE c]`. `charset` is absent for `DEFAULT`. */
+  | { readonly type: 'convert'; readonly charset?: string; readonly collation?: string }
+  | { readonly type: 'keys'; readonly enable: boolean }
+  | { readonly type: 'force' }
+  | { readonly type: 'tablespace'; readonly action: 'DISCARD' | 'IMPORT' }
+
+/**
+ * `ALTER TABLE`, and `CREATE INDEX`, which MySQL executes as one: `CREATE
+ * INDEX i ON t (a)` is the tree of `ALTER TABLE t ADD INDEX i (a)`.
+ *
+ * Table options (`ENGINE = …`, `COMMENT = …`) are kept apart from the actions
+ * in `options`, keyed as `CreateTableNode`'s are. `ALGORITHM` and `LOCK` say
+ * how the server should make the change, not what the change is, and are read
+ * and not kept, as `DROP INDEX` already does.
+ */
+export interface AlterTableNode {
+  readonly kind: typeof STATEMENT.ALTER_TABLE
+  readonly table: TableName
+  readonly actions: readonly AlterAction[]
+  readonly options: Readonly<Record<string, string>>
   readonly at: number
 }
 
@@ -184,6 +284,15 @@ export interface CreateViewNode {
   readonly query: QueryExpression
   /** `WITH CHECK OPTION` is `CASCADED`, MySQL's default. */
   readonly checkOption?: 'CASCADED' | 'LOCAL'
+  readonly at: number
+}
+
+/** `CREATE DATABASE`, with its options keyed by canonical upper-case name. */
+export interface CreateDatabaseNode {
+  readonly kind: typeof STATEMENT.CREATE_DATABASE
+  readonly name: string
+  readonly ifNotExists?: boolean
+  readonly options: Readonly<Record<string, string>>
   readonly at: number
 }
 
@@ -513,6 +622,8 @@ export interface DoNode {
 export type Statement =
   | CreateTableNode
   | CreateViewNode
+  | AlterTableNode
+  | CreateDatabaseNode
   | DropNode
   | QueryExpression
   | InsertNode

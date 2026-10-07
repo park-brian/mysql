@@ -16,7 +16,8 @@ import { Cursor, checkTreeDepth } from './cursor.ts'
 import { TOKEN } from './tokens.ts'
 import { lex, lexBytes, type LexOptions } from './lexer.ts'
 import { NO_SQL_MODE, type SqlMode } from './sql-mode.ts'
-import { parseCreateTable, parseCreateView, parseDefiner, parseDrop } from './ddl.ts'
+import { parseCreateDatabase, parseCreateTable, parseCreateView, parseDefiner, parseDrop } from './ddl.ts'
+import { parseAlterTable, parseCreateIndex } from './alter.ts'
 import { atParenthesisedQuery, atQueryStart } from './query.ts'
 import {
   parseCommit,
@@ -82,8 +83,11 @@ function dispatch(c: Cursor, sqlMode: SqlMode): Statement {
     const kind = createObject(c)
     if (kind === 'TABLE') return parseCreateTable(c, options)
     if (kind === 'VIEW') return parseCreateView(c, options)
+    if (kind === 'INDEX' || kind === 'UNIQUE' || kind === 'FULLTEXT' || kind === 'SPATIAL') return parseCreateIndex(c, options)
+    if (kind === 'DATABASE' || kind === 'SCHEMA') return parseCreateDatabase(c)
     throw unsupportedStatement(`CREATE ${kind}`)
   }
+  if (c.atWords('ALTER', 'TABLE')) return parseAlterTable(c, options)
 
   // A query, `INSERT`, `REPLACE`, `UPDATE`, `DELETE`, and `WITH` opening any
   // of the last three or a query — the statements `EXPLAIN` can explain.
@@ -118,7 +122,12 @@ function dispatch(c: Cursor, sqlMode: SqlMode): Statement {
     c.skip()
     c.takeWord('TEMPORARY')
     const known =
-      c.atWord('TABLE') || c.atWord('VIEW') || c.atWord('INDEX') || c.atWord('DATABASE') || c.atWord('SCHEMA')
+      c.atWord('TABLE') ||
+      c.atWord('TABLES') ||
+      c.atWord('VIEW') ||
+      c.atWord('INDEX') ||
+      c.atWord('DATABASE') ||
+      c.atWord('SCHEMA')
     const object = c.peek().text.toUpperCase()
     c.at = save
     if (known) return parseDrop(c)

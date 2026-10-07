@@ -57,6 +57,13 @@ import {
   type TableName,
   type UpdateNode,
   type CommitNode,
+  type AlterAction,
+  type AlterTableNode,
+  type ColumnPosition,
+  type CreateDatabaseNode,
+  type PartitionDefinition,
+  type PartitionMethod,
+  type Partitioning,
   type DescribeNode,
   type ExplainNode,
   type RollbackNode,
@@ -432,6 +439,10 @@ class Deparser {
         return this.createView(s)
       case STATEMENT.DROP:
         return this.drop(s)
+      case STATEMENT.ALTER_TABLE:
+        return this.alterTable(s)
+      case STATEMENT.CREATE_DATABASE:
+        return this.createDatabase(s)
       case STATEMENT.QUERY:
         return this.query(s)
       case STATEMENT.INSERT:
@@ -643,8 +654,103 @@ class Deparser {
     ]
     const body = elements.length === 0 ? '' : ` (${elements.join(', ')})`
     const options = this.tableOptions(s.options)
+    const partition = s.partition === undefined ? '' : ` ${this.partitioning(s.partition)}`
     const query = s.query === undefined ? '' : ` ${s.duplicates === undefined ? '' : s.duplicates + ' '}AS ${this.query(s.query)}`
-    return `${head}${body}${options === '' ? '' : ' ' + options}${query}`
+    return `${head}${body}${options === '' ? '' : ' ' + options}${partition}${query}`
+  }
+
+  partitioning(p: Partitioning): string {
+    const out = [`PARTITION BY ${this.partitionMethod(p, 'PARTITIONS')}`]
+    if (p.sub !== undefined) out.push(`SUBPARTITION BY ${this.partitionMethod(p.sub, 'SUBPARTITIONS')}`)
+    if (p.partitions !== undefined) out.push(`(${p.partitions.map((d) => this.partitionDefinition(d)).join(', ')})`)
+    return out.join(' ')
+  }
+
+  partitionMethod(m: PartitionMethod, countWord: string): string {
+    const out: string[] = []
+    if (m.linear === true) out.push('LINEAR')
+    out.push(m.method)
+    if (m.algorithm !== undefined) out.push(`ALGORITHM = ${m.algorithm}`)
+    if (m.columns !== undefined) out.push(`${m.method === 'RANGE' || m.method === 'LIST' ? 'COLUMNS ' : ''}(${m.columns.map(quoteName).join(', ')})`)
+    if (m.expr !== undefined) out.push(`(${this.expr(m.expr)})`)
+    if (m.count !== undefined) out.push(`${countWord} ${m.count}`)
+    return out.join(' ')
+  }
+
+  partitionDefinition(d: PartitionDefinition): string {
+    const out = [`PARTITION ${quoteName(d.name)}`]
+    if (d.lessThan !== undefined) out.push(`VALUES LESS THAN (${d.lessThan.map((e) => this.expr(e)).join(', ')})`)
+    if (d.in !== undefined) out.push(`VALUES IN (${d.in.map((e) => this.expr(e)).join(', ')})`)
+    out.push(...this.partitionOptions(d.options))
+    if (d.subpartitions !== undefined) {
+      out.push(`(${d.subpartitions.map((p) => [`SUBPARTITION ${quoteName(p.name)}`, ...this.partitionOptions(p.options)].join(' ')).join(', ')})`)
+    }
+    return out.join(' ')
+  }
+
+  partitionOptions(options: Readonly<Record<string, string>>): string[] {
+    return Object.entries(options).map(([name, value]) => `${name} = ${STRING_OPTIONS.has(name) ? this.string(value) : /^\d+$/.test(value) ? value : this.word(value)}`)
+  }
+
+  createDatabase(s: CreateDatabaseNode): string {
+    const out = [`CREATE DATABASE ${s.ifNotExists === true ? 'IF NOT EXISTS ' : ''}${quoteName(s.name)}`]
+    for (const [name, value] of Object.entries(s.options)) {
+      out.push(`${name} = ${name === 'ENCRYPTION' ? this.string(value) : value.toUpperCase() === 'DEFAULT' ? 'DEFAULT' : this.word(value)}`)
+    }
+    return out.join(' ')
+  }
+
+  alterTable(s: AlterTableNode): string {
+    const items = s.actions.map((a) => this.alterAction(a))
+    const options = this.tableOptions(s.options)
+    if (options !== '') items.push(options)
+    return `ALTER TABLE ${this.table(s.table)}${items.length === 0 ? '' : ' ' + items.join(', ')}`
+  }
+
+  position(p: ColumnPosition | undefined): string {
+    if (p === undefined) return ''
+    return p === 'FIRST' ? ' FIRST' : ` AFTER ${quoteName(p.after)}`
+  }
+
+  alterAction(a: AlterAction): string {
+    switch (a.type) {
+      case 'addColumn':
+        return `ADD COLUMN ${this.column(a.column)}${this.position(a.position)}`
+      case 'addKey':
+        return `ADD ${this.key(a.key)}`
+      case 'addCheck':
+        return `ADD ${this.check(a.check)}`
+      case 'changeColumn':
+        return `CHANGE COLUMN ${quoteName(a.name)} ${this.column(a.column)}${this.position(a.position)}`
+      case 'drop':
+        return `DROP ${a.what}${a.name === undefined ? '' : ' ' + quoteName(a.name)}`
+      case 'setDefault':
+        return `ALTER COLUMN ${quoteName(a.column)} SET DEFAULT (${this.expr(a.value)})`
+      case 'dropDefault':
+        return `ALTER COLUMN ${quoteName(a.column)} DROP DEFAULT`
+      case 'columnVisibility':
+        return `ALTER COLUMN ${quoteName(a.column)} SET ${a.visible ? 'VISIBLE' : 'INVISIBLE'}`
+      case 'indexVisibility':
+        return `ALTER INDEX ${quoteName(a.index)} ${a.visible ? 'VISIBLE' : 'INVISIBLE'}`
+      case 'enforce':
+        return `ALTER ${a.what} ${quoteName(a.name)} ${a.enforced ? '' : 'NOT '}ENFORCED`
+      case 'rename':
+        return `RENAME TO ${this.table(a.to)}`
+      case 'renameColumn':
+        return `RENAME COLUMN ${quoteName(a.from)} TO ${quoteName(a.to)}`
+      case 'renameIndex':
+        return `RENAME INDEX ${quoteName(a.from)} TO ${quoteName(a.to)}`
+      case 'orderBy':
+        return `ORDER BY ${a.columns.map((c) => `${quoteName(c.name ?? '')}${c.desc === true ? ' DESC' : ''}`).join(', ')}`
+      case 'convert':
+        return `CONVERT TO CHARACTER SET ${a.charset === undefined ? 'DEFAULT' : this.word(a.charset)}${a.collation === undefined ? '' : ` COLLATE ${this.word(a.collation)}`}`
+      case 'keys':
+        return `${a.enable ? 'ENABLE' : 'DISABLE'} KEYS`
+      case 'force':
+        return 'FORCE'
+      case 'tablespace':
+        return `${a.action} TABLESPACE`
+    }
   }
 
   createView(s: CreateViewNode): string {
