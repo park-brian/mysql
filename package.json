@@ -12,10 +12,11 @@
     "node": ">=22.18"
   },
   "scripts": {
-    "test": "node --test \"test/unit/**/*.test.ts\" \"test/format/**/*.test.ts\" \"test/protocol/**/*.test.ts\"",
+    "test": "node --test \"test/unit/**/*.test.ts\" \"test/format/**/*.test.ts\" \"test/protocol/**/*.test.ts\" \"test/crash/**/*.test.ts\"",
     "test:unit": "node --test \"test/unit/**/*.test.ts\"",
     "test:format": "node --test \"test/format/**/*.test.ts\"",
     "test:protocol": "node --test \"test/protocol/**/*.test.ts\"",
+    "test:crash": "node --test \"test/crash/**/*.test.ts\"",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "lint": "node tools/lint-isomorphic.mjs",
     "fuzz": "npm run fuzz:reader && npm run fuzz:parser && npm run fuzz:engine",

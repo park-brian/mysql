@@ -56,7 +56,12 @@ makes Web Locks better than a lock file here.
 ## Transactions
 
 We implement `READ COMMITTED` and `REPEATABLE READ` (MySQL's default) over MVCC,
-per doc 25. With a single writer:
+per doc 25 (§Our undo has the design as built). The engine's API is
+`store.begin(isolation)`, then `commit()`, `rollback()`, `savepoint()` and
+`rollbackTo()`. A second transaction's write while one is open is refused at
+once with `ENGINE_WRITER_BUSY`. The synchronous engine cannot wait, so the async
+edge queues the statement and reports `ER_LOCK_WAIT_TIMEOUT` when
+`innodb_lock_wait_timeout` passes. With a single writer:
 
 - **Readers** take a read view at the right moment (statement or transaction
   start) and are never blocked.
@@ -142,6 +147,30 @@ browser, a committed transaction survives a tab crash; a small window of recent
 commits may be lost on an OS crash or power loss. In no case can the database
 become corrupt.* That last clause is the one that actually matters, and it is
 the one the checksums and LSNs buy.
+
+### What is checked, and what is not (M4.19, M4.25)
+
+`Store.commit()` is the commit. `Store.sync()` is the once-a-second flush that
+settings `0` and `2` rely on, called by the host because a synchronous engine
+owns no timer. The crash suite (`test/crash`, 10,000 crash points in CI) models
+two crashes over a VFS whose `flush()` is honest:
+
+- a **process crash**, where every write survives but none has become durable;
+- a **power loss**, where each write since the last flush survives whole,
+  is torn at 512-byte sectors, or is lost, independently.
+
+Under those two models it checks the table above as written. At `1` no
+acknowledged commit is lost. At `2` none is lost on a process crash, and
+those since the last `sync()` may be on power loss. At `0` those since the last
+`sync()` may be lost on either. In every case the database recovers to the state
+after some whole step and verifies.
+
+That covers the Node clause of the guarantee. **It does not yet check the
+browser clause.** "In no case corrupt" on OPFS assumes that a best-effort
+`flush()` may lose writes but does not reorder them across itself. If a page
+write could become durable while the log write flushed before it did not, the
+WAL rule would be void. That assumption is Q-14, and M6's real-browser crash
+tests (doc 43 §5) are where it gets settled.
 
 ## The buffer pool
 

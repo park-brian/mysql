@@ -15,16 +15,32 @@
 // key must be used, and FLOAT/DOUBLE, which are compared numerically.
 //
 // So this module's contract is narrow and load-bearing: everything it emits is
-// `memcmp`-ordered. A float column cannot go through it, and says so.
+// `memcmp`-ordered. A float column goes through a transform that makes it so
+// (M4.23): its stored little-endian IEEE bytes become a big-endian double with
+// the sign bit flipped, or every bit flipped for a negative — the standard
+// order-preserving map, with −0 folded into 0 because MySQL compares them equal.
+// A descending part (MySQL 8's `DESC` index) is its ascending bytes
+// complemented, which reverses `memcmp` order exactly because every part has a
+// fixed width — the same D-35 width that makes concatenation unambiguous.
 //
-// D-35 is what makes that contract actually true for a character column. A
-// PAD SPACE collation compares `'a'` *greater* than `'a\x01'` — the shorter
-// value is extended with spaces and 0x20 > 0x01 — which no variable-length
-// sort key can express, and concatenating variable-length parts is ambiguous
-// besides. Both are fixed by the same thing: a declared width, padded to.
+// D-35 is what makes that contract actually true for a PAD SPACE character
+// column. Such a collation compares `'a'` *greater* than `'a\x01'` — the
+// shorter value is extended with spaces and 0x20 > 0x01 — which no
+// variable-length sort key can express, and concatenating variable-length
+// parts is ambiguous besides. Both are fixed by the same thing: a declared
+// width, padded to.
+//
+// A NO PAD collation needs neither, and a width does it harm (D-55): its sort
+// key can be far longer than its value — `utf8mb4_0900_ai_ci`, the default,
+// weighs `'ß'` as `'ss'` and `'ﷺ'` as eight weights — so no width a column's
+// declared length implies is safe, and the one that is would be enormous. So a
+// NO PAD part is its sort key with every 0x00 written `00 ff`, then `00 00`.
+// That is prefix-free and keeps `memcmp` order — the terminator sorts below
+// every continuation — so it concatenates unambiguously and complements to its
+// exact reverse, with no width at all.
 import { collation, type Collation } from '@myjs/charsets'
-import { badValue, unsupportedType } from './errors.ts'
-import { compareFloat } from './floats.ts'
+import { badValue } from './errors.ts'
+import { compareFloat, decodeDouble, decodeFloat } from './floats.ts'
 
 /**
  * How a column contributes to a key.
@@ -37,9 +53,8 @@ import { compareFloat } from './floats.ts'
  * (doc 24 defers to doc 29 here, and doc 29 explains why `Intl.Collator`
  * cannot supply it).
  *
- * `float` — FLOAT or DOUBLE: **not** `memcmp`-ordered, so it cannot appear in
- * a key this module builds. Named rather than omitted so the refusal is
- * explicit.
+ * `float` — FLOAT or DOUBLE: not `memcmp`-ordered as stored, so the stored
+ * little-endian bytes are mapped to an order-preserving 8-byte form first.
  */
 export type KeyPartKind = 'bytes' | 'text' | 'float'
 
@@ -56,7 +71,11 @@ export interface KeyPart {
   /**
    * The byte width this part's key occupies, before the NULL flag (D-35).
    *
-   * **Required for every `'text'` part**, for two independent reasons.
+   * For a NO PAD `'text'` part it is only the budget an index is sized by: the
+   * key is variable-length (D-55), and a value whose sort key is longer is
+   * still encoded — the engine checks the key's real length against the page.
+   *
+   * **Required for every PAD SPACE `'text'` part**, for two independent reasons.
    *
    * A PAD SPACE collation compares `'a'` equal to `'a '`, and — less
    * obviously — compares `'a'` *greater* than `'a\x01'`, because the shorter
@@ -73,6 +92,14 @@ export interface KeyPart {
    * and there is nothing to pad. Set it only where the length can vary.
    */
   readonly width?: number
+  /** A `DESC` part: its bytes complemented, so a scan in key order runs high to low (NULL last). */
+  readonly descending?: boolean
+  /**
+   * A `CHAR` column: trailing spaces are not part of the value — MySQL strips
+   * them when it reads one — so they are not part of the key, under NO PAD
+   * included. Applied before the prefix.
+   */
+  readonly trimSpaces?: boolean
 }
 
 /**
@@ -163,33 +190,42 @@ export function declaredKeyWidth(collationId: number, chars: number): number {
 
 /** One column's contribution to a key, sort key, padding and NULL flag included. */
 export function encodeKeyPart(value: Uint8Array | null, part: KeyPart): Uint8Array {
-  if (part.kind === 'float') {
-    throw unsupportedType('a FLOAT or DOUBLE index key part — it is not memcmp-ordered (doc 24 Rule 2)')
+  if (part.descending === true && part.kind === 'bytes' && part.prefix !== undefined && part.width === undefined) {
+    throw badValue('index key', 'a descending prefix part needs a declared width: complementing a variable-length key does not reverse its order')
   }
-  if (part.kind === 'text' && part.width === undefined) {
-    throw badValue('index key', "a 'text' key part needs a declared width (D-35)")
+  const ascending = encodeAscending(value, part)
+  return part.descending === true ? ascending.map((b) => b ^ 0xff) : ascending
+}
+
+function encodeAscending(value: Uint8Array | null, part: KeyPart): Uint8Array {
+  const c = part.kind === 'text' ? collationFor(part) : undefined
+  if (c?.padAttribute === 'PAD SPACE' && part.width === undefined) {
+    throw badValue('index key', "a PAD SPACE 'text' key part needs a declared width (D-35)")
   }
   if (value === null) {
     if (!part.nullable) throw badValue('index key', 'null value for a NOT NULL key part')
     return Uint8Array.from([NULL_FLAG])
   }
-  const truncated = applyPrefix(value, part)
+  const truncated = applyPrefix(part.trimSpaces === true ? trimSpaces(value) : value, part)
   let encoded: Uint8Array
-  if (part.kind === 'text') {
-    const c = collationFor(part)
-    const padded = c.padAttribute === 'PAD SPACE' ? c.padUnit : null
+  if (c !== undefined && c.padAttribute !== 'PAD SPACE') {
+    encoded = terminated(c.sortKey(truncated))
+  } else if (c !== undefined) {
+    const padded = c.padUnit
     const width = part.width as number
     // A width that is not a whole number of characters would be padded with a
     // *fragment* of the pad character — `00 00` of `utf8mb4_bin`'s `00 00 20`
     // — and two keys padded to different phases no longer compare the way
     // their values do. Cheap to check, and impossible to see in a hex dump.
-    if (padded !== null && width % padded.length !== 0) {
+    if (width % padded.length !== 0) {
       throw badValue(
         'index key',
         `a declared width of ${width} is not a whole number of ${padded.length}-byte characters — see declaredKeyWidth()`,
       )
     }
     encoded = padToWidth(c.sortKey(truncated), width, padded)
+  } else if (part.kind === 'float') {
+    encoded = floatKey(truncated)
   } else {
     encoded = part.width === undefined ? truncated : padToWidth(truncated, part.width, null)
   }
@@ -198,6 +234,87 @@ export function encodeKeyPart(value: Uint8Array | null, part: KeyPart): Uint8Arr
   out[0] = PRESENT_FLAG
   out.set(encoded, 1)
   return out
+}
+
+/** Trailing 0x20 bytes removed: a CHAR value as MySQL reads it. */
+function trimSpaces(value: Uint8Array): Uint8Array {
+  let end = value.length
+  while (end > 0 && value[end - 1] === 0x20) end--
+  return value.subarray(0, end)
+}
+
+/**
+ * A NO PAD sort key as a prefix-free, order-keeping byte string (D-55): each
+ * 0x00 becomes `00 ff`, and `00 00` ends it. Where two keys first differ, either
+ * both bytes are ordinary — the order is the sort keys' — or one key has ended,
+ * and its `00 00` is below whatever the other has there, as a shorter key is.
+ */
+function terminated(key: Uint8Array): Uint8Array {
+  let zeros = 0
+  for (const b of key) if (b === 0) zeros++
+  const out = new Uint8Array(key.length + zeros + 2)
+  let at = 0
+  for (const b of key) {
+    out[at++] = b
+    if (b === 0) out[at++] = 0xff
+  }
+  return out
+}
+
+/**
+ * A FLOAT (4 bytes) or DOUBLE (8), as stored — little-endian IEEE (doc 24
+ * Rule 2) — as 8 bytes whose `memcmp` order is the values' numeric order: a
+ * big-endian double with the sign bit flipped, or with every bit flipped when
+ * it is negative. −0 becomes 0, which MySQL compares equal to it. NaN cannot be
+ * stored in MySQL and is refused rather than given a place.
+ */
+function floatKey(stored: Uint8Array): Uint8Array {
+  if (stored.length !== 4 && stored.length !== 8) throw badValue('index key', `a ${stored.length}-byte FLOAT or DOUBLE`)
+  let n = stored.length === 4 ? decodeFloat(stored) : decodeDouble(stored)
+  if (Number.isNaN(n)) throw badValue('index key', 'NaN in a FLOAT or DOUBLE key')
+  if (n === 0) n = 0
+  const out = new Uint8Array(8)
+  new DataView(out.buffer).setFloat64(0, n)
+  if (((out[0] as number) & 0x80) !== 0) for (let i = 0; i < 8; i++) out[i] = (out[i] as number) ^ 0xff
+  else out[0] = (out[0] as number) ^ 0x80
+  return out
+}
+
+/**
+ * How many bytes of `key`, from `at`, one part's encoding takes — the inverse
+ * a reader needs to split a concatenated key, such as a secondary entry's own
+ * key from the primary key after it. `fixed` is the value's width for a
+ * `'bytes'` part that declares none (an integer, a temporal). Malformed bytes
+ * are `ER_TRUNCATED_WRONG_VALUE`, never a read past the key.
+ */
+export function keyPartLength(key: Uint8Array, at: number, part: KeyPart, fixed?: number): number {
+  const flip = part.descending === true ? 0xff : 0
+  const byte = (i: number): number => {
+    if (i >= key.length) throw badValue('index key', `a key part runs past the ${key.length}-byte key`)
+    return (key[i] as number) ^ flip
+  }
+  let n = 0
+  if (part.nullable) {
+    if (byte(at) === NULL_FLAG) return 1
+    n = 1
+  }
+  let body: number
+  if (part.kind === 'float') body = 8
+  else if (part.kind === 'text' && collationFor(part).padAttribute !== 'PAD SPACE') {
+    let i = at + n
+    for (;;) {
+      if (byte(i) === 0) {
+        if (byte(i + 1) === 0) break
+        i += 2
+      } else i++
+    }
+    body = i + 2 - (at + n)
+  } else if (part.kind === 'text') body = part.width as number
+  else if (part.width !== undefined) body = part.width + 2
+  else if (fixed !== undefined) body = Math.min(fixed, part.prefix ?? fixed)
+  else throw badValue('index key', 'a variable-length bytes part with no width cannot be split')
+  if (at + n + body > key.length) throw badValue('index key', `a key part runs past the ${key.length}-byte key`)
+  return n + body
 }
 
 /**

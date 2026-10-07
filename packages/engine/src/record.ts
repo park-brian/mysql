@@ -13,6 +13,7 @@
 // DYNAMIC's rule: while the record is over its budget, the longest inline
 // variable-length field over 40 bytes moves out. The codec is told how to store
 // one and stays a pure function of its inputs.
+import type { Reader, Writer } from '@myjs/bytes'
 import { EngineError, misuse, rowTooBig } from './errors.ts'
 import { REF_SIZE } from './overflow.ts'
 
@@ -146,6 +147,31 @@ export function decodeRecord(layout: RecordLayout, bytes: Uint8Array): (FieldByt
     out.push(external[i] === true ? { ref: v } : v)
   }
   if (at !== bytes.length) throw badRecord(`${bytes.length - at} byte(s) after the last field`)
+  return out
+}
+
+/**
+ * A layout as bytes, for the one place the store keeps one: an undo record
+ * that drops a tree. A count, then per field a flag byte — bit 0 nullable,
+ * bit 1 fixed — and a fixed field's width.
+ */
+export function encodeLayout(w: Writer, layout: RecordLayout): void {
+  w.lenEncInt(layout.length)
+  for (const f of layout) {
+    w.u8((f.nullable ? 1 : 0) | (f.fixed !== undefined ? 2 : 0))
+    if (f.fixed !== undefined) w.lenEncInt(f.fixed)
+  }
+}
+
+export function decodeLayout(r: Reader): RecordLayout {
+  const n = Number(r.lenEncInt())
+  if (n > r.remaining) throw badRecord(`a ${n}-field layout longer than its bytes`)
+  const out: RecordField[] = []
+  for (let i = 0; i < n; i++) {
+    const flags = r.u8()
+    if ((flags & ~3) !== 0) throw badRecord(`layout field flags ${flags}`)
+    out.push((flags & 2) !== 0 ? { nullable: (flags & 1) !== 0, fixed: Number(r.lenEncInt()) } : { nullable: (flags & 1) !== 0 })
+  }
   return out
 }
 

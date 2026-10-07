@@ -20,7 +20,7 @@ const caught = (fn: () => unknown): EngineError => {
 }
 
 test('engine errnos and SQLSTATEs agree with the generated error table', async () => {
-  const store = Store.create(await new MemoryVfs({ pageSize: 1024 }).open('d', { create: true }), { frames: 16 })
+  const store = Store.create(await new MemoryVfs({ pageSize: 1024 }).open('d', { create: true }), await new MemoryVfs().open('log', { create: true }), { frames: 32 })
   const clustered = ClusteredIndex.create(store, [{ nullable: false, fixed: 1 }, { nullable: true }], [{ field: 0, part: { kind: 'bytes', nullable: false } }])
   clustered.insert([Uint8Array.of(1), null])
   const errors = [

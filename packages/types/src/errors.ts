@@ -16,7 +16,7 @@ export function badValue(what: string, why: string): TypeError_ {
 }
 
 export function unsupportedType(what: string): TypeError_ {
-  return new TypeError_('ER_NOT_SUPPORTED_YET', `${what} is not supported yet`, { errno: 1235, sqlState: '0A000' })
+  return new TypeError_('ER_NOT_SUPPORTED_YET', `${what} is not supported yet`, { errno: 1235, sqlState: '42000' })
 }
 
 /**

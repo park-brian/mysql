@@ -8,7 +8,9 @@
 // are *valid pages, mutated, then re-sealed*: the frame check passes and the
 // structure check behind it has to do the work. The same goes for whole
 // stores: about one input in 250 corrupts one sealed page of a real database
-// and walks it with `verifyStore`.
+// and walks it with `verifyStore`. The log is the same kind of input (doc 43
+// §6's "mutated real logs"): a real log with bytes changed, sometimes re-sealed
+// so that the record decoder and recovery, not the checksum, have to answer.
 //
 // `tools/fuzz-reader.mjs`'s shape: a seed, a per-input time budget, and a
 // crasher written to the corpus. Some targets draw their own bytes from the
@@ -17,14 +19,29 @@
 import { mkdirSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { MemoryVfs } from '@myjs/vfs'
+import { FIELD_TYPE } from '@myjs/bytes'
+import { loadCollation } from '@myjs/charsets'
 import {
+  Catalog,
+  ClusteredIndex,
   EngineError,
+  LOG_BLOCK,
+  LOG_HEADER,
   PAGE_TYPE,
   Store,
+  decodeGroup,
   decodeRecord,
+  decodeTableDef,
+  decodeUndo,
+  encodeTableDef,
+  encodeGroup,
+  encodeUndo,
+  groupLength,
   indexPage,
   initPage,
+  readBlock,
   readSuperblock,
+  sealBlock,
   sealPage,
   verifyPage,
   verifyStore,
@@ -68,21 +85,119 @@ function mutate(page) {
   return page
 }
 
-/** A small real database, for the store-level target. */
+/**
+ * A small real database, for the store-level targets: its data pages and its
+ * log, with work after the last checkpoint so that opening it replays groups.
+ */
 const fixture = await (async () => {
-  const file = await new MemoryVfs({ pageSize: PAGE }).open('d', { create: true })
-  const store = Store.create(file, { frames: 16 })
+  const vfs = new MemoryVfs({ pageSize: PAGE })
+  const file = await vfs.open('d', { create: true })
+  const logFile = await vfs.open('l', { create: true })
+  const store = Store.create(file, logFile, { frames: 16, logBlocks: 32 })
   const tree = store.createTree()
-  for (let i = 0; i < 300; i++) tree.put(Uint8Array.of(i >> 8, i & 0xff), new Uint8Array(i % 20))
-  store.flush()
+  for (let i = 0; i < 150; i++) tree.put(Uint8Array.of(i >> 8, i & 0xff), new Uint8Array(i % 20))
+  store.checkpoint()
+  for (let i = 150; i < 300; i++) tree.put(Uint8Array.of(i >> 8, i & 0xff), new Uint8Array(i % 20))
+  // A table with history a reader pins, and a transaction left open: opening
+  // the store rolls it back, so every mutation below reaches undo too.
+  const table = ClusteredIndex.create(store, [{ nullable: false, fixed: 2 }, { nullable: true }], [{ field: 0, part: { kind: 'bytes', nullable: false } }])
+  for (let i = 0; i < 40; i++) table.insert([Uint8Array.of(0, i), new Uint8Array(i % 30)])
+  table.get(Uint8Array.of(0, 0), store.begin())
+  for (let i = 0; i < 40; i += 3) table.update([Uint8Array.of(0, i), new Uint8Array(5).fill(i)])
+  const open = store.begin()
+  for (let i = 1; i < 40; i += 4) table.delete(Uint8Array.of(0, i), open)
+  for (let i = 40; i < 50; i++) table.insert([Uint8Array.of(0, i), null], open)
+  store.sync()
   const pages = []
-  for (let p = 0; p < store.alloc.pageCount; p++) {
+  for (let p = 0; p < file.size() / PAGE; p++) {
     const page = new Uint8Array(PAGE)
     file.readPage(p, page)
     pages.push(page)
   }
-  return pages
+  const log = new Uint8Array(logFile.size())
+  logFile.readBytes(0, log)
+  return { pages, log }
 })()
+
+/**
+ * A database with a catalog, at 1 KiB pages — the smallest a catalog's keys fit
+ * — for the catalog targets: two tables with rows, history, and an open
+ * transaction, one table dropped while a view pins it.
+ */
+await loadCollation(255)
+const catalogFixture = await (async () => {
+  const vfs = new MemoryVfs({ pageSize: 1024 })
+  const file = await vfs.open('d', { create: true })
+  const logFile = await vfs.open('l', { create: true })
+  const store = Store.create(file, logFile, { frames: 32, logBlocks: 32 })
+  const catalog = Catalog.open(store)
+  catalog.createSchema('s')
+  const spec = (name) => ({
+    name,
+    columns: [
+      { name: 'id', type: { type: FIELD_TYPE.LONG }, nullable: false },
+      { name: 'v', type: { type: FIELD_TYPE.VAR_STRING, length: 8, collationId: 255 }, nullable: true },
+      { name: 'b', type: { type: FIELD_TYPE.BLOB, collationId: 63 }, nullable: true },
+    ],
+    indexes: [
+      { name: 'PRIMARY', kind: 'primary', parts: [{ column: 'id' }] },
+      { name: 'v', kind: 'index', parts: [{ column: 'v', descending: true }] },
+    ],
+  })
+  for (const name of ['a', 'b', 'gone']) {
+    catalog.createTable('s', spec(name))
+    const t = catalog.table('s', name)
+    for (let i = 0; i < 12; i++) t.insert([Uint8Array.of(0x80, 0, 0, i), new TextEncoder().encode(`v${i % 5}`), i % 4 === 0 ? new Uint8Array(900).fill(i) : null])
+  }
+  catalog.table('s', 'gone').get(Uint8Array.of(0x80, 0, 0, 1), store.begin())
+  catalog.dropTable('s', 'gone')
+  const open = store.begin()
+  catalog.table('s', 'a').delete(Uint8Array.of(0x80, 0, 0, 3), open)
+  store.sync()
+  const pages = []
+  for (let p = 0; p < file.size() / 1024; p++) {
+    const page = new Uint8Array(1024)
+    file.readPage(p, page)
+    pages.push(page)
+  }
+  const log = new Uint8Array(logFile.size())
+  logFile.readBytes(0, log)
+  return { pages, log, def: catalog.definition('s', 'a') }
+})()
+
+/** The fixture as files, with `change` applied to copies of its bytes first. */
+async function fixtureFiles(change) {
+  const vfs = new MemoryVfs({ pageSize: PAGE })
+  const file = await vfs.open('d', { create: true })
+  const logFile = await vfs.open('l', { create: true })
+  const pages = fixture.pages.map((p) => p.slice())
+  const log = fixture.log.slice()
+  change(pages, log)
+  pages.forEach((p, i) => file.writePage(i, p))
+  logFile.writeBytes(0, log)
+  return [file, logFile]
+}
+
+/** Open what is left and walk all of it. */
+function openAndWalk(files) {
+  const store = Store.open(...files, { frames: 16 })
+  verifyStore(store)
+  for (const { indexId } of store.trees()) for (const _ of store.openTree(indexId).entries());
+}
+
+/** A JSON value with one leaf replaced, or a key dropped: past `JSON.parse`, so the field checks answer. */
+function mutateJson(v) {
+  if (Array.isArray(v) || (typeof v === 'object' && v !== null)) {
+    const keys = Object.keys(v)
+    if (keys.length === 0 || rnd() < 0.15) return [null, 7, -1, 'x', true, [], {}, 2 ** 60][randInt(8)]
+    const out = Array.isArray(v) ? [...v] : { ...v }
+    const k = keys[randInt(keys.length)]
+    if (!Array.isArray(v) && rnd() < 0.1) delete out[k]
+    else out[k] = mutateJson(v[k])
+    return out
+  }
+  return [null, 7, -1, 'x', true, [], {}, 1.5, 'PRIMARY', 'id', 255, 0xff][randInt(12)]
+}
 
 const TARGETS = [
   // A raw page, mostly failing the checksum — the first line of defence.
@@ -97,7 +212,7 @@ const TARGETS = [
   // A mutated superblock.
   () => {
     const page = new Uint8Array(PAGE)
-    writeSuperblock(page, { pageSize: PAGE, lsn: randInt(1e9), pageCount: 64, nextIndexId: 2, directoryRoot: 3 })
+    writeSuperblock(page, { pageSize: PAGE, generation: randInt(9), salt: randInt(1e9), logBlocks: 64, checkpointLsn: randInt(1e9), checkpointBlock: randInt(64), pageCount: 64, nextIndexId: 2, directoryRoot: 3, trxRoot: 4, nextTrxId: randInt(1e9) })
     readSuperblock(mutate(page), PAGE)
   },
   // A record of a random layout over arbitrary bytes.
@@ -105,22 +220,85 @@ const TARGETS = [
     const layout = Array.from({ length: 1 + randInt(8) }, () => (rnd() < 0.5 ? { nullable: rnd() < 0.5 } : { nullable: rnd() < 0.5, fixed: 1 + randInt(8) }))
     decodeRecord(layout, input)
   },
-  // A whole store with one page corrupted and re-sealed, walked end to end.
+  // A whole store with one page corrupted and re-sealed, recovered and walked end to end.
   async () => {
     if (rnd() > 0.02) return
-    const file = await new MemoryVfs({ pageSize: PAGE }).open('d', { create: true })
-    const victim = randInt(fixture.length)
-    fixture.forEach((p, i) => {
-      const copy = p.slice()
-      if (i === victim) {
-        mutate(copy)
-        sealPage(copy)
-      }
-      file.writePage(i, copy)
-    })
-    const store = Store.open(file, { frames: 16 })
-    verifyStore(store)
-    for (const { indexId } of store.trees()) for (const _ of store.openTree(indexId).entries());
+    const victim = randInt(fixture.pages.length)
+    openAndWalk(
+      await fixtureFiles((pages) => {
+        mutate(pages[victim])
+        sealPage(pages[victim])
+      }),
+    )
+  },
+  // A real log with bytes changed in one block — re-sealed half the time, so
+  // the scan and the record decoder have to answer rather than the checksum.
+  async () => {
+    if (rnd() > 0.02) return
+    openAndWalk(
+      await fixtureFiles((_, log) => {
+        const block = randInt(log.length / LOG_BLOCK)
+        const at = block * LOG_BLOCK
+        const view = log.subarray(at, at + LOG_BLOCK)
+        const header = readBlock(view)
+        for (let i = 1 + randInt(4); i > 0; i--) view[(rnd() < 0.3 ? 4 + randInt(LOG_HEADER - 4) : LOG_HEADER + randInt(200))] = randInt(256)
+        if (header !== undefined && rnd() < 0.5) sealBlock(view, header)
+      }),
+    )
+  },
+  // An undo record's bytes, mutated: decode answers with a record or ENGINE_CORRUPT_UNDO.
+  (input) => {
+    const record = encodeUndo({ isInsert: false, purgeRemoves: rnd() < 0.5, indexId: randInt(1000), key: input.subarray(0, randInt(20)), old: input.subarray(0, randInt(60)), freeOnPurge: [new Uint8Array(8)], freeOnRollback: [] })
+    for (let i = 1 + randInt(3); i > 0; i--) record[randInt(record.length)] = randInt(256)
+    decodeUndo(record.subarray(0, 1 + randInt(record.length)))
+  },
+  // A table definition, its bytes or its values changed: a definition or ENGINE_CORRUPT_CATALOG.
+  (input) => {
+    if (rnd() < 0.5) {
+      const bytes = encodeTableDef(catalogFixture.def)
+      for (let i = 1 + randInt(3); i > 0; i--) bytes[randInt(bytes.length)] = input[i] ?? randInt(256)
+      decodeTableDef(bytes)
+    } else decodeTableDef(new TextEncoder().encode(JSON.stringify(mutateJson(catalogFixture.def))))
+  },
+  // A DDL undo record, mutated.
+  (input) => {
+    const record = encodeUndo({ trees: { onRollback: [{ indexId: randInt(1000), layout: [{ nullable: true }, { nullable: false, fixed: input[0] ?? 1 }] }], onPurge: [{ indexId: 17, layout: null }] } })
+    for (let i = 1 + randInt(3); i > 0; i--) record[randInt(record.length)] = randInt(256)
+    decodeUndo(record.subarray(0, 1 + randInt(record.length)))
+  },
+  // A store with a catalog, one page corrupted and re-sealed: recovered, its
+  // catalog opened, and every table walked through every index.
+  async () => {
+    if (rnd() > 0.02) return
+    const vfs = new MemoryVfs({ pageSize: 1024 })
+    const file = await vfs.open('d', { create: true })
+    const logFile = await vfs.open('l', { create: true })
+    const pages = catalogFixture.pages.map((p) => p.slice())
+    const victim = pages[randInt(pages.length)]
+    mutate(victim)
+    sealPage(victim)
+    pages.forEach((p, i) => file.writePage(i, p))
+    logFile.writeBytes(0, catalogFixture.log)
+    const store = Store.open(file, logFile, { frames: 32 })
+    const catalog = Catalog.open(store)
+    verifyStore(store, catalog.verifyOptions())
+    for (const def of catalog.tables()) {
+      const t = catalog.table(def.schema, def.name)
+      for (const _ of t.scan());
+      for (const i of def.indexes) for (const _ of t.indexScan(i.name));
+    }
+  },
+  // A group's bytes, mutated: decode answers with records or ENGINE_CORRUPT_LOG.
+  (input) => {
+    const group = encodeGroup([
+      { type: 'page', pageNo: randInt(1000), image: rnd() < 0.5, runs: [{ at: 24, bytes: input.subarray(0, 1 + randInt(20)) }] },
+      { type: 'meta', pageCount: 64, nextIndexId: 2, nextTrxId: 9 },
+      { type: 'row', indexId: 1, trxId: 3, before: null, after: [input.subarray(0, randInt(10)), null] },
+      { type: 'commit', trxId: 3 },
+    ])
+    for (let i = 1 + randInt(3); i > 0; i--) group[randInt(group.length)] = randInt(256)
+    const n = groupLength(group)
+    if (n !== undefined && n <= group.length) decodeGroup(group.subarray(0, n))
   },
 ]
 

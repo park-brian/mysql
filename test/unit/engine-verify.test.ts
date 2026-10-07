@@ -3,14 +3,20 @@
 // that passes a corrupt store is worse than none, because it is believed.
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { MemoryVfs } from '@myjs/vfs'
+import { MemoryVfs, type VfsFile } from '@myjs/vfs'
 import { EngineError, Store, indexPage as ip, segmentId, verifyStore, writeChain, type BTree } from '@myjs/engine'
 
 const PAGE = 1024
 const be = (n: number) => Uint8Array.of(n >>> 24, (n >>> 16) & 0xff, (n >>> 8) & 0xff, n & 0xff)
 
+/** A database's two files: data and log. */
+async function files(pageSize: number): Promise<[VfsFile, VfsFile]> {
+  const vfs = new MemoryVfs({ pageSize })
+  return [await vfs.open('data', { create: true }), await vfs.open('log', { create: true })]
+}
+
 async function built(): Promise<{ store: Store; tree: BTree }> {
-  const store = Store.create(await new MemoryVfs({ pageSize: PAGE }).open('d', { create: true }), { frames: 32 })
+  const store = Store.create(...(await files(PAGE)), { frames: 32 })
   const tree = store.createTree()
   for (let i = 0; i < 2003; i++) tree.put(be(((i * 7919) % 2003) * 3), new Uint8Array(40))
   assert.ok(tree.height() >= 3)
@@ -22,7 +28,7 @@ async function built(): Promise<{ store: Store; tree: BTree }> {
 function tamper(store: Store, pageNo: number, change: (page: Uint8Array) => void): void {
   const page = store.pool.fetch(pageNo)
   change(page)
-  store.pool.markDirty(page, store.lsn.next())
+  store.pool.markDirty(page, 0)
   store.pool.release(page)
 }
 
@@ -57,13 +63,13 @@ test('verify: a separator off by one — a key below its bound — is caught', a
 
 test('verify: a leaked page is caught', async () => {
   const { store, tree } = await built()
-  store.alloc.allocate(segmentId(tree.indexId, 0), 99)
+  store.atomically(() => store.alloc.allocate(segmentId(tree.indexId, 0), 99))
   caught(store, /allocated but unreachable/)
 })
 
 test('verify: a page in use but free in the maps is caught', async () => {
   const { store, tree } = await built()
-  store.alloc.free(landmarks(store, tree).child)
+  store.atomically(() => store.alloc.free(landmarks(store, tree).child))
   caught(store, /reachable but free/)
 })
 
@@ -89,7 +95,7 @@ test('verify: an unsorted slot is caught', async () => {
 
 test('verify: a leaked overflow chain is caught', async () => {
   const { store, tree } = await built()
-  writeChain(tree.overflowPages(), new Uint8Array(3000))
+  store.atomically(() => writeChain(tree.overflowPages(), new Uint8Array(3000)))
   // Two checks see it: the overflow segment's fragment count no longer matches
   // what is reachable, and neither do the maps. The first to run reports it.
   caught(store, /allocated but unreachable|fragment pages in segment 2/)

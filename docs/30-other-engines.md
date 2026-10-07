@@ -139,3 +139,74 @@ Deliberately narrower than MySQL's `handler`, which has grown ~100 virtual
 methods over twenty years of features. Keep it small enough that a new
 implementation is a day's work, and the `innodb-ro` and `csv` engines stay
 genuinely cheap.
+
+## Our engines (M4.24 — D-58)
+
+The interface as built is the shape above with what the executor turned out to
+need (`@myjs/engine`'s `table.ts`):
+
+```ts
+interface StorageEngine {
+  readonly name: 'native' | 'memory'
+  readonly transactional: boolean     // a rollback undoes its writes
+  readonly consistentReads: boolean   // a transaction reads its snapshot
+  create(def, trx): TableDef          // storage made inside the DDL transaction
+  open(def, hooks): Table
+  drop(def, trx): void                // what can wait for purge does
+  discard(def): void                  // after the DROP commits
+}
+
+interface Table {
+  insert(row, trx?): RowId                          // ER_DUP_ENTRY names its index
+  update(id, row, trx?): RowId | undefined          // a changed clustered key moves the row
+  delete(id, trx?): boolean
+  get(id, trx?, mode?): Row | undefined
+  scan(range?, trx?, mode?): Iterator<[RowId, Row]>              // clustered order
+  indexScan(index, range?, trx?, mode?): Iterator<[RowId, Row]>  // index order
+  nextAutoIncrement(count?): bigint
+  stats(): { rows, dataLength, indexLength }        // estimates, for the planner
+}
+```
+
+- **Rows are field bytes in storage encoding** (D-22), and the executor converts
+  values. That is the counterpart of MySQL's row buffer, with one encoding
+  instead of two.
+- **A `RowId` is the clustered key's bytes**, or the hidden row id's, as
+  InnoDB's `position()` is.
+- **Ranges are given in key values**, a prefix of the index's leading columns
+  with each end inclusive or not, in index order. Each engine works out what a
+  range means, so the two have to agree on it.
+- **Scans must not be interleaved with writes to the same table.** An executor
+  that needs both, as UPDATE does, materializes first.
+
+**native** wraps one `ClusteredIndex` and one `SecondaryIndex` per other index.
+Each row operation is one write, which is one mini-transaction, so a duplicate
+in the third index leaves nothing of the row in the first two.
+
+**memory** is not MySQL's MEMORY engine. It is an in-process engine with the
+same table semantics and neither capability: a rollback does not undo it, a
+view does not hide its rows, and its rows do not outlive the process. Its
+definition persists in the catalog. Unlike MySQL's, it keeps BLOBs and returns
+rows in key order. **It is written to be independent of native (D-58).** It
+compares values, a collation's `compare` and a float's number, where native
+compares encoded keys with `memcmp`. So the differential test is an instrument
+for the key encoding rather than an echo of it. Ordering memory by `memcmp`
+instead of the collation fails that test, and so does keying native with D-35's
+old width.
+
+**"The executor cannot tell the two apart"** is two instruments:
+
+- **`tableConformanceCases`**, exported from `@myjs/engine/conformance` as the
+  VFS suite is. It covers rows and orders, errors and the indexes they name, a
+  refused row leaving nothing in any index, ranges, `DESC`, floats, CHAR
+  trimming, prefixes, the hidden row id and the clustered-index rule, and
+  AUTO_INCREMENT. Both engines pass it.
+- **A differential property test** drives the same random inserts, updates,
+  deletes and range scans into a native and a memory table. It requires the
+  same result, or the same error code and message, at every step, and the same
+  contents in every index after it.
+
+Both run autocommit and single-session, the ground where the capabilities do
+not show. Native's transactions are tested by name. `stats()` is an estimate
+and excluded.
+

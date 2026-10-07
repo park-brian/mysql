@@ -8,8 +8,10 @@ file is the shorter thing you read first.
 
 An isomorphic, in-process MySQL for JavaScript: no server process, no native
 addon, MySQL's wire protocol and MySQL's semantics. M0–M2 are complete (the
-protocol, charsets and collations, the type system); M3 (parse SQL) is in
-progress; M4 (storage) and M5 (execute) have not started.
+protocol, charsets and collations, the type system); M3 (parse SQL) has one
+optional item left; M4 (storage) has its pages, B+tree, WAL, crash recovery,
+MVCC transactions, the catalog and the `Table` interface with its `native` and
+`memory` engines, with the Node VFS to come; M5 (execute) has not started.
 
 ## Running things
 
@@ -18,7 +20,8 @@ types and runs the `.ts` directly (D-01). `tsc` is only a checker.
 
 ```bash
 npm ci
-npm test          # unit + format + protocol; no Docker, no browser, under a minute
+npm test          # unit + format + protocol + 300 crash points; no Docker, no browser, under a minute
+CRASH_POINTS=10000 npm run test:crash   # the M4 exit criterion's 10,000, as CI runs it
 npm run typecheck
 npm run lint      # the isomorphic gate
 npm run size      # the ratcheting bundle budget
@@ -79,16 +82,22 @@ what belongs there: a *fact about the format*, not *behaviour*.
 `@myjs/protocol` never depends on `@myjs/charsets` (D-33). Behaviour that needs
 a session is injected — a `Transcoder`, a `Capabilities`, an `Executor`.
 
-## Two seams carry the design
+## Three seams carry the design
 
 - **`execProtocol(bytes) → bytes`** (doc 03). Every other entry point is a
   caller of it, which is why `mysql2.createConnection({ stream })` works with no
   knowledge that there is no socket.
 - **The `Vfs` interface** (doc 40) — the only platform-dependent code, and
   synchronous, so there is no `await` inside a page split.
+- **`journal.atomically(fn)`** (doc 26 §Our log) — every page change in the
+  engine sits inside one, and the journal, not the tree, writes the log. Code
+  above the pool declares where an atomic change begins and ends and nothing
+  more.
 
 The engine seam is `Executor` in `packages/protocol/src/session.ts`. Today it is
-answered by a regex stub in `packages/core/src/stub.ts`; M5 replaces it.
+answered by a regex stub in `packages/core/src/stub.ts`; M5 replaces it. Below
+the executor, the storage seam is `Catalog` and `Table` in `@myjs/engine` (doc 30
+§Our engines): rows as storage-encoded field bytes, DDL as transactions.
 
 ## Ground rules
 

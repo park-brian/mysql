@@ -71,5 +71,7 @@ export { isMysqlDateTime, isMysqlTime, renderMysqlDateTime, renderMysqlTime } fr
 export type { MysqlDateTime, MysqlTime, SqlValue } from '@myjs/bytes'
 export { JSON_TYPE, compareJsonKeys, decodeJson, encodeJson } from './json.ts'
 export type { JsonValue } from './json.ts'
-export { declaredKeyWidth, encodeKey, encodeKeyPart } from './keys.ts'
+export { declaredKeyWidth, encodeKey, encodeKeyPart, keyPartLength } from './keys.ts'
 export type { KeyPart, KeyPartKind } from './keys.ts'
+export { keyPartOf, storageWidth } from './columns.ts'
+export type { ColumnType, KeyPartOptions } from './columns.ts'

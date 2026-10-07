@@ -297,6 +297,15 @@ local prefix. Which fields go off-page is DYNAMIC's rule: while the record is
 over its budget, the longest inline variable-length field of more than 40 bytes
 moves off-page. A record that still does not fit is `ER_TOO_BIG_ROWSIZE`.
 
+**In a leaf, a record follows a version header (M4.20).** A clustered value is
+`flags`, `DB_TRX_ID` (6 bytes) and `DB_ROLL_PTR` (7), then the record: doc 25's
+hidden columns, placed as a value prefix because the primary key is the tree's
+key. A secondary entry's value, empty under D-42, is now `flags` and the trx id
+that last changed the entry. Flag bit 0 is the delete-mark, so a delete leaves
+the entry for purge. The tree never reads either header; doc 25 §Our undo is
+the layer that does. `PAGE_MAX_TRX_ID` is not used: the per-entry id does its
+job exactly (D-51).
+
 ### Overflow pages (M4.6)
 
 An overflow page is the frame, a `u32` next page (0 at the end of the chain), a

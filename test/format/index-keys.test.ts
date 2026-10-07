@@ -11,13 +11,17 @@ import fc from 'fast-check'
 import { collation, encodeCharset, loadCollation, memcmp } from '@myjs/charsets'
 import {
   TypeError as MyjsTypeError,
+  compareFloat,
   declaredKeyWidth,
+  encodeDouble,
+  encodeFloat,
   encodeDateField,
   encodeDatetime2,
   encodeDecimal,
   encodeInt,
   encodeKey,
   encodeKeyPart,
+  keyPartLength,
   dateFieldToStorage,
   type KeyPart,
 } from '@myjs/types'
@@ -184,14 +188,49 @@ test('M2.14/D-35: an expanding NO PAD key distinguishes values that pad alike', 
   assert.equal(sign(c.compare(encodeCharset('\u00df', 'utf8mb4'), encodeCharset('ss', 'utf8mb4'))), 0)
 })
 
-test('M2.14/D-35: an expanding sort key that overflows its width is refused', async () => {
-  // A declared width too small for the sort key is a schema error, and it must
-  // be an error: silently truncating would produce a key that compares wrongly
-  // rather than one that fails loudly. Only reachable now that a sort key can
-  // be longer than its value.
-  await loadCollation(255)
+test('M2.14/D-35 ⊘ D-55: an expanding NO PAD key needs no width, and ignores one too small', async () => {
+  // D-35 refused this: 'ß' weighs four bytes under 0900, more than a 2-byte
+  // width. That made `VARCHAR(6) PRIMARY KEY` refuse 'Straße' (a 14-byte sort
+  // key against the 12 that six characters declare) under the default
+  // collation, a value MySQL stores. A NO PAD key is variable-length now, so
+  // the width is a budget, never a refusal.
+  const c = await loadCollation(255)
   const narrow = keyed(255, 2)
-  assert.throws(() => encodeKeyPart(encodeCharset('\u00df', 'utf8mb4'), narrow), MyjsTypeError)
+  const none: KeyPart = { kind: 'text', nullable: false, collationId: 255 }
+  for (const [a, b] of [['Straße', 'Strasse'], ['Straße', 'Strasse '], ['\ufdfa', '\ufdfb'], ['ææ', 'ae']]) {
+    const [ba, bb] = [encodeCharset(a as string, 'utf8mb4'), encodeCharset(b as string, 'utf8mb4')]
+    for (const part of [narrow, none]) assert.equal(sign(memcmp(encodeKeyPart(ba, part), encodeKeyPart(bb, part))), sign(c.compare(ba, bb)), `${a} vs ${b}`)
+  }
+})
+
+test('D-55: NO PAD parts concatenate unambiguously and reverse exactly under DESC', async () => {
+  // Two variable-length parts side by side: 'ab' + 'c' must not key like
+  // 'a' + 'bc', and a descending part must order exactly backwards — both
+  // follow from the encoding being prefix-free, which this checks by property.
+  const c = await loadCollation(255)
+  const part = (descending: boolean): KeyPart => ({ kind: 'text', nullable: true, collationId: 255, descending })
+  const value = () => fc.option(awkward(), { nil: null })
+  const cmp = (x: string | null, y: string | null): number =>
+    x === null || y === null ? (x === null ? (y === null ? 0 : -1) : 1) : sign(c.compare(encodeCharset(x, 'utf8mb4'), encodeCharset(y, 'utf8mb4')))
+  const bytes = (x: string | null) => (x === null ? null : encodeCharset(x, 'utf8mb4'))
+  fc.assert(
+    fc.property(value(), value(), value(), value(), fc.boolean(), (a1, a2, b1, b2, desc) => {
+      const parts = [part(desc), part(false)]
+      const ka = encodeKey([bytes(a1), bytes(a2)], parts)
+      const kb = encodeKey([bytes(b1), bytes(b2)], parts)
+      const expected = (desc ? -cmp(a1, b1) : cmp(a1, b1)) || cmp(a2, b2)
+      assert.equal(sign(memcmp(ka, kb)), expected, JSON.stringify([a1, a2, b1, b2, desc]))
+    }),
+    { numRuns: 3000 },
+  )
+})
+
+test('D-55: a CHAR part keys without its trailing spaces, under NO PAD too', async () => {
+  await loadCollation(255)
+  const char: KeyPart = { kind: 'text', nullable: false, collationId: 255, trimSpaces: true }
+  const key = (s: string) => encodeKeyPart(encodeCharset(s, 'utf8mb4'), char)
+  assert.deepEqual(key('a   '), key('a'))
+  assert.equal(sign(memcmp(key('a\t'), key('a  '))), 1)
 })
 
 test('M2.14/D-35: the pair that inverted without padding', () => {
@@ -227,7 +266,7 @@ test('M2.14/D-35: NO PAD keeps a trailing NUL distinguishable', () => {
   assert.equal(sign(memcmp(encodeKeyPart(Uint8Array.of(0x62), part), encodeKeyPart(Uint8Array.of(0x61, 0x61), part))), 1)
 })
 
-test('M2.14/D-35: a text part without a width is refused', () => {
+test('M2.14/D-35: a PAD SPACE text part without a width is refused', () => {
   assert.throws(() => encodeKeyPart(Uint8Array.of(0x61), { kind: 'text', nullable: false, collationId: 46 }), MyjsTypeError)
 })
 
@@ -287,11 +326,39 @@ test('M2.14: a prefix never splits a multi-byte character', () => {
   )
 })
 
-test('M2.14: a FLOAT key part refuses rather than producing a wrong order', () => {
-  // Doc 24 Rule 2. Silently encoding a little-endian double into a key would
-  // build an index whose order is nonsense for negatives, and nothing would
-  // notice until a range scan returned the wrong rows.
-  assert.throws(() => encodeKeyPart(new Uint8Array(8), { kind: 'float', nullable: false }), MyjsTypeError)
+test('M4.23: a FLOAT or DOUBLE key part orders as the numbers do — M2.14 refused it, before there was a transform', () => {
+  // Doc 24 Rule 2: the stored bytes are little-endian IEEE, whose memcmp order
+  // is nonsense for negatives. M2.14 refused such a part rather than build an
+  // index in the wrong order; the order-preserving map replaces the refusal.
+  const finite = fc.double({ noNaN: true, noDefaultInfinity: false })
+  const cmp = (a: Uint8Array, b: Uint8Array) => sign(memcmp(a, b))
+  fc.assert(
+    fc.property(finite, finite, (a, b) => {
+      const part = notNull({ kind: 'float' })
+      assert.equal(cmp(encodeKeyPart(encodeDouble(a), part), encodeKeyPart(encodeDouble(b), part)), sign(compareFloat(a, b)), `${a} vs ${b}`)
+      const fa = Math.fround(a)
+      const fb = Math.fround(b)
+      assert.equal(cmp(encodeKeyPart(encodeFloat(fa), part), encodeKeyPart(encodeFloat(fb), part)), sign(compareFloat(fa, fb)), `float ${fa} vs ${fb}`)
+    }),
+    { numRuns: 4000 },
+  )
+  const part = notNull({ kind: 'float' })
+  assert.deepEqual(encodeKeyPart(encodeDouble(-0), part), encodeKeyPart(encodeDouble(0), part), '−0 is 0')
+  assert.throws(() => encodeKeyPart(encodeDouble(Number.NaN), part), MyjsTypeError)
+})
+
+test('M4.23: a DESC part reverses the order of its ascending bytes, NULL last', () => {
+  fc.assert(
+    fc.property(fc.option(fc.uint8Array({ maxLength: 12 }), { nil: null }), fc.option(fc.uint8Array({ maxLength: 12 }), { nil: null }), (a, b) => {
+      const asc = nullable({ prefix: 12, width: 12 })
+      const desc = nullable({ prefix: 12, width: 12, descending: true })
+      assert.equal(sign(memcmp(encodeKeyPart(a, desc), encodeKeyPart(b, desc))), -sign(memcmp(encodeKeyPart(a, asc), encodeKeyPart(b, asc))) || 0)
+    }),
+    { numRuns: 4000 },
+  )
+  const desc = nullable({ prefix: 12, width: 12, descending: true })
+  assert.ok(memcmp(encodeKeyPart(new Uint8Array(0), desc), encodeKeyPart(null, desc)) < 0, 'NULL sorts last in a DESC part')
+  assert.throws(() => encodeKeyPart(new Uint8Array(3), notNull({ prefix: 4, descending: true })), MyjsTypeError, 'complementing a variable-length key does not reverse it')
 })
 
 test('M2.14: a text part without a collation is a typed error, not a guess', () => {
@@ -300,4 +367,54 @@ test('M2.14: a text part without a collation is a typed error, not a guess', () 
 
 test('M2.14: a key with the wrong number of values is refused', () => {
   assert.throws(() => encodeKey([new Uint8Array(1)], [notNull(), notNull()]), MyjsTypeError)
+})
+
+test('D-55: the escape keeps NUL-bearing values apart in a two-part key', () => {
+  // `binary` is NO PAD with the value as its sort key, so this reaches 0x00
+  // bytes the string properties above never generate: without the escape,
+  // 'a\0' + 'b' and 'a' + '\0b' would share a prefix the terminator cannot
+  // separate.
+  const part = (descending: boolean): KeyPart => ({ kind: 'text', nullable: false, collationId: 63, descending })
+  const value = () => fc.uint8Array({ maxLength: 4, max: 2 })
+  fc.assert(
+    fc.property(value(), value(), value(), value(), fc.boolean(), (a1, a2, b1, b2, desc) => {
+      const parts = [part(desc), part(false)]
+      const expected = (desc ? -sign(memcmp(a1, b1)) : sign(memcmp(a1, b1))) || sign(memcmp(a2, b2))
+      assert.equal(sign(memcmp(encodeKey([a1, a2], parts), encodeKey([b1, b2], parts))), expected)
+    }),
+    { numRuns: 5000 },
+  )
+})
+
+test('keyPartLength splits every concatenation encodeKey makes', async () => {
+  await loadCollation(255)
+  const parts: Array<[KeyPart, number | undefined]> = [
+    [{ kind: 'text', nullable: true, collationId: 255 }, undefined],
+    [{ kind: 'text', nullable: false, collationId: 46, width: declaredKeyWidth(46, 4), descending: true }, undefined],
+    [{ kind: 'bytes', nullable: true, width: 3, descending: true }, undefined],
+    [{ kind: 'bytes', nullable: false }, 4],
+    [{ kind: 'float', nullable: true }, 8],
+    [{ kind: 'text', nullable: false, collationId: 63, descending: true }, undefined],
+  ]
+  const text = () => fc.option(fc.string({ maxLength: 4 }).map((s) => encodeCharset(s, 'utf8mb4')), { nil: null })
+  fc.assert(
+    fc.property(text(), fc.string({ maxLength: 4 }), fc.option(fc.uint8Array({ maxLength: 3 }), { nil: null }), fc.uint8Array({ minLength: 4, maxLength: 4 }), fc.option(fc.double({ noNaN: true }), { nil: null }), fc.uint8Array({ maxLength: 4, max: 1 }), (a, b, c, d, e, f) => {
+      const values = [a, encodeCharset(b, 'utf8mb4'), c, d, e === null ? null : encodeDouble(e), f]
+      const key = encodeKey(values, parts.map(([p]) => p))
+      let at = 0
+      for (const [i, [p, fixed]] of parts.entries()) {
+        const n = keyPartLength(key, at, p, fixed)
+        assert.deepEqual(key.subarray(at, at + n), encodeKeyPart(values[i] ?? null, p))
+        at += n
+      }
+      assert.equal(at, key.length)
+      for (let cut = 0; cut < key.length; cut++) {
+        assert.throws(() => {
+          let at = 0
+          for (const [p, fixed] of parts) at += keyPartLength(key.subarray(0, cut), at, p, fixed)
+        }, MyjsTypeError)
+      }
+    }),
+    { numRuns: 500 },
+  )
 })

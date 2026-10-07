@@ -19,8 +19,10 @@ const be = (n: number, width = 4) => {
   return out
 }
 
-async function freshFile(): Promise<VfsFile> {
-  return new MemoryVfs({ pageSize: PAGE }).open('data', { create: true })
+/** A database's two files: data and log. */
+async function freshFiles(pageSize = PAGE): Promise<[VfsFile, VfsFile]> {
+  const vfs = new MemoryVfs({ pageSize })
+  return [await vfs.open('data', { create: true }), await vfs.open('log', { create: true })]
 }
 
 type Op =
@@ -49,8 +51,8 @@ const opArb = (mode: number): fc.Arbitrary<Op> =>
     { weight: 1, arbitrary: fc.constant({ op: 'reopen' as const }) },
   )
 
-function check(ops: readonly Op[], file: VfsFile, options: TreeOptions = {}, upgradeFrom?: (s: Store) => void): void {
-  let store = Store.create(file, { frames: 32 })
+function check(ops: readonly Op[], files: [VfsFile, VfsFile], options: TreeOptions = {}, upgradeFrom?: (s: Store) => void): void {
+  let store = Store.create(...files, { frames: 32 })
   let tree = store.createTree(options)
   upgradeFrom?.(store)
   const model = new Map<string, Uint8Array>()
@@ -76,8 +78,8 @@ function check(ops: readonly Op[], file: VfsFile, options: TreeOptions = {}, upg
       if (o.reverse) want.reverse()
       assert.deepEqual([...tree.entries(o)].map(([k]) => hex(k)), want)
     } else {
-      store.flush()
-      store = Store.open(file, { frames: 32 })
+      store.checkpoint()
+      store = Store.open(...files, { frames: 32 })
       tree = store.openTree(tree.indexId, options)
     }
     verifyStore(store, { schemaVersion: () => options.schemaVersion ?? 0 })
@@ -89,14 +91,14 @@ function check(ops: readonly Op[], file: VfsFile, options: TreeOptions = {}, upg
 for (const [mode, name] of [[0, 'random'], [1, 'ascending'], [2, 'descending'], [3, 'maximum-size']] as const) {
   test(`M4.8/M4.9: the tree agrees with a Map, and verifies after every operation — ${name} keys`, async () => {
     await fc.assert(
-      fc.asyncProperty(fc.array(opArb(mode), { minLength: 50, maxLength: 400 }), async (ops) => check(ops, await freshFile())),
+      fc.asyncProperty(fc.array(opArb(mode), { minLength: 50, maxLength: 400 }), async (ops) => check(ops, await freshFiles())),
       { numRuns: RUNS },
     )
   })
 }
 
 test('M4.8: descending the left spine of a four-level tree reaches the correct leaf', async () => {
-  const store = Store.create(await freshFile(), { frames: 32 })
+  const store = Store.create(...(await freshFiles()), { frames: 32 })
   const tree = store.createTree()
   const value = new Uint8Array(40)
   let n = 0
@@ -143,13 +145,13 @@ function leafFill(store: Store, tree: BTree): number {
 
 test('M4.10: sequential primary-key inserts fill pages ≥95%; random inserts do not', async () => {
   const value = new Uint8Array(30)
-  const sequential = Store.create(await freshFile(), { frames: 64 })
+  const sequential = Store.create(...(await freshFiles()), { frames: 64 })
   const seqTree = sequential.createTree()
   for (let i = 0; i < 3000; i++) seqTree.put(be(i), value)
-  const descending = Store.create(await freshFile(), { frames: 64 })
+  const descending = Store.create(...(await freshFiles()), { frames: 64 })
   const descTree = descending.createTree()
   for (let i = 3000; i > 0; i--) descTree.put(be(i), value)
-  const random = Store.create(await freshFile(), { frames: 64 })
+  const random = Store.create(...(await freshFiles()), { frames: 64 })
   const randTree = random.createTree()
   const order = Array.from({ length: 3000 }, (_, i) => i)
   for (let i = order.length - 1; i > 0; i--) {
@@ -165,7 +167,7 @@ test('M4.10: sequential primary-key inserts fill pages ≥95%; random inserts do
 })
 
 test('M4.9: a randomised insert/delete workload leaves no unreachable page, and emptying a tree returns its pages', async () => {
-  const store = Store.create(await freshFile(), { frames: 32 })
+  const store = Store.create(...(await freshFiles()), { frames: 32 })
   const tree = store.createTree()
   const keys = Array.from({ length: 2000 }, (_, i) => be((i * 2654435761) >>> 0))
   for (const k of keys) tree.put(k, new Uint8Array(20))
@@ -179,20 +181,20 @@ test('M4.9: a randomised insert/delete workload leaves no unreachable page, and 
 })
 
 test('M4.4: a leaf behind the schema version is re-encoded before any write, through the insert path', async () => {
-  const file = await freshFile()
+  const files = await freshFiles()
   // Version 1 writes values of 10 bytes; version 2's upgrade doubles them, so
   // re-encoding cannot fit in place and must split.
-  let store = Store.create(file, { frames: 32 })
+  let store = Store.create(...files, { frames: 32 })
   const v1 = store.createTree({ schemaVersion: 1, upgrade: (v) => v })
   for (let i = 0; i < 200; i++) v1.put(be(i), new Uint8Array(10).fill(1))
-  store.flush()
+  store.checkpoint()
   const upgrade = (v: Uint8Array, from: number) => {
     assert.equal(from, 1)
     const out = new Uint8Array(v.length * 2)
     out.set(v)
     return out
   }
-  store = Store.open(file, { frames: 32 })
+  store = Store.open(...files, { frames: 32 })
   const v2 = store.openTree(v1.indexId, { schemaVersion: 2, upgrade })
   const versions = { schemaVersion: () => 2 }
   verifyStore(store, versions)
@@ -209,12 +211,12 @@ test('M4.4: a leaf behind the schema version is re-encoded before any write, thr
 })
 
 test('review: an upgrade that makes records too big is refused with every row in place', async () => {
-  const file = await freshFile()
-  let store = Store.create(file, { frames: 32 })
+  const files = await freshFiles()
+  let store = Store.create(...files, { frames: 32 })
   const v1 = store.createTree({ schemaVersion: 1, upgrade: (v) => v })
   for (let i = 0; i < 60; i++) v1.put(be(i), new Uint8Array(200))
-  store.flush()
-  store = Store.open(file, { frames: 32 })
+  store.checkpoint()
+  store = Store.open(...files, { frames: 32 })
   const grow = (v: Uint8Array) => new Uint8Array(Math.ceil(v.length * 1.8))
   const v2 = store.openTree(v1.indexId, { schemaVersion: 2, upgrade: grow })
   assert.throws(() => v2.put(be(1000), new Uint8Array(1)), (e: EngineError) => e.code === 'ER_TOO_BIG_ROWSIZE')
@@ -223,12 +225,12 @@ test('review: an upgrade that makes records too big is refused with every row in
 })
 
 test('review: deletes across leaves an upgrade has grown 2.5× rebalance only where the halves fit', async () => {
-  const file = await freshFile()
-  let store = Store.create(file, { frames: 32 })
+  const files = await freshFiles()
+  let store = Store.create(...files, { frames: 32 })
   const v1 = store.createTree({ schemaVersion: 1, upgrade: (v) => v })
   for (let i = 0; i < 60; i++) v1.put(be(i), new Uint8Array(60))
-  store.flush()
-  store = Store.open(file, { frames: 32 })
+  store.checkpoint()
+  store = Store.open(...files, { frames: 32 })
   const v2 = store.openTree(v1.indexId, { schemaVersion: 2, upgrade: (v) => new Uint8Array(Math.ceil(v.length * 2.5)) })
   for (let i = 59; i >= 0; i--) {
     v2.delete(be(i))
@@ -237,8 +239,8 @@ test('review: deletes across leaves an upgrade has grown 2.5× rebalance only wh
 })
 
 test('review: a tree opened at an older schema version than its leaves refuses them', async () => {
-  const file = await freshFile()
-  const store = Store.create(file, { frames: 32 })
+  const files = await freshFiles()
+  const store = Store.create(...files, { frames: 32 })
   const v2 = store.createTree({ schemaVersion: 2, upgrade: (v) => v })
   v2.put(be(1), new Uint8Array(4))
   const stale = store.openTree(v2.indexId)
@@ -248,8 +250,7 @@ test('review: a tree opened at an older schema version than its leaves refuses t
 
 test('review: a file of more than one allocation group verifies', async () => {
   // At 512-byte pages a group is 40 extents, so a few thousand rows cross it.
-  const file = await new MemoryVfs({ pageSize: 512 }).open('d', { create: true })
-  const store = Store.create(file, { frames: 32 })
+  const store = Store.create(...(await freshFiles(512)), { frames: 32 })
   const tree = store.createTree()
   for (let i = 0; store.alloc.pageCount <= 2560; i++) tree.put(be(i), new Uint8Array(100))
   verifyStore(store)

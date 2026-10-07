@@ -2,14 +2,20 @@
 // long column moves to.
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { MemoryVfs } from '@myjs/vfs'
+import { MemoryVfs, type VfsFile } from '@myjs/vfs'
 import { declaredKeyWidth, encodeInt } from '@myjs/types'
-import { ClusteredIndex, EngineError, SecondaryIndex, Store, decodeRecord, externalRefs, verifyStore, type FieldBytes, type KeyColumn, type RecordLayout } from '@myjs/engine'
+import { CLUSTERED_HEADER, ClusteredIndex, EngineError, SecondaryIndex, Store, decodeRecord, externalRefs, verifyStore, type FieldBytes, type KeyColumn, type RecordLayout } from '@myjs/engine'
 
 const PAGE = 1024
 const utf8 = (s: string) => new TextEncoder().encode(s)
 const int = (n: number) => encodeInt(BigInt(n), 4, false)
 const UTF8MB4_BIN = 46
+
+/** A database's two files: data and log. */
+async function files(pageSize: number): Promise<[VfsFile, VfsFile]> {
+  const vfs = new MemoryVfs({ pageSize })
+  return [await vfs.open('data', { create: true }), await vfs.open('log', { create: true })]
+}
 
 // id INT PRIMARY KEY, name VARCHAR(10) COLLATE utf8mb4_bin NULL, body BLOB NULL
 const layout: RecordLayout = [{ nullable: false, fixed: 4 }, { nullable: true }, { nullable: true }]
@@ -17,13 +23,13 @@ const primary: KeyColumn[] = [{ field: 0, part: { kind: 'bytes', nullable: false
 const byName: KeyColumn[] = [{ field: 1, part: { kind: 'text', nullable: true, collationId: UTF8MB4_BIN, width: declaredKeyWidth(UTF8MB4_BIN, 10) } }]
 
 async function table(frames = 64) {
-  const store = Store.create(await new MemoryVfs({ pageSize: PAGE }).open('d', { create: true }), { frames })
+  const store = Store.create(...(await files(PAGE)), { frames })
   const clustered = ClusteredIndex.create(store, layout, primary)
   return { store, clustered }
 }
 
 const verify = (store: Store, clustered: ClusteredIndex) =>
-  verifyStore(store, { overflowRefs: (id, value) => (id === clustered.tree.indexId ? externalRefs(layout, value) : []) })
+  verifyStore(store, { overflowRefs: (id, value) => (id === clustered.tree.indexId ? clustered.refsOf(value) : []) })
 
 test('M4.11: a non-covering secondary lookup costs exactly one extra descent, and the test proves it', async () => {
   const { store, clustered } = await table()
@@ -85,7 +91,7 @@ test('M4.6: a 1 MB value round-trips, and its pages are freed on delete', async 
   const baseline = store.alloc.usedPages().size
   const key = clustered.insert([int(1), utf8('big'), body])
   // Off-page with no local prefix: the record holds an 8-byte reference.
-  const record = clustered.tree.get(key) as Uint8Array
+  const record = (clustered.tree.get(key) as Uint8Array).subarray(CLUSTERED_HEADER)
   assert.ok(record.length < 40)
   assert.equal(externalRefs(layout, record).length, 1)
   assert.ok(!(decodeRecord(layout, record)[2] instanceof Uint8Array))
@@ -94,8 +100,8 @@ test('M4.6: a 1 MB value round-trips, and its pages are freed on delete', async 
   verify(store, clustered)
 
   // Through a reopen, too.
-  store.flush()
-  const reopened = Store.open(store.file, { frames: 64 })
+  store.checkpoint()
+  const reopened = Store.open(store.file, store.logFile, { frames: 64 })
   const again = new ClusteredIndex(reopened.openTree(clustered.tree.indexId), layout, primary)
   const back = again.get(key) as FieldBytes[]
   assert.equal(back[2]?.length, 1 << 20)

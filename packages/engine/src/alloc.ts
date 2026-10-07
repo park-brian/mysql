@@ -19,8 +19,10 @@
 //
 // The in-memory view — free extents, and each owner's extents that still have
 // room — is rebuilt from the map pages on open, so the maps are the only truth.
+// A mini-transaction saves it and an abort puts it back (`save`/`restore`), with
+// no I/O: the map pages' own snapshots are the journal's.
 import { corrupt, misuse } from './errors.ts'
-import type { LsnClock } from './lsn.ts'
+import type { Journal } from './journal.ts'
 import { FRAME_HEADER, PAGE_TYPE, initPage, pageType } from './page.ts'
 import type { BufferPool } from './pool.ts'
 
@@ -37,32 +39,38 @@ const SYSTEM_PAGES = 3
 /** Extents one map page describes. */
 export const extentsPerMap = (pageSize: number): number => Math.floor((pageSize - FRAME_HEADER - 8) / DESCRIPTOR)
 
+export interface AllocatorState {
+  readonly pageCount: number
+  readonly free: readonly number[]
+  readonly room: readonly (readonly [number, readonly number[]])[]
+}
+
 export class Allocator {
   readonly #pool: BufferPool
-  readonly #lsn: LsnClock
+  readonly #journal: Journal
   readonly #perMap: number
   readonly #free: number[] = []
   readonly #room = new Map<number, Set<number>>()
   #pageCount: number
 
-  private constructor(pool: BufferPool, lsn: LsnClock, pageCount: number) {
+  private constructor(pool: BufferPool, journal: Journal, pageCount: number) {
     this.#pool = pool
-    this.#lsn = lsn
+    this.#journal = journal
     this.#perMap = extentsPerMap(pool.pageSize)
     this.#pageCount = pageCount
   }
 
   /** A new file's allocator: one group, its system pages taken. */
-  static format(pool: BufferPool, lsn: LsnClock): Allocator {
-    const a = new Allocator(pool, lsn, 0)
+  static format(pool: BufferPool, journal: Journal): Allocator {
+    const a = new Allocator(pool, journal, 0)
     a.#grow()
     return a
   }
 
   /** Rebuild the in-memory view from the map pages of a file of `pageCount` pages. */
-  static open(pool: BufferPool, lsn: LsnClock, pageCount: number): Allocator {
+  static open(pool: BufferPool, journal: Journal, pageCount: number): Allocator {
     if (pageCount % EXTENT !== 0 || pageCount === 0) throw corrupt(0, `page count ${pageCount} is not a whole number of extents`)
-    const a = new Allocator(pool, lsn, pageCount)
+    const a = new Allocator(pool, journal, pageCount)
     a.#forEachDescriptor((extent, owner, used) => {
       // A group's system pages are taken for good. A map that says otherwise
       // would hand out the superblock or a map page as a tree node.
@@ -77,6 +85,18 @@ export class Allocator {
       }
     })
     return a
+  }
+
+  /** The in-memory view, for an abort to put back. */
+  save(): AllocatorState {
+    return { pageCount: this.#pageCount, free: [...this.#free], room: [...this.#room].map(([owner, set]) => [owner, [...set]]) }
+  }
+
+  restore(s: AllocatorState): void {
+    this.#pageCount = s.pageCount
+    this.#free.splice(0, this.#free.length, ...s.free)
+    this.#room.clear()
+    for (const [owner, extents] of s.room) this.#room.set(owner, new Set(extents))
   }
 
   /** The file's length in pages, which the superblock records. */
@@ -126,6 +146,7 @@ export class Allocator {
       if (this.#isSystem(page)) throw misuse(`page ${page} is a system page`)
       const out = { fragment: owner === SHARED }
       used.clear(bit)
+      this.#journal.freed(page)
       const room = this.#roomFor(owner)
       if (used.empty()) {
         room.delete(extent)
@@ -178,7 +199,7 @@ export class Allocator {
     this.#pageCount += EXTENT
     if (extent % this.#perMap !== 0) return extent
     const mapNo = this.#mapPage(extent)
-    this.#pool.write(mapNo, this.#lsn, (page) => initPage(page, mapNo, PAGE_TYPE.ALLOC_MAP), true)
+    this.#journal.write(mapNo, (page) => initPage(page, mapNo, PAGE_TYPE.ALLOC_MAP), true)
     this.#update(extent, (_, used) => {
       for (let bit = 0; bit < SYSTEM_PAGES; bit++) used.set(bit)
       return { owner: SHARED, out: undefined }
@@ -200,7 +221,7 @@ export class Allocator {
 
   /** Change one descriptor: `change` may edit the bitmap in place, and returns the new owner and a result. */
   #update<T>(extent: number, change: (owner: number, used: Used) => { owner: number; out: T }): T {
-    return this.#pool.write(this.#mapPage(extent), this.#lsn, (page) => {
+    return this.#journal.write(this.#mapPage(extent), (page) => {
       const v = descriptorView(page)
       const at = this.#descriptor(extent)
       const used = new Used(v.getUint32(at + 4), v.getUint32(at + 8))

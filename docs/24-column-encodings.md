@@ -384,6 +384,40 @@ character columns, where the collation's sort key must be used, and for
 [29-charsets-and-collations.md](./29-charsets-and-collations.md); this is the
 single hardest part of matching MySQL's ordering.
 
+### Our keys (M2.14, M4.23 — D-35, D-55)
+
+`@myjs/types`' `encodeKey` makes every key part `memcmp`-ordered, so the B+tree
+compares bytes and nothing else (D-42). Per part:
+
+| Part | Encoding |
+|---|---|
+| NULL flag | `00` for NULL, `01` for a value, ahead of a nullable part |
+| integer, temporal, `DECIMAL`, `BINARY(n)` | the storage bytes, already ordered |
+| `VARBINARY`, a binary prefix | NUL-padded to a declared width, then a two-byte length (D-35) |
+| `FLOAT`, `DOUBLE` | the value as a big-endian double, sign bit flipped — every bit, for a negative. −0 is 0, as MySQL compares it |
+| text, PAD SPACE | the sort key, padded to a declared width with the collation's pad weight (D-35) |
+| text, NO PAD | the sort key with each `00` written `00 ff`, then `00 00` (D-55) |
+| any part, `DESC` | the ascending bytes complemented: NULL comes last |
+
+A `CHAR` part keys its value without trailing spaces, which MySQL does not count
+as part of a `CHAR`. Under PAD SPACE that changes nothing; under NO PAD it is
+the difference between `'a  '` sorting before `'a\t'` and after it.
+
+**Why NO PAD keys have no width (D-55).** D-35 padded every text key to a width
+derived from the column's length, which assumed one weight per character.
+`utf8mb4_0900_ai_ci` breaks that: `'ß'` weighs as `'ss'`, `'ﷺ'` as eight
+weights, and so `VARCHAR(6) PRIMARY KEY` refused `'Straße'` (a 14-byte sort key
+against 12). A width large enough for every expansion would be enormous. The
+escaped, terminated form needs none. It is prefix-free, so a multi-part key is
+unambiguous and a complemented part reverses exactly. A width given for a NO
+PAD part is the budget an index is sized by, not a refusal. A key longer than
+the page allows is `ER_TOO_LONG_KEY` at insert, and only for values whose sort
+key is far longer than the declared length.
+
+`keyPartLength` is the inverse a reader needs: how long one part's encoding is.
+It is how a secondary index's range scan splits an entry's key from the
+primary key after it.
+
 ## Implementation plan for the codec
 
 ```

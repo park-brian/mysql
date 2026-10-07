@@ -21,7 +21,11 @@
 //     pages included. A leaked page and a page in use but marked free are both
 //     a difference between those two sets (M4.9);
 //   - each tree's fragment counts match the pages it holds in shared extents,
-//     and every page in an owned extent belongs to the segment owning it.
+//     and every page in an owned extent belongs to the segment owning it;
+//   - every transaction's undo log decodes, its pages are the transaction
+//     directory's overflow pages, and the overflow chains only old versions
+//     still own — named by undo records, freed by purge — are reachable
+//     through those records and nowhere else (M4.20).
 //
 // `verify.test.ts` plants a defect for each of these and checks it is caught.
 import { EngineError } from './errors.ts'
@@ -29,7 +33,11 @@ import { SEGMENT, segmentId } from './btree.ts'
 import * as ip from './index-page.ts'
 import { chainPages, decodeRef } from './overflow.ts'
 import { extentsPerMap, EXTENT } from './alloc.ts'
-import type { Store } from './store.ts'
+import { TRX_INDEX, type Store } from './store.ts'
+import { NEXT } from './overflow.ts'
+import { UndoLog, isTreeUndo } from './undo.ts'
+import { externalRefs, type RecordLayout } from './record.ts'
+import { CLUSTERED_HEADER, versionOf } from './trx.ts'
 
 export interface VerifyOptions {
   /** The off-page references in a leaf value of index `indexId`, for indexes that have any. */
@@ -50,8 +58,45 @@ export function verifyStore(store: Store, options: VerifyOptions = {}): void {
   const groupPages = extentsPerMap(pool.pageSize) * EXTENT
   for (let start = 0; start < store.alloc.pageCount; start += groupPages) for (let p = start; p < start + 3; p++) reached.add(p)
 
-  const trees = [{ indexId: 0, root: store.directory.root }, ...store.trees()]
-  for (const { indexId, root } of trees) verifyTree(store, indexId, root, reached, options)
+  // The undo logs: their pages belong to the transaction directory, and the
+  // chains their records alone still own belong to the index they came from.
+  const extra = new Map<number, { pages: number[]; refs: Uint8Array[] }>()
+  const named = new Set<number>()
+  // A tree an undo record will drop is described by that record: its layout is
+  // the one the drop frees chains by, whatever the catalog says now — a table
+  // dropped and created again under its name has a new row, and its old trees
+  // only this.
+  const pending = new Map<number, RecordLayout>()
+  const of = (indexId: number) => extra.get(indexId) ?? (extra.set(indexId, { pages: [], refs: [] }).get(indexId) as { pages: number[]; refs: Uint8Array[] })
+  for (const [, value] of store.trxTree.entries()) {
+    const first = new DataView(value.buffer, value.byteOffset, value.byteLength).getUint32(1)
+    const log = UndoLog.open(pool, first, store.alloc.pageCount)
+    for (let page = first; page !== 0; ) {
+      of(TRX_INDEX).pages.push(page)
+      page = pool.read(page, (p) => new DataView(p.buffer, p.byteOffset, p.byteLength).getUint32(NEXT))
+    }
+    for (const at of log.records) {
+      const r = log.read(pool, at)
+      if (isTreeUndo(r)) {
+        for (const t of [...r.trees.onRollback, ...r.trees.onPurge]) {
+          named.add(t.indexId)
+          if (t.layout !== null) pending.set(t.indexId, t.layout)
+        }
+      }
+      else of(r.indexId).refs.push(...r.freeOnPurge)
+    }
+  }
+
+  const trees = [{ indexId: 0, root: store.directory.root }, { indexId: TRX_INDEX, root: store.trxTree.root }, ...store.trees()]
+  for (const { indexId, root } of trees) {
+    const layout = pending.get(indexId)
+    const refs = layout === undefined ? options.overflowRefs : (id: number, v: Uint8Array) => (id !== indexId || versionOf(v).marked ? [] : externalRefs(layout, v.subarray(CLUSTERED_HEADER)))
+    verifyTree(store, indexId, root, reached, refs === undefined ? options : { ...options, overflowRefs: refs }, extra.get(indexId))
+  }
+  // An undo record names only trees that exist: rollback and purge drop a tree
+  // after every record that touches it, never before (M4.23).
+  const present = new Set(trees.map((t) => t.indexId))
+  for (const id of [...extra.keys(), ...named]) if (!present.has(id)) fail(`an undo record names index ${id}, which has no tree`)
 
   const used = store.alloc.usedPages()
   const leaked = [...used].filter((p) => !reached.has(p))
@@ -61,7 +106,7 @@ export function verifyStore(store: Store, options: VerifyOptions = {}): void {
   if (pool.pinned() !== 0) fail(`${pool.pinned()} buffer pool frame(s) still pinned`)
 }
 
-function verifyTree(store: Store, indexId: number, root: number, reached: Set<number>, options: VerifyOptions): void {
+function verifyTree(store: Store, indexId: number, root: number, reached: Set<number>, options: VerifyOptions, extra?: { pages: number[]; refs: Uint8Array[] }): void {
   const pool = store.pool
   const version = options.schemaVersion?.(indexId) ?? 0
   const leaves: number[] = []
@@ -107,6 +152,8 @@ function verifyTree(store: Store, indexId: number, root: number, reached: Set<nu
   }
 
   walk(root, undefined, undefined, undefined)
+  for (const p of extra?.pages ?? []) claim(p, SEGMENT.OVERFLOW)
+  for (const ref of extra?.refs ?? []) for (const p of chainPages(pool, decodeRef(ref))) claim(p, SEGMENT.OVERFLOW)
 
   for (let i = 0; i < leaves.length; i++) {
     pool.read(leaves[i] as number, (page) => {
