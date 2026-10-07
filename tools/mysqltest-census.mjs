@@ -414,14 +414,14 @@ if (wouldNotParse > 0) {
 
 // The divergence in the other direction, which the expected-failure accounting
 // is the only thing that can see: SQL we accept and a real server rejects.
-// Two remain and both need machinery M3.5 does not own — MySQL's reserved-word
-// list (`create table lateral(…)`) and its rules for which characters may
-// appear in an unquoted identifier. Both arrive with M3.3. The bound is a
+// One remains: MySQL's rules for which characters may appear in an unquoted
+// identifier (`ctype_latin1.test`'s `CREATE TABLE „a`). The other, `create
+// table lateral(…)`, fell to M3.15's reserved-word list. The bound is a
 // ratchet: it may fall, and a rise means a new one.
 const wronglyAccepted = [...tooPermissive.values()].reduce((a, b) => a + b, 0)
-if (wronglyAccepted > 2) {
+if (wronglyAccepted > 1) {
   console.error(
-    `\n${wronglyAccepted} statement(s) parsed that MySQL rejects, and the ratchet allows 2.\n` +
+    `\n${wronglyAccepted} statement(s) parsed that MySQL rejects, and the ratchet allows 1.\n` +
       '  Being more permissive than the server is a divergence like any other.',
   )
   process.exit(1)

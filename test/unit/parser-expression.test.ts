@@ -208,3 +208,24 @@ test('M3.10 / ground rule 5: deep nesting is refused, not a stack overflow', () 
   // And the limit is generous enough that real SQL never reaches it.
   assert.equal(tree('('.repeat(50) + '1 + 2' + ')'.repeat(50)), '(1 + 2)')
 })
+
+test('M3.15: a reserved word ends an expression, unless it names a function', () => {
+  // What lets a query parser stop an expression at `FROM`, `GROUP` or `UNION`
+  // without a hand-kept list of stop words: MySQL's own reserved list.
+  for (const word of ['FROM', 'WHERE', 'GROUP', 'ORDER', 'LIMIT', 'UNION', 'JOIN', 'ON', 'THEN']) {
+    assert.throws(() => parseExpression(`a + ${word}`), ParseError, word)
+  }
+  // `END` is not reserved, so it is a column like any other.
+  assert.equal(tree('end + 1'), '(end + 1)')
+  // Reserved words that are builtin functions.
+  assert.equal(parseExpression('IF(a, b, c)').kind, NODE.CALL)
+  assert.equal(parseExpression('LEFT(s, 2)').kind, NODE.CALL)
+  assert.throws(() => parseExpression('WHERE(1)'), ParseError)
+  // A niladic keyword is the same call with or without its parentheses.
+  const bare = parseExpression('CURRENT_TIMESTAMP')
+  const called = parseExpression('CURRENT_TIMESTAMP()')
+  assert.deepEqual({ ...bare, at: 0 }, { ...called, at: 0 })
+  // After a dot, anything is a name.
+  assert.deepEqual(parseExpression('t.select'), { kind: NODE.COLUMN, parts: ['t', 'select'], at: 0 })
+  assert.deepEqual(parseExpression('`select`'), { kind: NODE.COLUMN, parts: ['select'], at: 0 })
+})

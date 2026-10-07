@@ -131,7 +131,7 @@
     "statements": 17679,
     "lexed": 17678,
     "refusedAtLex": 1,
-    "parsed": 4154,
+    "parsed": 4153,
     "skippedWithVariables": 33,
     "directives": 13049,
     "unreadLines": 68,
@@ -139,7 +139,7 @@
       "binary"
     ],
     "expectedToFail": 50,
-    "expectedToFailAndDid": 48
+    "expectedToFailAndDid": 49
   },
   "byKeyword": {
     "SELECT": 6162,
@@ -194,7 +194,7 @@
     "T1_INV_DATE": 1
   },
   "parsedByKeyword": {
-    "CREATE": 2268,
+    "CREATE": 2267,
     "DROP": 1886
   },
   "unsupported": {
@@ -268,7 +268,7 @@
   },
   "parseFailuresByKeyword": {},
   "wronglyAcceptedByKeyword": {
-    "CREATE": 2
+    "CREATE": 1
   },
   "byCharset": {
     "utf8mb4": 14124,

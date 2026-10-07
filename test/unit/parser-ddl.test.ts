@@ -133,16 +133,11 @@ test('M3.5: ENUM members keep their order, and may be written as hex or bits', (
   assert.equal(column("ENUM(b'1001001') BYTE").type.binary, true)
 })
 
-test('M3.5: a key and a column of the same name are told apart by what follows', () => {
-  // `KEY` and `INDEX` are legal column names, so neither can be a key
-  // introducer on sight. The genuinely hard case came out of the corpus:
-  //
-  //     KEY timestamp (timestamp)     -- a key named `timestamp`
-  //     key TIMESTAMP(6)              -- a column named `key`
-  //
-  // Both are a key-ish word, a type name, and a `(`. What separates them is
-  // what is inside the parentheses — a type's argument is a number and an
-  // index's is a column.
+test('M3.15: KEY, INDEX and UNIQUE are reserved, so they introduce a key on sight', () => {
+  // M3.5 first read `KEY`, `INDEX` and `UNIQUE` as legal column names and told
+  // a key from a column by what followed. A real 8.4 refuses all three
+  // unquoted — `CREATE TABLE t (key INT)` is ER_PARSE_ERROR — and the corpus's
+  // column named `key` was in backticks all along.
   const keyed = create('CREATE TABLE t (a INT, KEY timestamp (timestamp))')
   assert.equal(keyed.keys.length, 1)
   assert.equal(keyed.keys[0]!.name, 'timestamp')
@@ -152,9 +147,26 @@ test('M3.5: a key and a column of the same name are told apart by what follows',
   assert.equal(named.columns[0]!.name, 'key')
   assert.equal(named.columns[0]!.type.length, 6)
 
-  // An unnamed key: a column can never look like this, since a column needs a
-  // type.
+  for (const word of ['key', 'index', 'unique']) {
+    assert.throws(() => parseStatement(`CREATE TABLE t (${word} INT)`), ParseError, word)
+  }
   assert.equal(create('CREATE TABLE t (a INT, KEY (a))').keys[0]!.name, undefined)
+})
+
+test('M3.15: a reserved word is not a name unless quoted, or after a dot', () => {
+  // The census's `create table lateral(…)`, which MySQL rejects and M3.5
+  // accepted for want of the list.
+  assert.throws(() => parseStatement('CREATE TABLE lateral (a INT)'), ParseError)
+  assert.equal(create('CREATE TABLE `lateral` (a INT)').table.name, 'lateral')
+  // A qualified name's later parts may be reserved: nothing else can follow
+  // the dot.
+  assert.deepEqual(create('CREATE TABLE db.select (a INT)').table, { schema: 'db', name: 'select' })
+  // Unreserved keywords stay names — `timestamp`, `date` and `text` are
+  // keywords, and are also among the most common column names there are.
+  assert.deepEqual(
+    create('CREATE TABLE t (timestamp INT, date INT, text INT)').columns.map((c) => c.name),
+    ['timestamp', 'date', 'text'],
+  )
 })
 
 test('M3.5: keys, constraints and references', () => {

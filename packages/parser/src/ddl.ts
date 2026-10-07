@@ -20,7 +20,7 @@ import type { Cursor } from './cursor.ts'
 import { TOKEN } from './tokens.ts'
 import { NODE, type Expression } from './ast.ts'
 import { parseExpressionFrom } from './expression.ts'
-import { atDataType, parseDataType } from './data-type.ts'
+import { parseDataType } from './data-type.ts'
 import type { SqlMode } from './sql-mode.ts'
 import {
   DROP_OBJECT,
@@ -238,10 +238,7 @@ function tableElement(c: Cursor, options: DdlOptions): TableElement {
   if (c.atWord('CONSTRAINT')) {
     c.skip()
     // The symbol is optional: `CONSTRAINT PRIMARY KEY (a)` names nothing.
-    const symbol =
-      c.peek().kind === TOKEN.IDENTIFIER && !c.atWord('CHECK') && !startsKeyOrCheck(c)
-        ? c.expectIdentifier()
-        : undefined
+    const symbol = c.atIdentifier() ? c.expectIdentifier() : undefined
     if (c.atWord('CHECK')) return { what: 'check', check: checkConstraint(c, options, at, symbol) }
     const key = keyDefinition(c, options, at)
     return { what: 'key', key: symbol === undefined ? key : { ...key, constraint: symbol } }
@@ -256,41 +253,19 @@ function tableElement(c: Cursor, options: DdlOptions): TableElement {
 /**
  * True when the cursor is at a word that introduces a key rather than a column.
  *
- * `PRIMARY`, `FULLTEXT` and `SPATIAL` are unambiguous. `KEY`, `INDEX` and
- * `UNIQUE` are not, because all three are legal column names — so they only
- * count as a key introducer when the token after them is not a type, which is
- * exactly what would follow a column of that name.
+ * All seven are reserved (M3.15), so none of them can begin a column definition
+ * unquoted and the test is a lookup. M3.5 first believed `KEY`, `INDEX` and
+ * `UNIQUE` were legal column names and told them apart from a key by what
+ * followed — `KEY timestamp (timestamp)` against `key TIMESTAMP(6)` — but the
+ * column in the corpus was `` `key` ``, in backticks, and a real 8.4 refuses
+ * `CREATE TABLE t (key INT)` outright. The lookahead was guarding a case MySQL
+ * does not have.
  */
 function startsKeyOrCheck(c: Cursor): boolean {
-  if (c.atWord('PRIMARY') || c.atWord('FULLTEXT') || c.atWord('SPATIAL') || c.atWord('FOREIGN')) return true
-  if (!c.atWord('KEY') && !c.atWord('INDEX') && !c.atWord('UNIQUE')) return false
-  const save = c.at
-  c.skip()
-  let isKey: boolean
-  if (c.atOp('(')) {
-    // `KEY (a)` — an unnamed key. A column can never look like this, since a
-    // column needs a type.
-    isKey = true
-  } else if (!atDataType(c)) {
-    // `KEY token (…)` — the next word is not a type, so it is the key's name.
-    isKey = true
-  } else {
-    // The genuinely ambiguous case, and one the corpus contains:
-    //
-    //     KEY timestamp (timestamp)          -- a key named `timestamp`
-    //     key TIMESTAMP(6)                   -- a column named `key`
-    //
-    // Both are a key-ish word, then a type name, then `(`. What separates them
-    // is what is *inside* the parentheses: a type's argument is a number, and
-    // an index's is a column name. Reading this wrong cost `type_ranges` and
-    // three other files a `CREATE TABLE` each, and the failure was invisible
-    // until MySQL's own tests named a column `timestamp`.
-    c.skip()
-    isKey = c.atOp('(') && c.peek(1).kind !== TOKEN.NUMBER
-  }
-  c.at = save
-  return isKey
+  return KEY_INTRODUCERS.some((w) => c.atWord(w))
 }
+
+const KEY_INTRODUCERS = ['PRIMARY', 'UNIQUE', 'KEY', 'INDEX', 'FULLTEXT', 'SPATIAL', 'FOREIGN']
 
 function keyDefinition(c: Cursor, options: DdlOptions, at: number): KeyDefinition {
   let type: KeyType
@@ -316,7 +291,7 @@ function keyDefinition(c: Cursor, options: DdlOptions, at: number): KeyDefinitio
   }
 
   // A name, unless the next thing is the column list or an index type.
-  const name = c.peek().kind === TOKEN.IDENTIFIER && !c.atWord('USING') ? c.expectIdentifier() : undefined
+  const name = c.atIdentifier() ? c.expectIdentifier() : undefined
   const using = indexType(c)
   const columns = indexColumns(c, options)
 
@@ -726,7 +701,7 @@ function parseTableOptions(c: Cursor): Record<string, string> {
 function tableName(c: Cursor): TableName {
   const first = c.expectIdentifier()
   if (!c.takeOp('.')) return { name: first }
-  return { schema: first, name: c.expectIdentifier() }
+  return { schema: first, name: c.expectNamePart() }
 }
 
 function stringLiteral(c: Cursor): string {

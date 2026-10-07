@@ -15,8 +15,8 @@
 //                       `NOT` binds tighter than comparison, as it did before
 //                       5.0, so `NOT a = b` regroups from `NOT (a = b)` to
 //                       `(NOT a) = b`.
-import { tooDeep } from './errors.ts'
 import { Cursor } from './cursor.ts'
+import { RESERVED } from './keywords.ts'
 import { TOKEN, type Token } from './tokens.ts'
 import { NODE, LITERAL, type Expression, type LiteralType } from './ast.ts'
 import { lex, type LexOptions } from './lexer.ts'
@@ -49,25 +49,6 @@ const LEVELS: readonly (readonly string[])[] = [
   // Unary -, ~, !, BINARY, COLLATE and INTERVAL bind tighter still.
 ]
 
-/**
- * How deeply an expression may nest before the parser refuses.
- *
- * Without a limit, `'('.repeat(1000) + '1' + ')'.repeat(1000)` throws a
- * `RangeError` — a crash from ordinary input, reachable by anyone who can send
- * a query, and exactly what ground rule 5 forbids.
- *
- * The number is small because a nesting level is expensive: `#binary` descends
- * one frame per precedence level, so a single `(` costs about fifteen. Measured
- * here, V8 gives up at roughly 390 levels; a limit of 400 was therefore no
- * limit at all, since 399 still crashed. 100 leaves a wide margin for a smaller
- * stack on another runtime, and is far past anything real SQL contains —
- * MySQL's own limit on nested `SELECT`s is 63.
- *
- * Raising it meaningfully is not a matter of changing this number: it needs the
- * per-level descent to become a loop rather than a recursion.
- */
-const MAX_DEPTH = 100
-
 /** The index into `LEVELS` of the comparison level, which needs naming twice. */
 const COMPARISON_LEVEL = 4
 /** Where `NOT` sits by default: just below comparison. */
@@ -79,8 +60,31 @@ const WORD_OPERATORS = new Set(['AND', 'OR', 'XOR', 'DIV', 'MOD', 'NOT', 'IS', '
 /** Keywords that type the string literal after them — `DATE'2019-10-01'`. */
 const TEMPORAL_KEYWORDS = new Set(['DATE', 'TIME', 'TIMESTAMP', 'DATETIME'])
 
-/** Words that end an expression and must never be eaten as a column name. */
-const STOP_WORDS = new Set(['THEN', 'WHEN', 'ELSE', 'END', 'ESCAPE', 'AND', 'FROM', 'WHERE'])
+/**
+ * Reserved words that are a function call **without** parentheses:
+ * `CURRENT_TIMESTAMP` is `CURRENT_TIMESTAMP()`. Both spellings parse to the
+ * same call node, because they are the same expression.
+ */
+const NILADIC = new Set([
+  'CURRENT_DATE', 'CURRENT_TIME', 'CURRENT_TIMESTAMP', 'CURRENT_USER',
+  'LOCALTIME', 'LOCALTIMESTAMP', 'UTC_DATE', 'UTC_TIME', 'UTC_TIMESTAMP',
+])
+
+/**
+ * Reserved words that are also builtin functions, so a `(` after one makes it a
+ * call rather than a syntax error: `IF(a, b, c)`, `LEFT(s, 2)`, `RANK() OVER w`.
+ *
+ * Written out rather than generated, for the reason M3.5's type table is: the
+ * server publishes which words are reserved (M3.15) but not which of those its
+ * grammar also accepts as a function name, and the grammar is Bison. The census
+ * keeps it honest — a missing name is a corpus statement that fails to parse.
+ */
+const RESERVED_FUNCTIONS = new Set([
+  ...NILADIC,
+  'CHAR', 'CONVERT', 'DATABASE', 'DEFAULT', 'IF', 'INSERT', 'LEFT', 'RIGHT', 'MOD', 'REPEAT', 'REPLACE',
+  'SCHEMA', 'VALUES', 'GROUPING', 'CUME_DIST', 'DENSE_RANK', 'FIRST_VALUE', 'LAG', 'LAST_VALUE', 'LEAD',
+  'NTH_VALUE', 'NTILE', 'PERCENT_RANK', 'RANK', 'ROW_NUMBER',
+])
 
 /** `INTERVAL 1 DAY` and friends. */
 const INTERVAL_UNITS = new Set([
@@ -116,7 +120,6 @@ export function parseExpressionFrom(cursor: Cursor, mode: SqlMode): Expression {
 class ExpressionParser {
   readonly #c: Cursor
   readonly #mode: SqlMode
-  #depth = 0
 
   constructor(cursor: Cursor, mode: SqlMode) {
     this.#c = cursor
@@ -313,18 +316,14 @@ class ExpressionParser {
   /**
    * Prefix operators and the operand they apply to.
    *
-   * The depth counter lives here because every nesting level passes through
+   * The depth guard is entered here because every nesting level passes through
    * this method — a parenthesised subexpression reaches `#parenthesised` via
    * `#primary`, and a chain of unary operators recurses directly — so one
-   * counter in one place bounds both.
+   * guard in one place bounds both. The counter itself is the cursor's, so it
+   * is shared with every other parser of the same statement (M3.15).
    */
   #unary(): Expression {
-    if (++this.#depth > MAX_DEPTH) throw tooDeep(MAX_DEPTH)
-    try {
-      return this.#unaryInner()
-    } finally {
-      this.#depth--
-    }
+    return this.#c.nested(() => this.#unaryInner())
   }
 
   #unaryInner(): Expression {
@@ -455,10 +454,18 @@ class ExpressionParser {
         const s = this.#take()
         return { kind: NODE.LITERAL, type: LITERAL.TEMPORAL, value: s.text, unit: upper, at: t.start }
       }
-      // A word that ends an expression is never a column reference. Without
-      // this, `CASE WHEN a THEN b END` reads `THEN` as a column and the whole
-      // construct falls apart in a way that is hard to trace back here.
-      if (STOP_WORDS.has(upper)) this.#fail()
+      // A reserved word is never a column reference (M3.15). It may be a
+      // builtin function — `IF(`, `LEFT(`, or `CURRENT_TIMESTAMP` with or
+      // without its parentheses — and is otherwise where the expression ends,
+      // which is what lets `SELECT a FROM t` stop at `FROM`.
+      if (RESERVED.has(upper)) {
+        if (NILADIC.has(upper) && !this.#atOp('(', 1)) {
+          this.#c.skip()
+          return { kind: NODE.CALL, name: t.text, args: [], at: t.start }
+        }
+        if (!RESERVED_FUNCTIONS.has(upper) || !this.#atOp('(', 1)) this.#fail()
+        return this.#call()
+      }
     }
 
     // `name(` is a call, **and a space before the `(` is allowed**.
@@ -487,10 +494,7 @@ class ExpressionParser {
         parts.push('*')
         break
       }
-      const next = this.#peek()
-      if (next.kind !== TOKEN.IDENTIFIER) this.#fail()
-      this.#c.skip()
-      parts.push(next.text)
+      parts.push(this.#c.expectNamePart())
     }
     return { kind: NODE.COLUMN, parts, at: t.start }
   }
