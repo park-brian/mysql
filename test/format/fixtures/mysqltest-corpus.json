@@ -131,15 +131,15 @@
     "statements": 17681,
     "lexed": 17680,
     "refusedAtLex": 1,
-    "parsed": 10671,
+    "parsed": 14340,
     "skippedWithVariables": 34,
     "directives": 13013,
     "unreadLines": 69,
     "unreadCharsets": [
       "binary"
     ],
-    "expectedToFail": 51,
-    "expectedToFailAndDid": 50
+    "expectedToFail": 54,
+    "expectedToFailAndDid": 53
   },
   "byKeyword": {
     "SELECT": 6187,
@@ -192,19 +192,20 @@
   },
   "parsedByKeyword": {
     "SELECT": 6156,
+    "INSERT": 3305,
     "CREATE": 2579,
     "DROP": 1886,
-    "WITH": 50
+    "DELETE": 188,
+    "UPDATE": 156,
+    "WITH": 50,
+    "REPLACE": 20
   },
   "unsupported": {
-    "INSERT": 3306,
     "SET": 1154,
     "EXPLAIN": 738,
     "ANALYZE": 292,
     "SHOW": 240,
     "EXECUTE": 215,
-    "DELETE": 190,
-    "UPDATE": 156,
     "PREPARE": 82,
     "DO": 79,
     "ALTER": 77,
@@ -215,7 +216,6 @@
     "CHECK": 24,
     "DROP PROCEDURE": 22,
     "CREATE FUNCTION": 21,
-    "REPLACE": 20,
     "CREATE INDEX": 19,
     "USE": 18,
     "DESCRIBE": 18,

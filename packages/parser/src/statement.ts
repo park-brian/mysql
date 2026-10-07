@@ -17,7 +17,8 @@ import { TOKEN } from './tokens.ts'
 import { lex, lexBytes, type LexOptions } from './lexer.ts'
 import { NO_SQL_MODE, type SqlMode } from './sql-mode.ts'
 import { parseCreateTable, parseCreateView, parseDefiner, parseDrop } from './ddl.ts'
-import { atParenthesisedQuery, atQueryStart, parseQueryFrom } from './query.ts'
+import { atParenthesisedQuery, atQueryStart, parseQueryFrom, parseWithFrom } from './query.ts'
+import { parseDelete, parseInsert, parseUpdate } from './dml.ts'
 import { STATEMENT, type Statement } from './statement-ast.ts'
 
 export interface ParseStatementOptions extends LexOptions {
@@ -69,8 +70,21 @@ function dispatch(c: Cursor, sqlMode: SqlMode): Statement {
     throw unsupportedStatement(`CREATE ${kind}`)
   }
 
-  // A query is a statement: `SELECT`, `WITH`, `VALUES ROW`, `TABLE t`, and any
-  // of those in parentheses. The only place `INTO` is allowed.
+  if (c.atWord('INSERT') || c.atWord('REPLACE')) return parseInsert(c, sqlMode)
+  if (c.atWord('UPDATE')) return parseUpdate(c, sqlMode)
+  if (c.atWord('DELETE')) return parseDelete(c, sqlMode)
+
+  // `WITH` opens a query, an `UPDATE` or a `DELETE`.
+  if (c.atWord('WITH')) {
+    const at = c.peek().start
+    const withClause = parseWithFrom(c, sqlMode)
+    if (c.atWord('UPDATE')) return parseUpdate(c, sqlMode, withClause, at)
+    if (c.atWord('DELETE')) return parseDelete(c, sqlMode, withClause, at)
+    return parseQueryFrom(c, sqlMode, true, withClause)
+  }
+
+  // A query is a statement: `SELECT`, `VALUES ROW`, `TABLE t`, and any of
+  // those in parentheses. The only place `INTO` is allowed.
   if (atQueryStart(c) || atParenthesisedQuery(c)) return parseQueryFrom(c, sqlMode, true)
 
   if (c.atWord('DROP')) {

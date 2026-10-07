@@ -44,6 +44,10 @@ import {
   type CreateTableNode,
   type CreateViewNode,
   type Definer,
+  type Assignment,
+  type DeleteNode,
+  type InsertNode,
+  type UpdateNode,
   type DropNode,
   type IndexColumn,
   type KeyDefinition,
@@ -240,13 +244,7 @@ class Deparser {
   // --- queries --------------------------------------------------------------
 
   query(q: QueryExpression): string {
-    const out: string[] = []
-    if (q.with !== undefined) {
-      const tables = q.with.tables.map(
-        (t) => `${quoteName(t.name)}${t.columns === undefined ? '' : ` (${t.columns.map(quoteName).join(', ')})`} AS (${this.query(t.query)})`,
-      )
-      out.push(`WITH ${q.with.recursive === true ? 'RECURSIVE ' : ''}${tables.join(', ')}`)
-    }
+    const out = this.withClause(q.with)
     out.push(this.queryBody(q.body))
     if (q.orderBy !== undefined) out.push(this.orderBy(q.orderBy))
     if (q.limit !== undefined) {
@@ -407,7 +405,79 @@ class Deparser {
         return this.drop(s)
       case STATEMENT.QUERY:
         return this.query(s)
+      case STATEMENT.INSERT:
+        return this.insert(s)
+      case STATEMENT.UPDATE:
+        return this.update(s)
+      case STATEMENT.DELETE:
+        return this.delete(s)
     }
+  }
+
+  // --- DML ------------------------------------------------------------------
+
+  assignments(list: readonly Assignment[]): string {
+    return list.map((a) => `${this.expr(a.column)} = ${this.expr(a.value)}`).join(', ')
+  }
+
+  insert(s: InsertNode): string {
+    const out = [s.replace === true ? 'REPLACE' : 'INSERT']
+    if (s.priority !== undefined) out.push(s.priority)
+    if (s.ignore === true) out.push('IGNORE')
+    out.push(`INTO ${this.table(s.table)}`)
+    if (s.partitions !== undefined) out.push(`PARTITION (${s.partitions.map(quoteName).join(', ')})`)
+    if (s.columns !== undefined) out.push(`(${s.columns.map((c) => this.expr(c)).join(', ')})`)
+    if (s.values !== undefined) out.push(`VALUES ${s.values.map((r) => `(${r.map((v) => this.expr(v)).join(', ')})`).join(', ')}`)
+    if (s.set !== undefined) out.push(`SET ${this.assignments(s.set)}`)
+    if (s.query !== undefined) out.push(this.query(s.query))
+    if (s.rowAlias !== undefined) {
+      out.push(`AS ${quoteName(s.rowAlias.name)}${s.rowAlias.columns === undefined ? '' : ` (${s.rowAlias.columns.map(quoteName).join(', ')})`}`)
+    }
+    if (s.onDuplicate !== undefined) out.push(`ON DUPLICATE KEY UPDATE ${this.assignments(s.onDuplicate)}`)
+    return out.join(' ')
+  }
+
+  /** `WHERE`, `ORDER BY` and a bare `LIMIT n`, which `UPDATE` and `DELETE` share. */
+  dmlTail(s: UpdateNode | DeleteNode, out: string[]): string {
+    if (s.where !== undefined) out.push(`WHERE ${this.expr(s.where)}`)
+    if (s.orderBy !== undefined) out.push(this.orderBy(s.orderBy))
+    if (s.limit !== undefined) out.push(`LIMIT ${this.expr(s.limit)}`)
+    return out.join(' ')
+  }
+
+  withClause(w: QueryExpression['with']): string[] {
+    if (w === undefined) return []
+    const tables = w.tables.map(
+      (t) => `${quoteName(t.name)}${t.columns === undefined ? '' : ` (${t.columns.map(quoteName).join(', ')})`} AS (${this.query(t.query)})`,
+    )
+    return [`WITH ${w.recursive === true ? 'RECURSIVE ' : ''}${tables.join(', ')}`]
+  }
+
+  update(s: UpdateNode): string {
+    const out = [...this.withClause(s.with), 'UPDATE']
+    if (s.priority !== undefined) out.push(s.priority)
+    if (s.ignore === true) out.push('IGNORE')
+    out.push(s.tables.map((t) => this.tableReference(t)).join(', '), `SET ${this.assignments(s.set)}`)
+    return this.dmlTail(s, out)
+  }
+
+  delete(s: DeleteNode): string {
+    const out = [...this.withClause(s.with), 'DELETE']
+    if (s.priority !== undefined) out.push(s.priority)
+    if (s.quick === true) out.push('QUICK')
+    if (s.ignore === true) out.push('IGNORE')
+    if (s.targets !== undefined) {
+      out.push(s.targets.map((t) => this.table(t)).join(', '), `FROM ${s.tables.map((t) => this.tableReference(t)).join(', ')}`)
+      return this.dmlTail(s, out)
+    }
+    // The single-table form puts the alias *before* the partitions, unlike a
+    // table reference in a `FROM` list.
+    const t = s.tables[0]
+    if (t === undefined || t.kind !== REF.TABLE) throw new Error('deparse: a single-table DELETE names one table')
+    out.push(`FROM ${this.table(t.table)}`)
+    if (t.alias !== undefined) out.push(`AS ${quoteName(t.alias)}`)
+    if (t.partitions !== undefined) out.push(`PARTITION (${t.partitions.map(quoteName).join(', ')})`)
+    return this.dmlTail(s, out)
   }
 
   createTable(s: CreateTableNode): string {

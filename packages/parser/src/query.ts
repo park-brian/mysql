@@ -82,8 +82,17 @@ export function atParenthesisedQuery(c: Cursor): boolean {
  * table or CTE with ER_MISPLACED_INTO, and refuses it on a branch of a `UNION`
  * other than the last.
  */
-export function parseQueryFrom(c: Cursor, mode: SqlMode, statement = false): QueryExpression {
-  return new QueryParser(c, mode, statement).query()
+export function parseQueryFrom(c: Cursor, mode: SqlMode, statement = false, withClause?: With): QueryExpression {
+  return new QueryParser(c, mode, statement).query(withClause)
+}
+
+/**
+ * A `WITH` clause on its own, for the dispatcher: `WITH` opens a query, an
+ * `UPDATE` or a `DELETE`, and which one is known only after the clause. Read
+ * once and handed on, rather than re-read once the dispatcher knows.
+ */
+export function parseWithFrom(c: Cursor, mode: SqlMode): With {
+  return new QueryParser(c, mode, false).with()
 }
 
 /**
@@ -140,10 +149,10 @@ class QueryParser {
 
   // --- query expressions ----------------------------------------------------
 
-  query(): QueryExpression {
+  query(already?: With): QueryExpression {
     return this.#c.nested(() => {
       const at = this.#c.peek().start
-      const withClause = this.#c.atWord('WITH') ? this.#with() : undefined
+      const withClause = already ?? (this.#c.atWord('WITH') ? this.with() : undefined)
       const body = this.#setOperation(this.#intersection(this.#primary()))
       return this.#tail(at, withClause, body)
     })
@@ -256,7 +265,7 @@ class QueryParser {
     return c.fail()
   }
 
-  #with(): With {
+  with(): With {
     const c = this.#c
     c.expectWord('WITH')
     const recursive = c.takeWord('RECURSIVE')

@@ -44,6 +44,7 @@ export { Cursor } from './cursor.ts'
 export { atDataType, parseDataType } from './data-type.ts'
 export type { DataType } from './data-type.ts'
 export { parseCreateTable, parseCreateView, parseDrop } from './ddl.ts'
+export { parseDelete, parseInsert, parseUpdate } from './dml.ts'
 export type { DdlOptions } from './ddl.ts'
 export { parseStatement, parseStatementBytes } from './statement.ts'
 export { deparse, quoteName } from './deparse.ts'
@@ -79,9 +80,13 @@ export type {
   CheckConstraint,
   ColumnDefinition,
   CreateTableNode,
+  Assignment,
   CreateViewNode,
   Definer,
+  DeleteNode,
   DropNode,
+  InsertNode,
+  UpdateNode,
   DropObject,
   IndexColumn,
   KeyDefinition,

@@ -100,7 +100,7 @@ const MAX_CONTINUATION = 20
  * bare command run to its delimiter removed 456 — checked by diffing what each
  * rule changed, which is the only way a rule that removes corpus gets noticed.
  */
-const LET_OPEN = /^(?:--)?let\s+\$(\w+)\s*=\s*$/i
+const LET_OPEN = /^(?:--\s*)?let\s+\$(\w+)\s*=\s*$/i
 /**
  * A bare `let` whose value starts on its own line and runs past it:
  * `let $query = SELECT a,` with the rest of the query below. The value from
@@ -119,7 +119,7 @@ const STATEMENT_START = /^[A-Za-z]/
 
 /** How far a skipped let value may run looking for its delimiter. */
 const MAX_LET_LINES = 40
-const EVAL_VAR = /^(?:--)?eval\s+\$(\w+)\s*;?\s*$/i
+const EVAL_VAR = /^(?:--\s*)?eval\s+\$(\w+)\s*;?\s*$/i
 
 /**
  * How many lex refusals one region may absorb before the file is reported.
@@ -145,9 +145,14 @@ const DEFAULT_CHARSET = 'utf8mb4'
  * multi-byte character's trail byte cannot spell one of these: every keyword
  * here is ASCII and anchored at the start of the line.
  */
-const CHARSET_DIRECTIVE = /^(?:--)?character_set\s+(\S+)/i
-/** `--error ER_PARSE_ERROR` or `--error 1064`, possibly a comma-separated list. */
-const EXPECTED_ERROR = /^(?:--)?error\s+([A-Za-z0-9_]+)/i
+const CHARSET_DIRECTIVE = /^(?:--\s*)?character_set\s+(\S+)/i
+/**
+ * `--error ER_PARSE_ERROR` or `--error 1064`, possibly a comma-separated list —
+ * and `-- error 1064`, with a space, which mysqltest reads the same way.
+ * `default_as_expr.test` writes it that way 59 times, so 59 statements MySQL
+ * refuses on purpose were being counted as ones it accepts (M3.4).
+ */
+const EXPECTED_ERROR = /^(?:--\s*)?error\s+([A-Za-z0-9_]+)/i
 const SET_NAMES = /^set\s+names\s+'?([A-Za-z0-9_]+)'?/i
 const SET_CLIENT = /^set\s+(?:@@)?(?:session\.|global\.|local\.)?character_set_client\s*=\s*'?([A-Za-z0-9_]+)'?/i
 
@@ -387,7 +392,7 @@ export function extract(bytes) {
     const midStatement = inStatement && delimiter === ';'
     if (!bare || (!midStatement && COMMANDS.test(trimmed))) {
       directives++
-      const d = /^(?:--)?delimiter\s+(\S+)/i.exec(trimmed)
+      const d = /^(?:--\s*)?delimiter\s+(\S+)/i.exec(trimmed)
       if (d !== null) delimiter = d[1].replace(/;$/, '') || ';'
       // mysqltest's own directive: it takes effect here, before the next line.
       const cs = CHARSET_DIRECTIVE.exec(trimmed)

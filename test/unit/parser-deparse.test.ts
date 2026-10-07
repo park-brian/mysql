@@ -152,3 +152,24 @@ test('M3.3: every query form survives the deparser', () => {
     statementRoundTrips(sql)
   }
 })
+
+test('M3.4: every DML form survives the deparser', () => {
+  for (const sql of [
+    'INSERT INTO t VALUES (1, DEFAULT), (2, DEFAULT(b))',
+    'INSERT LOW_PRIORITY IGNORE INTO db.t PARTITION (p0) (t.a, b) VALUES ROW(1, 2) AS new (x, y) ON DUPLICATE KEY UPDATE b = new.y',
+    'INSERT INTO t () VALUES ()',
+    'INSERT INTO t SET a = 1, b = DEFAULT',
+    'INSERT INTO t (a) SELECT 1 UNION SELECT 2 ON DUPLICATE KEY UPDATE a = VALUES(a)',
+    'INSERT INTO t TABLE u',
+    'REPLACE DELAYED INTO t (a) (SELECT 1)',
+    'UPDATE LOW_PRIORITY IGNORE t SET a = a + 1 WHERE b > 1 ORDER BY a DESC LIMIT 5',
+    'UPDATE t JOIN u ON t.a = u.a, v SET t.b = u.b, v.c := 1',
+    'WITH c AS (SELECT 1 AS a) UPDATE t JOIN c USING (a) SET t.b = 3',
+    'DELETE QUICK FROM t AS x PARTITION (p0, p1) WHERE x.a = 1 ORDER BY a LIMIT ?',
+    'DELETE t1, db.t2 FROM t1 JOIN db.t2 ON 1 WHERE 1',
+    'DELETE FROM t1 USING t1 LEFT JOIN t2 ON 1',
+    'WITH RECURSIVE c (n) AS (SELECT 1) DELETE FROM t WHERE a IN (SELECT n FROM c)',
+  ]) {
+    statementRoundTrips(sql)
+  }
+})
