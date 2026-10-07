@@ -197,6 +197,26 @@ export class BTree {
     }
   }
 
+  /**
+   * Every page the tree's nodes occupy, after `leafValue` has seen each value
+   * on its leaves — what dropping the tree frees, with the overflow chains
+   * those values name. More pages than the file holds is a cycle: corruption.
+   */
+  nodePages(leafValue?: (value: Uint8Array) => void): number[] {
+    const out: number[] = []
+    const pending = [this.root]
+    for (let pageNo = pending.pop(); pageNo !== undefined; pageNo = pending.pop()) {
+      if (out.length > this.space.alloc.pageCount) throw corrupt(this.root, 'the tree reaches more pages than the file has')
+      out.push(pageNo)
+      this.#read(pageNo, (p) => {
+        const n = ip.cellCount(p)
+        if (ip.level(p) > 0) for (let i = 0; i < n; i++) pending.push(ip.childAt(p, i))
+        else if (leafValue !== undefined) for (let i = 0; i < n; i++) leafValue(ip.cell(p, i).value)
+      })
+    }
+    return out
+  }
+
   // --- reading ----------------------------------------------------------------
 
   /**

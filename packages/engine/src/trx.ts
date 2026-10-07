@@ -35,7 +35,7 @@ import { misuse, snapshotTooOld, writerBusy } from './errors.ts'
 import type { Journal } from './journal.ts'
 import { freeChain, type OverflowPages } from './overflow.ts'
 import type { BufferPool } from './pool.ts'
-import { UndoLog, readRollPtr, writeRollPtr, type RollPtr, type UndoRecord } from './undo.ts'
+import { UndoLog, isTreeUndo, readRollPtr, writeRollPtr, type DroppedTree, type RollPtr, type UndoRecord } from './undo.ts'
 
 // --- the version header -------------------------------------------------------
 
@@ -139,6 +139,8 @@ export interface TrxHost {
   readonly trxTree: BTree
   /** An index by id: rollback and purge act on entries without knowing their schema. */
   tree(indexId: number): BTree
+  /** Free a tree and everything it owns, inside the caller's mini-transaction (a DDL undo record's). */
+  drop(tree: DroppedTree): void
   /** The durability point: what `flushLogAtTrxCommit` says a commit costs. */
   durable(): void
   readonly pageCount: number
@@ -276,6 +278,11 @@ export class TrxSys {
       const i = log.records.length - 1
       this.#step(log, () => {
         const r = log.read(pool, log.records[i] as { page: number; offset: number })
+        if (isTreeUndo(r)) {
+          for (const dropped of r.trees.onPurge) this.host.drop(dropped)
+          log.truncate(pages, i)
+          return
+        }
         const tree = this.host.tree(r.indexId)
         if (r.purgeRemoves) {
           const current = tree.get(r.key)
@@ -313,6 +320,11 @@ export class TrxSys {
   rollBack(log: UndoLog, i: number): void {
     this.#step(log, () => {
       const r: UndoRecord = log.read(this.host.pool, log.records[i] as { page: number; offset: number })
+      if (isTreeUndo(r)) {
+        for (const dropped of r.trees.onRollback) this.host.drop(dropped)
+        log.truncate(this.undoPages, i)
+        return
+      }
       const tree = this.host.tree(r.indexId)
       if (r.old === null || this.#markedByPurged(r.old)) tree.delete(r.key)
       else tree.put(r.key, r.old)
@@ -420,7 +432,7 @@ export class Trx {
   undo(record: UndoRecord): RollPtr {
     if (this.#log === undefined || !this.#sys.host.journal.open) throw misuse('an undo record outside a write')
     const at = this.#log.append(this.#sys.undoPages, record)
-    return { isInsert: record.isInsert, page: at.page, offset: at.offset }
+    return { isInsert: !isTreeUndo(record) && record.isInsert, page: at.page, offset: at.offset }
   }
 
   /** A point `rollbackTo` can return to. */

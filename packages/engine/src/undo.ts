@@ -22,6 +22,7 @@
 import { Reader, Writer } from '@myjs/bytes'
 import type { BufferPool } from './pool.ts'
 import { EngineError } from './errors.ts'
+import { decodeLayout, encodeLayout, type RecordLayout } from './record.ts'
 import { DATA, NEXT, USED, capacity, type OverflowPages } from './overflow.ts'
 import { PAGE_TYPE, initPage, pageType } from './page.ts'
 
@@ -70,8 +71,11 @@ export function rollPtrBits(p: RollPtr): bigint {
 const IS_INSERT = 1
 /** The new value was a delete-mark: purge removes the entry if the mark is still this transaction's. */
 const PURGE_REMOVES = 2
+/** Not an entry's change but a tree's: which trees rollback drops, and which purge does (M4.23). */
+const TREES = 4
 
-export interface UndoRecord {
+/** A change to one index entry. */
+export interface EntryUndo {
   readonly isInsert: boolean
   readonly purgeRemoves: boolean
   readonly indexId: number
@@ -82,11 +86,48 @@ export interface UndoRecord {
   readonly freeOnRollback: readonly Uint8Array[]
 }
 
+/**
+ * A tree a DDL statement made or retired. A layout is carried for a clustered
+ * tree, so dropping it can free the overflow chains its live values own —
+ * the store keeps no schema, and this record is the one place that outlives
+ * the catalog row describing the tree.
+ */
+export interface DroppedTree {
+  readonly indexId: number
+  readonly layout: RecordLayout | null
+}
+
+/**
+ * DDL as undo (M4.23). CREATE TABLE leaves one per tree it makes, "drop on
+ * rollback", in the mini-transaction that makes it, so a crash at any point
+ * leaves no tree that nothing will drop. DROP TABLE leaves one "drop on
+ * purge": the trees stay readable until no view can see the table, and purge's
+ * oldest-first order means no older record still names them by then.
+ */
+export interface TreeUndo {
+  readonly trees: { readonly onRollback: readonly DroppedTree[]; readonly onPurge: readonly DroppedTree[] }
+}
+
+export type UndoRecord = EntryUndo | TreeUndo
+
+export const isTreeUndo = (r: UndoRecord): r is TreeUndo => 'trees' in r
+
 const corruptUndo = (what: string): EngineError => new EngineError('ENGINE_CORRUPT_UNDO', what)
 
 export function encodeUndo(r: UndoRecord): Uint8Array {
-  if (r.isInsert !== (r.old === null)) throw corruptUndo('an insert has no old value, and only an insert')
   const w = new Writer()
+  if (isTreeUndo(r)) {
+    w.u8(TREES)
+    for (const list of [r.trees.onRollback, r.trees.onPurge]) {
+      w.lenEncInt(list.length)
+      for (const t of list) {
+        w.lenEncInt(t.indexId).u8(t.layout === null ? 0 : 1)
+        if (t.layout !== null) encodeLayout(w, t.layout)
+      }
+    }
+    return w.toBytes()
+  }
+  if (r.isInsert !== (r.old === null)) throw corruptUndo('an insert has no old value, and only an insert')
   w.u8((r.isInsert ? IS_INSERT : 0) | (r.purgeRemoves ? PURGE_REMOVES : 0))
   w.lenEncInt(r.indexId).lenEncBytes(r.key).lenEncBytes(r.old)
   for (const list of [r.freeOnPurge, r.freeOnRollback]) {
@@ -101,6 +142,23 @@ export function decodeUndo(bytes: Uint8Array): UndoRecord {
   try {
     const r = new Reader(bytes)
     const flags = r.u8()
+    if (flags === TREES) {
+      const lists: DroppedTree[][] = []
+      for (let l = 0; l < 2; l++) {
+        const n = Number(r.lenEncInt())
+        if (n * 2 > r.remaining) throw corruptUndo('a tree list longer than its record')
+        const list: DroppedTree[] = []
+        for (let i = 0; i < n; i++) {
+          const indexId = Number(r.lenEncInt())
+          const has = r.u8()
+          if (has > 1) throw corruptUndo(`a tree with layout flag ${has}`)
+          list.push({ indexId, layout: has === 1 ? decodeLayout(r) : null })
+        }
+        lists.push(list)
+      }
+      if (r.remaining !== 0) throw corruptUndo('bytes after an undo record')
+      return { trees: { onRollback: lists[0] as DroppedTree[], onPurge: lists[1] as DroppedTree[] } }
+    }
     if ((flags & ~(IS_INSERT | PURGE_REMOVES)) !== 0) throw corruptUndo(`unknown undo flags ${flags}`)
     const indexId = Number(r.lenEncInt())
     const key = r.lenEncBytes()
@@ -290,6 +348,13 @@ export class UndoLog {
 export function readUndo(pool: BufferPool, at: Position): UndoRecord {
   const length = new DataView(readBytes(pool, at, LENGTH).buffer).getUint32(0)
   return decodeUndo(readBytes(pool, at, LENGTH + length).subarray(LENGTH))
+}
+
+/** The entry change a roll pointer names. A pointer at a tree record is corruption: nothing points at one. */
+export function readEntryUndo(pool: BufferPool, at: Position): EntryUndo {
+  const r = readUndo(pool, at)
+  if (isTreeUndo(r)) throw corruptUndo(`a roll pointer to ${at.page}:${at.offset} names a tree record`)
+  return r
 }
 
 /** `n` bytes from `at`, following the chain. */

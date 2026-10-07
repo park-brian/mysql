@@ -20,13 +20,15 @@ const MAGIC = Uint8Array.from([0x6d, 0x79, 0x6a, 0x73, 0x2d, 0x64, 0x62, 0x00])
 /**
  * The one format this build reads and writes. A change is a new number and a
  * documented migration (D-26). Version 1 had no log, version 2 no versions on
- * its rows; neither was released, so both are refused rather than migrated.
+ * its rows, version 3 no catalog; none was released, so all are refused
+ * rather than migrated.
  */
-export const FORMAT_VERSION = 3
+export const FORMAT_VERSION = 4
 
 const REFUSED: Record<number, string> = {
   1: 'version 1 had no log and was never crash-safe',
   2: 'version 2 stored rows without transaction ids',
+  3: 'version 3 had no catalog and no reserved index ids',
 }
 
 export interface Superblock {

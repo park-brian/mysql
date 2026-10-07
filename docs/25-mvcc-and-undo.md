@@ -238,6 +238,31 @@ while making every chain walk and rollback harder to reason about (D-52).
 There is one record type, with explicit flags *(review)*, rather than
 InnoDB's five types with their behaviour inferred from the type.
 
+### DDL records (M4.23 — D-59)
+
+A second record type, flags `0x04`, records a tree rather than an entry: two
+lists of `{index id, layout?}`, the trees to drop **on rollback** and the trees
+to drop **on purge**. The layout is carried for a clustered tree, so the drop
+can free the overflow chains its live values own; the store keeps no schema,
+and this record is what outlives the catalog row that described the tree.
+
+- **CREATE TABLE** leaves one record per tree, "drop on rollback", in the
+  mini-transaction that makes the tree. A crash between two trees leaves
+  neither, and no single mini-transaction grows with the table's width.
+- **DROP TABLE** leaves one record, "drop on purge". The trees stay readable
+  until every view can see the DROP.
+
+**A tree is dropped only when no undo record still names it.** Rollback runs
+newest first, so a CREATE's own rows are gone before its trees. Purge runs
+oldest first, so every older change to a dropped table is purged before the
+DROP's record is. No newer change can exist, because writes re-check the
+catalog. So rollback and purge treat a record for a tree that is missing as
+`ENGINE_CORRUPT_UNDO`, never as a call to obey. `verifyStore` holds the same
+invariant, and takes a pending drop's layout from its record. The crash suite
+found why that has to be the record and not the catalog: a table dropped and
+created again under the same name re-inserts over the dropped row's
+delete-mark, and the old definition is then only in undo.
+
 ### The values
 
 | Where | Prefix |

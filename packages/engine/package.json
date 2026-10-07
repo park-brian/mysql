@@ -1,20 +1,22 @@
 {
   "name": "@myjs/engine",
   "version": "0.0.0",
-  "description": "Pages, buffer pool, allocator, records and the B+tree — the native storage engine",
+  "description": "Pages, buffer pool, allocator, records and the B+tree \u2014 the native storage engine",
   "type": "module",
   "license": "MIT",
   "engines": {
     "node": ">=22.18"
   },
   "exports": {
-    ".": "./src/index.ts"
+    ".": "./src/index.ts",
+    "./conformance": "./src/conformance.ts"
   },
   "files": [
     "src"
   ],
   "dependencies": {
     "@myjs/bytes": "0.0.0",
+    "@myjs/charsets": "0.0.0",
     "@myjs/types": "0.0.0",
     "@myjs/vfs": "0.0.0"
   }

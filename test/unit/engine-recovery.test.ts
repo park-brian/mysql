@@ -5,7 +5,7 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { MemoryVfs, type VfsFile } from '@myjs/vfs'
 import { FaultInjectingVfs } from '@myjs/vfs/fault'
-import { ClusteredIndex, EngineError, LOG_BLOCK, Store, freeChain, indexPage, pageLsn, readChain, sealPage, setPageLsn, writeChain, verifyStore, type FieldBytes, type RecordLayout, type StoreOptions } from '@myjs/engine'
+import { ClusteredIndex, EngineError, FIRST_USER_INDEX, LOG_BLOCK, Store, freeChain, indexPage, pageLsn, readChain, sealPage, setPageLsn, writeChain, verifyStore, type FieldBytes, type RecordLayout, type StoreOptions } from '@myjs/engine'
 
 const PAGE = 1024
 const be = (n: number) => Uint8Array.of(n >>> 24, (n >>> 16) & 0xff, (n >>> 8) & 0xff, n & 0xff)
@@ -21,7 +21,7 @@ const crashedError = (e: unknown) => (e as { code?: string }).code === 'VFS_CRAS
 async function recovered(vfs: FaultInjectingVfs, options: StoreOptions = {}): Promise<string[]> {
   const store = Store.open(...(await open(vfs)), { frames: 64, ...options })
   verifyStore(store)
-  const [first] = [...store.trees()]
+  const first = [...store.trees()].find((t) => t.indexId >= FIRST_USER_INDEX)
   if (first === undefined) return []
   return [...store.openTree(first.indexId).entries()].map(([k, v]) => hex(k) + ':' + hex(v))
 }
@@ -56,11 +56,11 @@ test('M4.15: a page split is never half-applied, whatever write a crash interrup
   // Fill one leaf, then one put that splits it, then a checkpoint that writes
   // the split's three pages and both maps out: every write of all that, torn.
   const fill = (s: Store) => {
-    const tree = s.openTree(1)
+    const tree = s.openTree(FIRST_USER_INDEX)
     for (let i = 0; i < 25; i++) tree.put(be(i), new Uint8Array(30).fill(i))
   }
   const split = (s: Store) => {
-    s.openTree(1).put(be(1000), new Uint8Array(30).fill(9))
+    s.openTree(FIRST_USER_INDEX).put(be(1000), new Uint8Array(30).fill(9))
     s.checkpoint()
   }
   const clean = await run(undefined, 1, [fill, split])
@@ -105,7 +105,7 @@ test('M4.16: a torn data page is rebuilt from the log alone', async () => {
 
 test('M4.17: a crash at any write of a checkpoint leaves a superblock, and the log it points into', async () => {
   const work = (s: Store) => {
-    const tree = s.openTree(1)
+    const tree = s.openTree(FIRST_USER_INDEX)
     for (let i = 0; i < 200; i++) tree.put(be((i * 7919) % 1000), new Uint8Array(40).fill(i))
   }
   const checkpoint = (s: Store) => s.checkpoint()
@@ -120,7 +120,7 @@ test('M4.17: a crash at any write of a checkpoint leaves a superblock, and the l
 
 test('M4.18: recovery is idempotent — a crash during it, at any write, recovers again to the same place', async () => {
   const work = (s: Store) => {
-    const tree = s.openTree(1)
+    const tree = s.openTree(FIRST_USER_INDEX)
     for (let i = 0; i < 150; i++) tree.put(be((i * 31) % 500), new Uint8Array(50).fill(i))
   }
   const { vfs: crashed, states } = await run(undefined, 1, [work, work])
@@ -273,7 +273,7 @@ const rowKey = [{ field: 0, part: { kind: 'bytes' as const, nullable: false } }]
 /** A table's rows as an autocommit read sees them — consistency checked on the way. */
 async function rowsAfter(vfs: FaultInjectingVfs): Promise<string> {
   const store = Store.open(...(await open(vfs)), { frames: 64 })
-  const t = new ClusteredIndex(store.openTree(1), rowLayout, rowKey)
+  const t = new ClusteredIndex(store.openTree(FIRST_USER_INDEX), rowLayout, rowKey)
   verifyStore(store, { overflowRefs: (id, v) => (id === t.tree.indexId ? t.refsOf(v) : []) })
   assert.equal(store.stats().writer, 0, 'nothing is left open')
   return JSON.stringify([...t.scan()].map(([, r]) => r.map((f) => (f === null ? '-' : hex(f)))))

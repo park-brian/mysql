@@ -19,7 +19,10 @@
 import { mkdirSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { MemoryVfs } from '@myjs/vfs'
+import { FIELD_TYPE } from '@myjs/bytes'
+import { loadCollation } from '@myjs/charsets'
 import {
+  Catalog,
   ClusteredIndex,
   EngineError,
   LOG_BLOCK,
@@ -28,7 +31,9 @@ import {
   Store,
   decodeGroup,
   decodeRecord,
+  decodeTableDef,
   decodeUndo,
+  encodeTableDef,
   encodeGroup,
   encodeUndo,
   groupLength,
@@ -114,6 +119,52 @@ const fixture = await (async () => {
   return { pages, log }
 })()
 
+/**
+ * A database with a catalog, at 1 KiB pages — the smallest a catalog's keys fit
+ * — for the catalog targets: two tables with rows, history, and an open
+ * transaction, one table dropped while a view pins it.
+ */
+await loadCollation(255)
+const catalogFixture = await (async () => {
+  const vfs = new MemoryVfs({ pageSize: 1024 })
+  const file = await vfs.open('d', { create: true })
+  const logFile = await vfs.open('l', { create: true })
+  const store = Store.create(file, logFile, { frames: 32, logBlocks: 32 })
+  const catalog = Catalog.open(store)
+  catalog.createSchema('s')
+  const spec = (name) => ({
+    name,
+    columns: [
+      { name: 'id', type: { type: FIELD_TYPE.LONG }, nullable: false },
+      { name: 'v', type: { type: FIELD_TYPE.VAR_STRING, length: 8, collationId: 255 }, nullable: true },
+      { name: 'b', type: { type: FIELD_TYPE.BLOB, collationId: 63 }, nullable: true },
+    ],
+    indexes: [
+      { name: 'PRIMARY', kind: 'primary', parts: [{ column: 'id' }] },
+      { name: 'v', kind: 'index', parts: [{ column: 'v', descending: true }] },
+    ],
+  })
+  for (const name of ['a', 'b', 'gone']) {
+    catalog.createTable('s', spec(name))
+    const t = catalog.table('s', name)
+    for (let i = 0; i < 12; i++) t.insert([Uint8Array.of(0x80, 0, 0, i), new TextEncoder().encode(`v${i % 5}`), i % 4 === 0 ? new Uint8Array(900).fill(i) : null])
+  }
+  catalog.table('s', 'gone').get(Uint8Array.of(0x80, 0, 0, 1), store.begin())
+  catalog.dropTable('s', 'gone')
+  const open = store.begin()
+  catalog.table('s', 'a').delete(Uint8Array.of(0x80, 0, 0, 3), open)
+  store.sync()
+  const pages = []
+  for (let p = 0; p < file.size() / 1024; p++) {
+    const page = new Uint8Array(1024)
+    file.readPage(p, page)
+    pages.push(page)
+  }
+  const log = new Uint8Array(logFile.size())
+  logFile.readBytes(0, log)
+  return { pages, log, def: catalog.definition('s', 'a') }
+})()
+
 /** The fixture as files, with `change` applied to copies of its bytes first. */
 async function fixtureFiles(change) {
   const vfs = new MemoryVfs({ pageSize: PAGE })
@@ -132,6 +183,20 @@ function openAndWalk(files) {
   const store = Store.open(...files, { frames: 16 })
   verifyStore(store)
   for (const { indexId } of store.trees()) for (const _ of store.openTree(indexId).entries());
+}
+
+/** A JSON value with one leaf replaced, or a key dropped: past `JSON.parse`, so the field checks answer. */
+function mutateJson(v) {
+  if (Array.isArray(v) || (typeof v === 'object' && v !== null)) {
+    const keys = Object.keys(v)
+    if (keys.length === 0 || rnd() < 0.15) return [null, 7, -1, 'x', true, [], {}, 2 ** 60][randInt(8)]
+    const out = Array.isArray(v) ? [...v] : { ...v }
+    const k = keys[randInt(keys.length)]
+    if (!Array.isArray(v) && rnd() < 0.1) delete out[k]
+    else out[k] = mutateJson(v[k])
+    return out
+  }
+  return [null, 7, -1, 'x', true, [], {}, 1.5, 'PRIMARY', 'id', 255, 0xff][randInt(12)]
 }
 
 const TARGETS = [
@@ -186,6 +251,42 @@ const TARGETS = [
     const record = encodeUndo({ isInsert: false, purgeRemoves: rnd() < 0.5, indexId: randInt(1000), key: input.subarray(0, randInt(20)), old: input.subarray(0, randInt(60)), freeOnPurge: [new Uint8Array(8)], freeOnRollback: [] })
     for (let i = 1 + randInt(3); i > 0; i--) record[randInt(record.length)] = randInt(256)
     decodeUndo(record.subarray(0, 1 + randInt(record.length)))
+  },
+  // A table definition, its bytes or its values changed: a definition or ENGINE_CORRUPT_CATALOG.
+  (input) => {
+    if (rnd() < 0.5) {
+      const bytes = encodeTableDef(catalogFixture.def)
+      for (let i = 1 + randInt(3); i > 0; i--) bytes[randInt(bytes.length)] = input[i] ?? randInt(256)
+      decodeTableDef(bytes)
+    } else decodeTableDef(new TextEncoder().encode(JSON.stringify(mutateJson(catalogFixture.def))))
+  },
+  // A DDL undo record, mutated.
+  (input) => {
+    const record = encodeUndo({ trees: { onRollback: [{ indexId: randInt(1000), layout: [{ nullable: true }, { nullable: false, fixed: input[0] ?? 1 }] }], onPurge: [{ indexId: 17, layout: null }] } })
+    for (let i = 1 + randInt(3); i > 0; i--) record[randInt(record.length)] = randInt(256)
+    decodeUndo(record.subarray(0, 1 + randInt(record.length)))
+  },
+  // A store with a catalog, one page corrupted and re-sealed: recovered, its
+  // catalog opened, and every table walked through every index.
+  async () => {
+    if (rnd() > 0.02) return
+    const vfs = new MemoryVfs({ pageSize: 1024 })
+    const file = await vfs.open('d', { create: true })
+    const logFile = await vfs.open('l', { create: true })
+    const pages = catalogFixture.pages.map((p) => p.slice())
+    const victim = pages[randInt(pages.length)]
+    mutate(victim)
+    sealPage(victim)
+    pages.forEach((p, i) => file.writePage(i, p))
+    logFile.writeBytes(0, catalogFixture.log)
+    const store = Store.open(file, logFile, { frames: 32 })
+    const catalog = Catalog.open(store)
+    verifyStore(store, catalog.verifyOptions())
+    for (const def of catalog.tables()) {
+      const t = catalog.table(def.schema, def.name)
+      for (const _ of t.scan());
+      for (const i of def.indexes) for (const _ of t.indexScan(i.name));
+    }
   },
   // A group's bytes, mutated: decode answers with records or ENGINE_CORRUPT_LOG.
   (input) => {

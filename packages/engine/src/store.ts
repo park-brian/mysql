@@ -21,15 +21,17 @@
 import type { VfsFile } from '@myjs/vfs'
 import { Allocator, type AllocatorState } from './alloc.ts'
 import { BTree, type TreeOptions } from './btree.ts'
-import { corrupt, misuse } from './errors.ts'
+import { EngineError, corrupt, misuse } from './errors.ts'
 import { Journal } from './journal.ts'
 import { BufferPool, type PoolOptions } from './pool.ts'
 import { validateIndexPage } from './index-page.ts'
 import { PAGE_TYPE, pageType } from './page.ts'
+import { chainPages, decodeRef } from './overflow.ts'
+import { externalRefs, type RecordLayout } from './record.ts'
 import { recover } from './recovery.ts'
 import type { Group } from './redo.ts'
 import { readSuperblocks, writeSuperblock } from './superblock.ts'
-import { TrxSys, type Isolation, type Trx, type TrxStats } from './trx.ts'
+import { CLUSTERED_HEADER, TrxSys, versionOf, type Isolation, type Trx, type TrxStats } from './trx.ts'
 import { LOG_BLOCKS_MAX, Log, scanLog } from './wal.ts'
 
 export interface StoreOptions {
@@ -61,6 +63,15 @@ export interface StoreOptions {
 const DIRECTORY = 0
 /** The transaction directory's index id: reserved, and never handed out by `createTree`. */
 export const TRX_INDEX = 0xffffff
+/**
+ * Index ids below this are reserved for trees whose id is known before the
+ * store is read — the counters here, and the catalog's system tables
+ * (`catalog.ts`): the bootstrap descriptor is those ids, fixed in code and
+ * pinned by `FORMAT_VERSION` (M4.23). `createTree` hands out ids from here up.
+ */
+export const FIRST_USER_INDEX = 16
+/** The counters: a raw tree from index id and slot to a big-endian `u64`. */
+export const COUNTERS_INDEX = 1
 const DEFAULT_LOG_BLOCKS = 4096
 
 const be32 = (n: number): Uint8Array => {
@@ -69,6 +80,13 @@ const be32 = (n: number): Uint8Array => {
   return out
 }
 const readBe32 = (b: Uint8Array): number => new DataView(b.buffer, b.byteOffset, 4).getUint32(0)
+
+const counterKey = (indexId: number, slot: number): Uint8Array => {
+  const out = new Uint8Array(5)
+  new DataView(out.buffer).setUint32(0, indexId)
+  out[4] = slot
+  return out
+}
 
 interface Saved {
   readonly alloc: AllocatorState | undefined
@@ -90,6 +108,7 @@ export class Store {
   #trx: TrxSys | undefined
   #log: Log | undefined
   readonly #trees = new Map<number, BTree>()
+  #drops = 0
   #nextIndexId: number
   #generation: number
   #nextTrxId: number
@@ -123,12 +142,13 @@ export class Store {
   /** Format a new, empty database. */
   static create(file: VfsFile, logFile: VfsFile, options: StoreOptions = {}): Store {
     if (file.size() !== 0 || logFile.size() !== 0) throw misuse('Store.create on a file that is not empty')
-    const store = new Store(file, logFile, new BufferPool(file, poolOptions(options)), options, options.logBlocks ?? DEFAULT_LOG_BLOCKS, DIRECTORY + 1, 0, 1)
+    const store = new Store(file, logFile, new BufferPool(file, poolOptions(options)), options, options.logBlocks ?? DEFAULT_LOG_BLOCKS, FIRST_USER_INDEX, 0, 1)
     store.#attach(Log.restart(logFile, store.#logBlocks, 1, 0))
     store.journal.atomically(() => {
       store.#alloc = Allocator.format(store.pool, store.journal)
       store.#directory = BTree.create(store, DIRECTORY)
       store.#trxTree = BTree.create(store, TRX_INDEX)
+      store.createTree({ indexId: COUNTERS_INDEX })
     })
     store.#startTrx(1)
     store.checkpoint()
@@ -206,11 +226,17 @@ export class Store {
     return this.journal.atomically(fn)
   }
 
-  /** A new, empty index, with its root recorded in the directory. */
-  createTree(options: TreeOptions = {}): BTree {
+  /**
+   * A new, empty index, with its root recorded in the directory. A reserved
+   * id (below `FIRST_USER_INDEX`) may be asked for, once.
+   */
+  createTree(options: TreeOptions & { readonly indexId?: number } = {}): BTree {
+    const reserved = options.indexId
+    if (reserved !== undefined && (!Number.isInteger(reserved) || reserved <= DIRECTORY || reserved >= FIRST_USER_INDEX)) throw misuse(`index id ${reserved} is not a reserved one`)
+    if (reserved !== undefined && this.hasTree(reserved)) throw misuse(`index ${reserved} exists`)
     if (this.#nextIndexId >= TRX_INDEX) throw misuse('index ids are exhausted')
     return this.journal.atomically(() => {
-      const tree = BTree.create(this, this.#nextIndexId++, options)
+      const tree = BTree.create(this, reserved ?? this.#nextIndexId++, options)
       this.directory.put(be32(tree.indexId), be32(tree.root))
       return tree
     })
@@ -220,6 +246,91 @@ export class Store {
     const root = this.directory.get(be32(indexId))
     if (root === undefined) throw misuse(`no index ${indexId}`)
     return new BTree(this, indexId, readBe32(root), options)
+  }
+
+  /**
+   * How many trees have been dropped since the store opened: a handle that
+   * holds trees re-checks they exist only when this has moved, so a check
+   * costs nothing until there is something to find.
+   */
+  get drops(): number {
+    return this.#drops
+  }
+
+  hasTree(indexId: number): boolean {
+    return this.directory.get(be32(indexId)) !== undefined
+  }
+
+  /**
+   * Free a tree: its pages, the overflow chains its live values own — found
+   * through `layout`, for a clustered tree — its counters and its directory
+   * entry. One mini-transaction, or part of the caller's: freeing a page
+   * changes only the allocation map, so even a large tree's drop logs a few
+   * page diffs. A delete-marked value's chains are not its own (D-50); by the
+   * time a tree is dropped, the undo records that owned them have been purged
+   * or rolled back (`undo.ts`, `TreeUndo`).
+   */
+  dropTree(indexId: number, layout: RecordLayout | null = null): void {
+    if (indexId === DIRECTORY || indexId === TRX_INDEX || indexId === COUNTERS_INDEX) throw misuse(`index ${indexId} is the store's own`)
+    this.#drops++
+    this.journal.atomically(() => {
+      const tree = this.openTree(indexId)
+      const refs: Uint8Array[] = []
+      const pages = tree.nodePages(
+        layout === null
+          ? undefined
+          : (value) => {
+              if (!versionOf(value).marked) refs.push(...externalRefs(layout, value.subarray(CLUSTERED_HEADER)))
+            },
+      )
+      for (const ref of refs) pages.push(...chainPages(this.pool, decodeRef(ref)))
+      for (const page of pages) this.alloc.free(page)
+      this.directory.delete(be32(indexId))
+      const counters = this.#counters()
+      for (const [key] of [...counters.entries({ from: be32(indexId), to: be32(indexId + 1) })]) counters.delete(key)
+      this.#trees.delete(indexId)
+    })
+  }
+
+  /**
+   * The next `count` values of a counter — an AUTO_INCREMENT column's, or a
+   * hidden row id's — as the first of them. Its own mini-transaction, which
+   * must not be inside another: a value handed out is gone, whether or not the
+   * statement that took it commits, as InnoDB's are (M5.8). Redo order makes it
+   * durable before any row that uses it. A counter starts at 1.
+   */
+  takeCounter(indexId: number, slot: number, count = 1): bigint {
+    if (this.journal.open) throw misuse('a counter taken inside a mini-transaction would be given back by its abort')
+    if (!Number.isInteger(count) || count < 1) throw misuse(`a count of ${count}`)
+    return this.journal.atomically(() => {
+      const first = this.counter(indexId, slot)
+      this.#setCounter(indexId, slot, first + BigInt(count))
+      return first
+    })
+  }
+
+  /** The value `takeCounter` would hand out next. */
+  counter(indexId: number, slot: number): bigint {
+    const v = this.#counters().get(counterKey(indexId, slot))
+    return v === undefined ? 1n : new DataView(v.buffer, v.byteOffset, 8).getBigUint64(0)
+  }
+
+  /** Move a counter past `value`, if it is not already: an explicit value larger than any handed out. Joins the caller's mini-transaction. */
+  raiseCounter(indexId: number, slot: number, value: bigint): void {
+    if (value + 1n > this.counter(indexId, slot)) this.journal.atomically(() => this.#setCounter(indexId, slot, value + 1n))
+  }
+
+  #setCounter(indexId: number, slot: number, next: bigint): void {
+    if (next > 0xffffffffffffffffn) throw misuse('a counter past 2^64')
+    const out = new Uint8Array(8)
+    new DataView(out.buffer).setBigUint64(0, next)
+    this.#counters().put(counterKey(indexId, slot), out)
+  }
+
+  #counters(): BTree {
+    let tree = this.#trees.get(COUNTERS_INDEX)
+    if (tree === undefined) this.#trees.set(COUNTERS_INDEX, (tree = this.openTree(COUNTERS_INDEX)))
+    return tree
   }
 
   /** Every index's id and root, from the directory. */
@@ -295,8 +406,17 @@ export class Store {
         trxTree: this.trxTree,
         tree: (indexId) => {
           let tree = this.#trees.get(indexId)
-          if (tree === undefined) this.#trees.set(indexId, (tree = this.openTree(indexId)))
+          if (tree === undefined) {
+            // Rollback and purge reach a tree only before it is dropped; an
+            // undo record for one that is gone is a broken log, not a call to obey.
+            if (!this.hasTree(indexId)) throw new EngineError('ENGINE_CORRUPT_UNDO', `an undo record for index ${indexId}, which has no tree`)
+            this.#trees.set(indexId, (tree = this.openTree(indexId)))
+          }
           return tree
+        },
+        drop: (t) => {
+          if (!this.hasTree(t.indexId)) throw new EngineError('ENGINE_CORRUPT_UNDO', `an undo record drops index ${t.indexId}, which has no tree`)
+          this.dropTree(t.indexId, t.layout)
         },
         durable: () => this.commit(),
         get pageCount() {

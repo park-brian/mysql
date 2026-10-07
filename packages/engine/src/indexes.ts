@@ -28,7 +28,7 @@
 // record. An update writes every off-page field afresh, so a chain belongs to
 // exactly one version and is freed exactly once. A change with no transaction
 // is one of its own: autocommit.
-import { encodeKey, type KeyPart } from '@myjs/types'
+import { encodeKey, keyPartLength, type KeyPart } from '@myjs/types'
 import { BTree, type Range, type TreeOptions } from './btree.ts'
 import { corrupt, duplicateKey, misuse, snapshotTooOld } from './errors.ts'
 import { maxCellSize } from './index-page.ts'
@@ -36,7 +36,7 @@ import { readChain, writeChain } from './overflow.ts'
 import { decodeRecord, encodeRecord, externalRefs, type FieldBytes, type RecordLayout } from './record.ts'
 import type { Store } from './store.ts'
 import { CLUSTERED_HEADER, SECONDARY_HEADER, clusteredValue, rollPtrOf, secondaryValue, versionOf, type ReadView, type Trx, type TrxSys } from './trx.ts'
-import { readUndo } from './undo.ts'
+import { readEntryUndo } from './undo.ts'
 
 /** One key column: which field of the row, and how it is encoded. */
 export interface KeyColumn {
@@ -57,12 +57,16 @@ function maxKeyLength(layout: RecordLayout, columns: readonly KeyColumn[]): numb
     const f = layout[field]
     if (f === undefined) throw misuse(`key column ${field} is not a field`)
     if (part.nullable !== f.nullable) throw misuse(`key column ${field}'s nullability differs from its field's`)
+    if (part.kind === 'text' && part.width === undefined) throw misuse(`text key column ${field} needs a declared width, or a budget (D-35, D-55)`)
     let width: number
-    if (part.kind === 'text') width = part.width as number
+    // A NO PAD text key is variable-length, ended by two bytes (D-55); its
+    // width is the budget it is sized by. A PAD SPACE one is exactly its width,
+    // and the two bytes of slack cost it nothing that matters.
+    if (part.kind === 'text') width = (part.width as number) + 2
+    else if (part.kind === 'float') width = 8
     else if (part.width !== undefined) width = part.width + 2
     else if (f.fixed !== undefined) width = Math.min(f.fixed, part.prefix ?? f.fixed)
     else throw misuse(`key column ${field} is variable-length and needs a declared width (D-35, D-42)`)
-    if (part.kind === 'text' && part.width === undefined) throw misuse(`text key column ${field} needs a declared width (D-35)`)
     total += width + (part.nullable ? 1 : 0)
   }
   return total
@@ -91,7 +95,7 @@ const keyOf = (row: Row, columns: readonly KeyColumn[]): Uint8Array =>
   )
 
 /** The first byte string after every string that starts with `prefix`, or `undefined` if there is none. */
-function prefixEnd(prefix: Uint8Array): Uint8Array | undefined {
+export function prefixEnd(prefix: Uint8Array): Uint8Array | undefined {
   const out = prefix.slice()
   for (let i = out.length - 1; i >= 0; i--) {
     if (out[i] !== 0xff) {
@@ -115,25 +119,35 @@ export class ClusteredIndex {
   readonly tree: BTree
   readonly layout: RecordLayout
   readonly primary: readonly KeyColumn[]
-  /** The longest key this index can hold — what a secondary index appends. */
+  /**
+   * The longest key this index is sized for — what a secondary index budgets
+   * for the primary key it appends. A NO PAD text key can exceed it (D-55); the
+   * tree refuses a key too long for the page, and the record's budget is what
+   * the cell has left beside the key it actually has.
+   */
   readonly maxKey: number
-  readonly #maxRecord: number
+  /** What ER_DUP_ENTRY names: `PRIMARY`, or the UNIQUE index InnoDB clusters by in its place. */
+  readonly name: string
 
-  constructor(tree: BTree, layout: RecordLayout, primary: readonly KeyColumn[]) {
+  constructor(tree: BTree, layout: RecordLayout, primary: readonly KeyColumn[], name = 'PRIMARY') {
     const pageSize = tree.space.pool.pageSize
     this.tree = tree
     this.layout = layout
     this.primary = primary
+    this.name = name
     this.maxKey = primaryBound(layout, primary, pageSize)
-    // A leaf cell is the key, the value and two length varints of up to three
-    // bytes; the value is the version header, then the record.
-    this.#maxRecord = maxCellSize(pageSize) - this.maxKey - 6 - CLUSTERED_HEADER
   }
 
-  static create(store: Store, layout: RecordLayout, primary: readonly KeyColumn[], options: TreeOptions = {}): ClusteredIndex {
+  static create(store: Store, layout: RecordLayout, primary: readonly KeyColumn[], options: TreeOptions & { readonly name?: string } = {}): ClusteredIndex {
     // Validated before a tree is created, so a refusal leaves nothing behind.
     primaryBound(layout, primary, store.pool.pageSize)
-    return new ClusteredIndex(store.createTree(options), layout, primary)
+    return new ClusteredIndex(store.createTree(options), layout, primary, options.name)
+  }
+
+  /** Refuse, as ER_TOO_LONG_KEY, a primary key and secondary keys the page cannot hold — before any tree is made. */
+  static check(pageSize: number, layout: RecordLayout, primary: readonly KeyColumn[], secondaries: readonly (readonly KeyColumn[])[]): void {
+    const maxKey = primaryBound(layout, primary, pageSize)
+    for (const columns of secondaries) BTree.checkKeyLength(maxKeyLength(layout, columns) + maxKey + SECONDARY_HEADER - 4, pageSize)
   }
 
   get #sys(): TrxSys {
@@ -164,8 +178,8 @@ export class ClusteredIndex {
     const key = this.keyOf(row)
     return this.#change(trx, (t) => {
       const current = this.tree.get(key)
-      if (current !== undefined && !versionOf(current).marked) throw duplicateKey('PRIMARY')
-      const record = this.#encode(row)
+      if (current !== undefined && !versionOf(current).marked) throw duplicateKey(this.name)
+      const record = this.#encode(key, row)
       const ptr = t.undo({ isInsert: current === undefined, purgeRemoves: false, indexId: this.tree.indexId, key, old: current ?? null, freeOnPurge: [], freeOnRollback: externalRefs(this.layout, record) })
       this.tree.put(key, clusteredValue(false, t.id, ptr, record))
       this.tree.space.journal.row(this.tree.indexId, t.id, null, row)
@@ -180,7 +194,7 @@ export class ClusteredIndex {
       const current = this.tree.get(key)
       if (current === undefined || versionOf(current).marked) return false
       const before = this.#row(current.subarray(CLUSTERED_HEADER))
-      const record = this.#encode(row)
+      const record = this.#encode(key, row)
       const ptr = t.undo({
         isInsert: false,
         purgeRemoves: false,
@@ -227,6 +241,12 @@ export class ClusteredIndex {
         const record = this.#visible(value, view.view)
         if (record !== undefined) yield [key, this.#row(record)]
       }
+    } catch (e) {
+      // A view that expired mid-scan may have had its pages purged from under
+      // it — even a dropped tree's. Whatever reading them did, the answer is
+      // the one an expired view gets.
+      if (view.view?.expired === true) throw snapshotTooOld()
+      throw e
     } finally {
       view.close()
     }
@@ -251,6 +271,11 @@ export class ClusteredIndex {
   /** The row a stored record decodes to, its off-page fields read in. */
   rowOf(record: Uint8Array): FieldBytes[] {
     return this.#row(record)
+  }
+
+  /** The view a read in `mode` by `trx` takes, and how to let it go: for a reader that cannot use `read`'s callback, such as a generator. */
+  openView(trx: Trx | undefined, mode: ReadMode): { view: ReadView | null; close: () => void } {
+    return this.#open(trx, mode)
   }
 
   #open(trx: Trx | undefined, mode: ReadMode): { view: ReadView | null; close: () => void } {
@@ -279,7 +304,7 @@ export class ClusteredIndex {
       const ptr = rollPtrOf(v)
       if (ptr === null || ptr.isInsert) return undefined
       if (hops > this.#sys.nextTrxId) throw corrupt(ptr.page, 'a version chain that does not end')
-      const old = readUndo(this.tree.space.pool, ptr).old
+      const old = readEntryUndo(this.tree.space.pool, ptr).old
       if (old === null) return undefined
       v = old
     }
@@ -290,9 +315,14 @@ export class ClusteredIndex {
     return this.#sys.autocommit((t) => t.write(() => change(t)))
   }
 
-  #encode(row: Row): Uint8Array {
+  #encode(key: Uint8Array, row: Row): Uint8Array {
+    const pageSize = this.tree.space.pool.pageSize
+    BTree.checkKeyLength(key.length, pageSize)
     const pages = this.tree.overflowPages()
-    return encodeRecord(this.layout, row, { maxSize: this.#maxRecord, storeExternal: (b) => writeChain(pages, b) })
+    // A leaf cell is the key, the value and two length varints of up to three
+    // bytes; the value is the version header, then the record.
+    const maxSize = maxCellSize(pageSize) - Math.max(key.length, this.maxKey) - 6 - CLUSTERED_HEADER
+    return encodeRecord(this.layout, row, { maxSize, storeExternal: (b) => writeChain(pages, b) })
   }
 
   #row(record: Uint8Array): FieldBytes[] {
@@ -369,6 +399,50 @@ export class SecondaryIndex {
   find(values: KeyValues, trx?: Trx, mode: ReadMode = 'consistent'): FieldBytes[][] {
     const secondary = encodeKey(values, this.columns.map((c) => c.part))
     return this.clustered.read(trx, mode, (view) => this.#keys(secondary, view).map((pk) => this.clustered.rowOf(this.clustered.recordAt(pk, view) as Uint8Array)))
+  }
+
+  /**
+   * Rows in this index's order within a range of encoded keys, as `trx` sees
+   * them, each with its primary key. An entry is split into its own key and
+   * the primary key after it by the parts' encodings (`keyPartLength`); which
+   * entries a view sees is decided as `primaryKeys` decides it. Do not change
+   * the index while iterating.
+   */
+  *scan(range: Range = {}, trx?: Trx, mode: ReadMode = 'consistent'): Generator<[Uint8Array, FieldBytes[]]> {
+    const v = this.clustered.openView(trx, mode)
+    try {
+      for (const [key, value] of this.tree.entries(range)) {
+        const at = this.#ownLength(key)
+        const secondary = key.subarray(0, at)
+        const pk = key.subarray(at)
+        const version = versionOf(value)
+        let record: Uint8Array | undefined
+        if (v.view === null || v.view.isVisible(version.trxId)) {
+          if (version.marked) continue
+          record = this.clustered.recordAt(pk, v.view)
+        } else {
+          record = this.clustered.recordAt(pk, v.view)
+          if (record !== undefined && !equal(keyOf(this.clustered.rowOf(record), this.columns), secondary)) continue
+        }
+        if (record !== undefined) yield [pk.slice(), this.clustered.rowOf(record)]
+      }
+    } catch (e) {
+      if (v.view?.expired === true) throw snapshotTooOld()
+      throw e
+    } finally {
+      v.close()
+    }
+  }
+
+  /** The length of an entry's own key, before the primary key. */
+  #ownLength(key: Uint8Array): number {
+    let at = 0
+    try {
+      for (const c of this.columns) at += keyPartLength(key, at, c.part, this.clustered.layout[c.field]?.fixed)
+    } catch (e) {
+      throw corrupt(this.tree.root, `an entry of ${this.name} does not split: ${e instanceof Error ? e.message : String(e)}`)
+    }
+    return at
   }
 
   #keys(secondary: Uint8Array, view: ReadView | null): Uint8Array[] {

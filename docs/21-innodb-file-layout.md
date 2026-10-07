@@ -259,7 +259,7 @@ copy is durable. After the frame (doc 22):
 | Offset | Size | Field |
 |---|---|---|
 | 24 | 8 | magic, `myjs-db\0` |
-| 32 | 2 | format version, **3** — refused if it is not one this build reads (D-26) |
+| 32 | 2 | format version, **4** — refused if it is not one this build reads (D-26) |
 | 34 | 2 | reserved |
 | 36 | 4 | page size |
 | 40 | 4 | generation |
@@ -285,12 +285,25 @@ in it to carry forward. Opening one says so.
 had no version for a reader to see and no undo to roll back. It was never
 released either (M4.20).
 
+**Format 3 is refused likewise.** It had no catalog. Format 4 reserves index ids
+below 16 for trees whose id is known before the store is read (D-56). Id 1 is
+the counters tree, made with the store; ids 2–4 are the catalog's system tables
+(doc 27 §Our catalog). Format 4 also adds the undo record that drops a tree
+(doc 25 §DDL records). Format 3 was never released (M4.23).
+
 **The directory is itself a B+tree**, index id 0, mapping a big-endian `u32`
 index id to the `u32` root page of that index. A root page **never moves**:
 when a root splits, its cells move into two new children and the root page
 becomes their parent, as InnoDB's `btr_root_raise_and_insert` does. When a root
 is left with one child, the child's cells move back up. So the directory
 changes only when an index is created or dropped, never during a split.
+
+**Dropping a tree** (`store.dropTree`) frees its pages and the overflow chains
+its live values own. It finds those chains through a record layout it is given;
+the store keeps no schema, and the undo record that drops a tree carries its
+layout. It also deletes the tree's counters and its directory entry. Freeing a
+page changes only its allocation map, so even a large tree's drop is one
+mini-transaction of a few page diffs.
 
 ### Allocation (M4.12)
 

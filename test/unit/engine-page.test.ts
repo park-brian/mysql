@@ -71,8 +71,12 @@ test('D-41: the superblock round-trips, and a file this build cannot read is ref
   assert.deepEqual(readSuperblock(page, PAGE), s)
   assert.throws(() => readSuperblock(page, 2048), (e: EngineError) => e.code === 'ENGINE_BAD_FORMAT')
   const future = page.slice()
-  new DataView(future.buffer).setUint16(FRAME_HEADER + 8, 4)
-  assert.throws(() => readSuperblock(future, PAGE), /format version 4/)
+  new DataView(future.buffer).setUint16(FRAME_HEADER + 8, 5)
+  assert.throws(() => readSuperblock(future, PAGE), /format version 5/)
+  // Version 3 had no catalog: refused with its reason too.
+  const three = page.slice()
+  new DataView(three.buffer).setUint16(FRAME_HEADER + 8, 3)
+  assert.throws(() => readSuperblock(three, PAGE), /version 3 had no catalog/)
   // Version 1 had no log. It is refused with the reason, never migrated (D-26).
   const old = page.slice()
   new DataView(old.buffer).setUint16(FRAME_HEADER + 8, 1)

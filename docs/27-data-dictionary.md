@@ -164,3 +164,89 @@ And one thing to do differently from both: **version the catalog format
 explicitly, and write a migration for every change.** MySQL's `dd_properties`
 version exists but the format's evolution is not documented. Ours should be, in
 the same spirit as SQLite's file format document.
+
+## Our catalog (M4.23 — D-26, D-56, D-57, D-59, D-60)
+
+Built as above, with two of the proposals narrowed by building them.
+
+**System tables** are ordinary MVCC clustered indexes. Their trees have reserved
+index ids, below `FIRST_USER_INDEX` (16):
+
+| Id | Tree | Key | Row |
+|---|---|---|---|
+| 1 | counters (the store's, raw) | index id, slot | next value, `u64` |
+| 2 | `_myjs_catalog` | name | value: `version`, `lower_case_table_names` |
+| 3 | `_myjs_schemas` | name | id, definition (JSON) |
+| 4 | `_myjs_tables` | schema id, name | id, definition (JSON: a `TableDef`) |
+
+**The bootstrap descriptor is code, not a page (D-56).** Those ids and layouts
+are constants, and the store's `FORMAT_VERSION` (4) pins them. Nothing has to
+be read to find the system tables, and their layout changes only with the
+format, which is refused rather than migrated (D-26).
+
+**A table's definition is its `_myjs_tables` row (D-57)**, not a separate page.
+There is one copy, changed by the transaction that changes the table. The
+row's value is JSON that `decodeTableDef` checks field by field.
+`ENGINE_CORRUPT_CATALOG` answers anything that does not decode, or does not
+hang together. Key parts are built when a table opens, not when it decodes,
+because they need its collations. The async edge loads those first, from
+`collationsOf` (D-36). The per-table page doc 27 proposed would have been a
+second copy, and two copies of a definition drift.
+
+**A `TableDef`** is engine-level, not SQL. Its columns carry `@myjs/types`'
+`ColumnType`: `ColumnMeta` plus the declared length. Its indexes carry named
+parts, with a prefix or a direction. What only SQL reads rides along in
+`attributes`: a default's text, a comment. It says which index clusters the
+table, by **InnoDB's rule (D-60)**: the PRIMARY KEY, or else the first UNIQUE
+index whose columns are all NOT NULL and which has no prefix part, or else a
+hidden 6-byte row id. That is MySQL's `sort_keys` order, then `TABLE_SHARE`'s
+promotion. `layoutOf` and `keyColumnsOf` are the joins nothing made before: a
+column list to a record layout, an index to its key columns.
+
+**DDL is a transaction of its own (D-59)**, as MySQL's implicit commit makes
+it:
+
+- **CREATE TABLE** makes each tree in its own write, with an undo record that
+  drops it on rollback (doc 25 §DDL records). It then inserts the row. A crash
+  anywhere rolls all of it back, and no tree is left that nothing will drop.
+- **DROP TABLE** deletes the row, then leaves a record that drops the trees **on
+  purge**. A view older than the DROP keeps reading them until it closes. The
+  row goes first, so purge, newest first, drops the trees before it removes the
+  row.
+
+**Lookups read the latest committed definition**, as MySQL's dictionary does,
+never a view's:
+
+- A `Table` handle re-checks its row before every write. A write cannot land
+  in a tree that purge is about to drop: `ER_NO_SUCH_TABLE`.
+- A consistent read through a view older than the definition is
+  `ER_TABLE_DEF_CHANGED` (1412), InnoDB's answer.
+
+**Versioning, the done-when.** The version is a row, and `CATALOG_VERSION` is
+1.
+
+- **Older:** each registered migration runs in order, in one transaction that
+  also writes the new version. A crash leaves the catalog old and unmigrated,
+  or new and migrated, never half. `Catalog.open` runs after the store's
+  recovery has rolled back whatever a crash left open, a half-done migration
+  included.
+- **Newer, or older with a step missing:** `ENGINE_BAD_FORMAT`, naming both
+  versions.
+- **What a migration can change:** it rewrites definitions. The system tables'
+  layout belongs to the store format.
+
+A test proves all three paths, crashing a migration at every write.
+
+Names are case-sensitive: `lower_case_table_names` is 0, stored when the
+catalog is made, and 1 is refused as `ER_NOT_SUPPORTED_YET`. A name is at
+most 64 BMP characters, as MySQL's identifiers are. At 1 KiB pages that leaves
+a catalog row 98 bytes, and a long name goes off-page like any long field. The
+catalog needs pages of at least 1 KiB; MySQL's smallest is 4 KiB.
+
+`AUTO_INCREMENT` and the hidden row id come from the counters tree, keyed by
+the clustered index id (D-61). Ids are never reused, so a table created again
+starts again. A value is taken in a mini-transaction of its own: one handed
+out is gone, committed or not, as InnoDB's are. An explicit value moves the
+counter past itself, in the inserting write. Dropping the tree deletes its
+counters.
+

@@ -9,9 +9,9 @@ file is the shorter thing you read first.
 An isomorphic, in-process MySQL for JavaScript: no server process, no native
 addon, MySQL's wire protocol and MySQL's semantics. M0–M2 are complete (the
 protocol, charsets and collations, the type system); M3 (parse SQL) has one
-optional item left; M4 (storage) has its pages, B+tree, WAL, crash recovery and
-MVCC transactions, with the catalog, the table interface and the Node VFS to
-come; M5 (execute) has not started.
+optional item left; M4 (storage) has its pages, B+tree, WAL, crash recovery,
+MVCC transactions, the catalog and the `Table` interface with its `native` and
+`memory` engines, with the Node VFS to come; M5 (execute) has not started.
 
 ## Running things
 
@@ -95,7 +95,9 @@ a session is injected — a `Transcoder`, a `Capabilities`, an `Executor`.
   more.
 
 The engine seam is `Executor` in `packages/protocol/src/session.ts`. Today it is
-answered by a regex stub in `packages/core/src/stub.ts`; M5 replaces it.
+answered by a regex stub in `packages/core/src/stub.ts`; M5 replaces it. Below
+the executor, the storage seam is `Catalog` and `Table` in `@myjs/engine` (doc 30
+§Our engines): rows as storage-encoded field bytes, DDL as transactions.
 
 ## Ground rules
 
