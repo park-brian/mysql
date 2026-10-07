@@ -294,6 +294,10 @@ export function parseDrop(c: Cursor): DropNode {
   else if (c.takeWord('VIEW')) object = DROP_OBJECT.VIEW
   else if (c.takeWord('INDEX')) object = DROP_OBJECT.INDEX
   else if (c.takeWord('DATABASE') || c.takeWord('SCHEMA')) object = DROP_OBJECT.DATABASE
+  else if (c.takeWord('PROCEDURE')) object = DROP_OBJECT.PROCEDURE
+  else if (c.takeWord('FUNCTION')) object = DROP_OBJECT.FUNCTION
+  else if (c.takeWord('TRIGGER')) object = DROP_OBJECT.TRIGGER
+  else if (c.takeWord('EVENT')) object = DROP_OBJECT.EVENT
   else c.fail()
 
   const ifExists = c.takeWords('IF', 'EXISTS')
@@ -310,7 +314,8 @@ export function parseDrop(c: Cursor): DropNode {
     return { kind: STATEMENT.DROP, object, names, ...flag('ifExists', ifExists), on, at }
   }
 
-  while (c.takeOp(',')) names.push(c.expectTableName())
+  // Only tables and views may be dropped several at a time.
+  if (object === DROP_OBJECT.TABLE || object === DROP_OBJECT.VIEW) while (c.takeOp(',')) names.push(c.expectTableName())
   let behaviour: string | undefined
   if (c.takeWord('RESTRICT')) behaviour = 'RESTRICT'
   else if (c.takeWord('CASCADE')) behaviour = 'CASCADE'

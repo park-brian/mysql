@@ -622,6 +622,10 @@ export function extract(bytes) {
         keyword: keywordOf(held),
         charset: region.charset,
         ...(expected === undefined || expected === null ? {} : { expectedError: expected }),
+        // A block under a custom delimiter is sent as one multi-statement
+        // query, so it may hold several statements; the census lets the parser
+        // find them, since only a parser can tell a body's `;` from a boundary.
+        ...(blockOf(lineAt(textStart)) === undefined ? {} : { block: true }),
       })
       held = []
     }

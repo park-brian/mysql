@@ -57,6 +57,10 @@ import {
   type TableName,
   type UpdateNode,
   type CommitNode,
+  type CallStatementNode,
+  type CreateEventNode,
+  type CreateRoutineNode,
+  type CreateTriggerNode,
   type AlterAction,
   type AlterTableNode,
   type ColumnPosition,
@@ -443,6 +447,14 @@ class Deparser {
         return this.alterTable(s)
       case STATEMENT.CREATE_DATABASE:
         return this.createDatabase(s)
+      case STATEMENT.CREATE_ROUTINE:
+        return this.createRoutine(s)
+      case STATEMENT.CREATE_TRIGGER:
+        return this.createTrigger(s)
+      case STATEMENT.CREATE_EVENT:
+        return this.createEvent(s)
+      case STATEMENT.CALL:
+        return this.callStatement(s)
       case STATEMENT.QUERY:
         return this.query(s)
       case STATEMENT.INSERT:
@@ -690,6 +702,51 @@ class Deparser {
 
   partitionOptions(options: Readonly<Record<string, string>>): string[] {
     return Object.entries(options).map(([name, value]) => `${name} = ${STRING_OPTIONS.has(name) ? this.string(value) : /^\d+$/.test(value) ? value : this.word(value)}`)
+  }
+
+  // --- M3.8: stored programs ------------------------------------------------
+
+  /** `CREATE [DEFINER = u] OBJECT [IF NOT EXISTS] name`. */
+  programHead(object: string, s: CreateRoutineNode | CreateTriggerNode | CreateEventNode): string {
+    const definer = s.definer === undefined ? '' : `DEFINER = ${this.definer(s.definer)} `
+    return `CREATE ${definer}${object} ${s.ifNotExists === true ? 'IF NOT EXISTS ' : ''}${this.table(s.name)}`
+  }
+
+  createRoutine(s: CreateRoutineNode): string {
+    const parameters = s.parameters.map((p) => `${p.mode === undefined ? '' : p.mode + ' '}${quoteName(p.name)} ${this.dataType(p.type)}`)
+    const out = [`${this.programHead(s.object, s)} (${parameters.join(', ')})`]
+    if (s.returns !== undefined) out.push(`RETURNS ${this.dataType(s.returns)}`)
+    if (s.comment !== undefined) out.push(`COMMENT ${this.string(s.comment)}`)
+    if (s.deterministic !== undefined) out.push(s.deterministic ? 'DETERMINISTIC' : 'NOT DETERMINISTIC')
+    if (s.dataAccess !== undefined) out.push(s.dataAccess)
+    if (s.security !== undefined) out.push(`SQL SECURITY ${s.security}`)
+    out.push(s.body)
+    return out.join(' ')
+  }
+
+  createTrigger(s: CreateTriggerNode): string {
+    const order = s.order === undefined ? '' : ` ${s.order.position} ${quoteName(s.order.trigger)}`
+    return `${this.programHead('TRIGGER', s)} ${s.timing} ${s.event} ON ${this.table(s.table)} FOR EACH ROW${order} ${s.body}`
+  }
+
+  createEvent(s: CreateEventNode): string {
+    const out = [`${this.programHead('EVENT', s)} ON SCHEDULE`]
+    const schedule = s.schedule
+    if ('at' in schedule) out.push(`AT ${this.expr(schedule.at)}`)
+    else {
+      out.push(`EVERY ${this.expr(schedule.every)} ${schedule.unit}`)
+      if (schedule.starts !== undefined) out.push(`STARTS ${this.expr(schedule.starts)}`)
+      if (schedule.ends !== undefined) out.push(`ENDS ${this.expr(schedule.ends)}`)
+    }
+    if (s.preserve !== undefined) out.push(`ON COMPLETION ${s.preserve ? '' : 'NOT '}PRESERVE`)
+    if (s.status !== undefined) out.push(s.status)
+    if (s.comment !== undefined) out.push(`COMMENT ${this.string(s.comment)}`)
+    out.push(`DO ${s.body}`)
+    return out.join(' ')
+  }
+
+  callStatement(s: CallStatementNode): string {
+    return `CALL ${this.table(s.name)}(${s.args.map((a) => this.expr(a)).join(', ')})`
   }
 
   createDatabase(s: CreateDatabaseNode): string {

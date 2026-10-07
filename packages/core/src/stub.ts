@@ -33,7 +33,13 @@ import {
   formatSqlMode,
   parseSqlMode,
   parseStatement,
+  type CallStatementNode,
+  type CreateEventNode,
+  type CreateRoutineNode,
+  type CreateTriggerNode,
+  type DropNode,
   type SetItem,
+  type TableName,
   type SetNode,
   type UseNode,
 } from '@myjs/parser'
@@ -85,6 +91,8 @@ const nullColumn = (name: string): ColumnDefinition => ({
 export class StubExecutor implements Executor {
   readonly #options: StubOptions
   readonly #vars: Map<string, SqlValue>
+  /** M3.8: stored programs, accepted and kept, by `kind:schema.name`. Never run. */
+  readonly #programs = new Map<string, StoredProgram>()
 
   constructor(options: StubOptions = {}) {
     this.#options = options
@@ -161,6 +169,7 @@ export class StubExecutor implements Executor {
       session.database = statement.database
       return { affectedRows: 0 }
     }
+    if (statement !== null) return this.#program(session, statement)
 
     // Statements a client sends for their side effect. The stub has no state
     // to change, but answering OK is what keeps a session usable.
@@ -185,6 +194,35 @@ export class StubExecutor implements Executor {
     }
 
     throw sqlError('ER_NOT_SUPPORTED_YET', messages.notSupported(`This statement (${firstWord(trimmed)})`))
+  }
+
+  /**
+   * M3.8: `CREATE PROCEDURE` and its siblings store, `DROP` removes, and
+   * `CALL` finds the procedure and says it cannot run it yet. The same errors
+   * a server gives for a name that exists or does not.
+   */
+  #program(session: Session, statement: ProgramStatement): StatementResult {
+    if (statement.kind === STATEMENT.CALL) {
+      const found = this.#programs.get(programKey('PROCEDURE', statement.name, session))
+      if (found === undefined) throw sqlError('ER_SP_DOES_NOT_EXIST', messages.objectMissing('PROCEDURE', qualified(statement.name, session)))
+      throw sqlError('ER_NOT_SUPPORTED_YET', messages.notSupported('CALL'))
+    }
+    if (statement.kind === STATEMENT.DROP) {
+      const object = statement.object as StoredProgram['object']
+      const name = statement.names[0] as TableName
+      if (!this.#programs.delete(programKey(object, name, session)) && statement.ifExists !== true) {
+        throw sqlError(MISSING[object], messages.objectMissing(object, qualified(name, session)))
+      }
+      return { affectedRows: 0 }
+    }
+    const object = statement.kind === STATEMENT.CREATE_ROUTINE ? statement.object : statement.kind === STATEMENT.CREATE_TRIGGER ? 'TRIGGER' : 'EVENT'
+    const key = programKey(object, statement.name, session)
+    if (this.#programs.has(key)) {
+      if (statement.ifNotExists === true) return { affectedRows: 0 }
+      throw sqlError(EXISTS[object], messages.objectExists(object, statement.name.name))
+    }
+    this.#programs.set(key, { object, statement })
+    return { affectedRows: 0 }
   }
 
   /**
@@ -382,18 +420,57 @@ function splitAlias(item: string): { expression: string; alias: string | null } 
   return { expression: item, alias: null }
 }
 
-type SessionStatement = SetNode | UseNode
+type ProgramStatement = CreateRoutineNode | CreateTriggerNode | CreateEventNode | CallStatementNode | DropNode
+type SessionStatement = SetNode | UseNode | ProgramStatement
+
+interface StoredProgram {
+  readonly object: 'PROCEDURE' | 'FUNCTION' | 'TRIGGER' | 'EVENT'
+  readonly statement: CreateRoutineNode | CreateTriggerNode | CreateEventNode
+}
+
+const EXISTS = {
+  PROCEDURE: 'ER_SP_ALREADY_EXISTS',
+  FUNCTION: 'ER_SP_ALREADY_EXISTS',
+  TRIGGER: 'ER_TRG_ALREADY_EXISTS',
+  EVENT: 'ER_EVENT_ALREADY_EXISTS',
+} as const
+const MISSING = {
+  PROCEDURE: 'ER_SP_DOES_NOT_EXIST',
+  FUNCTION: 'ER_SP_DOES_NOT_EXIST',
+  TRIGGER: 'ER_TRG_DOES_NOT_EXIST',
+  EVENT: 'ER_EVENT_DOES_NOT_EXIST',
+} as const
+
+/** `db.name`, in the session's database when unqualified. */
+const qualified = (name: TableName, session: Session): string => `${name.schema ?? session.database ?? ''}.${name.name}`
+/** Stored-program names are case-insensitive, as MySQL's are. */
+const programKey = (object: string, name: TableName, session: Session): string => `${object}:${qualified(name, session).toLowerCase()}`
+
+const PROGRAM_OBJECTS: ReadonlySet<string> = new Set(['PROCEDURE', 'FUNCTION', 'TRIGGER', 'EVENT'])
 
 /**
- * `SET` and `USE`, parsed with the session's own `sql_mode` — so a session
- * that has run `SET sql_mode = 'NO_BACKSLASH_ESCAPES'` reads its next
- * statement that way. Everything else stays with the regexes above until the
- * executor replaces this file.
+ * The statements this stub reads with the parser: `SET` and `USE`, parsed
+ * with the session's own `sql_mode` — so a session that has run
+ * `SET sql_mode = 'NO_BACKSLASH_ESCAPES'` reads its next statement that way —
+ * and the stored-program statements M3.8 stores. Everything else stays with
+ * the regexes above until the executor replaces this file.
  */
 function sessionStatement(session: Session | undefined, sql: string): SessionStatement | null {
-  if (session === undefined || !/^\s*(SET|USE)\b/i.test(sql)) return null
+  if (session === undefined || !/^\s*(SET|USE|CREATE|DROP|CALL)\b/i.test(sql)) return null
   const node = parseStatement(sql, { sqlMode: parseSqlMode(session.sqlMode) })
-  return node.kind === STATEMENT.SET || node.kind === STATEMENT.USE ? node : null
+  switch (node.kind) {
+    case STATEMENT.SET:
+    case STATEMENT.USE:
+    case STATEMENT.CREATE_ROUTINE:
+    case STATEMENT.CREATE_TRIGGER:
+    case STATEMENT.CREATE_EVENT:
+    case STATEMENT.CALL:
+      return node
+    case STATEMENT.DROP:
+      return PROGRAM_OBJECTS.has(node.object) ? node : null
+    default:
+      return null
+  }
 }
 
 /**

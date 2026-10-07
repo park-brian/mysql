@@ -20,6 +20,10 @@ export const STATEMENT = {
   CREATE_VIEW: 'createView',
   ALTER_TABLE: 'alterTable',
   CREATE_DATABASE: 'createDatabase',
+  CREATE_ROUTINE: 'createRoutine',
+  CREATE_TRIGGER: 'createTrigger',
+  CREATE_EVENT: 'createEvent',
+  CALL: 'callStatement',
   DROP: 'drop',
   /** A query as a statement: `SELECT`, `WITH`, `VALUES`, `TABLE`, `(…)`. */
   QUERY: 'query',
@@ -296,12 +300,103 @@ export interface CreateDatabaseNode {
   readonly at: number
 }
 
+// --- M3.8: stored programs, accepted and stored ------------------------------
+
+/**
+ * A stored program's body, kept as the source text it was written in.
+ *
+ * M3.8 accepts and stores and does not execute; executing is M8.5's. A body
+ * that is one ordinary statement is parsed as well, since a real 8.4 refuses
+ * `CREATE PROCEDURE p() garbage`, but only its text is kept. A compound body
+ * — `BEGIN … END`, `IF`, `WHILE` and the rest of the stored-program language —
+ * is stored without being read, and is the one place this parser accepts SQL
+ * it has not checked. The census's wrongly-accepted count would show it if
+ * that mattered.
+ */
+export type RoutineBody = string
+
+export interface RoutineParameter {
+  /** `IN`, `OUT` or `INOUT` — a procedure's only; absent means `IN`. */
+  readonly mode?: 'IN' | 'OUT' | 'INOUT'
+  readonly name: string
+  readonly type: DataType
+}
+
+/**
+ * `CREATE PROCEDURE` and `CREATE FUNCTION`.
+ *
+ * The characteristics are a bag in any order, repeats allowed, and the last
+ * one written wins. `deterministic` and `dataAccess` are absent when not
+ * written, which is not the same as their defaults.
+ */
+export interface CreateRoutineNode {
+  readonly kind: typeof STATEMENT.CREATE_ROUTINE
+  readonly object: 'PROCEDURE' | 'FUNCTION'
+  readonly name: TableName
+  readonly definer?: Definer
+  readonly ifNotExists?: boolean
+  readonly parameters: readonly RoutineParameter[]
+  /** A function's `RETURNS` type. */
+  readonly returns?: DataType
+  readonly comment?: string
+  readonly deterministic?: boolean
+  readonly dataAccess?: 'CONTAINS SQL' | 'NO SQL' | 'READS SQL DATA' | 'MODIFIES SQL DATA'
+  readonly security?: 'DEFINER' | 'INVOKER'
+  readonly body: RoutineBody
+  readonly at: number
+}
+
+export interface CreateTriggerNode {
+  readonly kind: typeof STATEMENT.CREATE_TRIGGER
+  readonly name: TableName
+  readonly definer?: Definer
+  readonly ifNotExists?: boolean
+  readonly timing: 'BEFORE' | 'AFTER'
+  readonly event: 'INSERT' | 'UPDATE' | 'DELETE'
+  readonly table: TableName
+  /** `FOLLOWS t` / `PRECEDES t`: where it runs among the table's other triggers. */
+  readonly order?: { readonly position: 'FOLLOWS' | 'PRECEDES'; readonly trigger: string }
+  readonly body: RoutineBody
+  readonly at: number
+}
+
+/** `AT t [+ INTERVAL …]`, or `EVERY n unit [STARTS t] [ENDS t]`. */
+export type EventSchedule =
+  | { readonly at: Expression }
+  | { readonly every: Expression; readonly unit: string; readonly starts?: Expression; readonly ends?: Expression }
+
+export interface CreateEventNode {
+  readonly kind: typeof STATEMENT.CREATE_EVENT
+  readonly name: TableName
+  readonly definer?: Definer
+  readonly ifNotExists?: boolean
+  readonly schedule: EventSchedule
+  /** `ON COMPLETION [NOT] PRESERVE`; absent leaves the default, which is `NOT PRESERVE`. */
+  readonly preserve?: boolean
+  readonly status?: 'ENABLE' | 'DISABLE' | 'DISABLE ON REPLICA'
+  readonly comment?: string
+  readonly body: RoutineBody
+  readonly at: number
+}
+
+/** `CALL p` and `CALL p()`, which are one statement. */
+export interface CallStatementNode {
+  readonly kind: typeof STATEMENT.CALL
+  readonly name: TableName
+  readonly args: readonly Expression[]
+  readonly at: number
+}
+
 /** What a `DROP` names. `TABLE` and `VIEW` may name several at once. */
 export const DROP_OBJECT = {
   TABLE: 'TABLE',
   VIEW: 'VIEW',
   INDEX: 'INDEX',
   DATABASE: 'DATABASE',
+  PROCEDURE: 'PROCEDURE',
+  FUNCTION: 'FUNCTION',
+  TRIGGER: 'TRIGGER',
+  EVENT: 'EVENT',
 } as const
 
 export type DropObject = (typeof DROP_OBJECT)[keyof typeof DROP_OBJECT]
@@ -624,6 +719,10 @@ export type Statement =
   | CreateViewNode
   | AlterTableNode
   | CreateDatabaseNode
+  | CreateRoutineNode
+  | CreateTriggerNode
+  | CreateEventNode
+  | CallStatementNode
   | DropNode
   | QueryExpression
   | InsertNode

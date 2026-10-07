@@ -71,11 +71,17 @@ export function checkTreeDepth(root: object): void {
 
 export class Cursor {
   readonly tokens: readonly Token[]
+  /**
+   * The decoded statement the tokens came from, for the one construct whose
+   * text is kept as written: a stored program's body (M3.8).
+   */
+  readonly source: string
   at = 0
   #depth = 0
 
-  constructor(tokens: readonly Token[]) {
+  constructor(tokens: readonly Token[], source = '') {
     this.tokens = tokens
+    this.source = source
   }
 
   /**

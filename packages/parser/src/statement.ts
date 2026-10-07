@@ -14,10 +14,11 @@
 import { unsupportedStatement } from './errors.ts'
 import { Cursor, checkTreeDepth } from './cursor.ts'
 import { TOKEN } from './tokens.ts'
-import { lex, lexBytes, type LexOptions } from './lexer.ts'
+import { decodeStatement, lex, type LexOptions } from './lexer.ts'
 import { NO_SQL_MODE, type SqlMode } from './sql-mode.ts'
 import { parseCreateDatabase, parseCreateTable, parseCreateView, parseDefiner, parseDrop } from './ddl.ts'
 import { parseAlterTable, parseCreateIndex } from './alter.ts'
+import { parseCall, parseCreateEvent, parseCreateRoutine, parseCreateTrigger } from './routine.ts'
 import { atParenthesisedQuery, atQueryStart } from './query.ts'
 import {
   parseCommit,
@@ -42,7 +43,7 @@ export interface ParseStatementOptions extends LexOptions {
 
 /** Parse one statement from SQL text. */
 export function parseStatement(sql: string, options: ParseStatementOptions = {}): Statement {
-  return parseFromTokens(new Cursor(lex(sql, options)), options.sqlMode ?? NO_SQL_MODE)
+  return parseFromTokens(new Cursor(lex(sql, options), sql), options.sqlMode ?? NO_SQL_MODE)
 }
 
 /**
@@ -54,7 +55,30 @@ export function parseStatement(sql: string, options: ParseStatementOptions = {})
  * charset-aware lexing reachable at all.
  */
 export function parseStatementBytes(bytes: Uint8Array, options: ParseStatementOptions = {}): Statement {
-  return parseFromTokens(new Cursor(lexBytes(bytes, options)), options.sqlMode ?? NO_SQL_MODE)
+  const sql = decodeStatement(bytes, options.collationId ?? 255)
+  return parseFromTokens(new Cursor(lex(sql, options), sql), options.sqlMode ?? NO_SQL_MODE)
+}
+
+/**
+ * Parse every statement in a multi-statement text: `SELECT 1; SELECT 2`.
+ *
+ * The boundaries come from the parser, not from splitting on `;`, because a
+ * stored program's body is full of `;`s that end nothing. This is how a server
+ * reads a `COM_QUERY` under `CLIENT_MULTI_STATEMENTS`, which D-13 keeps off by
+ * default, and how mysqltest's `delimiter` blocks are sent.
+ */
+export function parseStatements(sql: string, options: ParseStatementOptions = {}): Statement[] {
+  const c = new Cursor(lex(sql, options), sql)
+  const sqlMode = options.sqlMode ?? NO_SQL_MODE
+  const out: Statement[] = []
+  do {
+    if (c.atEnd()) break
+    const statement = dispatch(c, sqlMode)
+    checkTreeDepth(statement)
+    out.push(statement)
+  } while (c.takeOp(';'))
+  if (out.length === 0 || !c.atEnd()) c.fail()
+  return out
 }
 
 function parseFromTokens(c: Cursor, sqlMode: SqlMode): Statement {
@@ -85,6 +109,10 @@ function dispatch(c: Cursor, sqlMode: SqlMode): Statement {
     if (kind === 'VIEW') return parseCreateView(c, options)
     if (kind === 'INDEX' || kind === 'UNIQUE' || kind === 'FULLTEXT' || kind === 'SPATIAL') return parseCreateIndex(c, options)
     if (kind === 'DATABASE' || kind === 'SCHEMA') return parseCreateDatabase(c)
+    const statement = (inner: Cursor) => dispatch(inner, sqlMode)
+    if (kind === 'PROCEDURE' || kind === 'FUNCTION') return parseCreateRoutine(c, sqlMode, kind, statement)
+    if (kind === 'TRIGGER') return parseCreateTrigger(c, sqlMode, statement)
+    if (kind === 'EVENT') return parseCreateEvent(c, sqlMode, statement)
     throw unsupportedStatement(`CREATE ${kind}`)
   }
   if (c.atWords('ALTER', 'TABLE')) return parseAlterTable(c, options)
@@ -116,6 +144,7 @@ function dispatch(c: Cursor, sqlMode: SqlMode): Statement {
   if (c.atWord('EXECUTE')) return parseExecute(c)
   if (c.atWord('DEALLOCATE') || c.atWords('DROP', 'PREPARE')) return parseDeallocate(c)
   if (c.atWord('DO')) return parseDo(c, sqlMode)
+  if (c.atWord('CALL')) return parseCall(c, sqlMode)
 
   if (c.atWord('DROP')) {
     const save = c.at
@@ -127,7 +156,11 @@ function dispatch(c: Cursor, sqlMode: SqlMode): Statement {
       c.atWord('VIEW') ||
       c.atWord('INDEX') ||
       c.atWord('DATABASE') ||
-      c.atWord('SCHEMA')
+      c.atWord('SCHEMA') ||
+      c.atWord('PROCEDURE') ||
+      c.atWord('FUNCTION') ||
+      c.atWord('TRIGGER') ||
+      c.atWord('EVENT')
     const object = c.peek().text.toUpperCase()
     c.at = save
     if (known) return parseDrop(c)

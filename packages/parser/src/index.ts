@@ -46,7 +46,7 @@ export type { DataType } from './data-type.ts'
 export { parseCreateTable, parseCreateView, parseDrop } from './ddl.ts'
 export { parseDelete, parseInsert, parseUpdate } from './dml.ts'
 export type { DdlOptions } from './ddl.ts'
-export { parseStatement, parseStatementBytes } from './statement.ts'
+export { parseStatement, parseStatementBytes, parseStatements } from './statement.ts'
 export { deparse, quoteName } from './deparse.ts'
 export type { DeparseOptions } from './deparse.ts'
 export type { ParseStatementOptions } from './statement.ts'
@@ -96,6 +96,13 @@ export type {
   StatementKind,
   TableName,
   AccessMode,
+  CallStatementNode,
+  CreateEventNode,
+  CreateRoutineNode,
+  CreateTriggerNode,
+  EventSchedule,
+  RoutineBody,
+  RoutineParameter,
   AlterAction,
   AlterTableNode,
   ColumnPosition,
