@@ -37,6 +37,7 @@ import {
   type GroupBy,
   type IndexHint,
   type Into,
+  type JoinNode,
   type Limit,
   type Locking,
   type OrderItem,
@@ -338,9 +339,10 @@ class QueryParser {
       break
     }
 
-    const items: SelectItem[] = []
-    do items.push(this.#selectItem())
-    while (c.takeOp(','))
+    // A bare `*` may only come first: `SELECT *, a` is legal and
+    // `SELECT a, *` is ER_PARSE_ERROR. A qualified `t.*` may go anywhere.
+    const items: SelectItem[] = [this.#selectItem(true)]
+    while (c.takeOp(',')) items.push(this.#selectItem(false))
 
     let into = this.#oneInto(undefined)
     let from: TableReference[] | undefined
@@ -369,9 +371,9 @@ class QueryParser {
     }
   }
 
-  #selectItem(): SelectItem {
+  #selectItem(first: boolean): SelectItem {
     const c = this.#c
-    if (c.atOp('*')) {
+    if (first && c.atOp('*')) {
       const t = c.take()
       return { expr: { kind: NODE.COLUMN, parts: ['*'], at: t.start } }
     }
@@ -798,8 +800,18 @@ class QueryParser {
  * list are leaves, which is how parentheses keep their grouping.
  */
 function hangCrossJoin(ref: TableReference, make: (leaf: TableReference) => TableReference): TableReference {
-  if (ref.kind !== REF.JOIN) return make(ref)
-  return { ...ref, left: hangCrossJoin(ref.left, make) }
+  // A loop, not a recursion: the spine was built by `tableReference`'s loop,
+  // so its length is bounded by nothing the cursor's nesting guard sees, and a
+  // recursive walk of a 5,000-join chain was a `RangeError` at parse time.
+  const spine: JoinNode[] = []
+  let leaf = ref
+  while (leaf.kind === REF.JOIN) {
+    spine.push(leaf)
+    leaf = leaf.left
+  }
+  let out = make(leaf)
+  for (const join of spine.reverse()) out = { ...join, left: out }
+  return out
 }
 
 /** For the DML parser: one value of a `VALUES` row, which may be `DEFAULT`. */

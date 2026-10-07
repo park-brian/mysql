@@ -32,7 +32,7 @@ test('M3.3: every expression node survives the deparser', () => {
     // Names and variables.
     'a', 't.a', 'db.t.a', 't.*', '`we``ird`', 't.select', '@a', "@'a b'", '@@session.sql_mode', '?',
     // Operators — precedence, unary chains, predicates.
-    '1 + 2 * 3', '(1 + 2) * 3', '- - 1', '!a', '~a', 'NOT a', 'BINARY a', 'a := 1',
+    '1 + 2 * 3', '(1 + 2) * 3', '- - 1', '!a', '~a', 'NOT a', 'BINARY a', '@a := 1',
     'a IS NOT NULL IS TRUE', 'a BETWEEN 1 AND 2', 'a NOT BETWEEN b AND c', 'a IN (1)', 'a NOT IN (1, 2)',
     "a LIKE 'x%' ESCAPE '!'", "a NOT REGEXP 'b'", 'a <=> b', 'a COLLATE latin1_bin', '(a, b) = (1, 2)',
     // Calls and the rest.
@@ -172,4 +172,20 @@ test('M3.4: every DML form survives the deparser', () => {
   ]) {
     statementRoundTrips(sql)
   }
+})
+
+test('D-40: a run of one operator is written flat, and `:=` is the exception', () => {
+  // Fully parenthesised, a 400-term `OR` would come back as 400 nested
+  // parentheses, which the parser's nesting guard refuses — so a statement it
+  // accepted would not survive its own deparser. Every operator but `:=`
+  // associates left, so the flat text reads back as the same tree.
+  assert.equal(deparse(parseExpression('a OR b OR c')), '(`a` OR `b` OR `c`)')
+  assert.equal(deparse(parseExpression('a - b - c')), '(`a` - `b` - `c`)')
+  assert.equal(deparse(parseExpression('a - (b - c)')), '(`a` - (`b` - `c`))')
+  // `:=` associates right — `@a := @b := 1` assigns both — so it stays nested.
+  const assign = parseExpression('@a := @b := 1')
+  assert.equal(assign.kind === 'binary' && assign.right.kind, 'binary')
+  assert.equal(deparse(assign), '(@a := (@b := 1))')
+  expressionRoundTrips('@a := @b := 1')
+  expressionRoundTrips('a OR b OR c AND d OR e')
 })

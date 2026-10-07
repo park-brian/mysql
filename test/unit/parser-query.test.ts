@@ -19,7 +19,7 @@ import {
   type QueryExpression,
   type TableReference,
 } from '@myjs/parser'
-import { withoutPositions } from '../../tools/lib/round-trip.mjs'
+import { roundTrip, withoutPositions } from '../../tools/lib/round-trip.mjs'
 
 const query = (sql: string): QueryExpression => {
   const node = parseStatement(sql)
@@ -243,4 +243,48 @@ test('M3.15 / ground rule 5: nested subqueries share one depth limit', () => {
   for (const sql of ['SELECT * FROM ' + '('.repeat(5000) + 't' + ')'.repeat(5000), 'SELECT 1 FROM ' + 't JOIN '.repeat(5000) + 't']) {
     assert.throws(() => parseStatement(sql), ParseError)
   }
+})
+
+test('D-40: a tree is at most 1,000 levels deep, however it was built', () => {
+  // Chains are built by loops, so the parser's own nesting bound never sees
+  // them. Before D-40 a 5,000-link `JOIN … ON` chain after a condition-less
+  // join was a `RangeError` *at parse time* (the re-hang walked its spine
+  // recursively), and every chain over ~2,700 links broke the deparser.
+  const chains: [string, string][] = [
+    ['SELECT 1', '+1'],
+    ['SELECT a', ' OR a'],
+    ['SELECT 1 FROM a JOIN b', ' JOIN t ON 1'],
+    ['SELECT 1', ' UNION SELECT 1'],
+  ]
+  for (const [head, link] of chains) {
+    assert.throws(
+      () => parseStatement(head + link.repeat(5000)),
+      (e: unknown) => e instanceof ParseError && e.errno === 1436,
+      `${link} ×5000 must be a typed refusal`,
+    )
+    // Well under the bound, and far past anything in MySQL's corpus (whose
+    // deepest tree is 70 levels), a chain parses and survives the deparser.
+    const ast = parseStatement(head + link.repeat(400))
+    assert.equal(roundTrip(ast), null, `${link} ×400`)
+  }
+  assert.throws(() => parseExpression('1' + '+1'.repeat(5000)), ParseError)
+})
+
+test('M3.3 review: forms a real 8.4 refuses, and so do we', () => {
+  // Each was accepted here and found by probing 8.4.11 with a list of
+  // malformed statements — the census sees over-permissiveness only where the
+  // corpus happens to contain the statement with an `--error`.
+  for (const sql of [
+    'SELECT a IN () FROM t', // an IN list needs an item
+    'SELECT a, * FROM t', // a bare * only first
+    'SELECT COUNT(*), * FROM t',
+    'SELECT a.b.c.d FROM t', // three name parts at most
+    'SELECT a := 1 FROM t', // only a user variable is assigned
+    'SELECT @@sql_mode := 1',
+    'SELECT a = 1 := 2 FROM t',
+  ]) {
+    assert.throws(() => parseStatement(sql), (e: unknown) => e instanceof ParseError && e.errno === 1064, sql)
+  }
+  // …and the neighbouring forms it accepts still parse.
+  for (const sql of ['SELECT *, a FROM t', 'SELECT t.a, db.t.* FROM t', "SELECT @a := @b := 1, @'q' := 2"]) parseStatement(sql)
 })

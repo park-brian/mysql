@@ -12,7 +12,9 @@
 //
 //   - **Every operator application is parenthesised.** The deparser contains no
 //     precedence table, so it cannot share a precedence mistake with the
-//     parser; `(a + (b * c))` means one thing under any table.
+//     parser; `(a + (b * c))` means one thing under any table. The single
+//     exception is a left-nested run of *one* operator, written flat because
+//     every operator but `:=` associates left — see `chain`.
 //   - **Every name is backticked.** A backtick-quoted name is a name under every
 //     `sql_mode` and whatever the reserved-word list says.
 //
@@ -241,6 +243,51 @@ class Deparser {
     return `${e.name}(${body})${over}`
   }
 
+  binary(op: string, left: Expression, right: Expression, extra: Expression | readonly Expression[] | undefined): string {
+    const l = this.expr(left)
+    switch (op) {
+      case ':=':
+        // The one operator that associates right, so it is never flattened.
+        return `(${l} := ${this.expr(right)})`
+      case 'BETWEEN':
+      case 'NOT BETWEEN':
+        return `(${l} ${op} ${this.expr(right)} AND ${this.expr(extra as Expression)})`
+      case 'LIKE':
+      case 'NOT LIKE':
+        return extra === undefined
+          ? `(${l} ${op} ${this.expr(right)})`
+          : `(${l} ${op} ${this.expr(right)} ESCAPE ${this.expr(extra as Expression)})`
+      case 'IN':
+      case 'NOT IN':
+        // The right side is always a row here, written as the list itself — a
+        // one-item list included, which a bare `this.expr` would lose.
+        return right.kind === NODE.ROW
+          ? `(${l} ${op} (${right.items.map((i) => this.expr(i)).join(', ')}))`
+          : `(${l} ${op} ${this.expr(right)})`
+      case 'MEMBER OF':
+        // The parentheses are the syntax's own: `a MEMBER OF (j)`.
+        return `(${l} MEMBER OF (${this.expr(right)}))`
+      default:
+        return `(${this.chain(op, left, right)})`
+    }
+  }
+
+  /**
+   * A left-nested run of one operator, written flat: `a OR b OR c`, not
+   * `((a OR b) OR c)`. Every binary operator MySQL has except `:=` associates
+   * left, so the flat text reads back as the same tree — and a 400-term chain,
+   * which the parser accepts, does not come back as 400 nested parentheses,
+   * which its nesting guard would refuse. The one fact about operators the
+   * deparser knows, and the round-trip checks it.
+   */
+  chain(op: string, left: Expression, right: Expression): string {
+    const l =
+      left.kind === NODE.BINARY && left.op === op && left.extra === undefined ? this.chain(op, left.left, left.right) : this.expr(left)
+    return `${l} ${op} ${this.expr(right)}`
+  }
+
+
+
   // --- queries --------------------------------------------------------------
 
   query(q: QueryExpression): string {
@@ -364,32 +411,6 @@ class Deparser {
         if (r.using !== undefined) return `${head} USING (${r.using.map(quoteName).join(', ')})`
         return head
       }
-    }
-  }
-
-  binary(op: string, left: Expression, right: Expression, extra: Expression | readonly Expression[] | undefined): string {
-    const l = this.expr(left)
-    switch (op) {
-      case 'BETWEEN':
-      case 'NOT BETWEEN':
-        return `(${l} ${op} ${this.expr(right)} AND ${this.expr(extra as Expression)})`
-      case 'LIKE':
-      case 'NOT LIKE':
-        return extra === undefined
-          ? `(${l} ${op} ${this.expr(right)})`
-          : `(${l} ${op} ${this.expr(right)} ESCAPE ${this.expr(extra as Expression)})`
-      case 'IN':
-      case 'NOT IN':
-        // The right side is always a row here, written as the list itself — a
-        // one-item list included, which a bare `this.expr` would lose.
-        return right.kind === NODE.ROW
-          ? `(${l} ${op} (${right.items.map((i) => this.expr(i)).join(', ')}))`
-          : `(${l} ${op} ${this.expr(right)})`
-      case 'MEMBER OF':
-        // The parentheses are the syntax's own: `a MEMBER OF (j)`.
-        return `(${l} MEMBER OF (${this.expr(right)}))`
-      default:
-        return `(${l} ${op} ${this.expr(right)})`
     }
   }
 

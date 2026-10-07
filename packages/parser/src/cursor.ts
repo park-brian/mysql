@@ -35,6 +35,39 @@ import { TOKEN, type Token } from './tokens.ts'
  */
 export const MAX_DEPTH = 100
 
+/**
+ * How deep a finished tree may be, in levels of object nesting (D-40).
+ *
+ * `MAX_DEPTH` bounds the *parser's* recursion, but a left-associative chain —
+ * `1+1+…`, `a OR a OR …`, a run of `JOIN … ON`, a `UNION` of many `SELECT`s —
+ * is built by a loop, so the tree it produces can be as deep as the input is
+ * long. Everything that walks the tree afterwards recurses: the deparser
+ * overflowed at about 2,700 terms of `+`, and M5's resolver and evaluator will
+ * do the same. Bounding the tree once, here, keeps every consumer stack-safe
+ * without each being rewritten as a loop.
+ *
+ * The deepest tree in MySQL's whole test corpus is 70 levels, so 1,000 is a
+ * wide margin. It is a divergence all the same: MySQL flattens `AND`, `OR` and
+ * `UNION` chains into lists and accepts chains this refuses. A real client that
+ * meets it is the signal to flatten them here too, into n-ary nodes.
+ */
+export const MAX_TREE_DEPTH = 1000
+
+/**
+ * Refuse a tree deeper than `MAX_TREE_DEPTH`, with `tooDeep` rather than the
+ * `RangeError` a later recursive walk would throw. Iterative, since a recursive
+ * check would fail on exactly the trees it exists to refuse.
+ */
+export function checkTreeDepth(root: object): void {
+  const stack: [unknown, number][] = [[root, 1]]
+  while (stack.length > 0) {
+    const [node, depth] = stack.pop() as [unknown, number]
+    if (node === null || typeof node !== 'object' || node instanceof Uint8Array) continue
+    if (depth > MAX_TREE_DEPTH) throw tooDeep(MAX_TREE_DEPTH)
+    for (const child of Object.values(node)) if (typeof child === 'object') stack.push([child, depth + 1])
+  }
+}
+
 export class Cursor {
   readonly tokens: readonly Token[]
   at = 0

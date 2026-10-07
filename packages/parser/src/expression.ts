@@ -15,7 +15,7 @@
 //                       `NOT` binds tighter than comparison, as it did before
 //                       5.0, so `NOT a = b` regroups from `NOT (a = b)` to
 //                       `(NOT a) = b`.
-import { Cursor } from './cursor.ts'
+import { Cursor, checkTreeDepth } from './cursor.ts'
 import { RESERVED } from './keywords.ts'
 import { TOKEN, type Token } from './tokens.ts'
 import { NODE, LITERAL, type Expression, type LiteralType } from './ast.ts'
@@ -125,6 +125,7 @@ export function parseExpression(sql: string, options: ParseExpressionOptions = {
   const cursor = new Cursor(lex(sql, options))
   const expr = new ExpressionParser(cursor, mode).parse()
   if (!cursor.atEnd()) cursor.fail()
+  checkTreeDepth(expr)
   return expr
 }
 
@@ -244,11 +245,16 @@ class ExpressionParser {
     for (;;) {
       const op = this.#binaryOpAt(level)
       if (op === null) return left
+      // Only a user variable can be assigned: `a := 1`, `@@sql_mode := 1` and
+      // `a = 1 := 2` are all ER_PARSE_ERROR on a real 8.4.
+      if (op === ':=' && !(left.kind === NODE.VARIABLE && !left.name.startsWith('@@'))) this.#fail()
       const t = this.#take()
       // `a = ANY (SELECT …)`: a comparison against every row of a subquery.
       // `SOME` is `ANY`'s synonym; `<=>` takes no quantifier.
       const quantified = level === COMPARISON_LEVEL && op !== '<=>' ? this.#quantifiedSubquery() : null
-      let right = quantified ?? this.#binary(level + 1)
+      // `:=` is the one operator that associates right: `@a := @b := 1`
+      // assigns 1 to both. Its right side is read at its own level.
+      let right = quantified ?? this.#binary(op === ':=' ? level : level + 1)
       if (level === COMPARISON_LEVEL && quantified === null) right = this.#predicate(right)
       left = { kind: NODE.BINARY, op, left, right, at: t.start }
     }
@@ -324,12 +330,11 @@ class ExpressionParser {
           left = { kind: NODE.BINARY, op: negated ? 'NOT IN' : 'IN', left, right, at }
           continue
         }
+        // At least one item: `a IN ()` is a syntax error.
         this.#expectOp('(')
         const items: Expression[] = []
-        if (!this.#atOp(')')) {
-          do items.push(this.#binary(0))
-          while (this.#takeOp(','))
-        }
+        do items.push(this.#binary(0))
+        while (this.#takeOp(','))
         this.#expectOp(')')
         left = {
           kind: NODE.BINARY,
@@ -621,10 +626,11 @@ class ExpressionParser {
     // supports, and the strict one silently refused valid SQL.
     if (this.#atOp('(', 1)) return this.#call()
 
-    // A qualified name: `a`, `t.a`, `db.t.a`, or `t.*`.
+    // A qualified name: `a`, `t.a`, `db.t.a`, `t.*` or `db.t.*` — three parts
+    // at most, since `a.b.c.d` names nothing.
     this.#c.skip()
     const parts = [t.text]
-    while (this.#atOp('.')) {
+    while (this.#atOp('.') && parts.length < 3) {
       this.#c.skip()
       if (this.#atOp('*')) {
         this.#c.skip()

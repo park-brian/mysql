@@ -12,7 +12,7 @@
 // sends `SHOW TABLES` today should be told this server cannot do that yet, not
 // that its SQL is malformed.
 import { unsupportedStatement } from './errors.ts'
-import { Cursor } from './cursor.ts'
+import { Cursor, checkTreeDepth } from './cursor.ts'
 import { TOKEN } from './tokens.ts'
 import { lex, lexBytes, type LexOptions } from './lexer.ts'
 import { NO_SQL_MODE, type SqlMode } from './sql-mode.ts'
@@ -47,6 +47,7 @@ function parseFromTokens(c: Cursor, sqlMode: SqlMode): Statement {
   if (first.kind === TOKEN.EOF) c.fail()
 
   const statement = dispatch(c, sqlMode)
+  checkTreeDepth(statement)
 
   // A trailing `;` is part of the statement as clients send it. Anything after
   // one is a second statement, and D-13 gates multi-statement execution off
