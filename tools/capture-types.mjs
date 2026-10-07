@@ -58,7 +58,15 @@ const OUT_DIR = arg('out', new URL('../test/format/fixtures/', import.meta.url).
  * a dependency on the order of two unrelated commands, which is not a thing to
  * rely on. Nothing here is a recorded byte stream, so TLS costs nothing.
  */
-const CONNECT = ['-h', HOST, '-P', String(PORT), '--protocol=TCP', '-u', USER, `-p${PASSWORD}`]
+// Pinned, not inherited. The `mysql` CLI picks its default character set from
+// the OS locale, so on a machine with no `LANG` it negotiates **latin1** — and
+// the UTF-8 bytes of a literal like 'café' are then read as latin1 and stored
+// double-encoded, as `63 61 66 C3 83 C2 A9` instead of `63 61 66 C3 A9`. The
+// corpus that comes out looks entirely plausible and is wrong, which is the
+// failure mode this file already guards against twice (the completeness
+// assertion, and the `--ssl-mode` removal). A capture must not depend on the
+// locale of the machine that ran it.
+const CONNECT = ['-h', HOST, '-P', String(PORT), '--protocol=TCP', '--default-character-set=utf8mb4', '-u', USER, `-p${PASSWORD}`]
 
 /** Run SQL and return stdout, tab-separated and unquoted (`-N -B`). */
 async function sql(statements) {

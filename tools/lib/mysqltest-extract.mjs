@@ -88,6 +88,15 @@ const CONTINUES = /^(?:--)?(let|assert|expr|if|while)\b/i
 /** How far one of those may run before the continuation is assumed spurious. */
 const MAX_CONTINUATION = 20
 
+/**
+ * How many lex refusals one region may absorb before the file is reported.
+ *
+ * Bounded for the same reason `MAX_CONTINUATION` is: a recovery rule with no
+ * ceiling stops being a recovery and becomes a way to not notice that the
+ * lexer broke. Each one must independently be predicted by an `--error`.
+ */
+const MAX_LEX_REFUSALS = 20
+
 /** The charset a `.test` file is read in before it says otherwise. */
 const DEFAULT_CHARSET = 'utf8mb4'
 
@@ -383,13 +392,46 @@ export function extract(bytes) {
     // "eight" — and the census promises the failing SQL is printed. A diagnostic
     // that reports a count and withholds the reason is the same mistake as a
     // gate that passes without checking.
+    // One exception, and only one: a line the corpus itself marks
+    // `--error ER_PARSE_ERROR`. MySQL removed `\N` in WL#7247 and `null.test`
+    // asserts the removal, so `SELECT \N;` is SQL a real 8.4 refuses — and
+    // refusing it at the *lexer* rather than the parser is still the right
+    // answer. Reporting the whole file for it cost 17,546 statements of
+    // coverage to surface one correct refusal, which is the failure mode M3.11
+    // already named once: a heuristic that silently drops input flatters every
+    // number downstream of it.
+    //
+    // So a *predicted* failure is excised and the region re-lexed; the
+    // statement is still emitted, carrying its `--error`, and the census
+    // counts it as the refusal it is. An *unpredicted* one still reports the
+    // file, unchanged, because that is the failure worth seeing.
     let tokens
-    try {
-      tokens = lex(sql)
-    } catch (e) {
-      const line = Number(/at line (\d+)/.exec(String(e.message))?.[1] ?? 0)
-      const context = sql.split('\n')[line - 1]?.trim() ?? ''
-      return result('lex-failed', `${region.charset} line ${line}: ${context.slice(0, 120)}`)
+    const refusedAtLex = []
+    for (;;) {
+      try {
+        tokens = lex(sql)
+        break
+      } catch (e) {
+        const line = Number(/at line (\d+)/.exec(String(e.message))?.[1] ?? 0)
+        const lines = sql.split('\n')
+        const context = lines[line - 1]?.trim() ?? ''
+        const expected = line > 0 ? region.errors[line - 1] : undefined
+        const predicted = expected === 'ER_PARSE_ERROR' || expected === '1064'
+        if (!predicted || refusedAtLex.length >= MAX_LEX_REFUSALS) {
+          return result('lex-failed', `${region.charset} line ${line}: ${context.slice(0, 120)}`)
+        }
+        refusedAtLex.push({ text: context, charset: region.charset, expectedError: expected })
+        // Replaced by a bare terminator rather than blanked, so the statements
+        // around it keep their boundaries and every later line number holds.
+        lines[line - 1] = ';'
+        sql = lines.join('\n')
+      }
+    }
+    for (const r of refusedAtLex) {
+      // The text never lexed, so the keyword comes off its first word rather
+      // than off a token; `keywordOf` still decides the shape.
+      const word = /^[A-Za-z_][A-Za-z0-9_]*/.exec(r.text)?.[0] ?? ''
+      statements.push({ ...r, keyword: keywordOf([{ kind: 'identifier', text: word, quoted: false }]) })
     }
 
     // Character offset of the first character of each line, so a statement's

@@ -43,7 +43,7 @@
 //   node tools/mysqltest-census.mjs --refresh   # re-list the directory (needs a token)
 import { mkdirSync, readFileSync, writeFileSync, existsSync } from 'node:fs'
 import { join } from 'node:path'
-import { REPO, REF, fetchPinnedBytes, combinedSha256 } from './lib/gen-common.mjs'
+import { REPO, REF, fetchPinnedBytes, combinedSha256, listPinnedDirectory, sourceMode } from './lib/gen-common.mjs'
 import { lex, parseStatement, ParseError } from '@myjs/parser'
 import { extract } from './lib/mysqltest-extract.mjs'
 
@@ -99,6 +99,33 @@ const PATTERNS = [
  * runner burns that quickly.
  */
 async function listCandidates() {
+  const names = (await listNames()).filter((n) => n.endsWith('.test')).sort()
+
+  const picked = []
+  for (const pattern of PATTERNS) {
+    for (const name of names) {
+      if (picked.length >= MAX_FILES) break
+      if (pattern.test(name) && !picked.includes(name)) picked.push(name)
+    }
+  }
+  console.log(`listed ${names.length} .test file(s), selected ${picked.length}`)
+  return picked
+}
+
+/**
+ * The directory listing, from a local clone when there is one.
+ *
+ * The API path is the fallback rather than the default now. It allows sixty
+ * unauthenticated requests an hour, it needs a token on a shared runner, and a
+ * sandbox that blocks `api.github.com` cannot refresh the census at all — while
+ * `git ls-tree` over the pinned commit answers the identical question offline.
+ */
+async function listNames() {
+  const local = listPinnedDirectory(DIRECTORY)
+  if (local !== null) {
+    console.log(`listing ${DIRECTORY} from ${sourceMode()}`)
+    return local
+  }
   const token = arg('token', process.env.GITHUB_TOKEN)
   const headers = { 'user-agent': 'myjs-mysqltest-census' }
   if (token !== undefined && token !== '') headers.authorization = `Bearer ${token}`
@@ -118,18 +145,7 @@ async function listCandidates() {
     process.exit(1)
   }
   const entries = await response.json()
-  const names = entries.filter((e) => e.type === 'file' && e.name.endsWith('.test')).map((e) => e.name)
-  names.sort()
-
-  const picked = []
-  for (const pattern of PATTERNS) {
-    for (const name of names) {
-      if (picked.length >= MAX_FILES) break
-      if (pattern.test(name) && !picked.includes(name)) picked.push(name)
-    }
-  }
-  console.log(`listed ${names.length} .test file(s), selected ${picked.length}`)
-  return picked
+  return entries.filter((e) => e.type === 'file').map((e) => e.name)
 }
 
 // --- main -------------------------------------------------------------------
@@ -139,7 +155,8 @@ const selection = has('refresh') ? await listCandidates() : (previous?.selection
 
 if (selection.length === 0) {
   console.error(
-    'no file list: run once with --refresh (and a GITHUB_TOKEN) to build one,\n' +
+    'no file list: run once with --refresh to build one (from reference/mysql, or\n' +
+      '  from the GitHub API with a GITHUB_TOKEN),\n' +
       '  or restore test/format/fixtures/mysqltest-corpus.json.',
   )
   process.exit(1)
@@ -179,6 +196,8 @@ const parseFailures = new Map()
 /** Parsed, by leading keyword — the exit criterion lives in this table. */
 const parsedByKeyword = new Map()
 /** Lines in a charset this build will not decode. Coverage lost, and counted. */
+/** Statements a real server also refuses, which we refuse at the lexer. */
+let refusedAtLex = 0
 let unreadLines = 0
 const unreadCharsets = new Set()
 
@@ -207,10 +226,24 @@ for (const source of sources) {
     statements++
     byKeyword.set(keyword, (byKeyword.get(keyword) ?? 0) + 1)
     byCharset.set(charset, (byCharset.get(charset) ?? 0) + 1)
+    // Hoisted above the lex: a statement the corpus marks `--error
+    // ER_PARSE_ERROR` is one a real server refuses, and *where* we refuse it —
+    // lexer or parser — is our business rather than a divergence. `SELECT \N;`
+    // is the case that proved it: MySQL removed `\N` in WL#7247, `null.test`
+    // asserts the removal, and a local 8.4.11 answers 1064. Counting our
+    // matching refusal as a lex failure would have been the instrument
+    // reporting itself as a defect, which M3.11 already did once.
+    const shouldFail = expectedError === 'ER_PARSE_ERROR' || expectedError === '1064'
     try {
       lex(text)
       lexed++
     } catch (e) {
+      if (shouldFail) {
+        expectedToFail++
+        expectedToFailAndDid++
+        refusedAtLex++
+        continue
+      }
       failures.push({ file: name, kind: 'statement-lex', code: e instanceof ParseError ? e.code : 'unknown' })
       // Printed, not committed: the CI log is ephemeral and this is the only
       // place the offending SQL may appear.
@@ -226,7 +259,6 @@ for (const source of sources) {
     // is what turns the census from "how much parses" into "how much of what
     // MySQL accepts parses" — the question M3's exit criterion actually asks,
     // and the difference between 80.8% and the real number.
-    const shouldFail = expectedError === 'ER_PARSE_ERROR' || expectedError === '1064'
     if (shouldFail) expectedToFail++
     try {
       parseStatement(text)
@@ -255,7 +287,10 @@ for (const source of sources) {
 const ranked = [...byKeyword].sort((a, b) => b[1] - a[1])
 const measured = sources.length - notMeasured.length
 console.log(`${sources.length} file(s), ${measured} measured, ${directives} directive line(s) skipped`)
-console.log(`${statements} statement(s): ${lexed} lexed, ${parsed} parsed, ${skipped} skipped for $variables`)
+console.log(
+  `${statements} statement(s): ${lexed} lexed, ${refusedAtLex} refused at the lexer as MySQL does, ` +
+    `${parsed} parsed, ${skipped} skipped for $variables`,
+)
 console.log(`top keywords: ${ranked.slice(0, 15).map(([k, n]) => `${k} ${n}`).join(', ')}`)
 // M3's exit criterion is "every `CREATE TABLE` in MySQL's own test suite
 // parses", so the per-keyword rate is the criterion's own scoreboard rather
@@ -310,6 +345,7 @@ writeFileSync(
         measured,
         statements,
         lexed,
+        refusedAtLex,
         parsed,
         skippedWithVariables: skipped,
         directives,
@@ -341,9 +377,16 @@ console.log(`census -> ${FIXTURE}`)
 //
 // A file that would not lex as a whole counts too, since that means the
 // statement boundaries could not be found at all.
-if (lexed !== statements || failures.length > 0) {
+//
+// `refusedAtLex` is the one thing that is not a miss: SQL the corpus marks
+// `--error ER_PARSE_ERROR`, which a real server rejects and we reject at the
+// lexer instead of the parser. Those are kept in their own column rather than
+// folded into `lexed`, because "tokenised" and "correctly refused" are
+// different facts and a gate that blurs them reports a worse number than it
+// could.
+if (lexed + refusedAtLex !== statements || failures.length > 0) {
   console.error(
-    `\n${statements - lexed} statement(s) and ${failures.filter((f) => f.kind === 'file-lex').length} whole file(s) failed to lex.\n` +
+    `\n${statements - lexed - refusedAtLex} statement(s) and ${failures.filter((f) => f.kind === 'file-lex').length} whole file(s) failed to lex.\n` +
       '  Every statement in the corpus must tokenise. The failing SQL is printed above —\n' +
       '  it is GPLv2, so it appears only in this log and is never written to a file.',
   )
