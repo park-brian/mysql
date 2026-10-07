@@ -121,7 +121,10 @@ export async function serve(db: MySQL, options: ServeOptions = {}): Promise<Serv
         .catch(() => socket.destroy())
     })
     socket.on('error', () => socket.destroy())
-    socket.on('close', () => sockets.delete(socket))
+    socket.on('close', () => {
+      sockets.delete(socket)
+      connection.close()
+    })
   })
 
   await new Promise<void>((resolve, reject) => {

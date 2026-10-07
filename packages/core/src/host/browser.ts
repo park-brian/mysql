@@ -5,6 +5,7 @@
 // the Node adapter; this is the dependency-free path for everything else,
 // including the `wss://` bridge (doc 17), where the transport is secure at a
 // lower layer and `CLIENT_SSL` stays off.
+import { VfsError, type Lock, type Vfs } from '@myjs/vfs'
 import type { ProtocolConnection } from '../connection.ts'
 
 export interface WebDuplex {
@@ -30,6 +31,9 @@ export function createWebStream(connection: ProtocolConnection): WebDuplex {
       const initial = connection.take()
       if (initial.length > 0) controller.enqueue(initial)
     },
+    cancel() {
+      connection.close()
+    },
   })
 
   const writable = new WritableStream<Uint8Array>({
@@ -41,8 +45,18 @@ export function createWebStream(connection: ProtocolConnection): WebDuplex {
     },
     close() {
       close?.()
+      connection.close()
+    },
+    abort() {
+      close?.()
+      connection.close()
     },
   })
 
   return { readable, writable }
+}
+
+/** M6.1 will answer `opfs://` here; until then a path is refused rather than silently kept in memory. */
+export async function openPathVfs(path: string): Promise<{ vfs: Vfs; lock: Lock }> {
+  throw new VfsError('VFS_UNSUPPORTED', `${path}: persistent storage in the browser is M6's OPFS VFS; use ':memory:' until then`)
 }

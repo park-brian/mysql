@@ -1,0 +1,104 @@
+// M5.3 — the Volcano operators: each one a generator over the rows of the one
+// below it, so a `LIMIT 1` over a million-row scan reads one row.
+//
+// They are deliberately ignorant of where rows come from: `scan` is the only
+// one that touches a `Table`, and every other operator takes any iterable of
+// rows. That is the item's done-when — each is testable over a fixed array —
+// and it is what lets a join (M5.4) or a sort that spills (M5.5) slot in
+// without the rest noticing.
+import type { KeyRange, RowId, Table, Trx } from '@myjs/engine'
+import type { ColumnType } from '@myjs/types'
+import { decodeField, orderValues, truth, type Value } from '@myjs/types'
+import type { Compiled, Env, Row } from './compile.ts'
+
+/** A row as a scan produces it: its values, and the id to write it back by. */
+export interface ScannedRow {
+  readonly id: RowId
+  readonly row: Row
+}
+
+export interface ScanSource {
+  readonly table: Table
+  /** An index to read in its order, or the clustered order when absent. */
+  readonly index?: string
+  readonly range?: KeyRange
+  readonly trx?: Trx
+  /** `'current'` for a locking read or a write's own reads. */
+  readonly mode?: 'consistent' | 'current'
+  readonly types: readonly ColumnType[]
+}
+
+/** Every row of a table, or of a range of one of its indexes, decoded. */
+export function* scan(source: ScanSource): Generator<ScannedRow> {
+  const { table, types } = source
+  const rows = source.index === undefined ? table.scan(source.range, source.trx, source.mode) : table.indexScan(source.index, source.range, source.trx, source.mode)
+  for (const [id, fields] of rows) {
+    const row = new Array<Value>(types.length)
+    for (let i = 0; i < types.length; i++) row[i] = decodeField(fields[i] ?? null, types[i] as ColumnType)
+    yield { id, row }
+  }
+}
+
+/** The rows a predicate is TRUE for — not FALSE, and not NULL. */
+export function* filter<T extends { readonly row: Row }>(source: Iterable<T>, predicate: Compiled | undefined, env: Env): Generator<T> {
+  if (predicate === undefined) {
+    yield* source
+    return
+  }
+  for (const item of source) if (truth(predicate.eval(item.row, env)) === true) yield item
+}
+
+/** Each row through a list of expressions. */
+export function* project(source: Iterable<{ readonly row: Row }>, items: readonly Compiled[], env: Env): Generator<Value[]> {
+  for (const { row } of source) yield items.map((item) => item.eval(row, env))
+}
+
+export interface SortKey {
+  readonly expr: Compiled
+  readonly desc: boolean
+}
+
+/**
+ * Rows ordered by `keys`, stably — rows that tie keep the order they arrived
+ * in, which is what makes `ORDER BY` over a clustered scan agree with MySQL on
+ * ties. NULL sorts first ascending and last descending. Materialises: spilling
+ * a sort larger than memory is M5.5's.
+ */
+export function sort<T extends { readonly row: Row }>(source: Iterable<T>, keys: readonly SortKey[], env: Env): T[] {
+  const decorated = [...source].map((item, at) => ({ item, at, values: keys.map((k) => k.expr.eval(item.row, env)) }))
+  decorated.sort((a, b) => {
+    for (let i = 0; i < keys.length; i++) {
+      const c = orderValues(a.values[i] ?? null, b.values[i] ?? null)
+      if (c !== 0) return (keys[i] as SortKey).desc ? -c : c
+    }
+    return a.at - b.at
+  })
+  return decorated.map((d) => d.item)
+}
+
+/** The first row of each run of rows equal on every value — `SELECT DISTINCT`, over projected rows. */
+export function* distinct(source: Iterable<Value[]>): Generator<Value[]> {
+  const seen: Value[][] = []
+  outer: for (const row of source) {
+    for (const prior of seen) {
+      if (prior.every((v, i) => orderValues(v, row[i] ?? null) === 0)) continue outer
+    }
+    seen.push(row)
+    yield row
+  }
+}
+
+/** `LIMIT count OFFSET offset`. */
+export function* limit<T>(source: Iterable<T>, offset: number, count: number | undefined): Generator<T> {
+  if (count === 0) return
+  let skipped = 0
+  let taken = 0
+  for (const item of source) {
+    if (skipped < offset) {
+      skipped++
+      continue
+    }
+    yield item
+    if (count !== undefined && ++taken >= count) return
+  }
+}

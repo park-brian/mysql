@@ -8,7 +8,7 @@
 // The full value model and its coercion rules are `@myjs/types` (M2). This is
 // only what the wire needs: a JS value in, the bytes MySQL would print out.
 
-import type { SqlValue } from '@myjs/bytes'
+import { isMysqlDateTime, isMysqlTime, renderMysqlDateTime, renderMysqlTime, type MysqlDateTime, type MysqlTime, type SqlValue } from '@myjs/bytes'
 import { FIELD_TYPE } from './constants/types.ts'
 import { utf8 } from './text.ts'
 import type { ColumnDefinition } from './packets/column.ts'
@@ -90,9 +90,12 @@ function scaleOf(decimals: number): number {
  * Render one value for the text protocol. `null` means "write `0xFB`", which
  * is the caller's job because it replaces the whole length-encoded string.
  */
-export function renderTextValue(value: SqlValue, column: Pick<ColumnDefinition, 'type' | 'decimals'>): Uint8Array | null {
+export function renderTextValue(value: SqlValue | MysqlDateTime | MysqlTime, column: Pick<ColumnDefinition, 'type' | 'decimals'>): Uint8Array | null {
   if (value === null) return null
   if (value instanceof Uint8Array) return value
+  // The neutral structs an executor holds (D-32), rendered at the column's scale.
+  if (isMysqlTime(value)) return utf8(renderMysqlTime(value, scaleOf(column.decimals)))
+  if (isMysqlDateTime(value)) return utf8(renderMysqlDateTime(value, column.type === FIELD_TYPE.DATE ? 0 : scaleOf(column.decimals)))
   if (value instanceof Date) {
     if (column.type === FIELD_TYPE.DATE) return utf8(renderDate(value))
     if (TEMPORAL_TYPES.includes(column.type)) {

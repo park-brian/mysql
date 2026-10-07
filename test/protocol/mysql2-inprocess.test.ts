@@ -103,6 +103,9 @@ test('COM_RESET_CONNECTION works, which is what pools actually use', async () =>
   const db = await MySQL.open(':memory:')
   const conn = await connect(db)
   try {
+    // M5: `USE` of a database that does not exist is ER_BAD_DB_ERROR, as on a
+    // real server, so the database is made first.
+    await conn.query('CREATE DATABASE testdb')
     await conn.query('USE testdb')
     await conn.changeUser({ user: 'root', password: '' })
     const [rows] = await conn.query('SELECT DATABASE()')
@@ -116,13 +119,15 @@ test('a server error arrives with mysql2s error shape', async () => {
   const db = await MySQL.open(':memory:')
   const conn = await connect(db)
   try {
+    // M5: a table that does not exist, which a real server reports the same way.
+    await conn.query('CREATE DATABASE d')
     await assert.rejects(
-      conn.query('DELETE FROM nothing'),
+      conn.query('DELETE FROM d.nothing'),
       (err: unknown) => {
         const e = err as { code?: string; errno?: number; sqlState?: string; sqlMessage?: string }
-        assert.equal(e.code, 'ER_NOT_SUPPORTED_YET')
-        assert.equal(e.errno, 1235)
-        assert.equal(e.sqlState, '42000')
+        assert.equal(e.code, 'ER_NO_SUCH_TABLE')
+        assert.equal(e.errno, 1146)
+        assert.equal(e.sqlState, '42S02')
         assert.ok(typeof e.sqlMessage === 'string' && e.sqlMessage.length > 0)
         return true
       },

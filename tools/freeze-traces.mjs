@@ -118,6 +118,44 @@ const withMysql2 = (port, user, password, body) => async () => {
   }
 }
 
+/**
+ * `--reanswer`: keep every trace's *client* bytes and record our server's
+ * answers to them afresh. For a deliberate change to what the server says —
+ * M5's executor answering `SELECT 1` with the metadata a real 8.4.11 sends,
+ * where the stub sent its own — without re-recording the clients, so the
+ * frozen diff is exactly the change in our bytes and nothing else.
+ */
+if (process.argv.includes('--reanswer')) {
+  const { readdirSync, readFileSync } = await import('node:fs')
+  for (const file of readdirSync(OUT_DIR).filter((f) => f.endsWith('.json')).sort()) {
+    const path = OUT_DIR + file
+    const trace = JSON.parse(readFileSync(path, 'utf8'))
+    const accounts = await fixedAccounts()
+    const db = await MySQL.open(':memory:', { accounts, serverVersion: trace.serverVersion })
+    const connection = db.createConnection({
+      accounts,
+      connectionId: trace.connectionId,
+      random: fixedRandom(Uint8Array.from(trace.nonce)),
+      secureChannel: true,
+    })
+    const events = []
+    connection.start()
+    const first = connection.take()
+    if (first.length > 0) events.push({ direction: 's2c', bytes: [...first] })
+    for (const e of trace.events) {
+      if (e.direction !== 'c2s') continue
+      events.push(e)
+      await connection.feed(Uint8Array.from(e.bytes))
+      const out = connection.take()
+      if (out.length > 0) events.push({ direction: 's2c', bytes: [...out] })
+    }
+    writeFileSync(path, JSON.stringify({ ...trace, events }, null, 2) + '\n')
+    console.log(`${file.padEnd(36)} re-answered`)
+    await db.end()
+  }
+  process.exit(0)
+}
+
 await record('cli-empty-password-select-1', (p) => cli(p, ['-u', 'root'], 'SELECT 1'))
 await record('cli-password-select-1', (p) =>
   cli(p, ['-u', 'alice', '-pcorrect horse battery staple'], 'SELECT 1'),

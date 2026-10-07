@@ -10,6 +10,9 @@
 // Keeping that fact in one file behind a package export condition is what lets
 // every other module stay provably portable.
 import { Duplex } from 'node:stream'
+import { fileURLToPath } from 'node:url'
+import { VfsError, type Lock, type Vfs } from '@myjs/vfs'
+import { NodeVfs } from '@myjs/vfs/node'
 import type { ProtocolConnection } from '../connection.ts'
 
 /**
@@ -36,7 +39,13 @@ export function createNodeStream(connection: ProtocolConnection): Duplex {
     },
     final(callback) {
       finish()
+      connection.close()
       callback()
+    },
+    destroy(error, callback) {
+      // `conn.destroy()` with no COM_QUIT: the session still has to end.
+      connection.close()
+      callback(error)
     },
   })
 
@@ -56,4 +65,19 @@ export function createNodeStream(connection: ProtocolConnection): Duplex {
   connection.start()
   flush()
   return stream
+}
+
+/**
+ * M4.26 — `MySQL.open('./data')` and `MySQL.open('file:///…')`: a database
+ * directory on disk, through the Node VFS. The directory is taken for this
+ * process for as long as the database is open (doc 41: one owner), and a
+ * directory another owner holds is refused at once rather than waited on.
+ */
+export async function openPathVfs(path: string): Promise<{ vfs: Vfs; lock: Lock }> {
+  if (path.startsWith('opfs://')) throw new VfsError('VFS_UNSUPPORTED', `${path}: OPFS is the browser's (M6), not Node's`)
+  const dir = path.startsWith('file://') ? fileURLToPath(path) : path
+  const vfs = new NodeVfs(dir)
+  const lock = vfs.tryLock('/database')
+  if (lock === undefined) throw new VfsError('VFS_LOCKED', `${dir} is open in another MySQL instance`)
+  return { vfs, lock }
 }

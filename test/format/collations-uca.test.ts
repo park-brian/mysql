@@ -325,17 +325,20 @@ test('M2.20: the exit criterion — the charsets bundle carries no UCA weights',
   )
 })
 
-test('D-36: preloading must not drag the weight tables into @myjs/core', async () => {
-  // A regression guard for a mistake already made once here. Wiring the
-  // `SET NAMES` preload through `collationAvailability` — the obvious way —
-  // put all 42 legacy 8-bit weight tables into `@myjs/core`'s entry chunk and
-  // cost it 10 KB gzipped, because that function lives beside the synchronous
-  // resolver and the resolver must statically contain every table it can
-  // return. `preloadCollation` exists in a module of its own to avoid exactly
-  // that, and this asserts it stayed avoided.
+test('D-36, D-66: @myjs/core carries the 8-bit tables now, and still not the UCA weights', async () => {
+  // Until M5 this asserted that the legacy 8-bit weight tables stayed *out*
+  // of `@myjs/core`: core only preloaded collations, and wiring that through
+  // the synchronous resolver had once cost it 10 KB gzipped for nothing. M5's
+  // executor compares strings, so it needs that resolver on purpose (D-66) —
+  // a `latin1_swedish_ci` column is ordered by one of those tables. What must
+  // still hold is D-36's real promise: the 48.6 KB of UCA weights load only
+  // when a `_0900_` collation is asked for, so they are in no chunk the entry
+  // point pulls in statically.
   const { PACKED_BYTE_WEIGHTS } = await import('../../packages/charsets/src/collations/weights.ts')
-  const probe = PACKED_BYTE_WEIGHTS.slice(400, 500)
-  assert.equal(probe.length, 100, 'the probe must come from the middle of the real table')
+  const { PACKED_UCA900_LEVEL1 } = await import('../../packages/charsets/src/collations/uca900.ts')
+  const legacy = PACKED_BYTE_WEIGHTS.slice(400, 500)
+  const uca = PACKED_UCA900_LEVEL1.slice(1000, 1100)
+  assert.equal(uca.length, 100, 'the probe must come from the middle of the real table')
 
   const entry = new URL('../../packages/core/src/index.ts', import.meta.url).pathname
   const result = await build({
@@ -358,8 +361,6 @@ test('D-36: preloading must not drag the weight tables into @myjs/core', async (
   const entryText = result.outputFiles.find((f) => f.path.endsWith(tail))?.text ?? ''
   assert.ok(entryText.length > 0, 'the entry chunk is empty')
 
-  assert.ok(
-    !entryText.includes(probe),
-    'the legacy 8-bit weight tables are in @myjs/core — something imported the synchronous resolver',
-  )
+  assert.ok(entryText.includes(legacy), 'the 8-bit tables are not in @myjs/core — then nothing in it can compare a latin1 string, and the probe is suspect')
+  assert.ok(!entryText.includes(uca), 'the UCA weights are in @myjs/core\'s entry chunk — the lazy boundary is broken')
 })

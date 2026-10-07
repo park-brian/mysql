@@ -124,7 +124,15 @@ function evaluate(e: Expression): Value | null {
         //
         // Unlike `+`, `-` and `*`, these two do **not** promote to unsigned
         // when either side is: the result follows the *dividend*, so
-        // `-5 % (0 ^ 2)` is -1 even though `0 ^ 2` is unsigned. The corpus
+        // `-5 % (0 ^ 2)` is -1 even though `0 ^ 2` is unsigned.
+        //
+        // **Half wrong, found by M5.17.** It holds for `%` and not for `DIV`:
+        // `-7 DIV (0 ^ 2)` is ER_DATA_OUT_OF_RANGE on 8.4.11, so `DIV` does
+        // promote. This evaluator never saw the difference because every
+        // vector that shows it is a refusal, which it skips; the executor,
+        // running the same corpus and reporting refusals, disagreed on one.
+        // The values below are unaffected: where the promotion matters, the
+        // server refused. The corpus
         // caught this too — modelling it as a promotion turned -1 into
         // 18446744073709551615, which is 0 mod 5 and so flipped an `XOR`.
         case 'DIV':
@@ -256,4 +264,33 @@ test('M3.7 in the parser: two modes that regroup rather than re-spell', () => {
   // Default: `1 || (2 + 3)`. With the mode: `(1 || 2) + 3`.
   assert.equal((asOr as { op: string }).op, '||')
   assert.equal((asConcat as { op: string }).op, '+')
+})
+
+test('M5.17: the executor evaluates every vector as the server did, refusals included', async () => {
+  // The same corpus, through the real executor rather than this file's
+  // evaluator — and unlike that evaluator, it reports overflow, so the
+  // vectors the server *refused* are checked too: ER_DATA_OUT_OF_RANGE for an
+  // overflow, ER_PARSE_ERROR for the ones that do not parse. Running it found
+  // that `DIV` promotes to unsigned and `%` does not, which the evaluator above
+  // had wrong for `DIV` without any vector showing it.
+  if (!existsSync(FIXTURE)) return
+  const { StubExecutor, charsetTranscoder } = await import('@myjs/core')
+  const { Session, capabilities } = await import('@myjs/protocol')
+  const fixture = JSON.parse(readFileSync(FIXTURE, 'utf8')) as { vectors: { expr: string; value?: string; error?: string }[] }
+  const executor = new StubExecutor()
+  const session = new Session({ connectionId: 1, capabilities: capabilities(0), transcoder: charsetTranscoder })
+  const mismatches: string[] = []
+  for (const v of fixture.vectors) {
+    let got: string
+    try {
+      const r = (await executor.query(session, `SELECT (${v.expr})`)) as { rows: unknown[][] }
+      const c = r.rows[0]?.[0]
+      got = c === null ? 'NULL' : c instanceof Uint8Array ? new TextDecoder().decode(c) : String(c)
+    } catch (e) {
+      got = `ERROR ${(e as { errno?: number }).errno}`
+    }
+    const want = v.value ?? `ERROR ${/ERROR (\d+)/.exec(v.error ?? '')?.[1]}`
+    if (got !== want) mismatches.push(`${v.expr}: server ${want}, executor ${got}`)
+  }
+  assert.deepEqual(mismatches, [])
 })

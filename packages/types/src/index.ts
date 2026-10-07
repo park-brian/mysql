@@ -75,3 +75,45 @@ export { declaredKeyWidth, encodeKey, encodeKeyPart, keyPartLength } from './key
 export type { KeyPart, KeyPartKind } from './keys.ts'
 export { keyPartOf, storageWidth } from './columns.ts'
 export type { ColumnType, KeyPartOptions } from './columns.ts'
+// M5.2 — the evaluation value, MySQL's comparison and arithmetic, and a value
+// into a column's bytes and back (D-62).
+export {
+  COERCIBILITY,
+  MAX_SIGNED,
+  MAX_UNSIGNED,
+  MIN_SIGNED,
+  bool,
+  bytes as bytesValue,
+  decimal as decimalValue,
+  doubleToDecimal,
+  double as doubleValue,
+  int as intValue,
+  isNumeric,
+  isText,
+  numericPrefix,
+  parseDateTime,
+  parseDecimal,
+  parseTime,
+  pow10,
+  renderDateTime,
+  renderDecimal,
+  renderDouble,
+  renderTime,
+  rescale,
+  string as stringValue,
+  toDateTime,
+  toDecimal,
+  toDouble,
+  toInteger,
+  toText,
+  toTextBytes,
+  toTime,
+  truth,
+  validDate,
+} from './sql-value.ts'
+export type { BytesValue, DateTimeValue, DecimalValue, DoubleValue, IntValue, StringValue, TemporalType, TimeValue, Value } from './sql-value.ts'
+export { aggregateCollation, commonCollation, compareDecimals, compareValues, nullSafeEqual, orderValues } from './compare.ts'
+export { DIV_PRECISION_INCREMENT, add, bitNot, bitwise, divide, intDivide, modulo, negate, not } from './arith.ts'
+export { decodeField, encodeField } from './encode.ts'
+export type { FieldColumn, StoreContext } from './encode.ts'
+export { columnCannotBeNull, columnOutOfRange, dataTooLong, valueOutOfRange, wrongTemporalValue, wrongValueForColumn } from './errors.ts'
