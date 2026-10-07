@@ -223,6 +223,8 @@ jobs:
           # source tree only implies (D-39), so it is re-captured here and a
           # drift shows as a diff in the generated table.
           npm run capture:keywords
+          # M3.16: joins and set operations, run by the same server.
+          npm run capture:queries
           git diff --stat -- test/format/fixtures/ packages/parser/src/keywords.ts
       - name: upload the captured fixtures
         uses: actions/upload-artifact@v4

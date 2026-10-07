@@ -9,13 +9,19 @@
 //     `LIMIT` applies to the whole query expression, never to its last branch.
 //   - **Comma against `JOIN`.** The comma binds loosest, so `FROM a, b JOIN c
 //     ON …` is `a, (b JOIN c ON …)` — and an `ON` there may not name `a`.
-//   - **`JOIN` against `JOIN`.** MySQL's grammar gives a condition-less inner
-//     join the lowest precedence of all (`%prec CONDITIONLESS_JOIN`), so the
-//     right side of a join *keeps absorbing* joins: `a JOIN b JOIN c ON x` is
-//     `a JOIN (b JOIN c ON x)`, and `a JOIN b JOIN c ON x ON y` is legal and
-//     means `a JOIN (b JOIN c ON x) ON y`. A recursive descent gets this by
-//     parsing the right side of every `JOIN` as a full table reference, which
-//     is what yacc's shift preference does.
+//   - **`JOIN` against `JOIN`, which is two rules, not one.** MySQL's grammar
+//     gives a condition-less inner join the lowest precedence of all (`%prec
+//     CONDITIONLESS_JOIN`), so the right side of a join *keeps absorbing*
+//     joins until a condition closes one: `a JOIN b JOIN c ON x ON y` is legal
+//     and means `a JOIN (b JOIN c ON x) ON y`. But the condition-less join is
+//     then **re-hung** — its action calls `add_cross_join`, which walks down
+//     the left spine of its right operand and attaches itself to the leftmost
+//     table there — so `a JOIN b JOIN c ON x` ends as `(a JOIN b) JOIN c ON
+//     x`, and `x` may name `a`. Parentheses stop the walk. The first version
+//     of this parser had the absorbing half and not the re-hanging half, and
+//     M3.16's corpus found it on its first run: 8.4 answers `t1 CROSS JOIN t2
+//     CROSS JOIN t3 ON t1.b < t1.a` with rows, where a tree that kept `t1` out
+//     of the `ON`'s reach says ER_BAD_FIELD_ERROR.
 import { unsupportedStatement } from './errors.ts'
 import type { Cursor } from './cursor.ts'
 import { TOKEN } from './tokens.ts'
@@ -619,9 +625,12 @@ class QueryParser {
         } else if (c.takeWord('USING')) {
           left = { kind: REF.JOIN, type, left, right, using: this.#nameList(), at }
         } else {
-          // An outer join must say how; an inner one need not.
+          // An outer join must say how; an inner one need not — and an inner
+          // one that does not is re-hung on its right side's leftmost table.
           if (type === 'LEFT' || type === 'RIGHT') c.fail()
-          left = { kind: REF.JOIN, type, left, right, at }
+          const outer = left
+          const crossType = type
+          left = hangCrossJoin(right, (leaf) => ({ kind: REF.JOIN, type: crossType, left: outer, right: leaf, at }))
         }
       }
     })
@@ -771,6 +780,17 @@ class QueryParser {
     this.#c.skip()
     return t.text
   }
+}
+
+/**
+ * `add_cross_join` in MySQL's grammar: a condition-less inner join `a ⋈ R`
+ * replaces the leftmost table reference of `R`'s join tree with `a ⋈ that`.
+ * Only a join node is descended; a table, a derived table and a parenthesised
+ * list are leaves, which is how parentheses keep their grouping.
+ */
+function hangCrossJoin(ref: TableReference, make: (leaf: TableReference) => TableReference): TableReference {
+  if (ref.kind !== REF.JOIN) return make(ref)
+  return { ...ref, left: hangCrossJoin(ref.left, make) }
 }
 
 /** For the DML parser: one value of a `VALUES` row, which may be `DEFAULT`. */

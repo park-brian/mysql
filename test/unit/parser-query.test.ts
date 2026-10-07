@@ -74,17 +74,25 @@ test('M3.3: a comma binds looser than any JOIN', () => {
   assert.equal(from('SELECT 1 FROM (a, b) JOIN c ON 1'), '([a, b] INNER c ON)')
 })
 
-test('M3.3: the right side of a join absorbs the joins after it', () => {
-  // MySQL's grammar gives a condition-less inner join the lowest precedence of
-  // all, so the right side keeps reading until a condition closes it.
-  assert.equal(from('SELECT 1 FROM a JOIN b JOIN c ON 1'), '(a INNER (b INNER c ON))')
+test('M3.3: a join absorbs the joins after it, then a condition-less one is re-hung', () => {
+  // Two rules, and M3.16's corpus is what showed it was two. MySQL's grammar
+  // gives a condition-less inner join the lowest precedence, so the right side
+  // of a join keeps reading until a condition closes it — `a JOIN b JOIN c ON
+  // 1 ON 2` is legal, and the first `ON` is the inner join's…
   assert.equal(from('SELECT 1 FROM a JOIN b JOIN c ON 1 ON 2'), '(a INNER (b INNER c ON) ON)')
   assert.equal(from('SELECT 1 FROM a LEFT JOIN b JOIN c ON 1 ON 2'), '(a LEFT (b INNER c ON) ON)')
-  // …but a condition closes it, and what follows is left-associative.
+  assert.equal(from('SELECT 1 FROM a STRAIGHT_JOIN b JOIN c ON 1 ON 2'), '(a STRAIGHT (b INNER c ON) ON)')
+  // …but a join with no condition of its own is then attached to the leftmost
+  // table of what it absorbed (`add_cross_join`), so its neighbour's `ON` can
+  // see `a`. 8.4 answers `t1 CROSS JOIN t2 CROSS JOIN t3 ON t1.b < t1.a`.
+  assert.equal(from('SELECT 1 FROM a JOIN b JOIN c ON 1'), '((a INNER b) INNER c ON)')
+  assert.equal(from('SELECT 1 FROM a JOIN b LEFT JOIN c ON 1'), '((a INNER b) LEFT c ON)')
+  assert.equal(from('SELECT 1 FROM a JOIN b JOIN c JOIN d ON 1 ON 2'), '((a INNER b) INNER (c INNER d ON) ON)')
+  // Parentheses stop the walk.
+  assert.equal(from('SELECT 1 FROM a JOIN (b JOIN c ON 1)'), '(a INNER [(b INNER c ON)])')
+  // A condition closes a join, and what follows is left-associative.
   assert.equal(from('SELECT 1 FROM a JOIN b ON 1 JOIN c ON 2'), '((a INNER b ON) INNER c ON)')
   assert.equal(from('SELECT 1 FROM a LEFT JOIN b ON 1 RIGHT JOIN c USING (x)'), '((a LEFT b ON) RIGHT c USING)')
-  // `STRAIGHT_JOIN` is an inner join type and groups like one.
-  assert.equal(from('SELECT 1 FROM a STRAIGHT_JOIN b JOIN c ON 1 ON 2'), '(a STRAIGHT (b INNER c ON) ON)')
   // `NATURAL` takes only a table on its right.
   assert.equal(from('SELECT 1 FROM a NATURAL JOIN b JOIN c'), '((a NATURAL INNER b) INNER c)')
   assert.equal(from('SELECT 1 FROM a NATURAL LEFT OUTER JOIN b'), '(a NATURAL LEFT b)')

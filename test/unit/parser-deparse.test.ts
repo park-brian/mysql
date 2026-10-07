@@ -121,6 +121,12 @@ test('M3.3: every query form survives the deparser', () => {
     'SELECT 1 FROM t PARTITION (p0, p1) AS x USE INDEX FOR JOIN (i) IGNORE KEY (PRIMARY) FORCE INDEX FOR ORDER BY ()',
     'SELECT 1 FROM a, b JOIN c ON 1 LEFT JOIN d USING (x, y) NATURAL RIGHT JOIN e STRAIGHT_JOIN f ON 2',
     'SELECT 1 FROM a JOIN b JOIN c ON 1 ON 2',
+    // A re-hung condition-less join (`add_cross_join`) writes back bare and
+    // re-hangs the same way on the way in.
+    'SELECT 1 FROM a JOIN b JOIN c ON 1',
+    'SELECT 1 FROM a JOIN b JOIN c JOIN d ON 1 ON 2',
+    'SELECT 1 FROM a CROSS JOIN b LEFT JOIN c ON 1 STRAIGHT_JOIN d',
+    'SELECT 1 FROM a JOIN (b JOIN c ON 1)',
     'SELECT 1 FROM (a, b) CROSS JOIN c',
     'SELECT 1 FROM t, LATERAL (SELECT t.a) AS d (x)',
     'SELECT 1 FROM (SELECT 1) d, ((SELECT 1) AS e JOIN f ON 1)',

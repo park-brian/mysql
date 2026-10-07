@@ -49,6 +49,7 @@ npm run capture:types        # storage encodings + sort keys, from binlog row im
 npm run capture:precedence   # 1,200 generated expressions, evaluated by the server
 npm run capture:traces       # 13 client/server byte traces, via a recording proxy
 npm run capture:keywords     # MySQL's reserved words, into @myjs/parser (D-39)
+npm run capture:queries      # 1,200 generated joins and set operations, run by the server
 npm run exit-criterion       # the real C client against our server
 npm run census:mysqltest -- --refresh   # MySQL's own test corpus, lexed and parsed
 ```
