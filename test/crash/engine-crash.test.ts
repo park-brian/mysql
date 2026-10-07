@@ -25,12 +25,12 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import type { VfsFile } from '@myjs/vfs'
 import { FaultInjectingVfs } from '@myjs/vfs/fault'
-import { ClusteredIndex, SecondaryIndex, Store, externalRefs, pageLsn, verifyStore, type FieldBytes, type KeyColumn, type RecordLayout } from '@myjs/engine'
+import { ClusteredIndex, SecondaryIndex, Store, pageLsn, versionOf, type Trx, verifyStore, type FieldBytes, type KeyColumn, type RecordLayout } from '@myjs/engine'
 
 const POINTS = Number(process.env.CRASH_POINTS ?? 300)
 const PAGE = 1024
 const STEPS = 200
-const OPTIONS = { frames: 16, logBlocks: 24 }
+const OPTIONS = { frames: 32, logBlocks: 32 }
 
 const layout: RecordLayout = [{ nullable: false, fixed: 4 }, { nullable: true }, { nullable: true }]
 const primary: KeyColumn[] = [{ field: 0, part: { kind: 'bytes', nullable: false } }]
@@ -41,8 +41,21 @@ const hex = (b: Uint8Array | null) => (b === null ? '-' : Buffer.from(b).toStrin
 type Policy = 0 | 1 | 2
 type Kind = 'process' | 'power'
 
+type Op = { insert: FieldBytes[] } | { update: FieldBytes[] } | { remove: number }
+
+/**
+ * One step: a transaction of several changes. Some steps roll their last
+ * change back to a savepoint, and some roll the whole transaction back; the
+ * plan knows which, so that later steps change only rows that exist.
+ */
+interface Step {
+  readonly ops: readonly Op[]
+  readonly undoLast: boolean
+  readonly abort: boolean
+}
+
 /** The workload's changes, fixed in advance so every run makes the same ones. */
-function plan(): { insert?: FieldBytes[]; remove?: number }[][] {
+function plan(): Step[] {
   let x = 0x2545f491
   const rnd = (n: number) => {
     x ^= x << 13
@@ -50,23 +63,38 @@ function plan(): { insert?: FieldBytes[]; remove?: number }[][] {
     x ^= x << 5
     return (x >>> 0) % n
   }
-  const live: number[] = []
+  let live: number[] = []
   let next = 0
-  const steps: { insert?: FieldBytes[]; remove?: number }[][] = []
+  const row = (id: number): FieldBytes[] => {
+    const val = rnd(5) === 0 ? null : new Uint8Array(1 + rnd(8)).fill(id & 0xff)
+    const body = rnd(6) === 0 ? new Uint8Array(500 + rnd(3000)).fill((id * 7 + rnd(9)) & 0xff) : rnd(2) === 0 ? null : new Uint8Array(rnd(60)).fill(id & 0xff)
+    return [be(id), val, body]
+  }
+  const steps: Step[] = []
   for (let s = 0; s < STEPS; s++) {
-    const ops: { insert?: FieldBytes[]; remove?: number }[] = []
+    const ops: Op[] = []
+    const before = [...live]
     for (let k = 1 + rnd(4); k > 0; k--) {
-      if (live.length > 0 && rnd(3) === 0) {
-        ops.push({ remove: live.splice(rnd(live.length), 1)[0] as number })
-      } else {
-        const id = next++
-        live.push(id)
-        const val = rnd(5) === 0 ? null : new Uint8Array(1 + rnd(8)).fill(id & 0xff)
-        const body = rnd(6) === 0 ? new Uint8Array(500 + rnd(3000)).fill((id * 7) & 0xff) : rnd(2) === 0 ? null : new Uint8Array(rnd(60)).fill(id & 0xff)
-        ops.push({ insert: [be(id), val, body] })
+      const r = rnd(6)
+      if (live.length > 0 && r === 0) ops.push({ remove: live.splice(rnd(live.length), 1)[0] as number })
+      else if (live.length > 0 && r === 1) ops.push({ update: row(live[rnd(live.length)] as number) })
+      else {
+        live.push(next)
+        ops.push({ insert: row(next++) })
       }
     }
-    steps.push(ops)
+    const abort = s % 11 === 5
+    const undoLast = !abort && ops.length > 1 && s % 7 === 3
+    if (abort) live = before
+    else if (undoLast) {
+      // The last change does not happen: put `live` back as it was before it.
+      live = [...before]
+      for (const op of ops.slice(0, -1)) {
+        if ('insert' in op) live.push(Number(new DataView((op.insert[0] as Uint8Array).buffer).getUint32(0)))
+        else if ('remove' in op) live.splice(live.indexOf(op.remove), 1)
+      }
+    }
+    steps.push({ ops, undoLast, abort })
   }
   return steps
 }
@@ -86,15 +114,16 @@ function tables(store: Store): Table {
 
 /** The table as a string — and a check that the secondary index agrees with it. */
 function snapshot(t: Table): string {
-  const rows = [...t.clustered.tree.entries()].map(([k]) => t.clustered.get(k) as FieldBytes[])
+  const rows = [...t.clustered.scan()].map(([, r]) => r)
   const derived = rows.map((r) => hex(r[1] as Uint8Array | null) + '/' + hex(r[0] as Uint8Array)).sort()
-  const indexed = [...t.secondary.tree.entries()].length
-  assert.equal(indexed, rows.length, 'the secondary index has one entry per row')
+  let live = 0
+  for (const [, v] of t.secondary.tree.entries()) if (!versionOf(v).marked) live++
+  assert.equal(live, rows.length, 'the secondary index has one live entry per row')
   for (const r of rows) assert.ok(t.secondary.primaryKeys([r[1] as FieldBytes]).some((pk) => hex(pk) === hex(r[0] as Uint8Array)), 'every row is in the secondary index')
   return derived.length + ':' + rows.map((r) => r.map(hex).join(',')).join(';')
 }
 
-const verify = (store: Store, t: Table) => verifyStore(store, { overflowRefs: (id, v) => (id === t.clustered.tree.indexId ? externalRefs(layout, v) : []) })
+const verify = (store: Store, t: Table) => verifyStore(store, { overflowRefs: (id, v) => (id === t.clustered.tree.indexId ? t.clustered.refsOf(v) : []) })
 
 const files = async (vfs: FaultInjectingVfs): Promise<[VfsFile, VfsFile]> => [await vfs.open('data', { create: true }), await vfs.open('log', { create: true })]
 
@@ -119,24 +148,42 @@ async function run(policy: Policy, crashAt: number | undefined, seed: number, st
     store.sync()
     acked = synced = 0
     states?.push(snapshot(t))
+    let reader: Trx | undefined
     for (let s = 0; s < PLAN.length; s++) {
-      store.atomically(() => {
-        for (const op of PLAN[s] as { insert?: FieldBytes[]; remove?: number }[]) {
-          if (op.insert !== undefined) t.secondary.insert(op.insert, t.clustered.insert(op.insert))
-          else {
-            const key = be(op.remove as number)
-            t.secondary.delete(t.clustered.get(key) as FieldBytes[], key)
-            t.clustered.delete(key)
+      const step = PLAN[s] as Step
+      const w = store.begin()
+      let savepoint = 0
+      step.ops.forEach((op, i) => {
+        if (i === step.ops.length - 1) savepoint = w.savepoint()
+        if ('insert' in op) t.secondary.insert(op.insert, t.clustered.insert(op.insert, w), w)
+        else {
+          const key = 'remove' in op ? be(op.remove) : (op.update[0] as Uint8Array)
+          const old = t.clustered.get(key, w, 'current') as FieldBytes[]
+          if ('remove' in op) {
+            t.secondary.delete(old, key, w)
+            t.clustered.delete(key, w)
+          } else {
+            if (hex(old[1] as Uint8Array | null) !== hex(op.update[1] as Uint8Array | null)) {
+              t.secondary.delete(old, key, w)
+              t.secondary.insert(op.update, key, w)
+            }
+            t.clustered.update(op.update, w)
           }
         }
       })
-      store.commit()
+      if (step.undoLast) w.rollbackTo(savepoint)
+      if (step.abort) w.rollback()
+      else w.commit()
       acked = s + 1
       if (s % 25 === 24) {
         store.sync()
         synced = s + 1
       }
       if (s % 30 === 29) store.checkpoint()
+      // A reader holds a view across a stretch of steps, so purge falls behind
+      // and the history a crash leaves is long.
+      if (s === 40) t.clustered.get(be(0), (reader = store.begin()))
+      if (s === 140) reader?.commit()
       states?.push(snapshot(t))
     }
     store.close()
@@ -179,7 +226,7 @@ test(`M4.25: ${POINTS} crash points — every recovery consistent, no acknowledg
   const model = states.get(1) as string[]
   console.log(`# writes per run: ${[...writes].map(([p, n]) => `policy ${p} ${n}`).join(", ")}`)
 
-  const tally = { points: 0, lost: 0, recoveryCrashes: 0, unborn: 0 }
+  const tally = { points: 0, lost: 0, recoveryCrashes: 0, unborn: 0, rolledBack: 0 }
   for (let i = 0; i < POINTS; i++) {
     const policy = ([1, 2, 0] as const)[i % 3] as Policy
     const kind: Kind = Math.floor(i / 3) % 2 === 0 ? 'power' : 'process'
@@ -201,24 +248,28 @@ test(`M4.25: ${POINTS} crash points — every recovery consistent, no acknowledg
     const where = `policy ${policy}, ${kind} crash at write ${crashAt} of ${total} (point ${i}): acked ${acked}, synced ${synced}`
     const got = await recover(after)
     tally.points++
+    if (got !== null) tally.rolledBack += got.store.recovered.rolledBack
     if (got === null || got.state === 'empty') {
       assert.ok(acked <= 0, `${where}: the database is gone`)
       tally.unborn++
       continue
     }
-    const j = model.indexOf(got.state)
-    assert.ok(j !== -1, `${where}: the recovered state is not the state after any step`)
+    // A step that rolls back leaves the state as it was, so a state may be
+    // the state after several steps: any of them in range will do.
     const floor = policy === 1 || (policy === 2 && kind === 'process') ? acked : synced
-    assert.ok(j >= floor, `${where}: recovered step ${j}, below the ${floor} this setting guarantees`)
-    assert.ok(j <= acked + 1, `${where}: recovered step ${j}, beyond anything attempted`)
-    if (j < acked) tally.lost++
+    const steps = model.flatMap((st, j) => (st === got.state ? [j] : []))
+    assert.ok(steps.length > 0, `${where}: the recovered state is not the state after any step`)
+    assert.ok(steps.some((j) => j >= floor && j <= acked + 1), `${where}: recovered the state of steps ${steps.join(',')}, outside ${floor}–${acked + 1}`)
+    if (!steps.some((j) => j >= acked)) tally.lost++
+    assert.equal(got.store.stats().writer, 0, `${where}: a transaction is left open`)
     // The recovered database goes on working, and closes clean.
-    got.store.atomically(() => got.t.secondary.insert([be(1e6), null, null], got.t.clustered.insert([be(1e6), null, null])))
-    got.store.commit()
+    const more = got.store.begin()
+    got.t.secondary.insert([be(1e6), null, null], got.t.clustered.insert([be(1e6), null, null], more), more)
+    more.commit()
     got.store.close()
     const reopened = await recover(after)
     assert.ok(reopened !== null && reopened.state !== 'empty')
     verify(reopened.store, reopened.t)
   }
-  console.log(`# crash points ${tally.points}: ${tally.lost} lost commits that their setting allowed, ${tally.recoveryCrashes} recoveries crashed and were recovered, ${tally.unborn} before creation finished`)
+  console.log(`# crash points ${tally.points}: ${tally.lost} lost commits that their setting allowed, ${tally.recoveryCrashes} recoveries crashed and were recovered, ${tally.unborn} before creation finished, ${tally.rolledBack} open transactions rolled back`)
 })

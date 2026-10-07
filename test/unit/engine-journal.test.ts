@@ -59,7 +59,7 @@ test('M4.15: a row too big for any page leaves no overflow page behind', async (
   const used = store.alloc.usedPages().size
   assert.throws(() => table.insert([be(1), new Uint8Array(900), new Uint8Array(5000)]), (e: EngineError) => e.code === 'ER_TOO_BIG_ROWSIZE')
   assert.equal(store.alloc.usedPages().size, used)
-  verifyStore(store, { overflowRefs: (id, v) => (id === table.tree.indexId ? externalRefs(layout, v) : []) })
+  verifyStore(store, { overflowRefs: (id, v) => (id === table.tree.indexId ? table.refsOf(v) : []) })
 })
 
 test('M4.15: an error caught inside a mini-transaction does not un-abort it', async () => {
@@ -108,7 +108,7 @@ test('M4.15: a 1 MiB value is one mini-transaction in a 32-frame pool: its fresh
   table.insert([be(1), body])
   assert.ok(store.pool.stats.writes - writes > 900, 'the chain went to disk before the mini-transaction committed')
   assert.deepEqual(table.get(be(1))?.[1], body)
-  verifyStore(store, { overflowRefs: (id, v) => (id === table.tree.indexId ? externalRefs(layout, v) : []) })
+  verifyStore(store, { overflowRefs: (id, v) => (id === table.tree.indexId ? table.refsOf(v) : []) })
 })
 
 test('D-46: a page clean since it was written logs an image; a dirty one logs a diff', async () => {

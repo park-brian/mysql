@@ -27,7 +27,8 @@ export const RECORD = {
   META: 2,
   ROW: 3,
   END: 15,
-  // 16 and up: Tier 5's undo and transaction records.
+  /** A transaction's commit, in the mini-transaction that makes it: a change stream's boundary (M4.21). */
+  COMMIT: 16,
 } as const
 
 /** A page record's flag: the runs apply to a zeroed page, not the current one. */
@@ -43,12 +44,14 @@ export interface Run {
 export interface Meta {
   readonly pageCount: number
   readonly nextIndexId: number
+  readonly nextTrxId: number
 }
 
 export type Redo =
   | { readonly type: 'page'; readonly pageNo: number; readonly image: boolean; readonly runs: readonly Run[] }
   | ({ readonly type: 'meta' } & Meta)
-  | { readonly type: 'row'; readonly indexId: number; readonly before: readonly FieldBytes[] | null; readonly after: readonly FieldBytes[] | null }
+  | { readonly type: 'row'; readonly indexId: number; readonly trxId: number; readonly before: readonly FieldBytes[] | null; readonly after: readonly FieldBytes[] | null }
+  | { readonly type: 'commit'; readonly trxId: number }
 
 /** A decoded group and the LSNs it spans. */
 export interface Group {
@@ -115,9 +118,11 @@ export function encodeGroup(records: readonly Redo[]): Uint8Array {
         end = run.at + run.bytes.length
       }
     } else if (r.type === 'meta') {
-      body.u8(RECORD.META).lenEncInt(r.pageCount).lenEncInt(r.nextIndexId)
+      body.u8(RECORD.META).lenEncInt(r.pageCount).lenEncInt(r.nextIndexId).lenEncInt(r.nextTrxId)
+    } else if (r.type === 'commit') {
+      body.u8(RECORD.COMMIT).lenEncInt(r.trxId)
     } else {
-      body.u8(RECORD.ROW).lenEncInt(r.indexId)
+      body.u8(RECORD.ROW).lenEncInt(r.indexId).lenEncInt(r.trxId)
       for (const image of [r.before, r.after]) {
         if (image === null) body.u8(0)
         else {
@@ -172,11 +177,14 @@ export function decodeGroup(bytes: Uint8Array): Redo[] {
         }
         out.push({ type: 'page', pageNo, image: (flags & IMAGE) !== 0, runs })
       } else if (type === RECORD.META) {
-        out.push({ type: 'meta', pageCount: int(r), nextIndexId: int(r) })
+        out.push({ type: 'meta', pageCount: int(r), nextIndexId: int(r), nextTrxId: int(r) })
+      } else if (type === RECORD.COMMIT) {
+        out.push({ type: 'commit', trxId: int(r) })
       } else if (type === RECORD.ROW) {
         const indexId = int(r)
+        const trxId = int(r)
         const before = rowImage(r)
-        out.push({ type: 'row', indexId, before, after: rowImage(r) })
+        out.push({ type: 'row', indexId, trxId, before, after: rowImage(r) })
       } else {
         throw corruptLog(`unknown record type ${type}`)
       }

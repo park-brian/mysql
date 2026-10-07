@@ -4,7 +4,7 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { MemoryVfs, type VfsFile } from '@myjs/vfs'
 import { declaredKeyWidth, encodeInt } from '@myjs/types'
-import { ClusteredIndex, EngineError, SecondaryIndex, Store, decodeRecord, externalRefs, verifyStore, type FieldBytes, type KeyColumn, type RecordLayout } from '@myjs/engine'
+import { CLUSTERED_HEADER, ClusteredIndex, EngineError, SecondaryIndex, Store, decodeRecord, externalRefs, verifyStore, type FieldBytes, type KeyColumn, type RecordLayout } from '@myjs/engine'
 
 const PAGE = 1024
 const utf8 = (s: string) => new TextEncoder().encode(s)
@@ -29,7 +29,7 @@ async function table(frames = 64) {
 }
 
 const verify = (store: Store, clustered: ClusteredIndex) =>
-  verifyStore(store, { overflowRefs: (id, value) => (id === clustered.tree.indexId ? externalRefs(layout, value) : []) })
+  verifyStore(store, { overflowRefs: (id, value) => (id === clustered.tree.indexId ? clustered.refsOf(value) : []) })
 
 test('M4.11: a non-covering secondary lookup costs exactly one extra descent, and the test proves it', async () => {
   const { store, clustered } = await table()
@@ -91,7 +91,7 @@ test('M4.6: a 1 MB value round-trips, and its pages are freed on delete', async 
   const baseline = store.alloc.usedPages().size
   const key = clustered.insert([int(1), utf8('big'), body])
   // Off-page with no local prefix: the record holds an 8-byte reference.
-  const record = clustered.tree.get(key) as Uint8Array
+  const record = (clustered.tree.get(key) as Uint8Array).subarray(CLUSTERED_HEADER)
   assert.ok(record.length < 40)
   assert.equal(externalRefs(layout, record).length, 1)
   assert.ok(!(decodeRecord(layout, record)[2] instanceof Uint8Array))

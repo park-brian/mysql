@@ -65,14 +65,14 @@ test('M4.2: a page in the wrong place, of an unknown type, or never written, is 
 
 test('D-41: the superblock round-trips, and a file this build cannot read is refused', () => {
   const page = new Uint8Array(PAGE)
-  const s = { pageSize: PAGE, generation: 3, salt: 0xdeadbeef, logBlocks: 64, checkpointLsn: 2 ** 35, checkpointBlock: 5, pageCount: 128, nextIndexId: 4, directoryRoot: 3 }
+  const s = { pageSize: PAGE, generation: 3, salt: 0xdeadbeef, logBlocks: 64, checkpointLsn: 2 ** 35, checkpointBlock: 5, pageCount: 128, nextIndexId: 4, directoryRoot: 3, trxRoot: 6, nextTrxId: 2 ** 40 + 7 }
   writeSuperblock(page, s)
   verifyPage(page, 1, PAGE)
   assert.deepEqual(readSuperblock(page, PAGE), s)
   assert.throws(() => readSuperblock(page, 2048), (e: EngineError) => e.code === 'ENGINE_BAD_FORMAT')
   const future = page.slice()
-  new DataView(future.buffer).setUint16(FRAME_HEADER + 8, 3)
-  assert.throws(() => readSuperblock(future, PAGE), /format version 3/)
+  new DataView(future.buffer).setUint16(FRAME_HEADER + 8, 4)
+  assert.throws(() => readSuperblock(future, PAGE), /format version 4/)
   // Version 1 had no log. It is refused with the reason, never migrated (D-26).
   const old = page.slice()
   new DataView(old.buffer).setUint16(FRAME_HEADER + 8, 1)

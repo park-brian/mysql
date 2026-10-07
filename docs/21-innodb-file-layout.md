@@ -259,7 +259,7 @@ copy is durable. After the frame (doc 22):
 | Offset | Size | Field |
 |---|---|---|
 | 24 | 8 | magic, `myjs-db\0` |
-| 32 | 2 | format version, **2** — refused if it is not one this build reads (D-26) |
+| 32 | 2 | format version, **3** — refused if it is not one this build reads (D-26) |
 | 34 | 2 | reserved |
 | 36 | 4 | page size |
 | 40 | 4 | generation |
@@ -270,6 +270,8 @@ copy is durable. After the frame (doc 22):
 | 64 | 4 | page count — the file's allocated length, as of the checkpoint |
 | 68 | 4 | next index id, likewise |
 | 72 | 4 | root page of the directory tree, fixed for the file's life |
+| 76 | 4 | root page of the transaction directory (doc 25 §Our undo), fixed likewise |
+| 80 | 6 | next transaction id, as of the checkpoint |
 
 The page LSN of a superblock is its checkpoint LSN. Page count and next index
 id change between checkpoints, so every log group carries them too, and the
@@ -278,6 +280,10 @@ last one recovery reads wins.
 **Format 1 is refused, not migrated.** It had one superblock, no log and no
 checkpoint; it was never crash-safe and was never released, so there is no data
 in it to carry forward. Opening one says so.
+
+**Format 2 is refused likewise.** It stored rows without transaction ids, so it
+had no version for a reader to see and no undo to roll back. It was never
+released either (M4.20).
 
 **The directory is itself a B+tree**, index id 0, mapping a big-endian `u32`
 index id to the `u32` root page of that index. A root page **never moves**:

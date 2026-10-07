@@ -13,12 +13,12 @@
 // never gets one must be free — which the store checks once the allocator is
 // open.
 //
-// Undo-based rollback is the other half of M4.18 and waits for M4.20: until
-// there are transactions longer than a mini-transaction, a group that is not
-// whole is all there is to roll back, and it is never applied.
+// This is redo. The other half of M4.18 — rolling back the transaction a crash
+// left open — runs once the store is open, from its undo log (`trx.ts`).
 import type { VfsFile } from '@myjs/vfs'
 import { EngineError, corruptLog } from './errors.ts'
-import { pageLsn } from './page.ts'
+import { validateIndexPage } from './index-page.ts'
+import { PAGE_TYPE, pageLsn, pageType } from './page.ts'
 import type { BufferPool } from './pool.ts'
 import { applyPage, type Meta } from './redo.ts'
 import type { Superblock } from './superblock.ts'
@@ -37,13 +37,13 @@ export function recover(pool: BufferPool, logFile: VfsFile, s: Superblock): Reco
   // A process crash can leave log blocks in the OS's cache. Nothing on disk
   // may come to depend on them until they are durable too.
   logFile.flush()
-  let meta: Meta = { pageCount: s.pageCount, nextIndexId: s.nextIndexId }
+  let meta: Meta = { pageCount: s.pageCount, nextIndexId: s.nextIndexId, nextTrxId: s.nextTrxId }
   let end = s.checkpointLsn
   let groups = 0
   const unreadable = new Set<number>()
   for (const group of scanLog(logFile, { salt: s.salt, blocks: s.logBlocks, block: s.checkpointBlock, lsn: s.checkpointLsn })) {
     let next = meta
-    for (const r of group.records) if (r.type === 'meta') next = { pageCount: r.pageCount, nextIndexId: r.nextIndexId }
+    for (const r of group.records) if (r.type === 'meta') next = { pageCount: r.pageCount, nextIndexId: r.nextIndexId, nextTrxId: r.nextTrxId }
     for (const r of group.records) {
       if (r.type !== 'page') continue
       if (r.pageNo < 2 || r.pageNo >= next.pageCount) throw corruptLog(`a record for page ${r.pageNo} of a ${next.pageCount}-page file`)
@@ -53,6 +53,7 @@ export function recover(pool: BufferPool, logFile: VfsFile, s: Superblock): Reco
         const page = pool.create(r.pageNo)
         try {
           applyPage(page, r, r.pageNo)
+          checked(page, r.pageNo)
           pool.markDirty(page, group.end)
         } finally {
           pool.release(page)
@@ -69,6 +70,7 @@ export function recover(pool: BufferPool, logFile: VfsFile, s: Superblock): Reco
       try {
         if (pageLsn(page) >= group.end) continue
         applyPage(page, r, r.pageNo)
+        checked(page, r.pageNo)
         pool.markDirty(page, group.end)
       } finally {
         pool.release(page)
@@ -79,6 +81,19 @@ export function recover(pool: BufferPool, logFile: VfsFile, s: Superblock): Reco
     groups++
   }
   return { end, meta, unreadable, groups }
+}
+
+/**
+ * A page redo has just changed must still be a page. The pool checks a page's
+ * structure as it reads one, but a diff written against the page as it was
+ * can make one that passed into one that does not, if what was on disk was not
+ * what the log assumed. A torn write cannot do that, because a torn page fails
+ * its checksum and waits for its image. A re-sealed, tampered page can (the
+ * engine fuzzer found it), and what it makes must be a typed error, not a heap
+ * that a later insert overruns.
+ */
+function checked(page: Uint8Array, pageNo: number): void {
+  if (pageType(page) === PAGE_TYPE.INDEX) validateIndexPage(page, pageNo)
 }
 
 /** A page from storage, or `undefined` if it does not verify. */

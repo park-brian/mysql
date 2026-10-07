@@ -7,7 +7,8 @@
 //   - The **clustered index** maps the primary key's sort key to the whole
 //     record. Both are stored, because a sort key cannot be turned back into a
 //     value: under a PAD SPACE collation `'a'` and `'a '` have one key.
-//   - A **secondary index** maps *secondary key ++ primary key* to nothing.
+//   - A **secondary index** maps *secondary key ++ primary key* to a version
+//     header: a delete-mark and the trx id that last changed the entry (M4.21).
 //     Every key is unique, so a nullable `UNIQUE` index can hold many NULLs as
 //     MySQL's does, and uniqueness is a prefix scan made before the insert. A
 //     lookup reads the primary key off the entry's tail and makes exactly one
@@ -18,13 +19,24 @@
 // key follows them. So every variable-length part must declare its width, and
 // the longest key an index can make is checked against the page when the index
 // is defined, as `ER_TOO_LONG_KEY` — never at insert.
+//
+// Every change is a transaction's (M4.20): a clustered value carries doc 25's
+// hidden `DB_TRX_ID` and `DB_ROLL_PTR` ahead of its record, a delete marks
+// rather than removes, and every change leaves an undo record — kept per index
+// entry, so rollback and purge need no schema. What does need the schema, the
+// overflow chains a version owns, is worked out here and carried in the undo
+// record. An update writes every off-page field afresh, so a chain belongs to
+// exactly one version and is freed exactly once. A change with no transaction
+// is one of its own: autocommit.
 import { encodeKey, type KeyPart } from '@myjs/types'
-import { BTree, type TreeOptions } from './btree.ts'
-import { duplicateKey, misuse } from './errors.ts'
+import { BTree, type Range, type TreeOptions } from './btree.ts'
+import { corrupt, duplicateKey, misuse, snapshotTooOld } from './errors.ts'
 import { maxCellSize } from './index-page.ts'
-import { freeChain, readChain, writeChain } from './overflow.ts'
+import { readChain, writeChain } from './overflow.ts'
 import { decodeRecord, encodeRecord, externalRefs, type FieldBytes, type RecordLayout } from './record.ts'
 import type { Store } from './store.ts'
+import { CLUSTERED_HEADER, SECONDARY_HEADER, clusteredValue, rollPtrOf, secondaryValue, versionOf, type ReadView, type Trx, type TrxSys } from './trx.ts'
+import { readUndo } from './undo.ts'
 
 /** One key column: which field of the row, and how it is encoded. */
 export interface KeyColumn {
@@ -67,7 +79,9 @@ function primaryBound(layout: RecordLayout, primary: readonly KeyColumn[], pageS
 
 /** A secondary entry's longest encoding — its own key and the primary key after it. */
 function secondaryBound(clustered: ClusteredIndex, columns: readonly KeyColumn[], pageSize: number): void {
-  BTree.checkKeyLength(maxKeyLength(clustered.layout, columns) + clustered.maxKey, pageSize)
+  // `maxKey` allows a 4-byte child pointer beside the key; a secondary leaf
+  // cell carries the version header beside it instead.
+  BTree.checkKeyLength(maxKeyLength(clustered.layout, columns) + clustered.maxKey + SECONDARY_HEADER - 4, pageSize)
 }
 
 const keyOf = (row: Row, columns: readonly KeyColumn[]): Uint8Array =>
@@ -88,6 +102,15 @@ function prefixEnd(prefix: Uint8Array): Uint8Array | undefined {
   return undefined
 }
 
+/**
+ * How a read sees an index. `'consistent'` reads the snapshot: the
+ * transaction's read view, or — with no transaction — a view of its own, as
+ * an autocommit read takes. `'current'` reads the latest version, as
+ * `SELECT … FOR UPDATE` and the reads inside `UPDATE` and `DELETE` do; it
+ * needs a transaction, and takes the writer slot for it (doc 25).
+ */
+export type ReadMode = 'consistent' | 'current'
+
 export class ClusteredIndex {
   readonly tree: BTree
   readonly layout: RecordLayout
@@ -102,8 +125,9 @@ export class ClusteredIndex {
     this.layout = layout
     this.primary = primary
     this.maxKey = primaryBound(layout, primary, pageSize)
-    // A leaf cell is the key, the record and two length varints of up to three bytes.
-    this.#maxRecord = maxCellSize(pageSize) - this.maxKey - 6
+    // A leaf cell is the key, the value and two length varints of up to three
+    // bytes; the value is the version header, then the record.
+    this.#maxRecord = maxCellSize(pageSize) - this.maxKey - 6 - CLUSTERED_HEADER
   }
 
   static create(store: Store, layout: RecordLayout, primary: readonly KeyColumn[], options: TreeOptions = {}): ClusteredIndex {
@@ -112,45 +136,167 @@ export class ClusteredIndex {
     return new ClusteredIndex(store.createTree(options), layout, primary)
   }
 
+  get #sys(): TrxSys {
+    return this.tree.space.transactions
+  }
+
   keyOf(row: Row): Uint8Array {
     return keyOf(row, this.primary)
   }
 
   /**
-   * Insert a row; ER_DUP_ENTRY if its primary key is taken. Returns the key.
-   * One mini-transaction, or part of the caller's, logging the row's image
-   * (D-25) — so a value too big for any page leaves no overflow page behind.
+   * The overflow references a stored value owns — what `verifyStore` follows.
+   * A delete-marked value owns none: its chains belong to the delete's undo
+   * record, which frees them at purge, so each chain has one owner.
    */
-  insert(row: Row): Uint8Array {
+  refsOf(value: Uint8Array): Uint8Array[] {
+    if (versionOf(value).marked) return []
+    return externalRefs(this.layout, value.subarray(CLUSTERED_HEADER))
+  }
+
+  /**
+   * Insert a row; ER_DUP_ENTRY if its primary key is taken. Returns the key.
+   * Re-inserting a key whose row is delete-marked is an update of the marked
+   * version, not an insert (InnoDB's `TRX_UNDO_UPD_DEL_REC`): a view that
+   * cannot see the delete must still find the row it deleted.
+   */
+  insert(row: Row, trx?: Trx): Uint8Array {
     const key = this.keyOf(row)
-    const journal = this.tree.space.journal
-    return journal.atomically(() => {
-      if (this.tree.get(key) !== undefined) throw duplicateKey('PRIMARY')
-      const pages = this.tree.overflowPages()
-      this.tree.put(key, encodeRecord(this.layout, row, { maxSize: this.#maxRecord, storeExternal: (b) => writeChain(pages, b) }))
-      journal.row(this.tree.indexId, null, row)
+    return this.#change(trx, (t) => {
+      const current = this.tree.get(key)
+      if (current !== undefined && !versionOf(current).marked) throw duplicateKey('PRIMARY')
+      const record = this.#encode(row)
+      const ptr = t.undo({ isInsert: current === undefined, purgeRemoves: false, indexId: this.tree.indexId, key, old: current ?? null, freeOnPurge: [], freeOnRollback: externalRefs(this.layout, record) })
+      this.tree.put(key, clusteredValue(false, t.id, ptr, record))
+      this.tree.space.journal.row(this.tree.indexId, t.id, null, row)
       return key
     })
   }
 
-  /** The row under a primary key, off-page fields read back in. One descent. */
-  get(key: Uint8Array): FieldBytes[] | undefined {
-    const record = this.tree.get(key)
-    if (record === undefined) return undefined
-    return decodeRecord(this.layout, record).map((v) => (v === null || v instanceof Uint8Array ? v : readChain(this.tree.space.pool, v.ref)))
+  /** Replace the row with `row`'s primary key. `false` if there is none. */
+  update(row: Row, trx?: Trx): boolean {
+    const key = this.keyOf(row)
+    return this.#change(trx, (t) => {
+      const current = this.tree.get(key)
+      if (current === undefined || versionOf(current).marked) return false
+      const before = this.#row(current.subarray(CLUSTERED_HEADER))
+      const record = this.#encode(row)
+      const ptr = t.undo({
+        isInsert: false,
+        purgeRemoves: false,
+        indexId: this.tree.indexId,
+        key,
+        old: current,
+        // The old version's chains are its own: freed when no view needs it.
+        freeOnPurge: this.refsOf(current),
+        freeOnRollback: externalRefs(this.layout, record),
+      })
+      this.tree.put(key, clusteredValue(false, t.id, ptr, record))
+      this.tree.space.journal.row(this.tree.indexId, t.id, before, row)
+      return true
+    })
   }
 
-  /** Remove a row, and free its off-page fields. Logs the row as it was. */
-  delete(key: Uint8Array): boolean {
-    const journal = this.tree.space.journal
-    return journal.atomically(() => {
-      const record = this.tree.get(key)
-      if (record === undefined) return false
-      journal.row(this.tree.indexId, this.get(key) as FieldBytes[], null)
-      const pages = this.tree.overflowPages()
-      for (const ref of externalRefs(this.layout, record)) freeChain(pages, ref)
-      return this.tree.delete(key)
+  /** Delete-mark a row; purge removes it once no view can see it. `false` if there is none. */
+  delete(key: Uint8Array, trx?: Trx): boolean {
+    return this.#change(trx, (t) => {
+      const current = this.tree.get(key)
+      if (current === undefined || versionOf(current).marked) return false
+      const record = current.subarray(CLUSTERED_HEADER)
+      const before = this.#row(record)
+      const ptr = t.undo({ isInsert: false, purgeRemoves: true, indexId: this.tree.indexId, key, old: current, freeOnPurge: this.refsOf(current), freeOnRollback: [] })
+      this.tree.put(key, clusteredValue(true, t.id, ptr, record.slice()))
+      this.tree.space.journal.row(this.tree.indexId, t.id, before, null)
+      return true
     })
+  }
+
+  /** The row under a primary key as `trx` sees it, off-page fields read back in. */
+  get(key: Uint8Array, trx?: Trx, mode: ReadMode = 'consistent'): FieldBytes[] | undefined {
+    return this.read(trx, mode, (view) => {
+      const record = this.recordAt(key, view)
+      return record === undefined ? undefined : this.#row(record)
+    })
+  }
+
+  /** Rows in key order within a range, as `trx` sees them. Do not change the index while iterating. */
+  *scan(range: Range = {}, trx?: Trx, mode: ReadMode = 'consistent'): Generator<[Uint8Array, FieldBytes[]]> {
+    const view = this.#open(trx, mode)
+    try {
+      for (const [key, value] of this.tree.entries(range)) {
+        const record = this.#visible(value, view.view)
+        if (record !== undefined) yield [key, this.#row(record)]
+      }
+    } finally {
+      view.close()
+    }
+  }
+
+  /** Run `use` with the view a read in `mode` by `trx` takes; `null` is the latest version. */
+  read<T>(trx: Trx | undefined, mode: ReadMode, use: (view: ReadView | null) => T): T {
+    const v = this.#open(trx, mode)
+    try {
+      return use(v.view)
+    } finally {
+      v.close()
+    }
+  }
+
+  /** The record of the version of `key` that `view` sees, or `undefined`. */
+  recordAt(key: Uint8Array, view: ReadView | null): Uint8Array | undefined {
+    const value = this.tree.get(key)
+    return value === undefined ? undefined : this.#visible(value, view)
+  }
+
+  /** The row a stored record decodes to, its off-page fields read in. */
+  rowOf(record: Uint8Array): FieldBytes[] {
+    return this.#row(record)
+  }
+
+  #open(trx: Trx | undefined, mode: ReadMode): { view: ReadView | null; close: () => void } {
+    if (mode === 'current') {
+      if (trx === undefined) throw misuse('a current read needs a transaction')
+      trx.lock()
+      return { view: null, close: () => {} }
+    }
+    if (trx !== undefined) return { view: trx.view, close: () => {} }
+    const sys = this.#sys
+    const view = sys.openView(undefined)
+    return { view, close: () => sys.closeView(view) }
+  }
+
+  /**
+   * Walk a version chain to the version `view` can see (doc 25): the stored
+   * one if its trx is visible, else the old value its roll pointer names,
+   * and so on. An insert's undo has nothing older; a delete-mark is absence.
+   */
+  #visible(value: Uint8Array, view: ReadView | null): Uint8Array | undefined {
+    if (view?.expired === true) throw snapshotTooOld()
+    let v = value
+    for (let hops = 0; ; hops++) {
+      const version = versionOf(v)
+      if (view === null || view.isVisible(version.trxId)) return version.marked ? undefined : v.subarray(CLUSTERED_HEADER)
+      const ptr = rollPtrOf(v)
+      if (ptr === null || ptr.isInsert) return undefined
+      if (hops > this.#sys.nextTrxId) throw corrupt(ptr.page, 'a version chain that does not end')
+      const old = readUndo(this.tree.space.pool, ptr).old
+      if (old === null) return undefined
+      v = old
+    }
+  }
+
+  #change<T>(trx: Trx | undefined, change: (t: Trx) => T): T {
+    if (trx !== undefined) return trx.write(() => change(trx))
+    return this.#sys.autocommit((t) => t.write(() => change(t)))
+  }
+
+  #encode(row: Row): Uint8Array {
+    const pages = this.tree.overflowPages()
+    return encodeRecord(this.layout, row, { maxSize: this.#maxRecord, storeExternal: (b) => writeChain(pages, b) })
+  }
+
+  #row(record: Uint8Array): FieldBytes[] {
+    return decodeRecord(this.layout, record).map((v) => (v === null || v instanceof Uint8Array ? v : readChain(this.tree.space.pool, v.ref)))
   }
 }
 
@@ -177,34 +323,84 @@ export class SecondaryIndex {
 
   /**
    * Add a row's entry. In a unique index a row with no NULL in the key is
-   * refused if any entry shares its secondary key; NULLs never collide.
+   * refused if a live entry shares its secondary key; NULLs never collide,
+   * and a delete-marked entry is a row already gone. An entry this row left
+   * marked is taken back rather than added again, as the clustered insert does.
    */
-  insert(row: Row, primaryKey: Uint8Array): void {
+  insert(row: Row, primaryKey: Uint8Array, trx?: Trx): void {
     const secondary = keyOf(row, this.columns)
-    if (this.unique && this.columns.every((c) => row[c.field] !== null) && this.#keys(secondary).next().done !== true) {
-      throw duplicateKey(this.name)
-    }
-    this.tree.put(concat(secondary, primaryKey), new Uint8Array(0))
+    const key = concat(secondary, primaryKey)
+    this.#change(trx, (t) => {
+      if (this.unique && this.columns.every((c) => row[c.field] !== null)) {
+        for (const [, value] of this.#entries(secondary)) if (!versionOf(value).marked) throw duplicateKey(this.name)
+      }
+      const current = this.tree.get(key)
+      if (current !== undefined && !versionOf(current).marked) throw misuse(`the row is already in ${this.name}`)
+      t.undo({ isInsert: current === undefined, purgeRemoves: false, indexId: this.tree.indexId, key, old: current ?? null, freeOnPurge: [], freeOnRollback: [] })
+      this.tree.put(key, secondaryValue(false, t.id))
+    })
   }
 
-  delete(row: Row, primaryKey: Uint8Array): boolean {
-    return this.tree.delete(concat(keyOf(row, this.columns), primaryKey))
+  /** Delete-mark a row's entry. `false` if it has none. */
+  delete(row: Row, primaryKey: Uint8Array, trx?: Trx): boolean {
+    const key = concat(keyOf(row, this.columns), primaryKey)
+    return this.#change(trx, (t) => {
+      const current = this.tree.get(key)
+      if (current === undefined || versionOf(current).marked) return false
+      t.undo({ isInsert: false, purgeRemoves: true, indexId: this.tree.indexId, key, old: current, freeOnPurge: [], freeOnRollback: [] })
+      this.tree.put(key, secondaryValue(true, t.id))
+      return true
+    })
   }
 
-  /** The primary keys of the rows whose secondary key is `values` — a covering read, the clustered index untouched. */
-  primaryKeys(values: KeyValues): Uint8Array[] {
-    return [...this.#keys(encodeKey(values, this.columns.map((c) => c.part)))]
+  /**
+   * The primary keys of the rows whose secondary key is `values`, as `trx`
+   * sees them. An entry whose last change the view can see is accurate as it
+   * stands — a covering read. One it cannot see may be marked for a row the
+   * view still has, or live for a row the view does not: the clustered version
+   * the view sees decides, by whether its key is this one.
+   */
+  primaryKeys(values: KeyValues, trx?: Trx, mode: ReadMode = 'consistent'): Uint8Array[] {
+    const secondary = encodeKey(values, this.columns.map((c) => c.part))
+    return this.clustered.read(trx, mode, (view) => this.#keys(secondary, view))
   }
 
   /** The rows whose secondary key is `values`: each one descent of the clustered index. */
-  find(values: KeyValues): FieldBytes[][] {
-    return this.primaryKeys(values).map((pk) => this.clustered.get(pk) as FieldBytes[])
+  find(values: KeyValues, trx?: Trx, mode: ReadMode = 'consistent'): FieldBytes[][] {
+    const secondary = encodeKey(values, this.columns.map((c) => c.part))
+    return this.clustered.read(trx, mode, (view) => this.#keys(secondary, view).map((pk) => this.clustered.rowOf(this.clustered.recordAt(pk, view) as Uint8Array)))
   }
 
-  *#keys(secondary: Uint8Array): Generator<Uint8Array> {
-    const end = prefixEnd(secondary)
-    for (const [key] of this.tree.entries({ from: secondary, ...(end === undefined ? {} : { to: end }) })) yield key.subarray(secondary.length)
+  #keys(secondary: Uint8Array, view: ReadView | null): Uint8Array[] {
+    const out: Uint8Array[] = []
+    for (const [key, value] of this.#entries(secondary)) {
+      const pk = key.subarray(secondary.length)
+      const v = versionOf(value)
+      if (view === null || view.isVisible(v.trxId)) {
+        if (!v.marked) out.push(pk)
+        continue
+      }
+      const record = this.clustered.recordAt(pk, view)
+      if (record !== undefined && equal(keyOf(this.clustered.rowOf(record), this.columns), secondary)) out.push(pk)
+    }
+    return out
   }
+
+  *#entries(secondary: Uint8Array): Generator<[Uint8Array, Uint8Array]> {
+    const end = prefixEnd(secondary)
+    yield* this.tree.entries({ from: secondary, ...(end === undefined ? {} : { to: end }) })
+  }
+
+  #change<T>(trx: Trx | undefined, change: (t: Trx) => T): T {
+    if (trx !== undefined) return trx.write(() => change(trx))
+    return this.tree.space.transactions.autocommit((t) => t.write(() => change(t)))
+  }
+}
+
+function equal(a: Uint8Array, b: Uint8Array): boolean {
+  if (a.length !== b.length) return false
+  for (let i = 0; i < a.length; i++) if (a[i] !== b[i]) return false
+  return true
 }
 
 function concat(a: Uint8Array, b: Uint8Array): Uint8Array {

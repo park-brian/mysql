@@ -20,6 +20,7 @@ import { mkdirSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { MemoryVfs } from '@myjs/vfs'
 import {
+  ClusteredIndex,
   EngineError,
   LOG_BLOCK,
   LOG_HEADER,
@@ -27,7 +28,9 @@ import {
   Store,
   decodeGroup,
   decodeRecord,
+  decodeUndo,
   encodeGroup,
+  encodeUndo,
   groupLength,
   indexPage,
   initPage,
@@ -90,6 +93,15 @@ const fixture = await (async () => {
   for (let i = 0; i < 150; i++) tree.put(Uint8Array.of(i >> 8, i & 0xff), new Uint8Array(i % 20))
   store.checkpoint()
   for (let i = 150; i < 300; i++) tree.put(Uint8Array.of(i >> 8, i & 0xff), new Uint8Array(i % 20))
+  // A table with history a reader pins, and a transaction left open: opening
+  // the store rolls it back, so every mutation below reaches undo too.
+  const table = ClusteredIndex.create(store, [{ nullable: false, fixed: 2 }, { nullable: true }], [{ field: 0, part: { kind: 'bytes', nullable: false } }])
+  for (let i = 0; i < 40; i++) table.insert([Uint8Array.of(0, i), new Uint8Array(i % 30)])
+  table.get(Uint8Array.of(0, 0), store.begin())
+  for (let i = 0; i < 40; i += 3) table.update([Uint8Array.of(0, i), new Uint8Array(5).fill(i)])
+  const open = store.begin()
+  for (let i = 1; i < 40; i += 4) table.delete(Uint8Array.of(0, i), open)
+  for (let i = 40; i < 50; i++) table.insert([Uint8Array.of(0, i), null], open)
   store.sync()
   const pages = []
   for (let p = 0; p < file.size() / PAGE; p++) {
@@ -135,7 +147,7 @@ const TARGETS = [
   // A mutated superblock.
   () => {
     const page = new Uint8Array(PAGE)
-    writeSuperblock(page, { pageSize: PAGE, generation: randInt(9), salt: randInt(1e9), logBlocks: 64, checkpointLsn: randInt(1e9), checkpointBlock: randInt(64), pageCount: 64, nextIndexId: 2, directoryRoot: 3 })
+    writeSuperblock(page, { pageSize: PAGE, generation: randInt(9), salt: randInt(1e9), logBlocks: 64, checkpointLsn: randInt(1e9), checkpointBlock: randInt(64), pageCount: 64, nextIndexId: 2, directoryRoot: 3, trxRoot: 4, nextTrxId: randInt(1e9) })
     readSuperblock(mutate(page), PAGE)
   },
   // A record of a random layout over arbitrary bytes.
@@ -169,12 +181,19 @@ const TARGETS = [
       }),
     )
   },
+  // An undo record's bytes, mutated: decode answers with a record or ENGINE_CORRUPT_UNDO.
+  (input) => {
+    const record = encodeUndo({ isInsert: false, purgeRemoves: rnd() < 0.5, indexId: randInt(1000), key: input.subarray(0, randInt(20)), old: input.subarray(0, randInt(60)), freeOnPurge: [new Uint8Array(8)], freeOnRollback: [] })
+    for (let i = 1 + randInt(3); i > 0; i--) record[randInt(record.length)] = randInt(256)
+    decodeUndo(record.subarray(0, 1 + randInt(record.length)))
+  },
   // A group's bytes, mutated: decode answers with records or ENGINE_CORRUPT_LOG.
   (input) => {
     const group = encodeGroup([
       { type: 'page', pageNo: randInt(1000), image: rnd() < 0.5, runs: [{ at: 24, bytes: input.subarray(0, 1 + randInt(20)) }] },
-      { type: 'meta', pageCount: 64, nextIndexId: 2 },
-      { type: 'row', indexId: 1, before: null, after: [input.subarray(0, randInt(10)), null] },
+      { type: 'meta', pageCount: 64, nextIndexId: 2, nextTrxId: 9 },
+      { type: 'row', indexId: 1, trxId: 3, before: null, after: [input.subarray(0, randInt(10)), null] },
+      { type: 'commit', trxId: 3 },
     ])
     for (let i = 1 + randInt(3); i > 0; i--) group[randInt(group.length)] = randInt(256)
     const n = groupLength(group)

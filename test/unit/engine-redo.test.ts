@@ -46,9 +46,9 @@ test('M4.13: an unchanged page has no runs, and nearby changes share one', () =>
 test('M4.13: a group round-trips, and its length is known from its first bytes', () => {
   const records: Redo[] = [
     { type: 'page', pageNo: 70000, image: true, runs: [{ at: 4, bytes: Uint8Array.of(1, 2) }, { at: 300, bytes: new Uint8Array(300).fill(9) }] },
-    { type: 'meta', pageCount: 2 ** 40, nextIndexId: 3 },
-    { type: 'row', indexId: 5, before: null, after: [Uint8Array.of(1), null, new Uint8Array(70000)] },
-    { type: 'row', indexId: 5, before: [new Uint8Array(0), null], after: null },
+    { type: 'meta', pageCount: 2 ** 40, nextIndexId: 3, nextTrxId: 5 },
+    { type: 'row', indexId: 5, trxId: 9, before: null, after: [Uint8Array.of(1), null, new Uint8Array(70000)] },
+    { type: 'row', indexId: 5, trxId: 9, before: [new Uint8Array(0), null], after: null },
   ]
   const bytes = encodeGroup(records)
   assert.equal(groupLength(bytes), bytes.length)
@@ -57,7 +57,7 @@ test('M4.13: a group round-trips, and its length is known from its first bytes',
 })
 
 test('M4.13: any bytes decode to a group or ENGINE_CORRUPT_LOG — never a crash', () => {
-  const valid = encodeGroup([{ type: 'page', pageNo: 9, image: false, runs: [{ at: 40, bytes: Uint8Array.of(7) }] }, { type: 'meta', pageCount: 64, nextIndexId: 2 }])
+  const valid = encodeGroup([{ type: 'page', pageNo: 9, image: false, runs: [{ at: 40, bytes: Uint8Array.of(7) }] }, { type: 'meta', pageCount: 64, nextIndexId: 2, nextTrxId: 5 }])
   fc.assert(
     fc.property(fc.array(fc.tuple(fc.nat(valid.length - 1), fc.nat(255)), { minLength: 1, maxLength: 4 }), (edits) => {
       const bytes = valid.slice()

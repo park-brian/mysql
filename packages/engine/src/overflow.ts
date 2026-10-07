@@ -14,9 +14,11 @@ import type { Journal } from './journal.ts'
 /** The inline size of an off-page reference. */
 export const REF_SIZE = 8
 
-const NEXT = FRAME_HEADER
-const USED = FRAME_HEADER + 4
-const DATA = FRAME_HEADER + 8
+// An overflow page: the next page, the bytes used, then the bytes. Undo logs
+// (M4.20) are chains of the same pages, so the layout is shared.
+export const NEXT = FRAME_HEADER
+export const USED = FRAME_HEADER + 4
+export const DATA = FRAME_HEADER + 8
 
 /** Where a tree's overflow pages come from and go back to. */
 export interface OverflowPages {
@@ -26,7 +28,7 @@ export interface OverflowPages {
   free(page: number): void
 }
 
-const capacity = (pageSize: number): number => pageSize - DATA - FRAME_TRAILER
+export const capacity = (pageSize: number): number => pageSize - DATA - FRAME_TRAILER
 
 export interface ExternalRef {
   readonly page: number

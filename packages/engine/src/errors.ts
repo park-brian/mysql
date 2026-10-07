@@ -59,3 +59,24 @@ export function corruptLog(what: string): EngineError {
 export function logFull(need: number, free: number): EngineError {
   return new EngineError('ENGINE_LOG_FULL', `a mini-transaction needs ${need} bytes of log and ${free} are free`)
 }
+
+/**
+ * Another transaction holds the writer slot (D-08). The synchronous engine
+ * cannot wait for it; the async edge queues the statement and reports
+ * `ER_LOCK_WAIT_TIMEOUT` (1205) once `innodb_lock_wait_timeout` passes.
+ */
+export function writerBusy(): EngineError {
+  return new EngineError('ENGINE_WRITER_BUSY', 'another transaction is writing')
+}
+
+/**
+ * ER_LOCK_DEADLOCK, 1213 / 40001 — a read view the store could not keep (Q-09).
+ * Not a deadlock, which one writer cannot have; the error retry loops already
+ * handle when a transaction must start again (D-09).
+ */
+export function snapshotTooOld(): EngineError {
+  return new EngineError('ER_LOCK_DEADLOCK', 'Deadlock found when trying to get lock; try restarting transaction (the snapshot is older than the store keeps)', {
+    errno: 1213,
+    sqlState: '40001',
+  })
+}

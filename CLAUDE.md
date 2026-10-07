@@ -9,8 +9,9 @@ file is the shorter thing you read first.
 An isomorphic, in-process MySQL for JavaScript: no server process, no native
 addon, MySQL's wire protocol and MySQL's semantics. M0–M2 are complete (the
 protocol, charsets and collations, the type system); M3 (parse SQL) has one
-optional item left; M4 (storage) has its pages, B+tree, WAL and crash recovery,
-with MVCC and the catalog to come; M5 (execute) has not started.
+optional item left; M4 (storage) has its pages, B+tree, WAL, crash recovery and
+MVCC transactions, with the catalog, the table interface and the Node VFS to
+come; M5 (execute) has not started.
 
 ## Running things
 

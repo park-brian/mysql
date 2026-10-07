@@ -9,7 +9,7 @@ const PAGE = 1024
 
 /** A journal over `pool` with nothing outside pages to keep: the allocator alone. */
 function journalFor(pool: BufferPool, logFile: VfsFile): Journal {
-  const journal = new Journal(pool, { meta: () => ({ pageCount: 0, nextIndexId: 0 }), save: () => undefined, restore: () => {}, beforeMtr: () => {} })
+  const journal = new Journal(pool, { meta: () => ({ pageCount: 0, nextIndexId: 0, nextTrxId: 1 }), save: () => undefined, restore: () => {}, beforeMtr: () => {} })
   journal.log = Log.restart(logFile, 1024, 1, 0)
   return journal
 }

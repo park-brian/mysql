@@ -31,6 +31,7 @@ import { corrupt, misuse, keyTooLong, rowTooBig } from './errors.ts'
 import { PAGE_TYPE, pageType } from './page.ts'
 import type { Allocator } from './alloc.ts'
 import type { Journal } from './journal.ts'
+import type { TrxSys } from './trx.ts'
 import type { BufferPool } from './pool.ts'
 import * as ip from './index-page.ts'
 import type { OverflowPages } from './overflow.ts'
@@ -40,6 +41,8 @@ export interface PageSpace {
   readonly pool: BufferPool
   readonly alloc: Allocator
   readonly journal: Journal
+  /** The transactions the index layer's changes belong to (M4.20). A bare tree never asks. */
+  readonly transactions: TrxSys
 }
 
 export interface TreeOptions {

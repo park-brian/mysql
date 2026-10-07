@@ -56,7 +56,12 @@ makes Web Locks better than a lock file here.
 ## Transactions
 
 We implement `READ COMMITTED` and `REPEATABLE READ` (MySQL's default) over MVCC,
-per doc 25. With a single writer:
+per doc 25 (§Our undo has the design as built). The engine's API is
+`store.begin(isolation)`, then `commit()`, `rollback()`, `savepoint()` and
+`rollbackTo()`. A second transaction's write while one is open is refused at
+once with `ENGINE_WRITER_BUSY`. The synchronous engine cannot wait, so the async
+edge queues the statement and reports `ER_LOCK_WAIT_TIMEOUT` when
+`innodb_lock_wait_timeout` passes. With a single writer:
 
 - **Readers** take a read view at the right moment (statement or transaction
   start) and are never blocked.

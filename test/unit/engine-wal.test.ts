@@ -10,8 +10,8 @@ const logFile = (): Promise<VfsFile> => new MemoryVfs().open('log', { create: tr
 /** A group of about `size` bytes whose one META record says `n`. */
 const group = (n: number, size = 100): Uint8Array =>
   encodeGroup([
-    { type: 'meta', pageCount: n, nextIndexId: n },
-    { type: 'row', indexId: 1, before: null, after: [new Uint8Array(Math.max(0, size - 20))] },
+    { type: 'meta', pageCount: n, nextIndexId: n, nextTrxId: 5 },
+    { type: 'row', indexId: 1, trxId: 9, before: null, after: [new Uint8Array(Math.max(0, size - 20))] },
   ])
 
 const metaOf = (g: Group): number => (g.records[0] as { pageCount: number }).pageCount

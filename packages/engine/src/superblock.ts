@@ -19,10 +19,15 @@ const MAGIC = Uint8Array.from([0x6d, 0x79, 0x6a, 0x73, 0x2d, 0x64, 0x62, 0x00])
 
 /**
  * The one format this build reads and writes. A change is a new number and a
- * documented migration (D-26). Version 1 had no log: it was never crash-safe
- * and never released, so it is refused rather than migrated.
+ * documented migration (D-26). Version 1 had no log, version 2 no versions on
+ * its rows; neither was released, so both are refused rather than migrated.
  */
-export const FORMAT_VERSION = 2
+export const FORMAT_VERSION = 3
+
+const REFUSED: Record<number, string> = {
+  1: 'version 1 had no log and was never crash-safe',
+  2: 'version 2 stored rows without transaction ids',
+}
 
 export interface Superblock {
   readonly pageSize: number
@@ -40,6 +45,10 @@ export interface Superblock {
   readonly nextIndexId: number
   /** Root page of the directory tree (index id 0), fixed for the file's life. */
   readonly directoryRoot: number
+  /** Root page of the transaction directory (M4.20), fixed likewise. */
+  readonly trxRoot: number
+  /** The next transaction id, as of the checkpoint. */
+  readonly nextTrxId: number
 }
 
 const at = FRAME_HEADER
@@ -60,18 +69,22 @@ export function writeSuperblock(page: Uint8Array, s: Superblock): void {
   v.setUint32(at + 40, s.pageCount)
   v.setUint32(at + 44, s.nextIndexId)
   v.setUint32(at + 48, s.directoryRoot)
+  v.setUint32(at + 52, s.trxRoot)
+  v.setUint16(at + 56, Math.floor(s.nextTrxId / 2 ** 32))
+  v.setUint32(at + 58, s.nextTrxId >>> 0)
   setPageLsn(page, s.checkpointLsn)
   sealPage(page)
 }
 
 /** Read a verified superblock page. The frame is checked by the caller; this checks what the frame cannot. */
 export function readSuperblock(page: Uint8Array, pageSize: number): Superblock {
-  if (page.length < at + 52 || pageType(page) !== PAGE_TYPE.SUPERBLOCK) throw badFormat('not a superblock')
+  if (page.length < at + 62 || pageType(page) !== PAGE_TYPE.SUPERBLOCK) throw badFormat('not a superblock')
   for (let i = 0; i < MAGIC.length; i++) if (page[at + i] !== MAGIC[i]) throw badFormat('not a myjs database file')
   const v = new DataView(page.buffer, page.byteOffset, page.byteLength)
   const version = v.getUint16(at + 8)
   if (version !== FORMAT_VERSION) {
-    throw badFormat(`format version ${version}; this build reads ${FORMAT_VERSION}${version === 1 ? ' (version 1 had no log and was never crash-safe: recreate the database)' : ''}`)
+    const why = REFUSED[version]
+    throw badFormat(`format version ${version}; this build reads ${FORMAT_VERSION}${why === undefined ? '' : ` (${why}: recreate the database)`}`)
   }
   const stored = v.getUint32(at + 12)
   if (stored !== pageSize) throw badFormat(`written with ${stored}-byte pages, opened with ${pageSize}`)
@@ -85,6 +98,8 @@ export function readSuperblock(page: Uint8Array, pageSize: number): Superblock {
     pageCount: v.getUint32(at + 40),
     nextIndexId: v.getUint32(at + 44),
     directoryRoot: v.getUint32(at + 48),
+    trxRoot: v.getUint32(at + 52),
+    nextTrxId: v.getUint16(at + 56) * 2 ** 32 + v.getUint32(at + 58),
   }
   if (s.logBlocks < 4 || s.logBlocks > LOG_BLOCKS_MAX || s.checkpointBlock >= s.logBlocks) throw corrupt(0, `a checkpoint at block ${s.checkpointBlock} of a ${s.logBlocks}-block log`)
   return s

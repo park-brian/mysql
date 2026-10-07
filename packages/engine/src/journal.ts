@@ -128,10 +128,16 @@ export class Journal {
     if (this.#depth > 0) this.#freed.add(pageNo)
   }
 
-  /** A row's logical images (D-25): redo ignores them, a change stream reads them. */
-  row(indexId: number, before: readonly FieldBytes[] | null, after: readonly FieldBytes[] | null): void {
+  /** A row's logical images (D-25), and the transaction that changed it: redo ignores them, a change stream reads them. */
+  row(indexId: number, trxId: number, before: readonly FieldBytes[] | null, after: readonly FieldBytes[] | null): void {
     this.#check()
-    this.#rows.push({ type: 'row', indexId, before, after })
+    this.#rows.push({ type: 'row', indexId, trxId, before, after })
+  }
+
+  /** A transaction's commit, logged in the mini-transaction that makes it. */
+  commitRecord(trxId: number): void {
+    this.#check()
+    this.#rows.push({ type: 'commit', trxId })
   }
 
   #check(): void {
