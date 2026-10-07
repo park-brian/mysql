@@ -511,9 +511,9 @@ class Deparser {
       case 'user':
         return `${this.userVariable(i.name)} = ${this.expr(i.value)}`
       case 'system': {
-        const prefix = `@@${i.scope === undefined ? '' : `${i.scope.toLowerCase()}.`}${i.base === undefined ? '' : `${i.base}.`}`
-        const name = /^[A-Za-z0-9_$]+$/.test(i.name) ? i.name : quoteName(i.name)
-        return `${prefix}${name} = ${this.expr(i.value)}`
+        const part = (p: string) => (/^[A-Za-z0-9_$]+$/.test(p) ? p : quoteName(p))
+        const prefix = `@@${i.scope === undefined ? '' : `${i.scope.toLowerCase()}.`}${i.base === undefined ? '' : `${part(i.base)}.`}`
+        return `${prefix}${part(i.name)} = ${this.expr(i.value)}`
       }
       case 'name':
         return `${i.base === undefined ? '' : `${quoteName(i.base)}.`}${quoteName(i.name)} = ${this.expr(i.value)}`
@@ -752,7 +752,7 @@ class Deparser {
   createDatabase(s: CreateDatabaseNode): string {
     const out = [`CREATE DATABASE ${s.ifNotExists === true ? 'IF NOT EXISTS ' : ''}${quoteName(s.name)}`]
     for (const [name, value] of Object.entries(s.options)) {
-      out.push(`${name} = ${name === 'ENCRYPTION' ? this.string(value) : value.toUpperCase() === 'DEFAULT' ? 'DEFAULT' : this.word(value)}`)
+      out.push(`${name} = ${name === 'ENCRYPTION' ? this.string(value) : value === 'DEFAULT' ? 'DEFAULT' : this.word(value)}`)
     }
     return out.join(' ')
   }
@@ -928,7 +928,7 @@ class Deparser {
       if (name === 'START TRANSACTION') out.push(name)
       else if (name === 'UNION') out.push(`UNION = (${value.split(',').map(quoteName).join(', ')})`)
       else if (STRING_OPTIONS.has(name)) out.push(`${name} = ${this.string(value)}`)
-      else if (name === 'CHARACTER SET' || name === 'COLLATE') out.push(`${name} = ${value.toLowerCase() === 'default' ? 'DEFAULT' : this.word(value)}`)
+      else if (value === 'DEFAULT' && (name === 'CHARACTER SET' || name === 'COLLATE')) out.push(`${name} = DEFAULT`)
       else out.push(`${name} = ${/^\d+$/.test(value) ? value : this.word(value)}`)
     }
     return out.join(' ')

@@ -110,3 +110,25 @@ test('M3.8: CREATE PROCEDURE stores; CALL errors with a clear "not yet supported
   await run('CREATE TRIGGER t BEFORE INSERT ON a FOR EACH ROW SET @x = 1')
   await assert.rejects(run('CREATE TRIGGER t BEFORE INSERT ON a FOR EACH ROW SET @x = 1'), errno(1359))
 })
+
+test('review: a compound body ends at its matching END, so the next statement is not swallowed', () => {
+  const kinds = (sql: string) => parseStatements(sql).map((n) => n.kind)
+  assert.deepEqual(kinds('CREATE PROCEDURE p() BEGIN END; SELECT 1'), [STATEMENT.CREATE_ROUTINE, STATEMENT.QUERY])
+  // Nested blocks, a CASE expression's END, the IF function and an IF statement.
+  const nested = 'CREATE PROCEDURE p() BEGIN SET @x = CASE WHEN 1 THEN IF(1, 2, 3) ELSE 0 END; IF @x THEN BEGIN SELECT 1; END; END IF; END'
+  assert.deepEqual(kinds(`${nested}; SELECT 2`), [STATEMENT.CREATE_ROUTINE, STATEMENT.QUERY])
+  assert.equal((parseStatements(`${nested}; SELECT 2`)[0] as CreateRoutineNode).body, nested.slice('CREATE PROCEDURE p() '.length))
+  assert.deepEqual(kinds('CREATE PROCEDURE p() l1: LOOP LEAVE l1; END LOOP l1; DO 1'), [STATEMENT.CREATE_ROUTINE, STATEMENT.DO])
+  assert.deepEqual(kinds('CREATE PROCEDURE p() REPEAT SET @a = REPEAT(\'x\', 2); UNTIL 1 END REPEAT; DO 1'), [STATEMENT.CREATE_ROUTINE, STATEMENT.DO])
+  refused('CREATE PROCEDURE p() BEGIN SELECT 1;', 'CREATE PROCEDURE p() BEGIN END IF')
+})
+
+test('review: a body inside /*! */ keeps its comment whole, and round-trips', () => {
+  assert.equal(routine('CREATE PROCEDURE p() /*!50001 SELECT */ 1').body, '/*!50001 SELECT */ 1')
+  assert.equal(routine('CREATE PROCEDURE p() SELECT /*!50001 1 */').body, 'SELECT /*!50001 1 */')
+})
+
+test('review: what 8.4.11 refuses in a stored program head, and the units an event accepts', () => {
+  refused('CREATE PROCEDURE p() RETURN 1', 'CREATE TRIGGER t BEFORE INSERT ON a FOR EACH ROW RETURN 1', 'DROP PROCEDURE p RESTRICT', 'CREATE EVENT e ON SCHEDULE EVERY 1 foo DO SELECT 1')
+  for (const unit of ['HOUR_MINUTE', 'DAY_HOUR', 'YEAR_MONTH']) parse(`CREATE EVENT e ON SCHEDULE EVERY '1:2' ${unit} DO SELECT 1`)
+})

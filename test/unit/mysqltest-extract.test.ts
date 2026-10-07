@@ -379,3 +379,8 @@ test('M3.6: `delimiter ;//` restores `;` — the command ends in the delimiter i
   const out = texts(file('delimiter |;', 'SELECT 1 |', 'delimiter ;|', 'SELECT 2;', 'SELECT 3;'))
   assert.deepEqual(out, ['SELECT 1', 'SELECT 2', 'SELECT 3'])
 })
+
+test('M3.6: a SET NAMES inside a procedure body is stored, not run, and does not split the block', () => {
+  const out = texts(file('delimiter |;', 'CREATE PROCEDURE p()', 'BEGIN', '  SET NAMES latin1;', '  SELECT 1;', 'END|', 'delimiter ;|'))
+  assert.deepEqual(out, ['CREATE PROCEDURE p()\nBEGIN\n  SET NAMES latin1;\n  SELECT 1;\nEND'])
+})

@@ -150,10 +150,9 @@ function systemVariable(c: Cursor): { scope?: VariableScope; base?: string; name
   if (parts[parts.length - 1] === '') {
     parts.pop()
     parts.push(c.expectNamePart())
-  } else if (c.takeOp('.')) {
-    // `@@global . x`: the dot and the name are tokens of their own.
-    parts.push(c.expectNamePart())
   }
+  // `@@global . x` and `@@global.`a b`.x`: the rest are tokens of their own.
+  while (parts.length < 3 && c.takeOp('.')) parts.push(c.expectNamePart())
 
   let scope: VariableScope | undefined
   const first = parts[0]?.toUpperCase()

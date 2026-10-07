@@ -191,16 +191,17 @@ export function parseCreateDatabase(c: Cursor): CreateDatabaseNode {
   const name = c.expectIdentifier()
   const options: Record<string, string> = {}
   for (;;) {
+    // `READ ONLY` is `ALTER DATABASE`'s alone, and a charset is never a
+    // number: 8.4.11 refuses both here.
     const defaulted = c.takeWord('DEFAULT')
-    let name: string | undefined
-    if (c.takeWords('CHARACTER', 'SET') || c.takeWord('CHARSET')) name = 'CHARACTER SET'
-    else if (c.takeWord('COLLATE')) name = 'COLLATE'
-    else if (c.takeWord('ENCRYPTION')) name = 'ENCRYPTION'
-    else if (c.takeWords('READ', 'ONLY')) name = 'READ ONLY'
+    let option: string | undefined
+    if (c.takeWords('CHARACTER', 'SET') || c.takeWord('CHARSET')) option = 'CHARACTER SET'
+    else if (c.takeWord('COLLATE')) option = 'COLLATE'
+    else if (c.takeWord('ENCRYPTION')) option = 'ENCRYPTION'
     else if (defaulted) c.fail()
     else break
     c.takeOp('=')
-    options[name] = name === 'ENCRYPTION' ? c.expectString() : c.takeWord('DEFAULT') ? 'DEFAULT' : nameOrString(c)
+    options[option] = option === 'ENCRYPTION' ? c.expectString() : charsetValue(c)
   }
   return { kind: STATEMENT.CREATE_DATABASE, name, ...flag('ifNotExists', ifNotExists), options, at }
 }
@@ -316,9 +317,11 @@ export function parseDrop(c: Cursor): DropNode {
 
   // Only tables and views may be dropped several at a time.
   if (object === DROP_OBJECT.TABLE || object === DROP_OBJECT.VIEW) while (c.takeOp(',')) names.push(c.expectTableName())
+  // `RESTRICT` and `CASCADE` belong to tables and views; 8.4.11 refuses them after a routine.
   let behaviour: string | undefined
-  if (c.takeWord('RESTRICT')) behaviour = 'RESTRICT'
-  else if (c.takeWord('CASCADE')) behaviour = 'CASCADE'
+  const many = object === DROP_OBJECT.TABLE || object === DROP_OBJECT.VIEW
+  if (many && c.takeWord('RESTRICT')) behaviour = 'RESTRICT'
+  else if (many && c.takeWord('CASCADE')) behaviour = 'CASCADE'
 
   return {
     kind: STATEMENT.DROP,
@@ -600,7 +603,7 @@ function columnDefinition(c: Cursor, options: DdlOptions, at: number): ColumnDef
  * they are part of the syntax rather than grouping, which is how MySQL keeps
  * the old restriction unambiguous.
  */
-export function defaultExpression(c: Cursor, options: DdlOptions): Expression {
+export function defaultExpression(c: Cursor, options: DdlOptions, now = true): Expression {
   if (c.atOp('(')) {
     // `DEFAULT (SELECT …)` is a subquery, which MySQL parses and then rejects
     // for a default. The parentheses are the subquery's own, so the
@@ -611,8 +614,9 @@ export function defaultExpression(c: Cursor, options: DdlOptions): Expression {
     c.expectOp(')')
     return expr
   }
-  const now = nowFunction(c)
-  if (now !== undefined) return now
+  // `ALTER … SET DEFAULT` takes no `NOW()`: 8.4.11 refuses it there.
+  const call = now ? nowFunction(c) : undefined
+  if (call !== undefined) return call
   // Otherwise a literal, or a signed number — `DEFAULT 1 + 1`, `DEFAULT c`
   // and `DEFAULT ~1` are all ER_PARSE_ERROR on 8.4.11, and an earlier
   // version of this function accepted them, since it read any expression.
@@ -800,12 +804,12 @@ export function parseTableOptions(c: Cursor): Record<string, string> {
 export function tableOption(c: Cursor, out: Record<string, string>): boolean {
   if (c.takeWords('DEFAULT', 'CHARACTER', 'SET') || c.takeWords('CHARACTER', 'SET') || c.takeWords('DEFAULT', 'CHARSET') || c.takeWord('CHARSET')) {
     c.takeOp('=')
-    out['CHARACTER SET'] = nameOrString(c)
+    out['CHARACTER SET'] = charsetValue(c)
     return true
   }
   if (c.takeWords('DEFAULT', 'COLLATE') || c.takeWord('COLLATE')) {
     c.takeOp('=')
-    out['COLLATE'] = nameOrString(c)
+    out['COLLATE'] = charsetValue(c)
     return true
   }
   const t = c.peek()
@@ -848,6 +852,18 @@ export function tableOption(c: Cursor, out: Record<string, string>): boolean {
 }
 
 // --- small shared pieces ----------------------------------------------------
+
+/**
+ * A charset or collation name, or the keyword `DEFAULT` — recorded as exactly
+ * `'DEFAULT'`, which is how the deparser knows to write the keyword back rather
+ * than a string naming a charset called `default`.
+ */
+function charsetValue(c: Cursor): string {
+  if (c.takeWord('DEFAULT')) return 'DEFAULT'
+  const t = c.peek()
+  if (t.kind !== TOKEN.IDENTIFIER && t.kind !== TOKEN.STRING) c.fail()
+  return c.take().text
+}
 
 /** A value that may be written as a bare word, a quoted string, or a number. */
 export function nameOrString(c: Cursor): string {

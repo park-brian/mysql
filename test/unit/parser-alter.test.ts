@@ -130,3 +130,15 @@ test('M3.5: an unparenthesised DEFAULT is a literal or a signed number; ON UPDAT
   )
   parse('CREATE TABLE b (c DATETIME ON UPDATE NOW())')
 })
+
+test('review: SET DEFAULT takes no NOW(); CREATE DATABASE takes no READ ONLY and no numeric charset', () => {
+  refused('ALTER TABLE t ALTER a SET DEFAULT NOW()', 'CREATE DATABASE d READ ONLY = 1', 'CREATE DATABASE d CHARACTER SET 1')
+})
+
+test('review: DEFAULT the keyword and default the name are different trees, and both round-trip', () => {
+  for (const sql of ["CREATE DATABASE d CHARACTER SET 'default'", 'CREATE DATABASE d CHARACTER SET `default`', 'CREATE DATABASE d CHARACTER SET DEFAULT', "CREATE TABLE t (a INT) CHARACTER SET 'default'", 'CREATE TABLE t (a INT) DEFAULT CHARSET = DEFAULT']) {
+    parse(sql)
+  }
+  assert.notDeepEqual(withoutPositions(parse("CREATE DATABASE d CHARACTER SET 'default'")), withoutPositions(parse('CREATE DATABASE d CHARACTER SET DEFAULT')))
+  refused('CREATE TABLE t (x INT) PARTITION BY HASH (x) PARTITIONS 1000000000000000000000')
+})

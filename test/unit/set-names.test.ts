@@ -164,3 +164,15 @@ test('M3.6: SET NAMES is one item of a list, not the whole statement', async () 
   await run('USE `my db`')
   assert.equal(s.database, 'my db')
 })
+
+test('review: the SETs a driver sends on connect still succeed against the stub', async () => {
+  const { s, run, read } = live()
+  await run('SET SESSION TRANSACTION ISOLATION LEVEL READ COMMITTED')
+  await run("SET PASSWORD = 'x'")
+  await run("SET SESSION sql_mode = 'ANSI_QUOTES'")
+  // An expression needs the executor: accepted, and nothing changes.
+  await run("SET SESSION sql_mode = (SELECT REPLACE(@@sql_mode, 'ONLY_FULL_GROUP_BY', ''))")
+  assert.equal(s.sqlMode, 'ANSI_QUOTES')
+  await assert.rejects(run('SET sql_mode = NULL'), (e: Error & { errno?: number }) => e.errno === 1231)
+  assert.equal(await read('@@local.sql_mode'), 'ANSI_QUOTES')
+})

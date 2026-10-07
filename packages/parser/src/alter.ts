@@ -159,7 +159,7 @@ function alterAction(c: Cursor, options: DdlOptions, actions: AlterAction[]): bo
     c.takeWord('COLUMN')
     const column = c.expectIdentifier()
     if (c.takeWords('DROP', 'DEFAULT')) actions.push({ type: 'dropDefault', column })
-    else if (c.takeWords('SET', 'DEFAULT')) actions.push({ type: 'setDefault', column, value: defaultExpression(c, options) })
+    else if (c.takeWords('SET', 'DEFAULT')) actions.push({ type: 'setDefault', column, value: defaultExpression(c, options, false) })
     else {
       c.expectWord('SET')
       actions.push({ type: 'columnVisibility', column, visible: visibility(c) })

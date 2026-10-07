@@ -230,21 +230,24 @@ const asLatin1 = (bytes) => {
   return out
 }
 
-/** Join a region's lines back into one byte buffer, newlines included. */
 /**
  * A line's trailing custom delimiter replaced by `;`. `raw` is bytes and the
  * delimiter is ASCII, which is the same bytes in every charset a test file
- * is written in.
+ * is written in. The whitespace skipped is what `String.trim` skips in the
+ * latin1 reading the delimiter test was made on — NBSP included — so the two
+ * agree on where the delimiter is.
  */
 function replaceDelimiter(raw, delimiter) {
+  const space = new Set([0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x20, 0xa0])
   let end = raw.length
-  while (end > 0 && (raw[end - 1] === 0x20 || raw[end - 1] === 0x09 || raw[end - 1] === 0x0d)) end--
+  while (end > 0 && space.has(raw[end - 1])) end--
   const out = new Uint8Array(end - delimiter.length + 1)
   out.set(raw.subarray(0, end - delimiter.length))
   out[out.length - 1] = 0x3b
   return out
 }
 
+/** Join a region's lines back into one byte buffer, newlines included. */
 function joinLines(lines) {
   let total = 0
   for (const l of lines) total += l.length + 1
@@ -475,6 +478,7 @@ export function extract(bytes) {
     pendingError = null
     if (openLet !== null) letValues.set(openLet, { region: current, line: current.lines.length })
     openLet = null
+    const continuing = inStatement
     inStatement = !trimmed.endsWith(delimiter)
     if (delimiter === ';') {
       current.lines.push(raw)
@@ -495,7 +499,10 @@ export function extract(bytes) {
     }
     // `SET NAMES` is SQL: it belongs to the region it was written in, and only
     // the bytes *after* it are in the new charset. Hence the push above first.
-    const named = SET_NAMES.exec(trimmed) ?? SET_CLIENT.exec(trimmed)
+    // Only a `SET NAMES` that is a whole statement is run: one inside a
+    // procedure body is stored, not executed, and switching there split the
+    // block across two regions.
+    const named = continuing || inStatement ? null : (SET_NAMES.exec(trimmed) ?? SET_CLIENT.exec(trimmed))
     if (named !== null) switchTo(named[1])
   }
   if (current.lines.length > 0) regions.push(current)

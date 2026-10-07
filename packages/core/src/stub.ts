@@ -29,7 +29,9 @@ import {
 } from '@myjs/protocol'
 import {
   NODE,
+  ParseError,
   STATEMENT,
+  badMode,
   formatSqlMode,
   parseSqlMode,
   parseStatement,
@@ -41,6 +43,7 @@ import {
   type SetItem,
   type TableName,
   type SetNode,
+  type SetTransactionNode,
   type UseNode,
 } from '@myjs/parser'
 import { DEFAULT_SERVER_VERSION } from './connection.ts'
@@ -165,6 +168,8 @@ export class StubExecutor implements Executor {
       for (const item of statement.items) this.#set(session, item)
       return { affectedRows: 0 }
     }
+    // Accepted and not applied: the stub has no transactions to characterise.
+    if (statement?.kind === STATEMENT.SET_TRANSACTION) return { affectedRows: 0 }
     if (statement?.kind === STATEMENT.USE) {
       session.database = statement.database
       return { affectedRows: 0 }
@@ -245,7 +250,12 @@ export class StubExecutor implements Executor {
     if (value.kind === NODE.LITERAL && typeof value.value === 'string') text = value.value
     else if (value.kind === NODE.COLUMN && value.parts.length === 1) text = value.parts[0] as string
     else if (value.kind === NODE.KEYWORD && value.word === 'DEFAULT') text = String(this.#vars.get('sql_mode'))
-    else throw sqlError('ER_NOT_SUPPORTED_YET', messages.notSupported('This value for sql_mode'))
+    else if ((value.kind === NODE.LITERAL && value.type === 'null') || value.kind === NODE.KEYWORD) throw badMode(value.kind === NODE.KEYWORD ? value.word : 'NULL')
+    // An expression — `CONCAT(@@sql_mode, ',ANSI')`, `(SELECT REPLACE(…))`, a
+    // bitmask — needs the executor to evaluate. Until then it is accepted and
+    // changes nothing, as every `SET` did before M3.6, because drivers send
+    // these on connect and refusing them breaks the session outright.
+    else return
     // Validated even for `PERSIST_ONLY`, which stores without applying: an
     // unknown mode is ER_WRONG_VALUE_FOR_VAR whatever the scope.
     const mode = formatSqlMode(parseSqlMode(text))
@@ -279,7 +289,7 @@ export class StubExecutor implements Executor {
     if (/^'.*'$/s.test(expr) || /^".*"$/s.test(expr)) return stripQuotes(expr)
 
     if (expr.startsWith('@@')) {
-      const name = expr.replace(/^@@(session\.|global\.)?/i, '').toLowerCase()
+      const name = expr.replace(/^@@(session\.|local\.|global\.)?/i, '').toLowerCase()
       // M3.6: the session's own `sql_mode`, which `SET sql_mode` changes.
       if (name === 'sql_mode' && session !== undefined && !/^@@global\./i.test(expr)) return session.sqlMode
       // M2.18: the `character_set_*` and `collation_*` variables are derived
@@ -421,7 +431,7 @@ function splitAlias(item: string): { expression: string; alias: string | null } 
 }
 
 type ProgramStatement = CreateRoutineNode | CreateTriggerNode | CreateEventNode | CallStatementNode | DropNode
-type SessionStatement = SetNode | UseNode | ProgramStatement
+type SessionStatement = SetNode | SetTransactionNode | UseNode | ProgramStatement
 
 interface StoredProgram {
   readonly object: 'PROCEDURE' | 'FUNCTION' | 'TRIGGER' | 'EVENT'
@@ -457,9 +467,21 @@ const PROGRAM_OBJECTS: ReadonlySet<string> = new Set(['PROCEDURE', 'FUNCTION', '
  */
 function sessionStatement(session: Session | undefined, sql: string): SessionStatement | null {
   if (session === undefined || !/^\s*(SET|USE|CREATE|DROP|CALL)\b/i.test(sql)) return null
-  const node = parseStatement(sql, { sqlMode: parseSqlMode(session.sqlMode) })
+  let node
+  try {
+    node = parseStatement(sql, { sqlMode: parseSqlMode(session.sqlMode) })
+  } catch (e) {
+    // `SET PASSWORD`, `SET ROLE` and the other `SET`s the parser names as not
+    // implemented were answered OK before M3.6, and still are: a driver's
+    // connect sequence must not fail on them. A syntax error stays an error.
+    if (e instanceof ParseError && e.code === 'ER_NOT_SUPPORTED_YET' && /^\s*SET\b/i.test(sql)) {
+      return { kind: STATEMENT.SET, items: [], at: 0 }
+    }
+    throw e
+  }
   switch (node.kind) {
     case STATEMENT.SET:
+    case STATEMENT.SET_TRANSACTION:
     case STATEMENT.USE:
     case STATEMENT.CREATE_ROUTINE:
     case STATEMENT.CREATE_TRIGGER:

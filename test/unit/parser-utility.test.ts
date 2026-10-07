@@ -252,3 +252,9 @@ test('M3.6: FORCE INDEX () and IGNORE INDEX () are refused; USE INDEX () is not'
   parse('SELECT a FROM t1 USE KEY FOR JOIN ()')
   refused('SELECT a FROM t1 FORCE INDEX ()', 'SELECT a FROM t1 IGNORE KEY FOR GROUP BY ()')
 })
+
+test('review: a system variable whose base needs quoting round-trips', () => {
+  parse('SET GLOBAL `a b`.x = 1')
+  parse('SET @@global.`my base`.x = 1')
+  same('SET @@global.`my base`.x = 1', 'SET GLOBAL `my base`.x = 1')
+})

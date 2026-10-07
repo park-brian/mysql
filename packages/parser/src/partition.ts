@@ -143,9 +143,10 @@ function nameList(c: Cursor): string[] {
   return out
 }
 
+/** A `PARTITIONS n` count: the grammar's `real_ulong_num`, so 32 bits at most. */
 function unsigned(c: Cursor): number {
   const t = c.peek()
-  if (t.kind !== TOKEN.NUMBER || !/^\d+$/.test(t.text)) c.fail()
+  if (t.kind !== TOKEN.NUMBER || !/^\d+$/.test(t.text) || Number(t.text) > 0xffffffff) c.fail()
   c.skip()
   return Number(t.text)
 }
