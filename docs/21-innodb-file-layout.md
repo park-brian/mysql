@@ -240,3 +240,61 @@ Reading InnoDB carefully suggests both what to copy and what to avoid.
 granularity. It matches InnoDB (so imported pages map one-to-one), it keeps
 B+tree fanout high, and it bounds tree depth: at 16 KiB with a 4-byte key, one
 internal page holds ~1000 children, so three levels cover a billion rows.
+
+## Our file (M4.2, M4.12 — D-41)
+
+`@myjs/engine` keeps **one data file per database**, plus the WAL file Tier 4
+adds. That is SQLite's shape. It needs the fewest OPFS access handles (doc 40),
+and a file per table is what interchange needs (D-07), not what storage needs.
+Until Tier 4 the file is **persistent but not crash-safe**: it can be closed
+and reopened, and a crash part-way through a write can leave it inconsistent.
+
+**Page 0 is the superblock**, after the frame (doc 22):
+
+| Offset | Size | Field |
+|---|---|---|
+| 24 | 8 | magic, `myjs-db\0` |
+| 32 | 2 | format version — refused if it is not one this build reads (D-26) |
+| 34 | 2 | reserved |
+| 36 | 4 | page size |
+| 40 | 8 | the highest LSN issued, so the counter survives a reopen |
+| 48 | 4 | page count — the file's allocated length |
+| 52 | 4 | next index id |
+| 56 | 4 | root page of the directory tree |
+
+**Page 1 is reserved** for the second superblock M4.17 alternates with.
+
+**The directory is itself a B+tree**, index id 0, mapping a big-endian `u32`
+index id to the `u32` root page of that index. A root page **never moves**:
+when a root splits, its cells move into two new children and the root page
+becomes their parent, as InnoDB's `btr_root_raise_and_insert` does. When a root
+is left with one child, the child's cells move back up. So the directory
+changes only when an index is created or dropped, never during a split.
+
+### Allocation (M4.12)
+
+Pages are allocated in **extents** of 64 pages. An **allocation map** page holds
+one 12-byte descriptor per extent: a `u32` owner, then a 64-bit page bitmap as
+two `u32`s, with a bit set for each used page. An owner is 0 for a free extent,
+`0xFFFFFFFF` for a shared fragment extent, and otherwise a segment id. A map
+page covers *E* = ⌊(size − 32) / 12⌋ extents. Map pages sit at fixed,
+computable places: the map for group *k* is page `k · 64E + 2`. Pages 0–2 of
+every group are system pages — the superblocks and the map in group 0, the map
+and two reserved pages elsewhere — and the extent holding them is a shared
+fragment extent with those three bits set for good, so the rest of it is not
+wasted. One page is all
+there is to validate, rather than a graph of list nodes (D-19).
+
+Every tree has **three segments**: leaf pages, internal pages and overflow
+pages, with ids `3·indexId + 1`, `+ 2` and `+ 3`. Keeping leaves apart keeps a
+range scan physically sequential. A segment's **first 32 pages come from shared
+fragment extents**, so a small table costs a few pages rather than three whole
+megabytes. Only then does it claim whole extents of its own. A segment's
+fragment count lives on its tree's root page (doc 22), as InnoDB keeps its
+`FSEG` headers there. When an extent's last page is freed, the extent goes back
+to the free pool and is reused before the file grows. The file grows one extent
+at a time.
+
+The allocator's in-memory view — free extents, and each segment's extents that
+still have a free page — is rebuilt from the map pages on open, so the map is
+the only truth.

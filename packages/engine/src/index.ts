@@ -1,0 +1,29 @@
+// @myjs/engine — the native storage engine (M4).
+//
+// Bytes in, bytes out (ground rule 2), and synchronous throughout (ground
+// rule 3): every function here runs to completion with no `await`, so a page
+// split can never be interleaved with anything. Only the index layer knows what
+// a key or a record *means*; below it, keys are `memcmp`-ordered bytes (D-42).
+export { EngineError } from './errors.ts'
+export { crc32c } from './crc32c.ts'
+export { FRAME_HEADER, FRAME_TRAILER, PAGE_TYPE, initPage, pageLsn, pageNumber, pageType, sealPage, setPageLsn, verifyPage } from './page.ts'
+export type { PageType } from './page.ts'
+export { FORMAT_VERSION, readSuperblock, writeSuperblock } from './superblock.ts'
+export type { Superblock } from './superblock.ts'
+export { BufferPool } from './pool.ts'
+export type { PoolOptions, PoolStats } from './pool.ts'
+export { LsnClock } from './lsn.ts'
+export { Allocator, EXTENT, FRAGMENT_LIMIT, extentsPerMap } from './alloc.ts'
+export * as indexPage from './index-page.ts'
+export { BTree, SEGMENT, segmentId } from './btree.ts'
+export type { PageSpace, Range, TreeOptions } from './btree.ts'
+export { REF_SIZE, chainPages, decodeRef, freeChain, readChain, writeChain } from './overflow.ts'
+export type { ExternalRef, OverflowPages } from './overflow.ts'
+export { Store } from './store.ts'
+export type { StoreOptions } from './store.ts'
+export { verifyStore } from './verify.ts'
+export type { VerifyOptions } from './verify.ts'
+export { OFF_PAGE_MIN, decodeRecord, encodeRecord, externalRefs } from './record.ts'
+export type { EncodeOptions, FieldBytes, OffPage, RecordField, RecordLayout } from './record.ts'
+export { ClusteredIndex, SecondaryIndex } from './indexes.ts'
+export type { KeyColumn, KeyValues, Row } from './indexes.ts'

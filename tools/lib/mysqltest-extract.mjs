@@ -230,6 +230,23 @@ const asLatin1 = (bytes) => {
   return out
 }
 
+/**
+ * A line's trailing custom delimiter replaced by `;`. `raw` is bytes and the
+ * delimiter is ASCII, which is the same bytes in every charset a test file
+ * is written in. The whitespace skipped is what `String.trim` skips in the
+ * latin1 reading the delimiter test was made on — NBSP included — so the two
+ * agree on where the delimiter is.
+ */
+function replaceDelimiter(raw, delimiter) {
+  const space = new Set([0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x20, 0xa0])
+  let end = raw.length
+  while (end > 0 && space.has(raw[end - 1])) end--
+  const out = new Uint8Array(end - delimiter.length + 1)
+  out.set(raw.subarray(0, end - delimiter.length))
+  out[out.length - 1] = 0x3b
+  return out
+}
+
 /** Join a region's lines back into one byte buffer, newlines included. */
 function joinLines(lines) {
   let total = 0
@@ -271,7 +288,8 @@ export function extract(bytes) {
   let charset = DEFAULT_CHARSET
   let collationId = resolveCharset(DEFAULT_CHARSET).collationId
   let readable = true
-  let current = { charset, collationId, readable, lines: [], errors: [] }
+  const freshRegion = () => ({ charset, collationId, readable, lines: [], errors: [], blocks: [], blockStart: null })
+  let current = freshRegion()
   /** A `--error` directive waiting for the statement it applies to. */
   let pendingError = null
   /** Lines in a charset this build will not decode — coverage lost, counted. */
@@ -333,7 +351,7 @@ export function extract(bytes) {
     collationId = resolved.collationId
     readable = resolved.readable
     charsets.add(charset)
-    current = { charset, collationId, readable, lines: [], errors: [] }
+    current = freshRegion()
   }
 
   for (const raw of lines) {
@@ -395,14 +413,23 @@ export function extract(bytes) {
     // statement it is SQL: a `CASE` closed by `END` on its own line lost the
     // `END` to this test, and the census then reported the statement as one
     // that would not parse — the instrument measuring its own mistake again.
-    // Restricted to the `;` delimiter, where "mid-statement" is reliable: under
-    // `delimiter |` a procedure body's lines end in `;` and never close it.
+    // Under `delimiter |` too, now that a block runs to its own delimiter:
+    // `WHILE … DO` and `END WHILE;` inside a procedure body are SQL, and were
+    // read as mysqltest's `while` and `end` while the body was split on `;`.
     const bare = !trimmed.startsWith('--') && !trimmed.startsWith('#')
-    const midStatement = inStatement && delimiter === ';'
-    if (!bare || (!midStatement && COMMANDS.test(trimmed))) {
+    if (!bare || (!inStatement && COMMANDS.test(trimmed))) {
       directives++
       const d = /^(?:--\s*)?delimiter\s+(\S+)/i.exec(trimmed)
-      if (d !== null) delimiter = d[1].replace(/;$/, '') || ';'
+      if (d !== null) {
+        // The command is terminated by the delimiter it replaces:
+        // `DELIMITER //;` under `;`, and `DELIMITER ;//` under `//`. Stripping
+        // only a trailing `;` left the second as `;//`, in force for the rest of
+        // the file — invisible while statements were split on `;` regardless.
+        const arg = d[1]
+        delimiter = arg.length > delimiter.length && arg.endsWith(delimiter) ? arg.slice(0, -delimiter.length) : arg
+        // A block the old delimiter never closed is not a statement.
+        current.blockStart = null
+      }
       // mysqltest's own directive: it takes effect here, before the next line.
       const cs = CHARSET_DIRECTIVE.exec(trimmed)
       if (cs !== null) switchTo(cs[1])
@@ -452,11 +479,31 @@ export function extract(bytes) {
     pendingError = null
     if (openLet !== null) letValues.set(openLet, { region: current, line: current.lines.length })
     openLet = null
-    current.lines.push(raw)
+    const continuing = inStatement
     inStatement = !trimmed.endsWith(delimiter)
+    if (delimiter === ';') {
+      current.lines.push(raw)
+    } else {
+      // Under `delimiter //` the statement runs to the line that ends in `//`,
+      // and every `;` before it is inside the statement — a procedure body's.
+      // Splitting on `;` there cut `CREATE PROCEDURE … BEGIN … END` into
+      // fragments and measured each as a statement of its own. The block's
+      // lines are recorded, and its delimiter becomes the `;` that ends it.
+      current.blockStart ??= current.lines.length
+      if (inStatement) {
+        current.lines.push(raw)
+      } else {
+        current.blocks.push({ start: current.blockStart, end: current.lines.length })
+        current.blockStart = null
+        current.lines.push(replaceDelimiter(raw, delimiter))
+      }
+    }
     // `SET NAMES` is SQL: it belongs to the region it was written in, and only
     // the bytes *after* it are in the new charset. Hence the push above first.
-    const named = SET_NAMES.exec(trimmed) ?? SET_CLIENT.exec(trimmed)
+    // Only a `SET NAMES` that is a whole statement is run: one inside a
+    // procedure body is stored, not executed, and switching there split the
+    // block across two regions.
+    const named = continuing || inStatement ? null : (SET_NAMES.exec(trimmed) ?? SET_CLIENT.exec(trimmed))
     if (named !== null) switchTo(named[1])
   }
   if (current.lines.length > 0) regions.push(current)
@@ -583,11 +630,27 @@ export function extract(bytes) {
         keyword: keywordOf(held),
         charset: region.charset,
         ...(expected === undefined || expected === null ? {} : { expectedError: expected }),
+        // A block under a custom delimiter is sent as one multi-statement
+        // query, so it may hold several statements; the census lets the parser
+        // find them, since only a parser can tell a body's `;` from a boundary.
+        ...(blockOf(lineAt(textStart)) === undefined ? {} : { block: true }),
       })
       held = []
     }
+    // Inside a custom-delimiter block only its last `;` — the delimiter's
+    // replacement — ends a statement.
+    const blockOf = (line) => region.blocks.find((b) => line >= b.start && line <= b.end)
+    const terminators = new Set()
+    const lastInBlock = new Map()
     for (const t of tokens) {
-      if (t.kind === 'operator' && t.text === ';') {
+      if (t.kind !== 'operator' || t.text !== ';') continue
+      const block = blockOf(lineAt(t.start))
+      if (block === undefined) terminators.add(t)
+      else lastInBlock.set(block, t)
+    }
+    for (const t of lastInBlock.values()) terminators.add(t)
+    for (const t of tokens) {
+      if (terminators.has(t)) {
         emit(start, t.start)
         start = t.end
         continue

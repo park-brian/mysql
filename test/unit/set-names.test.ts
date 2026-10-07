@@ -8,9 +8,22 @@ import {
   capabilities,
   utf8Transcoder,
 } from '@myjs/protocol'
-import { charsetTranscoder, charsetVariables, parseSetNames } from '@myjs/core'
+import { StubExecutor, charsetChange, charsetTranscoder, charsetVariables } from '@myjs/core'
+import { STATEMENT, parseStatement } from '@myjs/parser'
 
 const session = () => new Session({ connectionId: 1, capabilities: capabilities(0) })
+
+/**
+ * The charset change a statement asks for — its last `NAMES` or `CHARACTER SET`
+ * item — or `null`. M3.6 replaced the regex this file used to test with the
+ * parser, so the cases below now go through the same path a `COM_QUERY` does.
+ */
+const parseSetNames = (sql: string) => {
+  const node = parseStatement(sql)
+  if (node.kind !== STATEMENT.SET) return null
+  const item = [...node.items].reverse().find((i) => i.type === 'names' || i.type === 'charset')
+  return item === undefined || (item.type !== 'names' && item.type !== 'charset') ? null : charsetChange(item)
+}
 
 test('D-33: a session gets the UTF-8-only transcoder unless one is supplied', () => {
   assert.equal(session().transcoder, utf8Transcoder)
@@ -97,4 +110,69 @@ test('M2.18: session.characterSet is now interpreted rather than merely stored',
   const change = parseSetNames('SET NAMES latin1') as { collationId: number }
   s.characterSet = change.collationId
   assert.equal(charsetVariables(s.characterSet).character_set_client, 'latin1')
+})
+
+// --- M3.6: SET reaches the session ------------------------------------------
+
+/** A stub-backed session that runs statements and reads variables back. */
+const live = () => {
+  const s = new Session({ connectionId: 1, capabilities: capabilities(0), transcoder: charsetTranscoder })
+  const stub = new StubExecutor()
+  const run = (sql: string) => stub.query(s, sql)
+  const read = async (variable: string) => {
+    const result = await run(`SELECT ${variable}`)
+    return (result as { rows: unknown[][] }).rows[0]?.[0]
+  }
+  return { s, run, read }
+}
+
+test('M3.6: SET sql_mode reaches the session, in the form @@sql_mode reports', async () => {
+  const { s, run, read } = live()
+  await run("SET sql_mode = 'ansi'")
+  // What 8.4.11 answers for the same statement: the expansion, in bit order,
+  // with the combination name kept.
+  assert.equal(s.sqlMode, 'REAL_AS_FLOAT,PIPES_AS_CONCAT,ANSI_QUOTES,IGNORE_SPACE,ONLY_FULL_GROUP_BY,ANSI')
+  assert.equal(await read('@@sql_mode'), s.sqlMode)
+  await run('SET SESSION sql_mode = NO_ZERO_DATE')
+  assert.equal(s.sqlMode, 'NO_ZERO_DATE')
+  await run("SET @@sql_mode = ''")
+  assert.equal(s.sqlMode, '')
+  // GLOBAL leaves the session alone, as it does on a real server.
+  await run("SET GLOBAL sql_mode = 'ANSI_QUOTES'")
+  assert.equal(s.sqlMode, '')
+  assert.equal(await read('@@global.sql_mode'), 'ANSI_QUOTES')
+  // An unknown mode is ER_WRONG_VALUE_FOR_VAR, with MySQL's message, and changes nothing.
+  await assert.rejects(run("SET sql_mode = 'nonsense'"), (e: Error & { errno?: number }) => e.errno === 1231)
+  assert.equal(s.sqlMode, '')
+})
+
+test("M3.6: the session's sql_mode decides how its next statement is parsed", async () => {
+  const { s, run } = live()
+  // `'latin1\'` never closes by default, since `\'` escapes the quote…
+  await assert.rejects(run("SET NAMES 'latin1\\'"), (e: Error & { errno?: number }) => e.errno === 1064)
+  await run("SET sql_mode = 'NO_BACKSLASH_ESCAPES'")
+  // …and under NO_BACKSLASH_ESCAPES it is a closed literal naming no charset.
+  await assert.rejects(run("SET NAMES 'latin1\\'"), (e: Error & { errno?: number }) => e.errno === 1115)
+  assert.equal(s.characterSet, CHARSET_UTF8MB4_0900_AI_CI)
+})
+
+test('M3.6: SET NAMES is one item of a list, not the whole statement', async () => {
+  const { s, run, read } = live()
+  await run('SET @a = 1, NAMES latin1, autocommit = 1')
+  assert.equal(s.characterSet, 8)
+  assert.equal(await read('@@character_set_client'), 'latin1')
+  await run('USE `my db`')
+  assert.equal(s.database, 'my db')
+})
+
+test('review: the SETs a driver sends on connect still succeed against the stub', async () => {
+  const { s, run, read } = live()
+  await run('SET SESSION TRANSACTION ISOLATION LEVEL READ COMMITTED')
+  await run("SET PASSWORD = 'x'")
+  await run("SET SESSION sql_mode = 'ANSI_QUOTES'")
+  // An expression needs the executor: accepted, and nothing changes.
+  await run("SET SESSION sql_mode = (SELECT REPLACE(@@sql_mode, 'ONLY_FULL_GROUP_BY', ''))")
+  assert.equal(s.sqlMode, 'ANSI_QUOTES')
+  await assert.rejects(run('SET sql_mode = NULL'), (e: Error & { errno?: number }) => e.errno === 1231)
+  assert.equal(await read('@@local.sql_mode'), 'ANSI_QUOTES')
 })

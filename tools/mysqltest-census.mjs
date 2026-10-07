@@ -44,7 +44,7 @@
 import { mkdirSync, readFileSync, writeFileSync, existsSync } from 'node:fs'
 import { join } from 'node:path'
 import { REPO, REF, fetchPinnedBytes, combinedSha256, listPinnedDirectory, sourceMode } from './lib/gen-common.mjs'
-import { lex, parseStatement, ParseError } from '@myjs/parser'
+import { lex, parseStatement, parseStatements, ParseError } from '@myjs/parser'
 import { roundTrip } from './lib/round-trip.mjs'
 import { extract } from './lib/mysqltest-extract.mjs'
 
@@ -230,7 +230,7 @@ for (const source of sources) {
     console.error(`  file will not lex: ${name} — ${result.detail}`)
     continue
   }
-  for (const { text, keyword, charset, expectedError } of result.statements) {
+  for (const { text, keyword, charset, expectedError, block } of result.statements) {
     statements++
     byKeyword.set(keyword, (byKeyword.get(keyword) ?? 0) + 1)
     byCharset.set(charset, (byCharset.get(charset) ?? 0) + 1)
@@ -269,9 +269,9 @@ for (const source of sources) {
     // and the difference between 80.8% and the real number.
     if (shouldFail) expectedToFail++
     try {
-      const ast = parseStatement(text)
+      const asts = block === true ? parseStatements(text) : [parseStatement(text)]
       parsed++
-      const broken = roundTrip(ast)
+      const broken = asts.map((ast) => roundTrip(ast)).find((b) => b !== null) ?? null
       if (broken !== null) {
         roundTripFailures.set(keyword, (roundTripFailures.get(keyword) ?? 0) + 1)
         // Printed, not committed, like every other line of corpus SQL here.

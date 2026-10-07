@@ -15,13 +15,13 @@
 // clause this parser does not know is a parse error rather than something
 // skipped, because skipping is how a `CREATE TABLE` silently loses a
 // `CHARACTER SET` and produces a table that stores different bytes.
-import { unsupportedStatement } from './errors.ts'
-import type { Cursor } from './cursor.ts'
+import { flag, opt, type Cursor } from './cursor.ts'
 import { TOKEN } from './tokens.ts'
 import { NODE, type Expression } from './ast.ts'
 import { parseExpressionFrom } from './expression.ts'
 import { parseDataType } from './data-type.ts'
 import { atParenthesisedQuery, atQueryStart, parseQueryFrom } from './query.ts'
+import { parsePartitioning } from './partition.ts'
 import type { QueryExpression } from './query-ast.ts'
 import type { SqlMode } from './sql-mode.ts'
 import {
@@ -32,6 +32,7 @@ import {
   type ColumnDefinition,
   type CreateTableNode,
   type CreateViewNode,
+  type CreateDatabaseNode,
   type Definer,
   type DropNode,
   type DropObject,
@@ -146,7 +147,7 @@ export function parseCreateTable(c: Cursor, options: DdlOptions): CreateTableNod
 
   const tableOptions = parseTableOptions(c)
 
-  if (c.atWord('PARTITION')) throw unsupportedStatement('CREATE TABLE ... PARTITION BY')
+  const partition = c.atWords('PARTITION', 'BY') ? parsePartitioning(c, options) : undefined
 
   // `CREATE TABLE ... [IGNORE | REPLACE] [AS] SELECT`. `IGNORE` and `REPLACE`
   // choose what a duplicate key does to the copied rows, and sit between the
@@ -170,10 +171,39 @@ export function parseCreateTable(c: Cursor, options: DdlOptions): CreateTableNod
     keys,
     checks,
     options: tableOptions,
-    ...(query === undefined ? {} : { query }),
-    ...(duplicates === undefined ? {} : { duplicates }),
+    ...opt('query', query),
+    ...opt('duplicates', duplicates),
+    ...opt('partition', partition),
     at,
   }
+}
+
+/**
+ * `CREATE {DATABASE | SCHEMA} [IF NOT EXISTS] d [options]`, with the cursor on
+ * `CREATE`. The options are `CHARACTER SET`, `COLLATE`, `ENCRYPTION` and
+ * `READ ONLY`, each optionally after `DEFAULT` and with an optional `=`.
+ */
+export function parseCreateDatabase(c: Cursor): CreateDatabaseNode {
+  const at = c.peek().start
+  c.expectWord('CREATE')
+  if (!c.takeWord('DATABASE')) c.expectWord('SCHEMA')
+  const ifNotExists = c.takeWords('IF', 'NOT', 'EXISTS')
+  const name = c.expectIdentifier()
+  const options: Record<string, string> = {}
+  for (;;) {
+    // `READ ONLY` is `ALTER DATABASE`'s alone, and a charset is never a
+    // number: 8.4.11 refuses both here.
+    const defaulted = c.takeWord('DEFAULT')
+    let option: string | undefined
+    if (c.takeWords('CHARACTER', 'SET') || c.takeWord('CHARSET')) option = 'CHARACTER SET'
+    else if (c.takeWord('COLLATE')) option = 'COLLATE'
+    else if (c.takeWord('ENCRYPTION')) option = 'ENCRYPTION'
+    else if (defaulted) c.fail()
+    else break
+    c.takeOp('=')
+    options[option] = option === 'ENCRYPTION' ? c.expectString() : charsetValue(c)
+  }
+  return { kind: STATEMENT.CREATE_DATABASE, name, ...flag('ifNotExists', ifNotExists), options, at }
 }
 
 /**
@@ -215,12 +245,12 @@ export function parseCreateView(c: Cursor, options: DdlOptions): CreateViewNode 
     kind: STATEMENT.CREATE_VIEW,
     view,
     ...flag('orReplace', orReplace),
-    ...(algorithm === undefined ? {} : { algorithm }),
-    ...(definer === undefined ? {} : { definer }),
-    ...(security === undefined ? {} : { security }),
-    ...(columns === undefined ? {} : { columns }),
+    ...opt('algorithm', algorithm),
+    ...opt('definer', definer),
+    ...opt('security', security),
+    ...opt('columns', columns),
     query,
-    ...(checkOption === undefined ? {} : { checkOption }),
+    ...opt('checkOption', checkOption),
     at,
   }
 }
@@ -233,6 +263,11 @@ export function parseCreateView(c: Cursor, options: DdlOptions): CreateViewNode 
  */
 export function parseDefiner(c: Cursor): Definer {
   c.expectOp('=')
+  return parseUser(c)
+}
+
+/** A user — `'u'@'h'`, `u@h`, `'u'` or `CURRENT_USER[()]` — as `DEFINER` and `SHOW GRANTS FOR` name one. */
+export function parseUser(c: Cursor): Definer {
   if (c.takeWord('CURRENT_USER')) {
     if (c.takeOp('(')) c.expectOp(')')
     return 'CURRENT_USER'
@@ -255,10 +290,15 @@ export function parseDrop(c: Cursor): DropNode {
   const temporary = c.takeWord('TEMPORARY')
 
   let object: DropObject
-  if (c.takeWord('TABLE')) object = DROP_OBJECT.TABLE
+  // `DROP TABLES` is `DROP TABLE`, a synonym the manual does not list.
+  if (c.takeWord('TABLE') || c.takeWord('TABLES')) object = DROP_OBJECT.TABLE
   else if (c.takeWord('VIEW')) object = DROP_OBJECT.VIEW
   else if (c.takeWord('INDEX')) object = DROP_OBJECT.INDEX
   else if (c.takeWord('DATABASE') || c.takeWord('SCHEMA')) object = DROP_OBJECT.DATABASE
+  else if (c.takeWord('PROCEDURE')) object = DROP_OBJECT.PROCEDURE
+  else if (c.takeWord('FUNCTION')) object = DROP_OBJECT.FUNCTION
+  else if (c.takeWord('TRIGGER')) object = DROP_OBJECT.TRIGGER
+  else if (c.takeWord('EVENT')) object = DROP_OBJECT.EVENT
   else c.fail()
 
   const ifExists = c.takeWords('IF', 'EXISTS')
@@ -275,10 +315,13 @@ export function parseDrop(c: Cursor): DropNode {
     return { kind: STATEMENT.DROP, object, names, ...flag('ifExists', ifExists), on, at }
   }
 
-  while (c.takeOp(',')) names.push(c.expectTableName())
+  // Only tables and views may be dropped several at a time.
+  if (object === DROP_OBJECT.TABLE || object === DROP_OBJECT.VIEW) while (c.takeOp(',')) names.push(c.expectTableName())
+  // `RESTRICT` and `CASCADE` belong to tables and views; 8.4.11 refuses them after a routine.
   let behaviour: string | undefined
-  if (c.takeWord('RESTRICT')) behaviour = 'RESTRICT'
-  else if (c.takeWord('CASCADE')) behaviour = 'CASCADE'
+  const many = object === DROP_OBJECT.TABLE || object === DROP_OBJECT.VIEW
+  if (many && c.takeWord('RESTRICT')) behaviour = 'RESTRICT'
+  else if (many && c.takeWord('CASCADE')) behaviour = 'CASCADE'
 
   return {
     kind: STATEMENT.DROP,
@@ -286,15 +329,13 @@ export function parseDrop(c: Cursor): DropNode {
     names,
     ...flag('ifExists', ifExists),
     ...flag('temporary', temporary),
-    ...(behaviour === undefined ? {} : { behaviour }),
+    ...opt('behaviour', behaviour),
     at,
   }
 }
 
 // --- table elements ---------------------------------------------------------
 
-/** `{ key: true }` when set, `{}` when not — so an unset flag is absent, not false. */
-const flag = (name: string, on: boolean): Record<string, true> => (on ? { [name]: true } : {})
 
 /**
  * One element of a `CREATE TABLE` body: a column, a key, or a check.
@@ -304,12 +345,12 @@ const flag = (name: string, on: boolean): Record<string, true> => (on ? { [name]
  * `CREATE TABLE t (key INT)` is valid. So a word that could introduce a key is
  * only treated as one when what follows fits a key rather than a type.
  */
-type TableElement =
+export type TableElement =
   | { readonly what: 'column'; readonly column: ColumnDefinition }
   | { readonly what: 'key'; readonly key: KeyDefinition }
   | { readonly what: 'check'; readonly check: CheckConstraint }
 
-function tableElement(c: Cursor, options: DdlOptions): TableElement {
+export function tableElement(c: Cursor, options: DdlOptions): TableElement {
   const at = c.peek().start
 
   if (c.atWord('CONSTRAINT')) {
@@ -378,11 +419,11 @@ function keyDefinition(c: Cursor, options: DdlOptions, at: number): KeyDefinitio
   const rest = indexOptions(c)
   return {
     type,
-    ...(name === undefined ? {} : { name }),
+    ...opt('name', name),
     columns,
     ...(using ?? rest.using ? { using: (using ?? rest.using) as string } : {}),
-    ...(references === undefined ? {} : { references }),
-    ...(rest.comment === undefined ? {} : { comment: rest.comment }),
+    ...opt('references', references),
+    ...opt('comment', rest.comment),
     at,
   }
 }
@@ -402,7 +443,7 @@ function checkConstraint(
   let enforced = true
   if (c.takeWords('NOT', 'ENFORCED')) enforced = false
   else c.takeWord('ENFORCED')
-  return { ...(name === undefined ? {} : { name }), expr, enforced, at }
+  return { ...opt('name', name), expr, enforced, at }
 }
 
 function columnDefinition(c: Cursor, options: DdlOptions, at: number): ColumnDefinition {
@@ -440,7 +481,7 @@ function columnDefinition(c: Cursor, options: DdlOptions, at: number): ColumnDef
       continue
     }
     if (c.takeWords('ON', 'UPDATE')) {
-      onUpdate = defaultExpression(c, options)
+      onUpdate = nowFunction(c) ?? c.fail()
       continue
     }
     if (c.takeWord('AUTO_INCREMENT')) {
@@ -535,18 +576,18 @@ function columnDefinition(c: Cursor, options: DdlOptions, at: number): ColumnDef
   return {
     name,
     type,
-    ...(notNull === undefined ? {} : { notNull }),
-    ...(nullable === undefined ? {} : { nullable }),
-    ...(defaultValue === undefined ? {} : { default: defaultValue }),
-    ...(onUpdate === undefined ? {} : { onUpdate }),
-    ...(autoIncrement === undefined ? {} : { autoIncrement }),
-    ...(unique === undefined ? {} : { unique }),
-    ...(primary === undefined ? {} : { primary }),
-    ...(comment === undefined ? {} : { comment }),
-    ...(generated === undefined ? {} : { generated }),
-    ...(invisible === undefined ? {} : { invisible }),
-    ...(srid === undefined ? {} : { srid }),
-    ...(check === undefined ? {} : { check }),
+    ...opt('notNull', notNull),
+    ...opt('nullable', nullable),
+    ...opt('default', defaultValue),
+    ...opt('onUpdate', onUpdate),
+    ...opt('autoIncrement', autoIncrement),
+    ...opt('unique', unique),
+    ...opt('primary', primary),
+    ...opt('comment', comment),
+    ...opt('generated', generated),
+    ...opt('invisible', invisible),
+    ...opt('srid', srid),
+    ...opt('check', check),
     at,
   }
 }
@@ -560,8 +601,7 @@ function columnDefinition(c: Cursor, options: DdlOptions, at: number): ColumnDef
  * they are part of the syntax rather than grouping, which is how MySQL keeps
  * the old restriction unambiguous.
  */
-function defaultExpression(c: Cursor, options: DdlOptions): Expression {
-  const t = c.peek()
+export function defaultExpression(c: Cursor, options: DdlOptions, now = true): Expression {
   if (c.atOp('(')) {
     // `DEFAULT (SELECT …)` is a subquery, which MySQL parses and then rejects
     // for a default. The parentheses are the subquery's own, so the
@@ -572,33 +612,56 @@ function defaultExpression(c: Cursor, options: DdlOptions): Expression {
     c.expectOp(')')
     return expr
   }
-  // `CURRENT_TIMESTAMP`, `NOW()`, `LOCALTIME` and friends — a function that may
-  // be written without parentheses, optionally with an fsp argument.
-  if (c.peek().kind === TOKEN.IDENTIFIER && c.peek().quoted !== true) {
-    const word = t.text.toUpperCase()
-    if (['CURRENT_TIMESTAMP', 'NOW', 'LOCALTIME', 'LOCALTIMESTAMP', 'CURRENT_DATE', 'CURRENT_TIME', 'UTC_TIMESTAMP'].includes(word)) {
-      c.skip()
-      const args: Expression[] = []
-      if (c.takeOp('(')) {
-        if (!c.atOp(')')) {
-          const n = c.peek()
-          if (n.kind !== TOKEN.NUMBER) c.fail()
-          c.skip()
-          args.push({ kind: NODE.LITERAL, type: 'int', value: BigInt(n.text), at: n.start })
-        }
-        c.expectOp(')')
-      }
-      // The name as written, as the expression parser records it — so
-      // `DEFAULT now()` and `DEFAULT (now())` are the same call.
-      return { kind: NODE.CALL, name: t.text, args, at: t.start }
-    }
+  // `ALTER … SET DEFAULT` takes no `NOW()`: 8.4.11 refuses it there.
+  const call = now ? nowFunction(c) : undefined
+  if (call !== undefined) return call
+  // Otherwise a literal, or a signed number — `DEFAULT 1 + 1`, `DEFAULT c`
+  // and `DEFAULT ~1` are all ER_PARSE_ERROR on 8.4.11, and an earlier
+  // version of this function accepted them, since it read any expression.
+  const save = c.at
+  const expr = parseExpressionFrom(c, options.sqlMode)
+  const literal = expr.kind === NODE.COLLATE ? expr.expr : expr
+  const signed = literal.kind === NODE.UNARY && (literal.op === '-' || literal.op === '+') ? literal.operand : undefined
+  const ok =
+    signed === undefined
+      ? literal.kind === NODE.LITERAL
+      : signed.kind === NODE.LITERAL && (signed.type === 'int' || signed.type === 'decimal' || signed.type === 'double')
+  if (!ok) {
+    c.at = save
+    c.fail()
   }
-  return parseExpressionFrom(c, options.sqlMode)
+  return expr
+}
+
+/**
+ * `CURRENT_TIMESTAMP`, `NOW()`, `LOCALTIME` and friends — a function that may
+ * be written without parentheses, optionally with an fsp argument — or
+ * `undefined` with nothing consumed. The only thing `ON UPDATE` accepts.
+ */
+function nowFunction(c: Cursor): Expression | undefined {
+  const t = c.peek()
+  if (t.kind !== TOKEN.IDENTIFIER || t.quoted === true) return undefined
+  const word = t.text.toUpperCase()
+  if (!['CURRENT_TIMESTAMP', 'NOW', 'LOCALTIME', 'LOCALTIMESTAMP', 'CURRENT_DATE', 'CURRENT_TIME', 'UTC_TIMESTAMP'].includes(word)) return undefined
+  c.skip()
+  const args: Expression[] = []
+  if (c.takeOp('(')) {
+    if (!c.atOp(')')) {
+      const n = c.peek()
+      if (n.kind !== TOKEN.NUMBER) c.fail()
+      c.skip()
+      args.push({ kind: NODE.LITERAL, type: 'int', value: BigInt(n.text), at: n.start })
+    }
+    c.expectOp(')')
+  }
+  // The name as written, as the expression parser records it — so
+  // `DEFAULT now()` and `DEFAULT (now())` are the same call.
+  return { kind: NODE.CALL, name: t.text, args, at: t.start }
 }
 
 // --- index and reference clauses -------------------------------------------
 
-function indexType(c: Cursor): string | undefined {
+export function indexType(c: Cursor): string | undefined {
   if (!c.takeWord('USING')) return undefined
   if (c.takeWord('BTREE')) return 'BTREE'
   if (c.takeWord('HASH')) return 'HASH'
@@ -606,7 +669,7 @@ function indexType(c: Cursor): string | undefined {
   c.fail()
 }
 
-function indexColumns(c: Cursor, options: DdlOptions): IndexColumn[] {
+export function indexColumns(c: Cursor, options: DdlOptions): IndexColumn[] {
   c.expectOp('(')
   const out: IndexColumn[] = []
   do {
@@ -628,7 +691,7 @@ function indexColumns(c: Cursor, options: DdlOptions): IndexColumn[] {
       length = Number(t.text)
       c.expectOp(')')
     }
-    out.push({ name, ...(length === undefined ? {} : { length }), ...direction(c) })
+    out.push({ name, ...opt('length', length), ...direction(c) })
   } while (c.takeOp(','))
   c.expectOp(')')
   return out
@@ -640,7 +703,7 @@ function direction(c: Cursor): { desc?: true } {
   return {}
 }
 
-function indexOptions(c: Cursor): { using?: string; comment?: string } {
+export function indexOptions(c: Cursor): { using?: string; comment?: string } {
   let using: string | undefined
   let comment: string | undefined
   for (;;) {
@@ -670,7 +733,7 @@ function indexOptions(c: Cursor): { using?: string; comment?: string } {
     }
     break
   }
-  return { ...(using === undefined ? {} : { using }), ...(comment === undefined ? {} : { comment }) }
+  return { ...opt('using', using), ...opt('comment', comment) }
 }
 
 function parseReferences(c: Cursor, options: DdlOptions): Reference {
@@ -700,9 +763,9 @@ function parseReferences(c: Cursor, options: DdlOptions): Reference {
   return {
     table,
     columns,
-    ...(match === undefined ? {} : { match }),
-    ...(onDelete === undefined ? {} : { onDelete }),
-    ...(onUpdate === undefined ? {} : { onUpdate }),
+    ...opt('match', match),
+    ...opt('onDelete', onDelete),
+    ...opt('onUpdate', onUpdate),
   }
 }
 
@@ -727,60 +790,81 @@ function parseTableOptions(c: Cursor): Record<string, string> {
   const out: Record<string, string> = {}
   for (;;) {
     c.takeOp(',')
-    if (c.takeWords('DEFAULT', 'CHARACTER', 'SET') || c.takeWords('CHARACTER', 'SET') || c.takeWords('DEFAULT', 'CHARSET') || c.takeWord('CHARSET')) {
-      c.takeOp('=')
-      out['CHARACTER SET'] = nameOrString(c)
-      continue
-    }
-    if (c.takeWords('DEFAULT', 'COLLATE') || c.takeWord('COLLATE')) {
-      c.takeOp('=')
-      out['COLLATE'] = nameOrString(c)
-      continue
-    }
-    const t = c.peek()
-    if (t.kind !== TOKEN.IDENTIFIER || t.quoted === true) break
-    const word = t.text.toUpperCase()
-    if (!TABLE_OPTIONS.has(word)) break
-    c.skip()
-    // `DATA DIRECTORY` and `INDEX DIRECTORY` are two words; `START TRANSACTION`
-    // is a suffix on `CREATE TABLE ... START TRANSACTION` and takes no value.
-    if (word === 'DATA' || word === 'INDEX') c.expectWord('DIRECTORY')
-    if (word === 'START') {
-      c.expectWord('TRANSACTION')
-      out['START TRANSACTION'] = 'true'
-      continue
-    }
-    if (word === 'UNION') {
-      c.takeOp('=')
-      c.expectOp('(')
-      const members: string[] = []
-      do members.push(c.expectTableName().name)
-      while (c.takeOp(','))
-      c.expectOp(')')
-      out['UNION'] = members.join(',')
-      continue
-    }
-    c.takeOp('=')
-    const max = ULONG_OPTIONS[word]
-    if (max !== undefined) {
-      out[word] = ulongValue(c, max)
-      continue
-    }
-    if (word === 'ROW_FORMAT') {
-      const format = nameOrString(c).toUpperCase()
-      if (!ROW_FORMATS.has(format)) c.fail()
-      out[word] = format
-      continue
-    }
-    out[word === 'DATA' ? 'DATA DIRECTORY' : word === 'INDEX' ? 'INDEX DIRECTORY' : word] = nameOrString(c)
+    if (!tableOption(c, out)) break
   }
   return out
 }
 
+/**
+ * One table option into `out`, or `false` with nothing consumed. `ALTER TABLE`
+ * reads options one at a time, since there a comma separates actions as well.
+ */
+export function tableOption(c: Cursor, out: Record<string, string>): boolean {
+  if (c.takeWords('DEFAULT', 'CHARACTER', 'SET') || c.takeWords('CHARACTER', 'SET') || c.takeWords('DEFAULT', 'CHARSET') || c.takeWord('CHARSET')) {
+    c.takeOp('=')
+    out['CHARACTER SET'] = charsetValue(c)
+    return true
+  }
+  if (c.takeWords('DEFAULT', 'COLLATE') || c.takeWord('COLLATE')) {
+    c.takeOp('=')
+    out['COLLATE'] = charsetValue(c)
+    return true
+  }
+  const t = c.peek()
+  if (t.kind !== TOKEN.IDENTIFIER || t.quoted === true) return false
+  const word = t.text.toUpperCase()
+  if (!TABLE_OPTIONS.has(word)) return false
+  c.skip()
+  // `DATA DIRECTORY` and `INDEX DIRECTORY` are two words; `START TRANSACTION`
+  // is a suffix on `CREATE TABLE ... START TRANSACTION` and takes no value.
+  if (word === 'DATA' || word === 'INDEX') c.expectWord('DIRECTORY')
+  if (word === 'START') {
+    c.expectWord('TRANSACTION')
+    out['START TRANSACTION'] = 'true'
+    return true
+  }
+  if (word === 'UNION') {
+    c.takeOp('=')
+    c.expectOp('(')
+    const members: string[] = []
+    do members.push(c.expectTableName().name)
+    while (c.takeOp(','))
+    c.expectOp(')')
+    out['UNION'] = members.join(',')
+    return true
+  }
+  c.takeOp('=')
+  const max = ULONG_OPTIONS[word]
+  if (max !== undefined) {
+    out[word] = ulongValue(c, max)
+    return true
+  }
+  if (word === 'ROW_FORMAT') {
+    const format = nameOrString(c).toUpperCase()
+    if (!ROW_FORMATS.has(format)) c.fail()
+    out[word] = format
+    return true
+  }
+  out[word === 'DATA' ? 'DATA DIRECTORY' : word === 'INDEX' ? 'INDEX DIRECTORY' : word] = nameOrString(c)
+  return true
+}
+
 // --- small shared pieces ----------------------------------------------------
 
+/**
+ * A charset or collation name, or the keyword `DEFAULT` — recorded as exactly
+ * `'DEFAULT'`, which is how the deparser knows to write the keyword back rather
+ * than a string naming a charset called `default`.
+ */
+function charsetValue(c: Cursor): string {
+  if (c.takeWord('DEFAULT')) return 'DEFAULT'
+  const t = c.peek()
+  if (t.kind !== TOKEN.IDENTIFIER && t.kind !== TOKEN.STRING) c.fail()
+  return c.take().text
+}
+
 /** A value that may be written as a bare word, a quoted string, or a number. */
-function nameOrString(c: Cursor): string {
+export function nameOrString(c: Cursor): string {
   const t = c.peek()
   if (t.kind === TOKEN.IDENTIFIER || t.kind === TOKEN.STRING || t.kind === TOKEN.NUMBER) {
     c.skip()
@@ -811,7 +895,7 @@ const ULONG_OPTIONS: Readonly<Record<string, number>> = {
   AUTOEXTEND_SIZE: 0xffffffff,
 }
 
-function ulongValue(c: Cursor, max: number): string {
+export function ulongValue(c: Cursor, max: number): string {
   const t = c.peek()
   if (t.kind !== TOKEN.NUMBER || !/^\d+$/.test(t.text) || Number(t.text) > max) c.fail()
   c.skip()
@@ -828,7 +912,7 @@ function ulongValue(c: Cursor, max: number): string {
 const ROW_FORMATS = new Set(['DEFAULT', 'DYNAMIC', 'FIXED', 'COMPRESSED', 'REDUNDANT', 'COMPACT'])
 
 /** `ALGORITHM = …` / `LOCK = …`, which `DROP INDEX` and `ALTER TABLE` accept. */
-function algorithmAndLock(c: Cursor): void {
+export function algorithmAndLock(c: Cursor): void {
   while (c.takeWord('ALGORITHM') || c.takeWord('LOCK')) {
     c.takeOp('=')
     c.skip()

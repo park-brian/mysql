@@ -99,4 +99,7 @@ export const OPERATORS: readonly string[] = [
   '.',
   '{',
   '}',
+  // A stored program's label, `l1: LOOP` (M3.8). MySQL's lexer has it; this
+  // one refused it, so a labelled body could not even be tokenised.
+  ':',
 ]

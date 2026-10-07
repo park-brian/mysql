@@ -348,3 +348,39 @@ test('M3.3 review: an EXPLAIN of a let value carries its --error too', () => {
   const out = extract(file('let $q =', 'SELECT 1 LIMIT @one;', '--error ER_PARSE_ERROR', 'eval EXPLAIN FORMAT=tree $q;'))
   assert.equal(out.statements[0]?.expectedError, 'ER_PARSE_ERROR')
 })
+
+test('M3.6: a custom delimiter ends a statement, and every ; before it is inside one', () => {
+  // Under `delimiter //` a routine body's `;`s belong to the routine. Splitting
+  // on them cut it into fragments — `BEGIN DECLARE …`, `SET i = 0` — and the
+  // census measured each as a top-level statement.
+  assert.deepEqual(
+    texts(
+      file(
+        'delimiter //;',
+        'CREATE PROCEDURE p()',
+        'BEGIN',
+        '  DECLARE i INT;',
+        '  WHILE i < 3 DO',
+        '    SET i = i + 1;',
+        '  END WHILE;',
+        'END //',
+        'CALL p() //',
+        'delimiter ;//',
+        'SELECT 1;',
+      ),
+    ),
+    ['CREATE PROCEDURE p()\nBEGIN\n  DECLARE i INT;\n  WHILE i < 3 DO\n    SET i = i + 1;\n  END WHILE;\nEND', 'CALL p()', 'SELECT 1'],
+  )
+})
+
+test('M3.6: `delimiter ;//` restores `;` — the command ends in the delimiter it replaces', () => {
+  // Stripping only a trailing `;` from the argument left the delimiter as
+  // `;//`, so everything after the routine was swallowed into one block.
+  const out = texts(file('delimiter |;', 'SELECT 1 |', 'delimiter ;|', 'SELECT 2;', 'SELECT 3;'))
+  assert.deepEqual(out, ['SELECT 1', 'SELECT 2', 'SELECT 3'])
+})
+
+test('M3.6: a SET NAMES inside a procedure body is stored, not run, and does not split the block', () => {
+  const out = texts(file('delimiter |;', 'CREATE PROCEDURE p()', 'BEGIN', '  SET NAMES latin1;', '  SELECT 1;', 'END|', 'delimiter ;|'))
+  assert.deepEqual(out, ['CREATE PROCEDURE p()\nBEGIN\n  SET NAMES latin1;\n  SELECT 1;\nEND'])
+})

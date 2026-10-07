@@ -207,9 +207,10 @@ Decisions, and why:
 
 - **4 KiB blocks, not 512 B.** OPFS and modern SSDs both work in 4 KiB units;
   512 B blocks would mean 8× the header overhead for no atomicity benefit.
-- **CRC32C per block**, using a table-driven implementation (or
-  `crypto.subtle.digest` where a hardware path exists). Never trust a block
-  without verifying it.
+- **CRC32C per block**, using a table-driven implementation. (This line once
+  offered `crypto.subtle.digest` "where a hardware path exists"; WebCrypto has
+  no CRC at all — erratum E-01, applied by M4.1.) Never trust a block without
+  verifying it.
 - **Two alternating superblocks**, exactly as InnoDB alternates
   `LOG_CHECKPOINT_1`/`LOG_CHECKPOINT_2`. Cheap, and it removes the
   chicken-and-egg problem of making the checkpoint itself atomic.

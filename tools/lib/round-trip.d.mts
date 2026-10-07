@@ -6,3 +6,6 @@ export function roundTrip(
   ast: Statement,
   options?: ParseStatementOptions & DeparseOptions,
 ): { sql: string; error: string } | null
+export function parsed(sql: string): Statement
+export function same(a: string, b: string): void
+export function refused(...sqls: string[]): void

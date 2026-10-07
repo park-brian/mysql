@@ -1,7 +1,7 @@
 // M3.5 — one statement in, one AST out.
 //
 // The dispatcher is deliberately thin and deliberately **honest about its
-// gaps**. What is not built yet — `SET`, `SHOW`, `ALTER` and the rest —
+// gaps**. What is not built yet — `GRANT`, `FLUSH`, `ALTER VIEW` and the rest —
 // reaches `unsupportedStatement` rather than a half-parse — which matters more
 // than it sounds, because M3.11's census counts what this function accepts. A
 // dispatcher that returned some vague node for anything it did not understand
@@ -14,11 +14,27 @@
 import { unsupportedStatement } from './errors.ts'
 import { Cursor, checkTreeDepth } from './cursor.ts'
 import { TOKEN } from './tokens.ts'
-import { lex, lexBytes, type LexOptions } from './lexer.ts'
+import { decodeStatement, lex, type LexOptions } from './lexer.ts'
 import { NO_SQL_MODE, type SqlMode } from './sql-mode.ts'
-import { parseCreateTable, parseCreateView, parseDefiner, parseDrop } from './ddl.ts'
-import { atParenthesisedQuery, atQueryStart, parseQueryFrom, parseWithFrom } from './query.ts'
-import { parseDelete, parseInsert, parseUpdate } from './dml.ts'
+import { parseCreateDatabase, parseCreateTable, parseCreateView, parseDefiner, parseDrop } from './ddl.ts'
+import { parseAlterTable, parseCreateIndex } from './alter.ts'
+import { parseCall, parseCreateEvent, parseCreateRoutine, parseCreateTrigger } from './routine.ts'
+import {
+  atExplainable,
+  parseCommit,
+  parseDeallocate,
+  parseDo,
+  parseExecute,
+  parseExplain,
+  parseExplainable,
+  parsePrepare,
+  parseRollback,
+  parseSavepoint,
+  parseSet,
+  parseShow,
+  parseStartTransaction,
+  parseUse,
+} from './utility.ts'
 import { STATEMENT, type Statement } from './statement-ast.ts'
 
 export interface ParseStatementOptions extends LexOptions {
@@ -27,7 +43,7 @@ export interface ParseStatementOptions extends LexOptions {
 
 /** Parse one statement from SQL text. */
 export function parseStatement(sql: string, options: ParseStatementOptions = {}): Statement {
-  return parseFromTokens(new Cursor(lex(sql, options)), options.sqlMode ?? NO_SQL_MODE)
+  return parseFromTokens(new Cursor(lex(sql, options), sql), options.sqlMode ?? NO_SQL_MODE)
 }
 
 /**
@@ -39,15 +55,37 @@ export function parseStatement(sql: string, options: ParseStatementOptions = {})
  * charset-aware lexing reachable at all.
  */
 export function parseStatementBytes(bytes: Uint8Array, options: ParseStatementOptions = {}): Statement {
-  return parseFromTokens(new Cursor(lexBytes(bytes, options)), options.sqlMode ?? NO_SQL_MODE)
+  const sql = decodeStatement(bytes, options.collationId ?? 255)
+  return parseFromTokens(new Cursor(lex(sql, options), sql), options.sqlMode ?? NO_SQL_MODE)
+}
+
+/**
+ * Parse every statement in a multi-statement text: `SELECT 1; SELECT 2`.
+ *
+ * The boundaries come from the parser, not from splitting on `;`, because a
+ * stored program's body is full of `;`s that end nothing. This is how a server
+ * reads a `COM_QUERY` under `CLIENT_MULTI_STATEMENTS`, which D-13 keeps off by
+ * default, and how mysqltest's `delimiter` blocks are sent.
+ */
+export function parseStatements(sql: string, options: ParseStatementOptions = {}): Statement[] {
+  const c = new Cursor(lex(sql, options), sql)
+  const sqlMode = options.sqlMode ?? NO_SQL_MODE
+  const out = [checked(c, sqlMode)]
+  while (c.takeOp(';') && !c.atEnd()) out.push(checked(c, sqlMode))
+  if (!c.atEnd()) c.fail()
+  return out
+}
+
+/** One statement, refused if there is none or if it nests too deep. */
+function checked(c: Cursor, sqlMode: SqlMode): Statement {
+  if (c.atEnd()) c.fail()
+  const statement = dispatch(c, sqlMode)
+  checkTreeDepth(statement)
+  return statement
 }
 
 function parseFromTokens(c: Cursor, sqlMode: SqlMode): Statement {
-  const first = c.peek()
-  if (first.kind === TOKEN.EOF) c.fail()
-
-  const statement = dispatch(c, sqlMode)
-  checkTreeDepth(statement)
+  const statement = checked(c, sqlMode)
 
   // A trailing `;` is part of the statement as clients send it. Anything after
   // one is a second statement, and D-13 gates multi-statement execution off
@@ -68,32 +106,51 @@ function dispatch(c: Cursor, sqlMode: SqlMode): Statement {
     const kind = createObject(c)
     if (kind === 'TABLE') return parseCreateTable(c, options)
     if (kind === 'VIEW') return parseCreateView(c, options)
+    if (kind === 'INDEX' || kind === 'UNIQUE' || kind === 'FULLTEXT' || kind === 'SPATIAL') return parseCreateIndex(c, options)
+    if (kind === 'DATABASE' || kind === 'SCHEMA') return parseCreateDatabase(c)
+    const statement = (inner: Cursor) => dispatch(inner, sqlMode)
+    if (kind === 'PROCEDURE' || kind === 'FUNCTION') return parseCreateRoutine(c, sqlMode, kind, statement)
+    if (kind === 'TRIGGER') return parseCreateTrigger(c, sqlMode, statement)
+    if (kind === 'EVENT') return parseCreateEvent(c, sqlMode, statement)
     throw unsupportedStatement(`CREATE ${kind}`)
   }
+  if (c.atWords('ALTER', 'TABLE')) return parseAlterTable(c, options)
 
-  if (c.atWord('INSERT') || c.atWord('REPLACE')) return parseInsert(c, sqlMode)
-  if (c.atWord('UPDATE')) return parseUpdate(c, sqlMode)
-  if (c.atWord('DELETE')) return parseDelete(c, sqlMode)
+  // A query, `INSERT`, `REPLACE`, `UPDATE`, `DELETE`, and `WITH` opening any
+  // of the last three or a query — the statements `EXPLAIN` can explain.
+  if (atExplainable(c)) return parseExplainable(c, sqlMode)
 
-  // `WITH` opens a query, an `UPDATE` or a `DELETE`.
-  if (c.atWord('WITH')) {
-    const at = c.peek().start
-    const withClause = parseWithFrom(c, sqlMode)
-    if (c.atWord('UPDATE')) return parseUpdate(c, sqlMode, withClause, at)
-    if (c.atWord('DELETE')) return parseDelete(c, sqlMode, withClause, at)
-    return parseQueryFrom(c, sqlMode, true, withClause, at)
-  }
-
-  // A query is a statement: `SELECT`, `VALUES ROW`, `TABLE t`, and any of
-  // those in parentheses. The only place `INTO` is allowed.
-  if (atQueryStart(c) || atParenthesisedQuery(c)) return parseQueryFrom(c, sqlMode, true)
+  // M3.6.
+  if (c.atWord('SET')) return parseSet(c, sqlMode)
+  if (c.atWord('USE')) return parseUse(c)
+  if (c.atWord('SHOW')) return parseShow(c, sqlMode)
+  if (c.atWord('EXPLAIN') || c.atWord('DESCRIBE') || c.atWord('DESC')) return parseExplain(c, sqlMode)
+  if (c.atWord('BEGIN') || c.atWords('START', 'TRANSACTION')) return parseStartTransaction(c)
+  if (c.atWord('COMMIT')) return parseCommit(c)
+  if (c.atWord('ROLLBACK')) return parseRollback(c)
+  // `RELEASE` begins nothing else, so `RELEASE sp` is a syntax error, as on 8.4.11.
+  if (c.atWord('SAVEPOINT') || c.atWord('RELEASE')) return parseSavepoint(c)
+  if (c.atWord('PREPARE')) return parsePrepare(c)
+  if (c.atWord('EXECUTE')) return parseExecute(c)
+  if (c.atWord('DEALLOCATE') || c.atWords('DROP', 'PREPARE')) return parseDeallocate(c)
+  if (c.atWord('DO')) return parseDo(c, sqlMode)
+  if (c.atWord('CALL')) return parseCall(c, sqlMode)
 
   if (c.atWord('DROP')) {
     const save = c.at
     c.skip()
     c.takeWord('TEMPORARY')
     const known =
-      c.atWord('TABLE') || c.atWord('VIEW') || c.atWord('INDEX') || c.atWord('DATABASE') || c.atWord('SCHEMA')
+      c.atWord('TABLE') ||
+      c.atWord('TABLES') ||
+      c.atWord('VIEW') ||
+      c.atWord('INDEX') ||
+      c.atWord('DATABASE') ||
+      c.atWord('SCHEMA') ||
+      c.atWord('PROCEDURE') ||
+      c.atWord('FUNCTION') ||
+      c.atWord('TRIGGER') ||
+      c.atWord('EVENT')
     const object = c.peek().text.toUpperCase()
     c.at = save
     if (known) return parseDrop(c)

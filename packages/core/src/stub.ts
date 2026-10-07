@@ -27,8 +27,27 @@ import {
   utf8Transcoder,
   type StatementResult,
 } from '@myjs/protocol'
+import {
+  NODE,
+  ParseError,
+  STATEMENT,
+  badMode,
+  formatSqlMode,
+  parseSqlMode,
+  parseStatement,
+  type CallStatementNode,
+  type CreateEventNode,
+  type CreateRoutineNode,
+  type CreateTriggerNode,
+  type DropNode,
+  type SetItem,
+  type TableName,
+  type SetNode,
+  type SetTransactionNode,
+  type UseNode,
+} from '@myjs/parser'
 import { DEFAULT_SERVER_VERSION } from './connection.ts'
-import { charsetVariables, ensureCollationResident, parseSetNames } from './transcoder.ts'
+import { charsetChange, charsetVariables, ensureCollationResident } from './transcoder.ts'
 
 export interface StubOptions {
   readonly serverVersion?: string
@@ -75,6 +94,8 @@ const nullColumn = (name: string): ColumnDefinition => ({
 export class StubExecutor implements Executor {
   readonly #options: StubOptions
   readonly #vars: Map<string, SqlValue>
+  /** M3.8: stored programs, accepted and kept, by `kind:schema.name`. Never run. */
+  readonly #programs = new Set<string>()
 
   constructor(options: StubOptions = {}) {
     this.#options = options
@@ -96,8 +117,9 @@ export class StubExecutor implements Executor {
   }
 
   async query(session: Session, sql: string): Promise<StatementResult | StatementResult[]> {
-    await this.#preload(session, sql)
-    return this.#run(session, sql)
+    const statement = sessionStatement(session, sql)
+    await preload(statement)
+    return this.#run(session, sql, [], statement)
   }
 
   async prepare(_session: Session, sql: string): Promise<PreparedInfo> {
@@ -117,8 +139,9 @@ export class StubExecutor implements Executor {
     sql: string,
     parameters: readonly Parameter[],
   ): Promise<StatementResult | StatementResult[]> {
-    await this.#preload(session, sql)
-    return this.#run(session, sql, parameters)
+    const statement = sessionStatement(session, sql)
+    await preload(statement)
+    return this.#run(session, sql, parameters, statement)
   }
 
   async initDb(session: Session, database: string): Promise<void> {
@@ -133,48 +156,29 @@ export class StubExecutor implements Executor {
     )
   }
 
-  /**
-   * The async half of D-36, on the one statement that can reach a collation
-   * whose tables are not resident.
-   *
-   * `SET NAMES utf8mb4 COLLATE utf8mb4_0900_ai_ci` is how a client reaches the
-   * 8.0 default at all — `HandshakeV10` carries one byte for the collation id,
-   * so 255 cannot be negotiated. Loading here, on the async edge, is what lets
-   * every later `collation()` on the hot path stay synchronous.
-   *
-   * `#run` itself stays synchronous, which is the point: an executor is not
-   * allowed to need an `await` in the middle of ordering rows.
-   */
-  async #preload(session: Session | undefined, sql: string): Promise<void> {
-    if (session === undefined) return
-    const change = parseSetNames(sql)
-    if (change !== null && change !== 'unknown') await ensureCollationResident(change.collationId)
-  }
-
-  #run(session: Session, sql: string, parameters: readonly Parameter[] = []): StatementResult {
+  #run(session: Session, sql: string, parameters: readonly Parameter[] = [], statement: SessionStatement | null = null): StatementResult {
     const trimmed = stripTrailingSemicolon(sql.trim())
     const upper = trimmed.toUpperCase()
 
     if (upper === '' ) return { affectedRows: 0 }
 
-    // Statements a client sends for their side effect. The stub has no state
-    // to change, but answering OK is what keeps a session usable.
-    if (/^(SET|BEGIN|START\s+TRANSACTION|COMMIT|ROLLBACK|USE|DO|FLUSH)\b/.test(upper)) {
-      if (upper.startsWith('USE ')) {
-        session.database = stripQuotes(trimmed.slice(4).trim())
-      }
-      // M2.18: `SET NAMES` is the only `SET` with a real effect here. Doc 29:
-      // `HandshakeV10` carries one byte for the collation id, so a client
-      // cannot reach `utf8mb4_0900_ai_ci` (255) any other way.
-      const change = parseSetNames(trimmed)
-      if (change === 'unknown') {
-        throw sqlError('ER_UNKNOWN_CHARACTER_SET', messages.unsupportedCharset(0))
-      }
-      if (change !== null && session !== undefined) {
-        session.characterSet = change.collationId
-      }
+    // M3.6: `SET` and `USE` arrive parsed, which is what lets `SET NAMES` sit
+    // anywhere in a list and `SET sql_mode` reach the session.
+    if (statement?.kind === STATEMENT.SET) {
+      for (const item of statement.items) this.#set(session, item)
       return { affectedRows: 0 }
     }
+    // Accepted and not applied: the stub has no transactions to characterise.
+    if (statement?.kind === STATEMENT.SET_TRANSACTION) return { affectedRows: 0 }
+    if (statement?.kind === STATEMENT.USE) {
+      session.database = statement.database
+      return { affectedRows: 0 }
+    }
+    if (statement !== null) return this.#program(session, statement)
+
+    // Statements a client sends for their side effect. The stub has no state
+    // to change, but answering OK is what keeps a session usable.
+    if (/^(BEGIN|START\s+TRANSACTION|COMMIT|ROLLBACK|DO|FLUSH)\b/.test(upper)) return { affectedRows: 0 }
 
     if (/^SHOW\s+WARNINGS\b/.test(upper)) {
       return {
@@ -195,6 +199,67 @@ export class StubExecutor implements Executor {
     }
 
     throw sqlError('ER_NOT_SUPPORTED_YET', messages.notSupported(`This statement (${firstWord(trimmed)})`))
+  }
+
+  /**
+   * M3.8: `CREATE PROCEDURE` and its siblings store, `DROP` removes, and
+   * `CALL` finds the procedure and says it cannot run it yet. The same errors
+   * a server gives for a name that exists or does not.
+   */
+  #program(session: Session, statement: ProgramStatement): StatementResult {
+    if (statement.kind === STATEMENT.CALL) {
+      if (!this.#programs.has(programKey('PROCEDURE', statement.name, session))) throw sqlError('ER_SP_DOES_NOT_EXIST', messages.objectMissing('PROCEDURE', qualified(statement.name, session)))
+      throw sqlError('ER_NOT_SUPPORTED_YET', messages.notSupported('CALL'))
+    }
+    if (statement.kind === STATEMENT.DROP) {
+      const object = statement.object as ProgramObject
+      const name = statement.names[0] as TableName
+      if (!this.#programs.delete(programKey(object, name, session)) && statement.ifExists !== true) {
+        throw sqlError(MISSING[object], messages.objectMissing(object, qualified(name, session)))
+      }
+      return { affectedRows: 0 }
+    }
+    const object = statement.kind === STATEMENT.CREATE_ROUTINE ? statement.object : statement.kind === STATEMENT.CREATE_TRIGGER ? 'TRIGGER' : 'EVENT'
+    const key = programKey(object, statement.name, session)
+    if (this.#programs.has(key)) {
+      if (statement.ifNotExists === true) return { affectedRows: 0 }
+      throw sqlError(EXISTS[object], messages.objectExists(object, statement.name.name))
+    }
+    this.#programs.add(key)
+    return { affectedRows: 0 }
+  }
+
+  /**
+   * One `SET` item. Two have an effect: the charset of the connection, and
+   * `sql_mode`, which decides how every later statement on the session is
+   * parsed. Anything else is accepted and not stored, as before M3.6; the
+   * real variable system arrives with the executor.
+   */
+  #set(session: Session, item: SetItem): void {
+    if (item.type === 'names' || item.type === 'charset') {
+      const change = charsetChange(item)
+      if (change === 'unknown') throw sqlError('ER_UNKNOWN_CHARACTER_SET', messages.unsupportedCharset(0))
+      session.characterSet = change.collationId
+      return
+    }
+    if (item.type === 'user' || item.base !== undefined || item.name.toLowerCase() !== 'sql_mode') return
+    const scope = item.type === 'system' ? item.scope : undefined
+    const value = item.value
+    let text: string
+    if (value.kind === NODE.LITERAL && typeof value.value === 'string') text = value.value
+    else if (value.kind === NODE.COLUMN && value.parts.length === 1) text = value.parts[0] as string
+    else if (value.kind === NODE.KEYWORD && value.word === 'DEFAULT') text = String(this.#vars.get('sql_mode'))
+    else if ((value.kind === NODE.LITERAL && value.type === 'null') || value.kind === NODE.KEYWORD) throw badMode(value.kind === NODE.KEYWORD ? value.word : 'NULL')
+    // An expression — `CONCAT(@@sql_mode, ',ANSI')`, `(SELECT REPLACE(…))`, a
+    // bitmask — needs the executor to evaluate. Until then it is accepted and
+    // changes nothing, as every `SET` did before M3.6, because drivers send
+    // these on connect and refusing them breaks the session outright.
+    else return
+    // Validated even for `PERSIST_ONLY`, which stores without applying: an
+    // unknown mode is ER_WRONG_VALUE_FOR_VAR whatever the scope.
+    const mode = formatSqlMode(parseSqlMode(text))
+    if (scope === 'GLOBAL' || scope === 'PERSIST') this.#vars.set('sql_mode', mode)
+    else if (scope !== 'PERSIST_ONLY') session.sqlMode = mode
   }
 
   #evaluate(rawItem: string, session?: Session, parameter?: Parameter): Evaluated {
@@ -223,7 +288,9 @@ export class StubExecutor implements Executor {
     if (/^'.*'$/s.test(expr) || /^".*"$/s.test(expr)) return stripQuotes(expr)
 
     if (expr.startsWith('@@')) {
-      const name = expr.replace(/^@@(session\.|global\.)?/i, '').toLowerCase()
+      const name = expr.replace(/^@@(session\.|local\.|global\.)?/i, '').toLowerCase()
+      // M3.6: the session's own `sql_mode`, which `SET sql_mode` changes.
+      if (name === 'sql_mode' && session !== undefined && !/^@@global\./i.test(expr)) return session.sqlMode
       // M2.18: the `character_set_*` and `collation_*` variables are derived
       // from the session rather than hardcoded, so a client that issues
       // `SET NAMES latin1` and then reads them back sees latin1.
@@ -360,4 +427,87 @@ function splitAlias(item: string): { expression: string; alias: string | null } 
     return { expression: (bare[1] as string).trim(), alias: bare[2] as string }
   }
   return { expression: item, alias: null }
+}
+
+type ProgramStatement = CreateRoutineNode | CreateTriggerNode | CreateEventNode | CallStatementNode | DropNode
+type SessionStatement = SetNode | SetTransactionNode | UseNode | ProgramStatement
+
+type ProgramObject = 'PROCEDURE' | 'FUNCTION' | 'TRIGGER' | 'EVENT'
+
+const EXISTS = {
+  PROCEDURE: 'ER_SP_ALREADY_EXISTS',
+  FUNCTION: 'ER_SP_ALREADY_EXISTS',
+  TRIGGER: 'ER_TRG_ALREADY_EXISTS',
+  EVENT: 'ER_EVENT_ALREADY_EXISTS',
+} as const
+const MISSING = {
+  PROCEDURE: 'ER_SP_DOES_NOT_EXIST',
+  FUNCTION: 'ER_SP_DOES_NOT_EXIST',
+  TRIGGER: 'ER_TRG_DOES_NOT_EXIST',
+  EVENT: 'ER_EVENT_DOES_NOT_EXIST',
+} as const
+
+/** `db.name`, in the session's database when unqualified. */
+const qualified = (name: TableName, session: Session): string => `${name.schema ?? session.database ?? ''}.${name.name}`
+/** Stored-program names are case-insensitive, as MySQL's are. */
+const programKey = (object: string, name: TableName, session: Session): string => `${object}:${qualified(name, session).toLowerCase()}`
+
+const PROGRAM_OBJECTS: ReadonlySet<string> = new Set(['PROCEDURE', 'FUNCTION', 'TRIGGER', 'EVENT'])
+
+/**
+ * The statements this stub reads with the parser: `SET` and `USE`, parsed
+ * with the session's own `sql_mode` — so a session that has run
+ * `SET sql_mode = 'NO_BACKSLASH_ESCAPES'` reads its next statement that way —
+ * and the stored-program statements M3.8 stores. Everything else stays with
+ * the regexes above until the executor replaces this file.
+ */
+function sessionStatement(session: Session | undefined, sql: string): SessionStatement | null {
+  if (session === undefined || !/^\s*(SET|USE|CREATE|DROP|CALL)\b/i.test(sql)) return null
+  let node
+  try {
+    node = parseStatement(sql, { sqlMode: parseSqlMode(session.sqlMode) })
+  } catch (e) {
+    // `SET PASSWORD`, `SET ROLE` and the other `SET`s the parser names as not
+    // implemented were answered OK before M3.6, and still are: a driver's
+    // connect sequence must not fail on them. A syntax error stays an error.
+    if (e instanceof ParseError && e.code === 'ER_NOT_SUPPORTED_YET' && /^\s*SET\b/i.test(sql)) {
+      return { kind: STATEMENT.SET, items: [], at: 0 }
+    }
+    throw e
+  }
+  switch (node.kind) {
+    case STATEMENT.SET:
+    case STATEMENT.SET_TRANSACTION:
+    case STATEMENT.USE:
+    case STATEMENT.CREATE_ROUTINE:
+    case STATEMENT.CREATE_TRIGGER:
+    case STATEMENT.CREATE_EVENT:
+    case STATEMENT.CALL:
+      return node
+    case STATEMENT.DROP:
+      return PROGRAM_OBJECTS.has(node.object) ? node : null
+    default:
+      return null
+  }
+}
+
+/**
+ * The async half of D-36, on the one statement that can reach a collation
+ * whose tables are not resident.
+ *
+ * `SET NAMES utf8mb4 COLLATE utf8mb4_0900_ai_ci` is how a client reaches the
+ * 8.0 default at all — `HandshakeV10` carries one byte for the collation id,
+ * so 255 cannot be negotiated. Loading here, on the async edge, is what lets
+ * every later `collation()` on the hot path stay synchronous.
+ *
+ * `#run` itself stays synchronous, which is the point: an executor is not
+ * allowed to need an `await` in the middle of ordering rows.
+ */
+async function preload(statement: SessionStatement | null): Promise<void> {
+  if (statement?.kind !== STATEMENT.SET) return
+  for (const item of statement.items) {
+    if (item.type !== 'names' && item.type !== 'charset') continue
+    const change = charsetChange(item)
+    if (change !== 'unknown') await ensureCollationResident(change.collationId)
+  }
 }

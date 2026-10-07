@@ -71,11 +71,17 @@ export function checkTreeDepth(root: object): void {
 
 export class Cursor {
   readonly tokens: readonly Token[]
+  /**
+   * The decoded statement the tokens came from, for the one construct whose
+   * text is kept as written: a stored program's body (M3.8).
+   */
+  readonly source: string
   at = 0
   #depth = 0
 
-  constructor(tokens: readonly Token[]) {
+  constructor(tokens: readonly Token[], source = '') {
     this.tokens = tokens
+    this.source = source
   }
 
   /**
@@ -228,3 +234,10 @@ export class Cursor {
     }
   }
 }
+
+/** `{ key: value }` when defined, `{}` when not — an absent field, never `undefined`. */
+export const opt = <K extends string, V>(key: K, value: V | undefined): { [P in K]?: V } =>
+  (value === undefined ? {} : { [key]: value }) as { [P in K]?: V }
+
+/** `{ name: true }` when on, `{}` when not. */
+export const flag = (name: string, on: boolean): Record<string, true> => (on ? { [name]: true } : {})

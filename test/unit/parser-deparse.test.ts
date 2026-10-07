@@ -118,7 +118,7 @@ test('M3.3: every query form survives the deparser', () => {
     "SELECT a FROM t INTO DUMPFILE '/f'",
     'SELECT a FROM t FOR UPDATE OF t, u SKIP LOCKED FOR SHARE LOCK IN SHARE MODE',
     // Table references.
-    'SELECT 1 FROM t PARTITION (p0, p1) AS x USE INDEX FOR JOIN (i) IGNORE KEY (PRIMARY) FORCE INDEX FOR ORDER BY ()',
+    'SELECT 1 FROM t PARTITION (p0, p1) AS x USE INDEX FOR JOIN (i) IGNORE KEY (PRIMARY) FORCE INDEX FOR ORDER BY (i) USE INDEX FOR GROUP BY ()',
     'SELECT 1 FROM a, b JOIN c ON 1 LEFT JOIN d USING (x, y) NATURAL RIGHT JOIN e STRAIGHT_JOIN f ON 2',
     'SELECT 1 FROM a JOIN b JOIN c ON 1 ON 2',
     // A re-hung condition-less join (`add_cross_join`) writes back bare and

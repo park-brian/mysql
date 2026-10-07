@@ -29,6 +29,8 @@ export const messages = {
   maxPreparedStmtCount: (limit: number): string =>
     `Can't create more than max_prepared_stmt_count statements (current value: ${limit})`,
   notSupported: (what: string): string => `${what} is not supported by this server yet`,
+  objectExists: (kind: string, name: string): string => `${kind} ${name} already exists`,
+  objectMissing: (kind: string, name: string): string => `${kind} ${name} does not exist`,
   multiStatementsDisabled: (): string =>
     "Multiple statements are disabled; enable them with the engine's multipleStatements option",
   unsupportedCharset: (id: number): string =>

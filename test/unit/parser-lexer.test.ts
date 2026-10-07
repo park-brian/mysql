@@ -14,6 +14,7 @@ import {
   lex,
   lexBytes,
   parseError,
+  formatSqlMode,
   parseSqlMode,
   unknownCharset,
   type Token,
@@ -131,7 +132,24 @@ test('M3.7: a sql_mode that is not a mode name is refused', () => {
   // own `@@sql_mode` reports.
   assert.throws(() => parseSqlMode('ANSI_QUOTES, nonsense!'), ParseError)
   assert.equal(parseSqlMode('').names.size, 0, "sql_mode='' is legal and means no modes")
-  assert.equal(parseSqlMode('  ansi_quotes , ').ansiQuotes, true, 'case and space tolerant, as MySQL is')
+  assert.equal(parseSqlMode('ansi_quotes,,').ansiQuotes, true, 'case-insensitive, and an empty item is nothing')
+  // This line asserted the opposite until M3.6 asked 8.4.11, which refuses
+  // `SET sql_mode = ' ansi_quotes '` with ER_WRONG_VALUE_FOR_VAR. It also
+  // refuses a well-shaped name that is not a mode, which the shape check let by.
+  for (const text of [' ansi_quotes ', 'ANSI_QUOTES, REAL_AS_FLOAT', 'nonsense', 'NO_FIELD_OPTIONS', 'POSTGRESQL']) {
+    assert.throws(() => parseSqlMode(text), (e: ParseError) => e.code === 'ER_WRONG_VALUE_FOR_VAR', JSON.stringify(text))
+  }
+})
+
+test('M3.6: @@sql_mode reports in bit order, combination names kept after their expansion', () => {
+  // Each expected value is what 8.4.11 returned for the same SET.
+  assert.equal(formatSqlMode(parseSqlMode('ansi')), 'REAL_AS_FLOAT,PIPES_AS_CONCAT,ANSI_QUOTES,IGNORE_SPACE,ONLY_FULL_GROUP_BY,ANSI')
+  assert.equal(formatSqlMode(parseSqlMode('NO_ZERO_DATE,STRICT_TRANS_TABLES')), 'STRICT_TRANS_TABLES,NO_ZERO_DATE')
+  assert.equal(
+    formatSqlMode(parseSqlMode('traditional,ansi')),
+    'REAL_AS_FLOAT,PIPES_AS_CONCAT,ANSI_QUOTES,IGNORE_SPACE,ONLY_FULL_GROUP_BY,ANSI,STRICT_TRANS_TABLES,STRICT_ALL_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,TRADITIONAL,NO_ENGINE_SUBSTITUTION',
+  )
+  assert.equal(formatSqlMode(parseSqlMode('')), '')
 })
 
 // --- literals ---------------------------------------------------------------

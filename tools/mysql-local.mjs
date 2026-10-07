@@ -47,7 +47,12 @@ const sh = (cmd, args, opts = {}) =>
   execFileSync(cmd, args, { stdio: 'inherit', ...opts })
 const quiet = (cmd, args, opts = {}) => {
   try {
-    return execFileSync(cmd, args, { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'], ...opts })
+    // stdin is a pipe only when there is `input` to send. Node drops `input`
+    // silently when `stdio[0]` is anything but 'pipe', and an unconditional
+    // 'ignore' here meant every `quiet(…, { input })` ran its client against
+    // an empty stdin — which exits 0 having done nothing.
+    const stdin = opts.input === undefined ? 'ignore' : 'pipe'
+    return execFileSync(cmd, args, { encoding: 'utf8', stdio: [stdin, 'pipe', 'ignore'], ...opts })
   } catch {
     return null
   }
@@ -107,6 +112,11 @@ function running() {
   return quiet('mysqladmin', [...client(), 'ping', '--silent']) !== null
 }
 
+/** Whether the capture tools can log in over TCP, which `running()` does not ask. */
+function answering() {
+  return quiet('mysql', [...client(['-N', '-B']), '-e', 'SELECT 1']) !== null
+}
+
 function pidAlive() {
   if (!existsSync(PIDFILE)) return false
   try {
@@ -151,9 +161,14 @@ async function start() {
   // server accepts the `ALTER USER`, and `quiet()` swallows that failure — so
   // the first `start` on a new machine reported "up, but not answering" and
   // every capture tool then failed with ER_HOST_NOT_PRIVILEGED.
-  for (let i = 0; i < 30 && !running(); i++) {
+  //
+  // And asked with a query, not with `running()`: `mysqladmin ping` exits 0
+  // when the server answers *at all* — "Access denied" included, as its manual
+  // says — so on a fresh datadir `running()` was already true, this loop never
+  // ran, and `grantTcp()` was never called.
+  for (let i = 0; i < 30 && !answering(); i++) {
     grantTcp()
-    if (!running()) await new Promise((r) => setTimeout(r, 1000))
+    if (!answering()) await new Promise((r) => setTimeout(r, 1000))
   }
   status()
 }

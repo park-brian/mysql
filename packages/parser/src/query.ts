@@ -725,7 +725,9 @@ class QueryParser {
       }
       c.expectOp('(')
       const indexes: string[] = []
-      if (!c.atOp(')')) {
+      // An empty list is `USE`'s alone — "use no index" — and a real 8.4
+      // refuses `FORCE INDEX ()` and `IGNORE INDEX ()` as syntax errors.
+      if (type !== 'USE' || !c.atOp(')')) {
         do indexes.push(c.takeWord('PRIMARY') ? 'PRIMARY' : c.expectIdentifier())
         while (c.takeOp(','))
       }
