@@ -19,16 +19,31 @@
 // String literals are the one place `sql_mode` reaches in here: whether `\` is
 // an escape character is `NO_BACKSLASH_ESCAPES`'s decision, so a literal is
 // escaped for the mode it will be parsed under.
-import { NODE, LITERAL, type Expression, type LiteralNode } from './ast.ts'
+import { NODE, LITERAL, type CallNode, type Expression, type LiteralNode } from './ast.ts'
 import type { DataType } from './data-type.ts'
 import { RESERVED } from './keywords.ts'
 import { NO_SQL_MODE, type SqlMode } from './sql-mode.ts'
+import {
+  QUERY,
+  REF,
+  type FrameBound,
+  type Into,
+  type Locking,
+  type OrderItem,
+  type QueryBody,
+  type QueryExpression,
+  type SelectNode,
+  type TableReference,
+  type WindowSpec,
+} from './query-ast.ts'
 import {
   STATEMENT,
   KEY,
   type CheckConstraint,
   type ColumnDefinition,
   type CreateTableNode,
+  type CreateViewNode,
+  type Definer,
   type DropNode,
   type IndexColumn,
   type KeyDefinition,
@@ -118,7 +133,8 @@ class Deparser {
         body = `${e.unit} ${this.string(e.value as string)}`
         break
     }
-    const introduced = e.charset === undefined ? body : `_${e.charset}${body}`
+    // A space after the introducer, always: `_latin1X'ff'` is one identifier.
+    const introduced = e.charset === undefined ? body : `_${e.charset} ${body}`
     return e.collation === undefined ? introduced : `${introduced} COLLATE ${quoteName(e.collation)}`
   }
 
@@ -145,13 +161,8 @@ class Deparser {
         return `(${e.op} ${this.expr(e.operand)})`
       case NODE.BINARY:
         return this.binary(e.op, e.left, e.right, e.extra)
-      case NODE.CALL: {
-        const args =
-          e.args.length === 1 && e.args[0]!.kind === NODE.COLUMN && e.args[0]!.parts.length === 1 && e.args[0]!.parts[0] === '*'
-            ? '*'
-            : e.args.map((a) => this.expr(a)).join(', ')
-        return `${e.name}(${e.distinct === true ? 'DISTINCT ' : ''}${args})`
-      }
+      case NODE.CALL:
+        return this.call(e)
       case NODE.CASE: {
         const parts = ['CASE']
         if (e.operand !== undefined) parts.push(this.expr(e.operand))
@@ -161,13 +172,200 @@ class Deparser {
         return parts.join(' ')
       }
       case NODE.ROW:
-        return `(${e.items.map((i) => this.expr(i)).join(', ')})`
+        // A one-item row cannot be written as `(a)`, which is just `a`.
+        return e.items.length === 1 ? `ROW(${this.expr(e.items[0]!)})` : `(${e.items.map((i) => this.expr(i)).join(', ')})`
       case NODE.INTERVAL:
         // Not parenthesised: `INTERVAL` is grammar beside `+` and `-`, not an
         // expression that can stand in parentheses on its own.
         return `INTERVAL ${this.expr(e.value)} ${e.unit}`
       case NODE.COLLATE:
         return `(${this.expr(e.expr)} COLLATE ${quoteName(e.collation)})`
+      case NODE.SUBQUERY:
+        return `${e.quantifier === undefined ? '' : e.quantifier + ' '}(${this.query(e.query)})`
+      case NODE.CAST: {
+        const zone = e.timeZone === undefined ? '' : ` AT TIME ZONE ${this.string(e.timeZone)}`
+        return `CAST(${this.expr(e.expr)}${zone} AS ${this.dataType(e.type)}${e.array === true ? ' ARRAY' : ''})`
+      }
+      case NODE.CONVERT:
+        return `CONVERT(${this.expr(e.expr)} USING ${quoteName(e.charset)})`
+      case NODE.KEYWORD:
+        return e.word
+      case NODE.MATCH:
+        return `MATCH (${e.columns.map((c) => this.expr(c)).join(', ')}) AGAINST (${this.expr(e.against)}${e.modifier === undefined ? '' : ' ' + e.modifier})`
+    }
+  }
+
+  /**
+   * A call. Most are a name and a comma-separated list; the few whose grammar
+   * is not are written back in their own syntax, since `POSITION(a, b)` and
+   * `EXTRACT(YEAR, d)` are not SQL at all.
+   */
+  call(e: CallNode): string {
+    const args = e.args.map((a) => this.expr(a))
+    let body: string
+    switch (e.name.toUpperCase()) {
+      case 'EXTRACT':
+        body = `${args[0]} FROM ${args[1]}`
+        break
+      case 'POSITION':
+        body = `${args[0]} IN ${args[1]}`
+        break
+      case 'WEIGHT_STRING':
+        body =
+          e.args[1]?.kind === NODE.KEYWORD
+            ? [`${args[0]} AS ${args[1]}(${args[2]})`, ...args.slice(3)].join(', ')
+            : args.join(', ')
+        break
+      case 'TRIM':
+        body =
+          e.args[0]?.kind === NODE.KEYWORD
+            ? `${args[0]} ${args.length === 3 ? args[1] + ' ' : ''}FROM ${args[args.length - 1]}`
+            : args.length === 2
+              ? `${args[0]} FROM ${args[1]}`
+              : (args[0] as string)
+        break
+      default: {
+        const star = e.args.length === 1 && e.args[0]!.kind === NODE.COLUMN && e.args[0]!.parts.length === 1 && e.args[0]!.parts[0] === '*'
+        body = star ? '*' : args.join(', ')
+      }
+    }
+    if (e.distinct === true) body = `DISTINCT ${body}`
+    if (e.orderBy !== undefined) body += ` ${this.orderBy(e.orderBy)}`
+    if (e.separator !== undefined) body += ` SEPARATOR ${this.string(e.separator)}`
+    if (e.using !== undefined) body += ` USING ${quoteName(e.using)}`
+    const over = e.over === undefined ? '' : ` OVER ${typeof e.over === 'string' ? quoteName(e.over) : `(${this.windowSpec(e.over)})`}`
+    return `${e.name}(${body})${over}`
+  }
+
+  // --- queries --------------------------------------------------------------
+
+  query(q: QueryExpression): string {
+    const out: string[] = []
+    if (q.with !== undefined) {
+      const tables = q.with.tables.map(
+        (t) => `${quoteName(t.name)}${t.columns === undefined ? '' : ` (${t.columns.map(quoteName).join(', ')})`} AS (${this.query(t.query)})`,
+      )
+      out.push(`WITH ${q.with.recursive === true ? 'RECURSIVE ' : ''}${tables.join(', ')}`)
+    }
+    out.push(this.queryBody(q.body))
+    if (q.orderBy !== undefined) out.push(this.orderBy(q.orderBy))
+    if (q.limit !== undefined) {
+      out.push(`LIMIT ${this.expr(q.limit.count)}${q.limit.offset === undefined ? '' : ` OFFSET ${this.expr(q.limit.offset)}`}`)
+    }
+    if (q.into !== undefined) out.push(this.into(q.into))
+    for (const lock of q.locking ?? []) out.push(this.locking(lock))
+    return out.join(' ')
+  }
+
+  queryBody(b: QueryBody): string {
+    switch (b.kind) {
+      case QUERY.QUERY:
+        return `(${this.query(b)})`
+      case QUERY.SELECT:
+        return this.select(b)
+      case QUERY.SET_OPERATION:
+        // Both sides are written bare, and that is faithful for every tree the
+        // parser builds: a side that was parenthesised is a nested query
+        // expression and brings its own parentheses, a left-nested chain
+        // re-associates left, and the one set operation that can sit on the
+        // right unparenthesised is an `INTERSECT` under a `UNION` or `EXCEPT`,
+        // which binds tighter and so regroups the same way.
+        return `${this.queryBody(b.left)} ${b.op}${b.all === true ? ' ALL' : ''} ${this.queryBody(b.right)}`
+      case QUERY.VALUES:
+        return `VALUES ${b.rows.map((r) => `ROW(${r.map((v) => this.expr(v)).join(', ')})`).join(', ')}`
+      case QUERY.TABLE:
+        return `TABLE ${this.table(b.table)}`
+    }
+  }
+
+  select(s: SelectNode): string {
+    const out = ['SELECT']
+    if (s.distinct === true) out.push('DISTINCT')
+    if (s.options !== undefined) out.push(...s.options)
+    out.push(s.items.map((i) => (i.alias === undefined ? this.expr(i.expr) : `${this.expr(i.expr)} AS ${quoteName(i.alias)}`)).join(', '))
+    if (s.from !== undefined) out.push(`FROM ${s.from.map((r) => this.tableReference(r)).join(', ')}`)
+    if (s.where !== undefined) out.push(`WHERE ${this.expr(s.where)}`)
+    if (s.groupBy !== undefined) {
+      out.push(`GROUP BY ${s.groupBy.items.map((i) => this.expr(i)).join(', ')}${s.groupBy.rollup === true ? ' WITH ROLLUP' : ''}`)
+    }
+    if (s.having !== undefined) out.push(`HAVING ${this.expr(s.having)}`)
+    if (s.windows !== undefined) {
+      out.push(`WINDOW ${s.windows.map((w) => `${quoteName(w.name)} AS (${this.windowSpec(w.spec)})`).join(', ')}`)
+    }
+    return out.join(' ')
+  }
+
+  orderBy(items: readonly OrderItem[]): string {
+    return `ORDER BY ${items.map((i) => `${this.expr(i.expr)}${i.desc === true ? ' DESC' : ''}`).join(', ')}`
+  }
+
+  windowSpec(w: WindowSpec): string {
+    const out: string[] = []
+    if (w.base !== undefined) out.push(quoteName(w.base))
+    if (w.partitionBy !== undefined) out.push(`PARTITION BY ${w.partitionBy.map((e) => this.expr(e)).join(', ')}`)
+    if (w.orderBy !== undefined) out.push(this.orderBy(w.orderBy))
+    if (w.frame !== undefined) {
+      const f = w.frame
+      out.push(f.end === undefined ? `${f.units} ${this.bound(f.start)}` : `${f.units} BETWEEN ${this.bound(f.start)} AND ${this.bound(f.end)}`)
+    }
+    return out.join(' ')
+  }
+
+  bound(b: FrameBound): string {
+    if (b.kind === 'current') return 'CURRENT ROW'
+    if (b.kind === 'unbounded') return `UNBOUNDED ${b.direction}`
+    return `${this.expr(b.value as Expression)} ${b.direction}`
+  }
+
+  into(i: Into): string {
+    if (i.kind === 'variables') return `INTO ${i.targets.map((t) => this.expr(t)).join(', ')}`
+    if (i.kind === 'dumpfile') return `INTO DUMPFILE ${this.string(i.file)}`
+    const out = [`INTO OUTFILE ${this.string(i.file)}`]
+    if (i.charset !== undefined) out.push(`CHARACTER SET ${quoteName(i.charset)}`)
+    for (const section of ['FIELDS', 'LINES']) {
+      const own = Object.entries(i.options).filter(([k]) => k.startsWith(section + ' '))
+      if (own.length > 0) out.push(section, ...own.map(([k, v]) => `${k.slice(section.length + 1)} ${this.string(v)}`))
+    }
+    return out.join(' ')
+  }
+
+  locking(l: Locking): string {
+    if (l.legacy === true) return 'LOCK IN SHARE MODE'
+    const of = l.of === undefined ? '' : ` OF ${l.of.map((t) => this.table(t)).join(', ')}`
+    return `FOR ${l.strength}${of}${l.wait === undefined ? '' : ' ' + l.wait}`
+  }
+
+  tableReference(r: TableReference): string {
+    switch (r.kind) {
+      case REF.TABLE: {
+        const out = [this.table(r.table)]
+        if (r.partitions !== undefined) out.push(`PARTITION (${r.partitions.map(quoteName).join(', ')})`)
+        if (r.alias !== undefined) out.push(`AS ${quoteName(r.alias)}`)
+        for (const h of r.indexHints ?? []) {
+          out.push(`${h.type} INDEX${h.for === undefined ? '' : ` FOR ${h.for}`} (${h.indexes.map((i) => (i === 'PRIMARY' ? i : quoteName(i))).join(', ')})`)
+        }
+        return out.join(' ')
+      }
+      case REF.DERIVED: {
+        const out = [`${r.lateral === true ? 'LATERAL ' : ''}(${this.query(r.query)})`]
+        if (r.alias !== undefined) out.push(`AS ${quoteName(r.alias)}`)
+        if (r.columns !== undefined) out.push(`(${r.columns.map(quoteName).join(', ')})`)
+        return out.join(' ')
+      }
+      case REF.LIST:
+        return `(${r.items.map((i) => this.tableReference(i)).join(', ')})`
+      case REF.JOIN: {
+        // The right side of a join absorbs the joins after it, so a join that
+        // was on the right is wrapped to stop it absorbing anything here — and
+        // reads back as a parenthesised list of one, which is a different tree.
+        // Written bare instead, it re-absorbs exactly what it held, because a
+        // join on the right was parsed by the same rule.
+        const op = r.type === 'STRAIGHT' ? 'STRAIGHT_JOIN' : `${r.natural === true ? 'NATURAL ' : ''}${r.type === 'INNER' ? '' : r.type + ' '}JOIN`
+        const head = `${this.tableReference(r.left)} ${op} ${this.tableReference(r.right)}`
+        if (r.on !== undefined) return `${head} ON ${this.expr(r.on)}`
+        if (r.using !== undefined) return `${head} USING (${r.using.map(quoteName).join(', ')})`
+        return head
+      }
     }
   }
 
@@ -189,6 +387,9 @@ class Deparser {
         return right.kind === NODE.ROW
           ? `(${l} ${op} (${right.items.map((i) => this.expr(i)).join(', ')}))`
           : `(${l} ${op} ${this.expr(right)})`
+      case 'MEMBER OF':
+        // The parentheses are the syntax's own: `a MEMBER OF (j)`.
+        return `(${l} MEMBER OF (${this.expr(right)}))`
       default:
         return `(${l} ${op} ${this.expr(right)})`
     }
@@ -200,8 +401,12 @@ class Deparser {
     switch (s.kind) {
       case STATEMENT.CREATE_TABLE:
         return this.createTable(s)
+      case STATEMENT.CREATE_VIEW:
+        return this.createView(s)
       case STATEMENT.DROP:
         return this.drop(s)
+      case STATEMENT.QUERY:
+        return this.query(s)
     }
   }
 
@@ -215,7 +420,26 @@ class Deparser {
     ]
     const body = elements.length === 0 ? '' : ` (${elements.join(', ')})`
     const options = this.tableOptions(s.options)
-    return `${head}${body}${options === '' ? '' : ' ' + options}`
+    const query = s.query === undefined ? '' : ` ${s.duplicates === undefined ? '' : s.duplicates + ' '}AS ${this.query(s.query)}`
+    return `${head}${body}${options === '' ? '' : ' ' + options}${query}`
+  }
+
+  createView(s: CreateViewNode): string {
+    const out = ['CREATE']
+    if (s.orReplace === true) out.push('OR REPLACE')
+    if (s.algorithm !== undefined) out.push(`ALGORITHM = ${s.algorithm}`)
+    if (s.definer !== undefined) out.push(`DEFINER = ${this.definer(s.definer)}`)
+    if (s.security !== undefined) out.push(`SQL SECURITY ${s.security}`)
+    out.push(`VIEW ${this.table(s.view)}`)
+    if (s.columns !== undefined) out.push(`(${s.columns.map(quoteName).join(', ')})`)
+    out.push(`AS ${this.query(s.query)}`)
+    if (s.checkOption !== undefined) out.push(`WITH ${s.checkOption} CHECK OPTION`)
+    return out.join(' ')
+  }
+
+  definer(d: Definer): string {
+    if (d === 'CURRENT_USER') return d
+    return d.host === undefined ? this.string(d.user) : `${this.string(d.user)}@${this.string(d.host)}`
   }
 
   dataType(t: DataType): string {

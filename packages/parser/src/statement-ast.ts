@@ -13,10 +13,14 @@
 // is on. Same shape as `NODE` in `ast.ts`.
 import type { Expression } from './ast.ts'
 import type { DataType } from './data-type.ts'
+import type { QueryExpression } from './query-ast.ts'
 
 export const STATEMENT = {
   CREATE_TABLE: 'createTable',
+  CREATE_VIEW: 'createView',
   DROP: 'drop',
+  /** A query as a statement: `SELECT`, `WITH`, `VALUES`, `TABLE`, `(…)`. */
+  QUERY: 'query',
 } as const
 
 export type StatementKind = (typeof STATEMENT)[keyof typeof STATEMENT]
@@ -138,6 +142,30 @@ export interface CreateTableNode {
    * what every column without its own charset inherits.
    */
   readonly options: Readonly<Record<string, string>>
+  /**
+   * `CREATE TABLE t … SELECT …`: the query whose rows fill the table, and
+   * whose columns are appended to any the body declares.
+   */
+  readonly query?: QueryExpression
+  /** For `query`: what a duplicate key does — skip the row, or replace the old one. */
+  readonly duplicates?: 'IGNORE' | 'REPLACE'
+  readonly at: number
+}
+
+/** `'u'@'h'`, `u@h`, `'u'` (any host), or `CURRENT_USER`. */
+export type Definer = 'CURRENT_USER' | { readonly user: string; readonly host?: string }
+
+export interface CreateViewNode {
+  readonly kind: typeof STATEMENT.CREATE_VIEW
+  readonly view: TableName
+  readonly orReplace?: boolean
+  readonly algorithm?: 'UNDEFINED' | 'MERGE' | 'TEMPTABLE'
+  readonly definer?: Definer
+  readonly security?: 'DEFINER' | 'INVOKER'
+  readonly columns?: readonly string[]
+  readonly query: QueryExpression
+  /** `WITH CHECK OPTION` is `CASCADED`, MySQL's default. */
+  readonly checkOption?: 'CASCADED' | 'LOCAL'
   readonly at: number
 }
 
@@ -164,4 +192,4 @@ export interface DropNode {
   readonly at: number
 }
 
-export type Statement = CreateTableNode | DropNode
+export type Statement = CreateTableNode | CreateViewNode | DropNode | QueryExpression

@@ -11,6 +11,8 @@ export interface Statement {
   readonly keyword: string
   /** The charset the statement's bytes were written in. */
   readonly charset: string
+  /** The `--error` that predicts this statement fails, when one does. */
+  readonly expectedError?: string
 }
 
 /**

@@ -21,6 +21,8 @@ import { TOKEN } from './tokens.ts'
 import { NODE, type Expression } from './ast.ts'
 import { parseExpressionFrom } from './expression.ts'
 import { parseDataType } from './data-type.ts'
+import { atParenthesisedQuery, atQueryStart, parseQueryFrom } from './query.ts'
+import type { QueryExpression } from './query-ast.ts'
 import type { SqlMode } from './sql-mode.ts'
 import {
   DROP_OBJECT,
@@ -29,6 +31,8 @@ import {
   type CheckConstraint,
   type ColumnDefinition,
   type CreateTableNode,
+  type CreateViewNode,
+  type Definer,
   type DropNode,
   type DropObject,
   type IndexColumn,
@@ -94,11 +98,11 @@ export interface DdlOptions {
 /**
  * Parse a `CREATE TABLE`, with the cursor on `CREATE`.
  *
- * `CREATE TABLE ... SELECT` and `CREATE TABLE ... AS SELECT` are refused rather
- * than half-parsed: the body is a query and M3.3 owns those. Refusing is what
- * makes the census number honest — a `CREATE TABLE ... SELECT` counted as
- * parsed because the column list happened to be empty would inflate the exit
- * criterion with statements nothing understood.
+ * `CREATE TABLE ... [AS] SELECT` carries its query (M3.3). Until the query
+ * parser existed these were refused rather than half-parsed, which is what
+ * kept the census honest: one counted as parsed because its column list
+ * happened to be empty would have inflated the exit criterion with statements
+ * nothing understood.
  */
 export function parseCreateTable(c: Cursor, options: DdlOptions): CreateTableNode {
   const at = c.peek().start
@@ -124,7 +128,8 @@ export function parseCreateTable(c: Cursor, options: DdlOptions): CreateTableNod
   const keys: KeyDefinition[] = []
   const checks: CheckConstraint[] = []
 
-  if (c.takeOp('(')) {
+  // `CREATE TABLE t (SELECT …)` — the parenthesis is the query's, not a body's.
+  if (!atParenthesisedQuery(c) && c.takeOp('(')) {
     do {
       // No `if (atOp(')')) break` here, and that absence is deliberate: an
       // earlier version allowed a trailing comma, and `create table t1 (a int,)`
@@ -141,20 +146,18 @@ export function parseCreateTable(c: Cursor, options: DdlOptions): CreateTableNod
 
   const tableOptions = parseTableOptions(c)
 
-  // `CREATE TABLE ... SELECT` and `CREATE TABLE ... AS SELECT`. The DDL half
-  // above parsed; what is left is a query, and queries are M3.3's. Reported as
-  // *unimplemented* rather than as a parse error, because that is what it is —
-  // and because counting 363 of these as syntax failures would have made the
-  // exit criterion's number describe M3.3's absence rather than M3.5's
-  // coverage. They are 363 of the corpus's 3,469 `CREATE`s.
-  // `IGNORE` and `REPLACE` select the duplicate-key behaviour of the copy and
-  // sit between the table definition and the query.
-  c.takeWord('IGNORE') || c.takeWord('REPLACE')
-  c.takeWord('AS')
-  if (c.atWord('SELECT') || c.atWord('WITH') || c.atOp('(')) {
-    throw unsupportedStatement('CREATE TABLE ... SELECT')
-  }
   if (c.atWord('PARTITION')) throw unsupportedStatement('CREATE TABLE ... PARTITION BY')
+
+  // `CREATE TABLE ... [IGNORE | REPLACE] [AS] SELECT`. `IGNORE` and `REPLACE`
+  // choose what a duplicate key does to the copied rows, and sit between the
+  // table definition and the query.
+  let duplicates: 'IGNORE' | 'REPLACE' | undefined
+  if (c.takeWord('IGNORE')) duplicates = 'IGNORE'
+  else if (c.takeWord('REPLACE')) duplicates = 'REPLACE'
+  const as = c.takeWord('AS')
+  let query: QueryExpression | undefined
+  if (atQueryStart(c) || atParenthesisedQuery(c)) query = parseQueryFrom(c, options.sqlMode)
+  else if (duplicates !== undefined || as) c.fail()
 
   if (!c.atEnd() && !c.atOp(';')) c.fail()
 
@@ -167,8 +170,88 @@ export function parseCreateTable(c: Cursor, options: DdlOptions): CreateTableNod
     keys,
     checks,
     options: tableOptions,
+    ...(query === undefined ? {} : { query }),
+    ...(duplicates === undefined ? {} : { duplicates }),
     at,
   }
+}
+
+/**
+ * Parse a `CREATE VIEW`, with the cursor on `CREATE`.
+ *
+ * The clauses before `VIEW` say how the view is stored and whose privileges it
+ * runs with; the query after `AS` is the view. `WITH CHECK OPTION` without a
+ * scope is `CASCADED`, so it is recorded as that.
+ */
+export function parseCreateView(c: Cursor, options: DdlOptions): CreateViewNode {
+  const at = c.peek().start
+  c.expectWord('CREATE')
+  const orReplace = c.takeWords('OR', 'REPLACE')
+  let algorithm: CreateViewNode['algorithm']
+  if (c.takeWord('ALGORITHM')) {
+    c.expectOp('=')
+    for (const a of ['UNDEFINED', 'MERGE', 'TEMPTABLE'] as const) if (c.takeWord(a)) algorithm = a
+    if (algorithm === undefined) c.fail()
+  }
+  const definer = c.takeWord('DEFINER') ? parseDefiner(c) : undefined
+  let security: CreateViewNode['security']
+  if (c.takeWords('SQL', 'SECURITY')) {
+    if (c.takeWord('DEFINER')) security = 'DEFINER'
+    else if (c.takeWord('INVOKER')) security = 'INVOKER'
+    else c.fail()
+  }
+  c.expectWord('VIEW')
+  const view = tableName(c)
+  let columns: string[] | undefined
+  if (c.takeOp('(')) {
+    columns = []
+    do columns.push(c.expectIdentifier())
+    while (c.takeOp(','))
+    c.expectOp(')')
+  }
+  c.expectWord('AS')
+  const query = parseQueryFrom(c, options.sqlMode)
+  let checkOption: CreateViewNode['checkOption']
+  if (c.takeWord('WITH')) {
+    checkOption = c.takeWord('LOCAL') ? 'LOCAL' : (c.takeWord('CASCADED'), 'CASCADED')
+    c.expectWord('CHECK')
+    c.expectWord('OPTION')
+  }
+  return {
+    kind: STATEMENT.CREATE_VIEW,
+    view,
+    ...flag('orReplace', orReplace),
+    ...(algorithm === undefined ? {} : { algorithm }),
+    ...(definer === undefined ? {} : { definer }),
+    ...(security === undefined ? {} : { security }),
+    ...(columns === undefined ? {} : { columns }),
+    query,
+    ...(checkOption === undefined ? {} : { checkOption }),
+    at,
+  }
+}
+
+/**
+ * `= 'u'@'h'`, `= u@h`, `= 'u'`, `= CURRENT_USER[()]`.
+ *
+ * The lexer reads `@'h'` as a variable token, since that is what it is
+ * everywhere else, so the host is that token with its `@` removed.
+ */
+export function parseDefiner(c: Cursor): Definer {
+  c.expectOp('=')
+  if (c.takeWord('CURRENT_USER')) {
+    if (c.takeOp('(')) c.expectOp(')')
+    return 'CURRENT_USER'
+  }
+  const u = c.peek()
+  if (u.kind !== TOKEN.STRING && u.kind !== TOKEN.IDENTIFIER) c.fail()
+  c.skip()
+  const h = c.peek()
+  if (h.kind === TOKEN.VARIABLE && h.text.startsWith('@') && !h.text.startsWith('@@')) {
+    c.skip()
+    return { user: u.text, host: h.text.slice(1) }
+  }
+  return { user: u.text }
 }
 
 /** Parse a `DROP`, with the cursor on `DROP`. */
@@ -486,12 +569,11 @@ function columnDefinition(c: Cursor, options: DdlOptions, at: number): ColumnDef
 function defaultExpression(c: Cursor, options: DdlOptions): Expression {
   const t = c.peek()
   if (c.atOp('(')) {
+    // `DEFAULT (SELECT …)` is a subquery, which MySQL parses and then rejects
+    // for a default. The parentheses are the subquery's own, so the
+    // expression parser reads them.
+    if (atQueryStart(c, 1)) return parseExpressionFrom(c, options.sqlMode)
     c.skip()
-    // `DEFAULT (SELECT …)` is a subquery, which MySQL rejects for a default and
-    // parses anyway. Reported as unimplemented rather than malformed, since
-    // what is missing here is M3.3's query parser and not this statement's
-    // syntax.
-    if (c.atWord('SELECT')) throw unsupportedStatement('DEFAULT (SELECT …)')
     const expr = parseExpressionFrom(c, options.sqlMode)
     c.expectOp(')')
     return expr

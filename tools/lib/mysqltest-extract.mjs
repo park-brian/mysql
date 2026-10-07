@@ -89,6 +89,39 @@ const CONTINUES = /^(?:--)?(let|assert|expr|if|while)\b/i
 const MAX_CONTINUATION = 20
 
 /**
+ * `let $name =` with the value on the lines that follow, and `eval $name`.
+ *
+ * The value is SQL — mysqltest sends it when an `eval $name` names it — so it
+ * is measured as a statement. But the `--error` that predicts its failure is
+ * written before the `eval`, not before the `let`, so without this the census
+ * counted a statement MySQL rejects on purpose as one we failed to parse.
+ * Narrow on purpose: widening "a bare `let` runs to the delimiter" into a rule
+ * that drops let values removed 524 statements of real SQL, and making every
+ * bare command run to its delimiter removed 456 — checked by diffing what each
+ * rule changed, which is the only way a rule that removes corpus gets noticed.
+ */
+const LET_OPEN = /^(?:--)?let\s+\$(\w+)\s*=\s*$/i
+/**
+ * A bare `let` whose value starts on its own line and runs past it:
+ * `let $query = SELECT a,` with the rest of the query below. The value from
+ * the `=` on is the first line of a statement. Only the bare form runs to the
+ * delimiter — `--let` ends with its line — and a backtick value is a query
+ * mysqltest runs for its result, which `CONTINUES` already handles.
+ */
+const LET_INLINE = /^let\s+\$(\w+)\s*=\s*(\S.*)$/i
+
+/**
+ * Whether a let value reads as a statement rather than as a piece of one:
+ * `join.test` builds `$rest_of_query = (t1 join t3 …) on …` and splices it into
+ * an `eval`. A value that is not a statement is skipped to its delimiter.
+ */
+const STATEMENT_START = /^[A-Za-z]/
+
+/** How far a skipped let value may run looking for its delimiter. */
+const MAX_LET_LINES = 40
+const EVAL_VAR = /^(?:--)?eval\s+\$(\w+)\s*;?\s*$/i
+
+/**
  * How many lex refusals one region may absorb before the file is reported.
  *
  * Bounded for the same reason `MAX_CONTINUATION` is: a recovery rule with no
@@ -243,6 +276,20 @@ export function extract(bytes) {
   let inHeredoc = false
   const open = { depth: 0, tick: false }
   let continuation = 0
+  /** A `let $name =` whose value starts on the next SQL line. */
+  let openLet = null
+  /**
+   * Inside `--disable_testcase … --enable_testcase`. mysqltest skips the
+   * block — it is a test parked until a bug is fixed — so its SQL is never
+   * sent and may not even be SQL any more.
+   */
+  let disabled = false
+  /** Lines left of a let value being skipped to its delimiter. */
+  let skippingLet = 0
+  /** Where each let value's statement starts: name → its region and line. */
+  const letValues = new Map()
+  /** A SQL statement has begun and its delimiter has not been seen. */
+  let inStatement = false
 
   /**
    * Every exit from this function goes through here.
@@ -297,6 +344,21 @@ export function extract(bytes) {
     continuation = 0
     open.depth = 0
     open.tick = false
+    if (skippingLet > 0 && !trimmed.startsWith('--')) {
+      directives++
+      skippingLet = trimmed.endsWith(delimiter) ? 0 : skippingLet - 1
+      continue
+    }
+    skippingLet = 0
+    if (/^--(disable|enable)_testcase\b/i.test(trimmed)) {
+      directives++
+      disabled = /^--disable/i.test(trimmed)
+      continue
+    }
+    if (disabled) {
+      directives++
+      continue
+    }
     // `perl;`, `write_file x;` and friends open a block that runs to `EOF`.
     // Its contents are Perl or file data, not SQL, and letting them through
     // means measuring something that is not the corpus. Rare — about 1.5% of
@@ -315,7 +377,15 @@ export function extract(bytes) {
     if (trimmed === '') continue
     // A directive, a comment, or a bare command. `--` at column 0 in a `.test`
     // file is mysqltest's prefix, not SQL's comment marker.
-    if (trimmed.startsWith('--') || trimmed.startsWith('#') || COMMANDS.test(trimmed)) {
+    // A bare command word is a command only at command position. Inside a
+    // statement it is SQL: a `CASE` closed by `END` on its own line lost the
+    // `END` to this test, and the census then reported the statement as one
+    // that would not parse — the instrument measuring its own mistake again.
+    // Restricted to the `;` delimiter, where "mid-statement" is reliable: under
+    // `delimiter |` a procedure body's lines end in `;` and never close it.
+    const bare = !trimmed.startsWith('--') && !trimmed.startsWith('#')
+    const midStatement = inStatement && delimiter === ';'
+    if (!bare || (!midStatement && COMMANDS.test(trimmed))) {
       directives++
       const d = /^(?:--)?delimiter\s+(\S+)/i.exec(trimmed)
       if (d !== null) delimiter = d[1].replace(/;$/, '') || ';'
@@ -328,6 +398,27 @@ export function extract(bytes) {
       // Without it a corpus full of deliberate syntax errors makes a correct
       // parser look incomplete.
       const err = EXPECTED_ERROR.exec(trimmed)
+      const evalVar = EVAL_VAR.exec(trimmed)
+      const letValue = evalVar === null ? undefined : letValues.get(evalVar[1])
+      if (letValue !== undefined && pendingError !== null) letValue.region.errors[letValue.line] = pendingError
+      openLet = LET_OPEN.exec(trimmed)?.[1] ?? null
+      // A value with a bracket or backtick open is `CONTINUES`'s, below.
+      const inline =
+        bare && !trimmed.endsWith(delimiter) && !advance(line, { depth: 0, tick: false }) ? LET_INLINE.exec(trimmed) : null
+      if (inline !== null && !STATEMENT_START.test(inline[2])) {
+        skippingLet = MAX_LET_LINES
+        continue
+      }
+      if (inline !== null) {
+        letValues.set(inline[1], { region: current, line: current.lines.length })
+        current.errors[current.lines.length] = null
+        // `raw` is bytes: the value starts after the `=` byte, which is the
+        // same byte in every charset a test file is written in.
+        current.lines.push(raw.subarray(raw.indexOf(0x3d) + 1))
+        inStatement = true
+        pendingError = null
+        continue
+      }
       if (err !== null) pendingError = err[1].toUpperCase()
       // …and it applies to the next *command*, not to the next statement. A
       // directive in between consumes it: `--error ER_X` followed by
@@ -336,6 +427,7 @@ export function extract(bytes) {
       // report that we wrongly accepted a plain `DROP TABLE t1`.
       else if (!trimmed.startsWith('#')) pendingError = null
       if (CONTINUES.test(trimmed) && advance(line, open)) continuation = 1
+
       continue
     }
     if (trimmed === '{' || trimmed === '}') {
@@ -344,7 +436,10 @@ export function extract(bytes) {
     }
     current.errors[current.lines.length] = pendingError
     pendingError = null
+    if (openLet !== null) letValues.set(openLet, { region: current, line: current.lines.length })
+    openLet = null
     current.lines.push(raw)
+    inStatement = !trimmed.endsWith(delimiter)
     // `SET NAMES` is SQL: it belongs to the region it was written in, and only
     // the bytes *after* it are in the new charset. Hence the push above first.
     const named = SET_NAMES.exec(trimmed) ?? SET_CLIENT.exec(trimmed)

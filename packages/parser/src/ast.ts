@@ -4,6 +4,8 @@
 // is on. Every node carries the character offset of its first token, so M3.9
 // can point at the right place and M5 can attribute a runtime error to a
 // subexpression rather than to the whole statement.
+import type { DataType } from './data-type.ts'
+import type { OrderItem, QueryExpression, WindowSpec } from './query-ast.ts'
 
 export const NODE = {
   LITERAL: 'literal',
@@ -17,6 +19,11 @@ export const NODE = {
   ROW: 'row',
   INTERVAL: 'interval',
   COLLATE: 'collate',
+  SUBQUERY: 'subquery',
+  CAST: 'cast',
+  CONVERT: 'convert',
+  KEYWORD: 'keyword',
+  MATCH: 'match',
 } as const
 
 export type NodeKind = (typeof NODE)[keyof typeof NODE]
@@ -113,6 +120,14 @@ export interface CallNode {
   readonly args: readonly Expression[]
   /** `COUNT(DISTINCT x)`. */
   readonly distinct?: boolean
+  /** `GROUP_CONCAT(a ORDER BY b)`. */
+  readonly orderBy?: readonly OrderItem[]
+  /** `GROUP_CONCAT(a SEPARATOR ';')`. */
+  readonly separator?: string
+  /** `CHAR(77 USING utf8mb4)`. */
+  readonly using?: string
+  /** `RANK() OVER w` names a window; `OVER (…)` defines one inline. */
+  readonly over?: string | WindowSpec
   readonly at: number
 }
 
@@ -156,6 +171,58 @@ export interface CollateNode {
   readonly at: number
 }
 
+/**
+ * A query in an expression: `(SELECT …)`, `EXISTS (SELECT …)`'s operand,
+ * `IN (SELECT …)`'s right side, and `= ANY (SELECT …)`'s.
+ */
+export interface SubqueryNode {
+  readonly kind: typeof NODE.SUBQUERY
+  readonly query: QueryExpression
+  /** `ANY` or `ALL` for a quantified comparison. `SOME` is `ANY`. */
+  readonly quantifier?: 'ANY' | 'ALL'
+  readonly at: number
+}
+
+/** `CAST(x AS type)` and `CONVERT(x, type)`, which are the same thing. */
+export interface CastNode {
+  readonly kind: typeof NODE.CAST
+  readonly expr: Expression
+  readonly type: DataType
+  /** `CAST(j AS UNSIGNED ARRAY)`, the multi-valued index form. */
+  readonly array?: boolean
+  /** `CAST(ts AT TIME ZONE '+00:00' AS DATETIME)`. */
+  readonly timeZone?: string
+  readonly at: number
+}
+
+/** `CONVERT(x USING utf8mb4)` — a change of charset, not of type. */
+export interface ConvertNode {
+  readonly kind: typeof NODE.CONVERT
+  readonly expr: Expression
+  readonly charset: string
+  readonly at: number
+}
+
+/**
+ * A bare keyword in an argument position: the unit in `EXTRACT(YEAR FROM d)`
+ * and `TIMESTAMPADD(DAY, 1, d)`, the type in `GET_FORMAT(DATE, 'USA')`, the
+ * side in `TRIM(LEADING 'x' FROM s)`. Not a column, which is the point.
+ */
+export interface KeywordNode {
+  readonly kind: typeof NODE.KEYWORD
+  readonly word: string
+  readonly at: number
+}
+
+/** `MATCH (a, b) AGAINST ('x' IN BOOLEAN MODE)`. */
+export interface MatchNode {
+  readonly kind: typeof NODE.MATCH
+  readonly columns: readonly Expression[]
+  readonly against: Expression
+  readonly modifier?: string
+  readonly at: number
+}
+
 export type Expression =
   | LiteralNode
   | PlaceholderNode
@@ -168,3 +235,8 @@ export type Expression =
   | RowNode
   | IntervalNode
   | CollateNode
+  | SubqueryNode
+  | CastNode
+  | ConvertNode
+  | KeywordNode
+  | MatchNode

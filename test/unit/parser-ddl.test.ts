@@ -266,20 +266,19 @@ test('M3.5: DROP, in the forms that differ from each other', () => {
 })
 
 test('M3.5: what is not implemented says so, and is not a syntax error', () => {
-  // The distinction the census turns on. `SELECT 1` is valid SQL; reporting it
-  // as malformed would be a lie, and counting it as a parse failure would make
-  // M3's exit criterion measure M3.3's absence rather than M3.5's coverage.
-  for (const sql of ['SELECT 1', 'INSERT INTO t VALUES (1)', 'ALTER TABLE t ADD a INT', 'CREATE VIEW v AS SELECT 1']) {
+  // The distinction the census turns on. `SHOW TABLES` is valid SQL; reporting
+  // it as malformed would be a lie, and counting it as a parse failure would
+  // make M3's exit criterion measure what is unbuilt rather than what is.
+  // (This list held `SELECT 1` and `CREATE VIEW` until M3.3 built them.)
+  for (const sql of ['SHOW TABLES', 'SET a = 1', 'ALTER TABLE t ADD a INT', 'CREATE INDEX i ON t (a)']) {
     const e = refusal(sql)
     assert.equal(e.code, 'ER_NOT_SUPPORTED_YET', sql)
     assert.equal(e.errno, 1235, sql)
   }
 
-  // `CREATE TABLE ... SELECT` is the interesting one: the DDL half parses and
-  // only the query body is missing, so it is unimplemented rather than
-  // malformed. There are 313 of them in the corpus, and counting them as
-  // failures would have hidden that everything else parses.
-  assert.equal(refusal('CREATE TABLE t (a INT) SELECT 1').code, 'ER_NOT_SUPPORTED_YET')
+  // A clause the parser does not have inside a statement it does: the table
+  // definition parses and only the partitioning is missing.
+  assert.equal(refusal('CREATE TABLE t (a INT) PARTITION BY HASH (a)').code, 'ER_NOT_SUPPORTED_YET')
 
   // A genuine syntax error is still 1064.
   assert.equal(refusal('CREATE TABLE t (a NOTATYPE)').errno, 1064)

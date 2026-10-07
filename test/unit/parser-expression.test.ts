@@ -50,6 +50,16 @@ function show(e: Expression): string {
       return `INTERVAL(${show(e.value)} ${e.unit})`
     case NODE.COLLATE:
       return `(${show(e.expr)} COLLATE ${e.collation})`
+    case NODE.SUBQUERY:
+      return `${e.quantifier ?? ''}(subquery)`
+    case NODE.CAST:
+      return `CAST(${show(e.expr)} AS ${e.type.name})`
+    case NODE.CONVERT:
+      return `CONVERT(${show(e.expr)} USING ${e.charset})`
+    case NODE.KEYWORD:
+      return e.word
+    case NODE.MATCH:
+      return `MATCH(${e.columns.map(show).join(', ')}) AGAINST(${show(e.against)})`
   }
 }
 

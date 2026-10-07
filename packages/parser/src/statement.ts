@@ -1,22 +1,23 @@
 // M3.5 — one statement in, one AST out.
 //
 // The dispatcher is deliberately thin and deliberately **honest about its
-// gaps**. M3.3, M3.4 and M3.6 are not built, so `SELECT`, `INSERT` and `SET`
-// reach `unsupportedStatement` rather than a half-parse — which matters more
+// gaps**. What is not built yet — `SET`, `SHOW`, `ALTER` and the rest —
+// reaches `unsupportedStatement` rather than a half-parse — which matters more
 // than it sounds, because M3.11's census counts what this function accepts. A
 // dispatcher that returned some vague node for anything it did not understand
 // would report a parse rate measuring nothing, and M3's exit criterion is
 // exactly such a rate.
 //
 // `ER_NOT_SUPPORTED_YET` is also the right answer on the wire: a client that
-// sends `SELECT 1` today should be told this server cannot do that yet, not
+// sends `SHOW TABLES` today should be told this server cannot do that yet, not
 // that its SQL is malformed.
 import { unsupportedStatement } from './errors.ts'
 import { Cursor } from './cursor.ts'
 import { TOKEN } from './tokens.ts'
 import { lex, lexBytes, type LexOptions } from './lexer.ts'
 import { NO_SQL_MODE, type SqlMode } from './sql-mode.ts'
-import { parseCreateTable, parseDrop } from './ddl.ts'
+import { parseCreateTable, parseCreateView, parseDefiner, parseDrop } from './ddl.ts'
+import { atParenthesisedQuery, atQueryStart, parseQueryFrom } from './query.ts'
 import { STATEMENT, type Statement } from './statement-ast.ts'
 
 export interface ParseStatementOptions extends LexOptions {
@@ -64,8 +65,13 @@ function dispatch(c: Cursor, sqlMode: SqlMode): Statement {
     // `TEMPORARY`, `OR REPLACE` and friends), so the refusal can say which.
     const kind = createObject(c)
     if (kind === 'TABLE') return parseCreateTable(c, options)
+    if (kind === 'VIEW') return parseCreateView(c, options)
     throw unsupportedStatement(`CREATE ${kind}`)
   }
+
+  // A query is a statement: `SELECT`, `WITH`, `VALUES ROW`, `TABLE t`, and any
+  // of those in parentheses. The only place `INTO` is allowed.
+  if (atQueryStart(c) || atParenthesisedQuery(c)) return parseQueryFrom(c, sqlMode, true)
 
   if (c.atWord('DROP')) {
     const save = c.at
@@ -85,34 +91,40 @@ function dispatch(c: Cursor, sqlMode: SqlMode): Statement {
 /**
  * What a `CREATE` is creating, without consuming anything.
  *
- * `CREATE` may carry `OR REPLACE`, `TEMPORARY`, `DEFINER = …` and `ALGORITHM =
- * …` before the object it names, so the object word is not simply the second
- * token — `CREATE DEFINER = 'a'@'b' VIEW v` names a view four tokens in.
+ * `CREATE` may carry `OR REPLACE`, `TEMPORARY`, `ALGORITHM = …`, `DEFINER = …`
+ * and `SQL SECURITY …` before the object it names, so the object word is not
+ * simply the second token — `CREATE DEFINER = 'a'@'b' VIEW v` names a view
+ * four tokens in. Each clause is read by its own grammar rather than skipped by
+ * a token-class heuristic: the first version skipped "words that look like a
+ * clause value", and `DEFINER` is one, so `ALGORITHM = MERGE DEFINER = …` lost
+ * its place at the `=`.
  */
 function createObject(c: Cursor): string {
   const save = c.at
   c.skip()
-  for (;;) {
-    if (c.takeWords('OR', 'REPLACE')) continue
-    if (c.takeWord('TEMPORARY')) continue
-    if (c.takeWord('DEFINER') || c.takeWord('ALGORITHM') || c.takeWord('SQL')) {
-      // Skip to the next word that could be the object: these clauses take a
-      // value whose shape varies (`'a'@'b'`, `= MERGE`, `SECURITY DEFINER`).
-      while (!c.atEnd() && c.peek().kind !== TOKEN.IDENTIFIER) c.skip()
-      while (!c.atEnd() && isClauseValue(c)) c.skip()
-      continue
+  try {
+    for (;;) {
+      if (c.takeWords('OR', 'REPLACE') || c.takeWord('TEMPORARY')) continue
+      if (c.takeWord('ALGORITHM')) {
+        c.takeOp('=')
+        c.skip()
+        continue
+      }
+      if (c.takeWord('DEFINER')) {
+        parseDefiner(c)
+        continue
+      }
+      if (c.takeWords('SQL', 'SECURITY')) {
+        c.skip()
+        continue
+      }
+      break
     }
-    break
+    return c.peek().kind === TOKEN.IDENTIFIER ? c.peek().text.toUpperCase() : c.peek().text
+  } finally {
+    c.at = save
   }
-  const word = c.peek().kind === TOKEN.IDENTIFIER ? c.peek().text.toUpperCase() : c.peek().text
-  c.at = save
-  return word
 }
-
-/** Words that are part of a `DEFINER`/`ALGORITHM`/`SQL SECURITY` clause's value. */
-const CLAUSE_VALUES = new Set(['UNDEFINED', 'MERGE', 'TEMPTABLE', 'SECURITY', 'DEFINER', 'INVOKER', 'CURRENT_USER'])
-const isClauseValue = (c: Cursor): boolean =>
-  c.peek().kind === TOKEN.IDENTIFIER && CLAUSE_VALUES.has(c.peek().text.toUpperCase())
 
 /** The leading word of the statement, for a refusal that names it. */
 function first(c: Cursor): string {
