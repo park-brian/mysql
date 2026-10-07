@@ -288,7 +288,8 @@ export function extract(bytes) {
   let charset = DEFAULT_CHARSET
   let collationId = resolveCharset(DEFAULT_CHARSET).collationId
   let readable = true
-  let current = { charset, collationId, readable, lines: [], errors: [], blocks: [], blockStart: null }
+  const freshRegion = () => ({ charset, collationId, readable, lines: [], errors: [], blocks: [], blockStart: null })
+  let current = freshRegion()
   /** A `--error` directive waiting for the statement it applies to. */
   let pendingError = null
   /** Lines in a charset this build will not decode — coverage lost, counted. */
@@ -350,7 +351,7 @@ export function extract(bytes) {
     collationId = resolved.collationId
     readable = resolved.readable
     charsets.add(charset)
-    current = { charset, collationId, readable, lines: [], errors: [], blocks: [], blockStart: null }
+    current = freshRegion()
   }
 
   for (const raw of lines) {
@@ -640,13 +641,14 @@ export function extract(bytes) {
     // replacement — ends a statement.
     const blockOf = (line) => region.blocks.find((b) => line >= b.start && line <= b.end)
     const terminators = new Set()
+    const lastInBlock = new Map()
     for (const t of tokens) {
       if (t.kind !== 'operator' || t.text !== ';') continue
       const block = blockOf(lineAt(t.start))
       if (block === undefined) terminators.add(t)
-      else block.last = t
+      else lastInBlock.set(block, t)
     }
-    for (const b of region.blocks) if (b.last !== undefined) terminators.add(b.last)
+    for (const t of lastInBlock.values()) terminators.add(t)
     for (const t of tokens) {
       if (terminators.has(t)) {
         emit(start, t.start)

@@ -6,32 +6,22 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { ParseError, STATEMENT, deparse, parseStatement, type AlterTableNode, type CreateTableNode } from '@myjs/parser'
-import { roundTrip, withoutPositions } from '../../tools/lib/round-trip.mjs'
+import { parsed as parse, refused, roundTrip, same, withoutPositions } from '../../tools/lib/round-trip.mjs'
 
-const parse = (sql: string) => {
-  const node = parseStatement(sql)
-  assert.equal(roundTrip(node), null, `${sql}\n${deparse(node)}`)
-  return node
-}
 const alter = (sql: string): AlterTableNode => {
   const node = parse(sql)
   assert.equal(node.kind, STATEMENT.ALTER_TABLE, sql)
   return node as AlterTableNode
 }
 const actions = (sql: string) => alter(sql).actions.map((a) => a.type)
-const same = (a: string, b: string) => assert.deepEqual(withoutPositions(parse(a)), withoutPositions(parse(b)), `${a}\n${b}`)
-const refused = (...sqls: string[]) => {
-  for (const sql of sqls) assert.throws(() => parseStatement(sql), (e: ParseError) => e.code === 'ER_PARSE_ERROR', sql)
-}
 
 test('M3.5: an ALTER TABLE is a list of actions, and may be empty', () => {
   assert.deepEqual(actions('ALTER TABLE a'), [])
   assert.deepEqual(actions('ALTER TABLE a ADD p INT FIRST, ADD q INT AFTER x, DROP y, DROP COLUMN z'), ['addColumn', 'addColumn', 'drop', 'drop'])
-  assert.deepEqual(alter('ALTER TABLE a ADD q INT AFTER x').actions[0], {
-    type: 'addColumn',
-    column: (alter('ALTER TABLE a ADD q INT AFTER x').actions[0] as { column: unknown }).column,
-    position: { after: 'x' },
-  })
+  const [add] = alter('ALTER TABLE a ADD q INT AFTER x').actions
+  assert.ok(add?.type === 'addColumn')
+  assert.equal(add.column.name, 'q')
+  assert.deepEqual(add.position, { after: 'x' })
   // `ADD (…)` takes any table element, not only columns.
   assert.deepEqual(actions('ALTER TABLE a ADD (p INT, INDEX (p), CHECK (p > 0))'), ['addColumn', 'addKey', 'addCheck'])
   refused('ALTER TABLE a DROP y,', 'ALTER TABLE a, DROP y')

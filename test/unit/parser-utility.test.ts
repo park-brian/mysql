@@ -20,15 +20,8 @@ import {
   type SetNode,
   type ShowNode,
 } from '@myjs/parser'
-import { roundTrip, withoutPositions } from '../../tools/lib/round-trip.mjs'
+import { parsed as parse, refused, roundTrip, same, withoutPositions } from '../../tools/lib/round-trip.mjs'
 
-const parse = (sql: string) => {
-  const node = parseStatement(sql)
-  // Every statement here must survive the deparser, which is what the census
-  // checks at corpus scale.
-  assert.equal(roundTrip(node), null, `${sql}\n${deparse(node)}`)
-  return node
-}
 const items = (sql: string): readonly SetItem[] => {
   const node = parse(sql)
   assert.equal(node.kind, STATEMENT.SET, sql)
@@ -38,10 +31,6 @@ const show = (sql: string): ShowNode => {
   const node = parse(sql)
   assert.equal(node.kind, STATEMENT.SHOW, sql)
   return node as ShowNode
-}
-const same = (a: string, b: string) => assert.deepEqual(withoutPositions(parse(a)), withoutPositions(parse(b)), `${a}\n${b}`)
-const refused = (...sqls: string[]) => {
-  for (const sql of sqls) assert.throws(() => parseStatement(sql), ParseError, sql)
 }
 /** Each item's target, as `scope:name` — `-` for no scope, `@` for a user variable. */
 const targets = (sql: string) =>
@@ -70,7 +59,10 @@ test('M3.6: the spellings of a system variable are one tree', () => {
   same('SET PERSIST_ONLY a = 1', 'SET @@persist_only.a = 1')
   // A two-part name: a key cache, or a component's variable.
   const [cache] = items('SET @@global.default.key_buffer_size = 1')
-  assert.deepEqual(cache, { type: 'system', scope: 'GLOBAL', base: 'default', name: 'key_buffer_size', value: cache?.type === 'system' ? cache.value : null })
+  assert.ok(cache?.type === 'system')
+  const { value, ...variable } = cache
+  assert.deepEqual(variable, { type: 'system', scope: 'GLOBAL', base: 'default', name: 'key_buffer_size' })
+  assert.equal(deparse(value), '1')
   same('SET GLOBAL default.key_buffer_size = 1', 'SET @@global.default.key_buffer_size = 1')
 })
 

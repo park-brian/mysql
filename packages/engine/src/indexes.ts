@@ -20,7 +20,7 @@
 // is defined, as `ER_TOO_LONG_KEY` — never at insert.
 import { encodeKey, type KeyPart } from '@myjs/types'
 import { BTree, type TreeOptions } from './btree.ts'
-import { duplicateKey, keyTooLong, misuse } from './errors.ts'
+import { duplicateKey, misuse } from './errors.ts'
 import { maxCellSize } from './index-page.ts'
 import { freeChain, readChain, writeChain } from './overflow.ts'
 import { decodeRecord, encodeRecord, externalRefs, type FieldBytes, type RecordLayout } from './record.ts'
@@ -32,7 +32,11 @@ export interface KeyColumn {
   readonly part: KeyPart
 }
 
+/** A row's field bytes, by field number. */
 export type Row = readonly FieldBytes[]
+
+/** A key's values, one per key column, in column order. */
+export type KeyValues = readonly FieldBytes[]
 
 /** The longest key `columns` can produce, refusing a variable-length part with no declared width. */
 function maxKeyLength(layout: RecordLayout, columns: readonly KeyColumn[]): number {
@@ -57,13 +61,13 @@ function primaryBound(layout: RecordLayout, primary: readonly KeyColumn[], pageS
   if (primary.length === 0) throw misuse('a clustered index needs a primary key')
   if (primary.some((c) => c.part.nullable)) throw misuse('a primary key part cannot be nullable')
   const max = maxKeyLength(layout, primary)
-  if (max > BTree.maxKey(pageSize)) throw keyTooLong(BTree.maxKey(pageSize))
+  BTree.checkKeyLength(max, pageSize)
   return max
 }
 
 /** A secondary entry's longest encoding — its own key and the primary key after it. */
 function secondaryBound(clustered: ClusteredIndex, columns: readonly KeyColumn[], pageSize: number): void {
-  if (maxKeyLength(clustered.layout, columns) + clustered.maxKey > BTree.maxKey(pageSize)) throw keyTooLong(BTree.maxKey(pageSize))
+  BTree.checkKeyLength(maxKeyLength(clustered.layout, columns) + clustered.maxKey, pageSize)
 }
 
 const keyOf = (row: Row, columns: readonly KeyColumn[]): Uint8Array =>
@@ -88,27 +92,24 @@ export class ClusteredIndex {
   readonly tree: BTree
   readonly layout: RecordLayout
   readonly primary: readonly KeyColumn[]
+  /** The longest key this index can hold — what a secondary index appends. */
+  readonly maxKey: number
   readonly #maxRecord: number
 
   constructor(tree: BTree, layout: RecordLayout, primary: readonly KeyColumn[]) {
     const pageSize = tree.space.pool.pageSize
-    const keyMax = primaryBound(layout, primary, pageSize)
     this.tree = tree
     this.layout = layout
     this.primary = primary
+    this.maxKey = primaryBound(layout, primary, pageSize)
     // A leaf cell is the key, the record and two length varints of up to three bytes.
-    this.#maxRecord = maxCellSize(pageSize) - keyMax - 6
+    this.#maxRecord = maxCellSize(pageSize) - this.maxKey - 6
   }
 
   static create(store: Store, layout: RecordLayout, primary: readonly KeyColumn[], options: TreeOptions = {}): ClusteredIndex {
     // Validated before a tree is created, so a refusal leaves nothing behind.
     primaryBound(layout, primary, store.pool.pageSize)
     return new ClusteredIndex(store.createTree(options), layout, primary)
-  }
-
-  /** The longest key this index can hold — what a secondary index appends. */
-  get maxKey(): number {
-    return maxKeyLength(this.layout, this.primary)
   }
 
   keyOf(row: Row): Uint8Array {
@@ -179,12 +180,12 @@ export class SecondaryIndex {
   }
 
   /** The primary keys of the rows whose secondary key is `values` — a covering read, the clustered index untouched. */
-  primaryKeys(values: Row): Uint8Array[] {
+  primaryKeys(values: KeyValues): Uint8Array[] {
     return [...this.#keys(encodeKey(values, this.columns.map((c) => c.part)))]
   }
 
   /** The rows whose secondary key is `values`: each one descent of the clustered index. */
-  find(values: Row): FieldBytes[][] {
+  find(values: KeyValues): FieldBytes[][] {
     return this.primaryKeys(values).map((pk) => this.clustered.get(pk) as FieldBytes[])
   }
 

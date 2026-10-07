@@ -485,7 +485,7 @@ class Deparser {
       case STATEMENT.RELEASE_SAVEPOINT:
         return `RELEASE SAVEPOINT ${quoteName(s.name)}`
       case STATEMENT.PREPARE:
-        return `PREPARE ${quoteName(s.name)} FROM ${s.text === undefined ? this.userVariable(s.variable ?? '') : this.string(s.text)}`
+        return `PREPARE ${quoteName(s.name)} FROM ${'text' in s ? this.string(s.text) : this.userVariable(s.variable)}`
       case STATEMENT.EXECUTE:
         return `EXECUTE ${quoteName(s.name)}${s.using === undefined ? '' : ` USING ${s.using.map((v) => this.userVariable(v)).join(', ')}`}`
       case STATEMENT.DEALLOCATE:
@@ -533,8 +533,8 @@ class Deparser {
   }
 
   show(s: ShowNode): string {
-    const out = ['SHOW']
     if (s.count === true) return `SHOW COUNT(*) ${s.what}`
+    const out = ['SHOW']
     if (s.what === 'GRANTS' || s.what === 'CREATE USER') {
       out.push(s.what)
       if (s.user !== undefined) out.push(`${s.what === 'GRANTS' ? 'FOR ' : ''}${this.definer(s.user)}`)
@@ -583,8 +583,8 @@ class Deparser {
   }
 
   completion(s: CommitNode | RollbackNode): string {
-    const out = [s.kind === STATEMENT.COMMIT ? 'COMMIT' : 'ROLLBACK']
     if (s.kind === STATEMENT.ROLLBACK && s.savepoint !== undefined) return `ROLLBACK TO SAVEPOINT ${quoteName(s.savepoint)}`
+    const out = [s.kind === STATEMENT.COMMIT ? 'COMMIT' : 'ROLLBACK']
     if (s.chain !== undefined) out.push(s.chain ? 'AND CHAIN' : 'AND NO CHAIN')
     if (s.release !== undefined) out.push(s.release ? 'RELEASE' : 'NO RELEASE')
     return out.join(' ')
@@ -798,7 +798,7 @@ class Deparser {
       case 'renameIndex':
         return `RENAME INDEX ${quoteName(a.from)} TO ${quoteName(a.to)}`
       case 'orderBy':
-        return `ORDER BY ${a.columns.map((c) => `${quoteName(c.name ?? '')}${c.desc === true ? ' DESC' : ''}`).join(', ')}`
+        return `ORDER BY ${a.columns.map((c) => `${quoteName(c.name)}${c.desc === true ? ' DESC' : ''}`).join(', ')}`
       case 'convert':
         return `CONVERT TO CHARACTER SET ${a.charset === undefined ? 'DEFAULT' : this.word(a.charset)}${a.collation === undefined ? '' : ` COLLATE ${this.word(a.collation)}`}`
       case 'keys':

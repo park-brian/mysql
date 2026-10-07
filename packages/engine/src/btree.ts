@@ -82,31 +82,40 @@ export class BTree {
   readonly indexId: number
   readonly root: number
   readonly #version: number
-  readonly #upgrade: ((value: Uint8Array, from: number) => Uint8Array) | undefined
+  readonly #upgrade: (value: Uint8Array, from: number) => Uint8Array
 
   constructor(space: PageSpace, indexId: number, root: number, options: TreeOptions = {}) {
     this.space = space
     this.indexId = indexId
     this.root = root
     this.#version = options.schemaVersion ?? 0
-    this.#upgrade = options.upgrade
-    if (this.#version > 0 && this.#upgrade === undefined) throw misuse('a versioned tree needs an upgrade function')
+    if (this.#version > 0 && options.upgrade === undefined) throw misuse('a versioned tree needs an upgrade function')
+    this.#upgrade = options.upgrade ?? ((value) => value)
   }
 
   /** A new, empty tree: one leaf, which is its root for life. */
   static create(space: PageSpace, indexId: number, options: TreeOptions = {}): BTree {
     const { page: root } = space.alloc.allocate(segmentId(indexId, SEGMENT.LEAF), 0)
-    const page = space.pool.create(root)
-    ip.initIndexPage(page, root, 0, indexId, options.schemaVersion ?? 0)
-    ip.setFragments(page, SEGMENT.LEAF, 1)
-    space.pool.markDirty(page, space.lsn.next())
-    space.pool.release(page)
+    space.pool.write(
+      root,
+      space.lsn,
+      (page) => {
+        ip.initIndexPage(page, root, 0, indexId, options.schemaVersion ?? 0)
+        ip.setFragments(page, SEGMENT.LEAF, 1)
+      },
+      true,
+    )
     return new BTree(space, indexId, root, options)
   }
 
   /** The largest key a page of this size can hold: an internal cell is the key and a child. */
   static maxKey(pageSize: number): number {
     return ip.maxCellSize(pageSize) - 3 - 1 - 4
+  }
+
+  /** ER_TOO_LONG_KEY if a key of `length` bytes is more than a page of this size can hold. */
+  static checkKeyLength(length: number, pageSize: number): void {
+    if (length > BTree.maxKey(pageSize)) throw keyTooLong(BTree.maxKey(pageSize))
   }
 
   /** The tree's overflow segment, for the record codec's off-page columns (M4.6). */
@@ -129,16 +138,14 @@ export class BTree {
     return this.#atLeaf(key, (p) => {
       const { index, found } = ip.search(p, key)
       if (!found) return undefined
-      const value = ip.cell(p, index).value.slice()
-      const from = ip.schemaVersion(p)
-      return from < this.#version ? (this.#upgrade as (v: Uint8Array, f: number) => Uint8Array)(value, from) : value
+      return this.#upgraded(ip.cell(p, index).value.slice(), ip.schemaVersion(p))
     })
   }
 
   /** Insert or replace. */
   put(key: Uint8Array, value: Uint8Array): void {
     const max = ip.maxCellSize(this.space.pool.pageSize)
-    if (key.length > BTree.maxKey(this.space.pool.pageSize)) throw keyTooLong(BTree.maxKey(this.space.pool.pageSize))
+    BTree.checkKeyLength(key.length, this.space.pool.pageSize)
     if (ip.cellSize(key, value) > max) throw rowTooBig(max)
     this.#upgradeLeaf(this.#leafFor(key))
     const split = this.#insert(this.root, key, value)
@@ -165,25 +172,13 @@ export class BTree {
       leaf = this.#read(leaf, (p) => {
         const n = ip.cellCount(p)
         const from = ip.schemaVersion(p)
-        for (let k = 0; k < n; k++) {
-          const i = reverse ? n - 1 - k : k
-          const { key, value } = ip.cell(p, i)
-          if (range.from !== undefined && ip.compareBytes(key, range.from) < 0) {
-            if (reverse) {
-              done = true
-              break
-            }
-            continue
-          }
-          if (range.to !== undefined && ip.compareBytes(key, range.to) >= 0) {
-            if (!reverse) {
-              done = true
-              break
-            }
-            continue
-          }
-          const v = value.slice()
-          batch.push([key.slice(), from < this.#version ? (this.#upgrade as (v: Uint8Array, f: number) => Uint8Array)(v, from) : v])
+        for (let k = 0; k < n && !done; k++) {
+          const { key, value } = ip.cell(p, reverse ? n - 1 - k : k)
+          // A key short of the range is skipped; one past it ends the scan.
+          const low = range.from !== undefined && ip.compareBytes(key, range.from) < 0
+          const high = range.to !== undefined && ip.compareBytes(key, range.to) >= 0
+          if (reverse ? low : high) done = true
+          else if (!low && !high) batch.push([key.slice(), this.#upgraded(value.slice(), from)])
         }
         return reverse ? ip.leftSibling(p) : ip.rightSibling(p)
       }, 0)
@@ -261,6 +256,10 @@ export class BTree {
     }
   }
 
+  #upgraded(value: Uint8Array, from: number): Uint8Array {
+    return from < this.#version ? this.#upgrade(value, from) : value
+  }
+
   #leafFor(key: Uint8Array): number {
     return this.#atLeaf(key, (_, pageNo) => pageNo)
   }
@@ -273,7 +272,8 @@ export class BTree {
     for (;;) {
       const step = this.#read(pageNo, (p) => (ip.level(p) === 0 ? null : { level: ip.level(p) - 1, next: ip.childAt(p, last ? ip.cellCount(p) - 1 : 0) }), level)
       if (step === null) return pageNo
-      ;({ level, next: pageNo } = step)
+      level = step.level
+      pageNo = step.next
     }
   }
 
@@ -293,6 +293,10 @@ export class BTree {
     })
   }
 
+  static #segment(level: number): number {
+    return level === 0 ? SEGMENT.LEAF : SEGMENT.INTERNAL
+  }
+
   /** The bytes `cells` take on a page, slots included. */
   static #bytes(cells: readonly Cell[]): number {
     return cells.reduce((sum, c) => sum + ip.cellSize(c.key, c.value) + ip.SLOT, 0)
@@ -310,12 +314,10 @@ export class BTree {
 
   /**
    * Rewrite a page with exactly `cells`, at `level`, keeping what belongs to
-   * the page rather than its contents: its siblings, the root's fragment
-   * counts, and the split heuristic's memory.
+   * the page rather than its contents: its siblings, unless new ones are
+   * given, and the root's fragment counts.
    */
-  #fill(p: Uint8Array, pageNo: number, level: number, cells: readonly Cell[]): void {
-    const left = ip.leftSibling(p)
-    const right = ip.rightSibling(p)
+  #fill(p: Uint8Array, pageNo: number, level: number, cells: readonly Cell[], left = ip.leftSibling(p), right = ip.rightSibling(p)): void {
     const counts = [0, 1, 2].map((i) => ip.fragments(p, i))
     ip.initIndexPage(p, pageNo, level, this.indexId, level === 0 ? this.#version : 0)
     ip.setLeftSibling(p, left)
@@ -377,7 +379,7 @@ export class BTree {
 
   /** The split point that most nearly halves the bytes, leaving at least `min` cells each side. */
   static #balancedPoint(cells: readonly Cell[], min: number): number {
-    const sizes = cells.map((c) => ip.cellSize(c.key, c.value) + 2)
+    const sizes = cells.map((c) => ip.cellSize(c.key, c.value) + ip.SLOT)
     const total = sizes.reduce((a, b) => a + b, 0)
     let left = 0
     let best = min
@@ -398,7 +400,7 @@ export class BTree {
    * root, which never moves — between two new children it then points at.
    */
   #split(p: Uint8Array, pageNo: number, level: number, left: Cell[], right: Cell[], separator: Uint8Array): Split | null {
-    const segment = level === 0 ? SEGMENT.LEAF : SEGMENT.INTERNAL
+    const segment = BTree.#segment(level)
     if (pageNo === this.root) {
       const l = this.#allocate(segment)
       const r = this.#allocate(segment)
@@ -422,16 +424,7 @@ export class BTree {
   }
 
   #create(pageNo: number, level: number, cells: readonly Cell[], left: number, right: number): void {
-    const page = this.space.pool.create(pageNo)
-    try {
-      ip.initIndexPage(page, pageNo, level, this.indexId, level === 0 ? this.#version : 0)
-      ip.setLeftSibling(page, left)
-      ip.setRightSibling(page, right)
-      for (let i = 0; i < cells.length; i++) ip.insertCell(page, i, (cells[i] as Cell).key, (cells[i] as Cell).value)
-      this.space.pool.markDirty(page, this.space.lsn.next())
-    } finally {
-      this.space.pool.release(page)
-    }
+    this.space.pool.write(pageNo, this.space.lsn, (page) => this.#fill(page, pageNo, level, cells, left, right), true)
   }
 
   // --- delete -----------------------------------------------------------------
@@ -450,8 +443,10 @@ export class BTree {
         return { removed: true, underflow: this.#underfull(p) }
       })
     }
-    const at = this.#read(pageNo, (p) => BTree.#childIndex(p, key))
-    const child = this.#read(pageNo, (p) => ip.childAt(p, at))
+    const { at, child } = this.#read(pageNo, (p) => {
+      const at = BTree.#childIndex(p, key)
+      return { at, child: ip.childAt(p, at) }
+    })
     const result = this.#remove(child, key, level - 1)
     if (result.underflow) this.#rebalance(pageNo, at)
     return { removed: result.removed, underflow: pageNo !== this.root && this.#read(pageNo, (p) => this.#underfull(p)) }
@@ -485,7 +480,7 @@ export class BTree {
         if (level === 0) ip.setRightSibling(p, after)
       })
       if (level === 0 && after !== 0) this.#write(after, (p) => ip.setLeftSibling(p, a))
-      this.#free(b, level === 0 ? SEGMENT.LEAF : SEGMENT.INTERNAL)
+      this.#free(b, BTree.#segment(level))
       this.#write(parentNo, (p) => ip.removeCell(p, sepIndex))
       return
     }
@@ -512,8 +507,7 @@ export class BTree {
     const cells = BTree.#cells(p)
     const from = ip.schemaVersion(p)
     if (ip.level(p) !== 0 || from >= this.#version) return cells
-    const upgrade = this.#upgrade as (v: Uint8Array, f: number) => Uint8Array
-    return cells.map((c) => ({ key: c.key, value: upgrade(c.value, from) }))
+    return cells.map((c) => ({ key: c.key, value: this.#upgrade(c.value, from) }))
   }
 
   /** A root with a single child takes that child's place, while it has one. */
@@ -524,7 +518,7 @@ export class BTree {
       const { level } = only
       const cells = this.#read(only.child, (p) => BTree.#cells(p), level)
       this.#write(this.root, (p) => this.#fill(p, this.root, level, cells))
-      this.#free(only.child, level === 0 ? SEGMENT.LEAF : SEGMENT.INTERNAL)
+      this.#free(only.child, BTree.#segment(level))
     }
   }
 

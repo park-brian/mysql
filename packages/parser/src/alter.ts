@@ -15,7 +15,7 @@
 //   - `CREATE INDEX` requires a name: `CREATE INDEX ON t (a)` is
 //     ER_PARSE_ERROR.
 import { unsupportedStatement } from './errors.ts'
-import type { Cursor } from './cursor.ts'
+import { opt, type Cursor } from './cursor.ts'
 import {
   algorithmAndLock,
   defaultExpression,
@@ -50,7 +50,10 @@ export function parseAlterTable(c: Cursor, options: DdlOptions): AlterTableNode 
     do {
       if (atPartitioning(c)) break
       if (c.atWord('ALGORITHM') || c.atWord('LOCK')) algorithmAndLock(c)
-      else if (tableOption(c, tableOptions)) while (tableOption(c, tableOptions));
+      else if (tableOption(c, tableOptions)) {
+        // Options after the first need no commas between them.
+        while (tableOption(c, tableOptions)) continue
+      }
       else if (!alterAction(c, options, actions)) c.fail()
     } while (c.takeOp(','))
   }
@@ -87,8 +90,8 @@ export function parseCreateIndex(c: Cursor, options: DdlOptions): AlterTableNode
     type,
     name,
     columns,
-    ...(using === undefined ? {} : { using }),
-    ...(rest.comment === undefined ? {} : { comment: rest.comment }),
+    ...opt('using', using),
+    ...opt('comment', rest.comment),
     at: keyAt,
   }
   return { kind: STATEMENT.ALTER_TABLE, table, actions: [{ type: 'addKey', key }], options: {}, at }
@@ -104,11 +107,8 @@ function alterAction(c: Cursor, options: DdlOptions, actions: AlterAction[]): bo
       c.expectOp(')')
       return true
     }
-    if (column) {
-      actions.push(addColumn(c, options))
-      return true
-    }
     const element = tableElement(c, options)
+    if (column && element.what !== 'column') c.fail()
     actions.push(element.what === 'column' ? { type: 'addColumn', column: element.column, ...position(c) } : fromElement(element))
     return true
   }
@@ -201,8 +201,8 @@ function alterAction(c: Cursor, options: DdlOptions, actions: AlterAction[]): bo
     const collation = c.takeWord('COLLATE') ? nameOrString(c) : undefined
     actions.push({
       type: 'convert',
-      ...(charset === undefined ? {} : { charset }),
-      ...(collation === undefined ? {} : { collation }),
+      ...opt('charset', charset),
+      ...opt('collation', collation),
     })
     return true
   }
@@ -238,12 +238,6 @@ function fromElement(element: TableElement): AlterAction {
   if (element.what === 'column') return { type: 'addColumn', column: element.column }
   if (element.what === 'key') return { type: 'addKey', key: element.key }
   return { type: 'addCheck', check: element.check }
-}
-
-function addColumn(c: Cursor, options: DdlOptions): AlterAction {
-  const element = tableElement(c, options)
-  if (element.what !== 'column') c.fail()
-  return { type: 'addColumn', column: element.column, ...position(c) }
 }
 
 function changeColumn(c: Cursor, options: DdlOptions, name: string): AlterAction {

@@ -18,7 +18,7 @@
 //   - `START TRANSACTION READ ONLY, READ WRITE` and `COMMIT AND CHAIN RELEASE`
 //     are syntax errors, while a repeated characteristic is not.
 import { NODE, type Expression, type KeywordNode } from './ast.ts'
-import type { Cursor } from './cursor.ts'
+import { flag, opt, type Cursor } from './cursor.ts'
 import { parseUser } from './ddl.ts'
 import { parseDelete, parseInsert, parseUpdate } from './dml.ts'
 import { parseExpressionFrom } from './expression.ts'
@@ -49,10 +49,6 @@ import {
 } from './statement-ast.ts'
 import { TOKEN } from './tokens.ts'
 import { unsupportedStatement } from './errors.ts'
-
-/** `{ key: value }` when defined, `{}` when not — an absent field, never `undefined`. */
-const opt = <K extends string, V>(key: K, value: V | undefined): { [P in K]?: V } =>
-  (value === undefined ? {} : { [key]: value }) as { [P in K]?: V }
 
 // --- SET -----------------------------------------------------------------------
 
@@ -105,7 +101,7 @@ function setItem(c: Cursor, mode: SqlMode, sticky: VariableScope | undefined): S
     if (c.takeWord('DEFAULT')) return { type: 'names' }
     const charset = charsetName(c)
     if (!c.takeWord('COLLATE')) return { type: 'names', charset }
-    return { type: 'names', charset, collation: nameOrString(c) }
+    return { type: 'names', charset, collation: identifierOrString(c) }
   }
   if (c.takeWords('CHARACTER', 'SET') || c.takeWord('CHARSET')) {
     return c.takeWord('DEFAULT') ? { type: 'charset' } : { type: 'charset', charset: charsetName(c) }
@@ -131,10 +127,11 @@ function setItem(c: Cursor, mode: SqlMode, sticky: VariableScope | undefined): S
 /** A charset name: a word, a string, or `BINARY`, which is reserved. */
 function charsetName(c: Cursor): string {
   if (c.takeWord('BINARY')) return 'binary'
-  return nameOrString(c)
+  return identifierOrString(c)
 }
 
-function nameOrString(c: Cursor): string {
+/** A bare identifier or a quoted string — never a number. */
+function identifierOrString(c: Cursor): string {
   return c.peek().kind === TOKEN.STRING ? c.take().text : c.expectIdentifier()
 }
 
@@ -274,7 +271,7 @@ export function parseStartTransaction(c: Cursor): StartTransactionNode {
   }
   return {
     kind: STATEMENT.START_TRANSACTION,
-    ...(consistentSnapshot ? { consistentSnapshot } : {}),
+    ...flag('consistentSnapshot', consistentSnapshot),
     ...opt('access', access),
     at,
   }
@@ -364,8 +361,8 @@ function userVariable(c: Cursor): string {
 
 // --- EXPLAIN and DESCRIBE ------------------------------------------------------
 
-/** True at a statement `EXPLAIN` can explain. */
-function atExplainable(c: Cursor): boolean {
+/** True at a statement `EXPLAIN` can explain — `WITH` included, as a query start. */
+export function atExplainable(c: Cursor): boolean {
   return (
     atQueryStart(c) ||
     atParenthesisedQuery(c) ||
@@ -378,7 +375,7 @@ function atExplainable(c: Cursor): boolean {
 
 /**
  * A query, `INSERT`, `REPLACE`, `UPDATE` or `DELETE`, possibly opened by
- * `WITH`. The same set the statement dispatcher handles, so it uses this too.
+ * `WITH`. The statement dispatcher handles the same set with the same pair.
  */
 export function parseExplainable(c: Cursor, mode: SqlMode): ExplainableStatement {
   if (c.atWord('INSERT') || c.atWord('REPLACE')) return parseInsert(c, mode)
@@ -406,7 +403,7 @@ export function parseExplain(c: Cursor, mode: SqlMode): ExplainNode | DescribeNo
   let format: string | undefined
   if (c.takeWord('FORMAT')) {
     c.expectOp('=')
-    format = nameOrString(c).toUpperCase()
+    format = identifierOrString(c).toUpperCase()
   }
   let into: string | undefined
   if (!analyze && c.takeWord('INTO')) into = userVariable(c)
@@ -416,7 +413,7 @@ export function parseExplain(c: Cursor, mode: SqlMode): ExplainNode | DescribeNo
     c.skip()
     return {
       kind: STATEMENT.EXPLAIN,
-      ...(analyze ? { analyze } : {}),
+      ...flag('analyze', analyze),
       ...opt('format', format),
       ...opt('into', into),
       connection: unsignedInteger(c),
@@ -431,7 +428,7 @@ export function parseExplain(c: Cursor, mode: SqlMode): ExplainNode | DescribeNo
   if (!atExplainable(c)) c.fail()
   return {
     kind: STATEMENT.EXPLAIN,
-    ...(analyze ? { analyze } : {}),
+    ...flag('analyze', analyze),
     ...opt('format', format),
     ...opt('into', into),
     ...opt('schema', schema),
@@ -555,12 +552,13 @@ export function parseShow(c: Cursor, mode: SqlMode): ShowNode {
 
   const match = SHOW_FORMS.find(([words]) => c.atWords(...words))
   if (match === undefined) {
-    if (extended || full || scope !== undefined) c.fail()
+    // `PERSIST` is a `SET` scope that no `SHOW` form takes.
+    if (extended || full || scope !== undefined || c.atWord('PERSIST') || c.atWord('PERSIST_ONLY')) c.fail()
     throw unsupportedStatement(`SHOW ${c.peek().text.toUpperCase()}`)
   }
   const [words, form] = match
   if ((full && form.full !== true) || (extended && form.extended !== true) || (scope !== undefined && form.scope !== true)) c.fail()
-  c.at += words.length
+  c.takeWords(...words)
   const database = form.database === true && (c.takeWord('FROM') || c.takeWord('IN')) ? c.expectIdentifier() : undefined
   return {
     kind: STATEMENT.SHOW,
@@ -574,8 +572,8 @@ export function parseShow(c: Cursor, mode: SqlMode): ShowNode {
 }
 
 const flags = (full: boolean, extended: boolean): { full?: boolean; extended?: boolean } => ({
-  ...(full ? { full } : {}),
-  ...(extended ? { extended } : {}),
+  ...flag('full', full),
+  ...flag('extended', extended),
 })
 
 function showCreate(c: Cursor, at: number): ShowNode {
@@ -586,7 +584,7 @@ function showCreate(c: Cursor, at: number): ShowNode {
   const what = `CREATE ${object[1]}`
   if (what === 'CREATE DATABASE') {
     const ifNotExists = c.takeWords('IF', 'NOT', 'EXISTS')
-    return { kind: STATEMENT.SHOW, what, ...(ifNotExists ? { ifNotExists } : {}), name: { name: c.expectIdentifier() }, at }
+    return { kind: STATEMENT.SHOW, what, ...flag('ifNotExists', ifNotExists), name: { name: c.expectIdentifier() }, at }
   }
   return { kind: STATEMENT.SHOW, what, name: c.expectTableName(), at }
 }

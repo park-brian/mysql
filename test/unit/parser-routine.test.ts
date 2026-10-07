@@ -15,18 +15,9 @@ import {
   type CreateRoutineNode,
   type CreateTriggerNode,
 } from '@myjs/parser'
-import { roundTrip, withoutPositions } from '../../tools/lib/round-trip.mjs'
+import { parsed as parse, refused, roundTrip, same, withoutPositions } from '../../tools/lib/round-trip.mjs'
 
-const parse = (sql: string) => {
-  const node = parseStatement(sql)
-  assert.equal(roundTrip(node), null, `${sql}\n${deparse(node)}`)
-  return node
-}
 const routine = (sql: string) => parse(sql) as CreateRoutineNode
-const same = (a: string, b: string) => assert.deepEqual(withoutPositions(parse(a)), withoutPositions(parse(b)), `${a}\n${b}`)
-const refused = (...sqls: string[]) => {
-  for (const sql of sqls) assert.throws(() => parseStatement(sql), (e: ParseError) => e.code === 'ER_PARSE_ERROR', sql)
-}
 
 test('M3.8: a procedure head is parsed in full, and its body kept as written', () => {
   const p = routine("CREATE DEFINER = 'u'@'h' PROCEDURE IF NOT EXISTS db.p(IN a INT, OUT b CHAR(3), INOUT c INT) COMMENT 'x' LANGUAGE SQL NOT DETERMINISTIC READS SQL DATA SQL SECURITY INVOKER SELECT a  +  1")

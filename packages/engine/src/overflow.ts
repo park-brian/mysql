@@ -7,7 +7,7 @@
 // before its data. A chain belongs to its tree's overflow segment and is freed
 // page by page when its record is deleted or replaced.
 import { corrupt } from './errors.ts'
-import { FRAME_HEADER, FRAME_TRAILER, PAGE_TYPE, initPage } from './page.ts'
+import { FRAME_HEADER, FRAME_TRAILER, PAGE_TYPE, initPage, pageType } from './page.ts'
 import type { BufferPool } from './pool.ts'
 import type { LsnClock } from './lsn.ts'
 
@@ -33,7 +33,7 @@ export interface ExternalRef {
   readonly length: number
 }
 
-export function encodeRef(ref: ExternalRef): Uint8Array {
+function encodeRef(ref: ExternalRef): Uint8Array {
   const out = new Uint8Array(REF_SIZE)
   const v = new DataView(out.buffer)
   v.setUint32(0, ref.page)
@@ -54,18 +54,19 @@ export function writeChain(pages: OverflowPages, bytes: Uint8Array): Uint8Array 
   for (let i = 0; i < count; i++) numbers.push(pages.allocate())
   for (let i = 0; i < count; i++) {
     const pageNo = numbers[i] as number
-    const page = pages.pool.create(pageNo)
-    try {
-      initPage(page, pageNo, PAGE_TYPE.OVERFLOW)
-      const chunk = bytes.subarray(i * cap, (i + 1) * cap)
-      const v = new DataView(page.buffer, page.byteOffset, page.byteLength)
-      v.setUint32(NEXT, numbers[i + 1] ?? 0)
-      v.setUint32(USED, chunk.length)
-      page.set(chunk, DATA)
-      pages.pool.markDirty(page, pages.lsn.next())
-    } finally {
-      pages.pool.release(page)
-    }
+    pages.pool.write(
+      pageNo,
+      pages.lsn,
+      (page) => {
+        initPage(page, pageNo, PAGE_TYPE.OVERFLOW)
+        const chunk = bytes.subarray(i * cap, (i + 1) * cap)
+        const v = new DataView(page.buffer, page.byteOffset, page.byteLength)
+        v.setUint32(NEXT, numbers[i + 1] ?? 0)
+        v.setUint32(USED, chunk.length)
+        page.set(chunk, DATA)
+      },
+      true,
+    )
   }
   return encodeRef({ page: numbers[0] as number, length: bytes.length })
 }
@@ -83,17 +84,15 @@ export function chainPages(pool: BufferPool, ref: ExternalRef): number[] {
   for (let pageNo = ref.page; pageNo !== 0; ) {
     if (out.length === limit) throw corrupt(ref.page, 'overflow chain is longer than its length needs')
     out.push(pageNo)
-    const page = pool.fetch(pageNo)
-    try {
+    const at = pageNo
+    pageNo = pool.read(at, (page) => {
       const v = new DataView(page.buffer, page.byteOffset, page.byteLength)
-      if (page[16] !== PAGE_TYPE.OVERFLOW) throw corrupt(pageNo, 'not an overflow page')
+      if (pageType(page) !== PAGE_TYPE.OVERFLOW) throw corrupt(at, 'not an overflow page')
       const used = v.getUint32(USED)
-      if (used > cap) throw corrupt(pageNo, `overflow page claims ${used} bytes`)
+      if (used > cap) throw corrupt(at, `overflow page claims ${used} bytes`)
       total += used
-      pageNo = v.getUint32(NEXT)
-    } finally {
-      pool.release(page)
-    }
+      return v.getUint32(NEXT)
+    })
   }
   if (total !== ref.length) throw corrupt(ref.page, `overflow chain holds ${total} bytes, its reference says ${ref.length}`)
   return out
@@ -106,14 +105,11 @@ export function readChain(pool: BufferPool, refBytes: Uint8Array): Uint8Array {
   const out = new Uint8Array(ref.length)
   let at = 0
   for (const pageNo of pages) {
-    const page = pool.fetch(pageNo)
-    try {
+    pool.read(pageNo, (page) => {
       const used = new DataView(page.buffer, page.byteOffset, page.byteLength).getUint32(USED)
       out.set(page.subarray(DATA, DATA + used), at)
       at += used
-    } finally {
-      pool.release(page)
-    }
+    })
   }
   return out
 }

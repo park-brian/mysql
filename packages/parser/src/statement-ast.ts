@@ -250,7 +250,7 @@ export type AlterAction =
   | { readonly type: 'rename'; readonly to: TableName }
   | { readonly type: 'renameColumn'; readonly from: string; readonly to: string }
   | { readonly type: 'renameIndex'; readonly from: string; readonly to: string }
-  | { readonly type: 'orderBy'; readonly columns: readonly IndexColumn[] }
+  | { readonly type: 'orderBy'; readonly columns: readonly { readonly name: string; readonly desc?: true }[] }
   /** `CONVERT TO CHARACTER SET cs [COLLATE c]`. `charset` is absent for `DEFAULT`. */
   | { readonly type: 'convert'; readonly charset?: string; readonly collation?: string }
   | { readonly type: 'keys'; readonly enable: boolean }
@@ -681,17 +681,15 @@ export interface SavepointNode {
 }
 
 /**
- * `PREPARE s FROM 'text'` or `PREPARE s FROM @v`. Exactly one of `text` and
- * `variable` is set. The text is a single string literal: a real 8.4 refuses
- * an introducer, adjacent literals and any other expression here.
+ * `PREPARE s FROM 'text'` or `PREPARE s FROM @v`. The text is a single string
+ * literal: a real 8.4 refuses an introducer, adjacent literals and any other
+ * expression here.
  */
-export interface PrepareNode {
+export type PrepareNode = {
   readonly kind: typeof STATEMENT.PREPARE
   readonly name: string
-  readonly text?: string
-  readonly variable?: string
   readonly at: number
-}
+} & ({ readonly text: string } | { readonly variable: string })
 
 /** `EXECUTE s [USING @a, @b]`. Only user variables may be passed. */
 export interface ExecuteNode {

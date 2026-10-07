@@ -95,7 +95,7 @@ export class StubExecutor implements Executor {
   readonly #options: StubOptions
   readonly #vars: Map<string, SqlValue>
   /** M3.8: stored programs, accepted and kept, by `kind:schema.name`. Never run. */
-  readonly #programs = new Map<string, StoredProgram>()
+  readonly #programs = new Set<string>()
 
   constructor(options: StubOptions = {}) {
     this.#options = options
@@ -208,12 +208,11 @@ export class StubExecutor implements Executor {
    */
   #program(session: Session, statement: ProgramStatement): StatementResult {
     if (statement.kind === STATEMENT.CALL) {
-      const found = this.#programs.get(programKey('PROCEDURE', statement.name, session))
-      if (found === undefined) throw sqlError('ER_SP_DOES_NOT_EXIST', messages.objectMissing('PROCEDURE', qualified(statement.name, session)))
+      if (!this.#programs.has(programKey('PROCEDURE', statement.name, session))) throw sqlError('ER_SP_DOES_NOT_EXIST', messages.objectMissing('PROCEDURE', qualified(statement.name, session)))
       throw sqlError('ER_NOT_SUPPORTED_YET', messages.notSupported('CALL'))
     }
     if (statement.kind === STATEMENT.DROP) {
-      const object = statement.object as StoredProgram['object']
+      const object = statement.object as ProgramObject
       const name = statement.names[0] as TableName
       if (!this.#programs.delete(programKey(object, name, session)) && statement.ifExists !== true) {
         throw sqlError(MISSING[object], messages.objectMissing(object, qualified(name, session)))
@@ -226,7 +225,7 @@ export class StubExecutor implements Executor {
       if (statement.ifNotExists === true) return { affectedRows: 0 }
       throw sqlError(EXISTS[object], messages.objectExists(object, statement.name.name))
     }
-    this.#programs.set(key, { object, statement })
+    this.#programs.add(key)
     return { affectedRows: 0 }
   }
 
@@ -433,10 +432,7 @@ function splitAlias(item: string): { expression: string; alias: string | null } 
 type ProgramStatement = CreateRoutineNode | CreateTriggerNode | CreateEventNode | CallStatementNode | DropNode
 type SessionStatement = SetNode | SetTransactionNode | UseNode | ProgramStatement
 
-interface StoredProgram {
-  readonly object: 'PROCEDURE' | 'FUNCTION' | 'TRIGGER' | 'EVENT'
-  readonly statement: CreateRoutineNode | CreateTriggerNode | CreateEventNode
-}
+type ProgramObject = 'PROCEDURE' | 'FUNCTION' | 'TRIGGER' | 'EVENT'
 
 const EXISTS = {
   PROCEDURE: 'ER_SP_ALREADY_EXISTS',

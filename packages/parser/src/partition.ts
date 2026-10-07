@@ -7,8 +7,8 @@
 // `RANGE` and a `KEY ()` with no primary key are all refused only after
 // parsing, with errors of their own.
 import { NODE, type Expression } from './ast.ts'
-import type { Cursor } from './cursor.ts'
-import type { DdlOptions } from './ddl.ts'
+import { opt, type Cursor } from './cursor.ts'
+import { nameOrString, ulongValue, type DdlOptions } from './ddl.ts'
 import { parseExpressionFrom } from './expression.ts'
 import type { PartitionDefinition, PartitionMethod, Partitioning } from './statement-ast.ts'
 import { TOKEN } from './tokens.ts'
@@ -30,7 +30,7 @@ export function parsePartitioning(c: Cursor, options: DdlOptions): Partitioning 
     while (c.takeOp(','))
     c.expectOp(')')
   }
-  return { ...method, ...(sub === undefined ? {} : { sub }), ...(partitions === undefined ? {} : { partitions }) }
+  return { ...method, ...opt('sub', sub), ...opt('partitions', partitions) }
 }
 
 /** `[LINEAR] HASH (expr)`, `[LINEAR] KEY [ALGORITHM = n] (cols)`, and — top level only — `RANGE`/`LIST`. */
@@ -48,14 +48,14 @@ function partitionMethod(c: Cursor, options: DdlOptions, countWord: string, top:
       c.skip()
       algorithm = Number(t.text)
     }
-    out = { method: 'KEY', ...(algorithm === undefined ? {} : { algorithm }), columns: nameList(c) }
+    out = { method: 'KEY', ...opt('algorithm', algorithm), columns: nameList(c) }
   } else if (top && !linear && (c.atWord('RANGE') || c.atWord('LIST'))) {
     const method = c.take().text.toUpperCase() as 'RANGE' | 'LIST'
     out = c.takeWord('COLUMNS') ? { method, columns: nameList(c) } : { method, expr: parenthesised(c, options) }
   } else {
     return c.fail()
   }
-  if (c.takeWord(countWord)) out = { ...out, count: unsigned(c) }
+  if (c.takeWord(countWord)) out = { ...out, count: Number(ulongValue(c, 0xffffffff)) }
   return linear ? { linear, ...out } : out
 }
 
@@ -81,10 +81,10 @@ function partitionDefinition(c: Cursor, options: DdlOptions): PartitionDefinitio
   }
   return {
     name,
-    ...(lessThan === undefined ? {} : { lessThan }),
-    ...(values === undefined ? {} : { in: values }),
+    ...opt('lessThan', lessThan),
+    ...opt('in', values),
     options: own,
-    ...(subpartitions === undefined ? {} : { subpartitions }),
+    ...opt('subpartitions', subpartitions),
   }
 }
 
@@ -102,9 +102,7 @@ function partitionOptions(c: Cursor): Record<string, string> {
     else for (const word of ['COMMENT', 'MAX_ROWS', 'MIN_ROWS', 'TABLESPACE', 'NODEGROUP']) if (name === undefined && c.takeWord(word)) name = word
     if (name === undefined) return out
     c.takeOp('=')
-    const t = c.peek()
-    if (t.kind !== TOKEN.IDENTIFIER && t.kind !== TOKEN.STRING && t.kind !== TOKEN.NUMBER) c.fail()
-    out[name] = c.take().text
+    out[name] = nameOrString(c)
   }
 }
 
@@ -143,10 +141,3 @@ function nameList(c: Cursor): string[] {
   return out
 }
 
-/** A `PARTITIONS n` count: the grammar's `real_ulong_num`, so 32 bits at most. */
-function unsigned(c: Cursor): number {
-  const t = c.peek()
-  if (t.kind !== TOKEN.NUMBER || !/^\d+$/.test(t.text) || Number(t.text) > 0xffffffff) c.fail()
-  c.skip()
-  return Number(t.text)
-}

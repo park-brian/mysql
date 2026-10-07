@@ -21,40 +21,38 @@ async function fileOf(n: number): Promise<VfsFile> {
 
 const touch = (pool: BufferPool, pageNo: number) => pool.release(pool.fetch(pageNo))
 
-test('M4.3: scanning 10× the pool does not evict the working set', async () => {
+/**
+ * Make pages 1–8 a working set the way one becomes young in use — touched,
+ * then touched again after other work — scan 10× the pool past them, each page
+ * three times in a row as a cursor visits a leaf one record at a time, and
+ * count how many of the working set are still resident.
+ */
+async function residentAfterScan(promoteAfter: number): Promise<{ pool: BufferPool; young: boolean; resident: number; working: number[] }> {
   const frames = 64
-  const file = await fileOf(1000)
-  const pool = new BufferPool(file, { frames, promoteAfter: 8 })
+  const pool = new BufferPool(await fileOf(1000), { frames, promoteAfter })
   const working = [1, 2, 3, 4, 5, 6, 7, 8]
-  // A working set becomes young the way one does in use: touched, then touched
-  // again later, after other work.
   for (const p of working) touch(pool, p)
   for (let p = 900; p < 920; p++) touch(pool, p)
   for (const p of working) touch(pool, p)
-  for (const p of working) assert.equal(pool.residency(p), 'young', `page ${p}`)
-
-  // A scan of 640 pages, each touched three times in a row, as a cursor visits
-  // a leaf one record at a time.
+  const young = working.every((p) => pool.residency(p) === 'young')
   for (let p = 100; p < 100 + frames * 10; p++) for (let k = 0; k < 3; k++) touch(pool, p)
-
   const hits = pool.stats.hits
   for (const p of working) touch(pool, p)
-  assert.equal(pool.stats.hits - hits, working.length, 'every working-set page is still resident')
+  return { pool, young, resident: pool.stats.hits - hits, working }
+}
+
+test('M4.3: scanning 10× the pool does not evict the working set', async () => {
+  const { pool, young, resident, working } = await residentAfterScan(8)
+  assert.ok(young, 'the working set was young before the scan')
+  assert.equal(resident, working.length, 'every working-set page is still resident')
   assert.equal(pool.pinned(), 0)
 })
 
 test('M4.3: a pool that promoted on any second access would have lost the working set — the test above can fail', async () => {
-  // The same workload with promotion on every re-access: the scan's repeated
-  // touches promote each scanned page, and they push the working set out.
-  const frames = 64
-  const pool = new BufferPool(await fileOf(1000), { frames, promoteAfter: 0 })
-  const working = [1, 2, 3, 4, 5, 6, 7, 8]
-  for (const p of working) touch(pool, p)
-  for (const p of working) touch(pool, p)
-  for (let p = 100; p < 100 + frames * 10; p++) for (let k = 0; k < 3; k++) touch(pool, p)
-  const hits = pool.stats.hits
-  for (const p of working) touch(pool, p)
-  assert.ok(pool.stats.hits - hits < working.length, 'the instrument detects a scan that promotes')
+  // Promotion on every re-access: the scan's repeated touches promote each
+  // scanned page, and they push the working set out.
+  const { resident, working } = await residentAfterScan(0)
+  assert.ok(resident < working.length, 'the instrument detects a scan that promotes')
 })
 
 test('M4.3: dirty pages flush in first-dirtied order, and re-dirtying does not move one', async () => {

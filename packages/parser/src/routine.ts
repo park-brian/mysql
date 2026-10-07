@@ -11,7 +11,7 @@
 // Also from the server: a function's parameters take no `IN`, `CREATE
 // PROCEDURE p SELECT 1` needs its `()`, and `IF NOT EXISTS` is legal on all four.
 import type { Expression } from './ast.ts'
-import type { Cursor } from './cursor.ts'
+import { flag, opt, type Cursor } from './cursor.ts'
 import { parseDefiner } from './ddl.ts'
 import { parseDataType, type DataType } from './data-type.ts'
 import { unsupportedStatement } from './errors.ts'
@@ -54,7 +54,7 @@ function head(c: Cursor, object: string): Head {
   c.expectWord(object)
   const ifNotExists = c.takeWords('IF', 'NOT', 'EXISTS')
   const name = c.expectTableName()
-  return { ...(definer === undefined ? {} : { definer }), ...(ifNotExists ? { ifNotExists } : {}), name, at }
+  return { ...opt('definer', definer), ...flag('ifNotExists', ifNotExists), name, at }
 }
 
 /** `CREATE PROCEDURE` or `CREATE FUNCTION`, with the cursor on `CREATE`. */
@@ -100,11 +100,11 @@ export function parseCreateRoutine(c: Cursor, mode: SqlMode, object: 'PROCEDURE'
     object,
     ...h,
     parameters,
-    ...(returns === undefined ? {} : { returns }),
-    ...(comment === undefined ? {} : { comment }),
-    ...(deterministic === undefined ? {} : { deterministic }),
-    ...(dataAccess === undefined ? {} : { dataAccess }),
-    ...(security === undefined ? {} : { security }),
+    ...opt('returns', returns),
+    ...opt('comment', comment),
+    ...opt('deterministic', deterministic),
+    ...opt('dataAccess', dataAccess),
+    ...opt('security', security),
     body: body(c, mode, statement, object === 'FUNCTION'),
   }
 }
@@ -148,7 +148,7 @@ export function parseCreateTrigger(c: Cursor, mode: SqlMode, statement: Statemen
     const position = c.take().text.toUpperCase() as 'FOLLOWS' | 'PRECEDES'
     order = { position, trigger: c.expectIdentifier() }
   }
-  return { kind: STATEMENT.CREATE_TRIGGER, ...h, timing, event, table, ...(order === undefined ? {} : { order }), body: body(c, mode, statement, false) }
+  return { kind: STATEMENT.CREATE_TRIGGER, ...h, timing, event, table, ...opt('order', order), body: body(c, mode, statement, false) }
 }
 
 /** `CREATE EVENT`, with the cursor on `CREATE`. */
@@ -168,7 +168,7 @@ export function parseCreateEvent(c: Cursor, mode: SqlMode, statement: StatementP
     c.skip()
     const starts = c.takeWord('STARTS') ? parseExpressionFrom(c, mode) : undefined
     const ends = c.takeWord('ENDS') ? parseExpressionFrom(c, mode) : undefined
-    schedule = { every, unit, ...(starts === undefined ? {} : { starts }), ...(ends === undefined ? {} : { ends }) }
+    schedule = { every, unit, ...opt('starts', starts), ...opt('ends', ends) }
   }
   let preserve: boolean | undefined
   if (c.takeWords('ON', 'COMPLETION')) {
@@ -187,9 +187,9 @@ export function parseCreateEvent(c: Cursor, mode: SqlMode, statement: StatementP
     kind: STATEMENT.CREATE_EVENT,
     ...h,
     schedule,
-    ...(preserve === undefined ? {} : { preserve }),
-    ...(status === undefined ? {} : { status }),
-    ...(comment === undefined ? {} : { comment }),
+    ...opt('preserve', preserve),
+    ...opt('status', status),
+    ...opt('comment', comment),
     body: body(c, mode, statement, false),
   }
 }

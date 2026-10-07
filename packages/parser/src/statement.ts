@@ -1,7 +1,7 @@
 // M3.5 — one statement in, one AST out.
 //
 // The dispatcher is deliberately thin and deliberately **honest about its
-// gaps**. What is not built yet — `ALTER`, `CALL`, `FLUSH` and the rest —
+// gaps**. What is not built yet — `GRANT`, `FLUSH`, `ALTER VIEW` and the rest —
 // reaches `unsupportedStatement` rather than a half-parse — which matters more
 // than it sounds, because M3.11's census counts what this function accepts. A
 // dispatcher that returned some vague node for anything it did not understand
@@ -19,8 +19,8 @@ import { NO_SQL_MODE, type SqlMode } from './sql-mode.ts'
 import { parseCreateDatabase, parseCreateTable, parseCreateView, parseDefiner, parseDrop } from './ddl.ts'
 import { parseAlterTable, parseCreateIndex } from './alter.ts'
 import { parseCall, parseCreateEvent, parseCreateRoutine, parseCreateTrigger } from './routine.ts'
-import { atParenthesisedQuery, atQueryStart } from './query.ts'
 import {
+  atExplainable,
   parseCommit,
   parseDeallocate,
   parseDo,
@@ -70,23 +70,22 @@ export function parseStatementBytes(bytes: Uint8Array, options: ParseStatementOp
 export function parseStatements(sql: string, options: ParseStatementOptions = {}): Statement[] {
   const c = new Cursor(lex(sql, options), sql)
   const sqlMode = options.sqlMode ?? NO_SQL_MODE
-  const out: Statement[] = []
-  do {
-    if (c.atEnd()) break
-    const statement = dispatch(c, sqlMode)
-    checkTreeDepth(statement)
-    out.push(statement)
-  } while (c.takeOp(';'))
-  if (out.length === 0 || !c.atEnd()) c.fail()
+  const out = [checked(c, sqlMode)]
+  while (c.takeOp(';') && !c.atEnd()) out.push(checked(c, sqlMode))
+  if (!c.atEnd()) c.fail()
   return out
 }
 
-function parseFromTokens(c: Cursor, sqlMode: SqlMode): Statement {
-  const first = c.peek()
-  if (first.kind === TOKEN.EOF) c.fail()
-
+/** One statement, refused if there is none or if it nests too deep. */
+function checked(c: Cursor, sqlMode: SqlMode): Statement {
+  if (c.atEnd()) c.fail()
   const statement = dispatch(c, sqlMode)
   checkTreeDepth(statement)
+  return statement
+}
+
+function parseFromTokens(c: Cursor, sqlMode: SqlMode): Statement {
+  const statement = checked(c, sqlMode)
 
   // A trailing `;` is part of the statement as clients send it. Anything after
   // one is a second statement, and D-13 gates multi-statement execution off
@@ -119,17 +118,7 @@ function dispatch(c: Cursor, sqlMode: SqlMode): Statement {
 
   // A query, `INSERT`, `REPLACE`, `UPDATE`, `DELETE`, and `WITH` opening any
   // of the last three or a query — the statements `EXPLAIN` can explain.
-  if (
-    c.atWord('INSERT') ||
-    c.atWord('REPLACE') ||
-    c.atWord('UPDATE') ||
-    c.atWord('DELETE') ||
-    c.atWord('WITH') ||
-    atQueryStart(c) ||
-    atParenthesisedQuery(c)
-  ) {
-    return parseExplainable(c, sqlMode)
-  }
+  if (atExplainable(c)) return parseExplainable(c, sqlMode)
 
   // M3.6.
   if (c.atWord('SET')) return parseSet(c, sqlMode)
@@ -139,7 +128,8 @@ function dispatch(c: Cursor, sqlMode: SqlMode): Statement {
   if (c.atWord('BEGIN') || c.atWords('START', 'TRANSACTION')) return parseStartTransaction(c)
   if (c.atWord('COMMIT')) return parseCommit(c)
   if (c.atWord('ROLLBACK')) return parseRollback(c)
-  if (c.atWord('SAVEPOINT') || c.atWords('RELEASE', 'SAVEPOINT')) return parseSavepoint(c)
+  // `RELEASE` begins nothing else, so `RELEASE sp` is a syntax error, as on 8.4.11.
+  if (c.atWord('SAVEPOINT') || c.atWord('RELEASE')) return parseSavepoint(c)
   if (c.atWord('PREPARE')) return parsePrepare(c)
   if (c.atWord('EXECUTE')) return parseExecute(c)
   if (c.atWord('DEALLOCATE') || c.atWords('DROP', 'PREPARE')) return parseDeallocate(c)

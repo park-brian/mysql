@@ -25,6 +25,7 @@
 import type { VfsFile } from '@myjs/vfs'
 import { misuse, poolExhausted } from './errors.ts'
 import { pageLsn, sealPage, setPageLsn, verifyPage } from './page.ts'
+import type { LsnClock } from './lsn.ts'
 
 export interface PoolOptions {
   readonly frames: number
@@ -132,6 +133,28 @@ export class BufferPool {
     page.fill(0)
     this.#pins[frame] = (this.#pins[frame] as number) + 1
     return page
+  }
+
+  /** Pin a page, use it, unpin it. */
+  read<T>(pageNo: number, use: (page: Uint8Array) => T): T {
+    const page = this.fetch(pageNo)
+    try {
+      return use(page)
+    } finally {
+      this.release(page)
+    }
+  }
+
+  /** Pin a page — read, or for `fresh` a zeroed frame — change it, stamp the clock's next LSN, unpin it. */
+  write<T>(pageNo: number, lsn: LsnClock, change: (page: Uint8Array) => T, fresh = false): T {
+    const page = fresh ? this.create(pageNo) : this.fetch(pageNo)
+    try {
+      const out = change(page)
+      this.markDirty(page, lsn.next())
+      return out
+    } finally {
+      this.release(page)
+    }
   }
 
   /** Unpin a page from `fetch` or `create`. */

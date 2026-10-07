@@ -29,7 +29,6 @@ import { SEGMENT, segmentId } from './btree.ts'
 import * as ip from './index-page.ts'
 import { chainPages, decodeRef } from './overflow.ts'
 import { extentsPerMap, EXTENT } from './alloc.ts'
-import { PAGE_TYPE, pageType } from './page.ts'
 import type { Store } from './store.ts'
 
 export interface VerifyOptions {
@@ -75,14 +74,11 @@ function verifyTree(store: Store, indexId: number, root: number, reached: Set<nu
     else if (owner !== segmentId(indexId, segment)) fail(`page ${pageNo} of index ${indexId} is in an extent owned by ${owner}`)
   }
 
-  const walk = (pageNo: number, expectLevel: number | undefined, lo: Uint8Array | undefined, hi: Uint8Array | undefined): number => {
-    const page = pool.fetch(pageNo)
+  const walk = (pageNo: number, expectLevel: number | undefined, lo: Uint8Array | undefined, hi: Uint8Array | undefined): void => {
     const children: [number, Uint8Array | undefined, Uint8Array | undefined][] = []
-    let level: number
-    try {
-      if (pageType(page) !== PAGE_TYPE.INDEX) fail(`page ${pageNo} is not an index page`)
+    const level = pool.read(pageNo, (page) => {
       ip.validateIndexPage(page, pageNo)
-      level = ip.level(page)
+      const level = ip.level(page)
       if (ip.indexIdOf(page) !== indexId) fail(`page ${pageNo} belongs to index ${ip.indexIdOf(page)}, reached from ${indexId}`)
       if (expectLevel !== undefined && level !== expectLevel) fail(`page ${pageNo} is at level ${level}, expected ${expectLevel}`)
       // The root is a leaf-segment page for life; every other page by level.
@@ -105,31 +101,23 @@ function verifyTree(store: Store, indexId: number, root: number, reached: Set<nu
       if (level > 0 && v !== 0) fail(`internal page ${pageNo} carries schema version ${v}`)
       if (level === 0 && v > version) fail(`leaf ${pageNo} is at schema version ${v}, ahead of its index's ${version}`)
       if (level === 0) leaves.push(pageNo)
-    } finally {
-      pool.release(page)
-    }
+      return level
+    })
     for (const [child, childLo, childHi] of children) walk(child, level - 1, childLo, childHi)
-    return level
   }
 
   walk(root, undefined, undefined, undefined)
 
   for (let i = 0; i < leaves.length; i++) {
-    const page = pool.fetch(leaves[i] as number)
-    try {
+    pool.read(leaves[i] as number, (page) => {
       if (ip.leftSibling(page) !== (leaves[i - 1] ?? 0)) fail(`leaf ${leaves[i]}'s left link is ${ip.leftSibling(page)}, not ${leaves[i - 1] ?? 0}`)
       if (ip.rightSibling(page) !== (leaves[i + 1] ?? 0)) fail(`leaf ${leaves[i]}'s right link is ${ip.rightSibling(page)}, not ${leaves[i + 1] ?? 0}`)
-    } finally {
-      pool.release(page)
-    }
+    })
   }
 
-  const rootPage = pool.fetch(root)
-  try {
+  pool.read(root, (page) => {
     for (let s = 0; s < 3; s++) {
-      if (ip.fragments(rootPage, s) !== shared[s]) fail(`index ${indexId} counts ${ip.fragments(rootPage, s)} fragment pages in segment ${s}, holds ${shared[s]}`)
+      if (ip.fragments(page, s) !== shared[s]) fail(`index ${indexId} counts ${ip.fragments(page, s)} fragment pages in segment ${s}, holds ${shared[s]}`)
     }
-  } finally {
-    pool.release(rootPage)
-  }
+  })
 }

@@ -62,13 +62,7 @@ export class Store {
   /** Open a file `create` formatted. Its superblock is verified and refused if it is not one this build reads. */
   static open(file: VfsFile, options: StoreOptions = {}): Store {
     const pool = new BufferPool(file, poolOptions(options))
-    const page = pool.fetch(0)
-    let s
-    try {
-      s = readSuperblock(page, file.pageSize)
-    } finally {
-      pool.release(page)
-    }
+    const s = pool.read(0, (page) => readSuperblock(page, file.pageSize))
     const lsn = new LsnClock(s.lsn)
     return new Store(file, pool, lsn, Allocator.open(pool, lsn, s.pageCount), s.directoryRoot, s.nextIndexId)
   }
@@ -93,6 +87,7 @@ export class Store {
 
   /** Write every dirty page, then the superblock, then ask the file to make it durable. */
   flush(): void {
+    // Not `pool.write`: the superblock records the very LSN it is stamped with.
     const page = this.pool.create(0)
     try {
       const lsn = this.lsn.next()

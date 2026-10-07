@@ -92,15 +92,13 @@ export class Allocator {
     if (segment === FREE || segment === SHARED) throw misuse(`segment id ${segment} is reserved`)
     const owner = fragments < FRAGMENT_LIMIT ? SHARED : segment
     const extent = this.#claim(owner)
-    let page = -1
-    this.#update(extent, (o, used) => {
+    const bit = this.#update(extent, (o, used) => {
       const bit = used.lowestClear()
-      page = extent * EXTENT + bit
       used.set(bit)
       if (used.full()) this.#roomFor(owner).delete(extent)
-      return o
+      return { owner: o, out: bit }
     })
-    return { page, fragment: owner === SHARED }
+    return { page: extent * EXTENT + bit, fragment: owner === SHARED }
   }
 
   /** An extent of `owner`'s with a free page: one it has, a free one, or a new one. */
@@ -113,7 +111,7 @@ export class Allocator {
       // Growing into a new group adds its first extent as shared room, and
       // that is all it adds: go round again.
       if (extent === undefined) continue
-      this.#update(extent, () => owner)
+      this.#update(extent, () => ({ owner, out: undefined }))
       room.add(extent)
       return extent
     }
@@ -123,22 +121,20 @@ export class Allocator {
   free(page: number): { fragment: boolean } {
     const extent = Math.floor(page / EXTENT)
     const bit = page % EXTENT
-    let fragment = false
-    this.#update(extent, (owner, used) => {
+    return this.#update(extent, (owner, used) => {
       if (owner === FREE || !used.has(bit)) throw misuse(`page ${page} freed but not in use`)
       if (this.#isSystem(page)) throw misuse(`page ${page} is a system page`)
-      fragment = owner === SHARED
+      const out = { fragment: owner === SHARED }
       used.clear(bit)
       const room = this.#roomFor(owner)
       if (used.empty()) {
         room.delete(extent)
         insertSorted(this.#free, extent)
-        return FREE
+        return { owner: FREE, out }
       }
       room.add(extent)
-      return owner
+      return { owner, out }
     })
-    return { fragment }
   }
 
   /** Every page the maps say is in use — what `verify` compares with what is reachable. */
@@ -152,11 +148,9 @@ export class Allocator {
 
   /** The owner of a page's extent: a segment id, or `'shared'`, or `'free'`. */
   ownerOf(page: number): number | 'shared' | 'free' {
-    let out: number | 'shared' | 'free' = 'free'
-    this.#read(Math.floor(page / EXTENT), (owner) => {
-      out = owner === FREE ? 'free' : owner === SHARED ? 'shared' : owner
-    })
-    return out
+    const extent = Math.floor(page / EXTENT)
+    const owner = this.#pool.read(this.#mapPage(extent), (p) => descriptorView(p).getUint32(this.#descriptor(extent)))
+    return owner === FREE ? 'free' : owner === SHARED ? 'shared' : owner
   }
 
   // --- the maps ---------------------------------------------------------------
@@ -184,13 +178,10 @@ export class Allocator {
     this.#pageCount += EXTENT
     if (extent % this.#perMap !== 0) return extent
     const mapNo = this.#mapPage(extent)
-    const page = this.#pool.create(mapNo)
-    initPage(page, mapNo, PAGE_TYPE.ALLOC_MAP)
-    this.#pool.markDirty(page, this.#lsn.next())
-    this.#pool.release(page)
+    this.#pool.write(mapNo, this.#lsn, (page) => initPage(page, mapNo, PAGE_TYPE.ALLOC_MAP), true)
     this.#update(extent, (_, used) => {
       for (let bit = 0; bit < SYSTEM_PAGES; bit++) used.set(bit)
-      return SHARED
+      return { owner: SHARED, out: undefined }
     })
     this.#roomFor(SHARED).add(extent)
     return undefined
@@ -202,47 +193,36 @@ export class Allocator {
     return room
   }
 
-  #read(extent: number, use: (owner: number, used: Used) => void): void {
-    const page = this.#pool.fetch(this.#mapPage(extent))
-    try {
-      const v = new DataView(page.buffer, page.byteOffset, page.byteLength)
-      const at = FRAME_HEADER + (extent % this.#perMap) * DESCRIPTOR
-      use(v.getUint32(at), new Used(v.getUint32(at + 4), v.getUint32(at + 8)))
-    } finally {
-      this.#pool.release(page)
-    }
+  /** Where an extent's descriptor sits on its map page. */
+  #descriptor(extent: number): number {
+    return FRAME_HEADER + (extent % this.#perMap) * DESCRIPTOR
   }
 
-  /** Change one descriptor: `change` may edit the bitmap in place, and returns the owner. */
-  #update(extent: number, change: (owner: number, used: Used) => number): void {
-    const page = this.#pool.fetch(this.#mapPage(extent))
-    try {
-      const v = new DataView(page.buffer, page.byteOffset, page.byteLength)
-      const at = FRAME_HEADER + (extent % this.#perMap) * DESCRIPTOR
+  /** Change one descriptor: `change` may edit the bitmap in place, and returns the new owner and a result. */
+  #update<T>(extent: number, change: (owner: number, used: Used) => { owner: number; out: T }): T {
+    return this.#pool.write(this.#mapPage(extent), this.#lsn, (page) => {
+      const v = descriptorView(page)
+      const at = this.#descriptor(extent)
       const used = new Used(v.getUint32(at + 4), v.getUint32(at + 8))
-      v.setUint32(at, change(v.getUint32(at), used))
+      const { owner, out } = change(v.getUint32(at), used)
+      v.setUint32(at, owner)
       v.setUint32(at + 4, used.hi)
       v.setUint32(at + 8, used.lo)
-      this.#pool.markDirty(page, this.#lsn.next())
-    } finally {
-      this.#pool.release(page)
-    }
+      return out
+    })
   }
 
   #forEachDescriptor(use: (extent: number, owner: number, used: Used) => void): void {
     const extents = this.#pageCount / EXTENT
     for (let start = 0; start < extents; start += this.#perMap) {
-      const page = this.#pool.fetch(this.#mapPage(start))
-      try {
+      this.#pool.read(this.#mapPage(start), (page) => {
         if (pageType(page) !== PAGE_TYPE.ALLOC_MAP) throw corrupt(this.#mapPage(start), 'not an allocation map page')
-        const v = new DataView(page.buffer, page.byteOffset, page.byteLength)
+        const v = descriptorView(page)
         for (let e = start; e < Math.min(extents, start + this.#perMap); e++) {
-          const at = FRAME_HEADER + (e - start) * DESCRIPTOR
+          const at = this.#descriptor(e)
           use(e, v.getUint32(at), new Used(v.getUint32(at + 4), v.getUint32(at + 8)))
         }
-      } finally {
-        this.#pool.release(page)
-      }
+      })
     }
   }
 }
@@ -287,6 +267,8 @@ class Used {
     return this.lo !== 0xffffffff ? bit : bit + 32
   }
 }
+
+const descriptorView = (page: Uint8Array): DataView => new DataView(page.buffer, page.byteOffset, page.byteLength)
 
 function first(set: Set<number>): number | undefined {
   for (const v of set) return v

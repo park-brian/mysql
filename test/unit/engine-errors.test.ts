@@ -8,36 +8,27 @@ import { errnoOf, sqlStateOf } from '@myjs/protocol'
 import { declaredKeyWidth } from '@myjs/types'
 import { BTree, ClusteredIndex, EngineError, SecondaryIndex, Store, encodeRecord } from '@myjs/engine'
 
-const seen = (e: unknown): EngineError => {
-  assert.ok(e instanceof EngineError)
-  return e
+/** The engine error `fn` throws; it must throw one. */
+const caught = (fn: () => unknown): EngineError => {
+  try {
+    fn()
+  } catch (e) {
+    assert.ok(e instanceof EngineError)
+    return e
+  }
+  assert.fail('expected an EngineError')
 }
 
 test('engine errnos and SQLSTATEs agree with the generated error table', async () => {
   const store = Store.create(await new MemoryVfs({ pageSize: 1024 }).open('d', { create: true }), { frames: 16 })
   const clustered = ClusteredIndex.create(store, [{ nullable: false, fixed: 1 }, { nullable: true }], [{ field: 0, part: { kind: 'bytes', nullable: false } }])
   clustered.insert([Uint8Array.of(1), null])
-  const errors: EngineError[] = []
-  try {
-    clustered.insert([Uint8Array.of(1), null])
-  } catch (e) {
-    errors.push(seen(e))
-  }
-  try {
-    SecondaryIndex.create(store, clustered, [{ field: 1, part: { kind: 'text', nullable: true, collationId: 46, width: declaredKeyWidth(46, 300) } }])
-  } catch (e) {
-    errors.push(seen(e))
-  }
-  try {
-    encodeRecord([{ nullable: false, fixed: 600 }], [new Uint8Array(600)], { maxSize: 100 })
-  } catch (e) {
-    errors.push(seen(e))
-  }
-  try {
-    store.createTree().put(new Uint8Array(BTree.maxKey(1024) + 1), new Uint8Array(0))
-  } catch (e) {
-    errors.push(seen(e))
-  }
+  const errors = [
+    () => clustered.insert([Uint8Array.of(1), null]),
+    () => SecondaryIndex.create(store, clustered, [{ field: 1, part: { kind: 'text', nullable: true, collationId: 46, width: declaredKeyWidth(46, 300) } }]),
+    () => encodeRecord([{ nullable: false, fixed: 600 }], [new Uint8Array(600)], { maxSize: 100 }),
+    () => store.createTree().put(new Uint8Array(BTree.maxKey(1024) + 1), new Uint8Array(0)),
+  ].map(caught)
   assert.deepEqual(errors.map((e) => e.code), ['ER_DUP_ENTRY', 'ER_TOO_LONG_KEY', 'ER_TOO_BIG_ROWSIZE', 'ER_TOO_LONG_KEY'])
   for (const e of errors) {
     assert.equal(e.errno, errnoOf(e.code), e.code)

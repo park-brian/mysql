@@ -6,8 +6,9 @@
 // absent field is not an `undefined` one — because the parser's convention is
 // that an unset flag is *absent*, and a deparser that wrote `NULL` where the
 // original said nothing would otherwise pass.
+import assert from 'node:assert/strict'
 import { isDeepStrictEqual } from 'node:util'
-import { deparse, parseStatement } from '@myjs/parser'
+import { ParseError, deparse, parseStatement } from '@myjs/parser'
 
 /** A copy of an AST with every `at` removed. */
 export function withoutPositions(node) {
@@ -32,4 +33,23 @@ export function roundTrip(ast, options = {}) {
     return { sql, error: String(e?.message ?? e) }
   }
   return isDeepStrictEqual(withoutPositions(ast), withoutPositions(again)) ? null : { sql, error: 'tree differs' }
+}
+
+// --- for the parser's unit tests ----------------------------------------------
+
+/** Parse one statement, asserting it survives the deparser — what the census checks at corpus scale. */
+export function parsed(sql) {
+  const node = parseStatement(sql)
+  assert.equal(roundTrip(node), null, `${sql}\n${deparse(node)}`)
+  return node
+}
+
+/** Assert two spellings parse to one tree. */
+export function same(a, b) {
+  assert.deepEqual(withoutPositions(parsed(a)), withoutPositions(parsed(b)), `${a}\n${b}`)
+}
+
+/** Assert each statement is a syntax error. */
+export function refused(...sqls) {
+  for (const sql of sqls) assert.throws(() => parseStatement(sql), (e) => e instanceof ParseError && e.code === 'ER_PARSE_ERROR', sql)
 }

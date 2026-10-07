@@ -29,10 +29,10 @@ const N_DIRECTION = 50
 const DIRECTION = 52
 const FRAGMENTS = 54
 
-export const DIRECTION_NONE = 0
+const DIRECTION_NONE = 0
 export const DIRECTION_ASC = 1
 export const DIRECTION_DESC = 2
-export const NO_SLOT = 0xffff
+const NO_SLOT = 0xffff
 /** Bytes per slot in the directory. */
 export const SLOT = 2
 
@@ -46,7 +46,7 @@ export const usableSpace = (pageSize: number): number => pageSize - INDEX_HEADER
  * A leaf then always holds two cells and an internal page three children, so a
  * split always has room for both halves (doc 22).
  */
-export const maxCellSize = (pageSize: number): number => Math.floor(usableSpace(pageSize) / 3) - 2
+export const maxCellSize = (pageSize: number): number => Math.floor(usableSpace(pageSize) / 3) - SLOT
 
 export function initIndexPage(page: Uint8Array, pageNo: number, level: number, indexId: number, schemaVersion = 0): void {
   initPage(page, pageNo, PAGE_TYPE.INDEX)
@@ -73,7 +73,6 @@ export const garbage = (p: Uint8Array): number => view(p).getUint16(GARBAGE)
 /** A root's count of fragment pages in segment `i`: 0 leaf, 1 internal, 2 overflow (doc 21). */
 export const fragments = (p: Uint8Array, i: number): number => view(p).getUint16(FRAGMENTS + 2 * i)
 
-export const setLevel = (p: Uint8Array, n: number): void => view(p).setUint16(LEVEL, n)
 export const setSchemaVersion = (p: Uint8Array, n: number): void => view(p).setUint32(SCHEMA_VERSION, n)
 export const setLeftSibling = (p: Uint8Array, n: number): void => view(p).setUint32(LEFT, n)
 export const setRightSibling = (p: Uint8Array, n: number): void => view(p).setUint32(RIGHT, n)
@@ -179,18 +178,18 @@ export function freeSpace(p: Uint8Array): number {
 
 /** Whether a cell would fit, after compacting the heap if need be. */
 export function fits(p: Uint8Array, key: Uint8Array, value: Uint8Array): boolean {
-  return freeSpace(p) + garbage(p) >= cellSize(key, value) + 2
+  return freeSpace(p) + garbage(p) >= cellSize(key, value) + SLOT
 }
 
 /** Bytes in use by cells and slots — what the merge and split policies weigh. */
 export function usedSpace(p: Uint8Array): number {
-  return view(p).getUint16(HEAP_TOP) - INDEX_HEADER_END - garbage(p) + 2 * cellCount(p)
+  return view(p).getUint16(HEAP_TOP) - INDEX_HEADER_END - garbage(p) + SLOT * cellCount(p)
 }
 
 /** Insert a cell at slot `index`. The caller checks `fits` first; this compacts when it must. */
 export function insertCell(p: Uint8Array, index: number, key: Uint8Array, value: Uint8Array): void {
   const size = cellSize(key, value)
-  if (freeSpace(p) < size + 2) defragment(p)
+  if (freeSpace(p) < size + SLOT) defragment(p)
   const v = view(p)
   const n = cellCount(p)
   const at = v.getUint16(HEAP_TOP)
@@ -202,7 +201,7 @@ export function insertCell(p: Uint8Array, index: number, key: Uint8Array, value:
   // Open slot `index`: the slots below it move down by one. Slot i sits at a
   // lower address than slot i-1, so the block [slot n-1, slot index] shifts left.
   const low = slotAt(p, n)
-  p.copyWithin(low, low + 2, slotAt(p, index) + 2)
+  p.copyWithin(low, low + SLOT, slotAt(p, index) + SLOT)
   v.setUint16(slotAt(p, index), at)
   v.setUint16(N_CELLS, n + 1)
 }
@@ -214,7 +213,7 @@ export function removeCell(p: Uint8Array, index: number): void {
   const { key, value } = cell(p, index)
   v.setUint16(GARBAGE, garbage(p) + cellSize(key, value))
   const low = slotAt(p, n - 1)
-  p.copyWithin(low + 2, low, slotAt(p, index))
+  p.copyWithin(low + SLOT, low, slotAt(p, index))
   v.setUint16(N_CELLS, n - 1)
   if (n === 1) {
     v.setUint16(HEAP_TOP, INDEX_HEADER_END)
@@ -223,7 +222,7 @@ export function removeCell(p: Uint8Array, index: number): void {
 }
 
 /** Compact the heap: every live cell moved down, in slot order, and the garbage gone. */
-export function defragment(p: Uint8Array): void {
+function defragment(p: Uint8Array): void {
   const n = cellCount(p)
   const cells: Uint8Array[] = []
   for (let i = 0; i < n; i++) {

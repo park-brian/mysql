@@ -7,11 +7,13 @@
 // behind it unfuzzed — the trap M3.10 named for the parser. So most inputs here
 // are *valid pages, mutated, then re-sealed*: the frame check passes and the
 // structure check behind it has to do the work. The same goes for whole
-// stores: a few inputs in a hundred corrupt one sealed page of a real database
-// and walk it with `verifyStore`.
+// stores: about one input in 250 corrupts one sealed page of a real database
+// and walks it with `verifyStore`.
 //
 // `tools/fuzz-reader.mjs`'s shape: a seed, a per-input time budget, and a
-// crasher written to the corpus so it replays.
+// crasher written to the corpus. Some targets draw their own bytes from the
+// generator rather than the input, so what replays a crasher is its seed and
+// iteration; the saved bytes are for reading.
 import { mkdirSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { MemoryVfs } from '@myjs/vfs'

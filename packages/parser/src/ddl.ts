@@ -15,7 +15,7 @@
 // clause this parser does not know is a parse error rather than something
 // skipped, because skipping is how a `CREATE TABLE` silently loses a
 // `CHARACTER SET` and produces a table that stores different bytes.
-import type { Cursor } from './cursor.ts'
+import { flag, opt, type Cursor } from './cursor.ts'
 import { TOKEN } from './tokens.ts'
 import { NODE, type Expression } from './ast.ts'
 import { parseExpressionFrom } from './expression.ts'
@@ -171,9 +171,9 @@ export function parseCreateTable(c: Cursor, options: DdlOptions): CreateTableNod
     keys,
     checks,
     options: tableOptions,
-    ...(query === undefined ? {} : { query }),
-    ...(duplicates === undefined ? {} : { duplicates }),
-    ...(partition === undefined ? {} : { partition }),
+    ...opt('query', query),
+    ...opt('duplicates', duplicates),
+    ...opt('partition', partition),
     at,
   }
 }
@@ -245,12 +245,12 @@ export function parseCreateView(c: Cursor, options: DdlOptions): CreateViewNode 
     kind: STATEMENT.CREATE_VIEW,
     view,
     ...flag('orReplace', orReplace),
-    ...(algorithm === undefined ? {} : { algorithm }),
-    ...(definer === undefined ? {} : { definer }),
-    ...(security === undefined ? {} : { security }),
-    ...(columns === undefined ? {} : { columns }),
+    ...opt('algorithm', algorithm),
+    ...opt('definer', definer),
+    ...opt('security', security),
+    ...opt('columns', columns),
     query,
-    ...(checkOption === undefined ? {} : { checkOption }),
+    ...opt('checkOption', checkOption),
     at,
   }
 }
@@ -329,15 +329,13 @@ export function parseDrop(c: Cursor): DropNode {
     names,
     ...flag('ifExists', ifExists),
     ...flag('temporary', temporary),
-    ...(behaviour === undefined ? {} : { behaviour }),
+    ...opt('behaviour', behaviour),
     at,
   }
 }
 
 // --- table elements ---------------------------------------------------------
 
-/** `{ key: true }` when set, `{}` when not — so an unset flag is absent, not false. */
-export const flag = (name: string, on: boolean): Record<string, true> => (on ? { [name]: true } : {})
 
 /**
  * One element of a `CREATE TABLE` body: a column, a key, or a check.
@@ -387,7 +385,7 @@ function startsKeyOrCheck(c: Cursor): boolean {
 
 const KEY_INTRODUCERS = ['PRIMARY', 'UNIQUE', 'KEY', 'INDEX', 'FULLTEXT', 'SPATIAL', 'FOREIGN']
 
-export function keyDefinition(c: Cursor, options: DdlOptions, at: number): KeyDefinition {
+function keyDefinition(c: Cursor, options: DdlOptions, at: number): KeyDefinition {
   let type: KeyType
   if (c.takeWord('PRIMARY')) {
     c.expectWord('KEY')
@@ -421,16 +419,16 @@ export function keyDefinition(c: Cursor, options: DdlOptions, at: number): KeyDe
   const rest = indexOptions(c)
   return {
     type,
-    ...(name === undefined ? {} : { name }),
+    ...opt('name', name),
     columns,
     ...(using ?? rest.using ? { using: (using ?? rest.using) as string } : {}),
-    ...(references === undefined ? {} : { references }),
-    ...(rest.comment === undefined ? {} : { comment: rest.comment }),
+    ...opt('references', references),
+    ...opt('comment', rest.comment),
     at,
   }
 }
 
-export function checkConstraint(
+function checkConstraint(
   c: Cursor,
   options: DdlOptions,
   at: number,
@@ -445,7 +443,7 @@ export function checkConstraint(
   let enforced = true
   if (c.takeWords('NOT', 'ENFORCED')) enforced = false
   else c.takeWord('ENFORCED')
-  return { ...(name === undefined ? {} : { name }), expr, enforced, at }
+  return { ...opt('name', name), expr, enforced, at }
 }
 
 function columnDefinition(c: Cursor, options: DdlOptions, at: number): ColumnDefinition {
@@ -578,18 +576,18 @@ function columnDefinition(c: Cursor, options: DdlOptions, at: number): ColumnDef
   return {
     name,
     type,
-    ...(notNull === undefined ? {} : { notNull }),
-    ...(nullable === undefined ? {} : { nullable }),
-    ...(defaultValue === undefined ? {} : { default: defaultValue }),
-    ...(onUpdate === undefined ? {} : { onUpdate }),
-    ...(autoIncrement === undefined ? {} : { autoIncrement }),
-    ...(unique === undefined ? {} : { unique }),
-    ...(primary === undefined ? {} : { primary }),
-    ...(comment === undefined ? {} : { comment }),
-    ...(generated === undefined ? {} : { generated }),
-    ...(invisible === undefined ? {} : { invisible }),
-    ...(srid === undefined ? {} : { srid }),
-    ...(check === undefined ? {} : { check }),
+    ...opt('notNull', notNull),
+    ...opt('nullable', nullable),
+    ...opt('default', defaultValue),
+    ...opt('onUpdate', onUpdate),
+    ...opt('autoIncrement', autoIncrement),
+    ...opt('unique', unique),
+    ...opt('primary', primary),
+    ...opt('comment', comment),
+    ...opt('generated', generated),
+    ...opt('invisible', invisible),
+    ...opt('srid', srid),
+    ...opt('check', check),
     at,
   }
 }
@@ -693,7 +691,7 @@ export function indexColumns(c: Cursor, options: DdlOptions): IndexColumn[] {
       length = Number(t.text)
       c.expectOp(')')
     }
-    out.push({ name, ...(length === undefined ? {} : { length }), ...direction(c) })
+    out.push({ name, ...opt('length', length), ...direction(c) })
   } while (c.takeOp(','))
   c.expectOp(')')
   return out
@@ -735,7 +733,7 @@ export function indexOptions(c: Cursor): { using?: string; comment?: string } {
     }
     break
   }
-  return { ...(using === undefined ? {} : { using }), ...(comment === undefined ? {} : { comment }) }
+  return { ...opt('using', using), ...opt('comment', comment) }
 }
 
 function parseReferences(c: Cursor, options: DdlOptions): Reference {
@@ -765,9 +763,9 @@ function parseReferences(c: Cursor, options: DdlOptions): Reference {
   return {
     table,
     columns,
-    ...(match === undefined ? {} : { match }),
-    ...(onDelete === undefined ? {} : { onDelete }),
-    ...(onUpdate === undefined ? {} : { onUpdate }),
+    ...opt('match', match),
+    ...opt('onDelete', onDelete),
+    ...opt('onUpdate', onUpdate),
   }
 }
 
@@ -788,7 +786,7 @@ function referentialAction(c: Cursor): string {
  * same statement — and a comma between options is optional too, which is why
  * this loop takes one at the top rather than expecting a separator.
  */
-export function parseTableOptions(c: Cursor): Record<string, string> {
+function parseTableOptions(c: Cursor): Record<string, string> {
   const out: Record<string, string> = {}
   for (;;) {
     c.takeOp(',')
@@ -897,7 +895,7 @@ const ULONG_OPTIONS: Readonly<Record<string, number>> = {
   AUTOEXTEND_SIZE: 0xffffffff,
 }
 
-function ulongValue(c: Cursor, max: number): string {
+export function ulongValue(c: Cursor, max: number): string {
   const t = c.peek()
   if (t.kind !== TOKEN.NUMBER || !/^\d+$/.test(t.text) || Number(t.text) > max) c.fail()
   c.skip()
