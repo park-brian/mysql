@@ -1,7 +1,7 @@
 // M3.5 — one statement in, one AST out.
 //
 // The dispatcher is deliberately thin and deliberately **honest about its
-// gaps**. What is not built yet — `SET`, `SHOW`, `ALTER` and the rest —
+// gaps**. What is not built yet — `ALTER`, `CALL`, `FLUSH` and the rest —
 // reaches `unsupportedStatement` rather than a half-parse — which matters more
 // than it sounds, because M3.11's census counts what this function accepts. A
 // dispatcher that returned some vague node for anything it did not understand
@@ -17,8 +17,22 @@ import { TOKEN } from './tokens.ts'
 import { lex, lexBytes, type LexOptions } from './lexer.ts'
 import { NO_SQL_MODE, type SqlMode } from './sql-mode.ts'
 import { parseCreateTable, parseCreateView, parseDefiner, parseDrop } from './ddl.ts'
-import { atParenthesisedQuery, atQueryStart, parseQueryFrom, parseWithFrom } from './query.ts'
-import { parseDelete, parseInsert, parseUpdate } from './dml.ts'
+import { atParenthesisedQuery, atQueryStart } from './query.ts'
+import {
+  parseCommit,
+  parseDeallocate,
+  parseDo,
+  parseExecute,
+  parseExplain,
+  parseExplainable,
+  parsePrepare,
+  parseRollback,
+  parseSavepoint,
+  parseSet,
+  parseShow,
+  parseStartTransaction,
+  parseUse,
+} from './utility.ts'
 import { STATEMENT, type Statement } from './statement-ast.ts'
 
 export interface ParseStatementOptions extends LexOptions {
@@ -71,22 +85,33 @@ function dispatch(c: Cursor, sqlMode: SqlMode): Statement {
     throw unsupportedStatement(`CREATE ${kind}`)
   }
 
-  if (c.atWord('INSERT') || c.atWord('REPLACE')) return parseInsert(c, sqlMode)
-  if (c.atWord('UPDATE')) return parseUpdate(c, sqlMode)
-  if (c.atWord('DELETE')) return parseDelete(c, sqlMode)
-
-  // `WITH` opens a query, an `UPDATE` or a `DELETE`.
-  if (c.atWord('WITH')) {
-    const at = c.peek().start
-    const withClause = parseWithFrom(c, sqlMode)
-    if (c.atWord('UPDATE')) return parseUpdate(c, sqlMode, withClause, at)
-    if (c.atWord('DELETE')) return parseDelete(c, sqlMode, withClause, at)
-    return parseQueryFrom(c, sqlMode, true, withClause, at)
+  // A query, `INSERT`, `REPLACE`, `UPDATE`, `DELETE`, and `WITH` opening any
+  // of the last three or a query — the statements `EXPLAIN` can explain.
+  if (
+    c.atWord('INSERT') ||
+    c.atWord('REPLACE') ||
+    c.atWord('UPDATE') ||
+    c.atWord('DELETE') ||
+    c.atWord('WITH') ||
+    atQueryStart(c) ||
+    atParenthesisedQuery(c)
+  ) {
+    return parseExplainable(c, sqlMode)
   }
 
-  // A query is a statement: `SELECT`, `VALUES ROW`, `TABLE t`, and any of
-  // those in parentheses. The only place `INTO` is allowed.
-  if (atQueryStart(c) || atParenthesisedQuery(c)) return parseQueryFrom(c, sqlMode, true)
+  // M3.6.
+  if (c.atWord('SET')) return parseSet(c, sqlMode)
+  if (c.atWord('USE')) return parseUse(c)
+  if (c.atWord('SHOW')) return parseShow(c, sqlMode)
+  if (c.atWord('EXPLAIN') || c.atWord('DESCRIBE') || c.atWord('DESC')) return parseExplain(c, sqlMode)
+  if (c.atWord('BEGIN') || c.atWords('START', 'TRANSACTION')) return parseStartTransaction(c)
+  if (c.atWord('COMMIT')) return parseCommit(c)
+  if (c.atWord('ROLLBACK')) return parseRollback(c)
+  if (c.atWord('SAVEPOINT') || c.atWords('RELEASE', 'SAVEPOINT')) return parseSavepoint(c)
+  if (c.atWord('PREPARE')) return parsePrepare(c)
+  if (c.atWord('EXECUTE')) return parseExecute(c)
+  if (c.atWord('DEALLOCATE') || c.atWords('DROP', 'PREPARE')) return parseDeallocate(c)
+  if (c.atWord('DO')) return parseDo(c, sqlMode)
 
   if (c.atWord('DROP')) {
     const save = c.at

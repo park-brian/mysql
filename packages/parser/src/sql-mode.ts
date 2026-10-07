@@ -65,22 +65,45 @@ const COMBINATION_MODES: Readonly<Record<string, readonly string[]>> = {
 export const DEFAULT_SQL_MODE = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION'
 
 /**
+ * Every `sql_mode` name a session may hold, in bit order.
+ *
+ * Captured from 8.4.11 rather than transcribed: `SET sql_mode = 1 << i` then
+ * `SELECT @@sql_mode` names bit `i` (`MODE_*` in `sql/system_variables.h`).
+ * Bits 8–17 and 28 are reserved and refused with ER 3899 there; they are
+ * absent here, so they are refused as unknown names (ER 1231), a different
+ * errno for the same refusal. Bit order matters because it is the order
+ * `@@sql_mode` reports in, which is how `ANSI` comes back as
+ * `REAL_AS_FLOAT,…,ONLY_FULL_GROUP_BY,ANSI` — the combination name kept, after
+ * the modes it expands to.
+ */
+const SQL_MODE_NAMES: readonly string[] = [
+  'REAL_AS_FLOAT', 'PIPES_AS_CONCAT', 'ANSI_QUOTES', 'IGNORE_SPACE', 'NOT_USED', 'ONLY_FULL_GROUP_BY',
+  'NO_UNSIGNED_SUBTRACTION', 'NO_DIR_IN_CREATE', 'ANSI', 'NO_AUTO_VALUE_ON_ZERO', 'NO_BACKSLASH_ESCAPES',
+  'STRICT_TRANS_TABLES', 'STRICT_ALL_TABLES', 'NO_ZERO_IN_DATE', 'NO_ZERO_DATE', 'ALLOW_INVALID_DATES',
+  'ERROR_FOR_DIVISION_BY_ZERO', 'TRADITIONAL', 'HIGH_NOT_PRECEDENCE', 'NO_ENGINE_SUBSTITUTION',
+  'PAD_CHAR_TO_FULL_LENGTH', 'TIME_TRUNCATE_FRACTIONAL',
+]
+const KNOWN = new Set(SQL_MODE_NAMES)
+
+/**
  * Parse a `sql_mode` string.
  *
- * Case-insensitive and whitespace-tolerant, as MySQL is. An empty string is
- * legal and means no modes at all — that is `sql_mode=''`, not an error.
+ * Case-insensitive, and an empty string — or an empty item, `'ANSI_QUOTES,,'`
+ * — is legal and means nothing. **Not whitespace-tolerant**, which this
+ * comment used to claim MySQL was: on 8.4.11, `SET sql_mode = ' ansi_quotes '`
+ * is ER_WRONG_VALUE_FOR_VAR, and so is any name that is not a mode.
  *
- * A mode name that is not a valid identifier shape is refused rather than
- * ignored: `sql_mode` reaches this from `SET sql_mode = <user string>`, and
- * silently dropping a mode the user asked for is how a session ends up parsing
- * differently from what its own `@@sql_mode` reports.
+ * A name that is not a mode is refused rather than ignored: `sql_mode`
+ * reaches this from `SET sql_mode = <user string>`, and silently dropping a
+ * mode the user asked for is how a session ends up parsing differently from
+ * what its own `@@sql_mode` reports.
  */
 export function parseSqlMode(text: string): SqlMode {
   const names = new Set<string>()
   for (const raw of text.split(',')) {
-    const name = raw.trim().toUpperCase()
-    if (name === '') continue
-    if (!/^[A-Z0-9_]+$/.test(name)) throw badMode(raw.trim())
+    if (raw === '') continue
+    const name = raw.toUpperCase()
+    if (!KNOWN.has(name)) throw badMode(raw)
     names.add(name)
     for (const expanded of COMBINATION_MODES[name] ?? []) names.add(expanded)
   }
@@ -93,6 +116,11 @@ export function parseSqlMode(text: string): SqlMode {
     realAsFloat: names.has('REAL_AS_FLOAT'),
     names,
   }
+}
+
+/** A mode as `@@sql_mode` reports it: its names, expansions included, in bit order. */
+export function formatSqlMode(mode: SqlMode): string {
+  return SQL_MODE_NAMES.filter((name) => mode.names.has(name)).join(',')
 }
 
 /** No modes at all — `sql_mode=''`. Useful as a test baseline. */

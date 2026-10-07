@@ -233,6 +233,11 @@ export function parseCreateView(c: Cursor, options: DdlOptions): CreateViewNode 
  */
 export function parseDefiner(c: Cursor): Definer {
   c.expectOp('=')
+  return parseUser(c)
+}
+
+/** A user — `'u'@'h'`, `u@h`, `'u'` or `CURRENT_USER[()]` — as `DEFINER` and `SHOW GRANTS FOR` name one. */
+export function parseUser(c: Cursor): Definer {
   if (c.takeWord('CURRENT_USER')) {
     if (c.takeOp('(')) c.expectOp(')')
     return 'CURRENT_USER'

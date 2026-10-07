@@ -56,6 +56,14 @@ import {
   type Statement,
   type TableName,
   type UpdateNode,
+  type CommitNode,
+  type DescribeNode,
+  type ExplainNode,
+  type RollbackNode,
+  type SetItem,
+  type SetTransactionNode,
+  type ShowNode,
+  type StartTransactionNode,
 } from './statement-ast.ts'
 
 export interface DeparseOptions {
@@ -432,7 +440,131 @@ class Deparser {
         return this.update(s)
       case STATEMENT.DELETE:
         return this.delete(s)
+      case STATEMENT.SET:
+        return `SET ${s.items.map((i) => this.setItem(i)).join(', ')}`
+      case STATEMENT.SET_TRANSACTION:
+        return this.setTransaction(s)
+      case STATEMENT.USE:
+        return `USE ${quoteName(s.database)}`
+      case STATEMENT.SHOW:
+        return this.show(s)
+      case STATEMENT.EXPLAIN:
+        return this.explain(s)
+      case STATEMENT.DESCRIBE:
+        return this.describe(s)
+      case STATEMENT.START_TRANSACTION:
+        return this.startTransaction(s)
+      case STATEMENT.COMMIT:
+      case STATEMENT.ROLLBACK:
+        return this.completion(s)
+      case STATEMENT.SAVEPOINT:
+        return `SAVEPOINT ${quoteName(s.name)}`
+      case STATEMENT.RELEASE_SAVEPOINT:
+        return `RELEASE SAVEPOINT ${quoteName(s.name)}`
+      case STATEMENT.PREPARE:
+        return `PREPARE ${quoteName(s.name)} FROM ${s.text === undefined ? this.userVariable(s.variable ?? '') : this.string(s.text)}`
+      case STATEMENT.EXECUTE:
+        return `EXECUTE ${quoteName(s.name)}${s.using === undefined ? '' : ` USING ${s.using.map((v) => this.userVariable(v)).join(', ')}`}`
+      case STATEMENT.DEALLOCATE:
+        return `DEALLOCATE PREPARE ${quoteName(s.name)}`
+      case STATEMENT.DO:
+        return `DO ${s.exprs.map((e) => this.expr(e)).join(', ')}`
     }
+  }
+
+  // --- M3.6: session statements ---------------------------------------------
+
+  userVariable(name: string): string {
+    return this.expr({ kind: NODE.VARIABLE, name: `@${name}`, at: 0 })
+  }
+
+  /**
+   * One `SET` item. A scoped system variable is always written `@@scope.x`,
+   * never `SCOPE x`, because the keyword form is sticky and would re-scope
+   * the bare names after it on the way back in.
+   */
+  setItem(i: SetItem): string {
+    switch (i.type) {
+      case 'user':
+        return `${this.userVariable(i.name)} = ${this.expr(i.value)}`
+      case 'system': {
+        const prefix = `@@${i.scope === undefined ? '' : `${i.scope.toLowerCase()}.`}${i.base === undefined ? '' : `${i.base}.`}`
+        const name = /^[A-Za-z0-9_$]+$/.test(i.name) ? i.name : quoteName(i.name)
+        return `${prefix}${name} = ${this.expr(i.value)}`
+      }
+      case 'name':
+        return `${i.base === undefined ? '' : `${quoteName(i.base)}.`}${quoteName(i.name)} = ${this.expr(i.value)}`
+      case 'names':
+        if (i.charset === undefined) return 'NAMES DEFAULT'
+        return `NAMES ${this.word(i.charset)}${i.collation === undefined ? '' : ` COLLATE ${this.word(i.collation)}`}`
+      case 'charset':
+        return `CHARACTER SET ${i.charset === undefined ? 'DEFAULT' : this.word(i.charset)}`
+    }
+  }
+
+  setTransaction(s: SetTransactionNode): string {
+    const characteristics: string[] = []
+    if (s.isolation !== undefined) characteristics.push(`ISOLATION LEVEL ${s.isolation}`)
+    if (s.access !== undefined) characteristics.push(s.access)
+    return `SET ${s.scope === undefined ? '' : `${s.scope} `}TRANSACTION ${characteristics.join(', ')}`
+  }
+
+  show(s: ShowNode): string {
+    const out = ['SHOW']
+    if (s.count === true) return `SHOW COUNT(*) ${s.what}`
+    if (s.what === 'GRANTS' || s.what === 'CREATE USER') {
+      out.push(s.what)
+      if (s.user !== undefined) out.push(`${s.what === 'GRANTS' ? 'FOR ' : ''}${this.definer(s.user)}`)
+      return out.join(' ')
+    }
+    if (s.what.startsWith('CREATE ')) {
+      out.push(s.what)
+      if (s.ifNotExists === true) out.push('IF NOT EXISTS')
+      if (s.name !== undefined) out.push(s.what === 'CREATE DATABASE' ? quoteName(s.name.name) : this.table(s.name))
+      return out.join(' ')
+    }
+    if (s.extended === true) out.push('EXTENDED')
+    if (s.full === true) out.push('FULL')
+    if (s.scope !== undefined) out.push(s.scope)
+    out.push(s.what)
+    if (s.name !== undefined) out.push(`FROM ${this.table(s.name)}`)
+    if (s.database !== undefined) out.push(`FROM ${quoteName(s.database)}`)
+    if (s.like !== undefined) out.push(`LIKE ${this.string(s.like)}`)
+    if (s.where !== undefined) out.push(`WHERE ${this.expr(s.where)}`)
+    if (s.limit !== undefined) {
+      out.push(`LIMIT ${this.expr(s.limit.count)}${s.limit.offset === undefined ? '' : ` OFFSET ${this.expr(s.limit.offset)}`}`)
+    }
+    return out.join(' ')
+  }
+
+  explain(s: ExplainNode): string {
+    const out = ['EXPLAIN']
+    if (s.analyze === true) out.push('ANALYZE')
+    if (s.format !== undefined) out.push(`FORMAT = ${this.word(s.format)}`)
+    if (s.into !== undefined) out.push(`INTO ${this.userVariable(s.into)}`)
+    if (s.connection !== undefined) out.push(`FOR CONNECTION ${s.connection}`)
+    if (s.schema !== undefined) out.push(`FOR SCHEMA ${quoteName(s.schema)}`)
+    if (s.statement !== undefined) out.push(this.statement(s.statement))
+    return out.join(' ')
+  }
+
+  describe(s: DescribeNode): string {
+    return `DESCRIBE ${this.table(s.table)}${s.column === undefined ? '' : ` ${this.string(s.column)}`}`
+  }
+
+  startTransaction(s: StartTransactionNode): string {
+    const characteristics: string[] = []
+    if (s.consistentSnapshot === true) characteristics.push('WITH CONSISTENT SNAPSHOT')
+    if (s.access !== undefined) characteristics.push(s.access)
+    return `START TRANSACTION${characteristics.length === 0 ? '' : ` ${characteristics.join(', ')}`}`
+  }
+
+  completion(s: CommitNode | RollbackNode): string {
+    const out = [s.kind === STATEMENT.COMMIT ? 'COMMIT' : 'ROLLBACK']
+    if (s.kind === STATEMENT.ROLLBACK && s.savepoint !== undefined) return `ROLLBACK TO SAVEPOINT ${quoteName(s.savepoint)}`
+    if (s.chain !== undefined) out.push(s.chain ? 'AND CHAIN' : 'AND NO CHAIN')
+    if (s.release !== undefined) out.push(s.release ? 'RELEASE' : 'NO RELEASE')
+    return out.join(' ')
   }
 
   // --- DML ------------------------------------------------------------------

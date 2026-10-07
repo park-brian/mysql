@@ -33,40 +33,28 @@ export interface CharsetChange {
 }
 
 /**
- * Resolve `SET NAMES <charset> [COLLATE <collation>]`.
+ * Resolve what `SET NAMES <charset> [COLLATE <collation>]`, `SET CHARACTER SET`
+ * and their `DEFAULT` forms name: the parsed item, as `@myjs/parser` reads it.
  *
  * Doc 29 notes that `HandshakeV10` carries only a single byte for the default
  * collation, "which is why servers advertise a low-numbered default and
  * clients issue `SET NAMES` afterwards". So this is not a nicety: it is how a
  * client reaches `utf8mb4_0900_ai_ci` (255) at all.
  *
- * Returns `null` when the statement is not a charset change, so the caller can
- * fall through to its other `SET` handling.
+ * Until M3.6 this took the statement's text and matched it with a regex,
+ * which saw `SET NAMES` only when it was the whole statement. It is one item
+ * of a list now, `SET @a = 1, NAMES latin1` included, because the parser says so.
  */
-export function parseSetNames(sql: string): CharsetChange | null | 'unknown' {
-  const names = /^\s*SET\s+NAMES\s+([A-Za-z0-9_]+|'[^']*'|"[^"]*")\s*(?:COLLATE\s+([A-Za-z0-9_]+|'[^']*'|"[^"]*"))?\s*;?\s*$/i.exec(sql)
-  const charsetOnly = /^\s*SET\s+(?:SESSION\s+|GLOBAL\s+)?CHARACTER\s+SET\s+([A-Za-z0-9_]+|'[^']*'|"[^"]*")\s*;?\s*$/i.exec(sql)
-  const m = names ?? charsetOnly
-  if (m === null) return null
-
-  const unquote = (s: string) => s.replace(/^['"]|['"]$/g, '')
-  const charset = unquote(m[1] as string).toLowerCase()
-  const collationName = names?.[2] === undefined ? null : unquote(names[2]).toLowerCase()
-
-  // `SET NAMES DEFAULT` restores the server default rather than naming a charset.
-  if (charset === 'default') {
-    const fallback = defaultCollationOf('utf8mb4')
-    return fallback === undefined ? 'unknown' : { collationId: fallback.id, charset: fallback.charset, collation: fallback.name }
-  }
-
-  if (collationName !== null) {
-    const info = collationInfoByName(collationName)
+export function charsetChange(item: { readonly charset?: string; readonly collation?: string }): CharsetChange | 'unknown' {
+  // An absent charset is `SET NAMES DEFAULT`: the server default, not a name.
+  const charset = (item.charset ?? 'utf8mb4').toLowerCase()
+  if (item.collation !== undefined) {
+    const info = collationInfoByName(item.collation.toLowerCase())
     // A COLLATE that does not belong to the named charset is an error in
     // MySQL, not a silent override.
     if (info === undefined || info.charset !== charset) return 'unknown'
     return { collationId: info.id, charset: info.charset, collation: info.name }
   }
-
   const info = defaultCollationOf(charset)
   if (info === undefined) return 'unknown'
   return { collationId: info.id, charset: info.charset, collation: info.name }

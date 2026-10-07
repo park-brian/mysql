@@ -11,9 +11,9 @@
 //
 // `const` objects and unions rather than `enum`s, because `erasableSyntaxOnly`
 // is on. Same shape as `NODE` in `ast.ts`.
-import type { ColumnNode, Expression } from './ast.ts'
+import type { ColumnNode, Expression, KeywordNode } from './ast.ts'
 import type { DataType } from './data-type.ts'
-import type { OrderItem, QueryExpression, TableReference, With } from './query-ast.ts'
+import type { Limit, OrderItem, QueryExpression, TableReference, With } from './query-ast.ts'
 
 export const STATEMENT = {
   CREATE_TABLE: 'createTable',
@@ -24,6 +24,21 @@ export const STATEMENT = {
   INSERT: 'insert',
   UPDATE: 'update',
   DELETE: 'delete',
+  SET: 'set',
+  SET_TRANSACTION: 'setTransaction',
+  USE: 'use',
+  SHOW: 'show',
+  EXPLAIN: 'explain',
+  DESCRIBE: 'describe',
+  START_TRANSACTION: 'startTransaction',
+  COMMIT: 'commit',
+  ROLLBACK: 'rollback',
+  SAVEPOINT: 'savepoint',
+  RELEASE_SAVEPOINT: 'releaseSavepoint',
+  PREPARE: 'prepare',
+  EXECUTE: 'execute',
+  DEALLOCATE: 'deallocate',
+  DO: 'do',
 } as const
 
 export type StatementKind = (typeof STATEMENT)[keyof typeof STATEMENT]
@@ -271,6 +286,230 @@ export interface DeleteNode {
   readonly at: number
 }
 
+// --- M3.6: the statements that drive a session rather than its data ---------
+
+/**
+ * Where a system variable is set. `LOCAL` is `SESSION`, and is recorded as it.
+ * `PERSIST` sets the global value and writes it to `mysqld-auto.cnf`;
+ * `PERSIST_ONLY` does the writing without the setting.
+ */
+export type VariableScope = 'GLOBAL' | 'SESSION' | 'PERSIST' | 'PERSIST_ONLY'
+
+/**
+ * One assignment in a `SET` list.
+ *
+ * Three targets, because MySQL has three and they behave differently:
+ *
+ *   - `user` — `@a`, a user variable. Its value is any expression; `DEFAULT`
+ *     and `ON` are syntax errors there.
+ *   - `system` — `@@x`, `@@global.x`, `GLOBAL x`, and a bare name written
+ *     after a scope keyword. Its value may also be one of the keywords
+ *     `DEFAULT`, `ON`, `ALL`, `BINARY`, `ROW` and `SYSTEM`, recorded as a
+ *     keyword node.
+ *   - `name` — a bare name with no scope in force. At top level it is a
+ *     system variable at the default scope, but in a stored program it is a
+ *     local variable first, so the parser does not decide which.
+ *
+ * **The scope keyword is sticky and the `@@` form is not**, which a real
+ * 8.4.11 settles: after `SET GLOBAL a = 1, b = 2` both are global, while after
+ * `SET GLOBAL a = 1, @@b = 2` and `SET @@global.a = 1, b = 2`, `b` is not.
+ * Stickiness depends only on the text, so the parser resolves it, and every
+ * `system` item records the scope it actually has. Deparsing always writes
+ * the `@@scope.x` form, which is never sticky, so the output cannot
+ * re-scope a later item.
+ *
+ * `base` is the first part of a two-part name: a key cache in
+ * `default.key_buffer_size`, or a component in `validate_password.length`.
+ */
+export type SetItem =
+  | { readonly type: 'user'; readonly name: string; readonly value: Expression }
+  | {
+      readonly type: 'system'
+      readonly scope?: VariableScope
+      readonly base?: string
+      readonly name: string
+      readonly value: Expression | KeywordNode
+    }
+  | { readonly type: 'name'; readonly base?: string; readonly name: string; readonly value: Expression | KeywordNode }
+  /** `SET NAMES cs [COLLATE c]`. `charset` is absent for `SET NAMES DEFAULT`. */
+  | { readonly type: 'names'; readonly charset?: string; readonly collation?: string }
+  /** `SET CHARACTER SET cs` and `SET CHARSET cs`. Absent for `DEFAULT`. */
+  | { readonly type: 'charset'; readonly charset?: string }
+
+export interface SetNode {
+  readonly kind: typeof STATEMENT.SET
+  readonly items: readonly SetItem[]
+  readonly at: number
+}
+
+export type IsolationLevel = 'REPEATABLE READ' | 'READ COMMITTED' | 'READ UNCOMMITTED' | 'SERIALIZABLE'
+export type AccessMode = 'READ ONLY' | 'READ WRITE'
+
+/**
+ * `SET [scope] TRANSACTION …`. It stands alone: a real 8.4 refuses it inside
+ * an assignment list, either before or after the other items. Each
+ * characteristic may be given at most once, so the order they were written in
+ * carries no meaning and is not kept.
+ */
+export interface SetTransactionNode {
+  readonly kind: typeof STATEMENT.SET_TRANSACTION
+  /** Absent means the next transaction only, which is neither `SESSION` nor `GLOBAL`. */
+  readonly scope?: VariableScope
+  readonly isolation?: IsolationLevel
+  readonly access?: AccessMode
+  readonly at: number
+}
+
+export interface UseNode {
+  readonly kind: typeof STATEMENT.USE
+  readonly database: string
+  readonly at: number
+}
+
+/**
+ * `SHOW …`. One node for every form, because they are one statement shape:
+ * something to list, then optionally where it lives and how to filter it.
+ *
+ * `what` is canonical, so synonyms that mean the same thing produce the same
+ * tree: `FIELDS` is `COLUMNS`, `INDEXES` and `KEYS` are `INDEX`, `SCHEMAS` is
+ * `DATABASES`, `CHARSET` is `CHARACTER SET`, and `STORAGE ENGINES` is
+ * `ENGINES`. `IN` is `FROM`. `SHOW COLUMNS FROM t FROM db` and
+ * `SHOW COLUMNS FROM db.t` are the same tree too. When both are written, the
+ * `FROM db` wins, which a real 8.4 shows: `SHOW COLUMNS FROM mysql.t1 FROM test`
+ * lists `test.t1`.
+ */
+export interface ShowNode {
+  readonly kind: typeof STATEMENT.SHOW
+  readonly what: string
+  readonly full?: boolean
+  readonly extended?: boolean
+  /** `GLOBAL` or `SESSION` for `VARIABLES` and `STATUS`. `LOCAL` is `SESSION`. */
+  readonly scope?: 'GLOBAL' | 'SESSION'
+  /** `SHOW COUNT(*) WARNINGS`. */
+  readonly count?: boolean
+  /** The object named: `SHOW CREATE TABLE t`, `SHOW COLUMNS FROM t`. */
+  readonly name?: TableName
+  /** `SHOW TABLES FROM db` and the other forms that take a database. */
+  readonly database?: string
+  readonly ifNotExists?: boolean
+  /** `SHOW GRANTS FOR u` and `SHOW CREATE USER u`. */
+  readonly user?: Definer
+  readonly like?: string
+  readonly where?: Expression
+  readonly limit?: Limit
+  readonly at: number
+}
+
+/** What an `EXPLAIN` may explain. */
+export type ExplainableStatement = QueryExpression | InsertNode | UpdateNode | DeleteNode
+
+/**
+ * `EXPLAIN`, `DESCRIBE` and `DESC` in front of a statement, all one thing.
+ * Exactly one of `statement` and `connection` is set.
+ */
+export interface ExplainNode {
+  readonly kind: typeof STATEMENT.EXPLAIN
+  readonly analyze?: boolean
+  /** `FORMAT = TREE`, upper-cased, since `tree`, `'tree'` and `TREE` name one format. */
+  readonly format?: string
+  /** `INTO @v` — the user variable that receives the plan. */
+  readonly into?: string
+  /** `FOR SCHEMA db` / `FOR DATABASE db` (8.4): the default database to explain in. */
+  readonly schema?: string
+  readonly statement?: ExplainableStatement
+  /** `FOR CONNECTION n`: explain what another connection is running. */
+  readonly connection?: bigint
+  readonly at: number
+}
+
+/**
+ * `DESCRIBE t [col]`, which is `SHOW COLUMNS FROM t` by another name. The
+ * column may be written as a name or as a string, and either way it is a
+ * `LIKE` pattern, so both spellings are one tree.
+ */
+export interface DescribeNode {
+  readonly kind: typeof STATEMENT.DESCRIBE
+  readonly table: TableName
+  readonly column?: string
+  readonly at: number
+}
+
+/**
+ * `START TRANSACTION …` and `BEGIN [WORK]`, which is the same statement with
+ * no characteristics. Repeating a characteristic is legal and changes
+ * nothing, while `READ ONLY` together with `READ WRITE` is a syntax error.
+ */
+export interface StartTransactionNode {
+  readonly kind: typeof STATEMENT.START_TRANSACTION
+  readonly consistentSnapshot?: boolean
+  readonly access?: AccessMode
+  readonly at: number
+}
+
+/**
+ * `COMMIT` and `ROLLBACK`'s shared tail.
+ *
+ * `chain` and `release` are tri-state. Absent means `completion_type`
+ * decides, while `AND NO CHAIN` and `NO RELEASE` override it explicitly, so
+ * `false` is not the same as absent. `AND CHAIN RELEASE` together is a syntax
+ * error.
+ */
+export interface CommitNode {
+  readonly kind: typeof STATEMENT.COMMIT
+  readonly chain?: boolean
+  readonly release?: boolean
+  readonly at: number
+}
+
+/** `ROLLBACK`, or `ROLLBACK TO [SAVEPOINT] sp`, which takes no `CHAIN` or `RELEASE`. */
+export interface RollbackNode {
+  readonly kind: typeof STATEMENT.ROLLBACK
+  readonly chain?: boolean
+  readonly release?: boolean
+  readonly savepoint?: string
+  readonly at: number
+}
+
+export interface SavepointNode {
+  readonly kind: typeof STATEMENT.SAVEPOINT | typeof STATEMENT.RELEASE_SAVEPOINT
+  readonly name: string
+  readonly at: number
+}
+
+/**
+ * `PREPARE s FROM 'text'` or `PREPARE s FROM @v`. Exactly one of `text` and
+ * `variable` is set. The text is a single string literal: a real 8.4 refuses
+ * an introducer, adjacent literals and any other expression here.
+ */
+export interface PrepareNode {
+  readonly kind: typeof STATEMENT.PREPARE
+  readonly name: string
+  readonly text?: string
+  readonly variable?: string
+  readonly at: number
+}
+
+/** `EXECUTE s [USING @a, @b]`. Only user variables may be passed. */
+export interface ExecuteNode {
+  readonly kind: typeof STATEMENT.EXECUTE
+  readonly name: string
+  readonly using?: readonly string[]
+  readonly at: number
+}
+
+/** `DEALLOCATE PREPARE s` and `DROP PREPARE s`. */
+export interface DeallocateNode {
+  readonly kind: typeof STATEMENT.DEALLOCATE
+  readonly name: string
+  readonly at: number
+}
+
+export interface DoNode {
+  readonly kind: typeof STATEMENT.DO
+  readonly exprs: readonly Expression[]
+  readonly at: number
+}
+
 export type Statement =
   | CreateTableNode
   | CreateViewNode
@@ -279,3 +518,17 @@ export type Statement =
   | InsertNode
   | UpdateNode
   | DeleteNode
+  | SetNode
+  | SetTransactionNode
+  | UseNode
+  | ShowNode
+  | ExplainNode
+  | DescribeNode
+  | StartTransactionNode
+  | CommitNode
+  | RollbackNode
+  | SavepointNode
+  | PrepareNode
+  | ExecuteNode
+  | DeallocateNode
+  | DoNode

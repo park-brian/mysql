@@ -269,8 +269,9 @@ test('M3.5: what is not implemented says so, and is not a syntax error', () => {
   // The distinction the census turns on. `SHOW TABLES` is valid SQL; reporting
   // it as malformed would be a lie, and counting it as a parse failure would
   // make M3's exit criterion measure what is unbuilt rather than what is.
-  // (This list held `SELECT 1` and `CREATE VIEW` until M3.3 built them.)
-  for (const sql of ['SHOW TABLES', 'SET a = 1', 'ALTER TABLE t ADD a INT', 'CREATE INDEX i ON t (a)']) {
+  // (This list held `SELECT 1` and `CREATE VIEW` until M3.3 built them, and
+  // `SHOW TABLES` and `SET a = 1` until M3.6 did.)
+  for (const sql of ['FLUSH TABLES', 'CALL p()', 'ALTER TABLE t ADD a INT', 'CREATE INDEX i ON t (a)']) {
     const e = refusal(sql)
     assert.equal(e.code, 'ER_NOT_SUPPORTED_YET', sql)
     assert.equal(e.errno, 1235, sql)

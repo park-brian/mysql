@@ -11,7 +11,7 @@
 // It depends on `@myjs/bytes`, `@myjs/charsets` and `@myjs/types` — never on
 // `@myjs/protocol`, which sits above it.
 export { ParseError, parseError, unknownCharset, badMode, tooDeep, unsupportedStatement } from './errors.ts'
-export { DEFAULT_SQL_MODE, NO_SQL_MODE, parseSqlMode } from './sql-mode.ts'
+export { DEFAULT_SQL_MODE, NO_SQL_MODE, formatSqlMode, parseSqlMode } from './sql-mode.ts'
 export type { SqlMode } from './sql-mode.ts'
 export { TOKEN, OPERATORS } from './tokens.ts'
 export type { Token, TokenKind } from './tokens.ts'
@@ -95,5 +95,24 @@ export type {
   Statement,
   StatementKind,
   TableName,
+  AccessMode,
+  CommitNode,
+  DeallocateNode,
+  DescribeNode,
+  DoNode,
+  ExecuteNode,
+  ExplainableStatement,
+  ExplainNode,
+  IsolationLevel,
+  PrepareNode,
+  RollbackNode,
+  SavepointNode,
+  SetItem,
+  SetNode,
+  SetTransactionNode,
+  ShowNode,
+  StartTransactionNode,
+  UseNode,
+  VariableScope,
 } from './statement-ast.ts'
 export type { LexOptions } from './lexer.ts'
