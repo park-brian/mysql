@@ -2,7 +2,7 @@
 // long column moves to.
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { MemoryVfs } from '@myjs/vfs'
+import { MemoryVfs, type VfsFile } from '@myjs/vfs'
 import { declaredKeyWidth, encodeInt } from '@myjs/types'
 import { ClusteredIndex, EngineError, SecondaryIndex, Store, decodeRecord, externalRefs, verifyStore, type FieldBytes, type KeyColumn, type RecordLayout } from '@myjs/engine'
 
@@ -11,13 +11,19 @@ const utf8 = (s: string) => new TextEncoder().encode(s)
 const int = (n: number) => encodeInt(BigInt(n), 4, false)
 const UTF8MB4_BIN = 46
 
+/** A database's two files: data and log. */
+async function files(pageSize: number): Promise<[VfsFile, VfsFile]> {
+  const vfs = new MemoryVfs({ pageSize })
+  return [await vfs.open('data', { create: true }), await vfs.open('log', { create: true })]
+}
+
 // id INT PRIMARY KEY, name VARCHAR(10) COLLATE utf8mb4_bin NULL, body BLOB NULL
 const layout: RecordLayout = [{ nullable: false, fixed: 4 }, { nullable: true }, { nullable: true }]
 const primary: KeyColumn[] = [{ field: 0, part: { kind: 'bytes', nullable: false } }]
 const byName: KeyColumn[] = [{ field: 1, part: { kind: 'text', nullable: true, collationId: UTF8MB4_BIN, width: declaredKeyWidth(UTF8MB4_BIN, 10) } }]
 
 async function table(frames = 64) {
-  const store = Store.create(await new MemoryVfs({ pageSize: PAGE }).open('d', { create: true }), { frames })
+  const store = Store.create(...(await files(PAGE)), { frames })
   const clustered = ClusteredIndex.create(store, layout, primary)
   return { store, clustered }
 }
@@ -94,8 +100,8 @@ test('M4.6: a 1 MB value round-trips, and its pages are freed on delete', async 
   verify(store, clustered)
 
   // Through a reopen, too.
-  store.flush()
-  const reopened = Store.open(store.file, { frames: 64 })
+  store.checkpoint()
+  const reopened = Store.open(store.file, store.logFile, { frames: 64 })
   const again = new ClusteredIndex(reopened.openTree(clustered.tree.indexId), layout, primary)
   const back = again.get(key) as FieldBytes[]
   assert.equal(back[2]?.length, 1 << 20)

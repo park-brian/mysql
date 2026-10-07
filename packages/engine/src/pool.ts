@@ -10,28 +10,26 @@
 //     measured on a logical clock rather than a wall clock. A scan touches each
 //     page several times in quick succession and then never again, so it churns
 //     through the old list and cannot evict the working set.
-//   - **Dirty pages in the order they were first dirtied.** A checkpoint must
-//     flush oldest-first to advance monotonically, and the order that matters
-//     is the LSN of the *first* change since the page was last written — not
-//     the page's current LSN, which moves forward every time it is touched
-//     again. Because LSNs only rise, first-dirtied order is insertion order,
-//     and a `Map` keeps it for free.
+//   - **Each dirty page carries its recLsn**: the start of the log a recovery
+//     would replay to rebuild it, which is where it was first changed since it
+//     was last written — not its current LSN, which moves forward every time
+//     it is touched again. A checkpoint can be no later than the smallest.
 //   - **Pins.** A page in use cannot be evicted; asking for a frame when every
 //     one is pinned is a typed error rather than a silent overwrite.
 //
-// `beforeWrite` is where Tier 4's WAL-before-data rule will attach: a page may
-// not reach storage before the log record describing its last change is
-// durable. Commit backpressure needs commits, which arrive with Tier 4 too.
+// The pool knows nothing of the log beyond one hook: `beforeWrite` is the WAL
+// rule (doc 26), called with a page's LSN before the page is written, so the
+// log through that LSN is durable first. What a change *is* — which pages a
+// mini-transaction touched, and their images — is the journal's (M4.15).
 import type { VfsFile } from '@myjs/vfs'
 import { misuse, poolExhausted } from './errors.ts'
 import { pageLsn, sealPage, setPageLsn, verifyPage } from './page.ts'
-import type { LsnClock } from './lsn.ts'
 
 export interface PoolOptions {
   readonly frames: number
   /** Fetches after its first access within which a re-access does not promote. Default: a quarter of the frames. */
   readonly promoteAfter?: number
-  /** Called with a page's LSN before it is written out. */
+  /** Called with a page's LSN before it is written out: the WAL rule. */
   readonly beforeWrite?: (lsn: number) => void
   /**
    * A structural check for a page just read from storage, after its frame has
@@ -66,7 +64,10 @@ export class BufferPool {
   readonly #next: Int32Array
   readonly #firstAccess: Float64Array
   readonly #frameOf = new Map<number, number>()
-  /** Dirty frames → the LSN of their first change, in first-dirtied order. */
+  /**
+   * Dirty frames → their recLsn: where the log must be replayed from to
+   * rebuild them. In first-dirtied order, though nothing relies on it.
+   */
   readonly #dirty = new Map<number, number>()
   readonly #free: number[] = []
   readonly #head = [NONE, NONE, NONE]
@@ -74,9 +75,10 @@ export class BufferPool {
   readonly #size = [0, 0, 0]
   readonly #oldTarget: number
   readonly #promoteAfter: number
-  readonly #beforeWrite: ((lsn: number) => void) | undefined
   readonly #validate: ((page: Uint8Array, pageNo: number) => void) | undefined
   #clock = 0
+  /** The WAL rule. Set once the log is open for appending; during recovery there is none. */
+  beforeWrite: ((lsn: number) => void) | undefined
 
   constructor(file: VfsFile, options: PoolOptions) {
     if (options.frames < 4) throw misuse('a buffer pool needs at least 4 frames')
@@ -94,7 +96,7 @@ export class BufferPool {
     // InnoDB's default: the old sublist is 3/8 of the pool.
     this.#oldTarget = Math.max(1, Math.floor((options.frames * 3) / 8))
     this.#promoteAfter = options.promoteAfter ?? Math.max(1, options.frames >> 2)
-    this.#beforeWrite = options.beforeWrite
+    this.beforeWrite = options.beforeWrite
     this.#validate = options.validate
   }
 
@@ -145,18 +147,6 @@ export class BufferPool {
     }
   }
 
-  /** Pin a page — read, or for `fresh` a zeroed frame — change it, stamp the clock's next LSN, unpin it. */
-  write<T>(pageNo: number, lsn: LsnClock, change: (page: Uint8Array) => T, fresh = false): T {
-    const page = fresh ? this.create(pageNo) : this.fetch(pageNo)
-    try {
-      const out = change(page)
-      this.markDirty(page, lsn.next())
-      return out
-    } finally {
-      this.release(page)
-    }
-  }
-
   /** Unpin a page from `fetch` or `create`. */
   release(page: Uint8Array): void {
     const frame = this.#frameAt(page)
@@ -164,16 +154,62 @@ export class BufferPool {
     this.#pins[frame] = (this.#pins[frame] as number) - 1
   }
 
-  /** Record a change to a pinned page at `lsn`, stamping it into the page's frame. */
-  markDirty(page: Uint8Array, lsn: number): void {
+  /**
+   * Record a change to a pinned page: stamp `lsn` at both ends of it and, if
+   * it was clean, note `recLsn` — the start of the log a recovery would need.
+   */
+  markDirty(page: Uint8Array, lsn: number, recLsn = lsn): void {
     const frame = this.#frameAt(page)
     setPageLsn(page, lsn)
-    if (!this.#dirty.has(frame)) this.#dirty.set(frame, lsn)
+    if (!this.#dirty.has(frame)) this.#dirty.set(frame, recLsn)
+  }
+
+  isDirty(page: Uint8Array): boolean {
+    return this.#dirty.has(this.#frameAt(page))
+  }
+
+  /** Forget that a page was changed: an aborted change has been undone in its frame. */
+  markClean(page: Uint8Array): void {
+    this.#dirty.delete(this.#frameAt(page))
+  }
+
+  isResident(pageNo: number): boolean {
+    return this.#frameOf.has(pageNo)
+  }
+
+  /** Drop an unpinned page's frame without writing it. */
+  discard(pageNo: number): void {
+    const frame = this.#frameOf.get(pageNo)
+    if (frame === undefined) return
+    if (this.#pins[frame] !== 0) throw misuse(`page ${pageNo} discarded while pinned`)
+    this.#forget(frame)
   }
 
   /** Write every dirty page, oldest first change first. Not a durability barrier: see `VfsFile.flush`. */
   flush(): void {
-    for (const frame of this.#dirty.keys()) this.#write(frame)
+    this.flushBefore(Infinity)
+  }
+
+  /** Write every dirty page whose recLsn is before `lsn`: what a checkpoint at `lsn` needs on disk. */
+  flushBefore(lsn: number): void {
+    for (const [frame, recLsn] of this.#dirty) if (recLsn < lsn) this.#write(frame)
+  }
+
+  /** The smallest recLsn of any dirty page: a checkpoint may not be later than this. */
+  oldestDirty(): number | undefined {
+    let min: number | undefined
+    for (const recLsn of this.#dirty.values()) if (min === undefined || recLsn < min) min = recLsn
+    return min
+  }
+
+  /** A recLsn that about half the dirty pages are older than. */
+  medianDirty(): number | undefined {
+    const all = [...this.#dirty.values()].sort((a, b) => a - b)
+    return all[all.length >> 1]
+  }
+
+  get dirtyCount(): number {
+    return this.#dirty.size
   }
 
   /** Dirty page numbers in the order a checkpoint would write them. */
@@ -243,7 +279,7 @@ export class BufferPool {
 
   #write(frame: number): void {
     const page = this.#view(frame)
-    this.#beforeWrite?.(pageLsn(page))
+    this.beforeWrite?.(pageLsn(page))
     sealPage(page)
     this.file.writePage(this.#pageOf[frame] as number, page)
     this.stats.writes++

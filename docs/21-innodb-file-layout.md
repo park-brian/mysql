@@ -241,28 +241,43 @@ granularity. It matches InnoDB (so imported pages map one-to-one), it keeps
 B+tree fanout high, and it bounds tree depth: at 16 KiB with a 4-byte key, one
 internal page holds ~1000 children, so three levels cover a billion rows.
 
-## Our file (M4.2, M4.12 — D-41)
+## Our file (M4.2, M4.12, M4.17 — D-41, D-45)
 
-`@myjs/engine` keeps **one data file per database**, plus the WAL file Tier 4
-adds. That is SQLite's shape. It needs the fewest OPFS access handles (doc 40),
-and a file per table is what interchange needs (D-07), not what storage needs.
-Until Tier 4 the file is **persistent but not crash-safe**: it can be closed
-and reopened, and a crash part-way through a write can leave it inconsistent.
+`@myjs/engine` keeps **one data file per database**, plus the log file (doc 26
+§Our log). That is SQLite's shape. It needs the fewest OPFS access handles (doc
+40), and a file per table is what interchange needs (D-07), not what storage
+needs. Since Tier 4 the pair is **crash-safe**: no page reaches the data file
+before the log record of its last change is durable, and a crash at any write
+recovers to the state after some whole mini-transaction.
 
-**Page 0 is the superblock**, after the frame (doc 22):
+**Pages 0 and 1 are the superblock**, in two copies written alternately (M4.17):
+generation *g* goes to page *g* mod 2, and open takes the newer copy that
+verifies. A crash while one copy is being written leaves the other, and the log
+it points into is still there because the log's tail moves only once the new
+copy is durable. After the frame (doc 22):
 
 | Offset | Size | Field |
 |---|---|---|
 | 24 | 8 | magic, `myjs-db\0` |
-| 32 | 2 | format version — refused if it is not one this build reads (D-26) |
+| 32 | 2 | format version, **2** — refused if it is not one this build reads (D-26) |
 | 34 | 2 | reserved |
 | 36 | 4 | page size |
-| 40 | 8 | the highest LSN issued, so the counter survives a reopen |
-| 48 | 4 | page count — the file's allocated length |
-| 52 | 4 | next index id |
-| 56 | 4 | root page of the directory tree |
+| 40 | 4 | generation |
+| 44 | 4 | the log's salt (doc 26) |
+| 48 | 4 | the log's length in 4 KiB blocks |
+| 52 | 8 | checkpoint LSN — where recovery starts |
+| 60 | 4 | the log block holding the checkpoint LSN |
+| 64 | 4 | page count — the file's allocated length, as of the checkpoint |
+| 68 | 4 | next index id, likewise |
+| 72 | 4 | root page of the directory tree, fixed for the file's life |
 
-**Page 1 is reserved** for the second superblock M4.17 alternates with.
+The page LSN of a superblock is its checkpoint LSN. Page count and next index
+id change between checkpoints, so every log group carries them too, and the
+last one recovery reads wins.
+
+**Format 1 is refused, not migrated.** It had one superblock, no log and no
+checkpoint; it was never crash-safe and was never released, so there is no data
+in it to carry forward. Opening one says so.
 
 **The directory is itself a B+tree**, index id 0, mapping a big-endian `u32`
 index id to the `u32` root page of that index. A root page **never moves**:

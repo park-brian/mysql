@@ -62,6 +62,24 @@ jobs:
       - name: Engine fuzz (10^6 inputs)
         run: npm run fuzz:engine
 
+  crash:
+    name: crash suite
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22.18'
+          cache: npm
+      - run: npm ci
+      # M4.25, M4's exit criterion: 10,000 crash points, each recovered and
+      # checked — consistent, and no acknowledged commit lost beyond what its
+      # flushLogAtTrxCommit setting allows (doc 41). `npm test` runs 300.
+      - name: Crash suite (10^4 crash points)
+        run: npm run test:crash
+        env:
+          CRASH_POINTS: '10000'
+
   generated:
     name: generated tables are reproducible
     runs-on: ubuntu-latest

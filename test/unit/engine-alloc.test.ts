@@ -2,16 +2,44 @@
 // segments that keep their pages together, and a view rebuilt from the maps.
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { MemoryVfs } from '@myjs/vfs'
-import { Allocator, BufferPool, EXTENT, EngineError, FRAGMENT_LIMIT, LsnClock, extentsPerMap } from '@myjs/engine'
+import { MemoryVfs, type VfsFile } from '@myjs/vfs'
+import { Allocator, BufferPool, EXTENT, EngineError, FRAGMENT_LIMIT, Journal, Log, extentsPerMap } from '@myjs/engine'
 
 const PAGE = 1024
 
+/** A journal over `pool` with nothing outside pages to keep: the allocator alone. */
+function journalFor(pool: BufferPool, logFile: VfsFile): Journal {
+  const journal = new Journal(pool, { meta: () => ({ pageCount: 0, nextIndexId: 0 }), save: () => undefined, restore: () => {}, beforeMtr: () => {} })
+  journal.log = Log.restart(logFile, 1024, 1, 0)
+  return journal
+}
+
+/**
+ * Every allocator change must sit in a mini-transaction (M4.15); here each
+ * call is one, so the tests below read as calls on the allocator itself.
+ */
+function eachAtomic<T extends object>(journal: Journal, target: T): T {
+  return new Proxy(target, {
+    get(t, k) {
+      const v = Reflect.get(t, k) as unknown
+      return typeof v === 'function' ? (...args: unknown[]) => journal.atomically(() => (v as (...a: unknown[]) => unknown).apply(t, args)) : v
+    },
+  })
+}
+
 async function setup() {
-  const file = await new MemoryVfs({ pageSize: PAGE }).open('data', { create: true })
+  const vfs = new MemoryVfs({ pageSize: PAGE })
+  const file = await vfs.open('data', { create: true })
+  const logFile = await vfs.open('log', { create: true })
   const pool = new BufferPool(file, { frames: 16 })
-  const lsn = new LsnClock(0)
-  return { file, pool, lsn, alloc: Allocator.format(pool, lsn) }
+  const journal = journalFor(pool, logFile)
+  const reopen = (): Allocator => {
+    const fresh = new BufferPool(file, { frames: 16 })
+    const j = journalFor(fresh, logFile)
+    return eachAtomic(j, Allocator.open(fresh, j, alloc.pageCount))
+  }
+  const alloc = eachAtomic(journal, journal.atomically(() => Allocator.format(pool, journal)))
+  return { file, pool, alloc, reopen }
 }
 
 /** Allocate `n` pages for a segment, keeping its fragment count as a tree would. */
@@ -74,14 +102,14 @@ test('M4.12: crossing into a new group places its map page where it can be compu
 })
 
 test('M4.12: the in-memory view is rebuilt from the maps on open', async () => {
-  const { pool, lsn, alloc } = await setup()
+  const { pool, alloc, reopen } = await setup()
   const counts = new Map<number, number>()
   const pages = take(alloc, 4, 200, counts)
   for (const p of pages.filter((_, i) => i % 3 === 0)) {
     if (alloc.free(p).fragment) counts.set(4, (counts.get(4) ?? 0) - 1)
   }
   pool.flush()
-  const reopened = Allocator.open(new BufferPool(pool.file, { frames: 16 }), lsn, alloc.pageCount)
+  const reopened = reopen()
   assert.deepEqual([...reopened.usedPages()].sort((a, b) => a - b), [...alloc.usedPages()].sort((a, b) => a - b))
   // …and allocates the same next page the original would have.
   assert.equal(reopened.allocate(4, counts.get(4) ?? 0).page, alloc.allocate(4, counts.get(4) ?? 0).page)
@@ -89,11 +117,11 @@ test('M4.12: the in-memory view is rebuilt from the maps on open', async () => {
 })
 
 test('review: a map that frees a group\'s system pages is refused on open, not trusted', async () => {
-  const { pool, lsn, alloc } = await setup()
+  const { pool, reopen } = await setup()
   const page = pool.fetch(2)
   new DataView(page.buffer, page.byteOffset).setUint32(24 + 8, 0)
-  pool.markDirty(page, lsn.next())
+  pool.markDirty(page, 0)
   pool.release(page)
   pool.flush()
-  assert.throws(() => Allocator.open(new BufferPool(pool.file, { frames: 16 }), lsn, alloc.pageCount), (e: EngineError) => e.code === 'ENGINE_CORRUPT_PAGE')
+  assert.throws(reopen, (e: EngineError) => e.code === 'ENGINE_CORRUPT_PAGE')
 })

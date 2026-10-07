@@ -116,13 +116,21 @@ export class ClusteredIndex {
     return keyOf(row, this.primary)
   }
 
-  /** Insert a row; ER_DUP_ENTRY if its primary key is taken. Returns the key. */
+  /**
+   * Insert a row; ER_DUP_ENTRY if its primary key is taken. Returns the key.
+   * One mini-transaction, or part of the caller's, logging the row's image
+   * (D-25) — so a value too big for any page leaves no overflow page behind.
+   */
   insert(row: Row): Uint8Array {
     const key = this.keyOf(row)
-    if (this.tree.get(key) !== undefined) throw duplicateKey('PRIMARY')
-    const pages = this.tree.overflowPages()
-    this.tree.put(key, encodeRecord(this.layout, row, { maxSize: this.#maxRecord, storeExternal: (b) => writeChain(pages, b) }))
-    return key
+    const journal = this.tree.space.journal
+    return journal.atomically(() => {
+      if (this.tree.get(key) !== undefined) throw duplicateKey('PRIMARY')
+      const pages = this.tree.overflowPages()
+      this.tree.put(key, encodeRecord(this.layout, row, { maxSize: this.#maxRecord, storeExternal: (b) => writeChain(pages, b) }))
+      journal.row(this.tree.indexId, null, row)
+      return key
+    })
   }
 
   /** The row under a primary key, off-page fields read back in. One descent. */
@@ -132,13 +140,17 @@ export class ClusteredIndex {
     return decodeRecord(this.layout, record).map((v) => (v === null || v instanceof Uint8Array ? v : readChain(this.tree.space.pool, v.ref)))
   }
 
-  /** Remove a row, and free its off-page fields. */
+  /** Remove a row, and free its off-page fields. Logs the row as it was. */
   delete(key: Uint8Array): boolean {
-    const record = this.tree.get(key)
-    if (record === undefined) return false
-    const pages = this.tree.overflowPages()
-    for (const ref of externalRefs(this.layout, record)) freeChain(pages, ref)
-    return this.tree.delete(key)
+    const journal = this.tree.space.journal
+    return journal.atomically(() => {
+      const record = this.tree.get(key)
+      if (record === undefined) return false
+      journal.row(this.tree.indexId, this.get(key) as FieldBytes[], null)
+      const pages = this.tree.overflowPages()
+      for (const ref of externalRefs(this.layout, record)) freeChain(pages, ref)
+      return this.tree.delete(key)
+    })
   }
 }
 

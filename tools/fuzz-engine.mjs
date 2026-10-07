@@ -8,7 +8,9 @@
 // are *valid pages, mutated, then re-sealed*: the frame check passes and the
 // structure check behind it has to do the work. The same goes for whole
 // stores: about one input in 250 corrupts one sealed page of a real database
-// and walks it with `verifyStore`.
+// and walks it with `verifyStore`. The log is the same kind of input (doc 43
+// §6's "mutated real logs"): a real log with bytes changed, sometimes re-sealed
+// so that the record decoder and recovery, not the checksum, have to answer.
 //
 // `tools/fuzz-reader.mjs`'s shape: a seed, a per-input time budget, and a
 // crasher written to the corpus. Some targets draw their own bytes from the
@@ -19,12 +21,19 @@ import { join } from 'node:path'
 import { MemoryVfs } from '@myjs/vfs'
 import {
   EngineError,
+  LOG_BLOCK,
+  LOG_HEADER,
   PAGE_TYPE,
   Store,
+  decodeGroup,
   decodeRecord,
+  encodeGroup,
+  groupLength,
   indexPage,
   initPage,
+  readBlock,
   readSuperblock,
+  sealBlock,
   sealPage,
   verifyPage,
   verifyStore,
@@ -68,21 +77,50 @@ function mutate(page) {
   return page
 }
 
-/** A small real database, for the store-level target. */
+/**
+ * A small real database, for the store-level targets: its data pages and its
+ * log, with work after the last checkpoint so that opening it replays groups.
+ */
 const fixture = await (async () => {
-  const file = await new MemoryVfs({ pageSize: PAGE }).open('d', { create: true })
-  const store = Store.create(file, { frames: 16 })
+  const vfs = new MemoryVfs({ pageSize: PAGE })
+  const file = await vfs.open('d', { create: true })
+  const logFile = await vfs.open('l', { create: true })
+  const store = Store.create(file, logFile, { frames: 16, logBlocks: 32 })
   const tree = store.createTree()
-  for (let i = 0; i < 300; i++) tree.put(Uint8Array.of(i >> 8, i & 0xff), new Uint8Array(i % 20))
-  store.flush()
+  for (let i = 0; i < 150; i++) tree.put(Uint8Array.of(i >> 8, i & 0xff), new Uint8Array(i % 20))
+  store.checkpoint()
+  for (let i = 150; i < 300; i++) tree.put(Uint8Array.of(i >> 8, i & 0xff), new Uint8Array(i % 20))
+  store.sync()
   const pages = []
-  for (let p = 0; p < store.alloc.pageCount; p++) {
+  for (let p = 0; p < file.size() / PAGE; p++) {
     const page = new Uint8Array(PAGE)
     file.readPage(p, page)
     pages.push(page)
   }
-  return pages
+  const log = new Uint8Array(logFile.size())
+  logFile.readBytes(0, log)
+  return { pages, log }
 })()
+
+/** The fixture as files, with `change` applied to copies of its bytes first. */
+async function fixtureFiles(change) {
+  const vfs = new MemoryVfs({ pageSize: PAGE })
+  const file = await vfs.open('d', { create: true })
+  const logFile = await vfs.open('l', { create: true })
+  const pages = fixture.pages.map((p) => p.slice())
+  const log = fixture.log.slice()
+  change(pages, log)
+  pages.forEach((p, i) => file.writePage(i, p))
+  logFile.writeBytes(0, log)
+  return [file, logFile]
+}
+
+/** Open what is left and walk all of it. */
+function openAndWalk(files) {
+  const store = Store.open(...files, { frames: 16 })
+  verifyStore(store)
+  for (const { indexId } of store.trees()) for (const _ of store.openTree(indexId).entries());
+}
 
 const TARGETS = [
   // A raw page, mostly failing the checksum — the first line of defence.
@@ -97,7 +135,7 @@ const TARGETS = [
   // A mutated superblock.
   () => {
     const page = new Uint8Array(PAGE)
-    writeSuperblock(page, { pageSize: PAGE, lsn: randInt(1e9), pageCount: 64, nextIndexId: 2, directoryRoot: 3 })
+    writeSuperblock(page, { pageSize: PAGE, generation: randInt(9), salt: randInt(1e9), logBlocks: 64, checkpointLsn: randInt(1e9), checkpointBlock: randInt(64), pageCount: 64, nextIndexId: 2, directoryRoot: 3 })
     readSuperblock(mutate(page), PAGE)
   },
   // A record of a random layout over arbitrary bytes.
@@ -105,22 +143,42 @@ const TARGETS = [
     const layout = Array.from({ length: 1 + randInt(8) }, () => (rnd() < 0.5 ? { nullable: rnd() < 0.5 } : { nullable: rnd() < 0.5, fixed: 1 + randInt(8) }))
     decodeRecord(layout, input)
   },
-  // A whole store with one page corrupted and re-sealed, walked end to end.
+  // A whole store with one page corrupted and re-sealed, recovered and walked end to end.
   async () => {
     if (rnd() > 0.02) return
-    const file = await new MemoryVfs({ pageSize: PAGE }).open('d', { create: true })
-    const victim = randInt(fixture.length)
-    fixture.forEach((p, i) => {
-      const copy = p.slice()
-      if (i === victim) {
-        mutate(copy)
-        sealPage(copy)
-      }
-      file.writePage(i, copy)
-    })
-    const store = Store.open(file, { frames: 16 })
-    verifyStore(store)
-    for (const { indexId } of store.trees()) for (const _ of store.openTree(indexId).entries());
+    const victim = randInt(fixture.pages.length)
+    openAndWalk(
+      await fixtureFiles((pages) => {
+        mutate(pages[victim])
+        sealPage(pages[victim])
+      }),
+    )
+  },
+  // A real log with bytes changed in one block — re-sealed half the time, so
+  // the scan and the record decoder have to answer rather than the checksum.
+  async () => {
+    if (rnd() > 0.02) return
+    openAndWalk(
+      await fixtureFiles((_, log) => {
+        const block = randInt(log.length / LOG_BLOCK)
+        const at = block * LOG_BLOCK
+        const view = log.subarray(at, at + LOG_BLOCK)
+        const header = readBlock(view)
+        for (let i = 1 + randInt(4); i > 0; i--) view[(rnd() < 0.3 ? 4 + randInt(LOG_HEADER - 4) : LOG_HEADER + randInt(200))] = randInt(256)
+        if (header !== undefined && rnd() < 0.5) sealBlock(view, header)
+      }),
+    )
+  },
+  // A group's bytes, mutated: decode answers with records or ENGINE_CORRUPT_LOG.
+  (input) => {
+    const group = encodeGroup([
+      { type: 'page', pageNo: randInt(1000), image: rnd() < 0.5, runs: [{ at: 24, bytes: input.subarray(0, 1 + randInt(20)) }] },
+      { type: 'meta', pageCount: 64, nextIndexId: 2 },
+      { type: 'row', indexId: 1, before: null, after: [input.subarray(0, randInt(10)), null] },
+    ])
+    for (let i = 1 + randInt(3); i > 0; i--) group[randInt(group.length)] = randInt(256)
+    const n = groupLength(group)
+    if (n !== undefined && n <= group.length) decodeGroup(group.subarray(0, n))
   },
 ]
 

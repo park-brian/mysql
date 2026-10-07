@@ -9,7 +9,7 @@
 import { corrupt } from './errors.ts'
 import { FRAME_HEADER, FRAME_TRAILER, PAGE_TYPE, initPage, pageType } from './page.ts'
 import type { BufferPool } from './pool.ts'
-import type { LsnClock } from './lsn.ts'
+import type { Journal } from './journal.ts'
 
 /** The inline size of an off-page reference. */
 export const REF_SIZE = 8
@@ -21,7 +21,7 @@ const DATA = FRAME_HEADER + 8
 /** Where a tree's overflow pages come from and go back to. */
 export interface OverflowPages {
   readonly pool: BufferPool
-  readonly lsn: LsnClock
+  readonly journal: Journal
   allocate(): number
   free(page: number): void
 }
@@ -54,9 +54,8 @@ export function writeChain(pages: OverflowPages, bytes: Uint8Array): Uint8Array 
   for (let i = 0; i < count; i++) numbers.push(pages.allocate())
   for (let i = 0; i < count; i++) {
     const pageNo = numbers[i] as number
-    pages.pool.write(
+    pages.journal.write(
       pageNo,
-      pages.lsn,
       (page) => {
         initPage(page, pageNo, PAGE_TYPE.OVERFLOW)
         const chunk = bytes.subarray(i * cap, (i + 1) * cap)

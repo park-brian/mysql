@@ -22,22 +22,24 @@
 //     underfull page is legal, and a delete that could split its parent would
 //     be a second, rarer code path for no real gain.
 //
-// Pins are held only while a page is being read or changed, never across a
-// recursive call or a `yield`, so the pool needs a handful of frames however
-// deep the tree is.
+// A read pins a page only while it reads it, never across a recursive call or
+// a `yield`. A change goes through the journal, which holds every page it
+// changes until the mini-transaction ends (M4.15) — so a put or a delete pins
+// a few pages per level, and a pool needs a few dozen frames for a deep tree.
+// Every public change is one mini-transaction, or joins the caller's.
 import { corrupt, misuse, keyTooLong, rowTooBig } from './errors.ts'
 import { PAGE_TYPE, pageType } from './page.ts'
 import type { Allocator } from './alloc.ts'
-import type { LsnClock } from './lsn.ts'
+import type { Journal } from './journal.ts'
 import type { BufferPool } from './pool.ts'
 import * as ip from './index-page.ts'
 import type { OverflowPages } from './overflow.ts'
 
-/** The pages, the allocator and the clock a tree draws on. */
+/** The pages, the allocator and the journal every change to them goes through. */
 export interface PageSpace {
   readonly pool: BufferPool
   readonly alloc: Allocator
-  readonly lsn: LsnClock
+  readonly journal: Journal
 }
 
 export interface TreeOptions {
@@ -95,17 +97,18 @@ export class BTree {
 
   /** A new, empty tree: one leaf, which is its root for life. */
   static create(space: PageSpace, indexId: number, options: TreeOptions = {}): BTree {
-    const { page: root } = space.alloc.allocate(segmentId(indexId, SEGMENT.LEAF), 0)
-    space.pool.write(
-      root,
-      space.lsn,
-      (page) => {
-        ip.initIndexPage(page, root, 0, indexId, options.schemaVersion ?? 0)
-        ip.setFragments(page, SEGMENT.LEAF, 1)
-      },
-      true,
-    )
-    return new BTree(space, indexId, root, options)
+    return space.journal.atomically(() => {
+      const { page: root } = space.alloc.allocate(segmentId(indexId, SEGMENT.LEAF), 0)
+      space.journal.write(
+        root,
+        (page) => {
+          ip.initIndexPage(page, root, 0, indexId, options.schemaVersion ?? 0)
+          ip.setFragments(page, SEGMENT.LEAF, 1)
+        },
+        true,
+      )
+      return new BTree(space, indexId, root, options)
+    })
   }
 
   /** The largest key a page of this size can hold: an internal cell is the key and a child. */
@@ -122,7 +125,7 @@ export class BTree {
   overflowPages(): OverflowPages {
     return {
       pool: this.space.pool,
-      lsn: this.space.lsn,
+      journal: this.space.journal,
       allocate: () => this.#allocate(SEGMENT.OVERFLOW),
       free: (page) => this.#free(page, SEGMENT.OVERFLOW),
     }
@@ -142,22 +145,26 @@ export class BTree {
     })
   }
 
-  /** Insert or replace. */
+  /** Insert or replace. One mini-transaction, or part of the caller's. */
   put(key: Uint8Array, value: Uint8Array): void {
     const max = ip.maxCellSize(this.space.pool.pageSize)
     BTree.checkKeyLength(key.length, this.space.pool.pageSize)
     if (ip.cellSize(key, value) > max) throw rowTooBig(max)
-    this.#upgradeLeaf(this.#leafFor(key))
-    const split = this.#insert(this.root, key, value)
-    if (split !== null) throw misuse('the root split without being raised')
+    this.space.journal.atomically(() => {
+      this.#upgradeLeaf(this.#leafFor(key))
+      const split = this.#insert(this.root, key, value)
+      if (split !== null) throw misuse('the root split without being raised')
+    })
   }
 
-  /** Remove a key. `false` when it was not there. */
+  /** Remove a key. `false` when it was not there. One mini-transaction, or part of the caller's. */
   delete(key: Uint8Array): boolean {
-    this.#upgradeLeaf(this.#leafFor(key))
-    const { removed } = this.#remove(this.root, key)
-    this.#collapseRoot()
-    return removed
+    return this.space.journal.atomically(() => {
+      this.#upgradeLeaf(this.#leafFor(key))
+      const { removed } = this.#remove(this.root, key)
+      this.#collapseRoot()
+      return removed
+    })
   }
 
   /** Entries in key order, or reverse key order, within a range. Do not change the tree while iterating. */
@@ -196,18 +203,25 @@ export class BTree {
    */
   #fetch(pageNo: number, level?: number): Uint8Array {
     const page = this.space.pool.fetch(pageNo)
-    if (pageType(page) !== PAGE_TYPE.INDEX || ip.indexIdOf(page) !== this.indexId || (level !== undefined && ip.level(page) !== level)) {
+    try {
+      this.#check(page, pageNo, level)
+    } catch (e) {
       this.space.pool.release(page)
+      throw e
+    }
+    return page
+  }
+
+  #check(page: Uint8Array, pageNo: number, level?: number): void {
+    if (pageType(page) !== PAGE_TYPE.INDEX || ip.indexIdOf(page) !== this.indexId || (level !== undefined && ip.level(page) !== level)) {
       throw corrupt(pageNo, `not a level-${level ?? '?'} page of index ${this.indexId}`)
     }
     // A leaf written at a newer version than this tree was opened with would be
     // read as the wrong layout and, on its next write, stamped with the older
     // version: its records upgraded twice later. Refused instead.
     if (ip.level(page) === 0 && ip.schemaVersion(page) > this.#version) {
-      this.space.pool.release(page)
       throw misuse(`leaf ${pageNo} is at schema version ${ip.schemaVersion(page)}; the tree was opened at ${this.#version}`)
     }
-    return page
   }
 
   #read<T>(pageNo: number, use: (page: Uint8Array) => T, level?: number): T {
@@ -219,15 +233,12 @@ export class BTree {
     }
   }
 
+  /** Change a page of this tree, checked before it is touched. */
   #write<T>(pageNo: number, use: (page: Uint8Array) => T): T {
-    const page = this.#fetch(pageNo)
-    try {
-      const out = use(page)
-      this.space.pool.markDirty(page, this.space.lsn.next())
-      return out
-    } finally {
-      this.space.pool.release(page)
-    }
+    return this.space.journal.write(pageNo, (page) => {
+      this.#check(page, pageNo)
+      return use(page)
+    })
   }
 
   /** The child an internal page routes `key` to: the last cell whose key is ≤ it. */
@@ -424,7 +435,7 @@ export class BTree {
   }
 
   #create(pageNo: number, level: number, cells: readonly Cell[], left: number, right: number): void {
-    this.space.pool.write(pageNo, this.space.lsn, (page) => this.#fill(page, pageNo, level, cells, left, right), true)
+    this.space.journal.write(pageNo, (page) => this.#fill(page, pageNo, level, cells, left, right), true)
   }
 
   // --- delete -----------------------------------------------------------------

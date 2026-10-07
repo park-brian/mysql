@@ -49,3 +49,13 @@ export function rowTooBig(max: number): EngineError {
 export function misuse(what: string): EngineError {
   return new EngineError('ENGINE_MISUSE', what)
 }
+
+/** A log block that verified but whose contents do not decode: tampering or a bug, never a torn write. */
+export function corruptLog(what: string): EngineError {
+  return new EngineError('ENGINE_CORRUPT_LOG', what)
+}
+
+/** A mini-transaction whose records need more log than a checkpoint can free. */
+export function logFull(need: number, free: number): EngineError {
+  return new EngineError('ENGINE_LOG_FULL', `a mini-transaction needs ${need} bytes of log and ${free} are free`)
+}

@@ -190,6 +190,9 @@ including uncommitted changes, and undo removes them.
 
 ## What our WAL should look like
 
+*The proposal, kept as it was written. What was built, and where it departs
+from this, is §Our log below.*
+
 ```
 ┌────────────────────────────────────────────────────┐
 │ WAL segment file, 4 KiB blocks                     │
@@ -220,3 +223,183 @@ Decisions, and why:
   this *now*: retrofitting logical information onto a physical log is painful.
 - **`MLOG_MULTI_REC_END` equivalent.** Mini-transaction grouping is not
   optional; without it a page split can be half-applied.
+
+## Our log (M4.13–M4.19 — D-45 to D-49)
+
+The specification M4.13 required before M4.14 began. The code is
+`packages/engine/src/{redo,wal,journal,recovery,store}.ts`.
+
+### Mini-transactions, and who writes the log
+
+Every page change happens inside `journal.atomically(fn)`. Nested calls join
+the outer one. The B+tree, the allocator and the overflow chains say where an
+atomic change begins and ends, and that is all they say: **no code above the
+buffer pool writes a log record.** The journal snapshots each page the first
+time a mini-transaction touches it, and at commit logs, per page, the runs of
+bytes that differ from the snapshot. The redo is schema-blind, as the tree is
+(D-42).
+
+- **Held pages.** A page the mini-transaction found in use stays pinned until
+  it ends, so the pool cannot write a change whose record does not exist yet.
+  Its snapshot is its undo: an error anywhere inside the mini-transaction puts
+  every snapshot back and restores the allocator's in-memory view and the next
+  index id, with no I/O. An error caught inside a nested call does not
+  un-abort it; a later write is refused.
+- **Fresh pages.** A page allocated in this mini-transaction that was free
+  before it is not held. If the mini-transaction is lost the page is free again,
+  so writing it early harms nothing. That is what lets a 1 MiB value be one
+  mini-transaction in a 32-frame pool. Two kinds of new page are held after all,
+  because they were *not* free before: one still resident (it may be dirty from
+  a committed change), and one this mini-transaction freed. A fresh page is
+  stamped with the LSN its mini-transaction starts at, so the WAL rule makes
+  every earlier mini-transaction durable before the page is written; one of
+  them may have freed it.
+- **Images (D-46).** A page's first change since it was last written is
+  logged whole: the same diff, taken against zeros. Every dirty page's recLsn is
+  therefore the start of a group holding its image. So a page torn on its way
+  to disk, which by definition was dirty, can be rebuilt from the log. This is
+  PostgreSQL's `full_page_writes` keyed to the page's own write-back rather than
+  to the checkpoint. With an incremental checkpointer the two differ: a page
+  written out between checkpoints and changed again must be imaged again.
+
+### Records
+
+A **group** is one mini-transaction: a length-encoded byte count, then records,
+then `END`. The length is how recovery tells a group cut short by the end of the
+log, which is discarded, from a whole group that does not decode, which is
+`ENGINE_CORRUPT_LOG`. Integers are MySQL's length-encoded integers (doc 11).
+
+| Code | Record | Body |
+|---|---|---|
+| 1 | `PAGE` | page number; flags (bit 0: an image — apply to a zeroed page); run count; per run, the gap since the last run's end and the run's bytes |
+| 2 | `META` | page count, next index id — in every group; the last one recovery reads wins |
+| 3 | `ROW` | index id; a before image and an after image, each absent or a field count and the fields |
+| 15 | `END` | — |
+| 16+ | | reserved for Tier 5's undo and transaction records |
+
+A run never covers a page's checksum (bytes 0–3) or its LSNs (8–15 and the last
+8). Recovery stamps the LSN, and the pool seals the checksum on the way out, so
+a record's length never depends on the LSN it is stamped with. Runs separated
+by fewer than 8 equal bytes are merged.
+
+**`ROW` is D-25's logical half.** Every field is inline, in MySQL's text-row
+encoding: a length-encoded string per field, `0xFB` for NULL. Off-page values
+are read back in, because a change stream cannot follow a reference to pages a
+later change may have freed. Redo ignores `ROW`. `ClusteredIndex.insert` logs
+an after image and `delete` a before image. An update — both images in one
+record — waits for the executor to have one.
+
+### Blocks and the ring
+
+The log file is a ring of `logBlocks` 4 KiB blocks (default 4,096, i.e. 16 MiB)
+with no header. A block is a 20-byte header and 4,076 bytes of payload, as the
+proposal sketched, with the `flags` field replaced by a salt:
+
+| Offset | Size | Field |
+|---|---|---|
+| 0 | 4 | CRC32C of bytes 4–4095 |
+| 4 | 4 | salt |
+| 8 | 8 | LSN of the block's first payload byte |
+| 16 | 2 | payload bytes used |
+| 18 | 2 | offset of the first group that starts here, or `0xFFFF` |
+
+The **LSN counts payload bytes**, so it is the position in the stream of groups.
+A page's LSN is the end LSN of the last group that changed it.
+
+- **A block, once written, is never written again.** Making a commit durable
+  seals the block it ends in. The padding sits outside `used` and costs no LSN,
+  and the next group starts a new block. InnoDB rewrites its last block in place
+  because a 512-byte sector write is atomic; a 4 KiB write on OPFS is not, and a
+  torn rewrite would take an acknowledged commit with it.
+- **A block must continue the one before it**: the same salt, and an LSN equal
+  to the previous block's LSN plus its `used`. The first block that fails its
+  checksum, carries another salt or does not continue is the end of the log. A
+  stale block from an earlier lap, or one written after a lost one, can
+  therefore never be read as the next. The scan's first block must hold the
+  checkpoint LSN.
+- **The salt changes at every open.** Open recovers, writes every page, then
+  writes a superblock that records a new salt and a log restarting at block 0
+  (SQLite's WAL reset). No new block is written until that superblock is
+  durable, so a crash before then recovers from the old log again. The salt
+  counts up rather than being random, so "a stale block never chains" is a
+  certainty, not a probability, and the crash suite is deterministic.
+- **The first-group offset is a cross-check**, not the entry point. Recovery
+  starts at the exact checkpoint LSN, and the first group to start in each later
+  block must start where that block says. This catches a group length the
+  checksum cannot, because a block can be written whole and still be wrong.
+- A mini-transaction must fit in the ring with room to seal its last block, or
+  it is `ENGINE_LOG_FULL` and aborts with nothing written.
+
+### Checkpoints (M4.17) and backpressure (M4.3)
+
+`checkpoint(target)`:
+
+1. Flush the log to its end.
+2. Write every dirty page whose recLsn is before `target`, then flush the data
+   file.
+3. Write the *other* superblock slot, with the checkpoint at the smaller of the
+   oldest remaining recLsn and the log's end, and flush.
+4. Only then let the log reuse the space before the checkpoint.
+
+Writing the log in full first is what lets the superblock's page count and next
+index id be current rather than as of the checkpoint LSN.
+
+Before each top-level mini-transaction, a checkpoint runs to the log's
+midpoint if the ring is over half full, or to the median dirty page if more
+than three quarters of the pool is dirty. In a synchronous engine, blocking a
+commit on a backlog means doing the work first. `close` and `open` run a full
+checkpoint.
+
+### Durability (M4.19)
+
+`Store.commit()` is the durability point. It follows
+`innodb_flush_log_at_trx_commit` as doc 41 tabulates it: `1` seals, writes and
+flushes; `2` seals and writes; `0` does nothing. `Store.sync()` writes and
+flushes, and is the once-a-second tick that settings 0 and 2 promise. The host
+calls it, because the engine owns no timer (ground rule 3). The WAL rule is the
+pool's `beforeWrite`: before a page stamped *L* is written, the log through *L*
+is durable.
+
+### Recovery (M4.18)
+
+1. Flush the log file. A process crash can leave log writes in the OS cache,
+   and nothing on disk may come to depend on them until they are durable.
+2. Read both superblocks and take the newer one that verifies.
+3. Scan from the checkpoint, group by group. For each `PAGE` record, read the
+   page:
+   - if its LSN is at or past the group's end, skip the record, which is what
+     makes recovery idempotent;
+   - if it does not verify (torn), skip the page's diffs until its next image.
+     A torn page was being written, so it was dirty, so the log holds its
+     image;
+   - otherwise apply the record and stamp the group's end LSN.
+4. Discard the incomplete trailing group.
+5. Open the allocator. Any page still unreadable must be free, or the store is
+   `ENGINE_CORRUPT_PAGE`.
+6. Run the full checkpoint, with the new salt, described above.
+
+A crash during recovery recovers again.
+
+**Rolling back transactions that were active at the crash** waits for undo
+(M4.20). Until then, an incomplete group is the only unfinished work, and it is
+never applied.
+
+### What checks this
+
+- `engine-wal`, `engine-redo`, `engine-journal` and `engine-recovery` cover each
+  claim above.
+- The crash suite (M4.25) runs a workload over `FaultInjectingVfs` at 10,000
+  crash points under process and power-loss crashes and all three settings.
+- Each rule was removed on purpose to check that something notices:
+  - imaging on clean→dirty: five tests fail;
+  - the WAL rule: the suite fails, via a direct "no page ahead of the log"
+    check;
+  - writing log blocks only once: a power-loss crash loses an acknowledged
+    commit;
+  - log continuity: the stale-lap and gap tests fail;
+  - holding pages freed in the same mini-transaction: a targeted test fails;
+  - stamping fresh pages with the start LSN: a targeted test fails.
+
+  The last two are not reached by the suite's workload, which never frees and
+  re-allocates a long value within one mini-transaction while the pool is
+  under pressure. They are recorded here, so that nobody concludes otherwise.
