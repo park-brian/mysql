@@ -1759,7 +1759,7 @@ function matchAgainst(e: MatchNode, ctx: CompileContext): Compiled {
   const fold = foldFor(def, index.columns)
   const boolean = e.modifier === 'IN BOOLEAN MODE'
   const positions = index.columns.map((c) => def.columns.findIndex((x) => x.name.toLowerCase() === c.toLowerCase()))
-  const wordsIn = (values: readonly Value[]) => values.flatMap((v) => (v === null ? [] : wordsOf(toText(v), fold)))
+  const wordsIn = (values: readonly Value[], raw?: Map<string, string>) => values.flatMap((v) => (v === null ? [] : wordsOf(toText(v), fold, raw)))
   let preparedFor: Env | undefined
   let corpus: Corpus | undefined
   let query: { readonly natural: string[] } | { readonly terms: Term[] } = { natural: [] }
@@ -1770,8 +1770,9 @@ function matchAgainst(e: MatchNode, ctx: CompileContext): Compiled {
         query = boolean ? { terms: parseBoolean(text, fold) } : { natural: wordsOf(text, fold) }
         const table = ctx.table?.(def.schema, def.name)
         const documents: string[][] = []
-        if (table !== undefined) for (const [, fields] of table.scan(undefined, env.trx)) documents.push(wordsIn(positions.map((p) => decodeField(fields[p] ?? null, (def.columns[p] as ColumnDef).type))))
-        corpus = new Corpus(documents)
+        const raw = new Map<string, string>()
+        if (table !== undefined) for (const [, fields] of table.scan(undefined, env.trx)) documents.push(wordsIn(positions.map((p) => decodeField(fields[p] ?? null, (def.columns[p] as ColumnDef).type)), raw))
+        corpus = new Corpus(documents, raw, fold)
         preparedFor = env
       }
       const words = wordsIn(slots.map((i) => row[i] ?? null))

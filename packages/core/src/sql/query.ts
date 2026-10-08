@@ -362,6 +362,11 @@ function planSelect(run: Run, q: QueryExpression, node: SelectNode): SelectPlan 
 
   const where = node.where === undefined ? undefined : compile(node.where, compileContext(run, lookup, 'where clause'))
   const keys = (q.orderBy ?? []).map((o) => orderKey(run, o, items, lookup))
+  // A MATCH in the WHERE of one table is read through its full-text index,
+  // which yields rows by relevance, highest first: with no ORDER BY of its
+  // own that is the order they come in (8.4.11, M5.26).
+  const match = keys.length === 0 && refs.length === 1 && refs[0]?.kind === REF.TABLE ? matchConjunct(node.where) : undefined
+  if (match !== undefined) keys.push({ expr: compile(match, compileContext(run, lookup, 'where clause')), desc: true })
   const locking = (q.locking ?? []).length > 0
 
   return {
@@ -718,6 +723,14 @@ function derivedTable(run: Run, query: QueryExpression, alias: string, names: re
       return all
     },
   }
+}
+
+/** The first MATCH a WHERE requires: itself, or a conjunct of a top-level AND. */
+function matchConjunct(e: Expression | undefined): Expression | undefined {
+  if (e === undefined) return undefined
+  if (e.kind === NODE.MATCH) return e
+  if (e.kind === NODE.BINARY && (e.op.toUpperCase() === 'AND' || e.op === '&&')) return matchConjunct(e.left) ?? matchConjunct(e.right)
+  return undefined
 }
 
 function* fieldRows(rows: Iterable<Value[]>): Generator<Value[]> {

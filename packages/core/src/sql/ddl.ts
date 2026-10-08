@@ -327,7 +327,7 @@ export function createTableSpec(node: CreateTableNode, schemaCollation: number):
     if (k.type === KEY.FULLTEXT) {
       // Kept in the definition and not built: MATCH reads the table (M5.26).
       const names = k.columns.map((p) => known(p.name ?? ''))
-      checkFulltext(engine, columns, names)
+      checkFulltext(engine, columns, names, k.columns.some((p) => p.desc === true))
       fulltext.push({ name: nameFor(k.name ?? k.constraint, names[0] as string), columns: names })
       continue
     }

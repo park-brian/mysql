@@ -32,7 +32,7 @@
 // until OPTIMIZE TABLE, where this reads the rows as they are; and a prefix
 // term's tf is the largest of its words' in the row.
 import { CHARSET_BINARY, FIELD_TYPE } from '@myjs/bytes'
-import { requireCollationInfo } from '@myjs/charsets'
+import { collation, encodeCollation, requireCollationInfo } from '@myjs/charsets'
 import type { ColumnDef, TableDef } from '@myjs/engine'
 import { SqlError, messages, sqlError } from '@myjs/protocol'
 import { toText, type Value } from '@myjs/types'
@@ -51,14 +51,20 @@ export function fulltextOf(def: { readonly options?: Readonly<Record<string, unk
 const TEXT_TYPES: ReadonlySet<number> = new Set([FIELD_TYPE.STRING, FIELD_TYPE.VAR_STRING, FIELD_TYPE.VARCHAR, FIELD_TYPE.TINY_BLOB, FIELD_TYPE.BLOB, FIELD_TYPE.MEDIUM_BLOB, FIELD_TYPE.LONG_BLOB])
 
 /** A FULLTEXT key's columns, checked: text columns of an engine that has full-text search. */
-export function checkFulltext(engine: string, columns: readonly ColumnDef[], names: readonly string[]): void {
+export function checkFulltext(engine: string, columns: readonly ColumnDef[], names: readonly string[], descending = false): void {
+  if (descending) throw sqlError('ER_WRONG_USAGE', 'Incorrect usage of spatial/fulltext/hash index and explicit index order')
   if (engine === 'memory') throw sqlError('ER_TABLE_CANT_HANDLE_FT', "The used table type doesn't support FULLTEXT indexes")
+  let charset: string | undefined
   for (const name of names) {
     const c = columns.find((x) => x.name.toLowerCase() === name.toLowerCase())
     if (c === undefined) throw sqlError('ER_KEY_COLUMN_DOES_NOT_EXITS', `Key column '${name}' doesn't exist in table`)
-    if (!TEXT_TYPES.has(c.type.type) || c.type.collationId === undefined || c.type.collationId === CHARSET_BINARY) {
+    if (c.type.type === FIELD_TYPE.JSON) throw sqlError('ER_JSON_USED_AS_KEY', `JSON column '${c.name}' supports indexing only via generated columns on a specified JSON path.`)
+    // Every column of one index is text in one character set (8.4.11: 1283 on the first that is not).
+    const own = c.type.collationId === undefined || c.type.collationId === CHARSET_BINARY ? undefined : requireCollationInfo(c.type.collationId).charset
+    if (!TEXT_TYPES.has(c.type.type) || own === undefined || (charset !== undefined && own !== charset)) {
       throw sqlError('ER_BAD_FT_COLUMN', `Column '${c.name}' cannot be part of FULLTEXT index`)
     }
+    charset = own
   }
 }
 
@@ -66,15 +72,14 @@ export function checkFulltext(engine: string, columns: readonly ColumnDef[], nam
 
 const WORD = /[\p{L}\p{N}_]+/gu
 
-/** A word as the index compares it: folded as the collation folds case, and accents where it ignores them. */
+/** A word as the index compares it: its collation's sort key, so 'Müller' and 'muller' meet where the collation says they do. */
 function folder(collationId: number): (w: string) => string {
-  const name = requireCollationInfo(collationId).name
-  const ci = name.endsWith('_ci')
-  // A pre-0900 `_ci` collation is accent-insensitive too; a 0900 one says so.
-  const ai = name.includes('_ai_') || (ci && !name.includes('_as_') && !name.includes('0900'))
+  const c = collation(collationId)
   return (w) => {
-    const bare = ai ? w.normalize('NFD').replace(/\p{M}/gu, '') : w
-    return ci ? bare.toLowerCase() : bare
+    const key = c.sortKey(encodeCollation(w, collationId))
+    let out = ''
+    for (const b of key) out += String.fromCharCode(b)
+    return out
   }
 }
 
@@ -85,9 +90,14 @@ function indexed(word: string): boolean {
 }
 
 /** A document's words, in order, folded; the ones the index leaves out are gone. */
-export function wordsOf(text: string, fold: (w: string) => string): string[] {
+export function wordsOf(text: string, fold: (w: string) => string, raw?: Map<string, string>): string[] {
   const out: string[] = []
-  for (const m of text.matchAll(WORD)) if (indexed(m[0])) out.push(fold(m[0]))
+  for (const m of text.matchAll(WORD)) {
+    if (!indexed(m[0])) continue
+    const key = fold(m[0])
+    if (raw !== undefined && !raw.has(key)) raw.set(key, m[0])
+    out.push(key)
+  }
   return out
 }
 
@@ -96,8 +106,8 @@ export function wordsOf(text: string, fold: (w: string) => string): string[] {
 type Op = '+' | '-' | '~' | '<' | '>' | ''
 
 export type Term =
-  | { readonly kind: 'word'; readonly op: Op; readonly word: string; readonly prefix: boolean }
-  | { readonly kind: 'phrase'; readonly op: Op; readonly words: readonly string[] }
+  | { readonly kind: 'word'; readonly op: Op; readonly word: string; readonly prefix: boolean; readonly times?: number }
+  | { readonly kind: 'phrase'; readonly op: Op; readonly words: readonly string[]; readonly within?: number }
   | { readonly kind: 'group'; readonly op: Op; readonly terms: readonly Term[] }
 
 const syntax = (detail: string) => sqlError('ER_PARSE_ERROR', `syntax error, ${detail}`)
@@ -114,7 +124,13 @@ export function parseBoolean(query: string, fold: (w: string) => string): Term[]
   const space = () => {
     while (i < n && !/[\p{L}\p{N}_+\-~<>()"*@]/u.test(query[i] as string)) i++
   }
-  const describe = (c: string | undefined) => (c === undefined ? '$end' : `'${c}'`)
+  // A token as Bison names it: a word FTS_TERM, a number FTS_NUMB, a phrase FTS_TEXT, anything else itself.
+  const describe = (c: string | undefined) => {
+    if (c === undefined) return '$end'
+    if (c === '"') return 'FTS_TEXT'
+    if (/[\p{L}\p{N}_]/u.test(c)) return /^\d+(?![\p{L}_])/u.test(query.slice(i)) ? 'FTS_NUMB' : 'FTS_TERM'
+    return `'${c}'`
+  }
   const list = (depth: number): Term[] => {
     // InnoDB's parser stops at 32 levels: a handler error, 209, with no
     // symbol of its own in the server's error table (8.4.11).
@@ -125,12 +141,12 @@ export function parseBoolean(query: string, fold: (w: string) => string): Term[]
       const c = query[i]
       if (c === undefined) {
         if (depth > 0) throw syntax('unexpected $end')
-        return terms
+        return merged(terms)
       }
       if (c === ')') {
         if (depth === 0) throw syntax("unexpected ')', expecting $end")
         i++
-        return terms
+        return merged(terms)
       }
       let op: Op = ''
       if ('+-~<>'.includes(c)) {
@@ -146,18 +162,26 @@ export function parseBoolean(query: string, fold: (w: string) => string): Term[]
         i++
         terms.push({ kind: 'group', op, terms: list(depth + 1) })
       } else if (d === '"') {
+        // A phrase's words the index leaves out
+        // are left out of it too, and one with no words left is no term at
+        // all (8.4.11: `'+"" words'` is `'words'`).
         const close = query.indexOf('"', i + 1)
         const body = close < 0 ? query.slice(i + 1) : query.slice(i + 1, close)
         i = close < 0 ? n : close + 1
-        // An unclosed phrase is a phrase that matches nothing.
-        terms.push({ kind: 'phrase', op, words: close < 0 ? ['\u0000'] : [...body.matchAll(WORD)].map((m) => (indexed(m[0]) ? fold(m[0]) : '\u0000')) })
+        const words = [...body.matchAll(WORD)].filter((m) => indexed(m[0])).map((m) => fold(m[0]))
         space()
+        let within: number | undefined
         if (query[i] === '@') {
           i++
           space()
-          if (!/\d/.test(query[i] ?? '')) throw syntax(`unexpected ${describe(query[i])}`)
+          if (!/\d/.test(query[i] ?? '')) throw syntax(`unexpected ${describe(query[i])}, expecting FTS_NUMB`)
+          const at = i
           while (/\d/.test(query[i] ?? '')) i++
+          within = Number(query.slice(at, i))
         }
+        // Unclosed, it is its words, each a term of its own (8.4.11: `'"more words'` finds 'words' alone).
+        if (close < 0) for (const word of words) terms.push({ kind: 'word', op, word, prefix: false })
+        else if (words.length > 0) terms.push({ kind: 'phrase', op, words, ...(within === undefined ? {} : { within }) })
       } else if (d === '*' || d === '@') {
         throw syntax(d === '*' ? "unexpected $end, expecting FTS_TERM or FTS_NUMB or '*'" : "unexpected '@', expecting $end")
       } else {
@@ -174,12 +198,25 @@ export function parseBoolean(query: string, fold: (w: string) => string): Term[]
           if (query[i] === '*') throw syntax("unexpected $end, expecting FTS_TERM or FTS_NUMB or '*'")
         }
         // A prefix may be shorter than a word the index keeps; a word may not.
-        terms.push({ kind: 'word', op, word: prefix || indexed(word) ? fold(word) : '\u0000', prefix })
+        // A prefix is kept as written, and compared by folding each word cut to its length.
+        terms.push({ kind: 'word', op, word: prefix ? word : indexed(word) ? fold(word) : '\u0000', prefix })
         if (query[i] === '@') throw syntax("unexpected '@', expecting $end")
       }
     }
   }
   return list(0)
+}
+
+/** A word asked twice is one term that counts its rows twice, as a natural-language query's is (8.4.11: `'data data'`). */
+function merged(terms: Term[]): Term[] {
+  const out: Term[] = []
+  for (const t of terms) {
+    const at = t.kind === 'word' && !t.prefix ? out.findIndex((u) => u.kind === 'word' && !u.prefix && u.op === t.op && u.word === t.word) : -1
+    const same = out[at]
+    if (same !== undefined && same.kind === 'word') out[at] = { ...same, times: (same.times ?? 1) + 1 }
+    else out.push(t)
+  }
+  return out
 }
 
 // --- ranking ----------------------------------------------------------------------
@@ -188,19 +225,36 @@ export function parseBoolean(query: string, fold: (w: string) => string): Term[]
 export class Corpus {
   readonly rows: number
   readonly #docs = new Map<string, number>()
-  readonly #words: string[][]
+  readonly #raw: ReadonlyMap<string, string>
+  readonly #fold: (w: string) => string
+  readonly #prefixes = new Map<string, Map<string, boolean>>()
 
-  constructor(documents: readonly (readonly string[])[]) {
+  /** `documents` are folded words; `raw` a word as written for each, which a prefix is matched against. */
+  constructor(documents: readonly (readonly string[])[], raw: ReadonlyMap<string, string>, fold: (w: string) => string) {
     this.rows = documents.length
-    this.#words = documents.map((d) => [...d])
+    this.#raw = raw
+    this.#fold = fold
     for (const d of documents) for (const w of new Set(d)) this.#docs.set(w, (this.#docs.get(w) ?? 0) + 1)
+  }
+
+  /** Whether a folded word starts with a prefix, as the collation compares them. */
+  starts(key: string, prefix: string): boolean {
+    let seen = this.#prefixes.get(prefix)
+    if (seen === undefined) this.#prefixes.set(prefix, (seen = new Map()))
+    let hit = seen.get(key)
+    if (hit === undefined) {
+      const raw = this.#raw.get(key) ?? ''
+      hit = this.#fold([...raw].slice(0, [...prefix].length).join('')) === this.#fold(prefix)
+      seen.set(key, hit)
+    }
+    return hit
   }
 
   /** How many rows hold a word, or any word with a prefix. */
   holding(word: string, prefix: boolean): number {
     if (!prefix) return this.#docs.get(word) ?? 0
     let total = 0
-    for (const [w, count] of this.#docs) if (w.startsWith(word)) total += count
+    for (const [w, count] of this.#docs) if (this.starts(w, word)) total += count
     return total
   }
 
@@ -214,10 +268,10 @@ export class Corpus {
 const f32 = Math.fround
 
 /** The occurrences of a word, or the most of any word with a prefix, in a row's words. */
-function frequency(words: readonly string[], word: string, prefix: boolean): number {
-  if (!prefix) return words.reduce((n, w) => (w === word ? n + 1 : n), 0)
+function frequency(words: readonly string[], word: string, prefix: boolean, corpus?: Corpus): number {
+  if (!prefix || corpus === undefined) return words.reduce((n, w) => (w === word ? n + 1 : n), 0)
   const counts = new Map<string, number>()
-  for (const w of words) if (w.startsWith(word)) counts.set(w, (counts.get(w) ?? 0) + 1)
+  for (const w of words) if (corpus.starts(w, word)) counts.set(w, (counts.get(w) ?? 0) + 1)
   return Math.max(0, ...counts.values())
 }
 
@@ -234,9 +288,16 @@ export function naturalRank(corpus: Corpus, query: readonly string[], words: rea
   return rank
 }
 
-/** Whether `words` holds `phrase`'s words side by side. */
-function holdsPhrase(words: readonly string[], phrase: readonly string[]): boolean {
+/** Whether `words` holds `phrase`'s words side by side, or, `"a b"@n`, all within a span of n words. */
+function holdsPhrase(words: readonly string[], phrase: readonly string[], within: number | undefined): boolean {
   if (phrase.length === 0) return false
+  if (within !== undefined) {
+    for (let i = 0; i < words.length; i++) {
+      const span = words.slice(i, i + Math.max(within, phrase.length))
+      if (phrase.every((p) => span.includes(p)) && span.includes(words[i] as string) && phrase.includes(words[i] as string)) return true
+    }
+    return false
+  }
   for (let i = 0; i + phrase.length <= words.length; i++) if (phrase.every((p, k) => words[i + k] === p)) return true
   return false
 }
@@ -274,11 +335,11 @@ export function booleanRank(corpus: Corpus, terms: readonly Term[], words: reado
 function termRank(corpus: Corpus, t: Term, words: readonly string[]): number | undefined {
   switch (t.kind) {
     case 'word': {
-      const tf = frequency(words, t.word, t.prefix)
-      return tf === 0 ? undefined : f32(tf * corpus.weight(corpus.holding(t.word, t.prefix)))
+      const tf = frequency(words, t.word, t.prefix, corpus)
+      return tf === 0 ? undefined : f32(tf * corpus.weight(corpus.holding(t.word, t.prefix) * (t.times ?? 1)))
     }
     case 'phrase': {
-      if (!holdsPhrase(words, t.words)) return undefined
+      if (!holdsPhrase(words, t.words, t.within)) return undefined
       let rank = 0
       for (const w of new Set(t.words)) rank = f32(rank + f32(frequency(words, w, false) * corpus.weight(corpus.holding(w, false))))
       return rank

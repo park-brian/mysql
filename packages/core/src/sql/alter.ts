@@ -144,7 +144,7 @@ export function alterTable(run: Run, catalog: Catalog, statement: AlterTableNode
     }
     if (k.type === KEY.FULLTEXT) {
       const parts = k.columns.map((p) => known(p.name ?? ''))
-      checkFulltext(def.engine, columns, parts)
+      checkFulltext(def.engine, columns, parts, k.columns.some((p) => p.desc === true))
       fulltext.push({ name: nameFor(k.name ?? k.constraint, parts[0] as string), columns: parts })
       continue
     }
