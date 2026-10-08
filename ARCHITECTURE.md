@@ -1375,14 +1375,15 @@ parser and the storage engine are all built and checked against a real
 server. M5 is well under way. The executor runs DDL, DML and transactions,
 upserts included, and relational SELECT: joins, grouping and aggregates,
 subqueries, derived tables, CTEs, set operations, views, JSON as a value and
-the first window functions, `INFORMATION_SCHEMA`, and foreign keys with
-their referential actions. Generated corpora of 400, 300 and 250 scripts
+the first window functions, `INFORMATION_SCHEMA`, foreign keys with their
+referential actions, CHECK constraints and JSON paths. Generated corpora of 400, 300 and 250 scripts
 agree with MySQL 8.4.11 statement for statement, column names and flags
-included. Half of M5's exit criterion holds: all 487 tests of Drizzle's
-MySQL suites pass, as they do against 8.4.11. Prisma's suites are under
-way, and after them come the rest of the function library and the
-cost-based planner. The core bundle is
-about 203 KB gzipped against a budget of 500 KB, with the UCA weights in a
+included. Most of M5's exit criterion holds. All 487 tests of Drizzle's
+MySQL suites pass, as they do against 8.4.11. Of Prisma's, 1,104 pass
+against the server's 1,122; the rest are FULLTEXT search and two tests
+that turn on timing or on another server's text. The rest of the function
+library and the cost-based planner come next. The core bundle is
+about 210 KB gzipped against a budget of 500 KB, with the UCA weights in a
 separate chunk loaded on demand.
 
 The release plan gives each stage something to ship:
