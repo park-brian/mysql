@@ -158,3 +158,19 @@ test('an empty payload classifies as empty rather than crashing', () => {
   assert.equal(classify(new Uint8Array(0), 'command'), PACKET.EMPTY)
   assert.equal(classify(new Uint8Array(0), 'connection'), PACKET.EMPTY)
 })
+
+test('an OK packet length-encodes its info whether or not session tracking was negotiated', () => {
+  // `net_send_ok` stores the message with `net_store_data` on both branches;
+  // the documented `string<EOF>` is not what 8.4.11 sends. Byte for byte, an
+  // UPDATE's OK to a client without CLIENT_SESSION_TRACK (Prisma's
+  // mysql_async): 00 01 00 03 00 00 00 28 "Rows matched: 1 ...". Without
+  // the length a client reads 'R' (82) as one, and Prisma read the matched
+  // count out of what followed.
+  const info = 'Rows matched: 1  Changed: 1  Warnings: 0'
+  for (const caps of [CAPS_41, CAPS_MODERN]) {
+    const w = new Writer()
+    writeOk(w, caps, { affectedRows: 1, statusFlags: SERVER_STATUS.AUTOCOMMIT | SERVER_STATUS.IN_TRANS, info })
+    assert.equal(hex(w.view().subarray(0, 8)), '00 01 00 03 00 00 00 28')
+    assert.equal(parseOk(w.view(), caps).info, info)
+  }
+})

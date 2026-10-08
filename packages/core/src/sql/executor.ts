@@ -101,6 +101,22 @@ function parameterValue(p: Parameter, session: Session): Value {
 /** Every error a statement can raise, as the `SqlError` a client is sent: typed errors keep their number. */
 const systemSchema = (name: string) => sqlError('ER_NO_SYSTEM_SCHEMA_ACCESS', `Access to system schema '${name}' is rejected.`)
 
+/**
+ * A text with no statement in it: `empty` when it is nothing but whitespace
+ * and semicolons, `comment` when a comment is there too; `undefined` when
+ * there is a statement.
+ */
+function emptyText(session: Session, sql: string): 'empty' | 'comment' | undefined {
+  if (/^[\s;]*$/.test(sql)) return 'empty'
+  let tokens
+  try {
+    tokens = lex(sql, { sqlMode: parseSqlMode(session.sqlMode) })
+  } catch {
+    return undefined
+  }
+  return tokens.every((t) => t.kind === TOKEN.EOF || (t.kind === TOKEN.OPERATOR && t.text === ';')) ? 'comment' : undefined
+}
+
 export function toSqlError(e: unknown): SqlError {
   if (e instanceof SqlError) return e
   if (e instanceof MyjsError && e.errno !== undefined) return new SqlError(e.code, e.message, { errno: e.errno, ...(e.sqlState === undefined ? {} : { sqlState: e.sqlState }) })
@@ -189,6 +205,8 @@ export class SqlExecutor implements Executor {
     }
     // COM_STMT_PREPARE_OK counts them in two bytes (`sql_prepare.cc`: 1390).
     if (paramCount > 0xffff) throw sqlError('ER_PS_MANY_PARAM', 'Prepared statement contains too many placeholders')
+    // The empty statement a comment makes is not one the protocol prepares.
+    if (emptyText(session, sql) === 'comment') throw sqlError('ER_UNSUPPORTED_PS', 'This command is not supported in the prepared statement protocol yet')
     const statement = this.#parse(session, sql)
     if (statement === null) return { paramCount, columns: [] }
     await this.#preload(session, statement)
@@ -238,7 +256,10 @@ export class SqlExecutor implements Executor {
 
   /** Parse, or `null` for a statement that is answered OK without being run. */
   #parse(session: Session, sql: string): Statement | null {
-    if (/^[\s;]*$/.test(sql)) return null
+    const empty = emptyText(session, sql)
+    // The grammar's END_OF_INPUT: ER_EMPTY_QUERY, unless the text held a comment.
+    if (empty === 'empty') throw sqlError('ER_EMPTY_QUERY', 'Query was empty')
+    if (empty === 'comment') return null
     try {
       return parseStatement(sql, { sqlMode: parseSqlMode(session.sqlMode) })
     } catch (e) {

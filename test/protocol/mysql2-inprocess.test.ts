@@ -233,3 +233,25 @@ test('a fresh database has the system schemas 8.4.11 has, and `mysql` cannot be 
     await conn.end()
   }
 })
+
+test('an empty statement is 1065; one of comments only is an OK, and not preparable (1295), as 8.4.11 answers', async () => {
+  // Prisma's `$executeRaw(Prisma.empty)` expects 1065 "Query was empty".
+  // The grammar's own rule: END_OF_INPUT is ER_EMPTY_QUERY unless the text
+  // held a comment, which makes it the empty statement.
+  const db = await MySQL.open(':memory:')
+  const conn = await connect(db)
+  try {
+    const empty = { errno: 1065, sqlState: '42000', message: 'Query was empty' }
+    for (const sql of ['', '   ', ';']) {
+      await assert.rejects(conn.query(sql), empty)
+      await assert.rejects(conn.prepare(sql), empty)
+    }
+    for (const sql of ['/* x */', '-- c\n']) {
+      const [ok] = await conn.query(sql)
+      assert.equal((ok as mysql.ResultSetHeader).affectedRows, 0)
+      await assert.rejects(conn.prepare(sql), { errno: 1295, sqlState: 'HY000', message: 'This command is not supported in the prepared statement protocol yet' })
+    }
+  } finally {
+    await conn.end()
+  }
+})

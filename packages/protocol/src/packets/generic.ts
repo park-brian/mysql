@@ -67,7 +67,10 @@ export function writeOk(w: Writer, caps: Capabilities, options: WriteOkOptions =
     if (stateChanged || info !== '') w.lenEncBytes(utf8(info))
     if (stateChanged) w.lenEncBytes(stateChanges ?? new Uint8Array(0))
   } else if (info !== '') {
-    w.bytes(utf8(info))
+    // Length-encoded here too: `net_send_ok` stores the message with
+    // `net_store_data` on both branches (sql/protocol_classic.cc), whatever
+    // the protocol documentation's `string<EOF>` says.
+    w.lenEncBytes(utf8(info))
   }
 }
 
@@ -95,7 +98,8 @@ export function parseOk(payload: Uint8Array, caps: Capabilities): OkPacket {
       sessionStateChanges = r.lenEncBytes()
     }
   } else if (r.remaining > 0) {
-    info = fromUtf8(r.restBytes())
+    // As libmysql's `read_ok_ex` reads it: a length, then the message.
+    info = fromUtf8(r.lenEncBytes() ?? new Uint8Array(0))
   }
   return { affectedRows, lastInsertId, statusFlags, warnings, info, sessionStateChanges }
 }
