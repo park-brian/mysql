@@ -66,7 +66,7 @@ import {
 } from './meta.ts'
 import { castAsJson, jsonConstructor } from './json.ts'
 import { jsonPathFunction, memberOf, unquote } from './json-path.ts'
-import { matchType, regexpLike } from './regexp.ts'
+import { matchType, regexpInstr, regexpLike, regexpReplace, regexpSubstr } from './regexp.ts'
 
 const JSON_PATH_FUNCTIONS: ReadonlySet<string> = new Set(['JSON_EXTRACT', 'JSON_UNQUOTE', 'JSON_CONTAINS', 'JSON_CONTAINS_PATH', 'JSON_TYPE', 'JSON_LENGTH', 'JSON_DEPTH', 'JSON_KEYS', 'JSON_VALID', 'JSON_OVERLAPS'])
 import { windowNotAllowed } from './window.ts'
@@ -1121,6 +1121,48 @@ function call(e: CallNode, ctx: CompileContext): Compiled {
           return intValue(BigInt(Math.sign(compareValues(asString(a), asString(b)) ?? 0)))
         },
         type: intType(2, x.type.nullable || y.type.nullable),
+      }
+    }
+    case 'REGEXP_INSTR':
+    case 'REGEXP_SUBSTR':
+    case 'REGEXP_REPLACE': {
+      // (subject, pattern[, replacement], position, occurrence[, return option], match type)
+      const replace = name === 'REGEXP_REPLACE'
+      const max = name === 'REGEXP_SUBSTR' ? 5 : 6
+      if (e.args.length < (replace ? 3 : 2) || e.args.length > max) throw sqlError('ER_WRONG_PARAMCOUNT_TO_NATIVE_FCT', `Incorrect parameter count in the call to native function '${e.name}'`)
+      const xs = args()
+      const fn = name.toLowerCase()
+      const at = replace ? 3 : 2
+      const subject = xs[0] as Compiled
+      const collation = subject.type.kind === 'string' && (xs[1] as Compiled).type.kind === 'string' ? aggregateTypes([subject.type, (xs[1] as Compiled).type], conn) : subject.type.kind === 'bytes' ? CHARSET_BINARY : subject.type.kind === 'string' ? subject.type.collationId : conn
+      // REGEXP_SUBSTR, and REGEXP_REPLACE of text, may be NULL whatever the
+      // arguments; the others only when an argument may be (8.4.11).
+      const nullable = xs.some((x) => x.type.nullable)
+      const type =
+        name === 'REGEXP_INSTR'
+          ? intType(21, nullable)
+          : replace
+            ? { ...stringType(16_777_216, collation, collation !== CHARSET_BINARY || nullable), field: FIELD_TYPE.LONG_BLOB }
+            : stringType(charWidth(subject.type), collation, true)
+      return {
+        eval: (r, env) => {
+          const vs = xs.map((x) => x.eval(r, env))
+          if (vs.some((v) => v === null)) return null
+          const v = vs as Exclude<Value, null>[]
+          const int = (i: number, fallback: bigint) => (v[i] === undefined ? fallback : toInteger(v[i] as Exclude<Value, null>))
+          const options = name === 'REGEXP_INSTR' ? 3 : 2
+          const mt = v[at + options] === undefined ? undefined : matchType(toText(v[at + options] as Exclude<Value, null>), fn)
+          const search = { subject: v[0] as Exclude<Value, null>, pattern: v[1] as Exclude<Value, null>, position: int(at, 1n), occurrence: int(at + 1, replace ? 0n : 1n), type: mt }
+          if (name === 'REGEXP_INSTR') {
+            const ret = int(at + 2, 0n)
+            if (ret !== 0n && ret !== 1n) throw sqlError('ER_WRONG_ARGUMENTS', 'Incorrect arguments to regexp_instr: return_option must be 1 or 0.')
+            return intValue(regexpInstr(search, ret === 1n))
+          }
+          const out = replace ? regexpReplace(search, v[2] as Exclude<Value, null>) : regexpSubstr(search)
+          if (out === undefined) return null
+          return collation === CHARSET_BINARY ? bytesValue(Uint8Array.from(out, (c) => c.charCodeAt(0))) : stringValue(out, collation, COERCIBILITY.IMPLICIT)
+        },
+        type,
       }
     }
     case 'REGEXP_LIKE': {

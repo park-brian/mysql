@@ -1,4 +1,4 @@
-// M5.10 — REGEXP, RLIKE and REGEXP_LIKE.
+// M5.10 — REGEXP, RLIKE, REGEXP_LIKE, REGEXP_INSTR, REGEXP_SUBSTR and REGEXP_REPLACE.
 //
 // MySQL 8 matches with ICU; this matches with the engine's RegExp, in Unicode
 // mode, after translating what ICU writes differently. What 8.4.11 answered:
@@ -16,12 +16,18 @@
 //     3691, an unclosed bracket 3696, a quantifier with nothing to repeat
 //     3688 at its character, `{2,1}` 3693.
 //
+// ICU's `\w` and `\d` are Unicode's, and are translated to property classes;
+// its `\b` is too, and the engine's is ASCII's, a second divergence.
+//
 // A named divergence: ICU folds case fully, so `'Straße' REGEXP 'STRASSE'` is
 // 1 there; the engine folds code point by code point, and it is 0 here.
 import { CHARSET_BINARY } from '@myjs/bytes'
 import { requireCollationInfo } from '@myjs/charsets'
 import { sqlError } from '@myjs/protocol'
 import { aggregateCollation, toText, type Value } from '@myjs/types'
+
+/** ICU's `\\w`: Unicode's word characters, where the engine's is ASCII's. */
+const WORD = '\\p{L}\\p{M}\\p{Nd}\\p{Pc}'
 
 const POSIX: Readonly<Record<string, string>> = {
   alpha: '\\p{Alphabetic}',
@@ -36,7 +42,29 @@ const POSIX: Readonly<Record<string, string>> = {
   cntrl: '\\p{Cc}',
   print: '\\P{C}',
   graph: '^\\p{Z}\\p{C}',
-  word: '\\w',
+  word: WORD,
+}
+
+/** ICU's Unicode-aware `\\w`, `\\W`, `\\d` and `\\D` as the engine's property classes. */
+function unicodeEscapes(p: string): string {
+  let out = ''
+  let inClass = false
+  for (let i = 0; i < p.length; i++) {
+    const c = p[i] as string
+    if (c === '\\' && i + 1 < p.length) {
+      const n = p[++i] as string
+      if (n === 'w') out += inClass ? WORD : `[${WORD}]`
+      else if (n === 'W' && !inClass) out += `[^${WORD}]`
+      else if (n === 'd') out += '\\p{Nd}'
+      else if (n === 'D') out += '\\P{Nd}'
+      else out += c + n
+      continue
+    }
+    if (c === '[' && !inClass) inClass = true
+    else if (c === ']' && inClass) inClass = false
+    out += c
+  }
+  return out
 }
 
 const illegal = () => sqlError('ER_REGEXP_ILLEGAL_ARGUMENT', 'Illegal argument to a regular expression.')
@@ -52,7 +80,7 @@ function translate(pattern: string): { source: string; insensitive?: boolean } {
     if (inline[2]?.includes('i') === true) insensitive = false
     p = p.slice(inline[0].length)
   }
-  const source = p.replace(/\[:([a-z]+):\]/g, (whole, name: string) => POSIX[name] ?? whole)
+  const source = unicodeEscapes(p).replace(/\[:([a-z]+):\]/g, (whole, name: string) => POSIX[name] ?? whole)
   return insensitive === undefined ? { source } : { source, insensitive }
 }
 
@@ -102,33 +130,186 @@ export function matchType(text: string, fn: string): MatchType {
 
 const cache = new Map<string, RegExp>()
 
-/** Whether `subject` matches `pattern`, as REGEXP_LIKE has it; NULL in, NULL out. */
-export function regexpLike(subject: Value, pattern: Value, type: MatchType | undefined): boolean | null {
-  if (subject === null || pattern === null) return null
-  const binary = (v: Exclude<Value, null>) => v.kind === 'bytes'
-  const collationOf = (v: Exclude<Value, null>) => (v.kind === 'string' ? v.collationId : v.kind === 'bytes' ? CHARSET_BINARY : undefined)
-  const sc = collationOf(subject)
-  const pc = collationOf(pattern)
-  if (sc !== undefined && pc !== undefined && (sc === CHARSET_BINARY) !== (pc === CHARSET_BINARY)) {
-    throw sqlError('ER_CHARACTER_SET_MISMATCH', `Character set '${requireCollationInfo(sc).name}' cannot be used in conjunction with '${requireCollationInfo(pc).name}' in call to regexp_like.`)
-  }
-  let collation = sc ?? pc ?? CHARSET_BINARY
-  if (subject.kind === 'string' && pattern.kind === 'string') collation = aggregateCollation(subject, pattern)
-  const name = collation === CHARSET_BINARY ? 'binary' : requireCollationInfo(collation).name
-  const text = (v: Exclude<Value, null>) => (binary(v) ? new TextDecoder('latin1').decode((v as { v: Uint8Array }).v) : toText(v))
-  const translated = translate(text(pattern))
-  const insensitive = type?.insensitive ?? translated.insensitive ?? /_ci$/.test(name)
-  const flags = `u${insensitive ? 'i' : ''}${type?.multiline === true ? 'm' : ''}${type?.dotAll === true ? 's' : ''}`
-  const key = `${flags}/${translated.source}`
+/** A pattern compiled once per flags and text. */
+function compiled(source: string, flags: string, pattern: string): RegExp {
+  const key = `${flags}/${source}`
   let re = cache.get(key)
   if (re === undefined) {
     try {
-      re = new RegExp(translated.source, flags)
+      re = new RegExp(source, flags)
     } catch (e) {
-      throw syntaxError(text(pattern), e as Error)
+      throw syntaxError(pattern, e as Error)
     }
     if (cache.size > 256) cache.clear()
     cache.set(key, re)
   }
-  return re.test(text(subject))
+  return re
+}
+
+const collationOf = (v: Exclude<Value, null>) => (v.kind === 'string' ? v.collationId : v.kind === 'bytes' ? CHARSET_BINARY : undefined)
+const nameOf = (id: number) => (id === CHARSET_BINARY ? 'binary' : requireCollationInfo(id).name)
+
+/** 3995 when one of a pair is a binary string and the other text, naming them in order. */
+function sameKind(a: Exclude<Value, null>, b: Exclude<Value, null>, fn: string): void {
+  const x = collationOf(a)
+  const y = collationOf(b)
+  if (x !== undefined && y !== undefined && (x === CHARSET_BINARY) !== (y === CHARSET_BINARY)) {
+    throw sqlError('ER_CHARACTER_SET_MISMATCH', `Character set '${nameOf(x)}' cannot be used in conjunction with '${nameOf(y)}' in call to ${fn}.`)
+  }
+}
+
+/** A value as the text the pattern runs over: a binary string byte for byte. */
+const textOf = (v: Exclude<Value, null>): string => (v.kind === 'bytes' ? new TextDecoder('latin1').decode(v.v) : toText(v))
+
+/** The subject's and pattern's collation, as the comparison has it. */
+function collationFor(subject: Exclude<Value, null>, pattern: Exclude<Value, null>): number {
+  if (subject.kind === 'string' && pattern.kind === 'string') return aggregateCollation(subject, pattern)
+  return collationOf(subject) ?? collationOf(pattern) ?? CHARSET_BINARY
+}
+
+/** The engine's pattern for `pattern` over `subject`, `g` added when every match is wanted. */
+function regexpFor(subject: Exclude<Value, null>, pattern: Exclude<Value, null>, type: MatchType | undefined, fn: string, global: boolean): RegExp {
+  sameKind(subject, pattern, fn)
+  const collation = collationFor(subject, pattern)
+  const text = textOf(pattern)
+  const translated = translate(text)
+  const insensitive = type?.insensitive ?? translated.insensitive ?? /_ci$/.test(nameOf(collation))
+  const flags = `${global ? 'g' : ''}u${insensitive ? 'i' : ''}${type?.multiline === true ? 'm' : ''}${type?.dotAll === true ? 's' : ''}`
+  return compiled(translated.source, flags, text)
+}
+
+/** Whether `subject` matches `pattern`, as REGEXP_LIKE has it; NULL in, NULL out. */
+export function regexpLike(subject: Value, pattern: Value, type: MatchType | undefined): boolean | null {
+  if (subject === null || pattern === null) return null
+  return regexpFor(subject, pattern, type, 'regexp_like', false).test(textOf(subject))
+}
+
+// --- REGEXP_INSTR, REGEXP_SUBSTR, REGEXP_REPLACE --------------------------------
+//
+// Positions count characters — code points — from 1, and bytes in a binary
+// string. What 8.4.11 answered, beyond REGEXP_LIKE's rules:
+//
+//   - A position below 1, or past the subject's last character (1 is allowed
+//     in an empty subject), is 3686. An occurrence below 1 is 1.
+//   - REGEXP_INSTR's return option is 0 (the match's start) or 1 (just past
+//     its end), else 1210; it is 0 when there is no such match.
+//   - REGEXP_SUBSTR is NULL when there is no such match, and `''` for an
+//     empty one.
+//   - REGEXP_REPLACE replaces every match from the position with occurrence
+//     0, or only the nth; the text before the position is kept. The
+//     replacement is ICU's: `$n` a group (3686 past the last one), `\x` the
+//     character x, and a `$` not before a digit 3887.
+
+const outOfBounds = () => sqlError('ER_REGEXP_INDEX_OUTOFBOUNDS_ERROR', 'Index out of bounds in regular expression search.')
+
+/** The UTF-16 offset of 1-based character `pos`, 3686 if the subject has no such place. */
+function offsetOf(text: string, pos: bigint, binary: boolean): number {
+  const length = binary ? text.length : [...text].length
+  if (pos < 1n || pos > BigInt(Math.max(1, length))) throw outOfBounds()
+  if (binary) return Number(pos) - 1
+  let offset = 0
+  for (let i = 1n; i < pos; i++) offset += (text.codePointAt(offset) as number) > 0xffff ? 2 : 1
+  return offset
+}
+
+/** Characters before UTF-16 offset `at`. */
+const charsBefore = (text: string, at: number, binary: boolean): number => (binary ? at : [...text.slice(0, at)].length)
+
+/** The matches of `re` in `text` from `start`, in order. */
+function* matchesFrom(re: RegExp, text: string, start: number): Generator<RegExpExecArray> {
+  const r = new RegExp(re.source, re.flags)
+  r.lastIndex = start
+  for (;;) {
+    const m = r.exec(text)
+    if (m === null) return
+    yield m
+    // An empty match moves on one character, as ICU's `find` does.
+    if (m[0] === '') r.lastIndex = m.index + ((text.codePointAt(m.index) ?? 0) > 0xffff ? 2 : 1)
+    if (r.lastIndex > text.length) return
+  }
+}
+
+/** The nth match from `start`, or undefined. */
+function nth(re: RegExp, text: string, start: number, occurrence: bigint): RegExpExecArray | undefined {
+  let n = occurrence < 1n ? 1n : occurrence
+  for (const m of matchesFrom(re, text, start)) if (--n === 0n) return m
+  return undefined
+}
+
+export interface Search {
+  readonly subject: Exclude<Value, null>
+  readonly pattern: Exclude<Value, null>
+  readonly position: bigint
+  readonly occurrence: bigint
+  readonly type: MatchType | undefined
+}
+
+export function regexpInstr(s: Search, returnEnd: boolean): bigint {
+  const re = regexpFor(s.subject, s.pattern, s.type, 'regexp_instr', true)
+  const binary = s.subject.kind === 'bytes'
+  const text = textOf(s.subject)
+  const m = nth(re, text, offsetOf(text, s.position, binary), s.occurrence)
+  if (m === undefined) return 0n
+  return BigInt(charsBefore(text, m.index + (returnEnd ? m[0].length : 0), binary) + 1)
+}
+
+/** The matched text, or undefined when there is no such match. */
+export function regexpSubstr(s: Search): string | undefined {
+  const re = regexpFor(s.subject, s.pattern, s.type, 'regexp_substr', true)
+  const text = textOf(s.subject)
+  return nth(re, text, offsetOf(text, s.position, s.subject.kind === 'bytes'), s.occurrence)?.[0]
+}
+
+type Piece = string | number
+
+/** ICU's replacement text as literal pieces and group numbers. */
+function replacementOf(text: string): Piece[] {
+  const out: Piece[] = []
+  let literal = ''
+  for (let i = 0; i < text.length; i++) {
+    const c = text[i] as string
+    if (c === '\\' && i + 1 < text.length) {
+      literal += text[++i]
+      continue
+    }
+    if (c !== '$') {
+      literal += c
+      continue
+    }
+    const digits = /^\d+/.exec(text.slice(i + 1))?.[0]
+    if (digits === undefined) throw sqlError('ER_REGEXP_INVALID_CAPTURE_GROUP_NAME', 'A capture group has an invalid name.')
+    if (literal !== '') out.push(literal)
+    literal = ''
+    out.push(Number(digits))
+    i += digits.length
+  }
+  if (literal !== '') out.push(literal)
+  return out
+}
+
+export function regexpReplace(s: Search, replacement: Exclude<Value, null>): string {
+  sameKind(s.subject, replacement, 'regexp_replace')
+  const re = regexpFor(s.subject, s.pattern, s.type, 'regexp_replace', true)
+  const text = textOf(s.subject)
+  const start = offsetOf(text, s.position, s.subject.kind === 'bytes')
+  const pieces = replacementOf(textOf(replacement))
+  const expand = (m: RegExpExecArray): string =>
+    pieces
+      .map((p) => {
+        if (typeof p === 'string') return p
+        if (p >= m.length) throw outOfBounds()
+        return m[p] ?? ''
+      })
+      .join('')
+  let out = text.slice(0, start)
+  let at = start
+  let n = 0n
+  for (const m of matchesFrom(re, text, start)) {
+    n++
+    if (s.occurrence > 0n && n !== s.occurrence) continue
+    out += text.slice(at, m.index) + expand(m)
+    at = m.index + m[0].length
+    if (s.occurrence > 0n) break
+  }
+  return out + text.slice(at)
 }

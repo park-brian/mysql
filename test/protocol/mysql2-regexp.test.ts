@@ -4,7 +4,13 @@
 // insensitivity; binary strings case-sensitive, and mixed with text 3995; a
 // number matched as its text; REGEXP_LIKE's match types (`c`, `i`, `m`,
 // `n`, the last of `c` and `i` winning, anything else 1210); ICU's POSIX
-// classes and inline `(?i)`; and ICU's errors for patterns it refuses.
+// classes and inline `(?i)`; and ICU's errors for patterns it refuses. Then
+// REGEXP_INSTR, REGEXP_SUBSTR and REGEXP_REPLACE: positions in characters,
+// an emoji one of them; a position out of the subject 3686, an occurrence
+// below 1 the first; the return option (1210); REPLACE's occurrence 0 for
+// every match and the text before the position kept; ICU's replacement,
+// `$n` (3686 past the last group), `\x`, and a bare `$` 3887; empty
+// matches; and 3995 for a binary replacement into text.
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import mysql from 'mysql2/promise'
@@ -72,6 +78,50 @@ const SCRIPT: readonly (readonly [string, Outcome])[] = [
   ["SELECT 'a' REGEXP 'a**'", [3688,"Syntax error in regular expression on line 1, character 3."]],
   ["SELECT 'a' REGEXP '[[:<:]]a'", [3685,"Illegal argument to a regular expression."]],
   ["SELECT 'a' REGEXP 'a{2,1}'", [3693,"The maximum is less than the minumum in a {min,max} interval."]],
+  ["CREATE TABLE rt (id INT PRIMARY KEY, s VARCHAR(20), b VARBINARY(20))", [0,0,"",0]],
+  ["INSERT INTO rt VALUES (1, 'Apple', 'Apple'), (2, 'banana', 'banana'), (3, NULL, NULL), (4, 'cherry pie', 'cherry pie')", [4,0,"Records: 4  Duplicates: 0  Warnings: 0",0]],
+  ["SELECT REGEXP_INSTR('dog cat dog','dog'), REGEXP_INSTR('dog cat dog','dog',2), REGEXP_INSTR('dog cat dog','dog',1,2), REGEXP_INSTR('dog cat dog','dog',1,2,1), REGEXP_INSTR('aa aaa','a{3}'), REGEXP_INSTR('abc','x')", [["1","9","9","12","4","0"]]],
+  ["SELECT REGEXP_INSTR('héllo','l'), REGEXP_INSTR('abc','B'), REGEXP_INSTR('abc','B',1,1,0,'c'), REGEXP_INSTR(NULL,'a'), REGEXP_INSTR('a',NULL), REGEXP_INSTR('abc','b',NULL)", [["3","2","0",null,null,null]]],
+  ["SELECT REGEXP_INSTR('abc','b',0)", [3686,"Index out of bounds in regular expression search."]],
+  ["SELECT REGEXP_INSTR('abc','b',4), REGEXP_INSTR('abc','b',3)", [3686,"Index out of bounds in regular expression search."]],
+  ["SELECT REGEXP_INSTR('abc','b',5)", [3686,"Index out of bounds in regular expression search."]],
+  ["SELECT REGEXP_INSTR('abc','b',1,0)", [["2"]]],
+  ["SELECT REGEXP_INSTR('abc','b',1,1,2)", [1210,"Incorrect arguments to regexp_instr: return_option must be 1 or 0."]],
+  ["SELECT REGEXP_REPLACE('a b c','b','X'), REGEXP_REPLACE('abc abc','b','X',1,2), REGEXP_REPLACE('abc abc','b','X',3), REGEXP_REPLACE('abcabc','(b)(c)','$2$1'), REGEXP_REPLACE('abc','B','x'), REGEXP_REPLACE('abc','B','x',1,0,'c')", [["a X c","abc aXc","abc aXc","acbacb","axc","abc"]]],
+  ["SELECT REGEXP_REPLACE('abc','b','\\\\1'), REGEXP_REPLACE('aaa','a*','X'), REGEXP_REPLACE('abc','','X')", [3685,"Illegal argument to a regular expression."]],
+  ["SELECT REGEXP_REPLACE('abc','x*','-')", [["-a-b-c-"]]],
+  ["SELECT REGEXP_REPLACE('abc','(b)','$2')", [3686,"Index out of bounds in regular expression search."]],
+  ["SELECT REGEXP_REPLACE('abc','b','$')", [3887,"A capture group has an invalid name."]],
+  ["SELECT REGEXP_SUBSTR('dog cat dog','\\\\w+'), REGEXP_SUBSTR('dog cat dog','\\\\w+',2), REGEXP_SUBSTR('dog cat dog','\\\\w+',1,3), REGEXP_SUBSTR('dog cat dog','\\\\w+',1,4), REGEXP_SUBSTR('abc','B'), REGEXP_SUBSTR(NULL,'a')", [["dog","og","dog",null,"b",null]]],
+  ["SELECT REGEXP_REPLACE('héllo wörld','[öé]','_'), REGEXP_SUBSTR('héllo','l+'), REGEXP_INSTR('héllo','o',1,1,1)", [["h_llo w_rld","ll","6"]]],
+  ["SELECT REGEXP_INSTR(12345,'3'), REGEXP_REPLACE(12345,'3','x'), REGEXP_SUBSTR(12345,'3.')", [["3","12x45","34"]]],
+  ["SELECT REGEXP_REPLACE(_binary'abc','b','x'), REGEXP_SUBSTR(_binary'abc','b')", [3995,"Character set 'binary' cannot be used in conjunction with 'utf8mb4_unicode_ci' in call to regexp_replace."]],
+  ["SELECT REGEXP_REPLACE('abc','b',NULL), REGEXP_SUBSTR('abc','b',1,1,NULL)", [[null,null]]],
+  ["SELECT REGEXP_INSTR('abc','b',1,1,0,'z')", [1210,"Incorrect arguments to regexp_instr"]],
+  ["SELECT REGEXP_REPLACE('aXbXc','x','-',1,0,'i'), REGEXP_SUBSTR('A\\nB','^B',1,1,'m'), REGEXP_SUBSTR('A\\nB','A.B',1,1,'n')", [["a-b-c","B","A\nB"]]],
+  ["SELECT REGEXP_INSTR('abc','b','x')", [3686,"Index out of bounds in regular expression search."]],
+  ["SELECT REGEXP_INSTR('abc','b',-1)", [3686,"Index out of bounds in regular expression search."]],
+  ["SELECT REGEXP_INSTR('abc','b',1,-1)", [["2"]]],
+  ["SELECT REGEXP_REPLACE('abc','b','x',1,-1)", [["axc"]]],
+  ["SELECT REGEXP_INSTR('abc','b',1.6)", [["2"]]],
+  ["SELECT REGEXP_INSTR('abc')", [1582,"Incorrect parameter count in the call to native function 'REGEXP_INSTR'"]],
+  ["SELECT REGEXP_REPLACE('abc','b')", [1582,"Incorrect parameter count in the call to native function 'REGEXP_REPLACE'"]],
+  ["SELECT REGEXP_SUBSTR('','a'), REGEXP_REPLACE('','a','b'), REGEXP_INSTR('','a'), REGEXP_INSTR('','x*')", [[null,"","0","1"]]],
+  ["SELECT REGEXP_INSTR('abc','x*'), REGEXP_SUBSTR('abc','x*'), REGEXP_INSTR('abc','c',4), REGEXP_SUBSTR('abc','c',3)", [3686,"Index out of bounds in regular expression search."]],
+  ["SELECT REGEXP_REPLACE('abc','b','\\\\1')", [["a1c"]]],
+  ["SELECT REGEXP_REPLACE('abc','(b)','\\\\1\\\\1'), REGEXP_REPLACE('abc','b','\\\\$'), REGEXP_REPLACE('abc','(b)','$0$0'), REGEXP_REPLACE('aaa','a*','X')", [["a11c","a$c","abbc","XX"]]],
+  ["SELECT REGEXP_INSTR('abc','x*'), REGEXP_SUBSTR('abc','x*'), REGEXP_SUBSTR('abc','c',3), REGEXP_INSTR('abc','c',3,1,1)", [["1","","c","4"]]],
+  ["SELECT REGEXP_REPLACE('abcabc','b','X',1,0), REGEXP_REPLACE('abcabc','b','X',1,3), REGEXP_REPLACE('abcb','b','X',3,1)", [["aXcaXc","abcabc","abcX"]]],
+  ["SELECT REGEXP_INSTR('a😀b','b'), REGEXP_SUBSTR('a😀b','.',2), REGEXP_REPLACE('a😀b','.','x')", [["3","😀","xxx"]]],
+  ["SELECT REGEXP_INSTR('abc','B' COLLATE utf8mb4_bin), REGEXP_SUBSTR('ABC','b' COLLATE utf8mb4_0900_as_cs)", [["0",null]]],
+  ["SELECT REGEXP_SUBSTR(_latin1'abc','b') l", [["b"]]],
+  ["SELECT REGEXP_SUBSTR(_binary'abc',_binary'b'), REGEXP_INSTR(_binary'abc',_binary'B'), REGEXP_REPLACE('abc','b',_binary'x')", [3995,"Character set 'utf8mb4_unicode_ci' cannot be used in conjunction with 'binary' in call to regexp_replace."]],
+  ["SELECT REGEXP_INSTR('abc','b',2.4), REGEXP_INSTR('abc','b','2'), REGEXP_INSTR('abc','b',1,'1x')", [["2","2","2"]]],
+  ["SELECT id, REGEXP_INSTR(s, 'a'), REGEXP_SUBSTR(s, '[aeiou]+', 1, 2), REGEXP_REPLACE(s, '[aeiou]', '*'), REGEXP_REPLACE(b, _binary'a', _binary'X'), REGEXP_INSTR(b, _binary'a') FROM rt ORDER BY id", [["1","1","e","*ppl*","Apple","0"],["2","2","a","b*n*n*","bXnXnX","2"],["3",null,null,null,null,null],["4","0","ie","ch*rry p**","cherry pie","0"]]],
+  ["SELECT id, REGEXP_INSTR(s, 'a'), REGEXP_SUBSTR(s, '[aeiou]+', 1, 2), REGEXP_REPLACE(s, '[aeiou]', '*'), REGEXP_REPLACE(b, 'a', 'X') FROM rt ORDER BY id", [3995,"Character set 'binary' cannot be used in conjunction with 'utf8mb4_unicode_ci' in call to regexp_replace."]],
+  ["SELECT id FROM rt WHERE REGEXP_INSTR(s, 'e') > 3 ORDER BY id", [["1"]]],
+  ["SELECT REGEXP_REPLACE('a😀b😀c', '😀', '-', 3), REGEXP_INSTR('a😀b😀c', '😀', 3), REGEXP_SUBSTR('héllo wörld', '\\\\w+', 7)", [["a😀b-c","4","wörld"]]],
+  ["DROP TABLE rt", [0,0,"",0]],
 ]
 
 test('M5.10: REGEXP and REGEXP_LIKE answer every statement of the script as 8.4.11 did', async () => {
