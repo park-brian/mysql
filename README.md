@@ -89,6 +89,10 @@ revisited, is in [docs/02-strategy.md](./docs/02-strategy.md).
 
 ## The documentation
 
+**Start with [ARCHITECTURE.md](./ARCHITECTURE.md)**: the target architecture
+as one readable paper, with diagrams. The numbered documents below are the
+specifications behind it.
+
 Thirty-one documents, written against the MySQL source tree
 (`mysql/mysql-server` trunk `e174239c`) rather than from memory or secondary
 sources. Every constant cites the header it came from.

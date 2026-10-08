@@ -1,5 +1,9 @@
 # 03 — Architecture
 
+> **Start with [ARCHITECTURE.md](../ARCHITECTURE.md)** for the narrative: the
+> target architecture end to end, with the reasoning and diagrams. This file
+> is the compact reference it builds on.
+
 ## The shape of the thing
 
 ```
@@ -66,15 +70,15 @@ testable and several are independently useful.
 | Package | Responsibility | Depends on |
 |---|---|---|
 | `@myjs/bytes` | Cursor/writer over `Uint8Array`; LE/BE ints, varints, length-encoded values | — |
-| `@myjs/protocol` | Packet framing, all packet types, both directions; auth plugins | `bytes`, crypto shim |
-| `@myjs/charsets` | Charset ids, encoders/decoders, collation key transforms | — |
-| `@myjs/types` | MySQL value model, coercion rules, comparison, index key encoding | `charsets` |
-| `@myjs/parser` | Lexer + parser → AST; `sql_mode`-aware | — |
+| `@myjs/protocol` | Packet framing, all packet types, both directions; auth plugins | `bytes` — never `charsets` or `types` (D-33) |
+| `@myjs/charsets` | Charset ids, encoders/decoders, collation key transforms | `bytes` |
+| `@myjs/types` | MySQL value model, coercion rules, comparison, index key encoding | `bytes`, `charsets` |
+| `@myjs/parser` | Lexer + parser → AST; `sql_mode`-aware | `bytes`, `charsets` |
 | `@myjs/vfs` | The one storage interface + OPFS / Node / memory backends | — |
-| `@myjs/engine` | Pages, B+tree, MVCC, WAL, recovery, catalog | `vfs`, `types` |
-| `@myjs/innodb` | Real `.ibd` and SDI codec — import/export only | `bytes`, `types` |
-| `@myjs/core` | Wires it together; the `MySQL` class | all of the above |
-| `@myjs/server` | Node TCP server, WebSocket bridge, worker host | `core`, `protocol` |
+| `@myjs/engine` | Pages, B+tree, MVCC, WAL, recovery, catalog | `bytes`, `charsets`, `types`, `vfs` |
+| `@myjs/innodb` | Real `.ibd` and SDI codec — import/export only (M7, not yet built) | `bytes`, `types` |
+| `@myjs/core` | Wires it together; the `MySQL` class and the SQL executor | all of the above but `innodb`, for now |
+| `@myjs/server` | Node TCP server (`serve()` lives here, not in core), WebSocket bridge, worker host | `core`, `protocol` |
 
 `@myjs/innodb` deliberately does **not** sit under `@myjs/engine`. It is a codec,
 not a storage backend. Someone should be able to `npm i @myjs/innodb` purely to
