@@ -14,8 +14,9 @@
 // itself, and to a table updated further up the chain (1451); REPLACE and an
 // upsert on a parent; the indexes a key holds (1553); MATCH SIMPLE's NULLs;
 // SET DEFAULT, which InnoDB refuses as RESTRICT; ALTER TABLE adding and
-// dropping keys, indexes and columns; DROP and TRUNCATE of a parent; and a
-// key across schemas.
+// dropping keys, indexes and columns; DROP and TRUNCATE of a parent; a key
+// across schemas, which DROP DATABASE must respect; a parent's own index (1553);
+// and REPLACE and an upsert on a table that references itself.
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import mysql from 'mysql2/promise'
@@ -144,7 +145,25 @@ const SCRIPT: readonly (readonly [string, Outcome])[] = [
   ["CREATE DATABASE other", [1,0,"",0]],
   ["CREATE TABLE other.x (pid INT, FOREIGN KEY (pid) REFERENCES app.p(id))", [0,0,"",0]],
   ["INSERT INTO other.x VALUES (7)", [1452,"Cannot add or update a child row: a foreign key constraint fails (`other`.`x`, CONSTRAINT `x_ibfk_1` FOREIGN KEY (`pid`) REFERENCES `app`.`p` (`id`))"]],
+  ["DROP DATABASE app", [3730,"Cannot drop table 'p' referenced by a foreign key constraint 'x_ibfk_1' on table 'x'."]],
   ["DROP DATABASE other", [1,0,"",0]],
+  ["DROP DATABASE app", [12,0,"",0]],
+  ["CREATE DATABASE app", [1,0,"",0]],
+  ["USE app", [0,0,"",0]],
+  ["CREATE TABLE p (id INT PRIMARY KEY, u INT, v INT, UNIQUE KEY uu (u), UNIQUE KEY uv (v))", [0,0,"",0]],
+  ["CREATE TABLE c (x INT, FOREIGN KEY (x) REFERENCES p(u))", [0,0,"",0]],
+  ["ALTER TABLE p DROP INDEX uv", [0,0,"Records: 0  Duplicates: 0  Warnings: 0",0]],
+  ["ALTER TABLE p DROP INDEX uu", [1553,"Cannot drop index 'uu': needed in a foreign key constraint"]],
+  ["ALTER TABLE p ADD COLUMN z INT", [0,0,"Records: 0  Duplicates: 0  Warnings: 0",0]],
+  ["CREATE TABLE p (id INT PRIMARY KEY, FOREIGN KEY (id) REFERENCES nope(id))", [1050,"Table 'p' already exists"]],
+  ["CREATE TABLE self (id INT PRIMARY KEY, x INT, FOREIGN KEY (x) REFERENCES self(id) ON DELETE SET NULL)", [0,0,"",0]],
+  ["INSERT INTO self VALUES (1, NULL), (2, 1)", [2,0,"Records: 2  Duplicates: 0  Warnings: 0",0]],
+  ["REPLACE INTO self VALUES (1, NULL)", [2,0,"",0]],
+  ["SELECT * FROM self", [["1",null],["2",null]]],
+  ["CREATE TABLE self2 (id INT PRIMARY KEY, x INT, FOREIGN KEY (x) REFERENCES self2(id) ON UPDATE SET NULL)", [0,0,"",0]],
+  ["INSERT INTO self2 VALUES (1, NULL), (2, 1)", [2,0,"Records: 2  Duplicates: 0  Warnings: 0",0]],
+  ["INSERT INTO self2 VALUES (1, NULL) ON DUPLICATE KEY UPDATE id = 3", [1451,"Cannot delete or update a parent row: a foreign key constraint fails (`app`.`self2`, CONSTRAINT `self2_ibfk_1` FOREIGN KEY (`x`) REFERENCES `self2` (`id`) ON UPDATE SET NULL)"]],
+  ["DROP TABLE self, self2", [0,0,"",0]],
 ]
 
 test('M5.25: foreign keys answer every statement of the script as 8.4.11 did', async () => {

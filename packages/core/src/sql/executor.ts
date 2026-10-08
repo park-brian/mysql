@@ -416,8 +416,8 @@ export class SqlExecutor implements Executor {
         if (schema === null) throw sqlError('ER_NO_DB_ERROR', messages.noDatabaseSelected())
         state.commit()
         let spec = createTableSpec(statement, catalog.schema(schema).collationId ?? DEFAULT_COLLATION)
-        // IF NOT EXISTS over a table that exists is its note, whatever its keys would say.
-        if (statement.ifNotExists !== true || !catalog.tables(schema).some((t) => t.name === spec.name)) {
+        // A table that exists is 1050, or IF NOT EXISTS's note, whatever its keys would say.
+        if (!catalog.tables(schema).some((t) => t.name === spec.name)) {
           spec = withForeignKeys(catalog, schema, spec, statement.keys.filter((k) => k.type === KEY.FOREIGN).map(foreignKeyClause), foreignKeyChecks(run))
         }
         catalog.createTable(schema, spec, { ifNotExists: statement.ifNotExists === true })
@@ -583,6 +583,13 @@ export class SqlExecutor implements Executor {
     if (statement.object === 'DATABASE') {
       const name = (statement.names[0] as TableName).name
       if (name === 'mysql') throw systemSchema(name)
+      // A table another schema's key references holds the whole schema (8.4.11: 3730).
+      if (foreignKeyChecks(run) && catalog.schemas().some((s) => s.name === name)) {
+        for (const t of catalog.tables(name)) {
+          const by = referencingKeys(catalog, name, t.name).find((r) => r.child.schema !== name)
+          if (by !== undefined) throw sqlError('ER_FK_CANNOT_DROP_PARENT', `Cannot drop table '${t.name}' referenced by a foreign key constraint '${by.fk.name}' on table '${by.child.name}'.`)
+        }
+      }
       run.state.commit()
       const tables = catalog.dropSchema(name, { ifExists: statement.ifExists === true })
       if (session.database === name) session.database = null

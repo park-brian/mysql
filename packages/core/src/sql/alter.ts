@@ -17,7 +17,7 @@ import type { StoreContext } from '@myjs/types'
 import { encodeField } from '@myjs/types'
 import { column as columnDef, DEFAULT_COLLATION } from './ddl.ts'
 import { defaultOf, implicitDefault } from './dml.ts'
-import { checkParentOf, foreignKeyChecks, foreignKeyClause, foreignKeysOf, withForeignKeys, type ForeignKeyClause } from './foreign-keys.ts'
+import { checkParentOf, foreignKeyChecks, foreignKeyClause, foreignKeysOf, referencedIndex, referencingKeys, supportingIndex, withForeignKeys, type ForeignKeyClause } from './foreign-keys.ts'
 import type { Run } from './query.ts'
 
 const notSupported = (what: string) => sqlError('ER_NOT_SUPPORTED_YET', messages.notSupported(what))
@@ -71,13 +71,14 @@ export function alterTable(run: Run, catalog: Catalog, statement: AlterTableNode
     if (!indexes.some((i) => i.name.toLowerCase() === name.toLowerCase())) throw cantDrop(name)
     indexes = indexes.filter((i) => i.name.toLowerCase() !== name.toLowerCase())
   }
-  // An index a remaining foreign key needs, and no other serves, stays (1553).
+  // An index a foreign key needs, and no other serves, stays (1553): the
+  // child's own keys need theirs, and the keys that reference this table
+  // need its UNIQUE key on their columns.
   for (const a of of('drop')) {
     if (a.what !== 'INDEX') continue
-    for (const fk of foreignKeys) {
-      const served = indexes.some((i) => fk.columns.every((c, k) => i.parts[k]?.column.toLowerCase() === c.toLowerCase()))
-      if (!served) throw sqlError('ER_DROP_INDEX_FK', `Cannot drop index '${a.name as string}': needed in a foreign key constraint`)
-    }
+    const refuse = () => sqlError('ER_DROP_INDEX_FK', `Cannot drop index '${a.name as string}': needed in a foreign key constraint`)
+    for (const fk of foreignKeys) if (supportingIndex(indexes, fk.columns) === undefined) throw refuse()
+    for (const { fk } of referencingKeys(catalog, schema, def.name)) if (referencedIndex({ indexes }, fk.references.columns) === undefined) throw refuse()
   }
 
   // --- columns ---

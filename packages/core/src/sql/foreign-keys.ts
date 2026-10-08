@@ -161,12 +161,12 @@ export function foreignKeyClause(k: KeyDefinition): ForeignKeyClause {
 }
 
 /** The index that serves `columns` as a foreign key's: its leading parts are those columns, in order. */
-function supportingIndex(indexes: readonly IndexDef[], columns: readonly string[]): IndexDef | undefined {
+export function supportingIndex(indexes: readonly IndexDef[], columns: readonly string[]): IndexDef | undefined {
   return indexes.find((i) => i.parts.length >= columns.length && columns.every((c, k) => i.parts[k]?.column.toLowerCase() === c.toLowerCase() && i.parts[k]?.prefix === undefined))
 }
 
 /** The parent's key a foreign key matches through: PRIMARY or UNIQUE, on exactly its columns. */
-function referencedIndex(parent: { readonly indexes: readonly IndexDef[] }, columns: readonly string[]): IndexDef | undefined {
+export function referencedIndex(parent: { readonly indexes: readonly IndexDef[] }, columns: readonly string[]): IndexDef | undefined {
   return parent.indexes.find((i) => i.kind !== 'index' && i.parts.length === columns.length && columns.every((c, k) => i.parts[k]?.column.toLowerCase() === c.toLowerCase() && i.parts[k]?.prefix === undefined))
 }
 
@@ -375,7 +375,7 @@ class GuardedTable implements Table {
   readonly #enforcer: Enforcer
   readonly #inner: Table
   readonly #depth: number
-  /** The tables an update further up the cascade is changing. */
+  /** The tables an update further up the cascade is changing — not a delete, and not this write. */
   readonly #updating: ReadonlySet<string>
   readonly #keys: readonly ForeignKeyDef[]
 
@@ -411,6 +411,8 @@ class GuardedTable implements Table {
       const found = this.#enforcer.children(this.def, before, child, fk)
       if (found === undefined || found.rows.length === 0) continue
       if (fk.onUpdate !== 'CASCADE' && fk.onUpdate !== 'SET NULL') throw rowIsReferenced(fk, child.schema, child.name)
+      // A cascaded update into a table an update in the chain — this one
+      // included — is changing: InnoDB "plays safe" and refuses.
       if (this.#updating.has(tableKey(child)) || tableKey(child) === tableKey(this.def)) throw rowIsReferenced(fk, child.schema, child.name)
       cascades.push({ fk, child, ...found })
     }
@@ -504,9 +506,9 @@ class GuardedTable implements Table {
  * no catalog, the table itself; otherwise one whose writes keep every foreign
  * key that names it, on either side.
  */
-export function guarded(run: Run, table: Table, trx: Trx, updating: boolean): Table {
+export function guarded(run: Run, table: Table, trx: Trx): Table {
   if (run.catalog === undefined || !foreignKeyChecks(run)) return table
-  return new Enforcer(run.catalog, trx).guard(table, 0, updating ? new Set([tableKey(table.def)]) : new Set())
+  return new Enforcer(run.catalog, trx).guard(table, 0, new Set())
 }
 
 /**

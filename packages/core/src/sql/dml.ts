@@ -353,7 +353,7 @@ export function insert(run: Run, node: InsertNode, trx: Trx): OkResult {
   const opened = openTarget(run, node.table)
   const def = opened.def
   // Every write keeps the foreign keys on both sides of the table (M5.25).
-  const table = guarded(run, opened.table, trx, true)
+  const table = guarded(run, opened.table, trx)
   const referenced = node.replace === true && isReferenced(run, def)
   // A VALUES or SET subquery reading the table being written is 1093, as an
   // UPDATE's is; INSERT … SELECT from it is legal, read in full first (8.4.11).
@@ -763,7 +763,7 @@ export function update(run: Run, node: UpdateNode, trx: Trx): OkResult {
   run = withCtes(run, node, 'UPDATE')
   const target = singleTable(run, node.tables, 'UPDATE')
   const { def, alias } = target
-  const table = guarded(run, target.table, trx, true)
+  const table = guarded(run, target.table, trx)
   checkTargetNotRead({ schema: def.schema, name: def.name }, [node.where, ...node.set.map((a) => a.value)], run.env.session.database)
   const scope = new TableScope([{ alias, def }])
   const assignments = node.set.map((a: Assignment) => {
@@ -828,7 +828,7 @@ export function remove(run: Run, node: DeleteNode, trx: Trx): OkResult {
   run = withCtes(run, node, 'DELETE')
   const target = singleTable(run, node.tables, 'DELETE')
   const { def, alias } = target
-  const table = guarded(run, target.table, trx, false)
+  const table = guarded(run, target.table, trx)
   checkTargetNotRead({ schema: def.schema, name: def.name }, [node.where], run.env.session.database)
   const rows = matching(run, def, table, alias, node, trx)
   let deleted = 0
