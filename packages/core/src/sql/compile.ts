@@ -991,7 +991,8 @@ export function convertTo(v: Value, t: ResultType): Value {
     case 'double':
       return v.kind === 'double' ? v : doubleValue(toDouble(v))
     case 'string':
-      return v.kind === 'string' ? v : stringValue(toText(v), t.collationId)
+      // A function's string is a string: an ENUM's index stays with the column.
+      return v.kind === 'string' ? (v.ordinal === undefined ? v : stringValue(v.v, v.collationId, v.coercibility)) : stringValue(toText(v), t.collationId)
     default:
       return v
   }

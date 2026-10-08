@@ -64,6 +64,11 @@ export interface StringValue {
   readonly v: string
   readonly collationId: number
   readonly coercibility: number
+  /**
+   * An ENUM's member index or a SET's bitmap, which is what the column is in
+   * a numeric context: `e + 0` is 2 for the second member (8.4.11).
+   */
+  readonly ordinal?: bigint
 }
 
 /** A binary string: VARBINARY, BLOB, a hex literal. */
@@ -199,6 +204,7 @@ export function toDouble(v: Exclude<Value, null>): number {
       return v.v
     case 'string':
     case 'bytes':
+      if (v.kind === 'string' && v.ordinal !== undefined) return Number(v.ordinal)
       return Number(numericPrefix(textOf(v)).text)
     case 'datetime':
       return Number(temporalNumber(v))
@@ -233,6 +239,7 @@ export function toDecimal(v: Exclude<Value, null>): DecimalValue {
       return doubleToDecimal(v.v)
     case 'string':
     case 'bytes': {
+      if (v.kind === 'string' && v.ordinal !== undefined) return decimal(v.ordinal, 0)
       const p = numericPrefix(textOf(v))
       return /[eE]/.test(p.text) ? doubleToDecimal(Number(p.text)) : parseDecimal(p.text)
     }
@@ -270,6 +277,7 @@ export function toInteger(v: Exclude<Value, null>): bigint {
       return roundDouble(v.v)
     case 'string':
     case 'bytes': {
+      if (v.kind === 'string' && v.ordinal !== undefined) return v.ordinal
       const p = numericPrefix(textOf(v))
       return p.fractional ? (/[eE]/.test(p.text) ? roundDouble(Number(p.text)) : rescale(parseDecimal(p.text), 0).v) : BigInt(p.text.replace(/^\+/, ''))
     }

@@ -12,12 +12,12 @@
 // here is refused by name.
 import { sqlError, messages, type OkResult } from '@myjs/protocol'
 import type { Catalog, ColumnDef, FieldBytes, IndexDef, TableDef, TableSpec } from '@myjs/engine'
-import { KEY, type AlterAction, type AlterTableNode, type ColumnDefinition } from '@myjs/parser'
-import type { StoreContext } from '@myjs/types'
-import { encodeField } from '@myjs/types'
+import { KEY, NODE, type AlterAction, type AlterTableNode, type ColumnDefinition, type Expression } from '@myjs/parser'
+import { decodeField, encodeField, type StoreContext, type Value } from '@myjs/types'
+import type { Compiled } from './compile.ts'
 import { column as columnDef, DEFAULT_COLLATION } from './ddl.ts'
 import { checker, checksOf, checkViolated, withChecks, type CheckDef } from './checks.ts'
-import { defaultOf, implicitDefault } from './dml.ts'
+import { checkDefaults, defaultOf, implicitDefault, rowDependent } from './dml.ts'
 import { checkParentOf, foreignKeyChecks, foreignKeyClause, foreignKeysOf, referencedIndex, referencingKeys, supportingIndex, withForeignKeys, type ForeignKeyClause } from './foreign-keys.ts'
 import type { Run } from './query.ts'
 
@@ -84,21 +84,12 @@ export function alterTable(run: Run, catalog: Catalog, statement: AlterTableNode
     if (!indexes.some((i) => i.name.toLowerCase() === name.toLowerCase())) throw cantDrop(name)
     indexes = indexes.filter((i) => i.name.toLowerCase() !== name.toLowerCase())
   }
-  // An index a foreign key needs, and no other serves, stays (1553): the
-  // child's own keys need theirs, and the keys that reference this table
-  // need its UNIQUE key on their columns.
-  for (const a of of('drop')) {
-    if (a.what !== 'INDEX' && a.what !== 'CONSTRAINT') continue
-    const refuse = () => sqlError('ER_DROP_INDEX_FK', `Cannot drop index '${a.name as string}': needed in a foreign key constraint`)
-    for (const fk of foreignKeys) if (supportingIndex(indexes, fk.columns) === undefined) throw refuse()
-    for (const { fk } of referencingKeys(catalog, schema, def.name)) if (referencedIndex({ indexes }, fk.references.columns) === undefined) throw refuse()
-  }
-
   // --- columns ---
   const columns: ColumnDef[] = [...def.columns]
   /** For each new column, where its value comes from: an old column's position, or its default. */
   let sources: (number | ColumnDef)[] = def.columns.map((_, i) => i)
   const added: ColumnDefinition[] = []
+  let notes = 0
   for (const a of of('addColumn')) {
     if (columns.some((c) => c.name.toLowerCase() === a.column.name.toLowerCase())) throw sqlError('ER_DUP_FIELDNAME', `Duplicate column name '${a.column.name}'`)
     const made = columnDef(a.column, tableCollation, false)
@@ -110,6 +101,7 @@ export function alterTable(run: Run, catalog: Catalog, statement: AlterTableNode
       if (i < 0) throw sqlError('ER_BAD_FIELD_ERROR', messages.unknownColumn(after, 'table definition'))
       at = i + 1
     }
+    notes += checkDefaults(run, [made])
     columns.splice(at, 0, made)
     sources = [...sources.slice(0, at), made, ...sources.slice(at)]
     added.push(a.column)
@@ -148,6 +140,17 @@ export function alterTable(run: Run, catalog: Catalog, statement: AlterTableNode
     indexes.push({ name: nameFor(k.name ?? k.constraint, (parts[0] as { column: string }).column), kind: k.type === KEY.UNIQUE ? 'unique' : 'index', parts })
   }
 
+  // An index a foreign key needs, and no other serves, stays (1553): the
+  // child's own keys need theirs, and the keys that reference this table
+  // need its UNIQUE key on their columns. Decided after this statement's
+  // own new indexes, which may be the ones that serve (8.4.11).
+  for (const a of of('drop')) {
+    if (a.what !== 'INDEX' && a.what !== 'CONSTRAINT') continue
+    const refuse = () => sqlError('ER_DROP_INDEX_FK', `Cannot drop index '${a.name as string}': needed in a foreign key constraint`)
+    for (const fk of foreignKeys) if (supportingIndex(indexes, fk.columns) === undefined) throw refuse()
+    for (const { fk } of referencingKeys(catalog, schema, def.name)) if (referencedIndex({ indexes }, fk.references.columns) === undefined) throw refuse()
+  }
+
   // --- foreign keys ---
   const checks = foreignKeyChecks(run)
   const options: Record<string, unknown> = { ...def.options }
@@ -175,7 +178,10 @@ export function alterTable(run: Run, catalog: Catalog, statement: AlterTableNode
 
   // --- the copy ---
   const store: StoreContext = { strict: false, row: 1, warnings: 0, table: def.name }
-  const fill = sources.map((s) => (typeof s === 'number' ? undefined : defaultOf(run, s)))
+  const newDef = { ...def, columns } as TableDef
+  const fill = sources.map((s) => (typeof s === 'number' ? undefined : defaultOf(run, s, newDef)))
+  // A default naming another column is evaluated over the row as copied.
+  const dependent = sources.flatMap((s, i) => (typeof s !== 'number' && rowDependent(s) ? [i] : []))
   // The rows a new key is checked on are the copy's, under MySQL's temporary name.
   const shownAs = `#sql-0_${run.env.session.connectionId.toString(16)}`
   const check = checks && made.length > 0 ? checkParentOf(catalog) : undefined
@@ -186,12 +192,21 @@ export function alterTable(run: Run, catalog: Catalog, statement: AlterTableNode
   catalog.rebuildTable(schema, def.name, spec, (row) => {
     records++
     store.row = records
+    const valueOf = (s: ColumnDef, value: Value) => encodeField(value === null && !s.nullable ? implicitDefault(s) : value, s, store)
     const out: FieldBytes[] = sources.map((s, i) => {
       if (typeof s === 'number') return row[s] ?? null
+      if (dependent.includes(i)) return null
       const d = fill[i]
-      const value = d === undefined || d === 'none' ? implicitDefault(s) : d.eval([], run.env)
-      return encodeField(value === null && !s.nullable ? implicitDefault(s) : value, s, store)
+      return valueOf(s, d === undefined || d === 'none' ? implicitDefault(s) : d.eval([], run.env))
     })
+    if (dependent.length > 0) {
+      const values: Value[] = out.map((f, i) => decodeField(f, (columns[i] as ColumnDef).type))
+      for (const i of dependent) {
+        const s = columns[i] as ColumnDef
+        out[i] = valueOf(s, (fill[i] as Compiled).eval(values, run.env))
+        values[i] = decodeField(out[i] ?? null, s.type)
+      }
+    }
     if (check !== undefined) {
       for (const fk of made) check(checked, fk, out)
     }
@@ -201,6 +216,15 @@ export function alterTable(run: Run, catalog: Catalog, statement: AlterTableNode
   })
   // "Records" counts the rows only where MySQL copies too: a key or a
   // constraint the rows must be checked against.
-  const copied = (checks && made.length > 0) || enabled.size > 0 ? records : 0
-  return { affectedRows: copied, info: `Records: ${copied}  Duplicates: 0  Warnings: 0` }
+  // And a column whose default is an expression, which 8.4 cannot add in place.
+  const expression = added.some((c) => c.default !== undefined && !isConstantDefault(c.default))
+  const copied = (checks && made.length > 0) || enabled.size > 0 || expression ? records : 0
+  return { affectedRows: copied, info: `Records: ${copied}  Duplicates: 0  Warnings: ${notes}`, ...(notes > 0 ? { warnings: notes } : {}) }
+}
+
+/** A literal default, or CURRENT_TIMESTAMP's: one 8.4 adds a column with in place, without copying the rows. */
+function isConstantDefault(e: Expression): boolean {
+  if (e.kind === NODE.LITERAL) return true
+  if (e.kind === NODE.UNARY && (e.op === '-' || e.op === '+') && e.operand.kind === NODE.LITERAL) return true
+  return e.kind === NODE.CALL && ['CURRENT_TIMESTAMP', 'NOW', 'LOCALTIME', 'LOCALTIMESTAMP'].includes(e.name.toUpperCase()) && e.args.length <= 1
 }

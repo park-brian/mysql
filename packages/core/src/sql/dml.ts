@@ -16,7 +16,7 @@
 // UPDATE and DELETE read every row they will change before changing any
 // (doc 30: a scan is not interleaved with writes to its own table), so a row
 // an UPDATE moves within the clustered order is never met twice.
-import { FIELD_TYPE, MyjsError } from '@myjs/bytes'
+import { CHARSET_BINARY, FIELD_TYPE, MyjsError } from '@myjs/bytes'
 import { CLIENT, hasCap, messages, sqlError, type OkResult } from '@myjs/protocol'
 import type { ColumnDef, FieldBytes, IndexDef, RowId, Table, TableDef, Trx } from '@myjs/engine'
 import { EngineError } from '@myjs/engine'
@@ -35,12 +35,70 @@ import { NULL_TYPE, type ResultType } from './meta.ts'
 const isStrict = (sqlMode: string): boolean => /\bSTRICT_(TRANS|ALL)_TABLES\b/.test(sqlMode)
 
 /** A column's DEFAULT, compiled: its expression, or NULL, or "none" for a NOT NULL column without one. */
-export function defaultOf(run: Run, column: ColumnDef): Compiled | 'none' {
+/** Whether an expression names a column anywhere in it. */
+function namesColumn(e: unknown): boolean {
+  if (e === null || typeof e !== 'object') return false
+  if (Array.isArray(e)) return e.some(namesColumn)
+  if ((e as { kind?: unknown }).kind === NODE.COLUMN) return true
+  return Object.values(e).some((v) => typeof v === 'object' && namesColumn(v))
+}
+
+/**
+ * Whether a column's default names another column of its row, `DEFAULT (x +
+ * 1)`: such a default is evaluated over the row once its given values are in
+ * (8.4.11), and the others before.
+ */
+export function rowDependent(column: ColumnDef): boolean {
+  const text = column.attributes?.['default']
+  return typeof text === 'string' && namesColumn(parseExpression(text))
+}
+
+/**
+ * A literal default must store in its column as a strict INSERT would, or
+ * the definition is 1067 — `TINYINT DEFAULT 1000`, `VARCHAR(5) DEFAULT
+ * 'toolongvalue'`, an ENUM's non-member. What stores with a note, a
+ * DECIMAL's extra digits, is kept rounded and counted. Returns the notes.
+ */
+export function checkDefaults(run: Run, columns: readonly ColumnDef[]): number {
+  let notes = 0
+  for (const column of columns) {
+    const text = column.attributes?.['default']
+    if (typeof text !== 'string') continue
+    const e = parseExpression(text)
+    const literal = e.kind === NODE.LITERAL || (e.kind === NODE.UNARY && (e.op === '-' || e.op === '+') && e.operand.kind === NODE.LITERAL)
+    if (!literal || (e.kind === NODE.LITERAL && e.type === 'null')) continue
+    const ctx: StoreContext = { strict: true, row: 1, warnings: 0 }
+    try {
+      encodeField((defaultOf(run, column) as Compiled).eval([], run.env), { ...column, nullable: true }, ctx)
+    } catch (err) {
+      if (err instanceof MyjsError) throw sqlError('ER_INVALID_DEFAULT', `Invalid default value for '${column.name}'`)
+      throw err
+    }
+    notes += ctx.warnings
+  }
+  return notes
+}
+
+/**
+ * A column's default, compiled; `'none'` for a NOT NULL column without one.
+ * One that names a column of the row needs the row's `def` and is evaluated
+ * over the row.
+ */
+export function defaultOf(run: Run, column: ColumnDef, def?: TableDef): Compiled | 'none' {
   // An AUTO_INCREMENT column's DEFAULT is 0: `UPDATE t SET id = DEFAULT` stores 0 (8.4.11).
   if (column.autoIncrement === true) return { eval: () => intValue(0n), type: NULL_TYPE }
   const text = column.attributes?.['default']
-  if (typeof text === 'string') return compile(parseExpression(text), compileContext(run, EMPTY_SCOPE, 'field list'))
+  if (typeof text === 'string') {
+    const scope = def !== undefined && rowDependent(column) ? new TableScope([{ alias: def.name, def }]) : EMPTY_SCOPE
+    return compile(parseExpression(text), compileContext(run, scope, 'field list'))
+  }
   if (column.nullable) return { eval: () => null, type: NULL_TYPE }
+  // A NOT NULL ENUM has a default all the same, its first member: leaving it
+  // out is neither 1364 nor a warning (8.4.11).
+  if (column.type.type === FIELD_TYPE.ENUM) {
+    const first = implicitDefault(column)
+    return { eval: () => first, type: NULL_TYPE }
+  }
   return 'none'
 }
 
@@ -430,7 +488,8 @@ export function insert(run: Run, node: InsertNode, trx: Trx): OkResult {
   const upsert = mode === 'upsert' ? compileUpsert(run, def, node, targets, selectRefs) : undefined
   // The SELECT's hidden columns of the row being written, for the upsert.
   let selectExtras: readonly Value[] = []
-  const defaults = def.columns.map((c) => defaultOf(run, c))
+  const defaults = def.columns.map((c) => defaultOf(run, c, def))
+  const dependent = def.columns.flatMap((c, i) => (rowDependent(c) ? [i] : []))
   const keys = uniqueKeys(def)
   const autoAt = def.columns.findIndex((c) => c.autoIncrement === true)
   // The key the AUTO_INCREMENT column leads (`next_number_index`).
@@ -453,7 +512,7 @@ export function insert(run: Run, node: InsertNode, trx: Trx): OkResult {
     // zero, an AUTO_INCREMENT one 0 — and each value written replaces one.
     const values: Value[] = def.columns.map((column, i) => {
       const d = defaults[i] as Compiled | 'none'
-      return d === 'none' ? implicitDefault(column) : d.eval([], run.env)
+      return d === 'none' ? implicitDefault(column) : dependent.includes(i) ? null : d.eval([], run.env)
     })
     const given = new Set<number>()
     row.forEach((c, i) => {
@@ -466,6 +525,7 @@ export function insert(run: Run, node: InsertNode, trx: Trx): OkResult {
       values[target] = c.eval(values, run.env)
       given.add(target)
     })
+    for (const i of dependent) if (!given.has(i)) values[i] = (defaults[i] as Compiled).eval(values, run.env)
     def.columns.forEach((column, i) => {
       if (given.has(i)) return
       if (column.autoIncrement === true) values[i] = null
@@ -700,7 +760,7 @@ function assignAll(
         if (store.strict) throw sqlError('ER_NO_DEFAULT_FOR_FIELD', messages.noDefaultForField(column.name))
         store.warnings++
       }
-      assign(a.index, d === 'none' ? implicitDefault(column) : d.eval([], run.env))
+      assign(a.index, d === 'none' ? implicitDefault(column) : d.eval(values as Row, run.env))
     } else assign(a.index, a.value.eval(extra.length === 0 ? (values as Row) : [...values, ...extra], run.env))
   }
   if (sameRow(before, after)) return { after, values, changed: false }
@@ -719,7 +779,14 @@ export function implicitDefault(column: ColumnDef): Value {
     return { kind: 'datetime', v: { year: 0, month: 0, day: 0, hour: 0, minute: 0, second: 0, microsecond: 0 }, type: t === FIELD_TYPE.DATE ? 'DATE' : 'DATETIME', fsp: 0 }
   }
   if (t === FIELD_TYPE.TIME) return { kind: 'time', v: { negative: false, days: 0, hour: 0, minute: 0, second: 0, microsecond: 0 }, fsp: 0 }
-  if (column.type.collationId !== undefined) return { kind: 'string', v: '', collationId: column.type.collationId, coercibility: 2 }
+  // An ENUM's is its first member, JSON's the JSON null, a binary string's
+  // no bytes (8.4.11).
+  if (t === FIELD_TYPE.JSON) return { kind: 'json', v: { t: 'null' } }
+  if (column.type.collationId === CHARSET_BINARY) return { kind: 'bytes', v: new Uint8Array(0) }
+  if (column.type.collationId !== undefined) {
+    const v = t === FIELD_TYPE.ENUM ? (column.type.members?.[0] ?? '') : ''
+    return { kind: 'string', v, collationId: column.type.collationId, coercibility: 2 }
+  }
   return intValue(0n)
 }
 
@@ -789,7 +856,7 @@ export function update(run: Run, node: UpdateNode, trx: Trx): OkResult {
     return { index, value: isDefaultKeyword(a.value) ? undefined : compile(a.value, compileContext(run, scope, 'field list')) }
   })
   const onUpdate = onUpdateOf(run, def)
-  const defaults = def.columns.map((c) => defaultOf(run, c))
+  const defaults = def.columns.map((c) => defaultOf(run, c, def))
   const check = checker(run, def)
   const store: StoreContext = { strict: isStrict(run.env.session.sqlMode), row: 1, warnings: 0, table: def.name }
   const keys = uniqueKeys(def)

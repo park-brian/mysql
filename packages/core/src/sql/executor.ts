@@ -61,7 +61,7 @@ import { checkClauses, withChecks } from './checks.ts'
 import { showCreateTable } from './show-create.ts'
 import { DEFAULT_COLLATION, createTableSpec, deprecationWarnings, resolveCollation } from './ddl.ts'
 import { foreignKeyChecks, foreignKeyClause, referencingKeys, withForeignKeys } from './foreign-keys.ts'
-import { insert, remove, update } from './dml.ts'
+import { checkDefaults, insert, remove, update } from './dml.ts'
 import { columnDefinition, stringType } from './meta.ts'
 import { columnsOf, compileContext, planQuery, resultSet, viewTable, type Run } from './query.ts'
 import { SqlSession, isolationOf } from './session.ts'
@@ -447,8 +447,9 @@ export class SqlExecutor implements Executor {
         if (!catalog.tables(schema).some((t) => t.name === spec.name)) {
           spec = withForeignKeys(catalog, schema, spec, statement.keys.filter((k) => k.type === KEY.FOREIGN).map(foreignKeyClause), foreignKeyChecks(run))
         }
+        const notes = checkDefaults(run, spec.columns)
         catalog.createTable(schema, spec, { ifNotExists: statement.ifNotExists === true })
-        const warnings = deprecationWarnings(statement)
+        const warnings = deprecationWarnings(statement) + notes
         return { affectedRows: 0, ...(warnings > 0 ? { warnings } : {}) }
       }
       case STATEMENT.ALTER_TABLE:

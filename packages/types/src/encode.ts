@@ -153,6 +153,7 @@ function nameOfType(t: ColumnType): string {
  */
 function numericSource(v: Exclude<Value, null>, column: FieldColumn, ctx: StoreContext): Exclude<Value, null> {
   if (v.kind !== 'string' && v.kind !== 'bytes') return v
+  if (v.kind === 'string' && v.ordinal !== undefined) return { kind: 'int', v: v.ordinal, unsigned: true }
   const text = toText(v)
   const p = numericPrefix(text)
   if (p.complete) return v
@@ -471,10 +472,12 @@ export function decodeField(field: Uint8Array | null, t: ColumnType): Value {
       return { kind: 'time', v: decodeTime2(field, t.decimals ?? 0), fsp: t.decimals ?? 0 }
     case FIELD_TYPE.ENUM: {
       const i = decodeEnum(field)
-      return string(i === 0 ? '' : (enumMember(i, t.members ?? []) ?? ''), t.collationId ?? 255, COERCIBILITY.IMPLICIT)
+      return { ...string(i === 0 ? '' : (enumMember(i, t.members ?? []) ?? ''), t.collationId ?? 255, COERCIBILITY.IMPLICIT), ordinal: BigInt(i) }
     }
-    case FIELD_TYPE.SET:
-      return string(setMembers(decodeSet(field), t.members ?? []).join(','), t.collationId ?? 255, COERCIBILITY.IMPLICIT)
+    case FIELD_TYPE.SET: {
+      const bits = decodeSet(field)
+      return { ...string(setMembers(bits, t.members ?? []).join(','), t.collationId ?? 255, COERCIBILITY.IMPLICIT), ordinal: BigInt(bits) }
+    }
     case FIELD_TYPE.BIT:
       return int(decodeBit(field), true)
     case FIELD_TYPE.STRING:
