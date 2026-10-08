@@ -29,6 +29,7 @@ import {
 } from '@myjs/types'
 import type { Compiled, Env, Row } from './compile.ts'
 import { jsonType, type ResultType } from './meta.ts'
+import { bitBytes } from './wire.ts'
 
 /** A value of type `t` as JSON; SQL NULL is JSON null. */
 export function asJson(v: Value, t: ResultType): JsonDoc {
@@ -37,14 +38,7 @@ export function asJson(v: Value, t: ResultType): JsonDoc {
   if (v.kind === 'bytes') return { t: 'opaque', field: opaqueField(t), v: v.v }
   if (t.field === FIELD_TYPE.BIT && v.kind === 'int') {
     // A BIT's bytes, big-endian, as many as its width needs.
-    const width = Math.max(1, Math.ceil(t.length / 8))
-    const out = new Uint8Array(width)
-    let n = v.v
-    for (let i = width - 1; i >= 0; i--) {
-      out[i] = Number(n & 0xffn)
-      n >>= 8n
-    }
-    return { t: 'opaque', field: FIELD_TYPE.BIT, v: out }
+    return { t: 'opaque', field: FIELD_TYPE.BIT, v: bitBytes(v.v, t.length) }
   }
   return toJsonDoc(v)
 }

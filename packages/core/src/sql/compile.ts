@@ -315,7 +315,7 @@ function literal(e: LiteralNode, ctx: CompileContext): Compiled {
   // `_latin1 x'E9'` is the string 'é' (8.4.11).
   const introduced = (b: Uint8Array): Compiled => {
     const id = e.charset === undefined && e.collation === undefined ? CHARSET_BINARY : introducerCollation(e, ctx)
-    if (id === CHARSET_BINARY) return lit(bytesValue(b), stringType(b.length, CHARSET_BINARY, false))
+    if (id === CHARSET_BINARY) return lit(e.charset === undefined && e.collation === undefined ? { kind: 'bytes', v: b, hex: true } : bytesValue(b), stringType(b.length, CHARSET_BINARY, false))
     const decode = (bytes: Uint8Array): string => {
       try {
         return decodeCollation(bytes, id)
@@ -563,8 +563,8 @@ function binary(op: string, left: Expression, right: Expression, extra: Expressi
   if ((COMPARISONS[op] !== undefined || op === '<=>') && (isRow(left) || isRow(right))) return rowComparison(op, left, right, ctx)
   const a = compile(left, ctx)
   if (op === 'BETWEEN' || op === 'NOT BETWEEN') {
-    const lo = compile(right, ctx)
-    const hi = compile(extra as Expression, ctx)
+    const lo = timeConstant(a, left, right, compile(right, ctx))
+    const hi = timeConstant(a, left, extra as Expression, compile(extra as Expression, ctx))
     const negated = op === 'NOT BETWEEN'
     return {
       eval: (r, env) => {
@@ -685,7 +685,17 @@ function binary(op: string, left: Expression, right: Expression, extra: Expressi
 
 // --- TIME against DATETIME --------------------------------------------------------
 
-const constantNode = (e: Expression): boolean => e.kind === NODE.LITERAL || e.kind === NODE.PLACEHOLDER
+const VOLATILE = new Set(['RAND', 'UUID', 'UUID_SHORT', 'SYSDATE', 'RANDOM_BYTES', 'SLEEP', 'LAST_INSERT_ID', 'ROW_COUNT', 'FOUND_ROWS', 'GET_LOCK', 'RELEASE_LOCK'])
+
+/** An expression whose value the statement fixes: no column, subquery, variable or volatile function in it. */
+function constantNode(e: unknown): boolean {
+  if (e === null || typeof e !== 'object') return true
+  if (Array.isArray(e)) return e.every(constantNode)
+  const n = e as { kind?: unknown; name?: unknown }
+  if (n.kind === NODE.COLUMN || n.kind === NODE.SUBQUERY || n.kind === NODE.VARIABLE) return false
+  if (n.kind === NODE.CALL && VOLATILE.has(String(n.name).toUpperCase())) return false
+  return Object.values(e).every((v) => typeof v !== 'object' || constantNode(v))
+}
 
 /**
  * A TIME compared with a DATETIME, as 8.4.11 compares them. A constant
@@ -698,23 +708,36 @@ function temporalOperands(left: Expression, right: Expression, a: Compiled, b: C
   const ak = a.type.kind
   const bk = b.type.kind
   // A string constant too: `tm = '1970-01-01 14:37:36'` finds 14:37:36.
-  if (ak === 'time' && left.kind === NODE.COLUMN && constantNode(right) && (bk === 'datetime' || bk === 'string')) return [a, asTimeOfDay(b)]
-  if (bk === 'time' && right.kind === NODE.COLUMN && constantNode(left) && (ak === 'datetime' || ak === 'string')) return [asTimeOfDay(a), b]
+  if (ak === 'time' && left.kind === NODE.COLUMN && constantNode(right) && (bk === 'datetime' || bk === 'string' || bk === 'int')) return [a, asTimeOfDay(b)]
+  if (bk === 'time' && right.kind === NODE.COLUMN && constantNode(left) && (ak === 'datetime' || ak === 'string' || ak === 'int')) return [asTimeOfDay(a), b]
   if (!((ak === 'time' && bk === 'datetime') || (ak === 'datetime' && bk === 'time'))) return [a, b]
   return ak === 'time' ? [onStatementDate(a), b] : [a, onStatementDate(b)]
 }
+
+/**
+ * A string that `str_to_time` reads as a datetime and keeps the time of:
+ * a date, a space and a time, or 14 digits. `'1970-01-01 14:37'` is 14:37:00;
+ * `'1970-01-01T14:37:36'` and `'2020-01-01'` are read as a number's prefix,
+ * 00:20:20 (8.4.11), which is not done here.
+ */
+const DATETIME_TEXT = /^\s*(?:\d+[-/.]\d+[-/.]\d+ +\d+:\d+(?::\d+(?:\.\d*)?)?|\d{14}(?:\.\d*)?)\s*$/
 
 function asTimeOfDay(c: Compiled): Compiled {
   return {
     eval: (r, env) => {
       const v = c.eval(r, env)
       if (v === null || v.kind === 'time') return v
-      // A string with a date in it keeps its time of day, as a DATETIME does.
-      const dt = v.kind === 'datetime' ? v : v.kind === 'string' && /^\s*\d+[-/.]\d+[-/.]\d+[ T]/.test(v.v) ? toDateTime(v, 'DATETIME') : undefined
+      // A datetime keeps its time of day, and so does a string or a number written as one.
+      const dt = v.kind === 'datetime' ? v : (v.kind === 'string' && DATETIME_TEXT.test(v.v)) || (v.kind === 'int' && v.v >= 10_000_000_000n) ? toDateTime(v, 'DATETIME') : undefined
       return toTime(dt ?? v) ?? v
     },
     type: c.type,
   }
+}
+
+/** A constant compared with a TIME column, converted to a time of day as MySQL converts it once. */
+function timeConstant(a: Compiled, left: Expression, e: Expression, c: Compiled): Compiled {
+  return a.type.kind === 'time' && left.kind === NODE.COLUMN && constantNode(e) && (c.type.kind === 'datetime' || c.type.kind === 'string' || c.type.kind === 'int') ? asTimeOfDay(c) : c
 }
 
 function onStatementDate(c: Compiled): Compiled {
@@ -874,7 +897,7 @@ function inList(negated: boolean, left: Expression, right: Expression, ctx: Comp
     }
   }
   const a = compile(left, ctx)
-  const items = list.map((i) => compile(i, ctx))
+  const items = list.map((i) => timeConstant(a, left, i, compile(i, ctx)))
   // A long list of constants is sorted once per execution and searched, as
   // MySQL's `in_vector` is: Prisma sends 65,535 of them.
   const searchable = items.length >= 10 && list.every(constantItem)

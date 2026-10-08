@@ -39,6 +39,7 @@ import {
   decimal,
   decimalIntegerDigits,
   double,
+  hexNumber,
   int,
   json,
   numericPrefix,
@@ -154,6 +155,7 @@ function nameOfType(t: ColumnType): string {
 function numericSource(v: Exclude<Value, null>, column: FieldColumn, ctx: StoreContext): Exclude<Value, null> {
   if (v.kind !== 'string' && v.kind !== 'bytes') return v
   if (v.kind === 'string' && v.ordinal !== undefined) return { kind: 'int', v: v.ordinal, unsigned: true }
+  if (v.kind === 'bytes' && v.hex === true) return { kind: 'int', v: hexNumber(v.v), unsigned: true }
   const text = toText(v)
   const p = numericPrefix(text)
   if (p.complete) return v

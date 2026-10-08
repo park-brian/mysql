@@ -75,6 +75,19 @@ export interface StringValue {
 export interface BytesValue {
   readonly kind: 'bytes'
   readonly v: Uint8Array
+  /**
+   * A hex or bit literal with no introducer, which a numeric context reads as
+   * a big-endian unsigned integer: `x'41' + 0` is 65, where `CAST('A' AS
+   * BINARY) + 0` is 0 (8.4.11).
+   */
+  readonly hex?: boolean
+}
+
+/** A hex literal's bytes as the unsigned integer they spell, big-endian; its low 64 bits. */
+export function hexNumber(v: Uint8Array): bigint {
+  let n = 0n
+  for (const b of v) n = ((n << 8n) | BigInt(b)) & 0xffff_ffff_ffff_ffffn
+  return n
 }
 
 export type TemporalType = 'DATE' | 'DATETIME' | 'TIMESTAMP'
@@ -205,6 +218,7 @@ export function toDouble(v: Exclude<Value, null>): number {
     case 'string':
     case 'bytes':
       if (v.kind === 'string' && v.ordinal !== undefined) return Number(v.ordinal)
+      if (v.kind === 'bytes' && v.hex === true) return Number(hexNumber(v.v))
       return Number(numericPrefix(textOf(v)).text)
     case 'datetime':
       return Number(temporalNumber(v))
@@ -240,6 +254,7 @@ export function toDecimal(v: Exclude<Value, null>): DecimalValue {
     case 'string':
     case 'bytes': {
       if (v.kind === 'string' && v.ordinal !== undefined) return decimal(v.ordinal, 0)
+      if (v.kind === 'bytes' && v.hex === true) return decimal(hexNumber(v.v), 0)
       const p = numericPrefix(textOf(v))
       return /[eE]/.test(p.text) ? doubleToDecimal(Number(p.text)) : parseDecimal(p.text)
     }
@@ -278,6 +293,7 @@ export function toInteger(v: Exclude<Value, null>): bigint {
     case 'string':
     case 'bytes': {
       if (v.kind === 'string' && v.ordinal !== undefined) return v.ordinal
+      if (v.kind === 'bytes' && v.hex === true) return hexNumber(v.v)
       const p = numericPrefix(textOf(v))
       return p.fractional ? (/[eE]/.test(p.text) ? roundDouble(Number(p.text)) : rescale(parseDecimal(p.text), 0).v) : BigInt(p.text.replace(/^\+/, ''))
     }
@@ -400,7 +416,7 @@ export function renderDouble(n: number): string {
  */
 export function parseDateTime(text: string): { readonly v: MysqlDateTime; readonly hasTime: boolean; readonly fsp: number } | undefined {
   const s = text.trim()
-  let m = /^(\d{4})[-/.](\d{1,2})[-/.](\d{1,2})(?:[ T](\d{1,2}):(\d{1,2})(?::(\d{1,2})(?:\.(\d{1,6}))?)?)?$/.exec(s)
+  let m = /^(\d{4}|\d{2})[-/.](\d{1,2})[-/.](\d{1,2})(?:[ T](\d{1,2}):(\d{1,2})(?::(\d{1,2})(?:\.(\d{1,6}))?)?)?$/.exec(s)
   if (m === null) {
     const compact = /^(\d{4})(\d{2})(\d{2})(?:(\d{2})(\d{2})(\d{2})(?:\.(\d{1,6}))?)?$/.exec(s)
     if (compact === null) return undefined
@@ -408,8 +424,11 @@ export function parseDateTime(text: string): { readonly v: MysqlDateTime; readon
   }
   const n = (i: number): number => Number(m[i] ?? 0)
   const fracText = m[7] ?? ''
+  // A two-digit year is 2000–2069 below 70 and 1970–1999 from it, as MySQL
+  // reads one (`'70-01-01'` is 1970-01-01); the zero date stays zero.
+  const short = (m[1] ?? '').length === 2 && (n(1) !== 0 || n(2) !== 0 || n(3) !== 0)
   const v: MysqlDateTime = {
-    year: n(1),
+    year: short ? n(1) + (n(1) < 70 ? 2000 : 1900) : n(1),
     month: n(2),
     day: n(3),
     hour: n(4),
@@ -502,6 +521,10 @@ function truncateTemporal(v: DateTimeValue, type: TemporalType): DateTimeValue {
 export function toTime(v: Exclude<Value, null>): TimeValue | undefined {
   if (v.kind === 'time') return v
   if (v.kind === 'datetime') return { kind: 'time', v: { negative: false, days: 0, hour: v.v.hour, minute: v.v.minute, second: v.v.second, microsecond: v.v.microsecond }, fsp: v.fsp }
-  const p = parseTime(toText(v))
-  return p === undefined ? undefined : { kind: 'time', v: p.v, fsp: p.fsp }
+  const text = toText(v)
+  const p = parseTime(text)
+  if (p !== undefined) return { kind: 'time', v: p.v, fsp: p.fsp }
+  // A datetime written out is its time of day (`str_to_time`, 8.4.11).
+  const d = parseDateTime(text)
+  return d === undefined || !d.hasTime ? undefined : { kind: 'time', v: { negative: false, days: 0, hour: d.v.hour, minute: d.v.minute, second: d.v.second, microsecond: d.v.microsecond }, fsp: d.fsp }
 }

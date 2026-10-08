@@ -110,6 +110,7 @@ export {
   int as intValue,
   isNumeric,
   isText,
+  hexNumber,
   numericPrefix,
   parseDateTime,
   parseDecimal,

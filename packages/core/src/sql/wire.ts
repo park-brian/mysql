@@ -39,6 +39,8 @@ function textOf(v: Exclude<Value, null>, t: ResultType): string {
 export function toWire(v: Value, t: ResultType, protocol: WireProtocol, session: Session): RowValue {
   if (v === null) return null
   if (v.kind === 'bytes') return v.v
+  // A BIT is sent as its bytes, big-endian, in either protocol (8.4.11).
+  if (t.field === FIELD_TYPE.BIT && v.kind === 'int') return bitBytes(v.v, t.length)
   if (v.kind === 'string') return session.transcoder.encode(v.v, session.characterSet)
   if (protocol === 'text') return session.transcoder.encode(textOf(v, t), session.characterSet)
 
@@ -66,4 +68,14 @@ export function toWire(v: Value, t: ResultType, protocol: WireProtocol, session:
     default:
       return session.transcoder.encode(textOf(v, t), session.characterSet)
   }
+}
+
+/** A BIT(n) value's bytes: big-endian, as many as n bits take. */
+export function bitBytes(n: bigint, bits: number): Uint8Array {
+  const out = new Uint8Array(Math.max(1, Math.ceil(bits / 8)))
+  for (let i = out.length - 1; i >= 0; i--) {
+    out[i] = Number(n & 0xffn)
+    n >>= 8n
+  }
+  return out
 }
