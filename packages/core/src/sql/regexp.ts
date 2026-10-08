@@ -69,9 +69,54 @@ function unicodeEscapes(p: string): string {
 
 const illegal = () => sqlError('ER_REGEXP_ILLEGAL_ARGUMENT', 'Illegal argument to a regular expression.')
 
+/**
+ * ICU's limits, which the engine does not have. A pattern nested 100 groups
+ * deep is 3687. And ICU stops a match after `regexp_time_limit` steps
+ * (3699), where the engine would backtrack for as long as it takes: a
+ * quantified group with a quantifier or an alternation inside it, `(a+)+b`,
+ * is exponential in the subject's length, and 8.4.11 gives up past 17
+ * characters. Such a pattern over a longer subject is refused with 3699
+ * before it runs, so a statement never hangs; a named divergence, since the
+ * server would finish one that happens to match quickly.
+ */
+function shapeOf(pattern: string): { readonly depth: number; readonly nested: boolean } {
+  let depth = 0
+  let deepest = 0
+  let inClass = false
+  // For each open group: whether it holds a quantifier or an alternation.
+  const open: boolean[] = []
+  let nested = false
+  for (let i = 0; i < pattern.length; i++) {
+    const c = pattern[i] as string
+    if (c === '\\') {
+      i++
+      continue
+    }
+    if (inClass) {
+      if (c === ']') inClass = false
+      continue
+    }
+    if (c === '[') inClass = true
+    else if (c === '(') {
+      open.push(false)
+      deepest = Math.max(deepest, ++depth)
+    } else if (c === ')') {
+      const inner = open.pop() === true
+      depth = Math.max(0, depth - 1)
+      const next = pattern[i + 1]
+      if (inner && (next === '*' || next === '+' || (next === '{' && /^\{\d*,\}/.test(pattern.slice(i + 1))))) nested = true
+      if (inner && open.length > 0) open[open.length - 1] = true
+    } else if ((c === '*' || c === '+' || c === '|' || c === '{') && open.length > 0) open[open.length - 1] = true
+  }
+  return { depth: deepest, nested }
+}
+
+const RUNAWAY_LENGTH = 17
+
 /** ICU's pattern as the engine's: POSIX classes inside brackets, a leading `(?i)`. */
 function translate(pattern: string): { source: string; insensitive?: boolean } {
   if (pattern === '' || pattern.includes('[[:<:]]') || pattern.includes('[[:>:]]')) throw illegal()
+  if (shapeOf(pattern).depth >= 100) throw sqlError('ER_REGEXP_INTERNAL_ERROR', 'Internal error in the regular expression library.')
   let insensitive: boolean | undefined
   let p = pattern
   const inline = /^\(\?([a-z]*)(?:-([a-z]*))?\)/.exec(p)
@@ -173,6 +218,7 @@ function regexpFor(subject: Exclude<Value, null>, pattern: Exclude<Value, null>,
   const collation = collationFor(subject, pattern)
   const text = textOf(pattern)
   const translated = translate(text)
+  if (shapeOf(text).nested && [...textOf(subject)].length > RUNAWAY_LENGTH) throw sqlError('ER_REGEXP_TIME_OUT', 'Timeout exceeded in regular expression match.')
   const insensitive = type?.insensitive ?? translated.insensitive ?? /_ci$/.test(nameOf(collation))
   const flags = `${global ? 'g' : ''}u${insensitive ? 'i' : ''}${type?.multiline === true ? 'm' : ''}${type?.dotAll === true ? 's' : ''}`
   return compiled(translated.source, flags, text)

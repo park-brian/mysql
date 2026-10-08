@@ -10,7 +10,9 @@
 // below 1 the first; the return option (1210); REPLACE's occurrence 0 for
 // every match and the text before the position kept; ICU's replacement,
 // `$n` (3686 past the last group), `\x`, and a bare `$` 3887; empty
-// matches; and 3995 for a binary replacement into text.
+// matches; and 3995 for a binary replacement into text. Last, ICU's limits:
+// 100 nested groups is 3687, and a runaway backtrack is 3699, which is
+// raised here before the engine could hang on it.
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import mysql from 'mysql2/promise'
@@ -122,6 +124,11 @@ const SCRIPT: readonly (readonly [string, Outcome])[] = [
   ["SELECT id FROM rt WHERE REGEXP_INSTR(s, 'e') > 3 ORDER BY id", [["1"]]],
   ["SELECT REGEXP_REPLACE('a😀b😀c', '😀', '-', 3), REGEXP_INSTR('a😀b😀c', '😀', 3), REGEXP_SUBSTR('héllo wörld', '\\\\w+', 7)", [["a😀b-c","4","wörld"]]],
   ["DROP TABLE rt", [0,0,"",0]],
+  ["SELECT REGEXP_INSTR('a', '(((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((a)))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))')", [["1"]]],
+  ["SELECT REGEXP_INSTR('a', '((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((((a))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))')", [3687,"Internal error in the regular expression library."]],
+  ["SELECT REGEXP_INSTR('aaaaaaaaaaaaaaaa!', '(a+)+b')", [["0"]]],
+  ["SELECT REGEXP_INSTR('aaaaaaaaaaaaaaaaaaaaaaaaa!', '(a+)+b')", [3699,"Timeout exceeded in regular expression match."]],
+  ["SELECT 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaa!' REGEXP '(a+)+b'", [3699,"Timeout exceeded in regular expression match."]],
 ]
 
 test('M5.10: REGEXP and REGEXP_LIKE answer every statement of the script as 8.4.11 did', async () => {

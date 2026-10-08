@@ -24,6 +24,8 @@
 //     it holds every `+` term, no `-` term and, with no `+` term, any other.
 //     The grammar's errors are 1064 with Bison's words, as the server's are.
 //
+// More than 32 levels of parentheses is 209, as InnoDB's parser has it.
+//
 // Named divergences: WITH QUERY EXPANSION is refused; InnoDB applies a
 // transaction's changes to the index at its commit, and counts the rows of
 // an UPDATE's old version in a prefix's or a boolean query's statistics
@@ -32,7 +34,7 @@
 import { CHARSET_BINARY, FIELD_TYPE } from '@myjs/bytes'
 import { requireCollationInfo } from '@myjs/charsets'
 import type { ColumnDef, TableDef } from '@myjs/engine'
-import { messages, sqlError } from '@myjs/protocol'
+import { SqlError, messages, sqlError } from '@myjs/protocol'
 import { toText, type Value } from '@myjs/types'
 import { FT_MAX_TOKEN, FT_MIN_TOKEN, FT_STOPWORDS } from './fulltext-params.ts'
 
@@ -114,6 +116,9 @@ export function parseBoolean(query: string, fold: (w: string) => string): Term[]
   }
   const describe = (c: string | undefined) => (c === undefined ? '$end' : `'${c}'`)
   const list = (depth: number): Term[] => {
+    // InnoDB's parser stops at 32 levels: a handler error, 209, with no
+    // symbol of its own in the server's error table (8.4.11).
+    if (depth > 32) throw new SqlError('HA_ERR_FTS_TOO_MANY_NESTED_EXP', 'Too many nested sub-expressions in a full-text search', { errno: 209, sqlState: 'HY000' })
     const terms: Term[] = []
     for (;;) {
       space()
