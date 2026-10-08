@@ -259,6 +259,9 @@ jobs:
           # M5.18: many tables at a time, each SELECT through both protocols
           # and with its plan skeleton, since row order is the plan's.
           npm run capture:relational
+          # M5.21: JSON columns, constructors and aggregates, and the LATERAL
+          # shape Drizzle sends, as the text the server sent.
+          npm run capture:json
           git diff --stat -- test/format/fixtures/ packages/parser/src/keywords.ts
       - name: upload the captured fixtures
         uses: actions/upload-artifact@v4

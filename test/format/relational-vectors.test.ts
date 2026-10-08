@@ -56,7 +56,7 @@ interface Outcome extends Answer {
   readonly warnings?: number
 }
 
-interface Fixture {
+export interface Fixture {
   readonly capturedAgainst: string
   readonly sqlMode: string
   readonly cases: readonly (readonly Outcome[])[]
@@ -88,9 +88,10 @@ function compare(want: Answer, got: Answer): 'equal' | 'reordered' | 'different'
   return JSON.stringify(sorted(want.rows)) === JSON.stringify(sorted(got.rows)) ? 'reordered' : 'different'
 }
 
-export async function replay(fixture: Fixture): Promise<Tally> {
+/** Replay a captured corpus through the executor. `connection` is the driver's options the corpus was captured with. */
+export async function replay(fixture: Fixture, connection: Record<string, unknown> = CONNECTION): Promise<Tally> {
   const db = await MySQL.open(':memory:')
-  const conn = await mysql.createConnection({ stream: db.createStream() as never, user: 'root', password: '', ...CONNECTION })
+  const conn = await mysql.createConnection({ stream: db.createStream() as never, user: 'root', password: '', ...connection })
   await conn.query(`SET sql_mode = '${fixture.sqlMode}'`)
   const tally: Tally = { statements: 0, agreed: 0, refused: 0, orderedByStatement: 0, orderedByPlan: 0, unordered: 0, unorderedInOrder: 0, unmodelled: 0, mismatches: [] }
   try {
