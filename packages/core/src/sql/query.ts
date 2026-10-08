@@ -12,9 +12,11 @@
 import type { Catalog, ColumnDef, Table, TableDef } from '@myjs/engine'
 import { NODE, QUERY, REF, TOKEN, deparse, lex, parseSqlMode, type Expression, type OrderItem, type QueryExpression, type SelectNode, type TableName, type Token } from '@myjs/parser'
 import { messages, sqlError, type ColumnDefinition, type ResultSet, type RowValue } from '@myjs/protocol'
-import { integerRange, toInteger, truth, type Value } from '@myjs/types'
-import { compile, EMPTY_SCOPE, type CompileContext, type Compiled, type Env, type Row, type Scope } from './compile.ts'
-import { columnDefinition, type ResultType } from './meta.ts'
+import { intValue, integerRange, toInteger, truth, type Value } from '@myjs/types'
+import { compile, EMPTY_SCOPE, type CompileContext, type Compiled, type Env, type GroupKeys, type Row, type Scope } from './compile.ts'
+import { AggregateSink, chooseStrategy, containsAggregate, groupRows, isAggregate } from './group.ts'
+import { columnDefinition, intType, type ResultType } from './meta.ts'
+import { FIELD_TYPE } from '@myjs/bytes'
 import { distinct, filter, limit, project, scan, sort, type ScannedRow, type SortKey } from './operators.ts'
 import { chooseAccess, type Access } from './plan.ts'
 import { TableScope } from './scope.ts'
@@ -124,8 +126,6 @@ export function selectOf(q: QueryExpression): SelectNode {
 
 export function planSelect(run: Run, q: QueryExpression): SelectPlan {
   const node = selectOf(q)
-  if (node.groupBy !== undefined) throw sqlError('ER_NOT_SUPPORTED_YET', messages.notSupported('GROUP BY'))
-  if (node.having !== undefined) throw sqlError('ER_NOT_SUPPORTED_YET', messages.notSupported('HAVING'))
   if (node.windows !== undefined) throw sqlError('ER_NOT_SUPPORTED_YET', messages.notSupported('WINDOW'))
 
   // FROM: nothing, `DUAL`, or one table.
@@ -143,6 +143,17 @@ export function planSelect(run: Run, q: QueryExpression): SelectPlan {
   const scope = source === undefined ? undefined : new TableScope([{ alias: source.alias, def: source.def }])
   const lookup: Scope = scope ?? EMPTY_SCOPE
 
+  // An aggregate anywhere in the select list or HAVING makes the query a
+  // grouped one, even with no GROUP BY; one in ORDER BY alone does not, and
+  // is 3029 (8.4.11).
+  const grouped = node.groupBy !== undefined || node.items.some((i) => containsAggregate(i.expr)) || (node.having !== undefined && containsAggregate(node.having))
+  if (!grouped && (q.orderBy ?? []).some((o) => containsAggregate(o.expr))) {
+    const at = (q.orderBy ?? []).findIndex((o) => containsAggregate(o.expr)) + 1
+    throw sqlError('ER_AGGREGATE_ORDER_NON_AGG_QUERY', `Expression #${at} of ORDER BY contains aggregate function and applies to the result of a non-aggregated query`)
+  }
+  if (!grouped && node.having !== undefined) throw sqlError('ER_NOT_SUPPORTED_YET', messages.notSupported('HAVING without grouping'))
+  if (grouped) return planGrouped(run, q, node, source, scope, lookup)
+
   // The select list, `*` expanded.
   const texts = itemTexts(run, node)
   const items: { name: string; compiled: Compiled; alias?: string }[] = []
@@ -155,13 +166,7 @@ export function planSelect(run: Run, q: QueryExpression): SelectPlan {
       return
     }
     const compiled = compile(e, compileContext(run, lookup, 'field list'))
-    const text = texts[i]
-    // A column is named by its own name as written, a string literal by its
-    // value, and anything else by its source text.
-    const name =
-      item.alias ??
-      (e.kind === NODE.COLUMN ? (e.parts[e.parts.length - 1] as string) : e.kind === NODE.LITERAL && e.type === 'string' ? (e.value as string) : text === undefined ? deparseName(e) : text)
-    items.push({ name, compiled, ...(item.alias === undefined ? {} : { alias: item.alias }) })
+    items.push({ name: itemName(item, texts[i]), compiled, ...(item.alias === undefined ? {} : { alias: item.alias }) })
   })
 
   // `SELECT DISTINCT` is run through a temporary table — which changes the
@@ -212,6 +217,381 @@ export function planSelect(run: Run, q: QueryExpression): SelectPlan {
       return limit(out, offset, limitCount)
     },
   }
+}
+
+/** A result column's name: its alias, a bare column's name as written, a string literal's value, else its source text. */
+function itemName(item: SelectNode['items'][number], text: string | undefined): string {
+  const e = item.expr
+  return item.alias ?? (e.kind === NODE.COLUMN ? (e.parts[e.parts.length - 1] as string) : e.kind === NODE.LITERAL && e.type === 'string' ? (e.value as string) : text === undefined ? deparseName(e) : text)
+}
+
+/**
+ * A grouped query (M5.5): GROUP BY, an aggregate, or both. See `group.ts`
+ * for the grouped row it compiles its select list against, and for how the
+ * strategy — index, sort, temporary table — is chosen as 8.4.11 chooses it.
+ */
+function planGrouped(
+  run: Run,
+  q: QueryExpression,
+  node: SelectNode,
+  source: { readonly alias: string; readonly def: TableDef; readonly table: Table } | undefined,
+  scope: TableScope | undefined,
+  lookup: Scope,
+): SelectPlan {
+  const width = scope?.width ?? 0
+  const rollup = node.groupBy?.rollup === true
+  const texts = itemTexts(run, node)
+
+  // The select list with `*` expanded to its columns, as expressions, since
+  // above the grouping a column is not simply its slot.
+  const selectItems: { expr: Expression; name: string; alias?: string }[] = []
+  node.items.forEach((item, i) => {
+    const e = item.expr
+    if (e.kind === NODE.COLUMN && e.parts[e.parts.length - 1] === '*') {
+      if (scope === undefined) throw sqlError('ER_NO_TABLES_USED', 'No tables used')
+      const table = e.parts.length >= 2 ? e.parts[e.parts.length - 2] : undefined
+      for (const t of scope.tables) {
+        if (table !== undefined && t.alias !== table) continue
+        for (const c of t.def.columns) selectItems.push({ expr: { kind: NODE.COLUMN, parts: [t.alias, c.name], at: e.at }, name: c.name })
+      }
+      scope.star(table)
+      return
+    }
+    selectItems.push({ expr: e, name: itemName(item, texts[i]), ...(item.alias === undefined ? {} : { alias: item.alias }) })
+  })
+
+  // GROUP BY: a table column first, then a select-list alias, then a
+  // position. `SELECT k AS s … GROUP BY s` groups by the column `s` (8.4.11).
+  const rowCtx = compileContext(run, lookup, 'group statement')
+  const keys = (node.groupBy?.items ?? []).map((g) => {
+    let expr: Expression = g
+    if (g.kind === NODE.LITERAL && g.type === 'int') {
+      const item = selectItems[Number(g.value as bigint) - 1]
+      if (item === undefined) throw sqlError('ER_BAD_FIELD_ERROR', messages.unknownColumn(String(g.value), 'group statement'))
+      expr = item.expr
+    } else if (g.kind === NODE.COLUMN && g.parts.length === 1) {
+      try {
+        lookup.resolve(g.parts, 'group statement')
+      } catch (e) {
+        const alias = selectItems.find((i) => i.alias?.toLowerCase() === (g.parts[0] as string).toLowerCase())
+        if (alias === undefined) throw e
+        expr = alias.expr
+      }
+    }
+    if (containsAggregate(expr)) throw sqlError('ER_WRONG_GROUP_FIELD', `Can't group on '${deparse(g)}'`)
+    const compiled = compile(expr, rowCtx)
+    const index = expr.kind === NODE.COLUMN ? lookup.resolve(expr.parts, 'group statement').index : undefined
+    return { expr, compiled, index, text: deparse(expr) }
+  })
+
+  // The strategy, which decides the order the groups come out in and whether
+  // their columns go through a temporary table.
+  const keyColumns = keys.map((k) => (k.index === undefined || source === undefined ? undefined : source.def.columns[k.index]?.name))
+  const distinctAggregate = [...node.items.map((i) => i.expr), ...(node.having === undefined ? [] : [node.having]), ...(q.orderBy ?? []).map((o) => o.expr)].some((e) => needsSortedGroups(e))
+  const { strategy, index: groupIndex } = chooseStrategy(source?.def, keyColumns, rollup, distinctAggregate)
+
+  const level = width + keys.length
+  const sink = new AggregateSink(compileContext(run, lookup, 'field list'), level + 1)
+  const groupKeys: GroupKeys = {
+    match(e) {
+      // Only ROLLUP needs a key read from its slot: elsewhere the group's
+      // first row holds the same value.
+      if (!rollup) return undefined
+      let j = -1
+      if (e.kind === NODE.COLUMN) {
+        let at: number | undefined
+        try {
+          at = lookup.resolve(e.parts, 'field list').index
+        } catch {
+          return undefined
+        }
+        j = keys.findIndex((k) => k.index === at)
+      } else {
+        const text = deparse(e)
+        j = keys.findIndex((k) => k.index === undefined && k.text === text)
+      }
+      if (j < 0) return undefined
+      const key = keys[j] as (typeof keys)[number]
+      const slot = width + j
+      const { column: _c, temporary: _t, blobBytes: _b, ...type } = key.compiled.type
+      return { eval: (row) => row[slot] ?? null, type: { ...type, nullable: true } }
+    },
+    grouping(args) {
+      if (!rollup) throw sqlError('ER_INVALID_GROUP_FUNC_USE', 'Invalid use of group function')
+      const positions = args.map((a, n) => {
+        const text = deparse(a)
+        const j = keys.findIndex((k) => k.text === text || (a.kind === NODE.COLUMN && k.index !== undefined && safeIndex(lookup, a.parts) === k.index))
+        if (j < 0) throw sqlError('ER_FIELD_IN_GROUPING_NOT_GROUP_BY', `Argument #${n + 1} of GROUPING function is not in GROUP BY`)
+        return j
+      })
+      return {
+        eval: (row) => {
+          const kept = Number(toInteger(row[level] ?? intValue(0n)))
+          let bits = 0n
+          for (const j of positions) bits = (bits << 1n) | (j >= kept ? 1n : 0n)
+          return intValue(bits)
+        },
+        type: intType(21, true),
+      }
+    },
+  }
+  const postCtx = (clause: string, at: Scope = lookup): CompileContext => ({ ...compileContext(run, at, clause), aggregates: sink, groupKeys })
+
+  const items = selectItems.map((s) => ({ name: s.name, compiled: compile(s.expr, postCtx('field list')), expr: s.expr, ...(s.alias === undefined ? {} : { alias: s.alias }) }))
+
+  // HAVING sees the select list's aliases, its columns and the keys; a column
+  // that is none of those is 1054 even when the table has it (8.4.11).
+  let having: Compiled | undefined
+  if (node.having !== undefined) {
+    const allowed = new Set<number>()
+    for (const k of keys) if (k.index !== undefined) allowed.add(k.index)
+    for (const s of selectItems) if (s.expr.kind === NODE.COLUMN) allowed.add(lookup.resolve(s.expr.parts, 'having clause').index)
+    const havingScope: Scope = {
+      resolve(parts, clause) {
+        const r = lookup.resolve(parts, clause)
+        if (!allowed.has(r.index)) throw sqlError('ER_BAD_FIELD_ERROR', messages.unknownColumn(parts.join('.'), clause))
+        return r
+      },
+    }
+    having = compile(substituteAliases(node.having, selectItems), postCtx('having clause', havingScope))
+  }
+
+  const orderItems = items.map((i) => ({ name: i.name, compiled: i.compiled, ...(i.alias === undefined ? {} : { alias: i.alias }) }))
+  const orderKeys = (q.orderBy ?? []).map((o) => {
+    const e = o.expr
+    if ((e.kind === NODE.LITERAL && e.type === 'int') || (e.kind === NODE.COLUMN && e.parts.length === 1 && items.some((i) => i.alias?.toLowerCase() === (e.parts[0] as string).toLowerCase()))) {
+      return orderKey(run, o, orderItems, lookup)
+    }
+    return { expr: compile(e, postCtx('order clause')), desc: o.desc === true }
+  })
+
+  if (/(^|,)ONLY_FULL_GROUP_BY(,|$)/i.test(run.env.session.sqlMode)) {
+    checkFullGroupBy(lookup, scope, keys, node.where, items.map((i) => i.expr), (q.orderBy ?? []).filter((o) => !(o.expr.kind === NODE.LITERAL && o.expr.type === 'int') && !(o.expr.kind === NODE.COLUMN && o.expr.parts.length === 1 && items.some((i) => i.alias?.toLowerCase() === (o.expr as unknown as { parts: string[] }).parts[0]?.toLowerCase()))).map((o) => o.expr), node.groupBy === undefined)
+  }
+
+  // What a client is told depends on what MySQL copies through a temporary
+  // table (8.4.11, M5.18):
+  //   - An aggregating temporary table holds the keys, the aggregates, the
+  //     other columns and the expressions over columns.
+  //   - Grouping by index or sort, then sorting for an ORDER BY that is not the
+  //     keys' own ascending order, streams the same items into one first
+  //     ("Stream results"). Under ROLLUP that happens for any ORDER BY.
+  //   - What is computed over an aggregate (`COUNT(*) + 2`), and a constant,
+  //     is computed after and keeps its own metadata.
+  //   - Without a GROUP BY, a column can be NULL: the group may be empty.
+  // A prepare reports the statement before it is optimized, so none of this.
+  const orderMatchesKeys =
+    !rollup &&
+    (q.orderBy ?? []).length <= keys.length &&
+    (q.orderBy ?? []).every((o, i) => {
+      if (o.desc === true) return false
+      const key = keys[i] as (typeof keys)[number]
+      const e = o.expr.kind === NODE.LITERAL && o.expr.type === 'int' ? selectItems[Number(o.expr.value as bigint) - 1]?.expr : o.expr
+      if (e === undefined) return false
+      if (key.index !== undefined && e.kind === NODE.COLUMN) return safeIndex(lookup, e.parts) === key.index
+      return deparse(e) === key.text
+    })
+  const stream = (strategy === 'sort' || strategy === 'index') && (q.orderBy ?? []).length > 0 && !orderMatchesKeys
+  if (run.preparing !== true) {
+    const seenKeys = new Set<number>()
+    for (const item of items) {
+      const e = item.expr
+      const t = item.compiled.type
+      if (!refersToRow(e)) continue
+      const aggregateCall = e.kind === NODE.CALL && isAggregate(e)
+      if (!aggregateCall && containsAggregate(e)) continue
+      if (strategy === 'implicit') {
+        if (!aggregateCall) item.compiled = { ...item.compiled, type: { ...t, nullable: true } }
+        continue
+      }
+      // A key named twice is one field of the table: only its first mention
+      // carries GROUP_FLAG (8.4.11, `SELECT t, t … GROUP BY t`).
+      const at = e.kind === NODE.COLUMN ? safeIndex(lookup, e.parts) : undefined
+      const isKey = at !== undefined && keys.some((k) => k.index === at) && !seenKeys.has(at)
+      if (at !== undefined) seenKeys.add(at)
+      if (strategy === 'temp') item.compiled = { ...item.compiled, type: { ...t, temporary: t.column === undefined || isKey ? true : 'pinned' } }
+      else if (stream) {
+        // A ROLLUP key is copied as the BIGINT it evaluates to (8.4.11: an INT key reports type 8 once sorted).
+        const rollupInt = rollup && t.column === undefined && t.kind === 'int' && !aggregateCall
+        item.compiled = { ...item.compiled, type: { ...t, temporary: 'stream', ...(rollupInt ? { field: FIELD_TYPE.LONGLONG } : {}) } }
+      }
+    }
+  }
+
+  const where = node.where === undefined ? undefined : compile(node.where, compileContext(run, lookup, 'where clause'))
+  const limitCount = q.limit === undefined ? undefined : limitValue(run, q.limit.count, 'LIMIT')
+  const offset = q.limit?.offset === undefined ? 0 : limitValue(run, q.limit.offset, 'LIMIT')
+  const locking = (q.locking ?? []).length > 0
+  const env = run.env
+  const plan = { width, keys: keys.map((k) => k.compiled), specs: sink.specs, strategy, rollup }
+
+  return {
+    columns: items.map((i) => ({ name: i.name, type: i.compiled.type })),
+    locking,
+    rows(trx) {
+      let rows: Iterable<{ readonly row: Row }>
+      if (source === undefined) rows = [{ row: [] }]
+      else {
+        let access = chooseAccess(source.def, source.alias, node.where, env)
+        // An index-ordered grouping reads that index whole, in its order.
+        if (strategy === 'index' && groupIndex !== undefined) {
+          const clustered = source.def.indexes.find((i) => i.name === groupIndex)?.kind === 'primary' || source.def.clustered === groupIndex
+          const sameIndex = clustered ? access.index === undefined : access.index === groupIndex
+          if (!sameIndex) access = clustered ? {} : { index: groupIndex }
+        }
+        rows = accessRows(source.table, source.def, access, trx, locking)
+      }
+      let out: Iterable<{ readonly row: Row }> = groupRows(filter(rows, where, env), plan, env)
+      out = filter(out, having, env)
+      if (orderKeys.length > 0) out = sort(out, orderKeys, env)
+      let projected: Iterable<Value[]> = project(out, items.map((i) => i.compiled), env)
+      if (node.distinct === true) projected = distinct(projected)
+      return limit(projected, offset, limitCount)
+    },
+  }
+}
+
+const safeIndex = (scope: Scope, parts: readonly string[]): number | undefined => {
+  try {
+    return scope.resolve(parts, 'field list').index
+  } catch {
+    return undefined
+  }
+}
+
+/** Whether an aggregate in `e` needs its groups sorted: a DISTINCT one, or any GROUP_CONCAT (8.4.11's plans). */
+function needsSortedGroups(e: unknown): boolean {
+  if (e === null || typeof e !== 'object') return false
+  const n = e as { kind?: string; distinct?: boolean; name?: string }
+  if (n.kind === NODE.SUBQUERY) return false
+  if (n.kind === NODE.CALL && isAggregate(n as Expression)) {
+    const name = (n.name as string).toUpperCase()
+    if (name === 'GROUP_CONCAT' || (n.distinct === true && name !== 'MIN' && name !== 'MAX')) return true
+  }
+  return Object.values(e).some((v) => (Array.isArray(v) ? v.some(needsSortedGroups) : typeof v === 'object' && needsSortedGroups(v)))
+}
+
+/** Whether `e` reads the row at all: a column or an aggregate. A constant does not, and is never copied into a temporary table. */
+function refersToRow(e: unknown): boolean {
+  if (e === null || typeof e !== 'object') return false
+  const n = e as { kind?: string }
+  if (n.kind === NODE.COLUMN) return true
+  if (n.kind === NODE.CALL && isAggregate(n as Expression)) return true
+  if (n.kind === NODE.SUBQUERY) return false
+  return Object.values(e).some((v) => (Array.isArray(v) ? v.some(refersToRow) : typeof v === 'object' && refersToRow(v)))
+}
+
+/** HAVING's bare names that are select-list aliases, replaced by the expressions they name. */
+function substituteAliases(e: Expression, items: readonly { readonly expr: Expression; readonly alias?: string }[]): Expression {
+  const walk = (x: unknown): unknown => {
+    if (x === null || typeof x !== 'object') return x
+    if (Array.isArray(x)) return x.map(walk)
+    const node = x as { kind?: string; parts?: readonly string[] }
+    if (node.kind === NODE.SUBQUERY) return x
+    if (node.kind === NODE.COLUMN && node.parts?.length === 1) {
+      const hit = items.find((i) => i.alias?.toLowerCase() === (node.parts?.[0] as string).toLowerCase())
+      if (hit !== undefined) return hit.expr
+    }
+    const out: Record<string, unknown> = {}
+    for (const [k, v] of Object.entries(x)) out[k] = typeof v === 'object' ? walk(v) : v
+    return out
+  }
+  return walk(e) as Expression
+}
+
+/**
+ * ONLY_FULL_GROUP_BY: every column a select item or an ORDER BY item reads
+ * outside an aggregate must be a key, or be determined by the keys — through
+ * a PRIMARY KEY or a NOT NULL UNIQUE key all of whose columns are, or through
+ * an equality in the WHERE with a constant or with a column that is (8.4.11,
+ * WL#2489). 1055 names the first column that is not; without a GROUP BY the
+ * error is 1140.
+ */
+function checkFullGroupBy(
+  lookup: Scope,
+  scope: TableScope | undefined,
+  keys: readonly { readonly index: number | undefined; readonly text: string }[],
+  where: Expression | undefined,
+  selectExprs: readonly Expression[],
+  orderExprs: readonly Expression[],
+  implicit: boolean,
+): void {
+  const determined = new Set<number>()
+  for (const k of keys) if (k.index !== undefined) determined.add(k.index)
+  const keyTexts = new Set(keys.filter((k) => k.index === undefined).map((k) => k.text))
+  const conjuncts: Expression[] = []
+  const flatten = (e: Expression | undefined): void => {
+    if (e === undefined) return
+    if (e.kind === NODE.BINARY && (e.op === 'AND' || e.op === '&&')) {
+      flatten(e.left)
+      flatten(e.right)
+    } else conjuncts.push(e)
+  }
+  flatten(where)
+  const constant = (e: Expression): boolean => e.kind === NODE.LITERAL ? e.type !== 'null' : e.kind === NODE.PLACEHOLDER || (e.kind === NODE.UNARY && e.op === '-' && constant(e.operand))
+  const edges: [number, number][] = []
+  for (const c of conjuncts) {
+    if (c.kind !== NODE.BINARY || (c.op !== '=' && c.op !== '<=>')) continue
+    const l = c.left.kind === NODE.COLUMN ? safeIndex(lookup, c.left.parts) : undefined
+    const r = c.right.kind === NODE.COLUMN ? safeIndex(lookup, c.right.parts) : undefined
+    if (l !== undefined && r !== undefined) edges.push([l, r], [r, l])
+    else if (l !== undefined && constant(c.right)) determined.add(l)
+    else if (r !== undefined && constant(c.left)) determined.add(r)
+  }
+  for (let changed = true; changed; ) {
+    changed = false
+    for (const [a, b] of edges) {
+      if (determined.has(a) && !determined.has(b)) {
+        determined.add(b)
+        changed = true
+      }
+    }
+    for (const t of scope?.tables ?? []) {
+      const offsetOf = (name: string): number => t.offset + t.def.columns.findIndex((c) => c.name.toLowerCase() === name.toLowerCase())
+      const unique = t.def.indexes.filter((i) => i.kind === 'primary' || (i.kind === 'unique' && i.parts.every((p) => p.prefix === undefined && t.def.columns.find((c) => c.name === p.column)?.nullable === false)))
+      if (!unique.some((i) => i.parts.every((p) => determined.has(offsetOf(p.column))))) continue
+      for (let i = 0; i < t.def.columns.length; i++) {
+        if (!determined.has(t.offset + i)) {
+          determined.add(t.offset + i)
+          changed = true
+        }
+      }
+    }
+  }
+  const nameOf = (index: number): string => {
+    const t = (scope?.tables ?? []).find((x) => index >= x.offset && index < x.offset + x.def.columns.length)
+    return t === undefined ? '?' : `${t.def.schema}.${t.def.name}.${(t.def.columns[index - t.offset] as { name: string }).name}`
+  }
+  const offending = (e: Expression): number | undefined => {
+    if (keyTexts.has(deparse(e))) return undefined
+    if (e.kind === NODE.CALL && (isAggregate(e) || e.name.toUpperCase() === 'ANY_VALUE')) return undefined
+    if (e.kind === NODE.SUBQUERY) return undefined
+    if (e.kind === NODE.COLUMN) {
+      const at = safeIndex(lookup, e.parts)
+      return at === undefined || determined.has(at) ? undefined : at
+    }
+    for (const v of Object.values(e)) {
+      const children = Array.isArray(v) ? v : [v]
+      for (const child of children) {
+        if (child === null || typeof child !== 'object' || typeof (child as { kind?: unknown }).kind !== 'string') continue
+        const hit = offending(child as Expression)
+        if (hit !== undefined) return hit
+      }
+    }
+    return undefined
+  }
+  selectExprs.forEach((e, i) => {
+    const at = offending(e)
+    if (at === undefined) return
+    if (implicit) throw sqlError('ER_MIX_OF_GROUP_FUNC_AND_FIELDS', `In aggregated query without GROUP BY, expression #${i + 1} of SELECT list contains nonaggregated column '${nameOf(at)}'; this is incompatible with sql_mode=only_full_group_by`)
+    throw sqlError('ER_WRONG_FIELD_WITH_GROUP', `Expression #${i + 1} of SELECT list is not in GROUP BY clause and contains nonaggregated column '${nameOf(at)}' which is not functionally dependent on columns in GROUP BY clause; this is incompatible with sql_mode=only_full_group_by`)
+  })
+  if (implicit) return
+  orderExprs.forEach((e, i) => {
+    const at = offending(e)
+    if (at === undefined) return
+    throw sqlError('ER_WRONG_FIELD_WITH_GROUP', `Expression #${i + 1} of ORDER BY clause is not in GROUP BY clause and contains nonaggregated column '${nameOf(at)}' which is not functionally dependent on columns in GROUP BY clause; this is incompatible with sql_mode=only_full_group_by`)
+  })
 }
 
 /**

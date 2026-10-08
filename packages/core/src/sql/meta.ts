@@ -54,7 +54,29 @@ export interface ResultType {
    * (`'pinned'`) is not. An expression keeps only NOT_NULL (8.4.11; the
    * metadata of an expression there is M5.5's, and differs more than this).
    */
-  readonly temporary?: boolean | 'pinned'
+  readonly temporary?: boolean | 'pinned' | 'stream'
+  /**
+   * `AVG`, the variance family and `BIT_*`: aggregates an aggregating
+   * temporary table holds as an intermediate (a sum and a count, say) rather
+   * than as a result field, so their metadata survives it whole — though not
+   * a stream of results into one (8.4.11: AVG is 0x80 grouped by temporary
+   * table and 0x00 once streamed for a sort).
+   */
+  readonly ownInTemporary?: boolean
+  /**
+   * `MIN`/`MAX` of a bare column: the column's own flags, which a temporary
+   * table's copy of it carries less its key flags — `MIN(pk_col)` is
+   * NO_DEFAULT_VALUE there (8.4.11).
+   */
+  readonly fieldFlags?: number
+  /**
+   * A temporal reported in the result charset, as text is, while keeping its
+   * field type: `MIN(date_col)` is type DATE, utf8mb4, 40 wide, with no BINARY
+   * flag (8.4.11).
+   */
+  readonly asText?: boolean
+  /** A length reported as is, where no rule of characters times bytes gives it (`GROUP_CONCAT`'s BLOB). */
+  readonly wireLength?: number
 }
 
 /** `GROUP_FLAG`, `include/mysql_com.h` — the same bit as `NUM_FLAG`. */
@@ -255,20 +277,30 @@ export function columnDefinition(name: string, t: ResultType, resultsCollation: 
   let flags = t.column?.flags ?? 0
   if (!t.nullable) flags |= COLUMN_FLAG.NOT_NULL
   if (t.unsigned && t.kind !== 'null') flags |= COLUMN_FLAG.UNSIGNED
-  const isText = t.kind === 'string'
+  const isText = t.kind === 'string' || (t.asText === true && !(t.temporary !== undefined && t.temporary !== false))
   // A bare column of a number type carries no BINARY flag; every other
   // non-text result does, a literal and an expression included.
   const numericColumn = t.column !== undefined && (t.kind === 'int' || t.kind === 'decimal' || t.kind === 'double')
   if (!isText && !numericColumn) flags |= COLUMN_FLAG.BINARY
   // A string in a `_bin` collation is flagged binary too, column or expression.
-  if (isText && requireCollationInfo(t.collationId).name.endsWith('_bin')) flags |= COLUMN_FLAG.BINARY
+  if (t.kind === 'string' && requireCollationInfo(t.collationId).name.endsWith('_bin')) flags |= COLUMN_FLAG.BINARY
   if (t.field === FIELD_TYPE.BLOB && t.kind === 'bytes') flags |= COLUMN_FLAG.BINARY
-  if (t.temporary !== undefined && t.temporary !== false) {
+  // Read from a temporary table's field rather than from the item: what a
+  // grouping, a DISTINCT or a sort after grouping copies into one (M5.5).
+  const materialized = t.temporary !== undefined && t.temporary !== false
+  if (materialized) {
     // GROUP_FLAG marks a nullable grouped column only: every non-key DISTINCT
     // column the first corpus drew was nullable, which hid that (8.4.11).
     const grouped = t.temporary === true && t.nullable ? GROUP_FLAG : 0
-    flags = t.column !== undefined ? (flags & ~KEY_FLAGS) | grouped : flags & (COLUMN_FLAG.NOT_NULL | COLUMN_FLAG.UNSIGNED)
+    if (t.column !== undefined) flags = (flags & ~KEY_FLAGS) | grouped
+    else if (!(t.ownInTemporary === true && t.temporary !== 'stream')) {
+      const keep = COLUMN_FLAG.NOT_NULL | COLUMN_FLAG.UNSIGNED | (t.kind === 'string' && requireCollationInfo(t.collationId).name.endsWith('_bin') ? COLUMN_FLAG.BINARY : 0)
+      flags = (flags & keep) | ((t.fieldFlags ?? 0) & ~KEY_FLAGS & ~COLUMN_FLAG.NOT_NULL)
+    }
   }
+  // A materialized temporal is a temporal field again, binary and its own width.
+  const asText = t.asText === true && !materialized
+  if (t.asText === true && materialized && t.column === undefined) flags |= COLUMN_FLAG.BINARY
 
   let length: number
   let decimals = t.scale
@@ -286,7 +318,7 @@ export function columnDefinition(name: string, t: ResultType, resultsCollation: 
       break
     case 'datetime':
     case 'time':
-      length = charWidth(t)
+      length = charWidth(t) * (asText ? requireCollationInfo(resultsCollation).mbmaxlen : 1)
       break
     case 'null':
       length = 0
@@ -294,21 +326,33 @@ export function columnDefinition(name: string, t: ResultType, resultsCollation: 
       break
     case 'bytes':
       length = t.length
-      decimals = t.column !== undefined ? 0 : 31
+      decimals = t.column !== undefined || materialized ? 0 : 31
       break
     case 'string': {
       const mb = requireCollationInfo(resultsCollation).mbmaxlen
       length = Math.min(4294967295, t.blobBytes !== undefined ? t.blobBytes * mb : t.length * mb)
-      decimals = t.column !== undefined ? 0 : 31
+      decimals = t.column !== undefined || materialized ? 0 : 31
       break
     }
+  }
+  let field = t.field
+  if (t.wireLength !== undefined) {
+    // GROUP_CONCAT's BLOB: as the item, a length no rule gives; as a
+    // temporary table's field, a BLOB of that many bytes over the argument
+    // charset's width, flagged BLOB (8.4.11: 252, 16,384 over utf8mb4 and
+    // 4,096 over latin1, 0x10).
+    if (materialized) {
+      field = FIELD_TYPE.BLOB
+      length = Math.floor(t.wireLength / (t.kind === 'string' ? requireCollationInfo(t.collationId).mbmaxlen : 1))
+      flags |= COLUMN_FLAG.BLOB
+    } else length = t.wireLength
   }
   return {
     ...(t.column === undefined ? { schema: '', table: '', orgTable: '', orgName: '' } : { schema: t.column.schema, table: t.column.table, orgTable: t.column.orgTable, orgName: t.column.orgName }),
     name,
     characterSet: isText ? resultsCollation : CHARSET_BINARY,
     columnLength: length,
-    type: t.field,
+    type: field,
     flags,
     decimals,
   }

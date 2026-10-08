@@ -123,7 +123,32 @@ export interface CompileContext {
    * NULL.
    */
   readonly insertValues?: { readonly resolve: (column: string) => { readonly index: number; readonly type: ResultType }; calls: number }
+  /**
+   * In a grouped query's select list, HAVING and ORDER BY: where an aggregate
+   * call is collected and given its slot in the grouped row (M5.5). Absent
+   * everywhere an aggregate is not allowed — a WHERE, a GROUP BY key — where
+   * one is ER_INVALID_GROUP_FUNC_USE.
+   */
+  readonly aggregates?: { register(e: CallNode, ctx: CompileContext): Compiled }
+  /** Inside an aggregate's arguments, where another aggregate is 1111 too. */
+  readonly inAggregate?: boolean
+  /** Above a grouping: the expressions that are its keys, which read the key slot (NULL in a ROLLUP super-aggregate row). */
+  readonly groupKeys?: GroupKeys
 }
+
+/** A grouped query's keys, as the expressions above the grouping see them. */
+export interface GroupKeys {
+  /** The key `e` is, read from its slot, or `undefined` when it is not one. */
+  match(e: Expression): Compiled | undefined
+  /** `GROUPING(e, …)`: which of the named keys a ROLLUP row has rolled up, as bits. */
+  grouping(args: readonly Expression[]): Compiled
+}
+
+/** The aggregate functions, `Item_sum`'s subclasses that a select list can name (M5.5). */
+export const AGGREGATE_NAMES: ReadonlySet<string> = new Set([
+  'COUNT', 'SUM', 'AVG', 'MIN', 'MAX', 'GROUP_CONCAT', 'BIT_AND', 'BIT_OR', 'BIT_XOR',
+  'STD', 'STDDEV', 'STDDEV_POP', 'STDDEV_SAMP', 'VARIANCE', 'VAR_POP', 'VAR_SAMP',
+])
 
 const lit = (value: Value, type: ResultType): Compiled => ({ eval: () => value, type })
 
@@ -154,6 +179,10 @@ function expressionOf(t: ResultType): ResultType {
 const notNull = (...ts: ResultType[]): boolean => ts.every((t) => !t.nullable)
 
 export function compile(e: Expression, ctx: CompileContext): Compiled {
+  if (ctx.groupKeys !== undefined) {
+    const key = ctx.groupKeys.match(e)
+    if (key !== undefined) return key
+  }
   switch (e.kind) {
     case NODE.LITERAL:
       return literal(e, ctx)
@@ -674,8 +703,7 @@ function caseExpr(e: CaseNode, ctx: CompileContext): Compiled {
 
 /** The builtins this executor knows, beyond the ones written out below — refused by name until M5.10. */
 const KNOWN_BUILTINS = new Set([
-  'COUNT', 'SUM', 'AVG', 'MIN', 'MAX', 'GROUP_CONCAT', 'BIT_AND', 'BIT_OR', 'BIT_XOR', 'STD', 'STDDEV', 'STDDEV_POP', 'STDDEV_SAMP',
-  'VARIANCE', 'VAR_POP', 'VAR_SAMP', 'ANY_VALUE', 'GROUPING', 'JSON_ARRAYAGG', 'JSON_OBJECTAGG', 'SUBSTRING', 'SUBSTR', 'TRIM', 'REPLACE', 'ROUND', 'FLOOR', 'CEIL',
+  'JSON_ARRAYAGG', 'JSON_OBJECTAGG', 'SUBSTRING', 'SUBSTR', 'TRIM', 'REPLACE', 'ROUND', 'FLOOR', 'CEIL',
   'CEILING', 'DATE_FORMAT', 'DATE_ADD', 'DATE_SUB', 'JSON_EXTRACT', 'JSON_OBJECT', 'JSON_ARRAY', 'UUID', 'RAND', 'LEFT',
   'RIGHT', 'LPAD', 'RPAD', 'REPEAT', 'REVERSE', 'LOCATE', 'INSTR', 'POSITION', 'GREATEST', 'LEAST', 'ROW_NUMBER', 'RANK',
 ])
@@ -686,6 +714,14 @@ function call(e: CallNode, ctx: CompileContext): Compiled {
   const args = (): Compiled[] => e.args.map((a) => compile(a, ctx))
   const arity = (n: number): void => {
     if (e.args.length !== n) throw sqlError('ER_WRONG_PARAMCOUNT_TO_NATIVE_FCT', `Incorrect parameter count in the call to native function '${e.name}'`)
+  }
+  if (AGGREGATE_NAMES.has(name)) {
+    if (ctx.aggregates === undefined || ctx.inAggregate === true) throw sqlError('ER_INVALID_GROUP_FUNC_USE', 'Invalid use of group function')
+    return ctx.aggregates.register(e, ctx)
+  }
+  if (name === 'GROUPING') {
+    if (ctx.groupKeys === undefined || ctx.inAggregate === true) throw sqlError('ER_INVALID_GROUP_FUNC_USE', 'Invalid use of group function')
+    return ctx.groupKeys.grouping(e.args)
   }
   const conn = ctx.connectionCollation
   const text = (value: (env: Env) => string | null, chars: number): Compiled => ({
@@ -725,6 +761,12 @@ function call(e: CallNode, ctx: CompileContext): Compiled {
         },
         type,
       }
+    }
+    case 'ANY_VALUE': {
+      // A value from the group, with ONLY_FULL_GROUP_BY's check switched off for it.
+      arity(1)
+      const [x] = args() as [Compiled]
+      return { eval: x.eval, type: expressionOf(x.type) }
     }
     case 'NULLIF': {
       arity(2)
