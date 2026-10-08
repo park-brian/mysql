@@ -212,3 +212,30 @@ test('M5.9: views return what 8.4.11 returned, statement by statement, names and
     await db.end()
   }
 })
+
+test('a bare column of a view, a derived table, a CTE or INFORMATION_SCHEMA is named as its source names it, not as written (8.4.11)', async () => {
+  // A base table's column is named as the query spells it; any other
+  // source's is an item that already has a name, and keeps it. So
+  // `SELECT table_name FROM information_schema.tables` reads as TABLE_NAME,
+  // which clients that index a row by name depend on.
+  const db = await MySQL.open(':memory:')
+  const conn = await mysql.createConnection({ stream: db.createStream() as never, user: 'root', password: '' })
+  try {
+    await conn.query('CREATE DATABASE app')
+    await conn.query('USE app')
+    await conn.query('CREATE TABLE t (Id INT, nAme VARCHAR(5))')
+    await conn.query('CREATE VIEW v AS SELECT Id, nAme AS Nm FROM t')
+    const names = async (sql: string) => ((await conn.query(sql))[1] as mysql.FieldPacket[]).map((f) => f.name)
+    assert.deepEqual(await names('SELECT id, NAME FROM t'), ['id', 'NAME'])
+    assert.deepEqual(await names('SELECT t.ID FROM t'), ['ID'])
+    assert.deepEqual(await names('SELECT ID, nm FROM v'), ['Id', 'Nm'])
+    assert.deepEqual(await names('SELECT id FROM (SELECT Id FROM t) d'), ['Id'])
+    assert.deepEqual(await names('WITH c AS (SELECT Id FROM t) SELECT ID FROM c'), ['Id'])
+    assert.deepEqual(await names("SELECT table_name, Table_Schema FROM information_schema.tables WHERE table_schema = 'app'"), ['TABLE_NAME', 'TABLE_SCHEMA'])
+    assert.deepEqual(await names("SELECT x.table_name AS tn, COUNT(*) FROM information_schema.tables x WHERE table_schema = 'app' GROUP BY x.table_name"), ['tn', 'COUNT(*)'])
+    assert.deepEqual(await names("SELECT table_name FROM information_schema.tables WHERE table_schema = 'app' GROUP BY table_name"), ['TABLE_NAME'])
+  } finally {
+    await conn.end()
+    await db.end()
+  }
+})

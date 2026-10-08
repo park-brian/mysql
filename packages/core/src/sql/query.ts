@@ -289,7 +289,7 @@ function planSelect(run: Run, q: QueryExpression, node: SelectNode): SelectPlan 
       return
     }
     const compiled = compile(e, { ...compileContext(run, selectScope, 'field list'), ...(windows === undefined ? {} : { windows }) })
-    items.push({ name: itemName(item, texts[i]), compiled, expr: e, ...(item.alias === undefined ? {} : { alias: item.alias }) })
+    items.push({ name: sourceName(scope, item, itemName(item, texts[i])), compiled, expr: e, ...(item.alias === undefined ? {} : { alias: item.alias }) })
   })
   // Read through the windows' temporary table: every column a field of it (8.4.11: `id` loses PRI).
   if (windows !== undefined && windows.windows.length > 0) {
@@ -951,6 +951,25 @@ function itemName(item: SelectNode['items'][number], text: string | undefined): 
 }
 
 /**
+ * A bare column of a view, a derived table, a CTE or an INFORMATION_SCHEMA
+ * table is named as that source names it, whatever the query wrote: only a
+ * base table's column takes the query's spelling (8.4.11 — `SELECT
+ * table_name FROM information_schema.tables` reads as TABLE_NAME).
+ */
+function sourceName(scope: TableScope | undefined, item: SelectNode['items'][number], name: string): string {
+  if (scope === undefined || item.alias !== undefined || item.expr.kind !== NODE.COLUMN) return name
+  let at
+  try {
+    const r = scope.resolve(item.expr.parts, 'field list')
+    if (r.depth !== undefined && r.depth > 0) return name
+    at = scope.columnAt(r.index)
+  } catch {
+    return name
+  }
+  return at === undefined || at.table.def !== undefined ? name : at.column.name
+}
+
+/**
  * A grouped query (M5.5): GROUP BY, an aggregate, or both. See `group.ts`
  * for the grouped row it compiles its select list against, and for how the
  * strategy — index, sort, temporary table — is chosen as 8.4.11 chooses it.
@@ -982,7 +1001,7 @@ function planGrouped(
       }
       return
     }
-    selectItems.push({ expr: e, name: itemName(item, texts[i]), ...(item.alias === undefined ? {} : { alias: item.alias }) })
+    selectItems.push({ expr: e, name: sourceName(scope, item, itemName(item, texts[i])), ...(item.alias === undefined ? {} : { alias: item.alias }) })
   })
 
   // GROUP BY: a table column first, then a select-list alias, then a
