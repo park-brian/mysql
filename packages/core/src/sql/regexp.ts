@@ -98,7 +98,14 @@ function compiled(pattern: string, flags: IcuFlags): IcuPattern & { readonly re:
   let c = cache.get(key)
   if (c === undefined) {
     const p = compileIcu(pattern, flags)
-    c = { ...p, re: new RegExp(p.source, p.flags) }
+    let re: RegExp
+    try {
+      re = new RegExp(p.source, p.flags)
+    } catch {
+      // Never expected — 600,000 fuzzed patterns compile — but a typed error, not a crash, if one does not.
+      throw illegal()
+    }
+    c = { ...p, re }
     if (cache.size > 256) cache.clear()
     cache.set(key, c)
   }

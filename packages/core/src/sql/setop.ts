@@ -33,7 +33,7 @@ import { encodeCollation, requireCollationInfo } from '@myjs/charsets'
 import type { SetOperationNode } from '@myjs/parser'
 import { sqlError } from '@myjs/protocol'
 import { COERCIBILITY, bytesValue, stringValue, toDateTime, toText, withoutHex, type Value } from '@myjs/types'
-import { aggregateTypes, convertTo } from './compile.ts'
+import { aggregateCollations, aggregateTypes, convertTo } from './compile.ts'
 import { rowKey } from './keys.ts'
 import { charWidth, decimalType, doubleType, jsonAsText, jsonType, stringType, type ResultType } from './meta.ts'
 
@@ -92,6 +92,7 @@ export function setOperationType(types: readonly ResultType[], connectionCollati
   }
   // Text: as wide as the widest as text, in the aggregated collation, binary if bytes are among them.
   const binary = kinds.has('bytes')
+  aggregateCollations(live, 'UNION', false)
   const collationId = binary ? CHARSET_BINARY : aggregateTypes(live, connectionCollation)
   const blob = live.find((t) => t.blobBytes !== undefined || t.field === FIELD_TYPE.BLOB)
   if (blob !== undefined) {

@@ -379,6 +379,112 @@ export function aggregateTypes(types: readonly ResultType[], fallback: number): 
   return acc?.collationId ?? fallback
 }
 
+// --- Collation aggregation, as `DTCollation::aggregate` does it -----------------
+//
+// Each argument brings a collation and a derivation (what COERCIBILITY()
+// reports): a number or a temporal latin1_swedish_ci at NUMERIC, NULL binary
+// at IGNORABLE. They are aggregated pairwise, left to right. In one charset
+// the lower derivation wins; at the same one a `_bin` collation wins, two
+// EXPLICIT ones are refused, and two others leave the charset's `_bin`
+// collation at derivation NONE (1), which a comparison refuses. Across
+// charsets a binary string wins at its derivation or lower, a Unicode
+// charset is a superset of any other, and a literal gives way to anything
+// lower. What cannot be decided is 1267, 1270 or 1271, naming every argument
+// for two or three. 8.4.11 names the operation as the parser spells it:
+// '=', 'like', ' IN ', 'concat', 'case', 'UNION'.
+
+const DERIVATION = ['EXPLICIT', 'NONE', 'IMPLICIT', 'SYSCONST', 'COERCIBLE', 'NUMERIC', 'IGNORABLE'] as const
+const DERIVATION_NONE = 1
+const UNICODE = new Set(['utf8mb4', 'utf8mb3', 'ucs2', 'utf16', 'utf16le', 'utf32'])
+const SUPPLEMENT = new Set(['utf8mb4', 'utf16', 'utf16le', 'utf32'])
+/** latin1_swedish_ci, `my_charset_numeric`'s collation. */
+const NUMERIC_COLLATION = 8
+
+interface Derived {
+  readonly collationId: number
+  readonly derivation: number
+}
+
+const isText = (t: ResultType): boolean => t.kind === 'string' || t.kind === 'bytes'
+
+const charsetOfId = (id: number): string => (id === CHARSET_BINARY ? 'binary' : requireCollationInfo(id).charset)
+
+/** `left_is_superset`: conversion into Unicode, or from ASCII. */
+function leftIsSuperset(l: Derived, r: Derived): boolean {
+  const lc = charsetOfId(l.collationId)
+  const rc = charsetOfId(r.collationId)
+  if (UNICODE.has(lc)) {
+    if (l.derivation < r.derivation) return true
+    if (l.derivation === r.derivation) {
+      if (!UNICODE.has(rc)) return true
+      const li = requireCollationInfo(l.collationId)
+      const ri = requireCollationInfo(r.collationId)
+      // utf8mb4 over utf8mb3: more bytes at the most, as many at the least.
+      if (SUPPLEMENT.has(lc) && !SUPPLEMENT.has(rc) && li.mbmaxlen > ri.mbmaxlen && li.mbminlen === ri.mbminlen) return true
+    }
+  }
+  return rc === 'ascii' && (l.derivation < r.derivation || (l.derivation === r.derivation && lc !== 'ascii'))
+}
+
+/** Two derivations aggregated, or undefined when MySQL cannot. */
+function aggregateTwo(acc: Derived, dt: Derived): Derived | undefined {
+  // Two EXPLICIT collations must be one, in any charsets (8.4.11).
+  if (acc.derivation === COERCIBILITY.EXPLICIT && dt.derivation === COERCIBILITY.EXPLICIT && acc.collationId !== dt.collationId) return undefined
+  if (charsetOfId(acc.collationId) !== charsetOfId(dt.collationId)) {
+    if (acc.collationId === CHARSET_BINARY) return acc.derivation <= dt.derivation ? acc : dt
+    if (dt.collationId === CHARSET_BINARY) return dt.derivation <= acc.derivation ? dt : acc
+    if (leftIsSuperset(acc, dt)) return acc
+    if (leftIsSuperset(dt, acc)) return dt
+    if (acc.derivation < dt.derivation && dt.derivation >= COERCIBILITY.SYSCONST) return acc
+    if (dt.derivation < acc.derivation && acc.derivation >= COERCIBILITY.SYSCONST) return dt
+    return undefined
+  }
+  if (acc.derivation !== dt.derivation) return acc.derivation < dt.derivation ? acc : dt
+  if (acc.collationId === dt.collationId) return acc
+  if (acc.derivation === COERCIBILITY.EXPLICIT) return undefined
+  if (requireCollationInfo(acc.collationId).isBinary) return acc
+  if (requireCollationInfo(dt.collationId).isBinary) return dt
+  const bin = collationInfoByName(`${charsetOfId(acc.collationId)}_bin`)
+  return { collationId: bin?.id ?? acc.collationId, derivation: DERIVATION_NONE }
+}
+
+/**
+ * The collation and derivation the arguments aggregate to for `operation`,
+ * or its error; `compare` for an operation that compares, which NONE cannot
+ * serve. Undefined when no argument is a string, or when one does not say
+ * its derivation and so cannot be held to one.
+ */
+export function aggregateCollations(types: readonly ResultType[], operation: string, compare: boolean): Derived | undefined {
+  const items: Derived[] = []
+  let known = true
+  for (const t of types) {
+    if (isText(t)) {
+      if (t.coercibility === undefined) known = false
+      items.push({ collationId: t.kind === 'string' ? t.collationId : CHARSET_BINARY, derivation: coercibilityOf(t) })
+    } else if (t.kind === 'null') items.push({ collationId: CHARSET_BINARY, derivation: COERCIBILITY.IGNORABLE })
+    else if (t.kind === 'json') items.push({ collationId: 46, derivation: COERCIBILITY.IMPLICIT })
+    else items.push({ collationId: NUMERIC_COLLATION, derivation: COERCIBILITY.NUMERIC })
+  }
+  if (!types.some(isText)) return undefined
+  let acc: Derived | undefined = items[0] as Derived
+  for (const dt of items.slice(1)) {
+    acc = aggregateTwo(acc, dt)
+    if (acc === undefined) break
+  }
+  if (acc === undefined || (compare && acc.derivation === DERIVATION_NONE)) {
+    if (known) throw collationMix(items, operation)
+    return undefined
+  }
+  return acc
+}
+
+function collationMix(items: readonly Derived[], operation: string): unknown {
+  const show = (d: Derived) => `(${d.collationId === CHARSET_BINARY ? 'binary' : requireCollationInfo(d.collationId).name},${DERIVATION[d.derivation] as string})`
+  if (items.length === 2) return sqlError('ER_CANT_AGGREGATE_2COLLATIONS', `Illegal mix of collations ${show(items[0] as Derived)} and ${show(items[1] as Derived)} for operation '${operation}'`)
+  if (items.length === 3) return sqlError('ER_CANT_AGGREGATE_3COLLATIONS', `Illegal mix of collations ${items.map(show).join(', ')} for operation '${operation}'`)
+  return sqlError('ER_CANT_AGGREGATE_NCOLLATIONS', `Illegal mix of collations for operation '${operation}'`)
+}
+
 /** A type with no table column behind it: what a function of a column returns. */
 function expressionOf(t: ResultType): ResultType {
   const { column: _column, blobBytes: _blob, ...rest } = t
@@ -445,15 +551,16 @@ export function compile(e: Expression, ctx: CompileContext): Compiled {
 
     case NODE.COLLATE: {
       const inner = compile(e.expr, ctx)
-      const info = collationInfoByName(e.collation.toLowerCase())
-      if (info === undefined) throw sqlError('ER_UNKNOWN_COLLATION', messages.unknownCollation(e.collation))
-      const id = info.id
+      // A number or a temporal becomes text in the collation's own charset; NULL and bytes are binary's.
+      const t = inner.type
+      const charset = t.kind === 'string' ? requireCollationInfo(t.collationId).charset : t.kind === 'bytes' || t.kind === 'null' ? 'binary' : t.kind === 'json' ? 'utf8mb4' : undefined
+      const id = collateTo(e.collation, charset ?? (collationInfoByName(e.collation.toLowerCase())?.charset as string))
       return {
         eval: (row, env) => {
           const v = inner.eval(row, env)
           return v === null ? null : stringValue(toText(v), id, COERCIBILITY.EXPLICIT)
         },
-        type: stringType(charWidth(inner.type), id, inner.type.nullable),
+        type: { ...stringType(charWidth(inner.type), id, inner.type.nullable), coercibility: COERCIBILITY.EXPLICIT },
       }
     }
 
@@ -490,6 +597,11 @@ export function typeOfValue(v: Value): ResultType {
 }
 
 function literal(e: LiteralNode, ctx: CompileContext): Compiled {
+  // A number or NULL with COLLATE is the COLLATE of it: text in that collation, or 1253 for NULL's binary.
+  if (e.collation !== undefined && e.type !== LITERAL.STRING && e.type !== LITERAL.HEX && e.type !== LITERAL.BIT) {
+    const { collation, ...bare } = e
+    return compile({ kind: NODE.COLLATE, expr: bare as LiteralNode, collation, at: e.at }, ctx)
+  }
   // A hex or bit literal is bytes, unless an introducer names their charset:
   // `_latin1 x'E9'` is the string 'é' (8.4.11).
   const introduced = (b: Uint8Array): Compiled => {
@@ -497,7 +609,7 @@ function literal(e: LiteralNode, ctx: CompileContext): Compiled {
     if (id === CHARSET_BINARY && e.charset === undefined && e.collation === undefined) {
       // As a number, as many digits as its largest value has, to 20.
       const digits = Math.min(20, String((1n << BigInt(8 * Math.max(1, b.length))) - 1n).length)
-      return lit({ kind: 'bytes', v: b, hex: true }, { ...stringType(b.length, CHARSET_BINARY, false), literalInt: { digits, unsigned: e.type === LITERAL.HEX } })
+      return lit({ kind: 'bytes', v: b, hex: true }, { ...stringType(b.length, CHARSET_BINARY, false), literalInt: { digits, unsigned: e.type === LITERAL.HEX }, coercibility: COERCIBILITY.COERCIBLE })
     }
     if (id === CHARSET_BINARY) return lit(bytesValue(b), stringType(b.length, CHARSET_BINARY, false))
     const decode = (bytes: Uint8Array): string => {
@@ -552,7 +664,7 @@ function literal(e: LiteralNode, ctx: CompileContext): Compiled {
         }
       }
       // With COLLATE it is nullable, as 8.4.11 reports `'abc' COLLATE utf8mb4_bin`.
-      return lit(stringValue(text, id, coercibility), stringType([...text].length, id, e.collation !== undefined))
+      return lit(stringValue(text, id, coercibility), { ...stringType([...text].length, id, e.collation !== undefined), coercibility })
     }
     case LITERAL.HEX:
       return introduced(e.value as Uint8Array)
@@ -588,12 +700,25 @@ function literal(e: LiteralNode, ctx: CompileContext): Compiled {
   }
 }
 
+/**
+ * A COLLATE's collation, which must be one of `charset`'s, else 1253
+ * (8.4.11: `'a' COLLATE latin1_bin` from a utf8mb4 client, and anything of
+ * binary's). `utf8_` names `utf8mb3_`.
+ */
+function collateTo(name: string, charset: string): number {
+  const lower = name.toLowerCase()
+  const info = collationInfoByName(lower) ?? (lower.startsWith('utf8_') ? collationInfoByName(`utf8mb3_${lower.slice(5)}`) : undefined)
+  if (info === undefined) throw sqlError('ER_UNKNOWN_COLLATION', messages.unknownCollation(name))
+  if (info.charset !== charset) throw sqlError('ER_COLLATION_CHARSET_MISMATCH', `COLLATION '${name}' is not valid for CHARACTER SET '${charset}'`)
+  return info.id
+}
+
 /** A string literal's collation: its `COLLATE`, else its introducer's charset default, else the connection's. */
 function introducerCollation(e: LiteralNode, ctx: CompileContext): number {
   if (e.collation !== undefined) {
-    const info = collationInfoByName(e.collation.toLowerCase())
-    if (info === undefined) throw sqlError('ER_UNKNOWN_COLLATION', messages.unknownCollation(e.collation))
-    return info.id
+    // A hex or bit literal with no introducer is binary's.
+    const cs = e.charset?.toLowerCase() ?? (e.type === LITERAL.STRING ? undefined : 'binary')
+    return collateTo(e.collation, cs === undefined ? requireCollationInfo(ctx.connectionCollation).charset : cs === 'utf8' ? 'utf8mb3' : cs)
   }
   if (e.charset !== undefined) {
     const cs = e.charset.toLowerCase()
@@ -616,7 +741,14 @@ function variable(name: string, ctx: CompileContext): Compiled {
   }
   const key = name.slice(1).toLowerCase()
   const known = ctx.state.userVariables.get(key)
-  return { eval: (_row, env) => env.state.userVariables.get(key) ?? null, type: typeOfUserVariable(known, ctx) }
+  // A user variable's text is IMPLICIT, whatever it was set from (8.4.11).
+  return {
+    eval: (_row, env) => {
+      const v = env.state.userVariables.get(key) ?? null
+      return v !== null && v.kind === 'string' && v.coercibility !== COERCIBILITY.IMPLICIT ? stringValue(v.v, v.collationId, COERCIBILITY.IMPLICIT) : v
+    },
+    type: typeOfUserVariable(known, ctx),
+  }
 }
 
 /** The system variables that are booleans, which report a width of 1 rather than a BIGINT UNSIGNED's 21. */
@@ -631,7 +763,7 @@ function typeOfSystemVariable(name: string, v: Value, ctx: CompileContext): Resu
 
 /** A user variable: a BIGINT, a LONGTEXT for a string, a 16,383-byte binary string when unset. */
 function typeOfUserVariable(v: Value | undefined, ctx: CompileContext): ResultType {
-  if (v === undefined || v === null) return stringType(16383, CHARSET_BINARY, true)
+  if (v === undefined || v === null) return { ...stringType(16383, CHARSET_BINARY, true), coercibility: COERCIBILITY.IMPLICIT }
   if (v.kind === 'string') return { ...stringType(67108860, ctx.connectionCollation, true), field: FIELD_TYPE.LONG_BLOB }
   if (v.kind === 'int') return intType(21, true, v.unsigned)
   return { ...typeOfValue(v), nullable: true }
@@ -703,7 +835,7 @@ function unary(op: string, a: Compiled, exists: boolean): Compiled {
           const v = at(r, env)
           return v === null ? null : v.kind === 'bytes' ? v : bytesValue(v.kind === 'string' ? encodeCollation(v.v, v.collationId) : new TextEncoder().encode(toText(v)))
         },
-        type: stringType(byteWidth(a.type), CHARSET_BINARY, true),
+        type: { ...stringType(byteWidth(a.type), CHARSET_BINARY, true), coercibility: COERCIBILITY.IMPLICIT },
       }
     case 'IS NULL':
       return { eval: (r, env) => bool(at(r, env) === null), type: boolType(false) }
@@ -777,6 +909,7 @@ function binary(op: string, left: Expression, right: Expression, extra: Expressi
   if (op === 'REGEXP' || op === 'RLIKE' || op === 'NOT REGEXP' || op === 'NOT RLIKE') {
     const a = compile(left, ctx)
     const p = compile(right, ctx)
+    if (a.type.kind === 'string' && p.type.kind === 'string') aggregateCollations([a.type, p.type], 'regexp_like', true)
     const negated = op.startsWith('NOT')
     return {
       eval: (r, env) => {
@@ -803,6 +936,7 @@ function binary(op: string, left: Expression, right: Expression, extra: Expressi
     const lo = textVersusNumber(lo0.type, a0.type) ? asNumber(lo0, 'DOUBLE', constantNode(right)) : lo0
     const hi = textVersusNumber(hi0.type, a0.type) ? asNumber(hi0, 'DOUBLE', constantNode(extra as Expression)) : hi0
     const negated = op === 'NOT BETWEEN'
+    if (isText(a0.type) && isText(lo0.type) && isText(hi0.type)) aggregateCollations([a0.type, lo0.type, hi0.type], 'between', true)
     // Each bound is its own comparison, fixed decimals and all.
     const low = comparer(a.type, lo.type)
     const high = comparer(a.type, hi.type)
@@ -838,6 +972,7 @@ function binary(op: string, left: Expression, right: Expression, extra: Expressi
   const nullable = !notNull(a.type, b.type)
   // What an overflow names, as MySQL's message does: the expression's text.
   const label = deparse({ kind: NODE.BINARY, op, left, right, at: 0 })
+  if (dated && isText(ca.type) && isText(cb.type)) aggregateCollations([ca.type, cb.type], op === '!=' ? '<>' : op, true)
 
   switch (op) {
     case 'AND':
@@ -1213,6 +1348,8 @@ function inList(negated: boolean, left: Expression, right: Expression, ctx: Comp
   // a text item each time it is compared (8.4.11: `id IN ('1x', 2)` warns a row).
   const a = raw.some((i) => textVersusNumber(compiled.type, i.type)) ? asNumber(compiled, 'DOUBLE') : compiled
   const items = raw.map((i) => (textVersusNumber(i.type, compiled.type) ? asNumber(i, 'DOUBLE') : i))
+  // Strings throughout are compared in one collation; one item is `=`'s.
+  if (isText(compiled.type) && raw.some((i) => isText(i.type))) aggregateCollations([compiled.type, ...raw.map((i) => i.type)], raw.length === 1 ? '=' : ' IN ', true)
   // A long list of constants is sorted once per execution and searched, as
   // MySQL's `in_vector` is: Prisma sends 65,535 of them.
   const searchable = items.length >= 10 && list.every(constantItem)
@@ -1251,6 +1388,7 @@ function inList(negated: boolean, left: Expression, right: Expression, ctx: Comp
  * character, and the escape (default `\`) makes either literal.
  */
 function like(negated: boolean, a: Compiled, pattern: Compiled, escape: Compiled | undefined): Compiled {
+  if (isText(a.type) && isText(pattern.type)) aggregateCollations([a.type, pattern.type], 'like', true)
   return {
     eval: (r, env) => {
       const v = a.eval(r, env)
@@ -1296,7 +1434,7 @@ function matchLike(s: readonly string[], p: readonly string[], escape: string, c
  * double, else a decimal wide enough for every integer and scale, else an
  * integer. NULL branches take no part.
  */
-export function aggregate(types: readonly ResultType[], nullable: boolean, connectionCollation: number): ResultType {
+export function aggregate(types: readonly ResultType[], nullable: boolean, connectionCollation: number, operation?: string, compare = false): ResultType {
   let live = types.filter((t) => t.kind !== 'null')
   if (live.length === 0) return NULL_TYPE
   // JSON with JSON is JSON; JSON with anything else is its text, in JSON's
@@ -1309,13 +1447,15 @@ export function aggregate(types: readonly ResultType[], nullable: boolean, conne
     // result is as wide as its widest argument's bytes; a TEXT among them
     // makes it a BLOB of its bytes.
     const texts = live.filter((t) => t.kind === 'string' || t.kind === 'bytes')
+    const derived = operation === undefined ? undefined : aggregateCollations(types, operation, compare)
     const least = Math.min(...texts.map(coercibilityOf))
-    const binary = texts.some((t) => t.kind === 'bytes' && coercibilityOf(t) === least)
-    const collation = binary ? CHARSET_BINARY : aggregateTypes(live, connectionCollation)
+    const binary = derived !== undefined ? derived.collationId === CHARSET_BINARY : texts.some((t) => t.kind === 'bytes' && coercibilityOf(t) === least)
+    const collation = binary ? CHARSET_BINARY : (derived?.collationId ?? aggregateTypes(live, connectionCollation))
+    const tagged = (t: ResultType): ResultType => (derived === undefined || binary ? t : { ...t, coercibility: derived.derivation })
     const width = Math.max(...live.map((t) => (binary && t.kind === 'string' ? charWidth(t) * requireCollationInfo(t.collationId).mbmaxlen : charWidth(t))))
     const blob = Math.max(0, ...live.map((t) => t.blobBytes ?? 0))
-    if (blob > 0 && !binary) return { ...stringType(width, collation, nullable), field: FIELD_TYPE.BLOB, blobBytes: blob * requireCollationInfo(collation).mbmaxlen }
-    return stringType(width, collation, nullable)
+    if (blob > 0 && !binary) return tagged({ ...stringType(width, collation, nullable), field: FIELD_TYPE.BLOB, blobBytes: blob * requireCollationInfo(collation).mbmaxlen })
+    return tagged(stringType(width, collation, nullable))
   }
   const first = live[0] as ResultType
   if (live.every((t) => t.kind === first.kind && t.field === first.field) && (first.kind === 'datetime' || first.kind === 'time')) {
@@ -1378,7 +1518,9 @@ function caseExpr(e: CaseNode, ctx: CompileContext): Compiled {
   const otherwise = e.else === undefined ? undefined : compile(e.else, ctx)
   const results = [...whens.map((w) => w.then.type), otherwise?.type ?? NULL_TYPE]
   const nullable = otherwise === undefined || results.some((t) => t.nullable)
-  const type = aggregate(results, nullable, ctx.connectionCollation)
+  const type = aggregate(results, nullable, ctx.connectionCollation, 'case')
+  // `CASE x WHEN y`: the operand and every WHEN compare in one collation.
+  if (operand !== undefined && isText(operand.type) && whens.every((w) => isText(w.when.type))) aggregateCollations([operand.type, ...whens.map((w) => w.when.type)], 'case', true)
   return {
     eval: (r, env) => {
       const subject = operand?.eval(r, env)
@@ -1475,6 +1617,7 @@ function call(e: CallNode, ctx: CompileContext): Compiled {
       // `STRCMP(10, 9)` is -1 (8.4.11).
       arity(2)
       const [x, y] = args() as [Compiled, Compiled]
+      aggregateCollations([x.type, y.type], 'strcmp', true)
       const id = aggregateTypes([x.type, y.type], conn)
       const asString = (v: Exclude<Value, null>): Value => (v.kind === 'string' || v.kind === 'bytes' ? v : stringValue(toText(v), id, COERCIBILITY.NUMERIC))
       return {
@@ -1498,6 +1641,7 @@ function call(e: CallNode, ctx: CompileContext): Compiled {
       const fn = name.toLowerCase()
       const at = replace ? 3 : 2
       const subject = xs[0] as Compiled
+      if (subject.type.kind === 'string' && (xs[1] as Compiled).type.kind === 'string') aggregateCollations([subject.type, (xs[1] as Compiled).type], fn, true)
       const collation = subject.type.kind === 'string' && (xs[1] as Compiled).type.kind === 'string' ? aggregateTypes([subject.type, (xs[1] as Compiled).type], conn) : subject.type.kind === 'bytes' ? CHARSET_BINARY : subject.type.kind === 'string' ? subject.type.collationId : conn
       // REGEXP_SUBSTR, and REGEXP_REPLACE of text, may be NULL whatever the
       // arguments; the others only when an argument may be (8.4.11).
@@ -1532,6 +1676,7 @@ function call(e: CallNode, ctx: CompileContext): Compiled {
     case 'REGEXP_LIKE': {
       if (e.args.length < 2 || e.args.length > 3) throw sqlError('ER_WRONG_PARAMCOUNT_TO_NATIVE_FCT', `Incorrect parameter count in the call to native function '${e.name}'`)
       const [a, p, t] = args() as [Compiled, Compiled, Compiled | undefined]
+      if (a.type.kind === 'string' && p.type.kind === 'string') aggregateCollations([a.type, p.type], 'regexp_like', true)
       return {
         eval: (r, env) => {
           const mt = t === undefined ? undefined : t.eval(r, env)
@@ -1556,14 +1701,14 @@ function call(e: CallNode, ctx: CompileContext): Compiled {
     case 'IF': {
       arity(3)
       const [c, x, y] = args() as [Compiled, Compiled, Compiled]
-      const type = aggregate([x.type, y.type], x.type.nullable || y.type.nullable, conn)
+      const type = aggregate([x.type, y.type], x.type.nullable || y.type.nullable, conn, 'if')
       if (type.kind === 'double') return { eval: (r, env) => doubleOf(truth(c.eval(r, env)) === true ? x.eval(r, env) : y.eval(r, env), type), type }
       return { eval: (r, env) => (truth(c.eval(r, env)) === true ? x.eval(r, env) : y.eval(r, env)), type }
     }
     case 'IFNULL': {
       arity(2)
       const [x, y] = args() as [Compiled, Compiled]
-      const type = aggregate([x.type, y.type], x.type.nullable && y.type.nullable, conn)
+      const type = aggregate([x.type, y.type], x.type.nullable && y.type.nullable, conn, 'ifnull')
       return { eval: (r, env) => convertTo(x.eval(r, env) ?? y.eval(r, env), type), type }
     }
     case 'COALESCE': {
@@ -1573,6 +1718,7 @@ function call(e: CallNode, ctx: CompileContext): Compiled {
         xs.map((x) => x.type),
         xs.every((x) => x.type.nullable),
         conn,
+        'coalesce',
       )
       return {
         eval: (r, env) => {
@@ -1594,6 +1740,7 @@ function call(e: CallNode, ctx: CompileContext): Compiled {
     case 'NULLIF': {
       arity(2)
       const [x, y] = args() as [Compiled, Compiled]
+      if (isText(x.type) && isText(y.type)) aggregateCollations([x.type, y.type], 'nullif', true)
       const cmp = comparer(x.type, y.type)
       return {
         eval: (r, env) => {
@@ -1606,8 +1753,15 @@ function call(e: CallNode, ctx: CompileContext): Compiled {
     case 'CONCAT': {
       if (e.args.length === 0) arity(1)
       const xs = args()
-      const binary = xs.some((x) => x.type.kind === 'bytes' || isBits(x.type))
-      const id = binary ? CHARSET_BINARY : aggregateTypes(xs.map((x) => x.type), conn)
+      const derived = aggregateCollations(
+        xs.map((x) => x.type),
+        'concat',
+        false,
+      )
+      // Bytes make the result bytes unless text of a stronger derivation wins (8.4.11: `'a' COLLATE utf8mb4_bin` over `x'61'`).
+      const binary = derived !== undefined ? derived.collationId === CHARSET_BINARY || xs.some((x) => isBits(x.type)) : xs.some((x) => x.type.kind === 'bytes' || isBits(x.type))
+      const id = binary ? CHARSET_BINARY : (derived?.collationId ?? aggregateTypes(xs.map((x) => x.type), conn))
+      const coercibility = derived?.derivation ?? Math.min(...xs.map((x) => coercibilityOf(x.type)))
       // A binary argument makes the result bytes: each argument contributes
       // its own bytes, a string in its own charset, and the width is counted
       // in bytes too (8.4.11).
@@ -1620,7 +1774,7 @@ function call(e: CallNode, ctx: CompileContext): Compiled {
             if (v === null) return null
             parts.push(v)
           }
-          if (!binary) return stringValue(parts.map(toText).join(''), id)
+          if (!binary) return stringValue(parts.map(toText).join(''), id, coercibility)
           // A BIT is its bytes in a string, as on the wire (8.4.11).
           const chunks = parts.map((v, i) => (v.kind === 'bytes' ? v.v : v.kind === 'string' ? encodeCollation(v.v, v.collationId) : v.kind === 'int' && isBits((xs[i] as Compiled).type) ? bitBytes(v.v, (xs[i] as Compiled).type.length) : new TextEncoder().encode(toText(v))))
           const out = new Uint8Array(chunks.reduce((n, c) => n + c.length, 0))
@@ -1633,7 +1787,7 @@ function call(e: CallNode, ctx: CompileContext): Compiled {
         },
         // Always nullable on 8.4.11, NOT NULL arguments or not: a result past
         // `max_allowed_packet` is NULL.
-        type: { ...stringType(width, id, true), coercibility: Math.min(...xs.map((x) => coercibilityOf(x.type))) },
+        type: { ...stringType(width, id, true), coercibility },
       }
     }
     case 'LENGTH':
@@ -1679,6 +1833,8 @@ function call(e: CallNode, ctx: CompileContext): Compiled {
       return {
         eval: (r, env) => {
           const v = x.eval(r, env)
+          // The type's derivation when it says one (IF over two collations is NONE whichever value it returns), else the value's.
+          if (x.type.kind === 'string' && x.type.coercibility !== undefined) return intValue(BigInt(x.type.coercibility))
           if (v !== null && v.kind === 'string') return intValue(BigInt(v.coercibility))
           if (x.type.kind === 'string' || x.type.kind === 'bytes') return intValue(BigInt(coercibilityOf(x.type)))
           return intValue(x.type.kind === 'null' || v === null ? 6n : 5n)
@@ -1944,7 +2100,7 @@ function cast(e: CastNode, ctx: CompileContext): Compiled {
           return bytesValue(out)
         },
         // As wide as its argument's bytes, and nullable whatever it is (8.4.11).
-        type: stringType(t.length ?? byteWidth(inner.type), CHARSET_BINARY, true),
+        type: { ...stringType(t.length ?? byteWidth(inner.type), CHARSET_BINARY, true), coercibility: COERCIBILITY.IMPLICIT },
       }
     case 'SIGNED':
     case 'UNSIGNED':

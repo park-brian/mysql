@@ -542,7 +542,12 @@ apart has paid for itself several times:
 erase. An integer's signedness matters, since negating an unsigned value
 saturates. A DECIMAL's exact scale matters, since `1/7*7` is `1.0000` and not
 `1.0003`. A string's coercibility matters, since a column's collation
-beats a literal's. And sometimes where a value came from matters. An ENUM's
+beats a literal's. Where strings meet, at a comparison, CONCAT, IF or a
+UNION, their collations are aggregated at compile time as MySQL's
+`DTCollation::aggregate` does it, and a mix it cannot decide is the
+statement's error (1267) before any row is read. A type that does not say its
+coercibility is left out of that check rather than guessed at, so a missing
+derivation can make a refusal disappear but never invents one. And sometimes where a value came from matters. An ENUM's
 member index, a hex literal and a FLOAT column's precision ride along as
 flags: an ENUM sorts by its index, `X'41' + 0` is 65, and a FLOAT(5,2)
 holding 0.1 reads as `0.10` wherever it becomes text. `plainValue` strips
@@ -1305,7 +1310,7 @@ it we capture:
 | Functions | 200 scripts of string and numeric function calls over every type, both protocols |
 | Temporal text | 2,700 generated strings stored into DATE, DATETIME, TIME and TIMESTAMP, strictly and under IGNORE, each with its SHOW WARNINGS |
 | `INFORMATION_SCHEMA` | 120 DDL scripts, each followed by the introspection queries Prisma and Drizzle send: 2,568 statements |
-| Feature scripts | Hand-written scripts, each run on the server first with its answers kept: foreign keys, CHECK, ALTER TABLE and defaults, SHOW CREATE TABLE, JSON paths, REGEXP and ICU's pattern syntax, temporal comparisons, BIT |
+| Feature scripts | Hand-written scripts, each run on the server first with its answers kept: foreign keys, CHECK, ALTER TABLE and defaults, SHOW CREATE TABLE, JSON paths, REGEXP and ICU's pattern syntax, collation mixes, temporal comparisons, BIT |
 
 Our code is never the oracle for itself. When a behaviour is in doubt, the
 server settles it, and the answer becomes a fixture.

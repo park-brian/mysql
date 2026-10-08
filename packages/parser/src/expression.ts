@@ -449,15 +449,22 @@ class ExpressionParser {
     return this.#postfixCollate(this.#primary())
   }
 
-  /** `expr COLLATE utf8mb4_bin`, which binds tighter than anything binary. */
+  /**
+   * `expr COLLATE utf8mb4_bin`, which binds tighter than anything binary,
+   * and may follow another: `'a' COLLATE x COLLATE y` is in y. `BINARY` is
+   * the keyword, not a collation, and so 1064 (8.4.11).
+   */
   #postfixCollate(expr: Expression): Expression {
-    if (!this.#atWord('COLLATE')) return expr
-    this.#c.skip()
-    const name = this.#peek()
-    if (name.kind !== TOKEN.IDENTIFIER && name.kind !== TOKEN.STRING) this.#fail()
-    this.#c.skip()
-    if (expr.kind === NODE.LITERAL) return { ...expr, collation: name.text }
-    return { kind: NODE.COLLATE, expr, collation: name.text, at: expr.at }
+    let out = expr
+    while (this.#atWord('COLLATE')) {
+      this.#c.skip()
+      const name = this.#peek()
+      if (name.kind !== TOKEN.IDENTIFIER && name.kind !== TOKEN.STRING) this.#fail()
+      if (name.kind === TOKEN.IDENTIFIER && name.quoted !== true && name.text.toUpperCase() === 'BINARY') this.#fail()
+      this.#c.skip()
+      out = out.kind === NODE.LITERAL && out.collation === undefined ? { ...out, collation: name.text } : { kind: NODE.COLLATE, expr: out, collation: name.text, at: out.at }
+    }
+    return out
   }
 
   #primary(): Expression {

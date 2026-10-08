@@ -48,7 +48,7 @@ import {
   type Value,
   type Condition,
 } from '@myjs/types'
-import { aggregate, aggregateTypes, asNumber, coercibilityOf, convertTo, raise, type Compiled, type CompileContext, type Env } from './compile.ts'
+import { aggregate, aggregateCollations, aggregateTypes, asNumber, coercibilityOf, convertTo, raise, type Compiled, type CompileContext, type Env } from './compile.ts'
 import { charWidth, decimalType, doubleType, intType, stringType, type ResultType } from './meta.ts'
 
 type V = Exclude<Value, null>
@@ -400,6 +400,11 @@ export function libraryFunction(name: string, args: readonly Compiled[], callNam
     }
     case 'CONCAT_WS': {
       arity(2, Infinity)
+      aggregateCollations(
+        xs.map((x) => x.type),
+        'concat_ws',
+        false,
+      )
       const { binary, collation, coercibility } = aggregateString(
         xs.map((x) => x.type),
         conn,
@@ -603,6 +608,8 @@ export function libraryFunction(name: string, args: readonly Compiled[], callNam
         xs.map((x) => x.type),
         xs.some((x) => x.type.nullable),
         conn,
+        name.toLowerCase(),
+        true,
       )
       const greatest = name === 'GREATEST'
       // Over text and a temporal, the server compares as datetimes and widens
