@@ -1,7 +1,8 @@
 // M5.10 — REGEXP, RLIKE, REGEXP_LIKE, REGEXP_INSTR, REGEXP_SUBSTR and REGEXP_REPLACE.
 //
-// MySQL 8 matches with ICU; this matches with the engine's RegExp, in Unicode
-// mode, after translating what ICU writes differently. What 8.4.11 answered:
+// MySQL 8 matches with ICU; this matches with the engine's RegExp, after
+// `icu-pattern.ts` has read ICU's syntax and written the engine's. What
+// 8.4.11 answered:
 //
 //   - The match is case-insensitive when the comparison's collation is (a
 //     `_ci` one), and case-sensitive for `_bin`, `_cs` and binary strings. It
@@ -12,12 +13,7 @@
 //     `c` and `i` winning; anything else is 1210. `.` does not match a line
 //     end without `n`; `^` and `$` are the whole subject's without `m`.
 //   - An empty pattern, and the POSIX word boundaries `[[:<:]]`, are 3685.
-//     ICU's syntax errors keep their own numbers: an unbalanced parenthesis
-//     3691, an unclosed bracket 3696, a quantifier with nothing to repeat
-//     3688 at its character, `{2,1}` 3693.
-//
-// ICU's `\w` and `\d` are Unicode's, and are translated to property classes;
-// its `\b` is too, and the engine's is ASCII's, a second divergence.
+//     ICU's syntax errors keep their own numbers, which `icu-pattern.ts` lists.
 //
 // A named divergence: ICU folds case fully, so `'Straße' REGEXP 'STRASSE'` is
 // 1 there; the engine folds code point by code point, and it is 0 here.
@@ -25,47 +21,7 @@ import { CHARSET_BINARY } from '@myjs/bytes'
 import { requireCollationInfo } from '@myjs/charsets'
 import { sqlError } from '@myjs/protocol'
 import { aggregateCollation, toText, type Value } from '@myjs/types'
-
-/** ICU's `\\w`: Unicode's word characters, where the engine's is ASCII's. */
-const WORD = '\\p{L}\\p{M}\\p{Nd}\\p{Pc}'
-
-const POSIX: Readonly<Record<string, string>> = {
-  alpha: '\\p{Alphabetic}',
-  digit: '\\p{Nd}',
-  alnum: '\\p{Alphabetic}\\p{Nd}',
-  upper: '\\p{Uppercase}',
-  lower: '\\p{Lowercase}',
-  space: '\\s',
-  blank: '\\t\\p{Zs}',
-  punct: '\\p{P}',
-  xdigit: '0-9A-Fa-f',
-  cntrl: '\\p{Cc}',
-  print: '\\P{C}',
-  graph: '^\\p{Z}\\p{C}',
-  word: WORD,
-}
-
-/** ICU's Unicode-aware `\\w`, `\\W`, `\\d` and `\\D` as the engine's property classes. */
-function unicodeEscapes(p: string): string {
-  let out = ''
-  let inClass = false
-  for (let i = 0; i < p.length; i++) {
-    const c = p[i] as string
-    if (c === '\\' && i + 1 < p.length) {
-      const n = p[++i] as string
-      if (n === 'w') out += inClass ? WORD : `[${WORD}]`
-      else if (n === 'W' && !inClass) out += `[^${WORD}]`
-      else if (n === 'd') out += '\\p{Nd}'
-      else if (n === 'D') out += '\\P{Nd}'
-      else out += c + n
-      continue
-    }
-    if (c === '[' && !inClass) inClass = true
-    else if (c === ']' && inClass) inClass = false
-    out += c
-  }
-  return out
-}
+import { compileIcu, type IcuFlags, type IcuPattern } from './icu-pattern.ts'
 
 const illegal = () => sqlError('ER_REGEXP_ILLEGAL_ARGUMENT', 'Illegal argument to a regular expression.')
 
@@ -113,45 +69,6 @@ function shapeOf(pattern: string): { readonly depth: number; readonly nested: bo
 
 const RUNAWAY_LENGTH = 17
 
-/** ICU's pattern as the engine's: POSIX classes inside brackets, a leading `(?i)`. */
-function translate(pattern: string): { source: string; insensitive?: boolean } {
-  if (pattern === '' || pattern.includes('[[:<:]]') || pattern.includes('[[:>:]]')) throw illegal()
-  if (shapeOf(pattern).depth >= 100) throw sqlError('ER_REGEXP_INTERNAL_ERROR', 'Internal error in the regular expression library.')
-  let insensitive: boolean | undefined
-  let p = pattern
-  const inline = /^\(\?([a-z]*)(?:-([a-z]*))?\)/.exec(p)
-  if (inline !== null) {
-    if (inline[1]?.includes('i') === true) insensitive = true
-    if (inline[2]?.includes('i') === true) insensitive = false
-    p = p.slice(inline[0].length)
-  }
-  const source = unicodeEscapes(p).replace(/\[:([a-z]+):\]/g, (whole, name: string) => POSIX[name] ?? whole)
-  return insensitive === undefined ? { source } : { source, insensitive }
-}
-
-/** ICU's error for a pattern the engine refuses, from what is wrong with it. */
-function syntaxError(pattern: string, e: Error): unknown {
-  const m = e.message
-  if (/Unterminated character class/i.test(m)) return sqlError('ER_REGEXP_MISSING_CLOSE_BRACKET', 'The regular expression contains an unclosed bracket expression.')
-  if (/Unterminated group|Unmatched '\)'/i.test(m)) return sqlError('ER_REGEXP_MISMATCHED_PAREN', 'Mismatched parenthesis in regular expression.')
-  if (/numbers out of order/i.test(m)) return sqlError('ER_REGEXP_MAX_LT_MIN', 'The maximum is less than the minumum in a {min,max} interval.')
-  if (/Nothing to repeat/i.test(m)) {
-    // The character ICU stops at: a quantifier with nothing before it, or
-    // one directly after another.
-    let at = 0
-    for (let i = 0; i < pattern.length; i++) {
-      const c = pattern[i] as string
-      const prev = i === 0 ? '' : (pattern[i - 1] as string)
-      if ('*+?'.includes(c) && (i === 0 || '(|'.includes(prev) || ('*+'.includes(prev) && (i < 2 || pattern[i - 2] !== '\\')))) {
-        at = i + 1
-        break
-      }
-    }
-    return sqlError('ER_REGEXP_RULE_SYNTAX', `Syntax error in regular expression on line 1, character ${at === 0 ? 1 : at}.`)
-  }
-  return illegal()
-}
-
 export interface MatchType {
   readonly insensitive?: boolean
   readonly multiline: boolean
@@ -173,22 +90,19 @@ export function matchType(text: string, fn: string): MatchType {
   return insensitive === undefined ? { multiline, dotAll } : { insensitive, multiline, dotAll }
 }
 
-const cache = new Map<string, RegExp>()
+const cache = new Map<string, IcuPattern & { readonly re: RegExp }>()
 
-/** A pattern compiled once per flags and text. */
-function compiled(source: string, flags: string, pattern: string): RegExp {
-  const key = `${flags}/${source}`
-  let re = cache.get(key)
-  if (re === undefined) {
-    try {
-      re = new RegExp(source, flags)
-    } catch (e) {
-      throw syntaxError(pattern, e as Error)
-    }
+/** A pattern compiled once per flags and text: ICU's syntax read, the engine's written. */
+function compiled(pattern: string, flags: IcuFlags): IcuPattern & { readonly re: RegExp } {
+  const key = `${Number(flags.insensitive)}${Number(flags.multiline)}${Number(flags.dotAll)}/${pattern}`
+  let c = cache.get(key)
+  if (c === undefined) {
+    const p = compileIcu(pattern, flags)
+    c = { ...p, re: new RegExp(p.source, p.flags) }
     if (cache.size > 256) cache.clear()
-    cache.set(key, re)
+    cache.set(key, c)
   }
-  return re
+  return c
 }
 
 const collationOf = (v: Exclude<Value, null>) => (v.kind === 'string' ? v.collationId : v.kind === 'bytes' ? CHARSET_BINARY : undefined)
@@ -212,22 +126,25 @@ function collationFor(subject: Exclude<Value, null>, pattern: Exclude<Value, nul
   return collationOf(subject) ?? collationOf(pattern) ?? CHARSET_BINARY
 }
 
-/** The engine's pattern for `pattern` over `subject`, `g` added when every match is wanted. */
-function regexpFor(subject: Exclude<Value, null>, pattern: Exclude<Value, null>, type: MatchType | undefined, fn: string, global: boolean): RegExp {
+/** The engine's pattern for `pattern` over `subject`. */
+function regexpFor(subject: Exclude<Value, null>, pattern: Exclude<Value, null>, type: MatchType | undefined, fn: string): IcuPattern & { readonly re: RegExp } {
   sameKind(subject, pattern, fn)
   const collation = collationFor(subject, pattern)
   const text = textOf(pattern)
-  const translated = translate(text)
-  if (shapeOf(text).nested && [...textOf(subject)].length > RUNAWAY_LENGTH) throw sqlError('ER_REGEXP_TIME_OUT', 'Timeout exceeded in regular expression match.')
-  const insensitive = type?.insensitive ?? translated.insensitive ?? /_ci$/.test(nameOf(collation))
-  const flags = `${global ? 'g' : ''}u${insensitive ? 'i' : ''}${type?.multiline === true ? 'm' : ''}${type?.dotAll === true ? 's' : ''}`
-  return compiled(translated.source, flags, text)
+  if (text === '' || text.includes('[[:<:]]') || text.includes('[[:>:]]')) throw illegal()
+  const shape = shapeOf(text)
+  if (shape.depth >= 100) throw sqlError('ER_REGEXP_INTERNAL_ERROR', 'Internal error in the regular expression library.')
+  const c = compiled(text, { insensitive: type?.insensitive ?? /_ci$/.test(nameOf(collation)), multiline: type?.multiline === true, dotAll: type?.dotAll === true })
+  if (shape.nested && [...textOf(subject)].length > RUNAWAY_LENGTH) throw sqlError('ER_REGEXP_TIME_OUT', 'Timeout exceeded in regular expression match.')
+  return c
 }
 
 /** Whether `subject` matches `pattern`, as REGEXP_LIKE has it; NULL in, NULL out. */
 export function regexpLike(subject: Value, pattern: Value, type: MatchType | undefined): boolean | null {
   if (subject === null || pattern === null) return null
-  return regexpFor(subject, pattern, type, 'regexp_like', false).test(textOf(subject))
+  const { re } = regexpFor(subject, pattern, type, 'regexp_like')
+  re.lastIndex = 0
+  return re.test(textOf(subject))
 }
 
 // --- REGEXP_INSTR, REGEXP_SUBSTR, REGEXP_REPLACE --------------------------------
@@ -274,7 +191,7 @@ const charsBefore = (text: string, at: number, binary: boolean): number => (bina
 
 /** The matches of `re` in `text` from `start`, in order. */
 function* matchesFrom(re: RegExp, text: string, start: number): Generator<RegExpExecArray> {
-  const r = new RegExp(re.source, re.flags)
+  const r = new RegExp(re.source, re.sticky ? re.flags : `${re.flags}g`)
   r.lastIndex = start
   for (;;) {
     const m = r.exec(text)
@@ -304,7 +221,7 @@ export interface Search {
 }
 
 export function regexpInstr(s: Search, returnEnd: boolean): bigint {
-  const re = regexpFor(s.subject, s.pattern, s.type, 'regexp_instr', true)
+  const { re } = regexpFor(s.subject, s.pattern, s.type, 'regexp_instr')
   const binary = s.subject.kind === 'bytes'
   const text = textOf(s.subject)
   const m = nth(re, text, offsetOf(text, s.position, binary, 'regexp_instr'), s.occurrence)
@@ -314,33 +231,62 @@ export function regexpInstr(s: Search, returnEnd: boolean): bigint {
 
 /** The matched text, or undefined when there is no such match. */
 export function regexpSubstr(s: Search): string | undefined {
-  const re = regexpFor(s.subject, s.pattern, s.type, 'regexp_substr', true)
+  const { re } = regexpFor(s.subject, s.pattern, s.type, 'regexp_substr')
   const text = textOf(s.subject)
   return nth(re, text, offsetOf(text, s.position, s.subject.kind === 'bytes', 'regexp_substr'), s.occurrence)?.[0]
 }
 
 type Piece = string | number
 
-/** ICU's replacement text as literal pieces and group numbers. */
-function replacementOf(text: string): Piece[] {
+/**
+ * ICU's replacement text as literal pieces and ICU group numbers. `\\uhhhh`
+ * and `\\Uhhhhhhhh` are a character, `\\` before anything else is that
+ * thing, and a trailing one nothing. `$` takes one digit, and more while
+ * the number stays a group (`$10` is group 1 and `0` with one group);
+ * `${name}` a named group. Anything else after `$`, or a name not a
+ * group's, is 3887; a number past the last group 3686 (8.4.11).
+ */
+function replacementOf(text: string, groups: number, names: ReadonlyMap<string, number>): Piece[] {
   const out: Piece[] = []
   let literal = ''
-  for (let i = 0; i < text.length; i++) {
-    const c = text[i] as string
-    if (c === '\\' && i + 1 < text.length) {
-      literal += text[++i]
+  const cps = Array.from(text)
+  for (let i = 0; i < cps.length; i++) {
+    const c = cps[i] as string
+    if (c === '\\') {
+      const n = cps[i + 1]
+      if (n === undefined) break
+      const width = n === 'u' ? 4 : n === 'U' ? 8 : 0
+      const hex = cps.slice(i + 2, i + 2 + width).join('')
+      const cp = width > 0 && hex.length === width && /^[0-9a-fA-F]+$/.test(hex) ? parseInt(hex, 16) : -1
+      if (cp >= 0 && cp <= 0x10ffff) {
+        literal += String.fromCodePoint(cp)
+        i += 1 + width
+      } else literal += cps[++i]
       continue
     }
     if (c !== '$') {
       literal += c
       continue
     }
-    const digits = /^\d+/.exec(text.slice(i + 1))?.[0]
-    if (digits === undefined) throw sqlError('ER_REGEXP_INVALID_CAPTURE_GROUP_NAME', 'A capture group has an invalid name.')
+    let group: number
+    if (cps[i + 1] === '{') {
+      const close = cps.indexOf('}', i + 2)
+      const name = close < 0 ? undefined : cps.slice(i + 2, close).join('')
+      const n = name === undefined ? undefined : names.get(name)
+      if (n === undefined) throw sqlError('ER_REGEXP_INVALID_CAPTURE_GROUP_NAME', 'A capture group has an invalid name.')
+      group = n
+      i = close
+    } else {
+      const d = cps[i + 1]
+      if (d === undefined || !/[0-9]/.test(d)) throw sqlError('ER_REGEXP_INVALID_CAPTURE_GROUP_NAME', 'A capture group has an invalid name.')
+      group = Number(d)
+      i++
+      while (/[0-9]/.test(cps[i + 1] ?? '') && group * 10 + Number(cps[i + 1]) <= groups) group = group * 10 + Number(cps[++i])
+      if (group > groups) throw outOfBounds()
+    }
     if (literal !== '') out.push(literal)
     literal = ''
-    out.push(Number(digits))
-    i += digits.length
+    out.push(group)
   }
   if (literal !== '') out.push(literal)
   return out
@@ -348,18 +294,11 @@ function replacementOf(text: string): Piece[] {
 
 export function regexpReplace(s: Search, replacement: Exclude<Value, null>): string {
   sameKind(s.subject, replacement, 'regexp_replace')
-  const re = regexpFor(s.subject, s.pattern, s.type, 'regexp_replace', true)
+  const { re, groups, names } = regexpFor(s.subject, s.pattern, s.type, 'regexp_replace')
   const text = textOf(s.subject)
   const start = offsetOf(text, s.position, s.subject.kind === 'bytes', 'regexp_replace')
-  const pieces = replacementOf(textOf(replacement))
-  const expand = (m: RegExpExecArray): string =>
-    pieces
-      .map((p) => {
-        if (typeof p === 'string') return p
-        if (p >= m.length) throw outOfBounds()
-        return m[p] ?? ''
-      })
-      .join('')
+  const pieces = replacementOf(textOf(replacement), groups.length - 1, names)
+  const expand = (m: RegExpExecArray): string => pieces.map((p) => (typeof p === 'string' ? p : (m[groups[p] as number] ?? ''))).join('')
   let out = text.slice(0, start)
   let at = start
   let n = 0n

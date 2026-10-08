@@ -1305,7 +1305,7 @@ it we capture:
 | Functions | 200 scripts of string and numeric function calls over every type, both protocols |
 | Temporal text | 2,700 generated strings stored into DATE, DATETIME, TIME and TIMESTAMP, strictly and under IGNORE, each with its SHOW WARNINGS |
 | `INFORMATION_SCHEMA` | 120 DDL scripts, each followed by the introspection queries Prisma and Drizzle send: 2,568 statements |
-| Feature scripts | Hand-written scripts, each run on the server first with its answers kept: foreign keys, CHECK, ALTER TABLE and defaults, SHOW CREATE TABLE, JSON paths, REGEXP, temporal comparisons, BIT |
+| Feature scripts | Hand-written scripts, each run on the server first with its answers kept: foreign keys, CHECK, ALTER TABLE and defaults, SHOW CREATE TABLE, JSON paths, REGEXP and ICU's pattern syntax, temporal comparisons, BIT |
 
 Our code is never the oracle for itself. When a behaviour is in doubt, the
 server settles it, and the answer becomes a fixture.
@@ -1416,7 +1416,7 @@ MySQL suites pass, as they do against 8.4.11. Of Prisma's, 1,111 pass
 against the server's 1,122, FULLTEXT search included; almost all of the
 rest were connections that failed to start on a loaded machine, and pass
 when their suites run alone. The rest of the function library and the
-cost-based planner come next. The core bundle is about 228 KB gzipped
+cost-based planner come next. The core bundle is about 240 KB gzipped
 against a budget of 500 KB, with the UCA weights in a separate chunk loaded
 on demand.
 
