@@ -64,6 +64,9 @@ import {
   type ResultType,
 } from './meta.ts'
 import { castAsJson, jsonConstructor } from './json.ts'
+import { jsonPathFunction, unquote } from './json-path.ts'
+
+const JSON_PATH_FUNCTIONS: ReadonlySet<string> = new Set(['JSON_EXTRACT', 'JSON_UNQUOTE', 'JSON_CONTAINS', 'JSON_CONTAINS_PATH', 'JSON_TYPE', 'JSON_LENGTH', 'JSON_DEPTH', 'JSON_KEYS', 'JSON_VALID'])
 import { windowNotAllowed } from './window.ts'
 import { dateAdd, isInterval } from './interval.ts'
 
@@ -535,6 +538,11 @@ function binary(op: string, left: Expression, right: Expression, extra: Expressi
   if (op === '+' && isInterval(left)) return dateAdd(right, left.value, left.unit, false, ctx)
   if (op === '-' && isInterval(right)) return dateAdd(left, right.value, right.unit, true, ctx)
   if (op === 'IN' || op === 'NOT IN') return inList(op === 'NOT IN', left, right, ctx)
+  // `c->'$.p'` is JSON_EXTRACT(c, '$.p'); `c->>'$.p'` unquotes it too.
+  if (op === '->' || op === '->>') {
+    const extracted = jsonPathFunction('JSON_EXTRACT', [compile(left, ctx), compile(right, ctx)], 'json_extract') as Compiled
+    return op === '->' ? extracted : unquote(extracted)
+  }
   if (right.kind === NODE.SUBQUERY && right.quantifier !== undefined && COMPARISONS[op] !== undefined) return quantified(op, right.quantifier === 'ALL' ? 'ALL' : 'ANY', left, right, ctx, op)
   if ((COMPARISONS[op] !== undefined || op === '<=>') && (isRow(left) || isRow(right))) return rowComparison(op, left, right, ctx)
   const a = compile(left, ctx)
@@ -1005,9 +1013,20 @@ function call(e: CallNode, ctx: CompileContext): Compiled {
     },
     type: stringType(chars, conn, false),
   })
-  const json = name === 'JSON_ARRAY' || name === 'JSON_OBJECT' ? jsonConstructor(name, args(), e.name) : undefined
+  const json = name === 'JSON_ARRAY' || name === 'JSON_OBJECT' ? jsonConstructor(name, args(), e.name) : JSON_PATH_FUNCTIONS.has(name) ? jsonPathFunction(name, args(), e.name) : undefined
   if (json !== undefined) return json
   switch (name) {
+    case 'COLLATION':
+    case 'CHARSET': {
+      // The argument's type decides, not its value: a number, a temporal or
+      // NULL is `binary`, JSON utf8mb4_bin (8.4.11). A VARCHAR(64) in utf8mb3.
+      arity(1)
+      const [x] = args() as [Compiled]
+      const id = x.type.kind === 'json' ? 46 : x.type.kind === 'string' ? x.type.collationId : CHARSET_BINARY
+      const info = requireCollationInfo(id)
+      const answer = name === 'COLLATION' ? info.name : info.charset
+      return { eval: () => stringValue(answer, 33, COERCIBILITY.IMPLICIT), type: stringType(64, 33, true) }
+    }
     case 'IF': {
       arity(3)
       const [c, x, y] = args() as [Compiled, Compiled, Compiled]

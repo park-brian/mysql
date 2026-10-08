@@ -213,7 +213,8 @@ export function parseJson(text: string): JsonDoc {
             break
           }
           default:
-            return fail('Invalid escape character in string.', i - 1)
+            // rapidjson reports the backslash, not the character after it (8.4.11).
+            return fail('Invalid escape character in string.', i - 2)
         }
         continue
       }
