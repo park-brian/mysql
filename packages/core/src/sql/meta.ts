@@ -83,6 +83,12 @@ export interface ResultType {
    * integer expression's temporary field would be sized by its width.
    */
   readonly keepField?: boolean
+  /**
+   * A set operation's column that holds a table column from some branch: what
+   * `INSERT … SELECT` copies from it is copied field to field, and a string too
+   * long for its target is 1265 rather than 1406 (8.4.11, M5.20).
+   */
+  readonly fromField?: boolean
 }
 
 /** `GROUP_FLAG`, `include/mysql_com.h` — the same bit as `NUM_FLAG`. */

@@ -20,14 +20,15 @@ import { FIELD_TYPE, MyjsError } from '@myjs/bytes'
 import { CLIENT, hasCap, messages, sqlError, type OkResult } from '@myjs/protocol'
 import type { ColumnDef, FieldBytes, IndexDef, RowId, Table, TableDef, Trx } from '@myjs/engine'
 import { EngineError } from '@myjs/engine'
-import { NODE, REF, parseExpression, type Assignment, type DeleteNode, type Expression, type InsertNode, type UpdateNode } from '@myjs/parser'
+import { NODE, QUERY, REF, parseExpression, type Assignment, type ColumnNode, type DeleteNode, type Expression, type InsertNode, type UpdateNode } from '@myjs/parser'
 import { decodeField, encodeField, integerRange, intValue, toInteger, toText, type StoreContext, type Value } from '@myjs/types'
-import { compile, EMPTY_SCOPE, type Compiled, type Row } from './compile.ts'
+import { compile, EMPTY_SCOPE, type Compiled, type Row, type Scope } from './compile.ts'
+import { containsAggregate } from './group.ts'
 import { filter, limit, sort, type ScannedRow } from './operators.ts'
 import { accessRows, chooseAccess } from './plan.ts'
-import { checkTargetNotRead, compileContext, limitValue, openTable, type Run } from './query.ts'
+import { checkTargetNotRead, compileContext, limitValue, openTable, planQuery, type Run } from './query.ts'
 import { TableScope } from './scope.ts'
-import { NULL_TYPE } from './meta.ts'
+import { NULL_TYPE, type ResultType } from './meta.ts'
 
 const isStrict = (sqlMode: string): boolean => /\bSTRICT_(TRANS|ALL)_TABLES\b/.test(sqlMode)
 
@@ -105,13 +106,19 @@ function duplicateError(e: unknown, def: TableDef, table: Table, keys: readonly 
 /** How a NULL meets a NOT NULL column: refused (1048), or stored as the type's zero with a warning. */
 type NullPolicy = 'error' | 'warn'
 
-/** A value into its column, as `encodeField` stores it, with `nulls` deciding what a NULL into NOT NULL does. */
-function storeField(v: Value, column: ColumnDef, store: StoreContext, nulls: NullPolicy): FieldBytes {
+/**
+ * A value into its column, as `encodeField` stores it, with `nulls` deciding
+ * what a NULL into NOT NULL does. An INSERT warns once per column, however
+ * many rows it gives a NULL (8.4.11: three rows, two of them NULL in `a` and
+ * one in `b`, is two warnings); an UPDATE warns per row, and passes no `warned`.
+ */
+function storeField(v: Value, column: ColumnDef, store: StoreContext, nulls: NullPolicy, warned?: Set<ColumnDef>): FieldBytes {
   try {
     return encodeField(v, column, store)
   } catch (e) {
     if (nulls === 'error' || !(e instanceof MyjsError) || e.code !== 'ER_BAD_NULL_ERROR') throw e
-    store.warnings++
+    if (warned === undefined || !warned.has(column)) store.warnings++
+    warned?.add(column)
     return encodeField(implicitDefault(column), column, store)
   }
 }
@@ -212,13 +219,50 @@ interface Upsert {
 }
 
 /**
+ * `INSERT … SELECT … ON DUPLICATE KEY UPDATE` may read the SELECT's own
+ * columns, of the row that made the one in the way — when the SELECT is one
+ * query block that neither groups nor aggregates (8.4.11: a GROUP BY or a
+ * UNION leaves only the target's, and the rest is 1054). Each reference the
+ * SELECT resolves rides along as a hidden item at the end of its list.
+ */
+function selectReferences(run: Run, node: InsertNode): ColumnNode[] {
+  const q = node.query
+  if (q === undefined || node.onDuplicate === undefined) return []
+  const body = q.body
+  if (body.kind !== QUERY.SELECT || body.from === undefined || body.groupBy !== undefined || body.having !== undefined || body.distinct === true) return []
+  if (body.items.some((i) => containsAggregate(i.expr))) return []
+  const refs = new Map<string, ColumnNode>()
+  const walk = (x: unknown): void => {
+    if (x === null || typeof x !== 'object') return
+    if (Array.isArray(x)) return x.forEach(walk)
+    const n = x as Expression
+    if (n.kind === NODE.SUBQUERY || (n.kind === NODE.CALL && n.name.toUpperCase() === 'VALUES')) return
+    if (n.kind === NODE.COLUMN) {
+      refs.set(n.parts.join('.').toLowerCase(), n)
+      return
+    }
+    for (const v of Object.values(x)) walk(v)
+  }
+  for (const a of node.onDuplicate) walk(a.value)
+  return [...refs.values()].filter((ref) => {
+    try {
+      planQuery(run, { kind: QUERY.QUERY, ...(q.with === undefined ? {} : { with: q.with }), body: { ...body, items: [{ expr: ref }] }, at: q.at })
+      return true
+    } catch (e) {
+      if (e instanceof MyjsError && e.errno === 1054) return false
+      throw e
+    }
+  })
+}
+
+/**
  * The scope an upsert's expressions see (8.4.11, each probed): the table's
  * columns, then — with `AS n` or `AS n(a, b)` — the alias's, which are the
  * INSERT's own target columns and no others (`n.id` is 1054 when `id` was not
  * inserted). A bare name searches both, so `age` under `AS n` is 1052. Then,
  * out of sight, the whole row the INSERT tried, which `VALUES(c)` reads.
  */
-function compileUpsert(run: Run, def: TableDef, node: InsertNode, targets: readonly number[]): Upsert {
+function compileUpsert(run: Run, def: TableDef, node: InsertNode, targets: readonly number[], selectRefs: readonly { readonly ref: ColumnNode; readonly type: ResultType }[] = []): Upsert {
   const n = def.columns.length
   const alias = node.rowAlias
   const scoped: { alias: string; def: TableDef }[] = [{ alias: def.name, def }]
@@ -246,7 +290,26 @@ function compileUpsert(run: Run, def: TableDef, node: InsertNode, targets: reado
     },
     calls: 0,
   }
-  const ctx = { ...compileContext(run, scope, 'field list'), insertValues }
+  // The SELECT's columns sit after the row the INSERT tried. A bare name both
+  // sides hold is 1052 (8.4.11: `n = n + 1` when the SELECT reads an `n`).
+  const keyOf = (parts: readonly string[]): string => parts.join('.').toLowerCase()
+  const fromSelect = new Map(selectRefs.map((r, i) => [keyOf(r.ref.parts), { index: tried + n + i, type: r.type }]))
+  const resolver: Scope = {
+    resolve: (parts, clause) => {
+      const selected = fromSelect.get(keyOf(parts))
+      if (selected === undefined) return scope.resolve(parts, clause)
+      let target: ReturnType<Scope['resolve']>
+      try {
+        target = scope.resolve(parts, clause)
+      } catch (e) {
+        if (e instanceof MyjsError && e.errno === 1054) return selected
+        throw e
+      }
+      if (parts.length === 1) throw sqlError('ER_NON_UNIQ_ERROR', messages.ambiguousColumn(parts.join('.'), clause))
+      return target
+    },
+  }
+  const ctx = { ...compileContext(run, resolver, 'field list'), insertValues }
   const assignments = (node.onDuplicate ?? []).map((a) => ({
     // The target is the table's column, whatever the alias says.
     index: own.resolve(a.column.parts, 'field list').index,
@@ -282,7 +345,8 @@ const okInfo = (records: number, duplicates: number, warnings: number): string =
  *     adjusts the row, and its `Duplicates` is rows not written.
  */
 export function insert(run: Run, node: InsertNode, trx: Trx): OkResult {
-  if (node.query !== undefined) throw sqlError('ER_NOT_SUPPORTED_YET', messages.notSupported('INSERT … SELECT'))
+  // A subquery, or the SELECT of `INSERT … SELECT`, reads in the statement's transaction.
+  run = { ...run, env: { ...run.env, trx } }
   if (node.partitions !== undefined) throw sqlError('ER_NOT_SUPPORTED_YET', messages.notSupported('Partitions'))
 
   const { def, table } = openTable(run, node.table)
@@ -295,7 +359,30 @@ export function insert(run: Run, node: InsertNode, trx: Trx): OkResult {
   // Which column each written value goes to, and the rows of expressions.
   let targets: number[]
   let rows: (readonly (Expression | undefined)[])[]
-  if (node.set !== undefined) {
+  // `INSERT … SELECT` (M5.20): the query's rows, read in full before the first
+  // is written — as MySQL does through a temporary table when the query reads
+  // the table it inserts into — and in the order the query returns them,
+  // which is the order they take AUTO_INCREMENT values in.
+  let selected: (readonly Value[])[] | undefined
+  // The columns the SELECT gives a table column: copied field to field, where
+  // a string too long is "Data truncated" (1265), not "Data too long" (1406) —
+  // through a join, a merged CTE, a grouping or a set operation alike (8.4.11).
+  const fieldCopies = new Set<number>()
+  let selectRefs: { readonly ref: ColumnNode; readonly type: ResultType }[] = []
+  if (node.query !== undefined) {
+    targets = node.columns === undefined ? def.columns.map((_, i) => i) : node.columns.map((c) => columnIndex(c.parts[c.parts.length - 1] as string))
+    const refs = selectReferences(run, node)
+    const query = node.query
+    const augmented = refs.length === 0 || query.body.kind !== QUERY.SELECT ? query : { ...query, body: { ...query.body, items: [...query.body.items, ...refs.map((ref) => ({ expr: ref }))] } }
+    const plan = planQuery(run, augmented)
+    if (plan.columns.length !== targets.length + refs.length) throw sqlError('ER_WRONG_VALUE_COUNT_ON_ROW', messages.wrongValueCount(1))
+    selectRefs = refs.map((ref, i) => ({ ref, type: (plan.columns[targets.length + i] as { type: ResultType }).type }))
+    plan.columns.slice(0, targets.length).forEach((c, i) => {
+      if (c.type.column !== undefined || c.type.fromField === true) fieldCopies.add(targets[i] as number)
+    })
+    selected = [...plan.rows(trx, run.env)]
+    rows = []
+  } else if (node.set !== undefined) {
     targets = node.set.map((a) => columnIndex(a.column.parts[a.column.parts.length - 1] as string))
     rows = [node.set.map((a) => a.value)]
   } else {
@@ -320,18 +407,25 @@ export function insert(run: Run, node: InsertNode, trx: Trx): OkResult {
   // A NULL for a NOT NULL column is refused by a strict mode and by a
   // one-row INSERT, and stored as the type's zero by IGNORE or a multi-row
   // INSERT; an upsert's own assignment is refused unless IGNORE (8.4.11).
-  const nulls: NullPolicy = ignore || (!strictMode && rows.length > 1) ? 'warn' : 'error'
+  const nulls: NullPolicy = ignore || (!strictMode && (rows.length > 1 || selected !== undefined)) ? 'warn' : 'error'
+  const warnedNull = new Set<ColumnDef>()
   const upsertNulls: NullPolicy = ignore ? 'warn' : 'error'
 
   const ctx = compileContext(run, EMPTY_SCOPE, 'field list')
-  const compiledRows = rows.map((r) => r.map((e) => (e === undefined || isDefaultKeyword(e) ? undefined : compile(e, ctx))))
-  const upsert = mode === 'upsert' ? compileUpsert(run, def, node, targets) : undefined
+  const compiledRows: (readonly (Compiled | undefined)[])[] =
+    selected !== undefined ? selected.map((r) => r.slice(0, targets.length).map((v) => ({ eval: () => v, type: NULL_TYPE }))) : rows.map((r) => r.map((e) => (e === undefined || isDefaultKeyword(e) ? undefined : compile(e, ctx))))
+  const upsert = mode === 'upsert' ? compileUpsert(run, def, node, targets, selectRefs) : undefined
+  // The SELECT's hidden columns of the row being written, for the upsert.
+  let selectExtras: readonly Value[] = []
   const defaults = def.columns.map((c) => defaultOf(run, c))
   const keys = uniqueKeys(def)
   const autoAt = def.columns.findIndex((c) => c.autoIncrement === true)
   // The key the AUTO_INCREMENT column leads (`next_number_index`).
   const autoKey = autoAt < 0 ? undefined : keys.find((i) => i.parts[0]?.column.toLowerCase() === (def.columns[autoAt] as ColumnDef).name.toLowerCase())
-  const auto = new AutoIncrement(table, compiledRows.length)
+  // InnoDB reserves a VALUES statement's rows at once, but cannot count a
+  // SELECT's: it reserves 1, then 2, then 4 (`ha_start_bulk_insert(0)`), so an
+  // INSERT … SELECT of two rows leaves a gap.
+  const auto = new AutoIncrement(table, selected !== undefined ? 0 : compiledRows.length)
   const stats = { records: 0, copied: 0, deleted: 0, updated: 0, touched: 0 }
   // `first_successful_insert_id_in_cur_stmt`, and the last row's AUTO_INCREMENT value.
   let firstId = 0n
@@ -341,6 +435,7 @@ export function insert(run: Run, node: InsertNode, trx: Trx): OkResult {
   compiledRows.forEach((row, n) => {
     store.row = n + 1
     stats.records++
+    if (selected !== undefined) selectExtras = (selected[n] as readonly Value[]).slice(targets.length)
     const values: Value[] = def.columns.map(() => null)
     const given = new Set<number>()
     row.forEach((c, i) => {
@@ -362,7 +457,15 @@ export function insert(run: Run, node: InsertNode, trx: Trx): OkResult {
     // one, as `write_row` takes it after `fill_record`: a row refused for an
     // out-of-range value costs no id of its own, and an explicit id that will
     // not convert is the error reported, not a later column's (8.4.11).
-    const fields = def.columns.map((c, i) => (i === autoAt && values[i] === null ? null : storeField(values[i] ?? null, c, store, nulls)))
+    const fields = def.columns.map((c, i) => {
+      if (i === autoAt && values[i] === null) return null
+      try {
+        return storeField(values[i] ?? null, c, store, nulls, warnedNull)
+      } catch (e) {
+        if (fieldCopies.has(i) && e instanceof MyjsError && e.errno === 1406) throw sqlError('WARN_DATA_TRUNCATED', `Data truncated for column '${c.name}' at row ${store.row}`)
+        throw e
+      }
+    })
     // `prev_insert_id`: where the handler stood before this row.
     const prev = auto.next
     let generated = 0n
@@ -434,7 +537,7 @@ export function insert(run: Run, node: InsertNode, trx: Trx): OkResult {
     const before = table.get(id, trx, 'current') as FieldBytes[]
     const current = def.columns.map((c, i) => decodeField(before[i] ?? null, c.type))
     const triedValues = def.columns.map((c, i) => decodeField(tried[i] ?? null, c.type))
-    const extra = [...u.aliased.map((t) => triedValues[t] ?? null), ...triedValues]
+    const extra = [...u.aliased.map((t) => triedValues[t] ?? null), ...triedValues, ...selectExtras]
     const result = assignAll(run, def, before, current, extra, u.assignments, u.onUpdate, defaults, store, upsertNulls)
     // An upsert that sets the AUTO_INCREMENT column to a value the statement
     // has promised another row is ER_AUTO_INCREMENT_CONFLICT; to this row's
@@ -463,15 +566,21 @@ export function insert(run: Run, node: InsertNode, trx: Trx): OkResult {
   // A value generated and written becomes `LAST_INSERT_ID()`; an upsert's
   // update does not, as an UPDATE does not.
   if (firstId !== 0n) run.state.lastInsertId = firstId
-  const insertId = firstId !== 0n ? firstId : run.state.insertIdSet ? run.state.lastInsertId : autoAt >= 0 && stats.copied > 0 ? lastAuto : 0n
+  // The SELECT form falls back to no id at all once a row was upserted, even
+  // beside rows it inserted with ids of their own (8.4.11).
+  const lastHandled = autoAt >= 0 && stats.copied > 0 && !(selected !== undefined && stats.touched > 0) ? lastAuto : 0n
+  const insertId = firstId !== 0n ? firstId : run.state.insertIdSet ? run.state.lastInsertId : lastHandled
   const updated = hasCap(run.env.session.capabilities, CLIENT.FOUND_ROWS) ? stats.touched : stats.updated
   const warnings = store.warnings + (upsert?.deprecated ?? 0)
-  const duplicates = ignore ? stats.records - stats.copied : stats.deleted + updated
+  // The SELECT form names only the rows an upsert changed, whatever the
+  // client's FOUND_ROWS: 8.4.11 reports 6 rows affected and "Duplicates: 1"
+  // for three inserts, one row updated and one row left as it was.
+  const duplicates = ignore ? stats.records - stats.copied : stats.deleted + (selected !== undefined ? stats.updated : updated)
   return {
     affectedRows: stats.copied + stats.deleted + updated,
     insertId,
     warnings,
-    ...(compiledRows.length !== 1 ? { info: okInfo(stats.records, duplicates, warnings) } : {}),
+    ...(compiledRows.length !== 1 || selected !== undefined ? { info: okInfo(stats.records, duplicates, warnings) } : {}),
   }
 }
 

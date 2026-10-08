@@ -47,6 +47,14 @@ export interface OptimizerFacts {
    * are still constants (8.4.11: "Constant row from c1" over an id it lacks).
    */
   readonly straight: boolean
+  /**
+   * An outer join's inner tables whose ON can never hold, read as one
+   * NULL-complemented row (8.4.11: `LEFT JOIN p1 ON … AND p1.id BETWEEN NULL
+   * AND 4` over an indexed `id` plans no read of p1). Their columns are still
+   * copied into a temporary table, but are never its key: a GROUP BY on one
+   * has no GROUP_FLAG.
+   */
+  readonly nullTables?: ReadonlySet<string>
 }
 
 const NO_FACTS: OptimizerFacts = { empty: false, constTables: [], straight: false }
@@ -181,6 +189,24 @@ export function optimizerFacts(from: FromPlan | undefined, where: Expression | u
   }
   if (pool.some(impossible)) return { empty: true, constTables: [], straight }
 
+  // An outer join's ON, judged as a WHERE over its inner tables.
+  const nullTables = new Set<string>()
+  from.joins.forEach((j, n) => {
+    if (!j.left || converted.has(n)) return
+    for (const a of j.innerAliases) nullable.delete(a)
+    const never = flatten(j.on, []).some((c) => {
+      // The range optimizer's proofs, not `IS NULL` on a NOT NULL column: an
+      // ON holding that is still a join (8.4.11: a hash antijoin).
+      if (c.kind === NODE.BINARY && impossible(c)) return true
+      const v = partialTruth(c, () => undefined, ctx, env, true)
+      return v === false || v === null
+    })
+    for (const a of j.innerAliases) {
+      nullable.add(a)
+      if (never) nullTables.add(a)
+    }
+  })
+
   // The range optimizer: an indexed column's ranges, intersected over every
   // condition, that come to nothing — `name > 'cy' AND (name < 'Blue' OR name
   // IS NULL)` on a NOT NULL `name`.
@@ -227,7 +253,7 @@ export function optimizerFacts(from: FromPlan | undefined, where: Expression | u
       }
     }
   }
-  return { empty: false, constTables, straight }
+  return { empty: false, constTables, straight, ...(nullTables.size > 0 ? { nullTables } : {}) }
 }
 
 /** Whether a const table has its row: read while planning, as MySQL reads it. */
@@ -287,10 +313,10 @@ function neverEqual(column: ColumnDef | undefined, other: Expression): boolean {
  * on a known side, as three-valued logic allows; anything else is evaluated
  * only when every column in it is known.
  */
-function partialTruth(e: Expression, known: (column: Expression) => Expression | undefined, ctx: CompileContext, env: Env): boolean | null | undefined {
+function partialTruth(e: Expression, known: (column: Expression) => Expression | undefined, ctx: CompileContext, env: Env, constants = false): boolean | null | undefined {
   if (e.kind === NODE.BINARY && (e.op === 'AND' || e.op === '&&' || e.op === 'OR' || e.op === '||')) {
-    const a = partialTruth(e.left, known, ctx, env)
-    const b = partialTruth(e.right, known, ctx, env)
+    const a = partialTruth(e.left, known, ctx, env, constants)
+    const b = partialTruth(e.right, known, ctx, env, constants)
     const and = e.op === 'AND' || e.op === '&&'
     if (and) {
       if (a === false || b === false) return false
@@ -322,7 +348,7 @@ function partialTruth(e: Expression, known: (column: Expression) => Expression |
     return out
   }
   const replaced = substitute(e) as Expression
-  if (!complete || !touched) return undefined
+  if (!complete || (!touched && !constants)) return undefined
   try {
     return truth(compile(replaced, { ...ctx, scope: EMPTY_SCOPE }).eval([], env))
   } catch {

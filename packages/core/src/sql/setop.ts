@@ -54,9 +54,12 @@ const intDigits = (t: ResultType): number => (t.kind === 'decimal' ? t.length - 
 export function setOperationType(types: readonly ResultType[], connectionCollation: number): ResultType {
   const nullable = types.some((t) => t.nullable)
   const live = types.filter((t) => t.kind !== 'null')
+  const fromField = types.some((t) => t.column !== undefined || t.fromField === true)
   const done = (t: ResultType): ResultType => {
-    const { column: _c, temporary: _t, asText: _a, ...rest } = t
-    return { ...rest, nullable, temporary: 'stream', keepField: true }
+    const { column: _c, temporary: _t, asText: _a, fromField: _f, ...rest } = t
+    // A column of the operation's temporary table: its collation is a
+    // column's (IMPLICIT), so a nested `_bin` union keeps it against a latin1 side.
+    return { ...rest, nullable, temporary: 'stream', keepField: true, ...(t.kind === 'string' ? { coercibility: COERCIBILITY.IMPLICIT } : {}), ...(fromField ? { fromField } : {}) }
   }
   if (live.length === 0) return done({ ...stringType(0, CHARSET_BINARY, true) })
   const kinds = new Set(live.map((t) => t.kind))
@@ -120,12 +123,22 @@ export function convert(v: Value, t: ResultType): Value {
   return convertTo(v, t)
 }
 
-/** A set operation over two branches' columns. */
-export function setOperation(node: SetOperationNode, left: Columns, right: Columns, connectionCollation: number): SetOperationPlan {
+/**
+ * A set operation over two branches' columns. Its types are folded, pairwise
+ * and in order, over every SELECT beneath it, `leaves` — not over a nested
+ * operation's result: `grp UNION (amt INTERSECT s)` is INT with DECIMAL(6,2),
+ * 14 wide as text, then a VARCHAR(10), so 56 bytes, where `grp UNION (s
+ * INTERSECT amt)` is 44 (8.4.11).
+ */
+export function setOperation(node: SetOperationNode, left: Columns, right: Columns, connectionCollation: number, leaves: readonly (readonly ResultType[])[] = [left.map((c) => c.type), right.map((c) => c.type)]): SetOperationPlan {
   if (left.length !== right.length) throw sqlError('ER_WRONG_NUMBER_OF_COLUMNS_IN_SELECT', 'The used SELECT statements have a different number of columns')
   // Nullable if either side is; `nestedNullability` narrows it for an
   // operation that is itself a branch.
-  const columns = left.map((c, i) => ({ name: c.name, type: setOperationType([c.type, (right[i] as { type: ResultType }).type], connectionCollation) }))
+  const columns = left.map((c, i) => {
+    const r = (right[i] as { type: ResultType }).type
+    const folded = leaves.map((l) => l[i] as ResultType).reduce((acc, t) => setOperationType([acc, t], connectionCollation))
+    return { name: c.name, type: { ...folded, nullable: c.type.nullable || r.nullable } }
+  })
   const types = columns.map((c) => c.type)
   const all = node.all === true
   return {

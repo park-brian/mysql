@@ -138,6 +138,11 @@ export interface SelectPlan {
   /** `FOR UPDATE` / `FOR SHARE`: the read takes the writer slot. */
   readonly locking: boolean
   /**
+   * A set operation's SELECTs' column types, in order: an enclosing set
+   * operation types its columns over these, not over this one's (8.4.11).
+   */
+  readonly leaves?: readonly (readonly ResultType[])[]
+  /**
    * The columns as the statement's execution reports them, when that depends
    * on data the optimizer reads while planning — a const table's row, whose
    * absence makes the result empty and its metadata unmaterialized (M5.4).
@@ -239,15 +244,21 @@ function planSelect(run: Run, q: QueryExpression, node: SelectNode): SelectPlan 
     // expression keeping only NOT_NULL (8.4.11, M5.18's corpus) — unless the
     // optimizer proved the result empty, when there is no table at all.
     const facts = optimizerFacts(from, node.where, limitCount, compileContext(run, EMPTY_SCOPE, 'where clause'), run.env, (node.options ?? []).includes('STRAIGHT_JOIN'))
-    // A sort over the first table alone, ahead of nested-loop joins, needs no stream.
     // A sort over the first table alone, ahead of nested-loop joins or a
     // nested-loop semijoin, needs no stream.
     const sortedFirst = node.distinct !== true && (source === undefined ? from.sortsFirst(orderAliases(q, items, lookup)) : nestedLoopSemijoin(node.where, scope) && !node.items.some((i) => correlatedIn(i.expr, scope)))
     if (!facts.empty && !sortedFirst) {
       const consts = new Set(facts.constTables.map((t) => t.alias))
+      const fixed = new Set([...consts, ...(facts.nullTables ?? [])])
       const own = items.map((i) => i.compiled.type)
+      // With every other table a constant, a DISTINCT is one table's, and its
+      // temporary table is keyed as one table's is: GROUP_FLAG on what can be
+      // NULL (8.4.11: `SELECT DISTINCT b.nl, a.x FROM a LEFT JOIN b ON FALSE`).
+      const alone = node.distinct === true && source === undefined && from.tables.filter((t) => !fixed.has(t.alias)).length === 1
       items.forEach((item) => {
-        if (item.expr === undefined || refersToRow(item.expr, lookup, consts)) item.compiled = { ...item.compiled, type: { ...item.compiled.type, temporary: 'stream' } }
+        if (item.expr !== undefined && !refersToRow(item.expr, lookup, consts)) return
+        const temporary = !alone ? 'stream' : item.expr === undefined || refersToRow(item.expr, lookup, fixed) ? true : 'pinned'
+        item.compiled = { ...item.compiled, type: { ...item.compiled.type, temporary } }
       })
       if (facts.constTables.length > 0) {
         const materialized = items.map((i) => i.compiled.type)
@@ -665,7 +676,9 @@ function planSetOperation(run: Run, node: SetOperationNode, parent?: SetOperatio
   }
   const left = branch(node.left)
   const right = branch(node.right)
-  const op = setOperation(node, left.columns, right.columns, run.env.session.characterSet)
+  const leavesOf = (p: SelectPlan): readonly (readonly ResultType[])[] => p.leaves ?? [p.columns.map((c) => c.type)]
+  const leaves = [...leavesOf(left), ...leavesOf(right)]
+  const op = setOperation(node, left.columns, right.columns, run.env.session.characterSet, leaves)
   const columns =
     parent === undefined || parent === node.op
       ? op.columns
@@ -673,6 +686,7 @@ function planSetOperation(run: Run, node: SetOperationNode, parent?: SetOperatio
   return {
     columns,
     locking: left.locking || right.locking,
+    leaves,
     rows: (trx, env) => op.rows(() => left.rows(trx, env), () => right.rows(trx, env)),
   }
 }
@@ -702,6 +716,7 @@ function orderedResult(run: Run, q: QueryExpression, plan: SelectPlan): SelectPl
   return {
     columns: plan.columns,
     locking: plan.locking,
+    ...(plan.leaves === undefined ? {} : { leaves: plan.leaves }),
     rows(trx, given) {
       const env = given ?? { ...run.env, ...(trx === undefined ? {} : { trx }) }
       let rows: Iterable<{ readonly row: Row }> = (function* () {
@@ -922,6 +937,7 @@ function planGrouped(
   let dataColumns: ((trx: Trx | undefined) => readonly ResultType[]) | undefined
   if (facts !== undefined && !facts.empty) {
     const consts = new Set(facts.constTables.map((t) => t.alias))
+    const fixed = new Set([...consts, ...(facts.nullTables ?? [])])
     const own = items.map((i) => i.compiled.type)
     const seenKeys = new Set<number>()
     for (const item of items) {
@@ -942,7 +958,9 @@ function planGrouped(
       // The keys are the temporary table's key, columns or expressions;
       // everything else is a field beside them.
       const isKeyExpression = e.kind !== NODE.COLUMN && !aggregateCall && keys.some((k) => k.index === undefined && k.text === deparse(e))
-      if (strategy === 'temp') item.compiled = { ...item.compiled, type: { ...t, temporary: isKey || isKeyExpression ? true : 'pinned' } }
+      // A key that reads only NULL-complemented tables is a constant, and no part of the table's key.
+      const keyed = (isKey || isKeyExpression) && refersToRow(e, lookup, fixed)
+      if (strategy === 'temp') item.compiled = { ...item.compiled, type: { ...t, temporary: keyed ? true : 'pinned' } }
       else if (stream || (source === undefined && from !== undefined && strategy === 'sort' && t.column !== undefined)) {
         // A sort-based grouping over a join sorts the join's rows streamed
         // into a temporary table, so its columns are that table's copies.
