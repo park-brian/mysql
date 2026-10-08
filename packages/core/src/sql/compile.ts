@@ -13,7 +13,7 @@
 // have not written is ER_NOT_SUPPORTED_YET naming it (M5.10 owns the rest).
 import { CHARSET_BINARY, FIELD_TYPE, type MysqlDateTime } from '@myjs/bytes'
 import { collation, collationInfoByName, decodeCollation, defaultCollationOf, encodeCollation, requireCollationInfo } from '@myjs/charsets'
-import { LITERAL, NODE, TOKEN, deparse, lex, parseExpression, type CallNode, type CaseNode, type CastNode, type Expression, type LiteralNode, type MatchNode, type QueryExpression, type SubqueryNode } from '@myjs/parser'
+import { LITERAL, NODE, TOKEN, deparse, lex, parseExpression, type CallNode, type CaseNode, type CastNode, type ConvertNode, type Expression, type LiteralNode, type MatchNode, type QueryExpression, type SubqueryNode } from '@myjs/parser'
 import type { ColumnDef, Table, Trx } from '@myjs/engine'
 import { sqlError, messages, type Session } from '@myjs/protocol'
 import {
@@ -166,6 +166,43 @@ function sourceText(sql: string | undefined, at: number): string | undefined {
   }
   return undefined
 }
+
+/**
+ * CONVERT(x USING cs): text in cs's default collation, with the coercibility
+ * of a column (2). Bytes, a BIT's included, are read as cs and are NULL with
+ * 1300 when they are no text in it; text is carried over, '?' standing for a
+ * character cs cannot hold; USING binary is the bytes (8.4.11).
+ */
+function convertUsing(e: ConvertNode, ctx: CompileContext): Compiled {
+  const x = compile(e.expr, ctx)
+  const name = e.charset.toLowerCase() === 'utf8' ? 'utf8mb3' : e.charset.toLowerCase()
+  const id = name === 'binary' ? CHARSET_BINARY : defaultCollationOf(name)?.id
+  if (id === undefined) throw sqlError('ER_UNKNOWN_CHARACTER_SET', `Unknown character set: '${e.charset}'`)
+  if (name === 'utf8mb3') raise2(ctx, 1287, "'utf8mb3' is deprecated and will be removed in a future release. Please use utf8mb4 instead")
+  // Characters, or bytes as many as the text could take when the result is bytes.
+  const width = x.type.kind === 'bytes' || isBits(x.type) ? byteWidthOf(x.type) : charWidth(x.type) * (id === CHARSET_BINARY && x.type.kind === 'string' ? requireCollationInfo(x.type.collationId).mbmaxlen : 1)
+  return {
+    eval: (r, env) => {
+      const v = x.eval(r, env)
+      if (v === null) return null
+      const bytes = v.kind === 'bytes' ? v.v : v.kind === 'int' && isBits(x.type) ? bitBytes(v.v, x.type.length) : undefined
+      if (id === CHARSET_BINARY) return bytesValue(bytes ?? (v.kind === 'string' ? encodeCollation(v.v, v.collationId) : new TextEncoder().encode(toText(v))))
+      // utf8mb3 holds no character past the BMP: it is '?' there.
+      const carried = (t: string): string => (name === 'utf8mb3' ? t.replace(/[\u{10000}-\u{10FFFF}]/gu, '?') : t)
+      const text = bytes === undefined ? carried(decodeCollation(encodeCollation(toText(v), id), id)) : textIn(bytes, id, env)
+      return text === null ? null : stringValue(text, id, COERCIBILITY.IMPLICIT)
+    },
+    type: stringType(width, id, true),
+  }
+}
+
+/** A condition raised while compiling, into the statement's diagnostics area. */
+function raise2(ctx: CompileContext, code: number, message: string): void {
+  ctx.conditions?.push({ level: 'Warning', code, message })
+}
+
+/** How many bytes a bytes-like type is wide: a BIT's are its bits over 8. */
+const byteWidthOf = (t: ResultType): number => (isBits(t) ? Math.ceil(t.length / 8) : t.length)
 
 /** A BIT column's value, or an expression's that keeps its type: bytes in a string context. */
 const isBits = (t: ResultType): boolean => t.field === FIELD_TYPE.BIT && t.kind === 'int'
@@ -399,6 +436,9 @@ export function compile(e: Expression, ctx: CompileContext): Compiled {
 
     case NODE.CAST:
       return cast(e, ctx)
+
+    case NODE.CONVERT:
+      return convertUsing(e, ctx)
 
     case NODE.MATCH:
       return matchAgainst(e, ctx)
@@ -1596,6 +1636,20 @@ function call(e: CallNode, ctx: CompileContext): Compiled {
         },
         // Nullable whatever the argument is, as 8.4.11 reports it.
         type: x.type.kind === 'bytes' ? { ...expressionOf(x.type), nullable: true } : { ...stringType(charWidth(x.type), x.type.kind === 'string' ? x.type.collationId : conn, true), coercibility: coercibilityOf(x.type) },
+      }
+    }
+    case 'COERCIBILITY': {
+      // Text's, as it carries it; 5 for a number or a temporal, 6 for NULL (8.4.11).
+      arity(1)
+      const [x] = args() as [Compiled]
+      return {
+        eval: (r, env) => {
+          const v = x.eval(r, env)
+          if (v !== null && v.kind === 'string') return intValue(BigInt(v.coercibility))
+          if (x.type.kind === 'string' || x.type.kind === 'bytes') return intValue(BigInt(coercibilityOf(x.type)))
+          return intValue(x.type.kind === 'null' || v === null ? 6n : 5n)
+        },
+        type: intType(10, false),
       }
     }
     case 'BIN':
