@@ -111,6 +111,8 @@ export {
   isNumeric,
   isText,
   hexNumber,
+  plainValue,
+  withoutHex,
   numericPrefix,
   parseDateTime,
   parseDecimal,
@@ -135,7 +137,7 @@ export {
   validDate,
 } from './sql-value.ts'
 export type { BytesValue, DateTimeValue, DecimalValue, DoubleValue, IntValue, JsonDocValue, StringValue, TemporalType, TimeValue, Value } from './sql-value.ts'
-export { aggregateCollation, commonCollation, compareDecimals, compareValues, nullSafeEqual, orderValues } from './compare.ts'
+export { aggregateCollation, commonCollation, compareDecimals, compareValues, nullSafeEqual, orderValues, sortValues } from './compare.ts'
 export { SUM_PRECISION_INCREMENT, avgAccumulator, avgPrecision, bitAccumulator, extremeAccumulator, sumAccumulator, sumPrecision, varianceAccumulator } from './aggregate.ts'
 export type { Accumulator } from './aggregate.ts'
 export { DIV_PRECISION_INCREMENT, add, bitNot, bitwise, divide, intDivide, modulo, negate, not } from './arith.ts'

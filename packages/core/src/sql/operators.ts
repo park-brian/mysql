@@ -8,7 +8,7 @@
 // without the rest noticing.
 import type { KeyRange, RowId, Table, Trx } from '@myjs/engine'
 import type { ColumnType } from '@myjs/types'
-import { decodeField, orderValues, truth, type Value } from '@myjs/types'
+import { decodeField, sortValues, truth, type Value } from '@myjs/types'
 import { rowKey } from './keys.ts'
 import type { Compiled, Env, Row } from './compile.ts'
 
@@ -69,7 +69,7 @@ export function sort<T extends { readonly row: Row }>(source: Iterable<T>, keys:
   const decorated = [...source].map((item, at) => ({ item, at, values: keys.map((k) => k.expr.eval(item.row, env)) }))
   decorated.sort((a, b) => {
     for (let i = 0; i < keys.length; i++) {
-      const c = orderValues(a.values[i] ?? null, b.values[i] ?? null)
+      const c = sortValues(a.values[i] ?? null, b.values[i] ?? null)
       if (c !== 0) return (keys[i] as SortKey).desc ? -c : c
     }
     return a.at - b.at

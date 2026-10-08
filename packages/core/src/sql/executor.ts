@@ -52,7 +52,7 @@ import {
   type Session,
   type StatementResult,
 } from '@myjs/protocol'
-import { COERCIBILITY, doubleValue, intValue, parseDecimal, stringValue, toInteger, toText, type Value } from '@myjs/types'
+import { COERCIBILITY, doubleValue, intValue, parseDecimal, plainValue, stringValue, toInteger, toText, type Value } from '@myjs/types'
 import { charsetChange, ensureCollationResident } from '../transcoder.ts'
 import { PROGRAM_OBJECTS, ServerState, type ProgramStatement, type ServerOptions } from './admin.ts'
 import { compile, EMPTY_SCOPE, type Env } from './compile.ts'
@@ -680,7 +680,7 @@ export class SqlExecutor implements Executor {
     for (const item of statement.items) {
       if (item.type === 'user') {
         const v = evaluate(item.value)
-        state.userVariables.set(item.name.replace(/^@/, '').toLowerCase(), v)
+        state.userVariables.set(item.name.replace(/^@/, '').toLowerCase(), plainValue(v))
         continue
       }
       const changed = this.server.set(session, item, evaluate, state.ownVariables, () => warnings++)

@@ -44,6 +44,7 @@ import {
   jsonObject,
   jsonValue,
   orderValues,
+  sortValues,
   stringValue,
   sumAccumulator,
   sumPrecision,
@@ -403,7 +404,7 @@ function groupConcat(e: CallNode, args: readonly Compiled[], type: ResultType, d
           if (order.length > 0) {
             entries.sort((a, b) => {
               for (let i = 0; i < order.length; i++) {
-                const c = orderValues(a.keys[i] ?? null, b.keys[i] ?? null)
+                const c = sortValues(a.keys[i] ?? null, b.keys[i] ?? null)
                 if (c !== 0) return (order[i] as SortKey).desc ? -c : c
               }
               return a.at - b.at
@@ -495,7 +496,7 @@ export function* groupRows(source: Iterable<{ readonly row: Row }>, plan: GroupP
     const all = [...source].map(({ row }, at) => ({ row, keys: keysOf(row), at }))
     all.sort((a, b) => {
       for (let i = 0; i < K; i++) {
-        const c = orderValues(a.keys[i] ?? null, b.keys[i] ?? null)
+        const c = sortValues(a.keys[i] ?? null, b.keys[i] ?? null)
         if (c !== 0) return c
       }
       return a.at - b.at

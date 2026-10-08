@@ -222,18 +222,22 @@ export function encodeField(value: Value, column: FieldColumn, ctx: StoreContext
     case FIELD_TYPE.ENUM: {
       const members = t.members ?? []
       const index = memberIndex(value, members, t.collationId)
-      if (index === 0) return encodeEnum(adjust(ctx, () => truncated(column.name, ctx.row), 0), members.length)
+      if (index === undefined) return encodeEnum(adjust(ctx, () => truncated(column.name, ctx.row), 0), members.length)
       return encodeEnum(index, members.length)
     }
 
     case FIELD_TYPE.SET: {
       const members = t.members ?? []
-      if (value.kind === 'int') return encodeSet(value.v & ((1n << BigInt(members.length)) - 1n), members.length)
+      // A number, or a string of digits that names no member, is the bitmap itself (8.4.11).
+      const all = (1n << BigInt(members.length)) - 1n
+      const asBits = (n: bigint) => (n > all ? adjust(ctx, () => truncated(column.name, ctx.row), n & all) : n & all)
+      if (value.kind === 'int' || value.kind === 'decimal' || value.kind === 'double' || (value.kind === 'bytes' && value.hex === true)) return encodeSet(asBits(toInteger(value)), members.length)
       let mask = 0n
       const text = toText(value)
+      if (/^\d+$/.test(text) && !members.includes(text)) return encodeSet(asBits(BigInt(text)), members.length)
       for (const item of text === '' ? [] : text.split(',')) {
-        const i = memberIndex(string(item, t.collationId ?? 255), members, t.collationId)
-        if (i === 0) adjust(ctx, () => truncated(column.name, ctx.row), 0)
+        const i = memberIndex(string(item, t.collationId ?? 255), members, t.collationId, false)
+        if (i === undefined || i === 0) adjust(ctx, () => truncated(column.name, ctx.row), 0)
         else mask |= 1n << BigInt(i - 1)
       }
       return encodeSet(mask, members.length)
@@ -380,8 +384,15 @@ function encodeTemporalField(value: Exclude<Value, null>, column: FieldColumn, c
 }
 
 /** The 1-based index of the member a value names, or 0 — ENUM's "no member" slot. */
-function memberIndex(value: Exclude<Value, null>, members: readonly string[], collationId: number | undefined): number {
-  if (value.kind === 'int') return value.v >= 1n && value.v <= BigInt(members.length) ? Number(value.v) : 0
+function memberIndex(value: Exclude<Value, null>, members: readonly string[], collationId: number | undefined, digits = true): number | undefined {
+  // A number is an index, whatever its type: `e + 1` is a DOUBLE, and 2.0
+  // names the second member (8.4.11). Index 0 is the error value, ''.
+  if (value.kind === 'int' || value.kind === 'decimal' || value.kind === 'double' || (value.kind === 'bytes' && value.hex === true)) {
+    const n = value.kind === 'double' ? value.v : Number(toText(value.kind === 'bytes' ? int(toInteger(value), true) : value))
+    // A number names a member: 0 is not one (8.4.11: 1265).
+    if (!Number.isInteger(n)) return undefined
+    return n >= 1 && n <= members.length ? n : undefined
+  }
   const text = toText(value)
   const id = collationId ?? 255
   const c = collation(id)
@@ -389,7 +400,15 @@ function memberIndex(value: Exclude<Value, null>, members: readonly string[], co
   for (let i = 0; i < members.length; i++) {
     if (c.compare(encodeCollation(members[i] as string, id), key) === 0) return i + 1
   }
-  return 0
+  // A string no member is named, that is a whole number, is an index too:
+  // '3' is the third member and '0' the error value. Leading spaces are read
+  // as the number's, and trailing ones go as they do for a name (8.4.11).
+  const trimmed = text.replace(/ +$/, '')
+  if (digits && /^\s*\d+$/.test(trimmed)) {
+    const n = Number(trimmed)
+    return n <= members.length ? n : undefined
+  }
+  return undefined
 }
 
 function encodeBinaryField(value: Exclude<Value, null>, column: FieldColumn, ctx: StoreContext): Uint8Array {

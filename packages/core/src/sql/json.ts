@@ -87,6 +87,8 @@ export function castAsJson(inner: Compiled): Compiled {
     eval: (r: Row, env: Env) => {
       const v = inner.eval(r, env)
       if (v === null) return null
+      // An ENUM or SET column is a JSON string, not text to parse (8.4.11).
+      if (v.kind === 'string' && v.ordinal !== undefined) return jsonValue({ t: 'string', v: v.v })
       if (v.kind === 'string') {
         try {
           return jsonValue(parseJson(v.v))

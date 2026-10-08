@@ -26,6 +26,8 @@ import {
   bytesValue,
   commonCollation,
   compareValues,
+  plainValue,
+  withoutHex,
   decodeField,
   decimalValue,
   divide,
@@ -1035,6 +1037,8 @@ export function convertTo(v: Value, t: ResultType): Value {
       return v.kind === 'int' || v.kind === 'decimal' ? rescale(toDecimal(v), t.scale) : v
     case 'double':
       return v.kind === 'double' ? v : doubleValue(toDouble(v))
+    case 'bytes':
+      return withoutHex(v)
     case 'string':
       // A function's string is a string: an ENUM's index stays with the column.
       return v.kind === 'string' ? (v.ordinal === undefined ? v : stringValue(v.v, v.collationId, v.coercibility)) : stringValue(toText(v), t.collationId)
@@ -1640,7 +1644,9 @@ function scalarSubquery(e: SubqueryNode, ctx: CompileContext): Compiled {
     eval: (row, env) => {
       const rows = rowsOf(plan, key, row, env)
       if (rows.length > 1) throw sqlError('ER_SUBQUERY_NO_1_ROW', 'Subquery returns more than 1 row')
-      return rows[0]?.[0] ?? null
+      // An ENUM's index is the column's, not the subquery's; a hex literal keeps its number (8.4.11).
+      const v = rows[0]?.[0] ?? null
+      return v !== null && v.kind === 'string' && v.ordinal !== undefined ? plainValue(v) : v
     },
     // Its own item, not its inner one: a MIN of a column inside keeps none of that column's flags here.
     type: (({ fieldFlags: _f, ownInTemporary: _o, ...rest }) => ({ ...rest, nullable: t.nullable || plan.hasFrom }))(expressionOf(t)),

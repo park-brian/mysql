@@ -120,6 +120,17 @@ export function nullSafeEqual(a: Value, b: Value): boolean {
  * An ordering for `ORDER BY` and `DISTINCT`: NULL first, as MySQL sorts it in
  * ascending order, then `compareValues`.
  */
+/**
+ * The order a sort puts two values in: `orderValues`, except that an ENUM or
+ * SET column sorts by its member index or bitmap, as its field's sort key
+ * does (8.4.11: `ORDER BY e` over ENUM('b','a') puts 'b' first). MIN and MAX
+ * compare the text, and use `orderValues`.
+ */
+export function sortValues(a: Value, b: Value): number {
+  if (a !== null && b !== null && a.kind === 'string' && b.kind === 'string' && a.ordinal !== undefined && b.ordinal !== undefined) return a.ordinal < b.ordinal ? -1 : a.ordinal > b.ordinal ? 1 : 0
+  return orderValues(a, b)
+}
+
 export function orderValues(a: Value, b: Value): number {
   if (a === null || b === null) return a === null ? (b === null ? 0 : -1) : 1
   if (a.kind === 'json' || b.kind === 'json') return sign(orderJson(toJsonDoc(a), toJsonDoc(b)))

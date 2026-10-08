@@ -23,6 +23,7 @@
 //     agrees too.
 import { DIV_PRECISION_INCREMENT, divide } from './arith.ts'
 import { orderValues } from './compare.ts'
+import { plainValue } from './sql-value.ts'
 import { MAX_UNSIGNED, decimal, double, int, rescale, toDecimal, toDouble, toInteger, type DecimalValue, type Value } from './sql-value.ts'
 
 /** `DECIMAL_LONGLONG_DIGITS`, `include/decimal.h`: what `SUM` widens a DECIMAL by. */
@@ -87,7 +88,8 @@ export function extremeAccumulator(max: boolean): Accumulator {
         if (max ? c > 0 : c < 0) best = v
       }
     },
-    result: () => best ?? null,
+    // MIN and MAX hand on a value: a hex literal's number and an ENUM's index are gone.
+    result: () => (best === undefined ? null : plainValue(best)),
   }
 }
 

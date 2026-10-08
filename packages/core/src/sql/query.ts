@@ -12,7 +12,7 @@
 import type { Catalog, ColumnDef, Table, TableDef, ViewDef } from '@myjs/engine'
 import { NODE, QUERY, REF, TOKEN, deparse, lex, parseSqlMode, parseStatement, type Expression, type OrderItem, type QueryBody, type QueryExpression, type SelectNode, type SetOperationNode, type TableName, type Token } from '@myjs/parser'
 import { messages, sqlError, type ColumnDefinition, type ResultSet, type RowValue } from '@myjs/protocol'
-import { intValue, integerRange, toInteger, truth, type Value } from '@myjs/types'
+import { intValue, integerRange, toInteger, truth, withoutHex, type Value } from '@myjs/types'
 import { compile, convertTo, EMPTY_SCOPE, type CompileContext, type Compiled, type Env, type GroupKeys, type Row, type Scope, type SubqueryPlan } from './compile.ts'
 import { AggregateSink, chooseStrategy, containsAggregate, groupRows, isAggregate } from './group.ts'
 import { WindowSink, applyWindows, containsWindow } from './window.ts'
@@ -707,16 +707,21 @@ function derivedTable(run: Run, query: QueryExpression, alias: string, names: re
   const key = {}
   return {
     columns,
+    // Its rows are a table's fields: a hex literal's number does not survive.
     rows: (trx, env, row) => {
-      if (lateral !== undefined || correlated || env.memo === undefined) return plan.rows(trx, lateral === undefined || row === undefined ? env : { ...env, outer: [row, ...(env.outer ?? [])] })
+      if (lateral !== undefined || correlated || env.memo === undefined) return fieldRows(plan.rows(trx, lateral === undefined || row === undefined ? env : { ...env, outer: [row, ...(env.outer ?? [])] }))
       let all = env.memo.get(key) as Value[][] | undefined
       if (all === undefined) {
-        all = [...plan.rows(trx, env)]
+        all = [...fieldRows(plan.rows(trx, env))]
         env.memo.set(key, all)
       }
       return all
     },
   }
+}
+
+function* fieldRows(rows: Iterable<Value[]>): Generator<Value[]> {
+  for (const r of rows) yield r.map(withoutHex)
 }
 
 /** A derived table's or CTE's column names: its own list, or its items' — 1353 when they differ in number, 1060 for a name twice. */

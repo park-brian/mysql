@@ -91,7 +91,7 @@ export function intervalOf(value: Value, unit: string): Interval | undefined {
       const d = rescale(toDecimal(value), 6)
       return { months: 0n, micros: d.v }
     }
-    const n = value.kind === 'string' || value.kind === 'bytes' ? integerPrefix(textOf(value)) : value.kind === 'double' ? roundDouble(value.v) : value.kind === 'decimal' ? rescale(value, 0).v : value.kind === 'int' ? value.v : integerPrefix(toText(value))
+    const n = value.kind === 'string' && value.ordinal !== undefined ? value.ordinal : value.kind === 'string' || value.kind === 'bytes' ? integerPrefix(textOf(value)) : value.kind === 'double' ? roundDouble(value.v) : value.kind === 'decimal' ? rescale(value, 0).v : value.kind === 'int' ? value.v : integerPrefix(toText(value))
     switch (u) {
       case 'YEAR':
         return { months: n * 12n, micros: 0n }

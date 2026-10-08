@@ -32,7 +32,7 @@ import { CHARSET_BINARY, FIELD_TYPE } from '@myjs/bytes'
 import { encodeCollation, requireCollationInfo } from '@myjs/charsets'
 import type { SetOperationNode } from '@myjs/parser'
 import { sqlError } from '@myjs/protocol'
-import { COERCIBILITY, bytesValue, stringValue, toDateTime, toText, type Value } from '@myjs/types'
+import { COERCIBILITY, bytesValue, stringValue, toDateTime, toText, withoutHex, type Value } from '@myjs/types'
 import { aggregateTypes, convertTo } from './compile.ts'
 import { rowKey } from './keys.ts'
 import { charWidth, decimalType, doubleType, jsonAsText, jsonType, stringType, type ResultType } from './meta.ts'
@@ -166,7 +166,7 @@ export function setOperation(node: SetOperationNode, left: Columns, right: Colum
               if (seen.has(k)) continue
               seen.add(k)
             }
-            yield [...r]
+            yield r.map(withoutHex)
           }
         }
         return

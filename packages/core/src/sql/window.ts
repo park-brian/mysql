@@ -19,7 +19,7 @@
 //   - In WHERE, HAVING or an ON it is 3593.
 import type { CallNode, WindowSpec } from '@myjs/parser'
 import { messages, sqlError } from '@myjs/protocol'
-import { intValue, orderValues, type Value } from '@myjs/types'
+import { intValue, sortValues, type Value } from '@myjs/types'
 import { compile, type CompileContext, type Compiled, type Env, type Row } from './compile.ts'
 import { intType } from './meta.ts'
 
@@ -82,17 +82,17 @@ export function applyWindows(rows: Row[], windows: readonly WindowPlan[], env: E
     if (w.partition.length > 0 || w.order.length > 0) {
       keyed.sort((a, b) => {
         for (let i = 0; i < a.partition.length; i++) {
-          const c = orderValues(a.partition[i] ?? null, b.partition[i] ?? null)
+          const c = sortValues(a.partition[i] ?? null, b.partition[i] ?? null)
           if (c !== 0) return c
         }
         for (let i = 0; i < a.order.length; i++) {
-          const c = orderValues(a.order[i] ?? null, b.order[i] ?? null)
+          const c = sortValues(a.order[i] ?? null, b.order[i] ?? null)
           if (c !== 0) return (w.order[i] as { desc: boolean }).desc ? -c : c
         }
         return a.at - b.at
       })
     }
-    const same = (x: readonly Value[], y: readonly Value[]): boolean => x.every((v, i) => orderValues(v, y[i] ?? null) === 0)
+    const same = (x: readonly Value[], y: readonly Value[]): boolean => x.every((v, i) => sortValues(v, y[i] ?? null) === 0)
     let n = 0
     let rank = 0
     let dense = 0

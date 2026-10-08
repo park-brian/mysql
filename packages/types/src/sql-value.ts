@@ -83,6 +83,17 @@ export interface BytesValue {
   readonly hex?: boolean
 }
 
+/** A value as a field holds it: a hex literal's bytes are plain VARBINARY once stored or materialized (8.4.11: `(SELECT x'41' a) d` reads `a + 0` as 0). */
+export function withoutHex(v: Value): Value {
+  return v !== null && v.kind === 'bytes' && v.hex === true ? { kind: 'bytes', v: v.v } : v
+}
+
+/** A value with no trace of the item it came from: no hex literal's number, no ENUM's index — what a user variable or a scalar subquery hands on. */
+export function plainValue(v: Value): Value {
+  if (v !== null && v.kind === 'string' && v.ordinal !== undefined) return { kind: 'string', v: v.v, collationId: v.collationId, coercibility: v.coercibility }
+  return withoutHex(v)
+}
+
 /** A hex literal's bytes as the unsigned integer they spell, big-endian; its low 64 bits. */
 export function hexNumber(v: Uint8Array): bigint {
   let n = 0n
