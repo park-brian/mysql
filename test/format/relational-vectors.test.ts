@@ -26,7 +26,7 @@ import { CONNECTION, SQL_MODE, runCase } from '../../tools/capture-relational.mj
 const FIXTURE = new URL('./fixtures/relational.json', import.meta.url).pathname
 
 /** The most statements the executor may still refuse. Lowered by every stage of M5.18, never raised. */
-const REFUSED_AT_MOST = 1381
+const REFUSED_AT_MOST = 910
 
 const NOT_SUPPORTED = 1235
 

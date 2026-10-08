@@ -38,7 +38,9 @@ import {
   type StoreContext,
   type Value,
 } from '@myjs/types'
+import type { Table, Trx } from '@myjs/engine'
 import type { Env } from './compile.ts'
+import { scan, type ScannedRow } from './operators.ts'
 
 /** How to read a table: an index and the ranges of it, in index order, or a full scan. */
 export interface Access {
@@ -236,6 +238,30 @@ function accessFor(index: IndexDef, column: ColumnDef, conditions: readonly Cond
   if (from === undefined && to === undefined) return undefined
   // A lower bound alone still skips the NULLs a clustered key cannot hold anyway.
   return { access: { index: index.name, ranges: [{ ...(from === undefined ? {} : { from }), ...(to === undefined ? {} : { to }) }] }, score: from !== undefined && to !== undefined ? 2 : 1 }
+}
+
+/**
+ * A point read of a unique index for one value, or `undefined` when the value
+ * does not convert to the key's type exactly — in which case the caller scans
+ * and filters, which finds the same rows (D-65).
+ */
+export function pointAccess(def: TableDef, index: IndexDef, column: ColumnDef, v: Value): Access | undefined {
+  void def
+  if (!exact(v, column)) return undefined
+  const b = bound(v, column, true)
+  return b === undefined ? undefined : { index: index.name, ranges: [{ from: b, to: b }] }
+}
+
+/** The rows an access path reads, in its order. */
+export function* accessRows(table: Table, def: TableDef, access: Access, trx: Trx | undefined, current: boolean): Generator<ScannedRow> {
+  const types = def.columns.map((c) => c.type)
+  const mode = current ? 'current' : 'consistent'
+  const base = { table, types, mode, ...(trx === undefined ? {} : { trx }), ...(access.index === undefined ? {} : { index: access.index }) } as const
+  if (access.ranges === undefined) {
+    yield* scan(base)
+    return
+  }
+  for (const range of access.ranges) yield* scan({ ...base, range })
 }
 
 /** A literal, `-literal` or `?`, evaluated. */

@@ -24,8 +24,8 @@ import { NODE, REF, parseExpression, type Assignment, type DeleteNode, type Expr
 import { decodeField, encodeField, integerRange, intValue, toInteger, toText, type StoreContext, type Value } from '@myjs/types'
 import { compile, EMPTY_SCOPE, type Compiled, type Row } from './compile.ts'
 import { filter, limit, sort, type ScannedRow } from './operators.ts'
-import { chooseAccess } from './plan.ts'
-import { accessRows, compileContext, limitValue, openTable, type Run } from './query.ts'
+import { accessRows, chooseAccess } from './plan.ts'
+import { compileContext, limitValue, openTable, type Run } from './query.ts'
 import { TableScope } from './scope.ts'
 import { NULL_TYPE } from './meta.ts'
 

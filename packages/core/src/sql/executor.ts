@@ -469,6 +469,9 @@ export class SqlExecutor implements Executor {
         return { affectedRows: 0 }
       case STATEMENT.SHOW:
         return this.#show(run, statement)
+      case STATEMENT.TABLE_MAINTENANCE:
+        if (statement.op !== 'ANALYZE') throw sqlError('ER_NOT_SUPPORTED_YET', messages.notSupported(`${statement.op} TABLE`))
+        return this.#analyze(run, statement.tables)
 
       // Answered OK and not run, as they were while the parser refused them:
       // drivers send them on connect, and there is no cache to flush and no
@@ -560,6 +563,31 @@ export class SqlExecutor implements Executor {
     // `SET autocommit = 1` commits whatever the session had open.
     if (!wasAutocommit && session.autocommit) state.commit()
     return { affectedRows: 0 }
+  }
+
+  /**
+   * `ANALYZE TABLE`: there are no index statistics to refresh, since nothing
+   * here costs a plan by them yet (M5.7), so it reports what MySQL reports —
+   * `status OK` per table, or the error and `Operation failed` for one that
+   * does not exist (8.4.11) — and changes nothing.
+   */
+  #analyze(run: Run, tables: readonly TableName[]): StatementResult {
+    const coll = run.env.session.characterSet
+    const text = (name: string, chars: number, field?: number): ColumnDefinition => columnDefinition(name, { ...stringType(chars, coll, false), ...(field === undefined ? {} : { field }) }, coll)
+    const encode = (s: string) => run.env.session.transcoder.encode(s, coll)
+    const rows: Uint8Array[][] = []
+    for (const t of tables) {
+      const schema = t.schema ?? run.env.session.database
+      if (schema === null) throw sqlError('ER_NO_DB_ERROR', messages.noDatabaseSelected())
+      const name = `${schema}.${t.name}`
+      const exists = this.catalog?.tables().some((x) => x.schema === schema && x.name === t.name) === true
+      if (exists) rows.push([encode(name), encode('analyze'), encode('status'), encode('OK')])
+      else {
+        rows.push([encode(name), encode('analyze'), encode('Error'), encode(`Table '${name}' doesn't exist`)])
+        rows.push([encode(name), encode('analyze'), encode('status'), encode('Operation failed')])
+      }
+    }
+    return { columns: [text('Table', 128), text('Op', 10), text('Msg_type', 10), text('Msg_text', 393216, FIELD_TYPE.MEDIUM_BLOB)], rows }
   }
 
   #show(run: Run, statement: ShowNode): StatementResult {

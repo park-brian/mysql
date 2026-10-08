@@ -289,13 +289,15 @@ export function columnDefinition(name: string, t: ResultType, resultsCollation: 
   // grouping, a DISTINCT or a sort after grouping copies into one (M5.5).
   const materialized = t.temporary !== undefined && t.temporary !== false
   if (materialized) {
-    // GROUP_FLAG marks a nullable grouped column only: every non-key DISTINCT
-    // column the first corpus drew was nullable, which hid that (8.4.11).
+    // GROUP_FLAG marks a nullable field of the table's key — a DISTINCT's
+    // every item, a grouping's keys — column or expression: every non-key
+    // DISTINCT column the first corpus drew was nullable, which hid the
+    // NOT NULL half of that (8.4.11, E-17, M5.18).
     const grouped = t.temporary === true && t.nullable ? GROUP_FLAG : 0
     if (t.column !== undefined) flags = (flags & ~KEY_FLAGS) | grouped
     else if (!(t.ownInTemporary === true && t.temporary !== 'stream')) {
       const keep = COLUMN_FLAG.NOT_NULL | COLUMN_FLAG.UNSIGNED | (t.kind === 'string' && requireCollationInfo(t.collationId).name.endsWith('_bin') ? COLUMN_FLAG.BINARY : 0)
-      flags = (flags & keep) | ((t.fieldFlags ?? 0) & ~KEY_FLAGS & ~COLUMN_FLAG.NOT_NULL)
+      flags = (flags & keep) | ((t.fieldFlags ?? 0) & ~KEY_FLAGS & ~COLUMN_FLAG.NOT_NULL) | grouped
     }
   }
   // A materialized temporal is a temporal field again, binary and its own width.
@@ -336,6 +338,10 @@ export function columnDefinition(name: string, t: ResultType, resultsCollation: 
     }
   }
   let field = t.field
+  // An integer expression's temporary field is an INT below ten characters
+  // and a BIGINT from there (8.4.11: `n IS NULL` is type 3, `LENGTH(s)` type 8);
+  // MIN and MAX of a column copy the column's own field.
+  if (materialized && t.kind === 'int' && t.column === undefined && t.fieldFlags === undefined && t.ownInTemporary !== true) field = t.length < 10 ? FIELD_TYPE.LONG : FIELD_TYPE.LONGLONG
   if (t.wireLength !== undefined) {
     // GROUP_CONCAT's BLOB: as the item, a length no rule gives; as a
     // temporary table's field, a BLOB of that many bytes over the argument
