@@ -27,7 +27,7 @@
     "size": "node tools/size-budget.mjs",
     "gen:errors": "node tools/gen-errors.mjs",
     "gen:charsets": "node tools/gen-charsets.mjs",
-    "gen:uca": "node tools/gen-uca.mjs",
+    "gen:uca": "node tools/gen-uca.mjs && node tools/gen-uca400.mjs",
     "fetch:reference": "node tools/fetch-reference.mjs",
     "mysql:local": "node tools/mysql-local.mjs",
     "capture:traces": "node tools/capture-traces.mjs --all",

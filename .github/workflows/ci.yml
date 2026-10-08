@@ -122,7 +122,7 @@ jobs:
       - name: regenerate the UCA weights and diff
         run: |
           npm run gen:uca
-          git diff --exit-code -- packages/charsets/src/collations/uca900.ts
+          git diff --exit-code -- packages/charsets/src/collations/uca900.ts packages/charsets/src/collations/uca400.ts
 
   exit-criterion:
     name: the real mysql client connects

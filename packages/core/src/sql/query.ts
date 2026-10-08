@@ -85,6 +85,8 @@ export function fromContext(run: Run): FromContext {
 export function openTable(run: Run, name: TableName): { readonly schema: string; readonly def: TableDef; readonly table: Table } {
   const schema = name.schema ?? defaultDatabase(run)
   if (schema === null || schema === undefined) throw sqlError('ER_NO_DB_ERROR', messages.noDatabaseSelected())
+  // M5.12: refused by name until its tables exist, never answered as a missing table.
+  if (schema.toLowerCase() === 'information_schema') throw sqlError('ER_NOT_SUPPORTED_YET', messages.notSupported('INFORMATION_SCHEMA'))
   if (run.catalog === undefined) throw sqlError('ER_NO_SUCH_TABLE', messages.noSuchTable(schema, name.name))
   const def = run.catalog.definition(schema, name.name)
   return { schema, def, table: run.catalog.table(schema, name.name) }

@@ -84,6 +84,9 @@ approach:
 - `utf8mb4_0900_ai_ci`. It is the MySQL 8 default and therefore what most
   schemas will actually use, so it cannot be optional in practice — but it can
   be a dynamically imported module so it does not sit in the initial bundle.
+- `utf8mb4_unicode_ci` and `utf8mb3_unicode_ci` (UCA 4.0.0), moved here from
+  Layer 3 by M2.25: Prisma creates every table in it. Its tables are a module
+  of their own, loaded only when a session or a table asks for it.
 
 **Layer 3 (opt-in packages)**
 - `utf8mb4_0900_as_cs`, `utf8mb4_unicode_520_ci`, and the language-specific

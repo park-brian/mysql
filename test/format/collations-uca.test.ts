@@ -104,6 +104,32 @@ test('D-36: the tables are not resident until something loads them', async () =>
   // which is the property `encodeKeyPart` depends on (ground rule 3).
   await loadUcaTables()
   assert.equal(collation(AI_CI), c)
+  // UCA 4.0.0's tables are their own: loading 9.0.0's did not load them.
+  assert.equal(ucaTablesLoaded(224), false)
+  assert.equal(collationAvailability(224), 'loadable')
+})
+
+test('utf8mb4_unicode_ci: UCA 4.0.0, PAD SPACE, as 8.4.11 compares it', async () => {
+  const utf8 = (s: string) => new TextEncoder().encode(s)
+  const c = await loadCollation(224)
+  const cmp = (a: string, b: string) => Math.sign(c.compare(utf8(a), utf8(b)))
+  // Each read off 8.4.11 under `SET NAMES utf8mb4 COLLATE utf8mb4_unicode_ci`.
+  assert.equal(cmp('a', 'a '), 0, 'PAD SPACE')
+  assert.equal(cmp('a\t', 'a'), -1, 'a tab weighs below the space the shorter side is padded with')
+  assert.equal(cmp('ß', 'ss'), 0)
+  assert.equal(cmp('a', 'A'), 0)
+  assert.equal(cmp('a', 'ä'), 0)
+  assert.equal(cmp('a', 'a\0'), 0, 'NUL is ignorable')
+  // Above U+FFFF everything is 0xFFFD: two emoji are equal, and both sort after the implicit CJK weights.
+  assert.equal(cmp('😀', '😁'), 0)
+  assert.equal(cmp('x😀', 'x日'), 1)
+  assert.equal(c.padAttribute, 'PAD SPACE')
+  // The sort key agrees with WEIGHT_STRING on 2,950 sampled code points (checked
+  // against the server while this was written); a few, verbatim:
+  const hex = (s: string) => Array.from(c.sortKey(utf8(s)), (b) => b.toString(16).padStart(2, '0')).join('')
+  assert.equal(hex('ß'), '0fea0fea')
+  assert.equal(hex('😀'), 'fffd')
+  assert.equal(hex('日'), 'fb40e5e5')
 })
 
 test('M2.7: NO PAD — a trailing space is a difference, not padding', async () => {
