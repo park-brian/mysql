@@ -32,6 +32,7 @@ import {
   parseJson,
   renderJson,
   stringValue,
+  toJsonDoc,
   toText,
   type JsonDoc,
   type Value,
@@ -359,10 +360,39 @@ function contains(target: JsonDoc, candidate: JsonDoc): boolean {
   return compareJson(target, candidate) === 0
 }
 
+/** JSON_OVERLAPS: an element, or a key with its value, the two share; a scalar is an array of itself. */
+function overlaps(a: JsonDoc, b: JsonDoc): boolean {
+  if (a.t === 'object' && b.t === 'object') return a.v.some(([k, v]) => b.v.some(([bk, bv]) => bk === k && compareJson(v, bv) === 0))
+  if (a.t === 'object' || b.t === 'object') return false
+  const xs = a.t === 'array' ? a.v : [a]
+  const ys = b.t === 'array' ? b.v : [b]
+  return xs.some((x) => ys.some((y) => compareJson(x, y) === 0))
+}
+
+/**
+ * `v MEMBER OF (doc)`: whether \`v\`, as JSON — a string stays a string, it is
+ * not parsed — is an element of the array, or the scalar, \`doc\` (8.4.11).
+ */
+export function memberOf(value: Compiled, doc: Compiled): Compiled {
+  return {
+    eval: (r, env) => {
+      const v = value.eval(r, env)
+      const d = doc.eval(r, env)
+      if (v === null || d === null) return null
+      const candidate = v.kind === 'json' ? v.v : toJsonDoc(v)
+      const target = docOf(d, 2, 'member of')
+      return int(target.t === 'array' ? target.v.some((x) => compareJson(x, candidate) === 0) : compareJson(target, candidate) === 0)
+    },
+    type: intType(1, true),
+  }
+}
+
+/** A document's depth; a loop, not a spread, so 300,000 elements are not as many arguments. */
 function depthOf(d: JsonDoc): number {
-  if (d.t === 'array') return d.v.length === 0 ? 1 : 1 + Math.max(...d.v.map(depthOf))
-  if (d.t === 'object') return d.v.length === 0 ? 1 : 1 + Math.max(...d.v.map(([, v]) => depthOf(v)))
-  return 1
+  if (d.t !== 'array' && d.t !== 'object') return 1
+  let deepest = 0
+  for (const x of d.v) deepest = Math.max(deepest, depthOf(d.t === 'array' ? (x as JsonDoc) : (x as readonly [string, JsonDoc])[1]))
+  return 1 + deepest
 }
 
 const lengthOf = (d: JsonDoc): number => (d.t === 'array' || d.t === 'object' ? d.v.length : 1)
@@ -434,16 +464,34 @@ export function jsonPathFunction(name: string, args: readonly Compiled[], callNa
     case 'JSON_CONTAINS_PATH':
       arity(3, Infinity)
       return {
+        // The paths are taken in order and the answer stops at the first that
+        // decides it: a NULL or a malformed path after that is never read (8.4.11).
         eval: (r, env) => {
-          const vs = present(args, r, env)
+          const vs = present(args.slice(0, 2), r, env)
           if (vs === undefined) return null
           const doc = docOf(vs[0] as Exclude<Value, null>, 1, fn)
           const mode = toText(vs[1] as Exclude<Value, null>).toLowerCase()
           if (mode !== 'one' && mode !== 'all') throw sqlError('ER_JSON_BAD_ONE_OR_ALL_ARG', `The oneOrAll argument to ${fn} may take these values: 'one' or 'all'.`)
-          const found = vs.slice(2).map((p) => seek(doc, path(p)).length > 0)
-          return int(mode === 'one' ? found.some((x) => x) : found.every((x) => x))
+          for (const a of args.slice(2)) {
+            const p = a.eval(r, env)
+            if (p === null) return null
+            const found = seek(doc, path(p)).length > 0
+            if (mode === 'one' && found) return int(true)
+            if (mode === 'all' && !found) return int(false)
+          }
+          return int(mode === 'all')
         },
         type: intType(21, true),
+      }
+    case 'JSON_OVERLAPS':
+      arity(2, 2)
+      return {
+        eval: (r, env) => {
+          const vs = present(args, r, env)
+          if (vs === undefined) return null
+          return int(overlaps(docOf(vs[0] as Exclude<Value, null>, 1, fn), docOf(vs[1] as Exclude<Value, null>, 2, fn)))
+        },
+        type: intType(1, true),
       }
     case 'JSON_TYPE':
       arity(1, 1)
@@ -467,8 +515,11 @@ export function jsonPathFunction(name: string, args: readonly Compiled[], callNa
           if (vs.length === 2) {
             const p = path(vs[1] as Exclude<Value, null>)
             if (p.many && name === 'JSON_KEYS') throw wildcardNotAllowed()
-            const hit = seek(doc, p)[0]
+            const hits = seek(doc, p)
+            const hit = hits[0]
             if (hit === undefined) return null
+            // A wildcard or a range is the number of values it reached (8.4.11).
+            if (p.many && name === 'JSON_LENGTH') return int(hits.length)
             doc = hit
           }
           if (name === 'JSON_LENGTH') return int(lengthOf(doc))

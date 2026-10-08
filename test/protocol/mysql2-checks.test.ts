@@ -8,7 +8,10 @@
 // is then not counted, and a violation that costs no AUTO_INCREMENT value;
 // then ALTER TABLE: ADD CHECK checking the rows there, the numbering that
 // continues from the highest, DROP CHECK (3821) and DROP CONSTRAINT (3940),
-// ALTER CHECK … [NOT] ENFORCED, and a new column's own constraint.
+// ALTER CHECK … [NOT] ENFORCED, and a new column's own constraint. Then what
+// a review found: a column a foreign key's action writes may not be checked
+// (3823), a column's own constraint may name only it (3813), and STRCMP,
+// MEMBER OF, JSON_CONTAINS and JSON_OVERLAPS are conditions.
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import mysql from 'mysql2/promise'
@@ -74,6 +77,24 @@ const SCRIPT: readonly (readonly [string, Outcome])[] = [
   ["ALTER TABLE ac ADD COLUMN z INT CHECK (z > 0)", [2,0,"Records: 2  Duplicates: 0  Warnings: 0",0]],
   ["ALTER TABLE ac ADD COLUMN y INT NOT NULL CHECK (y > 0)", [3819,"Check constraint 'ac_chk_5' is violated."]],
   ["SELECT constraint_name, check_clause FROM information_schema.check_constraints WHERE constraint_schema = 'app' AND constraint_name LIKE 'ac%' ORDER BY 1", [["ac_chk_1","(`a` > 0)"],["ac_chk_3","(`a` < 100)"],["ac_chk_4","(`z` > 0)"]]],
+  ["CREATE TABLE par (id INT PRIMARY KEY)", [0,0,"",0]],
+  ["CREATE TABLE c1 (p INT CHECK (p > 0), FOREIGN KEY (p) REFERENCES par(id) ON UPDATE CASCADE)", [3823,"Column 'p' cannot be used in a check constraint 'c1_chk_1': needed in a foreign key constraint 'c1_ibfk_1' referential action."]],
+  ["CREATE TABLE c2 (p INT, CHECK (p > 0), FOREIGN KEY (p) REFERENCES par(id) ON DELETE SET NULL)", [3823,"Column 'p' cannot be used in a check constraint 'c2_chk_1': needed in a foreign key constraint 'c2_ibfk_1' referential action."]],
+  ["CREATE TABLE c3 (p INT, CHECK (p > 0), FOREIGN KEY (p) REFERENCES par(id) ON DELETE CASCADE)", [0,0,"",0]],
+  ["CREATE TABLE c4 (p INT, CHECK (p > 0), FOREIGN KEY (p) REFERENCES par(id) ON UPDATE RESTRICT ON DELETE NO ACTION)", [0,0,"",0]],
+  ["CREATE TABLE c5 (p INT, q INT, CONSTRAINT k CHECK (q > p), FOREIGN KEY (p) REFERENCES par(id) ON UPDATE SET NULL)", [3823,"Column 'p' cannot be used in a check constraint 'k': needed in a foreign key constraint 'c5_ibfk_1' referential action."]],
+  ["CREATE TABLE c6 (a INT CHECK (b > 0), b INT)", [3813,"Column check constraint 'c6_chk_1' references other column."]],
+  ["CREATE TABLE c7 (a INT CONSTRAINT nm CHECK (a > b), b INT)", [3813,"Column check constraint 'nm' references other column."]],
+  ["CREATE TABLE c8 (a INT CHECK (a > 0 AND c8.a < 9))", [0,0,"",0]],
+  ["CREATE TABLE c9 (p INT)", [0,0,"",0]],
+  ["ALTER TABLE c9 ADD CONSTRAINT cc CHECK (p > 0), ADD FOREIGN KEY (p) REFERENCES par(id) ON DELETE CASCADE", [0,0,"Records: 0  Duplicates: 0  Warnings: 0",0]],
+  ["ALTER TABLE c9 ADD FOREIGN KEY (p) REFERENCES par(id) ON DELETE SET NULL", [3823,"Column 'p' cannot be used in a check constraint 'cc': needed in a foreign key constraint 'c9_ibfk_2' referential action."]],
+  ["ALTER TABLE c9 ADD CONSTRAINT cc2 CHECK (p > 0)", [0,0,"Records: 0  Duplicates: 0  Warnings: 0",0]],
+  ["CREATE TABLE c10 (a INT, b INT, CHECK (STRCMP(a, '1')), CHECK (1 MEMBER OF ('[1, 2]')), CHECK (JSON_CONTAINS('[1]', '1')), CHECK (JSON_OVERLAPS('[1]', '1')), CHECK (a IS TRUE), CHECK (NOT a))", [0,0,"",0]],
+  ["INSERT INTO c10 VALUES (2, 0)", [3819,"Check constraint 'c10_chk_6' is violated."]],
+  ["INSERT INTO c10 VALUES (1, 0)", [3819,"Check constraint 'c10_chk_1' is violated."]],
+  ["SELECT constraint_name, check_clause FROM information_schema.check_constraints WHERE constraint_schema = 'app' AND constraint_name REGEXP '^(c[0-9]|cc)' ORDER BY 1", [["c10_chk_1","strcmp(`a`,_utf8mb4\\'1\\')"],["c10_chk_2","1 member of (_utf8mb4\\'[1, 2]\\')"],["c10_chk_3","json_contains(_utf8mb4\\'[1]\\',_utf8mb4\\'1\\')"],["c10_chk_4","json_overlaps(_utf8mb4\\'[1]\\',_utf8mb4\\'1\\')"],["c10_chk_5","((0 <> `a`) is true)"],["c10_chk_6","(0 = `a`)"],["c3_chk_1","(`p` > 0)"],["c4_chk_1","(`p` > 0)"],["c8_chk_1","((`a` > 0) and (`a` < 9))"],["cc","(`p` > 0)"],["cc2","(`p` > 0)"]]],
+  ["DROP TABLE c3, c4, c8, c9, c10, par", [0,0,"",0]],
 ]
 
 test('M5.9: CHECK constraints answer every statement of the script as 8.4.11 did', async () => {

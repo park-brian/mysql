@@ -65,10 +65,10 @@ import {
   type ResultType,
 } from './meta.ts'
 import { castAsJson, jsonConstructor } from './json.ts'
-import { jsonPathFunction, unquote } from './json-path.ts'
+import { jsonPathFunction, memberOf, unquote } from './json-path.ts'
 import { matchType, regexpLike } from './regexp.ts'
 
-const JSON_PATH_FUNCTIONS: ReadonlySet<string> = new Set(['JSON_EXTRACT', 'JSON_UNQUOTE', 'JSON_CONTAINS', 'JSON_CONTAINS_PATH', 'JSON_TYPE', 'JSON_LENGTH', 'JSON_DEPTH', 'JSON_KEYS', 'JSON_VALID'])
+const JSON_PATH_FUNCTIONS: ReadonlySet<string> = new Set(['JSON_EXTRACT', 'JSON_UNQUOTE', 'JSON_CONTAINS', 'JSON_CONTAINS_PATH', 'JSON_TYPE', 'JSON_LENGTH', 'JSON_DEPTH', 'JSON_KEYS', 'JSON_VALID', 'JSON_OVERLAPS'])
 import { windowNotAllowed } from './window.ts'
 import { dateAdd, isInterval } from './interval.ts'
 
@@ -540,6 +540,7 @@ function binary(op: string, left: Expression, right: Expression, extra: Expressi
   if (op === '+' && isInterval(left)) return dateAdd(right, left.value, left.unit, false, ctx)
   if (op === '-' && isInterval(right)) return dateAdd(left, right.value, right.unit, true, ctx)
   if (op === 'IN' || op === 'NOT IN') return inList(op === 'NOT IN', left, right, ctx)
+  if (op === 'MEMBER OF') return memberOf(compile(left, ctx), compile(right, ctx))
   // `a REGEXP p` is REGEXP_LIKE(a, p), and `RLIKE` is its other spelling.
   if (op === 'REGEXP' || op === 'RLIKE' || op === 'NOT REGEXP' || op === 'NOT RLIKE') {
     const a = compile(left, ctx)
@@ -1082,6 +1083,23 @@ function call(e: CallNode, ctx: CompileContext): Compiled {
   const json = name === 'JSON_ARRAY' || name === 'JSON_OBJECT' ? jsonConstructor(name, args(), e.name) : JSON_PATH_FUNCTIONS.has(name) ? jsonPathFunction(name, args(), e.name) : undefined
   if (json !== undefined) return json
   switch (name) {
+    case 'STRCMP': {
+      // A comparison of the two as strings, in their aggregated collation:
+      // `STRCMP(10, 9)` is -1 (8.4.11).
+      arity(2)
+      const [x, y] = args() as [Compiled, Compiled]
+      const id = aggregateTypes([x.type, y.type], conn)
+      const asString = (v: Exclude<Value, null>): Value => (v.kind === 'string' || v.kind === 'bytes' ? v : stringValue(toText(v), id, COERCIBILITY.NUMERIC))
+      return {
+        eval: (r, env) => {
+          const a = x.eval(r, env)
+          const b = y.eval(r, env)
+          if (a === null || b === null) return null
+          return intValue(BigInt(Math.sign(compareValues(asString(a), asString(b)) ?? 0)))
+        },
+        type: intType(2, x.type.nullable || y.type.nullable),
+      }
+    }
     case 'REGEXP_LIKE': {
       if (e.args.length < 2 || e.args.length > 3) throw sqlError('ER_WRONG_PARAMCOUNT_TO_NATIVE_FCT', `Incorrect parameter count in the call to native function '${e.name}'`)
       const [a, p, t] = args() as [Compiled, Compiled, Compiled | undefined]

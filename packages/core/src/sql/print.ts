@@ -6,7 +6,8 @@
 //   - Every operator in parentheses, `!=` as `<>`, `DIV` in capitals and
 //     `MOD` as `%`; a chain of AND or OR as one group, `((a) and (b) and (c))`.
 //   - NOT LIKE as `(not((a like b)))`, REGEXP as `regexp_like(a,b)`, NOT of a
-//     column as `(0 = c)`; NOT IN and NOT BETWEEN as written.
+//     column as `(0 = c)`, `c IS TRUE` as `((0 <> c) is true)`, MEMBER OF
+//     bare, `x member of (j)`; NOT IN and NOT BETWEEN as written.
 //   - A negative literal as `-(1.50)`, a float as written (`1e2`), functions
 //     in lower case with their arguments joined by a bare comma, `COUNT(*)` as
 //     `count(0)`, and CASE in parentheses.
@@ -52,6 +53,8 @@ export function printExpression(e: Expression, o: PrintOptions): string {
       // The optimizer's rewrite is what is stored: NOT c is (0 = c).
       if (e.op === 'NOT' || e.op === '!') return e.operand.kind === NODE.COLUMN ? `(0 = ${p(e.operand)})` : `(not(${p(e.operand)}))`
       if (e.op === 'IS NULL' || e.op === 'IS NOT NULL') return `(${p(e.operand)} ${e.op.toLowerCase()})`
+      // IS [NOT] TRUE and FALSE test a truth value: a column is made one, `(0 <> c)`.
+      if (/^IS (NOT )?(TRUE|FALSE|UNKNOWN)$/.test(e.op)) return `(${e.operand.kind === NODE.COLUMN ? `(0 <> ${p(e.operand)})` : p(e.operand)} ${e.op.toLowerCase()})`
       throw new Unprintable()
     case NODE.BINARY: {
       const op = e.op.toUpperCase()
@@ -73,6 +76,8 @@ export function printExpression(e: Expression, o: PrintOptions): string {
         return `(${p(e.left)} ${op.toLowerCase()} (${e.right.items.map(p).join(',')}))`
       }
       if (op === 'BETWEEN' || op === 'NOT BETWEEN') return `(${p(e.left)} ${op.toLowerCase()} ${p(e.right)} and ${p(e.extra as Expression)})`
+      // The only operator printed without parentheses of its own (8.4.11).
+      if (op === 'MEMBER OF') return `${p(e.left)} member of (${p(e.right)})`
       if (op === 'LIKE' || op === 'NOT LIKE') {
         const escape = e.extra === undefined ? '' : ` escape ${p(e.extra as Expression)}`
         const like = `(${p(e.left)} like ${p(e.right)}${escape})`

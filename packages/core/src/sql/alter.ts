@@ -16,7 +16,7 @@ import { KEY, NODE, type AlterAction, type AlterTableNode, type ColumnDefinition
 import { decodeField, encodeField, type StoreContext, type Value } from '@myjs/types'
 import type { Compiled } from './compile.ts'
 import { column as columnDef, DEFAULT_COLLATION } from './ddl.ts'
-import { checker, checksOf, checkViolated, withChecks, type CheckDef } from './checks.ts'
+import { checker, checkForeignKeyActions, checksOf, checkViolated, columnChecks, withChecks, type CheckDef } from './checks.ts'
 import { checkDefaults, defaultOf, implicitDefault, rowDependent } from './dml.ts'
 import { checkParentOf, foreignKeyChecks, foreignKeyClause, foreignKeysOf, referencedIndex, referencingKeys, supportingIndex, withForeignKeys, type ForeignKeyClause } from './foreign-keys.ts'
 import type { Run } from './query.ts'
@@ -169,10 +169,11 @@ export function alterTable(run: Run, catalog: Catalog, statement: AlterTableNode
   }
   if (checkDefs.length > 0) options['checks'] = checkDefs
   else delete options['checks']
-  const checkClausesAdded = [...of('addCheck').map((a) => a.check), ...added.flatMap((c) => (c.check === undefined ? [] : [c.check]))].sort((x, y) => x.at - y.at)
+  const checkClausesAdded = columnChecks(of('addCheck').map((a) => a.check), added)
   const withNewChecks = withChecks(catalog, schema, { name: def.name, engine: def.engine, columns, indexes, options }, run.sql, checkClausesAdded, run.env.session.characterSet)
   for (const c of checksOf(withNewChecks).slice(checkDefs.length)) if (c.enforced) enabled.add(c.name)
   const spec = withForeignKeys(catalog, schema, withNewChecks, clauses, checks)
+  checkForeignKeyActions(spec, foreignKeysOf({ ...def, ...spec, options: spec.options ?? {} } as TableDef))
   const before = new Set(foreignKeys.map((fk) => fk.name))
   const made = foreignKeysOf({ ...def, ...spec, options: spec.options ?? {} } as TableDef).filter((fk) => !before.has(fk.name))
 

@@ -43,9 +43,17 @@ export function checksOf(def: { readonly options?: Readonly<Record<string, unkno
   return Array.isArray(stored) ? (stored as CheckDef[]) : []
 }
 
+/** A CHECK clause, and the column it was written on if it was a column's own. */
+export type CheckClause = CheckConstraint & { readonly column?: string }
+
 /** The constraints a CREATE TABLE writes, table-level and column-level, in the order it writes them. */
-export function checkClauses(node: CreateTableNode): CheckConstraint[] {
-  const all = [...node.checks, ...node.columns.flatMap((c) => (c.check === undefined ? [] : [c.check]))]
+export function checkClauses(node: CreateTableNode): CheckClause[] {
+  return columnChecks(node.checks, node.columns)
+}
+
+/** Table-level clauses and the columns' own, in the order they were written. */
+export function columnChecks(table: readonly CheckConstraint[], columns: readonly { readonly name: string; readonly check?: CheckConstraint }[]): CheckClause[] {
+  const all: CheckClause[] = [...table, ...columns.flatMap((c) => (c.check === undefined ? [] : [{ ...c.check, column: c.name }]))]
   return all.sort((a, b) => a.at - b.at)
 }
 
@@ -72,8 +80,8 @@ const DISALLOWED = new Set([
 ])
 
 /** The functions that are conditions themselves, as a comparison is. */
-const BOOLEAN_FUNCTIONS = new Set(['JSON_VALID', 'REGEXP_LIKE', 'ISNULL'])
-const CONDITIONS = new Set(['=', '<>', '!=', '<', '<=', '>', '>=', '<=>', 'AND', '&&', 'OR', '||', 'XOR', 'IN', 'NOT IN', 'BETWEEN', 'NOT BETWEEN', 'LIKE', 'NOT LIKE', 'REGEXP', 'NOT REGEXP', 'RLIKE', 'NOT RLIKE', 'IS', 'IS NOT'])
+const BOOLEAN_FUNCTIONS = new Set(['JSON_VALID', 'REGEXP_LIKE', 'ISNULL', 'STRCMP', 'JSON_CONTAINS', 'JSON_CONTAINS_PATH', 'JSON_OVERLAPS'])
+const CONDITIONS = new Set(['MEMBER OF', '=', '<>', '!=', '<', '<=', '>', '>=', '<=>', 'AND', '&&', 'OR', '||', 'XOR', 'IN', 'NOT IN', 'BETWEEN', 'NOT BETWEEN', 'LIKE', 'NOT LIKE', 'REGEXP', 'NOT REGEXP', 'RLIKE', 'NOT RLIKE', 'IS', 'IS NOT'])
 
 function isCondition(e: Expression): boolean {
   switch (e.kind) {
@@ -108,7 +116,7 @@ function* nodes(root: unknown): Generator<{ readonly kind: string } & Record<str
  * `spec` with its CHECK constraints named, checked and stored. `sql` is the
  * statement they were written in, `charset` the connection's character set.
  */
-export function withChecks(catalog: Catalog, schema: string, spec: TableSpec, sql: string, clauses: readonly CheckConstraint[], charset: number): TableSpec {
+export function withChecks(catalog: Catalog, schema: string, spec: TableSpec, sql: string, clauses: readonly CheckClause[], charset: number): TableSpec {
   if (clauses.length === 0) return spec
   const tokens = lex(sql)
   const taken = new Set<string>()
@@ -130,6 +138,8 @@ export function withChecks(catalog: Catalog, schema: string, spec: TableSpec, sq
         const parts = node['parts'] as readonly string[]
         const column = columns.get((parts[parts.length - 1] as string).toLowerCase())
         if (column === undefined) throw sqlError('ER_CHECK_CONSTRAINT_REFERS_UNKNOWN_COLUMN', `Check constraint '${name}' refers to non-existing column '${parts[parts.length - 1]}'.`)
+        // A column's own constraint names that column alone (3813).
+        if (clause.column !== undefined && column.name.toLowerCase() !== clause.column.toLowerCase()) throw sqlError('ER_COLUMN_CHECK_CONSTRAINT_REFERENCES_OTHER_COLUMN', `Column check constraint '${name}' references other column.`)
         if (column.autoIncrement === true) throw sqlError('ER_CHECK_CONSTRAINT_REFERS_AUTO_INCREMENT_COLUMN', `Check constraint '${name}' cannot refer to an auto-increment column.`)
       } else if (node.kind === NODE.SUBQUERY) {
         throw sqlError('ER_CHECK_CONSTRAINT_FUNCTION_IS_NOT_ALLOWED', `An expression of a check constraint '${name}' contains disallowed function.`)
@@ -179,3 +189,28 @@ export function checker(run: Run, def: TableDef): ((fields: readonly FieldBytes[
 }
 
 export const checkViolated = (name: string) => sqlError('ER_CHECK_CONSTRAINT_VIOLATED', `Check constraint '${name}' is violated.`)
+
+/** The columns an expression names. */
+function columnsOf(text: string): Set<string> {
+  const out = new Set<string>()
+  for (const node of nodes(parseExpression(text))) if (node.kind === NODE.COLUMN) out.add(((node['parts'] as readonly string[]).at(-1) as string).toLowerCase())
+  return out
+}
+
+/**
+ * A constraint may not name a column a foreign key's action writes — ON
+ * UPDATE CASCADE or SET NULL, ON DELETE SET NULL — since the cascade would
+ * go around it (3823, 8.4.11). ON DELETE CASCADE removes the row, and is allowed.
+ */
+export function checkForeignKeyActions(spec: TableSpec, foreignKeys: readonly { readonly name: string; readonly columns: readonly string[]; readonly onUpdate: string; readonly onDelete: string }[]): void {
+  const checks = checksOf(spec)
+  if (checks.length === 0) return
+  for (const c of checks) {
+    const named = columnsOf(c.text)
+    for (const fk of foreignKeys) {
+      if (fk.onUpdate !== 'CASCADE' && fk.onUpdate !== 'SET NULL' && fk.onDelete !== 'SET NULL') continue
+      const column = fk.columns.find((x) => named.has(x.toLowerCase()))
+      if (column !== undefined) throw sqlError('ER_CHECK_CONSTRAINT_CLAUSE_USING_FK_REFER_ACTION_COLUMN', `Column '${column}' cannot be used in a check constraint '${c.name}': needed in a foreign key constraint '${fk.name}' referential action.`)
+    }
+  }
+}

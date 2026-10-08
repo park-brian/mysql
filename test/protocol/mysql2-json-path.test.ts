@@ -11,7 +11,11 @@
 // The errors are 3143 for a path, with its position, 3141 for a text that
 // is not JSON, 3146 for a value that is neither JSON nor a string, and 3149
 // for a wildcard where one is not allowed. JSON values are read as text, as
-// the server sent them, not as mysql2 parses them.
+// the server sent them, not as mysql2 parses them. JSON_LENGTH over a
+// wildcard or a range counts the values it reached, and JSON_CONTAINS_PATH
+// reads its paths in order and stops at the first that decides: a NULL or a
+// malformed path after it is never looked at (both found by review). And
+// `v MEMBER OF (j)`, JSON_OVERLAPS, and STRCMP beside them.
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import mysql from 'mysql2/promise'
@@ -62,6 +66,27 @@ const SCRIPT: readonly (readonly [string, Outcome])[] = [
   ["SELECT id FROM r WHERE j ->> '$.a' = '1' ORDER BY id", [["1"]]],
   ["SELECT id FROM r WHERE JSON_EXTRACT(j, '$[0]') = CAST('1' AS JSON) ORDER BY id", [["2"]]],
   ["SELECT JSON_UNQUOTE('\"ABC\"') = 'abc', JSON_TYPE('{}') = 'object', JSON_UNQUOTE('abc') = 'ABC', COLLATION(JSON_UNQUOTE('x')), COLLATION(JSON_TYPE('1')), COLLATION(j ->> '$.d.f') FROM r WHERE id = 1", [["0","0","0","utf8mb4_bin","utf8mb4_bin","utf8mb4_bin"]]],
+  ["SELECT JSON_LENGTH('[1,[2,3]]','$[*]'), JSON_LENGTH('[1,[2,3]]','$[1 to 1]'), JSON_LENGTH('[1,[2,3]]','$[5 to 9]'), JSON_LENGTH('{\"a\":[1,2],\"b\":3}','$.*'), JSON_LENGTH('[[1,2,3]]','$[0]'), JSON_LENGTH('[[1,2,3]]','$**[0]'), JSON_LENGTH('[]','$[*]')", [["2","1",null,"2","3","4",null]]],
+  ["SELECT JSON_LENGTH('[[1,2,3],[4]]','$[*]'), JSON_LENGTH('[[1,2,3],[4]]','$[0 to 1]'), JSON_LENGTH('[[1,2,3]]','$[0 to 0]'), JSON_LENGTH('{\"a\":{\"x\":1,\"y\":2}}','$.*')", [["2","2","1","1"]]],
+  ["SELECT JSON_CONTAINS_PATH('{\"a\":1}','one','$.a',NULL), JSON_CONTAINS_PATH('{\"a\":1}','one','$.a','$x'), JSON_CONTAINS_PATH('{\"a\":1}','all','$.b','$x')", [["1","1","0"]]],
+  ["SELECT JSON_CONTAINS_PATH('{\"a\":1}','one','$.b',NULL)", [[null]]],
+  ["SELECT JSON_CONTAINS_PATH('{\"a\":1}','all','$.a',NULL)", [[null]]],
+  ["SELECT JSON_CONTAINS_PATH('{\"a\":1}','one','$.b','$x')", [3143,"Invalid JSON path expression. The error is around character position 1."]],
+  ["SELECT JSON_CONTAINS_PATH('{\"a\":1}','all','$.a','$x')", [3143,"Invalid JSON path expression. The error is around character position 1."]],
+  ["SELECT JSON_CONTAINS_PATH('{\"a\":1}','one',NULL,'$.a')", [[null]]],
+  ["SELECT JSON_CONTAINS_PATH(NULL,'one','$x')", [[null]]],
+  ["SELECT JSON_CONTAINS_PATH('{\"a\":1}',NULL,'$.a')", [[null]]],
+  ["SELECT JSON_CONTAINS_PATH('{\"a\":1}','xx','$.a')", [3154,"The oneOrAll argument to json_contains_path may take these values: 'one' or 'all'."]],
+  ["SELECT JSON_CONTAINS_PATH('{\"a\":1}','one','$x', NULL)", [3143,"Invalid JSON path expression. The error is around character position 1."]],
+  ["SELECT JSON_LENGTH('[1]', NULL), JSON_LENGTH(NULL, '$x')", [[null,null]]],
+  ["SELECT JSON_EXTRACT('[[1,2,3]]','$**[0]'), JSON_LENGTH('[[1,2,3]]','$**[0]')", [["[[1, 2, 3], 1, 2, 3]","4"]]],
+  ["SELECT 1 MEMBER OF ('[1, 2]'), 3 MEMBER OF ('[1, 2]'), 'a' MEMBER OF ('[\"a\"]'), 'a' MEMBER OF ('\"a\"'), 1 MEMBER OF ('1'), NULL MEMBER OF ('[1]'), 1 MEMBER OF (NULL), CAST('[1]' AS JSON) MEMBER OF ('[[1], 2]'), '[1]' MEMBER OF ('[[1], 2]'), 1.0 MEMBER OF ('[1]'), 'A' MEMBER OF ('[\"a\"]')", [["1","0","1","1","1",null,null,"1","0","1","0"]]],
+  ["SELECT 1 MEMBER OF ('x')", [3141,"Invalid JSON text in argument 2 to function member of: \"Invalid value.\" at position 0."]],
+  ["SELECT JSON_OVERLAPS('[1,2]','[2,3]'), JSON_OVERLAPS('[1,2]','[3]'), JSON_OVERLAPS('{\"a\":1}','{\"a\":1,\"b\":2}'), JSON_OVERLAPS('{\"a\":1}','{\"a\":2}'), JSON_OVERLAPS('1','1'), JSON_OVERLAPS('[1]','1'), JSON_OVERLAPS('1','[1]'), JSON_OVERLAPS('[[1]]','[1]'), JSON_OVERLAPS(NULL,'1'), JSON_OVERLAPS('{\"a\":1}','[1]'), JSON_OVERLAPS('[]','[]')", [["1","0","1","0","1","1","1","0",null,"0","0"]]],
+  ["SELECT JSON_OVERLAPS('x','1')", [3141,"Invalid JSON text in argument 1 to function json_overlaps: \"Invalid value.\" at position 0."]],
+  ["SELECT JSON_OVERLAPS(1,'1')", [3146,"Invalid data type for JSON data in argument 1 to function json_overlaps; a JSON string or JSON type is required."]],
+  ["SELECT STRCMP('a','b'), STRCMP('b','a'), STRCMP('a','A'), STRCMP('a' COLLATE utf8mb4_bin,'A'), STRCMP(NULL,'a'), STRCMP(1, 2), STRCMP(10, 9), STRCMP('', ' '), STRCMP('a ', 'a')", [["-1","1","0","1",null,"-1","-1","0","0"]]],
+  ["SELECT STRCMP(_binary'a','A')", [["1"]]],
 ]
 
 test('JSON paths and the functions over them answer as 8.4.11 did', async () => {
@@ -93,6 +118,21 @@ test('JSON paths and the functions over them answer as 8.4.11 did', async () => 
       }
       assert.deepEqual(actual, expected, sql)
     }
+  } finally {
+    await conn.end()
+    await db.end()
+  }
+})
+
+test('JSON_DEPTH of a document too wide to spread into arguments', async () => {
+  const db = await MySQL.open(':memory:')
+  const conn = await mysql.createConnection({ stream: db.createStream() as never, user: 'root', password: '' })
+  try {
+    // 8.4.11: 2 and 2 — an array of 300,000 numbers, an object of 200,000 keys.
+    const wide = `[${'1,'.repeat(299_999)}1]`
+    const keys = `{${Array.from({ length: 200_000 }, (_, i) => `"k${i}": 1`).join(',')}}`
+    const [rows] = await conn.query({ sql: 'SELECT JSON_DEPTH(?), JSON_DEPTH(?)', values: [wide, keys], rowsAsArray: true })
+    assert.deepEqual(rows, [[2, 2]])
   } finally {
     await conn.end()
     await db.end()
