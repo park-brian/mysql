@@ -11,9 +11,8 @@
 // returns a column called `1+1`, spaces and all, which only the text has.
 import type { Catalog, ColumnDef, Table, TableDef } from '@myjs/engine'
 import { NODE, QUERY, REF, TOKEN, deparse, lex, parseSqlMode, type Expression, type OrderItem, type QueryExpression, type SelectNode, type TableName, type Token } from '@myjs/parser'
-import { FIELD_TYPE } from '@myjs/bytes'
 import { messages, sqlError, type ColumnDefinition, type ResultSet, type RowValue } from '@myjs/protocol'
-import { toInteger, truth, type Value } from '@myjs/types'
+import { integerRange, toInteger, truth, type Value } from '@myjs/types'
 import { compile, EMPTY_SCOPE, type CompileContext, type Compiled, type Env, type Row, type Scope } from './compile.ts'
 import { columnDefinition, type ResultType } from './meta.ts'
 import { distinct, filter, limit, project, scan, sort, type ScannedRow, type SortKey } from './operators.ts'
@@ -34,6 +33,8 @@ export interface Run {
   readonly serverVersion: string
   /** Parameter values, when they are known (an execute rather than a prepare). */
   readonly params?: readonly Value[]
+  /** Planning for COM_STMT_PREPARE's metadata: what MySQL reports before it optimizes. */
+  readonly preparing?: boolean
 }
 
 export function compileContext(run: Run, scope: Scope, clause: string): CompileContext {
@@ -169,17 +170,22 @@ export function planSelect(run: Run, q: QueryExpression): SelectPlan {
   // the DISTINCT.
   const limitCount = q.limit === undefined ? undefined : limitValue(run, q.limit.count, 'LIMIT')
   const offset = q.limit?.offset === undefined ? 0 : limitValue(run, q.limit.offset, 'LIMIT')
-  if (node.distinct === true && source !== undefined && !holdsKey(source.def, node.items, source.alias)) {
+  const facts = source === undefined ? undefined : whereFacts(run, source.def, source.alias, node.where)
+  // A prepare reports a statement before MySQL optimizes it, so it never sees
+  // the temporary table: COM_STMT_PREPARE's metadata has no GROUP_FLAG where
+  // the execute's does (8.4.11, found by review).
+  if (node.distinct === true && source !== undefined && facts !== undefined && run.preparing !== true && !holdsKey(source.def, node.items, source.alias)) {
     // `LIMIT 0` returns nothing before a row is read — unless an offset must
     // be counted off sorted rows: `ORDER BY 1 LIMIT 0 OFFSET 1` still makes
     // the table, and the same without the ORDER BY does not (8.4.11).
     const zero = limitCount === 0 && (offset === 0 || q.orderBy === undefined)
-    const constant = distinctConstant(run, source.def, source.alias, node, zero)
-    if (constant !== true) {
-      for (const item of items) {
-        const pinned = item.compiled.type.column !== undefined && constant.has(item.compiled.type.column.orgName.toLowerCase())
-        item.compiled = { ...item.compiled, type: { ...item.compiled.type, temporary: pinned ? 'pinned' : true } }
-      }
+    const pinnedName = (item: { compiled: Compiled }): boolean => {
+      const name = item.compiled.type.column?.orgName.toLowerCase()
+      return name !== undefined && [...facts.pins].some((c) => c.name.toLowerCase() === name)
+    }
+    const constant = zero || facts.impossible || facts.constTable || items.every((item) => pinnedName(item))
+    if (!constant) {
+      for (const item of items) item.compiled = { ...item.compiled, type: { ...item.compiled.type, temporary: pinnedName(item) ? 'pinned' : true } }
     }
   }
 
@@ -194,6 +200,7 @@ export function planSelect(run: Run, q: QueryExpression): SelectPlan {
     rows(trx) {
       let rows: Iterable<{ readonly row: Row }>
       if (source === undefined) rows = [{ row: [] }]
+      else if (facts?.impossible === true) rows = []
       else {
         const access = chooseAccess(source.def, source.alias, node.where, env)
         rows = accessRows(source.table, source.def, access, trx, locking)
@@ -236,55 +243,36 @@ function holdsKey(def: TableDef, items: SelectNode['items'], alias: string): boo
 }
 
 /**
- * `true` when MySQL answers a `SELECT DISTINCT` without its temporary table
- * because it can tell before reading a row that the rows it returns are all
- * alike, or that there are none; otherwise the columns the WHERE pins, which
- * the table holds but does not group by. Each rule is 8.4.11's, probed shape
- * by shape:
+ * What MySQL's optimizer knows of a one-table WHERE before it reads a row,
+ * which decides whether a `SELECT DISTINCT` makes its temporary table and
+ * whether the scan runs at all. Each rule is 8.4.11's, probed shape by shape:
  *
- *   - A zero limit, and a WHERE that folds to false — a NOT NULL column `IS
- *     NULL`, or a conjunct with no column in it that is not true — return
- *     nothing, and no table is made.
- *   - A WHERE that binds every part of the primary key or of a UNIQUE key to a
- *     constant makes the table a constant one: a row or none.
- *   - A DISTINCT column that the WHERE pins to one value — `c = 5` at its top
- *     level, or `<=>`, `IN (5)`, `NOT (c <> 5)`, or an OR of one of those
- *     with itself — is dropped from the grouping DISTINCT becomes, and when
- *     every column is dropped there is nothing to group. A string column
- *     against a number pins nothing (`b = 5` holds for `'5'` and `'5.0'`),
- *     and neither does `IS NULL`, on 8.4.
+ *   - `impossible`: a conjunct folds to false — a NOT NULL column `IS NULL`,
+ *     `int_col = 9.5`, or a conjunct of constants that is not
+ *     true. Nothing is read, so nothing in the WHERE is evaluated: `WHERE
+ *     LAST_INSERT_ID(8) = 8 AND 1 = 0` leaves `LAST_INSERT_ID()` alone.
+ *   - `pins`: the columns the WHERE holds to one value, as MySQL's
+ *     `check_field_is_const` finds them — `c = 5`, `<=>`, `IN (5)`, `NOT (c <>
+ *     5)`; through AND, any conjunct; through OR, every branch, with the same
+ *     constant. Two placeholders are two values, whatever they are bound to,
+ *     and NULL pins nothing.
+ *     A string column against a number pins nothing (`b = 5` holds for `'5'`
+ *     and `'5.0'`), and neither does `IS NULL`, on 8.4.
+ *   - `constTable`: every part of the primary key or of a UNIQUE key pinned
+ *     makes the table a constant one: a row or none. NULL pins nothing, which
+ *     matters here: a nullable UNIQUE key holds many NULLs.
+ *
+ * Folding never evaluates a call, a variable or a subquery, and a placeholder
+ * only once it is bound, so planning has no side effects and a prepare sees
+ * what the statement says rather than NULLs.
  */
-function distinctConstant(run: Run, def: TableDef, alias: string, node: SelectNode, zeroLimit: boolean): true | Set<string> {
-  if (zeroLimit) return true
+function whereFacts(run: Run, def: TableDef, alias: string, where: Expression | undefined): { impossible: boolean; pins: Set<ColumnDef>; constTable: boolean } {
+  const facts = { impossible: false, pins: new Set<ColumnDef>(), constTable: false }
+  if (where === undefined) return facts
   const columnOf = (e: Expression): ColumnDef | undefined => {
     if (e.kind !== NODE.COLUMN || e.parts.length > 3 || (e.parts.length >= 2 && e.parts[e.parts.length - 2] !== alias)) return undefined
     const name = (e.parts[e.parts.length - 1] as string).toLowerCase()
     return def.columns.find((c) => c.name.toLowerCase() === name)
-  }
-  const constant = (e: Expression): boolean =>
-    e.kind === NODE.LITERAL || e.kind === NODE.PLACEHOLDER || (e.kind === NODE.UNARY && e.op === '-' && constant(e.operand))
-  const numeric = (e: Expression): boolean => (e.kind === NODE.LITERAL && (e.type === 'int' || e.type === 'decimal' || e.type === 'double')) || (e.kind === NODE.UNARY && numeric(e.operand))
-  /** The column a conjunct pins to one value, and that value's text. */
-  const pinned = (e: Expression): { column: ColumnDef; value: string } | undefined => {
-    if (e.kind === NODE.UNARY && e.op === 'NOT' && e.operand.kind === NODE.BINARY && (e.operand.op === '<>' || e.operand.op === '!=')) return pinned({ ...e.operand, op: '=' })
-    if (e.kind !== NODE.BINARY) return undefined
-    if (e.op === 'OR' || e.op === '||') {
-      const a = pinned(e.left)
-      const b = pinned(e.right)
-      return a !== undefined && b !== undefined && a.column === b.column && a.value === b.value ? a : undefined
-    }
-    let column: ColumnDef | undefined
-    let value: Expression | undefined
-    if (e.op === 'IN' && e.right.kind === NODE.ROW && e.right.items.length === 1) {
-      column = columnOf(e.left)
-      value = e.right.items[0]
-    } else if (e.op === '=' || e.op === '<=>') {
-      column = columnOf(e.left) ?? columnOf(e.right)
-      value = columnOf(e.left) !== undefined ? e.right : e.left
-    }
-    if (column === undefined || value === undefined || !constant(value)) return undefined
-    if (column.type.collationId !== undefined && numeric(value)) return undefined
-    return { column, value: deparse(value) }
   }
   const conjuncts: Expression[] = []
   const flatten = (e: Expression): void => {
@@ -293,43 +281,74 @@ function distinctConstant(run: Run, def: TableDef, alias: string, node: SelectNo
       flatten(e.right)
     } else conjuncts.push(e)
   }
-  if (node.where !== undefined) flatten(node.where)
-  const pins = new Set<ColumnDef>()
+  flatten(where)
   for (const c of conjuncts) {
-    if (c.kind === NODE.UNARY && c.op === 'IS NULL' && columnOf(c.operand)?.nullable === false) return true
-    if (neverEqual(c, columnOf)) return true
-    if (!hasColumn(c)) {
+    if (c.kind === NODE.UNARY && c.op === 'IS NULL' && columnOf(c.operand)?.nullable === false) facts.impossible = true
+    else if (neverEqual(c, columnOf)) facts.impossible = true
+    else if (foldable(c, run.params !== undefined)) {
       try {
-        if (truth(compile(c, compileContext(run, EMPTY_SCOPE, 'where clause')).eval([], run.env)) !== true) return true
+        if (truth(compile(c, compileContext(run, EMPTY_SCOPE, 'where clause')).eval([], run.env)) !== true) facts.impossible = true
       } catch {
         // Not something the optimizer folds; the scan will say.
       }
     }
-    const p = pinned(c)
-    if (p !== undefined) pins.add(p.column)
   }
+  for (const column of def.columns) if (pinOf(where, column, columnOf) !== undefined) facts.pins.add(column)
   const named = (n: string): ColumnDef | undefined => def.columns.find((c) => c.name.toLowerCase() === n.toLowerCase())
-  if (def.indexes.some((i) => i.kind !== 'index' && i.parts.every((p) => p.prefix === undefined && pins.has(named(p.column) as ColumnDef)))) return true
-  const all = node.items.every((item) => {
-    const column = columnOf(item.expr)
-    return column !== undefined && pins.has(column)
-  })
-  return all ? true : new Set([...pins].map((c) => c.name.toLowerCase()))
+  facts.constTable = def.indexes.some(
+    (i) =>
+      i.kind !== 'index' &&
+      i.parts.every((p) => {
+        const column = named(p.column) as ColumnDef
+        return p.prefix === undefined && pinOf(where, column, columnOf) !== undefined
+      }),
+  )
+  return facts
 }
 
 /**
+ * The constant `cond` holds `column` to, as a key two pins can be compared by,
+ * or `undefined` (`check_field_is_const`). A placeholder's key is its own
+ * position, so no two are the same.
+ */
+function pinOf(cond: Expression, column: ColumnDef, columnOf: (e: Expression) => ColumnDef | undefined): string | undefined {
+  if (cond.kind === NODE.UNARY && cond.op === 'NOT' && cond.operand.kind === NODE.BINARY && (cond.operand.op === '<>' || cond.operand.op === '!=')) {
+    return pinOf({ ...cond.operand, op: '=' }, column, columnOf)
+  }
+  if (cond.kind !== NODE.BINARY) return undefined
+  if (cond.op === 'AND' || cond.op === '&&') return pinOf(cond.left, column, columnOf) ?? pinOf(cond.right, column, columnOf)
+  if (cond.op === 'OR' || cond.op === '||') {
+    const a = pinOf(cond.left, column, columnOf)
+    return a !== undefined && a === pinOf(cond.right, column, columnOf) ? a : undefined
+  }
+  let value: Expression | undefined
+  if (cond.op === 'IN' && cond.right.kind === NODE.ROW && cond.right.items.length === 1 && columnOf(cond.left) === column) value = cond.right.items[0]
+  else if (cond.op === '=' || cond.op === '<=>') {
+    if (columnOf(cond.left) === column) value = cond.right
+    else if (columnOf(cond.right) === column) value = cond.left
+  }
+  // NULL pins nothing: `c <=> NULL` leaves `c` grouped (8.4.11).
+  if (value === undefined || !constant(value) || (value.kind === NODE.LITERAL && value.type === 'null')) return undefined
+  if (column.type.collationId !== undefined && numeric(value)) return undefined
+  return value.kind === NODE.PLACEHOLDER ? `?${value.at}` : deparse(value)
+}
+
+const constant = (e: Expression): boolean => e.kind === NODE.LITERAL || e.kind === NODE.PLACEHOLDER || (e.kind === NODE.UNARY && e.op === '-' && constant(e.operand))
+const numeric = (e: Expression): boolean => (e.kind === NODE.LITERAL && (e.type === 'int' || e.type === 'decimal' || e.type === 'double')) || (e.kind === NODE.UNARY && numeric(e.operand))
+
+/**
  * `int_col = 9.5` and `tinyint_col = 300`: an integer column against a
- * number it cannot hold, which MySQL folds to false before reading a row
+ * number it can never equal, which MySQL folds to false before reading a row
  * (8.4.11 answers `SELECT DISTINCT score FROM p WHERE flag = 9.5` without its
- * temporary table).
+ * temporary table). `c = NULL` is not folded, on 8.4.
  */
 function neverEqual(e: Expression, columnOf: (e: Expression) => ColumnDef | undefined): boolean {
-  if (e.kind !== NODE.BINARY || (e.op !== '=' && e.op !== '<=>')) return false
+  if (e.kind !== NODE.BINARY || e.op !== '=') return false
   const column = columnOf(e.left) ?? columnOf(e.right)
   const other = columnOf(e.left) !== undefined ? e.right : e.left
-  const bits: Record<number, number> = { [FIELD_TYPE.TINY]: 8, [FIELD_TYPE.SHORT]: 16, [FIELD_TYPE.INT24]: 24, [FIELD_TYPE.LONG]: 32, [FIELD_TYPE.LONGLONG]: 64 }
-  const n = column === undefined ? undefined : bits[column.type.type]
-  if (column === undefined || n === undefined) return false
+  if (column === undefined) return false
+  const range = integerRange(column.type)
+  if (range === undefined) return false
   const negative = other.kind === NODE.UNARY && other.op === '-'
   const literal = negative ? other.operand : other
   if (literal.kind !== NODE.LITERAL) return false
@@ -339,18 +358,21 @@ function neverEqual(e: Expression, columnOf: (e: Expression) => ColumnDef | unde
   if (!number) return false
   if (!/^[+-]?\d+$/.test(text) && Number(text) % 1 !== 0) return true
   const v = (negative ? -1n : 1n) * (/^[+-]?\d+$/.test(text) ? BigInt(text) : BigInt(Math.trunc(Number(text))))
-  const unsigned = column.type.unsigned === true
-  const min = unsigned ? 0n : -(2n ** BigInt(n - 1))
-  const max = unsigned ? 2n ** BigInt(n) - 1n : 2n ** BigInt(n - 1) - 1n
-  return v < min || v > max
+  return v < range.min || v > range.max
 }
 
-/** Whether an expression reads a column, or anything else a constant cannot (a subquery). */
-function hasColumn(e: unknown): boolean {
-  if (e === null || typeof e !== 'object') return false
+/**
+ * Whether the optimizer can evaluate an expression before reading a row:
+ * literals and operators over them, and placeholders once bound — never a
+ * column, a variable, a subquery or a call, any of which may have an effect
+ * or depend on the row.
+ */
+function foldable(e: unknown, bound: boolean): boolean {
+  if (e === null || typeof e !== 'object') return true
   const node = e as { kind?: string }
-  if (node.kind === NODE.COLUMN || node.kind === NODE.SUBQUERY || node.kind === NODE.VARIABLE) return true
-  return Object.values(e).some((v) => (Array.isArray(v) ? v.some(hasColumn) : typeof v === 'object' && hasColumn(v)))
+  if (node.kind === NODE.COLUMN || node.kind === NODE.SUBQUERY || node.kind === NODE.VARIABLE || node.kind === NODE.CALL) return false
+  if (node.kind === NODE.PLACEHOLDER) return bound
+  return Object.values(e).every((v) => (Array.isArray(v) ? v.every((x) => foldable(x, bound)) : typeof v !== 'object' || foldable(v, bound)))
 }
 
 /** The rows an access path reads, in its order. */

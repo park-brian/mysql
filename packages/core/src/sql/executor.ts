@@ -182,7 +182,7 @@ export class SqlExecutor implements Executor {
     await this.#preload(session, statement)
     if (statement.kind !== STATEMENT.QUERY) return { paramCount, columns: [] }
     try {
-      const run = this.#run(session, sql, [], undefined, 'binary')
+      const run = { ...this.#run(session, sql, [], undefined, 'binary'), preparing: true }
       return { paramCount, columns: columnsOf(run, planSelect(run, statement)) }
     } catch (e) {
       throw toSqlError(e)

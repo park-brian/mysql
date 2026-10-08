@@ -114,6 +114,6 @@ export {
 export type { BytesValue, DateTimeValue, DecimalValue, DoubleValue, IntValue, StringValue, TemporalType, TimeValue, Value } from './sql-value.ts'
 export { aggregateCollation, commonCollation, compareDecimals, compareValues, nullSafeEqual, orderValues } from './compare.ts'
 export { DIV_PRECISION_INCREMENT, add, bitNot, bitwise, divide, intDivide, modulo, negate, not } from './arith.ts'
-export { decodeField, encodeField } from './encode.ts'
+export { decodeField, encodeField, integerRange } from './encode.ts'
 export type { FieldColumn, StoreContext } from './encode.ts'
 export { columnCannotBeNull, columnOutOfRange, dataTooLong, valueOutOfRange, wrongTemporalValue, wrongValueForColumn } from './errors.ts'

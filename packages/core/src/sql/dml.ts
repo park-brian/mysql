@@ -21,7 +21,7 @@ import { CLIENT, hasCap, messages, sqlError, type OkResult } from '@myjs/protoco
 import type { ColumnDef, FieldBytes, IndexDef, RowId, Table, TableDef, Trx } from '@myjs/engine'
 import { EngineError } from '@myjs/engine'
 import { NODE, REF, parseExpression, type Assignment, type DeleteNode, type Expression, type InsertNode, type UpdateNode } from '@myjs/parser'
-import { decodeField, encodeField, intValue, toInteger, toText, type StoreContext, type Value } from '@myjs/types'
+import { decodeField, encodeField, integerRange, intValue, toInteger, toText, type StoreContext, type Value } from '@myjs/types'
 import { compile, EMPTY_SCOPE, type Compiled, type Row } from './compile.ts'
 import { filter, limit, sort, type ScannedRow } from './operators.ts'
 import { chooseAccess } from './plan.ts'
@@ -89,10 +89,12 @@ function conflictOf(table: Table, keys: readonly IndexDef[], fields: readonly Fi
   return undefined
 }
 
-/** The error a 1062 from the engine becomes: named by the first key that collides, as InnoDB finds it. */
-function duplicateError(e: unknown, def: TableDef, table: Table, keys: readonly IndexDef[], fields: readonly FieldBytes[], trx: Trx, except?: RowId): unknown {
+/**
+ * The error a 1062 from the engine becomes: named by the first key that
+ * collides, as InnoDB finds it — `hit`, when the caller has looked already.
+ */
+function duplicateError(e: unknown, def: TableDef, table: Table, keys: readonly IndexDef[], fields: readonly FieldBytes[], trx: Trx, except?: RowId, hit = conflictOf(table, keys, fields, trx, except)): unknown {
   if (!isDuplicate(e)) return e
-  const hit = conflictOf(table, keys, fields, trx, except)
   const named = hit?.index ?? def.indexes.find((i) => i.name === /'([^']*)'/.exec((e as Error).message)?.[1])
   if (named === undefined) return e
   // Named by the values as stored: `VALUES (1.6)` colliding with id 2 is
@@ -223,6 +225,12 @@ function compileUpsert(run: Run, def: TableDef, node: InsertNode, targets: reado
   if (alias !== undefined) {
     if (alias.columns !== undefined && alias.columns.length !== targets.length) {
       throw sqlError('ER_VIEW_WRONG_LIST', 'In definition of view, derived table or common table expression, SELECT list and column names list have different column counts')
+    }
+    // `AS n(a, A)` is 1060: the alias's names are column names (8.4.11).
+    const named = new Set<string>()
+    for (const c of alias.columns ?? []) {
+      if (named.has(c.toLowerCase())) throw sqlError('ER_DUP_FIELDNAME', `Duplicate column name '${c}'`)
+      named.add(c.toLowerCase())
     }
     const columns = targets.map((t, i) => ({ ...(def.columns[t] as ColumnDef), name: alias.columns?.[i] ?? (def.columns[t] as ColumnDef).name }))
     scoped.push({ alias: alias.name, def: { ...def, name: alias.name, columns } })
@@ -385,7 +393,7 @@ export function insert(run: Run, node: InsertNode, trx: Trx): OkResult {
         const hit = conflictOf(table, keys, fields, trx)
         if (hit === undefined) throw e
         if (mode === 'insert') {
-          if (!ignore) throw duplicateError(e, def, table, keys, fields, trx)
+          if (!ignore) throw duplicateError(e, def, table, keys, fields, trx, undefined, hit)
           store.warnings++
           auto.restore(prev)
           return
@@ -394,7 +402,7 @@ export function insert(run: Run, node: InsertNode, trx: Trx): OkResult {
           // A generated value that collides on the AUTO_INCREMENT column's own
           // key is not allowed to replace the row that has it
           // (`write_record`): the column's range is used up, and it is 1062.
-          if (generated > 0n && hit.index === autoKey) throw duplicateError(e, def, table, keys, fields, trx)
+          if (generated > 0n && hit.index === autoKey) throw duplicateError(e, def, table, keys, fields, trx, undefined, hit)
           // The table's last UNIQUE key: no later key can collide, so the row
           // in the way is updated into this one rather than deleted.
           if (hit.index === keys[keys.length - 1]) {
@@ -469,10 +477,7 @@ export function insert(run: Run, node: InsertNode, trx: Trx): OkResult {
 
 /** An integer column's largest value; a non-integer AUTO_INCREMENT column has no bound here. */
 function integerMax(column: ColumnDef): bigint {
-  const bits: Record<number, number> = { [FIELD_TYPE.TINY]: 8, [FIELD_TYPE.SHORT]: 16, [FIELD_TYPE.INT24]: 24, [FIELD_TYPE.LONG]: 32, [FIELD_TYPE.LONGLONG]: 64 }
-  const n = bits[column.type.type]
-  if (n === undefined) return 2n ** 64n
-  return column.type.unsigned === true ? 2n ** BigInt(n) - 1n : 2n ** BigInt(n - 1) - 1n
+  return integerRange(column.type)?.max ?? 2n ** 64n
 }
 
 /** The AUTO_INCREMENT column's value in a row's fields, 0 for NULL. */

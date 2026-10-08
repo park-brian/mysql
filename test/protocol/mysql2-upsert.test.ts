@@ -319,3 +319,88 @@ test("M5.8: outside a strict mode, NULL into NOT NULL is refused for one row and
   ]
   agree(sql, await run(sql, { mode: "" }), expected)
 })
+
+// --- M5.8's review: each finding a test that failed before its fix, against 8.4.11's answers ---
+
+/** A connection to a fresh in-memory database with one table, and the flags a query's columns carry. */
+async function flagsOf(): Promise<{
+  flags: (sql: string, params?: unknown[]) => Promise<number[]>
+  prepared: (sql: string) => Promise<number[]>
+  query: (sql: string) => Promise<unknown>
+  close: () => Promise<void>
+}> {
+  const db = await MySQL.open(':memory:')
+  const conn = await mysql.createConnection({ stream: db.createStream() as never, user: 'root', password: '', supportBigNumbers: true, bigNumberStrings: true })
+  await conn.query('CREATE DATABASE app')
+  await conn.query('USE app')
+  await conn.query('CREATE TABLE t (u INT UNIQUE, a INT, b INT, x INT PRIMARY KEY)')
+  await conn.query('INSERT INTO t VALUES (NULL, 5, 1, 1), (NULL, 5, 2, 2), (3, 6, 1, 3)')
+  return {
+    async flags(sql, params) {
+      const [, fields] = params === undefined ? await conn.query(sql) : await conn.execute(sql, params as (string | number)[])
+      return (fields as { flags: number }[]).map((f) => f.flags)
+    },
+    async prepared(sql) {
+      const st = (await conn.prepare(sql)) as unknown as { statement?: { columns: { flags: number }[] }; columns?: { flags: number }[] }
+      return (st.statement?.columns ?? st.columns ?? []).map((f) => f.flags)
+    },
+    async query(sql) {
+      const [rows] = await conn.query({ sql, rowsAsArray: true })
+      return rows
+    },
+    async close() {
+      await conn.end()
+      await db.end()
+    },
+  }
+}
+
+test('M5.8 review: LAST_INSERT_ID(x) saturates a value past 64 bits rather than wrapping it', async () => {
+  // A negative integer wraps (-1 is 2^64 - 1), but a non-integer past the
+  // signed range saturates at 2^63 - 1, and one below it is 1690.
+  const sql = ['SELECT LAST_INSERT_ID(1e30), LAST_INSERT_ID()', 'SELECT LAST_INSERT_ID(18446744073709551616)', 'SELECT LAST_INSERT_ID(-1e30)', 'SELECT LAST_INSERT_ID(-1)']
+  const expected: Outcome[] = [[["9223372036854775807", "9223372036854775807"]], [["9223372036854775807"]], 1690, [["18446744073709551615"]]]
+  agree(sql, await run(sql), expected)
+})
+
+test('M5.8 review: a row alias may not name a column twice', async () => {
+  const sql = [
+    'CREATE TABLE t (x INT PRIMARY KEY, v INT)',
+    'INSERT INTO t (x, v) VALUES (1, 2) AS n(a, A) ON DUPLICATE KEY UPDATE v = 1',
+  ]
+  agree(sql, await run(sql), [[0, 0, '', 0], 1060])
+})
+
+test('M5.8 review: what pins a DISTINCT column, and what does not', async () => {
+  const t = await flagsOf()
+  try {
+    // A nullable UNIQUE key matched with `<=> NULL` matches many rows, so the
+    // table is not a constant one and the temporary table is made.
+    assert.deepEqual(await t.flags('SELECT DISTINCT b FROM t WHERE u <=> NULL'), [32768])
+    // A value shared by every branch of an OR pins the column, through AND.
+    assert.deepEqual(await t.flags('SELECT DISTINCT a, b FROM t WHERE (a = 5 AND b = 1) OR (a = 5 AND b = 2)'), [0, 32768])
+    // Two placeholders are two values, whatever they are bound to.
+    assert.deepEqual(await t.flags('SELECT DISTINCT a FROM t WHERE a = ? OR a = ?', [5, 5]), [32768])
+    // NULL pins nothing, and `c = NULL` is not folded to false.
+    assert.deepEqual(await t.flags('SELECT DISTINCT a FROM t WHERE a <=> NULL'), [32768])
+    assert.deepEqual(await t.flags('SELECT DISTINCT b FROM t WHERE a = NULL'), [32768])
+  } finally {
+    await t.close()
+  }
+})
+
+test('M5.8 review: a prepare reports a DISTINCT before MySQL optimizes it, and runs nothing', async () => {
+  const t = await flagsOf()
+  try {
+    // The temporary table is the optimizer's, and COM_STMT_PREPARE's metadata
+    // comes before the optimizer: no GROUP_FLAG there, GROUP_FLAG on execute.
+    assert.deepEqual(await t.prepared('SELECT DISTINCT b FROM t WHERE a > ?'), [0])
+    assert.deepEqual(await t.flags('SELECT DISTINCT b FROM t WHERE a > ?', [1]), [32768])
+    // Neither a prepare nor a WHERE MySQL knows to be false evaluates a call.
+    await t.prepared('SELECT DISTINCT b FROM t WHERE LAST_INSERT_ID(7) = 7')
+    await t.query('SELECT DISTINCT b FROM t WHERE LAST_INSERT_ID(8) = 8 AND 1 = 0')
+    assert.deepEqual(await t.query('SELECT LAST_INSERT_ID()'), [['0']])
+  } finally {
+    await t.close()
+  }
+})

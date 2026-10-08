@@ -93,6 +93,18 @@ const INT_WIDTH: Readonly<Record<number, number>> = {
   [FIELD_TYPE.LONGLONG]: 8,
 }
 
+/**
+ * An integer type's range, from its pack length (`Field_tiny` … `Field_longlong`
+ * in `sql/field.h`): what a column of it can hold. `undefined` for any other
+ * type.
+ */
+export function integerRange(t: { readonly type: number; readonly unsigned?: boolean }): { readonly min: bigint; readonly max: bigint } | undefined {
+  const width = INT_WIDTH[t.type]
+  if (width === undefined) return undefined
+  const bits = BigInt(width * 8)
+  return t.unsigned === true ? { min: 0n, max: 2n ** bits - 1n } : { min: -(2n ** (bits - 1n)), max: 2n ** (bits - 1n) - 1n }
+}
+
 /** BLOB and TEXT's byte limits, from `Field_blob`'s pack length. */
 const BLOB_BYTES: Readonly<Record<number, number>> = {
   [FIELD_TYPE.TINY_BLOB]: 255,
