@@ -182,7 +182,15 @@ export function encodeField(value: Value, column: FieldColumn, ctx: StoreContext
     case FIELD_TYPE.FLOAT:
     case FIELD_TYPE.DOUBLE: {
       let n = toDouble(numericSource(value, column, ctx))
-      const max = t.type === FIELD_TYPE.FLOAT ? FLOAT_MAX : Number.MAX_VALUE
+      let max = t.type === FIELD_TYPE.FLOAT ? FLOAT_MAX : Number.MAX_VALUE
+      // FLOAT(M,D): rounded to D decimals, half to even on the fraction, and
+      // at most M - D digits before the point (`Field_real::truncate`).
+      if (t.precision !== undefined && t.scale !== undefined && Number.isFinite(n) && !(t.unsigned === true && n < 0)) {
+        const unit = 10 ** t.scale
+        max = Math.min(max, 10 ** (t.precision - t.scale) - 1 / unit)
+        const whole = Math.floor(n)
+        n = whole + roundHalfEven((n - whole) * unit) / unit
+      }
       if (!Number.isFinite(n) || Math.abs(n) > max || (t.unsigned === true && n < 0)) {
         n = adjust(ctx, () => columnOutOfRange(column.name, ctx.row), t.unsigned === true && n < 0 ? 0 : Math.sign(n) * max)
       }
@@ -384,6 +392,12 @@ function encodeTemporalField(value: Exclude<Value, null>, column: FieldColumn, c
 }
 
 /** The 1-based index of the member a value names, or 0 — ENUM's "no member" slot. */
+/** C's `rint` in the default rounding mode: halves go to the even neighbour. */
+function roundHalfEven(x: number): number {
+  const r = Math.round(x)
+  return r - x === 0.5 && r % 2 !== 0 ? r - 1 : r
+}
+
 function memberIndex(value: Exclude<Value, null>, members: readonly string[], collationId: number | undefined, digits = true): number | undefined {
   // A number is an index, whatever its type: `e + 1` is a DOUBLE, and 2.0
   // names the second member (8.4.11). Index 0 is the error value, ''.
@@ -428,9 +442,13 @@ function encodeTextField(value: Exclude<Value, null>, column: FieldColumn, ctx: 
     const chars = [...text]
     const length = t.length ?? 1
     if (chars.length > length) {
-      // Excess trailing spaces are dropped with a note, not refused.
+      // Excess trailing spaces are dropped with a note, not refused; a
+      // CHAR's are padding, and go silently (8.4.11).
       const kept = chars.slice(0, length).join('')
-      if (/^ *$/.test(chars.slice(length).join(''))) text = kept
+      if (/^ *$/.test(chars.slice(length).join(''))) {
+        text = kept
+        if (t.type !== FIELD_TYPE.STRING) ctx.warnings++
+      }
       else text = adjust(ctx, () => dataTooLong(column.name, ctx.row), kept)
     }
   }
@@ -458,10 +476,11 @@ export function decodeField(field: Uint8Array | null, t: ColumnType): Value {
       return parseDecimal(decodeDecimal(field, t.precision ?? 10, t.scale ?? 0))
     case FIELD_TYPE.JSON:
       return json(decodeJsonDoc(field))
+    // A FLOAT's value prints as a float does, and a FLOAT(M,D)'s with its D.
     case FIELD_TYPE.FLOAT:
-      return double(decodeFloat(field))
+      return { ...double(decodeFloat(field)), float: true, ...(t.precision !== undefined && t.scale !== undefined ? { decimals: t.scale } : {}) }
     case FIELD_TYPE.DOUBLE:
-      return double(decodeDouble(field))
+      return t.precision !== undefined && t.scale !== undefined ? { ...double(decodeDouble(field)), decimals: t.scale } : double(decodeDouble(field))
     case FIELD_TYPE.YEAR:
       return int(BigInt(decodeYear(field)), true)
     case FIELD_TYPE.DATE:

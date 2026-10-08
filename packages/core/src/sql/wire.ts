@@ -9,18 +9,19 @@
 // them by the column's field type, so a value is first brought to that type.
 import { FIELD_TYPE } from '@myjs/bytes'
 import type { RowValue, Session } from '@myjs/protocol'
-import { renderDateTime, renderDecimal, renderDouble, renderTime, toDecimal, toDouble, toInteger, toText, type Value } from '@myjs/types'
+import { renderDateTime, renderDecimal, renderDouble, renderFloat, renderTime, toDecimal, toDouble, toInteger, toText, type Value } from '@myjs/types'
 import type { ResultType } from './meta.ts'
 
 export type WireProtocol = 'text' | 'binary'
 
-/** A FLOAT column prints six significant digits, as `my_gcvt` does for `FLT_DIG`. */
-export function renderFloat(n: number): string {
-  if (!Number.isFinite(n) || n === 0) return renderDouble(n)
-  return renderDouble(Number(n.toPrecision(6)))
-}
 
 function textOf(v: Exclude<Value, null>, t: ResultType): string {
+  // A FLOAT(M,D), and arithmetic over one, prints exactly D decimals, as
+  // `my_fcvt` does (8.4.11: a FLOAT(3,1) holding 1.25 is `1.2`).
+  if (t.kind === 'double' && t.scale < 31 && (v.kind === 'double' || v.kind === 'int' || v.kind === 'decimal')) {
+    const n = toDouble(v)
+    if (Number.isFinite(n) && Math.abs(n) < 1e21) return n.toFixed(t.scale)
+  }
   switch (v.kind) {
     case 'double':
       return t.field === FIELD_TYPE.FLOAT ? renderFloat(v.v) : renderDouble(v.v)

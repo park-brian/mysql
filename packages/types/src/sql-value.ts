@@ -52,6 +52,10 @@ export interface DecimalValue {
 export interface DoubleValue {
   readonly kind: 'double'
   readonly v: number
+  /** Read from a FLOAT column: as text, six significant digits (`FLT_DIG`). */
+  readonly float?: true
+  /** A FLOAT(M,D)'s D, and arithmetic's over one: as text, exactly this many decimals. */
+  readonly decimals?: number
 }
 
 /**
@@ -91,6 +95,7 @@ export function withoutHex(v: Value): Value {
 /** A value with no trace of the item it came from: no hex literal's number, no ENUM's index — what a user variable or a scalar subquery hands on. */
 export function plainValue(v: Value): Value {
   if (v !== null && v.kind === 'string' && v.ordinal !== undefined) return { kind: 'string', v: v.v, collationId: v.collationId, coercibility: v.coercibility }
+  if (v !== null && v.kind === 'double' && (v.float !== undefined || v.decimals !== undefined)) return { kind: 'double', v: v.v }
   return withoutHex(v)
 }
 
@@ -377,7 +382,8 @@ export function toText(v: Exclude<Value, null>): string {
     case 'decimal':
       return renderDecimal(v)
     case 'double':
-      return renderDouble(v.v)
+      if (v.decimals !== undefined && Number.isFinite(v.v) && Math.abs(v.v) < 1e21) return v.v.toFixed(v.decimals)
+      return v.float === true ? renderFloat(v.v) : renderDouble(v.v)
     case 'string':
       return v.v
     case 'bytes':
@@ -403,6 +409,12 @@ export function toTextBytes(v: Exclude<Value, null>, collationId: number): Uint8
  * notation outside it — `1e15`, `1e-16`, but `0.0000000000000015` and
  * `123456789012345.6`. The bounds were read off a real 8.4.11, not a manual.
  */
+/** A FLOAT prints six significant digits, as `my_gcvt` does for `FLT_DIG`. */
+export function renderFloat(n: number): string {
+  if (!Number.isFinite(n) || n === 0) return renderDouble(n)
+  return renderDouble(Number(n.toPrecision(6)))
+}
+
 export function renderDouble(n: number): string {
   if (Number.isNaN(n)) return 'NaN'
   if (n === 0) return Object.is(n, -0) ? '-0' : '0'

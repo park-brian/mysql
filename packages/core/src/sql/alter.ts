@@ -19,7 +19,7 @@ import type { Catalog, ColumnDef, FieldBytes, IndexDef, TableDef, TableSpec } fr
 import { KEY, NODE, deparse, type AlterAction, type AlterTableNode, type ColumnDefinition, type Expression } from '@myjs/parser'
 import { decodeField, encodeField, type StoreContext, type Value } from '@myjs/types'
 import type { Compiled } from './compile.ts'
-import { column as columnDef, DEFAULT_COLLATION, duplicateKeys } from './ddl.ts'
+import { column as columnDef, columnDeprecations, DEFAULT_COLLATION, duplicateKeys } from './ddl.ts'
 import { checker, checkForeignKeyActions, checksOf, checkViolated, columnChecks, columnsOf, withChecks, type CheckDef } from './checks.ts'
 import { checkDefaults, defaultOf, implicitDefault, rowDependent } from './dml.ts'
 import { checkParentOf, foreignKeyChecks, foreignKeyClause, foreignKeysOf, referencedIndex, referencingKeys, storageClass, supportingIndex, withForeignKeys, type ForeignKeyClause } from './foreign-keys.ts'
@@ -149,8 +149,8 @@ export function alterTable(run: Run, catalog: Catalog, statement: AlterTableNode
       const made = columnDef(a.column, tableCollation, primary.has(old.name.toLowerCase()))
       if (made.autoIncrement === true && old.autoIncrement !== true) throw notSupported('ALTER TABLE … making a column AUTO_INCREMENT')
       rename(i, made.name)
-      notes += checkDefaults(run, [made])
       columns[i] = made
+      notes += checkDefaults(run, [made], columns) + columnDeprecations(a.column)
       move(i, a.position)
     } else if (a.type === 'renameColumn') {
       const i = columnAt(a.from)
@@ -159,12 +159,12 @@ export function alterTable(run: Run, catalog: Catalog, statement: AlterTableNode
     } else if (a.type === 'setDefault' || a.type === 'dropDefault') {
       const i = columnAt(a.column)
       const c = columns[i] as ColumnDef
-      const { default: _d, noDefault: _n, ...rest } = c.attributes ?? {}
+      const { default: _d, noDefault: _n, defaultExpression: _e, ...rest } = c.attributes ?? {}
       // DROP DEFAULT leaves no default at all, NULL included: a row that omits
       // the column is 1364, and SHOW CREATE TABLE says nothing (8.4.11).
-      const attributes = a.type === 'setDefault' ? { ...rest, default: deparse(a.value) } : { ...rest, noDefault: true }
+      const attributes = a.type === 'setDefault' ? { ...rest, default: deparse(a.value), ...(a.expression === true ? { defaultExpression: true } : {}) } : { ...rest, noDefault: true }
       columns[i] = { ...c, attributes }
-      if (a.type === 'setDefault') notes += checkDefaults(run, [columns[i] as ColumnDef])
+      if (a.type === 'setDefault') notes += checkDefaults(run, [columns[i] as ColumnDef], columns)
     }
   }
   /** An old column's name now, or undefined if it was dropped. */
@@ -246,8 +246,8 @@ export function alterTable(run: Run, catalog: Catalog, statement: AlterTableNode
       if (i < 0) throw sqlError('ER_BAD_FIELD_ERROR', messages.unknownColumn(after, 'table definition'))
       at = i + 1
     }
-    notes += checkDefaults(run, [made])
     columns.splice(at, 0, made)
+    notes += checkDefaults(run, [made], columns) + columnDeprecations(a.column)
     sources = [...sources.slice(0, at), made, ...sources.slice(at)]
     added.push(a.column)
   }

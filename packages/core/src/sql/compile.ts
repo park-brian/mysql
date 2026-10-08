@@ -13,7 +13,7 @@
 // have not written is ER_NOT_SUPPORTED_YET naming it (M5.10 owns the rest).
 import { CHARSET_BINARY, FIELD_TYPE, type MysqlDateTime } from '@myjs/bytes'
 import { collation, collationInfoByName, decodeCollation, defaultCollationOf, encodeCollation, requireCollationInfo } from '@myjs/charsets'
-import { LITERAL, NODE, deparse, type CallNode, type CaseNode, type CastNode, type Expression, type LiteralNode, type MatchNode, type QueryExpression, type SubqueryNode } from '@myjs/parser'
+import { LITERAL, NODE, deparse, parseExpression, type CallNode, type CaseNode, type CastNode, type Expression, type LiteralNode, type MatchNode, type QueryExpression, type SubqueryNode } from '@myjs/parser'
 import type { ColumnDef, Table, Trx } from '@myjs/engine'
 import { sqlError, messages, type Session } from '@myjs/protocol'
 import {
@@ -29,6 +29,7 @@ import {
   plainValue,
   withoutHex,
   decodeField,
+  encodeField,
   decimalValue,
   divide,
   doubleValue,
@@ -61,6 +62,8 @@ import {
   datetimeType,
   decimalType,
   doubleType,
+  fixedDouble,
+  floatLength,
   intType,
   jsonAsText,
   jsonType,
@@ -463,6 +466,44 @@ function typeOfUserVariable(v: Value | undefined, ctx: CompileContext): ResultTy
   return { ...typeOfValue(v), nullable: true }
 }
 
+/**
+ * A division with a fixed-decimal double: the larger scale plus
+ * div_precision_increment's 4, and the dividend's integer part
+ * (`Item_func_div::resolve_type`).
+ */
+/** `5 / 10^(D+1)` when a comparison is of doubles and both sides have fixed decimals. */
+function fixedTolerance(a: ResultType, b: ResultType): number | undefined {
+  const numeric = (t: ResultType) => t.kind === 'int' || t.kind === 'decimal' || t.kind === 'double'
+  if (!(a.kind === 'double' || b.kind === 'double') || !numeric(a) || !numeric(b) || a.scale >= 31 || b.scale >= 31) return undefined
+  return 5 / 10 ** (Math.max(a.scale, b.scale) + 1)
+}
+
+/**
+ * How two operands compare: as `compareValues` does, except that two sides
+ * with fixed decimals compare as doubles within half a unit of the next
+ * digit (`compare_real_fixed`): a FLOAT(5,2) holding 0.1 equals 0.1, and
+ * so do `<=>`, BETWEEN, NULLIF and a one-element IN (8.4.11).
+ */
+export function comparer(a: ResultType, b: ResultType): (x: Value, y: Value) => number | null {
+  const tolerance = fixedTolerance(a, b)
+  if (tolerance === undefined) return compareValues
+  return (x, y) => {
+    if (x === null || y === null) return null
+    const p = toDouble(x)
+    const q = toDouble(y)
+    return p === q || Math.abs(p - q) < tolerance ? 0 : p < q ? -1 : 1
+  }
+}
+
+function divisionDouble(a: ResultType, b: ResultType): ResultType {
+  const fixed = fixedDouble([a, b], true)
+  if (fixed === undefined) return doubleType(true, 23)
+  const scale = Math.min(31, Math.max(a.scale, b.scale) + 4)
+  if (scale >= 31) return doubleType(true, 23)
+  const width = (a.kind === 'decimal' ? charWidth(a) : a.length) - a.scale + scale
+  return { ...doubleType(true, Math.min(width, 17 + scale)), scale }
+}
+
 function unary(op: string, a: Compiled, exists: boolean): Compiled {
   if (exists) throw sqlError('ER_NOT_SUPPORTED_YET', messages.notSupported('EXISTS'))
   const at = a.eval
@@ -470,7 +511,8 @@ function unary(op: string, a: Compiled, exists: boolean): Compiled {
     case '-': {
       const t = a.type
       // Negating an unsigned value needs room for the sign it gains.
-      const type = t.kind === 'int' ? intType(t.length + (t.unsigned ? 1 : 0), t.nullable) : t.kind === 'decimal' ? decimalType(t.length, t.scale, t.nullable) : t.kind === 'null' ? NULL_TYPE : doubleType(t.nullable)
+      const type = t.kind === 'int' ? intType(t.length + (t.unsigned ? 1 : 0), t.nullable) : t.kind === 'decimal' ? decimalType(t.length, t.scale, t.nullable) : t.kind === 'null' ? NULL_TYPE : t.kind === 'double' ? floatLength(t.scale, t.nullable) : doubleType(t.nullable)
+      if (type.kind === 'double' && type.scale < 31) return { eval: (r, env) => doubleOf(negate(at(r, env)), type), type }
       return { eval: (r, env) => negate(at(r, env)), type }
     }
     case '+':
@@ -577,11 +619,14 @@ function binary(op: string, left: Expression, right: Expression, extra: Expressi
     const lo = timeConstant(a, left, right, compile(right, ctx))
     const hi = timeConstant(a, left, extra as Expression, compile(extra as Expression, ctx))
     const negated = op === 'NOT BETWEEN'
+    // Each bound is its own comparison, fixed decimals and all.
+    const low = comparer(a.type, lo.type)
+    const high = comparer(a.type, hi.type)
     return {
       eval: (r, env) => {
         const v = a.eval(r, env)
-        const x = compareValues(v, lo.eval(r, env))
-        const y = compareValues(v, hi.eval(r, env))
+        const x = low(v, lo.eval(r, env))
+        const y = high(v, hi.eval(r, env))
         // Three-valued: a known failure on either side decides it.
         if ((x !== null && x < 0) || (y !== null && y > 0)) return bool(negated)
         if (x === null || y === null) return null
@@ -634,8 +679,21 @@ function binary(op: string, left: Expression, right: Expression, extra: Expressi
         },
         type: boolType(nullable),
       }
-    case '<=>':
+    case '<=>': {
+      const tolerance = fixedTolerance(a.type, b.type)
+      if (tolerance !== undefined) {
+        const cmp = comparer(a.type, b.type)
+        return {
+          eval: (r, env) => {
+            const x = at(r, env)
+            const y = bt(r, env)
+            return bool(x === null || y === null ? x === y : cmp(x, y) === 0)
+          },
+          type: boolType(false),
+        }
+      }
       return { eval: (r, env) => bool(nullSafeEqual(at(r, env), bt(r, env))), type: boolType(false) }
+    }
     case '+':
     case '-':
     case '*': {
@@ -649,14 +707,19 @@ function binary(op: string, left: Expression, right: Expression, extra: Expressi
         // A DECIMAL result is unsigned only when both sides are; an integer
         // one when either is (`Item_func_*::result_precision`).
         type = decimalType(digits + s, s, nullable, a.type.unsigned === true && b.type.unsigned === true)
-      } else if (kind === 'double') type = doubleType(nullable, 23)
+      } else if (kind === 'double') type = fixedDouble([a.type, b.type], nullable) ?? doubleType(nullable, 23)
       else type = NULL_TYPE
+      if (type.kind === 'double' && type.scale < 31) {
+        const fixed = type
+        return { eval: (r, env) => doubleOf(add(at(r, env), bt(r, env), op, label), fixed), type }
+      }
       return { eval: (r, env) => add(at(r, env), bt(r, env), op, label), type }
     }
     case '/': {
       const kind = arithKind(a.type, b.type)
       const s = Math.min(30, scaleOf(a.type) + 4)
-      const type = kind === 'double' ? doubleType(true, 23) : kind === 'null' ? NULL_TYPE : decimalType(intDigits(a.type) + scaleOf(b.type) + s, s, true, a.type.unsigned === true && b.type.unsigned === true)
+      const type = kind === 'double' ? divisionDouble(a.type, b.type) : kind === 'null' ? NULL_TYPE : decimalType(intDigits(a.type) + scaleOf(b.type) + s, s, true, a.type.unsigned === true && b.type.unsigned === true)
+      if (type.kind === 'double' && type.scale < 31) return { eval: (r, env) => doubleOf(divide(at(r, env), bt(r, env)), type), type }
       return { eval: (r, env) => divide(at(r, env), bt(r, env)), type }
     }
     case 'DIV': {
@@ -683,6 +746,16 @@ function binary(op: string, left: Expression, right: Expression, extra: Expressi
     default: {
       const test = COMPARISONS[op]
       if (test === undefined) throw sqlError('ER_NOT_SUPPORTED_YET', messages.notSupported(`The operator ${op}`))
+      if (fixedTolerance(a.type, b.type) !== undefined) {
+        const cmp = comparer(a.type, b.type)
+        return {
+          eval: (r, env) => {
+            const c = cmp(at(r, env), bt(r, env))
+            return c === null ? null : bool(test(c))
+          },
+          type: boolType(nullable),
+        }
+      }
       return {
         eval: (r, env) => {
           const c = compareValues(at(r, env), bt(r, env))
@@ -912,6 +985,9 @@ function inList(negated: boolean, left: Expression, right: Expression, ctx: Comp
   // A long list of constants is sorted once per execution and searched, as
   // MySQL's `in_vector` is: Prisma sends 65,535 of them.
   const searchable = items.length >= 10 && list.every(constantItem)
+  // One element is `=`, which compares fixed decimals within a tolerance;
+  // a list compares exactly (8.4.11: a FLOAT(3,1) is IN (1.2) and not IN (1.2, 1.3)).
+  const compare = items.length === 1 ? comparer(a.type, (items[0] as Compiled).type) : compareValues
   let sortedFor: Env | undefined
   let sorted: SortedItems | undefined
   return {
@@ -928,7 +1004,7 @@ function inList(negated: boolean, left: Expression, right: Expression, ctx: Comp
       }
       let sawNull = false
       for (const item of items) {
-        const c = compareValues(v, item.eval(r, env))
+        const c = compare(v, item.eval(r, env))
         if (c === 0) return bool(!negated)
         if (c === null) sawNull = true
       }
@@ -1015,7 +1091,13 @@ export function aggregate(types: readonly ResultType[], nullable: boolean, conne
     return datetimeType(first.field, Math.max(...live.map((t) => t.scale)), nullable)
   }
   if (live.some((t) => t.kind === 'datetime' || t.kind === 'time')) return stringType(Math.max(...live.map(charWidth)), connectionCollation, nullable)
-  if (live.some((t) => t.kind === 'double')) return doubleType(nullable, 23)
+  if (live.some((t) => t.kind === 'double')) {
+    const type = fixedDouble(live, nullable) ?? doubleType(nullable, 23)
+    // FLOAT stays FLOAT beside FLOAT, the smaller integers, BIGINT and YEAR,
+    // and is DOUBLE beside INT or DECIMAL (`field_types_merge_rules`).
+    const float = live.every((t) => (t.kind === 'double' && t.field === FIELD_TYPE.FLOAT) || (t.kind === 'int' && FLOAT_PARTNERS.has(t.field)))
+    return float ? { ...type, field: FIELD_TYPE.FLOAT } : type
+  }
   if (live.some((t) => t.kind === 'decimal')) {
     const s = Math.max(...live.map(scaleOf))
     return decimalType(Math.max(...live.map(intDigits)) + s, s, nullable)
@@ -1030,13 +1112,25 @@ export function aggregate(types: readonly ResultType[], nullable: boolean, conne
  * return theirs: `COALESCE(1, 1.5)` is `1.0`. (`IF` and `CASE` do not — `IF(1, 1,
  * 0.5)` is `1` — which 8.4.11 settled, not the manual.)
  */
+const FLOAT_PARTNERS: ReadonlySet<number> = new Set([FIELD_TYPE.TINY, FIELD_TYPE.SHORT, FIELD_TYPE.INT24, FIELD_TYPE.LONGLONG, FIELD_TYPE.YEAR])
+
+/** A value as a double of this type: a FLOAT's text, or a fixed number of decimals, or neither. */
+function doubleOf(v: Value, t: ResultType): Value {
+  if (v === null) return null
+  const n = v.kind === 'double' ? v.v : toDouble(v)
+  const float = t.field === FIELD_TYPE.FLOAT
+  const decimals = t.scale < 31 ? t.scale : undefined
+  if (v.kind === 'double' && (v.float === true) === float && v.decimals === decimals) return v
+  return { kind: 'double', v: n, ...(float ? { float: true as const } : {}), ...(decimals === undefined ? {} : { decimals }) }
+}
+
 export function convertTo(v: Value, t: ResultType): Value {
   if (v === null) return null
   switch (t.kind) {
     case 'decimal':
       return v.kind === 'int' || v.kind === 'decimal' ? rescale(toDecimal(v), t.scale) : v
     case 'double':
-      return v.kind === 'double' ? v : doubleValue(toDouble(v))
+      return doubleOf(v, t)
     case 'bytes':
       return withoutHex(v)
     case 'string':
@@ -1053,16 +1147,17 @@ function caseExpr(e: CaseNode, ctx: CompileContext): Compiled {
   const otherwise = e.else === undefined ? undefined : compile(e.else, ctx)
   const results = [...whens.map((w) => w.then.type), otherwise?.type ?? NULL_TYPE]
   const nullable = otherwise === undefined || results.some((t) => t.nullable)
+  const type = aggregate(results, nullable, ctx.connectionCollation)
   return {
     eval: (r, env) => {
       const subject = operand?.eval(r, env)
       for (const w of whens) {
         const hit = operand === undefined ? truth(w.when.eval(r, env)) === true : compareValues(subject ?? null, w.when.eval(r, env)) === 0
-        if (hit) return w.then.eval(r, env)
+        if (hit) return type.kind === 'double' ? doubleOf(w.then.eval(r, env), type) : w.then.eval(r, env)
       }
       return otherwise === undefined ? null : otherwise.eval(r, env)
     },
-    type: aggregate(results, nullable, ctx.connectionCollation),
+    type,
   }
 }
 
@@ -1137,6 +1232,7 @@ function call(e: CallNode, ctx: CompileContext): Compiled {
     const xs = e.args.map((a): Compiled => (a.kind === NODE.KEYWORD ? Object.assign({ eval: () => null, type: NULL_TYPE }, { keyword: a.word }) : compile(a, ctx)))
     return libraryFunction(name, xs, e.name, e.args.map((a) => constantNode(a)), ctx) as Compiled
   }
+  if (name === 'DEFAULT' && e.args.length === 1) return defaultFunction(e, ctx)
   switch (name) {
     case 'STRCMP': {
       // A comparison of the two as strings, in their aggregated collation:
@@ -1224,7 +1320,9 @@ function call(e: CallNode, ctx: CompileContext): Compiled {
     case 'IF': {
       arity(3)
       const [c, x, y] = args() as [Compiled, Compiled, Compiled]
-      return { eval: (r, env) => (truth(c.eval(r, env)) === true ? x.eval(r, env) : y.eval(r, env)), type: aggregate([x.type, y.type], x.type.nullable || y.type.nullable, conn) }
+      const type = aggregate([x.type, y.type], x.type.nullable || y.type.nullable, conn)
+      if (type.kind === 'double') return { eval: (r, env) => doubleOf(truth(c.eval(r, env)) === true ? x.eval(r, env) : y.eval(r, env), type), type }
+      return { eval: (r, env) => (truth(c.eval(r, env)) === true ? x.eval(r, env) : y.eval(r, env)), type }
     }
     case 'IFNULL': {
       arity(2)
@@ -1260,10 +1358,11 @@ function call(e: CallNode, ctx: CompileContext): Compiled {
     case 'NULLIF': {
       arity(2)
       const [x, y] = args() as [Compiled, Compiled]
+      const cmp = comparer(x.type, y.type)
       return {
         eval: (r, env) => {
           const v = x.eval(r, env)
-          return compareValues(v, y.eval(r, env)) === 0 ? null : v
+          return cmp(v, y.eval(r, env)) === 0 ? null : v
         },
         type: { ...expressionOf(x.type), nullable: true },
       }
@@ -1389,9 +1488,10 @@ function call(e: CallNode, ctx: CompileContext): Compiled {
           const v = x.eval(r, env)
           if (v === null) return null
           const sign = compareValues(v, intValue(0n))
-          return sign !== null && sign < 0 ? negate(v) : v.kind === 'string' || v.kind === 'bytes' ? doubleValue(Math.abs(toDouble(v))) : v
+          const out = sign !== null && sign < 0 ? negate(v) : v.kind === 'string' || v.kind === 'bytes' ? doubleValue(Math.abs(toDouble(v))) : v
+          return x.type.kind === 'double' ? doubleOf(out, floatLength(x.type.scale, true)) : out
         },
-        type: x.type.kind === 'string' || x.type.kind === 'bytes' || x.type.kind === 'double' ? doubleType(x.type.nullable) : x.type.kind === 'int' ? intType(x.type.length, x.type.nullable, x.type.unsigned) : expressionOf(x.type),
+        type: x.type.kind === 'double' ? floatLength(x.type.scale, x.type.nullable) : x.type.kind === 'string' || x.type.kind === 'bytes' ? doubleType(x.type.nullable) : x.type.kind === 'int' ? intType(x.type.length, x.type.nullable, x.type.unsigned) : expressionOf(x.type),
       }
     }
     case 'VERSION':
@@ -1732,6 +1832,43 @@ function byteWidth(t: ResultType): number {
 }
 
 // --- MATCH … AGAINST (M5.26) -------------------------------------------------------
+
+/**
+ * DEFAULT(c): the column's literal default, as the column would store it;
+ * NULL for a nullable column with none. A column with no default at all is
+ * 1364 when a row asks, and one whose default is an expression is 3773 at
+ * once (8.4.11).
+ */
+function defaultFunction(e: CallNode, ctx: CompileContext): Compiled {
+  const arg = e.args[0] as Expression
+  if (arg.kind !== NODE.COLUMN) throw sqlError('ER_PARSE_ERROR', messages.parseError(deparse(arg), 1))
+  const scope = ctx.scope
+  const r = scope.resolve(arg.parts, ctx.clause)
+  const at = scope instanceof TableScope && (r.depth ?? 0) === 0 ? scope.columnAt(r.index) : undefined
+  const def = at?.table.def
+  const column = def?.columns.find((c) => c.name.toLowerCase() === (at?.column.name ?? '').toLowerCase())
+  if (column === undefined) throw sqlError('ER_NOT_SUPPORTED_YET', messages.notSupported('DEFAULT() of a column that is not a base table\'s'))
+  const type = { ...r.type, nullable: true }
+  const text = column.attributes?.['default']
+  if (column.attributes?.['defaultExpression'] === true) throw sqlError('ER_DEFAULT_AS_VAL_GENERATED', 'DEFAULT function cannot be used with default value expressions')
+  if (typeof text !== 'string') {
+    if (column.nullable && column.attributes?.['noDefault'] !== true) return { eval: () => null, type }
+    return {
+      eval: () => {
+        throw sqlError('ER_NO_DEFAULT_FOR_FIELD', messages.noDefaultForField(column.name))
+      },
+      type,
+    }
+  }
+  const value = compile(parseExpression(text), { ...ctx, scope: EMPTY_SCOPE, clause: 'default' })
+  return {
+    eval: (_r, env) => {
+      const v = value.eval([], env)
+      return v === null ? null : decodeField(encodeField(v, column, { strict: false, row: 1, warnings: 0 }), column.type)
+    },
+    type,
+  }
+}
 
 /**
  * MATCH: the columns of one FULLTEXT index of one base table, ranked against

@@ -121,6 +121,7 @@ export {
   renderDateTime,
   renderDecimal,
   renderDouble,
+  renderFloat,
   renderTime,
   rescale,
   string as stringValue,

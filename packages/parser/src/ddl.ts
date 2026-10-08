@@ -455,6 +455,7 @@ function columnDefinition(c: Cursor, options: DdlOptions, at: number): ColumnDef
   let notNull: boolean | undefined
   let nullable: boolean | undefined
   let defaultValue: Expression | undefined
+  let parenthesised = false
   let onUpdate: Expression | undefined
   let autoIncrement: boolean | undefined
   let unique: boolean | undefined
@@ -479,6 +480,7 @@ function columnDefinition(c: Cursor, options: DdlOptions, at: number): ColumnDef
       continue
     }
     if (c.takeWord('DEFAULT')) {
+      parenthesised = c.atOp('(')
       defaultValue = defaultExpression(c, options)
       continue
     }
@@ -582,6 +584,7 @@ function columnDefinition(c: Cursor, options: DdlOptions, at: number): ColumnDef
     ...opt('notNull', notNull),
     ...opt('nullable', nullable),
     ...opt('default', defaultValue),
+    ...(parenthesised ? { defaultExpression: true } : {}),
     ...opt('onUpdate', onUpdate),
     ...opt('autoIncrement', autoIncrement),
     ...opt('unique', unique),
@@ -606,11 +609,12 @@ function columnDefinition(c: Cursor, options: DdlOptions, at: number): ColumnDef
  */
 export function defaultExpression(c: Cursor, options: DdlOptions, now = true): Expression {
   if (c.atOp('(')) {
-    // `DEFAULT (SELECT …)` is a subquery, which MySQL parses and then rejects
-    // for a default. The parentheses are the subquery's own, so the
-    // expression parser reads them.
-    if (atQueryStart(c, 1)) return parseExpressionFrom(c, options.sqlMode)
+    // The parentheses are the syntax's, not a subquery's: `DEFAULT (SELECT 1)`
+    // is ER_PARSE_ERROR at SELECT, and a subquery needs its own, `DEFAULT
+    // ((SELECT 1))`, which the executor then refuses (8.4.11: 3769). This
+    // read `(SELECT 1)` as a subquery until the server was asked.
     c.skip()
+    if (atQueryStart(c)) c.fail()
     const expr = parseExpressionFrom(c, options.sqlMode)
     c.expectOp(')')
     return expr

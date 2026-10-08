@@ -1015,7 +1015,7 @@ class Deparser {
       case 'drop':
         return `DROP ${a.what}${a.name === undefined ? '' : ' ' + quoteName(a.name)}`
       case 'setDefault':
-        return `ALTER COLUMN ${quoteName(a.column)} SET DEFAULT (${this.expr(a.value)})`
+        return `ALTER COLUMN ${quoteName(a.column)} SET DEFAULT ${a.expression === true ? `(${this.expr(a.value)})` : this.defaultValue(a.value)}`
       case 'dropDefault':
         return `ALTER COLUMN ${quoteName(a.column)} DROP DEFAULT`
       case 'columnVisibility':
@@ -1069,6 +1069,9 @@ class Deparser {
       out[0] += `(${t.values.map((v) => (typeof v === 'string' ? this.string(v) : `X'${hex(v)}'`)).join(', ')})`
     } else if (t.length !== undefined) {
       out[0] += t.scale === undefined ? `(${t.length})` : `(${t.length}, ${t.scale})`
+    } else if (t.precision !== undefined) {
+      // FLOAT(p) past 24 bits was read as a DOUBLE; it is written back as written.
+      out[0] = `${t.name === 'DOUBLE' && t.precision > 24 ? 'FLOAT' : t.name}(${t.precision})`
     }
     // ZEROFILL implies UNSIGNED, and the parser records both; writing both back
     // is harmless and keeps this a field-by-field transcription.
@@ -1092,7 +1095,7 @@ class Deparser {
     // after `SERIAL` is legal and changes nothing.
     if (c.notNull === true) out.push('NOT NULL')
     if (c.nullable === true) out.push('NULL')
-    if (c.default !== undefined) out.push(`DEFAULT ${this.defaultValue(c.default)}`)
+    if (c.default !== undefined) out.push(`DEFAULT ${c.defaultExpression === true ? `(${this.expr(c.default)})` : this.defaultValue(c.default)}`)
     if (c.onUpdate !== undefined) out.push(`ON UPDATE ${this.defaultValue(c.onUpdate)}`)
     if (c.autoIncrement === true) out.push('AUTO_INCREMENT')
     if (c.unique === true) out.push('UNIQUE KEY')
@@ -1113,7 +1116,8 @@ class Deparser {
    */
   defaultValue(e: Expression): string {
     if (e.kind === NODE.LITERAL) return this.literal(e)
-    if (e.kind === NODE.UNARY && (e.op === '-' || e.op === '+') && e.operand.kind === NODE.LITERAL) return this.expr(e)
+    // A signed number stays bare: parenthesised, it would be an expression default.
+    if (e.kind === NODE.UNARY && (e.op === '-' || e.op === '+') && e.operand.kind === NODE.LITERAL) return `${e.op}${this.literal(e.operand)}`
     if (e.kind === NODE.CALL && DEFAULT_FUNCTIONS.has(e.name.toUpperCase())) return this.expr(e)
     return `(${this.expr(e)})`
   }

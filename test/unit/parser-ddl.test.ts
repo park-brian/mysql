@@ -75,16 +75,20 @@ test('M3.5: a column carries its charset and collation, or says it has none', ()
 
 test('M3.5: FLOAT(p) is a precision and FLOAT(M,D) is not', () => {
   // The trap this table exists for. One argument to FLOAT is a precision in
-  // bits of mantissa, and 24 or more makes the column a DOUBLE; two arguments
-  // are the old display form and leave it a FLOAT. So `FLOAT(24)` and
-  // `FLOAT(24,2)` are different types, which is not visible from the syntax.
+  // bits of mantissa, and more than 24 makes the column a DOUBLE; two
+  // arguments are the old display form and leave it a FLOAT. So `FLOAT(25)`
+  // and `FLOAT(25,2)` are different types, which is not visible from the
+  // syntax. This test first said 24 was a DOUBLE; 8.4.11's SHOW CREATE TABLE
+  // says `float`.
   assert.equal(column('FLOAT').type.code, FIELD_TYPE.FLOAT)
   assert.equal(column('FLOAT(23)').type.code, FIELD_TYPE.FLOAT)
-  assert.equal(column('FLOAT(24)').type.code, FIELD_TYPE.DOUBLE)
+  assert.equal(column('FLOAT(24)').type.code, FIELD_TYPE.FLOAT)
+  assert.equal(column('FLOAT(25)').type.code, FIELD_TYPE.DOUBLE)
   assert.equal(column('FLOAT(53)').type.code, FIELD_TYPE.DOUBLE)
-  const two = column('FLOAT(24,2)')
+  assert.equal(column('FLOAT(53)').type.precision, 53)
+  const two = column('FLOAT(25,2)')
   assert.equal(two.type.code, FIELD_TYPE.FLOAT)
-  assert.equal(two.type.length, 24)
+  assert.equal(two.type.length, 25)
   assert.equal(two.type.scale, 2)
 })
 

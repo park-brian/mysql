@@ -27,19 +27,27 @@ import { checkFulltext, type FulltextDef } from './fulltext.ts'
 
 const INTEGER_CODES: ReadonlySet<number> = new Set([FIELD_TYPE.TINY, FIELD_TYPE.SHORT, FIELD_TYPE.INT24, FIELD_TYPE.LONG, FIELD_TYPE.LONGLONG])
 
+const INEXACT_CODES: ReadonlySet<number> = new Set([FIELD_TYPE.FLOAT, FIELD_TYPE.DOUBLE, FIELD_TYPE.NEWDECIMAL, FIELD_TYPE.DECIMAL])
+
 /**
  * The 1681 deprecation warnings a CREATE TABLE draws (8.4.11): one for each
- * integer display width written, TINYINT(1) included — BOOL writes none — and
- * one for each ZEROFILL.
+ * integer display width written, TINYINT(1) included — BOOL writes none —
+ * one for each ZEROFILL, one for a FLOAT(M,D)'s or DOUBLE(M,D)'s digits, and
+ * one for UNSIGNED on a FLOAT, DOUBLE or DECIMAL (ZEROFILL's own UNSIGNED
+ * draws none).
  */
 export function deprecationWarnings(node: CreateTableNode): number {
-  let n = 0
-  for (const c of node.columns) {
-    const t = c.type
-    if (!INTEGER_CODES.has(t.code as number)) continue
-    if (t.length !== undefined) n++
-    if (t.zerofill === true) n++
-  }
+  return node.columns.reduce((n, c) => n + columnDeprecations(c), 0)
+}
+
+/** One column's share of `deprecationWarnings`, for ALTER TABLE's added and changed columns too. */
+export function columnDeprecations(c: ColumnDefinition): number {
+  const t = c.type
+  const code = t.code as number
+  let n = t.zerofill === true ? 1 : 0
+  if (INTEGER_CODES.has(code) && t.length !== undefined) n++
+  if ((code === FIELD_TYPE.FLOAT || code === FIELD_TYPE.DOUBLE) && t.scale !== undefined) n++
+  if (INEXACT_CODES.has(code) && t.unsigned === true && t.zerofill !== true) n++
   return n
 }
 
@@ -163,7 +171,11 @@ const fieldLength = (column: string, max: number) => sqlError('ER_TOO_BIG_FIELDL
  * BIT's 64 (1439); a DECIMAL's precision 65 and scale 30, and a fractional
  * second 6 (1426, 1425).
  */
+const tooBigScale = (scale: number, column: string) => sqlError('ER_TOO_BIG_SCALE', `Too big scale ${scale} specified for column '${column}'. Maximum is 30.`)
+
 function checkLength(t: DataType, column: string, collationId: number | undefined): void {
+  // FLOAT(p) past 53 bits is no type at all.
+  if ((t.precision ?? 0) > 53) throw sqlError('ER_WRONG_FIELD_SPEC', `Incorrect column specifier for column '${column}'`)
   const n = t.length
   if (n === undefined) return
   if (n > 4294967295) throw displayWidth(column, 4294967295)
@@ -182,7 +194,15 @@ function checkLength(t: DataType, column: string, collationId: number | undefine
     case FIELD_TYPE.NEWDECIMAL:
     case FIELD_TYPE.DECIMAL:
       if (n > 65) throw sqlError('ER_TOO_BIG_PRECISION', `Too-big precision ${n} specified for '${column}'. Maximum is 65.`)
-      if ((t.scale ?? 0) > 30) throw sqlError('ER_TOO_BIG_SCALE', `Too big scale ${t.scale} specified for '${column}'. Maximum is 30.`)
+      if ((t.scale ?? 0) > 30) throw tooBigScale(t.scale as number, column)
+      return
+    // FLOAT(M,D) and DOUBLE(M,D): the scale first, then the width, which is
+    // 1 to 255 (8.4.11: `float(0,0)` is 1439).
+    case FIELD_TYPE.FLOAT:
+    case FIELD_TYPE.DOUBLE:
+      if ((t.scale ?? 0) > 30) throw tooBigScale(t.scale as number, column)
+      if (n > 255 || n < 1) throw displayWidth(column, 255)
+      if ((t.scale ?? 0) > n) throw mBiggerThanD(column)
       return
     case FIELD_TYPE.DATETIME:
     case FIELD_TYPE.TIMESTAMP:
@@ -205,12 +225,14 @@ function checkLength(t: DataType, column: string, collationId: number | undefine
 
 /** One column's type, resolved against the table's default collation. */
 export function columnType(t: DataType, tableCollation: number, column = ''): ColumnType {
-  const resolved = resolveColumnType(t, tableCollation)
+  const resolved = resolveColumnType(t, tableCollation, column)
   checkLength(t, column, resolved.collationId)
   return resolved
 }
 
-function resolveColumnType(t: DataType, tableCollation: number): ColumnType {
+const mBiggerThanD = (column: string) => sqlError('ER_M_BIGGER_THAN_D', `For float(M,D), double(M,D) or decimal(M,D), M must be >= D (column '${column}').`)
+
+function resolveColumnType(t: DataType, tableCollation: number, column: string): ColumnType {
   const code = t.code as number
   if (code === FIELD_TYPE.JSON) return { type: FIELD_TYPE.JSON }
   if (code === FIELD_TYPE.GEOMETRY || code === FIELD_TYPE.VECTOR) {
@@ -221,10 +243,18 @@ function resolveColumnType(t: DataType, tableCollation: number): ColumnType {
     switch (code) {
       case FIELD_TYPE.NEWDECIMAL:
       case FIELD_TYPE.DECIMAL: {
-        const precision = t.length ?? 10
+        // DECIMAL(0) is DECIMAL(10) (8.4.11).
+        const precision = t.length === undefined || t.length === 0 ? 10 : t.length
         const scale = t.scale ?? 0
-        if (scale > precision) throw sqlError('ER_M_BIGGER_THAN_D', 'For float(M,D), double(M,D) or decimal(M,D), M must be >= D.')
+        if (scale > precision) throw mBiggerThanD(column)
         return { type: FIELD_TYPE.NEWDECIMAL, precision, scale, ...unsigned }
+      }
+      case FIELD_TYPE.FLOAT:
+      case FIELD_TYPE.DOUBLE: {
+        // FLOAT(M,D): a width and a fixed number of decimals, which every
+        // value is rounded to as it is stored (`Field_real::truncate`).
+        if (t.length === undefined || t.scale === undefined) return { type: code, ...unsigned }
+        return { type: code, precision: t.length, scale: t.scale, ...unsigned }
       }
       case FIELD_TYPE.DATETIME:
       case FIELD_TYPE.TIMESTAMP:
@@ -359,8 +389,11 @@ export function column(c: ColumnDefinition, tableCollation: number, inPrimary: b
   const serial = c.type.serial === true
   const nullable = !(c.notNull === true || inPrimary || serial) && c.nullable !== false
   if (inPrimary && c.nullable === true) throw sqlError('ER_PRIMARY_CANT_HAVE_NULL', 'All parts of a PRIMARY KEY must be NOT NULL; if you need NULL in a key, use UNIQUE instead')
+  // AUTO_INCREMENT is for integers alone: 8.4 refuses FLOAT, DOUBLE and DECIMAL.
+  if (c.autoIncrement === true && INEXACT_CODES.has(c.type.code as number)) throw sqlError('ER_WRONG_FIELD_SPEC', `Incorrect column specifier for column '${c.name}'`)
   const attributes: Record<string, unknown> = {}
   if (c.default !== undefined) attributes['default'] = sqlText(c.default)
+  if (c.defaultExpression === true) attributes['defaultExpression'] = true
   if (c.onUpdate !== undefined) attributes['onUpdate'] = sqlText(c.onUpdate)
   if (c.comment !== undefined) attributes['comment'] = c.comment
   if (c.type.zerofill === true) attributes['zerofill'] = true

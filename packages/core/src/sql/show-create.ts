@@ -31,7 +31,9 @@ import { escapeString, printExpression } from './print.ts'
 import type { Run } from './query.ts'
 
 const q = (name: string): string => `\`${name.replace(/`/g, '``')}\``
-const quoted = (s: string): string => `'${s.replace(/'/g, "''")}'`
+/** sql_show.cc's append_unescaped: NUL, newline, CR and backslash escaped, a quote doubled. */
+const quoted = (s: string): string => `'${s.replace(/[\0\n\r\\']/g, (ch) => UNESCAPED[ch] as string)}'`
+const UNESCAPED: Readonly<Record<string, string>> = { '\0': '\\0', '\n': '\\n', '\r': '\\r', '\\': '\\\\', "'": "''" }
 
 const BLOBS: ReadonlySet<number> = new Set([FIELD_TYPE.TINY_BLOB, FIELD_TYPE.BLOB, FIELD_TYPE.MEDIUM_BLOB, FIELD_TYPE.LONG_BLOB])
 
@@ -56,7 +58,7 @@ function defaultClause(run: Run, c: ColumnDef): string {
     return ` DEFAULT ${quoted(text)}`
   }
   const literal = e.kind === NODE.LITERAL || (e.kind === NODE.UNARY && e.op === '-' && e.operand.kind === NODE.LITERAL)
-  if (literal) {
+  if (literal && c.attributes?.['defaultExpression'] !== true) {
     if (e.kind === NODE.LITERAL && e.type === 'null') return ' DEFAULT NULL'
     const stored = columnDefault(run, c)
     if (stored === null) return ' DEFAULT NULL'

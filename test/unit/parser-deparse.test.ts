@@ -147,7 +147,7 @@ test('M3.3: every query form survives the deparser', () => {
     'CREATE TABLE t SELECT 1 FROM u',
     "CREATE OR REPLACE ALGORITHM = TEMPTABLE DEFINER = 'u'@'h' SQL SECURITY DEFINER VIEW db.v (a, b) AS SELECT 1, 2 WITH LOCAL CHECK OPTION",
     'CREATE DEFINER = CURRENT_USER VIEW v AS SELECT 1 WITH CHECK OPTION',
-    'CREATE TABLE t (a INT DEFAULT (SELECT 1))',
+    'CREATE TABLE t (a INT DEFAULT ((SELECT 1)))',
   ]) {
     statementRoundTrips(sql)
   }

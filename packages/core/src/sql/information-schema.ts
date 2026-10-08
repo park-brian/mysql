@@ -181,9 +181,13 @@ export function typeFacts(column: ColumnDef): ColumnFacts {
     case FIELD_TYPE.DECIMAL:
       return { ...none, dataType: 'decimal', columnType: `decimal(${t.precision ?? 10},${t.scale ?? 0})${unsigned}`, precision: t.precision ?? 10, scale: t.scale ?? 0 }
     case FIELD_TYPE.DOUBLE:
-      return { ...none, dataType: 'double', columnType: `double${unsigned}`, precision: 22 }
-    case FIELD_TYPE.FLOAT:
-      return { ...none, dataType: 'float', columnType: `float${unsigned}`, precision: 12 }
+    case FIELD_TYPE.FLOAT: {
+      // FLOAT(M,D) shows its M and D, as the precision and scale (8.4.11).
+      const name = t.type === FIELD_TYPE.FLOAT ? 'float' : 'double'
+      const fixed = t.precision !== undefined && t.scale !== undefined
+      const columnType = `${name}${fixed ? `(${t.precision},${t.scale})` : ''}${unsigned}${zerofill ? ' zerofill' : ''}`
+      return { ...none, dataType: name, columnType, precision: fixed ? (t.precision as number) : name === 'float' ? 12 : 22, scale: fixed ? (t.scale as number) : null }
+    }
     case FIELD_TYPE.DATE:
     case FIELD_TYPE.NEWDATE:
       return { ...none, dataType: 'date', columnType: 'date' }

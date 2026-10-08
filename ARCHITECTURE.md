@@ -536,13 +536,17 @@ apart has paid for itself several times:
 |---|---|---|---|
 | `SqlValue` | `@myjs/bytes` | the plain value: number, bigint, string, bytes, date struct | the wire, and the driver-facing mapping |
 | `StorageValue` | `@myjs/types` | what a column stores | encoding to and from record bytes |
-| `Value` | `@myjs/types` | signedness, DECIMAL scale, a string's collation *and its coercibility* | evaluating expressions |
+| `Value` | `@myjs/types` | signedness, DECIMAL scale, a string's collation *and its coercibility*, and where a value came from when MySQL's rules depend on it | evaluating expressions |
 
 `Value` exists because evaluation needs three things the other two shapes
 erase. An integer's signedness matters, since negating an unsigned value
 saturates. A DECIMAL's exact scale matters, since `1/7*7` is `1.0000` and not
 `1.0003`. A string's coercibility matters, since a column's collation
-beats a literal's. The *rules* for all of this, meaning MySQL's choice of
+beats a literal's. And sometimes where a value came from matters. An ENUM's
+member index, a hex literal and a FLOAT column's precision ride along as
+flags: an ENUM sorts by its index, `X'41' + 0` is 65, and a FLOAT(5,2)
+holding 0.1 reads as `0.10` wherever it becomes text. `plainValue` strips
+them where MySQL forgets them, at a user variable for example. The *rules* for all of this, meaning MySQL's choice of
 comparison type, its arithmetic and its strict-mode refusals when assigning
 into a column, live in `@myjs/types`, below the executor. An importer can
 therefore store a value exactly as an `INSERT` would without running any SQL.
@@ -1393,12 +1397,13 @@ referential actions, CHECK constraints, ALTER TABLE by copy, `SHOW CREATE
 TABLE` byte for byte, JSON paths and regular expressions. Generated corpora of 400, 300 and 250 scripts
 agree with MySQL 8.4.11 statement for statement, column names and flags
 included. Most of M5's exit criterion holds. All 487 tests of Drizzle's
-MySQL suites pass, as they do against 8.4.11. Of Prisma's, 1,104 pass
-against the server's 1,122; the rest are FULLTEXT search and two tests
-that turn on timing or on another server's text. The rest of the function
-library and the cost-based planner come next. The core bundle is
-about 210 KB gzipped against a budget of 500 KB, with the UCA weights in a
-separate chunk loaded on demand.
+MySQL suites pass, as they do against 8.4.11. Of Prisma's, 1,106 pass
+against the server's 1,122, FULLTEXT search included; almost all of the
+rest were connections that failed to start on a loaded machine, and pass
+when their suites run alone. The rest of the function library and the
+cost-based planner come next. The core bundle is about 228 KB gzipped
+against a budget of 500 KB, with the UCA weights in a separate chunk loaded
+on demand.
 
 The release plan gives each stage something to ship:
 

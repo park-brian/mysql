@@ -21,7 +21,7 @@ import { CLIENT, hasCap, messages, sqlError, type OkResult } from '@myjs/protoco
 import type { ColumnDef, FieldBytes, IndexDef, RowId, Table, TableDef, Trx } from '@myjs/engine'
 import { EngineError } from '@myjs/engine'
 import { NODE, QUERY, REF, parseExpression, type Assignment, type ColumnNode, type DeleteNode, type Expression, type InsertNode, type TableName, type UpdateNode } from '@myjs/parser'
-import { decodeField, encodeField, integerRange, intValue, toInteger, toText, type StoreContext, type Value } from '@myjs/types'
+import { decodeField, encodeEnum, encodeField, integerRange, intValue, toInteger, toText, type StoreContext, type Value } from '@myjs/types'
 import { compile, EMPTY_SCOPE, type Compiled, type Row, type Scope } from './compile.ts'
 import { checker, checkViolated } from './checks.ts'
 import { guarded, isReferenced } from './foreign-keys.ts'
@@ -54,29 +54,81 @@ export function rowDependent(column: ColumnDef): boolean {
 }
 
 /**
- * A literal default must store in its column as a strict INSERT would, or
- * the definition is 1067 — `TINYINT DEFAULT 1000`, `VARCHAR(5) DEFAULT
- * 'toolongvalue'`, an ENUM's non-member. What stores with a note, a
- * DECIMAL's extra digits, is kept rounded and counted. Returns the notes.
+ * A column definition's default, checked as 8.4.11 checks it when the table
+ * is made: and the notes it draws.
+ *
+ *   - A literal must store as a strict INSERT would, or the definition is
+ *     1067 (`TINYINT DEFAULT 1000`, an ENUM's non-member, a number for an
+ *     ENUM or a SET, the zero date under NO_ZERO_DATE); a DECIMAL's extra
+ *     digits round with a note. NOT NULL with DEFAULT NULL is 1067, and a
+ *     BLOB, TEXT or JSON column may have no literal default at all (1101).
+ *   - An expression default, `DEFAULT (…)`, is stored as written and checked
+ *     when a row takes it. It may not name a column the table lacks (1054),
+ *     a later one with an expression default or itself (3767), an
+ *     AUTO_INCREMENT column (3768), a subquery (3769) or a variable (3772).
  */
-export function checkDefaults(run: Run, columns: readonly ColumnDef[]): number {
+export function checkDefaults(run: Run, columns: readonly ColumnDef[], table: readonly ColumnDef[] = columns): number {
   let notes = 0
+  const invalid = (c: ColumnDef) => sqlError('ER_INVALID_DEFAULT', `Invalid default value for '${c.name}'`)
   for (const column of columns) {
     const text = column.attributes?.['default']
     if (typeof text !== 'string') continue
     const e = parseExpression(text)
+    if (column.attributes?.['defaultExpression'] === true) {
+      checkExpressionDefault(column, e, table)
+      continue
+    }
+    if (BLOB_TYPES.has(column.type.type)) throw sqlError('ER_BLOB_CANT_HAVE_DEFAULT', `BLOB, TEXT, GEOMETRY or JSON column '${column.name}' can't have a default value`)
     const literal = e.kind === NODE.LITERAL || (e.kind === NODE.UNARY && (e.op === '-' || e.op === '+') && e.operand.kind === NODE.LITERAL)
-    if (!literal || (e.kind === NODE.LITERAL && e.type === 'null')) continue
+    if (e.kind === NODE.LITERAL && e.type === 'null') {
+      if (!column.nullable) throw invalid(column)
+      continue
+    }
+    if (!literal) continue
+    const numeric = e.kind === NODE.UNARY || (e.kind === NODE.LITERAL && (e.type === 'int' || e.type === 'decimal' || e.type === 'double'))
+    if (numeric && (column.type.type === FIELD_TYPE.ENUM || column.type.type === FIELD_TYPE.SET)) throw invalid(column)
     const ctx: StoreContext = { strict: true, row: 1, warnings: 0 }
+    let field: Uint8Array | null
     try {
-      encodeField((defaultOf(run, column) as Compiled).eval([], run.env), { ...column, nullable: true }, ctx)
+      field = encodeField((defaultOf(run, column) as Compiled).eval([], run.env), { ...column, nullable: true }, ctx)
     } catch (err) {
-      if (err instanceof MyjsError) throw sqlError('ER_INVALID_DEFAULT', `Invalid default value for '${column.name}'`)
+      if (err instanceof MyjsError) throw invalid(column)
       throw err
+    }
+    // The zero date, where the mode forbids it (8.4.11's default mode does).
+    if (field !== null && /\bNO_ZERO_DATE\b/.test(run.env.session.sqlMode) && (column.type.type === FIELD_TYPE.DATE || column.type.type === FIELD_TYPE.DATETIME || column.type.type === FIELD_TYPE.TIMESTAMP)) {
+      const v = decodeField(field, column.type)
+      if (v !== null && v.kind === 'datetime' && v.v.year === 0 && v.v.month === 0 && v.v.day === 0) throw invalid(column)
     }
     notes += ctx.warnings
   }
   return notes
+}
+
+const BLOB_TYPES: ReadonlySet<number> = new Set([FIELD_TYPE.TINY_BLOB, FIELD_TYPE.BLOB, FIELD_TYPE.MEDIUM_BLOB, FIELD_TYPE.LONG_BLOB, FIELD_TYPE.JSON, FIELD_TYPE.GEOMETRY])
+
+function checkExpressionDefault(column: ColumnDef, e: Expression, table: readonly ColumnDef[]): void {
+  const at = table.findIndex((c) => c.name.toLowerCase() === column.name.toLowerCase())
+  const walk = (x: unknown): void => {
+    if (x === null || typeof x !== 'object') return
+    if (Array.isArray(x)) return x.forEach(walk)
+    const n = x as { kind?: unknown } & Record<string, unknown>
+    if (n.kind === NODE.SUBQUERY) throw sqlError('ER_DEFAULT_VAL_GENERATED_FUNCTION_IS_NOT_ALLOWED', `Default value expression of column '${column.name}' contains a disallowed function.`)
+    if (n.kind === NODE.VARIABLE) throw sqlError('ER_DEFAULT_VAL_GENERATED_VARIABLES', `Default value expression of column '${column.name}' cannot refer user or system variables.`)
+    if (n.kind === NODE.COLUMN) {
+      const parts = n['parts'] as readonly string[]
+      const name = parts[parts.length - 1] as string
+      const i = table.findIndex((c) => c.name.toLowerCase() === name.toLowerCase())
+      if (i < 0) throw sqlError('ER_BAD_FIELD_ERROR', `Unknown column '${name}' in 'default value expression'`)
+      const other = table[i] as ColumnDef
+      if (other.autoIncrement === true) throw sqlError('ER_DEFAULT_VAL_GENERATED_REF_AUTO_INC', `Default value expression of column '${column.name}' cannot refer to an auto-increment column.`)
+      if (i >= at && other.attributes?.['defaultExpression'] === true) {
+        throw sqlError('ER_DEFAULT_VAL_GENERATED_NON_PRIOR', `Default value expression of column '${column.name}' cannot refer to a column defined after it if that column is a generated column or has an expression as default value.`)
+      }
+    }
+    for (const v of Object.values(n)) if (typeof v === 'object') walk(v)
+  }
+  walk(e)
 }
 
 /**
@@ -181,6 +233,9 @@ function storeField(v: Value, column: ColumnDef, store: StoreContext, nulls: Nul
     if (nulls === 'error' || !(e instanceof MyjsError) || e.code !== 'ER_BAD_NULL_ERROR') throw e
     if (warned === undefined || !warned.has(column)) store.warnings++
     warned?.add(column)
+    // An explicit NULL is the type's zero, which for an ENUM is index 0, the
+    // error value '' — not the first member a missing column takes (8.4.11).
+    if (column.type.type === FIELD_TYPE.ENUM) return encodeEnum(0, column.type.members?.length ?? 0)
     return encodeField(implicitDefault(column), column, store)
   }
 }
@@ -520,8 +575,13 @@ export function insert(run: Run, node: InsertNode, trx: Trx): OkResult {
     row.forEach((c, i) => {
       const target = targets[i] as number
       if (c === undefined) {
-        // DEFAULT: the column's own, as the row began.
-        given.delete(target)
+        // DEFAULT: the column's own. One that reads the row reads it as it
+        // stands at this point in the list — `(y, x) VALUES (DEFAULT, 8)`
+        // with `y DEFAULT (x + 1)` is NULL (8.4.11).
+        if (dependent.includes(target)) {
+          values[target] = (defaults[target] as Compiled).eval(values, run.env)
+          given.add(target)
+        } else given.delete(target)
         return
       }
       values[target] = c.eval(values, run.env)

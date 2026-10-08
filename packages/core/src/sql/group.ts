@@ -58,7 +58,7 @@ import {
 import { AGGREGATE_NAMES, compile, type CompileContext, type Compiled, type Env, type Row } from './compile.ts'
 import { rowKey, valueKey } from './keys.ts'
 import { asJson } from './json.ts'
-import { decimalType, doubleType, intType, jsonType, stringType, type ResultType } from './meta.ts'
+import { decimalType, doubleType, floatLength, intType, jsonType, stringType, type ResultType } from './meta.ts'
 import type { SortKey } from './operators.ts'
 
 export const isAggregate = (e: Expression): boolean => e.kind === NODE.CALL && e.over === undefined && AGGREGATE_NAMES.has(e.name.toUpperCase())
@@ -122,11 +122,13 @@ export function aggregateType(name: string, args: readonly Compiled[], ctx: Comp
       return intType(21, false)
     case 'SUM': {
       const shape = t === undefined ? undefined : exactShape(t)
-      return shape === undefined ? doubleType(true, 23) : decimalType(sumPrecision(shape.precision), shape.scale, true)
+      if (shape === undefined) return t?.kind === 'double' ? floatLength(t.scale, true) : doubleType(true, 23)
+      return decimalType(sumPrecision(shape.precision), shape.scale, true)
     }
     case 'AVG': {
       const shape = t === undefined ? undefined : exactShape(t)
-      if (shape === undefined) return { ...doubleType(true, 23), ownInTemporary: true }
+      // AVG of a FLOAT(M,D) keeps D + div_precision_increment decimals.
+      if (shape === undefined) return { ...(t?.kind === 'double' ? floatLength(Math.min(31, t.scale + 4), true) : doubleType(true, 23)), ownInTemporary: true }
       const p = avgPrecision(shape.precision, shape.scale)
       return { ...decimalType(p.precision, p.scale, true), ownInTemporary: true }
     }

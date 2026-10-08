@@ -94,6 +94,8 @@ export interface ColumnDefinition {
   readonly nullable?: boolean
   /** `DEFAULT <expr>`. A literal, or an expression in parentheses (8.0.13+). */
   readonly default?: Expression
+  /** The default was written in parentheses: an expression default, even `('x')`. */
+  readonly defaultExpression?: boolean
   /** `ON UPDATE CURRENT_TIMESTAMP[(fsp)]`. */
   readonly onUpdate?: Expression
   readonly autoIncrement?: boolean
@@ -264,7 +266,7 @@ export type AlterAction =
       /** Absent only for `PRIMARY KEY`. */
       readonly name?: string
     }
-  | { readonly type: 'setDefault'; readonly column: string; readonly value: Expression }
+  | { readonly type: 'setDefault'; readonly column: string; readonly value: Expression; readonly expression?: boolean }
   | { readonly type: 'dropDefault'; readonly column: string }
   | { readonly type: 'columnVisibility'; readonly column: string; readonly visible: boolean }
   | { readonly type: 'indexVisibility'; readonly index: string; readonly visible: boolean }

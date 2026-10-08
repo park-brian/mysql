@@ -217,6 +217,23 @@ export const doubleType = (nullable: boolean, length = 23): ResultType => ({
   collationId: CHARSET_BINARY,
 })
 
+/**
+ * A DOUBLE with fixed decimals, from FLOAT(M,D) operands: when every operand
+ * has a scale below 31 and one of them is such a double, the result keeps
+ * the largest scale and is as wide as the widest integer part plus it
+ * (`Item::aggregate_float_properties`). Otherwise undefined: 31 decimals.
+ */
+export function fixedDouble(types: readonly ResultType[], nullable: boolean): ResultType | undefined {
+  if (!types.some((t) => t.kind === 'double' && t.scale < 31)) return undefined
+  if (!types.every((t) => (t.kind === 'int' || t.kind === 'decimal' || t.kind === 'double') && t.scale < 31)) return undefined
+  const scale = Math.max(...types.map((t) => t.scale))
+  const whole = Math.max(...types.map((t) => (t.kind === 'decimal' ? charWidth(t) : t.length) - t.scale))
+  return { ...doubleType(nullable, whole + scale), scale }
+}
+
+/** A function of one fixed-decimal double, or an aggregate of it: `float_length`, DBL_DIG + 2 + D wide. */
+export const floatLength = (scale: number, nullable: boolean): ResultType => (scale >= 31 ? doubleType(nullable, 23) : { ...doubleType(nullable, 17 + scale), scale })
+
 export const stringType = (chars: number, collationId: number, nullable: boolean): ResultType =>
   isBinaryCollation(collationId)
     ? { kind: 'bytes', field: FIELD_TYPE.VAR_STRING, nullable, unsigned: false, length: chars, scale: 31, collationId: CHARSET_BINARY }
@@ -248,6 +265,8 @@ export function keyFlags(def: TableDef, name: string): number {
   return flags
 }
 
+const fixedScale = (t: ColumnDef['type']): { scale?: number } => (t.precision !== undefined && t.scale !== undefined ? { scale: t.scale } : {})
+
 /** A table column's result type, as `SELECT c FROM t` reports it. */
 export function columnResultType(def: TableDef, column: ColumnDef, tableAlias: string): ResultType {
   const t = column.type
@@ -269,10 +288,11 @@ export function columnResultType(def: TableDef, column: ColumnDef, tableAlias: s
     case FIELD_TYPE.DECIMAL:
     case FIELD_TYPE.NEWDECIMAL:
       return { ...decimalType(t.precision ?? 10, t.scale ?? 0, nullable, unsigned), ...base }
+    // FLOAT(M,D) reports M as its length and D as its decimals (8.4.11).
     case FIELD_TYPE.FLOAT:
-      return { ...doubleType(nullable, 12), ...base, field: FIELD_TYPE.FLOAT }
+      return { ...doubleType(nullable, t.precision ?? 12), ...fixedScale(t), ...base, field: FIELD_TYPE.FLOAT }
     case FIELD_TYPE.DOUBLE:
-      return { ...doubleType(nullable, 22), ...base }
+      return { ...doubleType(nullable, t.precision ?? 22), ...fixedScale(t), ...base }
     case FIELD_TYPE.YEAR:
       return { ...intType(4, nullable, true), ...base, field: FIELD_TYPE.YEAR, unsigned: true }
     case FIELD_TYPE.BIT:
@@ -318,6 +338,8 @@ export function charWidth(t: ResultType): number {
     case 'decimal':
       return t.length + (t.scale > 0 ? 1 : 0) + (t.unsigned ? 0 : 1)
     case 'double':
+      // A FLOAT(M,D) column is M wide as text (8.4.11: CONCAT of a FLOAT(5,2) is 20 bytes over utf8mb4).
+      if (t.column !== undefined && t.scale < 31) return t.length
       return t.field === FIELD_TYPE.FLOAT ? 12 : 22
     case 'datetime':
       return t.field === FIELD_TYPE.DATE ? 10 : 19 + (t.scale > 0 ? t.scale + 1 : 0)
@@ -400,7 +422,8 @@ export function columnDefinition(name: string, t: ResultType, resultsCollation: 
       break
     case 'double':
       length = t.length
-      decimals = 31
+      // 31, NOT_FIXED_DEC, unless a FLOAT(M,D) fixed them (8.4.11).
+      decimals = t.scale < 31 ? t.scale : 31
       break
     case 'datetime':
     case 'time':

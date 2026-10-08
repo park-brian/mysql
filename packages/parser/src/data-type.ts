@@ -209,6 +209,8 @@ export interface DataType {
   readonly length?: number
   /** `DECIMAL(10,2)`'s 2. */
   readonly scale?: number
+  /** `FLOAT(p)`'s bits of mantissa, which chose FLOAT or DOUBLE; past 53 the column is 1063. */
+  readonly precision?: number
   readonly unsigned?: boolean
   readonly zerofill?: boolean
   /**
@@ -265,6 +267,7 @@ export function parseDataType(c: Cursor, mode: SqlMode): DataType {
   let canonical = spec.as ?? name
   let length: number | undefined
   let scale: number | undefined
+  let precision: number | undefined
   let values: readonly (string | Uint8Array)[] | undefined
 
   // `REAL` is the one type whose meaning `sql_mode` changes. The flag has been
@@ -283,9 +286,11 @@ export function parseDataType(c: Cursor, mode: SqlMode): DataType {
       if (args.length === 1) {
         // **The trap.** One argument to `FLOAT` is a *precision* in bits of
         // mantissa, not a display width, and 24 or more makes the column a
-        // DOUBLE. `FLOAT(24)` and `FLOAT(24,2)` are different types.
+        // DOUBLE. `FLOAT(25)` and `FLOAT(25,2)` are different types; 24 is
+        // still a FLOAT (8.4.11).
         const p = args[0] as number
-        if (p >= 24) {
+        precision = p
+        if (p > 24) {
           code = FIELD_TYPE.DOUBLE
           canonical = 'DOUBLE'
         }
@@ -370,6 +375,7 @@ export function parseDataType(c: Cursor, mode: SqlMode): DataType {
     code,
     ...(length === undefined ? {} : { length }),
     ...(scale === undefined ? {} : { scale }),
+    ...(precision === undefined ? {} : { precision }),
     ...(unsigned === undefined ? {} : { unsigned }),
     ...(zerofill === undefined ? {} : { zerofill }),
     ...(values === undefined ? {} : { values }),
