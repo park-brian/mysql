@@ -1,0 +1,165 @@
+{
+  "note": "M5.22: the exit criterion's ORM suites, fetched at a pinned tag and run by tools/orm-suites.mjs. `server` is a real MySQL's pass count and the census of what the suites sent it (counts and feature names, never a statement); `ours` is this executor served over TCP. Regenerate, never edit.",
+  "drizzle": {
+    "tag": "0.36.4",
+    "commit": "03f6239c53c7132cf8ef08ff4f0cf70a1009de3f",
+    "files": [
+      "tests/mysql/mysql.test.ts",
+      "tests/mysql/mysql-prefixed.test.ts",
+      "tests/mysql/mysql-custom.test.ts",
+      "tests/mysql/mysql-proxy.test.ts",
+      "tests/relational/mysql.test.ts"
+    ],
+    "server": {
+      "version": "8.4.11",
+      "passed": 487,
+      "failed": 0,
+      "skipped": 8,
+      "files": {
+        "tests/mysql/mysql-custom.test.ts": {
+          "passed": 39,
+          "failed": 0,
+          "skipped": 0
+        },
+        "tests/mysql/mysql-prefixed.test.ts": {
+          "passed": 69,
+          "failed": 0,
+          "skipped": 0
+        },
+        "tests/mysql/mysql-proxy.test.ts": {
+          "passed": 141,
+          "failed": 0,
+          "skipped": 8
+        },
+        "tests/mysql/mysql.test.ts": {
+          "passed": 149,
+          "failed": 0,
+          "skipped": 0
+        },
+        "tests/relational/mysql.test.ts": {
+          "passed": 89,
+          "failed": 0,
+          "skipped": 0
+        }
+      },
+      "census": {
+        "statements": 6599,
+        "unparsed": 0,
+        "features": {
+          "statement createTable": 2769,
+          "column BIGINT": 2635,
+          "column TEXT": 2473,
+          "statement drop": 2305,
+          "column TIMESTAMP": 958,
+          "column TINYINT": 775,
+          "column INT": 748,
+          "default NOW": 687,
+          "column JSON": 682,
+          "statement insert": 660,
+          "statement query": 451,
+          "statement createDatabase": 286,
+          "default CURRENT_TIMESTAMP": 267,
+          "operator =": 232,
+          "join LEFT": 127,
+          "clause LIMIT": 102,
+          "clause derived table": 90,
+          "clause LATERAL": 83,
+          "function JSON_ARRAY": 83,
+          "function COALESCE": 73,
+          "function JSON_ARRAYAGG": 73,
+          "clause ORDER BY": 52,
+          "column DATETIME": 48,
+          "column VARCHAR": 43,
+          "column DATE": 42,
+          "column TIME": 42,
+          "column YEAR": 42,
+          "column BINARY": 39,
+          "function COUNT": 35,
+          "operator AND": 35,
+          "clause GROUP BY": 33,
+          "statement update": 33,
+          "operator >": 28,
+          "function UPPER": 26,
+          "statement truncate": 26,
+          "clause subquery": 20,
+          "function LOWER": 20,
+          "statement delete": 20,
+          "function ROW_NUMBER OVER": 14,
+          "operator OR": 14,
+          "statement startTransaction": 14,
+          "clause EXCEPT": 12,
+          "clause UNION": 12,
+          "operator >=": 11,
+          "statement commit": 11,
+          "statement createView": 11,
+          "function AVG": 10,
+          "clause WITH": 9,
+          "function SUM": 9,
+          "clause INTERSECT": 8,
+          "clause DISTINCT": 5,
+          "operator IN": 5,
+          "statement rollback": 5,
+          "clause INTERVAL": 4,
+          "clause ON DUPLICATE KEY UPDATE": 4,
+          "column ENUM": 4,
+          "function MAX": 4,
+          "function MIN": 4,
+          "function NOW": 4,
+          "operator -": 4,
+          "statement savepoint": 4,
+          "clause CAST": 3,
+          "clause HAVING": 3,
+          "function CONCAT": 3,
+          "function LENGTH": 3,
+          "operator /": 3,
+          "operator EXISTS": 3,
+          "column DECIMAL": 2,
+          "operator +": 2,
+          "operator <": 2,
+          "statement releaseSavepoint": 2,
+          "function UNHEX": 1,
+          "statement set": 1,
+          "statement setTransaction": 1
+        }
+      }
+    },
+    "ours": {
+      "passed": 10,
+      "failed": 477,
+      "skipped": 8,
+      "files": {
+        "tests/mysql/mysql-custom.test.ts": {
+          "passed": 0,
+          "failed": 39,
+          "skipped": 0
+        },
+        "tests/mysql/mysql-prefixed.test.ts": {
+          "passed": 0,
+          "failed": 69,
+          "skipped": 0
+        },
+        "tests/mysql/mysql-proxy.test.ts": {
+          "passed": 2,
+          "failed": 139,
+          "skipped": 8
+        },
+        "tests/mysql/mysql.test.ts": {
+          "passed": 2,
+          "failed": 147,
+          "skipped": 0
+        },
+        "tests/relational/mysql.test.ts": {
+          "passed": 6,
+          "failed": 83,
+          "skipped": 0
+        }
+      },
+      "reasons": {
+        "Error: The JSON type is not supported by this server yet": 394,
+        "Error: The function JSON_ARRAY is not supported by this server yet": 39,
+        "Error: The function JSON_ARRAYAGG is not supported by this server yet": 33,
+        "Error: Window functions is not supported by this server yet": 11
+      }
+    }
+  }
+}
