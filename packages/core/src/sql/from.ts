@@ -126,6 +126,8 @@ export interface FromContext {
   derived?(ref: TableReference & { readonly kind: typeof REF.DERIVED }, lateral: Scope | undefined): DerivedSource
   /** A common table expression the statement defines under this name, planned for one reference to it. */
   cte?(name: string): DerivedSource | undefined
+  /** A view of this name, planned for one reference to it, or `undefined` when there is none. */
+  view?(ref: { readonly schema?: string; readonly name: string }, alias: string): { readonly schema: string; readonly source: DerivedSource } | undefined
   /** The scope an enclosing query gives a correlated name, if any. */
   readonly parent?: Scope
 }
@@ -141,6 +143,8 @@ export function planFrom(refs: readonly TableReference[], ctx: FromContext, wher
     /** Tables before it that a LATERAL one may not see: a RIGHT JOIN's left side (8.4.11: 1054). */
     hidden?: ReadonlySet<string>
     cte?: DerivedSource
+    /** A view's schema, which a qualified name may name it by. */
+    schema?: string
     nullable: boolean
     width: number
   }
@@ -154,8 +158,18 @@ export function planFrom(refs: readonly TableReference[], ctx: FromContext, wher
           pending.push({ alias: ref.alias ?? ref.table.name, cte, nullable, width: cte.columns.length })
           return
         }
-        const opened = ctx.open(ref.table)
-        pending.push({ alias: ref.alias ?? ref.table.name, def: opened.def, table: opened.table, nullable, width: opened.def.columns.length })
+        const alias = ref.alias ?? ref.table.name
+        let opened: ReturnType<FromContext['open']>
+        try {
+          opened = ctx.open(ref.table)
+        } catch (e) {
+          // Tables and views share their names: a name that is no table may be a view.
+          const view = (e as { errno?: number }).errno === 1146 ? ctx.view?.(ref.table, alias) : undefined
+          if (view === undefined) throw e
+          pending.push({ alias, cte: view.source, schema: view.schema, nullable, width: view.source.columns.length })
+          return
+        }
+        pending.push({ alias, def: opened.def, table: opened.table, nullable, width: opened.def.columns.length })
         return
       }
       case REF.DERIVED:
@@ -193,7 +207,7 @@ export function planFrom(refs: readonly TableReference[], ctx: FromContext, wher
       derived = ctx.derived(p.derivedRef, p.derivedRef.lateral === true ? before : undefined)
       p.width = derived.columns.length
     }
-    specs.push({ alias: p.alias, ...(p.def === undefined ? {} : { def: p.def }), ...(derived === undefined ? {} : { columns: derived.columns, schema: '' }), nullable: p.nullable })
+    specs.push({ alias: p.alias, ...(p.def === undefined ? {} : { def: p.def }), ...(derived === undefined ? {} : { columns: derived.columns, schema: p.schema ?? '' }), nullable: p.nullable })
     tables.push({ alias: p.alias, ...(p.def === undefined ? {} : { def: p.def }), ...(p.table === undefined ? {} : { table: p.table }), ...(derived === undefined ? {} : { derived }), nullable: p.nullable, offset, width: p.width, lateral: p.derivedRef?.lateral === true })
     offset += p.width
   }

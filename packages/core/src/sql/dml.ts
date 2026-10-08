@@ -20,7 +20,7 @@ import { FIELD_TYPE, MyjsError } from '@myjs/bytes'
 import { CLIENT, hasCap, messages, sqlError, type OkResult } from '@myjs/protocol'
 import type { ColumnDef, FieldBytes, IndexDef, RowId, Table, TableDef, Trx } from '@myjs/engine'
 import { EngineError } from '@myjs/engine'
-import { NODE, QUERY, REF, parseExpression, type Assignment, type ColumnNode, type DeleteNode, type Expression, type InsertNode, type UpdateNode } from '@myjs/parser'
+import { NODE, QUERY, REF, parseExpression, type Assignment, type ColumnNode, type DeleteNode, type Expression, type InsertNode, type TableName, type UpdateNode } from '@myjs/parser'
 import { decodeField, encodeField, integerRange, intValue, toInteger, toText, type StoreContext, type Value } from '@myjs/types'
 import { compile, EMPTY_SCOPE, type Compiled, type Row, type Scope } from './compile.ts'
 import { containsAggregate } from './group.ts'
@@ -349,7 +349,7 @@ export function insert(run: Run, node: InsertNode, trx: Trx): OkResult {
   run = { ...run, env: { ...run.env, trx } }
   if (node.partitions !== undefined) throw sqlError('ER_NOT_SUPPORTED_YET', messages.notSupported('Partitions'))
 
-  const { def, table } = openTable(run, node.table)
+  const { def, table } = openTarget(run, node.table)
   // A VALUES or SET subquery reading the table being written is 1093, as an
   // UPDATE's is; INSERT … SELECT from it is legal, read in full first (8.4.11).
   if (node.query === undefined) checkTargetNotRead({ schema: def.schema, name: def.name }, [...(node.values ?? []).flat(), ...(node.set ?? []).map((a) => a.value), ...(node.onDuplicate ?? []).map((a) => a.value)], run.env.session.database)
@@ -679,11 +679,27 @@ function implicitDefault(column: ColumnDef): Value {
   return intValue(0n)
 }
 
+/**
+ * The table a write names. A view is refused by name: 8.4.11 writes through
+ * an updatable one to its base table, which is not built yet.
+ */
+function openTarget(run: Run, name: TableName): ReturnType<typeof openTable> {
+  try {
+    return openTable(run, name)
+  } catch (e) {
+    const schema = name.schema ?? run.env.session.database
+    if ((e as { errno?: number }).errno === 1146 && schema !== null && run.catalog?.view(schema, name.name) !== undefined) {
+      throw sqlError('ER_NOT_SUPPORTED_YET', messages.notSupported('INSERT, UPDATE and DELETE through a view'))
+    }
+    throw e
+  }
+}
+
 /** The single table an UPDATE or DELETE names; ER_NOT_SUPPORTED_YET for the multi-table forms. */
 function singleTable(run: Run, tables: UpdateNode['tables'], what: string): { def: TableDef; table: Table; alias: string } {
   const ref = tables[0]
   if (tables.length !== 1 || ref === undefined || ref.kind !== REF.TABLE) throw sqlError('ER_NOT_SUPPORTED_YET', messages.notSupported(`Multiple-table ${what}`))
-  const { def, table } = openTable(run, ref.table)
+  const { def, table } = openTarget(run, ref.table)
   return { def, table, alias: ref.alias ?? ref.table.name }
 }
 

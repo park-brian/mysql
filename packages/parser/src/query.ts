@@ -83,7 +83,7 @@ export function atParenthesisedQuery(c: Cursor): boolean {
  * table or CTE with ER_MISPLACED_INTO, and refuses it on a branch of a `UNION`
  * other than the last.
  */
-export function parseQueryFrom(c: Cursor, mode: SqlMode, statement = false, withClause?: With, at?: number): QueryExpression {
+export function parseQueryFrom(c: Cursor, mode: SqlMode, statement: boolean | 'select' = false, withClause?: With, at?: number): QueryExpression {
   return new QueryParser(c, mode, statement).query(withClause, at)
 }
 
@@ -128,12 +128,17 @@ export function parseOrderBy(c: Cursor, mode: SqlMode): OrderItem[] {
 class QueryParser {
   readonly #c: Cursor
   readonly #mode: SqlMode
-  /** Whether the query being read may carry `INTO` — see `parseQueryFrom`. */
-  #intoAllowed: boolean
+  /**
+   * Whether the query being read may carry `INTO` — see `parseQueryFrom`.
+   * `'select'` allows it only inside a SELECT, not after the whole
+   * expression: a view's query, which MySQL's grammar reads as a query
+   * specification with its own INTO, then refuses (ER_VIEW_SELECT_CLAUSE).
+   */
+  #intoAllowed: boolean | 'select'
   /** An `INTO` read inside a `SELECT`, waiting to be lifted to its query expression. */
   #pendingInto: Into | undefined
 
-  constructor(c: Cursor, mode: SqlMode, intoAllowed: boolean) {
+  constructor(c: Cursor, mode: SqlMode, intoAllowed: boolean | 'select') {
     this.#c = c
     this.#mode = mode
     this.#intoAllowed = intoAllowed
@@ -184,10 +189,10 @@ class QueryParser {
     this.#pendingInto = undefined
     const orderBy = c.atWords('ORDER', 'BY') ? this.orderBy() : undefined
     const limit = c.atWord('LIMIT') ? this.#limit() : undefined
-    into = this.#oneInto(into)
+    into = this.#oneInto(into, true)
     const locking: Locking[] = []
     for (let lock = this.#locking(); lock !== undefined; lock = this.#locking()) locking.push(lock)
-    into = this.#oneInto(into)
+    into = this.#oneInto(into, true)
     return {
       kind: QUERY.QUERY,
       ...(withClause === undefined ? {} : { with: withClause }),
@@ -207,9 +212,9 @@ class QueryParser {
    * spellings are one tree. A second is ER_MULTIPLE_INTO_CLAUSES, and one where
    * `INTO` is not allowed at all is ER_MISPLACED_INTO; both are refused here.
    */
-  #oneInto(already: Into | undefined): Into | undefined {
+  #oneInto(already: Into | undefined, tail = false): Into | undefined {
     if (!this.#c.atWord('INTO')) return already
-    if (already !== undefined || !this.#intoAllowed) this.#c.fail()
+    if (already !== undefined || this.#intoAllowed === false || (tail && this.#intoAllowed === 'select')) this.#c.fail()
     return this.#into()
   }
 

@@ -30,8 +30,22 @@ export interface ResultType {
   readonly kind: ResultKind
   /** The wire field type. */
   readonly field: number
-  /** The derived table or CTE an expression column belongs to: reported as its table, with no original table (8.4.11). */
-  readonly derivedTable?: string
+  /**
+   * What an expression column reports in place of a table column's names,
+   * when not the defaults (8.4.11). Read through a derived table, CTE or view,
+   * its original name is the derived column's and its original table a view's
+   * name, or none. Read from a temporary table's field, its original name is
+   * its own name — though not an aggregate an aggregating table computes,
+   * which is the aggregate and not the field.
+   */
+  readonly names?: Omit<SourceColumn, 'flags'> & {
+    /**
+     * A merged view's expression: the view's schema, which it reports once
+     * a temporary table copies it (a DISTINCT, a grouping, a sort over a
+     * join), with no original table (8.4.11).
+     */
+    readonly viewSchema?: string
+  }
   /** A boolean's result — a comparison, `TRUE`, `NOT`: JSON takes it as `true` or `false`. */
   readonly boolean?: boolean
   readonly nullable: boolean
@@ -407,7 +421,7 @@ export function columnDefinition(name: string, t: ResultType, resultsCollation: 
     } else length = t.wireLength
   }
   return {
-    ...(t.column === undefined ? { schema: '', table: t.derivedTable ?? '', orgTable: '', orgName: '' } : { schema: t.column.schema, table: t.column.table, orgTable: t.column.orgTable, orgName: t.column.orgName }),
+    ...(t.column === undefined ? (materialized && t.names?.viewSchema !== undefined ? { schema: t.names.viewSchema, table: t.names.table, orgTable: '', orgName: t.names.orgName } : (t.names ?? { schema: '', table: '', orgTable: '', orgName: materialized ? name : '' })) : { schema: t.column.schema, table: t.column.table, orgTable: t.column.orgTable, orgName: t.column.orgName }),
     name,
     characterSet: isText || (t.kind === 'json' && t.column === undefined && !materialized) ? resultsCollation : CHARSET_BINARY,
     columnLength: length,

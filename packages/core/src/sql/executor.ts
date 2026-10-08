@@ -14,9 +14,11 @@
 // rolls back the statement and not the transaction, as InnoDB's does.
 import { FIELD_TYPE, MyjsError } from '@myjs/bytes'
 import { collationInfoByName, defaultCollationOf } from '@myjs/charsets'
-import { collationsOf, type Catalog, type TableDef } from '@myjs/engine'
+import { collationsOf, type Catalog, type TableDef, type ViewDef } from '@myjs/engine'
 import {
+  NODE,
   ParseError,
+  QUERY,
   REF,
   parseStatements,
   STATEMENT,
@@ -25,13 +27,16 @@ import {
   parseSqlMode,
   parseStatement,
   type CreateDatabaseNode,
+  type CreateViewNode,
   type DropNode,
   type Expression,
+  type QueryExpression,
   type SetNode,
   type ShowNode,
   type Statement,
   type TableName,
   type TableReference,
+  type Token,
 } from '@myjs/parser'
 import {
   CHARSET_UTF8MB4_0900_AI_CI,
@@ -53,7 +58,7 @@ import { compile, EMPTY_SCOPE, type Env } from './compile.ts'
 import { DEFAULT_COLLATION, createTableSpec, resolveCollation } from './ddl.ts'
 import { insert, remove, update } from './dml.ts'
 import { columnDefinition, stringType } from './meta.ts'
-import { columnsOf, compileContext, planQuery, resultSet, type Run } from './query.ts'
+import { columnsOf, compileContext, planQuery, resultSet, viewTable, type Run } from './query.ts'
 import { SqlSession, isolationOf } from './session.ts'
 import type { WireProtocol } from './wire.ts'
 
@@ -408,6 +413,9 @@ export class SqlExecutor implements Executor {
         catalog.createTable(schema, spec, { ifNotExists: statement.ifNotExists === true })
         return { affectedRows: 0 }
       }
+      case STATEMENT.CREATE_VIEW:
+        state.commit()
+        return this.#createView(run, statement)
       case STATEMENT.CREATE_DATABASE:
         // An implicit commit, as every DDL statement makes: without it the
         // session's own transaction holds the writer the catalog needs, and the
@@ -515,6 +523,35 @@ export class SqlExecutor implements Executor {
     return { affectedRows: made === undefined ? 0 : 1 }
   }
 
+  /**
+   * CREATE VIEW: the query planned now, in the session's database, so what
+   * would fail at its first use fails here (8.4.11: 1146, 1054, 1353, 1060 —
+   * before 1050 for a name taken), and stored as its text with the names its
+   * columns got now. A variable or parameter is 1351, an INTO 1350.
+   */
+  #createView(run: Run, statement: CreateViewNode): StatementResult {
+    const session = run.env.session
+    const schema = statement.view.schema ?? session.database
+    if (schema === null) throw sqlError('ER_NO_DB_ERROR', messages.noDatabaseSelected())
+    if (findNode(statement.query, (n) => n.kind === QUERY.QUERY && (n as QueryExpression).into !== undefined)) throw sqlError('ER_VIEW_SELECT_CLAUSE', "View's SELECT contains a 'INTO' clause")
+    if (findNode(statement.query, (n) => n.kind === NODE.VARIABLE || n.kind === NODE.PLACEHOLDER)) throw sqlError('ER_VIEW_SELECT_VARIABLE', "View's SELECT contains a variable or parameter")
+    const catalog = this.#catalog()
+    catalog.schema(schema)
+    const def: ViewDef = {
+      schema,
+      name: statement.view.name,
+      query: viewText(run, statement),
+      ...(session.database === null ? {} : { database: session.database }),
+      ...(statement.columns === undefined ? {} : { columns: statement.columns }),
+      ...(statement.algorithm === undefined ? {} : { algorithm: statement.algorithm }),
+      ...(statement.checkOption === undefined ? {} : { checkOption: statement.checkOption }),
+    }
+    const planned = viewTable(run, { schema, name: def.name }, def.name, def)
+    const columns = planned?.source.columns.map((c) => c.name) ?? def.columns
+    catalog.createView({ ...def, ...(columns === undefined ? {} : { columns }) }, { orReplace: statement.orReplace === true })
+    return { affectedRows: 0 }
+  }
+
   #drop(run: Run, statement: DropNode): StatementResult {
     const session = run.env.session
     if (PROGRAM_OBJECTS.has(statement.object)) {
@@ -528,6 +565,19 @@ export class SqlExecutor implements Executor {
       const tables = catalog.dropSchema(name, { ifExists: statement.ifExists === true })
       if (session.database === name) session.database = null
       return { affectedRows: tables.length }
+    }
+    if (statement.object === 'VIEW') {
+      const schemas = new Set(statement.names.map((n) => n.schema ?? session.database))
+      if (schemas.has(null)) throw sqlError('ER_NO_DB_ERROR', messages.noDatabaseSelected())
+      run.state.commit()
+      // One schema at a time, as the names are given; MySQL checks every name
+      // first, and so does each call.
+      let notes = 0
+      for (const schema of schemas as Set<string>) {
+        const names = statement.names.filter((n) => (n.schema ?? session.database) === schema).map((n) => n.name)
+        notes += catalog.dropViews(schema, names, { ifExists: statement.ifExists === true }).length
+      }
+      return { affectedRows: 0, ...(notes > 0 ? { warnings: notes } : {}) }
     }
     if (statement.object !== 'TABLE') throw sqlError('ER_NOT_SUPPORTED_YET', messages.notSupported(`DROP ${statement.object}`))
     if (statement.temporary === true) throw sqlError('ER_NOT_SUPPORTED_YET', messages.notSupported('DROP TEMPORARY TABLE'))
@@ -543,8 +593,10 @@ export class SqlExecutor implements Executor {
       if (missing.length > 0) throw sqlError('ER_BAD_TABLE_ERROR', `Unknown table '${missing.map((m) => `${m.schema}.${m.name}`).join(',')}'`)
     }
     run.state.commit()
-    for (const n of names) catalog.dropTable(n.schema, n.name, { ifExists: true })
-    return { affectedRows: 0 }
+    let notes = 0
+    for (const n of names) if (!catalog.dropTable(n.schema, n.name, { ifExists: true })) notes++
+    // IF EXISTS notes each name it did not find, a view's included (8.4.11: 1051).
+    return { affectedRows: 0, ...(notes > 0 ? { warnings: notes } : {}) }
   }
 
   #set(run: Run, statement: SetNode): StatementResult {
@@ -614,9 +666,13 @@ export class SqlExecutor implements Executor {
       case 'TABLES': {
         const schema = statement.database ?? run.env.session.database
         if (schema === null) throw sqlError('ER_NO_DB_ERROR', messages.noDatabaseSelected())
-        const tables = this.#catalog().tables(schema).map((t) => t.name).sort()
+        // Views beside tables, and under FULL, which is which (8.4.11).
+        const catalog = this.#catalog()
+        const tables = [...catalog.tables(schema).map((t) => [t.name, 'BASE TABLE']), ...catalog.views(schema).map((v) => [v.name, 'VIEW'])].sort((a, b) => ((a[0] as string) < (b[0] as string) ? -1 : 1))
         const label = `Tables_in_${schema}${statement.like === undefined ? '' : ` (${statement.like})`}`
-        return { columns: [text(label, 64)], rows: tables.filter((n) => statement.like === undefined || likeText(n, statement.like)).map((n) => [encode(n)]) }
+        const shown = tables.filter(([n]) => statement.like === undefined || likeText(n as string, statement.like))
+        if (statement.full === true) return { columns: [text(label, 64), text('Table_type', 11)], rows: shown.map(([n, kind]) => [encode(n as string), encode(kind as string)]) }
+        return { columns: [text(label, 64)], rows: shown.map(([n]) => [encode(n as string)]) }
       }
       default:
         throw sqlError('ER_NOT_SUPPORTED_YET', messages.notSupported(`SHOW ${statement.what}`))
@@ -641,3 +697,27 @@ function likeText(name: string, pattern: string): boolean {
   return new RegExp(`^${re}$`, 'is').test(name)
 }
 
+/** Whether any node under `root` — expression or query — satisfies `test`. */
+function findNode(root: unknown, test: (n: { readonly kind: string }) => boolean): boolean {
+  if (root === null || typeof root !== 'object') return false
+  if (Array.isArray(root)) return root.some((x) => findNode(x, test))
+  const n = root as { kind?: unknown }
+  if (typeof n.kind === 'string' && test(n as { kind: string })) return true
+  return Object.values(root).some((v) => typeof v === 'object' && findNode(v, test))
+}
+
+/**
+ * A view's query as written: from its first token to the end of the
+ * statement, less a trailing `WITH … CHECK OPTION`. The text, not a deparse,
+ * since an unaliased column is named by its text (`c*2`).
+ */
+function viewText(run: Run, statement: CreateViewNode): string {
+  const tokens = lex(run.sql, { sqlMode: parseSqlMode(run.env.session.sqlMode) })
+  const first = tokens.findIndex((t) => t.start === statement.query.at)
+  let last = tokens.findIndex((t, i) => i >= first && (t.kind === TOKEN.EOF || (t.kind === TOKEN.OPERATOR && t.text === ';'))) - 1
+  if (statement.checkOption !== undefined) {
+    while (last > first && (tokens[last] as Token).text.toUpperCase() !== 'WITH') last--
+    last--
+  }
+  return run.sql.slice((tokens[first] as Token).start, (tokens[last] as Token).end)
+}

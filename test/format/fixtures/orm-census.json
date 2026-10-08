@@ -124,8 +124,8 @@
       }
     },
     "ours": {
-      "passed": 465,
-      "failed": 22,
+      "passed": 476,
+      "failed": 11,
       "skipped": 8,
       "files": {
         "tests/mysql/mysql-custom.test.ts": {
@@ -134,18 +134,18 @@
           "skipped": 0
         },
         "tests/mysql/mysql-prefixed.test.ts": {
-          "passed": 66,
-          "failed": 3,
+          "passed": 69,
+          "failed": 0,
           "skipped": 0
         },
         "tests/mysql/mysql-proxy.test.ts": {
-          "passed": 132,
-          "failed": 9,
+          "passed": 136,
+          "failed": 5,
           "skipped": 8
         },
         "tests/mysql/mysql.test.ts": {
-          "passed": 140,
-          "failed": 9,
+          "passed": 144,
+          "failed": 5,
           "skipped": 0
         },
         "tests/relational/mysql.test.ts": {
@@ -155,8 +155,6 @@
         }
       },
       "reasons": {
-        "Error: DROP VIEW is not supported by this server yet": 6,
-        "Error: This statement (createView) is not supported by this server yet": 5,
         "Error: WITH is not supported by this server yet": 4,
         "Error: Unknown column '…' in '…'": 4,
         "Error: This expression (interval) is not supported by this server yet": 2,

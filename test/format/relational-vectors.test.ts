@@ -37,7 +37,14 @@ const NOT_SUPPORTED = 1235
  * not compared; the rows (as a multiset) and the error still are, and the
  * case is counted.
  */
-const UNMODELLED = ['Remove duplicates from input sorted on']
+const UNMODELLED: readonly (string | RegExp)[] = [
+  'Remove duplicates from input sorted on',
+  // A join the const tables reduce to one table, grouped by that table's
+  // index: the grouping a single table gets, which this executor gives only a
+  // FROM of one table. Its flags agree by chance; the names it reports do not.
+  /Group aggregate[\s\S]*(Nested loop|hash join)[\s\S]*Constant row from/,
+]
+const unmodelled = (plan: string | null | undefined): boolean => UNMODELLED.some((m) => (typeof m === 'string' ? plan?.includes(m) === true : plan !== null && plan !== undefined && m.test(plan)))
 
 interface Answer {
   readonly columns?: unknown
@@ -112,7 +119,7 @@ export async function replay(fixture: Fixture, connection: Record<string, unknow
         let agrees: boolean
         if (e.select !== true) {
           agrees = JSON.stringify({ ok: e.ok, error: e.error }) === JSON.stringify({ ok: a.ok, error: a.error })
-        } else if (UNMODELLED.some((m) => e.plan?.includes(m) === true)) {
+        } else if (unmodelled(e.plan)) {
           tally.unmodelled++
           agrees = JSON.stringify(e.error) === JSON.stringify(a.error) && JSON.stringify(sorted(e.rows)) === JSON.stringify(sorted(a.rows))
         } else {

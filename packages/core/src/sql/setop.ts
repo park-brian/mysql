@@ -61,7 +61,7 @@ export function setOperationType(types: readonly ResultType[], connectionCollati
   const live = types.filter((t) => t.kind !== 'null')
   const fromField = types.some((t) => t.column !== undefined || t.fromField === true)
   const done = (t: ResultType): ResultType => {
-    const { column: _c, temporary: _t, asText: _a, fromField: _f, ...rest } = t
+    const { column: _c, temporary: _t, asText: _a, fromField: _f, names: _n, ...rest } = t
     // A column of the operation's temporary table: its collation is a
     // column's (IMPLICIT), so a nested `_bin` union keeps it against a latin1 side.
     return { ...rest, nullable, temporary: 'stream', keepField: true, ...(t.kind === 'string' ? { coercibility: COERCIBILITY.IMPLICIT } : {}), ...(fromField ? { fromField } : {}) }

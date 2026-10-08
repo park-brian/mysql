@@ -422,7 +422,9 @@ function cell(v, field) {
   return field.characterSet === 63 && BYTE_TYPES.has(field.columnType) ? `0x${b.toString('hex')}` : b.toString('utf8')
 }
 
-const columnsOfFields = (fields) => fields.map((f) => [f.name, f.columnType, f.columnLength, f.flags, f.decimals, f.characterSet])
+// The four names too: a derived table's column reports its own derived name
+// as its original name, which a corpus recording only the shape never saw.
+const columnsOfFields = (fields) => fields.map((f) => [f.name, f.columnType, f.columnLength, f.flags, f.decimals, f.characterSet, f.schema, f.table, f.orgTable, f.orgName])
 
 /**
  * `EXPLAIN FORMAT=TREE`, reduced to what a plan *is*: each node's kind and the

@@ -9,8 +9,8 @@
 // A result column is named as MySQL names it: its alias, else a bare column's
 // name as written, else the expression's own source text — `SELECT 1+1`
 // returns a column called `1+1`, spaces and all, which only the text has.
-import type { Catalog, ColumnDef, Table, TableDef } from '@myjs/engine'
-import { NODE, QUERY, REF, TOKEN, deparse, lex, parseSqlMode, type Expression, type OrderItem, type QueryBody, type QueryExpression, type SelectNode, type SetOperationNode, type TableName, type Token } from '@myjs/parser'
+import type { Catalog, ColumnDef, Table, TableDef, ViewDef } from '@myjs/engine'
+import { NODE, QUERY, REF, TOKEN, deparse, lex, parseSqlMode, parseStatement, type Expression, type OrderItem, type QueryBody, type QueryExpression, type SelectNode, type SetOperationNode, type TableName, type Token } from '@myjs/parser'
 import { messages, sqlError, type ColumnDefinition, type ResultSet, type RowValue } from '@myjs/protocol'
 import { intValue, integerRange, toInteger, truth, type Value } from '@myjs/types'
 import { compile, convertTo, EMPTY_SCOPE, type CompileContext, type Compiled, type Env, type GroupKeys, type Row, type Scope, type SubqueryPlan } from './compile.ts'
@@ -47,6 +47,13 @@ export interface Run {
   readonly parent?: Scope
   /** The common table expressions in scope, by name. */
   readonly ctes?: ReadonlyMap<string, () => DerivedSource>
+  /**
+   * The database an unqualified table name is in, when it is not the
+   * session's: inside a view, the one that was current at its CREATE VIEW.
+   */
+  readonly database?: string | null
+  /** The views being expanded, outermost first, as `schema.name`: one met again is 1146. */
+  readonly views?: readonly string[]
 }
 
 export function compileContext(run: Run, scope: Scope, clause: string): CompileContext {
@@ -69,17 +76,68 @@ export function fromContext(run: Run): FromContext {
     compileOn: (e, scope) => compile(e, compileContext(run, scope, 'on clause')),
     derived: (ref, lateral) => derivedTable(run, ref.query, ref.alias as string, ref.columns, lateral),
     cte: (name) => run.ctes?.get(name)?.(),
+    view: (name, alias) => viewTable(run, name, alias),
     ...(run.parent === undefined ? {} : { parent: run.parent }),
   }
 }
 
 /** A table a statement names, opened: ER_NO_DB_ERROR with no schema, ER_NO_SUCH_TABLE with no table. */
 export function openTable(run: Run, name: TableName): { readonly schema: string; readonly def: TableDef; readonly table: Table } {
-  const schema = name.schema ?? run.env.session.database
+  const schema = name.schema ?? defaultDatabase(run)
   if (schema === null || schema === undefined) throw sqlError('ER_NO_DB_ERROR', messages.noDatabaseSelected())
   if (run.catalog === undefined) throw sqlError('ER_NO_SUCH_TABLE', messages.noSuchTable(schema, name.name))
   const def = run.catalog.definition(schema, name.name)
   return { schema, def, table: run.catalog.table(schema, name.name) }
+}
+
+const defaultDatabase = (run: Run): string | null => (run.database === undefined ? run.env.session.database : run.database)
+
+/** A view met again inside itself: its 1146 is the statement's, through every view between. */
+const recursion = new WeakSet<object>()
+
+/** The errors that mean a view's query no longer resolves: 1356 in its place (8.4.11). */
+const INVALID_VIEW = new Set([1054, 1146, 1305, 1353])
+
+/**
+ * A view, planned for one reference to it, as a derived table whose query is
+ * its stored text: parsed again, in the database that was current when it was
+ * made, with nothing of the statement around it in scope — no CTE, no
+ * enclosing query, no parameter. A query that no longer resolves is 1356; a
+ * view that names itself, by any path, is 1146 on its own name, as it is when
+ * CREATE VIEW meets it.
+ */
+export function viewTable(run: Run, name: TableName, alias: string, given?: ViewDef): { schema: string; source: DerivedSource } | undefined {
+  const schema = name.schema ?? defaultDatabase(run)
+  if (schema === null || schema === undefined || run.catalog === undefined) return undefined
+  const view = given ?? run.catalog.view(schema, name.name)
+  if (view === undefined) return undefined
+  const path = `${schema}.${view.name}`
+  if (run.views?.includes(path) === true && given === undefined) {
+    const e = sqlError('ER_NO_SUCH_TABLE', messages.noSuchTable(schema, view.name))
+    recursion.add(e)
+    throw e
+  }
+  const query = parseStatement(view.query) as QueryExpression
+  const inner: Run = {
+    catalog: run.catalog,
+    state: run.state,
+    env: run.env,
+    sql: view.query,
+    protocol: run.protocol,
+    serverVersion: run.serverVersion,
+    ...(run.preparing === true ? { preparing: true } : {}),
+    database: view.database ?? null,
+    views: [...(run.views ?? []), path],
+  }
+  try {
+    return { schema, source: derivedTable(inner, query, alias, view.columns, undefined, view) }
+  } catch (e) {
+    // Only once it is stored: CREATE VIEW reports the error itself.
+    if (given === undefined && !recursion.has(e as object) && INVALID_VIEW.has((e as { errno?: number }).errno ?? 0)) {
+      throw sqlError('ER_VIEW_INVALID', `View '${schema}.${view.name}' references invalid table(s) or column(s) or function(s) or definer/invoker of view lack rights to use them`)
+    }
+    throw e
+  }
 }
 
 const CLAUSE_WORDS = new Set(['FROM', 'WHERE', 'GROUP', 'HAVING', 'WINDOW', 'ORDER', 'LIMIT', 'INTO', 'FOR', 'LOCK', 'UNION', 'EXCEPT', 'INTERSECT'])
@@ -577,7 +635,7 @@ function mergeable(q: QueryExpression): boolean {
 }
 
 /** A derived table, or one reference to a CTE: its columns as the outer query sees them, and its rows. */
-function derivedTable(run: Run, query: QueryExpression, alias: string, names: readonly string[] | undefined, lateral: Scope | undefined): DerivedSource {
+function derivedTable(run: Run, query: QueryExpression, alias: string, names: readonly string[] | undefined, lateral: Scope | undefined, view?: ViewDef): DerivedSource {
   let correlated = false
   const outer = lateral === undefined ? run.parent : enclosing(lateral, () => {})
   const parent: Scope | undefined =
@@ -594,12 +652,28 @@ function derivedTable(run: Run, query: QueryExpression, alias: string, names: re
   // A LATERAL one merges as any other does when it can (8.4.11: Drizzle's
   // `LEFT JOIN LATERAL (SELECT JSON_ARRAY(…) FROM (… LIMIT 1) p)` reports its
   // JSON_ARRAY as an expression, not a temporary table's field).
-  const merged = mergeable(query)
+  //
+  // Every column reports the derived table's alias as its table and its own
+  // derived name as its original name. A view's merged columns report the view
+  // as their original table and its schema as theirs, expressions excepted;
+  // a materialized view's table columns keep their base table, and its
+  // expressions take the view's names instead (8.4.11).
+  const merged = mergeable(query) && view?.algorithm !== 'TEMPTABLE'
   const columns = renamed(plan.columns, names).map((c) => {
-    const t = c.type
-    if (merged) return { name: c.name, type: t.column === undefined ? { ...t, derivedTable: alias } : { ...t, column: { ...t.column, table: alias } } }
-    const { column, ...rest } = t
-    return { name: c.name, type: { ...rest, ...(column === undefined ? { derivedTable: alias } : { column: { ...column, table: alias } }), temporary: 'stream' as const } }
+    const { column, ...rest } = c.type
+    const derived = { table: alias, orgName: c.name }
+    const asColumn = column === undefined ? undefined : { ...column, ...derived, ...(merged && view !== undefined ? { schema: view.schema, orgTable: view.name } : {}) }
+    // A materialized derived table's field, merged into a view, is a field of
+    // the view's: its schema is the view's (8.4.11).
+    const field = rest.temporary !== undefined && rest.temporary !== false
+    const asExpression =
+      view === undefined
+        ? { ...derived, schema: '', orgTable: '' }
+        : merged && !field
+          ? { ...derived, schema: '', orgTable: view.name, viewSchema: view.schema }
+          : { ...derived, schema: view.schema, orgTable: view.name }
+    const type = asColumn === undefined ? { ...rest, names: asExpression } : { ...rest, column: asColumn }
+    return { name: c.name, type: merged ? type : { ...type, temporary: 'stream' as const } }
   })
   // Read once per statement unless it reads an enclosing query: so an UPDATE
   // whose subquery reads its own table through a derived table sees the
@@ -702,7 +776,7 @@ function recursiveCte(run: Run, cte: NonNullable<QueryExpression['with']>['table
   const anchor = anchorPlans[0]
   if (anchor === undefined) throw sqlError('ER_CTE_RECURSIVE_REQUIRES_NONRECURSIVE_FIRST', `Recursive Common Table Expression '${cte.name}' should have one or more non-recursive query blocks followed by one or more recursive ones`)
   // A recursive CTE's table is typed as a set operation's column is, from the anchor alone, and nullable.
-  const columns = renamed(anchor.columns, cte.columns).map((c) => ({ name: c.name, type: { ...setOperationType([c.type], run.env.session.characterSet), nullable: true, derivedTable: cte.name } }))
+  const columns = renamed(anchor.columns, cte.columns).map((c) => ({ name: c.name, type: { ...setOperationType([c.type], run.env.session.characterSet), nullable: true, names: { schema: '', table: cte.name, orgTable: '', orgName: c.name } } }))
   let working: readonly (readonly Value[])[] = []
   const workingTable: DerivedSource = { columns, rows: () => working }
   const ctes = new Map(run.ctes ?? [])
@@ -1050,7 +1124,7 @@ function planGrouped(
       const isKeyExpression = e.kind !== NODE.COLUMN && !aggregateCall && keys.some((k) => k.index === undefined && k.text === deparse(e))
       // A key that reads only NULL-complemented tables is a constant, and no part of the table's key.
       const keyed = (isKey || isKeyExpression) && refersToRow(e, lookup, fixed)
-      if (strategy === 'temp') item.compiled = { ...item.compiled, type: { ...t, temporary: keyed ? true : 'pinned' } }
+      if (strategy === 'temp') item.compiled = { ...item.compiled, type: { ...t, temporary: keyed ? true : 'pinned', ...(aggregateCall ? { names: { schema: '', table: '', orgTable: '', orgName: '' } } : {}) } }
       else if (stream || (source === undefined && from !== undefined && strategy === 'sort' && t.column !== undefined)) {
         // A sort-based grouping over a join sorts the join's rows streamed
         // into a temporary table, so its columns are that table's copies.

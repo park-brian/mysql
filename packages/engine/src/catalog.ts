@@ -8,6 +8,11 @@
 //   `_myjs_schemas`  name → id, definition (JSON)
 //   `_myjs_tables`   schema id, name → id, definition (JSON: `TableDef`)
 //
+// A view is a `_myjs_tables` row too, with id 0, which no table has (the
+// counter starts at 1), and a `ViewDef` for its definition. Tables and views
+// share one namespace in MySQL — CREATE TABLE over a view's name is 1050 — and
+// one key gives that for nothing.
+//
 // Those ids and layouts are the bootstrap descriptor: constants in this file,
 // which `FORMAT_VERSION` pins, so no page has to be read to find them (D-56).
 // A table's definition is its `_myjs_tables` row and nowhere else — one copy,
@@ -34,7 +39,7 @@
 // the system tables' own layout is the store format's, which is refused, not
 // migrated (D-26).
 import { TypeError as TypeError_ } from '@myjs/types'
-import { badFormat, corruptCatalog, dbExists, dbMissingOnDrop, noSuchTable, notSupportedYet, tableExists, unknownDb, unknownTable, writerBusy, wrongDbName } from './errors.ts'
+import { badFormat, corruptCatalog, dbExists, dbMissingOnDrop, noSuchTable, notAView, notSupportedYet, tableExists, unknownDb, unknownTable, writerBusy, wrongDbName, wrongTableName } from './errors.ts'
 import { ClusteredIndex, type KeyColumn } from './indexes.ts'
 import { decodeRecord, externalRefs, type RecordLayout } from './record.ts'
 import { NAME_BYTES, checkName, clusteredKeyOf, decodeTableDef, encodeTableDef, keyColumnsOf, layoutOf, resolveTable, secondariesOf, type TableDef, type TableSpec } from './schema.ts'
@@ -62,6 +67,48 @@ const SYSTEM: Record<keyof typeof SYSTEM_INDEX, { layout: RecordLayout; key: Key
     ],
   },
 }
+
+/** A view: the query's text, which is parsed again at each use, and its own column names if it gave any. */
+export interface ViewDef {
+  readonly schema: string
+  readonly name: string
+  /** The query as written, so its unaliased columns are named as they were at CREATE VIEW. */
+  readonly query: string
+  /** The database its unqualified names are in: the one current at CREATE VIEW, if any (8.4.11). */
+  readonly database?: string
+  readonly columns?: readonly string[]
+  readonly algorithm?: 'UNDEFINED' | 'MERGE' | 'TEMPTABLE'
+  readonly checkOption?: 'CASCADED' | 'LOCAL'
+}
+
+const VIEW_ID = 0
+
+function encodeViewDef(v: ViewDef): Uint8Array {
+  return utf8.encode(JSON.stringify({ view: v }))
+}
+
+function decodeViewDef(bytes: Uint8Array): ViewDef {
+  let v: unknown
+  try {
+    v = JSON.parse(str(bytes, 'a view definition'))
+  } catch (e) {
+    throw corruptCatalog(`a view definition that is not JSON: ${e instanceof Error ? e.message : String(e)}`)
+  }
+  const d = (v as { view?: unknown } | null)?.view as Record<string, unknown> | undefined
+  const isStr = (x: unknown): x is string => typeof x === 'string'
+  if (d === null || typeof d !== 'object' || !isStr(d['schema']) || !isStr(d['name']) || !isStr(d['query'])) throw corruptCatalog('a view definition without its schema, name and query')
+  const database = d['database']
+  if (database !== undefined && !isStr(database)) throw corruptCatalog('a view definition whose database is not a name')
+  const columns = d['columns']
+  if (columns !== undefined && !(Array.isArray(columns) && columns.every(isStr))) throw corruptCatalog('a view definition whose columns are not names')
+  const algorithm = d['algorithm']
+  if (algorithm !== undefined && algorithm !== 'UNDEFINED' && algorithm !== 'MERGE' && algorithm !== 'TEMPTABLE') throw corruptCatalog(`a view algorithm of ${JSON.stringify(algorithm)}`)
+  const checkOption = d['checkOption']
+  if (checkOption !== undefined && checkOption !== 'CASCADED' && checkOption !== 'LOCAL') throw corruptCatalog(`a view check option of ${JSON.stringify(checkOption)}`)
+  return { schema: d['schema'], name: d['name'], query: d['query'], ...(database === undefined ? {} : { database }), ...(columns === undefined ? {} : { columns }), ...(algorithm === undefined ? {} : { algorithm }), ...(checkOption === undefined ? {} : { checkOption }) }
+}
+
+const isView = (row: readonly (Uint8Array | null)[]): boolean => readBe32(row[2]) === VIEW_ID
 
 export interface SchemaDef {
   readonly id: number
@@ -204,7 +251,7 @@ export class Catalog {
     })
   }
 
-  /** Drop a schema and every table in it, in one transaction. Returns the tables' names. */
+  /** Drop a schema and every table and view in it, in one transaction. Returns their names. */
   dropSchema(name: string, options: { readonly ifExists?: boolean } = {}): string[] {
     const discards: (() => void)[] = []
     const dropped = ddl(this.store, (trx) => {
@@ -217,6 +264,10 @@ export class Catalog {
       for (const def of this.#definitions(s.id, trx)) {
         discards.push(this.#drop(def, s.id, trx))
         names.push(def.name)
+      }
+      for (const v of this.#views(s.id, trx)) {
+        this.#tables.delete(this.#tableKey(s.id, v.name), trx)
+        names.push(v.name)
       }
       this.#schemas.delete(this.#schemaKey(name), trx)
       return names
@@ -251,6 +302,7 @@ export class Catalog {
         if (options.ifNotExists === true) return existing
         throw tableExists(spec.name)
       }
+      if (this.#row(s.id, spec.name, trx) !== undefined) throw tableExists(spec.name)
       const resolved = resolveTable(Number(this.store.takeCounter(SYSTEM_INDEX.TABLES, 0)), schema, spec)
       // Both engines refuse a key the page cannot hold, the same way.
       ClusteredIndex.check(this.store.pool.pageSize, layoutOf(resolved), clusteredKeyOf(resolved), secondariesOf(resolved).map((i) => keyColumnsOf(resolved, i)))
@@ -310,8 +362,61 @@ export class Catalog {
 
   /** Every table, or every table in one schema, in name order. */
   tables(schema?: string): TableDef[] {
-    if (schema === undefined) return [...this.#tables.scan()].map(([, r]) => decodeTableDef(r[3] as Uint8Array))
+    if (schema === undefined) return [...this.#tables.scan()].filter(([, r]) => !isView(r)).map(([, r]) => decodeTableDef(r[3] as Uint8Array))
     return this.#definitions(this.schema(schema).id, undefined)
+  }
+
+  // --- views --------------------------------------------------------------------
+
+  /**
+   * CREATE VIEW: the definition as one row, checked against the namespace it
+   * shares with tables. `orReplace` replaces a view; over a table it is
+   * ER_WRONG_OBJECT, as 8.4.11 answers.
+   */
+  createView(view: ViewDef, options: { readonly orReplace?: boolean } = {}): void {
+    checkName(view.name, wrongTableName)
+    ddl(this.store, (trx) => {
+      const s = this.#schemaOf(view.schema, trx)
+      if (s === undefined) throw unknownDb(view.schema)
+      const row = this.#row(s.id, view.name, trx)
+      const value: (Uint8Array | null)[] = [be32(s.id), utf8.encode(view.name), be32(VIEW_ID), encodeViewDef(view)]
+      if (row === undefined) return void this.#tables.insert(value, trx)
+      if (options.orReplace !== true) throw tableExists(view.name)
+      if (!isView(row)) throw notAView(view.schema, view.name)
+      this.#tables.update(value, trx)
+    })
+  }
+
+  /**
+   * DROP VIEW, all or nothing: a table among the names is ER_WRONG_OBJECT, and
+   * the missing ones are one ER_BAD_TABLE_ERROR naming them all — or, with
+   * `ifExists`, returned for the caller's notes.
+   */
+  dropViews(schema: string, names: readonly string[], options: { readonly ifExists?: boolean } = {}): string[] {
+    return ddl(this.store, (trx) => {
+      const s = this.#schemaOf(schema, trx)
+      const missing: string[] = []
+      for (const name of names) {
+        const row = s === undefined ? undefined : this.#row(s.id, name, trx)
+        if (row === undefined) missing.push(name)
+        else if (!isView(row)) throw notAView(schema, name)
+      }
+      if (missing.length > 0 && options.ifExists !== true) throw unknownTable(missing.map((n) => `${schema}.${n}`).join(','))
+      if (s !== undefined) for (const name of names) if (!missing.includes(name)) this.#tables.delete(this.#tableKey(s.id, name), trx)
+      return missing
+    })
+  }
+
+  /** A view's definition, as last committed, or `undefined` when the name is not a view. */
+  view(schema: string, name: string): ViewDef | undefined {
+    const s = this.#schemaOf(schema, undefined)
+    const row = s === undefined ? undefined : this.#row(s.id, name, undefined)
+    return row === undefined || !isView(row) ? undefined : decodeViewDef(row[3] as Uint8Array)
+  }
+
+  /** Every view in a schema, in name order. */
+  views(schema: string): ViewDef[] {
+    return this.#views(this.schema(schema).id, undefined)
   }
 
   /** A handle on a table, through the engine that stores it. */
@@ -355,7 +460,9 @@ export class Catalog {
     for (const k of ['CATALOG', 'SCHEMAS', 'TABLES'] as const) layouts.set(SYSTEM_INDEX[k], SYSTEM[k].layout)
     for (const [, value] of this.#tables.tree.entries()) {
       const record = value.subarray(CLUSTERED_HEADER)
-      const def = decodeTableDef(this.#tables.rowOf(record)[3] as Uint8Array)
+      const row = this.#tables.rowOf(record)
+      if (isView(row)) continue
+      const def = decodeTableDef(row[3] as Uint8Array)
       if (def.engine !== 'native') continue
       const clustered = def.clustered === null ? def.rowIdIndexId : def.indexes.find((i) => i.name === def.clustered)?.indexId
       if (clustered !== undefined) layouts.set(clustered, layoutOf(def))
@@ -403,16 +510,33 @@ export class Catalog {
     return r === undefined ? undefined : schemaDef(r[2])
   }
 
-  #definition(schemaId: number, name: string, trx: Trx | undefined): TableDef | undefined {
+  /** A table's or a view's row. */
+  #row(schemaId: number, name: string, trx: Trx | undefined): (Uint8Array | null)[] | undefined {
     if (utf8.encode(name).length > NAME_BYTES) return undefined
-    const r = this.#tables.get(this.#tableKey(schemaId, name), trx, trx === undefined ? 'consistent' : 'current')
-    return r === undefined ? undefined : decodeTableDef(r[3] as Uint8Array)
+    return this.#tables.get(this.#tableKey(schemaId, name), trx, trx === undefined ? 'consistent' : 'current')
+  }
+
+  #definition(schemaId: number, name: string, trx: Trx | undefined): TableDef | undefined {
+    const r = this.#row(schemaId, name, trx)
+    return r === undefined || isView(r) ? undefined : decodeTableDef(r[3] as Uint8Array)
+  }
+
+  #rows(schemaId: number, trx: Trx | undefined): (Uint8Array | null)[][] {
+    const from = be32(schemaId)
+    const range = { from, to: be32(schemaId + 1) }
+    return [...this.#tables.scan(range, trx, trx === undefined ? 'consistent' : 'current')].map(([, r]) => r)
   }
 
   #definitions(schemaId: number, trx: Trx | undefined): TableDef[] {
-    const from = be32(schemaId)
-    const range = { from, to: be32(schemaId + 1) }
-    return [...this.#tables.scan(range, trx, trx === undefined ? 'consistent' : 'current')].map(([, r]) => decodeTableDef(r[3] as Uint8Array))
+    return this.#rows(schemaId, trx)
+      .filter((r) => !isView(r))
+      .map((r) => decodeTableDef(r[3] as Uint8Array))
+  }
+
+  #views(schemaId: number, trx: Trx | undefined): ViewDef[] {
+    return this.#rows(schemaId, trx)
+      .filter(isView)
+      .map((r) => decodeViewDef(r[3] as Uint8Array))
   }
 
   #version(): number {

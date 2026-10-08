@@ -234,7 +234,9 @@ export function parseCreateView(c: Cursor, options: DdlOptions): CreateViewNode 
   const view = c.expectTableName()
   const columns = c.atOp('(') ? c.expectNameList() : undefined
   c.expectWord('AS')
-  const query = parseQueryFrom(c, options.sqlMode)
+  // INTO parses here, as MySQL's grammar has it, so that the executor can
+  // refuse it as the server does: 1350, not a syntax error (8.4.11).
+  const query = parseQueryFrom(c, options.sqlMode, 'select')
   let checkOption: CreateViewNode['checkOption']
   if (c.takeWord('WITH')) {
     checkOption = c.takeWord('LOCAL') ? 'LOCAL' : (c.takeWord('CASCADED'), 'CASCADED')
