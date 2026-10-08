@@ -453,7 +453,7 @@ export function alterTable(run: Run, catalog: CatalogApi, statement: AlterTableN
 /** A column definition's 1681 deprecations, recorded; how many. */
 function deprecated(run: Run, c: ColumnDefinition): number {
   const texts = columnDeprecations(c)
-  for (const m of texts) raise(run.env, 1681, m)
+  for (const d of texts) raise(run.env, d.code, d.message)
   return texts.length
 }
 
