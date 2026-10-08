@@ -19,7 +19,7 @@ import { CLIENT, hasCap, messages, sqlError, type OkResult } from '@myjs/protoco
 import type { ColumnDef, Table, TableDef, Trx } from '@myjs/engine'
 import { EngineError } from '@myjs/engine'
 import { NODE, REF, parseExpression, type Assignment, type DeleteNode, type Expression, type InsertNode, type UpdateNode } from '@myjs/parser'
-import { encodeField, intValue, toInteger, toText, type StoreContext, type Value } from '@myjs/types'
+import { decodeField, encodeField, intValue, toInteger, toText, type StoreContext, type Value } from '@myjs/types'
 import { compile, EMPTY_SCOPE, type Compiled, type Row } from './compile.ts'
 import { filter, limit, sort, type ScannedRow } from './operators.ts'
 import { chooseAccess } from './plan.ts'
@@ -145,7 +145,9 @@ export function insert(run: Run, node: InsertNode, trx: Trx): OkResult {
     try {
       table.insert(fields, trx)
     } catch (e) {
-      throw duplicateEntry(e, def, values)
+      // Named by the values as stored: `VALUES (1.6)` colliding with id 2 is
+      // "Duplicate entry '2'", not '1.6'.
+      throw duplicateEntry(e, def, def.columns.map((c, i) => decodeField(fields[i] ?? null, c.type)))
     }
   })
 
@@ -216,26 +218,33 @@ export function update(run: Run, node: UpdateNode, trx: Trx): OkResult {
   let changed = 0
   rows.forEach(({ id, row }, n) => {
     store.row = n + 1
-    // Assignments apply left to right, each seeing the ones before it, as a
-    // single-table UPDATE does in MySQL: `SET a = a + 1, b = a` sets b to the new a.
+    // Assignments apply left to right, each seeing the ones before it *as
+    // stored*: `SET d = 1.234, x = d` on a DECIMAL(5,1) d gives x = 1.2, and
+    // outside strict mode `SET tiny = 1000, j = tiny` gives j = 127 (8.4.11;
+    // found by review). So each value is converted into its column as it is
+    // assigned, and read back from there — which also counts each adjusted
+    // value's warning once.
+    const before = encodeRow(def, row, { strict: false, row: n + 1, warnings: 0 })
+    const after = [...before]
     const values: Value[] = [...row]
+    const assign = (i: number, v: Value): void => {
+      const column = def.columns[i] as ColumnDef
+      const field = encodeField(v, column, store)
+      after[i] = field
+      values[i] = decodeField(field, column.type)
+    }
     for (const a of assignments) {
       if (a.value === undefined) {
         const d = defaults[a.index] as Compiled | 'none'
-        values[a.index] = d === 'none' ? implicitDefault(def.columns[a.index] as ColumnDef) : d.eval([], run.env)
-      } else values[a.index] = a.value.eval(values as Row, run.env)
+        assign(a.index, d === 'none' ? implicitDefault(def.columns[a.index] as ColumnDef) : d.eval([], run.env))
+      } else assign(a.index, a.value.eval(values as Row, run.env))
     }
-    const before = encodeRow(def, row, { strict: false, row: n + 1, warnings: 0 })
-    let after = encodeRow(def, values, store)
     if (sameRow(before, after)) return
     // `ON UPDATE CURRENT_TIMESTAMP` fires only for a row that changed, and
     // only on a column the statement did not set itself.
-    if (onUpdate.some((u, i) => u !== undefined && !assigned.has(i))) {
-      onUpdate.forEach((u, i) => {
-        if (u !== undefined && !assigned.has(i)) values[i] = u.eval([], run.env)
-      })
-      after = encodeRow(def, values, store)
-    }
+    onUpdate.forEach((u, i) => {
+      if (u !== undefined && !assigned.has(i)) assign(i, u.eval([], run.env))
+    })
     try {
       table.update(id, after, trx)
     } catch (e) {

@@ -13,10 +13,12 @@
 // `innodb_lock_wait_timeout` the answer is ER_LOCK_WAIT_TIMEOUT (1205), which
 // rolls back the statement and not the transaction, as InnoDB's does.
 import { FIELD_TYPE, MyjsError } from '@myjs/bytes'
+import { collationInfoByName, defaultCollationOf } from '@myjs/charsets'
 import { collationsOf, type Catalog, type TableDef } from '@myjs/engine'
 import {
   ParseError,
   REF,
+  parseStatements,
   STATEMENT,
   TOKEN,
   lex,
@@ -44,7 +46,7 @@ import {
   type Session,
   type StatementResult,
 } from '@myjs/protocol'
-import { COERCIBILITY, doubleValue, intValue, parseDecimal, stringValue, toInteger, type Value } from '@myjs/types'
+import { COERCIBILITY, doubleValue, intValue, parseDecimal, stringValue, toInteger, toText, type Value } from '@myjs/types'
 import { charsetChange, ensureCollationResident } from '../transcoder.ts'
 import { PROGRAM_OBJECTS, ServerState, type ProgramStatement, type ServerOptions } from './admin.ts'
 import { compile, EMPTY_SCOPE, type Env } from './compile.ts'
@@ -99,6 +101,10 @@ export function toSqlError(e: unknown): SqlError {
 
 const codeOf = (e: unknown): string | undefined => (e instanceof MyjsError ? e.code : undefined)
 
+/** Whether a statement can change rows: the ones that may not simply be run again after failing part-way. */
+const writes = (statement: Statement): boolean =>
+  statement.kind === STATEMENT.INSERT || statement.kind === STATEMENT.UPDATE || statement.kind === STATEMENT.DELETE
+
 const sleep = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms))
 
 /** The tables a statement reads or writes, for loading their collations before it runs. */
@@ -132,6 +138,14 @@ export class SqlExecutor implements Executor {
   readonly catalog: Catalog | undefined
   readonly server: ServerState
   readonly #sessions = new WeakMap<Session, SqlSession>()
+  /**
+   * Sessions whose connection has gone. A statement that was waiting at an
+   * await — for the writer, for a collation — when its connection closed must
+   * not run afterwards: `end()` has already rolled its transaction back, and
+   * running it then would commit a write from an abandoned transaction, or
+   * open one nothing will ever end (found by review).
+   */
+  readonly #ended = new WeakSet<Session>()
 
   constructor(options: SqlExecutorOptions = {}) {
     this.catalog = options.catalog
@@ -200,7 +214,13 @@ export class SqlExecutor implements Executor {
   }
 
   end(session: Session): void {
+    this.#ended.add(session)
     this.reset(session)
+  }
+
+  /** ER_QUERY_INTERRUPTED, for a statement whose connection ended while it waited. */
+  #alive(session: Session): void {
+    if (this.#ended.has(session)) throw sqlError('ER_QUERY_INTERRUPTED', 'Query execution was interrupted')
   }
 
   /** Parse, or `null` for a statement that is answered OK without being run. */
@@ -254,6 +274,27 @@ export class SqlExecutor implements Executor {
         }
       }
     }
+    // Every collation the statement names itself — `COLLATE x`, `_latin1'…'`,
+    // `CAST(… AS CHAR CHARACTER SET x)` — found by walking the tree for the
+    // fields that carry one.
+    const walk = (node: unknown, depth: number): void => {
+      if (depth > 1200 || node === null || typeof node !== 'object') return
+      if (Array.isArray(node)) {
+        for (const n of node) walk(n, depth + 1)
+        return
+      }
+      const o = node as Record<string, unknown>
+      if (typeof o['collation'] === 'string') {
+        const info = collationInfoByName((o['collation'] as string).toLowerCase())
+        if (info !== undefined) ids.add(info.id)
+      }
+      if (typeof o['charset'] === 'string') {
+        const info = defaultCollationOf((o['charset'] as string).toLowerCase())
+        if (info !== undefined) ids.add(info.id)
+      }
+      for (const v of Object.values(o)) if (typeof v === 'object') walk(v, depth + 1)
+    }
+    walk(statement, 0)
     for (const id of ids) {
       try {
         await ensureCollationResident(id)
@@ -263,10 +304,38 @@ export class SqlExecutor implements Executor {
     }
   }
 
-  async #statement(session: Session, sql: string, params: readonly Value[], known: readonly Value[] | undefined, protocol: WireProtocol): Promise<StatementResult> {
+  /**
+   * One `COM_QUERY` or `COM_STMT_EXECUTE`. With D-13's switch on and the
+   * capability negotiated, the text may hold several statements, run in turn
+   * and answered as several results; the first error stops the rest, as it
+   * does on MySQL.
+   */
+  async #statement(session: Session, sql: string, params: readonly Value[], known: readonly Value[] | undefined, protocol: WireProtocol): Promise<StatementResult | StatementResult[]> {
+    if (session.multipleStatementsEnabled && protocol === 'text' && !/^[\s;]*$/.test(sql)) {
+      let statements: Statement[]
+      try {
+        statements = parseStatements(sql, { sqlMode: parseSqlMode(session.sqlMode) })
+      } catch (e) {
+        throw toSqlError(e)
+      }
+      if (statements.length > 1) {
+        const results: StatementResult[] = []
+        // All are parsed under the mode in force when the text arrives; MySQL
+        // parses each as it reaches it, so a `SET sql_mode` inside the text
+        // governs the rest there and not here — a recorded divergence.
+        for (const statement of statements) results.push(await this.#one(session, sql, statement, params, known, protocol))
+        return results
+      }
+    }
     const statement = this.#parse(session, sql)
     if (statement === null) return { affectedRows: 0 }
+    return this.#one(session, sql, statement, params, known, protocol)
+  }
+
+  async #one(session: Session, sql: string, statement: Statement, params: readonly Value[], known: readonly Value[] | undefined, protocol: WireProtocol): Promise<StatementResult> {
+    this.#alive(session)
     await this.#preload(session, statement)
+    this.#alive(session)
     const state = this.#state(session)
     const started = Date.now()
     let wait = 1
@@ -280,13 +349,19 @@ export class SqlExecutor implements Executor {
           const timeout = Number(toInteger(state.systemVariable('innodb_lock_wait_timeout', undefined, session) ?? intValue(50n)))
           if (Date.now() - started >= timeout * 1000) throw sqlError('ER_LOCK_WAIT_TIMEOUT', messages.lockWaitTimeout())
           await sleep(wait)
+          this.#alive(session)
           wait = Math.min(wait * 2, 50)
           continue
         }
-        if (code === 'ER_COLLATION_NOT_LOADED' && attempt < 4) {
+        // A collation the preload could not see is loaded and the statement
+        // run again — but only a statement that cannot have written, since a
+        // memory table keeps whatever rows a failed statement wrote before it
+        // failed, and running it again would write them twice.
+        if (code === 'ER_COLLATION_NOT_LOADED' && attempt < 4 && !writes(statement)) {
           const id = /\((\d+)\)/.exec((e as Error).message)?.[1]
           if (id !== undefined) {
             await ensureCollationResident(Number(id))
+            this.#alive(session)
             continue
           }
         }
@@ -333,6 +408,10 @@ export class SqlExecutor implements Executor {
         return { affectedRows: 0 }
       }
       case STATEMENT.CREATE_DATABASE:
+        // An implicit commit, as every DDL statement makes: without it the
+        // session's own transaction holds the writer the catalog needs, and the
+        // statement waits on itself (found by review).
+        state.commit()
         return this.#createDatabase(statement)
       case STATEMENT.DROP:
         return this.#drop(run, statement)
@@ -348,8 +427,9 @@ export class SqlExecutor implements Executor {
       case STATEMENT.SET_TRANSACTION: {
         if (statement.isolation !== undefined) {
           const level = isolationOf(statement.isolation)
-          if (statement.scope === 'GLOBAL' || statement.scope === 'PERSIST') this.server.vars.set('transaction_isolation', statement.isolation.replace(' ', '-'))
-          else if (statement.scope === 'SESSION') state.isolation = level
+          const name = statement.isolation.replace(' ', '-')
+          if (statement.scope === 'GLOBAL' || statement.scope === 'PERSIST') this.server.vars.set('transaction_isolation', name)
+          else if (statement.scope === 'SESSION') state.setIsolation(name)
           else {
             if (state.trx !== undefined) throw sqlError('ER_CANT_CHANGE_TX_CHARACTERISTICS', 'Transaction characteristics can\'t be changed while a transaction is in progress')
             state.nextIsolation = level
@@ -456,7 +536,16 @@ export class SqlExecutor implements Executor {
         state.userVariables.set(item.name.replace(/^@/, '').toLowerCase(), v)
         continue
       }
-      if (this.server.set(session, item, evaluate, state.ownVariables) === 'sql_mode') state.sqlModeAssigned = true
+      const changed = this.server.set(session, item, evaluate, state.ownVariables)
+      if (changed === 'sql_mode') state.sqlModeAssigned = true
+      // `transaction_isolation` is what SET SESSION TRANSACTION sets too: one
+      // setting, so the variable reaches the transactions (found by review).
+      const sessionScoped = item.type === 'name' || (item.type === 'system' && (item.scope === undefined || item.scope === 'SESSION'))
+      if (sessionScoped && /^(transaction_isolation|tx_isolation)$/i.test(item.name)) {
+        const v = state.ownVariables.get(item.name.toLowerCase())
+        state.ownVariables.delete(item.name.toLowerCase())
+        if (v !== undefined && v !== null) state.setIsolation(toText(v))
+      }
     }
     // `SET autocommit = 1` commits whatever the session had open.
     if (!wasAutocommit && session.autocommit) state.commit()
@@ -487,9 +576,20 @@ export class SqlExecutor implements Executor {
   }
 }
 
-/** `SHOW … LIKE 'pattern'`, case-insensitive as `SHOW` matches names. */
+/**
+ * `SHOW … LIKE 'pattern'`, case-insensitive as `SHOW` matches names. A
+ * backslash makes the next character literal, so `'user\\_roles'` — what
+ * mysqldump sends — matches `user_roles` and not `userXroles`.
+ */
 function likeText(name: string, pattern: string): boolean {
-  const re = new RegExp(`^${pattern.replace(/[.*+?^${}()|[\]\\]/g, '\\$&').replace(/%/g, '.*').replace(/_/g, '.')}$`, 'is')
-  return re.test(name)
+  let re = ''
+  for (let i = 0; i < pattern.length; i++) {
+    const c = pattern[i] as string
+    if (c === '\\' && i + 1 < pattern.length) re += (pattern[++i] as string).replace(/[.*+?^${}()|[\]\\/]/g, '\\$&')
+    else if (c === '%') re += '.*'
+    else if (c === '_') re += '.'
+    else re += c.replace(/[.*+?^${}()|[\]\\/]/g, '\\$&')
+  }
+  return new RegExp(`^${re}$`, 'is').test(name)
 }
 

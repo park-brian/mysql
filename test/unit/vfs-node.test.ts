@@ -3,7 +3,7 @@
 // that never called `end()`, and is refused to a second owner while open.
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { mkdtempSync, rmSync, readdirSync } from 'node:fs'
+import { mkdtempSync, readFileSync, rmSync, readdirSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { spawnSync } from 'node:child_process'
@@ -91,4 +91,19 @@ test('M4.26: a process that exits without end() loses no committed row', async (
   const db = await MySQL.open(dir)
   assert.deepEqual(await rows(db, 'SELECT id FROM app.t'), [{ id: 1 }, { id: 2 }, { id: 3 }], 'the committed rows, and not the open transaction')
   await db.end()
+})
+
+test('M4.26 review: a lock file whose owner is dead is taken over; one whose owner lives is not', async () => {
+  const { writeFileSync, existsSync } = await import('node:fs')
+  const dir = fresh()
+  const file = join(dir, `.myjs-lock-${encodeURIComponent('/database')}`)
+  // A pid far above any kernel's pid_max: never running.
+  writeFileSync(file, '2147483646')
+  const db = await MySQL.open(dir)
+  await db.end()
+  assert.equal(existsSync(file), false, 'released on end()')
+  // The parent of this test process is alive and is not this process.
+  writeFileSync(file, String(process.ppid))
+  await assert.rejects(MySQL.open(dir), (e: unknown) => (e as { code?: string }).code === 'VFS_LOCKED')
+  assert.equal(readFileSync(file, 'utf8'), String(process.ppid), "a live owner's lock is left exactly as it was")
 })

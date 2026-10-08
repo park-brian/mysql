@@ -23,19 +23,26 @@ import type { ProtocolConnection } from '../connection.ts'
  */
 export function createNodeStream(connection: ProtocolConnection): Duplex {
   let ended = false
+  let pending: Promise<void> = Promise.resolve()
 
   const stream = new Duplex({
     read() {
       // Nothing to pull: bytes are pushed as the connection produces them.
     },
     write(chunk: Buffer | Uint8Array, _encoding, callback) {
-      connection
-        .feed(new Uint8Array(chunk.buffer, chunk.byteOffset, chunk.byteLength))
-        .then(() => {
-          flush()
-          callback()
+      // Acknowledged at once and processed in order behind a promise chain.
+      // Holding the callback until the command finished made a `destroy()`
+      // wait for it too — Node defers destroy behind a pending write — so a
+      // connection closed mid-statement was not seen to close until the
+      // statement it was abandoning had run (found by M5.17's review).
+      const bytes = new Uint8Array(chunk.buffer, chunk.byteOffset, chunk.byteLength).slice()
+      pending = pending
+        .then(() => connection.feed(bytes))
+        .then(flush)
+        .catch((err: unknown) => {
+          stream.destroy(err instanceof Error ? err : new Error(String(err)))
         })
-        .catch(callback)
+      callback()
     },
     final(callback) {
       finish()

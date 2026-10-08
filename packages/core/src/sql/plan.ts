@@ -31,9 +31,9 @@ import { CHARSET_BINARY, FIELD_TYPE } from '@myjs/bytes'
 import type { ColumnDef, IndexDef, KeyBound, KeyRange, TableDef } from '@myjs/engine'
 import { NODE, type Expression } from '@myjs/parser'
 import {
-  compareValues,
   encodeField,
-  orderValues,
+  encodeKey,
+  keyPartOf,
   parseDateTime,
   type StoreContext,
   type Value,
@@ -125,12 +125,16 @@ function exact(v: Value, c: ColumnDef): boolean {
     case FIELD_TYPE.DATE:
     case FIELD_TYPE.DATETIME:
     case FIELD_TYPE.TIMESTAMP: {
-      if (v.kind === 'datetime') return t.type !== FIELD_TYPE.DATE || v.type === 'DATE'
+      // Exact only if the column holds every digit of it: a bound rounded to
+      // the column's precision would move an exclusive `<` past a row (found
+      // by review: `dt < ?` bound to 12:00:00.500 on a DATETIME(0)).
+      const fits = (us: number): boolean => us % 10 ** (6 - (t.decimals ?? 0)) === 0
+      if (v.kind === 'datetime') return t.type === FIELD_TYPE.DATE ? v.type === 'DATE' : fits(v.v.microsecond)
       if (v.kind !== 'string') return false
       const p = parseDateTime(v.v)
       if (p === undefined) return false
       if (t.type === FIELD_TYPE.DATE) return !p.hasTime
-      return p.fsp <= (t.decimals ?? 0)
+      return fits(p.v.microsecond)
     }
     case FIELD_TYPE.STRING:
     case FIELD_TYPE.VAR_STRING:
@@ -199,13 +203,20 @@ function accessFor(index: IndexDef, column: ColumnDef, conditions: readonly Cond
     if (c.op === '=' || c.op === 'IN') {
       const values = c.constants.map(evaluate)
       if (values.some((v) => v === undefined || !exact(v ?? null, column))) continue
-      const points = dedupe((values as Value[]).sort(orderValues))
-      const ranges: KeyRange[] = []
-      for (const v of points) {
+      // The points are ordered and made distinct by their encoded keys —
+      // the index's own order and equality. Comparing the constants as
+      // values would use the literal's collation, not the column's: under
+      // `SET NAMES … COLLATE utf8mb4_bin`, `IN ('a', 'A')` on a case-
+      // insensitive column read the same key twice (found by review).
+      const part = keyPartOf(column.type, true)
+      const points = new Map<string, KeyBound>()
+      for (const v of values as Value[]) {
         const b = bound(v, column, true)
         if (b === undefined) return undefined
-        ranges.push({ from: b, to: b })
+        const key = encodeKey(b.values, [part])
+        points.set(Array.from(key, (x) => x.toString(16).padStart(2, '0')).join(''), b)
       }
+      const ranges = [...points.entries()].sort(([x], [y]) => (x < y ? -1 : x > y ? 1 : 0)).map(([, b]) => ({ from: b, to: b }))
       return { access: { index: index.name, ranges }, score: 3 }
     }
   }
@@ -225,12 +236,6 @@ function accessFor(index: IndexDef, column: ColumnDef, conditions: readonly Cond
   if (from === undefined && to === undefined) return undefined
   // A lower bound alone still skips the NULLs a clustered key cannot hold anyway.
   return { access: { index: index.name, ranges: [{ ...(from === undefined ? {} : { from }), ...(to === undefined ? {} : { to }) }] }, score: from !== undefined && to !== undefined ? 2 : 1 }
-}
-
-function dedupe(sorted: readonly Value[]): Value[] {
-  const out: Value[] = []
-  for (const v of sorted) if (out.length === 0 || compareValues(out[out.length - 1] ?? null, v) !== 0) out.push(v)
-  return out
 }
 
 /** A literal, `-literal` or `?`, evaluated. */

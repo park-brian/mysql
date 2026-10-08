@@ -149,7 +149,7 @@ export class MySQL {
    */
   createConnection(over: Partial<ConnectionOptions> = {}): ProtocolConnection {
     if (this.#closed) throw new Error('database is closed')
-    return new ProtocolConnection({
+    const connection = new ProtocolConnection({
       executor: this.#executor,
       accounts: this.accounts,
       connectionId: this.#nextConnectionId++,
@@ -164,6 +164,17 @@ export class MySQL {
       ...(this.options.serverVersion === undefined ? {} : { serverVersion: this.options.serverVersion }),
       ...over,
     })
+    this.#connections.add(connection)
+    return connection
+  }
+
+  /** Every connection this instance made that has not closed, so `end()` can end their sessions. */
+  readonly #connections = new Set<ProtocolConnection>()
+
+  /** How many connections are still open. */
+  get openConnections(): number {
+    for (const c of this.#connections) if (c.closed) this.#connections.delete(c)
+    return this.#connections.size
   }
 
   /**
@@ -199,6 +210,9 @@ export class MySQL {
         if (out.length > 0) local.postMessage(out, [out.buffer])
       })
     }
+    // The peer closing its port is the connection going away (D-68): its
+    // session ends, and an open transaction releases the writer.
+    local.addEventListener('close', () => connection.close())
     connection.start()
     const initial = connection.take()
     if (initial.length > 0) local.postMessage(initial, [initial.buffer])
@@ -209,7 +223,11 @@ export class MySQL {
   async end(): Promise<void> {
     if (this.#closed) return
     this.#closed = true
-    this.#implicit?.close()
+    // Every session ends before the store closes, rolling back what is open;
+    // closing the store under a live transaction would leave its writer slot
+    // and its undo to recovery for no reason.
+    for (const c of this.#connections) c.close()
+    this.#connections.clear()
     this.#implicit = null
     if (this.#sync !== undefined) clearInterval(this.#sync)
     this.store?.close()

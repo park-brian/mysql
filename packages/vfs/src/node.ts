@@ -13,7 +13,7 @@
 // process, `lock` queues callers exactly as the memory backend does. Across
 // processes it holds an advisory lock file created with `wx`, which holds the
 // owner's pid: a file whose pid is no longer running is stale, and taken over.
-import { closeSync, existsSync, fstatSync, fsyncSync, ftruncateSync, mkdirSync, openSync, readdirSync, readFileSync, readSync, rmSync, statSync, unlinkSync, writeFileSync, writeSync } from 'node:fs'
+import { closeSync, existsSync, fstatSync, fsyncSync, ftruncateSync, mkdirSync, openSync, readdirSync, readFileSync, readSync, renameSync, rmSync, statSync, unlinkSync, writeFileSync, writeSync } from 'node:fs'
 import { dirname, join, resolve } from 'node:path'
 import { DEFAULT_PAGE_SIZE, VfsError, badPage, fileClosed, fileNotFound, type Lock, type Vfs, type VfsFile } from './vfs.ts'
 
@@ -290,7 +290,33 @@ export class NodeVfs implements Vfs {
         continue
       }
       if (Number.isInteger(owner) && owner !== process.pid && isRunning(owner)) return false
-      rmSync(file, { force: true })
+      // Take the stale file over by renaming it aside, which only one of two
+      // racing processes can do, and check it was the stale one: a process
+      // that read the dead pid a moment ago and then deleted the file could
+      // otherwise remove a lock another had just created, and both would own
+      // the database (found by review). Moving a fresh lock aside by mistake
+      // puts it back and backs off.
+      const tomb = `${file}.stale-${process.pid}-${Date.now()}`
+      try {
+        renameSync(file, tomb)
+      } catch {
+        continue
+      }
+      let moved = NaN
+      try {
+        moved = Number(readFileSync(tomb, 'utf8'))
+      } catch {
+        // Unreadable: it was the stale one or nothing.
+      }
+      if (moved !== owner && Number.isInteger(moved)) {
+        try {
+          renameSync(tomb, file)
+        } catch {
+          rmSync(tomb, { force: true })
+        }
+        return false
+      }
+      rmSync(tomb, { force: true })
     }
     return false
   }

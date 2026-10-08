@@ -19,7 +19,7 @@
 // of its own, which is what `Catalog` already does (D-59).
 import type { Isolation, Store, Trx } from '@myjs/engine'
 import { sqlError, type Session } from '@myjs/protocol'
-import type { Value } from '@myjs/types'
+import { stringValue, type Value } from '@myjs/types'
 import type { SessionValues } from './compile.ts'
 import type { ServerState } from './admin.ts'
 
@@ -56,6 +56,22 @@ export class SqlSession implements SessionValues {
   constructor(session: Session, server: ServerState) {
     this.session = session
     this.#server = server
+    // A session starts at the server's level, as `SET GLOBAL TRANSACTION` leaves it.
+    this.isolation = isolationOf(String(server.vars.get('transaction_isolation') ?? 'REPEATABLE-READ'))
+  }
+
+  /**
+   * `SET SESSION TRANSACTION ISOLATION LEVEL …` and `SET transaction_isolation
+   * = …` are one setting: what transactions run at, and what
+   * `@@transaction_isolation` reads back — in MySQL's spelling, `READ-COMMITTED`.
+   */
+  setIsolation(level: string): void {
+    const name = level.toUpperCase().replace(/[ _]/g, '-')
+    if (!['READ-UNCOMMITTED', 'READ-COMMITTED', 'REPEATABLE-READ', 'SERIALIZABLE'].includes(name)) {
+      throw sqlError('ER_WRONG_VALUE_FOR_VAR', `Variable 'transaction_isolation' can't be set to the value of '${level}'`)
+    }
+    this.isolation = isolationOf(name)
+    this.ownVariables.set('transaction_isolation', stringValue(name, 255))
   }
 
   systemVariable(name: string, scope: 'GLOBAL' | 'SESSION' | undefined, session: Session): Value | undefined {

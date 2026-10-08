@@ -15,7 +15,7 @@
 // binlog's little-endian form, as D-34's fixtures were captured in, so this
 // module converts between the two. A DATE keyed in the little-endian form
 // would sort `2024-01-02` before `2023-12-31`.
-import { CHARSET_BINARY, FIELD_TYPE, type MysqlDateTime } from '@myjs/bytes'
+import { CHARSET_BINARY, FIELD_TYPE, type MysqlDateTime, type MysqlTime } from '@myjs/bytes'
 import { collation, decodeCollation, encodeCollation, requireCollationInfo } from '@myjs/charsets'
 import type { ColumnType } from './columns.ts'
 import { decodeDecimal, encodeDecimal } from './decimal.ts'
@@ -186,7 +186,7 @@ export function encodeField(value: Value, column: FieldColumn, ctx: StoreContext
         adjust(ctx, () => wrongTemporalValue('time', toText(value), column.name, ctx.row), undefined)
         return encodeTime2({ negative: false, days: 0, hour: 0, minute: 0, second: 0, microsecond: 0 }, fsp)
       }
-      return encodeTime2({ ...tv.v, microsecond: truncateMicros(tv.v.microsecond, fsp) }, fsp)
+      return encodeTime2(roundTime(tv.v, fsp), fsp)
     }
 
     case FIELD_TYPE.ENUM: {
@@ -262,10 +262,32 @@ function encodeDecimalField(v: Exclude<Value, null>, column: FieldColumn, ctx: S
   return encodeDecimal(renderDecimal(d), precision, scale)
 }
 
-/** Fractional seconds beyond the column's precision are dropped. */
-function truncateMicros(us: number, fsp: number): number {
+/**
+ * Fractional seconds beyond the column's precision are rounded, half up, and
+ * the carry is carried: `'2020-12-31 23:59:59.7'` into a DATETIME is
+ * `2021-01-01 00:00:00`, as 8.4.11 stores it (`TIME_TRUNCATE_FRACTIONAL` is
+ * off by default). Truncating, as this first did, was found by review.
+ */
+export function roundDateTime(v: MysqlDateTime, fsp: number): MysqlDateTime {
   const unit = 10 ** (6 - fsp)
-  return Math.floor(us / unit) * unit
+  const us = Math.round(v.microsecond / unit) * unit
+  if (us < 1_000_000) return { ...v, microsecond: us }
+  // One second more. `Date` does the calendar; years below 100 are set
+  // explicitly, since `Date.UTC` reads them as 1900 + y.
+  const d = new Date(0)
+  d.setUTCFullYear(v.year, v.month - 1, v.day)
+  d.setUTCHours(v.hour, v.minute, v.second + 1, 0)
+  return { year: d.getUTCFullYear(), month: d.getUTCMonth() + 1, day: d.getUTCDate(), hour: d.getUTCHours(), minute: d.getUTCMinutes(), second: d.getUTCSeconds(), microsecond: 0 }
+}
+
+/** A TIME rounded the same way: `'10:00:59.5'` into a TIME is `10:01:00`. */
+export function roundTime(t: MysqlTime, fsp: number): MysqlTime {
+  const unit = 10 ** (6 - fsp)
+  const seconds = ((t.days * 24 + t.hour) * 60 + t.minute) * 60 + t.second
+  const total = Math.round((seconds * 1_000_000 + t.microsecond) / unit) * unit
+  const s = Math.floor(total / 1_000_000)
+  const hours = Math.floor(s / 3600)
+  return { negative: t.negative, days: Math.floor(hours / 24), hour: hours % 24, minute: Math.floor(s / 60) % 60, second: s % 60, microsecond: total % 1_000_000 }
 }
 
 const ZERO_DATE: MysqlDateTime = { year: 0, month: 0, day: 0, hour: 0, minute: 0, second: 0, microsecond: 0 }
@@ -279,7 +301,7 @@ function encodeTemporalField(value: Exclude<Value, null>, column: FieldColumn, c
   if (dt === undefined) {
     const label = type === 'DATE' ? 'date' : type === 'DATETIME' ? 'datetime' : 'datetime'
     v = adjust(ctx, () => wrongTemporalValue(label, toText(value), column.name, ctx.row), ZERO_DATE)
-  } else v = { ...dt.v, microsecond: truncateMicros(dt.v.microsecond, fsp) }
+  } else v = roundDateTime(dt.v, fsp)
 
   if (type === 'DATE') return dateFieldToStorage(encodeDateField(v.year, v.month, v.day))
   if (type === 'DATETIME') return encodeDatetime2(v, fsp)
