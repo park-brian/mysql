@@ -26,6 +26,7 @@ import { NODE, parseExpression, type Expression } from '@myjs/parser'
 import { checksOf } from './checks.ts'
 import { foreignKeysOf, referenceText } from './foreign-keys.ts'
 import { fulltextOf } from './fulltext.ts'
+import { isTemporary } from './temporary.ts'
 import { columnDefault, generatedDefault, tableCollation, typeFacts } from './information-schema.ts'
 import { escapeString, printExpression } from './print.ts'
 import type { Run } from './query.ts'
@@ -142,5 +143,5 @@ export function showCreateTable(run: Run, def: TableDef, table: Table): string {
   if (!isPrimary(collation)) options += ` COLLATE=${info.name}`
   const comment = def.options['comment']
   if (typeof comment === 'string' && comment !== '') options += ` COMMENT=${quoted(comment)}`
-  return `CREATE TABLE ${q(def.name)} (\n${lines.join(',\n')}\n)${options}`
+  return `CREATE ${isTemporary(def) ? "TEMPORARY " : ""}TABLE ${q(def.name)} (\n${lines.join(',\n')}\n)${options}`
 }

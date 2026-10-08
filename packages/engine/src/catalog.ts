@@ -193,7 +193,7 @@ export class Catalog {
     const version = options.version ?? CATALOG_VERSION
     if ((options.lowerCaseTableNames ?? 0) !== 0) throw notSupportedYet('lower_case_table_names = 1')
     if (!store.hasTree(SYSTEM_INDEX.CATALOG)) {
-      ddl(store, (trx) => {
+      ddl(store, undefined, (trx) => {
         for (const k of ['CATALOG', 'SCHEMAS', 'TABLES'] as const) {
           trx.write(() => {
             store.createTree({ indexId: SYSTEM_INDEX[k] })
@@ -217,7 +217,7 @@ export class Catalog {
       if (m === undefined) throw badFormat(`catalog version ${stored}; this build reads ${version} and has no migration from ${v}`)
       chain.push(m)
     }
-    ddl(store, (trx) => {
+    ddl(store, undefined, (trx) => {
       const context: MigrationContext = {
         trx,
         tables: () =>
@@ -245,9 +245,9 @@ export class Catalog {
 
   // --- schemas ------------------------------------------------------------------
 
-  createSchema(name: string, options: { readonly ifNotExists?: boolean; readonly collationId?: number } = {}): SchemaDef | undefined {
+  createSchema(name: string, options: { readonly ifNotExists?: boolean; readonly collationId?: number; readonly trx?: Trx } = {}): SchemaDef | undefined {
     checkName(name, wrongDbName)
-    return ddl(this.store, (trx) => {
+    return ddl(this.store, options.trx, (trx) => {
       if (this.#schemaOf(name, trx) !== undefined) {
         if (options.ifNotExists === true) return undefined
         throw dbExists(name)
@@ -259,9 +259,9 @@ export class Catalog {
   }
 
   /** Drop a schema and every table and view in it, in one transaction. Returns their names. */
-  dropSchema(name: string, options: { readonly ifExists?: boolean } = {}): string[] {
+  dropSchema(name: string, options: { readonly ifExists?: boolean; readonly trx?: Trx } = {}): string[] {
     const discards: (() => void)[] = []
-    const dropped = ddl(this.store, (trx) => {
+    const dropped = ddl(this.store, options.trx, (trx) => {
       const s = this.#schemaOf(name, trx)
       if (s === undefined) {
         if (options.ifExists === true) return []
@@ -300,8 +300,8 @@ export class Catalog {
    * clustered index — before anything is made, so a refusal leaves nothing.
    * With `ifNotExists`, an existing table's definition is returned instead.
    */
-  createTable(schema: string, spec: TableSpec, options: { readonly ifNotExists?: boolean } = {}): TableDef {
-    return ddl(this.store, (trx) => {
+  createTable(schema: string, spec: TableSpec, options: { readonly ifNotExists?: boolean; readonly trx?: Trx } = {}): TableDef {
+    return ddl(this.store, options.trx, (trx) => {
       const s = this.#schemaOf(schema, trx)
       if (s === undefined) throw unknownDb(schema)
       const existing = this.#definition(s.id, spec.name, trx)
@@ -320,9 +320,9 @@ export class Catalog {
   }
 
   /** DROP TABLE: the definition goes now, the storage when no view can need it. */
-  dropTable(schema: string, name: string, options: { readonly ifExists?: boolean } = {}): boolean {
+  dropTable(schema: string, name: string, options: { readonly ifExists?: boolean; readonly trx?: Trx } = {}): boolean {
     let discard: (() => void) | undefined
-    const dropped = ddl(this.store, (trx) => {
+    const dropped = ddl(this.store, options.trx, (trx) => {
       const s = this.#schemaOf(schema, trx)
       const def = s === undefined ? undefined : this.#definition(s.id, name, trx)
       if (s === undefined || def === undefined) {
@@ -344,7 +344,7 @@ export class Catalog {
    */
   truncateTable(schema: string, name: string): TableDef {
     let discard: (() => void) | undefined
-    const def = ddl(this.store, (trx) => {
+    const def = ddl(this.store, undefined, (trx) => {
       const s = this.#schemaOf(schema, trx)
       const old = s === undefined ? undefined : this.#definition(s.id, name, trx)
       if (s === undefined || old === undefined) throw noSuchTable(schema, name)
@@ -369,7 +369,7 @@ export class Catalog {
     let discard: (() => void) | undefined
     let made: TableDef | undefined
     try {
-      const def = ddl(this.store, (trx) => {
+      const def = ddl(this.store, undefined, (trx) => {
         const s = this.#schemaOf(schema, trx)
         const old = s === undefined ? undefined : this.#definition(s.id, name, trx)
         if (s === undefined || old === undefined) throw noSuchTable(schema, name)
@@ -396,9 +396,10 @@ export class Catalog {
   }
 
   /** A table's definition, as last committed. ER_NO_SUCH_TABLE if there is none. */
-  definition(schema: string, name: string): TableDef {
-    const s = this.#schemaOf(schema, undefined)
-    const def = s === undefined ? undefined : this.#definition(s.id, name, undefined)
+  /** A table's definition, as last committed, or as `trx` sees it. */
+  definition(schema: string, name: string, trx?: Trx): TableDef {
+    const s = this.#schemaOf(schema, trx)
+    const def = s === undefined ? undefined : this.#definition(s.id, name, trx)
     if (def === undefined) throw noSuchTable(schema, name)
     return def
   }
@@ -418,7 +419,7 @@ export class Catalog {
    */
   createView(view: ViewDef, options: { readonly orReplace?: boolean } = {}): void {
     checkName(view.name, wrongTableName)
-    ddl(this.store, (trx) => {
+    ddl(this.store, undefined, (trx) => {
       const s = this.#schemaOf(view.schema, trx)
       if (s === undefined) throw unknownDb(view.schema)
       const row = this.#row(s.id, view.name, trx)
@@ -436,7 +437,7 @@ export class Catalog {
    * `ifExists`, returned for the caller's notes.
    */
   dropViews(schema: string, names: readonly string[], options: { readonly ifExists?: boolean } = {}): string[] {
-    return ddl(this.store, (trx) => {
+    return ddl(this.store, undefined, (trx) => {
       const s = this.#schemaOf(schema, trx)
       const missing: string[] = []
       for (const name of names) {
@@ -462,13 +463,13 @@ export class Catalog {
     return this.#views(this.schema(schema).id, undefined)
   }
 
-  /** A handle on a table, through the engine that stores it. */
-  table(schema: string, name: string): Table {
-    const s = this.#schemaOf(schema, undefined)
+  /** A handle on a table, through the engine that stores it: as last committed, or as `trx` sees it. */
+  table(schema: string, name: string, trx?: Trx): Table {
+    const s = this.#schemaOf(schema, trx)
     if (s === undefined) throw noSuchTable(schema, name)
     const key = this.#tableKey(s.id, name)
     const value = this.#tables.tree.get(key)
-    const def = this.#definition(s.id, name, undefined)
+    const def = this.#definition(s.id, name, trx)
     if (value === undefined || def === undefined) throw noSuchTable(schema, name)
     try {
       return this.#open(def, key, value, schema, name)
@@ -619,7 +620,13 @@ function schemaDef(bytes: Uint8Array | null | undefined): SchemaDef {
  * as the writer slot is taken; the executor commits the session's transaction
  * first, as MySQL's implicit commit does.
  */
-function ddl<T>(store: Store, change: (trx: Trx) => T): T {
+/**
+ * One DDL change in a transaction of its own, or in `within`, the caller's:
+ * a session's temporary table is made and dropped in the session's
+ * transaction, since the one writer is that transaction's.
+ */
+function ddl<T>(store: Store, within: Trx | undefined, change: (trx: Trx) => T): T {
+  if (within !== undefined) return change(within)
   if (store.transactions.writer !== undefined) throw writerBusy()
   const trx = store.begin('READ COMMITTED')
   let out: T

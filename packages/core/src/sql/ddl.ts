@@ -315,7 +315,6 @@ export interface ResolvedTable {
  * default, which a table without a charset of its own inherits.
  */
 export function createTableSpec(node: CreateTableNode, schemaCollation: number): TableSpec {
-  if (node.temporary === true) throw sqlError('ER_NOT_SUPPORTED_YET', messages.notSupported('CREATE TEMPORARY TABLE'))
   if (node.like !== undefined) throw sqlError('ER_NOT_SUPPORTED_YET', messages.notSupported('CREATE TABLE … LIKE'))
   if (node.query !== undefined) throw sqlError('ER_NOT_SUPPORTED_YET', messages.notSupported('CREATE TABLE … SELECT'))
   if (node.partition !== undefined) throw sqlError('ER_NOT_SUPPORTED_YET', messages.notSupported('Partitioning'))

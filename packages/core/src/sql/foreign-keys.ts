@@ -37,11 +37,12 @@
 //   - `foreign_key_checks = 0` turns all of it off, cascades included.
 import { FIELD_TYPE, CHARSET_BINARY } from '@myjs/bytes'
 import { sqlError } from '@myjs/protocol'
-import type { Catalog, ColumnDef, FieldBytes, IndexDef, KeyRange, ReadMode, Row, RowId, Table, TableDef, TableSpec, Trx } from '@myjs/engine'
+import type { ColumnDef, FieldBytes, IndexDef, KeyRange, ReadMode, Row, RowId, Table, TableDef, TableSpec, Trx } from '@myjs/engine'
 import type { KeyDefinition } from '@myjs/parser'
 import type { ColumnType } from '@myjs/types'
 import { decodeField, encodeField, type StoreContext } from '@myjs/types'
 import type { Run } from './query.ts'
+import { isTemporary, type CatalogApi } from './temporary.ts'
 
 export type ReferentialAction = 'RESTRICT' | 'CASCADE' | 'SET NULL' | 'NO ACTION' | 'SET DEFAULT'
 
@@ -175,7 +176,7 @@ export function referencedIndex(parent: { readonly indexes: readonly IndexDef[] 
  * named, checked against its parent, and given an index if it has none. Every
  * refusal is the one 8.4.11 gives, in its order.
  */
-export function withForeignKeys(catalog: Catalog, schema: string, spec: TableSpec, clauses: readonly ForeignKeyClause[], checks: boolean): TableSpec {
+export function withForeignKeys(catalog: CatalogApi, schema: string, spec: TableSpec, clauses: readonly ForeignKeyClause[], checks: boolean): TableSpec {
   if (clauses.length === 0) return spec
   const existing = spec.options?.['foreignKeys'] === undefined ? [] : foreignKeysOf({ ...(spec as TableDef), schema, options: spec.options })
   const indexes = [...(spec.indexes ?? [])]
@@ -212,6 +213,8 @@ export function withForeignKeys(catalog: Catalog, schema: string, spec: TableSpe
     else {
       try {
         parent = catalog.definition(parentSchema, clause.references.table)
+        // A temporary table is no parent (8.4.11: 1215).
+        if (isTemporary(parent as TableDef)) throw sqlError('ER_CANNOT_ADD_FOREIGN', 'Cannot add foreign key constraint')
       } catch {
         parent = undefined
       }
@@ -253,7 +256,7 @@ export function isReferenced(run: Run, def: TableDef): boolean {
 }
 
 /** The foreign keys in other tables that reference `schema.name`. */
-export function referencingKeys(catalog: Catalog, schema: string, name: string): { readonly child: TableDef; readonly fk: ForeignKeyDef }[] {
+export function referencingKeys(catalog: CatalogApi, schema: string, name: string): { readonly child: TableDef; readonly fk: ForeignKeyDef }[] {
   const out: { child: TableDef; fk: ForeignKeyDef }[] = []
   for (const child of catalog.tables()) for (const fk of foreignKeysOf(child)) if (fk.references.schema === schema && fk.references.table === name) out.push({ child, fk })
   return out
@@ -293,7 +296,7 @@ const position = (def: TableDef, name: string): number => def.columns.findIndex(
 
 /** What a statement's writes share: its tables, opened once, and the keys that reference each. */
 class Enforcer {
-  readonly #catalog: Catalog
+  readonly #catalog: CatalogApi
   readonly #trx: Trx | undefined
   readonly #tables = new Map<string, Table>()
   #referencing: Map<string, { child: TableDef; fk: ForeignKeyDef }[]> | undefined
@@ -301,7 +304,7 @@ class Enforcer {
   /** The writer's latest, inside a statement; the latest committed, from inside a DDL. */
   readonly #mode: ReadMode | undefined
 
-  constructor(catalog: Catalog, trx: Trx | undefined) {
+  constructor(catalog: CatalogApi, trx: Trx | undefined) {
     this.#mode = trx === undefined ? undefined : 'current'
     this.#catalog = catalog
     this.#trx = trx
@@ -543,7 +546,7 @@ export function guarded(run: Run, table: Table, trx: Trx): Table {
  * The child-side check alone, reading committed parents: ALTER TABLE … ADD
  * FOREIGN KEY on rows already there, from inside the DDL that copies them.
  */
-export function checkParentOf(catalog: Catalog): (def: TableDef, fk: ForeignKeyDef, row: Row) => void {
+export function checkParentOf(catalog: CatalogApi): (def: TableDef, fk: ForeignKeyDef, row: Row) => void {
   const enforcer = new Enforcer(catalog, undefined)
   return (def, fk, row) => enforcer.checkParent(def, fk, row)
 }

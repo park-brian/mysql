@@ -66,6 +66,7 @@ import { fulltextOf } from './fulltext.ts'
 import { columnDefinition, intType, stringType } from './meta.ts'
 import { columnsOf, compileContext, planQuery, resultSet, viewTable, type Run } from './query.ts'
 import { SqlSession, isolationOf } from './session.ts'
+import { dropOrphans, isTemporary, sessionCatalog, TemporaryTables, type CatalogApi } from './temporary.ts'
 import type { WireProtocol } from './wire.ts'
 
 export interface SqlExecutorOptions extends ServerOptions {
@@ -178,10 +179,22 @@ export class SqlExecutor implements Executor {
    * open one nothing will ever end (found by review).
    */
   readonly #ended = new WeakSet<Session>()
+  /** Each session's temporary tables, dropped when it ends or is reset. */
+  readonly #temporary = new WeakMap<Session, TemporaryTables>()
+  #temporaries = 0
 
   constructor(options: SqlExecutorOptions = {}) {
     this.catalog = options.catalog
     this.server = new ServerState(options)
+    if (this.catalog !== undefined) dropOrphans(this.catalog)
+  }
+
+  /** The catalog as `session` sees it: its temporary tables over everyone's. */
+  #catalogOf(session: Session): CatalogApi | undefined {
+    if (this.catalog === undefined) return undefined
+    let temporary = this.#temporary.get(session)
+    if (temporary === undefined) this.#temporary.set(session, (temporary = new TemporaryTables(this.catalog, ++this.#temporaries, () => this.#sessions.get(session)?.trx)))
+    return sessionCatalog(this.catalog, temporary)
   }
 
   #state(session: Session): SqlSession {
@@ -228,7 +241,7 @@ export class SqlExecutor implements Executor {
   async initDb(session: Session, database: string): Promise<void> {
     if (this.catalog !== undefined && database.toLowerCase() !== 'information_schema') {
       try {
-        this.catalog.schema(database)
+        this.#catalogOf(session)?.schema(database)
       } catch (e) {
         throw toSqlError(e)
       }
@@ -248,6 +261,9 @@ export class SqlExecutor implements Executor {
   reset(session: Session): void {
     this.#sessions.get(session)?.rollback()
     this.#sessions.delete(session)
+    // A session's temporary tables end with it, and with a reset (COM_RESET_CONNECTION).
+    this.#temporary.get(session)?.dropAll()
+    this.#temporary.delete(session)
   }
 
   end(session: Session): void {
@@ -436,12 +452,12 @@ export class SqlExecutor implements Executor {
   #run(session: Session, sql: string, params: readonly Value[], known: readonly Value[] | undefined, protocol: WireProtocol, conditions: Condition[] = []): Run {
     const state = this.#state(session)
     const env: Env = { params, now: new Date(), session, state, memo: new Map(), conditions }
-    return { catalog: this.catalog, state, env, sql, protocol, serverVersion: this.server.serverVersion, ...(known === undefined ? {} : { params: known }) }
+    return { catalog: this.#catalogOf(session), state, env, sql, protocol, serverVersion: this.server.serverVersion, ...(known === undefined ? {} : { params: known }) }
   }
 
-  #catalog(): Catalog {
-    if (this.catalog === undefined) throw sqlError('ER_NOT_SUPPORTED_YET', messages.notSupported('This statement without a database'))
-    return this.catalog
+  #catalog(run: Run): CatalogApi {
+    if (run.catalog === undefined) throw sqlError('ER_NOT_SUPPORTED_YET', messages.notSupported('This statement without a database'))
+    return run.catalog
   }
 
   /** The synchronous core: one parsed statement, run. */
@@ -455,22 +471,29 @@ export class SqlExecutor implements Executor {
         return state.statement(this.catalog.store, plan.locking, (trx) => resultSet(run, plan, trx))
       }
       case STATEMENT.INSERT:
-        return this.#counted(run, state.statement(this.#catalog().store, true, (trx) => insert(run, statement, trx)))
+        return this.#counted(run, state.statement(this.#catalog(run).store, true, (trx) => insert(run, statement, trx)))
       case STATEMENT.UPDATE:
-        return this.#counted(run, state.statement(this.#catalog().store, true, (trx) => update(run, statement, trx)))
+        return this.#counted(run, state.statement(this.#catalog(run).store, true, (trx) => update(run, statement, trx)))
       case STATEMENT.DELETE:
-        return this.#counted(run, state.statement(this.#catalog().store, true, (trx) => remove(run, statement, trx)))
+        return this.#counted(run, state.statement(this.#catalog(run).store, true, (trx) => remove(run, statement, trx)))
 
       case STATEMENT.CREATE_TABLE: {
-        const catalog = this.#catalog()
+        const catalog = this.#catalog(run)
         const schema = statement.table.schema ?? session.database
         if (schema === null) throw sqlError('ER_NO_DB_ERROR', messages.noDatabaseSelected())
-        state.commit()
+        const temporary = statement.temporary === true ? catalog.temporary : undefined
+        // CREATE TEMPORARY TABLE does not commit (8.4.11).
+        if (temporary === undefined) state.commit()
         let spec = createTableSpec(statement, catalog.schema(schema).collationId ?? DEFAULT_COLLATION)
         // CHECK constraints are resolved first, IF NOT EXISTS or not (8.4.11: 3820 over a table that exists).
         spec = withChecks(catalog, schema, spec, run.sql, checkClauses(statement), session.characterSet)
-        // A table that exists is 1050, or IF NOT EXISTS's note, whatever its keys would say.
-        const exists = catalog.tables(schema).some((t) => t.name === spec.name)
+        // A table that exists is 1050, or IF NOT EXISTS's note, whatever its keys would say; a
+        // temporary one meets only the session's others.
+        const exists = temporary !== undefined ? temporary.has(schema, spec.name) : catalog.tables(schema).some((t) => t.name === spec.name)
+        if (temporary !== undefined && !exists) {
+          if (statement.keys.some((k) => k.type === KEY.FOREIGN)) throw sqlError('ER_CANNOT_ADD_FOREIGN', 'Cannot add foreign key constraint')
+          if (fulltextOf(spec).length > 0 && spec.engine !== 'memory') throw sqlError('ER_INNODB_NO_FT_TEMP_TABLE', 'Cannot create FULLTEXT index on temporary InnoDB table')
+        }
         if (!exists) {
           spec = withForeignKeys(catalog, schema, spec, statement.keys.filter((k) => k.type === KEY.FOREIGN).map(foreignKeyClause), foreignKeyChecks(run))
           checkForeignKeyActions(spec, foreignKeysOf({ ...spec, schema, options: spec.options ?? {} } as TableDef))
@@ -478,7 +501,14 @@ export class SqlExecutor implements Executor {
         const deprecated = deprecationWarnings(statement)
         for (const m of deprecated) raise(run.env, 1681, m)
         const notes = checkDefaults(run, spec.columns)
-        catalog.createTable(schema, spec, { ifNotExists: statement.ifNotExists === true })
+        if (temporary !== undefined) {
+          if (exists && statement.ifNotExists !== true) throw sqlError('ER_TABLE_EXISTS_ERROR', `Table '${spec.name}' already exists`)
+          if (!exists) {
+            // Under autocommit = 0 the creation belongs to the transaction the session is in, begun here if nothing has begun it.
+            if (!session.autocommit && state.trx === undefined) state.begin(catalog.store)
+            temporary.create(schema, spec)
+          }
+        } else catalog.createTable(schema, spec, { ifNotExists: statement.ifNotExists === true })
         if (exists) {
           raise(run.env, 1050, `Table '${spec.name}' already exists`, 'Note')
           return { affectedRows: 0, warnings: deprecated.length + notes + 1 }
@@ -489,7 +519,7 @@ export class SqlExecutor implements Executor {
         return { affectedRows: 0, ...(warnings > 0 ? { warnings } : {}) }
       }
       case STATEMENT.ALTER_TABLE:
-        return alterTable(run, this.#catalog(), statement)
+        return alterTable(run, this.#catalog(run), statement)
       case STATEMENT.CREATE_VIEW:
         state.commit()
         return this.#createView(run, statement)
@@ -508,10 +538,10 @@ export class SqlExecutor implements Executor {
         if (schema === null) throw sqlError('ER_NO_DB_ERROR', messages.noDatabaseSelected())
         state.commit()
         if (foreignKeyChecks(run)) {
-          const by = referencingKeys(this.#catalog(), schema, statement.table.name).find((r) => r.child.schema !== schema || r.child.name !== statement.table.name)
+          const by = referencingKeys(this.#catalog(run), schema, statement.table.name).find((r) => r.child.schema !== schema || r.child.name !== statement.table.name)
           if (by !== undefined) throw sqlError('ER_TRUNCATE_ILLEGAL_FK', `Cannot truncate a table referenced in a foreign key constraint (\`${by.child.schema}\`.\`${by.child.name}\`, CONSTRAINT \`${by.fk.name}\`)`)
         }
-        this.#catalog().truncateTable(schema, statement.table.name)
+        this.#catalog(run).truncateTable(schema, statement.table.name)
         return { affectedRows: 0 }
       }
       case STATEMENT.CREATE_ROUTINE:
@@ -537,7 +567,7 @@ export class SqlExecutor implements Executor {
         return { affectedRows: 0 }
       }
       case STATEMENT.USE:
-        if (this.catalog !== undefined && statement.database.toLowerCase() !== 'information_schema') this.catalog.schema(statement.database)
+        if (this.catalog !== undefined && statement.database.toLowerCase() !== 'information_schema') run.catalog?.schema(statement.database)
         session.database = statement.database
         return { affectedRows: 0 }
 
@@ -546,15 +576,27 @@ export class SqlExecutor implements Executor {
         return { affectedRows: 0 }
       case STATEMENT.COMMIT:
         state.commit()
+        run.catalog?.temporary?.committed()
         if (statement.chain === true && this.catalog !== undefined) state.begin(this.catalog.store)
         return { affectedRows: 0 }
-      case STATEMENT.ROLLBACK:
+      case STATEMENT.ROLLBACK: {
+        const rolledBack = state.trx
         if (statement.savepoint !== undefined) state.rollbackTo(statement.savepoint)
-        else {
-          state.rollback()
-          if (statement.chain === true && this.catalog !== undefined) state.begin(this.catalog.store)
+        else state.rollback()
+        // What the rollback took of the session's temporary tables is put back, with a warning (8.4.11: 1751, 1752).
+        const restored = run.catalog?.temporary?.reconcile(rolledBack)
+        let warnings = 0
+        if (restored?.made === true) {
+          raise(run.env, 1751, 'The creation of some temporary tables could not be rolled back.')
+          warnings++
         }
-        return { affectedRows: 0 }
+        if (restored?.dropped === true) {
+          raise(run.env, 1752, 'Some temporary tables were dropped, but these operations could not be rolled back.')
+          warnings++
+        }
+        if (statement.savepoint === undefined && statement.chain === true && this.catalog !== undefined) state.begin(this.catalog.store)
+        return { affectedRows: 0, ...(warnings > 0 ? { warnings } : {}) }
+      }
       case STATEMENT.SAVEPOINT:
         state.savepoint(statement.name)
         return { affectedRows: 0 }
@@ -593,7 +635,7 @@ export class SqlExecutor implements Executor {
   }
 
   #createDatabase(run: Run, statement: CreateDatabaseNode): StatementResult {
-    const catalog = this.#catalog()
+    const catalog = this.#catalog(run)
     const options = statement.options
     const pick = (...names: string[]): string | undefined => {
       for (const [k, v] of Object.entries(options)) if (names.includes(k.toUpperCase().replace(/^DEFAULT /, ''))) return v
@@ -623,8 +665,17 @@ export class SqlExecutor implements Executor {
     if (schema === null) throw sqlError('ER_NO_DB_ERROR', messages.noDatabaseSelected())
     if (findNode(statement.query, (n) => n.kind === QUERY.QUERY && (n as QueryExpression).into !== undefined)) throw sqlError('ER_VIEW_SELECT_CLAUSE', "View's SELECT contains a 'INTO' clause")
     if (findNode(statement.query, (n) => n.kind === NODE.VARIABLE || n.kind === NODE.PLACEHOLDER)) throw sqlError('ER_VIEW_SELECT_VARIABLE', "View's SELECT contains a variable or parameter")
-    const catalog = this.#catalog()
+    const catalog = this.#catalog(run)
     catalog.schema(schema)
+    // A view may not read a temporary table (8.4.11: 1352).
+    let temporary: string | undefined
+    findNode(statement.query, (n) => {
+      const t = n.kind === REF.TABLE ? (n as unknown as { table: TableName }).table : undefined
+      const at = t?.schema ?? session.database
+      if (t !== undefined && temporary === undefined && at !== null && catalog.temporary?.has(at, t.name) === true) temporary = t.name
+      return false
+    })
+    if (temporary !== undefined) throw sqlError('ER_VIEW_SELECT_TMPTABLE', `View's SELECT refers to a temporary table '${temporary}'`)
     const def: ViewDef = {
       schema,
       name: statement.view.name,
@@ -648,7 +699,7 @@ export class SqlExecutor implements Executor {
       this.server.program(session, statement)
       return { affectedRows: 0 }
     }
-    const catalog = this.#catalog()
+    const catalog = this.#catalog(run)
     if (statement.object === 'DATABASE') {
       const name = (statement.names[0] as TableName).name
       if (name === 'mysql') throw systemSchema(name)
@@ -689,22 +740,32 @@ export class SqlExecutor implements Executor {
       return alterTable(run, catalog, { kind: STATEMENT.ALTER_TABLE, table: statement.on, actions: [{ type: 'drop', what: 'INDEX', name }], options: {}, at: statement.at })
     }
     if (statement.object !== 'TABLE') throw sqlError('ER_NOT_SUPPORTED_YET', messages.notSupported(`DROP ${statement.object}`))
-    if (statement.temporary === true) throw sqlError('ER_NOT_SUPPORTED_YET', messages.notSupported('DROP TEMPORARY TABLE'))
     const names = statement.names.map((n) => {
       const schema = n.schema ?? session.database
       if (schema === null) throw sqlError('ER_NO_DB_ERROR', messages.noDatabaseSelected())
       return { schema, name: n.name }
     })
+    // DROP TEMPORARY TABLE drops the session's own and nothing else, and does not commit (8.4.11).
+    const temporary = catalog.temporary
+    if (statement.temporary === true) {
+      const missing = names.filter((n) => temporary?.has(n.schema, n.name) !== true)
+      if (missing.length > 0 && statement.ifExists !== true) throw sqlError('ER_BAD_TABLE_ERROR', `Unknown table '${missing.map((m) => `${m.schema}.${m.name}`).join(',')}'`)
+      for (const n of names) temporary?.drop(n.schema, n.name)
+      for (const m of missing) raise(run.env, 1051, `Unknown table '${m.schema}.${m.name}'`, 'Note')
+      return { affectedRows: 0, ...(missing.length > 0 ? { warnings: missing.length } : {}) }
+    }
+    const held = (n: { schema: string; name: string }) => temporary?.has(n.schema, n.name) === true || catalog.tables().some((t) => t.schema === n.schema && t.name === n.name)
     // All or nothing, as 8.0's atomic DDL is: every missing table is named,
     // and nothing is dropped.
     if (statement.ifExists !== true) {
-      const missing = names.filter((n) => !catalog.tables().some((t) => t.schema === n.schema && t.name === n.name))
+      const missing = names.filter((n) => !held(n))
       if (missing.length > 0) throw sqlError('ER_BAD_TABLE_ERROR', `Unknown table '${missing.map((m) => `${m.schema}.${m.name}`).join(',')}'`)
     }
     // A parent goes only with its children, or with the checks off (8.4.11: 3730).
     if (foreignKeyChecks(run)) {
       const dropping = (schema: string, name: string) => names.some((n) => n.schema === schema && n.name === name)
       for (const n of names) {
+        if (temporary?.has(n.schema, n.name) === true) continue
         const by = referencingKeys(catalog, n.schema, n.name).find((r) => !dropping(r.child.schema, r.child.name))
         if (by !== undefined) throw sqlError('ER_FK_CANNOT_DROP_PARENT', `Cannot drop table '${n.name}' referenced by a foreign key constraint '${by.fk.name}' on table '${by.child.name}'.`)
       }
@@ -804,15 +865,15 @@ export class SqlExecutor implements Executor {
         }
       }
       case 'DATABASES': {
-        const names = ['information_schema', ...(this.catalog?.schemas().map((s) => s.name) ?? [])].sort()
+        const names = ['information_schema', ...(run.catalog?.schemas().map((s) => s.name) ?? [])].sort()
         return { columns: [text('Database', 64)], rows: names.filter((n) => statement.like === undefined || likeText(n, statement.like)).map((n) => [encode(n)]) }
       }
       case 'CREATE TABLE': {
         const name = statement.name as TableName
         const schema = name.schema ?? run.env.session.database
         if (schema === null) throw sqlError('ER_NO_DB_ERROR', messages.noDatabaseSelected())
-        const catalog = this.#catalog()
-        if (catalog.view(schema, name.name) !== undefined) throw sqlError('ER_NOT_SUPPORTED_YET', messages.notSupported('SHOW CREATE TABLE of a view'))
+        const catalog = this.#catalog(run)
+        if (catalog.temporary?.has(schema, name.name) !== true && catalog.view(schema, name.name) !== undefined) throw sqlError('ER_NOT_SUPPORTED_YET', messages.notSupported('SHOW CREATE TABLE of a view'))
         const def = catalog.definition(schema, name.name)
         const created = showCreateTable(run, def, catalog.table(schema, name.name))
         return { columns: [text('Table', 64), text('Create Table', 1024)], rows: [[encode(def.name), encode(created)]] }
@@ -821,7 +882,7 @@ export class SqlExecutor implements Executor {
         const schema = statement.database ?? run.env.session.database
         if (schema === null) throw sqlError('ER_NO_DB_ERROR', messages.noDatabaseSelected())
         // Views beside tables, and under FULL, which is which (8.4.11).
-        const catalog = this.#catalog()
+        const catalog = this.#catalog(run)
         const tables = [...catalog.tables(schema).map((t) => [t.name, 'BASE TABLE']), ...catalog.views(schema).map((v) => [v.name, 'VIEW'])].sort((a, b) => ((a[0] as string) < (b[0] as string) ? -1 : 1))
         const label = `Tables_in_${schema}${statement.like === undefined ? '' : ` (${statement.like})`}`
         const shown = tables.filter(([n]) => statement.like === undefined || likeText(n as string, statement.like))

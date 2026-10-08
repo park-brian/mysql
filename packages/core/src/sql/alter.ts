@@ -15,7 +15,7 @@
 // name.
 import { FIELD_TYPE, MyjsError } from '@myjs/bytes'
 import { sqlError, messages, type OkResult } from '@myjs/protocol'
-import type { Catalog, ColumnDef, FieldBytes, IndexDef, TableDef, TableSpec } from '@myjs/engine'
+import type { ColumnDef, FieldBytes, IndexDef, TableDef, TableSpec } from '@myjs/engine'
 import { KEY, NODE, deparse, type AlterAction, type AlterTableNode, type ColumnDefinition, type Expression } from '@myjs/parser'
 import { decodeField, encodeField, type StoreContext, type Value } from '@myjs/types'
 import { raise, type Compiled } from './compile.ts'
@@ -25,6 +25,7 @@ import { checkDefaults, defaultOf, implicitDefault, rowDependent, zeroRules } fr
 import { checkParentOf, foreignKeyChecks, foreignKeyClause, foreignKeysOf, referencedIndex, referencingKeys, storageClass, supportingIndex, withForeignKeys, type ForeignKeyClause } from './foreign-keys.ts'
 import { checkFulltext, fulltextOf, type FulltextDef } from './fulltext.ts'
 import type { Run } from './query.ts'
+import { isTemporary, type CatalogApi } from './temporary.ts'
 
 const notSupported = (what: string) => sqlError('ER_NOT_SUPPORTED_YET', messages.notSupported(what))
 const cantDrop = (name: string) => sqlError('ER_CANT_DROP_FIELD_OR_KEY', `Can't DROP '${name}'; check that column/key exists`)
@@ -38,7 +39,7 @@ const ACTION_NAMES: Readonly<Record<string, string>> = {
   tablespace: 'ALTER TABLE … TABLESPACE',
 }
 
-export function alterTable(run: Run, catalog: Catalog, statement: AlterTableNode): OkResult {
+export function alterTable(run: Run, catalog: CatalogApi, statement: AlterTableNode): OkResult {
   const schema = statement.table.schema ?? run.env.session.database
   if (schema === null) throw sqlError('ER_NO_DB_ERROR', messages.noDatabaseSelected())
   // Table options: a COMMENT, an AUTO_INCREMENT counter, and the ENGINE it already has.
@@ -424,7 +425,9 @@ export function alterTable(run: Run, catalog: Catalog, statement: AlterTableNode
   const retyped = converted.some((c) => c !== undefined && !widened(c.from, c.to))
   const keyOf = (ix: readonly IndexDef[]) => JSON.stringify(ix.find((i) => i.kind === 'primary')?.parts.map((p) => p.column.toLowerCase()) ?? [])
   const rekeyed = keyOf(def.indexes) !== keyOf(indexes.map((i) => ({ ...i, parts: i.parts })) ) && def.indexes.some((i) => i.kind === 'primary') && [...dropped].some((d) => primary.has(d))
-  const copied = (checks && made.length > 0) || enabled.size > 0 || expression || retyped || rekeyed ? records : 0
+  // A temporary table is always copied, its rename too (8.4.11: `Records: 1` for one row).
+  const temporary = isTemporary(def)
+  const copied = temporary || (checks && made.length > 0) || enabled.size > 0 || expression || retyped || rekeyed ? records : 0
   // AUTO_INCREMENT = n moves the counter on, never back past the rows.
   const counter = optionOf('AUTO_INCREMENT')
   if (counter !== undefined && /^\d+$/.test(counter)) catalog.table(schema, name).raiseAutoIncrement(BigInt(counter))
@@ -436,7 +439,7 @@ export function alterTable(run: Run, catalog: Catalog, statement: AlterTableNode
     }
   }
   // A rename alone is answered as RENAME TABLE is, without counts.
-  if (statement.actions.every((a) => a.type === 'rename') && Object.keys(statement.options).length === 0) return { affectedRows: 0 }
+  if (!temporary && statement.actions.every((a) => a.type === 'rename') && Object.keys(statement.options).length === 0) return { affectedRows: 0 }
   // A table's first FULLTEXT key makes InnoDB add its document id column, and
   // say so (124, "InnoDB rebuilding table to add column FTS_DOC_ID").
   const duplicates = duplicateKeys(indexes, fulltext, kept)

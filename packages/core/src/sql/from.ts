@@ -125,7 +125,7 @@ export interface JoinCondition {
 
 export interface FromContext {
   /** Open a base table: ER_NO_SUCH_TABLE, ER_NO_DB_ERROR. */
-  open(ref: { readonly schema?: string; readonly name: string }): { readonly schema: string; readonly def: TableDef; readonly table: Table }
+  open(ref: { readonly schema?: string; readonly name: string }, alias?: string): { readonly schema: string; readonly def: TableDef; readonly table: Table }
   /** Compile an ON clause against the scope its join sees. */
   compileOn(e: Expression, scope: Scope): Compiled
   /** Plan a derived table (M5.1); `lateral` is the scope of the tables before it, for LATERAL. */
@@ -174,7 +174,7 @@ export function planFrom(refs: readonly TableReference[], ctx: FromContext, wher
         }
         let opened: ReturnType<FromContext['open']>
         try {
-          opened = ctx.open(ref.table)
+          opened = ctx.open(ref.table, alias)
         } catch (e) {
           // Tables and views share their names: a name that is no table may be a view.
           const view = (e as { errno?: number }).errno === 1146 ? ctx.view?.(ref.table, alias) : undefined

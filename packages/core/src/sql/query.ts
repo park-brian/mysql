@@ -9,7 +9,7 @@
 // A result column is named as MySQL names it: its alias, else a bare column's
 // name as written, else the expression's own source text — `SELECT 1+1`
 // returns a column called `1+1`, spaces and all, which only the text has.
-import type { Catalog, ColumnDef, Table, TableDef, ViewDef } from '@myjs/engine'
+import type { ColumnDef, Table, TableDef, ViewDef } from '@myjs/engine'
 import { NODE, QUERY, REF, TOKEN, deparse, lex, parseSqlMode, parseStatement, type Expression, type OrderItem, type QueryBody, type QueryExpression, type SelectNode, type SetOperationNode, type TableName, type Token } from '@myjs/parser'
 import { messages, sqlError, type ColumnDefinition, type ResultSet, type RowValue } from '@myjs/protocol'
 import { intValue, integerRange, toInteger, truth, withoutHex, type Value } from '@myjs/types'
@@ -30,10 +30,11 @@ import { informationSchemaTable } from './information-schema.ts'
 import type { SqlSession } from './session.ts'
 import { toWire, type WireProtocol } from './wire.ts'
 import type { Trx } from '@myjs/engine'
+import { isTemporary, type CatalogApi } from './temporary.ts'
 
 /** Everything one statement execution needs. */
 export interface Run {
-  readonly catalog: Catalog | undefined
+  readonly catalog: CatalogApi | undefined
   readonly state: SqlSession
   readonly env: Env
   /** The statement's text, which names unaliased result columns. */
@@ -76,7 +77,7 @@ export function compileContext(run: Run, scope: Scope, clause: string): CompileC
 /** What planning a FROM needs from the statement: its tables, and a compiler for ON clauses. */
 export function fromContext(run: Run): FromContext {
   return {
-    open: (name) => openTable(run, name),
+    open: (name, alias) => openTable(run, name, alias),
     compileOn: (e, scope) => compile(e, compileContext(run, scope, 'on clause')),
     derived: (ref, lateral) => derivedTable(run, ref.query, ref.alias as string, ref.columns, lateral),
     cte: (name) => run.ctes?.get(name)?.(),
@@ -87,15 +88,30 @@ export function fromContext(run: Run): FromContext {
 }
 
 /** A table a statement names, opened: ER_NO_DB_ERROR with no schema, ER_NO_SUCH_TABLE with no table. */
-export function openTable(run: Run, name: TableName): { readonly schema: string; readonly def: TableDef; readonly table: Table } {
+export function openTable(run: Run, name: TableName, alias = name.name): { readonly schema: string; readonly def: TableDef; readonly table: Table } {
   const schema = name.schema ?? defaultDatabase(run)
   if (schema === null || schema === undefined) throw sqlError('ER_NO_DB_ERROR', messages.noDatabaseSelected())
   // M5.12: refused by name until its tables exist, never answered as a missing table.
   if (schema.toLowerCase() === 'information_schema') throw sqlError('ER_NOT_SUPPORTED_YET', messages.notSupported('INFORMATION_SCHEMA'))
   if (run.catalog === undefined) throw sqlError('ER_NO_SUCH_TABLE', messages.noSuchTable(schema, name.name))
   const def = run.catalog.definition(schema, name.name)
+  // A temporary table is opened once a statement: a second reference to it is 1137, naming the first (8.4.11).
+  if (isTemporary(def)) {
+    let opened = run.env.memo?.get(OPENED) as Map<string, { readonly at: TableName; readonly alias: string }> | undefined
+    if (opened === undefined) {
+      opened = new Map()
+      run.env.memo?.set(OPENED, opened)
+    }
+    const key = `${schema}\0${name.name}`
+    const first = opened.get(key)
+    if (first !== undefined && first.at !== name) throw sqlError('ER_CANT_REOPEN_TABLE', `Can't reopen table: '${first.alias}'`)
+    opened.set(key, { at: name, alias })
+  }
   return { schema, def, table: run.catalog.table(schema, name.name) }
 }
+
+/** The statement's memo entry for the temporary tables it has opened. */
+const OPENED = Symbol('temporary tables opened')
 
 const defaultDatabase = (run: Run): string | null => (run.database === undefined ? run.env.session.database : run.database)
 

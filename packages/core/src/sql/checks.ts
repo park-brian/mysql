@@ -21,13 +21,14 @@
 //   - NOT ENFORCED keeps a constraint as documentation.
 import { requireCollationInfo } from '@myjs/charsets'
 import { sqlError } from '@myjs/protocol'
-import type { Catalog, ColumnDef, FieldBytes, TableDef, TableSpec } from '@myjs/engine'
+import type { ColumnDef, FieldBytes, TableDef, TableSpec } from '@myjs/engine'
 import { NODE, TOKEN, lex, parseExpression, type CheckConstraint, type CreateTableNode, type Expression, type Token } from '@myjs/parser'
 import { decodeField, truth } from '@myjs/types'
 import { compile, type Compiled } from './compile.ts'
 import { escapeString, printExpression } from './print.ts'
 import { compileContext, type Run } from './query.ts'
 import { TableScope } from './scope.ts'
+import type { CatalogApi } from './temporary.ts'
 
 export interface CheckDef {
   readonly name: string
@@ -116,7 +117,7 @@ function* nodes(root: unknown): Generator<{ readonly kind: string } & Record<str
  * `spec` with its CHECK constraints named, checked and stored. `sql` is the
  * statement they were written in, `charset` the connection's character set.
  */
-export function withChecks(catalog: Catalog, schema: string, spec: TableSpec, sql: string, clauses: readonly CheckClause[], charset: number): TableSpec {
+export function withChecks(catalog: CatalogApi, schema: string, spec: TableSpec, sql: string, clauses: readonly CheckClause[], charset: number): TableSpec {
   if (clauses.length === 0) return spec
   const tokens = lex(sql)
   const taken = new Set<string>()
