@@ -121,6 +121,8 @@ export {
   renderTime,
   rescale,
   string as stringValue,
+  textOf,
+  timeOrdinal,
   toDateTime,
   toDecimal,
   toDouble,
@@ -139,3 +141,4 @@ export { DIV_PRECISION_INCREMENT, add, bitNot, bitwise, divide, intDivide, modul
 export { decodeField, encodeField, integerRange } from './encode.ts'
 export type { FieldColumn, StoreContext } from './encode.ts'
 export { columnCannotBeNull, columnOutOfRange, dataTooLong, invalidJsonArgument, invalidJsonCharset, invalidJsonText, valueOutOfRange, wrongTemporalValue, wrongValueForColumn } from './errors.ts'
+export { addInterval, dayNumber, intervalFsp, intervalOf, isDateUnit, isIntervalUnit, isTimeUnit, type Interval } from './interval.ts'

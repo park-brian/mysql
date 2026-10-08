@@ -124,13 +124,13 @@
       }
     },
     "ours": {
-      "passed": 476,
-      "failed": 11,
+      "passed": 487,
+      "failed": 0,
       "skipped": 8,
       "files": {
         "tests/mysql/mysql-custom.test.ts": {
-          "passed": 38,
-          "failed": 1,
+          "passed": 39,
+          "failed": 0,
           "skipped": 0
         },
         "tests/mysql/mysql-prefixed.test.ts": {
@@ -139,13 +139,13 @@
           "skipped": 0
         },
         "tests/mysql/mysql-proxy.test.ts": {
-          "passed": 136,
-          "failed": 5,
+          "passed": 141,
+          "failed": 0,
           "skipped": 8
         },
         "tests/mysql/mysql.test.ts": {
-          "passed": 144,
-          "failed": 5,
+          "passed": 149,
+          "failed": 0,
           "skipped": 0
         },
         "tests/relational/mysql.test.ts": {
@@ -154,12 +154,7 @@
           "skipped": 0
         }
       },
-      "reasons": {
-        "Error: WITH is not supported by this server yet": 4,
-        "Error: Unknown column '…' in '…'": 4,
-        "Error: This expression (interval) is not supported by this server yet": 2,
-        "Error: FUNCTION drizzle.UNHEX does not exist": 1
-      }
+      "reasons": {}
     }
   }
 }

@@ -710,7 +710,7 @@ function renamed(columns: readonly { readonly name: string; readonly type: Resul
 }
 
 /** The CTEs a WITH defines, each visible to the ones after it and to the query. */
-function withClause(run: Run, w: NonNullable<QueryExpression['with']>): Run {
+export function withClause(run: Run, w: NonNullable<QueryExpression['with']>): Run {
   const ctes = new Map(run.ctes ?? [])
   let at: Run = { ...run, ctes }
   for (const cte of w.tables) {

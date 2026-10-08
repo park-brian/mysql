@@ -26,7 +26,7 @@ import { compile, EMPTY_SCOPE, type Compiled, type Row, type Scope } from './com
 import { containsAggregate } from './group.ts'
 import { filter, limit, sort, type ScannedRow } from './operators.ts'
 import { accessRows, chooseAccess } from './plan.ts'
-import { checkTargetNotRead, compileContext, limitValue, openTable, planQuery, type Run } from './query.ts'
+import { checkTargetNotRead, compileContext, limitValue, openTable, planQuery, withClause, type Run } from './query.ts'
 import { TableScope } from './scope.ts'
 import { NULL_TYPE, type ResultType } from './meta.ts'
 
@@ -414,7 +414,10 @@ export function insert(run: Run, node: InsertNode, trx: Trx): OkResult {
   const warnedNull = new Set<ColumnDef>()
   const upsertNulls: NullPolicy = ignore ? 'warn' : 'error'
 
-  const ctx = compileContext(run, EMPTY_SCOPE, 'field list')
+  // A VALUES or SET expression reads the row being written: each column as
+  // it stands when the expression is reached, in the list's order (8.4.11:
+  // `VALUES ('x', UPPER(a))` stores 'X'; Drizzle's `$onUpdateFn` writes that).
+  const ctx = compileContext(run, new TableScope([{ alias: def.name, def }]), 'field list')
   const compiledRows: (readonly (Compiled | undefined)[])[] =
     selected !== undefined ? selected.map((r) => r.slice(0, targets.length).map((v) => ({ eval: () => v, type: NULL_TYPE }))) : rows.map((r) => r.map((e) => (e === undefined || isDefaultKeyword(e) ? undefined : compile(e, ctx))))
   const upsert = mode === 'upsert' ? compileUpsert(run, def, node, targets, selectRefs) : undefined
@@ -439,22 +442,30 @@ export function insert(run: Run, node: InsertNode, trx: Trx): OkResult {
     store.row = n + 1
     stats.records++
     if (selected !== undefined) selectExtras = (selected[n] as readonly Value[]).slice(targets.length)
-    const values: Value[] = def.columns.map(() => null)
+    // The row starts as its defaults — a column with none holds its type's
+    // zero, an AUTO_INCREMENT one 0 — and each value written replaces one.
+    const values: Value[] = def.columns.map((column, i) => {
+      const d = defaults[i] as Compiled | 'none'
+      return d === 'none' ? implicitDefault(column) : d.eval([], run.env)
+    })
     const given = new Set<number>()
     row.forEach((c, i) => {
       const target = targets[i] as number
-      if (c === undefined) return
-      values[target] = c.eval([], run.env)
+      if (c === undefined) {
+        // DEFAULT: the column's own, as the row began.
+        given.delete(target)
+        return
+      }
+      values[target] = c.eval(values, run.env)
       given.add(target)
     })
     def.columns.forEach((column, i) => {
-      if (given.has(i) || column.autoIncrement === true) return
-      const d = defaults[i] as Compiled | 'none'
-      if (d === 'none') {
+      if (given.has(i)) return
+      if (column.autoIncrement === true) values[i] = null
+      else if (defaults[i] === 'none') {
         if (store.strict) throw sqlError('ER_NO_DEFAULT_FOR_FIELD', messages.noDefaultForField(column.name))
         store.warnings++
-        values[i] = implicitDefault(column)
-      } else values[i] = d.eval([], run.env)
+      }
     })
     // Every value is converted, in column order, before AUTO_INCREMENT takes
     // one, as `write_row` takes it after `fill_record`: a row refused for an
@@ -703,6 +714,21 @@ function singleTable(run: Run, tables: UpdateNode['tables'], what: string): { de
   return { def, table, alias: ref.alias ?? ref.table.name }
 }
 
+/**
+ * An UPDATE's or DELETE's WITH: its CTEs, for the statement's subqueries. Each
+ * is read once, before the first row changes, so one that reads the table
+ * being written is no 1093 (8.4.11 — Drizzle's `with … update` is that
+ * shape). A CTE named as the target is 1288: it is not a table.
+ */
+function withCtes(run: Run, node: UpdateNode | DeleteNode, what: 'UPDATE' | 'DELETE'): Run {
+  if (node.with === undefined) return run
+  const ref = node.tables[0]
+  if (ref?.kind === REF.TABLE && ref.table.schema === undefined && node.with.tables.some((c) => c.name.toLowerCase() === ref.table.name.toLowerCase())) {
+    throw sqlError('ER_NON_UPDATABLE_TABLE', `The target table ${ref.alias ?? ref.table.name} of the ${what} is not updatable`)
+  }
+  return withClause(run, node.with)
+}
+
 /** The rows a WHERE / ORDER BY / LIMIT selects, read in full before any is written. */
 function matching(run: Run, def: TableDef, table: Table, alias: string, node: UpdateNode | DeleteNode, trx: Trx): ScannedRow[] {
   const scope = new TableScope([{ alias, def }])
@@ -716,10 +742,10 @@ function matching(run: Run, def: TableDef, table: Table, alias: string, node: Up
 }
 
 export function update(run: Run, node: UpdateNode, trx: Trx): OkResult {
-  if (node.with !== undefined) throw sqlError('ER_NOT_SUPPORTED_YET', messages.notSupported('WITH'))
   if (node.ignore === true) throw sqlError('ER_NOT_SUPPORTED_YET', messages.notSupported('UPDATE IGNORE'))
   // A subquery reads in the statement's transaction.
   run = { ...run, env: { ...run.env, trx } }
+  run = withCtes(run, node, 'UPDATE')
   const { def, table, alias } = singleTable(run, node.tables, 'UPDATE')
   checkTargetNotRead({ schema: def.schema, name: def.name }, [node.where, ...node.set.map((a) => a.value)], run.env.session.database)
   const scope = new TableScope([{ alias, def }])
@@ -780,9 +806,9 @@ function sameBytes(x: Uint8Array, y: Uint8Array): boolean {
 }
 
 export function remove(run: Run, node: DeleteNode, trx: Trx): OkResult {
-  if (node.with !== undefined) throw sqlError('ER_NOT_SUPPORTED_YET', messages.notSupported('WITH'))
   if (node.targets !== undefined) throw sqlError('ER_NOT_SUPPORTED_YET', messages.notSupported('Multiple-table DELETE'))
   run = { ...run, env: { ...run.env, trx } }
+  run = withCtes(run, node, 'DELETE')
   const { def, table, alias } = singleTable(run, node.tables, 'DELETE')
   checkTargetNotRead({ schema: def.schema, name: def.name }, [node.where], run.env.session.database)
   const rows = matching(run, def, table, alias, node, trx)

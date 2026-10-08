@@ -12,7 +12,7 @@
 // unknown function is ER_SP_DOES_NOT_EXIST, as MySQL says it, and a builtin we
 // have not written is ER_NOT_SUPPORTED_YET naming it (M5.10 owns the rest).
 import { CHARSET_BINARY, FIELD_TYPE, type MysqlDateTime } from '@myjs/bytes'
-import { collation, collationInfoByName, defaultCollationOf, encodeCollation, requireCollationInfo } from '@myjs/charsets'
+import { collation, collationInfoByName, decodeCollation, defaultCollationOf, encodeCollation, requireCollationInfo } from '@myjs/charsets'
 import { LITERAL, NODE, deparse, type CallNode, type CaseNode, type CastNode, type Expression, type LiteralNode, type QueryExpression, type SubqueryNode } from '@myjs/parser'
 import type { Trx } from '@myjs/engine'
 import { sqlError, messages, type Session } from '@myjs/protocol'
@@ -65,6 +65,7 @@ import {
 } from './meta.ts'
 import { castAsJson, jsonConstructor } from './json.ts'
 import { windowNotAllowed } from './window.ts'
+import { dateAdd, isInterval } from './interval.ts'
 
 /** One row as operators pass it: a value per column of the scope. */
 export type Row = readonly Value[]
@@ -305,6 +306,31 @@ export function typeOfValue(v: Value): ResultType {
 }
 
 function literal(e: LiteralNode, ctx: CompileContext): Compiled {
+  // A hex or bit literal is bytes, unless an introducer names their charset:
+  // `_latin1 x'E9'` is the string 'é' (8.4.11).
+  const introduced = (b: Uint8Array): Compiled => {
+    const id = e.charset === undefined && e.collation === undefined ? CHARSET_BINARY : introducerCollation(e, ctx)
+    if (id === CHARSET_BINARY) return lit(bytesValue(b), stringType(b.length, CHARSET_BINARY, false))
+    const decode = (bytes: Uint8Array): string => {
+      try {
+        return decodeCollation(bytes, id)
+      } catch {
+        return '\uFFFD'
+      }
+    }
+    // A single-byte charset takes any byte, one it cannot map being '?';
+    // bytes that are no text in a multi-byte one are refused (8.4.11: 1300).
+    if (requireCollationInfo(id).mbmaxlen === 1) {
+      const text = [...b].map((x) => decode(Uint8Array.of(x)).replace('\uFFFD', '?')).join('')
+      return lit(stringValue(text, id, e.collation !== undefined ? COERCIBILITY.EXPLICIT : COERCIBILITY.COERCIBLE), stringType(b.length, id, e.collation !== undefined))
+    }
+    const text = decode(b)
+    const back = encodeCollation(text, id)
+    if (back.length !== b.length || back.some((x, i) => x !== b[i])) {
+      throw sqlError('ER_INVALID_CHARACTER_STRING', `Invalid ${requireCollationInfo(id).charset} character string: '${[...b].map((x) => x.toString(16).toUpperCase().padStart(2, '0')).join('')}'`)
+    }
+    return lit(stringValue(text, id, e.collation !== undefined ? COERCIBILITY.EXPLICIT : COERCIBILITY.COERCIBLE), stringType([...text].length, id, e.collation !== undefined))
+  }
   switch (e.type) {
     case LITERAL.INT: {
       const n = e.value as bigint
@@ -321,15 +347,26 @@ function literal(e: LiteralNode, ctx: CompileContext): Compiled {
     case LITERAL.STRING: {
       const id = introducerCollation(e, ctx)
       const coercibility = e.collation !== undefined ? COERCIBILITY.EXPLICIT : COERCIBILITY.COERCIBLE
-      const text = e.value as string
+      let text = e.value as string
       if (id === CHARSET_BINARY) {
         const bytes = encodeCollation(text, ctx.connectionCollation)
         return lit(bytesValue(bytes), stringType(bytes.length, CHARSET_BINARY, false))
       }
-      return lit(stringValue(text, id, coercibility), stringType([...text].length, id, false))
+      // An introducer names the charset of the literal's bytes as sent:
+      // `_latin1'é'` from a utf8mb4 client is the two latin1 characters of
+      // é's two bytes, 'Ã©' (8.4.11).
+      if (e.charset !== undefined && requireCollationInfo(id).charset !== requireCollationInfo(ctx.connectionCollation).charset) {
+        try {
+          text = decodeCollation(encodeCollation(text, ctx.connectionCollation), id)
+        } catch {
+          // Bytes that are no text in the named charset stay as written.
+        }
+      }
+      // With COLLATE it is nullable, as 8.4.11 reports `'abc' COLLATE utf8mb4_bin`.
+      return lit(stringValue(text, id, coercibility), stringType([...text].length, id, e.collation !== undefined))
     }
     case LITERAL.HEX:
-      return lit(bytesValue(e.value as Uint8Array), stringType((e.value as Uint8Array).length, CHARSET_BINARY, false))
+      return introduced(e.value as Uint8Array)
     case LITERAL.BIT: {
       const n = e.value as bigint
       const width = Math.max(1, Math.ceil(n.toString(2).length / 8))
@@ -339,7 +376,7 @@ function literal(e: LiteralNode, ctx: CompileContext): Compiled {
         out[i] = Number(v & 0xffn)
         v >>= 8n
       }
-      return lit(bytesValue(out), stringType(width, CHARSET_BINARY, false))
+      return introduced(out)
     }
     case LITERAL.NULL:
       return lit(null, NULL_TYPE)
@@ -433,7 +470,7 @@ function unary(op: string, a: Compiled, exists: boolean): Compiled {
           const v = at(r, env)
           return v === null ? null : v.kind === 'bytes' ? v : bytesValue(v.kind === 'string' ? encodeCollation(v.v, v.collationId) : new TextEncoder().encode(toText(v)))
         },
-        type: stringType(charWidth(a.type), CHARSET_BINARY, a.type.nullable),
+        type: stringType(byteWidth(a.type), CHARSET_BINARY, true),
       }
     case 'IS NULL':
       return { eval: (r, env) => bool(at(r, env) === null), type: boolType(false) }
@@ -493,6 +530,10 @@ function arithKind(a: ResultType, b: ResultType): 'int' | 'decimal' | 'double' |
 }
 
 function binary(op: string, left: Expression, right: Expression, extra: Expression | readonly Expression[] | undefined, ctx: CompileContext): Compiled {
+  // `d + INTERVAL n unit`, `INTERVAL n unit + d` and `d - INTERVAL n unit` (M5.10).
+  if (op === '+' && isInterval(right)) return dateAdd(left, right.value, right.unit, false, ctx)
+  if (op === '+' && isInterval(left)) return dateAdd(right, left.value, left.unit, false, ctx)
+  if (op === '-' && isInterval(right)) return dateAdd(left, right.value, right.unit, true, ctx)
   if (op === 'IN' || op === 'NOT IN') return inList(op === 'NOT IN', left, right, ctx)
   if (right.kind === NODE.SUBQUERY && right.quantifier !== undefined && COMPARISONS[op] !== undefined) return quantified(op, right.quantifier === 'ALL' ? 'ALL' : 'ANY', left, right, ctx, op)
   const a = compile(left, ctx)
@@ -929,6 +970,51 @@ function call(e: CallNode, ctx: CompileContext): Compiled {
         type: x.type.kind === 'bytes' ? { ...expressionOf(x.type), nullable: true } : { ...stringType(charWidth(x.type), x.type.kind === 'string' ? x.type.collationId : conn, true), coercibility: coercibilityOf(x.type) },
       }
     }
+    case 'HEX': {
+      // A string's bytes in its own charset, or a number's rounded value as
+      // 64-bit two's complement: HEX(-1) is sixteen Fs, HEX(1.5) is 2 (8.4.11).
+      arity(1)
+      const [x] = args() as [Compiled]
+      const t = x.type
+      const numeric = t.kind === 'int' || t.kind === 'decimal' || t.kind === 'double'
+      const bytes = byteWidth(t)
+      return {
+        eval: (r, env) => {
+          const v = x.eval(r, env)
+          if (v === null) return null
+          if (v.kind === 'int' || v.kind === 'decimal' || v.kind === 'double') {
+            const n = toInteger(v)
+            const clamped = n > 2n ** 64n - 1n ? 2n ** 64n - 1n : n < -MAX_SIGNED - 1n ? -MAX_SIGNED - 1n : n
+            return stringValue(BigInt.asUintN(64, clamped).toString(16).toUpperCase(), conn)
+          }
+          const raw = v.kind === 'bytes' ? v.v : v.kind === 'string' ? encodeCollation(v.v, v.collationId) : new TextEncoder().encode(toText(v))
+          return stringValue(hexOf(raw), conn)
+        },
+        type: stringType(numeric ? 16 : bytes * 2, conn, true),
+      }
+    }
+    case 'UNHEX': {
+      // Pairs of hex digits as bytes, a lone first digit as its own byte; a
+      // number is read as its decimal digits, and anything not hex is NULL
+      // (8.4.11 warns 1411). The width is half the argument's, in bytes.
+      arity(1)
+      const [x] = args() as [Compiled]
+      const t = x.type
+      const bytes = byteWidth(t)
+      return {
+        eval: (r, env) => {
+          const v = x.eval(r, env)
+          if (v === null) return null
+          const text = v.kind === 'bytes' ? String.fromCharCode(...v.v) : toText(v)
+          if (!/^[0-9a-fA-F]*$/.test(text)) return null
+          const even = text.length % 2 === 0 ? text : `0${text}`
+          const out = new Uint8Array(even.length / 2)
+          for (let i = 0; i < out.length; i++) out[i] = parseInt(even.slice(i * 2, i * 2 + 2), 16)
+          return bytesValue(out)
+        },
+        type: stringType(Math.ceil(bytes / 2), CHARSET_BINARY, true),
+      }
+    }
     case 'ABS': {
       arity(1)
       const [x] = args() as [Compiled]
@@ -1009,6 +1095,18 @@ function call(e: CallNode, ctx: CompileContext): Compiled {
       const fsp = fspArgument(e, ctx)
       return { eval: (_r, env) => ({ kind: 'datetime', v: clock(env.now, fsp), type: 'DATETIME', fsp }), type: datetimeType(FIELD_TYPE.DATETIME, fsp, false) }
     }
+    case 'DATE_ADD':
+    case 'DATE_SUB':
+    case 'ADDDATE':
+    case 'SUBDATE': {
+      arity(2)
+      const [d, i] = e.args as [Expression, Expression]
+      const negate = name === 'DATE_SUB' || name === 'SUBDATE'
+      // ADDDATE and SUBDATE take a bare number of days as well.
+      if (isInterval(i)) return dateAdd(d, i.value, i.unit, negate, ctx)
+      if (name === 'ADDDATE' || name === 'SUBDATE') return dateAdd(d, i, 'DAY', negate, ctx)
+      throw sqlError('ER_PARSE_ERROR', messages.parseError(deparse(i), 1))
+    }
     case 'CURDATE':
     case 'CURRENT_DATE':
     case 'UTC_DATE':
@@ -1084,9 +1182,14 @@ function cast(e: CastNode, ctx: CompileContext): Compiled {
           const v = x(r, env)
           if (v === null) return null
           const b = v.kind === 'bytes' ? v.v : v.kind === 'string' ? encodeCollation(v.v, v.collationId) : new TextEncoder().encode(toText(v))
-          return bytesValue(t.length === undefined ? b : b.subarray(0, t.length))
+          if (t.length === undefined) return bytesValue(b)
+          // BINARY(N) is N bytes: cut, or padded with zero bytes (8.4.11).
+          const out = new Uint8Array(t.length)
+          out.set(b.subarray(0, t.length))
+          return bytesValue(out)
         },
-        type: stringType(t.length ?? charWidth(inner.type), CHARSET_BINARY, nullable),
+        // As wide as its argument's bytes, and nullable whatever it is (8.4.11).
+        type: stringType(t.length ?? byteWidth(inner.type), CHARSET_BINARY, true),
       }
     case 'SIGNED':
     case 'UNSIGNED':
@@ -1248,3 +1351,14 @@ export function textForColumn(v: Value, columnCollation: number): Value {
   return stringValue(v.v, columnCollation, COERCIBILITY.IMPLICIT)
 }
 
+/** Bytes as upper-case hex digits, two to a byte. */
+function hexOf(b: Uint8Array): string {
+  let out = ''
+  for (const x of b) out += x.toString(16).toUpperCase().padStart(2, '0')
+  return out
+}
+
+/** A result's width in bytes: a string's characters at its charset's widest, anything else its characters. */
+function byteWidth(t: ResultType): number {
+  return t.kind === 'string' ? charWidth(t) * requireCollationInfo(t.collationId).mbmaxlen : charWidth(t)
+}

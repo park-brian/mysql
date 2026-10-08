@@ -181,7 +181,7 @@ export function numericPrefix(text: string): { readonly text: string; readonly c
   return { text: t, complete: /^[ \t\n\r]*$/.test(rest), fractional: /[.eE]/.test(t) }
 }
 
-function textOf(v: StringValue | BytesValue): string {
+export function textOf(v: StringValue | BytesValue): string {
   // A binary string in a numeric context is read byte by byte, as ASCII is.
   return v.kind === 'string' ? v.v : String.fromCharCode(...v.v.subarray(0, 1024))
 }
@@ -284,7 +284,7 @@ export function toInteger(v: Exclude<Value, null>): bigint {
   }
 }
 
-function roundDouble(n: number): bigint {
+export function roundDouble(n: number): bigint {
   if (!Number.isFinite(n)) return n > 0 ? MAX_UNSIGNED + 1n : MIN_SIGNED - 1n
   const r = n < 0 ? -Math.round(-n) : Math.round(n)
   return BigInt(r)

@@ -232,7 +232,9 @@ function keyFlags(def: TableDef, name: string): number {
     const at = index.parts.findIndex((p) => p.column === name)
     if (at < 0) continue
     flags |= PART_KEY_FLAG
-    if (index.kind === 'primary') flags |= COLUMN_FLAG.PRI_KEY
+    // With no PRIMARY KEY, the unique key InnoDB clusters on — the first whose
+    // columns are all NOT NULL — is reported as one (8.4.11: SERIAL's key).
+    if (index.kind === 'primary' || index.name === def.clustered) flags |= COLUMN_FLAG.PRI_KEY
     else if (index.kind === 'unique' && index.parts.length === 1) flags |= COLUMN_FLAG.UNIQUE_KEY
     else if (at === 0) flags |= COLUMN_FLAG.MULTIPLE_KEY
   }
