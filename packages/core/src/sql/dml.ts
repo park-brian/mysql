@@ -92,6 +92,8 @@ export function defaultOf(run: Run, column: ColumnDef, def?: TableDef): Compiled
     const scope = def !== undefined && rowDependent(column) ? new TableScope([{ alias: def.name, def }]) : EMPTY_SCOPE
     return compile(parseExpression(text), compileContext(run, scope, 'field list'))
   }
+  // `ALTER COLUMN … DROP DEFAULT` leaves none, not even NULL (8.4.11: 1364).
+  if (column.attributes?.['noDefault'] === true) return 'none'
   if (column.nullable) return { eval: () => null, type: NULL_TYPE }
   // A NOT NULL ENUM has a default all the same, its first member: leaving it
   // out is neither 1364 nor a warning (8.4.11).

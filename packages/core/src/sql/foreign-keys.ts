@@ -114,7 +114,7 @@ const INT_BYTES: Readonly<Record<number, number>> = { [FIELD_TYPE.TINY]: 1, [FIE
 const STRINGS: ReadonlySet<number> = new Set([FIELD_TYPE.STRING, FIELD_TYPE.VAR_STRING, FIELD_TYPE.VARCHAR, FIELD_TYPE.TINY_BLOB, FIELD_TYPE.BLOB, FIELD_TYPE.MEDIUM_BLOB, FIELD_TYPE.LONG_BLOB])
 
 /** A column as InnoDB stores it, which is what a foreign key compares (`get_innobase_type_from_mysql_type`). */
-function storageClass(t: ColumnType): string {
+export function storageClass(t: ColumnType): string {
   const width = INT_BYTES[t.type]
   if (width !== undefined) return `int ${width} ${t.type === FIELD_TYPE.YEAR || t.unsigned === true ? 'unsigned' : 'signed'}`
   switch (t.type) {

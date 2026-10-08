@@ -191,7 +191,7 @@ export function checker(run: Run, def: TableDef): ((fields: readonly FieldBytes[
 export const checkViolated = (name: string) => sqlError('ER_CHECK_CONSTRAINT_VIOLATED', `Check constraint '${name}' is violated.`)
 
 /** The columns an expression names. */
-function columnsOf(text: string): Set<string> {
+export function columnsOf(text: string): Set<string> {
   const out = new Set<string>()
   for (const node of nodes(parseExpression(text))) if (node.kind === NODE.COLUMN) out.add(((node['parts'] as readonly string[]).at(-1) as string).toLowerCase())
   return out

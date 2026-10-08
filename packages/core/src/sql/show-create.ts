@@ -44,7 +44,7 @@ function isPrimary(id: number): boolean {
 function defaultClause(run: Run, c: ColumnDef): string {
   const text = c.attributes?.['default']
   if (typeof text !== 'string') {
-    if (!c.nullable || BLOBS.has(c.type.type)) return ''
+    if (!c.nullable || BLOBS.has(c.type.type) || c.attributes?.['noDefault'] === true) return ''
     return ' DEFAULT NULL'
   }
   const generated = generatedDefault(text)
