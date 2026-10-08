@@ -74,6 +74,11 @@ export class Journal {
     this.#host = host
   }
 
+  /** Pages the open mini-transaction has changed, and holds until it ends. */
+  get touched(): number {
+    return this.#touched.size
+  }
+
   /** Whether a mini-transaction is open. */
   get open(): boolean {
     return this.#depth > 0

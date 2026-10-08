@@ -32,6 +32,11 @@ test('a long IN list answers as the same list item by item does — kinds, NULLs
       ['s', ["'A0'", "'b1'", "'Z25'", "'c2'", "'zz'", "'E4'", "'f5'", "'G6'", "'h7'", "'I8'", "'j35'"]],
       ['b', ["'A0'", "'b1'", "'Z25'", "'C2'", "'zz'", "'E4'", "'F5'", "'g6'", "'H7'", "'i8'"]],
       ['s', ["_utf8mb4'A0' COLLATE utf8mb4_bin", "'b1'", "'z25'", "'C2'", "'zz'", "'E4'", "'F5'", "'g6'", "'H7'", "'i8'"]],
+      // Trailing spaces: utf8mb4_bin pads them away, utf8mb4_0900_ai_ci
+      // does not, and a tab or a NUL is no space in either.
+      ['b', ["'A0 '", "'B1  '", "'C2\\t'", "'D3\\0'", "' E4'", "'F5 '", "'g6 '", "'H7'", "'I8   '", "'j9'"]],
+      ['s', ["'a0 '", "'B1'", "'c2\\t'", "'d3 '", "'E4'", "'f5  '", "'G6'", "'h7'", "'I8 '", "'j9'"]],
+      ['s', ["'a0 ' COLLATE utf8mb4_general_ci", "'B1'", "'c2\\t'", "'d3 '", "'E4'", "'f5  '", "'G6'", "'h7'", "'I8 '", "'j9'"]],
     ]
     for (const [column, items] of lists) {
       for (const not of ['', 'NOT ']) {

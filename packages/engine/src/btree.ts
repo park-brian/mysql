@@ -173,7 +173,8 @@ export class BTree {
   /** Entries in key order, or reverse key order, within a range. Do not change the tree while iterating. */
   *entries(range: Range = {}): Generator<[Uint8Array, Uint8Array]> {
     const reverse = range.reverse === true
-    let leaf = reverse ? this.#edgeLeaf(range.to, true) : this.#edgeLeaf(range.from, false)
+    const bound = reverse ? range.to : range.from
+    let leaf = this.#edgeLeaf(bound, reverse)
     // A sibling chain longer than the file is a cycle: corruption, not a scan.
     for (let visited = 0; leaf !== 0; visited++) {
       if (visited > this.space.alloc.pageCount) throw corrupt(leaf, 'the leaf chain loops')
@@ -182,7 +183,15 @@ export class BTree {
       leaf = this.#read(leaf, (p) => {
         const n = ip.cellCount(p)
         const from = ip.schemaVersion(p)
-        for (let k = 0; k < n && !done; k++) {
+        // On the leaf the bound led to, the cells short of it are searched
+        // past rather than walked: a point lookup is one leaf, and the walk
+        // was most of it.
+        let k = 0
+        if (visited === 0 && bound !== undefined) {
+          const at = ip.search(p, bound).index
+          k = reverse ? n - at : at
+        }
+        for (; k < n && !done; k++) {
           const { key, value } = ip.cell(p, reverse ? n - 1 - k : k)
           // A key short of the range is skipped; one past it ends the scan.
           const low = range.from !== undefined && ip.compareBytes(key, range.from) < 0

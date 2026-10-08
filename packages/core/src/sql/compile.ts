@@ -1348,6 +1348,28 @@ interface SortedItems {
   readonly sawNull: boolean
   /** Strings: the list sorted in each collation a comparison with it has met. */
   readonly byCollation: Map<number, readonly Exclude<Value, null>[]>
+  /** Strings: the items' sort keys in each collation met, or `null` where it has none. */
+  readonly keysByCollation: Map<number, ReadonlySet<string> | null>
+}
+
+/**
+ * A string's sort key in collation `id`, as a JS string, for equality alone:
+ * equal keys are equal strings. PAD SPACE ignores trailing padding, which the
+ * key keeps, so its weights come off the end: whatever weighs what a space
+ * does, as the comparison sees it.
+ */
+function equalityKey(text: string, id: number): string {
+  const c = collation(id)
+  let key = c.sortKey(encodeCollation(text, id))
+  if (c.padAttribute === 'PAD SPACE') {
+    const pad = c.padUnit
+    let end = key.length
+    while (end >= pad.length && pad.every((b, i) => key[end - pad.length + i] === b)) end -= pad.length
+    key = key.subarray(0, end)
+  }
+  let out = ''
+  for (let i = 0; i < key.length; i += 8192) out += String.fromCharCode(...key.subarray(i, i + 8192))
+  return out
 }
 
 function sortItems(values: readonly Value[]): SortedItems | undefined {
@@ -1359,7 +1381,7 @@ function sortItems(values: readonly Value[]): SortedItems | undefined {
     if (v.kind === 'string' && first.kind === 'string' && (v.collationId !== first.collationId || v.coercibility !== first.coercibility)) return undefined
   }
   const sorted = first.kind === 'string' ? present : [...present].sort((x, y) => compareValues(x, y) ?? 0)
-  return { kind: first.kind, sorted, sawNull: present.length < values.length, byCollation: new Map() }
+  return { kind: first.kind, sorted, sawNull: present.length < values.length, byCollation: new Map(), keysByCollation: new Map() }
 }
 
 /** The searched path's answer for `v`, or `undefined` when `v` cannot be searched for. */
@@ -1372,6 +1394,20 @@ function searchItems(list: SortedItems, v: Exclude<Value, null>): boolean | null
     // is sorted in that one, which its items alone would not choose.
     const item = list.sorted[0] as StringValue
     const id = aggregateCollation(v, item)
+    // Equality is all IN asks: the items' sort keys in a set, and the row's
+    // key looked up, rather than a sort and a search that re-encode both
+    // sides at every comparison (Prisma's chunks are 32,766 long).
+    let keys = list.keysByCollation.get(id)
+    if (keys === undefined) {
+      try {
+        keys = new Set(list.sorted.map((x) => equalityKey((x as StringValue).v, id)))
+      } catch {
+        // A collation with no sort key (an `Intl` fallback) is searched as below.
+        keys = null
+      }
+      list.keysByCollation.set(id, keys)
+    }
+    if (keys !== null) return keys.has(equalityKey(v.v, id)) ? true : list.sawNull ? null : false
     let inId = list.byCollation.get(id)
     if (inId === undefined) {
       const as = (x: Exclude<Value, null>): Value => ({ ...(x as StringValue), collationId: id })
