@@ -414,7 +414,16 @@ export function* groupRows(source: Iterable<{ readonly row: Row }>, plan: GroupP
       if (first === undefined) first = row
       for (const s of states) s.add(row, env)
     }
-    yield compose(first, [], 0, states)
+    if (K === 0) {
+      yield compose(first, [], 0, states)
+      return
+    }
+    // A GROUP BY whose every key the WHERE pins is one group, with the
+    // metadata of no grouping at all — but no rows in, no rows out, and ROLLUP
+    // still adds its super-aggregates (8.4.11).
+    if (first === undefined) return
+    const keys = keysOf(first)
+    for (let level = K; level >= (plan.rollup ? 0 : K); level--) yield compose(first, keys, level, states)
     return
   }
 

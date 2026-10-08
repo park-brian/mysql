@@ -83,8 +83,10 @@ export class TableScope implements Scope {
   restrict(aliases: ReadonlySet<string>, coalesced: readonly (readonly number[])[] = []): Scope {
     const tables = this.tables.filter((t) => aliases.has(t.alias))
     const groups = coalesced
+    // An enclosing query's columns stay visible: a correlated ON is legal.
+    const parent = this.#parent
     return {
-      resolve: (parts, clause) => resolveIn(tables, groups, parts, clause, undefined),
+      resolve: (parts, clause) => resolveIn(tables, groups, parts, clause, parent),
     }
   }
 

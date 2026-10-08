@@ -138,12 +138,14 @@ export function planFrom(refs: readonly TableReference[], ctx: FromContext, wher
     def?: TableDef
     table?: Table
     derivedRef?: TableReference & { readonly kind: typeof REF.DERIVED }
+    /** Tables before it that a LATERAL one may not see: a RIGHT JOIN's left side (8.4.11: 1054). */
+    hidden?: ReadonlySet<string>
     cte?: DerivedSource
     nullable: boolean
     width: number
   }
   const pending: Pending[] = []
-  const collect = (ref: TableReference, nullable: boolean): void => {
+  const collect = (ref: TableReference, nullable: boolean, hidden: ReadonlySet<string> = new Set()): void => {
     switch (ref.kind) {
       case REF.TABLE: {
         // A CTE of the statement hides a table of the same name.
@@ -158,15 +160,18 @@ export function planFrom(refs: readonly TableReference[], ctx: FromContext, wher
       }
       case REF.DERIVED:
         if (ref.alias === undefined) throw sqlError('ER_DERIVED_MUST_HAVE_ALIAS', 'Every derived table must have its own alias')
-        pending.push({ alias: ref.alias, derivedRef: ref, nullable, width: -1 })
+        pending.push({ alias: ref.alias, derivedRef: ref, nullable, width: -1, hidden })
         return
       case REF.LIST:
-        for (const item of ref.items) collect(item, nullable)
+        for (const item of ref.items) collect(item, nullable, hidden)
         return
-      case REF.JOIN:
-        collect(ref.left, nullable || ref.type === 'RIGHT')
-        collect(ref.right, nullable || ref.type === 'LEFT')
+      case REF.JOIN: {
+        const from = pending.length
+        collect(ref.left, nullable || ref.type === 'RIGHT', hidden)
+        const left = ref.type === 'RIGHT' ? new Set([...hidden, ...pending.slice(from).map((p) => p.alias)]) : hidden
+        collect(ref.right, nullable || ref.type === 'LEFT', left)
         return
+      }
     }
   }
   for (const r of refs) collect(r, false)
@@ -183,7 +188,8 @@ export function planFrom(refs: readonly TableReference[], ctx: FromContext, wher
     let derived: DerivedSource | undefined = p.cte
     if (p.derivedRef !== undefined) {
       if (ctx.derived === undefined) throw sqlError('ER_NOT_SUPPORTED_YET', messages.notSupported('Derived tables'))
-      const before = specs.length > 0 ? new TableScope(specs, ctx.parent === undefined ? {} : { parent: ctx.parent }) : ctx.parent
+      const visible = specs.filter((sp) => p.hidden?.has(sp.alias) !== true)
+      const before = visible.length > 0 ? new TableScope(visible, ctx.parent === undefined ? {} : { parent: ctx.parent }) : ctx.parent
       derived = ctx.derived(p.derivedRef, p.derivedRef.lateral === true ? before : undefined)
       p.width = derived.columns.length
     }
@@ -198,7 +204,7 @@ export function planFrom(refs: readonly TableReference[], ctx: FromContext, wher
   // of its own two sides.
   const coalesced: number[][] = []
   const byAlias = new Map(tables.map((t) => [t.alias, t]))
-  const preliminary = new TableScope(specs)
+  const preliminary = new TableScope(specs, ctx.parent === undefined ? {} : { parent: ctx.parent })
   const columnName = (index: number): string => {
     const at = preliminary.columnAt(index)
     return at === undefined ? '' : at.column.name
@@ -396,20 +402,27 @@ function slotScope(scope: Scope, full: TableScope): Scope {
 /** The rows of a join tree, each as wide as the whole FROM. */
 type RunOptions = { readonly where: Expression | undefined; readonly locking: boolean; readonly covering?: ReadonlyMap<string, string> }
 
-function* run(node: Node, trx: Trx | undefined, env: Env, options: RunOptions, width: number): Generator<{ readonly row: Row }> {
+const hasLateral = (node: Node): boolean => (node.kind === 'leaf' ? node.table.lateral : hasLateral(node.outer) || hasLateral(node.inner))
+
+/**
+ * `context` is the row of the tables before this subtree, for a LATERAL
+ * table inside it that reads them: `t1 JOIN (t2 JOIN LATERAL (SELECT t1.a)
+ * d ON TRUE) ON TRUE` (8.4.11 reads t1's row there).
+ */
+function* run(node: Node, trx: Trx | undefined, env: Env, options: RunOptions, width: number, context?: Row): Generator<{ readonly row: Row }> {
   if (node.kind === 'leaf') {
-    yield* leafRows(node.table, trx, env, options, width, undefined)
+    yield* leafRows(node.table, trx, env, options, width, node.table.lateral ? context : undefined)
     return
   }
-  if (node.inner.kind === 'leaf' && node.inner.table.lateral) {
-    // LATERAL: the derived table again for each row of the tables before it.
-    const t = node.inner.table
+  if (hasLateral(node.inner)) {
+    // LATERAL: the tables after it again for each row of the tables before it.
     const on = node.on
-    for (const { row } of run(node.outer, trx, env, options, width)) {
+    for (const { row: own } of run(node.outer, trx, env, options, width, context)) {
+      const row = context === undefined ? own : own.map((v, i) => v ?? context[i] ?? null)
       let matched = false
-      for (const { row: inner } of leafRows(t, trx, env, options, width, row)) {
+      for (const { row: inner } of run(node.inner, trx, env, options, width, row)) {
         const combined = row.slice()
-        for (let i = 0; i < t.width; i++) combined[t.offset + i] = inner[t.offset + i] ?? null
+        for (const s of node.innerSlots) combined[s] = inner[s] ?? null
         if (on === undefined || truth(on.eval(combined, env)) === true) {
           matched = true
           yield { row: combined }
@@ -429,8 +442,8 @@ function* run(node: Node, trx: Trx | undefined, env: Env, options: RunOptions, w
   if (node.left) {
     // Probe with the outer side, build on the inner: each outer row, then its
     // matches newest first, or one row of NULLs.
-    const build = [...run(node.inner, trx, env, options, width)].map((r) => r.row)
-    for (const { row } of run(node.outer, trx, env, options, width)) {
+    const build = [...run(node.inner, trx, env, options, width, context)].map((r) => r.row)
+    for (const { row } of run(node.outer, trx, env, options, width, context)) {
       let matched = false
       for (let i = build.length - 1; i >= 0; i--) {
         const combined = merge(row, build[i] as Row)
@@ -447,7 +460,7 @@ function* run(node: Node, trx: Trx | undefined, env: Env, options: RunOptions, w
   if (lookup !== undefined && node.inner.kind === 'leaf') {
     // A nested loop with a single-row lookup on the later table's unique key.
     const t = node.inner.table
-    for (const { row } of run(node.outer, trx, env, options, width)) {
+    for (const { row } of run(node.outer, trx, env, options, width, context)) {
       const v = lookup.value.eval(row, env)
       if (v === null) continue
       const access = pointAccess(t.def as TableDef, lookup.index, lookup.column, v)
@@ -461,8 +474,8 @@ function* run(node: Node, trx: Trx | undefined, env: Env, options: RunOptions, w
   }
   // A hash join: build on the earlier tables, probe with the later one; each
   // probe row's matches newest first.
-  const build = [...run(node.outer, trx, env, options, width)].map((r) => r.row)
-  for (const { row } of run(node.inner, trx, env, options, width)) {
+  const build = [...run(node.outer, trx, env, options, width, context)].map((r) => r.row)
+  for (const { row } of run(node.inner, trx, env, options, width, context)) {
     for (let i = build.length - 1; i >= 0; i--) {
       const combined = merge(build[i] as Row, row)
       if (accepts(combined)) yield { row: combined }

@@ -18,6 +18,11 @@
 //   - The column has no table behind it, so a number carries no BINARY flag,
 //     and a string's decimals are 0.
 //
+// Rows are compared in the column's type but passed on as their branch gave
+// them, and only the outermost operation converts: a nested one's leaves
+// meet the final type directly, so `(amt UNION ALL id) UNION s` shows the
+// INT 1 as '1', not as the inner DECIMAL's '1.00' (8.4.11).
+//
 // Rows: UNION ALL is the left branch's rows, then the right's. A DISTINCT
 // operation keeps each row's first occurrence, in that order, as its
 // temporary table does; INTERSECT and EXCEPT keep the left branch's order.
@@ -149,13 +154,12 @@ export function setOperation(node: SetOperationNode, left: Columns, right: Colum
         const seen = new Set<string>()
         for (const side of [leftRows, rightRows]) {
           for (const r of side()) {
-            const row = conv(r)
             if (!all) {
-              const k = rowKey(row)
+              const k = rowKey(conv(r))
               if (seen.has(k)) continue
               seen.add(k)
             }
-            yield row
+            yield [...r]
           }
         }
         return
@@ -168,8 +172,8 @@ export function setOperation(node: SetOperationNode, left: Columns, right: Colum
       }
       const seen = new Set<string>()
       for (const r of leftRows()) {
-        const row = conv(r)
-        const k = rowKey(row)
+        const row = [...r]
+        const k = rowKey(conv(r))
         const n = counts.get(k) ?? 0
         if (node.op === 'INTERSECT') {
           if (n === 0) continue

@@ -174,6 +174,21 @@ export function optimizerFacts(from: FromPlan | undefined, where: Expression | u
       if (i !== undefined && columnAt(i) !== undefined && isNull(other) && indexedClass(i)) return true
       if (c.op === '=' && i !== undefined && neverEqual(columnAt(i)?.column, other)) return true
     }
+    if (c.op === '<=>') {
+      // `int_col <=> 2.5` folds as `=` does, index or none (8.4.11).
+      const l = slot(c.left)
+      const i = l ?? slot(c.right)
+      if (i !== undefined && neverEqual(columnAt(i)?.column, l !== undefined ? c.right : c.left)) return true
+    }
+    if (['<', '<=', '>', '>='].includes(c.op)) {
+      const l = slot(c.left)
+      const r = slot(c.right)
+      // With the column on the left; `5 < c` is `c > 5`.
+      const flip: Record<string, string> = { '<': '>', '<=': '>=', '>': '<', '>=': '<=' }
+      const at = l ?? r
+      const op = l !== undefined ? c.op : (flip[c.op] as string)
+      if (at !== undefined && pastRange(columnAt(at)?.column, op, l !== undefined ? c.right : c.left)) return true
+    }
     if (c.op === 'BETWEEN') {
       const i = slot(c.left)
       if (i !== undefined && columnAt(i) !== undefined && indexedClass(i)) {
@@ -293,18 +308,50 @@ function nullRejected(c: Expression, slot: (e: Expression) => number | undefined
 
 /** `int_col = 9.5`, `tinyint_col = 300`: an integer column against a number it can never equal. */
 function neverEqual(column: ColumnDef | undefined, other: Expression): boolean {
-  if (column === undefined) return false
+  const n = numericConstant(column, other)
+  if (n === undefined) return false
+  return n.fraction || n.floor < n.range.min || n.floor > n.range.max
+}
+
+/** An integer column against a number constant: its floor, whether it has a fraction, and the column's range. */
+function numericConstant(column: ColumnDef | undefined, other: Expression): { floor: bigint; fraction: boolean; range: { min: bigint; max: bigint } } | undefined {
+  if (column === undefined) return undefined
   const range = integerRange(column.type)
-  if (range === undefined) return false
+  if (range === undefined) return undefined
   const negative = other.kind === NODE.UNARY && other.op === '-'
   const literal = negative ? other.operand : other
-  if (literal.kind !== NODE.LITERAL) return false
+  if (literal.kind !== NODE.LITERAL) return undefined
   const text = String(literal.value).trim()
   const number = literal.type === 'int' || literal.type === 'decimal' || literal.type === 'double' || (literal.type === 'string' && /^[+-]?(\d+\.?\d*|\.\d+)([eE][+-]?\d+)?$/.test(text))
-  if (!number) return false
-  if (!/^[+-]?\d+$/.test(text) && Number(text) % 1 !== 0) return true
-  const v = (negative ? -1n : 1n) * (/^[+-]?\d+$/.test(text) ? BigInt(text) : BigInt(Math.trunc(Number(text))))
-  return v < range.min || v > range.max
+  if (!number) return undefined
+  const integral = /^[+-]?\d+$/.test(text)
+  const x = (negative ? -1 : 1) * Number(text)
+  const fraction = !integral && x % 1 !== 0
+  const floor = integral ? (negative ? -1n : 1n) * BigInt(text) : BigInt(Math.floor(x))
+  return { floor, fraction, range }
+}
+
+/**
+ * `c > k` (or `<`, `>=`, `<=`) where no value of the integer column's type
+ * can satisfy it: `int_col > 2147483647`, `int_col >= 2147483647.5`,
+ * `int_col < -2147483648` (8.4.11 folds each to "Impossible WHERE", index or
+ * none; `>= 2147483647` it does not).
+ */
+function pastRange(column: ColumnDef | undefined, op: string, other: Expression): boolean {
+  const n = numericConstant(column, other)
+  if (n === undefined) return false
+  const ceil = n.fraction ? n.floor + 1n : n.floor
+  switch (op) {
+    case '>':
+      return n.floor >= n.range.max
+    case '>=':
+      return ceil > n.range.max
+    case '<':
+      return ceil <= n.range.min
+    case '<=':
+      return n.floor < n.range.min
+  }
+  return false
 }
 
 /**

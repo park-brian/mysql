@@ -485,6 +485,7 @@ function arithKind(a: ResultType, b: ResultType): 'int' | 'decimal' | 'double' |
 
 function binary(op: string, left: Expression, right: Expression, extra: Expression | readonly Expression[] | undefined, ctx: CompileContext): Compiled {
   if (op === 'IN' || op === 'NOT IN') return inList(op === 'NOT IN', left, right, ctx)
+  if (right.kind === NODE.SUBQUERY && right.quantifier !== undefined && COMPARISONS[op] !== undefined) return quantified(op, right.quantifier === 'ALL' ? 'ALL' : 'ANY', left, right, ctx, op)
   const a = compile(left, ctx)
   if (op === 'BETWEEN' || op === 'NOT BETWEEN') {
     const lo = compile(right, ctx)
@@ -505,7 +506,6 @@ function binary(op: string, left: Expression, right: Expression, extra: Expressi
   }
   if (op === 'LIKE' || op === 'NOT LIKE') return like(op === 'NOT LIKE', a, compile(right, ctx), extra === undefined ? undefined : compile(extra as Expression, ctx))
 
-  if (right.kind === NODE.SUBQUERY && right.quantifier !== undefined && COMPARISONS[op] !== undefined) return quantified(op, right.quantifier === 'ALL' ? 'ALL' : 'ANY', left, right, ctx, op)
   const b = compile(right, ctx)
   const at = a.eval
   const bt = b.eval
@@ -743,6 +743,30 @@ const KNOWN_BUILTINS = new Set([
   'RIGHT', 'LPAD', 'RPAD', 'REPEAT', 'REVERSE', 'LOCATE', 'INSTR', 'POSITION', 'GREATEST', 'LEAST', 'ROW_NUMBER', 'RANK',
 ])
 
+/** Whether the columns `args` read, outside their own subqueries, are all an enclosing query's — and there is one. */
+function outerOnly(args: readonly Expression[], ctx: CompileContext): boolean {
+  let outer = 0
+  let local = 0
+  const visit = (x: unknown): void => {
+    if (x === null || typeof x !== 'object') return
+    if (Array.isArray(x)) return x.forEach(visit)
+    const n = x as Expression
+    if (n.kind === NODE.SUBQUERY) return
+    if (n.kind === NODE.COLUMN) {
+      try {
+        if ((ctx.scope.resolve(n.parts, 'field list').depth ?? 0) > 0) outer++
+        else local++
+      } catch {
+        local++
+      }
+      return
+    }
+    for (const v of Object.values(x)) visit(v)
+  }
+  visit(args)
+  return outer > 0 && local === 0
+}
+
 function call(e: CallNode, ctx: CompileContext): Compiled {
   const name = e.name.toUpperCase()
   if (e.over !== undefined) throw sqlError('ER_NOT_SUPPORTED_YET', messages.notSupported('Window functions'))
@@ -751,6 +775,10 @@ function call(e: CallNode, ctx: CompileContext): Compiled {
     if (e.args.length !== n) throw sqlError('ER_WRONG_PARAMCOUNT_TO_NATIVE_FCT', `Incorrect parameter count in the call to native function '${e.name}'`)
   }
   if (AGGREGATE_NAMES.has(name)) {
+    // An aggregate of an enclosing query's columns alone is that query's, and
+    // makes it aggregate (8.4.11: `SELECT (SELECT COUNT(t1.x) FROM t2) FROM
+    // t1` is one row). Refused by name until the outer query can take it.
+    if (outerOnly(e.args, ctx)) throw sqlError('ER_NOT_SUPPORTED_YET', messages.notSupported("An aggregate of an enclosing query's columns"))
     if (ctx.aggregates === undefined || ctx.inAggregate === true) throw sqlError('ER_INVALID_GROUP_FUNC_USE', 'Invalid use of group function')
     return ctx.aggregates.register(e, ctx)
   }
@@ -1149,19 +1177,36 @@ function exists(e: SubqueryNode, ctx: CompileContext): Compiled {
  */
 function quantified(op: string, quantifier: 'ANY' | 'ALL', left: Expression, right: SubqueryNode, ctx: CompileContext, label: string): Compiled {
   void label
-  const a = compile(left, ctx)
+  // MySQL's own limit, not ours: 8.4.11 refuses `a IN (SELECT … LIMIT 1)`,
+  // though a LIMIT inside a derived table there is fine.
+  if (right.query.limit !== undefined) throw sqlError('ER_NOT_SUPPORTED_YET', "This version of MySQL doesn't yet support 'LIMIT & IN/ALL/ANY/SOME subquery'")
+  // `(a, b) IN (SELECT x, y …)`: a row is equal where every element is, and
+  // unequal where any is not, whatever the others hold (8.4.11).
+  const lefts = left.kind === NODE.ROW && left.items.length > 1 ? left.items : [left]
+  if (lefts.length > 1 && op !== '=' && op !== '<>') throw sqlError('ER_NOT_SUPPORTED_YET', messages.notSupported(`A row compared with ${op} ${quantifier}`))
+  const as = lefts.map((l) => compile(l, ctx))
   const plan = planned(right, ctx)
-  if (plan.columns.length !== 1) throw sqlError('ER_OPERAND_COLUMNS', 'Operand should contain 1 column(s)')
+  if (plan.columns.length !== as.length) throw sqlError('ER_OPERAND_COLUMNS', `Operand should contain ${as.length} column(s)`)
   const test = COMPARISONS[op] as (c: number) => boolean
+  const compareRow = (vs: readonly Value[], r: readonly Value[]): number | null => {
+    if (vs.length === 1) return compareValues(vs[0] ?? null, r[0] ?? null)
+    let unknown = false
+    for (let i = 0; i < vs.length; i++) {
+      const c = compareValues(vs[i] ?? null, r[i] ?? null)
+      if (c === null) unknown = true
+      else if (c !== 0) return 1
+    }
+    return unknown ? null : 0
+  }
   const key = {}
   return {
     eval: (row, env) => {
       const rows = rowsOf(plan, key, row, env)
       if (rows.length === 0) return bool(quantifier === 'ALL')
-      const v = a.eval(row, env)
+      const v = as.map((a) => a.eval(row, env))
       let sawNull = false
       for (const r of rows) {
-        const c = compareValues(v, r[0] ?? null)
+        const c = compareRow(v, r)
         if (c === null) {
           sawNull = true
           continue

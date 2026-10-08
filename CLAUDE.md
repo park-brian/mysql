@@ -13,8 +13,10 @@ administration statements); M4 (storage) is complete — pages, B+tree, WAL,
 crash recovery, MVCC transactions, the catalog, the `native` and `memory`
 engines and the Node VFS; M5 (execute) has begun: a real executor runs single-table DDL,
 DML and transactions through unmodified `mysql2` (M5.17), upserts, REPLACE
-and INSERT IGNORE included (M5.8), and joins,
-aggregates, the function library and the planner proper are what is left.
+and INSERT IGNORE included (M5.8), and relational SELECT — joins, GROUP BY
+and aggregates, subqueries, derived tables, CTEs, set operations and
+`INSERT … SELECT` — agreeing with 8.4.11 on M5.18's corpus. The function
+library, JSON and the cost-based planner proper are what is left.
 
 ## Running things
 

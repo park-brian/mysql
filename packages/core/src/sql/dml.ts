@@ -350,6 +350,9 @@ export function insert(run: Run, node: InsertNode, trx: Trx): OkResult {
   if (node.partitions !== undefined) throw sqlError('ER_NOT_SUPPORTED_YET', messages.notSupported('Partitions'))
 
   const { def, table } = openTable(run, node.table)
+  // A VALUES or SET subquery reading the table being written is 1093, as an
+  // UPDATE's is; INSERT … SELECT from it is legal, read in full first (8.4.11).
+  if (node.query === undefined) checkTargetNotRead({ schema: def.schema, name: def.name }, [...(node.values ?? []).flat(), ...(node.set ?? []).map((a) => a.value), ...(node.onDuplicate ?? []).map((a) => a.value)], run.env.session.database)
   const columnIndex = (name: string): number => {
     const i = def.columns.findIndex((c) => c.name.toLowerCase() === name.toLowerCase())
     if (i < 0) throw sqlError('ER_BAD_FIELD_ERROR', messages.unknownColumn(name, 'field list'))

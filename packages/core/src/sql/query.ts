@@ -559,7 +559,18 @@ function mergeable(q: QueryExpression): boolean {
 
 /** A derived table, or one reference to a CTE: its columns as the outer query sees them, and its rows. */
 function derivedTable(run: Run, query: QueryExpression, alias: string, names: readonly string[] | undefined, lateral: Scope | undefined): DerivedSource {
-  const parent = lateral === undefined ? run.parent : enclosing(lateral, () => {})
+  let correlated = false
+  const outer = lateral === undefined ? run.parent : enclosing(lateral, () => {})
+  const parent: Scope | undefined =
+    outer === undefined
+      ? undefined
+      : {
+          resolve(parts, clause) {
+            const r = outer.resolve(parts, clause)
+            correlated = true
+            return r
+          },
+        }
   const plan = planQuery({ ...run, ...(parent === undefined ? {} : { parent }) }, query)
   const merged = lateral === undefined && mergeable(query)
   const columns = renamed(plan.columns, names).map((c) => {
@@ -568,9 +579,22 @@ function derivedTable(run: Run, query: QueryExpression, alias: string, names: re
     const { column, ...rest } = t
     return { name: c.name, type: { ...rest, ...(column === undefined ? {} : { column: { ...column, table: alias } }), temporary: 'stream' as const } }
   })
+  // Read once per statement unless it reads an enclosing query: so an UPDATE
+  // whose subquery reads its own table through a derived table sees the
+  // table as it was before the first row changed (8.4.11: `UPDATE t SET a =
+  // a + (SELECT COUNT(*) FROM (SELECT a FROM t) d WHERE d.a > t.a)` is 3, 3, 3).
+  const key = {}
   return {
     columns,
-    rows: (trx, env, row) => plan.rows(trx, lateral === undefined || row === undefined ? env : { ...env, outer: [row, ...(env.outer ?? [])] }),
+    rows: (trx, env, row) => {
+      if (lateral !== undefined || correlated || env.memo === undefined) return plan.rows(trx, lateral === undefined || row === undefined ? env : { ...env, outer: [row, ...(env.outer ?? [])] })
+      let all = env.memo.get(key) as Value[][] | undefined
+      if (all === undefined) {
+        all = [...plan.rows(trx, env)]
+        env.memo.set(key, all)
+      }
+      return all
+    },
   }
 }
 
@@ -619,29 +643,67 @@ function references(q: unknown, name: string): boolean {
  * rounds than `cte_max_recursion_depth` is 3636.
  */
 function recursiveCte(run: Run, cte: NonNullable<QueryExpression['with']>['tables'][number]): DerivedSource {
-  const body = cte.query.body
+  const notYet = (what: string): Error => sqlError('ER_NOT_SUPPORTED_YET', `This version of MySQL doesn't yet support '${what}'`)
+  // `AS ((SELECT 1 UNION ALL …))` is the same query (8.4.11).
+  let query: QueryExpression = cte.query
+  while (query.body.kind === QUERY.QUERY && query.with === undefined && query.orderBy === undefined && query.limit === undefined) query = query.body
+  const body = query.body
   if (body.kind !== QUERY.SET_OPERATION || body.op !== 'UNION') {
     throw sqlError('ER_CTE_RECURSIVE_REQUIRES_UNION', `Recursive Common Table Expression '${cte.name}' should contain a UNION`)
   }
-  const anchor = planQuery(run, { kind: QUERY.QUERY, body: body.left, at: body.at })
+  if (query.orderBy !== undefined) throw notYet('ORDER BY over UNION in recursive Common Table Expression')
+  // The UNION's members, in order: those that do not read the CTE are its
+  // anchor, and every one that does runs each round (8.4.11 runs two).
+  const members: QueryBody[] = []
+  let distinctRows = false
+  const flatten = (b: QueryBody): void => {
+    if (b.kind === QUERY.SET_OPERATION && b.op === 'UNION') {
+      if (b.all !== true) distinctRows = true
+      flatten(b.left)
+      flatten(b.right)
+    } else members.push(b)
+  }
+  flatten(body)
+  const recursive = members.filter((m) => references(m, cte.name))
+  const anchors = members.filter((m) => !references(m, cte.name))
+  for (const m of recursive) {
+    const select = m.kind === QUERY.QUERY ? m.body : m
+    if (m.kind === QUERY.QUERY && (m.orderBy !== undefined || m.limit !== undefined)) throw notYet('ORDER BY / LIMIT / SELECT DISTINCT in recursive query block of Common Table Expression')
+    if (select.kind !== QUERY.SELECT) continue
+    if (select.groupBy !== undefined || select.items.some((i) => containsAggregate(i.expr)) || (select.having !== undefined && containsAggregate(select.having))) {
+      throw sqlError('ER_CTE_RECURSIVE_FORBIDS_AGGREGATION', `Recursive Common Table Expression '${cte.name}' can contain neither aggregation nor window functions in recursive query block`)
+    }
+    if (select.distinct === true) throw notYet('ORDER BY / LIMIT / SELECT DISTINCT in recursive query block of Common Table Expression')
+  }
+  const asQuery = (b: QueryBody): QueryExpression => (b.kind === QUERY.QUERY ? b : { kind: QUERY.QUERY, body: b, at: b.at })
+  const anchorPlans = anchors.map((a) => planQuery(run, asQuery(a)))
+  const anchor = anchorPlans[0]
+  if (anchor === undefined) throw sqlError('ER_CTE_RECURSIVE_REQUIRES_NONRECURSIVE_FIRST', `Recursive Common Table Expression '${cte.name}' should have one or more non-recursive query blocks followed by one or more recursive ones`)
   // A recursive CTE's table is typed as a set operation's column is, from the anchor alone, and nullable.
   const columns = renamed(anchor.columns, cte.columns).map((c) => ({ name: c.name, type: { ...setOperationType([c.type], run.env.session.characterSet), nullable: true } }))
   let working: readonly (readonly Value[])[] = []
   const workingTable: DerivedSource = { columns, rows: () => working }
   const ctes = new Map(run.ctes ?? [])
   ctes.set(cte.name, () => workingTable)
-  const step = planQuery({ ...run, ctes }, { kind: QUERY.QUERY, body: body.right, at: body.at })
-  if (step.columns.length !== columns.length) throw sqlError('ER_WRONG_NUMBER_OF_COLUMNS_IN_SELECT', 'The used SELECT statements have a different number of columns')
-  const distinctRows = body.all !== true
+  const steps = recursive.map((m) => planQuery({ ...run, ctes }, asQuery(m)))
+  for (const p of [...anchorPlans, ...steps]) {
+    if (p.columns.length !== columns.length) throw sqlError('ER_WRONG_NUMBER_OF_COLUMNS_IN_SELECT', 'The used SELECT statements have a different number of columns')
+  }
+  // A LIMIT on the whole CTE stops the recursion once it has its rows (8.4.11).
+  const limitCount = query.limit === undefined ? undefined : limitValue(run, query.limit.count, 'LIMIT')
+  const offset = query.limit?.offset === undefined ? 0 : limitValue(run, query.limit.offset, 'LIMIT')
+  const enough = limitCount === undefined ? Infinity : offset + limitCount
   const types = columns.map((c) => c.type)
   return {
     columns,
     rows(trx, env) {
       const max = Number(toInteger(run.state.systemVariable('cte_max_recursion_depth', undefined, env.session) ?? intValue(1000n)))
       const seen = new Set<string>()
+      const all: Value[][] = []
       const keep = (rows: Iterable<readonly Value[]>): Value[][] => {
         const out: Value[][] = []
         for (const r of rows) {
+          if (all.length + out.length >= enough) break
           const row = r.map((v, i) => convertSetValue(v, types[i] as ResultType))
           if (distinctRows) {
             const k = rowKey(row)
@@ -652,16 +714,15 @@ function recursiveCte(run: Run, cte: NonNullable<QueryExpression['with']>['table
         }
         return out
       }
-      const all: Value[][] = []
-      let current = keep(anchor.rows(trx, env))
+      let current = keep(anchorPlans.flatMap((p) => [...p.rows(trx, env)]))
       all.push(...current)
-      for (let round = 1; current.length > 0; round++) {
+      for (let round = 1; current.length > 0 && all.length < enough; round++) {
         if (round > max) throw sqlError('ER_CTE_MAX_RECURSION_DEPTH', `Recursive query aborted after ${round} iterations. Try increasing @@cte_max_recursion_depth to a larger value.`)
         working = current
-        current = keep([...step.rows(trx, env)])
+        current = keep(steps.flatMap((p) => [...p.rows(trx, env)]))
         all.push(...current)
       }
-      return all
+      return all.slice(offset, enough)
     },
   }
 }
@@ -687,7 +748,14 @@ function planSetOperation(run: Run, node: SetOperationNode, parent?: SetOperatio
     columns,
     locking: left.locking || right.locking,
     leaves,
-    rows: (trx, env) => op.rows(() => left.rows(trx, env), () => right.rows(trx, env)),
+    rows: (trx, env) => {
+      const rows = op.rows(() => left.rows(trx, env), () => right.rows(trx, env))
+      if (parent !== undefined) return rows
+      const types = op.columns.map((c) => c.type)
+      return (function* () {
+        for (const r of rows) yield r.map((v, i) => convertSetValue(v, types[i] as ResultType))
+      })()
+    },
   }
 }
 
@@ -839,12 +907,8 @@ function planGrouped(
       if (!rollup) return undefined
       let j = -1
       if (e.kind === NODE.COLUMN) {
-        let at: number | undefined
-        try {
-          at = lookup.resolve(e.parts, 'field list').index
-        } catch {
-          return undefined
-        }
+        const at = safeIndex(lookup, e.parts)
+        if (at === undefined) return undefined
         j = keys.findIndex((k) => k.index === at)
       } else {
         const text = deparse(e)
@@ -885,11 +949,15 @@ function planGrouped(
   if (node.having !== undefined) {
     const allowed = new Set<number>()
     for (const k of keys) if (k.index !== undefined) allowed.add(k.index)
-    for (const s of selectItems) if (s.expr.kind === NODE.COLUMN) allowed.add(lookup.resolve(s.expr.parts, 'having clause').index)
+    for (const s of selectItems) {
+      const at = s.expr.kind === NODE.COLUMN ? safeIndex(lookup, s.expr.parts) : undefined
+      if (at !== undefined) allowed.add(at)
+    }
     const havingScope: Scope = {
       resolve(parts, clause) {
         const r = lookup.resolve(parts, clause)
-        if (!allowed.has(r.index)) throw sqlError('ER_BAD_FIELD_ERROR', messages.unknownColumn(parts.join('.'), clause))
+        // An enclosing query's column is a constant here, and always visible.
+        if ((r.depth ?? 0) === 0 && !allowed.has(r.index)) throw sqlError('ER_BAD_FIELD_ERROR', messages.unknownColumn(parts.join('.'), clause))
         return r
       },
     }
@@ -906,7 +974,7 @@ function planGrouped(
   })
 
   if (/(^|,)ONLY_FULL_GROUP_BY(,|$)/i.test(run.env.session.sqlMode)) {
-    checkFullGroupBy(lookup, scope, keys, node.where, from?.joins ?? [], items.map((i) => i.expr), (q.orderBy ?? []).filter((o) => !(o.expr.kind === NODE.LITERAL && o.expr.type === 'int') && !(o.expr.kind === NODE.COLUMN && o.expr.parts.length === 1 && items.some((i) => i.alias?.toLowerCase() === (o.expr as unknown as { parts: string[] }).parts[0]?.toLowerCase()))).map((o) => o.expr), node.groupBy === undefined)
+    checkFullGroupBy(lookup, scope, keys, node.where, from?.joins ?? [], items.map((i) => i.expr), (q.orderBy ?? []).filter((o) => !(o.expr.kind === NODE.LITERAL && o.expr.type === 'int') && !(o.expr.kind === NODE.COLUMN && o.expr.parts.length === 1 && items.some((i) => i.alias?.toLowerCase() === (o.expr as unknown as { parts: string[] }).parts[0]?.toLowerCase()))).map((o) => o.expr), node.groupBy === undefined, rollup)
   }
 
   // What a client is told depends on what MySQL copies through a temporary
@@ -1008,9 +1076,11 @@ function planGrouped(
   }
 }
 
+/** A column's slot in this query's row; undefined for none, and for an enclosing query's column, which is a constant here. */
 const safeIndex = (scope: Scope, parts: readonly string[]): number | undefined => {
   try {
-    return scope.resolve(parts, 'field list').index
+    const r = scope.resolve(parts, 'field list')
+    return (r.depth ?? 0) > 0 ? undefined : r.index
   } catch {
     return undefined
   }
@@ -1095,10 +1165,17 @@ function checkFullGroupBy(
   selectExprs: readonly Expression[],
   orderExprs: readonly Expression[],
   implicit: boolean,
+  rollup = false,
 ): void {
   const determined = new Set<number>()
   for (const k of keys) if (k.index !== undefined) determined.add(k.index)
   const keyTexts = new Set(keys.filter((k) => k.index === undefined).map((k) => k.text))
+  // Under ROLLUP a key can be NULL where its row's other columns are not, so
+  // nothing is functionally dependent on it: not through a key, a WHERE
+  // equality or a constant (8.4.11: `WHERE grp = 1 GROUP BY id WITH ROLLUP`
+  // selecting `grp` is 1055).
+  if (rollup) where = undefined
+  if (rollup) joins = []
   const conjuncts: Expression[] = []
   const flatten = (e: Expression | undefined): void => {
     if (e === undefined) return
@@ -1141,7 +1218,7 @@ function checkFullGroupBy(
         changed = true
       }
     }
-    for (const t of scope?.tables ?? []) {
+    for (const t of rollup ? [] : (scope?.tables ?? [])) {
       const def = t.def
       if (def === undefined) continue
       const offsetOf = (name: string): number => t.offset + def.columns.findIndex((c) => c.name.toLowerCase() === name.toLowerCase())
@@ -1158,7 +1235,8 @@ function checkFullGroupBy(
   const nameOf = (index: number): string => {
     const at = scope?.columnAt(index)
     if (at === undefined) return '?'
-    return at.table.def === undefined ? `${at.table.alias}.${at.column.name}` : `${at.table.def.schema}.${at.table.def.name}.${at.column.name}`
+    // An aliased table is named by its alias, under its schema: `app.p0.id` (8.4.11).
+    return at.table.def === undefined ? `${at.table.alias}.${at.column.name}` : `${at.table.def.schema}.${at.table.alias}.${at.column.name}`
   }
   const offending = (e: Expression): number | undefined => {
     if (keyTexts.has(deparse(e))) return undefined
