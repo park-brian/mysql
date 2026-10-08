@@ -30,6 +30,8 @@ export interface ResultType {
   readonly kind: ResultKind
   /** The wire field type. */
   readonly field: number
+  /** The derived table or CTE an expression column belongs to: reported as its table, with no original table (8.4.11). */
+  readonly derivedTable?: string
   /** A boolean's result — a comparison, `TRUE`, `NOT`: JSON takes it as `true` or `false`. */
   readonly boolean?: boolean
   readonly nullable: boolean
@@ -405,7 +407,7 @@ export function columnDefinition(name: string, t: ResultType, resultsCollation: 
     } else length = t.wireLength
   }
   return {
-    ...(t.column === undefined ? { schema: '', table: '', orgTable: '', orgName: '' } : { schema: t.column.schema, table: t.column.table, orgTable: t.column.orgTable, orgName: t.column.orgName }),
+    ...(t.column === undefined ? { schema: '', table: t.derivedTable ?? '', orgTable: '', orgName: '' } : { schema: t.column.schema, table: t.column.table, orgTable: t.column.orgTable, orgName: t.column.orgName }),
     name,
     characterSet: isText || (t.kind === 'json' && t.column === undefined && !materialized) ? resultsCollation : CHARSET_BINARY,
     columnLength: length,

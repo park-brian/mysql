@@ -416,6 +416,15 @@ export class SqlExecutor implements Executor {
         return this.#createDatabase(statement)
       case STATEMENT.DROP:
         return this.#drop(run, statement)
+      case STATEMENT.TRUNCATE: {
+        // DDL: an implicit commit, then the table made again, empty and its
+        // AUTO_INCREMENT from 1 (8.4.11; ER_NO_SUCH_TABLE for a missing one).
+        const schema = statement.table.schema ?? session.database
+        if (schema === null) throw sqlError('ER_NO_DB_ERROR', messages.noDatabaseSelected())
+        state.commit()
+        this.#catalog().truncateTable(schema, statement.table.name)
+        return { affectedRows: 0 }
+      }
       case STATEMENT.CREATE_ROUTINE:
       case STATEMENT.CREATE_TRIGGER:
       case STATEMENT.CREATE_EVENT:

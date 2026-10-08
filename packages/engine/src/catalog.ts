@@ -277,6 +277,29 @@ export class Catalog {
     return dropped
   }
 
+  /**
+   * TRUNCATE TABLE: the table made again from its own definition, in one DDL,
+   * so a crash leaves either the old table or the new one. It is empty, and
+   * its AUTO_INCREMENT starts again from 1, since the counter belongs to the
+   * clustered tree and the tree is new.
+   */
+  truncateTable(schema: string, name: string): TableDef {
+    let discard: (() => void) | undefined
+    const def = ddl(this.store, (trx) => {
+      const s = this.#schemaOf(schema, trx)
+      const old = s === undefined ? undefined : this.#definition(s.id, name, trx)
+      if (s === undefined || old === undefined) throw noSuchTable(schema, name)
+      discard = this.#drop(old, s.id, trx)
+      const spec: TableSpec = { name: old.name, engine: old.engine, columns: old.columns, indexes: old.indexes, options: old.options }
+      const resolved = resolveTable(Number(this.store.takeCounter(SYSTEM_INDEX.TABLES, 0)), schema, spec)
+      const made = this.#engine(resolved).create(resolved, trx)
+      this.#tables.insert([be32(s.id), utf8.encode(made.name), be32(made.id), encodeTableDef(made)], trx)
+      return made
+    })
+    discard?.()
+    return def
+  }
+
   /** A table's definition, as last committed. ER_NO_SUCH_TABLE if there is none. */
   definition(schema: string, name: string): TableDef {
     const s = this.#schemaOf(schema, undefined)

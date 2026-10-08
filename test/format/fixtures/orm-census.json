@@ -124,8 +124,8 @@
       }
     },
     "ours": {
-      "passed": 425,
-      "failed": 62,
+      "passed": 465,
+      "failed": 22,
       "skipped": 8,
       "files": {
         "tests/mysql/mysql-custom.test.ts": {
@@ -139,24 +139,22 @@
           "skipped": 0
         },
         "tests/mysql/mysql-proxy.test.ts": {
-          "passed": 119,
-          "failed": 22,
+          "passed": 132,
+          "failed": 9,
           "skipped": 8
         },
         "tests/mysql/mysql.test.ts": {
-          "passed": 127,
-          "failed": 22,
+          "passed": 140,
+          "failed": 9,
           "skipped": 0
         },
         "tests/relational/mysql.test.ts": {
-          "passed": 75,
-          "failed": 14,
+          "passed": 89,
+          "failed": 0,
           "skipped": 0
         }
       },
       "reasons": {
-        "Error: This statement (truncate) is not supported by this server yet": 26,
-        "Error: Window functions is not supported by this server yet": 14,
         "Error: DROP VIEW is not supported by this server yet": 6,
         "Error: This statement (createView) is not supported by this server yet": 5,
         "Error: WITH is not supported by this server yet": 4,

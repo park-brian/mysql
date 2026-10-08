@@ -15,6 +15,7 @@ import { messages, sqlError, type ColumnDefinition, type ResultSet, type RowValu
 import { intValue, integerRange, toInteger, truth, type Value } from '@myjs/types'
 import { compile, convertTo, EMPTY_SCOPE, type CompileContext, type Compiled, type Env, type GroupKeys, type Row, type Scope, type SubqueryPlan } from './compile.ts'
 import { AggregateSink, chooseStrategy, containsAggregate, groupRows, isAggregate } from './group.ts'
+import { WindowSink, applyWindows, containsWindow } from './window.ts'
 import { columnDefinition, intType, type ResultType } from './meta.ts'
 import { FIELD_TYPE } from '@myjs/bytes'
 import { requireCollationInfo } from '@myjs/charsets'
@@ -191,7 +192,12 @@ function planSelect(run: Run, q: QueryExpression, node: SelectNode): SelectPlan 
     throw sqlError('ER_AGGREGATE_ORDER_NON_AGG_QUERY', `Expression #${at} of ORDER BY contains aggregate function and applies to the result of a non-aggregated query`)
   }
   if (!grouped && node.having !== undefined) throw sqlError('ER_NOT_SUPPORTED_YET', messages.notSupported('HAVING without grouping'))
+  const windowed = node.items.some((i) => containsWindow(i.expr)) || (q.orderBy ?? []).some((o) => containsWindow(o.expr))
+  if (grouped && windowed) throw sqlError('ER_NOT_SUPPORTED_YET', messages.notSupported('Window functions over a grouped query'))
   if (grouped) return planGrouped(run, q, node, from, lookup)
+  // Window functions (M5.6) write into slots past the FROM row.
+  const windowBase = from?.width ?? 0
+  const windows = windowed ? new WindowSink(compileContext(run, lookup, 'window order by'), windowBase) : undefined
 
   // The select list, `*` expanded. A table a correlated, aggregating scalar
   // subquery in it reads is reported nullable there (8.4.11: `SELECT a.x,
@@ -209,9 +215,13 @@ function planSelect(run: Run, q: QueryExpression, node: SelectNode): SelectPlan 
       for (const s of scope.star(table)) items.push({ name: s.name, compiled: { eval: (row) => row[s.index] ?? null, type: nullableTables.has(scope.columnAt(s.index)?.table.alias ?? '') ? { ...s.type, nullable: true } : s.type }, expr: { kind: NODE.COLUMN, parts: [scope.columnAt(s.index)?.table.alias as string, s.name], at: e.at } })
       return
     }
-    const compiled = compile(e, compileContext(run, selectScope, 'field list'))
+    const compiled = compile(e, { ...compileContext(run, selectScope, 'field list'), ...(windows === undefined ? {} : { windows }) })
     items.push({ name: itemName(item, texts[i]), compiled, expr: e, ...(item.alias === undefined ? {} : { alias: item.alias }) })
   })
+  // Read through the windows' temporary table: every column a field of it (8.4.11: `id` loses PRI).
+  if (windows !== undefined && windows.windows.length > 0) {
+    for (const item of items) if (item.compiled.type.temporary === undefined) item.compiled = { ...item.compiled, type: { ...item.compiled.type, temporary: 'stream' } }
+  }
 
   // `SELECT DISTINCT` is run through a temporary table — which changes the
   // metadata a client sees — unless the select list holds a whole key of NOT
@@ -282,6 +292,15 @@ function planSelect(run: Run, q: QueryExpression, node: SelectNode): SelectPlan 
       else if (facts?.impossible === true) rows = []
       else rows = from.rows(trx, env, { where: node.where, locking })
       let filtered: Iterable<{ readonly row: Row }> = filter(rows, where, env)
+      if (windows !== undefined && windows.windows.length > 0) {
+        const width = windowBase + windows.windows.length
+        const all = [...filtered].map(({ row }) => {
+          const r = row.slice() as Value[]
+          while (r.length < width) r.push(null)
+          return r
+        })
+        filtered = applyWindows(all, windows.windows, env).map((row) => ({ row }))
+      }
       if (keys.length > 0) filtered = sort(filtered, keys, env)
       let out: Iterable<Value[]> = project(filtered, items.map((i) => i.compiled), env)
       if (node.distinct === true) out = distinct(out)
@@ -554,7 +573,7 @@ function mergeable(q: QueryExpression): boolean {
   if (body.kind !== QUERY.SELECT) return false
   // A derived table with no FROM is a constant row MySQL materializes ("Rows fetched before execution").
   if (!hasFrom(q)) return false
-  return body.groupBy === undefined && body.having === undefined && body.distinct !== true && body.windows === undefined && !body.items.some((i) => containsAggregate(i.expr))
+  return body.groupBy === undefined && body.having === undefined && body.distinct !== true && body.windows === undefined && !body.items.some((i) => containsAggregate(i.expr) || containsWindow(i.expr))
 }
 
 /** A derived table, or one reference to a CTE: its columns as the outer query sees them, and its rows. */
@@ -578,9 +597,9 @@ function derivedTable(run: Run, query: QueryExpression, alias: string, names: re
   const merged = mergeable(query)
   const columns = renamed(plan.columns, names).map((c) => {
     const t = c.type
-    if (merged) return { name: c.name, type: t.column === undefined ? t : { ...t, column: { ...t.column, table: alias } } }
+    if (merged) return { name: c.name, type: t.column === undefined ? { ...t, derivedTable: alias } : { ...t, column: { ...t.column, table: alias } } }
     const { column, ...rest } = t
-    return { name: c.name, type: { ...rest, ...(column === undefined ? {} : { column: { ...column, table: alias } }), temporary: 'stream' as const } }
+    return { name: c.name, type: { ...rest, ...(column === undefined ? { derivedTable: alias } : { column: { ...column, table: alias } }), temporary: 'stream' as const } }
   })
   // Read once per statement unless it reads an enclosing query: so an UPDATE
   // whose subquery reads its own table through a derived table sees the
@@ -683,7 +702,7 @@ function recursiveCte(run: Run, cte: NonNullable<QueryExpression['with']>['table
   const anchor = anchorPlans[0]
   if (anchor === undefined) throw sqlError('ER_CTE_RECURSIVE_REQUIRES_NONRECURSIVE_FIRST', `Recursive Common Table Expression '${cte.name}' should have one or more non-recursive query blocks followed by one or more recursive ones`)
   // A recursive CTE's table is typed as a set operation's column is, from the anchor alone, and nullable.
-  const columns = renamed(anchor.columns, cte.columns).map((c) => ({ name: c.name, type: { ...setOperationType([c.type], run.env.session.characterSet), nullable: true } }))
+  const columns = renamed(anchor.columns, cte.columns).map((c) => ({ name: c.name, type: { ...setOperationType([c.type], run.env.session.characterSet), nullable: true, derivedTable: cte.name } }))
   let working: readonly (readonly Value[])[] = []
   const workingTable: DerivedSource = { columns, rows: () => working }
   const ctes = new Map(run.ctes ?? [])

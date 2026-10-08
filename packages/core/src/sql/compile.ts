@@ -64,6 +64,7 @@ import {
   type ResultType,
 } from './meta.ts'
 import { castAsJson, jsonConstructor } from './json.ts'
+import { windowNotAllowed } from './window.ts'
 
 /** One row as operators pass it: a value per column of the scope. */
 export type Row = readonly Value[]
@@ -155,6 +156,8 @@ export interface CompileContext {
    * one is ER_INVALID_GROUP_FUNC_USE.
    */
   readonly aggregates?: { register(e: CallNode, ctx: CompileContext): Compiled }
+  /** Where a select list's window functions are collected (M5.6); absent where none may be. */
+  readonly windows?: { register(e: CallNode): Compiled }
   /** Inside an aggregate's arguments, where another aggregate is 1111 too. */
   readonly inAggregate?: boolean
   /** Above a grouping: the expressions that are its keys, which read the key slot (NULL in a ROLLUP super-aggregate row). */
@@ -779,7 +782,11 @@ function outerOnly(args: readonly Expression[], ctx: CompileContext): boolean {
 
 function call(e: CallNode, ctx: CompileContext): Compiled {
   const name = e.name.toUpperCase()
-  if (e.over !== undefined) throw sqlError('ER_NOT_SUPPORTED_YET', messages.notSupported('Window functions'))
+  if (e.over !== undefined) {
+    if (ctx.windows !== undefined) return ctx.windows.register(e)
+    if (/^(where|having|on) clause$/.test(ctx.clause)) windowNotAllowed(e)
+    throw sqlError('ER_NOT_SUPPORTED_YET', messages.notSupported('Window functions here'))
+  }
   const args = (): Compiled[] => e.args.map((a) => compile(a, ctx))
   const arity = (n: number): void => {
     if (e.args.length !== n) throw sqlError('ER_WRONG_PARAMCOUNT_TO_NATIVE_FCT', `Incorrect parameter count in the call to native function '${e.name}'`)
