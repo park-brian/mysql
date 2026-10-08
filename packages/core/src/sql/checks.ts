@@ -115,7 +115,11 @@ export function withChecks(catalog: Catalog, schema: string, spec: TableSpec, sq
   for (const t of catalog.tables(schema)) if (t.name !== spec.name) for (const c of checksOf(t)) taken.add(c.name.toLowerCase())
   const columns = new Map(spec.columns.map((c) => [c.name.toLowerCase(), c] as const))
   const made: CheckDef[] = []
-  let n = 0
+  const existing = checksOf(spec)
+  for (const c of existing) taken.add(c.name.toLowerCase())
+  // An ALTER's new constraint continues from the table's highest number (8.4.11).
+  const prefix = `${spec.name}_chk_`
+  let n = Math.max(0, ...existing.map((c) => (c.name.startsWith(prefix) && /^\d+$/.test(c.name.slice(prefix.length)) ? Number(c.name.slice(prefix.length)) : 0)))
   for (const clause of clauses) {
     const name = clause.name ?? `${spec.name}_chk_${++n}`
     if (taken.has(name.toLowerCase())) throw sqlError('ER_CHECK_CONSTRAINT_DUP_NAME', `Duplicate check constraint name '${name}'.`)
@@ -138,7 +142,7 @@ export function withChecks(catalog: Catalog, schema: string, spec: TableSpec, sq
     if (!isCondition(e)) throw sqlError('ER_NON_BOOLEAN_EXPR_FOR_CHECK_CONSTRAINT', `An expression of non-boolean type specified to a check constraint '${name}'.`)
     made.push({ name, text: conditionText(sql, tokens, clause), enforced: clause.enforced, charset: requireCollationInfo(charset).charset })
   }
-  return { ...spec, options: { ...(spec.options ?? {}), checks: [...checksOf(spec), ...made] } }
+  return { ...spec, options: { ...(spec.options ?? {}), checks: [...existing, ...made] } }
 }
 
 /** CHECK_CLAUSE: the condition as the server reprints it, then escaped as INFORMATION_SCHEMA shows it. */

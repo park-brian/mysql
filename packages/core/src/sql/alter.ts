@@ -16,6 +16,7 @@ import { KEY, type AlterAction, type AlterTableNode, type ColumnDefinition } fro
 import type { StoreContext } from '@myjs/types'
 import { encodeField } from '@myjs/types'
 import { column as columnDef, DEFAULT_COLLATION } from './ddl.ts'
+import { checker, checksOf, checkViolated, withChecks, type CheckDef } from './checks.ts'
 import { defaultOf, implicitDefault } from './dml.ts'
 import { checkParentOf, foreignKeyChecks, foreignKeyClause, foreignKeysOf, referencedIndex, referencingKeys, supportingIndex, withForeignKeys, type ForeignKeyClause } from './foreign-keys.ts'
 import type { Run } from './query.ts'
@@ -24,13 +25,11 @@ const notSupported = (what: string) => sqlError('ER_NOT_SUPPORTED_YET', messages
 const cantDrop = (name: string) => sqlError('ER_CANT_DROP_FIELD_OR_KEY', `Can't DROP '${name}'; check that column/key exists`)
 
 const ACTION_NAMES: Readonly<Record<string, string>> = {
-  addCheck: 'ALTER TABLE … ADD CHECK',
   changeColumn: 'ALTER TABLE … CHANGE / MODIFY COLUMN',
   setDefault: 'ALTER TABLE … ALTER COLUMN … SET DEFAULT',
   dropDefault: 'ALTER TABLE … ALTER COLUMN … DROP DEFAULT',
   columnVisibility: 'Invisible columns',
   indexVisibility: 'Invisible indexes',
-  enforce: 'ALTER TABLE … ENFORCED',
   rename: 'ALTER TABLE … RENAME',
   renameColumn: 'ALTER TABLE … RENAME COLUMN',
   renameIndex: 'ALTER TABLE … RENAME INDEX',
@@ -51,7 +50,7 @@ export function alterTable(run: Run, catalog: Catalog, statement: AlterTableNode
   for (const a of statement.actions) {
     const named = ACTION_NAMES[a.type]
     if (named !== undefined) throw notSupported(named)
-    if (a.type === 'drop' && a.what !== 'FOREIGN KEY' && a.what !== 'INDEX') throw notSupported(`ALTER TABLE … DROP ${a.what}`)
+    if (a.type === 'drop' && (a.what === 'COLUMN' || a.what === 'PRIMARY KEY')) throw notSupported(`ALTER TABLE … DROP ${a.what}`)
     if (a.type === 'addKey' && (a.key.type === KEY.PRIMARY || a.key.type === KEY.FULLTEXT || a.key.type === KEY.SPATIAL)) throw notSupported(`ALTER TABLE … ADD ${a.key.type.toUpperCase()} KEY`)
     if (a.type === 'addColumn' && (a.column.autoIncrement === true || a.column.primary === true || a.column.type.serial === true)) throw notSupported('ALTER TABLE … ADD an AUTO_INCREMENT or PRIMARY KEY column')
   }
@@ -61,8 +60,22 @@ export function alterTable(run: Run, catalog: Catalog, statement: AlterTableNode
   // --- drops ---
   let foreignKeys = foreignKeysOf(def)
   let indexes: IndexDef[] = [...def.indexes]
+  let checkDefs: CheckDef[] = checksOf(def)
+  const same = (x: string, y: string) => x.toLowerCase() === y.toLowerCase()
   for (const a of of('drop')) {
     const name = a.name as string
+    if (a.what === 'CHECK' || (a.what === 'CONSTRAINT' && checkDefs.some((c) => same(c.name, name)))) {
+      if (!checkDefs.some((c) => same(c.name, name))) throw sqlError('ER_CHECK_CONSTRAINT_NOT_FOUND', `Check constraint '${name}' is not found in the table.`)
+      checkDefs = checkDefs.filter((c) => !same(c.name, name))
+      continue
+    }
+    // DROP CONSTRAINT names a constraint of any kind (8.4.11: 3940 when none is).
+    if (a.what === 'CONSTRAINT') {
+      if (foreignKeys.some((fk) => same(fk.name, name))) foreignKeys = foreignKeys.filter((fk) => !same(fk.name, name))
+      else if (indexes.some((i) => i.kind === 'unique' && same(i.name, name))) indexes = indexes.filter((i) => !same(i.name, name))
+      else throw sqlError('ER_CONSTRAINT_NOT_FOUND', `Constraint '${name}' does not exist.`)
+      continue
+    }
     if (a.what === 'FOREIGN KEY') {
       if (!foreignKeys.some((fk) => fk.name.toLowerCase() === name.toLowerCase())) throw cantDrop(name)
       foreignKeys = foreignKeys.filter((fk) => fk.name.toLowerCase() !== name.toLowerCase())
@@ -75,7 +88,7 @@ export function alterTable(run: Run, catalog: Catalog, statement: AlterTableNode
   // child's own keys need theirs, and the keys that reference this table
   // need its UNIQUE key on their columns.
   for (const a of of('drop')) {
-    if (a.what !== 'INDEX') continue
+    if (a.what !== 'INDEX' && a.what !== 'CONSTRAINT') continue
     const refuse = () => sqlError('ER_DROP_INDEX_FK', `Cannot drop index '${a.name as string}': needed in a foreign key constraint`)
     for (const fk of foreignKeys) if (supportingIndex(indexes, fk.columns) === undefined) throw refuse()
     for (const { fk } of referencingKeys(catalog, schema, def.name)) if (referencedIndex({ indexes }, fk.references.columns) === undefined) throw refuse()
@@ -140,8 +153,23 @@ export function alterTable(run: Run, catalog: Catalog, statement: AlterTableNode
   const options: Record<string, unknown> = { ...def.options }
   if (foreignKeys.length > 0) options['foreignKeys'] = foreignKeys
   else delete options['foreignKeys']
-  const base: TableSpec = { name: def.name, engine: def.engine, columns, indexes, options }
-  const spec = withForeignKeys(catalog, schema, base, clauses, checks)
+  // CHECK constraints: switched on or off, then the new ones, a column's own included.
+  const enabled = new Set<string>()
+  for (const a of of('enforce')) {
+    const target = checkDefs.find((c) => same(c.name, a.name))
+    if (target === undefined) {
+      if (a.what === 'CHECK') throw sqlError('ER_CHECK_CONSTRAINT_NOT_FOUND', `Check constraint '${a.name}' is not found in the table.`)
+      throw sqlError('ER_CONSTRAINT_NOT_FOUND', `Constraint '${a.name}' does not exist.`)
+    }
+    if (a.enforced && !target.enforced) enabled.add(target.name)
+    checkDefs = checkDefs.map((c) => (c === target ? { ...c, enforced: a.enforced } : c))
+  }
+  if (checkDefs.length > 0) options['checks'] = checkDefs
+  else delete options['checks']
+  const checkClausesAdded = [...of('addCheck').map((a) => a.check), ...added.flatMap((c) => (c.check === undefined ? [] : [c.check]))].sort((x, y) => x.at - y.at)
+  const withNewChecks = withChecks(catalog, schema, { name: def.name, engine: def.engine, columns, indexes, options }, run.sql, checkClausesAdded, run.env.session.characterSet)
+  for (const c of checksOf(withNewChecks).slice(checkDefs.length)) if (c.enforced) enabled.add(c.name)
+  const spec = withForeignKeys(catalog, schema, withNewChecks, clauses, checks)
   const before = new Set(foreignKeys.map((fk) => fk.name))
   const made = foreignKeysOf({ ...def, ...spec, options: spec.options ?? {} } as TableDef).filter((fk) => !before.has(fk.name))
 
@@ -152,6 +180,8 @@ export function alterTable(run: Run, catalog: Catalog, statement: AlterTableNode
   const shownAs = `#sql-0_${run.env.session.connectionId.toString(16)}`
   const check = checks && made.length > 0 ? checkParentOf(catalog) : undefined
   const checked = { ...def, columns, name: shownAs } as TableDef
+  // A constraint added or switched on is checked on every row there (3819).
+  const violation = enabled.size > 0 ? checker(run, { ...def, columns, indexes: def.indexes, options: spec.options ?? {} } as TableDef) : undefined
   let records = 0
   catalog.rebuildTable(schema, def.name, spec, (row) => {
     records++
@@ -165,8 +195,12 @@ export function alterTable(run: Run, catalog: Catalog, statement: AlterTableNode
     if (check !== undefined) {
       for (const fk of made) check(checked, fk, out)
     }
+    const violated = violation?.(out)
+    if (violated !== undefined) throw checkViolated(violated)
     return out
   })
-  const copied = checks && made.length > 0 ? records : 0
+  // "Records" counts the rows only where MySQL copies too: a key or a
+  // constraint the rows must be checked against.
+  const copied = (checks && made.length > 0) || enabled.size > 0 ? records : 0
   return { affectedRows: copied, info: `Records: ${copied}  Duplicates: 0  Warnings: 0` }
 }

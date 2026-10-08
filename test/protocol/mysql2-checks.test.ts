@@ -5,7 +5,10 @@
 // 3818, 3820, 3822); CHECK_CLAUSE as the server reprints the condition, and
 // TABLE_CONSTRAINTS' ENFORCED; 3819 on INSERT, UPDATE and an upsert, NULL
 // passing, the first violation in name order, IGNORE skipping a row that
-// is then not counted, and a violation that costs no AUTO_INCREMENT value.
+// is then not counted, and a violation that costs no AUTO_INCREMENT value;
+// then ALTER TABLE: ADD CHECK checking the rows there, the numbering that
+// continues from the highest, DROP CHECK (3821) and DROP CONSTRAINT (3940),
+// ALTER CHECK … [NOT] ENFORCED, and a new column's own constraint.
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import mysql from 'mysql2/promise'
@@ -49,6 +52,28 @@ const SCRIPT: readonly (readonly [string, Outcome])[] = [
   ["SELECT constraint_name, check_clause FROM information_schema.check_constraints WHERE constraint_schema = 'app' AND constraint_name LIKE 'p\\\\_%' ORDER BY LENGTH(constraint_name), constraint_name", [["p_chk_1","(`a` in (1,2,3))"],["p_chk_2","(`a` not in (4,5))"],["p_chk_3","(`a` not between 7 and 8)"],["p_chk_4","(`s` is not null)"],["p_chk_5","((`b` is null) or (`b` >= -(1.50)))"],["p_chk_6","(upper(`s`) <> _utf8mb4\\'X\\\\\\'Y\\')"],["p_chk_7","((char_length(`s`) < 9) xor (`a` = 1))"],["p_chk_8","((`a` <> 3) and (`a` <=> 3))"],["p_chk_9","((case when (`a` > 1) then 1 else 0 end) = 1)"],["p_chk_10","((-(`a`) < 10) and ((`a` % 2) = 0) and ((`a` DIV 2) > 0))"],["p_chk_11","(coalesce(`a`,0) >= 0)"],["p_chk_12","(`s` like _utf8mb4\\'a\\\\\\\\_b\\' escape _utf8mb4\\'|\\')"],["p_chk_13","json_valid(`j`)"],["p_chk_14","(0 = `a`)"],["p_chk_15","true"],["p_chk_16","(`a` > 1e2)"],["p_chk_17","(`b` <> 0.5)"]]],
   ["DROP TABLE p", [0,0,"",0]],
   ["CREATE TABLE IF NOT EXISTS c (a INT, CHECK (zz > 0))", [3820,"Check constraint 'c_chk_1' refers to non-existing column 'zz'."]],
+  ["CREATE TABLE ac (a INT, b INT, CHECK (a > 0), CHECK (b > 0))", [0,0,"",0]],
+  ["INSERT INTO ac VALUES (5, 5), (50, 1)", [2,0,"Records: 2  Duplicates: 0  Warnings: 0",0]],
+  ["ALTER TABLE ac ADD CHECK (a < 100)", [2,0,"Records: 2  Duplicates: 0  Warnings: 0",0]],
+  ["ALTER TABLE ac ADD CONSTRAINT lim CHECK (a < 10)", [3819,"Check constraint 'lim' is violated."]],
+  ["ALTER TABLE ac ADD CONSTRAINT lim CHECK (a < 100)", [2,0,"Records: 2  Duplicates: 0  Warnings: 0",0]],
+  ["ALTER TABLE ac ADD CHECK (a < 9), ADD CHECK (b < 9)", [3819,"Check constraint 'ac_chk_4' is violated."]],
+  ["SELECT constraint_name, check_clause FROM information_schema.check_constraints WHERE constraint_schema = 'app' AND constraint_name LIKE 'ac%' OR constraint_name = 'lim' ORDER BY 1", [["ac_chk_1","(`a` > 0)"],["ac_chk_2","(`b` > 0)"],["ac_chk_3","(`a` < 100)"],["lim","(`a` < 100)"]]],
+  ["ALTER TABLE ac DROP CHECK ac_chk_2", [0,0,"Records: 0  Duplicates: 0  Warnings: 0",0]],
+  ["ALTER TABLE ac DROP CHECK nope", [3821,"Check constraint 'nope' is not found in the table."]],
+  ["ALTER TABLE ac DROP CONSTRAINT lim", [0,0,"Records: 0  Duplicates: 0  Warnings: 0",0]],
+  ["ALTER TABLE ac DROP CONSTRAINT nope", [3940,"Constraint 'nope' does not exist."]],
+  ["ALTER TABLE ac ALTER CHECK ac_chk_1 NOT ENFORCED", [0,0,"Records: 0  Duplicates: 0  Warnings: 0",0]],
+  ["INSERT INTO ac VALUES (-1, 1)", [1,0,"",0]],
+  ["ALTER TABLE ac ALTER CHECK ac_chk_1 ENFORCED", [3819,"Check constraint 'ac_chk_1' is violated."]],
+  ["DELETE FROM ac WHERE a = -1", [1,0,"",0]],
+  ["ALTER TABLE ac ALTER CHECK ac_chk_1 ENFORCED", [2,0,"Records: 2  Duplicates: 0  Warnings: 0",0]],
+  ["ALTER TABLE ac ALTER CONSTRAINT ac_chk_3 NOT ENFORCED", [0,0,"Records: 0  Duplicates: 0  Warnings: 0",0]],
+  ["ALTER TABLE ac ALTER CHECK nope ENFORCED", [3821,"Check constraint 'nope' is not found in the table."]],
+  ["SELECT constraint_name, enforced FROM information_schema.table_constraints WHERE table_schema = 'app' AND table_name = 'ac' ORDER BY 1", [["ac_chk_1","YES"],["ac_chk_3","NO"]]],
+  ["ALTER TABLE ac ADD COLUMN z INT CHECK (z > 0)", [2,0,"Records: 2  Duplicates: 0  Warnings: 0",0]],
+  ["ALTER TABLE ac ADD COLUMN y INT NOT NULL CHECK (y > 0)", [3819,"Check constraint 'ac_chk_5' is violated."]],
+  ["SELECT constraint_name, check_clause FROM information_schema.check_constraints WHERE constraint_schema = 'app' AND constraint_name LIKE 'ac%' ORDER BY 1", [["ac_chk_1","(`a` > 0)"],["ac_chk_3","(`a` < 100)"],["ac_chk_4","(`z` > 0)"]]],
 ]
 
 test('M5.9: CHECK constraints answer every statement of the script as 8.4.11 did', async () => {
