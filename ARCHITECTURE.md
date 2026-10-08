@@ -1284,6 +1284,8 @@ it we capture:
 | Queries | 1,200 generated joins and set operations |
 | Execution | 400 generated scripts run through `mysql2`; every statement's rows, order, metadata, `affectedRows`, `insertId`, errno and SQLSTATE must agree |
 | Keywords | MySQL's reserved-word list |
+| `INFORMATION_SCHEMA` | 120 DDL scripts, each followed by the introspection queries Prisma and Drizzle send: 2,568 statements |
+| Feature scripts | Hand-written scripts, each run on the server first with its answers kept: foreign keys, CHECK, ALTER TABLE and defaults, SHOW CREATE TABLE, JSON paths, REGEXP, temporal comparisons, BIT |
 
 Our code is never the oracle for itself. When a behaviour is in doubt, the
 server settles it, and the answer becomes a fixture.
@@ -1309,6 +1311,16 @@ would store and then could not read back.
 rate and driver suites to traces, storage vectors, crash points and bundle
 size, lives in one table that changes in the same commit as the code. A
 number updated by hand, later, is marketing.
+
+**Reviews that must reproduce.** A finished feature is handed to a reviewer
+whose only job is to break it, with the server beside it. A finding counts
+only once it has been reproduced against 8.4.11, and it is fixed by adding the
+server's answer to a captured script, not by editing code until the symptom
+goes away. One review of the foreign-key, ALTER, CHECK and JSON work found
+twelve divergences. Among them was a cascade that wrote NULL where InnoDB
+refuses: silent data loss that every existing test had passed. Fixing them
+turned up three more, in places nobody had been looking: ENUM in a numeric
+context, two-digit years, and `\w` in a regular expression.
 
 **Mutations that must be caught.** A test suite that passes is evidence only
 if it *could* fail. So the suites are tested too. We plant a bug, such as
@@ -1351,7 +1363,7 @@ a blocker and one without is just a note.
 |---|---|---|
 | **Does OPFS `flush()` ever reorder writes?** | The browser half of the durability promise depends on it ([§12](#12-durability-stated-honestly)) | Real-browser crash tests, M6 |
 | **Does `execProtocol` need a streaming variant?** | `db.stream()` exists so that a large resultset is never held in memory, and today's seam returns a command's whole response | M5 |
-| **How faithful must `INFORMATION_SCHEMA` be?** | Migration tools read it directly, and column flags alone cannot reconstruct a multi-column index | M5, against Prisma's and Drizzle's introspection |
+| ~~**How faithful must `INFORMATION_SCHEMA` be?**~~ | Settled by M5.12: byte for byte, metadata included, because Prisma diffs what it reads against what it pushed. A captured corpus of 2,568 statements agrees in full | — |
 | **How closely can our byte traces match a real server's?** | Version string, capabilities and connection ids differ *by design*, so byte identity with a real server is not simply a question of correctness | M5's differential harness |
 | **Is whole-page compression at the VFS the answer to COMPRESSED tables?** | It is the proposed replacement, with no design yet | M6 or later |
 | **Do index pages get prefix compression?** | Could save a third or more on string keys, at the cost of a slower page format | Deliberately undecided |
@@ -1376,7 +1388,8 @@ server. M5 is well under way. The executor runs DDL, DML and transactions,
 upserts included, and relational SELECT: joins, grouping and aggregates,
 subqueries, derived tables, CTEs, set operations, views, JSON as a value and
 the first window functions, `INFORMATION_SCHEMA`, foreign keys with their
-referential actions, CHECK constraints and JSON paths. Generated corpora of 400, 300 and 250 scripts
+referential actions, CHECK constraints, ALTER TABLE by copy, `SHOW CREATE
+TABLE` byte for byte, JSON paths and regular expressions. Generated corpora of 400, 300 and 250 scripts
 agree with MySQL 8.4.11 statement for statement, column names and flags
 included. Most of M5's exit criterion holds. All 487 tests of Drizzle's
 MySQL suites pass, as they do against 8.4.11. Of Prisma's, 1,104 pass
