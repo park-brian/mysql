@@ -735,6 +735,12 @@ function matchConjunct(e: Expression | undefined): Expression | undefined {
   return undefined
 }
 
+function plainColumn(t: ResultType): ResultType {
+  if (t.literalInt === undefined) return t
+  const { literalInt: _l, ...rest } = t
+  return { ...rest, wasLiteralInt: true }
+}
+
 function* fieldRows(rows: Iterable<Value[]>): Generator<Value[]> {
   for (const r of rows) yield r.map(withoutHex)
 }
@@ -744,7 +750,8 @@ function renamed(columns: readonly { readonly name: string; readonly type: Resul
   if (names !== undefined && names.length !== columns.length) {
     throw sqlError('ER_VIEW_WRONG_LIST', 'In definition of view, derived table or common table expression, SELECT list and column names list have different column counts')
   }
-  const out = columns.map((c, i) => ({ name: names?.[i] ?? c.name, type: c.type }))
+  // A hex literal's column is bytes again, as its rows are (`fieldRows`).
+  const out = columns.map((c, i) => ({ name: names?.[i] ?? c.name, type: plainColumn(c.type) }))
   const seen = new Set<string>()
   for (const c of out) {
     const k = c.name.toLowerCase()

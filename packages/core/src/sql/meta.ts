@@ -28,6 +28,13 @@ export type ResultKind = 'int' | 'decimal' | 'double' | 'string' | 'bytes' | 'da
 
 export interface ResultType {
   readonly kind: ResultKind
+  /**
+   * A hex or bit literal: bytes as written, and in arithmetic an integer as
+   * wide as its largest value — unsigned for hex, signed for bits (8.4.11).
+   */
+  readonly literalInt?: { readonly digits: number; readonly unsigned: boolean }
+  /** A derived table's, a CTE's or a view's column of one: bytes again, but with 0 decimals (8.4.11). */
+  readonly wasLiteralInt?: true
   /** The wire field type. */
   readonly field: number
   /**
@@ -379,7 +386,8 @@ export function columnDefinition(name: string, t: ResultType, resultsCollation: 
   }
   let flags = t.column?.flags ?? 0
   if (!t.nullable) flags |= COLUMN_FLAG.NOT_NULL
-  if (t.unsigned && t.kind !== 'null') flags |= COLUMN_FLAG.UNSIGNED
+  // A hex literal is reported unsigned, bytes or not, as the integer it can be (8.4.11).
+  if ((t.unsigned || t.literalInt?.unsigned === true) && t.kind !== 'null') flags |= COLUMN_FLAG.UNSIGNED
   const isText = t.kind === 'string' || (t.asText === true && !(t.temporary !== undefined && t.temporary !== false))
   // A bare column of a number type carries no BINARY flag; every other
   // non-text result does, a literal and an expression included.
@@ -435,7 +443,7 @@ export function columnDefinition(name: string, t: ResultType, resultsCollation: 
       break
     case 'bytes':
       length = t.length
-      decimals = t.column !== undefined || materialized ? 0 : 31
+      decimals = t.column !== undefined || materialized || t.literalInt !== undefined || t.wasLiteralInt === true ? 0 : 31
       break
     case 'string': {
       const mb = requireCollationInfo(resultsCollation).mbmaxlen

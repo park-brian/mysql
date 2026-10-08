@@ -92,6 +92,8 @@ function temporalPrecision(t: ResultType): number {
 
 /** The precision and scale an argument has as a DECIMAL, or `undefined` for one that sums as a double. */
 function exactShape(t: ResultType): { precision: number; scale: number } | undefined {
+  // A hex literal sums as the unsigned integer it is.
+  if (t.literalInt !== undefined) return { precision: t.literalInt.digits, scale: 0 }
   switch (t.kind) {
     case 'int':
       return { precision: intPrecision(t), scale: 0 }

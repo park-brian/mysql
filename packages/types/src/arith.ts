@@ -52,6 +52,9 @@ function numericKind(v: Exclude<Value, null>): Kind {
   switch (v.kind) {
     case 'int':
       return 'int'
+    // A hex literal is an unsigned BIGINT in arithmetic (8.4.11: `X'41' - 100` is 1690).
+    case 'bytes':
+      return v.hex === true ? 'int' : 'double'
     case 'decimal':
       return 'decimal'
     case 'datetime':
@@ -70,7 +73,7 @@ function resultKind(a: Exclude<Value, null>, b: Exclude<Value, null>): Kind {
   return 'int'
 }
 
-const isUnsigned = (v: Exclude<Value, null>): boolean => v.kind === 'int' && v.unsigned
+const isUnsigned = (v: Exclude<Value, null>): boolean => (v.kind === 'int' && v.unsigned) || (v.kind === 'bytes' && v.hex === true)
 
 /** A BIGINT result, range-checked. `expr` names the expression in the error, as MySQL's message does. */
 function checked(n: bigint, unsigned: boolean, expr: string): Value {

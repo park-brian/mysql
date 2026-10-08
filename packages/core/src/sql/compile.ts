@@ -415,7 +415,12 @@ function literal(e: LiteralNode, ctx: CompileContext): Compiled {
   // `_latin1 x'E9'` is the string 'é' (8.4.11).
   const introduced = (b: Uint8Array): Compiled => {
     const id = e.charset === undefined && e.collation === undefined ? CHARSET_BINARY : introducerCollation(e, ctx)
-    if (id === CHARSET_BINARY) return lit(e.charset === undefined && e.collation === undefined ? { kind: 'bytes', v: b, hex: true } : bytesValue(b), stringType(b.length, CHARSET_BINARY, false))
+    if (id === CHARSET_BINARY && e.charset === undefined && e.collation === undefined) {
+      // As a number, as many digits as its largest value has, to 20.
+      const digits = Math.min(20, String((1n << BigInt(8 * Math.max(1, b.length))) - 1n).length)
+      return lit({ kind: 'bytes', v: b, hex: true }, { ...stringType(b.length, CHARSET_BINARY, false), literalInt: { digits, unsigned: e.type === LITERAL.HEX } })
+    }
+    if (id === CHARSET_BINARY) return lit(bytesValue(b), stringType(b.length, CHARSET_BINARY, false))
     const decode = (bytes: Uint8Array): string => {
       try {
         return decodeCollation(bytes, id)
@@ -597,7 +602,8 @@ function unary(op: string, a: Compiled, exists: boolean): Compiled {
     case '-': {
       const t = a.type
       // Negating an unsigned value needs room for the sign it gains.
-      const type = t.kind === 'int' ? intType(t.length + (t.unsigned ? 1 : 0), t.nullable) : t.kind === 'decimal' ? decimalType(t.length, t.scale, t.nullable) : t.kind === 'null' ? NULL_TYPE : t.kind === 'double' ? floatLength(t.scale, t.nullable) : doubleType(t.nullable)
+      // A hex literal negated is a double, as its string self is (8.4.11: 17 wide, 0 decimals).
+      const type = t.literalInt !== undefined ? floatLength(0, t.nullable) : t.kind === 'int' ? intType(t.length + (t.unsigned ? 1 : 0), t.nullable) : t.kind === 'decimal' ? decimalType(t.length, t.scale, t.nullable) : t.kind === 'null' ? NULL_TYPE : t.kind === 'double' ? floatLength(t.scale, t.nullable) : doubleType(t.nullable)
       const operand = asNumber(a, 'DOUBLE').eval
       if (type.kind === 'double' && type.scale < 31) return { eval: (r, env) => doubleOf(negate(operand(r, env)), type), type }
       return { eval: (r, env) => negate(operand(r, env)), type }
@@ -659,10 +665,14 @@ const arithWidth = (a: ResultType, b: ResultType, unsigned: boolean): number => 
 
 /** Digits before the point, for a DECIMAL or an integer operand. */
 function intDigits(t: ResultType): number {
+  if (t.literalInt !== undefined) return t.literalInt.digits
   if (t.kind === 'decimal') return t.length - t.scale
   if (t.kind === 'int') return t.unsigned ? t.length : t.length - 1
   return 0
 }
+
+/** Whether an operand is unsigned as a number: an unsigned type, or a hex literal. */
+const unsignedOf = (t: ResultType): boolean => t.unsigned || t.literalInt?.unsigned === true
 
 const scaleOf = (t: ResultType): number => (t.kind === 'decimal' ? t.scale : 0)
 
@@ -670,7 +680,7 @@ const scaleOf = (t: ResultType): number => (t.kind === 'decimal' ? t.scale : 0)
 function arithKind(a: ResultType, b: ResultType): 'int' | 'decimal' | 'double' | 'null' {
   if (a.kind === 'null' || b.kind === 'null') return 'null'
   const k = (t: ResultType): 'int' | 'decimal' | 'double' =>
-    t.kind === 'int' ? 'int' : t.kind === 'decimal' ? 'decimal' : t.kind === 'datetime' || t.kind === 'time' ? (t.scale > 0 ? 'decimal' : 'int') : 'double'
+    t.kind === 'int' || t.literalInt !== undefined ? 'int' : t.kind === 'decimal' ? 'decimal' : t.kind === 'datetime' || t.kind === 'time' ? (t.scale > 0 ? 'decimal' : 'int') : 'double'
   const x = k(a)
   const y = k(b)
   return x === 'double' || y === 'double' ? 'double' : x === 'decimal' || y === 'decimal' ? 'decimal' : 'int'
@@ -798,14 +808,14 @@ function binary(op: string, left: Expression, right: Expression, extra: Expressi
     case '*': {
       const kind = arithKind(a.type, b.type)
       let type: ResultType
-      const unsigned = a.type.unsigned || b.type.unsigned
+      const unsigned = unsignedOf(a.type) || unsignedOf(b.type)
       if (kind === 'int') type = intType(op === '*' ? intDigits(a.type) + intDigits(b.type) + (unsigned ? 0 : 1) : arithWidth(a.type, b.type, unsigned), nullable, unsigned)
       else if (kind === 'decimal') {
         const s = op === '*' ? scaleOf(a.type) + scaleOf(b.type) : Math.max(scaleOf(a.type), scaleOf(b.type))
         const digits = op === '*' ? intDigits(a.type) + intDigits(b.type) : Math.max(intDigits(a.type), intDigits(b.type)) + 1
         // A DECIMAL result is unsigned only when both sides are; an integer
         // one when either is (`Item_func_*::result_precision`).
-        type = decimalType(digits + s, s, nullable, a.type.unsigned === true && b.type.unsigned === true)
+        type = decimalType(digits + s, s, nullable, unsignedOf(a.type) && unsignedOf(b.type))
       } else if (kind === 'double') type = fixedDouble([a.type, b.type], nullable) ?? doubleType(nullable, 23)
       else type = NULL_TYPE
       if (type.kind === 'double' && type.scale < 31) {
@@ -817,7 +827,7 @@ function binary(op: string, left: Expression, right: Expression, extra: Expressi
     case '/': {
       const kind = arithKind(a.type, b.type)
       const s = Math.min(30, scaleOf(a.type) + 4)
-      const type = kind === 'double' ? divisionDouble(a.type, b.type) : kind === 'null' ? NULL_TYPE : decimalType(intDigits(a.type) + scaleOf(b.type) + s, s, true, a.type.unsigned === true && b.type.unsigned === true)
+      const type = kind === 'double' ? divisionDouble(a.type, b.type) : kind === 'null' ? NULL_TYPE : decimalType(intDigits(a.type) + scaleOf(b.type) + s, s, true, unsignedOf(a.type) && unsignedOf(b.type))
       const quotient = byZero(at, bt, divide)
       if (type.kind === 'double' && type.scale < 31) return { eval: (r, env) => doubleOf(quotient(r, env), type), type }
       return { eval: quotient, type }
@@ -827,14 +837,14 @@ function binary(op: string, left: Expression, right: Expression, extra: Expressi
       // DECIMAL's integer digits and a sign (`score DIV 0` on a DECIMAL(6,2)
       // is 5), a double's 22 — all read off 8.4.11.
       const t = a.type
-      const width = t.kind === 'int' ? t.length : t.kind === 'decimal' ? intDigits(t) + 1 : 22
-      return { eval: byZero(at, bt, (x, y) => intDivide(x, y, label)), type: intType(width, true, t.unsigned || b.type.unsigned) }
+      const width = t.literalInt !== undefined ? t.literalInt.digits : t.kind === 'int' ? t.length : t.kind === 'decimal' ? intDigits(t) + 1 : 22
+      return { eval: byZero(at, bt, (x, y) => intDivide(x, y, label)), type: intType(width, true, unsignedOf(t) || unsignedOf(b.type)) }
     }
     case '%':
     case 'MOD': {
       const kind = arithKind(a.type, b.type)
       // The wider operand's digits and a sign, unsigned or not: `flag % 3` on a TINYINT UNSIGNED is 4.
-      const type = kind === 'int' ? intType(Math.max(intDigits(a.type), intDigits(b.type), 1) + 1, true, a.type.unsigned) : kind === 'decimal' ? decimalType(Math.max(a.type.length, b.type.length), Math.max(scaleOf(a.type), scaleOf(b.type)), true) : doubleType(true, 23)
+      const type = kind === 'int' ? intType(Math.max(intDigits(a.type), intDigits(b.type), 1) + 1, true, unsignedOf(a.type)) : kind === 'decimal' ? decimalType(Math.max(a.type.length, b.type.length), Math.max(scaleOf(a.type), scaleOf(b.type)), true) : doubleType(true, 23)
       return { eval: byZero(at, bt, (x, y) => modulo(x, y, label)), type }
     }
     case '|':
@@ -1604,7 +1614,7 @@ function call(e: CallNode, ctx: CompileContext): Compiled {
           const out = sign !== null && sign < 0 ? negate(v) : v.kind === 'string' || v.kind === 'bytes' ? doubleValue(Math.abs(toDouble(v))) : v
           return x.type.kind === 'double' ? doubleOf(out, floatLength(x.type.scale, true)) : out
         },
-        type: x.type.kind === 'double' ? floatLength(x.type.scale, x.type.nullable) : x.type.kind === 'string' || x.type.kind === 'bytes' ? doubleType(x.type.nullable) : x.type.kind === 'int' ? intType(x.type.length, x.type.nullable, x.type.unsigned) : expressionOf(x.type),
+        type: x.type.literalInt !== undefined ? { ...floatLength(0, x.type.nullable), unsigned: true } : x.type.kind === 'double' ? floatLength(x.type.scale, x.type.nullable) : x.type.kind === 'string' || x.type.kind === 'bytes' ? doubleType(x.type.nullable) : x.type.kind === 'int' ? intType(x.type.length, x.type.nullable, x.type.unsigned) : expressionOf(x.type),
       }
     }
     case 'VERSION':
@@ -1792,7 +1802,8 @@ function cast(e: CastNode, ctx: CompileContext): Compiled {
           if (!unsigned && n > (1n << 63n) - 1n && (v.kind === 'string' || v.kind === 'bytes')) raise(env, 1105, 'Cast to signed converted positive out-of-range integer to its negative complement')
           return unsigned ? intValue(n & mask, true) : intValue(n > (1n << 63n) - 1n ? n - (1n << 64n) : n)
         },
-        type: intType(unsigned ? 20 : 21, nullable, unsigned),
+        // 21 wide, unsigned or not (8.4.11).
+        type: intType(21, nullable, unsigned),
       }
     }
     case 'DECIMAL': {

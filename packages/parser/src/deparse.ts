@@ -159,7 +159,9 @@ class Deparser {
         body = this.string(e.value as string)
         break
       case LITERAL.HEX:
-        body = `X'${hex(e.value as Uint8Array)}'`
+        // As MySQL prints one, in a message or a view: 0x41. No bytes at all
+        // has no such form.
+        body = (e.value as Uint8Array).length === 0 ? "X''" : `0x${hex(e.value as Uint8Array).toLowerCase()}`
         break
       case LITERAL.BIT:
         body = `b'${(e.value as bigint).toString(2)}'`
