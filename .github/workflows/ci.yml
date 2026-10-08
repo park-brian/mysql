@@ -256,6 +256,9 @@ jobs:
           # M5.17: whole statements — rows, metadata, counters, errors — run
           # through mysql2, so the executor's corpus is re-checked too.
           npm run capture:execution
+          # M5.18: many tables at a time, each SELECT through both protocols
+          # and with its plan skeleton, since row order is the plan's.
+          npm run capture:relational
           git diff --stat -- test/format/fixtures/ packages/parser/src/keywords.ts
       - name: upload the captured fixtures
         uses: actions/upload-artifact@v4

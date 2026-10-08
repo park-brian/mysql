@@ -59,7 +59,13 @@ export interface ResultType {
 
 /** `GROUP_FLAG`, `include/mysql_com.h` — the same bit as `NUM_FLAG`. */
 export const GROUP_FLAG = 0x8000
-const KEY_FLAGS = COLUMN_FLAG.PRI_KEY | COLUMN_FLAG.UNIQUE_KEY | COLUMN_FLAG.MULTIPLE_KEY | PART_KEY_FLAG | COLUMN_FLAG.NO_DEFAULT_VALUE | COLUMN_FLAG.AUTO_INCREMENT
+/**
+ * What a column loses through a temporary table: its key flags. NO_DEFAULT_VALUE
+ * survives — `SELECT DISTINCT qty, label` reports a NOT NULL `qty` as 0x1001
+ * (8.4.11, found by M5.18's corpus: every NOT NULL column M5.17's drew for
+ * DISTINCT held a key, so the table was skipped).
+ */
+const KEY_FLAGS = COLUMN_FLAG.PRI_KEY | COLUMN_FLAG.UNIQUE_KEY | COLUMN_FLAG.MULTIPLE_KEY | PART_KEY_FLAG | COLUMN_FLAG.AUTO_INCREMENT
 
 export interface SourceColumn {
   readonly schema: string

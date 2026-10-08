@@ -57,6 +57,7 @@ npm run capture:traces       # 13 client/server byte traces, via a recording pro
 npm run capture:keywords     # MySQL's reserved words, into @myjs/parser (D-39)
 npm run capture:queries      # 1,200 generated joins and set operations, run by the server
 npm run capture:execution    # 400 generated scripts, run by the server through mysql2
+npm run capture:relational   # 300 multi-table scripts, both protocols, plans captured
 npm run exit-criterion       # the real C client against our server
 npm run census:mysqltest -- --refresh   # MySQL's own test corpus, lexed and parsed
 ```

@@ -674,7 +674,8 @@ function caseExpr(e: CaseNode, ctx: CompileContext): Compiled {
 
 /** The builtins this executor knows, beyond the ones written out below — refused by name until M5.10. */
 const KNOWN_BUILTINS = new Set([
-  'COUNT', 'SUM', 'AVG', 'MIN', 'MAX', 'GROUP_CONCAT', 'SUBSTRING', 'SUBSTR', 'TRIM', 'REPLACE', 'ROUND', 'FLOOR', 'CEIL',
+  'COUNT', 'SUM', 'AVG', 'MIN', 'MAX', 'GROUP_CONCAT', 'BIT_AND', 'BIT_OR', 'BIT_XOR', 'STD', 'STDDEV', 'STDDEV_POP', 'STDDEV_SAMP',
+  'VARIANCE', 'VAR_POP', 'VAR_SAMP', 'ANY_VALUE', 'GROUPING', 'JSON_ARRAYAGG', 'JSON_OBJECTAGG', 'SUBSTRING', 'SUBSTR', 'TRIM', 'REPLACE', 'ROUND', 'FLOOR', 'CEIL',
   'CEILING', 'DATE_FORMAT', 'DATE_ADD', 'DATE_SUB', 'JSON_EXTRACT', 'JSON_OBJECT', 'JSON_ARRAY', 'UUID', 'RAND', 'LEFT',
   'RIGHT', 'LPAD', 'RPAD', 'REPEAT', 'REVERSE', 'LOCATE', 'INSTR', 'POSITION', 'GREATEST', 'LEAST', 'ROW_NUMBER', 'RANK',
 ])

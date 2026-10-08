@@ -36,6 +36,7 @@
     "capture:keywords": "node tools/capture-keywords.mjs",
     "capture:queries": "node tools/capture-queries.mjs",
     "capture:execution": "node tools/capture-execution.mjs",
+    "capture:relational": "node tools/capture-relational.mjs",
     "census:mysqltest": "node tools/mysqltest-census.mjs",
     "freeze:traces": "node tools/freeze-traces.mjs",
     "exit-criterion": "node tools/exit-criterion.mjs"
