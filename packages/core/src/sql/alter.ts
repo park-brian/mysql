@@ -21,7 +21,9 @@ import { decodeField, encodeField, type StoreContext, type Value } from '@myjs/t
 import { raise, type Compiled } from './compile.ts'
 import { column as columnDef, columnDeprecations, DEFAULT_COLLATION, duplicateKeys, duplicateKeyText, keyExtras, visiblePrimary } from './ddl.ts'
 import { checker, checkForeignKeyActions, checksOf, checkViolated, columnChecks, columnsOf, withChecks, type CheckDef } from './checks.ts'
-import { checkDefaults, defaultOf, implicitDefault, rowDependent, zeroRules } from './dml.ts'
+import { checkDefaults, defaultOf, generatorOf, implicitDefault, rowDependent, zeroRules } from './dml.ts'
+import { requireCollationInfo } from '@myjs/charsets'
+import { checkGenerated, generationOf, stampGenerated } from './generated.ts'
 import { checkParentOf, foreignKeyChecks, foreignKeyClause, foreignKeysOf, referencedIndex, referencingKeys, storageClass, supportingIndex, withForeignKeys, type ForeignKeyClause } from './foreign-keys.ts'
 import { checkFulltext, fulltextOf, type FulltextDef } from './fulltext.ts'
 import type { Run } from './query.ts'
@@ -348,6 +350,15 @@ export function alterTable(run: Run, catalog: CatalogApi, statement: AlterTableN
   }
   if (checkDefs.length > 0) options['checks'] = checkDefs
   else delete options['checks']
+  // A column a generated column names stays (8.4.11: 3108), and the generated columns are checked over the table as it will be.
+  for (const c of columns) {
+    const generation = generationOf(c)
+    if (generation === undefined) continue
+    const named = [...columnsOf(generation.text)].find((n) => dropped.has(n))
+    if (named !== undefined) throw sqlError('ER_DEPENDENT_BY_GENERATED_COLUMN', `Column '${def.columns.find((x) => x.name.toLowerCase() === named)?.name ?? named}' has a generated column dependency.`)
+  }
+  checkGenerated(columns)
+  columns.splice(0, columns.length, ...stampGenerated(columns, requireCollationInfo(run.env.session.characterSet).charset))
   const checkClausesAdded = columnChecks(of('addCheck').map((a) => a.check), added)
   const withNewChecks = withChecks(catalog, schema, { name, engine: def.engine, columns, indexes, options }, run.sql, checkClausesAdded, run.env.session.characterSet)
   for (const c of checksOf(withNewChecks).slice(checkDefs.length)) if (c.enforced) enabled.add(c.name)
@@ -377,6 +388,7 @@ export function alterTable(run: Run, catalog: CatalogApi, statement: AlterTableN
   const checked = { ...def, columns, name: shownAs } as TableDef
   // A constraint added or switched on is checked on every row there (3819).
   const violation = enabled.size > 0 ? checker(run, { ...def, columns, indexes: def.indexes, options: spec.options ?? {} } as TableDef) : undefined
+  const generate = generatorOf(run, newDef)
   let records = 0
   catalog.rebuildTable(schema, def.name, spec, (row) => {
     records++
@@ -409,6 +421,8 @@ export function alterTable(run: Run, catalog: CatalogApi, statement: AlterTableN
         values[i] = decodeField(out[i] ?? null, s.type)
       }
     }
+    // Every generated column again, over the row as copied (8.4.11: an added STORED one is filled).
+    generate?.(out, out.map((f, i) => (f === null ? null : decodeField(f, (columns[i] as ColumnDef).type))), strict, 'error')
     if (check !== undefined) {
       for (const fk of made) check(checked, fk, out)
     }
@@ -427,7 +441,9 @@ export function alterTable(run: Run, catalog: CatalogApi, statement: AlterTableN
   const rekeyed = keyOf(def.indexes) !== keyOf(indexes.map((i) => ({ ...i, parts: i.parts })) ) && def.indexes.some((i) => i.kind === 'primary') && [...dropped].some((d) => primary.has(d))
   // A temporary table is always copied, its rename too (8.4.11: `Records: 1` for one row).
   const temporary = isTemporary(def)
-  const copied = temporary || (checks && made.length > 0) || enabled.size > 0 || expression || retyped || rekeyed ? records : 0
+  // And a STORED generated column added, which every row must be given.
+  const stored = added.some((c) => c.generated?.stored === true)
+  const copied = temporary || stored || (checks && made.length > 0) || enabled.size > 0 || expression || retyped || rekeyed ? records : 0
   // AUTO_INCREMENT = n moves the counter on, never back past the rows.
   const counter = optionOf('AUTO_INCREMENT')
   if (counter !== undefined && /^\d+$/.test(counter)) catalog.table(schema, name).raiseAutoIncrement(BigInt(counter))

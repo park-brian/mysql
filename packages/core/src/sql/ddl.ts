@@ -24,6 +24,7 @@ import { KEY, NODE, deparse, type ColumnDefinition, type CreateTableNode, type D
 import { messages, sqlError } from '@myjs/protocol'
 import type { ColumnType } from '@myjs/types'
 import { checkFulltext, type FulltextDef } from './fulltext.ts'
+import { checkGenerated } from './generated.ts'
 
 const INTEGER_CODES: ReadonlySet<number> = new Set([FIELD_TYPE.TINY, FIELD_TYPE.SHORT, FIELD_TYPE.INT24, FIELD_TYPE.LONG, FIELD_TYPE.LONGLONG])
 
@@ -403,6 +404,7 @@ export function createTableSpec(node: CreateTableNode, schemaCollation: number):
   if (fulltext.length > 0) options['fulltext'] = fulltext
   const comment = option(node.options, 'COMMENT')
   if (comment !== undefined) options['comment'] = comment
+  checkGenerated(columns)
   return { name: node.table.name, engine, columns, indexes, options }
 }
 
@@ -424,7 +426,8 @@ export function visiblePrimary(columns: readonly ColumnDef[], indexes: readonly 
 }
 
 export function column(c: ColumnDefinition, tableCollation: number, inPrimary: boolean): ColumnDef {
-  if (c.generated !== undefined) throw sqlError('ER_NOT_SUPPORTED_YET', messages.notSupported('Generated columns'))
+  // A generated column has its expression and no default (8.4.11: 1221).
+  if (c.generated !== undefined && c.default !== undefined) throw sqlError('ER_WRONG_USAGE', 'Incorrect usage of DEFAULT and generated column')
   const type = columnType(c.type, tableCollation, c.name)
   const serial = c.type.serial === true
   const nullable = !(c.notNull === true || inPrimary || serial) && c.nullable !== false
@@ -436,6 +439,10 @@ export function column(c: ColumnDefinition, tableCollation: number, inPrimary: b
   const nullDefault = c.default?.kind === NODE.LITERAL && c.default.type === 'null' && c.defaultExpression !== true
   if (c.default !== undefined && !(nullDefault && nullable && BLOB_CODES.has(type.type))) attributes['default'] = sqlText(c.default)
   if (c.defaultExpression === true) attributes['defaultExpression'] = true
+  if (c.generated !== undefined) {
+    attributes['generated'] = sqlText(c.generated.expr)
+    if (c.generated.stored) attributes['stored'] = true
+  }
   // A charset or collation the column names itself, which SHOW CREATE TABLE then always writes (`is_explicit_collation`).
   if (type.collationId !== undefined && type.collationId !== CHARSET_BINARY && (c.type.charset !== undefined || c.type.collation !== undefined || c.type.binary === true)) attributes['explicitCollation'] = true
   if (c.onUpdate !== undefined) attributes['onUpdate'] = sqlText(c.onUpdate)

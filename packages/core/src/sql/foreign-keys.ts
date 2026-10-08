@@ -43,6 +43,7 @@ import type { ColumnType } from '@myjs/types'
 import { decodeField, encodeField, type StoreContext } from '@myjs/types'
 import type { Run } from './query.ts'
 import { isTemporary, type CatalogApi } from './temporary.ts'
+import { generationOf } from './generated.ts'
 
 export type ReferentialAction = 'RESTRICT' | 'CASCADE' | 'SET NULL' | 'NO ACTION' | 'SET DEFAULT'
 
@@ -197,6 +198,9 @@ export function withForeignKeys(catalog: CatalogApi, schema: string, spec: Table
     const children = clause.columns.map((c) => {
       const col = column(c)
       if (col === undefined) throw sqlError('ER_KEY_COLUMN_DOES_NOT_EXITS', `Key column '${c}' doesn't exist in table`)
+      // A VIRTUAL column holds no value an index could check (8.4.11: 3733).
+      const generation = generationOf(col)
+      if (generation !== undefined && !generation.stored) throw sqlError('ER_FK_CANNOT_USE_VIRTUAL_COLUMN', `Foreign key '${name}' uses virtual column '${col.name}' which is not supported.`)
       return col
     })
     const onDelete = action(clause.onDelete)

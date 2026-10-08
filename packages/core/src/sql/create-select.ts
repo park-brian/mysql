@@ -115,8 +115,11 @@ export function selectColumns(
       const column = def?.columns.find((c) => c.name === source.orgName)
       if (def !== undefined && column !== undefined) {
         if (column.type.collationId !== undefined) collations.set(name.toLowerCase(), { collationId: column.type.collationId, explicit: column.attributes?.['explicitCollation'] === true })
-        // The column again, under the query's name: no AUTO_INCREMENT, and a 0 in its place.
-        const own = column.autoIncrement === true ? { ...column, autoIncrement: false, attributes: { ...column.attributes, default: '0' } } : column
+        // The column again, under the query's name: no AUTO_INCREMENT, and a 0
+        // in its place; a generated one is a plain column of its type (8.4.11).
+        const { generated: _g, stored: _s, generatedCharset: _c, ...plain } = column.attributes ?? {}
+        const base = { ...column, attributes: plain }
+        const own = column.autoIncrement === true ? { ...base, autoIncrement: false, attributes: { ...plain, default: '0' } } : base
         // Its charset always named, since the new table's default may not be the old one's.
         const named = { ...def, options: { ...def.options, collationId: CHARSET_BINARY } }
         return `${quote(name)} ${columnLine(run, named, own).trim().slice(quote(column.name).length + 1)}`

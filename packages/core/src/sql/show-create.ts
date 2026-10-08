@@ -28,6 +28,7 @@ import { checksOf } from './checks.ts'
 import { foreignKeysOf, referenceText } from './foreign-keys.ts'
 import { fulltextOf } from './fulltext.ts'
 import { isTemporary } from './temporary.ts'
+import { generationOf, printGeneration } from './generated.ts'
 import { columnDefault, generatedDefault, tableCollation, typeFacts } from './information-schema.ts'
 import { escapeString, printExpression } from './print.ts'
 import type { Run } from './query.ts'
@@ -89,10 +90,13 @@ export function columnLine(run: Run, def: TableDef, c: ColumnDef): string {
     if (id !== table || explicit) out += ` CHARACTER SET ${info.charset}`
     if (!info.isDefault || explicit || (id === CHARSET_UTF8MB4_0900_AI_CI && table !== CHARSET_UTF8MB4_0900_AI_CI)) out += ` COLLATE ${info.name}`
   }
+  // A generated column: its expression where a default would be, and nothing of a default (8.4.11).
+  const generation = generationOf(c)
+  if (generation !== undefined) out += ` GENERATED ALWAYS AS (${printGeneration(c, generation)}) ${generation.stored ? 'STORED' : 'VIRTUAL'}`
   if (!c.nullable) out += ' NOT NULL'
-  else if (c.type.type === FIELD_TYPE.TIMESTAMP) out += ' NULL'
+  else if (c.type.type === FIELD_TYPE.TIMESTAMP && generation === undefined) out += ' NULL'
   if (c.autoIncrement === true) out += ' AUTO_INCREMENT'
-  else out += defaultClause(run, c)
+  else if (generation === undefined) out += defaultClause(run, c)
   const onUpdate = c.attributes?.['onUpdate']
   if (typeof onUpdate === 'string') out += ` ON UPDATE ${generatedDefault(onUpdate) ?? onUpdate}`
   const comment = c.attributes?.['comment']

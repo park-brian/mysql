@@ -36,6 +36,7 @@ import { INFORMATION_SCHEMA, type InformationSchemaColumn } from './information-
 import { datetimeType, intType, keyFlags, NULL_TYPE, stringType, type ResultType } from './meta.ts'
 import { planViewQuery, type Run } from './query.ts'
 import { viewDefinition, viewUpdatable } from './view-text.ts'
+import { generationOf, printGeneration } from './generated.ts'
 
 const COLUMN_FLAG = { PRI_KEY: 2, UNIQUE_KEY: 4, MULTIPLE_KEY: 8 } as const
 
@@ -255,6 +256,8 @@ export function columnDefault(run: Run, column: ColumnDef): string | null {
 
 function extraOf(column: ColumnDef): string {
   if (column.autoIncrement === true) return 'auto_increment'
+  const generation = generationOf(column)
+  if (generation !== undefined) return generation.stored ? 'STORED GENERATED' : 'VIRTUAL GENERATED'
   const parts: string[] = []
   const d = column.attributes?.['default']
   if (typeof d === 'string' && generatedDefault(d) !== undefined) parts.push('DEFAULT_GENERATED')
@@ -274,10 +277,11 @@ function* columnRows(run: Run, schema: string, table: string, columns: readonly 
     const c = x.column
     const f = typeFacts(c)
     const comment = c.attributes?.['comment']
+    const generation = generationOf(c)
     yield [
       s('def'), s(schema), s(table), s(c.name), n(i + 1), s(x.def), s(c.nullable ? 'YES' : 'NO'), s(f.dataType), n(f.charMax), n(f.octets), n(f.precision), n(f.scale), n(f.datetimePrecision),
       s(f.collationId === null ? null : charsetName(f.collationId)), s(f.collationId === null ? null : collationName(f.collationId)), s(f.columnType), s(x.key), s(x.extra),
-      s('select,insert,update,references'), s(typeof comment === 'string' ? comment : ''), s(''), null,
+      s('select,insert,update,references'), s(typeof comment === 'string' ? comment : ''), s(generation === undefined ? '' : printGeneration(c, generation).replace(/'/g, "\\'")), null,
     ]
   }
 }

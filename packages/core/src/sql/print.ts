@@ -76,6 +76,9 @@ export function printExpression(e: Expression, o: PrintOptions): string {
         return `(${p(e.left)} ${op.toLowerCase()} (${e.right.items.map(p).join(',')}))`
       }
       if (op === 'BETWEEN' || op === 'NOT BETWEEN') return `(${p(e.left)} ${op.toLowerCase()} ${p(e.right)} and ${p(e.extra as Expression)})`
+      // `c->'$.p'` is the call it stands for, and `->>` its unquoting (8.4.11).
+      if (op === '->') return `json_extract(${p(e.left)},${p(e.right)})`
+      if (op === '->>') return `json_unquote(json_extract(${p(e.left)},${p(e.right)}))`
       // The only operator printed without parentheses of its own (8.4.11).
       if (op === 'MEMBER OF') return `${p(e.left)} member of (${p(e.right)})`
       if (op === 'LIKE' || op === 'NOT LIKE') {

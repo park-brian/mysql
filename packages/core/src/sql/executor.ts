@@ -13,7 +13,7 @@
 // `innodb_lock_wait_timeout` the answer is ER_LOCK_WAIT_TIMEOUT (1205), which
 // rolls back the statement and not the transaction, as InnoDB's does.
 import { FIELD_TYPE, MyjsError } from '@myjs/bytes'
-import { collationInfoByName, defaultCollationOf } from '@myjs/charsets'
+import { collationInfoByName, defaultCollationOf, requireCollationInfo } from '@myjs/charsets'
 import { collationsOf, type Catalog, type TableDef, type ViewDef } from '@myjs/engine'
 import {
   NODE,
@@ -70,6 +70,7 @@ import { columnsOf, compileContext, planQuery, resultSet, viewTable, type Run } 
 import { SqlSession, isolationOf } from './session.ts'
 import { dropOrphans, isTemporary, sessionCatalog, TemporaryTables, type CatalogApi } from './temporary.ts'
 import { likeSpec, mergedColumns, selectColumns, withCollations } from './create-select.ts'
+import { stampGenerated } from './generated.ts'
 import type { WireProtocol } from './wire.ts'
 
 export interface SqlExecutorOptions extends ServerOptions {
@@ -510,6 +511,7 @@ export class SqlExecutor implements Executor {
         const node: CreateTableNode = selected === undefined ? statement : { ...declared, columns: mergedColumns(statement.columns, selected.columns) }
         let spec = createTableSpec(node, catalog.schema(schema).collationId ?? DEFAULT_COLLATION)
         if (selected !== undefined) spec = withCollations(spec, selected.collations, statement.columns)
+        spec = { ...spec, columns: stampGenerated(spec.columns, requireCollationInfo(session.characterSet).charset) }
         // CHECK constraints are resolved first, IF NOT EXISTS or not (8.4.11: 3820 over a table that exists).
         spec = withChecks(catalog, schema, spec, run.sql, checkClauses(statement), session.characterSet)
         // A table that exists is 1050, or IF NOT EXISTS's note, whatever its keys would say; a

@@ -17,10 +17,11 @@
 // (doc 30: a scan is not interleaved with writes to its own table), so a row
 // an UPDATE moves within the clustered order is never met twice.
 import { CHARSET_BINARY, FIELD_TYPE, MyjsError } from '@myjs/bytes'
-import { CLIENT, hasCap, messages, sqlError, type OkResult } from '@myjs/protocol'
+import { CLIENT, hasCap, messages, sqlError, symbolOf, type OkResult } from '@myjs/protocol'
 import type { ColumnDef, FieldBytes, IndexDef, RowId, Table, TableDef, Trx } from '@myjs/engine'
 import { EngineError } from '@myjs/engine'
 import { NODE, QUERY, REF, parseExpression, type Assignment, type ColumnNode, type DeleteNode, type Expression, type InsertNode, type TableName, type UpdateNode } from '@myjs/parser'
+import { generationOf, type Generation } from './generated.ts'
 import { decodeField, encodeEnum, encodeField, integerRange, intValue, toInteger, toText, warn, type Condition, type StoreContext, type Value } from '@myjs/types'
 import { compile, EMPTY_SCOPE, type Compiled, type Row, type Scope } from './compile.ts'
 import { checker, checkViolated } from './checks.ts'
@@ -440,11 +441,12 @@ function compileUpsert(run: Run, def: TableDef, node: InsertNode, targets: reado
     },
   }
   const ctx = { ...compileContext(run, resolver, 'field list'), insertValues }
-  const assignments = (node.onDuplicate ?? []).map((a) => ({
+  const assignments = (node.onDuplicate ?? []).map((a) => {
     // The target is the table's column, whatever the alias says.
-    index: own.resolve(a.column.parts, 'field list').index,
-    value: isDefaultKeyword(a.value) ? undefined : compile(a.value, ctx),
-  }))
+    const index = own.resolve(a.column.parts, 'field list').index
+    if (!isDefaultKeyword(a.value)) notGenerated(def, index)
+    return { index, value: isDefaultKeyword(a.value) ? undefined : compile(a.value, ctx) }
+  })
   return { assignments, onUpdate: onUpdateOf(run, def), deprecated: insertValues.calls, aliased: alias === undefined ? [] : targets }
 }
 
@@ -537,6 +539,12 @@ export function insert(run: Run, node: InsertNode, trx: Trx): OkResult {
     if (seen.has(t)) throw sqlError('ER_FIELD_SPECIFIED_TWICE', `Column '${(def.columns[t] as ColumnDef).name}' specified twice`)
     seen.add(t)
   }
+  // A generated column takes DEFAULT and nothing else (8.4.11: 3105), from a SELECT not even that.
+  if (selected !== undefined) targets.forEach((t) => notGenerated(def, t))
+  for (const r of rows) r.forEach((e, i) => {
+    if (e !== undefined && !isDefaultKeyword(e)) notGenerated(def, targets[i] as number)
+  })
+  const generate = generatorOf(run, def)
 
   const ignore = node.ignore === true
   const mode = node.replace === true ? 'replace' : node.onDuplicate !== undefined ? 'upsert' : 'insert'
@@ -602,7 +610,7 @@ export function insert(run: Run, node: InsertNode, trx: Trx): OkResult {
     })
     for (const i of dependent) if (!given.has(i)) values[i] = (defaults[i] as Compiled).eval(values, run.env)
     def.columns.forEach((column, i) => {
-      if (given.has(i)) return
+      if (given.has(i) || generationOf(column) !== undefined) return
       if (column.autoIncrement === true) values[i] = null
       else if (defaults[i] === 'none') {
         if (store.strict) throw sqlError('ER_NO_DEFAULT_FOR_FIELD', messages.noDefaultForField(column.name))
@@ -615,6 +623,7 @@ export function insert(run: Run, node: InsertNode, trx: Trx): OkResult {
     // not convert is the error reported, not a later column's (8.4.11).
     const fields = def.columns.map((c, i) => {
       if (i === autoAt && values[i] === null) return null
+      if (generate !== undefined && generationOf(c) !== undefined) return null
       try {
         return storeField(values[i] ?? null, c, store, nulls, warnedNull)
       } catch (e) {
@@ -622,6 +631,8 @@ export function insert(run: Run, node: InsertNode, trx: Trx): OkResult {
         throw e
       }
     })
+    // Then the generated columns, from the row as it will be stored.
+    generate?.(fields, fields.map((f, i) => (f === null ? null : decodeField(f, (def.columns[i] as ColumnDef).type))), store, nulls)
     // CHECK constraints, before the row is written: a violation is not a
     // duplicate first and costs no AUTO_INCREMENT value. IGNORE skips the
     // row, and it is not one of the "Records" (8.4.11).
@@ -714,7 +725,7 @@ export function insert(run: Run, node: InsertNode, trx: Trx): OkResult {
     const current = def.columns.map((c, i) => decodeField(before[i] ?? null, c.type))
     const triedValues = def.columns.map((c, i) => decodeField(tried[i] ?? null, c.type))
     const extra = [...u.aliased.map((t) => triedValues[t] ?? null), ...triedValues, ...selectExtras]
-    const result = assignAll(run, def, before, current, extra, u.assignments, u.onUpdate, defaults, store, upsertNulls)
+    const result = assignAll(run, def, before, current, extra, u.assignments, u.onUpdate, defaults, store, upsertNulls, generate)
     // An upsert that sets the AUTO_INCREMENT column to a value the statement
     // has promised another row is ER_AUTO_INCREMENT_CONFLICT; to this row's
     // own generated value, it keeps it.
@@ -802,6 +813,39 @@ function onUpdateOf(run: Run, def: TableDef): (Compiled | undefined)[] {
  * assign. `extra` is what an expression may read after the row: an upsert's
  * alias and tried row.
  */
+/** Fill a row's generated columns, from its fields as stored, in column order (M5.31). */
+type Generator = (fields: FieldBytes[], values: Value[], store: StoreContext, nulls: NullPolicy) => void
+
+/** The table's generated columns, compiled once a statement; `undefined` when it has none. */
+export function generatorOf(run: Run, def: TableDef): Generator | undefined {
+  const at = def.columns.flatMap((c, i) => (generationOf(c) === undefined ? [] : [i]))
+  if (at.length === 0) return undefined
+  const ctx = compileContext(run, new TableScope([{ alias: def.name, def }]), 'generated column function')
+  const compiled = at.map((i) => ({ i, expr: compile(parseExpression((generationOf(def.columns[i] as ColumnDef) as Generation).text), ctx) }))
+  return (fields, values, store, nulls) => {
+    for (const { i, expr } of compiled) {
+      const column = def.columns[i] as ColumnDef
+      // What the expression warns of is an error under a strict mode, as a
+      // default's is (8.4.11: `a + 0` over '7x' is 1292, and no row).
+      const raised: Condition[] = []
+      const value = expr.eval(values, { ...run.env, conditions: raised })
+      const first = raised[0]
+      if (first !== undefined && store.strict) throw sqlError(symbolOf(first.code) ?? 'ER_UNKNOWN_ERROR', first.message)
+      run.env.conditions?.push(...raised)
+      store.warnings += raised.length
+      const field = storeField(value, column, store, nulls)
+      fields[i] = field
+      values[i] = field === null ? null : decodeField(field, column.type)
+    }
+  }
+}
+
+/** 3105: a value other than DEFAULT given to a generated column. */
+function notGenerated(def: TableDef, index: number): void {
+  const column = def.columns[index] as ColumnDef
+  if (generationOf(column) !== undefined) throw sqlError('ER_NON_DEFAULT_VALUE_FOR_GENERATED_COLUMN', `The value specified for generated column '${column.name}' in table '${def.name}' is not allowed.`)
+}
+
 function assignAll(
   run: Run,
   def: TableDef,
@@ -813,6 +857,7 @@ function assignAll(
   defaults: readonly (Compiled | 'none')[],
   store: StoreContext,
   nulls: NullPolicy,
+  generate?: Generator,
 ): { after: FieldBytes[]; values: Value[]; changed: boolean } {
   const after = [...before]
   const values: Value[] = [...current]
@@ -825,6 +870,8 @@ function assignAll(
   const assigned = new Set<number>()
   for (const a of assignments) {
     assigned.add(a.index)
+    // A generated column's DEFAULT is its expression, filled below.
+    if (a.value === undefined && generationOf(def.columns[a.index] as ColumnDef) !== undefined) continue
     if (a.value === undefined) {
       // `c = DEFAULT` on a column with none is 1364 under a strict mode and
       // the type's zero with a warning outside one, as a missing INSERT
@@ -842,6 +889,7 @@ function assignAll(
   onUpdate.forEach((u, i) => {
     if (u !== undefined && !assigned.has(i)) assign(i, u.eval([], run.env))
   })
+  generate?.(after, values, store, nulls)
   return { after, values, changed: true }
 }
 
@@ -928,8 +976,10 @@ export function update(run: Run, node: UpdateNode, trx: Trx): OkResult {
   const scope = new TableScope([{ alias, def }])
   const assignments = node.set.map((a: Assignment) => {
     const { index } = scope.resolve(a.column.parts, 'field list')
+    if (!isDefaultKeyword(a.value)) notGenerated(def, index)
     return { index, value: isDefaultKeyword(a.value) ? undefined : compile(a.value, compileContext(run, scope, 'field list')) }
   })
+  const generate = generatorOf(run, def)
   const onUpdate = onUpdateOf(run, def)
   const defaults = def.columns.map((c) => defaultOf(run, c, def))
   const check = checker(run, def)
@@ -943,7 +993,7 @@ export function update(run: Run, node: UpdateNode, trx: Trx): OkResult {
     store.row = n + 1
     const before = encodeRow(def, row, { strict: false, row: n + 1, warnings: 0 })
     // A NULL into a NOT NULL column is the type's zero and a warning outside a strict mode (8.4.11).
-    const result = assignAll(run, def, before, row, [], assignments, onUpdate, defaults, store, store.strict ? 'error' : 'warn')
+    const result = assignAll(run, def, before, row, [], assignments, onUpdate, defaults, store, store.strict ? 'error' : 'warn', generate)
     if (!result.changed) return
     const violated = check?.(result.after)
     if (violated !== undefined) throw checkViolated(violated)
