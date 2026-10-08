@@ -392,7 +392,8 @@ export function columnDefinition(name: string, t: ResultType, resultsCollation: 
   // A bare column of a number type carries no BINARY flag; every other
   // non-text result does, a literal and an expression included.
   const numericColumn = t.column !== undefined && (t.kind === 'int' || t.kind === 'decimal' || t.kind === 'double')
-  if (!isText && !numericColumn) flags |= COLUMN_FLAG.BINARY
+  // A BIT, column or expression (MAX(b), COALESCE(b)), carries none either (8.4.11).
+  if (!isText && !numericColumn && !(t.field === FIELD_TYPE.BIT && t.kind === 'int')) flags |= COLUMN_FLAG.BINARY
   // A string in a `_bin` collation is flagged binary too, column or expression.
   if (t.kind === 'string' && requireCollationInfo(t.collationId).name.endsWith('_bin')) flags |= COLUMN_FLAG.BINARY
   if (t.field === FIELD_TYPE.BLOB && t.kind === 'bytes') flags |= COLUMN_FLAG.BINARY

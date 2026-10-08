@@ -92,6 +92,8 @@ export interface StoreContext {
   table?: string
   /** Where each adjustment's condition goes, for SHOW WARNINGS: the statement's diagnostics area. */
   conditions?: Condition[]
+  /** The session's mode is strict, whether or not IGNORE has made this write lenient: some warnings name it. */
+  strictMode?: boolean
 }
 
 /** One row of SHOW WARNINGS: a note, a warning or an error, with its code and its text. */
@@ -285,9 +287,15 @@ export function encodeField(value: Value, column: FieldColumn, ctx: StoreContext
     }
 
     case FIELD_TYPE.BIT: {
+      // Text is stored as its bytes, big-endian, as a hex literal is: '1' is
+      // 49. A value too wide is "too long", 1406 — a warning under IGNORE in
+      // a strict mode, and 1264 outside one (`Field_bit::store`, 8.4.11).
       const bits = t.bits ?? 1
-      let n = value.kind === 'bytes' ? bytesToBigint(value.v) : toInteger(value)
-      if (n < 0n || n >= 1n << BigInt(bits)) n = adjust(ctx, () => columnOutOfRange(column.name, ctx.row), n < 0n ? 0n : (1n << BigInt(bits)) - 1n)
+      const text = value.kind === 'string' && value.ordinal === undefined ? encodeCollation(value.v, value.collationId) : undefined
+      let n = value.kind === 'bytes' ? bytesToBigint(value.v) : text !== undefined ? bytesToBigint(text) : toInteger(value)
+      if (n < 0n || n >= 1n << BigInt(bits)) {
+        n = adjust(ctx, () => dataTooLong(column.name, ctx.row), (1n << BigInt(bits)) - 1n, () => (ctx.strictMode === false ? columnOutOfRange(column.name, ctx.row) : dataTooLong(column.name, ctx.row)))
+      }
       return encodeBit(n, bits)
     }
 

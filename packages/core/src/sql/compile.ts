@@ -38,6 +38,7 @@ import {
   modulo,
   negate,
   numericPrefix,
+  hexNumber,
   not,
   nullSafeEqual,
   parseDateTime,
@@ -78,6 +79,7 @@ import { jsonPathFunction, memberOf, unquote } from './json-path.ts'
 import { matchType, regexpInstr, regexpLike, regexpReplace, regexpSubstr } from './regexp.ts'
 import { TableScope } from './scope.ts'
 import { libraryFunction } from './functions.ts'
+import { bitBytes } from './wire.ts'
 import { badAgainst, booleanRank, Corpus, foldFor, fulltextOf, naturalRank, noExpansion, noIndex, parseBoolean, queryText, wordsOf, type Term } from './fulltext.ts'
 
 const JSON_PATH_FUNCTIONS: ReadonlySet<string> = new Set(['JSON_EXTRACT', 'JSON_UNQUOTE', 'JSON_CONTAINS', 'JSON_CONTAINS_PATH', 'JSON_TYPE', 'JSON_LENGTH', 'JSON_DEPTH', 'JSON_KEYS', 'JSON_VALID', 'JSON_OVERLAPS'])
@@ -163,6 +165,43 @@ function sourceText(sql: string | undefined, at: number): string | undefined {
     else if (t.text === ')' && --depth === 0) return sql.slice(at, t.start + 1)
   }
   return undefined
+}
+
+/** A BIT column's value, or an expression's that keeps its type: bytes in a string context. */
+const isBits = (t: ResultType): boolean => t.field === FIELD_TYPE.BIT && t.kind === 'int'
+
+/**
+ * Bytes read as text in a collation's charset: NULL, with 1300 naming the
+ * bytes from the first that is not text, when they are not (UTF-8 is checked;
+ * a single-byte charset holds any byte).
+ */
+export function textIn(bytes: Uint8Array, collationId: number, env: Env): string | null {
+  const charset = requireCollationInfo(collationId).charset
+  if (charset === 'utf8mb4' || charset === 'utf8mb3') {
+    const bad = firstInvalidUtf8(bytes, charset === 'utf8mb4' ? 4 : 3)
+    if (bad >= 0) {
+      const rest = Array.from(bytes.subarray(bad, bad + 6), (b) => b.toString(16).toUpperCase().padStart(2, '0')).join('')
+      raise(env, 1300, `Invalid ${charset} character string: '${rest}'`)
+      return null
+    }
+  }
+  return decodeCollation(bytes, collationId)
+}
+
+/** Where a UTF-8 byte sequence stops being one, or -1; `longest` is 3 for utf8mb3. */
+function firstInvalidUtf8(b: Uint8Array, longest: number): number {
+  let i = 0
+  while (i < b.length) {
+    const c = b[i] as number
+    const n = c < 0x80 ? 1 : c >= 0xc2 && c <= 0xdf ? 2 : c >= 0xe0 && c <= 0xef ? 3 : c >= 0xf0 && c <= 0xf4 ? 4 : 0
+    if (n === 0 || n > longest || i + n > b.length) return i
+    for (let k = 1; k < n; k++) if (((b[i + k] as number) & 0xc0) !== 0x80) return i
+    // Overlong three- and four-byte forms, surrogates and past U+10FFFF.
+    const d = b[i + 1] as number
+    if ((c === 0xe0 && d < 0xa0) || (c === 0xed && d >= 0xa0) || (c === 0xf0 && d < 0x90) || (c === 0xf4 && d >= 0x90)) return i
+    i += n
+  }
+  return -1
 }
 
 /** A division of either kind, with 1365 when the divisor is zero and the answer therefore NULL. */
@@ -1493,7 +1532,7 @@ function call(e: CallNode, ctx: CompileContext): Compiled {
     case 'CONCAT': {
       if (e.args.length === 0) arity(1)
       const xs = args()
-      const binary = xs.some((x) => x.type.kind === 'bytes')
+      const binary = xs.some((x) => x.type.kind === 'bytes' || isBits(x.type))
       const id = binary ? CHARSET_BINARY : aggregateTypes(xs.map((x) => x.type), conn)
       // A binary argument makes the result bytes: each argument contributes
       // its own bytes, a string in its own charset, and the width is counted
@@ -1508,7 +1547,8 @@ function call(e: CallNode, ctx: CompileContext): Compiled {
             parts.push(v)
           }
           if (!binary) return stringValue(parts.map(toText).join(''), id)
-          const chunks = parts.map((v) => (v.kind === 'bytes' ? v.v : v.kind === 'string' ? encodeCollation(v.v, v.collationId) : new TextEncoder().encode(toText(v))))
+          // A BIT is its bytes in a string, as on the wire (8.4.11).
+          const chunks = parts.map((v, i) => (v.kind === 'bytes' ? v.v : v.kind === 'string' ? encodeCollation(v.v, v.collationId) : v.kind === 'int' && isBits((xs[i] as Compiled).type) ? bitBytes(v.v, (xs[i] as Compiled).type.length) : new TextEncoder().encode(toText(v))))
           const out = new Uint8Array(chunks.reduce((n, c) => n + c.length, 0))
           let at = 0
           for (const c of chunks) {
@@ -1556,6 +1596,33 @@ function call(e: CallNode, ctx: CompileContext): Compiled {
         },
         // Nullable whatever the argument is, as 8.4.11 reports it.
         type: x.type.kind === 'bytes' ? { ...expressionOf(x.type), nullable: true } : { ...stringType(charWidth(x.type), x.type.kind === 'string' ? x.type.collationId : conn, true), coercibility: coercibilityOf(x.type) },
+      }
+    }
+    case 'BIN':
+    case 'OCT': {
+      // CONV(N, 10, 2 or 8): N read as base-10 text up to its first
+      // non-digit, so BIN(2.7) is '10'; a negative number is its 64-bit
+      // complement; empty text is NULL (8.4.11). A hex literal is its number.
+      arity(1)
+      const [x] = args() as [Compiled]
+      const radix = name === 'BIN' ? 2 : 8
+      return {
+        eval: (r, env) => {
+          const v = x.eval(r, env)
+          if (v === null) return null
+          let n: bigint
+          if (v.kind === 'bytes' && v.hex === true) n = hexNumber(v.v)
+          else {
+            const text = toText(v)
+            if (text === '') return null
+            const m = /^[ \t\n\r]*([+-]?)(\d*)/.exec(text) as RegExpExecArray
+            n = (m[2] as string) === '' ? 0n : BigInt(m[2] as string)
+            if (n > (1n << 64n) - 1n) n = (1n << 64n) - 1n
+            if (m[1] === '-') n = (1n << 64n) - n
+          }
+          return stringValue((n & ((1n << 64n) - 1n)).toString(radix), conn, COERCIBILITY.COERCIBLE)
+        },
+        type: stringType(65, conn, true),
       }
     }
     case 'HEX': {
@@ -1759,7 +1826,12 @@ function cast(e: CastNode, ctx: CompileContext): Compiled {
         eval: (r, env) => {
           const v = x(r, env)
           if (v === null) return null
-          const s = toText(v)
+          // Bytes, a BIT's included, are read in the target charset: NULL and
+          // 1300 when they are no text in it (8.4.11: CAST(X'C3A9' AS CHAR) is 'é').
+          const bytes = v.kind === 'bytes' ? v.v : v.kind === 'int' && isBits(inner.type) ? bitBytes(v.v, inner.type.length) : undefined
+          const read = bytes === undefined ? toText(v) : textIn(bytes, id, env)
+          if (read === null) return null
+          const s = read
           if (t.length === undefined || [...s].length <= t.length) return stringValue(s, id, COERCIBILITY.IMPLICIT)
           raise(env, 1292, `Truncated incorrect CHAR(${t.length}) value: '${s}'`)
           return stringValue([...s].slice(0, t.length).join(''), id, COERCIBILITY.IMPLICIT)

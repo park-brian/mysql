@@ -1411,7 +1411,7 @@ referential actions, CHECK constraints, ALTER TABLE by copy, `SHOW CREATE
 TABLE` byte for byte, JSON paths and regular expressions. Generated corpora of 400, 300 and 250 scripts
 agree with MySQL 8.4.11 statement for statement, column names and flags
 included. Most of M5's exit criterion holds. All 487 tests of Drizzle's
-MySQL suites pass, as they do against 8.4.11. Of Prisma's, 1,106 pass
+MySQL suites pass, as they do against 8.4.11. Of Prisma's, 1,111 pass
 against the server's 1,122, FULLTEXT search included; almost all of the
 rest were connections that failed to start on a loaded machine, and pass
 when their suites run alone. The rest of the function library and the
