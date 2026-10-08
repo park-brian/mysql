@@ -13,8 +13,8 @@
 // have not written is ER_NOT_SUPPORTED_YET naming it (M5.10 owns the rest).
 import { CHARSET_BINARY, FIELD_TYPE, type MysqlDateTime } from '@myjs/bytes'
 import { collation, collationInfoByName, decodeCollation, defaultCollationOf, encodeCollation, requireCollationInfo } from '@myjs/charsets'
-import { LITERAL, NODE, deparse, type CallNode, type CaseNode, type CastNode, type Expression, type LiteralNode, type QueryExpression, type SubqueryNode } from '@myjs/parser'
-import type { Trx } from '@myjs/engine'
+import { LITERAL, NODE, deparse, type CallNode, type CaseNode, type CastNode, type Expression, type LiteralNode, type MatchNode, type QueryExpression, type SubqueryNode } from '@myjs/parser'
+import type { ColumnDef, Table, Trx } from '@myjs/engine'
 import { sqlError, messages, type Session } from '@myjs/protocol'
 import {
   COERCIBILITY,
@@ -26,6 +26,7 @@ import {
   bytesValue,
   commonCollation,
   compareValues,
+  decodeField,
   decimalValue,
   divide,
   doubleValue,
@@ -67,6 +68,8 @@ import {
 import { castAsJson, jsonConstructor } from './json.ts'
 import { jsonPathFunction, memberOf, unquote } from './json-path.ts'
 import { matchType, regexpInstr, regexpLike, regexpReplace, regexpSubstr } from './regexp.ts'
+import { TableScope } from './scope.ts'
+import { badAgainst, booleanRank, Corpus, foldFor, fulltextOf, naturalRank, noExpansion, noIndex, parseBoolean, queryText, wordsOf, type Term } from './fulltext.ts'
 
 const JSON_PATH_FUNCTIONS: ReadonlySet<string> = new Set(['JSON_EXTRACT', 'JSON_UNQUOTE', 'JSON_CONTAINS', 'JSON_CONTAINS_PATH', 'JSON_TYPE', 'JSON_LENGTH', 'JSON_DEPTH', 'JSON_KEYS', 'JSON_VALID', 'JSON_OVERLAPS'])
 import { windowNotAllowed } from './window.ts'
@@ -170,6 +173,8 @@ export interface CompileContext {
   readonly groupKeys?: GroupKeys
   /** Plan a subquery whose enclosing scope is `outer` (M5.1); absent where none is allowed. */
   readonly subquery?: (q: QueryExpression, outer: Scope) => SubqueryPlan
+  /** A base table by name, for what reads one whole: MATCH's statistics (M5.26). */
+  readonly table?: (schema: string, name: string) => Table | undefined
 }
 
 /** A grouped query's keys, as the expressions above the grouping see them. */
@@ -263,6 +268,9 @@ export function compile(e: Expression, ctx: CompileContext): Compiled {
 
     case NODE.CAST:
       return cast(e, ctx)
+
+    case NODE.MATCH:
+      return matchAgainst(e, ctx)
 
     case NODE.COLLATE: {
       const inner = compile(e.expr, ctx)
@@ -1695,4 +1703,56 @@ function hexOf(b: Uint8Array): string {
 /** A result's width in bytes: a string's characters at its charset's widest, anything else its characters. */
 function byteWidth(t: ResultType): number {
   return t.kind === 'string' ? charWidth(t) * requireCollationInfo(t.collationId).mbmaxlen : charWidth(t)
+}
+
+// --- MATCH … AGAINST (M5.26) -------------------------------------------------------
+
+/**
+ * MATCH: the columns of one FULLTEXT index of one base table, ranked against
+ * a constant query (`fulltext.ts` has the rules). The table's words are read
+ * once per statement, as the index's statistics.
+ */
+function matchAgainst(e: MatchNode, ctx: CompileContext): Compiled {
+  if (e.modifier !== undefined && e.modifier.includes('EXPANSION')) throw noExpansion()
+  const scope = ctx.scope
+  if (!(scope instanceof TableScope)) throw noIndex()
+  const slots = e.columns.map((c) => {
+    if (c.kind !== NODE.COLUMN) throw noIndex()
+    const r = scope.resolve(c.parts, ctx.clause)
+    if ((r.depth ?? 0) > 0) throw sqlError('ER_NOT_SUPPORTED_YET', messages.notSupported('MATCH on an outer query\'s columns'))
+    return r.index
+  })
+  const source = scope.tables.find((t) => (slots[0] as number) >= t.offset && (slots[0] as number) < t.offset + t.columns.length)
+  const def = source?.def
+  if (source === undefined || def === undefined || slots.some((i) => i < source.offset || i >= source.offset + source.columns.length)) throw noIndex()
+  const names = slots.map((i) => (source.columns[i - source.offset] as { name: string }).name.toLowerCase())
+  const index = fulltextOf(def).find((f) => f.columns.length === names.length && f.columns.every((c) => names.includes(c.toLowerCase())))
+  if (index === undefined) throw noIndex()
+  if (!constantNode(e.against)) throw badAgainst()
+  const against = compile(e.against, ctx)
+  const fold = foldFor(def, index.columns)
+  const boolean = e.modifier === 'IN BOOLEAN MODE'
+  const positions = index.columns.map((c) => def.columns.findIndex((x) => x.name.toLowerCase() === c.toLowerCase()))
+  const wordsIn = (values: readonly Value[]) => values.flatMap((v) => (v === null ? [] : wordsOf(toText(v), fold)))
+  let preparedFor: Env | undefined
+  let corpus: Corpus | undefined
+  let query: { readonly natural: string[] } | { readonly terms: Term[] } = { natural: [] }
+  return {
+    eval: (row, env) => {
+      if (preparedFor !== env || corpus === undefined) {
+        const text = queryText(against.eval(row, env))
+        query = boolean ? { terms: parseBoolean(text, fold) } : { natural: wordsOf(text, fold) }
+        const table = ctx.table?.(def.schema, def.name)
+        const documents: string[][] = []
+        if (table !== undefined) for (const [, fields] of table.scan(undefined, env.trx)) documents.push(wordsIn(positions.map((p) => decodeField(fields[p] ?? null, (def.columns[p] as ColumnDef).type))))
+        corpus = new Corpus(documents)
+        preparedFor = env
+      }
+      const words = wordsIn(slots.map((i) => row[i] ?? null))
+      if ('natural' in query) return doubleValue(naturalRank(corpus, query.natural, words))
+      const answer = booleanRank(corpus, query.terms, words)
+      return doubleValue(answer.matched ? answer.rank : 0)
+    },
+    type: doubleType(true),
+  }
 }

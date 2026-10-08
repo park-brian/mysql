@@ -67,6 +67,7 @@ export function compileContext(run: Run, scope: Scope, clause: string): CompileC
     serverVersion: run.serverVersion,
     ...(run.params === undefined ? {} : { params: run.params }),
     subquery: (q, outer) => planSubquery(run, q, outer),
+    table: (schema, name) => run.catalog?.table(schema, name),
   }
 }
 

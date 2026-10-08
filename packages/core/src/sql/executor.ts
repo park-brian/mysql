@@ -59,9 +59,10 @@ import { compile, EMPTY_SCOPE, type Env } from './compile.ts'
 import { alterTable } from './alter.ts'
 import { checkClauses, checkForeignKeyActions, withChecks } from './checks.ts'
 import { showCreateTable } from './show-create.ts'
-import { DEFAULT_COLLATION, createTableSpec, deprecationWarnings, resolveCollation } from './ddl.ts'
+import { DEFAULT_COLLATION, createTableSpec, deprecationWarnings, duplicateKeys, resolveCollation } from './ddl.ts'
 import { foreignKeyChecks, foreignKeyClause, foreignKeysOf, referencingKeys, withForeignKeys } from './foreign-keys.ts'
 import { checkDefaults, insert, remove, update } from './dml.ts'
+import { fulltextOf } from './fulltext.ts'
 import { columnDefinition, stringType } from './meta.ts'
 import { columnsOf, compileContext, planQuery, resultSet, viewTable, type Run } from './query.ts'
 import { SqlSession, isolationOf } from './session.ts'
@@ -450,7 +451,7 @@ export class SqlExecutor implements Executor {
         }
         const notes = checkDefaults(run, spec.columns)
         catalog.createTable(schema, spec, { ifNotExists: statement.ifNotExists === true })
-        const warnings = deprecationWarnings(statement) + notes
+        const warnings = deprecationWarnings(statement) + notes + duplicateKeys(spec.indexes ?? [], fulltextOf(spec))
         return { affectedRows: 0, ...(warnings > 0 ? { warnings } : {}) }
       }
       case STATEMENT.ALTER_TABLE:
@@ -636,6 +637,11 @@ export class SqlExecutor implements Executor {
         notes += catalog.dropViews(schema, names, { ifExists: statement.ifExists === true }).length
       }
       return { affectedRows: 0, ...(notes > 0 ? { warnings: notes } : {}) }
+    }
+    // `DROP INDEX i ON t` is `ALTER TABLE t DROP INDEX i`, as MySQL runs it.
+    if (statement.object === 'INDEX' && statement.on !== undefined) {
+      const name = (statement.names[0] as TableName).name
+      return alterTable(run, catalog, { kind: STATEMENT.ALTER_TABLE, table: statement.on, actions: [{ type: 'drop', what: 'INDEX', name }], options: {}, at: statement.at })
     }
     if (statement.object !== 'TABLE') throw sqlError('ER_NOT_SUPPORTED_YET', messages.notSupported(`DROP ${statement.object}`))
     if (statement.temporary === true) throw sqlError('ER_NOT_SUPPORTED_YET', messages.notSupported('DROP TEMPORARY TABLE'))

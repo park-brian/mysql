@@ -59,6 +59,7 @@ npm run capture:types        # storage encodings + sort keys, from binlog row im
 npm run capture:precedence   # 1,200 generated expressions, evaluated by the server
 npm run capture:traces       # 13 client/server byte traces, via a recording proxy
 npm run capture:keywords     # MySQL's reserved words, into @myjs/parser (D-39)
+npm run capture:fulltext     # InnoDB's stopwords and token bounds, into @myjs/core (M5.26)
 npm run capture:queries      # 1,200 generated joins and set operations, run by the server
 npm run capture:execution    # 400 generated scripts, run by the server through mysql2
 npm run capture:relational   # 300 multi-table scripts, both protocols, plans captured

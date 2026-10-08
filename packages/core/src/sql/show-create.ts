@@ -25,6 +25,7 @@ import type { ColumnDef, IndexDef, Table, TableDef } from '@myjs/engine'
 import { NODE, parseExpression, type Expression } from '@myjs/parser'
 import { checksOf } from './checks.ts'
 import { foreignKeysOf, referenceText } from './foreign-keys.ts'
+import { fulltextOf } from './fulltext.ts'
 import { columnDefault, generatedDefault, tableCollation, typeFacts } from './information-schema.ts'
 import { escapeString, printExpression } from './print.ts'
 import type { Run } from './query.ts'
@@ -111,6 +112,8 @@ export function showCreateTable(run: Run, def: TableDef, table: Table): string {
   const lines = def.columns.map((c) => columnLine(run, def, c))
   const keys = def.indexes.map((index, i) => ({ index, i })).sort((a, b) => keyClass(def, a.index) - keyClass(def, b.index) || a.i - b.i)
   for (const { index } of keys) lines.push(keyLine(index))
+  // FULLTEXT keys sort after every other kind (`sort_keys`).
+  for (const f of fulltextOf(def)) lines.push(`  FULLTEXT KEY ${q(f.name)} (${f.columns.map(q).join(',')})`)
   for (const fk of [...foreignKeysOf(def)].sort(byName)) lines.push(`  CONSTRAINT ${q(fk.name)} ${referenceText(fk, def.schema, false)}`)
   for (const c of [...checksOf(def)].sort(byName)) {
     let clause: string

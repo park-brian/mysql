@@ -23,6 +23,7 @@ import type { ColumnDef, EngineName, IndexDef, TableSpec } from '@myjs/engine'
 import { KEY, deparse, type ColumnDefinition, type CreateTableNode, type DataType, type Expression } from '@myjs/parser'
 import { messages, sqlError } from '@myjs/protocol'
 import type { ColumnType } from '@myjs/types'
+import { checkFulltext, type FulltextDef } from './fulltext.ts'
 
 const INTEGER_CODES: ReadonlySet<number> = new Set([FIELD_TYPE.TINY, FIELD_TYPE.SHORT, FIELD_TYPE.INT24, FIELD_TYPE.LONG, FIELD_TYPE.LONGLONG])
 
@@ -39,6 +40,25 @@ export function deprecationWarnings(node: CreateTableNode): number {
     if (t.length !== undefined) n++
     if (t.zerofill === true) n++
   }
+  return n
+}
+
+/**
+ * How many keys repeat an earlier one: the same kind over the same parts, in
+ * the same order and direction. Each is a warning, 1831, which says the
+ * duplicate is deprecated (8.4.11); a FULLTEXT key repeats only a FULLTEXT
+ * one. `before` keys of each list were there already and are not counted.
+ */
+export function duplicateKeys(indexes: readonly IndexDef[], fulltext: readonly FulltextDef[], before: { readonly indexes: number; readonly fulltext: number } = { indexes: 0, fulltext: 0 }): number {
+  const shape = (i: IndexDef) => `${i.kind === 'primary' ? 'unique' : i.kind}:${i.parts.map((p) => `${p.column.toLowerCase()}(${p.prefix ?? ''})${p.descending === true ? 'D' : 'A'}`).join(',')}`
+  let n = 0
+  indexes.forEach((x, k) => {
+    if (k >= before.indexes && indexes.slice(0, k).some((y) => shape(y) === shape(x))) n++
+  })
+  const words = (f: FulltextDef) => f.columns.map((c) => c.toLowerCase()).join(',')
+  fulltext.forEach((x, k) => {
+    if (k >= before.fulltext && fulltext.slice(0, k).some((y) => words(y) === words(x))) n++
+  })
   return n
 }
 
@@ -299,10 +319,18 @@ export function createTableSpec(node: CreateTableNode, schemaCollation: number):
     names.add('primary')
     indexes.push({ name: 'PRIMARY', kind: 'primary', parts: [{ column: (inlinePrimary[0] as ColumnDefinition).name }] })
   }
+  const fulltext: FulltextDef[] = []
   for (const k of node.keys) {
     // A foreign key needs its parent, so the catalog: `withForeignKeys` (M5.25).
     if (k.type === KEY.FOREIGN) continue
-    if (k.type === KEY.FULLTEXT || k.type === KEY.SPATIAL) throw sqlError('ER_NOT_SUPPORTED_YET', messages.notSupported(`${k.type.toUpperCase()} indexes`))
+    if (k.type === KEY.SPATIAL) throw sqlError('ER_NOT_SUPPORTED_YET', messages.notSupported('SPATIAL indexes'))
+    if (k.type === KEY.FULLTEXT) {
+      // Kept in the definition and not built: MATCH reads the table (M5.26).
+      const names = k.columns.map((p) => known(p.name ?? ''))
+      checkFulltext(engine, columns, names)
+      fulltext.push({ name: nameFor(k.name ?? k.constraint, names[0] as string), columns: names })
+      continue
+    }
     const parts = k.columns.map((p) => {
       if (p.name === undefined) throw sqlError('ER_NOT_SUPPORTED_YET', messages.notSupported('Functional key parts'))
       return { column: known(p.name), ...(p.length === undefined ? {} : { prefix: p.length }), ...(p.desc === true ? { descending: true } : {}) }
@@ -319,6 +347,7 @@ export function createTableSpec(node: CreateTableNode, schemaCollation: number):
   indexes.sort((a, b) => (a.kind === 'primary' ? -1 : 0) - (b.kind === 'primary' ? -1 : 0))
 
   const options: Record<string, unknown> = { collationId: tableCollation }
+  if (fulltext.length > 0) options['fulltext'] = fulltext
   const comment = option(node.options, 'COMMENT')
   if (comment !== undefined) options['comment'] = comment
   return { name: node.table.name, engine, columns, indexes, options }

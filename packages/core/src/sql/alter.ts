@@ -15,10 +15,11 @@ import type { Catalog, ColumnDef, FieldBytes, IndexDef, TableDef, TableSpec } fr
 import { KEY, NODE, type AlterAction, type AlterTableNode, type ColumnDefinition, type Expression } from '@myjs/parser'
 import { decodeField, encodeField, type StoreContext, type Value } from '@myjs/types'
 import type { Compiled } from './compile.ts'
-import { column as columnDef, DEFAULT_COLLATION } from './ddl.ts'
+import { column as columnDef, DEFAULT_COLLATION, duplicateKeys } from './ddl.ts'
 import { checker, checkForeignKeyActions, checksOf, checkViolated, columnChecks, withChecks, type CheckDef } from './checks.ts'
 import { checkDefaults, defaultOf, implicitDefault, rowDependent } from './dml.ts'
 import { checkParentOf, foreignKeyChecks, foreignKeyClause, foreignKeysOf, referencedIndex, referencingKeys, supportingIndex, withForeignKeys, type ForeignKeyClause } from './foreign-keys.ts'
+import { checkFulltext, fulltextOf, type FulltextDef } from './fulltext.ts'
 import type { Run } from './query.ts'
 
 const notSupported = (what: string) => sqlError('ER_NOT_SUPPORTED_YET', messages.notSupported(what))
@@ -51,7 +52,7 @@ export function alterTable(run: Run, catalog: Catalog, statement: AlterTableNode
     const named = ACTION_NAMES[a.type]
     if (named !== undefined) throw notSupported(named)
     if (a.type === 'drop' && (a.what === 'COLUMN' || a.what === 'PRIMARY KEY')) throw notSupported(`ALTER TABLE … DROP ${a.what}`)
-    if (a.type === 'addKey' && (a.key.type === KEY.PRIMARY || a.key.type === KEY.FULLTEXT || a.key.type === KEY.SPATIAL)) throw notSupported(`ALTER TABLE … ADD ${a.key.type.toUpperCase()} KEY`)
+    if (a.type === 'addKey' && (a.key.type === KEY.PRIMARY || a.key.type === KEY.SPATIAL)) throw notSupported(`ALTER TABLE … ADD ${a.key.type.toUpperCase()} KEY`)
     if (a.type === 'addColumn' && (a.column.autoIncrement === true || a.column.primary === true || a.column.type.serial === true)) throw notSupported('ALTER TABLE … ADD an AUTO_INCREMENT or PRIMARY KEY column')
   }
   const tableCollation = typeof def.options['collationId'] === 'number' ? (def.options['collationId'] as number) : DEFAULT_COLLATION
@@ -60,6 +61,7 @@ export function alterTable(run: Run, catalog: Catalog, statement: AlterTableNode
   // --- drops ---
   let foreignKeys = foreignKeysOf(def)
   let indexes: IndexDef[] = [...def.indexes]
+  let fulltext: FulltextDef[] = fulltextOf(def)
   let checkDefs: CheckDef[] = checksOf(def)
   const same = (x: string, y: string) => x.toLowerCase() === y.toLowerCase()
   for (const a of of('drop')) {
@@ -81,9 +83,16 @@ export function alterTable(run: Run, catalog: Catalog, statement: AlterTableNode
       foreignKeys = foreignKeys.filter((fk) => fk.name.toLowerCase() !== name.toLowerCase())
       continue
     }
+    if (fulltext.some((f) => same(f.name, name))) {
+      fulltext = fulltext.filter((f) => !same(f.name, name))
+      continue
+    }
     if (!indexes.some((i) => i.name.toLowerCase() === name.toLowerCase())) throw cantDrop(name)
     indexes = indexes.filter((i) => i.name.toLowerCase() !== name.toLowerCase())
   }
+  // What was there, so a repeated key is counted only when it is new (1831).
+  const kept = { indexes: indexes.length, fulltext: fulltext.length }
+
   // --- columns ---
   const columns: ColumnDef[] = [...def.columns]
   /** For each new column, where its value comes from: an old column's position, or its default. */
@@ -108,7 +117,7 @@ export function alterTable(run: Run, catalog: Catalog, statement: AlterTableNode
   }
 
   // --- indexes ---
-  const names = new Set(indexes.map((i) => i.name.toLowerCase()))
+  const names = new Set([...indexes, ...fulltext].map((i) => i.name.toLowerCase()))
   const nameFor = (wanted: string | undefined, first: string): string => {
     if (wanted !== undefined) {
       if (names.has(wanted.toLowerCase())) throw sqlError('ER_DUP_KEYNAME', `Duplicate key name '${wanted}'`)
@@ -133,6 +142,12 @@ export function alterTable(run: Run, catalog: Catalog, statement: AlterTableNode
       clauses.push(foreignKeyClause(k))
       continue
     }
+    if (k.type === KEY.FULLTEXT) {
+      const parts = k.columns.map((p) => known(p.name ?? ''))
+      checkFulltext(def.engine, columns, parts)
+      fulltext.push({ name: nameFor(k.name ?? k.constraint, parts[0] as string), columns: parts })
+      continue
+    }
     const parts = k.columns.map((p) => {
       if (p.name === undefined) throw notSupported('Functional key parts')
       return { column: known(p.name), ...(p.length === undefined ? {} : { prefix: p.length }), ...(p.desc === true ? { descending: true } : {}) }
@@ -154,6 +169,8 @@ export function alterTable(run: Run, catalog: Catalog, statement: AlterTableNode
   // --- foreign keys ---
   const checks = foreignKeyChecks(run)
   const options: Record<string, unknown> = { ...def.options }
+  if (fulltext.length > 0) options['fulltext'] = fulltext
+  else delete options['fulltext']
   if (foreignKeys.length > 0) options['foreignKeys'] = foreignKeys
   else delete options['foreignKeys']
   // CHECK constraints: switched on or off, then the new ones, a column's own included.
@@ -220,7 +237,10 @@ export function alterTable(run: Run, catalog: Catalog, statement: AlterTableNode
   // And a column whose default is an expression, which 8.4 cannot add in place.
   const expression = added.some((c) => c.default !== undefined && !isConstantDefault(c.default))
   const copied = (checks && made.length > 0) || enabled.size > 0 || expression ? records : 0
-  return { affectedRows: copied, info: `Records: ${copied}  Duplicates: 0  Warnings: ${notes}`, ...(notes > 0 ? { warnings: notes } : {}) }
+  // A table's first FULLTEXT key makes InnoDB add its document id column, and
+  // say so (124, "InnoDB rebuilding table to add column FTS_DOC_ID").
+  const warnings = notes + duplicateKeys(indexes, fulltext, kept) + (fulltextOf(def).length === 0 && fulltext.length > 0 ? 1 : 0)
+  return { affectedRows: copied, info: `Records: ${copied}  Duplicates: 0  Warnings: ${warnings}`, ...(warnings > 0 ? { warnings } : {}) }
 }
 
 /** A literal default, or CURRENT_TIMESTAMP's: one 8.4 adds a column with in place, without copying the rows. */

@@ -34,6 +34,7 @@
     "capture:types": "node tools/capture-types.mjs",
     "capture:precedence": "node tools/capture-precedence.mjs",
     "capture:keywords": "node tools/capture-keywords.mjs",
+    "capture:fulltext": "node tools/capture-fulltext.mjs",
     "capture:queries": "node tools/capture-queries.mjs",
     "capture:execution": "node tools/capture-execution.mjs",
     "capture:relational": "node tools/capture-relational.mjs",
