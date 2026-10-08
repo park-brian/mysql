@@ -16,7 +16,7 @@ import { MAX_PREPARED_STMT_COUNT } from './constants/commands.ts'
 import { messages } from './errors/messages.ts'
 import { sqlError } from './errors/index.ts'
 import type { ColumnDefinition } from './packets/column.ts'
-import type { SqlValue } from './values.ts'
+import type { RowValue } from './packets/resultset.ts'
 
 export interface BoundType {
   readonly type: number
@@ -26,7 +26,7 @@ export interface BoundType {
 
 /** An open read-only cursor: rows still to send, and when it was last touched. */
 export interface Cursor {
-  readonly rows: readonly (readonly SqlValue[])[]
+  readonly rows: readonly (readonly RowValue[])[]
   position: number
   lastUsedAt: number
 }

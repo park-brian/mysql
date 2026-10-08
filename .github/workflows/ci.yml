@@ -61,6 +61,11 @@ jobs:
       # bytes with an EngineError and nothing else.
       - name: Engine fuzz (10^6 inputs)
         run: npm run fuzz:engine
+      # M5.17: statements from the execution corpus's generator, with boundary
+      # values swapped in, run against a seeded table. An ER_INTERNAL_ERROR —
+      # what the executor makes of an untyped exception — or a hang fails it.
+      - name: Executor fuzz (2 x 10^4 statements)
+        run: npm run fuzz:executor
 
   crash:
     name: crash suite
@@ -248,6 +253,9 @@ jobs:
           npm run capture:keywords
           # M3.16: joins and set operations, run by the same server.
           npm run capture:queries
+          # M5.17: whole statements — rows, metadata, counters, errors — run
+          # through mysql2, so the executor's corpus is re-checked too.
+          npm run capture:execution
           git diff --stat -- test/format/fixtures/ packages/parser/src/keywords.ts
       - name: upload the captured fixtures
         uses: actions/upload-artifact@v4

@@ -13,10 +13,11 @@
 // then the supported route is `mysql2.createConnection({ stream:
 // db.createStream() })`, which is doc 42's own example.
 
+import { Catalog, Store } from '@myjs/engine'
 import { MapAccountStore, Sha2Cache, type AccountStore, type Executor } from '@myjs/protocol'
-import { MemoryVfs, type Vfs } from '@myjs/vfs'
+import { MemoryVfs, type Lock, type Vfs } from '@myjs/vfs'
 import { ProtocolConnection, type ConnectionOptions } from './connection.ts'
-import { StubExecutor } from './stub.ts'
+import { SqlExecutor } from './sql/executor.ts'
 
 export interface MySQLOptions {
   /** Doc 42's options object. Only the ones M1 can honour are read. */
@@ -30,7 +31,11 @@ export interface MySQLOptions {
   readonly multipleStatements?: boolean
   /** An explicit VFS, as doc 42 documents. */
   readonly vfs?: Vfs
-  /** Swap in a real executor; M1 defaults to the stub. */
+  /** Doc 42: the buffer pool, in bytes. Default 4 MiB. */
+  readonly bufferPoolSize?: number
+  /** Doc 41's knob: `1` makes every commit durable; `0` and `2` leave it to the once-a-second sync. */
+  readonly flushLogAtTrxCommit?: 0 | 1 | 2
+  /** Swap in another executor; the default is the SQL executor over this database's store. */
   readonly executor?: Executor
   readonly accounts?: AccountStore
   readonly serverVersion?: string
@@ -43,6 +48,12 @@ export interface DriverStream {
 
 type StreamFactory = (connection: ProtocolConnection) => unknown
 
+/** What the host adapter provides (D-27): the platform's stream, and the platform's storage for a path. */
+interface Host {
+  readonly createStream: StreamFactory
+  readonly openPathVfs: (path: string) => Promise<{ vfs: Vfs; lock: Lock }>
+}
+
 export class MySQL {
   readonly path: string
   readonly vfs: Vfs
@@ -50,6 +61,12 @@ export class MySQL {
   readonly options: MySQLOptions
 
   readonly #executor: Executor
+  /** The database, when this instance opened one (not with a custom executor). */
+  readonly store: Store | undefined
+  readonly catalog: Catalog | undefined
+  #sync: ReturnType<typeof setInterval> | undefined
+  /** The database directory's lock, held from open to `end()`. */
+  #lock: Lock | undefined
   readonly #cache = new Sha2Cache()
   readonly #streamFactory: StreamFactory
   #nextConnectionId = 1
@@ -62,9 +79,12 @@ export class MySQL {
     accounts: AccountStore,
     options: MySQLOptions,
     streamFactory: StreamFactory,
+    catalog: Catalog | undefined,
   ) {
     this.path = path
     this.vfs = vfs
+    this.store = catalog?.store
+    this.catalog = catalog
     this.#executor = executor
     this.accounts = accounts
     this.options = options
@@ -75,18 +95,48 @@ export class MySQL {
    * Doc 42: the URL scheme selects the VFS — `opfs://`, `file://` or a bare
    * path, `:memory:`. An explicit `vfs` option accepts a custom implementation.
    *
-   * M1 has no storage engine, so every scheme resolves to the memory backend
-   * and nothing is persisted. The VFS is wired up rather than stubbed out so
-   * that M4 changes one line here, not the shape of the API.
+   * The database is two files in the VFS, `data` and `log` (D-41, D-45):
+   * made on first open, recovered on every later one. `:memory:` is the
+   * memory backend; a bare path or `file://` is a directory on disk through
+   * the Node VFS (M4.26), taken for this instance until `end()`; `opfs://`
+   * is M6's.
    */
   static async open(path = ':memory:', options: MySQLOptions = {}): Promise<MySQL> {
-    const vfs = options.vfs ?? new MemoryVfs()
-    const executor =
-      options.executor ??
-      new StubExecutor(options.serverVersion === undefined ? {} : { serverVersion: options.serverVersion })
+    const host = await loadHost()
+    let vfs = options.vfs
+    let lock: Lock | undefined
+    if (vfs === undefined) {
+      if (path === ':memory:') vfs = new MemoryVfs()
+      else ({ vfs, lock } = await host.openPathVfs(path))
+    }
+    let catalog: Catalog | undefined
+    let executor = options.executor
+    if (executor === undefined) {
+      try {
+        catalog = await openCatalog(vfs, options)
+      } catch (e) {
+        lock?.release()
+        throw e
+      }
+      executor = new SqlExecutor({ catalog, ...(options.serverVersion === undefined ? {} : { serverVersion: options.serverVersion }) })
+    }
     const accounts = options.accounts ?? (await defaultAccounts())
-    const streamFactory = await loadStreamFactory()
-    return new MySQL(path, vfs, executor, accounts, options, streamFactory)
+    const db = new MySQL(path, vfs, executor, accounts, options, host.createStream, catalog)
+    db.#lock = lock
+    db.#startSync()
+    return db
+  }
+
+  /**
+   * D-49: with `flushLogAtTrxCommit` 0 or 2 a commit is not flushed, and
+   * `Store.sync()` is the once-a-second flush that bounds what a crash can
+   * lose. The synchronous core owns no timer (ground rule 3), so it is here.
+   */
+  #startSync(): void {
+    const store = this.store
+    if (store === undefined || (this.options.flushLogAtTrxCommit ?? 1) === 1) return
+    this.#sync = setInterval(() => store.sync(), 1000)
+    ;(this.#sync as { unref?: () => void }).unref?.()
   }
 
   get closed(): boolean {
@@ -99,7 +149,7 @@ export class MySQL {
    */
   createConnection(over: Partial<ConnectionOptions> = {}): ProtocolConnection {
     if (this.#closed) throw new Error('database is closed')
-    return new ProtocolConnection({
+    const connection = new ProtocolConnection({
       executor: this.#executor,
       accounts: this.accounts,
       connectionId: this.#nextConnectionId++,
@@ -114,6 +164,17 @@ export class MySQL {
       ...(this.options.serverVersion === undefined ? {} : { serverVersion: this.options.serverVersion }),
       ...over,
     })
+    this.#connections.add(connection)
+    return connection
+  }
+
+  /** Every connection this instance made that has not closed, so `end()` can end their sessions. */
+  readonly #connections = new Set<ProtocolConnection>()
+
+  /** How many connections are still open. */
+  get openConnections(): number {
+    for (const c of this.#connections) if (c.closed) this.#connections.delete(c)
+    return this.#connections.size
   }
 
   /**
@@ -149,6 +210,9 @@ export class MySQL {
         if (out.length > 0) local.postMessage(out, [out.buffer])
       })
     }
+    // The peer closing its port is the connection going away (D-68): its
+    // session ends, and an open transaction releases the writer.
+    local.addEventListener('close', () => connection.close())
     connection.start()
     const initial = connection.take()
     if (initial.length > 0) local.postMessage(initial, [initial.buffer])
@@ -157,9 +221,30 @@ export class MySQL {
   }
 
   async end(): Promise<void> {
+    if (this.#closed) return
     this.#closed = true
+    // Every session ends before the store closes, rolling back what is open;
+    // closing the store under a live transaction would leave its writer slot
+    // and its undo to recovery for no reason.
+    for (const c of this.#connections) c.close()
+    this.#connections.clear()
     this.#implicit = null
+    if (this.#sync !== undefined) clearInterval(this.#sync)
+    this.store?.close()
+    this.#lock?.release()
   }
+}
+
+/** The store and its catalog, made if the VFS has none yet and recovered if it has. */
+async function openCatalog(vfs: Vfs, options: MySQLOptions): Promise<Catalog> {
+  const data = await vfs.open('data', { create: true })
+  const log = await vfs.open('log', { create: true })
+  const storeOptions = {
+    ...(options.bufferPoolSize === undefined ? {} : { frames: Math.max(16, Math.floor(options.bufferPoolSize / data.pageSize)) }),
+    ...(options.flushLogAtTrxCommit === undefined ? {} : { flushLogAtTrxCommit: options.flushLogAtTrxCommit }),
+  }
+  const store = data.size() === 0 ? Store.create(data, log, storeOptions) : Store.open(data, log, storeOptions)
+  return Catalog.open(store)
 }
 
 function toBytes(data: unknown): Uint8Array | null {
@@ -187,10 +272,14 @@ async function defaultAccounts(): Promise<AccountStore> {
  * Pick the host adapter. D-27 confines `node:*` and `Buffer` to these two
  * files; this is the one place that chooses between them.
  */
-async function loadStreamFactory(): Promise<StreamFactory> {
+async function loadHost(): Promise<Host> {
   const isNode =
     typeof globalThis.process !== 'undefined' &&
     typeof globalThis.process.versions?.node === 'string'
-  if (isNode) return (await import('./host/node.ts')).createNodeStream as StreamFactory
-  return (await import('./host/browser.ts')).createWebStream as StreamFactory
+  if (isNode) {
+    const node = await import('./host/node.ts')
+    return { createStream: node.createNodeStream as StreamFactory, openPathVfs: node.openPathVfs }
+  }
+  const browser = await import('./host/browser.ts')
+  return { createStream: browser.createWebStream as StreamFactory, openPathVfs: browser.openPathVfs }
 }

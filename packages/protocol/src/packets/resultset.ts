@@ -15,14 +15,18 @@
 import { Writer, bitmapFrom, RESULTSET_ROW_OFFSET } from '@myjs/bytes'
 import { CLIENT, RESULTSET_METADATA, SERVER_STATUS, hasCap, type Capabilities } from '../constants/capabilities.ts'
 import { renderTextValue, type SqlValue } from '../values.ts'
+import type { MysqlDateTime, MysqlTime } from '@myjs/bytes'
 import { writeBinaryValue } from '../binary-values.ts'
 import { CHARSET_BINARY, COLUMN_FLAG, FIELD_TYPE } from '../constants/types.ts'
 import { writeColumnDefinition41, type ColumnDefinition } from './column.ts'
 import { writeErr, writeOk, writeTerminator } from './generic.ts'
 
+/** A value in a row: what a driver receives, or a temporal struct either protocol renders (D-32). */
+export type RowValue = SqlValue | MysqlDateTime | MysqlTime
+
 export interface ResultSet {
   readonly columns: readonly ColumnDefinition[]
-  readonly rows: readonly (readonly SqlValue[])[]
+  readonly rows: readonly (readonly RowValue[])[]
 }
 
 export interface OkResult {
@@ -62,7 +66,7 @@ export function columnDefinitionPacket(column: ColumnDefinition, forFieldList = 
 }
 
 /** A row: values back to back as `string<lenenc>`, with `0xFB` for NULL. */
-export function textRowPacket(columns: readonly ColumnDefinition[], row: readonly SqlValue[]): Uint8Array {
+export function textRowPacket(columns: readonly ColumnDefinition[], row: readonly RowValue[]): Uint8Array {
   const w = new Writer(64)
   for (let i = 0; i < columns.length; i++) {
     w.lenEncBytes(renderTextValue(row[i] ?? null, columns[i] as ColumnDefinition))
@@ -187,7 +191,7 @@ export function fieldListPackets(
  */
 export function binaryRowPacket(
   columns: readonly ColumnDefinition[],
-  row: readonly SqlValue[],
+  row: readonly RowValue[],
 ): Uint8Array {
   const w = new Writer(64)
   w.u8(0x00)
@@ -248,7 +252,7 @@ export function cursorOpenedPackets(
 export function fetchPackets(
   caps: Capabilities,
   columns: readonly ColumnDefinition[],
-  rows: readonly (readonly SqlValue[])[],
+  rows: readonly (readonly RowValue[])[],
   exhausted: boolean,
   options: ResultsetOptions = {},
 ): Uint8Array[] {

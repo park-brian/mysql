@@ -121,7 +121,10 @@ const live = () => {
   const run = (sql: string) => stub.query(s, sql)
   const read = async (variable: string) => {
     const result = await run(`SELECT ${variable}`)
-    return (result as { rows: unknown[][] }).rows[0]?.[0]
+    // M5: a string comes back as bytes in the session's result charset, as
+    // it goes onto the wire.
+    const v = (result as { rows: unknown[][] }).rows[0]?.[0]
+    return v instanceof Uint8Array ? s.transcoder.decode(v, s.characterSet) : v
   }
   return { s, run, read }
 }

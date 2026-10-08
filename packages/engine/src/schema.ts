@@ -148,6 +148,14 @@ export function resolveTable(id: number, schema: string, spec: TableSpec): Table
   const seen = new Set<string>()
   for (const c of spec.columns) {
     checkName(c.name, wrongColumnName)
+    // Every number a type carries is checked here as `decodeTableDef` will
+    // check it, so a definition is never stored that the catalog cannot read
+    // back. The executor fuzzer found the gap: `VARCHAR(18446744073709551615)`
+    // made a table every later statement called corrupt.
+    for (const field of ['length', 'precision', 'scale', 'decimals', 'bits', 'collationId'] as const) {
+      const v = c.type[field]
+      if (v !== undefined && (!Number.isSafeInteger(v) || v < 0)) throw wrongFieldSpec(c.name)
+    }
     if (seen.has(lower(c.name))) throw dupFieldName(c.name)
     seen.add(lower(c.name))
   }

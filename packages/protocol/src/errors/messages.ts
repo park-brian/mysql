@@ -29,6 +29,18 @@ export const messages = {
   maxPreparedStmtCount: (limit: number): string =>
     `Can't create more than max_prepared_stmt_count statements (current value: ${limit})`,
   notSupported: (what: string): string => `${what} is not supported by this server yet`,
+  // M5 — what the executor reports. MySQL's own names for the clauses
+  // (`'field list'`, `'where clause'`) are kept, since clients and tests
+  // match on them.
+  unknownColumn: (column: string, clause: string): string => `Unknown column '${column}' in '${clause}'`,
+  ambiguousColumn: (column: string, clause: string): string => `Column '${column}' in ${clause} is ambiguous`,
+  unknownCollation: (name: string): string => `Unknown collation: '${name}'`,
+  duplicateEntry: (value: string, key: string): string => `Duplicate entry '${value}' for key '${key}'`,
+  noSuchTable: (schema: string, table: string): string => `Table '${schema}.${table}' doesn't exist`,
+  wrongValueCount: (row: number): string => `Column count doesn't match value count at row ${row}`,
+  noDefaultForField: (column: string): string => `Field '${column}' doesn't have a default value`,
+  lockWaitTimeout: (): string => 'Lock wait timeout exceeded; try restarting transaction',
+  nonUniqueTable: (alias: string): string => `Not unique table/alias: '${alias}'`,
   objectExists: (kind: string, name: string): string => `${kind} ${name} already exists`,
   objectMissing: (kind: string, name: string): string => `${kind} ${name} does not exist`,
   multiStatementsDisabled: (): string =>

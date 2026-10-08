@@ -100,6 +100,20 @@ export class ProtocolConnection {
     return this.#phase === 'closed'
   }
 
+  /**
+   * The transport is gone. Idempotent, and the one place a session ends: the
+   * executor is told, so an open transaction is rolled back rather than
+   * holding the writer slot for ever (D-53).
+   */
+  close(): void {
+    if (this.#ended) return
+    this.#ended = true
+    this.#phase = 'closed'
+    if (this.#session !== null) this.#options.executor.end?.(this.#session)
+  }
+
+  #ended = false
+
   get session(): Session | null {
     return this.#session
   }
@@ -159,7 +173,10 @@ export class ProtocolConnection {
 
   async #pump(): Promise<void> {
     for (;;) {
-      if (this.#phase === 'closed') return
+      if (this.#phase === 'closed') {
+        this.close()
+        return
+      }
       // The sequence resets per command, and runs continuously through the
       // whole connection phase (doc 10). Resetting here — before the framer
       // validates the header — is the entire rule.
@@ -170,6 +187,7 @@ export class ProtocolConnection {
         payload = this.#framer.next()
       } catch (err) {
         this.#fail(err)
+        this.close()
         return
       }
       if (payload === null) return
@@ -178,6 +196,7 @@ export class ProtocolConnection {
         await this.#handle(payload)
       } catch (err) {
         this.#fail(err)
+        this.close()
         return
       }
     }
@@ -324,6 +343,7 @@ export class ProtocolConnection {
     const changed = parseComChangeUser(payload, this.#capabilities)
     const session = this.#session
     if (session !== null) {
+      this.#options.executor.reset?.(session)
       session.reset()
       session.user = changed.username
       session.database = changed.database

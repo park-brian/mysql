@@ -16,8 +16,10 @@
   "dependencies": {
     "@myjs/bytes": "0.0.0",
     "@myjs/charsets": "0.0.0",
+    "@myjs/engine": "0.0.0",
     "@myjs/parser": "0.0.0",
     "@myjs/protocol": "0.0.0",
+    "@myjs/types": "0.0.0",
     "@myjs/vfs": "0.0.0"
   },
   "browser": {

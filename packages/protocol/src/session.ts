@@ -155,4 +155,18 @@ export interface Executor {
 
   /** `COM_STATISTICS` — a single human-readable line. */
   statistics?(session: Session): string
+
+  /**
+   * `COM_RESET_CONNECTION` and `COM_CHANGE_USER`: the session starts over, so
+   * whatever the executor keeps for it — an open transaction above all — is
+   * rolled back and dropped (M5.14).
+   */
+  reset?(session: Session): void
+
+  /**
+   * The connection is gone — `COM_QUIT`, a framing fault, or the transport
+   * closing under it. An open transaction is rolled back, which is what
+   * releases the single writer slot (D-53) for everyone else.
+   */
+  end?(session: Session): void
 }

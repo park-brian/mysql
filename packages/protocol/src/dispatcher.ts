@@ -42,7 +42,7 @@ import {
 } from './packets/resultset.ts'
 import { utf8 } from './text.ts'
 import type { Executor, Session } from './session.ts'
-import type { SqlValue } from './values.ts'
+import type { RowValue } from './packets/resultset.ts'
 
 export interface DispatchContext {
   readonly session: Session
@@ -151,6 +151,7 @@ async function handle(command: number, payload: Uint8Array, ctx: DispatchContext
       return { packets: [okPacket(ctx)] }
 
     case COM.RESET_CONNECTION:
+      executor.reset?.(session)
       session.reset()
       return { packets: [okPacket(ctx)] }
 
@@ -272,7 +273,7 @@ async function handle(command: number, payload: Uint8Array, ctx: DispatchContext
         throw sqlError('ER_UNKNOWN_STMT_HANDLER', messages.unknownStatementHandler(String(statementId)))
       }
       const cursor = stmt.cursor
-      const slice: readonly (readonly SqlValue[])[] = cursor.rows.slice(
+      const slice: readonly (readonly RowValue[])[] = cursor.rows.slice(
         cursor.position,
         cursor.position + numRows,
       )

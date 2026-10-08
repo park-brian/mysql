@@ -151,6 +151,7 @@ test('several TCP connections are served at once, each with its own session', as
       ),
     )
     try {
+      await conns[0]?.query('CREATE DATABASE alpha')
       await conns[0]?.query('USE alpha')
       const [rows] = (await conns[1]?.query('SELECT DATABASE()')) as [unknown, unknown]
       assert.deepEqual(rows, [{ 'DATABASE()': null }], 'sessions do not share state')

@@ -9,9 +9,11 @@ file is the shorter thing you read first.
 An isomorphic, in-process MySQL for JavaScript: no server process, no native
 addon, MySQL's wire protocol and MySQL's semantics. M0–M2 are complete (the
 protocol, charsets and collations, the type system); M3 (parse SQL) has one
-optional item left; M4 (storage) has its pages, B+tree, WAL, crash recovery,
-MVCC transactions, the catalog and the `Table` interface with its `native` and
-`memory` engines, with the Node VFS to come; M5 (execute) has not started.
+optional item left; M4 (storage) is complete — pages, B+tree, WAL, crash
+recovery, MVCC transactions, the catalog, the `native` and `memory` engines and
+the Node VFS; M5 (execute) has begun: a real executor runs single-table DDL,
+DML and transactions through unmodified `mysql2` (M5.17), and joins,
+aggregates, the function library and the planner proper are what is left.
 
 ## Running things
 
@@ -25,7 +27,7 @@ CRASH_POINTS=10000 npm run test:crash   # the M4 exit criterion's 10,000, as CI 
 npm run typecheck
 npm run lint      # the isomorphic gate
 npm run size      # the ratcheting bundle budget
-npm run fuzz      # 10^6 inputs per parser
+npm run fuzz      # 10^6 inputs per parser, and 2 x 10^4 statements into the executor
 ```
 
 Because there is no build step, only **erasable** TypeScript is legal: no
@@ -53,6 +55,7 @@ npm run capture:precedence   # 1,200 generated expressions, evaluated by the ser
 npm run capture:traces       # 13 client/server byte traces, via a recording proxy
 npm run capture:keywords     # MySQL's reserved words, into @myjs/parser (D-39)
 npm run capture:queries      # 1,200 generated joins and set operations, run by the server
+npm run capture:execution    # 400 generated scripts, run by the server through mysql2
 npm run exit-criterion       # the real C client against our server
 npm run census:mysqltest -- --refresh   # MySQL's own test corpus, lexed and parsed
 ```
@@ -94,10 +97,13 @@ a session is injected — a `Transcoder`, a `Capabilities`, an `Executor`.
   above the pool declares where an atomic change begins and ends and nothing
   more.
 
-The engine seam is `Executor` in `packages/protocol/src/session.ts`. Today it is
-answered by a regex stub in `packages/core/src/stub.ts`; M5 replaces it. Below
-the executor, the storage seam is `Catalog` and `Table` in `@myjs/engine` (doc 30
-§Our engines): rows as storage-encoded field bytes, DDL as transactions.
+The engine seam is `Executor` in `packages/protocol/src/session.ts`, answered by
+`SqlExecutor` in `packages/core/src/sql/` (D-62–D-68): parse once, compile each
+expression to a closure, plan a key range only where it is exact, run in the
+session's transaction. MySQL's value rules — comparison, arithmetic, a value
+into a column — are `@myjs/types`', not the executor's. Below the executor, the
+storage seam is `Catalog` and `Table` in `@myjs/engine` (doc 30 §Our engines):
+rows as storage-encoded field bytes, DDL as transactions.
 
 ## Ground rules
 

@@ -10,6 +10,9 @@
 // Keeping that fact in one file behind a package export condition is what lets
 // every other module stay provably portable.
 import { Duplex } from 'node:stream'
+import { fileURLToPath } from 'node:url'
+import { VfsError, type Lock, type Vfs } from '@myjs/vfs'
+import { NodeVfs } from '@myjs/vfs/node'
 import type { ProtocolConnection } from '../connection.ts'
 
 /**
@@ -20,23 +23,36 @@ import type { ProtocolConnection } from '../connection.ts'
  */
 export function createNodeStream(connection: ProtocolConnection): Duplex {
   let ended = false
+  let pending: Promise<void> = Promise.resolve()
 
   const stream = new Duplex({
     read() {
       // Nothing to pull: bytes are pushed as the connection produces them.
     },
     write(chunk: Buffer | Uint8Array, _encoding, callback) {
-      connection
-        .feed(new Uint8Array(chunk.buffer, chunk.byteOffset, chunk.byteLength))
-        .then(() => {
-          flush()
-          callback()
+      // Acknowledged at once and processed in order behind a promise chain.
+      // Holding the callback until the command finished made a `destroy()`
+      // wait for it too — Node defers destroy behind a pending write — so a
+      // connection closed mid-statement was not seen to close until the
+      // statement it was abandoning had run (found by M5.17's review).
+      const bytes = new Uint8Array(chunk.buffer, chunk.byteOffset, chunk.byteLength).slice()
+      pending = pending
+        .then(() => connection.feed(bytes))
+        .then(flush)
+        .catch((err: unknown) => {
+          stream.destroy(err instanceof Error ? err : new Error(String(err)))
         })
-        .catch(callback)
+      callback()
     },
     final(callback) {
       finish()
+      connection.close()
       callback()
+    },
+    destroy(error, callback) {
+      // `conn.destroy()` with no COM_QUIT: the session still has to end.
+      connection.close()
+      callback(error)
     },
   })
 
@@ -56,4 +72,19 @@ export function createNodeStream(connection: ProtocolConnection): Duplex {
   connection.start()
   flush()
   return stream
+}
+
+/**
+ * M4.26 — `MySQL.open('./data')` and `MySQL.open('file:///…')`: a database
+ * directory on disk, through the Node VFS. The directory is taken for this
+ * process for as long as the database is open (doc 41: one owner), and a
+ * directory another owner holds is refused at once rather than waited on.
+ */
+export async function openPathVfs(path: string): Promise<{ vfs: Vfs; lock: Lock }> {
+  if (path.startsWith('opfs://')) throw new VfsError('VFS_UNSUPPORTED', `${path}: OPFS is the browser's (M6), not Node's`)
+  const dir = path.startsWith('file://') ? fileURLToPath(path) : path
+  const vfs = new NodeVfs(dir)
+  const lock = vfs.tryLock('/database')
+  if (lock === undefined) throw new VfsError('VFS_LOCKED', `${dir} is open in another MySQL instance`)
+  return { vfs, lock }
 }
