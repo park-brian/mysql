@@ -12,7 +12,9 @@
 // `$n` (3686 past the last group), `\x`, and a bare `$` 3887; empty
 // matches; and 3995 for a binary replacement into text. Last, ICU's limits:
 // 100 nested groups is 3687, and a runaway backtrack is 3699, which is
-// raised here before the engine could hang on it.
+// raised here before the engine could hang on it. And the positions each
+// function takes: INSTR one in the subject, SUBSTR and REPLACE also the place
+// past its end, and below 1 their 1583 (found by review).
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import mysql from 'mysql2/promise'
@@ -129,6 +131,16 @@ const SCRIPT: readonly (readonly [string, Outcome])[] = [
   ["SELECT REGEXP_INSTR('aaaaaaaaaaaaaaaa!', '(a+)+b')", [["0"]]],
   ["SELECT REGEXP_INSTR('aaaaaaaaaaaaaaaaaaaaaaaaa!', '(a+)+b')", [3699,"Timeout exceeded in regular expression match."]],
   ["SELECT 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaa!' REGEXP '(a+)+b'", [3699,"Timeout exceeded in regular expression match."]],
+  ["SELECT REGEXP_INSTR('abc','b',3), REGEXP_SUBSTR('abc','b',4), REGEXP_REPLACE('abc','b','X',4), REGEXP_SUBSTR('abc','x*',4), REGEXP_INSTR('','b',2), REGEXP_INSTR('','b',1), REGEXP_SUBSTR('','b',1)", [["0",null,"abc","","0","0",null]]],
+  ["SELECT REGEXP_INSTR('abc','b',4)", [3686,"Index out of bounds in regular expression search."]],
+  ["SELECT REGEXP_INSTR('','b',3)", [["0"]]],
+  ["SELECT REGEXP_INSTR('a','b',3)", [3686,"Index out of bounds in regular expression search."]],
+  ["SELECT REGEXP_SUBSTR('abc','b',5)", [3686,"Index out of bounds in regular expression search."]],
+  ["SELECT REGEXP_REPLACE('abc','b','X',5)", [3686,"Index out of bounds in regular expression search."]],
+  ["SELECT REGEXP_SUBSTR('abc','b',0)", [1583,"Incorrect parameters in the call to native function 'regexp_substr'"]],
+  ["SELECT REGEXP_REPLACE('abc','b','X',-1)", [1583,"Incorrect parameters in the call to native function 'regexp_replace'"]],
+  ["SELECT REGEXP_INSTR('abc','b',0)", [3686,"Index out of bounds in regular expression search."]],
+  ["SELECT REGEXP_INSTR('abc','b',1,99999999999999999999), REGEXP_SUBSTR('abcb','b',1,99999999999999999999)", [["2","b"]]],
 ]
 
 test('M5.10: REGEXP and REGEXP_LIKE answer every statement of the script as 8.4.11 did', async () => {

@@ -248,10 +248,21 @@ export function regexpLike(subject: Value, pattern: Value, type: MatchType | und
 
 const outOfBounds = () => sqlError('ER_REGEXP_INDEX_OUTOFBOUNDS_ERROR', 'Index out of bounds in regular expression search.')
 
-/** The UTF-16 offset of 1-based character `pos`, 3686 if the subject has no such place. */
-function offsetOf(text: string, pos: bigint, binary: boolean): number {
+/**
+ * The UTF-16 offset of 1-based character `pos`. REGEXP_INSTR takes a
+ * position in the subject, any in an empty one; REGEXP_SUBSTR and
+ * REGEXP_REPLACE also the place just past its end, and call a position below
+ * 1 their arguments' fault, 1583 (8.4.11). Past that, 3686.
+ */
+function offsetOf(text: string, pos: bigint, binary: boolean, fn: string): number {
   const length = binary ? text.length : [...text].length
-  if (pos < 1n || pos > BigInt(Math.max(1, length))) throw outOfBounds()
+  if (fn === 'regexp_instr') {
+    if (length === 0) return 0
+    if (pos < 1n || pos > BigInt(length)) throw outOfBounds()
+  } else {
+    if (pos < 1n) throw sqlError('ER_WRONG_PARAMETERS_TO_NATIVE_FCT', `Incorrect parameters in the call to native function '${fn}'`)
+    if (pos > BigInt(length + 1)) throw outOfBounds()
+  }
   if (binary) return Number(pos) - 1
   let offset = 0
   for (let i = 1n; i < pos; i++) offset += (text.codePointAt(offset) as number) > 0xffff ? 2 : 1
@@ -277,7 +288,9 @@ function* matchesFrom(re: RegExp, text: string, start: number): Generator<RegExp
 
 /** The nth match from `start`, or undefined. */
 function nth(re: RegExp, text: string, start: number, occurrence: bigint): RegExpExecArray | undefined {
-  let n = occurrence < 1n ? 1n : occurrence
+  // The server keeps an occurrence in 32 bits: BIGINT's largest is -1 there, and so the first.
+  const wrapped = BigInt.asIntN(32, occurrence > 9223372036854775807n ? 9223372036854775807n : occurrence)
+  let n = wrapped < 1n ? 1n : wrapped
   for (const m of matchesFrom(re, text, start)) if (--n === 0n) return m
   return undefined
 }
@@ -294,7 +307,7 @@ export function regexpInstr(s: Search, returnEnd: boolean): bigint {
   const re = regexpFor(s.subject, s.pattern, s.type, 'regexp_instr', true)
   const binary = s.subject.kind === 'bytes'
   const text = textOf(s.subject)
-  const m = nth(re, text, offsetOf(text, s.position, binary), s.occurrence)
+  const m = nth(re, text, offsetOf(text, s.position, binary, 'regexp_instr'), s.occurrence)
   if (m === undefined) return 0n
   return BigInt(charsBefore(text, m.index + (returnEnd ? m[0].length : 0), binary) + 1)
 }
@@ -303,7 +316,7 @@ export function regexpInstr(s: Search, returnEnd: boolean): bigint {
 export function regexpSubstr(s: Search): string | undefined {
   const re = regexpFor(s.subject, s.pattern, s.type, 'regexp_substr', true)
   const text = textOf(s.subject)
-  return nth(re, text, offsetOf(text, s.position, s.subject.kind === 'bytes'), s.occurrence)?.[0]
+  return nth(re, text, offsetOf(text, s.position, s.subject.kind === 'bytes', 'regexp_substr'), s.occurrence)?.[0]
 }
 
 type Piece = string | number
@@ -337,7 +350,7 @@ export function regexpReplace(s: Search, replacement: Exclude<Value, null>): str
   sameKind(s.subject, replacement, 'regexp_replace')
   const re = regexpFor(s.subject, s.pattern, s.type, 'regexp_replace', true)
   const text = textOf(s.subject)
-  const start = offsetOf(text, s.position, s.subject.kind === 'bytes')
+  const start = offsetOf(text, s.position, s.subject.kind === 'bytes', 'regexp_replace')
   const pieces = replacementOf(textOf(replacement))
   const expand = (m: RegExpExecArray): string =>
     pieces
