@@ -235,6 +235,8 @@ export interface DataType {
   readonly binary?: boolean
   /** `SERIAL`, which also implies UNSIGNED NOT NULL AUTO_INCREMENT UNIQUE. */
   readonly serial?: boolean
+  /** Spelled `BOOL` or `BOOLEAN`: a TINYINT(1) whose width was never written, so it draws no deprecation warning. */
+  readonly boolean?: boolean
   readonly at: number
 }
 
@@ -375,6 +377,7 @@ export function parseDataType(c: Cursor, mode: SqlMode): DataType {
     ...(collation === undefined ? {} : { collation }),
     ...(binaryModifier === undefined ? {} : { binary: binaryModifier }),
     ...(name === 'SERIAL' ? { serial: true } : {}),
+    ...(name === 'BOOL' || name === 'BOOLEAN' ? { boolean: true } : {}),
     at,
   }
 }

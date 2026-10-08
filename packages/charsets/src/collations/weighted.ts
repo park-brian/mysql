@@ -25,7 +25,7 @@ import { requireCollationInfo, type Collation, type CollationInfo } from '../col
 import { comparePadded, memcmp } from './memcmp.ts'
 import { utf8CodePoints } from './utf8.ts'
 import { expandRuns } from '../runs.ts'
-import { PACKED_BYTE_WEIGHTS, PACKED_UNICASE_WEIGHTS, PACKED_WEIGHTED_COLLATIONS } from './weights.ts'
+import { PACKED_BYTE_WEIGHTS, PACKED_UNICASE_LOWER, PACKED_UNICASE_WEIGHTS, PACKED_WEIGHTED_COLLATIONS } from './weights.ts'
 
 /** Code points above `my_unicase_default`'s `maxchar` all weigh this. */
 const REPLACEMENT_WEIGHT = 0xfffd
@@ -45,18 +45,23 @@ function byteWeightTable(name: string): Uint8Array {
   return table
 }
 
-let unicasePages: Map<number, Uint16Array> | null = null
-function unicaseWeight(codePoint: number): number {
-  if (unicasePages === null) {
-    unicasePages = new Map()
-    for (const line of PACKED_UNICASE_WEIGHTS.split('\n')) {
-      const at = line.indexOf(' ')
-      const page = Number.parseInt(line.slice(0, at), 16)
-      unicasePages.set(page, Uint16Array.from(expandRuns(line.slice(at + 1), page << 8, 256)))
-    }
+function unicaseTable(packed: string): Map<number, Uint16Array> {
+  const pages = new Map<number, Uint16Array>()
+  for (const line of packed.split('\n')) {
+    const at = line.indexOf(' ')
+    const page = Number.parseInt(line.slice(0, at), 16)
+    pages.set(page, Uint16Array.from(expandRuns(line.slice(at + 1), page << 8, 256)))
   }
+  return pages
+}
+
+let unicasePages: Map<number, Uint16Array> | null = null
+let lowerPages: Map<number, Uint16Array> | null = null
+/** A code point's weight: `my_unicase_default`'s sort column, or, for a `MY_CS_LOWER_SORT` collation, its `tolower`. */
+function unicaseWeight(codePoint: number, lower = false): number {
   if (codePoint > 0xffff) return REPLACEMENT_WEIGHT
-  const page = unicasePages.get(codePoint >> 8)
+  const pages = lower ? (lowerPages ??= unicaseTable(PACKED_UNICASE_LOWER)) : (unicasePages ??= unicaseTable(PACKED_UNICASE_WEIGHTS))
+  const page = pages.get(codePoint >> 8)
   // An absent page is identity — 245 of the 256 pages, and the whole reason
   // this table is kilobytes rather than a megabyte (Q-04).
   return page === undefined ? codePoint : (page[codePoint & 0xff] as number)
@@ -94,14 +99,14 @@ function byteWeightCollation(info: CollationInfo, table: Uint8Array): Collation 
   }
 }
 
-function unicaseCollation(info: CollationInfo): Collation {
-  const spaceWeight = unicaseWeight(0x20)
+function unicaseCollation(info: CollationInfo, lower = false): Collation {
+  const spaceWeight = unicaseWeight(0x20, lower)
   const padUnit = Uint8Array.of(spaceWeight >> 8, spaceWeight & 0xff)
   const sortKey = (bytes: Uint8Array): Uint8Array => {
     const points = utf8CodePoints(bytes)
     const out = new Uint8Array(points.length * 2)
     for (let i = 0; i < points.length; i++) {
-      const w = unicaseWeight(points[i] as number)
+      const w = unicaseWeight(points[i] as number, lower)
       out[i * 2] = w >> 8
       out[i * 2 + 1] = w & 0xff
     }
@@ -138,7 +143,7 @@ export function weightedCollationFor(id: number): Collation {
   const source = weightSource(id)
   if (source === undefined) throw new Error(`collation ${id} has no weight table`)
   const info = requireCollationInfo(id)
-  const c = source === '-' ? unicaseCollation(info) : byteWeightCollation(info, byteWeightTable(source))
+  const c = source === '-' ? unicaseCollation(info) : source === '<' ? unicaseCollation(info, true) : byteWeightCollation(info, byteWeightTable(source))
   cache.set(id, c)
   return c
 }

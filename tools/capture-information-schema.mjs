@@ -247,10 +247,19 @@ if (import.meta.url === `file://${process.argv[1]}`) {
     const [, fields] = await conn.query(`SELECT * FROM information_schema.${t} LIMIT 0`)
     const [[collations]] = await conn
       .query({
-        sql: `SELECT ${fields.map((f) => `COLLATION(\`${f.name}\`)`).join(', ')} FROM information_schema.${t} LIMIT 1`,
+        // Through a LEFT JOIN that always yields a row: a table with no rows
+        // (CHECK_CONSTRAINTS, often) still names its columns' collations.
+        sql: `SELECT ${fields.map((f) => `COLLATION(x.\`${f.name}\`)`).join(', ')} FROM (SELECT 1) one LEFT JOIN information_schema.${t} x ON FALSE`,
         rowsAsArray: true,
       })
       .catch(() => [[fields.map(() => null)]])
+    // The same columns as a sort over the view's join streams them through a
+    // temporary table: a constant is not copied, a dictionary column is copied
+    // as a column, a computed one as an expression. The sort is on a column the
+    // filter does not pin, so the optimizer cannot drop it.
+    const [where] = FILTER[t]
+    const order = t === 'SCHEMATA' ? 'DEFAULT_COLLATION_NAME' : FILTER[t][1].split(',')[0]
+    const [, sorted] = await conn.execute(`SELECT * FROM information_schema.${t} WHERE ${where} = ? ORDER BY ${order}`, ['mysql'])
     defs[t] = fields.map((f, i) => ({
       name: f.name,
       type: f.columnType,
@@ -261,6 +270,7 @@ if (import.meta.url === `file://${process.argv[1]}`) {
       // A dictionary column reports its schema; a computed one does not.
       column: f.schema === 'information_schema',
       collation: collations?.[i] ?? null,
+      streamed: [sorted[i].columnType, sorted[i].columnLength, sorted[i].flags, sorted[i].decimals],
     }))
   }
   const lines = TABLES.map((t) => `  ${t}: [\n${defs[t].map((c) => `    ${JSON.stringify(c)},`).join('\n')}\n  ],`)
@@ -271,7 +281,7 @@ if (import.meta.url === `file://${process.argv[1]}`) {
       "// Each INFORMATION_SCHEMA table's columns as `SELECT *` reports them through a\n" +
       '// utf8mb4 connection (lengths are in its bytes), whether each is a dictionary\n' +
       '// column or a computed one, and the collation it compares in (M5.12).\n' +
-      'export interface InformationSchemaColumn {\n  readonly name: string\n  readonly type: number\n  readonly length: number\n  readonly flags: number\n  readonly decimals: number\n  readonly text: boolean\n  readonly column: boolean\n  readonly collation: string | null\n}\n\n' +
+      'export interface InformationSchemaColumn {\n  readonly name: string\n  readonly type: number\n  readonly length: number\n  readonly flags: number\n  readonly decimals: number\n  readonly text: boolean\n  readonly column: boolean\n  readonly collation: string | null\n  /** `[type, length, flags, decimals]` under a sort over the view, which streams through a temporary table. */\n  readonly streamed: readonly [number, number, number, number]\n}\n\n' +
       `export const INFORMATION_SCHEMA: Readonly<Record<string, readonly InformationSchemaColumn[]>> = {\n${lines.join('\n')}\n}\n`,
   )
 

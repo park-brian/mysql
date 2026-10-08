@@ -24,6 +24,24 @@ import { KEY, deparse, type ColumnDefinition, type CreateTableNode, type DataTyp
 import { messages, sqlError } from '@myjs/protocol'
 import type { ColumnType } from '@myjs/types'
 
+const INTEGER_CODES: ReadonlySet<number> = new Set([FIELD_TYPE.TINY, FIELD_TYPE.SHORT, FIELD_TYPE.INT24, FIELD_TYPE.LONG, FIELD_TYPE.LONGLONG])
+
+/**
+ * The 1681 deprecation warnings a CREATE TABLE draws (8.4.11): one for each
+ * integer display width written, TINYINT(1) included — BOOL writes none — and
+ * one for each ZEROFILL.
+ */
+export function deprecationWarnings(node: CreateTableNode): number {
+  let n = 0
+  for (const c of node.columns) {
+    const t = c.type
+    if (!INTEGER_CODES.has(t.code as number)) continue
+    if (t.length !== undefined) n++
+    if (t.zerofill === true) n++
+  }
+  return n
+}
+
 /** The server default (D-10). */
 export const DEFAULT_COLLATION = 255
 
@@ -326,6 +344,9 @@ function column(c: ColumnDefinition, tableCollation: number, inPrimary: boolean)
   if (c.onUpdate !== undefined) attributes['onUpdate'] = sqlText(c.onUpdate)
   if (c.comment !== undefined) attributes['comment'] = c.comment
   if (c.type.zerofill === true) attributes['zerofill'] = true
+  // BOOL and BOOLEAN are TINYINT(1), width and all.
+  const boolean = c.type.boolean === true
+  if (INTEGER_CODES.has(c.type.code as number) && (c.type.length !== undefined || boolean)) attributes['width'] = c.type.length ?? 1
   return {
     name: c.name,
     type,

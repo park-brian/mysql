@@ -1063,6 +1063,7 @@ class Deparser {
 
   dataType(t: DataType): string {
     if (t.serial === true) return 'SERIAL'
+    if (t.boolean === true) return ['BOOL', ...(t.unsigned === true ? ['UNSIGNED'] : []), ...(t.zerofill === true ? ['ZEROFILL'] : [])].join(' ')
     const out = [t.name]
     if (t.values !== undefined) {
       out[0] += `(${t.values.map((v) => (typeof v === 'string' ? this.string(v) : `X'${hex(v)}'`)).join(', ')})`

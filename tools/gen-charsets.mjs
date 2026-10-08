@@ -416,6 +416,8 @@ const byteTables = new Map()
 
 /** `my_unicase_pages_default`, as page index -> 256 weights. */
 const unicasePages = new Map()
+/** The same pages' `tolower` column, which a `MY_CS_LOWER_SORT` collation weighs by. */
+const lowerPages = new Map()
 {
   const utf8 = sources.find((s) => s.path.endsWith('ctype-utf8.cc'))
   check(utf8 !== undefined, 'gen-charsets: ctype-utf8.cc is not in SOURCES')
@@ -438,6 +440,10 @@ const unicasePages = new Map()
     unicasePages.set(
       page,
       rows.map((r) => parseInt(r[3], 16)),
+    )
+    lowerPages.set(
+      page,
+      rows.map((r) => parseInt(r[2], 16)),
     )
   })
 }
@@ -463,6 +469,12 @@ const unicaseWeighted = collations.filter(
     !c.lowerSort &&
     !c.hidden,
 )
+
+// `MY_CS_LOWER_SORT`: the same handler weighing by `tolower` instead —
+// `utf8mb3_tolower_ci`, the collation INFORMATION_SCHEMA compares column and
+// index names in.
+const lowerWeighted = collations.filter((c) => c.mbminlen === 1 && c.mbmaxlen > 1 && c.caseinfo === 'my_unicase_default' && !c.usesUca && !c.isBinary && c.lowerSort && !c.hidden)
+check(lowerWeighted.map((c) => c.id).join(',') === '76', `gen-charsets: expected the lower-sort collation 76, got ${lowerWeighted.map((c) => c.id).join(',')}`)
 
 const weightOf = (cp) => {
   const page = unicasePages.get(cp >> 8)
@@ -509,9 +521,13 @@ const unicaseLines = [...unicasePages.entries()]
   .sort((a, b) => a[0] - b[0])
   .map(([page, weights]) => `${page.toString(16)} ${runs(weights, page << 8)}`)
   .join('\n')
-const weightedLines = [...byteWeighted, ...unicaseWeighted]
+const lowerLines = [...lowerPages.entries()]
+  .sort((a, b) => a[0] - b[0])
+  .map(([page, weights]) => `${page.toString(16)} ${runs(weights, page << 8)}`)
+  .join('\n')
+const weightedLines = [...byteWeighted, ...unicaseWeighted, ...lowerWeighted]
   .sort((a, b) => a.id - b.id)
-  .map((c) => `${c.id} ${c.sortOrder === null ? '-' : c.sortOrder.replace('sort_order_', '')}`)
+  .map((c) => `${c.id} ${c.lowerSort ? '<' : c.sortOrder === null ? '-' : c.sortOrder.replace('sort_order_', '')}`)
   .join('\n')
 
 writeFileSync(
@@ -523,7 +539,7 @@ writeFileSync(
     counts: {
       'Byte weight tables': usedByteTables.length,
       'Unicase pages': unicasePages.size,
-      'Collations served': byteWeighted.length + unicaseWeighted.length,
+      'Collations served': byteWeighted.length + unicaseWeighted.length + lowerWeighted.length,
     },
   })}
 
@@ -547,7 +563,13 @@ export const PACKED_BYTE_WEIGHTS = ${packed(byteLines)}
 export const PACKED_UNICASE_WEIGHTS = ${packed(unicaseLines)}
 
 /**
- * \`id table\`, one per line, where \`-\` means the unicase page table. Read out
+ * The same pages' \`tolower\` column, in the same format: what a \`MY_CS_LOWER_SORT\`
+ * collation (\`utf8mb3_tolower_ci\`) weighs a code point by.
+ */
+export const PACKED_UNICASE_LOWER = ${packed(lowerLines)}
+
+/**
+ * \`id table\`, one per line, where \`-\` means the unicase page table and \`<\` its lowercase column. Read out
  * of each collation's own \`CHARSET_INFO\`, not guessed from its name.
  */
 export const PACKED_WEIGHTED_COLLATIONS = ${packed(weightedLines)}

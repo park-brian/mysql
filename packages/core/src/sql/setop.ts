@@ -101,7 +101,11 @@ export function setOperationType(types: readonly ResultType[], connectionCollati
   }
   const width = Math.max(...live.map((t) => (t.kind === 'string' || t.kind === 'bytes' ? t.length : charWidth(t))))
   const sameField = live.every((t) => t.field === (live[0] as ResultType).field) && (live[0] as ResultType).field === FIELD_TYPE.STRING
-  const text = stringType(binary ? width * Math.max(...live.map((t) => (t.kind === 'string' ? requireCollationInfo(t.collationId).mbmaxlen : 1))) : width, collationId, nullable)
+  // Binary: as wide as the widest branch in its own bytes — a string's
+  // characters at its charset's widest, bytes as they are (8.4.11:
+  // VARBINARY(10) UNION 'k' is 10, UNION a 13-character literal 52).
+  const bytes = Math.max(...live.map((t) => (t.kind === 'string' ? t.length * requireCollationInfo(t.collationId).mbmaxlen : t.kind === 'bytes' ? t.length : charWidth(t))))
+  const text = stringType(binary ? bytes : width, collationId, nullable)
   return done(sameField ? { ...text, field: FIELD_TYPE.STRING } : text)
 }
 

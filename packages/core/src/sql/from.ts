@@ -51,6 +51,12 @@ export interface FromTable {
 
 export interface DerivedSource {
   readonly columns: readonly ScopeColumn[]
+  /**
+   * A view MySQL plans as a join of its own tables — INFORMATION_SCHEMA's, over
+   * the data dictionary (M5.12) — so a sort or a DISTINCT over it streams its
+   * rows through a temporary table, as over any join.
+   */
+  readonly joined?: boolean
   /** Its rows, as values in column order. `lateral` is the FROM's row so far, for LATERAL. */
   rows(trx: Trx | undefined, env: Env, lateral: Row | undefined): Iterable<readonly Value[]>
 }
@@ -126,6 +132,8 @@ export interface FromContext {
   derived?(ref: TableReference & { readonly kind: typeof REF.DERIVED }, lateral: Scope | undefined): DerivedSource
   /** A common table expression the statement defines under this name, planned for one reference to it. */
   cte?(name: string): DerivedSource | undefined
+  /** An INFORMATION_SCHEMA table of this name (M5.12), or `undefined` when the name is not in it. */
+  system?(ref: { readonly schema?: string; readonly name: string }, alias: string): { readonly schema: string; readonly source: DerivedSource } | undefined
   /** A view of this name, planned for one reference to it, or `undefined` when there is none. */
   view?(ref: { readonly schema?: string; readonly name: string }, alias: string): { readonly schema: string; readonly source: DerivedSource } | undefined
   /** The scope an enclosing query gives a correlated name, if any. */
@@ -159,6 +167,11 @@ export function planFrom(refs: readonly TableReference[], ctx: FromContext, wher
           return
         }
         const alias = ref.alias ?? ref.table.name
+        const system = ctx.system?.(ref.table, alias)
+        if (system !== undefined) {
+          pending.push({ alias, cte: system.source, schema: system.schema, nullable, width: system.source.columns.length })
+          return
+        }
         let opened: ReturnType<FromContext['open']>
         try {
           opened = ctx.open(ref.table)
@@ -371,6 +384,7 @@ export function planFrom(refs: readonly TableReference[], ctx: FromContext, wher
         node = node.outer
       }
       const first = node.table.alias
+      if (node.table.derived?.joined === true) return false
       if ([...aliases].some((a) => a !== first)) return false
       return spine.every((j) => j.kind === 'join' && [...nestedLoopJoins].some((s) => [...s].every((a) => innerAliasesOf(j).has(a)) && s.size === innerAliasesOf(j).size))
     },

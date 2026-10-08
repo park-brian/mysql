@@ -55,7 +55,7 @@ import { COERCIBILITY, doubleValue, intValue, parseDecimal, stringValue, toInteg
 import { charsetChange, ensureCollationResident } from '../transcoder.ts'
 import { PROGRAM_OBJECTS, ServerState, type ProgramStatement, type ServerOptions } from './admin.ts'
 import { compile, EMPTY_SCOPE, type Env } from './compile.ts'
-import { DEFAULT_COLLATION, createTableSpec, resolveCollation } from './ddl.ts'
+import { DEFAULT_COLLATION, createTableSpec, deprecationWarnings, resolveCollation } from './ddl.ts'
 import { insert, remove, update } from './dml.ts'
 import { columnDefinition, stringType } from './meta.ts'
 import { columnsOf, compileContext, planQuery, resultSet, viewTable, type Run } from './query.ts'
@@ -411,7 +411,8 @@ export class SqlExecutor implements Executor {
         state.commit()
         const spec = createTableSpec(statement, catalog.schema(schema).collationId ?? DEFAULT_COLLATION)
         catalog.createTable(schema, spec, { ifNotExists: statement.ifNotExists === true })
-        return { affectedRows: 0 }
+        const warnings = deprecationWarnings(statement)
+        return { affectedRows: 0, ...(warnings > 0 ? { warnings } : {}) }
       }
       case STATEMENT.CREATE_VIEW:
         state.commit()
@@ -542,6 +543,8 @@ export class SqlExecutor implements Executor {
       name: statement.view.name,
       query: viewText(run, statement),
       ...(session.database === null ? {} : { database: session.database }),
+      definer: `${session.user}@%`,
+      collationConnection: session.characterSet,
       ...(statement.columns === undefined ? {} : { columns: statement.columns }),
       ...(statement.algorithm === undefined ? {} : { algorithm: statement.algorithm }),
       ...(statement.checkOption === undefined ? {} : { checkOption: statement.checkOption }),

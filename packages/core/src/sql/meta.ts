@@ -46,6 +46,13 @@ export interface ResultType {
      */
     readonly viewSchema?: string
   }
+  /**
+   * An INFORMATION_SCHEMA column read bare (M5.12): the definition 8.4.11
+   * reports for it, captured whole, because a view over the data dictionary
+   * reports a dictionary column and a computed one in ways no rule here
+   * derives. `length` is in bytes of a utf8mb4 result for text, as captured.
+   */
+  readonly wire?: { readonly field: number; readonly length: number; readonly flags: number; readonly decimals: number; readonly text: boolean; readonly streamed?: readonly [number, number, number, number] }
   /** A boolean's result — a comparison, `TRUE`, `NOT`: JSON takes it as `true` or `false`. */
   readonly boolean?: boolean
   readonly nullable: boolean
@@ -226,7 +233,7 @@ export const datetimeType = (field: number, fsp: number, nullable: boolean): Res
 })
 
 /** The key flags a column has from the indexes it is in. */
-function keyFlags(def: TableDef, name: string): number {
+export function keyFlags(def: TableDef, name: string): number {
   let flags = 0
   for (const index of def.indexes) {
     const at = index.parts.findIndex((p) => p.column === name)
@@ -249,12 +256,15 @@ export function columnResultType(def: TableDef, column: ColumnDef, tableAlias: s
   let flags = keyFlags(def, column.name)
   if (column.autoIncrement === true) flags |= COLUMN_FLAG.AUTO_INCREMENT
   if (!nullable && column.autoIncrement !== true && column.attributes?.['default'] === undefined) flags |= COLUMN_FLAG.NO_DEFAULT_VALUE
-  if (t.type === FIELD_TYPE.YEAR) flags |= COLUMN_FLAG.ZEROFILL
+  if (t.type === FIELD_TYPE.YEAR || column.attributes?.['zerofill'] === true) flags |= COLUMN_FLAG.ZEROFILL
   const source: SourceColumn = { schema: def.schema, table: tableAlias, orgTable: def.name, orgName: column.name, flags }
   const base = { nullable, unsigned, column: source }
 
   const width = INT_WIDTH[t.type]
-  if (width !== undefined) return { ...intType(unsigned ? width[1] : width[0], nullable, unsigned), ...base, field: t.type }
+  // A declared display width is the field's length, deprecated or not: TINYINT(1)
+  // reports 1, which is how a driver knows a boolean (8.4.11).
+  const declared = column.attributes?.['width']
+  if (width !== undefined) return { ...intType(typeof declared === 'number' ? declared : unsigned ? width[1] : width[0], nullable, unsigned), ...base, field: t.type }
   switch (t.type) {
     case FIELD_TYPE.DECIMAL:
     case FIELD_TYPE.NEWDECIMAL:
@@ -326,6 +336,25 @@ export function charWidth(t: ResultType): number {
  * the column reports.
  */
 export function columnDefinition(name: string, t: ResultType, resultsCollation: number): ColumnDefinition {
+  // A NULL constant in the view is not copied into a temporary table: it
+  // reports what it always does (8.4.11: STATISTICS.PACKED under a sort).
+  if (t.wire !== undefined && (t.temporary === undefined || t.temporary === false || t.temporary === 'stream' || t.wire.field === FIELD_TYPE.NULL)) {
+    // Under a sort, what 8.4.11 reports for the column streamed through a
+    // temporary table, captured as such: a constant is not copied at all.
+    const streamed = t.temporary === 'stream' ? t.wire.streamed : undefined
+    const w = streamed === undefined ? t.wire : { ...t.wire, field: streamed[0], length: streamed[1], flags: streamed[2], decimals: streamed[3] }
+    const mb = requireCollationInfo(resultsCollation).mbmaxlen
+    return {
+      ...(t.names ?? { schema: '', table: '', orgTable: '', orgName: '' }),
+      name,
+      characterSet: w.text ? resultsCollation : CHARSET_BINARY,
+      columnLength: w.text ? Math.min(4294967295, Math.ceil(w.length / 4) * mb) : w.length,
+      type: w.field,
+      // The column's own NOT NULL, unless the query made it nullable: an outer join's inner side.
+      flags: t.nullable ? w.flags & ~COLUMN_FLAG.NOT_NULL : w.flags,
+      decimals: w.decimals,
+    }
+  }
   let flags = t.column?.flags ?? 0
   if (!t.nullable) flags |= COLUMN_FLAG.NOT_NULL
   if (t.unsigned && t.kind !== 'null') flags |= COLUMN_FLAG.UNSIGNED
@@ -409,8 +438,20 @@ export function columnDefinition(name: string, t: ResultType, resultsCollation: 
   // and a BIGINT from there (8.4.11: `n IS NULL` is type 3, `LENGTH(s)` type 8);
   // MIN and MAX of a column copy the column's own field.
   if (materialized && t.kind === 'int' && t.column === undefined && t.fieldFlags === undefined && t.ownInTemporary !== true && t.keepField !== true) field = t.length < 10 ? FIELD_TYPE.LONG : FIELD_TYPE.LONGLONG
-  // A BLOB field says so, column or not.
-  if (materialized && t.column === undefined && field >= FIELD_TYPE.TINY_BLOB && field <= FIELD_TYPE.BLOB) flags |= COLUMN_FLAG.BLOB
+  // A temporary table holds a string expression over 512 characters as a
+  // BLOB of its bytes (`CONVERT_IF_BIGGER_TO_BLOB`); a column's copy keeps its
+  // own field (8.4.11: `e UNION 'k'` over a VARCHAR(513) is type 252, 8,208).
+  if (materialized && t.column === undefined && (t.kind === 'string' || t.kind === 'bytes') && (field === FIELD_TYPE.VAR_STRING || field === FIELD_TYPE.VARCHAR || field === FIELD_TYPE.STRING) && t.length > 512 && t.wireLength === undefined) {
+    field = FIELD_TYPE.BLOB
+    length = t.kind === 'bytes' ? t.length : Math.min(4294967295, t.length * requireCollationInfo(t.collationId).mbmaxlen * requireCollationInfo(resultsCollation).mbmaxlen)
+    decimals = 0
+  }
+  // A BLOB field says so, column or not, and a temporary table's is a BLOB
+  // whatever its size: LONGTEXT's 251 is reported as 252 (8.4.11).
+  if (materialized && t.column === undefined && field >= FIELD_TYPE.TINY_BLOB && field <= FIELD_TYPE.BLOB) {
+    flags |= COLUMN_FLAG.BLOB
+    field = FIELD_TYPE.BLOB
+  }
   if (t.wireLength !== undefined) {
     // GROUP_CONCAT's BLOB: as the item, a length no rule gives; as a
     // temporary table's field, a BLOB of that many bytes over the argument

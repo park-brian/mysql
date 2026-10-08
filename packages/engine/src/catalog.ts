@@ -79,6 +79,9 @@ export interface ViewDef {
   readonly columns?: readonly string[]
   readonly algorithm?: 'UNDEFINED' | 'MERGE' | 'TEMPTABLE'
   readonly checkOption?: 'CASCADED' | 'LOCAL'
+  /** Who made it, `user@host`, and the connection collation it was made in, as INFORMATION_SCHEMA.VIEWS reports them. */
+  readonly definer?: string
+  readonly collationConnection?: number
 }
 
 const VIEW_ID = 0
@@ -105,7 +108,11 @@ function decodeViewDef(bytes: Uint8Array): ViewDef {
   if (algorithm !== undefined && algorithm !== 'UNDEFINED' && algorithm !== 'MERGE' && algorithm !== 'TEMPTABLE') throw corruptCatalog(`a view algorithm of ${JSON.stringify(algorithm)}`)
   const checkOption = d['checkOption']
   if (checkOption !== undefined && checkOption !== 'CASCADED' && checkOption !== 'LOCAL') throw corruptCatalog(`a view check option of ${JSON.stringify(checkOption)}`)
-  return { schema: d['schema'], name: d['name'], query: d['query'], ...(database === undefined ? {} : { database }), ...(columns === undefined ? {} : { columns }), ...(algorithm === undefined ? {} : { algorithm }), ...(checkOption === undefined ? {} : { checkOption }) }
+  const definer = d['definer']
+  const collationConnection = d['collationConnection']
+  if (definer !== undefined && !isStr(definer)) throw corruptCatalog('a view definition whose definer is not a name')
+  if (collationConnection !== undefined && typeof collationConnection !== 'number') throw corruptCatalog('a view definition whose collation is not an id')
+  return { schema: d['schema'], name: d['name'], query: d['query'], ...(database === undefined ? {} : { database }), ...(definer === undefined ? {} : { definer }), ...(collationConnection === undefined ? {} : { collationConnection }), ...(columns === undefined ? {} : { columns }), ...(algorithm === undefined ? {} : { algorithm }), ...(checkOption === undefined ? {} : { checkOption }) }
 }
 
 const isView = (row: readonly (Uint8Array | null)[]): boolean => readBe32(row[2]) === VIEW_ID

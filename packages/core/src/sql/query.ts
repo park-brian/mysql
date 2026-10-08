@@ -26,6 +26,7 @@ import { planFrom, type DerivedSource, type FromContext, type FromPlan, type Joi
 import { rowKey } from './keys.ts'
 import { convert as convertSetValue, nestedNullability, setOperation, setOperationType } from './setop.ts'
 import { constTablesHaveRows, optimizerFacts } from './optimize.ts'
+import { informationSchemaTable } from './information-schema.ts'
 import type { SqlSession } from './session.ts'
 import { toWire, type WireProtocol } from './wire.ts'
 import type { Trx } from '@myjs/engine'
@@ -77,6 +78,7 @@ export function fromContext(run: Run): FromContext {
     derived: (ref, lateral) => derivedTable(run, ref.query, ref.alias as string, ref.columns, lateral),
     cte: (name) => run.ctes?.get(name)?.(),
     view: (name, alias) => viewTable(run, name, alias),
+    system: (name, alias) => informationSchemaTable(run, name, alias, defaultDatabase(run)),
     ...(run.parent === undefined ? {} : { parent: run.parent }),
   }
 }
@@ -140,6 +142,17 @@ export function viewTable(run: Run, name: TableName, alias: string, given?: View
     }
     throw e
   }
+}
+
+/**
+ * A view's stored query, planned as its CREATE resolved it, for what its
+ * columns are made of: INFORMATION_SCHEMA.COLUMNS lists a view's columns with
+ * the types and the base columns behind them (M5.12).
+ */
+export function planViewQuery(run: Run, view: ViewDef): { query: QueryExpression; plan: SelectPlan } {
+  const query = parseStatement(view.query) as QueryExpression
+  const inner: Run = { catalog: run.catalog, state: run.state, env: run.env, sql: view.query, protocol: run.protocol, serverVersion: run.serverVersion, preparing: true, database: view.database ?? null, views: [`${view.schema}.${view.name}`] }
+  return { query, plan: planQuery(inner, query) }
 }
 
 const CLAUSE_WORDS = new Set(['FROM', 'WHERE', 'GROUP', 'HAVING', 'WINDOW', 'ORDER', 'LIMIT', 'INTO', 'FOR', 'LOCK', 'UNION', 'EXCEPT', 'INTERSECT'])
@@ -305,7 +318,12 @@ function planSelect(run: Run, q: QueryExpression, node: SelectNode): SelectPlan 
     }
     const constant = zero || facts.impossible || facts.constTable || items.every((item) => pinnedName(item))
     if (!constant) {
-      for (const item of items) item.compiled = { ...item.compiled, type: { ...item.compiled.type, temporary: pinnedName(item) ? 'pinned' : true } }
+      // A constant is not copied into the table: `SELECT DISTINCT NULL, x`
+      // reports its NULL as it always does (8.4.11).
+      for (const item of items) {
+        if (item.expr !== undefined && !refersToRow(item.expr, lookup)) continue
+        item.compiled = { ...item.compiled, type: { ...item.compiled.type, temporary: pinnedName(item) ? 'pinned' : true } }
+      }
     }
   } else if (from !== undefined && scope !== undefined && run.preparing !== true && (source === undefined || semijoins(node.where, scope) || (q.orderBy !== undefined && node.items.some((i) => correlatedIn(i.expr, scope)))) && (node.distinct === true || (q.orderBy ?? []).length > 0)) {
     // Over a join, a DISTINCT is a temporary table and a sort reads the join's
@@ -316,7 +334,11 @@ function planSelect(run: Run, q: QueryExpression, node: SelectNode): SelectPlan 
     const facts = optimizerFacts(from, node.where, limitCount, compileContext(run, EMPTY_SCOPE, 'where clause'), run.env, (node.options ?? []).includes('STRAIGHT_JOIN'))
     // A sort over the first table alone, ahead of nested-loop joins or a
     // nested-loop semijoin, needs no stream.
-    const sortedFirst = node.distinct !== true && (source === undefined ? from.sortsFirst(orderAliases(q, items, lookup)) : nestedLoopSemijoin(node.where, scope) && !node.items.some((i) => correlatedIn(i.expr, scope)))
+    // An ORDER BY on columns the WHERE holds to constants orders nothing, and
+    // MySQL drops it before it plans a sort (8.4.11: `WHERE SCHEMA_NAME = ?
+    // ORDER BY SCHEMA_NAME` over INFORMATION_SCHEMA's join streams nothing).
+    const constantOrder = node.distinct !== true && (q.orderBy ?? []).every((o) => o.expr.kind === NODE.COLUMN && pinnedByWhere(node.where, o.expr.parts))
+    const sortedFirst = constantOrder || (node.distinct !== true && (source === undefined ? from.sortsFirst(orderAliases(q, items, lookup)) : nestedLoopSemijoin(node.where, scope) && !node.items.some((i) => correlatedIn(i.expr, scope))))
     if (!facts.empty && !sortedFirst) {
       const consts = new Set(facts.constTables.map((t) => t.alias))
       const fixed = new Set([...consts, ...(facts.nullTables ?? [])])
@@ -1172,6 +1194,16 @@ function planGrouped(
       return limit(projected, offset, limitCount)
     },
   }
+}
+
+/** Whether a top-level conjunct of `where` equates the column `parts` with a literal or a parameter. */
+function pinnedByWhere(where: Expression | undefined, parts: readonly string[]): boolean {
+  if (where === undefined) return false
+  if (where.kind === NODE.BINARY && (where.op === 'AND' || where.op === '&&')) return pinnedByWhere(where.left, parts) || pinnedByWhere(where.right, parts)
+  if (where.kind !== NODE.BINARY || where.op !== '=') return false
+  const same = (e: Expression) => e.kind === NODE.COLUMN && e.parts.length === parts.length && e.parts.every((p, i) => p.toLowerCase() === (parts[i] as string).toLowerCase())
+  const constant = (e: Expression) => e.kind === NODE.LITERAL || e.kind === NODE.PLACEHOLDER
+  return (same(where.left) && constant(where.right)) || (same(where.right) && constant(where.left))
 }
 
 /** A column's slot in this query's row; undefined for none, and for an enclosing query's column, which is a constant here. */
