@@ -110,9 +110,12 @@ test('M3.6: SET TRANSACTION stands alone, with each characteristic once', () => 
 })
 
 test('M3.6: the SET statements that are not assignments are named, not misparsed', () => {
-  for (const sql of ["SET PASSWORD = 'x'", 'SET ROLE r', 'SET DEFAULT ROLE r TO u', 'SET RESOURCE GROUP g']) {
-    assert.throws(() => parseStatement(sql), (e: ParseError) => e.code === 'ER_NOT_SUPPORTED_YET', sql)
-  }
+  // `SET PASSWORD`, `SET ROLE` and `SET DEFAULT ROLE` were refused here by
+  // name until M3.17 parsed them (`parser-admin.test.ts`).
+  assert.throws(() => parseStatement('SET RESOURCE GROUP g'), (e: ParseError) => e.code === 'ER_NOT_SUPPORTED_YET')
+  assert.equal(parse("SET PASSWORD = 'x'").kind, STATEMENT.SET_PASSWORD)
+  assert.equal(parse('SET ROLE r').kind, STATEMENT.SET_ROLE)
+  assert.equal(parse('SET DEFAULT ROLE r TO u').kind, STATEMENT.SET_DEFAULT_ROLE)
 })
 
 test('M3.6: USE, DO, and the transaction statements', () => {

@@ -19,6 +19,7 @@
 //     are syntax errors, while a repeated characteristic is not.
 import { NODE, type Expression, type KeywordNode } from './ast.ts'
 import { flag, opt, type Cursor } from './cursor.ts'
+import { parseSetDefaultRole, parseSetPassword, parseSetRole } from './admin.ts'
 import { parseUser } from './ddl.ts'
 import { parseDelete, parseInsert, parseUpdate } from './dml.ts'
 import { parseExpressionFrom } from './expression.ts'
@@ -40,7 +41,10 @@ import {
   type RollbackNode,
   type SavepointNode,
   type SetItem,
+  type SetDefaultRoleNode,
   type SetNode,
+  type SetPasswordNode,
+  type SetRoleNode,
   type SetTransactionNode,
   type ShowNode,
   type StartTransactionNode,
@@ -53,15 +57,16 @@ import { unsupportedStatement } from './errors.ts'
 // --- SET -----------------------------------------------------------------------
 
 /** `SET …`, with the cursor on `SET`. */
-export function parseSet(c: Cursor, mode: SqlMode): SetNode | SetTransactionNode {
+export function parseSet(c: Cursor, mode: SqlMode): SetNode | SetTransactionNode | SetPasswordNode | SetRoleNode | SetDefaultRoleNode {
   const at = c.peek().start
   c.expectWord('SET')
 
-  // Statements that begin with `SET` and are not assignments. Named, so the
-  // refusal says which one rather than calling it a syntax error.
-  for (const words of [['PASSWORD'], ['ROLE'], ['DEFAULT', 'ROLE'], ['RESOURCE', 'GROUP']]) {
-    if (c.atWords(...words)) throw unsupportedStatement(`SET ${words.join(' ')}`)
-  }
+  // Statements that begin with `SET` and are not assignments (M3.17). A
+  // `PASSWORD` that is not followed by `=`, `FOR` or `TO` is a variable's name.
+  if (c.atWord('PASSWORD') && (c.atOp('=', 1) || c.atWord('FOR', 1) || c.atWord('TO', 1))) return parseSetPassword(c, at)
+  if (c.atWord('ROLE')) return parseSetRole(c, at)
+  if (c.atWords('DEFAULT', 'ROLE')) return parseSetDefaultRole(c, at)
+  if (c.atWords('RESOURCE', 'GROUP')) throw unsupportedStatement('SET RESOURCE GROUP')
 
   const scopeWord = scopeKeyword(c, 0)
   if (c.atWord('TRANSACTION', scopeWord === undefined ? 0 : 1)) {
@@ -125,7 +130,7 @@ function setItem(c: Cursor, mode: SqlMode, sticky: VariableScope | undefined): S
 }
 
 /** A charset name: a word, a string, or `BINARY`, which is reserved. */
-function charsetName(c: Cursor): string {
+export function charsetName(c: Cursor): string {
   if (c.takeWord('BINARY')) return 'binary'
   return identifierOrString(c)
 }

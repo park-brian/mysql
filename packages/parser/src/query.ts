@@ -407,9 +407,10 @@ class QueryParser {
     const c = this.#c
     c.skip()
     c.skip()
-    // Newer than the 8.4 this project targets (D-10), which refuses it; the
-    // pinned test corpus is newer still and uses it.
-    if (c.atWords('GROUPING', 'SETS')) throw unsupportedStatement('GROUP BY GROUPING SETS')
+    // Newer than the 8.4 this project targets (D-10): 8.4.11 answers
+    // ER_PARSE_ERROR, and so does this. Answering "not yet" told a client to
+    // wait for SQL its server will never accept (D-70).
+    if (c.atWords('GROUPING', 'SETS')) c.fail()
     const items: Expression[] = []
     do items.push(this.#expr())
     while (c.takeOp(','))

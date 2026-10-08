@@ -75,6 +75,22 @@ import {
   type SetTransactionNode,
   type ShowNode,
   type StartTransactionNode,
+  type AccountOptions,
+  type AlterUserNode,
+  type CreateUserNode,
+  type FlushNode,
+  type GrantNode,
+  type Identification,
+  type LoadDataNode,
+  type LoadDelimiter,
+  type Privilege,
+  type PrivilegeLevel,
+  type ResetNode,
+  type RevokeNode,
+  type RoleSpec,
+  type SetPasswordNode,
+  type TableMaintenanceNode,
+  type UserSpec,
 } from './statement-ast.ts'
 
 export interface DeparseOptions {
@@ -492,7 +508,224 @@ class Deparser {
         return `DEALLOCATE PREPARE ${quoteName(s.name)}`
       case STATEMENT.DO:
         return `DO ${s.exprs.map((e) => this.expr(e)).join(', ')}`
+      case STATEMENT.TABLE_MAINTENANCE:
+        return this.tableMaintenance(s)
+      case STATEMENT.FLUSH:
+        return this.flush(s)
+      case STATEMENT.TRUNCATE:
+        return `TRUNCATE TABLE ${this.table(s.table)}`
+      case STATEMENT.LOCK_TABLES:
+        return `LOCK TABLES ${s.tables.map((t) => `${this.table(t.table)}${t.alias === undefined ? '' : ` AS ${quoteName(t.alias)}`} ${t.lock}`).join(', ')}`
+      case STATEMENT.UNLOCK_TABLES:
+        return 'UNLOCK TABLES'
+      case STATEMENT.LOCK_INSTANCE:
+        return 'LOCK INSTANCE FOR BACKUP'
+      case STATEMENT.UNLOCK_INSTANCE:
+        return 'UNLOCK INSTANCE'
+      case STATEMENT.RENAME_TABLE:
+        return `RENAME TABLE ${s.pairs.map((p) => `${this.table(p.from)} TO ${this.table(p.to)}`).join(', ')}`
+      case STATEMENT.LOAD_DATA:
+        return this.loadData(s)
+      case STATEMENT.GRANT:
+        return this.grant(s)
+      case STATEMENT.REVOKE:
+        return this.revoke(s)
+      case STATEMENT.CREATE_USER:
+        return this.createUser(s)
+      case STATEMENT.ALTER_USER:
+        return this.alterUser(s)
+      case STATEMENT.DROP_USER:
+      case STATEMENT.DROP_ROLE:
+        return `DROP ${s.kind === STATEMENT.DROP_ROLE ? 'ROLE' : 'USER'} ${s.ifExists === true ? 'IF EXISTS ' : ''}${s.users.map((u) => this.definer(u)).join(', ')}`
+      case STATEMENT.CREATE_ROLE:
+        return `CREATE ROLE ${s.ifNotExists === true ? 'IF NOT EXISTS ' : ''}${s.roles.map((r) => this.definer(r)).join(', ')}`
+      case STATEMENT.RENAME_USER:
+        return `RENAME USER ${s.pairs.map((p) => `${this.definer(p.from)} TO ${this.definer(p.to)}`).join(', ')}`
+      case STATEMENT.SET_PASSWORD:
+        return this.setPassword(s)
+      case STATEMENT.SET_ROLE:
+        return `SET ROLE ${this.roleSpec(s.role)}`
+      case STATEMENT.SET_DEFAULT_ROLE:
+        return `SET DEFAULT ROLE ${this.roleSpec(s.role)} TO ${s.to.map((u) => this.definer(u)).join(', ')}`
+      case STATEMENT.RESET:
+        return this.reset(s)
     }
+  }
+
+  // --- M3.17: administration --------------------------------------------------
+
+  tableMaintenance(s: TableMaintenanceNode): string {
+    const out: string[] = [s.op]
+    if (s.noWriteToBinlog === true) out.push('NO_WRITE_TO_BINLOG')
+    out.push('TABLE', s.tables.map((t) => this.table(t)).join(', '))
+    if (s.options !== undefined) out.push(...s.options)
+    const h = s.histogram
+    if (h !== undefined) {
+      out.push(`${h.action} HISTOGRAM ON ${h.columns.map(quoteName).join(', ')}`)
+      if ('data' in h) out.push(`USING DATA ${this.string(h.data)}`)
+      else if (h.action === 'UPDATE') {
+        if (h.buckets !== undefined) out.push(`WITH ${h.buckets} BUCKETS`)
+        if (h.update !== undefined) out.push(`${h.update} UPDATE`)
+      }
+    }
+    return out.join(' ')
+  }
+
+  flush(s: FlushNode): string {
+    const head = `FLUSH ${s.noWriteToBinlog === true ? 'NO_WRITE_TO_BINLOG ' : ''}`
+    if ('options' in s) {
+      return head + s.options.map((o) => (o.channel === undefined ? o.option : `${o.option} FOR CHANNEL ${this.string(o.channel)}`)).join(', ')
+    }
+    const out = ['TABLES']
+    if (s.tables.length > 0) out.push(s.tables.map((t) => this.table(t)).join(', '))
+    if (s.lock === 'READ') out.push('WITH READ LOCK')
+    if (s.lock === 'EXPORT') out.push('FOR EXPORT')
+    return head + out.join(' ')
+  }
+
+  loadData(s: LoadDataNode): string {
+    const out = ['LOAD', s.format]
+    if (s.priority !== undefined) out.push(s.priority)
+    if (s.local === true) out.push('LOCAL')
+    out.push(s.source, this.string(s.file))
+    if (s.count !== undefined) out.push(`COUNT ${s.count}`)
+    if (s.inPrimaryKeyOrder === true) out.push('IN PRIMARY KEY ORDER')
+    if (s.duplicates !== undefined) out.push(s.duplicates)
+    out.push('INTO TABLE', this.table(s.table))
+    if (s.partitions !== undefined) out.push(`PARTITION (${s.partitions.map(quoteName).join(', ')})`)
+    if (s.charset !== undefined) out.push(`CHARACTER SET ${this.word(s.charset)}`)
+    if (s.rowsIdentifiedBy !== undefined) out.push(`ROWS IDENTIFIED BY ${this.string(s.rowsIdentifiedBy)}`)
+    const delimiters = (list: readonly LoadDelimiter[]): string => list.map((d) => `${d.what} BY ${this.expr(d.value)}`).join(' ')
+    if (s.fields !== undefined) out.push(`FIELDS ${delimiters(s.fields)}`)
+    if (s.lines !== undefined) out.push(`LINES ${delimiters(s.lines)}`)
+    if (s.ignoreLines !== undefined) out.push(`IGNORE ${s.ignoreLines} LINES`)
+    if (s.columns !== undefined) {
+      out.push(`(${s.columns.map((c) => ('variable' in c ? this.userVariable(c.variable) : this.expr(c))).join(', ')})`)
+    }
+    if (s.set !== undefined) out.push(`SET ${this.assignments(s.set)}`)
+    if (s.parallel !== undefined) out.push(`PARALLEL = ${s.parallel}`)
+    if (s.memory !== undefined) out.push(`MEMORY = ${/^\d+$/.test(s.memory) ? s.memory : quoteName(s.memory)}`)
+    if (s.algorithm !== undefined) out.push(`ALGORITHM = ${s.algorithm}`)
+    return out.join(' ')
+  }
+
+  privileges(list: readonly Privilege[]): string {
+    return list
+      .map((p) => {
+        if ('name' in p) return this.definer({ user: p.name, ...(p.host === undefined ? {} : { host: p.host }) })
+        return p.columns === undefined ? p.privilege : `${p.privilege} (${p.columns.map(quoteName).join(', ')})`
+      })
+      .join(', ')
+  }
+
+  privilegeLevel(objectType: string | undefined, on: PrivilegeLevel): string {
+    const type = objectType === undefined ? '' : `${objectType} `
+    switch (on.level) {
+      case 'global':
+        return `${type}*.*`
+      case 'default':
+        return `${type}*`
+      case 'schema':
+        return `${type}${quoteName(on.schema)}.*`
+      case 'object':
+        return `${type}${this.table(on.name)}`
+    }
+  }
+
+  roleSpec(r: RoleSpec): string {
+    if ('roles' in r) return r.roles.map((a) => this.definer(a)).join(', ')
+    if (r.which === 'ALL' && r.except !== undefined) return `ALL EXCEPT ${r.except.map((a) => this.definer(a)).join(', ')}`
+    return r.which
+  }
+
+  grant(s: GrantNode): string {
+    const to = s.to.map((u) => this.definer(u)).join(', ')
+    if ('proxy' in s) return `GRANT PROXY ON ${this.definer(s.proxy)} TO ${to}${s.withGrantOption === true ? ' WITH GRANT OPTION' : ''}`
+    if ('roles' in s) return `GRANT ${s.roles.map((r) => this.definer(r)).join(', ')} TO ${to}${s.withAdminOption === true ? ' WITH ADMIN OPTION' : ''}`
+    const out = [`GRANT ${this.privileges(s.privileges)} ON ${this.privilegeLevel(s.objectType, s.on)} TO ${to}`]
+    if (s.withGrantOption === true) out.push('WITH GRANT OPTION')
+    if (s.as !== undefined) out.push(`AS ${this.definer(s.as)}`)
+    if (s.withRole !== undefined) out.push(`WITH ROLE ${this.roleSpec(s.withRole)}`)
+    return out.join(' ')
+  }
+
+  revoke(s: RevokeNode): string {
+    const out = ['REVOKE']
+    if (s.ifExists === true) out.push('IF EXISTS')
+    if ('proxy' in s) out.push(`PROXY ON ${this.definer(s.proxy)}`)
+    else if ('all' in s) out.push('ALL PRIVILEGES, GRANT OPTION')
+    else if ('roles' in s) out.push(s.roles.map((r) => this.definer(r)).join(', '))
+    else out.push(`${this.privileges(s.privileges)} ON ${this.privilegeLevel(s.objectType, s.on)}`)
+    out.push('FROM', s.from.map((u) => this.definer(u)).join(', '))
+    if (s.ignoreUnknownUser === true) out.push('IGNORE UNKNOWN USER')
+    return out.join(' ')
+  }
+
+  identification(i: Identification): string {
+    const out = ['IDENTIFIED']
+    if (i.plugin !== undefined) out.push(`WITH ${this.string(i.plugin)}`)
+    if (i.random === true) out.push('BY RANDOM PASSWORD')
+    if (i.password !== undefined) out.push(`BY ${this.string(i.password)}`)
+    if (i.hash !== undefined) out.push(`AS ${this.string(i.hash)}`)
+    return out.join(' ')
+  }
+
+  userSpec(u: UserSpec): string {
+    const out = [this.definer(u.account)]
+    if (u.discardOldPassword === true) out.push('DISCARD OLD PASSWORD')
+    if (u.auth !== undefined) out.push(u.auth.map((i) => this.identification(i)).join(' AND '))
+    if (u.replace !== undefined) out.push(`REPLACE ${this.string(u.replace)}`)
+    if (u.retainCurrentPassword === true) out.push('RETAIN CURRENT PASSWORD')
+    return out.join(' ')
+  }
+
+  accountOptions(o: AccountOptions): string[] {
+    const out: string[] = []
+    if (o.require !== undefined) {
+      out.push(`REQUIRE ${typeof o.require === 'string' ? o.require : o.require.map((r) => `${r.what} ${this.string(r.value)}`).join(' AND ')}`)
+    }
+    if (o.resources !== undefined) out.push(`WITH ${o.resources.map((r) => `${r.name} ${r.value}`).join(' ')}`)
+    if (o.passwordOptions !== undefined) out.push(...o.passwordOptions)
+    if (o.comment !== undefined) out.push(`COMMENT ${this.string(o.comment)}`)
+    if (o.attribute !== undefined) out.push(`ATTRIBUTE ${this.string(o.attribute)}`)
+    return out
+  }
+
+  createUser(s: CreateUserNode): string {
+    const out = ['CREATE USER']
+    if (s.ifNotExists === true) out.push('IF NOT EXISTS')
+    out.push(s.users.map((u) => this.userSpec(u)).join(', '))
+    if (s.defaultRoles !== undefined) out.push(`DEFAULT ROLE ${s.defaultRoles.map((r) => this.definer(r)).join(', ')}`)
+    out.push(...this.accountOptions(s))
+    return out.join(' ')
+  }
+
+  alterUser(s: AlterUserNode): string {
+    const out = ['ALTER USER']
+    if (s.ifExists === true) out.push('IF EXISTS')
+    if ('self' in s) out.push(this.userSpec(s.self).replace(/^CURRENT_USER/, 'USER()'))
+    else if ('defaultRole' in s) out.push(`${this.definer(s.user)} DEFAULT ROLE ${this.roleSpec(s.defaultRole)}`)
+    else out.push(s.users.map((u) => this.userSpec(u)).join(', '), ...this.accountOptions(s))
+    return out.join(' ')
+  }
+
+  setPassword(s: SetPasswordNode): string {
+    const out = ['SET PASSWORD']
+    if (s.for !== undefined) out.push(`FOR ${this.definer(s.for)}`)
+    out.push(s.password === undefined ? 'TO RANDOM' : `= ${this.string(s.password)}`)
+    if (s.replace !== undefined) out.push(`REPLACE ${this.string(s.replace)}`)
+    if (s.retainCurrentPassword === true) out.push('RETAIN CURRENT PASSWORD')
+    return out.join(' ')
+  }
+
+  reset(s: ResetNode): string {
+    if ('persist' in s) return `RESET PERSIST${s.ifExists === true ? ' IF EXISTS' : ''}${s.name === undefined ? '' : ` ${s.name.split('.').map(quoteName).join('.')}`}`
+    return `RESET ${s.options
+      .map((o) => {
+        if (o.option === 'REPLICA') return `REPLICA${o.all === true ? ' ALL' : ''}${o.channel === undefined ? '' : ` FOR CHANNEL ${this.string(o.channel)}`}`
+        return `BINARY LOGS AND GTIDS${o.to === undefined ? '' : ` TO ${o.to}`}`
+      })
+      .join(', ')}`
   }
 
   // --- M3.6: session statements ---------------------------------------------

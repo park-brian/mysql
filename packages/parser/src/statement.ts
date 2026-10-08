@@ -1,7 +1,7 @@
 // M3.5 — one statement in, one AST out.
 //
 // The dispatcher is deliberately thin and deliberately **honest about its
-// gaps**. What is not built yet — `GRANT`, `FLUSH`, `ALTER VIEW` and the rest —
+// gaps**. What is not built yet — `ALTER VIEW`, `CACHE INDEX` and the rest —
 // reaches `unsupportedStatement` rather than a half-parse — which matters more
 // than it sounds, because M3.11's census counts what this function accepts. A
 // dispatcher that returned some vague node for anything it did not understand
@@ -36,6 +36,23 @@ import {
   parseUse,
 } from './utility.ts'
 import { STATEMENT, type Statement } from './statement-ast.ts'
+import {
+  atTableMaintenance,
+  parseAlterUser,
+  parseCreateRole,
+  parseCreateUser,
+  parseDropUser,
+  parseFlush,
+  parseGrant,
+  parseLoad,
+  parseLock,
+  parseRename,
+  parseReset,
+  parseRevoke,
+  parseTableMaintenance,
+  parseTruncate,
+  parseUnlock,
+} from './admin.ts'
 
 export interface ParseStatementOptions extends LexOptions {
   readonly sqlMode?: SqlMode
@@ -112,9 +129,12 @@ function dispatch(c: Cursor, sqlMode: SqlMode): Statement {
     if (kind === 'PROCEDURE' || kind === 'FUNCTION') return parseCreateRoutine(c, sqlMode, kind, statement)
     if (kind === 'TRIGGER') return parseCreateTrigger(c, sqlMode, statement)
     if (kind === 'EVENT') return parseCreateEvent(c, sqlMode, statement)
+    if (kind === 'USER') return parseCreateUser(c)
+    if (kind === 'ROLE') return parseCreateRole(c)
     throw unsupportedStatement(`CREATE ${kind}`)
   }
   if (c.atWords('ALTER', 'TABLE')) return parseAlterTable(c, options)
+  if (c.atWords('ALTER', 'USER')) return parseAlterUser(c)
 
   // A query, `INSERT`, `REPLACE`, `UPDATE`, `DELETE`, and `WITH` opening any
   // of the last three or a query — the statements `EXPLAIN` can explain.
@@ -135,6 +155,19 @@ function dispatch(c: Cursor, sqlMode: SqlMode): Statement {
   if (c.atWord('DEALLOCATE') || c.atWords('DROP', 'PREPARE')) return parseDeallocate(c)
   if (c.atWord('DO')) return parseDo(c, sqlMode)
   if (c.atWord('CALL')) return parseCall(c, sqlMode)
+
+  // M3.17.
+  if (atTableMaintenance(c)) return parseTableMaintenance(c)
+  if (c.atWord('FLUSH')) return parseFlush(c)
+  if (c.atWord('TRUNCATE')) return parseTruncate(c)
+  if (c.atWord('LOCK')) return parseLock(c)
+  if (c.atWord('UNLOCK')) return parseUnlock(c)
+  if (c.atWord('RENAME')) return parseRename(c)
+  if (c.atWords('LOAD', 'DATA') || c.atWords('LOAD', 'XML')) return parseLoad(c, sqlMode)
+  if (c.atWord('GRANT')) return parseGrant(c)
+  if (c.atWord('REVOKE')) return parseRevoke(c)
+  if (c.atWord('RESET')) return parseReset(c)
+  if (c.atWords('DROP', 'USER') || c.atWords('DROP', 'ROLE')) return parseDropUser(c)
 
   if (c.atWord('DROP')) {
     const save = c.at

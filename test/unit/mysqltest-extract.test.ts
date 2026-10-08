@@ -384,3 +384,24 @@ test('M3.6: a SET NAMES inside a procedure body is stored, not run, and does not
   const out = texts(file('delimiter |;', 'CREATE PROCEDURE p()', 'BEGIN', '  SET NAMES latin1;', '  SELECT 1;', 'END|', 'delimiter ;|'))
   assert.deepEqual(out, ['CREATE PROCEDURE p()\nBEGIN\n  SET NAMES latin1;\n  SELECT 1;\nEND'])
 })
+
+test('M3.17: `query_vertical` sends SQL — the statement is what follows the word', () => {
+  assert.deepEqual(texts(file('query_vertical SELECT 1 AS a,', '  2 AS b;', 'query SELECT 3;')), ['SELECT 1 AS a,\n  2 AS b', 'SELECT 3'])
+})
+
+test('M3.17: a let value that is a piece of a statement is not a statement', () => {
+  // A select list spliced into an `eval` later, inline and on the next line,
+  // and a name with no `$`, which mysqltest also accepts.
+  assert.deepEqual(texts(file('let $cols=a.x, b.y', 'FROM a JOIN b;', 'SELECT 1;')), ['SELECT 1'])
+  assert.deepEqual(texts(file('let $cols=', 'x_col', 'FROM a;', 'SELECT 2;')), ['SELECT 2'])
+  assert.deepEqual(texts(file('let $n=', '12345;', 'SELECT 3;')), ['SELECT 3'])
+  // A real statement as a let value is still measured, `$` or not.
+  assert.deepEqual(texts(file('let q1=', 'SELECT a', 'FROM t;', 'eval $q1;')), ['SELECT a\nFROM t'])
+})
+
+test('M3.17: a bare eval or let runs to its delimiter', () => {
+  // The second line used to be measured as a statement beginning `WHERE`, and
+  // the line after a let's closing bracket as one beginning `ORDER`.
+  assert.deepEqual(texts(file('eval SELECT $x FROM t', 'WHERE a = 1;', 'SELECT 1;')), ['SELECT 1'])
+  assert.deepEqual(texts(file('let q= SELECT a FROM t WHERE a IN (', '  SELECT 1)', '  ORDER BY a;', 'SELECT 2;')), ['SELECT 2'])
+})

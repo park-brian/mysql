@@ -271,8 +271,9 @@ test('M3.5: what is not implemented says so, and is not a syntax error', () => {
   // make M3's exit criterion measure what is unbuilt rather than what is.
   // (This list held `SELECT 1` and `CREATE VIEW` until M3.3 built them, and
   // `SHOW TABLES` and `SET a = 1` until M3.6 did, and `ALTER TABLE` and
-  // `CREATE INDEX` until M3.5 finished.)
-  for (const sql of ['FLUSH TABLES', 'LOCK TABLES t READ', 'GRANT ALL ON *.* TO u', 'ANALYZE TABLE t']) {
+  // `CREATE INDEX` until M3.5 finished, and `FLUSH`, `LOCK TABLES`, `GRANT`
+  // and `ANALYZE` until M3.17.)
+  for (const sql of ['ALTER VIEW v AS SELECT 1', 'CACHE INDEX t IN c', 'LOAD INDEX INTO CACHE t', 'HANDLER t OPEN']) {
     const e = refusal(sql)
     assert.equal(e.code, 'ER_NOT_SUPPORTED_YET', sql)
     assert.equal(e.errno, 1235, sql)

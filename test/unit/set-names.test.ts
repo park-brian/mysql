@@ -172,6 +172,12 @@ test('review: the SETs a driver sends on connect still succeed against the stub'
   const { s, run, read } = live()
   await run('SET SESSION TRANSACTION ISOLATION LEVEL READ COMMITTED')
   await run("SET PASSWORD = 'x'")
+  // Parsed since M3.17, and still answered OK rather than refused.
+  await run('SET ROLE DEFAULT')
+  await run('SET DEFAULT ROLE ALL TO u')
+  await run('FLUSH PRIVILEGES')
+  await run('FLUSH TABLES')
+  await run('SET RESOURCE GROUP g')
   await run("SET SESSION sql_mode = 'ANSI_QUOTES'")
   // An expression needs the executor: accepted, and nothing changes.
   await run("SET SESSION sql_mode = (SELECT REPLACE(@@sql_mode, 'ONLY_FULL_GROUP_BY', ''))")

@@ -196,7 +196,7 @@ function tail(c: Cursor, mode: SqlMode): { where?: Expression; orderBy?: OrderIt
 }
 
 /** `a = 1, t.b = DEFAULT`. */
-function assignments(c: Cursor, mode: SqlMode): Assignment[] {
+export function assignments(c: Cursor, mode: SqlMode): Assignment[] {
   const out: Assignment[] = []
   do {
     const col = column(c)
@@ -220,7 +220,7 @@ function row(c: Cursor, mode: SqlMode): Expression[] {
 }
 
 /** `a`, `t.a` or `db.t.a`, as a column node. */
-function column(c: Cursor): ColumnNode {
+export function column(c: Cursor): ColumnNode {
   const at = c.peek().start
   const parts = [c.expectIdentifier()]
   while (c.takeOp('.')) parts.push(c.expectNamePart())

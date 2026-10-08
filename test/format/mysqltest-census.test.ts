@@ -37,6 +37,7 @@ interface Census {
   readonly refusedCharsetSwitches: Readonly<Record<string, number>>
   readonly parsedByKeyword: Readonly<Record<string, number>>
   readonly unsupported: Readonly<Record<string, number>>
+  readonly newerThanTarget?: Readonly<Record<string, number>>
   readonly parseFailuresByKeyword: Readonly<Record<string, number>>
   readonly wronglyAcceptedByKeyword: Readonly<Record<string, number>>
   readonly notMeasured: readonly { readonly file: string; readonly reason: string }[]
@@ -197,6 +198,19 @@ test('M3.5: every statement MySQL accepts, in a form this parser implements, par
       `CREATE ${parsedCreate}/${create}, with ${createSelect} more waiting on M3.3's query parser`,
   )
   assert.ok(parsedCreate > 2000, `only ${parsedCreate} CREATE statements parsed`)
+})
+
+test('M3.17: nothing in the corpus is a statement this parser has not built', () => {
+  // The not-implemented list held ANALYZE 292, FLUSH 55, CHECK 24, GRANT 10
+  // and a dozen more before M3.17. It also held eight entries that were never
+  // statements: `QUERY_VERTICAL` is a mysqltest command that sends SQL, and
+  // `FROM`, `WHERE`, `ORDER`, `T3`, `T6A`, `T1_INV_DATE` and a number were
+  // pieces of `let` values and bare `eval`s the extractor cut in half.
+  const c = census()
+  assert.deepEqual(c.unsupported, {}, 'a statement form the corpus uses has no grammar')
+  // Newer than 8.4, and refused as 8.4.11 refuses it (D-70): a named list, not
+  // a place for failures to hide.
+  for (const name of Object.keys(c.newerThanTarget ?? {})) assert.ok(['GROUP BY GROUPING SETS'].includes(name), name)
 })
 
 test('M3.5: being more permissive than the server is a divergence too', () => {

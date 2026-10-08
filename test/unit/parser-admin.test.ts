@@ -1,0 +1,393 @@
+// M3.17 — administration statements: table maintenance, FLUSH, TRUNCATE,
+// locks, RENAME TABLE, LOAD DATA, GRANT/REVOKE, accounts and roles, RESET.
+//
+// Every acceptance and every refusal below was put to a real 8.4.11 before it
+// was written down; `parsed` also checks that each tree survives the deparser.
+// The refusals are the half that matters: each is SQL a reader of the manual
+// might expect to work, and 8.4.11 answers ER_PARSE_ERROR.
+import { test } from 'node:test'
+import assert from 'node:assert/strict'
+import {
+  STATEMENT,
+  parseStatement,
+  type FlushNode,
+  type GrantNode,
+  type LoadDataNode,
+  type LockTablesNode,
+  type RevokeNode,
+  type TableMaintenanceNode,
+} from '@myjs/parser'
+import { parsed, refused, same, withoutPositions } from '../../tools/lib/round-trip.mjs'
+
+const accepts = (...sqls: string[]): void => {
+  for (const sql of sqls) parsed(sql)
+}
+
+test('M3.17: ANALYZE, CHECK, CHECKSUM, OPTIMIZE and REPAIR TABLE', () => {
+  accepts(
+    'ANALYZE TABLE t',
+    'ANALYZE LOCAL TABLE t, d.t2',
+    'ANALYZE NO_WRITE_TO_BINLOG TABLE t',
+    'ANALYZE TABLE t UPDATE HISTOGRAM ON b',
+    'ANALYZE TABLE t UPDATE HISTOGRAM ON b, a WITH 10 BUCKETS AUTO UPDATE',
+    'ANALYZE TABLE t UPDATE HISTOGRAM ON b WITH 10 BUCKETS MANUAL UPDATE',
+    'ANALYZE TABLE t UPDATE HISTOGRAM ON b MANUAL UPDATE',
+    "ANALYZE TABLE t UPDATE HISTOGRAM ON b, a USING DATA '{}'",
+    'ANALYZE TABLE t, t2 DROP HISTOGRAM ON b',
+    'CHECK TABLE t, t2 FOR UPGRADE',
+    'CHECK TABLE t QUICK FAST MEDIUM EXTENDED CHANGED',
+    'CHECK TABLE t QUICK QUICK',
+    'CHECK TABLE t QUICK FOR UPGRADE',
+    'CHECKSUM TABLE t QUICK',
+    'CHECKSUM TABLES t EXTENDED',
+    'OPTIMIZE LOCAL TABLES t',
+    'REPAIR NO_WRITE_TO_BINLOG TABLES t USE_FRM',
+    'REPAIR TABLE t QUICK EXTENDED USE_FRM',
+  )
+  same('ANALYZE TABLES t', 'ANALYZE TABLE t')
+  same('ANALYZE LOCAL TABLE t', 'ANALYZE NO_WRITE_TO_BINLOG TABLE t')
+  const node = parsed('CHECK TABLE t QUICK FOR UPGRADE') as TableMaintenanceNode
+  assert.deepEqual(node.options, ['QUICK', 'FOR UPGRADE'])
+  refused(
+    'ANALYZE TABLE',
+    'ANALYZE t',
+    'ANALYZE TABLE t AS x',
+    'CHECK TABLE t QUICK, FAST',
+    'CHECK LOCAL TABLE t',
+    'CHECK TABLE t USE_FRM',
+    'CHECKSUM TABLE t QUICK EXTENDED',
+    'CHECKSUM LOCAL TABLE t',
+    'REPAIR TABLE t FOR UPGRADE',
+    "ANALYZE TABLE t UPDATE HISTOGRAM ON b WITH 10 BUCKETS USING DATA '{}'",
+    'ANALYZE TABLE t UPDATE HISTOGRAM ON b MANUAL UPDATE WITH 10 BUCKETS',
+    'ANALYZE TABLE t UPDATE HISTOGRAM ON b WITH 10 BUCKET',
+    'ANALYZE TABLE t UPDATE HISTOGRAM ON t.b',
+    'ANALYZE TABLE t UPDATE HISTOGRAM ON b WITH 0x10 BUCKETS',
+    "ANALYZE TABLE t UPDATE HISTOGRAM ON b USING DATA _utf8mb4'x'",
+    'ANALYZE TABLE t DROP HISTOGRAM ON b WITH 10 BUCKETS',
+  )
+})
+
+test('M3.17: FLUSH — an option list, or TABLES with a table list and nothing else', () => {
+  accepts(
+    'FLUSH PRIVILEGES, STATUS',
+    'FLUSH NO_WRITE_TO_BINLOG PRIVILEGES',
+    'FLUSH LOGS, BINARY LOGS, ENGINE LOGS, ERROR LOGS, GENERAL LOGS, RELAY LOGS, SLOW LOGS',
+    "FLUSH RELAY LOGS FOR CHANNEL 'c'",
+    'FLUSH OPTIMIZER_COSTS, USER_RESOURCES, STATUS, STATUS',
+    'FLUSH TABLES',
+    'FLUSH LOCAL TABLES t WITH READ LOCK',
+    'FLUSH TABLES WITH READ LOCK',
+    'FLUSH TABLE t FOR EXPORT',
+    'FLUSH TABLES d.t, t2',
+  )
+  same('FLUSH TABLE', 'FLUSH TABLES')
+  // `PRIVILEGES` after a table list is a table.
+  const tables = parsed('FLUSH TABLES t, PRIVILEGES') as FlushNode
+  assert.ok('tables' in tables)
+  assert.deepEqual(tables.tables, [{ name: 't' }, { name: 'PRIVILEGES' }])
+  refused(
+    'FLUSH',
+    'FLUSH LOCAL',
+    'FLUSH PRIVILEGES STATUS',
+    'FLUSH TABLES, PRIVILEGES',
+    'FLUSH PRIVILEGES, TABLES',
+    'FLUSH TABLES FOR EXPORT',
+    'FLUSH TABLES WITH READ LOCK, PRIVILEGES',
+    'FLUSH LOGS FOR CHANNEL c',
+    'FLUSH RELAY LOGS FOR CHANNEL `c`',
+    // Gone from 8.4.
+    'FLUSH HOSTS',
+    'FLUSH QUERY CACHE',
+    'FLUSH DES_KEY_FILE',
+    'FLUSH RESOURCES',
+  )
+})
+
+test('M3.17: TRUNCATE, LOCK and UNLOCK, RENAME TABLE, RESET', () => {
+  same('TRUNCATE t', 'TRUNCATE TABLE t')
+  accepts('TRUNCATE TABLE d.t', 'LOCK INSTANCE FOR BACKUP', 'UNLOCK INSTANCE', 'UNLOCK TABLES')
+  refused('TRUNCATE TABLES t', 'TRUNCATE TABLE t, t2', 'UNLOCK TABLES t')
+
+  const lock = parsed('LOCK TABLES t READ LOCAL, t AS x READ, d.u y WRITE') as LockTablesNode
+  assert.deepEqual(withoutPositions(lock.tables), [
+    { table: { name: 't' }, lock: 'READ LOCAL' },
+    { table: { name: 't' }, alias: 'x', lock: 'READ' },
+    { table: { schema: 'd', name: 'u' }, alias: 'y', lock: 'WRITE' },
+  ])
+  same('LOCK TABLE t x READ', 'LOCK TABLES t AS x READ')
+  same('UNLOCK TABLE', 'UNLOCK TABLES')
+  refused('LOCK TABLES t', 'LOCK TABLES t LOW_PRIORITY WRITE', 'LOCK TABLES t WRITE LOCAL')
+
+  accepts('RENAME TABLE t3 TO t2, t2 TO t3, d.t3 TO e.t2')
+  same('RENAME TABLES a TO b', 'RENAME TABLE a TO b')
+  refused('RENAME TABLE a TO b, c AS d')
+
+  accepts(
+    'RESET BINARY LOGS AND GTIDS',
+    'RESET BINARY LOGS AND GTIDS TO 5',
+    'RESET REPLICA',
+    "RESET REPLICA ALL FOR CHANNEL 'c'",
+    'RESET REPLICA ALL, REPLICA, BINARY LOGS AND GTIDS',
+    'RESET PERSIST',
+    'RESET PERSIST x',
+    'RESET PERSIST IF EXISTS innodb.x',
+  )
+  // Gone from 8.4.
+  refused('RESET MASTER', 'RESET SLAVE', 'RESET QUERY CACHE', 'RESET BINARY LOGS', 'RESET PERSIST, REPLICA', 'RESET PERSIST IF EXISTS', "RESET PERSIST 'x'")
+})
+
+test('M3.17: LOAD DATA and LOAD XML, clause by clause and in their one order', () => {
+  accepts(
+    "LOAD DATA INFILE 'f' INTO TABLE t",
+    "LOAD DATA LOW_PRIORITY LOCAL INFILE 'f' REPLACE INTO TABLE d.t PARTITION (p0)",
+    "LOAD DATA CONCURRENT INFILE 'f' IGNORE INTO TABLE t CHARACTER SET binary",
+    "LOAD DATA INFILE 'f' INTO TABLE t CHARACTER SET 'utf8mb4'",
+    "LOAD DATA INFILE 'f' INTO TABLE t FIELDS TERMINATED BY ',' OPTIONALLY ENCLOSED BY '\"' ESCAPED BY '\\\\'",
+    "LOAD DATA INFILE 'f' INTO TABLE t FIELDS TERMINATED BY ',' TERMINATED BY ';'",
+    "LOAD DATA INFILE 'f' INTO TABLE t FIELDS TERMINATED BY 0x2c ENCLOSED BY X'22' ESCAPED BY 0b101100",
+    "LOAD DATA INFILE 'f' INTO TABLE t LINES STARTING BY 'x' TERMINATED BY '\\n'",
+    "LOAD DATA INFILE 'f' INTO TABLE t ROWS IDENTIFIED BY '<r>' IGNORE 1 LINES",
+    "LOAD DATA INFILE 'f' INTO TABLE t (a, @b, t.c) SET b = @b + 1, c = DEFAULT",
+    "LOAD DATA INFILE 'f' INTO TABLE t ()",
+    "LOAD DATA INFILE 'f' INTO TABLE t (a) SET b = 1 PARALLEL = 2 MEMORY = 100M ALGORITHM = BULK",
+    "LOAD DATA INFILE 'f' INTO TABLE t MEMORY = 100",
+    "LOAD DATA FROM S3 'f' COUNT 3 IN PRIMARY KEY ORDER INTO TABLE t",
+    "LOAD XML LOCAL INFILE 'f' INTO TABLE t ROWS IDENTIFIED BY '<row>'",
+  )
+  same("LOAD DATA FROM INFILE 'f' INTO TABLE t", "LOAD DATA INFILE 'f' INTO TABLE t")
+  same("LOAD DATA INFILE 'f' INTO TABLE t COLUMNS TERMINATED BY ','", "LOAD DATA INFILE 'f' INTO TABLE t FIELDS TERMINATED BY ','")
+  same("LOAD DATA INFILE 'f' INTO TABLE t CHARSET utf8mb4", "LOAD DATA INFILE 'f' INTO TABLE t CHARACTER SET utf8mb4")
+  same("LOAD DATA INFILE 'f' INTO TABLE t IGNORE 2 ROWS", "LOAD DATA INFILE 'f' INTO TABLE t IGNORE 2 LINES")
+  const node = parsed("LOAD DATA INFILE 'f' INTO TABLE t (a, @b)") as LoadDataNode
+  assert.deepEqual(withoutPositions(node.columns), [{ kind: 'column', parts: ['a'] }, { variable: 'b' }])
+  refused(
+    "LOAD DATA INFILE 'f' INTO TABLE t LINES TERMINATED BY '\\n' FIELDS TERMINATED BY ','",
+    "LOAD DATA INFILE 'f' INTO TABLE t FIELDS TERMINATED BY ',' ','",
+    "LOAD DATA INFILE 'f' INTO TABLE t FIELDS TERMINATED BY _latin1','",
+    "LOAD DATA INFILE 'f' INTO TABLE t FIELDS TERMINATED BY ',' FIELDS ENCLOSED BY '\"'",
+    "LOAD DATA INFILE 'f' INTO TABLE t LINES TERMINATED BY '\\n' LINES STARTING BY 'x'",
+    "LOAD DATA INFILE 'f' INTO TABLE t IGNORE 1 LINES CHARACTER SET utf8mb4",
+    "LOAD DATA INFILE 'f' INTO TABLE t IGNORE 1 LINES ROWS IDENTIFIED BY '<r>'",
+    "LOAD DATA INFILE 'f' INTO TABLE t FIELDS",
+    "LOAD DATA INFILE 'f' INTO TABLE t IGNORE -1 LINES",
+    "LOAD DATA INFILE 'f' INTO TABLE t IGNORE 0x1 LINES",
+    "LOAD DATA INFILE 'f' REPLACE IGNORE INTO TABLE t",
+    "LOAD DATA LOCAL LOW_PRIORITY INFILE 'f' INTO TABLE t",
+    "LOAD DATA INFILE 'f' INTO TABLE t AS x",
+    "LOAD DATA INFILE 'f' INTO TABLE t (@@a)",
+    "LOAD DATA INFILE 'f' INTO TABLE t PARALLEL 4",
+    "LOAD DATA INFILE 'f' INTO TABLE t MEMORY = 100 PARALLEL = 4",
+    "LOAD DATA INFILE 'f' INTO TABLE t ALGORITHM = DEFAULT",
+    "LOAD DATA INFILE 'f' COUNT 3 REPLACE IN PRIMARY KEY ORDER INTO TABLE t",
+  )
+})
+
+test('M3.17: GRANT — privileges on a level, roles to accounts, or a proxy', () => {
+  accepts(
+    'GRANT SELECT ON t TO u1@localhost',
+    'GRANT SELECT ON d.t TO u1@localhost',
+    "GRANT SELECT, INSERT, DELETE ON d.* TO u1@localhost, 'u2'@'%'",
+    'GRANT SELECT ON *.* TO u1@localhost WITH GRANT OPTION',
+    'GRANT SELECT ON * TO CURRENT_USER',
+    'GRANT SELECT ON TABLE t TO CURRENT_USER',
+    'GRANT EXECUTE ON PROCEDURE d.p TO u1@localhost',
+    'GRANT EXECUTE ON FUNCTION d.f TO u1@localhost',
+    'GRANT SELECT (a), UPDATE (a, b), REFERENCES (a), INSERT (a, a) ON t TO u1@localhost',
+    'GRANT CREATE ROUTINE, ALTER ROUTINE, CREATE TEMPORARY TABLES, LOCK TABLES, CREATE VIEW, SHOW VIEW, CREATE USER, REPLICATION SLAVE, REPLICATION CLIENT, CREATE TABLESPACE, CREATE ROLE, DROP ROLE ON *.* TO u',
+    'GRANT EVENT, TRIGGER, REFERENCES, INDEX, ALTER, DROP, CREATE, RELOAD, SHUTDOWN, PROCESS, FILE, SHOW DATABASES, SUPER, USAGE, GRANT OPTION ON *.* TO u',
+    'GRANT BACKUP_ADMIN, SELECT ON *.* TO u1@localhost',
+    "GRANT 'BACKUP_ADMIN', `XA_RECOVER_ADMIN` ON *.* TO u",
+    'GRANT SELECT, r1 ON t TO u',
+    'GRANT r1 TO u1@localhost',
+    "GRANT r1, 'r2'@'%' TO u1@localhost, r3 WITH ADMIN OPTION",
+    'GRANT r1 TO none',
+    'GRANT PROXY ON u2 TO u1@localhost WITH GRANT OPTION',
+    "GRANT PROXY ON ''@'' TO u1@localhost",
+    'GRANT PROXY ON CURRENT_USER TO u',
+    'GRANT SELECT ON t TO u AS root@localhost',
+    'GRANT SELECT ON t TO u WITH GRANT OPTION AS CURRENT_USER WITH ROLE NONE',
+    'GRANT SELECT ON t TO u AS root@localhost WITH ROLE DEFAULT',
+    'GRANT SELECT ON t TO u AS root@localhost WITH ROLE ALL',
+    'GRANT SELECT ON t TO u AS root@localhost WITH ROLE ALL EXCEPT r1, r2',
+    'GRANT SELECT ON t TO u AS root@localhost WITH ROLE r1, r2',
+  )
+  same('GRANT ALL PRIVILEGES ON t TO u', 'GRANT ALL ON t TO u')
+  same('GRANT SELECT ON d . * TO u', 'GRANT SELECT ON d.* TO u')
+  same('GRANT SELECT ON * . * TO u', 'GRANT SELECT ON *.* TO u')
+  same("GRANT SELECT ON t TO u1@'localhost'", "GRANT SELECT ON t TO 'u1'@localhost")
+  same('GRANT SELECT ON t TO CURRENT_USER()', 'GRANT SELECT ON t TO CURRENT_USER')
+  // A quoted `*` is a name, not the wildcard.
+  const star = parsed('GRANT SELECT ON `*`.`*` TO u') as GrantNode
+  assert.ok('on' in star)
+  assert.deepEqual(star.on, { level: 'object', name: { schema: '*', name: '*' } })
+  const roles = parsed("GRANT r1, 'r2'@'%' TO u") as GrantNode
+  assert.ok('roles' in roles)
+  assert.deepEqual(roles.roles, [{ user: 'r1' }, { user: 'r2', host: '%' }])
+  refused(
+    "GRANT SELECT ON t TO u IDENTIFIED BY 'x'",
+    'GRANT SELECT ON t TO u REQUIRE SSL',
+    'GRANT SELECT ON t TO u WITH MAX_QUERIES_PER_HOUR 1',
+    'GRANT SELECT ON t TO u WITH GRANT OPTION WITH GRANT OPTION',
+    'GRANT r1 TO u WITH GRANT OPTION',
+    'GRANT r1 TO u AS root@localhost',
+    'GRANT PROXY ON u2 TO u AS root@localhost',
+    'GRANT RELOAD TO u',
+    'GRANT DELETE (a) ON t TO u',
+    'GRANT ALL PRIVILEGES (a) ON t TO u',
+    'GRANT ALL, SELECT ON t TO u',
+    'GRANT SELECT, ALL ON t TO u',
+    'GRANT SELECT () ON t TO u',
+    'GRANT SELECT ON *.t TO u',
+    'GRANT SELECT ON d.t.a TO u',
+    'GRANT SELECT (a) ON PROCEDURE p TO u',
+    'GRANT SELECT (a) ON FUNCTION f TO u',
+    'GRANT none TO u',
+    'GRANT CURRENT_USER TO u',
+  )
+})
+
+test('M3.17: REVOKE', () => {
+  accepts(
+    'REVOKE SELECT ON t FROM u1@localhost',
+    'REVOKE IF EXISTS SELECT (a) ON TABLE t FROM u1@localhost IGNORE UNKNOWN USER',
+    'REVOKE SELECT ON PROCEDURE p FROM u1@localhost',
+    'REVOKE ALL ON t FROM u',
+    'REVOKE IF EXISTS ALL, GRANT OPTION FROM u IGNORE UNKNOWN USER',
+    'REVOKE IF EXISTS PROXY ON u2 FROM u1@localhost',
+    'REVOKE IF EXISTS r1 FROM u1@localhost IGNORE UNKNOWN USER',
+    'REVOKE SELECT ON t FROM CURRENT_USER',
+  )
+  same('REVOKE ALL PRIVILEGES, GRANT OPTION FROM u', 'REVOKE ALL, GRANT OPTION FROM u')
+  same('REVOKE ALL PRIVILEGES ON t FROM u', 'REVOKE ALL ON t FROM u')
+  assert.ok('all' in (parsed('REVOKE ALL, GRANT OPTION FROM u') as RevokeNode))
+  refused(
+    'REVOKE GRANT OPTION, ALL FROM u',
+    'REVOKE ALL PRIVILEGES FROM u',
+    'REVOKE r1 FROM u WITH ADMIN OPTION',
+    'REVOKE SELECT ON t FROM u WITH GRANT OPTION',
+    'REVOKE SELECT (a) ON PROCEDURE p FROM u',
+  )
+})
+
+test('M3.17: CREATE USER — users, then DEFAULT ROLE, REQUIRE, WITH, password options, COMMENT', () => {
+  accepts(
+    'CREATE USER x1',
+    'CREATE USER IF NOT EXISTS x1@localhost, x2',
+    "CREATE USER x3 IDENTIFIED BY 'p'",
+    'CREATE USER x4 IDENTIFIED BY RANDOM PASSWORD',
+    'CREATE USER x5 IDENTIFIED WITH caching_sha2_password',
+    "CREATE USER x6 IDENTIFIED WITH 'caching_sha2_password' BY 'p'",
+    'CREATE USER x7 IDENTIFIED WITH caching_sha2_password BY RANDOM PASSWORD',
+    "CREATE USER x8 IDENTIFIED WITH mysql_native_password AS '*00'",
+    "CREATE USER x9 IDENTIFIED BY 'p', x10 IDENTIFIED BY 'q'",
+    "CREATE USER x39 IDENTIFIED BY 'p' AND IDENTIFIED WITH authentication_ldap_simple",
+    'CREATE USER x12 DEFAULT ROLE r1, r2 REQUIRE SSL',
+    'CREATE USER x7 DEFAULT ROLE `none`',
+    'CREATE USER x13 REQUIRE NONE',
+    'CREATE USER x15 REQUIRE X509',
+    "CREATE USER x16 REQUIRE ISSUER 'i' AND SUBJECT 's' CIPHER 'c'",
+    'CREATE USER x17 WITH MAX_QUERIES_PER_HOUR 1 MAX_UPDATES_PER_HOUR 2 MAX_CONNECTIONS_PER_HOUR 3 MAX_USER_CONNECTIONS 4',
+    'CREATE USER x18 PASSWORD EXPIRE PASSWORD EXPIRE DEFAULT PASSWORD EXPIRE NEVER PASSWORD EXPIRE INTERVAL 30 DAY',
+    'CREATE USER x22 PASSWORD HISTORY DEFAULT PASSWORD HISTORY 5 PASSWORD REUSE INTERVAL DEFAULT PASSWORD REUSE INTERVAL 5 DAY',
+    'CREATE USER x25 PASSWORD REQUIRE CURRENT PASSWORD REQUIRE CURRENT OPTIONAL PASSWORD REQUIRE CURRENT DEFAULT',
+    'CREATE USER x28 FAILED_LOGIN_ATTEMPTS 3 PASSWORD_LOCK_TIME 2 PASSWORD_LOCK_TIME UNBOUNDED',
+    "CREATE USER x36 REQUIRE SSL WITH MAX_QUERIES_PER_HOUR 1 PASSWORD EXPIRE ACCOUNT LOCK ACCOUNT UNLOCK COMMENT 'c'",
+    'CREATE USER x38 PASSWORD EXPIRE ACCOUNT LOCK PASSWORD HISTORY 2',
+    'CREATE USER x33 ATTRIBUTE \'{"a":1}\'',
+    "CREATE USER x48@'%' IDENTIFIED BY 'p'",
+    "CREATE USER ''@localhost",
+    'CREATE USER password, account',
+  )
+  same("CREATE USER x REQUIRE ISSUER 'i' SUBJECT 's'", "CREATE USER x REQUIRE ISSUER 'i' AND SUBJECT 's'")
+  refused(
+    "CREATE USER x COMMENT 'c' ACCOUNT LOCK",
+    "CREATE USER x COMMENT 'a' ATTRIBUTE '{}'",
+    'CREATE USER x WITH MAX_QUERIES_PER_HOUR 1 REQUIRE SSL',
+    'CREATE USER x REQUIRE SSL DEFAULT ROLE r1',
+    'CREATE USER x REQUIRE SSL AND X509',
+    "CREATE USER x REQUIRE ISSUER 'a' AND",
+    "CREATE USER x REQUIRE ISSUER 'a' AND WITH MAX_USER_CONNECTIONS 1",
+    'CREATE USER x DEFAULT ROLE NONE',
+    'CREATE USER x DEFAULT ROLE ALL',
+    "CREATE USER x IDENTIFIED BY 'p' REPLACE 'q'",
+    "CREATE USER x IDENTIFIED BY 'p' RETAIN CURRENT PASSWORD",
+    'CREATE USER x PASSWORD EXPIRE INTERVAL 30',
+    'CREATE USER x WITH MAX_USER_CONNECTIONS 1, MAX_QUERIES_PER_HOUR 2',
+  )
+})
+
+test('M3.17: ALTER USER, DROP USER, RENAME USER, and roles', () => {
+  accepts(
+    'ALTER USER x1',
+    "ALTER USER IF EXISTS x1 IDENTIFIED BY 'p'",
+    "ALTER USER x3 IDENTIFIED BY 'r' REPLACE 'q' RETAIN CURRENT PASSWORD",
+    'ALTER USER x3 IDENTIFIED WITH caching_sha2_password BY RANDOM PASSWORD RETAIN CURRENT PASSWORD',
+    "ALTER USER x1 IDENTIFIED WITH caching_sha2_password AS 'x'",
+    'ALTER USER x5 DISCARD OLD PASSWORD ACCOUNT LOCK',
+    "ALTER USER x1 IDENTIFIED BY 'p', x2 IDENTIFIED BY 'q' ACCOUNT LOCK",
+    'ALTER USER x1, x2 REQUIRE SSL WITH MAX_QUERIES_PER_HOUR 1 MAX_QUERIES_PER_HOUR 2 ACCOUNT LOCK',
+    "ALTER USER x1 COMMENT 'x'",
+    'ALTER USER x5 FAILED_LOGIN_ATTEMPTS 0x1',
+    'ALTER USER x1 DEFAULT ROLE NONE',
+    'ALTER USER x1 DEFAULT ROLE ALL',
+    'ALTER USER x1 DEFAULT ROLE r1, r2',
+    "ALTER USER USER() IDENTIFIED BY 'p' REPLACE 'q' RETAIN CURRENT PASSWORD",
+    'ALTER USER USER() IDENTIFIED BY RANDOM PASSWORD',
+    'ALTER USER USER() DISCARD OLD PASSWORD',
+    "ALTER USER CURRENT_USER() IDENTIFIED BY 'p'",
+    'DROP USER x1',
+    'DROP USER IF EXISTS x1, CURRENT_USER',
+    'RENAME USER x3 TO x3b, CURRENT_USER TO x4b',
+    "CREATE ROLE IF NOT EXISTS rr1, 'rr2'@'%'",
+    'DROP ROLE IF EXISTS rr1, rr2',
+  )
+  refused(
+    "ALTER USER x IDENTIFIED BY 'p' DISCARD OLD PASSWORD",
+    "ALTER USER x IDENTIFIED BY 'p' AND IDENTIFIED BY 'q'",
+    "ALTER USER x COMMENT 'a' COMMENT 'b'",
+    'ALTER USER x DEFAULT ROLE r1 ACCOUNT LOCK',
+    "CREATE ROLE r IDENTIFIED BY 'x'",
+    'CREATE ROLE none',
+    'DROP ROLE CURRENT_USER',
+  )
+})
+
+test('M3.17: SET PASSWORD, SET ROLE and SET DEFAULT ROLE', () => {
+  accepts(
+    "SET PASSWORD = 'p'",
+    "SET PASSWORD FOR x4b = 'p' REPLACE 'q' RETAIN CURRENT PASSWORD",
+    "SET PASSWORD FOR CURRENT_USER() = 'p'",
+    'SET PASSWORD TO RANDOM',
+    "SET PASSWORD FOR x4b TO RANDOM REPLACE 'q' RETAIN CURRENT PASSWORD",
+    'SET ROLE r1, r2',
+    "SET ROLE 'r1'@'%'",
+    'SET ROLE NONE',
+    'SET ROLE DEFAULT',
+    'SET ROLE ALL',
+    'SET ROLE ALL EXCEPT r1, r2',
+    'SET DEFAULT ROLE r1, r2 TO x4b',
+    'SET DEFAULT ROLE NONE TO x4b',
+    'SET DEFAULT ROLE ALL TO x4b, x5',
+  )
+  refused(
+    "SET PASSWORD = PASSWORD('p')",
+    "SET PASSWORD FOR x = 'p', a = 1",
+    'SET ROLE none, r1',
+    'SET ROLE DEFAULT, r1',
+    'SET DEFAULT ROLE ALL EXCEPT r1 TO x',
+    'SET DEFAULT ROLE r1 FOR x',
+  )
+  // `PASSWORD` not followed by `=`, `FOR` or `TO` is a variable's name.
+  assert.equal(parsed('SET a = 1, password = 2').kind, STATEMENT.SET)
+})
+
+test('M3.17: GROUPING SETS is newer than 8.4, and refused as 8.4.11 refuses it', () => {
+  // Not ER_NOT_SUPPORTED_YET: that would tell a client to wait for SQL its
+  // server will never accept (D-70).
+  refused('SELECT 1 GROUP BY GROUPING SETS((1))', 'SELECT a FROM t GROUP BY GROUPING SETS((a), (b), ())')
+  assert.throws(
+    () => parseStatement('SELECT 1 GROUP BY GROUPING SETS((1))'),
+    (e: { errno?: number }) => e.errno === 1064,
+  )
+})
