@@ -75,3 +75,49 @@ test('M4.13: any bytes decode to a group or ENGINE_CORRUPT_LOG — never a crash
   assert.throws(() => applyPage(new Uint8Array(PAGE), { image: false, runs: [{ at: 0, bytes: Uint8Array.of(1) }] }, 3), (e: EngineError) => e.code === 'ENGINE_CORRUPT_LOG')
   assert.throws(() => applyPage(new Uint8Array(PAGE), { image: false, runs: [{ at: PAGE - 9, bytes: Uint8Array.of(1, 2) }] }, 3), (e: EngineError) => e.code === 'ENGINE_CORRUPT_LOG')
 })
+
+test('a diff skipping equal words gives the runs a byte-at-a-time diff gives, aligned or not', () => {
+  // The reference: the definition, one byte at a time.
+  const reference = (before: Uint8Array | null, after: Uint8Array): [number, number[]][] => {
+    const out: [number, number[]][] = []
+    const at = (i: number) => (before === null ? 0 : (before[i] as number))
+    const regions: [number, number][] = [
+      [4, 8],
+      [16, after.length - 8],
+    ]
+    for (const [from, to] of regions) {
+      let i = from
+      while (i < to) {
+        if (after[i] === at(i)) {
+          i++
+          continue
+        }
+        const start = i
+        let end = i + 1
+        for (let j = end; j < to && j - end < 8; j++) if (after[j] !== at(j)) end = j + 1
+        out.push([start, [...after.slice(start, end)]])
+        i = end
+      }
+    }
+    return out
+  }
+  fc.assert(
+    fc.property(pagePair, fc.boolean(), fc.nat(3), fc.nat(3), fc.boolean(), ([base, edits], image, shiftA, shiftB, sparse) => {
+      // Mostly-zero pages too, which is what an image of a fresh page is.
+      const before0 = sparse ? new Uint8Array(PAGE) : base
+      const after0 = before0.slice()
+      for (const [at, v] of edits) after0[at] = v
+      // Views at every alignment, over buffers with room on either side.
+      const view = (src: Uint8Array, shift: number) => {
+        const buf = new Uint8Array(PAGE + 8).fill(0xee)
+        buf.set(src, shift)
+        return buf.subarray(shift, shift + PAGE)
+      }
+      const before = view(before0, shiftA)
+      const after = view(after0, shiftB)
+      const got = diffPage(image ? null : before, after).map((r) => [r.at, [...r.bytes]])
+      assert.deepEqual(got, reference(image ? null : before, after))
+    }),
+    { numRuns: 500 },
+  )
+})

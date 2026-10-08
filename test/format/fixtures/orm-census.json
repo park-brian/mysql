@@ -1439,9 +1439,9 @@
       }
     },
     "ours": {
-      "passed": 16,
-      "failed": 1258,
-      "skipped": 12139,
+      "passed": 938,
+      "failed": 192,
+      "skipped": 12058,
       "files": {
         "0-legacy-ports/aggregate-raw/tests.ts": {
           "passed": 0,
@@ -1449,23 +1449,23 @@
           "skipped": 2
         },
         "0-legacy-ports/aggregations/tests.ts": {
-          "passed": 0,
-          "failed": 14,
+          "passed": 13,
+          "failed": 0,
           "skipped": 130
         },
         "0-legacy-ports/atomic-increment-decrement/tests.ts": {
-          "passed": 0,
-          "failed": 5,
+          "passed": 4,
+          "failed": 0,
           "skipped": 40
         },
         "0-legacy-ports/batch-find-unique/tests.ts": {
-          "passed": 0,
-          "failed": 2,
+          "passed": 1,
+          "failed": 0,
           "skipped": 10
         },
         "0-legacy-ports/execute-raw/tests.ts": {
           "passed": 0,
-          "failed": 6,
+          "failed": 5,
           "skipped": 45
         },
         "0-legacy-ports/find-raw/tests.ts": {
@@ -1474,8 +1474,8 @@
           "skipped": 3
         },
         "0-legacy-ports/json/tests.ts": {
-          "passed": 0,
-          "failed": 7,
+          "passed": 3,
+          "failed": 3,
           "skipped": 36
         },
         "0-legacy-ports/malformed-id/tests.ts": {
@@ -1484,14 +1484,9 @@
           "skipped": 3
         },
         "0-legacy-ports/optional-relation-filters/tests.ts": {
-          "passed": 0,
-          "failed": 7,
+          "passed": 6,
+          "failed": 0,
           "skipped": 60
-        },
-        "0-legacy-ports/query-raw/tests.ts": {
-          "passed": 0,
-          "failed": 10,
-          "skipped": 81
         },
         "0-legacy-ports/run-command-raw/tests.ts": {
           "passed": 0,
@@ -1504,8 +1499,8 @@
           "skipped": 10
         },
         "17810-direct-url-missing/tests.ts": {
-          "passed": 0,
-          "failed": 2,
+          "passed": 1,
+          "failed": 0,
           "skipped": 10
         },
         "20422-cannot-assign-type-to-itself/tests.ts": {
@@ -1519,8 +1514,8 @@
           "skipped": 18
         },
         "_example/tests.ts": {
-          "passed": 0,
-          "failed": 11,
+          "passed": 10,
+          "failed": 0,
           "skipped": 100
         },
         "accelerate-bad-url-errors/tests.ts": {
@@ -1539,33 +1534,33 @@
           "skipped": 6
         },
         "batch-transaction-isolation-level/tests.ts": {
-          "passed": 0,
-          "failed": 7,
+          "passed": 6,
+          "failed": 0,
           "skipped": 30
         },
         "batching/tests.ts": {
-          "passed": 0,
-          "failed": 6,
+          "passed": 5,
+          "failed": 0,
           "skipped": 50
         },
         "binary-engine/restart/tests.ts": {
-          "passed": 0,
-          "failed": 2,
+          "passed": 1,
+          "failed": 0,
           "skipped": 10
         },
         "binary-engine/reuse-binary-engine/tests.ts": {
-          "passed": 0,
-          "failed": 2,
+          "passed": 1,
+          "failed": 0,
           "skipped": 10
         },
         "blog-update/tests.ts": {
-          "passed": 0,
-          "failed": 5,
+          "passed": 3,
+          "failed": 1,
           "skipped": 40
         },
         "chunking-query/tests.ts": {
-          "passed": 0,
-          "failed": 9,
+          "passed": 2,
+          "failed": 6,
           "skipped": 73
         },
         "composites/list/aggregate.ts": {
@@ -1699,8 +1694,8 @@
           "skipped": 4
         },
         "create-default-date/test.ts": {
-          "passed": 0,
-          "failed": 2,
+          "passed": 1,
+          "failed": 0,
           "skipped": 8
         },
         "dataproxy-engine/version/tests.ts": {
@@ -1709,8 +1704,8 @@
           "skipped": 11
         },
         "datasource-overrides/tests.ts": {
-          "passed": 0,
-          "failed": 5,
+          "passed": 4,
+          "failed": 0,
           "skipped": 62
         },
         "decimal/list/tests.ts": {
@@ -1719,28 +1714,28 @@
           "skipped": 12
         },
         "decimal/precision/tests.ts": {
-          "passed": 0,
-          "failed": 5,
+          "passed": 4,
+          "failed": 0,
           "skipped": 27
         },
         "decimal/scalar/tests.ts": {
-          "passed": 0,
-          "failed": 5,
+          "passed": 4,
+          "failed": 0,
           "skipped": 36
         },
         "default-selection/tests.ts": {
-          "passed": 0,
-          "failed": 4,
+          "passed": 3,
+          "failed": 0,
           "skipped": 63
         },
         "distinct/tests.ts": {
-          "passed": 0,
-          "failed": 11,
+          "passed": 10,
+          "failed": 0,
           "skipped": 100
         },
         "driver-adapters/adapter-nullability/tests.ts": {
-          "passed": 0,
-          "failed": 4,
+          "passed": 3,
+          "failed": 0,
           "skipped": 21
         },
         "driver-adapters/binary-engine-error/tests.ts": {
@@ -1749,8 +1744,8 @@
           "skipped": 8
         },
         "driver-adapters/enforce-preview-feature/tests.ts": {
-          "passed": 0,
-          "failed": 5,
+          "passed": 4,
+          "failed": 0,
           "skipped": 28
         },
         "driver-adapters/error-forwarding/tests.ts": {
@@ -1774,13 +1769,13 @@
           "skipped": 42
         },
         "enums/tests.ts": {
-          "passed": 0,
-          "failed": 4,
+          "passed": 3,
+          "failed": 0,
           "skipped": 18
         },
         "extended-where/aggregate.ts": {
-          "passed": 0,
-          "failed": 4,
+          "passed": 2,
+          "failed": 1,
           "skipped": 30
         },
         "extended-where/create.ts": {
@@ -1789,68 +1784,68 @@
           "skipped": 30
         },
         "extended-where/delete.ts": {
-          "passed": 0,
-          "failed": 4,
+          "passed": 3,
+          "failed": 0,
           "skipped": 30
         },
         "extended-where/findFirst.ts": {
-          "passed": 0,
-          "failed": 4,
+          "passed": 2,
+          "failed": 1,
           "skipped": 30
         },
         "extended-where/findFirstOrThrow.ts": {
-          "passed": 0,
-          "failed": 4,
+          "passed": 2,
+          "failed": 1,
           "skipped": 30
         },
         "extended-where/findMany.ts": {
-          "passed": 0,
-          "failed": 4,
+          "passed": 2,
+          "failed": 1,
           "skipped": 30
         },
         "extended-where/findUnique.ts": {
-          "passed": 0,
-          "failed": 6,
+          "passed": 5,
+          "failed": 0,
           "skipped": 50
         },
         "extended-where/findUniqueOrThrow.ts": {
-          "passed": 0,
-          "failed": 4,
+          "passed": 3,
+          "failed": 0,
           "skipped": 30
         },
         "extended-where/update.ts": {
-          "passed": 0,
-          "failed": 4,
+          "passed": 3,
+          "failed": 0,
           "skipped": 30
         },
         "extended-where/upsert.ts": {
-          "passed": 0,
-          "failed": 4,
+          "passed": 3,
+          "failed": 0,
           "skipped": 30
         },
         "extended-where/validation.ts": {
-          "passed": 0,
-          "failed": 5,
+          "passed": 4,
+          "failed": 0,
           "skipped": 40
         },
         "extensions/client.ts": {
-          "passed": 0,
-          "failed": 20,
+          "passed": 19,
+          "failed": 0,
           "skipped": 190
         },
         "extensions/defineExtension.ts": {
-          "passed": 0,
-          "failed": 13,
+          "passed": 12,
+          "failed": 0,
           "skipped": 120
         },
         "extensions/extends.ts": {
-          "passed": 0,
-          "failed": 3,
+          "passed": 2,
+          "failed": 0,
           "skipped": 20
         },
         "extensions/itx.ts": {
-          "passed": 0,
-          "failed": 11,
+          "passed": 10,
+          "failed": 0,
           "skipped": 100
         },
         "extensions/model.ts": {
@@ -1859,8 +1854,8 @@
           "skipped": 340
         },
         "extensions/pdp.ts": {
-          "passed": 0,
-          "failed": 2,
+          "passed": 1,
+          "failed": 0,
           "skipped": 87
         },
         "extensions/query.ts": {
@@ -1869,23 +1864,23 @@
           "skipped": 270
         },
         "extensions/result.ts": {
-          "passed": 0,
-          "failed": 25,
+          "passed": 24,
+          "failed": 0,
           "skipped": 240
         },
         "extensions/tx.ts": {
-          "passed": 0,
-          "failed": 7,
+          "passed": 6,
+          "failed": 0,
           "skipped": 60
         },
         "field-reference/enum/tests.ts": {
-          "passed": 0,
-          "failed": 3,
+          "passed": 2,
+          "failed": 0,
           "skipped": 12
         },
         "field-reference/json/tests.ts": {
-          "passed": 0,
-          "failed": 5,
+          "passed": 3,
+          "failed": 1,
           "skipped": 38
         },
         "field-reference/list/tests.ts": {
@@ -1894,8 +1889,8 @@
           "skipped": 15
         },
         "field-reference/numeric/tests.ts": {
-          "passed": 0,
-          "failed": 19,
+          "passed": 18,
+          "failed": 0,
           "skipped": 180
         },
         "field-reference/string/tests.ts": {
@@ -1904,23 +1899,23 @@
           "skipped": 50
         },
         "filter-count-relations/tests.ts": {
-          "passed": 0,
-          "failed": 9,
+          "passed": 8,
+          "failed": 0,
           "skipped": 80
         },
         "find-unique-or-throw-batching/tests.ts": {
-          "passed": 0,
-          "failed": 3,
+          "passed": 2,
+          "failed": 0,
           "skipped": 20
         },
         "fluent-api-null/tests.ts": {
-          "passed": 0,
-          "failed": 51,
+          "passed": 50,
+          "failed": 0,
           "skipped": 500
         },
         "fluent-api/tests.ts": {
-          "passed": 0,
-          "failed": 35,
+          "passed": 34,
+          "failed": 0,
           "skipped": 340
         },
         "fulltext-search/tests.ts": {
@@ -1929,8 +1924,8 @@
           "skipped": 32
         },
         "globalOmit/test.ts": {
-          "passed": 0,
-          "failed": 32,
+          "passed": 30,
+          "failed": 1,
           "skipped": 321
         },
         "handle-int-overflow/tests.ts": {
@@ -1939,8 +1934,8 @@
           "skipped": 20
         },
         "interactive-transactions/tests.ts": {
-          "passed": 0,
-          "failed": 26,
+          "passed": 24,
+          "failed": 1,
           "skipped": 294
         },
         "invalid-env-value/tests.ts": {
@@ -1949,8 +1944,8 @@
           "skipped": 10
         },
         "issues/10000/tests.ts": {
-          "passed": 0,
-          "failed": 2,
+          "passed": 1,
+          "failed": 0,
           "skipped": 1
         },
         "issues/10229/tests.ts": {
@@ -1960,17 +1955,17 @@
         },
         "issues/11233/tests.ts": {
           "passed": 0,
-          "failed": 3,
+          "failed": 2,
           "skipped": 18
         },
         "issues/11322/tests.ts": {
-          "passed": 0,
-          "failed": 2,
+          "passed": 1,
+          "failed": 0,
           "skipped": 1
         },
         "issues/11740-transaction-stored-query/tests.ts": {
-          "passed": 0,
-          "failed": 4,
+          "passed": 3,
+          "failed": 0,
           "skipped": 30
         },
         "issues/11789-sqlite-with-wal-or-connection_limit/tests.ts": {
@@ -1989,13 +1984,13 @@
           "skipped": 2
         },
         "issues/11974/tests.ts": {
-          "passed": 0,
-          "failed": 3,
+          "passed": 2,
+          "failed": 0,
           "skipped": 18
         },
         "issues/12003-order-by-self/tests.ts": {
-          "passed": 0,
-          "failed": 4,
+          "passed": 3,
+          "failed": 0,
           "skipped": 30
         },
         "issues/12378/tests.ts": {
@@ -2004,13 +1999,13 @@
           "skipped": 6
         },
         "issues/12557/tests.ts": {
-          "passed": 0,
-          "failed": 2,
+          "passed": 1,
+          "failed": 0,
           "skipped": 4
         },
         "issues/12572/tests.ts": {
-          "passed": 0,
-          "failed": 2,
+          "passed": 1,
+          "failed": 0,
           "skipped": 10
         },
         "issues/12862-errors-are-obfuscated-by-interactive-transactions/tests.ts": {
@@ -2024,8 +2019,8 @@
           "skipped": 3
         },
         "issues/13097-group-by-enum/tests.ts": {
-          "passed": 0,
-          "failed": 2,
+          "passed": 1,
+          "failed": 0,
           "skipped": 13
         },
         "issues/13405-mongo-raw-itx/tests.ts": {
@@ -2034,13 +2029,13 @@
           "skipped": 5
         },
         "issues/13766/at-unique/tests.ts": {
-          "passed": 0,
-          "failed": 3,
+          "passed": 2,
+          "failed": 0,
           "skipped": 20
         },
         "issues/13766/primary-key/tests.ts": {
-          "passed": 0,
-          "failed": 3,
+          "passed": 2,
+          "failed": 0,
           "skipped": 20
         },
         "issues/13913-integer-overflow/tests.ts": {
@@ -2059,13 +2054,13 @@
           "skipped": 3
         },
         "issues/14373-batch-tx-error/tests.ts": {
-          "passed": 0,
-          "failed": 2,
+          "passed": 1,
+          "failed": 0,
           "skipped": 10
         },
         "issues/14954-date-batch/tests.ts": {
-          "passed": 0,
-          "failed": 5,
+          "passed": 4,
+          "failed": 0,
           "skipped": 40
         },
         "issues/15044/tests.ts": {
@@ -2084,13 +2079,13 @@
           "skipped": 1
         },
         "issues/15176/tests.ts": {
-          "passed": 0,
-          "failed": 2,
+          "passed": 1,
+          "failed": 0,
           "skipped": 10
         },
         "issues/15177/tests.ts": {
-          "passed": 0,
-          "failed": 2,
+          "passed": 1,
+          "failed": 0,
           "skipped": 9
         },
         "issues/15204-conversion-error/tests.ts": {
@@ -2099,8 +2094,8 @@
           "skipped": 6
         },
         "issues/15264-uint-id-overflow/tests.ts": {
-          "passed": 0,
-          "failed": 2,
+          "passed": 1,
+          "failed": 0,
           "skipped": 1
         },
         "issues/15644-middleware-arg-types/tests.ts": {
@@ -2109,28 +2104,28 @@
           "skipped": 60
         },
         "issues/16195-index-out-of-bounds/tests.ts": {
-          "passed": 0,
-          "failed": 2,
+          "passed": 1,
+          "failed": 0,
           "skipped": 10
         },
         "issues/16390-relation-mode-m-n-dangling-pivot/tests.ts": {
-          "passed": 0,
-          "failed": 5,
+          "passed": 4,
+          "failed": 0,
           "skipped": 16
         },
         "issues/16535-select-enum/tests.ts": {
-          "passed": 0,
-          "failed": 2,
+          "passed": 1,
+          "failed": 0,
           "skipped": 5
         },
         "issues/17005-args-type-conflict/tests.ts": {
-          "passed": 0,
-          "failed": 2,
+          "passed": 1,
+          "failed": 0,
           "skipped": 10
         },
         "issues/17030-args-type-conflict/tests.ts": {
-          "passed": 0,
-          "failed": 2,
+          "passed": 1,
+          "failed": 0,
           "skipped": 10
         },
         "issues/17405-extensions-casing/tests.ts": {
@@ -2139,53 +2134,53 @@
           "skipped": 10
         },
         "issues/17948-tx-client-extensions/tests.ts": {
-          "passed": 0,
-          "failed": 2,
+          "passed": 1,
+          "failed": 0,
           "skipped": 10
         },
         "issues/18276-batch-order/tests.ts": {
-          "passed": 0,
-          "failed": 3,
+          "passed": 2,
+          "failed": 0,
           "skipped": 18
         },
         "issues/18292-inspect-loop/test.ts": {
-          "passed": 0,
-          "failed": 4,
+          "passed": 3,
+          "failed": 0,
           "skipped": 30
         },
         "issues/18598-select-count-true/tests.ts": {
-          "passed": 0,
-          "failed": 2,
+          "passed": 1,
+          "failed": 0,
           "skipped": 10
         },
         "issues/18846-empty-array/tests.ts": {
-          "passed": 0,
-          "failed": 2,
+          "passed": 1,
+          "failed": 0,
           "skipped": 10
         },
         "issues/18854-extensions-db-null/tests.ts": {
-          "passed": 0,
-          "failed": 2,
+          "passed": 1,
+          "failed": 0,
           "skipped": 5
         },
         "issues/18970-invalid-date/tests.ts": {
-          "passed": 0,
-          "failed": 2,
+          "passed": 1,
+          "failed": 0,
           "skipped": 10
         },
         "issues/19997-select-include-undefined/tests.ts": {
-          "passed": 0,
-          "failed": 3,
+          "passed": 2,
+          "failed": 0,
           "skipped": 20
         },
         "issues/20261-group-by-shortcut/tests.ts": {
-          "passed": 0,
-          "failed": 4,
+          "passed": 3,
+          "failed": 0,
           "skipped": 30
         },
         "issues/20499-result-ext-count/tests.ts": {
-          "passed": 0,
-          "failed": 2,
+          "passed": 1,
+          "failed": 0,
           "skipped": 10
         },
         "issues/20614-missing-legacy-aliases/tests.ts": {
@@ -2194,38 +2189,38 @@
           "skipped": 10
         },
         "issues/20724/tests.ts": {
-          "passed": 0,
-          "failed": 6,
+          "passed": 5,
+          "failed": 0,
           "skipped": 45
         },
         "issues/21352-id-does-not-exist/tests.ts": {
-          "passed": 0,
-          "failed": 3,
+          "passed": 2,
+          "failed": 0,
           "skipped": 18
         },
         "issues/21369-select-null/tests.ts": {
-          "passed": 0,
-          "failed": 2,
+          "passed": 1,
+          "failed": 0,
           "skipped": 9
         },
         "issues/21454-$type-in-json/tests.ts": {
-          "passed": 0,
-          "failed": 3,
+          "passed": 2,
+          "failed": 0,
           "skipped": 12
         },
         "issues/21552-datetime-representation-compatibility/tests.ts": {
-          "passed": 0,
-          "failed": 2,
+          "passed": 1,
+          "failed": 0,
           "skipped": 10
         },
         "issues/21592-char-truncation/tests.ts": {
-          "passed": 0,
-          "failed": 3,
+          "passed": 2,
+          "failed": 0,
           "skipped": 12
         },
         "issues/21631-batching-in-transaction/tests.ts": {
-          "passed": 0,
-          "failed": 4,
+          "passed": 3,
+          "failed": 0,
           "skipped": 30
         },
         "issues/21807-citext-neon/tests.ts": {
@@ -2239,28 +2234,28 @@
           "skipped": 1
         },
         "issues/22098-column_does_not_exist/test.ts": {
-          "passed": 0,
-          "failed": 2,
+          "passed": 1,
+          "failed": 0,
           "skipped": 10
         },
         "issues/22610-parallel-batch/tests.ts": {
-          "passed": 0,
-          "failed": 2,
+          "passed": 1,
+          "failed": 0,
           "skipped": 10
         },
         "issues/22947-sqlite-conccurrent-upsert/tests.ts": {
-          "passed": 0,
-          "failed": 2,
+          "passed": 1,
+          "failed": 0,
           "skipped": 10
         },
         "issues/23201-non-ascii-comments/test.ts": {
-          "passed": 0,
-          "failed": 2,
+          "passed": 1,
+          "failed": 0,
           "skipped": 10
         },
         "issues/23902/tests.ts": {
           "passed": 0,
-          "failed": 2,
+          "failed": 1,
           "skipped": 10
         },
         "issues/25163-typed-sql-enum/test.ts": {
@@ -2269,23 +2264,23 @@
           "skipped": 4
         },
         "issues/25404/test.ts": {
-          "passed": 0,
-          "failed": 2,
+          "passed": 1,
+          "failed": 0,
           "skipped": 10
         },
         "issues/4004/tests.ts": {
-          "passed": 0,
-          "failed": 2,
+          "passed": 1,
+          "failed": 0,
           "skipped": 10
         },
         "issues/5952-decimal-batch/tests.ts": {
-          "passed": 0,
-          "failed": 5,
+          "passed": 4,
+          "failed": 0,
           "skipped": 36
         },
         "issues/6578/tests.ts": {
-          "passed": 0,
-          "failed": 2,
+          "passed": 1,
+          "failed": 0,
           "skipped": 9
         },
         "issues/9007/tests.ts": {
@@ -2299,13 +2294,13 @@
           "skipped": 3
         },
         "issues/9678/tests.ts": {
-          "passed": 0,
-          "failed": 2,
+          "passed": 1,
+          "failed": 0,
           "skipped": 6
         },
         "json-fields/tests.ts": {
-          "passed": 0,
-          "failed": 5,
+          "passed": 4,
+          "failed": 0,
           "skipped": 24
         },
         "json-list-push/tests.ts": {
@@ -2314,38 +2309,38 @@
           "skipped": 6
         },
         "json-null-types/tests.ts": {
-          "passed": 0,
-          "failed": 7,
+          "passed": 6,
+          "failed": 0,
           "skipped": 30
         },
         "large-floats/tests.ts": {
-          "passed": 0,
-          "failed": 2,
+          "passed": 1,
+          "failed": 0,
           "skipped": 10
         },
         "logging-types/tests.ts": {
-          "passed": 0,
-          "failed": 2,
+          "passed": 1,
+          "failed": 0,
           "skipped": 10
         },
         "logging/tests.ts": {
-          "passed": 0,
-          "failed": 5,
+          "passed": 4,
+          "failed": 0,
           "skipped": 40
         },
         "max_bind_value/tests.ts": {
-          "passed": 0,
-          "failed": 3,
+          "passed": 1,
+          "failed": 1,
           "skipped": 20
         },
         "methods/count/tests.ts": {
-          "passed": 0,
-          "failed": 10,
+          "passed": 9,
+          "failed": 0,
           "skipped": 90
         },
         "methods/createMany/tests.ts": {
-          "passed": 0,
-          "failed": 4,
+          "passed": 2,
+          "failed": 1,
           "skipped": 30
         },
         "methods/createManyAndReturn-supported/tests.ts": {
@@ -2354,18 +2349,18 @@
           "skipped": 70
         },
         "methods/createManyAndReturn-unsupported/tests.ts": {
-          "passed": 0,
-          "failed": 3,
+          "passed": 2,
+          "failed": 0,
           "skipped": 6
         },
         "methods/findFirstOrThrow/tests.ts": {
-          "passed": 0,
-          "failed": 6,
+          "passed": 5,
+          "failed": 0,
           "skipped": 50
         },
         "methods/findUniqueOrThrow/tests.ts": {
-          "passed": 0,
-          "failed": 6,
+          "passed": 5,
+          "failed": 0,
           "skipped": 50
         },
         "methods/upsert/native-atomic/tests.ts": {
@@ -2374,23 +2369,23 @@
           "skipped": 49
         },
         "methods/upsert/simple/tests.ts": {
-          "passed": 0,
-          "failed": 3,
+          "passed": 2,
+          "failed": 0,
           "skipped": 20
         },
         "metrics/disabled/tests.ts": {
-          "passed": 0,
-          "failed": 3,
+          "passed": 2,
+          "failed": 0,
           "skipped": 20
         },
         "metrics/enabled/tests.ts": {
-          "passed": 0,
-          "failed": 10,
+          "passed": 9,
+          "failed": 0,
           "skipped": 90
         },
         "middleware-raw-args/tests.ts": {
-          "passed": 0,
-          "failed": 5,
+          "passed": 4,
+          "failed": 0,
           "skipped": 36
         },
         "missing-env/tests.ts": {
@@ -2409,38 +2404,38 @@
           "skipped": 48
         },
         "multiple-types/tests.ts": {
-          "passed": 0,
-          "failed": 6,
+          "passed": 5,
+          "failed": 0,
           "skipped": 55
         },
         "naming-conflict/built-in-types-vs-enum/tests.ts": {
-          "passed": 0,
-          "failed": 70,
+          "passed": 69,
+          "failed": 0,
           "skipped": 414
         },
         "naming-conflict/built-in-types-vs-model/tests.ts": {
-          "passed": 0,
-          "failed": 139,
+          "passed": 138,
+          "failed": 0,
           "skipped": 1380
         },
         "naming-conflict/model-vs-model/tests.ts": {
-          "passed": 0,
-          "failed": 13,
+          "passed": 12,
+          "failed": 0,
           "skipped": 120
         },
         "omit/test.ts": {
-          "passed": 0,
-          "failed": 19,
+          "passed": 18,
+          "failed": 0,
           "skipped": 191
         },
         "optimistic-concurrency-control/tests.ts": {
-          "passed": 0,
-          "failed": 5,
+          "passed": 4,
+          "failed": 0,
           "skipped": 51
         },
         "order-by-null/tests.ts": {
-          "passed": 0,
-          "failed": 5,
+          "passed": 4,
+          "failed": 0,
           "skipped": 36
         },
         "postgres_raw_query_parameter_types/test.ts": {
@@ -2454,13 +2449,13 @@
           "skipped": 21
         },
         "prisma-promise/tests.ts": {
-          "passed": 0,
-          "failed": 86,
+          "passed": 85,
+          "failed": 0,
           "skipped": 790
         },
         "query-error-logging/tests.ts": {
-          "passed": 0,
-          "failed": 4,
+          "passed": 3,
+          "failed": 0,
           "skipped": 30
         },
         "query-validation/tests.ts": {
@@ -2474,8 +2469,8 @@
           "skipped": 1
         },
         "raw-queries/send-type-hints/tests.ts": {
-          "passed": 0,
-          "failed": 5,
+          "passed": 4,
+          "failed": 0,
           "skipped": 36
         },
         "raw-queries/typed-results-advanced-and-native-types/tests.ts": {
@@ -2484,18 +2479,18 @@
           "skipped": 4
         },
         "raw-queries/typed-results/tests.ts": {
-          "passed": 0,
-          "failed": 8,
+          "passed": 7,
+          "failed": 0,
           "skipped": 93
         },
         "reconnect-failure/tests.ts": {
-          "passed": 0,
-          "failed": 1,
+          "passed": 1,
+          "failed": 0,
           "skipped": 9
         },
         "referentialActions-setDefault/tests_1-to-1.ts": {
-          "passed": 0,
-          "failed": 6,
+          "passed": 5,
+          "failed": 0,
           "skipped": 65
         },
         "referentialActions-setDefault/tests_1-to-n.ts": {
@@ -2529,13 +2524,13 @@
           "skipped": 96
         },
         "relationMode-17255-mixed-actions/tests.ts": {
-          "passed": 0,
-          "failed": 5,
+          "passed": 4,
+          "failed": 0,
           "skipped": 52
         },
         "relationMode-17255-same-actions/tests.ts": {
-          "passed": 0,
-          "failed": 11,
+          "passed": 10,
+          "failed": 0,
           "skipped": 382
         },
         "relationMode-m-n-mongodb-failing-with-at-map/tests_m-to-n-MongoDB.ts": {
@@ -2544,13 +2539,13 @@
           "skipped": 32
         },
         "runtime-import/tests.ts": {
-          "passed": 0,
-          "failed": 3,
+          "passed": 2,
+          "failed": 0,
           "skipped": 20
         },
         "skip/test.ts": {
-          "passed": 0,
-          "failed": 9,
+          "passed": 8,
+          "failed": 0,
           "skipped": 80
         },
         "strictUndefinedChecks/test.ts": {
@@ -2564,8 +2559,8 @@
           "skipped": 10
         },
         "tracing-disabled/tests.ts": {
-          "passed": 0,
-          "failed": 2,
+          "passed": 1,
+          "failed": 0,
           "skipped": 10
         },
         "tracing-no-sampling/tests.ts": {
@@ -2584,13 +2579,13 @@
           "skipped": 6
         },
         "typed-sql/mysql-scalars-nullable/test.ts": {
-          "passed": 0,
-          "failed": 22,
+          "passed": 20,
+          "failed": 1,
           "skipped": 21
         },
         "typed-sql/mysql-scalars/test.ts": {
-          "passed": 0,
-          "failed": 22,
+          "passed": 20,
+          "failed": 1,
           "skipped": 21
         },
         "typed-sql/postgres-lists/test.ts": {
@@ -2619,13 +2614,13 @@
           "skipped": 42
         },
         "unsupported-action/tests.ts": {
-          "passed": 0,
-          "failed": 2,
+          "passed": 1,
+          "failed": 0,
           "skipped": 9
         },
         "upsert-relation-mode-prisma/test.ts": {
-          "passed": 0,
-          "failed": 2,
+          "passed": 1,
+          "failed": 0,
           "skipped": 10
         },
         "validator/tests.ts": {
@@ -2635,15 +2630,26 @@
         },
         "views/tests.ts": {
           "passed": 0,
-          "failed": 4,
+          "failed": 3,
           "skipped": 30
         }
       },
       "reasons": {
-        "Error: P1014": 1107,
-        "Error: ENOENT: no such file or directory, lstat '…'": 121,
-        "Error: Schema engine error:": 25,
-        "ReferenceError: prisma is not defined": 5
+        "Error: P1001: Can't reach database server at `…`": 138,
+        "Error: ENOENT: no such file or directory, lstat '…'": 12,
+        "PrismaClientKnownRequestError:": 9,
+        "PrismaClientUnknownRequestError:": 8,
+        "Error: P1001": 6,
+        "Error: expect(received).toMatchInlineSnapshot(snapshot)": 5,
+        "Error: Schema engine error:": 3,
+        "Error: expect(received).resolves.toMatchObject()": 2,
+        "TypeError: Cannot read properties of undefined (reading '…')": 2,
+        "Error: expect(received).toContain(expected) // indexOf": 2,
+        "Error: expect(received).rejects.toMatchSnapshot()": 1,
+        "Error: expect(received).toBe(expected) // Object.is equality": 1,
+        "ReferenceError: prisma is not defined": 1,
+        "Error: thrown: \"Exceeded timeout of 30000 ms for a test.": 1,
+        "Error: expect(received).toEqual(expected) // deep equality": 1
       }
     }
   }

@@ -79,9 +79,26 @@ const MERGE_GAP = 8
 export function diffPage(before: Uint8Array | null, after: Uint8Array): Run[] {
   const runs: Run[] = []
   const at = (i: number): number => (before === null ? 0 : (before[i] as number))
+  // Equal stretches are skipped a word at a time where both pages are
+  // word-aligned, as the buffer pool's frames are: a page is mostly
+  // unchanged, and a byte at a time this was most of an INSERT's cost.
+  const words = (b: Uint8Array): Uint32Array | undefined => ((b.byteOffset & 3) === 0 ? new Uint32Array(b.buffer, b.byteOffset, b.length >> 2) : undefined)
+  const a32 = words(after)
+  const b32 = before === null ? undefined : words(before)
+  const fast = a32 !== undefined && (before === null || b32 !== undefined)
   for (const [from, to] of regions(after.length)) {
     let i = from
     while (i < to) {
+      if (fast && (i & 3) === 0) {
+        let k = i >> 2
+        const last = to >> 2
+        if (b32 === undefined) while (k < last && (a32 as Uint32Array)[k] === 0) k++
+        else while (k < last && (a32 as Uint32Array)[k] === b32[k]) k++
+        if (k << 2 !== i) {
+          i = k << 2
+          continue
+        }
+      }
       if (after[i] === at(i)) {
         i++
         continue

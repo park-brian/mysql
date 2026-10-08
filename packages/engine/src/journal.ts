@@ -161,6 +161,7 @@ export class Journal {
       } else {
         const runs = diffPage(t.before, t.page)
         if (runs.length === 0) continue
+        // A page clean before this change is logged whole: its image, not the diff just taken.
         records.push({ type: 'page', pageNo, image: !t.wasDirty, runs: t.wasDirty ? runs : diffPage(null, t.page) })
       }
       logged.push(pageNo)

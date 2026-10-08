@@ -536,6 +536,7 @@ function binary(op: string, left: Expression, right: Expression, extra: Expressi
   if (op === '-' && isInterval(right)) return dateAdd(left, right.value, right.unit, true, ctx)
   if (op === 'IN' || op === 'NOT IN') return inList(op === 'NOT IN', left, right, ctx)
   if (right.kind === NODE.SUBQUERY && right.quantifier !== undefined && COMPARISONS[op] !== undefined) return quantified(op, right.quantifier === 'ALL' ? 'ALL' : 'ANY', left, right, ctx, op)
+  if ((COMPARISONS[op] !== undefined || op === '<=>') && (isRow(left) || isRow(right))) return rowComparison(op, left, right, ctx)
   const a = compile(left, ctx)
   if (op === 'BETWEEN' || op === 'NOT BETWEEN') {
     const lo = compile(right, ctx)
@@ -657,14 +658,166 @@ function binary(op: string, left: Expression, right: Expression, extra: Expressi
   }
 }
 
+// --- row constructors ------------------------------------------------------------
+
+/** A row constructor of more than one value: `(a, b)`. `(a)` is `a`. */
+const isRow = (e: Expression): boolean => e.kind === NODE.ROW && e.items.length !== 1
+
+/** A row, compiled element by element, its elements rows in turn where they are. */
+type Shape = Compiled | readonly Shape[]
+
+function shapeOf(e: Expression, ctx: CompileContext): Shape {
+  if (e.kind === NODE.ROW && e.items.length !== 1) return e.items.map((i) => shapeOf(i, ctx))
+  return compile(e.kind === NODE.ROW ? (e.items[0] as Expression) : e, ctx)
+}
+
+const widthOf = (s: Shape): number => (Array.isArray(s) ? s.length : 1)
+
+/** ER_OPERAND_COLUMNS unless the two shapes match, element by element, as the left one asks. */
+function sameShape(a: Shape, b: Shape): void {
+  if (widthOf(a) !== widthOf(b) || Array.isArray(a) !== Array.isArray(b)) throw sqlError('ER_OPERAND_COLUMNS', `Operand should contain ${widthOf(a)} column(s)`)
+  if (Array.isArray(a)) a.forEach((x, i) => sameShape(x, (b as readonly Shape[])[i] as Shape))
+}
+
+/**
+ * Two rows compared, as `Arg_comparator::compare_row` does. `equality`
+ * (= and <>): any element that differs decides, and otherwise a NULL makes
+ * the answer NULL. `order` (<, <=, >, >=): the first difference decides, and
+ * a NULL met before it makes the answer NULL. `nullSafe` (<=>): equal only
+ * where every element is, NULL equal to NULL.
+ */
+function compareShapes(a: Shape, b: Shape, row: Row, env: Env, mode: 'equality' | 'order' | 'nullSafe'): number | null {
+  if (!Array.isArray(a)) {
+    const x = (a as Compiled).eval(row, env)
+    const y = (b as Compiled).eval(row, env)
+    return mode === 'nullSafe' ? (nullSafeEqual(x, y) ? 0 : 1) : compareValues(x, y)
+  }
+  let sawNull = false
+  for (let i = 0; i < a.length; i++) {
+    const c = compareShapes(a[i] as Shape, (b as readonly Shape[])[i] as Shape, row, env, mode)
+    if (c === null) {
+      if (mode === 'order') return null
+      sawNull = true
+    } else if (c !== 0) return c
+  }
+  return sawNull ? null : 0
+}
+
+function rowComparison(op: string, left: Expression, right: Expression, ctx: CompileContext): Compiled {
+  const a = shapeOf(left, ctx)
+  const b = shapeOf(right, ctx)
+  sameShape(a, b)
+  if (op === '<=>') return { eval: (r, env) => bool(compareShapes(a, b, r, env, 'nullSafe') === 0), type: boolType(false) }
+  const test = COMPARISONS[op] as (c: number) => boolean
+  const mode = op === '=' || op === '<>' || op === '!=' ? 'equality' : 'order'
+  return {
+    eval: (r, env) => {
+      const c = compareShapes(a, b, r, env, mode)
+      return c === null ? null : bool(test(c))
+    },
+    type: boolType(true),
+  }
+}
+
+/** An IN item that is the same for every row of one execution: a literal, a negated one, or a parameter. */
+const constantItem = (e: Expression): boolean => e.kind === NODE.LITERAL || e.kind === NODE.PLACEHOLDER || (e.kind === NODE.UNARY && e.op === '-' && e.operand.kind === NODE.LITERAL)
+
+/**
+ * A list of constants, sorted, where searching it gives exactly what
+ * comparing item by item does: every non-NULL item of one kind, and one
+ * collation and coercibility if strings, so `compareValues(v, item)` is
+ * monotonic in the order. `undefined` where that does not hold.
+ */
+interface SortedItems {
+  readonly kind: string
+  readonly sorted: readonly Exclude<Value, null>[]
+  readonly sawNull: boolean
+  /** Strings: the list sorted in each collation a comparison with it has met. */
+  readonly byCollation: Map<number, readonly Exclude<Value, null>[]>
+}
+
+function sortItems(values: readonly Value[]): SortedItems | undefined {
+  const present = values.filter((v): v is Exclude<Value, null> => v !== null)
+  const first = present[0]
+  if (first === undefined || !(first.kind === 'int' || first.kind === 'decimal' || first.kind === 'double' || first.kind === 'string')) return undefined
+  for (const v of present) {
+    if (v.kind !== first.kind) return undefined
+    if (v.kind === 'string' && first.kind === 'string' && (v.collationId !== first.collationId || v.coercibility !== first.coercibility)) return undefined
+  }
+  const sorted = first.kind === 'string' ? present : [...present].sort((x, y) => compareValues(x, y) ?? 0)
+  return { kind: first.kind, sorted, sawNull: present.length < values.length, byCollation: new Map() }
+}
+
+/** The searched path's answer for `v`, or `undefined` when `v` cannot be searched for. */
+function searchItems(list: SortedItems, v: Exclude<Value, null>): boolean | null | undefined {
+  const numeric = (k: string) => k === 'int' || k === 'decimal' || k === 'double'
+  if (list.kind === 'string' ? v.kind !== 'string' : !numeric(v.kind)) return undefined
+  let sorted = list.sorted
+  if (v.kind === 'string') {
+    // Every item meets `v` in one collation, the pair's aggregate; the list
+    // is sorted in that one, which its items alone would not choose.
+    const item = list.sorted[0] as StringValue
+    const id = aggregateCollation(v, item)
+    let inId = list.byCollation.get(id)
+    if (inId === undefined) {
+      const as = (x: Exclude<Value, null>): Value => ({ ...(x as StringValue), collationId: id })
+      inId = [...list.sorted].sort((x, y) => compareValues(as(x), as(y)) ?? 0)
+      list.byCollation.set(id, inId)
+    }
+    sorted = inId
+  }
+  let lo = 0
+  let hi = sorted.length - 1
+  while (lo <= hi) {
+    const mid = (lo + hi) >> 1
+    const c = compareValues(v, sorted[mid] as Value) as number
+    if (c === 0) return true
+    if (c < 0) hi = mid - 1
+    else lo = mid + 1
+  }
+  return list.sawNull ? null : false
+}
+
 function inList(negated: boolean, left: Expression, right: Expression, ctx: CompileContext): Compiled {
   if (right.kind === NODE.SUBQUERY) return quantified(negated ? '<>' : '=', negated ? 'ALL' : 'ANY', left, right, ctx, negated ? 'NOT IN' : 'IN')
+  const list = right.kind === NODE.ROW ? right.items : [right]
+  if (isRow(left)) {
+    // `(a, b) IN ((1, 2), (3, 4))`: = with each row, TRUE if any is.
+    const lhs = shapeOf(left, ctx)
+    const rows = list.map((i) => shapeOf(i, ctx))
+    for (const r of rows) sameShape(lhs, r)
+    return {
+      eval: (r, env) => {
+        let sawNull = false
+        for (const item of rows) {
+          const c = compareShapes(lhs, item, r, env, 'equality')
+          if (c === 0) return bool(!negated)
+          if (c === null) sawNull = true
+        }
+        return sawNull ? null : bool(negated)
+      },
+      type: boolType(true),
+    }
+  }
   const a = compile(left, ctx)
-  const items = (right.kind === NODE.ROW ? right.items : [right]).map((i) => compile(i, ctx))
+  const items = list.map((i) => compile(i, ctx))
+  // A long list of constants is sorted once per execution and searched, as
+  // MySQL's `in_vector` is: Prisma sends 65,535 of them.
+  const searchable = items.length >= 10 && list.every(constantItem)
+  let sortedFor: Env | undefined
+  let sorted: SortedItems | undefined
   return {
     eval: (r, env) => {
       const v = a.eval(r, env)
       if (v === null) return null
+      if (searchable) {
+        if (sortedFor !== env) {
+          sorted = sortItems(items.map((i) => i.eval(r, env)))
+          sortedFor = env
+        }
+        const found = sorted === undefined ? undefined : searchItems(sorted, v)
+        if (found !== undefined) return found === null ? null : bool(found !== negated)
+      }
       let sawNull = false
       for (const item of items) {
         const c = compareValues(v, item.eval(r, env))

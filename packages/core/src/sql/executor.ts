@@ -187,6 +187,8 @@ export class SqlExecutor implements Executor {
     } catch (e) {
       throw toSqlError(e)
     }
+    // COM_STMT_PREPARE_OK counts them in two bytes (`sql_prepare.cc`: 1390).
+    if (paramCount > 0xffff) throw sqlError('ER_PS_MANY_PARAM', 'Prepared statement contains too many placeholders')
     const statement = this.#parse(session, sql)
     if (statement === null) return { paramCount, columns: [] }
     await this.#preload(session, statement)

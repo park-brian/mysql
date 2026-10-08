@@ -367,6 +367,7 @@ export class BTree {
     if (level === 0) {
       return this.#write(pageNo, (p) => {
         const { index, found } = ip.search(p, key)
+        if (found && ip.replaceValue(p, index, value)) return null
         if (found) ip.removeCell(p, index)
         if (ip.fits(p, key, value)) {
           ip.insertCell(p, index, key, value)

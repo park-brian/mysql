@@ -206,6 +206,20 @@ export function insertCell(p: Uint8Array, index: number, key: Uint8Array, value:
   v.setUint16(N_CELLS, n + 1)
 }
 
+/**
+ * Overwrite the value of the cell at slot `index` where it lies, when the new
+ * value is the same length: a delete-mark or an update of fixed-width fields.
+ * `false`, and the page untouched, when it is not. Removing and re-inserting
+ * instead leaves the old bytes as garbage, and on a full page compacts the
+ * whole heap for every row a DELETE marks.
+ */
+export function replaceValue(p: Uint8Array, index: number, value: Uint8Array): boolean {
+  const { value: old } = cell(p, index)
+  if (old.length !== value.length) return false
+  p.set(value, old.byteOffset - p.byteOffset)
+  return true
+}
+
 /** Remove the cell at slot `index`, leaving its bytes as garbage. */
 export function removeCell(p: Uint8Array, index: number): void {
   const v = view(p)
