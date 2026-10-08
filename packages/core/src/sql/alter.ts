@@ -19,7 +19,7 @@ import type { Catalog, ColumnDef, FieldBytes, IndexDef, TableDef, TableSpec } fr
 import { KEY, NODE, deparse, type AlterAction, type AlterTableNode, type ColumnDefinition, type Expression } from '@myjs/parser'
 import { decodeField, encodeField, type StoreContext, type Value } from '@myjs/types'
 import { raise, type Compiled } from './compile.ts'
-import { column as columnDef, columnDeprecations, DEFAULT_COLLATION, duplicateKeys, duplicateKeyText } from './ddl.ts'
+import { column as columnDef, columnDeprecations, DEFAULT_COLLATION, duplicateKeys, duplicateKeyText, keyExtras, visiblePrimary } from './ddl.ts'
 import { checker, checkForeignKeyActions, checksOf, checkViolated, columnChecks, columnsOf, withChecks, type CheckDef } from './checks.ts'
 import { checkDefaults, defaultOf, implicitDefault, rowDependent, zeroRules } from './dml.ts'
 import { checkParentOf, foreignKeyChecks, foreignKeyClause, foreignKeysOf, referencedIndex, referencingKeys, storageClass, supportingIndex, withForeignKeys, type ForeignKeyClause } from './foreign-keys.ts'
@@ -31,7 +31,6 @@ const cantDrop = (name: string) => sqlError('ER_CANT_DROP_FIELD_OR_KEY', `Can't 
 
 const ACTION_NAMES: Readonly<Record<string, string>> = {
   columnVisibility: 'Invisible columns',
-  indexVisibility: 'Invisible indexes',
   orderBy: 'ALTER TABLE … ORDER BY',
   convert: 'ALTER TABLE … CONVERT TO CHARACTER SET',
   keys: 'ALTER TABLE … ENABLE / DISABLE KEYS',
@@ -230,6 +229,19 @@ export function alterTable(run: Run, catalog: Catalog, statement: AlterTableNode
     fulltext = fulltext.map((f) => (f === target ? { ...f, name: a.to } : f))
   }
 
+  // --- keys made visible or invisible: kept and enforced either way ---
+  for (const a of of('indexVisibility')) {
+    const target = [...indexes, ...fulltext].find((i) => same(i.name, a.index))
+    if (target === undefined) throw sqlError('ER_KEY_DOES_NOT_EXITS', `Key '${a.index}' doesn't exist in table '${def.name}'`)
+    const flip = <T extends { invisible?: true }>(i: T): T => {
+      if (i !== (target as unknown)) return i
+      const { invisible: _was, ...rest } = i
+      return (a.visible ? rest : { ...rest, invisible: true }) as T
+    }
+    indexes = indexes.map(flip)
+    fulltext = fulltext.map(flip)
+  }
+
   // What was there, so a repeated key is counted only when it is new (1831).
   const kept = { indexes: indexes.length, fulltext: fulltext.length }
 
@@ -280,16 +292,19 @@ export function alterTable(run: Run, catalog: Catalog, statement: AlterTableNode
     }
     if (k.type === KEY.FULLTEXT) {
       const parts = k.columns.map((p) => known(p.name ?? ''))
-      checkFulltext(def.engine, columns, parts, k.columns.some((p) => p.desc === true))
-      fulltext.push({ name: nameFor(k.name ?? k.constraint, parts[0] as string), columns: parts })
+      checkFulltext(def.engine, columns, parts, k.columns.some((p) => p.desc === true || p.asc === true))
+      if (k.parser !== undefined) throw notSupported('WITH PARSER')
+      fulltext.push({ name: nameFor(k.name ?? k.constraint, parts[0] as string), columns: parts, ...keyExtras(k) })
       continue
     }
     const parts = k.columns.map((p) => {
       if (p.name === undefined) throw notSupported('Functional key parts')
       return { column: known(p.name), ...(p.length === undefined ? {} : { prefix: p.length }), ...(p.desc === true ? { descending: true } : {}) }
     })
-    indexes.push({ name: nameFor(k.name ?? k.constraint, (parts[0] as { column: string }).column), kind: k.type === KEY.UNIQUE ? 'unique' : 'index', parts })
+    indexes.push({ name: nameFor(k.name ?? k.constraint, (parts[0] as { column: string }).column), kind: k.type === KEY.UNIQUE ? 'unique' : 'index', parts, ...keyExtras(k) })
   }
+
+  visiblePrimary(columns, indexes)
 
   // An index a foreign key needs, and no other serves, stays (1553): the
   // child's own keys need theirs, and the keys that reference this table

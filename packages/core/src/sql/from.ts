@@ -428,7 +428,9 @@ function slotScope(scope: Scope, full: TableScope): Scope {
       }
       return scope.resolve(parts, clause)
     },
-  }
+    // The tables MATCH looks for its index among.
+    tables: (scope as { readonly tables?: unknown }).tables ?? full.tables,
+  } as Scope
 }
 
 /** The rows of a join tree, each as wide as the whole FROM. */
@@ -571,7 +573,7 @@ function eqRef(t: FromTable, conditions: readonly (Expression | undefined)[], ou
     else if (own(c.right) !== undefined && outerColumn(c.left)) [col, other] = [own(c.right), c.left]
     if (col === undefined || other === undefined) continue
     const column = def.columns.find((x) => x.name === col) as ColumnDef
-    const index = def.indexes.find((i) => i.parts.length === 1 && i.parts[0]?.column === col && i.parts[0].prefix === undefined && (i.kind === 'primary' || (i.kind === 'unique' && !column.nullable)))
+    const index = def.indexes.find((i) => i.invisible !== true && i.parts.length === 1 && i.parts[0]?.column === col && i.parts[0].prefix === undefined && (i.kind === 'primary' || (i.kind === 'unique' && !column.nullable)))
     if (index === undefined) continue
     let value: Compiled
     try {

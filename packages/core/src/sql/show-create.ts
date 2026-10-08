@@ -103,8 +103,13 @@ function keyClass(def: TableDef, index: IndexDef): number {
 
 function keyLine(index: IndexDef): string {
   const parts = index.parts.map((p) => `${q(p.column)}${p.prefix === undefined ? '' : `(${p.prefix})`}${p.descending === true ? ' DESC' : ''}`).join(',')
-  if (index.kind === 'primary') return `  PRIMARY KEY (${parts})`
-  return `  ${index.kind === 'unique' ? 'UNIQUE KEY' : 'KEY'} ${q(index.name)} (${parts})`
+  if (index.kind === 'primary') return `  PRIMARY KEY (${parts})${keyTail(index)}`
+  return `  ${index.kind === 'unique' ? 'UNIQUE KEY' : 'KEY'} ${q(index.name)} (${parts})${keyTail(index)}`
+}
+
+/** A key's COMMENT, and its invisibility in a versioned comment (8.4.11: `KEY \`k\` (\`b\`) COMMENT 'x' /*!80000 INVISIBLE *\/`). */
+function keyTail(index: { readonly comment?: string; readonly invisible?: true }): string {
+  return `${index.comment === undefined ? '' : ` COMMENT ${quoted(index.comment)}`}${index.invisible === true ? ' /*!80000 INVISIBLE */' : ''}`
 }
 
 const byName = <T extends { readonly name: string }>(a: T, b: T): number => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0)
@@ -115,7 +120,7 @@ export function showCreateTable(run: Run, def: TableDef, table: Table): string {
   const keys = def.indexes.map((index, i) => ({ index, i })).sort((a, b) => keyClass(def, a.index) - keyClass(def, b.index) || a.i - b.i)
   for (const { index } of keys) lines.push(keyLine(index))
   // FULLTEXT keys sort after every other kind (`sort_keys`).
-  for (const f of fulltextOf(def)) lines.push(`  FULLTEXT KEY ${q(f.name)} (${f.columns.map(q).join(',')})`)
+  for (const f of fulltextOf(def)) lines.push(`  FULLTEXT KEY ${q(f.name)} (${f.columns.map(q).join(',')})${keyTail(f)}`)
   for (const fk of [...foreignKeysOf(def)].sort(byName)) lines.push(`  CONSTRAINT ${q(fk.name)} ${referenceText(fk, def.schema, false)}`)
   for (const c of [...checksOf(def)].sort(byName)) {
     let clause: string

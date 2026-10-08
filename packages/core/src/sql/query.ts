@@ -583,7 +583,7 @@ function chooseCovering(from: FromPlan, scope: TableScope, node: SelectNode, q: 
     if (pk === undefined) continue
     let best: { name: string; bytes: number } | undefined
     for (const index of def.indexes) {
-      if (index === pk || index.parts.some((p) => p.prefix !== undefined)) continue
+      if (index === pk || index.invisible === true || index.parts.some((p) => p.prefix !== undefined)) continue
       const holds = new Set([...index.parts, ...pk.parts].map((p) => p.column.toLowerCase()))
       if (![...cols].every((c) => holds.has(c))) continue
       const bytes = index.parts.reduce((n, p) => n + keyBytes(def.columns.find((c) => c.name === p.column) as ColumnDef), 0)

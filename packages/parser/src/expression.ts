@@ -924,9 +924,20 @@ class ExpressionParser {
     const t = this.#take()
     // The column list may go without its parentheses: `MATCH a AGAINST (…)`.
     const parenthesised = this.#takeOp('(')
+    // Each is a column's name, qualified or not, and nothing else: the
+    // grammar's `simple_ident` (8.4.11: `MATCH(UPPER(t))` is 1064 at its `(`).
     const columns: Expression[] = []
-    do columns.push(this.#binary(COMPARISON_LEVEL + 1))
-    while (this.#takeOp(','))
+    do {
+      const c = this.#peek()
+      if (c.kind !== TOKEN.IDENTIFIER) this.#fail()
+      this.#c.skip()
+      const parts = [c.text]
+      while (this.#atOp('.') && parts.length < 3) {
+        this.#c.skip()
+        parts.push(this.#c.expectNamePart())
+      }
+      columns.push({ kind: NODE.COLUMN, parts, at: c.start })
+    } while (this.#takeOp(','))
     if (parenthesised) this.#expectOp(')')
     this.#expectWord('AGAINST')
     this.#expectOp('(')

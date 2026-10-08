@@ -556,7 +556,7 @@ export function chooseStrategy(def: TableDef | undefined, keyColumns: readonly (
   if (keyColumns.length === 0) return { strategy: 'implicit' }
   if (def !== undefined && keyColumns.every((c) => c !== undefined)) {
     const pk = def.indexes.find((i) => i.kind === 'primary' || i.name === def.clustered)
-    const ordered = [...def.indexes].sort((a, b) => (a === pk ? -1 : b === pk ? 1 : 0))
+    const ordered = def.indexes.filter((i) => i.invisible !== true).sort((a, b) => (a === pk ? -1 : b === pk ? 1 : 0))
     for (const index of ordered) {
       // A secondary index carries the clustered key after its own parts.
       const parts = [...index.parts, ...(index === pk || pk === undefined ? [] : pk.parts.filter((p) => !index.parts.some((q) => q.column === p.column)))]

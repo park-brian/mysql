@@ -87,7 +87,9 @@ export class TableScope implements Scope {
     const parent = this.#parent
     return {
       resolve: (parts, clause) => resolveIn(tables, groups, parts, clause, parent),
-    }
+      // MATCH looks for its FULLTEXT index among them (8.4.11: `JOIN b ON MATCH(b.t) AGAINST(…)`).
+      tables,
+    } as Scope & { readonly tables: readonly ScopeTable[] }
   }
 
   /** How many values a row of this scope holds. */

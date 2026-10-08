@@ -412,13 +412,15 @@ function keyDefinition(c: Cursor, options: DdlOptions, at: number): KeyDefinitio
 
   // A name, unless the next thing is the column list or an index type.
   const name = c.atIdentifier() ? c.expectIdentifier() : undefined
-  const using = indexType(c)
+  // A FULLTEXT or SPATIAL key has no index type in the grammar (8.4.11: `FULLTEXT (t) USING BTREE` is 1064).
+  const typed = type !== KEY.FULLTEXT && type !== KEY.SPATIAL
+  const using = typed ? indexType(c) : undefined
   const columns = indexColumns(c, options)
 
   let references: Reference | undefined
   if (type === KEY.FOREIGN) references = parseReferences(c, options)
 
-  const rest = indexOptions(c)
+  const rest = indexOptions(c, typed)
   return {
     type,
     ...opt('name', name),
@@ -426,6 +428,8 @@ function keyDefinition(c: Cursor, options: DdlOptions, at: number): KeyDefinitio
     ...(using ?? rest.using ? { using: (using ?? rest.using) as string } : {}),
     ...opt('references', references),
     ...opt('comment', rest.comment),
+    ...opt('parser', rest.parser),
+    ...(rest.invisible === true ? { invisible: true as const } : {}),
     at,
   }
 }
@@ -704,16 +708,19 @@ export function indexColumns(c: Cursor, options: DdlOptions): IndexColumn[] {
   return out
 }
 
-function direction(c: Cursor): { desc?: true } {
+function direction(c: Cursor): { desc?: true; asc?: true } {
   if (c.takeWord('DESC')) return { desc: true }
-  c.takeWord('ASC')
+  if (c.takeWord('ASC')) return { asc: true }
   return {}
 }
 
-export function indexOptions(c: Cursor): { using?: string; comment?: string } {
+export function indexOptions(c: Cursor, typed = true): { using?: string; comment?: string; parser?: string; invisible?: boolean } {
   let using: string | undefined
   let comment: string | undefined
+  let parser: string | undefined
+  let invisible: boolean | undefined
   for (;;) {
+    if (!typed && c.atWord('USING')) c.fail()
     const more = indexType(c)
     if (more !== undefined) {
       using = more
@@ -729,10 +736,17 @@ export function indexOptions(c: Cursor): { using?: string; comment?: string } {
       continue
     }
     if (c.takeWords('WITH', 'PARSER')) {
-      c.expectIdentifier()
+      parser = c.expectIdentifier()
       continue
     }
-    if (c.takeWord('VISIBLE') || c.takeWord('INVISIBLE')) continue
+    if (c.takeWord('VISIBLE')) {
+      invisible = false
+      continue
+    }
+    if (c.takeWord('INVISIBLE')) {
+      invisible = true
+      continue
+    }
     if (c.takeWord('ENGINE_ATTRIBUTE') || c.takeWord('SECONDARY_ENGINE_ATTRIBUTE')) {
       c.takeOp('=')
       c.skip()
@@ -740,7 +754,7 @@ export function indexOptions(c: Cursor): { using?: string; comment?: string } {
     }
     break
   }
-  return { ...opt('using', using), ...opt('comment', comment) }
+  return { ...opt('using', using), ...opt('comment', comment), ...opt('parser', parser), ...opt('invisible', invisible) }
 }
 
 function parseReferences(c: Cursor, options: DdlOptions): Reference {

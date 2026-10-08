@@ -163,7 +163,8 @@ export function chooseAccess(def: TableDef, alias: string, where: Expression | u
     .filter((c): c is Condition => c !== undefined)
   if (conditions.length === 0) return FULL_SCAN
 
-  const candidates = [...def.indexes].sort((a, b) => (a.kind === 'primary' ? -1 : 0) - (b.kind === 'primary' ? -1 : 0))
+  // An invisible index is kept and enforced, and never chosen (8.4.11: a scan, its rows in table order).
+  const candidates = def.indexes.filter((i) => i.invisible !== true).sort((a, b) => (a.kind === 'primary' ? -1 : 0) - (b.kind === 'primary' ? -1 : 0))
   let best: { access: Access; score: number } | undefined
   for (const index of candidates) {
     const part = index.parts[0]

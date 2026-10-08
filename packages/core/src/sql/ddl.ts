@@ -19,8 +19,8 @@
 // `DEFAULT` and `ON UPDATE` as SQL text, compiled when a row needs them.
 import { CHARSET_BINARY, FIELD_TYPE } from '@myjs/bytes'
 import { collationInfoByName, defaultCollationOf, requireCollationInfo } from '@myjs/charsets'
-import type { ColumnDef, EngineName, IndexDef, TableSpec } from '@myjs/engine'
-import { KEY, deparse, type ColumnDefinition, type CreateTableNode, type DataType, type Expression } from '@myjs/parser'
+import { clusteredIndexOf, type ColumnDef, type EngineName, type IndexDef, type TableSpec } from '@myjs/engine'
+import { KEY, deparse, type ColumnDefinition, type CreateTableNode, type DataType, type Expression, type KeyDefinition } from '@myjs/parser'
 import { messages, sqlError } from '@myjs/protocol'
 import type { ColumnType } from '@myjs/types'
 import { checkFulltext, type FulltextDef } from './fulltext.ts'
@@ -369,8 +369,9 @@ export function createTableSpec(node: CreateTableNode, schemaCollation: number):
     if (k.type === KEY.FULLTEXT) {
       // Kept in the definition and not built: MATCH reads the table (M5.26).
       const names = k.columns.map((p) => known(p.name ?? ''))
-      checkFulltext(engine, columns, names, k.columns.some((p) => p.desc === true))
-      fulltext.push({ name: nameFor(k.name ?? k.constraint, names[0] as string), columns: names })
+      checkFulltext(engine, columns, names, k.columns.some((p) => p.desc === true || p.asc === true))
+      if (k.parser !== undefined) throw sqlError('ER_NOT_SUPPORTED_YET', messages.notSupported('WITH PARSER'))
+      fulltext.push({ name: nameFor(k.name ?? k.constraint, names[0] as string), columns: names, ...keyExtras(k) })
       continue
     }
     const parts = k.columns.map((p) => {
@@ -379,20 +380,35 @@ export function createTableSpec(node: CreateTableNode, schemaCollation: number):
     })
     if (k.type === KEY.PRIMARY) {
       names.add('primary')
-      indexes.push({ name: 'PRIMARY', kind: 'primary', parts })
-    } else indexes.push({ name: nameFor(k.name ?? k.constraint, (parts[0] as { column: string }).column), kind: k.type === KEY.UNIQUE ? 'unique' : 'index', parts })
+      indexes.push({ name: 'PRIMARY', kind: 'primary', parts, ...keyExtras(k) })
+    } else indexes.push({ name: nameFor(k.name ?? k.constraint, (parts[0] as { column: string }).column), kind: k.type === KEY.UNIQUE ? 'unique' : 'index', parts, ...keyExtras(k) })
   }
   for (const c of node.columns) {
     if (c.unique === true || c.type.serial === true) indexes.push({ name: nameFor(undefined, c.name), kind: 'unique', parts: [{ column: c.name }] })
   }
   // The primary key first, as MySQL lists it.
   indexes.sort((a, b) => (a.kind === 'primary' ? -1 : 0) - (b.kind === 'primary' ? -1 : 0))
+  visiblePrimary(columns, indexes)
 
   const options: Record<string, unknown> = { collationId: tableCollation }
   if (fulltext.length > 0) options['fulltext'] = fulltext
   const comment = option(node.options, 'COMMENT')
   if (comment !== undefined) options['comment'] = comment
   return { name: node.table.name, engine, columns, indexes, options }
+}
+
+/** A key's COMMENT and INVISIBLE, as a definition keeps them. */
+export function keyExtras(k: KeyDefinition): { comment?: string; invisible?: true } {
+  return { ...(k.comment === undefined ? {} : { comment: k.comment }), ...(k.invisible === true ? { invisible: true as const } : {}) }
+}
+
+/**
+ * The index InnoDB clusters on may not be invisible: the primary key, or the
+ * UNIQUE key on NOT NULL columns promoted in its place (8.4.11: 3522 for both).
+ */
+export function visiblePrimary(columns: readonly ColumnDef[], indexes: readonly IndexDef[]): void {
+  const clustered = clusteredIndexOf(columns, indexes)
+  if (indexes.some((i) => i.name === clustered && i.invisible === true)) throw sqlError('ER_PK_INDEX_CANT_BE_INVISIBLE', 'A primary key index cannot be invisible')
 }
 
 export function column(c: ColumnDefinition, tableCollation: number, inPrimary: boolean): ColumnDef {

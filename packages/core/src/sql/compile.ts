@@ -514,7 +514,7 @@ function aggregateTwo(acc: Derived, dt: Derived): Derived | undefined {
  * serve. Undefined when no argument is a string, or when one does not say
  * its derivation and so cannot be held to one.
  */
-export function aggregateCollations(types: readonly ResultType[], operation: string, compare: boolean): Derived | undefined {
+export function aggregateCollations(types: readonly ResultType[], operation: string, compare: boolean, numbers = true): Derived | undefined {
   const items: Derived[] = []
   let known = true
   for (const t of types) {
@@ -526,6 +526,8 @@ export function aggregateCollations(types: readonly ResultType[], operation: str
     else items.push({ collationId: NUMERIC_COLLATION, derivation: COERCIBILITY.NUMERIC })
   }
   if (!types.some(isText)) return undefined
+  // Without MY_COLL_ALLOW_NUMERIC_CONV a number is not converted, and meeting text is the mix's error (MATCH's).
+  if (!numbers && items.some((d) => d.derivation === COERCIBILITY.NUMERIC)) throw collationMix(items, operation)
   let acc: Derived | undefined = items[0] as Derived
   for (const dt of items.slice(1)) {
     acc = aggregateTwo(acc, dt)
@@ -2421,6 +2423,16 @@ function defaultFunction(e: CallNode, ctx: CompileContext): Compiled {
   }
 }
 
+/** Whether an expression reads a column of the row, outside any subquery of its own. */
+function readsColumn(e: unknown): boolean {
+  if (e === null || typeof e !== 'object') return false
+  if (Array.isArray(e)) return e.some(readsColumn)
+  const n = e as { kind?: unknown }
+  if (n.kind === NODE.COLUMN) return true
+  if (n.kind === NODE.SUBQUERY) return false
+  return Object.values(e).some((v) => typeof v === 'object' && readsColumn(v))
+}
+
 /**
  * MATCH: the columns of one FULLTEXT index of one base table, ranked against
  * a constant query (`fulltext.ts` has the rules). The table's words are read
@@ -2429,23 +2441,36 @@ function defaultFunction(e: CallNode, ctx: CompileContext): Compiled {
 function matchAgainst(e: MatchNode, ctx: CompileContext): Compiled {
   if (e.modifier !== undefined && e.modifier.includes('EXPANSION')) throw noExpansion()
   const scope = ctx.scope
-  if (!(scope instanceof TableScope)) throw noIndex()
+  const tables = scope instanceof TableScope ? scope.tables : (scope as { readonly tables?: TableScope['tables'] }).tables
+  if (tables === undefined) throw noIndex()
   const slots = e.columns.map((c) => {
     if (c.kind !== NODE.COLUMN) throw noIndex()
     const r = scope.resolve(c.parts, ctx.clause)
     if ((r.depth ?? 0) > 0) throw sqlError('ER_NOT_SUPPORTED_YET', messages.notSupported('MATCH on an outer query\'s columns'))
     return r.index
   })
-  const source = scope.tables.find((t) => (slots[0] as number) >= t.offset && (slots[0] as number) < t.offset + t.columns.length)
+  // Columns of more than one collation are a mix before they are an index (8.4.11: `MATCH(t, id)` is 1267).
+  aggregateCollations(
+    e.columns.map((c) => scope.resolve((c as { parts: readonly string[] }).parts, ctx.clause).type),
+    'match',
+    false,
+    false,
+  )
+  const source = tables.find((t) => (slots[0] as number) >= t.offset && (slots[0] as number) < t.offset + t.columns.length)
   const def = source?.def
   if (source === undefined || def === undefined || slots.some((i) => i < source.offset || i >= source.offset + source.columns.length)) throw noIndex()
   const names = slots.map((i) => (source.columns[i - source.offset] as { name: string }).name.toLowerCase())
   const index = fulltextOf(def).find((f) => f.columns.length === names.length && f.columns.every((c) => names.includes(c.toLowerCase())))
   if (index === undefined) throw noIndex()
-  if (!constantNode(e.against)) throw badAgainst()
+  // A row's own column is no query; a variable or a subquery is, read once
+  // a statement (8.4.11: `AGAINST(@x)` and `AGAINST((SELECT 'apple'))`).
+  if (readsColumn(e.against)) throw badAgainst()
   const against = compile(e.against, ctx)
   const fold = foldFor(def, index.columns)
   const boolean = e.modifier === 'IN BOOLEAN MODE'
+  // A constant query is parsed before any row is read, so its errors come
+  // from an empty table too (8.4.11: 33 nested groups is 209 there).
+  if (boolean && constantNode(e.against)) parseBoolean(queryText(against.eval([], { params: ctx.params ?? [], now: new Date(0), session: ctx.session, state: ctx.state })), fold)
   const positions = index.columns.map((c) => def.columns.findIndex((x) => x.name.toLowerCase() === c.toLowerCase()))
   const wordsIn = (values: readonly Value[], raw?: Map<string, string>) => values.flatMap((v) => (v === null ? [] : wordsOf(toText(v), fold, raw)))
   let preparedFor: Env | undefined

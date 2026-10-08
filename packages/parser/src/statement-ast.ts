@@ -139,6 +139,8 @@ export interface IndexColumn {
   readonly length?: number
   /** `DESC`. `ASC` is the default and is recorded as absent. */
   readonly desc?: boolean
+  /** `ASC` written: no different to a B-tree, refused by a FULLTEXT key (1221). */
+  readonly asc?: true
 }
 
 /** What a foreign key points at, and what it does when the target moves. */
@@ -161,6 +163,10 @@ export interface KeyDefinition {
   /** Set for `type: 'foreign'`. */
   readonly references?: Reference
   readonly comment?: string
+  /** `WITH PARSER p`, a FULLTEXT key's. */
+  readonly parser?: string
+  /** `INVISIBLE`. */
+  readonly invisible?: true
   readonly at: number
 }
 

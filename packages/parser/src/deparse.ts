@@ -1131,7 +1131,7 @@ class Deparser {
           col.expr !== undefined
             ? `(${this.expr(col.expr)})`
             : `${quoteName(col.name as string)}${col.length === undefined ? '' : `(${col.length})`}`
-        return col.desc === true ? `${body} DESC` : body
+        return col.desc === true ? `${body} DESC` : col.asc === true ? `${body} ASC` : body
       })
       .join(', ')})`
   }
@@ -1145,6 +1145,8 @@ class Deparser {
     if (k.references !== undefined) out.push(this.references(k.references))
     if (k.using !== undefined) out.push(`USING ${k.using}`)
     if (k.comment !== undefined) out.push(`COMMENT ${this.string(k.comment)}`)
+    if (k.parser !== undefined) out.push(`WITH PARSER ${quoteName(k.parser)}`)
+    if (k.invisible === true) out.push('INVISIBLE')
     return out.join(' ')
   }
 

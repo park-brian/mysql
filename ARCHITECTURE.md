@@ -1422,7 +1422,7 @@ included. Most of M5's exit criterion holds. All 487 tests of Drizzle's
 MySQL suites pass, as they do against 8.4.11. Of Prisma's, 1,113 pass
 against the server's 1,122, FULLTEXT search included; the one failure is a
 snapshot of another MySQL version's error text, which 8.4.11 fails too. The rest of the function library and the
-cost-based planner come next. The core bundle is about 264 KB gzipped
+cost-based planner come next. The core bundle is about 265 KB gzipped
 against a budget of 500 KB, with the UCA weights in a separate chunk loaded
 on demand.
 

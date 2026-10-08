@@ -389,14 +389,14 @@ const ROWS: Readonly<Record<string, (run: Run) => Iterable<readonly Value[]>>> =
         const unique = index.kind === 'primary' || index.kind === 'unique'
         for (const [i, p] of index.parts.entries()) {
           const column = def.columns.find((c) => c.name === p.column)
-          yield [s('def'), s(schema), s(def.name), n(unique ? 0 : 1), s(schema), s(index.name), n(i + 1), s(p.column), s(p.descending === true ? 'D' : 'A'), n(0), n(p.prefix ?? null), null, s(column?.nullable === true ? 'YES' : ''), s(def.engine === 'memory' ? 'HASH' : 'BTREE'), s(''), s(''), s('YES'), null]
+          yield [s('def'), s(schema), s(def.name), n(unique ? 0 : 1), s(schema), s(index.name), n(i + 1), s(p.column), s(p.descending === true ? 'D' : 'A'), n(0), n(p.prefix ?? null), null, s(column?.nullable === true ? 'YES' : ''), s(def.engine === 'memory' ? 'HASH' : 'BTREE'), s(''), s(index.comment ?? ''), s(index.invisible === true ? 'NO' : 'YES'), null]
         }
       }
       // A FULLTEXT key has no order, so no COLLATION (8.4.11).
       for (const index of fulltextOf(def)) {
         for (const [i, name] of index.columns.entries()) {
           const column = def.columns.find((c) => c.name === name)
-          yield [s('def'), s(schema), s(def.name), n(1), s(schema), s(index.name), n(i + 1), s(name), null, n(0), null, null, s(column?.nullable === true ? 'YES' : ''), s('FULLTEXT'), s(''), s(''), s('YES'), null]
+          yield [s('def'), s(schema), s(def.name), n(1), s(schema), s(index.name), n(i + 1), s(name), null, n(0), null, null, s(column?.nullable === true ? 'YES' : ''), s('FULLTEXT'), s(''), s(index.comment ?? ''), s(index.invisible === true ? 'NO' : 'YES'), null]
         }
       }
     }
