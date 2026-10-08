@@ -12,7 +12,9 @@
 // number as latin1_swedish_ci NUMERIC and NULL as binary IGNORABLE, and the
 // operation as the server spells it: '<>', 'like', ' IN ', 'between',
 // 'strcmp', 'concat', 'concat_ws', 'greatest', 'if', 'ifnull', 'coalesce',
-// 'nullif', 'case', 'UNION', 'regexp_like' (found by review).
+// 'nullif', 'case', 'UNION', 'regexp_like' (found by review). A literal
+// whose characters the winning charset cannot hold is refused as a mix
+// (`c = 'ж'` with c latin1), a convertible one is converted.
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import mysql from 'mysql2/promise'
@@ -155,6 +157,15 @@ const SCRIPT: readonly (readonly [string, Outcome])[] = [
   ["SELECT REGEXP_REPLACE('abc' COLLATE utf8mb4_bin, 'B', 'x' COLLATE utf8mb4_0900_ai_ci)", [["abc"]]],
   ["SELECT REGEXP_REPLACE('abc' COLLATE utf8mb4_bin, 'b', 'x' COLLATE utf8mb4_0900_ai_ci)", [["axc"]]],
   ["SELECT REGEXP_SUBSTR('abc' COLLATE utf8mb4_bin, 'B' COLLATE utf8mb4_0900_ai_ci)", [1267,"Illegal mix of collations (utf8mb4_bin,EXPLICIT) and (utf8mb4_0900_ai_ci,EXPLICIT) for operation 'regexp_substr'"]],
+  ["CREATE TABLE cl (c VARCHAR(5) CHARACTER SET latin1, u VARCHAR(5))", [0,0,"",0]],
+  ["INSERT INTO cl VALUES ('é', 'ж')", [1,0,"",0]],
+  ["SELECT c = 'ж' FROM cl", [1267,"Illegal mix of collations (latin1_swedish_ci,IMPLICIT) and (utf8mb4_unicode_ci,COERCIBLE) for operation '='"]],
+  ["SELECT c = 'é', c = 'e' FROM cl", [["1","1"]]],
+  ["SELECT c IN ('a', 'ж') FROM cl", [1270,"Illegal mix of collations (latin1_swedish_ci,IMPLICIT), (utf8mb4_unicode_ci,COERCIBLE), (utf8mb4_unicode_ci,COERCIBLE) for operation ' IN '"]],
+  ["SELECT u = 'é', u = _latin1'x' FROM cl", [["0","0"]]],
+  ["SELECT CONCAT(c, 'ж') FROM cl", [1267,"Illegal mix of collations (latin1_swedish_ci,IMPLICIT) and (utf8mb4_unicode_ci,COERCIBLE) for operation 'concat'"]],
+  ["SELECT c LIKE 'ж%' FROM cl", [1267,"Illegal mix of collations (latin1_swedish_ci,IMPLICIT) and (utf8mb4_unicode_ci,COERCIBLE) for operation 'like'"]],
+  ["SELECT c = _utf8mb4'ж' COLLATE utf8mb4_bin FROM cl", [["0"]]],
 ]
 
 test('M5.10: collations are checked and aggregated as 8.4.11 does', async () => {

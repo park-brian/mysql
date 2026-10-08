@@ -151,3 +151,4 @@ export { DAY_NAMES, MAX_DAY_NUMBER, MONTH_NAMES, daysInMonth, daysInYear, fullYe
 export { dateOf, dateStructOf, numberToDateTime, timeDiff, timeOf, timeStructOf, type Converted, type DateFlags, type TimeStruct } from './temporal-args.ts'
 export { extractDateTime, formatDateTime, formatLength, formatShape, type Broken } from './date-format.ts'
 export { scanDateTime, scanTime } from './temporal-scan.ts'
+export { crc32, md5, sha1, sha256, sha512 } from './digest.ts'

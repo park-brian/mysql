@@ -60,7 +60,7 @@ const INT_MIN32 = -2147483648n
 
 /** `val_int` of a position or count: BIGINT UNSIGNED's values above 2⁶³ stay positive. */
 /** A count or a position, as `val_int` reads it: text stops at its first non-digit. */
-const intArg = (v: V): bigint => valInt(v)
+export const intArg = (v: V): bigint => valInt(v)
 
 /** A constant argument's integer value: `null` for a constant NULL, `undefined` for an argument that is not constant. */
 function constantInt(c: Compiled | undefined, constant: boolean, conditions?: Condition[]): bigint | null | undefined {
@@ -76,13 +76,13 @@ function constantInt(c: Compiled | undefined, constant: boolean, conditions?: Co
 }
 
 /** A string operand as the function sees it: text in the result's collation, or bytes when the result is binary. */
-interface Str {
+export interface Str {
   readonly binary: boolean
   /** Code points, or bytes as Latin-1 code units for a binary result. */
   readonly units: readonly string[]
 }
 
-function strOf(v: V, binary: boolean, collation: number): Str {
+export function strOf(v: V, binary: boolean, collation: number): Str {
   if (binary) {
     const b = v.kind === 'bytes' ? v.v : v.kind === 'string' ? encodeCollation(v.v, v.collationId) : new TextEncoder().encode(toText(v))
     return { binary, units: Array.from(b, (x) => String.fromCharCode(x)) }
@@ -115,13 +115,13 @@ function asText(bytes: Uint8Array, collation: number): string {
   return text
 }
 
-function result(units: readonly string[], binary: boolean, collation: number, coercibility: number): Value {
+export function result(units: readonly string[], binary: boolean, collation: number, coercibility: number): Value {
   if (binary) return bytesValue(Uint8Array.from(units, (u) => u.charCodeAt(0)))
   return stringValue(units.join(''), collation, coercibility)
 }
 
 /** The collation a string function's first argument gives its result: NULL's is binary. */
-function firstCollation(t: ResultType, conn: number): { readonly binary: boolean; readonly collation: number; readonly coercibility: number } {
+export function firstCollation(t: ResultType, conn: number): { readonly binary: boolean; readonly collation: number; readonly coercibility: number } {
   if (t.kind === 'bytes' || t.kind === 'null') return { binary: true, collation: CHARSET_BINARY, coercibility: coercibilityOf(t) }
   if (t.kind === 'string') return { binary: false, collation: t.collationId, coercibility: coercibilityOf(t) }
   return { binary: false, collation: conn, coercibility: COERCIBILITY.NUMERIC }
@@ -134,7 +134,7 @@ function firstCollation(t: ResultType, conn: number): { readonly binary: boolean
  * Past 65,535 bytes it is a MEDIUMTEXT, past 16,777,215 a LONGTEXT, which
  * report their width in bytes (8.4.11: `TRIM(t)` of a TEXT is 250, 1,048,560).
  */
-function textType(chars: number | undefined, binary: boolean, collation: number, coercibility: number, capped = false): ResultType {
+export function textType(chars: number | undefined, binary: boolean, collation: number, coercibility: number, capped = false): ResultType {
   const mb = binary ? 1 : requireCollationInfo(collation).mbmaxlen
   let width = chars === undefined ? MAX_BLOB_WIDTH : chars
   if (capped && width * mb > MAX_BLOB_WIDTH) width = Math.floor(MAX_BLOB_WIDTH / mb)
@@ -146,13 +146,13 @@ function textType(chars: number | undefined, binary: boolean, collation: number,
 }
 
 /** An argument's width in characters, or in bytes for a binary result; a TEXT's is its byte capacity, as a field's `max_char_length` is. */
-function widthOf(t: ResultType, binary: boolean): number {
+export function widthOf(t: ResultType, binary: boolean): number {
   const chars = t.kind === 'string' && t.blobBytes !== undefined ? t.blobBytes : charWidth(t)
   return binary && t.kind === 'string' ? chars * requireCollationInfo(t.collationId).mbmaxlen : chars
 }
 
 /** The collation several string arguments aggregate to: a binary one wins only at the lowest coercibility. */
-function aggregateString(types: readonly ResultType[], conn: number): { readonly binary: boolean; readonly collation: number; readonly coercibility: number } {
+export function aggregateString(types: readonly ResultType[], conn: number): { readonly binary: boolean; readonly collation: number; readonly coercibility: number } {
   const live = types.filter((t) => t.kind === 'string' || t.kind === 'bytes')
   if (live.length === 0) return { binary: false, collation: conn, coercibility: COERCIBILITY.NUMERIC }
   const least = Math.min(...live.map(coercibilityOf))
@@ -161,7 +161,7 @@ function aggregateString(types: readonly ResultType[], conn: number): { readonly
 }
 
 /** Every argument evaluated; `undefined` when one is NULL. */
-function all(xs: readonly Compiled[], r: Parameters<Compiled['eval']>[0], env: Parameters<Compiled['eval']>[1]): V[] | undefined {
+export function all(xs: readonly Compiled[], r: Parameters<Compiled['eval']>[0], env: Parameters<Compiled['eval']>[1]): V[] | undefined {
   const out: V[] = []
   for (const x of xs) {
     const v = x.eval(r, env)
@@ -172,7 +172,7 @@ function all(xs: readonly Compiled[], r: Parameters<Compiled['eval']>[0], env: P
 }
 
 /** A word the index of a substring search compares by: folded as the collation folds. */
-function folder(collation: number, binary: boolean): (s: string) => string {
+export function folder(collation: number, binary: boolean): (s: string) => string {
   if (binary) return (s) => s
   const name = requireCollationInfo(collation).name
   if (!name.endsWith('_ci')) return (s) => s

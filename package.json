@@ -42,6 +42,7 @@
     "capture:functions": "node tools/capture-functions.mjs",
     "capture:temporal": "node tools/capture-temporal-text.mjs",
     "capture:temporal-functions": "node tools/capture-temporal-functions.mjs",
+    "capture:more-functions": "node tools/capture-more-functions.mjs",
     "capture:information-schema": "node tools/capture-information-schema.mjs",
     "census:mysqltest": "node tools/mysqltest-census.mjs",
     "census:orm": "node tools/orm-suites.mjs --server --ours",

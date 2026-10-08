@@ -98,8 +98,30 @@ function compare(want: Answer, got: Answer): 'equal' | 'reordered' | 'different'
   return JSON.stringify(sorted(want.rows)) === JSON.stringify(sorted(got.rows)) ? 'reordered' : 'different'
 }
 
-/** Replay a captured corpus through the executor. `connection` is the driver's options the corpus was captured with. */
-export async function replay(fixture: Fixture, connection: Record<string, unknown> = CONNECTION): Promise<Tally> {
+/**
+ * `got`'s DOUBLE cells that are within `ulps` units in the last place of
+ * `want`'s, made `want`'s. A transcendental function's last bit is the
+ * platform's `libm`: the server's and the engine's round LN(3) one ulp
+ * apart, and neither is wrong by more. Nothing else is loosened.
+ */
+function snapDoubles(want: Answer, got: Answer, ulps: number): Answer {
+  const columns = want.columns as readonly (readonly unknown[])[] | undefined
+  if (columns === undefined || want.rows === undefined || got.rows === undefined || want.rows.length !== got.rows.length) return got
+  const doubles = columns.map((c) => c[1] === 5)
+  if (!doubles.includes(true)) return got
+  const near = (a: unknown, b: unknown): boolean => {
+    if (typeof a !== 'string' || typeof b !== 'string') return false
+    const x = Number(a)
+    const y = Number(b)
+    if (!Number.isFinite(x) || !Number.isFinite(y)) return false
+    return Math.abs(x - y) <= ulps * Number.EPSILON * Math.max(Math.abs(x), Math.abs(y))
+  }
+  const rows = got.rows.map((row, i) => (row as unknown[]).map((cell, k) => (doubles[k] === true && cell !== (want.rows?.[i] as unknown[])[k] && near((want.rows?.[i] as unknown[])[k], cell) ? (want.rows?.[i] as unknown[])[k] : cell)))
+  return { ...got, rows }
+}
+
+/** Replay a captured corpus through the executor. `connection` is the driver's options the corpus was captured with; `ulps` loosens DOUBLE cells by that many units in the last place. */
+export async function replay(fixture: Fixture, connection: Record<string, unknown> = CONNECTION, ulps = 0): Promise<Tally> {
   const db = await MySQL.open(':memory:')
   const conn = await mysql.createConnection({ stream: db.createStream() as never, user: 'root', password: '', ...connection })
   await conn.query(`SET sql_mode = '${fixture.sqlMode}'`)
@@ -129,9 +151,10 @@ export async function replay(fixture: Fixture, connection: Record<string, unknow
           const strict = e.ordered === true || (e.plan !== undefined && e.plan !== null && a.plan === e.plan)
           if (e.ordered === true) tally.orderedByStatement++
           else if (strict) tally.orderedByPlan++
-          const text = compare(e, a)
+          const text = compare(e, ulps > 0 ? { ...a, ...snapDoubles(e, a, ulps) } : a)
           const wantBinary = e.binary === 'same' || e.binary === undefined ? textOf(e) : e.binary
-          const gotBinary = a.binary === 'same' || a.binary === undefined ? textOf(a) : a.binary
+          const gotBinary0 = a.binary === 'same' || a.binary === undefined ? textOf(a) : a.binary
+          const gotBinary = ulps > 0 ? snapDoubles(wantBinary, gotBinary0, ulps) : gotBinary0
           const binary = compare(wantBinary, gotBinary)
           agrees = text !== 'different' && binary !== 'different' && (!strict || (text === 'equal' && binary === 'equal'))
           if (agrees && !strict) {

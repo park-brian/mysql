@@ -80,12 +80,14 @@ import { matchType, regexpInstr, regexpLike, regexpReplace, regexpSubstr } from 
 import { TableScope } from './scope.ts'
 import { libraryFunction } from './functions.ts'
 import { temporalFunction } from './temporal-functions.ts'
+import { MORE_FUNCTIONS, moreFunction } from './more-functions.ts'
 import { bitBytes } from './wire.ts'
 import { badAgainst, booleanRank, Corpus, foldFor, fulltextOf, naturalRank, noExpansion, noIndex, parseBoolean, queryText, wordsOf, type Term } from './fulltext.ts'
 
 const JSON_PATH_FUNCTIONS: ReadonlySet<string> = new Set(['JSON_EXTRACT', 'JSON_UNQUOTE', 'JSON_CONTAINS', 'JSON_CONTAINS_PATH', 'JSON_TYPE', 'JSON_LENGTH', 'JSON_DEPTH', 'JSON_KEYS', 'JSON_VALID', 'JSON_OVERLAPS'])
 import { windowNotAllowed } from './window.ts'
 import { dateAdd, isInterval } from './interval.ts'
+import { escapeString, printExpression, Unprintable } from './print.ts'
 
 /** One row as operators pass it: a value per column of the scope. */
 export type Row = readonly Value[]
@@ -126,6 +128,12 @@ export function asNumber(c: Compiled, kind: 'DOUBLE' | 'INTEGER' | 'DECIMAL', on
   // A TEXT or BLOB column reads as a double or an integer without a word
   // (`Field_blob::val_real` and `val_int` discard the error).
   if (c.type.column !== undefined && c.type.field === FIELD_TYPE.BLOB && kind !== 'DECIMAL') return c
+  // A VARCHAR or VARBINARY column, read as a double or an integer, is quiet
+  // when the bytes left unconverted are exactly twice its length bytes — 2
+  // under 256 bytes, 4 from there (8.4.11: in a VARCHAR(10), `v + 0` warns
+  // for '1x' and '12x' but not for '1xy', 'xy' or 'é'; in a VARCHAR(400),
+  // for those three but not for '1abc' or '1.2.3.4'). A CHAR always warns.
+  const quietTail = c.type.column !== undefined && c.type.field === FIELD_TYPE.VAR_STRING && kind !== 'DECIMAL' ? ((c.type.kind === 'bytes' ? c.type.length : c.type.length * requireCollationInfo(c.type.collationId).mbmaxlen) < 256 ? 2 : 4) : undefined
   const key = {}
   return {
     ...c,
@@ -136,10 +144,21 @@ export function asNumber(c: Compiled, kind: 'DOUBLE' | 'INTEGER' | 'DECIMAL', on
         if (env.memo?.has(key) === true) return v
         env.memo?.set(key, true)
       }
+      if (quietTail !== undefined && unconvertedBytes(v, kind) === quietTail) return v
       checkNumber(v, kind, env)
       return v
     },
   }
+}
+
+/** The bytes a number's reading leaves over: after the integer for an INTEGER (-1 when there is no digit), after the number for a DOUBLE (all of them, leading spaces too, when there is none). */
+function unconvertedBytes(v: Exclude<Value, null>, kind: 'DOUBLE' | 'INTEGER' | 'DECIMAL'): number {
+  if (v.kind !== 'string' && v.kind !== 'bytes') return 0
+  const text = toText(v)
+  const m = (kind === 'INTEGER' ? /^[ \t\n\r]*[+-]?\d+/ : /^(?:[ \t\n\r]*[+-]?(?:\d+\.?\d*|\.\d+)(?:[eE][+-]?\d+)?)?/).exec(text)
+  if (m === null) return -1
+  const rest = text.slice(m[0].length)
+  return v.kind === 'bytes' ? rest.length : new TextEncoder().encode(rest).length
 }
 
 /** Text on one side and a number on the other: a comparison of doubles. */
@@ -157,7 +176,40 @@ export function checkNumber(v: Exclude<Value, null>, kind: 'DOUBLE' | 'INTEGER' 
   if (p.complete && !(kind === 'INTEGER' && p.fractional) && !overflow) return
   // Nothing at all is 0 quietly, except as a DECIMAL (8.4.11: `CAST('' AS DECIMAL)` warns).
   if (!p.complete && kind !== 'DECIMAL' && /^[ \t\n\r]*$/.test(text)) return
-  raise(env, 1292, `Truncated incorrect ${kind} value: '${text}'`)
+  raise(env, 1292, `Truncated incorrect ${kind} value: '${warnedText(v)}'`)
+}
+
+/**
+ * Text or bytes as a 1292 quotes them: up to the first NUL, the message
+ * being a C string, and bytes read as UTF-8 (8.4.11: X'00FF' is quoted as
+ * '', X'0A000509' as '\n', X'C3A9' as 'é').
+ */
+export function warnedText(v: Exclude<Value, null>): string {
+  const text = v.kind === 'bytes' ? new TextDecoder().decode(v.v.subarray(0, v.v.indexOf(0) === -1 ? v.v.length : v.v.indexOf(0))) : toText(v)
+  const nul = text.indexOf('\0')
+  return nul === -1 ? text : text.slice(0, nul)
+}
+
+/**
+ * An argument as `Item::print` shows it in a message that quotes one —
+ * INET_ATON's and INET_NTOA's 1411: a column as `schema`.`table`.`column`,
+ * a string with its introducer if it was written with one (8.4.11).
+ */
+function printedArgument(a: Expression, ctx: CompileContext): string {
+  try {
+    return printExpression(a, {
+      column: (parts) => {
+        const c = compile({ kind: NODE.COLUMN, parts, at: a.at }, ctx).type.column
+        const q = (x: string): string => `\`${x.replace(/`/g, '``')}\``
+        return c === undefined ? parts.map(q).join('.') : `${q(c.schema)}.${q(c.table)}.${q(c.orgName === '' ? (parts[parts.length - 1] as string) : c.orgName)}`
+      },
+      string: (v, cs) => `${cs === undefined ? '' : `_${cs}`}'${escapeString(v)}'`,
+      ...(ctx.sql === undefined ? {} : { source: ctx.sql }),
+    })
+  } catch (err) {
+    if (err instanceof Unprintable) return deparse(a)
+    throw err
+  }
 }
 
 /**
@@ -483,6 +535,15 @@ export function aggregateCollations(types: readonly ResultType[], operation: str
     if (known) throw collationMix(items, operation)
     return undefined
   }
+  // A literal is converted into the collation chosen, and one that cannot be is the mix's error (`convert_const_strings`).
+  if (acc.collationId !== CHARSET_BINARY) {
+    const target = charsetOfId(acc.collationId)
+    for (const t of types) {
+      if (t.kind !== 'string' || t.literalText === undefined || charsetOfId(t.collationId) === target || UNICODE.has(target)) continue
+      const back = decodeCollation(encodeCollation(t.literalText, acc.collationId), acc.collationId)
+      if (back !== t.literalText) throw collationMix(items, operation)
+    }
+  }
   return acc
 }
 
@@ -672,7 +733,7 @@ function literal(e: LiteralNode, ctx: CompileContext): Compiled {
         }
       }
       // With COLLATE it is nullable, as 8.4.11 reports `'abc' COLLATE utf8mb4_bin`.
-      return lit(stringValue(text, id, coercibility), { ...stringType([...text].length, id, e.collation !== undefined), coercibility })
+      return lit(stringValue(text, id, coercibility), { ...stringType([...text].length, id, e.collation !== undefined), coercibility, literalText: text })
     }
     case LITERAL.HEX:
       return introduced(e.value as Uint8Array)
@@ -1616,6 +1677,18 @@ function call(e: CallNode, ctx: CompileContext): Compiled {
   if (name === 'DEFAULT' && e.args.length === 1) return defaultFunction(e, ctx)
   const temporal = temporalFunction(name, e, ctx)
   if (temporal !== undefined) return temporal
+  if (MORE_FUNCTIONS.has(name)) {
+    return moreFunction(
+      name,
+      e.args.map((a) => compile(a, ctx)),
+      e.name,
+      deparse(e),
+      e.using,
+      e.args.map((a) => constantNode(a)),
+      ctx,
+      e.args.map((a) => printedArgument(a, ctx)),
+    ) as Compiled
+  }
   // MOD(a, b) is `a % b`, its name included in an overflow's message.
   if (name === 'MOD') {
     arity(2)

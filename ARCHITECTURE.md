@@ -1309,6 +1309,7 @@ it we capture:
 | Keywords | MySQL's reserved-word list |
 | Functions | 200 scripts of string and numeric function calls over every type, both protocols |
 | Date and time functions | 300 scripts of the date and time functions over every temporal type, text and numbers, in UTC, both protocols, warning counts compared |
+| More functions | 300 scripts of the remaining string, math, hashing and network functions (CHAR, FIELD, FORMAT with locales, CONV, base64, the digests, LOG and the trigonometry, INET and UUID), both protocols, warning counts compared |
 | Temporal text | 2,700 generated strings stored into DATE, DATETIME, TIME and TIMESTAMP, strictly and under IGNORE, each with its SHOW WARNINGS |
 | `INFORMATION_SCHEMA` | 120 DDL scripts, each followed by the introspection queries Prisma and Drizzle send: 2,568 statements |
 | Feature scripts | Hand-written scripts, each run on the server first with its answers kept: foreign keys, CHECK, ALTER TABLE and defaults, SHOW CREATE TABLE, JSON paths, REGEXP and ICU's pattern syntax, collation mixes, temporal comparisons, BIT |
@@ -1421,7 +1422,7 @@ included. Most of M5's exit criterion holds. All 487 tests of Drizzle's
 MySQL suites pass, as they do against 8.4.11. Of Prisma's, 1,113 pass
 against the server's 1,122, FULLTEXT search included; the one failure is a
 snapshot of another MySQL version's error text, which 8.4.11 fails too. The rest of the function library and the
-cost-based planner come next. The core bundle is about 252 KB gzipped
+cost-based planner come next. The core bundle is about 264 KB gzipped
 against a budget of 500 KB, with the UCA weights in a separate chunk loaded
 on demand.
 

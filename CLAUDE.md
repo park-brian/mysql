@@ -67,6 +67,7 @@ npm run capture:json         # 250 scripts over JSON columns, the constructors a
 npm run capture:temporal     # 2,700 generated strings into DATE/DATETIME/TIME/TIMESTAMP, with SHOW WARNINGS
 npm run capture:functions    # 200 scripts of string and numeric function calls, both protocols
 npm run capture:temporal-functions   # 300 scripts of date and time function calls, in UTC
+npm run capture:more-functions       # 300 scripts of string, math, hashing and network function calls
 npm run capture:information-schema   # 120 DDL scripts, then Prisma's introspection queries
 npm run census:orm           # Drizzle's and Prisma's MySQL suites: a feature census, and our pass count
 npm run exit-criterion       # the real C client against our server
