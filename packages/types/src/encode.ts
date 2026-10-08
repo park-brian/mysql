@@ -275,10 +275,14 @@ function encodeIntField(v: Exclude<Value, null>, width: number, column: FieldCol
 function encodeDecimalField(v: Exclude<Value, null>, column: FieldColumn, ctx: StoreContext): Uint8Array {
   const precision = column.type.precision ?? 10
   const scale = column.type.scale ?? 0
-  let d: DecimalValue = rescale(toDecimal(v), scale)
+  const exact = toDecimal(v)
+  let d: DecimalValue = rescale(exact, scale)
   const max = decimal(pow10(precision) - 1n, scale)
   if (decimalIntegerDigits(d) > precision - scale || (column.type.unsigned === true && d.v < 0n)) {
     d = adjust(ctx, () => columnOutOfRange(column.name, ctx.row), d.v < 0n ? (column.type.unsigned === true ? decimal(0n, scale) : decimal(-max.v, scale)) : max)
+  } else if (exact.scale > scale && exact.v % pow10(exact.scale - scale) !== 0n) {
+    // Rounded past the scale: Note 1265, whatever the mode (8.4.11).
+    ctx.warnings++
   }
   return encodeDecimal(renderDecimal(d), precision, scale)
 }
@@ -324,6 +328,13 @@ function encodeTemporalField(value: Exclude<Value, null>, column: FieldColumn, c
     v = adjust(ctx, () => wrongTemporalValue(label, toText(value), column.name, ctx.row), ZERO_DATE)
   } else v = roundDateTime(dt.v, fsp)
 
+  // A time of day a DATE drops: 1292 under a strict mode, 1265 without one,
+  // a warning either way (8.4.11) — and a fraction of a second is none.
+  if (type === 'DATE' && dt !== undefined) {
+    const full = toDateTime(value, 'DATETIME')
+    const time = full === undefined ? undefined : roundDateTime(full.v, 0)
+    if (time !== undefined && (time.hour !== 0 || time.minute !== 0 || time.second !== 0)) ctx.warnings++
+  }
   if (type === 'DATE') return dateFieldToStorage(encodeDateField(v.year, v.month, v.day))
   if (type === 'DATETIME') return encodeDatetime2(v, fsp)
   // TIMESTAMP: the session `time_zone` is taken to be UTC (doc 15's

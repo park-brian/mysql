@@ -149,6 +149,28 @@ test('M3.6: SET sql_mode reaches the session, in the form @@sql_mode reports', a
   assert.equal(s.sqlMode, '')
 })
 
+test("review: a session starts in 8.4.11's sql_mode, and a strict mode without the date modes warns 3135", async () => {
+  const { s, run, read } = live()
+  // 8.4.11's default, which `SELECT @@SESSION.sql_mode` reads on a fresh
+  // connection; this was 5.7's `STRICT_TRANS_TABLES,NO_ENGINE_SUBSTITUTION`.
+  const DEFAULT = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION'
+  assert.equal(s.sqlMode, DEFAULT)
+  assert.equal(await read('@@global.sql_mode'), DEFAULT)
+  const warnings = async (sql: string) => ((await run(sql)) as { warnings?: number }).warnings ?? 0
+  // NO_ZERO_DATE, NO_ZERO_IN_DATE and ERROR_FOR_DIVISION_BY_ZERO belong with
+  // a strict mode, all three or none: each line is what 8.4.11 answers.
+  assert.equal(await warnings("SET sql_mode = 'STRICT_TRANS_TABLES'"), 1)
+  assert.equal(await warnings("SET sql_mode = 'NO_ZERO_DATE'"), 1)
+  assert.equal(await warnings("SET sql_mode = 'STRICT_TRANS_TABLES,NO_ZERO_DATE,NO_ZERO_IN_DATE'"), 1)
+  assert.equal(await warnings("SET sql_mode = 'TRADITIONAL'"), 0)
+  assert.equal(await warnings("SET sql_mode = ''"), 0)
+  assert.equal(await warnings('SET sql_mode = DEFAULT'), 0)
+  // DEFAULT is the global's value, and is checked like any other.
+  assert.equal(await warnings("SET GLOBAL sql_mode = 'STRICT_ALL_TABLES'"), 1)
+  assert.equal(await warnings('SET sql_mode = DEFAULT'), 1)
+  assert.equal(await warnings("SET sql_mode = 'STRICT_TRANS_TABLES', @@session.sql_mode = 'NO_ZERO_DATE'"), 2)
+})
+
 test("M3.6: the session's sql_mode decides how its next statement is parsed", async () => {
   const { s, run } = live()
   // `'latin1\'` never closes by default, since `\'` escapes the quote…

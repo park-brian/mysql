@@ -81,7 +81,7 @@ export class ServerState {
     this.vars = new Map<string, SqlValue>([
       ['version', this.serverVersion],
       ['version_comment', options.versionComment ?? 'myjs — an in-process MySQL for JavaScript'],
-      ['sql_mode', 'STRICT_TRANS_TABLES,NO_ENGINE_SUBSTITUTION'],
+      ['sql_mode', 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION'],
       ['autocommit', 1],
       ['time_zone', 'SYSTEM'],
       ['system_time_zone', 'UTC'],
@@ -131,7 +131,7 @@ export class ServerState {
    * `autocommit`, which the caller applies. Anything else is kept for
    * `@@name` to read back and otherwise changes nothing.
    */
-  set(session: Session, item: SetItem, evaluate: (e: Expression) => Value, own: Map<string, Value>): 'sql_mode' | undefined {
+  set(session: Session, item: SetItem, evaluate: (e: Expression) => Value, own: Map<string, Value>, warn: () => void = () => {}): 'sql_mode' | undefined {
     if (item.type === 'names' || item.type === 'charset') {
       const change = charsetChange(item)
       if (change === 'unknown') throw sqlError('ER_UNKNOWN_CHARACTER_SET', messages.unsupportedCharset(0))
@@ -142,7 +142,7 @@ export class ServerState {
     const name = (item.base === undefined ? item.name : `${item.base}.${item.name}`).toLowerCase()
     const scope = item.type === 'system' ? item.scope : undefined
     const value = item.value
-    if (name === 'sql_mode') return this.#setSqlMode(session, scope, value) ? 'sql_mode' : undefined
+    if (name === 'sql_mode') return this.#setSqlMode(session, scope, value, warn) ? 'sql_mode' : undefined
 
     let v: Value
     if (value.kind === NODE.KEYWORD) {
@@ -170,7 +170,7 @@ export class ServerState {
   }
 
   /** Whether the session's own `sql_mode` was assigned. */
-  #setSqlMode(session: Session, scope: string | undefined, value: Expression | KeywordNode): boolean {
+  #setSqlMode(session: Session, scope: string | undefined, value: Expression | KeywordNode, warn: () => void): boolean {
     let text: string
     if (value.kind === NODE.LITERAL && typeof value.value === 'string') text = value.value
     else if (value.kind === NODE.COLUMN && value.parts.length === 1) text = value.parts[0] as string
@@ -182,7 +182,14 @@ export class ServerState {
     else return false
     // Validated even for `PERSIST_ONLY`, which stores without applying: an
     // unknown mode is ER_WRONG_VALUE_FOR_VAR whatever the scope.
-    const mode = formatSqlMode(parseSqlMode(text))
+    const parsed = parseSqlMode(text)
+    // 3135, a warning: NO_ZERO_DATE, NO_ZERO_IN_DATE and
+    // ERROR_FOR_DIVISION_BY_ZERO belong with a strict mode, all three or none
+    // (8.4.11 warns for `STRICT_TRANS_TABLES` alone, and for `NO_ZERO_DATE` alone).
+    const strict = parsed.names.has('STRICT_TRANS_TABLES') || parsed.names.has('STRICT_ALL_TABLES')
+    const dates = ['NO_ZERO_DATE', 'NO_ZERO_IN_DATE', 'ERROR_FOR_DIVISION_BY_ZERO'].filter((m) => parsed.names.has(m)).length
+    if (strict ? dates < 3 : dates > 0) warn()
+    const mode = formatSqlMode(parsed)
     if (scope === 'GLOBAL' || scope === 'PERSIST') this.vars.set('sql_mode', mode)
     else if (scope !== 'PERSIST_ONLY') {
       session.sqlMode = mode

@@ -543,13 +543,14 @@ export class SqlExecutor implements Executor {
     const session = run.env.session
     const evaluate = (e: Expression): Value => compile(e, compileContext(run, EMPTY_SCOPE, 'field list')).eval([], run.env)
     const wasAutocommit = session.autocommit
+    let warnings = 0
     for (const item of statement.items) {
       if (item.type === 'user') {
         const v = evaluate(item.value)
         state.userVariables.set(item.name.replace(/^@/, '').toLowerCase(), v)
         continue
       }
-      const changed = this.server.set(session, item, evaluate, state.ownVariables)
+      const changed = this.server.set(session, item, evaluate, state.ownVariables, () => warnings++)
       if (changed === 'sql_mode') state.sqlModeAssigned = true
       // `transaction_isolation` is what SET SESSION TRANSACTION sets too: one
       // setting, so the variable reaches the transactions (found by review).
@@ -562,7 +563,7 @@ export class SqlExecutor implements Executor {
     }
     // `SET autocommit = 1` commits whatever the session had open.
     if (!wasAutocommit && session.autocommit) state.commit()
-    return { affectedRows: 0 }
+    return { affectedRows: 0, ...(warnings > 0 ? { warnings } : {}) }
   }
 
   /**
