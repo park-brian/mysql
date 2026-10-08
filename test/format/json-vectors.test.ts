@@ -25,8 +25,11 @@ test('M5.21: every JSON statement the executor runs returns what the server retu
   assert.match(fixture.capturedAgainst, /mysql-server/, 'a fixture must name the server it came from')
   assert.equal(fixture.sqlMode, SQL_MODE)
   const t = await replay(fixture, CONNECTION as Record<string, unknown>)
-  console.log(`  [json] ${t.agreed} of ${t.statements} agree, ${t.refused} refused; ${t.unordered} compared as multisets`)
+  console.log(`  [json] ${t.agreed} of ${t.statements} agree, ${t.refused} refused; ${t.unordered} compared as multisets; warning counts differ on ${t.warningMismatches.length} of ${t.warningsCompared}`)
+  if (process.env.WARNINGS === '1') console.log(t.warningMismatches.join('\n'))
   assert.ok(t.statements > 4000, `the corpus is too small to say anything: ${t.statements} statements`)
   assert.deepEqual(t.mismatches.slice(0, 5), [], `${t.mismatches.length} statements disagree`)
   assert.ok(t.refused <= REFUSED_AT_MOST, `${t.refused} refusals, more than the ${REFUSED_AT_MOST} this stage allows`)
+  // M5.28: a query's warning count, as `@@warning_count` reads it straight after.
+  assert.deepEqual(t.warningMismatches.slice(0, 5), [], `${t.warningMismatches.length} queries' warning counts disagree`)
 })

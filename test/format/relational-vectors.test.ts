@@ -83,6 +83,9 @@ export interface Tally {
   /** Queries whose server plan used a strategy listed in UNMODELLED. */
   unmodelled: number
   mismatches: string[]
+  /** Queries that agree whose warning count was compared, and those whose count did not (M5.28). */
+  warningsCompared: number
+  warningMismatches: string[]
 }
 
 const textOf = (o: Answer): Answer => (o.error !== undefined ? { error: o.error } : { columns: o.columns, rows: o.rows })
@@ -100,10 +103,10 @@ export async function replay(fixture: Fixture, connection: Record<string, unknow
   const db = await MySQL.open(':memory:')
   const conn = await mysql.createConnection({ stream: db.createStream() as never, user: 'root', password: '', ...connection })
   await conn.query(`SET sql_mode = '${fixture.sqlMode}'`)
-  const tally: Tally = { statements: 0, agreed: 0, refused: 0, orderedByStatement: 0, orderedByPlan: 0, unordered: 0, unorderedInOrder: 0, unmodelled: 0, mismatches: [] }
+  const tally: Tally = { statements: 0, agreed: 0, refused: 0, orderedByStatement: 0, orderedByPlan: 0, unordered: 0, unorderedInOrder: 0, unmodelled: 0, mismatches: [], warningsCompared: 0, warningMismatches: [] }
   try {
     for (const expected of fixture.cases) {
-      const actual = (await runCase(conn, expected.map(({ sql, select, ordered, serverOnly }) => ({ sql, select, ordered, serverOnly })))) as Outcome[]
+      const actual = (await runCase(conn, expected.map(({ sql, select, ordered, serverOnly }) => ({ sql, select, ordered, serverOnly })), { warnings: true })) as Outcome[]
       for (let i = 0; i < expected.length; i++) {
         const e = expected[i] as Outcome
         const a = actual[i] as Outcome
@@ -144,6 +147,10 @@ export async function replay(fixture: Fixture, connection: Record<string, unknow
           break
         }
         tally.agreed++
+        if (e.select === true && e.warnings !== undefined) {
+          tally.warningsCompared++
+          if (e.warnings !== a.warnings) tally.warningMismatches.push(`${e.sql}\n    server ${e.warnings} warnings, ours ${a.warnings}`)
+        }
       }
     }
   } finally {
@@ -162,9 +169,13 @@ test('M5.18: every relational statement the executor runs returns what the serve
   console.log(
     `  [relational] ${t.agreed} of ${t.statements} agree, ${t.refused} refused; order checked ${t.orderedByStatement} by ORDER BY, ` +
       `${t.orderedByPlan} by plan; ${t.unordered} compared as multisets (${t.unorderedInOrder} in the server's order anyway); ` +
-      `${t.unmodelled} under a plan strategy not yet modelled, metadata uncompared`,
+      `${t.unmodelled} under a plan strategy not yet modelled, metadata uncompared; ` +
+      `warning counts differ on ${t.warningMismatches.length} of ${t.warningsCompared}`,
   )
+  if (process.env.WARNINGS === '1') console.log(t.warningMismatches.join('\n'))
   assert.ok(t.statements > 4000, `the corpus is too small to say anything: ${t.statements} statements`)
   assert.deepEqual(t.mismatches.slice(0, 5), [], `${t.mismatches.length} statements disagree`)
   assert.ok(t.refused <= REFUSED_AT_MOST, `${t.refused} refusals, more than the ${REFUSED_AT_MOST} this stage allows`)
+  // M5.28: a query's warning count, as `@@warning_count` reads it straight after.
+  assert.deepEqual(t.warningMismatches.slice(0, 5), [], `${t.warningMismatches.length} queries' warning counts disagree`)
 })

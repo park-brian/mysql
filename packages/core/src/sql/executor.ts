@@ -52,18 +52,18 @@ import {
   type Session,
   type StatementResult,
 } from '@myjs/protocol'
-import { COERCIBILITY, doubleValue, intValue, parseDecimal, plainValue, stringValue, toInteger, toText, type Value } from '@myjs/types'
+import { COERCIBILITY, doubleValue, intValue, parseDecimal, plainValue, stringValue, toInteger, toText, type Condition, type Value } from '@myjs/types'
 import { charsetChange, ensureCollationResident } from '../transcoder.ts'
 import { PROGRAM_OBJECTS, ServerState, type ProgramStatement, type ServerOptions } from './admin.ts'
-import { compile, EMPTY_SCOPE, type Env } from './compile.ts'
+import { compile, EMPTY_SCOPE, raise, type Env } from './compile.ts'
 import { alterTable } from './alter.ts'
 import { checkClauses, checkForeignKeyActions, withChecks } from './checks.ts'
 import { showCreateTable } from './show-create.ts'
-import { DEFAULT_COLLATION, createTableSpec, deprecationWarnings, duplicateKeys, resolveCollation } from './ddl.ts'
+import { DEFAULT_COLLATION, createTableSpec, deprecationWarnings, duplicateKeys, duplicateKeyText, resolveCollation } from './ddl.ts'
 import { foreignKeyChecks, foreignKeyClause, foreignKeysOf, referencingKeys, withForeignKeys } from './foreign-keys.ts'
 import { checkDefaults, insert, remove, update } from './dml.ts'
 import { fulltextOf } from './fulltext.ts'
-import { columnDefinition, stringType } from './meta.ts'
+import { columnDefinition, intType, stringType } from './meta.ts'
 import { columnsOf, compileContext, planQuery, resultSet, viewTable, type Run } from './query.ts'
 import { SqlSession, isolationOf } from './session.ts'
 import type { WireProtocol } from './wire.ts'
@@ -162,6 +162,9 @@ function tablesOf(statement: Statement): TableName[] {
   }
   return out
 }
+
+/** `max_error_count`'s default: how many conditions SHOW WARNINGS keeps. */
+const MAX_ERROR_COUNT = 1024
 
 export class SqlExecutor implements Executor {
   readonly catalog: Catalog | undefined
@@ -384,12 +387,22 @@ export class SqlExecutor implements Executor {
     await this.#preload(session, statement)
     this.#alive(session)
     const state = this.#state(session)
+    // SHOW WARNINGS, SHOW ERRORS and their counts read the diagnostics area
+    // and leave it; every other statement starts a new one (8.4.11).
+    const diagnostic = statement.kind === STATEMENT.SHOW && (statement.what === 'WARNINGS' || statement.what === 'ERRORS')
+    if (!diagnostic) state.previous = state.diagnostics
     const started = Date.now()
     let wait = 1
     for (let attempt = 0; ; attempt++) {
+      const conditions: Condition[] = []
       try {
-        const run = this.#run(session, sql, params, known, protocol)
-        return this.#dispatch(run, statement)
+        const run = this.#run(session, sql, params, known, protocol, conditions)
+        const result = this.#dispatch(run, statement)
+        if (diagnostic) return result
+        // A count no condition stands for is still the count (`warning_count`).
+        const warnings = Math.max(result.warnings ?? 0, conditions.length)
+        state.diagnostics = { conditions: conditions.slice(0, MAX_ERROR_COUNT), warnings, errors: 0 }
+        return warnings === (result.warnings ?? 0) ? result : { ...result, warnings }
       } catch (e) {
         const code = codeOf(e)
         if (code === 'ENGINE_WRITER_BUSY') {
@@ -412,14 +425,17 @@ export class SqlExecutor implements Executor {
             continue
           }
         }
-        throw toSqlError(e)
+        const error = toSqlError(e)
+        // The error is a condition too, after any the statement raised first.
+        if (!diagnostic) state.diagnostics = { conditions: [...conditions, { level: 'Error' as const, code: error.errno ?? 0, message: error.message }].slice(0, MAX_ERROR_COUNT), warnings: conditions.length + 1, errors: 1 }
+        throw error
       }
     }
   }
 
-  #run(session: Session, sql: string, params: readonly Value[], known: readonly Value[] | undefined, protocol: WireProtocol): Run {
+  #run(session: Session, sql: string, params: readonly Value[], known: readonly Value[] | undefined, protocol: WireProtocol, conditions: Condition[] = []): Run {
     const state = this.#state(session)
-    const env: Env = { params, now: new Date(), session, state, memo: new Map() }
+    const env: Env = { params, now: new Date(), session, state, memo: new Map(), conditions }
     return { catalog: this.catalog, state, env, sql, protocol, serverVersion: this.server.serverVersion, ...(known === undefined ? {} : { params: known }) }
   }
 
@@ -454,13 +470,22 @@ export class SqlExecutor implements Executor {
         // CHECK constraints are resolved first, IF NOT EXISTS or not (8.4.11: 3820 over a table that exists).
         spec = withChecks(catalog, schema, spec, run.sql, checkClauses(statement), session.characterSet)
         // A table that exists is 1050, or IF NOT EXISTS's note, whatever its keys would say.
-        if (!catalog.tables(schema).some((t) => t.name === spec.name)) {
+        const exists = catalog.tables(schema).some((t) => t.name === spec.name)
+        if (!exists) {
           spec = withForeignKeys(catalog, schema, spec, statement.keys.filter((k) => k.type === KEY.FOREIGN).map(foreignKeyClause), foreignKeyChecks(run))
           checkForeignKeyActions(spec, foreignKeysOf({ ...spec, schema, options: spec.options ?? {} } as TableDef))
         }
+        const deprecated = deprecationWarnings(statement)
+        for (const m of deprecated) raise(run.env, 1681, m)
         const notes = checkDefaults(run, spec.columns)
         catalog.createTable(schema, spec, { ifNotExists: statement.ifNotExists === true })
-        const warnings = deprecationWarnings(statement) + notes + duplicateKeys(spec.indexes ?? [], fulltextOf(spec))
+        if (exists) {
+          raise(run.env, 1050, `Table '${spec.name}' already exists`, 'Note')
+          return { affectedRows: 0, warnings: deprecated.length + notes + 1 }
+        }
+        const duplicates = duplicateKeys(spec.indexes ?? [], fulltextOf(spec))
+        for (const key of duplicates) raise(run.env, 1831, duplicateKeyText(key, schema, spec.name))
+        const warnings = deprecated.length + notes + duplicates.length
         return { affectedRows: 0, ...(warnings > 0 ? { warnings } : {}) }
       }
       case STATEMENT.ALTER_TABLE:
@@ -473,7 +498,7 @@ export class SqlExecutor implements Executor {
         // session's own transaction holds the writer the catalog needs, and the
         // statement waits on itself (found by review).
         state.commit()
-        return this.#createDatabase(statement)
+        return this.#createDatabase(run, statement)
       case STATEMENT.DROP:
         return this.#drop(run, statement)
       case STATEMENT.TRUNCATE: {
@@ -567,7 +592,7 @@ export class SqlExecutor implements Executor {
     return result
   }
 
-  #createDatabase(statement: CreateDatabaseNode): StatementResult {
+  #createDatabase(run: Run, statement: CreateDatabaseNode): StatementResult {
     const catalog = this.#catalog()
     const options = statement.options
     const pick = (...names: string[]): string | undefined => {
@@ -578,7 +603,12 @@ export class SqlExecutor implements Executor {
     // The data dictionary's own schema is refused by name (sql_db.cc), before anything else.
     if (statement.name === 'mysql' && statement.ifNotExists !== true) throw systemSchema(statement.name)
     const made = catalog.createSchema(statement.name, { ifNotExists: statement.ifNotExists === true, collationId })
-    return { affectedRows: made === undefined ? 0 : 1 }
+    // One that exists is a note under IF NOT EXISTS, and still "1 row affected" (8.4.11).
+    if (made === undefined) {
+      run.env.conditions?.push({ level: 'Note', code: 1007, message: `Can't create database '${statement.name}'; database exists` })
+      return { affectedRows: 1, warnings: 1 }
+    }
+    return { affectedRows: 1 }
   }
 
   /**
@@ -630,6 +660,10 @@ export class SqlExecutor implements Executor {
         }
       }
       run.state.commit()
+      if (!catalog.schemas().some((s) => s.name === name) && statement.ifExists === true) {
+        raise(run.env, 1008, `Can't drop database '${name}'; database doesn't exist`, 'Note')
+        return { affectedRows: 0, warnings: 1 }
+      }
       const tables = catalog.dropSchema(name, { ifExists: statement.ifExists === true })
       if (session.database === name) session.database = null
       return { affectedRows: tables.length }
@@ -643,7 +677,9 @@ export class SqlExecutor implements Executor {
       let notes = 0
       for (const schema of schemas as Set<string>) {
         const names = statement.names.filter((n) => (n.schema ?? session.database) === schema).map((n) => n.name)
-        notes += catalog.dropViews(schema, names, { ifExists: statement.ifExists === true }).length
+        const missing = catalog.dropViews(schema, names, { ifExists: statement.ifExists === true })
+        for (const name of missing) raise(run.env, 1051, `Unknown table '${schema}.${name}'`, 'Note')
+        notes += missing.length
       }
       return { affectedRows: 0, ...(notes > 0 ? { warnings: notes } : {}) }
     }
@@ -675,7 +711,11 @@ export class SqlExecutor implements Executor {
     }
     run.state.commit()
     let notes = 0
-    for (const n of names) if (!catalog.dropTable(n.schema, n.name, { ifExists: true })) notes++
+    for (const n of names) {
+      if (catalog.dropTable(n.schema, n.name, { ifExists: true })) continue
+      raise(run.env, 1051, `Unknown table '${n.schema}.${n.name}'`, 'Note')
+      notes++
+    }
     // IF EXISTS notes each name it did not find, a view's included (8.4.11: 1051).
     return { affectedRows: 0, ...(notes > 0 ? { warnings: notes } : {}) }
   }
@@ -692,7 +732,10 @@ export class SqlExecutor implements Executor {
         state.userVariables.set(item.name.replace(/^@/, '').toLowerCase(), plainValue(v))
         continue
       }
-      const changed = this.server.set(session, item, evaluate, state.ownVariables, () => warnings++)
+      const changed = this.server.set(session, item, evaluate, state.ownVariables, (code, message) => {
+        warnings++
+        raise(run.env, code, message)
+      })
       if (changed === 'sql_mode') state.sqlModeAssigned = true
       // `transaction_isolation` is what SET SESSION TRANSACTION sets too: one
       // setting, so the variable reaches the transactions (found by review).
@@ -739,7 +782,27 @@ export class SqlExecutor implements Executor {
     const encode = (s: string) => run.env.session.transcoder.encode(s, coll)
     switch (statement.what) {
       case 'WARNINGS':
-        return { columns: [text('Level', 7), text('Code', 4), text('Message', 512)], rows: [] }
+      case 'ERRORS': {
+        // The last statement's conditions — SHOW ERRORS only its errors — or
+        // how many, under COUNT(*), as `@@session.warning_count` (8.4.11).
+        const d = run.state.diagnostics
+        if (statement.count === true) {
+          const name = `@@session.${statement.what === 'WARNINGS' ? 'warning' : 'error'}_count`
+          const n = statement.what === 'WARNINGS' ? d.warnings : d.errors
+          return { columns: [columnDefinition(name, intType(21, true, true), coll)], rows: [[encode(String(n))]] }
+        }
+        let listed = statement.what === 'WARNINGS' ? d.conditions : d.conditions.filter((c) => c.level === 'Error')
+        if (statement.limit !== undefined) {
+          const value = (x: Expression | undefined) => (x === undefined ? 0 : Number(toInteger(compile(x, compileContext(run, EMPTY_SCOPE, 'limit')).eval([], run.env) ?? intValue(0n))))
+          const offset = value(statement.limit.offset)
+          listed = listed.slice(offset, offset + value(statement.limit.count))
+        }
+        const code = { ...intType(5, false, true), field: FIELD_TYPE.LONG }
+        return {
+          columns: [text('Level', 7), columnDefinition('Code', code, coll), text('Message', 512)],
+          rows: listed.map((c) => [encode(c.level), encode(String(c.code)), encode(c.message)]),
+        }
+      }
       case 'DATABASES': {
         const names = ['information_schema', ...(this.catalog?.schemas().map((s) => s.name) ?? [])].sort()
         return { columns: [text('Database', 64)], rows: names.filter((n) => statement.like === undefined || likeText(n, statement.like)).map((n) => [encode(n)]) }

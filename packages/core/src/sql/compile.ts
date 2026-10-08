@@ -13,7 +13,7 @@
 // have not written is ER_NOT_SUPPORTED_YET naming it (M5.10 owns the rest).
 import { CHARSET_BINARY, FIELD_TYPE, type MysqlDateTime } from '@myjs/bytes'
 import { collation, collationInfoByName, decodeCollation, defaultCollationOf, encodeCollation, requireCollationInfo } from '@myjs/charsets'
-import { LITERAL, NODE, deparse, parseExpression, type CallNode, type CaseNode, type CastNode, type Expression, type LiteralNode, type MatchNode, type QueryExpression, type SubqueryNode } from '@myjs/parser'
+import { LITERAL, NODE, TOKEN, deparse, lex, parseExpression, type CallNode, type CaseNode, type CastNode, type Expression, type LiteralNode, type MatchNode, type QueryExpression, type SubqueryNode } from '@myjs/parser'
 import type { ColumnDef, Table, Trx } from '@myjs/engine'
 import { sqlError, messages, type Session } from '@myjs/protocol'
 import {
@@ -37,6 +37,7 @@ import {
   intValue,
   modulo,
   negate,
+  numericPrefix,
   not,
   nullSafeEqual,
   parseDateTime,
@@ -52,6 +53,8 @@ import {
   toTime,
   timeOrdinal,
   truth,
+  valInt,
+  type Condition,
   type StringValue,
   type Value,
 } from '@myjs/types'
@@ -97,6 +100,85 @@ export interface Env {
   readonly outer?: readonly Row[]
   /** One statement's memory: an uncorrelated subquery's answer, computed once. */
   readonly memo?: Map<unknown, unknown>
+  /** The statement's conditions, as SHOW WARNINGS will list them. */
+  readonly conditions?: Condition[]
+}
+
+/**
+ * An operand read as a number: when it is text, each value that is not one
+ * draws 1292, "Truncated incorrect DOUBLE value" (or INTEGER, or DECIMAL),
+ * as `double_from_string_with_check` and its siblings warn. Text that is
+ * empty or only spaces is 0 without one; so is an ENUM, read by its index,
+ * and a hex literal, read as a number. The value itself passes unchanged.
+ */
+export function asNumber(c: Compiled, kind: 'DOUBLE' | 'INTEGER' | 'DECIMAL', once = false): Compiled {
+  if (c.type.kind !== 'string' && c.type.kind !== 'bytes') return c
+  // A TEXT or BLOB column reads as a double or an integer without a word
+  // (`Field_blob::val_real` and `val_int` discard the error).
+  if (c.type.column !== undefined && c.type.field === FIELD_TYPE.BLOB && kind !== 'DECIMAL') return c
+  const key = {}
+  return {
+    ...c,
+    eval: (r, env) => {
+      const v = c.eval(r, env)
+      if (v === null) return v
+      if (once) {
+        if (env.memo?.has(key) === true) return v
+        env.memo?.set(key, true)
+      }
+      checkNumber(v, kind, env)
+      return v
+    },
+  }
+}
+
+/** Text on one side and a number on the other: a comparison of doubles. */
+function textVersusNumber(x: ResultType, y: ResultType): boolean {
+  return (x.kind === 'string' || x.kind === 'bytes') && (y.kind === 'int' || y.kind === 'decimal' || y.kind === 'double')
+}
+
+/** `asNumber`'s check, for one value. */
+export function checkNumber(v: Exclude<Value, null>, kind: 'DOUBLE' | 'INTEGER' | 'DECIMAL', env: Env): void {
+  if (v.kind === 'string' ? v.ordinal !== undefined : v.kind !== 'bytes' || v.hex === true) return
+  const text = toText(v)
+  const p = numericPrefix(text)
+  // An integer past 64 bits is truncated too, to the largest there is.
+  const overflow = kind === 'INTEGER' && p.complete && !p.fractional && (BigInt(p.text) > 18446744073709551615n || BigInt(p.text) < -9223372036854775808n)
+  if (p.complete && !(kind === 'INTEGER' && p.fractional) && !overflow) return
+  // Nothing at all is 0 quietly, except as a DECIMAL (8.4.11: `CAST('' AS DECIMAL)` warns).
+  if (!p.complete && kind !== 'DECIMAL' && /^[ \t\n\r]*$/.test(text)) return
+  raise(env, 1292, `Truncated incorrect ${kind} value: '${text}'`)
+}
+
+/**
+ * An expression's text as the statement wrote it, from its start to the
+ * parenthesis that closes it: what a warning quoting it quotes.
+ */
+function sourceText(sql: string | undefined, at: number): string | undefined {
+  if (sql === undefined) return undefined
+  let depth = 0
+  for (const t of lex(sql)) {
+    if (t.start < at || t.kind !== TOKEN.OPERATOR) continue
+    if (t.text === '(') depth++
+    else if (t.text === ')' && --depth === 0) return sql.slice(at, t.start + 1)
+  }
+  return undefined
+}
+
+/** A division of either kind, with 1365 when the divisor is zero and the answer therefore NULL. */
+function byZero(at: Compiled['eval'], bt: Compiled['eval'], op: (x: Value, y: Value) => Value): Compiled['eval'] {
+  return (r, env) => {
+    const x = at(r, env)
+    const y = bt(r, env)
+    const v = op(x, y)
+    if (v === null && x !== null && y !== null) raise(env, 1365, 'Division by 0')
+    return v
+  }
+}
+
+/** Records a condition in the statement's diagnostics area, for SHOW WARNINGS. */
+export function raise(env: Env, code: number, message: string, level: Condition['level'] = 'Warning'): void {
+  env.conditions?.push({ level, code, message })
 }
 
 /** Session state an expression can read: user variables and the last statement's counters. */
@@ -181,6 +263,10 @@ export interface CompileContext {
   readonly subquery?: (q: QueryExpression, outer: Scope) => SubqueryPlan
   /** A base table by name, for what reads one whole: MATCH's statistics (M5.26). */
   readonly table?: (schema: string, name: string) => Table | undefined
+  /** The statement's diagnostics area, for what resolving a constant warns (1292 at a constant position, say). */
+  readonly conditions?: Condition[]
+  /** The statement's text, which a warning that quotes an expression quotes from. */
+  readonly sql?: string
 }
 
 /** A grouped query's keys, as the expressions above the grouping see them. */
@@ -512,13 +598,16 @@ function unary(op: string, a: Compiled, exists: boolean): Compiled {
       const t = a.type
       // Negating an unsigned value needs room for the sign it gains.
       const type = t.kind === 'int' ? intType(t.length + (t.unsigned ? 1 : 0), t.nullable) : t.kind === 'decimal' ? decimalType(t.length, t.scale, t.nullable) : t.kind === 'null' ? NULL_TYPE : t.kind === 'double' ? floatLength(t.scale, t.nullable) : doubleType(t.nullable)
-      if (type.kind === 'double' && type.scale < 31) return { eval: (r, env) => doubleOf(negate(at(r, env)), type), type }
-      return { eval: (r, env) => negate(at(r, env)), type }
+      const operand = asNumber(a, 'DOUBLE').eval
+      if (type.kind === 'double' && type.scale < 31) return { eval: (r, env) => doubleOf(negate(operand(r, env)), type), type }
+      return { eval: (r, env) => negate(operand(r, env)), type }
     }
     case '+':
       return a
-    case '~':
-      return { eval: (r, env) => bitNot(at(r, env)), type: intType(21, a.type.nullable, true) }
+    case '~': {
+      const x = asNumber(a, 'INTEGER').eval
+      return { eval: (r, env) => bitNot(x(r, env)), type: intType(21, a.type.nullable, true) }
+    }
     case '!':
     case 'NOT':
       return { eval: (r, env) => not(at(r, env)), type: boolType(a.type.nullable) }
@@ -616,15 +705,20 @@ function binary(op: string, left: Expression, right: Expression, extra: Expressi
   if ((COMPARISONS[op] !== undefined || op === '<=>') && (isRow(left) || isRow(right))) return rowComparison(op, left, right, ctx)
   const a = compile(left, ctx)
   if (op === 'BETWEEN' || op === 'NOT BETWEEN') {
-    const lo = timeConstant(a, left, right, compile(right, ctx))
-    const hi = timeConstant(a, left, extra as Expression, compile(extra as Expression, ctx))
+    const a0 = a
+    const lo0 = timeConstant(a0, left, right, compile(right, ctx))
+    const hi0 = timeConstant(a0, left, extra as Expression, compile(extra as Expression, ctx))
+    // Text against a number bound is a double, read once a row.
+    const subject = textVersusNumber(a0.type, lo0.type) || textVersusNumber(a0.type, hi0.type) ? asNumber(a0, 'DOUBLE') : a0
+    const lo = textVersusNumber(lo0.type, a0.type) ? asNumber(lo0, 'DOUBLE', constantNode(right)) : lo0
+    const hi = textVersusNumber(hi0.type, a0.type) ? asNumber(hi0, 'DOUBLE', constantNode(extra as Expression)) : hi0
     const negated = op === 'NOT BETWEEN'
     // Each bound is its own comparison, fixed decimals and all.
     const low = comparer(a.type, lo.type)
     const high = comparer(a.type, hi.type)
     return {
       eval: (r, env) => {
-        const v = a.eval(r, env)
+        const v = subject.eval(r, env)
         const x = low(v, lo.eval(r, env))
         const y = high(v, hi.eval(r, env))
         // Three-valued: a known failure on either side decides it.
@@ -639,8 +733,13 @@ function binary(op: string, left: Expression, right: Expression, extra: Expressi
 
   const b = compile(right, ctx)
   const [ca, cb] = COMPARISONS[op] !== undefined || op === '<=>' ? temporalOperands(left, right, a, b) : [a, b]
-  const at = ca.eval
-  const bt = cb.eval
+  // A string in arithmetic is read as a double, with 1292 when it is not one.
+  const arithmetic = op === '+' || op === '-' || op === '*' || op === '/' || op === '%' || op === 'MOD'
+  // And in a comparison with a number, which is of doubles: a constant is
+  // converted once a statement (`cache_converted_constant`), a column each row.
+  const comparison = (COMPARISONS[op] !== undefined || op === '<=>') && (textVersusNumber(ca.type, cb.type) || textVersusNumber(cb.type, ca.type))
+  const at = arithmetic || comparison ? asNumber(ca, 'DOUBLE', comparison && constantNode(left)).eval : ca.eval
+  const bt = arithmetic || comparison ? asNumber(cb, 'DOUBLE', comparison && constantNode(right)).eval : cb.eval
   const nullable = !notNull(a.type, b.type)
   // What an overflow names, as MySQL's message does: the expression's text.
   const label = deparse({ kind: NODE.BINARY, op, left, right, at: 0 })
@@ -719,8 +818,9 @@ function binary(op: string, left: Expression, right: Expression, extra: Expressi
       const kind = arithKind(a.type, b.type)
       const s = Math.min(30, scaleOf(a.type) + 4)
       const type = kind === 'double' ? divisionDouble(a.type, b.type) : kind === 'null' ? NULL_TYPE : decimalType(intDigits(a.type) + scaleOf(b.type) + s, s, true, a.type.unsigned === true && b.type.unsigned === true)
-      if (type.kind === 'double' && type.scale < 31) return { eval: (r, env) => doubleOf(divide(at(r, env), bt(r, env)), type), type }
-      return { eval: (r, env) => divide(at(r, env), bt(r, env)), type }
+      const quotient = byZero(at, bt, divide)
+      if (type.kind === 'double' && type.scale < 31) return { eval: (r, env) => doubleOf(quotient(r, env), type), type }
+      return { eval: quotient, type }
     }
     case 'DIV': {
       // The dividend's width: an integer's own (a TINYINT UNSIGNED is 3), a
@@ -728,21 +828,25 @@ function binary(op: string, left: Expression, right: Expression, extra: Expressi
       // is 5), a double's 22 — all read off 8.4.11.
       const t = a.type
       const width = t.kind === 'int' ? t.length : t.kind === 'decimal' ? intDigits(t) + 1 : 22
-      return { eval: (r, env) => intDivide(at(r, env), bt(r, env), label), type: intType(width, true, t.unsigned || b.type.unsigned) }
+      return { eval: byZero(at, bt, (x, y) => intDivide(x, y, label)), type: intType(width, true, t.unsigned || b.type.unsigned) }
     }
     case '%':
     case 'MOD': {
       const kind = arithKind(a.type, b.type)
       // The wider operand's digits and a sign, unsigned or not: `flag % 3` on a TINYINT UNSIGNED is 4.
       const type = kind === 'int' ? intType(Math.max(intDigits(a.type), intDigits(b.type), 1) + 1, true, a.type.unsigned) : kind === 'decimal' ? decimalType(Math.max(a.type.length, b.type.length), Math.max(scaleOf(a.type), scaleOf(b.type)), true) : doubleType(true, 23)
-      return { eval: (r, env) => modulo(at(r, env), bt(r, env), label), type }
+      return { eval: byZero(at, bt, (x, y) => modulo(x, y, label)), type }
     }
     case '|':
     case '&':
     case '^':
     case '<<':
-    case '>>':
-      return { eval: (r, env) => bitwise(at(r, env), bt(r, env), op), type: intType(21, nullable, true) }
+    case '>>': {
+      // Text is read as an unsigned integer, warning as it goes.
+      const x = asNumber(ca, 'INTEGER').eval
+      const y = asNumber(cb, 'INTEGER').eval
+      return { eval: (r, env) => bitwise(x(r, env), y(r, env), op), type: intType(21, nullable, true) }
+    }
     default: {
       const test = COMPARISONS[op]
       if (test === undefined) throw sqlError('ER_NOT_SUPPORTED_YET', messages.notSupported(`The operator ${op}`))
@@ -980,8 +1084,12 @@ function inList(negated: boolean, left: Expression, right: Expression, ctx: Comp
       type: boolType(true),
     }
   }
-  const a = compile(left, ctx)
-  const items = list.map((i) => timeConstant(a, left, i, compile(i, ctx)))
+  const compiled = compile(left, ctx)
+  const raw = list.map((i) => timeConstant(compiled, left, i, compile(i, ctx)))
+  // Text against numbers is read as doubles: the left side once a row, and
+  // a text item each time it is compared (8.4.11: `id IN ('1x', 2)` warns a row).
+  const a = raw.some((i) => textVersusNumber(compiled.type, i.type)) ? asNumber(compiled, 'DOUBLE') : compiled
+  const items = raw.map((i) => (textVersusNumber(i.type, compiled.type) ? asNumber(i, 'DOUBLE') : i))
   // A long list of constants is sorted once per execution and searched, as
   // MySQL's `in_vector` is: Prisma sends 65,535 of them.
   const searchable = items.length >= 10 && list.every(constantItem)
@@ -1233,6 +1341,11 @@ function call(e: CallNode, ctx: CompileContext): Compiled {
     return libraryFunction(name, xs, e.name, e.args.map((a) => constantNode(a)), ctx) as Compiled
   }
   if (name === 'DEFAULT' && e.args.length === 1) return defaultFunction(e, ctx)
+  // MOD(a, b) is `a % b`, its name included in an overflow's message.
+  if (name === 'MOD') {
+    arity(2)
+    return compile({ kind: NODE.BINARY, op: '%', left: e.args[0] as Expression, right: e.args[1] as Expression, at: e.at }, ctx)
+  }
   switch (name) {
     case 'STRCMP': {
       // A comparison of the two as strings, in their aggregated collation:
@@ -1482,7 +1595,7 @@ function call(e: CallNode, ctx: CompileContext): Compiled {
     }
     case 'ABS': {
       arity(1)
-      const [x] = args() as [Compiled]
+      const x = asNumber((args() as [Compiled])[0], 'DOUBLE')
       return {
         eval: (r, env) => {
           const v = x.eval(r, env)
@@ -1620,7 +1733,10 @@ function clock(now: Date, fsp: number): MysqlDateTime {
 }
 
 function cast(e: CastNode, ctx: CompileContext): Compiled {
-  const inner = compile(e.expr, ctx)
+  const raw = compile(e.expr, ctx)
+  // What the target reads its argument as, warning as it goes (1292).
+  const reads = e.type.name === 'DECIMAL' ? 'DECIMAL' : e.type.name === 'DOUBLE' || e.type.name === 'FLOAT' || e.type.name === 'REAL' ? 'DOUBLE' : ['SIGNED', 'UNSIGNED', 'INT', 'BIGINT'].includes(e.type.name) ? 'INTEGER' : undefined
+  const inner = reads === undefined ? raw : asNumber(raw, reads)
   const x = inner.eval
   const nullable = inner.type.nullable
   const t = e.type
@@ -1634,7 +1750,9 @@ function cast(e: CastNode, ctx: CompileContext): Compiled {
           const v = x(r, env)
           if (v === null) return null
           const s = toText(v)
-          return stringValue(t.length === undefined ? s : [...s].slice(0, t.length).join(''), id, COERCIBILITY.IMPLICIT)
+          if (t.length === undefined || [...s].length <= t.length) return stringValue(s, id, COERCIBILITY.IMPLICIT)
+          raise(env, 1292, `Truncated incorrect CHAR(${t.length}) value: '${s}'`)
+          return stringValue([...s].slice(0, t.length).join(''), id, COERCIBILITY.IMPLICIT)
         },
         // Nullable whatever its argument, as 8.4.11 reports it.
         type: stringType(t.length ?? charWidth(inner.type), id, true),
@@ -1650,6 +1768,7 @@ function cast(e: CastNode, ctx: CompileContext): Compiled {
           const b = v.kind === 'bytes' ? v.v : v.kind === 'string' ? encodeCollation(v.v, v.collationId) : new TextEncoder().encode(toText(v))
           if (t.length === undefined) return bytesValue(b)
           // BINARY(N) is N bytes: cut, or padded with zero bytes (8.4.11).
+          if (b.length > t.length) raise(env, 1292, `Truncated incorrect BINARY(${t.length}) value: '${toText(v)}'`)
           const out = new Uint8Array(t.length)
           out.set(b.subarray(0, t.length))
           return bytesValue(out)
@@ -1666,8 +1785,11 @@ function cast(e: CastNode, ctx: CompileContext): Compiled {
         eval: (r, env) => {
           const v = x(r, env)
           if (v === null) return null
-          const n = toInteger(v)
+          const n = valInt(v)
+          // A negative number written as text, made unsigned, says so (1105).
+          if (unsigned && n < 0n && (v.kind === 'string' || v.kind === 'bytes')) raise(env, 1105, 'Cast to unsigned converted negative integer to its positive complement')
           const mask = (1n << 64n) - 1n
+          if (!unsigned && n > (1n << 63n) - 1n && (v.kind === 'string' || v.kind === 'bytes')) raise(env, 1105, 'Cast to signed converted positive out-of-range integer to its negative complement')
           return unsigned ? intValue(n & mask, true) : intValue(n > (1n << 63n) - 1n ? n - (1n << 64n) : n)
         },
         type: intType(unsigned ? 20 : 21, nullable, unsigned),
@@ -1676,10 +1798,17 @@ function cast(e: CastNode, ctx: CompileContext): Compiled {
     case 'DECIMAL': {
       const precision = t.length ?? 10
       const scale = t.scale ?? 0
+      const limit = 10n ** BigInt(precision) - 1n
+      const label = () => sourceText(ctx.sql, e.at) ?? deparse(e)
       return {
         eval: (r, env) => {
           const v = x(r, env)
-          return v === null ? null : rescale(toDecimal(v), scale)
+          if (v === null) return null
+          const d = rescale(toDecimal(v), scale)
+          // Past DECIMAL(M,D)'s digits: the largest it holds, and 1264 (8.4.11).
+          if (d.v <= limit && d.v >= -limit) return d
+          raise(env, 1264, `Out of range value for column '${label()}' at row 1`)
+          return decimalValue(d.v < 0n ? -limit : limit, scale)
         },
         type: decimalType(precision, scale, nullable),
       }

@@ -43,10 +43,12 @@ import {
   toDouble,
   toInteger,
   toText,
+  valInt,
   type DecimalValue,
   type Value,
+  type Condition,
 } from '@myjs/types'
-import { aggregate, aggregateTypes, coercibilityOf, convertTo, type Compiled, type CompileContext } from './compile.ts'
+import { aggregate, aggregateTypes, asNumber, coercibilityOf, convertTo, raise, type Compiled, type CompileContext, type Env } from './compile.ts'
 import { charWidth, decimalType, doubleType, intType, stringType, type ResultType } from './meta.ts'
 
 type V = Exclude<Value, null>
@@ -57,13 +59,16 @@ const INT_MAX32 = 2147483647n
 const INT_MIN32 = -2147483648n
 
 /** `val_int` of a position or count: BIGINT UNSIGNED's values above 2⁶³ stay positive. */
-const intArg = (v: V): bigint => toInteger(v)
+/** A count or a position, as `val_int` reads it: text stops at its first non-digit. */
+const intArg = (v: V): bigint => valInt(v)
 
 /** A constant argument's integer value: `null` for a constant NULL, `undefined` for an argument that is not constant. */
-function constantInt(c: Compiled | undefined, constant: boolean): bigint | null | undefined {
+function constantInt(c: Compiled | undefined, constant: boolean, conditions?: Condition[]): bigint | null | undefined {
   if (c === undefined || !constant) return undefined
   try {
-    const v = c.eval([], { params: [], now: new Date(0), session: undefined as never, state: undefined as never })
+    // Resolving reads the constant once, and warns once for it, as
+    // `resolve_type`'s `val_int` does: `LEFT('abc', 'z')` warns twice (8.4.11).
+    const v = c.eval([], { params: [], now: new Date(0), session: undefined as never, state: undefined as never, ...(conditions === undefined ? {} : { conditions }) })
     return v === null ? null : intArg(v)
   } catch {
     return undefined
@@ -191,7 +196,32 @@ const startsWith = (s: readonly string[], p: readonly string[], at: number) => p
  * A string or numeric function by name, or `undefined` for another name. `e`
  * gives the call's text for its arity error and its arguments' constness.
  */
-export function libraryFunction(name: string, xs: readonly Compiled[], callName: string, constant: readonly boolean[], ctx: CompileContext): Compiled | undefined {
+const READS_DOUBLE: ReadonlySet<string> = new Set(['FLOOR', 'CEIL', 'CEILING', 'ROUND', 'TRUNCATE', 'SIGN'])
+
+/** The arguments that are counts and positions, read as integers (1292 "INTEGER"). */
+const READS_INTEGER: Readonly<Record<string, readonly number[]>> = { SUBSTRING: [1, 2], SUBSTR: [1, 2], MID: [1, 2], LEFT: [1], RIGHT: [1], LPAD: [1], RPAD: [1], REPEAT: [1], SPACE: [0] }
+
+/** `max_allowed_packet`: the largest string LPAD, RPAD, REPEAT and SPACE build. */
+function maxPacket(env: Env): number {
+  const v = env.state.systemVariable('max_allowed_packet', undefined, env.session)
+  return v === undefined || v === null ? 67_108_864 : Number(toInteger(v))
+}
+
+/** A result too large to build: NULL, and 1301 naming the function (8.4.11). */
+function packetOverflow(env: Env, name: string): null {
+  raise(env, 1301, `Result of ${name.toLowerCase()}() was larger than max_allowed_packet (${maxPacket(env)}) - truncated`)
+  return null
+}
+
+/** A string's bytes in its charset, as the packet check counts them. */
+function byteLength(units: readonly string[], binary: boolean, collation: number): number {
+  return binary ? units.length : encodeCollation(units.join(''), collation).length
+}
+
+export function libraryFunction(name: string, args: readonly Compiled[], callName: string, constant: readonly boolean[], ctx: CompileContext): Compiled | undefined {
+  // The numeric functions read text as a double, warning as they go (1292).
+  const integers = READS_INTEGER[name]
+  const xs = READS_DOUBLE.has(name) && args[0] !== undefined ? [asNumber(args[0], 'DOUBLE'), ...args.slice(1)] : integers !== undefined ? args.map((a, i) => (integers.includes(i) ? asNumber(a, 'INTEGER') : a)) : args
   const conn = ctx.connectionCollation
   const arity = (min: number, max = min) => {
     if (xs.length < min || xs.length > max) throw sqlError('ER_WRONG_PARAMCOUNT_TO_NATIVE_FCT', `Incorrect parameter count in the call to native function '${callName}'`)
@@ -207,10 +237,10 @@ export function libraryFunction(name: string, xs: readonly Compiled[], callName:
       // (position 0 to nothing, as its unsigned arithmetic has it), then a
       // constant length; a NULL one leaves it whole.
       let width = widthOf((xs[0] as Compiled).type, binary)
-      const start = constantInt(xs[1], constant[1] === true)
+      const start = constantInt(xs[1], constant[1] === true, ctx.conditions)
       if (start !== null) {
         if (start !== undefined && start > INT_MIN32 && start <= INT_MAX32) width = start < 0n ? (-start > BigInt(width) ? 0 : Number(-start)) : start === 0n ? 0 : width - Math.min(Number(start) - 1, width)
-        const length = constantInt(xs[2], constant[2] === true)
+        const length = constantInt(xs[2], constant[2] === true, ctx.conditions)
         if (length !== null && length !== undefined) width = length < 0n ? 0 : length <= INT_MAX32 ? Math.min(width, Number(length)) : width
       }
       return {
@@ -235,7 +265,7 @@ export function libraryFunction(name: string, xs: readonly Compiled[], callName:
       arity(2)
       const { binary, collation, coercibility } = first()
       let width = widthOf((xs[0] as Compiled).type, binary)
-      const n = constantInt(xs[1], constant[1] === true)
+      const n = constantInt(xs[1], constant[1] === true, ctx.conditions)
       if (n !== undefined && n !== null) width = n < 0n ? 0 : n <= INT_MAX32 ? Math.min(width, Number(n)) : width
       return {
         eval: (r, env) => {
@@ -254,7 +284,7 @@ export function libraryFunction(name: string, xs: readonly Compiled[], callName:
     case 'RPAD': {
       arity(3)
       const { binary, collation, coercibility } = first()
-      const n = constantInt(xs[1], constant[1] === true)
+      const n = constantInt(xs[1], constant[1] === true, ctx.conditions)
       // `val_uint`: a negative count is a huge one.
       const width = n === undefined || n === null ? undefined : Number(n > INT_MAX32 || n < 0n ? INT_MAX32 : n)
       return {
@@ -263,9 +293,12 @@ export function libraryFunction(name: string, xs: readonly Compiled[], callName:
           if (v === undefined) return null
           const s = strOf(v[0] as V, binary, collation).units
           const count = intArg(v[1] as V)
-          if (count < 0n || count > INT_MAX32) return null
-          const k = Number(count)
+          if (count < 0n) return null
+          // A count past INT_MAX32 is INT_MAX32, and a result past
+          // max_allowed_packet is NULL with 1301 — checked before it is built.
+          const k = Number(count > INT_MAX32 ? INT_MAX32 : count)
           if (k <= s.length) return result(s.slice(0, k), binary, collation, coercibility)
+          if (byteLength(s, binary, collation) + (k - s.length) * (binary ? 1 : requireCollationInfo(collation).mbmaxlen) > maxPacket(env)) return packetOverflow(env, name)
           const pad = strOf(v[2] as V, binary, collation).units
           if (pad.length === 0) return result([], binary, collation, coercibility)
           const fill: string[] = []
@@ -278,7 +311,7 @@ export function libraryFunction(name: string, xs: readonly Compiled[], callName:
     case 'REPEAT': {
       arity(2)
       const { binary, collation, coercibility } = first()
-      const n = constantInt(xs[1], constant[1] === true)
+      const n = constantInt(xs[1], constant[1] === true, ctx.conditions)
       const width = n === undefined || n === null ? undefined : n === 0n ? 0 : widthOf((xs[0] as Compiled).type, binary) * Number(n > INT_MAX32 || n < 0n ? INT_MAX32 : n)
       return {
         eval: (r, env) => {
@@ -287,7 +320,7 @@ export function libraryFunction(name: string, xs: readonly Compiled[], callName:
           const s = strOf(v[0] as V, binary, collation).units
           const count = intArg(v[1] as V)
           if (count <= 0n || s.length === 0) return result([], binary, collation, coercibility)
-          if (count * BigInt(s.length) > 67_108_864n) return null
+          if (BigInt(byteLength(s, binary, collation)) * (count > INT_MAX32 ? INT_MAX32 : count) > BigInt(maxPacket(env))) return packetOverflow(env, name)
           return result(Array.from({ length: Number(count) }, () => s).flat(), binary, collation, coercibility)
         },
         type: textType(width, binary, collation, coercibility, width !== undefined),
@@ -389,7 +422,7 @@ export function libraryFunction(name: string, xs: readonly Compiled[], callName:
     }
     case 'SPACE': {
       arity(1)
-      const n = constantInt(xs[0], constant[0] === true)
+      const n = constantInt(xs[0], constant[0] === true, ctx.conditions)
       const width = constant[0] === true ? (n === undefined || n === null || n < 0n ? 0 : Number(n > INT_MAX32 ? INT_MAX32 : n)) : undefined
       return {
         eval: (r, env) => {
@@ -397,7 +430,7 @@ export function libraryFunction(name: string, xs: readonly Compiled[], callName:
           if (v === null) return null
           const count = intArg(v)
           if (count <= 0n) return stringValue('', conn, COERCIBILITY.COERCIBLE)
-          if (count > 67_108_864n) return null
+          if ((count > INT_MAX32 ? INT_MAX32 : count) * BigInt(requireCollationInfo(conn).mbminlen) > BigInt(maxPacket(env))) return packetOverflow(env, name)
           return stringValue(' '.repeat(Number(count)), conn, COERCIBILITY.COERCIBLE)
         },
         type: textType(width, false, conn, COERCIBILITY.COERCIBLE, width !== undefined),

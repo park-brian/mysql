@@ -21,7 +21,7 @@ import { CLIENT, hasCap, messages, sqlError, type OkResult } from '@myjs/protoco
 import type { ColumnDef, FieldBytes, IndexDef, RowId, Table, TableDef, Trx } from '@myjs/engine'
 import { EngineError } from '@myjs/engine'
 import { NODE, QUERY, REF, parseExpression, type Assignment, type ColumnNode, type DeleteNode, type Expression, type InsertNode, type TableName, type UpdateNode } from '@myjs/parser'
-import { decodeField, encodeEnum, encodeField, integerRange, intValue, toInteger, toText, type StoreContext, type Value } from '@myjs/types'
+import { decodeField, encodeEnum, encodeField, integerRange, intValue, toInteger, toText, warn, type Condition, type StoreContext, type Value } from '@myjs/types'
 import { compile, EMPTY_SCOPE, type Compiled, type Row, type Scope } from './compile.ts'
 import { checker, checkViolated } from './checks.ts'
 import { guarded, isReferenced } from './foreign-keys.ts'
@@ -87,7 +87,7 @@ export function checkDefaults(run: Run, columns: readonly ColumnDef[], table: re
     if (!literal) continue
     const numeric = e.kind === NODE.UNARY || (e.kind === NODE.LITERAL && (e.type === 'int' || e.type === 'decimal' || e.type === 'double'))
     if (numeric && (column.type.type === FIELD_TYPE.ENUM || column.type.type === FIELD_TYPE.SET)) throw invalid(column)
-    const ctx: StoreContext = { strict: true, row: 1, warnings: 0 }
+    const ctx: StoreContext = { strict: true, row: 1, warnings: 0, ...sink(run) }
     let field: Uint8Array | null
     try {
       field = encodeField((defaultOf(run, column) as Compiled).eval([], run.env), { ...column, nullable: true }, ctx)
@@ -226,12 +226,21 @@ type NullPolicy = 'error' | 'warn'
  * many rows it gives a NULL (8.4.11: three rows, two of them NULL in `a` and
  * one in `b`, is two warnings); an UPDATE warns per row, and passes no `warned`.
  */
+/** The statement's diagnostics area, for a StoreContext to record its conditions in. */
+const sink = (run: Run): { conditions?: Condition[] } => (run.env.conditions === undefined ? {} : { conditions: run.env.conditions })
+
+/** An error IGNORE turns into a warning: its code and its text, at warning level. */
+function warnError(store: StoreContext, e: unknown): void {
+  if (e instanceof MyjsError) warn(store, e.errno ?? 0, e.message)
+  else store.warnings++
+}
+
 function storeField(v: Value, column: ColumnDef, store: StoreContext, nulls: NullPolicy, warned?: Set<ColumnDef>): FieldBytes {
   try {
     return encodeField(v, column, store)
   } catch (e) {
     if (nulls === 'error' || !(e instanceof MyjsError) || e.code !== 'ER_BAD_NULL_ERROR') throw e
-    if (warned === undefined || !warned.has(column)) store.warnings++
+    if (warned === undefined || !warned.has(column)) warn(store, e.errno ?? 1048, e.message)
     warned?.add(column)
     // An explicit NULL is the type's zero, which for an ENUM is index 0, the
     // error value '' — not the first member a missing column takes (8.4.11).
@@ -528,7 +537,7 @@ export function insert(run: Run, node: InsertNode, trx: Trx): OkResult {
   const ignore = node.ignore === true
   const mode = node.replace === true ? 'replace' : node.onDuplicate !== undefined ? 'upsert' : 'insert'
   const strictMode = isStrict(run.env.session.sqlMode)
-  const store: StoreContext = { strict: strictMode && !ignore, row: 1, warnings: 0, table: def.name }
+  const store: StoreContext = { strict: strictMode && !ignore, row: 1, warnings: 0, table: def.name, ...sink(run) }
   // A NULL for a NOT NULL column is refused by a strict mode and by a
   // one-row INSERT, and stored as the type's zero by IGNORE or a multi-row
   // INSERT; an upsert's own assignment is refused unless IGNORE (8.4.11).
@@ -593,7 +602,7 @@ export function insert(run: Run, node: InsertNode, trx: Trx): OkResult {
       if (column.autoIncrement === true) values[i] = null
       else if (defaults[i] === 'none') {
         if (store.strict) throw sqlError('ER_NO_DEFAULT_FOR_FIELD', messages.noDefaultForField(column.name))
-        store.warnings++
+        warn(store, 1364, messages.noDefaultForField(column.name))
       }
     })
     // Every value is converted, in column order, before AUTO_INCREMENT takes
@@ -615,7 +624,7 @@ export function insert(run: Run, node: InsertNode, trx: Trx): OkResult {
     const violated = check?.(fields)
     if (violated !== undefined) {
       if (!ignore) throw checkViolated(violated)
-      store.warnings++
+      warnError(store, checkViolated(violated))
       stats.records--
       return
     }
@@ -648,7 +657,7 @@ export function insert(run: Run, node: InsertNode, trx: Trx): OkResult {
         // a warning, and its value is given back (8.4.11).
         if (ignore && e instanceof MyjsError && e.errno === 1452) {
           auto.written()
-          store.warnings++
+          warnError(store, e)
           auto.restore(prev)
           return
         }
@@ -658,7 +667,7 @@ export function insert(run: Run, node: InsertNode, trx: Trx): OkResult {
         if (hit === undefined) throw e
         if (mode === 'insert') {
           if (!ignore) throw duplicateError(e, def, table, keys, fields, trx, undefined, hit)
-          store.warnings++
+          warnError(store, duplicateError(e, def, table, keys, fields, trx, undefined, hit))
           auto.restore(prev)
           return
         }
@@ -718,14 +727,14 @@ export function insert(run: Run, node: InsertNode, trx: Trx): OkResult {
     const violated = check?.(result.after)
     if (violated !== undefined) {
       if (!ignore) throw checkViolated(violated)
-      store.warnings++
+      warnError(store, checkViolated(violated))
       return
     }
     try {
       table.update(id, result.after, trx)
     } catch (e) {
       if (!isDuplicate(e) || !ignore) throw duplicateError(e, def, table, keys, result.after, trx, id)
-      store.warnings++
+      warnError(store, duplicateError(e, def, table, keys, result.after, trx, id))
       return
     }
     stats.updated++
@@ -820,7 +829,7 @@ function assignAll(
       const column = def.columns[a.index] as ColumnDef
       if (d === 'none') {
         if (store.strict) throw sqlError('ER_NO_DEFAULT_FOR_FIELD', messages.noDefaultForField(column.name))
-        store.warnings++
+        warn(store, 1364, messages.noDefaultForField(column.name))
       }
       assign(a.index, d === 'none' ? implicitDefault(column) : d.eval(values as Row, run.env))
     } else assign(a.index, a.value.eval(extra.length === 0 ? (values as Row) : [...values, ...extra], run.env))
@@ -920,7 +929,7 @@ export function update(run: Run, node: UpdateNode, trx: Trx): OkResult {
   const onUpdate = onUpdateOf(run, def)
   const defaults = def.columns.map((c) => defaultOf(run, c, def))
   const check = checker(run, def)
-  const store: StoreContext = { strict: isStrict(run.env.session.sqlMode), row: 1, warnings: 0, table: def.name }
+  const store: StoreContext = { strict: isStrict(run.env.session.sqlMode), row: 1, warnings: 0, table: def.name, ...sink(run) }
   const keys = uniqueKeys(def)
   run.state.insertIdSet = false
 
@@ -993,6 +1002,7 @@ export function remove(run: Run, node: DeleteNode, trx: Trx): OkResult {
       if (node.ignore !== true || !(e instanceof MyjsError) || e.errno !== 1451) throw e
       trx.rollbackTo(at)
       warnings++
+      run.env.conditions?.push({ level: 'Warning', code: e.errno ?? 1451, message: e.message })
     }
   }
   return warnings === 0 ? { affectedRows: deleted } : { affectedRows: deleted, warnings }

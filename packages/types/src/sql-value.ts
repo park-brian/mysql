@@ -324,6 +324,26 @@ export function toInteger(v: Exclude<Value, null>): bigint {
   }
 }
 
+/**
+ * A value as `val_int` reads it. Text is read as `my_strtoll10` reads it:
+ * leading spaces, a sign and digits, stopping at anything else — so '1.5' is
+ * 1 and '2e1' is 2, where storing them into a column rounds — and a number
+ * past 64 bits saturates, at 2^64 - 1 or -2^63 (8.4.11:
+ * `CAST('99999999999999999999' AS SIGNED)` is -1). Anything else is
+ * `toInteger`.
+ */
+export function valInt(v: Exclude<Value, null>): bigint {
+  if (v.kind !== 'string' && v.kind !== 'bytes') return toInteger(v)
+  if (v.kind === 'string' && v.ordinal !== undefined) return v.ordinal
+  if (v.kind === 'bytes' && v.hex === true) return hexNumber(v.v)
+  const m = /^[ \t\n\r]*([+-]?)(\d*)/.exec(textOf(v)) as RegExpExecArray
+  const digits = m[2] as string
+  if (digits === '') return 0n
+  const n = BigInt(digits)
+  if (m[1] === '-') return n > -MIN_SIGNED ? MIN_SIGNED : -n
+  return n > MAX_UNSIGNED ? MAX_UNSIGNED : n
+}
+
 export function roundDouble(n: number): bigint {
   if (!Number.isFinite(n)) return n > 0 ? MAX_UNSIGNED + 1n : MIN_SIGNED - 1n
   const r = n < 0 ? -Math.round(-n) : Math.round(n)

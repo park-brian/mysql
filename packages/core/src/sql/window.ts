@@ -21,6 +21,7 @@ import type { CallNode, WindowSpec } from '@myjs/parser'
 import { messages, sqlError } from '@myjs/protocol'
 import { intValue, sortValues, type Value } from '@myjs/types'
 import { compile, type CompileContext, type Compiled, type Env, type Row } from './compile.ts'
+import { warnNonScalar } from './operators.ts'
 import { intType } from './meta.ts'
 
 const FUNCTIONS = new Set(['ROW_NUMBER', 'RANK', 'DENSE_RANK'])
@@ -79,6 +80,7 @@ export function applyWindows(rows: Row[], windows: readonly WindowPlan[], env: E
   let current = rows
   for (const w of windows) {
     const keyed = current.map((row, at) => ({ row, at, partition: w.partition.map((p) => p.eval(row, env)), order: w.order.map((o) => o.expr.eval(row, env)) }))
+    warnNonScalar(keyed.map((k) => k.order), env)
     if (w.partition.length > 0 || w.order.length > 0) {
       keyed.sort((a, b) => {
         for (let i = 0; i < a.partition.length; i++) {

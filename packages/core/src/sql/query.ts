@@ -68,6 +68,8 @@ export function compileContext(run: Run, scope: Scope, clause: string): CompileC
     ...(run.params === undefined ? {} : { params: run.params }),
     subquery: (q, outer) => planSubquery(run, q, outer),
     table: (schema, name) => run.catalog?.table(schema, name),
+    ...(run.env.conditions === undefined ? {} : { conditions: run.env.conditions }),
+    sql: run.sql,
   }
 }
 

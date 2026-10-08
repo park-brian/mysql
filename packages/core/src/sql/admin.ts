@@ -136,7 +136,7 @@ export class ServerState {
    * `autocommit`, which the caller applies. Anything else is kept for
    * `@@name` to read back and otherwise changes nothing.
    */
-  set(session: Session, item: SetItem, evaluate: (e: Expression) => Value, own: Map<string, Value>, warn: () => void = () => {}): 'sql_mode' | undefined {
+  set(session: Session, item: SetItem, evaluate: (e: Expression) => Value, own: Map<string, Value>, warn: (code: number, message: string) => void = () => {}): 'sql_mode' | undefined {
     if (item.type === 'names' || item.type === 'charset') {
       const change = charsetChange(item)
       if (change === 'unknown') throw sqlError('ER_UNKNOWN_CHARACTER_SET', messages.unsupportedCharset(0))
@@ -175,7 +175,7 @@ export class ServerState {
   }
 
   /** Whether the session's own `sql_mode` was assigned. */
-  #setSqlMode(session: Session, scope: string | undefined, value: Expression | KeywordNode, warn: () => void): boolean {
+  #setSqlMode(session: Session, scope: string | undefined, value: Expression | KeywordNode, warn: (code: number, message: string) => void): boolean {
     let text: string
     if (value.kind === NODE.LITERAL && typeof value.value === 'string') text = value.value
     else if (value.kind === NODE.COLUMN && value.parts.length === 1) text = value.parts[0] as string
@@ -193,7 +193,7 @@ export class ServerState {
     // (8.4.11 warns for `STRICT_TRANS_TABLES` alone, and for `NO_ZERO_DATE` alone).
     const strict = parsed.names.has('STRICT_TRANS_TABLES') || parsed.names.has('STRICT_ALL_TABLES')
     const dates = ['NO_ZERO_DATE', 'NO_ZERO_IN_DATE', 'ERROR_FOR_DIVISION_BY_ZERO'].filter((m) => parsed.names.has(m)).length
-    if (strict ? dates < 3 : dates > 0) warn()
+    if (strict ? dates < 3 : dates > 0) warn(3135, "'NO_ZERO_DATE', 'NO_ZERO_IN_DATE' and 'ERROR_FOR_DIVISION_BY_ZERO' sql modes should be used with strict mode. They will be merged with strict mode in a future release.")
     const mode = formatSqlMode(parsed)
     if (scope === 'GLOBAL' || scope === 'PERSIST') this.vars.set('sql_mode', mode)
     else if (scope !== 'PERSIST_ONLY') {

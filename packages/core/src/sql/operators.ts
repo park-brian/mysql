@@ -10,7 +10,7 @@ import type { KeyRange, RowId, Table, Trx } from '@myjs/engine'
 import type { ColumnType } from '@myjs/types'
 import { decodeField, sortValues, truth, type Value } from '@myjs/types'
 import { rowKey } from './keys.ts'
-import type { Compiled, Env, Row } from './compile.ts'
+import { raise, type Compiled, type Env, type Row } from './compile.ts'
 
 /** A row as a scan produces it: its values, and the id to write it back by. */
 export interface ScannedRow {
@@ -67,6 +67,7 @@ export interface SortKey {
  */
 export function sort<T extends { readonly row: Row }>(source: Iterable<T>, keys: readonly SortKey[], env: Env): T[] {
   const decorated = [...source].map((item, at) => ({ item, at, values: keys.map((k) => k.expr.eval(item.row, env)) }))
+  warnNonScalar(decorated.map((d) => d.values), env)
   decorated.sort((a, b) => {
     for (let i = 0; i < keys.length; i++) {
       const c = sortValues(a.values[i] ?? null, b.values[i] ?? null)
@@ -76,6 +77,24 @@ export function sort<T extends { readonly row: Row }>(source: Iterable<T>, keys:
   })
   return decorated.map((d) => d.item)
 }
+
+/**
+ * A JSON array or object among a sort's keys: sorted, but with 8.4.11's
+ * warning, once a statement (1235: "sorting of non-scalar JSON values").
+ */
+export function warnNonScalar(keys: readonly (readonly Value[])[], env: Env): void {
+  if (env.memo?.has(NON_SCALAR) === true) return
+  for (const values of keys) {
+    for (const v of values) {
+      if (v === null || v.kind !== 'json' || (v.v.t !== 'array' && v.v.t !== 'object')) continue
+      env.memo?.set(NON_SCALAR, true)
+      raise(env, 1235, "This version of MySQL doesn't yet support 'sorting of non-scalar JSON values'")
+      return
+    }
+  }
+}
+
+const NON_SCALAR = Symbol('non-scalar JSON sorted')
 
 /**
  * The first of each set of rows equal on every value — `SELECT DISTINCT`, over

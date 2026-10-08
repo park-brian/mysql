@@ -131,6 +131,7 @@ export {
   toDecimal,
   toDouble,
   toInteger,
+  valInt,
   toText,
   toTextBytes,
   toTime,
@@ -142,7 +143,7 @@ export { aggregateCollation, commonCollation, compareDecimals, compareValues, nu
 export { SUM_PRECISION_INCREMENT, avgAccumulator, avgPrecision, bitAccumulator, extremeAccumulator, sumAccumulator, sumPrecision, varianceAccumulator } from './aggregate.ts'
 export type { Accumulator } from './aggregate.ts'
 export { DIV_PRECISION_INCREMENT, add, bitNot, bitwise, divide, intDivide, modulo, negate, not } from './arith.ts'
-export { decodeField, encodeField, integerRange } from './encode.ts'
-export type { FieldColumn, StoreContext } from './encode.ts'
+export { decodeField, encodeField, integerRange, warn } from './encode.ts'
+export type { Condition, FieldColumn, StoreContext } from './encode.ts'
 export { columnCannotBeNull, columnOutOfRange, dataTooLong, invalidJsonArgument, invalidJsonCharset, invalidJsonText, valueOutOfRange, wrongTemporalValue, wrongValueForColumn } from './errors.ts'
 export { addInterval, dayNumber, intervalFsp, intervalOf, isDateUnit, isIntervalUnit, isTimeUnit, type Interval } from './interval.ts'

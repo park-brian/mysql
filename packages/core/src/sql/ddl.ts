@@ -36,39 +36,51 @@ const INEXACT_CODES: ReadonlySet<number> = new Set([FIELD_TYPE.FLOAT, FIELD_TYPE
  * one for UNSIGNED on a FLOAT, DOUBLE or DECIMAL (ZEROFILL's own UNSIGNED
  * draws none).
  */
-export function deprecationWarnings(node: CreateTableNode): number {
-  return node.columns.reduce((n, c) => n + columnDeprecations(c), 0)
+export function deprecationWarnings(node: CreateTableNode): string[] {
+  return node.columns.flatMap(columnDeprecations)
 }
 
-/** One column's share of `deprecationWarnings`, for ALTER TABLE's added and changed columns too. */
-export function columnDeprecations(c: ColumnDefinition): number {
+/** One column's share of `deprecationWarnings`, in 8.4.11's order, for ALTER TABLE's added and changed columns too. */
+export function columnDeprecations(c: ColumnDefinition): string[] {
   const t = c.type
   const code = t.code as number
-  let n = t.zerofill === true ? 1 : 0
-  if (INTEGER_CODES.has(code) && t.length !== undefined) n++
-  if ((code === FIELD_TYPE.FLOAT || code === FIELD_TYPE.DOUBLE) && t.scale !== undefined) n++
-  if (INEXACT_CODES.has(code) && t.unsigned === true && t.zerofill !== true) n++
-  return n
+  const out: string[] = []
+  if (t.zerofill === true) out.push(DEPRECATED.zerofill)
+  if (INTEGER_CODES.has(code) && t.length !== undefined) out.push(DEPRECATED.width)
+  if ((code === FIELD_TYPE.FLOAT || code === FIELD_TYPE.DOUBLE) && t.scale !== undefined) out.push(DEPRECATED.digits)
+  if (INEXACT_CODES.has(code) && t.unsigned === true && t.zerofill !== true) out.push(DEPRECATED.unsigned)
+  return out
+}
+
+/** The 1681 texts, as 8.4.11 words them. */
+const DEPRECATED = {
+  zerofill: 'The ZEROFILL attribute is deprecated and will be removed in a future release. Use the LPAD function to zero-pad numbers, or store the formatted numbers in a CHAR column.',
+  width: 'Integer display width is deprecated and will be removed in a future release.',
+  digits: 'Specifying number of digits for floating point data types is deprecated and will be removed in a future release.',
+  unsigned: 'UNSIGNED for decimal and floating point data types is deprecated and support for it will be removed in a future release.',
 }
 
 /**
- * How many keys repeat an earlier one: the same kind over the same parts, in
+ * The keys that repeat an earlier one: the same kind over the same parts, in
  * the same order and direction. Each is a warning, 1831, which says the
  * duplicate is deprecated (8.4.11); a FULLTEXT key repeats only a FULLTEXT
  * one. `before` keys of each list were there already and are not counted.
  */
-export function duplicateKeys(indexes: readonly IndexDef[], fulltext: readonly FulltextDef[], before: { readonly indexes: number; readonly fulltext: number } = { indexes: 0, fulltext: 0 }): number {
+export function duplicateKeys(indexes: readonly IndexDef[], fulltext: readonly FulltextDef[], before: { readonly indexes: number; readonly fulltext: number } = { indexes: 0, fulltext: 0 }): string[] {
   const shape = (i: IndexDef) => `${i.kind === 'primary' ? 'unique' : i.kind}:${i.parts.map((p) => `${p.column.toLowerCase()}(${p.prefix ?? ''})${p.descending === true ? 'D' : 'A'}`).join(',')}`
-  let n = 0
+  const out: string[] = []
   indexes.forEach((x, k) => {
-    if (k >= before.indexes && indexes.slice(0, k).some((y) => shape(y) === shape(x))) n++
+    if (k >= before.indexes && indexes.slice(0, k).some((y) => shape(y) === shape(x))) out.push(x.name)
   })
   const words = (f: FulltextDef) => f.columns.map((c) => c.toLowerCase()).join(',')
   fulltext.forEach((x, k) => {
-    if (k >= before.fulltext && fulltext.slice(0, k).some((y) => words(y) === words(x))) n++
+    if (k >= before.fulltext && fulltext.slice(0, k).some((y) => words(y) === words(x))) out.push(x.name)
   })
-  return n
+  return out
 }
+
+/** 1831's text, for a key `duplicateKeys` found. */
+export const duplicateKeyText = (key: string, schema: string, table: string): string => `Duplicate index '${key}' defined on the table '${schema}.${table}'. This is deprecated and will be disallowed in a future release.`
 
 /** The server default (D-10). */
 export const DEFAULT_COLLATION = 255

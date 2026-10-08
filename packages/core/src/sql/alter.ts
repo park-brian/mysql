@@ -18,8 +18,8 @@ import { sqlError, messages, type OkResult } from '@myjs/protocol'
 import type { Catalog, ColumnDef, FieldBytes, IndexDef, TableDef, TableSpec } from '@myjs/engine'
 import { KEY, NODE, deparse, type AlterAction, type AlterTableNode, type ColumnDefinition, type Expression } from '@myjs/parser'
 import { decodeField, encodeField, type StoreContext, type Value } from '@myjs/types'
-import type { Compiled } from './compile.ts'
-import { column as columnDef, columnDeprecations, DEFAULT_COLLATION, duplicateKeys } from './ddl.ts'
+import { raise, type Compiled } from './compile.ts'
+import { column as columnDef, columnDeprecations, DEFAULT_COLLATION, duplicateKeys, duplicateKeyText } from './ddl.ts'
 import { checker, checkForeignKeyActions, checksOf, checkViolated, columnChecks, columnsOf, withChecks, type CheckDef } from './checks.ts'
 import { checkDefaults, defaultOf, implicitDefault, rowDependent } from './dml.ts'
 import { checkParentOf, foreignKeyChecks, foreignKeyClause, foreignKeysOf, referencedIndex, referencingKeys, storageClass, supportingIndex, withForeignKeys, type ForeignKeyClause } from './foreign-keys.ts'
@@ -150,7 +150,7 @@ export function alterTable(run: Run, catalog: Catalog, statement: AlterTableNode
       if (made.autoIncrement === true && old.autoIncrement !== true) throw notSupported('ALTER TABLE … making a column AUTO_INCREMENT')
       rename(i, made.name)
       columns[i] = made
-      notes += checkDefaults(run, [made], columns) + columnDeprecations(a.column)
+      notes += deprecated(run, a.column) + checkDefaults(run, [made], columns)
       move(i, a.position)
     } else if (a.type === 'renameColumn') {
       const i = columnAt(a.from)
@@ -247,7 +247,7 @@ export function alterTable(run: Run, catalog: Catalog, statement: AlterTableNode
       at = i + 1
     }
     columns.splice(at, 0, made)
-    notes += checkDefaults(run, [made], columns) + columnDeprecations(a.column)
+    notes += deprecated(run, a.column) + checkDefaults(run, [made], columns)
     sources = [...sources.slice(0, at), made, ...sources.slice(at)]
     added.push(a.column)
   }
@@ -341,10 +341,10 @@ export function alterTable(run: Run, catalog: Catalog, statement: AlterTableNode
   const made = foreignKeysOf({ ...def, ...spec, options: spec.options ?? {} } as TableDef).filter((fk) => !before.has(fk.name))
 
   // --- the copy ---
-  const store: StoreContext = { strict: false, row: 1, warnings: 0, table: def.name }
+  const store: StoreContext = { strict: false, row: 1, warnings: 0, table: def.name, ...(run.env.conditions === undefined ? {} : { conditions: run.env.conditions }) }
   // A column whose type changed is converted as a strict INSERT would store
   // it: 1264, 1265 at the row, and NULL into NOT NULL 1138 (8.4.11).
-  const strict: StoreContext = { strict: /\bSTRICT_(TRANS|ALL)_TABLES\b/.test(run.env.session.sqlMode), row: 1, warnings: 0, table: def.name }
+  const strict: StoreContext = { strict: /\bSTRICT_(TRANS|ALL)_TABLES\b/.test(run.env.session.sqlMode), row: 1, warnings: 0, table: def.name, ...(run.env.conditions === undefined ? {} : { conditions: run.env.conditions }) }
   const converted = sources.map((src, i) => {
     if (typeof src !== 'number') return undefined
     const from = def.columns[src] as ColumnDef
@@ -424,8 +424,19 @@ export function alterTable(run: Run, catalog: Catalog, statement: AlterTableNode
   if (statement.actions.every((a) => a.type === 'rename') && Object.keys(statement.options).length === 0) return { affectedRows: 0 }
   // A table's first FULLTEXT key makes InnoDB add its document id column, and
   // say so (124, "InnoDB rebuilding table to add column FTS_DOC_ID").
-  const warnings = notes + duplicateKeys(indexes, fulltext, kept) + (fulltextOf(def).length === 0 && fulltext.length > 0 ? 1 : 0)
+  const duplicates = duplicateKeys(indexes, fulltext, kept)
+  for (const key of duplicates) raise(run.env, 1831, duplicateKeyText(key, def.schema, spec.name))
+  const rebuilt = fulltextOf(def).length === 0 && fulltext.length > 0
+  if (rebuilt) raise(run.env, 124, 'InnoDB rebuilding table to add column FTS_DOC_ID')
+  const warnings = notes + duplicates.length + (rebuilt ? 1 : 0)
   return { affectedRows: copied, info: `Records: ${copied}  Duplicates: 0  Warnings: ${warnings}`, ...(warnings > 0 ? { warnings } : {}) }
+}
+
+/** A column definition's 1681 deprecations, recorded; how many. */
+function deprecated(run: Run, c: ColumnDefinition): number {
+  const texts = columnDeprecations(c)
+  for (const m of texts) raise(run.env, 1681, m)
+  return texts.length
 }
 
 /** A literal default, or CURRENT_TIMESTAMP's: one 8.4 adds a column with in place, without copying the rows. */

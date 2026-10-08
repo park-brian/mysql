@@ -670,6 +670,20 @@ never a quiet difference. The order in which the gaps close is set by
 measurement, not by a feature list: whatever stands between the ORM test
 suites and a pass goes first.
 
+### Warnings are part of the answer
+
+A statement's warnings are part of what MySQL answers, and an application that
+reads SHOW WARNINGS after an `INSERT IGNORE` is relying on them. Each statement
+gets a diagnostics area: a list on the evaluation environment that storing a
+value, `IGNORE`, the DDL deprecations and expressions all write to, with
+MySQL's code and text. The session keeps the last one for SHOW WARNINGS and
+`@@warning_count`. When a warning fires is part of the contract. Text read
+as a number warns each time it is read, but a constant compared with a
+number is converted once per statement. So the warning sits in the
+conversion each operator wraps around its operand (`asNumber`), not in the
+conversion functions of `@myjs/types`, which stay pure. Every corpus compares
+each query's warning count.
+
 ### Plan conservatively
 
 A planner that picks a range too wide costs time. One that picks a range too

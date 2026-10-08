@@ -35,6 +35,7 @@ import {
   toDouble,
   toInteger,
   truth,
+  valInt,
   type DecimalValue,
   type Value,
 } from './sql-value.ts'
@@ -192,7 +193,8 @@ const U64 = MAX_UNSIGNED
 
 /** An operand of a bitwise operator: its 64-bit two's-complement pattern. */
 function bits(v: Exclude<Value, null>): bigint {
-  const n = numericKind(v) === 'int' ? toInteger(v) : toInteger(toDecimal(v))
+  // Text is read as `val_uint` reads it: '1.5' | 0 is 1 (8.4.11).
+  const n = v.kind === 'string' || v.kind === 'bytes' ? valInt(v) : numericKind(v) === 'int' ? toInteger(v) : toInteger(toDecimal(v))
   if (n > MAX_UNSIGNED) return U64
   if (n < MIN_SIGNED) return 1n << 63n
   return n & U64

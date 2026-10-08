@@ -445,8 +445,13 @@ export function planSkeleton(text) {
     .join('\n')
 }
 
-/** One statement's outcome on one connection. */
-export async function outcome(conn, statement) {
+/**
+ * One statement's outcome on one connection. With `warnings`, a query's
+ * warning count is read straight after it, as `@@warning_count`: before the
+ * binary execute and the EXPLAIN, whose own counts the first captures
+ * recorded instead (found when M5.28 first compared them).
+ */
+export async function outcome(conn, statement, { warnings = false } = {}) {
   const { sql } = statement
   try {
     const [result, fields] = await conn.query({ sql, rowsAsArray: true, typeCast: false })
@@ -455,12 +460,14 @@ export async function outcome(conn, statement) {
       return { ok: { affectedRows, insertId, info, warnings: warningStatus } }
     }
     const out = { columns: columnsOfFields(fields), rows: result.map((row) => row.map((v, i) => cell(v, fields[i]))) }
+    const counted = warnings ? Number((await conn.query({ sql: 'SELECT @@warning_count', rowsAsArray: true }))[0][0][0]) : undefined
     if (statement.select === true) {
       const binary = await binaryOutcome(conn, sql)
       // Recorded only where it differs from the text answer, which is rare.
       out.binary = JSON.stringify(binary) === JSON.stringify(out) ? 'same' : binary
       out.plan = await plan(conn, sql)
     }
+    if (counted !== undefined) out.warnings = counted
     return out
   } catch (e) {
     if (e.errno === undefined) throw e
@@ -493,8 +500,12 @@ async function plan(conn, sql) {
   }
 }
 
-/** Run a case: each statement's outcome, `serverOnly` ones run only when `server` is set. */
-export async function runCase(conn, statements, { server = false } = {}) {
+/**
+ * Run a case: each statement's outcome, `serverOnly` ones run only when
+ * `server` is set. With `warnings`, a query's warning count is read after it,
+ * as `@@warning_count`, which the executor answers since M5.28.
+ */
+export async function runCase(conn, statements, { server = false, warnings = server } = {}) {
   await conn.query(`DROP DATABASE IF EXISTS ${SCHEMA}`)
   await conn.query(`CREATE DATABASE ${SCHEMA}`)
   await conn.query(`USE ${SCHEMA}`)
@@ -505,12 +516,7 @@ export async function runCase(conn, statements, { server = false } = {}) {
       out.push({ ...s })
       continue
     }
-    const o = await outcome(conn, s)
-    if (server && o.rows !== undefined) {
-      const [[w]] = await conn.query({ sql: 'SELECT @@warning_count', rowsAsArray: true })
-      o.warnings = Number(w)
-    }
-    out.push({ ...s, ...o })
+    out.push({ ...s, ...(await outcome(conn, s, { warnings })) })
   }
   return out
 }

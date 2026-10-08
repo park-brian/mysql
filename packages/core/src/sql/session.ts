@@ -19,7 +19,7 @@
 // of its own, which is what `Catalog` already does (D-59).
 import type { Isolation, Store, Trx } from '@myjs/engine'
 import { sqlError, type Session } from '@myjs/protocol'
-import { stringValue, type Value } from '@myjs/types'
+import { intValue, stringValue, type Condition, type Value } from '@myjs/types'
 import type { SessionValues } from './compile.ts'
 import type { ServerState } from './admin.ts'
 
@@ -28,6 +28,18 @@ export function isolationOf(level: string): Isolation {
   const l = level.toUpperCase().replace(/[-_]/g, ' ')
   return l === 'READ COMMITTED' || l === 'READ UNCOMMITTED' ? 'READ COMMITTED' : 'REPEATABLE READ'
 }
+
+/**
+ * The diagnostics area: one statement's conditions, as SHOW WARNINGS lists
+ * them (at most `max_error_count`, 1,024), and how many there were.
+ */
+export interface Diagnostics {
+  readonly conditions: readonly Condition[]
+  readonly warnings: number
+  readonly errors: number
+}
+
+export const NO_DIAGNOSTICS: Diagnostics = { conditions: [], warnings: 0, errors: 0 }
 
 export class SqlSession implements SessionValues {
   readonly session: Session
@@ -53,6 +65,10 @@ export class SqlSession implements SessionValues {
    * even to the value it already had, it does not. Observed, not explained.
    */
   sqlModeAssigned = false
+  /** The last statement's diagnostics, which SHOW WARNINGS and SHOW ERRORS read and leave alone. */
+  diagnostics: Diagnostics = NO_DIAGNOSTICS
+  /** The diagnostics as the running statement began: what `@@warning_count` reads (8.4.11). */
+  previous: Diagnostics = NO_DIAGNOSTICS
 
   constructor(session: Session, server: ServerState) {
     this.session = session
@@ -76,6 +92,7 @@ export class SqlSession implements SessionValues {
   }
 
   systemVariable(name: string, scope: 'GLOBAL' | 'SESSION' | undefined, session: Session): Value | undefined {
+    if (scope !== 'GLOBAL' && (name === 'warning_count' || name === 'error_count')) return intValue(BigInt(name === 'warning_count' ? this.previous.warnings : this.previous.errors), true)
     return this.#server.systemVariable(name, scope, session, this.ownVariables)
   }
 

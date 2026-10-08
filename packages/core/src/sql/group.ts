@@ -55,7 +55,7 @@ import {
   type JsonDoc,
   type Value,
 } from '@myjs/types'
-import { AGGREGATE_NAMES, compile, type CompileContext, type Compiled, type Env, type Row } from './compile.ts'
+import { AGGREGATE_NAMES, asNumber, compile, type CompileContext, type Compiled, type Env, type Row } from './compile.ts'
 import { rowKey, valueKey } from './keys.ts'
 import { asJson } from './json.ts'
 import { decimalType, doubleType, floatLength, intType, jsonType, stringType, type ResultType } from './meta.ts'
@@ -225,7 +225,9 @@ export class AggregateSink {
     const ctx: CompileContext = { ...this.#rowCtx, clause, inAggregate: true }
     const star = e.args.length === 1 && e.args[0]?.kind === NODE.COLUMN && e.args[0].parts.length === 1 && e.args[0].parts[0] === '*'
     if (star && name !== 'COUNT') throw sqlError('ER_PARSE_ERROR', messages.parseError('*', 1))
-    const args = star ? [] : e.args.map((a) => compile(a, ctx))
+    // The numeric aggregates read text as doubles, a warning each time one is not (1292).
+    const numeric = name === 'SUM' || name === 'AVG' || /^(STD|STDDEV|STDDEV_POP|STDDEV_SAMP|VARIANCE|VAR_POP|VAR_SAMP)$/.test(name)
+    const args = star ? [] : e.args.map((a) => (numeric ? asNumber(compile(a, ctx), 'DOUBLE') : compile(a, ctx)))
     const arity = name === 'COUNT' || name === 'GROUP_CONCAT' ? args.length >= 1 || star : name === 'JSON_OBJECTAGG' ? args.length === 2 : args.length === 1
     if (!arity) throw sqlError('ER_WRONG_PARAMCOUNT_TO_NATIVE_FCT', `Incorrect parameter count in the call to native function '${e.name}'`)
     const type = aggregateType(name, args, ctx)
