@@ -66,6 +66,7 @@ import {
 } from './meta.ts'
 import { castAsJson, jsonConstructor } from './json.ts'
 import { jsonPathFunction, unquote } from './json-path.ts'
+import { matchType, regexpLike } from './regexp.ts'
 
 const JSON_PATH_FUNCTIONS: ReadonlySet<string> = new Set(['JSON_EXTRACT', 'JSON_UNQUOTE', 'JSON_CONTAINS', 'JSON_CONTAINS_PATH', 'JSON_TYPE', 'JSON_LENGTH', 'JSON_DEPTH', 'JSON_KEYS', 'JSON_VALID'])
 import { windowNotAllowed } from './window.ts'
@@ -539,6 +540,19 @@ function binary(op: string, left: Expression, right: Expression, extra: Expressi
   if (op === '+' && isInterval(left)) return dateAdd(right, left.value, left.unit, false, ctx)
   if (op === '-' && isInterval(right)) return dateAdd(left, right.value, right.unit, true, ctx)
   if (op === 'IN' || op === 'NOT IN') return inList(op === 'NOT IN', left, right, ctx)
+  // `a REGEXP p` is REGEXP_LIKE(a, p), and `RLIKE` is its other spelling.
+  if (op === 'REGEXP' || op === 'RLIKE' || op === 'NOT REGEXP' || op === 'NOT RLIKE') {
+    const a = compile(left, ctx)
+    const p = compile(right, ctx)
+    const negated = op.startsWith('NOT')
+    return {
+      eval: (r, env) => {
+        const m = regexpLike(a.eval(r, env), p.eval(r, env), undefined)
+        return m === null ? null : bool(m !== negated)
+      },
+      type: boolType(!notNull(a.type, p.type)),
+    }
+  }
   // `c->'$.p'` is JSON_EXTRACT(c, '$.p'); `c->>'$.p'` unquotes it too.
   if (op === '->' || op === '->>') {
     const extracted = jsonPathFunction('JSON_EXTRACT', [compile(left, ctx), compile(right, ctx)], 'json_extract') as Compiled
@@ -1067,6 +1081,19 @@ function call(e: CallNode, ctx: CompileContext): Compiled {
   const json = name === 'JSON_ARRAY' || name === 'JSON_OBJECT' ? jsonConstructor(name, args(), e.name) : JSON_PATH_FUNCTIONS.has(name) ? jsonPathFunction(name, args(), e.name) : undefined
   if (json !== undefined) return json
   switch (name) {
+    case 'REGEXP_LIKE': {
+      if (e.args.length < 2 || e.args.length > 3) throw sqlError('ER_WRONG_PARAMCOUNT_TO_NATIVE_FCT', `Incorrect parameter count in the call to native function '${e.name}'`)
+      const [a, p, t] = args() as [Compiled, Compiled, Compiled | undefined]
+      return {
+        eval: (r, env) => {
+          const mt = t === undefined ? undefined : t.eval(r, env)
+          if (mt === null) return null
+          const m = regexpLike(a.eval(r, env), p.eval(r, env), mt === undefined ? undefined : matchType(toText(mt), 'regexp_like'))
+          return m === null ? null : bool(m)
+        },
+        type: boolType(true),
+      }
+    }
     case 'COLLATION':
     case 'CHARSET': {
       // The argument's type decides, not its value: a number, a temporal or
