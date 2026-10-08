@@ -64,6 +64,7 @@ npm run capture:queries      # 1,200 generated joins and set operations, run by 
 npm run capture:execution    # 400 generated scripts, run by the server through mysql2
 npm run capture:relational   # 300 multi-table scripts, both protocols, plans captured
 npm run capture:json         # 250 scripts over JSON columns, the constructors and aggregates
+npm run capture:temporal     # 2,700 generated strings into DATE/DATETIME/TIME/TIMESTAMP, with SHOW WARNINGS
 npm run capture:functions    # 200 scripts of string and numeric function calls, both protocols
 npm run capture:information-schema   # 120 DDL scripts, then Prisma's introspection queries
 npm run census:orm           # Drizzle's and Prisma's MySQL suites: a feature census, and our pass count

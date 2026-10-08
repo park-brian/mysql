@@ -226,6 +226,9 @@ type NullPolicy = 'error' | 'warn'
  * many rows it gives a NULL (8.4.11: three rows, two of them NULL in `a` and
  * one in `b`, is two warnings); an UPDATE warns per row, and passes no `warned`.
  */
+/** The session's zero-date modes, which decide what a date column takes (8.4.11's default has both). */
+export const zeroRules = (run: Run): { noZeroDate: boolean; noZeroInDate: boolean } => ({ noZeroDate: /\bNO_ZERO_DATE\b/.test(run.env.session.sqlMode), noZeroInDate: /\bNO_ZERO_IN_DATE\b/.test(run.env.session.sqlMode) })
+
 /** The statement's diagnostics area, for a StoreContext to record its conditions in. */
 const sink = (run: Run): { conditions?: Condition[] } => (run.env.conditions === undefined ? {} : { conditions: run.env.conditions })
 
@@ -537,7 +540,7 @@ export function insert(run: Run, node: InsertNode, trx: Trx): OkResult {
   const ignore = node.ignore === true
   const mode = node.replace === true ? 'replace' : node.onDuplicate !== undefined ? 'upsert' : 'insert'
   const strictMode = isStrict(run.env.session.sqlMode)
-  const store: StoreContext = { strict: strictMode && !ignore, strictMode, row: 1, warnings: 0, table: def.name, ...sink(run) }
+  const store: StoreContext = { strict: strictMode && !ignore, strictMode, ...zeroRules(run), row: 1, warnings: 0, table: def.name, ...sink(run) }
   // A NULL for a NOT NULL column is refused by a strict mode and by a
   // one-row INSERT, and stored as the type's zero by IGNORE or a multi-row
   // INSERT; an upsert's own assignment is refused unless IGNORE (8.4.11).
@@ -929,7 +932,7 @@ export function update(run: Run, node: UpdateNode, trx: Trx): OkResult {
   const onUpdate = onUpdateOf(run, def)
   const defaults = def.columns.map((c) => defaultOf(run, c, def))
   const check = checker(run, def)
-  const store: StoreContext = { strict: isStrict(run.env.session.sqlMode), strictMode: isStrict(run.env.session.sqlMode), row: 1, warnings: 0, table: def.name, ...sink(run) }
+  const store: StoreContext = { strict: isStrict(run.env.session.sqlMode), strictMode: isStrict(run.env.session.sqlMode), ...zeroRules(run), row: 1, warnings: 0, table: def.name, ...sink(run) }
   const keys = uniqueKeys(def)
   run.state.insertIdSet = false
 

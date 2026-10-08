@@ -578,7 +578,8 @@ function literal(e: LiteralNode, ctx: CompileContext): Compiled {
         if (t === undefined) throw sqlError('ER_WRONG_VALUE', `Incorrect TIME value: '${text}'`)
         return lit({ kind: 'time', v: t.v, fsp: t.fsp }, datetimeType(FIELD_TYPE.TIME, t.fsp, false))
       }
-      const p = parseDateTime(text)
+      // Under the session's zero-date modes: DATE '0000-00-00' is 1525 by default (8.4.11).
+      const p = parseDateTime(text, zeroFlags(ctx.session.sqlMode))
       const type = e.unit === 'DATE' ? 'DATE' : 'DATETIME'
       if (p === undefined) throw sqlError('ER_WRONG_VALUE', `Incorrect ${type} value: '${text}'`)
       const v = toDateTime({ kind: 'datetime', v: p.v, type: 'DATETIME', fsp: p.fsp }, type)
@@ -821,7 +822,12 @@ function binary(op: string, left: Expression, right: Expression, extra: Expressi
   if (op === 'LIKE' || op === 'NOT LIKE') return like(op === 'NOT LIKE', a, compile(right, ctx), extra === undefined ? undefined : compile(extra as Expression, ctx))
 
   const b = compile(right, ctx)
-  const [ca, cb] = COMPARISONS[op] !== undefined || op === '<=>' ? temporalOperands(left, right, a, b) : [a, b]
+  const [ta, tb] = COMPARISONS[op] !== undefined || op === '<=>' ? temporalOperands(left, right, a, b) : [a, b]
+  // A string constant compared with a date is read as one first, and one
+  // that is not is the statement's error (8.4.11: `d = '00-00-00'` is 1525).
+  const dated = COMPARISONS[op] !== undefined || op === '<=>'
+  const ca = dated && tb.type.kind === 'datetime' && ta.type.kind === 'string' && constantNode(left) ? asDateConstant(ta, tb.type.field, ctx) : ta
+  const cb = dated && ta.type.kind === 'datetime' && tb.type.kind === 'string' && constantNode(right) ? asDateConstant(tb, ta.type.field, ctx) : tb
   // A string in arithmetic is read as a double, with 1292 when it is not one.
   const arithmetic = op === '+' || op === '-' || op === '*' || op === '/' || op === '%' || op === 'MOD'
   // And in a comparison with a number, which is of doubles: a constant is
@@ -991,30 +997,58 @@ function temporalOperands(left: Expression, right: Expression, a: Compiled, b: C
   return ak === 'time' ? [onStatementDate(a), b] : [a, onStatementDate(b)]
 }
 
-/**
- * A string that `str_to_time` reads as a datetime and keeps the time of:
- * a date, a space and a time, or 14 digits. `'1970-01-01 14:37'` is 14:37:00;
- * `'1970-01-01T14:37:36'` and `'2020-01-01'` are read as a number's prefix,
- * 00:20:20 (8.4.11), which is not done here.
- */
-const DATETIME_TEXT = /^\s*(?:\d+[-/.]\d+[-/.]\d+ +\d+:\d+(?::\d+(?:\.\d*)?)?|\d{14}(?:\.\d*)?)\s*$/
-
 function asTimeOfDay(c: Compiled): Compiled {
   return {
     eval: (r, env) => {
       const v = c.eval(r, env)
       if (v === null || v.kind === 'time') return v
-      // A datetime keeps its time of day, and so does a string or a number written as one.
-      const dt = v.kind === 'datetime' ? v : (v.kind === 'string' && DATETIME_TEXT.test(v.v)) || (v.kind === 'int' && v.v >= 10_000_000_000n) ? toDateTime(v, 'DATETIME') : undefined
+      // A datetime keeps its time of day; text is read as `str_to_time`
+      // reads it, a datetime written out included ('1970-01-01 14:37' is
+      // 14:37:00, '2020-01-01' is 00:20:20), and a number of 11 digits or
+      // more as a datetime (8.4.11).
+      if (v.kind === 'string' || v.kind === 'bytes') {
+        // Text that leaves anything over, or is no time at all, equals no
+        // time — false, not NULL (8.4.11: `tm = 'garbage'` finds no row, a
+        // midnight included). A time past TIME's range stands for it.
+        const p = parseTime(toText(v))
+        return p === undefined || p.truncated ? NO_TIME : { kind: 'time', v: p.v, fsp: p.fsp }
+      }
+      const dt = v.kind === 'datetime' ? v : v.kind === 'int' && v.v >= 10_000_000_000n ? toDateTime(v, 'DATETIME') : undefined
       return toTime(dt ?? v) ?? v
     },
     type: c.type,
   }
 }
 
-/** A constant compared with a TIME column, converted to a time of day as MySQL converts it once. */
-function timeConstant(a: Compiled, left: Expression, e: Expression, c: Compiled): Compiled {
-  return a.type.kind === 'time' && left.kind === NODE.COLUMN && constantNode(e) && (c.type.kind === 'datetime' || c.type.kind === 'string' || c.type.kind === 'int') ? asTimeOfDay(c) : c
+/** The session's NO_ZERO_DATE and NO_ZERO_IN_DATE, as a scan's flags. */
+const zeroFlags = (mode: string): { noZeroDate: boolean; noZeroInDate: boolean } => ({ noZeroDate: /\bNO_ZERO_DATE\b/.test(mode), noZeroInDate: /\bNO_ZERO_IN_DATE\b/.test(mode) })
+
+/** A string constant compared with a date or datetime: that, or 1292 and then 1525. */
+function asDateConstant(c: Compiled, field: number, ctx: CompileContext): Compiled {
+  const flags = zeroFlags(ctx.session.sqlMode)
+  const date = field === FIELD_TYPE.DATE || field === FIELD_TYPE.NEWDATE
+  return {
+    eval: (r, env) => {
+      const v = c.eval(r, env)
+      if (v === null || v.kind !== 'string') return v
+      const p = parseDateTime(v.v, flags)
+      if (p !== undefined) return { kind: 'datetime', v: p.v, type: p.hasTime ? 'DATETIME' : 'DATE', fsp: p.fsp }
+      const what = date ? 'date' : 'datetime'
+      raise(env, 1292, `Truncated incorrect ${what} value: '${v.v}'`)
+      throw sqlError('ER_WRONG_VALUE', `Incorrect ${what.toUpperCase()} value: '${v.v}'`)
+    },
+    type: c.type,
+  }
+}
+
+/** A constant compared with a TIME column, read as a time of day. */
+const NO_TIME: Value = { kind: 'time', v: { negative: true, days: 41, hour: 23, minute: 59, second: 59, microsecond: 999999 }, fsp: 0 }
+
+function timeConstant(a: Compiled, left: Expression, e: Expression, c: Compiled, list = false): Compiled {
+  // In an IN list a TIMESTAMP literal compares as a datetime, the column on
+  // today's date; a CAST to one is still read as a time of day (8.4.11).
+  const kinds = (c.type.kind === 'datetime' && !(list && e.kind === NODE.LITERAL)) || c.type.kind === 'string' || c.type.kind === 'int'
+  return a.type.kind === 'time' && left.kind === NODE.COLUMN && constantNode(e) && kinds ? asTimeOfDay(c) : c
 }
 
 function onStatementDate(c: Compiled): Compiled {
@@ -1174,7 +1208,7 @@ function inList(negated: boolean, left: Expression, right: Expression, ctx: Comp
     }
   }
   const compiled = compile(left, ctx)
-  const raw = list.map((i) => timeConstant(compiled, left, i, compile(i, ctx)))
+  const raw = list.map((i) => timeConstant(compiled, left, i, compile(i, ctx), true))
   // Text against numbers is read as doubles: the left side once a row, and
   // a text item each time it is compared (8.4.11: `id IN ('1x', 2)` warns a row).
   const a = raw.some((i) => textVersusNumber(compiled.type, i.type)) ? asNumber(compiled, 'DOUBLE') : compiled
@@ -1958,10 +1992,22 @@ function cast(e: CastNode, ctx: CompileContext): Compiled {
     case 'DATETIME': {
       const type = t.name === 'DATE' ? 'DATE' : 'DATETIME'
       const fsp = type === 'DATE' ? 0 : (t.length ?? 0)
+      const flags = zeroFlags(ctx.session.sqlMode)
       return {
         eval: (r, env) => {
           const v = x(r, env)
           if (v === null) return null
+          // Text is read under the session's zero-date modes; what is no
+          // date is NULL with 1292 (8.4.11: CAST('0000-00-00' AS DATE)).
+          if (v.kind === 'string' || (v.kind === 'bytes' && v.hex !== true)) {
+            const p = parseDateTime(toText(v), flags)
+            if (p === undefined) {
+              raise(env, 1292, `Incorrect datetime value: '${toText(v)}'`)
+              return null
+            }
+            const d = toDateTime({ kind: 'datetime', v: p.v, type: p.hasTime ? 'DATETIME' : 'DATE', fsp: p.fsp }, type)
+            return d === undefined ? null : { ...d, fsp }
+          }
           const d = toDateTime(v, type)
           return d === undefined ? null : { ...d, fsp }
         },

@@ -21,7 +21,7 @@ import { decodeField, encodeField, type StoreContext, type Value } from '@myjs/t
 import { raise, type Compiled } from './compile.ts'
 import { column as columnDef, columnDeprecations, DEFAULT_COLLATION, duplicateKeys, duplicateKeyText } from './ddl.ts'
 import { checker, checkForeignKeyActions, checksOf, checkViolated, columnChecks, columnsOf, withChecks, type CheckDef } from './checks.ts'
-import { checkDefaults, defaultOf, implicitDefault, rowDependent } from './dml.ts'
+import { checkDefaults, defaultOf, implicitDefault, rowDependent, zeroRules } from './dml.ts'
 import { checkParentOf, foreignKeyChecks, foreignKeyClause, foreignKeysOf, referencedIndex, referencingKeys, storageClass, supportingIndex, withForeignKeys, type ForeignKeyClause } from './foreign-keys.ts'
 import { checkFulltext, fulltextOf, type FulltextDef } from './fulltext.ts'
 import type { Run } from './query.ts'
@@ -344,7 +344,7 @@ export function alterTable(run: Run, catalog: Catalog, statement: AlterTableNode
   const store: StoreContext = { strict: false, row: 1, warnings: 0, table: def.name, ...(run.env.conditions === undefined ? {} : { conditions: run.env.conditions }) }
   // A column whose type changed is converted as a strict INSERT would store
   // it: 1264, 1265 at the row, and NULL into NOT NULL 1138 (8.4.11).
-  const strict: StoreContext = { strict: /\bSTRICT_(TRANS|ALL)_TABLES\b/.test(run.env.session.sqlMode), row: 1, warnings: 0, table: def.name, ...(run.env.conditions === undefined ? {} : { conditions: run.env.conditions }) }
+  const strict: StoreContext = { strict: /\bSTRICT_(TRANS|ALL)_TABLES\b/.test(run.env.session.sqlMode), ...zeroRules(run), row: 1, warnings: 0, table: def.name, ...(run.env.conditions === undefined ? {} : { conditions: run.env.conditions }) }
   const converted = sources.map((src, i) => {
     if (typeof src !== 'number') return undefined
     const from = def.columns[src] as ColumnDef

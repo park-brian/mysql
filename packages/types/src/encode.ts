@@ -43,7 +43,9 @@ import {
   int,
   json,
   numericPrefix,
+  parseDateTime,
   parseDecimal,
+  parseTime,
   pow10,
   renderDecimal,
   rescale,
@@ -57,6 +59,7 @@ import {
   type DecimalValue,
   type Value,
 } from './sql-value.ts'
+import { scanDateTime, scanTime, type Deprecation } from './temporal-scan.ts'
 import { decodeBit, decodeEnum, decodeSet, encodeBit, encodeEnum, encodeSet, enumMember, padBinary, padChar, setMembers, trimTrailingSpaces } from './strings.ts'
 import {
   dateFieldToStorage,
@@ -94,6 +97,10 @@ export interface StoreContext {
   conditions?: Condition[]
   /** The session's mode is strict, whether or not IGNORE has made this write lenient: some warnings name it. */
   strictMode?: boolean
+  /** NO_ZERO_DATE: '0000-00-00' into a date is refused, or warned of (default: allowed). */
+  noZeroDate?: boolean
+  /** NO_ZERO_IN_DATE: a zero month or day is refused, or warned of (default: refused). */
+  noZeroInDate?: boolean
 }
 
 /** One row of SHOW WARNINGS: a note, a warning or an error, with its code and its text. */
@@ -253,11 +260,34 @@ export function encodeField(value: Value, column: FieldColumn, ctx: StoreContext
 
     case FIELD_TYPE.TIME:
     case FIELD_TYPE.TIME2: {
-      const tv = toTime(value)
       const fsp = t.decimals ?? 0
+      const zero = { negative: false, days: 0, hour: 0, minute: 0, second: 0, microsecond: 0 }
+      const refuse = () => wrongTemporalValue('time', toText(value), column.name, ctx.row)
+      if (isText(value)) {
+        const text = toText(value)
+        // Nothing at all is midnight, quietly: `str_to_time` fails without a word (8.4.11).
+        if (text.trim() === '') return encodeTime2(zero, fsp)
+        const p = parseTime(text)
+        if (p === undefined) {
+          adjust(ctx, refuse, undefined, scanTime(text) === 'out-of-range' ? () => columnOutOfRange(column.name, ctx.row) : () => truncated(column.name, ctx.row))
+          return encodeTime2(zero, fsp)
+        }
+        if (p.deprecation !== undefined) deprecated(ctx, p.deprecation, text, column.name)
+        // Text after a time truncates it, and past 838:59:59 is clamped to
+        // it — each a warning, in that order (8.4.11).
+        if (p.truncated) adjust(ctx, refuse, undefined, () => truncated(column.name, ctx.row))
+        if (p.clamped) adjust(ctx, refuse, undefined, () => columnOutOfRange(column.name, ctx.row))
+        // A datetime's date goes with a note, as a DATE's time of day does.
+        if (p.dateDropped) {
+          if (ctx.strict) warn(ctx, 1292, `Incorrect time value: '${text}' for column '${column.name}' at row ${ctx.row}`, 'Note')
+          else warn(ctx, 1265, `Data truncated for column '${column.name}' at row ${ctx.row}`, 'Note')
+        }
+        return encodeTime2(roundTime(p.v, fsp), fsp)
+      }
+      const tv = toTime(value)
       if (tv === undefined) {
-        adjust(ctx, () => wrongTemporalValue('time', toText(value), column.name, ctx.row), undefined, temporalWarning(value, column.name, ctx.row, true))
-        return encodeTime2({ negative: false, days: 0, hour: 0, minute: 0, second: 0, microsecond: 0 }, fsp)
+        adjust(ctx, refuse, undefined, temporalWarning(value, column.name, ctx.row, true))
+        return encodeTime2(zero, fsp)
       }
       return encodeTime2(roundTime(tv.v, fsp), fsp)
     }
@@ -405,18 +435,50 @@ function encodeTemporalField(value: Exclude<Value, null>, column: FieldColumn, c
   const t = column.type
   const type = t.type === FIELD_TYPE.DATE || t.type === FIELD_TYPE.NEWDATE ? 'DATE' : t.type === FIELD_TYPE.DATETIME || t.type === FIELD_TYPE.DATETIME2 ? 'DATETIME' : 'TIMESTAMP'
   const fsp = type === 'DATE' ? 0 : (t.decimals ?? 0)
-  const dt = toDateTime(value, type)
+  const label = type === 'DATE' ? 'date' : 'datetime'
+  const refuse = () => wrongTemporalValue(label, toText(value), column.name, ctx.row)
   let v: MysqlDateTime
-  if (dt === undefined) {
-    const label = type === 'DATE' ? 'date' : type === 'DATETIME' ? 'datetime' : 'datetime'
-    v = adjust(ctx, () => wrongTemporalValue(label, toText(value), column.name, ctx.row), ZERO_DATE, temporalWarning(value, column.name, ctx.row, false))
-  } else v = roundDateTime(dt.v, fsp)
+  let full: MysqlDateTime | undefined
+  if (isText(value)) {
+    // Text is scanned as `str_to_datetime` scans it, under the session's
+    // zero-date rules. Unreadable is 1265 outside a strict mode; zero where
+    // the mode forbids it, or a day the month lacks, 1264; strict, both 1292.
+    const text = toText(value)
+    // A TIMESTAMP takes no zero month or day whatever the mode: such text
+    // fails as it is read, before its delimiters are judged (8.4.11).
+    const flags = { noZeroDate: ctx.noZeroDate === true, noZeroInDate: ctx.noZeroInDate !== false || type === 'TIMESTAMP' }
+    const scanned = scanDateTime(text, flags)
+    const p = typeof scanned === 'string' ? undefined : parseDateTime(text, flags)
+    if (p === undefined) {
+      v = adjust(ctx, refuse, ZERO_DATE, scanned === 'truncated' || scanned === 'unreadable' ? () => truncated(column.name, ctx.row) : () => columnOutOfRange(column.name, ctx.row))
+    } else {
+      if (p.deprecation !== undefined) deprecated(ctx, p.deprecation, text, column.name)
+      if (p.truncated) adjust(ctx, refuse, undefined, () => truncated(column.name, ctx.row))
+      v = roundDateTime(p.v, fsp)
+      // A truncation's warning stands for the dropped time of day's note too (8.4.11).
+      full = p.hasTime && !p.truncated && v.year <= 9999 ? roundDateTime(p.v, 0) : undefined
+    }
+  } else {
+    const dt = toDateTime(value, type)
+    if (dt === undefined) v = adjust(ctx, refuse, ZERO_DATE, temporalWarning(value, column.name, ctx.row, false))
+    else v = roundDateTime(dt.v, fsp)
+    const whole = dt === undefined ? undefined : toDateTime(value, 'DATETIME')
+    full = whole === undefined ? undefined : roundDateTime(whole.v, 0)
+  }
+
+  // Rounding past 9999-12-31 23:59:59.999999 overflows: the zero date, with
+  // 1441 and 1264 as warnings, strict mode or not (8.4.11).
+  if (v.year > 9999) {
+    warn(ctx, 1441, 'Datetime function: datetime field overflow')
+    warn(ctx, 1264, `Out of range value for column '${column.name}' at row ${ctx.row}`)
+    v = ZERO_DATE
+    full = undefined
+  }
 
   // A time of day a DATE drops: 1292 under a strict mode, 1265 without one,
   // a warning either way (8.4.11) — and a fraction of a second is none.
-  if (type === 'DATE' && dt !== undefined) {
-    const full = toDateTime(value, 'DATETIME')
-    const time = full === undefined ? undefined : roundDateTime(full.v, 0)
+  if (type === 'DATE' && full !== undefined) {
+    const time = full
     if (time !== undefined && (time.hour !== 0 || time.minute !== 0 || time.second !== 0)) {
       if (ctx.strict) warn(ctx, 1292, `Incorrect date value: '${toText(value)}' for column '${column.name}' at row ${ctx.row}`, 'Note')
       else warn(ctx, 1265, `Data truncated for column '${column.name}' at row ${ctx.row}`, 'Note')
@@ -427,7 +489,9 @@ function encodeTemporalField(value: Exclude<Value, null>, column: FieldColumn, c
   // TIMESTAMP: the session `time_zone` is taken to be UTC (doc 15's
   // conversion; `@@time_zone` is SYSTEM and the system zone is UTC here).
   if (v.year === 0 && v.month === 0 && v.day === 0) return encodeTimestamp2(0, 0, fsp)
-  const seconds = Date.UTC(v.year, v.month - 1, v.day, v.hour, v.minute, v.second) / 1000
+  // A zero month or day, which a DATETIME may hold where the mode allows, is
+  // no instant: out of range for a TIMESTAMP (8.4.11).
+  const seconds = v.month === 0 || v.day === 0 ? 0 : Date.UTC(v.year, v.month - 1, v.day, v.hour, v.minute, v.second) / 1000
   if (seconds < 1 || seconds > 2147483647) {
     adjust(ctx, () => wrongTemporalValue('datetime', toText(value), column.name, ctx.row), undefined, () => columnOutOfRange(column.name, ctx.row))
     return encodeTimestamp2(0, 0, fsp)
@@ -436,6 +500,20 @@ function encodeTemporalField(value: Exclude<Value, null>, column: FieldColumn, c
 }
 
 /** The 1-based index of the member a value names, or 0 — ENUM's "no member" slot. */
+
+/** Text, as a temporal column reads it: a string, or bytes that are not a hex literal. */
+const isText = (v: Exclude<Value, null>): boolean => v.kind === 'string' || (v.kind === 'bytes' && v.hex !== true)
+
+/** The first deprecated delimiter in a temporal's text: 4095, or 4096 for one too many (8.4.11). */
+function deprecated(ctx: StoreContext, d: Deprecation, text: string, column: string): void {
+  // A control character is named by its escape: '\t' (8.4.11).
+  const char = ({ '\t': '\\t', '\n': '\\n', '\r': '\\r', '\v': '\\v', '\f': '\\f' } as Record<string, string>)[d.char] ?? d.char
+  const where = `Delimiter '${char}' in position ${d.position} in datetime value '${text}' at row ${ctx.row}`
+  if (d.superfluous) warn(ctx, 4096, `${where} is superfluous and is deprecated. Please remove.`)
+  else warn(ctx, 4095, `${where} is deprecated. Prefer the standard '${d.prefer}'.`)
+  void column
+}
+
 /** C's `rint` in the default rounding mode: halves go to the even neighbour. */
 function roundHalfEven(x: number): number {
   const r = Math.round(x)

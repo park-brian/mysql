@@ -15,6 +15,7 @@
 import type { MysqlDateTime, MysqlTime } from '@myjs/bytes'
 import { encodeCollation } from '@myjs/charsets'
 import { renderJson, type JsonDoc } from './json-doc.ts'
+import { scanDateTime, scanTime, type Deprecation, type ScanFlags } from './temporal-scan.ts'
 
 export type Value =
   | null
@@ -453,35 +454,39 @@ export function renderDouble(n: number): string {
 // --- temporals from text ----------------------------------------------------------
 
 /**
- * `'2024-01-02'`, `'2024-01-02 03:04:05.123'`, `'20240102'`, and the other
- * delimiters MySQL's `str_to_datetime` accepts. `undefined` when the text is
- * not a date; the caller decides whether that is NULL, a warning or an error.
+ * Text as a datetime, as `str_to_datetime` reads it (`temporal-scan.ts` has
+ * the rules): the value, its displacement applied and a seventh fraction
+ * digit rounded in; whether it had a time; and whether text followed it,
+ * which a strict mode refuses and anything else ignores with a warning.
+ * `undefined` when it is no datetime at all. A zero month or day is refused
+ * unless `flags` say otherwise; the zero date is allowed unless they forbid it.
  */
-export function parseDateTime(text: string): { readonly v: MysqlDateTime; readonly hasTime: boolean; readonly fsp: number } | undefined {
-  const s = text.trim()
-  let m = /^(\d{4}|\d{2})[-/.](\d{1,2})[-/.](\d{1,2})(?:[ T](\d{1,2}):(\d{1,2})(?::(\d{1,2})(?:\.(\d{1,6}))?)?)?$/.exec(s)
-  if (m === null) {
-    const compact = /^(\d{4})(\d{2})(\d{2})(?:(\d{2})(\d{2})(\d{2})(?:\.(\d{1,6}))?)?$/.exec(s)
-    if (compact === null) return undefined
-    m = compact
+export function parseDateTime(
+  text: string,
+  flags: ScanFlags = { noZeroInDate: true },
+): { readonly v: MysqlDateTime; readonly hasTime: boolean; readonly fsp: number; readonly truncated: boolean; readonly deprecation?: Deprecation } | undefined {
+  const s = scanDateTime(text, flags)
+  if (typeof s === 'string') return undefined
+  let v = s.v
+  if (s.nanoseconds >= 500) v = addSeconds(v, 0, 1)
+  // A displacement is converted into the session's zone, UTC here.
+  if (s.displacement !== undefined) v = addSeconds(v, -s.displacement, 0)
+  return { v, hasTime: s.fields > 3, fsp: s.fsp, truncated: s.truncated, ...(s.deprecation === undefined ? {} : { deprecation: s.deprecation }) }
+}
+
+/** A datetime moved by whole seconds and microseconds, the calendar carrying. */
+function addSeconds(v: MysqlDateTime, seconds: number, microseconds: number): MysqlDateTime {
+  let us = v.microsecond + microseconds
+  let carry = seconds
+  if (us >= 1_000_000) {
+    us -= 1_000_000
+    carry++
   }
-  const n = (i: number): number => Number(m[i] ?? 0)
-  const fracText = m[7] ?? ''
-  // A two-digit year is 2000–2069 below 70 and 1970–1999 from it, as MySQL
-  // reads one (`'70-01-01'` is 1970-01-01); the zero date stays zero.
-  const short = (m[1] ?? '').length === 2 && (n(1) !== 0 || n(2) !== 0 || n(3) !== 0)
-  const v: MysqlDateTime = {
-    year: short ? n(1) + (n(1) < 70 ? 2000 : 1900) : n(1),
-    month: n(2),
-    day: n(3),
-    hour: n(4),
-    minute: n(5),
-    second: n(6),
-    microsecond: fracText === '' ? 0 : Number(fracText.padEnd(6, '0')),
-  }
-  if (!validDate(v)) return undefined
-  if (v.hour > 23 || v.minute > 59 || v.second > 59) return undefined
-  return { v, hasTime: m[4] !== undefined, fsp: fracText.length }
+  if (carry === 0) return { ...v, microsecond: us }
+  const d = new Date(0)
+  d.setUTCFullYear(v.year, v.month - 1, v.day)
+  d.setUTCHours(v.hour, v.minute, v.second + carry, 0)
+  return { year: d.getUTCFullYear(), month: d.getUTCMonth() + 1, day: d.getUTCDate(), hour: d.getUTCHours(), minute: d.getUTCMinutes(), second: d.getUTCSeconds(), microsecond: us }
 }
 
 /** MySQL's default `sql_mode` refuses an invalid day for its month, but allows the zero date's parts only when they are all zero. */
@@ -494,26 +499,33 @@ export function validDate(v: Pick<MysqlDateTime, 'year' | 'month' | 'day'>): boo
 
 const isLeap = (y: number): boolean => (y % 4 === 0 && y % 100 !== 0) || y % 400 === 0
 
-/** `'12:34:56'`, `'-838:59:59'`, `'1 02:03:04'`, `'123456'`. */
-export function parseTime(text: string): { readonly v: MysqlTime; readonly fsp: number } | undefined {
-  const s = text.trim()
-  const m = /^(-)?(?:(\d+) )?(\d+):(\d{1,2})(?::(\d{1,2})(?:\.(\d{1,6}))?)?$/.exec(s) ?? /^(-)?()(\d{1,3}?)(\d{2})(\d{2})(?:\.(\d{1,6}))?$/.exec(s)
-  if (m === null) return undefined
-  const hours = Number(m[2] ?? 0) * 24 + Number(m[3] ?? 0)
-  const minute = Number(m[4] ?? 0)
-  const second = Number(m[5] ?? 0)
-  if (minute > 59 || second > 59 || hours > 838) return undefined
-  const fracText = m[6] ?? ''
+/**
+ * Text as a TIME, as `str_to_time` reads it: `'12:34:56'`, `'-1 02:03'`,
+ * `'123456'`, `'10.5'`, or a datetime's time of day. Past 838:59:59 it is
+ * clamped, and says so; `undefined` when it is no time at all.
+ */
+export function parseTime(
+  text: string,
+): { readonly v: MysqlTime; readonly fsp: number; readonly truncated: boolean; readonly clamped: boolean; readonly dateDropped: boolean; readonly deprecation?: Deprecation } | undefined {
+  const s = scanTime(text)
+  if (typeof s === 'string') return undefined
+  let us = s.microsecond
+  let seconds = (s.hours * 60 + s.minute) * 60 + s.second
+  if (s.nanoseconds >= 500 && !s.clamped) {
+    us++
+    if (us === 1_000_000) {
+      us = 0
+      seconds++
+    }
+  }
+  const hours = Math.floor(seconds / 3600)
   return {
-    v: {
-      negative: m[1] === '-',
-      days: Math.floor(hours / 24),
-      hour: hours % 24,
-      minute,
-      second,
-      microsecond: fracText === '' ? 0 : Number(fracText.padEnd(6, '0')),
-    },
-    fsp: fracText.length,
+    v: { negative: s.negative && (seconds > 0 || us > 0), days: Math.floor(hours / 24), hour: hours % 24, minute: Math.floor(seconds / 60) % 60, second: seconds % 60, microsecond: us },
+    fsp: s.fsp,
+    truncated: s.truncated,
+    clamped: s.clamped,
+    dateDropped: s.datetime !== undefined && (s.datetime.v.year !== 0 || s.datetime.v.month !== 0 || s.datetime.v.day !== 0),
+    ...(s.deprecation === undefined ? {} : { deprecation: s.deprecation }),
   }
 }
 
@@ -564,10 +576,8 @@ function truncateTemporal(v: DateTimeValue, type: TemporalType): DateTimeValue {
 export function toTime(v: Exclude<Value, null>): TimeValue | undefined {
   if (v.kind === 'time') return v
   if (v.kind === 'datetime') return { kind: 'time', v: { negative: false, days: 0, hour: v.v.hour, minute: v.v.minute, second: v.v.second, microsecond: v.v.microsecond }, fsp: v.fsp }
-  const text = toText(v)
-  const p = parseTime(text)
-  if (p !== undefined) return { kind: 'time', v: p.v, fsp: p.fsp }
-  // A datetime written out is its time of day (`str_to_time`, 8.4.11).
-  const d = parseDateTime(text)
-  return d === undefined || !d.hasTime ? undefined : { kind: 'time', v: { negative: false, days: 0, hour: d.v.hour, minute: d.v.minute, second: d.v.second, microsecond: d.v.microsecond }, fsp: d.fsp }
+  // `str_to_time`: a datetime written out is its time of day, and a date
+  // alone is a number's prefix ('2020-01-01' is 00:20:20, 8.4.11).
+  const p = parseTime(toText(v))
+  return p === undefined ? undefined : { kind: 'time', v: p.v, fsp: p.fsp }
 }
