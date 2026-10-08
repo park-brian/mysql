@@ -230,6 +230,53 @@ function insertStatement(t, next) {
   return `INSERT INTO ${t.name} (${cols.join(', ')}) VALUES ${rows.map((r) => `(${r.join(', ')})`).join(', ')}`
 }
 
+/**
+ * INSERT IGNORE, REPLACE and `ON DUPLICATE KEY UPDATE` (M5.8). Rows are drawn
+ * from the seeds' own keys more often than not, so they collide — on the
+ * primary key, on `p`'s UNIQUE name, and on `k`'s text key under the
+ * accent- and case-insensitive default — and a share carry a bad value, which
+ * IGNORE turns into a warning. An upsert's assignments read the old row, the
+ * tried row through `VALUES()` and through a row alias, and the table's
+ * AUTO_INCREMENT through `LAST_INSERT_ID(id)`.
+ */
+function upsertStatement(t, next, seeded) {
+  const kind = pick(['ignore', 'replace', 'upsert', 'upsert'])
+  const cols = Object.keys(t.columns).filter((c) => !(t.name === 'p' && c === 'id' && chance(0.6)))
+  const rows = Array.from({ length: int(1, 3) }, () => {
+    const r = t.row(chance(0.65) ? int(0, Math.max(seeded - 1, 0)) : next())
+    return cols.map((c) => {
+      if (chance(0.06)) return pick(['NULL', "'oops-too-long-for-it'", '99999999999', "'abc'"])
+      if (c === 'id') return pick(['NULL', String(int(1, seeded + 2))])
+      if (c === 'n') return String(pick([int(0, seeded) * 3 + 1, int(1, 60)]))
+      if (c === 'code' && chance(0.3)) return (r[c] ?? 'NULL').toUpperCase()
+      return r[c] ?? 'NULL'
+    })
+  })
+  const head = kind === 'replace' ? 'REPLACE' : `INSERT${kind === 'ignore' || chance(0.1) ? ' IGNORE' : ''}`
+  let sql = `${head} INTO ${t.name} (${cols.join(', ')}) VALUES ${rows.map((r) => `(${r.join(', ')})`).join(', ')}`
+  if (kind !== 'upsert') return sql
+  const alias = chance(0.4)
+  if (alias) sql += ' AS new'
+  const targets = Object.keys(t.columns).filter((c) => c !== t.pk || chance(0.1))
+  const sets = Array.from({ length: int(1, 2) }, () => {
+    const c = pick(targets)
+    const k = t.columns[c]
+    const numeric = k === 'int' || k === 'uint' || k === 'dec' || k === 'double'
+    const tried = cols.includes(c) ? [alias ? `new.${c}` : `VALUES(${c})`] : []
+    const value = pick([
+      ...tried,
+      ...tried,
+      literalFor(k),
+      'DEFAULT',
+      numeric ? `${c} + ${int(1, 5)}` : k === 'text' ? `CONCAT(${c}, '${pick(['x', 'y'])}')` : 'NULL',
+      numeric && tried.length > 0 ? `${t.name}.${c} + ${tried[0]}` : literalFor(k),
+    ])
+    return `${c} = ${value}`
+  })
+  if (t.name === 'p' && chance(0.15)) sets.push('id = LAST_INSERT_ID(id)')
+  return `${sql} ON DUPLICATE KEY UPDATE ${sets.join(', ')}`
+}
+
 function updateStatement(t) {
   const cols = Object.keys(t.columns).filter((c) => c !== t.pk || chance(0.1))
   const sets = Array.from({ length: int(1, 2) }, () => {
@@ -264,7 +311,9 @@ export function generateCase() {
     for (const r of seeds) statements.push(`INSERT INTO ${t.name} (${cols.join(', ')}) VALUES (${cols.map((c) => r[c]).join(', ')})`)
   }
   for (let i = int(1, 4); i > 0; i--) {
-    statements.push(pick([selectStatement, selectStatement, selectStatement, (x) => insertStatement(x, next), updateStatement, deleteStatement])(t))
+    statements.push(
+      pick([selectStatement, selectStatement, selectStatement, (x) => insertStatement(x, next), (x) => upsertStatement(x, next, seeds.length), (x) => upsertStatement(x, next, seeds.length), updateStatement, deleteStatement])(t),
+    )
   }
   statements.push(`SELECT * FROM ${t.name} ORDER BY ${t.pk ?? Object.keys(t.columns).join(', ')}`)
   return statements

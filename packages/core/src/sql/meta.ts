@@ -49,10 +49,12 @@ export interface ResultType {
   readonly blobBytes?: number
   /**
    * Copied through a temporary table — a `SELECT DISTINCT` MySQL runs that
-   * way. A column then loses its key flags and gains `GROUP_FLAG`; an
-   * expression keeps only NOT_NULL (8.4.11).
+   * way. A column then loses its key flags, and gains `GROUP_FLAG` if it is
+   * nullable and part of the grouping; a column the WHERE pins to one value
+   * (`'pinned'`) is not. An expression keeps only NOT_NULL (8.4.11; the
+   * metadata of an expression there is M5.5's, and differs more than this).
    */
-  readonly temporary?: boolean
+  readonly temporary?: boolean | 'pinned'
 }
 
 /** `GROUP_FLAG`, `include/mysql_com.h` — the same bit as `NUM_FLAG`. */
@@ -255,7 +257,12 @@ export function columnDefinition(name: string, t: ResultType, resultsCollation: 
   // A string in a `_bin` collation is flagged binary too, column or expression.
   if (isText && requireCollationInfo(t.collationId).name.endsWith('_bin')) flags |= COLUMN_FLAG.BINARY
   if (t.field === FIELD_TYPE.BLOB && t.kind === 'bytes') flags |= COLUMN_FLAG.BINARY
-  if (t.temporary === true) flags = t.column !== undefined ? (flags & ~KEY_FLAGS) | GROUP_FLAG : flags & (COLUMN_FLAG.NOT_NULL | COLUMN_FLAG.UNSIGNED)
+  if (t.temporary !== undefined && t.temporary !== false) {
+    // GROUP_FLAG marks a nullable grouped column only: every non-key DISTINCT
+    // column the first corpus drew was nullable, which hid that (8.4.11).
+    const grouped = t.temporary === true && t.nullable ? GROUP_FLAG : 0
+    flags = t.column !== undefined ? (flags & ~KEY_FLAGS) | grouped : flags & (COLUMN_FLAG.NOT_NULL | COLUMN_FLAG.UNSIGNED)
+  }
 
   let length: number
   let decimals = t.scale

@@ -153,7 +153,13 @@ test('M5.2: a bad value is an error under a strict mode, and a warning and an ad
   }
   const tiny: ColumnType = { type: FIELD_TYPE.TINY }
   assert.equal(code(() => encodeField(n(300), col(tiny), ctx())), 1264)
-  assert.equal(code(() => encodeField(s('12abc'), col({ type: FIELD_TYPE.LONG }), ctx())), 1366)
+  // Which number depends on the column (8.4.11). This line asserted 1366 for
+  // '12abc' until M5.8's corpus put such a value into a DOUBLE and the server
+  // said 1265; asked directly, it says 1265 for '12abc' into an INT as well.
+  assert.equal(code(() => encodeField(s('12abc'), col({ type: FIELD_TYPE.LONG }), ctx())), 1265)
+  assert.equal(code(() => encodeField(s('abc12'), col({ type: FIELD_TYPE.LONG }), ctx())), 1366)
+  assert.equal(code(() => encodeField(s('abc'), col({ type: FIELD_TYPE.DOUBLE }), ctx())), 1265)
+  assert.equal(code(() => encodeField(s('1x'), col({ type: FIELD_TYPE.NEWDECIMAL, precision: 5, scale: 2 }), ctx())), 1366)
   assert.equal(code(() => encodeField(s('abcdef'), col({ type: FIELD_TYPE.VAR_STRING, length: 3, collationId: UTF8MB4 }), ctx())), 1406)
   assert.equal(code(() => encodeField(s('2024-13-01'), col({ type: FIELD_TYPE.DATE }), ctx())), 1292)
   assert.equal(code(() => encodeField(null, col(tiny, false), ctx())), 1048)

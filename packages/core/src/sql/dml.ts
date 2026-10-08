@@ -1,4 +1,5 @@
-// M5.8 / M5.17 — INSERT, UPDATE and DELETE on one table.
+// M5.8 / M5.17 — INSERT (with IGNORE, ON DUPLICATE KEY UPDATE and REPLACE),
+// UPDATE and DELETE on one table.
 //
 // What a client is told matters as much as what is stored, and MySQL's rules
 // for it are not the obvious ones (each read off 8.4.11 through `mysql2`):
@@ -9,14 +10,15 @@
 //     "Rows matched: 4  Changed: 2  Warnings: 0".
 //   - A multi-row INSERT says "Records: 3  Duplicates: 0  Warnings: 0"; a
 //     single-row one says nothing.
-//   - `insertId` is the first AUTO_INCREMENT value the statement generated.
+//   - INSERT's counters and `insertId`, and the AUTO_INCREMENT values it
+//     hands out, are `insert`'s and `AutoIncrement`'s to explain, below.
 //
 // UPDATE and DELETE read every row they will change before changing any
 // (doc 30: a scan is not interleaved with writes to its own table), so a row
 // an UPDATE moves within the clustered order is never met twice.
-import { FIELD_TYPE } from '@myjs/bytes'
+import { FIELD_TYPE, MyjsError } from '@myjs/bytes'
 import { CLIENT, hasCap, messages, sqlError, type OkResult } from '@myjs/protocol'
-import type { ColumnDef, Table, TableDef, Trx } from '@myjs/engine'
+import type { ColumnDef, FieldBytes, IndexDef, RowId, Table, TableDef, Trx } from '@myjs/engine'
 import { EngineError } from '@myjs/engine'
 import { NODE, REF, parseExpression, type Assignment, type DeleteNode, type Expression, type InsertNode, type UpdateNode } from '@myjs/parser'
 import { decodeField, encodeField, intValue, toInteger, toText, type StoreContext, type Value } from '@myjs/types'
@@ -31,6 +33,8 @@ const isStrict = (sqlMode: string): boolean => /\bSTRICT_(TRANS|ALL)_TABLES\b/.t
 
 /** A column's DEFAULT, compiled: its expression, or NULL, or "none" for a NOT NULL column without one. */
 function defaultOf(run: Run, column: ColumnDef): Compiled | 'none' {
+  // An AUTO_INCREMENT column's DEFAULT is 0: `UPDATE t SET id = DEFAULT` stores 0 (8.4.11).
+  if (column.autoIncrement === true) return { eval: () => intValue(0n), type: NULL_TYPE }
   const text = column.attributes?.['default']
   if (typeof text === 'string') return compile(parseExpression(text), compileContext(run, EMPTY_SCOPE, 'field list'))
   if (column.nullable) return { eval: () => null, type: NULL_TYPE }
@@ -42,11 +46,7 @@ function defaultOf(run: Run, column: ColumnDef): Compiled | 'none' {
  * and the key named `table.index`. The engine knows the index but not the SQL
  * rendering of a value, so the message is finished here.
  */
-function duplicateEntry(e: unknown, def: TableDef, values: readonly Value[]): unknown {
-  if (!(e instanceof EngineError) || e.code !== 'ER_DUP_ENTRY') return e
-  const name = /'([^']*)'/.exec(e.message)?.[1]
-  const index = def.indexes.find((i) => i.name === name)
-  if (index === undefined) return e
+function duplicateEntry(def: TableDef, index: IndexDef, values: readonly Value[]): unknown {
   const text = index.parts
     .map((p) => {
       const v = values[def.columns.findIndex((c) => c.name === p.column)] ?? null
@@ -57,16 +57,223 @@ function duplicateEntry(e: unknown, def: TableDef, values: readonly Value[]): un
   return sqlError('ER_DUP_ENTRY', messages.duplicateEntry(text, `${def.name}.${index.name}`))
 }
 
-function encodeRow(def: TableDef, values: readonly Value[], ctx: StoreContext): (Uint8Array | null)[] {
+const isDuplicate = (e: unknown): boolean => e instanceof EngineError && e.code === 'ER_DUP_ENTRY'
+
+/**
+ * A table's UNIQUE indexes in MySQL's `sort_keys` order, which is the order
+ * InnoDB checks them in: NOT NULL keys before nullable ones, PRIMARY first
+ * among them, keys without a prefix part before keys with one, then the order
+ * declared. So the key a duplicate names, the row an upsert updates, and
+ * whether REPLACE may update rather than delete are all decided by it.
+ */
+function uniqueKeys(def: TableDef): IndexDef[] {
+  const nullable = new Map(def.columns.map((c) => [c.name.toLowerCase(), c.nullable]))
+  const rank = (i: IndexDef): number[] => [
+    i.parts.some((p) => nullable.get(p.column.toLowerCase()) === true) ? 1 : 0,
+    i.kind === 'primary' ? 0 : 1,
+    i.parts.some((p) => p.prefix !== undefined) ? 1 : 0,
+  ]
+  return def.indexes
+    .map((index, at) => ({ index, at, r: rank(index) }))
+    .filter((x) => x.index.kind !== 'index')
+    .sort((a, b) => (a.r[0] as number) - (b.r[0] as number) || (a.r[1] as number) - (b.r[1] as number) || (a.r[2] as number) - (b.r[2] as number) || a.at - b.at)
+    .map((x) => x.index)
+}
+
+/** The first key, in `uniqueKeys` order, on which `fields` collide with a row other than `except`. */
+function conflictOf(table: Table, keys: readonly IndexDef[], fields: readonly FieldBytes[], trx: Trx, except?: RowId): { index: IndexDef; id: RowId } | undefined {
+  for (const index of keys) {
+    const id = table.duplicateOf(index.name, fields, trx)
+    if (id !== undefined && (except === undefined || !sameBytes(id, except))) return { index, id }
+  }
+  return undefined
+}
+
+/** The error a 1062 from the engine becomes: named by the first key that collides, as InnoDB finds it. */
+function duplicateError(e: unknown, def: TableDef, table: Table, keys: readonly IndexDef[], fields: readonly FieldBytes[], trx: Trx, except?: RowId): unknown {
+  if (!isDuplicate(e)) return e
+  const hit = conflictOf(table, keys, fields, trx, except)
+  const named = hit?.index ?? def.indexes.find((i) => i.name === /'([^']*)'/.exec((e as Error).message)?.[1])
+  if (named === undefined) return e
+  // Named by the values as stored: `VALUES (1.6)` colliding with id 2 is
+  // "Duplicate entry '2'", not '1.6'.
+  return duplicateEntry(def, named, def.columns.map((c, i) => decodeField(fields[i] ?? null, c.type)))
+}
+
+/** How a NULL meets a NOT NULL column: refused (1048), or stored as the type's zero with a warning. */
+type NullPolicy = 'error' | 'warn'
+
+/** A value into its column, as `encodeField` stores it, with `nulls` deciding what a NULL into NOT NULL does. */
+function storeField(v: Value, column: ColumnDef, store: StoreContext, nulls: NullPolicy): FieldBytes {
+  try {
+    return encodeField(v, column, store)
+  } catch (e) {
+    if (nulls === 'error' || !(e instanceof MyjsError) || e.code !== 'ER_BAD_NULL_ERROR') throw e
+    store.warnings++
+    return encodeField(implicitDefault(column), column, store)
+  }
+}
+
+/**
+ * The AUTO_INCREMENT values one statement hands out: the server's handler
+ * and InnoDB's counter, together, because what a client sees comes from
+ * both. Read off `handler::update_auto_increment` and InnoDB's
+ * `get_auto_increment` and `write_row` (innodb_autoinc_lock_mode = 2, 8.4's
+ * default), and checked against 8.4.11, which agrees on every case:
+ *
+ *   - The first row that needs a value reserves one per row the statement
+ *     has (`INSERT … VALUES (…), (…), (…)` reserves three), and what is left
+ *     of the block when the statement ends is lost. So a three-row INSERT
+ *     that fails on its second row costs three ids, not one.
+ *   - InnoDB counts rows down as each is written, and a later reservation —
+ *     when an explicit value has carried the handler past the block — is for
+ *     the rows still to come, from the handler's value.
+ *   - An explicit value past the handler's next value moves it.
+ *   - A row that loses to a duplicate under IGNORE, or is upserted instead,
+ *     gives its value back to the next row (`restore_auto_increment`).
+ */
+class AutoIncrement {
+  readonly #table: Table
+  readonly #rows: number
+  /** The handler's `next_insert_id`: the value the next row that needs one takes. */
+  next = 0n
+  /** The value the current row was given, 0 for an explicit one (`insert_id_for_cur_row`). */
+  current = 0n
+  #lo = 0n
+  #hi = 0n
+  #intervals = 0
+  /** InnoDB's `n_autoinc_rows`: the rows the statement has still to write. */
+  #remaining = 0
+
+  constructor(table: Table, rows: number) {
+    this.#table = table
+    this.#rows = rows
+  }
+
+  /**
+   * A value for a row that did not give one. A new block is taken from the
+   * table's counter: under one writer the handler's value is never past it,
+   * so InnoDB's "continue from the handler's value" lands on the counter too.
+   * The one case it would not — an upsert that raised the counter with an
+   * explicit value, then a later row that has run past its block — is not
+   * modelled: InnoDB would continue below the counter, and this does not.
+   *
+   * A value past the column's range is its largest, silently, and the
+   * handler carries on from there: the next row collides, as 1062 and not
+   * 1264 (8.4.11).
+   */
+  generate(max: bigint): bigint {
+    let nr = this.next
+    if (nr >= this.#hi) {
+      if (this.#remaining === 0) this.#remaining = Math.max(this.#intervals === 0 && this.#rows > 0 ? this.#rows : Math.min(1 << this.#intervals, 65535), 1)
+      nr = this.#table.nextAutoIncrement(this.#remaining)
+      this.#lo = nr
+      this.#hi = nr + BigInt(this.#remaining)
+      this.#intervals++
+    }
+    if (nr > max) nr = max
+    this.current = nr
+    this.next = nr + 1n
+    return nr
+  }
+
+  /** A row that gave its own value. */
+  explicit(v: bigint): void {
+    this.current = 0n
+    if (this.next > 0n && v >= this.next) this.next = v + 1n
+  }
+
+  /** InnoDB's count of a write attempted, whether it succeeded or not. */
+  written(): void {
+    if (this.#remaining > 0) this.#remaining--
+  }
+
+  /** `restore_auto_increment`: the next row takes `prev`, or this row's value back. */
+  restore(prev: bigint): void {
+    this.next = prev > 0n ? prev : this.current
+  }
+
+  /** Whether `v` is in the block the statement holds, and so promised to one of its rows. */
+  reserved(v: bigint): boolean {
+    return v >= this.#lo && v < this.#hi
+  }
+}
+
+/** An `ON DUPLICATE KEY UPDATE`, compiled against the old row, the row alias and the row the INSERT tried. */
+interface Upsert {
+  readonly assignments: readonly Assigned[]
+  readonly onUpdate: readonly (Compiled | undefined)[]
+  /** `VALUES(c)` calls, each a 1287 deprecation warning. */
+  readonly deprecated: number
+  /** The INSERT's target columns, which a row alias exposes, in order; none without an alias. */
+  readonly aliased: readonly number[]
+}
+
+/**
+ * The scope an upsert's expressions see (8.4.11, each probed): the table's
+ * columns, then — with `AS n` or `AS n(a, b)` — the alias's, which are the
+ * INSERT's own target columns and no others (`n.id` is 1054 when `id` was not
+ * inserted). A bare name searches both, so `age` under `AS n` is 1052. Then,
+ * out of sight, the whole row the INSERT tried, which `VALUES(c)` reads.
+ */
+function compileUpsert(run: Run, def: TableDef, node: InsertNode, targets: readonly number[]): Upsert {
+  const n = def.columns.length
+  const alias = node.rowAlias
+  const scoped: { alias: string; def: TableDef }[] = [{ alias: def.name, def }]
+  if (alias !== undefined) {
+    if (alias.columns !== undefined && alias.columns.length !== targets.length) {
+      throw sqlError('ER_VIEW_WRONG_LIST', 'In definition of view, derived table or common table expression, SELECT list and column names list have different column counts')
+    }
+    const columns = targets.map((t, i) => ({ ...(def.columns[t] as ColumnDef), name: alias.columns?.[i] ?? (def.columns[t] as ColumnDef).name }))
+    scoped.push({ alias: alias.name, def: { ...def, name: alias.name, columns } })
+  }
+  const scope = new TableScope(scoped)
+  const own = new TableScope([{ alias: def.name, def }])
+  const tried = n + (alias === undefined ? 0 : targets.length)
+  const insertValues = {
+    resolve: (name: string) => {
+      const i = def.columns.findIndex((c) => c.name.toLowerCase() === name.toLowerCase())
+      if (i < 0) throw sqlError('ER_BAD_FIELD_ERROR', messages.unknownColumn(name, 'field list'))
+      return { index: tried + i, type: own.resolve([name], 'field list').type }
+    },
+    calls: 0,
+  }
+  const ctx = { ...compileContext(run, scope, 'field list'), insertValues }
+  const assignments = (node.onDuplicate ?? []).map((a) => ({
+    // The target is the table's column, whatever the alias says.
+    index: own.resolve(a.column.parts, 'field list').index,
+    value: isDefaultKeyword(a.value) ? undefined : compile(a.value, ctx),
+  }))
+  return { assignments, onUpdate: onUpdateOf(run, def), deprecated: insertValues.calls, aliased: alias === undefined ? [] : targets }
+}
+
+function encodeRow(def: TableDef, values: readonly Value[], ctx: StoreContext): FieldBytes[] {
   return def.columns.map((c, i) => encodeField(values[i] ?? null, c, ctx))
 }
 
 const okInfo = (records: number, duplicates: number, warnings: number): string => `Records: ${records}  Duplicates: ${duplicates}  Warnings: ${warnings}`
 
+/**
+ * INSERT, INSERT IGNORE, `ON DUPLICATE KEY UPDATE` and REPLACE: MySQL's
+ * `write_record`, a row at a time, with its four counters. What 8.4.11 tells
+ * a client, all read off it through `mysql2`:
+ *
+ *   - `affectedRows` is rows inserted, plus rows REPLACE deleted, plus rows an
+ *     upsert updated — or, under `CLIENT_FOUND_ROWS`, every row an upsert met,
+ *     changed or not. So an upsert that changes a row is 2, one that finds
+ *     it already as asked is 1 (0 without FOUND_ROWS), and an insert 1.
+ *   - REPLACE deletes the row in its way and tries again, unless the key it
+ *     collided on is the table's last UNIQUE key, when it updates that row in
+ *     place — and an update that changes nothing is not a deletion, so
+ *     replacing a row with itself is 1, not 2.
+ *   - `insertId` is the first value the statement generated for a row it
+ *     wrote; failing that, `LAST_INSERT_ID(x)`'s x if the statement called it;
+ *     failing that, the AUTO_INCREMENT value of the last row it handled, if it
+ *     wrote any — so an upsert that updated row 7 reports 7.
+ *   - IGNORE turns 1062 and the conversion errors into warnings and skips or
+ *     adjusts the row, and its `Duplicates` is rows not written.
+ */
 export function insert(run: Run, node: InsertNode, trx: Trx): OkResult {
-  if (node.replace === true) throw sqlError('ER_NOT_SUPPORTED_YET', messages.notSupported('REPLACE'))
-  if (node.ignore === true) throw sqlError('ER_NOT_SUPPORTED_YET', messages.notSupported('INSERT IGNORE'))
-  if (node.onDuplicate !== undefined) throw sqlError('ER_NOT_SUPPORTED_YET', messages.notSupported('ON DUPLICATE KEY UPDATE'))
   if (node.query !== undefined) throw sqlError('ER_NOT_SUPPORTED_YET', messages.notSupported('INSERT … SELECT'))
   if (node.partitions !== undefined) throw sqlError('ER_NOT_SUPPORTED_YET', messages.notSupported('Partitions'))
 
@@ -98,17 +305,34 @@ export function insert(run: Run, node: InsertNode, trx: Trx): OkResult {
     seen.add(t)
   }
 
+  const ignore = node.ignore === true
+  const mode = node.replace === true ? 'replace' : node.onDuplicate !== undefined ? 'upsert' : 'insert'
+  const strictMode = isStrict(run.env.session.sqlMode)
+  const store: StoreContext = { strict: strictMode && !ignore, row: 1, warnings: 0 }
+  // A NULL for a NOT NULL column is refused by a strict mode and by a
+  // one-row INSERT, and stored as the type's zero by IGNORE or a multi-row
+  // INSERT; an upsert's own assignment is refused unless IGNORE (8.4.11).
+  const nulls: NullPolicy = ignore || (!strictMode && rows.length > 1) ? 'warn' : 'error'
+  const upsertNulls: NullPolicy = ignore ? 'warn' : 'error'
+
   const ctx = compileContext(run, EMPTY_SCOPE, 'field list')
   const compiledRows = rows.map((r) => r.map((e) => (e === undefined || isDefaultKeyword(e) ? undefined : compile(e, ctx))))
+  const upsert = mode === 'upsert' ? compileUpsert(run, def, node, targets) : undefined
   const defaults = def.columns.map((c) => defaultOf(run, c))
-  const strict = isStrict(run.env.session.sqlMode)
-  const store: StoreContext = { strict, row: 1, warnings: 0 }
-  // The first value the statement generated; failing that, the last one it was given.
-  let generated = 0n
-  let explicit = 0n
+  const keys = uniqueKeys(def)
+  const autoAt = def.columns.findIndex((c) => c.autoIncrement === true)
+  // The key the AUTO_INCREMENT column leads (`next_number_index`).
+  const autoKey = autoAt < 0 ? undefined : keys.find((i) => i.parts[0]?.column.toLowerCase() === (def.columns[autoAt] as ColumnDef).name.toLowerCase())
+  const auto = new AutoIncrement(table, compiledRows.length)
+  const stats = { records: 0, copied: 0, deleted: 0, updated: 0, touched: 0 }
+  // `first_successful_insert_id_in_cur_stmt`, and the last row's AUTO_INCREMENT value.
+  let firstId = 0n
+  let lastAuto = 0n
+  run.state.insertIdSet = false
 
   compiledRows.forEach((row, n) => {
     store.row = n + 1
+    stats.records++
     const values: Value[] = def.columns.map(() => null)
     const given = new Set<number>()
     row.forEach((c, i) => {
@@ -121,47 +345,208 @@ export function insert(run: Run, node: InsertNode, trx: Trx): OkResult {
       if (given.has(i) || column.autoIncrement === true) return
       const d = defaults[i] as Compiled | 'none'
       if (d === 'none') {
-        if (strict) throw sqlError('ER_NO_DEFAULT_FOR_FIELD', messages.noDefaultForField(column.name))
+        if (store.strict) throw sqlError('ER_NO_DEFAULT_FOR_FIELD', messages.noDefaultForField(column.name))
         store.warnings++
         values[i] = implicitDefault(column)
       } else values[i] = d.eval([], run.env)
     })
-    // Every value is converted before AUTO_INCREMENT takes one, as
-    // `write_row` takes it after `fill_record`: a row refused for an
-    // out-of-range value costs no id, and one refused as a duplicate does
-    // (both read off 8.4.11).
-    const auto = def.columns.findIndex((c) => c.autoIncrement === true)
-    const fields = def.columns.map((c, i) => (i === auto ? null : encodeField(values[i] ?? null, c, store)))
-    if (auto >= 0) {
-      const column = def.columns[auto] as ColumnDef
-      const v = values[auto] ?? null
-      if (v === null || (v.kind !== 'string' && toInteger(v) === 0n)) {
-        const next = table.nextAutoIncrement(1)
-        values[auto] = intValue(next, column.type.unsigned === true)
-        if (generated === 0n) generated = next
-      } else explicit = toInteger(v)
-      fields[auto] = encodeField(values[auto] ?? null, column, store)
+    // Every value is converted, in column order, before AUTO_INCREMENT takes
+    // one, as `write_row` takes it after `fill_record`: a row refused for an
+    // out-of-range value costs no id of its own, and an explicit id that will
+    // not convert is the error reported, not a later column's (8.4.11).
+    const fields = def.columns.map((c, i) => (i === autoAt && values[i] === null ? null : storeField(values[i] ?? null, c, store, nulls)))
+    // `prev_insert_id`: where the handler stood before this row.
+    const prev = auto.next
+    let generated = 0n
+    if (autoAt >= 0) {
+      const column = def.columns[autoAt] as ColumnDef
+      // Whether to generate is decided on the value as stored: NULL, and
+      // anything that stores as 0 — `'0'`, `0.4`, and `'abc'` under IGNORE —
+      // takes the next value (8.4.11, without NO_AUTO_VALUE_ON_ZERO).
+      const stored = autoOf(def, autoAt, fields)
+      if (stored === 0n) {
+        generated = auto.generate(integerMax(column))
+        fields[autoAt] = encodeField(intValue(generated, column.type.unsigned === true), column, store)
+      } else auto.explicit(stored)
+      lastAuto = autoOf(def, autoAt, fields)
     }
-    try {
-      table.insert(fields, trx)
-    } catch (e) {
-      // Named by the values as stored: `VALUES (1.6)` colliding with id 2 is
-      // "Duplicate entry '2'", not '1.6'.
-      throw duplicateEntry(e, def, def.columns.map((c, i) => decodeField(fields[i] ?? null, c.type)))
-    }
+    writeRecord(fields, generated, prev)
   })
 
-  // `LAST_INSERT_ID()` moves only for a generated value; the OK packet also
-  // reports an explicit one.
-  if (generated !== 0n) run.state.lastInsertId = generated
-  const insertId = generated !== 0n ? generated : explicit
-  const affected = compiledRows.length
-  return {
-    affectedRows: affected,
-    insertId,
-    warnings: store.warnings,
-    ...(compiledRows.length > 1 ? { info: okInfo(affected, 0, store.warnings) } : {}),
+  /** One row through `write_record`: write it, or settle its duplicate as the statement asks. */
+  function writeRecord(fields: FieldBytes[], generated: bigint, prevNext: bigint): void {
+    let prev = prevNext
+    for (;;) {
+      try {
+        table.insert(fields, trx)
+      } catch (e) {
+        if (!isDuplicate(e)) throw e
+        auto.written()
+        const hit = conflictOf(table, keys, fields, trx)
+        if (hit === undefined) throw e
+        if (mode === 'insert') {
+          if (!ignore) throw duplicateError(e, def, table, keys, fields, trx)
+          store.warnings++
+          auto.restore(prev)
+          return
+        }
+        if (mode === 'replace') {
+          // A generated value that collides on the AUTO_INCREMENT column's own
+          // key is not allowed to replace the row that has it
+          // (`write_record`): the column's range is used up, and it is 1062.
+          if (generated > 0n && hit.index === autoKey) throw duplicateError(e, def, table, keys, fields, trx)
+          // The table's last UNIQUE key: no later key can collide, so the row
+          // in the way is updated into this one rather than deleted.
+          if (hit.index === keys[keys.length - 1]) {
+            const old = table.get(hit.id, trx, 'current') as FieldBytes[]
+            if (!sameRow(old, fields)) {
+              table.update(hit.id, fields, trx)
+              stats.deleted++
+            }
+            break
+          }
+          table.delete(hit.id, trx)
+          stats.deleted++
+          continue
+        }
+        if (generated > 0n) prev = generated
+        upsertRow(hit.id, fields, generated, prev)
+        return
+      }
+      auto.written()
+      break
+    }
+    stats.copied++
+    if (generated > 0n && firstId === 0n) firstId = generated
   }
+
+  /** `ON DUPLICATE KEY UPDATE` on the row in the way, as an UPDATE of it would change it. */
+  function upsertRow(id: RowId, tried: FieldBytes[], generated: bigint, prev: bigint): void {
+    const u = upsert as Upsert
+    const before = table.get(id, trx, 'current') as FieldBytes[]
+    const current = def.columns.map((c, i) => decodeField(before[i] ?? null, c.type))
+    const triedValues = def.columns.map((c, i) => decodeField(tried[i] ?? null, c.type))
+    const extra = [...u.aliased.map((t) => triedValues[t] ?? null), ...triedValues]
+    const result = assignAll(run, def, before, current, extra, u.assignments, u.onUpdate, defaults, store, upsertNulls)
+    // An upsert that sets the AUTO_INCREMENT column to a value the statement
+    // has promised another row is ER_AUTO_INCREMENT_CONFLICT; to this row's
+    // own generated value, it keeps it.
+    let consumed = false
+    if (generated > 0n && autoAt >= 0 && u.assignments.some((a) => a.index === autoAt)) {
+      const v = autoOf(def, autoAt, result.after)
+      if (v === generated) consumed = true
+      else if (v !== 0n && auto.reserved(v)) throw sqlError('ER_AUTO_INCREMENT_CONFLICT', 'Auto-increment value in UPDATE conflicts with internally generated values')
+    }
+    if (!consumed) auto.restore(prev)
+    stats.touched++
+    if (autoAt >= 0) lastAuto = autoOf(def, autoAt, result.after)
+    if (!result.changed) return
+    try {
+      table.update(id, result.after, trx)
+    } catch (e) {
+      if (!isDuplicate(e) || !ignore) throw duplicateError(e, def, table, keys, result.after, trx, id)
+      store.warnings++
+      return
+    }
+    stats.updated++
+    stats.copied++
+  }
+
+  // A value generated and written becomes `LAST_INSERT_ID()`; an upsert's
+  // update does not, as an UPDATE does not.
+  if (firstId !== 0n) run.state.lastInsertId = firstId
+  const insertId = firstId !== 0n ? firstId : run.state.insertIdSet ? run.state.lastInsertId : autoAt >= 0 && stats.copied > 0 ? lastAuto : 0n
+  const updated = hasCap(run.env.session.capabilities, CLIENT.FOUND_ROWS) ? stats.touched : stats.updated
+  const warnings = store.warnings + (upsert?.deprecated ?? 0)
+  const duplicates = ignore ? stats.records - stats.copied : stats.deleted + updated
+  return {
+    affectedRows: stats.copied + stats.deleted + updated,
+    insertId,
+    warnings,
+    ...(compiledRows.length !== 1 ? { info: okInfo(stats.records, duplicates, warnings) } : {}),
+  }
+}
+
+/** An integer column's largest value; a non-integer AUTO_INCREMENT column has no bound here. */
+function integerMax(column: ColumnDef): bigint {
+  const bits: Record<number, number> = { [FIELD_TYPE.TINY]: 8, [FIELD_TYPE.SHORT]: 16, [FIELD_TYPE.INT24]: 24, [FIELD_TYPE.LONG]: 32, [FIELD_TYPE.LONGLONG]: 64 }
+  const n = bits[column.type.type]
+  if (n === undefined) return 2n ** 64n
+  return column.type.unsigned === true ? 2n ** BigInt(n) - 1n : 2n ** BigInt(n - 1) - 1n
+}
+
+/** The AUTO_INCREMENT column's value in a row's fields, 0 for NULL. */
+function autoOf(def: TableDef, at: number, fields: readonly FieldBytes[]): bigint {
+  const v = decodeField(fields[at] ?? null, (def.columns[at] as ColumnDef).type)
+  return v === null ? 0n : toInteger(v)
+}
+
+/** A SET or ON DUPLICATE KEY UPDATE assignment, compiled: the column's slot, and its value or `undefined` for DEFAULT. */
+interface Assigned {
+  readonly index: number
+  readonly value: Compiled | undefined
+}
+
+/** `ON UPDATE CURRENT_TIMESTAMP` and its kin, compiled, per column. */
+function onUpdateOf(run: Run, def: TableDef): (Compiled | undefined)[] {
+  return def.columns.map((c) => {
+    const text = c.attributes?.['onUpdate']
+    return typeof text === 'string' ? compile(parseExpression(text), compileContext(run, EMPTY_SCOPE, 'field list')) : undefined
+  })
+}
+
+/**
+ * Apply assignments to one row, as UPDATE and an upsert both do (8.4.11).
+ * Left to right, each seeing the ones before it *as stored*: `SET d = 1.234,
+ * x = d` on a DECIMAL(5,1) d gives x = 1.2, and outside strict mode `SET tiny
+ * = 1000, j = tiny` gives j = 127 (found by review). So each value is
+ * converted into its column as it is assigned, and read back from there —
+ * which also counts each adjusted value's warning once. `ON UPDATE` columns
+ * fire only for a row that changed, and only where the statement did not
+ * assign. `extra` is what an expression may read after the row: an upsert's
+ * alias and tried row.
+ */
+function assignAll(
+  run: Run,
+  def: TableDef,
+  before: readonly FieldBytes[],
+  current: readonly Value[],
+  extra: readonly Value[],
+  assignments: readonly Assigned[],
+  onUpdate: readonly (Compiled | undefined)[],
+  defaults: readonly (Compiled | 'none')[],
+  store: StoreContext,
+  nulls: NullPolicy,
+): { after: FieldBytes[]; values: Value[]; changed: boolean } {
+  const after = [...before]
+  const values: Value[] = [...current]
+  const assign = (i: number, v: Value): void => {
+    const column = def.columns[i] as ColumnDef
+    const field = storeField(v, column, store, nulls)
+    after[i] = field
+    values[i] = decodeField(field, column.type)
+  }
+  const assigned = new Set<number>()
+  for (const a of assignments) {
+    assigned.add(a.index)
+    if (a.value === undefined) {
+      // `c = DEFAULT` on a column with none is 1364 under a strict mode and
+      // the type's zero with a warning outside one, as a missing INSERT
+      // value is (8.4.11).
+      const d = defaults[a.index] as Compiled | 'none'
+      const column = def.columns[a.index] as ColumnDef
+      if (d === 'none') {
+        if (store.strict) throw sqlError('ER_NO_DEFAULT_FOR_FIELD', messages.noDefaultForField(column.name))
+        store.warnings++
+      }
+      assign(a.index, d === 'none' ? implicitDefault(column) : d.eval([], run.env))
+    } else assign(a.index, a.value.eval(extra.length === 0 ? (values as Row) : [...values, ...extra], run.env))
+  }
+  if (sameRow(before, after)) return { after, values, changed: false }
+  onUpdate.forEach((u, i) => {
+    if (u !== undefined && !assigned.has(i)) assign(i, u.eval([], run.env))
+  })
+  return { after, values, changed: true }
 }
 
 const isDefaultKeyword = (e: Expression): boolean => e.kind === NODE.KEYWORD && e.word.toUpperCase() === 'DEFAULT'
@@ -206,49 +591,24 @@ export function update(run: Run, node: UpdateNode, trx: Trx): OkResult {
     const { index } = scope.resolve(a.column.parts, 'field list')
     return { index, value: isDefaultKeyword(a.value) ? undefined : compile(a.value, compileContext(run, scope, 'field list')) }
   })
-  const onUpdate = def.columns.map((c) => {
-    const text = c.attributes?.['onUpdate']
-    return typeof text === 'string' ? compile(parseExpression(text), compileContext(run, EMPTY_SCOPE, 'field list')) : undefined
-  })
+  const onUpdate = onUpdateOf(run, def)
   const defaults = def.columns.map((c) => defaultOf(run, c))
-  const assigned = new Set(assignments.map((a) => a.index))
   const store: StoreContext = { strict: isStrict(run.env.session.sqlMode), row: 1, warnings: 0 }
+  const keys = uniqueKeys(def)
+  run.state.insertIdSet = false
 
   const rows = matching(run, def, table, alias, node, trx)
   let changed = 0
   rows.forEach(({ id, row }, n) => {
     store.row = n + 1
-    // Assignments apply left to right, each seeing the ones before it *as
-    // stored*: `SET d = 1.234, x = d` on a DECIMAL(5,1) d gives x = 1.2, and
-    // outside strict mode `SET tiny = 1000, j = tiny` gives j = 127 (8.4.11;
-    // found by review). So each value is converted into its column as it is
-    // assigned, and read back from there — which also counts each adjusted
-    // value's warning once.
     const before = encodeRow(def, row, { strict: false, row: n + 1, warnings: 0 })
-    const after = [...before]
-    const values: Value[] = [...row]
-    const assign = (i: number, v: Value): void => {
-      const column = def.columns[i] as ColumnDef
-      const field = encodeField(v, column, store)
-      after[i] = field
-      values[i] = decodeField(field, column.type)
-    }
-    for (const a of assignments) {
-      if (a.value === undefined) {
-        const d = defaults[a.index] as Compiled | 'none'
-        assign(a.index, d === 'none' ? implicitDefault(def.columns[a.index] as ColumnDef) : d.eval([], run.env))
-      } else assign(a.index, a.value.eval(values as Row, run.env))
-    }
-    if (sameRow(before, after)) return
-    // `ON UPDATE CURRENT_TIMESTAMP` fires only for a row that changed, and
-    // only on a column the statement did not set itself.
-    onUpdate.forEach((u, i) => {
-      if (u !== undefined && !assigned.has(i)) assign(i, u.eval([], run.env))
-    })
+    // A NULL into a NOT NULL column is the type's zero and a warning outside a strict mode (8.4.11).
+    const result = assignAll(run, def, before, row, [], assignments, onUpdate, defaults, store, store.strict ? 'error' : 'warn')
+    if (!result.changed) return
     try {
-      table.update(id, after, trx)
+      table.update(id, result.after, trx)
     } catch (e) {
-      throw duplicateEntry(e, def, values)
+      throw duplicateError(e, def, table, keys, result.after, trx, id)
     }
     changed++
   })
@@ -257,12 +617,14 @@ export function update(run: Run, node: UpdateNode, trx: Trx): OkResult {
   const foundRows = hasCap(run.env.session.capabilities, CLIENT.FOUND_ROWS)
   return {
     affectedRows: foundRows ? matched : changed,
+    // `UPDATE t SET id = LAST_INSERT_ID(id + 1)` reports the value it set.
+    ...(run.state.insertIdSet ? { insertId: run.state.lastInsertId } : {}),
     warnings: store.warnings,
     info: `Rows matched: ${matched}  Changed: ${changed}  Warnings: ${store.warnings}`,
   }
 }
 
-function sameRow(a: readonly (Uint8Array | null)[], b: readonly (Uint8Array | null)[]): boolean {
+function sameRow(a: readonly FieldBytes[], b: readonly FieldBytes[]): boolean {
   for (let i = 0; i < a.length; i++) {
     const x = a[i] ?? null
     const y = b[i] ?? null
@@ -270,9 +632,14 @@ function sameRow(a: readonly (Uint8Array | null)[], b: readonly (Uint8Array | nu
       if (x !== y) return false
       continue
     }
-    if (x.length !== y.length) return false
-    for (let j = 0; j < x.length; j++) if (x[j] !== y[j]) return false
+    if (!sameBytes(x, y)) return false
   }
+  return true
+}
+
+function sameBytes(x: Uint8Array, y: Uint8Array): boolean {
+  if (x.length !== y.length) return false
+  for (let j = 0; j < x.length; j++) if (x[j] !== y[j]) return false
   return true
 }
 

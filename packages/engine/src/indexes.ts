@@ -187,6 +187,13 @@ export class ClusteredIndex {
     })
   }
 
+  /** The key of the live row holding `row`'s primary key, latest version — what `insert` would collide with. */
+  duplicateOf(row: Row): Uint8Array | undefined {
+    const key = this.keyOf(row)
+    const current = this.tree.get(key)
+    return current !== undefined && !versionOf(current).marked ? key : undefined
+  }
+
   /** Replace the row with `row`'s primary key. `false` if there is none. */
   update(row: Row, trx?: Trx): boolean {
     const key = this.keyOf(row)
@@ -369,6 +376,17 @@ export class SecondaryIndex {
       t.undo({ isInsert: current === undefined, purgeRemoves: false, indexId: this.tree.indexId, key, old: current ?? null, freeOnPurge: [], freeOnRollback: [] })
       this.tree.put(key, secondaryValue(false, t.id))
     })
+  }
+
+  /**
+   * The primary key of the live entry `row` would collide with, as `insert`
+   * checks it: none in an index that is not unique, or for a key with a NULL.
+   */
+  duplicateOf(row: Row): Uint8Array | undefined {
+    if (!this.unique || this.columns.some((c) => row[c.field] === null)) return undefined
+    const secondary = keyOf(row, this.columns)
+    for (const [key, value] of this.#entries(secondary)) if (!versionOf(value).marked) return key.subarray(secondary.length)
+    return undefined
   }
 
   /** Delete-mark a row's entry. `false` if it has none. */

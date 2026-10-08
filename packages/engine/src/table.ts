@@ -65,6 +65,15 @@ export interface Table {
   /** Replace a row. A changed clustered key moves it, and the new id is returned; `undefined` if there is no row `id`. */
   update(id: RowId, row: Row, trx?: Trx): RowId | undefined
   delete(id: RowId, trx?: Trx): boolean
+  /**
+   * The row `row` would collide with in the UNIQUE (or primary) index `index`,
+   * as the uniqueness check sees it: the latest version, which under the one
+   * writer (D-53) is committed or the writer's own. `undefined` if none, and
+   * always for a key with a NULL in it, since NULLs never collide. An upsert
+   * and REPLACE need the row a 1062 means, and the error names only its index
+   * (D-71).
+   */
+  duplicateOf(index: string, row: Row, trx?: Trx): RowId | undefined
   get(id: RowId, trx?: Trx, mode?: ReadMode): FieldBytes[] | undefined
   /** Rows in clustered order. Do not change the table while iterating; an executor that must, materializes first. */
   scan(range?: KeyRange, trx?: Trx, mode?: ReadMode): Generator<[RowId, FieldBytes[]]>
@@ -237,6 +246,14 @@ class NativeTable implements Table {
       for (const s of this.#secondaries) s.delete(old, id, t)
       return true
     })
+  }
+
+  duplicateOf(index: string, row: Row, trx?: Trx): RowId | undefined {
+    checkRow(this.def, row)
+    this.#visible(trx, 'current')
+    const name = indexOf(this.def, index).name
+    if (name === this.def.clustered) return this.#clustered.duplicateOf(row)
+    return this.#secondaries.find((s) => s.name === name)?.duplicateOf(row)
   }
 
   get(id: RowId, trx?: Trx, mode: ReadMode = 'consistent'): FieldBytes[] | undefined {
@@ -529,6 +546,20 @@ class MemoryTable implements Table {
     })
     if (range.reverse === true) inside.reverse()
     for (const { r } of inside) yield [r.id, this.#strip(r.row) as FieldBytes[]]
+  }
+
+  duplicateOf(index: string, row: Row): RowId | undefined {
+    checkRow(this.def, row)
+    const name = indexOf(this.def, index).name
+    if (name === this.def.clustered) {
+      const key = valuesOf(row, this.#clustered)
+      return this.#data.rows.find((r) => compareKey(r.key, key, this.#clustered) === 0)?.id
+    }
+    const s = this.#secondaries.find((x) => x.index.name === name)
+    if (s === undefined || s.index.kind === 'index') return undefined
+    const values = valuesOf(row, s.columns)
+    if (values.some((v) => v === null)) return undefined
+    return this.#data.rows.find((r) => compareKey(valuesOf(r.row, s.columns), values, s.columns) === 0)?.id
   }
 
   /** What native's record and key encoders would refuse, refused alike: a field's width, a NOT NULL, a value that cannot be keyed. */
