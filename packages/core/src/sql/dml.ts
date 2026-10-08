@@ -853,6 +853,18 @@ export function remove(run: Run, node: DeleteNode, trx: Trx): OkResult {
   checkTargetNotRead({ schema: def.schema, name: def.name }, [node.where], run.env.session.database)
   const rows = matching(run, def, table, alias, node, trx)
   let deleted = 0
-  for (const { id } of rows) if (table.delete(id, trx)) deleted++
-  return { affectedRows: deleted }
+  let warnings = 0
+  for (const { id } of rows) {
+    // IGNORE keeps a row a child holds, with a warning, and undoes whatever
+    // its cascades had done (8.4.11).
+    const at = node.ignore === true ? trx.savepoint() : 0
+    try {
+      if (table.delete(id, trx)) deleted++
+    } catch (e) {
+      if (node.ignore !== true || !(e instanceof MyjsError) || e.errno !== 1451) throw e
+      trx.rollbackTo(at)
+      warnings++
+    }
+  }
+  return warnings === 0 ? { affectedRows: deleted } : { affectedRows: deleted, warnings }
 }

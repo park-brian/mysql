@@ -263,10 +263,20 @@ export function referencingKeys(catalog: Catalog, schema: string, name: string):
 
 const ctx = (): StoreContext => ({ strict: true, row: 1, warnings: 0 })
 
-/** A field of one column as another's: the same value, encoded for it; `undefined` if it cannot be. */
+/**
+ * A field of one column as another's: the same value, encoded for it;
+ * `undefined` if it cannot be. A byte string must survive unchanged: BINARY
+ * pads, and InnoDB compares `'ab'` with `'ab\0\0'` as different (8.4.11).
+ */
 function convert(field: Uint8Array, from: ColumnDef, to: ColumnDef): Uint8Array | undefined {
   try {
-    return encodeField(decodeField(field, from.type), { ...to, nullable: true }, ctx()) ?? undefined
+    const value = decodeField(field, from.type)
+    const out = encodeField(value, { ...to, nullable: true }, ctx()) ?? undefined
+    if (out !== undefined && value?.kind === 'bytes') {
+      const back = decodeField(out, to.type)
+      if (back?.kind !== 'bytes' || !same(back.v, value.v)) return undefined
+    }
+    return out
   } catch {
     return undefined
   }
@@ -407,8 +417,10 @@ class GuardedTable implements Table {
     const before = this.#inner.get(id, trx, 'current')
     if (before === undefined) return this.#inner.update(id, row, trx)
     const changed = (columns: readonly string[]) => columns.some((c) => !same(before[position(this.def, c)] ?? null, row[position(this.def, c)] ?? null))
-    // The children of the row as it was, and what each key will do to them.
-    const cascades: { fk: ForeignKeyDef; child: TableDef; table: Table; rows: [RowId, FieldBytes[]][] }[] = []
+    // The children of the row as it was, and the value each key gives them:
+    // one that does not fit the child's column refuses the update (1451),
+    // as InnoDB's cascade does, rather than writing something else.
+    const cascades: { fk: ForeignKeyDef; table: Table; rows: [RowId, FieldBytes[]][]; values: FieldBytes[] }[] = []
     for (const { child, fk } of this.#enforcer.referencing(this.def)) {
       if (!changed(fk.references.columns)) continue
       const found = this.#enforcer.children(this.def, before, child, fk)
@@ -417,25 +429,38 @@ class GuardedTable implements Table {
       // A cascaded update into a table an update in the chain — this one
       // included — is changing: InnoDB "plays safe" and refuses.
       if (this.#updating.has(tableKey(child)) || tableKey(child) === tableKey(this.def)) throw rowIsReferenced(fk, child.schema, child.name)
-      cascades.push({ fk, child, ...found })
+      const values = fk.columns.map((c, k): FieldBytes => {
+        const parentAt = position(this.def, fk.references.columns[k] as string)
+        const value = row[parentAt] ?? null
+        if (fk.onUpdate === 'SET NULL' || value === null) return null
+        const v = convert(value, this.def.columns[parentAt] as ColumnDef, found.table.def.columns[position(found.table.def, c)] as ColumnDef)
+        if (v === undefined) throw rowIsReferenced(fk, child.schema, child.name)
+        return v
+      })
+      cascades.push({ fk, ...found, values })
     }
-    for (const fk of this.#keys) if (changed(fk.columns)) this.#enforcer.checkParent(this.def, fk, row)
+    // The row is written first and its parents looked for after, as InnoDB
+    // does: a row may become its own parent, and a duplicate key is the
+    // error before a missing parent. A changed primary key is a new index
+    // record, and every key is checked again (8.4.11).
     const moved = this.#inner.update(id, row, trx)
+    const all = this.def.indexes.some((i) => i.kind === 'primary' && changed(i.parts.map((p) => p.column)))
+    try {
+      for (const fk of this.#keys) if (all || changed(fk.columns)) this.#enforcer.checkParent(this.def, fk, row)
+    } catch (e) {
+      this.#inner.update(moved ?? id, before, trx)
+      throw e
+    }
     if (cascades.length > 0) {
       if (this.#depth >= MAX_DEPTH) throw tooDeep()
       const updating = new Set([...this.#updating, tableKey(this.def)])
-      for (const { fk, table, rows } of cascades) {
+      for (const { fk, table, rows, values } of cascades) {
         const guarded = this.#enforcer.guard(table, this.#depth + 1, updating)
         for (const [childId] of rows) {
           const current = table.get(childId, trx, 'current')
           if (current === undefined) continue
           const next = [...current]
-          for (const [k, c] of fk.columns.entries()) {
-            const at = position(table.def, c)
-            const from = this.def.columns[position(this.def, fk.references.columns[k] as string)] as ColumnDef
-            const value = row[position(this.def, fk.references.columns[k] as string)] ?? null
-            next[at] = fk.onUpdate === 'SET NULL' || value === null ? null : (convert(value, from, table.def.columns[at] as ColumnDef) ?? null)
-          }
+          for (const [k, c] of fk.columns.entries()) next[position(table.def, c)] = values[k] ?? null
           guarded.update(childId, next, trx)
         }
       }

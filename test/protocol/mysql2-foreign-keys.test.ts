@@ -16,7 +16,12 @@
 // SET DEFAULT, which InnoDB refuses as RESTRICT; ALTER TABLE adding and
 // dropping keys, indexes and columns; DROP and TRUNCATE of a parent; a key
 // across schemas, which DROP DATABASE must respect; a parent's own index (1553);
-// and REPLACE and an upsert on a table that references itself.
+// and REPLACE and an upsert on a table that references itself. Then what a
+// review found: a row's keys are checked after it is written, not before (a
+// row that becomes its own parent, a duplicate before a missing parent); a
+// changed primary key re-checks every key; DELETE IGNORE; a cascaded value
+// that does not fit its column refuses the parent's update (1451) rather
+// than writing NULL; and BINARY against VARBINARY compares unpadded.
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import mysql from 'mysql2/promise'
@@ -164,6 +169,39 @@ const SCRIPT: readonly (readonly [string, Outcome])[] = [
   ["INSERT INTO self2 VALUES (1, NULL), (2, 1)", [2,0,"Records: 2  Duplicates: 0  Warnings: 0",0]],
   ["INSERT INTO self2 VALUES (1, NULL) ON DUPLICATE KEY UPDATE id = 3", [1451,"Cannot delete or update a parent row: a foreign key constraint fails (`app`.`self2`, CONSTRAINT `self2_ibfk_1` FOREIGN KEY (`x`) REFERENCES `self2` (`id`) ON UPDATE SET NULL)"]],
   ["DROP TABLE self, self2", [0,0,"",0]],
+  ["CREATE TABLE t (id INT PRIMARY KEY, p INT, FOREIGN KEY (p) REFERENCES t(id))", [0,0,"",0]],
+  ["INSERT INTO t VALUES (1, NULL)", [1,0,"",0]],
+  ["UPDATE t SET id = 5, p = 5 WHERE id = 1", [1,0,"Rows matched: 1  Changed: 1  Warnings: 0",0]],
+  ["SELECT * FROM t", [["5","5"]]],
+  ["CREATE TABLE tp (id INT PRIMARY KEY)", [0,0,"",0]],
+  ["INSERT INTO tp VALUES (1)", [1,0,"",0]],
+  ["CREATE TABLE tc (id INT PRIMARY KEY, pid INT, FOREIGN KEY (pid) REFERENCES tp(id))", [0,0,"",0]],
+  ["INSERT INTO tc VALUES (1, 1), (2, 1)", [2,0,"Records: 2  Duplicates: 0  Warnings: 0",0]],
+  ["UPDATE tc SET id = 1, pid = 9 WHERE id = 2", [1062,"Duplicate entry '1' for key 'tc.PRIMARY'"]],
+  ["SET foreign_key_checks = 0", [0,0,"",0]],
+  ["INSERT INTO tc VALUES (3, 7)", [1,0,"",0]],
+  ["SET foreign_key_checks = 1", [0,0,"",0]],
+  ["UPDATE tc SET id = 4 WHERE id = 3", [1452,"Cannot add or update a child row: a foreign key constraint fails (`app`.`tc`, CONSTRAINT `tc_ibfk_1` FOREIGN KEY (`pid`) REFERENCES `tp` (`id`))"]],
+  ["UPDATE tc SET id = 5 WHERE id = 1", [1,0,"Rows matched: 1  Changed: 1  Warnings: 0",0]],
+  ["SELECT * FROM tc ORDER BY id", [["2","1"],["3","7"],["5","1"]]],
+  ["DELETE IGNORE FROM tp", [0,0,"",1]],
+  ["SELECT * FROM tp", [["1"]]],
+  ["CREATE TABLE sp (a VARCHAR(10) PRIMARY KEY)", [0,0,"",0]],
+  ["CREATE TABLE sc (a VARCHAR(3), FOREIGN KEY (a) REFERENCES sp(a) ON UPDATE CASCADE)", [0,0,"",0]],
+  ["INSERT INTO sp VALUES ('abc')", [1,0,"",0]],
+  ["INSERT INTO sc VALUES ('abc')", [1,0,"",0]],
+  ["UPDATE sp SET a = 'abcdef'", [1451,"Cannot delete or update a parent row: a foreign key constraint fails (`app`.`sc`, CONSTRAINT `sc_ibfk_1` FOREIGN KEY (`a`) REFERENCES `sp` (`a`) ON UPDATE CASCADE)"]],
+  ["SELECT * FROM sc", [["abc"]]],
+  ["SELECT * FROM sp", [["abc"]]],
+  ["UPDATE sp SET a = 'xy'", [1,0,"Rows matched: 1  Changed: 1  Warnings: 0",0]],
+  ["SELECT * FROM sc", [["xy"]]],
+  ["CREATE TABLE pb (a BINARY(4) PRIMARY KEY)", [0,0,"",0]],
+  ["CREATE TABLE cb (a VARBINARY(4), FOREIGN KEY (a) REFERENCES pb(a))", [0,0,"",0]],
+  ["INSERT INTO pb VALUES ('ab')", [1,0,"",0]],
+  ["INSERT INTO cb VALUES ('ab')", [1452,"Cannot add or update a child row: a foreign key constraint fails (`app`.`cb`, CONSTRAINT `cb_ibfk_1` FOREIGN KEY (`a`) REFERENCES `pb` (`a`))"]],
+  ["INSERT INTO cb VALUES (x'61620000')", [1,0,"",0]],
+  ["SELECT HEX(a) FROM cb", [["61620000"]]],
+  ["DROP TABLE t, tc, tp, sc, sp, cb, pb", [0,0,"",0]],
 ]
 
 test('M5.25: foreign keys answer every statement of the script as 8.4.11 did', async () => {
