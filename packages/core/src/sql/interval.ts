@@ -17,15 +17,19 @@
 import { FIELD_TYPE, type MysqlDateTime } from '@myjs/bytes'
 import type { Expression, IntervalNode } from '@myjs/parser'
 import { messages, sqlError } from '@myjs/protocol'
-import { addInterval, intervalFsp, intervalOf, isDateUnit, isIntervalUnit, isTimeUnit, parseDateTime, renderMysqlDateTime, stringValue, textOf, timeOrdinal, toText, COERCIBILITY } from '@myjs/types'
-import { compile, type CompileContext, type Compiled, type Env } from './compile.ts'
+import { addInterval, dateStructOf, type TimeStruct, intervalFsp, intervalOf, isDateUnit, isIntervalUnit, isTimeUnit, renderMysqlDateTime, stringValue, timeOrdinal, COERCIBILITY } from '@myjs/types'
+import { asNumber, compile, raise, type CompileContext, type Compiled, type Env } from './compile.ts'
+import { settle } from './temporal-functions.ts'
 import { datetimeType, stringType, type ResultType } from './meta.ts'
 
 /** `arg ± INTERVAL value unit`; `negate` for `-`, DATE_SUB and SUBDATE. */
 export function dateAdd(arg: Expression, value: Expression, unit: string, negate: boolean, ctx: CompileContext): Compiled {
   if (!isIntervalUnit(unit)) throw sqlError('ER_PARSE_ERROR', messages.parseError(unit, 1))
   const a = compile(arg, ctx)
-  const n = compile(value, ctx)
+  const raw = compile(value, ctx)
+  // A simple unit's count is an integer, SECOND's a decimal, each read with its 1292; a compound unit's text is parsed.
+  const compound = unit.includes('_')
+  const n = compound ? raw : asNumber(raw, unit === 'SECOND' || unit === 'MICROSECOND' ? 'DECIMAL' : 'INTEGER')
   const scale = n.type.kind === 'decimal' ? n.type.scale : n.type.kind === 'double' ? 31 : 0
   const fsp = intervalFsp(unit, scale)
   const t = a.type
@@ -50,6 +54,13 @@ export function dateAdd(arg: Expression, value: Expression, unit: string, negate
     eval: (row, env) => {
       const v = a.eval(row, env)
       if (v === null) return null
+      // The date is read first, and warns, before the interval is.
+      let text: TimeStruct | undefined
+      if (shape === 'string') {
+        const d = settle(dateStructOf(v, { noZeroDate: true }, () => ({ year: env.now.getUTCFullYear(), month: env.now.getUTCMonth() + 1, day: env.now.getUTCDate(), hour: 0, minute: 0, second: 0, microsecond: 0 })), env)
+        if (d === null) return null
+        text = d
+      }
       const interval = intervalOf(n.eval(row, env), unit)
       if (interval === undefined) return null
       switch (shape) {
@@ -57,8 +68,10 @@ export function dateAdd(arg: Expression, value: Expression, unit: string, negate
         case 'datetime': {
           const from = v.kind === 'datetime' ? v.v : v.kind === 'time' ? onToday(v.v, env) : undefined
           if (from === undefined) return null
+          // A zero date, or a zero month or day, is no date to move, and says nothing.
+          if (from.month === 0 || from.day === 0) return null
           const to = addInterval(from, interval, negate)
-          if (to === undefined) return null
+          if (to === undefined) return overflow(env)
           return shape === 'date' ? { kind: 'datetime', v: to, type: 'DATE', fsp: 0 } : { kind: 'datetime', v: to, type: 'DATETIME', fsp: result.scale }
         }
         case 'time': {
@@ -74,12 +87,11 @@ export function dateAdd(arg: Expression, value: Expression, unit: string, negate
           }
         }
         case 'string': {
-          const text = v.kind === 'string' || v.kind === 'bytes' ? textOf(v) : v.kind === 'int' ? numberAsTemporal(v.v) : toText(v)
-          const parsed = parseDateTime(text)
-          if (parsed === undefined) return null
-          const to = addInterval(parsed.v, interval, negate)
-          if (to === undefined) return null
-          const asDate = !parsed.hasTime && dateUnit
+          const d = text as TimeStruct
+          if (d.month === 0 || d.day === 0) return overflow(env)
+          const to = addInterval(d, interval, negate)
+          if (to === undefined) return overflow(env)
+          const asDate = d.type === 'DATE' && dateUnit
           const out = asDate ? renderMysqlDateTime(to).slice(0, 10) : renderMysqlDateTime(to, to.microsecond === 0 ? 0 : 6)
           return stringValue(out, ctx.connectionCollation, COERCIBILITY.COERCIBLE)
         }
@@ -87,6 +99,12 @@ export function dateAdd(arg: Expression, value: Expression, unit: string, negate
     },
     type: result,
   }
+}
+
+/** A result past MySQL's range: NULL, and 1441. */
+function overflow(env: Env): null {
+  raise(env, 1441, 'Datetime function: datetime field overflow')
+  return null
 }
 
 /** Whether an expression is an `INTERVAL n unit`. */
@@ -99,10 +117,4 @@ function onToday(t: { readonly negative: boolean; readonly days: number; readonl
   const now = env.now
   const today: MysqlDateTime = { year: now.getFullYear(), month: now.getMonth() + 1, day: now.getDate(), hour: 0, minute: 0, second: 0, microsecond: 0 }
   return addInterval(today, { months: 0n, micros: timeOrdinal(t) })
-}
-
-/** An integer as a temporal's digits: `20240131` is a date. */
-function numberAsTemporal(n: bigint): string {
-  const s = (n < 0n ? -n : n).toString()
-  return s.length <= 8 ? s.padStart(8, '0') : s.padStart(14, '0')
 }

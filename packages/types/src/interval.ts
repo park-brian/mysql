@@ -148,7 +148,7 @@ const MONTH_DAYS = [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31]
 const daysInMonth = (y: number, m: number): number => (m === 2 && isLeap(y) ? 29 : (MONTH_DAYS[m - 1] as number))
 
 /** `get_date_from_daynr`: the date of a day number — the zero date in year 0, as MySQL gives it (`'0001-01-01' - INTERVAL 1 DAY` is `0000-00-00`). */
-function dateOfDayNumber(daynr: number): { year: number; month: number; day: number } {
+export function dateOfDayNumber(daynr: number): { year: number; month: number; day: number } {
   if (daynr <= 365 || daynr >= 3652500) return { year: 0, month: 0, day: 0 }
   let year = Math.trunc((daynr * 100) / 36525)
   const temp = Math.trunc(((Math.trunc((year - 1) / 100) + 1) * 3) / 4)

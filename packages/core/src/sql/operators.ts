@@ -10,7 +10,7 @@ import type { KeyRange, RowId, Table, Trx } from '@myjs/engine'
 import type { ColumnType } from '@myjs/types'
 import { decodeField, sortValues, truth, type Value } from '@myjs/types'
 import { rowKey } from './keys.ts'
-import { raise, type Compiled, type Env, type Row } from './compile.ts'
+import { raise, setRowNumber, type Compiled, type Env, type Row } from './compile.ts'
 
 /** A row as a scan produces it: its values, and the id to write it back by. */
 export interface ScannedRow {
@@ -51,7 +51,11 @@ export function* filter<T extends { readonly row: Row }>(source: Iterable<T>, pr
 
 /** Each row through a list of expressions. */
 export function* project(source: Iterable<{ readonly row: Row }>, items: readonly Compiled[], env: Env): Generator<Value[]> {
-  for (const { row } of source) yield items.map((item) => item.eval(row, env))
+  let n = 0
+  for (const { row } of source) {
+    setRowNumber(env, ++n)
+    yield items.map((item) => item.eval(row, env))
+  }
 }
 
 export interface SortKey {

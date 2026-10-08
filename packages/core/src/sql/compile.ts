@@ -79,6 +79,7 @@ import { jsonPathFunction, memberOf, unquote } from './json-path.ts'
 import { matchType, regexpInstr, regexpLike, regexpReplace, regexpSubstr } from './regexp.ts'
 import { TableScope } from './scope.ts'
 import { libraryFunction } from './functions.ts'
+import { temporalFunction } from './temporal-functions.ts'
 import { bitBytes } from './wire.ts'
 import { badAgainst, booleanRank, Corpus, foldFor, fulltextOf, naturalRank, noExpansion, noIndex, parseBoolean, queryText, wordsOf, type Term } from './fulltext.ts'
 
@@ -88,6 +89,13 @@ import { dateAdd, isInterval } from './interval.ts'
 
 /** One row as operators pass it: a value per column of the scope. */
 export type Row = readonly Value[]
+
+/** The row a statement is producing, 1-based, as a warning's "at row N" names it (`current_row_for_condition`). */
+const ROW_NUMBERS = new WeakMap<object, number>()
+export const rowNumber = (env: Env): number => ROW_NUMBERS.get(env) ?? 1
+export const setRowNumber = (env: Env, n: number): void => {
+  ROW_NUMBERS.set(env, n)
+}
 
 /** What evaluation may read beyond the row: the parameters, the clock, the session. */
 export interface Env {
@@ -1106,7 +1114,7 @@ function binary(op: string, left: Expression, right: Expression, extra: Expressi
 const VOLATILE = new Set(['RAND', 'UUID', 'UUID_SHORT', 'SYSDATE', 'RANDOM_BYTES', 'SLEEP', 'LAST_INSERT_ID', 'ROW_COUNT', 'FOUND_ROWS', 'GET_LOCK', 'RELEASE_LOCK'])
 
 /** An expression whose value the statement fixes: no column, subquery, variable or volatile function in it. */
-function constantNode(e: unknown): boolean {
+export function constantNode(e: unknown): boolean {
   if (e === null || typeof e !== 'object') return true
   if (Array.isArray(e)) return e.every(constantNode)
   const n = e as { kind?: unknown; name?: unknown }
@@ -1606,6 +1614,8 @@ function call(e: CallNode, ctx: CompileContext): Compiled {
     return libraryFunction(name, xs, e.name, e.args.map((a) => constantNode(a)), ctx) as Compiled
   }
   if (name === 'DEFAULT' && e.args.length === 1) return defaultFunction(e, ctx)
+  const temporal = temporalFunction(name, e, ctx)
+  if (temporal !== undefined) return temporal
   // MOD(a, b) is `a % b`, its name included in an overflow's message.
   if (name === 'MOD') {
     arity(2)
