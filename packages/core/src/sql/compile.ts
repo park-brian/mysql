@@ -13,7 +13,8 @@
 // have not written is ER_NOT_SUPPORTED_YET naming it (M5.10 owns the rest).
 import { CHARSET_BINARY, FIELD_TYPE, type MysqlDateTime } from '@myjs/bytes'
 import { collation, collationInfoByName, defaultCollationOf, encodeCollation, requireCollationInfo } from '@myjs/charsets'
-import { LITERAL, NODE, deparse, type CallNode, type CaseNode, type CastNode, type Expression, type LiteralNode } from '@myjs/parser'
+import { LITERAL, NODE, deparse, type CallNode, type CaseNode, type CastNode, type Expression, type LiteralNode, type QueryExpression, type SubqueryNode } from '@myjs/parser'
+import type { Trx } from '@myjs/engine'
 import { sqlError, messages, type Session } from '@myjs/protocol'
 import {
   COERCIBILITY,
@@ -71,6 +72,12 @@ export interface Env {
   readonly now: Date
   readonly session: Session
   readonly state: SessionValues
+  /** The transaction a subquery reads in (M5.1). */
+  readonly trx?: Trx
+  /** The rows of the enclosing queries, innermost first: what a correlated reference reads (D-73). */
+  readonly outer?: readonly Row[]
+  /** One statement's memory: an uncorrelated subquery's answer, computed once. */
+  readonly memo?: Map<unknown, unknown>
 }
 
 /** Session state an expression can read: user variables and the last statement's counters. */
@@ -95,8 +102,23 @@ export interface Compiled {
 
 /** Where names resolve: the columns of the tables in `FROM`, in row order. */
 export interface Scope {
-  /** The slot a column reference reads and its type. ER_BAD_FIELD_ERROR or ER_NON_UNIQ_ERROR when there is none or more than one. */
-  resolve(parts: readonly string[], clause: string): { readonly index: number; readonly type: ResultType }
+  /**
+   * The slot a column reference reads and its type. ER_BAD_FIELD_ERROR or
+   * ER_NON_UNIQ_ERROR when there is none or more than one. `depth` is how
+   * many queries out the column lives, for a correlated reference: it reads
+   * `env.outer[depth - 1]` rather than the row.
+   */
+  resolve(parts: readonly string[], clause: string): { readonly index: number; readonly type: ResultType; readonly depth?: number }
+}
+
+/** A subquery planned for an expression: its columns, and its rows under an environment that carries the outer row. */
+export interface SubqueryPlan {
+  readonly columns: readonly { readonly name: string; readonly type: ResultType }[]
+  /** Whether it reads a column of an enclosing query, and must run again for each of its rows. */
+  readonly correlated: boolean
+  /** Whether it has a FROM: one without is a constant row, never empty. */
+  readonly hasFrom: boolean
+  rows(env: Env): Iterable<readonly Value[]>
 }
 
 export const EMPTY_SCOPE: Scope = {
@@ -134,6 +156,8 @@ export interface CompileContext {
   readonly inAggregate?: boolean
   /** Above a grouping: the expressions that are its keys, which read the key slot (NULL in a ROLLUP super-aggregate row). */
   readonly groupKeys?: GroupKeys
+  /** Plan a subquery whose enclosing scope is `outer` (M5.1); absent where none is allowed. */
+  readonly subquery?: (q: QueryExpression, outer: Scope) => SubqueryPlan
 }
 
 /** A grouped query's keys, as the expressions above the grouping see them. */
@@ -159,7 +183,7 @@ const MAX_SIGNED = 2n ** 63n - 1n
 const coercibilityOf = (t: ResultType): number => t.coercibility ?? COERCIBILITY.COERCIBLE
 
 /** The collation a list of string-typed results aggregates to (`aggregateCollation`, pairwise). */
-function aggregateTypes(types: readonly ResultType[], fallback: number): number {
+export function aggregateTypes(types: readonly ResultType[], fallback: number): number {
   let acc: { collationId: number; coercibility: number } | undefined
   for (const t of types) {
     if (t.kind !== 'string') continue
@@ -195,14 +219,24 @@ export function compile(e: Expression, ctx: CompileContext): Compiled {
     }
 
     case NODE.COLUMN: {
-      const { index, type } = ctx.scope.resolve(e.parts, ctx.clause)
+      const { index, type, depth } = ctx.scope.resolve(e.parts, ctx.clause)
+      if (depth !== undefined && depth > 0) {
+        // A correlated reference: a column of an enclosing query's current row.
+        const d = depth - 1
+        return { eval: (_row, env) => env.outer?.[d]?.[index] ?? null, type }
+      }
       return { eval: (row) => row[index] ?? null, type }
     }
+
+    case NODE.SUBQUERY:
+      if (e.quantifier !== undefined) throw sqlError('ER_PARSE_ERROR', messages.parseError(e.quantifier, 1))
+      return scalarSubquery(e, ctx)
 
     case NODE.VARIABLE:
       return variable(e.name, ctx)
 
     case NODE.UNARY:
+      if (e.op === 'EXISTS' && e.operand.kind === NODE.SUBQUERY) return exists(e.operand, ctx)
       return unary(e.op, compile(e.operand, ctx), e.op === 'EXISTS')
 
     case NODE.BINARY:
@@ -471,6 +505,7 @@ function binary(op: string, left: Expression, right: Expression, extra: Expressi
   }
   if (op === 'LIKE' || op === 'NOT LIKE') return like(op === 'NOT LIKE', a, compile(right, ctx), extra === undefined ? undefined : compile(extra as Expression, ctx))
 
+  if (right.kind === NODE.SUBQUERY && right.quantifier !== undefined && COMPARISONS[op] !== undefined) return quantified(op, right.quantifier === 'ALL' ? 'ALL' : 'ANY', left, right, ctx, op)
   const b = compile(right, ctx)
   const at = a.eval
   const bt = b.eval
@@ -573,7 +608,7 @@ function binary(op: string, left: Expression, right: Expression, extra: Expressi
 }
 
 function inList(negated: boolean, left: Expression, right: Expression, ctx: CompileContext): Compiled {
-  if (right.kind === NODE.SUBQUERY) throw sqlError('ER_NOT_SUPPORTED_YET', messages.notSupported('IN (subquery)'))
+  if (right.kind === NODE.SUBQUERY) return quantified(negated ? '<>' : '=', negated ? 'ALL' : 'ANY', left, right, ctx, negated ? 'NOT IN' : 'IN')
   const a = compile(left, ctx)
   const items = (right.kind === NODE.ROW ? right.items : [right]).map((i) => compile(i, ctx))
   return {
@@ -668,7 +703,7 @@ function aggregate(types: readonly ResultType[], nullable: boolean, connectionCo
  * return theirs: `COALESCE(1, 1.5)` is `1.0`. (`IF` and `CASE` do not — `IF(1, 1,
  * 0.5)` is `1` — which 8.4.11 settled, not the manual.)
  */
-function convertTo(v: Value, t: ResultType): Value {
+export function convertTo(v: Value, t: ResultType): Value {
   if (v === null) return null
   switch (t.kind) {
     case 'decimal':
@@ -1053,6 +1088,91 @@ function cast(e: CastNode, ctx: CompileContext): Compiled {
       return { eval: (r, env) => { const v = x(r, env); return v === null ? null : (toTime(v) ?? null) }, type: datetimeType(FIELD_TYPE.TIME, t.length ?? 0, true) }
     default:
       throw sqlError('ER_NOT_SUPPORTED_YET', messages.notSupported(`CAST AS ${t.name}`))
+  }
+}
+
+// --- subqueries (M5.1) --------------------------------------------------------------
+
+/** A subquery's plan, with the enclosing scope its correlated names resolve in. */
+function planned(e: SubqueryNode, ctx: CompileContext): SubqueryPlan {
+  if (ctx.subquery === undefined) throw sqlError('ER_NOT_SUPPORTED_YET', messages.notSupported('Subqueries here'))
+  return ctx.subquery(e.query, ctx.scope)
+}
+
+/** Its rows for this outer row: run again for each if correlated, else once per statement. */
+function rowsOf(plan: SubqueryPlan, key: object, row: Row, env: Env): readonly (readonly Value[])[] {
+  if (!plan.correlated && env.memo !== undefined) {
+    const hit = env.memo.get(key) as (readonly Value[])[] | undefined
+    if (hit !== undefined) return hit
+    const all = [...plan.rows(env)]
+    env.memo.set(key, all)
+    return all
+  }
+  return [...plan.rows({ ...env, outer: [row, ...(env.outer ?? [])] })]
+}
+
+/**
+ * `(SELECT …)` as a value: one column, at most one row (1242 otherwise —
+ * raised only when it is evaluated, so an empty outer table raises nothing),
+ * NULL for none. Its type is its item's as an expression, nullable unless it
+ * has no FROM, as 8.4.11 reports `(SELECT 1)` NOT NULL.
+ */
+function scalarSubquery(e: SubqueryNode, ctx: CompileContext): Compiled {
+  const plan = planned(e, ctx)
+  if (plan.columns.length !== 1) throw sqlError('ER_OPERAND_COLUMNS', 'Operand should contain 1 column(s)')
+  const t = (plan.columns[0] as { type: ResultType }).type
+  const key = {}
+  return {
+    eval: (row, env) => {
+      const rows = rowsOf(plan, key, row, env)
+      if (rows.length > 1) throw sqlError('ER_SUBQUERY_NO_1_ROW', 'Subquery returns more than 1 row')
+      return rows[0]?.[0] ?? null
+    },
+    // Its own item, not its inner one: a MIN of a column inside keeps none of that column's flags here.
+    type: (({ fieldFlags: _f, ownInTemporary: _o, ...rest }) => ({ ...rest, nullable: t.nullable || plan.hasFrom }))(expressionOf(t)),
+  }
+}
+
+/** `EXISTS (SELECT …)`: whether it has a row. Never NULL. */
+function exists(e: SubqueryNode, ctx: CompileContext): Compiled {
+  const plan = planned(e, ctx)
+  const key = {}
+  return { eval: (row, env) => bool(rowsOf(plan, key, row, env).length > 0), type: boolType(false) }
+}
+
+/**
+ * `x op ANY (SELECT …)`, `x op ALL (…)`, and `x IN`/`NOT IN (…)`, which are
+ * `= ANY` and `<> ALL`. Three-valued as the standard has it: ANY is true if
+ * one comparison is, else NULL if one was NULL, else false — false over no
+ * rows; ALL is false if one comparison is, else NULL if one was, else true —
+ * true over no rows. So `x NOT IN` a subquery with a NULL in it is never true.
+ */
+function quantified(op: string, quantifier: 'ANY' | 'ALL', left: Expression, right: SubqueryNode, ctx: CompileContext, label: string): Compiled {
+  void label
+  const a = compile(left, ctx)
+  const plan = planned(right, ctx)
+  if (plan.columns.length !== 1) throw sqlError('ER_OPERAND_COLUMNS', 'Operand should contain 1 column(s)')
+  const test = COMPARISONS[op] as (c: number) => boolean
+  const key = {}
+  return {
+    eval: (row, env) => {
+      const rows = rowsOf(plan, key, row, env)
+      if (rows.length === 0) return bool(quantifier === 'ALL')
+      const v = a.eval(row, env)
+      let sawNull = false
+      for (const r of rows) {
+        const c = compareValues(v, r[0] ?? null)
+        if (c === null) {
+          sawNull = true
+          continue
+        }
+        const hit = test(c)
+        if (quantifier === 'ANY' && hit) return bool(true)
+        if (quantifier === 'ALL' && !hit) return bool(false)
+      }
+      return sawNull ? null : bool(quantifier === 'ALL')
+    },
+    type: boolType(true),
   }
 }
 

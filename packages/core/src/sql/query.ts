@@ -10,17 +10,20 @@
 // name as written, else the expression's own source text — `SELECT 1+1`
 // returns a column called `1+1`, spaces and all, which only the text has.
 import type { Catalog, ColumnDef, Table, TableDef } from '@myjs/engine'
-import { NODE, QUERY, REF, TOKEN, deparse, lex, parseSqlMode, type Expression, type OrderItem, type QueryExpression, type SelectNode, type TableName, type Token } from '@myjs/parser'
+import { NODE, QUERY, REF, TOKEN, deparse, lex, parseSqlMode, type Expression, type OrderItem, type QueryBody, type QueryExpression, type SelectNode, type SetOperationNode, type TableName, type Token } from '@myjs/parser'
 import { messages, sqlError, type ColumnDefinition, type ResultSet, type RowValue } from '@myjs/protocol'
 import { intValue, integerRange, toInteger, truth, type Value } from '@myjs/types'
-import { compile, EMPTY_SCOPE, type CompileContext, type Compiled, type Env, type GroupKeys, type Row, type Scope } from './compile.ts'
+import { compile, convertTo, EMPTY_SCOPE, type CompileContext, type Compiled, type Env, type GroupKeys, type Row, type Scope, type SubqueryPlan } from './compile.ts'
 import { AggregateSink, chooseStrategy, containsAggregate, groupRows, isAggregate } from './group.ts'
 import { columnDefinition, intType, type ResultType } from './meta.ts'
 import { FIELD_TYPE } from '@myjs/bytes'
+import { requireCollationInfo } from '@myjs/charsets'
 import { distinct, filter, limit, project, scan, sort, type ScannedRow, type SortKey } from './operators.ts'
 import { accessRows, chooseAccess, type Access } from './plan.ts'
 import { TableScope } from './scope.ts'
-import { planFrom, type FromContext, type FromPlan, type JoinCondition } from './from.ts'
+import { planFrom, type DerivedSource, type FromContext, type FromPlan, type JoinCondition } from './from.ts'
+import { rowKey } from './keys.ts'
+import { convert as convertSetValue, nestedNullability, setOperation, setOperationType } from './setop.ts'
 import { constTablesHaveRows, optimizerFacts } from './optimize.ts'
 import type { SqlSession } from './session.ts'
 import { toWire, type WireProtocol } from './wire.ts'
@@ -39,6 +42,10 @@ export interface Run {
   readonly params?: readonly Value[]
   /** Planning for COM_STMT_PREPARE's metadata: what MySQL reports before it optimizes. */
   readonly preparing?: boolean
+  /** The enclosing query's scope, where a subquery's correlated names resolve (M5.1). */
+  readonly parent?: Scope
+  /** The common table expressions in scope, by name. */
+  readonly ctes?: ReadonlyMap<string, () => DerivedSource>
 }
 
 export function compileContext(run: Run, scope: Scope, clause: string): CompileContext {
@@ -50,15 +57,18 @@ export function compileContext(run: Run, scope: Scope, clause: string): CompileC
     state: run.state,
     serverVersion: run.serverVersion,
     ...(run.params === undefined ? {} : { params: run.params }),
+    subquery: (q, outer) => planSubquery(run, q, outer),
   }
 }
 
 /** What planning a FROM needs from the statement: its tables, and a compiler for ON clauses. */
-export function fromContext(run: Run, parent?: Scope): FromContext {
+export function fromContext(run: Run): FromContext {
   return {
     open: (name) => openTable(run, name),
     compileOn: (e, scope) => compile(e, compileContext(run, scope, 'on clause')),
-    ...(parent === undefined ? {} : { parent }),
+    derived: (ref, lateral) => derivedTable(run, ref.query, ref.alias as string, ref.columns, lateral),
+    cte: (name) => run.ctes?.get(name)?.(),
+    ...(run.parent === undefined ? {} : { parent: run.parent }),
   }
 }
 
@@ -119,8 +129,12 @@ function itemTexts(run: Run, node: SelectNode): (string | undefined)[] {
 
 export interface SelectPlan {
   readonly columns: readonly { readonly name: string; readonly type: ResultType }[]
-  /** The rows, as values. Runs the scan: call once, inside the statement's transaction. */
-  rows(trx: Trx | undefined): Iterable<Value[]>
+  /**
+   * The rows, as values. Runs the scan: call inside the statement's
+   * transaction. `env` is the statement's unless a correlated subquery
+   * passes its own, carrying the outer row.
+   */
+  rows(trx: Trx | undefined, env?: Env): Iterable<Value[]>
   /** `FOR UPDATE` / `FOR SHARE`: the read takes the writer slot. */
   readonly locking: boolean
   /**
@@ -131,18 +145,28 @@ export interface SelectPlan {
   columnsAt?(trx: Trx | undefined): readonly { readonly name: string; readonly type: ResultType }[]
 }
 
-/** The one query shape this executor runs: a SELECT, possibly in parentheses, with no set operation. */
-export function selectOf(q: QueryExpression): SelectNode {
-  if (q.with !== undefined) throw sqlError('ER_NOT_SUPPORTED_YET', messages.notSupported('WITH'))
+/**
+ * Any query: a SELECT, a parenthesised query with its own ORDER BY and
+ * LIMIT, or a set operation, under the CTEs its WITH defines.
+ */
+export function planQuery(run: Run, q: QueryExpression): SelectPlan {
   if (q.into !== undefined) throw sqlError('ER_NOT_SUPPORTED_YET', messages.notSupported('SELECT … INTO'))
+  const r = q.with === undefined ? run : withClause(run, q.with)
   const body = q.body
-  if (body.kind === QUERY.QUERY && body.orderBy === undefined && body.limit === undefined && q.orderBy === undefined && q.limit === undefined) return selectOf(body)
-  if (body.kind !== QUERY.SELECT) throw sqlError('ER_NOT_SUPPORTED_YET', messages.notSupported(body.kind === QUERY.SET_OPERATION ? body.op : body.kind.toUpperCase()))
-  return body
+  switch (body.kind) {
+    case QUERY.SELECT:
+      return planSelect(r, q, body)
+    case QUERY.QUERY:
+      if (q.orderBy === undefined && q.limit === undefined) return planQuery(r, body)
+      return orderedResult(r, q, planQuery(r, body))
+    case QUERY.SET_OPERATION:
+      return orderedResult(r, q, planSetOperation(r, body))
+    default:
+      throw sqlError('ER_NOT_SUPPORTED_YET', messages.notSupported(body.kind.toUpperCase()))
+  }
 }
 
-export function planSelect(run: Run, q: QueryExpression): SelectPlan {
-  const node = selectOf(q)
+function planSelect(run: Run, q: QueryExpression, node: SelectNode): SelectPlan {
   if (node.windows !== undefined) throw sqlError('ER_NOT_SUPPORTED_YET', messages.notSupported('WINDOW'))
 
   // FROM: nothing, `DUAL`, or tables joined (M5.4).
@@ -150,7 +174,8 @@ export function planSelect(run: Run, q: QueryExpression): SelectPlan {
   const from = refs.length === 0 ? undefined : planFrom(refs, fromContext(run), node.where)
   const scope = from?.scope
   const source = from?.single
-  const lookup: Scope = scope ?? EMPTY_SCOPE
+  const lookup: Scope = scope ?? run.parent ?? EMPTY_SCOPE
+  if (from !== undefined && scope !== undefined) chooseCovering(from, scope, node, q)
 
   // An aggregate anywhere in the select list or HAVING makes the query a
   // grouped one, even with no GROUP BY; one in ORDER BY alone does not, and
@@ -163,7 +188,12 @@ export function planSelect(run: Run, q: QueryExpression): SelectPlan {
   if (!grouped && node.having !== undefined) throw sqlError('ER_NOT_SUPPORTED_YET', messages.notSupported('HAVING without grouping'))
   if (grouped) return planGrouped(run, q, node, from, lookup)
 
-  // The select list, `*` expanded.
+  // The select list, `*` expanded. A table a correlated, aggregating scalar
+  // subquery in it reads is reported nullable there (8.4.11: `SELECT a.x,
+  // (SELECT MAX(b.id) FROM b WHERE b.id = a.id) FROM a` drops `a.x`'s
+  // NOT_NULL, the same without the MAX does not).
+  const nullableTables = scope === undefined ? new Set<string>() : aggregatingSubqueryTables(node, scope)
+  const selectScope: Scope = nullableTables.size === 0 || scope === undefined ? lookup : nullableView(scope, nullableTables)
   const texts = itemTexts(run, node)
   const items: { name: string; compiled: Compiled; alias?: string; expr?: Expression }[] = []
   node.items.forEach((item, i) => {
@@ -171,10 +201,10 @@ export function planSelect(run: Run, q: QueryExpression): SelectPlan {
     if (e.kind === NODE.COLUMN && e.parts[e.parts.length - 1] === '*') {
       if (scope === undefined) throw sqlError('ER_NO_TABLES_USED', 'No tables used')
       const table = e.parts.length >= 2 ? e.parts[e.parts.length - 2] : undefined
-      for (const s of scope.star(table)) items.push({ name: s.name, compiled: { eval: (row) => row[s.index] ?? null, type: s.type }, expr: { kind: NODE.COLUMN, parts: [scope.columnAt(s.index)?.table.alias as string, s.name], at: e.at } })
+      for (const s of scope.star(table)) items.push({ name: s.name, compiled: { eval: (row) => row[s.index] ?? null, type: nullableTables.has(scope.columnAt(s.index)?.table.alias ?? '') ? { ...s.type, nullable: true } : s.type }, expr: { kind: NODE.COLUMN, parts: [scope.columnAt(s.index)?.table.alias as string, s.name], at: e.at } })
       return
     }
-    const compiled = compile(e, compileContext(run, lookup, 'field list'))
+    const compiled = compile(e, compileContext(run, selectScope, 'field list'))
     items.push({ name: itemName(item, texts[i]), compiled, expr: e, ...(item.alias === undefined ? {} : { alias: item.alias }) })
   })
 
@@ -202,7 +232,7 @@ export function planSelect(run: Run, q: QueryExpression): SelectPlan {
     if (!constant) {
       for (const item of items) item.compiled = { ...item.compiled, type: { ...item.compiled.type, temporary: pinnedName(item) ? 'pinned' : true } }
     }
-  } else if (from !== undefined && source === undefined && run.preparing !== true && (node.distinct === true || (q.orderBy ?? []).length > 0)) {
+  } else if (from !== undefined && scope !== undefined && run.preparing !== true && (source === undefined || semijoins(node.where, scope) || (q.orderBy !== undefined && node.items.some((i) => correlatedIn(i.expr, scope)))) && (node.distinct === true || (q.orderBy ?? []).length > 0)) {
     // Over a join, a DISTINCT is a temporary table and a sort reads the join's
     // rows streamed into one ("Stream results"): every item that reads the row
     // is copied, a column losing its key flags without gaining GROUP_FLAG, an
@@ -210,7 +240,9 @@ export function planSelect(run: Run, q: QueryExpression): SelectPlan {
     // optimizer proved the result empty, when there is no table at all.
     const facts = optimizerFacts(from, node.where, limitCount, compileContext(run, EMPTY_SCOPE, 'where clause'), run.env, (node.options ?? []).includes('STRAIGHT_JOIN'))
     // A sort over the first table alone, ahead of nested-loop joins, needs no stream.
-    const sortedFirst = node.distinct !== true && from.sortsFirst(orderAliases(q, items, lookup))
+    // A sort over the first table alone, ahead of nested-loop joins or a
+    // nested-loop semijoin, needs no stream.
+    const sortedFirst = node.distinct !== true && (source === undefined ? from.sortsFirst(orderAliases(q, items, lookup)) : nestedLoopSemijoin(node.where, scope) && !node.items.some((i) => correlatedIn(i.expr, scope)))
     if (!facts.empty && !sortedFirst) {
       const consts = new Set(facts.constTables.map((t) => t.alias))
       const own = items.map((i) => i.compiled.type)
@@ -227,13 +259,13 @@ export function planSelect(run: Run, q: QueryExpression): SelectPlan {
   const where = node.where === undefined ? undefined : compile(node.where, compileContext(run, lookup, 'where clause'))
   const keys = (q.orderBy ?? []).map((o) => orderKey(run, o, items, lookup))
   const locking = (q.locking ?? []).length > 0
-  const env = run.env
 
   return {
     columns: items.map((i) => ({ name: i.name, type: i.compiled.type })),
     locking,
     ...(dataColumns === undefined ? {} : { columnsAt: (trx: Trx | undefined) => (dataColumns as (t: Trx | undefined) => readonly ResultType[])(trx).map((type, i) => ({ name: (items[i] as { name: string }).name, type })) }),
-    rows(trx) {
+    rows(trx, given) {
+      const env = given ?? { ...run.env, ...(trx === undefined ? {} : { trx }) }
       let rows: Iterable<{ readonly row: Row }>
       if (from === undefined) rows = [{ row: [] }]
       else if (facts?.impossible === true) rows = []
@@ -243,6 +275,442 @@ export function planSelect(run: Run, q: QueryExpression): SelectPlan {
       let out: Iterable<Value[]> = project(filtered, items.map((i) => i.compiled), env)
       if (node.distinct === true) out = distinct(out)
       return limit(out, offset, limitCount)
+    },
+  }
+}
+
+// --- what MySQL's plan reads, and how ----------------------------------------------
+
+/** The WHERE's IN and EXISTS subqueries MySQL runs as semijoins (NOT EXISTS, antijoins), each with the subquery. */
+function semijoinSubqueries(where: Expression | undefined): QueryExpression[] {
+  if (where === undefined) return []
+  if (where.kind === NODE.BINARY && (where.op === 'AND' || where.op === '&&')) return [...semijoinSubqueries(where.left), ...semijoinSubqueries(where.right)]
+  if (where.kind === NODE.BINARY && where.op === 'IN' && where.right.kind === NODE.SUBQUERY) return [where.right.query]
+  if (where.kind === NODE.UNARY && where.op === 'EXISTS' && where.operand.kind === NODE.SUBQUERY) return [where.operand.query]
+  if (where.kind === NODE.UNARY && where.op === 'NOT' && where.operand.kind === NODE.UNARY && where.operand.op === 'EXISTS' && where.operand.operand.kind === NODE.SUBQUERY) return [where.operand.operand.query]
+  return []
+}
+
+/** Whether the query is a join in MySQL's plan because of a semijoin. */
+function semijoins(where: Expression | undefined, scope: TableScope): boolean {
+  void scope
+  return semijoinSubqueries(where).length > 0
+}
+
+/**
+ * Whether every semijoin is a nested loop over an index: an EXISTS whose only
+ * condition is its own indexed column equal to an outer column (8.4.11:
+ * "Nested loop antijoin / Covering index lookup on ch using pa_id"). Then a
+ * sort on the outer table goes first, and nothing is streamed; anything more
+ * in the condition makes it a hash join, and the rows are.
+ */
+function nestedLoopSemijoin(where: Expression | undefined, scope: TableScope): boolean {
+  const subqueries = semijoinSubqueries(where)
+  if (subqueries.length === 0 || (where?.kind === NODE.BINARY && where.op === 'IN')) return false
+  return subqueries.every((q) => {
+    const body = q.body
+    if (body.kind !== QUERY.SELECT || (body.from ?? []).length !== 1) return false
+    const ref = body.from?.[0]
+    const w = body.where
+    if (ref === undefined || ref.kind !== REF.TABLE || w === undefined || w.kind !== NODE.BINARY || w.op !== '=') return false
+    const innerAlias = ref.alias ?? ref.table.name
+    const sides = [w.left, w.right]
+    const outer = sides.some((e) => e.kind === NODE.COLUMN && e.parts.length >= 2 && e.parts[e.parts.length - 2] !== innerAlias && scope.tables.some((t) => t.alias === e.parts[e.parts.length - 2]))
+    const inner = sides.find((e) => e.kind === NODE.COLUMN && e.parts.length >= 2 && e.parts[e.parts.length - 2] === innerAlias)
+    if (!outer || inner === undefined || inner.kind !== NODE.COLUMN) return false
+    return true
+  })
+}
+
+/** Whether `e` holds a subquery that reads a column of `scope`'s tables by a qualified name: a correlated one. */
+function correlatedIn(e: unknown, scope: TableScope): boolean {
+  if (e === null || typeof e !== 'object') return false
+  const n = e as { kind?: string; query?: QueryExpression }
+  if (n.kind === NODE.SUBQUERY && n.query !== undefined) return readsOuter(n.query, new Set(scope.tables.map((t) => t.alias)))
+  return Object.values(e).some((v) => (Array.isArray(v) ? v.some((x) => correlatedIn(x, scope)) : typeof v === 'object' && correlatedIn(v, scope)))
+}
+
+/** Whether a query names, by qualifier, one of `aliases` that its own FROM does not define. */
+function readsOuter(q: unknown, aliases: ReadonlySet<string>): boolean {
+  const own = new Set<string>()
+  const collect = (x: unknown): void => {
+    if (x === null || typeof x !== 'object') return
+    const n = x as { kind?: string; alias?: string; table?: TableName }
+    if (n.kind === REF.TABLE) own.add(n.alias ?? n.table?.name ?? '')
+    if (n.kind === REF.DERIVED && n.alias !== undefined) own.add(n.alias)
+    for (const v of Object.values(x)) if (typeof v === 'object') Array.isArray(v) ? v.forEach(collect) : collect(v)
+  }
+  collect(q)
+  const visit = (x: unknown): boolean => {
+    if (x === null || typeof x !== 'object') return false
+    const n = x as { kind?: string; parts?: readonly string[] }
+    if (n.kind === NODE.COLUMN && n.parts !== undefined && n.parts.length >= 2) {
+      const qualifier = n.parts[n.parts.length - 2] as string
+      if (aliases.has(qualifier) && !own.has(qualifier)) return true
+    }
+    return Object.values(x).some((v) => (Array.isArray(v) ? v.some(visit) : typeof v === 'object' && visit(v)))
+  }
+  return visit(q)
+}
+
+function containsSubquery(e: unknown): boolean {
+  if (e === null || typeof e !== 'object') return false
+  if ((e as { kind?: string }).kind === NODE.SUBQUERY) return true
+  return Object.values(e).some((v) => (Array.isArray(v) ? v.some(containsSubquery) : typeof v === 'object' && containsSubquery(v)))
+}
+
+/** The FROM tables a select-list scalar subquery that aggregates without GROUP BY reads, by qualified name. */
+function aggregatingSubqueryTables(node: SelectNode, scope: TableScope): Set<string> {
+  const out = new Set<string>()
+  const aliases = new Set(scope.tables.map((t) => t.alias))
+  const visit = (e: unknown, inside: boolean): void => {
+    if (e === null || typeof e !== 'object') return
+    const n = e as { kind?: string; query?: QueryExpression; parts?: readonly string[] }
+    if (n.kind === NODE.SUBQUERY && n.query !== undefined) {
+      const body = n.query.body
+      const aggregating = body.kind === QUERY.SELECT && body.groupBy === undefined && body.items.some((i) => containsAggregate(i.expr))
+      if (aggregating) visit(n.query, true)
+      return
+    }
+    if (inside && n.kind === NODE.COLUMN && (n.parts?.length ?? 0) >= 2) {
+      const alias = n.parts?.[(n.parts?.length ?? 0) - 2] as string
+      if (aliases.has(alias)) out.add(alias)
+    }
+    for (const v of Object.values(e)) if (typeof v === 'object') Array.isArray(v) ? v.forEach((x) => visit(x, inside)) : visit(v, inside)
+  }
+  for (const item of node.items) visit(item.expr, false)
+  return out
+}
+
+/** A scope whose columns of the named tables report nullable. */
+function nullableView(scope: TableScope, aliases: ReadonlySet<string>): Scope {
+  return {
+    resolve(parts, clause) {
+      const r = scope.resolve(parts, clause)
+      if (r.depth === undefined && aliases.has(scope.columnAt(r.index)?.table.alias ?? '')) return { ...r, type: { ...r.type, nullable: true } }
+      return r
+    },
+  }
+}
+
+/** The bytes a column takes in an index key, as `key_length` counts it — what makes one covering index cheaper than another. */
+function keyBytes(c: ColumnDef): number {
+  const t = c.type
+  const widths: Record<number, number> = { [FIELD_TYPE.TINY]: 1, [FIELD_TYPE.SHORT]: 2, [FIELD_TYPE.INT24]: 3, [FIELD_TYPE.LONG]: 4, [FIELD_TYPE.LONGLONG]: 8, [FIELD_TYPE.FLOAT]: 4, [FIELD_TYPE.DOUBLE]: 8, [FIELD_TYPE.DATE]: 3, [FIELD_TYPE.YEAR]: 1 }
+  const fixed = widths[t.type]
+  if (fixed !== undefined) return fixed + (c.nullable ? 1 : 0)
+  if (t.type === FIELD_TYPE.NEWDECIMAL || t.type === FIELD_TYPE.DECIMAL) return Math.ceil((t.precision ?? 10) / 2) + 1 + (c.nullable ? 1 : 0)
+  if (t.type === FIELD_TYPE.DATETIME || t.type === FIELD_TYPE.TIMESTAMP) return 5 + Math.ceil((t.decimals ?? 0) / 2) + (c.nullable ? 1 : 0)
+  const mb = t.collationId === undefined ? 1 : requireCollationInfo(t.collationId).mbmaxlen
+  return (t.length ?? 1) * mb + 2 + (c.nullable ? 1 : 0)
+}
+
+/**
+ * For each base table, the smallest secondary index that holds every column
+ * the query reads of it — the index and the clustered key it carries — which
+ * MySQL scans in place of the table when no condition picks an access path.
+ */
+function chooseCovering(from: FromPlan, scope: TableScope, node: SelectNode, q: QueryExpression): void {
+  const used = new Map<string, Set<string> | 'all'>()
+  const aliases = new Set(scope.tables.map((t) => t.alias))
+  const add = (alias: string, column: string | 'all'): void => {
+    const cur = used.get(alias)
+    if (cur === 'all') return
+    if (column === 'all') used.set(alias, 'all')
+    else used.set(alias, (cur ?? new Set()).add(column.toLowerCase()))
+  }
+  const visit = (e: unknown, inside: boolean): void => {
+    if (e === null || typeof e !== 'object') return
+    const n = e as { kind?: string; parts?: readonly string[]; query?: unknown }
+    if (n.kind === NODE.SUBQUERY || n.kind === REF.DERIVED) {
+      visit(n.query, true)
+      return
+    }
+    if (n.kind === NODE.COLUMN && n.parts !== undefined) {
+      const last = n.parts[n.parts.length - 1] as string
+      const qualifier = n.parts.length >= 2 ? (n.parts[n.parts.length - 2] as string) : undefined
+      if (last === '*') {
+        if (inside) return
+        for (const t of scope.tables) if (qualifier === undefined || qualifier === t.alias) add(t.alias, 'all')
+        return
+      }
+      if (inside) {
+        if (qualifier !== undefined && aliases.has(qualifier)) add(qualifier, last)
+        return
+      }
+      try {
+        const r = scope.resolve(n.parts, 'field list')
+        const at = r.depth === undefined ? scope.columnAt(r.index) : undefined
+        if (at !== undefined) add(at.table.alias, at.column.name)
+      } catch {
+        // An alias, or an error compiling will report.
+      }
+      return
+    }
+    for (const v of Object.values(e)) if (typeof v === 'object') Array.isArray(v) ? v.forEach((x) => visit(x, inside)) : visit(v, inside)
+  }
+  visit(node.items, false)
+  visit(node.where, false)
+  visit(node.groupBy, false)
+  visit(node.having, false)
+  visit(node.from, false)
+  visit(q.orderBy, false)
+  for (const t of scope.tables) {
+    const def = t.def
+    const cols = used.get(t.alias) ?? new Set<string>()
+    if (def === undefined || cols === 'all' || t.nullable) continue
+    const pk = def.indexes.find((i) => i.kind === 'primary' || i.name === def.clustered)
+    if (pk === undefined) continue
+    let best: { name: string; bytes: number } | undefined
+    for (const index of def.indexes) {
+      if (index === pk || index.parts.some((p) => p.prefix !== undefined)) continue
+      const holds = new Set([...index.parts, ...pk.parts].map((p) => p.column.toLowerCase()))
+      if (![...cols].every((c) => holds.has(c))) continue
+      const bytes = index.parts.reduce((n, p) => n + keyBytes(def.columns.find((c) => c.name === p.column) as ColumnDef), 0)
+      if (best === undefined || bytes < best.bytes) best = { name: index.name, bytes }
+    }
+    if (best !== undefined) from.cover(t.alias, best.name)
+  }
+}
+
+/**
+ * 1093: an UPDATE or DELETE whose own subqueries read the table it writes,
+ * which MySQL refuses unless a derived table materializes the read first.
+ */
+export function checkTargetNotRead(target: { readonly schema: string; readonly name: string }, exprs: readonly (Expression | undefined)[], database: string | null): void {
+  const visit = (e: unknown, inSubquery: boolean): void => {
+    if (e === null || typeof e !== 'object') return
+    const n = e as { kind?: string; table?: TableName; query?: unknown }
+    if (n.kind === REF.DERIVED) return
+    if (n.kind === NODE.SUBQUERY) {
+      visit(n.query, true)
+      return
+    }
+    if (inSubquery && n.kind === REF.TABLE && n.table !== undefined && n.table.name === target.name && (n.table.schema ?? database) === target.schema) {
+      throw sqlError('ER_UPDATE_TABLE_USED', `You can't specify target table '${target.name}' for update in FROM clause`)
+    }
+    for (const v of Object.values(e)) if (typeof v === 'object') Array.isArray(v) ? v.forEach((x) => visit(x, inSubquery)) : visit(v, inSubquery)
+  }
+  for (const e of exprs) visit(e, false)
+}
+
+// --- subqueries, derived tables, CTEs and set operations (M5.1, M5.19) --------------
+
+/** A scope one query further out: every name it resolves is a correlated reference, one level deeper. */
+function enclosing(scope: Scope, seen: () => void): Scope {
+  return {
+    resolve(parts, clause) {
+      const r = scope.resolve(parts, clause)
+      seen()
+      return { ...r, depth: (r.depth ?? 0) + 1 }
+    },
+  }
+}
+
+/** A subquery in an expression, planned with the expression's scope enclosing it. */
+function planSubquery(run: Run, q: QueryExpression, outer: Scope): SubqueryPlan {
+  let correlated = false
+  const plan = planQuery({ ...run, parent: enclosing(outer, () => (correlated = true)) }, q)
+  return {
+    columns: plan.columns,
+    get correlated() {
+      return correlated
+    },
+    hasFrom: hasFrom(q),
+    rows: (env) => plan.rows(env.trx, env),
+  }
+}
+
+/** Whether a query reads a table: one with no FROM is a constant row. */
+function hasFrom(q: QueryExpression): boolean {
+  const body = q.body
+  if (body.kind === QUERY.SELECT) return (body.from ?? []).some((r) => !(r.kind === REF.TABLE && r.table.schema === undefined && r.table.name.toLowerCase() === 'dual'))
+  if (body.kind === QUERY.QUERY) return hasFrom(body)
+  return true
+}
+
+/**
+ * Whether MySQL merges a derived table or CTE into its outer query rather
+ * than materializing it (`derived_merge`): a plain SELECT, with no grouping,
+ * aggregate, DISTINCT, LIMIT or set operation. A merged one reports its
+ * columns as their own, keys included; a materialized one as a temporary
+ * table's copies (8.4.11).
+ */
+function mergeable(q: QueryExpression): boolean {
+  if (q.limit !== undefined || q.with !== undefined) return false
+  const body = q.body
+  if (body.kind === QUERY.QUERY) return mergeable(body)
+  if (body.kind !== QUERY.SELECT) return false
+  // A derived table with no FROM is a constant row MySQL materializes ("Rows fetched before execution").
+  if (!hasFrom(q)) return false
+  return body.groupBy === undefined && body.having === undefined && body.distinct !== true && body.windows === undefined && !body.items.some((i) => containsAggregate(i.expr))
+}
+
+/** A derived table, or one reference to a CTE: its columns as the outer query sees them, and its rows. */
+function derivedTable(run: Run, query: QueryExpression, alias: string, names: readonly string[] | undefined, lateral: Scope | undefined): DerivedSource {
+  const parent = lateral === undefined ? run.parent : enclosing(lateral, () => {})
+  const plan = planQuery({ ...run, ...(parent === undefined ? {} : { parent }) }, query)
+  const merged = lateral === undefined && mergeable(query)
+  const columns = renamed(plan.columns, names).map((c) => {
+    const t = c.type
+    if (merged) return { name: c.name, type: t.column === undefined ? t : { ...t, column: { ...t.column, table: alias } } }
+    const { column, ...rest } = t
+    return { name: c.name, type: { ...rest, ...(column === undefined ? {} : { column: { ...column, table: alias } }), temporary: 'stream' as const } }
+  })
+  return {
+    columns,
+    rows: (trx, env, row) => plan.rows(trx, lateral === undefined || row === undefined ? env : { ...env, outer: [row, ...(env.outer ?? [])] }),
+  }
+}
+
+/** A derived table's or CTE's column names: its own list, or its items' — 1353 when they differ in number, 1060 for a name twice. */
+function renamed(columns: readonly { readonly name: string; readonly type: ResultType }[], names: readonly string[] | undefined): { name: string; type: ResultType }[] {
+  if (names !== undefined && names.length !== columns.length) {
+    throw sqlError('ER_VIEW_WRONG_LIST', 'In definition of view, derived table or common table expression, SELECT list and column names list have different column counts')
+  }
+  const out = columns.map((c, i) => ({ name: names?.[i] ?? c.name, type: c.type }))
+  const seen = new Set<string>()
+  for (const c of out) {
+    const k = c.name.toLowerCase()
+    if (seen.has(k)) throw sqlError('ER_DUP_FIELDNAME', `Duplicate column name '${c.name}'`)
+    seen.add(k)
+  }
+  return out
+}
+
+/** The CTEs a WITH defines, each visible to the ones after it and to the query. */
+function withClause(run: Run, w: NonNullable<QueryExpression['with']>): Run {
+  const ctes = new Map(run.ctes ?? [])
+  let at: Run = { ...run, ctes }
+  for (const cte of w.tables) {
+    const before: Run = at
+    const recursive = w.recursive === true && references(cte.query, cte.name)
+    const source = recursive ? recursiveCte(before, cte) : undefined
+    ctes.set(cte.name, () => source ?? derivedTable(before, cte.query, cte.name, cte.columns, undefined))
+    at = { ...run, ctes: new Map(ctes) }
+  }
+  return at
+}
+
+/** Whether a query names a table `name` anywhere in its FROMs, subqueries included. */
+function references(q: unknown, name: string): boolean {
+  if (q === null || typeof q !== 'object') return false
+  const n = q as { kind?: string; table?: TableName }
+  if (n.kind === REF.TABLE && n.table?.schema === undefined && n.table?.name === name) return true
+  return Object.values(q).some((v) => (Array.isArray(v) ? v.some((x) => references(x, name)) : typeof v === 'object' && references(v, name)))
+}
+
+/**
+ * `WITH RECURSIVE r AS (anchor UNION [ALL|DISTINCT] step)`: the anchor's rows,
+ * then the step over the rows the last round added, until a round adds none.
+ * The columns are the anchor's, and nullable, as a temporary table holds them
+ * (8.4.11: `SELECT 1` as an anchor reports a nullable BIGINT 2 wide). More
+ * rounds than `cte_max_recursion_depth` is 3636.
+ */
+function recursiveCte(run: Run, cte: NonNullable<QueryExpression['with']>['tables'][number]): DerivedSource {
+  const body = cte.query.body
+  if (body.kind !== QUERY.SET_OPERATION || body.op !== 'UNION') {
+    throw sqlError('ER_CTE_RECURSIVE_REQUIRES_UNION', `Recursive Common Table Expression '${cte.name}' should contain a UNION`)
+  }
+  const anchor = planQuery(run, { kind: QUERY.QUERY, body: body.left, at: body.at })
+  // A recursive CTE's table is typed as a set operation's column is, from the anchor alone, and nullable.
+  const columns = renamed(anchor.columns, cte.columns).map((c) => ({ name: c.name, type: { ...setOperationType([c.type], run.env.session.characterSet), nullable: true } }))
+  let working: readonly (readonly Value[])[] = []
+  const workingTable: DerivedSource = { columns, rows: () => working }
+  const ctes = new Map(run.ctes ?? [])
+  ctes.set(cte.name, () => workingTable)
+  const step = planQuery({ ...run, ctes }, { kind: QUERY.QUERY, body: body.right, at: body.at })
+  if (step.columns.length !== columns.length) throw sqlError('ER_WRONG_NUMBER_OF_COLUMNS_IN_SELECT', 'The used SELECT statements have a different number of columns')
+  const distinctRows = body.all !== true
+  const types = columns.map((c) => c.type)
+  return {
+    columns,
+    rows(trx, env) {
+      const max = Number(toInteger(run.state.systemVariable('cte_max_recursion_depth', undefined, env.session) ?? intValue(1000n)))
+      const seen = new Set<string>()
+      const keep = (rows: Iterable<readonly Value[]>): Value[][] => {
+        const out: Value[][] = []
+        for (const r of rows) {
+          const row = r.map((v, i) => convertSetValue(v, types[i] as ResultType))
+          if (distinctRows) {
+            const k = rowKey(row)
+            if (seen.has(k)) continue
+            seen.add(k)
+          }
+          out.push(row)
+        }
+        return out
+      }
+      const all: Value[][] = []
+      let current = keep(anchor.rows(trx, env))
+      all.push(...current)
+      for (let round = 1; current.length > 0; round++) {
+        if (round > max) throw sqlError('ER_CTE_MAX_RECURSION_DEPTH', `Recursive query aborted after ${round} iterations. Try increasing @@cte_max_recursion_depth to a larger value.`)
+        working = current
+        current = keep([...step.rows(trx, env)])
+        all.push(...current)
+      }
+      return all
+    },
+  }
+}
+
+/** UNION, INTERSECT or EXCEPT over two branches, each any query (M5.19). `parent` is the operator it is a branch of. */
+function planSetOperation(run: Run, node: SetOperationNode, parent?: SetOperationNode['op']): SelectPlan {
+  const branch = (b: QueryBody): SelectPlan => {
+    if (b.kind === QUERY.SET_OPERATION) return planSetOperation(run, b, node.op)
+    // A parenthesised set operation is still a branch of this one.
+    if (b.kind === QUERY.QUERY && b.body.kind === QUERY.SET_OPERATION && b.with === undefined) return orderedResult(run, b, planSetOperation(run, b.body, node.op))
+    return planQuery(run, b.kind === QUERY.QUERY ? b : { kind: QUERY.QUERY, body: b, at: b.at })
+  }
+  const left = branch(node.left)
+  const right = branch(node.right)
+  const op = setOperation(node, left.columns, right.columns, run.env.session.characterSet)
+  const columns =
+    parent === undefined || parent === node.op
+      ? op.columns
+      : op.columns.map((c, i) => ({ name: c.name, type: { ...c.type, nullable: nestedNullability(node.op, (left.columns[i] as { type: ResultType }).type.nullable, (right.columns[i] as { type: ResultType }).type.nullable) } }))
+  return {
+    columns,
+    locking: left.locking || right.locking,
+    rows: (trx, env) => op.rows(() => left.rows(trx, env), () => right.rows(trx, env)),
+  }
+}
+
+/**
+ * A query's own ORDER BY and LIMIT over a result that is not a single SELECT's
+ * — a set operation's, or a parenthesised query's. It sees only the result's
+ * columns, by position or name; a table-qualified name is 1250.
+ */
+function orderedResult(run: Run, q: QueryExpression, plan: SelectPlan): SelectPlan {
+  if (q.orderBy === undefined && q.limit === undefined) return plan
+  const scope = new TableScope([{ alias: '\u0000result', columns: plan.columns.map((c) => ({ name: c.name, type: c.type })) }])
+  const keys = (q.orderBy ?? []).map((o): SortKey => {
+    const e = o.expr
+    if (e.kind === NODE.LITERAL && e.type === 'int') {
+      const n = Number(e.value as bigint)
+      if (n < 1 || n > plan.columns.length) throw sqlError('ER_BAD_FIELD_ERROR', messages.unknownColumn(String(n), 'order clause'))
+      return { expr: { eval: (row) => row[n - 1] ?? null, type: (plan.columns[n - 1] as { type: ResultType }).type }, desc: o.desc === true }
+    }
+    if (e.kind === NODE.COLUMN && e.parts.length >= 2) {
+      throw sqlError('ER_TABLENAME_NOT_ALLOWED_HERE', `Table '${e.parts[e.parts.length - 2]}' from one of the SELECTs cannot be used in global ORDER clause`)
+    }
+    return { expr: compile(e, compileContext(run, scope, 'order clause')), desc: o.desc === true }
+  })
+  const limitCount = q.limit === undefined ? undefined : limitValue(run, q.limit.count, 'LIMIT')
+  const offset = q.limit?.offset === undefined ? 0 : limitValue(run, q.limit.offset, 'LIMIT')
+  return {
+    columns: plan.columns,
+    locking: plan.locking,
+    rows(trx, given) {
+      const env = given ?? { ...run.env, ...(trx === undefined ? {} : { trx }) }
+      let rows: Iterable<{ readonly row: Row }> = (function* () {
+        for (const row of plan.rows(trx, given)) yield { row }
+      })()
+      if (keys.length > 0) rows = sort(rows, keys, env)
+      return limit((function* () {
+        for (const { row } of rows) yield row as Value[]
+      })(), offset, limitCount)
     },
   }
 }
@@ -340,7 +808,10 @@ function planGrouped(
 
   // The strategy, which decides the order the groups come out in and whether
   // their columns go through a temporary table.
-  const keyColumns = keys.map((k) => (k.index === undefined || source === undefined ? undefined : source.def.columns[k.index]?.name))
+  // A key the WHERE holds to one value does not order anything: GROUP BY
+  // amt, name WHERE amt = -18 groups by the index on name (8.4.11).
+  const pinned = source === undefined ? new Set<string>() : new Set([...whereFacts(run, source.def, source.alias, node.where).pins].map((c) => c.name))
+  const keyColumns = keys.map((k) => (k.index === undefined || source === undefined ? undefined : source.def.columns[k.index]?.name)).filter((c) => c === undefined || !pinned.has(c))
   const distinctAggregate = [...node.items.map((i) => i.expr), ...(node.having === undefined ? [] : [node.having]), ...(q.orderBy ?? []).map((o) => o.expr)].some((e) => needsSortedGroups(e))
   const { strategy, index: groupIndex } = chooseStrategy(source?.def, keyColumns, rollup, distinctAggregate)
 
@@ -488,14 +959,14 @@ function planGrouped(
   const limitCount = q.limit === undefined ? undefined : limitValue(run, q.limit.count, 'LIMIT')
   const offset = q.limit?.offset === undefined ? 0 : limitValue(run, q.limit.offset, 'LIMIT')
   const locking = (q.locking ?? []).length > 0
-  const env = run.env
   const plan = { width, keys: keys.map((k) => k.compiled), specs: sink.specs, strategy, rollup }
 
   return {
     columns: items.map((i) => ({ name: i.name, type: i.compiled.type })),
     locking,
     ...(dataColumns === undefined ? {} : { columnsAt: (trx: Trx | undefined) => (dataColumns as (t: Trx | undefined) => readonly ResultType[])(trx).map((type, i) => ({ name: (items[i] as { name: string }).name, type })) }),
-    rows(trx) {
+    rows(trx, given) {
+      const env = given ?? { ...run.env, ...(trx === undefined ? {} : { trx }) }
       let rows: Iterable<{ readonly row: Row }>
       if (from === undefined) rows = [{ row: [] }]
       else if (source === undefined) rows = from.rows(trx, env, { where: node.where, locking })
@@ -566,7 +1037,8 @@ function refersToRow(e: unknown, scope?: Scope, consts?: ReadonlySet<string>): b
   }
   if (n.kind === NODE.COLUMN) return true
   if (n.kind === NODE.CALL && isAggregate(n as Expression)) return true
-  if (n.kind === NODE.SUBQUERY) return false
+  // A correlated subquery is evaluated per row and copied like any value; an uncorrelated one is a constant.
+  if (n.kind === NODE.SUBQUERY) return scope instanceof TableScope && correlatedIn(n, scope)
   return Object.values(e).some((v) => (Array.isArray(v) ? v.some((x) => refersToRow(x, scope, consts)) : typeof v === 'object' && refersToRow(v, scope, consts)))
 }
 

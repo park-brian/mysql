@@ -77,6 +77,12 @@ export interface ResultType {
   readonly asText?: boolean
   /** A length reported as is, where no rule of characters times bytes gives it (`GROUP_CONCAT`'s BLOB). */
   readonly wireLength?: number
+  /**
+   * A set operation's column (`Item_type_holder`): its field type is the
+   * branches' aggregate, kept as is — `INT UNION INT` is an INT, where an
+   * integer expression's temporary field would be sized by its width.
+   */
+  readonly keepField?: boolean
 }
 
 /** `GROUP_FLAG`, `include/mysql_com.h` — the same bit as `NUM_FLAG`. */
@@ -296,7 +302,10 @@ export function columnDefinition(name: string, t: ResultType, resultsCollation: 
     const grouped = t.temporary === true && t.nullable ? GROUP_FLAG : 0
     if (t.column !== undefined) flags = (flags & ~KEY_FLAGS) | grouped
     else if (!(t.ownInTemporary === true && t.temporary !== 'stream')) {
-      const keep = COLUMN_FLAG.NOT_NULL | COLUMN_FLAG.UNSIGNED | (t.kind === 'string' && requireCollationInfo(t.collationId).name.endsWith('_bin') ? COLUMN_FLAG.BINARY : 0)
+      // A number's field carries no BINARY; a temporal's, a byte string's and
+      // a `_bin` string's do.
+      const binaryField = t.kind === 'datetime' || t.kind === 'time' || t.kind === 'bytes' || (t.kind === 'string' && requireCollationInfo(t.collationId).name.endsWith('_bin'))
+      const keep = COLUMN_FLAG.NOT_NULL | COLUMN_FLAG.UNSIGNED | (binaryField ? COLUMN_FLAG.BINARY : 0)
       flags = (flags & keep) | ((t.fieldFlags ?? 0) & ~KEY_FLAGS & ~COLUMN_FLAG.NOT_NULL) | grouped
     }
   }
@@ -341,7 +350,9 @@ export function columnDefinition(name: string, t: ResultType, resultsCollation: 
   // An integer expression's temporary field is an INT below ten characters
   // and a BIGINT from there (8.4.11: `n IS NULL` is type 3, `LENGTH(s)` type 8);
   // MIN and MAX of a column copy the column's own field.
-  if (materialized && t.kind === 'int' && t.column === undefined && t.fieldFlags === undefined && t.ownInTemporary !== true) field = t.length < 10 ? FIELD_TYPE.LONG : FIELD_TYPE.LONGLONG
+  if (materialized && t.kind === 'int' && t.column === undefined && t.fieldFlags === undefined && t.ownInTemporary !== true && t.keepField !== true) field = t.length < 10 ? FIELD_TYPE.LONG : FIELD_TYPE.LONGLONG
+  // A BLOB field says so, column or not.
+  if (materialized && t.column === undefined && field >= FIELD_TYPE.TINY_BLOB && field <= FIELD_TYPE.BLOB) flags |= COLUMN_FLAG.BLOB
   if (t.wireLength !== undefined) {
     // GROUP_CONCAT's BLOB: as the item, a length no rule gives; as a
     // temporary table's field, a BLOB of that many bytes over the argument

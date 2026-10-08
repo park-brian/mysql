@@ -25,7 +25,7 @@ import { decodeField, encodeField, integerRange, intValue, toInteger, toText, ty
 import { compile, EMPTY_SCOPE, type Compiled, type Row } from './compile.ts'
 import { filter, limit, sort, type ScannedRow } from './operators.ts'
 import { accessRows, chooseAccess } from './plan.ts'
-import { compileContext, limitValue, openTable, type Run } from './query.ts'
+import { checkTargetNotRead, compileContext, limitValue, openTable, type Run } from './query.ts'
 import { TableScope } from './scope.ts'
 import { NULL_TYPE } from './meta.ts'
 
@@ -590,7 +590,10 @@ function matching(run: Run, def: TableDef, table: Table, alias: string, node: Up
 export function update(run: Run, node: UpdateNode, trx: Trx): OkResult {
   if (node.with !== undefined) throw sqlError('ER_NOT_SUPPORTED_YET', messages.notSupported('WITH'))
   if (node.ignore === true) throw sqlError('ER_NOT_SUPPORTED_YET', messages.notSupported('UPDATE IGNORE'))
+  // A subquery reads in the statement's transaction.
+  run = { ...run, env: { ...run.env, trx } }
   const { def, table, alias } = singleTable(run, node.tables, 'UPDATE')
+  checkTargetNotRead({ schema: def.schema, name: def.name }, [node.where, ...node.set.map((a) => a.value)], run.env.session.database)
   const scope = new TableScope([{ alias, def }])
   const assignments = node.set.map((a: Assignment) => {
     const { index } = scope.resolve(a.column.parts, 'field list')
@@ -651,7 +654,9 @@ function sameBytes(x: Uint8Array, y: Uint8Array): boolean {
 export function remove(run: Run, node: DeleteNode, trx: Trx): OkResult {
   if (node.with !== undefined) throw sqlError('ER_NOT_SUPPORTED_YET', messages.notSupported('WITH'))
   if (node.targets !== undefined) throw sqlError('ER_NOT_SUPPORTED_YET', messages.notSupported('Multiple-table DELETE'))
+  run = { ...run, env: { ...run.env, trx } }
   const { def, table, alias } = singleTable(run, node.tables, 'DELETE')
+  checkTargetNotRead({ schema: def.schema, name: def.name }, [node.where], run.env.session.database)
   const rows = matching(run, def, table, alias, node, trx)
   let deleted = 0
   for (const { id } of rows) if (table.delete(id, trx)) deleted++

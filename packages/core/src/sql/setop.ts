@@ -1,0 +1,185 @@
+// M5.19 — UNION, INTERSECT and EXCEPT.
+//
+// A set operation's columns are named by its first branch and typed by all of
+// them (`Item_type_holder::join_types`), and every row is converted to that
+// type before the rows meet — so `SELECT 1 UNION SELECT 'a'` is two strings,
+// and a DISTINCT compares them as strings. The rules, read off 8.4.11:
+//
+//   - Integers keep the widest field among them, and the widest width: INT
+//     with TINYINT is an INT, INT with BIGINT a BIGINT, 20 wide.
+//   - A DECIMAL among integers and DECIMALs holds the most integer digits and
+//     the most scale; a DOUBLE anywhere is a DOUBLE, 23 wide.
+//   - Two temporals of one kind keep it; DATE with DATETIME is a DATETIME.
+//   - Anything else that meets a string, or numbers and temporals together,
+//     is a VARCHAR as wide as the widest as text (an INT is 11), binary if a
+//     byte string is among them, in the aggregated collation.
+//   - A NULL branch takes no part, except that it makes the column nullable;
+//     all-NULL is a zero-width binary string.
+//   - The column has no table behind it, so a number carries no BINARY flag,
+//     and a string's decimals are 0.
+//
+// Rows: UNION ALL is the left branch's rows, then the right's. A DISTINCT
+// operation keeps each row's first occurrence, in that order, as its
+// temporary table does; INTERSECT and EXCEPT keep the left branch's order.
+// The ALL forms of INTERSECT and EXCEPT count: a row the right branch holds
+// twice is kept, or removed, twice.
+import { CHARSET_BINARY, FIELD_TYPE } from '@myjs/bytes'
+import { encodeCollation, requireCollationInfo } from '@myjs/charsets'
+import type { SetOperationNode } from '@myjs/parser'
+import { sqlError } from '@myjs/protocol'
+import { COERCIBILITY, bytesValue, stringValue, toDateTime, toText, type Value } from '@myjs/types'
+import { aggregateTypes, convertTo } from './compile.ts'
+import { rowKey } from './keys.ts'
+import { charWidth, decimalType, doubleType, stringType, type ResultType } from './meta.ts'
+
+type Columns = readonly { readonly name: string; readonly type: ResultType }[]
+
+/** A set operation, typed: its columns, and how it makes its rows from its branches'. */
+export interface SetOperationPlan {
+  readonly columns: Columns
+  rows(left: () => Iterable<readonly Value[]>, right: () => Iterable<readonly Value[]>): Iterable<Value[]>
+}
+
+const INT_RANK: Readonly<Record<number, number>> = {
+  [FIELD_TYPE.TINY]: 1,
+  [FIELD_TYPE.SHORT]: 2,
+  [FIELD_TYPE.INT24]: 3,
+  [FIELD_TYPE.LONG]: 4,
+  [FIELD_TYPE.LONGLONG]: 5,
+}
+
+const intDigits = (t: ResultType): number => (t.kind === 'decimal' ? t.length - t.scale : t.kind === 'int' ? (t.unsigned ? t.length : t.length - 1) : 0)
+
+/** The type a column of a set operation has, given each branch's. */
+export function setOperationType(types: readonly ResultType[], connectionCollation: number): ResultType {
+  const nullable = types.some((t) => t.nullable)
+  const live = types.filter((t) => t.kind !== 'null')
+  const done = (t: ResultType): ResultType => {
+    const { column: _c, temporary: _t, asText: _a, ...rest } = t
+    return { ...rest, nullable, temporary: 'stream', keepField: true }
+  }
+  if (live.length === 0) return done({ ...stringType(0, CHARSET_BINARY, true) })
+  const kinds = new Set(live.map((t) => t.kind))
+  if (kinds.size === 1 && kinds.has('int') && live.every((t) => INT_RANK[t.field] !== undefined)) {
+    const widest = live.reduce((a, b) => ((INT_RANK[b.field] ?? 0) > (INT_RANK[a.field] ?? 0) ? b : a))
+    return done({ ...widest, length: Math.max(...live.map((t) => t.length)), unsigned: live.every((t) => t.unsigned) })
+  }
+  const numeric = [...kinds].every((k) => k === 'int' || k === 'decimal' || k === 'double')
+  if (numeric) {
+    if (kinds.has('double')) return done(doubleType(nullable, 23))
+    const scale = Math.max(...live.map((t) => (t.kind === 'decimal' ? t.scale : 0)))
+    return done(decimalType(Math.max(...live.map(intDigits)) + scale, scale, nullable, live.every((t) => t.unsigned)))
+  }
+  const temporal = [...kinds].every((k) => k === 'datetime' || k === 'time')
+  if (temporal) {
+    const fields = new Set(live.map((t) => t.field))
+    const scale = Math.max(...live.map((t) => t.scale))
+    if (fields.size === 1) return done({ ...(live[0] as ResultType), scale })
+    if ([...fields].every((f) => f === FIELD_TYPE.DATE || f === FIELD_TYPE.DATETIME || f === FIELD_TYPE.TIMESTAMP)) {
+      return done({ ...(live.find((t) => t.field !== FIELD_TYPE.DATE) as ResultType), field: FIELD_TYPE.DATETIME, scale })
+    }
+  }
+  // Text: as wide as the widest as text, in the aggregated collation, binary if bytes are among them.
+  const binary = kinds.has('bytes')
+  const collationId = binary ? CHARSET_BINARY : aggregateTypes(live, connectionCollation)
+  const blob = live.find((t) => t.blobBytes !== undefined || t.field === FIELD_TYPE.BLOB)
+  if (blob !== undefined) {
+    const bytes = Math.max(...live.map((t) => t.blobBytes ?? 0))
+    const mb = blob.kind === 'string' ? requireCollationInfo(blob.collationId).mbmaxlen : 1
+    return done({ ...stringType(bytes * mb, collationId, nullable), field: FIELD_TYPE.BLOB, blobBytes: bytes * mb })
+  }
+  const width = Math.max(...live.map((t) => (t.kind === 'string' || t.kind === 'bytes' ? t.length : charWidth(t))))
+  const sameField = live.every((t) => t.field === (live[0] as ResultType).field) && (live[0] as ResultType).field === FIELD_TYPE.STRING
+  const text = stringType(binary ? width * Math.max(...live.map((t) => (t.kind === 'string' ? requireCollationInfo(t.collationId).mbmaxlen : 1))) : width, collationId, nullable)
+  return done(sameField ? { ...text, field: FIELD_TYPE.STRING } : text)
+}
+
+/**
+ * A set operation that is a branch of a different one is materialized as a
+ * table of its own, and its columns are as nullable as its rows can be:
+ * INTERSECT only where every side is, EXCEPT as its left side, UNION where any
+ * side is. The outermost operation — and a branch of the same operator, which
+ * 8.4.11 flattens into it — is nullable where any side is. So `(b INTERSECT
+ * a) UNION a` is NOT NULL over a nullable `b`, and `(a INTERSECT b) INTERSECT
+ * a` is not.
+ */
+export function nestedNullability(op: SetOperationNode['op'], left: boolean, right: boolean): boolean {
+  return op === 'UNION' ? left || right : op === 'INTERSECT' ? left && right : left
+}
+
+/**
+ * A branch's value as the set operation's column type holds it — a string in
+ * the column's collation, so the rows dedupe and sort as one column does
+ * (`utf8mb4_bin` against the default puts `'Blue'` before `'ann'`).
+ */
+export function convert(v: Value, t: ResultType): Value {
+  if (v === null) return null
+  if (t.kind === 'string') return stringValue(v.kind === 'string' ? v.v : toText(v), t.collationId, COERCIBILITY.IMPLICIT)
+  if (t.kind === 'datetime' && v.kind === 'datetime' && t.field === FIELD_TYPE.DATETIME && v.type === 'DATE') return toDateTime(v, 'DATETIME') ?? v
+  if (t.kind === 'bytes' && v.kind !== 'bytes') return bytesValue(v.kind === 'string' ? encodeCollation(v.v, v.collationId) : new TextEncoder().encode(toText(v)))
+  return convertTo(v, t)
+}
+
+/** A set operation over two branches' columns. */
+export function setOperation(node: SetOperationNode, left: Columns, right: Columns, connectionCollation: number): SetOperationPlan {
+  if (left.length !== right.length) throw sqlError('ER_WRONG_NUMBER_OF_COLUMNS_IN_SELECT', 'The used SELECT statements have a different number of columns')
+  // Nullable if either side is; `nestedNullability` narrows it for an
+  // operation that is itself a branch.
+  const columns = left.map((c, i) => ({ name: c.name, type: setOperationType([c.type, (right[i] as { type: ResultType }).type], connectionCollation) }))
+  const types = columns.map((c) => c.type)
+  const all = node.all === true
+  return {
+    columns,
+    *rows(leftRows, rightRows) {
+      const conv = (r: readonly Value[]): Value[] => r.map((v, i) => convert(v, types[i] as ResultType))
+      if (node.op === 'UNION') {
+        const seen = new Set<string>()
+        for (const side of [leftRows, rightRows]) {
+          for (const r of side()) {
+            const row = conv(r)
+            if (!all) {
+              const k = rowKey(row)
+              if (seen.has(k)) continue
+              seen.add(k)
+            }
+            yield row
+          }
+        }
+        return
+      }
+      // INTERSECT and EXCEPT: the right side counted, the left side filtered.
+      const counts = new Map<string, number>()
+      for (const r of rightRows()) {
+        const k = rowKey(conv(r))
+        counts.set(k, (counts.get(k) ?? 0) + 1)
+      }
+      const seen = new Set<string>()
+      for (const r of leftRows()) {
+        const row = conv(r)
+        const k = rowKey(row)
+        const n = counts.get(k) ?? 0
+        if (node.op === 'INTERSECT') {
+          if (n === 0) continue
+          if (all) counts.set(k, n - 1)
+          else {
+            if (seen.has(k)) continue
+            seen.add(k)
+          }
+          yield row
+        } else {
+          if (all) {
+            if (n > 0) {
+              counts.set(k, n - 1)
+              continue
+            }
+          } else {
+            if (n > 0 || seen.has(k)) continue
+            seen.add(k)
+          }
+          yield row
+        }
+      }
+    },
+  }
+}
+

@@ -93,7 +93,7 @@ export class TableScope implements Scope {
     return this.tables.reduce((n, t) => n + t.columns.length, 0)
   }
 
-  resolve(parts: readonly string[], clause: string): { readonly index: number; readonly type: ResultType } {
+  resolve(parts: readonly string[], clause: string): { readonly index: number; readonly type: ResultType; readonly depth?: number } {
     return resolveIn(this.tables, this.#coalesced, parts, clause, this.#parent)
   }
 
@@ -129,7 +129,7 @@ function resolveIn(
   parts: readonly string[],
   clause: string,
   parent: Scope | undefined,
-): { readonly index: number; readonly type: ResultType } {
+): { readonly index: number; readonly type: ResultType; readonly depth?: number } {
   const column = (parts[parts.length - 1] as string).toLowerCase()
   const tableName = parts.length >= 2 ? parts[parts.length - 2] : undefined
   const schemaName = parts.length === 3 ? parts[0] : undefined

@@ -53,7 +53,7 @@ import { compile, EMPTY_SCOPE, type Env } from './compile.ts'
 import { DEFAULT_COLLATION, createTableSpec, resolveCollation } from './ddl.ts'
 import { insert, remove, update } from './dml.ts'
 import { columnDefinition, stringType } from './meta.ts'
-import { columnsOf, compileContext, planSelect, resultSet, type Run } from './query.ts'
+import { columnsOf, compileContext, planQuery, resultSet, type Run } from './query.ts'
 import { SqlSession, isolationOf } from './session.ts'
 import type { WireProtocol } from './wire.ts'
 
@@ -183,7 +183,7 @@ export class SqlExecutor implements Executor {
     if (statement.kind !== STATEMENT.QUERY) return { paramCount, columns: [] }
     try {
       const run = { ...this.#run(session, sql, [], undefined, 'binary'), preparing: true }
-      return { paramCount, columns: columnsOf(run, planSelect(run, statement)) }
+      return { paramCount, columns: columnsOf(run, planQuery(run, statement)) }
     } catch (e) {
       throw toSqlError(e)
     }
@@ -373,7 +373,7 @@ export class SqlExecutor implements Executor {
 
   #run(session: Session, sql: string, params: readonly Value[], known: readonly Value[] | undefined, protocol: WireProtocol): Run {
     const state = this.#state(session)
-    const env: Env = { params, now: new Date(), session, state }
+    const env: Env = { params, now: new Date(), session, state, memo: new Map() }
     return { catalog: this.catalog, state, env, sql, protocol, serverVersion: this.server.serverVersion, ...(known === undefined ? {} : { params: known }) }
   }
 
@@ -388,7 +388,7 @@ export class SqlExecutor implements Executor {
     const session = run.env.session
     switch (statement.kind) {
       case STATEMENT.QUERY: {
-        const plan = planSelect(run, statement)
+        const plan = planQuery(run, statement)
         if (this.catalog === undefined) return resultSet(run, plan, undefined)
         return state.statement(this.catalog.store, plan.locking, (trx) => resultSet(run, plan, trx))
       }

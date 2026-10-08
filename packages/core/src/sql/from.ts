@@ -45,12 +45,14 @@ export interface FromTable {
   readonly nullable: boolean
   readonly offset: number
   readonly width: number
+  /** LATERAL: its rows depend on the tables before it, so it runs once per row of them. */
+  readonly lateral: boolean
 }
 
 export interface DerivedSource {
   readonly columns: readonly ScopeColumn[]
-  /** Its rows, as values in column order. `outer` is the row so far, for LATERAL. */
-  rows(trx: Trx | undefined, env: Env, outer: Row | undefined): Iterable<readonly Value[]>
+  /** Its rows, as values in column order. `lateral` is the FROM's row so far, for LATERAL. */
+  rows(trx: Trx | undefined, env: Env, lateral: Row | undefined): Iterable<readonly Value[]>
 }
 
 type Node =
@@ -95,8 +97,15 @@ export interface FromPlan {
    * so the join's rows are never streamed into a temporary table to sort.
    */
   sortsFirst(aliases: ReadonlySet<string>): boolean
+  /**
+   * Read a table through a secondary index rather than its clustered one when
+   * no condition chooses an access path: MySQL's "Covering index scan", taken
+   * when the index holds every column the query reads, which changes the order
+   * of an unordered result.
+   */
+  cover(alias: string, index: string): void
   /** The rows of the FROM. `where` may narrow a scan (see the header). */
-  rows(trx: Trx | undefined, env: Env, options: { readonly where: Expression | undefined; readonly locking: boolean; readonly outer?: Row }): Iterable<{ readonly row: Row }>
+  rows(trx: Trx | undefined, env: Env, options: { readonly where: Expression | undefined; readonly locking: boolean }): Iterable<{ readonly row: Row }>
 }
 
 export interface JoinCondition {
@@ -115,6 +124,8 @@ export interface FromContext {
   compileOn(e: Expression, scope: Scope): Compiled
   /** Plan a derived table (M5.1); `lateral` is the scope of the tables before it, for LATERAL. */
   derived?(ref: TableReference & { readonly kind: typeof REF.DERIVED }, lateral: Scope | undefined): DerivedSource
+  /** A common table expression the statement defines under this name, planned for one reference to it. */
+  cte?(name: string): DerivedSource | undefined
   /** The scope an enclosing query gives a correlated name, if any. */
   readonly parent?: Scope
 }
@@ -127,6 +138,7 @@ export function planFrom(refs: readonly TableReference[], ctx: FromContext, wher
     def?: TableDef
     table?: Table
     derivedRef?: TableReference & { readonly kind: typeof REF.DERIVED }
+    cte?: DerivedSource
     nullable: boolean
     width: number
   }
@@ -134,6 +146,12 @@ export function planFrom(refs: readonly TableReference[], ctx: FromContext, wher
   const collect = (ref: TableReference, nullable: boolean): void => {
     switch (ref.kind) {
       case REF.TABLE: {
+        // A CTE of the statement hides a table of the same name.
+        const cte = ref.table.schema === undefined ? ctx.cte?.(ref.table.name) : undefined
+        if (cte !== undefined) {
+          pending.push({ alias: ref.alias ?? ref.table.name, cte, nullable, width: cte.columns.length })
+          return
+        }
         const opened = ctx.open(ref.table)
         pending.push({ alias: ref.alias ?? ref.table.name, def: opened.def, table: opened.table, nullable, width: opened.def.columns.length })
         return
@@ -162,7 +180,7 @@ export function planFrom(refs: readonly TableReference[], ctx: FromContext, wher
   for (const p of pending) {
     if (seen.has(p.alias)) throw sqlError('ER_NONUNIQ_TABLE', messages.nonUniqueTable(p.alias))
     seen.add(p.alias)
-    let derived: DerivedSource | undefined
+    let derived: DerivedSource | undefined = p.cte
     if (p.derivedRef !== undefined) {
       if (ctx.derived === undefined) throw sqlError('ER_NOT_SUPPORTED_YET', messages.notSupported('Derived tables'))
       const before = specs.length > 0 ? new TableScope(specs, ctx.parent === undefined ? {} : { parent: ctx.parent }) : ctx.parent
@@ -170,7 +188,7 @@ export function planFrom(refs: readonly TableReference[], ctx: FromContext, wher
       p.width = derived.columns.length
     }
     specs.push({ alias: p.alias, ...(p.def === undefined ? {} : { def: p.def }), ...(derived === undefined ? {} : { columns: derived.columns, schema: '' }), nullable: p.nullable })
-    tables.push({ alias: p.alias, ...(p.def === undefined ? {} : { def: p.def }), ...(p.table === undefined ? {} : { table: p.table }), ...(derived === undefined ? {} : { derived }), nullable: p.nullable, offset, width: p.width })
+    tables.push({ alias: p.alias, ...(p.def === undefined ? {} : { def: p.def }), ...(p.table === undefined ? {} : { table: p.table }), ...(derived === undefined ? {} : { derived }), nullable: p.nullable, offset, width: p.width, lateral: p.derivedRef?.lateral === true })
     offset += p.width
   }
   const width = offset
@@ -299,6 +317,7 @@ export function planFrom(refs: readonly TableReference[], ctx: FromContext, wher
     }
   }
   const nestedLoopJoins = new Set<ReadonlySet<string>>()
+  const covering = new Map<string, string>()
   let tree: { node: Node; aliases: Set<string>; visible: number[] } | undefined
   for (const r of refs) {
     const next = build(r)
@@ -315,6 +334,9 @@ export function planFrom(refs: readonly TableReference[], ctx: FromContext, wher
     width,
     joins,
     straight,
+    cover(alias, index) {
+      covering.set(alias, index)
+    },
     sortsFirst(aliases) {
       if (tree === undefined) return false
       // The first table in execution order: the outer side all the way down.
@@ -330,8 +352,8 @@ export function planFrom(refs: readonly TableReference[], ctx: FromContext, wher
     },
     ...(single === undefined ? {} : { single }),
     rows(trx, env, options) {
-      if (tree === undefined) return [{ row: options.outer ?? [] }]
-      return run(tree.node, trx, env, options, width)
+      if (tree === undefined) return [{ row: [] }]
+      return run(tree.node, trx, env, { ...options, covering }, width)
     },
   }
 }
@@ -372,9 +394,29 @@ function slotScope(scope: Scope, full: TableScope): Scope {
 }
 
 /** The rows of a join tree, each as wide as the whole FROM. */
-function* run(node: Node, trx: Trx | undefined, env: Env, options: { readonly where: Expression | undefined; readonly locking: boolean; readonly outer?: Row }, width: number): Generator<{ readonly row: Row }> {
+type RunOptions = { readonly where: Expression | undefined; readonly locking: boolean; readonly covering?: ReadonlyMap<string, string> }
+
+function* run(node: Node, trx: Trx | undefined, env: Env, options: RunOptions, width: number): Generator<{ readonly row: Row }> {
   if (node.kind === 'leaf') {
-    yield* leafRows(node.table, trx, env, options, width)
+    yield* leafRows(node.table, trx, env, options, width, undefined)
+    return
+  }
+  if (node.inner.kind === 'leaf' && node.inner.table.lateral) {
+    // LATERAL: the derived table again for each row of the tables before it.
+    const t = node.inner.table
+    const on = node.on
+    for (const { row } of run(node.outer, trx, env, options, width)) {
+      let matched = false
+      for (const { row: inner } of leafRows(t, trx, env, options, width, row)) {
+        const combined = row.slice()
+        for (let i = 0; i < t.width; i++) combined[t.offset + i] = inner[t.offset + i] ?? null
+        if (on === undefined || truth(on.eval(combined, env)) === true) {
+          matched = true
+          yield { row: combined }
+        }
+      }
+      if (!matched && node.left) yield { row }
+    }
     return
   }
   const on = node.on
@@ -428,13 +470,10 @@ function* run(node: Node, trx: Trx | undefined, env: Env, options: { readonly wh
   }
 }
 
-function* leafRows(t: FromTable, trx: Trx | undefined, env: Env, options: { readonly where: Expression | undefined; readonly locking: boolean; readonly outer?: Row }, width: number): Generator<{ readonly row: Row }> {
-  const base = (): Value[] => {
-    const out = options.outer === undefined ? new Array<Value>(width).fill(null) : [...options.outer, ...new Array<Value>(Math.max(0, width - options.outer.length)).fill(null)]
-    return out
-  }
+function* leafRows(t: FromTable, trx: Trx | undefined, env: Env, options: RunOptions, width: number, lateral: Row | undefined): Generator<{ readonly row: Row }> {
+  const base = (): Value[] => new Array<Value>(width).fill(null)
   if (t.derived !== undefined) {
-    for (const values of t.derived.rows(trx, env, options.outer)) {
+    for (const values of t.derived.rows(trx, env, lateral)) {
       const row = base()
       for (let i = 0; i < t.width; i++) row[t.offset + i] = values[i] ?? null
       yield { row }
@@ -442,7 +481,9 @@ function* leafRows(t: FromTable, trx: Trx | undefined, env: Env, options: { read
     return
   }
   const def = t.def as TableDef
-  const access = t.nullable ? {} : chooseAccess(def, t.alias, options.where, env)
+  let access = t.nullable ? {} : chooseAccess(def, t.alias, options.where, env)
+  const cover = options.covering?.get(t.alias)
+  if (access.index === undefined && access.ranges === undefined && cover !== undefined) access = { index: cover }
   for (const { row: values } of accessRows(t.table as Table, def, access, trx, options.locking)) {
     const row = base()
     for (let i = 0; i < t.width; i++) row[t.offset + i] = values[i] ?? null

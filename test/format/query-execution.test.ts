@@ -17,7 +17,7 @@ import { MySQL } from '@myjs/core'
 const FIXTURE = new URL('./fixtures/queries.json', import.meta.url).pathname
 
 /** The most vectors the executor may still refuse. Lowered as M5.18's stages land, never raised. */
-const REFUSED_AT_MOST = 500
+const REFUSED_AT_MOST = 0
 
 interface Vector {
   readonly sql: string
