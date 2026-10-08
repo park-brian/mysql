@@ -61,7 +61,10 @@ export function initIndexPage(page: Uint8Array, pageNo: number, level: number, i
 // --- header fields ------------------------------------------------------------
 
 export const level = (p: Uint8Array): number => view(p).getUint16(LEVEL)
-export const cellCount = (p: Uint8Array): number => view(p).getUint16(N_CELLS)
+/** A big-endian `uint16` read straight from the bytes: the binary search reads one per probe, and a DataView each was most of its cost. */
+const u16 = (p: Uint8Array, at: number): number => ((p[at] as number) << 8) | (p[at + 1] as number)
+
+export const cellCount = (p: Uint8Array): number => u16(p, N_CELLS)
 export const indexIdOf = (p: Uint8Array): number => view(p).getUint32(INDEX_ID)
 export const schemaVersion = (p: Uint8Array): number => view(p).getUint32(SCHEMA_VERSION)
 export const leftSibling = (p: Uint8Array): number => view(p).getUint32(LEFT)
@@ -94,7 +97,7 @@ export function noteInsert(p: Uint8Array, slot: number): void {
 const slotAt = (p: Uint8Array, i: number): number => p.length - FRAME_TRAILER - 2 * (i + 1)
 
 function cellOffset(p: Uint8Array, i: number): number {
-  return view(p).getUint16(slotAt(p, i))
+  return u16(p, slotAt(p, i))
 }
 
 const varintSize = (n: number): number => (n < 0x80 ? 1 : n < 0x4000 ? 2 : 3)
@@ -132,7 +135,19 @@ export function cell(p: Uint8Array, i: number): { key: Uint8Array; value: Uint8A
   return { key: p.subarray(start, start + keyLength), value: p.subarray(start + keyLength, start + keyLength + valueLength) }
 }
 
-export const keyAt = (p: Uint8Array, i: number): Uint8Array => cell(p, i).key
+/** The key of the cell at slot `i`, without the value's view `cell` builds too. */
+export function keyAt(p: Uint8Array, i: number): Uint8Array {
+  let at = cellOffset(p, i)
+  // The key's length, then the value's, each a varint of at most three bytes.
+  let keyLength = 0
+  for (let shift = 0; ; shift += 7) {
+    const b = p[at++] as number
+    keyLength |= (b & 0x7f) << shift
+    if ((b & 0x80) === 0) break
+  }
+  while (((p[at++] as number) & 0x80) !== 0);
+  return p.subarray(at, at + keyLength)
+}
 
 /** An internal page's child at slot `i`. */
 export const childAt = (p: Uint8Array, i: number): number => {
