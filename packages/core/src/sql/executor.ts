@@ -28,6 +28,8 @@ import {
   parseSqlMode,
   parseStatement,
   type CreateDatabaseNode,
+  type CreateTableNode,
+  type InsertNode,
   type CreateViewNode,
   type DropNode,
   type Expression,
@@ -67,6 +69,7 @@ import { columnDefinition, intType, stringType } from './meta.ts'
 import { columnsOf, compileContext, planQuery, resultSet, viewTable, type Run } from './query.ts'
 import { SqlSession, isolationOf } from './session.ts'
 import { dropOrphans, isTemporary, sessionCatalog, TemporaryTables, type CatalogApi } from './temporary.ts'
+import { likeSpec, mergedColumns, selectColumns, withCollations } from './create-select.ts'
 import type { WireProtocol } from './wire.ts'
 
 export interface SqlExecutorOptions extends ServerOptions {
@@ -138,6 +141,22 @@ const writes = (statement: Statement): boolean =>
 const sleep = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms))
 
 /** The tables a statement reads or writes, for loading their collations before it runs. */
+/**
+ * Which of a query's columns are made as a literal's are, rather than a
+ * function's: a literal select item, or any column of a set operation,
+ * whose result is a holder of the types it meets (`Item_type_holder`).
+ */
+function literalColumns(q: QueryExpression): (i: number) => boolean {
+  const body = q.body
+  if (body.kind !== QUERY.SELECT) return () => true
+  // A `*` expands to columns, which are copied whatever their place: past one, places no longer match items.
+  if (body.items.some((item) => !('expr' in item))) return () => false
+  return (i) => {
+    const item = body.items[i]
+    return item !== undefined && 'expr' in item && item.expr.kind === NODE.LITERAL
+  }
+}
+
 function tablesOf(statement: Statement): TableName[] {
   const out: TableName[] = []
   const refs = (r: readonly TableReference[] | undefined): void => {
@@ -484,7 +503,13 @@ export class SqlExecutor implements Executor {
         const temporary = statement.temporary === true ? catalog.temporary : undefined
         // CREATE TEMPORARY TABLE does not commit (8.4.11).
         if (temporary === undefined) state.commit()
-        let spec = createTableSpec(statement, catalog.schema(schema).collationId ?? DEFAULT_COLLATION)
+        if (statement.like !== undefined) return this.#createLike(run, statement, schema)
+        // … SELECT: the query is planned first, so its errors come before any table (8.4.11: 1052).
+        const selected = statement.query === undefined ? undefined : selectColumns(run, planQuery(run, statement.query).columns, literalColumns(statement.query))
+        const { query: _query, ...declared } = statement
+        const node: CreateTableNode = selected === undefined ? statement : { ...declared, columns: mergedColumns(statement.columns, selected.columns) }
+        let spec = createTableSpec(node, catalog.schema(schema).collationId ?? DEFAULT_COLLATION)
+        if (selected !== undefined) spec = withCollations(spec, selected.collations, statement.columns)
         // CHECK constraints are resolved first, IF NOT EXISTS or not (8.4.11: 3820 over a table that exists).
         spec = withChecks(catalog, schema, spec, run.sql, checkClauses(statement), session.characterSet)
         // A table that exists is 1050, or IF NOT EXISTS's note, whatever its keys would say; a
@@ -499,7 +524,7 @@ export class SqlExecutor implements Executor {
           checkForeignKeyActions(spec, foreignKeysOf({ ...spec, schema, options: spec.options ?? {} } as TableDef))
         }
         const deprecated = deprecationWarnings(statement)
-        for (const m of deprecated) raise(run.env, 1681, m)
+        for (const d of deprecated) raise(run.env, d.code, d.message)
         const notes = checkDefaults(run, spec.columns)
         if (temporary !== undefined) {
           if (exists && statement.ifNotExists !== true) throw sqlError('ER_TABLE_EXISTS_ERROR', `Table '${spec.name}' already exists`)
@@ -513,10 +538,44 @@ export class SqlExecutor implements Executor {
           raise(run.env, 1050, `Table '${spec.name}' already exists`, 'Note')
           return { affectedRows: 0, warnings: deprecated.length + notes + 1 }
         }
+        // AUTO_INCREMENT = n starts the counter there (8.4.11: the first row is n).
+        const counter = Object.entries(statement.options).find(([k]) => k.toUpperCase() === 'AUTO_INCREMENT')?.[1]
+        if (counter !== undefined && /^\d+$/.test(counter)) catalog.table(schema, spec.name).raiseAutoIncrement(BigInt(counter))
         const duplicates = duplicateKeys(spec.indexes ?? [], fulltextOf(spec))
         for (const key of duplicates) raise(run.env, 1831, duplicateKeyText(key, schema, spec.name))
         const warnings = deprecated.length + notes + duplicates.length
-        return { affectedRows: 0, ...(warnings > 0 ? { warnings } : {}) }
+        if (statement.query === undefined || selected === undefined) return { affectedRows: 0, ...(warnings > 0 ? { warnings } : {}) }
+        // The rows are the INSERT … SELECT of them; a failure takes the table with it (8.4.11: 1062 leaves none).
+        const fill: InsertNode = {
+          kind: STATEMENT.INSERT,
+          table: statement.table,
+          columns: selected.columns.map((c) => ({ kind: NODE.COLUMN, parts: [c.name], at: statement.at })),
+          query: statement.query,
+          ...(statement.duplicates === 'IGNORE' ? { ignore: true } : {}),
+          ...(statement.duplicates === 'REPLACE' ? { replace: true } : {}),
+          at: statement.at,
+        }
+        // A table everyone sees is filled, though the session has a temporary one of its name (8.4.11).
+        const base = this.catalog
+        const target = temporary === undefined && catalog.temporary?.has(schema, spec.name) === true && base !== undefined
+        const filling: Run = !target
+          ? run
+          : {
+              ...run,
+              catalog: {
+                ...catalog,
+                definition: (s, n) => (s === schema && n === spec.name ? base.definition(s, n) : catalog.definition(s, n)),
+                table: (s, n) => (s === schema && n === spec.name ? base.table(s, n) : catalog.table(s, n)),
+              },
+            }
+        try {
+          const filled = state.statement(catalog.store, true, (trx) => insert(filling, fill, trx))
+          return { ...filled, ...(warnings + (filled.warnings ?? 0) > 0 ? { warnings: warnings + (filled.warnings ?? 0) } : {}) }
+        } catch (e) {
+          if (temporary !== undefined) temporary.drop(schema, spec.name)
+          else catalog.dropTable(schema, spec.name, { ifExists: true })
+          throw e
+        }
       }
       case STATEMENT.ALTER_TABLE:
         return alterTable(run, this.#catalog(run), statement)
@@ -659,6 +718,30 @@ export class SqlExecutor implements Executor {
    * before 1050 for a name taken), and stored as its text with the names its
    * columns got now. A variable or parameter is 1351, an INTO 1350.
    */
+  /** CREATE TABLE … LIKE: the source's definition copied (`likeSpec`), temporary or not. */
+  #createLike(run: Run, statement: CreateTableNode, schema: string): StatementResult {
+    const catalog = this.#catalog(run)
+    const { state } = run
+    const session = run.env.session
+    const like = statement.like as TableName
+    const source = catalog.definition(like.schema ?? session.database ?? schema, like.name)
+    const temporary = statement.temporary === true ? catalog.temporary : undefined
+    const name = statement.table.name
+    const exists = temporary !== undefined ? temporary.has(schema, name) : catalog.tables(schema).some((t) => t.name === name)
+    if (exists) {
+      if (statement.ifNotExists !== true) throw sqlError('ER_TABLE_EXISTS_ERROR', `Table '${name}' already exists`)
+      raise(run.env, 1050, `Table '${name}' already exists`, 'Note')
+      return { affectedRows: 0, warnings: 1 }
+    }
+    const spec = likeSpec(source, name)
+    if (temporary !== undefined) {
+      if (fulltextOf(spec).length > 0 && spec.engine !== 'memory') throw sqlError('ER_INNODB_NO_FT_TEMP_TABLE', 'Cannot create FULLTEXT index on temporary InnoDB table')
+      if (!session.autocommit && state.trx === undefined) state.begin(catalog.store)
+      temporary.create(schema, spec)
+    } else catalog.createTable(schema, spec)
+    return { affectedRows: 0 }
+  }
+
   #createView(run: Run, statement: CreateViewNode): StatementResult {
     const session = run.env.session
     const schema = statement.view.schema ?? session.database

@@ -20,7 +20,7 @@
 import { CHARSET_BINARY, FIELD_TYPE } from '@myjs/bytes'
 import { collationInfoByName, defaultCollationOf, requireCollationInfo } from '@myjs/charsets'
 import { clusteredIndexOf, type ColumnDef, type EngineName, type IndexDef, type TableSpec } from '@myjs/engine'
-import { KEY, deparse, type ColumnDefinition, type CreateTableNode, type DataType, type Expression, type KeyDefinition } from '@myjs/parser'
+import { KEY, NODE, deparse, type ColumnDefinition, type CreateTableNode, type DataType, type Expression, type KeyDefinition } from '@myjs/parser'
 import { messages, sqlError } from '@myjs/protocol'
 import type { ColumnType } from '@myjs/types'
 import { checkFulltext, type FulltextDef } from './fulltext.ts'
@@ -36,19 +36,31 @@ const INEXACT_CODES: ReadonlySet<number> = new Set([FIELD_TYPE.FLOAT, FIELD_TYPE
  * one for UNSIGNED on a FLOAT, DOUBLE or DECIMAL (ZEROFILL's own UNSIGNED
  * draws none).
  */
-export function deprecationWarnings(node: CreateTableNode): string[] {
+export function deprecationWarnings(node: CreateTableNode): Deprecation[] {
   return node.columns.flatMap(columnDeprecations)
 }
 
+/** A warning a column's definition draws: 1681 for a type's form, 1287, 3719 and 3720 for its charset. */
+export interface Deprecation {
+  readonly code: number
+  readonly message: string
+}
+
 /** One column's share of `deprecationWarnings`, in 8.4.11's order, for ALTER TABLE's added and changed columns too. */
-export function columnDeprecations(c: ColumnDefinition): string[] {
+export function columnDeprecations(c: ColumnDefinition): Deprecation[] {
   const t = c.type
   const code = t.code as number
-  const out: string[] = []
-  if (t.zerofill === true) out.push(DEPRECATED.zerofill)
-  if (INTEGER_CODES.has(code) && t.length !== undefined) out.push(DEPRECATED.width)
-  if ((code === FIELD_TYPE.FLOAT || code === FIELD_TYPE.DOUBLE) && t.scale !== undefined) out.push(DEPRECATED.digits)
-  if (INEXACT_CODES.has(code) && t.unsigned === true && t.zerofill !== true) out.push(DEPRECATED.unsigned)
+  const out: Deprecation[] = []
+  const form = (message: string) => out.push({ code: 1681, message })
+  if (t.zerofill === true) form(DEPRECATED.zerofill)
+  if (INTEGER_CODES.has(code) && t.length !== undefined) form(DEPRECATED.width)
+  if ((code === FIELD_TYPE.FLOAT || code === FIELD_TYPE.DOUBLE) && t.scale !== undefined) form(DEPRECATED.digits)
+  if (INEXACT_CODES.has(code) && t.unsigned === true && t.zerofill !== true) form(DEPRECATED.unsigned)
+  // The charset's, in the order the definition meets them (8.4.11).
+  if (t.binary === true) out.push({ code: 1287, message: "'BINARY as attribute of a type' is deprecated and will be removed in a future release. Please use a CHARACTER SET clause with _bin collation instead" })
+  if (t.national === true) out.push({ code: 3720, message: 'NATIONAL/NCHAR/NVARCHAR implies the character set UTF8MB3, which will be replaced by UTF8MB4 in a future release. Please consider using CHAR(x) CHARACTER SET UTF8MB4 in order to be unambiguous.' })
+  else if (t.charset === 'utf8mb3') out.push({ code: 1287, message: "'utf8mb3' is deprecated and will be removed in a future release. Please use utf8mb4 instead" })
+  else if (t.charset === 'utf8') out.push({ code: 3719, message: "'utf8' is currently an alias for the character set UTF8MB3, but will be an alias for UTF8MB4 in a future release. Please consider using UTF8MB4 in order to be unambiguous." })
   return out
 }
 
@@ -315,8 +327,6 @@ export interface ResolvedTable {
  * default, which a table without a charset of its own inherits.
  */
 export function createTableSpec(node: CreateTableNode, schemaCollation: number): TableSpec {
-  if (node.like !== undefined) throw sqlError('ER_NOT_SUPPORTED_YET', messages.notSupported('CREATE TABLE … LIKE'))
-  if (node.query !== undefined) throw sqlError('ER_NOT_SUPPORTED_YET', messages.notSupported('CREATE TABLE … SELECT'))
   if (node.partition !== undefined) throw sqlError('ER_NOT_SUPPORTED_YET', messages.notSupported('Partitioning'))
 
   const tableCollation = resolveCollation(option(node.options, 'CHARACTER SET', 'CHARSET'), option(node.options, 'COLLATE'), schemaCollation)
@@ -396,6 +406,9 @@ export function createTableSpec(node: CreateTableNode, schemaCollation: number):
   return { name: node.table.name, engine, columns, indexes, options }
 }
 
+/** TEXT and BLOB, which no default but NULL suits. */
+const BLOB_CODES: ReadonlySet<number> = new Set([FIELD_TYPE.TINY_BLOB, FIELD_TYPE.BLOB, FIELD_TYPE.MEDIUM_BLOB, FIELD_TYPE.LONG_BLOB])
+
 /** A key's COMMENT and INVISIBLE, as a definition keeps them. */
 export function keyExtras(k: KeyDefinition): { comment?: string; invisible?: true } {
   return { ...(k.comment === undefined ? {} : { comment: k.comment }), ...(k.invisible === true ? { invisible: true as const } : {}) }
@@ -419,8 +432,12 @@ export function column(c: ColumnDefinition, tableCollation: number, inPrimary: b
   // AUTO_INCREMENT is for integers alone: 8.4 refuses FLOAT, DOUBLE and DECIMAL.
   if (c.autoIncrement === true && INEXACT_CODES.has(c.type.code as number)) throw sqlError('ER_WRONG_FIELD_SPEC', `Incorrect column specifier for column '${c.name}'`)
   const attributes: Record<string, unknown> = {}
-  if (c.default !== undefined) attributes['default'] = sqlText(c.default)
+  // A nullable TEXT or BLOB's DEFAULT NULL is no default at all: SHOW CREATE TABLE writes none (8.4.11).
+  const nullDefault = c.default?.kind === NODE.LITERAL && c.default.type === 'null' && c.defaultExpression !== true
+  if (c.default !== undefined && !(nullDefault && nullable && BLOB_CODES.has(type.type))) attributes['default'] = sqlText(c.default)
   if (c.defaultExpression === true) attributes['defaultExpression'] = true
+  // A charset or collation the column names itself, which SHOW CREATE TABLE then always writes (`is_explicit_collation`).
+  if (type.collationId !== undefined && type.collationId !== CHARSET_BINARY && (c.type.charset !== undefined || c.type.collation !== undefined || c.type.binary === true)) attributes['explicitCollation'] = true
   if (c.onUpdate !== undefined) attributes['onUpdate'] = sqlText(c.onUpdate)
   if (c.comment !== undefined) attributes['comment'] = c.comment
   if (c.type.zerofill === true) attributes['zerofill'] = true

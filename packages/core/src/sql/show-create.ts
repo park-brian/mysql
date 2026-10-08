@@ -20,6 +20,7 @@
 //     collation, and always for utf8mb4_0900_ai_ci. AUTO_INCREMENT appears
 //     when the table has such a column and its counter is past 1.
 import { CHARSET_BINARY, FIELD_TYPE } from '@myjs/bytes'
+import { CHARSET_UTF8MB4_0900_AI_CI } from '@myjs/protocol'
 import { requireCollationInfo } from '@myjs/charsets'
 import type { ColumnDef, IndexDef, Table, TableDef } from '@myjs/engine'
 import { NODE, parseExpression, type Expression } from '@myjs/parser'
@@ -74,13 +75,19 @@ function defaultClause(run: Run, c: ColumnDef): string {
   }
 }
 
-function columnLine(run: Run, def: TableDef, c: ColumnDef): string {
+export function columnLine(run: Run, def: TableDef, c: ColumnDef): string {
   const facts = typeFacts(c)
   let out = `  ${q(c.name)} ${facts.columnType}`
+  // The charset when it is not the table's or was named, and the collation
+  // when it is not its charset's first, was named, or is utf8mb4's in a
+  // table of another (`store_create_info`).
   const id = c.type.collationId
-  if (id !== undefined && id !== CHARSET_BINARY && id !== tableCollation(def)) {
+  if (id !== undefined && id !== CHARSET_BINARY) {
     const info = requireCollationInfo(id)
-    out += ` CHARACTER SET ${info.charset} COLLATE ${info.name}`
+    const explicit = c.attributes?.['explicitCollation'] === true
+    const table = tableCollation(def)
+    if (id !== table || explicit) out += ` CHARACTER SET ${info.charset}`
+    if (!info.isDefault || explicit || (id === CHARSET_UTF8MB4_0900_AI_CI && table !== CHARSET_UTF8MB4_0900_AI_CI)) out += ` COLLATE ${info.name}`
   }
   if (!c.nullable) out += ' NOT NULL'
   else if (c.type.type === FIELD_TYPE.TIMESTAMP) out += ' NULL'

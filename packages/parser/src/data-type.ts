@@ -239,6 +239,8 @@ export interface DataType {
   readonly serial?: boolean
   /** Spelled `BOOL` or `BOOLEAN`: a TINYINT(1) whose width was never written, so it draws no deprecation warning. */
   readonly boolean?: boolean
+  /** Spelled `NCHAR`, `NATIONAL VARCHAR` and the like: utf8mb3 by its name, which 8.4 warns of (3720). */
+  readonly national?: true
   readonly at: number
 }
 
@@ -384,6 +386,7 @@ export function parseDataType(c: Cursor, mode: SqlMode): DataType {
     ...(binaryModifier === undefined ? {} : { binary: binaryModifier }),
     ...(name === 'SERIAL' ? { serial: true } : {}),
     ...(name === 'BOOL' || name === 'BOOLEAN' ? { boolean: true } : {}),
+    ...(spec.charset !== undefined ? { national: true as const } : {}),
     at,
   }
 }

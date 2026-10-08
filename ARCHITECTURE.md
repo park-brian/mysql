@@ -1415,7 +1415,8 @@ server. M5 is well under way. The executor runs DDL, DML and transactions,
 upserts included, and relational SELECT: joins, grouping and aggregates,
 subqueries, derived tables, CTEs, set operations, views, JSON as a value and
 the first window functions, `INFORMATION_SCHEMA`, foreign keys with their
-referential actions, CHECK constraints, ALTER TABLE by copy, temporary tables, `SHOW CREATE
+referential actions, CHECK constraints, ALTER TABLE by copy, temporary tables,
+CREATE TABLE … LIKE and … SELECT, `SHOW CREATE
 TABLE` byte for byte, JSON paths and regular expressions. Generated corpora of 400, 300 and 250 scripts
 agree with MySQL 8.4.11 statement for statement, column names and flags
 included. Most of M5's exit criterion holds. All 487 tests of Drizzle's
@@ -1425,7 +1426,7 @@ snapshot of another MySQL version's error text, which 8.4.11 fails too.
 The count drifts down by up to four between runs, because bulk statements
 still stall the event loop long enough for parallel suites' connections to
 time out (M5.32). The rest of the function library and the
-cost-based planner come next. The core bundle is about 267 KB gzipped
+cost-based planner come next. The core bundle is about 269 KB gzipped
 against a budget of 500 KB, with the UCA weights in a separate chunk loaded
 on demand.
 

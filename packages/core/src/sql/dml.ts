@@ -61,7 +61,7 @@ export function rowDependent(column: ColumnDef): boolean {
  *     1067 (`TINYINT DEFAULT 1000`, an ENUM's non-member, a number for an
  *     ENUM or a SET, the zero date under NO_ZERO_DATE); a DECIMAL's extra
  *     digits round with a note. NOT NULL with DEFAULT NULL is 1067, and a
- *     BLOB, TEXT or JSON column may have no literal default at all (1101).
+ *     BLOB, TEXT or JSON column may have no literal default but NULL (1101).
  *   - An expression default, `DEFAULT (…)`, is stored as written and checked
  *     when a row takes it. It may not name a column the table lacks (1054),
  *     a later one with an expression default or itself (3767), an
@@ -78,12 +78,13 @@ export function checkDefaults(run: Run, columns: readonly ColumnDef[], table: re
       checkExpressionDefault(column, e, table)
       continue
     }
-    if (BLOB_TYPES.has(column.type.type)) throw sqlError('ER_BLOB_CANT_HAVE_DEFAULT', `BLOB, TEXT, GEOMETRY or JSON column '${column.name}' can't have a default value`)
-    const literal = e.kind === NODE.LITERAL || (e.kind === NODE.UNARY && (e.op === '-' || e.op === '+') && e.operand.kind === NODE.LITERAL)
+    // DEFAULT NULL is a default any nullable column may have, a BLOB's too (8.4.11: `JSON DEFAULT NULL`).
     if (e.kind === NODE.LITERAL && e.type === 'null') {
       if (!column.nullable) throw invalid(column)
       continue
     }
+    if (BLOB_TYPES.has(column.type.type)) throw sqlError('ER_BLOB_CANT_HAVE_DEFAULT', `BLOB, TEXT, GEOMETRY or JSON column '${column.name}' can't have a default value`)
+    const literal = e.kind === NODE.LITERAL || (e.kind === NODE.UNARY && (e.op === '-' || e.op === '+') && e.operand.kind === NODE.LITERAL)
     if (!literal) continue
     const numeric = e.kind === NODE.UNARY || (e.kind === NODE.LITERAL && (e.type === 'int' || e.type === 'decimal' || e.type === 'double'))
     if (numeric && (column.type.type === FIELD_TYPE.ENUM || column.type.type === FIELD_TYPE.SET)) throw invalid(column)
