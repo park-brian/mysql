@@ -279,3 +279,15 @@ test('a TIME column compared with a DATETIME constant compares as TIME; two cons
     await conn.end()
   }
 })
+
+test('a `?` in a plain query is the grammar error at it, 1064, and a prepared one is a parameter (8.4.11, found by review)', async () => {
+  const db = await MySQL.open(':memory:')
+  const conn = await connect(db)
+  try {
+    await assert.rejects(conn.query('SELECT 1 + ?, 2'), { errno: 1064, message: "You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near '?, 2' at line 1" })
+    assert.deepEqual((await conn.query({ sql: "SELECT '?', 3", rowsAsArray: true }))[0], [['?', 3]])
+    assert.deepEqual((await conn.execute({ sql: 'SELECT ? + 1', rowsAsArray: true }, [2]))[0], [[3]])
+  } finally {
+    await conn.end()
+  }
+})

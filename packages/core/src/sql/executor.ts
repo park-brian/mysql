@@ -349,6 +349,15 @@ export class SqlExecutor implements Executor {
    * does on MySQL.
    */
   async #statement(session: Session, sql: string, params: readonly Value[], known: readonly Value[] | undefined, protocol: WireProtocol): Promise<StatementResult | StatementResult[]> {
+    // A `?` belongs to a prepared statement: in a plain query it is the
+    // grammar's error, at the `?` (8.4.11: `SELECT ?` is 1064).
+    if (protocol === 'text' && params.length === 0 && known === undefined && sql.includes('?')) {
+      const mark = lex(sql).find((t) => t.kind === TOKEN.PLACEHOLDER)
+      if (mark !== undefined) {
+        const line = sql.slice(0, mark.start).split('\n').length
+        throw sqlError('ER_PARSE_ERROR', messages.parseError(sql.slice(mark.start), line))
+      }
+    }
     if (session.multipleStatementsEnabled && protocol === 'text' && !/^[\s;]*$/.test(sql)) {
       let statements: Statement[]
       try {
