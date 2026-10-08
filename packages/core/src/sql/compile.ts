@@ -46,6 +46,7 @@ import {
   toInteger,
   toText,
   toTime,
+  timeOrdinal,
   truth,
   type StringValue,
   type Value,
@@ -566,8 +567,9 @@ function binary(op: string, left: Expression, right: Expression, extra: Expressi
   if (op === 'LIKE' || op === 'NOT LIKE') return like(op === 'NOT LIKE', a, compile(right, ctx), extra === undefined ? undefined : compile(extra as Expression, ctx))
 
   const b = compile(right, ctx)
-  const at = a.eval
-  const bt = b.eval
+  const [ca, cb] = COMPARISONS[op] !== undefined || op === '<=>' ? temporalOperands(left, right, a, b) : [a, b]
+  const at = ca.eval
+  const bt = cb.eval
   const nullable = !notNull(a.type, b.type)
   // What an overflow names, as MySQL's message does: the expression's text.
   const label = deparse({ kind: NODE.BINARY, op, left, right, at: 0 })
@@ -663,6 +665,55 @@ function binary(op: string, left: Expression, right: Expression, extra: Expressi
         type: boolType(nullable),
       }
     }
+  }
+}
+
+// --- TIME against DATETIME --------------------------------------------------------
+
+const constantNode = (e: Expression): boolean => e.kind === NODE.LITERAL || e.kind === NODE.PLACEHOLDER
+
+/**
+ * A TIME compared with a DATETIME, as 8.4.11 compares them. A constant
+ * against a TIME column is converted to the column's type
+ * (`convert_constant_item`), so its date is dropped: Prisma binds a TIME as
+ * a DATETIME on 1970-01-01, and \`tm = ?\` must find the row. Anything else
+ * meets as DATETIME, the TIME added to the statement's date, as CURDATE has it.
+ */
+function temporalOperands(left: Expression, right: Expression, a: Compiled, b: Compiled): [Compiled, Compiled] {
+  const ak = a.type.kind
+  const bk = b.type.kind
+  // A string constant too: `tm = '1970-01-01 14:37:36'` finds 14:37:36.
+  if (ak === 'time' && left.kind === NODE.COLUMN && constantNode(right) && (bk === 'datetime' || bk === 'string')) return [a, asTimeOfDay(b)]
+  if (bk === 'time' && right.kind === NODE.COLUMN && constantNode(left) && (ak === 'datetime' || ak === 'string')) return [asTimeOfDay(a), b]
+  if (!((ak === 'time' && bk === 'datetime') || (ak === 'datetime' && bk === 'time'))) return [a, b]
+  return ak === 'time' ? [onStatementDate(a), b] : [a, onStatementDate(b)]
+}
+
+function asTimeOfDay(c: Compiled): Compiled {
+  return {
+    eval: (r, env) => {
+      const v = c.eval(r, env)
+      if (v === null || v.kind === 'time') return v
+      // A string with a date in it keeps its time of day, as a DATETIME does.
+      const dt = v.kind === 'datetime' ? v : v.kind === 'string' && /^\s*\d+[-/.]\d+[-/.]\d+[ T]/.test(v.v) ? toDateTime(v, 'DATETIME') : undefined
+      return toTime(dt ?? v) ?? v
+    },
+    type: c.type,
+  }
+}
+
+function onStatementDate(c: Compiled): Compiled {
+  return {
+    eval: (r, env) => {
+      const v = c.eval(r, env)
+      if (v === null || v.kind !== 'time') return v
+      const today = clock(env.now, 0)
+      const ms = Date.UTC(today.year, today.month - 1, today.day) + Number(timeOrdinal(v.v) / 1000n)
+      const d = new Date(ms)
+      const microsecond = Number(((timeOrdinal(v.v) % 1_000_000n) + 1_000_000n) % 1_000_000n)
+      return { kind: 'datetime', v: { year: d.getUTCFullYear(), month: d.getUTCMonth() + 1, day: d.getUTCDate(), hour: d.getUTCHours(), minute: d.getUTCMinutes(), second: d.getUTCSeconds(), microsecond }, type: 'DATETIME', fsp: v.fsp }
+    },
+    type: c.type,
   }
 }
 

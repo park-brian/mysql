@@ -138,8 +138,10 @@ function resolveIn(
   const found: { index: number; type: ResultType }[] = []
   for (const t of tables) {
     if (tableName !== undefined && t.alias !== tableName) continue
-    // `db.t.c` names a table by its schema too, and an aliased table has none.
-    if (schemaName !== undefined && (t.schema !== schemaName || t.def === undefined || t.alias !== t.def.name)) continue
+    // `db.t.c` names a table by its schema too, alias or not; a derived table
+    // or a CTE has no schema, and any qualifier passes it (8.4.11: `zz.d.c`
+    // over `(SELECT …) d` reads d.c).
+    if (schemaName !== undefined && t.schema !== '' && t.schema !== schemaName) continue
     const i = t.columns.findIndex((c) => c.name.toLowerCase() === column)
     if (i < 0) continue
     found.push({ index: t.offset + i, type: (t.columns[i] as ScopeColumn).type })

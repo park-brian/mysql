@@ -255,3 +255,27 @@ test('an empty statement is 1065; one of comments only is an OK, and not prepara
     await conn.end()
   }
 })
+
+test('a TIME column compared with a DATETIME constant compares as TIME; two constants compare as DATETIME (8.4.11)', async () => {
+  // Prisma binds a TIME as a DATETIME on 1970-01-01. The server converts a
+  // constant compared with a TIME column to the column's type
+  // (`convert_constant_item`), so any date matches; constants alone meet as
+  // DATETIME, the TIME on today's date.
+  const db = await MySQL.open(':memory:')
+  const conn = await connect(db, { timezone: 'Z' })
+  try {
+    await conn.query('CREATE DATABASE app')
+    await conn.query('USE app')
+    await conn.query('CREATE TABLE t (id INT, tm TIME, dt DATETIME)')
+    await conn.query("INSERT INTO t VALUES (1, '14:37:36', '1970-01-01 14:37:36')")
+    const rows = async (sql: string, params?: Date[]) => (await (params === undefined ? conn.query({ sql, rowsAsArray: true }) : conn.execute({ sql, rowsAsArray: true }, params)))[0]
+    assert.deepEqual(await rows("SELECT TIME'14:37:36' = TIMESTAMP'1970-01-01 14:37:36', TIME'14:37:36' = CAST(CONCAT(CURDATE(), ' 14:37:36') AS DATETIME)"), [[0, 1]])
+    assert.deepEqual(await rows("SELECT id FROM t WHERE tm = TIMESTAMP'1970-01-01 14:37:36'"), [[1]])
+    assert.deepEqual(await rows("SELECT id FROM t WHERE tm = '1970-01-01 14:37:36'"), [[1]])
+    assert.deepEqual(await rows("SELECT id FROM t WHERE dt = TIME'14:37:36'"), [])
+    assert.deepEqual(await rows('SELECT id FROM t WHERE tm = ?', [new Date(Date.UTC(1970, 0, 1, 14, 37, 36))]), [[1]])
+    assert.deepEqual(await rows('SELECT id FROM t WHERE tm = ?', [new Date(Date.UTC(2020, 5, 1, 14, 37, 36))]), [[1]])
+  } finally {
+    await conn.end()
+  }
+})

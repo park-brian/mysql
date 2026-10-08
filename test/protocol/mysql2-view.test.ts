@@ -239,3 +239,29 @@ test('a bare column of a view, a derived table, a CTE or INFORMATION_SCHEMA is n
     await db.end()
   }
 })
+
+test('db.table.column reaches a view, an alias, INFORMATION_SCHEMA, and a derived table under any qualifier (8.4.11)', async () => {
+  // Prisma reads a view as `db`.`View`.`col`, which was 1054. The rule: the
+  // table name — alias or not — and the schema must match, and a derived
+  // table or CTE has no schema to mismatch.
+  const db = await MySQL.open(':memory:')
+  const conn = await mysql.createConnection({ stream: db.createStream() as never, user: 'root', password: '' })
+  try {
+    await conn.query('CREATE DATABASE vp')
+    await conn.query('USE vp')
+    await conn.query('CREATE TABLE t (id INT, b INT)')
+    await conn.query('CREATE VIEW v AS SELECT id, b FROM t')
+    await conn.query('INSERT INTO t VALUES (1, 2)')
+    const rows = async (sql: string) => (await conn.query({ sql, rowsAsArray: true }))[0]
+    assert.deepEqual(await rows('SELECT vp.v.id, vp.v.b FROM vp.v'), [[1, 2]])
+    assert.deepEqual(await rows('SELECT vp.x.id FROM vp.v AS x'), [[1]])
+    assert.deepEqual(await rows('SELECT vp.x.id FROM t AS x'), [[1]])
+    assert.deepEqual(await rows('SELECT zz.v.id FROM (SELECT 1 AS id) v'), [[1]])
+    assert.deepEqual(await rows('WITH c AS (SELECT 1 AS id) SELECT zz.c.id FROM c'), [[1]])
+    assert.deepEqual(await rows("SELECT information_schema.tables.table_name FROM information_schema.tables WHERE table_schema = 'vp' ORDER BY 1"), [['t'], ['v']])
+    for (const sql of ['SELECT vp.v.id FROM vp.v AS x', 'SELECT zz.x.id FROM t AS x', 'SELECT zz.v.id FROM v']) await assert.rejects(conn.query(sql), { errno: 1054 }, sql)
+  } finally {
+    await conn.end()
+    await db.end()
+  }
+})
