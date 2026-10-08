@@ -40,6 +40,7 @@ export class SqlSession implements SessionValues {
   /** What the session has `SET` that is not one of the variables it holds itself. */
   readonly ownVariables = new Map<string, Value>()
   lastInsertId = 0n
+  insertIdSet = false
   rowCount = -1n
   /** `SET SESSION TRANSACTION ISOLATION LEVEL`. */
   isolation: Isolation = 'REPEATABLE READ'

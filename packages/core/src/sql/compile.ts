@@ -77,6 +77,12 @@ export interface Env {
 export interface SessionValues {
   readonly userVariables: Map<string, Value>
   lastInsertId: bigint
+  /**
+   * Whether the statement running has evaluated `LAST_INSERT_ID(expr)`
+   * (MySQL's `arg_of_last_insert_id_function`): an INSERT or UPDATE then
+   * reports that value as its `insertId`. Cleared as each one starts.
+   */
+  insertIdSet: boolean
   rowCount: bigint
   /** A system variable's value, as `@@name` reads it; `undefined` for one that does not exist. */
   systemVariable(name: string, scope: 'GLOBAL' | 'SESSION' | undefined, session: Session): Value | undefined
@@ -110,9 +116,19 @@ export interface CompileContext {
   readonly session: Session
   readonly state: SessionValues
   readonly serverVersion: string
+  /**
+   * Inside `ON DUPLICATE KEY UPDATE`: where `VALUES(c)` reads the row the
+   * INSERT tried to write, and a count of the calls, each of which 8.4.11
+   * answers with a deprecation warning (1287). Anywhere else `VALUES(c)` is
+   * NULL.
+   */
+  readonly insertValues?: { readonly resolve: (column: string) => { readonly index: number; readonly type: ResultType }; calls: number }
 }
 
 const lit = (value: Value, type: ResultType): Compiled => ({ eval: () => value, type })
+
+/** BIGINT's largest value, `LLONG_MAX` in `include/my_inttypes.h`. */
+const MAX_SIGNED = 2n ** 63n - 1n
 
 /** A string type's coercibility: a column's 2, a literal's 4. */
 const coercibilityOf = (t: ResultType): number => t.coercibility ?? COERCIBILITY.COERCIBLE
@@ -479,7 +495,9 @@ function binary(op: string, left: Expression, right: Expression, extra: Expressi
       else if (kind === 'decimal') {
         const s = op === '*' ? scaleOf(a.type) + scaleOf(b.type) : Math.max(scaleOf(a.type), scaleOf(b.type))
         const digits = op === '*' ? intDigits(a.type) + intDigits(b.type) : Math.max(intDigits(a.type), intDigits(b.type)) + 1
-        type = decimalType(digits + s, s, nullable)
+        // A DECIMAL result is unsigned only when both sides are; an integer
+        // one when either is (`Item_func_*::result_precision`).
+        type = decimalType(digits + s, s, nullable, a.type.unsigned === true && b.type.unsigned === true)
       } else if (kind === 'double') type = doubleType(nullable, 23)
       else type = NULL_TYPE
       return { eval: (r, env) => add(at(r, env), bt(r, env), op, label), type }
@@ -487,7 +505,7 @@ function binary(op: string, left: Expression, right: Expression, extra: Expressi
     case '/': {
       const kind = arithKind(a.type, b.type)
       const s = Math.min(30, scaleOf(a.type) + 4)
-      const type = kind === 'double' ? doubleType(true, 23) : kind === 'null' ? NULL_TYPE : decimalType(intDigits(a.type) + scaleOf(b.type) + s, s, true)
+      const type = kind === 'double' ? doubleType(true, 23) : kind === 'null' ? NULL_TYPE : decimalType(intDigits(a.type) + scaleOf(b.type) + s, s, true, a.type.unsigned === true && b.type.unsigned === true)
       return { eval: (r, env) => divide(at(r, env), bt(r, env)), type }
     }
     case 'DIV': {
@@ -815,9 +833,45 @@ function call(e: CallNode, ctx: CompileContext): Compiled {
     case 'CONNECTION_ID':
       arity(0)
       return { eval: (_r, env) => intValue(BigInt(env.session.connectionId), true), type: intType(10, false, true) }
-    case 'LAST_INSERT_ID':
-      if (e.args.length > 0) throw sqlError('ER_NOT_SUPPORTED_YET', messages.notSupported('LAST_INSERT_ID(expr)'))
-      return { eval: (_r, env) => intValue(env.state.lastInsertId, true), type: intType(20, false, true) }
+    case 'LAST_INSERT_ID': {
+      // BIGINT UNSIGNED, 21 wide, as 8.4.11 reports both forms. With an
+      // argument it sets the value and returns it, and the INSERT or UPDATE
+      // that evaluates it reports it as its `insertId` (the `UPDATE t SET id =
+      // LAST_INSERT_ID(id + 1)` sequence idiom). The value is the argument's
+      // `val_int()`: an integer as it is, a negative wrapped to 64 bits; any
+      // other number rounded and held to the signed range — past it, 2^63 - 1,
+      // below it, 1690 (8.4.11, found by review); NULL as 0.
+      if (e.args.length === 0) return { eval: (_r, env) => intValue(env.state.lastInsertId, true), type: intType(21, false, true) }
+      arity(1)
+      const [x] = args() as [Compiled]
+      const self = deparse(e)
+      return {
+        eval: (r, env) => {
+          const v = x.eval(r, env)
+          let n = v === null ? 0n : toInteger(v)
+          // An integer past 64 bits is a DECIMAL to MySQL, so it saturates too.
+          if (v !== null && (v.kind !== 'int' || n > 2n ** 64n - 1n || n < -MAX_SIGNED - 1n)) {
+            if (n > MAX_SIGNED) n = MAX_SIGNED
+            else if (n < -MAX_SIGNED - 1n) throw sqlError('ER_DATA_OUT_OF_RANGE', `BIGINT value is out of range in '${self}'`)
+          }
+          env.state.lastInsertId = BigInt.asUintN(64, n)
+          env.state.insertIdSet = true
+          return v === null ? null : intValue(env.state.lastInsertId, true)
+        },
+        type: intType(21, x.type.nullable, true),
+      }
+    }
+    case 'VALUES': {
+      // Deprecated in 8.4 in favour of the row alias, and still answered.
+      arity(1)
+      const target = e.args[0] as Expression
+      if (target.kind !== NODE.COLUMN) throw sqlError('ER_PARSE_ERROR', messages.parseError(e.name, 1))
+      const iv = ctx.insertValues
+      if (iv === undefined) return lit(null, NULL_TYPE)
+      iv.calls++
+      const { index, type } = iv.resolve(target.parts[target.parts.length - 1] as string)
+      return { eval: (row) => row[index] ?? null, type }
+    }
     case 'ROW_COUNT':
       arity(0)
       return { eval: (_r, env) => intValue(env.state.rowCount), type: intType(21, false) }

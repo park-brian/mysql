@@ -192,6 +192,20 @@ let expectedToFail = 0
 let expectedToFailAndDid = 0
 /** Statements a real parser would accept and this one does not implement yet. */
 const unsupported = new Map()
+/**
+ * Syntax newer than the 8.4 this project targets (D-10). The pinned corpus is
+ * a later tree and uses some; 8.4.11 answers ER_PARSE_ERROR to each, and so
+ * does the parser (D-70). They are counted here, by name, rather than as
+ * statements MySQL accepts and we cannot parse — or, as `GROUPING SETS` was
+ * until M3.17, as statements not implemented *yet*, which told a client to wait
+ * for SQL its server will never take. Each name was put to 8.4.11. A pattern is
+ * tried only on a statement that failed with ER_PARSE_ERROR, so it cannot hide
+ * one that parses, and the list is the whole allowance: anything else that
+ * fails is still a failure.
+ */
+const NEWER_THAN_TARGET = [{ name: 'GROUP BY GROUPING SETS', pattern: /\bGROUP\s+BY\s+GROUPING\s+SETS\b/i }]
+const newerThanTarget = new Map()
+let unsupportedPrinted = 0
 /** Statements that lexed and would not parse, by leading keyword. */
 const parseFailures = new Map()
 /**
@@ -292,6 +306,13 @@ for (const source of sources) {
       } else if (e instanceof ParseError && e.code === 'ER_NOT_SUPPORTED_YET') {
         const what = /support '([^']*)'/.exec(String(e.message))?.[1] ?? '(unknown)'
         unsupported.set(what, (unsupported.get(what) ?? 0) + 1)
+        if (unsupportedPrinted++ < 400) console.error(`  not implemented (${what}) in ${name}: ${text.replace(/\s+/g, ' ').slice(0, 300)}`)
+      } else if (
+        e instanceof ParseError &&
+        e.code === 'ER_PARSE_ERROR' &&
+        NEWER_THAN_TARGET.some(({ name, pattern }) => pattern.test(text) && newerThanTarget.set(name, (newerThanTarget.get(name) ?? 0) + 1))
+      ) {
+        // Counted above, by name.
       } else {
         parseFailures.set(keyword, (parseFailures.get(keyword) ?? 0) + 1)
         if (parseFailed++ < 400) console.error(`  parse failed in ${name}: ${text.replace(/\s+/g, ' ').slice(0, 400)}`)
@@ -319,6 +340,7 @@ const rate = (k) => {
 console.log(`parsed by keyword: ${ranked.slice(0, 8).map(([k]) => rate(k)).join(', ')}`)
 const topUnsupported = [...unsupported].sort((a, b) => b[1] - a[1]).slice(0, 12)
 console.log(`not implemented yet: ${topUnsupported.map(([k, n]) => `${k} ${n}`).join(', ') || 'none'}`)
+console.log(`newer than 8.4, refused as 8.4.11 refuses it: ${[...newerThanTarget].map(([k, n]) => `${k} ${n}`).join(', ') || 'none'}`)
 const topParseFailures = [...parseFailures].sort((a, b) => b[1] - a[1]).slice(0, 12)
 console.log(`would not parse: ${topParseFailures.map(([k, n]) => `${k} ${n}`).join(', ') || 'none'}`)
 console.log(
@@ -373,6 +395,7 @@ writeFileSync(
       byKeyword: Object.fromEntries(ranked),
       parsedByKeyword: Object.fromEntries([...parsedByKeyword].sort((a, b) => b[1] - a[1])),
       unsupported: Object.fromEntries([...unsupported].sort((a, b) => b[1] - a[1])),
+      newerThanTarget: Object.fromEntries([...newerThanTarget].sort((a, b) => b[1] - a[1])),
       parseFailuresByKeyword: Object.fromEntries([...parseFailures].sort((a, b) => b[1] - a[1])),
       wronglyAcceptedByKeyword: Object.fromEntries([...tooPermissive].sort((a, b) => b[1] - a[1])),
       roundTripFailuresByKeyword: Object.fromEntries([...roundTripFailures].sort((a, b) => b[1] - a[1])),
@@ -425,6 +448,20 @@ if (wouldNotParse > 0) {
       '  printed above — it is GPLv2, so it appears only in this log and is never written\n' +
       '  to a file. A statement this parser does not implement is reported separately and\n' +
       '  does not reach here.',
+  )
+  process.exit(1)
+}
+
+// M3.17's done-when: nothing in the corpus is a statement this parser has not
+// built. What remains is either parsed or refused for a stated reason — MySQL
+// refuses it too, or it is newer than 8.4 — and "not yet" is no longer one.
+const notImplemented = [...unsupported.values()].reduce((a, b) => a + b, 0)
+if (notImplemented > 0) {
+  console.error(
+    `\n${notImplemented} statement(s) are of a kind this parser does not implement: ` +
+      `${[...unsupported].map(([k, n]) => `${k} ${n}`).join(', ')}.\n` +
+      '  M3.17 emptied this list. A new entry is a statement form the corpus has gained,\n' +
+      '  and it needs a grammar — or, if 8.4.11 refuses it, an entry in NEWER_THAN_TARGET.',
   )
   process.exit(1)
 }

@@ -45,6 +45,28 @@ export const STATEMENT = {
   EXECUTE: 'execute',
   DEALLOCATE: 'deallocate',
   DO: 'do',
+  // M3.17: administration.
+  TABLE_MAINTENANCE: 'tableMaintenance',
+  FLUSH: 'flush',
+  TRUNCATE: 'truncate',
+  LOCK_TABLES: 'lockTables',
+  UNLOCK_TABLES: 'unlockTables',
+  LOCK_INSTANCE: 'lockInstance',
+  UNLOCK_INSTANCE: 'unlockInstance',
+  RENAME_TABLE: 'renameTable',
+  LOAD_DATA: 'loadData',
+  GRANT: 'grant',
+  REVOKE: 'revoke',
+  CREATE_USER: 'createUser',
+  ALTER_USER: 'alterUser',
+  DROP_USER: 'dropUser',
+  RENAME_USER: 'renameUser',
+  CREATE_ROLE: 'createRole',
+  DROP_ROLE: 'dropRole',
+  SET_PASSWORD: 'setPassword',
+  SET_ROLE: 'setRole',
+  SET_DEFAULT_ROLE: 'setDefaultRole',
+  RESET: 'reset',
 } as const
 
 export type StatementKind = (typeof STATEMENT)[keyof typeof STATEMENT]
@@ -712,6 +734,323 @@ export interface DoNode {
   readonly at: number
 }
 
+// --- M3.17: administration ------------------------------------------------------
+//
+// Parsed in full and stored as written; what they *do* is the executor's call.
+// Every acceptance and refusal below was put to a real 8.4.11 first.
+
+/** An account: `'u'@'h'`, `u@h` or `'u'`. A role is named the same way. */
+export interface Account {
+  readonly user: string
+  readonly host?: string
+}
+
+/** An account, or the session's own: `CURRENT_USER`, `CURRENT_USER()`. */
+export type AccountOrCurrent = 'CURRENT_USER' | Account
+
+/**
+ * `ANALYZE`/`CHECK`/`CHECKSUM`/`OPTIMIZE`/`REPAIR TABLE t, …`, one node with
+ * the verb in `op`. `TABLE` and `TABLES` are one spelling.
+ */
+export interface TableMaintenanceNode {
+  readonly kind: typeof STATEMENT.TABLE_MAINTENANCE
+  readonly op: 'ANALYZE' | 'CHECK' | 'CHECKSUM' | 'OPTIMIZE' | 'REPAIR'
+  /** `NO_WRITE_TO_BINLOG` or its synonym `LOCAL` (not `CHECK`, not `CHECKSUM`). */
+  readonly noWriteToBinlog?: boolean
+  readonly tables: readonly TableName[]
+  /**
+   * The option words, in order, repeats kept: `CHECK`'s `FOR UPGRADE`,
+   * `QUICK`, `FAST`, `MEDIUM`, `EXTENDED`, `CHANGED`; `REPAIR`'s `QUICK`,
+   * `EXTENDED`, `USE_FRM`; `CHECKSUM`'s one `QUICK` or `EXTENDED`.
+   */
+  readonly options?: readonly string[]
+  /** `ANALYZE TABLE … UPDATE|DROP HISTOGRAM ON c, …`. */
+  readonly histogram?: Histogram
+  readonly at: number
+}
+
+export type Histogram =
+  | {
+      readonly action: 'UPDATE'
+      readonly columns: readonly string[]
+      readonly buckets?: string
+      /** `AUTO UPDATE` or `MANUAL UPDATE`. */
+      readonly update?: 'AUTO' | 'MANUAL'
+    }
+  | { readonly action: 'UPDATE'; readonly columns: readonly string[]; readonly data: string }
+  | { readonly action: 'DROP'; readonly columns: readonly string[] }
+
+/**
+ * `FLUSH [NO_WRITE_TO_BINLOG | LOCAL] option, …`, or the `TABLES` form, which
+ * stands alone: `FLUSH TABLES t, PRIVILEGES` flushes a *table* named
+ * `PRIVILEGES`.
+ */
+export type FlushNode = {
+  readonly kind: typeof STATEMENT.FLUSH
+  readonly noWriteToBinlog?: boolean
+  readonly at: number
+} & (
+  | {
+      /** `BINARY LOGS`, `PRIVILEGES`, `RELAY LOGS` and the rest, as written in upper case. */
+      readonly options: readonly FlushOption[]
+    }
+  | {
+      readonly tables: readonly TableName[]
+      /** `WITH READ LOCK`, or `FOR EXPORT` (which needs tables). */
+      readonly lock?: 'READ' | 'EXPORT'
+    }
+)
+
+export interface FlushOption {
+  readonly option: string
+  /** `RELAY LOGS FOR CHANNEL 'c'`. */
+  readonly channel?: string
+}
+
+/** `TRUNCATE [TABLE] t`. */
+export interface TruncateNode {
+  readonly kind: typeof STATEMENT.TRUNCATE
+  readonly table: TableName
+  readonly at: number
+}
+
+/** `LOCK TABLES t [AS a] READ [LOCAL] | WRITE, …`. */
+export interface LockTablesNode {
+  readonly kind: typeof STATEMENT.LOCK_TABLES
+  readonly tables: readonly LockedTable[]
+  readonly at: number
+}
+
+export interface LockedTable {
+  readonly table: TableName
+  readonly alias?: string
+  readonly lock: 'READ' | 'READ LOCAL' | 'WRITE'
+}
+
+/** `UNLOCK TABLES`, `LOCK INSTANCE FOR BACKUP`, `UNLOCK INSTANCE`. */
+export interface UnlockTablesNode {
+  readonly kind: typeof STATEMENT.UNLOCK_TABLES | typeof STATEMENT.LOCK_INSTANCE | typeof STATEMENT.UNLOCK_INSTANCE
+  readonly at: number
+}
+
+/** `RENAME TABLE a TO b, c TO d`. */
+export interface RenameTableNode {
+  readonly kind: typeof STATEMENT.RENAME_TABLE
+  readonly pairs: readonly { readonly from: TableName; readonly to: TableName }[]
+  readonly at: number
+}
+
+/**
+ * `LOAD DATA` and `LOAD XML`, clause for clause. A field or line delimiter is a
+ * string, hex or bit literal, kept as the expression the literal parses to.
+ */
+export interface LoadDataNode {
+  readonly kind: typeof STATEMENT.LOAD_DATA
+  readonly format: 'DATA' | 'XML'
+  readonly priority?: 'LOW_PRIORITY' | 'CONCURRENT'
+  readonly local?: boolean
+  /** `INFILE`, `URL` or `S3`, with `FROM` before it or not — one spelling. */
+  readonly source: 'INFILE' | 'URL' | 'S3'
+  readonly file: string
+  readonly count?: string
+  readonly inPrimaryKeyOrder?: boolean
+  readonly duplicates?: 'REPLACE' | 'IGNORE'
+  readonly table: TableName
+  readonly partitions?: readonly string[]
+  readonly charset?: string
+  readonly rowsIdentifiedBy?: string
+  /** `FIELDS` (or `COLUMNS`) sub-options in order; a repeat is legal and kept. */
+  readonly fields?: readonly LoadDelimiter[]
+  /** `LINES` sub-options in order. */
+  readonly lines?: readonly LoadDelimiter[]
+  /** `IGNORE n LINES` (or `ROWS`, the same). */
+  readonly ignoreLines?: string
+  /** `(a, @b)`: columns and user variables; `()` is an empty list. */
+  readonly columns?: readonly (ColumnNode | { readonly variable: string })[]
+  readonly set?: readonly Assignment[]
+  readonly parallel?: string
+  readonly memory?: string
+  readonly algorithm?: 'BULK'
+  readonly at: number
+}
+
+export interface LoadDelimiter {
+  /** `TERMINATED`, `ENCLOSED`, `OPTIONALLY ENCLOSED`, `ESCAPED` or `STARTING`. */
+  readonly what: string
+  readonly value: Expression
+}
+
+/** A privilege as `GRANT` and `REVOKE` name one. */
+export type Privilege =
+  /** A static privilege — `SELECT`, `CREATE TEMPORARY TABLES` — with columns or not. */
+  | { readonly privilege: string; readonly columns?: readonly string[] }
+  /** Any other name: a dynamic privilege (`BACKUP_ADMIN`) or, with no `ON`, a role. */
+  | { readonly name: string; readonly host?: string }
+
+/** What `ON` names: `*.*`, `*`, `db.*`, or a table or routine. */
+export type PrivilegeLevel =
+  | { readonly level: 'global' }
+  | { readonly level: 'default' }
+  | { readonly level: 'schema'; readonly schema: string }
+  | { readonly level: 'object'; readonly name: TableName }
+
+export type GrantNode = {
+  readonly kind: typeof STATEMENT.GRANT
+  readonly at: number
+} & (
+  | {
+      readonly privileges: readonly Privilege[]
+      readonly objectType?: 'TABLE' | 'FUNCTION' | 'PROCEDURE'
+      readonly on: PrivilegeLevel
+      readonly to: readonly AccountOrCurrent[]
+      readonly withGrantOption?: boolean
+      readonly as?: AccountOrCurrent
+      readonly withRole?: RoleSpec
+    }
+  | {
+      readonly proxy: AccountOrCurrent
+      readonly to: readonly AccountOrCurrent[]
+      readonly withGrantOption?: boolean
+    }
+  | { readonly roles: readonly Account[]; readonly to: readonly AccountOrCurrent[]; readonly withAdminOption?: boolean }
+)
+
+export type RevokeNode = {
+  readonly kind: typeof STATEMENT.REVOKE
+  readonly ifExists?: boolean
+  readonly from: readonly AccountOrCurrent[]
+  readonly ignoreUnknownUser?: boolean
+  readonly at: number
+} & (
+  | { readonly privileges: readonly Privilege[]; readonly objectType?: 'TABLE' | 'FUNCTION' | 'PROCEDURE'; readonly on: PrivilegeLevel }
+  /** `REVOKE ALL [PRIVILEGES], GRANT OPTION FROM …`. */
+  | { readonly all: true }
+  | { readonly proxy: AccountOrCurrent }
+  | { readonly roles: readonly Account[] }
+)
+
+/** `DEFAULT`, `NONE`, `ALL [EXCEPT r, …]` or a list of roles. */
+export type RoleSpec =
+  | { readonly which: 'DEFAULT' | 'NONE' }
+  | { readonly which: 'ALL'; readonly except?: readonly Account[] }
+  | { readonly roles: readonly Account[] }
+
+/** One way of authenticating, as `IDENTIFIED …` writes it. */
+export interface Identification {
+  readonly plugin?: string
+  /** `BY 'password'`. */
+  readonly password?: string
+  /** `BY RANDOM PASSWORD`. */
+  readonly random?: boolean
+  /** `AS 'hash'`. */
+  readonly hash?: string
+}
+
+export interface UserSpec {
+  readonly account: AccountOrCurrent
+  /** `IDENTIFIED …`, then `AND IDENTIFIED …` for each further factor. */
+  readonly auth?: readonly Identification[]
+  /** `ALTER USER`'s `REPLACE 'current'`. */
+  readonly replace?: string
+  readonly retainCurrentPassword?: boolean
+  readonly discardOldPassword?: boolean
+}
+
+/** Everything after the users in `CREATE USER` and `ALTER USER`. */
+export interface AccountOptions {
+  /** `REQUIRE NONE`, `SSL`, `X509`, or `ISSUER`/`SUBJECT`/`CIPHER` values. */
+  readonly require?: 'NONE' | 'SSL' | 'X509' | readonly { readonly what: 'ISSUER' | 'SUBJECT' | 'CIPHER'; readonly value: string }[]
+  /** `WITH MAX_QUERIES_PER_HOUR n …`, in order. */
+  readonly resources?: readonly { readonly name: string; readonly value: string }[]
+  /** `PASSWORD EXPIRE …`, `ACCOUNT LOCK`, `FAILED_LOGIN_ATTEMPTS n` and the rest, in order, as written in upper case. */
+  readonly passwordOptions?: readonly string[]
+  readonly comment?: string
+  readonly attribute?: string
+}
+
+export interface CreateUserNode extends AccountOptions {
+  readonly kind: typeof STATEMENT.CREATE_USER
+  readonly ifNotExists?: boolean
+  readonly users: readonly UserSpec[]
+  readonly defaultRoles?: readonly Account[]
+  readonly at: number
+}
+
+export type AlterUserNode = {
+  readonly kind: typeof STATEMENT.ALTER_USER
+  readonly ifExists?: boolean
+  readonly at: number
+} & (
+  | (AccountOptions & { readonly users: readonly UserSpec[] })
+  /** `ALTER USER USER() IDENTIFIED BY …`: the session's own account. */
+  | { readonly self: UserSpec }
+  | { readonly user: AccountOrCurrent; readonly defaultRole: RoleSpec }
+)
+
+/** `DROP USER` and `DROP ROLE`. */
+export interface DropUserNode {
+  readonly kind: typeof STATEMENT.DROP_USER | typeof STATEMENT.DROP_ROLE
+  readonly ifExists?: boolean
+  readonly users: readonly AccountOrCurrent[]
+  readonly at: number
+}
+
+export interface CreateRoleNode {
+  readonly kind: typeof STATEMENT.CREATE_ROLE
+  readonly ifNotExists?: boolean
+  readonly roles: readonly Account[]
+  readonly at: number
+}
+
+export interface RenameUserNode {
+  readonly kind: typeof STATEMENT.RENAME_USER
+  readonly pairs: readonly { readonly from: AccountOrCurrent; readonly to: AccountOrCurrent }[]
+  readonly at: number
+}
+
+/** `SET PASSWORD [FOR u] = 'p' | TO RANDOM [REPLACE 'c'] [RETAIN CURRENT PASSWORD]`. */
+export interface SetPasswordNode {
+  readonly kind: typeof STATEMENT.SET_PASSWORD
+  readonly for?: AccountOrCurrent
+  /** The new password; absent for `TO RANDOM`. */
+  readonly password?: string
+  readonly replace?: string
+  readonly retainCurrentPassword?: boolean
+  readonly at: number
+}
+
+export interface SetRoleNode {
+  readonly kind: typeof STATEMENT.SET_ROLE
+  readonly role: RoleSpec
+  readonly at: number
+}
+
+/** `SET DEFAULT ROLE NONE | ALL | r, … TO u, …`. */
+export interface SetDefaultRoleNode {
+  readonly kind: typeof STATEMENT.SET_DEFAULT_ROLE
+  readonly role: RoleSpec
+  readonly to: readonly AccountOrCurrent[]
+  readonly at: number
+}
+
+/**
+ * `RESET PERSIST [[IF EXISTS] name]`, or `RESET` replication state:
+ * `REPLICA [ALL] [FOR CHANNEL 'c']` and `BINARY LOGS AND GTIDS [TO n]`, which
+ * may be listed together.
+ */
+export type ResetNode = {
+  readonly kind: typeof STATEMENT.RESET
+  readonly at: number
+} & (
+  | { readonly persist: true; readonly ifExists?: boolean; readonly name?: string }
+  | {
+      readonly options: readonly (
+        | { readonly option: 'REPLICA'; readonly all?: boolean; readonly channel?: string }
+        | { readonly option: 'BINARY LOGS AND GTIDS'; readonly to?: string }
+      )[]
+    }
+)
+
 export type Statement =
   | CreateTableNode
   | CreateViewNode
@@ -740,3 +1079,21 @@ export type Statement =
   | ExecuteNode
   | DeallocateNode
   | DoNode
+  | TableMaintenanceNode
+  | FlushNode
+  | TruncateNode
+  | LockTablesNode
+  | UnlockTablesNode
+  | RenameTableNode
+  | LoadDataNode
+  | GrantNode
+  | RevokeNode
+  | CreateUserNode
+  | AlterUserNode
+  | DropUserNode
+  | CreateRoleNode
+  | RenameUserNode
+  | SetPasswordNode
+  | SetRoleNode
+  | SetDefaultRoleNode
+  | ResetNode

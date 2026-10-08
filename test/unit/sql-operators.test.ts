@@ -14,7 +14,7 @@ const env: Env = {
   params: [],
   now: new Date(0),
   session,
-  state: { userVariables: new Map(), lastInsertId: 0n, rowCount: 0n, systemVariable: () => undefined },
+  state: { userVariables: new Map(), lastInsertId: 0n, insertIdSet: false, rowCount: 0n, systemVariable: () => undefined },
 }
 const s = (v: string) => stringValue(v, 255)
 const n = (v: number) => intValue(BigInt(v))

@@ -106,6 +106,23 @@ export const tableConformanceCases: readonly TableCase[] = [
     },
   },
   {
+    name: 'duplicateOf finds the row a duplicate names, by the index and its collation (D-71)',
+    async run(make) {
+      const t = await make(people)
+      t.insert(person(1, 'Ann', 10))
+      t.insert(person(2, 'bob', 20))
+      t.insert(person(3, null, 20))
+      eq(t.duplicateOf('PRIMARY', person(2, 'zz', null)), i32(2), 'the primary key')
+      eq(t.duplicateOf('name', person(9, 'ÄNN', null)), i32(1), 'the same name under the collation')
+      eq(t.duplicateOf('name', person(1, 'nobody', null)), undefined, 'one index at a time: not the primary key')
+      eq(t.duplicateOf('name', person(9, null, null)), undefined, 'NULLs never collide')
+      eq(t.duplicateOf('age', person(9, 'x', 20)), undefined, 'a non-unique index collides with nothing')
+      t.delete(i32(2))
+      eq(t.duplicateOf('name', person(9, 'BOB', null)), undefined, 'a deleted row is gone')
+      eq(t.duplicateOf('PRIMARY', person(2, 'x', null)), undefined, 'from the primary key too')
+    },
+  },
+  {
     name: 'a refused row or update leaves nothing changed in any index',
     async run(make) {
       const t = await make(people)

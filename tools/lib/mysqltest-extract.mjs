@@ -32,6 +32,9 @@ import { decodeStatement, lex } from '@myjs/parser'
 const COMMANDS =
   /^(let|if|while|echo|connection|connect|disconnect|send|reap|source|sleep|real_sleep|inc|dec|die|exit|skip|end|eval|error|replace_result|replace_column|replace_regex|enable_\w+|disable_\w+|sync_slave_with_master|save_master_pos|start_transaction|delimiter|remove_file|write_file|append_file|copy_file|chmod|mkdir|rmdir|cat_file|diff_files|perl|output|lowercase_result|assert|character_set)\b/i
 
+/** `query_vertical` and `query`: mysqltest commands whose argument is a statement. */
+const QUERY_COMMAND = /^(?:query_vertical|query)\s+/i
+
 /**
  * Does this line leave a bracket or a backtick open?
  *
@@ -100,7 +103,7 @@ const MAX_CONTINUATION = 20
  * bare command run to its delimiter removed 456 — checked by diffing what each
  * rule changed, which is the only way a rule that removes corpus gets noticed.
  */
-const LET_OPEN = /^(?:--\s*)?let\s+\$(\w+)\s*=\s*$/i
+const LET_OPEN = /^(?:--\s*)?let\s+\$?(\w+)\s*=\s*$/i
 /**
  * A bare `let` whose value starts on its own line and runs past it:
  * `let $query = SELECT a,` with the rest of the query below. The value from
@@ -108,14 +111,21 @@ const LET_OPEN = /^(?:--\s*)?let\s+\$(\w+)\s*=\s*$/i
  * delimiter — `--let` ends with its line — and a backtick value is a query
  * mysqltest runs for its result, which `CONTINUES` already handles.
  */
-const LET_INLINE = /^let\s+\$(\w+)\s*=\s*(\S.*)$/i
+const LET_INLINE = /^let\s+\$?(\w+)\s*=\s*(\S.*)$/i
 
 /**
  * Whether a let value reads as a statement rather than as a piece of one:
  * `join.test` builds `$rest_of_query = (t1 join t3 …) on …` and splices it into
  * an `eval`. A value that is not a statement is skipped to its delimiter.
+ *
+ * A statement begins with a statement keyword (or a `(`, for a parenthesised
+ * query), not merely with a letter: `join_outer.test` builds
+ * `$rest_of_query=t6a.pk, t2.pk` — a select list — and `derived.test` puts
+ * `t1_inv_date` on the line after `let $query=`. Both reached the parser as
+ * statements and the census counted them as statements it did not implement.
  */
-const STATEMENT_START = /^[A-Za-z]/
+const STATEMENT_START =
+  /^(?:\(|(?:select|with|table|values|insert|replace|update|delete|explain|describe|desc|create|alter|drop|rename|truncate|set|show|call|do|analyze|check|optimize|repair|flush|lock|unlock|load|grant|revoke|prepare|execute|deallocate|handler|begin|start|commit|rollback|savepoint|release|use|kill|purge|reset|install|uninstall|checksum|cache|import|clone|restart|shutdown|signal|resignal|get|xa|help|binlog|change)\b)/i
 
 /** How far a skipped let value may run looking for its delimiter. */
 const MAX_LET_LINES = 40
@@ -354,7 +364,7 @@ export function extract(bytes) {
     current = freshRegion()
   }
 
-  for (const raw of lines) {
+  for (let raw of lines) {
     const line = asLatin1(raw)
     const trimmed = line.trim()
     // A directive that has not closed its brackets yet. A fresh `--` line ends
@@ -467,6 +477,18 @@ export function extract(bytes) {
       // lines later is an ordinary statement. Carrying it over made the census
       // report that we wrongly accepted a plain `DROP TABLE t1`.
       else if (!trimmed.startsWith('#')) pendingError = null
+      // A bare `eval` or `let` runs to its delimiter, as every bare command
+      // does, and what it carries is a statement with `$variables` in it or a
+      // let value — never one this census can measure. Ending the first at
+      // its line made `WHERE …` on the next line a statement of its own
+      // (`func_misc.test`), and ending the second where its brackets closed
+      // did the same to an `ORDER BY` after them (`subquery_bugs.test`).
+      // Narrow on purpose — two words, bare only — for the reason `LET_OPEN`
+      // gives.
+      if (bare && openLet === null && /^(?:eval|let)\b/i.test(trimmed) && !trimmed.endsWith(delimiter)) {
+        skippingLet = MAX_LET_LINES
+        continue
+      }
       if (CONTINUES.test(trimmed) && advance(line, open)) continuation = 1
 
       continue
@@ -474,6 +496,23 @@ export function extract(bytes) {
     if (trimmed === '{' || trimmed === '}') {
       directives++
       continue
+    }
+    // A `let $x =` whose value, on this line, is a piece of a statement rather
+    // than one: skipped to its delimiter like an inline one.
+    if (openLet !== null && !inStatement && !STATEMENT_START.test(trimmed)) {
+      openLet = null
+      pendingError = null
+      directives++
+      skippingLet = trimmed.endsWith(delimiter) ? 0 : MAX_LET_LINES
+      continue
+    }
+    // `query_vertical SELECT …` sends the statement and prints its result
+    // vertically, so what follows the word is SQL. Counting the word as the
+    // statement's keyword reported `QUERY_VERTICAL` as a statement not yet
+    // implemented.
+    if (!inStatement) {
+      const q = QUERY_COMMAND.exec(trimmed)
+      if (q !== null) raw = raw.subarray(line.indexOf(trimmed) + q[0].length)
     }
     current.errors[current.lines.length] = pendingError
     pendingError = null

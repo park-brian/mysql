@@ -7,12 +7,13 @@ file is the shorter thing you read first.
 ## What this is
 
 An isomorphic, in-process MySQL for JavaScript: no server process, no native
-addon, MySQL's wire protocol and MySQL's semantics. M0–M2 are complete (the
-protocol, charsets and collations, the type system); M3 (parse SQL) has one
-optional item left; M4 (storage) is complete — pages, B+tree, WAL, crash
-recovery, MVCC transactions, the catalog, the `native` and `memory` engines and
-the Node VFS; M5 (execute) has begun: a real executor runs single-table DDL,
-DML and transactions through unmodified `mysql2` (M5.17), and joins,
+addon, MySQL's wire protocol and MySQL's semantics. M0–M3 are complete (the
+protocol, charsets and collations, the type system, and the parser down to the
+administration statements); M4 (storage) is complete — pages, B+tree, WAL,
+crash recovery, MVCC transactions, the catalog, the `native` and `memory`
+engines and the Node VFS; M5 (execute) has begun: a real executor runs single-table DDL,
+DML and transactions through unmodified `mysql2` (M5.17), upserts, REPLACE
+and INSERT IGNORE included (M5.8), and joins,
 aggregates, the function library and the planner proper are what is left.
 
 ## Running things
