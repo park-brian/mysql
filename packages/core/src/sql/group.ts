@@ -26,7 +26,7 @@
 //   - `temp`: anything else ("Aggregate using temporary table"). The groups
 //     come out in the order their first rows arrived, and the columns go
 //     through the temporary table, which costs them their key flags as it does
-//     `SELECT DISTINCT`'s (E-17, E-18), and an expression everything but
+//     `SELECT DISTINCT`'s (E-17, E-19), and an expression everything but
 //     NOT_NULL: `COUNT(*)` is 0x81 by index and 0x01 by temporary table.
 //   - `implicit`: aggregates and no GROUP BY. One row, whatever the input.
 import { CHARSET_BINARY, FIELD_TYPE } from '@myjs/bytes'

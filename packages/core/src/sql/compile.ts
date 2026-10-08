@@ -79,7 +79,7 @@ export interface Env {
   readonly state: SessionValues
   /** The transaction a subquery reads in (M5.1). */
   readonly trx?: Trx
-  /** The rows of the enclosing queries, innermost first: what a correlated reference reads (D-73). */
+  /** The rows of the enclosing queries, innermost first: what a correlated reference reads (D-74). */
   readonly outer?: readonly Row[]
   /** One statement's memory: an uncorrelated subquery's answer, computed once. */
   readonly memo?: Map<unknown, unknown>

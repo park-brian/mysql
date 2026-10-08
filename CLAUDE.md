@@ -2,7 +2,9 @@
 
 Orientation for working in this repository. **[docs/44-roadmap.md](./docs/44-roadmap.md)
 is the living plan** — what is done, what is decided, what is still unknown. This
-file is the shorter thing you read first.
+file is the shorter thing you read first. **[ARCHITECTURE.md](./ARCHITECTURE.md)**
+is the narrative overview of the target architecture, for humans; it carries
+no status beyond one dated section, and the roadmap wins where they differ (D-72).
 
 ## What this is
 

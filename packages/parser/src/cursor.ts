@@ -116,7 +116,7 @@ export class Cursor {
   /** ER_PARSE_ERROR at the cursor, with the position M3.9 reports. */
   fail(): never {
     const t = this.peek()
-    // The rest of the statement from here, capped as the lexer's is (E-19):
+    // The rest of the statement from here, capped as the lexer's is (E-20):
     // `near 'WHERE x = 1'`, not `near 'WHERE'`. A cursor without its source
     // has only the token.
     const near = t.kind === TOKEN.EOF ? '' : this.source === '' ? t.text : this.source.slice(t.start, t.start + 80)

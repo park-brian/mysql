@@ -18,6 +18,10 @@ Reference trees are cloned into `reference/` (gitignored) — see
 
 ## How to read this
 
+**For the whole picture in one sitting, read
+[ARCHITECTURE.md](../ARCHITECTURE.md) first**: the target architecture as a
+narrative, with diagrams, linking down into the documents below.
+
 **If you want to know what we are building and why**, read in order:
 
 | # | Document | What it covers |

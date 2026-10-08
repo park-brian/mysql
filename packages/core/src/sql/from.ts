@@ -1,6 +1,6 @@
 // M5.4 — FROM: the tables a query reads, joined.
 //
-// Every table of a FROM has a place in one flat row (D-73): its columns at an
+// Every table of a FROM has a place in one flat row (D-74): its columns at an
 // offset, NULL where an outer join found no match. A join is a generator of
 // such rows, and so is a table; what sits above the FROM never knows how many
 // tables there were.

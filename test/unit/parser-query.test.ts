@@ -291,7 +291,7 @@ test('M3.3 review: forms a real 8.4 refuses, and so do we', () => {
   for (const sql of ['SELECT *, a FROM t', 'SELECT t.a, db.t.* FROM t', "SELECT @a := @b := 1, @'q' := 2"]) parseStatement(sql)
 })
 
-test('E-19: a parse error quotes the rest of the statement from the token it failed at, capped at 80 characters', () => {
+test('E-20: a parse error quotes the rest of the statement from the token it failed at, capped at 80 characters', () => {
   const message = (sql: string): string => {
     try {
       parseStatement(sql)
