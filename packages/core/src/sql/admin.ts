@@ -86,6 +86,11 @@ export class ServerState {
       ['time_zone', 'SYSTEM'],
       ['system_time_zone', 'UTC'],
       ['max_allowed_packet', 67108864],
+      // Read by Rust's mysql_async (Prisma's engines) as it connects. There is
+      // no socket in-process; this is MySQL's compiled-in default path.
+      ['socket', '/tmp/mysql.sock'],
+      ['wait_timeout', 28800],
+      ['interactive_timeout', 28800],
       ['transaction_isolation', 'REPEATABLE-READ'],
       ['lower_case_table_names', 0],
       ['license', 'MIT'],
