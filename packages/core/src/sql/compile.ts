@@ -69,6 +69,7 @@ import { castAsJson, jsonConstructor } from './json.ts'
 import { jsonPathFunction, memberOf, unquote } from './json-path.ts'
 import { matchType, regexpInstr, regexpLike, regexpReplace, regexpSubstr } from './regexp.ts'
 import { TableScope } from './scope.ts'
+import { libraryFunction } from './functions.ts'
 import { badAgainst, booleanRank, Corpus, foldFor, fulltextOf, naturalRank, noExpansion, noIndex, parseBoolean, queryText, wordsOf, type Term } from './fulltext.ts'
 
 const JSON_PATH_FUNCTIONS: ReadonlySet<string> = new Set(['JSON_EXTRACT', 'JSON_UNQUOTE', 'JSON_CONTAINS', 'JSON_CONTAINS_PATH', 'JSON_TYPE', 'JSON_LENGTH', 'JSON_DEPTH', 'JSON_KEYS', 'JSON_VALID', 'JSON_OVERLAPS'])
@@ -198,7 +199,7 @@ const lit = (value: Value, type: ResultType): Compiled => ({ eval: () => value, 
 const MAX_SIGNED = 2n ** 63n - 1n
 
 /** A string type's coercibility: a column's 2, a literal's 4. */
-const coercibilityOf = (t: ResultType): number => t.coercibility ?? COERCIBILITY.COERCIBLE
+export const coercibilityOf = (t: ResultType): number => t.coercibility ?? COERCIBILITY.COERCIBLE
 
 /** The collation a list of string-typed results aggregates to (`aggregateCollation`, pairwise). */
 export function aggregateTypes(types: readonly ResultType[], fallback: number): number {
@@ -986,7 +987,7 @@ function matchLike(s: readonly string[], p: readonly string[], escape: string, c
  * double, else a decimal wide enough for every integer and scale, else an
  * integer. NULL branches take no part.
  */
-function aggregate(types: readonly ResultType[], nullable: boolean, connectionCollation: number): ResultType {
+export function aggregate(types: readonly ResultType[], nullable: boolean, connectionCollation: number): ResultType {
   let live = types.filter((t) => t.kind !== 'null')
   if (live.length === 0) return NULL_TYPE
   // JSON with JSON is JSON; JSON with anything else is its text, in JSON's
@@ -994,8 +995,18 @@ function aggregate(types: readonly ResultType[], nullable: boolean, connectionCo
   if (live.every((t) => t.kind === 'json')) return jsonType(nullable)
   if (live.some((t) => t.kind === 'json')) live = live.map((t) => (t.kind === 'json' ? jsonAsText(t.nullable) : t))
   if (live.some((t) => t.kind === 'string' || t.kind === 'bytes')) {
-    const binary = live.some((t) => t.kind === 'bytes')
-    return stringType(Math.max(...live.map(charWidth)), binary ? CHARSET_BINARY : aggregateTypes(live, connectionCollation), nullable)
+    // A binary string decides only at the lowest coercibility: a column's text
+    // beats a hex literal (8.4.11: `LEAST(X'61', t)` is t's text). A binary
+    // result is as wide as its widest argument's bytes; a TEXT among them
+    // makes it a BLOB of its bytes.
+    const texts = live.filter((t) => t.kind === 'string' || t.kind === 'bytes')
+    const least = Math.min(...texts.map(coercibilityOf))
+    const binary = texts.some((t) => t.kind === 'bytes' && coercibilityOf(t) === least)
+    const collation = binary ? CHARSET_BINARY : aggregateTypes(live, connectionCollation)
+    const width = Math.max(...live.map((t) => (binary && t.kind === 'string' ? charWidth(t) * requireCollationInfo(t.collationId).mbmaxlen : charWidth(t))))
+    const blob = Math.max(0, ...live.map((t) => t.blobBytes ?? 0))
+    if (blob > 0 && !binary) return { ...stringType(width, collation, nullable), field: FIELD_TYPE.BLOB, blobBytes: blob * requireCollationInfo(collation).mbmaxlen }
+    return stringType(width, collation, nullable)
   }
   const first = live[0] as ResultType
   if (live.every((t) => t.kind === first.kind && t.field === first.field) && (first.kind === 'datetime' || first.kind === 'time')) {
@@ -1007,7 +1018,9 @@ function aggregate(types: readonly ResultType[], nullable: boolean, connectionCo
     const s = Math.max(...live.map(scaleOf))
     return decimalType(Math.max(...live.map(intDigits)) + s, s, nullable)
   }
-  return intType(Math.max(...live.map((t) => t.length)), nullable, live.every((t) => t.unsigned))
+  // Integers of one field type keep it (8.4.11: `GREATEST(NULL, id)` of an INT is an INT).
+  const field = live.every((t) => t.field === first.field) ? first.field : FIELD_TYPE.LONGLONG
+  return { ...intType(Math.max(...live.map((t) => t.length)), nullable, live.every((t) => t.unsigned)), field }
 }
 
 /**
@@ -1050,10 +1063,12 @@ function caseExpr(e: CaseNode, ctx: CompileContext): Compiled {
 }
 
 /** The builtins this executor knows, beyond the ones written out below — refused by name until M5.10. */
-const KNOWN_BUILTINS = new Set([
-  'SUBSTRING', 'SUBSTR', 'TRIM', 'REPLACE', 'ROUND', 'FLOOR', 'CEIL',
-  'CEILING', 'DATE_FORMAT', 'DATE_ADD', 'DATE_SUB', 'JSON_EXTRACT', 'UUID', 'RAND', 'LEFT',
-  'RIGHT', 'LPAD', 'RPAD', 'REPEAT', 'REVERSE', 'LOCATE', 'INSTR', 'POSITION', 'GREATEST', 'LEAST', 'ROW_NUMBER', 'RANK',
+const KNOWN_BUILTINS = new Set(['DATE_FORMAT', 'DATE_ADD', 'DATE_SUB', 'JSON_EXTRACT', 'UUID', 'RAND', 'ROW_NUMBER', 'RANK'])
+
+/** M5.10's string and numeric slices (`functions.ts`). */
+const LIBRARY: ReadonlySet<string> = new Set([
+  'SUBSTRING', 'SUBSTR', 'MID', 'LEFT', 'RIGHT', 'LPAD', 'RPAD', 'REPEAT', 'REVERSE', 'LOCATE', 'INSTR', 'POSITION', 'TRIM', 'LTRIM', 'RTRIM',
+  'REPLACE', 'CONCAT_WS', 'SPACE', 'ASCII', 'ROUND', 'FLOOR', 'CEIL', 'CEILING', 'TRUNCATE', 'SIGN', 'GREATEST', 'LEAST',
 ])
 
 /** Whether the columns `args` read, outside their own subqueries, are all an enclosing query's — and there is one. */
@@ -1113,6 +1128,11 @@ function call(e: CallNode, ctx: CompileContext): Compiled {
   })
   const json = name === 'JSON_ARRAY' || name === 'JSON_OBJECT' ? jsonConstructor(name, args(), e.name) : JSON_PATH_FUNCTIONS.has(name) ? jsonPathFunction(name, args(), e.name) : undefined
   if (json !== undefined) return json
+  if (LIBRARY.has(name)) {
+    // TRIM's side is a keyword argument, carried as such.
+    const xs = e.args.map((a): Compiled => (a.kind === NODE.KEYWORD ? Object.assign({ eval: () => null, type: NULL_TYPE }, { keyword: a.word }) : compile(a, ctx)))
+    return libraryFunction(name, xs, e.name, e.args.map((a) => constantNode(a)), ctx) as Compiled
+  }
   switch (name) {
     case 'STRCMP': {
       // A comparison of the two as strings, in their aggregated collation:

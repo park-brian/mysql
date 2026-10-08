@@ -1284,6 +1284,7 @@ it we capture:
 | Queries | 1,200 generated joins and set operations |
 | Execution | 400 generated scripts run through `mysql2`; every statement's rows, order, metadata, `affectedRows`, `insertId`, errno and SQLSTATE must agree |
 | Keywords | MySQL's reserved-word list |
+| Functions | 200 scripts of string and numeric function calls over every type, both protocols |
 | `INFORMATION_SCHEMA` | 120 DDL scripts, each followed by the introspection queries Prisma and Drizzle send: 2,568 statements |
 | Feature scripts | Hand-written scripts, each run on the server first with its answers kept: foreign keys, CHECK, ALTER TABLE and defaults, SHOW CREATE TABLE, JSON paths, REGEXP, temporal comparisons, BIT |
 

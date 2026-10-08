@@ -948,7 +948,18 @@ function orderAliases(q: QueryExpression, items: readonly { readonly alias?: str
 /** A result column's name: its alias, a bare column's name as written, a string literal's value, else its source text. */
 function itemName(item: SelectNode['items'][number], text: string | undefined): string {
   const e = item.expr
-  return item.alias ?? (e.kind === NODE.COLUMN ? (e.parts[e.parts.length - 1] as string) : e.kind === NODE.LITERAL && e.type === 'string' ? (e.value as string) : text === undefined ? deparseName(e) : text)
+  if (item.alias !== undefined) {
+    // A name is utf8mb3: a character past the BMP in an alias is refused (8.4.11).
+    const astral = /[\u{10000}-\u{10FFFF}]/u.exec(item.alias)
+    if (astral !== null) {
+      const bytes = Array.from(new TextEncoder().encode(astral[0]), (b) => `\\x${b.toString(16).toUpperCase()}`).join('')
+      throw sqlError('ER_CANNOT_CONVERT_STRING', `Cannot convert string '${bytes}' from utf8mb4 to utf8mb3`)
+    }
+    return item.alias
+  }
+  // A name made from the expression has such a character as '?'.
+  const made = e.kind === NODE.COLUMN ? (e.parts[e.parts.length - 1] as string) : e.kind === NODE.LITERAL && e.type === 'string' ? (e.value as string) : text === undefined ? deparseName(e) : text
+  return made.replace(/[\u{10000}-\u{10FFFF}]/gu, '?')
 }
 
 /**
