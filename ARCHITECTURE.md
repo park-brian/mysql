@@ -29,7 +29,7 @@ flowchart LR
 
 For what is done this week, the [roadmap](./docs/44-roadmap.md) is the only
 source of truth. This document says *what* and *why*. The roadmap says *how
-far along*. [§20](#20-where-we-are) has a dated snapshot.
+far along*. [§21](#21-where-we-are) has a dated snapshot.
 
 ---
 
@@ -54,8 +54,9 @@ far along*. [§20](#20-where-we-are) has a dated snapshot.
 17. [The API you hold](#17-the-api-you-hold)
 18. [How we know it works](#18-how-we-know-it-works)
 19. [What we gave up, on purpose](#19-what-we-gave-up-on-purpose)
-20. [Where we are](#20-where-we-are)
-21. [Further reading](#21-further-reading)
+20. [What we don't know yet](#20-what-we-dont-know-yet)
+21. [Where we are](#21-where-we-are)
+22. [Further reading](#22-further-reading)
 
 ---
 
@@ -501,12 +502,14 @@ back as strings. BLOB comes back as `Uint8Array`. A BIGINT comes back as a
 number when it is safe and a `BigInt` otherwise. JSON comes back parsed. Swapping a real
 connection for ours must change nothing in the application.
 
-**A statement reaches the executor as bytes, not text.** The dispatcher decodes
-it with the session's character set. An early version decoded everything as
-UTF-8, so a `latin1` client's `0x80` arrived as U+FFFD and the statement that
-ran was not the statement that was sent. Keeping the bytes also lets the lexer
-see that a `gbk` lead byte followed by `0x5C` is one character, not a
-backslash escape waiting to open an injection.
+**A statement is read in the client's character set, never assumed to be
+UTF-8.** The protocol hands the dispatcher the statement's raw bytes, and the
+dispatcher decodes them with the session's `Transcoder`. An early version
+decoded everything as UTF-8, so a `latin1` client's `0x80` arrived as U+FFFD,
+and the statement that ran was not the statement that was sent. The parser
+keeps a byte-level lexer for the same reason: it has to see that a `gbk` lead
+byte followed by `0x5C` is one character, not a backslash escape waiting to
+open an injection.
 
 ## 8. The part everyone gets wrong: types and collations
 
@@ -516,6 +519,13 @@ spaces in `'a '`. Collation is not a detail, because **collation decides index
 order, and index order decides results**. That is why `@myjs/charsets` and
 `@myjs/types` were built and checked against a real server before the
 executor existed.
+
+A small example shows the stakes. Under `utf8mb4_general_ci`, the collation
+most schemas from before MySQL 8 use, `'a' = 'a '` is **true**. Under
+`utf8mb4_0900_ai_ci`, MySQL 8's default, it is **false**. So a `UNIQUE` index
+that accepts both strings on one server refuses the second on the other. It is
+one of the most common surprises when people upgrade MySQL, and an engine that
+wants to be MySQL has to reproduce both behaviours, not pick one.
 
 ### Three shapes of a value
 
@@ -557,12 +567,15 @@ secondary entry:
  INDEX (name, age) on a table with PRIMARY KEY (id), name utf8mb4_0900_ai_ci
 
  ┌────┬──────────────────────────────┬────┬──────────────┬──────────────┐
- │ 01 │ sort key of name, 00→00 ff   │ 01 │ age: BE,     │ id: BE,      │
- │    │ … then terminator 00 00      │    │ sign flipped │ sign flipped │
+ │ 01 │ sort key of name, 00 → 00 ff │ 01 │ age: big-    │ id: big-     │
+ │    │ … then terminator 00 00      │    │ endian, sign │ endian, sign │
+ │    │                              │    │ bit flipped  │ bit flipped  │
  └────┴──────────────────────────────┴────┴──────────────┴──────────────┘
-  NULL  NO PAD text part:            NULL  fixed-width     the PK suffix:
-  flag  prefix-free, so parts        flag  integer         makes the entry
-  (00 = NULL sorts first)            concatenate unambiguously   unique, and recoverable
+   ▲     ▲                              ▲     ▲              ▲
+   │     NO PAD text: prefix-free,      │     fixed width    the PK suffix:
+   │     so the parts after it can't    │                    every entry is
+   │     be confused with it            │                    unique, and the
+   NULL flags: 00 for NULL, 01 for a value                   row can be found
 ```
 
 *Each part is either fixed-width or prefix-free. That makes the
@@ -597,9 +610,13 @@ MySQL's own definitions and checked against a real server's
 sort key is three bytes per code point, not the raw UTF-8. Every ordering
 test had passed anyway, because UTF-8 happens to preserve order.
 
-The UCA tables behind `utf8mb4_0900_ai_ci` are about 49 KB gzipped, more than
-we want in every initial bundle. They are loaded on demand. That raises a
-question: how does a lazy module survive a synchronous core? The answer is an explicit
+Collations ship in three layers, by how often they are needed. The binary
+collations and the small legacy tables (`utf8mb4_general_ci`,
+`latin1_swedish_ci`) are always in the bundle. `utf8mb4_0900_ai_ci` is the
+default, so it cannot be optional in practice. But its UCA tables are about
+49 KB gzipped, more than we want in every initial bundle, so they sit in a
+chunk that is loaded on demand. The accent-sensitive and language-specific
+variants are opt-in modules. That raises a question: how does a lazy module survive a synchronous core? The answer is an explicit
 `loadCollation()`, called on the async edge, for example when a `SET NAMES` is
 handled or a table is opened. By the time a statement runs, everything it
 needs is resident. A collation whose tables exist but have not been loaded
@@ -633,6 +650,21 @@ never walks the tree. The reason to compile at execute time and not at
 prepare time is that the parameters change the answer: `SELECT ?` reports a
 16,383-character string until it is bound and the bound value's type after,
 and a range's bounds *are* the parameters' values.
+
+### Refuse by name, never approximate
+
+Query operators follow the Volcano model. Each one is a generator over the
+rows of the one below it, so a `LIMIT 1` over a million-row scan reads one
+row, and a join or a spilling sort can slot in without the rest noticing.
+
+While the executor grows, it has one firm rule about what it can't do yet: it
+**refuses by name, never approximates**. A `GROUP BY` the executor silently
+dropped would be a wrong answer that looks like a right one. So an unbuilt
+clause is refused naming the clause, and an unwritten builtin function is
+`ER_NOT_SUPPORTED_YET` naming the function. An application meets a loud gap,
+never a quiet difference. The order in which the gaps close is set by
+measurement, not by a feature list: whatever stands between the ORM test
+suites and a pass goes first.
 
 ### Plan conservatively
 
@@ -671,21 +703,32 @@ execution), statements run in order and the first error stops the rest.
 A database is two files: a data file of 16 KiB pages and a log.
 
 ```
- data file                                         log file (a ring)
- ┌──────────┬──────────┬──────────┬─────┐          ┌─────────┬─────────┬─────────┬───
- │ page 0   │ page 1   │ page 2   │ …   │          │ block 0 │ block 1 │ block 2 │ …
- │ super-   │ super-   │ directory│     │          │  4 KiB  │  4 KiB  │  4 KiB  │
- │ block A  │ block B  │ B+tree   │     │          └─────────┴─────────┴─────────┴───
- └──────────┴──────────┴──────────┴─────┘
-   written alternately;   index id → root page;
-   open takes the newer   roots never move, so this
-   one that verifies      changes only on CREATE/DROP
+ data file                                            log file (a ring)
+ ┌──────────┬──────────┬──────────┬──────────────┐    ┌─────────┬─────────┬─────────┬───
+ │ page 0   │ page 1   │ page 2   │ page 3 …     │    │ block 0 │ block 1 │ block 2 │ …
+ │ super-   │ super-   │ alloc-   │ B+tree pages │    │  4 KiB  │  4 KiB  │  4 KiB  │
+ │ block A  │ block B  │ ation map│ in extents   │    └─────────┴─────────┴─────────┴───
+ └──────────┴──────────┴──────────┴──────────────┘
+  └─ written alternately; ─┘  one bitmap   the directory tree (index id → root
+     open takes the newer      per 64-page  page), the catalog, undo, and every
+     copy that verifies        extent       table and index
 ```
 
 That is SQLite's shape, not InnoDB's file per table. One file needs the
 fewest OPFS access handles, and a file per table is something interchange
 needs, not storage. The 16 KiB page size *is* InnoDB's, so an imported page
 maps one to one and three tree levels cover about a billion rows.
+
+The superblock names the root of a **directory tree** that maps each index id
+to its root page. A root page never moves. When it splits, its cells move down
+into two new children and the root becomes their parent, as InnoDB does. So
+the directory changes only when an index is created or dropped. Everything
+else, including the catalog, the transaction directory and the undo logs, is
+an ordinary tree or chain inside the same file. Pages are allocated in 64-page
+extents tracked by bitmaps, and each tree keeps its leaves, its internal pages
+and its overflow pages in separate segments, so a range scan stays physically
+sequential. A small table draws its first pages from shared extents, so it
+costs a few pages and not three whole megabytes.
 
 Every page is self-identifying. It carries its own number, its type, the LSN
 of its last change at *both* ends, and a CRC32C over everything after the
@@ -712,6 +755,15 @@ optimisations for spinning disks and for gap locking, and we have neither.
 Records, by contrast, keep InnoDB's framing for every column type, because
 those encodings are shared with binlog row images and `.ibd` files. One codec
 then serves the engine, the importer and the change stream.
+
+Schema changes are where we depart from InnoDB again. MySQL 8's instant
+`ALTER TABLE ADD COLUMN` puts a version byte in each *record*, which makes the
+size of every record's null bitmap depend on the dictionary. We put the schema
+version in the *page* header instead: every record on a clustered leaf is in
+the version its page names. The first write to an older page re-encodes the
+whole page through an upgrade function the layer above supplies. The `ALTER`
+stays instant, the cost is paid once per page rather than once per row, and
+any page can still be decoded with nothing but its own header.
 
 ### The log
 
@@ -781,7 +833,7 @@ background thread, which a synchronous engine does not have.
 The pages a mini-transaction changes stay pinned in the buffer pool until it
 ends, and their snapshots serve as its undo. An exception anywhere inside it
 restores every page *and* the state kept outside pages. There is one deliberate
-exception: pages that were free before the mini-transaction started may be
+carve-out: pages that were free before the mini-transaction started may be
 written out early. That is what lets a single value larger than the whole
 buffer pool be stored in one mini-transaction. Working out exactly which pages
 qualify took a design review that broke the first draft. "Allocated here" does
@@ -910,7 +962,9 @@ assumption we have not yet verified. We assume an OPFS `flush()` may *lose*
 writes but never *reorders* them across itself. If a page write could become
 durable while an earlier log write did not, the write-ahead rule would be
 void. Real-browser crash tests settle that question, and until they have,
-we say so.
+we say so. If the answer turns out to be yes, a page would need to be
+recognisable as running ahead of its log without consulting the log, and
+nothing in the format does that yet.
 
 ## 13. Engines behind one interface
 
@@ -947,7 +1001,7 @@ never learns how an engine keeps them.
 | Engine | What it is | Status |
 |---|---|---|
 | `native` | The B+tree, MVCC and WAL store described above | built |
-| `memory` | Sorted arrays, non-transactional, and says so in its flags | built |
+| `memory` | Sorted arrays in process memory. Not MySQL's MEMORY engine: it keeps BLOBs and returns rows in key order. Non-transactional, and says so in its flags | built |
 | `innodb-ro` | Query an imported `.ibd` in place, without copying it into native storage | planned |
 | `csv` | MySQL's CSV engine, for import and export | planned |
 
@@ -975,6 +1029,11 @@ The database is owned by **exactly one context** at a time. Everyone else is a
 client speaking the wire protocol over a port. That is not a limitation we
 apologise for. It is PGlite's worker model too, and it is what keeps durability
 reasoning tractable.
+
+The browser comes late in the build order on purpose. OPFS is just another
+VFS backend, and the engine has been built and crash-tested against memory and
+Node first. If the VFS interface is right, the browser is a fortnight of work.
+If it is wrong, no amount of browser work saves it.
 
 ### In the browser
 
@@ -1129,6 +1188,13 @@ already have freed. The field encoding is MySQL's text-row format, so the bytes
 are already ones a MySQL client knows how to read. A test already rebuilds a table from
 its `ROW` records alone.
 
+Emitting the stream in the *shape* of MySQL's binlog, as table-map and row
+events, means change-data-capture tools built for MySQL can follow it
+without modification. Serving that over `COM_BINLOG_DUMP` is what turns "sync
+a browser database to a server" into an extension rather than a rewrite. Going
+the other way, a standalone binlog reader (`@myjs/binlog`) lets an existing
+MySQL's changes be replayed into an embedded copy.
+
 ## 17. The API you hold
 
 The convenience API is deliberately shaped like `mysql2/promise`, because that
@@ -1173,6 +1239,12 @@ shape everywhere. Introspection (`explain()`, `stats()`, and real `SHOW` and
 `INFORMATION_SCHEMA`) reads the same numbers the engine already keeps. The
 full surface is in [doc 42](./docs/42-public-api.md).
 
+There is one place where the seam from §5 and this surface pull against each
+other. `execProtocol` returns every response byte for one command, which is
+right for nearly everything and wrong for `db.stream()`, whose whole purpose
+is never to hold a large resultset in memory. A streaming variant of the
+lowest entry point is one of the open questions in [§20](#20-what-we-dont-know-yet).
+
 ## 18. How we know it works
 
 A database is a long list of claims, and every one of them is easy to make.
@@ -1205,7 +1277,8 @@ executed and diffed, with the pass rate as a headline number.
 **Crashes on purpose.** The fault-injecting VFS from §12 kills the engine at
 10,000 points per CI run. Every recovery must reach the state after some
 whole step, verify, and lose no acknowledged commit. In the browser, real
-page kills in Chrome, Firefox and Safari do the same job.
+page kills in Chrome, Firefox and Safari will do the same job, and settle the
+one assumption the fault model cannot.
 
 **Fuzzing.** Packets, SQL text, the executor, page decoders and the log are
 all fuzz targets, and the invariant is ground rule 5: a typed error, never a
@@ -1247,7 +1320,24 @@ discovers them by surprise.
 | **The X Protocol** | `mysqlx` clients | The JavaScript ecosystem speaks the classic protocol |
 | **Being a production server** | Clusters, replication as a source or replica | This is an embedded database that happens to be MySQL-shaped |
 
-## 20. Where we are
+## 20. What we don't know yet
+
+A design document that has answered everything is either finished or not
+being honest. These are the questions this one still carries. Each is pinned
+to the milestone that has to answer it, because a question with a deadline is
+a blocker and one without is just a note.
+
+| Question | Why it matters | Settled by |
+|---|---|---|
+| **Does OPFS `flush()` ever reorder writes?** | The browser half of the durability promise depends on it ([§12](#12-durability-stated-honestly)) | Real-browser crash tests, M6 |
+| **Does `execProtocol` need a streaming variant?** | `db.stream()` exists so that a large resultset is never held in memory, and today's seam returns a command's whole response | M5 |
+| **How faithful must `INFORMATION_SCHEMA` be?** | Migration tools read it directly, and column flags alone cannot reconstruct a multi-column index | M5, against Prisma's and Drizzle's introspection |
+| **How closely can our byte traces match a real server's?** | Version string, capabilities and connection ids differ *by design*, so byte identity with a real server is not simply a question of correctness | M5's differential harness |
+| **Is whole-page compression at the VFS the answer to COMPRESSED tables?** | It is the proposed replacement, with no design yet | M6 or later |
+| **Do index pages get prefix compression?** | Could save a third or more on string keys, at the cost of a slower page format | Deliberately undecided |
+| **How are legacy temporal types told apart on import?** | Their byte lengths overlap the modern forms, so the dictionary has to decide | M7 |
+
+## 21. Where we are
 
 *A snapshot as of 2026-10-08. The [roadmap](./docs/44-roadmap.md) is the live
 version, and wins wherever it disagrees with this section.*
@@ -1280,7 +1370,7 @@ The release plan gives each stage something to ship:
 | 0.5 | `@myjs/innodb` and import/export | M7 |
 | 1.0 | Every scoreboard target met, and the API frozen | — |
 
-## 21. Further reading
+## 22. Further reading
 
 This paper is the overview. The numbered documents in [`docs/`](./docs/README.md)
 are the specifications, each written against MySQL's source rather than from
