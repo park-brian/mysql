@@ -203,6 +203,9 @@ export function withForeignKeys(catalog: Catalog, schema: string, spec: TableSpe
     for (const c of children) if (!c.nullable && (onDelete === 'SET NULL' || onUpdate === 'SET NULL')) throw sqlError('ER_FK_COLUMN_NOT_NULL', `Column '${c.name}' cannot be NOT NULL: needed in a foreign key constraint '${name}' SET NULL`)
 
     const parentSchema = clause.references.schema ?? schema
+    // A MEMORY table cannot hold a key, so nothing about its parent is checked
+    // (8.4.11 accepts one naming a parent column with no key): only its index is made.
+    const memory = spec.engine === 'memory'
     const self = parentSchema === schema && clause.references.table === spec.name
     let parent: { readonly columns: readonly ColumnDef[]; readonly indexes: readonly IndexDef[]; readonly engine?: string } | undefined
     if (self) parent = { columns: spec.columns, indexes }
@@ -214,7 +217,7 @@ export function withForeignKeys(catalog: Catalog, schema: string, spec: TableSpe
       }
     }
     let parentColumns = clause.references.columns
-    if (checks || parent !== undefined) {
+    if (!memory && (checks || parent !== undefined)) {
       if (parent === undefined || parent.engine === 'memory') throw sqlError('ER_FK_CANNOT_OPEN_PARENT', `Failed to open the referenced table '${clause.references.table}'`)
       const p = parent
       parentColumns = clause.references.columns.map((c, k) => {

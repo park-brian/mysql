@@ -58,6 +58,7 @@ import { PROGRAM_OBJECTS, ServerState, type ProgramStatement, type ServerOptions
 import { compile, EMPTY_SCOPE, type Env } from './compile.ts'
 import { alterTable } from './alter.ts'
 import { checkClauses, withChecks } from './checks.ts'
+import { showCreateTable } from './show-create.ts'
 import { DEFAULT_COLLATION, createTableSpec, deprecationWarnings, resolveCollation } from './ddl.ts'
 import { foreignKeyChecks, foreignKeyClause, referencingKeys, withForeignKeys } from './foreign-keys.ts'
 import { insert, remove, update } from './dml.ts'
@@ -725,6 +726,16 @@ export class SqlExecutor implements Executor {
       case 'DATABASES': {
         const names = ['information_schema', ...(this.catalog?.schemas().map((s) => s.name) ?? [])].sort()
         return { columns: [text('Database', 64)], rows: names.filter((n) => statement.like === undefined || likeText(n, statement.like)).map((n) => [encode(n)]) }
+      }
+      case 'CREATE TABLE': {
+        const name = statement.name as TableName
+        const schema = name.schema ?? run.env.session.database
+        if (schema === null) throw sqlError('ER_NO_DB_ERROR', messages.noDatabaseSelected())
+        const catalog = this.#catalog()
+        if (catalog.view(schema, name.name) !== undefined) throw sqlError('ER_NOT_SUPPORTED_YET', messages.notSupported('SHOW CREATE TABLE of a view'))
+        const def = catalog.definition(schema, name.name)
+        const created = showCreateTable(run, def, catalog.table(schema, name.name))
+        return { columns: [text('Table', 64), text('Create Table', 1024)], rows: [[encode(def.name), encode(created)]] }
       }
       case 'TABLES': {
         const schema = statement.database ?? run.env.session.database

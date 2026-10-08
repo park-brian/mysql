@@ -123,7 +123,7 @@ const collationName = (id: number): string => requireCollationInfo(id).name
 const charsetName = (id: number): string => requireCollationInfo(id).charset
 
 /** The table's collation: its own, as CREATE TABLE resolved it. */
-function tableCollation(def: TableDef): number {
+export function tableCollation(def: TableDef): number {
   const id = def.options['collationId']
   return typeof id === 'number' ? id : 255
 }
@@ -146,6 +146,8 @@ const BLOB_NAMES: Readonly<Record<number, [string, string, number]>> = {
   [FIELD_TYPE.LONG_BLOB]: ['longtext', 'longblob', 4294967295],
 }
 
+const ZEROFILL_WIDTH: Readonly<Record<number, number>> = { [FIELD_TYPE.TINY]: 3, [FIELD_TYPE.SHORT]: 5, [FIELD_TYPE.INT24]: 8, [FIELD_TYPE.LONG]: 10, [FIELD_TYPE.LONGLONG]: 20 }
+
 interface ColumnFacts {
   readonly dataType: string
   readonly columnType: string
@@ -158,12 +160,13 @@ interface ColumnFacts {
 }
 
 /** What COLUMNS says of a column's type, as 8.4.11 says it. */
-function typeFacts(column: ColumnDef): ColumnFacts {
+export function typeFacts(column: ColumnDef): ColumnFacts {
   const t = column.type
   const none = { charMax: null, octets: null, precision: null, scale: null, datetimePrecision: null, collationId: null }
   const unsigned = t.unsigned === true ? ' unsigned' : ''
   const zerofill = column.attributes?.['zerofill'] === true
-  const width = column.attributes?.['width']
+  // ZEROFILL with no width written has the type's own: its unsigned digits (8.4.11: `bigint(20) unsigned zerofill`).
+  const width = column.attributes?.['width'] ?? (zerofill ? ZEROFILL_WIDTH[t.type] : undefined)
   const integer = INTEGER_NAMES[t.type]
   if (integer !== undefined) {
     // Only ZEROFILL and the boolean TINYINT(1) keep their width in COLUMN_TYPE.
@@ -222,14 +225,14 @@ function typeFacts(column: ColumnDef): ColumnFacts {
 }
 
 /** A function default: CURRENT_TIMESTAMP and its synonyms, with the precision it was given. */
-function generatedDefault(text: string): string | undefined {
+export function generatedDefault(text: string): string | undefined {
   const m = /^\s*(CURRENT_TIMESTAMP|NOW|LOCALTIME|LOCALTIMESTAMP)\s*(?:\(\s*(\d*)\s*\))?\s*$/i.exec(text)
   if (m === null) return undefined
   return m[2] === undefined || m[2] === '' ? 'CURRENT_TIMESTAMP' : `CURRENT_TIMESTAMP(${m[2]})`
 }
 
 /** COLUMN_DEFAULT: a literal as the column stores it, a function as MySQL names it, else NULL. */
-function columnDefault(run: Run, column: ColumnDef): string | null {
+export function columnDefault(run: Run, column: ColumnDef): string | null {
   const text = column.attributes?.['default']
   if (typeof text !== 'string') return null
   const generated = generatedDefault(text)
