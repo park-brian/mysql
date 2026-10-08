@@ -191,6 +191,14 @@ test('M3.5: keys, constraints and references', () => {
   assert.equal(t.checks[0]!.name, 'ck')
   assert.equal(t.checks[0]!.enforced, false)
 
+  // A column's own CHECK takes a name and NOT ENFORCED as a table's does
+  // (8.4.11 accepts `d INT CONSTRAINT dd CHECK (d > 1) NOT ENFORCED`).
+  const inline = create('CREATE TABLE t (d INT CONSTRAINT dd CHECK (d > 1) NOT ENFORCED, e INT CHECK (e < 2), f INT CONSTRAINT CHECK (f <> 0) ENFORCED)')
+  assert.deepEqual(
+    inline.columns.map((c) => (c.check === undefined ? undefined : { name: c.check.name, enforced: c.check.enforced })),
+    [{ name: 'dd', enforced: false }, { name: undefined, enforced: true }, { name: undefined, enforced: true }],
+  )
+
   // A prefix length is how a TEXT column is indexed at all.
   assert.equal(create('CREATE TABLE t (a TEXT, KEY (a(15)))').keys[0]!.columns[0]!.length, 15)
   // A functional index, whose inner parentheses are required.

@@ -17,12 +17,9 @@
 // view's own text instead, a named divergence rather than a guess.
 import type { TableDef } from '@myjs/engine'
 import { NODE, QUERY, REF, type Expression, type QueryExpression, type TableReference } from '@myjs/parser'
+import { Unprintable, escapeString, printExpression } from './print.ts'
 
 const q = (name: string): string => `\`${name.replace(/`/g, '``')}\``
-
-const OPERATORS: Readonly<Record<string, string>> = { AND: 'and', '&&': 'and', OR: 'or', '||': 'or', XOR: 'xor', LIKE: 'like', 'NOT LIKE': 'not like', REGEXP: 'regexp', DIV: 'DIV', MOD: '%', IS: 'is', 'IS NOT': 'is not' }
-
-class Unprintable extends Error {}
 
 interface Source {
   readonly qualifier: string
@@ -31,7 +28,7 @@ interface Source {
 }
 
 /** VIEW_DEFINITION for `query`, resolved in `schema` against `tables`; `undefined` past the subset. */
-export function viewDefinition(query: QueryExpression, names: readonly string[], schema: string, tables: (schema: string, name: string) => TableDef | undefined): string | undefined {
+export function viewDefinition(query: QueryExpression, names: readonly string[], schema: string, tables: (schema: string, name: string) => TableDef | undefined, source?: string): string | undefined {
   try {
     if (query.with !== undefined || query.locking !== undefined) return undefined
     const body = query.body
@@ -68,41 +65,7 @@ export function viewDefinition(query: QueryExpression, names: readonly string[],
       if (owner === undefined) throw new Unprintable()
       return `${owner.qualifier}.${q(name)}`
     }
-    function expr(e: Expression): string {
-      switch (e.kind) {
-        case NODE.COLUMN:
-          return column(e.parts)
-        case NODE.LITERAL:
-          if (e.type === 'null') return 'NULL'
-          if (e.type === 'bool') return e.value === true ? 'true' : 'false'
-          if (e.type === 'string') return `'${String(e.value).replace(/\\/g, '\\\\').replace(/'/g, "\\'")}'`
-          if (e.type === 'int' || e.type === 'decimal') return String(e.value)
-          throw new Unprintable()
-        case NODE.UNARY:
-          if (e.op === '-') return `-(${expr(e.operand)})`
-          // The optimizer's rewrite is what is stored: NOT c is (0 = c).
-          if (e.op === 'NOT' || e.op === '!') return e.operand.kind === NODE.COLUMN ? `(0 = ${expr(e.operand)})` : `(not(${expr(e.operand)}))`
-          if (e.op === 'IS NULL' || e.op === 'IS NOT NULL') return `(${expr(e.operand)} ${e.op.toLowerCase()})`
-          throw new Unprintable()
-        case NODE.BINARY: {
-          if (e.op === 'IN' || e.op === 'NOT IN') {
-            if (e.right.kind !== NODE.ROW) throw new Unprintable()
-            return `(${expr(e.left)} ${e.op.toLowerCase()} (${e.right.items.map(expr).join(',')}))`
-          }
-          if (e.op === 'BETWEEN' || e.op === 'NOT BETWEEN') return `(${expr(e.left)} ${e.op.toLowerCase()} ${expr(e.right)} and ${expr(e.extra as Expression)})`
-          return `(${expr(e.left)} ${OPERATORS[e.op] ?? e.op} ${expr(e.right)})`
-        }
-        case NODE.CALL: {
-          if (e.over !== undefined || e.distinct === true || e.orderBy !== undefined) throw new Unprintable()
-          const star = e.args.length === 1 && e.args[0]?.kind === NODE.COLUMN && e.args[0].parts.at(-1) === '*'
-          return `${e.name.toLowerCase()}(${star ? '0' : e.args.map(expr).join(',')})`
-        }
-        case NODE.CASE:
-          return `(case ${e.operand === undefined ? '' : `${expr(e.operand)} `}${e.whens.map((w) => `when ${expr(w.when)} then ${expr(w.then)}`).join(' ')}${e.else === undefined ? '' : ` else ${expr(e.else)}`} end)`
-        default:
-          throw new Unprintable()
-      }
-    }
+    const expr = (e: Expression): string => printExpression(e, { column, string: (v) => `'${escapeString(v)}'`, ...(source === undefined ? {} : { source }) })
     // `*` expands to the tables' columns, in order.
     const items: string[] = []
     for (const item of body.items) {

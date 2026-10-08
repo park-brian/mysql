@@ -1102,7 +1102,7 @@ class Deparser {
     if (c.invisible === true) out.push('INVISIBLE')
     if (c.invisible === false) out.push('VISIBLE')
     if (c.srid !== undefined) out.push(`SRID ${c.srid}`)
-    if (c.check !== undefined) out.push(`CHECK (${this.expr(c.check)})`)
+    if (c.check !== undefined) out.push(`${c.check.name === undefined ? '' : `CONSTRAINT ${quoteName(c.check.name)} `}CHECK (${this.expr(c.check.expr)})${c.check.enforced ? '' : ' NOT ENFORCED'}`)
     return out.join(' ')
   }
 

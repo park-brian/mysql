@@ -57,6 +57,7 @@ import { charsetChange, ensureCollationResident } from '../transcoder.ts'
 import { PROGRAM_OBJECTS, ServerState, type ProgramStatement, type ServerOptions } from './admin.ts'
 import { compile, EMPTY_SCOPE, type Env } from './compile.ts'
 import { alterTable } from './alter.ts'
+import { checkClauses, withChecks } from './checks.ts'
 import { DEFAULT_COLLATION, createTableSpec, deprecationWarnings, resolveCollation } from './ddl.ts'
 import { foreignKeyChecks, foreignKeyClause, referencingKeys, withForeignKeys } from './foreign-keys.ts'
 import { insert, remove, update } from './dml.ts'
@@ -439,6 +440,8 @@ export class SqlExecutor implements Executor {
         if (schema === null) throw sqlError('ER_NO_DB_ERROR', messages.noDatabaseSelected())
         state.commit()
         let spec = createTableSpec(statement, catalog.schema(schema).collationId ?? DEFAULT_COLLATION)
+        // CHECK constraints are resolved first, IF NOT EXISTS or not (8.4.11: 3820 over a table that exists).
+        spec = withChecks(catalog, schema, spec, run.sql, checkClauses(statement), session.characterSet)
         // A table that exists is 1050, or IF NOT EXISTS's note, whatever its keys would say.
         if (!catalog.tables(schema).some((t) => t.name === spec.name)) {
           spec = withForeignKeys(catalog, schema, spec, statement.keys.filter((k) => k.type === KEY.FOREIGN).map(foreignKeyClause), foreignKeyChecks(run))

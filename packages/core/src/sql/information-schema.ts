@@ -29,6 +29,7 @@ import { messages, sqlError } from '@myjs/protocol'
 import { COERCIBILITY, decodeField, encodeField, intValue, stringValue, toText, type Value } from '@myjs/types'
 import { compile, EMPTY_SCOPE } from './compile.ts'
 import type { DerivedSource } from './from.ts'
+import { checkClause, checksOf } from './checks.ts'
 import { foreignKeysOf } from './foreign-keys.ts'
 import { INFORMATION_SCHEMA, type InformationSchemaColumn } from './information-schema-defs.ts'
 import { datetimeType, intType, keyFlags, NULL_TYPE, stringType, type ResultType } from './meta.ts'
@@ -339,26 +340,38 @@ const ROWS: Readonly<Record<string, (run: Run) => Iterable<readonly Value[]>>> =
   },
 
   *COLUMNS(run) {
-    for (const { schema, def } of everyTable(run)) yield* columnRows(run, schema, def.name, def.columns.map((c) => ({ column: c, key: columnKey(def, c), extra: extraOf(c), def: columnDefault(run, c) })))
-    // A view's columns follow its tables', with no key, no auto_increment, and
-    // a NOT NULL column's default its type's zero (8.4.11).
+    // Tables and views in one order, by name as bytes (8.4.11: `User`,
+    // `User_v`, `checked28`). A view's columns have no key and no auto_increment.
     for (const schema of schemaNames(run)) {
+      const objects: { name: string; rows: () => Iterable<readonly Value[]> }[] = []
+      for (const def of tablesOf(run, schema)) objects.push({ name: def.name, rows: () => columnRows(run, schema, def.name, def.columns.map((c) => ({ column: c, key: columnKey(def, c), extra: extraOf(c), def: columnDefault(run, c) }))) })
       for (const v of viewsOf(run, schema)) {
-        let planned
-        try {
-          planned = planViewQuery(run, v).plan
-        } catch {
-          continue
-        }
-        const rows = planned.columns.map((c, i) => {
-          const base = baseColumn(run, c.type)
-          const column: ColumnDef = { ...(base ?? synthesized(c.type)), name: v.columns?.[i] ?? c.name, nullable: c.type.nullable }
-          const extra = base === undefined ? '' : extraOf({ ...base, autoIncrement: false })
-          const d = base === undefined ? null : columnDefault(run, base)
-          return { column, key: '', extra, def: d ?? (column.nullable ? null : zeroOf(run, column)) }
+        objects.push({
+          name: v.name,
+          rows: function* () {
+            let planned
+            try {
+              planned = planViewQuery(run, v).plan
+            } catch {
+              return
+            }
+            const rows = planned.columns.map((c, i) => {
+              const base = baseColumn(run, c.type)
+              const column: ColumnDef = { ...(base ?? synthesized(c.type)), name: v.columns?.[i] ?? c.name, nullable: c.type.nullable }
+              const extra = base === undefined ? '' : extraOf({ ...base, autoIncrement: false })
+              const d = base === undefined ? null : columnDefault(run, base)
+              // A NOT NULL column with no default reports its type's zero when
+              // it is computed or AUTO_INCREMENT, and NULL when it is a plain
+              // column of the table (8.4.11).
+              const zero = column.nullable || (base !== undefined && base.autoIncrement !== true) ? null : zeroOf(run, column)
+              return { column, key: '', extra, def: d ?? zero }
+            })
+            yield* columnRows(run, schema, v.name, rows)
+          },
         })
-        yield* columnRows(run, schema, v.name, rows)
       }
+      objects.sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0))
+      for (const o of objects) yield* o.rows()
     }
   },
 
@@ -403,10 +416,13 @@ const ROWS: Readonly<Record<string, (run: Run) => Iterable<readonly Value[]>>> =
         yield [s('def'), s(schema), s(index.name), s(schema), s(def.name), s(index.kind === 'primary' ? 'PRIMARY KEY' : 'UNIQUE'), s('YES')]
       }
       for (const fk of foreignKeysOf(def)) yield [s('def'), s(schema), s(fk.name), s(schema), s(def.name), s('FOREIGN KEY'), s('YES')]
+      for (const c of checksOf(def)) yield [s('def'), s(schema), s(c.name), s(schema), s(def.name), s('CHECK'), s(c.enforced ? 'YES' : 'NO')]
     }
   },
 
-  *CHECK_CONSTRAINTS() {},
+  *CHECK_CONSTRAINTS(run) {
+    for (const { schema, def } of everyTable(run)) for (const c of checksOf(def)) yield [s('def'), s(schema), s(c.name), s(checkClause(c))]
+  },
 
   *VIEWS(run) {
     for (const schema of schemaNames(run)) {
@@ -415,7 +431,7 @@ const ROWS: Readonly<Record<string, (run: Run) => Iterable<readonly Value[]>>> =
         let updatable = false
         try {
           const { query, plan } = planViewQuery(run, v)
-          text = viewDefinition(query, v.columns ?? plan.columns.map((c) => c.name), v.database ?? v.schema, (db, name) => tablesOf(run, db).find((t) => t.name === name))
+          text = viewDefinition(query, v.columns ?? plan.columns.map((c) => c.name), v.database ?? v.schema, (db, name) => tablesOf(run, db).find((t) => t.name === name), v.query)
           updatable = viewUpdatable(query)
         } catch {}
         const collation = v.collationConnection ?? 255

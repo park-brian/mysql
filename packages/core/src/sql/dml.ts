@@ -23,6 +23,7 @@ import { EngineError } from '@myjs/engine'
 import { NODE, QUERY, REF, parseExpression, type Assignment, type ColumnNode, type DeleteNode, type Expression, type InsertNode, type TableName, type UpdateNode } from '@myjs/parser'
 import { decodeField, encodeField, integerRange, intValue, toInteger, toText, type StoreContext, type Value } from '@myjs/types'
 import { compile, EMPTY_SCOPE, type Compiled, type Row, type Scope } from './compile.ts'
+import { checker, checkViolated } from './checks.ts'
 import { guarded, isReferenced } from './foreign-keys.ts'
 import { containsAggregate } from './group.ts'
 import { filter, limit, sort, type ScannedRow } from './operators.ts'
@@ -355,6 +356,7 @@ export function insert(run: Run, node: InsertNode, trx: Trx): OkResult {
   // Every write keeps the foreign keys on both sides of the table (M5.25).
   const table = guarded(run, opened.table, trx)
   const referenced = node.replace === true && isReferenced(run, def)
+  const check = checker(run, def)
   // A VALUES or SET subquery reading the table being written is 1093, as an
   // UPDATE's is; INSERT … SELECT from it is legal, read in full first (8.4.11).
   if (node.query === undefined) checkTargetNotRead({ schema: def.schema, name: def.name }, [...(node.values ?? []).flat(), ...(node.set ?? []).map((a) => a.value), ...(node.onDuplicate ?? []).map((a) => a.value)], run.env.session.database)
@@ -485,6 +487,16 @@ export function insert(run: Run, node: InsertNode, trx: Trx): OkResult {
         throw e
       }
     })
+    // CHECK constraints, before the row is written: a violation is not a
+    // duplicate first and costs no AUTO_INCREMENT value. IGNORE skips the
+    // row, and it is not one of the "Records" (8.4.11).
+    const violated = check?.(fields)
+    if (violated !== undefined) {
+      if (!ignore) throw checkViolated(violated)
+      store.warnings++
+      stats.records--
+      return
+    }
     // `prev_insert_id`: where the handler stood before this row.
     const prev = auto.next
     let generated = 0n
@@ -581,6 +593,12 @@ export function insert(run: Run, node: InsertNode, trx: Trx): OkResult {
     stats.touched++
     if (autoAt >= 0) lastAuto = autoOf(def, autoAt, result.after)
     if (!result.changed) return
+    const violated = check?.(result.after)
+    if (violated !== undefined) {
+      if (!ignore) throw checkViolated(violated)
+      store.warnings++
+      return
+    }
     try {
       table.update(id, result.after, trx)
     } catch (e) {
@@ -772,6 +790,7 @@ export function update(run: Run, node: UpdateNode, trx: Trx): OkResult {
   })
   const onUpdate = onUpdateOf(run, def)
   const defaults = def.columns.map((c) => defaultOf(run, c))
+  const check = checker(run, def)
   const store: StoreContext = { strict: isStrict(run.env.session.sqlMode), row: 1, warnings: 0, table: def.name }
   const keys = uniqueKeys(def)
   run.state.insertIdSet = false
@@ -784,6 +803,8 @@ export function update(run: Run, node: UpdateNode, trx: Trx): OkResult {
     // A NULL into a NOT NULL column is the type's zero and a warning outside a strict mode (8.4.11).
     const result = assignAll(run, def, before, row, [], assignments, onUpdate, defaults, store, store.strict ? 'error' : 'warn')
     if (!result.changed) return
+    const violated = check?.(result.after)
+    if (violated !== undefined) throw checkViolated(violated)
     try {
       table.update(id, result.after, trx)
     } catch (e) {

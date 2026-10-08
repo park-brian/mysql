@@ -463,7 +463,7 @@ function columnDefinition(c: Cursor, options: DdlOptions, at: number): ColumnDef
   let generated: { expr: Expression; stored: boolean } | undefined
   let invisible: boolean | undefined
   let srid: number | undefined
-  let check: Expression | undefined
+  let check: CheckConstraint | undefined
 
   // Column attributes are an unordered bag, and MySQL accepts them in any
   // order. Anything not matched here ends the column — and if it is not a
@@ -529,11 +529,12 @@ function columnDefinition(c: Cursor, options: DdlOptions, at: number): ColumnDef
       srid = Number(t.text)
       continue
     }
-    if (c.takeWord('CHECK')) {
-      c.expectOp('(')
-      check = parseExpressionFrom(c, options.sqlMode)
-      c.expectOp(')')
-      c.takeWords('NOT', 'ENFORCED') || c.takeWord('ENFORCED')
+    // `[CONSTRAINT [symbol]] CHECK (…) [[NOT] ENFORCED]`, as a table's.
+    if (c.atWord('CHECK') || (c.atWord('CONSTRAINT') && (c.atWord('CHECK', 1) || c.atWord('CHECK', 2)))) {
+      const checkAt = c.peek().start
+      let symbol: string | undefined
+      if (c.takeWord('CONSTRAINT') && !c.atWord('CHECK')) symbol = c.expectIdentifier()
+      check = checkConstraint(c, options, checkAt, symbol)
       continue
     }
     // A generated column, in both its spellings. `STORED` and `VIRTUAL` are

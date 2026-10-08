@@ -108,8 +108,8 @@ export interface ColumnDefinition {
   readonly invisible?: boolean
   /** `SRID n` on a spatial column. */
   readonly srid?: number
-  /** An inline `CHECK (…)`, which MySQL treats as a table constraint anyway. */
-  readonly check?: Expression
+  /** An inline `[CONSTRAINT [symbol]] CHECK (…) [[NOT] ENFORCED]`, which MySQL treats as a table constraint anyway. */
+  readonly check?: CheckConstraint
   readonly at: number
 }
 

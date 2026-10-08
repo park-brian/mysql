@@ -257,10 +257,6 @@ export function createTableSpec(node: CreateTableNode, schemaCollation: number):
   if (node.like !== undefined) throw sqlError('ER_NOT_SUPPORTED_YET', messages.notSupported('CREATE TABLE … LIKE'))
   if (node.query !== undefined) throw sqlError('ER_NOT_SUPPORTED_YET', messages.notSupported('CREATE TABLE … SELECT'))
   if (node.partition !== undefined) throw sqlError('ER_NOT_SUPPORTED_YET', messages.notSupported('Partitioning'))
-  if (node.checks.length > 0 || node.columns.some((c) => c.check !== undefined)) {
-    // Accepting a CHECK we do not enforce would accept rows MySQL refuses.
-    throw sqlError('ER_NOT_SUPPORTED_YET', messages.notSupported('CHECK constraints'))
-  }
 
   const tableCollation = resolveCollation(option(node.options, 'CHARACTER SET', 'CHARSET'), option(node.options, 'COLLATE'), schemaCollation)
   const engine = engineFor(option(node.options, 'ENGINE'))
