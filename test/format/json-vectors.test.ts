@@ -17,7 +17,7 @@ import { replay, type Fixture } from './relational-vectors.test.ts'
 const FIXTURE = new URL('./fixtures/json.json', import.meta.url).pathname
 
 /** The most statements the executor may still refuse. Lowered by M5.21's stages, never raised. */
-const REFUSED_AT_MOST = 4617
+const REFUSED_AT_MOST = 0
 
 test('M5.21: every JSON statement the executor runs returns what the server returned', async () => {
   if (!existsSync(FIXTURE)) return

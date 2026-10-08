@@ -19,6 +19,7 @@
 //   6. Anything else — a number against a string, or a double anywhere — as
 //      doubles.
 import { collation, encodeCollation, memcmp, requireCollationInfo } from '@myjs/charsets'
+import { compareJson, orderJson, toJsonDoc } from './json-doc.ts'
 import {
   rescale,
   temporalOrdinal,
@@ -78,6 +79,8 @@ export function compareDecimals(a: DecimalValue, b: DecimalValue): number {
 /** MySQL's three-way comparison: negative, zero or positive, or `null` when either side is NULL. */
 export function compareValues(a: Value, b: Value): number | null {
   if (a === null || b === null) return null
+  // JSON on either side: the other is brought to JSON and the two compare as JSON do (M5.21).
+  if (a.kind === 'json' || b.kind === 'json') return sign(compareJson(toJsonDoc(a), toJsonDoc(b)))
   const textual = (v: Exclude<Value, null>): boolean => v.kind === 'string' || v.kind === 'bytes'
 
   if (textual(a) && textual(b)) return compareText(a, b)
@@ -119,5 +122,6 @@ export function nullSafeEqual(a: Value, b: Value): boolean {
  */
 export function orderValues(a: Value, b: Value): number {
   if (a === null || b === null) return a === null ? (b === null ? 0 : -1) : 1
+  if (a.kind === 'json' || b.kind === 'json') return sign(orderJson(toJsonDoc(a), toJsonDoc(b)))
   return compareValues(a, b) ?? 0
 }

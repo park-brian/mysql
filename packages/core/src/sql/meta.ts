@@ -24,12 +24,14 @@ import type { ColumnDefinition } from '@myjs/protocol'
 export const PART_KEY_FLAG = 0x4000
 
 /** What an expression yields, before a result charset turns it into metadata. */
-export type ResultKind = 'int' | 'decimal' | 'double' | 'string' | 'bytes' | 'datetime' | 'time' | 'null'
+export type ResultKind = 'int' | 'decimal' | 'double' | 'string' | 'bytes' | 'datetime' | 'time' | 'json' | 'null'
 
 export interface ResultType {
   readonly kind: ResultKind
   /** The wire field type. */
   readonly field: number
+  /** A boolean's result — a comparison, `TRUE`, `NOT`: JSON takes it as `true` or `false`. */
+  readonly boolean?: boolean
   readonly nullable: boolean
   readonly unsigned: boolean
   /**
@@ -151,7 +153,25 @@ export const intType = (width: number, nullable: boolean, unsigned = false): Res
 })
 
 /** A boolean: `a = b`, `a IS NULL`, `NOT a`. */
-export const boolType = (nullable: boolean): ResultType => intType(1, nullable)
+/** A boolean result: an INT(1), and `true` or `false` when it meets JSON (8.4.11: `JSON_ARRAY(1 = 1)` is `[true]`). */
+export const boolType = (nullable: boolean): ResultType => ({ ...intType(1, nullable), boolean: true })
+
+/** The longest a JSON value may be: `max_length` of a JSON field, 2³² − 1. */
+const JSON_MAX = 4294967295
+
+/**
+ * A JSON result (M5.21). As an expression it is reported in the results
+ * charset, 4,294,967,292 long — the most whole utf8mb4 characters in 2³² − 1
+ * bytes — with 31 decimals and BINARY; as a column, or a temporary table's
+ * field, it is charset 63, 2³² − 1 long, BLOB and BINARY (8.4.11).
+ */
+/** JSON where it meets a string: a LONGTEXT in utf8mb4_bin, the collation a JSON value's text has (8.4.11: `s UNION ALL doc` is 252, BLOB and BINARY). */
+export const jsonAsText = (nullable: boolean): ResultType => ({ ...stringType(JSON_MAX / 4, CHARSET_UTF8MB4_BIN, nullable), field: FIELD_TYPE.BLOB, blobBytes: JSON_MAX / 4, coercibility: 2 })
+
+/** utf8mb4_bin, from `share/charsets`'s compiled collations. */
+const CHARSET_UTF8MB4_BIN = 46
+
+export const jsonType = (nullable: boolean): ResultType => ({ kind: 'json', field: FIELD_TYPE.JSON, nullable, unsigned: false, length: JSON_MAX, scale: 0, collationId: CHARSET_BINARY })
 
 export const decimalType = (precision: number, scale: number, nullable: boolean, unsigned = false): ResultType => ({
   kind: 'decimal',
@@ -241,6 +261,8 @@ export function columnResultType(def: TableDef, column: ColumnDef, tableAlias: s
     case FIELD_TYPE.TIME:
     case FIELD_TYPE.TIME2:
       return { ...datetimeType(FIELD_TYPE.TIME, t.decimals ?? 0, nullable), ...base }
+    case FIELD_TYPE.JSON:
+      return { ...jsonType(nullable), ...base, column: { ...source, flags: flags | COLUMN_FLAG.BLOB } }
     case FIELD_TYPE.ENUM:
     case FIELD_TYPE.SET: {
       const longest = Math.max(0, ...(t.members ?? []).map((m) => [...m].length))
@@ -351,6 +373,18 @@ export function columnDefinition(name: string, t: ResultType, resultsCollation: 
       decimals = t.column !== undefined || materialized ? 0 : 31
       break
     }
+    case 'json': {
+      if (t.column !== undefined || materialized) {
+        length = JSON_MAX
+        decimals = 0
+        flags |= COLUMN_FLAG.BLOB | COLUMN_FLAG.BINARY
+      } else {
+        const mb = requireCollationInfo(resultsCollation).mbmaxlen
+        length = Math.floor(JSON_MAX / mb) * mb
+        decimals = 31
+      }
+      break
+    }
   }
   let field = t.field
   // An integer expression's temporary field is an INT below ten characters
@@ -373,7 +407,7 @@ export function columnDefinition(name: string, t: ResultType, resultsCollation: 
   return {
     ...(t.column === undefined ? { schema: '', table: '', orgTable: '', orgName: '' } : { schema: t.column.schema, table: t.column.table, orgTable: t.column.orgTable, orgName: t.column.orgName }),
     name,
-    characterSet: isText ? resultsCollation : CHARSET_BINARY,
+    characterSet: isText || (t.kind === 'json' && t.column === undefined && !materialized) ? resultsCollation : CHARSET_BINARY,
     columnLength: length,
     type: field,
     flags,

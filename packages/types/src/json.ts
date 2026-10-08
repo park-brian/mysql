@@ -91,7 +91,7 @@ function u32(bytes: Uint8Array, at: number): number {
  * little-endian — the same scheme as Protocol Buffers, and nothing like the
  * length-encoded integers the wire protocol uses.
  */
-function varint(bytes: Uint8Array, at: number): { value: number; size: number } {
+export function varint(bytes: Uint8Array, at: number): { value: number; size: number } {
   let value = 0
   let shift = 0
   let n = 0
@@ -122,7 +122,7 @@ function isLarge(type: number): boolean {
  * an `int32` is inline in a large container and out-of-line in a small one,
  * because the entry's value field is 4 bytes there and 2 bytes here.
  */
-function isInlined(type: number, large: boolean): boolean {
+export function isInlined(type: number, large: boolean): boolean {
   switch (type) {
     case JSON_TYPE.LITERAL:
     case JSON_TYPE.INT16:
@@ -379,7 +379,7 @@ function int32Body(value: number): Uint8Array {
   return body
 }
 
-function writeVarint(n: number): Uint8Array {
+export function writeVarint(n: number): Uint8Array {
   const out: number[] = []
   let v = n
   do {

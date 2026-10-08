@@ -30,6 +30,21 @@ export function invalidJson(why: string): TypeError_ {
   return new TypeError_('ER_INVALID_JSON_BINARY_DATA', `invalid binary JSON: ${why}`, { errno: 3142 })
 }
 
+/** ER_INVALID_JSON_TEXT, 3140 / 22032: a string into a JSON column that is not JSON, naming the column as `table.column`. */
+export function invalidJsonText(why: string, position: number, column: string): TypeError_ {
+  return new TypeError_('ER_INVALID_JSON_TEXT', `Invalid JSON text: "${why}" at position ${position} in value for column '${column}'.`, { errno: 3140, sqlState: '22032' })
+}
+
+/** ER_INVALID_JSON_TEXT_IN_PARAM, 3141 / 22032: a function's argument that is not JSON. */
+export function invalidJsonArgument(why: string, position: number, arg: number, fn: string): TypeError_ {
+  return new TypeError_('ER_INVALID_JSON_TEXT_IN_PARAM', `Invalid JSON text in argument ${arg} to function ${fn}: "${why}" at position ${position}.`, { errno: 3141, sqlState: '22032' })
+}
+
+/** ER_INVALID_JSON_CHARSET, 3144 / 22032: a binary string where a JSON text is wanted. */
+export function invalidJsonCharset(fn: string): TypeError_ {
+  return new TypeError_('ER_INVALID_JSON_CHARSET', `Cannot create a JSON value from a string with CHARACTER SET 'binary'.`, { errno: 3144, sqlState: '22032' })
+}
+
 /** ER_DATA_OUT_OF_RANGE, 1690 / 22003, as an expression raises it: "BIGINT value is out of range in '(a + b)'". */
 export function valueOutOfRange(type: string, expr: string): TypeError_ {
   return new TypeError_('ER_DATA_OUT_OF_RANGE', `${type} value is out of range in '${expr}'`, { errno: 1690, sqlState: '22003' })

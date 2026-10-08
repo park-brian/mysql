@@ -41,6 +41,8 @@ import {
   bytesValue,
   extremeAccumulator,
   intValue,
+  jsonObject,
+  jsonValue,
   orderValues,
   stringValue,
   sumAccumulator,
@@ -49,11 +51,13 @@ import {
   toText,
   varianceAccumulator,
   type Accumulator,
+  type JsonDoc,
   type Value,
 } from '@myjs/types'
 import { AGGREGATE_NAMES, compile, type CompileContext, type Compiled, type Env, type Row } from './compile.ts'
 import { rowKey, valueKey } from './keys.ts'
-import { decimalType, doubleType, intType, stringType, type ResultType } from './meta.ts'
+import { asJson } from './json.ts'
+import { decimalType, doubleType, intType, jsonType, stringType, type ResultType } from './meta.ts'
 import type { SortKey } from './operators.ts'
 
 export const isAggregate = (e: Expression): boolean => e.kind === NODE.CALL && e.over === undefined && AGGREGATE_NAMES.has(e.name.toUpperCase())
@@ -132,6 +136,9 @@ export function aggregateType(name: string, args: readonly Compiled[], ctx: Comp
     case 'BIT_OR':
     case 'BIT_XOR':
       return { ...intType(21, false, true), ownInTemporary: true }
+    case 'JSON_ARRAYAGG':
+    case 'JSON_OBJECTAGG':
+      return jsonType(true)
     case 'GROUP_CONCAT': {
       const max = Number(maxLength(ctx))
       const binary = args.some((a) => a.type.kind === 'bytes')
@@ -216,7 +223,7 @@ export class AggregateSink {
     const star = e.args.length === 1 && e.args[0]?.kind === NODE.COLUMN && e.args[0].parts.length === 1 && e.args[0].parts[0] === '*'
     if (star && name !== 'COUNT') throw sqlError('ER_PARSE_ERROR', messages.parseError('*', 1))
     const args = star ? [] : e.args.map((a) => compile(a, ctx))
-    const arity = name === 'COUNT' || name === 'GROUP_CONCAT' ? args.length >= 1 || star : args.length === 1
+    const arity = name === 'COUNT' || name === 'GROUP_CONCAT' ? args.length >= 1 || star : name === 'JSON_OBJECTAGG' ? args.length === 2 : args.length === 1
     if (!arity) throw sqlError('ER_WRONG_PARAMCOUNT_TO_NATIVE_FCT', `Incorrect parameter count in the call to native function '${e.name}'`)
     const type = aggregateType(name, args, ctx)
     const distinct = e.distinct === true
@@ -258,6 +265,9 @@ export class AggregateSink {
         }
       case 'GROUP_CONCAT':
         return groupConcat(e, args, type, distinct, ctx)
+      case 'JSON_ARRAYAGG':
+      case 'JSON_OBJECTAGG':
+        return jsonAggregate(name, args, type)
       default: {
         const arg = args[0] as Compiled
         const make = (): Accumulator => accumulator(name, arg.type)
@@ -284,6 +294,37 @@ export class AggregateSink {
         }
       }
     }
+  }
+}
+
+/**
+ * `JSON_ARRAYAGG(x)` and `JSON_OBJECTAGG(k, v)` (M5.21): every row's value, a
+ * NULL one as JSON null; the object refuses a NULL key (3158) and keeps the
+ * last value of a key seen twice. Over no rows, NULL.
+ */
+function jsonAggregate(name: string, args: readonly Compiled[], type: ResultType): AggregateSpec {
+  const [a, b] = args as [Compiled, Compiled | undefined]
+  return {
+    name,
+    type,
+    start() {
+      const items: JsonDoc[] = []
+      const members: [string, JsonDoc][] = []
+      let rows = 0
+      return {
+        add(row, env) {
+          rows++
+          if (b === undefined) {
+            items.push(asJson(a.eval(row, env), a.type))
+            return
+          }
+          const k = a.eval(row, env)
+          if (k === null) throw sqlError('ER_JSON_DOCUMENT_NULL_KEY', 'JSON documents may not contain NULL member names.')
+          members.push([toText(k), asJson(b.eval(row, env), b.type)])
+        },
+        result: () => (rows === 0 ? null : jsonValue(b === undefined ? { t: 'array', v: items } : jsonObject(members))),
+      }
+    },
   }
 }
 

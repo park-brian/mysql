@@ -14,6 +14,7 @@
 // needs no decimal library: `12.50` is `{ v: 1250n, scale: 2 }`.
 import type { MysqlDateTime, MysqlTime } from '@myjs/bytes'
 import { encodeCollation } from '@myjs/charsets'
+import { renderJson, type JsonDoc } from './json-doc.ts'
 
 export type Value =
   | null
@@ -24,6 +25,7 @@ export type Value =
   | BytesValue
   | DateTimeValue
   | TimeValue
+  | JsonDocValue
 
 /** A BIGINT. `unsigned` decides its range, and how arithmetic promotes it. */
 export interface IntValue {
@@ -86,6 +88,12 @@ export interface TimeValue {
   readonly fsp: number
 }
 
+/** A JSON value (M5.21): what a JSON column holds and a JSON function returns. */
+export interface JsonDocValue {
+  readonly kind: 'json'
+  readonly v: JsonDoc
+}
+
 /** Coercibility, from `sql/item.h`'s `Derivation`. */
 export const COERCIBILITY = { EXPLICIT: 0, IMPLICIT: 2, SYSCONST: 3, COERCIBLE: 4, NUMERIC: 5, IGNORABLE: 6 } as const
 
@@ -102,6 +110,7 @@ export const decimal = (v: bigint, scale: number, display?: number): DecimalValu
 /** The scale a decimal is shown at. */
 export const displayScale = (d: DecimalValue): number => d.display ?? d.scale
 export const bytes = (v: Uint8Array): BytesValue => ({ kind: 'bytes', v })
+export const json = (v: JsonDoc): JsonDocValue => ({ kind: 'json', v })
 export const string = (v: string, collationId: number, coercibility: number = COERCIBILITY.COERCIBLE): StringValue => ({
   kind: 'string',
   v,
@@ -195,7 +204,22 @@ export function toDouble(v: Exclude<Value, null>): number {
       return Number(temporalNumber(v))
     case 'time':
       return Number(timeNumber(v.v))
+    case 'json': {
+      const n = jsonNumber(v)
+      return n === undefined ? Number(numericPrefix(renderJson(v.v)).text) : toDouble(n)
+    }
   }
+}
+
+/** A JSON number as the SQL number it is; undefined for anything else (`val_real` and friends then read its text). */
+function jsonNumber(v: JsonDocValue): Exclude<Value, null> | undefined {
+  const d = v.v
+  if (d.t === 'int') return int(d.v)
+  if (d.t === 'uint') return int(d.v, true)
+  if (d.t === 'double') return double(d.v)
+  if (d.t === 'decimal') return d.v
+  if (d.t === 'bool') return int(d.v ? 1n : 0n)
+  return undefined
 }
 
 /** A value as an exact decimal, as `val_decimal()`. */
@@ -216,6 +240,10 @@ export function toDecimal(v: Exclude<Value, null>): DecimalValue {
       return parseDecimal(temporalNumber(v))
     case 'time':
       return parseDecimal(timeNumber(v.v))
+    case 'json': {
+      const n = jsonNumber(v)
+      return n === undefined ? parseDecimal(numericPrefix(renderJson(v.v)).text.replace(/[eE].*$/, '') || '0') : toDecimal(n)
+    }
   }
 }
 
@@ -249,6 +277,10 @@ export function toInteger(v: Exclude<Value, null>): bigint {
       return BigInt(temporalNumber(v).split('.')[0] as string)
     case 'time':
       return BigInt(timeNumber(v.v).split('.')[0] as string)
+    case 'json': {
+      const n = jsonNumber(v)
+      return n === undefined ? toInteger(string(renderJson(v.v), 255)) : toInteger(n)
+    }
   }
 }
 
@@ -319,6 +351,8 @@ export function toText(v: Exclude<Value, null>): string {
       return renderDateTime(v.v, v.type, v.fsp)
     case 'time':
       return renderTime(v.v, v.fsp)
+    case 'json':
+      return renderJson(v.v)
   }
 }
 

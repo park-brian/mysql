@@ -176,7 +176,10 @@ const statements = [
   () => ({ sql: `SELECT CAST(${pick(["'[1, 2]'", "' {\"b\":1, \"a\":2} '", "'x'", '1', '2.50', 'NULL', "'null'", "'1e2'", "'18446744073709551616'"])} AS JSON)`, ordered: true }),
   () => ({ sql: `SELECT id, CAST(${pick(['s', 'n', 'd', 'f', 'dt', 'b'])} AS JSON) FROM jd ORDER BY id`, ordered: true }),
   () => ({ sql: `SELECT id, s FROM jd UNION ALL SELECT id, doc FROM jd ORDER BY 1, 2`, ordered: true }),
-  () => ({ sql: `SELECT DISTINCT nn FROM jd ORDER BY nn`, ordered: true }),
+  // Not ordered: a sort keys a JSON array or object on its length alone, and
+  // 8.4.11 breaks the ties the same way ascending and descending, so not by
+  // anything in the key — its sort's own order over equal keys.
+  () => ({ sql: `SELECT DISTINCT nn FROM jd ORDER BY nn`, ordered: false }),
   // Writes.
   () => `INSERT INTO jd (id, doc, nn) VALUES (${int(20, 40)}, ${quote(chance(0.4) ? pick(INVALID) : doc())}, ${quote(doc())})`,
   () => `INSERT INTO jd (id, doc, nn) VALUES (${int(41, 60)}, ${pick(['1', "'1'", 'NULL', 'TRUE', "JSON_ARRAY(1)", "CAST(1 AS JSON)"])}, ${pick(["'[]'", 'NULL', "JSON_OBJECT()"])})`,

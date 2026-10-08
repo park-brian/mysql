@@ -572,7 +572,10 @@ function derivedTable(run: Run, query: QueryExpression, alias: string, names: re
           },
         }
   const plan = planQuery({ ...run, ...(parent === undefined ? {} : { parent }) }, query)
-  const merged = lateral === undefined && mergeable(query)
+  // A LATERAL one merges as any other does when it can (8.4.11: Drizzle's
+  // `LEFT JOIN LATERAL (SELECT JSON_ARRAY(…) FROM (… LIMIT 1) p)` reports its
+  // JSON_ARRAY as an expression, not a temporary table's field).
+  const merged = mergeable(query)
   const columns = renamed(plan.columns, names).map((c) => {
     const t = c.type
     if (merged) return { name: c.name, type: t.column === undefined ? t : { ...t, column: { ...t.column, table: alias } } }
@@ -1093,7 +1096,8 @@ function needsSortedGroups(e: unknown): boolean {
   if (n.kind === NODE.SUBQUERY) return false
   if (n.kind === NODE.CALL && isAggregate(n as Expression)) {
     const name = (n.name as string).toUpperCase()
-    if (name === 'GROUP_CONCAT' || (n.distinct === true && name !== 'MIN' && name !== 'MAX')) return true
+    // JSON_ARRAYAGG and JSON_OBJECTAGG sort their groups as GROUP_CONCAT does (8.4.11, M5.21).
+    if (name === 'GROUP_CONCAT' || name === 'JSON_ARRAYAGG' || name === 'JSON_OBJECTAGG' || (n.distinct === true && name !== 'MIN' && name !== 'MAX')) return true
   }
   return Object.values(e).some((v) => (Array.isArray(v) ? v.some(needsSortedGroups) : typeof v === 'object' && needsSortedGroups(v)))
 }

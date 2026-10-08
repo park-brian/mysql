@@ -124,41 +124,45 @@
       }
     },
     "ours": {
-      "passed": 10,
-      "failed": 477,
+      "passed": 425,
+      "failed": 62,
       "skipped": 8,
       "files": {
         "tests/mysql/mysql-custom.test.ts": {
-          "passed": 0,
-          "failed": 39,
+          "passed": 38,
+          "failed": 1,
           "skipped": 0
         },
         "tests/mysql/mysql-prefixed.test.ts": {
-          "passed": 0,
-          "failed": 69,
+          "passed": 66,
+          "failed": 3,
           "skipped": 0
         },
         "tests/mysql/mysql-proxy.test.ts": {
-          "passed": 2,
-          "failed": 139,
+          "passed": 119,
+          "failed": 22,
           "skipped": 8
         },
         "tests/mysql/mysql.test.ts": {
-          "passed": 2,
-          "failed": 147,
+          "passed": 127,
+          "failed": 22,
           "skipped": 0
         },
         "tests/relational/mysql.test.ts": {
-          "passed": 6,
-          "failed": 83,
+          "passed": 75,
+          "failed": 14,
           "skipped": 0
         }
       },
       "reasons": {
-        "Error: The JSON type is not supported by this server yet": 394,
-        "Error: The function JSON_ARRAY is not supported by this server yet": 39,
-        "Error: The function JSON_ARRAYAGG is not supported by this server yet": 33,
-        "Error: Window functions is not supported by this server yet": 11
+        "Error: This statement (truncate) is not supported by this server yet": 26,
+        "Error: Window functions is not supported by this server yet": 14,
+        "Error: DROP VIEW is not supported by this server yet": 6,
+        "Error: This statement (createView) is not supported by this server yet": 5,
+        "Error: WITH is not supported by this server yet": 4,
+        "Error: Unknown column '…' in '…'": 4,
+        "Error: This expression (interval) is not supported by this server yet": 2,
+        "Error: FUNCTION drizzle.UNHEX does not exist": 1
       }
     }
   }

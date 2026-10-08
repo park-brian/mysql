@@ -71,6 +71,25 @@ export { isMysqlDateTime, isMysqlTime, renderMysqlDateTime, renderMysqlTime } fr
 export type { MysqlDateTime, MysqlTime, SqlValue } from '@myjs/bytes'
 export { JSON_TYPE, compareJsonKeys, decodeJson, encodeJson } from './json.ts'
 export type { JsonValue } from './json.ts'
+// M5.21 — JSON as a value: the lossless model, its text, its order and its binary form.
+export {
+  JSON_FALSE,
+  JSON_NULL,
+  JSON_TRUE,
+  JsonSyntaxError,
+  compareJson,
+  decodeJsonDoc,
+  encodeJsonDoc,
+  jsonInteger,
+  jsonKey,
+  jsonObject,
+  orderJson,
+  parseJson,
+  quoteJsonString,
+  renderJson,
+  toJsonDoc,
+} from './json-doc.ts'
+export type { JsonDoc } from './json-doc.ts'
 export { declaredKeyWidth, encodeKey, encodeKeyPart, keyPartLength } from './keys.ts'
 export type { KeyPart, KeyPartKind } from './keys.ts'
 export { keyPartOf, storageWidth } from './columns.ts'
@@ -84,6 +103,7 @@ export {
   MIN_SIGNED,
   bool,
   bytes as bytesValue,
+  json as jsonValue,
   decimal as decimalValue,
   doubleToDecimal,
   double as doubleValue,
@@ -111,11 +131,11 @@ export {
   truth,
   validDate,
 } from './sql-value.ts'
-export type { BytesValue, DateTimeValue, DecimalValue, DoubleValue, IntValue, StringValue, TemporalType, TimeValue, Value } from './sql-value.ts'
+export type { BytesValue, DateTimeValue, DecimalValue, DoubleValue, IntValue, JsonDocValue, StringValue, TemporalType, TimeValue, Value } from './sql-value.ts'
 export { aggregateCollation, commonCollation, compareDecimals, compareValues, nullSafeEqual, orderValues } from './compare.ts'
 export { SUM_PRECISION_INCREMENT, avgAccumulator, avgPrecision, bitAccumulator, extremeAccumulator, sumAccumulator, sumPrecision, varianceAccumulator } from './aggregate.ts'
 export type { Accumulator } from './aggregate.ts'
 export { DIV_PRECISION_INCREMENT, add, bitNot, bitwise, divide, intDivide, modulo, negate, not } from './arith.ts'
 export { decodeField, encodeField, integerRange } from './encode.ts'
 export type { FieldColumn, StoreContext } from './encode.ts'
-export { columnCannotBeNull, columnOutOfRange, dataTooLong, valueOutOfRange, wrongTemporalValue, wrongValueForColumn } from './errors.ts'
+export { columnCannotBeNull, columnOutOfRange, dataTooLong, invalidJsonArgument, invalidJsonCharset, invalidJsonText, valueOutOfRange, wrongTemporalValue, wrongValueForColumn } from './errors.ts'

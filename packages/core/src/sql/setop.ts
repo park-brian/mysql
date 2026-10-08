@@ -35,7 +35,7 @@ import { sqlError } from '@myjs/protocol'
 import { COERCIBILITY, bytesValue, stringValue, toDateTime, toText, type Value } from '@myjs/types'
 import { aggregateTypes, convertTo } from './compile.ts'
 import { rowKey } from './keys.ts'
-import { charWidth, decimalType, doubleType, stringType, type ResultType } from './meta.ts'
+import { charWidth, decimalType, doubleType, jsonAsText, jsonType, stringType, type ResultType } from './meta.ts'
 
 type Columns = readonly { readonly name: string; readonly type: ResultType }[]
 
@@ -67,6 +67,9 @@ export function setOperationType(types: readonly ResultType[], connectionCollati
     return { ...rest, nullable, temporary: 'stream', keepField: true, ...(t.kind === 'string' ? { coercibility: COERCIBILITY.IMPLICIT } : {}), ...(fromField ? { fromField } : {}) }
   }
   if (live.length === 0) return done({ ...stringType(0, CHARSET_BINARY, true) })
+  // JSON with JSON is JSON; with anything else, its text: a LONGTEXT in utf8mb4_bin (8.4.11, M5.21).
+  if (live.every((t) => t.kind === 'json')) return done(jsonType(nullable))
+  if (live.some((t) => t.kind === 'json')) return setOperationType(types.map((t) => (t.kind === 'json' ? { ...jsonAsText(t.nullable), ...(t.column === undefined ? {} : { column: t.column }) } : t)), connectionCollation)
   const kinds = new Set(live.map((t) => t.kind))
   if (kinds.size === 1 && kinds.has('int') && live.every((t) => INT_RANK[t.field] !== undefined)) {
     const widest = live.reduce((a, b) => ((INT_RANK[b.field] ?? 0) > (INT_RANK[a.field] ?? 0) ? b : a))

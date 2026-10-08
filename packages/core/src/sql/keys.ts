@@ -11,7 +11,7 @@
 // against every earlier one; a key makes it one lookup.
 import { CHARSET_BINARY } from '@myjs/bytes'
 import { collation, encodeCollation, requireCollationInfo } from '@myjs/charsets'
-import { renderDecimal, toDecimal, toText, type Value } from '@myjs/types'
+import { jsonKey, renderDecimal, toDecimal, toText, type Value } from '@myjs/types'
 
 const hex = (b: Uint8Array): string => {
   let s = ''
@@ -39,6 +39,8 @@ export function valueKey(v: Value): string {
     }
     case 'double':
       return `d${Object.is(v.v, -0) ? 0 : v.v}`
+    case 'json':
+      return `j${jsonKey(v.v)}`
     case 'datetime':
     case 'time':
     {

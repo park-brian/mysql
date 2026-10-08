@@ -9,6 +9,7 @@
 import type { KeyRange, RowId, Table, Trx } from '@myjs/engine'
 import type { ColumnType } from '@myjs/types'
 import { decodeField, orderValues, truth, type Value } from '@myjs/types'
+import { rowKey } from './keys.ts'
 import type { Compiled, Env, Row } from './compile.ts'
 
 /** A row as a scan produces it: its values, and the id to write it back by. */
@@ -76,14 +77,17 @@ export function sort<T extends { readonly row: Row }>(source: Iterable<T>, keys:
   return decorated.map((d) => d.item)
 }
 
-/** The first row of each run of rows equal on every value — `SELECT DISTINCT`, over projected rows. */
+/**
+ * The first of each set of rows equal on every value — `SELECT DISTINCT`, over
+ * projected rows. Equal, not "sorts the same": two JSON arrays of one length
+ * sort together but are distinct (M5.21), so this keys on `rowKey`.
+ */
 export function* distinct(source: Iterable<Value[]>): Generator<Value[]> {
-  const seen: Value[][] = []
-  outer: for (const row of source) {
-    for (const prior of seen) {
-      if (prior.every((v, i) => orderValues(v, row[i] ?? null) === 0)) continue outer
-    }
-    seen.push(row)
+  const seen = new Set<string>()
+  for (const row of source) {
+    const k = rowKey(row)
+    if (seen.has(k)) continue
+    seen.add(k)
     yield row
   }
 }

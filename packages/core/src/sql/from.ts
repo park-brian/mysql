@@ -301,6 +301,10 @@ export function planFrom(refs: readonly TableReference[], ctx: FromContext, wher
         if (outerLookup !== undefined) nestedLoopJoins.add(inner.aliases)
         const lookup = isLeft || inner.node.kind !== 'leaf' ? undefined : eqRef(inner.node.table, [onAst, ...(ref.type === 'STRAIGHT' || ref.type === 'INNER' ? [where] : [])], outer.aliases, (e) => ctx.compileOn(e, slotScope(preliminary.restrict(outer.aliases, within), preliminary)))
         if (lookup !== undefined) nestedLoopJoins.add(inner.aliases)
+        // A LATERAL table is read again for each row before it: a nested loop,
+        // so a sort over the tables before it goes first (8.4.11: Drizzle's
+        // `LEFT JOIN LATERAL … ORDER BY parent.id` keeps parent.id's key flags).
+        if ([...inner.aliases].some((a) => byAlias.get(a)?.lateral === true)) nestedLoopJoins.add(inner.aliases)
         return {
           node: { kind: 'join', outer: outer.node, inner: inner.node, left: isLeft, on, onAst, innerSlots, lookup },
           aliases,
@@ -315,7 +319,7 @@ export function planFrom(refs: readonly TableReference[], ctx: FromContext, wher
       return Array.from({ length: t.width }, (_, i) => t.offset + i)
     })
     const lookup = r.node.kind !== 'leaf' ? undefined : eqRef(r.node.table, [where], l.aliases, (e) => ctx.compileOn(e, preliminary.restrict(l.aliases)))
-    if (lookup !== undefined) nestedLoopJoins.add(r.aliases)
+    if (lookup !== undefined || [...r.aliases].some((a) => byAlias.get(a)?.lateral === true)) nestedLoopJoins.add(r.aliases)
     return {
       node: { kind: 'join', outer: l.node, inner: r.node, left: false, on: undefined, onAst: undefined, innerSlots, lookup } as Node,
       aliases: new Set([...l.aliases, ...r.aliases]),

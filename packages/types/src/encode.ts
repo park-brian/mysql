@@ -23,6 +23,8 @@ import {
   columnCannotBeNull,
   columnOutOfRange,
   dataTooLong,
+  invalidJsonCharset,
+  invalidJsonText,
   unsupportedType,
   wrongTemporalValue,
   wrongValueForColumn,
@@ -30,6 +32,7 @@ import {
 } from './errors.ts'
 import { decodeDouble, decodeFloat, encodeDouble, encodeFloat } from './floats.ts'
 import { decodeInt, encodeInt, signedRange, unsignedRange } from './integers.ts'
+import { JsonSyntaxError, decodeJsonDoc, encodeJsonDoc, parseJson } from './json-doc.ts'
 import {
   COERCIBILITY,
   MAX_UNSIGNED,
@@ -37,6 +40,7 @@ import {
   decimalIntegerDigits,
   double,
   int,
+  json,
   numericPrefix,
   parseDecimal,
   pow10,
@@ -83,6 +87,8 @@ export interface StoreContext {
   row: number
   /** Incremented for each value adjusted rather than refused. */
   warnings: number
+  /** The table being written, for the messages that name a column as `table.column` (3140). */
+  table?: string
 }
 
 const INT_WIDTH: Readonly<Record<number, number>> = {
@@ -237,6 +243,9 @@ export function encodeField(value: Value, column: FieldColumn, ctx: StoreContext
       return encodeBit(n, bits)
     }
 
+    case FIELD_TYPE.JSON:
+      return encodeJsonField(value, column, ctx)
+
     case FIELD_TYPE.STRING:
     case FIELD_TYPE.VAR_STRING:
     case FIELD_TYPE.VARCHAR:
@@ -248,6 +257,25 @@ export function encodeField(value: Value, column: FieldColumn, ctx: StoreContext
 
     default:
       throw unsupportedType(`storing a value in a column of field type ${t.type}`)
+  }
+}
+
+/**
+ * A value into a JSON column (M5.21): a JSON value as it is, a string parsed
+ * as a JSON text, and anything else refused — 3140 even for a number, which
+ * "may need CAST", and 3144 for a binary string (8.4.11). A mode does not
+ * soften either.
+ */
+function encodeJsonField(value: Exclude<Value, null>, column: FieldColumn, ctx: StoreContext): Uint8Array {
+  const name = ctx.table === undefined ? column.name : `${ctx.table}.${column.name}`
+  if (value.kind === 'json') return encodeJsonDoc(value.v)
+  if (value.kind === 'bytes') throw invalidJsonCharset('')
+  if (value.kind !== 'string') throw invalidJsonText('not a JSON text, may need CAST', 0, name)
+  try {
+    return encodeJsonDoc(parseJson(value.v))
+  } catch (e) {
+    if (e instanceof JsonSyntaxError) throw invalidJsonText(e.message, e.position, name)
+    throw e
   }
 }
 
@@ -406,6 +434,8 @@ export function decodeField(field: Uint8Array | null, t: ColumnType): Value {
     case FIELD_TYPE.DECIMAL:
     case FIELD_TYPE.NEWDECIMAL:
       return parseDecimal(decodeDecimal(field, t.precision ?? 10, t.scale ?? 0))
+    case FIELD_TYPE.JSON:
+      return json(decodeJsonDoc(field))
     case FIELD_TYPE.FLOAT:
       return double(decodeFloat(field))
     case FIELD_TYPE.DOUBLE:

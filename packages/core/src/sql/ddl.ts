@@ -174,7 +174,8 @@ export function columnType(t: DataType, tableCollation: number, column = ''): Co
 
 function resolveColumnType(t: DataType, tableCollation: number): ColumnType {
   const code = t.code as number
-  if (code === FIELD_TYPE.JSON || code === FIELD_TYPE.GEOMETRY || code === FIELD_TYPE.VECTOR) {
+  if (code === FIELD_TYPE.JSON) return { type: FIELD_TYPE.JSON }
+  if (code === FIELD_TYPE.GEOMETRY || code === FIELD_TYPE.VECTOR) {
     throw sqlError('ER_NOT_SUPPORTED_YET', messages.notSupported(`The ${t.name} type`))
   }
   if (!STRING_CODES.has(code)) {

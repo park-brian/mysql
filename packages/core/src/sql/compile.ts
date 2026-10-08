@@ -58,9 +58,12 @@ import {
   decimalType,
   doubleType,
   intType,
+  jsonAsText,
+  jsonType,
   stringType,
   type ResultType,
 } from './meta.ts'
+import { castAsJson, jsonConstructor } from './json.ts'
 
 /** One row as operators pass it: a value per column of the scope. */
 export type Row = readonly Value[]
@@ -172,6 +175,7 @@ export interface GroupKeys {
 export const AGGREGATE_NAMES: ReadonlySet<string> = new Set([
   'COUNT', 'SUM', 'AVG', 'MIN', 'MAX', 'GROUP_CONCAT', 'BIT_AND', 'BIT_OR', 'BIT_XOR',
   'STD', 'STDDEV', 'STDDEV_POP', 'STDDEV_SAMP', 'VARIANCE', 'VAR_POP', 'VAR_SAMP',
+  'JSON_ARRAYAGG', 'JSON_OBJECTAGG',
 ])
 
 const lit = (value: Value, type: ResultType): Compiled => ({ eval: () => value, type })
@@ -292,6 +296,8 @@ export function typeOfValue(v: Value): ResultType {
       return datetimeType(v.type === 'DATE' ? FIELD_TYPE.DATE : v.type === 'TIMESTAMP' ? FIELD_TYPE.TIMESTAMP : FIELD_TYPE.DATETIME, v.fsp, false)
     case 'time':
       return datetimeType(FIELD_TYPE.TIME, v.fsp, false)
+    case 'json':
+      return jsonType(false)
   }
 }
 
@@ -335,7 +341,7 @@ function literal(e: LiteralNode, ctx: CompileContext): Compiled {
     case LITERAL.NULL:
       return lit(null, NULL_TYPE)
     case LITERAL.BOOL:
-      return lit(bool(e.value as boolean), intType(1, false))
+      return lit(bool(e.value as boolean), boolType(false))
     case LITERAL.TEMPORAL: {
       const text = e.value as string
       if (e.unit === 'TIME') {
@@ -679,8 +685,12 @@ function matchLike(s: readonly string[], p: readonly string[], escape: string, c
  * integer. NULL branches take no part.
  */
 function aggregate(types: readonly ResultType[], nullable: boolean, connectionCollation: number): ResultType {
-  const live = types.filter((t) => t.kind !== 'null')
+  let live = types.filter((t) => t.kind !== 'null')
   if (live.length === 0) return NULL_TYPE
+  // JSON with JSON is JSON; JSON with anything else is its text, in JSON's
+  // collation, utf8mb4_bin (8.4.11, M5.21).
+  if (live.every((t) => t.kind === 'json')) return jsonType(nullable)
+  if (live.some((t) => t.kind === 'json')) live = live.map((t) => (t.kind === 'json' ? jsonAsText(t.nullable) : t))
   if (live.some((t) => t.kind === 'string' || t.kind === 'bytes')) {
     const binary = live.some((t) => t.kind === 'bytes')
     return stringType(Math.max(...live.map(charWidth)), binary ? CHARSET_BINARY : aggregateTypes(live, connectionCollation), nullable)
@@ -738,8 +748,8 @@ function caseExpr(e: CaseNode, ctx: CompileContext): Compiled {
 
 /** The builtins this executor knows, beyond the ones written out below — refused by name until M5.10. */
 const KNOWN_BUILTINS = new Set([
-  'JSON_ARRAYAGG', 'JSON_OBJECTAGG', 'SUBSTRING', 'SUBSTR', 'TRIM', 'REPLACE', 'ROUND', 'FLOOR', 'CEIL',
-  'CEILING', 'DATE_FORMAT', 'DATE_ADD', 'DATE_SUB', 'JSON_EXTRACT', 'JSON_OBJECT', 'JSON_ARRAY', 'UUID', 'RAND', 'LEFT',
+  'SUBSTRING', 'SUBSTR', 'TRIM', 'REPLACE', 'ROUND', 'FLOOR', 'CEIL',
+  'CEILING', 'DATE_FORMAT', 'DATE_ADD', 'DATE_SUB', 'JSON_EXTRACT', 'UUID', 'RAND', 'LEFT',
   'RIGHT', 'LPAD', 'RPAD', 'REPEAT', 'REVERSE', 'LOCATE', 'INSTR', 'POSITION', 'GREATEST', 'LEAST', 'ROW_NUMBER', 'RANK',
 ])
 
@@ -794,6 +804,8 @@ function call(e: CallNode, ctx: CompileContext): Compiled {
     },
     type: stringType(chars, conn, false),
   })
+  const json = name === 'JSON_ARRAY' || name === 'JSON_OBJECT' ? jsonConstructor(name, args(), e.name) : undefined
+  if (json !== undefined) return json
   switch (name) {
     case 'IF': {
       arity(3)
@@ -1057,6 +1069,8 @@ function cast(e: CastNode, ctx: CompileContext): Compiled {
         type: stringType(t.length ?? charWidth(inner.type), id, true),
       }
     }
+    case 'JSON':
+      return castAsJson(inner)
     case 'BINARY':
       return {
         eval: (r, env) => {
