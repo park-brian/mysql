@@ -244,8 +244,14 @@ async function openCatalog(vfs: Vfs, options: MySQLOptions): Promise<Catalog> {
     ...(options.flushLogAtTrxCommit === undefined ? {} : { flushLogAtTrxCommit: options.flushLogAtTrxCommit }),
   }
   const store = data.size() === 0 ? Store.create(data, log, storeOptions) : Store.open(data, log, storeOptions)
-  return Catalog.open(store)
+  const catalog = Catalog.open(store)
+  // The schemas a fresh 8.4.11 has, empty here: clients connect to `mysql`
+  // to create their own database (Prisma's schema engine does).
+  for (const name of SYSTEM_SCHEMAS) catalog.createSchema(name, { ifNotExists: true })
+  return catalog
 }
+
+const SYSTEM_SCHEMAS = ['mysql', 'performance_schema', 'sys']
 
 function toBytes(data: unknown): Uint8Array | null {
   if (data instanceof Uint8Array) return data

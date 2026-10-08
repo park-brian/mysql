@@ -96,6 +96,8 @@ function parameterValue(p: Parameter, session: Session): Value {
 }
 
 /** Every error a statement can raise, as the `SqlError` a client is sent: typed errors keep their number. */
+const systemSchema = (name: string) => sqlError('ER_NO_SYSTEM_SCHEMA_ACCESS', `Access to system schema '${name}' is rejected.`)
+
 export function toSqlError(e: unknown): SqlError {
   if (e instanceof SqlError) return e
   if (e instanceof MyjsError && e.errno !== undefined) return new SqlError(e.code, e.message, { errno: e.errno, ...(e.sqlState === undefined ? {} : { sqlState: e.sqlState }) })
@@ -202,7 +204,8 @@ export class SqlExecutor implements Executor {
         throw toSqlError(e)
       }
     }
-    session.database = database
+    // The system schema is named in lower case, however the client wrote it (8.4.11).
+    session.database = database.toLowerCase() === 'information_schema' ? 'information_schema' : database
   }
 
   statistics(session: Session): string {
@@ -520,6 +523,8 @@ export class SqlExecutor implements Executor {
       return undefined
     }
     const collationId = resolveCollation(pick('CHARACTER SET', 'CHARSET'), pick('COLLATE'), DEFAULT_COLLATION)
+    // The data dictionary's own schema is refused by name (sql_db.cc), before anything else.
+    if (statement.name === 'mysql' && statement.ifNotExists !== true) throw systemSchema(statement.name)
     const made = catalog.createSchema(statement.name, { ifNotExists: statement.ifNotExists === true, collationId })
     return { affectedRows: made === undefined ? 0 : 1 }
   }
@@ -564,6 +569,7 @@ export class SqlExecutor implements Executor {
     const catalog = this.#catalog()
     if (statement.object === 'DATABASE') {
       const name = (statement.names[0] as TableName).name
+      if (name === 'mysql') throw systemSchema(name)
       run.state.commit()
       const tables = catalog.dropSchema(name, { ifExists: statement.ifExists === true })
       if (session.database === name) session.database = null

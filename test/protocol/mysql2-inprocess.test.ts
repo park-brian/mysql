@@ -204,3 +204,32 @@ test('a custom executor replaces the stub without the protocol layer noticing', 
     await conn.end()
   }
 })
+
+test('a handshake naming a database that does not exist is refused with 1049, as 8.4.11 refuses it', async () => {
+  // Prisma connects with its database in the URL and creates the database
+  // only when the connection says it is unknown; accepting it left every
+  // Prisma test with no schema to push into.
+  const db = await MySQL.open(':memory:')
+  await assert.rejects(connect(db, { database: 'nope' }), { errno: 1049, sqlState: '42000', message: "Unknown database 'nope'" })
+  const conn = await connect(db, { database: 'INFORMATION_SCHEMA' })
+  try {
+    const [rows] = await conn.query('SELECT DATABASE() AS d')
+    assert.deepEqual(rows, [{ d: 'information_schema' }], 'the system schema is named in lower case, whatever the client wrote')
+  } finally {
+    await conn.end()
+  }
+})
+
+test('a fresh database has the system schemas 8.4.11 has, and `mysql` cannot be made or dropped (3552)', async () => {
+  // Prisma's schema engine connects to `mysql` to CREATE DATABASE its own.
+  const db = await MySQL.open(':memory:')
+  const conn = await connect(db, { database: 'mysql' })
+  try {
+    const [rows] = await conn.query('SHOW DATABASES')
+    assert.deepEqual(rows, [{ Database: 'information_schema' }, { Database: 'mysql' }, { Database: 'performance_schema' }, { Database: 'sys' }])
+    for (const sql of ['CREATE DATABASE mysql', 'DROP DATABASE mysql']) await assert.rejects(conn.query(sql), { errno: 3552, message: "Access to system schema 'mysql' is rejected." })
+    await conn.query('CREATE DATABASE IF NOT EXISTS mysql')
+  } finally {
+    await conn.end()
+  }
+})

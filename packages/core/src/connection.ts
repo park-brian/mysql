@@ -300,6 +300,24 @@ export class ProtocolConnection {
     // whole point, and the reason `send` is a list.
     const session = this.#session
     if (session !== null) session.user = step.user
+    // A database named in the handshake must exist: 8.4.11 answers ERR 1049
+    // and closes, and Prisma creates its database only on that answer.
+    if (session !== null && session.database !== null && session.database !== '' && this.#options.executor.initDb !== undefined) {
+      try {
+        await this.#options.executor.initDb(session, session.database)
+      } catch (e) {
+        if (!(e instanceof MyjsError)) throw e
+        const w = new Writer(96)
+        writeErr(w, this.#capabilities, {
+          errno: e.errno ?? errnoOf('ER_BAD_DB_ERROR'),
+          sqlState: e.sqlState ?? sqlStateOf('ER_BAD_DB_ERROR'),
+          message: e.message,
+        })
+        this.#send(w.toBytes())
+        this.#phase = 'closed'
+        return
+      }
+    }
     const ok = new Writer(32)
     writeOk(ok, this.#capabilities, { statusFlags: session?.statusFlags ?? 0 })
     this.#send(ok.toBytes())
