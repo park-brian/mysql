@@ -303,13 +303,9 @@ export function createTableSpec(node: CreateTableNode, schemaCollation: number):
     names.add('primary')
     indexes.push({ name: 'PRIMARY', kind: 'primary', parts: [{ column: (inlinePrimary[0] as ColumnDefinition).name }] })
   }
-  const foreignKeys: unknown[] = []
   for (const k of node.keys) {
-    if (k.type === KEY.FOREIGN) {
-      // Accepted and kept, not enforced (M8.6), as MySQL's own MyISAM does.
-      foreignKeys.push({ name: k.name ?? k.constraint, columns: k.columns.map((c) => c.name), references: k.references === undefined ? undefined : { table: k.references.table, columns: k.references.columns.map((c) => c.name) } })
-      continue
-    }
+    // A foreign key needs its parent, so the catalog: `withForeignKeys` (M5.25).
+    if (k.type === KEY.FOREIGN) continue
     if (k.type === KEY.FULLTEXT || k.type === KEY.SPATIAL) throw sqlError('ER_NOT_SUPPORTED_YET', messages.notSupported(`${k.type.toUpperCase()} indexes`))
     const parts = k.columns.map((p) => {
       if (p.name === undefined) throw sqlError('ER_NOT_SUPPORTED_YET', messages.notSupported('Functional key parts'))
@@ -329,11 +325,10 @@ export function createTableSpec(node: CreateTableNode, schemaCollation: number):
   const options: Record<string, unknown> = { collationId: tableCollation }
   const comment = option(node.options, 'COMMENT')
   if (comment !== undefined) options['comment'] = comment
-  if (foreignKeys.length > 0) options['foreignKeys'] = foreignKeys
   return { name: node.table.name, engine, columns, indexes, options }
 }
 
-function column(c: ColumnDefinition, tableCollation: number, inPrimary: boolean): ColumnDef {
+export function column(c: ColumnDefinition, tableCollation: number, inPrimary: boolean): ColumnDef {
   if (c.generated !== undefined) throw sqlError('ER_NOT_SUPPORTED_YET', messages.notSupported('Generated columns'))
   const type = columnType(c.type, tableCollation, c.name)
   const serial = c.type.serial === true

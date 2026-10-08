@@ -687,8 +687,10 @@ goes further, along the same lines. It adds index selection with a cost
 model, predicate pushdown, and join ordering, and its success criterion is
 concrete: `EXPLAIN` should name the index a MySQL DBA would expect. Sorts
 will spill when large, and MySQL's function library grows in the order the
-ORM test suites use it. `INFORMATION_SCHEMA` has to be real enough that
-Prisma and Drizzle introspection can rebuild a schema exactly.
+ORM test suites use it. `INFORMATION_SCHEMA` is a set of derived tables
+computed from the catalog when read. Their column definitions were captured
+from the server, because no rule derives them. That is enough for Prisma's
+introspection to rebuild a schema exactly.
 
 ### Statements are atomic; transactions are yours
 
@@ -923,6 +925,20 @@ crash-atomic by the same path every row takes. A table's definition is a row
 in a system table. The catalog itself is described by code (a few reserved
 index ids and fixed layouts) and versioned with the store format. A format
 change is a new number and a documented migration, never a guess.
+
+`ALTER TABLE` is a copy. `Catalog.rebuildTable` makes the changed table and
+passes every row through a function into it. It carries the AUTO_INCREMENT
+counter over and drops the old table, all in one DDL transaction. A row the
+new definition refuses, such as a duplicate under a new UNIQUE key or a child
+with no parent under a new foreign key, rolls the whole thing back. MySQL
+does many of these changes in place. A client can tell only from the
+"Records" count, so we report the count MySQL would.
+
+Foreign keys are enforced above the engine, in one place. Every INSERT,
+UPDATE, DELETE, REPLACE and upsert writes through a guarded `Table`, which
+checks a child's parent after the write and fires the actions on a parent's
+children before it. A failed check is an error like any other, so the
+statement's savepoint undoes the cascade with the write that caused it.
 
 ## 12. Durability, stated honestly
 
@@ -1359,12 +1375,14 @@ parser and the storage engine are all built and checked against a real
 server. M5 is well under way. The executor runs DDL, DML and transactions,
 upserts included, and relational SELECT: joins, grouping and aggregates,
 subqueries, derived tables, CTEs, set operations, views, JSON as a value and
-the first window functions. Generated corpora of 400, 300 and 250 scripts
+the first window functions, `INFORMATION_SCHEMA`, and foreign keys with
+their referential actions. Generated corpora of 400, 300 and 250 scripts
 agree with MySQL 8.4.11 statement for statement, column names and flags
 included. Half of M5's exit criterion holds: all 487 tests of Drizzle's
-MySQL suites pass, as they do against 8.4.11. Prisma's suites, the rest of
-the function library and the cost-based planner are next. The core bundle is
-about 189 KB gzipped against a budget of 500 KB, with the UCA weights in a
+MySQL suites pass, as they do against 8.4.11. Prisma's suites are under
+way, and after them come the rest of the function library and the
+cost-based planner. The core bundle is
+about 203 KB gzipped against a budget of 500 KB, with the UCA weights in a
 separate chunk loaded on demand.
 
 The release plan gives each stage something to ship:

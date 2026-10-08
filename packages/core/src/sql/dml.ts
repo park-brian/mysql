@@ -23,6 +23,7 @@ import { EngineError } from '@myjs/engine'
 import { NODE, QUERY, REF, parseExpression, type Assignment, type ColumnNode, type DeleteNode, type Expression, type InsertNode, type TableName, type UpdateNode } from '@myjs/parser'
 import { decodeField, encodeField, integerRange, intValue, toInteger, toText, type StoreContext, type Value } from '@myjs/types'
 import { compile, EMPTY_SCOPE, type Compiled, type Row, type Scope } from './compile.ts'
+import { guarded, isReferenced } from './foreign-keys.ts'
 import { containsAggregate } from './group.ts'
 import { filter, limit, sort, type ScannedRow } from './operators.ts'
 import { accessRows, chooseAccess } from './plan.ts'
@@ -33,7 +34,7 @@ import { NULL_TYPE, type ResultType } from './meta.ts'
 const isStrict = (sqlMode: string): boolean => /\bSTRICT_(TRANS|ALL)_TABLES\b/.test(sqlMode)
 
 /** A column's DEFAULT, compiled: its expression, or NULL, or "none" for a NOT NULL column without one. */
-function defaultOf(run: Run, column: ColumnDef): Compiled | 'none' {
+export function defaultOf(run: Run, column: ColumnDef): Compiled | 'none' {
   // An AUTO_INCREMENT column's DEFAULT is 0: `UPDATE t SET id = DEFAULT` stores 0 (8.4.11).
   if (column.autoIncrement === true) return { eval: () => intValue(0n), type: NULL_TYPE }
   const text = column.attributes?.['default']
@@ -349,7 +350,11 @@ export function insert(run: Run, node: InsertNode, trx: Trx): OkResult {
   run = { ...run, env: { ...run.env, trx } }
   if (node.partitions !== undefined) throw sqlError('ER_NOT_SUPPORTED_YET', messages.notSupported('Partitions'))
 
-  const { def, table } = openTarget(run, node.table)
+  const opened = openTarget(run, node.table)
+  const def = opened.def
+  // Every write keeps the foreign keys on both sides of the table (M5.25).
+  const table = guarded(run, opened.table, trx, true)
+  const referenced = node.replace === true && isReferenced(run, def)
   // A VALUES or SET subquery reading the table being written is 1093, as an
   // UPDATE's is; INSERT … SELECT from it is legal, read in full first (8.4.11).
   if (node.query === undefined) checkTargetNotRead({ schema: def.schema, name: def.name }, [...(node.values ?? []).flat(), ...(node.set ?? []).map((a) => a.value), ...(node.onDuplicate ?? []).map((a) => a.value)], run.env.session.database)
@@ -505,6 +510,14 @@ export function insert(run: Run, node: InsertNode, trx: Trx): OkResult {
       try {
         table.insert(fields, trx)
       } catch (e) {
+        // IGNORE skips a row whose parent is missing, as it skips a duplicate:
+        // a warning, and its value is given back (8.4.11).
+        if (ignore && e instanceof MyjsError && e.errno === 1452) {
+          auto.written()
+          store.warnings++
+          auto.restore(prev)
+          return
+        }
         if (!isDuplicate(e)) throw e
         auto.written()
         const hit = conflictOf(table, keys, fields, trx)
@@ -521,8 +534,10 @@ export function insert(run: Run, node: InsertNode, trx: Trx): OkResult {
           // (`write_record`): the column's range is used up, and it is 1062.
           if (generated > 0n && hit.index === autoKey) throw duplicateError(e, def, table, keys, fields, trx, undefined, hit)
           // The table's last UNIQUE key: no later key can collide, so the row
-          // in the way is updated into this one rather than deleted.
-          if (hit.index === keys[keys.length - 1]) {
+          // in the way is updated into this one rather than deleted — unless a
+          // foreign key references the table, whose actions a delete must
+          // fire (`write_record`, 8.4.11).
+          if (hit.index === keys[keys.length - 1] && !referenced) {
             const old = table.get(hit.id, trx, 'current') as FieldBytes[]
             if (!sameRow(old, fields)) {
               table.update(hit.id, fields, trx)
@@ -680,7 +695,7 @@ function assignAll(
 const isDefaultKeyword = (e: Expression): boolean => e.kind === NODE.KEYWORD && e.word.toUpperCase() === 'DEFAULT'
 
 /** What a NOT NULL column with no DEFAULT gets outside a strict mode: its type's zero. */
-function implicitDefault(column: ColumnDef): Value {
+export function implicitDefault(column: ColumnDef): Value {
   const t = column.type.type
   if (t === FIELD_TYPE.TIMESTAMP || t === FIELD_TYPE.DATE || t === FIELD_TYPE.DATETIME) {
     return { kind: 'datetime', v: { year: 0, month: 0, day: 0, hour: 0, minute: 0, second: 0, microsecond: 0 }, type: t === FIELD_TYPE.DATE ? 'DATE' : 'DATETIME', fsp: 0 }
@@ -746,7 +761,9 @@ export function update(run: Run, node: UpdateNode, trx: Trx): OkResult {
   // A subquery reads in the statement's transaction.
   run = { ...run, env: { ...run.env, trx } }
   run = withCtes(run, node, 'UPDATE')
-  const { def, table, alias } = singleTable(run, node.tables, 'UPDATE')
+  const target = singleTable(run, node.tables, 'UPDATE')
+  const { def, alias } = target
+  const table = guarded(run, target.table, trx, true)
   checkTargetNotRead({ schema: def.schema, name: def.name }, [node.where, ...node.set.map((a) => a.value)], run.env.session.database)
   const scope = new TableScope([{ alias, def }])
   const assignments = node.set.map((a: Assignment) => {
@@ -809,7 +826,9 @@ export function remove(run: Run, node: DeleteNode, trx: Trx): OkResult {
   if (node.targets !== undefined) throw sqlError('ER_NOT_SUPPORTED_YET', messages.notSupported('Multiple-table DELETE'))
   run = { ...run, env: { ...run.env, trx } }
   run = withCtes(run, node, 'DELETE')
-  const { def, table, alias } = singleTable(run, node.tables, 'DELETE')
+  const target = singleTable(run, node.tables, 'DELETE')
+  const { def, alias } = target
+  const table = guarded(run, target.table, trx, false)
   checkTargetNotRead({ schema: def.schema, name: def.name }, [node.where], run.env.session.database)
   const rows = matching(run, def, table, alias, node, trx)
   let deleted = 0

@@ -40,11 +40,11 @@
 // migrated (D-26).
 import { TypeError as TypeError_ } from '@myjs/types'
 import { badFormat, corruptCatalog, dbExists, dbMissingOnDrop, noSuchTable, notAView, notSupportedYet, tableExists, unknownDb, unknownTable, writerBusy, wrongDbName, wrongTableName } from './errors.ts'
-import { ClusteredIndex, type KeyColumn } from './indexes.ts'
-import { decodeRecord, externalRefs, type RecordLayout } from './record.ts'
+import { ClusteredIndex, type KeyColumn, type Row } from './indexes.ts'
+import { decodeRecord, externalRefs, type FieldBytes, type RecordLayout } from './record.ts'
 import { NAME_BYTES, checkName, clusteredKeyOf, decodeTableDef, encodeTableDef, keyColumnsOf, layoutOf, resolveTable, secondariesOf, type TableDef, type TableSpec } from './schema.ts'
 import type { Store } from './store.ts'
-import { MemoryEngine, NativeEngine, type StorageEngine, type Table } from './table.ts'
+import { MemoryEngine, NativeEngine, type StorageEngine, type Table, type TableHooks } from './table.ts'
 import { CLUSTERED_HEADER, versionOf, type Trx } from './trx.ts'
 import type { VerifyOptions } from './verify.ts'
 
@@ -357,6 +357,42 @@ export class Catalog {
     })
     discard?.()
     return def
+  }
+
+  /**
+   * ALTER TABLE by copy: a table made from `spec`, every row of the old one
+   * passed through `copy` into it, its AUTO_INCREMENT counter carried over, and
+   * the old one dropped — one DDL, so a crash or a refused row (a duplicate
+   * under a new UNIQUE key, say) leaves the old table as it was.
+   */
+  rebuildTable(schema: string, name: string, spec: TableSpec, copy: (row: FieldBytes[]) => Row): TableDef {
+    let discard: (() => void) | undefined
+    let made: TableDef | undefined
+    try {
+      const def = ddl(this.store, (trx) => {
+        const s = this.#schemaOf(schema, trx)
+        const old = s === undefined ? undefined : this.#definition(s.id, name, trx)
+        if (s === undefined || old === undefined) throw noSuchTable(schema, name)
+        const resolved = resolveTable(Number(this.store.takeCounter(SYSTEM_INDEX.TABLES, 0)), schema, spec)
+        ClusteredIndex.check(this.store.pool.pageSize, layoutOf(resolved), clusteredKeyOf(resolved), secondariesOf(resolved).map((i) => keyColumnsOf(resolved, i)))
+        made = this.#engine(resolved).create(resolved, trx)
+        // Both handles live only inside this DDL, which holds the writer.
+        const hooks: TableHooks = { definedBy: 0, alive: () => {} }
+        const from = this.#engine(old).open(old, hooks)
+        const to = this.#engine(made).open(made, hooks)
+        for (const [, row] of from.scan(undefined, trx, 'current')) to.insert(copy(row), trx)
+        to.raiseAutoIncrement(from.peekAutoIncrement())
+        discard = this.#drop(old, s.id, trx)
+        this.#tables.insert([be32(s.id), utf8.encode(made.name), be32(made.id), encodeTableDef(made)], trx)
+        return made
+      })
+      discard?.()
+      return def
+    } catch (e) {
+      // A memory table's rows are not the transaction's to take back.
+      if (made !== undefined && !this.#engine(made).transactional) this.#engine(made).discard(made)
+      throw e
+    }
   }
 
   /** A table's definition, as last committed. ER_NO_SUCH_TABLE if there is none. */

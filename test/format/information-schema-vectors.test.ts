@@ -21,7 +21,7 @@ const FIXTURE = new URL('./fixtures/information-schema.json', import.meta.url).p
 const NOT_SUPPORTED = 1235
 
 /** The most statements the executor may still refuse. Lowered by M5.12's and M5.25's stages, never raised. */
-const REFUSED_AT_MOST = 1619
+const REFUSED_AT_MOST = 414
 
 interface Outcome {
   readonly sql: string

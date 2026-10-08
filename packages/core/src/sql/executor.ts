@@ -21,6 +21,7 @@ import {
   QUERY,
   REF,
   parseStatements,
+  KEY,
   STATEMENT,
   TOKEN,
   lex,
@@ -55,7 +56,9 @@ import { COERCIBILITY, doubleValue, intValue, parseDecimal, stringValue, toInteg
 import { charsetChange, ensureCollationResident } from '../transcoder.ts'
 import { PROGRAM_OBJECTS, ServerState, type ProgramStatement, type ServerOptions } from './admin.ts'
 import { compile, EMPTY_SCOPE, type Env } from './compile.ts'
+import { alterTable } from './alter.ts'
 import { DEFAULT_COLLATION, createTableSpec, deprecationWarnings, resolveCollation } from './ddl.ts'
+import { foreignKeyChecks, foreignKeyClause, referencingKeys, withForeignKeys } from './foreign-keys.ts'
 import { insert, remove, update } from './dml.ts'
 import { columnDefinition, stringType } from './meta.ts'
 import { columnsOf, compileContext, planQuery, resultSet, viewTable, type Run } from './query.ts'
@@ -412,11 +415,17 @@ export class SqlExecutor implements Executor {
         const schema = statement.table.schema ?? session.database
         if (schema === null) throw sqlError('ER_NO_DB_ERROR', messages.noDatabaseSelected())
         state.commit()
-        const spec = createTableSpec(statement, catalog.schema(schema).collationId ?? DEFAULT_COLLATION)
+        let spec = createTableSpec(statement, catalog.schema(schema).collationId ?? DEFAULT_COLLATION)
+        // IF NOT EXISTS over a table that exists is its note, whatever its keys would say.
+        if (statement.ifNotExists !== true || !catalog.tables(schema).some((t) => t.name === spec.name)) {
+          spec = withForeignKeys(catalog, schema, spec, statement.keys.filter((k) => k.type === KEY.FOREIGN).map(foreignKeyClause), foreignKeyChecks(run))
+        }
         catalog.createTable(schema, spec, { ifNotExists: statement.ifNotExists === true })
         const warnings = deprecationWarnings(statement)
         return { affectedRows: 0, ...(warnings > 0 ? { warnings } : {}) }
       }
+      case STATEMENT.ALTER_TABLE:
+        return alterTable(run, this.#catalog(), statement)
       case STATEMENT.CREATE_VIEW:
         state.commit()
         return this.#createView(run, statement)
@@ -434,6 +443,10 @@ export class SqlExecutor implements Executor {
         const schema = statement.table.schema ?? session.database
         if (schema === null) throw sqlError('ER_NO_DB_ERROR', messages.noDatabaseSelected())
         state.commit()
+        if (foreignKeyChecks(run)) {
+          const by = referencingKeys(this.#catalog(), schema, statement.table.name).find((r) => r.child.schema !== schema || r.child.name !== statement.table.name)
+          if (by !== undefined) throw sqlError('ER_TRUNCATE_ILLEGAL_FK', `Cannot truncate a table referenced in a foreign key constraint (\`${by.child.schema}\`.\`${by.child.name}\`, CONSTRAINT \`${by.fk.name}\`)`)
+        }
         this.#catalog().truncateTable(schema, statement.table.name)
         return { affectedRows: 0 }
       }
@@ -600,6 +613,14 @@ export class SqlExecutor implements Executor {
     if (statement.ifExists !== true) {
       const missing = names.filter((n) => !catalog.tables().some((t) => t.schema === n.schema && t.name === n.name))
       if (missing.length > 0) throw sqlError('ER_BAD_TABLE_ERROR', `Unknown table '${missing.map((m) => `${m.schema}.${m.name}`).join(',')}'`)
+    }
+    // A parent goes only with its children, or with the checks off (8.4.11: 3730).
+    if (foreignKeyChecks(run)) {
+      const dropping = (schema: string, name: string) => names.some((n) => n.schema === schema && n.name === name)
+      for (const n of names) {
+        const by = referencingKeys(catalog, n.schema, n.name).find((r) => !dropping(r.child.schema, r.child.name))
+        if (by !== undefined) throw sqlError('ER_FK_CANNOT_DROP_PARENT', `Cannot drop table '${n.name}' referenced by a foreign key constraint '${by.fk.name}' on table '${by.child.name}'.`)
+      }
     }
     run.state.commit()
     let notes = 0

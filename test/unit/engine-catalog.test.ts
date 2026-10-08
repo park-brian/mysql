@@ -465,6 +465,37 @@ test('TRUNCATE TABLE: the same definition, no rows, AUTO_INCREMENT from 1, and a
   verifyStore(reopened, again.verifyOptions())
 })
 
+test('ALTER by copy: every row mapped into the new definition, the counter kept, and a refused row leaving the old table whole', async () => {
+  for (const engine of ['native', 'memory'] as const) {
+    const { vfs, store, catalog } = await fresh()
+    catalog.createSchema('app')
+    catalog.createTable('app', { ...spec(), engine, columns: [int('id', { autoIncrement: true }), varchar('v', 20), { name: 'b', type: { type: FIELD_TYPE.BLOB, collationId: 63 }, nullable: true }], indexes: [{ name: 'PRIMARY', kind: 'primary', parts: [{ column: 'id' }] }] })
+    const t = catalog.table('app', 't')
+    t.insert([i32(1), utf8('one'), null])
+    t.insert([i32(2), utf8('one'), null])
+    assert.equal(t.nextAutoIncrement(10), 3n, 'values handed out and never used')
+    const before = catalog.definition('app', 't')
+    // A UNIQUE key the rows break: 1062, and nothing changed.
+    refused(() => catalog.rebuildTable('app', 't', { ...before, indexes: [...before.indexes, { name: 'v', kind: 'unique', parts: [{ column: 'v' }] }] }, (row) => row), 'ER_DUP_ENTRY')
+    assert.deepEqual(catalog.definition('app', 't'), before)
+    assert.equal([...catalog.table('app', 't').scan()].length, 2)
+    // A column added at the end, filled for every row.
+    const after = catalog.rebuildTable('app', 't', { ...before, columns: [...before.columns, int('n', { nullable: true })], indexes: [...before.indexes, { name: 'v', kind: 'index', parts: [{ column: 'v' }] }] }, (row) => [...row, i32(7)])
+    assert.deepEqual(after.indexes.map((i) => i.name), ['PRIMARY', 'v'])
+    const rebuilt = catalog.table('app', 't')
+    assert.deepEqual([...rebuilt.scan()].map(([, r]) => [decodeInt(r[0] as Uint8Array, false), decodeInt(r[3] as Uint8Array, false)]), [[1n, 7n], [2n, 7n]])
+    assert.deepEqual([...rebuilt.indexScan('v')].length, 2)
+    assert.equal(rebuilt.nextAutoIncrement(), 13n, 'the counter is the old table\'s, not one past its largest row')
+    if (engine === 'memory') continue
+    verifyStore(store, catalog.verifyOptions())
+    store.close()
+    const reopened = Store.open(...(await files(vfs)), { frames: 64 })
+    const again = Catalog.open(reopened)
+    assert.deepEqual(again.definition('app', 't').columns.map((c) => c.name), ['id', 'v', 'b', 'n'])
+    verifyStore(reopened, again.verifyOptions())
+  }
+})
+
 test('views: one namespace with tables, all-or-nothing DROP, dropped with their schema, and kept across a reopen', async () => {
   const { vfs, store, catalog } = await fresh()
   catalog.createSchema('app')

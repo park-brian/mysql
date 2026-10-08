@@ -29,6 +29,7 @@ import { messages, sqlError } from '@myjs/protocol'
 import { COERCIBILITY, decodeField, encodeField, intValue, stringValue, toText, type Value } from '@myjs/types'
 import { compile, EMPTY_SCOPE } from './compile.ts'
 import type { DerivedSource } from './from.ts'
+import { foreignKeysOf } from './foreign-keys.ts'
 import { INFORMATION_SCHEMA, type InformationSchemaColumn } from './information-schema-defs.ts'
 import { datetimeType, intType, keyFlags, NULL_TYPE, stringType, type ResultType } from './meta.ts'
 import { planViewQuery, type Run } from './query.ts'
@@ -312,30 +313,6 @@ function zeroOf(run: Run, column: ColumnDef): string | null {
 
 // --- the tables -----------------------------------------------------------------------
 
-/** Constraint name of a FOREIGN KEY written without one: `<table>_ibfk_<n>`, as InnoDB names it. */
-interface ForeignKey {
-  readonly name: string
-  readonly columns: readonly string[]
-  readonly table: { readonly schema?: string; readonly name: string }
-  readonly referenced: readonly string[]
-  readonly onDelete: string
-  readonly onUpdate: string
-}
-
-export function foreignKeysOf(def: TableDef): ForeignKey[] {
-  const stored = def.options['foreignKeys']
-  if (!Array.isArray(stored)) return []
-  let auto = 0
-  return stored.map((k: { name?: string; columns: string[]; references?: { table: { schema?: string; name: string }; columns: string[]; onDelete?: string; onUpdate?: string } }) => ({
-    name: k.name ?? `${def.name}_ibfk_${++auto}`,
-    columns: k.columns,
-    table: k.references?.table ?? { name: '' },
-    referenced: k.references?.columns ?? [],
-    onDelete: k.references?.onDelete ?? 'NO ACTION',
-    onUpdate: k.references?.onUpdate ?? 'NO ACTION',
-  }))
-}
-
 function* everyTable(run: Run): Generator<{ schema: string; def: TableDef }> {
   for (const schema of schemaNames(run)) for (const def of tablesOf(run, schema)) yield { schema, def }
 }
@@ -404,7 +381,7 @@ const ROWS: Readonly<Record<string, (run: Run) => Iterable<readonly Value[]>>> =
         for (const [i, p] of index.parts.entries()) yield [s('def'), s(schema), s(index.name), s('def'), s(schema), s(def.name), s(p.column), n(i + 1), null, null, null, null]
       }
       for (const fk of foreignKeysOf(def)) {
-        for (const [i, c] of fk.columns.entries()) yield [s('def'), s(schema), s(fk.name), s('def'), s(schema), s(def.name), s(c), n(i + 1), n(i + 1), s(fk.table.schema ?? schema), s(fk.table.name), s(fk.referenced[i] ?? null)]
+        for (const [i, c] of fk.columns.entries()) yield [s('def'), s(schema), s(fk.name), s('def'), s(schema), s(def.name), s(c), n(i + 1), n(i + 1), s(fk.references.schema), s(fk.references.table), s(fk.references.columns[i] ?? null)]
       }
     }
   },
@@ -412,9 +389,9 @@ const ROWS: Readonly<Record<string, (run: Run) => Iterable<readonly Value[]>>> =
   *REFERENTIAL_CONSTRAINTS(run) {
     for (const { schema, def } of everyTable(run)) {
       for (const fk of foreignKeysOf(def)) {
-        const parent = run.catalog === undefined ? undefined : tablesOf(run, fk.table.schema ?? schema).find((t) => t.name === fk.table.name)
-        const unique = parent?.indexes.find((i) => i.kind !== 'index' && i.parts.length === fk.referenced.length && i.parts.every((p, k) => p.column === fk.referenced[k]))
-        yield [s('def'), s(schema), s(fk.name), s('def'), s(fk.table.schema ?? schema), s(unique?.name ?? null), s('NONE'), s(fk.onUpdate), s(fk.onDelete), s(def.name), s(fk.table.name)]
+        const parent = run.catalog === undefined ? undefined : tablesOf(run, fk.references.schema).find((t) => t.name === fk.references.table)
+        const unique = parent?.indexes.find((i) => i.kind !== 'index' && i.parts.length === fk.references.columns.length && i.parts.every((p, k) => p.column.toLowerCase() === fk.references.columns[k]?.toLowerCase()))
+        yield [s('def'), s(schema), s(fk.name), s('def'), s(fk.references.schema), s(unique?.name ?? null), s('NONE'), s(fk.onUpdate), s(fk.onDelete), s(def.name), s(fk.references.table)]
       }
     }
   },
