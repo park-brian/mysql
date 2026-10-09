@@ -40,7 +40,7 @@ import { truth, type Value } from '@myjs/types'
 import type { Compiled, Env, Row, Scope } from './compile.ts'
 import { planNode, type PlanNode } from './explain.ts'
 import { FULL_SCAN, accessRows, chooseAccess, pointAccess, splitAnd, type Access, type OuterColumn } from './plan.ts'
-import { bestAccess, floorFilter, type KeyChoice, type Position } from './cost.ts'
+import { bestAccess, floorFilter, joinOrder, type Candidate, type KeyChoice, type Positioned } from './cost.ts'
 import { rowKey } from './keys.ts'
 import type { TableStatistics } from './stats.ts'
 import { TableScope, type ScopeColumn, type ScopeTableSpec } from './scope.ts'
@@ -177,6 +177,8 @@ export interface FromContext {
   compileOn(e: Expression, scope: Scope): Compiled
   /** A base table's statistics, as the optimizer reads them (M5.45). */
   statistics?(def: TableDef, table: Table): TableStatistics
+  /** The statement's environment, which the cost model evaluates constant conditions in (M5.7). */
+  readonly env?: Env
   /** Plan a derived table (M5.1); `lateral` is the scope of the tables before it, for LATERAL. */
   derived?(ref: TableReference & { readonly kind: typeof REF.DERIVED }, lateral: Scope | undefined): DerivedSource
   /** A common table expression the statement defines under this name, planned for one reference to it. */
@@ -190,7 +192,8 @@ export interface FromContext {
 }
 
 /** The written FROM, as a plan: its scope, and how to read it. */
-export function planFrom(refs: readonly TableReference[], ctx: FromContext, where?: Expression): FromPlan {
+/** `straight` is SELECT STRAIGHT_JOIN: the tables joined in the order written. */
+export function planFrom(refs: readonly TableReference[], ctx: FromContext, where?: Expression, straightJoin = false): FromPlan {
   // First pass: the tables, in order, with whether an outer join can null them.
   interface Pending {
     alias: string
@@ -286,7 +289,7 @@ export function planFrom(refs: readonly TableReference[], ctx: FromContext, wher
     return at === undefined ? '' : at.column.name
   }
   let leafAt = 0
-  let straight = false
+  let straight = straightJoin
   const joins: JoinCondition[] = []
   let nesting = 0
   /** A subtree: its node, its aliases, and its visible columns as `*` lists them. */
@@ -434,15 +437,36 @@ export function planFrom(refs: readonly TableReference[], ctx: FromContext, wher
 
   // The physical tree: built once the WHERE is placed (`filter`), or without one.
   const settings: LeafSettings = { covering, read: new Map(), tables: new Map(tables.map((t) => [t.alias, t])), ...(outer === undefined ? {} : { outer }), ...(ctx.statistics === undefined ? {} : { statistics: ctx.statistics }) }
-  // Which joins read their later table by its index lookup: the cost model's, over the WHERE's conjuncts, once the columns read are known.
-  let looked: ReadonlySet<string> | undefined
-  const lookups = (): ReadonlySet<string> => (looked ??= tree === undefined ? new Set() : chooseLookups(tree.node, splitAnd(where).map((e) => ({ e, aliases: aliasesOf(e, scope) })), scope, settings))
-  const withLookups = (): LeafSettings => {
-    settings.lookups = lookups()
-    return settings
+  // The join order and each join's access: the cost model's, over the WHERE's conjuncts, once the columns read are known (M5.7).
+  const onAsts: Expression[] = []
+  const gatherOn = (node: Node): void => {
+    if (node.kind === 'leaf') return
+    if (node.onAst !== undefined) onAsts.push(node.onAst)
+    gatherOn(node.outer)
+    gatherOn(node.inner)
+  }
+  if (tree !== undefined) gatherOn(tree.node)
+  // The index lookup into `t` after the tables in `before`, by the WHERE or an ON.
+  const lookupAfter = (t: FromTable, before: ReadonlySet<string>): EqRef | undefined => {
+    const within = coalesced.filter((g) => g.every((i) => [...before].some((a) => inTable(byAlias.get(a), i))))
+    return refOf(t, [where, ...onAsts], before, preliminary, (e) => ctx.compileOn(e, slotScope(preliminary.restrict(before, within), preliminary)))
+  }
+  let planned: JoinPlan | undefined
+  const joinPlan = (): JoinPlan | undefined => {
+    if (tree === undefined) return undefined
+    const env = ctx.env
+    const rangeOf = (t: FromTable, conditions: readonly Weighed[]): RangeEstimate | undefined =>
+      env === undefined ? undefined : rangeEstimate(t, conditions, tables, scope, (e) => ctx.compileOn(e, preliminary.restrict(new Set([t.alias]))), env, width)
+    planned ??= planJoins(tree.node, splitAnd(where).map((e) => ({ e, aliases: aliasesOf(e, scope) })), scope, settings, straight ? undefined : lookupAfter, rangeOf)
+    settings.lookups = planned.lookups
+    return planned
+  }
+  const physicalOf = (conditions: readonly Placed[]): Op | undefined => {
+    const plan = joinPlan()
+    return plan === undefined ? undefined : toOp(plan.node, [...conditions, ...plan.on], scope, settings, ctx, preliminary)
   }
   let physical: Op | undefined
-  const physicalTree = (): Op | undefined => (physical ??= tree === undefined ? undefined : toOp(tree.node, [], scope, withLookups(), ctx, preliminary))
+  const physicalTree = (): Op | undefined => (physical ??= physicalOf([]))
 
   return {
     scope,
@@ -459,9 +483,10 @@ export function planFrom(refs: readonly TableReference[], ctx: FromContext, wher
       }
     },
     sortsFirst(aliases) {
-      if (tree === undefined) return false
+      const plan = joinPlan()
+      if (plan === undefined) return false
       // The first table in execution order: the outer side all the way down.
-      let node = tree.node
+      let node = plan.node
       const spine: Node[] = []
       while (node.kind === 'join') {
         spine.push(node)
@@ -470,7 +495,7 @@ export function planFrom(refs: readonly TableReference[], ctx: FromContext, wher
       const first = node.table.alias
       if (node.table.derived?.joined === true) return false
       if ([...aliases].some((a) => a !== first)) return false
-      const looked = lookups()
+      const looked = plan.lookups
       return spine.every((j) => j.kind === 'join' && ((j.inner.kind === 'leaf' && looked.has(j.inner.table.alias)) || [...nestedLoopJoins].some((s) => [...s].every((a) => innerAliasesOf(j).has(a)) && s.size === innerAliasesOf(j).size)))
     },
     ...(single === undefined ? {} : { single }),
@@ -481,7 +506,7 @@ export function planFrom(refs: readonly TableReference[], ctx: FromContext, wher
         const semi = semijoin?.(e)
         return { e, aliases: aliasesOf(e, scope), compiled, ...(semi === undefined ? {} : { semijoin: semi }) }
       })
-      physical = tree === undefined ? undefined : toOp(tree.node, conditions, scope, withLookups(), ctx, preliminary)
+      physical = physicalOf(conditions)
     },
     readInOrder(index, force, reverse = false) {
       settings.ordered = { index, force, reverse }
@@ -638,7 +663,7 @@ interface LeafSettings {
   readonly statistics?: (def: TableDef, table: Table) => TableStatistics
   /** The FROM's tables by alias, for the cost model. */
   readonly tables?: ReadonlyMap<string, FromTable>
-  /** The tables the cost model reads by their join's index lookup (`chooseLookups`). */
+  /** The tables the cost model reads by their join's index lookup (`planJoins`). */
   lookups?: ReadonlySet<string>
   readonly outer?: OuterColumn
   /** The one table read whole in this index's order (`readInOrder`). */
@@ -862,17 +887,26 @@ function toOp(node: Node, conditions: readonly Placed[], scope: TableScope, sett
 /** A condition as the cost model weighs it: its text and the tables it reads. */
 type Weighed = Pick<Placed, 'e' | 'aliases'>
 
+/** The joins as they run: in the order chosen, each later table read by its lookup or hashed, and the ON conditions a reordered tree applies above its joins. */
+interface JoinPlan {
+  readonly node: Node
+  readonly lookups: ReadonlySet<string>
+  readonly on: readonly Placed[]
+}
+
 /**
- * The tables a join reads by its index lookup rather than by a hash join
- * (`cost.ts`): the join order's positions, table by table, each read the
- * cheaper way given the rows the tables before it are estimated to give.
- * The conditions that filter those estimates are the WHERE and the inner
- * joins' ONs — an outer join's ON keys its lookup but filters nothing
- * (`where_cond`). A table with no statistics to cost it by is looked up.
+ * The join order and each table's access (`cost.ts`). An inner join of base
+ * tables is reordered as the server orders it (`joinOrder`), given
+ * `lookupAfter`, which finds the index lookup into a table after the tables
+ * before it; anything else — an outer join, a derived or LATERAL table,
+ * STRAIGHT_JOIN — runs in the written order. Either way each table is read
+ * by its lookup or whole as `bestAccess` decides, given the rows the tables
+ * before it are estimated to give. The conditions that filter those
+ * estimates are the WHERE and the inner joins' ONs; an outer join's ON keys
+ * its lookup but filters nothing (`where_cond`). A table with no statistics
+ * to cost it by is looked up.
  */
-function chooseLookups(root: Node, where: readonly Weighed[], scope: TableScope, settings: LeafSettings): Set<string> {
-  const candidates = (node: Node): boolean => node.kind === 'join' && (node.lookup !== undefined || candidates(node.outer) || candidates(node.inner))
-  if (!candidates(root)) return new Set()
+function planJoins(root: Node, where: readonly Weighed[], scope: TableScope, settings: LeafSettings, lookupAfter: ((t: FromTable, before: ReadonlySet<string>) => EqRef | undefined) | undefined, rangeOf: (t: FromTable, conditions: readonly Weighed[]) => RangeEstimate | undefined): JoinPlan {
   const conditions = [...where]
   const gather = (node: Node, nullable: boolean): void => {
     if (node.kind === 'leaf') return
@@ -881,48 +915,224 @@ function chooseLookups(root: Node, where: readonly Weighed[], scope: TableScope,
     gather(node.inner, nullable || node.left)
   }
   gather(root, false)
-  const positions: Position[] = []
-  const looked = new Set<string>()
+  const statsOf = (t: FromTable): TableStatistics | undefined => (t.def !== undefined && t.table !== undefined ? settings.statistics?.(t.def, t.table) : undefined)
+  const leaves: FromTable[] = []
+  const inner = (node: Node): boolean => (node.kind === 'leaf' ? (leaves.push(node.table), true) : !node.left && inner(node.outer) && inner(node.inner))
+  if (lookupAfter !== undefined && inner(root) && leaves.length > 1 && leaves.every((t) => !t.lateral && statsOf(t) !== undefined)) {
+    const candidates: Candidate[] = leaves.map((t) => {
+      const range = rangeOf(t, conditions)
+      return {
+        alias: t.alias,
+        rows: range?.rows ?? (statsOf(t) as TableStatistics).rows,
+        dependent: new Set(),
+        keyDependent: keySources(t, conditions, scope),
+        place: (prefix) => placeTable(t, lookupAfter(t, new Set(prefix.map((p) => p.alias))), prefix, conditions, scope, settings, statsOf(t), range),
+      }
+    })
+    const order = joinOrder(candidates)
+    const byAlias = new Map(leaves.map((t) => [t.alias, t]))
+    let node: Node = { kind: 'leaf', table: byAlias.get((order[0] as Positioned).alias) as FromTable }
+    const before = new Set([(order[0] as Positioned).alias])
+    for (const p of order.slice(1)) {
+      const t = byAlias.get(p.alias) as FromTable
+      const lookup = p.lookup ? lookupAfter(t, before) : undefined
+      node = { kind: 'join', outer: node, inner: { kind: 'leaf', table: t }, left: false, on: [], onAst: undefined, innerSlots: Array.from({ length: t.width }, (_, i) => t.offset + i), lookup }
+      before.add(p.alias)
+    }
+    const on: Placed[] = []
+    const ons = (n: Node): void => {
+      if (n.kind === 'leaf') return
+      on.push(...n.on)
+      ons(n.outer)
+      ons(n.inner)
+    }
+    ons(root)
+    return { node, lookups: new Set(order.filter((p) => p.lookup).map((p) => p.alias)), on }
+  }
+  const candidates = (node: Node): boolean => node.kind === 'join' && (node.lookup !== undefined || candidates(node.outer) || candidates(node.inner))
+  if (!candidates(root)) return { node: root, lookups: new Set(), on: [] }
+  const positions: Positioned[] = []
   const visit = (node: Node, lookup?: EqRef): void => {
     if (node.kind === 'join') {
       visit(node.outer)
       visit(node.inner, node.lookup)
       return
     }
-    const t = node.table
-    const stats = t.def !== undefined && t.table !== undefined ? settings.statistics?.(t.def, t.table) : undefined
-    if (t.def === undefined || stats === undefined) {
-      if (lookup !== undefined) looked.add(t.alias)
-      positions.push({ alias: t.alias, fetched: 1, filter: 1, keyFrom: new Set() })
-      return
-    }
-    const def = t.def
-    const read = settings.read.get(t.alias) ?? 'all'
-    const before = new Set(positions.map((p) => p.alias))
-    const filter = (available: ReadonlySet<string>, ignore?: ColumnDef): number => conditions.reduce((f, c) => f * filterEffect(c.e, t, stats, available, scope, ignore), 1)
-    const key: KeyChoice | undefined =
-      lookup === undefined
-        ? undefined
-        : {
-            kind: lookup.unique ? 'unique' : isClustered(def, lookup.index) ? 'clustered' : 'ref',
-            fanout: lookup.unique ? 1 : stats.recordsPerKey(lookup.index, 1),
-            covering: covers(def, lookup.index, read),
-            recordBytes: indexBytes(def, lookup.index) + indexBytes(def, clusteredIndex(def)),
-            keyFrom: new Set([...(aliasesOf(lookup.condition, scope) ?? [])].filter((a) => a !== t.alias)),
-          }
-    const coveredByAnyIndex = read !== 'all' && (def.indexes.some((i) => covers(def, i, read)) || [...read].every((c) => clusteredIndex(def)?.parts.some((p) => p.column.toLowerCase() === c) === true))
-    const constant = stats.rows < 1 ? 1 : floorFilter(filter(new Set()), stats.rows, stats.rows)
-    const access = bestAccess({ stats, coveredByAnyIndex, constantFilter: constant }, positions, key, rowBytes(positions, settings))
-    let kept: number
-    if (access.lookup) {
-      looked.add(t.alias)
-      kept = access.fetched < 1 ? 1 : floorFilter(filter(before, lookup?.column), stats.rows, access.fetched)
-    } else kept = Math.min(1, (stats.rows * floorFilter(filter(before), stats.rows, stats.rows)) / access.fetched)
-    positions.push({ alias: t.alias, fetched: access.fetched, filter: kept, keyFrom: access.lookup ? (key?.keyFrom ?? new Set()) : new Set() })
+    positions.push(placeTable(node.table, lookup, positions, conditions, scope, settings, statsOf(node.table), rangeOf(node.table, conditions)))
   }
   visit(root)
-  return looked
+  return { node: root, lookups: new Set(positions.filter((p) => p.lookup).map((p) => p.alias)), on: [] }
 }
+
+/** What the range optimizer estimates of a table (`found_records`, `quick_rows`): its rows under the conditions on each column an index leads, and the least of them. */
+interface RangeEstimate {
+  readonly rows: number
+  readonly counts: ReadonlyMap<ColumnDef, number>
+}
+
+/**
+ * The rows of `t` each index's range would read, as the range optimizer's
+ * index dives count them — exactly, on a table this size. A condition counts
+ * for a column an index leads where it compares that column alone with
+ * constants: a comparison, BETWEEN, IN, IS [NOT] NULL, a LIKE with a fixed
+ * prefix, or an AND or OR of them. Two things are done first, as the server
+ * does them: an IS NULL on a NOT NULL column is false, so an OR drops it; and
+ * a condition on a column joined to this one by `=` holds for this one too
+ * (multiple equalities), so `lt.n = pa.id AND pa.id <= 0.5` ranges over
+ * `lt.n`. A range that finds nothing estimates one row (`records_in_range`).
+ */
+function rangeEstimate(t: FromTable, conditions: readonly Weighed[], leaves: readonly FromTable[], scope: TableScope, compile: (e: Expression) => Compiled, env: Env, width: number): RangeEstimate | undefined {
+  const def = t.def
+  if (def === undefined || t.table === undefined || t.nullable) return undefined
+  const leading = new Set(def.indexes.filter((i) => i.invisible !== true && i.parts[0]?.prefix === undefined).map((i) => i.parts[0]?.column))
+  const resolve = (e: Expression): { readonly t: FromTable; readonly c: ColumnDef } | undefined => {
+    for (const l of leaves) {
+      const c = columnOf(l, e, scope)
+      if (c !== undefined) return { t: l, c }
+    }
+    return undefined
+  }
+  const name = (r: { readonly t: FromTable; readonly c: ColumnDef }): string => `${r.t.alias}\u0000${r.c.name.toLowerCase()}`
+  const conjuncts = conditions.flatMap((c) => splitAnd(c.e))
+  // The multiple equalities: classes of columns joined by `=`.
+  const classes: Set<string>[] = []
+  const classOf = (k: string): Set<string> => classes.find((c) => c.has(k)) ?? (classes.push(new Set([k])), classes.at(-1) as Set<string>)
+  for (const e of conjuncts) {
+    if (e.kind !== NODE.BINARY || e.op !== '=') continue
+    const l = resolve(e.left)
+    const r = resolve(e.right)
+    if (l === undefined || r === undefined || l.t === r.t) continue
+    const a = classOf(name(l))
+    const b = classOf(name(r))
+    if (a === b) continue
+    for (const k of b) a.add(k)
+    classes.splice(classes.indexOf(b), 1)
+  }
+  const isNullOfNotNull = (e: Expression): boolean => e.kind === NODE.UNARY && e.op === 'IS NULL' && resolve(e.operand)?.c.nullable === false
+  const possible = (e: Expression): Expression => {
+    if (e.kind !== NODE.BINARY || (e.op !== 'OR' && e.op !== '||')) return e
+    const kept = [possible(e.left), possible(e.right)].filter((x) => !isNullOfNotNull(x))
+    return kept.length === 2 ? { ...e, left: kept[0] as Expression, right: kept[1] as Expression } : (kept[0] ?? e)
+  }
+  const per = new Map<ColumnDef, Expression[]>()
+  for (const raw of conjuncts) {
+    const e = possible(raw)
+    const columns: Expression[] = []
+    let plain = true
+    const visit = (x: unknown): void => {
+      if (!plain || x === null || typeof x !== 'object') return
+      if (Array.isArray(x)) return x.forEach(visit)
+      const n = x as Expression
+      if (n.kind === NODE.SUBQUERY || n.kind === NODE.PLACEHOLDER || n.kind === NODE.VARIABLE) plain = false
+      else if (n.kind === NODE.COLUMN) columns.push(n)
+      else for (const v of Object.values(n)) if (typeof v === 'object') visit(v)
+    }
+    visit(e)
+    if (!plain || columns.length === 0) continue
+    const resolved = columns.map(resolve)
+    const first = resolved[0]
+    if (first === undefined || resolved.some((r) => r === undefined || name(r) !== name(first))) continue
+    const target = first.t === t ? first.c : def.columns.find((c) => classOf(name(first)).has(name({ t, c })))
+    if (target === undefined || !leading.has(target.name)) continue
+    const column: Expression = { kind: NODE.COLUMN, parts: [t.alias, target.name], at: e.at } as Expression
+    const own = (x: Expression): boolean => x.kind === NODE.COLUMN && resolve(x) !== undefined && name(resolve(x) as { t: FromTable; c: ColumnDef }) === name(first)
+    const rewrite = (x: Expression): Expression => (own(x) ? column : x)
+    const sargable = (x: Expression): Expression | undefined => {
+      const constant = (y: Expression | undefined): boolean => y !== undefined && !own(y) && aliasesOf(y, scope)?.size === 0
+      if (x.kind === NODE.UNARY) return (x.op === 'IS NULL' || x.op === 'IS NOT NULL') && own(x.operand) ? { ...x, operand: column } : undefined
+      if (x.kind !== NODE.BINARY) return undefined
+      const op = x.op.toUpperCase()
+      if (op === 'AND' || op === '&&' || op === 'OR' || op === '||') {
+        const a = sargable(x.left)
+        const b = sargable(x.right)
+        return a === undefined || b === undefined ? undefined : { ...x, left: a, right: b }
+      }
+      if (['=', '<=>', '<', '<=', '>', '>=', '<>', '!='].includes(op)) return (own(x.left) && constant(x.right)) || (own(x.right) && constant(x.left)) ? { ...x, left: rewrite(x.left), right: rewrite(x.right) } : undefined
+      if (op === 'BETWEEN' || op === 'NOT BETWEEN') return own(x.left) && constant(x.right) && constant(x.extra as Expression) ? { ...x, left: column } : undefined
+      if (op === 'IN' || op === 'NOT IN') return own(x.left) && x.right.kind === NODE.ROW && x.right.items.every((i) => constant(i)) ? { ...x, left: column } : undefined
+      if (op === 'LIKE') return own(x.left) && x.right.kind === NODE.LITERAL && typeof x.right.value === 'string' && !/^[%_]/.test(x.right.value) && x.extra === undefined ? { ...x, left: column } : undefined
+      return undefined
+    }
+    const range = sargable(e)
+    if (range === undefined) continue
+    per.set(target, [...(per.get(target) ?? []), range])
+  }
+  if (per.size === 0) return undefined
+  const compiled: [ColumnDef, Compiled][] = []
+  for (const [column, es] of per) {
+    try {
+      compiled.push([column, compile(es.reduce((a, b) => ({ kind: NODE.BINARY, op: 'AND', left: a, right: b, at: a.at }) as Expression))])
+    } catch (e) {
+      expectTyped(e)
+    }
+  }
+  if (compiled.length === 0) return undefined
+  const counts = new Map<ColumnDef, number>(compiled.map(([c]) => [c, 0]))
+  const row = new Array<Value>(width).fill(null)
+  for (const { row: values } of accessRows(t.table, def, FULL_SCAN, undefined, false)) {
+    for (let i = 0; i < t.width; i++) row[t.offset + i] = values[i] ?? null
+    for (const [column, c] of compiled) if (truth(c.eval(row, env)) === true) counts.set(column, (counts.get(column) as number) + 1)
+  }
+  for (const [c, n] of counts) counts.set(c, Math.max(1, n))
+  return { rows: Math.min(...counts.values()), counts }
+}
+
+/** The tables an index lookup into `t` could take its key from: the other side of an equality with a column an index leads (`key_dependent`). */
+function keySources(t: FromTable, conditions: readonly Weighed[], scope: TableScope): Set<string> {
+  const out = new Set<string>()
+  const leads = (c: ColumnDef | undefined): boolean => c !== undefined && t.def?.indexes.some((i) => i.invisible !== true && i.parts[0]?.column === c.name) === true
+  for (const { e } of conditions) {
+    for (const c of splitAnd(e)) {
+      if (c.kind !== NODE.BINARY || c.op !== '=') continue
+      for (const [own, other] of [[c.left, c.right], [c.right, c.left]] as const) {
+        if (!leads(columnOf(t, own, scope))) continue
+        for (const a of aliasesOf(other, scope) ?? []) if (a !== t.alias) out.add(a)
+      }
+    }
+  }
+  return out
+}
+
+/**
+ * A table placed after `prefix` (`best_access_path`): read by `lookup` or
+ * whole, whichever costs less, with the rows it fetches for each prefix row
+ * and the share of them the conditions keep.
+ */
+function placeTable(t: FromTable, lookup: EqRef | undefined, prefix: readonly Positioned[], conditions: readonly Weighed[], scope: TableScope, settings: LeafSettings, stats: TableStatistics | undefined, range?: RangeEstimate): Positioned {
+  if (t.def === undefined || stats === undefined) return { alias: t.alias, fetched: 1, filter: 1, keyFrom: new Set(), lookup: lookup !== undefined, read: 0 }
+  const def = t.def
+  const read = settings.read.get(t.alias) ?? 'all'
+  const before = new Set(prefix.map((p) => p.alias))
+  // A range's estimate is the filter of the columns it was made on, unless the lookup's key is one of them; the rest are guessed (`calculate_condition_filter`).
+  const ranged = new Set(range?.counts.keys() ?? [])
+  const filter = (available: ReadonlySet<string>, key?: ColumnDef): number => {
+    let f = 1
+    for (const [column, n] of range?.counts ?? []) if (column !== key) f *= Math.min(1, Math.fround(n / stats.rows))
+    const ignore = key === undefined ? ranged : new Set([...ranged, key])
+    return conditions.reduce((g, c) => g * filterEffect(c.e, t, stats, available, scope, ignore), f)
+  }
+  const key: KeyChoice | undefined =
+    lookup === undefined
+      ? undefined
+      : {
+          kind: lookup.unique ? 'unique' : isClustered(def, lookup.index) ? 'clustered' : 'ref',
+          fanout: lookup.unique ? 1 : stats.recordsPerKey(lookup.index, 1),
+          covering: covers(def, lookup.index, read),
+          recordBytes: indexBytes(def, lookup.index) + indexBytes(def, clusteredIndex(def)),
+          keyFrom: new Set([...(aliasesOf(lookup.condition, scope) ?? [])].filter((a) => a !== t.alias)),
+        }
+  const coveredByAnyIndex = read !== 'all' && (def.indexes.some((i) => covers(def, i, read)) || [...read].every((c) => clusteredIndex(def)?.parts.some((p) => p.column.toLowerCase() === c) === true))
+  const constant = stats.rows < 1 ? 1 : floorFilter(filter(new Set()), stats.rows, stats.rows)
+  const access = bestAccess({ stats, coveredByAnyIndex, constantFilter: constant }, prefix, key, rowBytes(prefix, settings))
+  const kept = access.lookup
+    ? access.fetched < 1
+      ? 1
+      : floorFilter(filter(before, lookup?.column), stats.rows, access.fetched)
+    : Math.min(1, (stats.rows * floorFilter(filter(before), stats.rows, stats.rows)) / access.fetched)
+  return { alias: t.alias, fetched: access.fetched, filter: kept, keyFrom: access.lookup ? (key?.keyFrom ?? new Set()) : new Set(), lookup: access.lookup, read: access.read }
+}
+
+const NO_COLUMNS: ReadonlySet<ColumnDef> = new Set()
 
 /**
  * The fraction of a table's rows one condition keeps, given the tables
@@ -931,11 +1141,11 @@ function chooseLookups(root: Node, where: readonly Weighed[], scope: TableScope,
  * a constant, or a column of a table read before it. An equality keeps the
  * rows per value of an index the column leads, else a tenth; `<>` the rest;
  * a range a third; BETWEEN and LIKE a ninth; IN a tenth per value, at most a
- * half; IS NULL a tenth. Each is at least one row's worth. `ignore` is the
- * column the table's lookup is keyed by, which the lookup's rows already
- * reflect.
+ * half; IS NULL a tenth. Each is at least one row's worth. `ignore` holds
+ * the columns the table's rows are already counted by — its lookup's key,
+ * and the columns a range was estimated on.
  */
-function filterEffect(e: Expression, t: FromTable, stats: TableStatistics, available: ReadonlySet<string>, scope: TableScope, ignore?: ColumnDef): number {
+function filterEffect(e: Expression, t: FromTable, stats: TableStatistics, available: ReadonlySet<string>, scope: TableScope, ignore: ReadonlySet<ColumnDef> = NO_COLUMNS): number {
   const def = t.def as TableDef
   const atLeast = (f: number): number => Math.max(Math.fround(1 / stats.rows), f)
   const known = (x: Expression): boolean => {
@@ -946,7 +1156,8 @@ function filterEffect(e: Expression, t: FromTable, stats: TableStatistics, avail
   // A comparison counts where one side is this table's column, not the lookup's, and the other is known.
   const compared = (x: Expression, y: Expression): boolean => {
     const c = own(x)
-    return c !== undefined && c !== ignore && (known(y) || (own(y) !== undefined && own(y) === ignore))
+    const other = own(y)
+    return c !== undefined && !ignore.has(c) && (known(y) || (other !== undefined && ignore.has(other)))
   }
   const comparison = (x: Expression, y: Expression, f: number): number => (compared(x, y) || compared(y, x) ? atLeast(f) : 1)
   if (e.kind === NODE.UNARY) {
@@ -955,7 +1166,7 @@ function filterEffect(e: Expression, t: FromTable, stats: TableStatistics, avail
       return f === 1 ? 1 : 1 - f
     }
     const c = own(e.operand)
-    if (c === undefined || c === ignore) return 1
+    if (c === undefined || ignore.has(c)) return 1
     if (e.op === 'IS NULL') return atLeast(0.1)
     if (e.op === 'IS NOT NULL') return c.nullable ? 1 - atLeast(0.1) : 1
     return 1
@@ -993,7 +1204,7 @@ function filterEffect(e: Expression, t: FromTable, stats: TableStatistics, avail
     case 'BETWEEN':
     case 'NOT BETWEEN': {
       const c = own(e.left)
-      if (c === undefined || c === ignore || !known(e.right) || (e.extra !== undefined && !known(e.extra as Expression))) return 1
+      if (c === undefined || ignore.has(c) || !known(e.right) || (e.extra !== undefined && !known(e.extra as Expression))) return 1
       return e.op.toUpperCase() === 'BETWEEN' ? atLeast(1 / 9) : 1 - atLeast(1 / 9)
     }
     case 'LIKE':
@@ -1005,7 +1216,7 @@ function filterEffect(e: Expression, t: FromTable, stats: TableStatistics, avail
     case 'IN':
     case 'NOT IN': {
       const c = own(e.left)
-      if (c === undefined || c === ignore || e.right.kind !== NODE.ROW || !known(e.right)) return 1
+      if (c === undefined || ignore.has(c) || e.right.kind !== NODE.ROW || !known(e.right)) return 1
       const f = Math.min(e.right.items.length * atLeast(0.1), 0.5)
       return e.op.toUpperCase() === 'IN' ? f : 1 - f
     }
@@ -1019,7 +1230,7 @@ function filterEffect(e: Expression, t: FromTable, stats: TableStatistics, avail
  * (`cache_record_length`): the columns the query reads of each, at their
  * stored width, and their NULL flags.
  */
-function rowBytes(prefix: readonly Position[], settings: LeafSettings): number {
+function rowBytes(prefix: readonly Positioned[], settings: LeafSettings): number {
   let bytes = 0
   for (const { alias } of prefix) {
     const read = settings.read.get(alias) ?? 'all'

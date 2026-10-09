@@ -89,6 +89,7 @@ export function fromContext(run: Run): FromContext {
   return {
     open: (name, alias) => openTable(run, name, alias),
     compileOn: (e, scope) => compile(e, compileContext(run, scope, 'on clause')),
+    env: run.env,
     ...(run.catalog === undefined ? {} : { statistics: (def: TableDef, table: Table) => statisticsOf(def, table, (run.catalog as CatalogApi).store) }),
     derived: (ref, lateral) => derivedTable(run, ref.query, ref.alias as string, ref.columns, lateral),
     cte: (name) => run.ctes?.get(name)?.(),
@@ -295,7 +296,7 @@ function planSelect(run: Run, q: QueryExpression, node: SelectNode): SelectPlan 
 
   // FROM: nothing, `DUAL`, or tables joined (M5.4).
   const refs = (node.from ?? []).filter((r) => !(r.kind === REF.TABLE && r.table.schema === undefined && r.table.name.toLowerCase() === 'dual' && r.alias === undefined && (node.from ?? []).length === 1))
-  const from = refs.length === 0 ? undefined : planFrom(refs, fromContext(run), node.where)
+  const from = refs.length === 0 ? undefined : planFrom(refs, fromContext(run), node.where, (node.options ?? []).includes('STRAIGHT_JOIN'))
   const scope = from?.scope
   const source = from?.single
   const lookup: Scope = scope ?? run.parent ?? EMPTY_SCOPE

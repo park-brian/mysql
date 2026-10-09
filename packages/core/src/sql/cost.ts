@@ -112,11 +112,13 @@ function lookupRead(t: TableStatistics, key: KeyChoice): number {
   return Math.min(PAGE_READ * key.fanout, worstSeeks(t))
 }
 
-/** The access a table is read by after `prefix`, and its position: by `key`, or whole. */
+/** The access a table is read by after `prefix`: by `key`, or whole. */
 export interface Access {
   readonly lookup: boolean
   /** Rows fetched for each prefix row. */
   readonly fetched: number
+  /** What reading them costs, before each row fetched is evaluated (`read_cost`). */
+  readonly read: number
 }
 
 /**
@@ -128,16 +130,15 @@ export function bestAccess(t: TableFacts, prefix: readonly Position[], key: KeyC
   const s = t.stats
   const before = prefixRows(prefix)
   const kept = s.rows * t.constantFilter
-  const whole: Access = { lookup: false, fetched: kept }
+  const refills = 1 + (rowBytes * before) / JOIN_BUFFER
+  const whole: Access = { lookup: false, fetched: kept, read: refills * (scanCost(s) + ROW_EVALUATE * (s.rows - kept)) }
   if (key === undefined) return whole
   const fanout = key.kind === 'unique' ? 1 : key.fanout
   const read = key.kind === 'unique' ? distinctRows(prefix, key.keyFrom) * PAGE_READ : before * lookupRead(s, key)
-  const lookup: Access = { lookup: true, fetched: fanout }
+  const lookup: Access = { lookup: true, fetched: fanout, read }
   if (fanout < s.rows && read <= scanCost(s)) return lookup
   if (t.coveredByAnyIndex) return lookup
-  const refills = 1 + (rowBytes * before) / JOIN_BUFFER
-  const scan = refills * (scanCost(s) + ROW_EVALUATE * (s.rows - kept)) + ROW_EVALUATE * before * kept
-  return scan < read + ROW_EVALUATE * before * fanout ? whole : lookup
+  return whole.read + ROW_EVALUATE * before * kept < read + ROW_EVALUATE * before * fanout ? whole : lookup
 }
 
 /**
@@ -148,4 +149,128 @@ export function floorFilter(filter: number, rows: number, fetched: number): numb
   let f = Math.max(Math.fround(filter), Math.fround(1 / rows))
   if (f * fetched < 0.05) f = 0.05 / fetched
   return f
+}
+
+/** A table placed in a join order: its position, how it is read, and what that costs. */
+export interface Positioned extends Position {
+  readonly lookup: boolean
+  /** `read_cost`. */
+  readonly read: number
+}
+
+/** A table the join order may put anywhere its dependencies allow. */
+export interface Candidate {
+  readonly alias: string
+  /** Its estimated rows before any join (`found_records`), which orders the search. */
+  readonly rows: number
+  /** Tables that must come before it: an outer join's preserved side. */
+  readonly dependent: ReadonlySet<string>
+  /** Tables an index lookup into it could take its key from (`key_dependent`). */
+  readonly keyDependent: ReadonlySet<string>
+  /** How it is best read after `prefix` (`best_access_path`). */
+  place(prefix: readonly Positioned[]): Positioned
+}
+
+interface Step {
+  readonly placed: Positioned
+  /** `prefix_rowcount`, `prefix_cost`. */
+  readonly rows: number
+  readonly cost: number
+}
+
+/** One more table on a plan (`set_prefix_join_cost`): its rows evaluated once for each it fetches, its filter applied after. */
+function step(before: Step | undefined, placed: Positioned): Step {
+  const fetched = (before?.rows ?? 1) * placed.fetched
+  return { placed, rows: fetched * placed.filter, cost: (before?.cost ?? 0) + placed.read + ROW_EVALUATE * fetched }
+}
+
+const almostEqual = (a: number, b: number): boolean => a >= b * 0.9 && a <= b * 1.1
+
+/**
+ * The cheapest join order (`greedy_search` at the default search depth,
+ * which on fewer than 62 tables is `best_extension_by_limited_search` over
+ * every order). The tables are first sorted as the server sorts them: a table
+ * after those it depends on, then after those its keys read from, then fewer
+ * rows first, then as written. Each prefix is extended by each table it may
+ * take next, in that order, and abandoned once it costs as much as the best
+ * whole plan found. `prune_level=1`'s heuristics are kept, since they decide
+ * which of two equal plans is found first: an extension no cheaper and no
+ * smaller than an earlier one at the same depth is not explored, and a table
+ * read by a unique key at one row per row draws the other such tables after
+ * it in sequence, without exploring their permutations. A later whole plan
+ * replaces the best only if strictly cheaper.
+ */
+export function joinOrder(candidates: readonly Candidate[]): Positioned[] {
+  const sorted = [...candidates].sort((a, b) => {
+    if (a.dependent.has(b.alias)) return 1
+    if (b.dependent.has(a.alias)) return -1
+    const ab = a.keyDependent.has(b.alias)
+    const ba = b.keyDependent.has(a.alias)
+    if (ab && !ba) return 1
+    if (ba && !ab) return -1
+    if (a.rows !== b.rows) return a.rows - b.rows
+    return candidates.indexOf(a) - candidates.indexOf(b)
+  })
+  let best: { readonly cost: number; readonly plan: readonly Positioned[] } | undefined
+  const plan: Step[] = []
+  const placedAliases = (): Set<string> => new Set(plan.map((p) => p.placed.alias))
+  const available = (c: Candidate, remaining: ReadonlySet<string>): boolean => remaining.has(c.alias) && ![...c.dependent].some((d) => remaining.has(d))
+  const consider = (): void => {
+    const cost = (plan.at(-1) as Step).cost
+    if (best === undefined || cost < best.cost) best = { cost, plan: plan.map((p) => p.placed) }
+  }
+  // The unique-key tables after the one just placed, each joined in turn while it costs what the one before did (`eq_ref_extension_by_limited_search`).
+  const extendByUniqueKeys = (order: readonly Candidate[], remaining: Set<string>): Set<string> => {
+    if (remaining.size === 0) return new Set()
+    const done = placedAliases()
+    for (const c of order) {
+      if (!available(c, remaining) || c.keyDependent.size === 0 || ![...c.keyDependent].some((a) => done.has(a))) continue
+      const placed = c.place(plan.map((p) => p.placed))
+      const previous = (plan.at(-1) as Step).placed
+      if (!(placed.lookup && almostEqual(placed.read, previous.read) && almostEqual(placed.fetched, previous.fetched))) continue
+      const next = step(plan.at(-1), placed)
+      if (best !== undefined && next.cost >= best.cost) continue
+      plan.push(next)
+      remaining.delete(c.alias)
+      const extended = new Set([c.alias, ...(remaining.size > 0 ? extendByUniqueKeys(order, remaining) : (consider(), []))])
+      remaining.add(c.alias)
+      plan.pop()
+      return extended
+    }
+    search(order, remaining)
+    return new Set()
+  }
+  const search = (order: readonly Candidate[], remaining: Set<string>): void => {
+    let bestRows = Infinity
+    let bestCost = Infinity
+    let extended = new Set<string>()
+    for (const c of order) {
+      if (!available(c, remaining) || extended.has(c.alias)) continue
+      const placed = c.place(plan.map((p) => p.placed))
+      const next = step(plan.at(-1), placed)
+      if (best !== undefined && next.cost >= best.cost) continue
+      if (bestRows > next.rows || bestCost > next.cost) {
+        if (bestRows >= next.rows && bestCost >= next.cost && (![...c.keyDependent].some((a) => remaining.has(a)) || placed.fetched < 2)) {
+          bestRows = next.rows
+          bestCost = next.cost
+        }
+      } else if (best !== undefined) continue
+      plan.push(next)
+      remaining.delete(c.alias)
+      if (remaining.size === 0) consider()
+      else if (placed.lookup && placed.fetched <= 1) {
+        if (extended.size === 0) {
+          extended = new Set([c.alias, ...extendByUniqueKeys(order, remaining)])
+          remaining.add(c.alias)
+          plan.pop()
+          if ([...remaining].every((a) => extended.has(a))) return
+          continue
+        }
+      } else search(order, remaining)
+      remaining.add(c.alias)
+      plan.pop()
+    }
+  }
+  search(sorted, new Set(candidates.map((c) => c.alias)))
+  return [...(best?.plan ?? [])]
 }
