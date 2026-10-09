@@ -13,18 +13,19 @@ import type { ColumnDef, Table, TableDef, ViewDef } from '@myjs/engine'
 import { NODE, QUERY, REF, TOKEN, deparse, lex, parseStatement, type Expression, type OrderItem, type QueryBody, type QueryExpression, type SelectNode, type SetOperationNode, type TableName, type Token } from '@myjs/parser'
 import { messages, sqlError, type ColumnDefinition, type ResultSet, type RowValue } from '@myjs/protocol'
 import { intValue, toInteger, truth, withoutHex, type Value } from '@myjs/types'
-import { compile, EMPTY_SCOPE, type CompileContext, type Compiled, type Env, type GroupKeys, type Row, type Scope, type SubqueryPlan } from './compile.ts'
+import { compile, EMPTY_SCOPE, type CompileContext, type Compiled, type Env, type GroupKeys, type Scope, type SubqueryPlan } from './compile.ts'
 import { AggregateSink, chooseStrategy, containsAggregate, groupRows, isAggregate } from './group.ts'
 import { WindowSink, applyWindows, containsWindow } from './window.ts'
 import { columnDefinition, intType, type ResultType } from './meta.ts'
 import { FIELD_TYPE, expectTyped } from '@myjs/bytes'
 import { requireCollationInfo } from '@myjs/charsets'
 import { distinct, filter, limit, project, sort, type SortKey } from './operators.ts'
-import { FULL_SCAN, accessRows, isConstant, splitAnd } from './plan.ts'
+import { isConstant, splitAnd } from './plan.ts'
 import { TableScope } from './scope.ts'
 import { planFrom, type DerivedPlan, type DerivedSource, type FromContext, type FromPlan, type JoinCondition } from './from.ts'
 import { rowKey } from './keys.ts'
 import { planNode, wrap, type PlanNode } from './explain.ts'
+import { describeStages, runStages, type Rowed, type Stage } from './pipeline.ts'
 import { convert as convertSetValue, nestedNullability, setOperation, setOperationType } from './setop.ts'
 import { constTablesHaveRows, neverEqual, optimizerFacts } from './optimize.ts'
 import { informationSchemaTable } from './information-schema.ts'
@@ -259,7 +260,7 @@ export interface SelectPlan {
    * described, which EXPLAIN refuses. `materialized`: a sort or a limit
    * reads it from a table, so a UNION ALL is no longer streamed (Append).
    */
-  explain?(materialized?: boolean): readonly PlanNode[]
+  explain?(materialized?: boolean): readonly PlanNode[] | undefined
   /** A set operation's branches, for an enclosing one of the same operator to flatten into its own. */
   readonly members?: SetMembers
 }
@@ -410,7 +411,15 @@ function planSelect(run: Run, q: QueryExpression, node: SelectNode): SelectPlan 
     }
   }
 
-  const where = node.where === undefined ? undefined : compile(node.where, compileContext(run, lookup, 'where clause'))
+  // The WHERE, compiled where MySQL resolves it, after the select list: a FROM
+  // applies it itself, each condition at its iterator (M5.43).
+  const whereCtx = compileContext(run, lookup, 'where clause')
+  let where: Compiled | undefined
+  if (from !== undefined) {
+    // [NOT] EXISTS over one indexed equality is a nested loop: the subquery probed for each row, in the outer table's order.
+    const semijoins = scope !== undefined && source !== undefined && nestedLoopSemijoin(node.where, scope)
+    from.filter(node.where, (e) => compile(e, whereCtx), semijoins ? (e) => semijoinNode(run, e) : undefined)
+  } else if (node.where !== undefined) where = compile(node.where, whereCtx)
   const having = node.having === undefined ? undefined : compile(substituteAliases(node.having, items), compileContext(run, selectedOnly(lookup, items, [], node.having), 'having clause'))
   const keys = (q.orderBy ?? []).map((o) => orderKey(run, o, items, lookup, windows))
   // A window ORDER BY alone names reads the rows through its table as well.
@@ -423,52 +432,102 @@ function planSelect(run: Run, q: QueryExpression, node: SelectNode): SelectPlan 
   const match = keys.length === 0 && refs.length === 1 && refs[0]?.kind === REF.TABLE ? matchConjunct(node.where) : undefined
   if (match !== undefined) keys.push({ expr: compile(match, compileContext(run, lookup, 'where clause')), desc: true })
   const locking = (q.locking ?? []).length > 0
+  // An ORDER BY the index the table is read by already gives: read in its order, and nothing to sort.
+  const read = source !== undefined && from !== undefined ? from.access(run.env) : undefined
+  // Not under windows, which reorder the rows before the ORDER BY sorts them.
+  const ordered = source !== undefined && read !== undefined && !deduplicated && !windowed && match === undefined && keys.length > 0 && read.ranges === undefined ? orderingIndex(source.def, source.alias, q.orderBy ?? [], items, lookup, read.index) : undefined
+  if (ordered !== undefined) from?.readInOrder(ordered, false, (q.orderBy ?? [])[0]?.desc === true)
 
+  const stages: Stage[] = [
+    ...(where === undefined ? [] : [filterStage(where)]),
+    // HAVING without grouping filters the rows WHERE kept, before any window sees them.
+    ...(having === undefined ? [] : [{ ...filterStage(having), describe: (n: PlanNode) => withSubqueries(run, planNode('Filter', [n]), 'having clause') }]),
+    ...(windows === undefined || windows.windows.length === 0 ? [] : [windowStage(windows, windowBase)]),
+    deliverStage(items.map((i) => i.compiled), ordered === undefined ? keys : [], node.distinct === true, { deduplicated, streamed }),
+    ...(limitCount === undefined && offset === 0 ? [] : [limitStage(offset, limitCount)]),
+  ]
   return {
     columns: items.map((i) => ({ name: i.name, type: i.compiled.type })),
     locking,
     ...(dataColumns === undefined ? {} : { columnsAt: (trx: Trx | undefined) => (dataColumns as (t: Trx | undefined) => readonly ResultType[])(trx).map((type, i) => ({ name: (items[i] as { name: string }).name, type })) }),
-    // Windows are not described yet: EXPLAIN refuses them.
-    ...(windowed ? {} : { explain: (): readonly PlanNode[] => {
+    explain() {
       // An empty result the optimizer proves is no plan at all.
       if (facts?.impossible === true || provedEmpty(run, from, node, limitCount)) return [planNode('Zero rows')]
-      // An ORDER BY the clustered index already gives: read in its order, and nothing to sort.
-      const read = source !== undefined && from !== undefined ? from.access(run.env, node.where) : undefined
-      const ordered = source !== undefined && read !== undefined && !deduplicated && match === undefined && keys.length > 0 && read.ranges === undefined ? orderingIndex(source.def, source.alias, q.orderBy ?? [], items, lookup, read.index) : undefined
-      // [NOT] EXISTS over one indexed equality is a nested loop: the subquery probed for each row, in the outer table's order.
-      const semi = scope !== undefined && source !== undefined && nestedLoopSemijoin(node.where, scope) ? semijoinNode(run, node.where) : undefined
-      let n = from === undefined ? planNode('Rows fetched before execution') : from.explain(run.env, semi === undefined ? node.where : semi.rest, ordered)
-      n = semi === undefined ? withSubqueries(run, n, 'where clause') : planNode(semi.label, [n, ...semi.inner])
-      if (having !== undefined) n = withSubqueries(run, planNode('Filter', [n]), 'having clause')
-      // A DISTINCT through a temporary table, deduplicated as it is written.
-      if (deduplicated) n = planNode('Table scan on <temporary>', [planNode('Temporary table with deduplication', [n])])
-      if (keys.length > 0 && ordered === undefined) n = planNode('Sort', [wrap(streamed, 'Stream results', n)])
-      if (limitCount !== undefined) n = planNode(offset > 0 ? 'Limit/Offset' : 'Limit', [n])
-      return [n, ...subqueryNodes(run, 'field list')]
-    } }),
+      const source = from === undefined ? planNode('Rows fetched before execution') : withSubqueries(run, from.explain(run.env), 'where clause')
+      const n = describeStages(source, stages)
+      return n === undefined ? undefined : [n, ...subqueryNodes(run, 'field list')]
+    },
     rows(trx, given) {
       const env = given ?? { ...run.env, ...(trx === undefined ? {} : { trx }) }
-      let rows: Iterable<{ readonly row: Row }>
+      let rows: Iterable<Rowed>
       if (from === undefined) rows = [{ row: [] }]
       else if (facts?.impossible === true) rows = []
-      else rows = from.rows(trx, env, { where: node.where, locking })
-      // HAVING without grouping filters the rows WHERE kept, before any window sees them.
-      let filtered: Iterable<{ readonly row: Row }> = filter(filter(rows, where, env), having, env)
-      if (windows !== undefined && windows.windows.length > 0) {
-        const width = windowBase + windows.windows.length
-        const all = [...filtered].map(({ row }) => {
-          const r = row.slice() as Value[]
-          while (r.length < width) r.push(null)
-          return r
-        })
-        filtered = applyWindows(all, windows.windows, env, windowBase).map((row) => ({ row }))
-      }
-      if (keys.length > 0) filtered = sort(filtered, keys, env)
-      let out: Iterable<Value[]> = project(filtered, items.map((i) => i.compiled), env)
-      if (node.distinct === true) out = distinct(out)
-      return limit(out, offset, limitCount)
+      else rows = from.rows(trx, env, { locking })
+      return values(runStages(rows, stages, env))
     },
   }
+}
+
+// --- the stages above the FROM (M5.43) -----------------------------------------------
+
+/** A condition over the rows: a Filter. */
+function filterStage(condition: Compiled): Stage {
+  return { run: (rows, env) => filter(rows, condition, env), describe: (n) => planNode('Filter', [n]) }
+}
+
+/** Window functions (M5.6), over the whole input: not yet named as 8.4.11 names them, so not explained. */
+function windowStage(windows: WindowSink, base: number): Stage {
+  return {
+    run(rows, env) {
+      const width = base + windows.windows.length
+      const all = [...rows].map(({ row }) => {
+        const r = row.slice() as Value[]
+        while (r.length < width) r.push(null)
+        return r
+      })
+      return applyWindows(all, windows.windows, env, base).map((row) => ({ row }))
+    },
+    describe: () => undefined,
+  }
+}
+
+/**
+ * ORDER BY, the select list and DISTINCT, as one iterator. The server writes
+ * DISTINCT's rows into a temporary table and sorts that; here the rows are
+ * sorted, projected and then de-duplicated, which keeps the same rows in the
+ * same order, since duplicates are identical. A sort over a join reads its
+ * rows streamed into a table first ("Stream results").
+ */
+function deliverStage(items: readonly Compiled[], keys: readonly SortKey[], unique: boolean, through: { readonly deduplicated: boolean; readonly streamed: boolean; readonly described?: boolean }): Stage {
+  return {
+    run(rows, env) {
+      const sorted = keys.length > 0 ? sort(rows, keys, env) : rows
+      const projected = project(sorted, items, env)
+      return rowed(unique ? distinct(projected) : projected)
+    },
+    describe(n) {
+      if (through.described === false) return undefined
+      let out = through.deduplicated ? planNode('Table scan on <temporary>', [planNode('Temporary table with deduplication', [n])]) : n
+      if (keys.length > 0) out = planNode('Sort', [wrap(through.streamed, 'Stream results', out)])
+      return out
+    },
+  }
+}
+
+/** LIMIT and OFFSET. */
+function limitStage(offset: number, count: number | undefined): Stage {
+  return {
+    run: (rows) => rowed(limit(values(rows), offset, count)),
+    describe: (n) => planNode(offset > 0 ? 'Limit/Offset' : 'Limit', [n]),
+  }
+}
+
+function* rowed(rows: Iterable<Value[]>): Generator<Rowed> {
+  for (const row of rows) yield { row }
+}
+
+function* values(rows: Iterable<Rowed>): Generator<Value[]> {
+  for (const { row } of rows) yield row as Value[]
 }
 
 // --- what MySQL's plan reads, and how ----------------------------------------------
@@ -492,21 +551,16 @@ function subqueryNodes(run: Run, clause: string): PlanNode[] {
 }
 
 /**
- * A WHERE's EXISTS and NOT EXISTS conjuncts as the join 8.4.11 makes of them:
- * its name, the subquery's plan as the inner side, and the rest of the WHERE.
+ * A WHERE's EXISTS or NOT EXISTS conjunct as the join 8.4.11 makes of it:
+ * the join, with the subquery's plan as its inner side; the outer side is
+ * the Filter's input (`filterOp`). `undefined` for any other conjunct.
  */
-function semijoinNode(run: Run, where: Expression | undefined): { label: string; inner: PlanNode[]; rest: Expression | undefined } | undefined {
-  const conjuncts = splitAnd(where)
-  const anti = (e: Expression): boolean => e.kind === NODE.UNARY && e.op === 'NOT' && e.operand.kind === NODE.UNARY && e.operand.op === 'EXISTS'
-  const exists = (e: Expression): boolean => e.kind === NODE.UNARY && e.op === 'EXISTS'
-  const joined = conjuncts.filter((e) => anti(e) || exists(e))
-  if (joined.length !== 1) return undefined
-  const e = joined[0] as Expression
+function semijoinNode(run: Run, e: Expression): PlanNode | undefined {
+  const anti = e.kind === NODE.UNARY && e.op === 'NOT' && e.operand.kind === NODE.UNARY && e.operand.op === 'EXISTS'
+  if (!anti && !(e.kind === NODE.UNARY && e.op === 'EXISTS')) return undefined
   const query = semijoinSubqueries(e)[0]
-  const sub = (run.subqueries ?? []).find((s) => s.query === query)?.plan.explain?.()[0]
-  if (sub === undefined) return undefined
-  const rest = conjuncts.filter((c) => c !== e).reduce<Expression | undefined>((acc, c) => (acc === undefined ? c : ({ kind: NODE.BINARY, op: 'AND', left: acc, right: c, at: c.at } as Expression)), undefined)
-  return { label: anti(e) ? 'Nested loop antijoin' : 'Nested loop semijoin', inner: [sub], rest }
+  const sub = (run.subqueries ?? []).find((s) => s.query === query)?.plan.explain?.()?.[0]
+  return sub === undefined ? undefined : planNode(anti ? 'Nested loop antijoin' : 'Nested loop semijoin', [sub])
 }
 
 /** A Filter with a clause's subqueries beside its input, as the server lists them; anything else as it is. */
@@ -880,7 +934,7 @@ function derivedTable(run: Run, query: QueryExpression, alias: string, names: re
   return {
     columns,
     explain: (): DerivedPlan | undefined => {
-      const body = plan.explain?.()[0]
+      const body = plan.explain?.()?.[0]
       if (body === undefined) return undefined
       return merged ? { merged, node: body } : { merged, materialize: cte === undefined ? 'Materialize' : `Materialize CTE ${cte}`, children: [body] }
     },
@@ -1017,7 +1071,7 @@ function recursiveCte(run: Run, cte: NonNullable<QueryExpression['with']>['table
     columns,
     // The anchors once, then the recursive members until a round adds nothing.
     explain: () => {
-      const roots = [...anchorPlans, ...steps].map((p) => p.explain?.()[0])
+      const roots = [...anchorPlans, ...steps].map((p) => p.explain?.()?.[0])
       if (roots.some((r) => r === undefined)) return undefined
       const body = roots as PlanNode[]
       return { merged: false, materialize: `Materialize recursive CTE ${cte.name}${distinctRows ? ' with deduplication' : ''}`, children: [...body.slice(0, anchorPlans.length), planNode('Repeat until convergence', body.slice(anchorPlans.length))] }
@@ -1071,7 +1125,7 @@ function planSetOperation(run: Run, node: SetOperationNode, parent?: SetOperatio
       ? op.columns
       : op.columns.map((c, i) => ({ name: c.name, type: { ...c.type, nullable: nestedNullability(node.op, (left.columns[i] as { type: ResultType }).type.nullable, (right.columns[i] as { type: ResultType }).type.nullable) } }))
   // EXPLAIN: a chain of one operator is one temporary table, its branches in order.
-  const described = (p: SelectPlan): PlanNode | undefined => p.explain?.(true)[0]
+  const described = (p: SelectPlan): PlanNode | undefined => p.explain?.(true)?.[0]
   const flatten = (p: SelectPlan, all: boolean): { node: PlanNode; all: boolean }[] | undefined => {
     if (p.members !== undefined && p.members.op === node.op) return p.members.items.map((m, i) => (i === 0 ? { ...m, all } : m))
     const n = described(p)
@@ -1134,30 +1188,28 @@ function orderedResult(run: Run, q: QueryExpression, plan: SelectPlan): SelectPl
   })
   const limitCount = q.limit === undefined ? undefined : limitValue(run, q.limit.count, 'LIMIT')
   const offset = q.limit?.offset === undefined ? 0 : limitValue(run, q.limit.offset, 'LIMIT')
-  const inner = plan.explain
+  const stages: Stage[] = [...(keys.length === 0 ? [] : [sortStage(keys)]), ...(limitCount === undefined && offset === 0 ? [] : [limitStage(offset, limitCount)])]
   return {
     columns: plan.columns,
     locking: plan.locking,
     ...(plan.leaves === undefined ? {} : { leaves: plan.leaves }),
-    ...(inner === undefined ? {} : { explain: (): readonly PlanNode[] => {
+    explain() {
       if (limitCount === 0) return [planNode('Zero rows')]
-      const [root, ...rest] = inner.call(plan, true)
-      if (root === undefined) return []
-      let n = keys.length > 0 ? planNode('Sort', [root]) : root
-      if (limitCount !== undefined) n = planNode(offset > 0 ? 'Limit/Offset' : 'Limit', [n])
-      return [n, ...rest]
-    } }),
+      // Read from a table, for the sort or the limit: a UNION ALL is no longer streamed.
+      const [root, ...rest] = plan.explain?.(true) ?? []
+      const n = root === undefined ? undefined : describeStages(root, stages)
+      return n === undefined ? undefined : [n, ...rest]
+    },
     rows(trx, given) {
       const env = given ?? { ...run.env, ...(trx === undefined ? {} : { trx }) }
-      let rows: Iterable<{ readonly row: Row }> = (function* () {
-        for (const row of plan.rows(trx, given)) yield { row }
-      })()
-      if (keys.length > 0) rows = sort(rows, keys, env)
-      return limit((function* () {
-        for (const { row } of rows) yield row as Value[]
-      })(), offset, limitCount)
+      return values(runStages(rowed(plan.rows(trx, given)), stages, env))
     },
   }
+}
+
+/** A sort of rows that are already a result's values. */
+function sortStage(keys: readonly SortKey[]): Stage {
+  return { run: (rows, env) => sort(rows, keys, env), describe: (n) => planNode('Sort', [n]) }
 }
 
 /** The tables an ORDER BY reads, through positions and aliases to the items they name. */
@@ -1428,7 +1480,13 @@ function planGrouped(
     }
   }
 
-  const where = node.where === undefined ? undefined : compile(node.where, compileContext(run, lookup, 'where clause'))
+  // The WHERE: a FROM applies it itself (M5.43); one with no FROM is a Filter here.
+  const whereCtx = compileContext(run, lookup, 'where clause')
+  let where: Compiled | undefined
+  if (from !== undefined) from.filter(node.where, (e) => compile(e, whereCtx))
+  else if (node.where !== undefined) where = compile(node.where, whereCtx)
+  // An index-ordered grouping reads that index whole, in its order, whatever range the WHERE would choose.
+  if (strategy === 'index' && groupIndex !== undefined) from?.readInOrder(groupIndex, true)
   const limitCount = q.limit === undefined ? undefined : limitValue(run, q.limit.count, 'LIMIT')
   const offset = q.limit?.offset === undefined ? 0 : limitValue(run, q.limit.offset, 'LIMIT')
   const locking = (q.locking ?? []).length > 0
@@ -1445,58 +1503,40 @@ function planGrouped(
   }
   const plan = { width, keys: keys.map((k) => k.compiled), specs: sink.specs, strategy, rollup }
   const sortsOutput = orderKeys.length > 0 && !(orderMatchesKeys && strategy !== 'temp')
+  const groups = rollup ? 'Group aggregate with rollup' : 'Group aggregate'
+  const stages: Stage[] = [
+    ...(where === undefined ? [] : [filterStage(where)]),
+    {
+      run: (rows, env) => groupRows(rows, plan, env),
+      // As the strategy runs: an Aggregate of everything, a temporary table keyed by the groups, or groups read in order — sorted for them first, a join's rows streamed into a table to be.
+      describe(n) {
+        if (strategy === 'implicit') return planNode('Aggregate', [n])
+        if (strategy === 'temp') return planNode('Table scan on <temporary>', [planNode('Aggregate using temporary table', [n])])
+        if (strategy === 'sort') return planNode(groups, [planNode('Sort', [wrap(source === undefined, 'Stream results', n)])])
+        return planNode(groups, [n])
+      },
+    },
+    ...(having === undefined ? [] : [{ ...filterStage(having), describe: (n: PlanNode) => withSubqueries(run, planNode('Filter', [n]), 'having clause') }]),
+    ...(windows === undefined || windows.windows.length === 0 ? [] : [windowStage(windows, windows.base)]),
+    // A DISTINCT over groups is not described yet.
+    deliverStage(items.map((i) => i.compiled), sortsOutput ? orderKeys : [], node.distinct === true, { deduplicated: false, streamed: stream, described: node.distinct !== true }),
+    ...(limitCount === undefined && offset === 0 ? [] : [limitStage(offset, limitCount)]),
+  ]
 
   return {
     columns: items.map((i) => ({ name: i.name, type: i.compiled.type })),
     locking,
     ...(dataColumns === undefined ? {} : { columnsAt: (trx: Trx | undefined) => (dataColumns as (t: Trx | undefined) => readonly ResultType[])(trx).map((type, i) => ({ name: (items[i] as { name: string }).name, type })) }),
-    // Windows and a DISTINCT over groups are not described yet: EXPLAIN refuses them.
-    ...(windowed || node.distinct === true ? {} : { explain: (): readonly PlanNode[] => {
+    explain() {
       // Implicit grouping answers one row even of nothing, so it is still an Aggregate.
       if (strategy !== 'implicit' && provedEmpty(run, from, node, limitCount)) return [planNode('Zero rows')]
-      let n = from === undefined ? planNode('Rows fetched before execution') : from.explain(run.env, node.where, strategy === 'index' ? groupIndex : undefined)
-      n = withSubqueries(run, n, 'where clause')
-      const groups = rollup ? 'Group aggregate with rollup' : 'Group aggregate'
-      if (strategy === 'implicit') n = planNode('Aggregate', [n])
-      else if (strategy === 'temp') n = planNode('Table scan on <temporary>', [planNode('Aggregate using temporary table', [n])])
-      // Sorted for its groups; a join's rows are streamed into a table to be.
-      else if (strategy === 'sort') n = planNode(groups, [planNode('Sort', [wrap(source === undefined, 'Stream results', n)])])
-      else n = planNode(groups, [n])
-      if (having !== undefined) n = withSubqueries(run, planNode('Filter', [n]), 'having clause')
-      if (sortsOutput) n = planNode('Sort', [wrap(stream, 'Stream results', n)])
-      if (limitCount !== undefined) n = planNode(offset > 0 ? 'Limit/Offset' : 'Limit', [n])
-      return [n, ...subqueryNodes(run, 'field list')]
-    } }),
+      const source = from === undefined ? planNode('Rows fetched before execution') : withSubqueries(run, from.explain(run.env), 'where clause')
+      const n = describeStages(source, stages)
+      return n === undefined ? undefined : [n, ...subqueryNodes(run, 'field list')]
+    },
     rows(trx, given) {
       const env = given ?? { ...run.env, ...(trx === undefined ? {} : { trx }) }
-      let rows: Iterable<{ readonly row: Row }>
-      if (from === undefined) rows = [{ row: [] }]
-      else if (source === undefined) rows = from.rows(trx, env, { where: node.where, locking })
-      else {
-        let access = from.access(env, node.where)
-        // An index-ordered grouping reads that index whole, in its order.
-        if (strategy === 'index' && groupIndex !== undefined) {
-          const clustered = source.def.indexes.find((i) => i.name === groupIndex)?.kind === 'primary' || source.def.clustered === groupIndex
-          const sameIndex = clustered ? access.index === undefined : access.index === groupIndex
-          if (!sameIndex) access = clustered ? FULL_SCAN : { index: groupIndex }
-        }
-        rows = accessRows(source.table, source.def, access, trx, locking)
-      }
-      let out: Iterable<{ readonly row: Row }> = groupRows(filter(rows, where, env), plan, env)
-      out = filter(out, having, env)
-      if (windows !== undefined && windows.windows.length > 0) {
-        const w = windows
-        const all = [...out].map(({ row }) => {
-          const r = row.slice() as Value[]
-          while (r.length < w.base + w.windows.length) r.push(null)
-          return r
-        })
-        out = applyWindows(all, w.windows, env, w.base).map((row) => ({ row }))
-      }
-      if (orderKeys.length > 0) out = sort(out, orderKeys, env)
-      let projected: Iterable<Value[]> = project(out, items.map((i) => i.compiled), env)
-      if (node.distinct === true) projected = distinct(projected)
-      return limit(projected, offset, limitCount)
+      return values(runStages(from === undefined ? [{ row: [] }] : from.rows(trx, env, { locking }), stages, env))
     },
   }
 }

@@ -47,6 +47,8 @@ export interface Access {
   readonly index?: string
   /** Disjoint, ascending. Absent for a full scan. */
   readonly ranges?: readonly KeyRange[]
+  /** Read in descending key order, for an ORDER BY … DESC the index gives. */
+  readonly reverse?: boolean
 }
 
 export const FULL_SCAN: Access = {}
@@ -318,10 +320,11 @@ export function* accessRows(table: Table, def: TableDef, access: Access, trx: Tr
   const mode = current ? 'current' : 'consistent'
   const base = { table, types, mode, ...(trx === undefined ? {} : { trx }), ...(access.index === undefined ? {} : { index: access.index }) } as const
   if (access.ranges === undefined) {
-    yield* scan(base)
+    yield* scan(access.reverse === true ? { ...base, range: { reverse: true } } : base)
     return
   }
-  for (const range of access.ranges) yield* scan({ ...base, range })
+  const ranges = access.reverse === true ? [...access.ranges].reverse().map((r) => ({ ...r, reverse: true })) : access.ranges
+  for (const range of ranges) yield* scan({ ...base, range })
 }
 
 /** A literal, `-literal` or `?`, evaluated. */

@@ -22,7 +22,7 @@ import type { ColumnDef, FieldBytes, IndexDef, RowId, Table, TableDef, Trx } fro
 import { EngineError } from '@myjs/engine'
 import { NODE, QUERY, REF, parseExpression, type Assignment, type ColumnNode, type DeleteNode, type Expression, type InsertNode, type TableName, type UpdateNode } from '@myjs/parser'
 import { generationOf, type Generation } from './generated.ts'
-import { decodeField, encodeEnum, encodeField, integerRange, intValue, toInteger, toText, truth, warn, type Condition, type StoreContext, type Value } from '@myjs/types'
+import { decodeField, encodeEnum, encodeField, integerRange, intValue, toInteger, toText, warn, type Condition, type StoreContext, type Value } from '@myjs/types'
 import { compile, EMPTY_SCOPE, type Compiled, type Row, type Scope } from './compile.ts'
 import { checker, checkViolated } from './checks.ts'
 import { guarded, isReferenced } from './foreign-keys.ts'
@@ -1176,9 +1176,9 @@ interface Target {
 /** The FROM of a multi-table UPDATE or DELETE, and each joined row with its tables' row ids, read in full before any is written. */
 function joinedRows(run: Run, node: UpdateNode | DeleteNode, trx: Trx): { from: FromPlan; rows: JoinedRow[] } {
   const from = planFrom(node.tables, fromContext(run), node.where)
-  const where = node.where === undefined ? undefined : compile(node.where, compileContext(run, from.scope, 'where clause'))
-  const rows = [...from.rows(trx, run.env, { where: node.where, locking: true, ids: true })].filter((r) => where === undefined || truth(where.eval(r.row, run.env)) === true)
-  return { from, rows }
+  const ctx = compileContext(run, from.scope, 'where clause')
+  from.filter(node.where, (e) => compile(e, ctx))
+  return { from, rows: [...from.rows(trx, run.env, { locking: true, ids: true })] }
 }
 
 /** The base table that holds slot `index` of the joined row; 1288 for a derived one (8.4.11). */
