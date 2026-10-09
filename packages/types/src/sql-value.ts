@@ -33,6 +33,13 @@ export interface IntValue {
   readonly kind: 'int'
   readonly v: bigint
   readonly unsigned: boolean
+  /**
+   * What the value is as text, where that is not its digits: a BIT's bytes
+   * passed through IF or CASE, which `val_str` hands on as they are while
+   * every numeric reading sees the number (8.4.11: `IF(1, b, 0)` is 5 in
+   * arithmetic and the byte 0x05 to a client).
+   */
+  readonly str?: Uint8Array
 }
 
 export interface DecimalValue {
@@ -97,6 +104,7 @@ export function withoutHex(v: Value): Value {
 export function plainValue(v: Value): Value {
   if (v !== null && v.kind === 'string' && v.ordinal !== undefined) return { kind: 'string', v: v.v, collationId: v.collationId, coercibility: v.coercibility }
   if (v !== null && v.kind === 'double' && (v.float !== undefined || v.decimals !== undefined)) return { kind: 'double', v: v.v }
+  if (v !== null && v.kind === 'int' && v.str !== undefined) return { kind: 'int', v: v.v, unsigned: v.unsigned }
   return withoutHex(v)
 }
 
@@ -402,7 +410,8 @@ function timeNumber(t: MysqlTime): string {
 export function toText(v: Exclude<Value, null>): string {
   switch (v.kind) {
     case 'int':
-      return v.v.toString()
+      // A BIT's bytes read as text as a binary string's are, byte by byte.
+      return v.str === undefined ? v.v.toString() : String.fromCharCode(...v.str)
     case 'decimal':
       return renderDecimal(v)
     case 'double':
@@ -424,6 +433,7 @@ export function toText(v: Exclude<Value, null>): string {
 /** A value as the bytes of a string in `collationId`'s charset. */
 export function toTextBytes(v: Exclude<Value, null>, collationId: number): Uint8Array {
   if (v.kind === 'bytes') return v.v
+  if (v.kind === 'int' && v.str !== undefined) return v.str
   return encodeCollation(toText(v), collationId)
 }
 

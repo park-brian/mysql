@@ -1564,6 +1564,14 @@ export function aggregate(types: readonly ResultType[], nullable: boolean, conne
   if (live.every((t) => t.kind === 'json')) return jsonType(nullable)
   if (live.some((t) => t.kind === 'json')) live = live.map((t) => (t.kind === 'json' ? jsonAsText(t.nullable) : t))
   if (live.some((t) => t.kind === 'string' || t.kind === 'bytes')) {
+    // A BIT beside text is a binary string as wide as it has bits, a
+    // column's, so its bytes decide the result (8.4.11: `IF(1, b, 'a')` of
+    // a BIT(8) is VARBINARY(8)).
+    if (live.some(isBits)) {
+      const asBytes = (t: ResultType): ResultType => (isBits(t) ? { ...stringType(t.length, CHARSET_BINARY, t.nullable), coercibility: COERCIBILITY.IMPLICIT } : t)
+      live = live.map(asBytes)
+      types = types.map(asBytes)
+    }
     // A binary string decides only at the lowest coercibility: a column's text
     // beats a hex literal (8.4.11: `LEAST(X'61', t)` is t's text). A binary
     // result is as wide as its widest argument's bytes; a TEXT among them
@@ -1595,6 +1603,10 @@ export function aggregate(types: readonly ResultType[], nullable: boolean, conne
     const s = Math.max(...live.map(scaleOf))
     return decimalType(Math.max(...live.map(intDigits)) + s, s, nullable)
   }
+  // A BIT beside another integer is a DECIMAL of as many digits as it has
+  // bits (`field_types_merge_rules`, 8.4.11: `IF(1, b, 0)` of a BIT(8) is
+  // DECIMAL(8,0)).
+  if (live.some(isBits) && !live.every(isBits)) return decimalType(Math.max(...live.map(intDigits)), 0, nullable)
   // Integers of one field type keep it (8.4.11: `GREATEST(NULL, id)` of an INT is an INT).
   const field = live.every((t) => t.field === first.field) ? first.field : FIELD_TYPE.LONGLONG
   return { ...intType(Math.max(...live.map((t) => t.length)), nullable, live.every((t) => t.unsigned)), field }
@@ -1634,6 +1646,33 @@ export function convertTo(v: Value, t: ResultType): Value {
   }
 }
 
+/**
+ * A branch of IF or CASE, as its result reads it: a BIT branch under a
+ * DECIMAL, binary or BIT result is its own bytes, as wide as it is, which
+ * is what `val_str` passes through (8.4.11: `IF(1, b, 0)` sends 0x05 as the
+ * DECIMAL's text, and `IF(1, b8, b12)` one byte).
+ */
+function branchOf(x: Compiled, result: ResultType): Compiled['eval'] {
+  if (!isBits(x.type) || !(result.kind === 'decimal' || result.kind === 'bytes' || isBits(result))) return x.eval
+  const bits = x.type.length
+  return (r, env) => {
+    const v = x.eval(r, env)
+    return v !== null && v.kind === 'int' ? { ...v, str: bitBytes(v.v, bits) } : v
+  }
+}
+
+/**
+ * An argument of COALESCE or IFNULL, as its result holds it: a BIT beside
+ * text is its bytes, and BITs alone are the number, whose text is its
+ * digits even under the BIT type (8.4.11: `COALESCE(b)` of b'101' sends '5').
+ */
+function chosenOf(x: Compiled, result: ResultType): (v: Exclude<Value, null>) => Value {
+  if (!isBits(x.type) || !(result.kind === 'bytes' || isBits(result))) return (v) => convertTo(v, result)
+  const bits = x.type.length
+  if (result.kind === 'bytes') return (v) => (v.kind === 'int' ? bytesValue(bitBytes(v.v, bits)) : convertTo(v, result))
+  return (v) => (v.kind === 'int' ? { ...v, str: new TextEncoder().encode(v.v.toString()) } : v)
+}
+
 function caseExpr(e: CaseNode, ctx: CompileContext): Compiled {
   const operand = e.operand === undefined ? undefined : compile(e.operand, ctx)
   const whens = e.whens.map((w) => ({ when: compile(w.when, ctx), then: compile(w.then, ctx) }))
@@ -1643,14 +1682,17 @@ function caseExpr(e: CaseNode, ctx: CompileContext): Compiled {
   const type = aggregate(results, nullable, ctx.connectionCollation, 'case')
   // `CASE x WHEN y`: the operand and every WHEN compare in one collation.
   if (operand !== undefined && isText(operand.type) && whens.every((w) => isText(w.when.type))) aggregateCollations([operand.type, ...whens.map((w) => w.when.type)], 'case', true)
+  const thens = whens.map((w) => branchOf(w.then, type))
+  const elseOf = otherwise === undefined ? undefined : branchOf(otherwise, type)
   return {
     eval: (r, env) => {
       const subject = operand?.eval(r, env)
-      for (const w of whens) {
+      for (let i = 0; i < whens.length; i++) {
+        const w = whens[i] as (typeof whens)[number]
         const hit = operand === undefined ? truth(w.when.eval(r, env)) === true : compareValues(subject ?? null, w.when.eval(r, env)) === 0
-        if (hit) return type.kind === 'double' ? doubleOf(w.then.eval(r, env), type) : w.then.eval(r, env)
+        if (hit) return type.kind === 'double' ? doubleOf(w.then.eval(r, env), type) : (thens[i] as Compiled['eval'])(r, env)
       }
-      return otherwise === undefined ? null : otherwise.eval(r, env)
+      return elseOf === undefined ? null : elseOf(r, env)
     },
     type,
   }
@@ -1839,13 +1881,23 @@ function call(e: CallNode, ctx: CompileContext): Compiled {
       const [c, x, y] = args() as [Compiled, Compiled, Compiled]
       const type = aggregate([x.type, y.type], x.type.nullable || y.type.nullable, conn, 'if')
       if (type.kind === 'double') return { eval: (r, env) => doubleOf(truth(c.eval(r, env)) === true ? x.eval(r, env) : y.eval(r, env), type), type }
-      return { eval: (r, env) => (truth(c.eval(r, env)) === true ? x.eval(r, env) : y.eval(r, env)), type }
+      const [xv, yv] = [branchOf(x, type), branchOf(y, type)]
+      return { eval: (r, env) => (truth(c.eval(r, env)) === true ? xv(r, env) : yv(r, env)), type }
     }
     case 'IFNULL': {
       arity(2)
       const [x, y] = args() as [Compiled, Compiled]
       const type = aggregate([x.type, y.type], x.type.nullable && y.type.nullable, conn, 'ifnull')
-      return { eval: (r, env) => convertTo(x.eval(r, env) ?? y.eval(r, env), type), type }
+      const [xv, yv] = [chosenOf(x, type), chosenOf(y, type)]
+      return {
+        eval: (r, env) => {
+          const v = x.eval(r, env)
+          if (v !== null) return xv(v)
+          const w = y.eval(r, env)
+          return w === null ? null : yv(w)
+        },
+        type,
+      }
     }
     case 'COALESCE': {
       if (e.args.length === 0) arity(1)
@@ -1856,11 +1908,12 @@ function call(e: CallNode, ctx: CompileContext): Compiled {
         conn,
         'coalesce',
       )
+      const chosen = xs.map((x) => chosenOf(x, type))
       return {
         eval: (r, env) => {
-          for (const x of xs) {
-            const v = x.eval(r, env)
-            if (v !== null) return convertTo(v, type)
+          for (let i = 0; i < xs.length; i++) {
+            const v = (xs[i] as Compiled).eval(r, env)
+            if (v !== null) return (chosen[i] as (v: Exclude<Value, null>) => Value)(v)
           }
           return null
         },
@@ -1912,7 +1965,7 @@ function call(e: CallNode, ctx: CompileContext): Compiled {
           }
           if (!binary) return stringValue(parts.map(toText).join(''), id, coercibility)
           // A BIT is its bytes in a string, as on the wire (8.4.11).
-          const chunks = parts.map((v, i) => (v.kind === 'bytes' ? v.v : v.kind === 'string' ? encodeCollation(v.v, v.collationId) : v.kind === 'int' && isBits((xs[i] as Compiled).type) ? bitBytes(v.v, (xs[i] as Compiled).type.length) : new TextEncoder().encode(toText(v))))
+          const chunks = parts.map((v, i) => (v.kind === 'bytes' ? v.v : v.kind === 'string' ? encodeCollation(v.v, v.collationId) : v.kind === 'int' && v.str !== undefined ? v.str : v.kind === 'int' && isBits((xs[i] as Compiled).type) ? bitBytes(v.v, (xs[i] as Compiled).type.length) : new TextEncoder().encode(toText(v))))
           const out = new Uint8Array(chunks.reduce((n, c) => n + c.length, 0))
           let at = 0
           for (const c of chunks) {

@@ -40,6 +40,7 @@ function textOf(v: Exclude<Value, null>, t: ResultType): string {
 export function toWire(v: Value, t: ResultType, protocol: WireProtocol, session: Session): RowValue {
   if (v === null) return null
   if (v.kind === 'bytes') return v.v
+  if (v.kind === 'int' && v.str !== undefined) return v.str
   // A BIT is sent as its bytes, big-endian, in either protocol (8.4.11).
   if (t.field === FIELD_TYPE.BIT && v.kind === 'int') return bitBytes(v.v, t.length)
   if (v.kind === 'string') return session.transcoder.encode(v.v, session.characterSet)
