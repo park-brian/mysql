@@ -25,7 +25,7 @@ interface Outcome {
 }
 
 test('every temporal text stored answers, warns and stores as 8.4.11 did', async () => {
-  if (!existsSync(FIXTURE)) return
+  assert.ok(existsSync(FIXTURE), 'the corpus must be committed')
   const fixture = JSON.parse(readFileSync(FIXTURE, 'utf8')) as { capturedAgainst: string; cases: Outcome[][] }
   assert.match(fixture.capturedAgainst, /mysql-server/, 'a fixture must name the server it came from')
   const db = await MySQL.open(':memory:')

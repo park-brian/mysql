@@ -12,7 +12,7 @@ import assert from 'node:assert/strict'
 import { existsSync, readFileSync } from 'node:fs'
 // @ts-expect-error — a tool, in plain JavaScript; its options are the capture's, so the replay cannot drift from it.
 import { CONNECTION, SQL_MODE } from '../../tools/capture-more-functions.mjs'
-import { replay, type Fixture } from './relational-vectors.test.ts'
+import { replay, type Fixture } from '../lib/replay.ts'
 
 const FIXTURE = new URL('./fixtures/more-functions.json', import.meta.url).pathname
 
@@ -20,7 +20,7 @@ const FIXTURE = new URL('./fixtures/more-functions.json', import.meta.url).pathn
 const REFUSED_AT_MOST = 0
 
 test('M5.10: every string, numeric, hashing and network function call returns what the server returned', async () => {
-  if (!existsSync(FIXTURE)) return
+  assert.ok(existsSync(FIXTURE), 'the corpus must be committed')
   const fixture = JSON.parse(readFileSync(FIXTURE, 'utf8')) as Fixture
   assert.match(fixture.capturedAgainst, /mysql-server/, 'a fixture must name the server it came from')
   assert.equal(fixture.sqlMode, SQL_MODE)

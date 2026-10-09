@@ -173,22 +173,8 @@ function evaluate(e: Expression): Value | null {
 
 const render = (v: Value | null): string => (v === null ? 'NULL' : v.n.toString())
 
-test('M3.2: the precedence corpus is visible, empty or not', () => {
-  // M2.22's lesson, a third time: a check that passes because it has nothing to
-  // check is not a check. This cannot *fail* on an empty corpus, because the
-  // vectors can only come from a real MySQL and `npm test` runs with neither a
-  // server nor Docker — the `precedence-vectors` CI job is what fills it.
-  if (!existsSync(FIXTURE)) {
-    console.log(
-      '  [precedence] no corpus committed yet — run `npm run capture:precedence` against a real\n' +
-        '               MySQL 8.4, or download the artifact from CI, and commit it.',
-    )
-  }
-  assert.ok(true)
-})
-
 test('M3.2: every captured expression groups the way the server grouped it', () => {
-  if (!existsSync(FIXTURE)) return
+  assert.ok(existsSync(FIXTURE), 'the corpus must be committed')
   const fixture = JSON.parse(readFileSync(FIXTURE, 'utf8')) as Fixture
   assert.match(fixture.capturedAgainst, /mysql-server/, 'a fixture must name the server it came from')
 
@@ -273,7 +259,7 @@ test('M5.17: the executor evaluates every vector as the server did, refusals inc
   // overflow, ER_PARSE_ERROR for the ones that do not parse. Running it found
   // that `DIV` promotes to unsigned and `%` does not, which the evaluator above
   // had wrong for `DIV` without any vector showing it.
-  if (!existsSync(FIXTURE)) return
+  assert.ok(existsSync(FIXTURE), 'the corpus must be committed')
   const { StubExecutor, charsetTranscoder } = await import('@myjs/core')
   const { Session, capabilities } = await import('@myjs/protocol')
   const fixture = JSON.parse(readFileSync(FIXTURE, 'utf8')) as { vectors: { expr: string; value?: string; error?: string }[] }

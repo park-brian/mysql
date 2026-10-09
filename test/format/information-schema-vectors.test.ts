@@ -33,7 +33,7 @@ interface Outcome {
 }
 
 test('M5.12: every INFORMATION_SCHEMA statement the executor runs returns what the server returned', async () => {
-  if (!existsSync(FIXTURE)) return
+  assert.ok(existsSync(FIXTURE), 'the corpus must be committed')
   const fixture = JSON.parse(readFileSync(FIXTURE, 'utf8')) as {
     capturedAgainst: string
     columns: Record<string, string[]>

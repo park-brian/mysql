@@ -21,13 +21,13 @@ function overlapping(): { executor: Executor; peak: () => number; order: string[
   const executor: Executor = {
     prepare: (s, sql) => inner.prepare(s, sql),
     execute: (s, sql, p) => inner.execute(s, sql, p),
-    async query(session, sql, attributes) {
+    async query(session, sql) {
       running++
       peak = Math.max(peak, running)
       order.push(sql)
       await new Promise((resolve) => setTimeout(resolve, 5))
       try {
-        return await inner.query(session, sql, attributes)
+        return await inner.query(session, sql)
       } finally {
         running--
       }
