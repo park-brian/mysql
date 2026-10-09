@@ -26,7 +26,7 @@
 // found that — every other test compared us against our own reading of a doc.
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { existsSync, readFileSync, readdirSync } from 'node:fs'
+import { existsSync, readFileSync } from 'node:fs'
 import { encodeCharset, loadCollation } from '@myjs/charsets'
 import { FIELD_TYPE } from '@myjs/bytes'
 import { decodeJson, decodeStorageValue, type ColumnMeta } from '@myjs/types'
@@ -44,36 +44,17 @@ interface WeightFixture {
   readonly vectors: readonly WeightVector[]
 }
 
-function load<T>(name: string): T | null {
+/** A committed fixture; a missing one fails, since a check with nothing to check is not a check (M2.22). */
+function load<T>(name: string): T {
   const file = `${FIXTURES}${name}.json`
-  if (!existsSync(file)) return null
+  assert.ok(existsSync(file), `${name}.json must be committed`)
   return JSON.parse(readFileSync(file, 'utf8')) as T
 }
 
 const hex = (u: Uint8Array) => [...u].map((x) => x.toString(16).padStart(2, '0').toUpperCase()).join('')
 
-test('M2.21: the corpus is visible, empty or not', () => {
-  // M2.22's lesson, applied to a second gate: a check that silently passes
-  // because it has nothing to check is not a check. If the corpus is empty
-  // this says so, loudly and with the command that fills it, rather than
-  // reporting a pass that means nothing.
-  //
-  // It cannot *fail* on an empty corpus, because these fixtures can only come
-  // from a real MySQL 8.4 and `npm test` must run with no server and no
-  // Docker. The `type-vectors` CI job is what produces them.
-  const present = existsSync(FIXTURES) ? readdirSync(FIXTURES).filter((f) => f.endsWith('.json')) : []
-  if (present.length === 0) {
-    console.log(
-      '  [type-vectors] no fixtures committed yet — run `npm run capture:types` against a real MySQL 8.4,\n' +
-        '                 or download the artifact from the `type-vectors` CI job, and commit them.',
-    )
-  }
-  assert.ok(Array.isArray(present))
-})
-
 test('M2.21: our sort keys are the server’s sort keys', async () => {
   const fixture = load<WeightFixture>('weight-strings')
-  if (fixture === null) return
 
   assert.ok(fixture.vectors.length > 0, 'a committed fixture must carry vectors')
   assert.match(fixture.capturedAgainst, /mysql-server/, 'a fixture must name the server it came from')
@@ -121,7 +102,6 @@ interface EncodingFixture {
 
 test('M2.21: the storage-encoding corpus is well formed and records its framing', () => {
   const fixture = load<EncodingFixture>('storage-encodings')
-  if (fixture === null) return
 
   // The framing is the point of D-34, not a label: a binlog row image differs
   // from the `.ibd` form in two documented ways — integers are little-endian
@@ -289,7 +269,6 @@ const CASES: Record<string, ColumnCase> = {
 
 test('M2.21: every captured storage vector decodes to the value that was inserted', () => {
   const fixture = load<EncodingFixture>('storage-encodings')
-  if (fixture === null) return
 
   let checked = 0
   for (const column of fixture.columns) {
@@ -316,7 +295,6 @@ test('M2.21: the captured JSON columns are the binary JSON M2.13 reads', () => {
   // Doc 28 quotes no byte dumps at all (M2.15), so until now every JSON vector
   // was derived from its grammar by hand. These three came off a server.
   const fixture = load<EncodingFixture>('storage-encodings')
-  if (fixture === null) return
   const js = fixture.columns.find((c) => c.column === 'js')
   assert.ok(js !== undefined, 'the corpus must carry a JSON column')
 

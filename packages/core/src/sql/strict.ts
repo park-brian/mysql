@@ -13,6 +13,7 @@
 import { errnoOf, sqlError, symbolOf } from '@myjs/protocol'
 import { STATEMENT, type Statement } from '@myjs/parser'
 import type { Condition } from '@myjs/types'
+import { modeOf } from './mode.ts'
 
 /** The codes `Strict_error_handler::handle_condition` raises as errors. */
 const ESCALATED: ReadonlySet<number> = new Set(
@@ -59,11 +60,9 @@ class StrictConditions extends Array<Condition> {
   }
 }
 
-const isStrict = (sqlMode: string): boolean => /\bSTRICT_(TRANS|ALL)_TABLES\b/.test(sqlMode)
-
 /** Whether the handler applies: a strict mode, and a statement that changes data without IGNORE. */
-export function escalates(statement: Statement, sqlMode: string): boolean {
-  if (!isStrict(sqlMode)) return false
+function escalates(statement: Statement, sqlMode: string): boolean {
+  if (!modeOf(sqlMode).strict) return false
   switch (statement.kind) {
     case STATEMENT.INSERT:
     case STATEMENT.UPDATE:

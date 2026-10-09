@@ -25,6 +25,7 @@
 // the first is reported (4095, 4096) when the value is stored.
 
 import type { MysqlDateTime } from '@myjs/bytes'
+import { isLeapYear } from './calendar.ts'
 
 /** The first deprecated delimiter in a datetime's text, as the server reports it. */
 export interface Deprecation {
@@ -77,7 +78,6 @@ const isSpace = (c: string | undefined): boolean => c === ' ' || c === '\t' || c
 const isPunct = (c: string | undefined): boolean => c !== undefined && /^[!-/:-@[-`{-~]$/.test(c)
 
 const DAYS = [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31]
-const isLeap = (y: number): boolean => (y % 4 === 0 && y % 100 !== 0) || y % 400 === 0
 
 /** `{+-}HH:MM`, at most 14 hours, and not -00:00; undefined when it is not one. */
 function displacementOf(text: string): number | undefined {
@@ -209,7 +209,7 @@ export function scanDateTime(text: string, flags: ScanFlags = {}): ScannedDateTi
   }
   if (notZero) {
     if (flags.noZeroInDate === true && (v.month === 0 || v.day === 0)) return 'zero-in-date'
-    if (v.month !== 0 && v.day > (DAYS[v.month - 1] as number) && !(v.month === 2 && v.day === 29 && isLeap(v.year))) return 'out-of-range'
+    if (v.month !== 0 && v.day > (DAYS[v.month - 1] as number) && !(v.month === 2 && v.day === 29 && isLeapYear(v.year))) return 'out-of-range'
   } else if (flags.noZeroDate === true) return 'zero-date'
 
   let nanoseconds = 0

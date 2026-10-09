@@ -156,7 +156,7 @@ function dateTimeText(s: string, zone: string): Date {
 }
 
 /** One value of a text-protocol row. */
-export function textValue(bytes: Uint8Array | null, c: ColumnDefinition, o: TypeOptions): unknown {
+function textValue(bytes: Uint8Array | null, c: ColumnDefinition, o: TypeOptions): unknown {
   if (bytes === null) return null
   const zone = o.timezone ?? 'local'
   switch (c.type) {

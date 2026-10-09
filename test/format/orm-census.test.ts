@@ -87,6 +87,19 @@ test("M5.22: Prisma's runs count every test once, and 8.4.11's failures are name
   )
 })
 
+test("M5's exit criterion: Prisma's suite passes here file for file as it passes on 8.4.11", () => {
+  // Per file, not in total: a total can hide one file lost and another
+  // gained, and it hid that `query-raw` was missing from our results
+  // altogether. A test 8.4.11 fails too, for reasons of its own environment,
+  // counts as parity when it fails here as well.
+  assert.deepEqual(Object.keys(p.ours.files).sort(), Object.keys(p.server.files).sort())
+  for (const [file, server] of Object.entries(p.server.files)) {
+    const ours = p.ours.files[file]
+    assert.deepEqual({ passed: ours?.passed, failed: ours?.failed }, { passed: server.passed, failed: server.failed }, file)
+  }
+  assert.deepEqual(p.ours.reasons, p.server.reasons ?? {}, 'the failures shared with 8.4.11 are the same failures')
+})
+
 test('M5.22: each run counts every test once, per file and in total', () => {
   for (const run of [d.server, d.ours]) {
     assert.deepEqual(Object.keys(run.files).sort(), [...d.files].sort())

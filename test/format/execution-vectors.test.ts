@@ -35,7 +35,7 @@ interface Fixture {
 /** Replay every case; the mismatches, described. */
 export async function replay(fixture: Fixture): Promise<{ statements: number; mismatches: string[] }> {
   const db = await MySQL.open(':memory:')
-  const conn = await mysql.createConnection({ stream: db.createStream() as never, user: 'root', password: '', charset: 'utf8mb4_0900_ai_ci' })
+  const conn = await mysql.createConnection({ stream: db.createStream(), user: 'root', password: '', charset: 'utf8mb4_0900_ai_ci' })
   await conn.query(`SET sql_mode = '${fixture.sqlMode}'`)
   const mismatches: string[] = []
   let statements = 0
@@ -62,15 +62,8 @@ export async function replay(fixture: Fixture): Promise<{ statements: number; mi
   return { statements, mismatches }
 }
 
-test('M5.17: the execution corpus is visible, empty or not', () => {
-  if (!existsSync(FIXTURE)) {
-    console.log('  [execution] no corpus committed yet — run `npm run capture:execution` against a real MySQL 8.4.')
-  }
-  assert.ok(true)
-})
-
 test('M5.17: every captured script returns what the server returned', async () => {
-  if (!existsSync(FIXTURE)) return
+  assert.ok(existsSync(FIXTURE), 'the corpus must be committed')
   const fixture = JSON.parse(readFileSync(FIXTURE, 'utf8')) as Fixture
   assert.match(fixture.capturedAgainst, /mysql-server/, 'a fixture must name the server it came from')
   assert.equal(fixture.sqlMode, SQL_MODE)

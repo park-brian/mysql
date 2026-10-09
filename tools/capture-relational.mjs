@@ -41,11 +41,9 @@
 import { mkdirSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import mysql from 'mysql2/promise'
+import { isMain } from './lib/is-main.mjs'
+import { arg, xorshift } from './lib/cli.mjs'
 
-function arg(name, fallback) {
-  const i = process.argv.indexOf(`--${name}`)
-  return i === -1 ? fallback : process.argv[i + 1]
-}
 
 const HOST = arg('host', '127.0.0.1')
 const PORT = Number(arg('port', '3306'))
@@ -60,17 +58,8 @@ export const SQL_MODE = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ENGINE_SUBSTI
 /** The driver's options, on both sides: dates and big numbers as strings, so a binary row compares as text does. */
 export const CONNECTION = { charset: 'utf8mb4_0900_ai_ci', dateStrings: true, supportBigNumbers: true, bigNumberStrings: true }
 
-/** xorshift32 — the generator every corpus tool here uses, so a seed reproduces. */
-let state = SEED || 1
-function rnd() {
-  state ^= state << 13
-  state ^= state >>> 17
-  state ^= state << 5
-  return (state >>> 0) / 0x100000000
-}
-const pick = (xs) => xs[Math.floor(rnd() * xs.length)]
-const chance = (p) => rnd() < p
-const int = (lo, hi) => lo + Math.floor(rnd() * (hi - lo + 1))
+/** xorshift32, seeded (`tools/lib/cli.mjs`), so a seed reproduces the corpus. */
+const { rnd, pick, chance, int } = xorshift(SEED)
 const some = (xs, lo, hi) => {
   const pool = [...xs]
   const out = []
@@ -521,7 +510,7 @@ export async function runCase(conn, statements, { server = false, warnings = ser
   return out
 }
 
-if (import.meta.url === `file://${process.argv[1]}`) {
+if (isMain(import.meta.url)) {
   const conn = await mysql.createConnection({ host: HOST, port: PORT, user: USER, password: PASSWORD, ...CONNECTION })
   await conn.query(`SET sql_mode = '${SQL_MODE}'`)
   const [[{ v: version }]] = await conn.query('SELECT VERSION() AS v')

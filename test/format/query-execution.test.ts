@@ -33,7 +33,7 @@ interface Fixture {
 test('M5.18: the executor answers the query-grouping corpus as 8.4.11 did', async () => {
   const fixture = JSON.parse(readFileSync(FIXTURE, 'utf8')) as Fixture
   const db = await MySQL.open(':memory:')
-  const conn = await mysql.createConnection({ stream: db.createStream() as never, user: 'root', password: '' })
+  const conn = await mysql.createConnection({ stream: db.createStream(), user: 'root', password: '' })
   let refused = 0
   let agreed = 0
   let inOrder = 0

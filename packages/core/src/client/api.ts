@@ -31,7 +31,13 @@ export interface QueryOptions extends TypeOptions {
   readonly rowsAsArray?: boolean
 }
 
-export type QueryResult = [unknown, FieldInfo[] | (FieldInfo[] | undefined)[] | undefined]
+/**
+ * What `query()` and `execute()` resolve to, as `mysql2/promise` has it: the
+ * rows (or an OK header, or one of each per statement) and the fields. `T`
+ * is the caller's word for the first, as it is under `mysql2`: nothing
+ * checks it against the SQL.
+ */
+export type QueryResult<T = unknown> = [T, FieldInfo[] | (FieldInfo[] | undefined)[] | undefined]
 
 /** A failed statement, in `mysql2`'s shape: `code`, `errno`, `sqlState`, `sqlMessage`, `sql`. */
 export class QueryError extends Error {
@@ -92,24 +98,24 @@ export class Connection {
   }
 
   /** The text protocol. `values` fill the `?`s client-side, as `mysql2` fills them. */
-  query(sql: string | QueryOptions, values?: readonly unknown[]): Promise<QueryResult> {
+  query<T = unknown>(sql: string | QueryOptions, values?: readonly unknown[]): Promise<QueryResult<T>> {
     const o = this.#options(sql, values)
     return this.#serial(async () => {
       const text = o.values === undefined ? o.sql : formatQuery(o.sql, o.values, this.#client.noBackslashEscapes, o.timezone)
       const results = await this.#run(text, () => this.#client.query(encoder.encode(text)))
-      return shape(results, o, false)
+      return shape(results, o, false) as QueryResult<T>
     })
   }
 
   /** The binary protocol: prepared once per text, then executed with `values`. */
-  execute(sql: string | QueryOptions, values?: readonly unknown[]): Promise<QueryResult> {
+  execute<T = unknown>(sql: string | QueryOptions, values?: readonly unknown[]): Promise<QueryResult<T>> {
     const o = this.#options(sql, values)
     return this.#serial(async () => {
       const id = await this.#prepare(o.sql)
       // A count that does not match is the server's to refuse, as it is under `mysql2`.
       const packet = executePacket(id, o.values ?? [], hasCap(this.#client.capabilities, CLIENT.QUERY_ATTRIBUTES), o.timezone)
       const results = await this.#run(o.sql, () => this.#client.execute(packet))
-      return shape(results, o, true)
+      return shape(results, o, true) as QueryResult<T>
     })
   }
 
@@ -242,12 +248,12 @@ export class Transaction {
     this.#connection = connection
   }
 
-  query(sql: string | QueryOptions, values?: readonly unknown[]): Promise<QueryResult> {
-    return this.#connection.query(sql, values)
+  query<T = unknown>(sql: string | QueryOptions, values?: readonly unknown[]): Promise<QueryResult<T>> {
+    return this.#connection.query<T>(sql, values)
   }
 
-  execute(sql: string | QueryOptions, values?: readonly unknown[]): Promise<QueryResult> {
-    return this.#connection.execute(sql, values)
+  execute<T = unknown>(sql: string | QueryOptions, values?: readonly unknown[]): Promise<QueryResult<T>> {
+    return this.#connection.execute<T>(sql, values)
   }
 
   async commit(): Promise<void> {

@@ -38,7 +38,7 @@ const SCRIPT: readonly (readonly [string, Outcome])[] = [
 
 test('row constructors compare as 8.4.11 compares them', async () => {
   const db = await MySQL.open(':memory:')
-  const conn = await mysql.createConnection({ stream: db.createStream() as never, user: 'root', password: '', supportBigNumbers: true, bigNumberStrings: true })
+  const conn = await mysql.createConnection({ stream: db.createStream(), user: 'root', password: '', supportBigNumbers: true, bigNumberStrings: true })
   try {
     await conn.query('CREATE DATABASE app')
     await conn.query('USE app')

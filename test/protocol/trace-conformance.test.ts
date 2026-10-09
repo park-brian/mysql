@@ -18,7 +18,6 @@ import {
   CLIENT,
   COM,
   PACKET,
-  PacketFramer,
   capabilities,
   classify,
   parseColumnDefinition41,

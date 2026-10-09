@@ -10,7 +10,7 @@ import { serve } from '@myjs/server'
 async function open(options: Parameters<typeof MySQL.open>[1] = {}) {
   const db = await MySQL.open(':memory:', options)
   const connect = (extra: Record<string, unknown> = {}) =>
-    mysql.createConnection({ stream: db.createStream() as never, user: 'root', password: '', ...extra })
+    mysql.createConnection({ stream: db.createStream(), user: 'root', password: '', ...extra })
   const conn = await connect()
   await conn.query('CREATE DATABASE app')
   await conn.query('USE app')

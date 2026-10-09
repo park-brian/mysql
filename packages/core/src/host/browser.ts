@@ -13,7 +13,10 @@ export interface WebDuplex {
   readonly writable: WritableStream<Uint8Array>
 }
 
-export function createWebStream(connection: ProtocolConnection): WebDuplex {
+/** The stream `createStream()` returns on this host: a pair of Web Streams. */
+export type DriverStream = WebDuplex
+
+export function createStream(connection: ProtocolConnection): WebDuplex {
   let push: ((chunk: Uint8Array) => void) | null = null
   let close: (() => void) | null = null
 

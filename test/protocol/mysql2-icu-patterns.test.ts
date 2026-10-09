@@ -672,7 +672,7 @@ const SCRIPT: readonly (readonly [string, Outcome])[] = [
 test("M5.10: every ICU pattern is read, refused or matched as 8.4.11 did", async () => {
   const db = await MySQL.open(":memory:");
   const conn = await mysql.createConnection({
-    stream: db.createStream() as never,
+    stream: db.createStream(),
     user: "root",
     password: "",
   });

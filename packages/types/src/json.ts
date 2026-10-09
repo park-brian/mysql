@@ -27,7 +27,6 @@
 //   and the text rendering both reflect the stored order, which is why
 //   `JSON_OBJECT('b',1,'a',2)` comes back with `a` first. Reproducing it is
 //   required for output compatibility, not a nicety.
-import { FIELD_TYPE } from '@myjs/bytes'
 import { invalidJson } from './errors.ts'
 import { decodeStorageValue, type ColumnMeta, type StorageValue } from './values.ts'
 
@@ -523,5 +522,3 @@ function inlineWidth(type: number): number {
   return type === JSON_TYPE.LITERAL ? 1 : 2
 }
 
-/** The MySQL field type a JSON column's storage bytes carry. */
-export const JSON_FIELD_TYPE = FIELD_TYPE.JSON

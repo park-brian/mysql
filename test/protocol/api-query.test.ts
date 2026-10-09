@@ -86,7 +86,7 @@ async function compare(name: string, scripts: number): Promise<void> {
   for (const [n, script] of cases.slice(0, scripts).entries()) {
     const ours = await MySQL.open(':memory:')
     const theirs = await MySQL.open(':memory:')
-    const conn = await mysql.createConnection({ stream: theirs.createStream() as never, user: 'root', password: '' })
+    const conn = await mysql.createConnection({ stream: theirs.createStream(), user: 'root', password: '' })
     try {
       for (const setup of ['CREATE DATABASE app', 'USE app', ...(sqlMode === undefined ? [] : [`SET sql_mode = '${sqlMode}'`])]) {
         await ours.query(setup)
@@ -98,7 +98,7 @@ async function compare(name: string, scripts: number): Promise<void> {
         if (!isQuery(sql)) continue
         assert.deepEqual(await outcome(() => ours.execute(sql)), await outcome(() => conn.execute(sql)), `execute, ${where}`)
         for (const options of TYPE_OPTIONS) {
-          const theirsWith = await mysql.createConnection({ stream: theirs.createStream() as never, user: 'root', password: '', database: 'app', ...options })
+          const theirsWith = await mysql.createConnection({ stream: theirs.createStream(), user: 'root', password: '', database: 'app', ...options })
           const oursWith = await ours.connect({ database: 'app', ...options })
           try {
             for (const mode of sqlMode === undefined ? [] : [`SET sql_mode = '${sqlMode}'`]) {

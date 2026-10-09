@@ -7,8 +7,8 @@
 // duplex that hands mysql2 plain `Uint8Array`s therefore cannot work, however
 // carefully it duck-types the rest of the interface.
 //
-// Keeping that fact in one file behind a package export condition is what lets
-// every other module stay provably portable.
+// Keeping that fact in one file behind a package import condition (`#host`)
+// is what lets every other module stay provably portable.
 import { Duplex } from 'node:stream'
 import { fileURLToPath } from 'node:url'
 import { VfsError, type Lock, type Vfs } from '@myjs/vfs'
@@ -21,23 +21,25 @@ import type { ProtocolConnection } from '../connection.ts'
  *
  * Doc 42: "`mysql2` does not know there is no socket."
  */
-export function createNodeStream(connection: ProtocolConnection): Duplex {
+/** The stream `createStream()` returns on this host: a Node `Duplex`, as `mysql2` reads one. */
+export type DriverStream = Duplex
+
+export function createStream(connection: ProtocolConnection): Duplex {
   let ended = false
-  let pending: Promise<void> = Promise.resolve()
 
   const stream = new Duplex({
     read() {
       // Nothing to pull: bytes are pushed as the connection produces them.
     },
     write(chunk: Buffer | Uint8Array, _encoding, callback) {
-      // Acknowledged at once and processed in order behind a promise chain.
+      // Acknowledged at once; the connection runs its feeds in order.
       // Holding the callback until the command finished made a `destroy()`
       // wait for it too — Node defers destroy behind a pending write — so a
       // connection closed mid-statement was not seen to close until the
       // statement it was abandoning had run (found by M5.17's review).
       const bytes = new Uint8Array(chunk.buffer, chunk.byteOffset, chunk.byteLength).slice()
-      pending = pending
-        .then(() => connection.feed(bytes))
+      connection
+        .feed(bytes)
         .then(flush)
         .catch((err: unknown) => {
           stream.destroy(err instanceof Error ? err : new Error(String(err)))

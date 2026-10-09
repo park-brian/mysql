@@ -13,9 +13,9 @@
 // (keys, foreign keys on both sides, CHECKs, FULLTEXT), then keys renamed,
 // columns added, indexes and foreign keys added. One not here is refused by
 // name.
-import { FIELD_TYPE, MyjsError } from '@myjs/bytes'
+import { FIELD_TYPE, MyjsError, expectTyped } from '@myjs/bytes'
 import { sqlError, messages, type OkResult } from '@myjs/protocol'
-import type { ColumnDef, FieldBytes, IndexDef, TableDef, TableSpec } from '@myjs/engine'
+import type { ColumnDef, FieldBytes, IndexDef, TableDef } from '@myjs/engine'
 import { KEY, NODE, STATEMENT, deparse, type AlterAction, type AlterTableNode, type ColumnDefinition, type Expression } from '@myjs/parser'
 import { decodeField, encodeField, type StoreContext, type Value } from '@myjs/types'
 import { raise, type Compiled } from './compile.ts'
@@ -29,6 +29,7 @@ import { checkFulltext, fulltextOf, type FulltextDef } from './fulltext.ts'
 import type { Run } from './query.ts'
 import { isTemporary, type CatalogApi } from './temporary.ts'
 import { renameTables } from './rename.ts'
+import { modeOf } from './mode.ts'
 
 const notSupported = (what: string) => sqlError('ER_NOT_SUPPORTED_YET', messages.notSupported(what))
 const cantDrop = (name: string) => sqlError('ER_CANT_DROP_FIELD_OR_KEY', `Can't DROP '${name}'; check that column/key exists`)
@@ -204,7 +205,7 @@ export function alterTable(run: Run, catalog: CatalogApi, statement: AlterTableN
   const incompatible = (child: ColumnDef, parent: ColumnDef, fk: string) => sqlError('ER_FK_INCOMPATIBLE_COLUMNS', `Referencing column '${child.name}' and referenced column '${parent.name}' in foreign key constraint '${fk}' are incompatible.`)
   const columnNamed = (list: readonly ColumnDef[], n: string) => list.find((c) => same(c.name, n))
   for (const fk of foreignKeys) {
-    const parent = self(fk) ? { columns } : (() => { try { return catalog.definition(fk.references.schema, fk.references.table) } catch { return undefined } })()
+    const parent = self(fk) ? { columns } : (() => { try { return catalog.definition(fk.references.schema, fk.references.table) } catch (e) { expectTyped(e); return undefined } })()
     if (parent === undefined) continue
     fk.columns.forEach((c, k) => {
       const mine = columnNamed(columns, c)
@@ -383,7 +384,7 @@ export function alterTable(run: Run, catalog: CatalogApi, statement: AlterTableN
   const store: StoreContext = { strict: false, row: 1, warnings: 0, table: def.name, ...(run.env.conditions === undefined ? {} : { conditions: run.env.conditions }) }
   // A column whose type changed is converted as a strict INSERT would store
   // it: 1264, 1265 at the row, and NULL into NOT NULL 1138 (8.4.11).
-  const strict: StoreContext = { strict: /\bSTRICT_(TRANS|ALL)_TABLES\b/.test(run.env.session.sqlMode), ...zeroRules(run), row: 1, warnings: 0, table: def.name, ...(run.env.conditions === undefined ? {} : { conditions: run.env.conditions }) }
+  const strict: StoreContext = { strict: modeOf(run.env.session.sqlMode).strict, ...zeroRules(run), row: 1, warnings: 0, table: def.name, ...(run.env.conditions === undefined ? {} : { conditions: run.env.conditions }) }
   const converted = sources.map((src, i) => {
     if (typeof src !== 'number') return undefined
     const from = def.columns[src] as ColumnDef

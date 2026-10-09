@@ -5,8 +5,8 @@
 // is SQL that server ran. The surprises are in the comments.
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { ParseError, STATEMENT, deparse, parseStatement, type AlterTableNode, type CreateTableNode } from '@myjs/parser'
-import { parsed as parse, refused, roundTrip, same, withoutPositions } from '../../tools/lib/round-trip.mjs'
+import { ParseError, STATEMENT, parseStatement, type AlterTableNode, type CreateTableNode } from '@myjs/parser'
+import { parsed as parse, refused, same, withoutPositions } from '../../tools/lib/round-trip.mjs'
 
 const alter = (sql: string): AlterTableNode => {
   const node = parse(sql)

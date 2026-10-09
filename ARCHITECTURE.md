@@ -246,8 +246,9 @@ flowchart BT
     vfs["@myjs/vfs<br/><i>the one platform seam</i>"]
     engine["@myjs/engine<br/><i>storage</i>"]
     innodb["@myjs/innodb<br/><i>interchange codec</i>"]:::planned
-    core["myjs (@myjs/core)<br/><i>MySQL class, executor</i>"]
+    core["@myjs/core<br/><i>MySQL class, executor</i>"]
     server["@myjs/server<br/><i>TCP, WebSocket, worker host</i>"]
+    myjs["myjs<br/><i>what an application installs</i>"]
 
     charsets --> bytes
     types --> charsets
@@ -260,6 +261,8 @@ flowchart BT
     core --> parser
     core --> protocol
     server --> core
+    myjs --> core
+    myjs --> server
     classDef planned stroke-dasharray: 5 5,color:#888
 ```
 
@@ -282,6 +285,16 @@ not. The number `MYSQL_TYPE_NEWDECIMAL = 246` is the same in a wire packet, a
 binlog row image and a `.ibd` file, so it lives in `bytes`. What you do with a
 DECIMAL lives in `types`. The protocol learns about a session's character set
 by having a `Transcoder` *injected* into it. It never imports one.
+
+`myjs` itself is a facade: it re-exports doc 42's surface from `@myjs/core`
+and `serve()`, as `myjs/server`, from `@myjs/server` (D-79). The core cannot
+be the package an application installs under that name, since `myjs/server`
+would then depend on a package that depends on it. The facade also makes the
+surface 1.0 freezes one short file rather than everything the core exports
+for its neighbours. In the repository every package runs from its
+TypeScript source; what npm installs is the JavaScript and declarations
+`tsc` emits from it, packed and smoke-installed by CI, because Node will not
+strip types inside `node_modules`.
 
 `@myjs/innodb` is deliberately not under `@myjs/engine`. It is a codec, not a
 storage backend. Someone should be able to `npm install @myjs/innodb` purely to
@@ -925,6 +938,22 @@ implements `innodb_lock_wait_timeout` without the engine ever blocking. When a
 connection ends, whether by `COM_QUIT`, a destroyed stream or a closed socket,
 its transaction rolls back. A dead client can't hold the slot forever.
 
+One writer would be a poor bargain if a long statement also held the event
+loop: a 32,000-row INSERT used to keep every other connection, handshakes
+included, waiting for three seconds. So a statement may **pause between its
+mini-transactions** (D-77). The core stays synchronous; a statement that may
+run long is a generator that yields only where no mini-transaction is open,
+and the async edge resumes it a ten-millisecond slice at a time. A writer
+pauses holding the slot, so nothing else can change a page under it, and the
+state it leaves between two batches is the state between two statements of
+an open transaction, which other sessions already see correctly. A read
+pauses every 256 rows holding nothing, and if a commit changed the tree
+meanwhile its scan finds its place again by key (M5.38). A connection that
+closes while its statement is paused has the statement interrupted at the
+pause, and it rolls back as on any error. Purge is cut to fit: a commit
+purges a bounded number of undo records, and the rest is purged a slice at
+a time while no writer holds the slot.
+
 ### Reading the past
 
 Each clustered record carries the id of the transaction that last wrote it and
@@ -1270,6 +1299,7 @@ const [rows, fields] = await db.query('SELECT * FROM users WHERE id > 10')
 const [result] = await db.execute('INSERT INTO users (name) VALUES (?)', ['alice'])
 result.insertId
 
+// not in 0.3 (M5.40)
 for await (const row of db.stream('SELECT * FROM big_table')) { /* … */ }
 
 // transactions: commit on return, roll back on throw,
@@ -1284,13 +1314,13 @@ db.execProtocol(bytes)        // Uint8Array → Promise<Uint8Array>
 db.createStream()             // a duplex for mysql2's { stream }
 db.createPort()               // a MessagePort for another thread or tab
 
-// data in and out
+// data in and out: not in 0.3 (M6.8, M7.10–M7.12)
 await db.importTablespace('users', ibdBytes, cfgBytes)
 const { ibd, cfg } = await db.exportTablespace('users')
 const snapshot = await db.dump()
 const copy = await MySQL.load(snapshot)
 
-// change streams
+// change streams: not in 0.3 (M8.1)
 for await (const c of db.changes({ tables: ['orders'] })) { c.type; c.before; c.after; c.lsn }
 ```
 
@@ -1298,13 +1328,18 @@ Automatic retry happens **only** inside `transaction()`, where replaying the
 callback is safe. Errors carry MySQL's numbers and SQLSTATEs in `mysql2`'s
 shape everywhere. Introspection (`explain()`, `stats()`, and real `SHOW` and
 `INFORMATION_SCHEMA`) reads the same numbers the engine already keeps. The
-full surface is in [doc 42](./docs/42-public-api.md).
+full surface is in [doc 42](./docs/42-public-api.md), with a table of what
+0.3 builds of it. `query<T>()` and `execute<T>()` take the caller's row type,
+as `mysql2`'s do, and `createStream()` is typed by its host (D-78): a Node
+`Duplex`, or Web Streams in a browser bundle.
 
 There is one place where the seam from §5 and this surface pull against each
 other. `execProtocol` returns every response byte for one command, which is
 right for nearly everything and wrong for `db.stream()`, whose whole purpose
 is never to hold a large resultset in memory. A streaming variant of the
-lowest entry point is one of the open questions in [§20](#20-what-we-dont-know-yet).
+lowest entry point was one of the open questions in [§20](#20-what-we-dont-know-yet);
+pausing reads (§11) answer it in principle, since a read that stops every 256
+rows can hand those rows out as it goes, and M5.40 builds it.
 
 ## 18. How we know it works
 
@@ -1407,11 +1442,11 @@ a blocker and one without is just a note.
 | Question | Why it matters | Settled by |
 |---|---|---|
 | **Does OPFS `flush()` ever reorder writes?** | The browser half of the durability promise depends on it ([§12](#12-durability-stated-honestly)) | Real-browser crash tests, M6 |
-| **Does `execProtocol` need a streaming variant?** | `db.stream()` exists so that a large resultset is never held in memory, and today's seam returns a command's whole response | M5 |
+| **Does `execProtocol` need a streaming variant?** | `db.stream()` exists so that a large resultset is never held in memory, and today's seam returns a command's whole response. D-77's pausing reads answer it in principle: rows can leave a batch at a time | M5.40, for 0.4 |
 | ~~**How faithful must `INFORMATION_SCHEMA` be?**~~ | Settled by M5.12: byte for byte, metadata included, because Prisma diffs what it reads against what it pushed. A captured corpus of 2,568 statements agrees in full | — |
-| **How closely can our byte traces match a real server's?** | Version string, capabilities and connection ids differ *by design*, so byte identity with a real server is not simply a question of correctness | M5's differential harness |
+| ~~**How closely can our byte traces match a real server's?**~~ | Settled by M5.16: what is compared with a real server is what a client sees — rows, metadata, counters, errors and warnings — and byte identity is held only against our own frozen traces | — |
 | **Is whole-page compression at the VFS the answer to COMPRESSED tables?** | It is the proposed replacement, with no design yet | M6 or later |
-| **Do index pages get prefix compression?** | Could save a third or more on string keys, at the cost of a slower page format | Deliberately undecided |
+| **Do index pages get prefix compression?** | Could save a third or more on string keys, at the cost of a slower page format | M7, which reads InnoDB's own pages |
 | **How are legacy temporal types told apart on import?** | Their byte lengths overlap the modern forms, so the dictionary has to decide | M7 |
 
 ## 21. Where we are
@@ -1429,31 +1464,24 @@ flowchart LR
 
 M0 through M4 are done. The protocol, the type system and collations, the
 parser and the storage engine are all built and checked against a real
-server. M5 is well under way. The executor runs DDL, DML and transactions,
-upserts and multi-table UPDATE and DELETE included, with a strict mode's
-errors where the server raises them. It runs relational SELECT: joins,
-grouping and aggregates, HAVING with or without groups, subqueries, derived
-tables, CTEs, set operations and views. It also covers JSON as a value,
-window functions with their frames (over groups too), `INFORMATION_SCHEMA`,
-SHOW COLUMNS, INDEX and CREATE VIEW, foreign keys with their referential
-actions, CHECK constraints, ALTER TABLE by copy, temporary tables, CREATE
-TABLE … LIKE and … SELECT, generated columns, RENAME TABLE, `SHOW CREATE
-TABLE` byte for byte, JSON paths and regular expressions. Generated corpora of 400, 300 and 250 scripts
-agree with MySQL 8.4.11 statement for statement, column names and flags
-included. Most of M5's exit criterion holds. All 487 tests of Drizzle's
-MySQL suites pass, as they do against 8.4.11. Of Prisma's, up to 1,113 pass
-against the server's 1,122, FULLTEXT search included; the one failure is a
-snapshot of another MySQL version's error text, which 8.4.11 fails too.
-The count drifts down by up to four between runs, because bulk statements
-still stall the event loop long enough for parallel suites' connections to
-time out (M5.32). Batching a bulk statement's rows into shared
-mini-transactions has halved that stall: 10,000 rows now take about 560 ms.
-32,000 still take over a second, so M5.32 stays open. The query API of
-§17 exists too: `db.query()`, `db.execute()`, `db.begin()` and
-`db.transaction()`, a client of the wire protocol whose answers are compared
-with `mysql2/promise`'s over five corpora (M5.36). `db.stream()` is not
-built yet. The rest of the function library and the cost-based planner come
-next. The core bundle is about 288 KB gzipped against a budget of 500 KB,
+server. M5's exit criterion is met. The executor runs DDL, DML and
+transactions, upserts and multi-table UPDATE and DELETE included, with a
+strict mode's errors where the server raises them. It runs relational
+SELECT: joins, grouping and aggregates, subqueries, derived tables, CTEs, set
+operations and views. It also covers JSON as a value, window functions with
+their frames, `INFORMATION_SCHEMA`, SHOW, foreign keys with their
+referential actions, CHECK constraints, ALTER TABLE by copy, temporary
+tables, generated columns, FULLTEXT, `SHOW CREATE TABLE` byte for byte, JSON
+paths and regular expressions. Generated corpora agree with MySQL 8.4.11
+statement for statement, column names and flags included. Drizzle's MySQL
+suites pass whole, as they do against 8.4.11, and so does every test of
+Prisma's that 8.4.11 passes, file for file, three runs in a row, now that a
+bulk statement pauses between its batches instead of stalling every other
+connection (§11). The query API of §17 exists, typed, and a client of the
+wire protocol whose answers are compared with `mysql2/promise`'s. `myjs`
+packs, installs into an empty project and runs there, in CI; 0.3 waits only
+on being published. Next are the cost-based planner, `db.stream()` and the
+browser. The core bundle is about 290 KB gzipped against a budget of 500 KB,
 with the UCA weights in a separate chunk loaded on demand.
 
 The release plan gives each stage something to ship:

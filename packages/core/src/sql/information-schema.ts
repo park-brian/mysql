@@ -21,7 +21,7 @@
 // text, a default as the column stores it (`'0.00'` for DECIMAL(10,2)),
 // EXTRA's `DEFAULT_GENERATED on update CURRENT_TIMESTAMP(3)`, COLUMN_KEY from
 // the same key flags a column's metadata carries.
-import { CHARSET_BINARY, FIELD_TYPE } from '@myjs/bytes'
+import { CHARSET_BINARY, FIELD_TYPE, expectTyped } from '@myjs/bytes'
 import { collationInfoByName, requireCollationInfo } from '@myjs/charsets'
 import type { ColumnDef, TableDef, ViewDef } from '@myjs/engine'
 import { parseExpression, type TableName } from '@myjs/parser'
@@ -42,7 +42,7 @@ import { generationOf, printGeneration } from './generated.ts'
 const COLUMN_FLAG = { PRI_KEY: 2, UNIQUE_KEY: 4, MULTIPLE_KEY: 8 } as const
 
 /** Whether a name is INFORMATION_SCHEMA's, compared as MySQL compares a schema name there. */
-export const isInformationSchema = (schema: string): boolean => schema.toLowerCase() === 'information_schema'
+const isInformationSchema = (schema: string): boolean => schema.toLowerCase() === 'information_schema'
 
 /** The ResultType of one captured column: what expressions over it compute with, and what a bare reference reports. */
 function typeOf(c: InformationSchemaColumn, table: string, alias: string): ResultType {
@@ -250,7 +250,8 @@ export function columnDefault(run: Run, column: ColumnDef): string | null {
     const field = encodeField(v, column, { strict: false, row: 1, warnings: 0 })
     const stored = decodeField(field, column.type)
     return stored === null ? null : toText(stored)
-  } catch {
+  } catch (e) {
+    expectTyped(e)
     return text
   }
 }
@@ -365,7 +366,8 @@ const ROWS: Readonly<Record<string, (run: Run) => Iterable<readonly Value[]>>> =
             let planned
             try {
               planned = planViewQuery(run, v).plan
-            } catch {
+            } catch (e) {
+              expectTyped(e)
               return
             }
             const rows = planned.columns.map((c, i) => {
@@ -457,7 +459,9 @@ const ROWS: Readonly<Record<string, (run: Run) => Iterable<readonly Value[]>>> =
           // The select list keeps its own names: a column list renames the view's columns, not them (8.4.11).
           text = viewDefinition(query, plan.columns.map((c) => c.name), v.database ?? v.schema, run.catalog === undefined ? () => undefined : printableSources(run.catalog), v.query)
           updatable = viewUpdatable(query)
-        } catch {}
+        } catch (e) {
+          expectTyped(e)
+        }
         const collation = v.collationConnection ?? 255
         yield [s('def'), s(schema), s(v.name), s(text ?? v.query), s(v.checkOption ?? 'NONE'), s(updatable ? 'YES' : 'NO'), s(v.definer ?? 'root@%'), s(v.security ?? 'DEFINER'), s(charsetName(collation)), s(collationName(collation))]
       }

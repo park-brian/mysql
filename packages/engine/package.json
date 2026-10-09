@@ -1,6 +1,6 @@
 {
   "name": "@myjs/engine",
-  "version": "0.0.0",
+  "version": "0.3.0",
   "description": "Pages, buffer pool, allocator, records and the B+tree \u2014 the native storage engine",
   "type": "module",
   "license": "MIT",
@@ -15,9 +15,9 @@
     "src"
   ],
   "dependencies": {
-    "@myjs/bytes": "0.0.0",
-    "@myjs/charsets": "0.0.0",
-    "@myjs/types": "0.0.0",
-    "@myjs/vfs": "0.0.0"
+    "@myjs/bytes": "0.3.0",
+    "@myjs/charsets": "0.3.0",
+    "@myjs/types": "0.3.0",
+    "@myjs/vfs": "0.3.0"
   }
 }

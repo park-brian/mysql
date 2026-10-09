@@ -22,12 +22,13 @@
 //   - **Const tables**: a table whose PRIMARY or NOT NULL UNIQUE key is held
 //     to constants is read while planning; with no such row the result is
 //     empty, and with one its columns are constants.
+import { CHARSET_BINARY, FIELD_TYPE, expectTyped } from '@myjs/bytes'
 import type { ColumnDef, Table, TableDef, Trx } from '@myjs/engine'
 import { NODE, type Expression } from '@myjs/parser'
 import { compareValues, integerRange, truth, type Value } from '@myjs/types'
 import { compile, EMPTY_SCOPE, type CompileContext, type Env } from './compile.ts'
 import type { FromPlan } from './from.ts'
-import { accessRows, pointAccess } from './plan.ts'
+import { accessRows, pointAccess, splitAnd } from './plan.ts'
 
 export interface ConstTable {
   readonly alias: string
@@ -66,19 +67,12 @@ export function optimizerFacts(from: FromPlan | undefined, where: Expression | u
   straight = straight || from.straight
   const scope = from.scope
 
-  const flatten = (e: Expression | undefined, out: Expression[]): Expression[] => {
-    if (e === undefined) return out
-    if (e.kind === NODE.BINARY && (e.op === 'AND' || e.op === '&&')) {
-      flatten(e.left, out)
-      flatten(e.right, out)
-    } else out.push(e)
-    return out
-  }
   const slot = (e: Expression): number | undefined => {
     if (e.kind !== NODE.COLUMN) return undefined
     try {
       return scope.resolve(e.parts, 'where clause').index
-    } catch {
+    } catch (e) {
+      expectTyped(e)
       return undefined
     }
   }
@@ -86,8 +80,8 @@ export function optimizerFacts(from: FromPlan | undefined, where: Expression | u
 
   // Outer-join simplification, to a fixed point: a null-rejecting condition on
   // an outer join's nullable side makes it an inner join.
-  const pool = flatten(where, [])
-  for (const j of from.joins) if (!j.left && !j.nested) flatten(j.on, pool)
+  const pool = splitAnd(where, [])
+  for (const j of from.joins) if (!j.left && !j.nested) splitAnd(j.on, pool)
   const converted = new Set<number>()
   for (let changed = true; changed; ) {
     changed = false
@@ -97,7 +91,7 @@ export function optimizerFacts(from: FromPlan | undefined, where: Expression | u
       if (!rejects) return
       converted.add(n)
       changed = true
-      if (!j.nested) flatten(j.on, pool)
+      if (!j.nested) splitAnd(j.on, pool)
     })
   }
   const nullable = new Set<string>()
@@ -209,7 +203,7 @@ export function optimizerFacts(from: FromPlan | undefined, where: Expression | u
   from.joins.forEach((j, n) => {
     if (!j.left || converted.has(n)) return
     for (const a of j.innerAliases) nullable.delete(a)
-    const never = flatten(j.on, []).some((c) => {
+    const never = splitAnd(j.on, []).some((c) => {
       // The range optimizer's proofs, not `IS NULL` on a NOT NULL column: an
       // ON holding that is still a join (8.4.11: a hash antijoin).
       if (c.kind === NODE.BINARY && impossible(c)) return true
@@ -307,7 +301,7 @@ function nullRejected(c: Expression, slot: (e: Expression) => number | undefined
 }
 
 /** `int_col = 9.5`, `tinyint_col = 300`: an integer column against a number it can never equal. */
-function neverEqual(column: ColumnDef | undefined, other: Expression): boolean {
+export function neverEqual(column: ColumnDef | undefined, other: Expression): boolean {
   const n = numericConstant(column, other)
   if (n === undefined) return false
   return n.fraction || n.floor < n.range.min || n.floor > n.range.max
@@ -398,7 +392,8 @@ function partialTruth(e: Expression, known: (column: Expression) => Expression |
   if (!complete || (!touched && !constants)) return undefined
   try {
     return truth(compile(replaced, { ...ctx, scope: EMPTY_SCOPE }).eval([], env))
-  } catch {
+  } catch (e) {
+    expectTyped(e)
     return undefined
   }
 }
@@ -420,13 +415,14 @@ function constantFor(e: Expression, column: ColumnDef, ctx: CompileContext, env:
   let v: Value
   try {
     v = compile(e, { ...ctx, scope: EMPTY_SCOPE }).eval([], env)
-  } catch {
+  } catch (e) {
+    expectTyped(e)
     return undefined
   }
   if (v === null) return null
-  const text = column.type.collationId !== undefined && column.type.collationId !== 63
+  const text = column.type.collationId !== undefined && column.type.collationId !== CHARSET_BINARY
   if (text) return v.kind === 'string' ? { ...v, collationId: column.type.collationId as number, coercibility: 2 } : undefined
-  if (integerRange(column.type) !== undefined || column.type.type === 246 || column.type.type === 0) return v.kind === 'int' || v.kind === 'decimal' ? v : undefined
+  if (integerRange(column.type) !== undefined || column.type.type === FIELD_TYPE.NEWDECIMAL || column.type.type === FIELD_TYPE.DECIMAL) return v.kind === 'int' || v.kind === 'decimal' ? v : undefined
   return undefined
 }
 

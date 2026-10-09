@@ -47,6 +47,7 @@ import type { Store } from './store.ts'
 import { MemoryEngine, NativeEngine, type StorageEngine, type Table, type TableHooks } from './table.ts'
 import { CLUSTERED_HEADER, versionOf, type Trx } from './trx.ts'
 import type { VerifyOptions } from './verify.ts'
+import { be32, readU32 } from './page.ts'
 
 /** This build's catalog version. */
 export const CATALOG_VERSION = 1
@@ -167,14 +168,9 @@ export interface CatalogOptions {
 
 const utf8 = new TextEncoder()
 const text = new TextDecoder('utf-8', { fatal: true })
-const be32 = (n: number): Uint8Array => {
-  const out = new Uint8Array(4)
-  new DataView(out.buffer).setUint32(0, n)
-  return out
-}
 const readBe32 = (b: Uint8Array | null | undefined): number => {
   if (!(b instanceof Uint8Array) || b.length !== 4) throw corruptCatalog('an id that is not four bytes')
-  return new DataView(b.buffer, b.byteOffset, 4).getUint32(0)
+  return readU32(b)
 }
 const str = (b: Uint8Array | null | undefined, what: string): string => {
   if (!(b instanceof Uint8Array)) throw corruptCatalog(`${what} is missing`)

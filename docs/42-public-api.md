@@ -8,29 +8,54 @@ Two design rules, both inherited from PGlite and from the argument in
 2. **Existing MySQL drivers must work unmodified.** If `mysql2` needs a patch,
    we have failed.
 
+This document is the target surface. What 0.3 builds of it, on Node, and the
+work item that builds the rest:
+
+| API | In 0.3 | Otherwise |
+|---|---|---|
+| `MySQL.open(path \| ':memory:', options)`, `end()` | yes | `opfs://` is M6.1 |
+| `query()`, `execute()`, `connect()`, `begin()`, `transaction()` | yes (M5.36) | |
+| `execProtocol()`, `createStream()`, `createPort()`, `createConnection()` | yes (M1.24) | |
+| `serve()` from `myjs/server` | yes (M1.24) | |
+| real `INFORMATION_SCHEMA`, `SHOW`, `EXPLAIN` | yes (M5.13 begun) | |
+| `db.stream()` | no | M5.40, pinned to 0.4 |
+| `db.schemas()`, `tables()`, `columns()`, `explain()`, `stats()` | no | M5.13 |
+| `MySQLWorker`, `myjs/worker` | no | M6.6 |
+| `dump()`, `MySQL.load()` | no | M6.8 |
+| `importTablespace()`, `exportTablespace()` | no | M7.10, M7.11 |
+| `importSql()`, `exportSql()` | no | M7.12 |
+| `db.live()`, `db.changes()` | no | M8.1 |
+
+Each code block below for something 0.3 lacks says so in its first line.
+
 ## Opening a database
 
 ```js
 import { MySQL } from 'myjs'
 
-const db = await MySQL.open('opfs://myapp')      // browser, persistent
-const db = await MySQL.open('./data')            // node, a directory
+const db = await MySQL.open('./data')            // node, a directory (or file:///…)
 const db = await MySQL.open(':memory:')          // either, ephemeral
+const db = await MySQL.open('opfs://myapp')      // browser, persistent — not in 0.3: M6.1
 
 const db = await MySQL.open('./data', {
-  bufferPoolSize: 128 * 1024 * 1024,
+  bufferPoolSize: 128 * 1024 * 1024,             // bytes; 4 MiB unless given
   flushLogAtTrxCommit: 1,                        // 0 | 1 | 2   (doc 41)
-  sqlMode: 'STRICT_TRANS_TABLES,NO_ENGINE_SUBSTITUTION',
-  characterSet: 'utf8mb4',
-  collation: 'utf8mb4_0900_ai_ci',
-  timeZone: 'SYSTEM',
   maxAllowedPacket: 64 * 1024 * 1024,
-  readOnly: false,
+  multipleStatements: false,                     // D-13: off unless given
+  user: 'root', password: '',                    // whom query() and friends sign in as
+  database: 'myapp',                             // and where they start
 })
 ```
 
 The URL scheme selects the VFS: `opfs://`, `file://` or a bare path, `:memory:`.
-An explicit `vfs` option accepts a custom implementation.
+An explicit `vfs` option accepts a custom implementation, and `accounts` an
+account store for the connections that sign in. A directory is locked by the
+instance that opened it until `end()`.
+
+`sqlMode`, `characterSet`, `collation`, `timeZone` and `readOnly` were drawn
+here once and nothing read them; `open()` refuses each with
+`ER_NOT_SUPPORTED_YET` rather than ignore it. Until they return, the session's
+own `SET sql_mode = …`, `SET NAMES …` and `SET time_zone = …` do the work.
 
 ## Queries
 
@@ -50,15 +75,22 @@ const [result] = await db.execute(
 result.affectedRows   // 1
 result.insertId       // 42
 
-// streaming — never materialise a large resultset
+// streaming — never materialise a large resultset — not in 0.3: M5.40
 for await (const row of db.stream('SELECT * FROM big_table')) {
   process(row)
 }
 
-// multiple statements, when enabled
-const results = await db.query(
-  'SELECT 1; SELECT 2;', [], { multipleStatements: true })
+// multiple statements: the database must allow them, and the connection ask
+const db = await MySQL.open(':memory:', { multipleStatements: true })
+const conn = await db.connect({ multipleStatements: true })
+const [results] = await conn.query('SELECT 1 AS a; SELECT 2 AS b')
+// [[{ a: 1 }], [{ b: 2 }]]
 ```
+
+Both switches are needed, as they are against a server: the first is the
+server's permission (off by default, D-13, since it turns an injection into
+arbitrary statements), the second is `mysql2`'s client flag. The shared
+connection behind `db.query()` never asks.
 
 ### Whose rules the values follow (M5.36)
 
@@ -85,7 +117,9 @@ them, and `execute()` prepares once per text and sends each value as
   `db.transaction()` each take a connection of their own, since a
   transaction is a session's state.
 
-`db.stream()` is not built yet, and needs Q-11's answer first.
+`db.stream()` is not built yet. D-77 answers Q-11 in principle — a read
+already pauses every 256 rows, so rows can be handed out a batch at a time —
+and M5.40 builds it for 0.4.
 
 ## Transactions
 
@@ -124,7 +158,7 @@ Which makes driver interop a two-liner:
 import mysql from 'mysql2/promise'
 import { MySQL } from 'myjs'
 
-const db = await MySQL.open('opfs://myapp')
+const db = await MySQL.open('./data')
 const conn = await mysql.createConnection({ stream: db.createStream() })
 
 const [rows] = await conn.execute('SELECT * FROM users WHERE id = ?', [1])
@@ -137,9 +171,8 @@ const [rows] = await conn.execute('SELECT * FROM users WHERE id = ?', [1])
 import { drizzle } from 'drizzle-orm/mysql2'
 const orm = drizzle(conn)
 
-// Prisma, via whichever MySQL driver adapter it ships — the adapter takes a
-// connection or pool, and ours is indistinguishable from a real one
-const prisma = new PrismaClient({ adapter: mysqlAdapter(conn) })
+// Prisma's engines dial a URL, so give them one: serve() it (below), and
+// DATABASE_URL="mysql://root@127.0.0.1:3306/app" — how its suite runs (M5.22)
 ```
 
 This is the payoff for treating the wire protocol as the primary compatibility
@@ -153,8 +186,9 @@ once, and each ORM's own test suite becomes our conformance suite.
 import { serve } from 'myjs/server'
 const server = await serve(db, { port: 3306, host: '127.0.0.1' })
 
-// Browser: expose the worker-owned database to other tabs
-const port = db.createPort()          // a MessagePort speaking MySQL packets
+// a MessagePort speaking MySQL packets: in a browser, how a worker-owned
+// database reaches other tabs (M6)
+const port = db.createPort()
 ```
 
 `serve()` defaults to `127.0.0.1` and **requires** a configured user and
@@ -165,6 +199,7 @@ silently listens on `0.0.0.0` would be a vulnerability, not a feature
 ## Workers
 
 ```js
+// not in 0.3: M6.6
 // main thread
 import { MySQLWorker } from 'myjs/worker'
 const db = await MySQLWorker.open('opfs://myapp')   // spawns/joins the worker
@@ -183,6 +218,7 @@ main event loop.
 ## Import and export
 
 ```js
+// not in 0.3: M7.10–M7.12, and dump()/load() M6.8
 // InnoDB tablespaces — doc 27
 await db.importTablespace('users', ibdBytes, cfgBytes)
 const { ibd, cfg } = await db.exportTablespace('users')
@@ -203,6 +239,7 @@ difference between "interesting demo" and "usable in production".
 ## Change streams
 
 ```js
+// not in 0.3: M8.1
 // live queries — recompute when the underlying data changes
 const live = db.live('SELECT * FROM todos WHERE done = 0')
 live.subscribe(rows => render(rows))
@@ -234,6 +271,7 @@ Exactly `mysql2`'s error shape, so existing `catch` blocks keep working.
 ## Introspection
 
 ```js
+// not in 0.3: M5.13
 await db.schemas()                    // string[]
 await db.tables('myapp')              // TableInfo[]
 await db.columns('myapp', 'users')    // ColumnInfo[]
@@ -253,7 +291,14 @@ const [rows] = await db.execute<User[]>(
 ```
 
 Row typing is caller-supplied — the same contract `mysql2` has. Inferring types
-from the SQL is a separate project and should stay one.
+from the SQL is a separate project and should stay one. `T` is unconstrained,
+as it is in `mysql2`: it is what the caller says the first element is, rows or
+a `ResultSetHeader`, and nothing checks it (`test/unit/api-types.test.ts` holds
+this example and the driver two-liner, typechecked).
+
+`createStream()` returns a `DriverStream`: Node's `Duplex` on Node, Deno and
+Bun, Web Streams in a browser bundle, chosen by the `#host` import's
+conditions (D-78), so `mysql2.createConnection({ stream })` needs no cast.
 
 ## API design principles
 

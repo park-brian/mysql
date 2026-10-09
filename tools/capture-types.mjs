@@ -31,13 +31,10 @@ import { execFile } from 'node:child_process'
 import { promisify } from 'node:util'
 import { check } from './lib/gen-common.mjs'
 import { parseRowImages } from './lib/binlog-hexdump.mjs'
+import { arg } from './lib/cli.mjs'
 
 const run = promisify(execFile)
 
-function arg(name, fallback) {
-  const i = process.argv.indexOf(`--${name}`)
-  return i === -1 ? fallback : process.argv[i + 1]
-}
 
 const HOST = arg('host', '127.0.0.1')
 const PORT = arg('port', '3306')

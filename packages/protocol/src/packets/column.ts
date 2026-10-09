@@ -131,28 +131,6 @@ export function columnLengthForCollation(charLength: number, collationId: number
   return charLength * mbMaxLenOf(collationId)
 }
 
-/** True when this column carries bytes rather than text. */
-export function isBinaryColumn(column: Pick<ColumnDefinition, 'characterSet'>): boolean {
-  return column.characterSet === CHARSET_BINARY
-}
-
-/**
- * Whether a column is a BLOB rather than a TEXT.
- *
- * The type byte is identical for both; only the charset separates them, which
- * is exactly how a client decides whether to hand back a string or bytes
- * (D-15).
- */
-export function isBlob(column: Pick<ColumnDefinition, 'type' | 'characterSet'>): boolean {
-  const blobTypes: number[] = [
-    FIELD_TYPE.TINY_BLOB,
-    FIELD_TYPE.MEDIUM_BLOB,
-    FIELD_TYPE.LONG_BLOB,
-    FIELD_TYPE.BLOB,
-  ]
-  return blobTypes.includes(column.type) && column.characterSet === CHARSET_BINARY
-}
-
 /** Convenience for building a column definition without repeating defaults. */
 export function column(
   name: string,

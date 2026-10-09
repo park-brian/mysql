@@ -8,7 +8,7 @@ import {
   capabilities,
   utf8Transcoder,
 } from '@myjs/protocol'
-import { StubExecutor, charsetChange, charsetTranscoder, charsetVariables } from '@myjs/core'
+import { SqlExecutor, charsetChange, charsetTranscoder, charsetVariables } from '@myjs/core'
 import { STATEMENT, parseStatement } from '@myjs/parser'
 
 const session = () => new Session({ connectionId: 1, capabilities: capabilities(0) })
@@ -117,7 +117,7 @@ test('M2.18: session.characterSet is now interpreted rather than merely stored',
 /** A stub-backed session that runs statements and reads variables back. */
 const live = () => {
   const s = new Session({ connectionId: 1, capabilities: capabilities(0), transcoder: charsetTranscoder })
-  const stub = new StubExecutor()
+  const stub = new SqlExecutor()
   const run = (sql: string) => stub.query(s, sql)
   const read = async (variable: string) => {
     const result = await run(`SELECT ${variable}`)

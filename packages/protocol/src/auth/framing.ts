@@ -85,7 +85,3 @@ export function parseAuthNextFactor(payload: Uint8Array): AuthSwitchRequest {
   return { pluginName: fromUtf8(r.nulString()), pluginData: r.restBytes() }
 }
 
-/** `AuthSwitchResponse` is raw plugin output with no header at all. */
-export function writeAuthSwitchResponse(w: Writer, data: Uint8Array): void {
-  w.bytes(data)
-}

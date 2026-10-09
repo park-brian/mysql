@@ -22,6 +22,7 @@
 //     subquery, is 1137 (`Can't reopen table`).
 //   - A view may not read it (1352), it may have no FULLTEXT key (1796), and
 //     no foreign key may name it or be its own (1215).
+import { expectTyped } from '@myjs/bytes'
 import type { Catalog, SchemaDef, Table, TableDef, TableSpec, Trx } from '@myjs/engine'
 import { messages, sqlError } from '@myjs/protocol'
 
@@ -55,7 +56,7 @@ export type CatalogApi = Pick<
 const HIDDEN = '#tmp#'
 
 /** A schema that holds temporary tables, which no listing shows. */
-export const isHiddenSchema = (name: string): boolean => name.startsWith(HIDDEN)
+const isHiddenSchema = (name: string): boolean => name.startsWith(HIDDEN)
 
 /** A definition read through `sessionCatalog` that is a temporary table's. */
 const temporaryDefs = new WeakSet<TableDef>()
@@ -176,7 +177,8 @@ export class TemporaryTables {
       const hidden = key.slice(0, key.indexOf('\0'))
       try {
         this.#base.definition(hidden, spec.name, trx)
-      } catch {
+      } catch (e) {
+        expectTyped(e)
         this.#base.createSchema(hidden, { ifNotExists: true, ...within })
         this.#base.createTable(hidden, spec, within)
       }

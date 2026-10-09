@@ -11,7 +11,7 @@ import mysql from 'mysql2/promise'
 import { MySQL } from '@myjs/core'
 
 async function connect(db: MySQL, database?: string) {
-  return mysql.createConnection({ stream: db.createStream() as never, user: 'root', password: '', ...(database === undefined ? {} : { database }) })
+  return mysql.createConnection({ stream: db.createStream(), user: 'root', password: '', ...(database === undefined ? {} : { database }) })
 }
 
 type Err = { errno?: number; sqlState?: string; code?: string; message?: string }

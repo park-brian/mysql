@@ -168,7 +168,7 @@ function option(options: Readonly<Record<string, string>>, ...names: string[]): 
 }
 
 /** `ENGINE=…` to the engine that stores it. */
-export function engineFor(name: string | undefined): EngineName {
+function engineFor(name: string | undefined): EngineName {
   if (name === undefined) return 'native'
   switch (name.toUpperCase()) {
     case 'INNODB':
@@ -318,11 +318,6 @@ function resolveColumnType(t: DataType, tableCollation: number, column: string):
 
 /** The SQL text a default is kept as. */
 const sqlText = (e: Expression): string => deparse(e)
-
-export interface ResolvedTable {
-  readonly spec: TableSpec
-  readonly ifNotExists: boolean
-}
 
 /**
  * `CREATE TABLE` → the catalog's spec. `schemaCollation` is the schema's

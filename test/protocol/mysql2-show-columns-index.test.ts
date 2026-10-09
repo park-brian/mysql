@@ -75,7 +75,7 @@ const VIEW_SCRIPT: readonly (readonly [string, Outcome])[] = [
 for (const [title, script] of [['SHOW COLUMNS, DESCRIBE and SHOW INDEX answer as 8.4.11 does, column definitions included', SCRIPT], ['SHOW CREATE VIEW writes a view back as 8.4.11 does', VIEW_SCRIPT]] as const) {
   test(title, async () => {
     const db = await MySQL.open(':memory:')
-    const conn = await mysql.createConnection({ stream: db.createStream() as never, user: 'root', password: '' })
+    const conn = await mysql.createConnection({ stream: db.createStream(), user: 'root', password: '' })
     try {
       await conn.query('CREATE DATABASE app')
       await conn.query('USE app')

@@ -118,7 +118,7 @@ export async function serve(db: MySQL, options: ServeOptions = {}): Promise<Serv
       connection
         .feed(new Uint8Array(chunk.buffer, chunk.byteOffset, chunk.byteLength))
         .then(flush)
-        .catch(() => socket.destroy())
+        .catch((err: unknown) => socket.destroy(err instanceof Error ? err : undefined))
     })
     socket.on('error', () => socket.destroy())
     socket.on('close', () => {

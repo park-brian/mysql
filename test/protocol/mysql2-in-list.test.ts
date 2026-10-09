@@ -14,7 +14,7 @@ import { MySQL } from '@myjs/core'
 
 test('a long IN list answers as the same list item by item does — kinds, NULLs, collations, NOT IN — and fast', async () => {
   const db = await MySQL.open(':memory:')
-  const conn = await mysql.createConnection({ stream: db.createStream() as never, user: 'root', password: '', supportBigNumbers: true, bigNumberStrings: true })
+  const conn = await mysql.createConnection({ stream: db.createStream(), user: 'root', password: '', supportBigNumbers: true, bigNumberStrings: true })
   try {
     await conn.query('CREATE DATABASE app')
     await conn.query('USE app')
@@ -80,7 +80,7 @@ test('a statement of more than 65,535 placeholders is 1390, and the connection g
   // COM_STMT_PREPARE_OK counts parameters in two bytes: one more and the
   // count wraps to 0, the client reads garbage, and the connection is lost.
   const db = await MySQL.open(':memory:')
-  const conn = await mysql.createConnection({ stream: db.createStream() as never, user: 'root', password: '' })
+  const conn = await mysql.createConnection({ stream: db.createStream(), user: 'root', password: '' })
   try {
     const sql = (n: number) => `SELECT 1 IN (${Array(n).fill('?').join(',')})`
     const ok = await conn.prepare(sql(65535))

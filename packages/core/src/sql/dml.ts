@@ -33,8 +33,8 @@ import { checkTargetNotRead, compileContext, fromContext, limitValue, openTable,
 import { planFrom, type FromPlan, type FromTable, type JoinedRow } from './from.ts'
 import { TableScope } from './scope.ts'
 import { NULL_TYPE, type ResultType } from './meta.ts'
+import { modeOf } from './mode.ts'
 
-const isStrict = (sqlMode: string): boolean => /\bSTRICT_(TRANS|ALL)_TABLES\b/.test(sqlMode)
 
 /** A column's DEFAULT, compiled: its expression, or NULL, or "none" for a NOT NULL column without one. */
 /** Whether an expression names a column anywhere in it. */
@@ -99,7 +99,7 @@ export function checkDefaults(run: Run, columns: readonly ColumnDef[], table: re
       throw err
     }
     // The zero date, where the mode forbids it (8.4.11's default mode does).
-    if (field !== null && /\bNO_ZERO_DATE\b/.test(run.env.session.sqlMode) && (column.type.type === FIELD_TYPE.DATE || column.type.type === FIELD_TYPE.DATETIME || column.type.type === FIELD_TYPE.TIMESTAMP)) {
+    if (field !== null && modeOf(run.env.session.sqlMode).noZeroDate && (column.type.type === FIELD_TYPE.DATE || column.type.type === FIELD_TYPE.DATETIME || column.type.type === FIELD_TYPE.TIMESTAMP)) {
       const v = decodeField(field, column.type)
       if (v !== null && v.kind === 'datetime' && v.v.year === 0 && v.v.month === 0 && v.v.day === 0) throw invalid(column)
     }
@@ -178,18 +178,30 @@ function duplicateEntry(def: TableDef, index: IndexDef, values: readonly Value[]
 /** A bulk statement's batches: at most this many rows, and while the batch holds fewer pages than this. */
 const BATCH_ROWS = 64
 const BATCH_PAGES = 16
+/** Rows written one at a time between two chances to pause. */
+const PACE_ROWS = 64
 
 /**
  * `each` over `items` from `from` on, in as few mini-transactions as the
  * bounds allow (`trx.batch`): only for a statement that fails whole on any
  * error, and whose rows take no counter.
  */
-function inBatches<T>(trx: Trx, items: readonly T[], each: (item: T, n: number) => void, from = 0): void {
+function* inBatches<T>(trx: Trx, items: readonly T[], each: (item: T, n: number) => void, from = 0): Generator<void, void> {
   for (let n = from; n < items.length; ) {
     trx.batch(() => {
       const start = n
       for (; n < items.length && n - start < BATCH_ROWS && trx.pagesHeld < BATCH_PAGES; n++) each(items[n] as T, n)
     })
+    // Between two batches no mini-transaction is open: the statement may pause (D-77).
+    yield
+  }
+}
+
+/** Each item in turn, each its own mini-transaction or several, pausing every `PACE_ROWS` (D-77). */
+function* paced<T>(items: readonly T[], each: (item: T, n: number) => void): Generator<void, void> {
+  for (let n = 0; n < items.length; n++) {
+    each(items[n] as T, n)
+    if (n % PACE_ROWS === PACE_ROWS - 1) yield
   }
 }
 
@@ -248,7 +260,10 @@ type NullPolicy = 'error' | 'warn'
  * one in `b`, is two warnings); an UPDATE warns per row, and passes no `warned`.
  */
 /** The session's zero-date modes, which decide what a date column takes (8.4.11's default has both). */
-export const zeroRules = (run: Run): { noZeroDate: boolean; noZeroInDate: boolean } => ({ noZeroDate: /\bNO_ZERO_DATE\b/.test(run.env.session.sqlMode), noZeroInDate: /\bNO_ZERO_IN_DATE\b/.test(run.env.session.sqlMode) })
+export const zeroRules = (run: Run): { noZeroDate: boolean; noZeroInDate: boolean } => {
+  const { noZeroDate, noZeroInDate } = modeOf(run.env.session.sqlMode)
+  return { noZeroDate, noZeroInDate }
+}
 
 /** The statement's diagnostics area, for a StoreContext to record its conditions in. */
 const sink = (run: Run): { conditions?: Condition[] } => (run.env.conditions === undefined ? {} : { conditions: run.env.conditions })
@@ -503,7 +518,7 @@ const okInfo = (records: number, duplicates: number, warnings: number): string =
  *   - IGNORE turns 1062 and the conversion errors into warnings and skips or
  *     adjusts the row, and its `Duplicates` is rows not written.
  */
-export function insert(run: Run, node: InsertNode, trx: Trx): OkResult {
+export function* insert(run: Run, node: InsertNode, trx: Trx): Generator<void, OkResult> {
   // A subquery, or the SELECT of `INSERT … SELECT`, reads in the statement's transaction.
   run = { ...run, env: { ...run.env, trx } }
   if (node.partitions !== undefined) throw sqlError('ER_NOT_SUPPORTED_YET', messages.notSupported('Partitions'))
@@ -575,7 +590,7 @@ export function insert(run: Run, node: InsertNode, trx: Trx): OkResult {
 
   const ignore = node.ignore === true
   const mode = node.replace === true ? 'replace' : node.onDuplicate !== undefined ? 'upsert' : 'insert'
-  const strictMode = isStrict(run.env.session.sqlMode)
+  const strictMode = modeOf(run.env.session.sqlMode).strict
   const store: StoreContext = { strict: strictMode && !ignore, strictMode, ...zeroRules(run), row: 1, warnings: 0, table: def.name, ...sink(run) }
   // A NULL for a NOT NULL column is refused by a strict mode and by a
   // one-row INSERT, and stored as the type's zero by IGNORE or a multi-row
@@ -701,8 +716,8 @@ export function insert(run: Run, node: InsertNode, trx: Trx): OkResult {
   const batchable = mode === 'insert' && !ignore && def.clustered !== null && selected === undefined && compiledRows.length > 1 && (autoAt < 0 || !targets.includes(autoAt))
   if (batchable) {
     each(compiledRows[0] as (typeof compiledRows)[number], 0)
-    inBatches(trx, compiledRows, each, 1)
-  } else compiledRows.forEach(each)
+    yield* inBatches(trx, compiledRows, each, 1)
+  } else yield* paced(compiledRows, each)
 
   /** One row through `write_record`: write it, or settle its duplicate as the statement asks. */
   function writeRecord(fields: FieldBytes[], generated: bigint, prevNext: bigint): void {
@@ -858,10 +873,10 @@ function onUpdateOf(run: Run, def: TableDef): (Compiled | undefined)[] {
  * alias and tried row.
  */
 /** Fill a row's generated columns, from its fields as stored, in column order (M5.31). */
-type Generator = (fields: FieldBytes[], values: Value[], store: StoreContext, nulls: NullPolicy) => void
+type ColumnGenerator = (fields: FieldBytes[], values: Value[], store: StoreContext, nulls: NullPolicy) => void
 
 /** The table's generated columns, compiled once a statement; `undefined` when it has none. */
-export function generatorOf(run: Run, def: TableDef): Generator | undefined {
+export function generatorOf(run: Run, def: TableDef): ColumnGenerator | undefined {
   const at = def.columns.flatMap((c, i) => (generationOf(c) === undefined ? [] : [i]))
   if (at.length === 0) return undefined
   const ctx = compileContext(run, new TableScope([{ alias: def.name, def }]), 'generated column function')
@@ -901,7 +916,7 @@ function assignAll(
   defaults: readonly (Compiled | 'none')[],
   store: StoreContext,
   nulls: NullPolicy,
-  generate?: Generator,
+  generate?: ColumnGenerator,
 ): { after: FieldBytes[]; values: Value[]; changed: boolean } {
   const after = [...before]
   const values: Value[] = [...current]
@@ -997,7 +1012,12 @@ function withCtes(run: Run, node: UpdateNode | DeleteNode, what: 'UPDATE' | 'DEL
 }
 
 /** The rows a WHERE / ORDER BY / LIMIT selects, read in full before any is written. */
-function matching(run: Run, def: TableDef, table: Table, alias: string, node: UpdateNode | DeleteNode, trx: Trx): ScannedRow[] {
+/**
+ * The rows a single-table UPDATE or DELETE changes, read in full before the
+ * first is changed. The read pauses as the writes do (D-77): the statement
+ * holds the writer slot, so nothing else changes the tree it walks.
+ */
+function* matching(run: Run, def: TableDef, table: Table, alias: string, node: UpdateNode | DeleteNode, trx: Trx): Generator<void, ScannedRow[]> {
   const scope = new TableScope([{ alias, def }])
   const where = node.where === undefined ? undefined : compile(node.where, compileContext(run, scope, 'where clause'))
   const keys = (node.orderBy ?? []).map((o) => ({ expr: compile(o.expr, compileContext(run, scope, 'order clause')), desc: o.desc === true }))
@@ -1005,10 +1025,15 @@ function matching(run: Run, def: TableDef, table: Table, alias: string, node: Up
   const access = chooseAccess(def, alias, node.where, run.env)
   let rows: Iterable<ScannedRow> = filter(accessRows(table, def, access, trx, true), where, run.env)
   if (keys.length > 0) rows = sort(rows, keys, run.env)
-  return [...limit(rows, 0, count)]
+  const out: ScannedRow[] = []
+  for (const row of limit(rows, 0, count)) {
+    out.push(row)
+    if (out.length % PACE_ROWS === 0) yield
+  }
+  return out
 }
 
-export function update(run: Run, node: UpdateNode, trx: Trx): OkResult {
+export function* update(run: Run, node: UpdateNode, trx: Trx): Generator<void, OkResult> {
   // A subquery reads in the statement's transaction.
   run = { ...run, env: { ...run.env, trx } }
   run = withCtes(run, node, 'UPDATE')
@@ -1031,12 +1056,12 @@ export function update(run: Run, node: UpdateNode, trx: Trx): OkResult {
   // a row that would duplicate a key, fail a CHECK or break a foreign key,
   // undoing whatever its cascades had done (8.4.11).
   const ignore = node.ignore === true
-  const strictMode = isStrict(run.env.session.sqlMode)
+  const strictMode = modeOf(run.env.session.sqlMode).strict
   const store: StoreContext = { strict: strictMode && !ignore, strictMode, ...zeroRules(run), row: 1, warnings: 0, table: def.name, ...sink(run) }
   const keys = uniqueKeys(def)
   run.state.insertIdSet = false
 
-  const rows = matching(run, def, table, alias, node, trx)
+  const rows = yield* matching(run, def, table, alias, node, trx)
   let changed = 0
   const each = ({ id, row }: ScannedRow, n: number): void => {
     store.row = n + 1
@@ -1064,8 +1089,8 @@ export function update(run: Run, node: UpdateNode, trx: Trx): OkResult {
     changed++
   }
   // Without IGNORE, any error fails the statement whole: the rows go in batches.
-  if (ignore) rows.forEach(each)
-  else inBatches(trx, rows, each)
+  if (ignore) yield* paced(rows, each)
+  else yield* inBatches(trx, rows, each)
 
   const matched = rows.length
   const foundRows = hasCap(run.env.session.capabilities, CLIENT.FOUND_ROWS)
@@ -1098,7 +1123,7 @@ function sameBytes(x: Uint8Array, y: Uint8Array): boolean {
   return true
 }
 
-export function remove(run: Run, node: DeleteNode, trx: Trx): OkResult {
+export function* remove(run: Run, node: DeleteNode, trx: Trx): Generator<void, OkResult> {
   run = { ...run, env: { ...run.env, trx } }
   run = withCtes(run, node, 'DELETE')
   if (node.targets !== undefined) return removeMulti(run, node, trx)
@@ -1106,29 +1131,29 @@ export function remove(run: Run, node: DeleteNode, trx: Trx): OkResult {
   const { def, alias } = target
   const table = guarded(run, target.table, trx)
   checkTargetNotRead({ schema: def.schema, name: def.name }, [node.where], run.env.session.database)
-  const rows = matching(run, def, table, alias, node, trx)
+  const rows = yield* matching(run, def, table, alias, node, trx)
   let deleted = 0
   let warnings = 0
   // Without IGNORE, any error fails the statement whole: the rows go in batches.
   if (node.ignore !== true) {
-    inBatches(trx, rows, ({ id }) => {
+    yield* inBatches(trx, rows, ({ id }) => {
       if (table.delete(id, trx)) deleted++
     })
     return { affectedRows: deleted }
   }
-  for (const { id } of rows) {
+  yield* paced(rows, ({ id }) => {
     // IGNORE keeps a row a child holds, with a warning, and undoes whatever
     // its cascades had done (8.4.11).
-    const at = node.ignore === true ? trx.savepoint() : 0
+    const at = trx.savepoint()
     try {
       if (table.delete(id, trx)) deleted++
     } catch (e) {
-      if (node.ignore !== true || !(e instanceof MyjsError) || e.errno !== 1451) throw e
+      if (!(e instanceof MyjsError) || e.errno !== 1451) throw e
       trx.rollbackTo(at)
       warnings++
       run.env.conditions?.push({ level: 'Warning', code: e.errno ?? 1451, message: e.message })
     }
-  }
+  })
   return warnings === 0 ? { affectedRows: deleted } : { affectedRows: deleted, warnings }
 }
 
@@ -1172,7 +1197,7 @@ function updateMulti(run: Run, node: UpdateNode, trx: Trx): OkResult {
   const { from, rows } = joinedRows(run, node, trx)
   const scope = from.scope
   const ignore = node.ignore === true
-  const strictMode = isStrict(run.env.session.sqlMode)
+  const strictMode = modeOf(run.env.session.sqlMode).strict
   const store: StoreContext = { strict: strictMode && !ignore, strictMode, ...zeroRules(run), row: 1, warnings: 0, table: '', ...sink(run) }
   // The SET list by table, each value compiled over the joined row.
   let joined: Row = []

@@ -86,10 +86,6 @@ export function hasCap(caps: Capabilities, flag: number): boolean {
   return (caps & flag) !== 0
 }
 
-export function capabilityNames(caps: number): CapabilityName[] {
-  return (Object.keys(CLIENT) as CapabilityName[]).filter((k) => (caps & CLIENT[k]) !== 0)
-}
-
 /**
  * What we advertise. Doc 12 lists this set verbatim.
  *

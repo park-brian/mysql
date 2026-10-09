@@ -27,12 +27,13 @@
 // table's scan only where that cannot change the answer: never for a table on
 // the inner side of an outer join, where `WHERE b.x IS NULL` must still see
 // the NULL rows the join made.
+import { expectTyped } from '@myjs/bytes'
 import type { ColumnDef, IndexDef, RowId, Table, TableDef, Trx } from '@myjs/engine'
 import { NODE, REF, type Expression, type TableReference } from '@myjs/parser'
 import { messages, sqlError } from '@myjs/protocol'
 import { truth, type Value } from '@myjs/types'
 import type { Compiled, Env, Row, Scope } from './compile.ts'
-import { accessRows, chooseAccess, pointAccess } from './plan.ts'
+import { FULL_SCAN, accessRows, chooseAccess, pointAccess, splitAnd } from './plan.ts'
 import { TableScope, type ScopeColumn, type ScopeTableSpec } from './scope.ts'
 
 /** A table the FROM reads: a base table, or (M5.1) a derived one. */
@@ -557,7 +558,7 @@ function* leafRows(t: FromTable, trx: Trx | undefined, env: Env, options: RunOpt
     return
   }
   const def = t.def as TableDef
-  let access = t.nullable ? {} : chooseAccess(def, t.alias, options.where, env)
+  let access = t.nullable ? FULL_SCAN : chooseAccess(def, t.alias, options.where, env)
   const cover = options.covering?.get(t.alias)
   if (access.index === undefined && access.ranges === undefined && cover !== undefined) access = { index: cover }
   for (const { id, row: values } of accessRows(t.table as Table, def, access, trx, options.locking)) {
@@ -580,13 +581,7 @@ function eqRef(t: FromTable, conditions: readonly (Expression | undefined)[], ou
   const def = t.def
   if (def === undefined || t.table === undefined) return undefined
   const conjuncts: Expression[] = []
-  const flatten = (e: Expression | undefined): void => {
-    if (e === undefined) return
-    if (e.kind === NODE.BINARY && (e.op === 'AND' || e.op === '&&')) {
-      flatten(e.left)
-      flatten(e.right)
-    } else conjuncts.push(e)
-  }
+  const flatten = (e: Expression | undefined): void => void splitAnd(e, conjuncts)
   for (const c of conditions) flatten(c)
   const own = (e: Expression): string | undefined => {
     if (e.kind !== NODE.COLUMN || e.parts.length < 2 || e.parts[e.parts.length - 2] !== t.alias) return undefined
@@ -607,7 +602,8 @@ function eqRef(t: FromTable, conditions: readonly (Expression | undefined)[], ou
     let value: Compiled
     try {
       value = compileOuter(other)
-    } catch {
+    } catch (e) {
+      expectTyped(e)
       continue
     }
     // `ref` access needs the two sides to compare as the key's own type.

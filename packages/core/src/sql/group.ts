@@ -43,7 +43,6 @@ import {
   intValue,
   jsonObject,
   jsonValue,
-  orderValues,
   sortValues,
   stringValue,
   sumAccumulator,
@@ -117,7 +116,7 @@ const CONVERT_IF_BIGGER_TO_BLOB = 512
  * times the argument's `mbmaxlen` squared times the result's — 65,536 for the
  * default 1,024 over utf8mb4, 4,096 over latin1, and 1,024 over bytes.
  */
-export function aggregateType(name: string, args: readonly Compiled[], ctx: CompileContext): ResultType {
+function aggregateType(name: string, args: readonly Compiled[], ctx: CompileContext): ResultType {
   const t = args[0]?.type
   switch (name) {
     case 'COUNT':
@@ -445,9 +444,6 @@ export interface GroupPlan {
   readonly strategy: GroupStrategy
   readonly rollup: boolean
 }
-
-/** Where a grouped row keeps its rollup level: how many leading keys it still groups by. */
-export const levelSlot = (plan: { readonly width: number; readonly keys: readonly unknown[] }): number => plan.width + plan.keys.length
 
 /** The rows of a grouped query, one per group (and per super-aggregate under ROLLUP). */
 export function* groupRows(source: Iterable<{ readonly row: Row }>, plan: GroupPlan, env: Env): Generator<{ readonly row: Row }> {

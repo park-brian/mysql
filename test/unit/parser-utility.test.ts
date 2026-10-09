@@ -20,7 +20,7 @@ import {
   type SetNode,
   type ShowNode,
 } from '@myjs/parser'
-import { parsed as parse, refused, roundTrip, same, withoutPositions } from '../../tools/lib/round-trip.mjs'
+import { parsed as parse, refused, same, withoutPositions } from '../../tools/lib/round-trip.mjs'
 
 const items = (sql: string): readonly SetItem[] => {
   const node = parse(sql)

@@ -25,11 +25,9 @@ import { mkdirSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import mysql from 'mysql2/promise'
 import { CONNECTION, SCHEMA, SQL_MODE, runCase } from './capture-relational.mjs'
+import { isMain } from './lib/is-main.mjs'
+import { arg, xorshift } from './lib/cli.mjs'
 
-function arg(name, fallback) {
-  const i = process.argv.indexOf(`--${name}`)
-  return i === -1 ? fallback : process.argv[i + 1]
-}
 
 const HOST = arg('host', '127.0.0.1')
 const PORT = Number(arg('port', '3306'))
@@ -40,17 +38,8 @@ const CASES = Number(arg('cases', '300'))
 const SEED = Number(arg('seed', '20261009'))
 export { CONNECTION, SQL_MODE }
 
-/** xorshift32, as every corpus tool here. */
-let state = SEED || 1
-function rnd() {
-  state ^= state << 13
-  state ^= state >>> 17
-  state ^= state << 5
-  return (state >>> 0) / 0x100000000
-}
-const pick = (xs) => xs[Math.floor(rnd() * xs.length)]
-const chance = (p) => rnd() < p
-const int = (lo, hi) => lo + Math.floor(rnd() * (hi - lo + 1))
+/** xorshift32, seeded (`tools/lib/cli.mjs`), so a seed reproduces the corpus. */
+const { rnd, pick, chance, int } = xorshift(SEED)
 const quote = (s) => `'${s.replace(/\\/g, '\\\\').replace(/'/g, "''")}'`
 
 const SETUP = 'CREATE TABLE tf (id INT NOT NULL PRIMARY KEY, d DATE, dt DATETIME(3), ts TIMESTAMP(2) NULL, tm TIME(1), y YEAR, s VARCHAR(40), n BIGINT, x DECIMAL(20,6))'
@@ -178,7 +167,7 @@ export function generateCase() {
   return out
 }
 
-if (import.meta.url === `file://${process.argv[1]}`) {
+if (isMain(import.meta.url)) {
   const conn = await mysql.createConnection({ host: HOST, port: PORT, user: USER, password: PASSWORD, ...CONNECTION })
   await conn.query(`SET sql_mode = '${SQL_MODE}'`)
   const [[{ v: version }]] = await conn.query('SELECT VERSION() AS v')

@@ -35,7 +35,7 @@ test('M4.26: a path outside the database is refused, not normalised away', async
 })
 
 async function rows(db: MySQL, sql: string): Promise<unknown> {
-  const conn = await mysql.createConnection({ stream: db.createStream() as never, user: 'root', password: '' })
+  const conn = await mysql.createConnection({ stream: db.createStream(), user: 'root', password: '' })
   try {
     const [r] = await conn.query(sql)
     return r

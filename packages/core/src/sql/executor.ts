@@ -12,7 +12,7 @@
 // statement again later is the same as having waited. Past
 // `innodb_lock_wait_timeout` the answer is ER_LOCK_WAIT_TIMEOUT (1205), which
 // rolls back the statement and not the transaction, as InnoDB's does.
-import { FIELD_TYPE, MyjsError } from '@myjs/bytes'
+import { FIELD_TYPE, MyjsError, expectTyped } from '@myjs/bytes'
 import { collationInfoByName, defaultCollationOf, requireCollationInfo } from '@myjs/charsets'
 import { collationsOf, type Catalog, type TableDef, type ViewDef } from '@myjs/engine'
 import {
@@ -25,7 +25,6 @@ import {
   STATEMENT,
   TOKEN,
   lex,
-  parseSqlMode,
   parseStatement,
   type CreateDatabaseNode,
   type CreateTableNode,
@@ -69,12 +68,13 @@ import { foreignKeyChecks, foreignKeyClause, foreignKeysOf, referencingKeys, wit
 import { checkDefaults, insert, remove, update } from './dml.ts'
 import { fulltextOf } from './fulltext.ts'
 import { columnDefinition, intType, stringType } from './meta.ts'
-import { columnsOf, compileContext, planQuery, resultSet, viewTable, type Run } from './query.ts'
-import { SqlSession, isolationOf } from './session.ts'
-import { dropOrphans, isTemporary, sessionCatalog, TemporaryTables, type CatalogApi } from './temporary.ts'
+import { columnsOf, compileContext, planQuery, resultSet, resultSteps, viewTable, type Run } from './query.ts'
+import { SqlSession, finish, isolationOf } from './session.ts'
+import { dropOrphans, sessionCatalog, TemporaryTables, type CatalogApi } from './temporary.ts'
 import { likeSpec, mergedColumns, selectColumns, withCollations } from './create-select.ts'
 import { stampGenerated } from './generated.ts'
 import type { WireProtocol } from './wire.ts'
+import { modeOf } from './mode.ts'
 
 export interface SqlExecutorOptions extends ServerOptions {
   /** The database. Without one the executor still answers what needs no table — `SET`, `SELECT 1` — as M1's stub did. */
@@ -109,7 +109,7 @@ function parameterValue(p: Parameter, session: Session): Value {
   return { kind: 'datetime', v, type: date ? 'DATE' : 'DATETIME', fsp: v.microsecond === 0 ? 0 : 6 }
 }
 
-/** Every error a statement can raise, as the `SqlError` a client is sent: typed errors keep their number. */
+/** 3554: a system schema a statement may not touch. */
 const systemSchema = (name: string) => sqlError('ER_NO_SYSTEM_SCHEMA_ACCESS', `Access to system schema '${name}' is rejected.`)
 
 /**
@@ -118,16 +118,24 @@ const systemSchema = (name: string) => sqlError('ER_NO_SYSTEM_SCHEMA_ACCESS', `A
  * there is a statement.
  */
 function emptyText(session: Session, sql: string): 'empty' | 'comment' | undefined {
-  if (/^[\s;]*$/.test(sql)) return 'empty'
+  const lead = /^[\s;]*/.exec(sql)?.[0].length ?? 0
+  if (lead === sql.length) return 'empty'
+  // Only a comment can make a text with something in it empty, and a comment
+  // begins with `/*`, `--` or `#`: anything else is a statement, and lexing a
+  // 32,000-row INSERT to learn so took half its PREPARE (M5.37).
+  const first = sql[lead]
+  if (first !== '/' && first !== '-' && first !== '#') return undefined
   let tokens
   try {
-    tokens = lex(sql, { sqlMode: parseSqlMode(session.sqlMode) })
-  } catch {
+    tokens = lex(sql, { sqlMode: modeOf(session.sqlMode) })
+  } catch (e) {
+    expectTyped(e)
     return undefined
   }
   return tokens.every((t) => t.kind === TOKEN.EOF || (t.kind === TOKEN.OPERATOR && t.text === ';')) ? 'comment' : undefined
 }
 
+/** Every error a statement can raise, as the `SqlError` a client is sent: typed errors keep their number. */
 export function toSqlError(e: unknown): SqlError {
   if (e instanceof SqlError) return e
   if (e instanceof MyjsError && e.errno !== undefined) return new SqlError(e.code, e.message, { errno: e.errno, ...(e.sqlState === undefined ? {} : { sqlState: e.sqlState }) })
@@ -143,6 +151,20 @@ const writes = (statement: Statement): boolean =>
   statement.kind === STATEMENT.INSERT || statement.kind === STATEMENT.UPDATE || statement.kind === STATEMENT.DELETE
 
 const sleep = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms))
+
+/** How long a statement runs before it pauses to let other connections in (D-77). */
+const SLICE_MS = 10
+
+/** Parameters enough that decoding them was a slice of its own. */
+const MANY_PARAMETERS = 4096
+
+/** Undo records the background purge takes a turn: about as long as a slice. */
+const PURGE_SLICE_RECORDS = 512
+
+/** One turn of the event loop: whatever was waiting runs before a paused statement resumes. */
+const pause = (): Promise<void> => sleep(0)
+
+const isSteps = <T>(x: T | Generator<void, T>): x is Generator<void, T> => typeof (x as { next?: unknown }).next === 'function' && typeof (x as { throw?: unknown }).throw === 'function'
 
 /** The tables a statement reads or writes, for loading their collations before it runs. */
 /**
@@ -246,21 +268,29 @@ export class SqlExecutor implements Executor {
 
   async execute(session: Session, sql: string, parameters: readonly Parameter[]): Promise<StatementResult | StatementResult[]> {
     const params = parameters.filter((p) => p.name === '').map((p) => parameterValue(p, session))
+    // Thousands of parameters took a slice to decode before this ran: the
+    // other connections go next, before the statement does (D-77).
+    if (params.length >= MANY_PARAMETERS) await pause()
     return this.#statement(session, sql, params, params, 'binary')
   }
 
   async prepare(session: Session, sql: string): Promise<PreparedInfo> {
-    let paramCount = 0
+    const started = performance.now()
+    let tokens: Token[]
     try {
-      paramCount = lex(sql, { sqlMode: parseSqlMode(session.sqlMode) }).filter((t) => t.kind === TOKEN.PLACEHOLDER).length
+      tokens = lex(sql, { sqlMode: modeOf(session.sqlMode) })
     } catch (e) {
       throw toSqlError(e)
     }
+    const paramCount = tokens.filter((t) => t.kind === TOKEN.PLACEHOLDER).length
     // COM_STMT_PREPARE_OK counts them in two bytes (`sql_prepare.cc`: 1390).
     if (paramCount > 0xffff) throw sqlError('ER_PS_MANY_PARAM', 'Prepared statement contains too many placeholders')
     // The empty statement a comment makes is not one the protocol prepares.
     if (emptyText(session, sql) === 'comment') throw sqlError('ER_UNSUPPORTED_PS', 'This command is not supported in the prepared statement protocol yet')
-    const statement = this.#parse(session, sql, true)
+    const statement = this.#parse(session, sql, true, tokens)
+    // Parsing a statement of 32,000 placeholders is a slice and more on its
+    // own: the other connections go next, before its EXECUTE does (D-77).
+    if (performance.now() - started > SLICE_MS) await pause()
     if (statement === null) return { paramCount, columns: [] }
     await this.#preload(session, statement)
     if (statement.kind !== STATEMENT.QUERY) return { paramCount, columns: [] }
@@ -311,17 +341,17 @@ export class SqlExecutor implements Executor {
   }
 
   /** Parse, or `null` for a statement that is answered OK without being run. */
-  #parse(session: Session, sql: string, keep = false): Statement | null {
+  #parse(session: Session, sql: string, keep = false, tokens?: Token[]): Statement | null {
     const empty = emptyText(session, sql)
     // The grammar's END_OF_INPUT: ER_EMPTY_QUERY, unless the text held a comment.
     if (empty === 'empty') throw sqlError('ER_EMPTY_QUERY', 'Query was empty')
     if (empty === 'comment') return null
     try {
-      if (!keep) return parseStatement(sql, { sqlMode: parseSqlMode(session.sqlMode) })
+      if (!keep) return parseStatement(sql, { sqlMode: modeOf(session.sqlMode) })
       const key = `${session.sqlMode}\n${sql}`
       const cached = this.#parsed.get(key)
       if (cached !== undefined) return cached
-      const statement = parseStatement(sql, { sqlMode: parseSqlMode(session.sqlMode) })
+      const statement = parseStatement(sql, { sqlMode: modeOf(session.sqlMode), ...(tokens === undefined ? {} : { tokens }) })
       if (this.#parsed.size >= PARSED_KEPT) this.#parsed.delete(this.#parsed.keys().next().value as string)
       this.#parsed.set(key, statement)
       return statement
@@ -355,7 +385,8 @@ export class SqlExecutor implements Executor {
         let def: TableDef
         try {
           def = catalog.definition(schema, name.name)
-        } catch {
+        } catch (e) {
+          expectTyped(e)
           continue
         }
         for (const id of collationsOf(def)) ids.add(id)
@@ -367,7 +398,8 @@ export class SqlExecutor implements Executor {
           ids.add(fallback)
           const spec = createTableSpec(statement, fallback)
           for (const c of spec.columns) if (c.type.collationId !== undefined) ids.add(c.type.collationId)
-        } catch {
+        } catch (e) {
+          expectTyped(e)
           // The statement itself will say what is wrong.
         }
       }
@@ -421,7 +453,7 @@ export class SqlExecutor implements Executor {
     if (session.multipleStatementsEnabled && protocol === 'text' && !/^[\s;]*$/.test(sql)) {
       let statements: Statement[]
       try {
-        statements = parseStatements(sql, { sqlMode: parseSqlMode(session.sqlMode) })
+        statements = parseStatements(sql, { sqlMode: modeOf(session.sqlMode) })
       } catch (e) {
         throw toSqlError(e)
       }
@@ -440,6 +472,7 @@ export class SqlExecutor implements Executor {
   }
 
   async #one(session: Session, sql: string, statement: Statement, params: readonly Value[], known: readonly Value[] | undefined, protocol: WireProtocol): Promise<StatementResult> {
+    const began = performance.now()
     this.#alive(session)
     await this.#preload(session, statement)
     this.#alive(session)
@@ -454,7 +487,9 @@ export class SqlExecutor implements Executor {
       const conditions = conditionsFor(statement, session.sqlMode)
       try {
         const run = this.#run(session, sql, params, known, protocol, conditions)
-        const result = this.#dispatch(run, statement)
+        const dispatched = this.#dispatch(run, statement)
+        const result = isSteps(dispatched) ? await this.#drive(session, dispatched, began) : dispatched
+        this.#purgeLater()
         if (diagnostic) return result
         // A count no condition stands for is still the count (`warning_count`).
         const warnings = Math.max(result.warnings ?? 0, conditions.length)
@@ -490,6 +525,73 @@ export class SqlExecutor implements Executor {
     }
   }
 
+  /** Statements running their steps now, so the database can wait for them before it closes. */
+  readonly #running = new Set<Promise<unknown>>()
+
+  /**
+   * A statement's steps, run with a pause every `SLICE_MS` (D-77), so that
+   * other connections are answered while a bulk statement runs. A pause falls
+   * only between mini-transactions, with the writer slot held. A session
+   * that ended during a pause gets ER_QUERY_INTERRUPTED thrown in at it, and
+   * the statement rolls back as it would on any other error.
+   */
+  #drive<T>(session: Session, steps: Generator<void, T>, started = performance.now()): Promise<T> {
+    const running = (async () => {
+      let since = started
+      for (;;) {
+        const step = steps.next()
+        if (step.done === true) return step.value
+        if (performance.now() - since < SLICE_MS) continue
+        await pause()
+        if (this.#ended.has(session)) steps.throw(sqlError('ER_QUERY_INTERRUPTED', 'Query execution was interrupted'))
+        since = performance.now()
+      }
+    })()
+    this.#running.add(running)
+    const done = (): void => void this.#running.delete(running)
+    running.then(done, done)
+    return running
+  }
+
+  #stopping = false
+  #purging = false
+
+  /**
+   * What a commit left for purge (D-77: it purges at most a slice), purged a
+   * slice a turn while no writer holds the slot. A purge that fails stops
+   * here; the next commit's own purge meets the same fault, and reports it.
+   */
+  #purgeLater(): void {
+    const store = this.catalog?.store
+    if (store === undefined || this.#purging || this.#stopping || !store.purgeDue) return
+    this.#purging = true
+    const running = (async () => {
+      try {
+        while (!this.#stopping && store.purgeDue) {
+          await pause()
+          if (this.#stopping || !store.purgeDue) break
+          store.purge(Infinity, PURGE_SLICE_RECORDS)
+        }
+      } catch {
+        // Left for the next commit's purge to report.
+      } finally {
+        this.#purging = false
+      }
+    })()
+    this.#running.add(running)
+    void running.then(() => this.#running.delete(running))
+  }
+
+  /**
+   * Start nothing new in the background, and resolve when nothing is
+   * running: no statement between its steps, no purge. What `MySQL.end()`
+   * waits for before it closes the store.
+   */
+  async stop(): Promise<void> {
+    this.#stopping = true
+    while (this.#running.size > 0) await Promise.allSettled([...this.#running])
+  }
+
   #run(session: Session, sql: string, params: readonly Value[], known: readonly Value[] | undefined, protocol: WireProtocol, conditions: Condition[] = []): Run {
     const state = this.#state(session)
     const env: Env = { params, now: new Date(), session, state, memo: new Map(), conditions }
@@ -501,22 +603,26 @@ export class SqlExecutor implements Executor {
     return run.catalog
   }
 
-  /** The synchronous core: one parsed statement, run. */
-  #dispatch(run: Run, statement: Statement): StatementResult {
+  /**
+   * The synchronous core: one parsed statement, run — or, for a statement
+   * that may run long (INSERT, UPDATE, DELETE), its steps, which `#drive`
+   * runs with pauses between them (D-77).
+   */
+  #dispatch(run: Run, statement: Statement): StatementResult | Generator<void, StatementResult> {
     const { state } = run
     const session = run.env.session
     switch (statement.kind) {
       case STATEMENT.QUERY: {
         const plan = planQuery(run, statement)
         if (this.catalog === undefined) return resultSet(run, plan, undefined)
-        return state.statement(this.catalog.store, plan.locking, (trx) => resultSet(run, plan, trx))
+        return state.steps(this.catalog.store, plan.locking, (trx) => resultSteps(run, plan, trx))
       }
       case STATEMENT.INSERT:
-        return this.#counted(run, state.statement(this.#catalog(run).store, true, (trx) => insert(run, statement, trx)))
+        return this.#counted(run, state.steps(this.#catalog(run).store, true, (trx) => insert(run, statement, trx)))
       case STATEMENT.UPDATE:
-        return this.#counted(run, state.statement(this.#catalog(run).store, true, (trx) => update(run, statement, trx)))
+        return this.#counted(run, state.steps(this.#catalog(run).store, true, (trx) => update(run, statement, trx)))
       case STATEMENT.DELETE:
-        return this.#counted(run, state.statement(this.#catalog(run).store, true, (trx) => remove(run, statement, trx)))
+        return this.#counted(run, state.steps(this.#catalog(run).store, true, (trx) => remove(run, statement, trx)))
 
       case STATEMENT.CREATE_TABLE: {
         const catalog = this.#catalog(run)
@@ -592,7 +698,7 @@ export class SqlExecutor implements Executor {
               },
             }
         try {
-          const filled = state.statement(catalog.store, true, (trx) => insert(filling, fill, trx))
+          const filled = state.statement(catalog.store, true, (trx) => finish(insert(filling, fill, trx)))
           return { ...filled, ...(warnings + (filled.warnings ?? 0) > 0 ? { warnings: warnings + (filled.warnings ?? 0) } : {}) }
         } catch (e) {
           if (temporary !== undefined) temporary.drop(schema, spec.name)
@@ -717,7 +823,8 @@ export class SqlExecutor implements Executor {
   }
 
   /** A DML result's counters, recorded for `ROW_COUNT()` and the session's warning count. */
-  #counted(run: Run, result: OkResult): OkResult {
+  *#counted(run: Run, steps: Generator<void, OkResult>): Generator<void, OkResult> {
+    const result = yield* steps
     run.state.rowCount = BigInt(result.affectedRows ?? 0)
     run.env.session.warnings = result.warnings ?? 0
     return result
@@ -1068,7 +1175,7 @@ function findNode(root: unknown, test: (n: { readonly kind: string }) => boolean
  * since an unaliased column is named by its text (`c*2`).
  */
 function viewText(run: Run, statement: CreateViewNode): string {
-  const tokens = lex(run.sql, { sqlMode: parseSqlMode(run.env.session.sqlMode) })
+  const tokens = lex(run.sql, { sqlMode: modeOf(run.env.session.sqlMode) })
   const first = tokens.findIndex((t) => t.start === statement.query.at)
   let last = tokens.findIndex((t, i) => i >= first && (t.kind === TOKEN.EOF || (t.kind === TOKEN.OPERATOR && t.text === ';'))) - 1
   if (statement.checkOption !== undefined) {

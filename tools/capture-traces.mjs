@@ -15,13 +15,10 @@ import { join } from 'node:path'
 import net from 'node:net'
 import { execFile } from 'node:child_process'
 import { promisify } from 'node:util'
+import { arg } from './lib/cli.mjs'
 
 const run = promisify(execFile)
 
-function arg(name, fallback) {
-  const i = process.argv.indexOf(`--${name}`)
-  return i === -1 ? fallback : process.argv[i + 1]
-}
 
 const [UPSTREAM_HOST, UPSTREAM_PORT] = (arg('to', '127.0.0.1:3306')).split(':')
 const OUT_DIR = arg('out', new URL('../test/protocol/fixtures/', import.meta.url).pathname)

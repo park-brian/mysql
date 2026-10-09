@@ -8,8 +8,9 @@
 //   - it takes `sql_mode` as a parameter, so the same text lexes differently
 //     under `ANSI_QUOTES` (M3.7).
 //
-// It depends on `@myjs/bytes`, `@myjs/charsets` and `@myjs/types` — never on
-// `@myjs/protocol`, which sits above it.
+// It depends on `@myjs/bytes` and `@myjs/charsets` only: values are
+// `@myjs/types`' business and the wire `@myjs/protocol`'s, and the two meet
+// the parser in `@myjs/core`, never here.
 export { ParseError, parseError, unknownCharset, badMode, tooDeep, unsupportedStatement } from './errors.ts'
 export { DEFAULT_SQL_MODE, NO_SQL_MODE, RESERVED_SQL_MODE_BITS, SQL_MODE_BITS, formatSqlMode, parseSqlMode } from './sql-mode.ts'
 export type { SqlMode } from './sql-mode.ts'

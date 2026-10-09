@@ -1,28 +1,21 @@
 # myjs — an isomorphic, in-process MySQL for JavaScript
 
-> **Status: the wire protocol works and the type system is landing; there is
-> no storage engine yet.** M0, M1 and M2 are complete and M3 is half done
-> (63 / 143 work items). `@myjs/protocol` speaks the MySQL wire protocol well
-> enough that the real `mysql` client and an unpatched `mysql2` complete full
-> sessions against it; `@myjs/charsets` and `@myjs/types` carry the generated
-> collation registry, generated weight tables, and every byte-exact column
-> encoding in doc 24. **`utf8mb4_0900_ai_ci`, the MySQL 8.0 default, now
-> orders values** — UCA 9.0.0 level 1, generated from MySQL's own tables and
-> loaded on demand so its 49 KB never reaches an initial bundle. `@myjs/types`
-> now carries D-15's driver mapping and MySQL's binary JSON, and every byte
-> dump in docs 15, 24 and 28 is a test case that CI checks rather than a claim
-> someone maintains. And the collations are now checked against a **real MySQL
-> 8.4** in CI rather than only against our reading of the docs — which caught
-> `utf8mb4_bin` producing the wrong sort key on the first run — and 45 storage
-> vectors captured from that server all decode to the value it stored.
-> `@myjs/parser` now lexes and parses expressions — charset-aware, so a `gbk`
-> lead byte cannot smuggle a backslash past a string literal, and checked
-> against that same server on 328 generated expressions.
-> Queries are still answered by a stub, because the parser
-> and engine are M3–M5. Start at
-> **[docs/44-roadmap.md](./docs/44-roadmap.md)** for the state
-> of the project, or **[docs/README.md](./docs/README.md)** for the
-> specifications.
+> **Status: it runs SQL.** The wire protocol, the type system and its
+> collations, the parser and the storage engine (B+tree, WAL, crash
+> recovery, MVCC) are done, and the executor runs DDL, DML, transactions and
+> relational queries — joins, grouping, subqueries, CTEs, window functions,
+> JSON, foreign keys, FULLTEXT — agreeing with a real MySQL 8.4.11 on every
+> statement of the committed corpora. Drizzle's and Prisma's MySQL test
+> suites pass against it as they pass against that server. Nothing is
+> published to npm yet: 0.3, the first release of `myjs` itself, is packed and
+> smoke-installed by CI, waiting to be published.
+>
+> The numbers behind those claims are the
+> [scoreboard](./docs/44-roadmap.md#scoreboard), which CI and the commits that
+> move it keep current; this page states none of its own. Start at
+> **[docs/44-roadmap.md](./docs/44-roadmap.md)** for the state of the project,
+> **[ARCHITECTURE.md](./ARCHITECTURE.md)** for the design, or
+> **[docs/README.md](./docs/README.md)** for the specifications.
 
 ```console
 $ npm run exit-criterion
@@ -41,16 +34,15 @@ model, MySQL's semantics.
 ```js
 import { MySQL } from 'myjs'
 
-const db = await MySQL.open('opfs://app-db')   // browser: OPFS
-const db = await MySQL.open('./data')          // node: filesystem
-const db = await MySQL.open(':memory:')        // either
+const db = await MySQL.open('./data')          // Node: a directory on disk
+const db = await MySQL.open(':memory:')        // gone when you close it
+// MySQL.open('opfs://app-db') in the browser is M6's
 
 const [rows] = await db.execute('SELECT * FROM users WHERE id = ?', [1])
+await db.transaction(async (tx) => {
+  await tx.execute('UPDATE accounts SET balance = balance - ? WHERE id = ?', [10, 1])
+})
 ```
-
-*(`db.execute()` arrives with the executor in 0.3. Today `MySQL.open()`,
-`execProtocol()`, `createStream()`, `createPort()` and `serve()` are real, and
-the route to running SQL is a driver — which is the point.)*
 
 …and, because the engine speaks the real MySQL wire protocol, the whole existing
 driver ecosystem works against it unchanged:
@@ -93,7 +85,7 @@ revisited, is in [docs/02-strategy.md](./docs/02-strategy.md).
 as one readable paper, with diagrams. The numbered documents below are the
 specifications behind it.
 
-Thirty-one documents, written against the MySQL source tree
+Thirty-two documents, written against the MySQL source tree
 (`mysql/mysql-server` trunk `e174239c`) rather than from memory or secondary
 sources. Every constant cites the header it came from.
 
@@ -102,7 +94,7 @@ sources. Every constant cites the header it came from.
 | **Project** | [goals](./docs/00-goals-and-scope.md) · [prior art](./docs/01-prior-art.md) · [strategy](./docs/02-strategy.md) · [architecture](./docs/03-architecture.md) |
 | **Protocol** | [overview](./docs/10-protocol-overview.md) · [primitives](./docs/11-protocol-primitives.md) · [connection](./docs/12-connection-phase.md) · [auth](./docs/13-authentication.md) · [commands](./docs/14-command-phase.md) · [wire types](./docs/15-wire-types.md) · [prepared statements](./docs/16-prepared-statements.md) · [extras](./docs/17-protocol-extras.md) · [binlog](./docs/18-binlog.md) |
 | **Storage** | [overview](./docs/20-storage-overview.md) · [file layout](./docs/21-innodb-file-layout.md) · [pages](./docs/22-innodb-page-formats.md) · [rows](./docs/23-innodb-row-formats.md) · [column encodings](./docs/24-column-encodings.md) · [MVCC](./docs/25-mvcc-and-undo.md) · [redo](./docs/26-redo-and-recovery.md) · [dictionary](./docs/27-data-dictionary.md) · [JSON](./docs/28-json-binary.md) · [collations](./docs/29-charsets-and-collations.md) · [other engines](./docs/30-other-engines.md) |
-| **Design** | [VFS](./docs/40-vfs.md) · [durability](./docs/41-durability-and-concurrency.md) · [API](./docs/42-public-api.md) · [testing](./docs/43-testing.md) · [roadmap](./docs/44-roadmap.md) |
+| **Design** | [VFS](./docs/40-vfs.md) · [durability](./docs/41-durability-and-concurrency.md) · [API](./docs/42-public-api.md) · [testing](./docs/43-testing.md) · [roadmap](./docs/44-roadmap.md) · [change log](./docs/45-changelog.md) |
 | **Appendix** | [references](./docs/90-references.md) · [glossary](./docs/91-glossary.md) |
 
 If you read only one, read
@@ -120,11 +112,7 @@ copied into this repository — MySQL is GPLv2 and this project is MIT.
 ## Next
 
 [docs/44-roadmap.md](./docs/44-roadmap.md) — the living plan. It carries the
-milestones and their work items, the decision log, the open questions, and the
-compatibility scoreboard, and it is updated in the same commit as the work it
-describes. Its status table is the fastest way to see where the project is.
-
-The first milestone is the wire protocol: it is fully specified, it is the
-smallest thing that is independently useful (a MySQL protocol server toolkit for
-JavaScript does not currently exist), and it forces the right architectural
-boundary to exist before anything grows around it.
+milestones and their work items, what comes next and why, the decision log,
+the open questions and the compatibility scoreboard, and it is updated in the
+same commit as the work it describes; [doc 45](./docs/45-changelog.md) records
+what each change taught.

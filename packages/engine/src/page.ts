@@ -12,6 +12,16 @@
 import { crc32c } from './crc32c.ts'
 import { corrupt } from './errors.ts'
 
+/** A big-endian u32 at `at`: how a page, a log record and a catalog key write every integer. */
+export const readU32 = (b: Uint8Array, at = 0): number => (((b[at] as number) << 24) | ((b[at + 1] as number) << 16) | ((b[at + 2] as number) << 8) | (b[at + 3] as number)) >>> 0
+
+/** `n` as four big-endian bytes. */
+export const be32 = (n: number): Uint8Array => {
+  const out = new Uint8Array(4)
+  new DataView(out.buffer).setUint32(0, n)
+  return out
+}
+
 export const PAGE_TYPE = {
   SUPERBLOCK: 1,
   ALLOC_MAP: 2,

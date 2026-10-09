@@ -15,7 +15,7 @@ type Outcome = number | readonly (string | number)[] | readonly (readonly (strin
 async function run(sql: readonly string[], options: { flags?: string; mode?: string } = {}): Promise<Outcome[]> {
   const db = await MySQL.open(':memory:')
   const conn = await mysql.createConnection({
-    stream: db.createStream() as never,
+    stream: db.createStream(),
     user: 'root',
     password: '',
     supportBigNumbers: true,
@@ -330,7 +330,7 @@ async function flagsOf(): Promise<{
   close: () => Promise<void>
 }> {
   const db = await MySQL.open(':memory:')
-  const conn = await mysql.createConnection({ stream: db.createStream() as never, user: 'root', password: '', supportBigNumbers: true, bigNumberStrings: true })
+  const conn = await mysql.createConnection({ stream: db.createStream(), user: 'root', password: '', supportBigNumbers: true, bigNumberStrings: true })
   await conn.query('CREATE DATABASE app')
   await conn.query('USE app')
   await conn.query('CREATE TABLE t (u INT UNIQUE, a INT, b INT, x INT PRIMARY KEY)')

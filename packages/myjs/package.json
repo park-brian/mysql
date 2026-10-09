@@ -1,0 +1,11 @@
+{
+  "name": "myjs",
+  "version": "0.3.0",
+  "description": "An in-process MySQL for JavaScript: MySQL's wire protocol and semantics, no server process",
+  "type": "module",
+  "license": "MIT",
+  "engines": { "node": ">=22.18" },
+  "exports": { ".": "./src/index.ts", "./server": "./src/server.ts" },
+  "files": ["src"],
+  "dependencies": { "@myjs/core": "0.3.0", "@myjs/server": "0.3.0" }
+}

@@ -170,14 +170,33 @@ export class BTree {
     })
   }
 
-  /** Entries in key order, or reverse key order, within a range. Do not change the tree while iterating. */
+  /**
+   * Entries in key order, or reverse key order, within a range. The tree may
+   * change between two entries: the scan then finds its place again by key,
+   * and hands out each key once (M5.38).
+   */
   *entries(range: Range = {}): Generator<[Uint8Array, Uint8Array]> {
     const reverse = range.reverse === true
-    const bound = reverse ? range.to : range.from
-    let leaf = this.#edgeLeaf(bound, reverse)
+    const journal = this.space.journal
+    // Where the next leaf's search starts: the range's bound, and after a
+    // re-seek the last key handed out, which is not handed out again.
+    let seek = reverse ? range.to : range.from
+    let past: Uint8Array | undefined
+    let leaf = this.#edgeLeaf(seek, reverse)
+    let searched = false
+    let seen = journal.commits
     // A sibling chain longer than the file is a cycle: corruption, not a scan.
     for (let visited = 0; leaf !== 0; visited++) {
       if (visited > this.space.alloc.pageCount) throw corrupt(leaf, 'the leaf chain loops')
+      // A consumer may pause between two entries (D-77), and a mini-transaction
+      // committed meanwhile may have split, merged or freed the leaf the
+      // sibling link names. Then the place is found again from the root, by
+      // the last key handed out.
+      if (journal.commits !== seen && past !== undefined) {
+        seek = past
+        leaf = this.#edgeLeaf(seek, reverse)
+        searched = false
+      }
       const batch: [Uint8Array, Uint8Array][] = []
       let done = false
       leaf = this.#read(leaf, (p) => {
@@ -187,21 +206,27 @@ export class BTree {
         // past rather than walked: a point lookup is one leaf, and the walk
         // was most of it.
         let k = 0
-        if (visited === 0 && bound !== undefined) {
-          const at = ip.search(p, bound).index
+        if (!searched && seek !== undefined) {
+          const at = ip.search(p, seek).index
           k = reverse ? n - at : at
         }
+        searched = true
         for (; k < n && !done; k++) {
           const { key, value } = ip.cell(p, reverse ? n - 1 - k : k)
           // A key short of the range is skipped; one past it ends the scan.
           const low = range.from !== undefined && ip.compareBytes(key, range.from) < 0
           const high = range.to !== undefined && ip.compareBytes(key, range.to) >= 0
           if (reverse ? low : high) done = true
+          else if (past !== undefined && (reverse ? ip.compareBytes(key, past) >= 0 : ip.compareBytes(key, past) <= 0)) continue
           else if (!low && !high) batch.push([key.slice(), this.#upgraded(value.slice(), from)])
         }
         return reverse ? ip.leftSibling(p) : ip.rightSibling(p)
       }, 0)
-      yield* batch
+      seen = journal.commits
+      for (const entry of batch) {
+        past = entry[0]
+        yield entry
+      }
       if (done) return
     }
   }

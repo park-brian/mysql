@@ -197,6 +197,9 @@ async function run(policy: Policy, crashAt: number | undefined, seed: number, st
       // the history a crash leaves is long, and some DROPs wait for it.
       if (s === 40) t.get(be(0), (reader = store.begin()))
       if (s === 140) reader?.commit()
+      // Between statements the executor purges a slice at a time (D-77):
+      // budgets that end inside a transaction, and inside one step of it.
+      if (s % 3 === 2 && store.purgeDue) store.purge(Infinity, 1 + (s % 41))
       states?.push(snapshot(c))
     }
     store.close()

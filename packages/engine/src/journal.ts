@@ -74,6 +74,17 @@ export class Journal {
     this.#host = host
   }
 
+  /**
+   * Mini-transactions committed so far. A scan that paused between two leaves
+   * (D-77) compares it with what it saw, to know whether a page may have
+   * changed under it.
+   */
+  get commits(): number {
+    return this.#commits
+  }
+
+  #commits = 0
+
   /** Pages the open mini-transaction has changed, and holds until it ends. */
   get touched(): number {
     return this.#touched.size
@@ -170,6 +181,7 @@ export class Journal {
   }
 
   #commit(): void {
+    this.#commits++
     const records: Redo[] = []
     const logged: number[] = []
     for (const [pageNo, t] of this.#touched) {

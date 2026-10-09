@@ -10,27 +10,29 @@
 // name as written, else the expression's own source text — `SELECT 1+1`
 // returns a column called `1+1`, spaces and all, which only the text has.
 import type { ColumnDef, Table, TableDef, ViewDef } from '@myjs/engine'
-import { NODE, QUERY, REF, TOKEN, deparse, lex, parseSqlMode, parseStatement, type Expression, type OrderItem, type QueryBody, type QueryExpression, type SelectNode, type SetOperationNode, type TableName, type Token } from '@myjs/parser'
+import { NODE, QUERY, REF, TOKEN, deparse, lex, parseStatement, type Expression, type OrderItem, type QueryBody, type QueryExpression, type SelectNode, type SetOperationNode, type TableName, type Token } from '@myjs/parser'
 import { messages, sqlError, type ColumnDefinition, type ResultSet, type RowValue } from '@myjs/protocol'
-import { intValue, integerRange, toInteger, truth, withoutHex, type Value } from '@myjs/types'
-import { compile, convertTo, EMPTY_SCOPE, type CompileContext, type Compiled, type Env, type GroupKeys, type Row, type Scope, type SubqueryPlan } from './compile.ts'
+import { intValue, toInteger, truth, withoutHex, type Value } from '@myjs/types'
+import { compile, EMPTY_SCOPE, type CompileContext, type Compiled, type Env, type GroupKeys, type Row, type Scope, type SubqueryPlan } from './compile.ts'
 import { AggregateSink, chooseStrategy, containsAggregate, groupRows, isAggregate } from './group.ts'
 import { WindowSink, applyWindows, containsWindow } from './window.ts'
 import { columnDefinition, intType, type ResultType } from './meta.ts'
-import { FIELD_TYPE } from '@myjs/bytes'
+import { FIELD_TYPE, expectTyped } from '@myjs/bytes'
 import { requireCollationInfo } from '@myjs/charsets'
-import { distinct, filter, limit, project, scan, sort, type ScannedRow, type SortKey } from './operators.ts'
-import { accessRows, chooseAccess, type Access } from './plan.ts'
+import { distinct, filter, limit, project, sort, type SortKey } from './operators.ts'
+import { FULL_SCAN, accessRows, chooseAccess, isConstant, splitAnd } from './plan.ts'
 import { TableScope } from './scope.ts'
 import { planFrom, type DerivedSource, type FromContext, type FromPlan, type JoinCondition } from './from.ts'
 import { rowKey } from './keys.ts'
 import { convert as convertSetValue, nestedNullability, setOperation, setOperationType } from './setop.ts'
-import { constTablesHaveRows, optimizerFacts } from './optimize.ts'
+import { constTablesHaveRows, neverEqual, optimizerFacts } from './optimize.ts'
 import { informationSchemaTable } from './information-schema.ts'
 import type { SqlSession } from './session.ts'
 import { toWire, type WireProtocol } from './wire.ts'
 import type { Trx } from '@myjs/engine'
 import { isTemporary, type CatalogApi } from './temporary.ts'
+import { modeOf } from './mode.ts'
+import { finish } from './session.ts'
 
 /** Everything one statement execution needs. */
 export interface Run {
@@ -187,8 +189,9 @@ const MODIFIERS = new Set(['ALL', 'DISTINCT', 'DISTINCTROW', 'HIGH_PRIORITY', 'S
 function itemTexts(run: Run, node: SelectNode): (string | undefined)[] {
   let tokens
   try {
-    tokens = lex(run.sql, { sqlMode: parseSqlMode(run.env.session.sqlMode) })
-  } catch {
+    tokens = lex(run.sql, { sqlMode: modeOf(run.env.session.sqlMode) })
+  } catch (e) {
+    expectTyped(e)
     return []
   }
   let i = tokens.findIndex((t) => t.start === node.at)
@@ -201,7 +204,7 @@ function itemTexts(run: Run, node: SelectNode): (string | undefined)[] {
   let first = i
   for (; i <= tokens.length; i++) {
     const t = tokens[i]
-    const end = t === undefined || (depth === 0 && (CLAUSE_WORDS.has(word(t)) || t.text === ';' || (t.kind === TOKEN.OPERATOR && t.text === ')')))
+    const end = t === undefined || t.kind === TOKEN.EOF || (depth === 0 && (CLAUSE_WORDS.has(word(t)) || t.text === ';' || (t.kind === TOKEN.OPERATOR && t.text === ')')))
     if (end || (depth === 0 && t?.kind === TOKEN.OPERATOR && t.text === ',')) {
       const a = tokens[first]
       const b = tokens[i - 1]
@@ -496,12 +499,6 @@ function readsOuter(q: unknown, aliases: ReadonlySet<string>): boolean {
   return visit(q)
 }
 
-function containsSubquery(e: unknown): boolean {
-  if (e === null || typeof e !== 'object') return false
-  if ((e as { kind?: string }).kind === NODE.SUBQUERY) return true
-  return Object.values(e).some((v) => (Array.isArray(v) ? v.some(containsSubquery) : typeof v === 'object' && containsSubquery(v)))
-}
-
 /** The FROM tables a select-list scalar subquery that aggregates without GROUP BY reads, by qualified name. */
 function aggregatingSubqueryTables(node: SelectNode, scope: TableScope): Set<string> {
   const out = new Set<string>()
@@ -585,7 +582,8 @@ function chooseCovering(from: FromPlan, scope: TableScope, node: SelectNode, q: 
         const r = scope.resolve(n.parts, 'field list')
         const at = r.depth === undefined ? scope.columnAt(r.index) : undefined
         if (at !== undefined) add(at.table.alias, at.column.name)
-      } catch {
+      } catch (e) {
+        expectTyped(e)
         // An alias, or an error compiling will report.
       }
       return
@@ -979,7 +977,8 @@ function orderAliases(q: QueryExpression, items: readonly { readonly alias?: str
       try {
         const alias = scope.columnAt(scope.resolve(n.parts as string[], 'order clause').index)?.table.alias
         if (alias !== undefined) out.add(alias)
-      } catch {
+      } catch (e) {
+        expectTyped(e)
         out.add('\u0000')
       }
       return
@@ -1025,7 +1024,8 @@ function sourceName(scope: TableScope | undefined, item: SelectNode['items'][num
     const r = scope.resolve(item.expr.parts, 'field list')
     if (r.depth !== undefined && r.depth > 0) return name
     at = scope.columnAt(r.index)
-  } catch {
+  } catch (e) {
+    expectTyped(e)
     return name
   }
   return at === undefined || at.table.def !== undefined ? name : at.column.name
@@ -1167,7 +1167,7 @@ function planGrouped(
     return { expr: compile(e, withWindows(postCtx('order clause'))), desc: o.desc === true }
   })
 
-  if (/(^|,)ONLY_FULL_GROUP_BY(,|$)/i.test(run.env.session.sqlMode)) {
+  if (modeOf(run.env.session.sqlMode).onlyFullGroupBy) {
     checkFullGroupBy(lookup, scope, keys, node.where, from?.joins ?? [], items.map((i) => i.expr), (q.orderBy ?? []).filter((o) => !(o.expr.kind === NODE.LITERAL && o.expr.type === 'int') && !(o.expr.kind === NODE.COLUMN && o.expr.parts.length === 1 && items.some((i) => i.alias?.toLowerCase() === (o.expr as unknown as { parts: string[] }).parts[0]?.toLowerCase()))).map((o) => o.expr), node.groupBy === undefined, rollup)
   }
 
@@ -1267,7 +1267,7 @@ function planGrouped(
         if (strategy === 'index' && groupIndex !== undefined) {
           const clustered = source.def.indexes.find((i) => i.name === groupIndex)?.kind === 'primary' || source.def.clustered === groupIndex
           const sameIndex = clustered ? access.index === undefined : access.index === groupIndex
-          if (!sameIndex) access = clustered ? {} : { index: groupIndex }
+          if (!sameIndex) access = clustered ? FULL_SCAN : { index: groupIndex }
         }
         rows = accessRows(source.table, source.def, access, trx, locking)
       }
@@ -1305,7 +1305,8 @@ const safeIndex = (scope: Scope, parts: readonly string[]): number | undefined =
   try {
     const r = scope.resolve(parts, 'field list')
     return (r.depth ?? 0) > 0 ? undefined : r.index
-  } catch {
+  } catch (e) {
+    expectTyped(e)
     return undefined
   }
 }
@@ -1337,14 +1338,16 @@ function refersToRow(e: unknown, scope?: Scope, consts?: ReadonlySet<string>): b
     try {
       const alias = scope.columnAt(scope.resolve(n.parts as string[], 'field list').index)?.table.alias
       if (alias !== undefined && consts.has(alias)) return false
-    } catch {
+    } catch (e) {
+      expectTyped(e)
       // Resolved, and reported, elsewhere.
     }
   }
   if (n.kind === NODE.UNARY && (n.op === 'IS NULL' || n.op === 'IS NOT NULL') && n.operand?.kind === NODE.COLUMN && scope !== undefined) {
     try {
       if (!scope.resolve(n.operand.parts, 'field list').type.nullable) return false
-    } catch {
+    } catch (e) {
+      expectTyped(e)
       // Resolved, and reported, elsewhere.
     }
   }
@@ -1469,13 +1472,7 @@ function checkFullGroupBy(
   if (rollup) where = undefined
   if (rollup) joins = []
   const conjuncts: Expression[] = []
-  const flatten = (e: Expression | undefined): void => {
-    if (e === undefined) return
-    if (e.kind === NODE.BINARY && (e.op === 'AND' || e.op === '&&')) {
-      flatten(e.left)
-      flatten(e.right)
-    } else conjuncts.push(e)
-  }
+  const flatten = (e: Expression | undefined): void => void splitAnd(e, conjuncts)
   flatten(where)
   // An inner join's ON is as good as the WHERE; an outer join's equality
   // determines its nullable side from the preserved one, never the reverse
@@ -1623,20 +1620,16 @@ function whereFacts(run: Run, def: TableDef, alias: string, where: Expression | 
     return def.columns.find((c) => c.name.toLowerCase() === name)
   }
   const conjuncts: Expression[] = []
-  const flatten = (e: Expression): void => {
-    if (e.kind === NODE.BINARY && (e.op === 'AND' || e.op === '&&')) {
-      flatten(e.left)
-      flatten(e.right)
-    } else conjuncts.push(e)
-  }
+  const flatten = (e: Expression): void => void splitAnd(e, conjuncts)
   flatten(where)
   for (const c of conjuncts) {
     if (c.kind === NODE.UNARY && c.op === 'IS NULL' && columnOf(c.operand)?.nullable === false) facts.impossible = true
-    else if (neverEqual(c, columnOf)) facts.impossible = true
+    else if (neverEqualIn(c, columnOf)) facts.impossible = true
     else if (foldable(c, run.params !== undefined)) {
       try {
         if (truth(compile(c, compileContext(run, EMPTY_SCOPE, 'where clause')).eval([], run.env)) !== true) facts.impossible = true
-      } catch {
+      } catch (e) {
+        expectTyped(e)
         // Not something the optimizer folds; the scan will say.
       }
     }
@@ -1676,12 +1669,11 @@ function pinOf(cond: Expression, column: ColumnDef, columnOf: (e: Expression) =>
     else if (columnOf(cond.right) === column) value = cond.left
   }
   // NULL pins nothing: `c <=> NULL` leaves `c` grouped (8.4.11).
-  if (value === undefined || !constant(value) || (value.kind === NODE.LITERAL && value.type === 'null')) return undefined
+  if (value === undefined || !isConstant(value) || (value.kind === NODE.LITERAL && value.type === 'null')) return undefined
   if (column.type.collationId !== undefined && numeric(value)) return undefined
   return value.kind === NODE.PLACEHOLDER ? `?${value.at}` : deparse(value)
 }
 
-const constant = (e: Expression): boolean => e.kind === NODE.LITERAL || e.kind === NODE.PLACEHOLDER || (e.kind === NODE.UNARY && e.op === '-' && constant(e.operand))
 const numeric = (e: Expression): boolean => (e.kind === NODE.LITERAL && (e.type === 'int' || e.type === 'decimal' || e.type === 'double')) || (e.kind === NODE.UNARY && numeric(e.operand))
 
 /**
@@ -1690,23 +1682,10 @@ const numeric = (e: Expression): boolean => (e.kind === NODE.LITERAL && (e.type 
  * (8.4.11 answers `SELECT DISTINCT score FROM p WHERE flag = 9.5` without its
  * temporary table). `c = NULL` is not folded, on 8.4.
  */
-function neverEqual(e: Expression, columnOf: (e: Expression) => ColumnDef | undefined): boolean {
+function neverEqualIn(e: Expression, columnOf: (e: Expression) => ColumnDef | undefined): boolean {
   if (e.kind !== NODE.BINARY || e.op !== '=') return false
-  const column = columnOf(e.left) ?? columnOf(e.right)
-  const other = columnOf(e.left) !== undefined ? e.right : e.left
-  if (column === undefined) return false
-  const range = integerRange(column.type)
-  if (range === undefined) return false
-  const negative = other.kind === NODE.UNARY && other.op === '-'
-  const literal = negative ? other.operand : other
-  if (literal.kind !== NODE.LITERAL) return false
-  // A string that is wholly a number is that number here (`flag = '9.5'`).
-  const text = String(literal.value).trim()
-  const number = literal.type === 'int' || literal.type === 'decimal' || literal.type === 'double' || (literal.type === 'string' && /^[+-]?(\d+\.?\d*|\.\d+)([eE][+-]?\d+)?$/.test(text))
-  if (!number) return false
-  if (!/^[+-]?\d+$/.test(text) && Number(text) % 1 !== 0) return true
-  const v = (negative ? -1n : 1n) * (/^[+-]?\d+$/.test(text) ? BigInt(text) : BigInt(Math.trunc(Number(text))))
-  return v < range.min || v > range.max
+  const left = columnOf(e.left)
+  return neverEqual(left ?? columnOf(e.right), left !== undefined ? e.right : e.left)
 }
 
 /**
@@ -1773,10 +1752,25 @@ export function columnsOf(run: Run, plan: SelectPlan): ColumnDefinition[] {
 
 /** Run a planned SELECT in `trx`, materialising its rows for the wire. */
 export function resultSet(run: Run, plan: SelectPlan, trx: Trx | undefined): ResultSet {
+  return finish(resultSteps(run, plan, trx))
+}
+
+/** Rows read between two chances for a query to pause (D-77). */
+const PACE_ROWS = 256
+
+/**
+ * `resultSet`, pausing every `PACE_ROWS` rows (D-77). A read holds no writer
+ * slot, so a write may come between two rows: the read's view keeps what it
+ * sees the same, and a B+tree scan finds its place again by key (M5.38).
+ */
+export function* resultSteps(run: Run, plan: SelectPlan, trx: Trx | undefined): Generator<void, ResultSet> {
   const described = plan.columnsAt?.(trx) ?? plan.columns
   const columns = described.map((c) => columnDefinition(c.name, c.type, run.env.session.characterSet))
   const rows: RowValue[][] = []
   const types = described.map((c) => c.type)
-  for (const values of plan.rows(trx)) rows.push(values.map((v, i) => toWire(v, types[i] as ResultType, run.protocol, run.env.session)))
+  for (const values of plan.rows(trx)) {
+    rows.push(values.map((v, i) => toWire(v, types[i] as ResultType, run.protocol, run.env.session)))
+    if (rows.length % PACE_ROWS === 0) yield
+  }
   return { columns, rows }
 }

@@ -12,9 +12,11 @@
 // `mysql2/promise` gives. `mysql2.createConnection({ stream:
 // db.createStream() })` remains doc 42's route for a driver or an ORM.
 
+import { MyjsError } from '@myjs/bytes'
 import { Catalog, Store } from '@myjs/engine'
 import { MapAccountStore, Sha2Cache, type AccountStore, type Executor } from '@myjs/protocol'
 import { MemoryVfs, type Lock, type Vfs } from '@myjs/vfs'
+import { createStream as hostStream, openPathVfs, type DriverStream } from '#host'
 import { ProtocolConnection, type ConnectionOptions } from './connection.ts'
 import { SqlExecutor } from './sql/executor.ts'
 import { Connection, Transaction, inTransaction, type BeginOptions, type QueryOptions, type QueryResult, type TransactionOptions, type TypeOptions } from './client/api.ts'
@@ -27,14 +29,13 @@ export interface ConnectionConfig extends TypeOptions {
   readonly multipleStatements?: boolean
 }
 
+/**
+ * Doc 42's options object, as far as it is honoured. Doc 42 also names
+ * `sqlMode`, `characterSet`, `collation`, `timeZone` and `readOnly`; none is
+ * built yet, and `open()` refuses each rather than quietly running without it.
+ */
 export interface MySQLOptions {
-  /** Doc 42's options object. Only the ones M1 can honour are read. */
-  readonly sqlMode?: string
-  readonly characterSet?: string
-  readonly collation?: string
-  readonly timeZone?: string
   readonly maxAllowedPacket?: number
-  readonly readOnly?: boolean
   /** D-13: off by default; it turns SQL injection into arbitrary execution. */
   readonly multipleStatements?: boolean
   /** An explicit VFS, as doc 42 documents. */
@@ -54,18 +55,12 @@ export interface MySQLOptions {
   readonly database?: string
 }
 
-/** A duplex a driver can be handed. Shape depends on the host (D-27). */
-export interface DriverStream {
-  readonly [key: string]: unknown
-}
-
-type StreamFactory = (connection: ProtocolConnection) => unknown
-
-/** What the host adapter provides (D-27): the platform's stream, and the platform's storage for a path. */
-interface Host {
-  readonly createStream: StreamFactory
-  readonly openPathVfs: (path: string) => Promise<{ vfs: Vfs; lock: Lock }>
-}
+/**
+ * A duplex a driver can be handed: a Node `Duplex` on Node, Deno and Bun, a
+ * pair of Web Streams in a browser. The host adapter decides (D-27), chosen
+ * by the `#host` import's conditions.
+ */
+export type { DriverStream } from '#host'
 
 export class MySQL {
   readonly path: string
@@ -81,7 +76,6 @@ export class MySQL {
   /** The database directory's lock, held from open to `end()`. */
   #lock: Lock | undefined
   readonly #cache = new Sha2Cache()
-  readonly #streamFactory: StreamFactory
   #nextConnectionId = 1
   #closed = false
 
@@ -91,7 +85,6 @@ export class MySQL {
     executor: Executor,
     accounts: AccountStore,
     options: MySQLOptions,
-    streamFactory: StreamFactory,
     catalog: Catalog | undefined,
   ) {
     this.path = path
@@ -101,7 +94,6 @@ export class MySQL {
     this.#executor = executor
     this.accounts = accounts
     this.options = options
-    this.#streamFactory = streamFactory
   }
 
   /**
@@ -115,12 +107,14 @@ export class MySQL {
    * is M6's.
    */
   static async open(path = ':memory:', options: MySQLOptions = {}): Promise<MySQL> {
-    const host = await loadHost()
+    for (const name of UNHONOURED) {
+      if ((options as Record<string, unknown>)[name] !== undefined) throw new MyjsError('ER_NOT_SUPPORTED_YET', `MySQL.open()'s ${name} option is not supported yet`)
+    }
     let vfs = options.vfs
     let lock: Lock | undefined
     if (vfs === undefined) {
       if (path === ':memory:') vfs = new MemoryVfs()
-      else ({ vfs, lock } = await host.openPathVfs(path))
+      else ({ vfs, lock } = await openPathVfs(path))
     }
     let catalog: Catalog | undefined
     let executor = options.executor
@@ -134,7 +128,7 @@ export class MySQL {
       executor = new SqlExecutor({ catalog, ...(options.serverVersion === undefined ? {} : { serverVersion: options.serverVersion }) })
     }
     const accounts = options.accounts ?? (await defaultAccounts())
-    const db = new MySQL(path, vfs, executor, accounts, options, host.createStream, catalog)
+    const db = new MySQL(path, vfs, executor, accounts, options, catalog)
     db.#lock = lock
     db.#startSync()
     return db
@@ -161,7 +155,7 @@ export class MySQL {
    * capabilities and statement table (D-28).
    */
   createConnection(over: Partial<ConnectionOptions> = {}): ProtocolConnection {
-    if (this.#closed) throw new Error('database is closed')
+    if (this.#closed) throw new MyjsError('DATABASE_CLOSED', 'database is closed')
     const connection = new ProtocolConnection({
       executor: this.#executor,
       accounts: this.accounts,
@@ -207,7 +201,7 @@ export class MySQL {
 
   /** A duplex stream of MySQL packets. Doc 42's driver-interop two-liner. */
   createStream(): DriverStream {
-    return this.#streamFactory(this.createConnection()) as DriverStream
+    return hostStream(this.createConnection())
   }
 
   /** A `MessagePort` speaking MySQL packets, for a worker or another tab. */
@@ -218,10 +212,16 @@ export class MySQL {
     local.onmessage = (event: MessageEvent) => {
       const chunk = toBytes(event.data)
       if (chunk === null) return
-      void connection.feed(chunk).then(() => {
-        const out = connection.take()
-        if (out.length > 0) local.postMessage(out, [out.buffer])
-      })
+      connection.feed(chunk).then(
+        () => {
+          const out = connection.take()
+          if (out.length > 0) local.postMessage(out, [out.buffer])
+        },
+        () => {
+          connection.close()
+          local.close()
+        },
+      )
     }
     // The peer closing its port is the connection going away (D-68): its
     // session ends, and an open transaction releases the writer.
@@ -265,13 +265,13 @@ export class MySQL {
   }
 
   /** Doc 42: the text protocol, `values` filling the `?`s as `mysql2` fills them. `[rows, fields]`, or `[header]`. */
-  async query(sql: string | QueryOptions, values?: readonly unknown[]): Promise<QueryResult> {
-    return (await this.#connection()).query(sql, values)
+  async query<T = unknown>(sql: string | QueryOptions, values?: readonly unknown[]): Promise<QueryResult<T>> {
+    return (await this.#connection()).query<T>(sql, values)
   }
 
   /** Doc 42: a prepared statement, run with `values` through the binary protocol. */
-  async execute(sql: string | QueryOptions, values?: readonly unknown[]): Promise<QueryResult> {
-    return (await this.#connection()).execute(sql, values)
+  async execute<T = unknown>(sql: string | QueryOptions, values?: readonly unknown[]): Promise<QueryResult<T>> {
+    return (await this.#connection()).execute<T>(sql, values)
   }
 
   /** Doc 42: a transaction on a connection of its own, which `commit()` or `rollback()` ends. */
@@ -306,6 +306,10 @@ export class MySQL {
     this.#implicit = null
     this.#shared = null
     if (this.#sync !== undefined) clearInterval(this.#sync)
+    // A statement paused between its steps (D-77) resumes, finds its session
+    // ended, and rolls back, and a background purge stops: the store stays
+    // open until both have.
+    if (this.#executor instanceof SqlExecutor) await this.#executor.stop()
     this.store?.close()
     this.#lock?.release()
   }
@@ -314,12 +318,23 @@ export class MySQL {
 /** The store and its catalog, made if the VFS has none yet and recovered if it has. */
 async function openCatalog(vfs: Vfs, options: MySQLOptions): Promise<Catalog> {
   const data = await vfs.open('data', { create: true })
-  const log = await vfs.open('log', { create: true })
+  const log = await vfs.open('log', { create: true }).catch((e: unknown) => {
+    data.close()
+    throw e
+  })
   const storeOptions = {
     ...(options.bufferPoolSize === undefined ? {} : { frames: Math.max(16, Math.floor(options.bufferPoolSize / data.pageSize)) }),
     ...(options.flushLogAtTrxCommit === undefined ? {} : { flushLogAtTrxCommit: options.flushLogAtTrxCommit }),
   }
-  const store = data.size() === 0 ? Store.create(data, log, storeOptions) : Store.open(data, log, storeOptions)
+  let store: Store
+  try {
+    store = data.size() === 0 ? Store.create(data, log, storeOptions) : Store.open(data, log, storeOptions)
+  } catch (e) {
+    // A database that fails recovery leaves its files closed, so it can be opened again.
+    data.close()
+    log.close()
+    throw e
+  }
   const catalog = Catalog.open(store)
   // The schemas a fresh 8.4.11 has, empty here: clients connect to `mysql`
   // to create their own database (Prisma's schema engine does).
@@ -328,6 +343,9 @@ async function openCatalog(vfs: Vfs, options: MySQLOptions): Promise<Catalog> {
 }
 
 const SYSTEM_SCHEMAS = ['mysql', 'performance_schema', 'sys']
+
+/** Doc 42's options that nothing honours yet: refused, never ignored. */
+const UNHONOURED = ['sqlMode', 'characterSet', 'collation', 'timeZone', 'readOnly'] as const
 
 function toBytes(data: unknown): Uint8Array | null {
   if (data instanceof Uint8Array) return data
@@ -348,20 +366,4 @@ async function defaultAccounts(): Promise<AccountStore> {
   const store = new MapAccountStore()
   await store.add('root', '')
   return store
-}
-
-/**
- * Pick the host adapter. D-27 confines `node:*` and `Buffer` to these two
- * files; this is the one place that chooses between them.
- */
-async function loadHost(): Promise<Host> {
-  const isNode =
-    typeof globalThis.process !== 'undefined' &&
-    typeof globalThis.process.versions?.node === 'string'
-  if (isNode) {
-    const node = await import('./host/node.ts')
-    return { createStream: node.createNodeStream as StreamFactory, openPathVfs: node.openPathVfs }
-  }
-  const browser = await import('./host/browser.ts')
-  return { createStream: browser.createWebStream as StreamFactory, openPathVfs: browser.openPathVfs }
 }

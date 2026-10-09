@@ -41,6 +41,16 @@ export class MyjsError extends Error {
 }
 
 /**
+ * Rethrow anything that is not one of ours. A `catch` that turns an expected
+ * failure into a fallback (a table that is not there, a constant that cannot
+ * be read yet) calls this first, so a `TypeError` from a bug still surfaces
+ * rather than quietly becoming the fallback.
+ */
+export function expectTyped(e: unknown): asserts e is MyjsError {
+  if (!(e instanceof MyjsError)) throw e
+}
+
+/**
  * A malformed or truncated byte stream. Every bounds check in `Reader` throws
  * this, and it is the only error type the M0.8 fuzz target may observe.
  */

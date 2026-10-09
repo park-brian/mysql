@@ -82,7 +82,7 @@ const SCRIPT: readonly (readonly [string, Outcome])[] = [
 test('M5.6 and M5.9: window functions and TRUNCATE return what 8.4.11 returned, statement by statement', async () => {
   const db = await MySQL.open(':memory:')
   const conn = await mysql.createConnection({
-    stream: db.createStream() as never,
+    stream: db.createStream(),
     user: 'root',
     password: '',
     supportBigNumbers: true,

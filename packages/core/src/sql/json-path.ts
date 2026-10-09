@@ -20,7 +20,7 @@
 // that is not an array treats it as a one-element array (`$[0]` of a scalar
 // is the scalar), where `[*]` matches nothing; `**` is the value and every
 // value below it, each match reported once, in document order.
-import { FIELD_TYPE } from '@myjs/bytes'
+import { FIELD_TYPE, expectTyped } from '@myjs/bytes'
 import { sqlError } from '@myjs/protocol'
 import {
   COERCIBILITY,
@@ -38,10 +38,10 @@ import {
   type Value,
 } from '@myjs/types'
 import type { Compiled } from './compile.ts'
-import { charWidth, intType, jsonType, stringType, type ResultType } from './meta.ts'
+import { CHARSET_UTF8MB4_BIN, charWidth, intType, jsonType, stringType, type ResultType } from './meta.ts'
+import { unregistered } from './registry.ts'
 
 /** The collation of every text these functions make, whatever the connection's (8.4.11: `JSON_UNQUOTE('"ABC"') = 'abc'` is 0). */
-const UTF8MB4_BIN = 46
 
 export type Leg =
   | { readonly kind: 'member'; readonly key: string }
@@ -101,13 +101,14 @@ function jsonString(bytes: Uint8Array): string | undefined {
   try {
     const doc = parseJson(text)
     return doc.t === 'string' ? doc.v : undefined
-  } catch {
+  } catch (e) {
+    expectTyped(e)
     return undefined
   }
 }
 
 /** A path, or ER_INVALID_JSON_PATH naming where it went wrong. */
-export function parseJsonPath(text: string): JsonPath {
+function parseJsonPath(text: string): JsonPath {
   const b = UTF8.encode(text)
   let at = 0
   const end = b.length
@@ -223,7 +224,7 @@ export function parseJsonPath(text: string): JsonPath {
 // --- evaluating ---------------------------------------------------------------------
 
 /** Every value `path` matches in `doc`, in document order, each once. */
-export function seek(doc: JsonDoc, path: JsonPath): JsonDoc[] {
+function seek(doc: JsonDoc, path: JsonPath): JsonDoc[] {
   let current: JsonDoc[] = [doc]
   for (const leg of path.legs) {
     const next: JsonDoc[] = []
@@ -421,7 +422,10 @@ function extract(doc: JsonDoc, paths: readonly JsonPath[]): Value {
 }
 
 /** A JSON function over paths, or `undefined` for another name. */
-export function jsonPathFunction(name: string, args: readonly Compiled[], callName: string): Compiled | undefined {
+/** The functions over a JSON document and a path. */
+export const JSON_PATH_FUNCTIONS: ReadonlySet<string> = new Set(['JSON_EXTRACT', 'JSON_UNQUOTE', 'JSON_CONTAINS', 'JSON_CONTAINS_PATH', 'JSON_TYPE', 'JSON_LENGTH', 'JSON_DEPTH', 'JSON_KEYS', 'JSON_VALID', 'JSON_OVERLAPS'])
+
+export function jsonPathFunction(name: string, args: readonly Compiled[], callName: string): Compiled {
   const fn = name.toLowerCase()
   const arity = (min: number, max: number) => {
     if (args.length < min || args.length > max) throw sqlError('ER_WRONG_PARAMCOUNT_TO_NATIVE_FCT', `Incorrect parameter count in the call to native function '${callName}'`)
@@ -498,9 +502,9 @@ export function jsonPathFunction(name: string, args: readonly Compiled[], callNa
       return {
         eval: (r, env) => {
           const v = (args[0] as Compiled).eval(r, env)
-          return v === null ? null : stringValue(typeName(docOf(v, 1, fn)), UTF8MB4_BIN, COERCIBILITY.IMPLICIT)
+          return v === null ? null : stringValue(typeName(docOf(v, 1, fn)), CHARSET_UTF8MB4_BIN, COERCIBILITY.IMPLICIT)
         },
-        type: stringType(17, UTF8MB4_BIN, true),
+        type: stringType(17, CHARSET_UTF8MB4_BIN, true),
       }
     case 'JSON_LENGTH':
     case 'JSON_DEPTH':
@@ -548,7 +552,7 @@ export function jsonPathFunction(name: string, args: readonly Compiled[], callNa
         type: intType(21, true),
       }
     default:
-      return undefined
+      throw unregistered(name)
   }
 }
 
@@ -559,12 +563,12 @@ export function jsonPathFunction(name: string, args: readonly Compiled[], callNa
  * argument makes a LONGTEXT, a string one the string's width.
  */
 export function unquote(arg: Compiled): Compiled {
-  const type: ResultType = arg.type.kind === 'json' ? { ...stringType(4294967295 / 4, UTF8MB4_BIN, true), field: FIELD_TYPE.LONG_BLOB, length: 4294967295 } : stringType(charWidth(arg.type), UTF8MB4_BIN, true)
+  const type: ResultType = arg.type.kind === 'json' ? { ...stringType(4294967295 / 4, CHARSET_UTF8MB4_BIN, true), field: FIELD_TYPE.LONG_BLOB, length: 4294967295 } : stringType(charWidth(arg.type), CHARSET_UTF8MB4_BIN, true)
   return {
     eval: (r, env) => {
       const v = arg.eval(r, env)
       if (v === null) return null
-      const out = (s: string) => stringValue(s, UTF8MB4_BIN, COERCIBILITY.IMPLICIT)
+      const out = (s: string) => stringValue(s, CHARSET_UTF8MB4_BIN, COERCIBILITY.IMPLICIT)
       if (v.kind === 'json') return out(v.v.t === 'string' ? v.v.v : renderJson(v.v))
       if (v.kind !== 'string') throw sqlError('ER_INCORRECT_TYPE', 'Incorrect type for argument 1 in function json_unquote.')
       const s = v.v

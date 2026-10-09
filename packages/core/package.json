@@ -1,6 +1,6 @@
 {
   "name": "@myjs/core",
-  "version": "0.0.0",
+  "version": "0.3.0",
   "description": "Wires it together; the MySQL class and the execProtocol boundary",
   "type": "module",
   "license": "MIT",
@@ -14,15 +14,18 @@
     "src"
   ],
   "dependencies": {
-    "@myjs/bytes": "0.0.0",
-    "@myjs/charsets": "0.0.0",
-    "@myjs/engine": "0.0.0",
-    "@myjs/parser": "0.0.0",
-    "@myjs/protocol": "0.0.0",
-    "@myjs/types": "0.0.0",
-    "@myjs/vfs": "0.0.0"
+    "@myjs/bytes": "0.3.0",
+    "@myjs/charsets": "0.3.0",
+    "@myjs/engine": "0.3.0",
+    "@myjs/parser": "0.3.0",
+    "@myjs/protocol": "0.3.0",
+    "@myjs/types": "0.3.0",
+    "@myjs/vfs": "0.3.0"
   },
-  "browser": {
-    "./src/host/node.ts": "./src/host/browser.ts"
+  "imports": {
+    "#host": {
+      "browser": "./src/host/browser.ts",
+      "default": "./src/host/node.ts"
+    }
   }
 }

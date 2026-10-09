@@ -25,6 +25,7 @@
     "fuzz:engine": "node tools/fuzz-engine.mjs",
     "fuzz:executor": "node tools/fuzz-executor.mjs",
     "size": "node tools/size-budget.mjs",
+    "pack": "node tools/pack.mjs",
     "gen:errors": "node tools/gen-errors.mjs",
     "gen:charsets": "node tools/gen-charsets.mjs",
     "gen:uca": "node tools/gen-uca.mjs && node tools/gen-uca400.mjs",

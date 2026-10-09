@@ -5,13 +5,13 @@
 // many times over, and the answer must be the comparison's own, not
 // JavaScript's: under `utf8mb4_0900_ai_ci` `'ann'` and `'ÄNN'` are one group,
 // under a PAD SPACE collation `'a'` and `'a '` are, and `1.50` is `1.5`. So a
-// string's key is its collation's sort key (with trailing spaces dropped first
-// where the collation pads), a number's is its exact decimal with no trailing
-// zeros, and a temporal's is its ordinal text. `distinct()` compared each row
-// against every earlier one; a key makes it one lookup.
+// string's key is `equalityKey`'s (its sort key, a PAD SPACE collation's
+// trailing pad weights dropped), a number's is its exact decimal with no
+// trailing zeros, and a temporal's is its ordinal text. `distinct()` compared
+// each row against every earlier one; a key makes it one lookup.
 import { CHARSET_BINARY } from '@myjs/bytes'
-import { collation, encodeCollation, requireCollationInfo } from '@myjs/charsets'
-import { jsonKey, renderDecimal, toDecimal, toText, type Value } from '@myjs/types'
+import { encodeCollation } from '@myjs/charsets'
+import { equalityKey, jsonKey, renderDecimal, toDecimal, toText, type Value } from '@myjs/types'
 
 const hex = (b: Uint8Array): string => {
   let s = ''
@@ -24,10 +24,8 @@ export function valueKey(v: Value): string {
   if (v === null) return 'N'
   switch (v.kind) {
     case 'string': {
-      const info = requireCollationInfo(v.collationId)
-      const text = info.padAttribute === 'PAD SPACE' ? v.v.replace(/ +$/, '') : v.v
-      if (v.collationId === CHARSET_BINARY) return `b${hex(encodeCollation(text, v.collationId))}`
-      return `s${hex(collation(v.collationId).sortKey(encodeCollation(text, v.collationId)))}`
+      if (v.collationId === CHARSET_BINARY) return `b${hex(encodeCollation(v.v, v.collationId))}`
+      return `s${equalityKey(v.v, v.collationId)}`
     }
     case 'bytes':
       return `b${hex(v.v)}`

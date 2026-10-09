@@ -1,4 +1,4 @@
-export { MyjsError, ProtocolError, outOfBounds } from './errors.ts'
+export { MyjsError, ProtocolError, expectTyped, outOfBounds } from './errors.ts'
 export type { ErrorInfo } from './errors.ts'
 export { Reader } from './reader.ts'
 export { Writer } from './writer.ts'
