@@ -29,7 +29,7 @@ test('every temporal text stored answers, warns and stores as 8.4.11 did', async
   const fixture = JSON.parse(readFileSync(FIXTURE, 'utf8')) as { capturedAgainst: string; cases: Outcome[][] }
   assert.match(fixture.capturedAgainst, /mysql-server/, 'a fixture must name the server it came from')
   const db = await MySQL.open(':memory:')
-  const conn = await mysql.createConnection({ stream: db.createStream() as never, user: 'root', password: '' })
+  const conn = await mysql.createConnection({ stream: db.createStream(), user: 'root', password: '' })
   let statements = 0
   const mismatches: string[] = []
   try {

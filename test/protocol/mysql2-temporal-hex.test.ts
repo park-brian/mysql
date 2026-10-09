@@ -96,7 +96,7 @@ const EXPRESSIONS: readonly (readonly [string, Outcome])[] = [
 test('M5.10: INTERVAL arithmetic, HEX and UNHEX return what 8.4.11 returned, value and metadata', async () => {
   const db = await MySQL.open(':memory:')
   const conn = await mysql.createConnection({
-    stream: db.createStream() as never,
+    stream: db.createStream(),
     user: 'root',
     password: '',
     supportBigNumbers: true,

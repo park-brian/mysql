@@ -105,7 +105,7 @@ const SCRIPT: readonly (readonly [string, Outcome])[] = [
 
 test('a strict mode fails a data-changing statement on the warnings 8.4.11 fails it on', async () => {
   const db = await MySQL.open(':memory:')
-  const conn = await mysql.createConnection({ stream: db.createStream() as never, user: 'root', password: '', supportBigNumbers: true, bigNumberStrings: true, dateStrings: true })
+  const conn = await mysql.createConnection({ stream: db.createStream(), user: 'root', password: '', supportBigNumbers: true, bigNumberStrings: true, dateStrings: true })
   try {
     await conn.query('CREATE DATABASE app')
     await conn.query('USE app')

@@ -43,7 +43,7 @@ test('M5.12: every INFORMATION_SCHEMA statement the executor runs returns what t
   const { host: _h, port: _p, user: _u, password: _w, ...options } = CONNECTION as Record<string, unknown>
   const db = await MySQL.open(':memory:')
   const conn = await mysql.createConnection({
-    stream: db.createStream() as never,
+    stream: db.createStream(),
     user: 'root',
     password: '',
     ...options,

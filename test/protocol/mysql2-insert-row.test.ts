@@ -70,7 +70,7 @@ const SCRIPT: readonly (readonly [string, Outcome])[] = [
 test('M5.8 and M5.9: INSERT reads its own row, and a promoted key is PRI, as 8.4.11 answered', async () => {
   const db = await MySQL.open(':memory:')
   const conn = await mysql.createConnection({
-    stream: db.createStream() as never,
+    stream: db.createStream(),
     user: 'root',
     password: '',
     supportBigNumbers: true,

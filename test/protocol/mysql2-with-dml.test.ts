@@ -64,7 +64,7 @@ const SCRIPT: readonly (readonly [string, Outcome])[] = [
 test('M5.1: WITH on UPDATE and DELETE returns what 8.4.11 returned', async () => {
   const db = await MySQL.open(':memory:')
   const conn = await mysql.createConnection({
-    stream: db.createStream() as never,
+    stream: db.createStream(),
     user: 'root',
     password: '',
     supportBigNumbers: true,

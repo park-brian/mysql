@@ -244,7 +244,7 @@ const SCRIPT: readonly (readonly [string, Outcome])[] = [
 
 test('SHOW WARNINGS lists every condition of each statement of the script as 8.4.11 did', async () => {
   const db = await MySQL.open(':memory:')
-  const conn = await mysql.createConnection({ stream: db.createStream() as never, user: 'root', password: '', supportBigNumbers: true, bigNumberStrings: true, dateStrings: true })
+  const conn = await mysql.createConnection({ stream: db.createStream(), user: 'root', password: '', supportBigNumbers: true, bigNumberStrings: true, dateStrings: true })
   try {
     await conn.query('CREATE DATABASE app')
     await conn.query('USE app')

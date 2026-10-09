@@ -203,7 +203,7 @@ const CASES: readonly (readonly [string, readonly (readonly [string, Outcome])[]
 for (const [name, steps] of CASES) {
   test(`review: ${name}`, async () => {
     const db = await MySQL.open(':memory:')
-    const conn = await mysql.createConnection({ stream: db.createStream() as never, user: 'root', password: '', supportBigNumbers: true, bigNumberStrings: true, dateStrings: true, charset: 'utf8mb4_0900_ai_ci' })
+    const conn = await mysql.createConnection({ stream: db.createStream(), user: 'root', password: '', supportBigNumbers: true, bigNumberStrings: true, dateStrings: true, charset: 'utf8mb4_0900_ai_ci' })
     try {
       await conn.query('CREATE DATABASE app')
       await conn.query('USE app')
@@ -233,7 +233,7 @@ test("review: an aggregate of only an enclosing query's columns is refused by na
   // 2: the COUNT is the outer query's, and makes it aggregate. This executor
   // counted once per t2 row instead, and said 1, 1.
   const db = await MySQL.open(':memory:')
-  const conn = await mysql.createConnection({ stream: db.createStream() as never, user: 'root', password: '' })
+  const conn = await mysql.createConnection({ stream: db.createStream(), user: 'root', password: '' })
   try {
     await conn.query('CREATE DATABASE app')
     await conn.query('USE app')

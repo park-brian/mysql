@@ -92,7 +92,7 @@ const SCRIPT: readonly (readonly [string, Outcome])[] = [
 test('JSON paths and the functions over them answer as 8.4.11 did', async () => {
   const db = await MySQL.open(':memory:')
   const conn = await mysql.createConnection({
-    stream: db.createStream() as never,
+    stream: db.createStream(),
     user: 'root',
     password: '',
     supportBigNumbers: true,
@@ -126,7 +126,7 @@ test('JSON paths and the functions over them answer as 8.4.11 did', async () => 
 
 test('JSON_DEPTH of a document too wide to spread into arguments', async () => {
   const db = await MySQL.open(':memory:')
-  const conn = await mysql.createConnection({ stream: db.createStream() as never, user: 'root', password: '' })
+  const conn = await mysql.createConnection({ stream: db.createStream(), user: 'root', password: '' })
   try {
     // 8.4.11: 2 and 2 — an array of 300,000 numbers, an object of 200,000 keys.
     const wide = `[${'1,'.repeat(299_999)}1]`

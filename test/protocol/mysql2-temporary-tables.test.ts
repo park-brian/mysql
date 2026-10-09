@@ -142,7 +142,7 @@ async function outcome(conn: mysql.Connection, sql: string): Promise<Outcome> {
 
 test('temporary tables answer every statement of the script as 8.4.11 did, and end with their session', async () => {
   const db = await MySQL.open(':memory:')
-  const open = () => mysql.createConnection({ stream: db.createStream() as never, user: 'root', password: '' })
+  const open = () => mysql.createConnection({ stream: db.createStream(), user: 'root', password: '' })
   const setup = await open()
   await setup.query('CREATE DATABASE tt')
   await setup.end()

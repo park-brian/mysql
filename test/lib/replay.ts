@@ -102,7 +102,7 @@ function snapDoubles(want: Answer, got: Answer, ulps: number): Answer {
 /** Replay a captured corpus through the executor. `connection` is the driver's options the corpus was captured with; `ulps` loosens DOUBLE cells by that many units in the last place. */
 export async function replay(fixture: Fixture, connection: Record<string, unknown> = CONNECTION, ulps = 0): Promise<Tally> {
   const db = await MySQL.open(':memory:')
-  const conn = await mysql.createConnection({ stream: db.createStream() as never, user: 'root', password: '', ...connection })
+  const conn = await mysql.createConnection({ stream: db.createStream(), user: 'root', password: '', ...connection })
   await conn.query(`SET sql_mode = '${fixture.sqlMode}'`)
   const tally: Tally = { statements: 0, agreed: 0, refused: 0, orderedByStatement: 0, orderedByPlan: 0, unordered: 0, unorderedInOrder: 0, unmodelled: 0, mismatches: [], warningsCompared: 0, warningMismatches: [] }
   try {

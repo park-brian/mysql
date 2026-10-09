@@ -7,8 +7,8 @@
 // duplex that hands mysql2 plain `Uint8Array`s therefore cannot work, however
 // carefully it duck-types the rest of the interface.
 //
-// Keeping that fact in one file behind a package export condition is what lets
-// every other module stay provably portable.
+// Keeping that fact in one file behind a package import condition (`#host`)
+// is what lets every other module stay provably portable.
 import { Duplex } from 'node:stream'
 import { fileURLToPath } from 'node:url'
 import { VfsError, type Lock, type Vfs } from '@myjs/vfs'
@@ -21,7 +21,10 @@ import type { ProtocolConnection } from '../connection.ts'
  *
  * Doc 42: "`mysql2` does not know there is no socket."
  */
-export function createNodeStream(connection: ProtocolConnection): Duplex {
+/** The stream `createStream()` returns on this host: a Node `Duplex`, as `mysql2` reads one. */
+export type DriverStream = Duplex
+
+export function createStream(connection: ProtocolConnection): Duplex {
   let ended = false
 
   const stream = new Duplex({

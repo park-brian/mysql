@@ -81,7 +81,7 @@ for (const timezone of ['local', 'Z', '-08:00']) {
   test(`M5.36: values and parameters are sent as mysql2 sends them (timezone ${timezone})`, async () => {
     const ours = await MySQL.open(':memory:')
     const theirs = await MySQL.open(':memory:')
-    const conn = await mysql.createConnection({ stream: theirs.createStream() as never, user: 'root', password: '', timezone })
+    const conn = await mysql.createConnection({ stream: theirs.createStream(), user: 'root', password: '', timezone })
     const api = await ours.connect({ timezone })
     try {
       for (const setup of ['CREATE DATABASE app', 'USE app', 'CREATE TABLE t (id INT PRIMARY KEY, s VARCHAR(20), d DATETIME(3))', "INSERT INTO t (id, s) VALUES (1, 'one'), (3, 'three'), (5, 'five')"]) {

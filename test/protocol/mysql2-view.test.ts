@@ -180,7 +180,7 @@ const SCRIPT: readonly (readonly [string, Outcome])[] = [
 test('M5.9: views return what 8.4.11 returned, statement by statement, names and all', async () => {
   const db = await MySQL.open(':memory:')
   const conn = await mysql.createConnection({
-    stream: db.createStream() as never,
+    stream: db.createStream(),
     user: 'root',
     password: '',
     supportBigNumbers: true,
@@ -219,7 +219,7 @@ test('a bare column of a view, a derived table, a CTE or INFORMATION_SCHEMA is n
   // `SELECT table_name FROM information_schema.tables` reads as TABLE_NAME,
   // which clients that index a row by name depend on.
   const db = await MySQL.open(':memory:')
-  const conn = await mysql.createConnection({ stream: db.createStream() as never, user: 'root', password: '' })
+  const conn = await mysql.createConnection({ stream: db.createStream(), user: 'root', password: '' })
   try {
     await conn.query('CREATE DATABASE app')
     await conn.query('USE app')
@@ -245,7 +245,7 @@ test('db.table.column reaches a view, an alias, INFORMATION_SCHEMA, and a derive
   // table name — alias or not — and the schema must match, and a derived
   // table or CTE has no schema to mismatch.
   const db = await MySQL.open(':memory:')
-  const conn = await mysql.createConnection({ stream: db.createStream() as never, user: 'root', password: '' })
+  const conn = await mysql.createConnection({ stream: db.createStream(), user: 'root', password: '' })
   try {
     await conn.query('CREATE DATABASE vp')
     await conn.query('USE vp')

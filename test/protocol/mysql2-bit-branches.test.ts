@@ -24,7 +24,7 @@ const SCRIPT: readonly (readonly [string, Rows, Rows, string])[] = [
 
 test('a BIT under IF, CASE, COALESCE and IFNULL is typed and sent as 8.4.11 does', async () => {
   const db = await MySQL.open(':memory:')
-  const conn = await mysql.createConnection({ stream: db.createStream() as never, user: 'root', password: '' })
+  const conn = await mysql.createConnection({ stream: db.createStream(), user: 'root', password: '' })
   const show = (v: unknown): string | null => (v === null ? null : v instanceof Uint8Array ? `0x${Array.from(v, (b) => b.toString(16).padStart(2, '0')).join('')}` : String(v))
   try {
     await conn.query('CREATE DATABASE app')

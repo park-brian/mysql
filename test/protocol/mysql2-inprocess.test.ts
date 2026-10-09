@@ -14,7 +14,7 @@ import { MapAccountStore } from '@myjs/protocol'
 async function connect(db: MySQL, over: Record<string, unknown> = {}) {
   return mysql.createConnection({
     // The whole interop story: mysql2 does not know there is no socket.
-    stream: db.createStream() as never,
+    stream: db.createStream(),
     user: 'root',
     password: '',
     ...over,
