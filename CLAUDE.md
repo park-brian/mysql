@@ -27,7 +27,8 @@ says what comes next: 0.3, then the cost-based planner (M5.7) and the browser
 ## Running things
 
 Node **≥ 22.18** is required and there is **no build step** — Node strips the
-types and runs the `.ts` directly (D-01). `tsc` is only a checker.
+types and runs the `.ts` directly (D-01). `tsc` is only a checker, except
+in `npm run pack`, which emits what npm would install (D-79).
 
 ```bash
 npm ci
@@ -37,6 +38,7 @@ npm run typecheck
 npm run lint      # the isomorphic gate and the package graph
 npm run size      # the ratcheting bundle budget
 npm run fuzz      # 10^6 inputs per parser, and 2 x 10^4 statements into the executor
+npm run pack -- --smoke   # every package as a tarball, installed into an empty project and run
 ```
 
 Because there is no build step, only **erasable** TypeScript is legal: no
@@ -98,6 +100,7 @@ protocol   bytes                         never charsets or types (D-33)
 engine     bytes, charsets, types, vfs
 core       all of the above
 server     core, protocol
+myjs       core, server                  the facade an application installs (D-79)
 ```
 
 The table in `tools/lint-isomorphic.mjs` is the authority: `npm run lint`

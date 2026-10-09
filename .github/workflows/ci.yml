@@ -85,6 +85,24 @@ jobs:
         env:
           CRASH_POINTS: '10000'
 
+  pack:
+    name: packages install and run
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22.18'
+          cache: npm
+      - run: npm ci
+      # M5.41 / D-79: each package emitted to JavaScript and declarations,
+      # packed, installed into an empty project with mysql2, and run there
+      # (a directory database, db.query(), mysql2 over createStream() and
+      # over TCP), then doc 42's typed example checked against what installed.
+      # Nothing is published.
+      - name: Pack and smoke-install
+        run: npm run pack -- --smoke
+
   generated:
     name: generated tables are reproducible
     runs-on: ubuntu-latest

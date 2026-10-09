@@ -43,9 +43,6 @@ await db.transaction(async (tx) => {
 })
 ```
 
-*(In this repository the package is `@myjs/core`; `myjs` is the name it ships
-under at 0.3.)*
-
 …and, because the engine speaks the real MySQL wire protocol, the whole existing
 driver ecosystem works against it unchanged:
 
