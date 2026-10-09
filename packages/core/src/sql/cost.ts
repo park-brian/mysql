@@ -199,8 +199,15 @@ const almostEqual = (a: number, b: number): boolean => a >= b * 0.9 && a <= b * 
  * read by a unique key at one row per row draws the other such tables after
  * it in sequence, without exploring their permutations. A later whole plan
  * replaces the best only if strictly cheaper.
+ *
+ * `sort` is the one table an ORDER BY or GROUP BY reads (`sort_by_table`): a
+ * plan that does not start with it pays a sort of its rows, one per row. Once
+ * that table has been placed first and read whole where `limit` keeps at
+ * least the rows it fetches, every plan pays the sort (`use_tmp_table`): the
+ * server's own state, kept as it is, since it decides plans.
  */
-export function joinOrder(candidates: readonly Candidate[]): Positioned[] {
+export function joinOrder(candidates: readonly Candidate[], sort?: { readonly alias: string; readonly limit: number }): Positioned[] {
+  let sortBy = sort?.alias
   const sorted = [...candidates].sort((a, b) => {
     if (a.dependent.has(b.alias)) return 1
     if (b.dependent.has(a.alias)) return -1
@@ -215,8 +222,14 @@ export function joinOrder(candidates: readonly Candidate[]): Positioned[] {
   const plan: Step[] = []
   const placedAliases = (): Set<string> => new Set(plan.map((p) => p.placed.alias))
   const available = (c: Candidate, remaining: ReadonlySet<string>): boolean => remaining.has(c.alias) && ![...c.dependent].some((d) => remaining.has(d))
+  const place = (c: Candidate): Positioned => {
+    const placed = c.place(plan.map((p) => p.placed))
+    if (plan.length === 0 && c.alias === sortBy && !placed.lookup && sort !== undefined && sort.limit >= placed.fetched) sortBy = undefined
+    return placed
+  }
   const consider = (): void => {
-    const cost = (plan.at(-1) as Step).cost
+    const last = plan.at(-1) as Step
+    const cost = last.cost + (sort !== undefined && plan[0]?.placed.alias !== sortBy ? last.rows : 0)
     if (best === undefined || cost < best.cost) best = { cost, plan: plan.map((p) => p.placed) }
   }
   // The unique-key tables after the one just placed, each joined in turn while it costs what the one before did (`eq_ref_extension_by_limited_search`).
@@ -225,7 +238,7 @@ export function joinOrder(candidates: readonly Candidate[]): Positioned[] {
     const done = placedAliases()
     for (const c of order) {
       if (!available(c, remaining) || c.keyDependent.size === 0 || ![...c.keyDependent].some((a) => done.has(a))) continue
-      const placed = c.place(plan.map((p) => p.placed))
+      const placed = place(c)
       const previous = (plan.at(-1) as Step).placed
       if (!(placed.lookup && almostEqual(placed.read, previous.read) && almostEqual(placed.fetched, previous.fetched))) continue
       const next = step(plan.at(-1), placed)
@@ -246,10 +259,10 @@ export function joinOrder(candidates: readonly Candidate[]): Positioned[] {
     let extended = new Set<string>()
     for (const c of order) {
       if (!available(c, remaining) || extended.has(c.alias)) continue
-      const placed = c.place(plan.map((p) => p.placed))
+      const placed = place(c)
       const next = step(plan.at(-1), placed)
       if (best !== undefined && next.cost >= best.cost) continue
-      if (bestRows > next.rows || bestCost > next.cost) {
+      if (bestRows > next.rows || bestCost > next.cost || (plan.length === 0 && c.alias === sortBy)) {
         if (bestRows >= next.rows && bestCost >= next.cost && (![...c.keyDependent].some((a) => remaining.has(a)) || placed.fetched < 2)) {
           bestRows = next.rows
           bestCost = next.cost

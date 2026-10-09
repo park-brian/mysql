@@ -350,6 +350,7 @@ function planSelect(run: Run, q: QueryExpression, node: SelectNode): SelectPlan 
   let streamed = false
   const limitCount = q.limit === undefined ? undefined : limitValue(run, q.limit.count, 'LIMIT')
   const offset = q.limit?.offset === undefined ? 0 : limitValue(run, q.limit.offset, 'LIMIT')
+  if (from !== undefined && scope !== undefined) from.sortedBy(sortTable(q.orderBy?.map((o) => o.expr), undefined, items, scope), limitCount === undefined ? Infinity : offset + limitCount)
   const facts = source === undefined ? undefined : whereFacts(run, source.def, source.alias, node.where)
   // A prepare reports a statement before MySQL optimizes it, so it never sees
   // the temporary table: COM_STMT_PREPARE's metadata has no GROUP_FLAG where
@@ -420,7 +421,7 @@ function planSelect(run: Run, q: QueryExpression, node: SelectNode): SelectPlan 
     const semijoins = scope !== undefined && source !== undefined && nestedLoopSemijoin(node.where, scope)
     from.filter(node.where, (e) => compile(e, whereCtx), semijoins ? (e) => semijoinNode(run, e) : undefined)
   } else if (node.where !== undefined) where = compile(node.where, whereCtx)
-  const having = node.having === undefined ? undefined : compile(substituteAliases(node.having, items), compileContext(run, selectedOnly(lookup, items, [], node.having), 'having clause'))
+  const having = node.having === undefined || neverNullTest(node.having) ? undefined : compile(substituteAliases(node.having, items), compileContext(run, selectedOnly(lookup, items, [], node.having), 'having clause'))
   const keys = (q.orderBy ?? []).map((o) => orderKey(run, o, items, lookup, windows))
   // A window ORDER BY alone names reads the rows through its table as well.
   if (windows !== undefined && windows.windows.length > 0) {
@@ -588,6 +589,11 @@ function selectNumber(run: Run, q: QueryExpression): number {
     expectTyped(e)
     return 0
   }
+}
+
+/** `IS NOT NULL` of an aggregate that is never NULL — COUNT and the BIT_ aggregates — which the server folds to TRUE and drops (8.4.11: no Filter). */
+function neverNullTest(e: Expression): boolean {
+  return e.kind === NODE.UNARY && e.op === 'IS NOT NULL' && e.operand.kind === NODE.CALL && ['COUNT', 'BIT_AND', 'BIT_OR', 'BIT_XOR'].includes(e.operand.name.toUpperCase())
 }
 
 /** Whether the WHERE equals a single-column PRIMARY or NOT NULL UNIQUE key to an uncorrelated scalar subquery. */
@@ -1205,7 +1211,31 @@ function sortStage(keys: readonly SortKey[]): Stage {
 }
 
 /** The tables an ORDER BY reads, through positions and aliases to the items they name. */
+/**
+ * The one table an ORDER BY, or a GROUP BY, reads (`get_sort_by_table`):
+ * with both, only if they are the same list; none if any key reads anything
+ * but that table's columns, or reads no table at all.
+ */
+function sortTable(order: readonly Expression[] | undefined, group: readonly Expression[] | undefined, items: readonly { readonly alias?: string; readonly expr?: Expression }[], scope: TableScope): string | undefined {
+  const keys = order ?? group
+  if (keys === undefined || keys.length === 0) return undefined
+  const resolved = (e: Expression): Expression | undefined => {
+    if (e.kind === NODE.LITERAL && e.type === 'int') return items[Number(e.value as bigint) - 1]?.expr
+    if (e.kind === NODE.COLUMN && e.parts.length === 1) return items.find((i) => i.alias?.toLowerCase() === (e.parts[0] as string).toLowerCase())?.expr ?? e
+    return e
+  }
+  const text = (e: Expression | undefined): string => (e === undefined ? '\u0000' : deparse(e))
+  if (order !== undefined && group !== undefined && (order.length !== group.length || order.some((o, i) => text(resolved(o)) !== text(resolved(group[i] as Expression))))) return undefined
+  const aliases = keyAliases(keys, items, scope)
+  return aliases.size === 1 && !aliases.has('\u0000') ? [...aliases][0] : undefined
+}
+
 function orderAliases(q: QueryExpression, items: readonly { readonly alias?: string; readonly expr?: Expression }[], scope: Scope): Set<string> {
+  return keyAliases((q.orderBy ?? []).map((o) => o.expr), items, scope)
+}
+
+/** The tables sort keys read, a position or an alias read through the select list; a name that resolves to nothing as `\u0000`. */
+function keyAliases(keys: readonly Expression[], items: readonly { readonly alias?: string; readonly expr?: Expression }[], scope: Scope): Set<string> {
   const out = new Set<string>()
   const visit = (e: unknown): void => {
     if (e === null || typeof e !== 'object') return
@@ -1222,8 +1252,7 @@ function orderAliases(q: QueryExpression, items: readonly { readonly alias?: str
     }
     for (const v of Object.values(e)) if (typeof v === 'object') Array.isArray(v) ? v.forEach(visit) : visit(v)
   }
-  for (const o of q.orderBy ?? []) {
-    const e = o.expr
+  for (const e of keys) {
     if (e.kind === NODE.LITERAL && e.type === 'int') visit(items[Number(e.value as bigint) - 1]?.expr ?? { kind: NODE.COLUMN, parts: ['\u0000'] })
     else if (e.kind === NODE.COLUMN && e.parts.length === 1 && items.some((i) => i.alias?.toLowerCase() === (e.parts[0] as string).toLowerCase())) visit(items.find((i) => i.alias?.toLowerCase() === (e.parts[0] as string).toLowerCase())?.expr)
     else visit(e)
@@ -1390,7 +1419,7 @@ function planGrouped(
   // HAVING sees the select list's aliases, its columns and the keys; a column
   // that is none of those is 1054 even when the table has it (8.4.11).
   let having: Compiled | undefined
-  if (node.having !== undefined) {
+  if (node.having !== undefined && !neverNullTest(node.having)) {
     const havingScope = selectedOnly(lookup, selectItems, keys.flatMap((k) => (k.index === undefined ? [] : [k.index])), node.having)
     having = compile(substituteAliases(node.having, selectItems), postCtx('having clause', havingScope))
   }
@@ -1432,6 +1461,7 @@ function planGrouped(
     })
   const stream = (strategy === 'sort' || strategy === 'index') && (q.orderBy ?? []).length > 0 && !orderMatchesKeys
   const groupedLimit = q.limit === undefined ? undefined : limitValue(run, q.limit.count, 'LIMIT')
+  if (from !== undefined && scope !== undefined) from.sortedBy(sortTable(q.orderBy?.map((o) => o.expr), node.groupBy?.items, selectItems, scope), groupedLimit === undefined ? Infinity : groupedLimit + (q.limit?.offset === undefined ? 0 : limitValue(run, q.limit.offset, 'LIMIT')))
   const facts = run.preparing === true ? undefined : optimizerFacts(from, node.where, groupedLimit, compileContext(run, EMPTY_SCOPE, 'where clause'), run.env, (node.options ?? []).includes('STRAIGHT_JOIN'))
   let dataColumns: ((trx: Trx | undefined) => readonly ResultType[]) | undefined
   if (facts !== undefined && !facts.empty) {

@@ -42,6 +42,7 @@ import { planNode, type PlanNode } from './explain.ts'
 import { FULL_SCAN, accessRows, chooseAccess, pointAccess, splitAnd, type Access, type OuterColumn } from './plan.ts'
 import { bestAccess, floorFilter, joinOrder, type Candidate, type KeyChoice, type Positioned } from './cost.ts'
 import { rowKey } from './keys.ts'
+import { neverEqual } from './optimize.ts'
 import type { TableStatistics } from './stats.ts'
 import { TableScope, type ScopeColumn, type ScopeTableSpec } from './scope.ts'
 
@@ -153,6 +154,8 @@ export interface FromPlan {
    * The FROM's rows are then the WHERE's: no caller applies it again.
    */
   filter(where: Expression | undefined, compile: (e: Expression) => Compiled, semijoin?: (e: Expression) => PlanNode | undefined): void
+  /** The one table an ORDER BY or GROUP BY reads, and the rows a LIMIT keeps: what the join order pays a sort for (M5.7). Given before the plan is first asked for. */
+  sortedBy(alias: string | undefined, limit: number): void
   /** Read the one base table whole in an index's order, for an ORDER BY or a grouping it gives; `force` drops a range on another index for it, and `reverse` reads it descending. */
   readInOrder(index: string, force: boolean, reverse?: boolean): void
   /** The FROM as 8.4.11's iterators (M5.44): the tree `rows` runs, as EXPLAIN shows it. */
@@ -454,18 +457,43 @@ export function planFrom(refs: readonly TableReference[], ctx: FromContext, wher
     return refOf(t, [where, ...onAsts], before, preliminary, (e) => ctx.compileOn(e, slotScope(preliminary.restrict(before, within), preliminary)))
   }
   let planned: JoinPlan | undefined
+  let sort: { readonly alias: string; readonly limit: number } | undefined
   const joinPlan = (): JoinPlan | undefined => {
     if (tree === undefined) return undefined
     const env = ctx.env
     const rangeOf = (t: FromTable, conditions: readonly Weighed[]): RangeEstimate | undefined =>
       env === undefined ? undefined : rangeEstimate(t, conditions, tables, scope, (e) => ctx.compileOn(e, preliminary.restrict(new Set([t.alias]))), env, width)
-    planned ??= planJoins(tree.node, splitAnd(where).map((e) => ({ e, aliases: aliasesOf(e, scope) })), scope, settings, straight ? undefined : lookupAfter, rangeOf)
+    planned ??= planJoins(tree.node, splitAnd(where).map((e) => ({ e, aliases: aliasesOf(e, scope) })), scope, settings, straight ? undefined : lookupAfter, rangeOf, sort)
     settings.lookups = planned.lookups
     return planned
   }
   const physicalOf = (conditions: readonly Placed[]): Op | undefined => {
     const plan = joinPlan()
-    return plan === undefined ? undefined : toOp(plan.node, [...conditions, ...plan.on], scope, settings, ctx, preliminary)
+    return plan === undefined ? undefined : toOp(plan.node, [...conditions, ...plan.on, ...notNullForLookups(plan)], scope, settings, ctx, preliminary)
+  }
+  // An inner join's lookup keyed by a nullable column of an earlier table: that column IS NOT NULL there,
+  // since a NULL finds no row (`add_not_null_conds`; 8.4.11 shows the Filter on the earlier table).
+  const notNullForLookups = (plan: JoinPlan): Placed[] => {
+    const out: Placed[] = []
+    const visit = (node: Node): void => {
+      if (node.kind === 'leaf') return
+      visit(node.outer)
+      visit(node.inner)
+      const lookup = node.lookup
+      if (node.left || lookup === undefined || node.inner.kind !== 'leaf' || !plan.lookups.has(node.inner.table.alias)) return
+      const c = lookup.condition
+      if (c.kind !== NODE.BINARY) return
+      const own = columnOf(node.inner.table, c.left, scope) !== undefined
+      const key = own ? c.right : c.left
+      for (const t of tables) {
+        const column = t === node.inner.table || t.nullable ? undefined : columnOf(t, key, scope)
+        if (column === undefined || !column.nullable) continue
+        const e = { kind: NODE.UNARY, op: 'IS NOT NULL', operand: key, at: c.at } as Expression
+        out.push({ e, aliases: new Set([t.alias]), compiled: ctx.compileOn(e, slotScope(preliminary, preliminary)) })
+      }
+    }
+    visit(plan.node)
+    return out
   }
   let physical: Op | undefined
   const physicalTree = (): Op | undefined => (physical ??= physicalOf([]))
@@ -503,14 +531,32 @@ export function planFrom(refs: readonly TableReference[], ctx: FromContext, wher
     ...(single === undefined ? {} : { single }),
     filter(where, compile, semijoin) {
       settings.where = where
-      // `IS NOT NULL` of a NOT NULL column no outer join can null is true, and the server drops it (8.4.11: no Filter).
-      const alwaysTrue = (e: Expression): boolean => e.kind === NODE.UNARY && e.op === 'IS NOT NULL' && tables.some((t) => !t.nullable && columnOf(t, e.operand, scope)?.nullable === false)
+      // What is true of every row the server folds away (8.4.11: no Filter): `IS NOT NULL` of a NOT NULL column no outer join
+      // can null, `<>` between such an integer column and a number it never equals, and an OR with either.
+      const notNull = (e: Expression): ColumnDef | undefined => {
+        for (const t of tables) {
+          const c = t.nullable ? undefined : columnOf(t, e, scope)
+          if (c !== undefined && !c.nullable) return c
+        }
+        return undefined
+      }
+      const alwaysTrue = (e: Expression): boolean => {
+        if (e.kind === NODE.UNARY) return e.op === 'IS NOT NULL' && notNull(e.operand) !== undefined
+        if (e.kind !== NODE.BINARY) return false
+        if (e.op === 'OR' || e.op === '||') return alwaysTrue(e.left) || alwaysTrue(e.right)
+        if (e.op !== '<>' && e.op !== '!=') return false
+        const l = notNull(e.left)
+        return l !== undefined ? neverEqual(l, e.right) : neverEqual(notNull(e.right), e.left)
+      }
       const conditions = splitAnd(where).filter((e) => !alwaysTrue(e)).map((e): Placed => {
         const compiled = compile(e)
         const semi = semijoin?.(e)
         return { e, aliases: aliasesOf(e, scope), compiled, ...(semi === undefined ? {} : { semijoin: semi }) }
       })
       physical = physicalOf(conditions)
+    },
+    sortedBy(alias, limit) {
+      sort = alias === undefined ? undefined : { alias, limit }
     },
     readInOrder(index, force, reverse = false) {
       settings.ordered = { index, force, reverse }
@@ -910,7 +956,7 @@ interface JoinPlan {
  * its lookup but filters nothing (`where_cond`). A table with no statistics
  * to cost it by is looked up.
  */
-function planJoins(root: Node, where: readonly Weighed[], scope: TableScope, settings: LeafSettings, lookupAfter: ((t: FromTable, before: ReadonlySet<string>) => EqRef | undefined) | undefined, rangeOf: (t: FromTable, conditions: readonly Weighed[]) => RangeEstimate | undefined): JoinPlan {
+function planJoins(root: Node, where: readonly Weighed[], scope: TableScope, settings: LeafSettings, lookupAfter: ((t: FromTable, before: ReadonlySet<string>) => EqRef | undefined) | undefined, rangeOf: (t: FromTable, conditions: readonly Weighed[]) => RangeEstimate | undefined, sort: { readonly alias: string; readonly limit: number } | undefined): JoinPlan {
   const conditions = [...where]
   const gather = (node: Node, nullable: boolean): void => {
     if (node.kind === 'leaf') return
@@ -933,7 +979,7 @@ function planJoins(root: Node, where: readonly Weighed[], scope: TableScope, set
         place: (prefix) => placeTable(t, lookupAfter(t, new Set(prefix.map((p) => p.alias))), prefix, conditions, scope, settings, statsOf(t), range),
       }
     })
-    const order = joinOrder(candidates)
+    const order = joinOrder(candidates, sort)
     const byAlias = new Map(leaves.map((t) => [t.alias, t]))
     let node: Node = { kind: 'leaf', table: byAlias.get((order[0] as Positioned).alias) as FromTable }
     const before = new Set([(order[0] as Positioned).alias])
