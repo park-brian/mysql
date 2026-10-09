@@ -1422,21 +1422,24 @@ flowchart LR
 M0 through M4 are done. The protocol, the type system and collations, the
 parser and the storage engine are all built and checked against a real
 server. M5 is well under way. The executor runs DDL, DML and transactions,
-upserts included, and relational SELECT: joins, grouping and aggregates,
-subqueries, derived tables, CTEs, set operations, views, JSON as a value and
-the first window functions, `INFORMATION_SCHEMA`, foreign keys with their
-referential actions, CHECK constraints, ALTER TABLE by copy, temporary tables,
-CREATE TABLE … LIKE and … SELECT, generated columns, RENAME TABLE, `SHOW CREATE
+upserts and multi-table UPDATE and DELETE included, with a strict mode's
+errors where the server raises them. It runs relational SELECT: joins,
+grouping and aggregates, HAVING with or without groups, subqueries, derived
+tables, CTEs, set operations and views. It also covers JSON as a value,
+window functions with their frames (over groups too), `INFORMATION_SCHEMA`,
+SHOW COLUMNS, INDEX and CREATE VIEW, foreign keys with their referential
+actions, CHECK constraints, ALTER TABLE by copy, temporary tables, CREATE
+TABLE … LIKE and … SELECT, generated columns, RENAME TABLE, `SHOW CREATE
 TABLE` byte for byte, JSON paths and regular expressions. Generated corpora of 400, 300 and 250 scripts
 agree with MySQL 8.4.11 statement for statement, column names and flags
 included. Most of M5's exit criterion holds. All 487 tests of Drizzle's
-MySQL suites pass, as they do against 8.4.11. Of Prisma's, 1,113 pass
+MySQL suites pass, as they do against 8.4.11. Of Prisma's, up to 1,113 pass
 against the server's 1,122, FULLTEXT search included; the one failure is a
 snapshot of another MySQL version's error text, which 8.4.11 fails too.
 The count drifts down by up to four between runs, because bulk statements
 still stall the event loop long enough for parallel suites' connections to
 time out (M5.32). The rest of the function library and the
-cost-based planner come next. The core bundle is about 271 KB gzipped
+cost-based planner come next. The core bundle is about 280 KB gzipped
 against a budget of 500 KB, with the UCA weights in a separate chunk loaded
 on demand.
 
