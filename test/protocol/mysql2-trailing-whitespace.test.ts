@@ -15,7 +15,7 @@ test('a trailing newline and indent are not part of the last item', async () => 
   const db = await MySQL.open(':memory:')
   const conn = await mysql.createConnection({ stream: db.createStream() as never, user: 'root', password: '' })
   for (const sql of ['SELECT 1\n      ', '\n  SELECT 1, 2.5, 3 + 4\n  ', 'SELECT 1 ']) {
-    for (const run of [conn.query.bind(conn), conn.execute.bind(conn)]) {
+    for (const run of [(q: string) => conn.query(q), (q: string) => conn.execute(q)]) {
       const [, fields] = await run(sql)
       assert.deepEqual(
         (fields as { name: string }[]).map((f) => f.name),
