@@ -334,10 +334,12 @@ function* everyTable(run: Run): Generator<{ schema: string; def: TableDef }> {
 }
 
 const ROWS: Readonly<Record<string, (run: Run) => Iterable<readonly Value[]>>> = {
+  // In the order the schemas were made, `information_schema` second, after `mysql`, as 8.4.11's dictionary has them.
   *SCHEMATA(run) {
-    for (const x of run.catalog?.schemas() ?? []) {
+    for (const x of [...(run.catalog?.schemas() ?? [])].sort((a, b) => a.id - b.id)) {
       const id = x.collationId ?? 255
       yield [s('def'), s(x.name), s(charsetName(id)), s(collationName(id)), null, s('NO')]
+      if (x.name === 'mysql') yield [s('def'), s('information_schema'), s('utf8mb3'), s('utf8mb3_general_ci'), null, s('NO')]
     }
   },
 
