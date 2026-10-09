@@ -94,9 +94,6 @@ export interface WireResultSet {
   readonly kind: 'rows'
   readonly columns: readonly ColumnDefinition[]
   readonly rows: readonly Uint8Array[]
-  /** The terminator's: warnings and status. */
-  readonly warnings: number
-  readonly statusFlags: number
 }
 
 export interface WireOk {
@@ -119,30 +116,18 @@ export class WireError extends Error {
   }
 }
 
-export interface PreparedOnWire {
-  readonly id: number
-  readonly params: readonly ColumnDefinition[]
-  readonly columns: readonly ColumnDefinition[]
-}
-
 export class WireClient {
   readonly #server: ServerEnd
   readonly #caps: Capabilities
   readonly connectionId: number
-  readonly collation: number
   /** The status flags of the last OK or EOF: whether backslashes escape (SERVER_STATUS.NO_BACKSLASH_ESCAPES). */
   #status = 0
   #closed = false
 
-  private constructor(server: ServerEnd, caps: Capabilities, connectionId: number, collation: number) {
+  private constructor(server: ServerEnd, caps: Capabilities, connectionId: number) {
     this.#server = server
     this.#caps = caps
     this.connectionId = connectionId
-    this.collation = collation
-  }
-
-  get statusFlags(): number {
-    return this.#status
   }
 
   get noBackslashEscapes(): boolean {
@@ -165,13 +150,12 @@ export class WireClient {
     // What the server does not offer is not asked for.
     flags &= hello.capabilities
     const caps = capabilities(flags)
-    const collation = options.collation ?? DEFAULT_CLIENT_COLLATION
     const password = new TextEncoder().encode(options.password)
     const plugin = hello.authPluginName === MYSQL_NATIVE_PASSWORD ? MYSQL_NATIVE_PASSWORD : CACHING_SHA2_PASSWORD
     const w = new Writer(128)
     writeHandshakeResponse41(w, {
       capabilities: flags,
-      characterSet: collation,
+      characterSet: options.collation ?? DEFAULT_CLIENT_COLLATION,
       username: options.user,
       authResponse: await scramble(plugin, password, hello.scramble),
       ...(options.database === undefined ? {} : { database: options.database }),
@@ -185,7 +169,7 @@ export class WireClient {
       if (packet === undefined) throw new Error('the server sent nothing during authentication')
       seq++
       if (packet[0] === OK) {
-        const client = new WireClient(server, caps, hello.connectionId, collation)
+        const client = new WireClient(server, caps, hello.connectionId)
         client.#status = parseOk(packet, caps).statusFlags
         return client
       }
@@ -199,18 +183,14 @@ export class WireClient {
         reply = await exchange(server, frame(await scramble(name, password, nonce), seq++))
         continue
       }
-      if (packet[0] === 0x01) {
-        // AuthMoreData: 3 is caching_sha2's fast path done (its OK follows);
-        // 4 asks for the password itself, which an in-process channel may carry.
-        if (packet[1] === 3 && reply.length > 1) {
-          reply = reply.slice(1)
-          continue
-        }
-        if (packet[1] === 4) {
-          reply = await exchange(server, frame(concat([password, new Uint8Array([0])]), seq++))
-          continue
-        }
+      if (packet[0] === 0x01 && packet[1] === 3) {
+        // AuthMoreData 3: caching_sha2's fast path succeeded; its OK follows.
         reply = reply.slice(1)
+        continue
+      }
+      if (packet[0] === 0x01 && packet[1] === 4) {
+        // AuthMoreData 4: the password itself, which an in-process channel may carry.
+        reply = await exchange(server, frame(concat([password, new Uint8Array([0])]), seq++))
         continue
       }
       throw new Error(`unexpected packet 0x${(packet[0] ?? 0).toString(16)} during authentication`)
@@ -230,24 +210,14 @@ export class WireClient {
     return this.#results(await this.#command(w.toBytes()))
   }
 
-  async prepare(sql: Uint8Array): Promise<PreparedOnWire> {
+  /** COM_STMT_PREPARE: the statement's id. Its definitions are not read; a result set carries its own. */
+  async prepare(sql: Uint8Array): Promise<number> {
     const w = new Writer(sql.length + 1)
     w.u8(COM.STMT_PREPARE)
     w.bytes(sql)
-    const packets = await this.#command(w.toBytes())
-    const head = packets[0] as Uint8Array
+    const head = (await this.#command(w.toBytes()))[0] as Uint8Array
     if (head[0] === ERR) throw new WireError(parseErr(head, this.#caps))
-    const r = new Reader(head, 1)
-    const id = r.u32()
-    const columnCount = r.u16()
-    const paramCount = r.u16()
-    let at = 1
-    const params: ColumnDefinition[] = []
-    for (let i = 0; i < paramCount; i++) params.push(parseColumnDefinition41(packets[at++] as Uint8Array))
-    if (paramCount > 0) at++ // EOF
-    const columns: ColumnDefinition[] = []
-    for (let i = 0; i < columnCount; i++) columns.push(parseColumnDefinition41(packets[at++] as Uint8Array))
-    return { id, params, columns }
+    return new Reader(head, 1).u32()
   }
 
   /** COM_STMT_EXECUTE, its parameters already written by the caller after the fixed head. */
@@ -309,10 +279,9 @@ export class WireClient {
         if (row[0] === ERR) throw new WireError(parseErr(row, this.#caps))
         // An EOF is short; a text row that starts with 0xFE is a long length.
         if (row[0] === EOF && row.length < 9) {
-          const eof = parseEof(row, this.#caps)
-          this.#status = eof.statusFlags
-          out.push({ kind: 'rows', columns, rows, warnings: eof.warnings, statusFlags: eof.statusFlags })
-          if ((eof.statusFlags & SERVER_STATUS.MORE_RESULTS_EXISTS) === 0) return out
+          this.#status = parseEof(row, this.#caps).statusFlags
+          out.push({ kind: 'rows', columns, rows })
+          if ((this.#status & SERVER_STATUS.MORE_RESULTS_EXISTS) === 0) return out
           break
         }
         rows.push(row)

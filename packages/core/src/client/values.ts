@@ -14,7 +14,7 @@
 // `Uint8Array` where `mysql2` gives a `Buffer`, and a `Uint8Array` parameter
 // is sent as bytes (a BLOB) as `mysql2` sends a `Buffer`.
 import { FIELD_TYPE, Reader, Writer } from '@myjs/bytes'
-import { COLUMN_FLAG, type ColumnDefinition } from '@myjs/protocol'
+import { COLUMN_FLAG, COM, type ColumnDefinition } from '@myjs/protocol'
 import { collationInfo, decodeCollation } from '@myjs/charsets'
 
 /** The options that change a value's JavaScript form: `mysql2`'s, by the same names. */
@@ -410,7 +410,7 @@ const isPlainJson = (v: object): boolean =>
  */
 export function executePacket(id: number, values: readonly unknown[], queryAttributes: boolean, timezone = 'local'): Uint8Array {
   const w = new Writer(64)
-  w.u8(0x17)
+  w.u8(COM.STMT_EXECUTE)
   w.u32(id)
   // CURSOR_TYPE_NO_CURSOR, and PARAMETER_COUNT_AVAILABLE with query attributes.
   w.u8(queryAttributes ? 0x08 : 0x00)
@@ -489,8 +489,8 @@ function writeDate(w: Writer, d: Date, timezone: string): void {
  * quoted name, as `mysql2`'s `format` does through sql-escaper: strings
  * quoted and escaped, numbers as they print, booleans `true`/`false`, a
  * `Date` as its text in `timezone`, bytes as `X'…'`, an array as a list and
- * an array of arrays as a list of rows. A `?` in a string, a quoted name or
- * a comment is left alone.
+ * an array of arrays as a list of rows. A `?` in a single-quoted string, a
+ * backquoted name or a comment is left alone.
  *
  * Two departures, both toward the server's own rules. Under
  * NO_BACKSLASH_ESCAPES, which the server reports in every OK, a quote is
@@ -516,12 +516,13 @@ export function formatQuery(sql: string, values: readonly unknown[], noBackslash
   return from === 0 ? sql : out + sql.slice(from)
 }
 
-/** The next `?` outside a string, a quoted name and a comment. */
+/** The next `?` outside a single-quoted string, a backquoted name and a comment (sql-escaper's `findNextPlaceholder`). */
 function nextPlaceholder(sql: string, start: number): number {
   for (let i = start; i < sql.length; i++) {
     const c = sql[i]
     if (c === '?') return i
-    if (c === "'" || c === '"') {
+    // A single-quoted string, as sql-escaper skips it; a double-quoted one is not skipped there either.
+    if (c === "'") {
       for (i++; i < sql.length && sql[i] !== c; i++) if (sql[i] === '\\') i++
     } else if (c === '`') {
       for (i++; i < sql.length; i++) {
@@ -580,17 +581,15 @@ function escapeValue(v: unknown, noBackslashEscapes: boolean, timezone: string):
 /** A `Date` as sql-escaper writes it: 'YYYY-MM-DD HH:MM:SS.mmm', in `timezone`, or NULL if invalid. */
 function dateLiteral(d: Date, timezone: string, noBackslashEscapes: boolean): string {
   if (Number.isNaN(d.getTime())) return 'NULL'
-  let t = d
-  let local = timezone === 'local'
-  if (!local) {
+  let f: number[]
+  if (timezone === 'local') f = [d.getFullYear(), d.getMonth() + 1, d.getDate(), d.getHours(), d.getMinutes(), d.getSeconds(), d.getMilliseconds()]
+  else {
+    // sql-escaper's `convertTimezone`: 'Z', or ±HH[:MM]; anything else is no shift.
     const m = /([+\-\s])(\d\d):?(\d\d)?/.exec(timezone)
-    const offset = timezone === 'Z' ? 0 : m === null ? 0 : (m[1] === '-' ? -1 : 1) * (Number.parseInt(m[2] as string, 10) + (m[3] === undefined ? 0 : Number.parseInt(m[3], 10) / 60)) * 60
-    t = new Date(d.getTime() + offset * 60000)
-    local = false
+    const minutes = timezone === 'Z' || m === null ? 0 : (m[1] === '-' ? -1 : 1) * (Number.parseInt(m[2] as string, 10) * 60 + (m[3] === undefined ? 0 : Number.parseInt(m[3], 10)))
+    const t = new Date(d.getTime() + minutes * 60000)
+    f = [t.getUTCFullYear(), t.getUTCMonth() + 1, t.getUTCDate(), t.getUTCHours(), t.getUTCMinutes(), t.getUTCSeconds(), t.getUTCMilliseconds()]
   }
-  const f = local
-    ? [d.getFullYear(), d.getMonth() + 1, d.getDate(), d.getHours(), d.getMinutes(), d.getSeconds(), d.getMilliseconds()]
-    : [t.getUTCFullYear(), t.getUTCMonth() + 1, t.getUTCDate(), t.getUTCHours(), t.getUTCMinutes(), t.getUTCSeconds(), t.getUTCMilliseconds()]
   const [y, mo, da, h, mi, s, ms] = f as [number, number, number, number, number, number, number]
   return escapeString(`${pad(4, y)}-${pad(2, mo)}-${pad(2, da)} ${pad(2, h)}:${pad(2, mi)}:${pad(2, s)}.${pad(3, ms)}`, noBackslashEscapes)
 }

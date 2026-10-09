@@ -10,6 +10,8 @@ import {
   NODE,
   STATEMENT,
   DEFAULT_SQL_MODE,
+  RESERVED_SQL_MODE_BITS,
+  SQL_MODE_BITS,
   badMode,
   formatSqlMode,
   parseSqlMode,
@@ -240,20 +242,6 @@ export class ServerState {
     this.#programs.add(key)
   }
 }
-
-/**
- * The names `SELECT @@sql_mode` gives bit `i`: `sql_mode_names[]` in
- * `sql/sys_vars.cc`, `NOT_USED_n` for the bits 8.4.11 reserves.
- */
-const SQL_MODE_BITS: readonly string[] = [
-  'REAL_AS_FLOAT', 'PIPES_AS_CONCAT', 'ANSI_QUOTES', 'IGNORE_SPACE', 'NOT_USED', 'ONLY_FULL_GROUP_BY', 'NO_UNSIGNED_SUBTRACTION', 'NO_DIR_IN_CREATE',
-  'NOT_USED_9', 'NOT_USED_10', 'NOT_USED_11', 'NOT_USED_12', 'NOT_USED_13', 'NOT_USED_14', 'NOT_USED_15', 'NOT_USED_16', 'NOT_USED_17', 'NOT_USED_18',
-  'ANSI', 'NO_AUTO_VALUE_ON_ZERO', 'NO_BACKSLASH_ESCAPES', 'STRICT_TRANS_TABLES', 'STRICT_ALL_TABLES', 'NO_ZERO_IN_DATE', 'NO_ZERO_DATE', 'ALLOW_INVALID_DATES',
-  'ERROR_FOR_DIVISION_BY_ZERO', 'TRADITIONAL', 'NOT_USED_29', 'HIGH_NOT_PRECEDENCE', 'NO_ENGINE_SUBSTITUTION', 'PAD_CHAR_TO_FULL_LENGTH', 'TIME_TRUNCATE_FRACTIONAL',
-]
-
-/** Bits 8–17 and 28, which 8.4.11 refuses as 3899 rather than as an unknown mode. */
-const RESERVED_SQL_MODE_BITS = 0x1003ff00n
 
 /** A `SET sql_mode = <integer>`'s modes, by name (8.4.11: past bit 32, or negative, is 1231). */
 function sqlModeOfBits(bits: bigint): string {

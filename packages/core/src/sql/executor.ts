@@ -206,8 +206,9 @@ export class SqlExecutor implements Executor {
    */
   readonly #ended = new WeakSet<Session>()
   /**
-   * The statements parsed last, by sql_mode and text: a prepared statement is
-   * parsed when prepared and again each time it runs. A statement is never
+   * The prepared statements parsed last, by sql_mode and text: one is parsed
+   * when prepared and again each time it runs. A text query is parsed once
+   * and not kept, since a bulk INSERT's tree can run to megabytes. A statement is never
    * changed after parsing (the suites, the fuzzer and both ORMs ran with every
    * one frozen), so one can be handed out twice.
    */
@@ -259,7 +260,7 @@ export class SqlExecutor implements Executor {
     if (paramCount > 0xffff) throw sqlError('ER_PS_MANY_PARAM', 'Prepared statement contains too many placeholders')
     // The empty statement a comment makes is not one the protocol prepares.
     if (emptyText(session, sql) === 'comment') throw sqlError('ER_UNSUPPORTED_PS', 'This command is not supported in the prepared statement protocol yet')
-    const statement = this.#parse(session, sql)
+    const statement = this.#parse(session, sql, true)
     if (statement === null) return { paramCount, columns: [] }
     await this.#preload(session, statement)
     if (statement.kind !== STATEMENT.QUERY) return { paramCount, columns: [] }
@@ -310,12 +311,13 @@ export class SqlExecutor implements Executor {
   }
 
   /** Parse, or `null` for a statement that is answered OK without being run. */
-  #parse(session: Session, sql: string): Statement | null {
+  #parse(session: Session, sql: string, keep = false): Statement | null {
     const empty = emptyText(session, sql)
     // The grammar's END_OF_INPUT: ER_EMPTY_QUERY, unless the text held a comment.
     if (empty === 'empty') throw sqlError('ER_EMPTY_QUERY', 'Query was empty')
     if (empty === 'comment') return null
     try {
+      if (!keep) return parseStatement(sql, { sqlMode: parseSqlMode(session.sqlMode) })
       const key = `${session.sqlMode}\n${sql}`
       const cached = this.#parsed.get(key)
       if (cached !== undefined) return cached
@@ -432,7 +434,7 @@ export class SqlExecutor implements Executor {
         return results
       }
     }
-    const statement = this.#parse(session, sql)
+    const statement = this.#parse(session, sql, protocol === 'binary')
     if (statement === null) return { affectedRows: 0 }
     return this.#one(session, sql, statement, params, known, protocol)
   }

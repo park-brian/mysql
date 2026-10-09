@@ -9,7 +9,7 @@
 // it.
 import { CLIENT, hasCap, symbolOf } from '@myjs/protocol'
 import { binaryRow, executePacket, fieldInfo, formatQuery, textRow, type FieldInfo, type TypeOptions } from './values.ts'
-import { WireClient, WireError, type ConnectOptions, type PreparedOnWire, type ServerEnd, type WireResult } from './wire.ts'
+import { WireClient, WireError, type ConnectOptions, type ServerEnd, type WireResult } from './wire.ts'
 
 export type { FieldInfo, TypeOptions }
 
@@ -65,10 +65,13 @@ export interface TransactionOptions extends BeginOptions {
 /** A prepared statement kept per connection, as `mysql2` keeps them, by text. */
 const PREPARED_KEPT = 256
 
+const encoder = new TextEncoder()
+
 export class Connection {
   readonly #client: WireClient
   readonly #defaults: TypeOptions
-  readonly #prepared = new Map<string, PreparedOnWire>()
+  /** Statement ids by text, oldest first. */
+  readonly #prepared = new Map<string, number>()
   #queue: Promise<unknown> = Promise.resolve()
 
   private constructor(client: WireClient, defaults: TypeOptions) {
@@ -93,7 +96,7 @@ export class Connection {
     const o = this.#options(sql, values)
     return this.#serial(async () => {
       const text = o.values === undefined ? o.sql : formatQuery(o.sql, o.values, this.#client.noBackslashEscapes, o.timezone)
-      const results = await this.#run(text, () => this.#client.query(new TextEncoder().encode(text)))
+      const results = await this.#run(text, () => this.#client.query(encoder.encode(text)))
       return shape(results, o, false)
     })
   }
@@ -102,10 +105,9 @@ export class Connection {
   execute(sql: string | QueryOptions, values?: readonly unknown[]): Promise<QueryResult> {
     const o = this.#options(sql, values)
     return this.#serial(async () => {
-      const prepared = await this.#prepare(o.sql)
+      const id = await this.#prepare(o.sql)
       // A count that does not match is the server's to refuse, as it is under `mysql2`.
-      const params = o.values ?? []
-      const packet = executePacket(prepared.id, params, hasCap(this.#client.capabilities, CLIENT.QUERY_ATTRIBUTES), o.timezone)
+      const packet = executePacket(id, o.values ?? [], hasCap(this.#client.capabilities, CLIENT.QUERY_ATTRIBUTES), o.timezone)
       const results = await this.#run(o.sql, () => this.#client.execute(packet))
       return shape(results, o, true)
     })
@@ -142,17 +144,17 @@ export class Connection {
     return { ...this.#defaults, ...o, ...(values === undefined ? {} : { values }) }
   }
 
-  async #prepare(sql: string): Promise<PreparedOnWire> {
+  async #prepare(sql: string): Promise<number> {
     const kept = this.#prepared.get(sql)
     if (kept !== undefined) return kept
-    const prepared = await this.#run(sql, () => this.#client.prepare(new TextEncoder().encode(sql)))
+    const id = await this.#run(sql, () => this.#client.prepare(encoder.encode(sql)))
     if (this.#prepared.size >= PREPARED_KEPT) {
-      const [oldest, statement] = this.#prepared.entries().next().value as [string, PreparedOnWire]
+      const [oldest, evicted] = this.#prepared.entries().next().value as [string, number]
       this.#prepared.delete(oldest)
-      await this.#client.closeStatement(statement.id)
+      await this.#client.closeStatement(evicted)
     }
-    this.#prepared.set(sql, prepared)
-    return prepared
+    this.#prepared.set(sql, id)
+    return id
   }
 
   async #run<T>(sql: string, call: () => Promise<T>): Promise<T> {

@@ -54,6 +54,8 @@ const CALLS: readonly (readonly [string, readonly unknown[]])[] = [
   ['SELECT ?? FROM ?? WHERE ?? = ?', [['id', 's'], 't', 'id', 10]],
   ['SELECT s FROM t WHERE s = ? AND id > ?', ["el'even", 0]],
   ["SELECT '?' AS q, `?` AS w, ? AS v FROM (SELECT 1 AS `?`) x -- ?\n", ['v']],
+  // sql-escaper skips single-quoted strings, not double-quoted ones: the first value lands inside.
+  ['SELECT "?" AS q, ? AS v', ['a', 'b']],
   ['SELECT ? AS one', [1, 2]],
   ['SELECT ? AS one, ? AS two', [1]],
   ['UPDATE t SET s = ? WHERE id = ?', ['changed', 1]],

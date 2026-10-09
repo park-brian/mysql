@@ -180,15 +180,15 @@ const BATCH_ROWS = 64
 const BATCH_PAGES = 16
 
 /**
- * `each(0)` … `each(count - 1)`, as few mini-transactions as the bounds
- * allow (`trx.batch`): only for a statement that fails whole on any error,
- * and whose rows take no counter.
+ * `each` over `items` from `from` on, in as few mini-transactions as the
+ * bounds allow (`trx.batch`): only for a statement that fails whole on any
+ * error, and whose rows take no counter.
  */
-function inBatches(trx: Trx, from: number, count: number, each: (n: number) => void): void {
-  for (let n = from; n < count; ) {
+function inBatches<T>(trx: Trx, items: readonly T[], each: (item: T, n: number) => void, from = 0): void {
+  for (let n = from; n < items.length; ) {
     trx.batch(() => {
       const start = n
-      while (n < count && n - start < BATCH_ROWS && trx.pagesHeld < BATCH_PAGES) each(n++)
+      for (; n < items.length && n - start < BATCH_ROWS && trx.pagesHeld < BATCH_PAGES; n++) each(items[n] as T, n)
     })
   }
 }
@@ -701,7 +701,7 @@ export function insert(run: Run, node: InsertNode, trx: Trx): OkResult {
   const batchable = mode === 'insert' && !ignore && def.clustered !== null && selected === undefined && compiledRows.length > 1 && (autoAt < 0 || !targets.includes(autoAt))
   if (batchable) {
     each(compiledRows[0] as (typeof compiledRows)[number], 0)
-    inBatches(trx, 1, compiledRows.length, (n) => each(compiledRows[n] as (typeof compiledRows)[number], n))
+    inBatches(trx, compiledRows, each, 1)
   } else compiledRows.forEach(each)
 
   /** One row through `write_record`: write it, or settle its duplicate as the statement asks. */
@@ -1065,7 +1065,7 @@ export function update(run: Run, node: UpdateNode, trx: Trx): OkResult {
   }
   // Without IGNORE, any error fails the statement whole: the rows go in batches.
   if (ignore) rows.forEach(each)
-  else inBatches(trx, 0, rows.length, (n) => each(rows[n] as ScannedRow, n))
+  else inBatches(trx, rows, each)
 
   const matched = rows.length
   const foundRows = hasCap(run.env.session.capabilities, CLIENT.FOUND_ROWS)
@@ -1111,8 +1111,8 @@ export function remove(run: Run, node: DeleteNode, trx: Trx): OkResult {
   let warnings = 0
   // Without IGNORE, any error fails the statement whole: the rows go in batches.
   if (node.ignore !== true) {
-    inBatches(trx, 0, rows.length, (n) => {
-      if (table.delete((rows[n] as ScannedRow).id, trx)) deleted++
+    inBatches(trx, rows, ({ id }) => {
+      if (table.delete(id, trx)) deleted++
     })
     return { affectedRows: deleted }
   }
