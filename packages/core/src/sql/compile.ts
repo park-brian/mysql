@@ -19,12 +19,14 @@ import { sqlError, messages, type Session } from '@myjs/protocol'
 import {
   COERCIBILITY,
   add,
+  DERIVATION_NONE,
   aggregateCollation,
+  aggregateDerivations,
+  charsetOfCollation,
   bitNot,
   bitwise,
   bool,
   bytesValue,
-  commonCollation,
   compareValues,
   plainValue,
   withoutHex,
@@ -56,6 +58,7 @@ import {
   truth,
   valInt,
   type Condition,
+  type Derived,
   type StringValue,
   type Value,
   valueOutOfRange,
@@ -443,85 +446,32 @@ const MAX_SIGNED = 2n ** 63n - 1n
 /** A string type's coercibility: a column's 2, a literal's 4. */
 export const coercibilityOf = (t: ResultType): number => t.coercibility ?? COERCIBILITY.COERCIBLE
 
-/** The collation a list of string-typed results aggregates to (`aggregateCollation`, pairwise). */
+/** The collation a list of string-typed results aggregates to (`aggregateDerivations`, pairwise), or `fallback` with none. */
 export function aggregateTypes(types: readonly ResultType[], fallback: number): number {
-  let acc: { collationId: number; coercibility: number } | undefined
+  let acc: Derived | undefined
   for (const t of types) {
     if (t.kind !== 'string') continue
-    const next = { collationId: t.collationId, coercibility: coercibilityOf(t) }
-    acc = acc === undefined ? next : { collationId: aggregateCollation(acc, next), coercibility: Math.min(acc.coercibility, next.coercibility) }
+    const next = { collationId: t.collationId, derivation: coercibilityOf(t) }
+    // Where MySQL cannot decide, `aggregateCollations` has already refused the statement.
+    acc = acc === undefined ? next : (aggregateDerivations(acc, next) ?? acc)
   }
   return acc?.collationId ?? fallback
 }
 
-// --- Collation aggregation, as `DTCollation::aggregate` does it -----------------
+// --- Collation aggregation for an operation, and its errors ---------------------
 //
-// Each argument brings a collation and a derivation (what COERCIBILITY()
-// reports): a number or a temporal latin1_swedish_ci at NUMERIC, NULL binary
-// at IGNORABLE. They are aggregated pairwise, left to right. In one charset
-// the lower derivation wins; at the same one a `_bin` collation wins, two
-// EXPLICIT ones are refused, and two others leave the charset's `_bin`
-// collation at derivation NONE (1), which a comparison refuses. Across
-// charsets a binary string wins at its derivation or lower, a Unicode
-// charset is a superset of any other, and a literal gives way to anything
-// lower. What cannot be decided is 1267, 1270 or 1271, naming every argument
-// for two or three. 8.4.11 names the operation as the parser spells it:
-// '=', 'like', ' IN ', 'concat', 'case', 'UNION'.
+// The pairwise rule is `@myjs/types`' `aggregateDerivations`. What is the
+// executor's is which arguments take part, and the error when the rule cannot
+// decide: 1267, 1270 or 1271, naming every argument for two or three. 8.4.11
+// names the operation as the parser spells it: '=', 'like', ' IN ', 'concat',
+// 'case', 'UNION'.
 
 const DERIVATION = ['EXPLICIT', 'NONE', 'IMPLICIT', 'SYSCONST', 'COERCIBLE', 'NUMERIC', 'IGNORABLE'] as const
-const DERIVATION_NONE = 1
 const UNICODE = new Set(['utf8mb4', 'utf8mb3', 'ucs2', 'utf16', 'utf16le', 'utf32'])
-const SUPPLEMENT = new Set(['utf8mb4', 'utf16', 'utf16le', 'utf32'])
 /** latin1_swedish_ci, `my_charset_numeric`'s collation. */
 const NUMERIC_COLLATION = 8
 
-interface Derived {
-  readonly collationId: number
-  readonly derivation: number
-}
-
 const isText = (t: ResultType): boolean => t.kind === 'string' || t.kind === 'bytes'
-
-const charsetOfId = (id: number): string => (id === CHARSET_BINARY ? 'binary' : requireCollationInfo(id).charset)
-
-/** `left_is_superset`: conversion into Unicode, or from ASCII. */
-function leftIsSuperset(l: Derived, r: Derived): boolean {
-  const lc = charsetOfId(l.collationId)
-  const rc = charsetOfId(r.collationId)
-  if (UNICODE.has(lc)) {
-    if (l.derivation < r.derivation) return true
-    if (l.derivation === r.derivation) {
-      if (!UNICODE.has(rc)) return true
-      const li = requireCollationInfo(l.collationId)
-      const ri = requireCollationInfo(r.collationId)
-      // utf8mb4 over utf8mb3: more bytes at the most, as many at the least.
-      if (SUPPLEMENT.has(lc) && !SUPPLEMENT.has(rc) && li.mbmaxlen > ri.mbmaxlen && li.mbminlen === ri.mbminlen) return true
-    }
-  }
-  return rc === 'ascii' && (l.derivation < r.derivation || (l.derivation === r.derivation && lc !== 'ascii'))
-}
-
-/** Two derivations aggregated, or undefined when MySQL cannot. */
-function aggregateTwo(acc: Derived, dt: Derived): Derived | undefined {
-  // Two EXPLICIT collations must be one, in any charsets (8.4.11).
-  if (acc.derivation === COERCIBILITY.EXPLICIT && dt.derivation === COERCIBILITY.EXPLICIT && acc.collationId !== dt.collationId) return undefined
-  if (charsetOfId(acc.collationId) !== charsetOfId(dt.collationId)) {
-    if (acc.collationId === CHARSET_BINARY) return acc.derivation <= dt.derivation ? acc : dt
-    if (dt.collationId === CHARSET_BINARY) return dt.derivation <= acc.derivation ? dt : acc
-    if (leftIsSuperset(acc, dt)) return acc
-    if (leftIsSuperset(dt, acc)) return dt
-    if (acc.derivation < dt.derivation && dt.derivation >= COERCIBILITY.SYSCONST) return acc
-    if (dt.derivation < acc.derivation && acc.derivation >= COERCIBILITY.SYSCONST) return dt
-    return undefined
-  }
-  if (acc.derivation !== dt.derivation) return acc.derivation < dt.derivation ? acc : dt
-  if (acc.collationId === dt.collationId) return acc
-  if (acc.derivation === COERCIBILITY.EXPLICIT) return undefined
-  if (requireCollationInfo(acc.collationId).isBinary) return acc
-  if (requireCollationInfo(dt.collationId).isBinary) return dt
-  const bin = collationInfoByName(`${charsetOfId(acc.collationId)}_bin`)
-  return { collationId: bin?.id ?? acc.collationId, derivation: DERIVATION_NONE }
-}
 
 /**
  * The collation and derivation the arguments aggregate to for `operation`,
@@ -545,7 +495,7 @@ export function aggregateCollations(types: readonly ResultType[], operation: str
   if (!numbers && items.some((d) => d.derivation === COERCIBILITY.NUMERIC)) throw collationMix(items, operation)
   let acc: Derived | undefined = items[0] as Derived
   for (const dt of items.slice(1)) {
-    acc = aggregateTwo(acc, dt)
+    acc = aggregateDerivations(acc, dt)
     if (acc === undefined) break
   }
   if (acc === undefined || (compare && acc.derivation === DERIVATION_NONE)) {
@@ -554,9 +504,9 @@ export function aggregateCollations(types: readonly ResultType[], operation: str
   }
   // A literal is converted into the collation chosen, and one that cannot be is the mix's error (`convert_const_strings`).
   if (acc.collationId !== CHARSET_BINARY) {
-    const target = charsetOfId(acc.collationId)
+    const target = charsetOfCollation(acc.collationId)
     for (const t of types) {
-      if (t.kind !== 'string' || t.literalText === undefined || charsetOfId(t.collationId) === target || UNICODE.has(target)) continue
+      if (t.kind !== 'string' || t.literalText === undefined || charsetOfCollation(t.collationId) === target || UNICODE.has(target)) continue
       const back = decodeCollation(encodeCollation(t.literalText, acc.collationId), acc.collationId)
       if (back !== t.literalText) throw collationMix(items, operation)
     }
@@ -1542,7 +1492,7 @@ function like(negated: boolean, a: Compiled, pattern: Compiled, escape: Compiled
       const p = pattern.eval(r, env)
       if (v === null || p === null) return null
       const esc = escape === undefined ? '\\' : toText(escape.eval(r, env) ?? stringValue('\\', 255))
-      const id = v.kind === 'string' && p.kind === 'string' ? commonCollation(v, p) : v.kind === 'string' ? v.collationId : p.kind === 'string' ? (p as StringValue).collationId : CHARSET_BINARY
+      const id = v.kind === 'string' && p.kind === 'string' ? aggregateCollation(v, p) : v.kind === 'string' ? v.collationId : p.kind === 'string' ? (p as StringValue).collationId : CHARSET_BINARY
       const m = matchLike([...toText(v)], [...toText(p)], esc, id)
       return bool(m !== negated)
     },

@@ -36,7 +36,7 @@ import { FIELD_TYPE } from '@myjs/bytes'
 import { NODE, type CallNode, type Expression, type FrameBound, type WindowSpec } from '@myjs/parser'
 import { messages, sqlError } from '@myjs/protocol'
 import { add, compareValues, doubleValue, intValue, sortValues, toInteger, type Value } from '@myjs/types'
-import { aggregate as aggregateTypes, compile, convertTo, type CompileContext, type Compiled, type Env, type Row } from './compile.ts'
+import { aggregate as resultTypeOf, compile, convertTo, type CompileContext, type Compiled, type Env, type Row } from './compile.ts'
 import { AggregateSink, type AggregateSpec } from './group.ts'
 import { warnNonScalar } from './operators.ts'
 import { doubleType, intType, type ResultType } from './meta.ts'
@@ -129,7 +129,7 @@ export class WindowSink {
       // The argument's type, with a default's beside it, an integer a BIGINT
       // of its own width, and NULL when there is no row; none of a column's
       // own flags (8.4.11).
-      const t = args.length === 2 ? aggregateTypes(args.map((a) => a.type), true, ctx.connectionCollation) : (args[0] as Compiled).type
+      const t = args.length === 2 ? resultTypeOf(args.map((a) => a.type), true, ctx.connectionCollation) : (args[0] as Compiled).type
       const { column: _column, ...plain } = t
       type = { ...plain, nullable: true, ...(t.kind === 'int' ? { field: FIELD_TYPE.LONGLONG } : {}) }
       if (args.length === 2) convert = type

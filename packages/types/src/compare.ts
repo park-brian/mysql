@@ -18,9 +18,11 @@
 //   5. Integers and decimals — exactly, as decimals.
 //   6. Anything else — a number against a string, or a double anywhere — as
 //      doubles.
-import { collation, encodeCollation, memcmp, requireCollationInfo } from '@myjs/charsets'
+import { CHARSET_BINARY } from '@myjs/bytes'
+import { collation, collationInfoByName, encodeCollation, memcmp, requireCollationInfo } from '@myjs/charsets'
 import { compareJson, orderJson, toJsonDoc } from './json-doc.ts'
 import {
+  COERCIBILITY,
   rescale,
   temporalOrdinal,
   timeOrdinal,
@@ -30,37 +32,92 @@ import {
   toText,
   toTime,
   type DecimalValue,
-  type StringValue,
   type Value,
 } from './sql-value.ts'
 
 const UTF8 = new TextEncoder()
 const sign = (n: number | bigint): number => (n < 0 ? -1 : n > 0 ? 1 : 0)
 
-/**
- * The collation two strings meet under (`DTCollation::aggregate`): the lower
- * coercibility wins; on a tie, a utf8mb4 collation wins over another charset's,
- * since the other converts into it losslessly, and within one charset a `_bin`
- * collation wins. Otherwise the left one. `CONCAT(latin1_col, utf8mb4_bin_col)`
- * is `utf8mb4_bin`, which 8.4.11 reports with the BINARY flag that follows from it.
- */
-export function aggregateCollation(a: { readonly collationId: number; readonly coercibility: number }, b: { readonly collationId: number; readonly coercibility: number }): number {
-  if (a.coercibility !== b.coercibility) return b.coercibility < a.coercibility ? b.collationId : a.collationId
-  if (a.collationId === b.collationId) return a.collationId
-  const x = requireCollationInfo(a.collationId)
-  const y = requireCollationInfo(b.collationId)
-  if (x.charset !== y.charset) return y.charset === 'utf8mb4' && x.charset !== 'utf8mb4' ? b.collationId : a.collationId
-  return y.name.endsWith('_bin') && !x.name.endsWith('_bin') ? b.collationId : a.collationId
+// --- Collation aggregation, as `DTCollation::aggregate` does it -----------------
+//
+// Each argument brings a collation and a derivation (what COERCIBILITY()
+// reports): a number or a temporal latin1_swedish_ci at NUMERIC, NULL binary
+// at IGNORABLE. They are aggregated pairwise, left to right. In one charset
+// the lower derivation wins; at the same one a `_bin` collation wins, two
+// EXPLICIT ones are refused, and two others leave the charset's `_bin`
+// collation at derivation NONE (1), which a comparison refuses. Across
+// charsets a binary string wins at its derivation or lower, a Unicode
+// charset is a superset of any other, and a literal gives way to anything
+// lower. What cannot be decided is the caller's error (1267, 1270, 1271).
+
+/** A collation and its derivation, `DTCollation`. The derivation is a `COERCIBILITY` value, or `DERIVATION_NONE`. */
+export interface Derived {
+  readonly collationId: number
+  readonly derivation: number
 }
 
-/** The collation two strings compare under. */
-export function commonCollation(a: StringValue, b: StringValue): number {
-  return aggregateCollation(a, b)
+/** `DERIVATION_NONE`: two collations of one charset that neither wins, which a comparison refuses. */
+export const DERIVATION_NONE = 1
+
+const UNICODE = new Set(['utf8mb4', 'utf8mb3', 'ucs2', 'utf16', 'utf16le', 'utf32'])
+const SUPPLEMENT = new Set(['utf8mb4', 'utf16', 'utf16le', 'utf32'])
+
+/** The charset a collation id belongs to; the binary pseudo-collation is `binary`. */
+export const charsetOfCollation = (id: number): string => (id === CHARSET_BINARY ? 'binary' : requireCollationInfo(id).charset)
+
+/** `left_is_superset`: conversion into Unicode, or from ASCII. */
+function leftIsSuperset(l: Derived, r: Derived): boolean {
+  const lc = charsetOfCollation(l.collationId)
+  const rc = charsetOfCollation(r.collationId)
+  if (UNICODE.has(lc)) {
+    if (l.derivation < r.derivation) return true
+    if (l.derivation === r.derivation) {
+      if (!UNICODE.has(rc)) return true
+      const li = requireCollationInfo(l.collationId)
+      const ri = requireCollationInfo(r.collationId)
+      // utf8mb4 over utf8mb3: more bytes at the most, as many at the least.
+      if (SUPPLEMENT.has(lc) && !SUPPLEMENT.has(rc) && li.mbmaxlen > ri.mbmaxlen && li.mbminlen === ri.mbminlen) return true
+    }
+  }
+  return rc === 'ascii' && (l.derivation < r.derivation || (l.derivation === r.derivation && lc !== 'ascii'))
+}
+
+/** Two derivations aggregated, or undefined when MySQL cannot. */
+export function aggregateDerivations(acc: Derived, dt: Derived): Derived | undefined {
+  // Two EXPLICIT collations must be one, in any charsets (8.4.11).
+  if (acc.derivation === COERCIBILITY.EXPLICIT && dt.derivation === COERCIBILITY.EXPLICIT && acc.collationId !== dt.collationId) return undefined
+  const ac = charsetOfCollation(acc.collationId)
+  if (ac !== charsetOfCollation(dt.collationId)) {
+    if (acc.collationId === CHARSET_BINARY) return acc.derivation <= dt.derivation ? acc : dt
+    if (dt.collationId === CHARSET_BINARY) return dt.derivation <= acc.derivation ? dt : acc
+    if (leftIsSuperset(acc, dt)) return acc
+    if (leftIsSuperset(dt, acc)) return dt
+    if (acc.derivation < dt.derivation && dt.derivation >= COERCIBILITY.SYSCONST) return acc
+    if (dt.derivation < acc.derivation && acc.derivation >= COERCIBILITY.SYSCONST) return dt
+    return undefined
+  }
+  if (acc.derivation !== dt.derivation) return acc.derivation < dt.derivation ? acc : dt
+  if (acc.collationId === dt.collationId) return acc
+  if (acc.derivation === COERCIBILITY.EXPLICIT) return undefined
+  if (requireCollationInfo(acc.collationId).isBinary) return acc
+  if (requireCollationInfo(dt.collationId).isBinary) return dt
+  const bin = collationInfoByName(`${ac}_bin`)
+  return { collationId: bin?.id ?? acc.collationId, derivation: DERIVATION_NONE }
+}
+
+/**
+ * The collation two strings meet under. Where MySQL cannot decide, the
+ * statement was refused when it was compiled, unless a side's derivation was
+ * not known then; the left side's collation is the answer for those.
+ */
+export function aggregateCollation(a: { readonly collationId: number; readonly coercibility: number }, b: { readonly collationId: number; readonly coercibility: number }): number {
+  if (a.collationId === b.collationId) return a.collationId
+  return aggregateDerivations({ collationId: a.collationId, derivation: a.coercibility }, { collationId: b.collationId, derivation: b.coercibility })?.collationId ?? a.collationId
 }
 
 function compareText(a: Exclude<Value, null>, b: Exclude<Value, null>): number {
   if (a.kind === 'string' && b.kind === 'string') {
-    const id = commonCollation(a, b)
+    const id = aggregateCollation(a, b)
     if (a.v === b.v) return 0
     const c = collation(id)
     return sign(c.compare(encodeCollation(a.v, id), encodeCollation(b.v, id)))
