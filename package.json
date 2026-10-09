@@ -47,6 +47,7 @@
     "capture:temporal-functions": "node tools/capture-temporal-functions.mjs",
     "capture:more-functions": "node tools/capture-more-functions.mjs",
     "capture:coercion": "node tools/capture-coercion.mjs",
+    "capture:type-merge": "node tools/capture-type-merge.mjs",
     "mysqltest:run": "node tools/mysqltest-run.mjs",
     "capture:information-schema": "node tools/capture-information-schema.mjs",
     "census:mysqltest": "node tools/mysqltest-census.mjs",

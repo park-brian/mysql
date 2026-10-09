@@ -156,3 +156,4 @@ export { dateOf, dateStructOf, numberToDateTime, timeDiff, timeOf, timeStructOf,
 export { extractDateTime, formatDateTime, formatLength, formatShape, type Broken } from './date-format.ts'
 export { scanDateTime, scanTime } from './temporal-scan.ts'
 export { crc32, md5, sha1, sha256, sha512 } from './digest.ts'
+export { MERGE_TYPES, mergeTypes, type MergeType } from './type-merge.ts'

@@ -46,6 +46,7 @@ import {
   readsColumn,
   type CompileContext,
   type Compiled,
+  asMerged,
   type Env,
   type Row,
 } from './compile.ts'
@@ -345,9 +346,9 @@ export function controlFunction(name: string, e: CallNode, ctx: CompileContext):
       return {
         eval: (r, env) => {
           const v = x.eval(r, env)
-          if (v !== null) return xv(v)
+          if (v !== null) return xv(v, env)
           const w = y.eval(r, env)
-          return w === null ? null : yv(w)
+          return w === null ? null : yv(w, env)
         },
         type,
       }
@@ -366,7 +367,7 @@ export function controlFunction(name: string, e: CallNode, ctx: CompileContext):
         eval: (r, env) => {
           for (let i = 0; i < xs.length; i++) {
             const v = (xs[i] as Compiled).eval(r, env)
-            if (v !== null) return (chosen[i] as (v: Exclude<Value, null>) => Value)(v)
+            if (v !== null) return (chosen[i] as (v: Exclude<Value, null>, env: Env) => Value)(v, env)
           }
           return null
         },
@@ -685,7 +686,8 @@ function nextRand(s: RandSeeds): number {
  * text is its bytes, and BITs alone are the number, whose text is its
  * digits even under the BIT type (8.4.11: `COALESCE(b)` of b'101' sends '5').
  */
-function chosenOf(x: Compiled, result: ResultType): (v: Exclude<Value, null>) => Value {
+function chosenOf(x: Compiled, result: ResultType): (v: Exclude<Value, null>, env: Env) => Value {
+  if (result.kind === 'datetime' && (x.type.kind === 'datetime' || x.type.kind === 'time') && x.type.field !== result.field) return (v, env) => asMerged(v, result, env)
   if (!isBits(x.type) || !(result.kind === 'bytes' || isBits(result))) return (v) => convertTo(v, result)
   const bits = x.type.length
   if (result.kind === 'bytes') return (v) => (v.kind === 'int' ? bytesValue(bitBytes(v.v, bits)) : convertTo(v, result))

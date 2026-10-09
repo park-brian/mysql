@@ -11,7 +11,7 @@
 // What is not here yet is refused by name rather than approximated: an
 // unknown function is ER_SP_DOES_NOT_EXIST, as MySQL says it, and a builtin we
 // have not written is ER_NOT_SUPPORTED_YET naming it (M5.10 owns the rest).
-import { CHARSET_BINARY, FIELD_TYPE, expectTyped } from '@myjs/bytes'
+import { CHARSET_BINARY, COLUMN_FLAG, FIELD_TYPE, expectTyped } from '@myjs/bytes'
 import { collationInfoByName, decodeCollation, defaultCollationOf, encodeCollation, requireCollationInfo } from '@myjs/charsets'
 import { LITERAL, NODE, TOKEN, deparse, lex, parseExpression, type CallNode, type CaseNode, type CastNode, type ConvertNode, type Expression, type LiteralNode, type MatchNode, type QueryExpression, type SubqueryNode, quoteName } from '@myjs/parser'
 import type { ColumnDef, Table, Trx } from '@myjs/engine'
@@ -63,6 +63,8 @@ import {
   type Value,
   valueOutOfRange,
   valueBytes,
+  mergeTypes,
+  type MergeType,
 } from '@myjs/types'
 import {
   CHARSET_UTF8MB4_BIN,
@@ -90,7 +92,7 @@ import { TableScope } from './scope.ts'
 import { bitBytes } from './wire.ts'
 import { badAgainst, booleanRank, Corpus, foldFor, fulltextOf, naturalRank, noExpansion, noIndex, parseBoolean, queryText, wordsOf, type Term } from './fulltext.ts'
 import { windowNotAllowed } from './window.ts'
-import { dateAdd, isInterval } from './interval.ts'
+import { dateAdd, isInterval, onToday } from './interval.ts'
 import { escapeString, printExpression, Unprintable } from './print.ts'
 import { modeOf } from './mode.ts'
 import { NOT_YET, VARIES_PER_EVALUATION, functionCompiler } from './registry.ts'
@@ -1544,7 +1546,105 @@ function matchLike(s: readonly string[], p: readonly string[], escape: string, c
  * double, else a decimal wide enough for every integer and scale, else an
  * integer. NULL branches take no part.
  */
+/**
+ * The one type CASE, IF, IFNULL and COALESCE give values of several types.
+ * Its field type is MySQL's pairwise merge of theirs (`type-merge.ts`,
+ * captured from 8.4.11); its length, scale and collation are the holder's
+ * (`holderOf`), which the merge then dresses: a CHAR among strings makes a
+ * CHAR, a DATE beside a TIME a DATETIME, a YEAR beside an INT an INT.
+ */
 export function aggregate(types: readonly ResultType[], nullable: boolean, connectionCollation: number, operation?: string, compare = false): ResultType {
+  const type = holderOf(types, nullable, connectionCollation, operation, compare)
+  const live = types.filter((t) => t.kind !== 'null')
+  if (live.length === 0) return type
+  const merged = live.map(mergeTypeOf).reduce((a, b) => mergeTypes(a, b) as MergeType)
+  const field = merged === 'VARCHAR' ? FIELD_TYPE.VAR_STRING : FIELD_TYPE[merged]
+  switch (merged) {
+    case 'DATE':
+    case 'TIME':
+    case 'DATETIME':
+    case 'TIMESTAMP':
+      // Reported in the connection's charset as text is, the field type kept (8.4.11).
+      return { ...datetimeType(field, Math.max(...live.map((t) => (t.kind === 'datetime' || t.kind === 'time' ? t.scale : 0))), nullable), asText: true }
+    case 'TINY':
+    case 'SHORT':
+    case 'INT24':
+    case 'LONG':
+    case 'LONGLONG':
+    case 'YEAR':
+      return type.kind === 'int' ? { ...type, field } : { ...intType(Math.max(...live.map((t) => t.length)), nullable, live.every((t) => t.unsigned)), field }
+    case 'FLOAT':
+    case 'DOUBLE':
+      return type.kind === 'double' ? { ...type, field } : type
+    case 'STRING':
+    case 'VARCHAR':
+    case 'ENUM':
+    case 'SET':
+    case 'LONG_BLOB':
+      return type.kind === 'string' || type.kind === 'bytes' ? { ...type, field } : type
+    default:
+      return type
+  }
+}
+
+/** A type's field type as the merge table names it: ENUM, SET and the TEXT sizes are read from the column. */
+function mergeTypeOf(t: ResultType): MergeType {
+  if (t.kind === 'null') return 'NULL'
+  if (t.kind === 'json') return 'JSON'
+  const flags = t.column?.flags ?? 0
+  if ((flags & COLUMN_FLAG.ENUM) !== 0 || t.field === FIELD_TYPE.ENUM) return 'ENUM'
+  if ((flags & COLUMN_FLAG.SET) !== 0 || t.field === FIELD_TYPE.SET) return 'SET'
+  switch (t.field) {
+    case FIELD_TYPE.TINY:
+    case FIELD_TYPE.SHORT:
+    case FIELD_TYPE.INT24:
+    case FIELD_TYPE.LONG:
+    case FIELD_TYPE.LONGLONG:
+    case FIELD_TYPE.YEAR:
+    case FIELD_TYPE.BIT:
+    case FIELD_TYPE.NEWDECIMAL:
+    case FIELD_TYPE.FLOAT:
+    case FIELD_TYPE.DOUBLE:
+    case FIELD_TYPE.DATE:
+    case FIELD_TYPE.TIME:
+    case FIELD_TYPE.DATETIME:
+    case FIELD_TYPE.TIMESTAMP:
+    case FIELD_TYPE.STRING:
+    case FIELD_TYPE.TINY_BLOB:
+    case FIELD_TYPE.MEDIUM_BLOB:
+    case FIELD_TYPE.LONG_BLOB:
+      return MERGE_NAME[t.field] as MergeType
+    case FIELD_TYPE.DECIMAL:
+      return 'NEWDECIMAL'
+    case FIELD_TYPE.NEWDATE:
+      return 'DATE'
+    case FIELD_TYPE.BLOB: {
+      const bytes = t.blobBytes ?? 65535
+      return bytes <= 255 ? 'TINY_BLOB' : bytes <= 65535 ? 'BLOB' : bytes <= 16777215 ? 'MEDIUM_BLOB' : 'LONG_BLOB'
+    }
+    default:
+      return 'VARCHAR'
+  }
+}
+
+const MERGE_NAME: Readonly<Record<number, string>> = Object.fromEntries(Object.entries(FIELD_TYPE).map(([name, code]) => [code, name]))
+
+/**
+ * A branch's value as the merged type holds it: a DATE or a TIME where the
+ * merge made a DATETIME is one, a TIME on today's date (8.4.11).
+ */
+export function asMerged(v: Value, result: ResultType, env: Env): Value {
+  if (v === null || result.kind !== 'datetime' || result.field === FIELD_TYPE.DATE) return v
+  if (v.kind === 'time') {
+    if (result.field === FIELD_TYPE.TIME) return v
+    const d = onToday(v.v, env)
+    return d === undefined ? null : { kind: 'datetime', v: d, type: 'DATETIME', fsp: v.fsp }
+  }
+  if (v.kind === 'datetime' && v.type === 'DATE' && result.field !== FIELD_TYPE.TIME) return { ...v, type: 'DATETIME' }
+  return v
+}
+
+function holderOf(types: readonly ResultType[], nullable: boolean, connectionCollation: number, operation?: string, compare = false): ResultType {
   let live = types.filter((t) => t.kind !== 'null')
   if (live.length === 0) return NULL_TYPE
   // JSON with JSON is JSON; JSON with anything else is its text, in JSON's
@@ -1641,6 +1741,7 @@ export function convertTo(v: Value, t: ResultType): Value {
  * DECIMAL's text, and `IF(1, b8, b12)` one byte).
  */
 export function branchOf(x: Compiled, result: ResultType): Compiled['eval'] {
+  if (result.kind === 'datetime' && (x.type.kind === 'datetime' || x.type.kind === 'time') && x.type.field !== result.field) return (r, env) => asMerged(x.eval(r, env), result, env)
   if (!isBits(x.type) || !(result.kind === 'decimal' || result.kind === 'bytes' || isBits(result))) return x.eval
   const bits = x.type.length
   return (r, env) => {
