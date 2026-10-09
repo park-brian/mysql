@@ -32,6 +32,7 @@ import { toWire, type WireProtocol } from './wire.ts'
 import type { Trx } from '@myjs/engine'
 import { isTemporary, type CatalogApi } from './temporary.ts'
 import { modeOf } from './mode.ts'
+import { finish } from './session.ts'
 
 /** Everything one statement execution needs. */
 export interface Run {
@@ -1751,10 +1752,25 @@ export function columnsOf(run: Run, plan: SelectPlan): ColumnDefinition[] {
 
 /** Run a planned SELECT in `trx`, materialising its rows for the wire. */
 export function resultSet(run: Run, plan: SelectPlan, trx: Trx | undefined): ResultSet {
+  return finish(resultSteps(run, plan, trx))
+}
+
+/** Rows read between two chances for a query to pause (D-77). */
+const PACE_ROWS = 256
+
+/**
+ * `resultSet`, pausing every `PACE_ROWS` rows (D-77). A read holds no writer
+ * slot, so a write may come between two rows: the read's view keeps what it
+ * sees the same, and a B+tree scan finds its place again by key (M5.38).
+ */
+export function* resultSteps(run: Run, plan: SelectPlan, trx: Trx | undefined): Generator<void, ResultSet> {
   const described = plan.columnsAt?.(trx) ?? plan.columns
   const columns = described.map((c) => columnDefinition(c.name, c.type, run.env.session.characterSet))
   const rows: RowValue[][] = []
   const types = described.map((c) => c.type)
-  for (const values of plan.rows(trx)) rows.push(values.map((v, i) => toWire(v, types[i] as ResultType, run.protocol, run.env.session)))
+  for (const values of plan.rows(trx)) {
+    rows.push(values.map((v, i) => toWire(v, types[i] as ResultType, run.protocol, run.env.session)))
+    if (rows.length % PACE_ROWS === 0) yield
+  }
   return { columns, rows }
 }

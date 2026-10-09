@@ -3,7 +3,7 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { MemoryVfs, type VfsFile } from '@myjs/vfs'
 import { errnoOf, sqlStateOf } from '@myjs/protocol'
-import { ClusteredIndex, EngineError, Store, verifyStore, type RecordLayout, type StoreOptions } from '@myjs/engine'
+import { ClusteredIndex, EngineError, Store, verifyStore, type FieldBytes, type RecordLayout, type StoreOptions } from '@myjs/engine'
 
 const PAGE = 1024
 const be = (n: number) => Uint8Array.of(n >>> 24, (n >>> 16) & 0xff, (n >>> 8) & 0xff, n & 0xff)
@@ -117,4 +117,63 @@ test('M4.20: rolling back a re-insert over a mark whose transaction is purged re
   store.purge()
   verify()
   assert.equal(store.alloc.usedPages().size, baseline)
+})
+
+test('M5.37: purge spends a budget of undo records, and a transaction it ends inside is finished by the next purge', async () => {
+  const { store, t, verify, sys } = await table()
+  const baseline = store.alloc.usedPages().size
+  const pin = sys.begin()
+  t.get(be(0), pin)
+  // One transaction that deletes 300 rows: 300 undo records, more than one budget.
+  const w = sys.begin()
+  for (let i = 0; i < 300; i++) t.insert([be(i), Uint8Array.of(i & 0xff)], w)
+  w.commit()
+  const d = sys.begin()
+  for (let i = 0; i < 300; i++) t.delete(be(i), d)
+  d.commit()
+  pin.commit()
+  assert.equal(store.stats().historyLength, 2)
+  // The insert's undo goes in one budget; the delete's runs past the next.
+  assert.equal(store.purge(Infinity, 300), 1, 'the first transaction fits its budget')
+  assert.equal(store.purge(Infinity, 100), 0, 'the second does not finish in 100 records')
+  assert.equal(store.stats().historyLength, 1, 'and stays at the head of the history')
+  verify()
+  assert.equal(store.purge(Infinity, 100), 0)
+  assert.equal(store.purge(), 1, 'the next purge goes on where the last one stopped')
+  assert.equal(store.stats().historyLength, 0)
+  verify()
+  assert.equal(store.alloc.usedPages().size, baseline)
+})
+
+test('M5.38: a scan paused while purge frees the leaves ahead of it, and new rows take their pages, resumes with exactly the rows its view sees', async () => {
+  const { store, t, verify, sys } = await table()
+  const row = (i: number): [Uint8Array, Uint8Array] => [be(i), Uint8Array.of(i & 0xff, 0xaa, 0xbb, 0xcc)]
+  // Seven leaves of small rows.
+  for (let i = 0; i < 400; i += 2) t.insert(row(i))
+  // Rows deleted before the reader's view: it cannot see them, so purge may
+  // remove them while it reads. A view held across the delete keeps the
+  // commit's own purge from doing it first.
+  const pin = sys.begin()
+  t.get(be(0), pin)
+  const d = sys.begin()
+  for (let i = 40; i < 390; i += 2) t.delete(be(i), d)
+  d.commit()
+  pin.commit()
+  const reader = sys.begin()
+  const key = (next: IteratorResult<[Uint8Array, FieldBytes[]]>): number => new DataView((next.value as [Uint8Array, FieldBytes[]])[0].buffer).getUint32(0)
+  const scan = t.scan({}, reader)
+  const seen: number[] = []
+  for (let k = 0; k < 3; k++) seen.push(key(scan.next()))
+  // While the scan is paused, after its first leaf: purge empties and frees
+  // the leaves the sibling links lead through, and rows past the end take
+  // those pages again, so a link followed now leads somewhere else.
+  assert.equal(store.purge(), 1)
+  const w = sys.begin()
+  for (let i = 1001; i < 4000; i += 2) t.insert(row(i), w)
+  w.commit()
+  for (let next = scan.next(); next.done !== true; next = scan.next()) seen.push(key(next))
+  reader.commit()
+  const want = Array.from({ length: 200 }, (_, i) => i * 2).filter((i) => i < 40 || i >= 390)
+  assert.deepEqual(seen, want, 'every key the view sees, once each, in order')
+  verify()
 })

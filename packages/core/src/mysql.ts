@@ -313,6 +313,10 @@ export class MySQL {
     this.#implicit = null
     this.#shared = null
     if (this.#sync !== undefined) clearInterval(this.#sync)
+    // A statement paused between its steps (D-77) resumes, finds its session
+    // ended, and rolls back, and a background purge stops: the store stays
+    // open until both have.
+    if (this.#executor instanceof SqlExecutor) await this.#executor.stop()
     this.store?.close()
     this.#lock?.release()
   }

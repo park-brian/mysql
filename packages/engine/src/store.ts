@@ -206,9 +206,15 @@ export class Store {
     return this.transactions.begin(isolation)
   }
 
-  /** Purge every committed transaction no open view needs, or up to `limit` of them. */
-  purge(limit = Infinity): number {
-    return this.transactions.purge(limit)
+  /** Purge every committed transaction no open view needs, or up to `limit` of them, spending at most `records` undo records. */
+  purge(limit = Infinity, records = Infinity): number {
+    return this.transactions.purge(limit, records)
+  }
+
+  /** Whether purge has work, and no writer holds the slot it would have to share (D-77). */
+  get purgeDue(): boolean {
+    const t = this.transactions
+    return t.purgeable && t.writer === undefined
   }
 
   stats(): TrxStats & { readonly pageCount: number; readonly dirtyPages: number } {

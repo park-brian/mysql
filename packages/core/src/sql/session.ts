@@ -173,6 +173,21 @@ export class SqlSession implements SessionValues {
    * effects are undone and the error rethrown.
    */
   statement<T>(store: Store, write: boolean, run: (trx: Trx) => T): T {
+    return finish(this.steps(store, write, function* (trx) {
+      return run(trx)
+    }))
+  }
+
+  /**
+   * `statement()` for a statement that pauses (D-77): `run` is a generator
+   * that yields between mini-transactions, and whoever drives this one
+   * decides when to resume it; `statement()` is this run straight through. The transaction is the same — the
+   * statement's own under autocommit, the session's otherwise — and so is
+   * its end: a failure, or an error thrown in at a pause, rolls back the
+   * statement whole. The writer slot is held across every pause, so no
+   * other writer, DDL or purge changes a page while it waits.
+   */
+  *steps<T>(store: Store, write: boolean, run: (trx: Trx) => Generator<void, T>): Generator<void, T> {
     if (write && this.readOnly) throw sqlError('ER_CANT_EXECUTE_IN_READ_ONLY_TRANSACTION', 'Cannot execute statement in a READ ONLY transaction.')
     if (this.trx === undefined && !this.session.autocommit) {
       this.trx = this.#begin(store)
@@ -180,11 +195,10 @@ export class SqlSession implements SessionValues {
     }
     const kept = this.trx
     if (kept === undefined) {
-      // Autocommit: a transaction for this statement alone.
       const trx = this.#begin(store)
       try {
         if (write) trx.lock()
-        const out = run(trx)
+        const out = yield* run(trx)
         trx.commit()
         return out
       } catch (e) {
@@ -196,10 +210,18 @@ export class SqlSession implements SessionValues {
     if (write) kept.lock()
     const at = kept.savepoint()
     try {
-      return run(kept)
+      return yield* run(kept)
     } catch (e) {
       if (kept.state === 'active') kept.rollbackTo(at)
       throw e
     }
+  }
+}
+
+/** A generator run to its end without pausing, and what it returns. */
+export function finish<T>(steps: Generator<void, T>): T {
+  for (;;) {
+    const r = steps.next()
+    if (r.done === true) return r.value
   }
 }

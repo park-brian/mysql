@@ -156,6 +156,12 @@ const ACTIVE = 1
 const COMMITTED = 2
 /** Committed transactions purge looks at after each commit. */
 const PURGE_BATCH = 4
+/**
+ * Undo records a commit purges, at most. A bulk DELETE's purge took as long
+ * as the DELETE, all of it inside the commit; past this, what is left waits
+ * for the next commit or for `purge()` from the async edge (D-77).
+ */
+const PURGE_COMMIT_RECORDS = 1024
 /** Undo records one purge mini-transaction takes, at most, and the pages it may hold before it stops taking more. */
 const PURGE_STEP_RECORDS = 64
 const PURGE_STEP_PAGES = 8
@@ -257,33 +263,47 @@ export class TrxSys {
 
   /**
    * Purge up to `limit` committed transactions, oldest first, while every
-   * open view that has not expired can see them. Before that, if the history
+   * open view that has not expired can see them, and spend at most `records`
+   * undo records doing it: a transaction the budget ends inside stays at the
+   * head of the history, its log shorter, and the next purge goes on with it.
+   * Each step is a mini-transaction, so a purge stopped between two is as
+   * consistent as one finished, crash included. Before that, if the history
    * is longer than `maxHistory`, the views pinning its oldest entries expire.
-   * Returns how many were purged.
+   * Returns how many were purged to the end.
    */
-  purge(limit = Infinity): number {
+  purge(limit = Infinity, records = Infinity): number {
     if (this.host.journal.open) throw misuse('purge inside a mini-transaction')
     for (let i = 0; this.#history.length - i > this.maxHistory; i++) {
       const id = (this.#history[i] as { id: number }).id
       for (const v of this.#views) if (!v.isVisible(id)) v.expired = true
     }
     let done = 0
-    while (done < limit) {
+    let budget = records
+    while (done < limit && budget > 0) {
       const oldest = this.#history[0]
       if (oldest === undefined) break
       if ([...this.#views].some((v) => !v.expired && !v.isVisible(oldest.id))) break
-      this.#purgeOne(oldest)
+      budget = this.#purgeOne(oldest, budget)
+      if (budget < 0) break
       this.#history.shift()
       done++
     }
     return done
   }
 
-  #purgeOne(t: { id: number; first: number; log?: UndoLog }): void {
+  /** Whether committed transactions wait for purge. */
+  get purgeable(): boolean {
+    return this.#history.length > 0
+  }
+
+  /** Purge one transaction, spending at most `budget` records: what is left of the budget, or -1 when it ran out first. */
+  #purgeOne(t: { id: number; first: number; log?: UndoLog }, budget: number): number {
     const { pool, journal } = this.host
-    const log = t.log ?? UndoLog.open(pool, t.first, this.host.pageCount)
+    const log = (t.log ??= UndoLog.open(pool, t.first, this.host.pageCount))
     const pages = this.undoPages
     while (log.records.length > 0) {
+      if (budget <= 0) return -1
+      const before = log.records.length
       // Several records to a mini-transaction, while it holds few pages: one
       // per record was a page image copied and diffed for every row a bulk
       // DELETE removed. Its pages stay pinned until it ends, hence the bound.
@@ -293,11 +313,13 @@ export class TrxSys {
           if (this.#purgeRecord(t, log)) break
         }
       })
+      budget -= before - log.records.length
     }
     journal.atomically(() => {
       this.host.trxTree.delete(be48(t.id))
       log.free(pages)
     })
+    return budget
   }
 
   /** Purge a log's last record, inside the caller's mini-transaction. `true` when it dropped trees. */
@@ -524,7 +546,7 @@ export class Trx {
     this.#end('committed')
     if (this.id !== 0) {
       sys.host.durable()
-      sys.purge(PURGE_BATCH)
+      sys.purge(PURGE_BATCH, PURGE_COMMIT_RECORDS)
     }
   }
 

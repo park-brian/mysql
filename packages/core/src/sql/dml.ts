@@ -178,18 +178,30 @@ function duplicateEntry(def: TableDef, index: IndexDef, values: readonly Value[]
 /** A bulk statement's batches: at most this many rows, and while the batch holds fewer pages than this. */
 const BATCH_ROWS = 64
 const BATCH_PAGES = 16
+/** Rows written one at a time between two chances to pause. */
+const PACE_ROWS = 64
 
 /**
  * `each` over `items` from `from` on, in as few mini-transactions as the
  * bounds allow (`trx.batch`): only for a statement that fails whole on any
  * error, and whose rows take no counter.
  */
-function inBatches<T>(trx: Trx, items: readonly T[], each: (item: T, n: number) => void, from = 0): void {
+function* inBatches<T>(trx: Trx, items: readonly T[], each: (item: T, n: number) => void, from = 0): Generator<void, void> {
   for (let n = from; n < items.length; ) {
     trx.batch(() => {
       const start = n
       for (; n < items.length && n - start < BATCH_ROWS && trx.pagesHeld < BATCH_PAGES; n++) each(items[n] as T, n)
     })
+    // Between two batches no mini-transaction is open: the statement may pause (D-77).
+    yield
+  }
+}
+
+/** Each item in turn, each its own mini-transaction or several, pausing every `PACE_ROWS` (D-77). */
+function* paced<T>(items: readonly T[], each: (item: T, n: number) => void): Generator<void, void> {
+  for (let n = 0; n < items.length; n++) {
+    each(items[n] as T, n)
+    if (n % PACE_ROWS === PACE_ROWS - 1) yield
   }
 }
 
@@ -506,7 +518,7 @@ const okInfo = (records: number, duplicates: number, warnings: number): string =
  *   - IGNORE turns 1062 and the conversion errors into warnings and skips or
  *     adjusts the row, and its `Duplicates` is rows not written.
  */
-export function insert(run: Run, node: InsertNode, trx: Trx): OkResult {
+export function* insert(run: Run, node: InsertNode, trx: Trx): Generator<void, OkResult> {
   // A subquery, or the SELECT of `INSERT … SELECT`, reads in the statement's transaction.
   run = { ...run, env: { ...run.env, trx } }
   if (node.partitions !== undefined) throw sqlError('ER_NOT_SUPPORTED_YET', messages.notSupported('Partitions'))
@@ -704,8 +716,8 @@ export function insert(run: Run, node: InsertNode, trx: Trx): OkResult {
   const batchable = mode === 'insert' && !ignore && def.clustered !== null && selected === undefined && compiledRows.length > 1 && (autoAt < 0 || !targets.includes(autoAt))
   if (batchable) {
     each(compiledRows[0] as (typeof compiledRows)[number], 0)
-    inBatches(trx, compiledRows, each, 1)
-  } else compiledRows.forEach(each)
+    yield* inBatches(trx, compiledRows, each, 1)
+  } else yield* paced(compiledRows, each)
 
   /** One row through `write_record`: write it, or settle its duplicate as the statement asks. */
   function writeRecord(fields: FieldBytes[], generated: bigint, prevNext: bigint): void {
@@ -861,10 +873,10 @@ function onUpdateOf(run: Run, def: TableDef): (Compiled | undefined)[] {
  * alias and tried row.
  */
 /** Fill a row's generated columns, from its fields as stored, in column order (M5.31). */
-type Generator = (fields: FieldBytes[], values: Value[], store: StoreContext, nulls: NullPolicy) => void
+type ColumnGenerator = (fields: FieldBytes[], values: Value[], store: StoreContext, nulls: NullPolicy) => void
 
 /** The table's generated columns, compiled once a statement; `undefined` when it has none. */
-export function generatorOf(run: Run, def: TableDef): Generator | undefined {
+export function generatorOf(run: Run, def: TableDef): ColumnGenerator | undefined {
   const at = def.columns.flatMap((c, i) => (generationOf(c) === undefined ? [] : [i]))
   if (at.length === 0) return undefined
   const ctx = compileContext(run, new TableScope([{ alias: def.name, def }]), 'generated column function')
@@ -904,7 +916,7 @@ function assignAll(
   defaults: readonly (Compiled | 'none')[],
   store: StoreContext,
   nulls: NullPolicy,
-  generate?: Generator,
+  generate?: ColumnGenerator,
 ): { after: FieldBytes[]; values: Value[]; changed: boolean } {
   const after = [...before]
   const values: Value[] = [...current]
@@ -1000,7 +1012,12 @@ function withCtes(run: Run, node: UpdateNode | DeleteNode, what: 'UPDATE' | 'DEL
 }
 
 /** The rows a WHERE / ORDER BY / LIMIT selects, read in full before any is written. */
-function matching(run: Run, def: TableDef, table: Table, alias: string, node: UpdateNode | DeleteNode, trx: Trx): ScannedRow[] {
+/**
+ * The rows a single-table UPDATE or DELETE changes, read in full before the
+ * first is changed. The read pauses as the writes do (D-77): the statement
+ * holds the writer slot, so nothing else changes the tree it walks.
+ */
+function* matching(run: Run, def: TableDef, table: Table, alias: string, node: UpdateNode | DeleteNode, trx: Trx): Generator<void, ScannedRow[]> {
   const scope = new TableScope([{ alias, def }])
   const where = node.where === undefined ? undefined : compile(node.where, compileContext(run, scope, 'where clause'))
   const keys = (node.orderBy ?? []).map((o) => ({ expr: compile(o.expr, compileContext(run, scope, 'order clause')), desc: o.desc === true }))
@@ -1008,10 +1025,15 @@ function matching(run: Run, def: TableDef, table: Table, alias: string, node: Up
   const access = chooseAccess(def, alias, node.where, run.env)
   let rows: Iterable<ScannedRow> = filter(accessRows(table, def, access, trx, true), where, run.env)
   if (keys.length > 0) rows = sort(rows, keys, run.env)
-  return [...limit(rows, 0, count)]
+  const out: ScannedRow[] = []
+  for (const row of limit(rows, 0, count)) {
+    out.push(row)
+    if (out.length % PACE_ROWS === 0) yield
+  }
+  return out
 }
 
-export function update(run: Run, node: UpdateNode, trx: Trx): OkResult {
+export function* update(run: Run, node: UpdateNode, trx: Trx): Generator<void, OkResult> {
   // A subquery reads in the statement's transaction.
   run = { ...run, env: { ...run.env, trx } }
   run = withCtes(run, node, 'UPDATE')
@@ -1039,7 +1061,7 @@ export function update(run: Run, node: UpdateNode, trx: Trx): OkResult {
   const keys = uniqueKeys(def)
   run.state.insertIdSet = false
 
-  const rows = matching(run, def, table, alias, node, trx)
+  const rows = yield* matching(run, def, table, alias, node, trx)
   let changed = 0
   const each = ({ id, row }: ScannedRow, n: number): void => {
     store.row = n + 1
@@ -1067,8 +1089,8 @@ export function update(run: Run, node: UpdateNode, trx: Trx): OkResult {
     changed++
   }
   // Without IGNORE, any error fails the statement whole: the rows go in batches.
-  if (ignore) rows.forEach(each)
-  else inBatches(trx, rows, each)
+  if (ignore) yield* paced(rows, each)
+  else yield* inBatches(trx, rows, each)
 
   const matched = rows.length
   const foundRows = hasCap(run.env.session.capabilities, CLIENT.FOUND_ROWS)
@@ -1101,7 +1123,7 @@ function sameBytes(x: Uint8Array, y: Uint8Array): boolean {
   return true
 }
 
-export function remove(run: Run, node: DeleteNode, trx: Trx): OkResult {
+export function* remove(run: Run, node: DeleteNode, trx: Trx): Generator<void, OkResult> {
   run = { ...run, env: { ...run.env, trx } }
   run = withCtes(run, node, 'DELETE')
   if (node.targets !== undefined) return removeMulti(run, node, trx)
@@ -1109,29 +1131,29 @@ export function remove(run: Run, node: DeleteNode, trx: Trx): OkResult {
   const { def, alias } = target
   const table = guarded(run, target.table, trx)
   checkTargetNotRead({ schema: def.schema, name: def.name }, [node.where], run.env.session.database)
-  const rows = matching(run, def, table, alias, node, trx)
+  const rows = yield* matching(run, def, table, alias, node, trx)
   let deleted = 0
   let warnings = 0
   // Without IGNORE, any error fails the statement whole: the rows go in batches.
   if (node.ignore !== true) {
-    inBatches(trx, rows, ({ id }) => {
+    yield* inBatches(trx, rows, ({ id }) => {
       if (table.delete(id, trx)) deleted++
     })
     return { affectedRows: deleted }
   }
-  for (const { id } of rows) {
+  yield* paced(rows, ({ id }) => {
     // IGNORE keeps a row a child holds, with a warning, and undoes whatever
     // its cascades had done (8.4.11).
-    const at = node.ignore === true ? trx.savepoint() : 0
+    const at = trx.savepoint()
     try {
       if (table.delete(id, trx)) deleted++
     } catch (e) {
-      if (node.ignore !== true || !(e instanceof MyjsError) || e.errno !== 1451) throw e
+      if (!(e instanceof MyjsError) || e.errno !== 1451) throw e
       trx.rollbackTo(at)
       warnings++
       run.env.conditions?.push({ level: 'Warning', code: e.errno ?? 1451, message: e.message })
     }
-  }
+  })
   return warnings === 0 ? { affectedRows: deleted } : { affectedRows: deleted, warnings }
 }
 

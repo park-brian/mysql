@@ -13,7 +13,7 @@
 // that its SQL is malformed.
 import { unsupportedStatement } from './errors.ts'
 import { Cursor, checkTreeDepth } from './cursor.ts'
-import { TOKEN } from './tokens.ts'
+import { TOKEN, type Token } from './tokens.ts'
 import { decodeStatement, lex, type LexOptions } from './lexer.ts'
 import { NO_SQL_MODE, type SqlMode } from './sql-mode.ts'
 import { parseCreateDatabase, parseCreateTable, parseCreateView, parseDefiner, parseDrop } from './ddl.ts'
@@ -56,11 +56,13 @@ import {
 
 export interface ParseStatementOptions extends LexOptions {
   readonly sqlMode?: SqlMode
+  /** `sql` already lexed under the same options, so a caller that needed the tokens first does not lex twice. */
+  readonly tokens?: Token[]
 }
 
 /** Parse one statement from SQL text. */
 export function parseStatement(sql: string, options: ParseStatementOptions = {}): Statement {
-  return parseFromTokens(new Cursor(lex(sql, options), sql), options.sqlMode ?? NO_SQL_MODE)
+  return parseFromTokens(new Cursor(options.tokens ?? lex(sql, options), sql), options.sqlMode ?? NO_SQL_MODE)
 }
 
 /**
