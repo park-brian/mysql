@@ -70,6 +70,8 @@ export interface DerivedSource {
   readonly joined?: boolean
   /** A query with no FROM: one constant row at most, which the server reads while planning, as a constant table. */
   readonly constant?: boolean
+  /** Merged into the query that reads it (`derived_merge`), rather than materialized. */
+  readonly merged?: boolean
   /** Its rows, as values in column order. `lateral` is the FROM's row so far, for LATERAL. */
   rows(trx: Trx | undefined, env: Env, lateral: Row | undefined): Iterable<readonly Value[]>
   /**
@@ -1042,6 +1044,12 @@ function toOp(node: Node, conditions: readonly Placed[], scope: TableScope, sett
   const inner = toOp(node.inner, toInner, scope, settings, ctx, preliminary)
   const both = new Set([...outerAliases, ...innerAliases])
   const keys = hashKeys(spanning, outerAliases, innerAliases, scope, (e) => ctx.compileOn(e, slotScope(preliminary.restrict(both), preliminary)))
+  // A materialized derived table joined by an equality is indexed on it and looked up (`<auto_key0>`).
+  const d = node.inner.kind === 'leaf' ? node.inner.table : undefined
+  if (d?.derived !== undefined && keys !== undefined && !d.lateral && d.derived.merged !== true && d.derived.constant !== true) {
+    const equalities = node.left ? spanning : spanning.filter((c) => isEquiJoin(c, outerAliases, innerAliases, scope))
+    return filterOp(autoKeyOp(node, outer, inner, d, keys, node.left ? spanning : equalities), node.left ? above : spanning.filter((c) => !equalities.includes(c)))
+  }
   if (node.left) return filterOp(hashJoinOp(node, outer, inner, spanning, keys), above)
   // An inner join's equalities between its sides are its own condition, whether or not they key the hash
   // (only some can: `hashKeys`); any other condition on both sides is a Filter over it.
@@ -1610,6 +1618,40 @@ function dynamicOp(node: Node & { kind: 'join' }, outer: Op, t: FromTable, on: r
     describe(env) {
       const read = planNode(`Index range scan on ${t.alias} (re-planned for each iteration)`)
       return planNode(node.left ? 'Nested loop left join' : 'Nested loop inner join', [outer.describe(env), on.length === 0 ? read : planNode('Filter', [read])])
+    },
+  }
+}
+
+/**
+ * A nested loop into a materialized derived table by the index the server
+ * builds on its join columns (`<auto_key0>`): the rows materialized once and
+ * kept by key in the order they were made, each row before them looking up
+ * its key's. Every condition is still checked of every pair.
+ */
+function autoKeyOp(node: Node & { kind: 'join' }, outer: Op, inner: Op, t: FromTable, keys: HashKeys, on: readonly Placed[]): Op {
+  return {
+    *rows(run, context) {
+      const env = run.env
+      const built = [...inner.rows(run, context)]
+      const byKey = bucket(built, keys.inner, env)
+      for (const o of outer.rows(run, context)) {
+        const k = keyOf(keys.outer, o.row, env)
+        let matched = false
+        for (const i of k === undefined ? NONE : (byKey.get(k) ?? NONE)) {
+          const r = built[i] as JoinedRow
+          const combined = merge(o.row, r.row, node.innerSlots)
+          if (!holds(on, combined, env)) continue
+          matched = true
+          yield joined(combined, run.ids ? joinIds(o, r) : undefined)
+        }
+        if (node.left && !matched) yield o
+      }
+    },
+    describe(env) {
+      const d = t.derived?.explain?.()
+      const lookup = planNode(`Index lookup on ${t.alias} using <auto_key0>`, d === undefined || d.merged ? [] : [planNode(d.materialize, d.children)])
+      const rest = on.filter((c) => !keys.conditions.includes(c))
+      return planNode(node.left ? 'Nested loop left join' : 'Nested loop inner join', [outer.describe(env), rest.length === 0 ? lookup : planNode('Filter', [lookup])])
     },
   }
 }

@@ -931,6 +931,7 @@ function derivedTable(run: Run, query: QueryExpression, alias: string, names: re
   return {
     columns,
     ...(lateral === undefined && !hasFrom(query) && query.body.kind === QUERY.SELECT ? { constant: true } : {}),
+    ...(merged ? { merged: true } : {}),
     explain: (): DerivedPlan | undefined => {
       const body = plan.explain?.()?.[0]
       if (body === undefined) return undefined
