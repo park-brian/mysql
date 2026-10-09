@@ -1,5 +1,5 @@
 export { MySQL, type ConnectionConfig } from './mysql.ts'
-export { Connection, QueryError, Transaction, type FieldInfo, type QueryOptions, type QueryResult, type ResultSetHeader, type TransactionOptions, type BeginOptions, type IsolationLevel, type TypeOptions } from './client/api.ts'
+export { Connection, QueryError, RowStream, Transaction, type FieldInfo, type QueryOptions, type QueryResult, type ResultSetHeader, type TransactionOptions, type BeginOptions, type IsolationLevel, type TypeOptions } from './client/api.ts'
 export type { MySQLOptions, DriverStream } from './mysql.ts'
 export { ProtocolConnection, DEFAULT_SERVER_VERSION } from './connection.ts'
 export type { ConnectionOptions } from './connection.ts'

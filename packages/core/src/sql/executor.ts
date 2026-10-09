@@ -52,7 +52,10 @@ import {
   type Parameter,
   type PreparedInfo,
   type Session,
+  type ResultSet,
+  type RowValue,
   type StatementResult,
+  type StreamedResultSet,
 } from '@myjs/protocol'
 import { conditionsFor } from './strict.ts'
 import { renameTables } from './rename.ts'
@@ -465,7 +468,7 @@ export class SqlExecutor implements Executor {
         // All are parsed under the mode in force when the text arrives; MySQL
         // parses each as it reaches it, so a `SET sql_mode` inside the text
         // governs the rest there and not here — a recorded divergence.
-        for (const statement of statements) results.push(await this.#one(session, sql, statement, params, known, protocol))
+        for (const statement of statements) results.push(await this.#one(session, sql, statement, params, known, protocol, false))
         return results
       }
     }
@@ -474,7 +477,11 @@ export class SqlExecutor implements Executor {
     return this.#one(session, sql, statement, params, known, protocol)
   }
 
-  async #one(session: Session, sql: string, statement: Statement, params: readonly Value[], known: readonly Value[] | undefined, protocol: WireProtocol): Promise<StatementResult> {
+  /**
+   * One statement. With `stream`, a resultset larger than a batch is answered
+   * as a `StreamedResultSet` (M5.40), and its end recorded when it comes.
+   */
+  async #one(session: Session, sql: string, statement: Statement, params: readonly Value[], known: readonly Value[] | undefined, protocol: WireProtocol, stream = true): Promise<StatementResult> {
     const began = performance.now()
     this.#alive(session)
     await this.#preload(session, statement)
@@ -488,16 +495,27 @@ export class SqlExecutor implements Executor {
     let wait = 1
     for (let attempt = 0; ; attempt++) {
       const conditions = conditionsFor(statement, session.sqlMode)
-      try {
-        const run = this.#run(session, sql, params, known, protocol, conditions)
-        const dispatched = this.#dispatch(run, statement)
-        const result = isSteps(dispatched) ? await this.#drive(session, dispatched, began) : dispatched
+      const settle = <R extends StatementResult>(result: R): R => {
         this.#purgeLater()
         if (diagnostic) return result
         // A count no condition stands for is still the count (`warning_count`).
         const warnings = Math.max(result.warnings ?? 0, conditions.length)
         state.diagnostics = { conditions: conditions.slice(0, MAX_ERROR_COUNT), warnings, errors: 0 }
         return warnings === (result.warnings ?? 0) ? result : { ...result, warnings }
+      }
+      // The error is a condition too, after any the statement raised first.
+      const failed = (e: unknown): SqlError => {
+        const error = toSqlError(e)
+        if (!diagnostic) state.diagnostics = { conditions: [...conditions, { level: 'Error' as const, code: error.errno ?? 0, message: error.message }].slice(0, MAX_ERROR_COUNT), warnings: conditions.length + 1, errors: 1 }
+        return error
+      }
+      try {
+        const run = this.#run(session, sql, params, known, protocol, conditions)
+        const batches: ResultSet[] | undefined = stream ? [] : undefined
+        const dispatched = this.#dispatch(run, statement, batches === undefined ? undefined : (batch) => batches.push(batch))
+        if (!isSteps(dispatched)) return settle(dispatched)
+        if (batches === undefined) return settle(await this.#drive(session, dispatched, began))
+        return await this.#streamed(session, dispatched, batches, began, settle, failed)
       } catch (e) {
         const code = codeOf(e)
         if (code === 'ENGINE_WRITER_BUSY') {
@@ -520,10 +538,7 @@ export class SqlExecutor implements Executor {
             continue
           }
         }
-        const error = toSqlError(e)
-        // The error is a condition too, after any the statement raised first.
-        if (!diagnostic) state.diagnostics = { conditions: [...conditions, { level: 'Error' as const, code: error.errno ?? 0, message: error.message }].slice(0, MAX_ERROR_COUNT), warnings: conditions.length + 1, errors: 1 }
-        throw error
+        throw failed(e)
       }
     }
   }
@@ -539,7 +554,7 @@ export class SqlExecutor implements Executor {
    * the statement rolls back as it would on any other error.
    */
   #drive<T>(session: Session, steps: Generator<void, T>, started = performance.now()): Promise<T> {
-    const running = (async () => {
+    return this.#tracked((async () => {
       let since = started
       for (;;) {
         const step = steps.next()
@@ -549,7 +564,96 @@ export class SqlExecutor implements Executor {
         if (this.#ended.has(session)) steps.throw(sqlError('ER_QUERY_INTERRUPTED', 'Query execution was interrupted'))
         since = performance.now()
       }
-    })()
+    })())
+  }
+
+  /**
+   * A statement's steps, driven as `#drive` drives them until a first batch
+   * of rows is out (M5.40). A statement that ends first is answered whole,
+   * as before; a larger resultset is answered as a stream, whose later
+   * batches are read only as the dispatcher pulls them, so that what is held
+   * is a batch, not the result. It pauses as `#drive` does, and a stream
+   * abandoned (`return()`) or interrupted rolls its statement back. `settle`
+   * and `failed` record its end in the diagnostics area when that comes.
+   */
+  async #streamed(
+    session: Session,
+    steps: Generator<void, StatementResult>,
+    batches: ResultSet[],
+    started: number,
+    settle: <R extends StatementResult>(result: R) => R,
+    failed: (e: unknown) => SqlError,
+  ): Promise<StatementResult> {
+    let since = started
+    const step = async (): Promise<StatementResult | undefined> => {
+      for (;;) {
+        const next = steps.next()
+        if (next.done === true) return next.value
+        // Every pause hands out a batch, so the clock is read before it is.
+        if (performance.now() - since >= SLICE_MS) {
+          await pause()
+          if (this.#ended.has(session)) steps.throw(sqlError('ER_QUERY_INTERRUPTED', 'Query execution was interrupted'))
+          since = performance.now()
+        }
+        if (batches.length > 0) return undefined
+      }
+    }
+    // A failure after rows were read is answered after them, as a stream.
+    let failure: unknown
+    let first: StatementResult | undefined
+    try {
+      first = await this.#tracked(step())
+    } catch (e) {
+      if (batches.length === 0) throw e
+      failure = e
+    }
+    if (first !== undefined) return settle(first)
+    const columns = (batches[0] as ResultSet).columns
+    let warnings = 0
+    // The stream is running until it ends or is abandoned: `stop()` waits.
+    let ended!: () => void
+    void this.#tracked(new Promise<void>((resolve) => (ended = resolve)))
+    async function* rest(): AsyncGenerator<readonly (readonly RowValue[])[]> {
+      let done = failure !== undefined
+      try {
+        for (;;) {
+          while (batches.length > 0) yield (batches.shift() as ResultSet).rows
+          if (failure !== undefined) throw failure
+          if (done) return
+          let last: StatementResult | undefined
+          try {
+            last = await step()
+          } catch (e) {
+            // Its rows first: the loop sends what is held, then throws.
+            failure = e
+            done = true
+            continue
+          }
+          if (last === undefined) continue
+          done = true
+          const result = settle(last as ResultSet)
+          warnings = result.warnings ?? 0
+          batches.push(result)
+        }
+      } catch (e) {
+        throw failed(e)
+      } finally {
+        if (!done) steps.return(undefined as never)
+        ended()
+      }
+    }
+    const streamed: StreamedResultSet = {
+      columns,
+      batches: rest(),
+      get warnings() {
+        return warnings
+      },
+    }
+    return streamed
+  }
+
+  /** `running`, counted among the statements `stop()` waits for. */
+  #tracked<T>(running: Promise<T>): Promise<T> {
     this.#running.add(running)
     const done = (): void => void this.#running.delete(running)
     running.then(done, done)
@@ -611,14 +715,14 @@ export class SqlExecutor implements Executor {
    * that may run long (INSERT, UPDATE, DELETE), its steps, which `#drive`
    * runs with pauses between them (D-77).
    */
-  #dispatch(run: Run, statement: Statement): StatementResult | Generator<void, StatementResult> {
+  #dispatch(run: Run, statement: Statement, emit?: (batch: ResultSet) => void): StatementResult | Generator<void, StatementResult> {
     const { state } = run
     const session = run.env.session
     switch (statement.kind) {
       case STATEMENT.QUERY: {
         const plan = planQuery(run, statement)
         if (this.catalog === undefined) return resultSet(run, plan, undefined)
-        return state.steps(this.catalog.store, plan.locking, (trx) => resultSteps(run, plan, trx))
+        return state.steps(this.catalog.store, plan.locking, (trx) => resultSteps(run, plan, trx, emit))
       }
       case STATEMENT.INSERT:
         return this.#counted(run, state.steps(this.#catalog(run).store, true, (trx) => insert(run, statement, trx)))

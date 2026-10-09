@@ -38,11 +38,35 @@ export interface OkResult {
   readonly info?: string
 }
 
+/**
+ * A resultset handed out a batch of rows at a time, for one too large to
+ * hold whole (M5.40, D-85). The rows are read as the batches are pulled, so a
+ * consumer that pulls slowly slows the statement, and one that stops pulling
+ * (`return()`) ends it: its transaction is rolled back. `warnings` is the
+ * statement's count once the batches have ended.
+ */
+export interface StreamedResultSet {
+  readonly columns: readonly ColumnDefinition[]
+  readonly batches: AsyncIterable<readonly (readonly RowValue[])[]>
+  readonly warnings?: number
+}
+
 /** What the executor hands back for one statement. */
-export type StatementResult = ResultSet | OkResult
+export type StatementResult = ResultSet | OkResult | StreamedResultSet
 
 export function isResultSet(result: StatementResult): result is ResultSet {
-  return 'columns' in result
+  return 'rows' in result
+}
+
+export function isStreamed(result: StatementResult): result is StreamedResultSet {
+  return 'batches' in result
+}
+
+/** A streamed resultset's rows, every batch read and held: for a cursor, which keeps them all (doc 16). */
+export async function collectRows(result: StreamedResultSet): Promise<ResultSet> {
+  const rows: (readonly RowValue[])[] = []
+  for await (const batch of result.batches) for (const row of batch) rows.push(row)
+  return { columns: result.columns, rows, ...(result.warnings === undefined ? {} : { warnings: result.warnings }) }
 }
 
 export interface ResultsetOptions {
@@ -81,23 +105,38 @@ function statusFor(options: ResultsetOptions): number {
   return options.moreResults === true ? base | SERVER_STATUS.MORE_RESULTS_EXISTS : base
 }
 
+/** A resultset's packets before its rows: the count, the definitions and, without CLIENT_DEPRECATE_EOF, an EOF. */
+export function resultsetHeadPackets(
+  caps: Capabilities,
+  columns: readonly ColumnDefinition[],
+  options: ResultsetOptions = {},
+): Uint8Array[] {
+  const packets: Uint8Array[] = [columnCountPacket(caps, columns.length)]
+  for (const c of columns) packets.push(columnDefinitionPacket(c))
+  if (!hasCap(caps, CLIENT.DEPRECATE_EOF)) {
+    const w = new Writer(8)
+    writeTerminator(w, caps, { statusFlags: options.statusFlags ?? SERVER_STATUS.AUTOCOMMIT })
+    packets.push(w.toBytes())
+  }
+  return packets
+}
+
+/** The terminator after a resultset's rows. */
+export function resultsetEndPacket(caps: Capabilities, warnings: number | undefined, options: ResultsetOptions = {}): Uint8Array {
+  const w = new Writer(16)
+  writeTerminator(w, caps, { statusFlags: statusFor(options), warnings: warnings ?? options.warnings ?? 0 })
+  return w.toBytes()
+}
+
 /** The packets of one text resultset, in order. */
 export function textResultsetPackets(
   caps: Capabilities,
   result: ResultSet,
   options: ResultsetOptions = {},
 ): Uint8Array[] {
-  const packets: Uint8Array[] = [columnCountPacket(caps, result.columns.length)]
-  for (const c of result.columns) packets.push(columnDefinitionPacket(c))
-  if (!hasCap(caps, CLIENT.DEPRECATE_EOF)) {
-    const w = new Writer(8)
-    writeTerminator(w, caps, { statusFlags: options.statusFlags ?? SERVER_STATUS.AUTOCOMMIT })
-    packets.push(w.toBytes())
-  }
+  const packets = resultsetHeadPackets(caps, result.columns, options)
   for (const row of result.rows) packets.push(textRowPacket(result.columns, row))
-  const w = new Writer(16)
-  writeTerminator(w, caps, { statusFlags: statusFor(options), warnings: result.warnings ?? options.warnings ?? 0 })
-  packets.push(w.toBytes())
+  packets.push(resultsetEndPacket(caps, result.warnings, options))
   return packets
 }
 
@@ -144,9 +183,8 @@ export function responsePackets(
 ): Uint8Array[] {
   const packets: Uint8Array[] = []
   for (const [i, result] of results.entries()) {
-    packets.push(
-      ...statementResultPackets(caps, result, { ...options, moreResults: i < results.length - 1 }),
-    )
+    // A loop, not a spread: a resultset's packets can outnumber the stack.
+    for (const packet of statementResultPackets(caps, result, { ...options, moreResults: i < results.length - 1 })) packets.push(packet)
   }
   return packets
 }
@@ -198,17 +236,9 @@ export function binaryResultsetPackets(
   result: ResultSet,
   options: ResultsetOptions = {},
 ): Uint8Array[] {
-  const packets: Uint8Array[] = [columnCountPacket(caps, result.columns.length)]
-  for (const c of result.columns) packets.push(columnDefinitionPacket(c))
-  if (!hasCap(caps, CLIENT.DEPRECATE_EOF)) {
-    const w = new Writer(8)
-    writeTerminator(w, caps, { statusFlags: options.statusFlags ?? SERVER_STATUS.AUTOCOMMIT })
-    packets.push(w.toBytes())
-  }
+  const packets = resultsetHeadPackets(caps, result.columns, options)
   for (const row of result.rows) packets.push(binaryRowPacket(result.columns, row))
-  const w = new Writer(16)
-  writeTerminator(w, caps, { statusFlags: statusFor(options), warnings: result.warnings ?? options.warnings ?? 0 })
-  packets.push(w.toBytes())
+  packets.push(resultsetEndPacket(caps, result.warnings, options))
   return packets
 }
 

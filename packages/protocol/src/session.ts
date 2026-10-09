@@ -133,7 +133,11 @@ export interface PreparedInfo {
  * protocol layer changing.
  */
 export interface Executor {
-  /** Text protocol. Returning an array produces a multi-resultset response. */
+  /**
+   * Text protocol. Returning an array produces a multi-resultset response.
+   * A single result may be a `StreamedResultSet`, whose rows the dispatcher
+   * sends as they are read (M5.40); an array holds none.
+   */
   query(
     session: Session,
     sql: string,

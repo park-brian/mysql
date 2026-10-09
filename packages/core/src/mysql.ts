@@ -19,7 +19,7 @@ import { MemoryVfs, type Lock, type Vfs } from '@myjs/vfs'
 import { createStream as hostStream, openPathVfs, type DriverStream } from '#host'
 import { ProtocolConnection, type ConnectionOptions } from './connection.ts'
 import { SqlExecutor } from './sql/executor.ts'
-import { Connection, Transaction, inTransaction, type BeginOptions, type QueryOptions, type QueryResult, type TransactionOptions, type TypeOptions } from './client/api.ts'
+import { Connection, Transaction, inTransaction, ownedStream, type RowStream, type BeginOptions, type QueryOptions, type QueryResult, type TransactionOptions, type TypeOptions } from './client/api.ts'
 
 /** Who `connect()` signs in as, and how its values are typed: `mysql2`'s option names. */
 export interface ConnectionConfig extends TypeOptions {
@@ -272,6 +272,16 @@ export class MySQL {
   /** Doc 42: a prepared statement, run with `values` through the binary protocol. */
   async execute<T = unknown>(sql: string | QueryOptions, values?: readonly unknown[]): Promise<QueryResult<T>> {
     return (await this.#connection()).execute<T>(sql, values)
+  }
+
+  /**
+   * Doc 42: a query's rows one at a time, never held whole (M5.40), on a
+   * connection of its own that ends with them. Breaking out early ends the
+   * statement: its transaction is rolled back, and a `FOR UPDATE`'s hold on
+   * the writer released.
+   */
+  stream<T = unknown>(sql: string | QueryOptions, values?: readonly unknown[]): RowStream<T> {
+    return ownedStream<T>(() => this.connect(), sql, values)
   }
 
   /** Doc 42: a transaction on a connection of its own, which `commit()` or `rollback()` ends. */

@@ -18,7 +18,7 @@ work item that builds the rest:
 | `execProtocol()`, `createStream()`, `createPort()`, `createConnection()` | yes (M1.24) | |
 | `serve()` from `myjs/server` | yes (M1.24) | |
 | real `INFORMATION_SCHEMA`, `SHOW`, `EXPLAIN` | yes (M5.13 begun) | |
-| `db.stream()` | no | M5.40, pinned to 0.4 |
+| `db.stream()` | no | built after 0.3 was staged (M5.40); in 0.4 |
 | `db.schemas()`, `tables()`, `columns()`, `explain()`, `stats()` | no | M5.13 |
 | `MySQLWorker`, `myjs/worker` | no | M6.6 |
 | `dump()`, `MySQL.load()` | no | M6.8 |
@@ -75,7 +75,7 @@ const [result] = await db.execute(
 result.affectedRows   // 1
 result.insertId       // 42
 
-// streaming — never materialise a large resultset — not in 0.3: M5.40
+// streaming — never materialise a large resultset (M5.40, in 0.4)
 for await (const row of db.stream('SELECT * FROM big_table')) {
   process(row)
 }
@@ -117,9 +117,25 @@ them, and `execute()` prepares once per text and sends each value as
   `db.transaction()` each take a connection of their own, since a
   transaction is a session's state.
 
-`db.stream()` is not built yet. D-77 answers Q-11 in principle — a read
-already pauses every 256 rows, so rows can be handed out a batch at a time —
-and M5.40 builds it for 0.4.
+### Streaming (M5.40)
+
+`db.stream(sql, values?)` is an async iterator of rows, shaped as `query()`
+shapes them, on a connection of its own that ends with the rows.
+`connection.stream()` does the same on a connection already held, a
+transaction's included, and nothing else runs on that connection meanwhile.
+The rows are read as the server sends them, and the server reads them as
+they are taken (D-85): a reader that stops taking stops the statement, so
+the memory held is a batch, whatever the result's size. Leaving the loop
+early, with `break` or a throw, closes the stream's connection, which ends
+the statement and rolls back its transaction, and a `FOR UPDATE`'s hold on
+the writer goes with it. A statement that fails part way throws after the
+rows read before the failure, as a server sends them.
+
+What streams is the reading. A sort, a hash join's build, a temporary
+table for GROUP BY or DISTINCT, and a window's partition each read their
+input whole before they hand out a row, as they do on a server, and until
+M5.23 they hold it in memory. `mysql2`'s own `query().stream()` streams the
+same way, over `createStream()` and `serve()` alike.
 
 ## Transactions
 

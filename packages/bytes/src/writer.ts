@@ -24,13 +24,17 @@ const U64_MAX = 0xffff_ffff_ffff_ffffn
 
 export class Writer {
   #bytes: Uint8Array
-  #view: DataView
+  /** Made on first use: most writes are bytes, and a row's writer never needs one. */
+  #view: DataView | undefined
   #pos = 0
 
   constructor(initialCapacity = 256) {
     const cap = Math.max(16, initialCapacity)
     this.#bytes = new Uint8Array(cap)
-    this.#view = new DataView(this.#bytes.buffer)
+  }
+
+  #dataView(): DataView {
+    return (this.#view ??= new DataView(this.#bytes.buffer))
   }
 
   /** Bytes written so far. */
@@ -41,10 +45,10 @@ export class Writer {
   /**
    * Geometric growth: double until it fits, so N appends cost O(N).
    *
-   * Callers must resolve this into a local *before* touching `this.#view` —
-   * a member expression is evaluated before its arguments, so the inline form
-   * `this.#view.setUint8(this.#ensure(1), v)` would write through the
-   * pre-growth DataView and throw on the first reallocation.
+   * Callers must resolve this into a local *before* touching `this.#bytes`
+   * or the view — an object is evaluated before its key or arguments, so the
+   * inline form `this.#bytes[this.#ensure(1)] = v` would write into the
+   * pre-growth buffer, and lose the byte, on the first reallocation.
    */
   #ensure(n: number): number {
     const need = this.#pos + n
@@ -54,7 +58,7 @@ export class Writer {
       const grown = new Uint8Array(cap)
       grown.set(this.#bytes.subarray(0, this.#pos))
       this.#bytes = grown
-      this.#view = new DataView(grown.buffer)
+      this.#view = undefined
     }
     const at = this.#pos
     this.#pos += n
@@ -65,28 +69,28 @@ export class Writer {
 
   u8(v: number): this {
     const at = this.#ensure(1)
-    this.#view.setUint8(at, v & 0xff)
+    this.#bytes[at] = v & 0xff
     return this
   }
 
   u16(v: number): this {
     const at = this.#ensure(2)
-    this.#view.setUint16(at, v & 0xffff, true)
+    this.#dataView().setUint16(at, v & 0xffff, true)
     return this
   }
 
   /** `int<3>` — the packet header's `payload_length` is one. */
   u24(v: number): this {
     const at = this.#ensure(3)
-    this.#view.setUint8(at, v & 0xff)
-    this.#view.setUint8(at + 1, (v >>> 8) & 0xff)
-    this.#view.setUint8(at + 2, (v >>> 16) & 0xff)
+    this.#bytes[at] = v & 0xff
+    this.#bytes[at + 1] = (v >>> 8) & 0xff
+    this.#bytes[at + 2] = (v >>> 16) & 0xff
     return this
   }
 
   u32(v: number): this {
     const at = this.#ensure(4)
-    this.#view.setUint32(at, v >>> 0, true)
+    this.#dataView().setUint32(at, v >>> 0, true)
     return this
   }
 
@@ -95,14 +99,14 @@ export class Writer {
     const at = this.#ensure(6)
     const lo = v % 0x1_0000_0000
     const hi = Math.floor(v / 0x1_0000_0000)
-    this.#view.setUint32(at, lo >>> 0, true)
-    this.#view.setUint16(at + 4, hi & 0xffff, true)
+    this.#dataView().setUint32(at, lo >>> 0, true)
+    this.#dataView().setUint16(at + 4, hi & 0xffff, true)
     return this
   }
 
   u64(v: bigint | number): this {
     const at = this.#ensure(8)
-    this.#view.setBigUint64(at, BigInt(v) & U64_MAX, true)
+    this.#dataView().setBigUint64(at, BigInt(v) & U64_MAX, true)
     return this
   }
 
@@ -110,25 +114,25 @@ export class Writer {
 
   i8(v: number): this {
     const at = this.#ensure(1)
-    this.#view.setInt8(at, v)
+    this.#dataView().setInt8(at, v)
     return this
   }
 
   i16(v: number): this {
     const at = this.#ensure(2)
-    this.#view.setInt16(at, v, true)
+    this.#dataView().setInt16(at, v, true)
     return this
   }
 
   i32(v: number): this {
     const at = this.#ensure(4)
-    this.#view.setInt32(at, v, true)
+    this.#dataView().setInt32(at, v, true)
     return this
   }
 
   i64(v: bigint | number): this {
     const at = this.#ensure(8)
-    this.#view.setBigInt64(at, BigInt(v), true)
+    this.#dataView().setBigInt64(at, BigInt(v), true)
     return this
   }
 
@@ -136,13 +140,13 @@ export class Writer {
 
   f32(v: number): this {
     const at = this.#ensure(4)
-    this.#view.setFloat32(at, v, true)
+    this.#dataView().setFloat32(at, v, true)
     return this
   }
 
   f64(v: number): this {
     const at = this.#ensure(8)
-    this.#view.setFloat64(at, v, true)
+    this.#dataView().setFloat64(at, v, true)
     return this
   }
 
@@ -212,14 +216,14 @@ export class Writer {
 
   patchU8(offset: number, v: number): void {
     this.#assertInside(offset, 1)
-    this.#view.setUint8(offset, v & 0xff)
+    this.#bytes[offset] = v & 0xff
   }
 
   patchU24(offset: number, v: number): void {
     this.#assertInside(offset, 3)
-    this.#view.setUint8(offset, v & 0xff)
-    this.#view.setUint8(offset + 1, (v >>> 8) & 0xff)
-    this.#view.setUint8(offset + 2, (v >>> 16) & 0xff)
+    this.#bytes[offset] = v & 0xff
+    this.#bytes[offset + 1] = (v >>> 8) & 0xff
+    this.#bytes[offset + 2] = (v >>> 16) & 0xff
   }
 
   #assertInside(offset: number, n: number): void {

@@ -2037,15 +2037,32 @@ const PACE_ROWS = 256
  * `resultSet`, pausing every `PACE_ROWS` rows (D-77). A read holds no writer
  * slot, so a write may come between two rows: the read's view keeps what it
  * sees the same, and a B+tree scan finds its place again by key (M5.38).
+ * With `emit`, each pause hands the rows read since the last one to it and
+ * keeps none, so a streamed result holds a batch at most (M5.40); what it
+ * returns is the rows after the last pause, and on a failure the rows read
+ * since then are handed out before the error is thrown.
  */
-export function* resultSteps(run: Run, plan: SelectPlan, trx: Trx | undefined): Generator<void, ResultSet> {
+export function* resultSteps(run: Run, plan: SelectPlan, trx: Trx | undefined, emit?: (batch: ResultSet) => void): Generator<void, ResultSet> {
   const described = plan.columnsAt?.(trx) ?? plan.columns
   const columns = described.map((c) => columnDefinition(c.name, c.type, run.env.session.characterSet))
-  const rows: RowValue[][] = []
+  let rows: RowValue[][] = []
   const types = described.map((c) => c.type)
-  for (const values of plan.rows(trx)) {
-    rows.push(values.map((v, i) => toWire(v, types[i] as ResultType, run.protocol, run.env.session)))
-    if (rows.length % PACE_ROWS === 0) yield
+  try {
+    for (const values of plan.rows(trx)) {
+      rows.push(values.map((v, i) => toWire(v, types[i] as ResultType, run.protocol, run.env.session)))
+      if (rows.length % PACE_ROWS !== 0) continue
+      if (emit !== undefined) {
+        emit({ columns, rows })
+        rows = []
+      }
+      yield
+    }
+  } catch (e) {
+    // A server sends each row as it is read, so the rows before a failure
+    // reach the client ahead of its error (8.4.11: a subquery's 1242 at the
+    // 700th row follows 699 rows).
+    if (emit !== undefined && rows.length > 0) emit({ columns, rows })
+    throw e
   }
   return { columns, rows }
 }

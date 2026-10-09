@@ -195,6 +195,17 @@ export class PacketFramer {
    * so a final chunk of length 0 is emitted naturally.
    */
   encode(payload: Uint8Array): Uint8Array {
+    if (payload.length < MAX_PAYLOAD) {
+      // One packet, as nearly every one is: its header, then its payload.
+      const out = new Uint8Array(HEADER_SIZE + payload.length)
+      out[0] = payload.length & 0xff
+      out[1] = (payload.length >>> 8) & 0xff
+      out[2] = payload.length >>> 16
+      out[3] = this.#seq
+      this.#seq = (this.#seq + 1) & 0xff
+      out.set(payload, HEADER_SIZE)
+      return out
+    }
     const chunks = Math.floor(payload.length / MAX_PAYLOAD) + 1
     const w = new Writer(payload.length + chunks * HEADER_SIZE)
     let offset = 0

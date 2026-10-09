@@ -245,7 +245,7 @@ export function decodeCharset(bytes: Uint8Array, charset: string): string {
  */
 export function encodeCharset(text: string, charset: string): Uint8Array {
   const label = WHATWG_LABEL[charset]
-  if (label === 'utf-8') return encoder.encode(text)
+  if (label === 'utf-8') return text.length <= SHORT_TEXT ? shortUtf8(text) : encoder.encode(text)
   const table = singleByteTable(charset)
   if (table === undefined) throw unsupportedCharset(charset)
   const map = singleByteInverse(charset, table)
@@ -259,6 +259,24 @@ export function encodeCharset(text: string, charset: string): Uint8Array {
     out[n++] = byte ?? 0x3f
   }
   return out.subarray(0, n)
+}
+
+/** Text short enough that copying its code units beats a call into `TextEncoder`. */
+const SHORT_TEXT = 32
+
+/**
+ * UTF-8 for a short string, copied byte for byte while it is ASCII, as the
+ * text of every number a resultset sends is: `TextEncoder` costs more to
+ * call than such a value takes to copy (M5.40's profile of a million rows).
+ */
+function shortUtf8(text: string): Uint8Array {
+  const out = new Uint8Array(text.length)
+  for (let i = 0; i < text.length; i++) {
+    const c = text.charCodeAt(i)
+    if (c > 0x7f) return encoder.encode(text)
+    out[i] = c
+  }
+  return out
 }
 
 /** Decode using a collation id rather than a charset name — what the wire carries. */

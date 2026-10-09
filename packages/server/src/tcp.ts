@@ -104,12 +104,31 @@ export async function serve(db: MySQL, options: ServeOptions = {}): Promise<Serv
       ...(options.cursorTimeoutMs === undefined ? {} : { cursorTimeoutMs: options.cursorTimeoutMs }),
     })
 
+    // Bytes are written as the connection queues them, a turn's worth at a
+    // time; while the socket's buffer is full nothing more is taken, so a
+    // streamed resultset waits for the client to read (M5.40).
+    let full = false
+    let scheduled = false
     const flush = (): void => {
+      scheduled = false
+      if (full) return
       const out = connection.take()
-      if (out.length > 0) socket.write(Buffer.from(out))
+      if (out.length > 0 && !socket.write(Buffer.from(out))) {
+        full = true
+        socket.once('drain', () => {
+          full = false
+          flush()
+        })
+        return
+      }
       // COM_QUIT: the server just closes, having written nothing.
       if (connection.closed) socket.end()
     }
+    connection.onOutput(() => {
+      if (scheduled) return
+      scheduled = true
+      queueMicrotask(flush)
+    })
 
     connection.start()
     flush()

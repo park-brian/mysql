@@ -25,7 +25,8 @@ const LENENC_INVALID = 0xff
 
 export class Reader {
   readonly #bytes: Uint8Array
-  readonly #view: DataView
+  /** Made on first use: a row's reader reads bytes and lengths, and never needs one. */
+  #view: DataView | undefined
   readonly #end: number
   #pos: number
 
@@ -34,9 +35,13 @@ export class Reader {
       throw new ProtocolError('PROTOCOL_BAD_RANGE', `invalid Reader range ${start}..${end} over ${bytes.length} bytes`)
     }
     this.#bytes = bytes
-    this.#view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength)
     this.#pos = start
     this.#end = end
+  }
+
+  #dataView(): DataView {
+    const b = this.#bytes
+    return (this.#view ??= new DataView(b.buffer, b.byteOffset, b.byteLength))
   }
 
   /** Bytes left in the payload; every read checks against it. */
@@ -59,28 +64,28 @@ export class Reader {
   // ---- fixed-width unsigned, little-endian -------------------------------
 
   u8(): number {
-    return this.#view.getUint8(this.#need(1, 'u8'))
+    return this.#bytes[this.#need(1, 'u8')] as number
   }
 
   u16(): number {
-    return this.#view.getUint16(this.#need(2, 'u16'), true)
+    return this.#dataView().getUint16(this.#need(2, 'u16'), true)
   }
 
   /** `int<3>` — MySQL's 3-byte integer; `payload_length` is one. */
   u24(): number {
     const at = this.#need(3, 'u24')
-    const v = this.#view
-    return v.getUint8(at) | (v.getUint8(at + 1) << 8) | (v.getUint8(at + 2) << 16)
+    const b = this.#bytes
+    return (b[at] as number) | ((b[at + 1] as number) << 8) | ((b[at + 2] as number) << 16)
   }
 
   u32(): number {
-    return this.#view.getUint32(this.#need(4, 'u32'), true)
+    return this.#dataView().getUint32(this.#need(4, 'u32'), true)
   }
 
   /** `int<6>` — appears in binlog contexts. Always exact: 2^48 < 2^53. */
   u48(): number {
     const at = this.#need(6, 'u48')
-    const v = this.#view
+    const v = this.#dataView()
     return v.getUint32(at, true) + v.getUint16(at + 4, true) * 0x1_0000_0000
   }
 
@@ -90,35 +95,35 @@ export class Reader {
    * number-if-safe-else-BigInt policy (D-15) belongs to a higher layer.
    */
   u64(): bigint {
-    return this.#view.getBigUint64(this.#need(8, 'u64'), true)
+    return this.#dataView().getBigUint64(this.#need(8, 'u64'), true)
   }
 
   // ---- fixed-width signed ------------------------------------------------
 
   i8(): number {
-    return this.#view.getInt8(this.#need(1, 'i8'))
+    return this.#dataView().getInt8(this.#need(1, 'i8'))
   }
 
   i16(): number {
-    return this.#view.getInt16(this.#need(2, 'i16'), true)
+    return this.#dataView().getInt16(this.#need(2, 'i16'), true)
   }
 
   i32(): number {
-    return this.#view.getInt32(this.#need(4, 'i32'), true)
+    return this.#dataView().getInt32(this.#need(4, 'i32'), true)
   }
 
   i64(): bigint {
-    return this.#view.getBigInt64(this.#need(8, 'i64'), true)
+    return this.#dataView().getBigInt64(this.#need(8, 'i64'), true)
   }
 
   // ---- floats ------------------------------------------------------------
 
   f32(): number {
-    return this.#view.getFloat32(this.#need(4, 'f32'), true)
+    return this.#dataView().getFloat32(this.#need(4, 'f32'), true)
   }
 
   f64(): number {
-    return this.#view.getFloat64(this.#need(8, 'f64'), true)
+    return this.#dataView().getFloat64(this.#need(8, 'f64'), true)
   }
 
   // ---- byte strings ------------------------------------------------------
@@ -144,7 +149,7 @@ export class Reader {
   nulString(): Uint8Array {
     const start = this.#pos
     let i = start
-    while (i < this.#end && this.#view.getUint8(i) !== 0) i++
+    while (i < this.#end && this.#bytes[i] !== 0) i++
     if (i === this.#end) {
       throw new ProtocolError('PROTOCOL_UNTERMINATED_STRING', 'string<NUL>: no NUL terminator before end of payload')
     }

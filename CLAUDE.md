@@ -26,7 +26,8 @@ says what comes next: 0.3 is staged (`npm run pack`, D-79/D-80) and waits only
 on being published. The cost-based planner (M5.7, M5.42–M5.46) is done:
 `EXPLAIN FORMAT=TREE` prints the plan that runs, and 2,082 of the relational
 corpus's 2,248 plans agree with 8.4.11's; the strategies left are M5.47–M5.50.
-Then `db.stream()` (M5.40) and the browser (M6).
+`db.stream()` (M5.40) streams with backpressure at every hop (D-85). Then the
+browser (M6).
 The package an application installs is `myjs`, a facade over `@myjs/core`.
 
 ## Running things

@@ -301,6 +301,20 @@ test('SERVER_MORE_RESULTS_EXISTS is set on every terminator but the last', async
   )
 })
 
+test('resultsets of more packets than the stack holds arguments are answered, in both protocols', async () => {
+  // Found by M5.40: the packets were joined with a spread, `push(...packets)`,
+  // which overflows the stack at a few hundred thousand.
+  const ctx = context()
+  ctx.session.multipleStatementsEnabled = true
+  const rows = Array.from({ length: 200_000 }, (_, i) => [i])
+  const result = { columns: [column('a', FIELD_TYPE.LONG)], rows }
+  ctx.executor.results = [result, result]
+  assert.equal((await dispatch(comQuery('SELECT a FROM t; SELECT a FROM t'), ctx)).packets.length, 2 * (200_000 + 3))
+  const stmt = ctx.session.statements.create('SELECT a FROM t', 0, result.columns)
+  ctx.executor.results = [result]
+  assert.equal((await dispatch(comStmtExecute(stmt.id, 0, []), ctx)).packets.length, 200_000 + 3)
+})
+
 test('D-13: multiple resultsets are refused while the engine switch is off', async () => {
   const ctx = context()
   assert.equal(ctx.session.multipleStatementsEnabled, false, 'off by default')
@@ -557,4 +571,60 @@ test('long data beyond max_allowed_packet fails at execute time, not on send', a
     ctx,
   )
   assert.equal(parseErr(packets[0] as Uint8Array, CAPS).errno, 1153)
+})
+
+// --- M5.40: a streamed resultset ----------------------------------------
+
+/** A streamed resultset of `batches`, failing with `fail` after them if given; `pulled` counts the batches read. */
+function streamed(batches: number[][], fail?: MyjsError): { result: StatementResult; pulled: () => number } {
+  let pulled = 0
+  async function* rows() {
+    for (const b of batches) {
+      pulled++
+      yield b.map((n) => [n])
+    }
+    if (fail !== undefined) throw fail
+  }
+  return { result: { columns: [column('n', FIELD_TYPE.LONG)], batches: rows(), warnings: 2 }, pulled: () => pulled }
+}
+
+async function drained(stream: AsyncIterable<readonly Uint8Array[]> | undefined): Promise<Uint8Array[]> {
+  const out: Uint8Array[] = []
+  for await (const packets of stream ?? []) out.push(...packets)
+  return out
+}
+
+test('a streamed resultset sends its head at once and each batch only when asked for it', async () => {
+  const ctx = context()
+  const { result, pulled } = streamed([[1, 2], [3]])
+  ctx.executor.results = result
+  const response = await dispatch(comQuery('SELECT n FROM t'), ctx)
+  assert.equal(response.packets.length, 2, 'count + definition, no rows yet')
+  assert.equal(pulled(), 0, 'no batch is read before the connection asks')
+  const rest = await drained(response.stream)
+  assert.deepEqual(rest.slice(0, 3).map((p) => fromUtf8(p.subarray(1))), ['1', '2', '3'])
+  assert.equal(parseOk(rest[3] as Uint8Array, CAPS).warnings, 2, "the terminator carries the statement's count")
+})
+
+test('a streamed resultset that fails part way ends with its ERR, after the rows already sent', async () => {
+  const ctx = context()
+  ctx.executor.results = streamed([[1]], new MyjsError('ER_SUBQUERY_NO_1_ROW', 'Subquery returns more than 1 row', { errno: 1242 })).result
+  const rest = await drained((await dispatch(comQuery('SELECT n FROM t'), ctx)).stream)
+  assert.equal(rest.length, 2)
+  assert.equal(parseErr(rest[1] as Uint8Array, CAPS).errno, 1242)
+})
+
+test('a cursor over a streamed resultset reads it whole, and fetches from it', async () => {
+  const ctx = context()
+  const columns = [column('n', FIELD_TYPE.LONG)]
+  const stmt = ctx.session.statements.create('SELECT n FROM t', 0, columns)
+  ctx.executor.results = streamed([[1, 2], [3]]).result
+  const opened = await dispatch(comStmtExecute(stmt.id, CURSOR_TYPE.READ_ONLY, []), ctx)
+  assert.equal(opened.stream, undefined)
+  assert.equal(opened.packets.length, 3, 'count + definition + terminator, no rows')
+  const fetch = new Writer()
+  fetch.u8(COM.STMT_FETCH)
+  fetch.u32(stmt.id)
+  fetch.u32(10)
+  assert.equal((await dispatch(fetch.toBytes(), ctx)).packets.length, 4, 'three rows and a terminator')
 })

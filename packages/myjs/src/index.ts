@@ -5,7 +5,7 @@
 // `MySQL` class, the connection and transaction it hands out, their errors
 // and their types. This package re-exports exactly those, so what 1.0
 // freezes is this file, not every export of `@myjs/core` (D-79).
-export { MySQL, Connection, Transaction, QueryError } from '@myjs/core'
+export { MySQL, Connection, Transaction, QueryError, RowStream } from '@myjs/core'
 export type {
   BeginOptions,
   ConnectionConfig,

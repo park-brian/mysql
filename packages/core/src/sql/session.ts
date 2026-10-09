@@ -183,8 +183,8 @@ export class SqlSession implements SessionValues {
    * that yields between mini-transactions, and whoever drives this one
    * decides when to resume it; `statement()` is this run straight through. The transaction is the same — the
    * statement's own under autocommit, the session's otherwise — and so is
-   * its end: a failure, or an error thrown in at a pause, rolls back the
-   * statement whole. The writer slot is held across every pause, so no
+   * its end: a failure, an error thrown in at a pause, or a `return()` at
+   * one, rolls back the statement whole. The writer slot is held across every pause, so no
    * other writer, DDL or purge changes a page while it waits.
    */
   *steps<T>(store: Store, write: boolean, run: (trx: Trx) => Generator<void, T>): Generator<void, T> {
@@ -193,6 +193,9 @@ export class SqlSession implements SessionValues {
       this.trx = this.#begin(store)
       this.#sync()
     }
+    // A run that did not finish is undone, whether it threw or its driver
+    // stopped resuming it (`return()`, a stream abandoned: M5.40).
+    let finished = false
     const kept = this.trx
     if (kept === undefined) {
       const trx = this.#begin(store)
@@ -200,20 +203,21 @@ export class SqlSession implements SessionValues {
         if (write) trx.lock()
         const out = yield* run(trx)
         trx.commit()
+        finished = true
         return out
-      } catch (e) {
-        trx.rollback()
-        throw e
+      } finally {
+        if (!finished) trx.rollback()
       }
     }
     kept.statement()
     if (write) kept.lock()
     const at = kept.savepoint()
     try {
-      return yield* run(kept)
-    } catch (e) {
-      if (kept.state === 'active') kept.rollbackTo(at)
-      throw e
+      const out = yield* run(kept)
+      finished = true
+      return out
+    } finally {
+      if (!finished && kept.state === 'active') kept.rollbackTo(at)
     }
   }
 }
