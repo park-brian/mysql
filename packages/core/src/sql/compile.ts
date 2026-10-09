@@ -135,6 +135,7 @@ export interface Env {
  * and a hex literal, read as a number. The value itself passes unchanged.
  */
 export function asNumber(c: Compiled, kind: 'DOUBLE' | 'INTEGER' | 'DECIMAL', once: boolean | Expression = false): Compiled {
+  if (c.type.kind === 'json') return jsonAsNumber(c, kind)
   if (c.type.kind !== 'string' && c.type.kind !== 'bytes') return c
   // A TEXT or BLOB column reads as a double or an integer without a word
   // (`Field_blob::val_real` and `val_int` discard the error).
@@ -181,7 +182,13 @@ function unconvertedBytes(v: Exclude<Value, null>, kind: 'DOUBLE' | 'INTEGER' | 
  */
 function logicalOperand(c: Compiled, written: Expression | false): Compiled['eval'] {
   if (c.type.kind === 'json') {
+    // Saying so once a statement, 3986 (8.4.11).
+    const key = {}
     return (r, env) => {
+      if (env.memo?.has(key) !== true) {
+        env.memo?.set(key, true)
+        raise(env, 3986, 'Evaluating a JSON value in SQL boolean context does an implicit comparison against JSON integer 0; if this is not what you want, consider converting JSON to a SQL numeric type with JSON_VALUE RETURNING')
+      }
       const v = c.eval(r, env)
       return v === null || v.kind !== 'json' ? v : bool(jsonTruth(v))
     }
@@ -215,6 +222,27 @@ const isNumber = (t: ResultType): boolean => t.kind === 'int' || t.kind === 'dec
 
 function textVersusNumber(x: ResultType, y: ResultType): boolean {
   return (x.kind === 'string' || x.kind === 'bytes') && isNumber(y)
+}
+
+/**
+ * JSON read as a number: 3156 each row for what is no number — an array, an
+ * object, `null`, a string that is not wholly one (8.4.11: `"10"` and `true`
+ * are quiet, `"1x"` warns though it reads as 1).
+ */
+function jsonAsNumber(c: Compiled, kind: 'DOUBLE' | 'INTEGER' | 'DECIMAL'): Compiled {
+  const name = c.type.column?.orgName ?? 'json'
+  const cast = kind === 'INTEGER' ? 'SIGNED' : kind
+  return {
+    ...c,
+    eval: (r, env) => {
+      const v = c.eval(r, env)
+      if (v === null || v.kind !== 'json') return v
+      const d = v.v
+      const number = d.t === 'int' || d.t === 'uint' || d.t === 'double' || d.t === 'decimal' || d.t === 'bool' || (d.t === 'string' && numericPrefix(d.v).complete)
+      if (!number) raise(env, 3156, `Invalid JSON value for CAST to ${cast} from column ${name} at row ${rowNumber(env)}`)
+      return v
+    },
+  }
 }
 
 /** `asNumber`'s check, for one value. */
@@ -1060,7 +1088,8 @@ function binary(op: string, left: Expression, right: Expression, extra: Expressi
     const dateOf = all.find((x) => x.type.kind === 'datetime')
     const dated = !numeric && dateOf !== undefined && all.every((x) => x.type.kind === 'datetime' || isText(x.type) || x.type.kind === 'null')
     const operand = (x: Compiled, written: Expression | false): Compiled => {
-      if (numeric && isText(x.type)) return asNumber(x, 'DOUBLE', written !== false && constantNode(written) && written)
+      // A constant bound warns each row it is compared, unlike `=`'s once (8.4.11: `tm BETWEEN 'a' AND db` warns for every row).
+      if (numeric && isText(x.type)) return asNumber(x, 'DOUBLE')
       if (numeric && (x.type.kind === 'datetime' || x.type.kind === 'time')) return { eval: (r, env) => { const v = x.eval(r, env); return v === null ? null : doubleValue(toDouble(v)) }, type: doubleType(x.type.nullable) }
       if (dated && isText(x.type) && written !== false) return dateConstant(x, written, dateOf as Compiled, ctx, false)
       return x
