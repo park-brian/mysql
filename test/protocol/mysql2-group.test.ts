@@ -33,6 +33,10 @@ const SCRIPT: readonly (readonly [string, Outcome])[] = [
     ["SELECT AVG(d), STD(n), VARIANCE(n), VAR_SAMP(n), STDDEV_SAMP(n), BIT_AND(k), BIT_OR(n), BIT_XOR(n) FROM t", [["0.980000", "2.65329983228432", "7.040000000000001", "8.8", "2.9664793948382653", "0", "15", "15"]]],
     ["SELECT k, AVG(d) FROM t GROUP BY k ORDER BY k", [["1", "0.050000"], ["2", "0.616667"], ["3", "3.000000"]]],
     ["SELECT s, COUNT(*) FROM t GROUP BY k", 1055],
+    // `=` with a constant pins the key, and the row with it; `<=>` pins nothing, with a constant or a column (8.4.11).
+    ["SELECT k, s FROM t WHERE id = 1 GROUP BY k", [["2", "ann"]]],
+    ["SELECT k, s FROM t WHERE id <=> 1 GROUP BY k", 1055],
+    ["SELECT t.k, u.s FROM t, t AS u WHERE u.id <=> t.k GROUP BY t.k", 1055],
     ["SELECT s, COUNT(*) FROM t", 1140],
     ["SELECT k, COUNT(*) FROM t WHERE k = 2", [["2", "3"]]],
     ["SELECT id, s FROM t GROUP BY id ORDER BY id", [["1", "ann"], ["2", "Bob"], ["3", "ÄNN"], ["4", null], ["5", "bob"], ["6", "cy"]]],

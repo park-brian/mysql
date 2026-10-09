@@ -1763,8 +1763,9 @@ function checkFullGroupBy(
   const constant = (e: Expression): boolean => e.kind === NODE.LITERAL ? e.type !== 'null' : e.kind === NODE.PLACEHOLDER || (e.kind === NODE.UNARY && e.op === '-' && constant(e.operand))
   const edges: [number, number][] = []
   const aliasOf = (index: number): string | undefined => scope?.columnAt(index)?.table.alias
+  // Only `=`: `<=>` determines nothing, with a constant or a column (8.4.11: `WHERE id <=> 0 GROUP BY g` selecting `n` is 1055).
   for (const { e: c, into } of directed) {
-    if (c.kind !== NODE.BINARY || (c.op !== '=' && c.op !== '<=>')) continue
+    if (c.kind !== NODE.BINARY || c.op !== '=') continue
     const l = c.left.kind === NODE.COLUMN ? safeIndex(lookup, c.left.parts) : undefined
     const r = c.right.kind === NODE.COLUMN ? safeIndex(lookup, c.right.parts) : undefined
     const allowed = (to: number): boolean => into === undefined || into.has(aliasOf(to) ?? '')
