@@ -17,12 +17,14 @@ the way: DDL, DML and transactions, upserts, relational SELECT (joins,
 grouping, subqueries, CTEs, set operations), window functions, JSON, views,
 foreign keys, CHECK constraints, generated columns, FULLTEXT search,
 INFORMATION_SCHEMA, temporary tables and ALTER TABLE all run through
-unmodified `mysql2` and agree with 8.4.11 on the committed corpora. Drizzle's
-MySQL suites pass whole and Prisma's all but one file. Doc 42's query API
+unmodified `mysql2` and agree with 8.4.11 on the committed corpora. M5's exit
+criterion is met: Drizzle's MySQL suites and Prisma's functional tests pass
+as they pass on 8.4.11, file for file. Doc 42's query API
 (`db.query()`, `db.execute()`, `db.transaction()`) is a client of the same
 protocol, its values `mysql2`'s (M5.36, D-76). The roadmap's **Next** section
-says what comes next: 0.3, then the cost-based planner (M5.7) and the browser
-(M6).
+says what comes next: 0.3 is staged (`npm run pack`, D-79/D-80) and waits only
+on being published; then the cost-based planner (M5.7) and the browser (M6).
+The package an application installs is `myjs`, a facade over `@myjs/core`.
 
 ## Running things
 
