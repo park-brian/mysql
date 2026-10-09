@@ -39,7 +39,7 @@ import { messages, sqlError } from '@myjs/protocol'
 import { truth, type Value } from '@myjs/types'
 import type { Compiled, Env, Row, Scope } from './compile.ts'
 import { planNode, type PlanNode } from './explain.ts'
-import { FULL_SCAN, accessRows, chooseAccess, keyOrder, pointAccess, splitAnd, type Access, type OuterColumn, type RangeCosting } from './plan.ts'
+import { FULL_SCAN, accessRows, chooseAccess, dynamicAccess, keyOrder, pointAccess, splitAnd, type Access, type OuterColumn, type RangeCosting } from './plan.ts'
 import { bestAccess, floorFilter, joinOrder, type Candidate, type KeyChoice, type Positioned } from './cost.ts'
 import { rowKey } from './keys.ts'
 import { neverEqual } from './optimize.ts'
@@ -465,6 +465,7 @@ export function planFrom(refs: readonly TableReference[], ctx: FromContext, wher
       env === undefined ? undefined : rangeEstimate(t, conditions, tables, scope, (e) => ctx.compileOn(e, preliminary.restrict(new Set([t.alias]))), env, width)
     planned ??= planJoins(tree.node, splitAnd(where).map((e) => ({ e, aliases: aliasesOf(e, scope) })), scope, settings, straight ? undefined : lookupAfter, rangeOf, sort)
     settings.lookups = planned.lookups
+    settings.dynamic = planned.dynamic
     return planned
   }
   const physicalOf = (conditions: readonly Placed[]): Op | undefined => {
@@ -719,6 +720,8 @@ interface LeafSettings {
   readonly tables?: ReadonlyMap<string, FromTable>
   /** The tables the cost model reads by their join's index lookup (`planJoins`). */
   lookups?: ReadonlySet<string>
+  /** The tables read by a range re-planned for each row before them (`planJoins`). */
+  dynamic?: ReadonlySet<string>
   readonly outer?: OuterColumn
   /** `chosenAccess`'s choices, by statement environment and table. */
   chosen: WeakMap<Env, Map<string, Access>>
@@ -959,6 +962,14 @@ function toOp(node: Node, conditions: readonly Placed[], scope: TableScope, sett
     const inner = toOp(node.inner, toInner, scope, settings, ctx, preliminary)
     return filterOp(lateralOp(node, outer, inner, spanning), above)
   }
+  if (node.inner.kind === 'leaf' && settings.dynamic?.has(node.inner.table.alias) === true) {
+    const t = node.inner.table
+    const known = (e: Expression): Compiled | undefined => {
+      const a = aliasesOf(e, scope)
+      return a !== undefined && a.size > 0 && [...a].every((x) => outerAliases.has(x)) ? ctx.compileOn(e, slotScope(preliminary.restrict(outerAliases), preliminary)) : undefined
+    }
+    return filterOp(dynamicOp(node, outer, t, [...toInner, ...spanning], settings, known), above)
+  }
   if (node.lookup !== undefined && node.inner.kind === 'leaf' && settings.lookups?.has(node.inner.table.alias) !== false) {
     return filterOp(lookupOp(node, outer, node.inner.table, node.lookup, [...toInner, ...spanning], settings), above)
   }
@@ -982,6 +993,8 @@ interface JoinPlan {
   readonly node: Node
   readonly lookups: ReadonlySet<string>
   readonly on: readonly Placed[]
+  /** The tables whose range is re-planned for each row before them (`finish` in `planJoins`). */
+  readonly dynamic: ReadonlySet<string>
 }
 
 /**
@@ -1037,10 +1050,10 @@ function planJoins(root: Node, where: readonly Weighed[], scope: TableScope, set
       ons(n.inner)
     }
     ons(root)
-    return { node, lookups: new Set(order.filter((p) => p.lookup).map((p) => p.alias)), on }
+    return finish(node, new Set(order.filter((p) => p.lookup).map((p) => p.alias)), on)
   }
   const candidates = (node: Node): boolean => node.kind === 'join' && (node.lookup !== undefined || candidates(node.outer) || candidates(node.inner))
-  if (!candidates(root)) return { node: root, lookups: new Set(), on: [] }
+  if (!candidates(root)) return finish(root, new Set(), [])
   const positions: Positioned[] = []
   const visit = (node: Node, lookup?: EqRef): void => {
     if (node.kind === 'join') {
@@ -1051,7 +1064,48 @@ function planJoins(root: Node, where: readonly Weighed[], scope: TableScope, set
     positions.push(placeTable(node.table, lookup, positions, conditions, scope, settings, statsOf(node.table), rangeOf(node.table, conditions)))
   }
   visit(root)
-  return { node: root, lookups: new Set(positions.filter((p) => p.lookup).map((p) => p.alias)), on: [] }
+  return finish(root, new Set(positions.filter((p) => p.lookup).map((p) => p.alias)), [])
+
+  // "Range checked for each record": a later table read whole, with no range of its own on constants, whose indexed
+  // column a condition compares by `<`, `>` or BETWEEN with the tables before it — not by `=`, whose key was already
+  // weighed as a lookup (`checked_keys`). The server re-plans its range for each row before it, and joins it by a
+  // nested loop, never a buffer (8.4.11).
+  function finish(node: Node, lookups: ReadonlySet<string>, on: readonly Placed[]): JoinPlan {
+    const dynamic = new Set<string>()
+    const before = new Set<string>()
+    const walk = (n: Node): void => {
+      if (n.kind === 'leaf') {
+        before.add(n.table.alias)
+        return
+      }
+      walk(n.outer)
+      const inner = n.inner
+      if (inner.kind === 'leaf' && !lookups.has(inner.table.alias) && !inner.table.lateral && inner.table.def !== undefined && inner.table.table !== undefined) {
+        const own = n.left ? n.on : conditions
+        if (rangeOf(inner.table, own) === undefined && own.some((c) => comparesWithEarlier(inner.table, c.e, before, scope))) dynamic.add(inner.table.alias)
+      }
+      walk(inner)
+    }
+    walk(node)
+    return { node, lookups, on, dynamic }
+  }
+}
+
+/** Whether a condition compares an indexed column of `t` by `<`, `<=`, `>`, `>=` or BETWEEN with columns of the tables in `before` alone. */
+function comparesWithEarlier(t: FromTable, e: Expression, before: ReadonlySet<string>, scope: TableScope): boolean {
+  const leads = (x: Expression): boolean => {
+    const c = columnOf(t, x, scope)
+    return c !== undefined && t.def?.indexes.some((i) => i.invisible !== true && i.parts[0]?.column === c.name && i.parts[0].prefix === undefined) === true
+  }
+  const earlier = (x: Expression | undefined): boolean => {
+    const a = x === undefined ? undefined : aliasesOf(x, scope)
+    return a !== undefined && a.size > 0 && [...a].every((alias) => before.has(alias))
+  }
+  return splitAnd(e).some((c) => {
+    if (c.kind !== NODE.BINARY) return false
+    if (['<', '<=', '>', '>='].includes(c.op)) return (leads(c.left) && earlier(c.right)) || (leads(c.right) && earlier(c.left))
+    return c.op.toUpperCase() === 'BETWEEN' && leads(c.left) && (earlier(c.right) || earlier(c.extra as Expression))
+  })
 }
 
 /** What the range optimizer estimates of a table (`found_records`, `quick_rows`): its rows under the conditions on each column an index leads, and the least of them. */
@@ -1454,6 +1508,42 @@ function lookupOp(node: Node & { kind: 'join' }, outer: Op, t: FromTable, lookup
       // The lookup's own equality is the key read, not a filter.
       const rest = on.filter((c) => c.e !== lookup.condition)
       return planNode(node.left ? 'Nested loop left join' : 'Nested loop inner join', [outer.describe(env), rest.length === 0 ? lookupNode : planNode('Filter', [lookupNode])])
+    },
+  }
+}
+
+/**
+ * A nested loop whose later table's range is planned again for each row
+ * before it, the earlier tables' columns read from that row (`dynamicAccess`).
+ * Every condition is still checked of every pair.
+ */
+function dynamicOp(node: Node & { kind: 'join' }, outer: Op, t: FromTable, on: readonly Placed[], settings: LeafSettings, known: (e: Expression) => Compiled | undefined): Op {
+  const compiled = new Map<Expression, Compiled | undefined>()
+  return {
+    *rows(run, context) {
+      const env = run.env
+      const costing = rangeCosting(t, settings, env)
+      const conjuncts = on.map((c) => c.e)
+      for (const o of outer.rows(run, context)) {
+        const value = (e: Expression): Value | undefined => {
+          if (!compiled.has(e)) compiled.set(e, known(e))
+          return compiled.get(e)?.eval(o.row, env)
+        }
+        const access = costing === undefined ? FULL_SCAN : dynamicAccess(t.def as TableDef, t.alias, conjuncts, env, costing, value)
+        let matched = false
+        for (const { id, row: values } of accessRows(t.table as Table, t.def as TableDef, access, run.trx, run.locking)) {
+          const combined = o.row.slice()
+          for (let i = 0; i < t.width; i++) combined[t.offset + i] = values[i] ?? null
+          if (!holds(on, combined, env)) continue
+          matched = true
+          yield joined(combined, run.ids ? joinIds(o, { row: values, ids: idsAt(t.offset, id) }) : undefined)
+        }
+        if (node.left && !matched) yield o
+      }
+    },
+    describe(env) {
+      const read = planNode(`Index range scan on ${t.alias} (re-planned for each iteration)`)
+      return planNode(node.left ? 'Nested loop left join' : 'Nested loop inner join', [outer.describe(env), on.length === 0 ? read : planNode('Filter', [read])])
     },
   }
 }

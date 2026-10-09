@@ -45,7 +45,7 @@ import {
 import type { Table, Trx } from '@myjs/engine'
 import type { Compiled, Env } from './compile.ts'
 import { rangeBaseline, rangeCost, type RangeShape } from './cost.ts'
-import { intersect, normalize, rangeOf, type Interval, type RangeSet } from './ranges.ts'
+import { intersect, normalize, rangeOf, type Constant, type Interval, type RangeSet } from './ranges.ts'
 import type { TableStatistics } from './stats.ts'
 import { scan, type ScannedRow } from './operators.ts'
 
@@ -218,6 +218,15 @@ function pointsAccess(def: TableDef, conditions: readonly Condition[], env: Env,
   return best?.access
 }
 
+/**
+ * A range re-planned for each row of the tables before it ("range checked
+ * for each record"): the range optimizer's choice with `known` giving the
+ * earlier tables' values, or a full scan.
+ */
+export function dynamicAccess(def: TableDef, alias: string, conjuncts: readonly Expression[], env: Env, costing: RangeCosting, known: Constant): Access {
+  return rangeAccess(def, alias, conjuncts, env, costing, known) ?? FULL_SCAN
+}
+
 /** What the range optimizer weighs a table's ranges by (M5.7). */
 export interface RangeCosting {
   readonly stats: TableStatistics
@@ -242,9 +251,9 @@ export interface RangeCosting {
  * point one; its cost `rangeCost`. Indexes are tried in the server's key order
  * and a later one wins only if strictly cheaper.
  */
-function rangeAccess(def: TableDef, alias: string, conjuncts: readonly Expression[], env: Env, costing: RangeCosting): Access | undefined {
+function rangeAccess(def: TableDef, alias: string, conjuncts: readonly Expression[], env: Env, costing: RangeCosting, known?: Constant): Access | undefined {
   const t = costing.stats
-  const value = (e: Expression): Value | undefined => (e.kind === NODE.PLACEHOLDER && e.index >= env.params.length ? undefined : isConstant(e) ? constantValue(e, env) : undefined)
+  const value = (e: Expression): Value | undefined => (e.kind === NODE.PLACEHOLDER && e.index >= env.params.length ? undefined : isConstant(e) ? constantValue(e, env) : known?.(e))
   const candidates: { readonly index: IndexDef; readonly column: ColumnDef; readonly intervals: Interval[]; readonly keyed: { readonly range: KeyRange; readonly point: boolean }[]; readonly shape: RangeShape }[] = []
   for (const index of keyOrder(def)) {
     const part = index.parts[0]
