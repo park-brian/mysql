@@ -981,13 +981,16 @@ function intDigits(t: ResultType): number {
   if (t.literalInt !== undefined) return t.literalInt.digits
   if (t.kind === 'decimal') return t.length - t.scale
   if (t.kind === 'int') return t.unsigned ? t.length : t.length - 1
+  // A temporal's number: YYYYMMDD, hhhmmss, or both (8.4.11: `d * 20200102` is 17 wide).
+  if (t.kind === 'datetime') return t.field === FIELD_TYPE.DATE ? 8 : 14
+  if (t.kind === 'time') return 7
   return 0
 }
 
 /** Whether an operand is unsigned as a number: an unsigned type, or a hex literal. */
 const unsignedOf = (t: ResultType): boolean => t.unsigned || t.literalInt?.unsigned === true
 
-const scaleOf = (t: ResultType): number => (t.kind === 'decimal' ? t.scale : 0)
+const scaleOf = (t: ResultType): number => (t.kind === 'decimal' || t.kind === 'datetime' || t.kind === 'time' ? t.scale : 0)
 
 /** The numeric kind an arithmetic operator yields, chosen before evaluation as MySQL chooses it. */
 function arithKind(a: ResultType, b: ResultType): 'int' | 'decimal' | 'double' | 'null' {
