@@ -10,7 +10,7 @@
 // name as written, else the expression's own source text — `SELECT 1+1`
 // returns a column called `1+1`, spaces and all, which only the text has.
 import type { ColumnDef, Table, TableDef, ViewDef } from '@myjs/engine'
-import { NODE, QUERY, REF, TOKEN, deparse, lex, parseSqlMode, parseStatement, type Expression, type OrderItem, type QueryBody, type QueryExpression, type SelectNode, type SetOperationNode, type TableName, type Token } from '@myjs/parser'
+import { NODE, QUERY, REF, TOKEN, deparse, lex, parseStatement, type Expression, type OrderItem, type QueryBody, type QueryExpression, type SelectNode, type SetOperationNode, type TableName, type Token } from '@myjs/parser'
 import { messages, sqlError, type ColumnDefinition, type ResultSet, type RowValue } from '@myjs/protocol'
 import { intValue, integerRange, toInteger, truth, withoutHex, type Value } from '@myjs/types'
 import { compile, convertTo, EMPTY_SCOPE, type CompileContext, type Compiled, type Env, type GroupKeys, type Row, type Scope, type SubqueryPlan } from './compile.ts'
@@ -31,6 +31,7 @@ import type { SqlSession } from './session.ts'
 import { toWire, type WireProtocol } from './wire.ts'
 import type { Trx } from '@myjs/engine'
 import { isTemporary, type CatalogApi } from './temporary.ts'
+import { modeOf } from './mode.ts'
 
 /** Everything one statement execution needs. */
 export interface Run {
@@ -187,7 +188,7 @@ const MODIFIERS = new Set(['ALL', 'DISTINCT', 'DISTINCTROW', 'HIGH_PRIORITY', 'S
 function itemTexts(run: Run, node: SelectNode): (string | undefined)[] {
   let tokens
   try {
-    tokens = lex(run.sql, { sqlMode: parseSqlMode(run.env.session.sqlMode) })
+    tokens = lex(run.sql, { sqlMode: modeOf(run.env.session.sqlMode) })
   } catch (e) {
     expectTyped(e)
     return []
@@ -1171,7 +1172,7 @@ function planGrouped(
     return { expr: compile(e, withWindows(postCtx('order clause'))), desc: o.desc === true }
   })
 
-  if (/(^|,)ONLY_FULL_GROUP_BY(,|$)/i.test(run.env.session.sqlMode)) {
+  if (modeOf(run.env.session.sqlMode).onlyFullGroupBy) {
     checkFullGroupBy(lookup, scope, keys, node.where, from?.joins ?? [], items.map((i) => i.expr), (q.orderBy ?? []).filter((o) => !(o.expr.kind === NODE.LITERAL && o.expr.type === 'int') && !(o.expr.kind === NODE.COLUMN && o.expr.parts.length === 1 && items.some((i) => i.alias?.toLowerCase() === (o.expr as unknown as { parts: string[] }).parts[0]?.toLowerCase()))).map((o) => o.expr), node.groupBy === undefined, rollup)
   }
 

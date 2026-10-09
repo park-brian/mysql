@@ -95,6 +95,7 @@ const JSON_PATH_FUNCTIONS: ReadonlySet<string> = new Set(['JSON_EXTRACT', 'JSON_
 import { windowNotAllowed } from './window.ts'
 import { dateAdd, isInterval } from './interval.ts'
 import { escapeString, printExpression, Unprintable } from './print.ts'
+import { modeOf } from './mode.ts'
 
 /** One row as operators pass it: a value per column of the scope. */
 export type Row = readonly Value[]
@@ -326,7 +327,7 @@ function byZero(at: Compiled['eval'], bt: Compiled['eval'], op: (x: Value, y: Va
     const v = op(x, y)
     // Only ERROR_FOR_DIVISION_BY_ZERO makes it a warning: without it the
     // answer is NULL and nothing is said (`signal_divide_by_null`, 8.4.11).
-    if (v === null && x !== null && y !== null && /\bERROR_FOR_DIVISION_BY_ZERO\b/.test(env.session.sqlMode)) raise(env, 1365, 'Division by 0')
+    if (v === null && x !== null && y !== null && modeOf(env.session.sqlMode).errorForDivisionByZero) raise(env, 1365, 'Division by 0')
     return v
   }
 }
@@ -728,7 +729,7 @@ function literal(e: LiteralNode, ctx: CompileContext): Compiled {
         return lit({ kind: 'time', v: t.v, fsp: t.fsp }, datetimeType(FIELD_TYPE.TIME, t.fsp, false))
       }
       // Under the session's zero-date modes: DATE '0000-00-00' is 1525 by default (8.4.11).
-      const p = parseDateTime(text, zeroFlags(ctx.session.sqlMode))
+      const p = parseDateTime(text, modeOf(ctx.session.sqlMode))
       const type = e.unit === 'DATE' ? 'DATE' : 'DATETIME'
       if (p === undefined) throw sqlError('ER_WRONG_VALUE', `Incorrect ${type} value: '${text}'`)
       const v = toDateTime({ kind: 'datetime', v: p.v, type: 'DATETIME', fsp: p.fsp }, type)
@@ -1203,11 +1204,9 @@ function asTimeOfDay(c: Compiled, column: readonly string[]): Compiled {
 }
 
 /** The session's NO_ZERO_DATE and NO_ZERO_IN_DATE, as a scan's flags. */
-const zeroFlags = (mode: string): { noZeroDate: boolean; noZeroInDate: boolean } => ({ noZeroDate: /\bNO_ZERO_DATE\b/.test(mode), noZeroInDate: /\bNO_ZERO_IN_DATE\b/.test(mode) })
-
 /** A string constant compared with a date or datetime: that, or 1292 and then 1525. */
 function asDateConstant(c: Compiled, field: number, ctx: CompileContext): Compiled {
-  const flags = zeroFlags(ctx.session.sqlMode)
+  const flags = modeOf(ctx.session.sqlMode)
   const date = field === FIELD_TYPE.DATE || field === FIELD_TYPE.NEWDATE
   return {
     eval: (r, env) => {
@@ -2369,7 +2368,7 @@ function cast(e: CastNode, ctx: CompileContext): Compiled {
     case 'DATETIME': {
       const type = t.name === 'DATE' ? 'DATE' : 'DATETIME'
       const fsp = type === 'DATE' ? 0 : (t.length ?? 0)
-      const flags = zeroFlags(ctx.session.sqlMode)
+      const flags = modeOf(ctx.session.sqlMode)
       return {
         eval: (r, env) => {
           const v = x(r, env)

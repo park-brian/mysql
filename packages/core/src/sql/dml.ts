@@ -33,8 +33,8 @@ import { checkTargetNotRead, compileContext, fromContext, limitValue, openTable,
 import { planFrom, type FromPlan, type FromTable, type JoinedRow } from './from.ts'
 import { TableScope } from './scope.ts'
 import { NULL_TYPE, type ResultType } from './meta.ts'
+import { modeOf } from './mode.ts'
 
-const isStrict = (sqlMode: string): boolean => /\bSTRICT_(TRANS|ALL)_TABLES\b/.test(sqlMode)
 
 /** A column's DEFAULT, compiled: its expression, or NULL, or "none" for a NOT NULL column without one. */
 /** Whether an expression names a column anywhere in it. */
@@ -99,7 +99,7 @@ export function checkDefaults(run: Run, columns: readonly ColumnDef[], table: re
       throw err
     }
     // The zero date, where the mode forbids it (8.4.11's default mode does).
-    if (field !== null && /\bNO_ZERO_DATE\b/.test(run.env.session.sqlMode) && (column.type.type === FIELD_TYPE.DATE || column.type.type === FIELD_TYPE.DATETIME || column.type.type === FIELD_TYPE.TIMESTAMP)) {
+    if (field !== null && modeOf(run.env.session.sqlMode).noZeroDate && (column.type.type === FIELD_TYPE.DATE || column.type.type === FIELD_TYPE.DATETIME || column.type.type === FIELD_TYPE.TIMESTAMP)) {
       const v = decodeField(field, column.type)
       if (v !== null && v.kind === 'datetime' && v.v.year === 0 && v.v.month === 0 && v.v.day === 0) throw invalid(column)
     }
@@ -248,7 +248,10 @@ type NullPolicy = 'error' | 'warn'
  * one in `b`, is two warnings); an UPDATE warns per row, and passes no `warned`.
  */
 /** The session's zero-date modes, which decide what a date column takes (8.4.11's default has both). */
-export const zeroRules = (run: Run): { noZeroDate: boolean; noZeroInDate: boolean } => ({ noZeroDate: /\bNO_ZERO_DATE\b/.test(run.env.session.sqlMode), noZeroInDate: /\bNO_ZERO_IN_DATE\b/.test(run.env.session.sqlMode) })
+export const zeroRules = (run: Run): { noZeroDate: boolean; noZeroInDate: boolean } => {
+  const { noZeroDate, noZeroInDate } = modeOf(run.env.session.sqlMode)
+  return { noZeroDate, noZeroInDate }
+}
 
 /** The statement's diagnostics area, for a StoreContext to record its conditions in. */
 const sink = (run: Run): { conditions?: Condition[] } => (run.env.conditions === undefined ? {} : { conditions: run.env.conditions })
@@ -575,7 +578,7 @@ export function insert(run: Run, node: InsertNode, trx: Trx): OkResult {
 
   const ignore = node.ignore === true
   const mode = node.replace === true ? 'replace' : node.onDuplicate !== undefined ? 'upsert' : 'insert'
-  const strictMode = isStrict(run.env.session.sqlMode)
+  const strictMode = modeOf(run.env.session.sqlMode).strict
   const store: StoreContext = { strict: strictMode && !ignore, strictMode, ...zeroRules(run), row: 1, warnings: 0, table: def.name, ...sink(run) }
   // A NULL for a NOT NULL column is refused by a strict mode and by a
   // one-row INSERT, and stored as the type's zero by IGNORE or a multi-row
@@ -1031,7 +1034,7 @@ export function update(run: Run, node: UpdateNode, trx: Trx): OkResult {
   // a row that would duplicate a key, fail a CHECK or break a foreign key,
   // undoing whatever its cascades had done (8.4.11).
   const ignore = node.ignore === true
-  const strictMode = isStrict(run.env.session.sqlMode)
+  const strictMode = modeOf(run.env.session.sqlMode).strict
   const store: StoreContext = { strict: strictMode && !ignore, strictMode, ...zeroRules(run), row: 1, warnings: 0, table: def.name, ...sink(run) }
   const keys = uniqueKeys(def)
   run.state.insertIdSet = false
@@ -1172,7 +1175,7 @@ function updateMulti(run: Run, node: UpdateNode, trx: Trx): OkResult {
   const { from, rows } = joinedRows(run, node, trx)
   const scope = from.scope
   const ignore = node.ignore === true
-  const strictMode = isStrict(run.env.session.sqlMode)
+  const strictMode = modeOf(run.env.session.sqlMode).strict
   const store: StoreContext = { strict: strictMode && !ignore, strictMode, ...zeroRules(run), row: 1, warnings: 0, table: '', ...sink(run) }
   // The SET list by table, each value compiled over the joined row.
   let joined: Row = []

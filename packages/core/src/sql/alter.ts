@@ -29,6 +29,7 @@ import { checkFulltext, fulltextOf, type FulltextDef } from './fulltext.ts'
 import type { Run } from './query.ts'
 import { isTemporary, type CatalogApi } from './temporary.ts'
 import { renameTables } from './rename.ts'
+import { modeOf } from './mode.ts'
 
 const notSupported = (what: string) => sqlError('ER_NOT_SUPPORTED_YET', messages.notSupported(what))
 const cantDrop = (name: string) => sqlError('ER_CANT_DROP_FIELD_OR_KEY', `Can't DROP '${name}'; check that column/key exists`)
@@ -383,7 +384,7 @@ export function alterTable(run: Run, catalog: CatalogApi, statement: AlterTableN
   const store: StoreContext = { strict: false, row: 1, warnings: 0, table: def.name, ...(run.env.conditions === undefined ? {} : { conditions: run.env.conditions }) }
   // A column whose type changed is converted as a strict INSERT would store
   // it: 1264, 1265 at the row, and NULL into NOT NULL 1138 (8.4.11).
-  const strict: StoreContext = { strict: /\bSTRICT_(TRANS|ALL)_TABLES\b/.test(run.env.session.sqlMode), ...zeroRules(run), row: 1, warnings: 0, table: def.name, ...(run.env.conditions === undefined ? {} : { conditions: run.env.conditions }) }
+  const strict: StoreContext = { strict: modeOf(run.env.session.sqlMode).strict, ...zeroRules(run), row: 1, warnings: 0, table: def.name, ...(run.env.conditions === undefined ? {} : { conditions: run.env.conditions }) }
   const converted = sources.map((src, i) => {
     if (typeof src !== 'number') return undefined
     const from = def.columns[src] as ColumnDef

@@ -25,7 +25,6 @@ import {
   STATEMENT,
   TOKEN,
   lex,
-  parseSqlMode,
   parseStatement,
   type CreateDatabaseNode,
   type CreateTableNode,
@@ -75,6 +74,7 @@ import { dropOrphans, isTemporary, sessionCatalog, TemporaryTables, type Catalog
 import { likeSpec, mergedColumns, selectColumns, withCollations } from './create-select.ts'
 import { stampGenerated } from './generated.ts'
 import type { WireProtocol } from './wire.ts'
+import { modeOf } from './mode.ts'
 
 export interface SqlExecutorOptions extends ServerOptions {
   /** The database. Without one the executor still answers what needs no table — `SET`, `SELECT 1` — as M1's stub did. */
@@ -121,7 +121,7 @@ function emptyText(session: Session, sql: string): 'empty' | 'comment' | undefin
   if (/^[\s;]*$/.test(sql)) return 'empty'
   let tokens
   try {
-    tokens = lex(sql, { sqlMode: parseSqlMode(session.sqlMode) })
+    tokens = lex(sql, { sqlMode: modeOf(session.sqlMode) })
   } catch (e) {
     expectTyped(e)
     return undefined
@@ -253,7 +253,7 @@ export class SqlExecutor implements Executor {
   async prepare(session: Session, sql: string): Promise<PreparedInfo> {
     let paramCount = 0
     try {
-      paramCount = lex(sql, { sqlMode: parseSqlMode(session.sqlMode) }).filter((t) => t.kind === TOKEN.PLACEHOLDER).length
+      paramCount = lex(sql, { sqlMode: modeOf(session.sqlMode) }).filter((t) => t.kind === TOKEN.PLACEHOLDER).length
     } catch (e) {
       throw toSqlError(e)
     }
@@ -318,11 +318,11 @@ export class SqlExecutor implements Executor {
     if (empty === 'empty') throw sqlError('ER_EMPTY_QUERY', 'Query was empty')
     if (empty === 'comment') return null
     try {
-      if (!keep) return parseStatement(sql, { sqlMode: parseSqlMode(session.sqlMode) })
+      if (!keep) return parseStatement(sql, { sqlMode: modeOf(session.sqlMode) })
       const key = `${session.sqlMode}\n${sql}`
       const cached = this.#parsed.get(key)
       if (cached !== undefined) return cached
-      const statement = parseStatement(sql, { sqlMode: parseSqlMode(session.sqlMode) })
+      const statement = parseStatement(sql, { sqlMode: modeOf(session.sqlMode) })
       if (this.#parsed.size >= PARSED_KEPT) this.#parsed.delete(this.#parsed.keys().next().value as string)
       this.#parsed.set(key, statement)
       return statement
@@ -424,7 +424,7 @@ export class SqlExecutor implements Executor {
     if (session.multipleStatementsEnabled && protocol === 'text' && !/^[\s;]*$/.test(sql)) {
       let statements: Statement[]
       try {
-        statements = parseStatements(sql, { sqlMode: parseSqlMode(session.sqlMode) })
+        statements = parseStatements(sql, { sqlMode: modeOf(session.sqlMode) })
       } catch (e) {
         throw toSqlError(e)
       }
@@ -1071,7 +1071,7 @@ function findNode(root: unknown, test: (n: { readonly kind: string }) => boolean
  * since an unaliased column is named by its text (`c*2`).
  */
 function viewText(run: Run, statement: CreateViewNode): string {
-  const tokens = lex(run.sql, { sqlMode: parseSqlMode(run.env.session.sqlMode) })
+  const tokens = lex(run.sql, { sqlMode: modeOf(run.env.session.sqlMode) })
   const first = tokens.findIndex((t) => t.start === statement.query.at)
   let last = tokens.findIndex((t, i) => i >= first && (t.kind === TOKEN.EOF || (t.kind === TOKEN.OPERATOR && t.text === ';'))) - 1
   if (statement.checkOption !== undefined) {
