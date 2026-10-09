@@ -22,8 +22,8 @@ const REFUSED_AT_MOST = 0
  * first disagreement, so each fix brings statements into comparison that were
  * not before. M5.2 is done when nothing disagrees. Raised as rules land, never lowered.
  */
-const AGREE_AT_LEAST = 2960
-const WARNINGS_AGREE_AT_LEAST = 1391
+const AGREE_AT_LEAST = 3000
+const WARNINGS_AGREE_AT_LEAST = 1423
 
 test('M5.2: implicit coercions give what the server gave, value, type and warnings, ratcheted to all', async () => {
   assert.ok(existsSync(FIXTURE), 'the corpus must be committed')

@@ -992,6 +992,20 @@ const unsignedOf = (t: ResultType): boolean => t.unsigned || t.literalInt?.unsig
 
 const scaleOf = (t: ResultType): number => (t.kind === 'decimal' || t.kind === 'datetime' || t.kind === 'time' ? t.scale : 0)
 
+/**
+ * `+`, `-`, `*` or `%` with NULL: a DOUBLE as wide as the other operand, with
+ * its decimals — an integer's none, text's and a double's unspecified, a
+ * temporal's fraction (8.4.11: `NULL * de` of a DECIMAL(6,2) is DOUBLE(8,2), `NULL + dt` 23 wide with 3).
+ */
+function nullArithmetic(a: ResultType, b: ResultType): ResultType {
+  const other = a.kind === 'null' ? b : a
+  if (other.kind === 'null') return { ...doubleType(true, 0), scale: 0 }
+  if (other.kind === 'int') return { ...doubleType(true, other.length), scale: 0 }
+  if (other.kind === 'decimal') return { ...doubleType(true, charWidth(other)), scale: other.scale }
+  if (other.kind === 'datetime' || other.kind === 'time') return { ...doubleType(true, 23), scale: other.scale }
+  return doubleType(true, 23)
+}
+
 /** The numeric kind an arithmetic operator yields, chosen before evaluation as MySQL chooses it. */
 function arithKind(a: ResultType, b: ResultType): 'int' | 'decimal' | 'double' | 'null' {
   if (a.kind === 'null' || b.kind === 'null') return 'null'
@@ -1077,8 +1091,8 @@ function binary(op: string, left: Expression, right: Expression, extra: Expressi
   // A string constant compared with a date is read as one first, and one
   // that is not is the statement's error (8.4.11: `d = '00-00-00'` is 1525).
   const dated = COMPARISONS[op] !== undefined || op === '<=>'
-  const ca = dated ? yearConstant(dateConstant(ta, left, tb, ctx), left, tb) : ta
-  const cb = dated ? yearConstant(dateConstant(tb, right, ta, ctx), right, ta) : tb
+  const ca = dated ? yearConstant(dateConstant(ta, left, tb, ctx), left, tb, ctx) : ta
+  const cb = dated ? yearConstant(dateConstant(tb, right, ta, ctx), right, ta, ctx) : tb
   // A string in arithmetic is read as a double, with 1292 when it is not one.
   const arithmetic = op === '+' || op === '-' || op === '*' || op === '/' || op === '%' || op === 'MOD'
   // And in a comparison with a number, which is of doubles: a constant is
@@ -1158,7 +1172,7 @@ function binary(op: string, left: Expression, right: Expression, extra: Expressi
         // one when either is (`Item_func_*::result_precision`).
         type = decimalType(digits + s, s, nullable, unsignedOf(a.type) && unsignedOf(b.type))
       } else if (kind === 'double') type = fixedDouble([a.type, b.type], nullable) ?? doubleType(nullable, 23)
-      else type = NULL_TYPE
+      else type = nullArithmetic(a.type, b.type)
       if (type.kind === 'double' && type.scale < 31) {
         const fixed = type
         return { eval: (r, env) => doubleOf(add(at(r, env), bt(r, env), op, label), fixed), type }
@@ -1168,7 +1182,8 @@ function binary(op: string, left: Expression, right: Expression, extra: Expressi
     case '/': {
       const kind = arithKind(a.type, b.type)
       const s = Math.min(30, scaleOf(a.type) + 4)
-      const type = kind === 'double' ? divisionDouble(a.type, b.type) : kind === 'null' ? NULL_TYPE : decimalType(intDigits(a.type) + scaleOf(b.type) + s, s, true, unsignedOf(a.type) && unsignedOf(b.type))
+      // NULL divided, or dividing, is a DOUBLE(4,4) (8.4.11).
+      const type = kind === 'double' ? divisionDouble(a.type, b.type) : kind === 'null' ? { ...doubleType(true, 4), scale: 4 } : decimalType(intDigits(a.type) + scaleOf(b.type) + s, s, true, unsignedOf(a.type) && unsignedOf(b.type))
       const quotient = byZero(at, bt, divide)
       if (type.kind === 'double' && type.scale < 31) return { eval: (r, env) => doubleOf(quotient(r, env), type), type }
       return { eval: quotient, type }
@@ -1187,7 +1202,8 @@ function binary(op: string, left: Expression, right: Expression, extra: Expressi
     case 'MOD': {
       const kind = arithKind(a.type, b.type)
       // The wider operand's digits and a sign, unsigned or not: `flag % 3` on a TINYINT UNSIGNED is 4.
-      const type = kind === 'int' ? intType(Math.max(intDigits(a.type), intDigits(b.type), 1) + 1, true, unsignedOf(a.type)) : kind === 'decimal' ? decimalType(Math.max(a.type.length, b.type.length), Math.max(scaleOf(a.type), scaleOf(b.type)), true) : doubleType(true, 23)
+      // A double keeps the dividend's sign flag (8.4.11: `u % ch` of an INT UNSIGNED is unsigned).
+      const type = kind === 'int' ? intType(Math.max(intDigits(a.type), intDigits(b.type), 1) + 1, true, unsignedOf(a.type)) : kind === 'decimal' ? decimalType(Math.max(a.type.length, b.type.length), Math.max(scaleOf(a.type), scaleOf(b.type)), true) : kind === 'null' ? nullArithmetic(a.type, b.type) : { ...doubleType(true, 23), unsigned: unsignedOf(a.type) }
       return { eval: byZero(at, bt, (x, y) => modulo(x, y, label)), type }
     }
     case '|':
@@ -1336,19 +1352,22 @@ const ZERO_DATETIME: Value = { kind: 'datetime', v: { year: 0, month: 0, day: 0,
  * (8.4.11: `y > '10:11:12'` compares with 2010). Text with no leading number
  * is left to compare as a double.
  */
-function yearConstant(c: Compiled, written: Expression, other: Compiled): Compiled {
+function yearConstant(c: Compiled, written: Expression, other: Compiled, ctx: CompileContext): Compiled {
   if (other.type.field !== FIELD_TYPE.YEAR || other.type.column === undefined || !isText(c.type) || !constantNode(written)) return c
-  return {
-    eval: (r, env) => {
-      const v = c.eval(r, env)
-      if (v === null || (v.kind !== 'string' && v.kind !== 'bytes')) return v
-      const p = numericPrefix(toText(v))
-      if (p.text === '' || !/\d/.test(p.text)) return v
-      const n = Math.trunc(Number(p.text))
-      return intValue(BigInt(n >= 0 && n < 70 ? 2000 + n : n >= 70 && n < 100 ? 1900 + n : n))
-    },
-    type: { ...c.type, kind: 'int', field: FIELD_TYPE.YEAR, unsigned: true, length: 4, scale: 0, collationId: CHARSET_BINARY },
+  if (written.kind === NODE.PLACEHOLDER && ctx.params === undefined) return c
+  let v: Value = null
+  try {
+    v = c.eval([], constantEnv(ctx))
+  } catch (e) {
+    expectTyped(e)
+    return c
   }
+  if (v === null || (v.kind !== 'string' && v.kind !== 'bytes')) return c
+  const text = toText(v)
+  if (!/^\s*[+-]?(\d|\.\d)/.test(text)) return c
+  const n = Math.trunc(Number(numericPrefix(text).text))
+  const year = n >= 0 && n < 70 ? 2000 + n : n >= 70 && n < 100 ? 1900 + n : n
+  return lit(intValue(BigInt(year)), { ...intType(4, false, true), field: FIELD_TYPE.YEAR })
 }
 
 /** A constant compared with a TIME column, read as a time of day. */

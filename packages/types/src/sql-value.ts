@@ -593,9 +593,12 @@ export function toDateTime(v: Exclude<Value, null>, type: TemporalType): DateTim
     case 'int':
     case 'decimal':
     case 'double': {
+      // A datetime's number has at most 14 digits: a double past them is no datetime, and is not narrowed into one.
+      if (v.kind === 'double' && !(Math.abs(v.v) < 1e14)) return undefined
       const t = toText(v.kind === 'double' ? toDecimal(v) : v)
       const whole = t.replace(/^-/, '').split('.')[0] as string
-      if (t.startsWith('-')) return undefined
+      // A datetime's number has at most 14 digits; past them it is no datetime (8.4.11: `1e300 >= dt` compares as numbers).
+      if (t.startsWith('-') || whole.length > 14) return undefined
       // `20240102` is a date and `20240102030405` a datetime, as a number.
       const padded = whole.length <= 8 ? whole.padStart(8, '0') : whole.padStart(14, '0')
       const p = parseDateTime(padded)
