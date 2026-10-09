@@ -19,10 +19,6 @@ const NOT_SUPPORTED = 1235
 const UNMODELLED: readonly (string | RegExp)[] = [
   // LooseScan, a semijoin strategy (M5.47).
   'Remove duplicates from input sorted on',
-  // A join the const tables reduce to one table, grouped by that table's
-  // index: the grouping a single table gets, which this executor gives only a
-  // FROM of one table. Its flags agree by chance; the names it reports do not (M5.48).
-  /Group aggregate[\s\S]*(Nested loop|hash join)[\s\S]*Constant row from/,
 ]
 const unmodelled = (plan: string | null | undefined): boolean => UNMODELLED.some((m) => (typeof m === 'string' ? plan?.includes(m) === true : plan !== null && plan !== undefined && m.test(plan)))
 

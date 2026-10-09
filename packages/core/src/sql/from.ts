@@ -160,8 +160,10 @@ export interface FromPlan {
   sortedBy(alias: string | undefined, limit: number): void
   /** SELECT DISTINCT, and the tables its select list reads: the last table in join order it does not read is joined for one match a row. */
   distinctReads(aliases: ReadonlySet<string>): void
+  /** The const tables of a STRAIGHT_JOIN, each joined as a constant row rather than read ahead (M5.48). Given before the plan is first asked for. */
+  constants(aliases: ReadonlySet<string>): void
   /** Read the one base table whole in an index's order, for an ORDER BY or a grouping it gives; `force` drops a range on another index for it, and `reverse` reads it descending. */
-  readInOrder(index: string, force: boolean, reverse?: boolean): void
+  readInOrder(index: string, force: boolean, reverse?: boolean, alias?: string): void
   /** The FROM as 8.4.11's iterators (M5.44): the tree `rows` runs, as EXPLAIN shows it. */
   explain(env: Env): PlanNode
   /** How the one base table of a single-table FROM is read: what `rows` and `explain` read it by. */
@@ -570,11 +572,14 @@ export function planFrom(refs: readonly TableReference[], ctx: FromContext, wher
     distinctReads(aliases) {
       settings.distinctSelect = aliases
     },
+    constants(aliases) {
+      settings.constants = aliases
+    },
     sortedBy(alias, limit) {
       sort = alias === undefined ? undefined : { alias, limit }
     },
-    readInOrder(index, force, reverse = false) {
-      settings.ordered = { index, force, reverse }
+    readInOrder(index, force, reverse = false, alias) {
+      settings.ordered = { index, force, reverse, ...(alias === undefined ? {} : { alias }) }
     },
     access(env) {
       return leafAccess(tables[0] as FromTable, settings, env)
@@ -786,6 +791,8 @@ function idsAt(offset: number, id: RowId): (RowId | undefined)[] {
 /** How the FROM's base tables are read: what the WHERE is, what covers them, and an order asked for. */
 interface LeafSettings {
   where?: Expression | undefined
+  /** A STRAIGHT_JOIN's const tables, joined as constant rows (`constants`). */
+  constants?: ReadonlySet<string>
   readonly covering: ReadonlyMap<string, string>
   /** The columns the query reads of each table (`reads`). */
   readonly read: Map<string, ReadonlySet<string> | 'all'>
@@ -807,7 +814,8 @@ interface LeafSettings {
   /** `chosenAccess`'s choices, by statement environment and table. */
   chosen: WeakMap<Env, Map<string, Access>>
   /** The one table read whole in this index's order (`readInOrder`). */
-  ordered?: { readonly index: string; readonly force: boolean; readonly reverse: boolean }
+  /** Read in an index's order: the one table's, or `alias`'s in a join its const tables reduce to it. */
+  ordered?: { readonly index: string; readonly force: boolean; readonly reverse: boolean; readonly alias?: string }
 }
 
 /**
@@ -819,7 +827,7 @@ interface LeafSettings {
  */
 function leafAccess(t: FromTable, settings: LeafSettings, env: Env): Access {
   const access = chosenAccess(t, settings, env)
-  const order = settings.ordered
+  const order = orderFor(t, settings)
   if (order !== undefined && t.def !== undefined) {
     const clustered = t.def.indexes.find((i) => i.name === order.index)?.kind === 'primary' || t.def.clustered === order.index
     const same = clustered ? access.index === undefined : access.index === order.index
@@ -830,6 +838,9 @@ function leafAccess(t: FromTable, settings: LeafSettings, env: Env): Access {
   const cover = settings.covering.get(t.alias)
   return access.index === undefined && access.ranges === undefined && cover !== undefined ? { index: cover } : access
 }
+
+/** The order asked of `t`'s reads, if any. */
+const orderFor = (t: FromTable, settings: LeafSettings): LeafSettings['ordered'] => (settings.ordered?.alias === undefined || settings.ordered.alias === t.alias ? settings.ordered : undefined)
 
 /** The access `chooseAccess` picks for a table under the WHERE, once per statement's environment: a range is weighed by counting its rows. */
 function chosenAccess(t: FromTable, settings: LeafSettings, env: Env): Access {
@@ -1057,6 +1068,7 @@ function toOp(node: Node, conditions: readonly Placed[], scope: TableScope, sett
     }
     return filterOp(dynamicOp(node, outer, t, [...toInner, ...spanning], settings, known), above)
   }
+  if (!node.left && node.inner.kind === 'leaf' && settings.constants?.has(node.inner.table.alias) === true) return constantRowOp(outer, node.inner.table, toInner, spanning, settings)
   if (node.lookup !== undefined && node.inner.kind === 'leaf' && settings.lookups?.has(node.inner.table.alias) !== false) {
     // Under DISTINCT, the last table the select list does not read needs one match a row (`not_used_in_distinct`).
     const firstOnly = !node.left && settings.distinctLast === node.inner.table.alias
@@ -1610,6 +1622,34 @@ function lookupOp(node: Node & { kind: 'join' }, outer: Op, t: FromTable, lookup
 }
 
 /**
+ * A STRAIGHT_JOIN's const table, which the optimizer does not read ahead of
+ * the join order (8.4.11: "Constant row from c1"): read once, by its key, with
+ * its own conditions, which the optimizer folds while planning and the plan
+ * does not show, and joined to every row before it by a nested loop, the
+ * conditions on both sides its Filter.
+ */
+function constantRowOp(outer: Op, t: FromTable, own: readonly Placed[], on: readonly Placed[], settings: LeafSettings): Op {
+  const leaf = filterOp(tableOp(t, settings), own)
+  return {
+    *rows(run, context) {
+      let inner: JoinedRow[] | undefined
+      for (const o of outer.rows(run, context)) {
+        inner ??= [...leaf.rows(run, context)]
+        for (const i of inner) {
+          const combined = o.row.slice()
+          for (let k = 0; k < t.width; k++) combined[t.offset + k] = i.row[t.offset + k] ?? null
+          if (holds(on, combined, run.env)) yield joined(combined, run.ids ? joinIds(o, i) : undefined)
+        }
+      }
+    },
+    describe(env) {
+      const row = planNode(`Constant row from ${t.alias}`)
+      return planNode('Nested loop inner join', [outer.describe(env), on.length === 0 ? row : planNode('Filter', [row])])
+    },
+  }
+}
+
+/**
  * A nested loop whose later table's range is planned again for each row
  * before it, the earlier tables' columns read from that row (`dynamicAccess`).
  * Every condition is still checked of every pair.
@@ -1721,7 +1761,7 @@ function describeLeaf(t: FromTable, settings: LeafSettings, env: Env): PlanNode 
     return d.merged ? d.node : planNode(`Table scan on ${t.alias}`, [planNode(d.materialize, d.children)])
   }
   const access = leafAccess(t, settings, env)
-  const order = settings.ordered
+  const order = orderFor(t, settings)
   if (order !== undefined && access.ranges === undefined) {
     // Read whole in an index's order: covering when it holds every column the query reads.
     const covers = settings.covering.get(t.alias) === order.index

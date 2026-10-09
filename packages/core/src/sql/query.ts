@@ -299,6 +299,7 @@ function planSelect(run: Run, q: QueryExpression, node: SelectNode): SelectPlan 
   const refs = (node.from ?? []).filter((r) => !(r.kind === REF.TABLE && r.table.schema === undefined && r.table.name.toLowerCase() === 'dual' && r.alias === undefined && (node.from ?? []).length === 1))
   const from = refs.length === 0 ? undefined : planFrom(refs, fromContext(run), node.where, (node.options ?? []).includes('STRAIGHT_JOIN'))
   const scope = from?.scope
+  const constants = constRows(run, from, node)
   const source = from?.single
   const lookup: Scope = scope ?? run.parent ?? EMPTY_SCOPE
   if (from !== undefined && scope !== undefined) from.reads(columnsRead(scope, node, q))
@@ -312,7 +313,7 @@ function planSelect(run: Run, q: QueryExpression, node: SelectNode): SelectPlan 
     throw sqlError('ER_AGGREGATE_ORDER_NON_AGG_QUERY', `Expression #${at} of ORDER BY contains aggregate function and applies to the result of a non-aggregated query`)
   }
   const windowed = node.items.some((i) => containsWindow(i.expr)) || (q.orderBy ?? []).some((o) => containsWindow(o.expr))
-  if (grouped) return planGrouped(run, q, node, from, lookup, windowed)
+  if (grouped) return planGrouped(run, q, node, from, lookup, windowed, constants)
   // Window functions (M5.6) write into slots past the FROM row.
   const windowBase = from?.width ?? 0
   const windows = windowed ? new WindowSink(compileContext(run, lookup, 'window order by'), windowBase, node.windows) : undefined
@@ -340,6 +341,9 @@ function planSelect(run: Run, q: QueryExpression, node: SelectNode): SelectPlan 
   if (windows !== undefined && windows.windows.length > 0) {
     for (const item of items) if (item.compiled.type.temporary === undefined) item.compiled = { ...item.compiled, type: { ...item.compiled.type, temporary: 'stream' } }
   }
+
+  // An ORDER BY item that reads only a STRAIGHT_JOIN's const tables is a constant, which nothing sorts by (8.4.11).
+  const constantKey = (o: OrderItem): boolean => constants.size > 0 && !refersToRow(orderedExpr(o, items), lookup, constants)
 
   // `SELECT DISTINCT` is run through a temporary table — which changes the
   // metadata a client sees — unless the select list holds a whole key of NOT
@@ -390,7 +394,7 @@ function planSelect(run: Run, q: QueryExpression, node: SelectNode): SelectPlan 
     // An ORDER BY on columns the WHERE holds to constants orders nothing, and
     // MySQL drops it before it plans a sort (8.4.11: `WHERE SCHEMA_NAME = ?
     // ORDER BY SCHEMA_NAME` over INFORMATION_SCHEMA's join streams nothing).
-    const constantOrder = node.distinct !== true && (q.orderBy ?? []).every((o) => o.expr.kind === NODE.COLUMN && pinnedByWhere(node.where, o.expr.parts))
+    const constantOrder = node.distinct !== true && (q.orderBy ?? []).every((o) => (o.expr.kind === NODE.COLUMN && pinnedByWhere(node.where, o.expr.parts)) || constantKey(o))
     const sortedFirst = constantOrder || (node.distinct !== true && (source === undefined ? from.sortsFirst(orderAliases(q, items, lookup)) : nestedLoopSemijoin(node.where, scope) && !node.items.some((i) => correlatedIn(i.expr, scope))))
     if (!facts.empty && !sortedFirst) {
       if (node.distinct === true) deduplicated = true
@@ -424,7 +428,7 @@ function planSelect(run: Run, q: QueryExpression, node: SelectNode): SelectPlan 
     from.filter(node.where, (e) => compile(e, whereCtx), semijoins ? (e) => semijoinNode(run, e) : undefined)
   } else if (node.where !== undefined) where = compile(node.where, whereCtx)
   const having = node.having === undefined || neverNullTest(node.having) ? undefined : compile(substituteAliases(node.having, items), compileContext(run, selectedOnly(lookup, items, [], node.having), 'having clause'))
-  const keys = (q.orderBy ?? []).map((o) => orderKey(run, o, items, lookup, windows))
+  const keys = (q.orderBy ?? []).filter((o) => !constantKey(o)).map((o) => orderKey(run, o, items, lookup, windows))
   // A window ORDER BY alone names reads the rows through its table as well.
   if (windows !== undefined && windows.windows.length > 0) {
     for (const item of items) if (item.compiled.type.temporary === undefined) item.compiled = { ...item.compiled, type: { ...item.compiled.type, temporary: 'stream' } }
@@ -606,6 +610,39 @@ function subqueryPinsKey(def: TableDef, alias: string, where: Expression | undef
     return column !== undefined && !column.nullable && def.indexes.some((i) => i.kind !== 'index' && i.parts.length === 1 && i.parts[0]?.column === column.name && i.parts[0].prefix === undefined)
   }
   return splitAnd(where).some((c) => c.kind === NODE.BINARY && c.op === '=' && ([[c.left, c.right], [c.right, c.left]] as const).some(([key, value]) => value.kind === NODE.SUBQUERY && !correlatedIn(value, scope) && unique(key)))
+}
+
+/**
+ * Under STRAIGHT_JOIN a const table is not read ahead of the join order but
+ * joined as a constant row (M5.48): its aliases, which an ORDER BY over them
+ * alone does not sort by, since they are constants.
+ */
+function constRows(run: Run, from: FromPlan | undefined, node: SelectNode): ReadonlySet<string> {
+  if (from === undefined || from.tables.length < 2) return new Set()
+  const facts = optimizerFacts(from, node.where, undefined, compileContext(run, EMPTY_SCOPE, 'where clause'), run.env, (node.options ?? []).includes('STRAIGHT_JOIN'))
+  if (!facts.straight || facts.constTables.length === 0) return new Set()
+  const aliases = new Set(facts.constTables.map((t) => t.alias))
+  from.constants(aliases)
+  return aliases
+}
+
+/** The one base table a FROM's const tables leave, and where its columns begin in the row; undefined unless every other table is one of `constants`. */
+function soleTable(from: FromPlan | undefined, constants: ReadonlySet<string>): { alias: string; def: TableDef; offset: number } | undefined {
+  if (from === undefined || constants.size === 0) return undefined
+  const rest = from.tables.filter((t) => !constants.has(t.alias))
+  const t = rest.length === 1 ? rest[0] : undefined
+  return t?.def === undefined ? undefined : { alias: t.alias, def: t.def, offset: t.offset }
+}
+
+/** The expression an ORDER BY item sorts by: a select item it names by position or alias, or itself. */
+function orderedExpr(o: OrderItem, items: readonly { expr?: Expression; alias?: string }[]): Expression | undefined {
+  const e = o.expr
+  if (e.kind === NODE.LITERAL && e.type === 'int') return items[Number(e.value as bigint) - 1]?.expr
+  if (e.kind === NODE.COLUMN && e.parts.length === 1) {
+    const alias = items.find((i) => i.alias?.toLowerCase() === (e.parts[0] as string).toLowerCase())
+    if (alias !== undefined) return alias.expr
+  }
+  return e
 }
 
 /**
@@ -1319,9 +1356,12 @@ function planGrouped(
   from: FromPlan | undefined,
   lookup: Scope,
   windowed = false,
+  constants: ReadonlySet<string> = new Set(),
 ): SelectPlan {
   const scope = from?.scope
   const source = from?.single
+  // A STRAIGHT_JOIN its const tables reduce to one base table groups as that table alone would (8.4.11, M5.48).
+  const alone = source === undefined ? soleTable(from, constants) : { ...source, offset: 0 }
   const width = from?.width ?? 0
   const rollup = node.groupBy?.rollup === true
   const texts = itemTexts(run, node)
@@ -1371,10 +1411,10 @@ function planGrouped(
   // their columns go through a temporary table.
   // A key the WHERE holds to one value does not order anything: GROUP BY
   // amt, name WHERE amt = -18 groups by the index on name (8.4.11).
-  const pinned = source === undefined ? new Set<string>() : new Set([...whereFacts(run, source.def, source.alias, node.where).pins].map((c) => c.name))
-  const keyColumns = keys.map((k) => (k.index === undefined || source === undefined ? undefined : source.def.columns[k.index]?.name)).filter((c) => c === undefined || !pinned.has(c))
+  const pinned = alone === undefined ? new Set<string>() : new Set([...whereFacts(run, alone.def, alone.alias, node.where).pins].map((c) => c.name))
+  const keyColumns = keys.map((k) => (k.index === undefined || alone === undefined ? undefined : alone.def.columns[k.index - alone.offset]?.name)).filter((c) => c === undefined || !pinned.has(c))
   const distinctAggregate = [...node.items.map((i) => i.expr), ...(node.having === undefined ? [] : [node.having]), ...(q.orderBy ?? []).map((o) => o.expr)].some((e) => needsSortedGroups(e))
-  const { strategy, index: groupIndex } = chooseStrategy(source?.def, keyColumns, rollup, distinctAggregate)
+  const { strategy, index: groupIndex } = chooseStrategy(alone?.def, keyColumns, rollup, distinctAggregate)
 
   const level = width + keys.length
   const sink = new AggregateSink(compileContext(run, lookup, 'field list'), level + 1)
@@ -1518,7 +1558,7 @@ function planGrouped(
   if (from !== undefined) from.filter(node.where, (e) => compile(e, whereCtx))
   else if (node.where !== undefined) where = compile(node.where, whereCtx)
   // An index-ordered grouping reads that index whole, in its order, whatever range the WHERE would choose.
-  if (strategy === 'index' && groupIndex !== undefined) from?.readInOrder(groupIndex, true)
+  if (strategy === 'index' && groupIndex !== undefined) from?.readInOrder(groupIndex, true, false, alone?.alias)
   const limitCount = q.limit === undefined ? undefined : limitValue(run, q.limit.count, 'LIMIT')
   const offset = q.limit?.offset === undefined ? 0 : limitValue(run, q.limit.offset, 'LIMIT')
   const locking = (q.locking ?? []).length > 0
