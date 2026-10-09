@@ -218,10 +218,16 @@ export class MySQL {
     local.onmessage = (event: MessageEvent) => {
       const chunk = toBytes(event.data)
       if (chunk === null) return
-      void connection.feed(chunk).then(() => {
-        const out = connection.take()
-        if (out.length > 0) local.postMessage(out, [out.buffer])
-      })
+      connection.feed(chunk).then(
+        () => {
+          const out = connection.take()
+          if (out.length > 0) local.postMessage(out, [out.buffer])
+        },
+        () => {
+          connection.close()
+          local.close()
+        },
+      )
     }
     // The peer closing its port is the connection going away (D-68): its
     // session ends, and an open transaction releases the writer.

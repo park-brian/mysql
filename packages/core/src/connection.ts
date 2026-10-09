@@ -158,18 +158,40 @@ export class ProtocolConnection {
     return out
   }
 
-  /** Push client bytes; any complete packets they form are processed. */
-  async feed(chunk: Uint8Array): Promise<void> {
+  /**
+   * Push client bytes; any complete packets they form are processed.
+   *
+   * Calls are serialised: a feed that arrives while a command is still running
+   * waits for it. A client may send a command with no response (COM_STMT_CLOSE,
+   * COM_STMT_SEND_LONG_DATA) and the next one at once, so every transport can
+   * feed again before the last feed has settled, and two pumps over one framer
+   * would run both commands at the same time.
+   */
+  feed(chunk: Uint8Array): Promise<void> {
+    return this.#serial(() => this.#feed(chunk))
+  }
+
+  /** D-28: bytes in, every response byte out — this request's bytes only. */
+  execProtocol(request: Uint8Array): Promise<Uint8Array> {
+    return this.#serial(async () => {
+      await this.#feed(request)
+      return this.take()
+    })
+  }
+
+  async #feed(chunk: Uint8Array): Promise<void> {
     if (this.#phase === 'new') this.start()
     if (this.#phase === 'closed') return
     this.#framer.feed(chunk)
     await this.#pump()
   }
 
-  /** D-28: bytes in, every response byte out. */
-  async execProtocol(request: Uint8Array): Promise<Uint8Array> {
-    await this.feed(request)
-    return this.take()
+  #tail: Promise<unknown> = Promise.resolve()
+
+  #serial<T>(work: () => Promise<T>): Promise<T> {
+    const run = this.#tail.then(work)
+    this.#tail = run.catch(() => {})
+    return run
   }
 
   async #pump(): Promise<void> {
@@ -187,8 +209,7 @@ export class ProtocolConnection {
       try {
         payload = this.#framer.next()
       } catch (err) {
-        this.#fail(err)
-        this.close()
+        this.#failAndClose(err)
         return
       }
       if (payload === null) return
@@ -196,8 +217,7 @@ export class ProtocolConnection {
       try {
         await this.#handle(payload)
       } catch (err) {
-        this.#fail(err)
-        this.close()
+        this.#failAndClose(err)
         return
       }
     }
@@ -396,6 +416,15 @@ export class ProtocolConnection {
       message,
     })
     this.#send(w.toBytes())
+  }
+
+  /** Close even when the fault is not ours to report and is rethrown. */
+  #failAndClose(err: unknown): void {
+    try {
+      this.#fail(err)
+    } finally {
+      this.close()
+    }
   }
 
   /** A framing or parse fault ends the connection, after saying why. */
