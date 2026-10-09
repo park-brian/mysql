@@ -19,6 +19,7 @@
 //     a duplicate first and costs no AUTO_INCREMENT value. IGNORE skips the
 //     row with a warning, and it is not counted among the "Records".
 //   - NOT ENFORCED keeps a constraint as documentation.
+import { expectTyped } from '@myjs/bytes'
 import { requireCollationInfo } from '@myjs/charsets'
 import { sqlError } from '@myjs/protocol'
 import type { ColumnDef, FieldBytes, TableDef, TableSpec } from '@myjs/engine'
@@ -165,7 +166,8 @@ export function checkClause(check: CheckDef): string | null {
       string: (v, cs) => `_${cs ?? check.charset}'${escapeString(v)}'`,
       source: check.text,
     })
-  } catch {
+  } catch (e) {
+    expectTyped(e)
     return check.text
   }
   return printed.replace(/\\/g, '\\\\').replace(/'/g, "\\'")

@@ -12,7 +12,7 @@
 // statement again later is the same as having waited. Past
 // `innodb_lock_wait_timeout` the answer is ER_LOCK_WAIT_TIMEOUT (1205), which
 // rolls back the statement and not the transaction, as InnoDB's does.
-import { FIELD_TYPE, MyjsError } from '@myjs/bytes'
+import { FIELD_TYPE, MyjsError, expectTyped } from '@myjs/bytes'
 import { collationInfoByName, defaultCollationOf, requireCollationInfo } from '@myjs/charsets'
 import { collationsOf, type Catalog, type TableDef, type ViewDef } from '@myjs/engine'
 import {
@@ -122,7 +122,8 @@ function emptyText(session: Session, sql: string): 'empty' | 'comment' | undefin
   let tokens
   try {
     tokens = lex(sql, { sqlMode: parseSqlMode(session.sqlMode) })
-  } catch {
+  } catch (e) {
+    expectTyped(e)
     return undefined
   }
   return tokens.every((t) => t.kind === TOKEN.EOF || (t.kind === TOKEN.OPERATOR && t.text === ';')) ? 'comment' : undefined
@@ -355,7 +356,8 @@ export class SqlExecutor implements Executor {
         let def: TableDef
         try {
           def = catalog.definition(schema, name.name)
-        } catch {
+        } catch (e) {
+          expectTyped(e)
           continue
         }
         for (const id of collationsOf(def)) ids.add(id)
@@ -367,7 +369,8 @@ export class SqlExecutor implements Executor {
           ids.add(fallback)
           const spec = createTableSpec(statement, fallback)
           for (const c of spec.columns) if (c.type.collationId !== undefined) ids.add(c.type.collationId)
-        } catch {
+        } catch (e) {
+          expectTyped(e)
           // The statement itself will say what is wrong.
         }
       }

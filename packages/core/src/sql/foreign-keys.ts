@@ -35,7 +35,7 @@
 //   - A cascaded update into a table an update further up the chain is
 //     changing is refused (1451): InnoDB "plays safe" rather than know.
 //   - `foreign_key_checks = 0` turns all of it off, cascades included.
-import { FIELD_TYPE, CHARSET_BINARY } from '@myjs/bytes'
+import { FIELD_TYPE, CHARSET_BINARY, expectTyped } from '@myjs/bytes'
 import { sqlError } from '@myjs/protocol'
 import type { ColumnDef, FieldBytes, IndexDef, KeyRange, ReadMode, Row, RowId, Table, TableDef, TableSpec, Trx } from '@myjs/engine'
 import type { KeyDefinition } from '@myjs/parser'
@@ -219,7 +219,8 @@ export function withForeignKeys(catalog: CatalogApi, schema: string, spec: Table
         parent = catalog.definition(parentSchema, clause.references.table)
         // A temporary table is no parent (8.4.11: 1215).
         if (isTemporary(parent as TableDef)) throw sqlError('ER_CANNOT_ADD_FOREIGN', 'Cannot add foreign key constraint')
-      } catch {
+      } catch (e) {
+        expectTyped(e)
         parent = undefined
       }
     }
@@ -284,7 +285,8 @@ function convert(field: Uint8Array, from: ColumnDef, to: ColumnDef): Uint8Array 
       if (back?.kind !== 'bytes' || !same(back.v, value.v)) return undefined
     }
     return out
-  } catch {
+  } catch (e) {
+    expectTyped(e)
     return undefined
   }
 }
@@ -320,7 +322,8 @@ class Enforcer {
     if (t === undefined) {
       try {
         t = this.#catalog.table(schema, name)
-      } catch {
+      } catch (e) {
+        expectTyped(e)
         return undefined
       }
       this.#tables.set(key, t)

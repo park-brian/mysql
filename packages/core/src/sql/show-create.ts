@@ -19,7 +19,7 @@
 //   - The table's COLLATE appears unless it is its character set's primary
 //     collation, and always for utf8mb4_0900_ai_ci. AUTO_INCREMENT appears
 //     when the table has such a column and its counter is past 1.
-import { CHARSET_BINARY, FIELD_TYPE } from '@myjs/bytes'
+import { CHARSET_BINARY, FIELD_TYPE, expectTyped } from '@myjs/bytes'
 import { CHARSET_UTF8MB4_0900_AI_CI } from '@myjs/protocol'
 import { requireCollationInfo } from '@myjs/charsets'
 import type { ColumnDef, IndexDef, Table, TableDef } from '@myjs/engine'
@@ -57,7 +57,8 @@ function defaultClause(run: Run, c: ColumnDef): string {
   let e: Expression
   try {
     e = parseExpression(text)
-  } catch {
+  } catch (e) {
+    expectTyped(e)
     return ` DEFAULT ${quoted(text)}`
   }
   const literal = e.kind === NODE.LITERAL || (e.kind === NODE.UNARY && e.op === '-' && e.operand.kind === NODE.LITERAL)
@@ -71,7 +72,8 @@ function defaultClause(run: Run, c: ColumnDef): string {
   const charset = requireCollationInfo(run.env.session.characterSet).charset
   try {
     return ` DEFAULT (${printExpression(e, { column: (parts) => q(parts[parts.length - 1] as string), string: (v, cs) => `_${cs ?? charset}'${escapeString(v)}'`, source: text })})`
-  } catch {
+  } catch (e) {
+    expectTyped(e)
     return ` DEFAULT (${text})`
   }
 }
@@ -138,7 +140,8 @@ export function showCreateTable(run: Run, def: TableDef, table: Table): string {
     let clause: string
     try {
       clause = printExpression(parseExpression(c.text), { column: (parts) => q(parts[parts.length - 1] as string), string: (v, cs) => `_${cs ?? c.charset}'${escapeString(v)}'`, source: c.text })
-    } catch {
+    } catch (e) {
+      expectTyped(e)
       clause = c.text
     }
     lines.push(`  CONSTRAINT ${q(c.name)} CHECK (${clause})${c.enforced ? '' : ' /*!80016 NOT ENFORCED */'}`)

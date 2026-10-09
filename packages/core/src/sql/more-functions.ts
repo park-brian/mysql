@@ -12,7 +12,7 @@
 // its first argument's collation, or the aggregate of the strings it chooses
 // among); the numeric ones read text as a double with 1292; the digests are
 // `@myjs/types`' (`digest.ts`).
-import { CHARSET_BINARY } from '@myjs/bytes'
+import { CHARSET_BINARY, expectTyped } from '@myjs/bytes'
 import { collationInfoByName, decodeCollation, defaultCollationOf, encodeCollation, requireCollationInfo } from '@myjs/charsets'
 import { sqlError } from '@myjs/protocol'
 import {
@@ -584,7 +584,8 @@ export function moreFunction(name: string, xs: readonly Compiled[], callName: st
         try {
           const v = sub.eval([], { params: ctx.params ?? [], now: new Date(0), session: ctx.session, state: ctx.state })
           if (v !== null) insertedWidth = toText(v).length
-        } catch {
+        } catch (e) {
+          expectTyped(e)
           // A constant that cannot be read now is read when the row is.
         }
       }
@@ -842,7 +843,8 @@ export function moreFunction(name: string, xs: readonly Compiled[], callName: st
             ctx.conditions?.push({ level: 'Warning', code: 1583, message: `Incorrect parameters in the call to native function 'sha2'` })
             fixedBits = null
           }
-        } catch {
+        } catch (e) {
+          expectTyped(e)
           shaWidth = 64
         }
       }

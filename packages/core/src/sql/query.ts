@@ -17,7 +17,7 @@ import { compile, convertTo, EMPTY_SCOPE, type CompileContext, type Compiled, ty
 import { AggregateSink, chooseStrategy, containsAggregate, groupRows, isAggregate } from './group.ts'
 import { WindowSink, applyWindows, containsWindow } from './window.ts'
 import { columnDefinition, intType, type ResultType } from './meta.ts'
-import { FIELD_TYPE } from '@myjs/bytes'
+import { FIELD_TYPE, expectTyped } from '@myjs/bytes'
 import { requireCollationInfo } from '@myjs/charsets'
 import { distinct, filter, limit, project, scan, sort, type ScannedRow, type SortKey } from './operators.ts'
 import { accessRows, chooseAccess, type Access } from './plan.ts'
@@ -188,7 +188,8 @@ function itemTexts(run: Run, node: SelectNode): (string | undefined)[] {
   let tokens
   try {
     tokens = lex(run.sql, { sqlMode: parseSqlMode(run.env.session.sqlMode) })
-  } catch {
+  } catch (e) {
+    expectTyped(e)
     return []
   }
   let i = tokens.findIndex((t) => t.start === node.at)
@@ -585,7 +586,8 @@ function chooseCovering(from: FromPlan, scope: TableScope, node: SelectNode, q: 
         const r = scope.resolve(n.parts, 'field list')
         const at = r.depth === undefined ? scope.columnAt(r.index) : undefined
         if (at !== undefined) add(at.table.alias, at.column.name)
-      } catch {
+      } catch (e) {
+        expectTyped(e)
         // An alias, or an error compiling will report.
       }
       return
@@ -979,7 +981,8 @@ function orderAliases(q: QueryExpression, items: readonly { readonly alias?: str
       try {
         const alias = scope.columnAt(scope.resolve(n.parts as string[], 'order clause').index)?.table.alias
         if (alias !== undefined) out.add(alias)
-      } catch {
+      } catch (e) {
+        expectTyped(e)
         out.add('\u0000')
       }
       return
@@ -1025,7 +1028,8 @@ function sourceName(scope: TableScope | undefined, item: SelectNode['items'][num
     const r = scope.resolve(item.expr.parts, 'field list')
     if (r.depth !== undefined && r.depth > 0) return name
     at = scope.columnAt(r.index)
-  } catch {
+  } catch (e) {
+    expectTyped(e)
     return name
   }
   return at === undefined || at.table.def !== undefined ? name : at.column.name
@@ -1305,7 +1309,8 @@ const safeIndex = (scope: Scope, parts: readonly string[]): number | undefined =
   try {
     const r = scope.resolve(parts, 'field list')
     return (r.depth ?? 0) > 0 ? undefined : r.index
-  } catch {
+  } catch (e) {
+    expectTyped(e)
     return undefined
   }
 }
@@ -1337,14 +1342,16 @@ function refersToRow(e: unknown, scope?: Scope, consts?: ReadonlySet<string>): b
     try {
       const alias = scope.columnAt(scope.resolve(n.parts as string[], 'field list').index)?.table.alias
       if (alias !== undefined && consts.has(alias)) return false
-    } catch {
+    } catch (e) {
+      expectTyped(e)
       // Resolved, and reported, elsewhere.
     }
   }
   if (n.kind === NODE.UNARY && (n.op === 'IS NULL' || n.op === 'IS NOT NULL') && n.operand?.kind === NODE.COLUMN && scope !== undefined) {
     try {
       if (!scope.resolve(n.operand.parts, 'field list').type.nullable) return false
-    } catch {
+    } catch (e) {
+      expectTyped(e)
       // Resolved, and reported, elsewhere.
     }
   }
@@ -1636,7 +1643,8 @@ function whereFacts(run: Run, def: TableDef, alias: string, where: Expression | 
     else if (foldable(c, run.params !== undefined)) {
       try {
         if (truth(compile(c, compileContext(run, EMPTY_SCOPE, 'where clause')).eval([], run.env)) !== true) facts.impossible = true
-      } catch {
+      } catch (e) {
+        expectTyped(e)
         // Not something the optimizer folds; the scan will say.
       }
     }

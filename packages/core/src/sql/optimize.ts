@@ -22,6 +22,7 @@
 //   - **Const tables**: a table whose PRIMARY or NOT NULL UNIQUE key is held
 //     to constants is read while planning; with no such row the result is
 //     empty, and with one its columns are constants.
+import { expectTyped } from '@myjs/bytes'
 import type { ColumnDef, Table, TableDef, Trx } from '@myjs/engine'
 import { NODE, type Expression } from '@myjs/parser'
 import { compareValues, integerRange, truth, type Value } from '@myjs/types'
@@ -78,7 +79,8 @@ export function optimizerFacts(from: FromPlan | undefined, where: Expression | u
     if (e.kind !== NODE.COLUMN) return undefined
     try {
       return scope.resolve(e.parts, 'where clause').index
-    } catch {
+    } catch (e) {
+      expectTyped(e)
       return undefined
     }
   }
@@ -398,7 +400,8 @@ function partialTruth(e: Expression, known: (column: Expression) => Expression |
   if (!complete || (!touched && !constants)) return undefined
   try {
     return truth(compile(replaced, { ...ctx, scope: EMPTY_SCOPE }).eval([], env))
-  } catch {
+  } catch (e) {
+    expectTyped(e)
     return undefined
   }
 }
@@ -420,7 +423,8 @@ function constantFor(e: Expression, column: ColumnDef, ctx: CompileContext, env:
   let v: Value
   try {
     v = compile(e, { ...ctx, scope: EMPTY_SCOPE }).eval([], env)
-  } catch {
+  } catch (e) {
+    expectTyped(e)
     return undefined
   }
   if (v === null) return null

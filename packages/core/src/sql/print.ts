@@ -13,9 +13,15 @@
 //     `count(0)`, and CASE in parentheses.
 //
 // Anything past that is `Unprintable`, and the caller decides what to show.
+import { MyjsError } from '@myjs/bytes'
 import { NODE, type Expression } from '@myjs/parser'
 
-export class Unprintable extends Error {}
+/** Not an error a client sees: the signal that an expression is past what this printer writes. */
+export class Unprintable extends MyjsError {
+  constructor() {
+    super('UNPRINTABLE', 'the expression cannot be printed')
+  }
+}
 
 export interface PrintOptions {
   /** A column reference, as this context names one. */

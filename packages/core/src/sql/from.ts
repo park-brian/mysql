@@ -27,6 +27,7 @@
 // table's scan only where that cannot change the answer: never for a table on
 // the inner side of an outer join, where `WHERE b.x IS NULL` must still see
 // the NULL rows the join made.
+import { expectTyped } from '@myjs/bytes'
 import type { ColumnDef, IndexDef, RowId, Table, TableDef, Trx } from '@myjs/engine'
 import { NODE, REF, type Expression, type TableReference } from '@myjs/parser'
 import { messages, sqlError } from '@myjs/protocol'
@@ -607,7 +608,8 @@ function eqRef(t: FromTable, conditions: readonly (Expression | undefined)[], ou
     let value: Compiled
     try {
       value = compileOuter(other)
-    } catch {
+    } catch (e) {
+      expectTyped(e)
       continue
     }
     // `ref` access needs the two sides to compare as the key's own type.

@@ -14,7 +14,7 @@
 // temporal (`create_tmp_field`). The rows are then the INSERT … SELECT of
 // them, IGNORE and REPLACE included, and a statement that fails leaves no
 // table behind.
-import { CHARSET_BINARY, FIELD_TYPE } from '@myjs/bytes'
+import { CHARSET_BINARY, FIELD_TYPE, expectTyped } from '@myjs/bytes'
 import { requireCollationInfo } from '@myjs/charsets'
 import type { TableDef, TableSpec } from '@myjs/engine'
 import { parseStatement, type ColumnDefinition, type CreateTableNode } from '@myjs/parser'
@@ -109,7 +109,8 @@ export function selectColumns(
       let def: TableDef | undefined
       try {
         def = run.catalog.definition(source.schema, source.orgTable)
-      } catch {
+      } catch (e) {
+        expectTyped(e)
         def = undefined
       }
       const column = def?.columns.find((c) => c.name === source.orgName)

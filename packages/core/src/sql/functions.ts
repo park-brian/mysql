@@ -27,7 +27,7 @@
 //     `Item_func_int_val` give it; anything else is a DOUBLE. A double rounds
 //     half to even, as `rint` does; an integer or a decimal half away from zero.
 //   - GREATEST and LEAST take the type CASE would, and compare in it.
-import { CHARSET_BINARY, FIELD_TYPE } from '@myjs/bytes'
+import { CHARSET_BINARY, FIELD_TYPE, expectTyped } from '@myjs/bytes'
 import { decodeCollation, encodeCollation, requireCollationInfo } from '@myjs/charsets'
 import { messages, sqlError } from '@myjs/protocol'
 import {
@@ -70,7 +70,8 @@ function constantInt(c: Compiled | undefined, constant: boolean, conditions?: Co
     // `resolve_type`'s `val_int` does: `LEFT('abc', 'z')` warns twice (8.4.11).
     const v = c.eval([], { params: [], now: new Date(0), session: undefined as never, state: undefined as never, ...(conditions === undefined ? {} : { conditions }) })
     return v === null ? null : intArg(v)
-  } catch {
+  } catch (e) {
+    expectTyped(e)
     return undefined
   }
 }

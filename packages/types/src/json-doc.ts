@@ -23,7 +23,7 @@
 // a double past both; `-0` is the integer 0 and `-0.0` the double -0. All of it
 // was read off 8.4.11 (tools/capture-json.mjs, M5.21).
 import type { MysqlDateTime, MysqlTime } from '@myjs/bytes'
-import { renderMysqlDateTime, renderMysqlTime } from '@myjs/bytes'
+import { MyjsError, renderMysqlDateTime, renderMysqlTime } from '@myjs/bytes'
 import { decodeDecimal, encodeDecimal } from './decimal.ts'
 import { invalidJson } from './errors.ts'
 import { JSON_TYPE, compareJsonKeys, isInlined, varint, writeVarint } from './json.ts'
@@ -69,11 +69,10 @@ export function jsonObject(members: Iterable<readonly [string, JsonDoc]>): JsonD
 // --- text -----------------------------------------------------------------------
 
 /** A JSON text that does not parse: rapidjson's message, and the offset (in characters) it was found at. */
-export class JsonSyntaxError extends Error {
+export class JsonSyntaxError extends MyjsError {
   readonly position: number
   constructor(message: string, position: number) {
-    super(message)
-    this.name = 'JsonSyntaxError'
+    super('JSON_SYNTAX', message)
     this.position = position
   }
 }

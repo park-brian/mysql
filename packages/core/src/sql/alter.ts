@@ -13,7 +13,7 @@
 // (keys, foreign keys on both sides, CHECKs, FULLTEXT), then keys renamed,
 // columns added, indexes and foreign keys added. One not here is refused by
 // name.
-import { FIELD_TYPE, MyjsError } from '@myjs/bytes'
+import { FIELD_TYPE, MyjsError, expectTyped } from '@myjs/bytes'
 import { sqlError, messages, type OkResult } from '@myjs/protocol'
 import type { ColumnDef, FieldBytes, IndexDef, TableDef, TableSpec } from '@myjs/engine'
 import { KEY, NODE, STATEMENT, deparse, type AlterAction, type AlterTableNode, type ColumnDefinition, type Expression } from '@myjs/parser'
@@ -204,7 +204,7 @@ export function alterTable(run: Run, catalog: CatalogApi, statement: AlterTableN
   const incompatible = (child: ColumnDef, parent: ColumnDef, fk: string) => sqlError('ER_FK_INCOMPATIBLE_COLUMNS', `Referencing column '${child.name}' and referenced column '${parent.name}' in foreign key constraint '${fk}' are incompatible.`)
   const columnNamed = (list: readonly ColumnDef[], n: string) => list.find((c) => same(c.name, n))
   for (const fk of foreignKeys) {
-    const parent = self(fk) ? { columns } : (() => { try { return catalog.definition(fk.references.schema, fk.references.table) } catch { return undefined } })()
+    const parent = self(fk) ? { columns } : (() => { try { return catalog.definition(fk.references.schema, fk.references.table) } catch (e) { expectTyped(e); return undefined } })()
     if (parent === undefined) continue
     fk.columns.forEach((c, k) => {
       const mine = columnNamed(columns, c)

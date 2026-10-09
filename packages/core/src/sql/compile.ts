@@ -11,7 +11,7 @@
 // What is not here yet is refused by name rather than approximated: an
 // unknown function is ER_SP_DOES_NOT_EXIST, as MySQL says it, and a builtin we
 // have not written is ER_NOT_SUPPORTED_YET naming it (M5.10 owns the rest).
-import { CHARSET_BINARY, FIELD_TYPE, type MysqlDateTime } from '@myjs/bytes'
+import { CHARSET_BINARY, FIELD_TYPE, type MysqlDateTime, expectTyped } from '@myjs/bytes'
 import { collation, collationInfoByName, decodeCollation, defaultCollationOf, encodeCollation, requireCollationInfo } from '@myjs/charsets'
 import { LITERAL, NODE, TOKEN, deparse, lex, parseExpression, type CallNode, type CaseNode, type CastNode, type ConvertNode, type Expression, type LiteralNode, type MatchNode, type QueryExpression, type SubqueryNode } from '@myjs/parser'
 import type { ColumnDef, Table, Trx } from '@myjs/engine'
@@ -209,7 +209,8 @@ function printedArgument(a: Expression, ctx: CompileContext): string {
         let c: SourceColumn | undefined
         try {
           c = compile({ kind: NODE.COLUMN, parts, at: a.at }, ctx).type.column
-        } catch {
+        } catch (e) {
+          expectTyped(e)
           // A column the clause cannot see by itself (an aggregate's, in HAVING) is named as written.
         }
         const q = (x: string): string => `\`${x.replace(/`/g, '``')}\``
@@ -1425,7 +1426,8 @@ function searchItems(list: SortedItems, v: Exclude<Value, null>): boolean | null
     if (keys === undefined) {
       try {
         keys = new Set(list.sorted.map((x) => equalityKey((x as StringValue).v, id)))
-      } catch {
+      } catch (e) {
+        expectTyped(e)
         // A collation with no sort key (an `Intl` fallback) is searched as below.
         keys = null
       }
@@ -1743,7 +1745,8 @@ function outerOnly(args: readonly Expression[], ctx: CompileContext): boolean {
       try {
         if ((ctx.scope.resolve(n.parts, 'field list').depth ?? 0) > 0) outer++
         else local++
-      } catch {
+      } catch (e) {
+        expectTyped(e)
         local++
       }
       return

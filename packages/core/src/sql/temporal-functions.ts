@@ -23,7 +23,7 @@
 //     constant string's as written, a decimal's scale, six for other text.
 //   - The session's time zone is UTC (`clock` in `compile.ts`): UNIX_TIMESTAMP
 //     and FROM_UNIXTIME count from 1970-01-01 00:00:00 there.
-import { FIELD_TYPE, type MysqlDateTime, type MysqlTime } from '@myjs/bytes'
+import { FIELD_TYPE, type MysqlDateTime, type MysqlTime, expectTyped } from '@myjs/bytes'
 import { NODE, type CallNode, type Expression } from '@myjs/parser'
 import { messages, sqlError } from '@myjs/protocol'
 import {
@@ -175,7 +175,8 @@ function constantOf(e: Expression, c: Compiled, ctx: CompileContext): Value | un
   if (!constantNode(e)) return undefined
   try {
     return c.eval([], { params: ctx.params ?? [], now: new Date(0), session: ctx.session, state: ctx.state })
-  } catch {
+  } catch (e) {
+    expectTyped(e)
     return undefined
   }
 }

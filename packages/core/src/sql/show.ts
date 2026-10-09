@@ -13,6 +13,7 @@
 // INDEX computes those. INFORMATION_SCHEMA.STATISTICS, which introspection
 // reads on every connect, says 0 rather than scan every key (its corpus treats
 // the column as volatile, as the server's cached statistics are).
+import { expectTyped } from '@myjs/bytes'
 import { NODE, STATEMENT, parseStatement, type Expression, type QueryExpression, type ShowNode, type TableName } from '@myjs/parser'
 import { messages, sqlError, type ColumnDefinition } from '@myjs/protocol'
 import { keyColumnsOf, type TableDef, type ViewDef } from '@myjs/engine'
@@ -124,7 +125,8 @@ export function printableSources(catalog: CatalogApi): (schema: string, name: st
     if (view !== undefined) return { schema, name, columns: (view.columns ?? []).map((c) => ({ name: c })) } as unknown as TableDef
     try {
       return catalog.definition(schema, name)
-    } catch {
+    } catch (e) {
+      expectTyped(e)
       return undefined
     }
   }
@@ -137,7 +139,9 @@ export function showCreateView(run: Run, catalog: CatalogApi, view: ViewDef): st
   try {
     const { query, plan } = planViewQuery(run, view)
     text = viewDefinition(query, plan.columns.map((c) => c.name), view.database ?? view.schema, printableSources(catalog), view.query, current)
-  } catch {}
+  } catch (e) {
+    expectTyped(e)
+  }
   const q = (s: string) => `\`${s.replace(/`/g, '``')}\``
   const [user, host] = (view.definer ?? 'root@%').split('@') as [string, string | undefined]
   const name = view.schema === current ? q(view.name) : `${q(view.schema)}.${q(view.name)}`

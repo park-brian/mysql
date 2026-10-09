@@ -27,7 +27,7 @@
 // its order within one key is the primary key's — the same as a full scan
 // filtered. A *range* on a secondary is left to a full scan until the cost
 // model of M5.7 can say what MySQL would pick.
-import { CHARSET_BINARY, FIELD_TYPE } from '@myjs/bytes'
+import { CHARSET_BINARY, FIELD_TYPE, expectTyped } from '@myjs/bytes'
 import type { ColumnDef, IndexDef, KeyBound, KeyRange, TableDef } from '@myjs/engine'
 import { NODE, type Expression } from '@myjs/parser'
 import {
@@ -191,7 +191,8 @@ function latin1(bytes: Uint8Array): string {
 function bound(v: Value, column: ColumnDef, inclusive: boolean): KeyBound | undefined {
   try {
     return { values: [encodeField(v, column.nullable ? column : { ...column, nullable: true }, ctx())], inclusive }
-  } catch {
+  } catch (e) {
+    expectTyped(e)
     return undefined
   }
 }
@@ -201,7 +202,8 @@ function accessFor(index: IndexDef, column: ColumnDef, conditions: readonly Cond
   const evaluate = (e: Expression): Value | undefined => {
     try {
       return constantValue(e, env)
-    } catch {
+    } catch (e) {
+      expectTyped(e)
       return undefined
     }
   }

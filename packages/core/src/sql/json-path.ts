@@ -20,7 +20,7 @@
 // that is not an array treats it as a one-element array (`$[0]` of a scalar
 // is the scalar), where `[*]` matches nothing; `**` is the value and every
 // value below it, each match reported once, in document order.
-import { FIELD_TYPE } from '@myjs/bytes'
+import { FIELD_TYPE, expectTyped } from '@myjs/bytes'
 import { sqlError } from '@myjs/protocol'
 import {
   COERCIBILITY,
@@ -101,7 +101,8 @@ function jsonString(bytes: Uint8Array): string | undefined {
   try {
     const doc = parseJson(text)
     return doc.t === 'string' ? doc.v : undefined
-  } catch {
+  } catch (e) {
+    expectTyped(e)
     return undefined
   }
 }
