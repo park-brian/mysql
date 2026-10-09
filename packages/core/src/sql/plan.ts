@@ -62,15 +62,15 @@ interface Condition {
 const FLIP: Readonly<Record<string, Op>> = { '=': '=', '<': '>', '<=': '>=', '>': '<', '>=': '<=' }
 
 /** A constant the planner may evaluate before the scan: a literal, or a `?`. */
-const isConstant = (e: Expression): boolean =>
+export const isConstant = (e: Expression): boolean =>
   e.kind === NODE.LITERAL || e.kind === NODE.PLACEHOLDER || (e.kind === NODE.UNARY && e.op === '-' && isConstant(e.operand))
 
-/** The WHERE clause's top-level `AND`ed conjuncts. */
-function conjuncts(e: Expression | undefined, out: Expression[] = []): Expression[] {
+/** A condition's top-level `AND`ed conjuncts, appended to `out`. */
+export function splitAnd(e: Expression | undefined, out: Expression[] = []): Expression[] {
   if (e === undefined) return out
   if (e.kind === NODE.BINARY && (e.op === 'AND' || e.op === '&&')) {
-    conjuncts(e.left, out)
-    conjuncts(e.right, out)
+    splitAnd(e.left, out)
+    splitAnd(e.right, out)
   } else out.push(e)
   return out
 }
@@ -158,7 +158,7 @@ function exact(v: Value, c: ColumnDef): boolean {
  * is why the plan is made per execution (a `?` is a constant by then).
  */
 export function chooseAccess(def: TableDef, alias: string, where: Expression | undefined, env: Env): Access {
-  const conditions = conjuncts(where)
+  const conditions = splitAnd(where)
     .map((e) => conditionOf(e, def, alias))
     .filter((c): c is Condition => c !== undefined)
   if (conditions.length === 0) return FULL_SCAN

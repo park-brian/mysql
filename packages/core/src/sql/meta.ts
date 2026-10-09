@@ -200,8 +200,10 @@ const JSON_MAX = 4294967295
 /** JSON where it meets a string: a LONGTEXT in utf8mb4_bin, the collation a JSON value's text has (8.4.11: `s UNION ALL doc` is 252, BLOB and BINARY). */
 export const jsonAsText = (nullable: boolean): ResultType => ({ ...stringType(JSON_MAX / 4, CHARSET_UTF8MB4_BIN, nullable), field: FIELD_TYPE.BLOB, blobBytes: JSON_MAX / 4, coercibility: 2 })
 
-/** utf8mb4_bin, from `share/charsets`'s compiled collations. */
-const CHARSET_UTF8MB4_BIN = 46
+/** utf8mb4_bin (`strings/ctype-utf8.cc`): the collation of a JSON value's text. */
+export const CHARSET_UTF8MB4_BIN = 46
+/** utf8mb3_general_ci (`strings/ctype-utf8.cc`): the system charset, which COLLATION() and CHARSET() answer in. */
+export const CHARSET_UTF8MB3_GENERAL_CI = 33
 
 export const jsonType = (nullable: boolean): ResultType => ({ kind: 'json', field: FIELD_TYPE.JSON, nullable, unsigned: false, length: JSON_MAX, scale: 0, collationId: CHARSET_BINARY })
 

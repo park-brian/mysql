@@ -36,7 +36,7 @@ import { FIELD_TYPE } from '@myjs/bytes'
 import { NODE, type CallNode, type Expression, type FrameBound, type WindowSpec } from '@myjs/parser'
 import { messages, sqlError } from '@myjs/protocol'
 import { add, compareValues, doubleValue, intValue, sortValues, toInteger, type Value } from '@myjs/types'
-import { aggregate as resultTypeOf, compile, convertTo, type CompileContext, type Compiled, type Env, type Row } from './compile.ts'
+import { AGGREGATE_NAMES, aggregate as resultTypeOf, compile, constantEnv, convertTo, type CompileContext, type Compiled, type Env, type Row } from './compile.ts'
 import { AggregateSink, type AggregateSpec } from './group.ts'
 import { warnNonScalar } from './operators.ts'
 import { doubleType, intType, type ResultType } from './meta.ts'
@@ -44,7 +44,8 @@ import { doubleType, intType, type ResultType } from './meta.ts'
 const RANKING = new Set(['ROW_NUMBER', 'RANK', 'DENSE_RANK', 'PERCENT_RANK', 'CUME_DIST', 'NTILE'])
 const OFFSET = new Set(['LAG', 'LEAD'])
 const VALUE = new Set(['FIRST_VALUE', 'LAST_VALUE', 'NTH_VALUE'])
-const AGGREGATES = new Set(['COUNT', 'SUM', 'AVG', 'MIN', 'MAX', 'BIT_AND', 'BIT_OR', 'BIT_XOR', 'STD', 'STDDEV', 'STDDEV_POP', 'STDDEV_SAMP', 'VARIANCE', 'VAR_POP', 'VAR_SAMP', 'JSON_ARRAYAGG', 'JSON_OBJECTAGG'])
+/** The aggregates that run over a window: every one but GROUP_CONCAT, which is refused above. */
+const windowAggregate = (name: string): boolean => name !== 'GROUP_CONCAT' && AGGREGATE_NAMES.has(name)
 
 interface Frame {
   readonly units: 'ROWS' | 'RANGE'
@@ -95,7 +96,7 @@ export class WindowSink {
     const ctx = { ...this.#rowCtx, clause: 'window order by' }
     if (e.distinct === true) throw sqlError('ER_NOT_SUPPORTED_YET', "This version of MySQL doesn't yet support '<window function>(DISTINCT ..)'")
     if (name === 'GROUP_CONCAT') throw sqlError('ER_NOT_SUPPORTED_YET', "This version of MySQL doesn't yet support 'group_concat as window function'")
-    const known = RANKING.has(name) || OFFSET.has(name) || VALUE.has(name) || AGGREGATES.has(name)
+    const known = RANKING.has(name) || OFFSET.has(name) || VALUE.has(name) || windowAggregate(name)
     if (!known) throw sqlError('ER_NOT_SUPPORTED_YET', messages.notSupported(`The window function ${name}`))
     const order = (spec.orderBy ?? []).map((o) => ({ expr: compile(o.expr, ctx), desc: o.desc === true }))
     const frame = frameOf(spec, order, ctx)
@@ -162,7 +163,6 @@ export class WindowSink {
 }
 
 /** What a constant argument or frame offset is evaluated in: no row, the statement's session. */
-const constantEnv = (ctx: CompileContext): Env => ({ params: ctx.params ?? [], now: new Date(), session: ctx.session, state: ctx.state })
 
 const stripUndefined = (spec: WindowSpec): WindowSpec => Object.fromEntries(Object.entries(spec).filter(([k, v]) => v !== undefined && k !== 'base')) as WindowSpec
 

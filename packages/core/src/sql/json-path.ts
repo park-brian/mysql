@@ -38,11 +38,10 @@ import {
   type Value,
 } from '@myjs/types'
 import type { Compiled } from './compile.ts'
-import { charWidth, intType, jsonType, stringType, type ResultType } from './meta.ts'
+import { CHARSET_UTF8MB4_BIN, charWidth, intType, jsonType, stringType, type ResultType } from './meta.ts'
 import { unregistered } from './registry.ts'
 
 /** The collation of every text these functions make, whatever the connection's (8.4.11: `JSON_UNQUOTE('"ABC"') = 'abc'` is 0). */
-const UTF8MB4_BIN = 46
 
 export type Leg =
   | { readonly kind: 'member'; readonly key: string }
@@ -503,9 +502,9 @@ export function jsonPathFunction(name: string, args: readonly Compiled[], callNa
       return {
         eval: (r, env) => {
           const v = (args[0] as Compiled).eval(r, env)
-          return v === null ? null : stringValue(typeName(docOf(v, 1, fn)), UTF8MB4_BIN, COERCIBILITY.IMPLICIT)
+          return v === null ? null : stringValue(typeName(docOf(v, 1, fn)), CHARSET_UTF8MB4_BIN, COERCIBILITY.IMPLICIT)
         },
-        type: stringType(17, UTF8MB4_BIN, true),
+        type: stringType(17, CHARSET_UTF8MB4_BIN, true),
       }
     case 'JSON_LENGTH':
     case 'JSON_DEPTH':
@@ -564,12 +563,12 @@ export function jsonPathFunction(name: string, args: readonly Compiled[], callNa
  * argument makes a LONGTEXT, a string one the string's width.
  */
 export function unquote(arg: Compiled): Compiled {
-  const type: ResultType = arg.type.kind === 'json' ? { ...stringType(4294967295 / 4, UTF8MB4_BIN, true), field: FIELD_TYPE.LONG_BLOB, length: 4294967295 } : stringType(charWidth(arg.type), UTF8MB4_BIN, true)
+  const type: ResultType = arg.type.kind === 'json' ? { ...stringType(4294967295 / 4, CHARSET_UTF8MB4_BIN, true), field: FIELD_TYPE.LONG_BLOB, length: 4294967295 } : stringType(charWidth(arg.type), CHARSET_UTF8MB4_BIN, true)
   return {
     eval: (r, env) => {
       const v = arg.eval(r, env)
       if (v === null) return null
-      const out = (s: string) => stringValue(s, UTF8MB4_BIN, COERCIBILITY.IMPLICIT)
+      const out = (s: string) => stringValue(s, CHARSET_UTF8MB4_BIN, COERCIBILITY.IMPLICIT)
       if (v.kind === 'json') return out(v.v.t === 'string' ? v.v.v : renderJson(v.v))
       if (v.kind !== 'string') throw sqlError('ER_INCORRECT_TYPE', 'Incorrect type for argument 1 in function json_unquote.')
       const s = v.v

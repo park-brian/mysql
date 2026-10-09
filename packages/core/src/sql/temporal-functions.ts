@@ -64,7 +64,7 @@ import {
   type TimeStruct,
   type Value,
 } from '@myjs/types'
-import { asNumber, compile, constantNode, raise, rowNumber, type Compiled, type CompileContext, type Env } from './compile.ts'
+import { asNumber, compile, constantNode, raise, rowNumber, type Compiled, type CompileContext, type Env, constantEnv } from './compile.ts'
 import { dateAdd } from './interval.ts'
 import { charWidth, datetimeType, decimalType, intType, stringType, type ResultType } from './meta.ts'
 import { unregistered } from './registry.ts'
@@ -173,7 +173,7 @@ function roundDatetime(v: MysqlDateTime, fsp: number): MysqlDateTime | undefined
 function constantOf(e: Expression, c: Compiled, ctx: CompileContext): Value | undefined {
   if (!constantNode(e)) return undefined
   try {
-    return c.eval([], { params: ctx.params ?? [], now: new Date(0), session: ctx.session, state: ctx.state })
+    return c.eval([], constantEnv(ctx))
   } catch (e) {
     expectTyped(e)
     return undefined

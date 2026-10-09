@@ -34,6 +34,8 @@ import { NODE, deparse, type CallNode } from '@myjs/parser'
 import { messages, sqlError } from '@myjs/protocol'
 import {
   COERCIBILITY,
+  MAX_SIGNED,
+  MIN_SIGNED,
   bytesValue,
   compareValues,
   crc32,
@@ -71,6 +73,7 @@ import {
   type CompileContext,
   type Compiled,
   type Env,
+  constantEnv,
 } from './compile.ts'
 import { NULL_TYPE, charWidth, decimalType, doubleType, intType, stringType, type ResultType } from './meta.ts'
 import { unregistered } from './registry.ts'
@@ -614,7 +617,7 @@ function libraryFunction(name: string, args: readonly Compiled[], callName: stri
           const v = x.eval(r, env)
           const p = placesOf(r, env)
           if (v === null || p === null) return null
-          return doubleValue(roundDouble(toDouble(v), p, truncate))
+          return doubleValue(myDoubleRound(toDouble(v), p, truncate))
         },
         type: doubleType(nullable),
       }
@@ -692,7 +695,7 @@ function roundDecimal(d: DecimalValue, places: number, truncate: boolean): Decim
 }
 
 /** `my_double_round`: half to even, as `rint`, at `places`, which may be negative. */
-function roundDouble(value: number, places: bigint, truncate: boolean): number {
+function myDoubleRound(value: number, places: bigint, truncate: boolean): number {
   const negative = places < 0n
   const abs = Number(negative ? -places : places)
   const tmp = 10 ** abs
@@ -700,13 +703,6 @@ function roundDouble(value: number, places: bigint, truncate: boolean): number {
   const div = value / tmp
   if (negative && !Number.isFinite(tmp)) return 0
   if (!negative && !Number.isFinite(mul)) return value
-  const rint = (x: number) => {
-    const f = Math.floor(x)
-    const diff = x - f
-    const r = diff > 0.5 ? f + 1 : diff < 0.5 ? f : f % 2 === 0 ? f : f + 1
-    // `rint(-0.25)` is -0, which MySQL prints as such.
-    return r === 0 && x < 0 ? -0 : r
-  }
   if (truncate) {
     if (value >= 0) return negative ? Math.floor(div) * tmp : Math.floor(mul) / tmp
     return negative ? Math.ceil(div) * tmp : Math.ceil(mul) / tmp
@@ -747,13 +743,13 @@ export function intReader(c: Compiled): (r: Row, env: Env) => bigint | null {
   }
 }
 
-/** C's `rint`: halves to the even neighbour. */
+/** C's `rint`: the nearest integer, halves to the even neighbour, and -0 kept (MySQL prints `ROUND(-0.25)` as -0). */
 function rint(x: number): number {
   const r = Math.round(x)
   return r - x === 0.5 && r % 2 !== 0 ? r - 1 : r
 }
 
-const clamp64 = (n: bigint): bigint => (n > (1n << 63n) - 1n ? (1n << 63n) - 1n : n < -(1n << 63n) ? -(1n << 63n) : n)
+const clamp64 = (n: bigint): bigint => (n > MAX_SIGNED ? MAX_SIGNED : n < MIN_SIGNED ? MIN_SIGNED : n)
 
 /** An argument's width in characters, which a binary result counts too (8.4.11: ELT and MAKE_SET over bytes). */
 const charsOf = (t: ResultType): number => widthOf(t, false)
@@ -804,13 +800,6 @@ const LOCALES: ReadonlyMap<string, readonly [string, string, boolean]> = new Map
 )
 const EN_US = LOCALES.get('en_us') as readonly [string, string, boolean]
 
-/** `my_double_round`: `x` rounded to `d` places as a double, halves to even, left alone where the scaling overflows. */
-function doubleRound(x: number, d: number): number {
-  const scale = 10 ** d
-  const scaled = x * scale
-  if (!Number.isFinite(scale) || !Number.isFinite(scaled)) return x
-  return rint(scaled) / scale
-}
 
 /** A double's shortest digits written out with exactly `d` places, its sign kept even at zero. */
 function fixedOf(x: number, d: number): string {
@@ -837,7 +826,7 @@ function fixedOf(x: number, d: number): string {
 /** FORMAT: `n` rounded to `d` places, grouped as `locale` groups: a double halves to even and keeps a negative zero's sign, an exact number rounds halves away. */
 function format(n: V, d: number, locale: readonly [string, string, boolean]): string {
   let text: string
-  if (n.kind === 'double' || n.kind === 'string' || n.kind === 'bytes') text = fixedOf(doubleRound(toDouble(n), d), d)
+  if (n.kind === 'double' || n.kind === 'string' || n.kind === 'bytes') text = fixedOf(myDoubleRound(toDouble(n), BigInt(d), false), d)
   else {
     const dec = toDecimal(n)
     const scale = BigInt(dec.scale)
@@ -1009,7 +998,7 @@ function moreStringFunction(name: string, xs: readonly Compiled[], callName: str
       const id = first.type.kind === 'string' ? first.type.collationId : CHARSET_BINARY
       const allBytes = id === CHARSET_BINARY
       if (textual) {
-        const env = { params: ctx.params ?? [], now: new Date(0), session: ctx.session, state: ctx.state }
+        const env = constantEnv(ctx)
         for (let i = 1; i < xs.length; i++) {
           if (constant[i] !== true) continue
           const v = (xs[i] as Compiled).eval([], env)
@@ -1154,7 +1143,7 @@ function moreStringFunction(name: string, xs: readonly Compiled[], callName: str
       let insertedWidth = widthOf(sub.type, binary)
       if (!binary && (sub.type.kind === 'int' || sub.type.kind === 'decimal') && constant[3] === true) {
         try {
-          const v = sub.eval([], { params: ctx.params ?? [], now: new Date(0), session: ctx.session, state: ctx.state })
+          const v = sub.eval([], constantEnv(ctx))
           if (v !== null) insertedWidth = toText(v).length
         } catch (e) {
           expectTyped(e)
@@ -1269,7 +1258,7 @@ function moreStringFunction(name: string, xs: readonly Compiled[], callName: str
       let loc = xs[2]
       let fixedLocale: readonly [string, string, boolean] | undefined
       if (loc !== undefined && constant[2] === true) {
-        const l = loc.eval([], { params: ctx.params ?? [], now: new Date(0), session: ctx.session, state: ctx.state })
+        const l = loc.eval([], constantEnv(ctx))
         fixedLocale = lookup(l, (name) => ctx.conditions?.push({ level: 'Warning', code: 1649, message: `Unknown locale: '${name}'` }))
         loc = undefined
       }
@@ -1406,7 +1395,7 @@ function moreStringFunction(name: string, xs: readonly Compiled[], callName: str
       let fixedBits: bigint | null | undefined
       if (constant[1] === true) {
         try {
-          const b = bitsC.eval([], { params: ctx.params ?? [], now: new Date(0), session: ctx.session, state: ctx.state })
+          const b = bitsC.eval([], constantEnv(ctx))
           const n = b === null ? null : valInt(b)
           shaWidth = n === 224n ? 56 : n === 384n ? 96 : n === 512n ? 128 : 64
           // A constant length that is none is NULL, warned once (8.4.11).

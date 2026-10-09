@@ -33,7 +33,7 @@ import { NODE, REF, type Expression, type TableReference } from '@myjs/parser'
 import { messages, sqlError } from '@myjs/protocol'
 import { truth, type Value } from '@myjs/types'
 import type { Compiled, Env, Row, Scope } from './compile.ts'
-import { accessRows, chooseAccess, pointAccess } from './plan.ts'
+import { accessRows, chooseAccess, pointAccess, splitAnd } from './plan.ts'
 import { TableScope, type ScopeColumn, type ScopeTableSpec } from './scope.ts'
 
 /** A table the FROM reads: a base table, or (M5.1) a derived one. */
@@ -581,13 +581,7 @@ function eqRef(t: FromTable, conditions: readonly (Expression | undefined)[], ou
   const def = t.def
   if (def === undefined || t.table === undefined) return undefined
   const conjuncts: Expression[] = []
-  const flatten = (e: Expression | undefined): void => {
-    if (e === undefined) return
-    if (e.kind === NODE.BINARY && (e.op === 'AND' || e.op === '&&')) {
-      flatten(e.left)
-      flatten(e.right)
-    } else conjuncts.push(e)
-  }
+  const flatten = (e: Expression | undefined): void => void splitAnd(e, conjuncts)
   for (const c of conditions) flatten(c)
   const own = (e: Expression): string | undefined => {
     if (e.kind !== NODE.COLUMN || e.parts.length < 2 || e.parts[e.parts.length - 2] !== t.alias) return undefined

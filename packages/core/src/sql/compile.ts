@@ -63,6 +63,8 @@ import {
   valueOutOfRange,
 } from '@myjs/types'
 import {
+  CHARSET_UTF8MB4_BIN,
+  NATIONAL_DEPRECATION,
   NULL_TYPE,
   boolType,
   charWidth,
@@ -77,7 +79,6 @@ import {
   stringType,
   type ResultType,
   type SourceColumn,
-  NATIONAL_DEPRECATION,
 } from './meta.ts'
 import { castAsJson } from './json.ts'
 import { jsonPathFunction, memberOf, unquote } from './json-path.ts'
@@ -202,6 +203,9 @@ export function warnedText(v: Exclude<Value, null>): string {
  * INET_ATON's and INET_NTOA's 1411: a column as `schema`.`table`.`column`,
  * a string with its introducer if it was written with one (8.4.11).
  */
+/** An environment for evaluating a constant while compiling: no row, the statement's parameters. */
+export const constantEnv = (ctx: CompileContext): Env => ({ params: ctx.params ?? [], now: new Date(), session: ctx.session, state: ctx.state })
+
 export function printedArgument(a: Expression, ctx: CompileContext): string {
   try {
     return printExpression(a, {
@@ -251,9 +255,9 @@ function convertUsing(e: ConvertNode, ctx: CompileContext): Compiled {
   const name = e.charset.toLowerCase() === 'utf8' ? 'utf8mb3' : e.charset.toLowerCase()
   const id = name === 'binary' ? CHARSET_BINARY : defaultCollationOf(name)?.id
   if (id === undefined) throw sqlError('ER_UNKNOWN_CHARACTER_SET', `Unknown character set: '${e.charset}'`)
-  if (name === 'utf8mb3') raise2(ctx, 1287, "'utf8mb3' is deprecated and will be removed in a future release. Please use utf8mb4 instead")
+  if (name === 'utf8mb3') warnAtCompile(ctx, 1287, "'utf8mb3' is deprecated and will be removed in a future release. Please use utf8mb4 instead")
   // Characters, or bytes as many as the text could take when the result is bytes.
-  const width = x.type.kind === 'bytes' || isBits(x.type) ? byteWidthOf(x.type) : charWidth(x.type) * (id === CHARSET_BINARY && x.type.kind === 'string' ? requireCollationInfo(x.type.collationId).mbmaxlen : 1)
+  const width = x.type.kind === 'bytes' || isBits(x.type) ? bitsOrBytesWidth(x.type) : charWidth(x.type) * (id === CHARSET_BINARY && x.type.kind === 'string' ? requireCollationInfo(x.type.collationId).mbmaxlen : 1)
   return {
     eval: (r, env) => {
       const v = x.eval(r, env)
@@ -270,12 +274,12 @@ function convertUsing(e: ConvertNode, ctx: CompileContext): Compiled {
 }
 
 /** A condition raised while compiling, into the statement's diagnostics area. */
-function raise2(ctx: CompileContext, code: number, message: string): void {
+function warnAtCompile(ctx: CompileContext, code: number, message: string): void {
   ctx.conditions?.push({ level: 'Warning', code, message })
 }
 
 /** How many bytes a bytes-like type is wide: a BIT's are its bits over 8. */
-const byteWidthOf = (t: ResultType): number => (isBits(t) ? Math.ceil(t.length / 8) : t.length)
+const bitsOrBytesWidth = (t: ResultType): number => (isBits(t) ? Math.ceil(t.length / 8) : t.length)
 
 /** A BIT column's value, or an expression's that keeps its type: bytes in a string context. */
 export const isBits = (t: ResultType): boolean => t.field === FIELD_TYPE.BIT && t.kind === 'int'
@@ -481,7 +485,7 @@ export function aggregateCollations(types: readonly ResultType[], operation: str
       if (t.coercibility === undefined) known = false
       items.push({ collationId: t.kind === 'string' ? t.collationId : CHARSET_BINARY, derivation: coercibilityOf(t) })
     } else if (t.kind === 'null') items.push({ collationId: CHARSET_BINARY, derivation: COERCIBILITY.IGNORABLE })
-    else if (t.kind === 'json') items.push({ collationId: 46, derivation: COERCIBILITY.IMPLICIT })
+    else if (t.kind === 'json') items.push({ collationId: CHARSET_UTF8MB4_BIN, derivation: COERCIBILITY.IMPLICIT })
     else items.push({ collationId: NUMERIC_COLLATION, derivation: COERCIBILITY.NUMERIC })
   }
   if (!types.some(isText)) return undefined
@@ -1688,7 +1692,7 @@ const FLT_MAX = 3.4028234663852886e38
 
 function cast(e: CastNode, ctx: CompileContext): Compiled {
   const raw = compile(e.expr, ctx)
-  if (e.type.national === true) raise2(ctx, 3720, NATIONAL_DEPRECATION)
+  if (e.type.national === true) warnAtCompile(ctx, 3720, NATIONAL_DEPRECATION)
   // What the target reads its argument as, warning as it goes (1292).
   const reads = e.type.name === 'DECIMAL' ? 'DECIMAL' : e.type.name === 'DOUBLE' || e.type.name === 'FLOAT' || e.type.name === 'REAL' ? 'DOUBLE' : ['SIGNED', 'UNSIGNED', 'INT', 'BIGINT'].includes(e.type.name) ? 'INTEGER' : undefined
   const inner = reads === undefined ? raw : asNumber(raw, reads)
@@ -1937,7 +1941,6 @@ export function textForColumn(v: Value, columnCollation: number): Value {
   return stringValue(v.v, columnCollation, COERCIBILITY.IMPLICIT)
 }
 
-
 /** A result's width in bytes: a string's characters at its charset's widest, anything else its characters. */
 export function byteWidth(t: ResultType): number {
   return t.kind === 'string' ? charWidth(t) * requireCollationInfo(t.collationId).mbmaxlen : charWidth(t)
@@ -2029,7 +2032,7 @@ function matchAgainst(e: MatchNode, ctx: CompileContext): Compiled {
   const boolean = e.modifier === 'IN BOOLEAN MODE'
   // A constant query is parsed before any row is read, so its errors come
   // from an empty table too (8.4.11: 33 nested groups is 209 there).
-  if (boolean && constantNode(e.against)) parseBoolean(queryText(against.eval([], { params: ctx.params ?? [], now: new Date(0), session: ctx.session, state: ctx.state })), fold)
+  if (boolean && constantNode(e.against)) parseBoolean(queryText(against.eval([], constantEnv(ctx))), fold)
   const positions = index.columns.map((c) => def.columns.findIndex((x) => x.name.toLowerCase() === c.toLowerCase()))
   const wordsIn = (values: readonly Value[], raw?: Map<string, string>) => values.flatMap((v) => (v === null ? [] : wordsOf(toText(v), fold, raw)))
   let preparedFor: Env | undefined

@@ -35,6 +35,7 @@ import {
   coercibilityOf,
   comparer,
   compile,
+  constantEnv,
   convertTo,
   doubleOf,
   expressionOf,
@@ -48,7 +49,19 @@ import {
   type Row,
 } from './compile.ts'
 import { dateAdd, isInterval } from './interval.ts'
-import { NULL_TYPE, boolType, charWidth, datetimeType, doubleType, floatLength, intType, stringType, type ResultType } from './meta.ts'
+import {
+  CHARSET_UTF8MB3_GENERAL_CI,
+  CHARSET_UTF8MB4_BIN,
+  NULL_TYPE,
+  boolType,
+  charWidth,
+  datetimeType,
+  doubleType,
+  floatLength,
+  intType,
+  stringType,
+  type ResultType,
+} from './meta.ts'
 import { matchType, regexpInstr, regexpLike, regexpReplace, regexpSubstr } from './regexp.ts'
 import { unregistered } from './registry.ts'
 import { bitBytes } from './wire.ts'
@@ -162,10 +175,10 @@ export function builtinFunction(name: string, e: CallNode, ctx: CompileContext):
       // NULL is `binary`, JSON utf8mb4_bin (8.4.11). A VARCHAR(64) in utf8mb3.
       arity(1)
       const [x] = args() as [Compiled]
-      const id = x.type.kind === 'json' ? 46 : x.type.kind === 'string' ? x.type.collationId : CHARSET_BINARY
+      const id = x.type.kind === 'json' ? CHARSET_UTF8MB4_BIN : x.type.kind === 'string' ? x.type.collationId : CHARSET_BINARY
       const info = requireCollationInfo(id)
       const answer = name === 'COLLATION' ? info.name : info.charset
-      return { eval: () => stringValue(answer, 33, COERCIBILITY.IMPLICIT), type: stringType(64, 33, true) }
+      return { eval: () => stringValue(answer, CHARSET_UTF8MB3_GENERAL_CI, COERCIBILITY.IMPLICIT), type: stringType(64, CHARSET_UTF8MB3_GENERAL_CI, true) }
     }
     case 'IF': {
       arity(3)
@@ -571,7 +584,7 @@ export function builtinFunction(name: string, e: CallNode, ctx: CompileContext):
 
 function fspArgument(e: CallNode, ctx: CompileContext): number {
   if (e.args.length === 0) return 0
-  const v = compile(e.args[0] as Expression, ctx).eval([], { params: ctx.params ?? [], now: new Date(0), session: ctx.session, state: ctx.state })
+  const v = compile(e.args[0] as Expression, ctx).eval([], constantEnv(ctx))
   const n = v === null ? 0 : Number(toInteger(v))
   if (n < 0 || n > 6) throw sqlError('ER_TOO_BIG_PRECISION', `Too-big precision ${n} specified for '${e.name}'. Maximum is 6.`)
   return n

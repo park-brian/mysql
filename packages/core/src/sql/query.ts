@@ -12,7 +12,7 @@
 import type { ColumnDef, Table, TableDef, ViewDef } from '@myjs/engine'
 import { NODE, QUERY, REF, TOKEN, deparse, lex, parseStatement, type Expression, type OrderItem, type QueryBody, type QueryExpression, type SelectNode, type SetOperationNode, type TableName, type Token } from '@myjs/parser'
 import { messages, sqlError, type ColumnDefinition, type ResultSet, type RowValue } from '@myjs/protocol'
-import { intValue, integerRange, toInteger, truth, withoutHex, type Value } from '@myjs/types'
+import { intValue, toInteger, truth, withoutHex, type Value } from '@myjs/types'
 import { compile, EMPTY_SCOPE, type CompileContext, type Compiled, type Env, type GroupKeys, type Row, type Scope, type SubqueryPlan } from './compile.ts'
 import { AggregateSink, chooseStrategy, containsAggregate, groupRows, isAggregate } from './group.ts'
 import { WindowSink, applyWindows, containsWindow } from './window.ts'
@@ -20,12 +20,12 @@ import { columnDefinition, intType, type ResultType } from './meta.ts'
 import { FIELD_TYPE, expectTyped } from '@myjs/bytes'
 import { requireCollationInfo } from '@myjs/charsets'
 import { distinct, filter, limit, project, sort, type SortKey } from './operators.ts'
-import { accessRows, chooseAccess } from './plan.ts'
+import { accessRows, chooseAccess, isConstant, splitAnd } from './plan.ts'
 import { TableScope } from './scope.ts'
 import { planFrom, type DerivedSource, type FromContext, type FromPlan, type JoinCondition } from './from.ts'
 import { rowKey } from './keys.ts'
 import { convert as convertSetValue, nestedNullability, setOperation, setOperationType } from './setop.ts'
-import { constTablesHaveRows, optimizerFacts } from './optimize.ts'
+import { constTablesHaveRows, neverEqual, optimizerFacts } from './optimize.ts'
 import { informationSchemaTable } from './information-schema.ts'
 import type { SqlSession } from './session.ts'
 import { toWire, type WireProtocol } from './wire.ts'
@@ -1471,13 +1471,7 @@ function checkFullGroupBy(
   if (rollup) where = undefined
   if (rollup) joins = []
   const conjuncts: Expression[] = []
-  const flatten = (e: Expression | undefined): void => {
-    if (e === undefined) return
-    if (e.kind === NODE.BINARY && (e.op === 'AND' || e.op === '&&')) {
-      flatten(e.left)
-      flatten(e.right)
-    } else conjuncts.push(e)
-  }
+  const flatten = (e: Expression | undefined): void => void splitAnd(e, conjuncts)
   flatten(where)
   // An inner join's ON is as good as the WHERE; an outer join's equality
   // determines its nullable side from the preserved one, never the reverse
@@ -1625,16 +1619,11 @@ function whereFacts(run: Run, def: TableDef, alias: string, where: Expression | 
     return def.columns.find((c) => c.name.toLowerCase() === name)
   }
   const conjuncts: Expression[] = []
-  const flatten = (e: Expression): void => {
-    if (e.kind === NODE.BINARY && (e.op === 'AND' || e.op === '&&')) {
-      flatten(e.left)
-      flatten(e.right)
-    } else conjuncts.push(e)
-  }
+  const flatten = (e: Expression): void => void splitAnd(e, conjuncts)
   flatten(where)
   for (const c of conjuncts) {
     if (c.kind === NODE.UNARY && c.op === 'IS NULL' && columnOf(c.operand)?.nullable === false) facts.impossible = true
-    else if (neverEqual(c, columnOf)) facts.impossible = true
+    else if (neverEqualIn(c, columnOf)) facts.impossible = true
     else if (foldable(c, run.params !== undefined)) {
       try {
         if (truth(compile(c, compileContext(run, EMPTY_SCOPE, 'where clause')).eval([], run.env)) !== true) facts.impossible = true
@@ -1679,12 +1668,11 @@ function pinOf(cond: Expression, column: ColumnDef, columnOf: (e: Expression) =>
     else if (columnOf(cond.right) === column) value = cond.left
   }
   // NULL pins nothing: `c <=> NULL` leaves `c` grouped (8.4.11).
-  if (value === undefined || !constant(value) || (value.kind === NODE.LITERAL && value.type === 'null')) return undefined
+  if (value === undefined || !isConstant(value) || (value.kind === NODE.LITERAL && value.type === 'null')) return undefined
   if (column.type.collationId !== undefined && numeric(value)) return undefined
   return value.kind === NODE.PLACEHOLDER ? `?${value.at}` : deparse(value)
 }
 
-const constant = (e: Expression): boolean => e.kind === NODE.LITERAL || e.kind === NODE.PLACEHOLDER || (e.kind === NODE.UNARY && e.op === '-' && constant(e.operand))
 const numeric = (e: Expression): boolean => (e.kind === NODE.LITERAL && (e.type === 'int' || e.type === 'decimal' || e.type === 'double')) || (e.kind === NODE.UNARY && numeric(e.operand))
 
 /**
@@ -1693,23 +1681,10 @@ const numeric = (e: Expression): boolean => (e.kind === NODE.LITERAL && (e.type 
  * (8.4.11 answers `SELECT DISTINCT score FROM p WHERE flag = 9.5` without its
  * temporary table). `c = NULL` is not folded, on 8.4.
  */
-function neverEqual(e: Expression, columnOf: (e: Expression) => ColumnDef | undefined): boolean {
+function neverEqualIn(e: Expression, columnOf: (e: Expression) => ColumnDef | undefined): boolean {
   if (e.kind !== NODE.BINARY || e.op !== '=') return false
-  const column = columnOf(e.left) ?? columnOf(e.right)
-  const other = columnOf(e.left) !== undefined ? e.right : e.left
-  if (column === undefined) return false
-  const range = integerRange(column.type)
-  if (range === undefined) return false
-  const negative = other.kind === NODE.UNARY && other.op === '-'
-  const literal = negative ? other.operand : other
-  if (literal.kind !== NODE.LITERAL) return false
-  // A string that is wholly a number is that number here (`flag = '9.5'`).
-  const text = String(literal.value).trim()
-  const number = literal.type === 'int' || literal.type === 'decimal' || literal.type === 'double' || (literal.type === 'string' && /^[+-]?(\d+\.?\d*|\.\d+)([eE][+-]?\d+)?$/.test(text))
-  if (!number) return false
-  if (!/^[+-]?\d+$/.test(text) && Number(text) % 1 !== 0) return true
-  const v = (negative ? -1n : 1n) * (/^[+-]?\d+$/.test(text) ? BigInt(text) : BigInt(Math.trunc(Number(text))))
-  return v < range.min || v > range.max
+  const left = columnOf(e.left)
+  return neverEqual(left ?? columnOf(e.right), left !== undefined ? e.right : e.left)
 }
 
 /**
