@@ -27,7 +27,7 @@ import {
 } from '@myjs/parser'
 import { COERCIBILITY, doubleValue, intValue, stringValue, toText, type Value } from '@myjs/types'
 import { DEFAULT_SERVER_VERSION } from '../connection.ts'
-import { charsetChange, charsetVariables } from '../transcoder.ts'
+import { checkConnectionCharset, charsetVariables } from '../transcoder.ts'
 
 export interface ServerOptions {
   readonly serverVersion?: string
@@ -141,9 +141,7 @@ export class ServerState {
    */
   set(session: Session, item: SetItem, evaluate: (e: Expression) => Value, own: Map<string, Value>, warn: (code: number, message: string) => void = () => {}): 'sql_mode' | undefined {
     if (item.type === 'names' || item.type === 'charset') {
-      const change = charsetChange(item)
-      if (change === 'unknown') throw sqlError('ER_UNKNOWN_CHARACTER_SET', messages.unsupportedCharset(0))
-      session.characterSet = change.collationId
+      session.characterSet = checkConnectionCharset(item).collationId
       return undefined
     }
     if (item.type === 'user') return undefined

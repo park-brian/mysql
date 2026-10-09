@@ -13,7 +13,8 @@ import {
   encodeCollation,
   preloadCollation,
 } from '@myjs/charsets'
-import type { Transcoder } from '@myjs/protocol'
+import { expectTyped } from '@myjs/bytes'
+import { messages, sqlError, type Transcoder } from '@myjs/protocol'
 
 /** A `Transcoder` backed by the full charset registry. */
 export const charsetTranscoder: Transcoder = {
@@ -56,8 +57,35 @@ export function charsetChange(item: { readonly charset?: string; readonly collat
     return { collationId: info.id, charset: info.charset, collation: info.name }
   }
   const info = defaultCollationOf(charset)
-  if (info === undefined) return 'unknown'
+  // `filename` is the server's encoding of identifiers on disk, not a charset a client can name.
+  if (info === undefined || info.charset === 'filename') return 'unknown'
   return { collationId: info.id, charset: info.charset, collation: info.name }
+}
+
+/**
+ * Refuse a connection charset the session could not then speak, before it
+ * becomes the session's: every later statement would fail to decode.
+ *
+ * A charset whose characters are not ASCII-compatible (`ucs2`, `utf16`,
+ * `utf16le`, `utf32`) MySQL itself refuses for `character_set_client`, with
+ * 1231. One this runtime cannot transcode (`binary`, whose statement bytes
+ * MySQL reads as they are; a multi-byte legacy charset without an encoder
+ * here) is refused by name rather than accepted and broken.
+ */
+export function checkConnectionCharset(item: { readonly charset?: string; readonly collation?: string }): CharsetChange {
+  const change = charsetChange(item)
+  if (change === 'unknown') throw sqlError('ER_UNKNOWN_CHARACTER_SET', `Unknown character set: '${item.collation ?? item.charset ?? ''}'`)
+  if ((collationInfo(change.collationId)?.mbminlen ?? 1) > 1) {
+    throw sqlError('ER_WRONG_VALUE_FOR_VAR', `Variable 'character_set_client' can't be set to the value of '${change.charset}'`)
+  }
+  try {
+    decodeCollation(new Uint8Array([0x61]), change.collationId)
+    encodeCollation('a', change.collationId)
+  } catch (e) {
+    expectTyped(e)
+    throw sqlError('ER_NOT_SUPPORTED_YET', messages.notSupported(`The connection character set '${change.charset}'`))
+  }
+  return change
 }
 
 /**
