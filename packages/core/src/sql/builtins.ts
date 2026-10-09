@@ -48,7 +48,7 @@ import {
   type Compiled,
   asBinary,
   asMerged,
-  dateConstant,
+  dateConverter,
   ownText,
   textOf,
   type Env,
@@ -388,11 +388,11 @@ export function controlFunction(name: string, e: CallNode, ctx: CompileContext):
     }
     case 'NULLIF': {
       arity(2)
-      const [first, second] = args() as [Compiled, Compiled]
-      // A comparison: a text constant beside a date is read as one, or is 1525.
-      const given = dateConstant(first, e.args[0] as Expression, second, ctx)
-      const y = dateConstant(second, e.args[1] as Expression, first, ctx)
-      const x = asBigintConstant(given, y, e.args[0] as Expression, ctx) ?? given
+      const [first, y] = args() as [Compiled, Compiled]
+      const x = asBigintConstant(first, y, e.args[0] as Expression, ctx) ?? first
+      // A comparison: text beside a date is read as one for it (or is 1525), though the value returned is the first argument as given.
+      const left = dateConverter(x, e.args[0] as Expression, y, ctx)
+      const right = dateConverter(y, e.args[1] as Expression, x, ctx)
       if (isText(x.type) && isText(y.type)) aggregateCollations([x.type, y.type], 'nullif', true)
       const cmp = comparer(x.type, y.type)
       // A temporal or a YEAR comes back as its text, in the connection's charset (8.4.11).
@@ -401,7 +401,9 @@ export function controlFunction(name: string, e: CallNode, ctx: CompileContext):
       return {
         eval: (r, env) => {
           const v = x.eval(r, env)
-          if (cmp(v, y.eval(r, env)) === 0 || v === null) return null
+          if (v === null) return null
+          const w = y.eval(r, env)
+          if (cmp(left === undefined ? v : left(v, env), right === undefined ? w : right(w, env)) === 0) return null
           return text ? stringValue(textOf(v, x.type), conn) : v
         },
         type,

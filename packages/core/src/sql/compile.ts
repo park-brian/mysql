@@ -1274,26 +1274,31 @@ function asTimeOfDay(c: Compiled, column: readonly string[]): Compiled {
  * 1292, the zero date (8.4.11: `dt > ch` with ch 'b' is 1). Otherwise `c`.
  */
 export function dateConstant(c: Compiled, written: Expression, other: Compiled, ctx: CompileContext): Compiled {
-  if (other.type.kind !== 'datetime' || !isText(c.type)) return c
-  return constantNode(written) ? asDateConstant(c, other.type.field, ctx) : asDateEachRow(c, ctx)
+  const convert = dateConverter(c, written, other, ctx)
+  return convert === undefined ? c : { eval: (r, env) => convert(c.eval(r, env), env), type: c.type }
+}
+
+/** `dateConstant`'s conversion of one value, for a caller that keeps the value itself too (NULLIF returns it unconverted). */
+export function dateConverter(c: Compiled, written: Expression, other: Compiled, ctx: CompileContext): ((v: Value, env: Env) => Value) | undefined {
+  if (other.type.kind !== 'datetime' || !isText(c.type)) return undefined
+  const flags = modeOf(ctx.session.sqlMode)
+  const constant = constantNode(written)
+  const what = other.type.field === FIELD_TYPE.DATE || other.type.field === FIELD_TYPE.NEWDATE ? 'date' : 'datetime'
+  return (v, env) => {
+    // Text or bytes, a hex or bit literal's included (8.4.11: `d <= b'1010'` is 1525).
+    if (v === null || (v.kind !== 'string' && v.kind !== 'bytes')) return v
+    const p = parseDateTime(toText(v), flags)
+    if (p !== undefined) return { kind: 'datetime', v: p.v, type: p.hasTime ? 'DATETIME' : 'DATE', fsp: p.fsp }
+    if (!constant) {
+      raise(env, 1292, `Incorrect datetime value: '${warnedText(v)}'`)
+      return ZERO_DATETIME
+    }
+    raise(env, 1292, `Truncated incorrect ${what} value: '${warnedText(v)}'`)
+    throw sqlError('ER_WRONG_VALUE', `Incorrect ${what.toUpperCase()} value: '${warnedText(v)}'`)
+  }
 }
 
 const ZERO_DATETIME: Value = { kind: 'datetime', v: { year: 0, month: 0, day: 0, hour: 0, minute: 0, second: 0, microsecond: 0 }, type: 'DATETIME', fsp: 0 }
-
-function asDateEachRow(c: Compiled, ctx: CompileContext): Compiled {
-  const flags = modeOf(ctx.session.sqlMode)
-  return {
-    eval: (r, env) => {
-      const v = c.eval(r, env)
-      if (v === null || (v.kind !== 'string' && v.kind !== 'bytes')) return v
-      const p = parseDateTime(toText(v), flags)
-      if (p !== undefined) return { kind: 'datetime', v: p.v, type: p.hasTime ? 'DATETIME' : 'DATE', fsp: p.fsp }
-      raise(env, 1292, `Incorrect datetime value: '${warnedText(v)}'`)
-      return ZERO_DATETIME
-    },
-    type: c.type,
-  }
-}
 
 /**
  * `c`, a text constant compared with a YEAR column, as the YEAR it would be
@@ -1313,24 +1318,6 @@ function yearConstant(c: Compiled, written: Expression, other: Compiled): Compil
       return intValue(BigInt(n >= 0 && n < 70 ? 2000 + n : n >= 70 && n < 100 ? 1900 + n : n))
     },
     type: { ...c.type, kind: 'int', field: FIELD_TYPE.YEAR, unsigned: true, length: 4, scale: 0, collationId: CHARSET_BINARY },
-  }
-}
-
-function asDateConstant(c: Compiled, field: number, ctx: CompileContext): Compiled {
-  const flags = modeOf(ctx.session.sqlMode)
-  const date = field === FIELD_TYPE.DATE || field === FIELD_TYPE.NEWDATE
-  return {
-    eval: (r, env) => {
-      const v = c.eval(r, env)
-      // Text or bytes, a hex or bit literal's included (8.4.11: `d <= b'1010'` is 1525).
-      if (v === null || (v.kind !== 'string' && v.kind !== 'bytes')) return v
-      const p = parseDateTime(toText(v), flags)
-      if (p !== undefined) return { kind: 'datetime', v: p.v, type: p.hasTime ? 'DATETIME' : 'DATE', fsp: p.fsp }
-      const what = date ? 'date' : 'datetime'
-      raise(env, 1292, `Truncated incorrect ${what} value: '${warnedText(v)}'`)
-      throw sqlError('ER_WRONG_VALUE', `Incorrect ${what.toUpperCase()} value: '${warnedText(v)}'`)
-    },
-    type: c.type,
   }
 }
 
