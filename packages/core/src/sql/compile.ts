@@ -65,6 +65,8 @@ import {
   valueBytes,
   renderFloat,
   jsonTruth,
+  numberToDateTime,
+  toInteger,
   mergeTypes,
   type MergeType,
 } from '@myjs/types'
@@ -1124,8 +1126,8 @@ function binary(op: string, left: Expression, right: Expression, extra: Expressi
   // A string constant compared with a date is read as one first, and one
   // that is not is the statement's error (8.4.11: `d = '00-00-00'` is 1525).
   const dated = COMPARISONS[op] !== undefined || op === '<=>'
-  const ca = dated ? yearConstant(dateConstant(ta, left, tb, ctx), left, tb, ctx) : ta
-  const cb = dated ? yearConstant(dateConstant(tb, right, ta, ctx), right, ta, ctx) : tb
+  const ca = dated ? numberBesideDate(yearConstant(dateConstant(ta, left, tb, ctx), left, tb, ctx), left, tb, right) : ta
+  const cb = dated ? numberBesideDate(yearConstant(dateConstant(tb, right, ta, ctx), right, ta, ctx), right, ta, left) : tb
   // A string in arithmetic is read as a double, with 1292 when it is not one.
   const arithmetic = op === '+' || op === '-' || op === '*' || op === '/' || op === '%' || op === 'MOD'
   // And in a comparison with a number, which is of doubles: a constant is
@@ -1347,7 +1349,13 @@ function asTimeOfDay(c: Compiled, column: readonly string[]): Compiled {
         return NO_TIME
       }
       const dt = v.kind === 'datetime' ? v : v.kind === 'int' && v.v >= 10_000_000_000n ? toDateTime(v, 'DATETIME') : undefined
-      return toTime(dt ?? v) ?? v
+      const t = toTime(dt ?? v)
+      // A number that is no time says so once, as storing it into the column would (8.4.11: `tm <= 20200102`).
+      if (t === undefined && v.kind === 'int' && env.memo?.has(self) !== true) {
+        env.memo?.set(self, true)
+        raise(env, 1292, `Incorrect time value: '${toText(v)}' for column '${column[column.length - 1] as string}' at row 1`)
+      }
+      return t ?? v
     },
     type: c.type,
   }
@@ -1393,7 +1401,8 @@ export function dateConverter(c: Compiled, written: Expression, other: Compiled,
     const p = parseDateTime(toText(v), flags)
     if (p !== undefined) return { kind: 'datetime', v: p.v, type: p.hasTime ? 'DATETIME' : 'DATE', fsp: p.fsp }
     if (!constant) {
-      raise(env, 1292, `Incorrect datetime value: '${warnedText(v)}'`)
+      // Beside a column the conversion says so plainly; beside a literal or an expression it is "truncated", in that one's own word (8.4.11).
+      raise(env, 1292, other.type.column !== undefined ? `Incorrect datetime value: '${warnedText(v)}'` : `Truncated incorrect ${what} value: '${warnedText(v)}'`)
       return ZERO_DATETIME
     }
     raise(env, 1292, `Truncated incorrect ${what} value: '${warnedText(v)}'`)
@@ -1402,6 +1411,31 @@ export function dateConverter(c: Compiled, written: Expression, other: Compiled,
 }
 
 const ZERO_DATETIME: Value = { kind: 'datetime', v: { year: 0, month: 0, day: 0, hour: 0, minute: 0, second: 0, microsecond: 0 }, type: 'DATETIME', fsp: 0 }
+
+/**
+ * `c`, a number constant compared with a DATE, DATETIME or TIMESTAMP column:
+ * converted into the column's type to compare, and when it is no such value,
+ * 1292 once a statement, naming the column, at row 1, as storing it into the
+ * column says (8.4.11: `dt = 10`, `1e300 >= dt`). The comparison itself is unchanged.
+ */
+function numberBesideDate(c: Compiled, written: Expression, other: Compiled, otherWritten: Expression): Compiled {
+  if (other.type.kind !== 'datetime' || otherWritten.kind !== NODE.COLUMN || !isNumber(c.type) || !constantNode(written)) return c
+  const what = other.type.field === FIELD_TYPE.DATE || other.type.field === FIELD_TYPE.NEWDATE ? 'date' : 'datetime'
+  const column = otherWritten.parts[otherWritten.parts.length - 1] as string
+  const key = written
+  return {
+    ...c,
+    eval: (r, env) => {
+      const v = c.eval(r, env)
+      if (v !== null && env.memo?.has(key) !== true) {
+        env.memo?.set(key, true)
+        const whole = v.kind === 'double' ? (Number.isInteger(v.v) && Math.abs(v.v) < 1e15 ? BigInt(v.v) : undefined) : v.kind === 'int' ? v.v : v.kind === 'decimal' ? toInteger(v) : undefined
+        if (whole === undefined || numberToDateTime(whole) === undefined) raise(env, 1292, `Incorrect ${what} value: '${toText(v)}' for column '${column}' at row 1`)
+      }
+      return v
+    },
+  }
+}
 
 /**
  * `c`, a text constant compared with a YEAR column, as the YEAR it would be
