@@ -499,46 +499,27 @@ const statementWarnings = (run: Run, counted: number): number => Math.max(counte
 const okInfo = (records: number, duplicates: number, warnings: number): string => `Records: ${records}  Duplicates: ${duplicates}  Warnings: ${warnings}`
 
 /**
- * INSERT, INSERT IGNORE, `ON DUPLICATE KEY UPDATE` and REPLACE: MySQL's
- * `write_record`, a row at a time, with its four counters. What 8.4.11 tells
- * a client, all read off it through `mysql2`:
- *
- *   - `affectedRows` is rows inserted, plus rows REPLACE deleted, plus rows an
- *     upsert updated — or, under `CLIENT_FOUND_ROWS`, every row an upsert met,
- *     changed or not. So an upsert that changes a row is 2, one that finds
- *     it already as asked is 1 (0 without FOUND_ROWS), and an insert 1.
- *   - REPLACE deletes the row in its way and tries again, unless the key it
- *     collided on is the table's last UNIQUE key, when it updates that row in
- *     place — and an update that changes nothing is not a deletion, so
- *     replacing a row with itself is 1, not 2.
- *   - `insertId` is the first value the statement generated for a row it
- *     wrote; failing that, `LAST_INSERT_ID(x)`'s x if the statement called it;
- *     failing that, the AUTO_INCREMENT value of the last row it handled, if it
- *     wrote any — so an upsert that updated row 7 reports 7.
- *   - IGNORE turns 1062 and the conversion errors into warnings and skips or
- *     adjusts the row, and its `Duplicates` is rows not written.
+ * What an INSERT writes: which column each value goes to, and the rows of
+ * expressions — or, for `INSERT … SELECT` (M5.20), the query's rows, read in
+ * full before the first is written, as MySQL does through a temporary table
+ * when the query reads the table it inserts into, and in the order the
+ * query returns them, which is the order they take AUTO_INCREMENT values in.
+ * A column named twice is 1110, and a generated column takes DEFAULT and
+ * nothing else (3105), from a SELECT not even that (8.4.11).
  */
-export function* insert(run: Run, node: InsertNode, trx: Trx): Generator<void, OkResult> {
-  // A subquery, or the SELECT of `INSERT … SELECT`, reads in the statement's transaction.
-  run = { ...run, env: { ...run.env, trx } }
-  if (node.partitions !== undefined) throw sqlError('ER_NOT_SUPPORTED_YET', messages.notSupported('Partitions'))
-
-  const opened = openTarget(run, node.table)
-  const def = opened.def
-  // Every write keeps the foreign keys on both sides of the table (M5.25).
-  const table = guarded(run, opened.table, trx)
-  const referenced = node.replace === true && isReferenced(run, def)
-  const check = checker(run, def)
-  // A VALUES or SET subquery reading the table being written is 1093, as an
-  // UPDATE's is; INSERT … SELECT from it is legal, read in full first (8.4.11).
-  if (node.query === undefined) checkTargetNotRead({ schema: def.schema, name: def.name }, [...(node.values ?? []).flat(), ...(node.set ?? []).map((a) => a.value), ...(node.onDuplicate ?? []).map((a) => a.value)], run.env.session.database)
+function insertSource(run: Run, node: InsertNode, def: TableDef, trx: Trx): {
+  readonly targets: readonly number[]
+  readonly rows: readonly (readonly (Expression | undefined)[])[]
+  readonly selected: readonly (readonly Value[])[] | undefined
+  readonly fieldCopies: ReadonlySet<number>
+  readonly selectRefs: readonly { readonly ref: ColumnNode; readonly type: ResultType }[]
+} {
   const columnIndex = (name: string): number => {
     const i = def.columns.findIndex((c) => c.name.toLowerCase() === name.toLowerCase())
     if (i < 0) throw sqlError('ER_BAD_FIELD_ERROR', messages.unknownColumn(name, 'field list'))
     return i
   }
 
-  // Which column each written value goes to, and the rows of expressions.
   let targets: number[]
   let rows: (readonly (Expression | undefined)[])[]
   // `INSERT … SELECT` (M5.20): the query's rows, read in full before the first
@@ -586,6 +567,44 @@ export function* insert(run: Run, node: InsertNode, trx: Trx): Generator<void, O
   for (const r of rows) r.forEach((e, i) => {
     if (e !== undefined && !isDefaultKeyword(e)) notGenerated(def, targets[i] as number)
   })
+  return { targets, rows, selected, fieldCopies, selectRefs }
+}
+
+/**
+ * INSERT, INSERT IGNORE, `ON DUPLICATE KEY UPDATE` and REPLACE: MySQL's
+ * `write_record`, a row at a time, with its four counters. What 8.4.11 tells
+ * a client, all read off it through `mysql2`:
+ *
+ *   - `affectedRows` is rows inserted, plus rows REPLACE deleted, plus rows an
+ *     upsert updated — or, under `CLIENT_FOUND_ROWS`, every row an upsert met,
+ *     changed or not. So an upsert that changes a row is 2, one that finds
+ *     it already as asked is 1 (0 without FOUND_ROWS), and an insert 1.
+ *   - REPLACE deletes the row in its way and tries again, unless the key it
+ *     collided on is the table's last UNIQUE key, when it updates that row in
+ *     place — and an update that changes nothing is not a deletion, so
+ *     replacing a row with itself is 1, not 2.
+ *   - `insertId` is the first value the statement generated for a row it
+ *     wrote; failing that, `LAST_INSERT_ID(x)`'s x if the statement called it;
+ *     failing that, the AUTO_INCREMENT value of the last row it handled, if it
+ *     wrote any — so an upsert that updated row 7 reports 7.
+ *   - IGNORE turns 1062 and the conversion errors into warnings and skips or
+ *     adjusts the row, and its `Duplicates` is rows not written.
+ */
+export function* insert(run: Run, node: InsertNode, trx: Trx): Generator<void, OkResult> {
+  // A subquery, or the SELECT of `INSERT … SELECT`, reads in the statement's transaction.
+  run = { ...run, env: { ...run.env, trx } }
+  if (node.partitions !== undefined) throw sqlError('ER_NOT_SUPPORTED_YET', messages.notSupported('Partitions'))
+
+  const opened = openTarget(run, node.table)
+  const def = opened.def
+  // Every write keeps the foreign keys on both sides of the table (M5.25).
+  const table = guarded(run, opened.table, trx)
+  const referenced = node.replace === true && isReferenced(run, def)
+  const check = checker(run, def)
+  // A VALUES or SET subquery reading the table being written is 1093, as an
+  // UPDATE's is; INSERT … SELECT from it is legal, read in full first (8.4.11).
+  if (node.query === undefined) checkTargetNotRead({ schema: def.schema, name: def.name }, [...(node.values ?? []).flat(), ...(node.set ?? []).map((a) => a.value), ...(node.onDuplicate ?? []).map((a) => a.value)], run.env.session.database)
+  const { targets, rows, selected, fieldCopies, selectRefs } = insertSource(run, node, def, trx)
   const generate = generatorOf(run, def)
 
   const ignore = node.ignore === true
