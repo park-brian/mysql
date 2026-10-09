@@ -49,9 +49,16 @@ export function valueKey(v: Value): string {
   }
 }
 
-/** The key of a row of values. */
+/**
+ * The key of a row of values: each value's key behind its length, so no
+ * value's bytes can be read as a separator (a `latin1_bin` sort key is the
+ * text itself, `|` included).
+ */
 export function rowKey(values: readonly Value[]): string {
   let s = ''
-  for (const v of values) s += `${valueKey(v)}|`
+  for (const v of values) {
+    const k = valueKey(v)
+    s += `${k.length}:${k}`
+  }
   return s
 }

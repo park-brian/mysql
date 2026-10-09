@@ -272,7 +272,7 @@ export function constTablesHaveRows(facts: OptimizerFacts, ctx: CompileContext, 
     const values: Value[] = t.key.map((k) => compile(k.value, ctx).eval([], env))
     if (values.some((v) => v === null)) return false
     const index = t.def.indexes.find((i) => i.parts.length === t.key.length && i.parts.every((p, n) => p.column === t.key[n]?.column.name))
-    const access = index !== undefined && t.key.length === 1 ? pointAccess(t.def, index, (t.key[0] as { column: ColumnDef }).column, values[0] as Value) : undefined
+    const access = index !== undefined && t.key.length === 1 ? pointAccess(index, (t.key[0] as { column: ColumnDef }).column, values[0] as Value) : undefined
     let found = false
     for (const { row } of accessRows(t.table, t.def, access ?? {}, trx, false)) {
       // A full scan when the bound does not convert exactly: match as the comparison would.

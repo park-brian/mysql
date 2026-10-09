@@ -519,7 +519,7 @@ function* run(node: Node, trx: Trx | undefined, env: Env, options: RunOptions, w
     for (const outer of run(node.outer, trx, env, options, width, context)) {
       const v = lookup.value.eval(outer.row, env)
       if (v === null) continue
-      const access = pointAccess(t.def as TableDef, lookup.index, lookup.column, v)
+      const access = pointAccess(lookup.index, lookup.column, v)
       for (const { id, row: values } of accessRows(t.table as Table, t.def as TableDef, access ?? {}, trx, options.locking)) {
         const combined = outer.row.slice()
         for (let i = 0; i < t.width; i++) combined[t.offset + i] = values[i] ?? null

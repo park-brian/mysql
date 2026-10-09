@@ -71,7 +71,6 @@ import { unregistered } from './registry.ts'
 
 type Row = Parameters<Compiled['eval']>[0]
 
-const ZERO_TIME: MysqlTime = { negative: false, days: 0, hour: 0, minute: 0, second: 0, microsecond: 0 }
 const TIME_MAX_SECONDS = 838 * 3600 + 59 * 60 + 59
 /** The last second FROM_UNIXTIME takes: 3001-01-18 23:59:59 UTC (`MYTIME_MAX_VALUE`). */
 const MYTIME_MAX_VALUE = 32536771199n
@@ -974,4 +973,3 @@ function strToDate(s: Compiled, f: Compiled, fixed: Value | undefined, ctx: Comp
   }
 }
 
-export { ZERO_TIME }

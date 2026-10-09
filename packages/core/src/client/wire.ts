@@ -21,7 +21,6 @@ import {
   PacketFramer,
   SERVER_STATUS,
   capabilities,
-  concat,
   hasCap,
   parseColumnDefinition41,
   parseEof,
@@ -37,7 +36,7 @@ import {
   type ErrPacket,
   type OkPacket,
 } from '@myjs/protocol'
-import { MyjsError, ProtocolError, Reader, Writer } from '@myjs/bytes'
+import { MyjsError, ProtocolError, Reader, Writer, concatBytes } from '@myjs/bytes'
 
 /** The packet a connection answers with: its first byte says which (doc 10). */
 const OK = 0x00
@@ -191,7 +190,7 @@ export class WireClient {
       }
       if (packet[0] === 0x01 && packet[1] === 4) {
         // AuthMoreData 4: the password itself, which an in-process channel may carry.
-        reply = await exchange(server, framer, concat([password, new Uint8Array([0])]))
+        reply = await exchange(server, framer, concatBytes([password, new Uint8Array([0])]))
         continue
       }
       throw unexpected(`unexpected packet 0x${(packet[0] ?? 0).toString(16)} during authentication`)

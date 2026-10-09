@@ -609,7 +609,11 @@ export function* insert(run: Run, node: InsertNode, trx: Trx): Generator<void, O
   // The SELECT's hidden columns of the row being written, for the upsert.
   let selectExtras: readonly Value[] = []
   const defaults = def.columns.map((c) => defaultOf(run, c, def))
-  const dependent = def.columns.flatMap((c, i) => (rowDependent(c) ? [i] : []))
+  // An expression default, `DEFAULT (…)`, is not in the row until it is
+  // taken: a VALUES expression that reads its column before then reads NULL,
+  // and one the row is given is never evaluated, nor warns (8.4.11). A
+  // literal default is in the row from the start.
+  const deferred = new Set(def.columns.flatMap((c, i) => (c.attributes?.['defaultExpression'] === true ? [i] : [])))
   const keys = uniqueKeys(def)
   const autoAt = def.columns.findIndex((c) => c.autoIncrement === true)
   // The key the AUTO_INCREMENT column leads (`next_number_index`).
@@ -632,7 +636,7 @@ export function* insert(run: Run, node: InsertNode, trx: Trx): Generator<void, O
     // zero, an AUTO_INCREMENT one 0 — and each value written replaces one.
     const values: Value[] = def.columns.map((column, i) => {
       const d = defaults[i] as Compiled | 'none'
-      return d === 'none' ? implicitDefault(column) : dependent.includes(i) ? null : d.eval([], run.env)
+      return d === 'none' ? implicitDefault(column) : deferred.has(i) ? null : d.eval([], run.env)
     })
     const given = new Set<number>()
     row.forEach((c, i) => {
@@ -641,7 +645,7 @@ export function* insert(run: Run, node: InsertNode, trx: Trx): Generator<void, O
         // DEFAULT: the column's own. One that reads the row reads it as it
         // stands at this point in the list — `(y, x) VALUES (DEFAULT, 8)`
         // with `y DEFAULT (x + 1)` is NULL (8.4.11).
-        if (dependent.includes(target)) {
+        if (deferred.has(target)) {
           values[target] = (defaults[target] as Compiled).eval(values, run.env)
           given.add(target)
         } else given.delete(target)
@@ -650,7 +654,7 @@ export function* insert(run: Run, node: InsertNode, trx: Trx): Generator<void, O
       values[target] = c.eval(values, run.env)
       given.add(target)
     })
-    for (const i of dependent) if (!given.has(i)) values[i] = (defaults[i] as Compiled).eval(values, run.env)
+    for (const i of deferred) if (!given.has(i)) values[i] = (defaults[i] as Compiled).eval(values, run.env)
     def.columns.forEach((column, i) => {
       if (given.has(i) || generationOf(column) !== undefined) return
       if (column.autoIncrement === true) values[i] = null

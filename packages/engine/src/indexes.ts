@@ -28,6 +28,7 @@
 // record. An update writes every off-page field afresh, so a chain belongs to
 // exactly one version and is freed exactly once. A change with no transaction
 // is one of its own: autocommit.
+import { concatBytes } from '@myjs/bytes'
 import { encodeKey, keyPartLength, type KeyPart } from '@myjs/types'
 import { BTree, type Range, type TreeOptions } from './btree.ts'
 import { corrupt, duplicateKey, misuse, snapshotTooOld } from './errors.ts'
@@ -366,7 +367,7 @@ export class SecondaryIndex {
    */
   insert(row: Row, primaryKey: Uint8Array, trx?: Trx): void {
     const secondary = keyOf(row, this.columns)
-    const key = concat(secondary, primaryKey)
+    const key = concatBytes([secondary, primaryKey])
     this.#change(trx, (t) => {
       if (this.unique && this.columns.every((c) => row[c.field] !== null)) {
         for (const [, value] of this.#entries(secondary)) if (!versionOf(value).marked) throw duplicateKey(this.name)
@@ -391,7 +392,7 @@ export class SecondaryIndex {
 
   /** Delete-mark a row's entry. `false` if it has none. */
   delete(row: Row, primaryKey: Uint8Array, trx?: Trx): boolean {
-    const key = concat(keyOf(row, this.columns), primaryKey)
+    const key = concatBytes([keyOf(row, this.columns), primaryKey])
     return this.#change(trx, (t) => {
       const current = this.tree.get(key)
       if (current === undefined || versionOf(current).marked) return false
@@ -495,9 +496,3 @@ function equal(a: Uint8Array, b: Uint8Array): boolean {
   return true
 }
 
-function concat(a: Uint8Array, b: Uint8Array): Uint8Array {
-  const out = new Uint8Array(a.length + b.length)
-  out.set(a)
-  out.set(b, a.length)
-  return out
-}

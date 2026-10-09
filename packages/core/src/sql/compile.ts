@@ -198,14 +198,14 @@ export function warnedText(v: Exclude<Value, null>): string {
   return nul === -1 ? text : text.slice(0, nul)
 }
 
+/** An environment for evaluating a constant while compiling: no row, the statement's parameters. */
+export const constantEnv = (ctx: CompileContext): Env => ({ params: ctx.params ?? [], now: new Date(), session: ctx.session, state: ctx.state })
+
 /**
  * An argument as `Item::print` shows it in a message that quotes one —
  * INET_ATON's and INET_NTOA's 1411: a column as `schema`.`table`.`column`,
  * a string with its introducer if it was written with one (8.4.11).
  */
-/** An environment for evaluating a constant while compiling: no row, the statement's parameters. */
-export const constantEnv = (ctx: CompileContext): Env => ({ params: ctx.params ?? [], now: new Date(), session: ctx.session, state: ctx.state })
-
 export function printedArgument(a: Expression, ctx: CompileContext): string {
   try {
     return printExpression(a, {
@@ -958,7 +958,7 @@ function binary(op: string, left: Expression, right: Expression, extra: Expressi
     const extracted = jsonPathFunction('JSON_EXTRACT', [compile(left, ctx), compile(right, ctx)], 'json_extract')
     return op === '->' ? extracted : unquote(extracted)
   }
-  if (right.kind === NODE.SUBQUERY && right.quantifier !== undefined && COMPARISONS[op] !== undefined) return quantified(op, right.quantifier === 'ALL' ? 'ALL' : 'ANY', left, right, ctx, op)
+  if (right.kind === NODE.SUBQUERY && right.quantifier !== undefined && COMPARISONS[op] !== undefined) return quantified(op, right.quantifier === 'ALL' ? 'ALL' : 'ANY', left, right, ctx)
   if ((COMPARISONS[op] !== undefined || op === '<=>') && (isRow(left) || isRow(right))) return rowComparison(op, left, right, ctx)
   const a = compile(left, ctx)
   if (op === 'BETWEEN' || op === 'NOT BETWEEN') {
@@ -1381,7 +1381,7 @@ function searchItems(list: SortedItems, v: Exclude<Value, null>): boolean | null
 }
 
 function inList(negated: boolean, left: Expression, right: Expression, ctx: CompileContext): Compiled {
-  if (right.kind === NODE.SUBQUERY) return quantified(negated ? '<>' : '=', negated ? 'ALL' : 'ANY', left, right, ctx, negated ? 'NOT IN' : 'IN')
+  if (right.kind === NODE.SUBQUERY) return quantified(negated ? '<>' : '=', negated ? 'ALL' : 'ANY', left, right, ctx)
   const list = right.kind === NODE.ROW ? right.items : [right]
   if (isRow(left)) {
     // `(a, b) IN ((1, 2), (3, 4))`: = with each row, TRUE if any is.
@@ -1480,25 +1480,36 @@ function matchLike(s: readonly string[], p: readonly string[], escape: string, c
   const c = collationId === CHARSET_BINARY ? undefined : collation(collationId)
   const same = (x: string, y: string): boolean =>
     x === y || (c !== undefined && c.compare(encodeCollation(x, collationId), encodeCollation(y, collationId)) === 0)
-  // Memoised on (i, j): `%` backtracking is otherwise exponential in the pattern.
-  const memo = new Map<number, boolean>()
-  const go = (i: number, j: number): boolean => {
-    const key = i * (p.length + 1) + j
-    const hit = memo.get(key)
-    if (hit !== undefined) return hit
-    let out: boolean
-    if (j === p.length) out = i === s.length
-    else {
-      const pc = p[j] as string
-      if (pc === escape && j + 1 < p.length) out = i < s.length && same(s[i] as string, p[j + 1] as string) && go(i + 1, j + 2)
-      else if (pc === '%') out = go(i, j + 1) || (i < s.length && go(i + 1, j))
-      else if (pc === '_') out = i < s.length && go(i + 1, j + 1)
-      else out = i < s.length && same(s[i] as string, pc) && go(i + 1, j + 1)
-    }
-    memo.set(key, out)
-    return out
+  // The pattern as tokens: `%`, `_`, or a character to match (escaped or not).
+  const ANY = 0
+  const ONE = 1
+  const tokens: (string | typeof ANY | typeof ONE)[] = []
+  for (let j = 0; j < p.length; j++) {
+    const pc = p[j] as string
+    if (pc === escape && j + 1 < p.length) tokens.push(p[++j] as string)
+    else tokens.push(pc === '%' ? ANY : pc === '_' ? ONE : pc)
   }
-  return go(0, 0)
+  // Iterative, backtracking only to the last `%`: linear stack, and O(|s|·|p|)
+  // time at worst, as the memoised recursion was without its stack depth.
+  let i = 0
+  let j = 0
+  let star = -1
+  let mark = 0
+  while (i < s.length) {
+    const t = tokens[j]
+    if (t === ONE || (typeof t === 'string' && same(s[i] as string, t))) {
+      i++
+      j++
+    } else if (t === ANY) {
+      star = j++
+      mark = i
+    } else if (star >= 0) {
+      j = star + 1
+      i = ++mark
+    } else return false
+  }
+  while (tokens[j] === ANY) j++
+  return j === tokens.length
 }
 
 /**
@@ -1889,8 +1900,7 @@ function exists(e: SubqueryNode, ctx: CompileContext): Compiled {
  * rows; ALL is false if one comparison is, else NULL if one was, else true —
  * true over no rows. So `x NOT IN` a subquery with a NULL in it is never true.
  */
-function quantified(op: string, quantifier: 'ANY' | 'ALL', left: Expression, right: SubqueryNode, ctx: CompileContext, label: string): Compiled {
-  void label
+function quantified(op: string, quantifier: 'ANY' | 'ALL', left: Expression, right: SubqueryNode, ctx: CompileContext): Compiled {
   // MySQL's own limit, not ours: 8.4.11 refuses `a IN (SELECT … LIMIT 1)`,
   // though a LIMIT inside a derived table there is fine.
   if (right.query.limit !== undefined) throw sqlError('ER_NOT_SUPPORTED_YET', "This version of MySQL doesn't yet support 'LIMIT & IN/ALL/ANY/SOME subquery'")

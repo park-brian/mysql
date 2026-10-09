@@ -43,11 +43,11 @@ with no milestone is a note; with a milestone it is a blocker with a deadline.
 | **M2** | [Types and collations](#m2--types-and-collations) | the part everyone else gets wrong | 25 / 25 | ☑ |
 | **M3** | [Parse SQL](#m3--parse-sql) | lexer, parser, AST | 17 / 17 | ☑ |
 | **M4** | [The storage engine](#m4--the-storage-engine) | pages, B+tree, WAL, MVCC | 26 / 26 | ☑ |
-| **M5** | [Execute](#m5--execute) | operators, planner, functions | 27 / 41 | ◐ |
+| **M5** | [Execute](#m5--execute) | operators, planner, functions | 28 / 46 | ◐ |
 | **M6** | [The browser](#m6--the-browser) | OPFS, workers, leader election | 0 / 10 | ☐ |
 | **M7** | [InnoDB interchange](#m7--innodb-interchange) | read and write real `.ibd` | 0 / 13 | ☐ |
 | **M8** | [Beyond](#m8--beyond) | as demand arrives | 0 / 10 | ☐ |
-| | | **Total** | **129 / 176** | |
+| | | **Total** | **130 / 181** | |
 
 ## Next
 
@@ -62,8 +62,20 @@ directory, leaves first.
 
 After 0.3, in order:
 
-1. **The cost-based planner (M5.7).** The multi-table corpus's plans have
-   waited on it, and with it EXPLAIN's (M5.13).
+1. **The cost-based planner (M5.7), as one slice of five items.** The
+   multi-table corpus's plans have waited on it, and with it EXPLAIN's
+   (M5.13). Its first step was a review (M5.42) so the refactor starts from
+   correct code. Then:
+   - **M5.43**: one plan tree that the executor runs, EXPLAIN prints and the
+     metadata reads, behaviour unchanged.
+   - **M5.44**: `EXPLAIN FORMAT=TREE` from that tree, which gives "Plans
+     agreeing" its first number.
+   - **M5.45**: persistent index statistics, written by ANALYZE TABLE.
+   - **M5.7 itself**: 8.4.11's cost constants, range and ref access on
+     secondary indexes, and constant tables actually read ahead.
+   - **M5.46**: join order by cost, a hash join that hashes, comparisons and
+     sorts with their collation resolved at compile time, a write that
+     descends the tree once, and `npm run bench`.
 2. **`db.stream()` (M5.40).** Pinned to 0.4; it starts where M5.38's pausing
    reads leave off.
 3. **The browser (M6),** the 0.4 gate: OPFS, the worker host, leader election.
@@ -489,6 +501,11 @@ inconsistencies and zero lost acknowledged commits.
 | M5.39 | **The query API's types.** `query<T>()` and `execute<T>()` are generic, `createStream()` returns a type `mysql2` accepts as a stream, and an option `open()` does not honour is refused rather than ignored | core | [42](./42-public-api.md) | M5.36 | ☑ | doc 42's TypeScript example typechecks verbatim, the tests' 61 `createStream() as never` casts are gone, and `MySQL.open(':memory:', { timeZone })` rejects **Done.** `query<T>()` and `execute<T>()` take the rows' type on `MySQL`, `Connection` and `Transaction`, unconstrained as `mysql2`'s is, so doc 42's `interface User` needs no index signature. `api-types.test.ts`, part of `npm run typecheck`, holds doc 42's example verbatim, and a `@ts-expect-error` proves `T` is not `any`. `createStream()` is typed by the host: `@myjs/core` imports `#host`, whose conditions choose `host/node.ts` (a `Duplex`) or `host/browser.ts` (Web Streams), in place of a `browser` field and a run-time sniff of `process` (D-78). The 61 casts were 63, and needless all along: `mysql2` types `stream` as `any`. `sqlMode`, `characterSet`, `collation`, `timeZone` and `readOnly` were accepted by `open()` and read by nothing; they are out of `MySQLOptions`, and passing one from JavaScript is ER_NOT_SUPPORTED_YET |
 | M5.40 | **`db.stream()`**, and the streaming `execProtocol` Q-11 asks for: rows handed out per batch from a statement that pauses (D-77), never a materialised result set | core, protocol | [42](./42-public-api.md) | M5.38 | ☐ | iterating `db.stream()` over 1,000,000 rows keeps the heap within a fixed bound over its baseline, and breaking after ten rows frees the connection and the writer. Pinned to 0.4 |
 | M5.41 | **A package that installs.** `myjs`, a facade over `@myjs/core` with `myjs/server`, and every package packed as JavaScript and declarations, since Node strips types only outside `node_modules` (D-79) | all | [42](./42-public-api.md) | M5.39 | ☑ | CI packs every package, installs the tarballs and `mysql2` into an empty project, and runs a smoke test there: a directory database, `db.query()`, `mysql2` over `createStream()`, `serve()` over TCP, and doc 42's typed examples through `tsc`; pointing `exports` back at `src/` fails it |
+| M5.42 | **The planner slice's review**: what a review of `core/src/sql`, the engine and the type codecs found, fixed before the refactor begins | core, types, engine, bytes, protocol | — | — | ☑ | each finding is a test that fails on the code before it (`mysql2-review-m542.test.ts`, `engine-undo.test.ts`), with 8.4.11's answers asked first. **What it found.** A row's hash key joined values with `\|`, and a `latin1_bin` sort key is the text itself, so `('x\|sy','z')` and `('x','y\|sz')` were one row to DISTINCT, UNION, GROUP BY and COUNT(DISTINCT); each part is now behind its length. A length argument folded at compile time ran with no session, so `LEFT('abc', CONNECTION_ID())` was 1815. LIKE recursed once per character, so a 100,000-character value overflowed the stack; it is an iterative matcher that backtracks only to the last `%`. GROUP_CONCAT cut its bytes and decoded them as UTF-8 whatever its charset, so latin1 came back as `???,`, and a binary GROUP_CONCAT could not run at all (1115); it now cuts text at a whole character in its own charset and joins binary as bytes, cut anywhere, as 8.4.11 does. A JSON container nested in another could not pass 64 KiB, because the encoder used a `RangeError` as control flow and retried only the top level, which also encoded every level twice; each container now chooses its own width once. The undo reader allocated a length read from the page before checking it, and a roll pointer was read with no bounds check, so corruption could surface as a raw `RangeError` (ground rule 5). **What 8.4.11 taught.** An expression default, `DEFAULT (…)`, is not in the row until it is taken. A VALUES expression that reads it first reads NULL, and a row that is given the column never evaluates it, so it never warns or fails for it. A literal default is in the row from the start. The executor had treated only a default that reads the row that way. INTERSECT and EXCEPT keeping a hex literal's flag, which UNION strips, was probed and agrees in every form a client can see, so it is unchanged. **What the instrument taught.** The latency test asserted that each statement took over 300 or 500 ms, "long enough for a stall to show", which would fail the day the engine got faster. What it needed is that the second connection was answered at least three times during the statement, and `SLICE_MS = 1e9` fails that. **Not changed:** a bound `?` still reads NULL when a length is folded at compile time, as before. Whether 8.4.11 resolves `LEFT(s, ?)`'s width from the bound value is for a probe |
+| M5.43 | **One plan tree** (D-81, planned): a SELECT planned into nodes named as 8.4.11's iterators are named, one interpreter that runs them, and metadata read from the tree | core | [03](./03-architecture.md) | M5.42 | ☐ | every committed corpus agrees exactly as before, and no plan decision (`chooseAccess`, `eqRef`, `chooseCovering`, `chooseStrategy`, the temporary-table rules) is made outside the tree's builder. Today those decisions are spread across `plan.ts`, `from.ts`, `query.ts`, `group.ts` and `optimize.ts`, and the last of them only feeds metadata |
+| M5.44 | **`EXPLAIN FORMAT=TREE`** from the plan tree | core | [42](./42-public-api.md) | M5.43 | ☐ | the relational corpus's "Plans agreeing" tally is non-zero and ratcheted by its test, comparing `planSkeleton`'s form of each plan |
+| M5.45 | **Persistent index statistics** (D-82, planned): `n_rows` and each key prefix's `n_diff`, written by ANALYZE TABLE in its own transaction | engine, core | [27](./27-data-dictionary.md) | M5.43 | ☐ | after ANALYZE, SHOW INDEX's cardinalities and `INFORMATION_SCHEMA.STATISTICS` agree with 8.4.11's on the relational corpus's tables without a rescan. Probe first: that `innodb_index_stats` holds the exact counts for tables this small |
+| M5.46 | **Join order by cost, and the operators' speed** | core, types, engine | — | M5.7 | ☐ | `lt JOIN kl ON lt.n = kl.g` runs as `kl, lt`, as 8.4.11 runs it. The plan also makes these faster: a hash join that hashes (today an O(n·m) loop), collation resolved at compile time, top-k under LIMIT, hashed uncorrelated IN subqueries, and one tree descent per row write. `npm run bench` records each change's figures |
 
 ---
 
@@ -604,7 +621,7 @@ code that moves it (doc 43 §8). A claim without a number is marketing.
 | Statements executing the way a real MySQL 8.4 executed them | 3,629 / 3,629 — 400 generated scripts through `mysql2`, 250 of their statements upserts, REPLACEs or IGNOREs: rows and order, column metadata, `affectedRows`/`insertId`/`info`, errno and SQLSTATE. Three further seeds, 46,346 statements and not committed, agree except four `SELECT DISTINCT` metadata cases that need the range optimizer (M5.7, which owns it since M5.5 closed) | every statement the executor accepts |
 | InnoDB round-trip, by type | 0 / 17 | 17 / 17 |
 | Crash injection points, inconsistencies | 10,000 points, 0 inconsistencies — CI's `crash` job runs `CRASH_POINTS=10000`, and `npm test` 300 of them | 10,000 points, 0 |
-| Core bundle, gzipped | 287.7 KB, `tools/size-budget.mjs`'s measure of everything `@myjs/core` reaches, which `size-budget.json` ratchets and CI checks — plus about 49 KB of UCA weights in a chunk nothing loads until a `_0900_` collation is asked for. Each package's own figure there includes its workspace dependencies, so they do not add up to this. The row said 156.6 KB until 2026-10-09, a figure from before the executor's growth that no measurement had updated | < 500 KB |
+| Core bundle, gzipped | 289.8 KB (the committed figure had fallen behind: on 2026-10-09 `myjs`, which is the core plus a facade, already measured 289.8 KB against the core's 287.8), `tools/size-budget.mjs`'s measure of everything `@myjs/core` reaches, which `size-budget.json` ratchets and CI checks — plus about 49 KB of UCA weights in a chunk nothing loads until a `_0900_` collation is asked for. Each package's own figure there includes its workspace dependencies, so they do not add up to this. The row said 156.6 KB until 2026-10-09, a figure from before the executor's growth that no measurement had updated | < 500 KB |
 | Function calls returning what a real MySQL 8.4 returned | 8,759 / 8,765 — the string and numeric slices (2,085 / 2,091, the 6 refused GREATEST and LEAST over text and a DATETIME), the date and time slice (3,463 / 3,463) and the rest of the string, math, hashing and network functions (3,211 / 3,211), both protocols, metadata and warning counts | every function in the library |
 | Relational statements executing the way a real MySQL 8.4 executed them | 5,635 / 5,635 agree and none are refused, over 300 multi-table scripts through `mysql2`, both protocols. `queries.json` through the executor: 1,200 / 1,200. Rows are compared in order wherever the statement or an agreeing plan fixes it | every statement the executor accepts, and no refusals |
 | Plans agreeing with a real MySQL 8.4 (`EXPLAIN FORMAT=TREE`, costs stripped) | — (M5.18 captures them; M5.7 moves the number) | every corpus SELECT |

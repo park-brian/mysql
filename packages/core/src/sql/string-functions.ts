@@ -53,7 +53,6 @@ import {
   toInteger,
   toText,
   valInt,
-  type Condition,
   type DecimalValue,
   type Value,
 } from '@myjs/types'
@@ -86,12 +85,15 @@ const INT_MAX32 = 2147483647n
 const INT_MIN32 = -2147483648n
 
 /** A constant argument's integer value: `null` for a constant NULL, `undefined` for an argument that is not constant. */
-function constantInt(c: Compiled | undefined, constant: boolean, conditions?: Condition[]): bigint | null | undefined {
+function constantInt(c: Compiled | undefined, constant: boolean, ctx: CompileContext, warn = true): bigint | null | undefined {
   if (c === undefined || !constant) return undefined
   try {
     // Resolving reads the constant once, and warns once for it, as
     // `resolve_type`'s `val_int` does: `LEFT('abc', 'z')` warns twice (8.4.11).
-    const v = c.eval([], { params: [], now: new Date(0), session: undefined as never, state: undefined as never, ...(conditions === undefined ? {} : { conditions }) })
+    // Without the parameters, as before (a bound `?` reads NULL here); the session
+    // is the statement's, so CONNECTION_ID() and DATABASE() fold.
+    const env = { ...constantEnv(ctx), params: [] }
+    const v = c.eval([], warn && ctx.conditions !== undefined ? { ...env, conditions: ctx.conditions } : env)
     return v === null ? null : valInt(v)
   } catch (e) {
     expectTyped(e)
@@ -267,10 +269,10 @@ function libraryFunction(name: string, args: readonly Compiled[], callName: stri
       // (position 0 to nothing, as its unsigned arithmetic has it), then a
       // constant length; a NULL one leaves it whole.
       let width = widthOf((xs[0] as Compiled).type, binary)
-      const start = constantInt(xs[1], constant[1] === true, ctx.conditions)
+      const start = constantInt(xs[1], constant[1] === true, ctx)
       if (start !== null) {
         if (start !== undefined && start > INT_MIN32 && start <= INT_MAX32) width = start < 0n ? (-start > BigInt(width) ? 0 : Number(-start)) : start === 0n ? 0 : width - Math.min(Number(start) - 1, width)
-        const length = constantInt(xs[2], constant[2] === true, ctx.conditions)
+        const length = constantInt(xs[2], constant[2] === true, ctx)
         if (length !== null && length !== undefined) width = length < 0n ? 0 : length <= INT_MAX32 ? Math.min(width, Number(length)) : width
       }
       return {
@@ -295,7 +297,7 @@ function libraryFunction(name: string, args: readonly Compiled[], callName: stri
       arity(2)
       const { binary, collation, coercibility } = first()
       let width = widthOf((xs[0] as Compiled).type, binary)
-      const n = constantInt(xs[1], constant[1] === true, ctx.conditions)
+      const n = constantInt(xs[1], constant[1] === true, ctx)
       if (n !== undefined && n !== null) width = n < 0n ? 0 : n <= INT_MAX32 ? Math.min(width, Number(n)) : width
       return {
         eval: (r, env) => {
@@ -314,7 +316,7 @@ function libraryFunction(name: string, args: readonly Compiled[], callName: stri
     case 'RPAD': {
       arity(3)
       const { binary, collation, coercibility } = first()
-      const n = constantInt(xs[1], constant[1] === true, ctx.conditions)
+      const n = constantInt(xs[1], constant[1] === true, ctx)
       // `val_uint`: a negative count is a huge one.
       const width = n === undefined || n === null ? undefined : Number(n > INT_MAX32 || n < 0n ? INT_MAX32 : n)
       return {
@@ -341,7 +343,7 @@ function libraryFunction(name: string, args: readonly Compiled[], callName: stri
     case 'REPEAT': {
       arity(2)
       const { binary, collation, coercibility } = first()
-      const n = constantInt(xs[1], constant[1] === true, ctx.conditions)
+      const n = constantInt(xs[1], constant[1] === true, ctx)
       const width = n === undefined || n === null ? undefined : n === 0n ? 0 : widthOf((xs[0] as Compiled).type, binary) * Number(n > INT_MAX32 || n < 0n ? INT_MAX32 : n)
       return {
         eval: (r, env) => {
@@ -457,7 +459,7 @@ function libraryFunction(name: string, args: readonly Compiled[], callName: stri
     }
     case 'SPACE': {
       arity(1)
-      const n = constantInt(xs[0], constant[0] === true, ctx.conditions)
+      const n = constantInt(xs[0], constant[0] === true, ctx)
       const width = constant[0] === true ? (n === undefined || n === null || n < 0n ? 0 : Number(n > INT_MAX32 ? INT_MAX32 : n)) : undefined
       return {
         eval: (r, env) => {
@@ -580,7 +582,7 @@ function libraryFunction(name: string, args: readonly Compiled[], callName: stri
         }
       }
       if (t.kind === 'decimal') {
-        const fixed = places === undefined ? 0n : constantInt(places, constant[1] === true)
+        const fixed = places === undefined ? 0n : constantInt(places, constant[1] === true, ctx, false)
         const wanted = fixed === undefined ? t.scale : fixed === null ? 0 : Number(fixed < -30n ? -30n : fixed > 30n ? 30n : fixed)
         let precision = t.length
         let scale = t.scale

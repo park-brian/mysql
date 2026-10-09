@@ -348,7 +348,7 @@ function planSelect(run: Run, q: QueryExpression, node: SelectNode): SelectPlan 
         item.compiled = { ...item.compiled, type: { ...item.compiled.type, temporary: pinnedName(item) ? 'pinned' : true } }
       }
     }
-  } else if (from !== undefined && scope !== undefined && run.preparing !== true && (source === undefined || semijoins(node.where, scope) || (q.orderBy !== undefined && node.items.some((i) => correlatedIn(i.expr, scope)))) && (node.distinct === true || (q.orderBy ?? []).length > 0)) {
+  } else if (from !== undefined && scope !== undefined && run.preparing !== true && (source === undefined || semijoinSubqueries(node.where).length > 0 || (q.orderBy !== undefined && node.items.some((i) => correlatedIn(i.expr, scope)))) && (node.distinct === true || (q.orderBy ?? []).length > 0)) {
     // Over a join, a DISTINCT is a temporary table and a sort reads the join's
     // rows streamed into one ("Stream results"): every item that reads the row
     // is copied, a column losing its key flags without gaining GROUP_FLAG, an
@@ -435,12 +435,6 @@ function semijoinSubqueries(where: Expression | undefined): QueryExpression[] {
   if (where.kind === NODE.UNARY && where.op === 'EXISTS' && where.operand.kind === NODE.SUBQUERY) return [where.operand.query]
   if (where.kind === NODE.UNARY && where.op === 'NOT' && where.operand.kind === NODE.UNARY && where.operand.op === 'EXISTS' && where.operand.operand.kind === NODE.SUBQUERY) return [where.operand.operand.query]
   return []
-}
-
-/** Whether the query is a join in MySQL's plan because of a semijoin. */
-function semijoins(where: Expression | undefined, scope: TableScope): boolean {
-  void scope
-  return semijoinSubqueries(where).length > 0
 }
 
 /**
@@ -1701,8 +1695,6 @@ function foldable(e: unknown, bound: boolean): boolean {
   if (node.kind === NODE.PLACEHOLDER) return bound
   return Object.values(e).every((v) => (Array.isArray(v) ? v.every((x) => foldable(x, bound)) : typeof v !== 'object' || foldable(v, bound)))
 }
-
-export { accessRows }
 
 function deparseName(e: Expression): string {
   return e.kind === NODE.LITERAL ? String(e.value) : e.kind

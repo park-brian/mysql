@@ -14,7 +14,7 @@
 import { corrupt } from './errors.ts'
 import { FRAME_TRAILER, PAGE_TYPE, initPage, pageType, readU32 } from './page.ts'
 
-export const INDEX_HEADER_END = 60
+const INDEX_HEADER_END = 60
 
 const LEVEL = 24
 const N_CELLS = 26

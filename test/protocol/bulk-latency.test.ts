@@ -29,6 +29,15 @@ const ROWS = 32_000
  */
 const bound = (took: number): number => took / 3
 
+/**
+ * A statement that never paused lets B in only once it has finished, so B is
+ * answered once or twice however long it ran; three answers mean it paused.
+ * This, not a floor on the statement's time, is what makes the bound below
+ * meaningful, so the test still holds once the statement gets faster.
+ */
+const answered = (what: string, r: { took: number; trips: number }): string =>
+  `SELECT 1 was answered ${r.trips} times during the ${what} (${r.took.toFixed(0)} ms): it did not pause`
+
 /** Run `work` on one connection while another asks `SELECT 1` every 5 ms; the longest it went unanswered, and the work's duration. */
 async function whileTiming(db: MySQL, work: (conn: Awaited<ReturnType<MySQL['connect']>>) => Promise<unknown>): Promise<{ slowest: number; took: number; trips: number }> {
   const a = await db.connect()
@@ -56,13 +65,15 @@ async function whileTiming(db: MySQL, work: (conn: Awaited<ReturnType<MySQL['con
   const started = performance.now()
   // Let the probe start first, so a stall at the statement's beginning is seen.
   await new Promise((resolve) => setTimeout(resolve, 20))
+  const before = trips
   await work(a)
+  const during = trips - before
   const took = performance.now() - started
   done = true
   await probe
   await a.end()
   await b.end()
-  return { slowest, took, trips }
+  return { slowest, took, trips: during }
 }
 
 test('a 32,000-row prepared INSERT, a 32,000-item IN-list SELECT and DELETE leave other connections answered', async () => {
@@ -74,7 +85,7 @@ test('a 32,000-row prepared INSERT, a 32,000-item IN-list SELECT and DELETE leav
   const insert = await whileTiming(db, (a) => a.execute(`INSERT INTO d.t (id) VALUES ${ids.map(() => '(?)').join(', ')}`, ids))
   const [[count]] = (await db.query('SELECT COUNT(*) AS n FROM d.t')) as unknown as [[{ n: number }]]
   assert.equal(count?.n, ROWS)
-  assert.ok(insert.took > 500, `the INSERT took ${insert.took.toFixed(0)} ms: too fast for a stall to show`)
+  assert.ok(insert.trips >= 3, answered('INSERT', insert))
   assert.ok(insert.slowest < bound(insert.took), `SELECT 1 waited ${insert.slowest.toFixed(0)} ms while the INSERT ran (${insert.took.toFixed(0)} ms, ${insert.trips} round trips)`)
 
   // M5.38: a read pauses too, holding no writer slot, and finds its place again if the tree changed meanwhile.
@@ -84,11 +95,11 @@ test('a 32,000-row prepared INSERT, a 32,000-item IN-list SELECT and DELETE leav
     found = (rows as unknown[]).length
   })
   assert.equal(found, ROWS)
-  assert.ok(select.took > 300, `the SELECT took ${select.took.toFixed(0)} ms: too fast for a stall to show`)
+  assert.ok(select.trips >= 3, answered('SELECT', select))
   assert.ok(select.slowest < bound(select.took), `SELECT 1 waited ${select.slowest.toFixed(0)} ms while the IN-list SELECT ran (${select.took.toFixed(0)} ms, ${select.trips} round trips)`)
 
   const remove = await whileTiming(db, (a) => a.execute(`DELETE FROM d.t WHERE id IN (${ids.map(() => '?').join(', ')})`, ids))
-  assert.ok(remove.took > 300, `the DELETE took ${remove.took.toFixed(0)} ms: too fast for a stall to show`)
+  assert.ok(remove.trips >= 3, answered('DELETE', remove))
   assert.ok(remove.slowest < bound(remove.took), `SELECT 1 waited ${remove.slowest.toFixed(0)} ms while the DELETE ran (${remove.took.toFixed(0)} ms, ${remove.trips} round trips)`)
   await db.end()
 })

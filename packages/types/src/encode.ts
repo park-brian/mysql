@@ -407,7 +407,7 @@ function encodeDecimalField(v: Exclude<Value, null>, column: FieldColumn, ctx: S
  * `2021-01-01 00:00:00`, as 8.4.11 stores it (`TIME_TRUNCATE_FRACTIONAL` is
  * off by default). Truncating, as this first did, was found by review.
  */
-export function roundDateTime(v: MysqlDateTime, fsp: number): MysqlDateTime {
+function roundDateTime(v: MysqlDateTime, fsp: number): MysqlDateTime {
   const unit = 10 ** (6 - fsp)
   const us = Math.round(v.microsecond / unit) * unit
   if (us < 1_000_000) return { ...v, microsecond: us }

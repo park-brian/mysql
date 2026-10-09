@@ -256,8 +256,7 @@ function accessFor(index: IndexDef, column: ColumnDef, conditions: readonly Cond
  * does not convert to the key's type exactly — in which case the caller scans
  * and filters, which finds the same rows (D-65).
  */
-export function pointAccess(def: TableDef, index: IndexDef, column: ColumnDef, v: Value): Access | undefined {
-  void def
+export function pointAccess(index: IndexDef, column: ColumnDef, v: Value): Access | undefined {
   if (!exact(v, column)) return undefined
   const b = bound(v, column, true)
   return b === undefined ? undefined : { index: index.name, ranges: [{ from: b, to: b }] }

@@ -2,13 +2,13 @@
 // it imports node:crypto".
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
+import { concatBytes as concat } from '@myjs/bytes'
 import {
   sha1,
   sha256,
   xor,
   xorRotating,
   constantTimeEqual,
-  concat,
   fixedRandom,
   webCryptoRandom,
   generateRsaKeyPair,
@@ -58,7 +58,7 @@ test('constantTimeEqual compares content and length', () => {
   assert.equal(constantTimeEqual(new Uint8Array(0), new Uint8Array(0)), true)
 })
 
-test('concat joins in order', () => {
+test('concatBytes joins in order', () => {
   assert.deepEqual([...concat([new Uint8Array([1]), new Uint8Array(0), new Uint8Array([2, 3])])], [1, 2, 3])
 })
 
