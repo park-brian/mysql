@@ -5,9 +5,10 @@
 > recovery, MVCC) are done, and the executor runs DDL, DML, transactions and
 > relational queries — joins, grouping, subqueries, CTEs, window functions,
 > JSON, foreign keys, FULLTEXT — agreeing with a real MySQL 8.4.11 on every
-> statement of the committed corpora. Drizzle's MySQL test suites pass whole
-> against it, and Prisma's all but one file. Nothing is published to npm yet:
-> 0.3, the first release of `myjs` itself, is what the roadmap is working on.
+> statement of the committed corpora. Drizzle's and Prisma's MySQL test
+> suites pass against it as they pass against that server. Nothing is
+> published to npm yet: 0.3, the first release of `myjs` itself, is packed and
+> smoke-installed by CI, waiting to be published.
 >
 > The numbers behind those claims are the
 > [scoreboard](./docs/44-roadmap.md#scoreboard), which CI and the commits that

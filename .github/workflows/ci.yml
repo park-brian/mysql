@@ -9,6 +9,7 @@ on:
   push:
     branches: ['**']
   pull_request:
+  workflow_dispatch:
 
 jobs:
   check:
@@ -287,6 +288,35 @@ jobs:
           name: type-vectors
           path: test/format/fixtures/
           if-no-files-found: warn
+
+  orm-suites:
+    name: the exit criterion's ORM suites
+    runs-on: ubuntu-latest
+    # M5's exit criterion, measured: Drizzle's MySQL suites and Prisma's
+    # functional tests run against this executor served over TCP, and
+    # `orm-census.test.ts` then holds both at per-file parity with 8.4.11's
+    # committed results. It fetches and builds both projects (Prisma's
+    # monorepo with pnpm, its engines from binaries.prisma.sh), so it runs
+    # on request, not on every push.
+    if: github.event_name == 'workflow_dispatch'
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22.18'
+          cache: npm
+      - run: npm ci
+      - name: Run both suites against this executor
+        run: node tools/orm-suites.mjs --ours
+      - name: Per-file parity with 8.4.11
+        run: node --test test/format/orm-census.test.ts
+      - name: upload the census
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: orm-census
+          path: test/format/fixtures/orm-census.json
 
   mysqltest-census:
     name: parse MySQL's own test corpus

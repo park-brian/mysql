@@ -1439,9 +1439,9 @@
       }
     },
     "ours": {
-      "passed": 1113,
+      "passed": 1122,
       "failed": 1,
-      "skipped": 12058,
+      "skipped": 12139,
       "files": {
         "0-legacy-ports/aggregate-raw/tests.ts": {
           "passed": 0,
@@ -1487,6 +1487,11 @@
           "passed": 6,
           "failed": 0,
           "skipped": 60
+        },
+        "0-legacy-ports/query-raw/tests.ts": {
+          "passed": 9,
+          "failed": 0,
+          "skipped": 81
         },
         "0-legacy-ports/run-command-raw/tests.ts": {
           "passed": 0,

@@ -1464,35 +1464,25 @@ flowchart LR
 
 M0 through M4 are done. The protocol, the type system and collations, the
 parser and the storage engine are all built and checked against a real
-server. M5 is well under way. The executor runs DDL, DML and transactions,
-upserts and multi-table UPDATE and DELETE included, with a strict mode's
-errors where the server raises them. It runs relational SELECT: joins,
-grouping and aggregates, HAVING with or without groups, subqueries, derived
-tables, CTEs, set operations and views. It also covers JSON as a value,
-window functions with their frames (over groups too), `INFORMATION_SCHEMA`,
-SHOW COLUMNS, INDEX and CREATE VIEW, foreign keys with their referential
-actions, CHECK constraints, ALTER TABLE by copy, temporary tables, CREATE
-TABLE … LIKE and … SELECT, generated columns, RENAME TABLE, `SHOW CREATE
-TABLE` byte for byte, JSON paths and regular expressions. Generated corpora of 400, 300 and 250 scripts
-agree with MySQL 8.4.11 statement for statement, column names and flags
-included. Most of M5's exit criterion holds. All 487 tests of Drizzle's
-MySQL suites pass, as they do against 8.4.11. Of Prisma's, up to 1,113 pass
-against the server's 1,122, FULLTEXT search included; the one failure is a
-snapshot of another MySQL version's error text, which 8.4.11 fails too.
-The count drifts down by up to four between runs, because bulk statements
-still stall the event loop long enough for parallel suites' connections to
-time out (M5.32). Batching a bulk statement's rows into shared
-mini-transactions has halved that stall: 10,000 rows now take about 560 ms.
-32,000 still take over a second, so M5.32 stays open. The query API of
-§17 exists too: `db.query()`, `db.execute()`, `db.begin()` and
-`db.transaction()`, a client of the wire protocol whose answers are compared
-with `mysql2/promise`'s over five corpora (M5.36). `db.stream()` is not
-built yet. Next is 0.3, the first release of `myjs` itself: statements that
-pause so a bulk one no longer stalls other connections, an API that installs
-and types cleanly, and the M5 exit criterion measured at parity. The
-cost-based planner and the browser follow. The core bundle is about 288 KB
-gzipped against a budget of 500 KB, with the UCA weights in a separate chunk
-loaded on demand.
+server. M5's exit criterion is met. The executor runs DDL, DML and
+transactions, upserts and multi-table UPDATE and DELETE included, with a
+strict mode's errors where the server raises them. It runs relational
+SELECT: joins, grouping and aggregates, subqueries, derived tables, CTEs, set
+operations and views. It also covers JSON as a value, window functions with
+their frames, `INFORMATION_SCHEMA`, SHOW, foreign keys with their
+referential actions, CHECK constraints, ALTER TABLE by copy, temporary
+tables, generated columns, FULLTEXT, `SHOW CREATE TABLE` byte for byte, JSON
+paths and regular expressions. Generated corpora agree with MySQL 8.4.11
+statement for statement, column names and flags included. Drizzle's MySQL
+suites pass whole, as they do against 8.4.11, and so does every test of
+Prisma's that 8.4.11 passes, file for file, three runs in a row, now that a
+bulk statement pauses between its batches instead of stalling every other
+connection (§11). The query API of §17 exists, typed, and a client of the
+wire protocol whose answers are compared with `mysql2/promise`'s. `myjs`
+packs, installs into an empty project and runs there, in CI; 0.3 waits only
+on being published. Next are the cost-based planner, `db.stream()` and the
+browser. The core bundle is about 290 KB gzipped against a budget of 500 KB,
+with the UCA weights in a separate chunk loaded on demand.
 
 The release plan gives each stage something to ship:
 

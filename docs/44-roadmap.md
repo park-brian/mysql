@@ -51,26 +51,22 @@ with no milestone is a note; with a milestone it is a blocker with a deadline.
 
 ## Next
 
-**0.3: `myjs` itself, on Node** (the [release plan](#release-plan)'s next
-gate). M5's exit criterion is all but met: Drizzle's suites pass whole, and
-Prisma's fall short of 8.4.11's by one file, `query-raw`, missing from the
-last run's results, while bulk statements that hold the event loop make the
-count drift from run to run. So the slice is, in order:
+**0.3 is staged.** Its gate is the M4 and M5 exit criteria, and both hold:
+M5's was met on 2026-10-09 (Drizzle 487 of 487, Prisma 1,122 of 1,122, file
+for file with 8.4.11, three runs each). The slice that got there: statements
+that pause (M5.37, M5.38), so a bulk statement no longer stalls other
+connections; a typed API (M5.39); and a package that installs (M5.41), which
+CI packs, installs into an empty project and runs. What is left of 0.3 is a
+person's: claiming the npm scope and name, and `npm publish` of each staged
+directory, leaves first.
 
-1. **M5.37, M5.38: statements that pause.** A 32,000-row statement stops
-   stalling every other connection, which is what Prisma's chunking tests
-   time out on. It replaces M5.32's chase for per-row speed.
-2. **The exit criterion, measured.** The census run three times at per-file
-   parity with 8.4.11, and `orm-census.test.ts` holding Prisma to that as it
-   holds Drizzle.
-3. **M5.39, M5.41: an API you can install and type.** Generic queries, a
-   stream type `mysql2` takes without a cast, a `myjs` package, tarballs CI
-   installs and runs. Doc 42 marks every method that is not built yet with
-   the item that builds it.
+After 0.3, in order:
 
-`db.stream()` (M5.40) is the 0.4 work that starts where M5.38 leaves off.
-After 0.3 comes the cost-based planner (M5.7), which the multi-table corpus's
-plans have been waiting for, and the browser (M6).
+1. **The cost-based planner (M5.7).** The multi-table corpus's plans have
+   waited on it, and with it EXPLAIN's (M5.13).
+2. **`db.stream()` (M5.40).** Pinned to 0.4; it starts where M5.38's pausing
+   reads leave off.
+3. **The browser (M6),** the 0.4 gate: OPFS, the worker host, leader election.
 
 ---
 
@@ -447,6 +443,8 @@ inconsistencies and zero lost acknowledged commits.
 
 **Exit criterion.** Drizzle's and Prisma's MySQL test suites pass end to end.
 
+**Met (2026-10-09).** Three consecutive runs of each, served over TCP: Drizzle 487 of 487, and Prisma 1,122 of the 1,122 tests 8.4.11 passes, file for file. Prisma's one failure is a snapshot of another MySQL version's error text, which 8.4.11 fails too; `orm-census.test.ts` counts a failure shared with 8.4.11 as parity and fails on any file whose counts differ. CI's `orm-suites` job runs both on request. M5's remaining items (the planner, `db.stream()`, the function library's tail) are no longer what the criterion waits on.
+
 | # | Work item | Pkg | Docs | Deps | St | Done when |
 |---|---|---|---|---|---|---|
 | M5.1 | Name resolution and type inference over the AST | core | [03](./03-architecture.md) | M3.3, M2.14 | ☑ | column references resolve through joins, subqueries and CTEs. **Begun by M5.17.** One table's scope is done: a bare name searches every table (1052 on two hits), `t.c` names a table by its alias, which hides its real name (1054), and `*` expands in column order. Every expression the executor compiles is typed, with the width, flags and charset 8.4.11 reports. Joins, subqueries and CTEs remain  **Planned (M5.18):** derived tables, `LATERAL`, CTEs (recursive ones too) and subqueries, where EXISTS and IN run as semijoins with weedout, as 8.4.11's plans show. A correlated reference compiles to a depth and a slot, so the row loop still never walks the tree (D-63). Set operations are M5.19's, not this item's **Joins done (M5.4):** names resolve through any number of tables, a USING or NATURAL column is one name, an ON sees only its own join's tables (1054 'on clause'), and an outer join's nullable side reports nullable. Subqueries, derived tables and CTEs remain **Done.** Subqueries (scalar, IN and NOT IN, EXISTS, ANY/SOME/ALL), correlated to any depth; derived tables, with column lists and LATERAL; CTEs, recursive ones included. The relational corpus agrees on every such statement. So does `mysql2-subquery.test.ts`, a 41-statement script captured from 8.4.11 with 1242, 1060, 3636, 1222, 1250 and 1093 among its answers. **A correlated reference is a slot one or more queries out (D-74).** The scope of an enclosing query resolves it to a depth, the compiled closure reads `env.outer[depth − 1]`, and the subquery runs again for each outer row. An uncorrelated one runs once per statement, through `env.memo`. Planning never evaluates a subquery, and 1242 is raised only on evaluation, so an empty outer table raises nothing. **The metadata rules came off the server as before.** A scalar subquery is its item as an expression, nullable unless it has no FROM. A mergeable derived table or CTE keeps its columns' metadata, keys included, under the new alias. One that groups, DISTINCTs, LIMITs or has no FROM is materialized. A recursive CTE is typed as a set operation's column, nullable. An aggregating correlated scalar subquery in the select list makes the outer table it reads nullable there. An IN or EXISTS is a semijoin, so the query is a join for streaming purposes, unless it is a nested loop over an index, which lets a sort go first. **The covering-index scan is also MySQL's, and it changes order.** With no condition choosing a path, a table is read through its smallest secondary index that holds every column the query reads. The semijoin strategy MySQL chooses by cost, LooseScan or FirstMatch, is M5.7's. Where the server used LooseScan the corpus compares rows and errors and leaves the flags uncompared, and the count is reported (5). **Later, by the ORM slice: WITH on UPDATE and DELETE.** The CTEs are visible to the statement's subqueries and read once, before the first row changes, as a derived table is. So one that reads the table being written is no 1093, and a SET that adds its MAX adds the same MAX to every row; a subquery reading that table directly still is 1093. A CTE named as the target is 1288 (8.4.11). Drizzle's `with … update` and `with … delete` are that shape, and `mysql2-with-dml.test.ts` pins it |
@@ -594,7 +592,7 @@ code that moves it (doc 43 §8). A claim without a number is marketing.
 | MySQL `mysql-test` statements parsing | 17,534 / 17,589 — **0 failures**, **0 round-trip differences** and **nothing not implemented**: `SELECT` 6,126 / 6,158, `INSERT` 3,304 / 3,313, `CREATE` 2,660 / 2,665, `DROP` 1,946 / 1,946, `SET` 1,138 / 1,138, `EXPLAIN` 733 / 735, `ANALYZE` 292 / 292, `SHOW` 240 / 240, `EXECUTE` 213 / 213, `DELETE` 188 / 194, `UPDATE` 153 / 153, `PREPARE` 80 / 80, `ALTER` 77 / 77, `DO` 77 / 77, `FLUSH` 55 / 55, `CALL` 36 / 36, `CHECK` 24 / 24, `GRANT` 10 / 10, `LOAD` 6 / 6, `TRUNCATE` 6 / 6. Every shortfall is a statement MySQL itself refuses, and one (`GROUPING SETS`) is newer than 8.4 (D-70) | 100% of the curated corpus |
 | `mysql2` test suite | 0 / 253 — not yet run. Its npm package ships no tests, so it needs the repository checked out against a server; nothing runs it yet | ≥ 245 |
 | Drizzle MySQL suite | 487 / 487 — `drizzle-orm@0.36.4`'s five MySQL suites (the query builder, prefixed tables, custom types, the proxy driver and the relational API), served over TCP; 8.4.11 passes all 487 and skips the same 8. Written by `tools/orm-suites.mjs` into `orm-census.json`, and a test fails if this row and that file disagree. M5.21's JSON took it from 10 to 425, TRUNCATE and the first window functions to 465, views to 476, and INSERT reading its own row, WITH on UPDATE and DELETE, INTERVAL and UNHEX to all of them. Drizzle's half of the exit criterion holds | pass |
-| Prisma MySQL suite | 1,113 / 1,122 — `prisma@5.22.0`'s functional tests (`packages/client/tests/functional`), built from its monorepo and run with `--provider mysql`; its engines speak the binary protocol through Rust's `mysql_async`. 8.4.11 passes 1,122 and fails one, a snapshot of another MySQL version's error text. Written by `tools/orm-suites.mjs` into `orm-census.json`, and a test fails if this row and that file disagree. With INFORMATION_SCHEMA (M5.12), foreign keys (M5.25) and FULLTEXT (M5.26) in, its schemas push, its relations hold and its full-text search passes. The one failure in the last run is the snapshot 8.4.11 fails too. Runs before it lost two to five tests to connections that timed out while `chunking-query` held the event loop; which tests varies from run to run | pass |
+| Prisma MySQL suite | 1,122 / 1,122 — `prisma@5.22.0`'s functional tests (`packages/client/tests/functional`), built from its monorepo and run with `--provider mysql`; its engines speak the binary protocol through Rust's `mysql_async`. 8.4.11 passes 1,122 and fails one, a snapshot of another MySQL version's error text. Written by `tools/orm-suites.mjs` into `orm-census.json`, and a test fails if this row and that file disagree. With INFORMATION_SCHEMA (M5.12), foreign keys (M5.25) and FULLTEXT (M5.26) in, its schemas push, its relations hold and its full-text search passes. The one failure is the snapshot 8.4.11 fails too, and every file's counts equal the server's, which a test checks. Runs before M5.37 lost two to five tests to connections that timed out while `chunking-query` held the event loop; three runs since have each passed all 1,122 | pass |
 | Protocol traces replayed byte-identically | 9 / 9 — our own server's traces (`test/protocol/self-traces`), replayed byte for byte. The 13 traces recorded between real clients and a real server (`test/protocol/fixtures`) are read by our parsers instead (`trace-conformance.test.ts`): a response byte-identical to a real server's is not the claim, since a version string and a connection id differ by design (Q-12) | 100% |
 | Sort keys agreeing with a real MySQL 8.4 | 24 / 24, over `utf8mb4_0900_ai_ci`, `utf8mb4_general_ci`, `utf8mb4_bin` and `latin1_swedish_ci` | every implemented collation |
 | Storage vectors decoding to the value a real MySQL 8.4 stored | 45 / 45, over 23 columns | every type in doc 24 |
