@@ -24,6 +24,7 @@ import {
   toText,
   truth,
   type Value,
+  valueBytes,
 } from '@myjs/types'
 import {
   aggregate,
@@ -409,7 +410,7 @@ export function builtinFunction(name: string, e: CallNode, ctx: CompileContext):
             const clamped = n > 2n ** 64n - 1n ? 2n ** 64n - 1n : n < -MAX_SIGNED - 1n ? -MAX_SIGNED - 1n : n
             return stringValue(BigInt.asUintN(64, clamped).toString(16).toUpperCase(), conn)
           }
-          const raw = v.kind === 'bytes' ? v.v : v.kind === 'string' ? encodeCollation(v.v, v.collationId) : new TextEncoder().encode(toText(v))
+          const raw = valueBytes(v)
           return stringValue(hexOf(raw), conn)
         },
         type: stringType(numeric ? 16 : bytes * 2, conn, true),

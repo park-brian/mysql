@@ -13,7 +13,7 @@
 // have not written is ER_NOT_SUPPORTED_YET naming it (M5.10 owns the rest).
 import { CHARSET_BINARY, FIELD_TYPE, expectTyped } from '@myjs/bytes'
 import { collationInfoByName, decodeCollation, defaultCollationOf, encodeCollation, requireCollationInfo } from '@myjs/charsets'
-import { LITERAL, NODE, TOKEN, deparse, lex, parseExpression, type CallNode, type CaseNode, type CastNode, type ConvertNode, type Expression, type LiteralNode, type MatchNode, type QueryExpression, type SubqueryNode } from '@myjs/parser'
+import { LITERAL, NODE, TOKEN, deparse, lex, parseExpression, type CallNode, type CaseNode, type CastNode, type ConvertNode, type Expression, type LiteralNode, type MatchNode, type QueryExpression, type SubqueryNode, quoteName } from '@myjs/parser'
 import type { ColumnDef, Table, Trx } from '@myjs/engine'
 import { sqlError, messages, type Session } from '@myjs/protocol'
 import {
@@ -61,6 +61,7 @@ import {
   type StringValue,
   type Value,
   valueOutOfRange,
+  valueBytes,
 } from '@myjs/types'
 import {
   CHARSET_UTF8MB4_BIN,
@@ -218,7 +219,7 @@ export function printedArgument(a: Expression, ctx: CompileContext): string {
           expectTyped(e)
           // A column the clause cannot see by itself (an aggregate's, in HAVING) is named as written.
         }
-        const q = (x: string): string => `\`${x.replace(/`/g, '``')}\``
+        const q = quoteName
         return c === undefined ? parts.map(q).join('.') : `${q(c.schema)}.${q(c.table)}.${q(c.orgName === '' ? (parts[parts.length - 1] as string) : c.orgName)}`
       },
       string: (v, cs) => `${cs === undefined ? '' : `_${cs}`}'${escapeString(v)}'`,
@@ -1761,7 +1762,7 @@ function cast(e: CastNode, ctx: CompileContext): Compiled {
         eval: (r, env) => {
           const v = x(r, env)
           if (v === null) return null
-          const b = v.kind === 'bytes' ? v.v : v.kind === 'string' ? encodeCollation(v.v, v.collationId) : new TextEncoder().encode(toText(v))
+          const b = valueBytes(v)
           if (t.length === undefined) return bytesValue(b)
           // BINARY(N) is N bytes: cut, or padded with zero bytes (8.4.11).
           if (b.length > t.length) raise(env, 1292, `Truncated incorrect BINARY(${t.length}) value: '${toText(v)}'`)

@@ -14,7 +14,7 @@
 // reads on every connect, says 0 rather than scan every key (its corpus treats
 // the column as volatile, as the server's cached statistics are).
 import { expectTyped } from '@myjs/bytes'
-import { NODE, STATEMENT, parseStatement, type Expression, type QueryExpression, type ShowNode, type TableName } from '@myjs/parser'
+import { NODE, STATEMENT, parseStatement, type Expression, type QueryExpression, type ShowNode, type TableName, quoteName } from '@myjs/parser'
 import { messages, sqlError, type ColumnDefinition } from '@myjs/protocol'
 import { keyColumnsOf, type TableDef, type ViewDef } from '@myjs/engine'
 import { encodeKey } from '@myjs/types'
@@ -142,7 +142,7 @@ export function showCreateView(run: Run, catalog: CatalogApi, view: ViewDef): st
   } catch (e) {
     expectTyped(e)
   }
-  const q = (s: string) => `\`${s.replace(/`/g, '``')}\``
+  const q = quoteName
   const [user, host] = (view.definer ?? 'root@%').split('@') as [string, string | undefined]
   const name = view.schema === current ? q(view.name) : `${q(view.schema)}.${q(view.name)}`
   const columns = view.listed === true && view.columns !== undefined ? ` (${view.columns.map(q).join(',')})` : ''

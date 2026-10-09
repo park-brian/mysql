@@ -23,7 +23,7 @@
 // a double past both; `-0` is the integer 0 and `-0.0` the double -0. All of it
 // was read off 8.4.11 (tools/capture-json.mjs, M5.21).
 import type { MysqlDateTime, MysqlTime } from '@myjs/bytes'
-import { MyjsError, renderMysqlDateTime, renderMysqlTime } from '@myjs/bytes'
+import { compareBytes, MyjsError, renderMysqlDateTime, renderMysqlTime } from '@myjs/bytes'
 import { decodeDecimal, encodeDecimal } from './decimal.ts'
 import { invalidJson } from './errors.ts'
 import { JSON_TYPE, compareJsonKeys, isInlined, varint, writeVarint } from './json.ts'
@@ -436,11 +436,6 @@ function compareNumbers(a: JsonDoc, b: JsonDoc): number {
   return da < db ? -1 : da > db ? 1 : 0
 }
 
-function compareBytes(a: Uint8Array, b: Uint8Array): number {
-  const n = Math.min(a.length, b.length)
-  for (let i = 0; i < n; i++) if (a[i] !== b[i]) return (a[i] as number) - (b[i] as number)
-  return a.length - b.length
-}
 
 const utf8 = new TextEncoder()
 

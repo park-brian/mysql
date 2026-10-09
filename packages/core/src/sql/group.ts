@@ -53,10 +53,10 @@ import {
   type Accumulator,
   type JsonDoc,
   type Value,
+  valueBytes,
 } from '@myjs/types'
 import { AGGREGATE_NAMES, asNumber, compile, type CompileContext, type Compiled, type Env, type Row } from './compile.ts'
 import { rowKey, valueKey } from './keys.ts'
-import { bytesOf } from './string-functions.ts'
 import { asJson } from './json.ts'
 import { decimalType, doubleType, floatLength, intType, jsonType, stringType, type ResultType } from './meta.ts'
 import type { SortKey } from './operators.ts'
@@ -395,7 +395,7 @@ function groupConcat(e: CallNode, args: readonly Compiled[], type: ResultType, d
     name: 'GROUP_CONCAT',
     type,
     start() {
-      const entries: { text: string; bytes: Uint8Array | undefined; keys: Value[]; at: number }[] = []
+      const entries: { text: string; bytes: Uint8Array | undefined; keys: Value[] }[] = []
       const seen = distinct ? new Set<string>() : undefined
       return {
         add(row, env) {
@@ -412,7 +412,7 @@ function groupConcat(e: CallNode, args: readonly Compiled[], type: ResultType, d
           }
           // A binary result joins bytes, which need not be text in any charset.
           const parts = vs as Exclude<Value, null>[]
-          entries.push({ text: binary ? '' : parts.map(toText).join(''), bytes: binary ? concatBytes(parts.map(bytesOf)) : undefined, keys: order.map((o) => o.expr.eval(row, env)), at: entries.length })
+          entries.push({ text: binary ? '' : parts.map(toText).join(''), bytes: binary ? concatBytes(parts.map(valueBytes)) : undefined, keys: order.map((o) => o.expr.eval(row, env)) })
         },
         result() {
           if (entries.length === 0) return null
@@ -422,7 +422,7 @@ function groupConcat(e: CallNode, args: readonly Compiled[], type: ResultType, d
                 const c = sortValues(a.keys[i] ?? null, b.keys[i] ?? null)
                 if (c !== 0) return (order[i] as SortKey).desc ? -c : c
               }
-              return a.at - b.at
+              return 0
             })
           }
           if (binary) {
@@ -519,13 +519,14 @@ export function* groupRows(source: Iterable<{ readonly row: Row }>, plan: GroupP
     for (const { row } of source) yield { row, keys: keysOf(row) }
   })()
   else {
-    const all = [...source].map(({ row }, at) => ({ row, keys: keysOf(row), at }))
+    // Stable: rows of one group keep the order they came in.
+    const all = [...source].map(({ row }) => ({ row, keys: keysOf(row) }))
     all.sort((a, b) => {
       for (let i = 0; i < K; i++) {
         const c = sortValues(a.keys[i] ?? null, b.keys[i] ?? null)
         if (c !== 0) return c
       }
-      return a.at - b.at
+      return 0
     })
     input = all
   }

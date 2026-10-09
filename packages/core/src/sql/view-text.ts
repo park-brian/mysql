@@ -16,10 +16,9 @@
 // derived table, a set operation — is `undefined`, and the caller reports the
 // view's own text instead, a named divergence rather than a guess.
 import type { TableDef } from '@myjs/engine'
-import { NODE, QUERY, REF, type Expression, type QueryExpression, type TableReference } from '@myjs/parser'
+import { NODE, QUERY, REF, type Expression, type QueryExpression, type TableReference, quoteName } from '@myjs/parser'
 import { Unprintable, escapeString, printExpression } from './print.ts'
 
-const q = (name: string): string => `\`${name.replace(/`/g, '``')}\``
 
 interface Source {
   readonly qualifier: string
@@ -41,10 +40,10 @@ export function viewDefinition(query: QueryExpression, names: readonly string[],
         const def = tables(db, r.table.name)
         if (def === undefined) throw new Unprintable()
         // SHOW CREATE VIEW names a table in the current database without it (8.4.11).
-        const named = db === current ? q(r.table.name) : `${q(db)}.${q(r.table.name)}`
-        const qualifier = r.alias === undefined ? named : q(r.alias)
+        const named = db === current ? quoteName(r.table.name) : `${quoteName(db)}.${quoteName(r.table.name)}`
+        const qualifier = r.alias === undefined ? named : quoteName(r.alias)
         sources.push({ qualifier, columns: new Set(def.columns.map((c) => c.name.toLowerCase())), names: def.columns.map((c) => c.name) })
-        return r.alias === undefined ? named : `${named} ${q(r.alias)}`
+        return r.alias === undefined ? named : `${named} ${quoteName(r.alias)}`
       }
       if (r.kind === REF.JOIN) {
         if (r.using !== undefined || r.natural === true) throw new Unprintable()
@@ -60,12 +59,12 @@ export function viewDefinition(query: QueryExpression, names: readonly string[],
       if (parts.length === 1) {
         const owner = sources.find((s) => s.columns.has(name.toLowerCase()))
         if (owner === undefined) throw new Unprintable()
-        return `${owner.qualifier}.${q(name)}`
+        return `${owner.qualifier}.${quoteName(name)}`
       }
       const table = parts[parts.length - 2] as string
-      const owner = sources.find((s) => s.qualifier === q(table) || s.qualifier.endsWith(`.${q(table)}`))
+      const owner = sources.find((s) => s.qualifier === quoteName(table) || s.qualifier.endsWith(`.${quoteName(table)}`))
       if (owner === undefined) throw new Unprintable()
-      return `${owner.qualifier}.${q(name)}`
+      return `${owner.qualifier}.${quoteName(name)}`
     }
     const expr = (e: Expression): string => printExpression(e, { column, string: (v) => `'${escapeString(v)}'`, ...(source === undefined ? {} : { source }) })
     // `*` expands to the tables' columns, in order.
@@ -73,11 +72,11 @@ export function viewDefinition(query: QueryExpression, names: readonly string[],
     for (const item of body.items) {
       if (item.expr.kind === NODE.COLUMN && item.expr.parts.at(-1) === '*') {
         const table = item.expr.parts.length > 1 ? (item.expr.parts.at(-2) as string) : undefined
-        for (const s of sources) if (table === undefined || s.qualifier === q(table) || s.qualifier.endsWith(`.${q(table)}`)) for (const c of s.names) items.push(`${s.qualifier}.${q(c)}`)
+        for (const s of sources) if (table === undefined || s.qualifier === quoteName(table) || s.qualifier.endsWith(`.${quoteName(table)}`)) for (const c of s.names) items.push(`${s.qualifier}.${quoteName(c)}`)
       } else items.push(expr(item.expr))
     }
     if (items.length !== names.length) return undefined
-    let out = `select ${body.distinct === true ? 'distinct ' : ''}${items.map((x, i) => `${x} AS ${q(names[i] as string)}`).join(',')}`
+    let out = `select ${body.distinct === true ? 'distinct ' : ''}${items.map((x, i) => `${x} AS ${quoteName(names[i] as string)}`).join(',')}`
     if (fromText !== '') out += ` from ${fromText}`
     if (body.where !== undefined) out += ` where ${expr(body.where)}`
     if (body.groupBy !== undefined) {

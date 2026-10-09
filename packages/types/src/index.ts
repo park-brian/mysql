@@ -136,6 +136,7 @@ export {
   valInt,
   toText,
   toTextBytes,
+  valueBytes,
   toTime,
   truth,
   validDate,

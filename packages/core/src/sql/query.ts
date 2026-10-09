@@ -17,8 +17,7 @@ import { compile, EMPTY_SCOPE, type CompileContext, type Compiled, type Env, typ
 import { AggregateSink, chooseStrategy, containsAggregate, groupRows, isAggregate } from './group.ts'
 import { WindowSink, applyWindows, containsWindow } from './window.ts'
 import { columnDefinition, intType, type ResultType } from './meta.ts'
-import { FIELD_TYPE, expectTyped } from '@myjs/bytes'
-import { requireCollationInfo } from '@myjs/charsets'
+import { expectTyped } from '@myjs/bytes'
 import { distinct, filter, limit, project, sort, type SortKey } from './operators.ts'
 import { isConstant, splitAnd } from './plan.ts'
 import { TableScope } from './scope.ts'
@@ -300,7 +299,7 @@ function planSelect(run: Run, q: QueryExpression, node: SelectNode): SelectPlan 
   const scope = from?.scope
   const source = from?.single
   const lookup: Scope = scope ?? run.parent ?? EMPTY_SCOPE
-  if (from !== undefined && scope !== undefined) chooseCovering(from, scope, node, q)
+  if (from !== undefined && scope !== undefined) from.reads(columnsRead(scope, node, q))
 
   // An aggregate anywhere in the select list or HAVING makes the query a
   // grouped one, even with no GROUP BY; one in ORDER BY alone does not, and
@@ -443,7 +442,7 @@ function planSelect(run: Run, q: QueryExpression, node: SelectNode): SelectPlan 
     // HAVING without grouping filters the rows WHERE kept, before any window sees them.
     ...(having === undefined ? [] : [{ ...filterStage(having), describe: (n: PlanNode) => withSubqueries(run, planNode('Filter', [n]), 'having clause') }]),
     ...(windows === undefined || windows.windows.length === 0 ? [] : [windowStage(windows, windowBase)]),
-    deliverStage(items.map((i) => i.compiled), ordered === undefined ? keys : [], node.distinct === true, { deduplicated, streamed }),
+    deliverStage(items.map((i) => i.compiled), ordered === undefined ? keys : [], node.distinct === true, { deduplicated, streamed, keep: limitCount === undefined ? undefined : offset + limitCount }),
     ...(limitCount === undefined && offset === 0 ? [] : [limitStage(offset, limitCount)]),
   ]
   return {
@@ -498,10 +497,12 @@ function windowStage(windows: WindowSink, base: number): Stage {
  * same order, since duplicates are identical. A sort over a join reads its
  * rows streamed into a table first ("Stream results").
  */
-function deliverStage(items: readonly Compiled[], keys: readonly SortKey[], unique: boolean, through: { readonly deduplicated: boolean; readonly streamed: boolean; readonly described?: boolean }): Stage {
+function deliverStage(items: readonly Compiled[], keys: readonly SortKey[], unique: boolean, through: { readonly deduplicated: boolean; readonly streamed: boolean; readonly described?: boolean; readonly keep?: number | undefined }): Stage {
+  // A LIMIT needs only its first rows of the order, unless a DISTINCT between would drop some.
+  const keep = unique ? undefined : through.keep
   return {
     run(rows, env) {
-      const sorted = keys.length > 0 ? sort(rows, keys, env) : rows
+      const sorted = keys.length > 0 ? sort(rows, keys, env, keep) : rows
       const projected = project(sorted, items, env)
       return rowed(unique ? distinct(projected) : projected)
     },
@@ -725,24 +726,12 @@ function nullableView(scope: TableScope, aliases: ReadonlySet<string>): Scope {
   }
 }
 
-/** The bytes a column takes in an index key, as `key_length` counts it — what makes one covering index cheaper than another. */
-function keyBytes(c: ColumnDef): number {
-  const t = c.type
-  const widths: Record<number, number> = { [FIELD_TYPE.TINY]: 1, [FIELD_TYPE.SHORT]: 2, [FIELD_TYPE.INT24]: 3, [FIELD_TYPE.LONG]: 4, [FIELD_TYPE.LONGLONG]: 8, [FIELD_TYPE.FLOAT]: 4, [FIELD_TYPE.DOUBLE]: 8, [FIELD_TYPE.DATE]: 3, [FIELD_TYPE.YEAR]: 1 }
-  const fixed = widths[t.type]
-  if (fixed !== undefined) return fixed + (c.nullable ? 1 : 0)
-  if (t.type === FIELD_TYPE.NEWDECIMAL || t.type === FIELD_TYPE.DECIMAL) return Math.ceil((t.precision ?? 10) / 2) + 1 + (c.nullable ? 1 : 0)
-  if (t.type === FIELD_TYPE.DATETIME || t.type === FIELD_TYPE.TIMESTAMP) return 5 + Math.ceil((t.decimals ?? 0) / 2) + (c.nullable ? 1 : 0)
-  const mb = t.collationId === undefined ? 1 : requireCollationInfo(t.collationId).mbmaxlen
-  return (t.length ?? 1) * mb + 2 + (c.nullable ? 1 : 0)
-}
-
 /**
- * For each base table, the smallest secondary index that holds every column
- * the query reads of it — the index and the clustered key it carries — which
- * MySQL scans in place of the table when no condition picks an access path.
+ * The columns a query reads of each table of its FROM, by name in lower case,
+ * or 'all' for a table read whole (`*`): what decides which secondary index
+ * holds everything it needs (`FromPlan.reads`).
  */
-function chooseCovering(from: FromPlan, scope: TableScope, node: SelectNode, q: QueryExpression): void {
+function columnsRead(scope: TableScope, node: SelectNode, q: QueryExpression): Map<string, ReadonlySet<string> | 'all'> {
   const used = new Map<string, Set<string> | 'all'>()
   const aliases = new Set(scope.tables.map((t) => t.alias))
   const add = (alias: string, column: string | 'all'): void => {
@@ -793,22 +782,7 @@ function chooseCovering(from: FromPlan, scope: TableScope, node: SelectNode, q: 
   visit(node.having, false)
   visit(node.from, false)
   visit(q.orderBy, false)
-  for (const t of scope.tables) {
-    const def = t.def
-    const cols = used.get(t.alias) ?? new Set<string>()
-    if (def === undefined || cols === 'all' || t.nullable) continue
-    const pk = def.indexes.find((i) => i.kind === 'primary' || i.name === def.clustered)
-    if (pk === undefined) continue
-    let best: { name: string; bytes: number } | undefined
-    for (const index of def.indexes) {
-      if (index === pk || index.invisible === true || index.parts.some((p) => p.prefix !== undefined)) continue
-      const holds = new Set([...index.parts, ...pk.parts].map((p) => p.column.toLowerCase()))
-      if (![...cols].every((c) => holds.has(c))) continue
-      const bytes = index.parts.reduce((n, p) => n + keyBytes(def.columns.find((c) => c.name === p.column) as ColumnDef), 0)
-      if (best === undefined || bytes < best.bytes) best = { name: index.name, bytes }
-    }
-    if (best !== undefined) from.cover(t.alias, best.name)
-  }
+  return used
 }
 
 /**
@@ -1519,7 +1493,7 @@ function planGrouped(
     ...(having === undefined ? [] : [{ ...filterStage(having), describe: (n: PlanNode) => withSubqueries(run, planNode('Filter', [n]), 'having clause') }]),
     ...(windows === undefined || windows.windows.length === 0 ? [] : [windowStage(windows, windows.base)]),
     // A DISTINCT over groups is not described yet.
-    deliverStage(items.map((i) => i.compiled), sortsOutput ? orderKeys : [], node.distinct === true, { deduplicated: false, streamed: stream, described: node.distinct !== true }),
+    deliverStage(items.map((i) => i.compiled), sortsOutput ? orderKeys : [], node.distinct === true, { deduplicated: false, streamed: stream, described: node.distinct !== true, keep: limitCount === undefined ? undefined : offset + limitCount }),
     ...(limitCount === undefined && offset === 0 ? [] : [limitStage(offset, limitCount)]),
   ]
 

@@ -31,7 +31,8 @@
 // could reject (D-65); a table's key range only narrows what is read, and
 // never for a table on the inner side of an outer join, where `WHERE b.x IS
 // NULL` must still see the NULL rows the join made.
-import { expectTyped } from '@myjs/bytes'
+import { FIELD_TYPE, expectTyped } from '@myjs/bytes'
+import { requireCollationInfo } from '@myjs/charsets'
 import type { ColumnDef, IndexDef, RowId, Table, TableDef, Trx } from '@myjs/engine'
 import { NODE, REF, type Expression, type TableReference } from '@myjs/parser'
 import { messages, sqlError } from '@myjs/protocol'
@@ -100,10 +101,15 @@ interface HashKeys {
   readonly conditions: readonly Placed[]
 }
 
+/** A join's index lookup: the inner table's index, the column it leads with, and the outer side's value for it. */
 interface EqRef {
   readonly index: IndexDef
   readonly column: ColumnDef
   readonly value: Compiled
+  /** `eq_ref`: a unique key, one row at most. */
+  readonly unique: boolean
+  /** The conjunct it reads by: the key read itself, which EXPLAIN shows no Filter for. */
+  readonly condition: Expression
 }
 
 export interface FromPlan {
@@ -128,12 +134,13 @@ export interface FromPlan {
    */
   sortsFirst(aliases: ReadonlySet<string>): boolean
   /**
-   * Read a table through a secondary index rather than its clustered one when
-   * no condition chooses an access path: MySQL's "Covering index scan", taken
-   * when the index holds every column the query reads, which changes the order
-   * of an unordered result.
+   * The columns the query reads of each table (`'all'` for one read whole).
+   * A table no condition chooses an access path for is read through the
+   * smallest secondary index that holds them all — MySQL's "Covering index
+   * scan", which changes the order of an unordered result — and an index
+   * lookup through an index that holds them is a "Covering index lookup".
    */
-  cover(alias: string, index: string): void
+  reads(columns: ReadonlyMap<string, ReadonlySet<string> | 'all'>): void
   /**
    * The WHERE, given once its caller has compiled it where MySQL resolves it
    * (after the select list), conjunct by conjunct. Each is applied by the
@@ -363,16 +370,16 @@ export function planFrom(refs: readonly TableReference[], ctx: FromContext, wher
         joins.push({ on: onAst, left: isLeft, innerAliases: isLeft ? inner.aliases : new Set(), nested: nestedHere })
         // An outer join over a unique key is a nested loop too; its order is a
         // hash join's, but it lets a sort go first.
-        const outerLookup = isLeft && inner.node.kind === 'leaf' ? eqRef(inner.node.table, [onAst], outer.aliases, (e) => ctx.compileOn(e, slotScope(preliminary.restrict(outer.aliases, within), preliminary))) : undefined
-        if (outerLookup !== undefined) nestedLoopJoins.add(inner.aliases)
-        const lookup = isLeft || inner.node.kind !== 'leaf' ? undefined : eqRef(inner.node.table, [onAst, ...(ref.type === 'STRAIGHT' || ref.type === 'INNER' ? [where] : [])], outer.aliases, (e) => ctx.compileOn(e, slotScope(preliminary.restrict(outer.aliases, within), preliminary)))
+        // A join by an index on the later table, where one serves it: an outer join by its ON, an inner one by its WHERE too.
+        const lateral = [...inner.aliases].some((a) => byAlias.get(a)?.lateral === true)
+        const lookup = inner.node.kind !== 'leaf' || lateral ? undefined : refOf(inner.node.table, [onAst, ...(!isLeft && (ref.type === 'STRAIGHT' || ref.type === 'INNER') ? [where] : [])], outer.aliases, preliminary, (e) => ctx.compileOn(e, slotScope(preliminary.restrict(outer.aliases, within), preliminary)))
         if (lookup !== undefined) nestedLoopJoins.add(inner.aliases)
         // A LATERAL table is read again for each row before it: a nested loop,
         // so a sort over the tables before it goes first (8.4.11: Drizzle's
         // `LEFT JOIN LATERAL … ORDER BY parent.id` keeps parent.id's key flags).
         if ([...inner.aliases].some((a) => byAlias.get(a)?.lateral === true)) nestedLoopJoins.add(inner.aliases)
         return {
-          node: { kind: 'join', outer: outer.node, inner: inner.node, left: isLeft, on, onAst, innerSlots, lookup: lookup ?? outerLookup },
+          node: { kind: 'join', outer: outer.node, inner: inner.node, left: isLeft, on, onAst, innerSlots, lookup },
           aliases,
           visible,
         }
@@ -384,7 +391,7 @@ export function planFrom(refs: readonly TableReference[], ctx: FromContext, wher
       const t = byAlias.get(a) as FromTable
       return Array.from({ length: t.width }, (_, i) => t.offset + i)
     })
-    const lookup = r.node.kind !== 'leaf' ? undefined : eqRef(r.node.table, [where], l.aliases, (e) => ctx.compileOn(e, preliminary.restrict(l.aliases)))
+    const lookup = r.node.kind !== 'leaf' || r.node.table.lateral ? undefined : refOf(r.node.table, [where], l.aliases, preliminary, (e) => ctx.compileOn(e, preliminary.restrict(l.aliases)))
     if (lookup !== undefined || [...r.aliases].some((a) => byAlias.get(a)?.lateral === true)) nestedLoopJoins.add(r.aliases)
     return {
       node: { kind: 'join', outer: l.node, inner: r.node, left: false, on: [], onAst: undefined, innerSlots, lookup } as Node,
@@ -423,7 +430,7 @@ export function planFrom(refs: readonly TableReference[], ctx: FromContext, wher
   const single = only?.def !== undefined && only.table !== undefined ? { alias: only.alias, def: only.def, table: only.table } : undefined
 
   // The physical tree: built once the WHERE is placed (`filter`), or without one.
-  const settings: LeafSettings = { covering, ...(outer === undefined ? {} : { outer }) }
+  const settings: LeafSettings = { covering, read: new Map(), ...(outer === undefined ? {} : { outer }) }
   let physical: Op | undefined
   const physicalTree = (): Op | undefined => (physical ??= tree === undefined ? undefined : toOp(tree.node, [], scope, settings, ctx, preliminary))
 
@@ -433,8 +440,13 @@ export function planFrom(refs: readonly TableReference[], ctx: FromContext, wher
     width,
     joins,
     straight,
-    cover(alias, index) {
-      covering.set(alias, index)
+    reads(columns) {
+      for (const t of tables) {
+        const read = columns.get(t.alias) ?? new Set<string>()
+        settings.read.set(t.alias, read)
+        const best = t.def === undefined || t.nullable ? undefined : coveringIndex(t.def, read)
+        if (best !== undefined) covering.set(t.alias, best)
+      }
     },
     sortsFirst(aliases) {
       if (tree === undefined) return false
@@ -609,6 +621,8 @@ function idsAt(offset: number, id: RowId): (RowId | undefined)[] {
 interface LeafSettings {
   where?: Expression | undefined
   readonly covering: ReadonlyMap<string, string>
+  /** The columns the query reads of each table (`reads`). */
+  readonly read: Map<string, ReadonlySet<string> | 'all'>
   readonly outer?: OuterColumn
   /** The one table read whole in this index's order (`readInOrder`). */
   ordered?: { readonly index: string; readonly force: boolean; readonly reverse: boolean }
@@ -636,36 +650,47 @@ function leafAccess(t: FromTable, settings: LeafSettings, env: Env): Access {
 }
 
 /**
- * `eq_ref`: the later table of an inner join has a PRIMARY or NOT NULL UNIQUE
- * single-column key that an equality in the ON or the WHERE pins to a column
- * of the earlier tables. The lookup is the join's order; whether the bound
- * converts exactly (D-65) decides only whether it is a key read or a filtered
- * scan, never which rows match. Only `=`: `<=>` matches NULL, which a key
- * lookup would not find, and only a top-level conjunct, which every row the
- * query returns must satisfy.
+ * An index lookup into the later table of a join, by an equality in the ON
+ * or the WHERE between one of its indexed columns and an expression over the
+ * earlier tables: `eq_ref` when the index is a PRIMARY or NOT NULL UNIQUE key
+ * of that one column ("Single-row index lookup"), `ref` on any other index the
+ * column leads ("Index lookup"). 8.4.11 joins by an index wherever one serves
+ * the join, and by a hash only where none does. The lookup decides the join's
+ * order; whether the value converts exactly (D-65) decides only whether it is
+ * a key read or a filtered scan, never which rows match. Only `=`, since
+ * `<=>` matches NULL, which a key lookup would not find; and only a top-level
+ * conjunct, which every row the join returns must satisfy.
  */
-function eqRef(t: FromTable, conditions: readonly (Expression | undefined)[], outerAliases: ReadonlySet<string>, compileOuter: (e: Expression) => Compiled): EqRef | undefined {
+function refOf(t: FromTable, conditions: readonly (Expression | undefined)[], outerAliases: ReadonlySet<string>, scope: TableScope, compileOuter: (e: Expression) => Compiled): EqRef | undefined {
   const def = t.def
   if (def === undefined || t.table === undefined) return undefined
-  const conjuncts: Expression[] = []
-  const flatten = (e: Expression | undefined): void => void splitAnd(e, conjuncts)
-  for (const c of conditions) flatten(c)
-  const own = (e: Expression): string | undefined => {
-    if (e.kind !== NODE.COLUMN || e.parts.length < 2 || e.parts[e.parts.length - 2] !== t.alias) return undefined
-    const name = (e.parts[e.parts.length - 1] as string).toLowerCase()
-    return def.columns.find((c) => c.name.toLowerCase() === name)?.name
+  // A column of this table, by name: qualified, or one of USING's slots.
+  const own = (e: Expression): ColumnDef | undefined => {
+    if (e.kind !== NODE.COLUMN) return undefined
+    const p = e.parts[0] as string
+    let name: string | undefined
+    if (e.parts.length === 1 && p.startsWith(SLOT_PREFIX)) {
+      const at = scope.columnAt(Number(p.slice(SLOT_PREFIX.length)))
+      name = at?.table.alias === t.alias ? at.column.name : undefined
+    } else if (e.parts.length >= 2 && e.parts[e.parts.length - 2] === t.alias) name = e.parts[e.parts.length - 1] as string
+    return name === undefined ? undefined : def.columns.find((c) => c.name.toLowerCase() === name.toLowerCase())
   }
-  const outerColumn = (e: Expression): boolean => e.kind === NODE.COLUMN && e.parts.length >= 2 && outerAliases.has(e.parts[e.parts.length - 2] as string)
-  for (const c of conjuncts) {
+  const fromOuter = (e: Expression): boolean => {
+    const a = aliasesOf(e, scope)
+    return a !== undefined && a.size > 0 && [...a].every((x) => outerAliases.has(x))
+  }
+  const unique = (i: IndexDef, c: ColumnDef): boolean => i.parts.length === 1 && (i.kind === 'primary' || (i.kind === 'unique' && !c.nullable))
+  let best: EqRef | undefined
+  for (const c of conditions.flatMap((x) => splitAnd(x))) {
     if (c.kind !== NODE.BINARY || c.op !== '=') continue
-    let col: string | undefined
-    let other: Expression | undefined
-    if (own(c.left) !== undefined && outerColumn(c.right)) [col, other] = [own(c.left), c.right]
-    else if (own(c.right) !== undefined && outerColumn(c.left)) [col, other] = [own(c.right), c.left]
-    if (col === undefined || other === undefined) continue
-    const column = def.columns.find((x) => x.name === col) as ColumnDef
-    const index = def.indexes.find((i) => i.invisible !== true && i.parts.length === 1 && i.parts[0]?.column === col && i.parts[0].prefix === undefined && (i.kind === 'primary' || (i.kind === 'unique' && !column.nullable)))
-    if (index === undefined) continue
+    const pair = own(c.left) !== undefined && fromOuter(c.right) ? ([own(c.left), c.right] as const) : own(c.right) !== undefined && fromOuter(c.left) ? ([own(c.right), c.left] as const) : undefined
+    if (pair === undefined) continue
+    const [column, other] = pair as readonly [ColumnDef, Expression]
+    // The unique key first, else the first index the column leads.
+    const leading = def.indexes.filter((i) => i.invisible !== true && i.parts[0]?.column === column.name && i.parts[0].prefix === undefined && i.parts[0].descending !== true)
+    // A non-unique key (`ref`) is the cost model's to choose against a hash join (M5.7): until it can, a unique key only.
+    const index = leading.find((i) => unique(i, column))
+    if (index === undefined || best !== undefined) continue
     let value: Compiled
     try {
       value = compileOuter(other)
@@ -673,13 +698,12 @@ function eqRef(t: FromTable, conditions: readonly (Expression | undefined)[], ou
       expectTyped(e)
       continue
     }
-    // `ref` access needs the two sides to compare as the key's own type.
-    const k = value.type.kind
-    const keyKind = t.def === undefined ? undefined : (new TableScope([{ alias: t.alias, def: t.def }]).resolve([t.alias, col], 'on clause').type.kind)
-    if (k !== keyKind || (k === 'string' && value.type.collationId !== column.type.collationId)) continue
-    return { index, column, value }
+    // A key read needs the two sides to compare as the key's own type.
+    const keyKind = new TableScope([{ alias: t.alias, def }]).resolve([t.alias, column.name], 'on clause').type.kind
+    if (value.type.kind !== keyKind || (keyKind === 'string' && value.type.collationId !== column.type.collationId)) continue
+    best = { index, column, value, unique: unique(index, column), condition: c }
   }
-  return undefined
+  return best
 }
 
 // --- the plan, as EXPLAIN shows it (M5.44) --------------------------------------
@@ -793,7 +817,7 @@ function toOp(node: Node, conditions: readonly Placed[], scope: TableScope, sett
     return filterOp(lateralOp(node, outer, inner, spanning), above)
   }
   if (node.lookup !== undefined && node.inner.kind === 'leaf') {
-    return filterOp(lookupOp(node, outer, node.inner.table, node.lookup, [...toInner, ...spanning]), above)
+    return filterOp(lookupOp(node, outer, node.inner.table, node.lookup, [...toInner, ...spanning], settings), above)
   }
   const inner = toOp(node.inner, toInner, scope, settings, ctx, preliminary)
   const both = new Set([...outerAliases, ...innerAliases])
@@ -892,12 +916,12 @@ function hashJoinOp(node: Node & { kind: 'join' }, outer: Op, inner: Op, on: rea
 }
 
 /**
- * A nested loop with a single-row lookup on the inner table's unique key, by
- * the outer row's value. A left join emits one row of NULLs for an outer row
- * with no match: the order a hash join over the key gives, since a unique
- * key has one match at most. `on` is every condition the pair must meet.
+ * A nested loop with an index lookup on the inner table (`refOf`), by the
+ * outer row's value: each outer row, then its matches in the index's order —
+ * the key's, then the clustered key's — or, under a left join, one row of
+ * NULLs. `on` is every condition the pair must meet.
  */
-function lookupOp(node: Node & { kind: 'join' }, outer: Op, t: FromTable, lookup: EqRef, on: readonly Placed[]): Op {
+function lookupOp(node: Node & { kind: 'join' }, outer: Op, t: FromTable, lookup: EqRef, on: readonly Placed[], settings: LeafSettings): Op {
   return {
     *rows(run, context) {
       const env = run.env
@@ -918,9 +942,10 @@ function lookupOp(node: Node & { kind: 'join' }, outer: Op, t: FromTable, lookup
       }
     },
     describe(env) {
-      const lookupNode = planNode(`Single-row index lookup on ${t.alias} using ${lookup.index.name}`)
+      const covering = !lookup.unique && t.def !== undefined && covers(t.def, lookup.index, settings.read.get(t.alias) ?? 'all')
+      const lookupNode = planNode(`${lookup.unique ? 'Single-row index' : covering ? 'Covering index' : 'Index'} lookup on ${t.alias} using ${lookup.index.name}`)
       // The lookup's own equality is the key read, not a filter.
-      const rest = on.filter((c) => !isLookupEquality(c.e, t, lookup))
+      const rest = on.filter((c) => c.e !== lookup.condition)
       return planNode(node.left ? 'Nested loop left join' : 'Nested loop inner join', [outer.describe(env), rest.length === 0 ? lookupNode : planNode('Filter', [lookupNode])])
     },
   }
@@ -959,12 +984,6 @@ function isEquiJoin(c: Placed, outer: ReadonlySet<string>, inner: ReadonlySet<st
   return (on(l, outer) && on(r, inner)) || (on(l, inner) && on(r, outer))
 }
 
-/** Whether a condition is the equality a single-row lookup reads its key by. */
-function isLookupEquality(e: Expression, t: FromTable, lookup: EqRef): boolean {
-  if (e.kind !== NODE.BINARY || e.op !== '=') return false
-  const names = (x: Expression): boolean => x.kind === NODE.COLUMN && (x.parts[x.parts.length - 1] as string).toLowerCase() === lookup.column.name.toLowerCase() && (x.parts.length < 2 || x.parts[x.parts.length - 2] === t.alias)
-  return names(e.left) || names(e.right)
-}
 
 /** A base or derived table's iterator, as EXPLAIN names it. */
 function describeLeaf(t: FromTable, settings: LeafSettings, env: Env): PlanNode {
@@ -1003,4 +1022,37 @@ function lookedUp(t: FromTable, e: Expression, settings: LeafSettings, env: Env)
   const column = index?.parts.length === 1 ? index.parts[0]?.column.toLowerCase() : undefined
   const names = (x: Expression): boolean => x.kind === NODE.COLUMN && (x.parts[x.parts.length - 1] as string).toLowerCase() === column && (x.parts.length < 2 || x.parts[x.parts.length - 2] === t.alias)
   return column !== undefined && (e.kind === NODE.UNARY ? names(e.operand) : e.kind === NODE.BINARY && (names(e.left) || names(e.right)))
+}
+
+// --- covering indexes -------------------------------------------------------------
+
+/** The bytes a column takes in an index key, as `key_length` counts it: what makes one covering index cheaper than another. */
+function keyBytes(c: ColumnDef): number {
+  const t = c.type
+  const widths: Record<number, number> = { [FIELD_TYPE.TINY]: 1, [FIELD_TYPE.SHORT]: 2, [FIELD_TYPE.INT24]: 3, [FIELD_TYPE.LONG]: 4, [FIELD_TYPE.LONGLONG]: 8, [FIELD_TYPE.FLOAT]: 4, [FIELD_TYPE.DOUBLE]: 8, [FIELD_TYPE.DATE]: 3, [FIELD_TYPE.YEAR]: 1 }
+  const fixed = widths[t.type]
+  if (fixed !== undefined) return fixed + (c.nullable ? 1 : 0)
+  if (t.type === FIELD_TYPE.NEWDECIMAL || t.type === FIELD_TYPE.DECIMAL) return Math.ceil((t.precision ?? 10) / 2) + 1 + (c.nullable ? 1 : 0)
+  if (t.type === FIELD_TYPE.DATETIME || t.type === FIELD_TYPE.TIMESTAMP) return 5 + Math.ceil((t.decimals ?? 0) / 2) + (c.nullable ? 1 : 0)
+  const mb = t.collationId === undefined ? 1 : requireCollationInfo(t.collationId).mbmaxlen
+  return (t.length ?? 1) * mb + 2 + (c.nullable ? 1 : 0)
+}
+
+/** Whether a secondary index, with the clustered key it carries, holds every column in `read`. */
+function covers(def: TableDef, index: IndexDef, read: ReadonlySet<string> | 'all'): boolean {
+  const clustered = def.indexes.find((i) => i.kind === 'primary' || i.name === def.clustered)
+  if (read === 'all' || clustered === undefined || index === clustered || index.invisible === true || index.parts.some((p) => p.prefix !== undefined)) return false
+  const holds = new Set([...index.parts, ...clustered.parts].map((p) => p.column.toLowerCase()))
+  return [...read].every((c) => holds.has(c))
+}
+
+/** The smallest secondary index that holds every column in `read`, by key bytes. */
+function coveringIndex(def: TableDef, read: ReadonlySet<string> | 'all'): string | undefined {
+  let best: { name: string; bytes: number } | undefined
+  for (const index of def.indexes) {
+    if (!covers(def, index, read)) continue
+    const bytes = index.parts.reduce((n, p) => n + keyBytes(def.columns.find((c) => c.name === p.column) as ColumnDef), 0)
+    if (best === undefined || bytes < best.bytes) best = { name: index.name, bytes }
+  }
+  return best?.name
 }

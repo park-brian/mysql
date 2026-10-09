@@ -202,7 +202,6 @@ export function windowNotAllowed(e: CallNode): never {
 
 interface Keyed {
   readonly row: Row
-  readonly at: number
   readonly partition: readonly Value[]
   readonly order: readonly Value[]
 }
@@ -215,7 +214,7 @@ interface Keyed {
 export function applyWindows(rows: Row[], windows: readonly WindowPlan[], env: Env, base: number): Row[] {
   let current = rows
   for (const w of windows) {
-    const keyed: Keyed[] = current.map((row, at) => ({ row, at, partition: w.partition.map((p) => p.eval(row, env)), order: w.order.map((o) => o.expr.eval(row, env)) }))
+    const keyed: Keyed[] = current.map((row) => ({ row, partition: w.partition.map((p) => p.eval(row, env)), order: w.order.map((o) => o.expr.eval(row, env)) }))
     warnNonScalar(keyed.map((k) => k.order), env)
     if (w.partition.length > 0 || w.order.length > 0) {
       keyed.sort((a, b) => {
@@ -227,7 +226,8 @@ export function applyWindows(rows: Row[], windows: readonly WindowPlan[], env: E
           const c = sortValues(a.order[i] ?? null, b.order[i] ?? null)
           if (c !== 0) return (w.order[i] as { desc: boolean }).desc ? -c : c
         }
-        return a.at - b.at
+        // Array.prototype.sort is stable: ties keep the order they came in.
+        return 0
       })
     }
     const same = (x: readonly Value[], y: readonly Value[]): boolean => x.every((v, i) => sortValues(v, y[i] ?? null) === 0)

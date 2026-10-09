@@ -55,6 +55,7 @@ import {
   valInt,
   type DecimalValue,
   type Value,
+  valueBytes,
 } from '@myjs/types'
 import { hexOf } from './builtins.ts'
 import {
@@ -110,7 +111,7 @@ export interface Str {
 
 function strOf(v: V, binary: boolean, collation: number): Str {
   if (binary) {
-    const b = v.kind === 'bytes' ? v.v : v.kind === 'string' ? encodeCollation(v.v, v.collationId) : new TextEncoder().encode(toText(v))
+    const b = valueBytes(v)
     return { binary, units: Array.from(b, (x) => String.fromCharCode(x)) }
   }
   const text = v.kind === 'bytes' ? asText(v.v, collation) : v.kind === 'string' ? converted(v.v, v.collationId, collation) : toText(v)
@@ -480,7 +481,7 @@ function libraryFunction(name: string, args: readonly Compiled[], callName: stri
         eval: (r, env) => {
           const v = x.eval(r, env)
           if (v === null) return null
-          const b = v.kind === 'bytes' ? v.v : v.kind === 'string' ? encodeCollation(v.v, v.collationId) : new TextEncoder().encode(toText(v))
+          const b = valueBytes(v)
           return intValue(BigInt(b[0] ?? 0))
         },
         type: intType(3, x.type.nullable),
@@ -725,7 +726,6 @@ const MORE_STRING_FUNCTIONS: ReadonlySet<string> = new Set([
 type Row = Parameters<Compiled['eval']>[0]
 
 /** A value's bytes, as a digest or BIT_LENGTH counts them: text in its charset, a number as its text. */
-export const bytesOf = (v: V): Uint8Array => (v.kind === 'bytes' ? v.v : v.kind === 'string' ? encodeCollation(v.v, v.collationId) : new TextEncoder().encode(toText(v)))
 
 /** An integer argument read with its 1292, as `val_int` reads it. */
 export function intReader(c: Compiled): (r: Row, env: Env) => bigint | null {
@@ -1283,7 +1283,7 @@ function moreStringFunction(name: string, xs: readonly Compiled[], callName: str
       return {
         eval: (r, env) => {
           const v = s.eval(r, env)
-          return v === null ? null : intValue(BigInt(bytesOf(v).length * 8))
+          return v === null ? null : intValue(BigInt(valueBytes(v).length * 8))
         },
         type: intType(10, s.type.nullable),
       }
@@ -1321,7 +1321,7 @@ function moreStringFunction(name: string, xs: readonly Compiled[], callName: str
       return {
         eval: (r, env) => {
           const v = s.eval(r, env)
-          return v === null ? null : conv(toBase64(bytesOf(v)))
+          return v === null ? null : conv(toBase64(valueBytes(v)))
         },
         type: hexText(len + Math.floor(len / 76), true),
       }
@@ -1334,7 +1334,7 @@ function moreStringFunction(name: string, xs: readonly Compiled[], callName: str
         eval: (r, env) => {
           const v = s.eval(r, env)
           if (v === null) return null
-          const out = fromBase64(new TextDecoder('latin1').decode(bytesOf(v)))
+          const out = fromBase64(new TextDecoder('latin1').decode(valueBytes(v)))
           return out === undefined ? null : bytesValue(out)
         },
         type: stringType(Math.floor((bytes * 3) / 4), CHARSET_BINARY, true),
@@ -1348,7 +1348,7 @@ function moreStringFunction(name: string, xs: readonly Compiled[], callName: str
           const v = s.eval(r, env)
           if (v === null) return null
           if (v.kind !== 'string') {
-            const b = bytesOf(v)
+            const b = valueBytes(v)
             return intValue(BigInt(b[0] ?? 0))
           }
           const first = [...v.v][0]
@@ -1370,7 +1370,7 @@ function moreStringFunction(name: string, xs: readonly Compiled[], callName: str
         return {
           eval: (r, env) => {
             const v = s.eval(r, env)
-            return v === null ? null : intValue(BigInt(crc32(bytesOf(v))), true)
+            return v === null ? null : intValue(BigInt(crc32(valueBytes(v))), true)
           },
           type: intType(10, s.type.nullable, true),
         }
@@ -1379,7 +1379,7 @@ function moreStringFunction(name: string, xs: readonly Compiled[], callName: str
       return {
         eval: (r, env) => {
           const v = s.eval(r, env)
-          return v === null ? null : conv(digest(bytesOf(v)))
+          return v === null ? null : conv(digest(valueBytes(v)))
         },
         type: hexText(name === 'MD5' ? 32 : 40, true),
       }
@@ -1418,7 +1418,7 @@ function moreStringFunction(name: string, xs: readonly Compiled[], callName: str
             raise(env, 1583, `Incorrect parameters in the call to native function 'sha2'`)
             return null
           }
-          const data = bytesOf(v)
+          const data = valueBytes(v)
           return conv(n <= 256n ? sha256(data, Number(n) as 224 | 256) : sha512(data, Number(n) as 384 | 512))
         },
         type: hexText(shaWidth, true),

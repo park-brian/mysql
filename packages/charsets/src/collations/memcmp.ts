@@ -25,19 +25,12 @@
 // in an order its own comparator rejected. `sortKey` still cannot pad on its
 // own — it does not know the column's width — so the key encoder does it, and
 // `padUnit` is what it pads with.
+import { compareBytes } from '@myjs/bytes'
 import { allCollations, requireCollationInfo, type Collation, type CollationInfo } from '../collation.ts'
 import { BIN_KEY_WIDTHS } from '../registry.ts'
 
 /** Unsigned byte comparison — the ordering every `*_bin` collation has. */
-export function memcmp(a: Uint8Array, b: Uint8Array): number {
-  const n = Math.min(a.length, b.length)
-  for (let i = 0; i < n; i++) {
-    const x = a[i] as number
-    const y = b[i] as number
-    if (x !== y) return x < y ? -1 : 1
-  }
-  return a.length === b.length ? 0 : a.length < b.length ? -1 : 1
-}
+export const memcmp = compareBytes
 
 /** The space, as every single-byte-space charset encodes it. */
 export const SPACE_UNIT: Uint8Array = Uint8Array.of(0x20)

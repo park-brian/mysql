@@ -29,13 +29,12 @@ import {
   toDateTime,
   toDecimal,
   toDouble,
-  toText,
   toTime,
+  valueBytes,
   type DecimalValue,
   type Value,
 } from './sql-value.ts'
 
-const UTF8 = new TextEncoder()
 const sign = (n: number | bigint): number => (n < 0 ? -1 : n > 0 ? 1 : 0)
 
 // --- Collation aggregation, as `DTCollation::aggregate` does it -----------------
@@ -144,9 +143,7 @@ function compareText(a: Exclude<Value, null>, b: Exclude<Value, null>): number {
     return sign(c.compare(encodeCollation(a.v, id), encodeCollation(b.v, id)))
   }
   // A binary string on either side: bytes against bytes, `memcmp`.
-  const bytesOf = (v: Exclude<Value, null>): Uint8Array =>
-    v.kind === 'bytes' ? v.v : v.kind === 'string' ? encodeCollation(v.v, v.collationId) : UTF8.encode(toText(v))
-  return sign(memcmp(bytesOf(a), bytesOf(b)))
+  return sign(memcmp(valueBytes(a), valueBytes(b)))
 }
 
 export function compareDecimals(a: DecimalValue, b: DecimalValue): number {

@@ -11,6 +11,7 @@
 // that finds the free gap too small but the garbage large enough compacts the
 // heap in place first. Every function here takes the page as bytes, so the page
 // can be verified, fuzzed and dumped with nothing else in hand.
+import { compareBytes } from '@myjs/bytes'
 import { corrupt } from './errors.ts'
 import { FRAME_TRAILER, PAGE_TYPE, initPage, pageType, readU32 } from './page.ts'
 
@@ -181,14 +182,7 @@ export function childValue(child: number): Uint8Array {
 }
 
 /** `memcmp`, the only order the tree knows (D-42). */
-export function compareBytes(a: Uint8Array, b: Uint8Array): number {
-  const n = Math.min(a.length, b.length)
-  for (let i = 0; i < n; i++) {
-    const d = (a[i] as number) - (b[i] as number)
-    if (d !== 0) return d
-  }
-  return a.length - b.length
-}
+export { compareBytes }
 
 /**
  * Binary search: the first slot whose key is ≥ `key`, and whether it is equal.

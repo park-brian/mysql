@@ -23,7 +23,7 @@ import { expectTyped } from '@myjs/bytes'
 import { requireCollationInfo } from '@myjs/charsets'
 import { sqlError } from '@myjs/protocol'
 import type { ColumnDef, FieldBytes, TableDef, TableSpec } from '@myjs/engine'
-import { NODE, TOKEN, lex, parseExpression, type CheckConstraint, type CreateTableNode, type Expression, type Token } from '@myjs/parser'
+import { NODE, TOKEN, lex, parseExpression, type CheckConstraint, type CreateTableNode, type Expression, type Token, quoteName } from '@myjs/parser'
 import { decodeField, truth } from '@myjs/types'
 import { compile, type Compiled } from './compile.ts'
 import { escapeString, printExpression } from './print.ts'
@@ -154,7 +154,7 @@ export function checkClause(check: CheckDef): string | null {
   let printed: string
   try {
     printed = printExpression(parseExpression(check.text), {
-      column: (parts) => `\`${(parts[parts.length - 1] as string).replace(/`/g, '``')}\``,
+      column: (parts) => quoteName(parts[parts.length - 1] as string),
       string: (v, cs) => `_${cs ?? check.charset}'${escapeString(v)}'`,
       source: check.text,
     })

@@ -18,6 +18,13 @@ import { renderJson, type JsonDoc } from './json-doc.ts'
 import { scanDateTime, scanTime, type Deprecation, type ScanFlags } from './temporal-scan.ts'
 import { daysInMonth } from './calendar.ts'
 
+const UTF8 = new TextEncoder()
+
+/** A value's bytes as a function of bytes reads them: a binary string's own, a string's in its charset, anything else its text in UTF-8. */
+export function valueBytes(v: Exclude<Value, null>): Uint8Array {
+  return v.kind === 'bytes' ? v.v : v.kind === 'string' ? encodeCollation(v.v, v.collationId) : UTF8.encode(toText(v))
+}
+
 export type Value =
   | null
   | IntValue

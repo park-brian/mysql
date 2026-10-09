@@ -58,6 +58,7 @@ import {
   toTime,
   type DecimalValue,
   type Value,
+  valueBytes,
 } from './sql-value.ts'
 import { scanDateTime, scanTime, type Deprecation } from './temporal-scan.ts'
 import { decodeBit, decodeEnum, decodeSet, encodeBit, encodeEnum, encodeSet, enumMember, padBinary, padChar, setMembers, trimTrailingSpaces } from './strings.ts'
@@ -549,7 +550,7 @@ function memberIndex(value: Exclude<Value, null>, members: readonly string[], co
 
 function encodeBinaryField(value: Exclude<Value, null>, column: FieldColumn, ctx: StoreContext): Uint8Array {
   const t = column.type
-  let b = value.kind === 'bytes' ? value.v : value.kind === 'string' ? encodeCollation(value.v, value.collationId) : new TextEncoder().encode(toText(value))
+  let b = valueBytes(value)
   const limit = BLOB_BYTES[t.type] ?? t.length ?? 1
   if (b.length > limit) b = adjust(ctx, () => dataTooLong(column.name, ctx.row), b.subarray(0, limit), () => truncated(column.name, ctx.row))
   return t.type === FIELD_TYPE.STRING ? padBinary(b, t.length ?? 1) : b

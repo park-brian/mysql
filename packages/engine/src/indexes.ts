@@ -28,7 +28,7 @@
 // record. An update writes every off-page field afresh, so a chain belongs to
 // exactly one version and is freed exactly once. A change with no transaction
 // is one of its own: autocommit.
-import { concatBytes } from '@myjs/bytes'
+import { concatBytes, equalBytes } from '@myjs/bytes'
 import { encodeKey, keyPartLength, type KeyPart } from '@myjs/types'
 import { BTree, type Range, type TreeOptions } from './btree.ts'
 import { corrupt, duplicateKey, misuse, snapshotTooOld } from './errors.ts'
@@ -441,7 +441,7 @@ export class SecondaryIndex {
           record = this.clustered.recordAt(pk, v.view)
         } else {
           record = this.clustered.recordAt(pk, v.view)
-          if (record !== undefined && !equal(keyOf(this.clustered.rowOf(record), this.columns), secondary)) continue
+          if (record !== undefined && !equalBytes(keyOf(this.clustered.rowOf(record), this.columns), secondary)) continue
         }
         if (record !== undefined) yield [pk.slice(), this.clustered.rowOf(record)]
       }
@@ -474,7 +474,7 @@ export class SecondaryIndex {
         continue
       }
       const record = this.clustered.recordAt(pk, view)
-      if (record !== undefined && equal(keyOf(this.clustered.rowOf(record), this.columns), secondary)) out.push(pk)
+      if (record !== undefined && equalBytes(keyOf(this.clustered.rowOf(record), this.columns), secondary)) out.push(pk)
     }
     return out
   }
@@ -490,9 +490,4 @@ export class SecondaryIndex {
   }
 }
 
-function equal(a: Uint8Array, b: Uint8Array): boolean {
-  if (a.length !== b.length) return false
-  for (let i = 0; i < a.length; i++) if (a[i] !== b[i]) return false
-  return true
-}
 

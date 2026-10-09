@@ -70,7 +70,7 @@ export interface SortKey {
  * ties. NULL sorts first ascending and last descending. Materialises: spilling
  * a sort larger than memory is M5.5's.
  */
-export function sort<T extends { readonly row: Row }>(source: Iterable<T>, keys: readonly SortKey[], env: Env): T[] {
+export function sort<T extends { readonly row: Row }>(source: Iterable<T>, keys: readonly SortKey[], env: Env, keep?: number): T[] {
   const decorated = [...source].map((item) => {
     const values = keys.map((k) => k.expr.eval(item.row, env))
     return { item, values, sortKeys: values.map(sortKeyOf), hash: 0n }
@@ -86,8 +86,7 @@ export function sort<T extends { readonly row: Row }>(source: Iterable<T>, keys:
       }
     }
   }
-  // Array.prototype.sort is stable: rows that tie keep the order they came in.
-  decorated.sort((a, b) => {
+  const compare = (a: (typeof decorated)[number], b: (typeof decorated)[number]): number => {
     for (let i = 0; i < keys.length; i++) {
       const x = a.sortKeys[i]
       const y = b.sortKeys[i]
@@ -95,7 +94,28 @@ export function sort<T extends { readonly row: Row }>(source: Iterable<T>, keys:
       if (c !== 0) return (keys[i] as SortKey).desc ? -c : c
     }
     return json.length === 0 ? 0 : compareJsonSortHashes(a.hash, b.hash)
-  })
+  }
+  // Only the first `keep` are wanted (a LIMIT): kept sorted as they arrive,
+  // each inserted after any it ties with, which is the stable sort's order.
+  if (keep === 0) return []
+  if (keep !== undefined && keep < decorated.length / 2) {
+    const top: (typeof decorated)[number][] = []
+    for (const d of decorated) {
+      if (top.length === keep && compare(d, top[keep - 1] as (typeof decorated)[number]) >= 0) continue
+      let lo = 0
+      let hi = top.length
+      while (lo < hi) {
+        const mid = (lo + hi) >>> 1
+        if (compare(d, top[mid] as (typeof decorated)[number]) < 0) hi = mid
+        else lo = mid + 1
+      }
+      top.splice(lo, 0, d)
+      if (top.length > keep) top.pop()
+    }
+    return top.map((d) => d.item)
+  }
+  // Array.prototype.sort is stable: rows that tie keep the order they came in.
+  decorated.sort(compare)
   return decorated.map((d) => d.item)
 }
 
