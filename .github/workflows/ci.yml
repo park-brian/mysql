@@ -327,10 +327,9 @@ jobs:
     # denominator and is committed from a local run (`--server`), since it
     # needs a real server's hour. This job writes this executor's half, and
     # `mysqltest-run.test.ts` then fails unless the scoreboard says what it
-    # measured: the number is CI's, not a hand's. Informational until its
-    # first green run, as the census job was: the runner image carries
-    # MySQL 8.0's packages, and installing 8.4's beside them is untried there.
-    continue-on-error: true
+    # measured: the number is CI's, not a hand's. It was informational for
+    # its first run, which reproduced the committed 23 of 1,146 in about
+    # three minutes, and gates from then on.
     timeout-minutes: 90
     steps:
       - uses: actions/checkout@v4
