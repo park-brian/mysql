@@ -169,6 +169,9 @@ const PURGE_STEP_PAGES = 8
 export interface TrxStats {
   /** Committed transactions whose undo purge has not yet freed. */
   readonly historyLength: number
+  /** The longest and the shortest the history has been since the store opened (INNODB_METRICS' `trx_rseg_history_len`). */
+  readonly historyMax: number
+  readonly historyMin: number
   readonly openViews: number
   readonly expiredViews: number
   /** The writer's trx id, or 0. */
@@ -184,6 +187,8 @@ export class TrxSys {
   readonly #views = new Set<ReadView>()
   /** Committed transactions, oldest first, with their logs once opened. */
   readonly #history: { id: number; first: number; log?: UndoLog }[] = []
+  #historyMax = 0
+  #historyMin = 0
 
   constructor(host: TrxHost, nextTrxId: number, maxHistory: number) {
     this.host = host
@@ -230,7 +235,7 @@ export class TrxSys {
   stats(): TrxStats {
     let expired = 0
     for (const v of this.#views) if (v.expired) expired++
-    return { historyLength: this.#history.length, openViews: this.#views.size, expiredViews: expired, writer: this.writer?.id ?? 0, nextTrxId: this.nextTrxId }
+    return { historyLength: this.#history.length, historyMax: this.#historyMax, historyMin: this.#historyMin, openViews: this.#views.size, expiredViews: expired, writer: this.writer?.id ?? 0, nextTrxId: this.nextTrxId }
   }
 
   /**
@@ -249,6 +254,7 @@ export class TrxSys {
       else this.#history.push({ id, first })
       this.nextTrxId = Math.max(this.nextTrxId, id + 1)
     }
+    this.#historyMax = this.#historyMin = this.#history.length
     for (const a of active) {
       const trx = new Trx(this, 'READ COMMITTED')
       trx.adopt(a.id, UndoLog.open(this.host.pool, a.first, this.host.pageCount))
@@ -259,6 +265,7 @@ export class TrxSys {
 
   committed(id: number, log: UndoLog): void {
     this.#history.push({ id, first: log.first, log })
+    this.#historyMax = Math.max(this.#historyMax, this.#history.length)
   }
 
   /**
@@ -286,6 +293,7 @@ export class TrxSys {
       budget = this.#purgeOne(oldest, budget)
       if (budget < 0) break
       this.#history.shift()
+      this.#historyMin = Math.min(this.#historyMin, this.#history.length)
       done++
     }
     return done

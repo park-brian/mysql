@@ -17,7 +17,7 @@
 //
 // DDL commits first (MySQL's implicit commit) and then runs as a transaction
 // of its own, which is what `Catalog` already does (D-59).
-import type { Isolation, Store, Trx } from '@myjs/engine'
+import type { Isolation, Store, StoreFigures, Trx, TrxStats } from '@myjs/engine'
 import { sqlError, type Session } from '@myjs/protocol'
 import { intValue, stringValue, type Condition, type Value } from '@myjs/types'
 import type { SessionValues } from './compile.ts'
@@ -102,6 +102,12 @@ export class SqlSession implements SessionValues {
   /** SHOW STATUS's rows for this session, or for the server. */
   status(_session: Session, scope: 'GLOBAL' | 'SESSION'): (readonly [string, string])[] {
     return this.#server.status(scope, this.questions)
+  }
+
+  /** The store's figures and when the server started, for INNODB_METRICS; none without a store. */
+  engine(): { readonly figures: StoreFigures & TrxStats; readonly started: number } | undefined {
+    const figures = this.#server.engine?.()
+    return figures === undefined ? undefined : { figures, started: this.#server.started }
   }
 
   systemVariableNames(): string[] {

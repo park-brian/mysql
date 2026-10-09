@@ -19,6 +19,8 @@ import { MemoryVfs, type Lock, type Vfs } from '@myjs/vfs'
 import { createStream as hostStream, openPathVfs, type DriverStream } from '#host'
 import { ProtocolConnection, type ConnectionOptions } from './connection.ts'
 import { SqlExecutor } from './sql/executor.ts'
+import * as introspection from './client/introspection.ts'
+import type { ColumnInfo, DatabaseStats, TableInfo } from './client/introspection.ts'
 import { Connection, Transaction, inTransaction, ownedStream, type RowStream, type BeginOptions, type QueryOptions, type QueryResult, type TransactionOptions, type TypeOptions } from './client/api.ts'
 
 /** Who `connect()` signs in as, and how its values are typed: `mysql2`'s option names. */
@@ -290,6 +292,31 @@ export class MySQL {
    */
   stream<T = unknown>(sql: string | QueryOptions, values?: readonly unknown[]): RowStream<T> {
     return ownedStream<T>(() => this.connect(), sql, values)
+  }
+
+  /** Doc 42: every schema, as SHOW DATABASES lists them. */
+  async schemas(): Promise<string[]> {
+    return introspection.schemas((sql, values) => this.query(sql, values))
+  }
+
+  /** Doc 42: a schema's tables and views, by name; the database `open` named, when none is given. */
+  async tables(schema?: string): Promise<TableInfo[]> {
+    return introspection.tables((sql, values) => this.query(sql, values), schema)
+  }
+
+  /** Doc 42: a table's or a view's columns, in its order. */
+  async columns(schema: string, table: string): Promise<ColumnInfo[]> {
+    return introspection.columns((sql, values) => this.query(sql, values), schema, table)
+  }
+
+  /** Doc 42: the plan a statement would run, as EXPLAIN FORMAT=TREE prints it. */
+  async explain(sql: string, values?: readonly unknown[]): Promise<string> {
+    return introspection.explain((text, v) => this.query(text, v), sql, values)
+  }
+
+  /** Doc 42: the buffer pool, the history of committed transactions, and the server's counters, through SHOW GLOBAL STATUS and INNODB_METRICS. */
+  async stats(): Promise<DatabaseStats> {
+    return introspection.stats((sql, values) => this.query(sql, values))
   }
 
   /** Doc 42: a transaction on a connection of its own, which `commit()` or `rollback()` ends. */

@@ -17,9 +17,9 @@ work item that builds the rest:
 | `query()`, `execute()`, `connect()`, `begin()`, `transaction()` | yes (M5.36) | |
 | `execProtocol()`, `createStream()`, `createPort()`, `createConnection()` | yes (M1.24) | |
 | `serve()` from `myjs/server` | yes (M1.24) | |
-| real `INFORMATION_SCHEMA`, `SHOW`, `EXPLAIN` | yes (M5.13 begun) | |
+| real `INFORMATION_SCHEMA`, `SHOW`, `EXPLAIN` | yes (M5.13 begun) | SHOW VARIABLES, STATUS, ENGINES and TABLE STATUS after 0.3 (M5.13) |
 | `db.stream()` | no | built after 0.3 was staged (M5.40); in 0.4 |
-| `db.schemas()`, `tables()`, `columns()`, `explain()`, `stats()` | no | M5.13 |
+| `db.schemas()`, `tables()`, `columns()`, `explain()`, `stats()` | no | built after 0.3 was staged (M5.13); in 0.4 |
 | `MySQLWorker`, `myjs/worker` | no | M6.6 |
 | `dump()`, `MySQL.load()` | no | M6.8 |
 | `importTablespace()`, `exportTablespace()` | no | M7.10, M7.11 |
@@ -287,13 +287,18 @@ Exactly `mysql2`'s error shape, so existing `catch` blocks keep working.
 ## Introspection
 
 ```js
-// not in 0.3: M5.13
-await db.schemas()                    // string[]
-await db.tables('myapp')              // TableInfo[]
-await db.columns('myapp', 'users')    // ColumnInfo[]
-await db.explain('SELECT ...')        // the plan
-await db.stats()                      // buffer pool, WAL, history length, sizes
+// M5.13, in 0.4
+await db.schemas()                    // string[], as SHOW DATABASES lists them
+await db.tables('myapp')              // TableInfo[]: name, type, engine, collation, comment
+await db.columns('myapp', 'users')    // ColumnInfo[]: name, position, type, nullable, default, key, extra, collation, comment
+await db.explain('SELECT ...', [v])   // the plan, as EXPLAIN FORMAT=TREE prints it
+await db.stats()                      // buffer pool pages and traffic, page size, history length, uptime, questions, connections
 ```
+
+Each is a query through the client, as the first rule asks: INFORMATION_SCHEMA
+for the first three, EXPLAIN for the plan, SHOW GLOBAL STATUS and
+INNODB_METRICS for the figures, so what they report is what a tool reading
+those tables would see, and what 8.4.11 reports for the same schema.
 
 Plus real `INFORMATION_SCHEMA` tables, because migration tools query them
 directly rather than using any library API.

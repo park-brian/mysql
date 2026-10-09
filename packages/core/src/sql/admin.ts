@@ -26,6 +26,7 @@ import {
   type TableName,
 } from '@myjs/parser'
 import { COERCIBILITY, doubleValue, intValue, stringValue, toText, type Value } from '@myjs/types'
+import type { StoreFigures, TrxStats } from '@myjs/engine'
 import { OURS, systemVariableInfo, systemVariableNames, type SystemVariable } from './variables.ts'
 import { DEFAULT_SERVER_VERSION } from '../connection.ts'
 import { checkConnectionCharset, charsetVariables } from '../transcoder.ts'
@@ -36,6 +37,8 @@ export interface ServerOptions {
   readonly systemVariables?: Readonly<Record<string, SqlValue>>
   /** The connections the embedding database has open, and has made: SHOW STATUS's `Threads_connected` and `Connections`. */
   readonly connections?: { open(): number; made(): number }
+  /** The store's figures, for SHOW STATUS's `Innodb_*` and INNODB_METRICS; none without a store. */
+  readonly engine?: () => (StoreFigures & TrxStats) | undefined
 }
 
 export type ProgramStatement = CreateRoutineNode | CreateTriggerNode | CreateEventNode | CallStatementNode | DropNode
@@ -112,7 +115,9 @@ export class ServerState {
   readonly serverVersion: string
   readonly vars: Map<string, SqlValue>
   readonly #connections: ServerOptions['connections']
-  readonly #started = Date.now()
+  readonly engine: ServerOptions['engine']
+  /** When the server started, which INNODB_METRICS dates its metrics from. */
+  readonly started = Date.now()
   /** Statements clients have sent, for SHOW STATUS. */
   questions = 0
   /** M3.8: stored programs, accepted and kept, by `kind:schema.name`. Never run. */
@@ -121,6 +126,7 @@ export class ServerState {
   constructor(options: ServerOptions = {}) {
     this.serverVersion = options.serverVersion ?? DEFAULT_SERVER_VERSION
     this.#connections = options.connections
+    this.engine = options.engine
     this.vars = new Map<string, SqlValue>([
       ...Object.entries(OURS),
       ['version', this.serverVersion],
@@ -136,7 +142,7 @@ export class ServerState {
    * rest describe machinery this executor does not have.
    */
   status(scope: 'GLOBAL' | 'SESSION', questions: number): (readonly [string, string])[] {
-    const uptime = String(Math.floor((Date.now() - this.#started) / 1000))
+    const uptime = String(Math.floor((Date.now() - this.started) / 1000))
     const rows: [string, string][] = [
       ['Connections', String(this.#connections?.made() ?? 0)],
       ['Queries', String(scope === 'GLOBAL' ? this.questions : questions)],
@@ -145,7 +151,23 @@ export class ServerState {
       ['Uptime', uptime],
       ['Uptime_since_flush_status', uptime],
     ]
-    return rows
+    // The buffer pool's figures, under InnoDB's names: global, so a session sees them too.
+    const e = this.engine?.()
+    if (e !== undefined) {
+      rows.push(
+        ['Innodb_buffer_pool_pages_data', String(e.residentPages)],
+        ['Innodb_buffer_pool_pages_dirty', String(e.dirtyPages)],
+        ['Innodb_buffer_pool_pages_flushed', String(e.writes)],
+        ['Innodb_buffer_pool_pages_free', String(e.poolFrames - e.residentPages)],
+        // Pages held for the pool's own use: none.
+        ['Innodb_buffer_pool_pages_misc', '0'],
+        ['Innodb_buffer_pool_pages_total', String(e.poolFrames)],
+        ['Innodb_buffer_pool_read_requests', String(e.fetches)],
+        ['Innodb_buffer_pool_reads', String(e.reads)],
+        ['Innodb_page_size', String(e.pageSize)],
+      )
+    }
+    return rows.sort((a, b) => (a[0] < b[0] ? -1 : 1))
   }
 
   /** Every variable's name: 8.4.11's, and any the embedding application declared, in SHOW VARIABLES' order. */

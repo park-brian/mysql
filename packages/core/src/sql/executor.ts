@@ -59,7 +59,7 @@ import {
 } from '@myjs/protocol'
 import { conditionsFor } from './strict.ts'
 import { renameTables } from './rename.ts'
-import { showCreateView, showQuery, shownColumns, variablesColumns, variablesQuery } from './show.ts'
+import { showCreateView, showQuery, shownColumns, tableStatusQuery, variablesColumns, variablesQuery } from './show.ts'
 import { COERCIBILITY, doubleValue, intValue, parseDecimal, plainValue, stringValue, toInteger, toText, type Condition, type Value } from '@myjs/types'
 import { charsetChange, ensureCollationResident } from '../transcoder.ts'
 import { PROGRAM_OBJECTS, ServerState, type ProgramStatement, type ServerOptions } from './admin.ts'
@@ -247,7 +247,7 @@ export class SqlExecutor implements Executor {
 
   constructor(options: SqlExecutorOptions = {}) {
     this.catalog = options.catalog
-    this.server = new ServerState(options)
+    this.server = new ServerState({ engine: () => this.catalog?.store.stats(), ...options })
     if (this.catalog !== undefined) dropOrphans(this.catalog)
   }
 
@@ -1268,6 +1268,16 @@ export class SqlExecutor implements Executor {
         const shown = tables.filter(([n]) => statement.like === undefined || likeText(n as string, statement.like))
         if (statement.full === true) return { columns: [text(label, 64), text('Table_type', 11)], rows: shown.map(([n, kind]) => [encode(n as string), encode(kind as string)]) }
         return { columns: [text(label, 64)], rows: shown.map(([n]) => [encode(n as string)]) }
+      }
+      case 'TABLE STATUS': {
+        // A query over INFORMATION_SCHEMA.TABLES, as the server runs it (show.ts).
+        const plan = planQuery(run, tableStatusQuery(run, this.#catalog(run), statement))
+        return run.state.statement(this.#catalog(run).store, false, (trx) => resultSet(run, plan, trx))
+      }
+      case 'ENGINES': {
+        // A query over INFORMATION_SCHEMA.ENGINES, its columns renamed (8.4.11).
+        const plan = planQuery(run, parseStatement('SELECT ENGINE AS Engine, SUPPORT AS Support, COMMENT AS Comment, TRANSACTIONS AS Transactions, XA, SAVEPOINTS AS Savepoints FROM information_schema.ENGINES') as QueryExpression)
+        return resultSet(run, plan, undefined)
       }
       case 'VARIABLES':
       case 'STATUS': {

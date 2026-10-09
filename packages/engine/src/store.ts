@@ -88,6 +88,20 @@ interface Saved {
   readonly nextTrxId: number
 }
 
+/** The store's own figures beside its transactions': the file's size, and the buffer pool's frames and traffic. */
+export interface StoreFigures {
+  readonly pageCount: number
+  readonly pageSize: number
+  readonly dirtyPages: number
+  readonly poolFrames: number
+  readonly residentPages: number
+  /** Pages asked of the pool, read from the file, and written to it. */
+  readonly fetches: number
+  readonly hits: number
+  readonly reads: number
+  readonly writes: number
+}
+
 export class Store {
   readonly file: VfsFile
   readonly logFile: VfsFile
@@ -217,8 +231,17 @@ export class Store {
     return t.purgeable && t.writer === undefined
   }
 
-  stats(): TrxStats & { readonly pageCount: number; readonly dirtyPages: number } {
-    return { ...this.transactions.stats(), pageCount: this.alloc.pageCount, dirtyPages: this.pool.dirtyCount }
+  stats(): TrxStats & StoreFigures {
+    const pool = this.pool
+    return {
+      ...this.transactions.stats(),
+      pageCount: this.alloc.pageCount,
+      pageSize: pool.pageSize,
+      dirtyPages: pool.dirtyCount,
+      poolFrames: pool.frames,
+      residentPages: pool.residentCount,
+      ...pool.stats,
+    }
   }
 
   /** Run `fn` as one mini-transaction: every change in it survives a crash, or none does. */

@@ -8,7 +8,9 @@
 export { MySQL, Connection, Transaction, QueryError, RowStream } from '@myjs/core'
 export type {
   BeginOptions,
+  ColumnInfo,
   ConnectionConfig,
+  DatabaseStats,
   DriverStream,
   FieldInfo,
   IsolationLevel,
@@ -16,6 +18,7 @@ export type {
   QueryOptions,
   QueryResult,
   ResultSetHeader,
+  TableInfo,
   TransactionOptions,
   TypeOptions,
 } from '@myjs/core'

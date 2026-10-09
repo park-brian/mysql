@@ -36,6 +36,34 @@ export function showQuery(run: Run, catalog: CatalogApi, node: ShowNode): QueryE
   return withWhere(parseStatement(text) as QueryExpression, node.where)
 }
 
+/** SHOW TABLE STATUS's columns, each INFORMATION_SCHEMA.TABLES's, renamed. */
+const TABLE_STATUS = [
+  ['Name', 'TABLE_NAME'], ['Engine', 'ENGINE'], ['Version', 'VERSION'], ['Row_format', 'ROW_FORMAT'], ['Rows', 'TABLE_ROWS'],
+  ['Avg_row_length', 'AVG_ROW_LENGTH'], ['Data_length', 'DATA_LENGTH'], ['Max_data_length', 'MAX_DATA_LENGTH'], ['Index_length', 'INDEX_LENGTH'],
+  ['Data_free', 'DATA_FREE'], ['Auto_increment', 'AUTO_INCREMENT'], ['Create_time', 'CREATE_TIME'], ['Update_time', 'UPDATE_TIME'],
+  ['Check_time', 'CHECK_TIME'], ['Collation', 'TABLE_COLLATION'], ['Checksum', 'CHECKSUM'], ['Create_options', 'CREATE_OPTIONS'], ['Comment', 'TABLE_COMMENT'],
+] as const
+
+/**
+ * The query a SHOW TABLE STATUS stands for (M5.13), over
+ * INFORMATION_SCHEMA.TABLES, filtered by the database and LIKE on the name,
+ * in the names' order, its columns renamed. A statement's own WHERE names the
+ * renamed columns, so it filters a derived table instead, and there 8.4.11
+ * leaves the rows in the view's order: its sort is inside the derived table,
+ * and dropped with it, which its column metadata shows too.
+ */
+export function tableStatusQuery(run: Run, catalog: CatalogApi, node: ShowNode): QueryExpression {
+  const schema = node.database ?? run.env.session.database
+  if (schema === null) throw sqlError('ER_NO_DB_ERROR', messages.noDatabaseSelected())
+  catalog.schema(schema)
+  const renamed = TABLE_STATUS.map(([name, column]) => `${column} AS \`${name}\``).join(', ')
+  const like = node.like === undefined ? '' : ` AND TABLE_NAME LIKE ${quote(node.like)}`
+  if (node.where === undefined) return parseStatement(`SELECT ${renamed} FROM information_schema.TABLES WHERE TABLE_SCHEMA = ${quote(schema)}${like} ORDER BY \`Name\``) as QueryExpression
+  const names = TABLE_STATUS.map(([name]) => `\`${name}\``).join(', ')
+  const query = parseStatement(`SELECT ${names} FROM (SELECT TABLE_SCHEMA AS \`Db\`, ${renamed} FROM information_schema.TABLES) AS \`TABLES\` WHERE \`Db\` = ${quote(schema)}${like.replace('TABLE_NAME', '`Name`')}`) as QueryExpression
+  return withWhere(query, node.where)
+}
+
 /**
  * The query a SHOW VARIABLES or SHOW STATUS stands for (M5.13): its
  * PERFORMANCE_SCHEMA table renamed in a derived table, filtered by LIKE on
