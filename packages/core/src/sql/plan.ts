@@ -252,7 +252,6 @@ export interface RangeCosting {
  * and a later one wins only if strictly cheaper.
  */
 function rangeAccess(def: TableDef, alias: string, conjuncts: readonly Expression[], env: Env, costing: RangeCosting, known?: Constant): Access | undefined {
-  const t = costing.stats
   const value = (e: Expression): Value | undefined => (e.kind === NODE.PLACEHOLDER && e.index >= env.params.length ? undefined : isConstant(e) ? constantValue(e, env) : known?.(e))
   const candidates: { readonly index: IndexDef; readonly column: ColumnDef; readonly intervals: Interval[]; readonly keyed: { readonly range: KeyRange; readonly point: boolean }[]; readonly shape: RangeShape }[] = []
   for (const index of keyOrder(def)) {
@@ -267,6 +266,9 @@ function rangeAccess(def: TableDef, alias: string, conjuncts: readonly Expressio
     if (keyed === undefined) continue
     candidates.push({ index, column, intervals, keyed, shape: { clustered: index.kind === 'primary' || index.name === def.clustered, covering: costing.covers(index), recordBytes: costing.recordBytes(index), minRecordBytes: costing.minRecordBytes } })
   }
+  // No range at all reads no statistics.
+  if (candidates.length === 0) return undefined
+  const t = costing.stats
   let best = rangeBaseline(t, costing.coveringScan === undefined ? undefined : costing.recordBytes(costing.coveringScan))
   const access = (c: (typeof candidates)[number]): Access => ({ index: c.index.name, ranges: c.keyed.map((k) => k.range), over: describeIntervals(c.intervals, c.column.name) })
   // One range that wins even reading every row needs no count: no other is weighed against it.

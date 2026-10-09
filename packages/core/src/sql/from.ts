@@ -465,6 +465,8 @@ export function planFrom(refs: readonly TableReference[], ctx: FromContext, wher
   let sort: { readonly alias: string; readonly limit: number } | undefined
   const joinPlan = (): JoinPlan | undefined => {
     if (tree === undefined) return undefined
+    // A FROM of one table has no join to plan.
+    if (tree.node.kind === 'leaf') planned ??= { node: tree.node, lookups: new Set(), on: [], dynamic: new Set() }
     const env = ctx.env
     const rangeOf = (t: FromTable, conditions: readonly Weighed[]): RangeEstimate | undefined =>
       env === undefined ? undefined : rangeEstimate(t, conditions, tables, scope, (e) => ctx.compileOn(e, preliminary.restrict(new Set([t.alias]))), env, width)
@@ -849,8 +851,13 @@ function rangeCosting(t: FromTable, settings: LeafSettings, env: Env): RangeCost
   const cover = settings.covering.get(t.alias)
   // The shortest a clustered record can be: its header, InnoDB's trx id and roll pointer, and its fixed-width columns.
   const fixed = def.columns.reduce((n, c) => n + (c.type.collationId === undefined ? keyBytes(c) - (c.nullable ? 1 : 0) : 0), 0)
+  const statistics = settings.statistics
+  let stats: TableStatistics | undefined
   return {
-    stats: settings.statistics(def, table),
+    // Read only when a range is weighed: on a table just written, statistics are recomputed.
+    get stats() {
+      return (stats ??= statistics(def, table))
+    },
     covers: (i) => holdsRead(def, i, read),
     recordBytes: (i) => indexBytes(def, i) + indexBytes(def, clustered),
     coveringScan: cover === undefined ? undefined : def.indexes.find((i) => i.name === cover),
@@ -951,6 +958,7 @@ function aliasesOf(e: Expression, scope: TableScope): Set<string> | undefined {
     if (other || x === null || typeof x !== 'object') return
     if (Array.isArray(x)) return x.forEach(visit)
     const n = x as { kind?: string; parts?: readonly string[] }
+    if (n.kind === NODE.LITERAL || n.kind === NODE.PLACEHOLDER) return
     if (n.kind === NODE.SUBQUERY) {
       other = true
       return

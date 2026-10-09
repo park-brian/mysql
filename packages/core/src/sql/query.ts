@@ -767,6 +767,7 @@ function columnsRead(scope: TableScope, node: SelectNode, q: QueryExpression): M
   const visit = (e: unknown, inside: boolean): void => {
     if (e === null || typeof e !== 'object') return
     const n = e as { kind?: string; parts?: readonly string[]; query?: unknown }
+    if (n.kind === NODE.LITERAL || n.kind === NODE.PLACEHOLDER) return
     if (n.kind === NODE.SUBQUERY || n.kind === REF.DERIVED) {
       visit(n.query, true)
       return
