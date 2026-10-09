@@ -454,6 +454,14 @@ function encodeRow(def: TableDef, values: readonly Value[], ctx: StoreContext): 
   return def.columns.map((c, i) => encodeField(values[i] ?? null, c, ctx))
 }
 
+/**
+ * What an OK's info counts as warnings: every condition the statement
+ * raised, its expressions' included (8.4.11: an UPDATE whose WHERE reads
+ * `'abc'` as a number says "Warnings: 1"), or what was counted where no
+ * condition stands for it.
+ */
+const statementWarnings = (run: Run, counted: number): number => Math.max(counted, run.env.conditions?.length ?? 0)
+
 const okInfo = (records: number, duplicates: number, warnings: number): string => `Records: ${records}  Duplicates: ${duplicates}  Warnings: ${warnings}`
 
 /**
@@ -764,7 +772,7 @@ export function insert(run: Run, node: InsertNode, trx: Trx): OkResult {
   const lastHandled = autoAt >= 0 && stats.copied > 0 && !(selected !== undefined && stats.touched > 0) ? lastAuto : 0n
   const insertId = firstId !== 0n ? firstId : run.state.insertIdSet ? run.state.lastInsertId : lastHandled
   const updated = hasCap(run.env.session.capabilities, CLIENT.FOUND_ROWS) ? stats.touched : stats.updated
-  const warnings = store.warnings + (upsert?.deprecated ?? 0)
+  const warnings = statementWarnings(run, store.warnings + (upsert?.deprecated ?? 0))
   // The SELECT form names only the rows an upsert changed, whatever the
   // client's FOUND_ROWS: 8.4.11 reports 6 rows affected and "Duplicates: 1"
   // for three inserts, one row updated and one row left as it was.
@@ -965,7 +973,6 @@ function matching(run: Run, def: TableDef, table: Table, alias: string, node: Up
 }
 
 export function update(run: Run, node: UpdateNode, trx: Trx): OkResult {
-  if (node.ignore === true) throw sqlError('ER_NOT_SUPPORTED_YET', messages.notSupported('UPDATE IGNORE'))
   // A subquery reads in the statement's transaction.
   run = { ...run, env: { ...run.env, trx } }
   run = withCtes(run, node, 'UPDATE')
@@ -983,7 +990,12 @@ export function update(run: Run, node: UpdateNode, trx: Trx): OkResult {
   const onUpdate = onUpdateOf(run, def)
   const defaults = def.columns.map((c) => defaultOf(run, c, def))
   const check = checker(run, def)
-  const store: StoreContext = { strict: isStrict(run.env.session.sqlMode), strictMode: isStrict(run.env.session.sqlMode), ...zeroRules(run), row: 1, warnings: 0, table: def.name, ...sink(run) }
+  // IGNORE makes a strict mode's errors warnings, and skips, with a warning,
+  // a row that would duplicate a key, fail a CHECK or break a foreign key,
+  // undoing whatever its cascades had done (8.4.11).
+  const ignore = node.ignore === true
+  const strictMode = isStrict(run.env.session.sqlMode)
+  const store: StoreContext = { strict: strictMode && !ignore, strictMode, ...zeroRules(run), row: 1, warnings: 0, table: def.name, ...sink(run) }
   const keys = uniqueKeys(def)
   run.state.insertIdSet = false
 
@@ -996,23 +1008,34 @@ export function update(run: Run, node: UpdateNode, trx: Trx): OkResult {
     const result = assignAll(run, def, before, row, [], assignments, onUpdate, defaults, store, store.strict ? 'error' : 'warn', generate)
     if (!result.changed) return
     const violated = check?.(result.after)
-    if (violated !== undefined) throw checkViolated(violated)
+    if (violated !== undefined) {
+      if (!ignore) throw checkViolated(violated)
+      warnError(store, checkViolated(violated))
+      return
+    }
+    const at = ignore ? trx.savepoint() : 0
     try {
       table.update(id, result.after, trx)
     } catch (e) {
-      throw duplicateError(e, def, table, keys, result.after, trx, id)
+      if (!ignore) throw duplicateError(e, def, table, keys, result.after, trx, id)
+      const skipped = isDuplicate(e) ? duplicateError(e, def, table, keys, result.after, trx, id) : e
+      if (!(skipped instanceof MyjsError) || !(isDuplicate(e) || skipped.errno === 1451 || skipped.errno === 1452)) throw e
+      trx.rollbackTo(at)
+      warnError(store, skipped)
+      return
     }
     changed++
   })
 
   const matched = rows.length
   const foundRows = hasCap(run.env.session.capabilities, CLIENT.FOUND_ROWS)
+  const warnings = statementWarnings(run, store.warnings)
   return {
     affectedRows: foundRows ? matched : changed,
     // `UPDATE t SET id = LAST_INSERT_ID(id + 1)` reports the value it set.
     ...(run.state.insertIdSet ? { insertId: run.state.lastInsertId } : {}),
-    warnings: store.warnings,
-    info: `Rows matched: ${matched}  Changed: ${changed}  Warnings: ${store.warnings}`,
+    warnings,
+    info: `Rows matched: ${matched}  Changed: ${changed}  Warnings: ${warnings}`,
   }
 }
 

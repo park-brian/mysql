@@ -40,6 +40,7 @@ import {
 } from '@myjs/protocol'
 import { MyjsError, ProtocolError, Writer } from '@myjs/bytes'
 import { charsetTranscoder } from './transcoder.ts'
+import { DEFAULT_SQL_MODE } from '@myjs/parser'
 
 export const DEFAULT_SERVER_VERSION = '8.4.0-myjs-0.1.0'
 
@@ -242,6 +243,9 @@ export class ProtocolConnection {
       ...(this.#options.maxAllowedPacket === undefined
         ? {}
         : { maxAllowedPacket: this.#options.maxAllowedPacket }),
+      // A client asking for CLIENT_IGNORE_SPACE starts with IGNORE_SPACE in
+      // its mode, printed first as its bit is lowest (8.4.11, through `mysql2`).
+      ...((parsed.capabilities & CLIENT.IGNORE_SPACE) !== 0 ? { sqlMode: `IGNORE_SPACE,${DEFAULT_SQL_MODE}` } : {}),
     })
     for (const [k, v] of parsed.connectAttrs) this.#session.connectAttrs.set(k, v)
 

@@ -556,6 +556,16 @@ comparison type, its arithmetic and its strict-mode refusals when assigning
 into a column, live in `@myjs/types`, below the executor. An importer can
 therefore store a value exactly as an `INSERT` would without running any SQL.
 
+A strict mode has a second half that is the statement's, not the value's.
+In an INSERT, UPDATE, DELETE, CREATE TABLE or ALTER TABLE without IGNORE,
+MySQL raises some warnings as errors: `'abc' + 1` in an UPDATE's WHERE, a
+division by zero, a logarithm of zero. Its `Strict_error_handler` decides
+this for every condition at the one point they all pass through. Here that
+point is the statement's list of conditions (`strict.ts`): the executor
+chooses the list from the statement and the mode, and a list for a strict
+statement throws when a listed code is pushed. No expression knows which
+statement it is in.
+
 ### One property that makes the engine simple
 
 The storage engine compares keys with `memcmp` and nothing else. It never sees

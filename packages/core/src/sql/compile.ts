@@ -58,6 +58,7 @@ import {
   type Condition,
   type StringValue,
   type Value,
+  valueOutOfRange,
 } from '@myjs/types'
 import {
   NULL_TYPE,
@@ -172,7 +173,11 @@ export function checkNumber(v: Exclude<Value, null>, kind: 'DOUBLE' | 'INTEGER' 
   const text = toText(v)
   const p = numericPrefix(text)
   // An integer past 64 bits is truncated too, to the largest there is.
-  const overflow = kind === 'INTEGER' && p.complete && !p.fractional && (BigInt(p.text) > 18446744073709551615n || BigInt(p.text) < -9223372036854775808n)
+  const overflow =
+    kind === 'INTEGER'
+      ? p.complete && !p.fractional && (BigInt(p.text) > 18446744073709551615n || BigInt(p.text) < -9223372036854775808n)
+      : // And a double past the largest, which is read as it (8.4.11: `'1e400' + 0`).
+        kind === 'DOUBLE' && p.complete && !Number.isFinite(Number(p.text))
   if (p.complete && !(kind === 'INTEGER' && p.fractional) && !overflow) return
   // Nothing at all is 0 quietly, except as a DECIMAL (8.4.11: `CAST('' AS DECIMAL)` warns).
   if (!p.complete && kind !== 'DECIMAL' && /^[ \t\n\r]*$/.test(text)) return
@@ -307,7 +312,9 @@ function byZero(at: Compiled['eval'], bt: Compiled['eval'], op: (x: Value, y: Va
     const x = at(r, env)
     const y = bt(r, env)
     const v = op(x, y)
-    if (v === null && x !== null && y !== null) raise(env, 1365, 'Division by 0')
+    // Only ERROR_FOR_DIVISION_BY_ZERO makes it a warning: without it the
+    // answer is NULL and nothing is said (`signal_divide_by_null`, 8.4.11).
+    if (v === null && x !== null && y !== null && /\bERROR_FOR_DIVISION_BY_ZERO\b/.test(env.session.sqlMode)) raise(env, 1365, 'Division by 0')
     return v
   }
 }
@@ -1042,7 +1049,7 @@ function binary(op: string, left: Expression, right: Expression, extra: Expressi
   const bt = arithmetic || comparison ? asNumber(cb, 'DOUBLE', comparison && constantNode(right)).eval : cb.eval
   const nullable = !notNull(a.type, b.type)
   // What an overflow names, as MySQL's message does: the expression's text.
-  const label = deparse({ kind: NODE.BINARY, op, left, right, at: 0 })
+  const label = printedArgument({ kind: NODE.BINARY, op, left, right, at: left.at }, ctx)
   if (dated && isText(ca.type) && isText(cb.type)) aggregateCollations([ca.type, cb.type], op === '!=' ? '<>' : op, true)
 
   switch (op) {
@@ -2174,6 +2181,9 @@ function clock(now: Date, fsp: number): MysqlDateTime {
   }
 }
 
+/** The largest single-precision float, `FLT_MAX` (<cfloat>). */
+const FLT_MAX = 3.4028234663852886e38
+
 function cast(e: CastNode, ctx: CompileContext): Compiled {
   const raw = compile(e.expr, ctx)
   // What the target reads its argument as, warning as it goes (1292).
@@ -2261,8 +2271,24 @@ function cast(e: CastNode, ctx: CompileContext): Compiled {
         type: decimalType(precision, scale, nullable),
       }
     }
-    case 'DOUBLE':
     case 'FLOAT':
+      // FLOAT, or FLOAT(p) to 24 bits, is a single: rounded to one, and past
+      // the largest one it is 1690 rather than infinity (8.4.11). Wider is DOUBLE.
+      if ((t.precision ?? 0) <= 24) {
+        const printed = `cast(${printedArgument(e.expr, ctx)} as float)`
+        return {
+          eval: (r, env) => {
+            const v = x(r, env)
+            if (v === null) return null
+            const n = toDouble(v)
+            if (Math.abs(n) > FLT_MAX) throw valueOutOfRange('DOUBLE', printed)
+            return { kind: 'double', v: Math.fround(n), float: true }
+          },
+          type: { ...doubleType(nullable), field: FIELD_TYPE.FLOAT },
+        }
+      }
+      return { eval: (r, env) => { const v = x(r, env); return v === null ? null : doubleValue(toDouble(v)) }, type: doubleType(nullable) }
+    case 'DOUBLE':
     case 'REAL':
       return { eval: (r, env) => { const v = x(r, env); return v === null ? null : doubleValue(toDouble(v)) }, type: doubleType(nullable) }
     case 'DATE':

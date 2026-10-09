@@ -223,6 +223,9 @@ export function textOf(v: StringValue | BytesValue): string {
 
 // --- conversions ----------------------------------------------------------------
 
+/** Text past the doubles is the largest there is, of its sign: `my_strtod` stops at DBL_MAX (8.4.11: `'1e400' + 0`, with 1292). */
+const clampedDouble = (n: number): number => (Number.isFinite(n) ? n : n > 0 ? Number.MAX_VALUE : -Number.MAX_VALUE)
+
 /** A value as a double, as MySQL's `val_real()`. */
 export function toDouble(v: Exclude<Value, null>): number {
   switch (v.kind) {
@@ -236,7 +239,7 @@ export function toDouble(v: Exclude<Value, null>): number {
     case 'bytes':
       if (v.kind === 'string' && v.ordinal !== undefined) return Number(v.ordinal)
       if (v.kind === 'bytes' && v.hex === true) return Number(hexNumber(v.v))
-      return Number(numericPrefix(textOf(v)).text)
+      return clampedDouble(Number(numericPrefix(textOf(v)).text))
     case 'datetime':
       return Number(temporalNumber(v))
     case 'time':

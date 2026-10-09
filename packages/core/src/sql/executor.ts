@@ -54,6 +54,7 @@ import {
   type Session,
   type StatementResult,
 } from '@myjs/protocol'
+import { conditionsFor } from './strict.ts'
 import { COERCIBILITY, doubleValue, intValue, parseDecimal, plainValue, stringValue, toInteger, toText, type Condition, type Value } from '@myjs/types'
 import { charsetChange, ensureCollationResident } from '../transcoder.ts'
 import { PROGRAM_OBJECTS, ServerState, type ProgramStatement, type ServerOptions } from './admin.ts'
@@ -430,7 +431,7 @@ export class SqlExecutor implements Executor {
     const started = Date.now()
     let wait = 1
     for (let attempt = 0; ; attempt++) {
-      const conditions: Condition[] = []
+      const conditions = conditionsFor(statement, session.sqlMode)
       try {
         const run = this.#run(session, sql, params, known, protocol, conditions)
         const result = this.#dispatch(run, statement)
