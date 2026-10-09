@@ -46,6 +46,7 @@ import {
   readsColumn,
   type CompileContext,
   type Compiled,
+  asBinary,
   asMerged,
   dateConstant,
   ownText,
@@ -718,6 +719,7 @@ function asBigintConstant(x: Compiled, y: Compiled, written: Expression, ctx: Co
 function chosenOf(x: Compiled, result: ResultType): (v: Exclude<Value, null>, env: Env) => Value {
   if (result.kind === 'datetime' && (x.type.kind === 'datetime' || x.type.kind === 'time') && x.type.field !== result.field) return (v, env) => asMerged(v, result, env)
   if (ownText(x.type) && result.kind === 'string') return (v) => stringValue(textOf(v, x.type), result.collationId)
+  if (result.kind === 'bytes' && (ownText(x.type) || x.type.kind === 'string')) return (v) => asBinary(v, x.type)
   if (!isBits(x.type) || !(result.kind === 'bytes' || isBits(result))) return (v) => convertTo(v, result)
   const bits = x.type.length
   if (result.kind === 'bytes') return (v) => (v.kind === 'int' ? bytesValue(bitBytes(v.v, bits)) : convertTo(v, result))

@@ -725,7 +725,7 @@ function literal(e: LiteralNode, ctx: CompileContext): Compiled {
       return lit(d, decimalType(Math.max(digits, d.scale + (digits > d.scale ? 0 : 1)), d.scale, false))
     }
     case LITERAL.DOUBLE:
-      return lit(doubleValue(e.value as number), doubleType(false, String(e.value).replace('+', '').length))
+      return lit(doubleValue(e.value as number), doubleType(false, (e.text ?? String(e.value).replace('+', '')).length))
     case LITERAL.STRING: {
       const id = introducerCollation(e, ctx)
       const coercibility = e.collation !== undefined ? COERCIBILITY.EXPLICIT : COERCIBILITY.COERCIBLE
@@ -913,7 +913,8 @@ function unary(op: string, a: Compiled, exists: boolean, constant: false | Expre
           return { eval: (r, env) => { const x = at(r, env); return x === null ? null : negate(toDecimal(x)) }, type }
         }
       }
-      const type = t.literalInt !== undefined ? floatLength(0, t.nullable) : t.kind === 'int' ? intType(t.length + (t.unsigned ? 1 : 0), t.nullable) : t.kind === 'decimal' ? decimalType(t.length, t.scale, t.nullable) : t.kind === 'null' ? NULL_TYPE : t.kind === 'double' ? floatLength(t.scale, t.nullable) : doubleType(t.nullable)
+      // A boolean's one character gains room for the sign; NULL negated is a DOUBLE (8.4.11: `-FALSE` is 2 wide, `-NULL` DOUBLE(17,0)).
+      const type = t.literalInt !== undefined ? floatLength(0, t.nullable) : t.kind === 'int' ? intType(Math.max(2, t.length + (t.unsigned ? 1 : 0)), t.nullable) : t.kind === 'decimal' ? decimalType(t.length, t.scale, t.nullable) : t.kind === 'null' ? floatLength(0, true) : t.kind === 'double' ? floatLength(t.scale, t.nullable) : doubleType(t.nullable)
       const operand = asNumber(a, 'DOUBLE').eval
       if (type.kind === 'double' && type.scale < 31) return { eval: (r, env) => doubleOf(negate(operand(r, env)), type), type }
       return { eval: (r, env) => negate(operand(r, env)), type }
@@ -1651,6 +1652,9 @@ export function aggregate(types: readonly ResultType[], nullable: boolean, conne
       return type.kind === 'double' ? { ...type, field } : type
     case 'STRING':
     case 'VARCHAR':
+      // A BIT among temporals or numbers that merge to a string makes it a binary one, as wide as the widest (8.4.11: `COALESCE(tm, bt, 1.5)` is VARBINARY(10)).
+      if (type.kind === 'string' && live.some(isBits)) return { ...stringType(Math.max(...live.map((t) => (isBits(t) ? t.length : charWidth(t)))), CHARSET_BINARY, nullable), field, coercibility: COERCIBILITY.IMPLICIT }
+      return type.kind === 'string' || type.kind === 'bytes' ? { ...type, field } : type
     case 'ENUM':
     case 'SET':
     case 'LONG_BLOB':
@@ -1823,12 +1827,27 @@ export function textOf(v: Exclude<Value, null>, t: ResultType): string {
 /** Whether a branch of this type, in a string result, is text of its own kind rather than its value's (`textOf`). */
 export const ownText = (t: ResultType): boolean => t.field === FIELD_TYPE.YEAR || (t.field === FIELD_TYPE.FLOAT && t.scale >= 31)
 
+/**
+ * A branch's value as a binary result holds it: text in its own charset's
+ * bytes (8.4.11: a latin1 'café' is 63 61 66 E9), a YEAR or FLOAT as its text.
+ */
+export function asBinary(v: Exclude<Value, null>, from: ResultType): Value {
+  if (ownText(from)) return bytesValue(new TextEncoder().encode(textOf(v, from)))
+  return v.kind === 'string' ? bytesValue(encodeCollation(v.v, v.collationId)) : v
+}
+
 export function branchOf(x: Compiled, result: ResultType): Compiled['eval'] {
   if (ownText(x.type) && result.kind === 'string') {
     const id = result.collationId
     return (r, env) => {
       const v = x.eval(r, env)
       return v === null ? null : stringValue(textOf(v, x.type), id)
+    }
+  }
+  if (result.kind === 'bytes' && (ownText(x.type) || x.type.kind === 'string')) {
+    return (r, env) => {
+      const v = x.eval(r, env)
+      return v === null ? null : asBinary(v, x.type)
     }
   }
   if (result.kind === 'datetime' && (x.type.kind === 'datetime' || x.type.kind === 'time') && x.type.field !== result.field) return (r, env) => asMerged(x.eval(r, env), result, env)

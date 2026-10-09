@@ -984,8 +984,9 @@ class ExpressionParser {
  * it in JavaScript — the same reasoning behind D-15 mapping DECIMAL to a
  * string rather than to a float.
  */
-function numericLiteral(text: string): { type: LiteralType; value: bigint | number | string } {
-  if (/[eE]/.test(text)) return { type: LITERAL.DOUBLE, value: Number(text) }
+function numericLiteral(text: string): { type: LiteralType; value: bigint | number | string; text?: string } {
+  // A DOUBLE keeps its text: MySQL sizes the literal by how it was written (`1e1` is 3 wide).
+  if (/[eE]/.test(text)) return { type: LITERAL.DOUBLE, value: Number(text), text }
   if (text.includes('.')) return { type: LITERAL.DECIMAL, value: text }
   return { type: LITERAL.INT, value: BigInt(text) }
 }

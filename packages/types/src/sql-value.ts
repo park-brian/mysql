@@ -262,9 +262,14 @@ export function toDouble(v: Exclude<Value, null>): number {
       return Number(timeNumber(v.v, v.fsp))
     case 'json': {
       const n = jsonNumber(v)
-      return n === undefined ? Number(numericPrefix(renderJson(v.v)).text) : toDouble(n)
+      return n === undefined ? Number(numericPrefix(jsonNumberText(v)).text) : toDouble(n)
     }
   }
+}
+
+/** The text a JSON value that is no number is read as a number from: a string's own characters, otherwise its rendering (8.4.11: `"10"` is 10). */
+function jsonNumberText(v: JsonDocValue): string {
+  return v.v.t === 'string' ? v.v.v : renderJson(v.v)
 }
 
 /** A JSON number as the SQL number it is; undefined for anything else (`val_real` and friends then read its text). */
@@ -314,7 +319,7 @@ export function toDecimal(v: Exclude<Value, null>): DecimalValue {
       return parseDecimal(timeNumber(v.v, v.fsp))
     case 'json': {
       const n = jsonNumber(v)
-      return n === undefined ? parseDecimal(numericPrefix(renderJson(v.v)).text.replace(/[eE].*$/, '') || '0') : toDecimal(n)
+      return n === undefined ? parseDecimal(numericPrefix(jsonNumberText(v)).text.replace(/[eE].*$/, '') || '0') : toDecimal(n)
     }
   }
 }
@@ -353,7 +358,7 @@ export function toInteger(v: Exclude<Value, null>): bigint {
       return BigInt(timeNumber(v.v, v.fsp).split('.')[0] as string)
     case 'json': {
       const n = jsonNumber(v)
-      return n === undefined ? toInteger(string(renderJson(v.v), 255)) : toInteger(n)
+      return n === undefined ? toInteger(string(jsonNumberText(v), 255)) : toInteger(n)
     }
   }
 }

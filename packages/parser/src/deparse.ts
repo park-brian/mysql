@@ -151,8 +151,9 @@ class Deparser {
       case LITERAL.DOUBLE: {
         // An exponent is what makes a literal a DOUBLE rather than a DECIMAL,
         // so it must survive: `1.5e0` written back as `1.5` is a different type.
+        // Written back as written when the text is known, as MySQL prints one (`Item_float`'s presentation).
         const n = e.value as number
-        body = Number.isFinite(n) ? n.toExponential() : '1e999'
+        body = e.text ?? (Number.isFinite(n) ? n.toExponential() : '1e999')
         break
       }
       case LITERAL.STRING:
