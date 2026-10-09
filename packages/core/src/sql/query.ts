@@ -56,6 +56,8 @@ export interface Run {
   readonly database?: string | null
   /** The views being expanded, outermost first, as `schema.name`: one met again is 1146. */
   readonly views?: readonly string[]
+  /** SHOW INDEX: STATISTICS counts each key's distinct values, as InnoDB's statistics would say them. */
+  readonly exactStatistics?: boolean
 }
 
 export function compileContext(run: Run, scope: Scope, clause: string): CompileContext {

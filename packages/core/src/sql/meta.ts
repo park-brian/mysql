@@ -271,6 +271,17 @@ export function keyFlags(def: TableDef, name: string): number {
     else if (index.kind === 'unique' && index.parts.length === 1) flags |= COLUMN_FLAG.UNIQUE_KEY
     else if (at === 0) flags |= COLUMN_FLAG.MULTIPLE_KEY
   }
+  // A FULLTEXT key is a key too: every column of it a part, its first a
+  // multiple one (8.4.11: SHOW COLUMNS says MUL, and the result flags agree).
+  const fulltext = def.options['fulltext']
+  if (Array.isArray(fulltext)) {
+    for (const index of fulltext as readonly { readonly columns?: readonly string[] }[]) {
+      const at = index.columns?.indexOf(name) ?? -1
+      if (at < 0) continue
+      flags |= PART_KEY_FLAG
+      if (at === 0) flags |= COLUMN_FLAG.MULTIPLE_KEY
+    }
+  }
   return flags
 }
 

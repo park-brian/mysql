@@ -56,6 +56,7 @@ import {
 } from '@myjs/protocol'
 import { conditionsFor } from './strict.ts'
 import { renameTables } from './rename.ts'
+import { showQuery, shownColumns } from './show.ts'
 import { COERCIBILITY, doubleValue, intValue, parseDecimal, plainValue, stringValue, toInteger, toText, type Condition, type Value } from '@myjs/types'
 import { charsetChange, ensureCollationResident } from '../transcoder.ts'
 import { PROGRAM_OBJECTS, ServerState, type ProgramStatement, type ServerOptions } from './admin.ts'
@@ -676,6 +677,9 @@ export class SqlExecutor implements Executor {
         return { affectedRows: 0 }
       case STATEMENT.SHOW:
         return this.#show(run, statement)
+      case STATEMENT.DESCRIBE:
+        // DESCRIBE t [column] is SHOW COLUMNS FROM t [LIKE 'column'].
+        return this.#show(run, { kind: STATEMENT.SHOW, what: 'COLUMNS', name: statement.table, ...(statement.column === undefined ? {} : { like: statement.column }), at: statement.at })
       case STATEMENT.TABLE_MAINTENANCE:
         if (statement.op !== 'ANALYZE') throw sqlError('ER_NOT_SUPPORTED_YET', messages.notSupported(`${statement.op} TABLE`))
         return this.#analyze(run, statement.tables)
@@ -979,6 +983,14 @@ export class SqlExecutor implements Executor {
         const shown = tables.filter(([n]) => statement.like === undefined || likeText(n as string, statement.like))
         if (statement.full === true) return { columns: [text(label, 64), text('Table_type', 11)], rows: shown.map(([n, kind]) => [encode(n as string), encode(kind as string)]) }
         return { columns: [text(label, 64)], rows: shown.map(([n]) => [encode(n as string)]) }
+      }
+      case 'COLUMNS':
+      case 'INDEX': {
+        // A query over INFORMATION_SCHEMA, as the server runs it (show.ts).
+        const shown: Run = { ...run, ...(statement.what === 'INDEX' ? { exactStatistics: true } : {}) }
+        const plan = planQuery(shown, showQuery(shown, this.#catalog(run), statement))
+        const result = run.state.statement(this.#catalog(run).store, false, (trx) => resultSet(shown, plan, trx))
+        return { ...result, columns: shownColumns(statement, plan.columns.map((c) => c.name), coll, requireCollationInfo(coll).mbmaxlen) }
       }
       default:
         throw sqlError('ER_NOT_SUPPORTED_YET', messages.notSupported(`SHOW ${statement.what}`))

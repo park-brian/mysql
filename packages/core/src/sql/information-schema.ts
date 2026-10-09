@@ -29,6 +29,7 @@ import { messages, sqlError } from '@myjs/protocol'
 import { COERCIBILITY, decodeField, encodeField, intValue, stringValue, toText, type Value } from '@myjs/types'
 import { compile, EMPTY_SCOPE } from './compile.ts'
 import type { DerivedSource } from './from.ts'
+import { keyCardinalities } from './show.ts'
 import { fulltextOf } from './fulltext.ts'
 import { checkClause, checksOf } from './checks.ts'
 import { foreignKeysOf } from './foreign-keys.ts'
@@ -389,18 +390,21 @@ const ROWS: Readonly<Record<string, (run: Run) => Iterable<readonly Value[]>>> =
 
   *STATISTICS(run) {
     for (const { schema, def } of everyTable(run)) {
+      // Counted only for SHOW INDEX, which asks of one table (show.ts).
+      const counts = run.exactStatistics === true && run.catalog !== undefined ? keyCardinalities(run.catalog, def) : undefined
+      const cardinality = (index: string, i: number) => n(counts?.get(index)?.[i] ?? 0)
       for (const index of def.indexes) {
         const unique = index.kind === 'primary' || index.kind === 'unique'
         for (const [i, p] of index.parts.entries()) {
           const column = def.columns.find((c) => c.name === p.column)
-          yield [s('def'), s(schema), s(def.name), n(unique ? 0 : 1), s(schema), s(index.name), n(i + 1), s(p.column), s(p.descending === true ? 'D' : 'A'), n(0), n(p.prefix ?? null), null, s(column?.nullable === true ? 'YES' : ''), s(def.engine === 'memory' ? 'HASH' : 'BTREE'), s(''), s(index.comment ?? ''), s(index.invisible === true ? 'NO' : 'YES'), null]
+          yield [s('def'), s(schema), s(def.name), n(unique ? 0 : 1), s(schema), s(index.name), n(i + 1), s(p.column), s(p.descending === true ? 'D' : 'A'), cardinality(index.name, i), n(p.prefix ?? null), null, s(column?.nullable === true ? 'YES' : ''), s(def.engine === 'memory' ? 'HASH' : 'BTREE'), s(''), s(index.comment ?? ''), s(index.invisible === true ? 'NO' : 'YES'), null]
         }
       }
       // A FULLTEXT key has no order, so no COLLATION (8.4.11).
       for (const index of fulltextOf(def)) {
         for (const [i, name] of index.columns.entries()) {
           const column = def.columns.find((c) => c.name === name)
-          yield [s('def'), s(schema), s(def.name), n(1), s(schema), s(index.name), n(i + 1), s(name), null, n(0), null, null, s(column?.nullable === true ? 'YES' : ''), s('FULLTEXT'), s(''), s(index.comment ?? ''), s(index.invisible === true ? 'NO' : 'YES'), null]
+          yield [s('def'), s(schema), s(def.name), n(1), s(schema), s(index.name), n(i + 1), s(name), null, cardinality(index.name, i), null, null, s(column?.nullable === true ? 'YES' : ''), s('FULLTEXT'), s(''), s(index.comment ?? ''), s(index.invisible === true ? 'NO' : 'YES'), null]
         }
       }
     }
