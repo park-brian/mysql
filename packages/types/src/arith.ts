@@ -75,10 +75,19 @@ function resultKind(a: Exclude<Value, null>, b: Exclude<Value, null>): Kind {
 
 const isUnsigned = (v: Exclude<Value, null>): boolean => (v.kind === 'int' && v.unsigned) || (v.kind === 'bytes' && v.hex === true)
 
+/**
+ * What an overflow's message names: the expression's text, or a function
+ * that prints it, called only when there is an error to word — a printing
+ * can cost a compile, and most arithmetic never overflows.
+ */
+export type ExprLabel = string | (() => string)
+
+const labelOf = (expr: ExprLabel): string => (typeof expr === 'string' ? expr : expr())
+
 /** A BIGINT result, range-checked. `expr` names the expression in the error, as MySQL's message does. */
-function checked(n: bigint, unsigned: boolean, expr: string): Value {
+function checked(n: bigint, unsigned: boolean, expr: ExprLabel): Value {
   if (unsigned ? n < 0n || n > MAX_UNSIGNED : n < MIN_SIGNED || n > MAX_SIGNED) {
-    throw valueOutOfRange(unsigned ? 'BIGINT UNSIGNED' : 'BIGINT', expr)
+    throw valueOutOfRange(unsigned ? 'BIGINT UNSIGNED' : 'BIGINT', labelOf(expr))
   }
   return int(n, unsigned)
 }
@@ -96,14 +105,14 @@ function decimalOp(a: DecimalValue, b: DecimalValue, op: '+' | '-' | '*'): Decim
 }
 
 /** `a + b`, `a - b`, `a * b`. */
-export function add(a: Value, b: Value, op: '+' | '-' | '*', expr: string = op): Value {
+export function add(a: Value, b: Value, op: '+' | '-' | '*', expr: ExprLabel = op): Value {
   if (a === null || b === null) return null
   switch (resultKind(a, b)) {
     case 'double': {
       const x = toDouble(a)
       const y = toDouble(b)
       const r = op === '+' ? x + y : op === '-' ? x - y : x * y
-      if (!Number.isFinite(r)) throw valueOutOfRange('DOUBLE', expr)
+      if (!Number.isFinite(r)) throw valueOutOfRange('DOUBLE', labelOf(expr))
       return double(r)
     }
     case 'decimal':
@@ -154,7 +163,7 @@ export function divide(a: Value, b: Value): Value {
 }
 
 /** `a DIV b`: an integer quotient, truncated, unsigned if either side is; NULL for a zero divisor. */
-export function intDivide(a: Value, b: Value, expr: string = 'DIV'): Value {
+export function intDivide(a: Value, b: Value, expr: ExprLabel = 'DIV'): Value {
   if (a === null || b === null) return null
   const unsigned = isUnsigned(a) || isUnsigned(b)
   if (resultKind(a, b) === 'int') {
@@ -169,7 +178,7 @@ export function intDivide(a: Value, b: Value, expr: string = 'DIV'): Value {
 }
 
 /** `a % b` and `MOD(a, b)`: the remainder takes the dividend's sign; NULL for a zero divisor. */
-export function modulo(a: Value, b: Value, expr: string = '%'): Value {
+export function modulo(a: Value, b: Value, expr: ExprLabel = '%'): Value {
   if (a === null || b === null) return null
   switch (resultKind(a, b)) {
     case 'double': {

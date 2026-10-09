@@ -74,6 +74,7 @@ import {
   jsonType,
   stringType,
   type ResultType,
+  type SourceColumn,
 } from './meta.ts'
 import { castAsJson, jsonConstructor } from './json.ts'
 import { jsonPathFunction, memberOf, unquote } from './json-path.ts'
@@ -204,7 +205,12 @@ function printedArgument(a: Expression, ctx: CompileContext): string {
   try {
     return printExpression(a, {
       column: (parts) => {
-        const c = compile({ kind: NODE.COLUMN, parts, at: a.at }, ctx).type.column
+        let c: SourceColumn | undefined
+        try {
+          c = compile({ kind: NODE.COLUMN, parts, at: a.at }, ctx).type.column
+        } catch {
+          // A column the clause cannot see by itself (an aggregate's, in HAVING) is named as written.
+        }
         const q = (x: string): string => `\`${x.replace(/`/g, '``')}\``
         return c === undefined ? parts.map(q).join('.') : `${q(c.schema)}.${q(c.table)}.${q(c.orgName === '' ? (parts[parts.length - 1] as string) : c.orgName)}`
       },
@@ -1049,7 +1055,9 @@ function binary(op: string, left: Expression, right: Expression, extra: Expressi
   const bt = arithmetic || comparison ? asNumber(cb, 'DOUBLE', comparison && constantNode(right)).eval : cb.eval
   const nullable = !notNull(a.type, b.type)
   // What an overflow names, as MySQL's message does: the expression's text.
-  const label = printedArgument({ kind: NODE.BINARY, op, left, right, at: left.at }, ctx)
+  // Printed only for an error's message: the printing compiles the columns it names.
+  let printed: string | undefined
+  const label = (): string => (printed ??= printedArgument({ kind: NODE.BINARY, op, left, right, at: left.at }, ctx))
   if (dated && isText(ca.type) && isText(cb.type)) aggregateCollations([ca.type, cb.type], op === '!=' ? '<>' : op, true)
 
   switch (op) {

@@ -283,7 +283,6 @@ function planSelect(run: Run, q: QueryExpression, node: SelectNode): SelectPlan 
     const at = (q.orderBy ?? []).findIndex((o) => containsAggregate(o.expr)) + 1
     throw sqlError('ER_AGGREGATE_ORDER_NON_AGG_QUERY', `Expression #${at} of ORDER BY contains aggregate function and applies to the result of a non-aggregated query`)
   }
-  if (!grouped && node.having !== undefined) throw sqlError('ER_NOT_SUPPORTED_YET', messages.notSupported('HAVING without grouping'))
   const windowed = node.items.some((i) => containsWindow(i.expr)) || (q.orderBy ?? []).some((o) => containsWindow(o.expr))
   if (grouped && windowed) throw sqlError('ER_NOT_SUPPORTED_YET', messages.notSupported('Window functions over a grouped query'))
   if (grouped) return planGrouped(run, q, node, from, lookup)
@@ -379,6 +378,7 @@ function planSelect(run: Run, q: QueryExpression, node: SelectNode): SelectPlan 
   }
 
   const where = node.where === undefined ? undefined : compile(node.where, compileContext(run, lookup, 'where clause'))
+  const having = node.having === undefined ? undefined : compile(substituteAliases(node.having, items), compileContext(run, selectedOnly(lookup, items, [], node.having), 'having clause'))
   const keys = (q.orderBy ?? []).map((o) => orderKey(run, o, items, lookup))
   // A MATCH in the WHERE of one table is read through its full-text index,
   // which yields rows by relevance, highest first: with no ORDER BY of its
@@ -397,7 +397,8 @@ function planSelect(run: Run, q: QueryExpression, node: SelectNode): SelectPlan 
       if (from === undefined) rows = [{ row: [] }]
       else if (facts?.impossible === true) rows = []
       else rows = from.rows(trx, env, { where: node.where, locking })
-      let filtered: Iterable<{ readonly row: Row }> = filter(rows, where, env)
+      // HAVING without grouping filters the rows WHERE kept, before any window sees them.
+      let filtered: Iterable<{ readonly row: Row }> = filter(filter(rows, where, env), having, env)
       if (windows !== undefined && windows.windows.length > 0) {
         const width = windowBase + windows.windows.length
         const all = [...filtered].map(({ row }) => {
@@ -1141,20 +1142,7 @@ function planGrouped(
   // that is none of those is 1054 even when the table has it (8.4.11).
   let having: Compiled | undefined
   if (node.having !== undefined) {
-    const allowed = new Set<number>()
-    for (const k of keys) if (k.index !== undefined) allowed.add(k.index)
-    for (const s of selectItems) {
-      const at = s.expr.kind === NODE.COLUMN ? safeIndex(lookup, s.expr.parts) : undefined
-      if (at !== undefined) allowed.add(at)
-    }
-    const havingScope: Scope = {
-      resolve(parts, clause) {
-        const r = lookup.resolve(parts, clause)
-        // An enclosing query's column is a constant here, and always visible.
-        if ((r.depth ?? 0) === 0 && !allowed.has(r.index)) throw sqlError('ER_BAD_FIELD_ERROR', messages.unknownColumn(parts.join('.'), clause))
-        return r
-      },
-    }
+    const havingScope = selectedOnly(lookup, selectItems, keys.flatMap((k) => (k.index === undefined ? [] : [k.index])), node.having)
     having = compile(substituteAliases(node.having, selectItems), postCtx('having clause', havingScope))
   }
 
@@ -1336,15 +1324,78 @@ function refersToRow(e: unknown, scope?: Scope, consts?: ReadonlySet<string>): b
 }
 
 /** HAVING's bare names that are select-list aliases, replaced by the expressions they name. */
-function substituteAliases(e: Expression, items: readonly { readonly expr: Expression; readonly alias?: string }[]): Expression {
+/**
+ * The scope HAVING reads columns through: the select list's columns, and
+ * `also` (a grouped query's keys), and nothing else of the row — a column
+ * that is neither is 1054 even when the table has it (8.4.11).
+ */
+function selectedOnly(lookup: Scope, items: readonly { readonly expr?: Expression; readonly alias?: string }[], also: readonly number[] = [], having?: Expression): Scope {
+  const allowed = new Set<number>(also)
+  for (const i of items) {
+    const at = i.expr?.kind === NODE.COLUMN ? safeIndex(lookup, i.expr.parts) : undefined
+    if (at !== undefined) allowed.add(at)
+  }
+  // What an alias HAVING names reads is read through the alias: `a + 1 AS b
+  // … HAVING b > 20` reads `a`, which is not itself selected.
+  if (having !== undefined) {
+    for (const i of items) {
+      const alias = i.alias?.toLowerCase()
+      if (alias === undefined || i.expr === undefined || !namesColumn(having, alias)) continue
+      for (const parts of columnsIn(i.expr)) {
+        const at = safeIndex(lookup, parts)
+        if (at !== undefined) allowed.add(at)
+      }
+    }
+  }
+  return {
+    resolve(parts, clause) {
+      const r = lookup.resolve(parts, clause)
+      // An enclosing query's column is a constant here, and always visible.
+      if ((r.depth ?? 0) === 0 && !allowed.has(r.index)) throw sqlError('ER_BAD_FIELD_ERROR', messages.unknownColumn(parts.join('.'), clause))
+      return r
+    },
+  }
+}
+
+/** Whether an expression names a column `name` (one part, any case), outside its subqueries. */
+function namesColumn(e: Expression, name: string): boolean {
+  return columnsIn(e).some((parts) => parts.length === 1 && (parts[0] as string).toLowerCase() === name)
+}
+
+/** Every column reference in an expression, outside its subqueries. */
+function columnsIn(e: Expression): (readonly string[])[] {
+  const out: (readonly string[])[] = []
+  const walk = (x: unknown): void => {
+    if (x === null || typeof x !== 'object') return
+    if (Array.isArray(x)) return x.forEach(walk)
+    const node = x as { kind?: string; parts?: readonly string[] }
+    if (node.kind === NODE.SUBQUERY) return
+    if (node.kind === NODE.COLUMN && node.parts !== undefined) out.push(node.parts)
+    for (const v of Object.values(x)) if (typeof v === 'object') walk(v)
+  }
+  walk(e)
+  return out
+}
+
+/**
+ * HAVING's names, an alias replaced by what it names: two items of that
+ * alias are 1052, and one holding a window function is 3594 (8.4.11).
+ */
+function substituteAliases(e: Expression, items: readonly { readonly expr?: Expression; readonly alias?: string }[]): Expression {
   const walk = (x: unknown): unknown => {
     if (x === null || typeof x !== 'object') return x
     if (Array.isArray(x)) return x.map(walk)
     const node = x as { kind?: string; parts?: readonly string[] }
     if (node.kind === NODE.SUBQUERY) return x
     if (node.kind === NODE.COLUMN && node.parts?.length === 1) {
-      const hit = items.find((i) => i.alias?.toLowerCase() === (node.parts?.[0] as string).toLowerCase())
-      if (hit !== undefined) return hit.expr
+      const name = node.parts[0] as string
+      const hits = items.filter((i) => i.expr !== undefined && i.alias?.toLowerCase() === name.toLowerCase())
+      if (hits.length > 1) throw sqlError('ER_NON_UNIQ_ERROR', `Column '${name}' in having clause is ambiguous`)
+      const hit = hits[0]
+      if (hit?.expr !== undefined) {
+        if (containsWindow(hit.expr)) throw sqlError('ER_WINDOW_INVALID_WINDOW_FUNC_ALIAS_USE', `You cannot use the alias '${name}' of an expression containing a window function in this context.'`)
+        return hit.expr
+      }
     }
     const out: Record<string, unknown> = {}
     for (const [k, v] of Object.entries(x)) out[k] = typeof v === 'object' ? walk(v) : v
