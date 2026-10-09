@@ -17,19 +17,14 @@ import { Catalog, Store } from '@myjs/engine'
 import { MemoryVfs } from '@myjs/vfs'
 import { SqlExecutor, charsetTranscoder } from '@myjs/core'
 import { SCHEMA, SQL_MODE, generateCase } from './capture-execution.mjs'
+import { xorshift } from './lib/cli.mjs'
 
 const RUNS = Number(process.env.FUZZ_RUNS ?? 20_000)
 const SEED = Number(process.env.FUZZ_SEED ?? (Date.now() & 0x7fffffff))
 const BUDGET_MS = Number(process.env.FUZZ_INPUT_BUDGET_MS ?? 2_000)
 
-let state = SEED || 1
-function rnd() {
-  state ^= state << 13
-  state ^= state >>> 17
-  state ^= state << 5
-  return (state >>> 0) / 0x100000000
-}
-const pick = (xs) => xs[Math.floor(rnd() * xs.length)]
+/** xorshift32, seeded (`tools/lib/cli.mjs`), so a seed reproduces the corpus. */
+const { rnd, pick } = xorshift(SEED)
 
 /** Values on a boundary of something: a type's range, a charset, the parser, the planner. */
 const BOUNDARIES = [

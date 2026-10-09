@@ -21,19 +21,15 @@ import { lex, lexBytes, parseExpression, parseStatement, parseSqlMode, ParseErro
 import { roundTrip } from './lib/round-trip.mjs'
 import { mkdirSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
+import { xorshift } from './lib/cli.mjs'
 
 const RUNS = Number(process.env.FUZZ_RUNS ?? 1_000_000)
 const SEED = Number(process.env.FUZZ_SEED ?? (Date.now() & 0x7fffffff))
 const PER_INPUT_BUDGET_MS = Number(process.env.FUZZ_INPUT_BUDGET_MS ?? 250)
 const CORPUS = new URL('../test/format/fuzz-corpus/', import.meta.url).pathname
 
-let state = SEED || 1
-function rnd() {
-  state ^= state << 13
-  state ^= state >>> 17
-  state ^= state << 5
-  return (state >>> 0) / 0x100000000
-}
+/** xorshift32, seeded (`tools/lib/cli.mjs`), so a seed reproduces the corpus. */
+const { rnd } = xorshift(SEED)
 const randInt = (n) => Math.floor(rnd() * n)
 const pick = (xs) => xs[randInt(xs.length)]
 

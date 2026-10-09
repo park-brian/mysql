@@ -47,6 +47,7 @@ import {
   verifyStore,
   writeSuperblock,
 } from '@myjs/engine'
+import { xorshift } from './lib/cli.mjs'
 
 const RUNS = Number(process.env.FUZZ_RUNS ?? 1_000_000)
 const SEED = Number(process.env.FUZZ_SEED ?? (Date.now() & 0x7fffffff))
@@ -54,13 +55,8 @@ const PER_INPUT_BUDGET_MS = Number(process.env.FUZZ_INPUT_BUDGET_MS ?? 250)
 const CORPUS = new URL('../test/format/fuzz-corpus/', import.meta.url).pathname
 const PAGE = 512
 
-let state = SEED || 1
-function rnd() {
-  state ^= state << 13
-  state ^= state >>> 17
-  state ^= state << 5
-  return (state >>> 0) / 0x100000000
-}
+/** xorshift32, seeded (`tools/lib/cli.mjs`), so a seed reproduces the corpus. */
+const { rnd } = xorshift(SEED)
 const randInt = (n) => Math.floor(rnd() * n)
 
 /** A well-formed index page with a few cells, as the seed to mutate. */

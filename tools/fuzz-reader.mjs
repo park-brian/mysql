@@ -12,6 +12,7 @@
 import { Reader, ProtocolError } from '@myjs/bytes'
 import { mkdirSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
+import { xorshift } from './lib/cli.mjs'
 
 const RUNS = Number(process.env.FUZZ_RUNS ?? 1_000_000)
 const SEED = Number(process.env.FUZZ_SEED ?? (Date.now() & 0x7fffffff))
@@ -20,13 +21,7 @@ const PER_INPUT_BUDGET_MS = Number(process.env.FUZZ_INPUT_BUDGET_MS ?? 250)
 const CORPUS = new URL('../test/format/fuzz-corpus/', import.meta.url).pathname
 
 // xorshift32 — reproducible from a seed, so a crasher can be replayed.
-let state = SEED || 1
-function rnd() {
-  state ^= state << 13
-  state ^= state >>> 17
-  state ^= state << 5
-  return (state >>> 0) / 0x100000000
-}
+const { rnd } = xorshift(SEED)
 const randInt = (n) => Math.floor(rnd() * n)
 
 const OPS = [

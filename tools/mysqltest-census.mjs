@@ -47,11 +47,8 @@ import { REPO, REF, fetchPinnedBytes, combinedSha256, listPinnedDirectory, sourc
 import { lex, parseStatement, parseStatements, ParseError } from '@myjs/parser'
 import { roundTrip } from './lib/round-trip.mjs'
 import { extract } from './lib/mysqltest-extract.mjs'
+import { arg } from './lib/cli.mjs'
 
-function arg(name, fallback) {
-  const i = process.argv.indexOf(`--${name}`)
-  return i === -1 ? fallback : process.argv[i + 1]
-}
 const has = (name) => process.argv.includes(`--${name}`)
 
 const OUT_DIR = arg('out', new URL('../test/format/fixtures/', import.meta.url).pathname)

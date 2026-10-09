@@ -96,6 +96,7 @@ export const CONNECTION = {
 
 // --- the generator ----------------------------------------------------------------
 
+/** A linear congruential generator, not `lib/cli.mjs`'s xorshift: the committed corpus was drawn with this one, and its seed reproduces it only here. */
 function rng(seed) {
   let s = seed >>> 0
   return () => {

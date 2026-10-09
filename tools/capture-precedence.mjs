@@ -24,13 +24,10 @@ import { mkdirSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { execFile } from 'node:child_process'
 import { promisify } from 'node:util'
+import { arg, xorshift } from './lib/cli.mjs'
 
 const run = promisify(execFile)
 
-function arg(name, fallback) {
-  const i = process.argv.indexOf(`--${name}`)
-  return i === -1 ? fallback : process.argv[i + 1]
-}
 
 const HOST = arg('host', '127.0.0.1')
 const PORT = arg('port', '3306')
@@ -110,15 +107,8 @@ function twoLevels() {
 /** Prefix operators. `NOT` is the one whose precedence `sql_mode` can move. */
 const UNARY = ['-', '~', '!', 'NOT']
 
-/** xorshift32 — the same reproducible generator `fuzz-reader.mjs` uses. */
-let state = SEED || 1
-function rnd() {
-  state ^= state << 13
-  state ^= state >>> 17
-  state ^= state << 5
-  return (state >>> 0) / 0x100000000
-}
-const pick = (xs) => xs[Math.floor(rnd() * xs.length)]
+/** xorshift32, seeded (`tools/lib/cli.mjs`), so a seed reproduces the corpus. */
+const { rnd, pick } = xorshift(SEED)
 
 /**
  * One expression.
