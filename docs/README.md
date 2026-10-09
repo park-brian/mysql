@@ -70,6 +70,7 @@ narrative, with diagrams, linking down into the documents below.
 | 42 | [Public API](./42-public-api.md) | The surface we expose, and how existing drivers plug into it |
 | 43 | [Testing and compatibility](./43-testing.md) | `mysql-test` reuse, differential testing, protocol conformance, fuzzing |
 | 44 | [Roadmap](./44-roadmap.md) | **The living plan**: milestones in dependency order, work items with acceptance criteria, the decision log, open questions, and the compatibility scoreboard |
+| 45 | [Change log](./45-changelog.md) | What changed and what it taught, newest first: one entry per milestone completion, significant decision or review |
 
 **Appendix**: [References](./90-references.md) · [Glossary](./91-glossary.md)
 

@@ -1409,9 +1409,9 @@ a blocker and one without is just a note.
 | **Does OPFS `flush()` ever reorder writes?** | The browser half of the durability promise depends on it ([§12](#12-durability-stated-honestly)) | Real-browser crash tests, M6 |
 | **Does `execProtocol` need a streaming variant?** | `db.stream()` exists so that a large resultset is never held in memory, and today's seam returns a command's whole response | M5 |
 | ~~**How faithful must `INFORMATION_SCHEMA` be?**~~ | Settled by M5.12: byte for byte, metadata included, because Prisma diffs what it reads against what it pushed. A captured corpus of 2,568 statements agrees in full | — |
-| **How closely can our byte traces match a real server's?** | Version string, capabilities and connection ids differ *by design*, so byte identity with a real server is not simply a question of correctness | M5's differential harness |
+| ~~**How closely can our byte traces match a real server's?**~~ | Settled by M5.16: what is compared with a real server is what a client sees — rows, metadata, counters, errors and warnings — and byte identity is held only against our own frozen traces | — |
 | **Is whole-page compression at the VFS the answer to COMPRESSED tables?** | It is the proposed replacement, with no design yet | M6 or later |
-| **Do index pages get prefix compression?** | Could save a third or more on string keys, at the cost of a slower page format | Deliberately undecided |
+| **Do index pages get prefix compression?** | Could save a third or more on string keys, at the cost of a slower page format | M7, which reads InnoDB's own pages |
 | **How are legacy temporal types told apart on import?** | Their byte lengths overlap the modern forms, so the dictionary has to decide | M7 |
 
 ## 21. Where we are
@@ -1452,9 +1452,12 @@ mini-transactions has halved that stall: 10,000 rows now take about 560 ms.
 §17 exists too: `db.query()`, `db.execute()`, `db.begin()` and
 `db.transaction()`, a client of the wire protocol whose answers are compared
 with `mysql2/promise`'s over five corpora (M5.36). `db.stream()` is not
-built yet. The rest of the function library and the cost-based planner come
-next. The core bundle is about 288 KB gzipped against a budget of 500 KB,
-with the UCA weights in a separate chunk loaded on demand.
+built yet. Next is 0.3, the first release of `myjs` itself: statements that
+pause so a bulk one no longer stalls other connections, an API that installs
+and types cleanly, and the M5 exit criterion measured at parity. The
+cost-based planner and the browser follow. The core bundle is about 288 KB
+gzipped against a budget of 500 KB, with the UCA weights in a separate chunk
+loaded on demand.
 
 The release plan gives each stage something to ship:
 

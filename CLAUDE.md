@@ -9,18 +9,20 @@ no status beyond one dated section, and the roadmap wins where they differ (D-72
 ## What this is
 
 An isomorphic, in-process MySQL for JavaScript: no server process, no native
-addon, MySQL's wire protocol and MySQL's semantics. M0–M3 are complete (the
-protocol, charsets and collations, the type system, and the parser down to the
-administration statements); M4 (storage) is complete — pages, B+tree, WAL,
-crash recovery, MVCC transactions, the catalog, the `native` and `memory`
-engines and the Node VFS; M5 (execute) has begun: a real executor runs single-table DDL,
-DML and transactions through unmodified `mysql2` (M5.17), upserts, REPLACE
-and INSERT IGNORE included (M5.8), and relational SELECT — joins, GROUP BY
-and aggregates, subqueries, derived tables, CTEs, set operations and
-`INSERT … SELECT` — agreeing with 8.4.11 on M5.18's corpus. Doc 42's query
-API (`db.query()`, `db.execute()`, `db.transaction()`) is a client of the
-same protocol, its values `mysql2`'s (M5.36, D-76). The function library,
-JSON and the cost-based planner proper are what is left.
+addon, MySQL's wire protocol and MySQL's semantics. M0–M4 are complete: the
+protocol, charsets and collations, the type system, the parser down to the
+administration statements, and storage (pages, B+tree, WAL, crash recovery,
+MVCC transactions, the catalog, the Node VFS). M5, the executor, is most of
+the way: DDL, DML and transactions, upserts, relational SELECT (joins,
+grouping, subqueries, CTEs, set operations), window functions, JSON, views,
+foreign keys, CHECK constraints, generated columns, FULLTEXT search,
+INFORMATION_SCHEMA, temporary tables and ALTER TABLE all run through
+unmodified `mysql2` and agree with 8.4.11 on the committed corpora. Drizzle's
+MySQL suites pass whole and Prisma's all but one file. Doc 42's query API
+(`db.query()`, `db.execute()`, `db.transaction()`) is a client of the same
+protocol, its values `mysql2`'s (M5.36, D-76). The roadmap's **Next** section
+says what comes next: 0.3, then the cost-based planner (M5.7) and the browser
+(M6).
 
 ## Running things
 
@@ -29,10 +31,10 @@ types and runs the `.ts` directly (D-01). `tsc` is only a checker.
 
 ```bash
 npm ci
-npm test          # unit + format + protocol + 300 crash points; no Docker, no browser, under a minute
+npm test          # unit + format + protocol + 300 crash points; no Docker, no browser; about 1.5 min on 4 cores
 CRASH_POINTS=10000 npm run test:crash   # the M4 exit criterion's 10,000, as CI runs it
 npm run typecheck
-npm run lint      # the isomorphic gate
+npm run lint      # the isomorphic gate and the package graph
 npm run size      # the ratcheting bundle budget
 npm run fuzz      # 10^6 inputs per parser, and 2 x 10^4 statements into the executor
 ```
@@ -86,10 +88,20 @@ of corpus SQL.
 ## The packages, and the edges that are not allowed
 
 ```
-bytes ── protocol ── core ── server
-  └──── charsets ── types
-  └──── parser              vfs
+package    depends on
+bytes      —
+vfs        —
+charsets   bytes
+types      bytes, charsets
+parser     bytes, charsets
+protocol   bytes                         never charsets or types (D-33)
+engine     bytes, charsets, types, vfs
+core       all of the above
+server     core, protocol
 ```
+
+The table in `tools/lint-isomorphic.mjs` is the authority: `npm run lint`
+fails an import, or a declared dependency, that it does not allow.
 
 `@myjs/bytes` is the cycle-breaker and the reason is the release plan, not
 taste: `@myjs/protocol` ships at 0.1 and `@myjs/charsets`/`@myjs/types` at 0.2,
@@ -140,7 +152,9 @@ From the roadmap, which states them once so no work item repeats them:
 ## How work is recorded
 
 - **The roadmap is edited in the same commit as the work it describes** (D-03),
-  and so is the scoreboard. A compatibility number updated by hand, later, is
+  and so are the scoreboard and an entry in [doc 45](./docs/45-changelog.md).
+  `test/format/roadmap.test.ts` recounts the status glyphs, so the summary
+  cannot drift from the tables. A compatibility number updated by hand, later, is
   marketing; one CI writes is an engineering artefact.
 - **Work items are append-only.** `M4.7` means `M4.7` forever. An item that
   turns out wrong is marked `⊘` with a reason and a new one is added.
@@ -152,7 +166,7 @@ From the roadmap, which states them once so no work item repeats them:
 
 ## The habit worth keeping
 
-Almost every entry in the changelog has the same shape: a claim was checked
+Almost every entry in the [change log](./docs/45-changelog.md) has the same shape: a claim was checked
 against something real, and the check found a bug — frequently **in the test
 rather than in the code**. `utf8mb4_bin`'s sort key, `<=>` being null-safe, an
 unsigned BIGINT negation saturating, a charset missing from a generated
