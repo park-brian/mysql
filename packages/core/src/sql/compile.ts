@@ -12,7 +12,7 @@
 // unknown function is ER_SP_DOES_NOT_EXIST, as MySQL says it, and a builtin we
 // have not written is ER_NOT_SUPPORTED_YET naming it (M5.10 owns the rest).
 import { CHARSET_BINARY, FIELD_TYPE, expectTyped } from '@myjs/bytes'
-import { collation, collationInfoByName, decodeCollation, defaultCollationOf, encodeCollation, requireCollationInfo } from '@myjs/charsets'
+import { collationInfoByName, decodeCollation, defaultCollationOf, encodeCollation, requireCollationInfo } from '@myjs/charsets'
 import { LITERAL, NODE, TOKEN, deparse, lex, parseExpression, type CallNode, type CaseNode, type CastNode, type ConvertNode, type Expression, type LiteralNode, type MatchNode, type QueryExpression, type SubqueryNode } from '@myjs/parser'
 import type { ColumnDef, Table, Trx } from '@myjs/engine'
 import { sqlError, messages, type Session } from '@myjs/protocol'
@@ -83,6 +83,7 @@ import {
 import { castAsJson } from './json.ts'
 import { jsonPathFunction, memberOf, unquote } from './json-path.ts'
 import { regexpLike } from './regexp.ts'
+import { valueKey } from './keys.ts'
 import { TableScope } from './scope.ts'
 import { bitBytes } from './wire.ts'
 import { badAgainst, booleanRank, Corpus, foldFor, fulltextOf, naturalRank, noExpansion, noIndex, parseBoolean, queryText, wordsOf, type Term } from './fulltext.ts'
@@ -1415,7 +1416,8 @@ function inList(negated: boolean, left: Expression, right: Expression, ctx: Comp
   // One element is `=`, which compares fixed decimals within a tolerance;
   // a list compares exactly (8.4.11: a FLOAT(3,1) is IN (1.2) and not IN (1.2, 1.3)).
   const compare = items.length === 1 ? comparer(a.type, (items[0] as Compiled).type) : compareValues
-  let sortedFor: Env | undefined
+  // Constant items: sorted once a statement, which a correlated subquery's per-row environments share the memo of.
+  let sortedFor: object | undefined
   let sorted: SortedItems | undefined
   const timed = compiled.type.kind === 'time' && left.kind === NODE.COLUMN
   return {
@@ -1423,9 +1425,9 @@ function inList(negated: boolean, left: Expression, right: Expression, ctx: Comp
       const v = a.eval(r, env)
       if (v === null) return null
       if (searchable) {
-        if (sortedFor !== env) {
+        if (sortedFor !== (env.memo ?? env)) {
           sorted = sortItems(items.map((i) => i.eval(r, env)))
-          sortedFor = env
+          sortedFor = env.memo ?? env
         }
         const found = sorted === undefined ? undefined : searchItems(sorted, v)
         if (found !== undefined) return found === null ? null : bool(found !== negated)
@@ -1476,10 +1478,29 @@ function like(negated: boolean, a: Compiled, pattern: Compiled, escape: Compiled
   }
 }
 
+/**
+ * Each character's equality key under a collation, kept across rows: two
+ * characters are one to LIKE exactly when their keys are (`equalityKey`
+ * drops only trailing pad weights, which for one character is a space's
+ * own). Bounded, since a column's text has few distinct characters.
+ */
+const CHARACTER_KEYS = new Map<number, Map<string, string>>()
+
+function characterKey(ch: string, collationId: number): string {
+  let keys = CHARACTER_KEYS.get(collationId)
+  if (keys === undefined) CHARACTER_KEYS.set(collationId, (keys = new Map()))
+  let k = keys.get(ch)
+  if (k === undefined) {
+    if (keys.size >= 65536) keys.clear()
+    k = equalityKey(ch, collationId)
+    keys.set(ch, k)
+  }
+  return k
+}
+
 function matchLike(s: readonly string[], p: readonly string[], escape: string, collationId: number): boolean {
-  const c = collationId === CHARSET_BINARY ? undefined : collation(collationId)
-  const same = (x: string, y: string): boolean =>
-    x === y || (c !== undefined && c.compare(encodeCollation(x, collationId), encodeCollation(y, collationId)) === 0)
+  const binary = collationId === CHARSET_BINARY
+  const same = (x: string, y: string): boolean => x === y || (!binary && characterKey(x, collationId) === characterKey(y, collationId))
   // The pattern as tokens: `%`, `_`, or a character to match (escaped or not).
   const ANY = 0
   const ONE = 1
@@ -1923,8 +1944,54 @@ function quantified(op: string, quantifier: 'ANY' | 'ALL', left: Expression, rig
     return unknown ? null : 0
   }
   const key = {}
-  return {
-    eval: (row, env) => {
+  // IN and NOT IN over one column of an uncorrelated subquery: its values as
+  // a set, built once a statement, where an equal comparison always means an
+  // equal key — two exact numbers, or two strings under one collation (the
+  // hash join's rule). The answer is the loop's: an equal value decides, and
+  // otherwise a NULL on either side makes it NULL.
+  const sub = (plan.columns[0] as { type: ResultType }).type
+  const a0 = as[0] as Compiled
+  const exactNumber = (k: string): boolean => k === 'int' || k === 'decimal'
+  const keyed =
+    as.length === 1 &&
+    ((op === '=' && quantifier === 'ANY') || (op === '<>' && quantifier === 'ALL')) &&
+    ((exactNumber(a0.type.kind) && exactNumber(sub.kind)) || (a0.type.kind === 'string' && sub.kind === 'string' && a0.type.collationId === sub.collationId))
+  const setKey = {}
+  if (keyed) {
+    const membership = (env: Env): { readonly keys: ReadonlySet<string>; readonly empty: boolean; readonly sawNull: boolean } | undefined => {
+      if (plan.correlated || env.memo === undefined) return undefined
+      const hit = env.memo.get(setKey) as ReturnType<typeof membership>
+      if (hit !== undefined) return hit
+      const rows = rowsOf(plan, key, [], env)
+      const keys = new Set<string>()
+      let sawNull = false
+      for (const r of rows) {
+        const x = r[0] ?? null
+        if (x === null) sawNull = true
+        else keys.add(valueKey(x))
+      }
+      const made = { keys, empty: rows.length === 0, sawNull }
+      env.memo.set(setKey, made)
+      return made
+    }
+    const loop = compareAll()
+    return {
+      eval: (row, env) => {
+        const m = membership(env)
+        if (m === undefined) return loop(row, env)
+        if (m.empty) return bool(quantifier === 'ALL')
+        const v = a0.eval(row, env)
+        if (v !== null && m.keys.has(valueKey(v))) return bool(quantifier === 'ANY')
+        return v === null || m.sawNull ? null : bool(quantifier === 'ALL')
+      },
+      type: boolType(true),
+    }
+  }
+  return { eval: compareAll(), type: boolType(true) }
+
+  /** Every subquery row compared in turn. */
+  function compareAll(): Compiled['eval'] {
+    return (row, env) => {
       const rows = rowsOf(plan, key, row, env)
       if (rows.length === 0) return bool(quantifier === 'ALL')
       const v = as.map((a) => a.eval(row, env))
@@ -1940,8 +2007,7 @@ function quantified(op: string, quantifier: 'ANY' | 'ALL', left: Expression, rig
         if (quantifier === 'ALL' && !hit) return bool(false)
       }
       return sawNull ? null : bool(quantifier === 'ALL')
-    },
-    type: boolType(true),
+    }
   }
 }
 
@@ -2039,12 +2105,13 @@ function matchAgainst(e: MatchNode, ctx: CompileContext): Compiled {
   if (boolean && constantNode(e.against)) parseBoolean(queryText(against.eval([], constantEnv(ctx))), fold)
   const positions = index.columns.map((c) => def.columns.findIndex((x) => x.name.toLowerCase() === c.toLowerCase()))
   const wordsIn = (values: readonly Value[], raw?: Map<string, string>) => values.flatMap((v) => (v === null ? [] : wordsOf(toText(v), fold, raw)))
-  let preparedFor: Env | undefined
+  // Read once a statement: the query reads no row's column, so a correlated run shares it through the memo.
+  let preparedFor: object | undefined
   let corpus: Corpus | undefined
   let query: { readonly natural: string[] } | { readonly terms: Term[] } = { natural: [] }
   return {
     eval: (row, env) => {
-      if (preparedFor !== env || corpus === undefined) {
+      if (preparedFor !== (env.memo ?? env) || corpus === undefined) {
         const text = queryText(against.eval(row, env))
         query = boolean ? { terms: parseBoolean(text, fold) } : { natural: wordsOf(text, fold) }
         const table = ctx.table?.(def.schema, def.name)
@@ -2052,7 +2119,7 @@ function matchAgainst(e: MatchNode, ctx: CompileContext): Compiled {
         const raw = new Map<string, string>()
         if (table !== undefined) for (const [, fields] of table.scan(undefined, env.trx)) documents.push(wordsIn(positions.map((p) => decodeField(fields[p] ?? null, (def.columns[p] as ColumnDef).type)), raw))
         corpus = new Corpus(documents, raw, fold)
-        preparedFor = env
+        preparedFor = env.memo ?? env
       }
       const words = wordsIn(slots.map((i) => row[i] ?? null))
       if ('natural' in query) return doubleValue(naturalRank(corpus, query.natural, words))

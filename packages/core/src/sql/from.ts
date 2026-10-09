@@ -35,6 +35,7 @@ import { truth, type Value } from '@myjs/types'
 import type { Compiled, Env, Row, Scope } from './compile.ts'
 import { planNode, type PlanNode } from './explain.ts'
 import { FULL_SCAN, accessRows, chooseAccess, pointAccess, splitAnd, type Access, type OuterColumn } from './plan.ts'
+import { rowKey } from './keys.ts'
 import { TableScope, type ScopeColumn, type ScopeTableSpec } from './scope.ts'
 
 /** A table the FROM reads: a base table, or (M5.1) a derived one. */
@@ -85,7 +86,15 @@ type Node =
       readonly innerSlots: readonly number[]
       /** `eq_ref`: the later table's unique key, and the expression of the earlier tables it equals. */
       readonly lookup: EqRef | undefined
+      /** A hash join's key, each side's half; absent where no equality may key it (`hashKeys`). */
+      readonly hash?: HashKeys
     }
+
+/** The two halves of a hash join's key: expressions over the outer (earlier, preserved) side and over the inner. */
+interface HashKeys {
+  readonly outer: readonly Compiled[]
+  readonly inner: readonly Compiled[]
+}
 
 interface EqRef {
   readonly index: IndexDef
@@ -350,13 +359,15 @@ export function planFrom(refs: readonly TableReference[], ctx: FromContext, wher
         if (outerLookup !== undefined) nestedLoopJoins.add(inner.aliases)
         const lookup = isLeft || inner.node.kind !== 'leaf' ? undefined : eqRef(inner.node.table, [onAst, ...(ref.type === 'STRAIGHT' || ref.type === 'INNER' ? [where] : [])], outer.aliases, (e) => ctx.compileOn(e, slotScope(preliminary.restrict(outer.aliases, within), preliminary)))
         if (lookup !== undefined) nestedLoopJoins.add(inner.aliases)
+        // The equalities between the sides that may key a hash join: the ON's, and an inner join's WHERE's.
+        const hash = lookup !== undefined || [...inner.aliases].some((a) => byAlias.get(a)?.lateral === true) ? undefined : hashKeys([onAst, ...(isLeft ? [] : [where])], outer.aliases, inner.aliases, preliminary, (e) => ctx.compileOn(e, slotScope(preliminary.restrict(aliases, within), preliminary)))
         // A LATERAL table is read again for each row before it: a nested loop,
         // so a sort over the tables before it goes first (8.4.11: Drizzle's
         // `LEFT JOIN LATERAL … ORDER BY parent.id` keeps parent.id's key flags).
         if ([...inner.aliases].some((a) => byAlias.get(a)?.lateral === true)) nestedLoopJoins.add(inner.aliases)
         return {
           // A left join runs as a hash join whatever its lookup (see `run`); the lookup is what EXPLAIN calls it.
-          node: { kind: 'join', outer: outer.node, inner: inner.node, left: isLeft, on, onAst, innerSlots, lookup: lookup ?? outerLookup },
+          node: { kind: 'join', outer: outer.node, inner: inner.node, left: isLeft, on, onAst, innerSlots, lookup: lookup ?? outerLookup, ...(hash === undefined ? {} : { hash }) },
           aliases,
           visible,
         }
@@ -369,9 +380,12 @@ export function planFrom(refs: readonly TableReference[], ctx: FromContext, wher
       return Array.from({ length: t.width }, (_, i) => t.offset + i)
     })
     const lookup = r.node.kind !== 'leaf' ? undefined : eqRef(r.node.table, [where], l.aliases, (e) => ctx.compileOn(e, preliminary.restrict(l.aliases)))
-    if (lookup !== undefined || [...r.aliases].some((a) => byAlias.get(a)?.lateral === true)) nestedLoopJoins.add(r.aliases)
+    const lateral = [...r.aliases].some((a) => byAlias.get(a)?.lateral === true)
+    if (lookup !== undefined || lateral) nestedLoopJoins.add(r.aliases)
+    const both = new Set([...l.aliases, ...r.aliases])
+    const hash = lookup !== undefined || lateral ? undefined : hashKeys([where], l.aliases, r.aliases, preliminary, (e) => ctx.compileOn(e, preliminary.restrict(both)))
     return {
-      node: { kind: 'join', outer: l.node, inner: r.node, left: false, on: undefined, onAst: undefined, innerSlots, lookup } as Node,
+      node: { kind: 'join', outer: l.node, inner: r.node, left: false, on: undefined, onAst: undefined, innerSlots, lookup, ...(hash === undefined ? {} : { hash }) } as Node,
       aliases: new Set([...l.aliases, ...r.aliases]),
       visible: [...l.visible, ...r.visible],
     }
@@ -539,10 +553,12 @@ function* run(node: Node, trx: Trx | undefined, env: Env, options: RunOptions, w
     // Probe with the outer side, build on the inner: each outer row, then its
     // matches newest first, or one row of NULLs.
     const build = [...run(node.inner, trx, env, options, width, context)]
+    const buckets = node.hash === undefined ? undefined : bucket(build, node.hash.inner, env)
     for (const outer of run(node.outer, trx, env, options, width, context)) {
       let matched = false
-      for (let i = build.length - 1; i >= 0; i--) {
-        const inner = build[i] as JoinedRow
+      const candidates = buckets === undefined ? undefined : (buckets.get(keyOf(node.hash?.outer ?? [], outer.row, env) ?? '') ?? NONE)
+      for (let n = (candidates ?? build).length - 1; n >= 0; n--) {
+        const inner = build[candidates === undefined ? n : (candidates[n] as number)] as JoinedRow
         const combined = merge(outer.row, inner.row)
         if (accepts(combined)) {
           matched = true
@@ -570,15 +586,86 @@ function* run(node: Node, trx: Trx | undefined, env: Env, options: RunOptions, w
     return
   }
   // A hash join: build on the earlier tables, probe with the later one; each
-  // probe row's matches newest first.
+  // probe row's matches newest first. The key narrows which build rows are
+  // tried and never which match: the whole condition is still evaluated.
   const build = [...run(node.outer, trx, env, options, width, context)]
+  const buckets = node.hash === undefined ? undefined : bucket(build, node.hash.outer, env)
   for (const inner of run(node.inner, trx, env, options, width, context)) {
-    for (let i = build.length - 1; i >= 0; i--) {
-      const outer = build[i] as JoinedRow
+    const candidates = buckets === undefined ? undefined : (buckets.get(keyOf(node.hash?.inner ?? [], inner.row, env) ?? '') ?? NONE)
+    for (let n = (candidates ?? build).length - 1; n >= 0; n--) {
+      const outer = build[candidates === undefined ? n : (candidates[n] as number)] as JoinedRow
       const combined = merge(outer.row, inner.row)
       if (accepts(combined)) yield joined(combined, joinIds(outer, inner))
     }
   }
+}
+
+const NONE: readonly number[] = []
+
+/** A row's hash key: its key values' `rowKey`, or `undefined` when one is NULL, which `=` matches to nothing. */
+function keyOf(exprs: readonly Compiled[], row: Row, env: Env): string | undefined {
+  const values: Value[] = []
+  for (const e of exprs) {
+    const v = e.eval(row, env)
+    if (v === null) return undefined
+    values.push(v)
+  }
+  return rowKey(values)
+}
+
+/** The build rows' positions by key, ascending, so a probe walks its bucket newest first as it walked them all. */
+function bucket(rows: readonly JoinedRow[], exprs: readonly Compiled[], env: Env): Map<string, number[]> {
+  const out = new Map<string, number[]>()
+  rows.forEach((r, i) => {
+    const k = keyOf(exprs, r.row, env)
+    if (k === undefined) return
+    const list = out.get(k)
+    if (list === undefined) out.set(k, [i])
+    else list.push(i)
+  })
+  return out
+}
+
+/**
+ * The equalities among `conditions`' conjuncts that may key a hash join of
+ * `outer` with `inner`: one side's columns against the other's, where two
+ * values that compare equal always have one `rowKey`. That holds for two
+ * exact numbers (`1` and `1.0` key alike) and for two strings under one
+ * collation (`equalityKey`); a string against a number compares as doubles,
+ * and two collations meet under a third, so neither is a key. `undefined`
+ * when there is none, and the join tries every pair.
+ */
+function hashKeys(conditions: readonly (Expression | undefined)[], outer: ReadonlySet<string>, inner: ReadonlySet<string>, scope: TableScope, compile: (e: Expression) => Compiled): HashKeys | undefined {
+  const out: Compiled[] = []
+  const inn: Compiled[] = []
+  const side = (e: Expression): 'outer' | 'inner' | undefined => {
+    const a = aliasesOf(e, scope)
+    if (a === undefined || a.size === 0) return undefined
+    if ([...a].every((x) => outer.has(x))) return 'outer'
+    if ([...a].every((x) => inner.has(x))) return 'inner'
+    return undefined
+  }
+  const exact = (k: string): boolean => k === 'int' || k === 'decimal'
+  for (const c of conditions.flatMap((x) => splitAnd(x))) {
+    if (c.kind !== NODE.BINARY || c.op !== '=') continue
+    const l = side(c.left)
+    const r = side(c.right)
+    if (l === undefined || r === undefined || l === r) continue
+    let a: Compiled
+    let b: Compiled
+    try {
+      a = compile(l === 'outer' ? c.left : c.right)
+      b = compile(l === 'outer' ? c.right : c.left)
+    } catch (e) {
+      expectTyped(e)
+      continue
+    }
+    const keyed = (exact(a.type.kind) && exact(b.type.kind)) || (a.type.kind === 'string' && b.type.kind === 'string' && a.type.collationId === b.type.collationId)
+    if (!keyed) continue
+    out.push(a)
+    inn.push(b)
+  }
+  return out.length === 0 ? undefined : { outer: out, inner: inn }
 }
 
 /** One table's row id, at its offset. */

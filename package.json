@@ -26,6 +26,7 @@
     "fuzz:executor": "node tools/fuzz-executor.mjs",
     "size": "node tools/size-budget.mjs",
     "plans": "node tools/plan-diff.mjs",
+    "bench": "node tools/bench.mjs",
     "pack": "node tools/pack.mjs",
     "gen:errors": "node tools/gen-errors.mjs",
     "gen:charsets": "node tools/gen-charsets.mjs",
