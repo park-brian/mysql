@@ -92,6 +92,9 @@ export class Session {
     let flags = 0
     if (this.autocommit) flags |= SERVER_STATUS.AUTOCOMMIT
     if (this.inTransaction) flags |= SERVER_STATUS.IN_TRANS
+    // 8.4.11 sets it on every OK and EOF while the mode is on, so a client
+    // quoting values knows a backslash escapes nothing (mysql_real_escape_string).
+    if (this.sqlMode.split(',').includes('NO_BACKSLASH_ESCAPES')) flags |= SERVER_STATUS.NO_BACKSLASH_ESCAPES
     return flags
   }
 

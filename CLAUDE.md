@@ -17,8 +17,10 @@ engines and the Node VFS; M5 (execute) has begun: a real executor runs single-ta
 DML and transactions through unmodified `mysql2` (M5.17), upserts, REPLACE
 and INSERT IGNORE included (M5.8), and relational SELECT — joins, GROUP BY
 and aggregates, subqueries, derived tables, CTEs, set operations and
-`INSERT … SELECT` — agreeing with 8.4.11 on M5.18's corpus. The function
-library, JSON and the cost-based planner proper are what is left.
+`INSERT … SELECT` — agreeing with 8.4.11 on M5.18's corpus. Doc 42's query
+API (`db.query()`, `db.execute()`, `db.transaction()`) is a client of the
+same protocol, its values `mysql2`'s (M5.36, D-76). The function library,
+JSON and the cost-based planner proper are what is left.
 
 ## Running things
 

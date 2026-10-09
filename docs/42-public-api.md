@@ -60,6 +60,33 @@ const results = await db.query(
   'SELECT 1; SELECT 2;', [], { multipleStatements: true })
 ```
 
+### Whose rules the values follow (M5.36)
+
+`mysql2`'s, version 3.24.3, checked by running the same statements through
+both and comparing what comes back (`test/protocol/api-query.test.ts`,
+`api-params.test.ts`). An INT is a number, a DECIMAL a string, a DATETIME a
+`Date` in local time, a BIGINT a number unless `supportBigNumbers` and
+`bigNumberStrings` say otherwise, JSON parsed; `dateStrings`,
+`decimalNumbers`, `jsonStrings`, `timezone` and `rowsAsArray` work as they do
+there, per call or per `db.connect(options)`. A connection signs in with
+`mysql2`'s capability flags and its utf8mb4_unicode_ci, so FOUND_ROWS and
+IGNORE_SPACE are in force as they are for an application on `mysql2`.
+`query()`'s values are written into the text as `mysql2`'s `format` writes
+them, and `execute()` prepares once per text and sends each value as
+`mysql2` sends it. Where the API departs, it is on purpose:
+
+- bytes are a `Uint8Array`, where `mysql2` has a `Buffer` (ground rule 1);
+- under NO_BACKSLASH_ESCAPES, which the server reports in every OK, a
+  `query()` value's quote is doubled, not escaped with a backslash that
+  escapes nothing there;
+- a plain object as a `query()` value is a `TypeError`, not a guess at a SET
+  clause's `name = value` list; `execute()` sends it as JSON;
+- `db.query()` and `db.execute()` share one connection. `db.begin()` and
+  `db.transaction()` each take a connection of their own, since a
+  transaction is a session's state.
+
+`db.stream()` is not built yet, and needs Q-11's answer first.
+
 ## Transactions
 
 ```js
@@ -76,7 +103,10 @@ catch (e) { await tx.rollback(); throw e }
 
 `db.transaction()` retries automatically on `ER_LOCK_DEADLOCK` (1213) with
 backoff, up to a configurable limit — the behaviour every application ends up
-writing by hand.
+writing by hand. The limit is `{ retries }`, 3 unless given, and the pause
+doubles from 10 ms. The callback runs again from the start on a fresh
+connection. `begin()`'s `commit()` and `rollback()` end the connection it
+took.
 
 ## The protocol boundary
 

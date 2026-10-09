@@ -201,7 +201,7 @@ flowchart TB
     app["Your code"]
     subgraph entry["Entry points"]
         direction LR
-        conv["db.query · db.execute · db.transaction"]:::planned
+        conv["db.query · db.execute · db.transaction"]
         drv["mysql2 · mariadb · ORMs<br/>via createStream()"]
         tcp["mysql CLI, any client<br/>via serve() over TCP"]
         port["Other tabs and threads<br/>via createPort()"]
@@ -1416,7 +1416,7 @@ a blocker and one without is just a note.
 
 ## 21. Where we are
 
-*A snapshot as of 2026-10-08. The [roadmap](./docs/44-roadmap.md) is the live
+*A snapshot as of 2026-10-09. The [roadmap](./docs/44-roadmap.md) is the live
 version, and wins wherever it disagrees with this section.*
 
 ```mermaid
@@ -1446,10 +1446,15 @@ against the server's 1,122, FULLTEXT search included; the one failure is a
 snapshot of another MySQL version's error text, which 8.4.11 fails too.
 The count drifts down by up to four between runs, because bulk statements
 still stall the event loop long enough for parallel suites' connections to
-time out (M5.32). The rest of the function library and the
-cost-based planner come next. The core bundle is about 280 KB gzipped
-against a budget of 500 KB, with the UCA weights in a separate chunk loaded
-on demand.
+time out (M5.32). Batching a bulk statement's rows into shared
+mini-transactions has halved that stall: 10,000 rows now take about 560 ms.
+32,000 still take over a second, so M5.32 stays open. The query API of
+§17 exists too: `db.query()`, `db.execute()`, `db.begin()` and
+`db.transaction()`, a client of the wire protocol whose answers are compared
+with `mysql2/promise`'s over five corpora (M5.36). `db.stream()` is not
+built yet. The rest of the function library and the cost-based planner come
+next. The core bundle is about 288 KB gzipped against a budget of 500 KB,
+with the UCA weights in a separate chunk loaded on demand.
 
 The release plan gives each stage something to ship:
 

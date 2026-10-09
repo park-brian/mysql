@@ -6,18 +6,26 @@
 //   2. Existing MySQL drivers must work unmodified. If `mysql2` needs a patch,
 //      we have failed.
 //
-// `query()` and `execute()` are deliberately absent until 0.3. They need a
-// client-side protocol implementation *and* a real executor, and the release
-// plan is explicit that shipping a package named `myjs` that cannot open a
-// database would be a worse first impression than shipping nothing. Until
-// then the supported route is `mysql2.createConnection({ stream:
-// db.createStream() })`, which is doc 42's own example.
+// `query()`, `execute()`, `begin()` and `transaction()` (M5.36) are rule 1
+// taken literally: a client in `client/` that speaks the protocol to a
+// connection of this database, as `mysql2` would, and gives back what
+// `mysql2/promise` gives. `mysql2.createConnection({ stream:
+// db.createStream() })` remains doc 42's route for a driver or an ORM.
 
 import { Catalog, Store } from '@myjs/engine'
 import { MapAccountStore, Sha2Cache, type AccountStore, type Executor } from '@myjs/protocol'
 import { MemoryVfs, type Lock, type Vfs } from '@myjs/vfs'
 import { ProtocolConnection, type ConnectionOptions } from './connection.ts'
 import { SqlExecutor } from './sql/executor.ts'
+import { Connection, Transaction, inTransaction, type BeginOptions, type QueryOptions, type QueryResult, type TransactionOptions, type TypeOptions } from './client/api.ts'
+
+/** Who `connect()` signs in as, and how its values are typed: `mysql2`'s option names. */
+export interface ConnectionConfig extends TypeOptions {
+  readonly user?: string
+  readonly password?: string
+  readonly database?: string
+  readonly multipleStatements?: boolean
+}
 
 export interface MySQLOptions {
   /** Doc 42's options object. Only the ones M1 can honour are read. */
@@ -39,6 +47,11 @@ export interface MySQLOptions {
   readonly executor?: Executor
   readonly accounts?: AccountStore
   readonly serverVersion?: string
+  /** Who `query()`, `execute()`, `begin()` and `transaction()` sign in as: root, with no password, unless said. */
+  readonly user?: string
+  readonly password?: string
+  /** The database those connections start in. */
+  readonly database?: string
 }
 
 /** A duplex a driver can be handed. Shape depends on the host (D-27). */
@@ -220,6 +233,68 @@ export class MySQL {
     return channel.port2
   }
 
+  /** A session of its own through the query API, signed in as `config.user` (doc 42). */
+  async connect(config: ConnectionConfig = {}): Promise<Connection> {
+    const { user, password, database, multipleStatements, ...types } = config
+    const db = database ?? this.options.database
+    return Connection.open(
+      this.createConnection(),
+      {
+        user: user ?? this.options.user ?? 'root',
+        password: password ?? this.options.password ?? '',
+        ...(db === undefined ? {} : { database: db }),
+        ...(multipleStatements === undefined ? {} : { multipleStatements }),
+      },
+      types,
+    )
+  }
+
+  /** The connection `query()` and `execute()` share, made on first use. */
+  #shared: Promise<Connection> | null = null
+
+  #connection(): Promise<Connection> {
+    if (this.#shared === null) {
+      const opening = this.connect()
+      // A failed open is not kept: the next call tries again.
+      opening.catch(() => {
+        if (this.#shared === opening) this.#shared = null
+      })
+      this.#shared = opening
+    }
+    return this.#shared
+  }
+
+  /** Doc 42: the text protocol, `values` filling the `?`s as `mysql2` fills them. `[rows, fields]`, or `[header]`. */
+  async query(sql: string | QueryOptions, values?: readonly unknown[]): Promise<QueryResult> {
+    return (await this.#connection()).query(sql, values)
+  }
+
+  /** Doc 42: a prepared statement, run with `values` through the binary protocol. */
+  async execute(sql: string | QueryOptions, values?: readonly unknown[]): Promise<QueryResult> {
+    return (await this.#connection()).execute(sql, values)
+  }
+
+  /** Doc 42: a transaction on a connection of its own, which `commit()` or `rollback()` ends. */
+  async begin(options: BeginOptions = {}): Promise<Transaction> {
+    const connection = await this.connect()
+    try {
+      await connection.begin(options)
+    } catch (e) {
+      await connection.end()
+      throw e
+    }
+    return new Transaction(connection)
+  }
+
+  /**
+   * Doc 42: `fn` in a transaction, committed on return and rolled back on a
+   * throw; one that fails with ER_LOCK_DEADLOCK (1213) runs again, up to
+   * `options.retries` times (3), after a pause that doubles from 10 ms.
+   */
+  async transaction<T>(fn: (tx: Connection) => Promise<T>, options: TransactionOptions = {}): Promise<T> {
+    return inTransaction(() => this.connect(), fn, options)
+  }
+
   async end(): Promise<void> {
     if (this.#closed) return
     this.#closed = true
@@ -229,6 +304,7 @@ export class MySQL {
     for (const c of this.#connections) c.close()
     this.#connections.clear()
     this.#implicit = null
+    this.#shared = null
     if (this.#sync !== undefined) clearInterval(this.#sync)
     this.store?.close()
     this.#lock?.release()
