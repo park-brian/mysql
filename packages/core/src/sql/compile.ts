@@ -2232,10 +2232,14 @@ function call(e: CallNode, ctx: CompileContext): Compiled {
     case 'CURRENT_TIMESTAMP':
     case 'LOCALTIME':
     case 'LOCALTIMESTAMP':
-    case 'SYSDATE':
     case 'UTC_TIMESTAMP': {
       const fsp = fspArgument(e, ctx)
       return { eval: (_r, env) => ({ kind: 'datetime', v: clock(env.now, fsp), type: 'DATETIME', fsp }), type: datetimeType(FIELD_TYPE.DATETIME, fsp, false) }
+    }
+    case 'SYSDATE': {
+      // The time of evaluation, not the statement's start (`Item_func_sysdate_local`).
+      const fsp = fspArgument(e, ctx)
+      return { eval: () => ({ kind: 'datetime', v: clock(new Date(), fsp), type: 'DATETIME', fsp }), type: datetimeType(FIELD_TYPE.DATETIME, fsp, false) }
     }
     case 'DATE_ADD':
     case 'DATE_SUB':
