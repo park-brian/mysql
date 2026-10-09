@@ -267,7 +267,6 @@ export function planQuery(run: Run, q: QueryExpression): SelectPlan {
 }
 
 function planSelect(run: Run, q: QueryExpression, node: SelectNode): SelectPlan {
-  if (node.windows !== undefined) throw sqlError('ER_NOT_SUPPORTED_YET', messages.notSupported('WINDOW'))
 
   // FROM: nothing, `DUAL`, or tables joined (M5.4).
   const refs = (node.from ?? []).filter((r) => !(r.kind === REF.TABLE && r.table.schema === undefined && r.table.name.toLowerCase() === 'dual' && r.alias === undefined && (node.from ?? []).length === 1))
@@ -290,7 +289,7 @@ function planSelect(run: Run, q: QueryExpression, node: SelectNode): SelectPlan 
   if (grouped) return planGrouped(run, q, node, from, lookup)
   // Window functions (M5.6) write into slots past the FROM row.
   const windowBase = from?.width ?? 0
-  const windows = windowed ? new WindowSink(compileContext(run, lookup, 'window order by'), windowBase) : undefined
+  const windows = windowed ? new WindowSink(compileContext(run, lookup, 'window order by'), windowBase, node.windows) : undefined
 
   // The select list, `*` expanded. A table a correlated, aggregating scalar
   // subquery in it reads is reported nullable there (8.4.11: `SELECT a.x,
@@ -342,6 +341,8 @@ function planSelect(run: Run, q: QueryExpression, node: SelectNode): SelectPlan 
       // reports its NULL as it always does (8.4.11).
       for (const item of items) {
         if (item.expr !== undefined && !refersToRow(item.expr, lookup)) continue
+        // Read through a window's table already, a column keeps what that gives it (8.4.11).
+        if (item.compiled.type.temporary === 'stream') continue
         item.compiled = { ...item.compiled, type: { ...item.compiled.type, temporary: pinnedName(item) ? 'pinned' : true } }
       }
     }
@@ -381,7 +382,11 @@ function planSelect(run: Run, q: QueryExpression, node: SelectNode): SelectPlan 
 
   const where = node.where === undefined ? undefined : compile(node.where, compileContext(run, lookup, 'where clause'))
   const having = node.having === undefined ? undefined : compile(substituteAliases(node.having, items), compileContext(run, selectedOnly(lookup, items, [], node.having), 'having clause'))
-  const keys = (q.orderBy ?? []).map((o) => orderKey(run, o, items, lookup))
+  const keys = (q.orderBy ?? []).map((o) => orderKey(run, o, items, lookup, windows))
+  // A window ORDER BY alone names reads the rows through its table as well.
+  if (windows !== undefined && windows.windows.length > 0) {
+    for (const item of items) if (item.compiled.type.temporary === undefined) item.compiled = { ...item.compiled, type: { ...item.compiled.type, temporary: 'stream' } }
+  }
   // A MATCH in the WHERE of one table is read through its full-text index,
   // which yields rows by relevance, highest first: with no ORDER BY of its
   // own that is the order they come in (8.4.11, M5.26).
@@ -1700,7 +1705,7 @@ function deparseName(e: Expression): string {
 }
 
 /** An `ORDER BY` item: a position in the select list, a select-list alias, or an expression over the table. */
-function orderKey(run: Run, o: OrderItem, items: readonly { name: string; compiled: Compiled; alias?: string }[], scope: Scope): SortKey {
+function orderKey(run: Run, o: OrderItem, items: readonly { name: string; compiled: Compiled; alias?: string }[], scope: Scope, windows?: WindowSink): SortKey {
   const e = o.expr
   const desc = o.desc === true
   if (e.kind === NODE.LITERAL && e.type === 'int') {
@@ -1714,7 +1719,8 @@ function orderKey(run: Run, o: OrderItem, items: readonly { name: string; compil
     const alias = items.find((i) => i.alias?.toLowerCase() === name)
     if (alias !== undefined) return { expr: alias.compiled, desc }
   }
-  return { expr: compile(e, compileContext(run, scope, 'order clause')), desc }
+  // A window function in ORDER BY is the query's too (8.4.11).
+  return { expr: compile(e, { ...compileContext(run, scope, 'order clause'), ...(windows === undefined ? {} : { windows }) }), desc }
 }
 
 /**

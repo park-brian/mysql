@@ -222,6 +222,11 @@ export class AggregateSink {
     return { eval: (row) => row[slot] ?? null, type: (this.specs[at] as AggregateSpec).type }
   }
 
+  /** An aggregate's spec without a slot: a window's (window.ts), which runs it over each row's frame. */
+  specFor(e: CallNode, clause: string): AggregateSpec {
+    return this.#spec(e, clause)
+  }
+
   #spec(e: CallNode, clause: string): AggregateSpec {
     const name = e.name.toUpperCase()
     const ctx: CompileContext = { ...this.#rowCtx, clause, inAggregate: true }
@@ -329,7 +334,8 @@ function jsonAggregate(name: string, args: readonly Compiled[], type: ResultType
           if (k === null) throw sqlError('ER_JSON_DOCUMENT_NULL_KEY', 'JSON documents may not contain NULL member names.')
           members.push([toText(k), asJson(b.eval(row, env), b.type)])
         },
-        result: () => (rows === 0 ? null : jsonValue(b === undefined ? { t: 'array', v: items } : jsonObject(members))),
+        // A copy: a window reads the result again after more rows are added.
+        result: () => (rows === 0 ? null : jsonValue(b === undefined ? { t: 'array', v: items.slice() } : jsonObject(members.slice()))),
       }
     },
   }
