@@ -139,7 +139,7 @@ export {
   validDate,
 } from './sql-value.ts'
 export type { BytesValue, DateTimeValue, DecimalValue, DoubleValue, IntValue, JsonDocValue, StringValue, TemporalType, TimeValue, Value } from './sql-value.ts'
-export { DERIVATION_NONE, aggregateCollation, aggregateDerivations, charsetOfCollation, compareDecimals, compareValues, nullSafeEqual, orderValues, sortValues } from './compare.ts'
+export { DERIVATION_NONE, aggregateCollation, aggregateDerivations, charsetOfCollation, compareDecimals, equalityKey, compareValues, nullSafeEqual, orderValues, sortValues } from './compare.ts'
 export type { Derived } from './compare.ts'
 export { SUM_PRECISION_INCREMENT, avgAccumulator, avgPrecision, bitAccumulator, extremeAccumulator, sumAccumulator, sumPrecision, varianceAccumulator } from './aggregate.ts'
 export type { Accumulator } from './aggregate.ts'

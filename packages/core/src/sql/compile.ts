@@ -22,6 +22,7 @@ import {
   DERIVATION_NONE,
   aggregateCollation,
   aggregateDerivations,
+  equalityKey,
   charsetOfCollation,
   bitNot,
   bitwise,
@@ -1325,26 +1326,6 @@ interface SortedItems {
   readonly byCollation: Map<number, readonly Exclude<Value, null>[]>
   /** Strings: the items' sort keys in each collation met, or `null` where it has none. */
   readonly keysByCollation: Map<number, ReadonlySet<string> | null>
-}
-
-/**
- * A string's sort key in collation `id`, as a JS string, for equality alone:
- * equal keys are equal strings. PAD SPACE ignores trailing padding, which the
- * key keeps, so its weights come off the end: whatever weighs what a space
- * does, as the comparison sees it.
- */
-function equalityKey(text: string, id: number): string {
-  const c = collation(id)
-  let key = c.sortKey(encodeCollation(text, id))
-  if (c.padAttribute === 'PAD SPACE') {
-    const pad = c.padUnit
-    let end = key.length
-    while (end >= pad.length && pad.every((b, i) => key[end - pad.length + i] === b)) end -= pad.length
-    key = key.subarray(0, end)
-  }
-  let out = ''
-  for (let i = 0; i < key.length; i += 8192) out += String.fromCharCode(...key.subarray(i, i + 8192))
-  return out
 }
 
 function sortItems(values: readonly Value[]): SortedItems | undefined {

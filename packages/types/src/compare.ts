@@ -115,6 +115,27 @@ export function aggregateCollation(a: { readonly collationId: number; readonly c
   return aggregateDerivations({ collationId: a.collationId, derivation: a.coercibility }, { collationId: b.collationId, derivation: b.coercibility })?.collationId ?? a.collationId
 }
 
+/**
+ * A string's sort key in collation `id`, as a JS string, for equality alone:
+ * equal keys are equal strings, so a group, a DISTINCT, a hash join and an IN
+ * list can look a value up rather than compare it with each. PAD SPACE
+ * ignores trailing padding, which the key keeps, so its weights come off the
+ * end: whatever weighs what a space does, as the comparison sees it.
+ */
+export function equalityKey(text: string, id: number): string {
+  const c = collation(id)
+  let key = c.sortKey(encodeCollation(text, id))
+  if (c.padAttribute === 'PAD SPACE') {
+    const pad = c.padUnit
+    let end = key.length
+    while (end >= pad.length && pad.every((b, i) => key[end - pad.length + i] === b)) end -= pad.length
+    key = key.subarray(0, end)
+  }
+  let out = ''
+  for (let i = 0; i < key.length; i += 8192) out += String.fromCharCode(...key.subarray(i, i + 8192))
+  return out
+}
+
 function compareText(a: Exclude<Value, null>, b: Exclude<Value, null>): number {
   if (a.kind === 'string' && b.kind === 'string') {
     const id = aggregateCollation(a, b)
