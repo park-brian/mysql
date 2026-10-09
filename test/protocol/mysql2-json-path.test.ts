@@ -54,6 +54,8 @@ const SCRIPT: readonly (readonly [string, Outcome])[] = [
   ["SELECT JSON_CONTAINS(1, '1')", [3146,"Invalid data type for JSON data in argument 1 to function json_contains; a JSON string or JSON type is required."]],
   ["SELECT JSON_CONTAINS(NULL, '1'), JSON_CONTAINS('1', NULL), JSON_CONTAINS('1', '1', NULL)", [[null,null,null]]],
   ["SELECT id, JSON_TYPE(j), JSON_LENGTH(j), JSON_LENGTH(j, '$.b'), JSON_DEPTH(j), JSON_KEYS(j), JSON_KEYS(j, '$.d') FROM r ORDER BY id", [["1","OBJECT","4","3","4","[\"a\", \"b\", \"d\", \"g h\"]","[\"e\", \"f\"]"],["2","ARRAY","4",null,"3",null,null],["3","STRING","1",null,"1",null,null],["4","INTEGER","1",null,"1",null,null],["5",null,null,null,null,null,null]]],
+  // Keys shortest first, then by their bytes: 'B' before 'b', 'é' (two bytes) after 'ab' (M5.11's done-when, 8.4.11).
+  ["SELECT JSON_KEYS('{\"aa\":1,\"b\":2,\"ab\":3,\"B\":4,\"é\":5,\"z\":6}')", [["[\"B\", \"b\", \"z\", \"aa\", \"ab\", \"é\"]"]]],
   ["SELECT JSON_TYPE('1.5'), JSON_TYPE('1e2'), JSON_TYPE('true'), JSON_TYPE('null'), JSON_TYPE('18446744073709551615'), JSON_TYPE(CAST(1.5 AS JSON)), JSON_TYPE(CAST(NOW() AS JSON) ), JSON_TYPE(NULL)", [["DOUBLE","DOUBLE","BOOLEAN","NULL","UNSIGNED INTEGER","DECIMAL","DATETIME",null]]],
   ["SELECT JSON_TYPE('x')", [3141,"Invalid JSON text in argument 1 to function json_type: \"Invalid value.\" at position 0."]],
   ["SELECT JSON_VALID('{}'), JSON_VALID('{a}'), JSON_VALID(NULL), JSON_VALID(1), JSON_VALID('1'), JSON_VALID(JSON_ARRAY())", [["1","0",null,"0","1","1"]]],

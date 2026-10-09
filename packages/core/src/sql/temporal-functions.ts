@@ -122,7 +122,7 @@ const timeMicros = (t: MysqlTime): bigint => {
 }
 
 /** Signed microseconds as a TIME, or undefined past 838:59:59.999999. */
-function microsToTime(us: bigint): MysqlTime | undefined {
+export function microsToTime(us: bigint): MysqlTime | undefined {
   const negative = us < 0n
   const a = negative ? -us : us
   if (a > BigInt(TIME_MAX_SECONDS) * 1_000_000n + 999_999n) return undefined

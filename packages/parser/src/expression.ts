@@ -673,8 +673,11 @@ class ExpressionParser {
       this.#c.skip()
       args.push({ kind: NODE.COLUMN, parts: ['*'], at: this.#peek().start })
     } else if (!this.#atOp(')')) {
-      do args.push(this.#binary(0))
-      while (this.#takeOp(','))
+      do {
+        // LAG's and LEAD's distance is a number as written or a `?`, nothing signed (8.4.11: `LAG(v, -1)` is 1064 at the `-`).
+        if (args.length === 1 && (upper === 'LAG' || upper === 'LEAD') && this.#peek().kind !== TOKEN.NUMBER && this.#peek().kind !== TOKEN.PLACEHOLDER) this.#fail()
+        args.push(this.#binary(0))
+      } while (this.#takeOp(','))
     }
     // `GROUP_CONCAT` is the one aggregate with clauses inside its parentheses,
     // and `CHAR` the one function that names a charset there.

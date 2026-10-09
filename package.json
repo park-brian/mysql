@@ -49,6 +49,7 @@
     "capture:coercion": "node tools/capture-coercion.mjs",
     "capture:type-merge": "node tools/capture-type-merge.mjs",
     "mysqltest:run": "node tools/mysqltest-run.mjs",
+    "introspection:diff": "node tools/introspection-diff.mjs",
     "capture:information-schema": "node tools/capture-information-schema.mjs",
     "census:mysqltest": "node tools/mysqltest-census.mjs",
     "census:orm": "node tools/orm-suites.mjs --server --ours",
