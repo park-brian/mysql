@@ -15,7 +15,7 @@
 // first one loaded.
 import { MyjsError } from '@myjs/bytes'
 import type { CallNode } from '@myjs/parser'
-import { BUILTINS, builtinFunction } from './builtins.ts'
+import { BUILTINS, CLOCK_FUNCTIONS, CONTROL_FUNCTIONS, INFORMATION_FUNCTIONS, REGEXP_FUNCTIONS, builtinFunction, clockFunction, controlFunction, informationFunction, regexpFunction } from './builtins.ts'
 import { compile, type CompileContext, type Compiled } from './compile.ts'
 import { JSON_PATH_FUNCTIONS, jsonPathFunction } from './json-path.ts'
 import { JSON_CONSTRUCTORS, jsonConstructor } from './json.ts'
@@ -38,6 +38,10 @@ const families = (): readonly (readonly [ReadonlySet<string>, FunctionCompiler])
   [MATH_FUNCTIONS, mathFunction],
   [NETWORK_FUNCTIONS, networkFunction],
   [BUILTINS, builtinFunction],
+  [CONTROL_FUNCTIONS, controlFunction],
+  [INFORMATION_FUNCTIONS, informationFunction],
+  [REGEXP_FUNCTIONS, regexpFunction],
+  [CLOCK_FUNCTIONS, clockFunction],
 ]
 
 let table: Map<string, FunctionCompiler> | undefined
