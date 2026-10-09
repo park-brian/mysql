@@ -453,6 +453,12 @@ function planSelect(run: Run, q: QueryExpression, node: SelectNode): SelectPlan 
     explain() {
       // An empty result the optimizer proves is no plan at all.
       if (facts?.impossible === true || provedEmpty(run, from, node, limitCount)) return [planNode('Zero rows')]
+      // A constant table is read while planning: its row, if the WHERE holds of it, is all there is to fetch.
+      // An uncorrelated scalar subquery a unique key equals is evaluated while planning too, so it pins the key (8.4.11).
+      if ((from?.single !== undefined && (facts?.constTable === true || subqueryPinsKey(from.single.def, from.single.alias, node.where, from.scope))) || (from !== undefined && from.tables.every((t) => t.derived?.constant === true))) {
+        for (const _ of from.rows(undefined, run.env, { locking: false })) return [planNode('Rows fetched before execution')]
+        return [planNode('Zero rows')]
+      }
       const source = from === undefined ? planNode('Rows fetched before execution') : withSubqueries(run, from.explain(run.env), 'where clause')
       const n = describeStages(source, stages)
       return n === undefined ? undefined : [n, ...subqueryNodes(run, 'field list')]
@@ -582,6 +588,16 @@ function selectNumber(run: Run, q: QueryExpression): number {
     expectTyped(e)
     return 0
   }
+}
+
+/** Whether the WHERE equals a single-column PRIMARY or NOT NULL UNIQUE key to an uncorrelated scalar subquery. */
+function subqueryPinsKey(def: TableDef, alias: string, where: Expression | undefined, scope: TableScope): boolean {
+  const unique = (e: Expression): boolean => {
+    if (e.kind !== NODE.COLUMN || (e.parts.length >= 2 && e.parts[e.parts.length - 2] !== alias)) return false
+    const column = def.columns.find((c) => c.name.toLowerCase() === (e.parts[e.parts.length - 1] as string).toLowerCase())
+    return column !== undefined && !column.nullable && def.indexes.some((i) => i.kind !== 'index' && i.parts.length === 1 && i.parts[0]?.column === column.name && i.parts[0].prefix === undefined)
+  }
+  return splitAnd(where).some((c) => c.kind === NODE.BINARY && c.op === '=' && ([[c.left, c.right], [c.right, c.left]] as const).some(([key, value]) => value.kind === NODE.SUBQUERY && !correlatedIn(value, scope) && unique(key)))
 }
 
 /** Whether the optimizer proves the result empty — an impossible condition, a join that cannot match, LIMIT 0 — and plans nothing. */
@@ -908,6 +924,7 @@ function derivedTable(run: Run, query: QueryExpression, alias: string, names: re
   const key = {}
   return {
     columns,
+    ...(lateral === undefined && !hasFrom(query) && query.body.kind === QUERY.SELECT ? { constant: true } : {}),
     explain: (): DerivedPlan | undefined => {
       const body = plan.explain?.()?.[0]
       if (body === undefined) return undefined

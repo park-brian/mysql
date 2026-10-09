@@ -67,6 +67,8 @@ export interface DerivedSource {
    * rows through a temporary table, as over any join.
    */
   readonly joined?: boolean
+  /** A query with no FROM: one constant row at most, which the server reads while planning, as a constant table. */
+  readonly constant?: boolean
   /** Its rows, as values in column order. `lateral` is the FROM's row so far, for LATERAL. */
   rows(trx: Trx | undefined, env: Env, lateral: Row | undefined): Iterable<readonly Value[]>
   /**
@@ -501,7 +503,9 @@ export function planFrom(refs: readonly TableReference[], ctx: FromContext, wher
     ...(single === undefined ? {} : { single }),
     filter(where, compile, semijoin) {
       settings.where = where
-      const conditions = splitAnd(where).map((e): Placed => {
+      // `IS NOT NULL` of a NOT NULL column no outer join can null is true, and the server drops it (8.4.11: no Filter).
+      const alwaysTrue = (e: Expression): boolean => e.kind === NODE.UNARY && e.op === 'IS NOT NULL' && tables.some((t) => !t.nullable && columnOf(t, e.operand, scope)?.nullable === false)
+      const conditions = splitAnd(where).filter((e) => !alwaysTrue(e)).map((e): Placed => {
         const compiled = compile(e)
         const semi = semijoin?.(e)
         return { e, aliases: aliasesOf(e, scope), compiled, ...(semi === undefined ? {} : { semijoin: semi }) }
@@ -1413,8 +1417,7 @@ function describeLeaf(t: FromTable, settings: LeafSettings, env: Env): PlanNode 
   const order = settings.ordered
   if (order !== undefined && access.ranges === undefined) {
     // Read whole in an index's order: covering when it holds every column the query reads.
-    const clustered = order.index === 'PRIMARY' || order.index === t.def.clustered
-    const covers = !clustered && settings.covering.get(t.alias) === order.index
+    const covers = settings.covering.get(t.alias) === order.index
     return planNode(`${covers ? 'Covering index' : 'Index'} scan on ${t.alias} using ${order.index}${order.reverse ? ' (reverse)' : ''}`)
   }
   if (access.index === undefined) return planNode(`Table scan on ${t.alias}`)
@@ -1488,7 +1491,12 @@ function covers(def: TableDef, index: IndexDef, read: ReadonlySet<string> | 'all
   return [...read].every((c) => holds.has(c))
 }
 
-/** The smallest secondary index that holds every column in `read`, by key bytes. */
+/**
+ * The index a table read whole is read through (`find_shortest_key`): the
+ * smallest secondary index that holds every column in `read`, by key bytes;
+ * else the clustered index itself when `read` is only its columns, which
+ * 8.4.11 shows as a covering index scan of PRIMARY.
+ */
 function coveringIndex(def: TableDef, read: ReadonlySet<string> | 'all'): string | undefined {
   let best: { name: string; bytes: number } | undefined
   for (const index of def.indexes) {
@@ -1496,5 +1504,7 @@ function coveringIndex(def: TableDef, read: ReadonlySet<string> | 'all'): string
     const bytes = index.parts.reduce((n, p) => n + keyBytes(def.columns.find((c) => c.name === p.column) as ColumnDef), 0)
     if (best === undefined || bytes < best.bytes) best = { name: index.name, bytes }
   }
+  const clustered = clusteredIndex(def)
+  if (best === undefined && read !== 'all' && clustered !== undefined && clustered.invisible !== true && [...read].every((c) => clustered.parts.some((p) => p.column.toLowerCase() === c))) return clustered.name
   return best?.name
 }

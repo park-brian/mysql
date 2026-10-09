@@ -28,7 +28,7 @@ const FIXTURE = new URL('./fixtures/relational.json', import.meta.url).pathname
 const REFUSED_AT_MOST = 0
 
 /** The fewest plans that must agree with the server's, skeleton for skeleton (M5.44). Raised by the planner's work, never lowered. */
-const PLANS_AGREE_AT_LEAST = 1909
+const PLANS_AGREE_AT_LEAST = 1984
 
 test('M5.18: every relational statement the executor runs returns what the server returned', async () => {
   assert.ok(existsSync(FIXTURE), 'the corpus must be committed')

@@ -429,7 +429,7 @@ function constantFor(e: Expression, column: ColumnDef, ctx: CompileContext, env:
 function rangeOf(e: Expression, isColumn: (e: Expression) => boolean, column: ColumnDef, ctx: CompileContext, env: Env): RangeSet {
   if (e.kind === NODE.BINARY && (e.op === 'AND' || e.op === '&&')) return intersect(rangeOf(e.left, isColumn, column, ctx, env), rangeOf(e.right, isColumn, column, ctx, env))
   if (e.kind === NODE.BINARY && (e.op === 'OR' || e.op === '||')) return union(rangeOf(e.left, isColumn, column, ctx, env), rangeOf(e.right, isColumn, column, ctx, env))
-  if (e.kind === NODE.UNARY && (e.op === 'IS NULL' || e.op === 'IS NOT NULL') && isColumn(e.operand)) return e.op === 'IS NULL' ? ['null'] : [ALL_VALUES]
+  if (e.kind === NODE.UNARY && (e.op === 'IS NULL' || e.op === 'IS NOT NULL') && isColumn(e.operand)) return e.op === 'IS NULL' ? (column.nullable ? ['null'] : []) : [ALL_VALUES]
   if (e.kind !== NODE.BINARY) return 'all'
   const point = (v: Exclude<Value, null>): Interval => ({ lo: { v, inclusive: true }, hi: { v, inclusive: true } })
   if (e.op === 'BETWEEN' && isColumn(e.left)) {
@@ -459,7 +459,7 @@ function rangeOf(e: Expression, isColumn: (e: Expression) => boolean, column: Co
   if (!(op in FLIP)) return 'all'
   const v = constantFor(other, column, ctx, env)
   if (v === undefined) return 'all'
-  if (v === null) return op === '<=>' ? ['null'] : []
+  if (v === null) return op === '<=>' && column.nullable ? ['null'] : []
   switch (op) {
     case '=':
     case '<=>':
