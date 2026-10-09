@@ -81,6 +81,19 @@ const NILADIC = new Set([
 ])
 
 /**
+ * The builtins whose names the server's lexer recognises as function tokens
+ * only when `(` follows at once, or anywhere under IGNORE_SPACE: the list in
+ * the Reference Manual's "Function Name Parsing and Resolution", each name
+ * checked against 8.4.11 (`SELECT NAME (1)` is 1630 for these 35, and the
+ * builtin for any other).
+ */
+const SPACE_SENSITIVE: ReadonlySet<string> = new Set([
+  'ADDDATE', 'BIT_AND', 'BIT_OR', 'BIT_XOR', 'CAST', 'COUNT', 'CURDATE', 'CURTIME', 'DATE_ADD', 'DATE_SUB', 'EXTRACT', 'GROUP_CONCAT',
+  'JSON_ARRAYAGG', 'JSON_OBJECTAGG', 'MAX', 'MID', 'MIN', 'NOW', 'POSITION', 'SESSION_USER', 'STD', 'STDDEV', 'STDDEV_POP', 'STDDEV_SAMP',
+  'ST_COLLECT', 'SUBDATE', 'SUBSTR', 'SUBSTRING', 'SUM', 'SYSDATE', 'SYSTEM_USER', 'TRIM', 'VARIANCE', 'VAR_POP', 'VAR_SAMP',
+])
+
+/**
  * Reserved words that are also builtin functions, so a `(` after one makes it a
  * call rather than a syntax error: `IF(a, b, c)`, `LEFT(s, 2)`, `RANK() OVER w`.
  *
@@ -590,6 +603,10 @@ class ExpressionParser {
       }
       if (upper === 'MATCH' && (this.#atOp('(', 1) || this.#peek(1).kind === TOKEN.IDENTIFIER)) return this.#match()
       if (this.#atOp('(', 1)) {
+        // One of the builtins the lexer knows by name, a space before its
+        // `(`, and IGNORE_SPACE off: not the builtin, but a stored function
+        // of that name (8.4.11: `COUNT (*)` is 1064, `NOW ()` is 1630).
+        if (SPACE_SENSITIVE.has(upper) && !this.#mode.ignoreSpace && this.#peek(1).start !== t.start + t.text.length) return this.#storedCall()
         const special = this.#specialCall(upper)
         if (special !== null) return special
       }
@@ -626,11 +643,9 @@ class ExpressionParser {
     //     something VARCHAR(64) NOT NULL DEFAULT (CONCAT ('[', data, ']'))
     //
     // with no `--error` in front of it, so a real 8.4 accepts it. The manual's
-    // rule applies only to the builtin functions that are *also grammar
-    // keywords* — `COUNT`, `LEFT`, `IF` and their like — which become reserved
-    // under `IGNORE_SPACE`. Modelling that list needs the reserved-word list
-    // M3.3 will bring; until then the permissive reading is the one the corpus
-    // supports, and the strict one silently refused valid SQL.
+    // rule applies only to the builtins its lexer knows by name, which
+    // `SPACE_SENSITIVE` lists and the branch above reads as stored functions
+    // when a space comes first (M5.33).
     if (this.#atOp('(', 1)) return this.#call()
 
     // A qualified name: `a`, `t.a`, `db.t.a`, `t.*` or `db.t.*` — three parts
@@ -712,6 +727,19 @@ class ExpressionParser {
     const spec = parseWindowSpec(this.#c, this.#mode)
     this.#expectOp(')')
     return spec
+  }
+
+  /** `name (args)` read as a stored function's call: plain arguments, none of a builtin's own syntax. */
+  #storedCall(): Expression {
+    const name = this.#take()
+    this.#expectOp('(')
+    const args: Expression[] = []
+    if (!this.#atOp(')')) {
+      do args.push(this.#binary(0))
+      while (this.#takeOp(','))
+    }
+    this.#expectOp(')')
+    return { kind: NODE.CALL, name: name.text, args, stored: true, at: name.start }
   }
 
   /**

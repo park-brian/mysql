@@ -2107,6 +2107,9 @@ function outerOnly(args: readonly Expression[], ctx: CompileContext): boolean {
 
 function call(e: CallNode, ctx: CompileContext): Compiled {
   const name = e.name.toUpperCase()
+  // `NOW ()` with IGNORE_SPACE off names a stored function, which this
+  // executor has none of (8.4.11's wording, M5.33).
+  if (e.stored === true) throw sqlError('ER_FUNC_INEXISTENT_NAME_COLLISION', `FUNCTION ${ctx.session.database ?? ''}.${e.name} does not exist. Check the 'Function Name Parsing and Resolution' section in the Reference Manual`)
   if (e.over !== undefined) {
     if (ctx.windows !== undefined) return ctx.windows.register(e)
     if (/^(where|having|on) clause$/.test(ctx.clause)) windowNotAllowed(e)
