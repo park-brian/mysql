@@ -132,7 +132,7 @@ export interface Env {
  * empty or only spaces is 0 without one; so is an ENUM, read by its index,
  * and a hex literal, read as a number. The value itself passes unchanged.
  */
-export function asNumber(c: Compiled, kind: 'DOUBLE' | 'INTEGER' | 'DECIMAL', once = false): Compiled {
+export function asNumber(c: Compiled, kind: 'DOUBLE' | 'INTEGER' | 'DECIMAL', once: boolean | Expression = false): Compiled {
   if (c.type.kind !== 'string' && c.type.kind !== 'bytes') return c
   // A TEXT or BLOB column reads as a double or an integer without a word
   // (`Field_blob::val_real` and `val_int` discard the error).
@@ -143,13 +143,15 @@ export function asNumber(c: Compiled, kind: 'DOUBLE' | 'INTEGER' | 'DECIMAL', on
   // for '1x' and '12x' but not for '1xy', 'xy' or 'é'; in a VARCHAR(400),
   // for those three but not for '1abc' or '1.2.3.4'). A CHAR always warns.
   const quietTail = c.type.column !== undefined && c.type.field === FIELD_TYPE.VAR_STRING && kind !== 'DECIMAL' ? ((c.type.kind === 'bytes' ? c.type.length : c.type.length * requireCollationInfo(c.type.collationId).mbmaxlen) < 256 ? 2 : 4) : undefined
-  const key = {}
+  // Once a statement, a constant: keyed by its node when it has one, so that
+  // the optimizer's own evaluation of it and the plan's share the one warning (8.4.11).
+  const key = typeof once === 'object' ? once : {}
   return {
     ...c,
     eval: (r, env) => {
       const v = c.eval(r, env)
       if (v === null) return v
-      if (once) {
+      if (once !== false) {
         if (env.memo?.has(key) === true) return v
         env.memo?.set(key, true)
       }
@@ -171,12 +173,14 @@ function unconvertedBytes(v: Exclude<Value, null>, kind: 'DOUBLE' | 'INTEGER' | 
 }
 
 /** Text on one side and a number on the other: a comparison of doubles. */
+const isNumber = (t: ResultType): boolean => t.kind === 'int' || t.kind === 'decimal' || t.kind === 'double'
+
 function textVersusNumber(x: ResultType, y: ResultType): boolean {
-  return (x.kind === 'string' || x.kind === 'bytes') && (y.kind === 'int' || y.kind === 'decimal' || y.kind === 'double')
+  return (x.kind === 'string' || x.kind === 'bytes') && isNumber(y)
 }
 
 /** `asNumber`'s check, for one value. */
-function checkNumber(v: Exclude<Value, null>, kind: 'DOUBLE' | 'INTEGER' | 'DECIMAL', env: Env): void {
+function checkNumber(v: Exclude<Value, null>, kind: 'DOUBLE' | 'INTEGER' | 'DECIMAL', env: Env, column = false): void {
   if (v.kind === 'string' ? v.ordinal !== undefined : v.kind !== 'bytes' || v.hex === true) return
   const text = toText(v)
   const p = numericPrefix(text)
@@ -187,8 +191,8 @@ function checkNumber(v: Exclude<Value, null>, kind: 'DOUBLE' | 'INTEGER' | 'DECI
       : // And a double past the largest, which is read as it (8.4.11: `'1e400' + 0`).
         kind === 'DOUBLE' && p.complete && !Number.isFinite(Number(p.text))
   if (p.complete && !(kind === 'INTEGER' && p.fractional) && !overflow) return
-  // Nothing at all is 0 quietly, except as a DECIMAL (8.4.11: `CAST('' AS DECIMAL)` warns).
-  if (!p.complete && kind !== 'DECIMAL' && /^[ \t\n\r]*$/.test(text)) return
+  // Nothing at all is 0 quietly, except as a DECIMAL (8.4.11: `CAST('' AS DECIMAL)` warns) and from a column (`-vc` of '' warns).
+  if (!p.complete && kind !== 'DECIMAL' && !column && /^[ \t\n\r]*$/.test(text)) return
   raise(env, 1292, `Truncated incorrect ${kind} value: '${warnedText(v)}'`)
 }
 
@@ -568,7 +572,7 @@ export function compile(e: Expression, ctx: CompileContext): Compiled {
 
     case NODE.UNARY:
       if (e.op === 'EXISTS' && e.operand.kind === NODE.SUBQUERY) return exists(e.operand, ctx)
-      return unary(e.op, compile(e.operand, ctx), e.op === 'EXISTS')
+      return unary(e.op, compile(e.operand, ctx), e.op === 'EXISTS', constantNode(e.operand) && e.operand)
 
     case NODE.BINARY:
       return binary(e.op, e.left, e.right, e.extra, ctx)
@@ -848,7 +852,7 @@ function divisionDouble(a: ResultType, b: ResultType): ResultType {
   return { ...doubleType(true, Math.min(width, 17 + scale)), scale }
 }
 
-function unary(op: string, a: Compiled, exists: boolean): Compiled {
+function unary(op: string, a: Compiled, exists: boolean, constant: false | Expression = false): Compiled {
   if (exists) throw sqlError('ER_NOT_SUPPORTED_YET', messages.notSupported('EXISTS'))
   const at = a.eval
   switch (op) {
@@ -856,6 +860,11 @@ function unary(op: string, a: Compiled, exists: boolean): Compiled {
       const t = a.type
       // Negating an unsigned value needs room for the sign it gains.
       // A hex literal negated is a double, as its string self is (8.4.11: 17 wide, 0 decimals).
+      // A temporal negated is a double with its fractional digits, through its number (8.4.11: `-dt` of a DATETIME(3) is 20 wide, 3 decimals).
+      if (t.kind === 'datetime' || t.kind === 'time') {
+        const type = floatLength(t.scale, t.nullable)
+        return { eval: (r, env) => { const v = a.eval(r, env); return v === null ? null : doubleOf(doubleValue(-toDouble(v)), type) }, type }
+      }
       const type = t.literalInt !== undefined ? floatLength(0, t.nullable) : t.kind === 'int' ? intType(t.length + (t.unsigned ? 1 : 0), t.nullable) : t.kind === 'decimal' ? decimalType(t.length, t.scale, t.nullable) : t.kind === 'null' ? NULL_TYPE : t.kind === 'double' ? floatLength(t.scale, t.nullable) : doubleType(t.nullable)
       const operand = asNumber(a, 'DOUBLE').eval
       if (type.kind === 'double' && type.scale < 31) return { eval: (r, env) => doubleOf(negate(operand(r, env)), type), type }
@@ -868,8 +877,10 @@ function unary(op: string, a: Compiled, exists: boolean): Compiled {
       return { eval: (r, env) => bitNot(x(r, env)), type: intType(21, a.type.nullable, true) }
     }
     case '!':
-    case 'NOT':
-      return { eval: (r, env) => not(at(r, env)), type: boolType(a.type.nullable) }
+    case 'NOT': {
+      const x = asNumber(a, 'DOUBLE', constant).eval
+      return { eval: (r, env) => not(x(r, env)), type: boolType(a.type.nullable) }
+    }
     case 'BINARY':
       return {
         eval: (r, env) => {
@@ -972,10 +983,11 @@ function binary(op: string, left: Expression, right: Expression, extra: Expressi
     const a0 = a
     const lo0 = timeConstant(a0, left, right, compile(right, ctx))
     const hi0 = timeConstant(a0, left, extra as Expression, compile(extra as Expression, ctx))
-    // Text against a number bound is a double, read once a row.
-    const subject = textVersusNumber(a0.type, lo0.type) || textVersusNumber(a0.type, hi0.type) ? asNumber(a0, 'DOUBLE') : a0
-    const lo = textVersusNumber(lo0.type, a0.type) ? asNumber(lo0, 'DOUBLE', constantNode(right)) : lo0
-    const hi = textVersusNumber(hi0.type, a0.type) ? asNumber(hi0, 'DOUBLE', constantNode(extra as Expression)) : hi0
+    // One comparison type for all three: with a number among them, text is read as a double (`agg_cmp_type`).
+    const numeric = [a0, lo0, hi0].some((x) => isNumber(x.type))
+    const subject = numeric && isText(a0.type) ? asNumber(a0, 'DOUBLE') : a0
+    const lo = numeric && isText(lo0.type) ? asNumber(lo0, 'DOUBLE', constantNode(right) && right) : lo0
+    const hi = numeric && isText(hi0.type) ? asNumber(hi0, 'DOUBLE', constantNode(extra as Expression) && (extra as Expression)) : hi0
     const negated = op === 'NOT BETWEEN'
     if (isText(a0.type) && isText(lo0.type) && isText(hi0.type)) aggregateCollations([a0.type, lo0.type, hi0.type], 'between', true)
     // Each bound is its own comparison, fixed decimals and all.
@@ -1008,8 +1020,10 @@ function binary(op: string, left: Expression, right: Expression, extra: Expressi
   // And in a comparison with a number, which is of doubles: a constant is
   // converted once a statement (`cache_converted_constant`), a column each row.
   const comparison = (COMPARISONS[op] !== undefined || op === '<=>') && (textVersusNumber(ca.type, cb.type) || textVersusNumber(cb.type, ca.type))
-  const at = arithmetic || comparison ? asNumber(ca, 'DOUBLE', comparison && constantNode(left)).eval : ca.eval
-  const bt = arithmetic || comparison ? asNumber(cb, 'DOUBLE', comparison && constantNode(right)).eval : cb.eval
+  // A logical operator reads its operands' truth as doubles, and a string that is not one warns as it would there.
+  const logical = op === 'AND' || op === '&&' || op === 'OR' || op === '||' || op === 'XOR'
+  const at = arithmetic || comparison || logical ? asNumber(ca, 'DOUBLE', (comparison || logical) && constantNode(left) && left).eval : ca.eval
+  const bt = arithmetic || comparison || logical ? asNumber(cb, 'DOUBLE', (comparison || logical) && constantNode(right) && right).eval : cb.eval
   const nullable = !notNull(a.type, b.type)
   // What an overflow names, as MySQL's message does: the expression's text.
   // Printed only for an error's message: the printing compiles the columns it names.
@@ -1740,7 +1754,19 @@ export function convertTo(v: Value, t: ResultType): Value {
  * is what `val_str` passes through (8.4.11: `IF(1, b, 0)` sends 0x05 as the
  * DECIMAL's text, and `IF(1, b8, b12)` one byte).
  */
+/** A value's text as its type shows it: a YEAR is four digits, `0000` for zero (8.4.11). */
+export function textOf(v: Exclude<Value, null>, t: ResultType): string {
+  return t.field === FIELD_TYPE.YEAR && v.kind === 'int' ? v.v.toString().padStart(4, '0') : toText(v)
+}
+
 export function branchOf(x: Compiled, result: ResultType): Compiled['eval'] {
+  if (x.type.field === FIELD_TYPE.YEAR && result.kind === 'string') {
+    const id = result.collationId
+    return (r, env) => {
+      const v = x.eval(r, env)
+      return v === null ? null : stringValue(textOf(v, x.type), id)
+    }
+  }
   if (result.kind === 'datetime' && (x.type.kind === 'datetime' || x.type.kind === 'time') && x.type.field !== result.field) return (r, env) => asMerged(x.eval(r, env), result, env)
   if (!isBits(x.type) || !(result.kind === 'decimal' || result.kind === 'bytes' || isBits(result))) return x.eval
   const bits = x.type.length
@@ -1751,14 +1777,19 @@ export function branchOf(x: Compiled, result: ResultType): Compiled['eval'] {
 }
 
 function caseExpr(e: CaseNode, ctx: CompileContext): Compiled {
-  const operand = e.operand === undefined ? undefined : compile(e.operand, ctx)
-  const whens = e.whens.map((w) => ({ when: compile(w.when, ctx), then: compile(w.then, ctx) }))
+  const given = e.operand === undefined ? undefined : compile(e.operand, ctx)
+  const compiled = e.whens.map((w) => ({ when: compile(w.when, ctx), then: compile(w.then, ctx) }))
+  // `CASE x WHEN y`: one comparison type for x and every y, text read as a
+  // double beside a number (`agg_cmp_type`); a searched CASE reads each WHEN's truth as one.
+  const numeric = given !== undefined && [given, ...compiled.map((w) => w.when)].some((x) => isNumber(x.type))
+  const operand = given !== undefined && numeric && isText(given.type) ? asNumber(given, 'DOUBLE') : given
+  const whens = compiled.map((w) => ({ when: given === undefined || numeric ? asNumber(w.when, 'DOUBLE') : w.when, then: w.then }))
   const otherwise = e.else === undefined ? undefined : compile(e.else, ctx)
   const results = [...whens.map((w) => w.then.type), otherwise?.type ?? NULL_TYPE]
   const nullable = otherwise === undefined || results.some((t) => t.nullable)
   const type = aggregate(results, nullable, ctx.connectionCollation, 'case')
   // `CASE x WHEN y`: the operand and every WHEN compare in one collation.
-  if (operand !== undefined && isText(operand.type) && whens.every((w) => isText(w.when.type))) aggregateCollations([operand.type, ...whens.map((w) => w.when.type)], 'case', true)
+  if (given !== undefined && isText(given.type) && compiled.every((w) => isText(w.when.type))) aggregateCollations([given.type, ...compiled.map((w) => w.when.type)], 'case', true)
   const thens = whens.map((w) => branchOf(w.then, type))
   const elseOf = otherwise === undefined ? undefined : branchOf(otherwise, type)
   return {

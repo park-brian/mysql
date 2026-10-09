@@ -47,6 +47,7 @@ import {
   type CompileContext,
   type Compiled,
   asMerged,
+  textOf,
   type Env,
   type Row,
 } from './compile.ts'
@@ -332,7 +333,9 @@ export function controlFunction(name: string, e: CallNode, ctx: CompileContext):
   switch (name) {
     case 'IF': {
       arity(3)
-      const [c, x, y] = args() as [Compiled, Compiled, Compiled]
+      const [given, x, y] = args() as [Compiled, Compiled, Compiled]
+      // The condition's truth is a double, and text that is not one warns (8.4.11).
+      const c = asNumber(given, 'DOUBLE')
       const type = aggregate([x.type, y.type], x.type.nullable || y.type.nullable, conn, 'if')
       if (type.kind === 'double') return { eval: (r, env) => doubleOf(truth(c.eval(r, env)) === true ? x.eval(r, env) : y.eval(r, env), type), type }
       const [xv, yv] = [branchOf(x, type), branchOf(y, type)]
@@ -382,15 +385,20 @@ export function controlFunction(name: string, e: CallNode, ctx: CompileContext):
     }
     case 'NULLIF': {
       arity(2)
-      const [x, y] = args() as [Compiled, Compiled]
+      const [given, y] = args() as [Compiled, Compiled]
+      const x = asBigintConstant(given, y, e.args[0] as Expression, ctx) ?? given
       if (isText(x.type) && isText(y.type)) aggregateCollations([x.type, y.type], 'nullif', true)
       const cmp = comparer(x.type, y.type)
+      // A temporal or a YEAR comes back as its text, in the connection's charset (8.4.11).
+      const text = x.type.kind === 'datetime' || x.type.kind === 'time' || x.type.field === FIELD_TYPE.YEAR
+      const type: ResultType = text ? { ...stringType(charWidth(x.type), conn, true), unsigned: x.type.field === FIELD_TYPE.YEAR } : { ...expressionOf(x.type), nullable: true }
       return {
         eval: (r, env) => {
           const v = x.eval(r, env)
-          return cmp(v, y.eval(r, env)) === 0 ? null : v
+          if (cmp(v, y.eval(r, env)) === 0 || v === null) return null
+          return text ? stringValue(textOf(v, x.type), conn) : v
         },
-        type: { ...expressionOf(x.type), nullable: true },
+        type,
       }
     }
     case 'ISNULL': {
@@ -686,8 +694,25 @@ function nextRand(s: RandSeeds): number {
  * text is its bytes, and BITs alone are the number, whose text is its
  * digits even under the BIT type (8.4.11: `COALESCE(b)` of b'101' sends '5').
  */
+/**
+ * A string or hex constant compared with a BIGINT column, as an integer
+ * constant: MySQL converts it once, so the comparison is exact rather than
+ * in doubles (`convert_constant_item`). Only where it reads as a whole number:
+ * `'1.5'` stays text, `'abc'` is 0 with its 1292 (8.4.11).
+ */
+function asBigintConstant(x: Compiled, y: Compiled, written: Expression, ctx: CompileContext): Compiled | undefined {
+  if (!isText(x.type) || written.kind !== NODE.LITERAL || y.type.column === undefined || y.type.field !== FIELD_TYPE.LONGLONG) return undefined
+  const read = asNumber(x, 'DOUBLE', true)
+  const probe = x.eval([], constantEnv(ctx))
+  const d = probe === null ? NaN : toDouble(probe)
+  if (!Number.isInteger(d) || Math.abs(d) > 2 ** 63) return undefined
+  const v = intValue(BigInt(d))
+  return { eval: (r, env) => (read.eval(r, env), v), type: { ...intType(22, x.type.nullable, y.type.unsigned), field: FIELD_TYPE.LONGLONG } }
+}
+
 function chosenOf(x: Compiled, result: ResultType): (v: Exclude<Value, null>, env: Env) => Value {
   if (result.kind === 'datetime' && (x.type.kind === 'datetime' || x.type.kind === 'time') && x.type.field !== result.field) return (v, env) => asMerged(v, result, env)
+  if (x.type.field === FIELD_TYPE.YEAR && result.kind === 'string') return (v) => stringValue(textOf(v, x.type), result.collationId)
   if (!isBits(x.type) || !(result.kind === 'bytes' || isBits(result))) return (v) => convertTo(v, result)
   const bits = x.type.length
   if (result.kind === 'bytes') return (v) => (v.kind === 'int' ? bytesValue(bitBytes(v.v, bits)) : convertTo(v, result))

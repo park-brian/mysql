@@ -259,7 +259,7 @@ export function toDouble(v: Exclude<Value, null>): number {
     case 'datetime':
       return Number(temporalNumber(v))
     case 'time':
-      return Number(timeNumber(v.v))
+      return Number(timeNumber(v.v, v.fsp))
     case 'json': {
       const n = jsonNumber(v)
       return n === undefined ? Number(numericPrefix(renderJson(v.v)).text) : toDouble(n)
@@ -297,7 +297,7 @@ export function toDecimal(v: Exclude<Value, null>): DecimalValue {
     case 'datetime':
       return parseDecimal(temporalNumber(v))
     case 'time':
-      return parseDecimal(timeNumber(v.v))
+      return parseDecimal(timeNumber(v.v, v.fsp))
     case 'json': {
       const n = jsonNumber(v)
       return n === undefined ? parseDecimal(numericPrefix(renderJson(v.v)).text.replace(/[eE].*$/, '') || '0') : toDecimal(n)
@@ -336,7 +336,7 @@ export function toInteger(v: Exclude<Value, null>): bigint {
     case 'datetime':
       return BigInt(temporalNumber(v).split('.')[0] as string)
     case 'time':
-      return BigInt(timeNumber(v.v).split('.')[0] as string)
+      return BigInt(timeNumber(v.v, v.fsp).split('.')[0] as string)
     case 'json': {
       const n = jsonNumber(v)
       return n === undefined ? toInteger(string(renderJson(v.v), 255)) : toInteger(n)
@@ -409,9 +409,9 @@ function temporalNumber(v: DateTimeValue): string {
   return `${date}${pad(d.hour, 2)}${pad(d.minute, 2)}${pad(d.second, 2)}${frac}`
 }
 
-function timeNumber(t: MysqlTime): string {
-  const n = `${t.days * 24 + t.hour}${pad(t.minute, 2)}${pad(t.second, 2)}`
-  return `${t.negative ? '-' : ''}${n}`
+function timeNumber(t: MysqlTime, fsp: number): string {
+  const frac = fsp > 0 ? `.${pad(t.microsecond, 6).slice(0, fsp)}` : ''
+  return `${t.negative ? '-' : ''}${t.days * 24 + t.hour}${pad(t.minute, 2)}${pad(t.second, 2)}${frac}`
 }
 
 /** A value as text, as `val_str()`. */
@@ -423,7 +423,7 @@ export function toText(v: Exclude<Value, null>): string {
     case 'decimal':
       return renderDecimal(v)
     case 'double':
-      if (v.decimals !== undefined && Number.isFinite(v.v) && Math.abs(v.v) < 1e21) return v.v.toFixed(v.decimals)
+      if (v.decimals !== undefined && Number.isFinite(v.v) && Math.abs(v.v) < 1e21) return `${Object.is(v.v, -0) ? '-' : ''}${v.v.toFixed(v.decimals)}`
       return v.float === true ? renderFloat(v.v) : renderDouble(v.v)
     case 'string':
       return v.v

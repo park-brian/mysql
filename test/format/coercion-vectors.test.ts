@@ -20,8 +20,8 @@ const REFUSED_AT_MOST = 0
  * The most statements that may still disagree, and queries whose warning
  * counts may: M5.2 is done at zero. Lowered as each rule lands, never raised.
  */
-const DISAGREE_AT_MOST = 205
-const WARNINGS_DIFFER_AT_MOST = 143
+const DISAGREE_AT_MOST = 168
+const WARNINGS_DIFFER_AT_MOST = 102
 
 test('M5.2: implicit coercions give what the server gave, value, type and warnings, ratcheted to all', async () => {
   assert.ok(existsSync(FIXTURE), 'the corpus must be committed')

@@ -20,7 +20,8 @@ function textOf(v: Exclude<Value, null>, t: ResultType): string {
   // `my_fcvt` does (8.4.11: a FLOAT(3,1) holding 1.25 is `1.2`).
   if (t.kind === 'double' && t.scale < 31 && (v.kind === 'double' || v.kind === 'int' || v.kind === 'decimal')) {
     const n = toDouble(v)
-    if (Number.isFinite(n) && Math.abs(n) < 1e21) return n.toFixed(t.scale)
+    // Negative zero keeps its sign, as `my_fcvt` writes it (8.4.11: `-TIME'00:00:00'` is `-0`).
+    if (Number.isFinite(n) && Math.abs(n) < 1e21) return `${Object.is(n, -0) ? '-' : ''}${n.toFixed(t.scale)}`
   }
   switch (v.kind) {
     case 'double':
