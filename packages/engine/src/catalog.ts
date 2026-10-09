@@ -79,6 +79,9 @@ export interface ViewDef {
   readonly columns?: readonly string[]
   readonly algorithm?: 'UNDEFINED' | 'MERGE' | 'TEMPTABLE'
   readonly checkOption?: 'CASCADED' | 'LOCAL'
+  readonly security?: 'DEFINER' | 'INVOKER'
+  /** Whether CREATE VIEW named the columns itself, which SHOW CREATE VIEW then lists. */
+  readonly listed?: true
   /** Who made it, `user@host`, and the connection collation it was made in, as INFORMATION_SCHEMA.VIEWS reports them. */
   readonly definer?: string
   readonly collationConnection?: number
@@ -112,7 +115,23 @@ function decodeViewDef(bytes: Uint8Array): ViewDef {
   const collationConnection = d['collationConnection']
   if (definer !== undefined && !isStr(definer)) throw corruptCatalog('a view definition whose definer is not a name')
   if (collationConnection !== undefined && typeof collationConnection !== 'number') throw corruptCatalog('a view definition whose collation is not an id')
-  return { schema: d['schema'], name: d['name'], query: d['query'], ...(database === undefined ? {} : { database }), ...(definer === undefined ? {} : { definer }), ...(collationConnection === undefined ? {} : { collationConnection }), ...(columns === undefined ? {} : { columns }), ...(algorithm === undefined ? {} : { algorithm }), ...(checkOption === undefined ? {} : { checkOption }) }
+  const security = d['security']
+  if (security !== undefined && security !== 'DEFINER' && security !== 'INVOKER') throw corruptCatalog(`a view security of ${JSON.stringify(security)}`)
+  const listed = d['listed']
+  if (listed !== undefined && listed !== true) throw corruptCatalog('a view definition whose column list flag is not true')
+  return {
+    schema: d['schema'],
+    name: d['name'],
+    query: d['query'],
+    ...(database === undefined ? {} : { database }),
+    ...(definer === undefined ? {} : { definer }),
+    ...(collationConnection === undefined ? {} : { collationConnection }),
+    ...(columns === undefined ? {} : { columns }),
+    ...(algorithm === undefined ? {} : { algorithm }),
+    ...(checkOption === undefined ? {} : { checkOption }),
+    ...(security === undefined ? {} : { security }),
+    ...(listed === undefined ? {} : { listed }),
+  }
 }
 
 const isView = (row: readonly (Uint8Array | null)[]): boolean => readBe32(row[2]) === VIEW_ID

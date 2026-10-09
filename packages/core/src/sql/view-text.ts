@@ -28,7 +28,7 @@ interface Source {
 }
 
 /** VIEW_DEFINITION for `query`, resolved in `schema` against `tables`; `undefined` past the subset. */
-export function viewDefinition(query: QueryExpression, names: readonly string[], schema: string, tables: (schema: string, name: string) => TableDef | undefined, source?: string): string | undefined {
+export function viewDefinition(query: QueryExpression, names: readonly string[], schema: string, tables: (schema: string, name: string) => TableDef | undefined, source?: string, current?: string | null): string | undefined {
   try {
     if (query.with !== undefined || query.locking !== undefined) return undefined
     const body = query.body
@@ -40,9 +40,11 @@ export function viewDefinition(query: QueryExpression, names: readonly string[],
         const db = r.table.schema ?? schema
         const def = tables(db, r.table.name)
         if (def === undefined) throw new Unprintable()
-        const qualifier = r.alias === undefined ? `${q(db)}.${q(r.table.name)}` : q(r.alias)
+        // SHOW CREATE VIEW names a table in the current database without it (8.4.11).
+        const named = db === current ? q(r.table.name) : `${q(db)}.${q(r.table.name)}`
+        const qualifier = r.alias === undefined ? named : q(r.alias)
         sources.push({ qualifier, columns: new Set(def.columns.map((c) => c.name.toLowerCase())), names: def.columns.map((c) => c.name) })
-        return r.alias === undefined ? `${q(db)}.${q(r.table.name)}` : `${q(db)}.${q(r.table.name)} ${q(r.alias)}`
+        return r.alias === undefined ? named : `${named} ${q(r.alias)}`
       }
       if (r.kind === REF.JOIN) {
         if (r.using !== undefined || r.natural === true) throw new Unprintable()

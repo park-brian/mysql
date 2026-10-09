@@ -15,10 +15,11 @@
 // the column as volatile, as the server's cached statistics are).
 import { NODE, STATEMENT, parseStatement, type Expression, type QueryExpression, type ShowNode, type TableName } from '@myjs/parser'
 import { messages, sqlError, type ColumnDefinition } from '@myjs/protocol'
-import { keyColumnsOf, type TableDef } from '@myjs/engine'
+import { keyColumnsOf, type TableDef, type ViewDef } from '@myjs/engine'
 import { encodeKey } from '@myjs/types'
 import { fulltextOf } from './fulltext.ts'
-import type { Run } from './query.ts'
+import { planViewQuery, type Run } from './query.ts'
+import { viewDefinition } from './view-text.ts'
 import type { CatalogApi } from './temporary.ts'
 
 const quote = (s: string): string => `'${s.replace(/\\/g, '\\\\').replace(/'/g, "\\'")}'`
@@ -110,4 +111,37 @@ export function shownColumns(node: ShowNode, names: readonly string[], resultsCo
     const text = chars !== undefined
     return { schema: '', table, orgTable, name, orgName, characterSet: text ? resultsCollation : 63, columnLength: text ? Math.min(4294967295, chars * mbmaxlen) : length, type, flags, decimals: 0 }
   })
+}
+
+/**
+ * What a view's text names, for printing it: a table's definition, or a
+ * view's columns as a table's would be (8.4.11 prints `select v.id AS id …
+ * from v` for a view over a view).
+ */
+export function printableSources(catalog: CatalogApi): (schema: string, name: string) => TableDef | undefined {
+  return (schema, name) => {
+    const view = catalog.view(schema, name)
+    if (view !== undefined) return { schema, name, columns: (view.columns ?? []).map((c) => ({ name: c })) } as unknown as TableDef
+    try {
+      return catalog.definition(schema, name)
+    } catch {
+      return undefined
+    }
+  }
+}
+
+/** SHOW CREATE VIEW's statement: the view as 8.4.11 writes it back, names in the current database unqualified. */
+export function showCreateView(run: Run, catalog: CatalogApi, view: ViewDef): string {
+  const current = run.env.session.database
+  let text: string | undefined
+  try {
+    const { query, plan } = planViewQuery(run, view)
+    text = viewDefinition(query, plan.columns.map((c) => c.name), view.database ?? view.schema, printableSources(catalog), view.query, current)
+  } catch {}
+  const q = (s: string) => `\`${s.replace(/`/g, '``')}\``
+  const [user, host] = (view.definer ?? 'root@%').split('@') as [string, string | undefined]
+  const name = view.schema === current ? q(view.name) : `${q(view.schema)}.${q(view.name)}`
+  const columns = view.listed === true && view.columns !== undefined ? ` (${view.columns.map(q).join(',')})` : ''
+  const check = view.checkOption === undefined ? '' : ` WITH ${view.checkOption} CHECK OPTION`
+  return `CREATE ALGORITHM=${view.algorithm ?? 'UNDEFINED'} DEFINER=${q(user)}@${q(host ?? '%')} SQL SECURITY ${view.security ?? 'DEFINER'} VIEW ${name}${columns} AS ${text ?? view.query}${check}`
 }

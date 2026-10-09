@@ -56,7 +56,7 @@ import {
 } from '@myjs/protocol'
 import { conditionsFor } from './strict.ts'
 import { renameTables } from './rename.ts'
-import { showQuery, shownColumns } from './show.ts'
+import { showCreateView, showQuery, shownColumns } from './show.ts'
 import { COERCIBILITY, doubleValue, intValue, parseDecimal, plainValue, stringValue, toInteger, toText, type Condition, type Value } from '@myjs/types'
 import { charsetChange, ensureCollationResident } from '../transcoder.ts'
 import { PROGRAM_OBJECTS, ServerState, type ProgramStatement, type ServerOptions } from './admin.ts'
@@ -781,6 +781,8 @@ export class SqlExecutor implements Executor {
       ...(statement.columns === undefined ? {} : { columns: statement.columns }),
       ...(statement.algorithm === undefined ? {} : { algorithm: statement.algorithm }),
       ...(statement.checkOption === undefined ? {} : { checkOption: statement.checkOption }),
+      ...(statement.security === undefined ? {} : { security: statement.security }),
+      ...(statement.columns === undefined ? {} : { listed: true as const }),
     }
     const planned = viewTable(run, { schema, name: def.name }, def.name, def)
     const columns = planned?.source.columns.map((c) => c.name) ?? def.columns
@@ -968,10 +970,28 @@ export class SqlExecutor implements Executor {
         const schema = name.schema ?? run.env.session.database
         if (schema === null) throw sqlError('ER_NO_DB_ERROR', messages.noDatabaseSelected())
         const catalog = this.#catalog(run)
-        if (catalog.temporary?.has(schema, name.name) !== true && catalog.view(schema, name.name) !== undefined) throw sqlError('ER_NOT_SUPPORTED_YET', messages.notSupported('SHOW CREATE TABLE of a view'))
+        // A view's SHOW CREATE TABLE is its SHOW CREATE VIEW (8.4.11).
+        if (catalog.temporary?.has(schema, name.name) !== true && catalog.view(schema, name.name) !== undefined) return this.#show(run, { ...statement, what: 'CREATE VIEW' })
         const def = catalog.definition(schema, name.name)
         const created = showCreateTable(run, def, catalog.table(schema, name.name))
         return { columns: [text('Table', 64), text('Create Table', 1024)], rows: [[encode(def.name), encode(created)]] }
+      }
+      case 'CREATE VIEW': {
+        const name = statement.name as TableName
+        const schema = name.schema ?? run.env.session.database
+        if (schema === null) throw sqlError('ER_NO_DB_ERROR', messages.noDatabaseSelected())
+        const catalog = this.#catalog(run)
+        const view = catalog.view(schema, name.name)
+        if (view === undefined) {
+          // A table is 1347; nothing at all, 1146 (8.4.11).
+          catalog.definition(schema, name.name)
+          throw sqlError('ER_WRONG_OBJECT', `'${schema}.${name.name}' is not VIEW`)
+        }
+        const collation = view.collationConnection ?? DEFAULT_COLLATION
+        return {
+          columns: [text('View', 64), text('Create View', 1024), text('character_set_client', 32), text('collation_connection', 32)],
+          rows: [[encode(view.name), encode(showCreateView(run, catalog, view)), encode(requireCollationInfo(collation).charset), encode(requireCollationInfo(collation).name)]],
+        }
       }
       case 'TABLES': {
         const schema = statement.database ?? run.env.session.database

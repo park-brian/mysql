@@ -29,7 +29,7 @@ import { messages, sqlError } from '@myjs/protocol'
 import { COERCIBILITY, decodeField, encodeField, intValue, stringValue, toText, type Value } from '@myjs/types'
 import { compile, EMPTY_SCOPE } from './compile.ts'
 import type { DerivedSource } from './from.ts'
-import { keyCardinalities } from './show.ts'
+import { keyCardinalities, printableSources } from './show.ts'
 import { fulltextOf } from './fulltext.ts'
 import { checkClause, checksOf } from './checks.ts'
 import { foreignKeysOf } from './foreign-keys.ts'
@@ -454,11 +454,12 @@ const ROWS: Readonly<Record<string, (run: Run) => Iterable<readonly Value[]>>> =
         let updatable = false
         try {
           const { query, plan } = planViewQuery(run, v)
-          text = viewDefinition(query, v.columns ?? plan.columns.map((c) => c.name), v.database ?? v.schema, (db, name) => tablesOf(run, db).find((t) => t.name === name), v.query)
+          // The select list keeps its own names: a column list renames the view's columns, not them (8.4.11).
+          text = viewDefinition(query, plan.columns.map((c) => c.name), v.database ?? v.schema, run.catalog === undefined ? () => undefined : printableSources(run.catalog), v.query)
           updatable = viewUpdatable(query)
         } catch {}
         const collation = v.collationConnection ?? 255
-        yield [s('def'), s(schema), s(v.name), s(text ?? v.query), s(v.checkOption ?? 'NONE'), s(updatable ? 'YES' : 'NO'), s(v.definer ?? 'root@%'), s('DEFINER'), s(charsetName(collation)), s(collationName(collation))]
+        yield [s('def'), s(schema), s(v.name), s(text ?? v.query), s(v.checkOption ?? 'NONE'), s(updatable ? 'YES' : 'NO'), s(v.definer ?? 'root@%'), s(v.security ?? 'DEFINER'), s(charsetName(collation)), s(collationName(collation))]
       }
     }
   },
