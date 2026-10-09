@@ -12,6 +12,7 @@
 // `mysql2/promise` gives. `mysql2.createConnection({ stream:
 // db.createStream() })` remains doc 42's route for a driver or an ORM.
 
+import { MyjsError } from '@myjs/bytes'
 import { Catalog, Store } from '@myjs/engine'
 import { MapAccountStore, Sha2Cache, type AccountStore, type Executor } from '@myjs/protocol'
 import { MemoryVfs, type Lock, type Vfs } from '@myjs/vfs'
@@ -161,7 +162,7 @@ export class MySQL {
    * capabilities and statement table (D-28).
    */
   createConnection(over: Partial<ConnectionOptions> = {}): ProtocolConnection {
-    if (this.#closed) throw new Error('database is closed')
+    if (this.#closed) throw new MyjsError('DATABASE_CLOSED', 'database is closed')
     const connection = new ProtocolConnection({
       executor: this.#executor,
       accounts: this.accounts,

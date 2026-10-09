@@ -18,6 +18,7 @@ import {
   CLIENT,
   COM,
   MYSQL_NATIVE_PASSWORD,
+  PacketFramer,
   SERVER_STATUS,
   capabilities,
   concat,
@@ -36,7 +37,7 @@ import {
   type ErrPacket,
   type OkPacket,
 } from '@myjs/protocol'
-import { Reader, Writer } from '@myjs/bytes'
+import { MyjsError, ProtocolError, Reader, Writer } from '@myjs/bytes'
 
 /** The packet a connection answers with: its first byte says which (doc 10). */
 const OK = 0x00
@@ -44,9 +45,8 @@ const EOF = 0xfe
 const ERR = 0xff
 const LOCAL_INFILE = 0xfb
 
-/** Header of one packet on the wire: three bytes of length and a sequence number. */
-const HEADER = 4
-const MAX_PAYLOAD = 0xffffff
+/** The largest packet a server may send: `max_allowed_packet`'s ceiling, 1 GiB. */
+const MAX_PACKET = 1 << 30
 
 /** `mysql2`'s default flags, `ConnectionConfig.getDefaultFlags`, as numbers. */
 const CLIENT_FLAGS =
@@ -104,28 +104,28 @@ export interface WireOk {
 export type WireResult = WireResultSet | WireOk
 
 /** An ERR packet, as the error a call rejects with. */
-export class WireError extends Error {
-  readonly errno: number
-  readonly sqlState: string
+export class WireError extends MyjsError {
+  declare readonly errno: number
+  declare readonly sqlState: string
   readonly sqlMessage: string
   constructor(err: ErrPacket) {
-    super(err.message)
-    this.errno = err.errno
-    this.sqlState = err.sqlState
+    super('ER_SERVER', err.message, { errno: err.errno, sqlState: err.sqlState })
     this.sqlMessage = err.message
   }
 }
 
 export class WireClient {
   readonly #server: ServerEnd
+  readonly #framer: PacketFramer
   readonly #caps: Capabilities
   readonly connectionId: number
   /** The status flags of the last OK or EOF: whether backslashes escape (SERVER_STATUS.NO_BACKSLASH_ESCAPES). */
   #status = 0
   #closed = false
 
-  private constructor(server: ServerEnd, caps: Capabilities, connectionId: number) {
+  private constructor(server: ServerEnd, framer: PacketFramer, caps: Capabilities, connectionId: number) {
     this.#server = server
+    this.#framer = framer
     this.#caps = caps
     this.connectionId = connectionId
   }
@@ -141,8 +141,11 @@ export class WireClient {
   /** Read the server's greeting, answer it, and see authentication through. */
   static async connect(server: ServerEnd, options: ConnectOptions): Promise<WireClient> {
     server.start()
-    const [greeting] = packetsOf(server.take())
-    if (greeting === undefined) throw new Error('the server sent no greeting')
+    // One framer for the connection: the sequence runs on through the
+    // handshake and authentication, and restarts at each command (doc 10).
+    const framer = new PacketFramer({ maxAllowedPacket: MAX_PACKET })
+    const [greeting] = received(framer, server.take())
+    if (greeting === undefined) throw unexpected('the server sent no greeting')
     if (greeting[0] === ERR) throw new WireError(parseErr(greeting, capabilities(CLIENT.PROTOCOL_41)))
     const hello = parseHandshakeV10(greeting)
     let flags = CLIENT_FLAGS | (options.multipleStatements === true ? CLIENT.MULTI_STATEMENTS : 0)
@@ -162,14 +165,12 @@ export class WireClient {
       clientPluginName: plugin,
       connectAttrs: new Map([['_client_name', 'myjs']]),
     })
-    let seq = 1
-    let reply = await exchange(server, frame(w.toBytes(), seq++))
+    let reply = await exchange(server, framer, w.toBytes())
     for (;;) {
       const packet = reply[0]
-      if (packet === undefined) throw new Error('the server sent nothing during authentication')
-      seq++
+      if (packet === undefined) throw unexpected('the server sent nothing during authentication')
       if (packet[0] === OK) {
-        const client = new WireClient(server, caps, hello.connectionId)
+        const client = new WireClient(server, framer, caps, hello.connectionId)
         client.#status = parseOk(packet, caps).statusFlags
         return client
       }
@@ -180,7 +181,7 @@ export class WireClient {
         const name = new TextDecoder().decode(r.nulString())
         const data = r.restBytes()
         const nonce = data[data.length - 1] === 0 ? data.subarray(0, data.length - 1) : data
-        reply = await exchange(server, frame(await scramble(name, password, nonce), seq++))
+        reply = await exchange(server, framer, await scramble(name, password, nonce))
         continue
       }
       if (packet[0] === 0x01 && packet[1] === 3) {
@@ -190,10 +191,10 @@ export class WireClient {
       }
       if (packet[0] === 0x01 && packet[1] === 4) {
         // AuthMoreData 4: the password itself, which an in-process channel may carry.
-        reply = await exchange(server, frame(concat([password, new Uint8Array([0])]), seq++))
+        reply = await exchange(server, framer, concat([password, new Uint8Array([0])]))
         continue
       }
-      throw new Error(`unexpected packet 0x${(packet[0] ?? 0).toString(16)} during authentication`)
+      throw unexpected(`unexpected packet 0x${(packet[0] ?? 0).toString(16)} during authentication`)
     }
   }
 
@@ -249,8 +250,9 @@ export class WireClient {
 
   /** One command, its sequence from zero, and the packets of everything the server answered. */
   async #command(payload: Uint8Array): Promise<Uint8Array[]> {
-    if (this.#closed) throw new Error('the connection is closed')
-    return exchange(this.#server, frame(payload, 0))
+    if (this.#closed) throw new MyjsError('CONNECTION_CLOSED', 'the connection is closed')
+    this.#framer.resetSequence()
+    return exchange(this.#server, this.#framer, payload)
   }
 
   #results(packets: readonly Uint8Array[]): WireResult[] {
@@ -258,7 +260,7 @@ export class WireClient {
     let at = 0
     for (;;) {
       const head = packets[at++]
-      if (head === undefined) throw new Error('the server ended a response early')
+      if (head === undefined) throw unexpected('the server ended a response early')
       if (head[0] === ERR) throw new WireError(parseErr(head, this.#caps))
       if (head[0] === OK) {
         const ok = parseOk(head, this.#caps)
@@ -267,7 +269,7 @@ export class WireClient {
         if ((ok.statusFlags & SERVER_STATUS.MORE_RESULTS_EXISTS) === 0) return out
         continue
       }
-      if (head[0] === LOCAL_INFILE) throw new Error('LOAD DATA LOCAL is not served by this client')
+      if (head[0] === LOCAL_INFILE) throw new MyjsError('LOCAL_INFILE_REFUSED', 'LOAD DATA LOCAL is not served by this client')
       const count = Number(new Reader(head).lenEncInt() ?? 0n)
       const columns: ColumnDefinition[] = []
       for (let i = 0; i < count; i++) columns.push(parseColumnDefinition41(packets[at++] as Uint8Array))
@@ -275,7 +277,7 @@ export class WireClient {
       const rows: Uint8Array[] = []
       for (;;) {
         const row = packets[at++]
-        if (row === undefined) throw new Error('the server ended a result set early')
+        if (row === undefined) throw unexpected('the server ended a result set early')
         if (row[0] === ERR) throw new WireError(parseErr(row, this.#caps))
         // An EOF is short; a text row that starts with 0xFE is a long length.
         if (row[0] === EOF && row.length < 9) {
@@ -290,46 +292,25 @@ export class WireClient {
   }
 }
 
-/** One payload as packets on the wire, split at 16 MB, from sequence `seq`. */
-function frame(payload: Uint8Array, seq: number): Uint8Array {
-  const parts: Uint8Array[] = []
-  let offset = 0
-  for (;;) {
-    const chunk = Math.min(MAX_PAYLOAD, payload.length - offset)
-    const out = new Uint8Array(HEADER + chunk)
-    out[0] = chunk & 0xff
-    out[1] = (chunk >> 8) & 0xff
-    out[2] = (chunk >> 16) & 0xff
-    out[3] = seq++ & 0xff
-    out.set(payload.subarray(offset, offset + chunk), HEADER)
-    parts.push(out)
-    offset += chunk
-    if (chunk < MAX_PAYLOAD) break
-  }
-  return parts.length === 1 ? (parts[0] as Uint8Array) : concat(parts)
+/** Send one payload, and read the whole answer as payloads, each split at 16 MB joined again. */
+async function exchange(server: ServerEnd, framer: PacketFramer, payload: Uint8Array): Promise<Uint8Array[]> {
+  await server.feed(framer.encode(payload))
+  return received(framer, server.take())
 }
 
-/** Send, and split the whole answer into payloads, joining any split at 16 MB. */
-async function exchange(server: ServerEnd, bytes: Uint8Array): Promise<Uint8Array[]> {
-  await server.feed(bytes)
-  return packetsOf(server.take())
-}
-
-function packetsOf(bytes: Uint8Array): Uint8Array[] {
-  const out: Uint8Array[] = []
-  let pending: Uint8Array[] = []
-  let at = 0
-  while (at + HEADER <= bytes.length) {
-    const length = (bytes[at] as number) | ((bytes[at + 1] as number) << 8) | ((bytes[at + 2] as number) << 16)
-    const body = bytes.subarray(at + HEADER, at + HEADER + length)
-    at += HEADER + length
-    pending.push(body)
-    if (length === MAX_PAYLOAD) continue
-    out.push(pending.length === 1 ? (pending[0] as Uint8Array) : concat(pending))
-    pending = []
-  }
+/**
+ * Every packet in `bytes`. A connection answers a command whole, so bytes
+ * left over that make no packet are a fault, not the start of the next one;
+ * the framer refuses a packet out of sequence.
+ */
+function received(framer: PacketFramer, bytes: Uint8Array): Uint8Array[] {
+  framer.feed(bytes)
+  const out = [...framer.drain()]
+  if (framer.buffered > 0 || framer.midMessage) throw unexpected('the server ended a packet early')
   return out
 }
+
+const unexpected = (message: string): ProtocolError => new ProtocolError('PROTOCOL_UNEXPECTED_PACKET', message)
 
 /** The auth response for `plugin` (sql/auth/sha2_password_common.cc, password.cc). */
 async function scramble(plugin: string, password: Uint8Array, nonce: Uint8Array): Promise<Uint8Array> {
