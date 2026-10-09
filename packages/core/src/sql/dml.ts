@@ -175,9 +175,23 @@ function duplicateEntry(def: TableDef, index: IndexDef, values: readonly Value[]
   return sqlError('ER_DUP_ENTRY', messages.duplicateEntry(text, `${def.name}.${index.name}`))
 }
 
-/** A plain INSERT's batches: at most this many rows, and while the batch holds fewer pages than this. */
-const INSERT_BATCH_ROWS = 64
-const INSERT_BATCH_PAGES = 16
+/** A bulk statement's batches: at most this many rows, and while the batch holds fewer pages than this. */
+const BATCH_ROWS = 64
+const BATCH_PAGES = 16
+
+/**
+ * `each(0)` … `each(count - 1)`, as few mini-transactions as the bounds
+ * allow (`trx.batch`): only for a statement that fails whole on any error,
+ * and whose rows take no counter.
+ */
+function inBatches(trx: Trx, from: number, count: number, each: (n: number) => void): void {
+  for (let n = from; n < count; ) {
+    trx.batch(() => {
+      const start = n
+      while (n < count && n - start < BATCH_ROWS && trx.pagesHeld < BATCH_PAGES) each(n++)
+    })
+  }
+}
 
 const isDuplicate = (e: unknown): boolean => e instanceof EngineError && e.code === 'ER_DUP_ENTRY'
 
@@ -687,15 +701,7 @@ export function insert(run: Run, node: InsertNode, trx: Trx): OkResult {
   const batchable = mode === 'insert' && !ignore && def.clustered !== null && selected === undefined && compiledRows.length > 1 && (autoAt < 0 || !targets.includes(autoAt))
   if (batchable) {
     each(compiledRows[0] as (typeof compiledRows)[number], 0)
-    for (let n = 1; n < compiledRows.length; ) {
-      trx.batch(() => {
-        const start = n
-        while (n < compiledRows.length && n - start < INSERT_BATCH_ROWS && trx.pagesHeld < INSERT_BATCH_PAGES) {
-          each(compiledRows[n] as (typeof compiledRows)[number], n)
-          n++
-        }
-      })
-    }
+    inBatches(trx, 1, compiledRows.length, (n) => each(compiledRows[n] as (typeof compiledRows)[number], n))
   } else compiledRows.forEach(each)
 
   /** One row through `write_record`: write it, or settle its duplicate as the statement asks. */
@@ -1032,7 +1038,7 @@ export function update(run: Run, node: UpdateNode, trx: Trx): OkResult {
 
   const rows = matching(run, def, table, alias, node, trx)
   let changed = 0
-  rows.forEach(({ id, row }, n) => {
+  const each = ({ id, row }: ScannedRow, n: number): void => {
     store.row = n + 1
     const before = encodeRow(def, row, { strict: false, row: n + 1, warnings: 0 })
     // A NULL into a NOT NULL column is the type's zero and a warning outside a strict mode (8.4.11).
@@ -1056,7 +1062,10 @@ export function update(run: Run, node: UpdateNode, trx: Trx): OkResult {
       return
     }
     changed++
-  })
+  }
+  // Without IGNORE, any error fails the statement whole: the rows go in batches.
+  if (ignore) rows.forEach(each)
+  else inBatches(trx, 0, rows.length, (n) => each(rows[n] as ScannedRow, n))
 
   const matched = rows.length
   const foundRows = hasCap(run.env.session.capabilities, CLIENT.FOUND_ROWS)
@@ -1100,6 +1109,13 @@ export function remove(run: Run, node: DeleteNode, trx: Trx): OkResult {
   const rows = matching(run, def, table, alias, node, trx)
   let deleted = 0
   let warnings = 0
+  // Without IGNORE, any error fails the statement whole: the rows go in batches.
+  if (node.ignore !== true) {
+    inBatches(trx, 0, rows.length, (n) => {
+      if (table.delete((rows[n] as ScannedRow).id, trx)) deleted++
+    })
+    return { affectedRows: deleted }
+  }
   for (const { id } of rows) {
     // IGNORE keeps a row a child holds, with a warning, and undoes whatever
     // its cascades had done (8.4.11).
