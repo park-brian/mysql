@@ -203,7 +203,7 @@ function itemTexts(run: Run, node: SelectNode): (string | undefined)[] {
   let first = i
   for (; i <= tokens.length; i++) {
     const t = tokens[i]
-    const end = t === undefined || (depth === 0 && (CLAUSE_WORDS.has(word(t)) || t.text === ';' || (t.kind === TOKEN.OPERATOR && t.text === ')')))
+    const end = t === undefined || t.kind === TOKEN.EOF || (depth === 0 && (CLAUSE_WORDS.has(word(t)) || t.text === ';' || (t.kind === TOKEN.OPERATOR && t.text === ')')))
     if (end || (depth === 0 && t?.kind === TOKEN.OPERATOR && t.text === ',')) {
       const a = tokens[first]
       const b = tokens[i - 1]
