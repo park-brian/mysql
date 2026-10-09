@@ -1054,6 +1054,8 @@ function binary(op: string, left: Expression, right: Expression, extra: Expressi
     // number (8.4.11: `tm BETWEEN 'a' AND db` puts -01:00:00 below 0). With
     // only dates and text, all are dates, text converted as `=` converts it.
     const all = [a0, lo0, hi0]
+    // JSON among them: compared as text, its rendering, with 1235 once a statement (8.4.11: `'"b"'` is below 'a').
+    if (all.some((x) => x.type.kind === 'json')) return jsonBetween(op === 'NOT BETWEEN', a0, lo0, hi0)
     const numeric = all.some((x) => isNumber(x.type))
     const dateOf = all.find((x) => x.type.kind === 'datetime')
     const dated = !numeric && dateOf !== undefined && all.every((x) => x.type.kind === 'datetime' || isText(x.type) || x.type.kind === 'null')
@@ -1236,6 +1238,27 @@ function binary(op: string, left: Expression, right: Expression, extra: Expressi
 }
 
 // --- Constants -------------------------------------------------------------------
+
+/** BETWEEN with JSON among its operands, which 8.4.11 does not compare as JSON: all three as their text, binary, warning once a statement. */
+function jsonBetween(negated: boolean, ...operands: [Compiled, Compiled, Compiled]): Compiled {
+  const key = {}
+  const text = (v: Value): Value => (v === null ? null : stringValue(toText(v), CHARSET_UTF8MB4_BIN))
+  return {
+    eval: (r, env) => {
+      if (env.memo?.has(key) !== true) {
+        env.memo?.set(key, true)
+        raise(env, 1235, "This version of MySQL doesn't yet support 'comparison of JSON in the BETWEEN operator'")
+      }
+      const [v, lo, hi] = operands.map((c) => text(c.eval(r, env))) as [Value, Value, Value]
+      const x = compareValues(v, lo)
+      const y = compareValues(v, hi)
+      if ((x !== null && x < 0) || (y !== null && y > 0)) return bool(negated)
+      if (x === null || y === null) return null
+      return bool(!negated)
+    },
+    type: boolType(true),
+  }
+}
 
 /** An expression whose value the statement fixes: no column, subquery, variable or volatile function in it. */
 export function constantNode(e: unknown): boolean {
