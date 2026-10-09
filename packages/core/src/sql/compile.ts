@@ -1212,14 +1212,14 @@ function temporalOperands(left: Expression, right: Expression, a: Compiled, b: C
   const ak = a.type.kind
   const bk = b.type.kind
   // A string constant too: `tm = '1970-01-01 14:37:36'` finds 14:37:36.
-  if (ak === 'time' && left.kind === NODE.COLUMN && constantNode(right) && (bk === 'datetime' || bk === 'string' || bk === 'int')) return [a, asTimeOfDay(b)]
-  if (bk === 'time' && right.kind === NODE.COLUMN && constantNode(left) && (ak === 'datetime' || ak === 'string' || ak === 'int')) return [asTimeOfDay(a), b]
+  if (ak === 'time' && left.kind === NODE.COLUMN && constantNode(right) && (bk === 'datetime' || bk === 'string' || bk === 'int')) return [a, asTimeOfDay(b, left.parts)]
+  if (bk === 'time' && right.kind === NODE.COLUMN && constantNode(left) && (ak === 'datetime' || ak === 'string' || ak === 'int')) return [asTimeOfDay(a, right.parts), b]
   if (!((ak === 'time' && bk === 'datetime') || (ak === 'datetime' && bk === 'time'))) return [a, b]
   return ak === 'time' ? [onStatementDate(a), b] : [a, onStatementDate(b)]
 }
 
-function asTimeOfDay(c: Compiled): Compiled {
-  return {
+function asTimeOfDay(c: Compiled, column: readonly string[]): Compiled {
+  const self: Compiled = {
     eval: (r, env) => {
       const v = c.eval(r, env)
       if (v === null || v.kind === 'time') return v
@@ -1230,15 +1230,23 @@ function asTimeOfDay(c: Compiled): Compiled {
       if (v.kind === 'string' || v.kind === 'bytes') {
         // Text that leaves anything over, or is no time at all, equals no
         // time — false, not NULL (8.4.11: `tm = 'garbage'` finds no row, a
-        // midnight included). A time past TIME's range stands for it.
+        // midnight included), with 1292 once a statement, as the server's
+        // storing it into the column warns. A time past TIME's range stands
+        // for it.
         const p = parseTime(toText(v))
-        return p === undefined || p.truncated ? NO_TIME : { kind: 'time', v: p.v, fsp: p.fsp }
+        if (p !== undefined && !p.truncated) return { kind: 'time', v: p.v, fsp: p.fsp }
+        if (env.memo?.has(self) !== true) {
+          env.memo?.set(self, true)
+          raise(env, 1292, `Incorrect time value: '${toText(v)}' for column '${column[column.length - 1] as string}' at row 1`)
+        }
+        return NO_TIME
       }
       const dt = v.kind === 'datetime' ? v : v.kind === 'int' && v.v >= 10_000_000_000n ? toDateTime(v, 'DATETIME') : undefined
       return toTime(dt ?? v) ?? v
     },
     type: c.type,
   }
+  return self
 }
 
 /** The session's NO_ZERO_DATE and NO_ZERO_IN_DATE, as a scan's flags. */
@@ -1269,7 +1277,7 @@ function timeConstant(a: Compiled, left: Expression, e: Expression, c: Compiled,
   // In an IN list a TIMESTAMP literal compares as a datetime, the column on
   // today's date; a CAST to one is still read as a time of day (8.4.11).
   const kinds = (c.type.kind === 'datetime' && !(list && e.kind === NODE.LITERAL)) || c.type.kind === 'string' || c.type.kind === 'int'
-  return a.type.kind === 'time' && left.kind === NODE.COLUMN && constantNode(e) && kinds ? asTimeOfDay(c) : c
+  return a.type.kind === 'time' && left.kind === NODE.COLUMN && constantNode(e) && kinds ? asTimeOfDay(c, left.parts) : c
 }
 
 function onStatementDate(c: Compiled): Compiled {
@@ -1474,12 +1482,13 @@ function inList(negated: boolean, left: Expression, right: Expression, ctx: Comp
   if (isText(compiled.type) && raw.some((i) => isText(i.type))) aggregateCollations([compiled.type, ...raw.map((i) => i.type)], raw.length === 1 ? '=' : ' IN ', true)
   // A long list of constants is sorted once per execution and searched, as
   // MySQL's `in_vector` is: Prisma sends 65,535 of them.
-  const searchable = items.length >= 10 && list.every(constantItem)
+  const searchable = items.length >= 10 && list.every(constantItem) && !(compiled.type.kind === 'time' && left.kind === NODE.COLUMN)
   // One element is `=`, which compares fixed decimals within a tolerance;
   // a list compares exactly (8.4.11: a FLOAT(3,1) is IN (1.2) and not IN (1.2, 1.3)).
   const compare = items.length === 1 ? comparer(a.type, (items[0] as Compiled).type) : compareValues
   let sortedFor: Env | undefined
   let sorted: SortedItems | undefined
+  const timed = compiled.type.kind === 'time' && left.kind === NODE.COLUMN
   return {
     eval: (r, env) => {
       const v = a.eval(r, env)
@@ -1493,6 +1502,19 @@ function inList(negated: boolean, left: Expression, right: Expression, ctx: Comp
         if (found !== undefined) return found === null ? null : bool(found !== negated)
       }
       let sawNull = false
+      if (timed) {
+        // One item that is no time and the TIME column is in none of them:
+        // the server's list of times could not be built (8.4.11: `t IN
+        // ('10:00:00', 'x')` is false for 10:00:00, NULL with a NULL item).
+        const values = items.map((i) => i.eval(r, env))
+        if (values.includes(NO_TIME)) return values.includes(null) ? null : bool(negated)
+        for (const w of values) {
+          const c = compare(v, w)
+          if (c === 0) return bool(!negated)
+          if (c === null) sawNull = true
+        }
+        return sawNull ? null : bool(negated)
+      }
       for (const item of items) {
         const c = compare(v, item.eval(r, env))
         if (c === 0) return bool(!negated)
