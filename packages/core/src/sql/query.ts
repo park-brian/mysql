@@ -608,11 +608,17 @@ function subqueryPinsKey(def: TableDef, alias: string, where: Expression | undef
   return splitAnd(where).some((c) => c.kind === NODE.BINARY && c.op === '=' && ([[c.left, c.right], [c.right, c.left]] as const).some(([key, value]) => value.kind === NODE.SUBQUERY && !correlatedIn(value, scope) && unique(key)))
 }
 
-/** Whether the optimizer proves the result empty — an impossible condition, a join that cannot match, LIMIT 0 — and plans nothing. */
+/**
+ * Whether the optimizer proves the result empty — an impossible condition, a
+ * join that cannot match, a const table with no row for its key, LIMIT 0 — and
+ * plans nothing ("Zero rows (no matching row in const table)", 8.4.11).
+ */
 function provedEmpty(run: Run, from: FromPlan | undefined, node: SelectNode, limitCount: number | undefined): boolean {
   if (limitCount === 0) return true
   if (from === undefined) return false
-  return optimizerFacts(from, node.where, limitCount, compileContext(run, EMPTY_SCOPE, 'where clause'), run.env, (node.options ?? []).includes('STRAIGHT_JOIN')).empty
+  const ctx = compileContext(run, EMPTY_SCOPE, 'where clause')
+  const facts = optimizerFacts(from, node.where, limitCount, ctx, run.env, (node.options ?? []).includes('STRAIGHT_JOIN'))
+  return facts.empty || (facts.constTables.length > 0 && !constTablesHaveRows(facts, ctx, run.env, run.env.trx))
 }
 
 /**
@@ -1554,8 +1560,17 @@ function planGrouped(
     locking,
     ...(dataColumns === undefined ? {} : { columnsAt: (trx: Trx | undefined) => (dataColumns as (t: Trx | undefined) => readonly ResultType[])(trx).map((type, i) => ({ name: (items[i] as { name: string }).name, type })) }),
     explain() {
-      // Implicit grouping answers one row even of nothing, so it is still an Aggregate.
-      if (strategy !== 'implicit' && provedEmpty(run, from, node, limitCount)) return [planNode('Zero rows')]
+      // Implicit grouping answers one row even of nothing: proved empty, it is
+      // "Zero input rows" in the Aggregate's place, with only its HAVING and
+      // LIMIT around it; its one row is not sorted, and its list's subqueries
+      // are not run (8.4.11).
+      if (limitCount !== 0 && provedEmpty(run, from, node, limitCount)) {
+        if (strategy !== 'implicit') return [planNode('Zero rows')]
+        let n = planNode('Zero input rows')
+        if (having !== undefined) n = withSubqueries(run, planNode('Filter', [n]), 'having clause')
+        if (limitCount !== undefined || offset > 0) n = limitStage(offset, limitCount).describe(n) ?? n
+        return [n]
+      }
       const source = from === undefined ? planNode('Rows fetched before execution') : withSubqueries(run, from.explain(run.env), 'where clause')
       const n = describeStages(source, stages)
       return n === undefined ? undefined : [n, ...subqueryNodes(run, 'field list')]
