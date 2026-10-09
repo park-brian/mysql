@@ -166,7 +166,10 @@ export function parseDelete(c: Cursor, mode: SqlMode, withClause?: With, at = c.
     tables = references(c, mode)
   }
 
-  const { where, orderBy, limit } = tail(c, mode)
+  // The multi-table forms take a WHERE and no more: an ORDER BY or LIMIT
+  // after it is left over, a syntax error there (8.4.11), where a
+  // multi-table UPDATE parses them and refuses them later (1221).
+  const { where, orderBy, limit } = targets === undefined ? tail(c, mode) : c.takeWord('WHERE') ? { where: parseExpressionFrom(c, mode), orderBy: undefined, limit: undefined } : { where: undefined, orderBy: undefined, limit: undefined }
   return {
     kind: STATEMENT.DELETE,
     ...(withClause === undefined ? {} : { with: withClause }),

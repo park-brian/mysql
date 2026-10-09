@@ -27,7 +27,7 @@
 // table's scan only where that cannot change the answer: never for a table on
 // the inner side of an outer join, where `WHERE b.x IS NULL` must still see
 // the NULL rows the join made.
-import type { ColumnDef, IndexDef, Table, TableDef, Trx } from '@myjs/engine'
+import type { ColumnDef, IndexDef, RowId, Table, TableDef, Trx } from '@myjs/engine'
 import { NODE, REF, type Expression, type TableReference } from '@myjs/parser'
 import { messages, sqlError } from '@myjs/protocol'
 import { truth, type Value } from '@myjs/types'
@@ -110,8 +110,8 @@ export interface FromPlan {
    * of an unordered result.
    */
   cover(alias: string, index: string): void
-  /** The rows of the FROM. `where` may narrow a scan (see the header). */
-  rows(trx: Trx | undefined, env: Env, options: { readonly where: Expression | undefined; readonly locking: boolean }): Iterable<{ readonly row: Row }>
+  /** The rows of the FROM. `where` may narrow a scan (see the header); `ids` asks for each base table's row id too. */
+  rows(trx: Trx | undefined, env: Env, options: { readonly where: Expression | undefined; readonly locking: boolean; readonly ids?: boolean }): Iterable<JoinedRow>
 }
 
 export interface JoinCondition {
@@ -434,7 +434,26 @@ function slotScope(scope: Scope, full: TableScope): Scope {
 }
 
 /** The rows of a join tree, each as wide as the whole FROM. */
-type RunOptions = { readonly where: Expression | undefined; readonly locking: boolean; readonly covering?: ReadonlyMap<string, string> }
+type RunOptions = { readonly where: Expression | undefined; readonly locking: boolean; readonly covering?: ReadonlyMap<string, string>; readonly ids?: boolean }
+
+/** A row of the join, and with `ids`, each base table's row id at that table's offset: what a multi-table UPDATE or DELETE writes. */
+export interface JoinedRow {
+  readonly row: Row
+  readonly ids?: readonly (RowId | undefined)[]
+}
+
+/** Two sides' ids as one row's. */
+function joinIds(a: JoinedRow, b: JoinedRow): readonly (RowId | undefined)[] | undefined {
+  if (a.ids === undefined) return b.ids
+  if (b.ids === undefined) return a.ids
+  const out = a.ids.slice()
+  b.ids.forEach((id, i) => {
+    if (id !== undefined) out[i] = id
+  })
+  return out
+}
+
+const joined = (row: Row, ids: readonly (RowId | undefined)[] | undefined): JoinedRow => (ids === undefined ? { row } : { row, ids })
 
 const hasLateral = (node: Node): boolean => (node.kind === 'leaf' ? node.table.lateral : hasLateral(node.outer) || hasLateral(node.inner))
 
@@ -443,7 +462,7 @@ const hasLateral = (node: Node): boolean => (node.kind === 'leaf' ? node.table.l
  * table inside it that reads them: `t1 JOIN (t2 JOIN LATERAL (SELECT t1.a)
  * d ON TRUE) ON TRUE` (8.4.11 reads t1's row there).
  */
-function* run(node: Node, trx: Trx | undefined, env: Env, options: RunOptions, width: number, context?: Row): Generator<{ readonly row: Row }> {
+function* run(node: Node, trx: Trx | undefined, env: Env, options: RunOptions, width: number, context?: Row): Generator<JoinedRow> {
   if (node.kind === 'leaf') {
     yield* leafRows(node.table, trx, env, options, width, node.table.lateral ? context : undefined)
     return
@@ -451,18 +470,19 @@ function* run(node: Node, trx: Trx | undefined, env: Env, options: RunOptions, w
   if (hasLateral(node.inner)) {
     // LATERAL: the tables after it again for each row of the tables before it.
     const on = node.on
-    for (const { row: own } of run(node.outer, trx, env, options, width, context)) {
+    for (const outer of run(node.outer, trx, env, options, width, context)) {
+      const own = outer.row
       const row = context === undefined ? own : own.map((v, i) => v ?? context[i] ?? null)
       let matched = false
-      for (const { row: inner } of run(node.inner, trx, env, options, width, row)) {
+      for (const inner of run(node.inner, trx, env, options, width, row)) {
         const combined = row.slice()
-        for (const s of node.innerSlots) combined[s] = inner[s] ?? null
+        for (const s of node.innerSlots) combined[s] = inner.row[s] ?? null
         if (on === undefined || truth(on.eval(combined, env)) === true) {
           matched = true
-          yield { row: combined }
+          yield joined(combined, joinIds(outer, inner))
         }
       }
-      if (!matched && node.left) yield { row }
+      if (!matched && node.left) yield joined(row, outer.ids)
     }
     return
   }
@@ -476,17 +496,18 @@ function* run(node: Node, trx: Trx | undefined, env: Env, options: RunOptions, w
   if (node.left) {
     // Probe with the outer side, build on the inner: each outer row, then its
     // matches newest first, or one row of NULLs.
-    const build = [...run(node.inner, trx, env, options, width, context)].map((r) => r.row)
-    for (const { row } of run(node.outer, trx, env, options, width, context)) {
+    const build = [...run(node.inner, trx, env, options, width, context)]
+    for (const outer of run(node.outer, trx, env, options, width, context)) {
       let matched = false
       for (let i = build.length - 1; i >= 0; i--) {
-        const combined = merge(row, build[i] as Row)
+        const inner = build[i] as JoinedRow
+        const combined = merge(outer.row, inner.row)
         if (accepts(combined)) {
           matched = true
-          yield { row: combined }
+          yield joined(combined, joinIds(outer, inner))
         }
       }
-      if (!matched) yield { row }
+      if (!matched) yield outer
     }
     return
   }
@@ -494,30 +515,38 @@ function* run(node: Node, trx: Trx | undefined, env: Env, options: RunOptions, w
   if (lookup !== undefined && node.inner.kind === 'leaf') {
     // A nested loop with a single-row lookup on the later table's unique key.
     const t = node.inner.table
-    for (const { row } of run(node.outer, trx, env, options, width, context)) {
-      const v = lookup.value.eval(row, env)
+    for (const outer of run(node.outer, trx, env, options, width, context)) {
+      const v = lookup.value.eval(outer.row, env)
       if (v === null) continue
       const access = pointAccess(t.def as TableDef, lookup.index, lookup.column, v)
-      for (const { row: values } of accessRows(t.table as Table, t.def as TableDef, access ?? {}, trx, options.locking)) {
-        const combined = row.slice()
+      for (const { id, row: values } of accessRows(t.table as Table, t.def as TableDef, access ?? {}, trx, options.locking)) {
+        const combined = outer.row.slice()
         for (let i = 0; i < t.width; i++) combined[t.offset + i] = values[i] ?? null
-        if (accepts(combined)) yield { row: combined }
+        if (accepts(combined)) yield joined(combined, options.ids === true ? joinIds(outer, { row: values, ids: idsAt(t.offset, id) }) : undefined)
       }
     }
     return
   }
   // A hash join: build on the earlier tables, probe with the later one; each
   // probe row's matches newest first.
-  const build = [...run(node.outer, trx, env, options, width, context)].map((r) => r.row)
-  for (const { row } of run(node.inner, trx, env, options, width, context)) {
+  const build = [...run(node.outer, trx, env, options, width, context)]
+  for (const inner of run(node.inner, trx, env, options, width, context)) {
     for (let i = build.length - 1; i >= 0; i--) {
-      const combined = merge(build[i] as Row, row)
-      if (accepts(combined)) yield { row: combined }
+      const outer = build[i] as JoinedRow
+      const combined = merge(outer.row, inner.row)
+      if (accepts(combined)) yield joined(combined, joinIds(outer, inner))
     }
   }
 }
 
-function* leafRows(t: FromTable, trx: Trx | undefined, env: Env, options: RunOptions, width: number, lateral: Row | undefined): Generator<{ readonly row: Row }> {
+/** One table's row id, at its offset. */
+function idsAt(offset: number, id: RowId): (RowId | undefined)[] {
+  const out: (RowId | undefined)[] = []
+  out[offset] = id
+  return out
+}
+
+function* leafRows(t: FromTable, trx: Trx | undefined, env: Env, options: RunOptions, width: number, lateral: Row | undefined): Generator<JoinedRow> {
   const base = (): Value[] => new Array<Value>(width).fill(null)
   if (t.derived !== undefined) {
     for (const values of t.derived.rows(trx, env, lateral)) {
@@ -531,10 +560,10 @@ function* leafRows(t: FromTable, trx: Trx | undefined, env: Env, options: RunOpt
   let access = t.nullable ? {} : chooseAccess(def, t.alias, options.where, env)
   const cover = options.covering?.get(t.alias)
   if (access.index === undefined && access.ranges === undefined && cover !== undefined) access = { index: cover }
-  for (const { row: values } of accessRows(t.table as Table, def, access, trx, options.locking)) {
+  for (const { id, row: values } of accessRows(t.table as Table, def, access, trx, options.locking)) {
     const row = base()
     for (let i = 0; i < t.width; i++) row[t.offset + i] = values[i] ?? null
-    yield { row }
+    yield options.ids === true ? { row, ids: idsAt(t.offset, id) } : { row }
   }
 }
 

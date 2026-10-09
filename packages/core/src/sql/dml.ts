@@ -22,14 +22,15 @@ import type { ColumnDef, FieldBytes, IndexDef, RowId, Table, TableDef, Trx } fro
 import { EngineError } from '@myjs/engine'
 import { NODE, QUERY, REF, parseExpression, type Assignment, type ColumnNode, type DeleteNode, type Expression, type InsertNode, type TableName, type UpdateNode } from '@myjs/parser'
 import { generationOf, type Generation } from './generated.ts'
-import { decodeField, encodeEnum, encodeField, integerRange, intValue, toInteger, toText, warn, type Condition, type StoreContext, type Value } from '@myjs/types'
+import { decodeField, encodeEnum, encodeField, integerRange, intValue, toInteger, toText, truth, warn, type Condition, type StoreContext, type Value } from '@myjs/types'
 import { compile, EMPTY_SCOPE, type Compiled, type Row, type Scope } from './compile.ts'
 import { checker, checkViolated } from './checks.ts'
 import { guarded, isReferenced } from './foreign-keys.ts'
 import { containsAggregate } from './group.ts'
 import { filter, limit, sort, type ScannedRow } from './operators.ts'
 import { accessRows, chooseAccess } from './plan.ts'
-import { checkTargetNotRead, compileContext, limitValue, openTable, planQuery, withClause, type Run } from './query.ts'
+import { checkTargetNotRead, compileContext, fromContext, limitValue, openTable, planQuery, withClause, type Run } from './query.ts'
+import { planFrom, type FromPlan, type FromTable, type JoinedRow } from './from.ts'
 import { TableScope } from './scope.ts'
 import { NULL_TYPE, type ResultType } from './meta.ts'
 
@@ -976,6 +977,7 @@ export function update(run: Run, node: UpdateNode, trx: Trx): OkResult {
   // A subquery reads in the statement's transaction.
   run = { ...run, env: { ...run.env, trx } }
   run = withCtes(run, node, 'UPDATE')
+  if (multiTable(node.tables)) return updateMulti(run, node, trx)
   const target = singleTable(run, node.tables, 'UPDATE')
   const { def, alias } = target
   const table = guarded(run, target.table, trx)
@@ -1059,9 +1061,9 @@ function sameBytes(x: Uint8Array, y: Uint8Array): boolean {
 }
 
 export function remove(run: Run, node: DeleteNode, trx: Trx): OkResult {
-  if (node.targets !== undefined) throw sqlError('ER_NOT_SUPPORTED_YET', messages.notSupported('Multiple-table DELETE'))
   run = { ...run, env: { ...run.env, trx } }
   run = withCtes(run, node, 'DELETE')
+  if (node.targets !== undefined) return removeMulti(run, node, trx)
   const target = singleTable(run, node.tables, 'DELETE')
   const { def, alias } = target
   const table = guarded(run, target.table, trx)
@@ -1080,6 +1082,177 @@ export function remove(run: Run, node: DeleteNode, trx: Trx): OkResult {
       trx.rollbackTo(at)
       warnings++
       run.env.conditions?.push({ level: 'Warning', code: e.errno ?? 1451, message: e.message })
+    }
+  }
+  return warnings === 0 ? { affectedRows: deleted } : { affectedRows: deleted, warnings }
+}
+
+// --- the multi-table forms ---------------------------------------------------
+
+/** Whether an UPDATE or DELETE names more than one table, or a join. */
+const multiTable = (tables: UpdateNode['tables']): boolean => tables.length !== 1 || tables[0]?.kind !== REF.TABLE
+
+/** A FROM's base table a multi-table statement writes, by the slots it holds in the joined row. */
+interface Target {
+  readonly from: FromTable
+  readonly def: TableDef
+  readonly table: Table
+}
+
+/** The FROM of a multi-table UPDATE or DELETE, and each joined row with its tables' row ids, read in full before any is written. */
+function joinedRows(run: Run, node: UpdateNode | DeleteNode, trx: Trx): { from: FromPlan; rows: JoinedRow[] } {
+  const from = planFrom(node.tables, fromContext(run), node.where)
+  const where = node.where === undefined ? undefined : compile(node.where, compileContext(run, from.scope, 'where clause'))
+  const rows = [...from.rows(trx, run.env, { where: node.where, locking: true, ids: true })].filter((r) => where === undefined || truth(where.eval(r.row, run.env)) === true)
+  return { from, rows }
+}
+
+/** The base table that holds slot `index` of the joined row; 1288 for a derived one (8.4.11). */
+function targetAt(run: Run, from: FromPlan, index: number, what: 'UPDATE' | 'DELETE', trx: Trx): Target {
+  const t = from.tables.find((x) => index >= x.offset && index < x.offset + x.width) as FromTable
+  if (t.def === undefined || t.table === undefined) throw sqlError('ER_NON_UPDATABLE_TABLE', `The target table ${t.alias} of the ${what} is not updatable`)
+  return { from: t, def: t.def, table: guarded(run, t.table, trx) }
+}
+
+/**
+ * `UPDATE a JOIN b … SET a.x = …, b.y = …` (8.4.11): every joined row the
+ * WHERE keeps is read first; each target row is then updated once, from the
+ * first joined row that reaches it, its SET reading that row as it was read.
+ * "Rows matched" counts the target rows, of every table. ORDER BY and LIMIT
+ * are 1221; a derived table as a target is 1288.
+ */
+function updateMulti(run: Run, node: UpdateNode, trx: Trx): OkResult {
+  if (node.orderBy !== undefined) throw sqlError('ER_WRONG_USAGE', 'Incorrect usage of UPDATE and ORDER BY')
+  if (node.limit !== undefined) throw sqlError('ER_WRONG_USAGE', 'Incorrect usage of UPDATE and LIMIT')
+  const { from, rows } = joinedRows(run, node, trx)
+  const scope = from.scope
+  const ignore = node.ignore === true
+  const strictMode = isStrict(run.env.session.sqlMode)
+  const store: StoreContext = { strict: strictMode && !ignore, strictMode, ...zeroRules(run), row: 1, warnings: 0, table: '', ...sink(run) }
+  // The SET list by table, each value compiled over the joined row.
+  let joined: Row = []
+  const byTable = new Map<FromTable, { target: Target; assignments: Assigned[] }>()
+  for (const a of node.set) {
+    const { index } = scope.resolve(a.column.parts, 'field list')
+    const target = targetAt(run, from, index, 'UPDATE', trx)
+    const column = index - target.from.offset
+    if (!isDefaultKeyword(a.value)) notGenerated(target.def, column)
+    let entry = byTable.get(target.from)
+    if (entry === undefined) byTable.set(target.from, (entry = { target, assignments: [] }))
+    const compiled = isDefaultKeyword(a.value) ? undefined : compile(a.value, compileContext(run, scope, 'field list'))
+    entry.assignments.push({
+      index: column,
+      value:
+        compiled === undefined
+          ? undefined
+          : // Over the joined row as it was read: a later SET does not see an
+            // earlier one, as it does in the single-table form (8.4.11:
+            // `SET q.x = q.x + 1, q.y = q.x * 10` over x = 5 gives y = 50).
+            { ...compiled, eval: (_values, env) => compiled.eval(joined, env) },
+    })
+  }
+  // A subquery that reads any of the joined tables is 1093, and the message
+  // names the first of them, whichever it reads (8.4.11).
+  const first = from.tables.find((t) => t.def !== undefined)
+  for (const t of from.tables) {
+    if (t.def === undefined) continue
+    try {
+      checkTargetNotRead({ schema: t.def.schema, name: t.def.name }, [node.where, ...node.set.map((a) => a.value)], run.env.session.database)
+    } catch (e) {
+      if (!(e instanceof MyjsError) || e.errno !== 1093 || first?.def === undefined) throw e
+      throw sqlError('ER_UPDATE_TABLE_USED', `You can't specify target table '${first.alias}' for update in FROM clause`)
+    }
+  }
+  run.state.insertIdSet = false
+  let matched = 0
+  let changed = 0
+  for (const { target, assignments } of byTable.values()) {
+    const { def, table } = target
+    store.table = def.name
+    const generate = generatorOf(run, def)
+    const onUpdate = onUpdateOf(run, def)
+    const defaults = def.columns.map((c) => defaultOf(run, c, def))
+    const check = checker(run, def)
+    const keys = uniqueKeys(def)
+    // Each target row once, at the first joined row that reaches it.
+    const seen = new Set<string>()
+    for (const r of rows) {
+      const id = r.ids?.[target.from.offset]
+      if (id === undefined) continue
+      const key = String.fromCharCode(...id)
+      if (seen.has(key)) continue
+      seen.add(key)
+      matched++
+      store.row = matched
+      joined = r.row
+      const current = table.get(id, trx, 'current')
+      if (current === undefined) continue
+      const values = current.map((f, i) => (f === null ? null : decodeField(f, (def.columns[i] as ColumnDef).type)))
+      const result = assignAll(run, def, current, values, [], assignments, onUpdate, defaults, store, store.strict ? 'error' : 'warn', generate)
+      if (!result.changed) continue
+      const violated = check?.(result.after)
+      if (violated !== undefined) {
+        if (!ignore) throw checkViolated(violated)
+        warnError(store, checkViolated(violated))
+        continue
+      }
+      const at = ignore ? trx.savepoint() : 0
+      try {
+        table.update(id, result.after, trx)
+      } catch (e) {
+        if (!ignore) throw duplicateError(e, def, table, keys, result.after, trx, id)
+        const skipped = isDuplicate(e) ? duplicateError(e, def, table, keys, result.after, trx, id) : e
+        if (!(skipped instanceof MyjsError) || !(isDuplicate(e) || skipped.errno === 1451 || skipped.errno === 1452)) throw e
+        trx.rollbackTo(at)
+        warnError(store, skipped)
+        continue
+      }
+      changed++
+    }
+  }
+  const foundRows = hasCap(run.env.session.capabilities, CLIENT.FOUND_ROWS)
+  const warnings = statementWarnings(run, store.warnings)
+  return {
+    affectedRows: foundRows ? matched : changed,
+    ...(run.state.insertIdSet ? { insertId: run.state.lastInsertId } : {}),
+    warnings,
+    info: `Rows matched: ${matched}  Changed: ${changed}  Warnings: ${warnings}`,
+  }
+}
+
+/**
+ * `DELETE a, b FROM a JOIN b …` and `DELETE FROM a, b USING …` (8.4.11): the
+ * joined rows the WHERE keeps, read first; each target's rows deleted once,
+ * the targets in the order named. A target not among the tables is 1109;
+ * the count is every row deleted.
+ */
+function removeMulti(run: Run, node: DeleteNode, trx: Trx): OkResult {
+  const { from, rows } = joinedRows(run, node, trx)
+  const targets = (node.targets ?? []).map((t) => {
+    const found = from.tables.find((x) => x.alias.toLowerCase() === t.name.toLowerCase())
+    if (found === undefined) throw sqlError('ER_UNKNOWN_TABLE', `Unknown table '${t.name}' in MULTI DELETE`)
+    return targetAt(run, from, found.offset, 'DELETE', trx)
+  })
+  for (const t of targets) checkTargetNotRead({ schema: t.def.schema, name: t.def.name }, [node.where], run.env.session.database)
+  let deleted = 0
+  let warnings = 0
+  for (const t of targets) {
+    const seen = new Set<string>()
+    for (const r of rows) {
+      const id = r.ids?.[t.from.offset]
+      if (id === undefined) continue
+      const key = String.fromCharCode(...id)
+      if (seen.has(key)) continue
+      seen.add(key)
+      const at = node.ignore === true ? trx.savepoint() : 0
+      try {
+        if (t.table.delete(id, trx)) deleted++
+      } catch (e) {
+        if (node.ignore !== true || !(e instanceof MyjsError) || e.errno !== 1451) throw e
+        trx.rollbackTo(at)
+        warnings++
+        run.env.conditions?.push({ level: 'Warning', code: e.errno ?? 1451, message: e.message })
+      }
     }
   }
   return warnings === 0 ? { affectedRows: deleted } : { affectedRows: deleted, warnings }
