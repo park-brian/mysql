@@ -116,3 +116,24 @@ test('M5.42: an expression default is not in the row until it is taken, and is n
     await end()
   }
 })
+
+test('M5.42 probe: a length bound by `?` does not size the result; the column is as wide as its string (8.4.11)', async () => {
+  const db = await MySQL.open(':memory:')
+  const conn = await mysql.createConnection({ stream: db.createStream(), user: 'root', password: '' })
+  try {
+    await conn.query('CREATE DATABASE app')
+    await conn.query('USE app')
+    await conn.query('CREATE TABLE t (s VARCHAR(20))')
+    await conn.query("INSERT INTO t VALUES ('abcdef')")
+    // 80 is the whole VARCHAR(20) in utf8mb4; a literal length sizes the column, a bound one never does.
+    const [bound, boundFields] = await conn.execute('SELECT LEFT(s, ?) AS l FROM t', [3])
+    assert.deepEqual([bound, boundFields.map((f) => f.columnLength)], [[{ l: 'abc' }], [80]])
+    const [, literalFields] = await conn.query('SELECT LEFT(s, 3) AS l FROM t')
+    assert.deepEqual(literalFields.map((f) => f.columnLength), [12])
+    const [, others] = await conn.execute("SELECT RIGHT(s, ?) AS r, SUBSTRING(s, 1, ?) AS m, REPEAT(s, ?) AS p, LPAD(s, ?, 'x') AS d FROM t", [2, 2, 2, 25])
+    assert.deepEqual(others.map((f) => f.columnLength), [80, 80, 268435456, 268435456])
+  } finally {
+    await conn.end()
+    await db.end()
+  }
+})
