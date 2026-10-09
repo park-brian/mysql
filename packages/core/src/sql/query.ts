@@ -20,9 +20,9 @@ import { columnDefinition, intType, type ResultType } from './meta.ts'
 import { FIELD_TYPE, expectTyped } from '@myjs/bytes'
 import { requireCollationInfo } from '@myjs/charsets'
 import { distinct, filter, limit, project, sort, type SortKey } from './operators.ts'
-import { FULL_SCAN, accessRows, chooseAccess, isConstant, splitAnd } from './plan.ts'
+import { FULL_SCAN, accessRows, isConstant, splitAnd } from './plan.ts'
 import { TableScope } from './scope.ts'
-import { planFrom, type DerivedSource, type FromContext, type FromPlan, type JoinCondition } from './from.ts'
+import { planFrom, type DerivedPlan, type DerivedSource, type FromContext, type FromPlan, type JoinCondition } from './from.ts'
 import { rowKey } from './keys.ts'
 import { planNode, wrap, type PlanNode } from './explain.ts'
 import { convert as convertSetValue, nestedNullability, setOperation, setOperationType } from './setop.ts'
@@ -433,9 +433,12 @@ function planSelect(run: Run, q: QueryExpression, node: SelectNode): SelectPlan 
       // An empty result the optimizer proves is no plan at all.
       if (facts?.impossible === true || provedEmpty(run, from, node, limitCount)) return [planNode('Zero rows')]
       // An ORDER BY the clustered index already gives: read in its order, and nothing to sort.
-      const ordered = source !== undefined && !deduplicated && match === undefined && keys.length > 0 ? orderingIndex(source.def, source.alias, q.orderBy ?? [], items, lookup) : undefined
-      let n = from === undefined ? planNode('Rows fetched before execution') : from.explain(run.env, node.where, ordered)
-      n = withSubqueries(run, n, 'where clause')
+      const read = source !== undefined && from !== undefined ? from.access(run.env, node.where) : undefined
+      const ordered = source !== undefined && read !== undefined && !deduplicated && match === undefined && keys.length > 0 && read.ranges === undefined ? orderingIndex(source.def, source.alias, q.orderBy ?? [], items, lookup, read.index) : undefined
+      // [NOT] EXISTS over one indexed equality is a nested loop: the subquery probed for each row, in the outer table's order.
+      const semi = scope !== undefined && source !== undefined && nestedLoopSemijoin(node.where, scope) ? semijoinNode(run, node.where) : undefined
+      let n = from === undefined ? planNode('Rows fetched before execution') : from.explain(run.env, semi === undefined ? node.where : semi.rest, ordered)
+      n = semi === undefined ? withSubqueries(run, n, 'where clause') : planNode(semi.label, [n, ...semi.inner])
       if (having !== undefined) n = withSubqueries(run, planNode('Filter', [n]), 'having clause')
       // A DISTINCT through a temporary table, deduplicated as it is written.
       if (deduplicated) n = planNode('Table scan on <temporary>', [planNode('Temporary table with deduplication', [n])])
@@ -488,6 +491,24 @@ function subqueryNodes(run: Run, clause: string): PlanNode[] {
   return out
 }
 
+/**
+ * A WHERE's EXISTS and NOT EXISTS conjuncts as the join 8.4.11 makes of them:
+ * its name, the subquery's plan as the inner side, and the rest of the WHERE.
+ */
+function semijoinNode(run: Run, where: Expression | undefined): { label: string; inner: PlanNode[]; rest: Expression | undefined } | undefined {
+  const conjuncts = splitAnd(where)
+  const anti = (e: Expression): boolean => e.kind === NODE.UNARY && e.op === 'NOT' && e.operand.kind === NODE.UNARY && e.operand.op === 'EXISTS'
+  const exists = (e: Expression): boolean => e.kind === NODE.UNARY && e.op === 'EXISTS'
+  const joined = conjuncts.filter((e) => anti(e) || exists(e))
+  if (joined.length !== 1) return undefined
+  const e = joined[0] as Expression
+  const query = semijoinSubqueries(e)[0]
+  const sub = (run.subqueries ?? []).find((s) => s.query === query)?.plan.explain?.()[0]
+  if (sub === undefined) return undefined
+  const rest = conjuncts.filter((c) => c !== e).reduce<Expression | undefined>((acc, c) => (acc === undefined ? c : ({ kind: NODE.BINARY, op: 'AND', left: acc, right: c, at: c.at } as Expression)), undefined)
+  return { label: anti(e) ? 'Nested loop antijoin' : 'Nested loop semijoin', inner: [sub], rest }
+}
+
 /** A Filter with a clause's subqueries beside its input, as the server lists them; anything else as it is. */
 function withSubqueries(run: Run, n: PlanNode, clause: string): PlanNode {
   const subs = subqueryNodes(run, clause)
@@ -515,14 +536,17 @@ function provedEmpty(run: Run, from: FromPlan | undefined, node: SelectNode, lim
 }
 
 /**
- * The clustered index, when an ORDER BY is one direction over a prefix of its
- * key — or the whole key and more, since nothing after a unique key orders
- * anything: 8.4.11 reads the index in that order and sorts nothing ("Index
- * scan on t using PRIMARY").
+ * The index a table read whole is read by — its covering index, else its
+ * clustered one — when an ORDER BY is one direction over a prefix of that
+ * index's key, which for a secondary index ends with the clustered key it
+ * carries; or the whole key and more, since nothing after a unique key orders
+ * anything. 8.4.11 reads the index in that order and sorts nothing ("Index
+ * scan on t using PRIMARY", "Covering index scan on t using name").
  */
-function orderingIndex(def: TableDef, alias: string, order: readonly OrderItem[], items: readonly { compiled: Compiled; expr?: Expression }[], scope: Scope): string | undefined {
-  const index = def.indexes.find((i) => i.kind === 'primary' || i.name === def.clustered)
-  if (index === undefined || order.length === 0) return undefined
+function orderingIndex(def: TableDef, alias: string, order: readonly OrderItem[], items: readonly { compiled: Compiled; expr?: Expression }[], scope: Scope, readBy: string | undefined): string | undefined {
+  const clustered = def.indexes.find((i) => i.kind === 'primary' || i.name === def.clustered)
+  const index = readBy === undefined ? clustered : def.indexes.find((i) => i.name === readBy)
+  if (index === undefined || clustered === undefined || order.length === 0) return undefined
   const desc = order[0]?.desc === true
   const names: string[] = []
   for (const o of order) {
@@ -541,7 +565,8 @@ function orderingIndex(def: TableDef, alias: string, order: readonly OrderItem[]
     if (name === undefined) return undefined
     names.push(name.toLowerCase())
   }
-  const parts = index.parts.map((p) => p.column.toLowerCase())
+  const own = index.parts.map((p) => p.column.toLowerCase())
+  const parts = index === clustered ? own : [...own, ...clustered.parts.map((p) => p.column.toLowerCase()).filter((c) => !own.includes(c))]
   const covered = names.length <= parts.length ? names.every((n, i) => n === parts[i]) : parts.every((p, i) => p === names[i])
   return covered ? index.name : undefined
 }
@@ -678,6 +703,11 @@ function chooseCovering(from: FromPlan, scope: TableScope, node: SelectNode, q: 
     if (n.kind === NODE.SUBQUERY || n.kind === REF.DERIVED) {
       visit(n.query, true)
       return
+    }
+    // COUNT(*) counts rows and reads no column.
+    if (n.kind === NODE.CALL && String((n as { name?: unknown }).name).toUpperCase() === 'COUNT') {
+      const args = (n as { args?: readonly Expression[] }).args ?? []
+      if (args.length === 1 && args[0]?.kind === NODE.COLUMN && args[0].parts.length === 1 && args[0].parts[0] === '*') return
     }
     if (n.kind === NODE.COLUMN && n.parts !== undefined) {
       const last = n.parts[n.parts.length - 1] as string
@@ -849,9 +879,10 @@ function derivedTable(run: Run, query: QueryExpression, alias: string, names: re
   const key = {}
   return {
     columns,
-    explain: () => {
+    explain: (): DerivedPlan | undefined => {
       const body = plan.explain?.()[0]
-      return body === undefined ? undefined : { merged, body, materialize: cte === undefined ? 'Materialize' : `Materialize CTE ${cte}` }
+      if (body === undefined) return undefined
+      return merged ? { merged, node: body } : { merged, materialize: cte === undefined ? 'Materialize' : `Materialize CTE ${cte}`, children: [body] }
     },
     // Its rows are a table's fields: a hex literal's number does not survive.
     rows: (trx, env, row) => {
@@ -969,7 +1000,8 @@ function recursiveCte(run: Run, cte: NonNullable<QueryExpression['with']>['table
   // A recursive CTE's table is typed as a set operation's column is, from the anchor alone, and nullable.
   const columns = renamed(anchor.columns, cte.columns).map((c) => ({ name: c.name, type: { ...setOperationType([c.type], run.env.session.characterSet), nullable: true, names: { schema: '', table: cte.name, orgTable: '', orgName: c.name } } }))
   let working: readonly (readonly Value[])[] = []
-  const workingTable: DerivedSource = { columns, rows: () => working }
+  // What a recursive member reads of the CTE: the rows the last round added.
+  const workingTable: DerivedSource = { columns, rows: () => working, explain: () => ({ merged: true, node: planNode(`Scan new records on ${cte.name}`) }) }
   const ctes = new Map(run.ctes ?? [])
   ctes.set(cte.name, () => workingTable)
   const steps = recursive.map((m) => planQuery({ ...run, ctes }, asQuery(m)))
@@ -983,6 +1015,13 @@ function recursiveCte(run: Run, cte: NonNullable<QueryExpression['with']>['table
   const types = columns.map((c) => c.type)
   return {
     columns,
+    // The anchors once, then the recursive members until a round adds nothing.
+    explain: () => {
+      const roots = [...anchorPlans, ...steps].map((p) => p.explain?.()[0])
+      if (roots.some((r) => r === undefined)) return undefined
+      const body = roots as PlanNode[]
+      return { merged: false, materialize: `Materialize recursive CTE ${cte.name}${distinctRows ? ' with deduplication' : ''}`, children: [...body.slice(0, anchorPlans.length), planNode('Repeat until convergence', body.slice(anchorPlans.length))] }
+    },
     rows(trx, env) {
       const max = Number(toInteger(run.state.systemVariable('cte_max_recursion_depth', undefined, env.session) ?? intValue(1000n)))
       const seen = new Set<string>()
@@ -1434,7 +1473,7 @@ function planGrouped(
       if (from === undefined) rows = [{ row: [] }]
       else if (source === undefined) rows = from.rows(trx, env, { where: node.where, locking })
       else {
-        let access = chooseAccess(source.def, source.alias, node.where, env)
+        let access = from.access(env, node.where)
         // An index-ordered grouping reads that index whole, in its order.
         if (strategy === 'index' && groupIndex !== undefined) {
           const clustered = source.def.indexes.find((i) => i.name === groupIndex)?.kind === 'primary' || source.def.clustered === groupIndex

@@ -39,7 +39,7 @@ import {
   type Value,
 } from '@myjs/types'
 import type { Table, Trx } from '@myjs/engine'
-import type { Env } from './compile.ts'
+import type { Compiled, Env } from './compile.ts'
 import { scan, type ScannedRow } from './operators.ts'
 
 /** How to read a table: an index and the ranges of it, in index order, or a full scan. */
@@ -51,7 +51,7 @@ export interface Access {
 
 export const FULL_SCAN: Access = {}
 
-type Op = '=' | '<' | '<=' | '>' | '>=' | 'IN' | 'IS NULL'
+type Op = '=' | '<=>' | '<' | '<=' | '>' | '>=' | 'IN' | 'IS NULL'
 
 interface Condition {
   readonly column: string
@@ -59,7 +59,14 @@ interface Condition {
   readonly constants: readonly Expression[]
 }
 
-const FLIP: Readonly<Record<string, Op>> = { '=': '=', '<': '>', '<=': '>=', '>': '<', '>=': '<=' }
+const FLIP: Readonly<Record<string, Op>> = { '=': '=', '<=>': '<=>', '<': '>', '<=': '>=', '>': '<', '>=': '<=' }
+
+/**
+ * A column of an enclosing query, compiled, when `e` is one: a constant for
+ * each run of a correlated subquery, so an index can be looked up by it
+ * (`ref` access: `WHERE ch.pa_id = pa.id` inside a subquery over `pa`).
+ */
+export type OuterColumn = (e: Expression) => Compiled | undefined
 
 /** A constant the planner may evaluate before the scan: a literal, or a `?`. */
 export const isConstant = (e: Expression): boolean =>
@@ -85,22 +92,23 @@ function columnOf(e: Expression, def: TableDef, alias: string): string | undefin
   return def.columns.find((c) => c.name.toLowerCase() === name)?.name
 }
 
-function conditionOf(e: Expression, def: TableDef, alias: string): Condition | undefined {
+function conditionOf(e: Expression, def: TableDef, alias: string, outer: OuterColumn | undefined): Condition | undefined {
+  const constant = (x: Expression): boolean => isConstant(x) || outer?.(x) !== undefined
   if (e.kind === NODE.UNARY && e.op === 'IS NULL') {
     const column = columnOf(e.operand, def, alias)
     return column === undefined ? undefined : { column, op: 'IS NULL', constants: [] }
   }
   if (e.kind !== NODE.BINARY) return undefined
-  if (e.op === 'IN' && e.right.kind === NODE.ROW && e.right.items.every(isConstant)) {
+  if (e.op === 'IN' && e.right.kind === NODE.ROW && e.right.items.every(constant)) {
     const column = columnOf(e.left, def, alias)
     return column === undefined ? undefined : { column, op: 'IN', constants: e.right.items }
   }
   const op = FLIP[e.op === '<>' || e.op === '!=' ? '' : e.op]
   if (op === undefined) return undefined
   const left = columnOf(e.left, def, alias)
-  if (left !== undefined && isConstant(e.right)) return { column: left, op: e.op as Op, constants: [e.right] }
+  if (left !== undefined && constant(e.right)) return { column: left, op: e.op as Op, constants: [e.right] }
   const right = columnOf(e.right, def, alias)
-  if (right !== undefined && isConstant(e.left)) return { column: right, op, constants: [e.left] }
+  if (right !== undefined && constant(e.left)) return { column: right, op, constants: [e.left] }
   return undefined
 }
 
@@ -157,9 +165,9 @@ function exact(v: Value, c: ColumnDef): boolean {
  * statement gives the table. Constants are evaluated now, with `env`, which
  * is why the plan is made per execution (a `?` is a constant by then).
  */
-export function chooseAccess(def: TableDef, alias: string, where: Expression | undefined, env: Env): Access {
+export function chooseAccess(def: TableDef, alias: string, where: Expression | undefined, env: Env, outer?: OuterColumn): Access {
   const conditions = splitAnd(where)
-    .map((e) => conditionOf(e, def, alias))
+    .map((e) => conditionOf(e, def, alias, outer))
     .filter((c): c is Condition => c !== undefined)
   if (conditions.length === 0) return FULL_SCAN
 
@@ -171,7 +179,7 @@ export function chooseAccess(def: TableDef, alias: string, where: Expression | u
     if (part === undefined || part.prefix !== undefined || part.descending === true) continue
     const column = def.columns.find((c) => c.name === part.column) as ColumnDef
     const mine = conditions.filter((c) => c.column === column.name)
-    const access = accessFor(index, column, mine, env)
+    const access = accessFor(index, column, mine, env, outer)
     if (access === undefined) continue
     const score = access.score + (index.kind === 'primary' || def.clustered === index.name ? 0.5 : 0)
     if (best === undefined || score > best.score) best = { access: access.access, score }
@@ -197,11 +205,45 @@ function bound(v: Value, column: ColumnDef, inclusive: boolean): KeyBound | unde
   }
 }
 
-function accessFor(index: IndexDef, column: ColumnDef, conditions: readonly Condition[], env: Env): { access: Access; score: number } | undefined {
+/**
+ * Whether every value an enclosing query's column can hold converts to
+ * `column` exactly — `exact` decided by type, for a plan made before the
+ * outer row is there to ask (EXPLAIN). It is true only where `exact` is true
+ * of every non-NULL value of that type, so the run, which asks the value,
+ * reads the same index.
+ */
+function exactType(t: Compiled['type'], c: ColumnDef): boolean {
+  switch (c.type.type) {
+    case FIELD_TYPE.TINY:
+    case FIELD_TYPE.SHORT:
+    case FIELD_TYPE.INT24:
+    case FIELD_TYPE.LONG:
+    case FIELD_TYPE.LONGLONG:
+      return t.kind === 'int' && t.literalInt === undefined
+    case FIELD_TYPE.DECIMAL:
+    case FIELD_TYPE.NEWDECIMAL:
+      return (t.kind === 'int' && t.literalInt === undefined) || (t.kind === 'decimal' && t.scale <= (c.type.scale ?? 0))
+    case FIELD_TYPE.DOUBLE:
+      return (t.kind === 'int' && t.literalInt === undefined) || t.kind === 'decimal' || t.kind === 'double'
+    default:
+      return false
+  }
+}
+
+/** A bound no row is read by: a plan's lookup by a value it does not have yet (see `exactType`). */
+const UNBOUND: KeyBound = { values: [], inclusive: true }
+
+function accessFor(index: IndexDef, column: ColumnDef, conditions: readonly Condition[], env: Env, outer: OuterColumn | undefined): { access: Access; score: number } | undefined {
   const clustered = index.kind === 'primary'
+  for (const c of conditions) {
+    // An outer column with no outer row to read: a lookup by type, for EXPLAIN.
+    const o = c.op === '=' && env.outer === undefined ? outer?.(c.constants[0] as Expression) : undefined
+    if (o !== undefined) return exactType(o.type, column) ? { access: { index: index.name, ranges: [{ from: UNBOUND, to: UNBOUND }] }, score: 3 } : undefined
+  }
   const evaluate = (e: Expression): Value | undefined => {
     try {
-      return constantValue(e, env)
+      const o = outer?.(e)
+      return o === undefined ? constantValue(e, env) : o.eval([], env)
     } catch (e) {
       expectTyped(e)
       return undefined
@@ -211,6 +253,14 @@ function accessFor(index: IndexDef, column: ColumnDef, conditions: readonly Cond
     if (c.op === 'IS NULL') {
       if (!column.nullable) continue
       return { access: { index: index.name, ranges: [{ from: { values: [null], inclusive: true }, to: { values: [null], inclusive: true } }] }, score: 3 }
+    }
+    if (c.op === '<=>') {
+      // NULL-safe: `= v` for a value, IS NULL for NULL — a key read either way.
+      const v = evaluate(c.constants[0] as Expression)
+      if (v === null && column.nullable) return { access: { index: index.name, ranges: [{ from: { values: [null], inclusive: true }, to: { values: [null], inclusive: true } }] }, score: 3 }
+      const b = v === undefined || v === null || !exact(v, column) ? undefined : bound(v, column, true)
+      if (b !== undefined) return { access: { index: index.name, ranges: [{ from: b, to: b }] }, score: 3 }
+      continue
     }
     if (c.op === '=' || c.op === 'IN') {
       const values = c.constants.map(evaluate)
@@ -238,7 +288,7 @@ function accessFor(index: IndexDef, column: ColumnDef, conditions: readonly Cond
   let from: KeyBound | undefined
   let to: KeyBound | undefined
   for (const c of conditions) {
-    if (c.op === 'IN' || c.op === '=' || c.op === 'IS NULL') continue
+    if (c.op === 'IN' || c.op === '=' || c.op === '<=>' || c.op === 'IS NULL') continue
     const v = evaluate(c.constants[0] as Expression)
     if (v === undefined || !exact(v, column)) continue
     const b = bound(v, column, c.op === '<=' || c.op === '>=')

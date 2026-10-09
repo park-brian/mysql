@@ -34,7 +34,7 @@ import { messages, sqlError } from '@myjs/protocol'
 import { truth, type Value } from '@myjs/types'
 import type { Compiled, Env, Row, Scope } from './compile.ts'
 import { planNode, type PlanNode } from './explain.ts'
-import { FULL_SCAN, accessRows, chooseAccess, pointAccess, splitAnd, type Access } from './plan.ts'
+import { FULL_SCAN, accessRows, chooseAccess, pointAccess, splitAnd, type Access, type OuterColumn } from './plan.ts'
 import { TableScope, type ScopeColumn, type ScopeTableSpec } from './scope.ts'
 
 /** A table the FROM reads: a base table, or (M5.1) a derived one. */
@@ -66,8 +66,11 @@ export interface DerivedSource {
    * query that reads it (`derived_merge`) or materializes it first, and as
    * what (`Materialize`, `Materialize CTE c`).
    */
-  explain?(): { readonly merged: boolean; readonly body: PlanNode; readonly materialize: string } | undefined
+  explain?(): DerivedPlan | undefined
 }
+
+/** A derived table's plan: merged, its query's own iterator in its place; or materialized, as what and from what. */
+export type DerivedPlan = { readonly merged: true; readonly node: PlanNode } | { readonly merged: false; readonly materialize: string; readonly children: readonly PlanNode[] }
 
 type Node =
   | { readonly kind: 'leaf'; readonly table: FromTable }
@@ -127,6 +130,8 @@ export interface FromPlan {
    * in the order of, for an ORDER BY it gives.
    */
   explain(env: Env, where: Expression | undefined, ordered?: string): PlanNode
+  /** How the one base table of a single-table FROM is read: what `rows` and `explain` read it by. */
+  access(env: Env, where: Expression | undefined): Access
   /** The rows of the FROM. `where` may narrow a scan (see the header); `ids` asks for each base table's row id too. */
   rows(trx: Trx | undefined, env: Env, options: { readonly where: Expression | undefined; readonly locking: boolean; readonly ids?: boolean }): Iterable<JoinedRow>
 }
@@ -380,6 +385,24 @@ export function planFrom(refs: readonly TableReference[], ctx: FromContext, wher
   }
 
   const scope = new TableScope(specs, { coalesced, ...(tree === undefined ? {} : { visible: tree.visible }), ...(ctx.parent === undefined ? {} : { parent: ctx.parent }) })
+  // A column of an enclosing query, compiled once: a constant for each run of this one.
+  const outerColumns = new Map<Expression, Compiled | undefined>()
+  const outer: OuterColumn | undefined =
+    ctx.parent === undefined
+      ? undefined
+      : (e) => {
+          if (e.kind !== NODE.COLUMN) return undefined
+          if (!outerColumns.has(e)) {
+            let compiled: Compiled | undefined
+            try {
+              if (scope.resolve(e.parts, 'where clause').depth !== undefined) compiled = ctx.compileOn(e, scope)
+            } catch (err) {
+              expectTyped(err)
+            }
+            outerColumns.set(e, compiled)
+          }
+          return outerColumns.get(e)
+        }
   const only = tables.length === 1 ? tables[0] : undefined
   const single = only?.def !== undefined && only.table !== undefined ? { alias: only.alias, def: only.def, table: only.table } : undefined
 
@@ -407,14 +430,18 @@ export function planFrom(refs: readonly TableReference[], ctx: FromContext, wher
       return spine.every((j) => j.kind === 'join' && [...nestedLoopJoins].some((s) => [...s].every((a) => innerAliasesOf(j).has(a)) && s.size === innerAliasesOf(j).size))
     },
     ...(single === undefined ? {} : { single }),
+    access(env, where) {
+      const t = tables[0] as FromTable
+      return leafAccess(t, { where, covering, ...(outer === undefined ? {} : { outer }) }, env)
+    },
     explain(env, where, ordered) {
       if (tree === undefined) return planNode('Rows fetched before execution')
       const conditions = splitAnd(where).map((e) => ({ e, aliases: aliasesOf(e, scope) }))
-      return describe(tree.node, conditions, scope, { where, covering, ...(ordered === undefined ? {} : { ordered }) }, env)
+      return describe(tree.node, conditions, scope, { where, covering, ...(outer === undefined ? {} : { outer }), ...(ordered === undefined ? {} : { ordered }) }, env)
     },
     rows(trx, env, options) {
       if (tree === undefined) return [{ row: [] }]
-      return run(tree.node, trx, env, { ...options, covering }, width)
+      return run(tree.node, trx, env, { ...options, covering, ...(outer === undefined ? {} : { outer }) }, width)
     },
   }
 }
@@ -449,7 +476,7 @@ function slotScope(scope: Scope, full: TableScope): Scope {
 }
 
 /** The rows of a join tree, each as wide as the whole FROM. */
-type RunOptions = { readonly where: Expression | undefined; readonly locking: boolean; readonly covering?: ReadonlyMap<string, string>; readonly ids?: boolean }
+type RunOptions = { readonly where: Expression | undefined; readonly locking: boolean; readonly covering?: ReadonlyMap<string, string>; readonly outer?: OuterColumn; readonly ids?: boolean }
 
 /** A row of the join, and with `ids`, each base table's row id at that table's offset: what a multi-table UPDATE or DELETE writes. */
 export interface JoinedRow {
@@ -566,8 +593,8 @@ function idsAt(offset: number, id: RowId): (RowId | undefined)[] {
  * outer join may null (see the header); else the covering index chosen for
  * it; else a full scan. `rows` and `explain` both ask this.
  */
-function leafAccess(t: FromTable, options: { readonly where: Expression | undefined; readonly covering?: ReadonlyMap<string, string> }, env: Env): Access {
-  const access = t.nullable ? FULL_SCAN : chooseAccess(t.def as TableDef, t.alias, options.where, env)
+function leafAccess(t: FromTable, options: { readonly where: Expression | undefined; readonly covering?: ReadonlyMap<string, string>; readonly outer?: OuterColumn }, env: Env): Access {
+  const access = t.nullable ? FULL_SCAN : chooseAccess(t.def as TableDef, t.alias, options.where, env, options.outer)
   const cover = options.covering?.get(t.alias)
   return access.index === undefined && access.ranges === undefined && cover !== undefined ? { index: cover } : access
 }
@@ -693,7 +720,7 @@ function describeLeaf(t: FromTable, options: DescribeOptions, env: Env): PlanNod
   if (t.def === undefined) {
     const d = t.derived?.explain?.()
     if (d === undefined) return planNode(`Table scan on ${t.alias}`, [planNode('Materialize')])
-    return d.merged ? d.body : planNode(`Table scan on ${t.alias}`, [planNode(d.materialize, [d.body])])
+    return d.merged ? d.node : planNode(`Table scan on ${t.alias}`, [planNode(d.materialize, d.children)])
   }
   const access = leafAccess(t, options, env)
   if (options.ordered !== undefined && access.ranges === undefined) {
@@ -706,8 +733,10 @@ function describeLeaf(t: FromTable, options: DescribeOptions, env: Env): PlanNod
   if (access.ranges === undefined) return planNode(`Covering index scan on ${t.alias} using ${access.index}`)
   const index = t.def.indexes.find((i) => i.name === access.index)
   const points = access.ranges.every((r) => r.from !== undefined && r.from === r.to)
-  if (points && access.ranges.length === 1 && index !== undefined && index.kind !== 'primary') return planNode(`Index lookup on ${t.alias} using ${access.index}`)
-  return planNode(`Index range scan on ${t.alias} using ${access.index}`)
+  // A secondary index that holds every column the query reads is read alone.
+  const covering = options.covering?.get(t.alias) === access.index ? 'Covering index' : 'Index'
+  if (points && access.ranges.length === 1 && index !== undefined && index.kind !== 'primary') return planNode(`${covering} lookup on ${t.alias} using ${access.index}`)
+  return planNode(`${covering} range scan on ${t.alias} using ${access.index}`)
 }
 
 /**
@@ -720,11 +749,12 @@ function describeLeaf(t: FromTable, options: DescribeOptions, env: Env): PlanNod
 interface DescribeOptions {
   readonly where: Expression | undefined
   readonly covering?: ReadonlyMap<string, string>
+  readonly outer?: OuterColumn
   readonly ordered?: string
 }
 
 function describe(node: Node, conditions: readonly Placed[], scope: TableScope, options: DescribeOptions, env: Env): PlanNode {
-  if (node.kind === 'leaf') return filtered(describeLeaf(node.table, options, env), conditions)
+  if (node.kind === 'leaf') return filtered(describeLeaf(node.table, options, env), conditions.filter((c) => !lookedUp(node.table, c.e, options, env)))
   const outerAliases = leafAliases(node.outer)
   const innerAliases = leafAliases(node.inner)
   const on: Placed[] = splitAnd(node.onAst).map((e) => ({ e, aliases: aliasesOf(e, scope) }))
@@ -736,6 +766,11 @@ function describe(node: Node, conditions: readonly Placed[], scope: TableScope, 
   const spanning = node.left ? on.filter((c) => !toInner.includes(c)) : here
   const keys = spanning.filter((c) => isEquiJoin(c.e, scope, outerAliases, innerAliases))
   const outer = describe(node.outer, toOuter, scope, options, env)
+  if (hasLateral(node.inner)) {
+    // Run again for each row before it, its materialized rows thrown away first (see `run`).
+    const inner = filtered(describe(node.inner, toInner, scope, options, env), node.left ? [] : spanning)
+    return filtered(planNode(node.left ? 'Nested loop left join' : 'Nested loop inner join', [planNode('Invalidate materialized tables', [outer]), inner]), node.left ? here : [])
+  }
   if (node.lookup !== undefined && node.inner.kind === 'leaf') {
     const t = node.inner.table
     // The lookup's own equality is the key read, not a filter.
@@ -747,6 +782,22 @@ function describe(node: Node, conditions: readonly Placed[], scope: TableScope, 
   if (node.left) return filtered(planNode('Left hash join', [outer, planNode('Hash', [inner])]), here)
   // Probe with the later side, build on the earlier (D-75).
   return filtered(planNode('Inner hash join', [inner, planNode('Hash', [outer])]), here.filter((c) => !keys.includes(c)))
+}
+
+/**
+ * Whether a condition is the equality a table's single-point lookup reads by:
+ * the lookup returns exactly its rows, so no Filter applies it again. A
+ * condition on an enclosing query's column is not one of this FROM's tables'
+ * (`aliasesOf`), so it reaches the table's Filter only by being the WHERE's.
+ */
+function lookedUp(t: FromTable, e: Expression, options: DescribeOptions, env: Env): boolean {
+  if (t.def === undefined || !((e.kind === NODE.BINARY && (e.op === '=' || e.op === '<=>')) || (e.kind === NODE.UNARY && e.op === 'IS NULL'))) return false
+  const access = leafAccess(t, options, env)
+  if (access.ranges?.length !== 1 || access.ranges[0]?.from !== access.ranges[0]?.to) return false
+  const index = t.def.indexes.find((i) => i.name === access.index)
+  const column = index?.parts.length === 1 ? index.parts[0]?.column.toLowerCase() : undefined
+  const names = (x: Expression): boolean => x.kind === NODE.COLUMN && (x.parts[x.parts.length - 1] as string).toLowerCase() === column && (x.parts.length < 2 || x.parts[x.parts.length - 2] === t.alias)
+  return column !== undefined && (e.kind === NODE.UNARY ? names(e.operand) : e.kind === NODE.BINARY && (names(e.left) || names(e.right)))
 }
 
 /** An equality with one side's tables on its left and the other's on its right: a hash join's key. */
