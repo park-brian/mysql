@@ -9,20 +9,23 @@
 // to whatever listens, so it drives `@myjs/server` exactly as it drives a
 // server, and diffs what it gets against the recorded result itself.
 //
-// What a file needs beyond a server, `mysql-test-run.pl` provides: a
-// bootstrapped `test` database, an `mtr` schema, server options from each
-// file's `-master.opt`, a fresh server after a file that changes globals.
-// This harness provides only the first, for both servers alike, so some files
-// fail on 8.4.11 too. Hence the denominator: a file counts when 8.4.11 passes
-// it here, and the score is how many of those pass on this executor, as the
-// ORM census counts tests (M5.22).
+// The two sides are not run alike, and on purpose. 8.4.11 runs under its own
+// `mysql-test-run.pl`, which gives each file what the suite was written for:
+// a bootstrapped server, the `mtr` schema, each file's `-master.opt`, and a
+// restart after a file that changes globals. A first cut ran 8.4.11 like this
+// executor, one shared server and a `test` database per file, and passed 120
+// files: tests had set `binlog_format`, read-only transactions and `SET
+// PERSIST`ed variables (`character_set_server=greek`) that every later file
+// then met, and some shut the server down. A file counts when 8.4.11 passes it
+// under its own runner, the honest denominator; this executor gets a fresh
+// database per file, which is what the runner's restarts amount to.
 //
 // Ground rule 7: the suite is read where the package installed it and never
 // copied. The fixture records file names, outcomes and failure reasons — an
 // error number, or the class of a difference — never a statement or a line of
 // a result.
 //
-//   node tools/mysqltest-run.mjs --server          # 8.4.11 on 127.0.0.1:3306 (mysql-local.mjs start)
+//   node tools/mysqltest-run.mjs --server [--jobs 4]   # 8.4.11 under mysql-test-run.pl
 //   node tools/mysqltest-run.mjs --ours [--jobs 4]
 //   node tools/mysqltest-run.mjs --ours --only 'count_distinct|alias' --print
 import { spawn, execFileSync } from 'node:child_process'
@@ -61,10 +64,12 @@ const SKIPPED = 62
  */
 function reasonOf(out, code, timedOut) {
   if (timedOut) return 'timed out'
-  let m = /failed with wrong errno (\d+)[^]*?instead of (\d+)/.exec(out)
+  let m = /failed with wrong (?:errno|error) (\d+)[^]*?(?:instead of|should have failed with error '?)(\d+)/.exec(out)
   if (m !== null) return `wrong error ${m[1]}, expected ${m[2]}`
-  m = /succeeded - should have failed with (?:error|errno) \S*?\(?(\d+)\)?/.exec(out)
+  m = /succeeded[ ,-]+should have failed with (?:error|errno) '?\S*?\(?(\d+)\)?/.exec(out)
   if (m !== null) return `succeeded, expected error ${m[1]}`
+  m = /Command "(\$\w+)/.exec(out)
+  if (m !== null) return `exec of ${m[1]} failed`
   m = /Query '[^]*?' failed\.\s*ERROR (\d+) \(\w+\): ([^\n]*)/.exec(out)
   if (m !== null) {
     // ER_NOT_SUPPORTED_YET's text is this executor's own, naming what it lacks: the work queue.
@@ -81,14 +86,30 @@ function reasonOf(out, code, timedOut) {
 /** One file against a server at `port`; its scratch directory is its own. */
 function runFile(name, port, password, scratch) {
   rmSync(scratch, { recursive: true, force: true })
-  mkdirSync(scratch, { recursive: true })
-  const client = `mysql --no-defaults -h127.0.0.1 -P${port} -uroot${password === '' ? '' : ` -p${password}`}`
+  mkdirSync(join(scratch, 'tmp'), { recursive: true })
+  // The client tools a file may run, pointed at the server under test, as `mysql-test-run.pl` points them.
+  const tool = (name) => `${name} --no-defaults -h127.0.0.1 -P${port} -uroot${password === '' ? '' : ` -p${password}`}`
+  const client = tool('mysql')
   const args = [
     '--no-defaults', '-h', '127.0.0.1', '-P', String(port), '-u', 'root', ...(password === '' ? [] : [`-p${password}`]), '-D', 'test',
     `--basedir=${SUITE}/`, `--test-file=${join(SUITE, 't', `${name}.test`)}`, `--result-file=${join(SUITE, 'r', `${name}.result`)}`,
     `--logdir=${scratch}`, `--tmpdir=${scratch}`, '--tail-lines=5',
   ]
-  const env = { ...process.env, MYSQL_TEST_DIR: SUITE, MYSQLTEST_VARDIR: scratch, MYSQL_TMP_DIR: scratch, MASTER_MYPORT: String(port), MYSQL: client }
+  const env = {
+    ...process.env,
+    MYSQL_TEST_DIR: SUITE,
+    MYSQLTEST_VARDIR: scratch,
+    MYSQL_TMP_DIR: join(scratch, 'tmp'),
+    MASTER_MYPORT: String(port),
+    MYSQL: client,
+    MYSQL_DUMP: tool('mysqldump'),
+    MYSQL_ADMIN: tool('mysqladmin'),
+    MYSQL_SHOW: tool('mysqlshow'),
+    MYSQL_CHECK: tool('mysqlcheck'),
+    MYSQL_IMPORT: tool('mysqlimport'),
+    MYSQL_SLAP: tool('mysqlslap'),
+    MYSQL_BINLOG: 'mysqlbinlog --no-defaults',
+  }
   return new Promise((resolve) => {
     const child = spawn('mysqltest', args, { cwd: SUITE, env, stdio: ['ignore', 'pipe', 'pipe'] })
     let out = ''
@@ -103,7 +124,11 @@ function runFile(name, port, password, scratch) {
       clearTimeout(timer)
       if (code === 0) resolve({ status: 'p' })
       else if (code === SKIPPED && !timedOut) resolve({ status: 's', reason: 'skipped' })
-      else resolve({ status: 'f', reason: reasonOf(out, code, timedOut), out })
+      else {
+        // Kept for reading, beside the run and out of the repository (`.tmp/` is ignored).
+        writeFileSync(join(TMP, `${scratch.endsWith('server') ? 'server' : 'ours'}-${name}.out`), out)
+        resolve({ status: 'f', reason: reasonOf(out, code, timedOut), out })
+      }
     })
   })
 }
@@ -129,23 +154,41 @@ function report(label, run) {
   for (const [reason, n] of Object.entries(run.reasons).slice(0, 25)) console.log(String(n).padStart(6), reason)
 }
 
-/** 8.4.11, one file at a time: the server is shared, so each starts from a `test` database of its own. */
+/**
+ * 8.4.11 under its own `mysql-test-run.pl`, `--jobs` workers, every file of
+ * the main suite, read from its report: `[ NN%] main.<file> [ pass ]`.
+ */
 async function onServer() {
-  const mysql = (await import('mysql2/promise')).default
-  const admin = await mysql.createConnection({ host: '127.0.0.1', port: 3306, user: 'root', password: 'root' })
-  const [[{ v }]] = await admin.query('SELECT VERSION() AS v')
-  const system = new Set(['information_schema', 'mysql', 'performance_schema', 'sys'])
+  const vardir = join(TMP, 'mtr-var')
+  const args = ['mysql-test-run.pl', `--vardir=${vardir}`, '--force', '--max-test-fail=0', `--parallel=${JOBS}`, `--testcase-timeout=${Math.ceil(TIMEOUT_MS / 60000)}`, '--suite=main', ...files.map((f) => `main.${f}`)]
   const results = new Map()
-  for (const name of files) {
-    const [dbs] = await admin.query('SHOW DATABASES')
-    for (const { Database: d } of dbs) if (!system.has(d)) await admin.query(`DROP DATABASE \`${d}\``)
-    await admin.query('CREATE DATABASE test')
-    const r = await runFile(name, 3306, 'root', join(TMP, 'server'))
-    results.set(name, r)
-    if (flag('print') && r.status === 'f') console.log(`--- ${name}: ${r.reason}\n${r.out}`)
-  }
-  await admin.end()
-  return { version: v, ...tally(results) }
+  await new Promise((resolve) => {
+    const child = spawn('perl', args, { cwd: SUITE, stdio: ['ignore', 'pipe', 'pipe'] })
+    let pending = ''
+    const line = (l) => {
+      const m = /\]\s+main\.([\w-]+)\s+(?:'[^']*'\s+)?(?:w\d+\s+)?\[ (pass|fail|skipped|disabled) \]/.exec(l)
+      if (m === null) return
+      const status = m[2] === 'pass' ? 'p' : m[2] === 'fail' ? 'f' : 's'
+      // A file that failed and passed on retry is a pass; a file run twice in two combinations counts once, as its worse.
+      const before = results.get(m[1])
+      if (before === undefined || (before.status === 'p' && status === 'f')) results.set(m[1], status === 'f' ? { status, reason: 'failed under mysql-test-run' } : { status, ...(status === 's' ? { reason: 'skipped' } : {}) })
+    }
+    const take = (d) => {
+      pending += d
+      const lines = pending.split('\n')
+      pending = lines.pop() ?? ''
+      for (const l of lines) line(l)
+    }
+    child.stdout.on('data', take)
+    child.stderr.on('data', take)
+    child.on('exit', () => {
+      line(pending)
+      resolve()
+    })
+  })
+  // A file the runner never reported (excluded by its own lists) is skipped, as it would be.
+  for (const name of files) if (!results.has(name)) results.set(name, { status: 's', reason: 'skipped' })
+  return { version: version, ...tally([...results].sort((a, b) => (a[0] < b[0] ? -1 : 1))) }
 }
 
 /** This executor: a database of its own per file, served over TCP, `--jobs` files at a time. */

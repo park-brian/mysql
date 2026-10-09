@@ -318,6 +318,40 @@ jobs:
           name: orm-census
           path: test/format/fixtures/orm-census.json
 
+  mysqltest-run:
+    name: MySQL's own suite, run
+    runs-on: ubuntu-latest
+    # M5.15. MySQL's suite, run file by file by MySQL's own `mysqltest` from
+    # `mysql-community-test`, against this executor over TCP. The fixture's
+    # other half, 8.4.11 under its own `mysql-test-run.pl`, is the
+    # denominator and is committed from a local run (`--server`), since it
+    # needs a real server's hour. This job writes this executor's half, and
+    # `mysqltest-run.test.ts` then fails unless the scoreboard says what it
+    # measured: the number is CI's, not a hand's. Informational until its
+    # first green run, as the census job was: the runner image carries
+    # MySQL 8.0's packages, and installing 8.4's beside them is untried there.
+    continue-on-error: true
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22.18'
+          cache: npm
+      - run: npm ci
+      - name: install mysql-community-test (the suite and mysqltest)
+        run: sudo node tools/mysql-local.mjs install
+      - name: run every file against this executor
+        run: node tools/mysqltest-run.mjs --ours --jobs 4
+      - name: the scoreboard is the run
+        run: node --test test/format/mysqltest-run.test.ts
+      - name: upload the run
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: mysqltest-run
+          path: test/format/fixtures/mysqltest-run.json
+
   mysqltest-census:
     name: parse MySQL's own test corpus
     runs-on: ubuntu-latest
