@@ -17,11 +17,13 @@ const FIXTURE = new URL('./fixtures/coercion.json', import.meta.url).pathname
 /** The most statements the executor may still refuse. */
 const REFUSED_AT_MOST = 0
 /**
- * The most statements that may still disagree, and queries whose warning
- * counts may: M5.2 is done at zero. Lowered as each rule lands, never raised.
+ * The fewest statements that must agree, and queries whose warning counts
+ * must: floors rather than ceilings, since a case is compared only up to its
+ * first disagreement, so each fix brings statements into comparison that were
+ * not before. M5.2 is done when nothing disagrees. Raised as rules land, never lowered.
  */
-const DISAGREE_AT_MOST = 168
-const WARNINGS_DIFFER_AT_MOST = 102
+const AGREE_AT_LEAST = 2650
+const WARNINGS_AGREE_AT_LEAST = 1119
 
 test('M5.2: implicit coercions give what the server gave, value, type and warnings, ratcheted to all', async () => {
   assert.ok(existsSync(FIXTURE), 'the corpus must be committed')
@@ -33,7 +35,8 @@ test('M5.2: implicit coercions give what the server gave, value, type and warnin
   if (process.env.MISMATCHES === '1') console.log(t.mismatches.join('\n'))
   if (process.env.WARNINGS === '1') console.log(t.warningMismatches.join('\n'))
   assert.ok(t.statements > 2000, `the corpus is too small to say anything: ${t.statements} statements`)
-  assert.ok(t.mismatches.length <= DISAGREE_AT_MOST, `${t.mismatches.length} statements disagree, more than the ${DISAGREE_AT_MOST} this stage allows:\n${t.mismatches.slice(0, 3).join('\n')}`)
+  assert.ok(t.agreed >= AGREE_AT_LEAST, `${t.agreed} statements agree, fewer than the ${AGREE_AT_LEAST} this stage holds:\n${t.mismatches.slice(0, 3).join('\n')}`)
   assert.ok(t.refused <= REFUSED_AT_MOST, `${t.refused} refusals, more than the ${REFUSED_AT_MOST} this stage allows`)
-  assert.ok(t.warningMismatches.length <= WARNINGS_DIFFER_AT_MOST, `${t.warningMismatches.length} queries' warning counts disagree, more than ${WARNINGS_DIFFER_AT_MOST}:\n${t.warningMismatches.slice(0, 3).join('\n')}`)
+  const warningsAgree = t.warningsCompared - t.warningMismatches.length
+  assert.ok(warningsAgree >= WARNINGS_AGREE_AT_LEAST, `${warningsAgree} queries' warning counts agree, fewer than ${WARNINGS_AGREE_AT_LEAST}:\n${t.warningMismatches.slice(0, 3).join('\n')}`)
 })

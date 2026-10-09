@@ -157,3 +157,4 @@ export { extractDateTime, formatDateTime, formatLength, formatShape, type Broken
 export { scanDateTime, scanTime } from './temporal-scan.ts'
 export { crc32, md5, sha1, sha256, sha512 } from './digest.ts'
 export { MERGE_TYPES, mergeTypes, type MergeType } from './type-merge.ts'
+export { jsonTruth } from './sql-value.ts'

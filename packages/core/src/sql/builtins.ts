@@ -47,6 +47,8 @@ import {
   type CompileContext,
   type Compiled,
   asMerged,
+  dateConstant,
+  ownText,
   textOf,
   type Env,
   type Row,
@@ -385,7 +387,10 @@ export function controlFunction(name: string, e: CallNode, ctx: CompileContext):
     }
     case 'NULLIF': {
       arity(2)
-      const [given, y] = args() as [Compiled, Compiled]
+      const [first, second] = args() as [Compiled, Compiled]
+      // A comparison: a text constant beside a date is read as one, or is 1525.
+      const given = dateConstant(first, e.args[0] as Expression, second, ctx)
+      const y = dateConstant(second, e.args[1] as Expression, first, ctx)
       const x = asBigintConstant(given, y, e.args[0] as Expression, ctx) ?? given
       if (isText(x.type) && isText(y.type)) aggregateCollations([x.type, y.type], 'nullif', true)
       const cmp = comparer(x.type, y.type)
@@ -712,7 +717,7 @@ function asBigintConstant(x: Compiled, y: Compiled, written: Expression, ctx: Co
 
 function chosenOf(x: Compiled, result: ResultType): (v: Exclude<Value, null>, env: Env) => Value {
   if (result.kind === 'datetime' && (x.type.kind === 'datetime' || x.type.kind === 'time') && x.type.field !== result.field) return (v, env) => asMerged(v, result, env)
-  if (x.type.field === FIELD_TYPE.YEAR && result.kind === 'string') return (v) => stringValue(textOf(v, x.type), result.collationId)
+  if (ownText(x.type) && result.kind === 'string') return (v) => stringValue(textOf(v, x.type), result.collationId)
   if (!isBits(x.type) || !(result.kind === 'bytes' || isBits(result))) return (v) => convertTo(v, result)
   const bits = x.type.length
   if (result.kind === 'bytes') return (v) => (v.kind === 'int' ? bytesValue(bitBytes(v.v, bits)) : convertTo(v, result))

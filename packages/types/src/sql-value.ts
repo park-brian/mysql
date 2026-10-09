@@ -278,6 +278,20 @@ function jsonNumber(v: JsonDocValue): Exclude<Value, null> | undefined {
   return undefined
 }
 
+/**
+ * A JSON value's truth where a logical operator reads it: an implicit
+ * comparison against JSON integer 0, so only a number that is zero is false;
+ * `false`, `null`, `[]` and `""` are true (8.4.11). IF and CASE WHEN read it
+ * as a number instead, which is `truth`.
+ */
+export function jsonTruth(v: JsonDocValue): boolean {
+  const d = v.v
+  if (d.t === 'int' || d.t === 'uint') return d.v !== 0n
+  if (d.t === 'double') return d.v !== 0
+  if (d.t === 'decimal') return d.v.v !== 0n
+  return true
+}
+
 /** A value as an exact decimal, as `val_decimal()`. */
 export function toDecimal(v: Exclude<Value, null>): DecimalValue {
   switch (v.kind) {

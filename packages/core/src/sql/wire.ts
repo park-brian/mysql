@@ -12,6 +12,9 @@ import type { RowValue, Session } from '@myjs/protocol'
 import { renderDateTime, renderDecimal, renderDouble, renderFloat, renderTime, toDecimal, toDouble, toInteger, toText, type Value } from '@myjs/types'
 import type { ResultType } from './meta.ts'
 
+/** latin1_swedish_ci, `my_charset_numeric`'s collation: the charset a number's text is in. */
+const LATIN1_SWEDISH_CI = 8
+
 export type WireProtocol = 'text' | 'binary'
 
 
@@ -41,7 +44,11 @@ function textOf(v: Exclude<Value, null>, t: ResultType): string {
 export function toWire(v: Value, t: ResultType, protocol: WireProtocol, session: Session): RowValue {
   if (v === null) return null
   if (v.kind === 'bytes') return v.v
-  if (v.kind === 'int' && v.str !== undefined) return v.str
+  if (v.kind === 'int' && v.str !== undefined) {
+    // A BIT's bytes under a DECIMAL holder are text in the numbers' charset,
+    // latin1, converted for the client as any text is (8.4.11: 0xFF comes as C3 BF).
+    return t.kind === 'decimal' ? session.transcoder.encode(session.transcoder.decode(v.str, LATIN1_SWEDISH_CI), session.characterSet) : v.str
+  }
   // A BIT is sent as its bytes, big-endian, in either protocol (8.4.11).
   if (t.field === FIELD_TYPE.BIT && v.kind === 'int') return bitBytes(v.v, t.length)
   if (v.kind === 'string') return session.transcoder.encode(v.v, session.characterSet)
