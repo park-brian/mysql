@@ -351,6 +351,7 @@ function planSelect(run: Run, q: QueryExpression, node: SelectNode): SelectPlan 
   const limitCount = q.limit === undefined ? undefined : limitValue(run, q.limit.count, 'LIMIT')
   const offset = q.limit?.offset === undefined ? 0 : limitValue(run, q.limit.offset, 'LIMIT')
   if (from !== undefined && scope !== undefined) from.sortedBy(sortTable(q.orderBy?.map((o) => o.expr), undefined, items, scope), limitCount === undefined ? Infinity : offset + limitCount)
+  if (from !== undefined && scope !== undefined && node.distinct === true) from.distinctReads(keyAliases(items.flatMap((i) => (i.expr === undefined ? [] : [i.expr])), items, scope))
   const facts = source === undefined ? undefined : whereFacts(run, source.def, source.alias, node.where)
   // A prepare reports a statement before MySQL optimizes it, so it never sees
   // the temporary table: COM_STMT_PREPARE's metadata has no GROUP_FLAG where

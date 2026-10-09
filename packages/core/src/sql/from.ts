@@ -158,6 +158,8 @@ export interface FromPlan {
   filter(where: Expression | undefined, compile: (e: Expression) => Compiled, semijoin?: (e: Expression) => PlanNode | undefined): void
   /** The one table an ORDER BY or GROUP BY reads, and the rows a LIMIT keeps: what the join order pays a sort for (M5.7). Given before the plan is first asked for. */
   sortedBy(alias: string | undefined, limit: number): void
+  /** SELECT DISTINCT, and the tables its select list reads: the last table in join order it does not read is joined for one match a row. */
+  distinctReads(aliases: ReadonlySet<string>): void
   /** Read the one base table whole in an index's order, for an ORDER BY or a grouping it gives; `force` drops a range on another index for it, and `reverse` reads it descending. */
   readInOrder(index: string, force: boolean, reverse?: boolean): void
   /** The FROM as 8.4.11's iterators (M5.44): the tree `rows` runs, as EXPLAIN shows it. */
@@ -473,6 +475,8 @@ export function planFrom(refs: readonly TableReference[], ctx: FromContext, wher
   }
   const physicalOf = (conditions: readonly Placed[]): Op | undefined => {
     const plan = joinPlan()
+    const last = plan?.node.kind === 'join' && plan.node.inner.kind === 'leaf' ? plan.node.inner.table.alias : undefined
+    settings.distinctLast = last !== undefined && settings.distinctSelect !== undefined && !settings.distinctSelect.has(last) ? last : undefined
     return plan === undefined ? undefined : toOp(plan.node, [...conditions, ...plan.on, ...notNullForLookups(plan)], scope, settings, ctx, preliminary)
   }
   // An inner join's lookup keyed by a nullable column of an earlier table: that column IS NOT NULL there,
@@ -560,6 +564,9 @@ export function planFrom(refs: readonly TableReference[], ctx: FromContext, wher
         return { e, aliases: aliasesOf(e, scope), compiled, ...(semi === undefined ? {} : { semijoin: semi }) }
       })
       physical = physicalOf(conditions)
+    },
+    distinctReads(aliases) {
+      settings.distinctSelect = aliases
     },
     sortedBy(alias, limit) {
       sort = alias === undefined ? undefined : { alias, limit }
@@ -788,6 +795,10 @@ interface LeafSettings {
   readonly tables?: ReadonlyMap<string, FromTable>
   /** The tables the cost model reads by their join's index lookup (`planJoins`). */
   lookups?: ReadonlySet<string>
+  /** SELECT DISTINCT: the tables its select list reads (`distinctReads`). */
+  distinctSelect?: ReadonlySet<string>
+  /** The last table in join order, when the DISTINCT's select list does not read it: one match a row is enough. */
+  distinctLast?: string | undefined
   /** The tables read by a range re-planned for each row before them (`planJoins`). */
   dynamic?: ReadonlySet<string>
   readonly outer?: OuterColumn
@@ -1039,7 +1050,9 @@ function toOp(node: Node, conditions: readonly Placed[], scope: TableScope, sett
     return filterOp(dynamicOp(node, outer, t, [...toInner, ...spanning], settings, known), above)
   }
   if (node.lookup !== undefined && node.inner.kind === 'leaf' && settings.lookups?.has(node.inner.table.alias) !== false) {
-    return filterOp(lookupOp(node, outer, node.inner.table, node.lookup, [...toInner, ...spanning], settings), above)
+    // Under DISTINCT, the last table the select list does not read needs one match a row (`not_used_in_distinct`).
+    const firstOnly = !node.left && settings.distinctLast === node.inner.table.alias
+    return filterOp(lookupOp(node, outer, node.inner.table, node.lookup, [...toInner, ...spanning], settings, firstOnly), above)
   }
   const inner = toOp(node.inner, toInner, scope, settings, ctx, preliminary)
   const both = new Set([...outerAliases, ...innerAliases])
@@ -1556,7 +1569,7 @@ function hashJoinOp(node: Node & { kind: 'join' }, outer: Op, inner: Op, on: rea
  * the key's, then the clustered key's — or, under a left join, one row of
  * NULLs. `on` is every condition the pair must meet.
  */
-function lookupOp(node: Node & { kind: 'join' }, outer: Op, t: FromTable, lookup: EqRef, on: readonly Placed[], settings: LeafSettings): Op {
+function lookupOp(node: Node & { kind: 'join' }, outer: Op, t: FromTable, lookup: EqRef, on: readonly Placed[], settings: LeafSettings, firstOnly = false): Op {
   return {
     *rows(run, context) {
       const env = run.env
@@ -1571,6 +1584,7 @@ function lookupOp(node: Node & { kind: 'join' }, outer: Op, t: FromTable, lookup
             if (!holds(on, combined, env)) continue
             matched = true
             yield joined(combined, run.ids ? joinIds(o, { row: values, ids: idsAt(t.offset, id) }) : undefined)
+            if (firstOnly) break
           }
         }
         if (node.left && !matched) yield o
@@ -1581,7 +1595,8 @@ function lookupOp(node: Node & { kind: 'join' }, outer: Op, t: FromTable, lookup
       const lookupNode = planNode(`${lookup.unique ? 'Single-row ' : ''}${covering ? (lookup.unique ? 'covering index' : 'Covering index') : lookup.unique ? 'index' : 'Index'} lookup on ${t.alias} using ${lookup.index.name}`)
       // The lookup's own equality is the key read, not a filter.
       const rest = on.filter((c) => c.e !== lookup.condition)
-      return planNode(node.left ? 'Nested loop left join' : 'Nested loop inner join', [outer.describe(env), rest.length === 0 ? lookupNode : planNode('Filter', [lookupNode])])
+      const read = rest.length === 0 ? lookupNode : planNode('Filter', [lookupNode])
+      return planNode(node.left ? 'Nested loop left join' : 'Nested loop inner join', [outer.describe(env), firstOnly ? planNode('Limit', [read]) : read])
     },
   }
 }
