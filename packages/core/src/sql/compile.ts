@@ -159,7 +159,7 @@ export function asNumber(c: Compiled, kind: 'DOUBLE' | 'INTEGER' | 'DECIMAL', on
         env.memo?.set(key, true)
       }
       if (quietTail !== undefined && unconvertedBytes(v, kind) === quietTail) return v
-      checkNumber(v, kind, env)
+      checkNumber(v, kind, env, c.type.column !== undefined)
       return v
     },
   }
@@ -257,8 +257,10 @@ function checkNumber(v: Exclude<Value, null>, kind: 'DOUBLE' | 'INTEGER' | 'DECI
       : // And a double past the largest, which is read as it (8.4.11: `'1e400' + 0`).
         kind === 'DOUBLE' && p.complete && !Number.isFinite(Number(p.text))
   if (p.complete && !(kind === 'INTEGER' && p.fractional) && !overflow) return
-  // Nothing at all is 0 quietly, except as a DECIMAL (8.4.11: `CAST('' AS DECIMAL)` warns) and from a column (`-vc` of '' warns).
-  if (!p.complete && kind !== 'DECIMAL' && !column && /^[ \t\n\r]*$/.test(text)) return
+  // Nothing at all is 0 quietly, except as a DECIMAL (8.4.11: `CAST('' AS DECIMAL)` warns).
+  if (!p.complete && kind !== 'DECIMAL' && /^[ \t\n\r]*$/.test(text)) return
+  // A column's text with no digit at all, read as a DECIMAL, is 1366 first, as its field's conversion says (8.4.11: `CAST(lt AS DECIMAL)` of 'abc').
+  if (column && kind === 'DECIMAL' && !/\d/.test(text)) raise(env, 1366, "Incorrect DECIMAL value: '0' for column '' at row -1")
   raise(env, 1292, `Truncated incorrect ${kind} value: '${warnedText(v)}'`)
 }
 
@@ -1227,7 +1229,10 @@ function binary(op: string, left: Expression, right: Expression, extra: Expressi
       const unsigned = unsignedOf(a.type) || unsignedOf(b.type)
       const divisor = fixedDecimals(b.type) ?? decimalPrecision(b.type)
       const digits = Math.min(decimalPrecision(a.type) - (fixedDecimals(a.type) ?? 0) + divisor, 21)
-      return { eval: byZero(at, bt, (x, y) => intDivide(x, y, label)), type: intType(digits + (unsigned ? 0 : 1), true, unsigned) }
+      // Its operands are read as DECIMALs, text warning each row (8.4.11: `lt DIV 10`).
+      const x = asNumber(ca, 'DECIMAL').eval
+      const y = asNumber(cb, 'DECIMAL').eval
+      return { eval: byZero(x, y, (p, q) => intDivide(p, q, label)), type: intType(digits + (unsigned ? 0 : 1), true, unsigned) }
     }
     case '%':
     case 'MOD': {

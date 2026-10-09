@@ -23,7 +23,7 @@ const REFUSED_AT_MOST = 0
  * not before. M5.2 is done when nothing disagrees. Raised as rules land, never lowered.
  */
 const AGREE_AT_LEAST = 3004
-const WARNINGS_AGREE_AT_LEAST = 1469
+const WARNINGS_AGREE_AT_LEAST = 1478
 
 test('M5.2: implicit coercions give what the server gave, value, type and warnings, ratcheted to all', async () => {
   assert.ok(existsSync(FIXTURE), 'the corpus must be committed')
