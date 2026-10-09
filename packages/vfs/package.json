@@ -1,6 +1,6 @@
 {
   "name": "@myjs/vfs",
-  "version": "0.0.0",
+  "version": "0.3.0",
   "description": "The one storage interface plus memory / Node / OPFS backends",
   "type": "module",
   "license": "MIT",
