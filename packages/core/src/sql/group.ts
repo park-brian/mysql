@@ -223,13 +223,14 @@ export class AggregateSink {
   }
 
   /** An aggregate's spec without a slot: a window's (window.ts), which runs it over each row's frame. */
-  specFor(e: CallNode, clause: string): AggregateSpec {
-    return this.#spec(e, clause)
+  specFor(e: CallNode, clause: string, overGroups = false): AggregateSpec {
+    return this.#spec(e, clause, overGroups)
   }
 
-  #spec(e: CallNode, clause: string): AggregateSpec {
+  /** `overGroups`: a window's over a grouped query, whose argument may be the group's own aggregate. */
+  #spec(e: CallNode, clause: string, overGroups = false): AggregateSpec {
     const name = e.name.toUpperCase()
-    const ctx: CompileContext = { ...this.#rowCtx, clause, inAggregate: true }
+    const ctx: CompileContext = { ...this.#rowCtx, clause, ...(overGroups ? {} : { inAggregate: true }) }
     const star = e.args.length === 1 && e.args[0]?.kind === NODE.COLUMN && e.args[0].parts.length === 1 && e.args[0].parts[0] === '*'
     if (star && name !== 'COUNT') throw sqlError('ER_PARSE_ERROR', messages.parseError('*', 1))
     // The numeric aggregates read text as doubles, a warning each time one is not (1292).

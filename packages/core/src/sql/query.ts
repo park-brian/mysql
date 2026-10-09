@@ -285,8 +285,7 @@ function planSelect(run: Run, q: QueryExpression, node: SelectNode): SelectPlan 
     throw sqlError('ER_AGGREGATE_ORDER_NON_AGG_QUERY', `Expression #${at} of ORDER BY contains aggregate function and applies to the result of a non-aggregated query`)
   }
   const windowed = node.items.some((i) => containsWindow(i.expr)) || (q.orderBy ?? []).some((o) => containsWindow(o.expr))
-  if (grouped && windowed) throw sqlError('ER_NOT_SUPPORTED_YET', messages.notSupported('Window functions over a grouped query'))
-  if (grouped) return planGrouped(run, q, node, from, lookup)
+  if (grouped) return planGrouped(run, q, node, from, lookup, windowed)
   // Window functions (M5.6) write into slots past the FROM row.
   const windowBase = from?.width ?? 0
   const windows = windowed ? new WindowSink(compileContext(run, lookup, 'window order by'), windowBase, node.windows) : undefined
@@ -413,7 +412,7 @@ function planSelect(run: Run, q: QueryExpression, node: SelectNode): SelectPlan 
           while (r.length < width) r.push(null)
           return r
         })
-        filtered = applyWindows(all, windows.windows, env).map((row) => ({ row }))
+        filtered = applyWindows(all, windows.windows, env, windowBase).map((row) => ({ row }))
       }
       if (keys.length > 0) filtered = sort(filtered, keys, env)
       let out: Iterable<Value[]> = project(filtered, items.map((i) => i.compiled), env)
@@ -1043,6 +1042,7 @@ function planGrouped(
   node: SelectNode,
   from: FromPlan | undefined,
   lookup: Scope,
+  windowed = false,
 ): SelectPlan {
   const scope = from?.scope
   const source = from?.single
@@ -1142,8 +1142,13 @@ function planGrouped(
     },
   }
   const postCtx = (clause: string, at: Scope = lookup): CompileContext => ({ ...compileContext(run, at, clause), aggregates: sink, groupKeys })
+  // Windows over the groups (M5.6): run after HAVING, over the grouped rows,
+  // so their arguments and keys may be the groups' aggregates. Their slots
+  // follow the aggregates', which are all known only once everything compiled.
+  const windows = windowed ? new WindowSink(postCtx('window order by'), 0, node.windows) : undefined
+  const withWindows = (ctx: CompileContext): CompileContext => (windows === undefined ? ctx : { ...ctx, windows })
 
-  const items = selectItems.map((s) => ({ name: s.name, compiled: compile(s.expr, postCtx('field list')), expr: s.expr, ...(s.alias === undefined ? {} : { alias: s.alias }) }))
+  const items = selectItems.map((s) => ({ name: s.name, compiled: compile(s.expr, withWindows(postCtx('field list'))), expr: s.expr, ...(s.alias === undefined ? {} : { alias: s.alias }) }))
 
   // HAVING sees the select list's aliases, its columns and the keys; a column
   // that is none of those is 1054 even when the table has it (8.4.11).
@@ -1159,7 +1164,7 @@ function planGrouped(
     if ((e.kind === NODE.LITERAL && e.type === 'int') || (e.kind === NODE.COLUMN && e.parts.length === 1 && items.some((i) => i.alias?.toLowerCase() === (e.parts[0] as string).toLowerCase()))) {
       return orderKey(run, o, orderItems, lookup)
     }
-    return { expr: compile(e, postCtx('order clause')), desc: o.desc === true }
+    return { expr: compile(e, withWindows(postCtx('order clause'))), desc: o.desc === true }
   })
 
   if (/(^|,)ONLY_FULL_GROUP_BY(,|$)/i.test(run.env.session.sqlMode)) {
@@ -1234,6 +1239,17 @@ function planGrouped(
   const limitCount = q.limit === undefined ? undefined : limitValue(run, q.limit.count, 'LIMIT')
   const offset = q.limit?.offset === undefined ? 0 : limitValue(run, q.limit.offset, 'LIMIT')
   const locking = (q.locking ?? []).length > 0
+  if (windows !== undefined) {
+    windows.base = level + 1 + sink.specs.length
+    // Read through the windows' temporary table, which takes the groups'
+    // place; one row of an aggregate without GROUP BY needs none (8.4.11:
+    // `COUNT(*), ROW_NUMBER() OVER ()` keeps BINARY on both).
+    const temporary = node.groupBy === undefined ? undefined : ('stream' as const)
+    for (const item of items) {
+      const { temporary: _was, ...type } = item.compiled.type
+      item.compiled = { ...item.compiled, type: temporary === undefined ? type : { ...type, temporary } }
+    }
+  }
   const plan = { width, keys: keys.map((k) => k.compiled), specs: sink.specs, strategy, rollup }
 
   return {
@@ -1257,6 +1273,15 @@ function planGrouped(
       }
       let out: Iterable<{ readonly row: Row }> = groupRows(filter(rows, where, env), plan, env)
       out = filter(out, having, env)
+      if (windows !== undefined && windows.windows.length > 0) {
+        const w = windows
+        const all = [...out].map(({ row }) => {
+          const r = row.slice() as Value[]
+          while (r.length < w.base + w.windows.length) r.push(null)
+          return r
+        })
+        out = applyWindows(all, w.windows, env, w.base).map((row) => ({ row }))
+      }
       if (orderKeys.length > 0) out = sort(out, orderKeys, env)
       let projected: Iterable<Value[]> = project(out, items.map((i) => i.compiled), env)
       if (node.distinct === true) projected = distinct(projected)

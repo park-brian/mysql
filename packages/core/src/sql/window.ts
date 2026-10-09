@@ -64,22 +64,27 @@ interface WindowPlan {
   readonly aggregate?: AggregateSpec
   /** NTILE's buckets, NTH_VALUE's position, LAG's and LEAD's distance. */
   readonly count?: number
-  /** Where in the row its value is written. */
+  /** Where in the row its value is written, past the sink's base. */
   readonly slot: number
 }
 
 /** The window functions of one query block, collected as its select list and ORDER BY compile. */
 export class WindowSink {
   readonly windows: WindowPlan[] = []
+  /**
+   * The row slot of the first window's value. Over a grouped query it is
+   * known only when every aggregate has been registered, so the caller may
+   * set it after compiling and before any row is read.
+   */
+  base: number
   readonly #rowCtx: CompileContext
-  readonly #base: number
   readonly #named: ReadonlyMap<string, WindowSpec>
   readonly #aggregates: AggregateSink
 
-  /** `rowCtx` compiles arguments, PARTITION BY and ORDER BY; `base` is the row slot of the first window's value; `named` the query's WINDOW clause. */
+  /** `rowCtx` compiles arguments, PARTITION BY and ORDER BY; `named` is the query's WINDOW clause. */
   constructor(rowCtx: CompileContext, base: number, named: readonly { readonly name: string; readonly spec: WindowSpec }[] = []) {
     this.#rowCtx = rowCtx
-    this.#base = base
+    this.base = base
     this.#named = new Map(named.map((w) => [w.name.toLowerCase(), w.spec]))
     this.#aggregates = new AggregateSink(rowCtx, 0)
   }
@@ -94,7 +99,7 @@ export class WindowSink {
     if (!known) throw sqlError('ER_NOT_SUPPORTED_YET', messages.notSupported(`The window function ${name}`))
     const order = (spec.orderBy ?? []).map((o) => ({ expr: compile(o.expr, ctx), desc: o.desc === true }))
     const frame = frameOf(spec, order, ctx)
-    const slot = this.#base + this.windows.length
+    const slot = this.windows.length
     const constant = (x: Expression, fn: string): number => {
       const v = compile(x, ctx).eval([], constantEnv(ctx))
       const n = v === null || (v.kind !== 'int' && v.kind !== 'decimal' && v.kind !== 'double') ? undefined : Number(toInteger(v))
@@ -129,7 +134,8 @@ export class WindowSink {
       type = { ...plain, nullable: true, ...(t.kind === 'int' ? { field: FIELD_TYPE.LONGLONG } : {}) }
       if (args.length === 2) convert = type
     } else {
-      aggregate = this.#aggregates.specFor(e, 'window order by')
+      // Over a grouped query its argument may be an aggregate itself: `SUM(SUM(v)) OVER …`.
+      aggregate = this.#aggregates.specFor(e, 'window order by', this.#rowCtx.aggregates !== undefined)
       const t = aggregate.type
       type = (name === 'MIN' || name === 'MAX') && t.kind === 'int' ? { ...t, field: FIELD_TYPE.LONGLONG } : t
     }
@@ -139,7 +145,7 @@ export class WindowSink {
     }
     this.windows.push({ fn: name, args, partition: (spec.partitionBy ?? []).map((p) => compile(p, ctx)), order, frame, slot, ...(aggregate === undefined ? {} : { aggregate }), ...(count === undefined ? {} : { count }) })
     // A field of the window's temporary table: a number there carries no BINARY.
-    return { eval: (row) => row[slot] ?? null, type: { ...type, temporary: 'stream' } }
+    return { eval: (row) => row[this.base + slot] ?? null, type: { ...type, temporary: 'stream' } }
   }
 
   /** The window a call names: its own, or a named one, or a named one it extends. */
@@ -206,7 +212,7 @@ interface Keyed {
  * last window leaves them. `rows` are the query's rows after WHERE, each as wide
  * as the windows' slots need.
  */
-export function applyWindows(rows: Row[], windows: readonly WindowPlan[], env: Env): Row[] {
+export function applyWindows(rows: Row[], windows: readonly WindowPlan[], env: Env, base: number): Row[] {
   let current = rows
   for (const w of windows) {
     const keyed: Keyed[] = current.map((row, at) => ({ row, at, partition: w.partition.map((p) => p.eval(row, env)), order: w.order.map((o) => o.expr.eval(row, env)) }))
@@ -228,7 +234,7 @@ export function applyWindows(rows: Row[], windows: readonly WindowPlan[], env: E
     for (let ps = 0; ps < keyed.length; ) {
       let pe = ps + 1
       while (pe < keyed.length && same((keyed[ps] as Keyed).partition, (keyed[pe] as Keyed).partition)) pe++
-      partitionValues(w, keyed.slice(ps, pe), env, same)
+      partitionValues(w, keyed.slice(ps, pe), env, same, base)
       ps = pe
     }
     current = keyed.map((k) => k.row)
@@ -237,14 +243,14 @@ export function applyWindows(rows: Row[], windows: readonly WindowPlan[], env: E
 }
 
 /** One partition's values, written into each row's slot. */
-function partitionValues(w: WindowPlan, part: readonly Keyed[], env: Env, same: (x: readonly Value[], y: readonly Value[]) => boolean): void {
+function partitionValues(w: WindowPlan, part: readonly Keyed[], env: Env, same: (x: readonly Value[], y: readonly Value[]) => boolean, base: number): void {
   const n = part.length
   // Each row's peers: the first and last index of the rows equal to it on the ORDER BY.
   const firstPeer: number[] = []
   const lastPeer: number[] = []
   for (let i = 0; i < n; i++) firstPeer[i] = i > 0 && same((part[i - 1] as Keyed).order, (part[i] as Keyed).order) ? (firstPeer[i - 1] as number) : i
   for (let i = n - 1; i >= 0; i--) lastPeer[i] = i < n - 1 && same((part[i + 1] as Keyed).order, (part[i] as Keyed).order) ? (lastPeer[i + 1] as number) : i
-  const set = (i: number, v: Value) => (((part[i] as Keyed).row as Value[])[w.slot] = v)
+  const set = (i: number, v: Value) => (((part[i] as Keyed).row as Value[])[base + w.slot] = v)
   let dense = 0
   switch (w.fn) {
     case 'ROW_NUMBER':

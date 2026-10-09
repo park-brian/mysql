@@ -8,9 +8,12 @@
 // over a DESC key and a DECIMAL one, empty frames, the default frame with and
 // without an ORDER BY; named windows and one extending another; a window
 // function in ORDER BY; and the refusals (1210, 1235, 3579, 3586, 3587).
-// Not pinned, and named in the roadmap: windows over a grouped query, LAG's
-// negative offset (a 1064 in the server's grammar), and the key a derived
-// table gets for `WHERE rn = 1`.
+// Over a grouped query, windows run after HAVING over the groups, their
+// arguments and keys the groups' aggregates (`SUM(SUM(v)) OVER …`), and the
+// window's table takes the groups' place in the metadata, except for one row
+// of an aggregate without GROUP BY. Not pinned, and named in the roadmap:
+// LAG's negative offset (a 1064 in the server's grammar), and the key a
+// derived table gets for `WHERE rn = 1`.
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import mysql from 'mysql2/promise'
@@ -54,6 +57,13 @@ const SCRIPT: readonly (readonly [string, Outcome])[] = [
   ["SELECT id, COUNT(*) OVER (ORDER BY id ROWS BETWEEN 1 PRECEDING AND 1 PRECEDING) FROM w ORDER BY id", [[["1","0"],["2","1"],["3","1"],["4","1"],["5","1"],["6","1"]],"11/3/4097/0 21/8/1/0"]],
   ["SELECT DISTINCT g, COUNT(*) OVER (PARTITION BY g) FROM w ORDER BY g", [[["a","3"],["b","2"],["c","1"]],"4/254/0/0 21/8/1/0"]],
   ["SELECT id, SUM(v) OVER (ORDER BY id) FROM w LIMIT 2", [[["1","10"],["2","30"]],"11/3/4097/0 33/246/0/0"]],
+  ["SELECT g, SUM(SUM(v)) OVER (ORDER BY g), RANK() OVER (ORDER BY SUM(v) DESC) FROM w GROUP BY g ORDER BY g", [[["a","50","1"],["b","55","3"],["c","62","2"]],"4/254/0/0 55/246/0/0 21/8/33/0"]],
+  ["SELECT g, COUNT(*) c, ROW_NUMBER() OVER (ORDER BY COUNT(*) DESC, g) rn FROM w GROUP BY g ORDER BY rn", [[["a","3","1"],["b","2","2"],["c","1","3"]],"4/254/0/0 21/8/1/0 21/8/33/0"]],
+  ["SELECT g, AVG(v), LAG(MAX(v)) OVER (ORDER BY g) FROM w GROUP BY g", [[["a","16.6667",null],["b","5.0000","20"],["c","7.0000","5"]],"4/254/0/0 16/246/0/4 11/8/0/0"]],
+  ["SELECT COUNT(*), ROW_NUMBER() OVER () FROM w", [[["6","1"]],"21/8/129/0 21/8/161/0"]],
+  ["SELECT g, SUM(v) s, SUM(SUM(v)) OVER w1 FROM w GROUP BY g HAVING s > 6 WINDOW w1 AS (ORDER BY g) ORDER BY g", [[["a","50","50"],["c","7","57"]],"4/254/0/0 33/246/0/0 55/246/0/0"]],
+  ["SELECT g, ROW_NUMBER() OVER (PARTITION BY g) FROM w GROUP BY g", [[["a","1"],["b","1"],["c","1"]],"4/254/0/0 21/8/33/0"]],
+  ["SELECT g FROM w GROUP BY g ORDER BY RANK() OVER (ORDER BY MIN(id) DESC)", [[["c"],["b"],["a"]],"4/254/0/0"]],
 ]
 
 test('window functions agree with 8.4.11, metadata included', async () => {
