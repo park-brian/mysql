@@ -190,8 +190,22 @@ function dispatch(c: Cursor, sqlMode: SqlMode): Statement {
     throw unsupportedStatement(`DROP ${object}`)
   }
 
+  // A word that begins no statement in MySQL's grammar is a syntax error
+  // there (8.4.11: `SELEC` is 1064, near 'SELEC'); one that begins a
+  // statement this parser does not build yet is refused as such.
+  if (!STATEMENT_WORDS.has(first(c))) c.fail()
   throw unsupportedStatement(first(c))
 }
+
+/** The words a statement can begin with: `simple_statement`'s alternatives in `sql_yacc.yy`, and BEGIN. */
+const STATEMENT_WORDS = new Set([
+  'ALTER', 'ANALYZE', 'BEGIN', 'BINLOG', 'CACHE', 'CALL', 'CHANGE', 'CHECK', 'CHECKSUM', 'CLONE', 'COMMIT', 'CREATE',
+  'DEALLOCATE', 'DELETE', 'DESC', 'DESCRIBE', 'DO', 'DROP', 'EXECUTE', 'EXPLAIN', 'FLUSH', 'GET', 'GRANT', 'HANDLER',
+  'HELP', 'IMPORT', 'INSERT', 'INSTALL', 'KILL', 'LOAD', 'LOCK', 'OPTIMIZE', 'PREPARE', 'PURGE', 'RELEASE', 'RENAME',
+  'REPAIR', 'REPLACE', 'RESET', 'RESIGNAL', 'RESTART', 'REVOKE', 'ROLLBACK', 'SAVEPOINT', 'SELECT', 'SET', 'SHOW',
+  'SHUTDOWN', 'SIGNAL', 'START', 'STOP', 'TABLE', 'TRUNCATE', 'UNINSTALL', 'UNLOCK', 'UPDATE', 'USE', 'VALUES', 'WITH',
+  'XA', '(',
+])
 
 /**
  * What a `CREATE` is creating, without consuming anything.

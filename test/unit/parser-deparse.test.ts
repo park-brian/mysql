@@ -85,6 +85,9 @@ test('M3.3: CREATE TABLE and DROP survive the deparser', () => {
     'DROP TEMPORARY TABLE IF EXISTS a, db.b RESTRICT',
     'DROP INDEX i ON t',
     'DROP DATABASE d',
+    // Spelled national, a type stays national: written as its utf8mb3 it lost the flag 3720 reads.
+    'CREATE TABLE t (a NATIONAL VARCHAR(10), b NCHAR(3) COLLATE utf8mb3_bin, c NVARCHAR(4))',
+    "SELECT CAST('a' AS NCHAR(2)), CAST('b' AS NATIONAL CHAR)",
   ]) {
     statementRoundTrips(sql)
   }

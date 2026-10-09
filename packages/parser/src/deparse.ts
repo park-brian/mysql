@@ -1066,7 +1066,8 @@ class Deparser {
   dataType(t: DataType): string {
     if (t.serial === true) return 'SERIAL'
     if (t.boolean === true) return ['BOOL', ...(t.unsigned === true ? ['UNSIGNED'] : []), ...(t.zerofill === true ? ['ZEROFILL'] : [])].join(' ')
-    const out = [t.name]
+    // `NCHAR` and its like name their charset: written back by the name, it stays national (3720).
+    const out = [t.national === true ? `NATIONAL ${t.name}` : t.name]
     if (t.values !== undefined) {
       out[0] += `(${t.values.map((v) => (typeof v === 'string' ? this.string(v) : `X'${hex(v)}'`)).join(', ')})`
     } else if (t.length !== undefined) {
@@ -1080,7 +1081,7 @@ class Deparser {
     if (t.unsigned === true) out.push('UNSIGNED')
     if (t.unsigned === false) out.push('SIGNED')
     if (t.zerofill === true) out.push('ZEROFILL')
-    if (t.charset !== undefined) out.push(`CHARACTER SET ${this.charsetName(t.charset)}`)
+    if (t.charset !== undefined && t.national !== true) out.push(`CHARACTER SET ${this.charsetName(t.charset)}`)
     if (t.collation !== undefined) out.push(`COLLATE ${this.charsetName(t.collation)}`)
     if (t.binary === true) out.push('BINARY')
     return out.join(' ')

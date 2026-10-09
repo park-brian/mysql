@@ -240,6 +240,16 @@ test('M3.6: SHOW forms, and the synonyms that are one tree', () => {
   assert.throws(() => parseStatement('SHOW MASTER STATUS'), (e: ParseError) => e.code === 'ER_NOT_SUPPORTED_YET')
 })
 
+test('A word that begins no statement is a syntax error; one that begins a statement not built yet is refused as such', () => {
+  // 8.4.11: `SELEC` is 1064, near 'SELEC'. The refusal had answered 1235 for any word at all.
+  for (const sql of ['SELEC', 'SELEC 1', 'FOO BAR', 'INSERTT INTO t VALUES (1)']) {
+    assert.throws(() => parseStatement(sql), (e: ParseError) => e.code === 'ER_PARSE_ERROR', sql)
+  }
+  for (const sql of ['XA START 1', 'HANDLER t OPEN', 'KILL 5']) {
+    assert.throws(() => parseStatement(sql), (e: ParseError) => e.code === 'ER_NOT_SUPPORTED_YET', sql)
+  }
+})
+
 test('M3.6: FORCE INDEX () and IGNORE INDEX () are refused; USE INDEX () is not', () => {
   // Found by the census once EXPLAIN parsed: `group_by.test` asserts the two
   // refusals under `EXPLAIN`, so they were invisible while EXPLAIN was not.
