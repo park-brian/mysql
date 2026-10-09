@@ -18,7 +18,7 @@ test('M5.44: EXPLAIN FORMAT=TREE answers the plan as one VAR_STRING row; other f
     await conn.query('CREATE TABLE b (id INT PRIMARY KEY, a_id INT)')
     const [rows, fields] = (await conn.query({ sql: 'EXPLAIN FORMAT=TREE SELECT * FROM a JOIN b ON a.x = b.a_id WHERE b.id > 1 ORDER BY a.x', rowsAsArray: true })) as unknown as [string[][], { name: string; columnType: number; columnLength: number; flags: number }[]]
     assert.deepEqual(fields.map((f) => [f.name, f.columnType, f.columnLength, f.flags & 1]), [['EXPLAIN', 253, 312, 1]])
-    assert.equal(rows[0]?.[0], ['-> Sort', '    -> Stream results', '        -> Inner hash join', '            -> Filter', '                -> Index range scan on b using PRIMARY', '            -> Hash', '                -> Table scan on a', ''].join('\n'))
+    assert.equal(rows[0]?.[0], ['-> Sort', '    -> Stream results', '        -> Inner hash join', '            -> Filter', '                -> Index range scan on b using PRIMARY over (1 < id)', '            -> Hash', '                -> Table scan on a', ''].join('\n'))
     const [one] = (await conn.query({ sql: 'EXPLAIN FORMAT=TREE SELECT 1', rowsAsArray: true })) as unknown as [string[][]]
     assert.equal(one[0]?.[0], '-> Rows fetched before execution\n')
     for (const sql of ['EXPLAIN SELECT 1', 'EXPLAIN FORMAT=JSON SELECT 1', 'EXPLAIN ANALYZE SELECT 1', 'EXPLAIN FORMAT=TREE INSERT INTO a VALUES (1, 1)']) {

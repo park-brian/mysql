@@ -22,13 +22,14 @@
 //   - **Const tables**: a table whose PRIMARY or NOT NULL UNIQUE key is held
 //     to constants is read while planning; with no such row the result is
 //     empty, and with one its columns are constants.
-import { CHARSET_BINARY, FIELD_TYPE, expectTyped } from '@myjs/bytes'
+import { expectTyped } from '@myjs/bytes'
 import type { ColumnDef, Table, TableDef, Trx } from '@myjs/engine'
 import { NODE, type Expression } from '@myjs/parser'
 import { compareValues, integerRange, truth, type Value } from '@myjs/types'
 import { compile, EMPTY_SCOPE, type CompileContext, type Env } from './compile.ts'
 import type { FromPlan } from './from.ts'
 import { accessRows, pointAccess, splitAnd } from './plan.ts'
+import { intersect, rangeOf, type RangeSet } from './ranges.ts'
 
 export interface ConstTable {
   readonly alias: string
@@ -227,7 +228,7 @@ export function optimizerFacts(from: FromPlan | undefined, where: Expression | u
       const col = columnAt(index)
       if (col === undefined) continue
       let acc: RangeSet = 'all'
-      for (const c of pool) acc = intersect(acc, rangeOf(c, (e) => slot(e) === index, col.column, ctx, env))
+      for (const c of pool) acc = intersect(acc, rangeOf(c, (e) => slot(e) === index, col.column, (e) => plannedConstant(e, ctx, env)))
       if (acc !== 'all' && acc.length === 0) return { empty: true, constTables: [], straight }
     }
   }
@@ -398,124 +399,15 @@ function partialTruth(e: Expression, known: (column: Expression) => Expression |
   }
 }
 
-// --- ranges -----------------------------------------------------------------------
-
-/** One interval of a column's values, or the NULL point. An absent bound is unbounded. */
-type Interval = { readonly lo?: { readonly v: Exclude<Value, null>; readonly inclusive: boolean }; readonly hi?: { readonly v: Exclude<Value, null>; readonly inclusive: boolean } } | 'null'
-/** The values a condition admits: some intervals, or everything (`'all'`) when it does not restrict the column. */
-type RangeSet = readonly Interval[] | 'all'
-
-const ALL_VALUES: Interval = {}
-
-/** A constant brought to the column's comparison, or `undefined` when the two do not compare as the column's type. */
-function constantFor(e: Expression, column: ColumnDef, ctx: CompileContext, env: Env): Value | undefined {
+/** A literal, or a bound `?`, evaluated while planning: what the range proofs may read. */
+function plannedConstant(e: Expression, ctx: CompileContext, env: Env): Value | undefined {
   const lit = e.kind === NODE.UNARY && e.op === '-' ? e.operand : e
   if (lit.kind !== NODE.LITERAL && lit.kind !== NODE.PLACEHOLDER) return undefined
   if (lit.kind === NODE.PLACEHOLDER && ctx.params === undefined) return undefined
-  let v: Value
   try {
-    v = compile(e, { ...ctx, scope: EMPTY_SCOPE }).eval([], env)
-  } catch (e) {
-    expectTyped(e)
+    return compile(e, { ...ctx, scope: EMPTY_SCOPE }).eval([], env)
+  } catch (err) {
+    expectTyped(err)
     return undefined
   }
-  if (v === null) return null
-  const text = column.type.collationId !== undefined && column.type.collationId !== CHARSET_BINARY
-  if (text) return v.kind === 'string' ? { ...v, collationId: column.type.collationId as number, coercibility: 2 } : undefined
-  if (integerRange(column.type) !== undefined || column.type.type === FIELD_TYPE.NEWDECIMAL || column.type.type === FIELD_TYPE.DECIMAL) return v.kind === 'int' || v.kind === 'decimal' ? v : undefined
-  return undefined
-}
-
-function rangeOf(e: Expression, isColumn: (e: Expression) => boolean, column: ColumnDef, ctx: CompileContext, env: Env): RangeSet {
-  if (e.kind === NODE.BINARY && (e.op === 'AND' || e.op === '&&')) return intersect(rangeOf(e.left, isColumn, column, ctx, env), rangeOf(e.right, isColumn, column, ctx, env))
-  if (e.kind === NODE.BINARY && (e.op === 'OR' || e.op === '||')) return union(rangeOf(e.left, isColumn, column, ctx, env), rangeOf(e.right, isColumn, column, ctx, env))
-  if (e.kind === NODE.UNARY && (e.op === 'IS NULL' || e.op === 'IS NOT NULL') && isColumn(e.operand)) return e.op === 'IS NULL' ? (column.nullable ? ['null'] : []) : [ALL_VALUES]
-  if (e.kind !== NODE.BINARY) return 'all'
-  const point = (v: Exclude<Value, null>): Interval => ({ lo: { v, inclusive: true }, hi: { v, inclusive: true } })
-  if (e.op === 'BETWEEN' && isColumn(e.left)) {
-    const a = constantFor(e.right, column, ctx, env)
-    const b = constantFor(e.extra as Expression, column, ctx, env)
-    if (a === undefined || b === undefined) return 'all'
-    if (a === null || b === null) return []
-    return [{ lo: { v: a, inclusive: true }, hi: { v: b, inclusive: true } }]
-  }
-  if (e.op === 'IN' && isColumn(e.left) && e.right.kind === NODE.ROW) {
-    const out: Interval[] = []
-    for (const item of e.right.items) {
-      const v = constantFor(item, column, ctx, env)
-      if (v === undefined) return 'all'
-      if (v !== null) out.push(point(v))
-    }
-    return out
-  }
-  const FLIP: Readonly<Record<string, string>> = { '<': '>', '<=': '>=', '>': '<', '>=': '<=', '=': '=', '<=>': '<=>', '<>': '<>', '!=': '!=' }
-  let op = e.op
-  let other: Expression
-  if (isColumn(e.left)) other = e.right
-  else if (isColumn(e.right)) {
-    other = e.left
-    op = FLIP[op] ?? op
-  } else return 'all'
-  if (!(op in FLIP)) return 'all'
-  const v = constantFor(other, column, ctx, env)
-  if (v === undefined) return 'all'
-  if (v === null) return op === '<=>' && column.nullable ? ['null'] : []
-  switch (op) {
-    case '=':
-    case '<=>':
-      return [point(v)]
-    case '<':
-      return [{ hi: { v, inclusive: false } }]
-    case '<=':
-      return [{ hi: { v, inclusive: true } }]
-    case '>':
-      return [{ lo: { v, inclusive: false } }]
-    case '>=':
-      return [{ lo: { v, inclusive: true } }]
-    default:
-      return [{ hi: { v, inclusive: false } }, { lo: { v, inclusive: false } }]
-  }
-}
-
-function union(a: RangeSet, b: RangeSet): RangeSet {
-  if (a === 'all' || b === 'all') return 'all'
-  return [...a, ...b]
-}
-
-function intersect(a: RangeSet, b: RangeSet): RangeSet {
-  if (a === 'all') return b
-  if (b === 'all') return a
-  const out: Interval[] = []
-  for (const x of a) {
-    for (const y of b) {
-      const z = meet(x, y)
-      if (z !== undefined) out.push(z)
-    }
-  }
-  return out
-}
-
-/** Two intervals' common part, or `undefined` when they share nothing. */
-function meet(x: Interval, y: Interval): Interval | undefined {
-  if (x === 'null' || y === 'null') return x === 'null' && y === 'null' ? 'null' : undefined
-  const lo = tighter(x.lo, y.lo, 1)
-  const hi = tighter(x.hi, y.hi, -1)
-  if (lo !== undefined && hi !== undefined) {
-    const c = compareValues(lo.v, hi.v)
-    if (c === null) return undefined
-    if (c > 0 || (c === 0 && !(lo.inclusive && hi.inclusive))) return undefined
-  }
-  return { ...(lo === undefined ? {} : { lo }), ...(hi === undefined ? {} : { hi }) }
-}
-
-type Bound = { readonly v: Exclude<Value, null>; readonly inclusive: boolean } | undefined
-
-/** The tighter of two lower bounds (`dir` 1) or upper bounds (`dir` -1). */
-function tighter(a: Bound, b: Bound, dir: 1 | -1): Bound {
-  if (a === undefined) return b
-  if (b === undefined) return a
-  const c = compareValues(a.v, b.v)
-  if (c === null) return a
-  if (c === 0) return { v: a.v, inclusive: a.inclusive && b.inclusive }
-  return c * dir > 0 ? a : b
 }

@@ -27,12 +27,16 @@
 // its order within one key is the primary key's — the same as a full scan
 // filtered. A *range* on a secondary is left to a full scan until the cost
 // model of M5.7 can say what MySQL would pick.
-import { CHARSET_BINARY, FIELD_TYPE, expectTyped } from '@myjs/bytes'
+import { CHARSET_BINARY, FIELD_TYPE, equalBytes, expectTyped } from '@myjs/bytes'
 import type { ColumnDef, IndexDef, KeyBound, KeyRange, TableDef } from '@myjs/engine'
 import { NODE, type Expression } from '@myjs/parser'
 import {
+  compareValues,
   encodeField,
   encodeKey,
+  integerRange,
+  renderDecimal,
+  textOf,
   keyPartOf,
   parseDateTime,
   type StoreContext,
@@ -40,6 +44,9 @@ import {
 } from '@myjs/types'
 import type { Table, Trx } from '@myjs/engine'
 import type { Compiled, Env } from './compile.ts'
+import { rangeBaseline, rangeCost, type RangeShape } from './cost.ts'
+import { intersect, normalize, rangeOf, type Interval, type RangeSet } from './ranges.ts'
+import type { TableStatistics } from './stats.ts'
 import { scan, type ScannedRow } from './operators.ts'
 
 /** How to read a table: an index and the ranges of it, in index order, or a full scan. */
@@ -49,6 +56,8 @@ export interface Access {
   readonly ranges?: readonly KeyRange[]
   /** Read in descending key order, for an ORDER BY … DESC the index gives. */
   readonly reverse?: boolean
+  /** The ranges as EXPLAIN prints them after `over`, where the range optimizer chose them. */
+  readonly over?: string
 }
 
 export const FULL_SCAN: Access = {}
@@ -167,10 +176,15 @@ function exact(v: Value, c: ColumnDef): boolean {
  * statement gives the table. Constants are evaluated now, with `env`, which
  * is why the plan is made per execution (a `?` is a constant by then).
  */
-export function chooseAccess(def: TableDef, alias: string, where: Expression | undefined, env: Env, outer?: OuterColumn): Access {
+export function chooseAccess(def: TableDef, alias: string, where: Expression | undefined, env: Env, outer?: OuterColumn, costing?: RangeCosting): Access {
   const conditions = splitAnd(where)
     .map((e) => conditionOf(e, def, alias, outer))
     .filter((c): c is Condition => c !== undefined)
+  if (costing !== undefined) {
+    // A key read by points stays one (`ref`); otherwise the range optimizer's choice.
+    const points = pointsAccess(def, conditions, env, outer)
+    return points ?? rangeAccess(def, alias, splitAnd(where), env, costing) ?? FULL_SCAN
+  }
   if (conditions.length === 0) return FULL_SCAN
 
   // An invisible index is kept and enforced, and never chosen (8.4.11: a scan, its rows in table order).
@@ -187,6 +201,192 @@ export function chooseAccess(def: TableDef, alias: string, where: Expression | u
     if (best === undefined || score > best.score) best = { access: access.access, score }
   }
   return best?.access ?? FULL_SCAN
+}
+
+/** The best key read by points — an equality, IN, `<=>` or IS NULL on an index's leading column — as `chooseAccess` scores them. */
+function pointsAccess(def: TableDef, conditions: readonly Condition[], env: Env, outer: OuterColumn | undefined): Access | undefined {
+  let best: { access: Access; score: number } | undefined
+  for (const index of def.indexes.filter((i) => i.invisible !== true).sort((a, b) => (a.kind === 'primary' ? -1 : 0) - (b.kind === 'primary' ? -1 : 0))) {
+    const part = index.parts[0]
+    if (part === undefined || part.prefix !== undefined || part.descending === true) continue
+    const column = def.columns.find((c) => c.name === part.column) as ColumnDef
+    const access = accessFor(index, column, conditions.filter((c) => c.column === column.name), env, outer)
+    if (access === undefined || access.score < 3) continue
+    const score = access.score + (index.kind === 'primary' || def.clustered === index.name ? 0.5 : 0)
+    if (best === undefined || score > best.score) best = { access: access.access, score }
+  }
+  return best?.access
+}
+
+/** What the range optimizer weighs a table's ranges by (M5.7). */
+export interface RangeCosting {
+  readonly stats: TableStatistics
+  /** Whether an index holds every column the query reads of the table. */
+  covers(index: IndexDef): boolean
+  /** An index record's bytes: its key and the clustered key it carries. */
+  recordBytes(index: IndexDef): number
+  /** The shortest index that covers the query, for a full scan of it, if any. */
+  readonly coveringScan: IndexDef | undefined
+  /** The shortest a clustered record can be. */
+  readonly minRecordBytes: number
+  /** The rows a range of an index reads, counted up to `limit` and no further: the server's index dives, exact on a small table. */
+  count(index: string, range: KeyRange, limit: number): number
+}
+
+/**
+ * The cheapest range of any index's leading column (`get_key_scans_params`),
+ * if one beats a scan (`rangeBaseline`): its intervals from the conjuncts
+ * (`ranges.ts`), each key bound converted as `exact` allows or, for an integer
+ * column, rounded outward, so the range is never too narrow; its rows counted
+ * as the server's dives count them, at least one a range, a unique key's
+ * point one; its cost `rangeCost`. Indexes are tried in the server's key order
+ * and a later one wins only if strictly cheaper.
+ */
+function rangeAccess(def: TableDef, alias: string, conjuncts: readonly Expression[], env: Env, costing: RangeCosting): Access | undefined {
+  const t = costing.stats
+  const value = (e: Expression): Value | undefined => (e.kind === NODE.PLACEHOLDER && e.index >= env.params.length ? undefined : isConstant(e) ? constantValue(e, env) : undefined)
+  const candidates: { readonly index: IndexDef; readonly column: ColumnDef; readonly intervals: Interval[]; readonly keyed: { readonly range: KeyRange; readonly point: boolean }[]; readonly shape: RangeShape }[] = []
+  for (const index of keyOrder(def)) {
+    const part = index.parts[0]
+    if (part === undefined || part.prefix !== undefined || part.descending === true) continue
+    const column = def.columns.find((c) => c.name === part.column) as ColumnDef
+    let set: RangeSet = 'all'
+    for (const c of conjuncts) set = intersect(set, rangeOf(c, (e) => columnOf(e, def, alias) === column.name, column, value))
+    if (set === 'all') continue
+    const intervals = normalize(set)
+    const keyed = keyRanges(intervals, column)
+    if (keyed === undefined) continue
+    candidates.push({ index, column, intervals, keyed, shape: { clustered: index.kind === 'primary' || index.name === def.clustered, covering: costing.covers(index), recordBytes: costing.recordBytes(index), minRecordBytes: costing.minRecordBytes } })
+  }
+  let best = rangeBaseline(t, costing.coveringScan === undefined ? undefined : costing.recordBytes(costing.coveringScan))
+  const access = (c: (typeof candidates)[number]): Access => ({ index: c.index.name, ranges: c.keyed.map((k) => k.range), over: describeIntervals(c.intervals, c.column.name) })
+  // One range that wins even reading every row needs no count: no other is weighed against it.
+  const only = candidates.length === 1 ? candidates[0] : undefined
+  if (only !== undefined && rangeCost(t, only.shape, only.keyed.length, t.rows) < best) return access(only)
+  let chosen: Access | undefined
+  for (const c of candidates) {
+    const limit = mostRows((rows) => rangeCost(t, c.shape, c.keyed.length, rows), best)
+    if (limit < c.keyed.length) continue
+    // A unique key's point is one row without a dive; any other range, its rows, at least one.
+    const unique = c.index.parts.length === 1 && (c.index.kind === 'primary' || (c.index.kind === 'unique' && !c.column.nullable))
+    let rows = 0
+    for (const { range, point } of c.keyed) {
+      rows += unique && point ? 1 : Math.max(1, costing.count(c.index.name, range, limit - rows + 1))
+      if (rows > limit) break
+    }
+    if (rows > limit) continue
+    best = rangeCost(t, c.shape, c.keyed.length, rows)
+    chosen = access(c)
+  }
+  return chosen
+}
+
+const EMPTY = new Uint8Array(0)
+
+/** Intervals as EXPLAIN writes a range: `(2 < grp <= 5) OR (grp = 7)`, `(NULL < grp)`, `(grp = NULL)`. */
+function describeIntervals(intervals: readonly Interval[], name: string): string {
+  const text = (v: Exclude<Value, null>): string => {
+    switch (v.kind) {
+      case 'int':
+        return String(v.v)
+      case 'decimal':
+        return renderDecimal(v)
+      case 'double':
+        return String(v.v)
+      case 'string':
+        return `'${textOf(v).replace(/'/g, "''")}'`
+      default:
+        return '?'
+    }
+  }
+  return intervals
+    .map((i) => {
+      if (i === 'null') return `(${name} = NULL)`
+      if (i.lo !== undefined && i.hi !== undefined && i.lo.inclusive && i.hi.inclusive && compareValues(i.lo.v, i.hi.v) === 0) return `(${name} = ${text(i.lo.v)})`
+      const lo = i.lo === undefined ? 'NULL < ' : `${text(i.lo.v)} ${i.lo.inclusive ? '<=' : '<'} `
+      const hi = i.hi === undefined ? '' : ` ${i.hi.inclusive ? '<=' : '<'} ${text(i.hi.v)}`
+      return `(${i.lo === undefined && i.hi !== undefined ? '' : lo}${name}${hi})`
+    })
+    .join(' OR ')
+}
+
+/** The most rows a read costing `cost` may take and still cost less than `best`, or -1 when even none would not. */
+function mostRows(cost: (rows: number) => number, best: number): number {
+  if (!(cost(0) < best)) return -1
+  let lo = 0
+  let hi = 1
+  while (cost(hi) < best) {
+    lo = hi
+    hi *= 2
+    if (hi > 2 ** 52) return Number.MAX_SAFE_INTEGER
+  }
+  // cost(lo) < best <= cost(hi)
+  while (hi - lo > 1) {
+    const mid = Math.floor((lo + hi) / 2)
+    if (cost(mid) < best) lo = mid
+    else hi = mid
+  }
+  return lo
+}
+
+/**
+ * Key ranges for a column's intervals, ascending: each bound the key of its
+ * value where it converts exactly, an integer column's bound rounded outward
+ * (`< 5.5` reads up to 5, `> 5.5` from 6); `undefined` when a bound converts
+ * neither way. Values are non-NULL, so a range with no lower bound starts
+ * after the NULLs. `point` marks a range of one non-NULL value.
+ */
+function keyRanges(intervals: readonly Interval[], column: ColumnDef): { readonly range: KeyRange; readonly point: boolean }[] | undefined {
+  const nullKey: KeyBound = { values: [null], inclusive: true }
+  const range = integerRange(column.type)
+  const side = (b: { readonly v: Exclude<Value, null>; readonly inclusive: boolean }, lower: boolean): KeyBound | 'empty' | 'open' | undefined => {
+    let { v, inclusive } = b
+    if (range !== undefined && (v.kind === 'decimal' || v.kind === 'int')) {
+      const scale = v.kind === 'decimal' ? 10n ** BigInt(v.scale) : 1n
+      const raw = v.v
+      let n = raw / scale
+      const fraction = raw % scale !== 0n
+      // Toward the interval's inside: BigInt division truncates toward zero.
+      if (fraction) {
+        if (lower && raw > 0n) n += 1n
+        if (!lower && raw < 0n) n -= 1n
+        inclusive = true
+      }
+      if (n > range.max) return lower ? 'empty' : 'open'
+      if (n < range.min) return lower ? 'open' : 'empty'
+      v = { kind: 'int', v: n, unsigned: n > (1n << 63n) - 1n }
+    } else if (!exact(v, column)) return undefined
+    return bound(v, column, inclusive)
+  }
+  const out: { range: KeyRange; point: boolean }[] = []
+  for (const i of intervals) {
+    if (i === 'null') {
+      out.push({ range: { from: nullKey, to: nullKey }, point: false })
+      continue
+    }
+    const from = i.lo === undefined ? 'open' : side(i.lo, true)
+    const to = i.hi === undefined ? 'open' : side(i.hi, false)
+    if (from === undefined || to === undefined) return undefined
+    if (from === 'empty' || to === 'empty') continue
+    const lower = from === 'open' ? (column.nullable ? { values: [null], inclusive: false } : undefined) : from
+    const point = from !== 'open' && to !== 'open' && from.inclusive && to.inclusive && equalBytes(from.values[0] ?? EMPTY, to.values[0] ?? EMPTY)
+    out.push({ range: { ...(lower === undefined ? {} : { from: lower }), ...(to === 'open' ? {} : { to }) }, point })
+  }
+  return out
+}
+
+/**
+ * A table's indexes in the order the server keeps them (`sort_keys`): the
+ * PRIMARY KEY, then unique keys of NOT NULL columns, then other unique keys,
+ * then the rest, each group as written. Invisible ones are left out.
+ */
+export function keyOrder(def: TableDef): IndexDef[] {
+  const rank = (i: IndexDef): number => {
+    if (i.kind === 'primary') return 0
+    if (i.kind !== 'unique') return 3
+    return i.parts.every((p) => def.columns.find((c) => c.name === p.column)?.nullable === false) ? 1 : 2
+  }
+  return def.indexes.filter((i) => i.invisible !== true).sort((a, b) => rank(a) - rank(b))
 }
 
 const ctx = (): StoreContext => ({ strict: true, row: 1, warnings: 0 })

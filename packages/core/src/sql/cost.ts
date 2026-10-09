@@ -287,3 +287,48 @@ export function joinOrder(candidates: readonly Candidate[], sort?: { readonly al
   search(sorted, new Set(candidates.map((c) => c.alias)))
   return [...(best?.plan ?? [])]
 }
+
+/** An index's pages for `rows` of its records (`index_only_read_time`): half a page's bytes of records to a page. */
+const indexPages = (rows: number, recordBytes: number): number => {
+  const perPage = 1 + Math.floor(PAGE_BYTES / 2 / recordBytes)
+  return (rows + perPage - 1) / perPage
+}
+
+/**
+ * What the range optimizer must beat (`test_quick_select`): a table scan, with
+ * the server's fixed 1.1 and 1 added; or, where an index covers the query, a
+ * full scan of the shortest one (`coveringRecordBytes`), if that is cheaper.
+ */
+export function rangeBaseline(t: TableStatistics, coveringRecordBytes: number | undefined): number {
+  const scan = PAGE_READ * t.pages + 1.1 + ROW_EVALUATE * t.rows + 1
+  if (coveringRecordBytes === undefined) return scan
+  return Math.min(scan, indexPages(t.rows, coveringRecordBytes) * PAGE_READ + ROW_EVALUATE * t.rows)
+}
+
+/** How an index is read for a range: through the clustered key, alone because it covers, or a secondary index with a row fetched for each entry. */
+export interface RangeShape {
+  readonly clustered: boolean
+  readonly covering: boolean
+  /** An index record's bytes: its key and the clustered key it carries. */
+  readonly recordBytes: number
+  /** The shortest a clustered record can be, which bounds the rows a page may hold (`estimate_rows_upper_bound`). */
+  readonly minRecordBytes: number
+}
+
+/**
+ * A range read's cost (`multi_range_read_info_const`): the index's pages for a
+ * covering read; for the clustered key, its rows or the share of the table's
+ * pages they fill, a page more per range (`ha_innobase::read_time`); for a
+ * secondary index, a page per range and per row; then every row evaluated,
+ * and 0.01.
+ */
+export function rangeCost(t: TableStatistics, shape: RangeShape, ranges: number, rows: number): number {
+  let pages: number
+  if (shape.covering) pages = indexPages(rows, shape.recordBytes)
+  else if (shape.clustered) {
+    const upper = Math.trunc((2 * t.pages * PAGE_BYTES) / shape.minRecordBytes)
+    const whole = Math.trunc(rows)
+    pages = whole <= 2 ? whole : upper < whole ? t.pages : ranges + (whole / upper) * t.pages
+  } else pages = ranges + rows
+  return pages * PAGE_READ + ROW_EVALUATE * rows + 0.01
+}

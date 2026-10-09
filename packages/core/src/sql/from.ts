@@ -39,7 +39,7 @@ import { messages, sqlError } from '@myjs/protocol'
 import { truth, type Value } from '@myjs/types'
 import type { Compiled, Env, Row, Scope } from './compile.ts'
 import { planNode, type PlanNode } from './explain.ts'
-import { FULL_SCAN, accessRows, chooseAccess, pointAccess, splitAnd, type Access, type OuterColumn } from './plan.ts'
+import { FULL_SCAN, accessRows, chooseAccess, keyOrder, pointAccess, splitAnd, type Access, type OuterColumn, type RangeCosting } from './plan.ts'
 import { bestAccess, floorFilter, joinOrder, type Candidate, type KeyChoice, type Positioned } from './cost.ts'
 import { rowKey } from './keys.ts'
 import { neverEqual } from './optimize.ts'
@@ -441,7 +441,7 @@ export function planFrom(refs: readonly TableReference[], ctx: FromContext, wher
   const single = only?.def !== undefined && only.table !== undefined ? { alias: only.alias, def: only.def, table: only.table } : undefined
 
   // The physical tree: built once the WHERE is placed (`filter`), or without one.
-  const settings: LeafSettings = { covering, read: new Map(), tables: new Map(tables.map((t) => [t.alias, t])), ...(outer === undefined ? {} : { outer }), ...(ctx.statistics === undefined ? {} : { statistics: ctx.statistics }) }
+  const settings: LeafSettings = { covering, read: new Map(), chosen: new WeakMap(), scope, tables: new Map(tables.map((t) => [t.alias, t])), ...(outer === undefined ? {} : { outer }), ...(ctx.statistics === undefined ? {} : { statistics: ctx.statistics }) }
   // The join order and each join's access: the cost model's, over the WHERE's conjuncts, once the columns read are known (M5.7).
   const onAsts: Expression[] = []
   const gatherOn = (node: Node): void => {
@@ -505,6 +505,7 @@ export function planFrom(refs: readonly TableReference[], ctx: FromContext, wher
     joins,
     straight,
     reads(columns) {
+      settings.chosen = new WeakMap()
       for (const t of tables) {
         const read = columns.get(t.alias) ?? new Set<string>()
         settings.read.set(t.alias, read)
@@ -531,6 +532,7 @@ export function planFrom(refs: readonly TableReference[], ctx: FromContext, wher
     ...(single === undefined ? {} : { single }),
     filter(where, compile, semijoin) {
       settings.where = where
+      settings.chosen = new WeakMap()
       // What is true of every row the server folds away (8.4.11: no Filter): `IS NOT NULL` of a NOT NULL column no outer join
       // can null, `<>` between such an integer column and a number it never equals, and an OR with either.
       const notNull = (e: Expression): ColumnDef | undefined => {
@@ -711,11 +713,15 @@ interface LeafSettings {
   readonly read: Map<string, ReadonlySet<string> | 'all'>
   /** A base table's statistics, for the cost model (M5.7). */
   readonly statistics?: (def: TableDef, table: Table) => TableStatistics
+  /** The FROM's scope, which names a condition's columns. */
+  readonly scope?: TableScope
   /** The FROM's tables by alias, for the cost model. */
   readonly tables?: ReadonlyMap<string, FromTable>
   /** The tables the cost model reads by their join's index lookup (`planJoins`). */
   lookups?: ReadonlySet<string>
   readonly outer?: OuterColumn
+  /** `chosenAccess`'s choices, by statement environment and table. */
+  chosen: WeakMap<Env, Map<string, Access>>
   /** The one table read whole in this index's order (`readInOrder`). */
   ordered?: { readonly index: string; readonly force: boolean; readonly reverse: boolean }
 }
@@ -728,7 +734,7 @@ interface LeafSettings {
  * reads the index it groups by. Both the row reader and EXPLAIN ask this.
  */
 function leafAccess(t: FromTable, settings: LeafSettings, env: Env): Access {
-  const access = t.nullable ? FULL_SCAN : chooseAccess(t.def as TableDef, t.alias, settings.where, env, settings.outer)
+  const access = chosenAccess(t, settings, env)
   const order = settings.ordered
   if (order !== undefined && t.def !== undefined) {
     const clustered = t.def.indexes.find((i) => i.name === order.index)?.kind === 'primary' || t.def.clustered === order.index
@@ -739,6 +745,40 @@ function leafAccess(t: FromTable, settings: LeafSettings, env: Env): Access {
   }
   const cover = settings.covering.get(t.alias)
   return access.index === undefined && access.ranges === undefined && cover !== undefined ? { index: cover } : access
+}
+
+/** The access `chooseAccess` picks for a table under the WHERE, once per statement's environment: a range is weighed by counting its rows. */
+function chosenAccess(t: FromTable, settings: LeafSettings, env: Env): Access {
+  if (t.nullable || t.def === undefined) return FULL_SCAN
+  let chosen = settings.chosen.get(env)
+  if (chosen === undefined) settings.chosen.set(env, (chosen = new Map()))
+  let access = chosen.get(t.alias)
+  if (access === undefined) chosen.set(t.alias, (access = chooseAccess(t.def, t.alias, settings.where, env, settings.outer, rangeCosting(t, settings, env))))
+  return access
+}
+
+/** What the range optimizer weighs a base table's ranges by: its statistics, what covers the query, and its rows counted in a range. */
+function rangeCosting(t: FromTable, settings: LeafSettings, env: Env): RangeCosting | undefined {
+  const def = t.def
+  const table = t.table
+  if (def === undefined || table === undefined || settings.statistics === undefined) return undefined
+  const read = settings.read.get(t.alias) ?? 'all'
+  const clustered = clusteredIndex(def)
+  const cover = settings.covering.get(t.alias)
+  // The shortest a clustered record can be: its header, InnoDB's trx id and roll pointer, and its fixed-width columns.
+  const fixed = def.columns.reduce((n, c) => n + (c.type.collationId === undefined ? keyBytes(c) - (c.nullable ? 1 : 0) : 0), 0)
+  return {
+    stats: settings.statistics(def, table),
+    covers: (i) => (i === clustered ? read !== 'all' && [...read].every((c) => i.parts.some((p) => p.column.toLowerCase() === c)) : covers(def, i, read)),
+    recordBytes: (i) => indexBytes(def, i) + indexBytes(def, clustered),
+    coveringScan: cover === undefined ? undefined : def.indexes.find((i) => i.name === cover),
+    minRecordBytes: 5 + 13 + Math.ceil(def.columns.filter((c) => c.nullable).length / 8) + fixed,
+    count(index, range, limit) {
+      let n = 0
+      for (const _ of accessRows(table, def, { index, ranges: [range] }, env.trx, false)) if (++n > limit) break
+      return n
+    },
+  }
 }
 
 /**
@@ -1329,7 +1369,7 @@ function filterOp(input: Op, conditions: readonly Placed[], leaf?: FromTable, se
       for (const r of input.rows(run, context)) if (holds(conditions, r.row, run.env)) yield r
     },
     describe(env) {
-      const shown = leaf === undefined || settings === undefined ? conditions : conditions.filter((c) => !lookedUp(leaf, c.e, settings, env))
+      const shown = leaf === undefined || settings === undefined ? conditions : conditions.filter((c) => !lookedUp(leaf, c.e, settings, env) && !pushedToIndex(leaf, c, settings, env))
       const below = input.describe(env)
       const semi = shown.length === 1 ? shown[0]?.semijoin : undefined
       if (semi !== undefined) return { ...semi, children: [below, ...semi.children] }
@@ -1473,7 +1513,7 @@ function describeLeaf(t: FromTable, settings: LeafSettings, env: Env): PlanNode 
   // A secondary index that holds every column the query reads is read alone.
   const covering = settings.covering.get(t.alias) === access.index ? 'Covering index' : 'Index'
   if (points && access.ranges.length === 1 && index !== undefined && index.kind !== 'primary') return planNode(`${covering} lookup on ${t.alias} using ${access.index}`)
-  return planNode(`${covering} range scan on ${t.alias} using ${access.index}`)
+  return planNode(`${covering} range scan on ${t.alias} using ${access.index}${access.over === undefined ? '' : ` over ${access.over}`}`)
 }
 
 /**
@@ -1488,6 +1528,36 @@ function lookedUp(t: FromTable, e: Expression, settings: LeafSettings, env: Env)
   const column = index?.parts.length === 1 ? index.parts[0]?.column.toLowerCase() : undefined
   const names = (x: Expression): boolean => x.kind === NODE.COLUMN && (x.parts[x.parts.length - 1] as string).toLowerCase() === column && (x.parts.length < 2 || x.parts[x.parts.length - 2] === t.alias)
   return column !== undefined && (e.kind === NODE.UNARY ? names(e.operand) : e.kind === NODE.BINARY && (names(e.left) || names(e.right)))
+}
+
+/**
+ * Whether InnoDB evaluates a condition inside the index read, where EXPLAIN
+ * shows it on the read rather than as a Filter (index condition pushdown):
+ * a read of a secondary index by a range or a lookup, not covering the
+ * query, and a condition on nothing but that index's columns and the
+ * clustered key it carries, with no subquery in it.
+ */
+function pushedToIndex(t: FromTable, c: Placed, settings: LeafSettings, env: Env): boolean {
+  const def = t.def
+  if (def === undefined || c.aliases === undefined || c.semijoin !== undefined || [...c.aliases].some((a) => a !== t.alias)) return false
+  const access = leafAccess(t, settings, env)
+  const index = def.indexes.find((i) => i.name === access.index)
+  const clustered = clusteredIndex(def)
+  if (access.ranges === undefined || index === undefined || index === clustered || settings.covering.get(t.alias) === index.name) return false
+  const held = new Set([...index.parts, ...(clustered?.parts ?? [])].map((p) => p.column.toLowerCase()))
+  let ok = true
+  const visit = (x: unknown): void => {
+    if (!ok || x === null || typeof x !== 'object') return
+    if (Array.isArray(x)) return x.forEach(visit)
+    const n = x as Expression
+    if (n.kind === NODE.SUBQUERY || n.kind === NODE.VARIABLE) ok = false
+    else if (n.kind === NODE.COLUMN) {
+      const column = columnOf(t, n, settings.scope as TableScope)
+      if (column === undefined || !held.has(column.name.toLowerCase())) ok = false
+    } else for (const v of Object.values(n)) if (typeof v === 'object') visit(v)
+  }
+  visit(c.e)
+  return ok
 }
 
 // --- covering indexes -------------------------------------------------------------
@@ -1513,20 +1583,6 @@ const isClustered = (def: TableDef, index: IndexDef): boolean => index === clust
 function indexBytes(def: TableDef, index: IndexDef | undefined): number {
   if (index === undefined) return 6
   return index.parts.reduce((n, p) => n + keyBytes(def.columns.find((c) => c.name === p.column) as ColumnDef), 0)
-}
-
-/**
- * A table's indexes in the order the server keeps them (`sort_keys`): the
- * PRIMARY KEY, then unique keys of NOT NULL columns, then other unique keys,
- * then the rest, each group as written.
- */
-function keyOrder(def: TableDef): IndexDef[] {
-  const rank = (i: IndexDef): number => {
-    if (i.kind === 'primary') return 0
-    if (i.kind !== 'unique') return 3
-    return i.parts.every((p) => def.columns.find((c) => c.name === p.column)?.nullable === false) ? 1 : 2
-  }
-  return def.indexes.filter((i) => i.invisible !== true).sort((a, b) => rank(a) - rank(b))
 }
 
 /** Whether a secondary index, with the clustered key it carries, holds every column in `read`. */
