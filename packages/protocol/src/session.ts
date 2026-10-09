@@ -77,7 +77,7 @@ export class Session {
     this.database = options.database ?? null
     this.characterSet = options.characterSet ?? CHARSET_UTF8MB4_0900_AI_CI
     this.transcoder = options.transcoder ?? utf8Transcoder
-    this.sqlMode = options.sqlMode ?? 'STRICT_TRANS_TABLES,NO_ENGINE_SUBSTITUTION'
+    this.sqlMode = options.sqlMode ?? 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION'
     this.multipleStatementsEnabled = options.multipleStatements ?? false
     this.#initial = {
       user: this.user,
@@ -92,6 +92,9 @@ export class Session {
     let flags = 0
     if (this.autocommit) flags |= SERVER_STATUS.AUTOCOMMIT
     if (this.inTransaction) flags |= SERVER_STATUS.IN_TRANS
+    // 8.4.11 sets it on every OK and EOF while the mode is on, so a client
+    // quoting values knows a backslash escapes nothing (mysql_real_escape_string).
+    if (this.sqlMode.split(',').includes('NO_BACKSLASH_ESCAPES')) flags |= SERVER_STATUS.NO_BACKSLASH_ESCAPES
     return flags
   }
 

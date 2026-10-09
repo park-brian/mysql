@@ -59,8 +59,9 @@ test('M5.9: the refusals, with 8.4.11s numbers', () => {
   // A divergence, not a fact: 8.4.11 has ARCHIVE and we do not (D-24), so we
   // answer as a server built without it does under NO_ENGINE_SUBSTITUTION.
   assert.equal(errno(() => spec('CREATE TABLE t (a INT) ENGINE=ARCHIVE')), 1286)
-  // A CHECK we would not enforce is refused rather than accepted (M8.7).
-  assert.equal(errno(() => spec('CREATE TABLE t (a INT CHECK (a > 0))')), 1235)
+  // CHECK constraints are enforced since M5.9's CHECK work, and checked by
+  // `withChecks`, which needs the catalog; the spec alone accepts them.
+  assert.doesNotThrow(() => spec('CREATE TABLE t (a INT CHECK (a > 0))'))
 })
 
 test('M5.9: the catalog never stores a definition it cannot read back (the executor fuzzer)', async () => {

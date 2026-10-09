@@ -24,7 +24,7 @@
 // `await import()` (D-36). Nothing in this module statically imports it, which
 // is what keeps 50 KB of DUCET out of anyone's initial bundle.
 import { requireCollationInfo, type Collation, type CollationInfo } from '../collation.ts'
-import { memcmp } from './memcmp.ts'
+import { comparePadded, memcmp } from './memcmp.ts'
 import { utf8CodePoints } from './utf8.ts'
 
 /**
@@ -39,7 +39,16 @@ import { utf8CodePoints } from './utf8.ts'
  * answerable *without* loading anything: `isUcaCollation` is how a caller
  * learns that `loadCollation` would help.
  */
-export const UCA_COLLATION_IDS: readonly number[] = [255]
+export const UCA_COLLATION_IDS: readonly number[] = [255, 224, 192]
+
+/**
+ * Which tables an id is served from: UCA 9.0.0's for the `_0900_` family,
+ * UCA 4.0.0's for `utf8mb4_unicode_ci` (224) and `utf8mb3_unicode_ci` (192).
+ * Each set loads on its own, so a Prisma schema in `utf8mb4_unicode_ci`
+ * never pays for DUCET 9.0.0, nor the reverse.
+ */
+type UcaVersion = '900' | '400'
+const versionOf = (id: number): UcaVersion => (id === 224 || id === 192 ? '400' : '900')
 
 /** Whether this id is one the UCA tables can serve, once loaded. */
 export function isUcaCollation(id: number): boolean {
@@ -102,21 +111,28 @@ function parsePage(spec: string): Page {
   return { first, extras }
 }
 
-// `page number -> its unparsed line`, and `page number -> the parsed page`.
-// The line index is built once when the module loads; a page is expanded when
-// something actually asks for a code point in it, so weighing an ASCII string
-// does not expand 149 pages.
-let lines: Map<number, string> | null = null
-const parsed = new Map<number, Page>()
+// Per version: `page number -> its unparsed line`, and `page number -> the
+// parsed page`. The line index is built once when a version's module loads; a
+// page is expanded when something actually asks for a code point in it, so
+// weighing an ASCII string does not expand 149 pages.
+const lines: Record<UcaVersion, Map<number, string> | null> = {
+  '900': null,
+  '400': null,
+}
+const parsed: Record<UcaVersion, Map<number, Page>> = {
+  '900': new Map(),
+  '400': new Map(),
+}
 
-function pageFor(page: number): Page | undefined {
-  if (lines === null) throw new Error('UCA tables are not loaded — call loadCollation() first')
-  const already = parsed.get(page)
+function pageFor(page: number, version: UcaVersion = '900'): Page | undefined {
+  const index = lines[version]
+  if (index === null) throw new Error('UCA tables are not loaded — call loadCollation() first')
+  const already = parsed[version].get(page)
   if (already !== undefined) return already
-  const line = lines.get(page)
+  const line = index.get(page)
   if (line === undefined) return undefined
   const expanded = parsePage(line)
-  parsed.set(page, expanded)
+  parsed[version].set(page, expanded)
   return expanded
 }
 
@@ -202,11 +218,38 @@ function weightsOf(codePoint: number, into: number[]): void {
   for (const w of implicitWeights(codePoint)) into.push(w)
 }
 
+/**
+ * Every level-1 weight of one code point under UCA 4.0.0, as
+ * `uca_scanner_any::next` walks them: nothing above the Basic Multilingual
+ * Plane but 0xFFFD, no Hangul decomposition, and an implicit pair for a page
+ * with no table, whose leading weight knows only the two CJK blocks of
+ * Unicode 4.0.
+ */
+function weightsOf400(codePoint: number, into: number[]): void {
+  if (codePoint > 0xffff) {
+    into.push(0xfffd)
+    return
+  }
+  const page = pageFor(codePoint >> 8, '400')
+  if (page !== undefined) {
+    const offset = codePoint & 0xff
+    const first = page.first[offset] as number
+    if (first === 0) return
+    into.push(first)
+    const extra = page.extras.get(offset)
+    if (extra !== undefined) for (const w of extra) into.push(w)
+    return
+  }
+  const plane = codePoint >> 15
+  const leading = codePoint >= 0x3400 && codePoint <= 0x4db5 ? 0xfb80 : codePoint >= 0x4e00 && codePoint <= 0x9fa5 ? 0xfb40 : 0xfbc0
+  into.push(leading + plane, (codePoint & 0x7fff) | 0x8000)
+}
 
 function ucaCollation(info: CollationInfo): Collation {
+  const weigh = versionOf(info.id) === '400' ? weightsOf400 : weightsOf
   const sortKey = (bytes: Uint8Array): Uint8Array => {
     const weights: number[] = []
-    for (const cp of utf8CodePoints(bytes)) weightsOf(cp, weights)
+    for (const cp of utf8CodePoints(bytes)) weigh(cp, weights)
     const out = new Uint8Array(weights.length * 2)
     for (let i = 0; i < weights.length; i++) {
       const w = weights[i] as number
@@ -216,14 +259,26 @@ function ucaCollation(info: CollationInfo): Collation {
     return out
   }
   const space: number[] = []
-  weightsOf(0x20, space)
+  weigh(0x20, space)
+  const padUnit = Uint8Array.of((space[0] as number) >> 8, (space[0] as number) & 0xff)
+  if (info.padAttribute === 'PAD SPACE') {
+    // UCA 4.0.0 pads: the longer string's remaining weights are compared with
+    // the space's, so 'a' = 'a ' and a tab, which weighs below a space, sorts
+    // 'a\t' before 'a' (`my_strnncollsp_uca`).
+    return {
+      ...info,
+      padUnit,
+      sortKey,
+      compare: (a, b) => comparePadded(sortKey(a), sortKey(b), padUnit),
+    }
+  }
   return {
     ...info,
     // NO PAD never pads, so this is never used to compare. It is still the
     // honest value rather than an empty array, because `Collation` promises
     // "one character's worth of pad weight" and a lie here would be a trap for
     // whatever reads it next.
-    padUnit: Uint8Array.of((space[0] as number) >> 8, (space[0] as number) & 0xff),
+    padUnit,
     sortKey,
     // NO PAD: a shorter weight string that is a prefix of a longer one sorts
     // first, which is exactly `memcmp`. No padding, and so `'a' < 'a '`.
@@ -233,9 +288,9 @@ function ucaCollation(info: CollationInfo): Collation {
 
 const cache = new Map<number, Collation>()
 
-/** Whether the weight tables are resident. */
-export function ucaTablesLoaded(): boolean {
-  return lines !== null
+/** Whether the weight tables serving `id` (by default, the 9.0.0 ones) are resident. */
+export function ucaTablesLoaded(id = 255): boolean {
+  return lines[versionOf(id)] !== null
 }
 
 /**
@@ -247,14 +302,15 @@ export function ucaTablesLoaded(): boolean {
  * synchronous all the way down into `encodeKeyPart` — ground rule 3 says no
  * `await` inside a page split, and an index key is built inside one.
  */
-export async function loadUcaTables(): Promise<void> {
-  if (lines !== null) return
-  const { PACKED_UCA900_LEVEL1 } = await import('./uca900.ts')
+export async function loadUcaTables(id = 255): Promise<void> {
+  const version = versionOf(id)
+  if (lines[version] !== null) return
+  const packed = version === '400' ? (await import('./uca400.ts')).PACKED_UCA400_LEVEL1 : (await import('./uca900.ts')).PACKED_UCA900_LEVEL1
   const index = new Map<number, string>()
-  for (const line of PACKED_UCA900_LEVEL1.split('\n')) {
+  for (const line of packed.split('\n')) {
     index.set(Number.parseInt(line.slice(0, line.indexOf(' ')), 16), line)
   }
-  lines = index
+  lines[version] = index
 }
 
 /** The `Collation` for a UCA id, cached. Throws unless the tables are loaded. */
@@ -262,7 +318,7 @@ export function ucaCollationFor(id: number): Collation {
   const cached = cache.get(id)
   if (cached !== undefined) return cached
   if (!isUcaCollation(id)) throw new Error(`collation ${id} is not served by the UCA tables`)
-  if (lines === null) throw new Error('UCA tables are not loaded — call loadCollation() first')
+  if (lines[versionOf(id)] === null) throw new Error('UCA tables are not loaded — call loadCollation() first')
   const c = ucaCollation(requireCollationInfo(id))
   cache.set(id, c)
   return c

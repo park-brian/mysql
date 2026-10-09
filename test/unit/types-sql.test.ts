@@ -170,3 +170,30 @@ test('M5.2: a bad value is an error under a strict mode, and a warning and an ad
   assert.equal(show(decodeField(encodeField(n(300), col(tiny), lax), tiny)), '127')
   assert.equal(lax.warnings, 1)
 })
+
+test('a value that loses digits on its way into a column counts a note, even under a strict mode', () => {
+  // 8.4.11: a DECIMAL rounded past its scale is Note 1265 when a nonzero digit
+  // goes (`12.30` into DECIMAL(5,1) is silent, `-12.36` is not); a DATE given a
+  // time of day is 1292 under a strict mode and 1265 without one — a warning
+  // either way, never the error a strict mode makes of an impossible date —
+  // and a fraction of a second alone is no time of day. Every one of these was
+  // silent here until INSERT … SELECT's corpus copied a DATETIME(3) into a DATE.
+  const warnings = (v: Value, type: ColumnType, strict = true): number => {
+    const c = ctx(strict)
+    encodeField(v, col(type), c)
+    return c.warnings
+  }
+  const dec: ColumnType = { type: FIELD_TYPE.NEWDECIMAL, precision: 5, scale: 1 }
+  assert.equal(warnings(d('12.30'), dec), 0)
+  assert.equal(warnings(s('12.300'), dec), 0)
+  assert.equal(warnings(d('-12.36'), dec), 1)
+  assert.equal(warnings(doubleValue(12.25), dec), 1)
+  assert.equal(roundTrip(d('-12.36'), dec), '-12.4')
+  const date: ColumnType = { type: FIELD_TYPE.DATE }
+  assert.equal(warnings(s('2020-01-02 03:04:05'), date), 1)
+  assert.equal(warnings(s('2020-01-02 03:04:05'), date, false), 1)
+  assert.equal(warnings(n(20200102030405n), date), 1)
+  assert.equal(warnings(s('2020-01-02 00:00:00.4'), date), 0)
+  assert.equal(warnings(s('2020-01-02'), date), 0)
+  assert.equal(roundTrip(s('2020-01-02 03:04:05'), date), '2020-01-02')
+})

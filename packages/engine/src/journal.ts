@@ -48,6 +48,9 @@ interface Touch {
   readonly wasDirty: boolean
 }
 
+/** Before-images kept for reuse: more than a mini-transaction usually touches. */
+const SPARE_IMAGES = 16
+
 export class Journal {
   readonly pool: BufferPool
   log: Log | undefined
@@ -59,10 +62,21 @@ export class Journal {
   readonly #touched = new Map<number, Touch>()
   readonly #freed = new Set<number>()
   #rows: Redo[] = []
+  /**
+   * Before-images a finished mini-transaction no longer needs, for the next to
+   * copy into: one row's change touches two or three pages, and a fresh copy
+   * of each was most of an INSERT's garbage.
+   */
+  readonly #spare: Uint8Array[] = []
 
   constructor(pool: BufferPool, host: JournalHost) {
     this.pool = pool
     this.#host = host
+  }
+
+  /** Pages the open mini-transaction has changed, and holds until it ends. */
+  get touched(): number {
+    return this.#touched.size
   }
 
   /** Whether a mini-transaction is open. */
@@ -103,7 +117,10 @@ export class Journal {
     if (t === undefined) {
       if (!fresh || this.pool.isResident(pageNo) || this.#freed.has(pageNo)) {
         const page = this.pool.fetch(pageNo)
-        t = { page, before: page.slice(), wasDirty: this.pool.isDirty(page) }
+        const spare = this.#spare.pop()
+        const before = spare !== undefined && spare.length === page.length ? spare : new Uint8Array(page.length)
+        before.set(page)
+        t = { page, before, wasDirty: this.pool.isDirty(page) }
       } else {
         t = { page: null, before: null, wasDirty: false }
       }
@@ -161,6 +178,7 @@ export class Journal {
       } else {
         const runs = diffPage(t.before, t.page)
         if (runs.length === 0) continue
+        // A page clean before this change is logged whole: its image, not the diff just taken.
         records.push({ type: 'page', pageNo, image: !t.wasDirty, runs: t.wasDirty ? runs : diffPage(null, t.page) })
       }
       logged.push(pageNo)
@@ -192,7 +210,10 @@ export class Journal {
   }
 
   #finish(): void {
-    for (const t of this.#touched.values()) if (t.page !== null) this.pool.release(t.page)
+    for (const t of this.#touched.values()) {
+      if (t.page !== null) this.pool.release(t.page)
+      if (t.before !== null && this.#spare.length < SPARE_IMAGES) this.#spare.push(t.before)
+    }
     this.#touched.clear()
     this.#freed.clear()
     this.#rows = []

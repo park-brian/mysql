@@ -122,7 +122,7 @@ jobs:
       - name: regenerate the UCA weights and diff
         run: |
           npm run gen:uca
-          git diff --exit-code -- packages/charsets/src/collations/uca900.ts
+          git diff --exit-code -- packages/charsets/src/collations/uca900.ts packages/charsets/src/collations/uca400.ts
 
   exit-criterion:
     name: the real mysql client connects
@@ -256,6 +256,12 @@ jobs:
           # M5.17: whole statements — rows, metadata, counters, errors — run
           # through mysql2, so the executor's corpus is re-checked too.
           npm run capture:execution
+          # M5.18: many tables at a time, each SELECT through both protocols
+          # and with its plan skeleton, since row order is the plan's.
+          npm run capture:relational
+          # M5.21: JSON columns, constructors and aggregates, and the LATERAL
+          # shape Drizzle sends, as the text the server sent.
+          npm run capture:json
           git diff --stat -- test/format/fixtures/ packages/parser/src/keywords.ts
       - name: upload the captured fixtures
         uses: actions/upload-artifact@v4

@@ -234,7 +234,9 @@ export function parseCreateView(c: Cursor, options: DdlOptions): CreateViewNode 
   const view = c.expectTableName()
   const columns = c.atOp('(') ? c.expectNameList() : undefined
   c.expectWord('AS')
-  const query = parseQueryFrom(c, options.sqlMode)
+  // INTO parses here, as MySQL's grammar has it, so that the executor can
+  // refuse it as the server does: 1350, not a syntax error (8.4.11).
+  const query = parseQueryFrom(c, options.sqlMode, 'select')
   let checkOption: CreateViewNode['checkOption']
   if (c.takeWord('WITH')) {
     checkOption = c.takeWord('LOCAL') ? 'LOCAL' : (c.takeWord('CASCADED'), 'CASCADED')
@@ -410,13 +412,15 @@ function keyDefinition(c: Cursor, options: DdlOptions, at: number): KeyDefinitio
 
   // A name, unless the next thing is the column list or an index type.
   const name = c.atIdentifier() ? c.expectIdentifier() : undefined
-  const using = indexType(c)
+  // A FULLTEXT or SPATIAL key has no index type in the grammar (8.4.11: `FULLTEXT (t) USING BTREE` is 1064).
+  const typed = type !== KEY.FULLTEXT && type !== KEY.SPATIAL
+  const using = typed ? indexType(c) : undefined
   const columns = indexColumns(c, options)
 
   let references: Reference | undefined
   if (type === KEY.FOREIGN) references = parseReferences(c, options)
 
-  const rest = indexOptions(c)
+  const rest = indexOptions(c, typed)
   return {
     type,
     ...opt('name', name),
@@ -424,6 +428,8 @@ function keyDefinition(c: Cursor, options: DdlOptions, at: number): KeyDefinitio
     ...(using ?? rest.using ? { using: (using ?? rest.using) as string } : {}),
     ...opt('references', references),
     ...opt('comment', rest.comment),
+    ...opt('parser', rest.parser),
+    ...(rest.invisible === true ? { invisible: true as const } : {}),
     at,
   }
 }
@@ -453,6 +459,7 @@ function columnDefinition(c: Cursor, options: DdlOptions, at: number): ColumnDef
   let notNull: boolean | undefined
   let nullable: boolean | undefined
   let defaultValue: Expression | undefined
+  let parenthesised = false
   let onUpdate: Expression | undefined
   let autoIncrement: boolean | undefined
   let unique: boolean | undefined
@@ -461,7 +468,7 @@ function columnDefinition(c: Cursor, options: DdlOptions, at: number): ColumnDef
   let generated: { expr: Expression; stored: boolean } | undefined
   let invisible: boolean | undefined
   let srid: number | undefined
-  let check: Expression | undefined
+  let check: CheckConstraint | undefined
 
   // Column attributes are an unordered bag, and MySQL accepts them in any
   // order. Anything not matched here ends the column — and if it is not a
@@ -477,6 +484,7 @@ function columnDefinition(c: Cursor, options: DdlOptions, at: number): ColumnDef
       continue
     }
     if (c.takeWord('DEFAULT')) {
+      parenthesised = c.atOp('(')
       defaultValue = defaultExpression(c, options)
       continue
     }
@@ -527,11 +535,12 @@ function columnDefinition(c: Cursor, options: DdlOptions, at: number): ColumnDef
       srid = Number(t.text)
       continue
     }
-    if (c.takeWord('CHECK')) {
-      c.expectOp('(')
-      check = parseExpressionFrom(c, options.sqlMode)
-      c.expectOp(')')
-      c.takeWords('NOT', 'ENFORCED') || c.takeWord('ENFORCED')
+    // `[CONSTRAINT [symbol]] CHECK (…) [[NOT] ENFORCED]`, as a table's.
+    if (c.atWord('CHECK') || (c.atWord('CONSTRAINT') && (c.atWord('CHECK', 1) || c.atWord('CHECK', 2)))) {
+      const checkAt = c.peek().start
+      let symbol: string | undefined
+      if (c.takeWord('CONSTRAINT') && !c.atWord('CHECK')) symbol = c.expectIdentifier()
+      check = checkConstraint(c, options, checkAt, symbol)
       continue
     }
     // A generated column, in both its spellings. `STORED` and `VIRTUAL` are
@@ -579,6 +588,7 @@ function columnDefinition(c: Cursor, options: DdlOptions, at: number): ColumnDef
     ...opt('notNull', notNull),
     ...opt('nullable', nullable),
     ...opt('default', defaultValue),
+    ...(parenthesised ? { defaultExpression: true } : {}),
     ...opt('onUpdate', onUpdate),
     ...opt('autoIncrement', autoIncrement),
     ...opt('unique', unique),
@@ -603,11 +613,12 @@ function columnDefinition(c: Cursor, options: DdlOptions, at: number): ColumnDef
  */
 export function defaultExpression(c: Cursor, options: DdlOptions, now = true): Expression {
   if (c.atOp('(')) {
-    // `DEFAULT (SELECT …)` is a subquery, which MySQL parses and then rejects
-    // for a default. The parentheses are the subquery's own, so the
-    // expression parser reads them.
-    if (atQueryStart(c, 1)) return parseExpressionFrom(c, options.sqlMode)
+    // The parentheses are the syntax's, not a subquery's: `DEFAULT (SELECT 1)`
+    // is ER_PARSE_ERROR at SELECT, and a subquery needs its own, `DEFAULT
+    // ((SELECT 1))`, which the executor then refuses (8.4.11: 3769). This
+    // read `(SELECT 1)` as a subquery until the server was asked.
     c.skip()
+    if (atQueryStart(c)) c.fail()
     const expr = parseExpressionFrom(c, options.sqlMode)
     c.expectOp(')')
     return expr
@@ -697,16 +708,19 @@ export function indexColumns(c: Cursor, options: DdlOptions): IndexColumn[] {
   return out
 }
 
-function direction(c: Cursor): { desc?: true } {
+function direction(c: Cursor): { desc?: true; asc?: true } {
   if (c.takeWord('DESC')) return { desc: true }
-  c.takeWord('ASC')
+  if (c.takeWord('ASC')) return { asc: true }
   return {}
 }
 
-export function indexOptions(c: Cursor): { using?: string; comment?: string } {
+export function indexOptions(c: Cursor, typed = true): { using?: string; comment?: string; parser?: string; invisible?: boolean } {
   let using: string | undefined
   let comment: string | undefined
+  let parser: string | undefined
+  let invisible: boolean | undefined
   for (;;) {
+    if (!typed && c.atWord('USING')) c.fail()
     const more = indexType(c)
     if (more !== undefined) {
       using = more
@@ -722,10 +736,17 @@ export function indexOptions(c: Cursor): { using?: string; comment?: string } {
       continue
     }
     if (c.takeWords('WITH', 'PARSER')) {
-      c.expectIdentifier()
+      parser = c.expectIdentifier()
       continue
     }
-    if (c.takeWord('VISIBLE') || c.takeWord('INVISIBLE')) continue
+    if (c.takeWord('VISIBLE')) {
+      invisible = false
+      continue
+    }
+    if (c.takeWord('INVISIBLE')) {
+      invisible = true
+      continue
+    }
     if (c.takeWord('ENGINE_ATTRIBUTE') || c.takeWord('SECONDARY_ENGINE_ATTRIBUTE')) {
       c.takeOp('=')
       c.skip()
@@ -733,7 +754,7 @@ export function indexOptions(c: Cursor): { using?: string; comment?: string } {
     }
     break
   }
-  return { ...opt('using', using), ...opt('comment', comment) }
+  return { ...opt('using', using), ...opt('comment', comment), ...opt('parser', parser), ...opt('invisible', invisible) }
 }
 
 function parseReferences(c: Cursor, options: DdlOptions): Reference {

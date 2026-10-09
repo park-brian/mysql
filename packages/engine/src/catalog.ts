@@ -8,6 +8,11 @@
 //   `_myjs_schemas`  name → id, definition (JSON)
 //   `_myjs_tables`   schema id, name → id, definition (JSON: `TableDef`)
 //
+// A view is a `_myjs_tables` row too, with id 0, which no table has (the
+// counter starts at 1), and a `ViewDef` for its definition. Tables and views
+// share one namespace in MySQL — CREATE TABLE over a view's name is 1050 — and
+// one key gives that for nothing.
+//
 // Those ids and layouts are the bootstrap descriptor: constants in this file,
 // which `FORMAT_VERSION` pins, so no page has to be read to find them (D-56).
 // A table's definition is its `_myjs_tables` row and nowhere else — one copy,
@@ -34,12 +39,12 @@
 // the system tables' own layout is the store format's, which is refused, not
 // migrated (D-26).
 import { TypeError as TypeError_ } from '@myjs/types'
-import { badFormat, corruptCatalog, dbExists, dbMissingOnDrop, noSuchTable, notSupportedYet, tableExists, unknownDb, unknownTable, writerBusy, wrongDbName } from './errors.ts'
-import { ClusteredIndex, type KeyColumn } from './indexes.ts'
-import { decodeRecord, externalRefs, type RecordLayout } from './record.ts'
+import { badFormat, corruptCatalog, misuse, dbExists, dbMissingOnDrop, noSuchTable, notAView, notSupportedYet, tableExists, unknownDb, unknownTable, writerBusy, wrongDbName, wrongTableName } from './errors.ts'
+import { ClusteredIndex, type KeyColumn, type Row } from './indexes.ts'
+import { decodeRecord, externalRefs, type FieldBytes, type RecordLayout } from './record.ts'
 import { NAME_BYTES, checkName, clusteredKeyOf, decodeTableDef, encodeTableDef, keyColumnsOf, layoutOf, resolveTable, secondariesOf, type TableDef, type TableSpec } from './schema.ts'
 import type { Store } from './store.ts'
-import { MemoryEngine, NativeEngine, type StorageEngine, type Table } from './table.ts'
+import { MemoryEngine, NativeEngine, type StorageEngine, type Table, type TableHooks } from './table.ts'
 import { CLUSTERED_HEADER, versionOf, type Trx } from './trx.ts'
 import type { VerifyOptions } from './verify.ts'
 
@@ -62,6 +67,74 @@ const SYSTEM: Record<keyof typeof SYSTEM_INDEX, { layout: RecordLayout; key: Key
     ],
   },
 }
+
+/** A view: the query's text, which is parsed again at each use, and its own column names if it gave any. */
+export interface ViewDef {
+  readonly schema: string
+  readonly name: string
+  /** The query as written, so its unaliased columns are named as they were at CREATE VIEW. */
+  readonly query: string
+  /** The database its unqualified names are in: the one current at CREATE VIEW, if any (8.4.11). */
+  readonly database?: string
+  readonly columns?: readonly string[]
+  readonly algorithm?: 'UNDEFINED' | 'MERGE' | 'TEMPTABLE'
+  readonly checkOption?: 'CASCADED' | 'LOCAL'
+  readonly security?: 'DEFINER' | 'INVOKER'
+  /** Whether CREATE VIEW named the columns itself, which SHOW CREATE VIEW then lists. */
+  readonly listed?: true
+  /** Who made it, `user@host`, and the connection collation it was made in, as INFORMATION_SCHEMA.VIEWS reports them. */
+  readonly definer?: string
+  readonly collationConnection?: number
+}
+
+const VIEW_ID = 0
+
+function encodeViewDef(v: ViewDef): Uint8Array {
+  return utf8.encode(JSON.stringify({ view: v }))
+}
+
+function decodeViewDef(bytes: Uint8Array): ViewDef {
+  let v: unknown
+  try {
+    v = JSON.parse(str(bytes, 'a view definition'))
+  } catch (e) {
+    throw corruptCatalog(`a view definition that is not JSON: ${e instanceof Error ? e.message : String(e)}`)
+  }
+  const d = (v as { view?: unknown } | null)?.view as Record<string, unknown> | undefined
+  const isStr = (x: unknown): x is string => typeof x === 'string'
+  if (d === null || typeof d !== 'object' || !isStr(d['schema']) || !isStr(d['name']) || !isStr(d['query'])) throw corruptCatalog('a view definition without its schema, name and query')
+  const database = d['database']
+  if (database !== undefined && !isStr(database)) throw corruptCatalog('a view definition whose database is not a name')
+  const columns = d['columns']
+  if (columns !== undefined && !(Array.isArray(columns) && columns.every(isStr))) throw corruptCatalog('a view definition whose columns are not names')
+  const algorithm = d['algorithm']
+  if (algorithm !== undefined && algorithm !== 'UNDEFINED' && algorithm !== 'MERGE' && algorithm !== 'TEMPTABLE') throw corruptCatalog(`a view algorithm of ${JSON.stringify(algorithm)}`)
+  const checkOption = d['checkOption']
+  if (checkOption !== undefined && checkOption !== 'CASCADED' && checkOption !== 'LOCAL') throw corruptCatalog(`a view check option of ${JSON.stringify(checkOption)}`)
+  const definer = d['definer']
+  const collationConnection = d['collationConnection']
+  if (definer !== undefined && !isStr(definer)) throw corruptCatalog('a view definition whose definer is not a name')
+  if (collationConnection !== undefined && typeof collationConnection !== 'number') throw corruptCatalog('a view definition whose collation is not an id')
+  const security = d['security']
+  if (security !== undefined && security !== 'DEFINER' && security !== 'INVOKER') throw corruptCatalog(`a view security of ${JSON.stringify(security)}`)
+  const listed = d['listed']
+  if (listed !== undefined && listed !== true) throw corruptCatalog('a view definition whose column list flag is not true')
+  return {
+    schema: d['schema'],
+    name: d['name'],
+    query: d['query'],
+    ...(database === undefined ? {} : { database }),
+    ...(definer === undefined ? {} : { definer }),
+    ...(collationConnection === undefined ? {} : { collationConnection }),
+    ...(columns === undefined ? {} : { columns }),
+    ...(algorithm === undefined ? {} : { algorithm }),
+    ...(checkOption === undefined ? {} : { checkOption }),
+    ...(security === undefined ? {} : { security }),
+    ...(listed === undefined ? {} : { listed }),
+  }
+}
+
+const isView = (row: readonly (Uint8Array | null)[]): boolean => readBe32(row[2]) === VIEW_ID
 
 export interface SchemaDef {
   readonly id: number
@@ -119,6 +192,8 @@ export class Catalog {
   readonly #catalog: ClusteredIndex
   readonly #schemas: ClusteredIndex
   readonly #tables: ClusteredIndex
+  /** Counts the writes to `_myjs_tables`: a table found alive stays so until the next. */
+  #generation = 0
 
   private constructor(store: Store, version: number) {
     this.store = store
@@ -139,7 +214,7 @@ export class Catalog {
     const version = options.version ?? CATALOG_VERSION
     if ((options.lowerCaseTableNames ?? 0) !== 0) throw notSupportedYet('lower_case_table_names = 1')
     if (!store.hasTree(SYSTEM_INDEX.CATALOG)) {
-      ddl(store, (trx) => {
+      ddl(store, undefined, (trx) => {
         for (const k of ['CATALOG', 'SCHEMAS', 'TABLES'] as const) {
           trx.write(() => {
             store.createTree({ indexId: SYSTEM_INDEX[k] })
@@ -163,7 +238,7 @@ export class Catalog {
       if (m === undefined) throw badFormat(`catalog version ${stored}; this build reads ${version} and has no migration from ${v}`)
       chain.push(m)
     }
-    ddl(store, (trx) => {
+    ddl(store, undefined, (trx) => {
       const context: MigrationContext = {
         trx,
         tables: () =>
@@ -191,9 +266,9 @@ export class Catalog {
 
   // --- schemas ------------------------------------------------------------------
 
-  createSchema(name: string, options: { readonly ifNotExists?: boolean; readonly collationId?: number } = {}): SchemaDef | undefined {
+  createSchema(name: string, options: { readonly ifNotExists?: boolean; readonly collationId?: number; readonly trx?: Trx } = {}): SchemaDef | undefined {
     checkName(name, wrongDbName)
-    return ddl(this.store, (trx) => {
+    return ddl(this.store, options.trx, (trx) => {
       if (this.#schemaOf(name, trx) !== undefined) {
         if (options.ifNotExists === true) return undefined
         throw dbExists(name)
@@ -204,10 +279,10 @@ export class Catalog {
     })
   }
 
-  /** Drop a schema and every table in it, in one transaction. Returns the tables' names. */
-  dropSchema(name: string, options: { readonly ifExists?: boolean } = {}): string[] {
+  /** Drop a schema and every table and view in it, in one transaction. Returns their names. */
+  dropSchema(name: string, options: { readonly ifExists?: boolean; readonly trx?: Trx } = {}): string[] {
     const discards: (() => void)[] = []
-    const dropped = ddl(this.store, (trx) => {
+    const dropped = ddl(this.store, options.trx, (trx) => {
       const s = this.#schemaOf(name, trx)
       if (s === undefined) {
         if (options.ifExists === true) return []
@@ -217,6 +292,10 @@ export class Catalog {
       for (const def of this.#definitions(s.id, trx)) {
         discards.push(this.#drop(def, s.id, trx))
         names.push(def.name)
+      }
+      for (const v of this.#views(s.id, trx)) {
+        this.#changing().delete(this.#tableKey(s.id, v.name), trx)
+        names.push(v.name)
       }
       this.#schemas.delete(this.#schemaKey(name), trx)
       return names
@@ -242,8 +321,8 @@ export class Catalog {
    * clustered index — before anything is made, so a refusal leaves nothing.
    * With `ifNotExists`, an existing table's definition is returned instead.
    */
-  createTable(schema: string, spec: TableSpec, options: { readonly ifNotExists?: boolean } = {}): TableDef {
-    return ddl(this.store, (trx) => {
+  createTable(schema: string, spec: TableSpec, options: { readonly ifNotExists?: boolean; readonly trx?: Trx } = {}): TableDef {
+    return ddl(this.store, options.trx, (trx) => {
       const s = this.#schemaOf(schema, trx)
       if (s === undefined) throw unknownDb(schema)
       const existing = this.#definition(s.id, spec.name, trx)
@@ -251,19 +330,20 @@ export class Catalog {
         if (options.ifNotExists === true) return existing
         throw tableExists(spec.name)
       }
+      if (this.#row(s.id, spec.name, trx) !== undefined) throw tableExists(spec.name)
       const resolved = resolveTable(Number(this.store.takeCounter(SYSTEM_INDEX.TABLES, 0)), schema, spec)
       // Both engines refuse a key the page cannot hold, the same way.
       ClusteredIndex.check(this.store.pool.pageSize, layoutOf(resolved), clusteredKeyOf(resolved), secondariesOf(resolved).map((i) => keyColumnsOf(resolved, i)))
       const def = this.#engine(resolved).create(resolved, trx)
-      this.#tables.insert([be32(s.id), utf8.encode(def.name), be32(def.id), encodeTableDef(def)], trx)
+      this.#changing().insert([be32(s.id), utf8.encode(def.name), be32(def.id), encodeTableDef(def)], trx)
       return def
     })
   }
 
   /** DROP TABLE: the definition goes now, the storage when no view can need it. */
-  dropTable(schema: string, name: string, options: { readonly ifExists?: boolean } = {}): boolean {
+  dropTable(schema: string, name: string, options: { readonly ifExists?: boolean; readonly trx?: Trx } = {}): boolean {
     let discard: (() => void) | undefined
-    const dropped = ddl(this.store, (trx) => {
+    const dropped = ddl(this.store, options.trx, (trx) => {
       const s = this.#schemaOf(schema, trx)
       const def = s === undefined ? undefined : this.#definition(s.id, name, trx)
       if (s === undefined || def === undefined) {
@@ -277,27 +357,192 @@ export class Catalog {
     return dropped
   }
 
+  /**
+   * TRUNCATE TABLE: the table made again from its own definition, in one DDL,
+   * so a crash leaves either the old table or the new one. It is empty, and
+   * its AUTO_INCREMENT starts again from 1, since the counter belongs to the
+   * clustered tree and the tree is new.
+   */
+  truncateTable(schema: string, name: string): TableDef {
+    let discard: (() => void) | undefined
+    const def = ddl(this.store, undefined, (trx) => {
+      const s = this.#schemaOf(schema, trx)
+      const old = s === undefined ? undefined : this.#definition(s.id, name, trx)
+      if (s === undefined || old === undefined) throw noSuchTable(schema, name)
+      discard = this.#drop(old, s.id, trx)
+      const spec: TableSpec = { name: old.name, engine: old.engine, columns: old.columns, indexes: old.indexes, options: old.options }
+      const resolved = resolveTable(Number(this.store.takeCounter(SYSTEM_INDEX.TABLES, 0)), schema, spec)
+      const made = this.#engine(resolved).create(resolved, trx)
+      this.#changing().insert([be32(s.id), utf8.encode(made.name), be32(made.id), encodeTableDef(made)], trx)
+      return made
+    })
+    discard?.()
+    return def
+  }
+
+  /**
+   * ALTER TABLE by copy: a table made from `spec`, every row of the old one
+   * passed through `copy` into it, its AUTO_INCREMENT counter carried over, and
+   * the old one dropped — one DDL, so a crash or a refused row (a duplicate
+   * under a new UNIQUE key, say) leaves the old table as it was.
+   */
+  rebuildTable(schema: string, name: string, spec: TableSpec, copy: (row: FieldBytes[]) => Row): TableDef {
+    let discard: (() => void) | undefined
+    let made: TableDef | undefined
+    try {
+      const def = ddl(this.store, undefined, (trx) => {
+        const s = this.#schemaOf(schema, trx)
+        const old = s === undefined ? undefined : this.#definition(s.id, name, trx)
+        if (s === undefined || old === undefined) throw noSuchTable(schema, name)
+        const resolved = resolveTable(Number(this.store.takeCounter(SYSTEM_INDEX.TABLES, 0)), schema, spec)
+        ClusteredIndex.check(this.store.pool.pageSize, layoutOf(resolved), clusteredKeyOf(resolved), secondariesOf(resolved).map((i) => keyColumnsOf(resolved, i)))
+        made = this.#engine(resolved).create(resolved, trx)
+        // Both handles live only inside this DDL, which holds the writer.
+        const hooks: TableHooks = { definedBy: 0, alive: () => {} }
+        const from = this.#engine(old).open(old, hooks)
+        const to = this.#engine(made).open(made, hooks)
+        for (const [, row] of from.scan(undefined, trx, 'current')) to.insert(copy(row), trx)
+        to.raiseAutoIncrement(from.peekAutoIncrement())
+        discard = this.#drop(old, s.id, trx)
+        this.#changing().insert([be32(s.id), utf8.encode(made.name), be32(made.id), encodeTableDef(made)], trx)
+        return made
+      })
+      discard?.()
+      return def
+    } catch (e) {
+      // A memory table's rows are not the transaction's to take back.
+      if (made !== undefined && !this.#engine(made).transactional) this.#engine(made).discard(made)
+      throw e
+    }
+  }
+
+  /**
+   * Several DDL steps as one: `change` runs in a transaction of its own,
+   * which each step takes as its `trx`, and commits when it returns — so a
+   * RENAME TABLE of many pairs, or a swap through a third name, is one
+   * change, all of it or none.
+   */
+  ddlTransaction<T>(change: (trx: Trx) => T): T {
+    return ddl(this.store, undefined, change)
+  }
+
+  /**
+   * RENAME TABLE's step: a table's row moved to a new name, or to another
+   * schema, and a view's to a new name — the trees untouched, since they are
+   * keyed by the table's id. `rewrite` gives the options the moved definition
+   * carries (constraint names that follow the table's own). The schemas are
+   * looked up first, then the table, then the name it takes (8.4.11: 1049
+   * before 1146, and 1050 for a name in use, its own included).
+   */
+  renameTable(schema: string, name: string, to: { readonly schema: string; readonly name: string }, options: { readonly trx?: Trx; readonly rewrite?: (def: TableDef) => TableDef['options'] } = {}): void {
+    checkName(to.name, wrongTableName)
+    ddl(this.store, options.trx, (trx) => {
+      const s = this.#schemaOf(schema, trx)
+      if (s === undefined) throw unknownDb(schema)
+      const t = this.#schemaOf(to.schema, trx)
+      if (t === undefined) throw unknownDb(to.schema)
+      const row = this.#row(s.id, name, trx)
+      if (row === undefined) throw noSuchTable(schema, name)
+      if (this.#row(t.id, to.name, trx) !== undefined) throw tableExists(to.name)
+      this.#changing().delete(this.#tableKey(s.id, name), trx)
+      if (isView(row)) {
+        if (t.id !== s.id) throw misuse('a view stays in its schema')
+        this.#changing().insert([be32(s.id), utf8.encode(to.name), be32(VIEW_ID), encodeViewDef({ ...decodeViewDef(row[3] as Uint8Array), name: to.name })], trx)
+        return
+      }
+      const moved: TableDef = { ...decodeTableDef(row[3] as Uint8Array), schema: to.schema, name: to.name }
+      const def = options.rewrite === undefined ? moved : { ...moved, options: options.rewrite(moved) }
+      this.#changing().insert([be32(t.id), utf8.encode(to.name), be32(def.id), encodeTableDef(def)], trx)
+    })
+  }
+
+  /** A table's options rewritten where they are, its rows untouched: the foreign keys a child keeps after its parent is renamed. */
+  setTableOptions(schema: string, name: string, tableOptions: TableDef['options'], options: { readonly trx?: Trx } = {}): void {
+    ddl(this.store, options.trx, (trx) => {
+      const s = this.#schemaOf(schema, trx)
+      const def = s === undefined ? undefined : this.#definition(s.id, name, trx)
+      if (s === undefined || def === undefined) throw noSuchTable(schema, name)
+      this.#changing().update([be32(s.id), utf8.encode(def.name), be32(def.id), encodeTableDef({ ...def, options: tableOptions })], trx)
+    })
+  }
+
   /** A table's definition, as last committed. ER_NO_SUCH_TABLE if there is none. */
-  definition(schema: string, name: string): TableDef {
-    const s = this.#schemaOf(schema, undefined)
-    const def = s === undefined ? undefined : this.#definition(s.id, name, undefined)
+  /** A table's definition, as last committed, or as `trx` sees it. */
+  definition(schema: string, name: string, trx?: Trx): TableDef {
+    const s = this.#schemaOf(schema, trx)
+    const def = s === undefined ? undefined : this.#definition(s.id, name, trx)
     if (def === undefined) throw noSuchTable(schema, name)
     return def
   }
 
-  /** Every table, or every table in one schema, in name order. */
-  tables(schema?: string): TableDef[] {
-    if (schema === undefined) return [...this.#tables.scan()].map(([, r]) => decodeTableDef(r[3] as Uint8Array))
-    return this.#definitions(this.schema(schema).id, undefined)
+  /** Every table, or every table in one schema, in name order: as last committed, or as `trx` sees them. */
+  tables(schema?: string, trx?: Trx): TableDef[] {
+    if (schema === undefined) return [...this.#tables.scan(undefined, trx, trx === undefined ? 'consistent' : 'current')].filter(([, r]) => !isView(r)).map(([, r]) => decodeTableDef(r[3] as Uint8Array))
+    const s = this.#schemaOf(schema, trx)
+    if (s === undefined) throw unknownDb(schema)
+    return this.#definitions(s.id, trx)
   }
 
-  /** A handle on a table, through the engine that stores it. */
-  table(schema: string, name: string): Table {
+  // --- views --------------------------------------------------------------------
+
+  /**
+   * CREATE VIEW: the definition as one row, checked against the namespace it
+   * shares with tables. `orReplace` replaces a view; over a table it is
+   * ER_WRONG_OBJECT, as 8.4.11 answers.
+   */
+  createView(view: ViewDef, options: { readonly orReplace?: boolean } = {}): void {
+    checkName(view.name, wrongTableName)
+    ddl(this.store, undefined, (trx) => {
+      const s = this.#schemaOf(view.schema, trx)
+      if (s === undefined) throw unknownDb(view.schema)
+      const row = this.#row(s.id, view.name, trx)
+      const value: (Uint8Array | null)[] = [be32(s.id), utf8.encode(view.name), be32(VIEW_ID), encodeViewDef(view)]
+      if (row === undefined) return void this.#changing().insert(value, trx)
+      if (options.orReplace !== true) throw tableExists(view.name)
+      if (!isView(row)) throw notAView(view.schema, view.name)
+      this.#changing().update(value, trx)
+    })
+  }
+
+  /**
+   * DROP VIEW, all or nothing: a table among the names is ER_WRONG_OBJECT, and
+   * the missing ones are one ER_BAD_TABLE_ERROR naming them all — or, with
+   * `ifExists`, returned for the caller's notes.
+   */
+  dropViews(schema: string, names: readonly string[], options: { readonly ifExists?: boolean } = {}): string[] {
+    return ddl(this.store, undefined, (trx) => {
+      const s = this.#schemaOf(schema, trx)
+      const missing: string[] = []
+      for (const name of names) {
+        const row = s === undefined ? undefined : this.#row(s.id, name, trx)
+        if (row === undefined) missing.push(name)
+        else if (!isView(row)) throw notAView(schema, name)
+      }
+      if (missing.length > 0 && options.ifExists !== true) throw unknownTable(missing.map((n) => `${schema}.${n}`).join(','))
+      if (s !== undefined) for (const name of names) if (!missing.includes(name)) this.#changing().delete(this.#tableKey(s.id, name), trx)
+      return missing
+    })
+  }
+
+  /** A view's definition, as last committed, or `undefined` when the name is not a view. */
+  view(schema: string, name: string): ViewDef | undefined {
     const s = this.#schemaOf(schema, undefined)
+    const row = s === undefined ? undefined : this.#row(s.id, name, undefined)
+    return row === undefined || !isView(row) ? undefined : decodeViewDef(row[3] as Uint8Array)
+  }
+
+  /** Every view in a schema, in name order. */
+  views(schema: string): ViewDef[] {
+    return this.#views(this.schema(schema).id, undefined)
+  }
+
+  /** A handle on a table, through the engine that stores it: as last committed, or as `trx` sees it. */
+  table(schema: string, name: string, trx?: Trx): Table {
+    const s = this.#schemaOf(schema, trx)
     if (s === undefined) throw noSuchTable(schema, name)
     const key = this.#tableKey(s.id, name)
     const value = this.#tables.tree.get(key)
-    const def = this.#definition(s.id, name, undefined)
+    const def = this.#definition(s.id, name, trx)
     if (value === undefined || def === undefined) throw noSuchTable(schema, name)
     try {
       return this.#open(def, key, value, schema, name)
@@ -309,14 +554,25 @@ export class Catalog {
     }
   }
 
+  /** `_myjs_tables`, for a write to it. */
+  #changing(): ClusteredIndex {
+    this.#generation++
+    return this.#tables
+  }
+
   #open(def: TableDef, key: Uint8Array, value: Uint8Array, schema: string, name: string): Table {
+    // The last transaction that found the table alive, as of which catalog write
+    // and which of its own rollbacks: a bulk write asks once, not once a row.
+    let seen: { trx: Trx; generation: number; rollbacks: number } | undefined
     return this.#engine(def).open(def, {
       definedBy: versionOf(value).trxId,
       alive: (trx) => {
+        if (trx !== undefined && seen !== undefined && seen.trx === trx && seen.generation === this.#generation && seen.rollbacks === trx.rollbacks) return
         // The id field only: the definition may be off-page, and a write needs none of it.
         const record = this.#tables.read(trx, trx === undefined ? 'consistent' : 'current', (view) => this.#tables.recordAt(key, view))
         const fields = record === undefined ? undefined : decodeRecord(SYSTEM.TABLES.layout, record)
         if (fields === undefined || readBe32(fields[2] as Uint8Array) !== def.id) throw noSuchTable(schema, name)
+        if (trx !== undefined) seen = { trx, generation: this.#generation, rollbacks: trx.rollbacks }
       },
     })
   }
@@ -332,7 +588,9 @@ export class Catalog {
     for (const k of ['CATALOG', 'SCHEMAS', 'TABLES'] as const) layouts.set(SYSTEM_INDEX[k], SYSTEM[k].layout)
     for (const [, value] of this.#tables.tree.entries()) {
       const record = value.subarray(CLUSTERED_HEADER)
-      const def = decodeTableDef(this.#tables.rowOf(record)[3] as Uint8Array)
+      const row = this.#tables.rowOf(record)
+      if (isView(row)) continue
+      const def = decodeTableDef(row[3] as Uint8Array)
       if (def.engine !== 'native') continue
       const clustered = def.clustered === null ? def.rowIdIndexId : def.indexes.find((i) => i.name === def.clustered)?.indexId
       if (clustered !== undefined) layouts.set(clustered, layoutOf(def))
@@ -360,7 +618,7 @@ export class Catalog {
    */
   #drop(def: TableDef, schemaId: number, trx: Trx): () => void {
     const engine = this.#engine(def)
-    this.#tables.delete(this.#tableKey(schemaId, def.name), trx)
+    this.#changing().delete(this.#tableKey(schemaId, def.name), trx)
     engine.drop(def, trx)
     return () => engine.discard(def)
   }
@@ -380,16 +638,33 @@ export class Catalog {
     return r === undefined ? undefined : schemaDef(r[2])
   }
 
-  #definition(schemaId: number, name: string, trx: Trx | undefined): TableDef | undefined {
+  /** A table's or a view's row. */
+  #row(schemaId: number, name: string, trx: Trx | undefined): (Uint8Array | null)[] | undefined {
     if (utf8.encode(name).length > NAME_BYTES) return undefined
-    const r = this.#tables.get(this.#tableKey(schemaId, name), trx, trx === undefined ? 'consistent' : 'current')
-    return r === undefined ? undefined : decodeTableDef(r[3] as Uint8Array)
+    return this.#tables.get(this.#tableKey(schemaId, name), trx, trx === undefined ? 'consistent' : 'current')
+  }
+
+  #definition(schemaId: number, name: string, trx: Trx | undefined): TableDef | undefined {
+    const r = this.#row(schemaId, name, trx)
+    return r === undefined || isView(r) ? undefined : decodeTableDef(r[3] as Uint8Array)
+  }
+
+  #rows(schemaId: number, trx: Trx | undefined): (Uint8Array | null)[][] {
+    const from = be32(schemaId)
+    const range = { from, to: be32(schemaId + 1) }
+    return [...this.#tables.scan(range, trx, trx === undefined ? 'consistent' : 'current')].map(([, r]) => r)
   }
 
   #definitions(schemaId: number, trx: Trx | undefined): TableDef[] {
-    const from = be32(schemaId)
-    const range = { from, to: be32(schemaId + 1) }
-    return [...this.#tables.scan(range, trx, trx === undefined ? 'consistent' : 'current')].map(([, r]) => decodeTableDef(r[3] as Uint8Array))
+    return this.#rows(schemaId, trx)
+      .filter((r) => !isView(r))
+      .map((r) => decodeTableDef(r[3] as Uint8Array))
+  }
+
+  #views(schemaId: number, trx: Trx | undefined): ViewDef[] {
+    return this.#rows(schemaId, trx)
+      .filter(isView)
+      .map((r) => decodeViewDef(r[3] as Uint8Array))
   }
 
   #version(): number {
@@ -429,7 +704,13 @@ function schemaDef(bytes: Uint8Array | null | undefined): SchemaDef {
  * as the writer slot is taken; the executor commits the session's transaction
  * first, as MySQL's implicit commit does.
  */
-function ddl<T>(store: Store, change: (trx: Trx) => T): T {
+/**
+ * One DDL change in a transaction of its own, or in `within`, the caller's:
+ * a session's temporary table is made and dropped in the session's
+ * transaction, since the one writer is that transaction's.
+ */
+function ddl<T>(store: Store, within: Trx | undefined, change: (trx: Trx) => T): T {
+  if (within !== undefined) return change(within)
   if (store.transactions.writer !== undefined) throw writerBusy()
   const trx = store.begin('READ COMMITTED')
   let out: T

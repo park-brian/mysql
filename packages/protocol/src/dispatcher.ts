@@ -93,12 +93,14 @@ export async function dispatch(payload: Uint8Array, ctx: DispatchContext): Promi
     // A no-response command stays silent even when it fails. The error
     // surfaces on the next command that does answer.
     if (NO_RESPONSE_COMMANDS.has(command)) return NOTHING
-    if (err instanceof SqlError) {
-      return errPackets(ctx, err.code, err.sqlMessage)
-    }
     if (err instanceof ProtocolError || err instanceof MyjsError) {
-      const symbol = err.errno === undefined ? 'ER_MALFORMED_PACKET' : err.code
-      return errPackets(ctx, symbol, err.message)
+      if (err.errno === undefined) return errPackets(ctx, 'ER_MALFORMED_PACKET', err.message)
+      // The error's own number: its code need not be a MySQL symbol (a
+      // CharsetError's `ER_COLLATION_NOT_IMPLEMENTED` is ours, and 1273).
+      const w = new Writer(64)
+      const message = err instanceof SqlError ? err.sqlMessage : err.message
+      writeErr(w, ctx.capabilities, { errno: err.errno, sqlState: err.sqlState ?? sqlStateOf(err.errno), message })
+      return { packets: [w.toBytes()] }
     }
     throw err
   }

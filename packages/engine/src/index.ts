@@ -42,6 +42,6 @@ export type { DroppedTree, EntryUndo, Position, RollPtr, TreeUndo, UndoLogState,
 export { NAME_BYTES, NAME_CHARS, MAX_INDEXES, MAX_KEY_PARTS, ROW_ID_BYTES, checkName, clusteredIndexOf, clusteredKeyOf, collationsOf, columnIndex, decodeTableDef, encodeTableDef, indexNamed, keyColumnsOf, layoutOf, resolveTable, secondariesOf } from './schema.ts'
 export type { ColumnDef, EngineName, IndexDef, IndexPartDef, TableDef, TableSpec } from './schema.ts'
 export { CATALOG_VERSION, Catalog, SYSTEM_INDEX } from './catalog.ts'
-export type { CatalogOptions, Migration, MigrationContext, SchemaDef } from './catalog.ts'
+export type { CatalogOptions, Migration, MigrationContext, SchemaDef, ViewDef } from './catalog.ts'
 export { MemoryEngine, NativeEngine } from './table.ts'
 export type { KeyBound, KeyRange, RowId, StorageEngine, Table, TableHooks, TableStats } from './table.ts'

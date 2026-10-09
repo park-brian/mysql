@@ -79,11 +79,13 @@ export function parseCreateIndex(c: Cursor, options: DdlOptions): AlterTableNode
   const keyAt = c.peek().start
   c.expectWord('INDEX')
   const name = c.expectIdentifier()
+  const typed = type !== KEY.FULLTEXT && type !== KEY.SPATIAL
+  if (!typed && c.atWord('USING')) c.fail()
   const before = indexType(c)
   c.expectWord('ON')
   const table = c.expectTableName()
   const columns = indexColumns(c, options)
-  const rest = indexOptions(c)
+  const rest = indexOptions(c, typed)
   algorithmAndLock(c)
   const using = before ?? rest.using
   const key = {
@@ -92,6 +94,8 @@ export function parseCreateIndex(c: Cursor, options: DdlOptions): AlterTableNode
     columns,
     ...opt('using', using),
     ...opt('comment', rest.comment),
+    ...opt('parser', rest.parser),
+    ...(rest.invisible === true ? { invisible: true as const } : {}),
     at: keyAt,
   }
   return { kind: STATEMENT.ALTER_TABLE, table, actions: [{ type: 'addKey', key }], options: {}, at }
@@ -159,7 +163,10 @@ function alterAction(c: Cursor, options: DdlOptions, actions: AlterAction[]): bo
     c.takeWord('COLUMN')
     const column = c.expectIdentifier()
     if (c.takeWords('DROP', 'DEFAULT')) actions.push({ type: 'dropDefault', column })
-    else if (c.takeWords('SET', 'DEFAULT')) actions.push({ type: 'setDefault', column, value: defaultExpression(c, options, false) })
+    else if (c.takeWords('SET', 'DEFAULT')) {
+      const expression = c.atOp('(')
+      actions.push({ type: 'setDefault', column, value: defaultExpression(c, options, false), ...(expression ? { expression: true } : {}) })
+    }
     else {
       c.expectWord('SET')
       actions.push({ type: 'columnVisibility', column, visible: visibility(c) })

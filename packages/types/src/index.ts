@@ -71,6 +71,25 @@ export { isMysqlDateTime, isMysqlTime, renderMysqlDateTime, renderMysqlTime } fr
 export type { MysqlDateTime, MysqlTime, SqlValue } from '@myjs/bytes'
 export { JSON_TYPE, compareJsonKeys, decodeJson, encodeJson } from './json.ts'
 export type { JsonValue } from './json.ts'
+// M5.21 — JSON as a value: the lossless model, its text, its order and its binary form.
+export {
+  JSON_FALSE,
+  JSON_NULL,
+  JSON_TRUE,
+  JsonSyntaxError,
+  compareJson,
+  decodeJsonDoc,
+  encodeJsonDoc,
+  jsonInteger,
+  jsonKey,
+  jsonObject,
+  orderJson,
+  parseJson,
+  quoteJsonString,
+  renderJson,
+  toJsonDoc,
+} from './json-doc.ts'
+export type { JsonDoc } from './json-doc.ts'
 export { declaredKeyWidth, encodeKey, encodeKeyPart, keyPartLength } from './keys.ts'
 export type { KeyPart, KeyPartKind } from './keys.ts'
 export { keyPartOf, storageWidth } from './columns.ts'
@@ -84,12 +103,16 @@ export {
   MIN_SIGNED,
   bool,
   bytes as bytesValue,
+  json as jsonValue,
   decimal as decimalValue,
   doubleToDecimal,
   double as doubleValue,
   int as intValue,
   isNumeric,
   isText,
+  hexNumber,
+  plainValue,
+  withoutHex,
   numericPrefix,
   parseDateTime,
   parseDecimal,
@@ -98,22 +121,34 @@ export {
   renderDateTime,
   renderDecimal,
   renderDouble,
+  renderFloat,
   renderTime,
   rescale,
   string as stringValue,
+  textOf,
+  timeOrdinal,
   toDateTime,
   toDecimal,
   toDouble,
   toInteger,
+  valInt,
   toText,
   toTextBytes,
   toTime,
   truth,
   validDate,
 } from './sql-value.ts'
-export type { BytesValue, DateTimeValue, DecimalValue, DoubleValue, IntValue, StringValue, TemporalType, TimeValue, Value } from './sql-value.ts'
-export { aggregateCollation, commonCollation, compareDecimals, compareValues, nullSafeEqual, orderValues } from './compare.ts'
-export { DIV_PRECISION_INCREMENT, add, bitNot, bitwise, divide, intDivide, modulo, negate, not } from './arith.ts'
-export { decodeField, encodeField, integerRange } from './encode.ts'
-export type { FieldColumn, StoreContext } from './encode.ts'
-export { columnCannotBeNull, columnOutOfRange, dataTooLong, valueOutOfRange, wrongTemporalValue, wrongValueForColumn } from './errors.ts'
+export type { BytesValue, DateTimeValue, DecimalValue, DoubleValue, IntValue, JsonDocValue, StringValue, TemporalType, TimeValue, Value } from './sql-value.ts'
+export { aggregateCollation, commonCollation, compareDecimals, compareValues, nullSafeEqual, orderValues, sortValues } from './compare.ts'
+export { SUM_PRECISION_INCREMENT, avgAccumulator, avgPrecision, bitAccumulator, extremeAccumulator, sumAccumulator, sumPrecision, varianceAccumulator } from './aggregate.ts'
+export type { Accumulator } from './aggregate.ts'
+export { DIV_PRECISION_INCREMENT, add, type ExprLabel, bitNot, bitwise, divide, intDivide, modulo, negate, not } from './arith.ts'
+export { decodeField, encodeField, integerRange, warn } from './encode.ts'
+export type { Condition, FieldColumn, StoreContext } from './encode.ts'
+export { columnCannotBeNull, columnOutOfRange, dataTooLong, invalidJsonArgument, invalidJsonCharset, invalidJsonText, valueOutOfRange, wrongTemporalValue, wrongValueForColumn } from './errors.ts'
+export { addInterval, dateOfDayNumber, dayNumber, intervalFsp, intervalOf, isDateUnit, isIntervalUnit, isTimeUnit, type Interval } from './interval.ts'
+export { DAY_NAMES, MAX_DAY_NUMBER, MONTH_NAMES, daysInMonth, daysInYear, fullYear, monthToPeriod, periodToMonth, validPeriod, week, weekBehaviour, weekday } from './calendar.ts'
+export { dateOf, dateStructOf, numberToDateTime, timeDiff, timeOf, timeStructOf, type Converted, type DateFlags, type TimeStruct } from './temporal-args.ts'
+export { extractDateTime, formatDateTime, formatLength, formatShape, type Broken } from './date-format.ts'
+export { scanDateTime, scanTime } from './temporal-scan.ts'
+export { crc32, md5, sha1, sha256, sha512 } from './digest.ts'

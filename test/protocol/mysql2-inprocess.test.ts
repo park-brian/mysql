@@ -204,3 +204,90 @@ test('a custom executor replaces the stub without the protocol layer noticing', 
     await conn.end()
   }
 })
+
+test('a handshake naming a database that does not exist is refused with 1049, as 8.4.11 refuses it', async () => {
+  // Prisma connects with its database in the URL and creates the database
+  // only when the connection says it is unknown; accepting it left every
+  // Prisma test with no schema to push into.
+  const db = await MySQL.open(':memory:')
+  await assert.rejects(connect(db, { database: 'nope' }), { errno: 1049, sqlState: '42000', message: "Unknown database 'nope'" })
+  const conn = await connect(db, { database: 'INFORMATION_SCHEMA' })
+  try {
+    const [rows] = await conn.query('SELECT DATABASE() AS d')
+    assert.deepEqual(rows, [{ d: 'information_schema' }], 'the system schema is named in lower case, whatever the client wrote')
+  } finally {
+    await conn.end()
+  }
+})
+
+test('a fresh database has the system schemas 8.4.11 has, and `mysql` cannot be made or dropped (3552)', async () => {
+  // Prisma's schema engine connects to `mysql` to CREATE DATABASE its own.
+  const db = await MySQL.open(':memory:')
+  const conn = await connect(db, { database: 'mysql' })
+  try {
+    const [rows] = await conn.query('SHOW DATABASES')
+    assert.deepEqual(rows, [{ Database: 'information_schema' }, { Database: 'mysql' }, { Database: 'performance_schema' }, { Database: 'sys' }])
+    for (const sql of ['CREATE DATABASE mysql', 'DROP DATABASE mysql']) await assert.rejects(conn.query(sql), { errno: 3552, message: "Access to system schema 'mysql' is rejected." })
+    await conn.query('CREATE DATABASE IF NOT EXISTS mysql')
+  } finally {
+    await conn.end()
+  }
+})
+
+test('an empty statement is 1065; one of comments only is an OK, and not preparable (1295), as 8.4.11 answers', async () => {
+  // Prisma's `$executeRaw(Prisma.empty)` expects 1065 "Query was empty".
+  // The grammar's own rule: END_OF_INPUT is ER_EMPTY_QUERY unless the text
+  // held a comment, which makes it the empty statement.
+  const db = await MySQL.open(':memory:')
+  const conn = await connect(db)
+  try {
+    const empty = { errno: 1065, sqlState: '42000', message: 'Query was empty' }
+    for (const sql of ['', '   ', ';']) {
+      await assert.rejects(conn.query(sql), empty)
+      await assert.rejects(conn.prepare(sql), empty)
+    }
+    for (const sql of ['/* x */', '-- c\n']) {
+      const [ok] = await conn.query(sql)
+      assert.equal((ok as mysql.ResultSetHeader).affectedRows, 0)
+      await assert.rejects(conn.prepare(sql), { errno: 1295, sqlState: 'HY000', message: 'This command is not supported in the prepared statement protocol yet' })
+    }
+  } finally {
+    await conn.end()
+  }
+})
+
+test('a TIME column compared with a DATETIME constant compares as TIME; two constants compare as DATETIME (8.4.11)', async () => {
+  // Prisma binds a TIME as a DATETIME on 1970-01-01. The server converts a
+  // constant compared with a TIME column to the column's type
+  // (`convert_constant_item`), so any date matches; constants alone meet as
+  // DATETIME, the TIME on today's date.
+  const db = await MySQL.open(':memory:')
+  const conn = await connect(db, { timezone: 'Z' })
+  try {
+    await conn.query('CREATE DATABASE app')
+    await conn.query('USE app')
+    await conn.query('CREATE TABLE t (id INT, tm TIME, dt DATETIME)')
+    await conn.query("INSERT INTO t VALUES (1, '14:37:36', '1970-01-01 14:37:36')")
+    const rows = async (sql: string, params?: Date[]) => (await (params === undefined ? conn.query({ sql, rowsAsArray: true }) : conn.execute({ sql, rowsAsArray: true }, params)))[0]
+    assert.deepEqual(await rows("SELECT TIME'14:37:36' = TIMESTAMP'1970-01-01 14:37:36', TIME'14:37:36' = CAST(CONCAT(CURDATE(), ' 14:37:36') AS DATETIME)"), [[0, 1]])
+    assert.deepEqual(await rows("SELECT id FROM t WHERE tm = TIMESTAMP'1970-01-01 14:37:36'"), [[1]])
+    assert.deepEqual(await rows("SELECT id FROM t WHERE tm = '1970-01-01 14:37:36'"), [[1]])
+    assert.deepEqual(await rows("SELECT id FROM t WHERE dt = TIME'14:37:36'"), [])
+    assert.deepEqual(await rows('SELECT id FROM t WHERE tm = ?', [new Date(Date.UTC(1970, 0, 1, 14, 37, 36))]), [[1]])
+    assert.deepEqual(await rows('SELECT id FROM t WHERE tm = ?', [new Date(Date.UTC(2020, 5, 1, 14, 37, 36))]), [[1]])
+  } finally {
+    await conn.end()
+  }
+})
+
+test('a `?` in a plain query is the grammar error at it, 1064, and a prepared one is a parameter (8.4.11, found by review)', async () => {
+  const db = await MySQL.open(':memory:')
+  const conn = await connect(db)
+  try {
+    await assert.rejects(conn.query('SELECT 1 + ?, 2'), { errno: 1064, message: "You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near '?, 2' at line 1" })
+    assert.deepEqual((await conn.query({ sql: "SELECT '?', 3", rowsAsArray: true }))[0], [['?', 3]])
+    assert.deepEqual((await conn.execute({ sql: 'SELECT ? + 1', rowsAsArray: true }, [2]))[0], [[3]])
+  } finally {
+    await conn.end()
+  }
+})

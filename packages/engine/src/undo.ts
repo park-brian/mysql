@@ -114,8 +114,12 @@ export const isTreeUndo = (r: UndoRecord): r is TreeUndo => 'trees' in r
 
 const corruptUndo = (what: string): EngineError => new EngineError('ENGINE_CORRUPT_UNDO', what)
 
+/** The one writer undo records are encoded in, reset each time (see `encodeGroup`). */
+const undoWriter = new Writer(1024)
+
 export function encodeUndo(r: UndoRecord): Uint8Array {
-  const w = new Writer()
+  const w = undoWriter
+  w.reset()
   if (isTreeUndo(r)) {
     w.u8(TREES)
     for (const list of [r.trees.onRollback, r.trees.onPurge]) {

@@ -27,6 +27,8 @@ export type RowValue = SqlValue | MysqlDateTime | MysqlTime
 export interface ResultSet {
   readonly columns: readonly ColumnDefinition[]
   readonly rows: readonly (readonly RowValue[])[]
+  /** The statement's warning count, which the terminator carries. */
+  readonly warnings?: number
 }
 
 export interface OkResult {
@@ -94,7 +96,7 @@ export function textResultsetPackets(
   }
   for (const row of result.rows) packets.push(textRowPacket(result.columns, row))
   const w = new Writer(16)
-  writeTerminator(w, caps, { statusFlags: statusFor(options), warnings: options.warnings ?? 0 })
+  writeTerminator(w, caps, { statusFlags: statusFor(options), warnings: result.warnings ?? options.warnings ?? 0 })
   packets.push(w.toBytes())
   return packets
 }
@@ -222,7 +224,7 @@ export function binaryResultsetPackets(
   }
   for (const row of result.rows) packets.push(binaryRowPacket(result.columns, row))
   const w = new Writer(16)
-  writeTerminator(w, caps, { statusFlags: statusFor(options), warnings: options.warnings ?? 0 })
+  writeTerminator(w, caps, { statusFlags: statusFor(options), warnings: result.warnings ?? options.warnings ?? 0 })
   packets.push(w.toBytes())
   return packets
 }
@@ -285,7 +287,9 @@ export function preparePackets(
 
   // Parameter definitions are placeholders: MySQL reports every `?` as
   // VAR_STRING with charset 63, and clients do not expect inferred types.
-  for (let i = 0; i < paramCount; i++) packets.push(columnDefinitionPacket(placeholderParameter()))
+  // All alike, so one packet stands for each.
+  const placeholder = paramCount > 0 ? columnDefinitionPacket(placeholderParameter()) : undefined
+  for (let i = 0; i < paramCount; i++) packets.push(placeholder as Uint8Array)
   if (paramCount > 0 && !hasCap(caps, CLIENT.DEPRECATE_EOF)) {
     const w = new Writer(8)
     writeTerminator(w, caps)

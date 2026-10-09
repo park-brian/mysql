@@ -159,7 +159,9 @@ class Deparser {
         body = this.string(e.value as string)
         break
       case LITERAL.HEX:
-        body = `X'${hex(e.value as Uint8Array)}'`
+        // As MySQL prints one, in a message or a view: 0x41. No bytes at all
+        // has no such form.
+        body = (e.value as Uint8Array).length === 0 ? "X''" : `0x${hex(e.value as Uint8Array).toLowerCase()}`
         break
       case LITERAL.BIT:
         body = `b'${(e.value as bigint).toString(2)}'`
@@ -1015,7 +1017,7 @@ class Deparser {
       case 'drop':
         return `DROP ${a.what}${a.name === undefined ? '' : ' ' + quoteName(a.name)}`
       case 'setDefault':
-        return `ALTER COLUMN ${quoteName(a.column)} SET DEFAULT (${this.expr(a.value)})`
+        return `ALTER COLUMN ${quoteName(a.column)} SET DEFAULT ${a.expression === true ? `(${this.expr(a.value)})` : this.defaultValue(a.value)}`
       case 'dropDefault':
         return `ALTER COLUMN ${quoteName(a.column)} DROP DEFAULT`
       case 'columnVisibility':
@@ -1063,18 +1065,23 @@ class Deparser {
 
   dataType(t: DataType): string {
     if (t.serial === true) return 'SERIAL'
-    const out = [t.name]
+    if (t.boolean === true) return ['BOOL', ...(t.unsigned === true ? ['UNSIGNED'] : []), ...(t.zerofill === true ? ['ZEROFILL'] : [])].join(' ')
+    // `NCHAR` and its like name their charset: written back by the name, it stays national (3720).
+    const out = [t.national === true ? `NATIONAL ${t.name}` : t.name]
     if (t.values !== undefined) {
       out[0] += `(${t.values.map((v) => (typeof v === 'string' ? this.string(v) : `X'${hex(v)}'`)).join(', ')})`
     } else if (t.length !== undefined) {
       out[0] += t.scale === undefined ? `(${t.length})` : `(${t.length}, ${t.scale})`
+    } else if (t.precision !== undefined) {
+      // FLOAT(p) past 24 bits was read as a DOUBLE; it is written back as written.
+      out[0] = `${t.name === 'DOUBLE' && t.precision > 24 ? 'FLOAT' : t.name}(${t.precision})`
     }
     // ZEROFILL implies UNSIGNED, and the parser records both; writing both back
     // is harmless and keeps this a field-by-field transcription.
     if (t.unsigned === true) out.push('UNSIGNED')
     if (t.unsigned === false) out.push('SIGNED')
     if (t.zerofill === true) out.push('ZEROFILL')
-    if (t.charset !== undefined) out.push(`CHARACTER SET ${this.charsetName(t.charset)}`)
+    if (t.charset !== undefined && t.national !== true) out.push(`CHARACTER SET ${this.charsetName(t.charset)}`)
     if (t.collation !== undefined) out.push(`COLLATE ${this.charsetName(t.collation)}`)
     if (t.binary === true) out.push('BINARY')
     return out.join(' ')
@@ -1091,7 +1098,7 @@ class Deparser {
     // after `SERIAL` is legal and changes nothing.
     if (c.notNull === true) out.push('NOT NULL')
     if (c.nullable === true) out.push('NULL')
-    if (c.default !== undefined) out.push(`DEFAULT ${this.defaultValue(c.default)}`)
+    if (c.default !== undefined) out.push(`DEFAULT ${c.defaultExpression === true ? `(${this.expr(c.default)})` : this.defaultValue(c.default)}`)
     if (c.onUpdate !== undefined) out.push(`ON UPDATE ${this.defaultValue(c.onUpdate)}`)
     if (c.autoIncrement === true) out.push('AUTO_INCREMENT')
     if (c.unique === true) out.push('UNIQUE KEY')
@@ -1101,7 +1108,7 @@ class Deparser {
     if (c.invisible === true) out.push('INVISIBLE')
     if (c.invisible === false) out.push('VISIBLE')
     if (c.srid !== undefined) out.push(`SRID ${c.srid}`)
-    if (c.check !== undefined) out.push(`CHECK (${this.expr(c.check)})`)
+    if (c.check !== undefined) out.push(`${c.check.name === undefined ? '' : `CONSTRAINT ${quoteName(c.check.name)} `}CHECK (${this.expr(c.check.expr)})${c.check.enforced ? '' : ' NOT ENFORCED'}`)
     return out.join(' ')
   }
 
@@ -1112,7 +1119,8 @@ class Deparser {
    */
   defaultValue(e: Expression): string {
     if (e.kind === NODE.LITERAL) return this.literal(e)
-    if (e.kind === NODE.UNARY && (e.op === '-' || e.op === '+') && e.operand.kind === NODE.LITERAL) return this.expr(e)
+    // A signed number stays bare: parenthesised, it would be an expression default.
+    if (e.kind === NODE.UNARY && (e.op === '-' || e.op === '+') && e.operand.kind === NODE.LITERAL) return `${e.op}${this.literal(e.operand)}`
     if (e.kind === NODE.CALL && DEFAULT_FUNCTIONS.has(e.name.toUpperCase())) return this.expr(e)
     return `(${this.expr(e)})`
   }
@@ -1124,7 +1132,7 @@ class Deparser {
           col.expr !== undefined
             ? `(${this.expr(col.expr)})`
             : `${quoteName(col.name as string)}${col.length === undefined ? '' : `(${col.length})`}`
-        return col.desc === true ? `${body} DESC` : body
+        return col.desc === true ? `${body} DESC` : col.asc === true ? `${body} ASC` : body
       })
       .join(', ')})`
   }
@@ -1138,6 +1146,8 @@ class Deparser {
     if (k.references !== undefined) out.push(this.references(k.references))
     if (k.using !== undefined) out.push(`USING ${k.using}`)
     if (k.comment !== undefined) out.push(`COMMENT ${this.string(k.comment)}`)
+    if (k.parser !== undefined) out.push(`WITH PARSER ${quoteName(k.parser)}`)
+    if (k.invisible === true) out.push('INVISIBLE')
     return out.join(' ')
   }
 

@@ -1,7 +1,7 @@
 // M1.16, M1.17, M1.18 — the COM_* dispatcher, and M1.23's statement state.
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { Writer } from '@myjs/bytes'
+import { MyjsError, Writer } from '@myjs/bytes'
 import {
   CLIENT,
   COM,
@@ -121,6 +121,20 @@ test('an unknown command is ER_UNKNOWN_COM_ERROR / 08S01', async () => {
 test('an empty command packet is a typed error, not a crash', async () => {
   const { packets } = await dispatch(new Uint8Array(0), context())
   assert.equal(parseErr(packets[0] as Uint8Array, CAPS).errno, 1835)
+})
+
+test('a typed error with an errno of its own is sent with that errno, whatever its code', async () => {
+  // A CharsetError's code (`ER_COLLATION_NOT_IMPLEMENTED`) is ours, not a
+  // MySQL symbol; looking it up was itself an error, and the client got 1835.
+  const ctx = context()
+  ctx.executor.query = async () => {
+    throw new MyjsError('ER_COLLATION_NOT_IMPLEMENTED', 'collation utf8mb4_unicode_ci (224) is not implemented', { errno: 1273, sqlState: 'HY000' })
+  }
+  const { packets } = await dispatch(comQuery('SELECT 1'), ctx)
+  const err = parseErr(packets[0] as Uint8Array, CAPS)
+  assert.equal(err.errno, 1273)
+  assert.equal(err.sqlState, 'HY000')
+  assert.match(err.message, /utf8mb4_unicode_ci/)
 })
 
 test('the commands a real MySQL refuses are refused', async () => {

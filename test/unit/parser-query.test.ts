@@ -290,3 +290,18 @@ test('M3.3 review: forms a real 8.4 refuses, and so do we', () => {
   // …and the neighbouring forms it accepts still parse.
   for (const sql of ['SELECT *, a FROM t', 'SELECT t.a, db.t.* FROM t', "SELECT @a := @b := 1, @'q' := 2"]) parseStatement(sql)
 })
+
+test('E-20: a parse error quotes the rest of the statement from the token it failed at, capped at 80 characters', () => {
+  const message = (sql: string): string => {
+    try {
+      parseStatement(sql)
+    } catch (e) {
+      return (e as Error).message
+    }
+    return ''
+  }
+  // Both read off 8.4.11.
+  assert.match(message('SELECT 1 FROM WHERE x = 1'), /near 'WHERE x = 1' at line 1$/)
+  assert.match(message('SELECT * FROM t WHERE (1 + ) AND 2 = 2'), /near '\) AND 2 = 2' at line 1$/)
+  assert.match(message(`SELECT 1 FROM WHERE ${'x'.repeat(100)}`), new RegExp(`near 'WHERE ${'x'.repeat(74)}' at line 1$`))
+})

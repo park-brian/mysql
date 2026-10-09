@@ -31,5 +31,5 @@ import { isUcaCollation, loadUcaTables, ucaTablesLoaded } from './uca.ts'
  * tries to *use* it, where the error can name what was being ordered.
  */
 export async function preloadCollation(id: number): Promise<void> {
-  if (isUcaCollation(id) && !ucaTablesLoaded()) await loadUcaTables()
+  if (isUcaCollation(id) && !ucaTablesLoaded(id)) await loadUcaTables(id)
 }

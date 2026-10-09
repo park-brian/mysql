@@ -63,6 +63,10 @@ export interface IndexDef {
   readonly parts: readonly IndexPartDef[]
   /** The tree, for a native table. */
   readonly indexId?: number
+  /** `COMMENT '…'`, as SHOW CREATE TABLE and STATISTICS report it. */
+  readonly comment?: string
+  /** `INVISIBLE`: kept and enforced, never chosen by the planner. */
+  readonly invisible?: true
 }
 
 /** What CREATE TABLE asks for. */
@@ -347,6 +351,8 @@ function indexDef(v: unknown): IndexDef {
       }
     }),
     ...optional(i, 'indexId', (x) => uint(x, 'indexId')),
+    ...optional(i, 'comment', (x) => str(x, 'index comment')),
+    ...(i['invisible'] !== undefined && bool(i['invisible'], 'invisible') ? { invisible: true as const } : {}),
   }
 }
 

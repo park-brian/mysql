@@ -45,15 +45,21 @@ export const CLUSTERED_HEADER = 14
 export const SECONDARY_HEADER = 7
 const MARKED = 1
 
-const view = (b: Uint8Array): DataView => new DataView(b.buffer, b.byteOffset, b.byteLength)
-
 function writeU48(out: Uint8Array, at: number, n: number): void {
-  view(out).setUint16(at, Math.floor(n / 2 ** 32))
-  view(out).setUint32(at + 2, n >>> 0)
+  const high = Math.floor(n / 2 ** 32)
+  const low = n >>> 0
+  out[at] = high >>> 8
+  out[at + 1] = high & 0xff
+  out[at + 2] = low >>> 24
+  out[at + 3] = (low >>> 16) & 0xff
+  out[at + 4] = (low >>> 8) & 0xff
+  out[at + 5] = low & 0xff
 }
 
+const u32 = (b: Uint8Array, at: number): number => (((b[at] as number) << 24) | ((b[at + 1] as number) << 16) | ((b[at + 2] as number) << 8) | (b[at + 3] as number)) >>> 0
+
 function readU48(b: Uint8Array, at: number): number {
-  return view(b).getUint16(at) * 2 ** 32 + view(b).getUint32(at + 2)
+  return (((b[at] as number) << 8) | (b[at + 1] as number)) * 2 ** 32 + u32(b, at + 2)
 }
 
 /** A value's header — the same first seven bytes on a clustered value and a secondary entry. */
@@ -150,6 +156,9 @@ const ACTIVE = 1
 const COMMITTED = 2
 /** Committed transactions purge looks at after each commit. */
 const PURGE_BATCH = 4
+/** Undo records one purge mini-transaction takes, at most, and the pages it may hold before it stops taking more. */
+const PURGE_STEP_RECORDS = 64
+const PURGE_STEP_PAGES = 8
 
 export interface TrxStats {
   /** Committed transactions whose undo purge has not yet freed. */
@@ -229,7 +238,7 @@ export class TrxSys {
     const active: { id: number; first: number }[] = []
     for (const [key, value] of this.host.trxTree.entries()) {
       const id = readU48(key, 0)
-      const first = view(value).getUint32(1)
+      const first = u32(value, 1)
       if (value[0] === ACTIVE) active.push({ id, first })
       else this.#history.push({ id, first })
       this.nextTrxId = Math.max(this.nextTrxId, id + 1)
@@ -275,34 +284,48 @@ export class TrxSys {
     const log = t.log ?? UndoLog.open(pool, t.first, this.host.pageCount)
     const pages = this.undoPages
     while (log.records.length > 0) {
-      const i = log.records.length - 1
+      // Several records to a mini-transaction, while it holds few pages: one
+      // per record was a page image copied and diffed for every row a bulk
+      // DELETE removed. Its pages stay pinned until it ends, hence the bound.
       this.#step(log, () => {
-        const r = log.read(pool, log.records[i] as { page: number; offset: number })
-        if (isTreeUndo(r)) {
-          for (const dropped of r.trees.onPurge) this.host.drop(dropped)
-          log.truncate(pages, i)
-          return
+        for (let n = 0; n < PURGE_STEP_RECORDS && log.records.length > 0 && journal.touched < PURGE_STEP_PAGES; n++) {
+          // A dropped tree's pages are freed by the record that drops it: it ends the step.
+          if (this.#purgeRecord(t, log)) break
         }
-        const tree = this.host.tree(r.indexId)
-        if (r.purgeRemoves) {
-          const current = tree.get(r.key)
-          // Removed only if the mark is still this transaction's: a later one
-          // may have re-inserted the entry, or marked it again itself.
-          if (current !== undefined) {
-            const v = versionOf(current)
-            if (v.marked && v.trxId === t.id) tree.delete(r.key)
-          }
-        }
-        // Only an undo record's own list frees a chain — never the refs found in
-        // the entry removed above — so each chain is freed exactly once.
-        for (const ref of r.freeOnPurge) freeChain(tree.overflowPages(), ref)
-        log.truncate(pages, i)
       })
     }
     journal.atomically(() => {
       this.host.trxTree.delete(be48(t.id))
       log.free(pages)
     })
+  }
+
+  /** Purge a log's last record, inside the caller's mini-transaction. `true` when it dropped trees. */
+  #purgeRecord(t: { id: number }, log: UndoLog): boolean {
+    const { pool } = this.host
+    const pages = this.undoPages
+    const i = log.records.length - 1
+    const r = log.read(pool, log.records[i] as { page: number; offset: number })
+    if (isTreeUndo(r)) {
+      for (const dropped of r.trees.onPurge) this.host.drop(dropped)
+      log.truncate(pages, i)
+      return true
+    }
+    const tree = this.host.tree(r.indexId)
+    if (r.purgeRemoves) {
+      const current = tree.get(r.key)
+      // Removed only if the mark is still this transaction's: a later one
+      // may have re-inserted the entry, or marked it again itself.
+      if (current !== undefined) {
+        const v = versionOf(current)
+        if (v.marked && v.trxId === t.id) tree.delete(r.key)
+      }
+    }
+    // Only an undo record's own list frees a chain — never the refs found in
+    // the entry removed above — so each chain is freed exactly once.
+    for (const ref of r.freeOnPurge) freeChain(tree.overflowPages(), ref)
+    log.truncate(pages, i)
+    return false
   }
 
   /** One mini-transaction over a log, with the log's in-memory state put back if it aborts. */
@@ -364,6 +387,7 @@ export class Trx {
   id = 0
   readonly #sys: TrxSys
   #state: TrxState = 'active'
+  #rollbacks = 0
   #view: ReadView | undefined
   #log: UndoLog | undefined
   /** Holds the writer slot: it has written, or made a locking read. */
@@ -428,6 +452,36 @@ export class Trx {
     }
   }
 
+  /**
+   * Several writes as one mini-transaction: a bulk statement's rows, whose
+   * page images are then diffed and logged once for the batch rather than
+   * once a row. Only for a statement that fails whole on any error: an error
+   * inside undoes every write of the batch, and the transaction is left as
+   * it was before the batch began, for the statement's own rollback to
+   * finish. `pagesHeld` says how many pages the batch holds pinned, for the
+   * caller to end it before the pool runs short.
+   */
+  batch<T>(change: () => T): T {
+    this.lock()
+    const sys = this.#sys
+    const first = this.id === 0
+    const before = this.#log?.state
+    try {
+      return sys.host.journal.atomically(change)
+    } catch (e) {
+      if (first) {
+        this.id = 0
+        this.#log = undefined
+      } else if (before !== undefined) this.#log?.restore(before)
+      throw e
+    }
+  }
+
+  /** The pages the open mini-transaction holds: what a batch watches. */
+  get pagesHeld(): number {
+    return this.#sys.host.journal.touched
+  }
+
   /** Append an undo record for a change being made inside `write`, and return its roll pointer. */
   undo(record: UndoRecord): RollPtr {
     if (this.#log === undefined || !this.#sys.host.journal.open) throw misuse('an undo record outside a write')
@@ -441,8 +495,14 @@ export class Trx {
     return this.#log?.records.length ?? 0
   }
 
+  /** How many times this transaction has rolled back to a savepoint: what it found before may be gone. */
+  get rollbacks(): number {
+    return this.#rollbacks
+  }
+
   rollbackTo(savepoint: number): void {
     this.#active()
+    this.#rollbacks++
     const log = this.#log
     if (log === undefined) return
     if (savepoint > log.records.length) throw misuse('a savepoint this transaction has already rolled back past')
@@ -507,6 +567,9 @@ export class Trx {
 function entry(state: number, first: number): Uint8Array {
   const out = new Uint8Array(5)
   out[0] = state
-  view(out).setUint32(1, first)
+  out[1] = first >>> 24
+  out[2] = (first >>> 16) & 0xff
+  out[3] = (first >>> 8) & 0xff
+  out[4] = first & 0xff
   return out
 }

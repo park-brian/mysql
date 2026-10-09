@@ -16,28 +16,146 @@
 // UPDATE and DELETE read every row they will change before changing any
 // (doc 30: a scan is not interleaved with writes to its own table), so a row
 // an UPDATE moves within the clustered order is never met twice.
-import { FIELD_TYPE, MyjsError } from '@myjs/bytes'
-import { CLIENT, hasCap, messages, sqlError, type OkResult } from '@myjs/protocol'
+import { CHARSET_BINARY, FIELD_TYPE, MyjsError } from '@myjs/bytes'
+import { CLIENT, hasCap, messages, sqlError, symbolOf, type OkResult } from '@myjs/protocol'
 import type { ColumnDef, FieldBytes, IndexDef, RowId, Table, TableDef, Trx } from '@myjs/engine'
 import { EngineError } from '@myjs/engine'
-import { NODE, REF, parseExpression, type Assignment, type DeleteNode, type Expression, type InsertNode, type UpdateNode } from '@myjs/parser'
-import { decodeField, encodeField, integerRange, intValue, toInteger, toText, type StoreContext, type Value } from '@myjs/types'
-import { compile, EMPTY_SCOPE, type Compiled, type Row } from './compile.ts'
+import { NODE, QUERY, REF, parseExpression, type Assignment, type ColumnNode, type DeleteNode, type Expression, type InsertNode, type TableName, type UpdateNode } from '@myjs/parser'
+import { generationOf, type Generation } from './generated.ts'
+import { decodeField, encodeEnum, encodeField, integerRange, intValue, toInteger, toText, truth, warn, type Condition, type StoreContext, type Value } from '@myjs/types'
+import { compile, EMPTY_SCOPE, type Compiled, type Row, type Scope } from './compile.ts'
+import { checker, checkViolated } from './checks.ts'
+import { guarded, isReferenced } from './foreign-keys.ts'
+import { containsAggregate } from './group.ts'
 import { filter, limit, sort, type ScannedRow } from './operators.ts'
-import { chooseAccess } from './plan.ts'
-import { accessRows, compileContext, limitValue, openTable, type Run } from './query.ts'
+import { accessRows, chooseAccess } from './plan.ts'
+import { checkTargetNotRead, compileContext, fromContext, limitValue, openTable, planQuery, withClause, type Run } from './query.ts'
+import { planFrom, type FromPlan, type FromTable, type JoinedRow } from './from.ts'
 import { TableScope } from './scope.ts'
-import { NULL_TYPE } from './meta.ts'
+import { NULL_TYPE, type ResultType } from './meta.ts'
 
 const isStrict = (sqlMode: string): boolean => /\bSTRICT_(TRANS|ALL)_TABLES\b/.test(sqlMode)
 
 /** A column's DEFAULT, compiled: its expression, or NULL, or "none" for a NOT NULL column without one. */
-function defaultOf(run: Run, column: ColumnDef): Compiled | 'none' {
+/** Whether an expression names a column anywhere in it. */
+function namesColumn(e: unknown): boolean {
+  if (e === null || typeof e !== 'object') return false
+  if (Array.isArray(e)) return e.some(namesColumn)
+  if ((e as { kind?: unknown }).kind === NODE.COLUMN) return true
+  return Object.values(e).some((v) => typeof v === 'object' && namesColumn(v))
+}
+
+/**
+ * Whether a column's default names another column of its row, `DEFAULT (x +
+ * 1)`: such a default is evaluated over the row once its given values are in
+ * (8.4.11), and the others before.
+ */
+export function rowDependent(column: ColumnDef): boolean {
+  const text = column.attributes?.['default']
+  return typeof text === 'string' && namesColumn(parseExpression(text))
+}
+
+/**
+ * A column definition's default, checked as 8.4.11 checks it when the table
+ * is made: and the notes it draws.
+ *
+ *   - A literal must store as a strict INSERT would, or the definition is
+ *     1067 (`TINYINT DEFAULT 1000`, an ENUM's non-member, a number for an
+ *     ENUM or a SET, the zero date under NO_ZERO_DATE); a DECIMAL's extra
+ *     digits round with a note. NOT NULL with DEFAULT NULL is 1067, and a
+ *     BLOB, TEXT or JSON column may have no literal default but NULL (1101).
+ *   - An expression default, `DEFAULT (…)`, is stored as written and checked
+ *     when a row takes it. It may not name a column the table lacks (1054),
+ *     a later one with an expression default or itself (3767), an
+ *     AUTO_INCREMENT column (3768), a subquery (3769) or a variable (3772).
+ */
+export function checkDefaults(run: Run, columns: readonly ColumnDef[], table: readonly ColumnDef[] = columns): number {
+  let notes = 0
+  const invalid = (c: ColumnDef) => sqlError('ER_INVALID_DEFAULT', `Invalid default value for '${c.name}'`)
+  for (const column of columns) {
+    const text = column.attributes?.['default']
+    if (typeof text !== 'string') continue
+    const e = parseExpression(text)
+    if (column.attributes?.['defaultExpression'] === true) {
+      checkExpressionDefault(column, e, table)
+      continue
+    }
+    // DEFAULT NULL is a default any nullable column may have, a BLOB's too (8.4.11: `JSON DEFAULT NULL`).
+    if (e.kind === NODE.LITERAL && e.type === 'null') {
+      if (!column.nullable) throw invalid(column)
+      continue
+    }
+    if (BLOB_TYPES.has(column.type.type)) throw sqlError('ER_BLOB_CANT_HAVE_DEFAULT', `BLOB, TEXT, GEOMETRY or JSON column '${column.name}' can't have a default value`)
+    const literal = e.kind === NODE.LITERAL || (e.kind === NODE.UNARY && (e.op === '-' || e.op === '+') && e.operand.kind === NODE.LITERAL)
+    if (!literal) continue
+    const numeric = e.kind === NODE.UNARY || (e.kind === NODE.LITERAL && (e.type === 'int' || e.type === 'decimal' || e.type === 'double'))
+    if (numeric && (column.type.type === FIELD_TYPE.ENUM || column.type.type === FIELD_TYPE.SET)) throw invalid(column)
+    const ctx: StoreContext = { strict: true, row: 1, warnings: 0, ...sink(run) }
+    let field: Uint8Array | null
+    try {
+      field = encodeField((defaultOf(run, column) as Compiled).eval([], run.env), { ...column, nullable: true }, ctx)
+    } catch (err) {
+      if (err instanceof MyjsError) throw invalid(column)
+      throw err
+    }
+    // The zero date, where the mode forbids it (8.4.11's default mode does).
+    if (field !== null && /\bNO_ZERO_DATE\b/.test(run.env.session.sqlMode) && (column.type.type === FIELD_TYPE.DATE || column.type.type === FIELD_TYPE.DATETIME || column.type.type === FIELD_TYPE.TIMESTAMP)) {
+      const v = decodeField(field, column.type)
+      if (v !== null && v.kind === 'datetime' && v.v.year === 0 && v.v.month === 0 && v.v.day === 0) throw invalid(column)
+    }
+    notes += ctx.warnings
+  }
+  return notes
+}
+
+const BLOB_TYPES: ReadonlySet<number> = new Set([FIELD_TYPE.TINY_BLOB, FIELD_TYPE.BLOB, FIELD_TYPE.MEDIUM_BLOB, FIELD_TYPE.LONG_BLOB, FIELD_TYPE.JSON, FIELD_TYPE.GEOMETRY])
+
+function checkExpressionDefault(column: ColumnDef, e: Expression, table: readonly ColumnDef[]): void {
+  const at = table.findIndex((c) => c.name.toLowerCase() === column.name.toLowerCase())
+  const walk = (x: unknown): void => {
+    if (x === null || typeof x !== 'object') return
+    if (Array.isArray(x)) return x.forEach(walk)
+    const n = x as { kind?: unknown } & Record<string, unknown>
+    if (n.kind === NODE.SUBQUERY) throw sqlError('ER_DEFAULT_VAL_GENERATED_FUNCTION_IS_NOT_ALLOWED', `Default value expression of column '${column.name}' contains a disallowed function.`)
+    if (n.kind === NODE.VARIABLE) throw sqlError('ER_DEFAULT_VAL_GENERATED_VARIABLES', `Default value expression of column '${column.name}' cannot refer user or system variables.`)
+    if (n.kind === NODE.COLUMN) {
+      const parts = n['parts'] as readonly string[]
+      const name = parts[parts.length - 1] as string
+      const i = table.findIndex((c) => c.name.toLowerCase() === name.toLowerCase())
+      if (i < 0) throw sqlError('ER_BAD_FIELD_ERROR', `Unknown column '${name}' in 'default value expression'`)
+      const other = table[i] as ColumnDef
+      if (other.autoIncrement === true) throw sqlError('ER_DEFAULT_VAL_GENERATED_REF_AUTO_INC', `Default value expression of column '${column.name}' cannot refer to an auto-increment column.`)
+      if (i >= at && other.attributes?.['defaultExpression'] === true) {
+        throw sqlError('ER_DEFAULT_VAL_GENERATED_NON_PRIOR', `Default value expression of column '${column.name}' cannot refer to a column defined after it if that column is a generated column or has an expression as default value.`)
+      }
+    }
+    for (const v of Object.values(n)) if (typeof v === 'object') walk(v)
+  }
+  walk(e)
+}
+
+/**
+ * A column's default, compiled; `'none'` for a NOT NULL column without one.
+ * One that names a column of the row needs the row's `def` and is evaluated
+ * over the row.
+ */
+export function defaultOf(run: Run, column: ColumnDef, def?: TableDef): Compiled | 'none' {
   // An AUTO_INCREMENT column's DEFAULT is 0: `UPDATE t SET id = DEFAULT` stores 0 (8.4.11).
   if (column.autoIncrement === true) return { eval: () => intValue(0n), type: NULL_TYPE }
   const text = column.attributes?.['default']
-  if (typeof text === 'string') return compile(parseExpression(text), compileContext(run, EMPTY_SCOPE, 'field list'))
+  if (typeof text === 'string') {
+    const scope = def !== undefined && rowDependent(column) ? new TableScope([{ alias: def.name, def }]) : EMPTY_SCOPE
+    return compile(parseExpression(text), compileContext(run, scope, 'field list'))
+  }
+  // `ALTER COLUMN … DROP DEFAULT` leaves none, not even NULL (8.4.11: 1364).
+  if (column.attributes?.['noDefault'] === true) return 'none'
   if (column.nullable) return { eval: () => null, type: NULL_TYPE }
+  // A NOT NULL ENUM has a default all the same, its first member: leaving it
+  // out is neither 1364 nor a warning (8.4.11).
+  if (column.type.type === FIELD_TYPE.ENUM) {
+    const first = implicitDefault(column)
+    return { eval: () => first, type: NULL_TYPE }
+  }
   return 'none'
 }
 
@@ -55,6 +173,24 @@ function duplicateEntry(def: TableDef, index: IndexDef, values: readonly Value[]
     })
     .join('-')
   return sqlError('ER_DUP_ENTRY', messages.duplicateEntry(text, `${def.name}.${index.name}`))
+}
+
+/** A bulk statement's batches: at most this many rows, and while the batch holds fewer pages than this. */
+const BATCH_ROWS = 64
+const BATCH_PAGES = 16
+
+/**
+ * `each` over `items` from `from` on, in as few mini-transactions as the
+ * bounds allow (`trx.batch`): only for a statement that fails whole on any
+ * error, and whose rows take no counter.
+ */
+function inBatches<T>(trx: Trx, items: readonly T[], each: (item: T, n: number) => void, from = 0): void {
+  for (let n = from; n < items.length; ) {
+    trx.batch(() => {
+      const start = n
+      for (; n < items.length && n - start < BATCH_ROWS && trx.pagesHeld < BATCH_PAGES; n++) each(items[n] as T, n)
+    })
+  }
 }
 
 const isDuplicate = (e: unknown): boolean => e instanceof EngineError && e.code === 'ER_DUP_ENTRY'
@@ -105,13 +241,34 @@ function duplicateError(e: unknown, def: TableDef, table: Table, keys: readonly 
 /** How a NULL meets a NOT NULL column: refused (1048), or stored as the type's zero with a warning. */
 type NullPolicy = 'error' | 'warn'
 
-/** A value into its column, as `encodeField` stores it, with `nulls` deciding what a NULL into NOT NULL does. */
-function storeField(v: Value, column: ColumnDef, store: StoreContext, nulls: NullPolicy): FieldBytes {
+/**
+ * A value into its column, as `encodeField` stores it, with `nulls` deciding
+ * what a NULL into NOT NULL does. An INSERT warns once per column, however
+ * many rows it gives a NULL (8.4.11: three rows, two of them NULL in `a` and
+ * one in `b`, is two warnings); an UPDATE warns per row, and passes no `warned`.
+ */
+/** The session's zero-date modes, which decide what a date column takes (8.4.11's default has both). */
+export const zeroRules = (run: Run): { noZeroDate: boolean; noZeroInDate: boolean } => ({ noZeroDate: /\bNO_ZERO_DATE\b/.test(run.env.session.sqlMode), noZeroInDate: /\bNO_ZERO_IN_DATE\b/.test(run.env.session.sqlMode) })
+
+/** The statement's diagnostics area, for a StoreContext to record its conditions in. */
+const sink = (run: Run): { conditions?: Condition[] } => (run.env.conditions === undefined ? {} : { conditions: run.env.conditions })
+
+/** An error IGNORE turns into a warning: its code and its text, at warning level. */
+function warnError(store: StoreContext, e: unknown): void {
+  if (e instanceof MyjsError) warn(store, e.errno ?? 0, e.message)
+  else store.warnings++
+}
+
+function storeField(v: Value, column: ColumnDef, store: StoreContext, nulls: NullPolicy, warned?: Set<ColumnDef>): FieldBytes {
   try {
     return encodeField(v, column, store)
   } catch (e) {
     if (nulls === 'error' || !(e instanceof MyjsError) || e.code !== 'ER_BAD_NULL_ERROR') throw e
-    store.warnings++
+    if (warned === undefined || !warned.has(column)) warn(store, e.errno ?? 1048, e.message)
+    warned?.add(column)
+    // An explicit NULL is the type's zero, which for an ENUM is index 0, the
+    // error value '' — not the first member a missing column takes (8.4.11).
+    if (column.type.type === FIELD_TYPE.ENUM) return encodeEnum(0, column.type.members?.length ?? 0)
     return encodeField(implicitDefault(column), column, store)
   }
 }
@@ -212,13 +369,50 @@ interface Upsert {
 }
 
 /**
+ * `INSERT … SELECT … ON DUPLICATE KEY UPDATE` may read the SELECT's own
+ * columns, of the row that made the one in the way — when the SELECT is one
+ * query block that neither groups nor aggregates (8.4.11: a GROUP BY or a
+ * UNION leaves only the target's, and the rest is 1054). Each reference the
+ * SELECT resolves rides along as a hidden item at the end of its list.
+ */
+function selectReferences(run: Run, node: InsertNode): ColumnNode[] {
+  const q = node.query
+  if (q === undefined || node.onDuplicate === undefined) return []
+  const body = q.body
+  if (body.kind !== QUERY.SELECT || body.from === undefined || body.groupBy !== undefined || body.having !== undefined || body.distinct === true) return []
+  if (body.items.some((i) => containsAggregate(i.expr))) return []
+  const refs = new Map<string, ColumnNode>()
+  const walk = (x: unknown): void => {
+    if (x === null || typeof x !== 'object') return
+    if (Array.isArray(x)) return x.forEach(walk)
+    const n = x as Expression
+    if (n.kind === NODE.SUBQUERY || (n.kind === NODE.CALL && n.name.toUpperCase() === 'VALUES')) return
+    if (n.kind === NODE.COLUMN) {
+      refs.set(n.parts.join('.').toLowerCase(), n)
+      return
+    }
+    for (const v of Object.values(x)) walk(v)
+  }
+  for (const a of node.onDuplicate) walk(a.value)
+  return [...refs.values()].filter((ref) => {
+    try {
+      planQuery(run, { kind: QUERY.QUERY, ...(q.with === undefined ? {} : { with: q.with }), body: { ...body, items: [{ expr: ref }] }, at: q.at })
+      return true
+    } catch (e) {
+      if (e instanceof MyjsError && e.errno === 1054) return false
+      throw e
+    }
+  })
+}
+
+/**
  * The scope an upsert's expressions see (8.4.11, each probed): the table's
  * columns, then — with `AS n` or `AS n(a, b)` — the alias's, which are the
  * INSERT's own target columns and no others (`n.id` is 1054 when `id` was not
  * inserted). A bare name searches both, so `age` under `AS n` is 1052. Then,
  * out of sight, the whole row the INSERT tried, which `VALUES(c)` reads.
  */
-function compileUpsert(run: Run, def: TableDef, node: InsertNode, targets: readonly number[]): Upsert {
+function compileUpsert(run: Run, def: TableDef, node: InsertNode, targets: readonly number[], selectRefs: readonly { readonly ref: ColumnNode; readonly type: ResultType }[] = []): Upsert {
   const n = def.columns.length
   const alias = node.rowAlias
   const scoped: { alias: string; def: TableDef }[] = [{ alias: def.name, def }]
@@ -246,18 +440,46 @@ function compileUpsert(run: Run, def: TableDef, node: InsertNode, targets: reado
     },
     calls: 0,
   }
-  const ctx = { ...compileContext(run, scope, 'field list'), insertValues }
-  const assignments = (node.onDuplicate ?? []).map((a) => ({
+  // The SELECT's columns sit after the row the INSERT tried. A bare name both
+  // sides hold is 1052 (8.4.11: `n = n + 1` when the SELECT reads an `n`).
+  const keyOf = (parts: readonly string[]): string => parts.join('.').toLowerCase()
+  const fromSelect = new Map(selectRefs.map((r, i) => [keyOf(r.ref.parts), { index: tried + n + i, type: r.type }]))
+  const resolver: Scope = {
+    resolve: (parts, clause) => {
+      const selected = fromSelect.get(keyOf(parts))
+      if (selected === undefined) return scope.resolve(parts, clause)
+      let target: ReturnType<Scope['resolve']>
+      try {
+        target = scope.resolve(parts, clause)
+      } catch (e) {
+        if (e instanceof MyjsError && e.errno === 1054) return selected
+        throw e
+      }
+      if (parts.length === 1) throw sqlError('ER_NON_UNIQ_ERROR', messages.ambiguousColumn(parts.join('.'), clause))
+      return target
+    },
+  }
+  const ctx = { ...compileContext(run, resolver, 'field list'), insertValues }
+  const assignments = (node.onDuplicate ?? []).map((a) => {
     // The target is the table's column, whatever the alias says.
-    index: own.resolve(a.column.parts, 'field list').index,
-    value: isDefaultKeyword(a.value) ? undefined : compile(a.value, ctx),
-  }))
+    const index = own.resolve(a.column.parts, 'field list').index
+    if (!isDefaultKeyword(a.value)) notGenerated(def, index)
+    return { index, value: isDefaultKeyword(a.value) ? undefined : compile(a.value, ctx) }
+  })
   return { assignments, onUpdate: onUpdateOf(run, def), deprecated: insertValues.calls, aliased: alias === undefined ? [] : targets }
 }
 
 function encodeRow(def: TableDef, values: readonly Value[], ctx: StoreContext): FieldBytes[] {
   return def.columns.map((c, i) => encodeField(values[i] ?? null, c, ctx))
 }
+
+/**
+ * What an OK's info counts as warnings: every condition the statement
+ * raised, its expressions' included (8.4.11: an UPDATE whose WHERE reads
+ * `'abc'` as a number says "Warnings: 1"), or what was counted where no
+ * condition stands for it.
+ */
+const statementWarnings = (run: Run, counted: number): number => Math.max(counted, run.env.conditions?.length ?? 0)
 
 const okInfo = (records: number, duplicates: number, warnings: number): string => `Records: ${records}  Duplicates: ${duplicates}  Warnings: ${warnings}`
 
@@ -282,10 +504,19 @@ const okInfo = (records: number, duplicates: number, warnings: number): string =
  *     adjusts the row, and its `Duplicates` is rows not written.
  */
 export function insert(run: Run, node: InsertNode, trx: Trx): OkResult {
-  if (node.query !== undefined) throw sqlError('ER_NOT_SUPPORTED_YET', messages.notSupported('INSERT … SELECT'))
+  // A subquery, or the SELECT of `INSERT … SELECT`, reads in the statement's transaction.
+  run = { ...run, env: { ...run.env, trx } }
   if (node.partitions !== undefined) throw sqlError('ER_NOT_SUPPORTED_YET', messages.notSupported('Partitions'))
 
-  const { def, table } = openTable(run, node.table)
+  const opened = openTarget(run, node.table)
+  const def = opened.def
+  // Every write keeps the foreign keys on both sides of the table (M5.25).
+  const table = guarded(run, opened.table, trx)
+  const referenced = node.replace === true && isReferenced(run, def)
+  const check = checker(run, def)
+  // A VALUES or SET subquery reading the table being written is 1093, as an
+  // UPDATE's is; INSERT … SELECT from it is legal, read in full first (8.4.11).
+  if (node.query === undefined) checkTargetNotRead({ schema: def.schema, name: def.name }, [...(node.values ?? []).flat(), ...(node.set ?? []).map((a) => a.value), ...(node.onDuplicate ?? []).map((a) => a.value)], run.env.session.database)
   const columnIndex = (name: string): number => {
     const i = def.columns.findIndex((c) => c.name.toLowerCase() === name.toLowerCase())
     if (i < 0) throw sqlError('ER_BAD_FIELD_ERROR', messages.unknownColumn(name, 'field list'))
@@ -295,7 +526,30 @@ export function insert(run: Run, node: InsertNode, trx: Trx): OkResult {
   // Which column each written value goes to, and the rows of expressions.
   let targets: number[]
   let rows: (readonly (Expression | undefined)[])[]
-  if (node.set !== undefined) {
+  // `INSERT … SELECT` (M5.20): the query's rows, read in full before the first
+  // is written — as MySQL does through a temporary table when the query reads
+  // the table it inserts into — and in the order the query returns them,
+  // which is the order they take AUTO_INCREMENT values in.
+  let selected: (readonly Value[])[] | undefined
+  // The columns the SELECT gives a table column: copied field to field, where
+  // a string too long is "Data truncated" (1265), not "Data too long" (1406) —
+  // through a join, a merged CTE, a grouping or a set operation alike (8.4.11).
+  const fieldCopies = new Set<number>()
+  let selectRefs: { readonly ref: ColumnNode; readonly type: ResultType }[] = []
+  if (node.query !== undefined) {
+    targets = node.columns === undefined ? def.columns.map((_, i) => i) : node.columns.map((c) => columnIndex(c.parts[c.parts.length - 1] as string))
+    const refs = selectReferences(run, node)
+    const query = node.query
+    const augmented = refs.length === 0 || query.body.kind !== QUERY.SELECT ? query : { ...query, body: { ...query.body, items: [...query.body.items, ...refs.map((ref) => ({ expr: ref }))] } }
+    const plan = planQuery(run, augmented)
+    if (plan.columns.length !== targets.length + refs.length) throw sqlError('ER_WRONG_VALUE_COUNT_ON_ROW', messages.wrongValueCount(1))
+    selectRefs = refs.map((ref, i) => ({ ref, type: (plan.columns[targets.length + i] as { type: ResultType }).type }))
+    plan.columns.slice(0, targets.length).forEach((c, i) => {
+      if (c.type.column !== undefined || c.type.fromField === true) fieldCopies.add(targets[i] as number)
+    })
+    selected = [...plan.rows(trx, run.env)]
+    rows = []
+  } else if (node.set !== undefined) {
     targets = node.set.map((a) => columnIndex(a.column.parts[a.column.parts.length - 1] as string))
     rows = [node.set.map((a) => a.value)]
   } else {
@@ -312,57 +566,110 @@ export function insert(run: Run, node: InsertNode, trx: Trx): OkResult {
     if (seen.has(t)) throw sqlError('ER_FIELD_SPECIFIED_TWICE', `Column '${(def.columns[t] as ColumnDef).name}' specified twice`)
     seen.add(t)
   }
+  // A generated column takes DEFAULT and nothing else (8.4.11: 3105), from a SELECT not even that.
+  if (selected !== undefined) targets.forEach((t) => notGenerated(def, t))
+  for (const r of rows) r.forEach((e, i) => {
+    if (e !== undefined && !isDefaultKeyword(e)) notGenerated(def, targets[i] as number)
+  })
+  const generate = generatorOf(run, def)
 
   const ignore = node.ignore === true
   const mode = node.replace === true ? 'replace' : node.onDuplicate !== undefined ? 'upsert' : 'insert'
   const strictMode = isStrict(run.env.session.sqlMode)
-  const store: StoreContext = { strict: strictMode && !ignore, row: 1, warnings: 0 }
+  const store: StoreContext = { strict: strictMode && !ignore, strictMode, ...zeroRules(run), row: 1, warnings: 0, table: def.name, ...sink(run) }
   // A NULL for a NOT NULL column is refused by a strict mode and by a
   // one-row INSERT, and stored as the type's zero by IGNORE or a multi-row
   // INSERT; an upsert's own assignment is refused unless IGNORE (8.4.11).
-  const nulls: NullPolicy = ignore || (!strictMode && rows.length > 1) ? 'warn' : 'error'
+  const nulls: NullPolicy = ignore || (!strictMode && (rows.length > 1 || selected !== undefined)) ? 'warn' : 'error'
+  const warnedNull = new Set<ColumnDef>()
   const upsertNulls: NullPolicy = ignore ? 'warn' : 'error'
 
-  const ctx = compileContext(run, EMPTY_SCOPE, 'field list')
-  const compiledRows = rows.map((r) => r.map((e) => (e === undefined || isDefaultKeyword(e) ? undefined : compile(e, ctx))))
-  const upsert = mode === 'upsert' ? compileUpsert(run, def, node, targets) : undefined
-  const defaults = def.columns.map((c) => defaultOf(run, c))
+  // A VALUES or SET expression reads the row being written: each column as
+  // it stands when the expression is reached, in the list's order (8.4.11:
+  // `VALUES ('x', UPPER(a))` stores 'X'; Drizzle's `$onUpdateFn` writes that).
+  const ctx = compileContext(run, new TableScope([{ alias: def.name, def }]), 'field list')
+  const compiledRows: (readonly (Compiled | undefined)[])[] =
+    selected !== undefined ? selected.map((r) => r.slice(0, targets.length).map((v) => ({ eval: () => v, type: NULL_TYPE }))) : rows.map((r) => r.map((e) => (e === undefined || isDefaultKeyword(e) ? undefined : compile(e, ctx))))
+  const upsert = mode === 'upsert' ? compileUpsert(run, def, node, targets, selectRefs) : undefined
+  // The SELECT's hidden columns of the row being written, for the upsert.
+  let selectExtras: readonly Value[] = []
+  const defaults = def.columns.map((c) => defaultOf(run, c, def))
+  const dependent = def.columns.flatMap((c, i) => (rowDependent(c) ? [i] : []))
   const keys = uniqueKeys(def)
   const autoAt = def.columns.findIndex((c) => c.autoIncrement === true)
   // The key the AUTO_INCREMENT column leads (`next_number_index`).
   const autoKey = autoAt < 0 ? undefined : keys.find((i) => i.parts[0]?.column.toLowerCase() === (def.columns[autoAt] as ColumnDef).name.toLowerCase())
-  const auto = new AutoIncrement(table, compiledRows.length)
+  // InnoDB reserves a VALUES statement's rows at once, but cannot count a
+  // SELECT's: it reserves 1, then 2, then 4 (`ha_start_bulk_insert(0)`), so an
+  // INSERT … SELECT of two rows leaves a gap.
+  const auto = new AutoIncrement(table, selected !== undefined ? 0 : compiledRows.length)
   const stats = { records: 0, copied: 0, deleted: 0, updated: 0, touched: 0 }
   // `first_successful_insert_id_in_cur_stmt`, and the last row's AUTO_INCREMENT value.
   let firstId = 0n
   let lastAuto = 0n
   run.state.insertIdSet = false
 
-  compiledRows.forEach((row, n) => {
+  const each = (row: (typeof compiledRows)[number], n: number): void => {
     store.row = n + 1
     stats.records++
-    const values: Value[] = def.columns.map(() => null)
+    if (selected !== undefined) selectExtras = (selected[n] as readonly Value[]).slice(targets.length)
+    // The row starts as its defaults — a column with none holds its type's
+    // zero, an AUTO_INCREMENT one 0 — and each value written replaces one.
+    const values: Value[] = def.columns.map((column, i) => {
+      const d = defaults[i] as Compiled | 'none'
+      return d === 'none' ? implicitDefault(column) : dependent.includes(i) ? null : d.eval([], run.env)
+    })
     const given = new Set<number>()
     row.forEach((c, i) => {
       const target = targets[i] as number
-      if (c === undefined) return
-      values[target] = c.eval([], run.env)
+      if (c === undefined) {
+        // DEFAULT: the column's own. One that reads the row reads it as it
+        // stands at this point in the list — `(y, x) VALUES (DEFAULT, 8)`
+        // with `y DEFAULT (x + 1)` is NULL (8.4.11).
+        if (dependent.includes(target)) {
+          values[target] = (defaults[target] as Compiled).eval(values, run.env)
+          given.add(target)
+        } else given.delete(target)
+        return
+      }
+      values[target] = c.eval(values, run.env)
       given.add(target)
     })
+    for (const i of dependent) if (!given.has(i)) values[i] = (defaults[i] as Compiled).eval(values, run.env)
     def.columns.forEach((column, i) => {
-      if (given.has(i) || column.autoIncrement === true) return
-      const d = defaults[i] as Compiled | 'none'
-      if (d === 'none') {
+      if (given.has(i) || generationOf(column) !== undefined) return
+      if (column.autoIncrement === true) values[i] = null
+      else if (defaults[i] === 'none') {
         if (store.strict) throw sqlError('ER_NO_DEFAULT_FOR_FIELD', messages.noDefaultForField(column.name))
-        store.warnings++
-        values[i] = implicitDefault(column)
-      } else values[i] = d.eval([], run.env)
+        warn(store, 1364, messages.noDefaultForField(column.name))
+      }
     })
     // Every value is converted, in column order, before AUTO_INCREMENT takes
     // one, as `write_row` takes it after `fill_record`: a row refused for an
     // out-of-range value costs no id of its own, and an explicit id that will
     // not convert is the error reported, not a later column's (8.4.11).
-    const fields = def.columns.map((c, i) => (i === autoAt && values[i] === null ? null : storeField(values[i] ?? null, c, store, nulls)))
+    const fields = def.columns.map((c, i) => {
+      if (i === autoAt && values[i] === null) return null
+      if (generate !== undefined && generationOf(c) !== undefined) return null
+      try {
+        return storeField(values[i] ?? null, c, store, nulls, warnedNull)
+      } catch (e) {
+        if (fieldCopies.has(i) && e instanceof MyjsError && e.errno === 1406) throw sqlError('WARN_DATA_TRUNCATED', `Data truncated for column '${c.name}' at row ${store.row}`)
+        throw e
+      }
+    })
+    // Then the generated columns, from the row as it will be stored.
+    generate?.(fields, fields.map((f, i) => (f === null ? null : decodeField(f, (def.columns[i] as ColumnDef).type))), store, nulls)
+    // CHECK constraints, before the row is written: a violation is not a
+    // duplicate first and costs no AUTO_INCREMENT value. IGNORE skips the
+    // row, and it is not one of the "Records" (8.4.11).
+    const violated = check?.(fields)
+    if (violated !== undefined) {
+      if (!ignore) throw checkViolated(violated)
+      warnError(store, checkViolated(violated))
+      stats.records--
+      return
+    }
     // `prev_insert_id`: where the handler stood before this row.
     const prev = auto.next
     let generated = 0n
@@ -379,7 +686,23 @@ export function insert(run: Run, node: InsertNode, trx: Trx): OkResult {
       lastAuto = autoOf(def, autoAt, fields)
     }
     writeRecord(fields, generated, prev)
-  })
+  }
+  // A plain INSERT fails whole on any error, so its rows go to the store in
+  // batches, a mini-transaction each: the page diffs and the log record are
+  // made once a batch rather than once a row (M5.32). The others handle a
+  // row's error and go on, so each row is its own.
+  // Only where no row takes a counter inside a batch, which the store
+  // refuses (a counter is given out for good, M5.8): a table with a key of
+  // its own, and VALUES that never name the AUTO_INCREMENT column. The first
+  // row is written alone: if it generates, it takes the statement's block,
+  // one for every row, and no later row needs the counter again; if its
+  // values fail first, no counter is taken at all (8.4.11: the next
+  // statement's id shows it).
+  const batchable = mode === 'insert' && !ignore && def.clustered !== null && selected === undefined && compiledRows.length > 1 && (autoAt < 0 || !targets.includes(autoAt))
+  if (batchable) {
+    each(compiledRows[0] as (typeof compiledRows)[number], 0)
+    inBatches(trx, compiledRows, each, 1)
+  } else compiledRows.forEach(each)
 
   /** One row through `write_record`: write it, or settle its duplicate as the statement asks. */
   function writeRecord(fields: FieldBytes[], generated: bigint, prevNext: bigint): void {
@@ -388,13 +711,22 @@ export function insert(run: Run, node: InsertNode, trx: Trx): OkResult {
       try {
         table.insert(fields, trx)
       } catch (e) {
+        // IGNORE skips a row whose parent is missing, as it skips a duplicate:
+        // a warning, and its value is given back (8.4.11).
+        if (ignore && e instanceof MyjsError && e.errno === 1452) {
+          auto.written()
+          warnError(store, e)
+          auto.restore(prev)
+          return
+        }
         if (!isDuplicate(e)) throw e
         auto.written()
         const hit = conflictOf(table, keys, fields, trx)
-        if (hit === undefined) throw e
+        // A batch's abort takes back the row this one met: the engine's error names the key.
+        if (hit === undefined) throw mode === 'insert' && !ignore ? duplicateError(e, def, table, keys, fields, trx, undefined, undefined) : e
         if (mode === 'insert') {
           if (!ignore) throw duplicateError(e, def, table, keys, fields, trx, undefined, hit)
-          store.warnings++
+          warnError(store, duplicateError(e, def, table, keys, fields, trx, undefined, hit))
           auto.restore(prev)
           return
         }
@@ -404,8 +736,10 @@ export function insert(run: Run, node: InsertNode, trx: Trx): OkResult {
           // (`write_record`): the column's range is used up, and it is 1062.
           if (generated > 0n && hit.index === autoKey) throw duplicateError(e, def, table, keys, fields, trx, undefined, hit)
           // The table's last UNIQUE key: no later key can collide, so the row
-          // in the way is updated into this one rather than deleted.
-          if (hit.index === keys[keys.length - 1]) {
+          // in the way is updated into this one rather than deleted — unless a
+          // foreign key references the table, whose actions a delete must
+          // fire (`write_record`, 8.4.11).
+          if (hit.index === keys[keys.length - 1] && !referenced) {
             const old = table.get(hit.id, trx, 'current') as FieldBytes[]
             if (!sameRow(old, fields)) {
               table.update(hit.id, fields, trx)
@@ -434,8 +768,8 @@ export function insert(run: Run, node: InsertNode, trx: Trx): OkResult {
     const before = table.get(id, trx, 'current') as FieldBytes[]
     const current = def.columns.map((c, i) => decodeField(before[i] ?? null, c.type))
     const triedValues = def.columns.map((c, i) => decodeField(tried[i] ?? null, c.type))
-    const extra = [...u.aliased.map((t) => triedValues[t] ?? null), ...triedValues]
-    const result = assignAll(run, def, before, current, extra, u.assignments, u.onUpdate, defaults, store, upsertNulls)
+    const extra = [...u.aliased.map((t) => triedValues[t] ?? null), ...triedValues, ...selectExtras]
+    const result = assignAll(run, def, before, current, extra, u.assignments, u.onUpdate, defaults, store, upsertNulls, generate)
     // An upsert that sets the AUTO_INCREMENT column to a value the statement
     // has promised another row is ER_AUTO_INCREMENT_CONFLICT; to this row's
     // own generated value, it keeps it.
@@ -449,11 +783,17 @@ export function insert(run: Run, node: InsertNode, trx: Trx): OkResult {
     stats.touched++
     if (autoAt >= 0) lastAuto = autoOf(def, autoAt, result.after)
     if (!result.changed) return
+    const violated = check?.(result.after)
+    if (violated !== undefined) {
+      if (!ignore) throw checkViolated(violated)
+      warnError(store, checkViolated(violated))
+      return
+    }
     try {
       table.update(id, result.after, trx)
     } catch (e) {
       if (!isDuplicate(e) || !ignore) throw duplicateError(e, def, table, keys, result.after, trx, id)
-      store.warnings++
+      warnError(store, duplicateError(e, def, table, keys, result.after, trx, id))
       return
     }
     stats.updated++
@@ -463,15 +803,21 @@ export function insert(run: Run, node: InsertNode, trx: Trx): OkResult {
   // A value generated and written becomes `LAST_INSERT_ID()`; an upsert's
   // update does not, as an UPDATE does not.
   if (firstId !== 0n) run.state.lastInsertId = firstId
-  const insertId = firstId !== 0n ? firstId : run.state.insertIdSet ? run.state.lastInsertId : autoAt >= 0 && stats.copied > 0 ? lastAuto : 0n
+  // The SELECT form falls back to no id at all once a row was upserted, even
+  // beside rows it inserted with ids of their own (8.4.11).
+  const lastHandled = autoAt >= 0 && stats.copied > 0 && !(selected !== undefined && stats.touched > 0) ? lastAuto : 0n
+  const insertId = firstId !== 0n ? firstId : run.state.insertIdSet ? run.state.lastInsertId : lastHandled
   const updated = hasCap(run.env.session.capabilities, CLIENT.FOUND_ROWS) ? stats.touched : stats.updated
-  const warnings = store.warnings + (upsert?.deprecated ?? 0)
-  const duplicates = ignore ? stats.records - stats.copied : stats.deleted + updated
+  const warnings = statementWarnings(run, store.warnings + (upsert?.deprecated ?? 0))
+  // The SELECT form names only the rows an upsert changed, whatever the
+  // client's FOUND_ROWS: 8.4.11 reports 6 rows affected and "Duplicates: 1"
+  // for three inserts, one row updated and one row left as it was.
+  const duplicates = ignore ? stats.records - stats.copied : stats.deleted + (selected !== undefined ? stats.updated : updated)
   return {
     affectedRows: stats.copied + stats.deleted + updated,
     insertId,
     warnings,
-    ...(compiledRows.length !== 1 ? { info: okInfo(stats.records, duplicates, warnings) } : {}),
+    ...(compiledRows.length !== 1 || selected !== undefined ? { info: okInfo(stats.records, duplicates, warnings) } : {}),
   }
 }
 
@@ -511,6 +857,39 @@ function onUpdateOf(run: Run, def: TableDef): (Compiled | undefined)[] {
  * assign. `extra` is what an expression may read after the row: an upsert's
  * alias and tried row.
  */
+/** Fill a row's generated columns, from its fields as stored, in column order (M5.31). */
+type Generator = (fields: FieldBytes[], values: Value[], store: StoreContext, nulls: NullPolicy) => void
+
+/** The table's generated columns, compiled once a statement; `undefined` when it has none. */
+export function generatorOf(run: Run, def: TableDef): Generator | undefined {
+  const at = def.columns.flatMap((c, i) => (generationOf(c) === undefined ? [] : [i]))
+  if (at.length === 0) return undefined
+  const ctx = compileContext(run, new TableScope([{ alias: def.name, def }]), 'generated column function')
+  const compiled = at.map((i) => ({ i, expr: compile(parseExpression((generationOf(def.columns[i] as ColumnDef) as Generation).text), ctx) }))
+  return (fields, values, store, nulls) => {
+    for (const { i, expr } of compiled) {
+      const column = def.columns[i] as ColumnDef
+      // What the expression warns of is an error under a strict mode, as a
+      // default's is (8.4.11: `a + 0` over '7x' is 1292, and no row).
+      const raised: Condition[] = []
+      const value = expr.eval(values, { ...run.env, conditions: raised })
+      const first = raised[0]
+      if (first !== undefined && store.strict) throw sqlError(symbolOf(first.code) ?? 'ER_UNKNOWN_ERROR', first.message)
+      run.env.conditions?.push(...raised)
+      store.warnings += raised.length
+      const field = storeField(value, column, store, nulls)
+      fields[i] = field
+      values[i] = field === null ? null : decodeField(field, column.type)
+    }
+  }
+}
+
+/** 3105: a value other than DEFAULT given to a generated column. */
+function notGenerated(def: TableDef, index: number): void {
+  const column = def.columns[index] as ColumnDef
+  if (generationOf(column) !== undefined) throw sqlError('ER_NON_DEFAULT_VALUE_FOR_GENERATED_COLUMN', `The value specified for generated column '${column.name}' in table '${def.name}' is not allowed.`)
+}
+
 function assignAll(
   run: Run,
   def: TableDef,
@@ -522,6 +901,7 @@ function assignAll(
   defaults: readonly (Compiled | 'none')[],
   store: StoreContext,
   nulls: NullPolicy,
+  generate?: Generator,
 ): { after: FieldBytes[]; values: Value[]; changed: boolean } {
   const after = [...before]
   const values: Value[] = [...current]
@@ -534,6 +914,8 @@ function assignAll(
   const assigned = new Set<number>()
   for (const a of assignments) {
     assigned.add(a.index)
+    // A generated column's DEFAULT is its expression, filled below.
+    if (a.value === undefined && generationOf(def.columns[a.index] as ColumnDef) !== undefined) continue
     if (a.value === undefined) {
       // `c = DEFAULT` on a column with none is 1364 under a strict mode and
       // the type's zero with a warning outside one, as a missing INSERT
@@ -542,37 +924,76 @@ function assignAll(
       const column = def.columns[a.index] as ColumnDef
       if (d === 'none') {
         if (store.strict) throw sqlError('ER_NO_DEFAULT_FOR_FIELD', messages.noDefaultForField(column.name))
-        store.warnings++
+        warn(store, 1364, messages.noDefaultForField(column.name))
       }
-      assign(a.index, d === 'none' ? implicitDefault(column) : d.eval([], run.env))
+      assign(a.index, d === 'none' ? implicitDefault(column) : d.eval(values as Row, run.env))
     } else assign(a.index, a.value.eval(extra.length === 0 ? (values as Row) : [...values, ...extra], run.env))
   }
   if (sameRow(before, after)) return { after, values, changed: false }
   onUpdate.forEach((u, i) => {
     if (u !== undefined && !assigned.has(i)) assign(i, u.eval([], run.env))
   })
+  generate?.(after, values, store, nulls)
   return { after, values, changed: true }
 }
 
 const isDefaultKeyword = (e: Expression): boolean => e.kind === NODE.KEYWORD && e.word.toUpperCase() === 'DEFAULT'
 
 /** What a NOT NULL column with no DEFAULT gets outside a strict mode: its type's zero. */
-function implicitDefault(column: ColumnDef): Value {
+export function implicitDefault(column: ColumnDef): Value {
   const t = column.type.type
   if (t === FIELD_TYPE.TIMESTAMP || t === FIELD_TYPE.DATE || t === FIELD_TYPE.DATETIME) {
     return { kind: 'datetime', v: { year: 0, month: 0, day: 0, hour: 0, minute: 0, second: 0, microsecond: 0 }, type: t === FIELD_TYPE.DATE ? 'DATE' : 'DATETIME', fsp: 0 }
   }
   if (t === FIELD_TYPE.TIME) return { kind: 'time', v: { negative: false, days: 0, hour: 0, minute: 0, second: 0, microsecond: 0 }, fsp: 0 }
-  if (column.type.collationId !== undefined) return { kind: 'string', v: '', collationId: column.type.collationId, coercibility: 2 }
+  // An ENUM's is its first member, JSON's the JSON null, a binary string's
+  // no bytes (8.4.11).
+  if (t === FIELD_TYPE.JSON) return { kind: 'json', v: { t: 'null' } }
+  if (column.type.collationId === CHARSET_BINARY) return { kind: 'bytes', v: new Uint8Array(0) }
+  if (column.type.collationId !== undefined) {
+    const v = t === FIELD_TYPE.ENUM ? (column.type.members?.[0] ?? '') : ''
+    return { kind: 'string', v, collationId: column.type.collationId, coercibility: 2 }
+  }
   return intValue(0n)
+}
+
+/**
+ * The table a write names. A view is refused by name: 8.4.11 writes through
+ * an updatable one to its base table, which is not built yet.
+ */
+function openTarget(run: Run, name: TableName): ReturnType<typeof openTable> {
+  try {
+    return openTable(run, name)
+  } catch (e) {
+    const schema = name.schema ?? run.env.session.database
+    if ((e as { errno?: number }).errno === 1146 && schema !== null && run.catalog?.view(schema, name.name) !== undefined) {
+      throw sqlError('ER_NOT_SUPPORTED_YET', messages.notSupported('INSERT, UPDATE and DELETE through a view'))
+    }
+    throw e
+  }
 }
 
 /** The single table an UPDATE or DELETE names; ER_NOT_SUPPORTED_YET for the multi-table forms. */
 function singleTable(run: Run, tables: UpdateNode['tables'], what: string): { def: TableDef; table: Table; alias: string } {
   const ref = tables[0]
   if (tables.length !== 1 || ref === undefined || ref.kind !== REF.TABLE) throw sqlError('ER_NOT_SUPPORTED_YET', messages.notSupported(`Multiple-table ${what}`))
-  const { def, table } = openTable(run, ref.table)
+  const { def, table } = openTarget(run, ref.table)
   return { def, table, alias: ref.alias ?? ref.table.name }
+}
+
+/**
+ * An UPDATE's or DELETE's WITH: its CTEs, for the statement's subqueries. Each
+ * is read once, before the first row changes, so one that reads the table
+ * being written is no 1093 (8.4.11 — Drizzle's `with … update` is that
+ * shape). A CTE named as the target is 1288: it is not a table.
+ */
+function withCtes(run: Run, node: UpdateNode | DeleteNode, what: 'UPDATE' | 'DELETE'): Run {
+  if (node.with === undefined) return run
+  const ref = node.tables[0]
+  if (ref?.kind === REF.TABLE && ref.table.schema === undefined && node.with.tables.some((c) => c.name.toLowerCase() === ref.table.name.toLowerCase())) {
+    throw sqlError('ER_NON_UPDATABLE_TABLE', `The target table ${ref.alias ?? ref.table.name} of the ${what} is not updatable`)
+  }
+  return withClause(run, node.with)
 }
 
 /** The rows a WHERE / ORDER BY / LIMIT selects, read in full before any is written. */
@@ -588,44 +1009,73 @@ function matching(run: Run, def: TableDef, table: Table, alias: string, node: Up
 }
 
 export function update(run: Run, node: UpdateNode, trx: Trx): OkResult {
-  if (node.with !== undefined) throw sqlError('ER_NOT_SUPPORTED_YET', messages.notSupported('WITH'))
-  if (node.ignore === true) throw sqlError('ER_NOT_SUPPORTED_YET', messages.notSupported('UPDATE IGNORE'))
-  const { def, table, alias } = singleTable(run, node.tables, 'UPDATE')
+  // A subquery reads in the statement's transaction.
+  run = { ...run, env: { ...run.env, trx } }
+  run = withCtes(run, node, 'UPDATE')
+  if (multiTable(node.tables)) return updateMulti(run, node, trx)
+  const target = singleTable(run, node.tables, 'UPDATE')
+  const { def, alias } = target
+  const table = guarded(run, target.table, trx)
+  checkTargetNotRead({ schema: def.schema, name: def.name }, [node.where, ...node.set.map((a) => a.value)], run.env.session.database)
   const scope = new TableScope([{ alias, def }])
   const assignments = node.set.map((a: Assignment) => {
     const { index } = scope.resolve(a.column.parts, 'field list')
+    if (!isDefaultKeyword(a.value)) notGenerated(def, index)
     return { index, value: isDefaultKeyword(a.value) ? undefined : compile(a.value, compileContext(run, scope, 'field list')) }
   })
+  const generate = generatorOf(run, def)
   const onUpdate = onUpdateOf(run, def)
-  const defaults = def.columns.map((c) => defaultOf(run, c))
-  const store: StoreContext = { strict: isStrict(run.env.session.sqlMode), row: 1, warnings: 0 }
+  const defaults = def.columns.map((c) => defaultOf(run, c, def))
+  const check = checker(run, def)
+  // IGNORE makes a strict mode's errors warnings, and skips, with a warning,
+  // a row that would duplicate a key, fail a CHECK or break a foreign key,
+  // undoing whatever its cascades had done (8.4.11).
+  const ignore = node.ignore === true
+  const strictMode = isStrict(run.env.session.sqlMode)
+  const store: StoreContext = { strict: strictMode && !ignore, strictMode, ...zeroRules(run), row: 1, warnings: 0, table: def.name, ...sink(run) }
   const keys = uniqueKeys(def)
   run.state.insertIdSet = false
 
   const rows = matching(run, def, table, alias, node, trx)
   let changed = 0
-  rows.forEach(({ id, row }, n) => {
+  const each = ({ id, row }: ScannedRow, n: number): void => {
     store.row = n + 1
     const before = encodeRow(def, row, { strict: false, row: n + 1, warnings: 0 })
     // A NULL into a NOT NULL column is the type's zero and a warning outside a strict mode (8.4.11).
-    const result = assignAll(run, def, before, row, [], assignments, onUpdate, defaults, store, store.strict ? 'error' : 'warn')
+    const result = assignAll(run, def, before, row, [], assignments, onUpdate, defaults, store, store.strict ? 'error' : 'warn', generate)
     if (!result.changed) return
+    const violated = check?.(result.after)
+    if (violated !== undefined) {
+      if (!ignore) throw checkViolated(violated)
+      warnError(store, checkViolated(violated))
+      return
+    }
+    const at = ignore ? trx.savepoint() : 0
     try {
       table.update(id, result.after, trx)
     } catch (e) {
-      throw duplicateError(e, def, table, keys, result.after, trx, id)
+      if (!ignore) throw duplicateError(e, def, table, keys, result.after, trx, id)
+      const skipped = isDuplicate(e) ? duplicateError(e, def, table, keys, result.after, trx, id) : e
+      if (!(skipped instanceof MyjsError) || !(isDuplicate(e) || skipped.errno === 1451 || skipped.errno === 1452)) throw e
+      trx.rollbackTo(at)
+      warnError(store, skipped)
+      return
     }
     changed++
-  })
+  }
+  // Without IGNORE, any error fails the statement whole: the rows go in batches.
+  if (ignore) rows.forEach(each)
+  else inBatches(trx, rows, each)
 
   const matched = rows.length
   const foundRows = hasCap(run.env.session.capabilities, CLIENT.FOUND_ROWS)
+  const warnings = statementWarnings(run, store.warnings)
   return {
     affectedRows: foundRows ? matched : changed,
     // `UPDATE t SET id = LAST_INSERT_ID(id + 1)` reports the value it set.
     ...(run.state.insertIdSet ? { insertId: run.state.lastInsertId } : {}),
-    warnings: store.warnings,
-    info: `Rows matched: ${matched}  Changed: ${changed}  Warnings: ${store.warnings}`,
+    warnings,
+    info: `Rows matched: ${matched}  Changed: ${changed}  Warnings: ${warnings}`,
   }
 }
 
@@ -649,11 +1099,206 @@ function sameBytes(x: Uint8Array, y: Uint8Array): boolean {
 }
 
 export function remove(run: Run, node: DeleteNode, trx: Trx): OkResult {
-  if (node.with !== undefined) throw sqlError('ER_NOT_SUPPORTED_YET', messages.notSupported('WITH'))
-  if (node.targets !== undefined) throw sqlError('ER_NOT_SUPPORTED_YET', messages.notSupported('Multiple-table DELETE'))
-  const { def, table, alias } = singleTable(run, node.tables, 'DELETE')
+  run = { ...run, env: { ...run.env, trx } }
+  run = withCtes(run, node, 'DELETE')
+  if (node.targets !== undefined) return removeMulti(run, node, trx)
+  const target = singleTable(run, node.tables, 'DELETE')
+  const { def, alias } = target
+  const table = guarded(run, target.table, trx)
+  checkTargetNotRead({ schema: def.schema, name: def.name }, [node.where], run.env.session.database)
   const rows = matching(run, def, table, alias, node, trx)
   let deleted = 0
-  for (const { id } of rows) if (table.delete(id, trx)) deleted++
-  return { affectedRows: deleted }
+  let warnings = 0
+  // Without IGNORE, any error fails the statement whole: the rows go in batches.
+  if (node.ignore !== true) {
+    inBatches(trx, rows, ({ id }) => {
+      if (table.delete(id, trx)) deleted++
+    })
+    return { affectedRows: deleted }
+  }
+  for (const { id } of rows) {
+    // IGNORE keeps a row a child holds, with a warning, and undoes whatever
+    // its cascades had done (8.4.11).
+    const at = node.ignore === true ? trx.savepoint() : 0
+    try {
+      if (table.delete(id, trx)) deleted++
+    } catch (e) {
+      if (node.ignore !== true || !(e instanceof MyjsError) || e.errno !== 1451) throw e
+      trx.rollbackTo(at)
+      warnings++
+      run.env.conditions?.push({ level: 'Warning', code: e.errno ?? 1451, message: e.message })
+    }
+  }
+  return warnings === 0 ? { affectedRows: deleted } : { affectedRows: deleted, warnings }
+}
+
+// --- the multi-table forms ---------------------------------------------------
+
+/** Whether an UPDATE or DELETE names more than one table, or a join. */
+const multiTable = (tables: UpdateNode['tables']): boolean => tables.length !== 1 || tables[0]?.kind !== REF.TABLE
+
+/** A FROM's base table a multi-table statement writes, by the slots it holds in the joined row. */
+interface Target {
+  readonly from: FromTable
+  readonly def: TableDef
+  readonly table: Table
+}
+
+/** The FROM of a multi-table UPDATE or DELETE, and each joined row with its tables' row ids, read in full before any is written. */
+function joinedRows(run: Run, node: UpdateNode | DeleteNode, trx: Trx): { from: FromPlan; rows: JoinedRow[] } {
+  const from = planFrom(node.tables, fromContext(run), node.where)
+  const where = node.where === undefined ? undefined : compile(node.where, compileContext(run, from.scope, 'where clause'))
+  const rows = [...from.rows(trx, run.env, { where: node.where, locking: true, ids: true })].filter((r) => where === undefined || truth(where.eval(r.row, run.env)) === true)
+  return { from, rows }
+}
+
+/** The base table that holds slot `index` of the joined row; 1288 for a derived one (8.4.11). */
+function targetAt(run: Run, from: FromPlan, index: number, what: 'UPDATE' | 'DELETE', trx: Trx): Target {
+  const t = from.tables.find((x) => index >= x.offset && index < x.offset + x.width) as FromTable
+  if (t.def === undefined || t.table === undefined) throw sqlError('ER_NON_UPDATABLE_TABLE', `The target table ${t.alias} of the ${what} is not updatable`)
+  return { from: t, def: t.def, table: guarded(run, t.table, trx) }
+}
+
+/**
+ * `UPDATE a JOIN b … SET a.x = …, b.y = …` (8.4.11): every joined row the
+ * WHERE keeps is read first; each target row is then updated once, from the
+ * first joined row that reaches it, its SET reading that row as it was read.
+ * "Rows matched" counts the target rows, of every table. ORDER BY and LIMIT
+ * are 1221; a derived table as a target is 1288.
+ */
+function updateMulti(run: Run, node: UpdateNode, trx: Trx): OkResult {
+  if (node.orderBy !== undefined) throw sqlError('ER_WRONG_USAGE', 'Incorrect usage of UPDATE and ORDER BY')
+  if (node.limit !== undefined) throw sqlError('ER_WRONG_USAGE', 'Incorrect usage of UPDATE and LIMIT')
+  const { from, rows } = joinedRows(run, node, trx)
+  const scope = from.scope
+  const ignore = node.ignore === true
+  const strictMode = isStrict(run.env.session.sqlMode)
+  const store: StoreContext = { strict: strictMode && !ignore, strictMode, ...zeroRules(run), row: 1, warnings: 0, table: '', ...sink(run) }
+  // The SET list by table, each value compiled over the joined row.
+  let joined: Row = []
+  const byTable = new Map<FromTable, { target: Target; assignments: Assigned[] }>()
+  for (const a of node.set) {
+    const { index } = scope.resolve(a.column.parts, 'field list')
+    const target = targetAt(run, from, index, 'UPDATE', trx)
+    const column = index - target.from.offset
+    if (!isDefaultKeyword(a.value)) notGenerated(target.def, column)
+    let entry = byTable.get(target.from)
+    if (entry === undefined) byTable.set(target.from, (entry = { target, assignments: [] }))
+    const compiled = isDefaultKeyword(a.value) ? undefined : compile(a.value, compileContext(run, scope, 'field list'))
+    entry.assignments.push({
+      index: column,
+      value:
+        compiled === undefined
+          ? undefined
+          : // Over the joined row as it was read: a later SET does not see an
+            // earlier one, as it does in the single-table form (8.4.11:
+            // `SET q.x = q.x + 1, q.y = q.x * 10` over x = 5 gives y = 50).
+            { ...compiled, eval: (_values, env) => compiled.eval(joined, env) },
+    })
+  }
+  // A subquery that reads any of the joined tables is 1093, and the message
+  // names the first of them, whichever it reads (8.4.11).
+  const first = from.tables.find((t) => t.def !== undefined)
+  for (const t of from.tables) {
+    if (t.def === undefined) continue
+    try {
+      checkTargetNotRead({ schema: t.def.schema, name: t.def.name }, [node.where, ...node.set.map((a) => a.value)], run.env.session.database)
+    } catch (e) {
+      if (!(e instanceof MyjsError) || e.errno !== 1093 || first?.def === undefined) throw e
+      throw sqlError('ER_UPDATE_TABLE_USED', `You can't specify target table '${first.alias}' for update in FROM clause`)
+    }
+  }
+  run.state.insertIdSet = false
+  let matched = 0
+  let changed = 0
+  for (const { target, assignments } of byTable.values()) {
+    const { def, table } = target
+    store.table = def.name
+    const generate = generatorOf(run, def)
+    const onUpdate = onUpdateOf(run, def)
+    const defaults = def.columns.map((c) => defaultOf(run, c, def))
+    const check = checker(run, def)
+    const keys = uniqueKeys(def)
+    // Each target row once, at the first joined row that reaches it.
+    const seen = new Set<string>()
+    for (const r of rows) {
+      const id = r.ids?.[target.from.offset]
+      if (id === undefined) continue
+      const key = String.fromCharCode(...id)
+      if (seen.has(key)) continue
+      seen.add(key)
+      matched++
+      store.row = matched
+      joined = r.row
+      const current = table.get(id, trx, 'current')
+      if (current === undefined) continue
+      const values = current.map((f, i) => (f === null ? null : decodeField(f, (def.columns[i] as ColumnDef).type)))
+      const result = assignAll(run, def, current, values, [], assignments, onUpdate, defaults, store, store.strict ? 'error' : 'warn', generate)
+      if (!result.changed) continue
+      const violated = check?.(result.after)
+      if (violated !== undefined) {
+        if (!ignore) throw checkViolated(violated)
+        warnError(store, checkViolated(violated))
+        continue
+      }
+      const at = ignore ? trx.savepoint() : 0
+      try {
+        table.update(id, result.after, trx)
+      } catch (e) {
+        if (!ignore) throw duplicateError(e, def, table, keys, result.after, trx, id)
+        const skipped = isDuplicate(e) ? duplicateError(e, def, table, keys, result.after, trx, id) : e
+        if (!(skipped instanceof MyjsError) || !(isDuplicate(e) || skipped.errno === 1451 || skipped.errno === 1452)) throw e
+        trx.rollbackTo(at)
+        warnError(store, skipped)
+        continue
+      }
+      changed++
+    }
+  }
+  const foundRows = hasCap(run.env.session.capabilities, CLIENT.FOUND_ROWS)
+  const warnings = statementWarnings(run, store.warnings)
+  return {
+    affectedRows: foundRows ? matched : changed,
+    ...(run.state.insertIdSet ? { insertId: run.state.lastInsertId } : {}),
+    warnings,
+    info: `Rows matched: ${matched}  Changed: ${changed}  Warnings: ${warnings}`,
+  }
+}
+
+/**
+ * `DELETE a, b FROM a JOIN b …` and `DELETE FROM a, b USING …` (8.4.11): the
+ * joined rows the WHERE keeps, read first; each target's rows deleted once,
+ * the targets in the order named. A target not among the tables is 1109;
+ * the count is every row deleted.
+ */
+function removeMulti(run: Run, node: DeleteNode, trx: Trx): OkResult {
+  const { from, rows } = joinedRows(run, node, trx)
+  const targets = (node.targets ?? []).map((t) => {
+    const found = from.tables.find((x) => x.alias.toLowerCase() === t.name.toLowerCase())
+    if (found === undefined) throw sqlError('ER_UNKNOWN_TABLE', `Unknown table '${t.name}' in MULTI DELETE`)
+    return targetAt(run, from, found.offset, 'DELETE', trx)
+  })
+  for (const t of targets) checkTargetNotRead({ schema: t.def.schema, name: t.def.name }, [node.where], run.env.session.database)
+  let deleted = 0
+  let warnings = 0
+  for (const t of targets) {
+    const seen = new Set<string>()
+    for (const r of rows) {
+      const id = r.ids?.[t.from.offset]
+      if (id === undefined) continue
+      const key = String.fromCharCode(...id)
+      if (seen.has(key)) continue
+      seen.add(key)
+      const at = node.ignore === true ? trx.savepoint() : 0
+      try {
+        if (t.table.delete(id, trx)) deleted++
+      } catch (e) {
+        if (node.ignore !== true || !(e instanceof MyjsError) || e.errno !== 1451) throw e
+        trx.rollbackTo(at)
+        warnings++
+        run.env.conditions?.push({ level: 'Warning', code: e.errno ?? 1451, message: e.message })
+      }
+    }
+  }
+  return warnings === 0 ? { affectedRows: deleted } : { affectedRows: deleted, warnings }
 }

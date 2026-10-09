@@ -201,7 +201,7 @@ flowchart TB
     app["Your code"]
     subgraph entry["Entry points"]
         direction LR
-        conv["db.query · db.execute · db.transaction"]:::planned
+        conv["db.query · db.execute · db.transaction"]
         drv["mysql2 · mariadb · ORMs<br/>via createStream()"]
         tcp["mysql CLI, any client<br/>via serve() over TCP"]
         port["Other tabs and threads<br/>via createPort()"]
@@ -536,16 +536,35 @@ apart has paid for itself several times:
 |---|---|---|---|
 | `SqlValue` | `@myjs/bytes` | the plain value: number, bigint, string, bytes, date struct | the wire, and the driver-facing mapping |
 | `StorageValue` | `@myjs/types` | what a column stores | encoding to and from record bytes |
-| `Value` | `@myjs/types` | signedness, DECIMAL scale, a string's collation *and its coercibility* | evaluating expressions |
+| `Value` | `@myjs/types` | signedness, DECIMAL scale, a string's collation *and its coercibility*, and where a value came from when MySQL's rules depend on it | evaluating expressions |
 
 `Value` exists because evaluation needs three things the other two shapes
 erase. An integer's signedness matters, since negating an unsigned value
 saturates. A DECIMAL's exact scale matters, since `1/7*7` is `1.0000` and not
 `1.0003`. A string's coercibility matters, since a column's collation
-beats a literal's. The *rules* for all of this, meaning MySQL's choice of
+beats a literal's. Where strings meet, at a comparison, CONCAT, IF or a
+UNION, their collations are aggregated at compile time as MySQL's
+`DTCollation::aggregate` does it, and a mix it cannot decide is the
+statement's error (1267) before any row is read. A type that does not say its
+coercibility is left out of that check rather than guessed at, so a missing
+derivation can make a refusal disappear but never invents one. And sometimes where a value came from matters. An ENUM's
+member index, a hex literal and a FLOAT column's precision ride along as
+flags: an ENUM sorts by its index, `X'41' + 0` is 65, and a FLOAT(5,2)
+holding 0.1 reads as `0.10` wherever it becomes text. `plainValue` strips
+them where MySQL forgets them, at a user variable for example. The *rules* for all of this, meaning MySQL's choice of
 comparison type, its arithmetic and its strict-mode refusals when assigning
 into a column, live in `@myjs/types`, below the executor. An importer can
 therefore store a value exactly as an `INSERT` would without running any SQL.
+
+A strict mode has a second half that is the statement's, not the value's.
+In an INSERT, UPDATE, DELETE, CREATE TABLE or ALTER TABLE without IGNORE,
+MySQL raises some warnings as errors: `'abc' + 1` in an UPDATE's WHERE, a
+division by zero, a logarithm of zero. Its `Strict_error_handler` decides
+this for every condition at the one point they all pass through. Here that
+point is the statement's list of conditions (`strict.ts`): the executor
+chooses the list from the statement and the mode, and a list for a strict
+statement throws when a listed code is pushed. No expression knows which
+statement it is in.
 
 ### One property that makes the engine simple
 
@@ -666,6 +685,20 @@ never a quiet difference. The order in which the gaps close is set by
 measurement, not by a feature list: whatever stands between the ORM test
 suites and a pass goes first.
 
+### Warnings are part of the answer
+
+A statement's warnings are part of what MySQL answers, and an application that
+reads SHOW WARNINGS after an `INSERT IGNORE` is relying on them. Each statement
+gets a diagnostics area: a list on the evaluation environment that storing a
+value, `IGNORE`, the DDL deprecations and expressions all write to, with
+MySQL's code and text. The session keeps the last one for SHOW WARNINGS and
+`@@warning_count`. When a warning fires is part of the contract. Text read
+as a number warns each time it is read, but a constant compared with a
+number is converted once per statement. So the warning sits in the
+conversion each operator wraps around its operand (`asNumber`), not in the
+conversion functions of `@myjs/types`, which stay pure. Every corpus compares
+each query's warning count.
+
 ### Plan conservatively
 
 A planner that picks a range too wide costs time. One that picks a range too
@@ -677,14 +710,20 @@ which MySQL compares as doubles, or `float_col = 1.1`. The differential suite
 includes a planted mutation, a planner that drops the `WHERE` after a range, and
 the suite catches it.
 
-The target planner goes further, but along the same lines. It adds index
-selection with a cost model, predicate pushdown, and join ordering for small
-joins. Its success criterion is concrete: `EXPLAIN` should name the index a
-MySQL DBA would expect. The operator set grows to nested-loop and hash joins,
-sorts that spill when large, aggregates and `GROUP BY`, window functions, and
-MySQL's function library, prioritised by how often the ORM test suites
-actually use each function. `INFORMATION_SCHEMA` has to be real enough that
-Prisma and Drizzle introspection can rebuild a schema exactly.
+The operators already run MySQL's own plans where the answer depends on
+them. Hash joins build on the earlier table and emit a probe row's matches
+newest first. A grouping chooses index order, a sort or a temporary table as
+8.4.11 would. Each choice decides the rows' order and the metadata a client
+sees, so the multi-table corpus records the server's `EXPLAIN` for every
+query and compares row order wherever the plans agree. The target planner
+goes further, along the same lines. It adds index selection with a cost
+model, predicate pushdown, and join ordering, and its success criterion is
+concrete: `EXPLAIN` should name the index a MySQL DBA would expect. Sorts
+will spill when large, and MySQL's function library grows in the order the
+ORM test suites use it. `INFORMATION_SCHEMA` is a set of derived tables
+computed from the catalog when read. Their column definitions were captured
+from the server, because no rule derives them. That is enough for Prisma's
+introspection to rebuild a schema exactly.
 
 ### Statements are atomic; transactions are yours
 
@@ -839,6 +878,14 @@ buffer pool be stored in one mini-transaction. Working out exactly which pages
 qualify took a design review that broke the first draft. "Allocated here" does
 not imply "free on disk" if the free that released the page is not yet durable.
 
+Because a held page stays pinned, work that would be cheaper in one
+mini-transaction is grouped by the pages it holds, not only by count. Purge
+takes undo records into one while it holds under 8 pages. A multi-row INSERT
+writes up to 64 rows into one while it holds under 16 (`trx.batch`). A batch
+never takes a counter such as AUTO_INCREMENT's, since a counter is taken
+outside any mini-transaction, and when a row in it fails the whole batch rolls
+back with the statement.
+
 ## 11. Transactions with one writer
 
 ### The writer slot
@@ -919,6 +966,20 @@ crash-atomic by the same path every row takes. A table's definition is a row
 in a system table. The catalog itself is described by code (a few reserved
 index ids and fixed layouts) and versioned with the store format. A format
 change is a new number and a documented migration, never a guess.
+
+`ALTER TABLE` is a copy. `Catalog.rebuildTable` makes the changed table and
+passes every row through a function into it. It carries the AUTO_INCREMENT
+counter over and drops the old table, all in one DDL transaction. A row the
+new definition refuses, such as a duplicate under a new UNIQUE key or a child
+with no parent under a new foreign key, rolls the whole thing back. MySQL
+does many of these changes in place. A client can tell only from the
+"Records" count, so we report the count MySQL would.
+
+Foreign keys are enforced above the engine, in one place. Every INSERT,
+UPDATE, DELETE, REPLACE and upsert writes through a guarded `Table`, which
+checks a child's parent after the write and fires the actions on a parent's
+children before it. A failed check is an error like any other, so the
+statement's savepoint undoes the cascade with the write that caused it.
 
 ## 12. Durability, stated honestly
 
@@ -1264,6 +1325,12 @@ it we capture:
 | Queries | 1,200 generated joins and set operations |
 | Execution | 400 generated scripts run through `mysql2`; every statement's rows, order, metadata, `affectedRows`, `insertId`, errno and SQLSTATE must agree |
 | Keywords | MySQL's reserved-word list |
+| Functions | 200 scripts of string and numeric function calls over every type, both protocols |
+| Date and time functions | 300 scripts of the date and time functions over every temporal type, text and numbers, in UTC, both protocols, warning counts compared |
+| More functions | 300 scripts of the remaining string, math, hashing and network functions (CHAR, FIELD, FORMAT with locales, CONV, base64, the digests, LOG and the trigonometry, INET and UUID), both protocols, warning counts compared |
+| Temporal text | 2,700 generated strings stored into DATE, DATETIME, TIME and TIMESTAMP, strictly and under IGNORE, each with its SHOW WARNINGS |
+| `INFORMATION_SCHEMA` | 120 DDL scripts, each followed by the introspection queries Prisma and Drizzle send: 2,568 statements |
+| Feature scripts | Hand-written scripts, each run on the server first with its answers kept: foreign keys, CHECK, ALTER TABLE and defaults, SHOW CREATE TABLE, JSON paths, REGEXP and ICU's pattern syntax, collation mixes, temporal comparisons, BIT |
 
 Our code is never the oracle for itself. When a behaviour is in doubt, the
 server settles it, and the answer becomes a fixture.
@@ -1289,6 +1356,16 @@ would store and then could not read back.
 rate and driver suites to traces, storage vectors, crash points and bundle
 size, lives in one table that changes in the same commit as the code. A
 number updated by hand, later, is marketing.
+
+**Reviews that must reproduce.** A finished feature is handed to a reviewer
+whose only job is to break it, with the server beside it. A finding counts
+only once it has been reproduced against 8.4.11, and it is fixed by adding the
+server's answer to a captured script, not by editing code until the symptom
+goes away. One review of the foreign-key, ALTER, CHECK and JSON work found
+twelve divergences. Among them was a cascade that wrote NULL where InnoDB
+refuses: silent data loss that every existing test had passed. Fixing them
+turned up three more, in places nobody had been looking: ENUM in a numeric
+context, two-digit years, and `\w` in a regular expression.
 
 **Mutations that must be caught.** A test suite that passes is evidence only
 if it *could* fail. So the suites are tested too. We plant a bug, such as
@@ -1331,7 +1408,7 @@ a blocker and one without is just a note.
 |---|---|---|
 | **Does OPFS `flush()` ever reorder writes?** | The browser half of the durability promise depends on it ([§12](#12-durability-stated-honestly)) | Real-browser crash tests, M6 |
 | **Does `execProtocol` need a streaming variant?** | `db.stream()` exists so that a large resultset is never held in memory, and today's seam returns a command's whole response | M5 |
-| **How faithful must `INFORMATION_SCHEMA` be?** | Migration tools read it directly, and column flags alone cannot reconstruct a multi-column index | M5, against Prisma's and Drizzle's introspection |
+| ~~**How faithful must `INFORMATION_SCHEMA` be?**~~ | Settled by M5.12: byte for byte, metadata included, because Prisma diffs what it reads against what it pushed. A captured corpus of 2,568 statements agrees in full | — |
 | **How closely can our byte traces match a real server's?** | Version string, capabilities and connection ids differ *by design*, so byte identity with a real server is not simply a question of correctness | M5's differential harness |
 | **Is whole-page compression at the VFS the answer to COMPRESSED tables?** | It is the proposed replacement, with no design yet | M6 or later |
 | **Do index pages get prefix compression?** | Could save a third or more on string keys, at the cost of a slower page format | Deliberately undecided |
@@ -1339,7 +1416,7 @@ a blocker and one without is just a note.
 
 ## 21. Where we are
 
-*A snapshot as of 2026-10-08. The [roadmap](./docs/44-roadmap.md) is the live
+*A snapshot as of 2026-10-09. The [roadmap](./docs/44-roadmap.md) is the live
 version, and wins wherever it disagrees with this section.*
 
 ```mermaid
@@ -1352,12 +1429,32 @@ flowchart LR
 
 M0 through M4 are done. The protocol, the type system and collations, the
 parser and the storage engine are all built and checked against a real
-server. M5 has begun. An executor runs single-table DDL, DML and
-transactions, upserts included, through an unmodified `mysql2`, and every
-statement in a generated corpus of 400 scripts agrees with MySQL 8.4.11.
-Joins, aggregates, the function library and the planner proper are next. The
-core bundle is about 157 KB gzipped against a budget of 500 KB, with the UCA
-weights in a separate chunk loaded on demand.
+server. M5 is well under way. The executor runs DDL, DML and transactions,
+upserts and multi-table UPDATE and DELETE included, with a strict mode's
+errors where the server raises them. It runs relational SELECT: joins,
+grouping and aggregates, HAVING with or without groups, subqueries, derived
+tables, CTEs, set operations and views. It also covers JSON as a value,
+window functions with their frames (over groups too), `INFORMATION_SCHEMA`,
+SHOW COLUMNS, INDEX and CREATE VIEW, foreign keys with their referential
+actions, CHECK constraints, ALTER TABLE by copy, temporary tables, CREATE
+TABLE … LIKE and … SELECT, generated columns, RENAME TABLE, `SHOW CREATE
+TABLE` byte for byte, JSON paths and regular expressions. Generated corpora of 400, 300 and 250 scripts
+agree with MySQL 8.4.11 statement for statement, column names and flags
+included. Most of M5's exit criterion holds. All 487 tests of Drizzle's
+MySQL suites pass, as they do against 8.4.11. Of Prisma's, up to 1,113 pass
+against the server's 1,122, FULLTEXT search included; the one failure is a
+snapshot of another MySQL version's error text, which 8.4.11 fails too.
+The count drifts down by up to four between runs, because bulk statements
+still stall the event loop long enough for parallel suites' connections to
+time out (M5.32). Batching a bulk statement's rows into shared
+mini-transactions has halved that stall: 10,000 rows now take about 560 ms.
+32,000 still take over a second, so M5.32 stays open. The query API of
+§17 exists too: `db.query()`, `db.execute()`, `db.begin()` and
+`db.transaction()`, a client of the wire protocol whose answers are compared
+with `mysql2/promise`'s over five corpora (M5.36). `db.stream()` is not
+built yet. The rest of the function library and the cost-based planner come
+next. The core bundle is about 288 KB gzipped against a budget of 500 KB,
+with the UCA weights in a separate chunk loaded on demand.
 
 The release plan gives each stage something to ship:
 

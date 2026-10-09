@@ -23,6 +23,8 @@ import {
   columnCannotBeNull,
   columnOutOfRange,
   dataTooLong,
+  invalidJsonCharset,
+  invalidJsonText,
   unsupportedType,
   wrongTemporalValue,
   wrongValueForColumn,
@@ -30,15 +32,20 @@ import {
 } from './errors.ts'
 import { decodeDouble, decodeFloat, encodeDouble, encodeFloat } from './floats.ts'
 import { decodeInt, encodeInt, signedRange, unsignedRange } from './integers.ts'
+import { JsonSyntaxError, decodeJsonDoc, encodeJsonDoc, parseJson } from './json-doc.ts'
 import {
   COERCIBILITY,
   MAX_UNSIGNED,
   decimal,
   decimalIntegerDigits,
   double,
+  hexNumber,
   int,
+  json,
   numericPrefix,
+  parseDateTime,
   parseDecimal,
+  parseTime,
   pow10,
   renderDecimal,
   rescale,
@@ -52,6 +59,7 @@ import {
   type DecimalValue,
   type Value,
 } from './sql-value.ts'
+import { scanDateTime, scanTime, type Deprecation } from './temporal-scan.ts'
 import { decodeBit, decodeEnum, decodeSet, encodeBit, encodeEnum, encodeSet, enumMember, padBinary, padChar, setMembers, trimTrailingSpaces } from './strings.ts'
 import {
   dateFieldToStorage,
@@ -83,6 +91,29 @@ export interface StoreContext {
   row: number
   /** Incremented for each value adjusted rather than refused. */
   warnings: number
+  /** The table being written, for the messages that name a column as `table.column` (3140). */
+  table?: string
+  /** Where each adjustment's condition goes, for SHOW WARNINGS: the statement's diagnostics area. */
+  conditions?: Condition[]
+  /** The session's mode is strict, whether or not IGNORE has made this write lenient: some warnings name it. */
+  strictMode?: boolean
+  /** NO_ZERO_DATE: '0000-00-00' into a date is refused, or warned of (default: allowed). */
+  noZeroDate?: boolean
+  /** NO_ZERO_IN_DATE: a zero month or day is refused, or warned of (default: refused). */
+  noZeroInDate?: boolean
+}
+
+/** One row of SHOW WARNINGS: a note, a warning or an error, with its code and its text. */
+export interface Condition {
+  readonly level: 'Note' | 'Warning' | 'Error'
+  readonly code: number
+  readonly message: string
+}
+
+/** Counts one condition and records it where the context keeps them. */
+export function warn(ctx: StoreContext, code: number, message: string, level: Condition['level'] = 'Warning'): void {
+  ctx.warnings++
+  ctx.conditions?.push({ level, code, message })
 }
 
 const INT_WIDTH: Readonly<Record<number, number>> = {
@@ -118,10 +149,28 @@ const FLOAT_MAX = 3.4028234663852886e38
 const isBinaryType = (t: ColumnType): boolean => t.collationId === undefined || t.collationId === CHARSET_BINARY
 
 /** Called for a value that does not fit: an error under a strict mode, a warning and `fallback` otherwise. */
-function adjust<T>(ctx: StoreContext, error: () => TypeError_, fallback: T): T {
+function adjust<T>(ctx: StoreContext, error: () => TypeError_, fallback: T, lenient: () => TypeError_ = error): T {
   if (ctx.strict) throw error()
-  ctx.warnings++
+  if (ctx.conditions === undefined) ctx.warnings++
+  else {
+    const e = lenient()
+    warn(ctx, e.errno ?? 0, e.message)
+  }
   return fallback
+}
+
+/**
+ * The warning a temporal that would not store draws outside a strict mode,
+ * where a strict one is 1292 (8.4.11): text shaped like a date or a time
+ * whose parts are each in range but do not make one — February 30, minute
+ * 99, a TIMESTAMP before 1970 — is out of range, 1264; anything else, a
+ * number or month 13 included, is truncated, 1265.
+ */
+function temporalWarning(value: Exclude<Value, null>, column: string, row: number, time: boolean): () => TypeError_ {
+  const text = value.kind === 'string' || value.kind === 'bytes' ? toText(value).trim() : ''
+  const m = time ? /^-?(\d+):(\d+)(?::(\d+))?(?:\.\d*)?$/.exec(text) : /^(\d{2,4})-(\d{1,2})-(\d{1,2})(?:[ T](\d{1,2}):(\d{1,2})(?::(\d{1,2}))?(?:\.\d*)?)?$/.exec(text)
+  const shaped = m !== null && (time || (Number(m[2]) >= 1 && Number(m[2]) <= 12 && Number(m[3]) >= 1 && Number(m[3]) <= 31 && Number(m[4] ?? 0) < 24 && Number(m[5] ?? 0) < 60 && Number(m[6] ?? 0) < 60))
+  return shaped ? () => columnOutOfRange(column, row) : () => truncated(column, row)
 }
 
 function nameOfType(t: ColumnType): string {
@@ -147,6 +196,8 @@ function nameOfType(t: ColumnType): string {
  */
 function numericSource(v: Exclude<Value, null>, column: FieldColumn, ctx: StoreContext): Exclude<Value, null> {
   if (v.kind !== 'string' && v.kind !== 'bytes') return v
+  if (v.kind === 'string' && v.ordinal !== undefined) return { kind: 'int', v: v.ordinal, unsigned: true }
+  if (v.kind === 'bytes' && v.hex === true) return { kind: 'int', v: hexNumber(v.v), unsigned: true }
   const text = toText(v)
   const p = numericPrefix(text)
   if (p.complete) return v
@@ -173,7 +224,15 @@ export function encodeField(value: Value, column: FieldColumn, ctx: StoreContext
     case FIELD_TYPE.FLOAT:
     case FIELD_TYPE.DOUBLE: {
       let n = toDouble(numericSource(value, column, ctx))
-      const max = t.type === FIELD_TYPE.FLOAT ? FLOAT_MAX : Number.MAX_VALUE
+      let max = t.type === FIELD_TYPE.FLOAT ? FLOAT_MAX : Number.MAX_VALUE
+      // FLOAT(M,D): rounded to D decimals, half to even on the fraction, and
+      // at most M - D digits before the point (`Field_real::truncate`).
+      if (t.precision !== undefined && t.scale !== undefined && Number.isFinite(n) && !(t.unsigned === true && n < 0)) {
+        const unit = 10 ** t.scale
+        max = Math.min(max, 10 ** (t.precision - t.scale) - 1 / unit)
+        const whole = Math.floor(n)
+        n = whole + roundHalfEven((n - whole) * unit) / unit
+      }
       if (!Number.isFinite(n) || Math.abs(n) > max || (t.unsigned === true && n < 0)) {
         n = adjust(ctx, () => columnOutOfRange(column.name, ctx.row), t.unsigned === true && n < 0 ? 0 : Math.sign(n) * max)
       }
@@ -201,11 +260,34 @@ export function encodeField(value: Value, column: FieldColumn, ctx: StoreContext
 
     case FIELD_TYPE.TIME:
     case FIELD_TYPE.TIME2: {
-      const tv = toTime(value)
       const fsp = t.decimals ?? 0
+      const zero = { negative: false, days: 0, hour: 0, minute: 0, second: 0, microsecond: 0 }
+      const refuse = () => wrongTemporalValue('time', toText(value), column.name, ctx.row)
+      if (isText(value)) {
+        const text = toText(value)
+        // Nothing at all is midnight, quietly: `str_to_time` fails without a word (8.4.11).
+        if (text.trim() === '') return encodeTime2(zero, fsp)
+        const p = parseTime(text)
+        if (p === undefined) {
+          adjust(ctx, refuse, undefined, scanTime(text) === 'out-of-range' ? () => columnOutOfRange(column.name, ctx.row) : () => truncated(column.name, ctx.row))
+          return encodeTime2(zero, fsp)
+        }
+        if (p.deprecation !== undefined) deprecated(ctx, p.deprecation, text, column.name)
+        // Text after a time truncates it, and past 838:59:59 is clamped to
+        // it — each a warning, in that order (8.4.11).
+        if (p.truncated) adjust(ctx, refuse, undefined, () => truncated(column.name, ctx.row))
+        if (p.clamped) adjust(ctx, refuse, undefined, () => columnOutOfRange(column.name, ctx.row))
+        // A datetime's date goes with a note, as a DATE's time of day does.
+        if (p.dateDropped) {
+          if (ctx.strict) warn(ctx, 1292, `Incorrect time value: '${text}' for column '${column.name}' at row ${ctx.row}`, 'Note')
+          else warn(ctx, 1265, `Data truncated for column '${column.name}' at row ${ctx.row}`, 'Note')
+        }
+        return encodeTime2(roundTime(p.v, fsp), fsp)
+      }
+      const tv = toTime(value)
       if (tv === undefined) {
-        adjust(ctx, () => wrongTemporalValue('time', toText(value), column.name, ctx.row), undefined)
-        return encodeTime2({ negative: false, days: 0, hour: 0, minute: 0, second: 0, microsecond: 0 }, fsp)
+        adjust(ctx, refuse, undefined, temporalWarning(value, column.name, ctx.row, true))
+        return encodeTime2(zero, fsp)
       }
       return encodeTime2(roundTime(tv.v, fsp), fsp)
     }
@@ -213,29 +295,42 @@ export function encodeField(value: Value, column: FieldColumn, ctx: StoreContext
     case FIELD_TYPE.ENUM: {
       const members = t.members ?? []
       const index = memberIndex(value, members, t.collationId)
-      if (index === 0) return encodeEnum(adjust(ctx, () => truncated(column.name, ctx.row), 0), members.length)
+      if (index === undefined) return encodeEnum(adjust(ctx, () => truncated(column.name, ctx.row), 0), members.length)
       return encodeEnum(index, members.length)
     }
 
     case FIELD_TYPE.SET: {
       const members = t.members ?? []
-      if (value.kind === 'int') return encodeSet(value.v & ((1n << BigInt(members.length)) - 1n), members.length)
+      // A number, or a string of digits that names no member, is the bitmap itself (8.4.11).
+      const all = (1n << BigInt(members.length)) - 1n
+      const asBits = (n: bigint) => (n > all ? adjust(ctx, () => truncated(column.name, ctx.row), n & all) : n & all)
+      if (value.kind === 'int' || value.kind === 'decimal' || value.kind === 'double' || (value.kind === 'bytes' && value.hex === true)) return encodeSet(asBits(toInteger(value)), members.length)
       let mask = 0n
       const text = toText(value)
+      if (/^\d+$/.test(text) && !members.includes(text)) return encodeSet(asBits(BigInt(text)), members.length)
       for (const item of text === '' ? [] : text.split(',')) {
-        const i = memberIndex(string(item, t.collationId ?? 255), members, t.collationId)
-        if (i === 0) adjust(ctx, () => truncated(column.name, ctx.row), 0)
+        const i = memberIndex(string(item, t.collationId ?? 255), members, t.collationId, false)
+        if (i === undefined || i === 0) adjust(ctx, () => truncated(column.name, ctx.row), 0)
         else mask |= 1n << BigInt(i - 1)
       }
       return encodeSet(mask, members.length)
     }
 
     case FIELD_TYPE.BIT: {
+      // Text is stored as its bytes, big-endian, as a hex literal is: '1' is
+      // 49. A value too wide is "too long", 1406 — a warning under IGNORE in
+      // a strict mode, and 1264 outside one (`Field_bit::store`, 8.4.11).
       const bits = t.bits ?? 1
-      let n = value.kind === 'bytes' ? bytesToBigint(value.v) : toInteger(value)
-      if (n < 0n || n >= 1n << BigInt(bits)) n = adjust(ctx, () => columnOutOfRange(column.name, ctx.row), n < 0n ? 0n : (1n << BigInt(bits)) - 1n)
+      const text = value.kind === 'string' && value.ordinal === undefined ? encodeCollation(value.v, value.collationId) : undefined
+      let n = value.kind === 'bytes' ? bytesToBigint(value.v) : text !== undefined ? bytesToBigint(text) : toInteger(value)
+      if (n < 0n || n >= 1n << BigInt(bits)) {
+        n = adjust(ctx, () => dataTooLong(column.name, ctx.row), (1n << BigInt(bits)) - 1n, () => (ctx.strictMode === false ? columnOutOfRange(column.name, ctx.row) : dataTooLong(column.name, ctx.row)))
+      }
       return encodeBit(n, bits)
     }
+
+    case FIELD_TYPE.JSON:
+      return encodeJsonField(value, column, ctx)
 
     case FIELD_TYPE.STRING:
     case FIELD_TYPE.VAR_STRING:
@@ -248,6 +343,25 @@ export function encodeField(value: Value, column: FieldColumn, ctx: StoreContext
 
     default:
       throw unsupportedType(`storing a value in a column of field type ${t.type}`)
+  }
+}
+
+/**
+ * A value into a JSON column (M5.21): a JSON value as it is, a string parsed
+ * as a JSON text, and anything else refused — 3140 even for a number, which
+ * "may need CAST", and 3144 for a binary string (8.4.11). A mode does not
+ * soften either.
+ */
+function encodeJsonField(value: Exclude<Value, null>, column: FieldColumn, ctx: StoreContext): Uint8Array {
+  const name = ctx.table === undefined ? column.name : `${ctx.table}.${column.name}`
+  if (value.kind === 'json') return encodeJsonDoc(value.v)
+  if (value.kind === 'bytes') throw invalidJsonCharset('')
+  if (value.kind !== 'string') throw invalidJsonText('not a JSON text, may need CAST', 0, name)
+  try {
+    return encodeJsonDoc(parseJson(value.v))
+  } catch (e) {
+    if (e instanceof JsonSyntaxError) throw invalidJsonText(e.message, e.position, name)
+    throw e
   }
 }
 
@@ -275,10 +389,14 @@ function encodeIntField(v: Exclude<Value, null>, width: number, column: FieldCol
 function encodeDecimalField(v: Exclude<Value, null>, column: FieldColumn, ctx: StoreContext): Uint8Array {
   const precision = column.type.precision ?? 10
   const scale = column.type.scale ?? 0
-  let d: DecimalValue = rescale(toDecimal(v), scale)
+  const exact = toDecimal(v)
+  let d: DecimalValue = rescale(exact, scale)
   const max = decimal(pow10(precision) - 1n, scale)
   if (decimalIntegerDigits(d) > precision - scale || (column.type.unsigned === true && d.v < 0n)) {
     d = adjust(ctx, () => columnOutOfRange(column.name, ctx.row), d.v < 0n ? (column.type.unsigned === true ? decimal(0n, scale) : decimal(-max.v, scale)) : max)
+  } else if (exact.scale > scale && exact.v % pow10(exact.scale - scale) !== 0n) {
+    // Rounded past the scale: Note 1265, whatever the mode (8.4.11).
+    warn(ctx, 1265, `Data truncated for column '${column.name}' at row ${ctx.row}`, 'Note')
   }
   return encodeDecimal(renderDecimal(d), precision, scale)
 }
@@ -317,29 +435,100 @@ function encodeTemporalField(value: Exclude<Value, null>, column: FieldColumn, c
   const t = column.type
   const type = t.type === FIELD_TYPE.DATE || t.type === FIELD_TYPE.NEWDATE ? 'DATE' : t.type === FIELD_TYPE.DATETIME || t.type === FIELD_TYPE.DATETIME2 ? 'DATETIME' : 'TIMESTAMP'
   const fsp = type === 'DATE' ? 0 : (t.decimals ?? 0)
-  const dt = toDateTime(value, type)
+  const label = type === 'DATE' ? 'date' : 'datetime'
+  const refuse = () => wrongTemporalValue(label, toText(value), column.name, ctx.row)
   let v: MysqlDateTime
-  if (dt === undefined) {
-    const label = type === 'DATE' ? 'date' : type === 'DATETIME' ? 'datetime' : 'datetime'
-    v = adjust(ctx, () => wrongTemporalValue(label, toText(value), column.name, ctx.row), ZERO_DATE)
-  } else v = roundDateTime(dt.v, fsp)
+  let full: MysqlDateTime | undefined
+  if (isText(value)) {
+    // Text is scanned as `str_to_datetime` scans it, under the session's
+    // zero-date rules. Unreadable is 1265 outside a strict mode; zero where
+    // the mode forbids it, or a day the month lacks, 1264; strict, both 1292.
+    const text = toText(value)
+    // A TIMESTAMP takes no zero month or day whatever the mode: such text
+    // fails as it is read, before its delimiters are judged (8.4.11).
+    const flags = { noZeroDate: ctx.noZeroDate === true, noZeroInDate: ctx.noZeroInDate !== false || type === 'TIMESTAMP' }
+    const scanned = scanDateTime(text, flags)
+    const p = typeof scanned === 'string' ? undefined : parseDateTime(text, flags)
+    if (p === undefined) {
+      v = adjust(ctx, refuse, ZERO_DATE, scanned === 'truncated' || scanned === 'unreadable' ? () => truncated(column.name, ctx.row) : () => columnOutOfRange(column.name, ctx.row))
+    } else {
+      if (p.deprecation !== undefined) deprecated(ctx, p.deprecation, text, column.name)
+      if (p.truncated) adjust(ctx, refuse, undefined, () => truncated(column.name, ctx.row))
+      v = roundDateTime(p.v, fsp)
+      // A truncation's warning stands for the dropped time of day's note too (8.4.11).
+      full = p.hasTime && !p.truncated && v.year <= 9999 ? roundDateTime(p.v, 0) : undefined
+    }
+  } else {
+    const dt = toDateTime(value, type)
+    if (dt === undefined) v = adjust(ctx, refuse, ZERO_DATE, temporalWarning(value, column.name, ctx.row, false))
+    else v = roundDateTime(dt.v, fsp)
+    const whole = dt === undefined ? undefined : toDateTime(value, 'DATETIME')
+    full = whole === undefined ? undefined : roundDateTime(whole.v, 0)
+  }
 
+  // Rounding past 9999-12-31 23:59:59.999999 overflows: the zero date, with
+  // 1441 and 1264 as warnings, strict mode or not (8.4.11).
+  if (v.year > 9999) {
+    warn(ctx, 1441, 'Datetime function: datetime field overflow')
+    warn(ctx, 1264, `Out of range value for column '${column.name}' at row ${ctx.row}`)
+    v = ZERO_DATE
+    full = undefined
+  }
+
+  // A time of day a DATE drops: 1292 under a strict mode, 1265 without one,
+  // a warning either way (8.4.11) — and a fraction of a second is none.
+  if (type === 'DATE' && full !== undefined) {
+    const time = full
+    if (time !== undefined && (time.hour !== 0 || time.minute !== 0 || time.second !== 0)) {
+      if (ctx.strict) warn(ctx, 1292, `Incorrect date value: '${toText(value)}' for column '${column.name}' at row ${ctx.row}`, 'Note')
+      else warn(ctx, 1265, `Data truncated for column '${column.name}' at row ${ctx.row}`, 'Note')
+    }
+  }
   if (type === 'DATE') return dateFieldToStorage(encodeDateField(v.year, v.month, v.day))
   if (type === 'DATETIME') return encodeDatetime2(v, fsp)
   // TIMESTAMP: the session `time_zone` is taken to be UTC (doc 15's
   // conversion; `@@time_zone` is SYSTEM and the system zone is UTC here).
   if (v.year === 0 && v.month === 0 && v.day === 0) return encodeTimestamp2(0, 0, fsp)
-  const seconds = Date.UTC(v.year, v.month - 1, v.day, v.hour, v.minute, v.second) / 1000
+  // A zero month or day, which a DATETIME may hold where the mode allows, is
+  // no instant: out of range for a TIMESTAMP (8.4.11).
+  const seconds = v.month === 0 || v.day === 0 ? 0 : Date.UTC(v.year, v.month - 1, v.day, v.hour, v.minute, v.second) / 1000
   if (seconds < 1 || seconds > 2147483647) {
-    adjust(ctx, () => wrongTemporalValue('datetime', toText(value), column.name, ctx.row), undefined)
+    adjust(ctx, () => wrongTemporalValue('datetime', toText(value), column.name, ctx.row), undefined, () => columnOutOfRange(column.name, ctx.row))
     return encodeTimestamp2(0, 0, fsp)
   }
   return encodeTimestamp2(seconds, v.microsecond, fsp)
 }
 
 /** The 1-based index of the member a value names, or 0 — ENUM's "no member" slot. */
-function memberIndex(value: Exclude<Value, null>, members: readonly string[], collationId: number | undefined): number {
-  if (value.kind === 'int') return value.v >= 1n && value.v <= BigInt(members.length) ? Number(value.v) : 0
+
+/** Text, as a temporal column reads it: a string, or bytes that are not a hex literal. */
+const isText = (v: Exclude<Value, null>): boolean => v.kind === 'string' || (v.kind === 'bytes' && v.hex !== true)
+
+/** The first deprecated delimiter in a temporal's text: 4095, or 4096 for one too many (8.4.11). */
+function deprecated(ctx: StoreContext, d: Deprecation, text: string, column: string): void {
+  // A control character is named by its escape: '\t' (8.4.11).
+  const char = ({ '\t': '\\t', '\n': '\\n', '\r': '\\r', '\v': '\\v', '\f': '\\f' } as Record<string, string>)[d.char] ?? d.char
+  const where = `Delimiter '${char}' in position ${d.position} in datetime value '${text}' at row ${ctx.row}`
+  if (d.superfluous) warn(ctx, 4096, `${where} is superfluous and is deprecated. Please remove.`)
+  else warn(ctx, 4095, `${where} is deprecated. Prefer the standard '${d.prefer}'.`)
+  void column
+}
+
+/** C's `rint` in the default rounding mode: halves go to the even neighbour. */
+function roundHalfEven(x: number): number {
+  const r = Math.round(x)
+  return r - x === 0.5 && r % 2 !== 0 ? r - 1 : r
+}
+
+function memberIndex(value: Exclude<Value, null>, members: readonly string[], collationId: number | undefined, digits = true): number | undefined {
+  // A number is an index, whatever its type: `e + 1` is a DOUBLE, and 2.0
+  // names the second member (8.4.11). Index 0 is the error value, ''.
+  if (value.kind === 'int' || value.kind === 'decimal' || value.kind === 'double' || (value.kind === 'bytes' && value.hex === true)) {
+    const n = value.kind === 'double' ? value.v : Number(toText(value.kind === 'bytes' ? int(toInteger(value), true) : value))
+    // A number names a member: 0 is not one (8.4.11: 1265).
+    if (!Number.isInteger(n)) return undefined
+    return n >= 1 && n <= members.length ? n : undefined
+  }
   const text = toText(value)
   const id = collationId ?? 255
   const c = collation(id)
@@ -347,14 +536,22 @@ function memberIndex(value: Exclude<Value, null>, members: readonly string[], co
   for (let i = 0; i < members.length; i++) {
     if (c.compare(encodeCollation(members[i] as string, id), key) === 0) return i + 1
   }
-  return 0
+  // A string no member is named, that is a whole number, is an index too:
+  // '3' is the third member and '0' the error value. Leading spaces are read
+  // as the number's, and trailing ones go as they do for a name (8.4.11).
+  const trimmed = text.replace(/ +$/, '')
+  if (digits && /^\s*\d+$/.test(trimmed)) {
+    const n = Number(trimmed)
+    return n <= members.length ? n : undefined
+  }
+  return undefined
 }
 
 function encodeBinaryField(value: Exclude<Value, null>, column: FieldColumn, ctx: StoreContext): Uint8Array {
   const t = column.type
   let b = value.kind === 'bytes' ? value.v : value.kind === 'string' ? encodeCollation(value.v, value.collationId) : new TextEncoder().encode(toText(value))
   const limit = BLOB_BYTES[t.type] ?? t.length ?? 1
-  if (b.length > limit) b = adjust(ctx, () => dataTooLong(column.name, ctx.row), b.subarray(0, limit))
+  if (b.length > limit) b = adjust(ctx, () => dataTooLong(column.name, ctx.row), b.subarray(0, limit), () => truncated(column.name, ctx.row))
   return t.type === FIELD_TYPE.STRING ? padBinary(b, t.length ?? 1) : b
 }
 
@@ -367,14 +564,18 @@ function encodeTextField(value: Exclude<Value, null>, column: FieldColumn, ctx: 
     const chars = [...text]
     const length = t.length ?? 1
     if (chars.length > length) {
-      // Excess trailing spaces are dropped with a note, not refused.
+      // Excess trailing spaces are dropped with a note, not refused; a
+      // CHAR's are padding, and go silently (8.4.11).
       const kept = chars.slice(0, length).join('')
-      if (/^ *$/.test(chars.slice(length).join(''))) text = kept
-      else text = adjust(ctx, () => dataTooLong(column.name, ctx.row), kept)
+      if (/^ *$/.test(chars.slice(length).join(''))) {
+        text = kept
+        if (t.type !== FIELD_TYPE.STRING) warn(ctx, 1265, `Data truncated for column '${column.name}' at row ${ctx.row}`, 'Note')
+      }
+      else text = adjust(ctx, () => dataTooLong(column.name, ctx.row), kept, () => truncated(column.name, ctx.row))
     }
   }
   let b = encodeCollation(text, id)
-  if (blobLimit !== undefined && b.length > blobLimit) b = adjust(ctx, () => dataTooLong(column.name, ctx.row), b.subarray(0, blobLimit))
+  if (blobLimit !== undefined && b.length > blobLimit) b = adjust(ctx, () => dataTooLong(column.name, ctx.row), b.subarray(0, blobLimit), () => truncated(column.name, ctx.row))
   if (t.type === FIELD_TYPE.STRING) {
     const info = requireCollationInfo(id)
     // doc 24: a CHAR is fixed and space-padded in a single-byte charset, and
@@ -395,10 +596,13 @@ export function decodeField(field: Uint8Array | null, t: ColumnType): Value {
     case FIELD_TYPE.DECIMAL:
     case FIELD_TYPE.NEWDECIMAL:
       return parseDecimal(decodeDecimal(field, t.precision ?? 10, t.scale ?? 0))
+    case FIELD_TYPE.JSON:
+      return json(decodeJsonDoc(field))
+    // A FLOAT's value prints as a float does, and a FLOAT(M,D)'s with its D.
     case FIELD_TYPE.FLOAT:
-      return double(decodeFloat(field))
+      return { ...double(decodeFloat(field)), float: true, ...(t.precision !== undefined && t.scale !== undefined ? { decimals: t.scale } : {}) }
     case FIELD_TYPE.DOUBLE:
-      return double(decodeDouble(field))
+      return t.precision !== undefined && t.scale !== undefined ? { ...double(decodeDouble(field)), decimals: t.scale } : double(decodeDouble(field))
     case FIELD_TYPE.YEAR:
       return int(BigInt(decodeYear(field)), true)
     case FIELD_TYPE.DATE:
@@ -430,10 +634,12 @@ export function decodeField(field: Uint8Array | null, t: ColumnType): Value {
       return { kind: 'time', v: decodeTime2(field, t.decimals ?? 0), fsp: t.decimals ?? 0 }
     case FIELD_TYPE.ENUM: {
       const i = decodeEnum(field)
-      return string(i === 0 ? '' : (enumMember(i, t.members ?? []) ?? ''), t.collationId ?? 255, COERCIBILITY.IMPLICIT)
+      return { ...string(i === 0 ? '' : (enumMember(i, t.members ?? []) ?? ''), t.collationId ?? 255, COERCIBILITY.IMPLICIT), ordinal: BigInt(i) }
     }
-    case FIELD_TYPE.SET:
-      return string(setMembers(decodeSet(field), t.members ?? []).join(','), t.collationId ?? 255, COERCIBILITY.IMPLICIT)
+    case FIELD_TYPE.SET: {
+      const bits = decodeSet(field)
+      return { ...string(setMembers(bits, t.members ?? []).join(','), t.collationId ?? 255, COERCIBILITY.IMPLICIT), ordinal: BigInt(bits) }
+    }
     case FIELD_TYPE.BIT:
       return int(decodeBit(field), true)
     case FIELD_TYPE.STRING:

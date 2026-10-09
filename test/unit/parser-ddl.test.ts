@@ -75,16 +75,20 @@ test('M3.5: a column carries its charset and collation, or says it has none', ()
 
 test('M3.5: FLOAT(p) is a precision and FLOAT(M,D) is not', () => {
   // The trap this table exists for. One argument to FLOAT is a precision in
-  // bits of mantissa, and 24 or more makes the column a DOUBLE; two arguments
-  // are the old display form and leave it a FLOAT. So `FLOAT(24)` and
-  // `FLOAT(24,2)` are different types, which is not visible from the syntax.
+  // bits of mantissa, and more than 24 makes the column a DOUBLE; two
+  // arguments are the old display form and leave it a FLOAT. So `FLOAT(25)`
+  // and `FLOAT(25,2)` are different types, which is not visible from the
+  // syntax. This test first said 24 was a DOUBLE; 8.4.11's SHOW CREATE TABLE
+  // says `float`.
   assert.equal(column('FLOAT').type.code, FIELD_TYPE.FLOAT)
   assert.equal(column('FLOAT(23)').type.code, FIELD_TYPE.FLOAT)
-  assert.equal(column('FLOAT(24)').type.code, FIELD_TYPE.DOUBLE)
+  assert.equal(column('FLOAT(24)').type.code, FIELD_TYPE.FLOAT)
+  assert.equal(column('FLOAT(25)').type.code, FIELD_TYPE.DOUBLE)
   assert.equal(column('FLOAT(53)').type.code, FIELD_TYPE.DOUBLE)
-  const two = column('FLOAT(24,2)')
+  assert.equal(column('FLOAT(53)').type.precision, 53)
+  const two = column('FLOAT(25,2)')
   assert.equal(two.type.code, FIELD_TYPE.FLOAT)
-  assert.equal(two.type.length, 24)
+  assert.equal(two.type.length, 25)
   assert.equal(two.type.scale, 2)
 })
 
@@ -190,6 +194,14 @@ test('M3.5: keys, constraints and references', () => {
   assert.equal(t.checks.length, 1)
   assert.equal(t.checks[0]!.name, 'ck')
   assert.equal(t.checks[0]!.enforced, false)
+
+  // A column's own CHECK takes a name and NOT ENFORCED as a table's does
+  // (8.4.11 accepts `d INT CONSTRAINT dd CHECK (d > 1) NOT ENFORCED`).
+  const inline = create('CREATE TABLE t (d INT CONSTRAINT dd CHECK (d > 1) NOT ENFORCED, e INT CHECK (e < 2), f INT CONSTRAINT CHECK (f <> 0) ENFORCED)')
+  assert.deepEqual(
+    inline.columns.map((c) => (c.check === undefined ? undefined : { name: c.check.name, enforced: c.check.enforced })),
+    [{ name: 'dd', enforced: false }, { name: undefined, enforced: true }, { name: undefined, enforced: true }],
+  )
 
   // A prefix length is how a TEXT column is indexed at all.
   assert.equal(create('CREATE TABLE t (a TEXT, KEY (a(15)))').keys[0]!.columns[0]!.length, 15)

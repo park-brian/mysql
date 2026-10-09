@@ -39,11 +39,12 @@ export function initPage(page: Uint8Array, pageNo: number, type: PageType): void
 }
 
 export function pageNumber(page: Uint8Array): number {
-  return view(page).getUint32(4)
+  return (((page[4] as number) << 24) | ((page[5] as number) << 16) | ((page[6] as number) << 8) | (page[7] as number)) >>> 0
 }
 
+/** Read straight from the bytes, as every fetch of a tree's page checks it: a DataView each time was measurable. */
 export function pageType(page: Uint8Array): number {
-  return view(page).getUint8(16)
+  return page[16] as number
 }
 
 export function pageLsn(page: Uint8Array): number {

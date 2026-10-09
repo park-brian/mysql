@@ -60,18 +60,22 @@ export function initIndexPage(page: Uint8Array, pageNo: number, level: number, i
 
 // --- header fields ------------------------------------------------------------
 
-export const level = (p: Uint8Array): number => view(p).getUint16(LEVEL)
-export const cellCount = (p: Uint8Array): number => view(p).getUint16(N_CELLS)
-export const indexIdOf = (p: Uint8Array): number => view(p).getUint32(INDEX_ID)
-export const schemaVersion = (p: Uint8Array): number => view(p).getUint32(SCHEMA_VERSION)
-export const leftSibling = (p: Uint8Array): number => view(p).getUint32(LEFT)
-export const rightSibling = (p: Uint8Array): number => view(p).getUint32(RIGHT)
-export const lastInsert = (p: Uint8Array): number => view(p).getUint16(LAST_INSERT)
-export const direction = (p: Uint8Array): number => view(p).getUint8(DIRECTION)
-export const directionCount = (p: Uint8Array): number => view(p).getUint16(N_DIRECTION)
-export const garbage = (p: Uint8Array): number => view(p).getUint16(GARBAGE)
+export const level = (p: Uint8Array): number => u16(p, LEVEL)
+/** A big-endian `uint16` read straight from the bytes: the binary search reads one per probe, and a DataView each was most of its cost. */
+const u16 = (p: Uint8Array, at: number): number => ((p[at] as number) << 8) | (p[at + 1] as number)
+const u32 = (p: Uint8Array, at: number): number => (((p[at] as number) << 24) | ((p[at + 1] as number) << 16) | ((p[at + 2] as number) << 8) | (p[at + 3] as number)) >>> 0
+
+export const cellCount = (p: Uint8Array): number => u16(p, N_CELLS)
+export const indexIdOf = (p: Uint8Array): number => u32(p, INDEX_ID)
+export const schemaVersion = (p: Uint8Array): number => u32(p, SCHEMA_VERSION)
+export const leftSibling = (p: Uint8Array): number => u32(p, LEFT)
+export const rightSibling = (p: Uint8Array): number => u32(p, RIGHT)
+export const lastInsert = (p: Uint8Array): number => u16(p, LAST_INSERT)
+export const direction = (p: Uint8Array): number => (p[DIRECTION] as number)
+export const directionCount = (p: Uint8Array): number => u16(p, N_DIRECTION)
+export const garbage = (p: Uint8Array): number => u16(p, GARBAGE)
 /** A root's count of fragment pages in segment `i`: 0 leaf, 1 internal, 2 overflow (doc 21). */
-export const fragments = (p: Uint8Array, i: number): number => view(p).getUint16(FRAGMENTS + 2 * i)
+export const fragments = (p: Uint8Array, i: number): number => u16(p, FRAGMENTS + 2 * i)
 
 export const setSchemaVersion = (p: Uint8Array, n: number): void => view(p).setUint32(SCHEMA_VERSION, n)
 export const setLeftSibling = (p: Uint8Array, n: number): void => view(p).setUint32(LEFT, n)
@@ -94,7 +98,7 @@ export function noteInsert(p: Uint8Array, slot: number): void {
 const slotAt = (p: Uint8Array, i: number): number => p.length - FRAME_TRAILER - 2 * (i + 1)
 
 function cellOffset(p: Uint8Array, i: number): number {
-  return view(p).getUint16(slotAt(p, i))
+  return u16(p, slotAt(p, i))
 }
 
 const varintSize = (n: number): number => (n < 0x80 ? 1 : n < 0x4000 ? 2 : 3)
@@ -132,7 +136,19 @@ export function cell(p: Uint8Array, i: number): { key: Uint8Array; value: Uint8A
   return { key: p.subarray(start, start + keyLength), value: p.subarray(start + keyLength, start + keyLength + valueLength) }
 }
 
-export const keyAt = (p: Uint8Array, i: number): Uint8Array => cell(p, i).key
+/** The key of the cell at slot `i`, without the value's view `cell` builds too. */
+export function keyAt(p: Uint8Array, i: number): Uint8Array {
+  let at = cellOffset(p, i)
+  // The key's length, then the value's, each a varint of at most three bytes.
+  let keyLength = 0
+  for (let shift = 0; ; shift += 7) {
+    const b = p[at++] as number
+    keyLength |= (b & 0x7f) << shift
+    if ((b & 0x80) === 0) break
+  }
+  while (((p[at++] as number) & 0x80) !== 0);
+  return p.subarray(at, at + keyLength)
+}
 
 /** An internal page's child at slot `i`. */
 export const childAt = (p: Uint8Array, i: number): number => {
@@ -173,7 +189,7 @@ export function search(p: Uint8Array, key: Uint8Array): { index: number; found: 
 
 /** Contiguous free bytes between the heap and the slot array. */
 export function freeSpace(p: Uint8Array): number {
-  return slotAt(p, cellCount(p) - 1) - view(p).getUint16(HEAP_TOP)
+  return slotAt(p, cellCount(p) - 1) - u16(p, HEAP_TOP)
 }
 
 /** Whether a cell would fit, after compacting the heap if need be. */
@@ -183,7 +199,7 @@ export function fits(p: Uint8Array, key: Uint8Array, value: Uint8Array): boolean
 
 /** Bytes in use by cells and slots — what the merge and split policies weigh. */
 export function usedSpace(p: Uint8Array): number {
-  return view(p).getUint16(HEAP_TOP) - INDEX_HEADER_END - garbage(p) + SLOT * cellCount(p)
+  return u16(p, HEAP_TOP) - INDEX_HEADER_END - garbage(p) + SLOT * cellCount(p)
 }
 
 /** Insert a cell at slot `index`. The caller checks `fits` first; this compacts when it must. */
@@ -204,6 +220,20 @@ export function insertCell(p: Uint8Array, index: number, key: Uint8Array, value:
   p.copyWithin(low, low + SLOT, slotAt(p, index) + SLOT)
   v.setUint16(slotAt(p, index), at)
   v.setUint16(N_CELLS, n + 1)
+}
+
+/**
+ * Overwrite the value of the cell at slot `index` where it lies, when the new
+ * value is the same length: a delete-mark or an update of fixed-width fields.
+ * `false`, and the page untouched, when it is not. Removing and re-inserting
+ * instead leaves the old bytes as garbage, and on a full page compacts the
+ * whole heap for every row a DELETE marks.
+ */
+export function replaceValue(p: Uint8Array, index: number, value: Uint8Array): boolean {
+  const { value: old } = cell(p, index)
+  if (old.length !== value.length) return false
+  p.set(value, old.byteOffset - p.byteOffset)
+  return true
 }
 
 /** Remove the cell at slot `index`, leaving its bytes as garbage. */

@@ -14,6 +14,8 @@
 // needs no decimal library: `12.50` is `{ v: 1250n, scale: 2 }`.
 import type { MysqlDateTime, MysqlTime } from '@myjs/bytes'
 import { encodeCollation } from '@myjs/charsets'
+import { renderJson, type JsonDoc } from './json-doc.ts'
+import { scanDateTime, scanTime, type Deprecation, type ScanFlags } from './temporal-scan.ts'
 
 export type Value =
   | null
@@ -24,12 +26,20 @@ export type Value =
   | BytesValue
   | DateTimeValue
   | TimeValue
+  | JsonDocValue
 
 /** A BIGINT. `unsigned` decides its range, and how arithmetic promotes it. */
 export interface IntValue {
   readonly kind: 'int'
   readonly v: bigint
   readonly unsigned: boolean
+  /**
+   * What the value is as text, where that is not its digits: a BIT's bytes
+   * passed through IF or CASE, which `val_str` hands on as they are while
+   * every numeric reading sees the number (8.4.11: `IF(1, b, 0)` is 5 in
+   * arithmetic and the byte 0x05 to a client).
+   */
+  readonly str?: Uint8Array
 }
 
 export interface DecimalValue {
@@ -50,6 +60,10 @@ export interface DecimalValue {
 export interface DoubleValue {
   readonly kind: 'double'
   readonly v: number
+  /** Read from a FLOAT column: as text, six significant digits (`FLT_DIG`). */
+  readonly float?: true
+  /** A FLOAT(M,D)'s D, and arithmetic's over one: as text, exactly this many decimals. */
+  readonly decimals?: number
 }
 
 /**
@@ -62,12 +76,43 @@ export interface StringValue {
   readonly v: string
   readonly collationId: number
   readonly coercibility: number
+  /**
+   * An ENUM's member index or a SET's bitmap, which is what the column is in
+   * a numeric context: `e + 0` is 2 for the second member (8.4.11).
+   */
+  readonly ordinal?: bigint
 }
 
 /** A binary string: VARBINARY, BLOB, a hex literal. */
 export interface BytesValue {
   readonly kind: 'bytes'
   readonly v: Uint8Array
+  /**
+   * A hex or bit literal with no introducer, which a numeric context reads as
+   * a big-endian unsigned integer: `x'41' + 0` is 65, where `CAST('A' AS
+   * BINARY) + 0` is 0 (8.4.11).
+   */
+  readonly hex?: boolean
+}
+
+/** A value as a field holds it: a hex literal's bytes are plain VARBINARY once stored or materialized (8.4.11: `(SELECT x'41' a) d` reads `a + 0` as 0). */
+export function withoutHex(v: Value): Value {
+  return v !== null && v.kind === 'bytes' && v.hex === true ? { kind: 'bytes', v: v.v } : v
+}
+
+/** A value with no trace of the item it came from: no hex literal's number, no ENUM's index — what a user variable or a scalar subquery hands on. */
+export function plainValue(v: Value): Value {
+  if (v !== null && v.kind === 'string' && v.ordinal !== undefined) return { kind: 'string', v: v.v, collationId: v.collationId, coercibility: v.coercibility }
+  if (v !== null && v.kind === 'double' && (v.float !== undefined || v.decimals !== undefined)) return { kind: 'double', v: v.v }
+  if (v !== null && v.kind === 'int' && v.str !== undefined) return { kind: 'int', v: v.v, unsigned: v.unsigned }
+  return withoutHex(v)
+}
+
+/** A hex literal's bytes as the unsigned integer they spell, big-endian; its low 64 bits. */
+export function hexNumber(v: Uint8Array): bigint {
+  let n = 0n
+  for (const b of v) n = ((n << 8n) | BigInt(b)) & 0xffff_ffff_ffff_ffffn
+  return n
 }
 
 export type TemporalType = 'DATE' | 'DATETIME' | 'TIMESTAMP'
@@ -86,6 +131,12 @@ export interface TimeValue {
   readonly fsp: number
 }
 
+/** A JSON value (M5.21): what a JSON column holds and a JSON function returns. */
+export interface JsonDocValue {
+  readonly kind: 'json'
+  readonly v: JsonDoc
+}
+
 /** Coercibility, from `sql/item.h`'s `Derivation`. */
 export const COERCIBILITY = { EXPLICIT: 0, IMPLICIT: 2, SYSCONST: 3, COERCIBLE: 4, NUMERIC: 5, IGNORABLE: 6 } as const
 
@@ -102,6 +153,7 @@ export const decimal = (v: bigint, scale: number, display?: number): DecimalValu
 /** The scale a decimal is shown at. */
 export const displayScale = (d: DecimalValue): number => d.display ?? d.scale
 export const bytes = (v: Uint8Array): BytesValue => ({ kind: 'bytes', v })
+export const json = (v: JsonDoc): JsonDocValue => ({ kind: 'json', v })
 export const string = (v: string, collationId: number, coercibility: number = COERCIBILITY.COERCIBLE): StringValue => ({
   kind: 'string',
   v,
@@ -172,12 +224,15 @@ export function numericPrefix(text: string): { readonly text: string; readonly c
   return { text: t, complete: /^[ \t\n\r]*$/.test(rest), fractional: /[.eE]/.test(t) }
 }
 
-function textOf(v: StringValue | BytesValue): string {
+export function textOf(v: StringValue | BytesValue): string {
   // A binary string in a numeric context is read byte by byte, as ASCII is.
   return v.kind === 'string' ? v.v : String.fromCharCode(...v.v.subarray(0, 1024))
 }
 
 // --- conversions ----------------------------------------------------------------
+
+/** Text past the doubles is the largest there is, of its sign: `my_strtod` stops at DBL_MAX (8.4.11: `'1e400' + 0`, with 1292). */
+const clampedDouble = (n: number): number => (Number.isFinite(n) ? n : n > 0 ? Number.MAX_VALUE : -Number.MAX_VALUE)
 
 /** A value as a double, as MySQL's `val_real()`. */
 export function toDouble(v: Exclude<Value, null>): number {
@@ -190,12 +245,29 @@ export function toDouble(v: Exclude<Value, null>): number {
       return v.v
     case 'string':
     case 'bytes':
-      return Number(numericPrefix(textOf(v)).text)
+      if (v.kind === 'string' && v.ordinal !== undefined) return Number(v.ordinal)
+      if (v.kind === 'bytes' && v.hex === true) return Number(hexNumber(v.v))
+      return clampedDouble(Number(numericPrefix(textOf(v)).text))
     case 'datetime':
       return Number(temporalNumber(v))
     case 'time':
       return Number(timeNumber(v.v))
+    case 'json': {
+      const n = jsonNumber(v)
+      return n === undefined ? Number(numericPrefix(renderJson(v.v)).text) : toDouble(n)
+    }
   }
+}
+
+/** A JSON number as the SQL number it is; undefined for anything else (`val_real` and friends then read its text). */
+function jsonNumber(v: JsonDocValue): Exclude<Value, null> | undefined {
+  const d = v.v
+  if (d.t === 'int') return int(d.v)
+  if (d.t === 'uint') return int(d.v, true)
+  if (d.t === 'double') return double(d.v)
+  if (d.t === 'decimal') return d.v
+  if (d.t === 'bool') return int(d.v ? 1n : 0n)
+  return undefined
 }
 
 /** A value as an exact decimal, as `val_decimal()`. */
@@ -209,6 +281,8 @@ export function toDecimal(v: Exclude<Value, null>): DecimalValue {
       return doubleToDecimal(v.v)
     case 'string':
     case 'bytes': {
+      if (v.kind === 'string' && v.ordinal !== undefined) return decimal(v.ordinal, 0)
+      if (v.kind === 'bytes' && v.hex === true) return decimal(hexNumber(v.v), 0)
       const p = numericPrefix(textOf(v))
       return /[eE]/.test(p.text) ? doubleToDecimal(Number(p.text)) : parseDecimal(p.text)
     }
@@ -216,6 +290,10 @@ export function toDecimal(v: Exclude<Value, null>): DecimalValue {
       return parseDecimal(temporalNumber(v))
     case 'time':
       return parseDecimal(timeNumber(v.v))
+    case 'json': {
+      const n = jsonNumber(v)
+      return n === undefined ? parseDecimal(numericPrefix(renderJson(v.v)).text.replace(/[eE].*$/, '') || '0') : toDecimal(n)
+    }
   }
 }
 
@@ -242,6 +320,8 @@ export function toInteger(v: Exclude<Value, null>): bigint {
       return roundDouble(v.v)
     case 'string':
     case 'bytes': {
+      if (v.kind === 'string' && v.ordinal !== undefined) return v.ordinal
+      if (v.kind === 'bytes' && v.hex === true) return hexNumber(v.v)
       const p = numericPrefix(textOf(v))
       return p.fractional ? (/[eE]/.test(p.text) ? roundDouble(Number(p.text)) : rescale(parseDecimal(p.text), 0).v) : BigInt(p.text.replace(/^\+/, ''))
     }
@@ -249,10 +329,34 @@ export function toInteger(v: Exclude<Value, null>): bigint {
       return BigInt(temporalNumber(v).split('.')[0] as string)
     case 'time':
       return BigInt(timeNumber(v.v).split('.')[0] as string)
+    case 'json': {
+      const n = jsonNumber(v)
+      return n === undefined ? toInteger(string(renderJson(v.v), 255)) : toInteger(n)
+    }
   }
 }
 
-function roundDouble(n: number): bigint {
+/**
+ * A value as `val_int` reads it. Text is read as `my_strtoll10` reads it:
+ * leading spaces, a sign and digits, stopping at anything else — so '1.5' is
+ * 1 and '2e1' is 2, where storing them into a column rounds — and a number
+ * past 64 bits saturates, at 2^64 - 1 or -2^63 (8.4.11:
+ * `CAST('99999999999999999999' AS SIGNED)` is -1). Anything else is
+ * `toInteger`.
+ */
+export function valInt(v: Exclude<Value, null>): bigint {
+  if (v.kind !== 'string' && v.kind !== 'bytes') return toInteger(v)
+  if (v.kind === 'string' && v.ordinal !== undefined) return v.ordinal
+  if (v.kind === 'bytes' && v.hex === true) return hexNumber(v.v)
+  const m = /^[ \t\n\r]*([+-]?)(\d*)/.exec(textOf(v)) as RegExpExecArray
+  const digits = m[2] as string
+  if (digits === '') return 0n
+  const n = BigInt(digits)
+  if (m[1] === '-') return n > -MIN_SIGNED ? MIN_SIGNED : -n
+  return n > MAX_UNSIGNED ? MAX_UNSIGNED : n
+}
+
+export function roundDouble(n: number): bigint {
   if (!Number.isFinite(n)) return n > 0 ? MAX_UNSIGNED + 1n : MIN_SIGNED - 1n
   const r = n < 0 ? -Math.round(-n) : Math.round(n)
   return BigInt(r)
@@ -306,11 +410,13 @@ function timeNumber(t: MysqlTime): string {
 export function toText(v: Exclude<Value, null>): string {
   switch (v.kind) {
     case 'int':
-      return v.v.toString()
+      // A BIT's bytes read as text as a binary string's are, byte by byte.
+      return v.str === undefined ? v.v.toString() : String.fromCharCode(...v.str)
     case 'decimal':
       return renderDecimal(v)
     case 'double':
-      return renderDouble(v.v)
+      if (v.decimals !== undefined && Number.isFinite(v.v) && Math.abs(v.v) < 1e21) return v.v.toFixed(v.decimals)
+      return v.float === true ? renderFloat(v.v) : renderDouble(v.v)
     case 'string':
       return v.v
     case 'bytes':
@@ -319,12 +425,15 @@ export function toText(v: Exclude<Value, null>): string {
       return renderDateTime(v.v, v.type, v.fsp)
     case 'time':
       return renderTime(v.v, v.fsp)
+    case 'json':
+      return renderJson(v.v)
   }
 }
 
 /** A value as the bytes of a string in `collationId`'s charset. */
 export function toTextBytes(v: Exclude<Value, null>, collationId: number): Uint8Array {
   if (v.kind === 'bytes') return v.v
+  if (v.kind === 'int' && v.str !== undefined) return v.str
   return encodeCollation(toText(v), collationId)
 }
 
@@ -334,6 +443,12 @@ export function toTextBytes(v: Exclude<Value, null>, collationId: number): Uint8
  * notation outside it — `1e15`, `1e-16`, but `0.0000000000000015` and
  * `123456789012345.6`. The bounds were read off a real 8.4.11, not a manual.
  */
+/** A FLOAT prints six significant digits, as `my_gcvt` does for `FLT_DIG`. */
+export function renderFloat(n: number): string {
+  if (!Number.isFinite(n) || n === 0) return renderDouble(n)
+  return renderDouble(Number(n.toPrecision(6)))
+}
+
 export function renderDouble(n: number): string {
   if (Number.isNaN(n)) return 'NaN'
   if (n === 0) return Object.is(n, -0) ? '-0' : '0'
@@ -352,32 +467,39 @@ export function renderDouble(n: number): string {
 // --- temporals from text ----------------------------------------------------------
 
 /**
- * `'2024-01-02'`, `'2024-01-02 03:04:05.123'`, `'20240102'`, and the other
- * delimiters MySQL's `str_to_datetime` accepts. `undefined` when the text is
- * not a date; the caller decides whether that is NULL, a warning or an error.
+ * Text as a datetime, as `str_to_datetime` reads it (`temporal-scan.ts` has
+ * the rules): the value, its displacement applied and a seventh fraction
+ * digit rounded in; whether it had a time; and whether text followed it,
+ * which a strict mode refuses and anything else ignores with a warning.
+ * `undefined` when it is no datetime at all. A zero month or day is refused
+ * unless `flags` say otherwise; the zero date is allowed unless they forbid it.
  */
-export function parseDateTime(text: string): { readonly v: MysqlDateTime; readonly hasTime: boolean; readonly fsp: number } | undefined {
-  const s = text.trim()
-  let m = /^(\d{4})[-/.](\d{1,2})[-/.](\d{1,2})(?:[ T](\d{1,2}):(\d{1,2})(?::(\d{1,2})(?:\.(\d{1,6}))?)?)?$/.exec(s)
-  if (m === null) {
-    const compact = /^(\d{4})(\d{2})(\d{2})(?:(\d{2})(\d{2})(\d{2})(?:\.(\d{1,6}))?)?$/.exec(s)
-    if (compact === null) return undefined
-    m = compact
+export function parseDateTime(
+  text: string,
+  flags: ScanFlags = { noZeroInDate: true },
+): { readonly v: MysqlDateTime; readonly hasTime: boolean; readonly fsp: number; readonly truncated: boolean; readonly deprecation?: Deprecation } | undefined {
+  const s = scanDateTime(text, flags)
+  if (typeof s === 'string') return undefined
+  let v = s.v
+  if (s.nanoseconds >= 500) v = addSeconds(v, 0, 1)
+  // A displacement is converted into the session's zone, UTC here.
+  if (s.displacement !== undefined) v = addSeconds(v, -s.displacement, 0)
+  return { v, hasTime: s.fields > 3, fsp: s.fsp, truncated: s.truncated, ...(s.deprecation === undefined ? {} : { deprecation: s.deprecation }) }
+}
+
+/** A datetime moved by whole seconds and microseconds, the calendar carrying. */
+function addSeconds(v: MysqlDateTime, seconds: number, microseconds: number): MysqlDateTime {
+  let us = v.microsecond + microseconds
+  let carry = seconds
+  if (us >= 1_000_000) {
+    us -= 1_000_000
+    carry++
   }
-  const n = (i: number): number => Number(m[i] ?? 0)
-  const fracText = m[7] ?? ''
-  const v: MysqlDateTime = {
-    year: n(1),
-    month: n(2),
-    day: n(3),
-    hour: n(4),
-    minute: n(5),
-    second: n(6),
-    microsecond: fracText === '' ? 0 : Number(fracText.padEnd(6, '0')),
-  }
-  if (!validDate(v)) return undefined
-  if (v.hour > 23 || v.minute > 59 || v.second > 59) return undefined
-  return { v, hasTime: m[4] !== undefined, fsp: fracText.length }
+  if (carry === 0) return { ...v, microsecond: us }
+  const d = new Date(0)
+  d.setUTCFullYear(v.year, v.month - 1, v.day)
+  d.setUTCHours(v.hour, v.minute, v.second + carry, 0)
+  return { year: d.getUTCFullYear(), month: d.getUTCMonth() + 1, day: d.getUTCDate(), hour: d.getUTCHours(), minute: d.getUTCMinutes(), second: d.getUTCSeconds(), microsecond: us }
 }
 
 /** MySQL's default `sql_mode` refuses an invalid day for its month, but allows the zero date's parts only when they are all zero. */
@@ -390,26 +512,33 @@ export function validDate(v: Pick<MysqlDateTime, 'year' | 'month' | 'day'>): boo
 
 const isLeap = (y: number): boolean => (y % 4 === 0 && y % 100 !== 0) || y % 400 === 0
 
-/** `'12:34:56'`, `'-838:59:59'`, `'1 02:03:04'`, `'123456'`. */
-export function parseTime(text: string): { readonly v: MysqlTime; readonly fsp: number } | undefined {
-  const s = text.trim()
-  const m = /^(-)?(?:(\d+) )?(\d+):(\d{1,2})(?::(\d{1,2})(?:\.(\d{1,6}))?)?$/.exec(s) ?? /^(-)?()(\d{1,3}?)(\d{2})(\d{2})(?:\.(\d{1,6}))?$/.exec(s)
-  if (m === null) return undefined
-  const hours = Number(m[2] ?? 0) * 24 + Number(m[3] ?? 0)
-  const minute = Number(m[4] ?? 0)
-  const second = Number(m[5] ?? 0)
-  if (minute > 59 || second > 59 || hours > 838) return undefined
-  const fracText = m[6] ?? ''
+/**
+ * Text as a TIME, as `str_to_time` reads it: `'12:34:56'`, `'-1 02:03'`,
+ * `'123456'`, `'10.5'`, or a datetime's time of day. Past 838:59:59 it is
+ * clamped, and says so; `undefined` when it is no time at all.
+ */
+export function parseTime(
+  text: string,
+): { readonly v: MysqlTime; readonly fsp: number; readonly truncated: boolean; readonly clamped: boolean; readonly dateDropped: boolean; readonly deprecation?: Deprecation } | undefined {
+  const s = scanTime(text)
+  if (typeof s === 'string') return undefined
+  let us = s.microsecond
+  let seconds = (s.hours * 60 + s.minute) * 60 + s.second
+  if (s.nanoseconds >= 500 && !s.clamped) {
+    us++
+    if (us === 1_000_000) {
+      us = 0
+      seconds++
+    }
+  }
+  const hours = Math.floor(seconds / 3600)
   return {
-    v: {
-      negative: m[1] === '-',
-      days: Math.floor(hours / 24),
-      hour: hours % 24,
-      minute,
-      second,
-      microsecond: fracText === '' ? 0 : Number(fracText.padEnd(6, '0')),
-    },
-    fsp: fracText.length,
+    v: { negative: s.negative && (seconds > 0 || us > 0), days: Math.floor(hours / 24), hour: hours % 24, minute: Math.floor(seconds / 60) % 60, second: seconds % 60, microsecond: us },
+    fsp: s.fsp,
+    truncated: s.truncated,
+    clamped: s.clamped,
+    dateDropped: s.datetime !== undefined && (s.datetime.v.year !== 0 || s.datetime.v.month !== 0 || s.datetime.v.day !== 0),
+    ...(s.deprecation === undefined ? {} : { deprecation: s.deprecation }),
   }
 }
 
@@ -460,6 +589,8 @@ function truncateTemporal(v: DateTimeValue, type: TemporalType): DateTimeValue {
 export function toTime(v: Exclude<Value, null>): TimeValue | undefined {
   if (v.kind === 'time') return v
   if (v.kind === 'datetime') return { kind: 'time', v: { negative: false, days: 0, hour: v.v.hour, minute: v.v.minute, second: v.v.second, microsecond: v.v.microsecond }, fsp: v.fsp }
+  // `str_to_time`: a datetime written out is its time of day, and a date
+  // alone is a number's prefix ('2020-01-01' is 00:20:20, 8.4.11).
   const p = parseTime(toText(v))
   return p === undefined ? undefined : { kind: 'time', v: p.v, fsp: p.fsp }
 }

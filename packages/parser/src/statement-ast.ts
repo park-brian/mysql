@@ -94,6 +94,8 @@ export interface ColumnDefinition {
   readonly nullable?: boolean
   /** `DEFAULT <expr>`. A literal, or an expression in parentheses (8.0.13+). */
   readonly default?: Expression
+  /** The default was written in parentheses: an expression default, even `('x')`. */
+  readonly defaultExpression?: boolean
   /** `ON UPDATE CURRENT_TIMESTAMP[(fsp)]`. */
   readonly onUpdate?: Expression
   readonly autoIncrement?: boolean
@@ -108,8 +110,8 @@ export interface ColumnDefinition {
   readonly invisible?: boolean
   /** `SRID n` on a spatial column. */
   readonly srid?: number
-  /** An inline `CHECK (…)`, which MySQL treats as a table constraint anyway. */
-  readonly check?: Expression
+  /** An inline `[CONSTRAINT [symbol]] CHECK (…) [[NOT] ENFORCED]`, which MySQL treats as a table constraint anyway. */
+  readonly check?: CheckConstraint
   readonly at: number
 }
 
@@ -137,6 +139,8 @@ export interface IndexColumn {
   readonly length?: number
   /** `DESC`. `ASC` is the default and is recorded as absent. */
   readonly desc?: boolean
+  /** `ASC` written: no different to a B-tree, refused by a FULLTEXT key (1221). */
+  readonly asc?: true
 }
 
 /** What a foreign key points at, and what it does when the target moves. */
@@ -159,6 +163,10 @@ export interface KeyDefinition {
   /** Set for `type: 'foreign'`. */
   readonly references?: Reference
   readonly comment?: string
+  /** `WITH PARSER p`, a FULLTEXT key's. */
+  readonly parser?: string
+  /** `INVISIBLE`. */
+  readonly invisible?: true
   readonly at: number
 }
 
@@ -264,7 +272,7 @@ export type AlterAction =
       /** Absent only for `PRIMARY KEY`. */
       readonly name?: string
     }
-  | { readonly type: 'setDefault'; readonly column: string; readonly value: Expression }
+  | { readonly type: 'setDefault'; readonly column: string; readonly value: Expression; readonly expression?: boolean }
   | { readonly type: 'dropDefault'; readonly column: string }
   | { readonly type: 'columnVisibility'; readonly column: string; readonly visible: boolean }
   | { readonly type: 'indexVisibility'; readonly index: string; readonly visible: boolean }

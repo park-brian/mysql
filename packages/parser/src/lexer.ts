@@ -103,6 +103,15 @@ export function lex(sql: string, options: LexOptions = {}): Token[] {
   return new Lexer(sql, options.sqlMode ?? NO_SQL_MODE).run()
 }
 
+/** `OPERATORS` by first character, each list still longest first. */
+const OPERATORS_BY_FIRST = new Map<string, string[]>()
+for (const op of OPERATORS) {
+  const list = OPERATORS_BY_FIRST.get(op[0] as string)
+  if (list === undefined) OPERATORS_BY_FIRST.set(op[0] as string, [op])
+  else list.push(op)
+}
+const NONE: readonly string[] = []
+
 class Lexer {
   readonly #sql: string
   readonly #mode: SqlMode
@@ -269,7 +278,7 @@ class Lexer {
     if ((c === 'b' || c === 'B') && this.#peek(1) === "'") return this.#quotedBinary(TOKEN.BIT, start, startLine)
     if (isIdentStart(c)) return this.#identifier(start, startLine)
 
-    for (const op of OPERATORS) {
+    for (const op of OPERATORS_BY_FIRST.get(c) ?? NONE) {
       if (this.#sql.startsWith(op, this.#at)) {
         // `||` is logical OR by default and concatenation under
         // `PIPES_AS_CONCAT`. The token is the same either way; M3.2 reads the

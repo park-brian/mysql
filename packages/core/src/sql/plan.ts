@@ -38,7 +38,9 @@ import {
   type StoreContext,
   type Value,
 } from '@myjs/types'
+import type { Table, Trx } from '@myjs/engine'
 import type { Env } from './compile.ts'
+import { scan, type ScannedRow } from './operators.ts'
 
 /** How to read a table: an index and the ranges of it, in index order, or a full scan. */
 export interface Access {
@@ -161,7 +163,8 @@ export function chooseAccess(def: TableDef, alias: string, where: Expression | u
     .filter((c): c is Condition => c !== undefined)
   if (conditions.length === 0) return FULL_SCAN
 
-  const candidates = [...def.indexes].sort((a, b) => (a.kind === 'primary' ? -1 : 0) - (b.kind === 'primary' ? -1 : 0))
+  // An invisible index is kept and enforced, and never chosen (8.4.11: a scan, its rows in table order).
+  const candidates = def.indexes.filter((i) => i.invisible !== true).sort((a, b) => (a.kind === 'primary' ? -1 : 0) - (b.kind === 'primary' ? -1 : 0))
   let best: { access: Access; score: number } | undefined
   for (const index of candidates) {
     const part = index.parts[0]
@@ -178,9 +181,16 @@ export function chooseAccess(def: TableDef, alias: string, where: Expression | u
 
 const ctx = (): StoreContext => ({ strict: true, row: 1, warnings: 0 })
 
+/** Bytes as a string of one character each, whose order is theirs. */
+function latin1(bytes: Uint8Array): string {
+  let s = ''
+  for (let i = 0; i < bytes.length; i++) s += String.fromCharCode(bytes[i] as number)
+  return s
+}
+
 function bound(v: Value, column: ColumnDef, inclusive: boolean): KeyBound | undefined {
   try {
-    return { values: [encodeField(v, { ...column, nullable: true }, ctx())], inclusive }
+    return { values: [encodeField(v, column.nullable ? column : { ...column, nullable: true }, ctx())], inclusive }
   } catch {
     return undefined
   }
@@ -208,13 +218,14 @@ function accessFor(index: IndexDef, column: ColumnDef, conditions: readonly Cond
       // values would use the literal's collation, not the column's: under
       // `SET NAMES … COLLATE utf8mb4_bin`, `IN ('a', 'A')` on a case-
       // insensitive column read the same key twice (found by review).
+      // A byte a character: the strings order as the keys do.
       const part = keyPartOf(column.type, true)
+      const nullable = { ...column, nullable: true }
       const points = new Map<string, KeyBound>()
       for (const v of values as Value[]) {
-        const b = bound(v, column, true)
+        const b = bound(v, nullable, true)
         if (b === undefined) return undefined
-        const key = encodeKey(b.values, [part])
-        points.set(Array.from(key, (x) => x.toString(16).padStart(2, '0')).join(''), b)
+        points.set(latin1(encodeKey(b.values, [part])), b)
       }
       const ranges = [...points.entries()].sort(([x], [y]) => (x < y ? -1 : x > y ? 1 : 0)).map(([, b]) => ({ from: b, to: b }))
       return { access: { index: index.name, ranges }, score: 3 }
@@ -236,6 +247,30 @@ function accessFor(index: IndexDef, column: ColumnDef, conditions: readonly Cond
   if (from === undefined && to === undefined) return undefined
   // A lower bound alone still skips the NULLs a clustered key cannot hold anyway.
   return { access: { index: index.name, ranges: [{ ...(from === undefined ? {} : { from }), ...(to === undefined ? {} : { to }) }] }, score: from !== undefined && to !== undefined ? 2 : 1 }
+}
+
+/**
+ * A point read of a unique index for one value, or `undefined` when the value
+ * does not convert to the key's type exactly — in which case the caller scans
+ * and filters, which finds the same rows (D-65).
+ */
+export function pointAccess(def: TableDef, index: IndexDef, column: ColumnDef, v: Value): Access | undefined {
+  void def
+  if (!exact(v, column)) return undefined
+  const b = bound(v, column, true)
+  return b === undefined ? undefined : { index: index.name, ranges: [{ from: b, to: b }] }
+}
+
+/** The rows an access path reads, in its order. */
+export function* accessRows(table: Table, def: TableDef, access: Access, trx: Trx | undefined, current: boolean): Generator<ScannedRow> {
+  const types = def.columns.map((c) => c.type)
+  const mode = current ? 'current' : 'consistent'
+  const base = { table, types, mode, ...(trx === undefined ? {} : { trx }), ...(access.index === undefined ? {} : { index: access.index }) } as const
+  if (access.ranges === undefined) {
+    yield* scan(base)
+    return
+  }
+  for (const range of access.ranges) yield* scan({ ...base, range })
 }
 
 /** A literal, `-literal` or `?`, evaluated. */

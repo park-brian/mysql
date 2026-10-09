@@ -209,6 +209,8 @@ export interface DataType {
   readonly length?: number
   /** `DECIMAL(10,2)`'s 2. */
   readonly scale?: number
+  /** `FLOAT(p)`'s bits of mantissa, which chose FLOAT or DOUBLE; past 53 the column is 1063. */
+  readonly precision?: number
   readonly unsigned?: boolean
   readonly zerofill?: boolean
   /**
@@ -235,6 +237,10 @@ export interface DataType {
   readonly binary?: boolean
   /** `SERIAL`, which also implies UNSIGNED NOT NULL AUTO_INCREMENT UNIQUE. */
   readonly serial?: boolean
+  /** Spelled `BOOL` or `BOOLEAN`: a TINYINT(1) whose width was never written, so it draws no deprecation warning. */
+  readonly boolean?: boolean
+  /** Spelled `NCHAR`, `NATIONAL VARCHAR` and the like: utf8mb3 by its name, which 8.4 warns of (3720). */
+  readonly national?: true
   readonly at: number
 }
 
@@ -263,6 +269,7 @@ export function parseDataType(c: Cursor, mode: SqlMode): DataType {
   let canonical = spec.as ?? name
   let length: number | undefined
   let scale: number | undefined
+  let precision: number | undefined
   let values: readonly (string | Uint8Array)[] | undefined
 
   // `REAL` is the one type whose meaning `sql_mode` changes. The flag has been
@@ -281,9 +288,11 @@ export function parseDataType(c: Cursor, mode: SqlMode): DataType {
       if (args.length === 1) {
         // **The trap.** One argument to `FLOAT` is a *precision* in bits of
         // mantissa, not a display width, and 24 or more makes the column a
-        // DOUBLE. `FLOAT(24)` and `FLOAT(24,2)` are different types.
+        // DOUBLE. `FLOAT(25)` and `FLOAT(25,2)` are different types; 24 is
+        // still a FLOAT (8.4.11).
         const p = args[0] as number
-        if (p >= 24) {
+        precision = p
+        if (p > 24) {
           code = FIELD_TYPE.DOUBLE
           canonical = 'DOUBLE'
         }
@@ -368,6 +377,7 @@ export function parseDataType(c: Cursor, mode: SqlMode): DataType {
     code,
     ...(length === undefined ? {} : { length }),
     ...(scale === undefined ? {} : { scale }),
+    ...(precision === undefined ? {} : { precision }),
     ...(unsigned === undefined ? {} : { unsigned }),
     ...(zerofill === undefined ? {} : { zerofill }),
     ...(values === undefined ? {} : { values }),
@@ -375,6 +385,8 @@ export function parseDataType(c: Cursor, mode: SqlMode): DataType {
     ...(collation === undefined ? {} : { collation }),
     ...(binaryModifier === undefined ? {} : { binary: binaryModifier }),
     ...(name === 'SERIAL' ? { serial: true } : {}),
+    ...(name === 'BOOL' || name === 'BOOLEAN' ? { boolean: true } : {}),
+    ...(spec.charset !== undefined ? { national: true as const } : {}),
     at,
   }
 }

@@ -65,24 +65,29 @@ const COMBINATION_MODES: Readonly<Record<string, readonly string[]>> = {
 export const DEFAULT_SQL_MODE = 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION'
 
 /**
- * Every `sql_mode` name a session may hold, in bit order.
+ * Every `sql_mode` bit's name, in bit order: `sql_mode_names[]` in
+ * `sql/sys_vars.cc`, `NOT_USED_n` for the reserved bits.
  *
  * Captured from 8.4.11 rather than transcribed: `SET sql_mode = 1 << i` then
  * `SELECT @@sql_mode` names bit `i` (`MODE_*` in `sql/system_variables.h`).
- * Bits 8–17 and 28 are reserved and refused with ER 3899 there; they are
- * absent here, so they are refused as unknown names (ER 1231), a different
- * errno for the same refusal. Bit order matters because it is the order
+ * Bits 8–17 and 28 are reserved and refused with ER 3899 there; their
+ * names are left out of the names a session may hold, so they are refused
+ * as unknown names (ER 1231), a different errno for the same refusal. Bit order matters because it is the order
  * `@@sql_mode` reports in, which is how `ANSI` comes back as
  * `REAL_AS_FLOAT,…,ONLY_FULL_GROUP_BY,ANSI` — the combination name kept, after
  * the modes it expands to.
  */
-const SQL_MODE_NAMES: readonly string[] = [
-  'REAL_AS_FLOAT', 'PIPES_AS_CONCAT', 'ANSI_QUOTES', 'IGNORE_SPACE', 'NOT_USED', 'ONLY_FULL_GROUP_BY',
-  'NO_UNSIGNED_SUBTRACTION', 'NO_DIR_IN_CREATE', 'ANSI', 'NO_AUTO_VALUE_ON_ZERO', 'NO_BACKSLASH_ESCAPES',
-  'STRICT_TRANS_TABLES', 'STRICT_ALL_TABLES', 'NO_ZERO_IN_DATE', 'NO_ZERO_DATE', 'ALLOW_INVALID_DATES',
-  'ERROR_FOR_DIVISION_BY_ZERO', 'TRADITIONAL', 'HIGH_NOT_PRECEDENCE', 'NO_ENGINE_SUBSTITUTION',
-  'PAD_CHAR_TO_FULL_LENGTH', 'TIME_TRUNCATE_FRACTIONAL',
+export const SQL_MODE_BITS: readonly string[] = [
+  'REAL_AS_FLOAT', 'PIPES_AS_CONCAT', 'ANSI_QUOTES', 'IGNORE_SPACE', 'NOT_USED', 'ONLY_FULL_GROUP_BY', 'NO_UNSIGNED_SUBTRACTION', 'NO_DIR_IN_CREATE',
+  'NOT_USED_9', 'NOT_USED_10', 'NOT_USED_11', 'NOT_USED_12', 'NOT_USED_13', 'NOT_USED_14', 'NOT_USED_15', 'NOT_USED_16', 'NOT_USED_17', 'NOT_USED_18',
+  'ANSI', 'NO_AUTO_VALUE_ON_ZERO', 'NO_BACKSLASH_ESCAPES', 'STRICT_TRANS_TABLES', 'STRICT_ALL_TABLES', 'NO_ZERO_IN_DATE', 'NO_ZERO_DATE', 'ALLOW_INVALID_DATES',
+  'ERROR_FOR_DIVISION_BY_ZERO', 'TRADITIONAL', 'NOT_USED_29', 'HIGH_NOT_PRECEDENCE', 'NO_ENGINE_SUBSTITUTION', 'PAD_CHAR_TO_FULL_LENGTH', 'TIME_TRUNCATE_FRACTIONAL',
 ]
+
+/** Bits 8–17 and 28, which 8.4.11 refuses with ER 3899 rather than as an unknown mode. */
+export const RESERVED_SQL_MODE_BITS = 0x1003ff00n
+
+const SQL_MODE_NAMES: readonly string[] = SQL_MODE_BITS.filter((_, i) => (RESERVED_SQL_MODE_BITS & (1n << BigInt(i))) === 0n)
 const KNOWN = new Set(SQL_MODE_NAMES)
 
 /**

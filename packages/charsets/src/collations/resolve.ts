@@ -38,7 +38,7 @@ export type CollationAvailability = 'resident' | 'loadable' | 'unsupported'
 /** Whether a collation is resident, merely loadable, or neither. */
 export function collationAvailability(id: number): CollationAvailability {
   if (isMemcmpCollation(id) || isWeightedCollation(id)) return 'resident'
-  if (isUcaCollation(id)) return ucaTablesLoaded() ? 'resident' : 'loadable'
+  if (isUcaCollation(id)) return ucaTablesLoaded(id) ? 'resident' : 'loadable'
   return 'unsupported'
 }
 
@@ -47,7 +47,7 @@ export function collation(id: number): Collation {
   if (isMemcmpCollation(id)) return binaryCollationFor(id)
   if (isWeightedCollation(id)) return weightedCollationFor(id)
   if (isUcaCollation(id)) {
-    if (ucaTablesLoaded()) return ucaCollationFor(id)
+    if (ucaTablesLoaded(id)) return ucaCollationFor(id)
     throw collationNotLoaded(id, requireCollationInfo(id).name)
   }
   // M2.23 / D-23: off by default, because a silent fallback turns "not
@@ -78,6 +78,6 @@ export function hasCollation(id: number): boolean {
  * later `collation()` on the hot path can stay synchronous.
  */
 export async function loadCollation(id: number): Promise<Collation> {
-  if (collationAvailability(id) === 'loadable') await loadUcaTables()
+  if (collationAvailability(id) === 'loadable') await loadUcaTables(id)
   return collation(id)
 }

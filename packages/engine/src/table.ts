@@ -81,6 +81,10 @@ export interface Table {
   indexScan(index: string, range?: KeyRange, trx?: Trx, mode?: ReadMode): Generator<[RowId, FieldBytes[]]>
   /** The next `count` AUTO_INCREMENT values, as the first of them: handed out for good, committed or not. */
   nextAutoIncrement(count?: number): bigint
+  /** The value `nextAutoIncrement` would hand out next, taking nothing. */
+  peekAutoIncrement(): bigint
+  /** Move the next AUTO_INCREMENT value up to `next`, if it is not there already: a rebuilt table keeps its counter. */
+  raiseAutoIncrement(next: bigint): void
   stats(): TableStats
 }
 
@@ -283,6 +287,14 @@ class NativeTable implements Table {
 
   nextAutoIncrement(count = 1): bigint {
     return this.#store.takeCounter(this.#clustered.tree.indexId, 0, count)
+  }
+
+  peekAutoIncrement(): bigint {
+    return this.#store.counter(this.#clustered.tree.indexId, 0)
+  }
+
+  raiseAutoIncrement(next: bigint): void {
+    if (next > 1n) this.#store.raiseCounter(this.#clustered.tree.indexId, 0, next - 1n)
   }
 
   stats(): TableStats {
@@ -523,6 +535,14 @@ class MemoryTable implements Table {
     const first = this.#data.nextAuto
     this.#data.nextAuto += BigInt(count)
     return first
+  }
+
+  peekAutoIncrement(): bigint {
+    return this.#data.nextAuto
+  }
+
+  raiseAutoIncrement(next: bigint): void {
+    if (next > this.#data.nextAuto) this.#data.nextAuto = next
   }
 
   stats(): TableStats {

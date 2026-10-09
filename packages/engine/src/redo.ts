@@ -79,9 +79,26 @@ const MERGE_GAP = 8
 export function diffPage(before: Uint8Array | null, after: Uint8Array): Run[] {
   const runs: Run[] = []
   const at = (i: number): number => (before === null ? 0 : (before[i] as number))
+  // Equal stretches are skipped a word at a time where both pages are
+  // word-aligned, as the buffer pool's frames are: a page is mostly
+  // unchanged, and a byte at a time this was most of an INSERT's cost.
+  const words = (b: Uint8Array): Uint32Array | undefined => ((b.byteOffset & 3) === 0 ? new Uint32Array(b.buffer, b.byteOffset, b.length >> 2) : undefined)
+  const a32 = words(after)
+  const b32 = before === null ? undefined : words(before)
+  const fast = a32 !== undefined && (before === null || b32 !== undefined)
   for (const [from, to] of regions(after.length)) {
     let i = from
     while (i < to) {
+      if (fast && (i & 3) === 0) {
+        let k = i >> 2
+        const last = to >> 2
+        if (b32 === undefined) while (k < last && (a32 as Uint32Array)[k] === 0) k++
+        else while (k < last && (a32 as Uint32Array)[k] === b32[k]) k++
+        if (k << 2 !== i) {
+          i = k << 2
+          continue
+        }
+      }
       if (after[i] === at(i)) {
         i++
         continue
@@ -107,8 +124,16 @@ export function applyPage(page: Uint8Array, record: { readonly image: boolean; r
 
 // --- records ------------------------------------------------------------------
 
+/**
+ * The one writer a group is encoded in, reset each time: encoding is
+ * synchronous, and a fresh one per mini-transaction, grown again from 256
+ * bytes, was a measurable share of a bulk INSERT.
+ */
+const groupBody = new Writer(4096)
+
 export function encodeGroup(records: readonly Redo[]): Uint8Array {
-  const body = new Writer()
+  const body = groupBody
+  body.reset()
   for (const r of records) {
     if (r.type === 'page') {
       body.u8(RECORD.PAGE).lenEncInt(r.pageNo).u8(r.image ? IMAGE : 0).lenEncInt(r.runs.length)
@@ -133,7 +158,11 @@ export function encodeGroup(records: readonly Redo[]): Uint8Array {
     }
   }
   body.u8(RECORD.END)
-  return new Writer(body.length + 9).lenEncInt(body.length).bytes(body.view()).toBytes()
+  const prefix = new Writer(16).lenEncInt(body.length).view()
+  const out = new Uint8Array(prefix.length + body.length)
+  out.set(prefix)
+  out.set(body.view(), prefix.length)
+  return out
 }
 
 /**

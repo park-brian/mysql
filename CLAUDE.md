@@ -15,8 +15,12 @@ administration statements); M4 (storage) is complete — pages, B+tree, WAL,
 crash recovery, MVCC transactions, the catalog, the `native` and `memory`
 engines and the Node VFS; M5 (execute) has begun: a real executor runs single-table DDL,
 DML and transactions through unmodified `mysql2` (M5.17), upserts, REPLACE
-and INSERT IGNORE included (M5.8), and joins,
-aggregates, the function library and the planner proper are what is left.
+and INSERT IGNORE included (M5.8), and relational SELECT — joins, GROUP BY
+and aggregates, subqueries, derived tables, CTEs, set operations and
+`INSERT … SELECT` — agreeing with 8.4.11 on M5.18's corpus. Doc 42's query
+API (`db.query()`, `db.execute()`, `db.transaction()`) is a client of the
+same protocol, its values `mysql2`'s (M5.36, D-76). The function library,
+JSON and the cost-based planner proper are what is left.
 
 ## Running things
 
@@ -57,8 +61,17 @@ npm run capture:types        # storage encodings + sort keys, from binlog row im
 npm run capture:precedence   # 1,200 generated expressions, evaluated by the server
 npm run capture:traces       # 13 client/server byte traces, via a recording proxy
 npm run capture:keywords     # MySQL's reserved words, into @myjs/parser (D-39)
+npm run capture:fulltext     # InnoDB's stopwords and token bounds, into @myjs/core (M5.26)
 npm run capture:queries      # 1,200 generated joins and set operations, run by the server
 npm run capture:execution    # 400 generated scripts, run by the server through mysql2
+npm run capture:relational   # 300 multi-table scripts, both protocols, plans captured
+npm run capture:json         # 250 scripts over JSON columns, the constructors and aggregates
+npm run capture:temporal     # 2,700 generated strings into DATE/DATETIME/TIME/TIMESTAMP, with SHOW WARNINGS
+npm run capture:functions    # 200 scripts of string and numeric function calls, both protocols
+npm run capture:temporal-functions   # 300 scripts of date and time function calls, in UTC
+npm run capture:more-functions       # 300 scripts of string, math, hashing and network function calls
+npm run capture:information-schema   # 120 DDL scripts, then Prisma's introspection queries
+npm run census:orm           # Drizzle's and Prisma's MySQL suites: a feature census, and our pass count
 npm run exit-criterion       # the real C client against our server
 npm run census:mysqltest -- --refresh   # MySQL's own test corpus, lexed and parsed
 ```

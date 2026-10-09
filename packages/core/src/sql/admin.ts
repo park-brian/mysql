@@ -9,6 +9,9 @@ import { CHARSET_UTF8MB4_0900_AI_CI, messages, sqlError, type Session, type SqlV
 import {
   NODE,
   STATEMENT,
+  DEFAULT_SQL_MODE,
+  RESERVED_SQL_MODE_BITS,
+  SQL_MODE_BITS,
   badMode,
   formatSqlMode,
   parseSqlMode,
@@ -81,11 +84,16 @@ export class ServerState {
     this.vars = new Map<string, SqlValue>([
       ['version', this.serverVersion],
       ['version_comment', options.versionComment ?? 'myjs — an in-process MySQL for JavaScript'],
-      ['sql_mode', 'STRICT_TRANS_TABLES,NO_ENGINE_SUBSTITUTION'],
+      ['sql_mode', 'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION'],
       ['autocommit', 1],
       ['time_zone', 'SYSTEM'],
       ['system_time_zone', 'UTC'],
       ['max_allowed_packet', 67108864],
+      // Read by Rust's mysql_async (Prisma's engines) as it connects. There is
+      // no socket in-process; this is MySQL's compiled-in default path.
+      ['socket', '/tmp/mysql.sock'],
+      ['wait_timeout', 28800],
+      ['interactive_timeout', 28800],
       ['transaction_isolation', 'REPEATABLE-READ'],
       ['lower_case_table_names', 0],
       ['license', 'MIT'],
@@ -131,7 +139,7 @@ export class ServerState {
    * `autocommit`, which the caller applies. Anything else is kept for
    * `@@name` to read back and otherwise changes nothing.
    */
-  set(session: Session, item: SetItem, evaluate: (e: Expression) => Value, own: Map<string, Value>): 'sql_mode' | undefined {
+  set(session: Session, item: SetItem, evaluate: (e: Expression) => Value, own: Map<string, Value>, warn: (code: number, message: string) => void = () => {}): 'sql_mode' | undefined {
     if (item.type === 'names' || item.type === 'charset') {
       const change = charsetChange(item)
       if (change === 'unknown') throw sqlError('ER_UNKNOWN_CHARACTER_SET', messages.unsupportedCharset(0))
@@ -142,7 +150,7 @@ export class ServerState {
     const name = (item.base === undefined ? item.name : `${item.base}.${item.name}`).toLowerCase()
     const scope = item.type === 'system' ? item.scope : undefined
     const value = item.value
-    if (name === 'sql_mode') return this.#setSqlMode(session, scope, value) ? 'sql_mode' : undefined
+    if (name === 'sql_mode') return this.#setSqlMode(session, scope, value, evaluate, warn) ? 'sql_mode' : undefined
 
     let v: Value
     if (value.kind === NODE.KEYWORD) {
@@ -170,19 +178,35 @@ export class ServerState {
   }
 
   /** Whether the session's own `sql_mode` was assigned. */
-  #setSqlMode(session: Session, scope: string | undefined, value: Expression | KeywordNode): boolean {
+  #setSqlMode(session: Session, scope: string | undefined, value: Expression | KeywordNode, evaluate: (e: Expression) => Value, warn: (code: number, message: string) => void): boolean {
     let text: string
-    if (value.kind === NODE.LITERAL && typeof value.value === 'string') text = value.value
+    if (value.kind === NODE.LITERAL && value.type === 'string' && typeof value.value === 'string') text = value.value
     else if (value.kind === NODE.COLUMN && value.parts.length === 1) text = value.parts[0] as string
-    else if (value.kind === NODE.KEYWORD && value.word === 'DEFAULT') text = String(this.vars.get('sql_mode'))
+    // DEFAULT is the global value for a session, and the compiled-in default for the global itself.
+    else if (value.kind === NODE.KEYWORD && value.word === 'DEFAULT') text = scope === 'GLOBAL' || scope === 'PERSIST' || scope === 'PERSIST_ONLY' ? DEFAULT_SQL_MODE : String(this.vars.get('sql_mode'))
     else if ((value.kind === NODE.LITERAL && value.type === 'null') || value.kind === NODE.KEYWORD) throw badMode(value.kind === NODE.KEYWORD ? value.word : 'NULL')
-    // An expression — `CONCAT(@@sql_mode, ',ANSI')`, a bitmask — is accepted
-    // and changes nothing, as before M3.6: drivers send these on connect and
-    // refusing them breaks the session outright.
-    else return false
+    // An expression is evaluated, as 8.4.11 evaluates it: an integer is the
+    // modes' bits, any text their names (`CONCAT(@@sql_mode, ',ANSI')`, a
+    // user variable, a subquery), and a DECIMAL or a DOUBLE neither (1232).
+    // Until M5.36 an expression was accepted and changed nothing.
+    else {
+      const v = evaluate(value)
+      if (v === null) throw badMode('NULL')
+      if (v.kind === 'decimal' || v.kind === 'double') throw sqlError('ER_WRONG_TYPE_FOR_VAR', "Incorrect argument type to variable 'sql_mode'")
+      text = v.kind === 'int' ? sqlModeOfBits(v.v) : toText(v)
+    }
     // Validated even for `PERSIST_ONLY`, which stores without applying: an
     // unknown mode is ER_WRONG_VALUE_FOR_VAR whatever the scope.
-    const mode = formatSqlMode(parseSqlMode(text))
+    const parsed = parseSqlMode(text)
+    // 3135, a warning: NO_ZERO_DATE, NO_ZERO_IN_DATE and
+    // ERROR_FOR_DIVISION_BY_ZERO belong with a strict mode, all three or none
+    // (8.4.11 warns for `STRICT_TRANS_TABLES` alone, and for `NO_ZERO_DATE` alone).
+    const strict = parsed.names.has('STRICT_TRANS_TABLES') || parsed.names.has('STRICT_ALL_TABLES')
+    const dates = ['NO_ZERO_DATE', 'NO_ZERO_IN_DATE', 'ERROR_FOR_DIVISION_BY_ZERO'].filter((m) => parsed.names.has(m)).length
+    if (strict ? dates < 3 : dates > 0) warn(3135, "'NO_ZERO_DATE', 'NO_ZERO_IN_DATE' and 'ERROR_FOR_DIVISION_BY_ZERO' sql modes should be used with strict mode. They will be merged with strict mode in a future release.")
+    // 3090 for every assignment that includes it, whatever the mode was, after 3135 (8.4.11).
+    if (parsed.names.has('PAD_CHAR_TO_FULL_LENGTH')) warn(3090, "Changing sql mode 'PAD_CHAR_TO_FULL_LENGTH' is deprecated. It will be removed in a future release.")
+    const mode = formatSqlMode(parsed)
     if (scope === 'GLOBAL' || scope === 'PERSIST') this.vars.set('sql_mode', mode)
     else if (scope !== 'PERSIST_ONLY') {
       session.sqlMode = mode
@@ -217,4 +241,12 @@ export class ServerState {
     }
     this.#programs.add(key)
   }
+}
+
+/** A `SET sql_mode = <integer>`'s modes, by name (8.4.11: past bit 32, or negative, is 1231). */
+function sqlModeOfBits(bits: bigint): string {
+  if (bits < 0n || bits >= 1n << BigInt(SQL_MODE_BITS.length)) throw badMode(String(bits))
+  const reserved = bits & RESERVED_SQL_MODE_BITS
+  if (reserved !== 0n) throw sqlError('ER_UNSUPPORTED_SQL_MODE', `sql_mode=0x${reserved.toString(16).padStart(8, '0')} is not supported.`)
+  return SQL_MODE_BITS.filter((_, i) => (bits & (1n << BigInt(i))) !== 0n).join(',')
 }

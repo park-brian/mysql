@@ -8,8 +8,9 @@
 // without the rest noticing.
 import type { KeyRange, RowId, Table, Trx } from '@myjs/engine'
 import type { ColumnType } from '@myjs/types'
-import { decodeField, orderValues, truth, type Value } from '@myjs/types'
-import type { Compiled, Env, Row } from './compile.ts'
+import { decodeField, sortValues, truth, type Value } from '@myjs/types'
+import { rowKey } from './keys.ts'
+import { raise, setRowNumber, type Compiled, type Env, type Row } from './compile.ts'
 
 /** A row as a scan produces it: its values, and the id to write it back by. */
 export interface ScannedRow {
@@ -50,7 +51,11 @@ export function* filter<T extends { readonly row: Row }>(source: Iterable<T>, pr
 
 /** Each row through a list of expressions. */
 export function* project(source: Iterable<{ readonly row: Row }>, items: readonly Compiled[], env: Env): Generator<Value[]> {
-  for (const { row } of source) yield items.map((item) => item.eval(row, env))
+  let n = 0
+  for (const { row } of source) {
+    setRowNumber(env, ++n)
+    yield items.map((item) => item.eval(row, env))
+  }
 }
 
 export interface SortKey {
@@ -66,9 +71,10 @@ export interface SortKey {
  */
 export function sort<T extends { readonly row: Row }>(source: Iterable<T>, keys: readonly SortKey[], env: Env): T[] {
   const decorated = [...source].map((item, at) => ({ item, at, values: keys.map((k) => k.expr.eval(item.row, env)) }))
+  warnNonScalar(decorated.map((d) => d.values), env)
   decorated.sort((a, b) => {
     for (let i = 0; i < keys.length; i++) {
-      const c = orderValues(a.values[i] ?? null, b.values[i] ?? null)
+      const c = sortValues(a.values[i] ?? null, b.values[i] ?? null)
       if (c !== 0) return (keys[i] as SortKey).desc ? -c : c
     }
     return a.at - b.at
@@ -76,14 +82,35 @@ export function sort<T extends { readonly row: Row }>(source: Iterable<T>, keys:
   return decorated.map((d) => d.item)
 }
 
-/** The first row of each run of rows equal on every value — `SELECT DISTINCT`, over projected rows. */
-export function* distinct(source: Iterable<Value[]>): Generator<Value[]> {
-  const seen: Value[][] = []
-  outer: for (const row of source) {
-    for (const prior of seen) {
-      if (prior.every((v, i) => orderValues(v, row[i] ?? null) === 0)) continue outer
+/**
+ * A JSON array or object among a sort's keys: sorted, but with 8.4.11's
+ * warning, once a statement (1235: "sorting of non-scalar JSON values").
+ */
+export function warnNonScalar(keys: readonly (readonly Value[])[], env: Env): void {
+  if (env.memo?.has(NON_SCALAR) === true) return
+  for (const values of keys) {
+    for (const v of values) {
+      if (v === null || v.kind !== 'json' || (v.v.t !== 'array' && v.v.t !== 'object')) continue
+      env.memo?.set(NON_SCALAR, true)
+      raise(env, 1235, "This version of MySQL doesn't yet support 'sorting of non-scalar JSON values'")
+      return
     }
-    seen.push(row)
+  }
+}
+
+const NON_SCALAR = Symbol('non-scalar JSON sorted')
+
+/**
+ * The first of each set of rows equal on every value — `SELECT DISTINCT`, over
+ * projected rows. Equal, not "sorts the same": two JSON arrays of one length
+ * sort together but are distinct (M5.21), so this keys on `rowKey`.
+ */
+export function* distinct(source: Iterable<Value[]>): Generator<Value[]> {
+  const seen = new Set<string>()
+  for (const row of source) {
+    const k = rowKey(row)
+    if (seen.has(k)) continue
+    seen.add(k)
     yield row
   }
 }
