@@ -181,9 +181,16 @@ export function chooseAccess(def: TableDef, alias: string, where: Expression | u
 
 const ctx = (): StoreContext => ({ strict: true, row: 1, warnings: 0 })
 
+/** Bytes as a string of one character each, whose order is theirs. */
+function latin1(bytes: Uint8Array): string {
+  let s = ''
+  for (let i = 0; i < bytes.length; i++) s += String.fromCharCode(bytes[i] as number)
+  return s
+}
+
 function bound(v: Value, column: ColumnDef, inclusive: boolean): KeyBound | undefined {
   try {
-    return { values: [encodeField(v, { ...column, nullable: true }, ctx())], inclusive }
+    return { values: [encodeField(v, column.nullable ? column : { ...column, nullable: true }, ctx())], inclusive }
   } catch {
     return undefined
   }
@@ -211,13 +218,14 @@ function accessFor(index: IndexDef, column: ColumnDef, conditions: readonly Cond
       // values would use the literal's collation, not the column's: under
       // `SET NAMES … COLLATE utf8mb4_bin`, `IN ('a', 'A')` on a case-
       // insensitive column read the same key twice (found by review).
+      // A byte a character: the strings order as the keys do.
       const part = keyPartOf(column.type, true)
+      const nullable = { ...column, nullable: true }
       const points = new Map<string, KeyBound>()
       for (const v of values as Value[]) {
-        const b = bound(v, column, true)
+        const b = bound(v, nullable, true)
         if (b === undefined) return undefined
-        const key = encodeKey(b.values, [part])
-        points.set(Array.from(key, (x) => x.toString(16).padStart(2, '0')).join(''), b)
+        points.set(latin1(encodeKey(b.values, [part])), b)
       }
       const ranges = [...points.entries()].sort(([x], [y]) => (x < y ? -1 : x > y ? 1 : 0)).map(([, b]) => ({ from: b, to: b }))
       return { access: { index: index.name, ranges }, score: 3 }
