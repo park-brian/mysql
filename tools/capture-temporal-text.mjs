@@ -15,6 +15,7 @@
 import { mkdirSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import mysql from 'mysql2/promise'
+import { isMain } from './lib/is-main.mjs'
 
 function arg(name, fallback) {
   const i = process.argv.indexOf(`--${name}`)
@@ -112,7 +113,7 @@ export async function runCase(conn, statements) {
   return out
 }
 
-if (import.meta.url === `file://${process.argv[1]}`) {
+if (isMain(import.meta.url)) {
   const conn = await mysql.createConnection({ host: HOST, port: PORT, user: USER, password: PASSWORD })
   const [[{ v: version }]] = await conn.query('SELECT VERSION() AS v')
   const cases = []

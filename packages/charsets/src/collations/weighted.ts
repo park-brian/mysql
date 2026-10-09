@@ -25,6 +25,7 @@ import { requireCollationInfo, type Collation, type CollationInfo } from '../col
 import { comparePadded, memcmp } from './memcmp.ts'
 import { utf8CodePoints } from './utf8.ts'
 import { expandRuns } from '../runs.ts'
+import { corruptTable } from '../errors.ts'
 import { PACKED_BYTE_WEIGHTS, PACKED_UNICASE_LOWER, PACKED_UNICASE_WEIGHTS, PACKED_WEIGHTED_COLLATIONS } from './weights.ts'
 
 /** Code points above `my_unicase_default`'s `maxchar` all weigh this. */
@@ -41,7 +42,7 @@ function byteWeightTable(name: string): Uint8Array {
     }
   }
   const table = byteTables.get(name)
-  if (table === undefined) throw new Error(`no weight table named ${name}`)
+  if (table === undefined) throw corruptTable(`no weight table named ${name}`)
   return table
 }
 
@@ -141,7 +142,7 @@ export function weightedCollationFor(id: number): Collation {
   const cached = cache.get(id)
   if (cached !== undefined) return cached
   const source = weightSource(id)
-  if (source === undefined) throw new Error(`collation ${id} has no weight table`)
+  if (source === undefined) throw corruptTable(`collation ${id} has no weight table`)
   const info = requireCollationInfo(id)
   const c = source === '-' ? unicaseCollation(info) : source === '<' ? unicaseCollation(info, true) : byteWeightCollation(info, byteWeightTable(source))
   cache.set(id, c)

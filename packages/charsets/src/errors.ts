@@ -40,3 +40,8 @@ export function collationNotLoaded(id: number, name: string): CharsetError {
     `collation ${name} (${id}) has weight tables that are not loaded: await loadCollation(${id}) first`,
   )
 }
+
+/** A generated table that does not have the shape its generator wrote: a build fault, never a client's. */
+export function corruptTable(what: string): CharsetError {
+  return new CharsetError('CHARSET_TABLE_CORRUPT', what)
+}

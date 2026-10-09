@@ -11,6 +11,8 @@
 // get a decoder would pull 21 KB of weights into anything that merely wanted
 // to decode a string — the same mistake D-36 records for `preloadCollation`.
 
+import { corruptTable } from './errors.ts'
+
 /**
  * Expand one delta-plus-run line.
  *
@@ -27,6 +29,6 @@ export function expandRuns(spec: string, base: number, length: number): number[]
     const delta = Number.parseInt(star === -1 ? run : run.slice(star + 1), 16)
     for (let i = 0; i < count; i++) out.push(base + out.length + delta)
   }
-  if (out.length !== length) throw new Error(`packed table has ${out.length} entries, not ${length}`)
+  if (out.length !== length) throw corruptTable(`packed table has ${out.length} entries, not ${length}`)
   return out
 }

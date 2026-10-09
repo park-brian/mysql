@@ -24,6 +24,7 @@
 // `await import()` (D-36). Nothing in this module statically imports it, which
 // is what keeps 50 KB of DUCET out of anyone's initial bundle.
 import { requireCollationInfo, type Collation, type CollationInfo } from '../collation.ts'
+import { CharsetError, collationNotLoaded, corruptTable, unknownCollation } from '../errors.ts'
 import { comparePadded, memcmp } from './memcmp.ts'
 import { utf8CodePoints } from './utf8.ts'
 
@@ -83,11 +84,11 @@ function expandDeltaRuns(spec: string, length: number): Uint16Array {
     const delta = Number.parseInt(star === -1 ? run : run.slice(star + 1), 16)
     for (let i = 0; i < count; i++) {
       previous += delta
-      if (at >= length) throw new Error(`UCA page has more than ${length} entries`)
+      if (at >= length) throw corruptTable(`UCA page has more than ${length} entries`)
       out[at++] = previous
     }
   }
-  if (at !== length) throw new Error(`UCA page has ${at} entries, not ${length}`)
+  if (at !== length) throw corruptTable(`UCA page has ${at} entries, not ${length}`)
   return out
 }
 
@@ -126,7 +127,7 @@ const parsed: Record<UcaVersion, Map<number, Page>> = {
 
 function pageFor(page: number, version: UcaVersion = '900'): Page | undefined {
   const index = lines[version]
-  if (index === null) throw new Error('UCA tables are not loaded — call loadCollation() first')
+  if (index === null) throw new CharsetError('ER_COLLATION_NOT_LOADED', `the UCA ${version} tables are not loaded: await loadCollation() first`)
   const already = parsed[version].get(page)
   if (already !== undefined) return already
   const line = index.get(page)
@@ -317,9 +318,10 @@ export async function loadUcaTables(id = 255): Promise<void> {
 export function ucaCollationFor(id: number): Collation {
   const cached = cache.get(id)
   if (cached !== undefined) return cached
-  if (!isUcaCollation(id)) throw new Error(`collation ${id} is not served by the UCA tables`)
-  if (lines[versionOf(id)] === null) throw new Error('UCA tables are not loaded — call loadCollation() first')
-  const c = ucaCollation(requireCollationInfo(id))
+  if (!isUcaCollation(id)) throw unknownCollation(id)
+  const info = requireCollationInfo(id)
+  if (lines[versionOf(id)] === null) throw collationNotLoaded(id, info.name)
+  const c = ucaCollation(info)
   cache.set(id, c)
   return c
 }

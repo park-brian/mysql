@@ -320,12 +320,23 @@ export class MySQL {
 /** The store and its catalog, made if the VFS has none yet and recovered if it has. */
 async function openCatalog(vfs: Vfs, options: MySQLOptions): Promise<Catalog> {
   const data = await vfs.open('data', { create: true })
-  const log = await vfs.open('log', { create: true })
+  const log = await vfs.open('log', { create: true }).catch((e: unknown) => {
+    data.close()
+    throw e
+  })
   const storeOptions = {
     ...(options.bufferPoolSize === undefined ? {} : { frames: Math.max(16, Math.floor(options.bufferPoolSize / data.pageSize)) }),
     ...(options.flushLogAtTrxCommit === undefined ? {} : { flushLogAtTrxCommit: options.flushLogAtTrxCommit }),
   }
-  const store = data.size() === 0 ? Store.create(data, log, storeOptions) : Store.open(data, log, storeOptions)
+  let store: Store
+  try {
+    store = data.size() === 0 ? Store.create(data, log, storeOptions) : Store.open(data, log, storeOptions)
+  } catch (e) {
+    // A database that fails recovery leaves its files closed, so it can be opened again.
+    data.close()
+    log.close()
+    throw e
+  }
   const catalog = Catalog.open(store)
   // The schemas a fresh 8.4.11 has, empty here: clients connect to `mysql`
   // to create their own database (Prisma's schema engine does).

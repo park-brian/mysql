@@ -27,6 +27,7 @@
 import { writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import mysql from 'mysql2/promise'
+import { isMain } from './lib/is-main.mjs'
 
 const ROOT = new URL('..', import.meta.url).pathname
 const DEFS = join(ROOT, 'packages/core/src/sql/information-schema-defs.ts')
@@ -237,7 +238,7 @@ export async function runScript(conn, schema, statements, columns) {
   return out
 }
 
-if (import.meta.url === `file://${process.argv[1]}`) {
+if (isMain(import.meta.url)) {
   const conn = await mysql.createConnection(CONNECTION)
   const [[{ v: version }]] = await conn.query('SELECT VERSION() AS v')
 
