@@ -878,6 +878,14 @@ buffer pool be stored in one mini-transaction. Working out exactly which pages
 qualify took a design review that broke the first draft. "Allocated here" does
 not imply "free on disk" if the free that released the page is not yet durable.
 
+Because a held page stays pinned, work that would be cheaper in one
+mini-transaction is grouped by the pages it holds, not only by count. Purge
+takes undo records into one while it holds under 8 pages. A multi-row INSERT
+writes up to 64 rows into one while it holds under 16 (`trx.batch`). A batch
+never takes a counter such as AUTO_INCREMENT's, since a counter is taken
+outside any mini-transaction, and when a row in it fails the whole batch rolls
+back with the statement.
+
 ## 11. Transactions with one writer
 
 ### The writer slot

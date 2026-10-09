@@ -175,6 +175,10 @@ function duplicateEntry(def: TableDef, index: IndexDef, values: readonly Value[]
   return sqlError('ER_DUP_ENTRY', messages.duplicateEntry(text, `${def.name}.${index.name}`))
 }
 
+/** A plain INSERT's batches: at most this many rows, and while the batch holds fewer pages than this. */
+const INSERT_BATCH_ROWS = 64
+const INSERT_BATCH_PAGES = 16
+
 const isDuplicate = (e: unknown): boolean => e instanceof EngineError && e.code === 'ER_DUP_ENTRY'
 
 /**
@@ -591,7 +595,7 @@ export function insert(run: Run, node: InsertNode, trx: Trx): OkResult {
   let lastAuto = 0n
   run.state.insertIdSet = false
 
-  compiledRows.forEach((row, n) => {
+  const each = (row: (typeof compiledRows)[number], n: number): void => {
     store.row = n + 1
     stats.records++
     if (selected !== undefined) selectExtras = (selected[n] as readonly Value[]).slice(targets.length)
@@ -668,7 +672,31 @@ export function insert(run: Run, node: InsertNode, trx: Trx): OkResult {
       lastAuto = autoOf(def, autoAt, fields)
     }
     writeRecord(fields, generated, prev)
-  })
+  }
+  // A plain INSERT fails whole on any error, so its rows go to the store in
+  // batches, a mini-transaction each: the page diffs and the log record are
+  // made once a batch rather than once a row (M5.32). The others handle a
+  // row's error and go on, so each row is its own.
+  // Only where no row takes a counter inside a batch, which the store
+  // refuses (a counter is given out for good, M5.8): a table with a key of
+  // its own, and VALUES that never name the AUTO_INCREMENT column. The first
+  // row is written alone: if it generates, it takes the statement's block,
+  // one for every row, and no later row needs the counter again; if its
+  // values fail first, no counter is taken at all (8.4.11: the next
+  // statement's id shows it).
+  const batchable = mode === 'insert' && !ignore && def.clustered !== null && selected === undefined && compiledRows.length > 1 && (autoAt < 0 || !targets.includes(autoAt))
+  if (batchable) {
+    each(compiledRows[0] as (typeof compiledRows)[number], 0)
+    for (let n = 1; n < compiledRows.length; ) {
+      trx.batch(() => {
+        const start = n
+        while (n < compiledRows.length && n - start < INSERT_BATCH_ROWS && trx.pagesHeld < INSERT_BATCH_PAGES) {
+          each(compiledRows[n] as (typeof compiledRows)[number], n)
+          n++
+        }
+      })
+    }
+  } else compiledRows.forEach(each)
 
   /** One row through `write_record`: write it, or settle its duplicate as the statement asks. */
   function writeRecord(fields: FieldBytes[], generated: bigint, prevNext: bigint): void {
@@ -688,7 +716,8 @@ export function insert(run: Run, node: InsertNode, trx: Trx): OkResult {
         if (!isDuplicate(e)) throw e
         auto.written()
         const hit = conflictOf(table, keys, fields, trx)
-        if (hit === undefined) throw e
+        // A batch's abort takes back the row this one met: the engine's error names the key.
+        if (hit === undefined) throw mode === 'insert' && !ignore ? duplicateError(e, def, table, keys, fields, trx, undefined, undefined) : e
         if (mode === 'insert') {
           if (!ignore) throw duplicateError(e, def, table, keys, fields, trx, undefined, hit)
           warnError(store, duplicateError(e, def, table, keys, fields, trx, undefined, hit))

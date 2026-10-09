@@ -124,8 +124,16 @@ export function applyPage(page: Uint8Array, record: { readonly image: boolean; r
 
 // --- records ------------------------------------------------------------------
 
+/**
+ * The one writer a group is encoded in, reset each time: encoding is
+ * synchronous, and a fresh one per mini-transaction, grown again from 256
+ * bytes, was a measurable share of a bulk INSERT.
+ */
+const groupBody = new Writer(4096)
+
 export function encodeGroup(records: readonly Redo[]): Uint8Array {
-  const body = new Writer()
+  const body = groupBody
+  body.reset()
   for (const r of records) {
     if (r.type === 'page') {
       body.u8(RECORD.PAGE).lenEncInt(r.pageNo).u8(r.image ? IMAGE : 0).lenEncInt(r.runs.length)
@@ -150,7 +158,11 @@ export function encodeGroup(records: readonly Redo[]): Uint8Array {
     }
   }
   body.u8(RECORD.END)
-  return new Writer(body.length + 9).lenEncInt(body.length).bytes(body.view()).toBytes()
+  const prefix = new Writer(16).lenEncInt(body.length).view()
+  const out = new Uint8Array(prefix.length + body.length)
+  out.set(prefix)
+  out.set(body.view(), prefix.length)
+  return out
 }
 
 /**

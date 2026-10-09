@@ -451,6 +451,36 @@ export class Trx {
     }
   }
 
+  /**
+   * Several writes as one mini-transaction: a bulk statement's rows, whose
+   * page images are then diffed and logged once for the batch rather than
+   * once a row. Only for a statement that fails whole on any error: an error
+   * inside undoes every write of the batch, and the transaction is left as
+   * it was before the batch began, for the statement's own rollback to
+   * finish. `pagesHeld` says how many pages the batch holds pinned, for the
+   * caller to end it before the pool runs short.
+   */
+  batch<T>(change: () => T): T {
+    this.lock()
+    const sys = this.#sys
+    const first = this.id === 0
+    const before = this.#log?.state
+    try {
+      return sys.host.journal.atomically(change)
+    } catch (e) {
+      if (first) {
+        this.id = 0
+        this.#log = undefined
+      } else if (before !== undefined) this.#log?.restore(before)
+      throw e
+    }
+  }
+
+  /** The pages the open mini-transaction holds: what a batch watches. */
+  get pagesHeld(): number {
+    return this.#sys.host.journal.touched
+  }
+
   /** Append an undo record for a change being made inside `write`, and return its roll pointer. */
   undo(record: UndoRecord): RollPtr {
     if (this.#log === undefined || !this.#sys.host.journal.open) throw misuse('an undo record outside a write')
