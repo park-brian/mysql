@@ -1046,7 +1046,7 @@ function binary(op: string, left: Expression, right: Expression, extra: Expressi
     const operand = (x: Compiled, written: Expression | false): Compiled => {
       if (numeric && isText(x.type)) return asNumber(x, 'DOUBLE', written !== false && constantNode(written) && written)
       if (numeric && (x.type.kind === 'datetime' || x.type.kind === 'time')) return { eval: (r, env) => { const v = x.eval(r, env); return v === null ? null : doubleValue(toDouble(v)) }, type: doubleType(x.type.nullable) }
-      if (dated && isText(x.type) && written !== false) return dateConstant(x, written, dateOf as Compiled, ctx)
+      if (dated && isText(x.type) && written !== false) return dateConstant(x, written, dateOf as Compiled, ctx, false)
       return x
     }
     const subject = operand(a0, left)
@@ -1288,17 +1288,32 @@ function asTimeOfDay(c: Compiled, column: readonly string[]): Compiled {
  * constant once, as a date or 1525; a column's each row, as a date or, with
  * 1292, the zero date (8.4.11: `dt > ch` with ch 'b' is 1). Otherwise `c`.
  */
-export function dateConstant(c: Compiled, written: Expression, other: Compiled, ctx: CompileContext): Compiled {
-  const convert = dateConverter(c, written, other, ctx)
+export function dateConstant(c: Compiled, written: Expression, other: Compiled, ctx: CompileContext, strict = true): Compiled {
+  const convert = dateConverter(c, written, other, ctx, strict)
   return convert === undefined ? c : { eval: (r, env) => convert(c.eval(r, env), env), type: c.type }
 }
 
-/** `dateConstant`'s conversion of one value, for a caller that keeps the value itself too (NULLIF returns it unconverted). */
-export function dateConverter(c: Compiled, written: Expression, other: Compiled, ctx: CompileContext): ((v: Value, env: Env) => Value) | undefined {
+/**
+ * `dateConstant`'s conversion of one value, for a caller that keeps the value
+ * itself too (NULLIF returns it unconverted). A constant that is no date is
+ * 1525 when the statement is prepared, rows or none (8.4.11: under `WHERE
+ * NULL` too) — unless not `strict`, as in BETWEEN, where it is the zero date
+ * with 1292 each row, as a column's text is.
+ */
+export function dateConverter(c: Compiled, written: Expression, other: Compiled, ctx: CompileContext, strict = true): ((v: Value, env: Env) => Value) | undefined {
   if (other.type.kind !== 'datetime' || !isText(c.type)) return undefined
   const flags = modeOf(ctx.session.sqlMode)
-  const constant = constantNode(written)
+  const constant = strict && constantNode(written)
   const what = other.type.field === FIELD_TYPE.DATE || other.type.field === FIELD_TYPE.NEWDATE ? 'date' : 'datetime'
+  if (constant && (written.kind !== NODE.PLACEHOLDER || ctx.params !== undefined)) {
+    let v: Value = null
+    try {
+      v = c.eval([], constantEnv(ctx))
+    } catch (e) {
+      expectTyped(e)
+    }
+    if (v !== null && (v.kind === 'string' || v.kind === 'bytes') && parseDateTime(toText(v), flags) === undefined) throw sqlError('ER_WRONG_VALUE', `Incorrect ${what.toUpperCase()} value: '${warnedText(v)}'`)
+  }
   return (v, env) => {
     // Text or bytes, a hex or bit literal's included (8.4.11: `d <= b'1010'` is 1525).
     if (v === null || (v.kind !== 'string' && v.kind !== 'bytes')) return v
