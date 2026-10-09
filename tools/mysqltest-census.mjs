@@ -131,7 +131,17 @@ async function listNames() {
   const headers = { 'user-agent': 'myjs-mysqltest-census' }
   if (token !== undefined && token !== '') headers.authorization = `Bearer ${token}`
 
-  const url = `https://api.github.com/repos/${REPO}/contents/${DIRECTORY}?ref=${REF}&per_page=1000&page=1`
+  // The contents API lists at most 1,000 entries of a directory, and
+  // mysql-test/t holds more: CI saw 816 .test files where the tree has
+  // 1,543, and so selected other files than the committed census (E-14's
+  // defect, back through the fallback). The git trees API lists a tree
+  // whole, so the directory's own tree is found in its parent's listing,
+  // which is small, and read from there.
+  const parent = DIRECTORY.slice(0, DIRECTORY.lastIndexOf('/'))
+  const leaf = DIRECTORY.slice(DIRECTORY.lastIndexOf('/') + 1)
+  const listing = await fetch(`https://api.github.com/repos/${REPO}/contents/${parent}?ref=${REF}`, { headers })
+  const tree = listing.ok ? (await listing.json()).find((e) => e.name === leaf && e.type === 'dir') : undefined
+  const url = `https://api.github.com/repos/${REPO}/git/trees/${tree?.sha ?? `${REF}:${DIRECTORY}`}`
   const response = await fetch(url, { headers })
   if (!response.ok) {
     const body = await response.text()
@@ -145,8 +155,12 @@ async function listNames() {
     )
     process.exit(1)
   }
-  const entries = await response.json()
-  return entries.filter((e) => e.type === 'file').map((e) => e.name)
+  const body = await response.json()
+  if (body.truncated === true) {
+    console.error(`listing ${DIRECTORY}: the trees API truncated it`)
+    process.exit(1)
+  }
+  return body.tree.filter((e) => e.type === 'blob').map((e) => e.path)
 }
 
 // --- main -------------------------------------------------------------------

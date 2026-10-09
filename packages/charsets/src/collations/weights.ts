@@ -121,7 +121,7 @@ export const PACKED_UNICASE_LOWER = `0 65*0,26*20,101*0,23*20,0,7*20,33*0
 ff 33*0,26*20,197*0`
 
 /**
- * `id table`, one per line, where `-` means the unicase page table. Read out
+ * `id table`, one per line, where `-` means the unicase page table and `<` its lowercase column. Read out
  * of each collation's own `CHARSET_INFO`, not guessed from its name.
  */
 export const PACKED_WEIGHTED_COLLATIONS = `2 czech
