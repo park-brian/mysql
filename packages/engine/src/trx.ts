@@ -307,8 +307,12 @@ export class TrxSys {
       // Several records to a mini-transaction, while it holds few pages: one
       // per record was a page image copied and diffed for every row a bulk
       // DELETE removed. Its pages stay pinned until it ends, hence the bound.
+      // The step ends with the budget, never past it: a step that overspent
+      // could finish the log, free it, and still report the budget run out,
+      // leaving the transaction in the history for its pages to be freed again.
+      const most = Math.min(PURGE_STEP_RECORDS, budget)
       this.#step(log, () => {
-        for (let n = 0; n < PURGE_STEP_RECORDS && log.records.length > 0 && journal.touched < PURGE_STEP_PAGES; n++) {
+        for (let n = 0; n < most && log.records.length > 0 && journal.touched < PURGE_STEP_PAGES; n++) {
           // A dropped tree's pages are freed by the record that drops it: it ends the step.
           if (this.#purgeRecord(t, log)) break
         }

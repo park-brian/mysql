@@ -145,6 +145,34 @@ test('M5.37: purge spends a budget of undo records, and a transaction it ends in
   assert.equal(store.alloc.usedPages().size, baseline)
 })
 
+test('M5.37: a budget smaller than one step stops inside the step, and the transaction it finishes is purged once', async () => {
+  // A step purged several records at once whatever was left of the budget,
+  // so a budget of 10 against a 50-record log purged all 50, freed the log,
+  // and reported the budget overspent: the transaction stayed at the head of
+  // the history, and the next purge freed its log's pages a second time.
+  const { store, t, verify, sys } = await table()
+  const baseline = store.alloc.usedPages().size
+  const w = sys.begin()
+  for (let i = 0; i < 50; i++) t.insert([be(i), Uint8Array.of(i)], w)
+  w.commit()
+  store.purge(Infinity, 0) // the commit's own purge has run; this one must change nothing
+  assert.equal(store.stats().historyLength, 0, "the commit's own purge finished it")
+  const d = sys.begin()
+  const pin = sys.begin()
+  t.get(be(0), pin)
+  for (let i = 0; i < 50; i++) t.delete(be(i), d)
+  d.commit()
+  pin.commit()
+  assert.equal(store.purge(Infinity, 10), 0, '10 records do not finish 50')
+  assert.equal(store.stats().historyLength, 1)
+  for (let budget = 0; budget < 3; budget++) assert.equal(store.purge(Infinity, 10), 0)
+  assert.equal(store.purge(Infinity, 10), 1, 'the fifth budget of 10 finishes it')
+  assert.equal(store.stats().historyLength, 0)
+  assert.equal(store.purge(), 0)
+  verify()
+  assert.equal(store.alloc.usedPages().size, baseline)
+})
+
 test('M5.38: a scan paused while purge frees the leaves ahead of it, and new rows take their pages, resumes with exactly the rows its view sees', async () => {
   const { store, t, verify, sys } = await table()
   const row = (i: number): [Uint8Array, Uint8Array] => [be(i), Uint8Array.of(i & 0xff, 0xaa, 0xbb, 0xcc)]
