@@ -160,6 +160,30 @@ test('M4.23: DROP SCHEMA drops its tables, in one transaction', async () => {
   assert.ok(store.alloc.usedPages().size <= baseline + 2, `${store.alloc.usedPages().size} pages in use against ${baseline} before`)
 })
 
+test('M5.32: a table found alive for a bulk write is asked again after any catalog write or rollback', async () => {
+  const { store, catalog } = await fresh()
+  catalog.createSchema('s')
+  catalog.createTable('s', spec())
+  // A DROP in the writing transaction itself, as a temporary table's is.
+  const trx = store.begin()
+  const t = catalog.table('s', 't', trx)
+  t.insert([i32(1), utf8('a'), null], trx)
+  t.insert([i32(2), utf8('b'), null], trx)
+  catalog.dropTable('s', 't', { trx })
+  refused(() => t.insert([i32(3), utf8('c'), null], trx), 'ER_NO_SUCH_TABLE')
+  trx.rollback()
+  // A rollback that takes back the table's creation, of a table that keeps no trees to miss.
+  const again = store.begin()
+  const savepoint = again.savepoint()
+  catalog.createTable('s', { ...spec('u'), engine: 'memory' }, { trx: again })
+  const u = catalog.table('s', 'u', again)
+  u.insert([i32(1), utf8('a'), null], again)
+  again.rollbackTo(savepoint)
+  refused(() => u.insert([i32(2), utf8('b'), null], again), 'ER_NO_SUCH_TABLE')
+  again.rollback()
+  assert.equal([...catalog.table('s', 't').scan()].length, 0)
+})
+
 test('M4.23: a DROP under an older view leaves its trees until purge, but no way to write to them', async () => {
   const { store, catalog } = await fresh()
   catalog.createSchema('s')

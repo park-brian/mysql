@@ -387,6 +387,7 @@ export class Trx {
   id = 0
   readonly #sys: TrxSys
   #state: TrxState = 'active'
+  #rollbacks = 0
   #view: ReadView | undefined
   #log: UndoLog | undefined
   /** Holds the writer slot: it has written, or made a locking read. */
@@ -494,8 +495,14 @@ export class Trx {
     return this.#log?.records.length ?? 0
   }
 
+  /** How many times this transaction has rolled back to a savepoint: what it found before may be gone. */
+  get rollbacks(): number {
+    return this.#rollbacks
+  }
+
   rollbackTo(savepoint: number): void {
     this.#active()
+    this.#rollbacks++
     const log = this.#log
     if (log === undefined) return
     if (savepoint > log.records.length) throw misuse('a savepoint this transaction has already rolled back past')

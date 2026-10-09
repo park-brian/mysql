@@ -192,6 +192,8 @@ export class Catalog {
   readonly #catalog: ClusteredIndex
   readonly #schemas: ClusteredIndex
   readonly #tables: ClusteredIndex
+  /** Counts the writes to `_myjs_tables`: a table found alive stays so until the next. */
+  #generation = 0
 
   private constructor(store: Store, version: number) {
     this.store = store
@@ -292,7 +294,7 @@ export class Catalog {
         names.push(def.name)
       }
       for (const v of this.#views(s.id, trx)) {
-        this.#tables.delete(this.#tableKey(s.id, v.name), trx)
+        this.#changing().delete(this.#tableKey(s.id, v.name), trx)
         names.push(v.name)
       }
       this.#schemas.delete(this.#schemaKey(name), trx)
@@ -333,7 +335,7 @@ export class Catalog {
       // Both engines refuse a key the page cannot hold, the same way.
       ClusteredIndex.check(this.store.pool.pageSize, layoutOf(resolved), clusteredKeyOf(resolved), secondariesOf(resolved).map((i) => keyColumnsOf(resolved, i)))
       const def = this.#engine(resolved).create(resolved, trx)
-      this.#tables.insert([be32(s.id), utf8.encode(def.name), be32(def.id), encodeTableDef(def)], trx)
+      this.#changing().insert([be32(s.id), utf8.encode(def.name), be32(def.id), encodeTableDef(def)], trx)
       return def
     })
   }
@@ -371,7 +373,7 @@ export class Catalog {
       const spec: TableSpec = { name: old.name, engine: old.engine, columns: old.columns, indexes: old.indexes, options: old.options }
       const resolved = resolveTable(Number(this.store.takeCounter(SYSTEM_INDEX.TABLES, 0)), schema, spec)
       const made = this.#engine(resolved).create(resolved, trx)
-      this.#tables.insert([be32(s.id), utf8.encode(made.name), be32(made.id), encodeTableDef(made)], trx)
+      this.#changing().insert([be32(s.id), utf8.encode(made.name), be32(made.id), encodeTableDef(made)], trx)
       return made
     })
     discard?.()
@@ -402,7 +404,7 @@ export class Catalog {
         for (const [, row] of from.scan(undefined, trx, 'current')) to.insert(copy(row), trx)
         to.raiseAutoIncrement(from.peekAutoIncrement())
         discard = this.#drop(old, s.id, trx)
-        this.#tables.insert([be32(s.id), utf8.encode(made.name), be32(made.id), encodeTableDef(made)], trx)
+        this.#changing().insert([be32(s.id), utf8.encode(made.name), be32(made.id), encodeTableDef(made)], trx)
         return made
       })
       discard?.()
@@ -442,15 +444,15 @@ export class Catalog {
       const row = this.#row(s.id, name, trx)
       if (row === undefined) throw noSuchTable(schema, name)
       if (this.#row(t.id, to.name, trx) !== undefined) throw tableExists(to.name)
-      this.#tables.delete(this.#tableKey(s.id, name), trx)
+      this.#changing().delete(this.#tableKey(s.id, name), trx)
       if (isView(row)) {
         if (t.id !== s.id) throw misuse('a view stays in its schema')
-        this.#tables.insert([be32(s.id), utf8.encode(to.name), be32(VIEW_ID), encodeViewDef({ ...decodeViewDef(row[3] as Uint8Array), name: to.name })], trx)
+        this.#changing().insert([be32(s.id), utf8.encode(to.name), be32(VIEW_ID), encodeViewDef({ ...decodeViewDef(row[3] as Uint8Array), name: to.name })], trx)
         return
       }
       const moved: TableDef = { ...decodeTableDef(row[3] as Uint8Array), schema: to.schema, name: to.name }
       const def = options.rewrite === undefined ? moved : { ...moved, options: options.rewrite(moved) }
-      this.#tables.insert([be32(t.id), utf8.encode(to.name), be32(def.id), encodeTableDef(def)], trx)
+      this.#changing().insert([be32(t.id), utf8.encode(to.name), be32(def.id), encodeTableDef(def)], trx)
     })
   }
 
@@ -460,7 +462,7 @@ export class Catalog {
       const s = this.#schemaOf(schema, trx)
       const def = s === undefined ? undefined : this.#definition(s.id, name, trx)
       if (s === undefined || def === undefined) throw noSuchTable(schema, name)
-      this.#tables.update([be32(s.id), utf8.encode(def.name), be32(def.id), encodeTableDef({ ...def, options: tableOptions })], trx)
+      this.#changing().update([be32(s.id), utf8.encode(def.name), be32(def.id), encodeTableDef({ ...def, options: tableOptions })], trx)
     })
   }
 
@@ -495,10 +497,10 @@ export class Catalog {
       if (s === undefined) throw unknownDb(view.schema)
       const row = this.#row(s.id, view.name, trx)
       const value: (Uint8Array | null)[] = [be32(s.id), utf8.encode(view.name), be32(VIEW_ID), encodeViewDef(view)]
-      if (row === undefined) return void this.#tables.insert(value, trx)
+      if (row === undefined) return void this.#changing().insert(value, trx)
       if (options.orReplace !== true) throw tableExists(view.name)
       if (!isView(row)) throw notAView(view.schema, view.name)
-      this.#tables.update(value, trx)
+      this.#changing().update(value, trx)
     })
   }
 
@@ -517,7 +519,7 @@ export class Catalog {
         else if (!isView(row)) throw notAView(schema, name)
       }
       if (missing.length > 0 && options.ifExists !== true) throw unknownTable(missing.map((n) => `${schema}.${n}`).join(','))
-      if (s !== undefined) for (const name of names) if (!missing.includes(name)) this.#tables.delete(this.#tableKey(s.id, name), trx)
+      if (s !== undefined) for (const name of names) if (!missing.includes(name)) this.#changing().delete(this.#tableKey(s.id, name), trx)
       return missing
     })
   }
@@ -552,14 +554,25 @@ export class Catalog {
     }
   }
 
+  /** `_myjs_tables`, for a write to it. */
+  #changing(): ClusteredIndex {
+    this.#generation++
+    return this.#tables
+  }
+
   #open(def: TableDef, key: Uint8Array, value: Uint8Array, schema: string, name: string): Table {
+    // The last transaction that found the table alive, as of which catalog write
+    // and which of its own rollbacks: a bulk write asks once, not once a row.
+    let seen: { trx: Trx; generation: number; rollbacks: number } | undefined
     return this.#engine(def).open(def, {
       definedBy: versionOf(value).trxId,
       alive: (trx) => {
+        if (trx !== undefined && seen !== undefined && seen.trx === trx && seen.generation === this.#generation && seen.rollbacks === trx.rollbacks) return
         // The id field only: the definition may be off-page, and a write needs none of it.
         const record = this.#tables.read(trx, trx === undefined ? 'consistent' : 'current', (view) => this.#tables.recordAt(key, view))
         const fields = record === undefined ? undefined : decodeRecord(SYSTEM.TABLES.layout, record)
         if (fields === undefined || readBe32(fields[2] as Uint8Array) !== def.id) throw noSuchTable(schema, name)
+        if (trx !== undefined) seen = { trx, generation: this.#generation, rollbacks: trx.rollbacks }
       },
     })
   }
@@ -605,7 +618,7 @@ export class Catalog {
    */
   #drop(def: TableDef, schemaId: number, trx: Trx): () => void {
     const engine = this.#engine(def)
-    this.#tables.delete(this.#tableKey(schemaId, def.name), trx)
+    this.#changing().delete(this.#tableKey(schemaId, def.name), trx)
     engine.drop(def, trx)
     return () => engine.discard(def)
   }
