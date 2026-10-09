@@ -26,6 +26,8 @@ function textOf(v: Exclude<Value, null>, t: ResultType): string {
     // Negative zero keeps its sign, as `my_fcvt` writes it (8.4.11: `-TIME'00:00:00'` is `-0`).
     if (Number.isFinite(n) && Math.abs(n) < 1e21) return `${Object.is(n, -0) ? '-' : ''}${n.toFixed(t.scale)}`
   }
+  // A YEAR column is four digits, zero too; YEAR()'s result is a number (8.4.11: `0000`, and `YEAR('0000-00-00')` is 0).
+  if (t.field === FIELD_TYPE.YEAR && t.column !== undefined && v.kind === 'int') return v.v.toString().padStart(4, '0')
   switch (v.kind) {
     case 'double':
       return t.field === FIELD_TYPE.FLOAT ? renderFloat(v.v) : renderDouble(v.v)

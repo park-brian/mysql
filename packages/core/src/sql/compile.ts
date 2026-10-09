@@ -1062,8 +1062,8 @@ function binary(op: string, left: Expression, right: Expression, extra: Expressi
   // A string constant compared with a date is read as one first, and one
   // that is not is the statement's error (8.4.11: `d = '00-00-00'` is 1525).
   const dated = COMPARISONS[op] !== undefined || op === '<=>'
-  const ca = dated ? dateConstant(ta, left, tb, ctx) : ta
-  const cb = dated ? dateConstant(tb, right, ta, ctx) : tb
+  const ca = dated ? yearConstant(dateConstant(ta, left, tb, ctx), left, tb) : ta
+  const cb = dated ? yearConstant(dateConstant(tb, right, ta, ctx), right, ta) : tb
   // A string in arithmetic is read as a double, with 1292 when it is not one.
   const arithmetic = op === '+' || op === '-' || op === '*' || op === '/' || op === '%' || op === 'MOD'
   // And in a comparison with a number, which is of doubles: a constant is
@@ -1188,20 +1188,14 @@ function binary(op: string, left: Expression, right: Expression, extra: Expressi
     default: {
       const test = COMPARISONS[op]
       if (test === undefined) throw sqlError('ER_NOT_SUPPORTED_YET', messages.notSupported(`The operator ${op}`))
-      if (fixedTolerance(a.type, b.type) !== undefined) {
-        const cmp = comparer(a.type, b.type)
-        return {
-          eval: (r, env) => {
-            const c = cmp(at(r, env), bt(r, env))
-            return c === null ? null : bool(test(c))
-          },
-          type: boolType(nullable),
-        }
-      }
       const cmp = comparer(a.type, b.type)
       return {
+        // The right side is not read when the left is NULL, so its conversion
+        // does not warn (8.4.11's comparators look at the left first).
         eval: (r, env) => {
-          const c = cmp(at(r, env), bt(r, env))
+          const x = at(r, env)
+          if (x === null) return null
+          const c = cmp(x, bt(r, env))
           return c === null ? null : bool(test(c))
         },
         type: boolType(nullable),
@@ -1274,9 +1268,52 @@ function asTimeOfDay(c: Compiled, column: readonly string[]): Compiled {
 
 /** The session's NO_ZERO_DATE and NO_ZERO_IN_DATE, as a scan's flags. */
 /** A string constant compared with a date or datetime: that, or 1292 and then 1525. */
-/** `c`, a text constant compared with the date or datetime `other`, read as one first; else `c`. */
+/**
+ * `c`, text compared with the date or datetime `other`, read as one first: a
+ * constant once, as a date or 1525; a column's each row, as a date or, with
+ * 1292, the zero date (8.4.11: `dt > ch` with ch 'b' is 1). Otherwise `c`.
+ */
 export function dateConstant(c: Compiled, written: Expression, other: Compiled, ctx: CompileContext): Compiled {
-  return other.type.kind === 'datetime' && isText(c.type) && constantNode(written) ? asDateConstant(c, other.type.field, ctx) : c
+  if (other.type.kind !== 'datetime' || !isText(c.type)) return c
+  return constantNode(written) ? asDateConstant(c, other.type.field, ctx) : asDateEachRow(c, ctx)
+}
+
+const ZERO_DATETIME: Value = { kind: 'datetime', v: { year: 0, month: 0, day: 0, hour: 0, minute: 0, second: 0, microsecond: 0 }, type: 'DATETIME', fsp: 0 }
+
+function asDateEachRow(c: Compiled, ctx: CompileContext): Compiled {
+  const flags = modeOf(ctx.session.sqlMode)
+  return {
+    eval: (r, env) => {
+      const v = c.eval(r, env)
+      if (v === null || (v.kind !== 'string' && v.kind !== 'bytes')) return v
+      const p = parseDateTime(toText(v), flags)
+      if (p !== undefined) return { kind: 'datetime', v: p.v, type: p.hasTime ? 'DATETIME' : 'DATE', fsp: p.fsp }
+      raise(env, 1292, `Incorrect datetime value: '${warnedText(v)}'`)
+      return ZERO_DATETIME
+    },
+    type: c.type,
+  }
+}
+
+/**
+ * `c`, a text constant compared with a YEAR column, as the YEAR it would be
+ * stored as, once: two digits are 2000 to 2069 or 1970 to 1999, `'0'` is 2000
+ * (8.4.11: `y > '10:11:12'` compares with 2010). Text with no leading number
+ * is left to compare as a double.
+ */
+function yearConstant(c: Compiled, written: Expression, other: Compiled): Compiled {
+  if (other.type.field !== FIELD_TYPE.YEAR || other.type.column === undefined || !isText(c.type) || !constantNode(written)) return c
+  return {
+    eval: (r, env) => {
+      const v = c.eval(r, env)
+      if (v === null || (v.kind !== 'string' && v.kind !== 'bytes')) return v
+      const p = numericPrefix(toText(v))
+      if (p.text === '' || !/\d/.test(p.text)) return v
+      const n = Math.trunc(Number(p.text))
+      return intValue(BigInt(n >= 0 && n < 70 ? 2000 + n : n >= 70 && n < 100 ? 1900 + n : n))
+    },
+    type: { ...c.type, kind: 'int', field: FIELD_TYPE.YEAR, unsigned: true, length: 4, scale: 0, collationId: CHARSET_BINARY },
+  }
 }
 
 function asDateConstant(c: Compiled, field: number, ctx: CompileContext): Compiled {
@@ -1824,13 +1861,13 @@ export function convertTo(v: Value, t: ResultType): Value {
  */
 /** A value's text as its type shows it: a YEAR is four digits, `0000` for zero; a FLOAT has a float's digits (8.4.11). */
 export function textOf(v: Exclude<Value, null>, t: ResultType): string {
-  if (t.field === FIELD_TYPE.YEAR && v.kind === 'int') return v.v.toString().padStart(4, '0')
+  if (t.field === FIELD_TYPE.YEAR && t.column !== undefined && v.kind === 'int') return v.v.toString().padStart(4, '0')
   if (t.field === FIELD_TYPE.FLOAT && v.kind === 'double' && t.scale >= 31) return renderFloat(v.v)
   return toText(v)
 }
 
 /** Whether a branch of this type, in a string result, is text of its own kind rather than its value's (`textOf`). */
-export const ownText = (t: ResultType): boolean => t.field === FIELD_TYPE.YEAR || (t.field === FIELD_TYPE.FLOAT && t.scale >= 31)
+export const ownText = (t: ResultType): boolean => (t.field === FIELD_TYPE.YEAR && t.column !== undefined) || (t.field === FIELD_TYPE.FLOAT && t.scale >= 31)
 
 /**
  * A branch's value as a binary result holds it: text in its own charset's
