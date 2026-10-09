@@ -1032,16 +1032,28 @@ function binary(op: string, left: Expression, right: Expression, extra: Expressi
     const a0 = a
     const lo0 = timeConstant(a0, left, right, compile(right, ctx))
     const hi0 = timeConstant(a0, left, extra as Expression, compile(extra as Expression, ctx))
-    // One comparison type for all three: with a number among them, text is read as a double (`agg_cmp_type`).
-    const numeric = [a0, lo0, hi0].some((x) => isNumber(x.type))
-    const subject = numeric && isText(a0.type) ? asNumber(a0, 'DOUBLE') : a0
-    const lo = numeric && isText(lo0.type) ? asNumber(lo0, 'DOUBLE', constantNode(right) && right) : lo0
-    const hi = numeric && isText(hi0.type) ? asNumber(hi0, 'DOUBLE', constantNode(extra as Expression) && (extra as Expression)) : hi0
+    // One comparison type for all three (`agg_cmp_type`). With a number among
+    // them, all are doubles: text read as one with its 1292, a temporal as its
+    // number (8.4.11: `tm BETWEEN 'a' AND db` puts -01:00:00 below 0). With
+    // only dates and text, all are dates, text converted as `=` converts it.
+    const all = [a0, lo0, hi0]
+    const numeric = all.some((x) => isNumber(x.type))
+    const dateOf = all.find((x) => x.type.kind === 'datetime')
+    const dated = !numeric && dateOf !== undefined && all.every((x) => x.type.kind === 'datetime' || isText(x.type) || x.type.kind === 'null')
+    const operand = (x: Compiled, written: Expression | false): Compiled => {
+      if (numeric && isText(x.type)) return asNumber(x, 'DOUBLE', written !== false && constantNode(written) && written)
+      if (numeric && (x.type.kind === 'datetime' || x.type.kind === 'time')) return { eval: (r, env) => { const v = x.eval(r, env); return v === null ? null : doubleValue(toDouble(v)) }, type: doubleType(x.type.nullable) }
+      if (dated && isText(x.type) && written !== false) return dateConstant(x, written, dateOf as Compiled, ctx)
+      return x
+    }
+    const subject = operand(a0, left)
+    const lo = operand(lo0, right)
+    const hi = operand(hi0, extra as Expression)
     const negated = op === 'NOT BETWEEN'
     if (isText(a0.type) && isText(lo0.type) && isText(hi0.type)) aggregateCollations([a0.type, lo0.type, hi0.type], 'between', true)
     // Each bound is its own comparison, fixed decimals and all.
-    const low = comparer(a.type, lo.type)
-    const high = comparer(a.type, hi.type)
+    const low = comparer(subject.type, lo.type)
+    const high = comparer(subject.type, hi.type)
     return {
       eval: (r, env) => {
         const v = subject.eval(r, env)
