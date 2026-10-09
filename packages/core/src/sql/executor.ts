@@ -190,6 +190,9 @@ function tablesOf(statement: Statement): TableName[] {
 /** `max_error_count`'s default: how many conditions SHOW WARNINGS keeps. */
 const MAX_ERROR_COUNT = 1024
 
+/** How many parsed statements `SqlExecutor` keeps. */
+const PARSED_KEPT = 16
+
 export class SqlExecutor implements Executor {
   readonly catalog: Catalog | undefined
   readonly server: ServerState
@@ -202,6 +205,13 @@ export class SqlExecutor implements Executor {
    * open one nothing will ever end (found by review).
    */
   readonly #ended = new WeakSet<Session>()
+  /**
+   * The statements parsed last, by sql_mode and text: a prepared statement is
+   * parsed when prepared and again each time it runs. A statement is never
+   * changed after parsing (the suites, the fuzzer and both ORMs ran with every
+   * one frozen), so one can be handed out twice.
+   */
+  readonly #parsed = new Map<string, Statement>()
   /** Each session's temporary tables, dropped when it ends or is reset. */
   readonly #temporary = new WeakMap<Session, TemporaryTables>()
   #temporaries = 0
@@ -306,7 +316,13 @@ export class SqlExecutor implements Executor {
     if (empty === 'empty') throw sqlError('ER_EMPTY_QUERY', 'Query was empty')
     if (empty === 'comment') return null
     try {
-      return parseStatement(sql, { sqlMode: parseSqlMode(session.sqlMode) })
+      const key = `${session.sqlMode}\n${sql}`
+      const cached = this.#parsed.get(key)
+      if (cached !== undefined) return cached
+      const statement = parseStatement(sql, { sqlMode: parseSqlMode(session.sqlMode) })
+      if (this.#parsed.size >= PARSED_KEPT) this.#parsed.delete(this.#parsed.keys().next().value as string)
+      this.#parsed.set(key, statement)
+      return statement
     } catch (e) {
       if (e instanceof ParseError && e.code === 'ER_NOT_SUPPORTED_YET') {
         // A `SET` the parser names as not implemented (`SET RESOURCE GROUP`)
