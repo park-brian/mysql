@@ -29,6 +29,7 @@ import {
   bool,
   bytesValue,
   compareValues,
+  textComparer,
   plainValue,
   withoutHex,
   decodeField,
@@ -820,6 +821,8 @@ function fixedTolerance(a: ResultType, b: ResultType): number | undefined {
  */
 export function comparer(a: ResultType, b: ResultType): (x: Value, y: Value) => number | null {
   const tolerance = fixedTolerance(a, b)
+  // Text against text: the collation and a constant's encoding decided once for the site, not once a row.
+  if (tolerance === undefined && a.kind === 'string' && b.kind === 'string') return textComparer()
   if (tolerance === undefined) return compareValues
   return (x, y) => {
     if (x === null || y === null) return null
@@ -1128,9 +1131,10 @@ function binary(op: string, left: Expression, right: Expression, extra: Expressi
           type: boolType(nullable),
         }
       }
+      const cmp = comparer(a.type, b.type)
       return {
         eval: (r, env) => {
-          const c = compareValues(at(r, env), bt(r, env))
+          const c = cmp(at(r, env), bt(r, env))
           return c === null ? null : bool(test(c))
         },
         type: boolType(nullable),

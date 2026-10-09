@@ -146,6 +146,39 @@ function compareText(a: Exclude<Value, null>, b: Exclude<Value, null>): number {
   return sign(memcmp(valueBytes(a), valueBytes(b)))
 }
 
+/**
+ * `compareValues` for one comparison site whose operands are text: the
+ * collation is decided once for the pair of collations it meets (rows of
+ * one column bring the same pair every time), and each side's last string is
+ * kept encoded, so a constant is encoded once rather than once a row.
+ * Anything else is `compareValues`'s.
+ */
+export function textComparer(): (a: Value, b: Value) => number | null {
+  let pair = -1
+  let id = 0
+  let compare: (x: Uint8Array, y: Uint8Array) => number = () => 0
+  let left: { text: string; id: number; bytes: Uint8Array } | undefined
+  let right: { text: string; id: number; bytes: Uint8Array } | undefined
+  const encoded = (memo: { text: string; id: number; bytes: Uint8Array } | undefined, text: string): { text: string; id: number; bytes: Uint8Array } =>
+    memo !== undefined && memo.text === text && memo.id === id ? memo : { text, id, bytes: encodeCollation(text, id) }
+  return (a, b) => {
+    if (a === null || b === null) return null
+    if (a.kind !== 'string' || b.kind !== 'string') return compareValues(a, b)
+    // The pair is keyed by both ids and coercibilities: what `aggregateCollation` decides by.
+    const key = ((a.collationId * 8 + a.coercibility) * 65536 + b.collationId) * 8 + b.coercibility
+    if (key !== pair) {
+      pair = key
+      id = aggregateCollation(a, b)
+      const c = collation(id)
+      compare = (x, y) => c.compare(x, y)
+    }
+    if (a.v === b.v) return 0
+    left = encoded(left, a.v)
+    right = encoded(right, b.v)
+    return sign(compare(left.bytes, right.bytes))
+  }
+}
+
 export function compareDecimals(a: DecimalValue, b: DecimalValue): number {
   const scale = Math.max(a.scale, b.scale)
   return sign(rescale(a, scale).v - rescale(b, scale).v)
