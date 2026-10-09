@@ -39,7 +39,7 @@
 // the system tables' own layout is the store format's, which is refused, not
 // migrated (D-26).
 import { TypeError as TypeError_ } from '@myjs/types'
-import { badFormat, corruptCatalog, dbExists, dbMissingOnDrop, noSuchTable, notAView, notSupportedYet, tableExists, unknownDb, unknownTable, writerBusy, wrongDbName, wrongTableName } from './errors.ts'
+import { badFormat, corruptCatalog, misuse, dbExists, dbMissingOnDrop, noSuchTable, notAView, notSupportedYet, tableExists, unknownDb, unknownTable, writerBusy, wrongDbName, wrongTableName } from './errors.ts'
 import { ClusteredIndex, type KeyColumn, type Row } from './indexes.ts'
 import { decodeRecord, externalRefs, type FieldBytes, type RecordLayout } from './record.ts'
 import { NAME_BYTES, checkName, clusteredKeyOf, decodeTableDef, encodeTableDef, keyColumnsOf, layoutOf, resolveTable, secondariesOf, type TableDef, type TableSpec } from './schema.ts'
@@ -395,6 +395,56 @@ export class Catalog {
     }
   }
 
+  /**
+   * Several DDL steps as one: `change` runs in a transaction of its own,
+   * which each step takes as its `trx`, and commits when it returns — so a
+   * RENAME TABLE of many pairs, or a swap through a third name, is one
+   * change, all of it or none.
+   */
+  ddlTransaction<T>(change: (trx: Trx) => T): T {
+    return ddl(this.store, undefined, change)
+  }
+
+  /**
+   * RENAME TABLE's step: a table's row moved to a new name, or to another
+   * schema, and a view's to a new name — the trees untouched, since they are
+   * keyed by the table's id. `rewrite` gives the options the moved definition
+   * carries (constraint names that follow the table's own). The schemas are
+   * looked up first, then the table, then the name it takes (8.4.11: 1049
+   * before 1146, and 1050 for a name in use, its own included).
+   */
+  renameTable(schema: string, name: string, to: { readonly schema: string; readonly name: string }, options: { readonly trx?: Trx; readonly rewrite?: (def: TableDef) => TableDef['options'] } = {}): void {
+    checkName(to.name, wrongTableName)
+    ddl(this.store, options.trx, (trx) => {
+      const s = this.#schemaOf(schema, trx)
+      if (s === undefined) throw unknownDb(schema)
+      const t = this.#schemaOf(to.schema, trx)
+      if (t === undefined) throw unknownDb(to.schema)
+      const row = this.#row(s.id, name, trx)
+      if (row === undefined) throw noSuchTable(schema, name)
+      if (this.#row(t.id, to.name, trx) !== undefined) throw tableExists(to.name)
+      this.#tables.delete(this.#tableKey(s.id, name), trx)
+      if (isView(row)) {
+        if (t.id !== s.id) throw misuse('a view stays in its schema')
+        this.#tables.insert([be32(s.id), utf8.encode(to.name), be32(VIEW_ID), encodeViewDef({ ...decodeViewDef(row[3] as Uint8Array), name: to.name })], trx)
+        return
+      }
+      const moved: TableDef = { ...decodeTableDef(row[3] as Uint8Array), schema: to.schema, name: to.name }
+      const def = options.rewrite === undefined ? moved : { ...moved, options: options.rewrite(moved) }
+      this.#tables.insert([be32(t.id), utf8.encode(to.name), be32(def.id), encodeTableDef(def)], trx)
+    })
+  }
+
+  /** A table's options rewritten where they are, its rows untouched: the foreign keys a child keeps after its parent is renamed. */
+  setTableOptions(schema: string, name: string, tableOptions: TableDef['options'], options: { readonly trx?: Trx } = {}): void {
+    ddl(this.store, options.trx, (trx) => {
+      const s = this.#schemaOf(schema, trx)
+      const def = s === undefined ? undefined : this.#definition(s.id, name, trx)
+      if (s === undefined || def === undefined) throw noSuchTable(schema, name)
+      this.#tables.update([be32(s.id), utf8.encode(def.name), be32(def.id), encodeTableDef({ ...def, options: tableOptions })], trx)
+    })
+  }
+
   /** A table's definition, as last committed. ER_NO_SUCH_TABLE if there is none. */
   /** A table's definition, as last committed, or as `trx` sees it. */
   definition(schema: string, name: string, trx?: Trx): TableDef {
@@ -404,10 +454,12 @@ export class Catalog {
     return def
   }
 
-  /** Every table, or every table in one schema, in name order. */
-  tables(schema?: string): TableDef[] {
-    if (schema === undefined) return [...this.#tables.scan()].filter(([, r]) => !isView(r)).map(([, r]) => decodeTableDef(r[3] as Uint8Array))
-    return this.#definitions(this.schema(schema).id, undefined)
+  /** Every table, or every table in one schema, in name order: as last committed, or as `trx` sees them. */
+  tables(schema?: string, trx?: Trx): TableDef[] {
+    if (schema === undefined) return [...this.#tables.scan(undefined, trx, trx === undefined ? 'consistent' : 'current')].filter(([, r]) => !isView(r)).map(([, r]) => decodeTableDef(r[3] as Uint8Array))
+    const s = this.#schemaOf(schema, trx)
+    if (s === undefined) throw unknownDb(schema)
+    return this.#definitions(s.id, trx)
   }
 
   // --- views --------------------------------------------------------------------

@@ -1426,7 +1426,7 @@ upserts included, and relational SELECT: joins, grouping and aggregates,
 subqueries, derived tables, CTEs, set operations, views, JSON as a value and
 the first window functions, `INFORMATION_SCHEMA`, foreign keys with their
 referential actions, CHECK constraints, ALTER TABLE by copy, temporary tables,
-CREATE TABLE … LIKE and … SELECT, generated columns, `SHOW CREATE
+CREATE TABLE … LIKE and … SELECT, generated columns, RENAME TABLE, `SHOW CREATE
 TABLE` byte for byte, JSON paths and regular expressions. Generated corpora of 400, 300 and 250 scripts
 agree with MySQL 8.4.11 statement for statement, column names and flags
 included. Most of M5's exit criterion holds. All 487 tests of Drizzle's

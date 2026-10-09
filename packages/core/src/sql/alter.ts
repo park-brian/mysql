@@ -16,7 +16,7 @@
 import { FIELD_TYPE, MyjsError } from '@myjs/bytes'
 import { sqlError, messages, type OkResult } from '@myjs/protocol'
 import type { ColumnDef, FieldBytes, IndexDef, TableDef, TableSpec } from '@myjs/engine'
-import { KEY, NODE, deparse, type AlterAction, type AlterTableNode, type ColumnDefinition, type Expression } from '@myjs/parser'
+import { KEY, NODE, STATEMENT, deparse, type AlterAction, type AlterTableNode, type ColumnDefinition, type Expression } from '@myjs/parser'
 import { decodeField, encodeField, type StoreContext, type Value } from '@myjs/types'
 import { raise, type Compiled } from './compile.ts'
 import { column as columnDef, columnDeprecations, DEFAULT_COLLATION, duplicateKeys, duplicateKeyText, keyExtras, visiblePrimary } from './ddl.ts'
@@ -28,6 +28,7 @@ import { checkParentOf, foreignKeyChecks, foreignKeyClause, foreignKeysOf, refer
 import { checkFulltext, fulltextOf, type FulltextDef } from './fulltext.ts'
 import type { Run } from './query.ts'
 import { isTemporary, type CatalogApi } from './temporary.ts'
+import { renameTables } from './rename.ts'
 
 const notSupported = (what: string) => sqlError('ER_NOT_SUPPORTED_YET', messages.notSupported(what))
 const cantDrop = (name: string) => sqlError('ER_CANT_DROP_FIELD_OR_KEY', `Can't DROP '${name}'; check that column/key exists`)
@@ -49,6 +50,16 @@ export function alterTable(run: Run, catalog: CatalogApi, statement: AlterTableN
   // DDL: an implicit commit first, as every DDL statement makes.
   run.state.commit()
   const def = catalog.definition(schema, statement.table.name)
+  // A rename alone moves the name, as RENAME TABLE does, and the rows stay
+  // where they are: to another schema too, and a name with none goes to the
+  // current database (8.4.11). Its own name is no change, and no error.
+  const renames = statement.actions.filter((a) => a.type === 'rename')
+  if (renames.length > 0 && renames.length === statement.actions.length && Object.keys(statement.options).length === 0 && !isTemporary(def)) {
+    const to = (renames[renames.length - 1] as Extract<AlterAction, { type: 'rename' }>).to
+    const target = { schema: to.schema ?? run.env.session.database ?? schema, name: to.name }
+    if (target.schema === schema && target.name === def.name) return { affectedRows: 0 }
+    return renameTables(catalog, { kind: STATEMENT.RENAME_TABLE, pairs: [{ from: { schema, name: def.name }, to: target }], at: statement.at }, run.env.session.database)
+  }
   for (const a of statement.actions) {
     const named = ACTION_NAMES[a.type]
     if (named !== undefined) throw notSupported(named)
@@ -322,7 +333,8 @@ export function alterTable(run: Run, catalog: CatalogApi, statement: AlterTableN
 
   // --- the table's own name and options ---
   const renameTo = of('rename').at(-1)?.to
-  if (renameTo !== undefined && renameTo.schema !== undefined && renameTo.schema !== schema) throw notSupported('ALTER TABLE … RENAME to another schema')
+  const renameSchema = renameTo === undefined ? schema : (renameTo.schema ?? run.env.session.database ?? schema)
+  if (renameSchema !== schema) throw notSupported('ALTER TABLE … RENAME to another schema beside other changes')
   const name = renameTo?.name ?? def.name
   if (!same(name, def.name) && (catalog.tables(schema).some((t) => same(t.name, name)) || catalog.view(schema, name) !== undefined)) throw sqlError('ER_TABLE_EXISTS_ERROR', `Table '${name}' already exists`)
   const optionOf = (key: string) => Object.entries(statement.options).find(([k]) => k.toUpperCase() === key)?.[1]

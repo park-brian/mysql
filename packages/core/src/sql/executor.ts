@@ -55,6 +55,7 @@ import {
   type StatementResult,
 } from '@myjs/protocol'
 import { conditionsFor } from './strict.ts'
+import { renameTables } from './rename.ts'
 import { COERCIBILITY, doubleValue, intValue, parseDecimal, plainValue, stringValue, toInteger, toText, type Condition, type Value } from '@myjs/types'
 import { charsetChange, ensureCollationResident } from '../transcoder.ts'
 import { PROGRAM_OBJECTS, ServerState, type ProgramStatement, type ServerOptions } from './admin.ts'
@@ -582,6 +583,10 @@ export class SqlExecutor implements Executor {
       }
       case STATEMENT.ALTER_TABLE:
         return alterTable(run, this.#catalog(run), statement)
+      case STATEMENT.RENAME_TABLE:
+        // DDL: the open transaction commits first (8.4.11).
+        state.commit()
+        return renameTables(this.#catalog(run), statement, session.database)
       case STATEMENT.CREATE_VIEW:
         state.commit()
         return this.#createView(run, statement)

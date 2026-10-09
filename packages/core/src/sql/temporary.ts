@@ -44,6 +44,9 @@ export type CatalogApi = Pick<
   | 'view'
   | 'views'
   | 'table'
+  | 'ddlTransaction'
+  | 'renameTable'
+  | 'setTableOptions'
 > & {
   /** The session's temporary tables, when this is a session's view. */
   readonly temporary?: TemporaryTables
@@ -235,12 +238,16 @@ export function sessionCatalog(base: Catalog, temporary: TemporaryTables): Catal
     truncateTable: (schema, name) => (temporary.has(schema, name) ? temporary.truncate(schema, name) : base.truncateTable(schema, name)),
     rebuildTable: (schema, name, spec, copy) => (temporary.has(schema, name) ? temporary.rebuild(schema, name, spec, copy) : base.rebuildTable(schema, name, spec, copy)),
     definition: (schema, name) => (temporary.has(schema, name) ? temporary.definition(schema, name) : base.definition(named(schema), name)),
-    tables: (schema) => base.tables(schema).filter((t) => !isHiddenSchema(t.schema)),
+    tables: (schema, trx) => base.tables(schema, trx).filter((t) => !isHiddenSchema(t.schema)),
     createView: (view, options) => base.createView(view, options),
     dropViews: (schema, names, options) => base.dropViews(schema, names, options),
     view: (schema, name) => base.view(schema, name),
     views: (schema) => base.views(schema),
     table: (schema, name) => (temporary.has(schema, name) ? temporary.table(schema, name) : base.table(named(schema), name)),
+    // RENAME TABLE acts on the tables everyone sees, never a session's own (8.4.11: 1146).
+    ddlTransaction: (change) => base.ddlTransaction(change),
+    renameTable: (schema, name, to, options) => base.renameTable(named(schema), name, { ...to, schema: named(to.schema) }, options),
+    setTableOptions: (schema, name, tableOptions, options) => base.setTableOptions(named(schema), name, tableOptions, options),
   }
 }
 
