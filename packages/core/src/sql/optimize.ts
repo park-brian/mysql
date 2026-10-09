@@ -288,7 +288,7 @@ export function constTablesHaveRows(facts: OptimizerFacts, ctx: CompileContext, 
 }
 
 /** The table slots a condition rejects NULL on: a comparison, BETWEEN, IN or LIKE with the column as its operand. */
-function nullRejected(c: Expression, slot: (e: Expression) => number | undefined): number[] {
+export function nullRejected(c: Expression, slot: (e: Expression) => number | undefined): number[] {
   if (c.kind === NODE.BINARY && ['=', '<', '<=', '>', '>=', '<>', '!=', 'BETWEEN', 'IN', 'LIKE', 'NOT IN', 'NOT BETWEEN', 'NOT LIKE'].includes(c.op)) {
     const out: number[] = []
     for (const side of [c.left, c.op === '=' || c.op === '<' || c.op === '<=' || c.op === '>' || c.op === '>=' || c.op === '<>' || c.op === '!=' ? c.right : undefined]) {

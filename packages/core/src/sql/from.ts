@@ -42,7 +42,7 @@ import { planNode, type PlanNode } from './explain.ts'
 import { FULL_SCAN, accessRows, chooseAccess, dynamicAccess, keyOrder, pointAccess, splitAnd, type Access, type OuterColumn, type RangeCosting } from './plan.ts'
 import { bestAccess, floorFilter, joinOrder, type Candidate, type KeyChoice, type Positioned } from './cost.ts'
 import { rowKey } from './keys.ts'
-import { neverEqual } from './optimize.ts'
+import { neverEqual, nullRejected } from './optimize.ts'
 import type { TableStatistics } from './stats.ts'
 import { TableScope, type ScopeColumn, type ScopeTableSpec } from './scope.ts'
 
@@ -419,6 +419,7 @@ export function planFrom(refs: readonly TableReference[], ctx: FromContext, wher
   }
 
   const scope = new TableScope(specs, { coalesced, ...(tree === undefined ? {} : { visible: tree.visible }), ...(ctx.parent === undefined ? {} : { parent: ctx.parent }) })
+  if (tree !== undefined) tree.node = innerWherePossible(tree.node, where, scope)
   // A column of an enclosing query, compiled once: a constant for each run of this one.
   const outerColumns = new Map<Expression, Compiled | undefined>()
   const outer: OuterColumn | undefined =
@@ -576,6 +577,71 @@ export function planFrom(refs: readonly TableReference[], ctx: FromContext, wher
       return op.rows({ trx, env, locking: options.locking, ids: options.ids === true, width })
     },
   }
+}
+
+/**
+ * Outer-join simplification, for the plan (`simplify_joins`): an outer join
+ * whose nullable side a WHERE condition rejects NULL on — or an inner join's
+ * ON, or a converted join's own ON — is an inner join, since the rows it adds
+ * are filtered out anyway; to a fixed point, as `optimize.ts` decides it for
+ * the metadata. The converted joins may then be reordered and their tables
+ * read by ranges, and a table no unconverted outer join can null is no longer
+ * marked nullable (`FromTable.nullable`; the scope keeps what the columns
+ * report).
+ */
+function innerWherePossible(root: Node, where: Expression | undefined, scope: TableScope): Node {
+  const slot = (e: Expression): number | undefined => {
+    if (e.kind !== NODE.COLUMN) return undefined
+    const p = e.parts[0] as string
+    if (e.parts.length === 1 && p.startsWith(SLOT_PREFIX)) return Number(p.slice(SLOT_PREFIX.length))
+    try {
+      const r = scope.resolve(e.parts, 'where clause')
+      return r.depth === undefined ? r.index : undefined
+    } catch (err) {
+      expectTyped(err)
+      return undefined
+    }
+  }
+  let pool: Expression[] = []
+  const converted = new Set<Node>()
+  // The ONs that hold as a WHERE does: an inner join's, or a converted one's, outside any nullable side.
+  const gather = (n: Node, nullable: boolean): void => {
+    if (n.kind === 'leaf') return
+    const inner = !n.left || converted.has(n)
+    if (inner && !nullable) pool.push(...splitAnd(n.onAst))
+    gather(n.outer, nullable)
+    gather(n.inner, nullable || !inner)
+  }
+  const visit = (n: Node, nullable: boolean): boolean => {
+    if (n.kind === 'leaf') return false
+    let changed = visit(n.outer, nullable)
+    if (n.left && !converted.has(n) && !nullable) {
+      const inner = leafAliases(n.inner)
+      if (pool.some((c) => nullRejected(c, slot).some((i) => inner.has(scope.columnAt(i)?.table.alias ?? '')))) {
+        converted.add(n)
+        pool.push(...splitAnd(n.onAst))
+        changed = true
+      }
+    }
+    return visit(n.inner, nullable || (n.left && !converted.has(n))) || changed
+  }
+  do {
+    pool = splitAnd(where)
+    gather(root, false)
+  } while (visit(root, false))
+  if (converted.size === 0) return root
+  const rebuilt = (n: Node): Node => (n.kind === 'leaf' ? n : { ...n, outer: rebuilt(n.outer), inner: rebuilt(n.inner), left: n.left && !converted.has(n) })
+  const node = rebuilt(root)
+  const mark = (n: Node, nullable: boolean): void => {
+    if (n.kind === 'leaf') {
+      ;(n.table as { nullable: boolean }).nullable = nullable
+      return
+    }
+    mark(n.outer, nullable)
+    mark(n.inner, nullable || n.left)
+  }
+  mark(node, false)
+  return node
 }
 
 /** The aliases of a join's inner side. */
@@ -772,7 +838,7 @@ function rangeCosting(t: FromTable, settings: LeafSettings, env: Env): RangeCost
   const fixed = def.columns.reduce((n, c) => n + (c.type.collationId === undefined ? keyBytes(c) - (c.nullable ? 1 : 0) : 0), 0)
   return {
     stats: settings.statistics(def, table),
-    covers: (i) => (i === clustered ? read !== 'all' && [...read].every((c) => i.parts.some((p) => p.column.toLowerCase() === c)) : covers(def, i, read)),
+    covers: (i) => holdsRead(def, i, read),
     recordBytes: (i) => indexBytes(def, i) + indexBytes(def, clustered),
     coveringScan: cover === undefined ? undefined : def.indexes.find((i) => i.name === cover),
     minRecordBytes: 5 + 13 + Math.ceil(def.columns.filter((c) => c.nullable).length / 8) + fixed,
@@ -1261,11 +1327,11 @@ function placeTable(t: FromTable, lookup: EqRef | undefined, prefix: readonly Po
       : {
           kind: lookup.unique ? 'unique' : isClustered(def, lookup.index) ? 'clustered' : 'ref',
           fanout: lookup.unique ? 1 : stats.recordsPerKey(lookup.index, 1),
-          covering: covers(def, lookup.index, read),
+          covering: holdsRead(def, lookup.index, read),
           recordBytes: indexBytes(def, lookup.index) + indexBytes(def, clusteredIndex(def)),
           keyFrom: new Set([...(aliasesOf(lookup.condition, scope) ?? [])].filter((a) => a !== t.alias)),
         }
-  const coveredByAnyIndex = read !== 'all' && (def.indexes.some((i) => covers(def, i, read)) || [...read].every((c) => clusteredIndex(def)?.parts.some((p) => p.column.toLowerCase() === c) === true))
+  const coveredByAnyIndex = def.indexes.some((i) => holdsRead(def, i, read))
   const constant = stats.rows < 1 ? 1 : floorFilter(filter(new Set()), stats.rows, stats.rows)
   const access = bestAccess({ stats, coveredByAnyIndex, constantFilter: constant }, prefix, key, rowBytes(prefix, settings))
   const kept = access.lookup
@@ -1503,8 +1569,8 @@ function lookupOp(node: Node & { kind: 'join' }, outer: Op, t: FromTable, lookup
       }
     },
     describe(env) {
-      const covering = !lookup.unique && t.def !== undefined && covers(t.def, lookup.index, settings.read.get(t.alias) ?? 'all')
-      const lookupNode = planNode(`${lookup.unique ? 'Single-row index' : covering ? 'Covering index' : 'Index'} lookup on ${t.alias} using ${lookup.index.name}`)
+      const covering = t.def !== undefined && holdsRead(t.def, lookup.index, settings.read.get(t.alias) ?? 'all')
+      const lookupNode = planNode(`${lookup.unique ? 'Single-row ' : ''}${covering ? (lookup.unique ? 'covering index' : 'Covering index') : lookup.unique ? 'index' : 'Index'} lookup on ${t.alias} using ${lookup.index.name}`)
       // The lookup's own equality is the key read, not a filter.
       const rest = on.filter((c) => c.e !== lookup.condition)
       return planNode(node.left ? 'Nested loop left join' : 'Nested loop inner join', [outer.describe(env), rest.length === 0 ? lookupNode : planNode('Filter', [lookupNode])])
@@ -1673,6 +1739,12 @@ const isClustered = (def: TableDef, index: IndexDef): boolean => index === clust
 function indexBytes(def: TableDef, index: IndexDef | undefined): number {
   if (index === undefined) return 6
   return index.parts.reduce((n, p) => n + keyBytes(def.columns.find((c) => c.name === p.column) as ColumnDef), 0)
+}
+
+/** Whether an index holds every column in `read` (`covering_keys`): a secondary one with the clustered key it carries, or the clustered key itself when `read` is only its columns. */
+function holdsRead(def: TableDef, index: IndexDef, read: ReadonlySet<string> | 'all'): boolean {
+  if (index !== clusteredIndex(def)) return covers(def, index, read)
+  return read !== 'all' && index.invisible !== true && [...read].every((c) => index.parts.some((p) => p.column.toLowerCase() === c))
 }
 
 /** Whether a secondary index, with the clustered key it carries, holds every column in `read`. */
