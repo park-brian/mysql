@@ -1722,7 +1722,7 @@ function caseExpr(e: CaseNode, ctx: CompileContext): Compiled {
 }
 
 /** The builtins this executor knows, beyond the ones written out below — refused by name until M5.10. */
-const KNOWN_BUILTINS = new Set(['DATE_FORMAT', 'DATE_ADD', 'DATE_SUB', 'JSON_EXTRACT', 'UUID', 'RAND', 'ROW_NUMBER', 'RANK'])
+const KNOWN_BUILTINS = new Set(['DATE_FORMAT', 'DATE_ADD', 'DATE_SUB', 'JSON_EXTRACT', 'UUID', 'ROW_NUMBER', 'RANK'])
 
 /** M5.10's string and numeric slices (`functions.ts`). */
 const LIBRARY: ReadonlySet<string> = new Set([
@@ -1939,6 +1939,36 @@ function call(e: CallNode, ctx: CompileContext): Compiled {
             if (v !== null) return (chosen[i] as (v: Exclude<Value, null>) => Value)(v)
           }
           return null
+        },
+        type,
+      }
+    }
+    case 'RAND': {
+      // MySQL's own generator (`randominit`, `my_rnd`), so a seed gives the
+      // server's sequence: RAND(1) is 0.40540353712197724. The seed is read
+      // as an integer and kept to 32 bits, NULL as 0. One that reads no
+      // column seeds once a statement and the rows take the sequence; one
+      // that reads the row seeds again for each (8.4.11). Without one, the
+      // session's own sequence.
+      if (e.args.length > 1) arity(1)
+      const type = { ...doubleType(false), scale: 31 }
+      if (e.args.length === 0) return { eval: () => doubleValue(Math.random()), type }
+      const [seed] = args() as [Compiled]
+      const perRow = readsColumn(e.args)
+      const state: { seeds?: RandSeeds } = {}
+      const seeded = (r: Row, env: Env): RandSeeds => {
+        const v = seed.eval(r, env)
+        return randSeeds(v === null ? 0n : toInteger(v))
+      }
+      return {
+        eval: (r, env) => {
+          if (perRow) return doubleValue(nextRand(seeded(r, env)))
+          let seeds = env.memo?.get(state) as RandSeeds | undefined
+          if (seeds === undefined) {
+            seeds = seeded(r, env)
+            env.memo?.set(state, seeds)
+          }
+          return doubleValue(nextRand(seeds))
         },
         type,
       }
@@ -2263,6 +2293,27 @@ function clock(now: Date, fsp: number): MysqlDateTime {
     second: now.getUTCSeconds(),
     microsecond: Math.floor(us / unit) * unit,
   }
+}
+
+/** RAND's state: MySQL's `rand_struct`. */
+interface RandSeeds {
+  seed1: number
+  seed2: number
+}
+
+const RAND_MAX = 0x3fffffff
+
+/** `randominit` over the seed as `Item_func_rand::seed_random` spreads it: two 32-bit products of its low 32 bits. */
+function randSeeds(n: bigint): RandSeeds {
+  const tmp = BigInt.asUintN(32, n)
+  return { seed1: Number(BigInt.asUintN(32, tmp * 0x10001n + 55555555n)) % RAND_MAX, seed2: Number(BigInt.asUintN(32, tmp * 0x10000001n)) % RAND_MAX }
+}
+
+/** `my_rnd`: the next value, in [0, 1). */
+function nextRand(s: RandSeeds): number {
+  s.seed1 = (s.seed1 * 3 + s.seed2) % RAND_MAX
+  s.seed2 = (s.seed1 + s.seed2 + 33) % RAND_MAX
+  return s.seed1 / RAND_MAX
 }
 
 /** The largest single-precision float, `FLT_MAX` (<cfloat>). */
