@@ -118,6 +118,9 @@ export class MySQL {
     }
     let catalog: Catalog | undefined
     let executor = options.executor
+    // SHOW STATUS counts the connections the database has, once it exists.
+    let db: MySQL | undefined
+    const connections = { open: () => db?.openConnections ?? 0, made: () => db?.connectionsMade ?? 0 }
     if (executor === undefined) {
       try {
         catalog = await openCatalog(vfs, options)
@@ -125,10 +128,10 @@ export class MySQL {
         lock?.release()
         throw e
       }
-      executor = new SqlExecutor({ catalog, ...(options.serverVersion === undefined ? {} : { serverVersion: options.serverVersion }) })
+      executor = new SqlExecutor({ catalog, connections, ...(options.serverVersion === undefined ? {} : { serverVersion: options.serverVersion }) })
     }
     const accounts = options.accounts ?? (await defaultAccounts())
-    const db = new MySQL(path, vfs, executor, accounts, options, catalog)
+    db = new MySQL(path, vfs, executor, accounts, options, catalog)
     db.#lock = lock
     db.#startSync()
     return db
@@ -177,6 +180,11 @@ export class MySQL {
 
   /** Every connection this instance made that has not closed, so `end()` can end their sessions. */
   readonly #connections = new Set<ProtocolConnection>()
+
+  /** How many connections this instance has made, closed ones too. */
+  get connectionsMade(): number {
+    return this.#nextConnectionId - 1
+  }
 
   /** How many connections are still open. */
   get openConnections(): number {

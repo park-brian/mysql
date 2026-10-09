@@ -46,7 +46,7 @@ const COLUMN_FLAG = { PRI_KEY: 2, UNIQUE_KEY: 4, MULTIPLE_KEY: 8 } as const
 const isInformationSchema = (schema: string): boolean => schema.toLowerCase() === 'information_schema'
 
 /** The ResultType of one captured column: what expressions over it compute with, and what a bare reference reports. */
-function typeOf(c: InformationSchemaColumn, table: string, alias: string): ResultType {
+export function systemColumnType(c: InformationSchemaColumn, table: string, alias: string, schema = 'information_schema'): ResultType {
   const nullable = (c.flags & 1) === 0
   const unsigned = (c.flags & 32) !== 0
   let base: ResultType
@@ -62,7 +62,7 @@ function typeOf(c: InformationSchemaColumn, table: string, alias: string): Resul
   // A dictionary column is copied through a temporary table as a table column
   // is, keeping its own flags less its key flags; a computed one as an
   // expression (8.4.11, under a sort over the view's join).
-  if (c.column) return { ...base, wire, column: { schema: 'information_schema', table: alias, orgTable: table, orgName: c.name, flags: c.flags & ~(1 | 32 | 128) } }
+  if (c.column) return { ...base, wire, column: { schema, table: alias, orgTable: table, orgName: c.name, flags: c.flags & ~(1 | 32 | 128) } }
   return { ...base, wire, names: { schema: '', table: alias, orgTable: table, orgName: c.name } }
 }
 
@@ -81,7 +81,7 @@ export function informationSchemaTable(run: Run, name: TableName, alias: string,
     throw sqlError('ER_UNKNOWN_TABLE', `Unknown table '${name.name}' in information_schema`)
   }
   const rowsOf = ROWS[table] as (run: Run) => Iterable<readonly Value[]>
-  const columns = defs.map((c) => ({ name: c.name, type: typeOf(c, table, alias) }))
+  const columns = defs.map((c) => ({ name: c.name, type: systemColumnType(c, table, alias) }))
   // Each string in its column's own collation, so a comparison is made in it.
   const collations = columns.map((c) => (c.type.kind === 'string' ? c.type.collationId : undefined))
   return {

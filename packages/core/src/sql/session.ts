@@ -69,12 +69,14 @@ export class SqlSession implements SessionValues {
   diagnostics: Diagnostics = NO_DIAGNOSTICS
   /** The diagnostics as the running statement began: what `@@warning_count` reads (8.4.11). */
   previous: Diagnostics = NO_DIAGNOSTICS
+  /** Statements this session has sent, for SHOW SESSION STATUS. */
+  questions = 0
 
   constructor(session: Session, server: ServerState) {
     this.session = session
     this.#server = server
     // A session starts at the server's level, as `SET GLOBAL TRANSACTION` leaves it.
-    this.isolation = isolationOf(String(server.vars.get('transaction_isolation') ?? 'REPEATABLE-READ'))
+    this.isolation = isolationOf(String(server.global('transaction_isolation') ?? 'REPEATABLE-READ'))
   }
 
   /**
@@ -91,8 +93,24 @@ export class SqlSession implements SessionValues {
     this.ownVariables.set('transaction_isolation', stringValue(name, 255))
   }
 
+  /** A statement from the client: counted for SHOW STATUS's `Questions`, for the session and the server. */
+  question(): void {
+    this.questions++
+    this.#server.questions++
+  }
+
+  /** SHOW STATUS's rows for this session, or for the server. */
+  status(_session: Session, scope: 'GLOBAL' | 'SESSION'): (readonly [string, string])[] {
+    return this.#server.status(scope, this.questions)
+  }
+
+  systemVariableNames(): string[] {
+    return this.#server.systemVariableNames()
+  }
+
   systemVariable(name: string, scope: 'GLOBAL' | 'SESSION' | undefined, session: Session): Value | undefined {
     if (scope !== 'GLOBAL' && (name === 'warning_count' || name === 'error_count')) return intValue(BigInt(name === 'warning_count' ? this.previous.warnings : this.previous.errors), true)
+    if (scope !== 'GLOBAL' && (name === 'last_insert_id' || name === 'identity') && !this.ownVariables.has(name)) return intValue(this.lastInsertId, true)
     return this.#server.systemVariable(name, scope, session, this.ownVariables)
   }
 

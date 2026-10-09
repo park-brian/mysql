@@ -81,6 +81,7 @@ npm run capture:functions    # 200 scripts of string and numeric function calls,
 npm run capture:temporal-functions   # 300 scripts of date and time function calls, in UTC
 npm run capture:more-functions       # 300 scripts of string, math, hashing and network function calls
 npm run capture:information-schema   # 120 DDL scripts, then Prisma's introspection queries
+npm run capture:variables    # the 619 system variables: scope, type, range, default (restart before and after)
 npm run census:orm           # Drizzle's and Prisma's MySQL suites: a feature census, and our pass count
 npm run exit-criterion       # the real C client against our server
 npm run census:mysqltest -- --refresh   # MySQL's own test corpus, lexed and parsed

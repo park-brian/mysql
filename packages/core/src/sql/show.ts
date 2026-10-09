@@ -10,7 +10,7 @@
 // A key's cardinality is what the table's statistics say, through the
 // server's cache of them (`cardinalities` in stats.ts, M5.45).
 import { expectTyped } from '@myjs/bytes'
-import { NODE, STATEMENT, parseStatement, type Expression, type QueryExpression, type ShowNode, type TableName, quoteName } from '@myjs/parser'
+import { NODE, parseStatement, type Expression, type QueryExpression, type ShowNode, type TableName, quoteName } from '@myjs/parser'
 import { messages, sqlError, type ColumnDefinition } from '@myjs/protocol'
 import type { TableDef, ViewDef } from '@myjs/engine'
 import { planViewQuery, type Run } from './query.ts'
@@ -32,11 +32,34 @@ export function showQuery(run: Run, catalog: CatalogApi, node: ShowNode): QueryE
     node.what === 'INDEX'
       ? `SELECT \`Table\`, \`Non_unique\`, \`Key_name\`, \`Seq_in_index\`, \`Column_name\`, \`Collation\`, \`Cardinality\`, \`Sub_part\`, \`Packed\`, \`Null\`, \`Index_type\`, \`Comment\`, \`Index_comment\`, \`Visible\`, \`Expression\` FROM (SELECT TABLE_SCHEMA AS \`Database\`, TABLE_NAME AS \`Table\`, NON_UNIQUE AS \`Non_unique\`, INDEX_NAME AS \`Key_name\`, SEQ_IN_INDEX AS \`Seq_in_index\`, COLUMN_NAME AS \`Column_name\`, COLLATION AS \`Collation\`, CARDINALITY AS \`Cardinality\`, SUB_PART AS \`Sub_part\`, PACKED AS \`Packed\`, NULLABLE AS \`Null\`, INDEX_TYPE AS \`Index_type\`, COMMENT AS \`Comment\`, INDEX_COMMENT AS \`Index_comment\`, IS_VISIBLE AS \`Visible\`, EXPRESSION AS \`Expression\` FROM information_schema.STATISTICS) AS \`SHOW_STATISTICS\` WHERE ${where}`
       : `SELECT \`Field\`, \`Type\`, ${node.full === true ? '`Collation`, ' : ''}\`Null\`, \`Key\`, \`Default\`, \`Extra\`${node.full === true ? ', `Privileges`, `Comment`' : ''} FROM (SELECT TABLE_SCHEMA AS \`Database\`, TABLE_NAME AS \`Table\`, COLUMN_NAME AS \`Field\`, COLUMN_TYPE AS \`Type\`, COLLATION_NAME AS \`Collation\`, IS_NULLABLE AS \`Null\`, COLUMN_KEY AS \`Key\`, COLUMN_DEFAULT AS \`Default\`, EXTRA AS \`Extra\`, PRIVILEGES AS \`Privileges\`, COLUMN_COMMENT AS \`Comment\`, ORDINAL_POSITION AS \`Ordinal_position\` FROM information_schema.COLUMNS) AS \`COLUMNS\` WHERE ${where}${node.like === undefined ? '' : ` AND \`Field\` LIKE ${quote(node.like)}`} ORDER BY \`Ordinal_position\``
-  const query = parseStatement(text) as QueryExpression
-  if (node.where === undefined || query.kind !== STATEMENT.QUERY || query.body.kind !== 'select') return query
   // The statement's own WHERE, beside the database and the table.
-  const own = query.body.where as Expression
-  return { ...query, body: { ...query.body, where: { kind: NODE.BINARY, op: 'AND', left: own, right: node.where, at: own.at } } }
+  return withWhere(parseStatement(text) as QueryExpression, node.where)
+}
+
+/**
+ * The query a SHOW VARIABLES or SHOW STATUS stands for (M5.13): its
+ * PERFORMANCE_SCHEMA table renamed in a derived table, filtered by LIKE on
+ * the name, case-insensitively as the table's collation compares, and by the
+ * statement's own WHERE, which names the renamed columns. `table` names it.
+ */
+export function variablesQuery(node: ShowNode): { query: QueryExpression; table: string } {
+  const table = `${node.scope === 'GLOBAL' ? 'global' : 'session'}_${node.what === 'STATUS' ? 'status' : 'variables'}`
+  const like = node.like === undefined ? '' : ` WHERE \`Variable_name\` LIKE ${quote(node.like)}`
+  const query = parseStatement(`SELECT \`Variable_name\`, \`Value\` FROM (SELECT VARIABLE_NAME AS \`Variable_name\`, VARIABLE_VALUE AS \`Value\` FROM performance_schema.${table}) AS \`${table}\`${like}`) as QueryExpression
+  return { query: withWhere(query, node.where), table }
+}
+
+/** `query` with `where` beside its own WHERE, if it has one. */
+function withWhere(query: QueryExpression, where: Expression | undefined): QueryExpression {
+  if (where === undefined || query.body.kind !== 'select') return query
+  const own = query.body.where
+  return { ...query, body: { ...query.body, where: own === undefined ? where : { kind: NODE.BINARY, op: 'AND', left: own, right: where, at: own.at } } }
+}
+
+/** SHOW VARIABLES' and SHOW STATUS's columns, as 8.4.11 describes them: its PERFORMANCE_SCHEMA table's, renamed. */
+export function variablesColumns(table: string, resultsCollation: number, mbmaxlen: number): ColumnDefinition[] {
+  const column = (name: string, chars: number, flags: number): ColumnDefinition => ({ schema: 'performance_schema', table, orgTable: table, name, orgName: name, characterSet: resultsCollation, columnLength: chars * mbmaxlen, type: 253, flags, decimals: 0 })
+  return [column('Variable_name', 64, 4097), column('Value', 1024, 0)]
 }
 
 /**

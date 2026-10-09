@@ -59,7 +59,7 @@ import {
 } from '@myjs/protocol'
 import { conditionsFor } from './strict.ts'
 import { renameTables } from './rename.ts'
-import { showCreateView, showQuery, shownColumns } from './show.ts'
+import { showCreateView, showQuery, shownColumns, variablesColumns, variablesQuery } from './show.ts'
 import { COERCIBILITY, doubleValue, intValue, parseDecimal, plainValue, stringValue, toInteger, toText, type Condition, type Value } from '@myjs/types'
 import { charsetChange, ensureCollationResident } from '../transcoder.ts'
 import { PROGRAM_OBJECTS, ServerState, type ProgramStatement, type ServerOptions } from './admin.ts'
@@ -487,6 +487,7 @@ export class SqlExecutor implements Executor {
     await this.#preload(session, statement)
     this.#alive(session)
     const state = this.#state(session)
+    state.question()
     // SHOW WARNINGS, SHOW ERRORS and their counts read the diagnostics area
     // and leave it; every other statement starts a new one (8.4.11).
     const diagnostic = statement.kind === STATEMENT.SHOW && (statement.what === 'WARNINGS' || statement.what === 'ERRORS')
@@ -1267,6 +1268,14 @@ export class SqlExecutor implements Executor {
         const shown = tables.filter(([n]) => statement.like === undefined || likeText(n as string, statement.like))
         if (statement.full === true) return { columns: [text(label, 64), text('Table_type', 11)], rows: shown.map(([n, kind]) => [encode(n as string), encode(kind as string)]) }
         return { columns: [text(label, 64)], rows: shown.map(([n]) => [encode(n as string)]) }
+      }
+      case 'VARIABLES':
+      case 'STATUS': {
+        // A query over PERFORMANCE_SCHEMA, as the server runs it (show.ts).
+        const { query, table } = variablesQuery(statement)
+        const plan = planQuery(run, query)
+        const result = this.catalog === undefined ? resultSet(run, plan, undefined) : run.state.statement(this.catalog.store, false, (trx) => resultSet(run, plan, trx))
+        return { ...result, columns: variablesColumns(table, coll, requireCollationInfo(coll).mbmaxlen) }
       }
       case 'COLUMNS':
       case 'INDEX': {

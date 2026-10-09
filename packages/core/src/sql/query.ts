@@ -28,6 +28,7 @@ import { describeStages, runStages, type Rowed, type Stage } from './pipeline.ts
 import { convert as convertSetValue, nestedNullability, setOperation, setOperationType } from './setop.ts'
 import { constTablesHaveRows, neverEqual, optimizerFacts } from './optimize.ts'
 import { informationSchemaTable } from './information-schema.ts'
+import { performanceSchemaTable } from './performance-schema.ts'
 import { statisticsOf } from './stats.ts'
 import type { SqlSession } from './session.ts'
 import { toWire, type WireProtocol } from './wire.ts'
@@ -94,7 +95,7 @@ export function fromContext(run: Run): FromContext {
     derived: (ref, lateral) => derivedTable(run, ref.query, ref.alias as string, ref.columns, lateral),
     cte: (name) => run.ctes?.get(name)?.(),
     view: (name, alias) => viewTable(run, name, alias),
-    system: (name, alias) => informationSchemaTable(run, name, alias, defaultDatabase(run)),
+    system: (name, alias) => informationSchemaTable(run, name, alias, defaultDatabase(run)) ?? performanceSchemaTable(run, name, alias, defaultDatabase(run)),
     ...(run.parent === undefined ? {} : { parent: run.parent }),
   }
 }

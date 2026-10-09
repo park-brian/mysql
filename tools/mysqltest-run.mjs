@@ -74,7 +74,10 @@ function reasonOf(out, code, timedOut) {
   if (m !== null) {
     // ER_NOT_SUPPORTED_YET's text is this executor's own, naming what it lacks: the work queue.
     const lacking = m[1] === '1235' ? /^(.{1,70}?) (?:is|are) not supported/.exec(m[2])?.[1] : undefined
-    return lacking === undefined ? `error ${m[1]}` : `error 1235: ${lacking.replace(/'[^']*'/g, "'…'").replace(/`[^`]*`/g, '`…`')}`
+    if (lacking !== undefined) return `error 1235: ${lacking.replace(/'[^']*'/g, "'…'").replace(/`[^`]*`/g, '`…`')}`
+    // The variable an unknown-variable error names: a name, never a statement.
+    const variable = m[1] === '1193' ? /^Unknown system variable '(\w{1,64})'/.exec(m[2])?.[1] : undefined
+    return variable === undefined ? `error ${m[1]}` : `error 1193: ${variable}`
   }
   m = /Could not open connection '[^']*': (\d+)/.exec(out)
   if (m !== null) return `connect: error ${m[1]}`

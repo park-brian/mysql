@@ -101,6 +101,7 @@ import { escapeString, printExpression, Unprintable } from './print.ts'
 import { modeOf } from './mode.ts'
 import { NOT_YET, VARIES_PER_EVALUATION, functionCompiler } from './registry.ts'
 import { clock } from './builtins.ts'
+import { systemVariableInfo } from './variables.ts'
 
 /** One row as operators pass it: a value per column of the scope. */
 export type Row = readonly Value[]
@@ -864,13 +865,10 @@ function variable(name: string, ctx: CompileContext): Compiled {
   }
 }
 
-/** The system variables that are booleans, which report a width of 1 rather than a BIGINT UNSIGNED's 21. */
-const BOOLEAN_VARIABLES = new Set(['autocommit', 'foreign_key_checks', 'unique_checks', 'sql_safe_updates', 'explicit_defaults_for_timestamp', 'performance_schema'])
-
-/** As 8.4.11 reports them: a string is 21,845 characters, an integer a BIGINT UNSIGNED. */
+/** As 8.4.11 reports them: a string is 21,845 characters, an integer a BIGINT UNSIGNED, a boolean one of width 1. */
 function typeOfSystemVariable(name: string, v: Value, ctx: CompileContext): ResultType {
   if (v === null || v.kind === 'string' || v.kind === 'bytes') return stringType(21845, ctx.connectionCollation, true)
-  if (v.kind === 'int') return BOOLEAN_VARIABLES.has(name) ? intType(1, true) : intType(21, true, true)
+  if (v.kind === 'int') return systemVariableInfo(name)?.kind === 'bool' ? intType(1, true) : intType(21, true, true)
   return { ...typeOfValue(v), nullable: true }
 }
 

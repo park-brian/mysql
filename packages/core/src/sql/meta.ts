@@ -391,7 +391,8 @@ export function columnDefinition(name: string, t: ResultType, resultsCollation: 
     const w = streamed === undefined ? t.wire : { ...t.wire, field: streamed[0], length: streamed[1], flags: streamed[2], decimals: streamed[3] }
     const mb = requireCollationInfo(resultsCollation).mbmaxlen
     return {
-      ...(t.names ?? { schema: '', table: '', orgTable: '', orgName: '' }),
+      // A dictionary column names its table, as any column does.
+      ...(t.column !== undefined ? { schema: t.column.schema, table: t.column.table, orgTable: t.column.orgTable, orgName: t.column.orgName } : (t.names ?? { schema: '', table: '', orgTable: '', orgName: '' })),
       name,
       characterSet: w.text ? resultsCollation : CHARSET_BINARY,
       columnLength: w.text ? Math.min(4294967295, Math.ceil(w.length / 4) * mb) : w.length,
