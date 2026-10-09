@@ -12,7 +12,7 @@
 // heap in place first. Every function here takes the page as bytes, so the page
 // can be verified, fuzzed and dumped with nothing else in hand.
 import { corrupt } from './errors.ts'
-import { FRAME_TRAILER, PAGE_TYPE, initPage, pageType } from './page.ts'
+import { FRAME_TRAILER, PAGE_TYPE, initPage, pageType, readU32 } from './page.ts'
 
 export const INDEX_HEADER_END = 60
 
@@ -63,14 +63,12 @@ export function initIndexPage(page: Uint8Array, pageNo: number, level: number, i
 export const level = (p: Uint8Array): number => u16(p, LEVEL)
 /** A big-endian `uint16` read straight from the bytes: the binary search reads one per probe, and a DataView each was most of its cost. */
 const u16 = (p: Uint8Array, at: number): number => ((p[at] as number) << 8) | (p[at + 1] as number)
-const u32 = (p: Uint8Array, at: number): number => (((p[at] as number) << 24) | ((p[at + 1] as number) << 16) | ((p[at + 2] as number) << 8) | (p[at + 3] as number)) >>> 0
 
 export const cellCount = (p: Uint8Array): number => u16(p, N_CELLS)
-export const indexIdOf = (p: Uint8Array): number => u32(p, INDEX_ID)
-export const schemaVersion = (p: Uint8Array): number => u32(p, SCHEMA_VERSION)
-export const leftSibling = (p: Uint8Array): number => u32(p, LEFT)
-export const rightSibling = (p: Uint8Array): number => u32(p, RIGHT)
-export const lastInsert = (p: Uint8Array): number => u16(p, LAST_INSERT)
+export const indexIdOf = (p: Uint8Array): number => readU32(p, INDEX_ID)
+export const schemaVersion = (p: Uint8Array): number => readU32(p, SCHEMA_VERSION)
+export const leftSibling = (p: Uint8Array): number => readU32(p, LEFT)
+export const rightSibling = (p: Uint8Array): number => readU32(p, RIGHT)
 export const direction = (p: Uint8Array): number => (p[DIRECTION] as number)
 export const directionCount = (p: Uint8Array): number => u16(p, N_DIRECTION)
 export const garbage = (p: Uint8Array): number => u16(p, GARBAGE)

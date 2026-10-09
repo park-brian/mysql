@@ -98,7 +98,7 @@ export function referenceText(fk: ForeignKeyDef, childSchema: string, forError: 
 }
 
 const constraintText = (fk: ForeignKeyDef, schema: string, table: string): string => `(${q(schema)}.${q(table)}, CONSTRAINT ${q(fk.name)} ${referenceText(fk, schema, true)})`
-export const noParent = (fk: ForeignKeyDef, schema: string, table: string) => sqlError('ER_NO_REFERENCED_ROW_2', `Cannot add or update a child row: a foreign key constraint fails ${constraintText(fk, schema, table)}`)
+const noParent = (fk: ForeignKeyDef, schema: string, table: string) => sqlError('ER_NO_REFERENCED_ROW_2', `Cannot add or update a child row: a foreign key constraint fails ${constraintText(fk, schema, table)}`)
 const rowIsReferenced = (fk: ForeignKeyDef, schema: string, table: string) => sqlError('ER_ROW_IS_REFERENCED_2', `Cannot delete or update a parent row: a foreign key constraint fails ${constraintText(fk, schema, table)}`)
 const tooDeep = () => sqlError('ER_FK_DEPTH_EXCEEDED', 'Foreign key cascade delete/update exceeds max depth of 15.')
 

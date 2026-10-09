@@ -31,7 +31,7 @@ const CAPS = capabilities(
 )
 const CLASSIC = capabilities(CLIENT.PROTOCOL_41 | CLIENT.TRANSACTIONS)
 
-class StubExecutor implements Executor {
+class SqlExecutor implements Executor {
   results: StatementResult | StatementResult[] = { affectedRows: 0 }
   columns: ColumnDefinition[] = []
   lastSql = ''
@@ -66,14 +66,14 @@ class StubExecutor implements Executor {
 }
 
 interface StubContext extends DispatchContext {
-  readonly executor: StubExecutor
+  readonly executor: SqlExecutor
 }
 
 function context(over: Partial<DispatchContext> = {}): StubContext {
   const caps = over.capabilities ?? CAPS
   return {
     session: new Session({ connectionId: 1, capabilities: caps }),
-    executor: new StubExecutor(),
+    executor: new SqlExecutor(),
     capabilities: caps,
     ...over,
   } as StubContext

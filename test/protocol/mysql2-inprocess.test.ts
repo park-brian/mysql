@@ -8,7 +8,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import mysql from 'mysql2/promise'
-import { MySQL, StubExecutor } from '@myjs/core'
+import { MySQL, SqlExecutor } from '@myjs/core'
 import { MapAccountStore } from '@myjs/protocol'
 
 async function connect(db: MySQL, over: Record<string, unknown> = {}) {
@@ -194,7 +194,7 @@ test('execProtocol is the same object the driver path uses', async () => {
 
 test('a custom executor replaces the stub without the protocol layer noticing', async () => {
   const db = await MySQL.open(':memory:', {
-    executor: new StubExecutor({ versionComment: 'a different engine' }),
+    executor: new SqlExecutor({ versionComment: 'a different engine' }),
   })
   const conn = await connect(db)
   try {

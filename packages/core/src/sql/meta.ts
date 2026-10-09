@@ -21,7 +21,7 @@ import type { ColumnDef, TableDef } from '@myjs/engine'
 import type { ColumnDefinition } from '@myjs/protocol'
 
 /** `PART_KEY_FLAG`, `include/mysql_com.h`: the column is in some index. */
-export const PART_KEY_FLAG = 0x4000
+const PART_KEY_FLAG = 0x4000
 
 /** What an expression yields, before a result charset turns it into metadata. */
 export type ResultKind = 'int' | 'decimal' | 'double' | 'string' | 'bytes' | 'datetime' | 'time' | 'json' | 'null'

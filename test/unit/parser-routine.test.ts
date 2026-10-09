@@ -3,7 +3,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { Session, capabilities } from '@myjs/protocol'
-import { StubExecutor, charsetTranscoder } from '@myjs/core'
+import { SqlExecutor, charsetTranscoder } from '@myjs/core'
 import {
   ParseError,
   STATEMENT,
@@ -85,7 +85,7 @@ test('parseStatements splits a multi-statement text where the parser says, not a
 test('M3.8: CREATE PROCEDURE stores; CALL errors with a clear "not yet supported"', async () => {
   const s = new Session({ connectionId: 1, capabilities: capabilities(0), transcoder: charsetTranscoder })
   s.database = 'test'
-  const stub = new StubExecutor()
+  const stub = new SqlExecutor()
   const run = (sql: string) => stub.query(s, sql)
   const errno = (n: number) => (e: Error & { errno?: number }) => e.errno === n
 

@@ -260,10 +260,10 @@ test('M5.17: the executor evaluates every vector as the server did, refusals inc
   // that `DIV` promotes to unsigned and `%` does not, which the evaluator above
   // had wrong for `DIV` without any vector showing it.
   assert.ok(existsSync(FIXTURE), 'the corpus must be committed')
-  const { StubExecutor, charsetTranscoder } = await import('@myjs/core')
+  const { SqlExecutor, charsetTranscoder } = await import('@myjs/core')
   const { Session, capabilities } = await import('@myjs/protocol')
   const fixture = JSON.parse(readFileSync(FIXTURE, 'utf8')) as { vectors: { expr: string; value?: string; error?: string }[] }
-  const executor = new StubExecutor()
+  const executor = new SqlExecutor()
   const session = new Session({ connectionId: 1, capabilities: capabilities(0), transcoder: charsetTranscoder })
   const mismatches: string[] = []
   for (const v of fixture.vectors) {

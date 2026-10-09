@@ -19,7 +19,7 @@ import type { MysqlDateTime, MysqlTime } from '@myjs/bytes'
 import { writeBinaryValue } from '../binary-values.ts'
 import { CHARSET_BINARY, COLUMN_FLAG, FIELD_TYPE } from '../constants/types.ts'
 import { writeColumnDefinition41, type ColumnDefinition } from './column.ts'
-import { writeErr, writeOk, writeTerminator } from './generic.ts'
+import { writeOk, writeTerminator } from './generic.ts'
 
 /** A value in a row: what a driver receives, or a temporal struct either protocol renders (D-32). */
 export type RowValue = SqlValue | MysqlDateTime | MysqlTime
@@ -149,23 +149,6 @@ export function responsePackets(
     )
   }
   return packets
-}
-
-/**
- * Abandon a resultset already in progress.
- *
- * Doc 14: "Our executor must be able to abandon a resultset in progress and
- * emit an ERR packet in the terminator position." The column definitions have
- * already gone out, so the ERR replaces the terminator rather than the
- * response.
- */
-export function abandonResultset(
-  caps: Capabilities,
-  error: { errno: number; sqlState?: string; message: string },
-): Uint8Array {
-  const w = new Writer(64)
-  writeErr(w, caps, error)
-  return w.toBytes()
 }
 
 /**

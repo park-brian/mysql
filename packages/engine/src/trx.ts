@@ -36,6 +36,7 @@ import type { Journal } from './journal.ts'
 import { freeChain, type OverflowPages } from './overflow.ts'
 import type { BufferPool } from './pool.ts'
 import { UndoLog, isTreeUndo, readRollPtr, writeRollPtr, type DroppedTree, type RollPtr, type UndoRecord } from './undo.ts'
+import { readU32 } from './page.ts'
 
 // --- the version header -------------------------------------------------------
 
@@ -56,10 +57,9 @@ function writeU48(out: Uint8Array, at: number, n: number): void {
   out[at + 5] = low & 0xff
 }
 
-const u32 = (b: Uint8Array, at: number): number => (((b[at] as number) << 24) | ((b[at + 1] as number) << 16) | ((b[at + 2] as number) << 8) | (b[at + 3] as number)) >>> 0
 
 function readU48(b: Uint8Array, at: number): number {
-  return (((b[at] as number) << 8) | (b[at + 1] as number)) * 2 ** 32 + u32(b, at + 2)
+  return (((b[at] as number) << 8) | (b[at + 1] as number)) * 2 ** 32 + readU32(b, at + 2)
 }
 
 /** A value's header — the same first seven bytes on a clustered value and a secondary entry. */
@@ -238,7 +238,7 @@ export class TrxSys {
     const active: { id: number; first: number }[] = []
     for (const [key, value] of this.host.trxTree.entries()) {
       const id = readU48(key, 0)
-      const first = u32(value, 1)
+      const first = readU32(value, 1)
       if (value[0] === ACTIVE) active.push({ id, first })
       else this.#history.push({ id, first })
       this.nextTrxId = Math.max(this.nextTrxId, id + 1)

@@ -42,7 +42,7 @@ import { generationOf, printGeneration } from './generated.ts'
 const COLUMN_FLAG = { PRI_KEY: 2, UNIQUE_KEY: 4, MULTIPLE_KEY: 8 } as const
 
 /** Whether a name is INFORMATION_SCHEMA's, compared as MySQL compares a schema name there. */
-export const isInformationSchema = (schema: string): boolean => schema.toLowerCase() === 'information_schema'
+const isInformationSchema = (schema: string): boolean => schema.toLowerCase() === 'information_schema'
 
 /** The ResultType of one captured column: what expressions over it compute with, and what a bare reference reports. */
 function typeOf(c: InformationSchemaColumn, table: string, alias: string): ResultType {

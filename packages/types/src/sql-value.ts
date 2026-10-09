@@ -16,6 +16,7 @@ import type { MysqlDateTime, MysqlTime } from '@myjs/bytes'
 import { encodeCollation } from '@myjs/charsets'
 import { renderJson, type JsonDoc } from './json-doc.ts'
 import { scanDateTime, scanTime, type Deprecation, type ScanFlags } from './temporal-scan.ts'
+import { daysInMonth } from './calendar.ts'
 
 export type Value =
   | null
@@ -506,11 +507,10 @@ function addSeconds(v: MysqlDateTime, seconds: number, microseconds: number): My
 export function validDate(v: Pick<MysqlDateTime, 'year' | 'month' | 'day'>): boolean {
   if (v.year === 0 && v.month === 0 && v.day === 0) return true
   if (v.month < 1 || v.month > 12 || v.day < 1) return false
-  const days = [31, isLeap(v.year) ? 29 : 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31][v.month - 1] as number
+  const days = daysInMonth(v.year, v.month)
   return v.day <= days
 }
 
-const isLeap = (y: number): boolean => (y % 4 === 0 && y % 100 !== 0) || y % 400 === 0
 
 /**
  * Text as a TIME, as `str_to_time` reads it: `'12:34:56'`, `'-1 02:03'`,

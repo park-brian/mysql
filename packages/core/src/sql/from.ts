@@ -33,7 +33,7 @@ import { NODE, REF, type Expression, type TableReference } from '@myjs/parser'
 import { messages, sqlError } from '@myjs/protocol'
 import { truth, type Value } from '@myjs/types'
 import type { Compiled, Env, Row, Scope } from './compile.ts'
-import { accessRows, chooseAccess, pointAccess, splitAnd } from './plan.ts'
+import { FULL_SCAN, accessRows, chooseAccess, pointAccess, splitAnd } from './plan.ts'
 import { TableScope, type ScopeColumn, type ScopeTableSpec } from './scope.ts'
 
 /** A table the FROM reads: a base table, or (M5.1) a derived one. */
@@ -558,7 +558,7 @@ function* leafRows(t: FromTable, trx: Trx | undefined, env: Env, options: RunOpt
     return
   }
   const def = t.def as TableDef
-  let access = t.nullable ? {} : chooseAccess(def, t.alias, options.where, env)
+  let access = t.nullable ? FULL_SCAN : chooseAccess(def, t.alias, options.where, env)
   const cover = options.covering?.get(t.alias)
   if (access.index === undefined && access.ranges === undefined && cover !== undefined) access = { index: cover }
   for (const { id, row: values } of accessRows(t.table as Table, def, access, trx, options.locking)) {

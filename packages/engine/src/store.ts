@@ -25,7 +25,7 @@ import { EngineError, corrupt, misuse } from './errors.ts'
 import { Journal } from './journal.ts'
 import { BufferPool, type PoolOptions } from './pool.ts'
 import { validateIndexPage } from './index-page.ts'
-import { PAGE_TYPE, pageType } from './page.ts'
+import { PAGE_TYPE, be32, pageType, readU32 } from './page.ts'
 import { chainPages, decodeRef } from './overflow.ts'
 import { externalRefs, type RecordLayout } from './record.ts'
 import { recover } from './recovery.ts'
@@ -74,12 +74,6 @@ export const FIRST_USER_INDEX = 16
 export const COUNTERS_INDEX = 1
 const DEFAULT_LOG_BLOCKS = 4096
 
-const be32 = (n: number): Uint8Array => {
-  const out = new Uint8Array(4)
-  new DataView(out.buffer).setUint32(0, n)
-  return out
-}
-const readBe32 = (b: Uint8Array): number => new DataView(b.buffer, b.byteOffset, 4).getUint32(0)
 
 const counterKey = (indexId: number, slot: number): Uint8Array => {
   const out = new Uint8Array(5)
@@ -245,7 +239,7 @@ export class Store {
   openTree(indexId: number, options: TreeOptions = {}): BTree {
     const root = this.directory.get(be32(indexId))
     if (root === undefined) throw misuse(`no index ${indexId}`)
-    return new BTree(this, indexId, readBe32(root), options)
+    return new BTree(this, indexId, readU32(root), options)
   }
 
   /**
@@ -335,7 +329,7 @@ export class Store {
 
   /** Every index's id and root, from the directory. */
   *trees(): Generator<{ indexId: number; root: number }> {
-    for (const [id, root] of this.directory.entries()) yield { indexId: readBe32(id), root: readBe32(root) }
+    for (const [id, root] of this.directory.entries()) yield { indexId: readU32(id), root: readU32(root) }
   }
 
   /** The durability point: what `flushLogAtTrxCommit` says a commit costs. */

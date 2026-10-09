@@ -85,10 +85,6 @@ const MAX_BLOB_WIDTH = 16_777_216
 const INT_MAX32 = 2147483647n
 const INT_MIN32 = -2147483648n
 
-/** `val_int` of a position or count: BIGINT UNSIGNED's values above 2⁶³ stay positive. */
-/** A count or a position, as `val_int` reads it: text stops at its first non-digit. */
-export const intArg = (v: V): bigint => valInt(v)
-
 /** A constant argument's integer value: `null` for a constant NULL, `undefined` for an argument that is not constant. */
 function constantInt(c: Compiled | undefined, constant: boolean, conditions?: Condition[]): bigint | null | undefined {
   if (c === undefined || !constant) return undefined
@@ -96,7 +92,7 @@ function constantInt(c: Compiled | undefined, constant: boolean, conditions?: Co
     // Resolving reads the constant once, and warns once for it, as
     // `resolve_type`'s `val_int` does: `LEFT('abc', 'z')` warns twice (8.4.11).
     const v = c.eval([], { params: [], now: new Date(0), session: undefined as never, state: undefined as never, ...(conditions === undefined ? {} : { conditions }) })
-    return v === null ? null : intArg(v)
+    return v === null ? null : valInt(v)
   } catch (e) {
     expectTyped(e)
     return undefined
@@ -110,7 +106,7 @@ export interface Str {
   readonly units: readonly string[]
 }
 
-export function strOf(v: V, binary: boolean, collation: number): Str {
+function strOf(v: V, binary: boolean, collation: number): Str {
   if (binary) {
     const b = v.kind === 'bytes' ? v.v : v.kind === 'string' ? encodeCollation(v.v, v.collationId) : new TextEncoder().encode(toText(v))
     return { binary, units: Array.from(b, (x) => String.fromCharCode(x)) }
@@ -149,7 +145,7 @@ export function result(units: readonly string[], binary: boolean, collation: num
 }
 
 /** The collation a string function's first argument gives its result: NULL's is binary. */
-export function firstCollation(t: ResultType, conn: number): { readonly binary: boolean; readonly collation: number; readonly coercibility: number } {
+function firstCollation(t: ResultType, conn: number): { readonly binary: boolean; readonly collation: number; readonly coercibility: number } {
   if (t.kind === 'bytes' || t.kind === 'null') return { binary: true, collation: CHARSET_BINARY, coercibility: coercibilityOf(t) }
   if (t.kind === 'string') return { binary: false, collation: t.collationId, coercibility: coercibilityOf(t) }
   return { binary: false, collation: conn, coercibility: COERCIBILITY.NUMERIC }
@@ -162,7 +158,7 @@ export function firstCollation(t: ResultType, conn: number): { readonly binary: 
  * Past 65,535 bytes it is a MEDIUMTEXT, past 16,777,215 a LONGTEXT, which
  * report their width in bytes (8.4.11: `TRIM(t)` of a TEXT is 250, 1,048,560).
  */
-export function textType(chars: number | undefined, binary: boolean, collation: number, coercibility: number, capped = false): ResultType {
+function textType(chars: number | undefined, binary: boolean, collation: number, coercibility: number, capped = false): ResultType {
   const mb = binary ? 1 : requireCollationInfo(collation).mbmaxlen
   let width = chars === undefined ? MAX_BLOB_WIDTH : chars
   if (capped && width * mb > MAX_BLOB_WIDTH) width = Math.floor(MAX_BLOB_WIDTH / mb)
@@ -180,7 +176,7 @@ export function widthOf(t: ResultType, binary: boolean): number {
 }
 
 /** The collation several string arguments aggregate to: a binary one wins only at the lowest coercibility. */
-export function aggregateString(types: readonly ResultType[], conn: number): { readonly binary: boolean; readonly collation: number; readonly coercibility: number } {
+function aggregateString(types: readonly ResultType[], conn: number): { readonly binary: boolean; readonly collation: number; readonly coercibility: number } {
   const live = types.filter((t) => t.kind === 'string' || t.kind === 'bytes')
   if (live.length === 0) return { binary: false, collation: conn, coercibility: COERCIBILITY.NUMERIC }
   const least = Math.min(...live.map(coercibilityOf))
@@ -283,8 +279,8 @@ function libraryFunction(name: string, args: readonly Compiled[], callName: stri
           if (v === undefined) return null
           const s = strOf(v[0] as V, binary, collation).units
           const empty = result([], binary, collation, coercibility)
-          let from = intArg(v[1] as V)
-          const len = v[2] === undefined ? INT_MAX32 : intArg(v[2])
+          let from = valInt(v[1] as V)
+          const len = v[2] === undefined ? INT_MAX32 : valInt(v[2])
           if (len <= 0n) return empty
           if (from < INT_MIN32 || from > INT_MAX32) return empty
           from = from < 0n ? BigInt(s.length) + from : from - 1n
@@ -306,7 +302,7 @@ function libraryFunction(name: string, args: readonly Compiled[], callName: stri
           const v = all(xs, r, env)
           if (v === undefined) return null
           const s = strOf(v[0] as V, binary, collation).units
-          const count = intArg(v[1] as V)
+          const count = valInt(v[1] as V)
           if (count <= 0n) return result([], binary, collation, coercibility)
           const k = count >= BigInt(s.length) ? s.length : Number(count)
           return result(name === 'LEFT' ? s.slice(0, k) : s.slice(s.length - k), binary, collation, coercibility)
@@ -326,7 +322,7 @@ function libraryFunction(name: string, args: readonly Compiled[], callName: stri
           const v = all(xs, r, env)
           if (v === undefined) return null
           const s = strOf(v[0] as V, binary, collation).units
-          const count = intArg(v[1] as V)
+          const count = valInt(v[1] as V)
           if (count < 0n) return null
           // A count past INT_MAX32 is INT_MAX32, and a result past
           // max_allowed_packet is NULL with 1301 — checked before it is built.
@@ -352,7 +348,7 @@ function libraryFunction(name: string, args: readonly Compiled[], callName: stri
           const v = all(xs, r, env)
           if (v === undefined) return null
           const s = strOf(v[0] as V, binary, collation).units
-          const count = intArg(v[1] as V)
+          const count = valInt(v[1] as V)
           if (count <= 0n || s.length === 0) return result([], binary, collation, coercibility)
           if (BigInt(byteLength(s, binary, collation)) * (count > INT_MAX32 ? INT_MAX32 : count) > BigInt(maxPacket(env))) return packetOverflow(env, name)
           return result(Array.from({ length: Number(count) }, () => s).flat(), binary, collation, coercibility)
@@ -467,7 +463,7 @@ function libraryFunction(name: string, args: readonly Compiled[], callName: stri
         eval: (r, env) => {
           const v = (xs[0] as Compiled).eval(r, env)
           if (v === null) return null
-          const count = intArg(v)
+          const count = valInt(v)
           if (count <= 0n) return stringValue('', conn, COERCIBILITY.COERCIBLE)
           if ((count > INT_MAX32 ? INT_MAX32 : count) * BigInt(requireCollationInfo(conn).mbminlen) > BigInt(maxPacket(env))) return packetOverflow(env, name)
           return stringValue(' '.repeat(Number(count)), conn, COERCIBILITY.COERCIBLE)
@@ -504,7 +500,7 @@ function libraryFunction(name: string, args: readonly Compiled[], callName: stri
           const v = all(xs, r, env)
           if (v === undefined) return null
           const [n, h] = name === 'INSTR' ? [v[1] as V, v[0] as V] : [v[0] as V, v[1] as V]
-          const start = v[2] === undefined ? 0n : intArg(v[2]) - 1n
+          const start = v[2] === undefined ? 0n : valInt(v[2]) - 1n
           const hs = strOf(h, binary, collation).units
           if (start < 0n || start > BigInt(hs.length)) return intValue(0n)
           const ns = strOf(n, binary, collation).units
@@ -564,7 +560,7 @@ function libraryFunction(name: string, args: readonly Compiled[], callName: stri
       const placesOf = (r: Parameters<Compiled['eval']>[0], env: Parameters<Compiled['eval']>[1]): bigint | null => {
         if (places === undefined) return 0n
         const p = places.eval(r, env)
-        return p === null ? null : intArg(p)
+        return p === null ? null : valInt(p)
       }
       if (t.kind === 'int') {
         return {

@@ -20,7 +20,7 @@ import { columnDefinition, intType, type ResultType } from './meta.ts'
 import { FIELD_TYPE, expectTyped } from '@myjs/bytes'
 import { requireCollationInfo } from '@myjs/charsets'
 import { distinct, filter, limit, project, sort, type SortKey } from './operators.ts'
-import { accessRows, chooseAccess, isConstant, splitAnd } from './plan.ts'
+import { FULL_SCAN, accessRows, chooseAccess, isConstant, splitAnd } from './plan.ts'
 import { TableScope } from './scope.ts'
 import { planFrom, type DerivedSource, type FromContext, type FromPlan, type JoinCondition } from './from.ts'
 import { rowKey } from './keys.ts'
@@ -1266,7 +1266,7 @@ function planGrouped(
         if (strategy === 'index' && groupIndex !== undefined) {
           const clustered = source.def.indexes.find((i) => i.name === groupIndex)?.kind === 'primary' || source.def.clustered === groupIndex
           const sameIndex = clustered ? access.index === undefined : access.index === groupIndex
-          if (!sameIndex) access = clustered ? {} : { index: groupIndex }
+          if (!sameIndex) access = clustered ? FULL_SCAN : { index: groupIndex }
         }
         rows = accessRows(source.table, source.def, access, trx, locking)
       }

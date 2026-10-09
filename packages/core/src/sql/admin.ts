@@ -59,7 +59,7 @@ const qualified = (name: TableName, session: Session): string => `${name.schema 
 const programKey = (object: string, name: TableName, session: Session): string => `${object}:${qualified(name, session).toLowerCase()}`
 
 /** A `SqlValue` as an evaluation value, for a system variable. */
-export function fromSqlValue(v: SqlValue): Value {
+function fromSqlValue(v: SqlValue): Value {
   if (v === null) return null
   if (typeof v === 'number') return Number.isInteger(v) ? intValue(BigInt(v)) : doubleValue(v)
   if (typeof v === 'bigint') return intValue(v)

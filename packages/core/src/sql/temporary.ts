@@ -56,7 +56,7 @@ export type CatalogApi = Pick<
 const HIDDEN = '#tmp#'
 
 /** A schema that holds temporary tables, which no listing shows. */
-export const isHiddenSchema = (name: string): boolean => name.startsWith(HIDDEN)
+const isHiddenSchema = (name: string): boolean => name.startsWith(HIDDEN)
 
 /** A definition read through `sessionCatalog` that is a temporary table's. */
 const temporaryDefs = new WeakSet<TableDef>()

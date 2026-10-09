@@ -7,7 +7,7 @@
 
 import { Reader, Writer } from '@myjs/bytes'
 import { CLIENT, SERVER_STATUS, hasCap, type Capabilities } from '../constants/capabilities.ts'
-import { DEFAULT_SQLSTATE, errnoOf, protocolError, sqlStateOf, symbolOf } from '../errors/index.ts'
+import { DEFAULT_SQLSTATE, protocolError, sqlStateOf } from '../errors/index.ts'
 import { utf8, fromUtf8 } from '../text.ts'
 
 export const OK_HEADER = 0x00
@@ -131,11 +131,6 @@ export function writeErr(w: Writer, caps: Capabilities, options: WriteErrOptions
   w.bytes(utf8(options.message))
 }
 
-/** Convenience: build an ERR from a symbol, taking errno and SQLSTATE from the generated table. */
-export function writeErrSymbol(w: Writer, caps: Capabilities, symbol: string, message: string): void {
-  writeErr(w, caps, { errno: errnoOf(symbol), sqlState: sqlStateOf(symbol), message })
-}
-
 export function parseErr(payload: Uint8Array, caps: Capabilities): ErrPacket {
   const r = new Reader(payload)
   const header = r.u8()
@@ -206,7 +201,3 @@ export function writeTerminator(
   }
 }
 
-/** Human-readable name for an errno, for logs and test failures. */
-export function describeErrno(errno: number): string {
-  return symbolOf(errno) ?? `errno ${errno}`
-}

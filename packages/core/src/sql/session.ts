@@ -39,7 +39,7 @@ export interface Diagnostics {
   readonly errors: number
 }
 
-export const NO_DIAGNOSTICS: Diagnostics = { conditions: [], warnings: 0, errors: 0 }
+const NO_DIAGNOSTICS: Diagnostics = { conditions: [], warnings: 0, errors: 0 }
 
 export class SqlSession implements SessionValues {
   readonly session: Session

@@ -49,7 +49,7 @@ const HEADER = 4
 const MAX_PAYLOAD = 0xffffff
 
 /** `mysql2`'s default flags, `ConnectionConfig.getDefaultFlags`, as numbers. */
-export const CLIENT_FLAGS =
+const CLIENT_FLAGS =
   CLIENT.LONG_PASSWORD |
   CLIENT.FOUND_ROWS |
   CLIENT.LONG_FLAG |
@@ -70,7 +70,7 @@ export const CLIENT_FLAGS =
   CLIENT.PLUGIN_AUTH_LENENC_CLIENT_DATA
 
 /** utf8mb4_unicode_ci: `mysql2`'s connection collation unless told otherwise. */
-export const DEFAULT_CLIENT_COLLATION = 224
+const DEFAULT_CLIENT_COLLATION = 224
 
 /** What the client needs of a server connection: `ProtocolConnection`'s byte pair. */
 export interface ServerEnd {

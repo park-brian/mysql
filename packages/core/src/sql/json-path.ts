@@ -108,7 +108,7 @@ function jsonString(bytes: Uint8Array): string | undefined {
 }
 
 /** A path, or ER_INVALID_JSON_PATH naming where it went wrong. */
-export function parseJsonPath(text: string): JsonPath {
+function parseJsonPath(text: string): JsonPath {
   const b = UTF8.encode(text)
   let at = 0
   const end = b.length
@@ -224,7 +224,7 @@ export function parseJsonPath(text: string): JsonPath {
 // --- evaluating ---------------------------------------------------------------------
 
 /** Every value `path` matches in `doc`, in document order, each once. */
-export function seek(doc: JsonDoc, path: JsonPath): JsonDoc[] {
+function seek(doc: JsonDoc, path: JsonPath): JsonDoc[] {
   let current: JsonDoc[] = [doc]
   for (const leg of path.legs) {
     const next: JsonDoc[] = []

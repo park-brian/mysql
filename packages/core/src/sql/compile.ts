@@ -171,7 +171,7 @@ function textVersusNumber(x: ResultType, y: ResultType): boolean {
 }
 
 /** `asNumber`'s check, for one value. */
-export function checkNumber(v: Exclude<Value, null>, kind: 'DOUBLE' | 'INTEGER' | 'DECIMAL', env: Env): void {
+function checkNumber(v: Exclude<Value, null>, kind: 'DOUBLE' | 'INTEGER' | 'DECIMAL', env: Env): void {
   if (v.kind === 'string' ? v.ordinal !== undefined : v.kind !== 'bytes' || v.hex === true) return
   const text = toText(v)
   const p = numericPrefix(text)
@@ -289,7 +289,7 @@ export const isBits = (t: ResultType): boolean => t.field === FIELD_TYPE.BIT && 
  * bytes from the first that is not text, when they are not (UTF-8 is checked;
  * a single-byte charset holds any byte).
  */
-export function textIn(bytes: Uint8Array, collationId: number, env: Env): string | null {
+function textIn(bytes: Uint8Array, collationId: number, env: Env): string | null {
   const charset = requireCollationInfo(collationId).charset
   if (charset === 'utf8mb4' || charset === 'utf8mb3') {
     const bad = firstInvalidUtf8(bytes, charset === 'utf8mb4' ? 4 : 3)
@@ -608,7 +608,7 @@ export function compile(e: Expression, ctx: CompileContext): Compiled {
 }
 
 /** The result type a value would have as a literal: what `?` reports once its value is bound. */
-export function typeOfValue(v: Value): ResultType {
+function typeOfValue(v: Value): ResultType {
   if (v === null) return NULL_TYPE
   switch (v.kind) {
     case 'int':
@@ -1139,7 +1139,6 @@ function binary(op: string, left: Expression, right: Expression, extra: Expressi
 
 // --- TIME against DATETIME --------------------------------------------------------
 
-
 /** An expression whose value the statement fixes: no column, subquery, variable or volatile function in it. */
 export function constantNode(e: unknown): boolean {
   if (e === null || typeof e !== 'object') return true
@@ -1611,7 +1610,6 @@ export function branchOf(x: Compiled, result: ResultType): Compiled['eval'] {
   }
 }
 
-
 function caseExpr(e: CaseNode, ctx: CompileContext): Compiled {
   const operand = e.operand === undefined ? undefined : compile(e.operand, ctx)
   const whens = e.whens.map((w) => ({ when: compile(w.when, ctx), then: compile(w.then, ctx) }))
@@ -1933,12 +1931,6 @@ function quantified(op: string, quantifier: 'ANY' | 'ALL', left: Expression, rig
     },
     type: boolType(true),
   }
-}
-
-/** The collation a store into a column of `columnCollation` converts a string to. */
-export function textForColumn(v: Value, columnCollation: number): Value {
-  if (v === null || v.kind !== 'string' || v.collationId === columnCollation) return v
-  return stringValue(v.v, columnCollation, COERCIBILITY.IMPLICIT)
 }
 
 /** A result's width in bytes: a string's characters at its charset's widest, anything else its characters. */

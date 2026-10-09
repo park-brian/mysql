@@ -61,7 +61,7 @@ class StrictConditions extends Array<Condition> {
 }
 
 /** Whether the handler applies: a strict mode, and a statement that changes data without IGNORE. */
-export function escalates(statement: Statement, sqlMode: string): boolean {
+function escalates(statement: Statement, sqlMode: string): boolean {
   if (!modeOf(sqlMode).strict) return false
   switch (statement.kind) {
     case STATEMENT.INSERT:

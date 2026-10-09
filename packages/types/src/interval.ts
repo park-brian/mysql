@@ -17,6 +17,7 @@
 // field is a fraction: `.5` is 500000.
 import type { MysqlDateTime } from '@myjs/bytes'
 import { rescale, roundDouble, textOf, toDecimal, toText, type Value } from './sql-value.ts'
+import { daysInMonth, daysInYear } from './calendar.ts'
 
 /** The units, each with the fields a compound one reads: `[years, months, days, hours, minutes, seconds, microseconds]` positions. */
 const FIELDS: Readonly<Record<string, readonly number[]>> = {
@@ -143,9 +144,6 @@ export function dayNumber(year: number, month: number, day: number): number {
   return delsum + Math.trunc(y / 4) - temp
 }
 
-const isLeap = (y: number): boolean => (y % 4 === 0 && y % 100 !== 0) || y % 400 === 0
-const MONTH_DAYS = [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31]
-const daysInMonth = (y: number, m: number): number => (m === 2 && isLeap(y) ? 29 : (MONTH_DAYS[m - 1] as number))
 
 /** `get_date_from_daynr`: the date of a day number — the zero date in year 0, as MySQL gives it (`'0001-01-01' - INTERVAL 1 DAY` is `0000-00-00`). */
 export function dateOfDayNumber(daynr: number): { year: number; month: number; day: number } {
@@ -153,7 +151,7 @@ export function dateOfDayNumber(daynr: number): { year: number; month: number; d
   let year = Math.trunc((daynr * 100) / 36525)
   const temp = Math.trunc(((Math.trunc((year - 1) / 100) + 1) * 3) / 4)
   let dayOfYear = daynr - year * 365 - Math.trunc((year - 1) / 4) + temp
-  for (let length = isLeap(year) ? 366 : 365; dayOfYear > length; length = isLeap(year) ? 366 : 365) {
+  for (let length = daysInYear(year); dayOfYear > length; length = daysInYear(year)) {
     dayOfYear -= length
     year++
   }
