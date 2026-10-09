@@ -40,7 +40,9 @@ import { truth, type Value } from '@myjs/types'
 import type { Compiled, Env, Row, Scope } from './compile.ts'
 import { planNode, type PlanNode } from './explain.ts'
 import { FULL_SCAN, accessRows, chooseAccess, pointAccess, splitAnd, type Access, type OuterColumn } from './plan.ts'
+import { bestAccess, floorFilter, type KeyChoice, type Position } from './cost.ts'
 import { rowKey } from './keys.ts'
+import type { TableStatistics } from './stats.ts'
 import { TableScope, type ScopeColumn, type ScopeTableSpec } from './scope.ts'
 
 /** A table the FROM reads: a base table, or (M5.1) a derived one. */
@@ -173,6 +175,8 @@ export interface FromContext {
   open(ref: { readonly schema?: string; readonly name: string }, alias?: string): { readonly schema: string; readonly def: TableDef; readonly table: Table }
   /** Compile an ON clause against the scope its join sees. */
   compileOn(e: Expression, scope: Scope): Compiled
+  /** A base table's statistics, as the optimizer reads them (M5.45). */
+  statistics?(def: TableDef, table: Table): TableStatistics
   /** Plan a derived table (M5.1); `lateral` is the scope of the tables before it, for LATERAL. */
   derived?(ref: TableReference & { readonly kind: typeof REF.DERIVED }, lateral: Scope | undefined): DerivedSource
   /** A common table expression the statement defines under this name, planned for one reference to it. */
@@ -373,7 +377,6 @@ export function planFrom(refs: readonly TableReference[], ctx: FromContext, wher
         // A join by an index on the later table, where one serves it: an outer join by its ON, an inner one by its WHERE too.
         const lateral = [...inner.aliases].some((a) => byAlias.get(a)?.lateral === true)
         const lookup = inner.node.kind !== 'leaf' || lateral ? undefined : refOf(inner.node.table, [onAst, ...(!isLeft && (ref.type === 'STRAIGHT' || ref.type === 'INNER') ? [where] : [])], outer.aliases, preliminary, (e) => ctx.compileOn(e, slotScope(preliminary.restrict(outer.aliases, within), preliminary)))
-        if (lookup !== undefined) nestedLoopJoins.add(inner.aliases)
         // A LATERAL table is read again for each row before it: a nested loop,
         // so a sort over the tables before it goes first (8.4.11: Drizzle's
         // `LEFT JOIN LATERAL … ORDER BY parent.id` keeps parent.id's key flags).
@@ -392,7 +395,7 @@ export function planFrom(refs: readonly TableReference[], ctx: FromContext, wher
       return Array.from({ length: t.width }, (_, i) => t.offset + i)
     })
     const lookup = r.node.kind !== 'leaf' || r.node.table.lateral ? undefined : refOf(r.node.table, [where], l.aliases, preliminary, (e) => ctx.compileOn(e, preliminary.restrict(l.aliases)))
-    if (lookup !== undefined || [...r.aliases].some((a) => byAlias.get(a)?.lateral === true)) nestedLoopJoins.add(r.aliases)
+    if ([...r.aliases].some((a) => byAlias.get(a)?.lateral === true)) nestedLoopJoins.add(r.aliases)
     return {
       node: { kind: 'join', outer: l.node, inner: r.node, left: false, on: [], onAst: undefined, innerSlots, lookup } as Node,
       aliases: new Set([...l.aliases, ...r.aliases]),
@@ -430,9 +433,16 @@ export function planFrom(refs: readonly TableReference[], ctx: FromContext, wher
   const single = only?.def !== undefined && only.table !== undefined ? { alias: only.alias, def: only.def, table: only.table } : undefined
 
   // The physical tree: built once the WHERE is placed (`filter`), or without one.
-  const settings: LeafSettings = { covering, read: new Map(), ...(outer === undefined ? {} : { outer }) }
+  const settings: LeafSettings = { covering, read: new Map(), tables: new Map(tables.map((t) => [t.alias, t])), ...(outer === undefined ? {} : { outer }), ...(ctx.statistics === undefined ? {} : { statistics: ctx.statistics }) }
+  // Which joins read their later table by its index lookup: the cost model's, over the WHERE's conjuncts, once the columns read are known.
+  let looked: ReadonlySet<string> | undefined
+  const lookups = (): ReadonlySet<string> => (looked ??= tree === undefined ? new Set() : chooseLookups(tree.node, splitAnd(where).map((e) => ({ e, aliases: aliasesOf(e, scope) })), scope, settings))
+  const withLookups = (): LeafSettings => {
+    settings.lookups = lookups()
+    return settings
+  }
   let physical: Op | undefined
-  const physicalTree = (): Op | undefined => (physical ??= tree === undefined ? undefined : toOp(tree.node, [], scope, settings, ctx, preliminary))
+  const physicalTree = (): Op | undefined => (physical ??= tree === undefined ? undefined : toOp(tree.node, [], scope, withLookups(), ctx, preliminary))
 
   return {
     scope,
@@ -460,7 +470,8 @@ export function planFrom(refs: readonly TableReference[], ctx: FromContext, wher
       const first = node.table.alias
       if (node.table.derived?.joined === true) return false
       if ([...aliases].some((a) => a !== first)) return false
-      return spine.every((j) => j.kind === 'join' && [...nestedLoopJoins].some((s) => [...s].every((a) => innerAliasesOf(j).has(a)) && s.size === innerAliasesOf(j).size))
+      const looked = lookups()
+      return spine.every((j) => j.kind === 'join' && ((j.inner.kind === 'leaf' && looked.has(j.inner.table.alias)) || [...nestedLoopJoins].some((s) => [...s].every((a) => innerAliasesOf(j).has(a)) && s.size === innerAliasesOf(j).size)))
     },
     ...(single === undefined ? {} : { single }),
     filter(where, compile, semijoin) {
@@ -470,7 +481,7 @@ export function planFrom(refs: readonly TableReference[], ctx: FromContext, wher
         const semi = semijoin?.(e)
         return { e, aliases: aliasesOf(e, scope), compiled, ...(semi === undefined ? {} : { semijoin: semi }) }
       })
-      physical = tree === undefined ? undefined : toOp(tree.node, conditions, scope, settings, ctx, preliminary)
+      physical = tree === undefined ? undefined : toOp(tree.node, conditions, scope, withLookups(), ctx, preliminary)
     },
     readInOrder(index, force, reverse = false) {
       settings.ordered = { index, force, reverse }
@@ -623,6 +634,12 @@ interface LeafSettings {
   readonly covering: ReadonlyMap<string, string>
   /** The columns the query reads of each table (`reads`). */
   readonly read: Map<string, ReadonlySet<string> | 'all'>
+  /** A base table's statistics, for the cost model (M5.7). */
+  readonly statistics?: (def: TableDef, table: Table) => TableStatistics
+  /** The FROM's tables by alias, for the cost model. */
+  readonly tables?: ReadonlyMap<string, FromTable>
+  /** The tables the cost model reads by their join's index lookup (`chooseLookups`). */
+  lookups?: ReadonlySet<string>
   readonly outer?: OuterColumn
   /** The one table read whole in this index's order (`readInOrder`). */
   ordered?: { readonly index: string; readonly force: boolean; readonly reverse: boolean }
@@ -664,17 +681,7 @@ function leafAccess(t: FromTable, settings: LeafSettings, env: Env): Access {
 function refOf(t: FromTable, conditions: readonly (Expression | undefined)[], outerAliases: ReadonlySet<string>, scope: TableScope, compileOuter: (e: Expression) => Compiled): EqRef | undefined {
   const def = t.def
   if (def === undefined || t.table === undefined) return undefined
-  // A column of this table, by name: qualified, or one of USING's slots.
-  const own = (e: Expression): ColumnDef | undefined => {
-    if (e.kind !== NODE.COLUMN) return undefined
-    const p = e.parts[0] as string
-    let name: string | undefined
-    if (e.parts.length === 1 && p.startsWith(SLOT_PREFIX)) {
-      const at = scope.columnAt(Number(p.slice(SLOT_PREFIX.length)))
-      name = at?.table.alias === t.alias ? at.column.name : undefined
-    } else if (e.parts.length >= 2 && e.parts[e.parts.length - 2] === t.alias) name = e.parts[e.parts.length - 1] as string
-    return name === undefined ? undefined : def.columns.find((c) => c.name.toLowerCase() === name.toLowerCase())
-  }
+  const own = (e: Expression): ColumnDef | undefined => columnOf(t, e, scope)
   const fromOuter = (e: Expression): boolean => {
     const a = aliasesOf(e, scope)
     return a !== undefined && a.size > 0 && [...a].every((x) => outerAliases.has(x))
@@ -688,9 +695,9 @@ function refOf(t: FromTable, conditions: readonly (Expression | undefined)[], ou
     const [column, other] = pair as readonly [ColumnDef, Expression]
     // The unique key first, else the first index the column leads.
     const leading = def.indexes.filter((i) => i.invisible !== true && i.parts[0]?.column === column.name && i.parts[0].prefix === undefined && i.parts[0].descending !== true)
-    // A non-unique key (`ref`) is the cost model's to choose against a hash join (M5.7): until it can, a unique key only.
-    const index = leading.find((i) => unique(i, column))
-    if (index === undefined || best !== undefined) continue
+    // The unique key first, else the first index the column leads; whether to look up at all is the cost model's (`toOp`).
+    const index = leading.find((i) => unique(i, column)) ?? leading[0]
+    if (index === undefined || (best !== undefined && (best.unique || !unique(index, column)))) continue
     let value: Compiled
     try {
       value = compileOuter(other)
@@ -704,6 +711,27 @@ function refOf(t: FromTable, conditions: readonly (Expression | undefined)[], ou
     best = { index, column, value, unique: unique(index, column), condition: c }
   }
   return best
+}
+
+/** A column of a base table an expression names: qualified by its alias, one of USING's slots, or a bare name the scope gives it. */
+function columnOf(t: FromTable, e: Expression, scope: TableScope): ColumnDef | undefined {
+  if (e.kind !== NODE.COLUMN || t.def === undefined) return undefined
+  const p = e.parts[0] as string
+  let name: string | undefined
+  if (e.parts.length === 1 && p.startsWith(SLOT_PREFIX)) {
+    const at = scope.columnAt(Number(p.slice(SLOT_PREFIX.length)))
+    name = at?.table.alias === t.alias ? at.column.name : undefined
+  } else if (e.parts.length >= 2) name = e.parts[e.parts.length - 2] === t.alias ? (e.parts[e.parts.length - 1] as string) : undefined
+  else {
+    try {
+      const r = scope.resolve(e.parts, 'where clause')
+      const at = r.depth === undefined ? scope.columnAt(r.index) : undefined
+      name = at?.table.alias === t.alias ? at.column.name : undefined
+    } catch (err) {
+      expectTyped(err)
+    }
+  }
+  return name === undefined ? undefined : t.def.columns.find((c) => c.name.toLowerCase() === (name as string).toLowerCase())
 }
 
 // --- the plan, as EXPLAIN shows it (M5.44) --------------------------------------
@@ -816,7 +844,7 @@ function toOp(node: Node, conditions: readonly Placed[], scope: TableScope, sett
     const inner = toOp(node.inner, toInner, scope, settings, ctx, preliminary)
     return filterOp(lateralOp(node, outer, inner, spanning), above)
   }
-  if (node.lookup !== undefined && node.inner.kind === 'leaf') {
+  if (node.lookup !== undefined && node.inner.kind === 'leaf' && settings.lookups?.has(node.inner.table.alias) !== false) {
     return filterOp(lookupOp(node, outer, node.inner.table, node.lookup, [...toInner, ...spanning], settings), above)
   }
   const inner = toOp(node.inner, toInner, scope, settings, ctx, preliminary)
@@ -827,6 +855,184 @@ function toOp(node: Node, conditions: readonly Placed[], scope: TableScope, sett
   // (only some can: `hashKeys`); any other condition on both sides is a Filter over it.
   const equalities = spanning.filter((c) => isEquiJoin(c, outerAliases, innerAliases, scope))
   return filterOp(hashJoinOp(node, outer, inner, equalities, keys), spanning.filter((c) => !equalities.includes(c)))
+}
+
+// --- the cost model's choices (M5.7) -----------------------------------------------
+
+/** A condition as the cost model weighs it: its text and the tables it reads. */
+type Weighed = Pick<Placed, 'e' | 'aliases'>
+
+/**
+ * The tables a join reads by its index lookup rather than by a hash join
+ * (`cost.ts`): the join order's positions, table by table, each read the
+ * cheaper way given the rows the tables before it are estimated to give.
+ * The conditions that filter those estimates are the WHERE and the inner
+ * joins' ONs — an outer join's ON keys its lookup but filters nothing
+ * (`where_cond`). A table with no statistics to cost it by is looked up.
+ */
+function chooseLookups(root: Node, where: readonly Weighed[], scope: TableScope, settings: LeafSettings): Set<string> {
+  const candidates = (node: Node): boolean => node.kind === 'join' && (node.lookup !== undefined || candidates(node.outer) || candidates(node.inner))
+  if (!candidates(root)) return new Set()
+  const conditions = [...where]
+  const gather = (node: Node, nullable: boolean): void => {
+    if (node.kind === 'leaf') return
+    if (!node.left && !nullable) conditions.push(...node.on)
+    gather(node.outer, nullable)
+    gather(node.inner, nullable || node.left)
+  }
+  gather(root, false)
+  const positions: Position[] = []
+  const looked = new Set<string>()
+  const visit = (node: Node, lookup?: EqRef): void => {
+    if (node.kind === 'join') {
+      visit(node.outer)
+      visit(node.inner, node.lookup)
+      return
+    }
+    const t = node.table
+    const stats = t.def !== undefined && t.table !== undefined ? settings.statistics?.(t.def, t.table) : undefined
+    if (t.def === undefined || stats === undefined) {
+      if (lookup !== undefined) looked.add(t.alias)
+      positions.push({ alias: t.alias, fetched: 1, filter: 1, keyFrom: new Set() })
+      return
+    }
+    const def = t.def
+    const read = settings.read.get(t.alias) ?? 'all'
+    const before = new Set(positions.map((p) => p.alias))
+    const filter = (available: ReadonlySet<string>, ignore?: ColumnDef): number => conditions.reduce((f, c) => f * filterEffect(c.e, t, stats, available, scope, ignore), 1)
+    const key: KeyChoice | undefined =
+      lookup === undefined
+        ? undefined
+        : {
+            kind: lookup.unique ? 'unique' : isClustered(def, lookup.index) ? 'clustered' : 'ref',
+            fanout: lookup.unique ? 1 : stats.recordsPerKey(lookup.index, 1),
+            covering: covers(def, lookup.index, read),
+            recordBytes: indexBytes(def, lookup.index) + indexBytes(def, clusteredIndex(def)),
+            keyFrom: new Set([...(aliasesOf(lookup.condition, scope) ?? [])].filter((a) => a !== t.alias)),
+          }
+    const coveredByAnyIndex = read !== 'all' && (def.indexes.some((i) => covers(def, i, read)) || [...read].every((c) => clusteredIndex(def)?.parts.some((p) => p.column.toLowerCase() === c) === true))
+    const constant = stats.rows < 1 ? 1 : floorFilter(filter(new Set()), stats.rows, stats.rows)
+    const access = bestAccess({ stats, coveredByAnyIndex, constantFilter: constant }, positions, key, rowBytes(positions, settings))
+    let kept: number
+    if (access.lookup) {
+      looked.add(t.alias)
+      kept = access.fetched < 1 ? 1 : floorFilter(filter(before, lookup?.column), stats.rows, access.fetched)
+    } else kept = Math.min(1, (stats.rows * floorFilter(filter(before), stats.rows, stats.rows)) / access.fetched)
+    positions.push({ alias: t.alias, fetched: access.fetched, filter: kept, keyFrom: access.lookup ? (key?.keyFrom ?? new Set()) : new Set() })
+  }
+  visit(root)
+  return looked
+}
+
+/**
+ * The fraction of a table's rows one condition keeps, given the tables
+ * already read (`get_filtering_effect`, with no histograms): a condition
+ * counts only where it compares a column of this table with what is known —
+ * a constant, or a column of a table read before it. An equality keeps the
+ * rows per value of an index the column leads, else a tenth; `<>` the rest;
+ * a range a third; BETWEEN and LIKE a ninth; IN a tenth per value, at most a
+ * half; IS NULL a tenth. Each is at least one row's worth. `ignore` is the
+ * column the table's lookup is keyed by, which the lookup's rows already
+ * reflect.
+ */
+function filterEffect(e: Expression, t: FromTable, stats: TableStatistics, available: ReadonlySet<string>, scope: TableScope, ignore?: ColumnDef): number {
+  const def = t.def as TableDef
+  const atLeast = (f: number): number => Math.max(Math.fround(1 / stats.rows), f)
+  const known = (x: Expression): boolean => {
+    const a = aliasesOf(x, scope)
+    return a !== undefined && [...a].every((alias) => available.has(alias))
+  }
+  const own = (x: Expression): ColumnDef | undefined => columnOf(t, x, scope)
+  // A comparison counts where one side is this table's column, not the lookup's, and the other is known.
+  const compared = (x: Expression, y: Expression): boolean => {
+    const c = own(x)
+    return c !== undefined && c !== ignore && (known(y) || (own(y) !== undefined && own(y) === ignore))
+  }
+  const comparison = (x: Expression, y: Expression, f: number): number => (compared(x, y) || compared(y, x) ? atLeast(f) : 1)
+  if (e.kind === NODE.UNARY) {
+    if (e.op === 'NOT' || e.op === '!') {
+      const f = filterEffect(e.operand, t, stats, available, scope, ignore)
+      return f === 1 ? 1 : 1 - f
+    }
+    const c = own(e.operand)
+    if (c === undefined || c === ignore) return 1
+    if (e.op === 'IS NULL') return atLeast(0.1)
+    if (e.op === 'IS NOT NULL') return c.nullable ? 1 - atLeast(0.1) : 1
+    return 1
+  }
+  if (e.kind !== NODE.BINARY) return 1
+  switch (e.op.toUpperCase()) {
+    case 'AND':
+    case '&&':
+      return filterEffect(e.left, t, stats, available, scope, ignore) * filterEffect(e.right, t, stats, available, scope, ignore)
+    case 'OR':
+    case '||': {
+      const a = filterEffect(e.left, t, stats, available, scope, ignore)
+      const b = filterEffect(e.right, t, stats, available, scope, ignore)
+      return a + b - a * b
+    }
+    case '=': {
+      // A multiple equality: each of this table's columns in it, by the first index it leads.
+      const pair = compared(e.left, e.right) ? own(e.left) : compared(e.right, e.left) ? own(e.right) : undefined
+      if (pair === undefined) return 1
+      const index = keyOrder(def).find((i) => i.parts[0]?.column.toLowerCase() === pair.name.toLowerCase())
+      return index === undefined ? atLeast(0.1) : Math.min(1, Math.fround(stats.recordsPerKey(index, 1) / stats.rows))
+    }
+    case '<=>':
+      return comparison(e.left, e.right, 0.1)
+    case '<>':
+    case '!=': {
+      const f = comparison(e.left, e.right, 0.1)
+      return f === 1 ? 1 : 1 - f
+    }
+    case '<':
+    case '<=':
+    case '>':
+    case '>=':
+      return comparison(e.left, e.right, 1 / 3)
+    case 'BETWEEN':
+    case 'NOT BETWEEN': {
+      const c = own(e.left)
+      if (c === undefined || c === ignore || !known(e.right) || (e.extra !== undefined && !known(e.extra as Expression))) return 1
+      return e.op.toUpperCase() === 'BETWEEN' ? atLeast(1 / 9) : 1 - atLeast(1 / 9)
+    }
+    case 'LIKE':
+      return comparison(e.left, e.right, 1 / 9)
+    case 'NOT LIKE': {
+      const f = comparison(e.left, e.right, 1 / 9)
+      return f === 1 ? 1 : 1 - f
+    }
+    case 'IN':
+    case 'NOT IN': {
+      const c = own(e.left)
+      if (c === undefined || c === ignore || e.right.kind !== NODE.ROW || !known(e.right)) return 1
+      const f = Math.min(e.right.items.length * atLeast(0.1), 0.5)
+      return e.op.toUpperCase() === 'IN' ? f : 1 - f
+    }
+    default:
+      return 1
+  }
+}
+
+/**
+ * What a join buffer holds for each row of the tables before a join
+ * (`cache_record_length`): the columns the query reads of each, at their
+ * stored width, and their NULL flags.
+ */
+function rowBytes(prefix: readonly Position[], settings: LeafSettings): number {
+  let bytes = 0
+  for (const { alias } of prefix) {
+    const read = settings.read.get(alias) ?? 'all'
+    const t = settings.tables?.get(alias)
+    if (t?.def === undefined) {
+      bytes += 8 * (read === 'all' ? (t?.width ?? 1) : read.size)
+      continue
+    }
+    const columns = t.def.columns.filter((c) => read === 'all' || read.has(c.name.toLowerCase()))
+    bytes += columns.reduce((n, c) => n + keyBytes(c) - (c.nullable ? 1 : 0), 0)
+    if (columns.some((c) => c.nullable)) bytes += Math.ceil(t.def.columns.filter((c) => c.nullable).length / 8)
+  }
+  return bytes
 }
 
 /** A base or derived table, read by `leafAccess`, each row as wide as the whole FROM. */
@@ -1038,9 +1244,34 @@ function keyBytes(c: ColumnDef): number {
   return (t.length ?? 1) * mb + 2 + (c.nullable ? 1 : 0)
 }
 
+/** The index a table's rows are stored in: its PRIMARY KEY, or the unique key InnoDB chose in its place; none for a hidden row id. */
+const clusteredIndex = (def: TableDef): IndexDef | undefined => def.indexes.find((i) => i.kind === 'primary' || i.name === def.clustered)
+
+const isClustered = (def: TableDef, index: IndexDef): boolean => index === clusteredIndex(def)
+
+/** An index's key bytes (`key_length`); a hidden row id's 6. */
+function indexBytes(def: TableDef, index: IndexDef | undefined): number {
+  if (index === undefined) return 6
+  return index.parts.reduce((n, p) => n + keyBytes(def.columns.find((c) => c.name === p.column) as ColumnDef), 0)
+}
+
+/**
+ * A table's indexes in the order the server keeps them (`sort_keys`): the
+ * PRIMARY KEY, then unique keys of NOT NULL columns, then other unique keys,
+ * then the rest, each group as written.
+ */
+function keyOrder(def: TableDef): IndexDef[] {
+  const rank = (i: IndexDef): number => {
+    if (i.kind === 'primary') return 0
+    if (i.kind !== 'unique') return 3
+    return i.parts.every((p) => def.columns.find((c) => c.name === p.column)?.nullable === false) ? 1 : 2
+  }
+  return def.indexes.filter((i) => i.invisible !== true).sort((a, b) => rank(a) - rank(b))
+}
+
 /** Whether a secondary index, with the clustered key it carries, holds every column in `read`. */
 function covers(def: TableDef, index: IndexDef, read: ReadonlySet<string> | 'all'): boolean {
-  const clustered = def.indexes.find((i) => i.kind === 'primary' || i.name === def.clustered)
+  const clustered = clusteredIndex(def)
   if (read === 'all' || clustered === undefined || index === clustered || index.invisible === true || index.parts.some((p) => p.prefix !== undefined)) return false
   const holds = new Set([...index.parts, ...clustered.parts].map((p) => p.column.toLowerCase()))
   return [...read].every((c) => holds.has(c))

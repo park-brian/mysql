@@ -28,6 +28,7 @@ import { describeStages, runStages, type Rowed, type Stage } from './pipeline.ts
 import { convert as convertSetValue, nestedNullability, setOperation, setOperationType } from './setop.ts'
 import { constTablesHaveRows, neverEqual, optimizerFacts } from './optimize.ts'
 import { informationSchemaTable } from './information-schema.ts'
+import { statisticsOf } from './stats.ts'
 import type { SqlSession } from './session.ts'
 import { toWire, type WireProtocol } from './wire.ts'
 import type { Trx } from '@myjs/engine'
@@ -59,8 +60,6 @@ export interface Run {
   readonly database?: string | null
   /** The views being expanded, outermost first, as `schema.name`: one met again is 1146. */
   readonly views?: readonly string[]
-  /** SHOW INDEX: STATISTICS counts each key's distinct values, as InnoDB's statistics would say them. */
-  readonly exactStatistics?: boolean
   /** The subqueries the SELECT being planned compiles, each with the clause it is in: what its EXPLAIN prints beside it. */
   readonly subqueries?: { readonly clause: string; readonly query: QueryExpression; readonly plan: SelectPlan }[]
 }
@@ -90,6 +89,7 @@ export function fromContext(run: Run): FromContext {
   return {
     open: (name, alias) => openTable(run, name, alias),
     compileOn: (e, scope) => compile(e, compileContext(run, scope, 'on clause')),
+    ...(run.catalog === undefined ? {} : { statistics: (def: TableDef, table: Table) => statisticsOf(def, table, (run.catalog as CatalogApi).store) }),
     derived: (ref, lateral) => derivedTable(run, ref.query, ref.alias as string, ref.columns, lateral),
     cte: (name) => run.ctes?.get(name)?.(),
     view: (name, alias) => viewTable(run, name, alias),

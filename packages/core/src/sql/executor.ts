@@ -62,6 +62,7 @@ import { charsetChange, ensureCollationResident } from '../transcoder.ts'
 import { PROGRAM_OBJECTS, ServerState, type ProgramStatement, type ServerOptions } from './admin.ts'
 import { compile, EMPTY_SCOPE, raise, type Env } from './compile.ts'
 import { renderTree } from './explain.ts'
+import { analyze, keepShown } from './stats.ts'
 import { alterTable } from './alter.ts'
 import { checkClauses, checkForeignKeyActions, withChecks } from './checks.ts'
 import { showCreateTable } from './show-create.ts'
@@ -735,7 +736,14 @@ export class SqlExecutor implements Executor {
           const by = referencingKeys(this.#catalog(run), schema, statement.table.name).find((r) => r.child.schema !== schema || r.child.name !== statement.table.name)
           if (by !== undefined) throw sqlError('ER_TRUNCATE_ILLEGAL_FK', `Cannot truncate a table referenced in a foreign key constraint (\`${by.child.schema}\`.\`${by.child.name}\`, CONSTRAINT \`${by.fk.name}\`)`)
         }
-        this.#catalog(run).truncateTable(schema, statement.table.name)
+        const before = this.#catalog(run).definition(schema, statement.table.name).id
+        const truncated = this.#catalog(run).truncateTable(schema, statement.table.name)
+        keepShown(this.#catalog(run).store, before, truncated.id)
+        // An emptied table's statistics are an empty table's, until it is analysed again (M5.45).
+        if (truncated.options['stats'] !== undefined) {
+          const { stats: _stats, ...options } = truncated.options
+          this.#catalog(run).setTableOptions(schema, statement.table.name, options)
+        }
         return { affectedRows: 0 }
       }
       case STATEMENT.CREATE_ROUTINE:
@@ -1069,8 +1077,15 @@ export class SqlExecutor implements Executor {
       const schema = t.schema ?? run.env.session.database
       if (schema === null) throw sqlError('ER_NO_DB_ERROR', messages.noDatabaseSelected())
       const name = `${schema}.${t.name}`
-      const exists = this.catalog?.tables().some((x) => x.schema === schema && x.name === t.name) === true
-      if (exists) rows.push([encode(name), encode('analyze'), encode('status'), encode('OK')])
+      const catalog = this.catalog
+      const exists = catalog?.tables().some((x) => x.schema === schema && x.name === t.name) === true
+      if (exists && catalog !== undefined) {
+        // ANALYZE commits, as DDL does, and keeps what it counted in the table's definition (M5.45).
+        run.state.commit()
+        const def = catalog.definition(schema, t.name)
+        catalog.setTableOptions(schema, t.name, { ...def.options, stats: analyze(def, catalog.table(schema, t.name)) })
+        rows.push([encode(name), encode('analyze'), encode('status'), encode('OK')])
+      }
       else {
         rows.push([encode(name), encode('analyze'), encode('Error'), encode(`Table '${name}' doesn't exist`)])
         rows.push([encode(name), encode('analyze'), encode('status'), encode('Operation failed')])
@@ -1152,9 +1167,8 @@ export class SqlExecutor implements Executor {
       case 'COLUMNS':
       case 'INDEX': {
         // A query over INFORMATION_SCHEMA, as the server runs it (show.ts).
-        const shown: Run = { ...run, ...(statement.what === 'INDEX' ? { exactStatistics: true } : {}) }
-        const plan = planQuery(shown, showQuery(shown, this.#catalog(run), statement))
-        const result = run.state.statement(this.#catalog(run).store, false, (trx) => resultSet(shown, plan, trx))
+        const plan = planQuery(run, showQuery(run, this.#catalog(run), statement))
+        const result = run.state.statement(this.#catalog(run).store, false, (trx) => resultSet(run, plan, trx))
         return { ...result, columns: shownColumns(statement, plan.columns.map((c) => c.name), coll, requireCollationInfo(coll).mbmaxlen) }
       }
       default:

@@ -7,18 +7,12 @@
 // columns and their metadata are the view's, as the server's are, and the
 // table must exist first (1146).
 //
-// A key's cardinality is what InnoDB's statistics say. On a small table they
-// are exact distinct counts of each prefix, NULLs counted as one value (the
-// default `innodb_stats_method`), and a FULLTEXT key's is the row count; SHOW
-// INDEX computes those. INFORMATION_SCHEMA.STATISTICS, which introspection
-// reads on every connect, says 0 rather than scan every key (its corpus treats
-// the column as volatile, as the server's cached statistics are).
+// A key's cardinality is what the table's statistics say, through the
+// server's cache of them (`cardinalities` in stats.ts, M5.45).
 import { expectTyped } from '@myjs/bytes'
 import { NODE, STATEMENT, parseStatement, type Expression, type QueryExpression, type ShowNode, type TableName, quoteName } from '@myjs/parser'
 import { messages, sqlError, type ColumnDefinition } from '@myjs/protocol'
-import { keyColumnsOf, type TableDef, type ViewDef } from '@myjs/engine'
-import { encodeKey } from '@myjs/types'
-import { fulltextOf } from './fulltext.ts'
+import type { TableDef, ViewDef } from '@myjs/engine'
 import { planViewQuery, type Run } from './query.ts'
 import { viewDefinition } from './view-text.ts'
 import type { CatalogApi } from './temporary.ts'
@@ -43,25 +37,6 @@ export function showQuery(run: Run, catalog: CatalogApi, node: ShowNode): QueryE
   // The statement's own WHERE, beside the database and the table.
   const own = query.body.where as Expression
   return { ...query, body: { ...query.body, where: { kind: NODE.BINARY, op: 'AND', left: own, right: node.where, at: own.at } } }
-}
-
-/** Each key's cardinality by prefix, as InnoDB's statistics on a small table say it: `index name → [count for 1 part, for 2, …]`. */
-export function keyCardinalities(catalog: CatalogApi, def: TableDef): Map<string, number[]> {
-  const out = new Map<string, number[]>()
-  const table = catalog.table(def.schema, def.name)
-  const rows = [...table.scan()].map(([, row]) => row)
-  for (const index of def.indexes) {
-    const columns = keyColumnsOf(def, index)
-    const counts = columns.map((_, k) => {
-      const seen = new Set<string>()
-      const parts = columns.slice(0, k + 1).map((c) => c.part)
-      for (const row of rows) seen.add(String.fromCharCode(...encodeKey(columns.slice(0, k + 1).map((c) => row[c.field] ?? null), parts)))
-      return seen.size
-    })
-    out.set(index.name, counts)
-  }
-  for (const index of fulltextOf(def)) out.set(index.name, index.columns.map(() => rows.length))
-  return out
 }
 
 /**

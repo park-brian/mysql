@@ -154,6 +154,8 @@ export function showCreateTable(run: Run, def: TableDef, table: Table): string {
   const info = requireCollationInfo(collation)
   options += ` DEFAULT CHARSET=${info.charset}`
   if (!isPrimary(collation)) options += ` COLLATE=${info.name}`
+  const recalc = def.options['statsAutoRecalc']
+  if (typeof recalc === 'boolean') options += ` STATS_AUTO_RECALC=${recalc ? 1 : 0}`
   const comment = def.options['comment']
   if (typeof comment === 'string' && comment !== '') options += ` COMMENT=${quoted(comment)}`
   return `CREATE ${isTemporary(def) ? "TEMPORARY " : ""}TABLE ${quoteName(def.name)} (\n${lines.join(',\n')}\n)${options}`

@@ -29,7 +29,8 @@ import { messages, sqlError } from '@myjs/protocol'
 import { COERCIBILITY, decodeField, encodeField, intValue, stringValue, toText, type Value } from '@myjs/types'
 import { compile, EMPTY_SCOPE } from './compile.ts'
 import type { DerivedSource } from './from.ts'
-import { keyCardinalities, printableSources } from './show.ts'
+import { printableSources } from './show.ts'
+import { cardinalities } from './stats.ts'
 import { fulltextOf } from './fulltext.ts'
 import { checkClause, checksOf } from './checks.ts'
 import { foreignKeysOf } from './foreign-keys.ts'
@@ -392,8 +393,7 @@ const ROWS: Readonly<Record<string, (run: Run) => Iterable<readonly Value[]>>> =
 
   *STATISTICS(run) {
     for (const { schema, def } of everyTable(run)) {
-      // Counted only for SHOW INDEX, which asks of one table (show.ts).
-      const counts = run.exactStatistics === true && run.catalog !== undefined ? keyCardinalities(run.catalog, def) : undefined
+      const counts = run.catalog === undefined ? undefined : cardinalities(def, run.catalog.table(schema, def.name), run.catalog.store, fulltextOf(def))
       const cardinality = (index: string, i: number) => n(counts?.get(index)?.[i] ?? 0)
       for (const index of def.indexes) {
         const unique = index.kind === 'primary' || index.kind === 'unique'

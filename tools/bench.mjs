@@ -36,7 +36,9 @@ async function setup(db) {
 const WORKLOADS = [
   { name: 'point select x1000', run: async (db) => { for (let i = 1; i <= 1000; i++) await db.query('SELECT name FROM p WHERE id = ?', [i]) } },
   { name: 'range scan', run: (db) => db.query('SELECT id, s FROM big WHERE id BETWEEN 1000 AND 15000') },
-  { name: 'hash join 2k x 2k', run: (db) => db.query('SELECT COUNT(*) FROM c JOIN p ON p.g = c.qty') },
+  // `p.g + 0` is a key no index serves, so 8.4.11 hashes it; on `p.g` itself, KEY (g) covers the query and it looks up.
+  { name: 'hash join 2k x 2k', run: (db) => db.query('SELECT COUNT(*) FROM c JOIN p ON p.g + 0 = c.qty') },
+  { name: 'covering lookup join 2k', run: (db) => db.query('SELECT COUNT(*) FROM c JOIN p ON p.g = c.qty') },
   { name: 'left hash join 2k x 2k', run: (db) => db.query('SELECT COUNT(p.id) FROM c LEFT JOIN p ON p.g = c.p_id') },
   { name: 'eq_ref join 2k', run: (db) => db.query('SELECT p.name, c.label FROM c JOIN p ON p.id = c.p_id') },
   { name: 'group by 20k', run: (db) => db.query('SELECT k, COUNT(*), SUM(d) FROM big GROUP BY k') },
