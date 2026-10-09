@@ -25,6 +25,7 @@ import { messages, sqlError } from '@myjs/protocol'
 import type { ColumnType } from '@myjs/types'
 import { checkFulltext, type FulltextDef } from './fulltext.ts'
 import { checkGenerated } from './generated.ts'
+import { NATIONAL_DEPRECATION } from './meta.ts'
 
 const INTEGER_CODES: ReadonlySet<number> = new Set([FIELD_TYPE.TINY, FIELD_TYPE.SHORT, FIELD_TYPE.INT24, FIELD_TYPE.LONG, FIELD_TYPE.LONGLONG])
 
@@ -59,7 +60,7 @@ export function columnDeprecations(c: ColumnDefinition): Deprecation[] {
   if (INEXACT_CODES.has(code) && t.unsigned === true && t.zerofill !== true) form(DEPRECATED.unsigned)
   // The charset's, in the order the definition meets them (8.4.11).
   if (t.binary === true) out.push({ code: 1287, message: "'BINARY as attribute of a type' is deprecated and will be removed in a future release. Please use a CHARACTER SET clause with _bin collation instead" })
-  if (t.national === true) out.push({ code: 3720, message: 'NATIONAL/NCHAR/NVARCHAR implies the character set UTF8MB3, which will be replaced by UTF8MB4 in a future release. Please consider using CHAR(x) CHARACTER SET UTF8MB4 in order to be unambiguous.' })
+  if (t.national === true) out.push({ code: 3720, message: NATIONAL_DEPRECATION })
   else if (t.charset === 'utf8mb3') out.push({ code: 1287, message: "'utf8mb3' is deprecated and will be removed in a future release. Please use utf8mb4 instead" })
   else if (t.charset === 'utf8') out.push({ code: 3719, message: "'utf8' is currently an alias for the character set UTF8MB3, but will be an alias for UTF8MB4 in a future release. Please consider using UTF8MB4 in order to be unambiguous." })
   return out

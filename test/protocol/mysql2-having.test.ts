@@ -8,7 +8,9 @@
 // 3593 and an alias of one 3594. An aggregate in HAVING reads the whole row,
 // and makes the query an aggregate one (1140 under ONLY_FULL_GROUP_BY for a
 // column beside it). An overflow names its expression as `Item::print`
-// does, which is printed only when there is one.
+// does, which is printed only when there is one. MATCH in HAVING finds its
+// index through the query's tables and its columns through the select
+// list. And a CAST to NCHAR draws 3720 as an NCHAR column does.
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import mysql from 'mysql2/promise'
@@ -50,6 +52,13 @@ const SCRIPT: readonly (readonly [string, Outcome])[] = [
   ["SELECT COUNT(*) FROM h HAVING SUM(a) * 9223372036854775807 > 0", [["3"]]],
   ["SELECT s, COUNT(*) n FROM h GROUP BY s HAVING n x", [1064,"You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'x' at line 1"]],
   ["SELECT id x, a x FROM h GROUP BY id, a HAVING x > 1", [1052,"Column 'x' in having clause is ambiguous"]],
+  ["CREATE TABLE ft (id INT PRIMARY KEY, s VARCHAR(20), FULLTEXT KEY (s))", [0,0,"",0]],
+  ["INSERT INTO ft VALUES (1, 'hello world'), (2, 'foo bar')", [2,0,"Records: 2  Duplicates: 0  Warnings: 0",0]],
+  ["SELECT id FROM ft GROUP BY id HAVING MATCH(s) AGAINST ('hello')", [1054,"Unknown column 's' in 'having clause'"]],
+  ["SELECT id, MATCH(s) AGAINST ('hello') m FROM ft HAVING m > 0", [["1","0.0906190574169159"]]],
+  ["SELECT id, s FROM ft HAVING MATCH(s) AGAINST ('foo')", [["2","foo bar"]]],
+  ["SELECT CAST('a' AS NCHAR), CAST('a' AS NATIONAL CHAR(3))", [["a","a"]]],
+  ["SHOW WARNINGS", [["Warning","3720","NATIONAL/NCHAR/NVARCHAR implies the character set UTF8MB3, which will be replaced by UTF8MB4 in a future release. Please consider using CHAR(x) CHARACTER SET UTF8MB4 in order to be unambiguous."],["Warning","3720","NATIONAL/NCHAR/NVARCHAR implies the character set UTF8MB3, which will be replaced by UTF8MB4 in a future release. Please consider using CHAR(x) CHARACTER SET UTF8MB4 in order to be unambiguous."]]],
 ]
 
 test('HAVING filters, resolves and refuses as 8.4.11 does, grouped or not', async () => {

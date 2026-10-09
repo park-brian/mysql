@@ -75,6 +75,7 @@ import {
   stringType,
   type ResultType,
   type SourceColumn,
+  NATIONAL_DEPRECATION,
 } from './meta.ts'
 import { castAsJson, jsonConstructor } from './json.ts'
 import { jsonPathFunction, memberOf, unquote } from './json-path.ts'
@@ -2269,6 +2270,7 @@ const FLT_MAX = 3.4028234663852886e38
 
 function cast(e: CastNode, ctx: CompileContext): Compiled {
   const raw = compile(e.expr, ctx)
+  if (e.type.national === true) raise2(ctx, 3720, NATIONAL_DEPRECATION)
   // What the target reads its argument as, warning as it goes (1292).
   const reads = e.type.name === 'DECIMAL' ? 'DECIMAL' : e.type.name === 'DOUBLE' || e.type.name === 'FLOAT' || e.type.name === 'REAL' ? 'DOUBLE' : ['SIGNED', 'UNSIGNED', 'INT', 'BIGINT'].includes(e.type.name) ? 'INTEGER' : undefined
   const inner = reads === undefined ? raw : asNumber(raw, reads)

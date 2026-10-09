@@ -1347,7 +1347,11 @@ function selectedOnly(lookup: Scope, items: readonly { readonly expr?: Expressio
       }
     }
   }
+  // MATCH finds its index through the tables, then names its columns
+  // through `resolve`: one not selected is 1054 there too (8.4.11).
+  const tables = lookup instanceof TableScope ? lookup.tables : (lookup as { readonly tables?: TableScope['tables'] }).tables
   return {
+    ...(tables === undefined ? {} : { tables }),
     resolve(parts, clause) {
       const r = lookup.resolve(parts, clause)
       // An enclosing query's column is a constant here, and always visible.
