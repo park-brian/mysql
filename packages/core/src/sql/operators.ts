@@ -8,7 +8,7 @@
 // without the rest noticing.
 import type { KeyRange, RowId, Table, Trx } from '@myjs/engine'
 import type { ColumnType } from '@myjs/types'
-import { decodeField, sortValues, truth, type Value } from '@myjs/types'
+import { compareJsonSortHashes, decodeField, jsonSortHash, sortValues, truth, type Value } from '@myjs/types'
 import { rowKey } from './keys.ts'
 import { raise, setRowNumber, type Compiled, type Env, type Row } from './compile.ts'
 
@@ -70,14 +70,25 @@ export interface SortKey {
  * a sort larger than memory is M5.5's.
  */
 export function sort<T extends { readonly row: Row }>(source: Iterable<T>, keys: readonly SortKey[], env: Env): T[] {
-  const decorated = [...source].map((item, at) => ({ item, at, values: keys.map((k) => k.expr.eval(item.row, env)) }))
+  const decorated = [...source].map((item) => ({ item, values: keys.map((k) => k.expr.eval(item.row, env)), hash: 0n }))
   warnNonScalar(decorated.map((d) => d.values), env)
+  // A JSON key adds the row's JSON hash after the keys (`jsonSortHash`): what orders two that tie.
+  const json = keys.flatMap((k, i) => (k.expr.type.kind === 'json' ? [i] : []))
+  if (json.length > 0) {
+    for (const d of decorated) {
+      for (const i of json) {
+        const v = d.values[i]
+        if (v !== null && v !== undefined && v.kind === 'json') d.hash = jsonSortHash(v.v, d.hash)
+      }
+    }
+  }
+  // Array.prototype.sort is stable: rows that tie keep the order they came in.
   decorated.sort((a, b) => {
     for (let i = 0; i < keys.length; i++) {
       const c = sortValues(a.values[i] ?? null, b.values[i] ?? null)
       if (c !== 0) return (keys[i] as SortKey).desc ? -c : c
     }
-    return a.at - b.at
+    return json.length === 0 ? 0 : compareJsonSortHashes(a.hash, b.hash)
   })
   return decorated.map((d) => d.item)
 }

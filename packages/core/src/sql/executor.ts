@@ -28,6 +28,7 @@ import {
   parseStatement,
   type CreateDatabaseNode,
   type CreateTableNode,
+  type ExplainNode,
   type InsertNode,
   type CreateViewNode,
   type DropNode,
@@ -60,6 +61,7 @@ import { COERCIBILITY, doubleValue, intValue, parseDecimal, plainValue, stringVa
 import { charsetChange, ensureCollationResident } from '../transcoder.ts'
 import { PROGRAM_OBJECTS, ServerState, type ProgramStatement, type ServerOptions } from './admin.ts'
 import { compile, EMPTY_SCOPE, raise, type Env } from './compile.ts'
+import { renderTree } from './explain.ts'
 import { alterTable } from './alter.ts'
 import { checkClauses, checkForeignKeyActions, withChecks } from './checks.ts'
 import { showCreateTable } from './show-create.ts'
@@ -804,6 +806,8 @@ export class SqlExecutor implements Executor {
       case STATEMENT.DESCRIBE:
         // DESCRIBE t [column] is SHOW COLUMNS FROM t [LIKE 'column'].
         return this.#show(run, { kind: STATEMENT.SHOW, what: 'COLUMNS', name: statement.table, ...(statement.column === undefined ? {} : { like: statement.column }), at: statement.at })
+      case STATEMENT.EXPLAIN:
+        return this.#explain(run, statement)
       case STATEMENT.TABLE_MAINTENANCE:
         if (statement.op !== 'ANALYZE') throw sqlError('ER_NOT_SUPPORTED_YET', messages.notSupported(`${statement.op} TABLE`))
         return this.#analyze(run, statement.tables)
@@ -1040,6 +1044,22 @@ export class SqlExecutor implements Executor {
    * `status OK` per table, or the error and `Operation failed` for one that
    * does not exist (8.4.11) — and changes nothing.
    */
+  /**
+   * EXPLAIN FORMAT=TREE of a query (M5.44): the plan it would run, as one
+   * VAR_STRING row (8.4.11: `EXPLAIN`, 78 characters, NOT NULL). Other
+   * formats, ANALYZE, and the plan of a write are refused by name.
+   */
+  #explain(run: Run, statement: ExplainNode): StatementResult {
+    const target = statement.statement
+    if (statement.format !== 'TREE' || statement.analyze === true || statement.into !== undefined || statement.schema !== undefined || target === undefined || target.kind !== STATEMENT.QUERY) {
+      throw sqlError('ER_NOT_SUPPORTED_YET', messages.notSupported(statement.format === 'TREE' ? 'EXPLAIN of this statement' : `EXPLAIN FORMAT=${statement.format ?? 'TRADITIONAL'}`))
+    }
+    const roots = planQuery(run, target).explain?.()
+    if (roots === undefined) throw sqlError('ER_NOT_SUPPORTED_YET', messages.notSupported('EXPLAIN of this query'))
+    const coll = run.env.session.characterSet
+    return { columns: [columnDefinition('EXPLAIN', stringType(78, coll, false), coll)], rows: [[run.env.session.transcoder.encode(renderTree(roots), coll)]] }
+  }
+
   #analyze(run: Run, tables: readonly TableName[]): StatementResult {
     const coll = run.env.session.characterSet
     const text = (name: string, chars: number, field?: number): ColumnDefinition => columnDefinition(name, { ...stringType(chars, coll, false), ...(field === undefined ? {} : { field }) }, coll)

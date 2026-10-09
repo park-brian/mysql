@@ -24,6 +24,7 @@ import { FULL_SCAN, accessRows, chooseAccess, isConstant, splitAnd } from './pla
 import { TableScope } from './scope.ts'
 import { planFrom, type DerivedSource, type FromContext, type FromPlan, type JoinCondition } from './from.ts'
 import { rowKey } from './keys.ts'
+import { planNode, wrap, type PlanNode } from './explain.ts'
 import { convert as convertSetValue, nestedNullability, setOperation, setOperationType } from './setop.ts'
 import { constTablesHaveRows, neverEqual, optimizerFacts } from './optimize.ts'
 import { informationSchemaTable } from './information-schema.ts'
@@ -60,6 +61,8 @@ export interface Run {
   readonly views?: readonly string[]
   /** SHOW INDEX: STATISTICS counts each key's distinct values, as InnoDB's statistics would say them. */
   readonly exactStatistics?: boolean
+  /** The subqueries the SELECT being planned compiles, each with the clause it is in: what its EXPLAIN prints beside it. */
+  readonly subqueries?: { readonly clause: string; readonly query: QueryExpression; readonly plan: SelectPlan }[]
 }
 
 export function compileContext(run: Run, scope: Scope, clause: string): CompileContext {
@@ -71,7 +74,11 @@ export function compileContext(run: Run, scope: Scope, clause: string): CompileC
     state: run.state,
     serverVersion: run.serverVersion,
     ...(run.params === undefined ? {} : { params: run.params }),
-    subquery: (q, outer) => planSubquery(run, q, outer),
+    subquery: (q, outer) => {
+      const plan = planSubquery(run, q, outer)
+      run.subqueries?.push({ clause, query: q, plan: plan.plan })
+      return plan
+    },
     table: (schema, name) => run.catalog?.table(schema, name),
     ...(run.env.conditions === undefined ? {} : { conditions: run.env.conditions }),
     sql: run.sql,
@@ -246,6 +253,21 @@ export interface SelectPlan {
    * absence makes the result empty and its metadata unmaterialized (M5.4).
    */
   columnsAt?(trx: Trx | undefined): readonly { readonly name: string; readonly type: ResultType }[]
+  /**
+   * The plan as 8.4.11's iterators (M5.44): the tree, then each subquery's,
+   * as EXPLAIN FORMAT=TREE prints them. Absent where the plan is not yet
+   * described, which EXPLAIN refuses. `materialized`: a sort or a limit
+   * reads it from a table, so a UNION ALL is no longer streamed (Append).
+   */
+  explain?(materialized?: boolean): readonly PlanNode[]
+  /** A set operation's branches, for an enclosing one of the same operator to flatten into its own. */
+  readonly members?: SetMembers
+}
+
+/** One set operator's branches, flattened as 8.4.11 flattens a chain of it: each with whether it joined the chain with ALL. */
+interface SetMembers {
+  readonly op: SetOperationNode['op']
+  readonly items: readonly { readonly node: PlanNode; readonly all: boolean }[]
 }
 
 /**
@@ -258,7 +280,7 @@ export function planQuery(run: Run, q: QueryExpression): SelectPlan {
   const body = q.body
   switch (body.kind) {
     case QUERY.SELECT:
-      return planSelect(r, q, body)
+      return planSelect({ ...r, subqueries: [] }, q, body)
     case QUERY.QUERY:
       if (q.orderBy === undefined && q.limit === undefined) return planQuery(r, body)
       return orderedResult(r, q, planQuery(r, body))
@@ -322,6 +344,9 @@ function planSelect(run: Run, q: QueryExpression, node: SelectNode): SelectPlan 
   // NULL columns, in which case every row is distinct already and MySQL drops
   // the DISTINCT.
   let dataColumns: ((trx: Trx | undefined) => readonly ResultType[]) | undefined
+  // What runs through a temporary table, as the metadata rules below decide: EXPLAIN shows the same.
+  let deduplicated = false
+  let streamed = false
   const limitCount = q.limit === undefined ? undefined : limitValue(run, q.limit.count, 'LIMIT')
   const offset = q.limit?.offset === undefined ? 0 : limitValue(run, q.limit.offset, 'LIMIT')
   const facts = source === undefined ? undefined : whereFacts(run, source.def, source.alias, node.where)
@@ -339,6 +364,7 @@ function planSelect(run: Run, q: QueryExpression, node: SelectNode): SelectPlan 
     }
     const constant = zero || facts.impossible || facts.constTable || items.every((item) => pinnedName(item))
     if (!constant) {
+      deduplicated = true
       // A constant is not copied into the table: `SELECT DISTINCT NULL, x`
       // reports its NULL as it always does (8.4.11).
       for (const item of items) {
@@ -363,6 +389,8 @@ function planSelect(run: Run, q: QueryExpression, node: SelectNode): SelectPlan 
     const constantOrder = node.distinct !== true && (q.orderBy ?? []).every((o) => o.expr.kind === NODE.COLUMN && pinnedByWhere(node.where, o.expr.parts))
     const sortedFirst = constantOrder || (node.distinct !== true && (source === undefined ? from.sortsFirst(orderAliases(q, items, lookup)) : nestedLoopSemijoin(node.where, scope) && !node.items.some((i) => correlatedIn(i.expr, scope))))
     if (!facts.empty && !sortedFirst) {
+      if (node.distinct === true) deduplicated = true
+      else streamed = true
       const consts = new Set(facts.constTables.map((t) => t.alias))
       const fixed = new Set([...consts, ...(facts.nullTables ?? [])])
       const own = items.map((i) => i.compiled.type)
@@ -400,6 +428,21 @@ function planSelect(run: Run, q: QueryExpression, node: SelectNode): SelectPlan 
     columns: items.map((i) => ({ name: i.name, type: i.compiled.type })),
     locking,
     ...(dataColumns === undefined ? {} : { columnsAt: (trx: Trx | undefined) => (dataColumns as (t: Trx | undefined) => readonly ResultType[])(trx).map((type, i) => ({ name: (items[i] as { name: string }).name, type })) }),
+    // Windows are not described yet: EXPLAIN refuses them.
+    ...(windowed ? {} : { explain: (): readonly PlanNode[] => {
+      // An empty result the optimizer proves is no plan at all.
+      if (facts?.impossible === true || provedEmpty(run, from, node, limitCount)) return [planNode('Zero rows')]
+      // An ORDER BY the clustered index already gives: read in its order, and nothing to sort.
+      const ordered = source !== undefined && !deduplicated && match === undefined && keys.length > 0 ? orderingIndex(source.def, source.alias, q.orderBy ?? [], items, lookup) : undefined
+      let n = from === undefined ? planNode('Rows fetched before execution') : from.explain(run.env, node.where, ordered)
+      n = withSubqueries(run, n, 'where clause')
+      if (having !== undefined) n = withSubqueries(run, planNode('Filter', [n]), 'having clause')
+      // A DISTINCT through a temporary table, deduplicated as it is written.
+      if (deduplicated) n = planNode('Table scan on <temporary>', [planNode('Temporary table with deduplication', [n])])
+      if (keys.length > 0 && ordered === undefined) n = planNode('Sort', [wrap(streamed, 'Stream results', n)])
+      if (limitCount !== undefined) n = planNode(offset > 0 ? 'Limit/Offset' : 'Limit', [n])
+      return [n, ...subqueryNodes(run, 'field list')]
+    } }),
     rows(trx, given) {
       const env = given ?? { ...run.env, ...(trx === undefined ? {} : { trx }) }
       let rows: Iterable<{ readonly row: Row }>
@@ -426,6 +469,82 @@ function planSelect(run: Run, q: QueryExpression, node: SelectNode): SelectPlan 
 }
 
 // --- what MySQL's plan reads, and how ----------------------------------------------
+
+/**
+ * The subqueries a clause compiled, as EXPLAIN prints them: `Select #n` over
+ * the subquery's own plan, `n` the query block's number, which the server
+ * gives each SELECT in the order the statement's text has them.
+ */
+function subqueryNodes(run: Run, clause: string): PlanNode[] {
+  const out: PlanNode[] = []
+  // A clause may be compiled more than once (its metadata, then its rows): each subquery is one block.
+  const seen = new Set<QueryExpression>()
+  for (const s of run.subqueries ?? []) {
+    if (s.clause !== clause || seen.has(s.query)) continue
+    seen.add(s.query)
+    const roots = s.plan.explain?.()
+    out.push(planNode(`Select #${selectNumber(run, s.query)}`, roots === undefined ? [] : [...roots]))
+  }
+  return out
+}
+
+/** A Filter with a clause's subqueries beside its input, as the server lists them; anything else as it is. */
+function withSubqueries(run: Run, n: PlanNode, clause: string): PlanNode {
+  const subs = subqueryNodes(run, clause)
+  return subs.length === 0 || n.label !== 'Filter' ? n : { ...n, children: [...n.children, ...subs] }
+}
+
+/** A query block's number: how many SELECTs the statement's text has up to its own. */
+function selectNumber(run: Run, q: QueryExpression): number {
+  let body: QueryBody = q.body
+  while (body.kind === QUERY.QUERY) body = body.body
+  const at = body.kind === QUERY.SELECT ? body.at : q.at
+  try {
+    return lex(run.sql, { sqlMode: modeOf(run.env.session.sqlMode) }).filter((t) => t.start <= at && t.kind === TOKEN.IDENTIFIER && t.quoted !== true && t.text.toUpperCase() === 'SELECT').length
+  } catch (e) {
+    expectTyped(e)
+    return 0
+  }
+}
+
+/** Whether the optimizer proves the result empty — an impossible condition, a join that cannot match, LIMIT 0 — and plans nothing. */
+function provedEmpty(run: Run, from: FromPlan | undefined, node: SelectNode, limitCount: number | undefined): boolean {
+  if (limitCount === 0) return true
+  if (from === undefined) return false
+  return optimizerFacts(from, node.where, limitCount, compileContext(run, EMPTY_SCOPE, 'where clause'), run.env, (node.options ?? []).includes('STRAIGHT_JOIN')).empty
+}
+
+/**
+ * The clustered index, when an ORDER BY is one direction over a prefix of its
+ * key — or the whole key and more, since nothing after a unique key orders
+ * anything: 8.4.11 reads the index in that order and sorts nothing ("Index
+ * scan on t using PRIMARY").
+ */
+function orderingIndex(def: TableDef, alias: string, order: readonly OrderItem[], items: readonly { compiled: Compiled; expr?: Expression }[], scope: Scope): string | undefined {
+  const index = def.indexes.find((i) => i.kind === 'primary' || i.name === def.clustered)
+  if (index === undefined || order.length === 0) return undefined
+  const desc = order[0]?.desc === true
+  const names: string[] = []
+  for (const o of order) {
+    if ((o.desc === true) !== desc) return undefined
+    let e: Expression | undefined = o.expr
+    if (e.kind === NODE.LITERAL && e.type === 'int') e = items[Number(e.value as bigint) - 1]?.expr
+    if (e === undefined || e.kind !== NODE.COLUMN) return undefined
+    let name: string | undefined
+    try {
+      const r = scope.resolve(e.parts, 'order clause')
+      const column = r.type.column
+      name = r.depth === undefined && column !== undefined && column.table === alias ? column.orgName : undefined
+    } catch (err) {
+      expectTyped(err)
+    }
+    if (name === undefined) return undefined
+    names.push(name.toLowerCase())
+  }
+  const parts = index.parts.map((p) => p.column.toLowerCase())
+  const covered = names.length <= parts.length ? names.every((n, i) => n === parts[i]) : parts.every((p, i) => p === names[i])
+  return covered ? index.name : undefined
+}
 
 /** The WHERE's IN and EXISTS subqueries MySQL runs as semijoins (NOT EXISTS, antijoins), each with the subquery. */
 function semijoinSubqueries(where: Expression | undefined): QueryExpression[] {
@@ -643,10 +762,11 @@ function enclosing(scope: Scope, seen: () => void): Scope {
 }
 
 /** A subquery in an expression, planned with the expression's scope enclosing it. */
-function planSubquery(run: Run, q: QueryExpression, outer: Scope): SubqueryPlan {
+function planSubquery(run: Run, q: QueryExpression, outer: Scope): SubqueryPlan & { readonly plan: SelectPlan } {
   let correlated = false
   const plan = planQuery({ ...run, parent: enclosing(outer, () => (correlated = true)) }, q)
   return {
+    plan,
     columns: plan.columns,
     get correlated() {
       return correlated
@@ -682,7 +802,7 @@ function mergeable(q: QueryExpression): boolean {
 }
 
 /** A derived table, or one reference to a CTE: its columns as the outer query sees them, and its rows. */
-function derivedTable(run: Run, query: QueryExpression, alias: string, names: readonly string[] | undefined, lateral: Scope | undefined, view?: ViewDef): DerivedSource {
+function derivedTable(run: Run, query: QueryExpression, alias: string, names: readonly string[] | undefined, lateral: Scope | undefined, view?: ViewDef, cte?: string): DerivedSource {
   let correlated = false
   const outer = lateral === undefined ? run.parent : enclosing(lateral, () => {})
   const parent: Scope | undefined =
@@ -729,6 +849,10 @@ function derivedTable(run: Run, query: QueryExpression, alias: string, names: re
   const key = {}
   return {
     columns,
+    explain: () => {
+      const body = plan.explain?.()[0]
+      return body === undefined ? undefined : { merged, body, materialize: cte === undefined ? 'Materialize' : `Materialize CTE ${cte}` }
+    },
     // Its rows are a table's fields: a hex literal's number does not survive.
     rows: (trx, env, row) => {
       if (lateral !== undefined || correlated || env.memo === undefined) return fieldRows(plan.rows(trx, lateral === undefined || row === undefined ? env : { ...env, outer: [row, ...(env.outer ?? [])] }))
@@ -784,7 +908,7 @@ export function withClause(run: Run, w: NonNullable<QueryExpression['with']>): R
     const before: Run = at
     const recursive = w.recursive === true && references(cte.query, cte.name)
     const source = recursive ? recursiveCte(before, cte) : undefined
-    ctes.set(cte.name, () => source ?? derivedTable(before, cte.query, cte.name, cte.columns, undefined))
+    ctes.set(cte.name, () => source ?? derivedTable(before, cte.query, cte.name, cte.columns, undefined, undefined, cte.name))
     at = { ...run, ctes: new Map(ctes) }
   }
   return at
@@ -907,10 +1031,21 @@ function planSetOperation(run: Run, node: SetOperationNode, parent?: SetOperatio
     parent === undefined || parent === node.op
       ? op.columns
       : op.columns.map((c, i) => ({ name: c.name, type: { ...c.type, nullable: nestedNullability(node.op, (left.columns[i] as { type: ResultType }).type.nullable, (right.columns[i] as { type: ResultType }).type.nullable) } }))
+  // EXPLAIN: a chain of one operator is one temporary table, its branches in order.
+  const described = (p: SelectPlan): PlanNode | undefined => p.explain?.(true)[0]
+  const flatten = (p: SelectPlan, all: boolean): { node: PlanNode; all: boolean }[] | undefined => {
+    if (p.members !== undefined && p.members.op === node.op) return p.members.items.map((m, i) => (i === 0 ? { ...m, all } : m))
+    const n = described(p)
+    return n === undefined ? undefined : [{ node: n, all }]
+  }
+  const l = flatten(left, false)
+  const r = flatten(right, node.all === true)
+  const members: SetMembers | undefined = l === undefined || r === undefined ? undefined : { op: node.op, items: [...l, ...r] }
   return {
     columns,
     locking: left.locking || right.locking,
     leaves,
+    ...(members === undefined ? {} : { members, explain: (materialized?: boolean): readonly PlanNode[] => [setOperationNode(members, materialized === true || parent !== undefined)] }),
     rows: (trx, env) => {
       const rows = op.rows(() => left.rows(trx, env), () => right.rows(trx, env))
       if (parent !== undefined) return rows
@@ -920,6 +1055,22 @@ function planSetOperation(run: Run, node: SetOperationNode, parent?: SetOperatio
       })()
     },
   }
+}
+
+/**
+ * A set operation as 8.4.11's iterators. Its branches are written into a
+ * temporary table and read back, deduplicated as they are written unless
+ * every branch joined with ALL; branches after the chain's last DISTINCT are
+ * written without it ("Disable deduplication"). A UNION ALL nothing sorts or
+ * limits is not materialized at all: each branch is streamed in turn (Append).
+ */
+function setOperationNode(m: SetMembers, materialized: boolean): PlanNode {
+  const name = m.op === 'UNION' ? 'Union' : m.op === 'INTERSECT' ? 'Intersect' : 'Except'
+  const lastDistinct = m.items.reduce((at, x, i) => (i > 0 && !x.all ? i : at), -1)
+  if (lastDistinct < 0 && m.op === 'UNION' && !materialized) return planNode('Append', m.items.map((x) => planNode('Stream results', [x.node])))
+  const children = m.items.map((x, i) => (lastDistinct >= 0 && i > lastDistinct ? planNode('Disable deduplication', [x.node]) : x.node))
+  const how = lastDistinct < 0 ? `${name} all materialize` : `${name} materialize with deduplication`
+  return planNode(`Table scan on <${m.op.toLowerCase()} temporary>`, [planNode(how, children)])
 }
 
 /**
@@ -944,10 +1095,19 @@ function orderedResult(run: Run, q: QueryExpression, plan: SelectPlan): SelectPl
   })
   const limitCount = q.limit === undefined ? undefined : limitValue(run, q.limit.count, 'LIMIT')
   const offset = q.limit?.offset === undefined ? 0 : limitValue(run, q.limit.offset, 'LIMIT')
+  const inner = plan.explain
   return {
     columns: plan.columns,
     locking: plan.locking,
     ...(plan.leaves === undefined ? {} : { leaves: plan.leaves }),
+    ...(inner === undefined ? {} : { explain: (): readonly PlanNode[] => {
+      if (limitCount === 0) return [planNode('Zero rows')]
+      const [root, ...rest] = inner.call(plan, true)
+      if (root === undefined) return []
+      let n = keys.length > 0 ? planNode('Sort', [root]) : root
+      if (limitCount !== undefined) n = planNode(offset > 0 ? 'Limit/Offset' : 'Limit', [n])
+      return [n, ...rest]
+    } }),
     rows(trx, given) {
       const env = given ?? { ...run.env, ...(trx === undefined ? {} : { trx }) }
       let rows: Iterable<{ readonly row: Row }> = (function* () {
@@ -1245,11 +1405,29 @@ function planGrouped(
     }
   }
   const plan = { width, keys: keys.map((k) => k.compiled), specs: sink.specs, strategy, rollup }
+  const sortsOutput = orderKeys.length > 0 && !(orderMatchesKeys && strategy !== 'temp')
 
   return {
     columns: items.map((i) => ({ name: i.name, type: i.compiled.type })),
     locking,
     ...(dataColumns === undefined ? {} : { columnsAt: (trx: Trx | undefined) => (dataColumns as (t: Trx | undefined) => readonly ResultType[])(trx).map((type, i) => ({ name: (items[i] as { name: string }).name, type })) }),
+    // Windows and a DISTINCT over groups are not described yet: EXPLAIN refuses them.
+    ...(windowed || node.distinct === true ? {} : { explain: (): readonly PlanNode[] => {
+      // Implicit grouping answers one row even of nothing, so it is still an Aggregate.
+      if (strategy !== 'implicit' && provedEmpty(run, from, node, limitCount)) return [planNode('Zero rows')]
+      let n = from === undefined ? planNode('Rows fetched before execution') : from.explain(run.env, node.where, strategy === 'index' ? groupIndex : undefined)
+      n = withSubqueries(run, n, 'where clause')
+      const groups = rollup ? 'Group aggregate with rollup' : 'Group aggregate'
+      if (strategy === 'implicit') n = planNode('Aggregate', [n])
+      else if (strategy === 'temp') n = planNode('Table scan on <temporary>', [planNode('Aggregate using temporary table', [n])])
+      // Sorted for its groups; a join's rows are streamed into a table to be.
+      else if (strategy === 'sort') n = planNode(groups, [planNode('Sort', [wrap(source === undefined, 'Stream results', n)])])
+      else n = planNode(groups, [n])
+      if (having !== undefined) n = withSubqueries(run, planNode('Filter', [n]), 'having clause')
+      if (sortsOutput) n = planNode('Sort', [wrap(stream, 'Stream results', n)])
+      if (limitCount !== undefined) n = planNode(offset > 0 ? 'Limit/Offset' : 'Limit', [n])
+      return [n, ...subqueryNodes(run, 'field list')]
+    } }),
     rows(trx, given) {
       const env = given ?? { ...run.env, ...(trx === undefined ? {} : { trx }) }
       let rows: Iterable<{ readonly row: Row }>

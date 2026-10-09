@@ -33,7 +33,8 @@ import { NODE, REF, type Expression, type TableReference } from '@myjs/parser'
 import { messages, sqlError } from '@myjs/protocol'
 import { truth, type Value } from '@myjs/types'
 import type { Compiled, Env, Row, Scope } from './compile.ts'
-import { FULL_SCAN, accessRows, chooseAccess, pointAccess, splitAnd } from './plan.ts'
+import { planNode, type PlanNode } from './explain.ts'
+import { FULL_SCAN, accessRows, chooseAccess, pointAccess, splitAnd, type Access } from './plan.ts'
 import { TableScope, type ScopeColumn, type ScopeTableSpec } from './scope.ts'
 
 /** A table the FROM reads: a base table, or (M5.1) a derived one. */
@@ -60,6 +61,12 @@ export interface DerivedSource {
   readonly joined?: boolean
   /** Its rows, as values in column order. `lateral` is the FROM's row so far, for LATERAL. */
   rows(trx: Trx | undefined, env: Env, lateral: Row | undefined): Iterable<readonly Value[]>
+  /**
+   * Its plan (M5.44): its query's, and whether the server merges it into the
+   * query that reads it (`derived_merge`) or materializes it first, and as
+   * what (`Materialize`, `Materialize CTE c`).
+   */
+  explain?(): { readonly merged: boolean; readonly body: PlanNode; readonly materialize: string } | undefined
 }
 
 type Node =
@@ -111,6 +118,15 @@ export interface FromPlan {
    * of an unordered result.
    */
   cover(alias: string, index: string): void
+  /**
+   * The FROM as 8.4.11's iterators (M5.44): each table's access, the joins,
+   * and each condition of `where` at the iterator that applies it — a
+   * condition on one table at that table, as the server pushes it down.
+   * `where` is the WHERE whose conjuncts are placed; `env` decides access
+   * paths as `rows` does. `ordered` names the index a single table is read
+   * in the order of, for an ORDER BY it gives.
+   */
+  explain(env: Env, where: Expression | undefined, ordered?: string): PlanNode
   /** The rows of the FROM. `where` may narrow a scan (see the header); `ids` asks for each base table's row id too. */
   rows(trx: Trx | undefined, env: Env, options: { readonly where: Expression | undefined; readonly locking: boolean; readonly ids?: boolean }): Iterable<JoinedRow>
 }
@@ -334,7 +350,8 @@ export function planFrom(refs: readonly TableReference[], ctx: FromContext, wher
         // `LEFT JOIN LATERAL … ORDER BY parent.id` keeps parent.id's key flags).
         if ([...inner.aliases].some((a) => byAlias.get(a)?.lateral === true)) nestedLoopJoins.add(inner.aliases)
         return {
-          node: { kind: 'join', outer: outer.node, inner: inner.node, left: isLeft, on, onAst, innerSlots, lookup },
+          // A left join runs as a hash join whatever its lookup (see `run`); the lookup is what EXPLAIN calls it.
+          node: { kind: 'join', outer: outer.node, inner: inner.node, left: isLeft, on, onAst, innerSlots, lookup: lookup ?? outerLookup },
           aliases,
           visible,
         }
@@ -390,6 +407,11 @@ export function planFrom(refs: readonly TableReference[], ctx: FromContext, wher
       return spine.every((j) => j.kind === 'join' && [...nestedLoopJoins].some((s) => [...s].every((a) => innerAliasesOf(j).has(a)) && s.size === innerAliasesOf(j).size))
     },
     ...(single === undefined ? {} : { single }),
+    explain(env, where, ordered) {
+      if (tree === undefined) return planNode('Rows fetched before execution')
+      const conditions = splitAnd(where).map((e) => ({ e, aliases: aliasesOf(e, scope) }))
+      return describe(tree.node, conditions, scope, { where, covering, ...(ordered === undefined ? {} : { ordered }) }, env)
+    },
     rows(trx, env, options) {
       if (tree === undefined) return [{ row: [] }]
       return run(tree.node, trx, env, { ...options, covering }, width)
@@ -398,18 +420,10 @@ export function planFrom(refs: readonly TableReference[], ctx: FromContext, wher
 }
 
 /** The aliases of a join's inner side. */
-function innerAliasesOf(j: Node): Set<string> {
-  const out = new Set<string>()
-  const walk = (n: Node): void => {
-    if (n.kind === 'leaf') out.add(n.table.alias)
-    else {
-      walk(n.outer)
-      walk(n.inner)
-    }
-  }
-  if (j.kind === 'join') walk(j.inner)
-  return out
-}
+const innerAliasesOf = (j: Node): Set<string> => (j.kind === 'join' ? leafAliases(j.inner) : new Set())
+
+/** The aliases of every table under a node. */
+const leafAliases = (n: Node): Set<string> => (n.kind === 'leaf' ? new Set([n.table.alias]) : new Set([...leafAliases(n.outer), ...leafAliases(n.inner)]))
 
 const inTable = (t: FromTable | undefined, index: number): boolean => t !== undefined && index >= t.offset && index < t.offset + t.width
 
@@ -547,6 +561,17 @@ function idsAt(offset: number, id: RowId): (RowId | undefined)[] {
   return out
 }
 
+/**
+ * How a base table is read: a key range the WHERE pins, never for a table an
+ * outer join may null (see the header); else the covering index chosen for
+ * it; else a full scan. `rows` and `explain` both ask this.
+ */
+function leafAccess(t: FromTable, options: { readonly where: Expression | undefined; readonly covering?: ReadonlyMap<string, string> }, env: Env): Access {
+  const access = t.nullable ? FULL_SCAN : chooseAccess(t.def as TableDef, t.alias, options.where, env)
+  const cover = options.covering?.get(t.alias)
+  return access.index === undefined && access.ranges === undefined && cover !== undefined ? { index: cover } : access
+}
+
 function* leafRows(t: FromTable, trx: Trx | undefined, env: Env, options: RunOptions, width: number, lateral: Row | undefined): Generator<JoinedRow> {
   const base = (): Value[] => new Array<Value>(width).fill(null)
   if (t.derived !== undefined) {
@@ -558,10 +583,7 @@ function* leafRows(t: FromTable, trx: Trx | undefined, env: Env, options: RunOpt
     return
   }
   const def = t.def as TableDef
-  let access = t.nullable ? FULL_SCAN : chooseAccess(def, t.alias, options.where, env)
-  const cover = options.covering?.get(t.alias)
-  if (access.index === undefined && access.ranges === undefined && cover !== undefined) access = { index: cover }
-  for (const { id, row: values } of accessRows(t.table as Table, def, access, trx, options.locking)) {
+  for (const { id, row: values } of accessRows(t.table as Table, def, leafAccess(t, options, env), trx, options.locking)) {
     const row = base()
     for (let i = 0; i < t.width; i++) row[t.offset + i] = values[i] ?? null
     yield options.ids === true ? { row, ids: idsAt(t.offset, id) } : { row }
@@ -613,4 +635,125 @@ function eqRef(t: FromTable, conditions: readonly (Expression | undefined)[], ou
     return { index, column, value }
   }
   return undefined
+}
+
+// --- the plan, as EXPLAIN shows it (M5.44) --------------------------------------
+
+interface Placed {
+  readonly e: Expression
+  /** The tables it reads; `undefined` when it reads more than a table's row (a subquery, an outer query's column). */
+  readonly aliases: ReadonlySet<string> | undefined
+}
+
+/** The aliases of the FROM's tables an expression reads, or `undefined` if it reads anything else. */
+function aliasesOf(e: Expression, scope: TableScope): Set<string> | undefined {
+  const out = new Set<string>()
+  let other = false
+  const visit = (x: unknown): void => {
+    if (other || x === null || typeof x !== 'object') return
+    if (Array.isArray(x)) return x.forEach(visit)
+    const n = x as { kind?: string; parts?: readonly string[] }
+    if (n.kind === NODE.SUBQUERY) {
+      other = true
+      return
+    }
+    if (n.kind === NODE.COLUMN && n.parts !== undefined) {
+      // USING's equalities name slots, which are positions in the FROM's row.
+      const p = n.parts[0] as string
+      if (n.parts.length === 1 && p.startsWith(SLOT_PREFIX)) {
+        const at = scope.columnAt(Number(p.slice(SLOT_PREFIX.length)))
+        if (at === undefined) other = true
+        else out.add(at.table.alias)
+        return
+      }
+      try {
+        const r = scope.resolve(n.parts, 'where clause')
+        const at = r.depth === undefined ? scope.columnAt(r.index) : undefined
+        if (at === undefined) other = true
+        else out.add(at.table.alias)
+      } catch (e) {
+        expectTyped(e)
+        other = true
+      }
+      return
+    }
+    for (const v of Object.values(x)) if (typeof v === 'object') visit(v)
+  }
+  visit(e)
+  return other ? undefined : out
+}
+
+const within = (c: Placed, aliases: ReadonlySet<string>): boolean => c.aliases !== undefined && c.aliases.size > 0 && [...c.aliases].every((a) => aliases.has(a))
+
+/** `node` under a Filter when any condition is left for it. */
+const filtered = (node: PlanNode, conditions: readonly Placed[]): PlanNode => (conditions.length === 0 ? node : planNode('Filter', [node]))
+
+/** A base or derived table's iterator. */
+function describeLeaf(t: FromTable, options: DescribeOptions, env: Env): PlanNode {
+  if (t.def === undefined) {
+    const d = t.derived?.explain?.()
+    if (d === undefined) return planNode(`Table scan on ${t.alias}`, [planNode('Materialize')])
+    return d.merged ? d.body : planNode(`Table scan on ${t.alias}`, [planNode(d.materialize, [d.body])])
+  }
+  const access = leafAccess(t, options, env)
+  if (options.ordered !== undefined && access.ranges === undefined) {
+    // Read whole in an index's order: covering when it holds every column the query reads.
+    const clustered = options.ordered === 'PRIMARY' || options.ordered === t.def.clustered
+    const covers = !clustered && options.covering?.get(t.alias) === options.ordered
+    return planNode(`${covers ? 'Covering index' : 'Index'} scan on ${t.alias} using ${options.ordered}`)
+  }
+  if (access.index === undefined) return planNode(`Table scan on ${t.alias}`)
+  if (access.ranges === undefined) return planNode(`Covering index scan on ${t.alias} using ${access.index}`)
+  const index = t.def.indexes.find((i) => i.name === access.index)
+  const points = access.ranges.every((r) => r.from !== undefined && r.from === r.to)
+  if (points && access.ranges.length === 1 && index !== undefined && index.kind !== 'primary') return planNode(`Index lookup on ${t.alias} using ${access.index}`)
+  return planNode(`Index range scan on ${t.alias} using ${access.index}`)
+}
+
+/**
+ * A join tree's iterators, with each condition placed: one that reads a
+ * single side goes down to it, an equality between the sides is a hash join's
+ * key or a nested loop's lookup, and the rest is a Filter where both sides
+ * are joined. A WHERE condition never goes into the side an outer join may
+ * null, nor does an outer join's ON condition on its preserved side.
+ */
+interface DescribeOptions {
+  readonly where: Expression | undefined
+  readonly covering?: ReadonlyMap<string, string>
+  readonly ordered?: string
+}
+
+function describe(node: Node, conditions: readonly Placed[], scope: TableScope, options: DescribeOptions, env: Env): PlanNode {
+  if (node.kind === 'leaf') return filtered(describeLeaf(node.table, options, env), conditions)
+  const outerAliases = leafAliases(node.outer)
+  const innerAliases = leafAliases(node.inner)
+  const on: Placed[] = splitAnd(node.onAst).map((e) => ({ e, aliases: aliasesOf(e, scope) }))
+  // An inner join's ON is its WHERE; an outer join's ON may go down only into the side it nulls.
+  const all = node.left ? conditions : [...conditions, ...on]
+  const toOuter = all.filter((c) => within(c, outerAliases))
+  const toInner = [...(node.left ? on : all).filter((c) => within(c, innerAliases))]
+  const here = all.filter((c) => !toOuter.includes(c) && !toInner.includes(c))
+  const spanning = node.left ? on.filter((c) => !toInner.includes(c)) : here
+  const keys = spanning.filter((c) => isEquiJoin(c.e, scope, outerAliases, innerAliases))
+  const outer = describe(node.outer, toOuter, scope, options, env)
+  if (node.lookup !== undefined && node.inner.kind === 'leaf') {
+    const t = node.inner.table
+    // The lookup's own equality is the key read, not a filter.
+    const rest = [...toInner, ...spanning.filter((c) => !keys.includes(c))]
+    const inner = filtered(planNode(`Single-row index lookup on ${t.alias} using ${node.lookup.index.name}`), rest)
+    return filtered(planNode(node.left ? 'Nested loop left join' : 'Nested loop inner join', [outer, inner]), node.left ? here : [])
+  }
+  const inner = describe(node.inner, toInner, scope, options, env)
+  if (node.left) return filtered(planNode('Left hash join', [outer, planNode('Hash', [inner])]), here)
+  // Probe with the later side, build on the earlier (D-75).
+  return filtered(planNode('Inner hash join', [inner, planNode('Hash', [outer])]), here.filter((c) => !keys.includes(c)))
+}
+
+/** An equality with one side's tables on its left and the other's on its right: a hash join's key. */
+function isEquiJoin(e: Expression, scope: TableScope, outer: ReadonlySet<string>, inner: ReadonlySet<string>): boolean {
+  if (e.kind !== NODE.BINARY || e.op !== '=') return false
+  const l = aliasesOf(e.left, scope)
+  const r = aliasesOf(e.right, scope)
+  const on = (a: Set<string> | undefined, side: ReadonlySet<string>): boolean => a !== undefined && a.size > 0 && [...a].every((x) => side.has(x))
+  return (on(l, outer) && on(r, inner)) || (on(l, inner) && on(r, outer))
 }

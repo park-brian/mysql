@@ -880,10 +880,89 @@ export function toJsonDoc(v: Exclude<Value, null>): JsonDoc {
  * MySQL's order of two JSON values in a sort — ORDER BY, and a sort-based
  * GROUP BY — which is not `compareJson`: the sort key of an array or an
  * object holds only its type and its number of members, so `[false]` sorts
- * before `[{}, 1, true]` and two one-member objects tie, keeping their input
- * order (8.4.11, M5.21). Scalars sort as they compare.
+ * before `[{}, 1, true]` and two one-member objects tie (8.4.11, M5.21); what
+ * orders a tie is `jsonSortHash`, not the input order (E-22). Scalars sort as
+ * they compare.
  */
 export function orderJson(a: JsonDoc, b: JsonDoc): number {
   if ((a.t === 'array' || a.t === 'object') && a.t === b.t) return sign(a.v.length - (b as typeof a).v.length)
   return compareJson(a, b)
+}
+
+/**
+ * What breaks a tie between rows whose sort keys hold JSON: a 64-bit hash of
+ * the row's JSON key values, chained from 0 in key order (`seed`), appended to
+ * the sort record after the keys and compared as its eight bytes,
+ * little-endian, ascending whichever way the keys sort (8.4.11's filesort,
+ * `Json_wrapper::make_hash_key`). So two arrays of one length — which the key
+ * alone ties — come out in the same order under ASC and DESC, and in neither
+ * the order they went in. The hash is a rolling checksum (`unique_hash`'s)
+ * over a canonical walk of the value: a number as its double's bytes, zero as
+ * one zero byte; a string as its bytes; an object's keys in storage order,
+ * each followed by its value's hash, seeded with the checksum so far.
+ */
+export function jsonSortHash(doc: JsonDoc, seed: bigint): bigint {
+  let crc = seed
+  const add = (byte: number): void => {
+    crc = BigInt.asUintN(64, (crc << 8n) + BigInt(byte) + (crc >> 24n))
+  }
+  const addBytes = (b: Uint8Array): void => b.forEach(add)
+  const addDouble = (d: number): void => {
+    if (d === 0) return add(0)
+    const b = new Uint8Array(8)
+    new DataView(b.buffer).setFloat64(0, d, true)
+    addBytes(b)
+  }
+  const addInteger = (n: bigint): void => addBytes(int64Bytes(n, true))
+  switch (doc.t) {
+    case 'null':
+      add(0x00)
+      break
+    case 'int':
+    case 'uint':
+      addDouble(Number(doc.v))
+      break
+    case 'double':
+      addDouble(doc.v)
+      break
+    case 'decimal':
+      addDouble(Number(renderDecimal(doc.v)))
+      break
+    case 'string':
+      addBytes(utf8.encode(doc.v))
+      break
+    case 'opaque':
+      addBytes(doc.v)
+      break
+    case 'object':
+      add(0x05)
+      for (const [k, v] of doc.v) {
+        addBytes(utf8.encode(k))
+        addInteger(jsonSortHash(v, crc))
+      }
+      break
+    case 'array':
+      add(0x06)
+      for (const v of doc.v) addInteger(jsonSortHash(v, crc))
+      break
+    case 'bool':
+      add(doc.v ? 0x08 : 0x07)
+      break
+    case 'time':
+      addBytes(int64Bytes(packTime(doc.v)))
+      break
+    default:
+      addBytes(int64Bytes(packDateTime(doc.v)))
+  }
+  return crc
+}
+
+/** Two {@link jsonSortHash}es as the sort compares them: their bytes little-endian, the low byte first. */
+export function compareJsonSortHashes(a: bigint, b: bigint): number {
+  for (let shift = 0n; shift < 64n; shift += 8n) {
+    const x = (a >> shift) & 0xffn
+    const y = (b >> shift) & 0xffn
+    if (x !== y) return x < y ? -1 : 1
+  }
+  return 0
 }

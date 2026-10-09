@@ -84,6 +84,8 @@ export {
   jsonKey,
   jsonObject,
   orderJson,
+  jsonSortHash,
+  compareJsonSortHashes,
   parseJson,
   quoteJsonString,
   renderJson,

@@ -56,6 +56,9 @@ export interface Tally {
   orderedByStatement: number
   /** Queries whose row order was compared because our plan is the server's. */
   orderedByPlan: number
+  /** Queries whose `EXPLAIN FORMAT=TREE` skeleton is the server's (M5.44), of those the server explained. */
+  plansAgreed: number
+  plansExplained: number
   /** Queries compared as a multiset, and of those, how many came back in the server's order anyway. */
   unordered: number
   unorderedInOrder: number
@@ -104,7 +107,7 @@ export async function replay(fixture: Fixture, connection: Record<string, unknow
   const db = await MySQL.open(':memory:')
   const conn = await mysql.createConnection({ stream: db.createStream(), user: 'root', password: '', ...connection })
   await conn.query(`SET sql_mode = '${fixture.sqlMode}'`)
-  const tally: Tally = { statements: 0, agreed: 0, refused: 0, orderedByStatement: 0, orderedByPlan: 0, unordered: 0, unorderedInOrder: 0, unmodelled: 0, mismatches: [], warningsCompared: 0, warningMismatches: [] }
+  const tally: Tally = { statements: 0, agreed: 0, refused: 0, orderedByStatement: 0, orderedByPlan: 0, plansAgreed: 0, plansExplained: 0, unordered: 0, unorderedInOrder: 0, unmodelled: 0, mismatches: [], warningsCompared: 0, warningMismatches: [] }
   try {
     for (const expected of fixture.cases) {
       const actual = (await runCase(conn, expected.map(({ sql, select, ordered, serverOnly }) => ({ sql, select, ordered, serverOnly })), { warnings: true })) as Outcome[]
@@ -119,6 +122,10 @@ export async function replay(fixture: Fixture, connection: Record<string, unknow
           tally.statements += expected.slice(i + 1).filter((s) => s.serverOnly !== true).length
           tally.refused += expected.slice(i + 1).filter((s) => s.serverOnly !== true).length
           break
+        }
+        if (e.select === true && typeof e.plan === 'string') {
+          tally.plansExplained++
+          if (a.plan === e.plan) tally.plansAgreed++
         }
         let agrees: boolean
         if (e.select !== true) {
