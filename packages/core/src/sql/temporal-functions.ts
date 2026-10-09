@@ -79,12 +79,14 @@ const US_PER_DAY = 86_400_000_000n
 const NO_ZERO: DateFlags = { noZeroDate: true, noZeroInDate: true }
 const FUZZY: DateFlags = {}
 
-export const TEMPORAL_FUNCTIONS: ReadonlySet<string> = new Set([
-  'DATE', 'TIME', 'TIMESTAMP', 'YEAR', 'MONTH', 'DAY', 'DAYOFMONTH', 'HOUR', 'MINUTE', 'SECOND', 'MICROSECOND', 'DAYOFWEEK', 'DAYOFYEAR',
-  'WEEK', 'WEEKDAY', 'YEARWEEK', 'QUARTER', 'DAYNAME', 'MONTHNAME', 'LAST_DAY', 'DATE_FORMAT', 'TIME_FORMAT', 'STR_TO_DATE', 'UNIX_TIMESTAMP',
-  'FROM_UNIXTIME', 'DATEDIFF', 'TIMEDIFF', 'TIMESTAMPDIFF', 'TIMESTAMPADD', 'ADDTIME', 'SUBTIME', 'MAKEDATE', 'MAKETIME', 'SEC_TO_TIME',
-  'TIME_TO_SEC', 'TO_DAYS', 'FROM_DAYS', 'TO_SECONDS', 'PERIOD_ADD', 'PERIOD_DIFF', 'EXTRACT', 'GET_FORMAT', 'CONVERT_TZ',
-])
+/** The names `temporalFunction` compiles. */
+export const TEMPORAL_FUNCTIONS: ReadonlySet<string> = new Set(['DATE', 'TIME', 'TIMESTAMP', 'YEAR', 'MONTH', 'DAY', 'DAYOFMONTH', 'QUARTER', 'DAYOFYEAR', 'DAYOFWEEK', 'WEEKDAY', 'TO_DAYS', 'TO_SECONDS', 'WEEK', 'YEARWEEK', 'DAYNAME', 'MONTHNAME', 'LAST_DAY', 'HOUR', 'MINUTE', 'SECOND', 'MICROSECOND', 'TIME_TO_SEC', 'EXTRACT'])
+
+/** The names `temporalTextFunction` compiles. */
+export const TEMPORAL_TEXT_FUNCTIONS: ReadonlySet<string> = new Set(['DATE_FORMAT', 'TIME_FORMAT', 'STR_TO_DATE', 'UNIX_TIMESTAMP', 'FROM_UNIXTIME', 'GET_FORMAT', 'CONVERT_TZ'])
+
+/** The names `temporalArithmetic` compiles. */
+export const TEMPORAL_ARITHMETIC: ReadonlySet<string> = new Set(['DATEDIFF', 'TIMEDIFF', 'TIMESTAMPDIFF', 'TIMESTAMPADD', 'ADDTIME', 'SUBTIME', 'MAKEDATE', 'FROM_DAYS', 'MAKETIME', 'SEC_TO_TIME', 'PERIOD_ADD', 'PERIOD_DIFF'])
 
 /** The statement's date, in UTC: where a TIME read as a date lands. */
 function today(env: Env): () => MysqlDateTime {
@@ -277,8 +279,8 @@ const EXTRACT_WIDTH: Readonly<Record<string, number>> = {
   SECOND_MICROSECOND: 9, MICROSECOND: 7,
 }
 
-/** The date and time functions, or undefined for any other name. */
-export function temporalFunction(name: string, e: CallNode, ctx: CompileContext): Compiled {
+/** What a temporal function's compiler asks of its call: its arguments compiled one at a time, a keyword argument read, its count checked, a constant one evaluated. */
+function temporalCall(e: CallNode, ctx: CompileContext) {
   const conn = ctx.connectionCollation
   const count = (min: number, max = min): void => {
     if (e.args.length < min || e.args.length > max) throw sqlError('ER_WRONG_PARAMCOUNT_TO_NATIVE_FCT', `Incorrect parameter count in the call to native function '${e.name}'`)
@@ -293,6 +295,19 @@ export function temporalFunction(name: string, e: CallNode, ctx: CompileContext)
   const constant = (i: number, c: Compiled): Value | undefined => constantOf(e.args[i] as Expression, c, ctx)
   const notNull = (...cs: Compiled[]): boolean => cs.every((c) => !c.type.nullable)
 
+  return {
+    conn,
+    count,
+    keyword,
+    arg,
+    constant,
+    notNull,
+  }
+}
+
+/** A temporal value made, or one of its parts read: DATE, TIME, TIMESTAMP, YEAR … MICROSECOND, the week and day counts, LAST_DAY, EXTRACT. */
+export function temporalFunction(name: string, e: CallNode, ctx: CompileContext): Compiled {
+  const { conn, count, keyword, arg, constant } = temporalCall(e, ctx)
   switch (name) {
     case 'DATE': {
       count(1)
@@ -431,6 +446,42 @@ export function temporalFunction(name: string, e: CallNode, ctx: CompileContext)
     case 'TIME_TO_SEC':
       count(1)
       return ofTime(arg(0), 10, (t) => (t.negative ? -1 : 1) * (((t.days * 24 + t.hour) * 60 + t.minute) * 60 + t.second))
+    case 'EXTRACT': {
+      count(2)
+      const unit = keyword(0)
+      const width = EXTRACT_WIDTH[unit]
+      if (width === undefined) throw sqlError('ER_PARSE_ERROR', messages.parseError(unit, 1))
+      const x = arg(1)
+      // The units of a date read a date; those of a time, DAY_HOUR and on included, read a time.
+      const dated = ['YEAR', 'YEAR_MONTH', 'QUARTER', 'MONTH', 'WEEK', 'DAY'].includes(unit)
+      const readDate = dateReader(x, FUZZY)
+      const readTime = structReader(x)
+      return {
+        eval: (r, env) => {
+          let v: Broken
+          if (dated) {
+            const d = readDate(r, env)
+            if (d === null) return null
+            v = brokenOfDatetime(d)
+          } else {
+            const t = readTime(r, env)
+            if (t === null) return null
+            v = t
+          }
+          return intValue(extract(unit, v))
+        },
+        type: INT(width),
+      }
+    }
+    default:
+      throw unregistered(name)
+  }
+}
+
+/** Temporals to and from text and seconds: DATE_FORMAT, TIME_FORMAT, STR_TO_DATE, GET_FORMAT, UNIX_TIMESTAMP, FROM_UNIXTIME, CONVERT_TZ. */
+export function temporalTextFunction(name: string, e: CallNode, ctx: CompileContext): Compiled {
+  const { conn, count, keyword, arg, constant } = temporalCall(e, ctx)
+  switch (name) {
     case 'DATE_FORMAT':
     case 'TIME_FORMAT': {
       count(2)
@@ -530,6 +581,57 @@ export function temporalFunction(name: string, e: CallNode, ctx: CompileContext)
         type: stringType(chars, conn, true),
       }
     }
+    case 'GET_FORMAT': {
+      count(2)
+      const which = keyword(0)
+      const column = which === 'DATE' ? 0 : which === 'TIME' ? 2 : 1
+      const loc = arg(1)
+      return {
+        eval: (r, env) => {
+          const v = loc.eval(r, env)
+          if (v === null) return null
+          const formats = GET_FORMATS[toText(v).toUpperCase()]
+          return formats === undefined ? null : stringValue(formats[column] as string, conn, COERCIBILITY.COERCIBLE)
+        },
+        type: stringType(17, conn, true),
+      }
+    }
+    case 'CONVERT_TZ': {
+      count(3)
+      const x = arg(0)
+      const fsp = datetimePrecision(x, constant(0, x))
+      const read = dateReader(x, NO_ZERO)
+      const from = arg(1)
+      const to = arg(2)
+      return {
+        eval: (r, env) => {
+          const f = from.eval(r, env)
+          const t = to.eval(r, env)
+          if (f === null || t === null) return null
+          const a = offsetOf(toText(f))
+          const b = offsetOf(toText(t))
+          if (a === undefined || b === undefined) return null
+          const d = read(r, env)
+          if (d === null) return null
+          const utc = datetimeMicros(d) - BigInt(a) * 1_000_000n
+          const epoch = datetimeMicros({ year: 1970, month: 1, day: 1, hour: 0, minute: 0, second: 0, microsecond: 0 })
+          // Outside TIMESTAMP's range the value is returned as it was.
+          if (utc < epoch + 1_000_000n || utc > epoch + MYTIME_MAX_VALUE * 1_000_000n) return datetimeValue(roundDatetime(d, fsp) ?? d, fsp)
+          const out = microsToDatetime(utc + BigInt(b) * 1_000_000n)
+          return out === undefined ? null : datetimeValue(roundDatetime(out, fsp) ?? out, fsp)
+        },
+        type: datetimeType(FIELD_TYPE.DATETIME, fsp, true),
+      }
+    }
+    default:
+      throw unregistered(name)
+  }
+}
+
+/** Arithmetic on temporals: the differences, TIMESTAMPADD, ADDTIME and SUBTIME, MAKEDATE, FROM_DAYS, MAKETIME, SEC_TO_TIME, the periods. */
+export function temporalArithmetic(name: string, e: CallNode, ctx: CompileContext): Compiled {
+  const { conn, count, keyword, arg, constant, notNull } = temporalCall(e, ctx)
+  switch (name) {
     case 'DATEDIFF': {
       count(2)
       const a = dateReader(arg(0), NO_ZERO)
@@ -717,77 +819,9 @@ export function temporalFunction(name: string, e: CallNode, ctx: CompileContext)
         type: INT(21, !notNull(x, y)),
       }
     }
-    case 'EXTRACT': {
-      count(2)
-      const unit = keyword(0)
-      const width = EXTRACT_WIDTH[unit]
-      if (width === undefined) throw sqlError('ER_PARSE_ERROR', messages.parseError(unit, 1))
-      const x = arg(1)
-      // The units of a date read a date; those of a time, DAY_HOUR and on included, read a time.
-      const dated = ['YEAR', 'YEAR_MONTH', 'QUARTER', 'MONTH', 'WEEK', 'DAY'].includes(unit)
-      const readDate = dateReader(x, FUZZY)
-      const readTime = structReader(x)
-      return {
-        eval: (r, env) => {
-          let v: Broken
-          if (dated) {
-            const d = readDate(r, env)
-            if (d === null) return null
-            v = brokenOfDatetime(d)
-          } else {
-            const t = readTime(r, env)
-            if (t === null) return null
-            v = t
-          }
-          return intValue(extract(unit, v))
-        },
-        type: INT(width),
-      }
-    }
-    case 'GET_FORMAT': {
-      count(2)
-      const which = keyword(0)
-      const column = which === 'DATE' ? 0 : which === 'TIME' ? 2 : 1
-      const loc = arg(1)
-      return {
-        eval: (r, env) => {
-          const v = loc.eval(r, env)
-          if (v === null) return null
-          const formats = GET_FORMATS[toText(v).toUpperCase()]
-          return formats === undefined ? null : stringValue(formats[column] as string, conn, COERCIBILITY.COERCIBLE)
-        },
-        type: stringType(17, conn, true),
-      }
-    }
-    case 'CONVERT_TZ': {
-      count(3)
-      const x = arg(0)
-      const fsp = datetimePrecision(x, constant(0, x))
-      const read = dateReader(x, NO_ZERO)
-      const from = arg(1)
-      const to = arg(2)
-      return {
-        eval: (r, env) => {
-          const f = from.eval(r, env)
-          const t = to.eval(r, env)
-          if (f === null || t === null) return null
-          const a = offsetOf(toText(f))
-          const b = offsetOf(toText(t))
-          if (a === undefined || b === undefined) return null
-          const d = read(r, env)
-          if (d === null) return null
-          const utc = datetimeMicros(d) - BigInt(a) * 1_000_000n
-          const epoch = datetimeMicros({ year: 1970, month: 1, day: 1, hour: 0, minute: 0, second: 0, microsecond: 0 })
-          // Outside TIMESTAMP's range the value is returned as it was.
-          if (utc < epoch + 1_000_000n || utc > epoch + MYTIME_MAX_VALUE * 1_000_000n) return datetimeValue(roundDatetime(d, fsp) ?? d, fsp)
-          const out = microsToDatetime(utc + BigInt(b) * 1_000_000n)
-          return out === undefined ? null : datetimeValue(roundDatetime(out, fsp) ?? out, fsp)
-        },
-        type: datetimeType(FIELD_TYPE.DATETIME, fsp, true),
-      }
-    }
+    default:
+      throw unregistered(name)
   }
-  throw unregistered(name)
 }
 
 /** TIMESTAMPDIFF: whole units from `a` to `b`, months counted by the calendar and cut toward zero. */
