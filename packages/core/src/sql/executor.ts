@@ -109,7 +109,7 @@ function parameterValue(p: Parameter, session: Session): Value {
   return { kind: 'datetime', v, type: date ? 'DATE' : 'DATETIME', fsp: v.microsecond === 0 ? 0 : 6 }
 }
 
-/** Every error a statement can raise, as the `SqlError` a client is sent: typed errors keep their number. */
+/** 3554: a system schema a statement may not touch. */
 const systemSchema = (name: string) => sqlError('ER_NO_SYSTEM_SCHEMA_ACCESS', `Access to system schema '${name}' is rejected.`)
 
 /**
@@ -129,6 +129,7 @@ function emptyText(session: Session, sql: string): 'empty' | 'comment' | undefin
   return tokens.every((t) => t.kind === TOKEN.EOF || (t.kind === TOKEN.OPERATOR && t.text === ';')) ? 'comment' : undefined
 }
 
+/** Every error a statement can raise, as the `SqlError` a client is sent: typed errors keep their number. */
 export function toSqlError(e: unknown): SqlError {
   if (e instanceof SqlError) return e
   if (e instanceof MyjsError && e.errno !== undefined) return new SqlError(e.code, e.message, { errno: e.errno, ...(e.sqlState === undefined ? {} : { sqlState: e.sqlState }) })

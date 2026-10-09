@@ -57,3 +57,14 @@ test('"Buffer" inside a comment or a string is not a violation', () => {
   )
   assert.equal(code, 0)
 })
+
+test('an edge the package graph does not draw fails the gate (D-33: protocol never reaches charsets)', () => {
+  const { code, out } = lintTree('protocol', 'bad.ts', "import { collation } from '@myjs/charsets'\nexport const c = collation\n")
+  assert.equal(code, 1)
+  assert.match(out, /imports @myjs\/charsets, an edge the package graph does not allow/)
+})
+
+test('an edge the package graph draws passes', () => {
+  const { code } = lintTree('types', 'ok.ts', "import { collation } from '@myjs/charsets'\nexport const c = collation\n")
+  assert.equal(code, 0)
+})

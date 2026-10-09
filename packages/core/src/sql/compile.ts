@@ -803,11 +803,6 @@ function typeOfUserVariable(v: Value | undefined, ctx: CompileContext): ResultTy
   return { ...typeOfValue(v), nullable: true }
 }
 
-/**
- * A division with a fixed-decimal double: the larger scale plus
- * div_precision_increment's 4, and the dividend's integer part
- * (`Item_func_div::resolve_type`).
- */
 /** `5 / 10^(D+1)` when a comparison is of doubles and both sides have fixed decimals. */
 function fixedTolerance(a: ResultType, b: ResultType): number | undefined {
   const numeric = (t: ResultType) => t.kind === 'int' || t.kind === 'decimal' || t.kind === 'double'
@@ -832,6 +827,11 @@ export function comparer(a: ResultType, b: ResultType): (x: Value, y: Value) => 
   }
 }
 
+/**
+ * A division with a fixed-decimal double: the larger scale plus
+ * div_precision_increment's 4, and the dividend's integer part
+ * (`Item_func_div::resolve_type`).
+ */
 function divisionDouble(a: ResultType, b: ResultType): ResultType {
   const fixed = fixedDouble([a, b], true)
   if (fixed === undefined) return doubleType(true, 23)
@@ -1137,7 +1137,7 @@ function binary(op: string, left: Expression, right: Expression, extra: Expressi
   }
 }
 
-// --- TIME against DATETIME --------------------------------------------------------
+// --- Constants -------------------------------------------------------------------
 
 /** An expression whose value the statement fixes: no column, subquery, variable or volatile function in it. */
 export function constantNode(e: unknown): boolean {
@@ -1148,6 +1148,8 @@ export function constantNode(e: unknown): boolean {
   if (n.kind === NODE.CALL && VARIES_PER_EVALUATION.has(String(n.name).toUpperCase())) return false
   return Object.values(e).every((v) => typeof v !== 'object' || constantNode(v))
 }
+
+// --- TIME against DATETIME --------------------------------------------------------
 
 /**
  * A TIME compared with a DATETIME, as 8.4.11 compares them. A constant
@@ -1561,11 +1563,6 @@ export function aggregate(types: readonly ResultType[], nullable: boolean, conne
   return { ...intType(Math.max(...live.map((t) => t.length)), nullable, live.every((t) => t.unsigned)), field }
 }
 
-/**
- * A value brought to an aggregated result type, as `COALESCE` and `IFNULL`
- * return theirs: `COALESCE(1, 1.5)` is `1.0`. (`IF` and `CASE` do not — `IF(1, 1,
- * 0.5)` is `1` — which 8.4.11 settled, not the manual.)
- */
 const FLOAT_PARTNERS: ReadonlySet<number> = new Set([FIELD_TYPE.TINY, FIELD_TYPE.SHORT, FIELD_TYPE.INT24, FIELD_TYPE.LONGLONG, FIELD_TYPE.YEAR])
 
 /** A value as a double of this type: a FLOAT's text, or a fixed number of decimals, or neither. */
@@ -1578,6 +1575,11 @@ export function doubleOf(v: Value, t: ResultType): Value {
   return { kind: 'double', v: n, ...(float ? { float: true as const } : {}), ...(decimals === undefined ? {} : { decimals }) }
 }
 
+/**
+ * A value brought to an aggregated result type, as `COALESCE` and `IFNULL`
+ * return theirs: `COALESCE(1, 1.5)` is `1.0`. (`IF` and `CASE` do not — `IF(1, 1,
+ * 0.5)` is `1` — which 8.4.11 settled, not the manual.)
+ */
 export function convertTo(v: Value, t: ResultType): Value {
   if (v === null) return null
   switch (t.kind) {
