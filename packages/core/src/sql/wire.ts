@@ -46,7 +46,8 @@ function textOf(v: Exclude<Value, null>, t: ResultType): string {
 export function toWire(v: Value, t: ResultType, protocol: WireProtocol, session: Session): RowValue {
   if (v === null) return null
   if (v.kind === 'bytes') return v.v
-  if (v.kind === 'int' && v.str !== undefined) {
+  // A BIT's bytes go as bytes where the result holds bytes; under an integer result, as its number (8.4.11: `COALESCE(bt, u)` is 49).
+  if (v.kind === 'int' && v.str !== undefined && (t.kind !== 'int' || t.field === FIELD_TYPE.BIT)) {
     // A BIT's bytes under a DECIMAL holder are text in the numbers' charset,
     // latin1, converted for the client as any text is (8.4.11: 0xFF comes as C3 BF).
     return t.kind === 'decimal' ? session.transcoder.encode(session.transcoder.decode(v.str, LATIN1_SWEDISH_CI), session.characterSet) : v.str

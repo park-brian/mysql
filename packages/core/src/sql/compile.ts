@@ -1685,7 +1685,7 @@ export function aggregate(types: readonly ResultType[], nullable: boolean, conne
   if (live.length === 0) return type
   // JSON among other types is a LONGBLOB wherever it stands, which a left fold would lose (8.4.11: `COALESCE(js, tm, d)`).
   const json = live.some((t) => t.kind === 'json')
-  const merged = json ? 'LONG_BLOB' : live.map(mergeTypeOf).reduce((a, b) => mergeTypes(a, b) as MergeType)
+  const merged = signedness(live, json ? 'LONG_BLOB' : live.map(mergeTypeOf).reduce((a, b) => mergeTypes(a, b) as MergeType))
   const field = merged === 'VARCHAR' ? FIELD_TYPE.VAR_STRING : FIELD_TYPE[merged]
   switch (merged) {
     case 'DATE':
@@ -1701,6 +1701,9 @@ export function aggregate(types: readonly ResultType[], nullable: boolean, conne
     case 'LONGLONG':
     case 'YEAR':
       return type.kind === 'int' ? { ...type, field } : { ...intType(Math.max(...live.map((t) => t.length)), nullable, live.every((t) => t.unsigned)), field }
+    case 'NEWDECIMAL':
+      // BIGINT UNSIGNED beside a signed integer: a DECIMAL of as many digits as the widest (8.4.11: 21 wide).
+      return type.kind === 'int' ? decimalType(Math.max(...live.map(intDigits)), 0, nullable) : type
     case 'FLOAT':
     case 'DOUBLE':
       return type.kind === 'double' ? { ...type, field } : type
@@ -1716,6 +1719,24 @@ export function aggregate(types: readonly ResultType[], nullable: boolean, conne
     default:
       return type
   }
+}
+
+const INTEGERS: readonly MergeType[] = ['TINY', 'SHORT', 'INT24', 'LONG', 'LONGLONG', 'NEWDECIMAL']
+
+/**
+ * The merge table's integers are signed ones. An unsigned one beside a signed
+ * one needs the next larger type to hold both, BIGINT UNSIGNED a DECIMAL; and
+ * a BIT, unsigned, beside only unsigned integers is a BIGINT rather than the
+ * DECIMAL it is beside a signed one (8.4.11: TINYINT with TINYINT UNSIGNED is
+ * SMALLINT, INT with INT UNSIGNED BIGINT). YEAR takes no part.
+ */
+function signedness(live: readonly ResultType[], merged: MergeType): MergeType {
+  const ints = live.filter((t) => t.kind === 'int' && t.field !== FIELD_TYPE.YEAR && !isBits(t))
+  if (live.some(isBits) && merged === 'NEWDECIMAL' && ints.length > 0 && ints.every((t) => t.unsigned) && live.every((t) => t.kind === 'int' || t.kind === 'null')) return 'LONGLONG'
+  const rank = INTEGERS.indexOf(merged)
+  if (rank === -1 || !ints.some((t) => t.unsigned) || !ints.some((t) => !t.unsigned)) return merged
+  const promoted = Math.max(rank, ...ints.filter((t) => t.unsigned).map((t) => INTEGERS.indexOf(mergeTypeOf(t)) + 1))
+  return INTEGERS[Math.min(promoted, INTEGERS.length - 1)] as MergeType
 }
 
 /** A type's field type as the merge table names it: ENUM, SET and the TEXT sizes are read from the column. */
@@ -1942,7 +1963,8 @@ function caseExpr(e: CaseNode, ctx: CompileContext): Compiled {
         const hit = operand === undefined ? truth(w.when.eval(r, env)) === true : compareValues(subject ?? null, w.when.eval(r, env)) === 0
         if (hit) return type.kind === 'double' ? doubleOf(w.then.eval(r, env), type) : (thens[i] as Compiled['eval'])(r, env)
       }
-      return elseOf === undefined ? null : elseOf(r, env)
+      if (elseOf === undefined) return null
+      return type.kind === 'double' ? doubleOf(elseOf(r, env), type) : elseOf(r, env)
     },
     type,
   }
