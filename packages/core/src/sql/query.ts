@@ -13,14 +13,14 @@ import type { ColumnDef, Table, TableDef, ViewDef } from '@myjs/engine'
 import { NODE, QUERY, REF, TOKEN, deparse, lex, parseStatement, type Expression, type OrderItem, type QueryBody, type QueryExpression, type SelectNode, type SetOperationNode, type TableName, type Token } from '@myjs/parser'
 import { messages, sqlError, type ColumnDefinition, type ResultSet, type RowValue } from '@myjs/protocol'
 import { intValue, integerRange, toInteger, truth, withoutHex, type Value } from '@myjs/types'
-import { compile, convertTo, EMPTY_SCOPE, type CompileContext, type Compiled, type Env, type GroupKeys, type Row, type Scope, type SubqueryPlan } from './compile.ts'
+import { compile, EMPTY_SCOPE, type CompileContext, type Compiled, type Env, type GroupKeys, type Row, type Scope, type SubqueryPlan } from './compile.ts'
 import { AggregateSink, chooseStrategy, containsAggregate, groupRows, isAggregate } from './group.ts'
 import { WindowSink, applyWindows, containsWindow } from './window.ts'
 import { columnDefinition, intType, type ResultType } from './meta.ts'
 import { FIELD_TYPE, expectTyped } from '@myjs/bytes'
 import { requireCollationInfo } from '@myjs/charsets'
-import { distinct, filter, limit, project, scan, sort, type ScannedRow, type SortKey } from './operators.ts'
-import { accessRows, chooseAccess, type Access } from './plan.ts'
+import { distinct, filter, limit, project, sort, type SortKey } from './operators.ts'
+import { accessRows, chooseAccess } from './plan.ts'
 import { TableScope } from './scope.ts'
 import { planFrom, type DerivedSource, type FromContext, type FromPlan, type JoinCondition } from './from.ts'
 import { rowKey } from './keys.ts'
@@ -496,12 +496,6 @@ function readsOuter(q: unknown, aliases: ReadonlySet<string>): boolean {
     return Object.values(x).some((v) => (Array.isArray(v) ? v.some(visit) : typeof v === 'object' && visit(v)))
   }
   return visit(q)
-}
-
-function containsSubquery(e: unknown): boolean {
-  if (e === null || typeof e !== 'object') return false
-  if ((e as { kind?: string }).kind === NODE.SUBQUERY) return true
-  return Object.values(e).some((v) => (Array.isArray(v) ? v.some(containsSubquery) : typeof v === 'object' && containsSubquery(v)))
 }
 
 /** The FROM tables a select-list scalar subquery that aggregates without GROUP BY reads, by qualified name. */

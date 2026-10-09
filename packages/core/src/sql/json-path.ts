@@ -39,6 +39,7 @@ import {
 } from '@myjs/types'
 import type { Compiled } from './compile.ts'
 import { charWidth, intType, jsonType, stringType, type ResultType } from './meta.ts'
+import { unregistered } from './registry.ts'
 
 /** The collation of every text these functions make, whatever the connection's (8.4.11: `JSON_UNQUOTE('"ABC"') = 'abc'` is 0). */
 const UTF8MB4_BIN = 46
@@ -422,7 +423,10 @@ function extract(doc: JsonDoc, paths: readonly JsonPath[]): Value {
 }
 
 /** A JSON function over paths, or `undefined` for another name. */
-export function jsonPathFunction(name: string, args: readonly Compiled[], callName: string): Compiled | undefined {
+/** The functions over a JSON document and a path. */
+export const JSON_PATH_FUNCTIONS: ReadonlySet<string> = new Set(['JSON_EXTRACT', 'JSON_UNQUOTE', 'JSON_CONTAINS', 'JSON_CONTAINS_PATH', 'JSON_TYPE', 'JSON_LENGTH', 'JSON_DEPTH', 'JSON_KEYS', 'JSON_VALID', 'JSON_OVERLAPS'])
+
+export function jsonPathFunction(name: string, args: readonly Compiled[], callName: string): Compiled {
   const fn = name.toLowerCase()
   const arity = (min: number, max: number) => {
     if (args.length < min || args.length > max) throw sqlError('ER_WRONG_PARAMCOUNT_TO_NATIVE_FCT', `Incorrect parameter count in the call to native function '${callName}'`)
@@ -549,7 +553,7 @@ export function jsonPathFunction(name: string, args: readonly Compiled[], callNa
         type: intType(21, true),
       }
     default:
-      return undefined
+      throw unregistered(name)
   }
 }
 

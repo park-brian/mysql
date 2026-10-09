@@ -5,7 +5,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { MemoryVfs, type VfsFile } from '@myjs/vfs'
-import { ClusteredIndex, EngineError, Store, externalRefs, verifyStore, type BTree, type Redo, type RecordLayout } from '@myjs/engine'
+import { ClusteredIndex, EngineError, Store, verifyStore, type BTree, type Redo, type RecordLayout } from '@myjs/engine'
 
 const PAGE = 1024
 const be = (n: number) => Uint8Array.of(n >>> 24, (n >>> 16) & 0xff, (n >>> 8) & 0xff, n & 0xff)

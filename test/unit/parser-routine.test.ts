@@ -7,7 +7,6 @@ import { StubExecutor, charsetTranscoder } from '@myjs/core'
 import {
   ParseError,
   STATEMENT,
-  deparse,
   parseStatement,
   parseStatements,
   type CallStatementNode,
@@ -15,7 +14,7 @@ import {
   type CreateRoutineNode,
   type CreateTriggerNode,
 } from '@myjs/parser'
-import { parsed as parse, refused, roundTrip, same, withoutPositions } from '../../tools/lib/round-trip.mjs'
+import { parsed as parse, refused, same, withoutPositions } from '../../tools/lib/round-trip.mjs'
 
 const routine = (sql: string) => parse(sql) as CreateRoutineNode
 

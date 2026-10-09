@@ -52,7 +52,6 @@ export const JSON_FALSE: JsonDoc = { t: 'bool', v: false }
 
 const INT64_MIN = -(2n ** 63n)
 const INT64_MAX = 2n ** 63n - 1n
-const UINT64_MAX = 2n ** 64n - 1n
 
 /** An integer as JSON holds it: INT64 where it fits, UINT64 past that. */
 export function jsonInteger(v: bigint): JsonDoc {

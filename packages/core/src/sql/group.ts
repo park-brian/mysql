@@ -43,7 +43,6 @@ import {
   intValue,
   jsonObject,
   jsonValue,
-  orderValues,
   sortValues,
   stringValue,
   sumAccumulator,

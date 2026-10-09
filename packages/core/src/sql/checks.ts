@@ -30,6 +30,7 @@ import { escapeString, printExpression } from './print.ts'
 import { compileContext, type Run } from './query.ts'
 import { TableScope } from './scope.ts'
 import type { CatalogApi } from './temporary.ts'
+import { CONDITION_FUNCTIONS, NOT_ROW_DETERMINED } from './registry.ts'
 
 export interface CheckDef {
   readonly name: string
@@ -74,15 +75,6 @@ function conditionText(sql: string, tokens: readonly Token[], check: CheckConstr
   return sql.slice(open.end).trim()
 }
 
-/** Functions whose answer is not the row's alone: what 3814 names. */
-const DISALLOWED = new Set([
-  'NOW', 'CURRENT_TIMESTAMP', 'LOCALTIME', 'LOCALTIMESTAMP', 'SYSDATE', 'CURDATE', 'CURRENT_DATE', 'CURTIME', 'CURRENT_TIME', 'UTC_DATE', 'UTC_TIME', 'UTC_TIMESTAMP', 'UNIX_TIMESTAMP',
-  'RAND', 'UUID', 'UUID_SHORT', 'RANDOM_BYTES', 'CONNECTION_ID', 'CURRENT_USER', 'USER', 'SESSION_USER', 'SYSTEM_USER', 'CURRENT_ROLE', 'DATABASE', 'SCHEMA', 'FOUND_ROWS', 'LAST_INSERT_ID', 'ROW_COUNT',
-  'GET_LOCK', 'RELEASE_LOCK', 'RELEASE_ALL_LOCKS', 'IS_FREE_LOCK', 'IS_USED_LOCK', 'SLEEP', 'BENCHMARK', 'LOAD_FILE', 'MASTER_POS_WAIT', 'SOURCE_POS_WAIT', 'VERSION',
-])
-
-/** The functions that are conditions themselves, as a comparison is. */
-const BOOLEAN_FUNCTIONS = new Set(['JSON_VALID', 'REGEXP_LIKE', 'ISNULL', 'STRCMP', 'JSON_CONTAINS', 'JSON_CONTAINS_PATH', 'JSON_OVERLAPS'])
 const CONDITIONS = new Set(['MEMBER OF', '=', '<>', '!=', '<', '<=', '>', '>=', '<=>', 'AND', '&&', 'OR', '||', 'XOR', 'IN', 'NOT IN', 'BETWEEN', 'NOT BETWEEN', 'LIKE', 'NOT LIKE', 'REGEXP', 'NOT REGEXP', 'RLIKE', 'NOT RLIKE', 'IS', 'IS NOT'])
 
 function isCondition(e: Expression): boolean {
@@ -94,7 +86,7 @@ function isCondition(e: Expression): boolean {
     case NODE.LITERAL:
       return e.type === 'bool'
     case NODE.CALL:
-      return BOOLEAN_FUNCTIONS.has(e.name.toUpperCase())
+      return CONDITION_FUNCTIONS.has(e.name.toUpperCase())
     case NODE.ROW:
       return e.items.length === 1 && isCondition(e.items[0] as Expression)
     default:
@@ -147,7 +139,7 @@ export function withChecks(catalog: CatalogApi, schema: string, spec: TableSpec,
         throw sqlError('ER_CHECK_CONSTRAINT_FUNCTION_IS_NOT_ALLOWED', `An expression of a check constraint '${name}' contains disallowed function.`)
       } else if (node.kind === NODE.VARIABLE) {
         throw sqlError('ER_CHECK_CONSTRAINT_VARIABLES', `An expression of a check constraint '${name}' cannot refer to a user or system variable.`)
-      } else if (node.kind === NODE.CALL && DISALLOWED.has(String(node['name']).toUpperCase())) {
+      } else if (node.kind === NODE.CALL && NOT_ROW_DETERMINED.has(String(node['name']).toUpperCase())) {
         throw sqlError('ER_CHECK_CONSTRAINT_NAMED_FUNCTION_IS_NOT_ALLOWED', `An expression of a check constraint '${name}' contains disallowed function: ${String(node['name']).toLowerCase()}.`)
       }
     }

@@ -30,6 +30,7 @@ import {
 import type { Compiled, Env, Row } from './compile.ts'
 import { jsonType, type ResultType } from './meta.ts'
 import { bitBytes } from './wire.ts'
+import { unregistered } from './registry.ts'
 
 /** A value of type `t` as JSON; SQL NULL is JSON null. */
 export function asJson(v: Value, t: ResultType): JsonDoc {
@@ -50,8 +51,11 @@ function opaqueField(t: ResultType): number {
   return FIELD_TYPE.VARCHAR
 }
 
-/** `JSON_ARRAY(a, …)` and `JSON_OBJECT(k, v, …)`; `undefined` for another name. */
-export function jsonConstructor(name: string, args: readonly Compiled[], callName: string): Compiled | undefined {
+/** The JSON constructors compiled here. */
+export const JSON_CONSTRUCTORS: ReadonlySet<string> = new Set(['JSON_ARRAY', 'JSON_OBJECT'])
+
+/** `JSON_ARRAY(a, …)` and `JSON_OBJECT(k, v, …)`. */
+export function jsonConstructor(name: string, args: readonly Compiled[], callName: string): Compiled {
   if (name === 'JSON_ARRAY') {
     return {
       eval: (r, env) => jsonValue({ t: 'array', v: args.map((a) => asJson(a.eval(r, env), a.type)) }),
@@ -74,7 +78,7 @@ export function jsonConstructor(name: string, args: readonly Compiled[], callNam
       type: jsonType(true),
     }
   }
-  return undefined
+  throw unregistered(name)
 }
 
 /**

@@ -44,12 +44,10 @@ import {
   fullYear,
   intValue,
   monthToPeriod,
-  parseDateTime,
   parseTime,
   periodToMonth,
   scanDateTime,
   stringValue,
-  textOf,
   timeDiff,
   timeOf,
   timeStructOf,
@@ -69,6 +67,7 @@ import {
 import { asNumber, compile, constantNode, raise, rowNumber, type Compiled, type CompileContext, type Env } from './compile.ts'
 import { dateAdd } from './interval.ts'
 import { charWidth, datetimeType, decimalType, intType, stringType, type ResultType } from './meta.ts'
+import { unregistered } from './registry.ts'
 
 type Row = Parameters<Compiled['eval']>[0]
 
@@ -205,28 +204,6 @@ function timePrecision(c: Compiled, constant: Value | undefined): number {
   return Math.min(t.kind === 'null' ? 0 : t.scale, 6)
 }
 
-/** A temporal argument read as either, as `eval_temporal` reads one: a datetime, a TIME, or NULL. */
-function temporalOf(v: Value, env: Env): { readonly dt: MysqlDateTime } | { readonly time: MysqlTime } | null {
-  if (v === null) return null
-  if (v.kind === 'datetime') return { dt: v.v }
-  if (v.kind === 'time') return { time: v.v }
-  if (v.kind === 'string' || v.kind === 'bytes') {
-    // Text with a date part is a datetime; anything else a time.
-    const text = textOf(v)
-    const s = scanDateTime(text)
-    if (typeof s !== 'string' && s.fields > 3) {
-      if (s.truncated) raise(env, 1292, `Truncated incorrect datetime value: '${text}'`)
-      return { dt: s.v }
-    }
-    const t = settle(timeOf(v), env)
-    return t === null ? null : { time: t }
-  }
-  const d = dateOf(v, FUZZY, today(env))
-  if (d.v !== null && d.warning === undefined) return { dt: d.v }
-  const t = settle(timeOf(v), env)
-  return t === null ? null : { time: t }
-}
-
 /** An integer argument as `val_int` reads it, 1292 for text that is not one. */
 function intReader(c: Compiled): (r: Row, env: Env) => bigint | null {
   const n = asNumber(c, 'INTEGER')
@@ -236,9 +213,8 @@ function intReader(c: Compiled): (r: Row, env: Env) => bigint | null {
   }
 }
 
-/** The broken-down value DATE_FORMAT writes: a datetime, or a TIME with its hours whole. */
+/** The broken-down value DATE_FORMAT writes from a datetime. */
 const brokenOfDatetime = (v: MysqlDateTime): Broken => ({ negative: false, ...v })
-const brokenOfTime = (t: MysqlTime): Broken => ({ negative: t.negative, year: 0, month: 0, day: 0, hour: t.days * 24 + t.hour, minute: t.minute, second: t.second, microsecond: t.microsecond })
 
 const INT = (width: number, nullable = true): ResultType => intType(width, nullable)
 
@@ -303,8 +279,7 @@ const EXTRACT_WIDTH: Readonly<Record<string, number>> = {
 }
 
 /** The date and time functions, or undefined for any other name. */
-export function temporalFunction(name: string, e: CallNode, ctx: CompileContext): Compiled | undefined {
-  if (!TEMPORAL_FUNCTIONS.has(name)) return undefined
+export function temporalFunction(name: string, e: CallNode, ctx: CompileContext): Compiled {
   const conn = ctx.connectionCollation
   const count = (min: number, max = min): void => {
     if (e.args.length < min || e.args.length > max) throw sqlError('ER_WRONG_PARAMCOUNT_TO_NATIVE_FCT', `Incorrect parameter count in the call to native function '${e.name}'`)
@@ -813,7 +788,7 @@ export function temporalFunction(name: string, e: CallNode, ctx: CompileContext)
       }
     }
   }
-  return undefined
+  throw unregistered(name)
 }
 
 /** TIMESTAMPDIFF: whole units from `a` to `b`, months counted by the calendar and cut toward zero. */

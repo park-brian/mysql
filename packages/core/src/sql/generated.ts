@@ -25,6 +25,7 @@ import type { ColumnDef } from '@myjs/engine'
 import { NODE, parseExpression, type Expression } from '@myjs/parser'
 import { sqlError } from '@myjs/protocol'
 import { escapeString, printExpression, Unprintable } from './print.ts'
+import { NOT_ROW_DETERMINED } from './registry.ts'
 
 export interface Generation {
   /** The expression as written. */
@@ -62,43 +63,6 @@ export function stampGenerated(columns: readonly ColumnDef[], charset: string): 
   return columns.map((c) => (generationOf(c) === undefined || c.attributes?.['generatedCharset'] !== undefined ? c : { ...c, attributes: { ...c.attributes, generatedCharset: charset } }))
 }
 
-/** Functions whose value is not the row's alone, by the name 3763 gives them. */
-const DISALLOWED: Readonly<Record<string, string>> = {
-  RAND: 'rand',
-  UUID: 'uuid',
-  UUID_SHORT: 'uuid_short',
-  NOW: 'now',
-  CURRENT_TIMESTAMP: 'now',
-  LOCALTIME: 'now',
-  LOCALTIMESTAMP: 'now',
-  SYSDATE: 'sysdate',
-  CURDATE: 'curdate',
-  CURRENT_DATE: 'curdate',
-  CURTIME: 'curtime',
-  CURRENT_TIME: 'curtime',
-  UTC_DATE: 'utc_date',
-  UTC_TIME: 'utc_time',
-  UTC_TIMESTAMP: 'utc_timestamp',
-  UNIX_TIMESTAMP: 'unix_timestamp',
-  CONNECTION_ID: 'connection_id',
-  USER: 'user',
-  CURRENT_USER: 'current_user',
-  SESSION_USER: 'session_user',
-  SYSTEM_USER: 'system_user',
-  DATABASE: 'database',
-  SCHEMA: 'database',
-  LAST_INSERT_ID: 'last_insert_id',
-  FOUND_ROWS: 'found_rows',
-  ROW_COUNT: 'row_count',
-  SLEEP: 'sleep',
-  GET_LOCK: 'get_lock',
-  RELEASE_LOCK: 'release_lock',
-  RANDOM_BYTES: 'random_bytes',
-  BENCHMARK: 'benchmark',
-  LOAD_FILE: 'load_file',
-  VERSION: 'version',
-}
-
 /** The table's generated columns, checked as CREATE TABLE and ALTER TABLE check them. */
 export function checkGenerated(columns: readonly ColumnDef[]): void {
   columns.forEach((column, at) => {
@@ -123,7 +87,7 @@ export function checkGenerated(columns: readonly ColumnDef[]): void {
         case NODE.VARIABLE:
           throw sqlError('ER_DEFAULT_VAL_GENERATED_VARIABLES', `Default value expression of column '${column.name}' cannot refer user or system variables.`)
         case NODE.CALL: {
-          const named = DISALLOWED[String(n.name).toUpperCase()]
+          const named = NOT_ROW_DETERMINED.get(String(n.name).toUpperCase())
           if (named !== undefined) throw sqlError('ER_GENERATED_COLUMN_NAMED_FUNCTION_IS_NOT_ALLOWED', `Expression of generated column '${column.name}' contains a disallowed function: ${named}.`)
           break
         }

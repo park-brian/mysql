@@ -15,7 +15,7 @@
 // name.
 import { FIELD_TYPE, MyjsError, expectTyped } from '@myjs/bytes'
 import { sqlError, messages, type OkResult } from '@myjs/protocol'
-import type { ColumnDef, FieldBytes, IndexDef, TableDef, TableSpec } from '@myjs/engine'
+import type { ColumnDef, FieldBytes, IndexDef, TableDef } from '@myjs/engine'
 import { KEY, NODE, STATEMENT, deparse, type AlterAction, type AlterTableNode, type ColumnDefinition, type Expression } from '@myjs/parser'
 import { decodeField, encodeField, type StoreContext, type Value } from '@myjs/types'
 import { raise, type Compiled } from './compile.ts'
