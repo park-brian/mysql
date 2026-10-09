@@ -1480,7 +1480,10 @@ bulk statement pauses between its batches instead of stalling every other
 connection (§11). The query API of §17 exists, typed, and a client of the
 wire protocol whose answers are compared with `mysql2/promise`'s. `myjs`
 packs, installs into an empty project and runs there, in CI; 0.3 waits only
-on being published. Next are the cost-based planner, `db.stream()` and the
+on being published. The cost-based planner is built: statistics stored by
+ANALYZE, MySQL's cost model choosing access paths and join order, and
+`EXPLAIN FORMAT=TREE` printed from the same tree of iterators that runs,
+agreeing with 8.4.11 on 2,082 of 2,248 plans. Next are `db.stream()` and the
 browser. The core bundle is about 290 KB gzipped against a budget of 500 KB,
 with the UCA weights in a separate chunk loaded on demand.
 
