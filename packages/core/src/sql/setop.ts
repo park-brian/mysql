@@ -114,13 +114,13 @@ export function setOperationType(types: readonly ResultType[], connectionCollati
 }
 
 /**
- * A set operation that is a branch of a different one is materialized as a
- * table of its own, and its columns are as nullable as its rows can be:
- * INTERSECT only where every side is, EXCEPT as its left side, UNION where any
- * side is. The outermost operation — and a branch of the same operator, which
- * 8.4.11 flattens into it — is nullable where any side is. So `(b INTERSECT
- * a) UNION a` is NOT NULL over a nullable `b`, and `(a INTERSECT b) INTERSECT
- * a` is not.
+ * A set operation that is a branch of a UNION is materialized as a table of
+ * its own, and its columns are as nullable as its rows can be: INTERSECT only
+ * where every side is, EXCEPT as its left side. The outermost operation, a
+ * branch of the same operator (which 8.4.11 flattens into it), and a branch
+ * of an INTERSECT or an EXCEPT are nullable where any side is. So `(b
+ * INTERSECT a) UNION a` is NOT NULL over a nullable `b`, and `a EXCEPT (b
+ * INTERSECT a)` and `(a INTERSECT b) INTERSECT a` are not (8.4.11, M5.48).
  */
 export function nestedNullability(op: SetOperationNode['op'], left: boolean, right: boolean): boolean {
   return op === 'UNION' ? left || right : op === 'INTERSECT' ? left && right : left

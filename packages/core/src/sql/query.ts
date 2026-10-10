@@ -375,7 +375,9 @@ function planSelect(run: Run, q: QueryExpression, node: SelectNode): SelectPlan 
       const name = item.compiled.type.column?.orgName.toLowerCase()
       return name !== undefined && [...facts.pins].some((c) => c.name.toLowerCase() === name)
     }
-    const constant = zero || facts.impossible || facts.constTable || items.every((item) => pinnedName(item))
+    // The range optimizer's proofs too: `g BETWEEN NULL AND 4` over an indexed `g` (8.4.11).
+    const impossible = facts.impossible || (from !== undefined && optimizerFacts(from, node.where, limitCount, compileContext(run, EMPTY_SCOPE, 'where clause'), run.env, false).empty)
+    const constant = zero || impossible || facts.constTable || items.every((item) => pinnedName(item))
     if (!constant) {
       deduplicated = true
       // A constant is not copied into the table: `SELECT DISTINCT NULL, x`
@@ -401,16 +403,20 @@ function planSelect(run: Run, q: QueryExpression, node: SelectNode): SelectPlan 
     // ORDER BY SCHEMA_NAME` over INFORMATION_SCHEMA's join streams nothing).
     const constantOrder = node.distinct !== true && (q.orderBy ?? []).every((o) => (o.expr.kind === NODE.COLUMN && pinnedByWhere(node.where, o.expr.parts)) || constantKey(o))
     const sortedFirst = constantOrder || (node.distinct !== true && (source === undefined ? from.sortsFirst(orderAliases(q, items, lookup)) : nestedLoopSemijoin(node.where, scope) && !node.items.some((i) => correlatedIn(i.expr, scope))))
-    if (!facts.empty && !semijoinEmpty(run, node.where) && !sortedFirst) {
+    const consts = new Set(facts.constTables.map((t) => t.alias))
+    const fixed = new Set([...consts, ...(facts.nullTables ?? [])])
+    // With every other table a constant, a DISTINCT is one table's, and its
+    // temporary table is keyed as one table's is: GROUP_FLAG on what can be
+    // NULL (8.4.11: `SELECT DISTINCT b.nl, a.x FROM a LEFT JOIN b ON FALSE`).
+    const rest = from.tables.filter((t) => !fixed.has(t.alias))
+    const alone = node.distinct === true && source === undefined && rest.length === 1
+    // …and one that selects that table's unique key is no DISTINCT at all (8.4.11: `SELECT DISTINCT
+    // lt.n, p1.name FROM lt LEFT JOIN pa AS p1 ON … AND p1.id <> NULL` reads lt alone, flags kept).
+    const keyed = alone && facts.nullTables !== undefined && rest[0]?.def !== undefined && holdsKey(rest[0].def, node.items, rest[0].alias)
+    if (!facts.empty && !semijoinEmpty(run, node.where) && !sortedFirst && !keyed) {
       if (node.distinct === true) deduplicated = true
       else streamed = true
-      const consts = new Set(facts.constTables.map((t) => t.alias))
-      const fixed = new Set([...consts, ...(facts.nullTables ?? [])])
       const own = items.map((i) => i.compiled.type)
-      // With every other table a constant, a DISTINCT is one table's, and its
-      // temporary table is keyed as one table's is: GROUP_FLAG on what can be
-      // NULL (8.4.11: `SELECT DISTINCT b.nl, a.x FROM a LEFT JOIN b ON FALSE`).
-      const alone = node.distinct === true && source === undefined && from.tables.filter((t) => !fixed.has(t.alias)).length === 1
       items.forEach((item) => {
         if (item.expr !== undefined && !refersToRow(item.expr, lookup, consts)) return
         const temporary = !alone ? 'stream' : item.expr === undefined || refersToRow(item.expr, lookup, fixed) ? true : 'pinned'
@@ -710,7 +716,8 @@ function constRows(run: Run, from: FromPlan | undefined, node: SelectNode): Read
   if (facts.empty) return new Set()
   const aliases = new Set(facts.constTables.map((t) => t.alias))
   if (aliases.size > 0 || facts.nullTables !== undefined) from.constants(aliases, facts.straight, facts.nullTables)
-  return aliases
+  // An outer join's tables whose ON never holds are NULL throughout: constants as well.
+  return facts.nullTables === undefined ? aliases : new Set([...aliases, ...facts.nullTables])
 }
 
 /** The one base table a FROM's const tables leave, and where its columns begin in the row; undefined unless every other table is one of `constants`. */
@@ -1303,7 +1310,7 @@ function planSetOperation(run: Run, node: SetOperationNode, parent?: SetOperatio
   const leaves = [...leavesOf(left), ...leavesOf(right)]
   const op = setOperation(node, left.columns, right.columns, run.env.session.characterSet, leaves)
   const columns =
-    parent === undefined || parent === node.op
+    parent !== 'UNION' || parent === node.op
       ? op.columns
       : op.columns.map((c, i) => ({ name: c.name, type: { ...c.type, nullable: nestedNullability(node.op, (left.columns[i] as { type: ResultType }).type.nullable, (right.columns[i] as { type: ResultType }).type.nullable) } }))
   // EXPLAIN: a chain of one operator is one temporary table, its branches in order.
@@ -1551,7 +1558,11 @@ function planGrouped(
   const pinned = alone === undefined ? new Set<string>() : new Set([...whereFacts(run, alone.def, alone.alias, node.where).pins].map((c) => c.name))
   const keyColumns = keys.map((k) => (k.index === undefined || alone === undefined ? undefined : alone.def.columns[k.index - alone.offset]?.name)).filter((c) => c === undefined || !pinned.has(c))
   const distinctAggregate = [...node.items.map((i) => i.expr), ...(node.having === undefined ? [] : [node.having]), ...(q.orderBy ?? []).map((o) => o.expr)].some((e) => needsSortedGroups(e))
-  const { strategy, index: groupIndex } = chooseStrategy(alone?.def, keyColumns, rollup, distinctAggregate)
+  // Keys over const tables alone are constants, one group at most: grouped as they come, and not sorted
+  // (8.4.11: `FROM p CROSS JOIN q WHERE p.id = 5 GROUP BY p.g ORDER BY 1, 2` is a Group aggregate over q).
+  const constTable = source !== undefined && run.preparing !== true && whereFacts(run, source.def, source.alias, node.where).constTable
+  const oneGroup = !rollup && keys.length > 0 && (constTable || (constants.size > 0 && keys.every((k) => !refersToRow(k.expr, lookup, constants))))
+  const { strategy, index: groupIndex } = oneGroup ? { strategy: 'index' as const, index: undefined } : chooseStrategy(alone?.def, keyColumns, rollup, distinctAggregate)
 
   const level = width + keys.length
   const sink = new AggregateSink(compileContext(run, lookup, 'field list'), level + 1)
@@ -1646,7 +1657,7 @@ function planGrouped(
       if (key.index !== undefined && e.kind === NODE.COLUMN) return safeIndex(lookup, e.parts) === key.index
       return deparse(e) === key.text
     })
-  const stream = (strategy === 'sort' || strategy === 'index') && (q.orderBy ?? []).length > 0 && !orderMatchesKeys
+  const stream = (strategy === 'sort' || strategy === 'index') && (q.orderBy ?? []).length > 0 && !orderMatchesKeys && !oneGroup
   const groupedLimit = q.limit === undefined ? undefined : limitValue(run, q.limit.count, 'LIMIT')
   if (from !== undefined && scope !== undefined) from.sortedBy(sortTable(q.orderBy?.map((o) => o.expr), node.groupBy?.items, selectItems, scope), groupedLimit === undefined ? Infinity : groupedLimit + (q.limit?.offset === undefined ? 0 : limitValue(run, q.limit.offset, 'LIMIT')))
   const facts = run.preparing === true ? undefined : optimizerFacts(from, node.where, groupedLimit, compileContext(run, EMPTY_SCOPE, 'where clause'), run.env, (node.options ?? []).includes('STRAIGHT_JOIN'))
@@ -1711,7 +1722,7 @@ function planGrouped(
     }
   }
   const plan = { width, keys: keys.map((k) => k.compiled), specs: sink.specs, strategy, rollup }
-  const sortsOutput = orderKeys.length > 0 && !(orderMatchesKeys && strategy !== 'temp')
+  const sortsOutput = orderKeys.length > 0 && !(orderMatchesKeys && strategy !== 'temp') && !oneGroup
   const groups = rollup ? 'Group aggregate with rollup' : 'Group aggregate'
   const stages: Stage[] = [
     ...(where === undefined ? [] : [filterStage(where)]),
@@ -1748,7 +1759,13 @@ function planGrouped(
         if (limitCount !== undefined || offset > 0) n = limitStage(offset, limitCount).describe(n) ?? n
         return [n]
       }
-      const source = from === undefined ? planNode('Rows fetched before execution') : withSubqueries(run, from.explain(run.env), 'where clause')
+      // A const table is read while planning: its row, if the WHERE holds of it, is what is grouped (8.4.11).
+      let fetched = false
+      if (constTable && from !== undefined) {
+        for (const _ of from.rows(undefined, run.env, { locking: false })) fetched = true
+        if (!fetched && strategy !== 'implicit') return [planNode('Zero rows')]
+      }
+      const source = from === undefined || fetched ? planNode('Rows fetched before execution') : withSubqueries(run, from.explain(run.env), 'where clause')
       const n = describeStages(source, stages)
       return n === undefined ? undefined : [n, ...subqueryNodes(run, 'field list')]
     },

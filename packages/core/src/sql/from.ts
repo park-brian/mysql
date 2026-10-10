@@ -636,7 +636,7 @@ function innerWherePossible(root: Node, where: Expression | undefined, scope: Ta
     let changed = visit(n.outer, nullable)
     if (n.left && !converted.has(n) && !nullable) {
       const inner = leafAliases(n.inner)
-      if (pool.some((c) => nullRejected(c, slot).some((i) => inner.has(scope.columnAt(i)?.table.alias ?? '')))) {
+      if (pool.some((c) => nullRejected(c, slot, (i) => scope.columnAt(i)?.table.alias).some((i) => inner.has(scope.columnAt(i)?.table.alias ?? '')))) {
         converted.add(n)
         pool.push(...splitAnd(n.onAst))
         changed = true

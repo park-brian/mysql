@@ -88,7 +88,7 @@ export function optimizerFacts(from: FromPlan | undefined, where: Expression | u
     changed = false
     from.joins.forEach((j, n) => {
       if (!j.left || converted.has(n)) return
-      const rejects = pool.some((c) => nullRejected(c, slot).some((i) => j.innerAliases.has(aliasOf(i) ?? '')))
+      const rejects = pool.some((c) => nullRejected(c, slot, aliasOf).some((i) => j.innerAliases.has(aliasOf(i) ?? '')))
       if (!rejects) return
       converted.add(n)
       changed = true
@@ -134,6 +134,15 @@ export function optimizerFacts(from: FromPlan | undefined, where: Expression | u
     if (l !== undefined && isConstant(c.right)) pinned.set(find(l), c.right)
     else if (r !== undefined && isConstant(c.left)) pinned.set(find(r), c.left)
   }
+  // `col IS NULL` holds its class to NULL, but only for finding const tables: `kl.g = ch.id AND kl.g IS
+  // NULL` is "no matching row in const table", while `ch.qty = k1.g AND k1.g IS NULL` is still a hash
+  // join (8.4.11).
+  const nullPinned = new Map<number, Expression>()
+  for (const c of pool) {
+    if (c.kind !== NODE.UNARY || c.op !== 'IS NULL') continue
+    const i = slot(c.operand)
+    if (i !== undefined) nullPinned.set(find(i), { kind: NODE.LITERAL, type: 'null', value: null, at: c.at } as Expression)
+  }
   const indexedClass = (index: number): boolean => {
     const root = find(index)
     for (const t of scope.tables) {
@@ -156,10 +165,13 @@ export function optimizerFacts(from: FromPlan | undefined, where: Expression | u
 
   // `inOn`: the range optimizer's proofs only, not `IS NULL` on a NOT NULL
   // column, which in an ON is still a join (8.4.11: a hash antijoin).
-  const impossible = (c: Expression, inOn = false): boolean => {
+  const impossible = (c: Expression, inOn = false, inner?: ReadonlySet<string>): boolean => {
     // An OR whose every side is impossible: `id IS NULL OR name IS NULL` over
     // NOT NULL columns is "Impossible WHERE" (8.4.11).
-    if (c.kind === NODE.BINARY && (c.op === 'OR' || c.op === '||')) return impossible(c.left, inOn) && impossible(c.right, inOn)
+    if (c.kind === NODE.BINARY && (c.op === 'OR' || c.op === '||')) return impossible(c.left, inOn, inner) && impossible(c.right, inOn, inner)
+    if (c.kind === NODE.BINARY && (c.op === 'AND' || c.op === '&&')) return impossible(c.left, inOn, inner) || impossible(c.right, inOn, inner)
+    // In an ON, only over the inner tables' columns: `p2.grp <> NULL` on the preserved side proves nothing (8.4.11).
+    if (inner !== undefined && !columnSlots(c, slot).every((i) => inner.has(aliasOf(i) ?? ''))) return false
     if (!inOn && c.kind === NODE.UNARY && c.op === 'IS NULL') {
       const i = slot(c.operand)
       const col = i === undefined ? undefined : columnAt(i)
@@ -210,7 +222,7 @@ export function optimizerFacts(from: FromPlan | undefined, where: Expression | u
     if (!j.left || converted.has(n)) return
     for (const a of j.innerAliases) nullable.delete(a)
     const never = splitAnd(j.on, []).some((c) => {
-      if (impossible(c, true)) return true
+      if (impossible(c, true, j.innerAliases)) return true
       const v = partialTruth(c, () => undefined, ctx, env, true)
       return v === false || v === null
     })
@@ -257,7 +269,7 @@ export function optimizerFacts(from: FromPlan | undefined, where: Expression | u
       if (index.parts.some((p) => p.prefix !== undefined)) continue
       const key = index.parts.map((p) => {
         const offset = def.columns.findIndex((c) => c.name === p.column)
-        const value = pinned.get(find(t.offset + offset))
+        const value = pinned.get(find(t.offset + offset)) ?? nullPinned.get(find(t.offset + offset))
         return value === undefined ? undefined : { column: def.columns[offset] as ColumnDef, value }
       })
       if (key.every((k) => k !== undefined)) {
@@ -291,7 +303,12 @@ export function constTablesHaveRows(facts: OptimizerFacts, ctx: CompileContext, 
 }
 
 /** The table slots a condition rejects NULL on: a comparison, BETWEEN, IN or LIKE with the column as its operand. */
-export function nullRejected(c: Expression, slot: (e: Expression) => number | undefined): number[] {
+export function nullRejected(c: Expression, slot: (e: Expression) => number | undefined, tableOf?: (i: number) => string | undefined): number[] {
+  // An OR rejects NULL on a table both its sides reject it on (`not_null_tables`): `ch.id BETWEEN … OR ch.id BETWEEN …`.
+  if (tableOf !== undefined && c.kind === NODE.BINARY && (c.op === 'OR' || c.op === '||')) {
+    const right = new Set(nullRejected(c.right, slot, tableOf).map(tableOf))
+    return nullRejected(c.left, slot, tableOf).filter((i) => right.has(tableOf(i)))
+  }
   if (c.kind === NODE.BINARY && ['=', '<', '<=', '>', '>=', '<>', '!=', 'BETWEEN', 'IN', 'LIKE', 'NOT IN', 'NOT BETWEEN', 'NOT LIKE'].includes(c.op)) {
     const out: number[] = []
     for (const side of [c.left, c.op === '=' || c.op === '<' || c.op === '<=' || c.op === '>' || c.op === '>=' || c.op === '<>' || c.op === '!=' ? c.right : undefined]) {
@@ -301,6 +318,17 @@ export function nullRejected(c: Expression, slot: (e: Expression) => number | un
     }
     return out
   }
+  return []
+}
+
+/** The table slots of a condition's columns, outside its subqueries. */
+function columnSlots(e: Expression, slot: (e: Expression) => number | undefined): number[] {
+  if (e.kind === NODE.COLUMN) {
+    const i = slot(e)
+    return i === undefined ? [] : [i]
+  }
+  if (e.kind === NODE.BINARY) return [e.left, e.right, ...(e.extra === undefined ? [] : Array.isArray(e.extra) ? e.extra : [e.extra as Expression])].flatMap((x) => columnSlots(x, slot))
+  if (e.kind === NODE.UNARY) return columnSlots(e.operand, slot)
   return []
 }
 
