@@ -730,7 +730,7 @@ function constRows(run: Run, from: FromPlan | undefined, node: SelectNode): Read
   if (facts.empty) return new Set()
   const aliases = new Set(facts.constTables.map((t) => t.alias))
   const readAhead = facts.readAhead ?? new Set<string>()
-  if (aliases.size > 0 || facts.nullTables !== undefined) from.constants(new Set([...aliases].filter((a) => !readAhead.has(a))), readAhead, facts.nullTables)
+  if (aliases.size > 0 || facts.nullTables !== undefined || facts.outerConstants !== undefined) from.constants(new Set([...aliases].filter((a) => !readAhead.has(a))), readAhead, facts.nullTables, facts.outerConstants)
   // An outer join's tables whose ON never holds are NULL throughout: constants as well.
   return facts.nullTables === undefined ? aliases : new Set([...aliases, ...facts.nullTables])
 }

@@ -63,6 +63,14 @@ export interface OptimizerFacts {
    */
   readonly readAhead?: ReadonlySet<string>
   /**
+   * An outer join's single inner table whose ON holds its PRIMARY or NOT NULL
+   * UNIQUE key to constants, with those conditions: read once, as a constant
+   * row the join NULL-complements where its other conditions fail (8.4.11:
+   * `q LEFT JOIN p ON p.id = 1` is "Constant row from p" under a nested-loop
+   * left join).
+   */
+  readonly outerConstants?: ReadonlyMap<string, readonly Expression[]>
+  /**
    * An outer join's inner tables whose ON can never hold, read as one
    * NULL-complemented row (8.4.11: `LEFT JOIN p1 ON … AND p1.id BETWEEN NULL
    * AND 4` over an indexed `id` plans no read of p1). Their columns are still
@@ -147,9 +155,9 @@ export function optimizerFacts(from: FromPlan | undefined, where: Expression | u
     if (l !== undefined && isConstant(c.right)) pinned.set(find(l), c.right)
     else if (r !== undefined && isConstant(c.left)) pinned.set(find(r), c.left)
   }
-  // `col IS NULL` holds its class to NULL, but only for finding const tables: `kl.g = ch.id AND kl.g IS
-  // NULL` is "no matching row in const table", while `ch.qty = k1.g AND k1.g IS NULL` is still a hash
-  // join (8.4.11).
+  // `col IS NULL` holds its class to NULL, but only for finding const tables by a PRIMARY KEY: `kl.g =
+  // ch.id AND kl.g IS NULL` is "no matching row in const table", while `ch.qty = k1.g AND k1.g IS NULL`
+  // is still a hash join (8.4.11).
   const nullPinned = new Map<number, Expression>()
   for (const c of pool) {
     if (c.kind !== NODE.UNARY || c.op !== 'IS NULL') continue
@@ -324,7 +332,8 @@ export function optimizerFacts(from: FromPlan | undefined, where: Expression | u
         const key = offsets.map((offset): ConstKeyPart | undefined => {
           const root = find(t.offset + offset)
           const column = def.columns[offset] as ColumnDef
-          const value = pinned.get(root) ?? nullPinned.get(root)
+          // NULL holds only a PRIMARY KEY: `p.name = k.s AND k.s IS NULL` over a unique `name` is a lookup (8.4.11).
+          const value = pinned.get(root) ?? (index.kind === 'primary' ? nullPinned.get(root) : undefined)
           if (value !== undefined) return { column, value }
           const other = fromConst.get(root)
           return other === undefined ? undefined : { column, from: other }
@@ -347,6 +356,24 @@ export function optimizerFacts(from: FromPlan | undefined, where: Expression | u
       }
     })
   }
+  const outerConstants = new Map<string, Expression[]>()
+  from.joins.forEach((j, n) => {
+    if (!j.left || converted.has(n) || j.innerAliases.size !== 1) return
+    const alias = [...j.innerAliases][0] as string
+    const t = scope.tables.find((x) => x.alias === alias)
+    if (t?.def === undefined || nullTables.has(alias)) return
+    const def = t.def
+    const held = new Map<string, Expression>()
+    for (const c of splitAnd(j.on, [])) {
+      if (c.kind !== NODE.BINARY || (c.op !== '=' && c.op !== '<=>')) continue
+      for (const [col, other] of [[c.left, c.right], [c.right, c.left]] as const) {
+        const i = slot(col)
+        if (i !== undefined && aliasOf(i) === alias && isConstant(other)) held.set((scope.columnAt(i)?.column.name ?? '').toLowerCase(), c)
+      }
+    }
+    const key = def.indexes.find((x) => (x.kind === 'primary' || (x.kind === 'unique' && x.parts.every((p) => def.columns.find((c) => c.name === p.column)?.nullable === false))) && x.parts.every((p) => p.prefix === undefined && held.has(p.column.toLowerCase())))
+    if (key !== undefined) outerConstants.set(alias, key.parts.map((p) => held.get(p.column.toLowerCase()) as Expression))
+  })
   const readAhead = new Set<string>()
   for (const t of from.tables) {
     if (!constTables.some((c) => c.alias === t.alias)) {
@@ -355,7 +382,7 @@ export function optimizerFacts(from: FromPlan | undefined, where: Expression | u
     }
     readAhead.add(t.alias)
   }
-  return { empty: false, constTables, straight, ...(readAhead.size > 0 ? { readAhead } : {}), ...(nullTables.size > 0 ? { nullTables } : {}) }
+  return { empty: false, constTables, straight, ...(readAhead.size > 0 ? { readAhead } : {}), ...(outerConstants.size > 0 ? { outerConstants } : {}), ...(nullTables.size > 0 ? { nullTables } : {}) }
 }
 
 /** Whether a const table has its row: read while planning, as MySQL reads it. */

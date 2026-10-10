@@ -161,7 +161,7 @@ export interface FromPlan {
   /** SELECT DISTINCT, and the tables its select list reads: the last table in join order it does not read is joined for one match a row. */
   distinctReads(aliases: ReadonlySet<string>): void
   /** The const tables: those joined as constant rows (a STRAIGHT_JOIN's after its first non-const table), those read ahead and absent from the plan, and the tables an impossible ON NULL-complements (M5.48). Given before the plan is first asked for. */
-  constants(rows: ReadonlySet<string>, readAhead: ReadonlySet<string>, nullTables?: ReadonlySet<string>): void
+  constants(rows: ReadonlySet<string>, readAhead: ReadonlySet<string>, nullTables?: ReadonlySet<string>, outerConstants?: ReadonlyMap<string, readonly Expression[]>): void
   /** Read the one base table whole in an index's order, for an ORDER BY or a grouping it gives; `force` drops a range on another index for it, and `reverse` reads it descending. */
   readInOrder(index: string, force: boolean, reverse?: boolean, alias?: string): void
   /** The FROM as 8.4.11's iterators (M5.44): the tree `rows` runs, as EXPLAIN shows it. */
@@ -572,10 +572,11 @@ export function planFrom(refs: readonly TableReference[], ctx: FromContext, wher
     distinctReads(aliases) {
       settings.distinctSelect = aliases
     },
-    constants(rows, readAhead, nullTables) {
+    constants(rows, readAhead, nullTables, outerConstants) {
       settings.constants = rows
       settings.hidden = readAhead
       if (nullTables !== undefined) settings.nullTables = nullTables
+      if (outerConstants !== undefined) settings.outerConstants = outerConstants
     },
     sortedBy(alias, limit) {
       sort = alias === undefined ? undefined : { alias, limit }
@@ -800,6 +801,8 @@ interface LeafSettings {
   hidden?: ReadonlySet<string>
   /** Outer joins' inner tables whose ON can never hold (`OptimizerFacts.nullTables`). */
   nullTables?: ReadonlySet<string>
+  /** Outer joins' inner tables their ON holds by a key to constants, and those conditions (`OptimizerFacts.outerConstants`). */
+  outerConstants?: ReadonlyMap<string, readonly Expression[]>
   readonly covering: ReadonlyMap<string, string>
   /** The columns the query reads of each table (`reads`). */
   readonly read: Map<string, ReadonlySet<string> | 'all'>
@@ -1070,6 +1073,8 @@ function toOp(node: Node, conditions: readonly Placed[], scope: TableScope, sett
   const outer = toOp(node.outer, toOuter, scope, settings, ctx, preliminary)
   // An outer join whose ON can never hold, its inner tables NULL-complemented without a read (8.4.11).
   if (node.left && innerAliases.size > 0 && [...innerAliases].every((a) => settings.nullTables?.has(a) === true)) return filterOp(nullComplementedOp(outer), above)
+  const keyHeld = node.left && node.inner.kind === 'leaf' ? settings.outerConstants?.get(node.inner.table.alias) : undefined
+  if (keyHeld !== undefined && node.inner.kind === 'leaf') return filterOp(outerConstantRowOp(outer, node.inner.table, toInner, spanning, keyHeld, settings), above)
   if (!node.left && (outer.hidden === true || (node.inner.kind === 'leaf' && settings.hidden?.has(node.inner.table.alias) === true))) {
     return constJoinOp(outer, toOp(node.inner, toInner, scope, settings, ctx, preliminary), node.innerSlots, spanning)
   }
@@ -1665,6 +1670,38 @@ function constJoinOp(outer: Op, inner: Op, innerSlots: readonly number[], on: re
       return on.length === 0 ? below : planNode('Filter', [below])
     },
     ...(outer.hidden === true && inner.hidden === true ? { hidden: true } : {}),
+  }
+}
+
+/**
+ * An outer join's inner table read once by the key its ON holds to
+ * constants (`outerConstants`): each outer row joined to that row where the
+ * rest of the ON holds, NULL-complemented where it does not, the key's own
+ * conditions not shown.
+ */
+function outerConstantRowOp(outer: Op, t: FromTable, own: readonly Placed[], on: readonly Placed[], key: readonly Expression[], settings: LeafSettings): Op {
+  const leaf = filterOp(tableOp(t, settings), own)
+  return {
+    *rows(run, context) {
+      let inner: JoinedRow[] | undefined
+      for (const o of outer.rows(run, context)) {
+        inner ??= [...leaf.rows(run, context)]
+        let matched = false
+        for (const i of inner) {
+          const combined = o.row.slice()
+          for (let k = 0; k < t.width; k++) combined[t.offset + k] = i.row[t.offset + k] ?? null
+          if (!holds(on, combined, run.env)) continue
+          matched = true
+          yield joined(combined, run.ids ? joinIds(o, i) : undefined)
+        }
+        if (!matched) yield o
+      }
+    },
+    describe(env) {
+      const row = planNode(`Constant row from ${t.alias}`)
+      const shown = [...own, ...on].filter((c) => !key.includes(c.e))
+      return planNode('Nested loop left join', [outer.describe(env), shown.length === 0 ? row : planNode('Filter', [row])])
+    },
   }
 }
 

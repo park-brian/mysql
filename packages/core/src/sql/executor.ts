@@ -1175,7 +1175,8 @@ export class SqlExecutor implements Executor {
 
   #analyze(run: Run, tables: readonly TableName[]): StatementResult {
     const coll = run.env.session.characterSet
-    const text = (name: string, chars: number, field?: number): ColumnDefinition => columnDefinition(name, { ...stringType(chars, coll, false), ...(field === undefined ? {} : { field }) }, coll)
+    // Nullable, as 8.4.11 reports them.
+    const text = (name: string, chars: number, field?: number): ColumnDefinition => columnDefinition(name, { ...stringType(chars, coll, true), ...(field === undefined ? {} : { field }) }, coll)
     const encode = (s: string) => run.env.session.transcoder.encode(s, coll)
     const rows: Uint8Array[][] = []
     for (const t of tables) {
