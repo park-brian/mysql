@@ -154,8 +154,13 @@ export function optimizerFacts(from: FromPlan | undefined, where: Expression | u
     return (neg ? -1 : 1) * Number(lit.value)
   }
 
-  const impossible = (c: Expression): boolean => {
-    if (c.kind === NODE.UNARY && c.op === 'IS NULL') {
+  // `inOn`: the range optimizer's proofs only, not `IS NULL` on a NOT NULL
+  // column, which in an ON is still a join (8.4.11: a hash antijoin).
+  const impossible = (c: Expression, inOn = false): boolean => {
+    // An OR whose every side is impossible: `id IS NULL OR name IS NULL` over
+    // NOT NULL columns is "Impossible WHERE" (8.4.11).
+    if (c.kind === NODE.BINARY && (c.op === 'OR' || c.op === '||')) return impossible(c.left, inOn) && impossible(c.right, inOn)
+    if (!inOn && c.kind === NODE.UNARY && c.op === 'IS NULL') {
       const i = slot(c.operand)
       const col = i === undefined ? undefined : columnAt(i)
       if (col !== undefined && !col.column.nullable) return true
@@ -197,7 +202,7 @@ export function optimizerFacts(from: FromPlan | undefined, where: Expression | u
     }
     return false
   }
-  if (pool.some(impossible)) return { empty: true, constTables: [], straight }
+  if (pool.some((c) => impossible(c))) return { empty: true, constTables: [], straight }
 
   // An outer join's ON, judged as a WHERE over its inner tables.
   const nullTables = new Set<string>()
@@ -205,9 +210,7 @@ export function optimizerFacts(from: FromPlan | undefined, where: Expression | u
     if (!j.left || converted.has(n)) return
     for (const a of j.innerAliases) nullable.delete(a)
     const never = splitAnd(j.on, []).some((c) => {
-      // The range optimizer's proofs, not `IS NULL` on a NOT NULL column: an
-      // ON holding that is still a join (8.4.11: a hash antijoin).
-      if (c.kind === NODE.BINARY && impossible(c)) return true
+      if (impossible(c, true)) return true
       const v = partialTruth(c, () => undefined, ctx, env, true)
       return v === false || v === null
     })

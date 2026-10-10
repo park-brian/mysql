@@ -161,7 +161,7 @@ export interface FromPlan {
   /** SELECT DISTINCT, and the tables its select list reads: the last table in join order it does not read is joined for one match a row. */
   distinctReads(aliases: ReadonlySet<string>): void
   /** The const tables of a STRAIGHT_JOIN, each joined as a constant row rather than read ahead (M5.48). Given before the plan is first asked for. */
-  constants(aliases: ReadonlySet<string>): void
+  constants(aliases: ReadonlySet<string>, straight?: boolean, nullTables?: ReadonlySet<string>): void
   /** Read the one base table whole in an index's order, for an ORDER BY or a grouping it gives; `force` drops a range on another index for it, and `reverse` reads it descending. */
   readInOrder(index: string, force: boolean, reverse?: boolean, alias?: string): void
   /** The FROM as 8.4.11's iterators (M5.44): the tree `rows` runs, as EXPLAIN shows it. */
@@ -572,8 +572,10 @@ export function planFrom(refs: readonly TableReference[], ctx: FromContext, wher
     distinctReads(aliases) {
       settings.distinctSelect = aliases
     },
-    constants(aliases) {
-      settings.constants = aliases
+    constants(aliases, straight = true, nullTables) {
+      if (straight) settings.constants = aliases
+      else settings.hidden = aliases
+      if (nullTables !== undefined) settings.nullTables = nullTables
     },
     sortedBy(alias, limit) {
       sort = alias === undefined ? undefined : { alias, limit }
@@ -585,7 +587,8 @@ export function planFrom(refs: readonly TableReference[], ctx: FromContext, wher
       return leafAccess(tables[0] as FromTable, settings, env)
     },
     explain(env) {
-      return physicalTree()?.describe(env) ?? planNode('Rows fetched before execution')
+      const op = physicalTree()
+      return op === undefined || op.hidden === true ? planNode('Rows fetched before execution') : op.describe(env)
     },
     rows(trx, env, options) {
       const op = physicalTree()
@@ -793,6 +796,10 @@ interface LeafSettings {
   where?: Expression | undefined
   /** A STRAIGHT_JOIN's const tables, joined as constant rows (`constants`). */
   constants?: ReadonlySet<string>
+  /** Any other join's const tables, read while planning and absent from the plan (`constants`). */
+  hidden?: ReadonlySet<string>
+  /** Outer joins' inner tables whose ON can never hold (`OptimizerFacts.nullTables`). */
+  nullTables?: ReadonlySet<string>
   readonly covering: ReadonlyMap<string, string>
   /** The columns the query reads of each table (`reads`). */
   readonly read: Map<string, ReadonlySet<string> | 'all'>
@@ -1023,6 +1030,8 @@ interface FromRun {
 interface Op {
   rows(run: FromRun, context?: Row): Iterable<JoinedRow>
   describe(env: Env): PlanNode
+  /** Read while planning, so absent from the plan: a const table (`hidden`), or a join of only such. */
+  readonly hidden?: boolean
 }
 
 /** Whether a row satisfies conditions as MySQL's AND does: false at the first FALSE, NULL past any NULL, true only if every one is. */
@@ -1044,7 +1053,10 @@ function holds(conditions: readonly Placed[], row: Row, env: Env): boolean {
  * nor an outer join's ON condition into its preserved side.
  */
 function toOp(node: Node, conditions: readonly Placed[], scope: TableScope, settings: LeafSettings, ctx: FromContext, preliminary: TableScope): Op {
-  if (node.kind === 'leaf') return filterOp(tableOp(node.table, settings), conditions, node.table, settings)
+  if (node.kind === 'leaf') {
+    const op = filterOp(tableOp(node.table, settings), conditions, node.table, settings)
+    return settings.hidden?.has(node.table.alias) === true ? { ...op, rows: op.rows.bind(op), hidden: true } : op
+  }
   const outerAliases = leafAliases(node.outer)
   const innerAliases = leafAliases(node.inner)
   // An inner join's ON is its WHERE; an outer join's ON may go down only into the side it nulls.
@@ -1056,6 +1068,11 @@ function toOp(node: Node, conditions: readonly Placed[], scope: TableScope, sett
   const spanning = node.left ? node.on.filter((c) => !toInner.includes(c)) : here
   const above = node.left ? here : []
   const outer = toOp(node.outer, toOuter, scope, settings, ctx, preliminary)
+  // An outer join whose ON can never hold, its inner tables NULL-complemented without a read (8.4.11).
+  if (node.left && innerAliases.size > 0 && [...innerAliases].every((a) => settings.nullTables?.has(a) === true)) return filterOp(nullComplementedOp(outer), above)
+  if (!node.left && (outer.hidden === true || (node.inner.kind === 'leaf' && settings.hidden?.has(node.inner.table.alias) === true))) {
+    return constJoinOp(outer, toOp(node.inner, toInner, scope, settings, ctx, preliminary), node.innerSlots, spanning)
+  }
   if (hasLateral(node.inner)) {
     const inner = toOp(node.inner, toInner, scope, settings, ctx, preliminary)
     return filterOp(lateralOp(node, outer, inner, spanning), above)
@@ -1618,6 +1635,45 @@ function lookupOp(node: Node & { kind: 'join' }, outer: Op, t: FromTable, lookup
       const read = rest.length === 0 ? lookupNode : planNode('Filter', [lookupNode])
       return planNode(node.left ? 'Nested loop left join' : 'Nested loop inner join', [outer.describe(env), firstOnly ? planNode('Limit', [read]) : read])
     },
+  }
+}
+
+/**
+ * An inner join one side of which is read while planning (`hidden`): that
+ * side's rows once, joined to each of the other's, and the plan the other
+ * side's alone, the conditions over both a Filter on it — the optimizer has
+ * made the const side's columns constants (8.4.11: `FROM kl, pa WHERE pa.id =
+ * 1` is "Table scan on kl").
+ */
+function constJoinOp(outer: Op, inner: Op, innerSlots: readonly number[], on: readonly Placed[]): Op {
+  return {
+    *rows(run, context) {
+      const [fixed, other] = outer.hidden === true ? [outer, inner] : [inner, outer]
+      const held = [...fixed.rows(run, context)]
+      if (held.length === 0) return
+      for (const r of other.rows(run, context)) {
+        for (const h of held) {
+          const [o, i] = fixed === outer ? [h, r] : [r, h]
+          const combined = merge(o.row, i.row, innerSlots)
+          if (holds(on, combined, run.env)) yield joined(combined, run.ids ? joinIds(o, i) : undefined)
+        }
+      }
+    },
+    describe(env) {
+      const shown = outer.hidden === true ? inner : outer
+      const below = shown.describe(env)
+      return on.length === 0 ? below : planNode('Filter', [below])
+    },
+    ...(outer.hidden === true && inner.hidden === true ? { hidden: true } : {}),
+  }
+}
+
+/** An outer join's preserved side alone, each row with the inner side's NULLs (`nullTables`). */
+function nullComplementedOp(outer: Op): Op {
+  return {
+    rows: (run, context) => outer.rows(run, context),
+    describe: (env) => outer.describe(env),
+    ...(outer.hidden === true ? { hidden: true } : {}),
   }
 }
 

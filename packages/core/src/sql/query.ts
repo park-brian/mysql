@@ -387,7 +387,7 @@ function planSelect(run: Run, q: QueryExpression, node: SelectNode): SelectPlan 
         item.compiled = { ...item.compiled, type: { ...item.compiled.type, temporary: pinnedName(item) ? 'pinned' : true } }
       }
     }
-  } else if (from !== undefined && scope !== undefined && run.preparing !== true && (source === undefined || semijoinSubqueries(node.where).length > 0 || (q.orderBy !== undefined && node.items.some((i) => correlatedIn(i.expr, scope)))) && (node.distinct === true || (q.orderBy ?? []).length > 0)) {
+  } else if (from !== undefined && scope !== undefined && run.preparing !== true && (source === undefined || semijoinSubqueries(node.where).some((sq) => !emptySubquery(run, sq)) || (q.orderBy !== undefined && node.items.some((i) => correlatedIn(i.expr, scope)))) && (node.distinct === true || (q.orderBy ?? []).length > 0)) {
     // Over a join, a DISTINCT is a temporary table and a sort reads the join's
     // rows streamed into one ("Stream results"): every item that reads the row
     // is copied, a column losing its key flags without gaining GROUP_FLAG, an
@@ -401,7 +401,7 @@ function planSelect(run: Run, q: QueryExpression, node: SelectNode): SelectPlan 
     // ORDER BY SCHEMA_NAME` over INFORMATION_SCHEMA's join streams nothing).
     const constantOrder = node.distinct !== true && (q.orderBy ?? []).every((o) => (o.expr.kind === NODE.COLUMN && pinnedByWhere(node.where, o.expr.parts)) || constantKey(o))
     const sortedFirst = constantOrder || (node.distinct !== true && (source === undefined ? from.sortsFirst(orderAliases(q, items, lookup)) : nestedLoopSemijoin(node.where, scope) && !node.items.some((i) => correlatedIn(i.expr, scope))))
-    if (!facts.empty && !sortedFirst) {
+    if (!facts.empty && !semijoinEmpty(run, node.where) && !sortedFirst) {
       if (node.distinct === true) deduplicated = true
       else streamed = true
       const consts = new Set(facts.constTables.map((t) => t.alias))
@@ -707,9 +707,9 @@ function subqueryPinsKey(def: TableDef, alias: string, where: Expression | undef
 function constRows(run: Run, from: FromPlan | undefined, node: SelectNode): ReadonlySet<string> {
   if (from === undefined || from.tables.length < 2) return new Set()
   const facts = optimizerFacts(from, node.where, undefined, compileContext(run, EMPTY_SCOPE, 'where clause'), run.env, (node.options ?? []).includes('STRAIGHT_JOIN'))
-  if (!facts.straight || facts.constTables.length === 0) return new Set()
+  if (facts.empty) return new Set()
   const aliases = new Set(facts.constTables.map((t) => t.alias))
-  from.constants(aliases)
+  if (aliases.size > 0 || facts.nullTables !== undefined) from.constants(aliases, facts.straight, facts.nullTables)
   return aliases
 }
 
@@ -742,7 +742,57 @@ function provedEmpty(run: Run, from: FromPlan | undefined, node: SelectNode, lim
   if (from === undefined) return false
   const ctx = compileContext(run, EMPTY_SCOPE, 'where clause')
   const facts = optimizerFacts(from, node.where, limitCount, ctx, run.env, (node.options ?? []).includes('STRAIGHT_JOIN'))
-  return facts.empty || (facts.constTables.length > 0 && !constTablesHaveRows(facts, ctx, run.env, run.env.trx))
+  return facts.empty || semijoinEmpty(run, node.where) || (facts.constTables.length > 0 && !constTablesHaveRows(facts, ctx, run.env, run.env.trx))
+}
+
+/**
+ * Whether an IN or EXISTS the WHERE joins as a semijoin can never match: its
+ * subquery's own WHERE is impossible, so the whole query is empty (8.4.11:
+ * `id IN (SELECT pa_id FROM ch WHERE ch.id IS NULL)` is "Zero rows"). Only an
+ * uncorrelated subquery over one base table is judged, every column it names
+ * its own; NOT EXISTS keeps every row instead.
+ */
+function semijoinEmpty(run: Run, where: Expression | undefined): boolean {
+  return splitAnd(where).some((c) => {
+    const query = c.kind === NODE.BINARY && c.op === 'IN' && c.right.kind === NODE.SUBQUERY ? c.right.query : c.kind === NODE.UNARY && c.op === 'EXISTS' && c.operand.kind === NODE.SUBQUERY ? c.operand.query : undefined
+    return query !== undefined && emptySubquery(run, query)
+  })
+}
+
+/** Whether an uncorrelated subquery over one base table has an impossible WHERE, judged as the optimizer judges a query's. */
+function emptySubquery(run: Run, query: QueryExpression): boolean {
+  const body = query.body
+  if (body.kind !== QUERY.SELECT || body.where === undefined || body.groupBy !== undefined || body.having !== undefined || query.limit !== undefined) return false
+  const ref = body.from?.length === 1 ? body.from[0] : undefined
+  if (ref?.kind !== REF.TABLE) return false
+  const alias = ref.alias ?? ref.table.name
+  let def: TableDef | undefined
+  try {
+    def = run.catalog?.definition(ref.table.schema ?? run.env.session.database ?? '', ref.table.name)
+  } catch (e) {
+    expectTyped(e)
+  }
+  if (def === undefined) return false
+  const own = (parts: readonly string[]): boolean => (parts.length === 1 ? def.columns.some((col) => col.name.toLowerCase() === (parts[0] as string).toLowerCase()) : parts[parts.length - 2] === alias)
+  if (!columnRefs(body.where).every(own)) return false
+  try {
+    const { parent: _outer, ...alone } = run
+    const sub = planFrom([ref], fromContext(alone), body.where, false)
+    return optimizerFacts(sub, body.where, undefined, compileContext(run, EMPTY_SCOPE, 'where clause'), run.env).empty
+  } catch (e) {
+    expectTyped(e)
+    return false
+  }
+}
+
+/** Every column a clause names, as written, outside its subqueries. */
+function columnRefs(e: unknown, out: (readonly string[])[] = []): (readonly string[])[] {
+  if (e === null || typeof e !== 'object') return out
+  const n = e as { kind?: string; parts?: readonly string[] }
+  if (n.kind === NODE.SUBQUERY) return out
+  if (n.kind === NODE.COLUMN && n.parts !== undefined) out.push(n.parts)
+  for (const v of Object.values(e as Record<string, unknown>)) if (typeof v === 'object') columnRefs(v, out)
+  return out
 }
 
 /**
