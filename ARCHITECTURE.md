@@ -1299,7 +1299,7 @@ const [rows, fields] = await db.query('SELECT * FROM users WHERE id > 10')
 const [result] = await db.execute('INSERT INTO users (name) VALUES (?)', ['alice'])
 result.insertId
 
-// not in 0.3 (M5.40)
+// never held whole (M5.40, in 0.4)
 for await (const row of db.stream('SELECT * FROM big_table')) { /* … */ }
 
 // transactions: commit on return, roll back on throw,
@@ -1337,9 +1337,12 @@ There is one place where the seam from §5 and this surface pull against each
 other. `execProtocol` returns every response byte for one command, which is
 right for nearly everything and wrong for `db.stream()`, whose whole purpose
 is never to hold a large resultset in memory. A streaming variant of the
-lowest entry point was one of the open questions in [§20](#20-what-we-dont-know-yet);
-pausing reads (§11) answer it in principle, since a read that stops every 256
-rows can hand those rows out as it goes, and M5.40 builds it.
+lowest entry point was one of the open questions in [§20](#20-what-we-dont-know-yet).
+The answer (D-85) left `execProtocol` whole and made every hop below the
+API pull instead: a read that stops every 256 rows (§11) hands those rows
+out as it goes, the dispatcher sends a batch only when the connection asks,
+and a connection whose transport reads as it writes waits while 64 KiB is
+unread. A reader that stops taking stops the statement.
 
 ## 18. How we know it works
 
@@ -1442,7 +1445,7 @@ a blocker and one without is just a note.
 | Question | Why it matters | Settled by |
 |---|---|---|
 | **Does OPFS `flush()` ever reorder writes?** | The browser half of the durability promise depends on it ([§12](#12-durability-stated-honestly)) | Real-browser crash tests, M6 |
-| **Does `execProtocol` need a streaming variant?** | `db.stream()` exists so that a large resultset is never held in memory, and today's seam returns a command's whole response. D-77's pausing reads answer it in principle: rows can leave a batch at a time | M5.40, for 0.4 |
+| ~~**Does `execProtocol` need a streaming variant?**~~ **Answered (M5.40, D-85): no.** `execProtocol` stays whole; a connection whose transport reads as it writes gets the stream, with backpressure at every hop | | M5.40 |
 | ~~**How faithful must `INFORMATION_SCHEMA` be?**~~ | Settled by M5.12: byte for byte, metadata included, because Prisma diffs what it reads against what it pushed. A captured corpus of 2,568 statements agrees in full | — |
 | ~~**How closely can our byte traces match a real server's?**~~ | Settled by M5.16: what is compared with a real server is what a client sees — rows, metadata, counters, errors and warnings — and byte identity is held only against our own frozen traces | — |
 | **Is whole-page compression at the VFS the answer to COMPRESSED tables?** | It is the proposed replacement, with no design yet | M6 or later |
@@ -1480,7 +1483,11 @@ bulk statement pauses between its batches instead of stalling every other
 connection (§11). The query API of §17 exists, typed, and a client of the
 wire protocol whose answers are compared with `mysql2/promise`'s. `myjs`
 packs, installs into an empty project and runs there, in CI; 0.3 waits only
-on being published. Next are the cost-based planner, `db.stream()` and the
+on being published. The cost-based planner is built: statistics stored by
+ANALYZE, MySQL's cost model choosing access paths and join order, and
+`EXPLAIN FORMAT=TREE` printed from the same tree of iterators that runs,
+agreeing with 8.4.11 on 2,082 of 2,248 plans. `db.stream()` streams a
+million rows within a few MB of the heap's baseline (M5.40). Next is the
 browser. The core bundle is about 290 KB gzipped against a budget of 500 KB,
 with the UCA weights in a separate chunk loaded on demand.
 

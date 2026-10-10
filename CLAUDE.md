@@ -23,7 +23,11 @@ as they pass on 8.4.11, file for file. Doc 42's query API
 (`db.query()`, `db.execute()`, `db.transaction()`) is a client of the same
 protocol, its values `mysql2`'s (M5.36, D-76). The roadmap's **Next** section
 says what comes next: 0.3 is staged (`npm run pack`, D-79/D-80) and waits only
-on being published; then the cost-based planner (M5.7) and the browser (M6).
+on being published. The cost-based planner (M5.7, M5.42–M5.46) is done:
+`EXPLAIN FORMAT=TREE` prints the plan that runs, and 2,103 of the relational
+corpus's 2,248 plans agree with 8.4.11's; the strategies left are M5.47–M5.50.
+`db.stream()` (M5.40) streams with backpressure at every hop (D-85). Then the
+browser (M6).
 The package an application installs is `myjs`, a facade over `@myjs/core`.
 
 ## Running things
@@ -77,6 +81,7 @@ npm run capture:functions    # 200 scripts of string and numeric function calls,
 npm run capture:temporal-functions   # 300 scripts of date and time function calls, in UTC
 npm run capture:more-functions       # 300 scripts of string, math, hashing and network function calls
 npm run capture:information-schema   # 120 DDL scripts, then Prisma's introspection queries
+npm run capture:variables    # the 619 system variables: scope, type, range, default (restart before and after)
 npm run census:orm           # Drizzle's and Prisma's MySQL suites: a feature census, and our pass count
 npm run exit-criterion       # the real C client against our server
 npm run census:mysqltest -- --refresh   # MySQL's own test corpus, lexed and parsed

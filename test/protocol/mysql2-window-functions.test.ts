@@ -11,9 +11,9 @@
 // Over a grouped query, windows run after HAVING over the groups, their
 // arguments and keys the groups' aggregates (`SUM(SUM(v)) OVER …`), and the
 // window's table takes the groups' place in the metadata, except for one row
-// of an aggregate without GROUP BY. Not pinned, and named in the roadmap:
-// LAG's negative offset (a 1064 in the server's grammar), and the key a
-// derived table gets for `WHERE rn = 1`.
+// of an aggregate without GROUP BY. A RANGE over a date by an INTERVAL; and
+// LAG's distance, which is never signed (1064 in the server's grammar). Not
+// pinned, and named in the roadmap: the key a derived table gets for `WHERE rn = 1`.
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import mysql from 'mysql2/promise'
@@ -64,6 +64,11 @@ const SCRIPT: readonly (readonly [string, Outcome])[] = [
   ["SELECT g, SUM(v) s, SUM(SUM(v)) OVER w1 FROM w GROUP BY g HAVING s > 6 WINDOW w1 AS (ORDER BY g) ORDER BY g", [[["a","50","50"],["c","7","57"]],"4/254/0/0 33/246/0/0 55/246/0/0"]],
   ["SELECT g, ROW_NUMBER() OVER (PARTITION BY g) FROM w GROUP BY g", [[["a","1"],["b","1"],["c","1"]],"4/254/0/0 21/8/33/0"]],
   ["SELECT g FROM w GROUP BY g ORDER BY RANK() OVER (ORDER BY MIN(id) DESC)", [[["c"],["b"],["a"]],"4/254/0/0"]],
+  // A RANGE over a temporal key by an INTERVAL, ascending and descending; LAG's distance is never signed (8.4.11).
+  ["ALTER TABLE w ADD COLUMN t DATETIME", [0]],
+  ["UPDATE w SET t = DATE_ADD('2020-01-01', INTERVAL id * 9 HOUR)", [6]],
+  ["SELECT id, SUM(v) OVER (ORDER BY t RANGE BETWEEN INTERVAL 1 DAY PRECEDING AND CURRENT ROW) a, COUNT(*) OVER (ORDER BY t DESC RANGE INTERVAL 18 HOUR PRECEDING) b FROM w ORDER BY id", [[["1","10","3"],["2","30","3"],["3","50","3"],["4","45","3"],["5","25","2"],["6","12","1"]],"11/3/4097/0 33/246/0/0 21/8/1/0"]],
+  ["SELECT LAG(v, -1) OVER (ORDER BY id) FROM w", [1064,"You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near '-1) OVER (ORDER BY id) FROM w' at line 1"]],
 ]
 
 test('window functions agree with 8.4.11, metadata included', async () => {

@@ -140,10 +140,14 @@ function resolveIn(
   const found: { index: number; type: ResultType }[] = []
   for (const t of tables) {
     if (tableName !== undefined && t.alias !== tableName) continue
+    // INFORMATION_SCHEMA is named in any case, whatever lower_case_table_names
+    // says; its tables' names are matched as written (8.4.11: drizzle-kit's
+    // `INFORMATION_SCHEMA.STATISTICS.TABLE_SCHEMA`, and 1054 for `….statistics.…` over `STATISTICS`).
+    const system = t.schema.toLowerCase() === 'information_schema'
     // `db.t.c` names a table by its schema too, alias or not; a derived table
     // or a CTE has no schema, and any qualifier passes it (8.4.11: `zz.d.c`
     // over `(SELECT …) d` reads d.c).
-    if (schemaName !== undefined && t.schema !== '' && t.schema !== schemaName) continue
+    if (schemaName !== undefined && t.schema !== '' && t.schema !== schemaName && !(system && schemaName.toLowerCase() === 'information_schema')) continue
     const i = t.columns.findIndex((c) => c.name.toLowerCase() === column)
     if (i < 0) continue
     found.push({ index: t.offset + i, type: (t.columns[i] as ScopeColumn).type })

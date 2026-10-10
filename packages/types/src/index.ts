@@ -84,6 +84,8 @@ export {
   jsonKey,
   jsonObject,
   orderJson,
+  jsonSortHash,
+  compareJsonSortHashes,
   parseJson,
   quoteJsonString,
   renderJson,
@@ -134,12 +136,13 @@ export {
   valInt,
   toText,
   toTextBytes,
+  valueBytes,
   toTime,
   truth,
   validDate,
 } from './sql-value.ts'
 export type { BytesValue, DateTimeValue, DecimalValue, DoubleValue, IntValue, JsonDocValue, StringValue, TemporalType, TimeValue, Value } from './sql-value.ts'
-export { DERIVATION_NONE, aggregateCollation, aggregateDerivations, charsetOfCollation, compareDecimals, equalityKey, compareValues, nullSafeEqual, orderValues, sortValues } from './compare.ts'
+export { DERIVATION_NONE, aggregateCollation, aggregateDerivations, charsetOfCollation, compareDecimals, equalityKey, compareValues, nullSafeEqual, orderValues, sortValues, textComparer } from './compare.ts'
 export type { Derived } from './compare.ts'
 export { SUM_PRECISION_INCREMENT, avgAccumulator, avgPrecision, bitAccumulator, extremeAccumulator, sumAccumulator, sumPrecision, varianceAccumulator } from './aggregate.ts'
 export type { Accumulator } from './aggregate.ts'
@@ -153,3 +156,5 @@ export { dateOf, dateStructOf, numberToDateTime, timeDiff, timeOf, timeStructOf,
 export { extractDateTime, formatDateTime, formatLength, formatShape, type Broken } from './date-format.ts'
 export { scanDateTime, scanTime } from './temporal-scan.ts'
 export { crc32, md5, sha1, sha256, sha512 } from './digest.ts'
+export { MERGE_TYPES, mergeTypes, type MergeType } from './type-merge.ts'
+export { jsonTruth } from './sql-value.ts'

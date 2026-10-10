@@ -30,15 +30,22 @@ import {
 import { writeEof, writeErr, writeOk } from './packets/generic.ts'
 import {
   binaryResultsetPackets,
+  binaryRowPacket,
+  collectRows,
   cursorOpenedPackets,
   fetchPackets,
   fieldListPackets,
   isResultSet,
+  isStreamed,
   okResultPackets,
   preparePackets,
   responsePackets,
+  resultsetEndPacket,
+  resultsetHeadPackets,
   statementResultPackets,
+  textRowPacket,
   type StatementResult,
+  type StreamedResultSet,
 } from './packets/resultset.ts'
 import { utf8 } from './text.ts'
 import type { Executor, Session } from './session.ts'
@@ -59,6 +66,12 @@ export interface DispatchResult {
   readonly close?: boolean
   /** `COM_CHANGE_USER`: the connection re-enters the connection phase. */
   readonly changeUser?: Uint8Array
+  /**
+   * The rest of the response, after `packets`, a batch at a time (M5.40): the
+   * connection sends each before it asks for the next, and stops asking (with
+   * `return()`) when its transport has gone, which ends the statement.
+   */
+  readonly stream?: AsyncIterable<readonly Uint8Array[]>
 }
 
 const NOTHING: DispatchResult = { packets: [] }
@@ -93,27 +106,56 @@ export async function dispatch(payload: Uint8Array, ctx: DispatchContext): Promi
     // A no-response command stays silent even when it fails. The error
     // surfaces on the next command that does answer.
     if (NO_RESPONSE_COMMANDS.has(command)) return NOTHING
-    if (err instanceof ProtocolError || err instanceof MyjsError) {
-      if (err.errno === undefined) return errPackets(ctx, 'ER_MALFORMED_PACKET', err.message)
-      // The error's own number: its code need not be a MySQL symbol (a
-      // CharsetError's `ER_COLLATION_NOT_IMPLEMENTED` is ours, and 1273).
-      const w = new Writer(64)
-      const message = err instanceof SqlError ? err.sqlMessage : err.message
-      writeErr(w, ctx.capabilities, { errno: err.errno, sqlState: err.sqlState ?? sqlStateOf(err.errno), message })
-      return { packets: [w.toBytes()] }
-    }
-    throw err
+    return { packets: [errorPacket(ctx, err)] }
   }
 }
 
+/** A typed error as its ERR packet; anything else is a fault, and rethrown. */
+function errorPacket(ctx: DispatchContext, err: unknown): Uint8Array {
+  if (!(err instanceof ProtocolError || err instanceof MyjsError)) throw err
+  if (err.errno === undefined) return errPacket(ctx, 'ER_MALFORMED_PACKET', err.message)
+  // The error's own number: its code need not be a MySQL symbol (a
+  // CharsetError's `ER_COLLATION_NOT_IMPLEMENTED` is ours, and 1273).
+  const w = new Writer(64)
+  const message = err instanceof SqlError ? err.sqlMessage : err.message
+  writeErr(w, ctx.capabilities, { errno: err.errno, sqlState: err.sqlState ?? sqlStateOf(err.errno), message })
+  return w.toBytes()
+}
+
+/**
+ * A streamed resultset (M5.40): its head now, then each batch's rows as the
+ * executor reads them, then the terminator, whose status and warning count
+ * are the statement's once it has ended. A statement that fails part way
+ * ends the response with its ERR after the rows already sent, as a server's
+ * does.
+ */
+function streamedResponse(ctx: DispatchContext, result: StreamedResultSet, binary: boolean): DispatchResult {
+  const { session, capabilities: caps } = ctx
+  const row = binary ? binaryRowPacket : textRowPacket
+  async function* rest(): AsyncGenerator<readonly Uint8Array[]> {
+    try {
+      for await (const batch of result.batches) yield batch.map((r) => row(result.columns, r))
+    } catch (err) {
+      yield [errorPacket(ctx, err)]
+      return
+    }
+    yield [resultsetEndPacket(caps, result.warnings, { statusFlags: session.statusFlags })]
+  }
+  return { packets: resultsetHeadPackets(caps, result.columns, { statusFlags: session.statusFlags }), stream: rest() }
+}
+
 function errPackets(ctx: DispatchContext, symbol: string, message: string): DispatchResult {
+  return { packets: [errPacket(ctx, symbol, message)] }
+}
+
+function errPacket(ctx: DispatchContext, symbol: string, message: string): Uint8Array {
   const w = new Writer(64)
   writeErr(w, ctx.capabilities, {
     errno: errnoOf(symbol),
     sqlState: sqlStateOf(symbol),
     message,
   })
-  return { packets: [w.toBytes()] }
+  return w.toBytes()
 }
 
 function okPacket(ctx: DispatchContext, info?: string): Uint8Array {
@@ -219,6 +261,7 @@ async function handle(command: number, payload: Uint8Array, ctx: DispatchContext
       // where the session is in scope, rather than being guessed as UTF-8 in
       // the packet parser.
       const results = await executor.query(session, sqlText(session, sqlBytes), attributes)
+      if (!Array.isArray(results) && isStreamed(results)) return streamedResponse(ctx, results, false)
       return { packets: responseFor(ctx, results, false) }
     }
 
@@ -254,8 +297,14 @@ async function handle(command: number, payload: Uint8Array, ctx: DispatchContext
         return long === undefined ? p : { ...p, value: long }
       })
 
-      const results = await executor.execute(session, stmt.sql, parameters)
+      let results = await executor.execute(session, stmt.sql, parameters)
       const wantsCursor = (parsed.flags & CURSOR_TYPE.READ_ONLY) !== 0
+      if (!Array.isArray(results) && isStreamed(results)) {
+        if (!wantsCursor) return streamedResponse(ctx, results, true)
+        // A cursor's rows are kept for COM_STMT_FETCH, as 8.4.11 keeps them
+        // in a temporary table: read whole here.
+        results = await collectRows(results)
+      }
       const single = Array.isArray(results) ? results[0] : results
 
       if (wantsCursor && single !== undefined && isResultSet(single)) {
@@ -356,11 +405,8 @@ function responseFor(
       statusFlags: session.statusFlags,
       moreResults: i < list.length - 1,
     }
-    packets.push(
-      ...(isResultSet(result)
-        ? binaryResultsetPackets(caps, result, options)
-        : okResultPackets(caps, result, options)),
-    )
+    // A loop, not a spread: a resultset's packets can outnumber the stack.
+    for (const packet of isResultSet(result) ? binaryResultsetPackets(caps, result, options) : okResultPackets(caps, result, options)) packets.push(packet)
   }
   return packets
 }

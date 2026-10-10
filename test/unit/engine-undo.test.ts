@@ -3,7 +3,7 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import fc from 'fast-check'
 import { MemoryVfs, type VfsFile } from '@myjs/vfs'
-import { ClusteredIndex, EngineError, Store, UndoLog, decodeUndo, encodeUndo, readRollPtr, rollPtrBits, verifyStore, writeRollPtr, type RecordLayout, type UndoRecord } from '@myjs/engine'
+import { ClusteredIndex, EngineError, Store, UndoLog, decodeUndo, encodeUndo, readRollPtr, readUndo, rollPtrBits, verifyStore, writeRollPtr, type RecordLayout, type UndoRecord } from '@myjs/engine'
 
 const PAGE = 1024
 const be = (n: number) => Uint8Array.of(n >>> 24, (n >>> 16) & 0xff, (n >>> 8) & 0xff, n & 0xff)
@@ -96,4 +96,16 @@ test('M4.20: an older version rebuilds correctly — ten transactions, ten views
   assert.equal(store.stats().historyLength, 0)
   assert.deepEqual(table.get(be(1))?.[1], value(10))
   verifyStore(store, { overflowRefs: (id, v) => (id === table.tree.indexId ? table.refsOf(v) : []) })
+})
+
+test('M5.42: a corrupt undo length or a short roll pointer is ENGINE_CORRUPT_UNDO, not a raw RangeError or a 4 GB allocation', async () => {
+  const store = Store.create(...(await files()), { frames: 32 })
+  const pages = store.trxTree.overflowPages()
+  const log = store.atomically(() => UndoLog.create(pages))
+  store.atomically(() => log.append(pages, { isInsert: true, purgeRemoves: false, indexId: 1, key: be(1), old: null, freeOnPurge: [], freeOnRollback: [] }))
+  const at = log.records[0] as { page: number; offset: number }
+  // The length a record starts with, overwritten in the cached page as a torn write would leave it.
+  store.pool.read(at.page, (p) => new DataView(p.buffer, p.byteOffset).setUint32(at.offset, 0xfffffff0))
+  assert.throws(() => readUndo(store.pool, at), (e: unknown) => e instanceof EngineError && e.code === 'ENGINE_CORRUPT_UNDO')
+  assert.throws(() => readRollPtr(new Uint8Array(10), 7), (e: unknown) => e instanceof EngineError && e.code === 'ENGINE_CORRUPT_UNDO')
 })

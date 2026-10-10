@@ -19,7 +19,9 @@ import { MemoryVfs, type Lock, type Vfs } from '@myjs/vfs'
 import { createStream as hostStream, openPathVfs, type DriverStream } from '#host'
 import { ProtocolConnection, type ConnectionOptions } from './connection.ts'
 import { SqlExecutor } from './sql/executor.ts'
-import { Connection, Transaction, inTransaction, type BeginOptions, type QueryOptions, type QueryResult, type TransactionOptions, type TypeOptions } from './client/api.ts'
+import * as introspection from './client/introspection.ts'
+import type { ColumnInfo, DatabaseStats, TableInfo } from './client/introspection.ts'
+import { Connection, Transaction, inTransaction, ownedStream, type RowStream, type BeginOptions, type QueryOptions, type QueryResult, type TransactionOptions, type TypeOptions } from './client/api.ts'
 
 /** Who `connect()` signs in as, and how its values are typed: `mysql2`'s option names. */
 export interface ConnectionConfig extends TypeOptions {
@@ -118,6 +120,9 @@ export class MySQL {
     }
     let catalog: Catalog | undefined
     let executor = options.executor
+    // SHOW STATUS counts the connections the database has, once it exists.
+    let db: MySQL | undefined
+    const connections = { open: () => db?.openConnections ?? 0, made: () => db?.connectionsMade ?? 0 }
     if (executor === undefined) {
       try {
         catalog = await openCatalog(vfs, options)
@@ -125,10 +130,10 @@ export class MySQL {
         lock?.release()
         throw e
       }
-      executor = new SqlExecutor({ catalog, ...(options.serverVersion === undefined ? {} : { serverVersion: options.serverVersion }) })
+      executor = new SqlExecutor({ catalog, connections, ...(options.serverVersion === undefined ? {} : { serverVersion: options.serverVersion }) })
     }
     const accounts = options.accounts ?? (await defaultAccounts())
-    const db = new MySQL(path, vfs, executor, accounts, options, catalog)
+    db = new MySQL(path, vfs, executor, accounts, options, catalog)
     db.#lock = lock
     db.#startSync()
     return db
@@ -177,6 +182,11 @@ export class MySQL {
 
   /** Every connection this instance made that has not closed, so `end()` can end their sessions. */
   readonly #connections = new Set<ProtocolConnection>()
+
+  /** How many connections this instance has made, closed ones too. */
+  get connectionsMade(): number {
+    return this.#nextConnectionId - 1
+  }
 
   /** How many connections are still open. */
   get openConnections(): number {
@@ -272,6 +282,41 @@ export class MySQL {
   /** Doc 42: a prepared statement, run with `values` through the binary protocol. */
   async execute<T = unknown>(sql: string | QueryOptions, values?: readonly unknown[]): Promise<QueryResult<T>> {
     return (await this.#connection()).execute<T>(sql, values)
+  }
+
+  /**
+   * Doc 42: a query's rows one at a time, never held whole (M5.40), on a
+   * connection of its own that ends with them. Breaking out early ends the
+   * statement: its transaction is rolled back, and a `FOR UPDATE`'s hold on
+   * the writer released.
+   */
+  stream<T = unknown>(sql: string | QueryOptions, values?: readonly unknown[]): RowStream<T> {
+    return ownedStream<T>(() => this.connect(), sql, values)
+  }
+
+  /** Doc 42: every schema, as SHOW DATABASES lists them. */
+  async schemas(): Promise<string[]> {
+    return introspection.schemas((sql, values) => this.query(sql, values))
+  }
+
+  /** Doc 42: a schema's tables and views, by name; the database `open` named, when none is given. */
+  async tables(schema?: string): Promise<TableInfo[]> {
+    return introspection.tables((sql, values) => this.query(sql, values), schema)
+  }
+
+  /** Doc 42: a table's or a view's columns, in its order. */
+  async columns(schema: string, table: string): Promise<ColumnInfo[]> {
+    return introspection.columns((sql, values) => this.query(sql, values), schema, table)
+  }
+
+  /** Doc 42: the plan a statement would run, as EXPLAIN FORMAT=TREE prints it. */
+  async explain(sql: string, values?: readonly unknown[]): Promise<string> {
+    return introspection.explain((text, v) => this.query(text, v), sql, values)
+  }
+
+  /** Doc 42: the buffer pool, the history of committed transactions, and the server's counters, through SHOW GLOBAL STATUS and INNODB_METRICS. */
+  async stats(): Promise<DatabaseStats> {
+    return introspection.stats((sql, values) => this.query(sql, values))
   }
 
   /** Doc 42: a transaction on a connection of its own, which `commit()` or `rollback()` ends. */

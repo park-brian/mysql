@@ -1,7 +1,7 @@
 // M1.10–M1.15 — authentication.
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { Writer } from '@myjs/bytes'
+import { Writer, concatBytes as concat } from '@myjs/bytes'
 import {
   MapAccountStore,
   ServerAuthenticator,
@@ -23,7 +23,6 @@ import {
   rsaEncrypt,
   xorRotating,
   utf8,
-  concat,
   CACHING_SHA2_PASSWORD,
   MYSQL_NATIVE_PASSWORD,
   SCRAMBLE_LENGTH,

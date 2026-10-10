@@ -400,6 +400,10 @@ export function createTableSpec(node: CreateTableNode, schemaCollation: number):
   if (fulltext.length > 0) options['fulltext'] = fulltext
   const comment = option(node.options, 'COMMENT')
   if (comment !== undefined) options['comment'] = comment
+  // Statistics kept from the last ANALYZE rather than recomputed as rows change (M5.45).
+  // STATS_AUTO_RECALC=0 freezes the table's statistics at its last ANALYZE (M5.45); either value written is shown again.
+  const recalc = option(node.options, 'STATS_AUTO_RECALC')
+  if (recalc === '0' || recalc === '1') options['statsAutoRecalc'] = recalc === '1'
   checkGenerated(columns)
   return { name: node.table.name, engine, columns, indexes, options }
 }

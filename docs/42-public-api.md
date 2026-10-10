@@ -17,9 +17,9 @@ work item that builds the rest:
 | `query()`, `execute()`, `connect()`, `begin()`, `transaction()` | yes (M5.36) | |
 | `execProtocol()`, `createStream()`, `createPort()`, `createConnection()` | yes (M1.24) | |
 | `serve()` from `myjs/server` | yes (M1.24) | |
-| real `INFORMATION_SCHEMA`, `SHOW`, `EXPLAIN` | yes (M5.13 begun) | |
-| `db.stream()` | no | M5.40, pinned to 0.4 |
-| `db.schemas()`, `tables()`, `columns()`, `explain()`, `stats()` | no | M5.13 |
+| real `INFORMATION_SCHEMA`, `SHOW`, `EXPLAIN` | yes (M5.13 begun) | SHOW VARIABLES, STATUS, ENGINES and TABLE STATUS after 0.3 (M5.13) |
+| `db.stream()` | no | built after 0.3 was staged (M5.40); in 0.4 |
+| `db.schemas()`, `tables()`, `columns()`, `explain()`, `stats()` | no | built after 0.3 was staged (M5.13); in 0.4 |
 | `MySQLWorker`, `myjs/worker` | no | M6.6 |
 | `dump()`, `MySQL.load()` | no | M6.8 |
 | `importTablespace()`, `exportTablespace()` | no | M7.10, M7.11 |
@@ -75,7 +75,7 @@ const [result] = await db.execute(
 result.affectedRows   // 1
 result.insertId       // 42
 
-// streaming — never materialise a large resultset — not in 0.3: M5.40
+// streaming — never materialise a large resultset (M5.40, in 0.4)
 for await (const row of db.stream('SELECT * FROM big_table')) {
   process(row)
 }
@@ -117,9 +117,25 @@ them, and `execute()` prepares once per text and sends each value as
   `db.transaction()` each take a connection of their own, since a
   transaction is a session's state.
 
-`db.stream()` is not built yet. D-77 answers Q-11 in principle — a read
-already pauses every 256 rows, so rows can be handed out a batch at a time —
-and M5.40 builds it for 0.4.
+### Streaming (M5.40)
+
+`db.stream(sql, values?)` is an async iterator of rows, shaped as `query()`
+shapes them, on a connection of its own that ends with the rows.
+`connection.stream()` does the same on a connection already held, a
+transaction's included, and nothing else runs on that connection meanwhile.
+The rows are read as the server sends them, and the server reads them as
+they are taken (D-85): a reader that stops taking stops the statement, so
+the memory held is a batch, whatever the result's size. Leaving the loop
+early, with `break` or a throw, closes the stream's connection, which ends
+the statement and rolls back its transaction, and a `FOR UPDATE`'s hold on
+the writer goes with it. A statement that fails part way throws after the
+rows read before the failure, as a server sends them.
+
+What streams is the reading. A sort, a hash join's build, a temporary
+table for GROUP BY or DISTINCT, and a window's partition each read their
+input whole before they hand out a row, as they do on a server, and until
+M5.23 they hold it in memory. `mysql2`'s own `query().stream()` streams the
+same way, over `createStream()` and `serve()` alike.
 
 ## Transactions
 
@@ -271,13 +287,18 @@ Exactly `mysql2`'s error shape, so existing `catch` blocks keep working.
 ## Introspection
 
 ```js
-// not in 0.3: M5.13
-await db.schemas()                    // string[]
-await db.tables('myapp')              // TableInfo[]
-await db.columns('myapp', 'users')    // ColumnInfo[]
-await db.explain('SELECT ...')        // the plan
-await db.stats()                      // buffer pool, WAL, history length, sizes
+// M5.13, in 0.4
+await db.schemas()                    // string[], as SHOW DATABASES lists them
+await db.tables('myapp')              // TableInfo[]: name, type, engine, collation, comment
+await db.columns('myapp', 'users')    // ColumnInfo[]: name, position, type, nullable, default, key, extra, collation, comment
+await db.explain('SELECT ...', [v])   // the plan, as EXPLAIN FORMAT=TREE prints it
+await db.stats()                      // buffer pool pages and traffic, page size, history length, uptime, questions, connections
 ```
+
+Each is a query through the client, as the first rule asks: INFORMATION_SCHEMA
+for the first three, EXPLAIN for the plan, SHOW GLOBAL STATUS and
+INNODB_METRICS for the figures, so what they report is what a tool reading
+those tables would see, and what 8.4.11 reports for the same schema.
 
 Plus real `INFORMATION_SCHEMA` tables, because migration tools query them
 directly rather than using any library API.

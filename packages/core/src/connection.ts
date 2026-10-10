@@ -71,6 +71,13 @@ export interface ConnectionOptions {
   readonly now?: () => number
 }
 
+/**
+ * Bytes a streamed response may queue ahead of its transport before the
+ * statement waits for them to be taken (M5.40): a few batches of ordinary
+ * rows, and bounded whatever the result's size.
+ */
+const HIGH_WATER = 64 * 1024
+
 type Phase = 'new' | 'awaiting-handshake-response' | 'authenticating' | 'command' | 'closed'
 
 export class ProtocolConnection {
@@ -110,6 +117,7 @@ export class ProtocolConnection {
     if (this.#ended) return
     this.#ended = true
     this.#phase = 'closed'
+    this.#roomMade?.()
     if (this.#session !== null) this.#options.executor.end?.(this.#session)
   }
 
@@ -140,11 +148,40 @@ export class ProtocolConnection {
 
   /** Frame and queue one packet payload for sending. */
   #send(payload: Uint8Array): void {
-    this.#out.push(this.#framer.encode(payload))
+    const framed = this.#framer.encode(payload)
+    this.#out.push(framed)
+    this.#queued += framed.length
+    this.#output?.()
+  }
+
+  #queued = 0
+  #output: (() => void) | undefined
+  #roomMade: (() => void) | undefined
+
+  /**
+   * A transport that reads as the connection writes (M5.40): `listener` is
+   * called whenever bytes are queued, and should `take()` them when it can.
+   * With one set, a streamed response waits while more than `HIGH_WATER`
+   * bytes are queued, so a transport that stops taking stops the statement;
+   * without one, every response is queued whole, as `execProtocol` needs.
+   */
+  onOutput(listener: (() => void) | undefined): void {
+    this.#output = listener
+  }
+
+  /** Resolves once the queue is below `HIGH_WATER`, or the connection has closed. */
+  async #room(): Promise<void> {
+    while (this.#output !== undefined && this.#queued > HIGH_WATER && !this.#ended) {
+      await new Promise<void>((resolve) => (this.#roomMade = resolve))
+    }
   }
 
   /** Everything queued for the client since the last call. */
   take(): Uint8Array {
+    this.#queued = 0
+    const made = this.#roomMade
+    this.#roomMade = undefined
+    made?.()
     if (this.#out.length === 0) return new Uint8Array(0)
     let total = 0
     for (const chunk of this.#out) total += chunk.length
@@ -365,6 +402,15 @@ export class ProtocolConnection {
     })
 
     for (const packet of result.packets) this.#send(packet)
+    if (result.stream !== undefined) {
+      // Each batch is sent before the next is read; a connection that has
+      // closed stops reading, which ends the statement (M5.40).
+      for await (const packets of result.stream) {
+        for (const packet of packets) this.#send(packet)
+        await this.#room()
+        if (this.#ended) break
+      }
+    }
     if (result.close === true) {
       this.#phase = 'closed'
       return

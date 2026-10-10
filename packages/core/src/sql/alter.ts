@@ -342,7 +342,9 @@ export function alterTable(run: Run, catalog: CatalogApi, statement: AlterTableN
 
   // --- foreign keys ---
   const checks = foreignKeyChecks(run)
-  const options: Record<string, unknown> = { ...def.options }
+  // A rebuilt table's statistics are recomputed, as InnoDB's are after ALTER (M5.45).
+  const { stats: _stats, ...unanalysed } = def.options
+  const options: Record<string, unknown> = { ...unanalysed }
   const comment = optionOf('COMMENT')
   if (comment !== undefined) options['comment'] = comment
   if (fulltext.length > 0) options['fulltext'] = fulltext

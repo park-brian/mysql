@@ -27,7 +27,10 @@
 // operation keeps each row's first occurrence, in that order, as its
 // temporary table does; INTERSECT and EXCEPT keep the left branch's order.
 // The ALL forms of INTERSECT and EXCEPT count: a row the right branch holds
-// twice is kept, or removed, twice.
+// twice is kept, or removed, twice; and their temporary table holds each row
+// once with its count, so a row's copies come out together, in the order
+// rows first came (8.4.11: `2,1,NULL,2,3,1,2 EXCEPT ALL 2,5,1` is
+// 2, 2, 1, NULL, 3).
 import { CHARSET_BINARY, FIELD_TYPE } from '@myjs/bytes'
 import { encodeCollation, requireCollationInfo } from '@myjs/charsets'
 import type { SetOperationNode } from '@myjs/parser'
@@ -111,13 +114,13 @@ export function setOperationType(types: readonly ResultType[], connectionCollati
 }
 
 /**
- * A set operation that is a branch of a different one is materialized as a
- * table of its own, and its columns are as nullable as its rows can be:
- * INTERSECT only where every side is, EXCEPT as its left side, UNION where any
- * side is. The outermost operation — and a branch of the same operator, which
- * 8.4.11 flattens into it — is nullable where any side is. So `(b INTERSECT
- * a) UNION a` is NOT NULL over a nullable `b`, and `(a INTERSECT b) INTERSECT
- * a` is not.
+ * A set operation that is a branch of a UNION is materialized as a table of
+ * its own, and its columns are as nullable as its rows can be: INTERSECT only
+ * where every side is, EXCEPT as its left side. The outermost operation, a
+ * branch of the same operator (which 8.4.11 flattens into it), and a branch
+ * of an INTERSECT or an EXCEPT are nullable where any side is. So `(b
+ * INTERSECT a) UNION a` is NOT NULL over a nullable `b`, and `a EXCEPT (b
+ * INTERSECT a)` and `(a INTERSECT b) INTERSECT a` are not (8.4.11, M5.48).
  */
 export function nestedNullability(op: SetOperationNode['op'], left: boolean, right: boolean): boolean {
   return op === 'UNION' ? left || right : op === 'INTERSECT' ? left && right : left
@@ -178,31 +181,30 @@ export function setOperation(node: SetOperationNode, left: Columns, right: Colum
         const k = rowKey(conv(r))
         counts.set(k, (counts.get(k) ?? 0) + 1)
       }
+      if (all) {
+        // The left side counted too, each row once in a temporary table with how often it came, in the order rows
+        // first came; then each is sent that many times less the right's (EXCEPT), or at most the right's (8.4.11).
+        const left = new Map<string, { row: Value[]; n: number }>()
+        for (const r of leftRows()) {
+          const k = rowKey(conv(r))
+          const seen = left.get(k)
+          if (seen === undefined) left.set(k, { row: [...r], n: 1 })
+          else seen.n++
+        }
+        for (const [k, { row, n }] of left) {
+          const right = counts.get(k) ?? 0
+          const times = node.op === 'INTERSECT' ? Math.min(n, right) : n - right
+          for (let i = 0; i < times; i++) yield row
+        }
+        return
+      }
       const seen = new Set<string>()
       for (const r of leftRows()) {
         const row = [...r]
         const k = rowKey(conv(r))
-        const n = counts.get(k) ?? 0
-        if (node.op === 'INTERSECT') {
-          if (n === 0) continue
-          if (all) counts.set(k, n - 1)
-          else {
-            if (seen.has(k)) continue
-            seen.add(k)
-          }
-          yield row
-        } else {
-          if (all) {
-            if (n > 0) {
-              counts.set(k, n - 1)
-              continue
-            }
-          } else {
-            if (n > 0 || seen.has(k)) continue
-            seen.add(k)
-          }
-          yield row
-        }
+        if ((node.op === 'INTERSECT') !== (counts.has(k)) || seen.has(k)) continue
+        seen.add(k)
+        yield row
       }
     },
   }

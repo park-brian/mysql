@@ -75,6 +75,8 @@ export interface ResultType {
   readonly collationId: number
   /** How strongly a string holds its collation (`COERCIBILITY`): a column's is 2, a literal's 4, the default. */
   readonly coercibility?: number
+  /** A DOUBLE literal: as wide as text as it was written (`Item_float`'s max_length), where a computed double is 22; what a CASE or COALESCE result sizes it by. */
+  readonly literalDouble?: true
   /** A string literal's text, which collation aggregation must be able to convert into the collation it chooses (1267, 1270). */
   readonly literalText?: string
   /** The column it is, when the expression is a bare column reference. */
@@ -389,7 +391,14 @@ export function columnDefinition(name: string, t: ResultType, resultsCollation: 
     const w = streamed === undefined ? t.wire : { ...t.wire, field: streamed[0], length: streamed[1], flags: streamed[2], decimals: streamed[3] }
     const mb = requireCollationInfo(resultsCollation).mbmaxlen
     return {
-      ...(t.names ?? { schema: '', table: '', orgTable: '', orgName: '' }),
+      // A dictionary column names its table, as any column does. Read from a
+      // temporary table's field instead, it is named for the item, and a
+      // computed one has no table behind it (8.4.11, under ORDER BY).
+      ...(t.column !== undefined
+        ? { schema: t.column.schema, table: t.column.table, orgTable: t.column.orgTable, orgName: streamed === undefined ? t.column.orgName : name }
+        : t.names !== undefined && streamed !== undefined
+          ? { ...t.names, orgTable: '', orgName: name }
+          : (t.names ?? { schema: '', table: '', orgTable: '', orgName: '' })),
       name,
       characterSet: w.text ? resultsCollation : CHARSET_BINARY,
       columnLength: w.text ? Math.min(4294967295, Math.ceil(w.length / 4) * mb) : w.length,

@@ -1,4 +1,5 @@
-// M5.36 — doc 42's query API: `query`, `execute`, `begin` and `transaction`,
+// M5.36 — doc 42's query API: `query`, `execute`, `begin` and `transaction`
+// (and M5.40's `stream`),
 // shaped like `mysql2/promise` and built on the protocol (doc 42, rule 1).
 //
 // A `Connection` is one session: a `WireClient` over one `ProtocolConnection`,
@@ -7,7 +8,7 @@
 // each `begin()` and `transaction()` a connection of its own, since a
 // transaction is a session's state and two callers sharing one would share
 // it.
-import { CLIENT, hasCap, symbolOf } from '@myjs/protocol'
+import { CLIENT, hasCap, symbolOf, type ColumnDefinition } from '@myjs/protocol'
 import { binaryRow, executePacket, fieldInfo, formatQuery, textRow, type FieldInfo, type TypeOptions } from './values.ts'
 import { WireClient, WireError, type ConnectOptions, type ServerEnd, type WireResult } from './wire.ts'
 
@@ -73,6 +74,9 @@ const PREPARED_KEPT = 256
 
 const encoder = new TextEncoder()
 
+/** `Connection`'s batches, for `ownedStream`: the class hands its private method out once. */
+let batchesOf: <T>(connection: Connection, sql: string | QueryOptions, values: readonly unknown[] | undefined) => AsyncGenerator<readonly T[], void, undefined>
+
 export class Connection {
   readonly #client: WireClient
   readonly #defaults: TypeOptions
@@ -117,6 +121,43 @@ export class Connection {
       const results = await this.#run(o.sql, () => this.#client.execute(packet))
       return shape(results, o, true) as QueryResult<T>
     })
+  }
+
+  /**
+   * Doc 42's `stream()`: the text protocol's rows, one at a time, as
+   * `query()` would shape them, read as the server sends them so that the
+   * resultset is never held whole (M5.40). Nothing else runs on the
+   * connection until the rows end; ending them early (a `break`) closes it,
+   * which ends the statement and rolls back what it held.
+   */
+  stream<T = unknown>(sql: string | QueryOptions, values?: readonly unknown[]): RowStream<T> {
+    return new RowStream(this.#batches<T>(sql, values))
+  }
+
+  /** `stream()`'s rows, shaped a batch at a time, with the connection held for them. */
+  async *#batches<T>(sql: string | QueryOptions, values: readonly unknown[] | undefined): AsyncGenerator<readonly T[], void, undefined> {
+    const o = this.#options(sql, values)
+    let release!: () => void
+    await new Promise<void>((started) => {
+      void this.#serial(() => {
+        started()
+        return new Promise<void>((resolve) => (release = resolve))
+      })
+    })
+    const text = o.values === undefined ? o.sql : formatQuery(o.sql, o.values, this.#client.noBackslashEscapes, o.timezone)
+    try {
+      const { columns, rows } = await this.#client.stream(encoder.encode(text))
+      const shape = rowShape(columns, o, false)
+      for await (const batch of rows) yield batch.map(shape) as T[]
+    } catch (e) {
+      throw e instanceof WireError ? new QueryError(e, text) : e
+    } finally {
+      release()
+    }
+  }
+
+  static {
+    batchesOf = (connection, sql, values) => connection.#batches(sql, values)
   }
 
   /** BEGIN on this connection, with the isolation level and access mode given. */
@@ -179,6 +220,61 @@ export class Connection {
   }
 }
 
+/**
+ * `stream()` on a connection of its own, opened for it and ended with its
+ * rows, however they end: `db.stream()` (doc 42).
+ */
+export function ownedStream<T>(open: () => Promise<Connection>, sql: string | QueryOptions, values?: readonly unknown[]): RowStream<T> {
+  return new RowStream(
+    (async function* () {
+      const connection = await open()
+      try {
+        yield* batchesOf<T>(connection, sql, values)
+      } finally {
+        await connection.end()
+      }
+    })(),
+  )
+}
+
+/**
+ * A stream's rows, handed out of the batch in hand (M5.40). An async
+ * generator's `yield` awaits, and costs several promises a row; this costs
+ * one, so a million rows are not three million turns of the microtask queue.
+ * Ending it early (`break`, or `return()`) ends the batches, and with them
+ * the statement.
+ */
+export class RowStream<T> implements AsyncIterableIterator<T> {
+  readonly #batches: AsyncGenerator<readonly T[], void, undefined>
+  #batch: readonly T[] = []
+  #at = 0
+
+  constructor(batches: AsyncGenerator<readonly T[], void, undefined>) {
+    this.#batches = batches
+  }
+
+  async next(): Promise<IteratorResult<T, undefined>> {
+    while (this.#at === this.#batch.length) {
+      const next = await this.#batches.next()
+      if (next.done === true) return { done: true, value: undefined }
+      this.#batch = next.value
+      this.#at = 0
+    }
+    return { done: false, value: this.#batch[this.#at++] as T }
+  }
+
+  async return(): Promise<IteratorResult<T, undefined>> {
+    this.#batch = []
+    this.#at = 0
+    await this.#batches.return()
+    return { done: true, value: undefined }
+  }
+
+  [Symbol.asyncIterator](): this {
+    return this
+  }
+}
+
 /** The results as `mysql2` returns them: one, or several as arrays. */
 function shape(results: readonly WireResult[], o: QueryOptions, binary: boolean): QueryResult {
   const each = results.map((r) => one(r, o, binary))
@@ -201,17 +297,21 @@ function one(r: WireResult, o: QueryOptions, binary: boolean): QueryResult {
     }
     return [header, undefined]
   }
-  const fields = r.columns.map(fieldInfo)
-  const rows = r.rows.map((packet) => {
-    const values = binary ? binaryRow(packet, r.columns, o) : textRow(packet, r.columns, o)
+  return [r.rows.map(rowShape(r.columns, o, binary)), r.columns.map(fieldInfo)]
+}
+
+/** A row's packet as `mysql2` hands it back: an array, or an object by field name. */
+function rowShape(columns: readonly ColumnDefinition[], o: QueryOptions, binary: boolean): (packet: Uint8Array) => unknown {
+  const names = columns.map((c) => c.name)
+  return (packet) => {
+    const values = binary ? binaryRow(packet, columns, o) : textRow(packet, columns, o)
     if (o.rowsAsArray === true) return values
     const row: Record<string, unknown> = {}
-    fields.forEach((f, i) => {
-      row[f.name] = values[i]
+    names.forEach((name, i) => {
+      row[name] = values[i]
     })
     return row
-  })
-  return [rows, fields]
+  }
 }
 
 /**

@@ -26,10 +26,15 @@ export type DriverStream = Duplex
 
 export function createStream(connection: ProtocolConnection): Duplex {
   let ended = false
+  // The reader's buffer is full: nothing more is taken until it reads, so a
+  // streamed resultset waits in the connection (M5.40).
+  let full = false
+  let scheduled = false
 
   const stream = new Duplex({
     read() {
-      // Nothing to pull: bytes are pushed as the connection produces them.
+      full = false
+      flush()
     },
     write(chunk: Buffer | Uint8Array, _encoding, callback) {
       // Acknowledged at once; the connection runs its feeds in order.
@@ -59,10 +64,19 @@ export function createStream(connection: ProtocolConnection): Duplex {
   })
 
   function flush(): void {
+    scheduled = false
+    if (full || ended) return
     const out = connection.take()
-    if (out.length > 0) stream.push(Buffer.from(out))
-    if (connection.closed) finish()
+    if (out.length > 0 && !stream.push(Buffer.from(out))) full = true
+    if (!full && connection.closed) finish()
   }
+
+  // Bytes are taken as they are queued, a turn's worth at a time.
+  connection.onOutput(() => {
+    if (scheduled) return
+    scheduled = true
+    queueMicrotask(flush)
+  })
 
   function finish(): void {
     if (ended) return

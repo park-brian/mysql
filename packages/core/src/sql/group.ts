@@ -29,7 +29,7 @@
 //     `SELECT DISTINCT`'s (E-17, E-19), and an expression everything but
 //     NOT_NULL: `COUNT(*)` is 0x81 by index and 0x01 by temporary table.
 //   - `implicit`: aggregates and no GROUP BY. One row, whatever the input.
-import { CHARSET_BINARY, FIELD_TYPE } from '@myjs/bytes'
+import { CHARSET_BINARY, FIELD_TYPE, concatBytes } from '@myjs/bytes'
 import { encodeCollation, requireCollationInfo } from '@myjs/charsets'
 import type { TableDef } from '@myjs/engine'
 import { NODE, deparse, type CallNode, type Expression } from '@myjs/parser'
@@ -53,6 +53,7 @@ import {
   type Accumulator,
   type JsonDoc,
   type Value,
+  valueBytes,
 } from '@myjs/types'
 import { AGGREGATE_NAMES, asNumber, compile, type CompileContext, type Compiled, type Env, type Row } from './compile.ts'
 import { rowKey, valueKey } from './keys.ts'
@@ -394,7 +395,7 @@ function groupConcat(e: CallNode, args: readonly Compiled[], type: ResultType, d
     name: 'GROUP_CONCAT',
     type,
     start() {
-      const entries: { text: string; keys: Value[]; at: number }[] = []
+      const entries: { text: string; bytes: Uint8Array | undefined; keys: Value[] }[] = []
       const seen = distinct ? new Set<string>() : undefined
       return {
         add(row, env) {
@@ -409,7 +410,9 @@ function groupConcat(e: CallNode, args: readonly Compiled[], type: ResultType, d
             if (seen.has(k)) return
             seen.add(k)
           }
-          entries.push({ text: vs.map((v) => toText(v as Exclude<Value, null>)).join(''), keys: order.map((o) => o.expr.eval(row, env)), at: entries.length })
+          // A binary result joins bytes, which need not be text in any charset.
+          const parts = vs as Exclude<Value, null>[]
+          entries.push({ text: binary ? '' : parts.map(toText).join(''), bytes: binary ? concatBytes(parts.map(valueBytes)) : undefined, keys: order.map((o) => o.expr.eval(row, env)) })
         },
         result() {
           if (entries.length === 0) return null
@@ -419,13 +422,27 @@ function groupConcat(e: CallNode, args: readonly Compiled[], type: ResultType, d
                 const c = sortValues(a.keys[i] ?? null, b.keys[i] ?? null)
                 if (c !== 0) return (order[i] as SortKey).desc ? -c : c
               }
-              return a.at - b.at
+              return 0
             })
           }
+          if (binary) {
+            const sep = new TextEncoder().encode(separator)
+            const all = concatBytes(entries.flatMap((x, i) => (i === 0 ? [x.bytes as Uint8Array] : [sep, x.bytes as Uint8Array])))
+            return bytesValue(all.length > max ? all.slice(0, max) : all)
+          }
           let text = entries.map((x) => x.text).join(separator)
-          const bytes = encodeCollation(text, binary ? 63 : collationId)
-          if (bytes.length > max) text = new TextDecoder().decode(bytes.subarray(0, max)).replace(/�$/, '')
-          return binary ? bytesValue(encodeCollation(text, 63)) : stringValue(text, collationId)
+          if (encodeCollation(text, collationId).length > max) {
+            // Cut at the last whole character within `max` bytes, in the result's own charset.
+            let cut = ''
+            let used = 0
+            for (const ch of text) {
+              used += encodeCollation(ch, collationId).length
+              if (used > max) break
+              cut += ch
+            }
+            text = cut
+          }
+          return stringValue(text, collationId)
         },
       }
     },
@@ -502,13 +519,14 @@ export function* groupRows(source: Iterable<{ readonly row: Row }>, plan: GroupP
     for (const { row } of source) yield { row, keys: keysOf(row) }
   })()
   else {
-    const all = [...source].map(({ row }, at) => ({ row, keys: keysOf(row), at }))
+    // Stable: rows of one group keep the order they came in.
+    const all = [...source].map(({ row }) => ({ row, keys: keysOf(row) }))
     all.sort((a, b) => {
       for (let i = 0; i < K; i++) {
         const c = sortValues(a.keys[i] ?? null, b.keys[i] ?? null)
         if (c !== 0) return c
       }
-      return a.at - b.at
+      return 0
     })
     input = all
   }

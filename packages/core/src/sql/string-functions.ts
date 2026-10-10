@@ -53,9 +53,9 @@ import {
   toInteger,
   toText,
   valInt,
-  type Condition,
   type DecimalValue,
   type Value,
+  valueBytes,
 } from '@myjs/types'
 import { hexOf } from './builtins.ts'
 import {
@@ -86,12 +86,15 @@ const INT_MAX32 = 2147483647n
 const INT_MIN32 = -2147483648n
 
 /** A constant argument's integer value: `null` for a constant NULL, `undefined` for an argument that is not constant. */
-function constantInt(c: Compiled | undefined, constant: boolean, conditions?: Condition[]): bigint | null | undefined {
+function constantInt(c: Compiled | undefined, constant: boolean, ctx: CompileContext, warn = true): bigint | null | undefined {
   if (c === undefined || !constant) return undefined
   try {
     // Resolving reads the constant once, and warns once for it, as
     // `resolve_type`'s `val_int` does: `LEFT('abc', 'z')` warns twice (8.4.11).
-    const v = c.eval([], { params: [], now: new Date(0), session: undefined as never, state: undefined as never, ...(conditions === undefined ? {} : { conditions }) })
+    // Without the parameters, as before (a bound `?` reads NULL here); the session
+    // is the statement's, so CONNECTION_ID() and DATABASE() fold.
+    const env = { ...constantEnv(ctx), params: [] }
+    const v = c.eval([], warn && ctx.conditions !== undefined ? { ...env, conditions: ctx.conditions } : env)
     return v === null ? null : valInt(v)
   } catch (e) {
     expectTyped(e)
@@ -108,7 +111,7 @@ export interface Str {
 
 function strOf(v: V, binary: boolean, collation: number): Str {
   if (binary) {
-    const b = v.kind === 'bytes' ? v.v : v.kind === 'string' ? encodeCollation(v.v, v.collationId) : new TextEncoder().encode(toText(v))
+    const b = valueBytes(v)
     return { binary, units: Array.from(b, (x) => String.fromCharCode(x)) }
   }
   const text = v.kind === 'bytes' ? asText(v.v, collation) : v.kind === 'string' ? converted(v.v, v.collationId, collation) : toText(v)
@@ -248,7 +251,8 @@ const LIBRARY: ReadonlySet<string> = new Set([
   'REPLACE', 'CONCAT_WS', 'SPACE', 'ASCII', 'ROUND', 'FLOOR', 'CEIL', 'CEILING', 'TRUNCATE', 'SIGN', 'GREATEST', 'LEAST',
 ])
 
-function libraryFunction(name: string, args: readonly Compiled[], callName: string, constant: readonly boolean[], ctx: CompileContext): Compiled {
+/** What a library function's compiler asks of its call: its arguments read as numbers where it reads numbers (warning as they go, 1292), its count checked, the first argument's collation. */
+function libraryCall(name: string, args: readonly Compiled[], callName: string, ctx: CompileContext) {
   // The numeric functions read text as a double, warning as they go (1292).
   const integers = READS_INTEGER[name]
   const xs = READS_DOUBLE.has(name) && args[0] !== undefined ? [asNumber(args[0], 'DOUBLE'), ...args.slice(1)] : integers !== undefined ? args.map((a, i) => (integers.includes(i) ? asNumber(a, 'INTEGER') : a)) : args
@@ -257,6 +261,18 @@ function libraryFunction(name: string, args: readonly Compiled[], callName: stri
     if (xs.length < min || xs.length > max) throw sqlError('ER_WRONG_PARAMCOUNT_TO_NATIVE_FCT', `Incorrect parameter count in the call to native function '${callName}'`)
   }
   const first = () => firstCollation((xs[0] as Compiled).type, conn)
+  return {
+    integers,
+    xs,
+    conn,
+    arity,
+    first,
+  }
+}
+
+/** The string library: SUBSTRING, LEFT and RIGHT, the pads and trims, REPEAT, REVERSE, REPLACE, CONCAT_WS, SPACE, ASCII, LOCATE. */
+function libraryFunction(name: string, args: readonly Compiled[], callName: string, constant: readonly boolean[], ctx: CompileContext): Compiled {
+  const { xs, conn, arity, first } = libraryCall(name, args, callName, ctx)
   switch (name) {
     case 'SUBSTRING':
     case 'SUBSTR':
@@ -267,10 +283,10 @@ function libraryFunction(name: string, args: readonly Compiled[], callName: stri
       // (position 0 to nothing, as its unsigned arithmetic has it), then a
       // constant length; a NULL one leaves it whole.
       let width = widthOf((xs[0] as Compiled).type, binary)
-      const start = constantInt(xs[1], constant[1] === true, ctx.conditions)
+      const start = constantInt(xs[1], constant[1] === true, ctx)
       if (start !== null) {
         if (start !== undefined && start > INT_MIN32 && start <= INT_MAX32) width = start < 0n ? (-start > BigInt(width) ? 0 : Number(-start)) : start === 0n ? 0 : width - Math.min(Number(start) - 1, width)
-        const length = constantInt(xs[2], constant[2] === true, ctx.conditions)
+        const length = constantInt(xs[2], constant[2] === true, ctx)
         if (length !== null && length !== undefined) width = length < 0n ? 0 : length <= INT_MAX32 ? Math.min(width, Number(length)) : width
       }
       return {
@@ -295,7 +311,7 @@ function libraryFunction(name: string, args: readonly Compiled[], callName: stri
       arity(2)
       const { binary, collation, coercibility } = first()
       let width = widthOf((xs[0] as Compiled).type, binary)
-      const n = constantInt(xs[1], constant[1] === true, ctx.conditions)
+      const n = constantInt(xs[1], constant[1] === true, ctx)
       if (n !== undefined && n !== null) width = n < 0n ? 0 : n <= INT_MAX32 ? Math.min(width, Number(n)) : width
       return {
         eval: (r, env) => {
@@ -314,7 +330,7 @@ function libraryFunction(name: string, args: readonly Compiled[], callName: stri
     case 'RPAD': {
       arity(3)
       const { binary, collation, coercibility } = first()
-      const n = constantInt(xs[1], constant[1] === true, ctx.conditions)
+      const n = constantInt(xs[1], constant[1] === true, ctx)
       // `val_uint`: a negative count is a huge one.
       const width = n === undefined || n === null ? undefined : Number(n > INT_MAX32 || n < 0n ? INT_MAX32 : n)
       return {
@@ -341,7 +357,7 @@ function libraryFunction(name: string, args: readonly Compiled[], callName: stri
     case 'REPEAT': {
       arity(2)
       const { binary, collation, coercibility } = first()
-      const n = constantInt(xs[1], constant[1] === true, ctx.conditions)
+      const n = constantInt(xs[1], constant[1] === true, ctx)
       const width = n === undefined || n === null ? undefined : n === 0n ? 0 : widthOf((xs[0] as Compiled).type, binary) * Number(n > INT_MAX32 || n < 0n ? INT_MAX32 : n)
       return {
         eval: (r, env) => {
@@ -457,7 +473,7 @@ function libraryFunction(name: string, args: readonly Compiled[], callName: stri
     }
     case 'SPACE': {
       arity(1)
-      const n = constantInt(xs[0], constant[0] === true, ctx.conditions)
+      const n = constantInt(xs[0], constant[0] === true, ctx)
       const width = constant[0] === true ? (n === undefined || n === null || n < 0n ? 0 : Number(n > INT_MAX32 ? INT_MAX32 : n)) : undefined
       return {
         eval: (r, env) => {
@@ -478,7 +494,7 @@ function libraryFunction(name: string, args: readonly Compiled[], callName: stri
         eval: (r, env) => {
           const v = x.eval(r, env)
           if (v === null) return null
-          const b = v.kind === 'bytes' ? v.v : v.kind === 'string' ? encodeCollation(v.v, v.collationId) : new TextEncoder().encode(toText(v))
+          const b = valueBytes(v)
           return intValue(BigInt(b[0] ?? 0))
         },
         type: intType(3, x.type.nullable),
@@ -515,6 +531,15 @@ function libraryFunction(name: string, args: readonly Compiled[], callName: stri
 
     // --- numeric ---------------------------------------------------------------------
 
+    default:
+      throw unregistered(name)
+  }
+}
+
+/** The number functions the library holds: FLOOR, CEIL, ROUND, TRUNCATE, SIGN, GREATEST, LEAST. */
+function numberFunction(name: string, args: readonly Compiled[], callName: string, constant: readonly boolean[], ctx: CompileContext): Compiled {
+  const { xs, conn, arity } = libraryCall(name, args, callName, ctx)
+  switch (name) {
     case 'FLOOR':
     case 'CEIL':
     case 'CEILING': {
@@ -580,7 +605,7 @@ function libraryFunction(name: string, args: readonly Compiled[], callName: stri
         }
       }
       if (t.kind === 'decimal') {
-        const fixed = places === undefined ? 0n : constantInt(places, constant[1] === true)
+        const fixed = places === undefined ? 0n : constantInt(places, constant[1] === true, ctx, false)
         const wanted = fixed === undefined ? t.scale : fixed === null ? 0 : Number(fixed < -30n ? -30n : fixed > 30n ? 30n : fixed)
         let precision = t.length
         let scale = t.scale
@@ -723,7 +748,6 @@ const MORE_STRING_FUNCTIONS: ReadonlySet<string> = new Set([
 type Row = Parameters<Compiled['eval']>[0]
 
 /** A value's bytes, as a digest or BIT_LENGTH counts them: text in its charset, a number as its text. */
-export const bytesOf = (v: V): Uint8Array => (v.kind === 'bytes' ? v.v : v.kind === 'string' ? encodeCollation(v.v, v.collationId) : new TextEncoder().encode(toText(v)))
 
 /** An integer argument read with its 1292, as `val_int` reads it. */
 export function intReader(c: Compiled): (r: Row, env: Env) => bigint | null {
@@ -931,7 +955,8 @@ function fromBase64(text: string): Uint8Array | undefined {
   return Uint8Array.from(out)
 }
 
-function moreStringFunction(name: string, xs: readonly Compiled[], callName: string, label: string, using: string | undefined, constant: readonly boolean[], ctx: CompileContext, args: readonly string[]): Compiled {
+/** What the other string functions' compilers ask of a call: its count checked, whether any argument may be NULL, a hex string's type, a string in the connection's collation, the name as the server prints it. */
+function stringCall(name: string, xs: readonly Compiled[], callName: string, ctx: CompileContext) {
   const conn = ctx.connectionCollation
   const arity = (min: number, max = min): void => {
     if (xs.length < min || xs.length > max) throw sqlError('ER_WRONG_PARAMCOUNT_TO_NATIVE_FCT', `Incorrect parameter count in the call to native function '${callName}'`)
@@ -940,45 +965,137 @@ function moreStringFunction(name: string, xs: readonly Compiled[], callName: str
   const hexText = (chars: number, nullable: boolean): ResultType => ({ ...stringType(chars, conn, nullable), coercibility: COERCIBILITY.COERCIBLE })
   const conv = (s: string): Value => stringValue(s, conn, COERCIBILITY.COERCIBLE)
   const fn = name.toLowerCase()
+  return {
+    conn,
+    arity,
+    nullableAny,
+    hexText,
+    conv,
+    fn,
+  }
+}
+
+/** The rest of the string functions: CHAR, FIELD, ELT, the sets, INSERT, SUBSTRING_INDEX, QUOTE, SOUNDEX, FORMAT, BIT_LENGTH, CONV, base64, ORD. */
+/** Edits of a string: INSERT, SUBSTRING_INDEX, QUOTE, SOUNDEX. */
+function moreStringFunction(name: string, xs: readonly Compiled[], callName: string, label: string, using: string | undefined, constant: readonly boolean[], ctx: CompileContext, args: readonly string[]): Compiled {
+  const { conn, arity } = stringCall(name, xs, callName, ctx)
   switch (name) {
-    case 'CHAR': {
-      arity(1, Infinity)
-      const reads = xs.map(intReader)
-      const target = using === undefined ? undefined : using.toLowerCase() === 'binary' ? CHARSET_BINARY : (defaultCollationOf(using.toLowerCase() === 'utf8' ? 'utf8mb3' : using.toLowerCase())?.id ?? collationInfoByName(using.toLowerCase())?.id)
-      if (using !== undefined && target === undefined) throw sqlError('ER_UNKNOWN_CHARACTER_SET', `Unknown character set: '${using}'`)
-      const binary = target === undefined || target === CHARSET_BINARY
+    case 'INSERT': {
+      arity(4)
+      const [s, posC, lenC, sub] = xs as [Compiled, Compiled, Compiled, Compiled]
+      const { binary, collation, coercibility } = firstCollation(s.type, conn)
+      // A constant number inserted is as wide as its text, sign and all (8.4.11: INSERT('', 1, 1, 123) is 3 wide, -4.5 is 4).
+      let insertedWidth = widthOf(sub.type, binary)
+      if (!binary && (sub.type.kind === 'int' || sub.type.kind === 'decimal') && constant[3] === true) {
+        try {
+          const v = sub.eval([], constantEnv(ctx))
+          if (v !== null) insertedWidth = toText(v).length
+        } catch (e) {
+          expectTyped(e)
+          // A constant that cannot be read now is read when the row is.
+        }
+      }
+      const pos = intReader(posC)
+      const len = intReader(lenC)
       return {
         eval: (r, env) => {
-          const bytes: number[] = []
-          for (const read of reads) {
-            const n = read(r, env)
-            if (n === null) continue
-            const u = Number(BigInt.asUintN(32, n))
-            if (u > 0xffffff) bytes.push(u >>> 24)
-            if (u > 0xffff) bytes.push((u >>> 16) & 255)
-            if (u > 0xff) bytes.push((u >>> 8) & 255)
-            bytes.push(u & 255)
-          }
-          const b = Uint8Array.from(bytes)
-          if (binary) return bytesValue(b)
-          const info = requireCollationInfo(target as number)
-          // A single-byte charset takes any byte; ascii's past 127 are '?' (8.4.11).
-          if (info.mbmaxlen === 1) {
-            if (info.charset === 'ascii' && b.some((x) => x > 127)) raise(env, 1300, `Invalid ascii character string: '${hexOf(b)}'`)
-            const text = info.charset === 'ascii' ? Array.from(b, (x) => (x > 127 ? '?' : String.fromCharCode(x))).join('') : decodeCollation(b, target as number)
-            return stringValue(text, target as number, COERCIBILITY.COERCIBLE)
-          }
-          const text = decodeCollation(b, target as number)
-          const back = encodeCollation(text, target as number)
-          if (back.length !== b.length || back.some((x, i) => x !== b[i])) {
-            raise(env, 1300, `Invalid ${requireCollationInfo(target as number).charset} character string: '${hexOf(b)}'`)
-            return null
-          }
-          return stringValue(text, target as number, COERCIBILITY.COERCIBLE)
+          const v = s.eval(r, env)
+          const p = pos(r, env)
+          const l = len(r, env)
+          const w = sub.eval(r, env)
+          if (v === null || p === null || l === null || w === null) return null
+          const units = strOf(v, binary, collation).units
+          // The inserted text is converted first, and fails (3854) even when it is not used.
+          const inserted = strOf(w, binary, collation).units
+          if (p < 1n || p > BigInt(units.length)) return result(units, binary, collation, coercibility)
+          const start = Number(p) - 1
+          const rest = units.length - start
+          const take = l < 0n || l > BigInt(rest) ? rest : Number(l)
+          return result([...units.slice(0, start), ...inserted, ...units.slice(start + take)], binary, collation, coercibility)
         },
-        type: binary ? stringType(4 * xs.length, CHARSET_BINARY, true) : { ...stringType(4 * xs.length, target as number, true), coercibility: COERCIBILITY.COERCIBLE },
+        // A number inserted counts its digits, not the sign's place it has elsewhere (8.4.11: INSERT('', 1, 1, 123) is 3 wide).
+        type: textType(widthOf(s.type, binary) + insertedWidth, binary, collation, coercibility),
       }
     }
+    case 'SUBSTRING_INDEX': {
+      arity(3)
+      const [s, delimC, countC] = xs as [Compiled, Compiled, Compiled]
+      const { binary, collation, coercibility } = firstCollation(s.type, conn)
+      const count = intReader(countC)
+      return {
+        eval: (r, env) => {
+          const v = s.eval(r, env)
+          const d = delimC.eval(r, env)
+          const c = count(r, env)
+          if (v === null || d === null || c === null) return null
+          const text = strOf(v, binary, collation).units
+          const delim = strOf(d, binary, collation).units
+          if (delim.length === 0 || c === 0n) return result([], binary, collation, coercibility)
+          const hits: number[] = []
+          for (let i = 0; i + delim.length <= text.length; ) {
+            if (delim.every((u, k) => text[i + k] === u)) {
+              hits.push(i)
+              i += delim.length
+            } else i++
+          }
+          const n = c
+          if (n > 0n) {
+            if (n > BigInt(hits.length)) return result(text, binary, collation, coercibility)
+            return result(text.slice(0, hits[Number(n) - 1]), binary, collation, coercibility)
+          }
+          const k = -n
+          if (k > BigInt(hits.length)) return result(text, binary, collation, coercibility)
+          return result(text.slice((hits[hits.length - Number(k)] as number) + delim.length), binary, collation, coercibility)
+        },
+        type: textType(widthOf(s.type, binary), binary, collation, coercibility),
+      }
+    }
+    case 'QUOTE': {
+      arity(1)
+      const s = xs[0] as Compiled
+      // Bytes are quoted as the connection's text, 3854 when they are not text there.
+      const first = firstCollation(s.type, conn)
+      const { binary, collation, coercibility } = first.binary ? { binary: false, collation: conn, coercibility: COERCIBILITY.COERCIBLE } : first
+      return {
+        eval: (r, env) => {
+          const v = s.eval(r, env)
+          if (v === null) return result([...'NULL'], binary, collation, coercibility)
+          const out: string[] = ["'"]
+          for (const u of strOf(v, binary, collation).units) {
+            if (u === '\\' || u === "'") out.push('\\', u)
+            else if (u === '\0') out.push('\\', '0')
+            else if (u === '\x1a') out.push('\\', 'Z')
+            else out.push(u)
+          }
+          out.push("'")
+          return result(out, binary, collation, coercibility)
+        },
+        // At least 'NULL''s four.
+        type: textType(Math.max(4, s.type.kind === 'null' ? 4 : 2 * widthOf(s.type, binary) + 2), binary, collation, coercibility),
+      }
+    }
+    case 'SOUNDEX': {
+      arity(1)
+      const s = xs[0] as Compiled
+      const { binary, collation, coercibility } = firstCollation(s.type, conn)
+      return {
+        eval: (r, env) => {
+          const v = s.eval(r, env)
+          if (v === null) return null
+          return result([...soundex(strOf(v, binary, collation).units.join(''))], binary, collation, coercibility)
+        },
+        type: textType(Math.max(widthOf(s.type, binary), 4), binary, collation, coercibility),
+      }
+    }
+    default:
+      throw unregistered(name)
+  }
+}
+
+/** A string as a list or a set: FIELD, ELT, MAKE_SET, EXPORT_SET, FIND_IN_SET. */
+function listFunction(name: string, xs: readonly Compiled[], callName: string, label: string, using: string | undefined, constant: readonly boolean[], ctx: CompileContext, args: readonly string[]): Compiled {
+  const { conn, arity, nullableAny, fn } = stringCall(name, xs, callName, ctx)
+  switch (name) {
     case 'FIELD': {
       arity(2, Infinity)
       const kinds = xs.map((x) => x.type.kind)
@@ -1131,111 +1248,51 @@ function moreStringFunction(name: string, xs: readonly Compiled[], callName: str
         type: intType(3, nullableAny(s, list)),
       }
     }
-    case 'INSERT': {
-      arity(4)
-      const [s, posC, lenC, sub] = xs as [Compiled, Compiled, Compiled, Compiled]
-      const { binary, collation, coercibility } = firstCollation(s.type, conn)
-      // A constant number inserted is as wide as its text, sign and all (8.4.11: INSERT('', 1, 1, 123) is 3 wide, -4.5 is 4).
-      let insertedWidth = widthOf(sub.type, binary)
-      if (!binary && (sub.type.kind === 'int' || sub.type.kind === 'decimal') && constant[3] === true) {
-        try {
-          const v = sub.eval([], constantEnv(ctx))
-          if (v !== null) insertedWidth = toText(v).length
-        } catch (e) {
-          expectTyped(e)
-          // A constant that cannot be read now is read when the row is.
-        }
-      }
-      const pos = intReader(posC)
-      const len = intReader(lenC)
+    default:
+      throw unregistered(name)
+  }
+}
+
+/** Strings to and from numbers, bytes and other bases: CHAR, ORD, FORMAT, BIT_LENGTH, CONV, TO_BASE64, FROM_BASE64. */
+function conversionFunction(name: string, xs: readonly Compiled[], callName: string, label: string, using: string | undefined, constant: readonly boolean[], ctx: CompileContext, args: readonly string[]): Compiled {
+  const { arity, hexText, conv } = stringCall(name, xs, callName, ctx)
+  switch (name) {
+    case 'CHAR': {
+      arity(1, Infinity)
+      const reads = xs.map(intReader)
+      const target = using === undefined ? undefined : using.toLowerCase() === 'binary' ? CHARSET_BINARY : (defaultCollationOf(using.toLowerCase() === 'utf8' ? 'utf8mb3' : using.toLowerCase())?.id ?? collationInfoByName(using.toLowerCase())?.id)
+      if (using !== undefined && target === undefined) throw sqlError('ER_UNKNOWN_CHARACTER_SET', `Unknown character set: '${using}'`)
+      const binary = target === undefined || target === CHARSET_BINARY
       return {
         eval: (r, env) => {
-          const v = s.eval(r, env)
-          const p = pos(r, env)
-          const l = len(r, env)
-          const w = sub.eval(r, env)
-          if (v === null || p === null || l === null || w === null) return null
-          const units = strOf(v, binary, collation).units
-          // The inserted text is converted first, and fails (3854) even when it is not used.
-          const inserted = strOf(w, binary, collation).units
-          if (p < 1n || p > BigInt(units.length)) return result(units, binary, collation, coercibility)
-          const start = Number(p) - 1
-          const rest = units.length - start
-          const take = l < 0n || l > BigInt(rest) ? rest : Number(l)
-          return result([...units.slice(0, start), ...inserted, ...units.slice(start + take)], binary, collation, coercibility)
-        },
-        // A number inserted counts its digits, not the sign's place it has elsewhere (8.4.11: INSERT('', 1, 1, 123) is 3 wide).
-        type: textType(widthOf(s.type, binary) + insertedWidth, binary, collation, coercibility),
-      }
-    }
-    case 'SUBSTRING_INDEX': {
-      arity(3)
-      const [s, delimC, countC] = xs as [Compiled, Compiled, Compiled]
-      const { binary, collation, coercibility } = firstCollation(s.type, conn)
-      const count = intReader(countC)
-      return {
-        eval: (r, env) => {
-          const v = s.eval(r, env)
-          const d = delimC.eval(r, env)
-          const c = count(r, env)
-          if (v === null || d === null || c === null) return null
-          const text = strOf(v, binary, collation).units
-          const delim = strOf(d, binary, collation).units
-          if (delim.length === 0 || c === 0n) return result([], binary, collation, coercibility)
-          const hits: number[] = []
-          for (let i = 0; i + delim.length <= text.length; ) {
-            if (delim.every((u, k) => text[i + k] === u)) {
-              hits.push(i)
-              i += delim.length
-            } else i++
+          const bytes: number[] = []
+          for (const read of reads) {
+            const n = read(r, env)
+            if (n === null) continue
+            const u = Number(BigInt.asUintN(32, n))
+            if (u > 0xffffff) bytes.push(u >>> 24)
+            if (u > 0xffff) bytes.push((u >>> 16) & 255)
+            if (u > 0xff) bytes.push((u >>> 8) & 255)
+            bytes.push(u & 255)
           }
-          const n = c
-          if (n > 0n) {
-            if (n > BigInt(hits.length)) return result(text, binary, collation, coercibility)
-            return result(text.slice(0, hits[Number(n) - 1]), binary, collation, coercibility)
+          const b = Uint8Array.from(bytes)
+          if (binary) return bytesValue(b)
+          const info = requireCollationInfo(target as number)
+          // A single-byte charset takes any byte; ascii's past 127 are '?' (8.4.11).
+          if (info.mbmaxlen === 1) {
+            if (info.charset === 'ascii' && b.some((x) => x > 127)) raise(env, 1300, `Invalid ascii character string: '${hexOf(b)}'`)
+            const text = info.charset === 'ascii' ? Array.from(b, (x) => (x > 127 ? '?' : String.fromCharCode(x))).join('') : decodeCollation(b, target as number)
+            return stringValue(text, target as number, COERCIBILITY.COERCIBLE)
           }
-          const k = -n
-          if (k > BigInt(hits.length)) return result(text, binary, collation, coercibility)
-          return result(text.slice((hits[hits.length - Number(k)] as number) + delim.length), binary, collation, coercibility)
-        },
-        type: textType(widthOf(s.type, binary), binary, collation, coercibility),
-      }
-    }
-    case 'QUOTE': {
-      arity(1)
-      const s = xs[0] as Compiled
-      // Bytes are quoted as the connection's text, 3854 when they are not text there.
-      const first = firstCollation(s.type, conn)
-      const { binary, collation, coercibility } = first.binary ? { binary: false, collation: conn, coercibility: COERCIBILITY.COERCIBLE } : first
-      return {
-        eval: (r, env) => {
-          const v = s.eval(r, env)
-          if (v === null) return result([...'NULL'], binary, collation, coercibility)
-          const out: string[] = ["'"]
-          for (const u of strOf(v, binary, collation).units) {
-            if (u === '\\' || u === "'") out.push('\\', u)
-            else if (u === '\0') out.push('\\', '0')
-            else if (u === '\x1a') out.push('\\', 'Z')
-            else out.push(u)
+          const text = decodeCollation(b, target as number)
+          const back = encodeCollation(text, target as number)
+          if (back.length !== b.length || back.some((x, i) => x !== b[i])) {
+            raise(env, 1300, `Invalid ${requireCollationInfo(target as number).charset} character string: '${hexOf(b)}'`)
+            return null
           }
-          out.push("'")
-          return result(out, binary, collation, coercibility)
+          return stringValue(text, target as number, COERCIBILITY.COERCIBLE)
         },
-        // At least 'NULL''s four.
-        type: textType(Math.max(4, s.type.kind === 'null' ? 4 : 2 * widthOf(s.type, binary) + 2), binary, collation, coercibility),
-      }
-    }
-    case 'SOUNDEX': {
-      arity(1)
-      const s = xs[0] as Compiled
-      const { binary, collation, coercibility } = firstCollation(s.type, conn)
-      return {
-        eval: (r, env) => {
-          const v = s.eval(r, env)
-          if (v === null) return null
-          return result([...soundex(strOf(v, binary, collation).units.join(''))], binary, collation, coercibility)
-        },
-        type: textType(Math.max(widthOf(s.type, binary), 4), binary, collation, coercibility),
+        type: binary ? stringType(4 * xs.length, CHARSET_BINARY, true) : { ...stringType(4 * xs.length, target as number, true), coercibility: COERCIBILITY.COERCIBLE },
       }
     }
     case 'FORMAT': {
@@ -1281,7 +1338,7 @@ function moreStringFunction(name: string, xs: readonly Compiled[], callName: str
       return {
         eval: (r, env) => {
           const v = s.eval(r, env)
-          return v === null ? null : intValue(BigInt(bytesOf(v).length * 8))
+          return v === null ? null : intValue(BigInt(valueBytes(v).length * 8))
         },
         type: intType(10, s.type.nullable),
       }
@@ -1319,7 +1376,7 @@ function moreStringFunction(name: string, xs: readonly Compiled[], callName: str
       return {
         eval: (r, env) => {
           const v = s.eval(r, env)
-          return v === null ? null : conv(toBase64(bytesOf(v)))
+          return v === null ? null : conv(toBase64(valueBytes(v)))
         },
         type: hexText(len + Math.floor(len / 76), true),
       }
@@ -1332,7 +1389,7 @@ function moreStringFunction(name: string, xs: readonly Compiled[], callName: str
         eval: (r, env) => {
           const v = s.eval(r, env)
           if (v === null) return null
-          const out = fromBase64(new TextDecoder('latin1').decode(bytesOf(v)))
+          const out = fromBase64(new TextDecoder('latin1').decode(valueBytes(v)))
           return out === undefined ? null : bytesValue(out)
         },
         type: stringType(Math.floor((bytes * 3) / 4), CHARSET_BINARY, true),
@@ -1346,7 +1403,7 @@ function moreStringFunction(name: string, xs: readonly Compiled[], callName: str
           const v = s.eval(r, env)
           if (v === null) return null
           if (v.kind !== 'string') {
-            const b = bytesOf(v)
+            const b = valueBytes(v)
             return intValue(BigInt(b[0] ?? 0))
           }
           const first = [...v.v][0]
@@ -1358,6 +1415,15 @@ function moreStringFunction(name: string, xs: readonly Compiled[], callName: str
         type: intType(21, s.type.nullable),
       }
     }
+    default:
+      throw unregistered(name)
+  }
+}
+
+/** The hashes: MD5, SHA1 and SHA, SHA2, CRC32. */
+function hashFunction(name: string, xs: readonly Compiled[], callName: string, label: string, using: string | undefined, constant: readonly boolean[], ctx: CompileContext, args: readonly string[]): Compiled {
+  const { arity, hexText, conv } = stringCall(name, xs, callName, ctx)
+  switch (name) {
     case 'MD5':
     case 'SHA1':
     case 'SHA':
@@ -1368,7 +1434,7 @@ function moreStringFunction(name: string, xs: readonly Compiled[], callName: str
         return {
           eval: (r, env) => {
             const v = s.eval(r, env)
-            return v === null ? null : intValue(BigInt(crc32(bytesOf(v))), true)
+            return v === null ? null : intValue(BigInt(crc32(valueBytes(v))), true)
           },
           type: intType(10, s.type.nullable, true),
         }
@@ -1377,7 +1443,7 @@ function moreStringFunction(name: string, xs: readonly Compiled[], callName: str
       return {
         eval: (r, env) => {
           const v = s.eval(r, env)
-          return v === null ? null : conv(digest(bytesOf(v)))
+          return v === null ? null : conv(digest(valueBytes(v)))
         },
         type: hexText(name === 'MD5' ? 32 : 40, true),
       }
@@ -1416,15 +1482,28 @@ function moreStringFunction(name: string, xs: readonly Compiled[], callName: str
             raise(env, 1583, `Incorrect parameters in the call to native function 'sha2'`)
             return null
           }
-          const data = bytesOf(v)
+          const data = valueBytes(v)
           return conv(n <= 256n ? sha256(data, Number(n) as 224 | 256) : sha512(data, Number(n) as 384 | 512))
         },
         type: hexText(shaWidth, true),
       }
     }
+    default:
+      throw unregistered(name)
   }
-  throw unregistered(name)
 }
+
+/** The library's number functions, which `numberFunction` compiles. */
+const NUMBER_FUNCTIONS: ReadonlySet<string> = new Set(['FLOOR', 'CEIL', 'CEILING', 'ROUND', 'TRUNCATE', 'SIGN', 'GREATEST', 'LEAST'])
+
+/** Lists and sets, which `listFunction` compiles. */
+const LIST_FUNCTIONS: ReadonlySet<string> = new Set(['FIELD', 'ELT', 'MAKE_SET', 'EXPORT_SET', 'FIND_IN_SET'])
+
+/** Conversions, which `conversionFunction` compiles. */
+const CONVERSION_FUNCTIONS: ReadonlySet<string> = new Set(['CHAR', 'FORMAT', 'BIT_LENGTH', 'CONV', 'TO_BASE64', 'FROM_BASE64', 'ORD'])
+
+/** The hashes, which `hashFunction` compiles. */
+const HASH_FUNCTIONS: ReadonlySet<string> = new Set(['MD5', 'SHA1', 'SHA', 'CRC32', 'SHA2'])
 
 /** Every function this file compiles. */
 export const STRING_FUNCTIONS: ReadonlySet<string> = new Set([...LIBRARY, ...MORE_STRING_FUNCTIONS])
@@ -1434,7 +1513,8 @@ export function stringFunction(name: string, e: CallNode, ctx: CompileContext): 
   if (LIBRARY.has(name)) {
     // TRIM's side is a keyword argument, carried as such.
     const xs = e.args.map((a): Compiled => (a.kind === NODE.KEYWORD ? Object.assign({ eval: () => null, type: NULL_TYPE }, { keyword: a.word }) : compile(a, ctx)))
-    return libraryFunction(name, xs, e.name, constant, ctx)
+    return (NUMBER_FUNCTIONS.has(name) ? numberFunction : libraryFunction)(name, xs, e.name, constant, ctx)
   }
-  return moreStringFunction(name, e.args.map((a) => compile(a, ctx)), e.name, deparse(e), e.using, constant, ctx, e.args.map((a) => printedArgument(a, ctx)))
+  const family = HASH_FUNCTIONS.has(name) ? hashFunction : LIST_FUNCTIONS.has(name) ? listFunction : CONVERSION_FUNCTIONS.has(name) ? conversionFunction : moreStringFunction
+  return family(name, e.args.map((a) => compile(a, ctx)), e.name, deparse(e), e.using, constant, ctx, e.args.map((a) => printedArgument(a, ctx)))
 }

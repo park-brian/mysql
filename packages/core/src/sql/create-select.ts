@@ -17,7 +17,7 @@
 import { CHARSET_BINARY, FIELD_TYPE, expectTyped } from '@myjs/bytes'
 import { requireCollationInfo } from '@myjs/charsets'
 import type { TableDef, TableSpec } from '@myjs/engine'
-import { parseStatement, type ColumnDefinition, type CreateTableNode } from '@myjs/parser'
+import { parseStatement, type ColumnDefinition, type CreateTableNode, quoteName } from '@myjs/parser'
 import type { CheckDef } from './checks.ts'
 import { checksOf } from './checks.ts'
 import type { ResultType } from './meta.ts'
@@ -84,7 +84,6 @@ function typeOf(t: ResultType, literal: boolean): { readonly text: string; reado
   }
 }
 
-const quote = (name: string): string => `\`${name.replace(/`/g, '``')}\``
 
 /** A made column's collation, and whether it is one the column names itself: what the DDL text cannot carry. */
 export interface Collation {
@@ -123,12 +122,12 @@ export function selectColumns(
         const own = column.autoIncrement === true ? { ...base, autoIncrement: false, attributes: { ...plain, default: '0' } } : base
         // Its charset always named, since the new table's default may not be the old one's.
         const named = { ...def, options: { ...def.options, collationId: CHARSET_BINARY } }
-        return `${quote(name)} ${columnLine(run, named, own).trim().slice(quote(column.name).length + 1)}`
+        return `${quoteName(name)} ${columnLine(run, named, own).trim().slice(quoteName(column.name).length + 1)}`
       }
     }
     if ((type.kind === 'string' || type.kind === 'bytes') && !typeOf(type, false).text.includes('blob')) collations.set(name.toLowerCase(), { collationId: type.kind === 'bytes' ? CHARSET_BINARY : type.collationId, explicit: false })
     const { text, zero } = typeOf(type, literal(i))
-    return `${quote(name)} ${text}${type.nullable ? '' : ` NOT NULL${zero === undefined ? '' : ` DEFAULT ${zero}`}`}`
+    return `${quoteName(name)} ${text}${type.nullable ? '' : ` NOT NULL${zero === undefined ? '' : ` DEFAULT ${zero}`}`}`
   })
   if (lines.length === 0) return { columns: [], collations }
   return { columns: [...(parseStatement(`CREATE TABLE t (${lines.join(', ')})`) as CreateTableNode).columns], collations }

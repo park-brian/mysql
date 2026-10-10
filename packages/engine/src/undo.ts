@@ -54,6 +54,7 @@ export function writeRollPtr(out: Uint8Array, at: number, p: RollPtr | null): vo
 }
 
 export function readRollPtr(bytes: Uint8Array, at: number): RollPtr | null {
+  if (at < 0 || at + ROLL_PTR_SIZE > bytes.length) throw corruptUndo(`a roll pointer at ${at} runs past a ${bytes.length}-byte value`)
   const v = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength)
   const page = v.getUint32(at + 1)
   if (page === 0) return null
@@ -363,7 +364,9 @@ export function readEntryUndo(pool: BufferPool, at: Position): EntryUndo {
 
 /** `n` bytes from `at`, following the chain. */
 function readBytes(pool: BufferPool, at: Position, n: number): Uint8Array {
-  const out = new Uint8Array(n)
+  // Collected page by page, so a corrupt length allocates no more than the
+  // chain actually holds before it runs off the log.
+  const parts: Uint8Array[] = []
   let page = at.page
   let offset = at.offset
   for (let done = 0, hops = 0; done < n; hops++) {
@@ -374,7 +377,7 @@ function readBytes(pool: BufferPool, at: Position, n: number): Uint8Array {
       const end = DATA + v.getUint32(USED)
       if (offset < DATA || offset > end || end > p.length) throw corruptUndo(`offset ${offset} is outside page ${page}'s ${end - DATA} bytes`)
       const k = Math.min(end - offset, n - done)
-      out.set(p.subarray(offset, offset + k), done)
+      parts.push(p.slice(offset, offset + k))
       return { k, next: v.getUint32(NEXT) }
     })
     done += step.k
@@ -382,6 +385,13 @@ function readBytes(pool: BufferPool, at: Position, n: number): Uint8Array {
       page = step.next
       offset = DATA
     }
+  }
+  if (parts.length === 1) return parts[0] as Uint8Array
+  const out = new Uint8Array(n)
+  let done = 0
+  for (const part of parts) {
+    out.set(part, done)
+    done += part.length
   }
   return out
 }

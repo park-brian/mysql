@@ -13,20 +13,23 @@ import type { ColumnDef, Table, TableDef, ViewDef } from '@myjs/engine'
 import { NODE, QUERY, REF, TOKEN, deparse, lex, parseStatement, type Expression, type OrderItem, type QueryBody, type QueryExpression, type SelectNode, type SetOperationNode, type TableName, type Token } from '@myjs/parser'
 import { messages, sqlError, type ColumnDefinition, type ResultSet, type RowValue } from '@myjs/protocol'
 import { intValue, toInteger, truth, withoutHex, type Value } from '@myjs/types'
-import { compile, EMPTY_SCOPE, type CompileContext, type Compiled, type Env, type GroupKeys, type Row, type Scope, type SubqueryPlan } from './compile.ts'
+import { compile, EMPTY_SCOPE, type CompileContext, type Compiled, type Env, type GroupKeys, type QuantifiedSubquery, type Scope, type SubqueryPlan } from './compile.ts'
 import { AggregateSink, chooseStrategy, containsAggregate, groupRows, isAggregate } from './group.ts'
 import { WindowSink, applyWindows, containsWindow } from './window.ts'
 import { columnDefinition, intType, type ResultType } from './meta.ts'
-import { FIELD_TYPE, expectTyped } from '@myjs/bytes'
-import { requireCollationInfo } from '@myjs/charsets'
+import { expectTyped } from '@myjs/bytes'
 import { distinct, filter, limit, project, sort, type SortKey } from './operators.ts'
-import { FULL_SCAN, accessRows, chooseAccess, isConstant, splitAnd } from './plan.ts'
+import { isConstant, splitAnd } from './plan.ts'
 import { TableScope } from './scope.ts'
-import { planFrom, type DerivedSource, type FromContext, type FromPlan, type JoinCondition } from './from.ts'
+import { planFrom, type DerivedPlan, type DerivedSource, type FromContext, type FromPlan, type JoinCondition } from './from.ts'
 import { rowKey } from './keys.ts'
+import { planNode, wrap, type PlanNode } from './explain.ts'
+import { describeStages, runStages, type Rowed, type Stage } from './pipeline.ts'
 import { convert as convertSetValue, nestedNullability, setOperation, setOperationType } from './setop.ts'
 import { constTablesHaveRows, neverEqual, optimizerFacts } from './optimize.ts'
 import { informationSchemaTable } from './information-schema.ts'
+import { performanceSchemaTable } from './performance-schema.ts'
+import { statisticsOf } from './stats.ts'
 import type { SqlSession } from './session.ts'
 import { toWire, type WireProtocol } from './wire.ts'
 import type { Trx } from '@myjs/engine'
@@ -58,8 +61,12 @@ export interface Run {
   readonly database?: string | null
   /** The views being expanded, outermost first, as `schema.name`: one met again is 1146. */
   readonly views?: readonly string[]
-  /** SHOW INDEX: STATISTICS counts each key's distinct values, as InnoDB's statistics would say them. */
-  readonly exactStatistics?: boolean
+  /** The subqueries the SELECT being planned compiles, each with the clause it is in: what its EXPLAIN prints beside it. */
+  readonly subqueries?: { readonly clause: string; readonly query: QueryExpression; readonly plan: SelectPlan }[]
+  /** Those subqueries compiled as `[NOT] IN`, `= ALL` and their like, and how (M5.47). */
+  readonly quantified?: Map<QueryExpression, QuantifiedSubquery>
+  /** The SELECT's WHERE and HAVING, where a subquery's predicate may stand at the top, for EXPLAIN (M5.47). */
+  readonly clauses?: Readonly<Record<string, Expression | undefined>>
 }
 
 export function compileContext(run: Run, scope: Scope, clause: string): CompileContext {
@@ -71,7 +78,12 @@ export function compileContext(run: Run, scope: Scope, clause: string): CompileC
     state: run.state,
     serverVersion: run.serverVersion,
     ...(run.params === undefined ? {} : { params: run.params }),
-    subquery: (q, outer) => planSubquery(run, q, outer),
+    subquery: (q, outer) => {
+      const plan = planSubquery(run, q, outer)
+      run.subqueries?.push({ clause, query: q, plan: plan.plan })
+      return plan
+    },
+    quantified: (q, how) => void run.quantified?.set(q, how),
     table: (schema, name) => run.catalog?.table(schema, name),
     ...(run.env.conditions === undefined ? {} : { conditions: run.env.conditions }),
     sql: run.sql,
@@ -83,10 +95,12 @@ export function fromContext(run: Run): FromContext {
   return {
     open: (name, alias) => openTable(run, name, alias),
     compileOn: (e, scope) => compile(e, compileContext(run, scope, 'on clause')),
+    env: run.env,
+    ...(run.catalog === undefined ? {} : { statistics: (def: TableDef, table: Table) => statisticsOf(def, table, (run.catalog as CatalogApi).store) }),
     derived: (ref, lateral) => derivedTable(run, ref.query, ref.alias as string, ref.columns, lateral),
     cte: (name) => run.ctes?.get(name)?.(),
     view: (name, alias) => viewTable(run, name, alias),
-    system: (name, alias) => informationSchemaTable(run, name, alias, defaultDatabase(run)),
+    system: (name, alias) => informationSchemaTable(run, name, alias, defaultDatabase(run)) ?? performanceSchemaTable(run, name, alias, defaultDatabase(run)),
     ...(run.parent === undefined ? {} : { parent: run.parent }),
   }
 }
@@ -246,6 +260,21 @@ export interface SelectPlan {
    * absence makes the result empty and its metadata unmaterialized (M5.4).
    */
   columnsAt?(trx: Trx | undefined): readonly { readonly name: string; readonly type: ResultType }[]
+  /**
+   * The plan as 8.4.11's iterators (M5.44): the tree, then each subquery's,
+   * as EXPLAIN FORMAT=TREE prints them. Absent where the plan is not yet
+   * described, which EXPLAIN refuses. `materialized`: a sort or a limit
+   * reads it from a table, so a UNION ALL is no longer streamed (Append).
+   */
+  explain?(materialized?: boolean): readonly PlanNode[] | undefined
+  /** A set operation's branches, for an enclosing one of the same operator to flatten into its own. */
+  readonly members?: SetMembers
+}
+
+/** One set operator's branches, flattened as 8.4.11 flattens a chain of it: each with whether it joined the chain with ALL. */
+interface SetMembers {
+  readonly op: SetOperationNode['op']
+  readonly items: readonly { readonly node: PlanNode; readonly all: boolean }[]
 }
 
 /**
@@ -258,7 +287,7 @@ export function planQuery(run: Run, q: QueryExpression): SelectPlan {
   const body = q.body
   switch (body.kind) {
     case QUERY.SELECT:
-      return planSelect(r, q, body)
+      return planSelect({ ...r, subqueries: [], quantified: new Map(), clauses: { 'where clause': body.where, 'having clause': body.having } }, q, body)
     case QUERY.QUERY:
       if (q.orderBy === undefined && q.limit === undefined) return planQuery(r, body)
       return orderedResult(r, q, planQuery(r, body))
@@ -273,11 +302,12 @@ function planSelect(run: Run, q: QueryExpression, node: SelectNode): SelectPlan 
 
   // FROM: nothing, `DUAL`, or tables joined (M5.4).
   const refs = (node.from ?? []).filter((r) => !(r.kind === REF.TABLE && r.table.schema === undefined && r.table.name.toLowerCase() === 'dual' && r.alias === undefined && (node.from ?? []).length === 1))
-  const from = refs.length === 0 ? undefined : planFrom(refs, fromContext(run), node.where)
+  const from = refs.length === 0 ? undefined : planFrom(refs, fromContext(run), node.where, (node.options ?? []).includes('STRAIGHT_JOIN'))
   const scope = from?.scope
+  const constants = constRows(run, from, node)
   const source = from?.single
   const lookup: Scope = scope ?? run.parent ?? EMPTY_SCOPE
-  if (from !== undefined && scope !== undefined) chooseCovering(from, scope, node, q)
+  if (from !== undefined && scope !== undefined) from.reads(columnsRead(scope, node, q))
 
   // An aggregate anywhere in the select list or HAVING makes the query a
   // grouped one, even with no GROUP BY; one in ORDER BY alone does not, and
@@ -288,7 +318,7 @@ function planSelect(run: Run, q: QueryExpression, node: SelectNode): SelectPlan 
     throw sqlError('ER_AGGREGATE_ORDER_NON_AGG_QUERY', `Expression #${at} of ORDER BY contains aggregate function and applies to the result of a non-aggregated query`)
   }
   const windowed = node.items.some((i) => containsWindow(i.expr)) || (q.orderBy ?? []).some((o) => containsWindow(o.expr))
-  if (grouped) return planGrouped(run, q, node, from, lookup, windowed)
+  if (grouped) return planGrouped(run, q, node, from, lookup, windowed, constants)
   // Window functions (M5.6) write into slots past the FROM row.
   const windowBase = from?.width ?? 0
   const windows = windowed ? new WindowSink(compileContext(run, lookup, 'window order by'), windowBase, node.windows) : undefined
@@ -317,13 +347,22 @@ function planSelect(run: Run, q: QueryExpression, node: SelectNode): SelectPlan 
     for (const item of items) if (item.compiled.type.temporary === undefined) item.compiled = { ...item.compiled, type: { ...item.compiled.type, temporary: 'stream' } }
   }
 
+  // An ORDER BY item that reads only a STRAIGHT_JOIN's const tables is a constant, which nothing sorts by (8.4.11).
+  const constantKey = (o: OrderItem): boolean => constants.size > 0 && !refersToRow(orderedExpr(o, items), lookup, constants)
+
   // `SELECT DISTINCT` is run through a temporary table — which changes the
   // metadata a client sees — unless the select list holds a whole key of NOT
   // NULL columns, in which case every row is distinct already and MySQL drops
   // the DISTINCT.
   let dataColumns: ((trx: Trx | undefined) => readonly ResultType[]) | undefined
+  // What runs through a temporary table, as the metadata rules below decide: EXPLAIN shows the same.
+  let deduplicated = false
+  let constantDistinct: 'group' | 'limit' | undefined
+  let streamed = false
   const limitCount = q.limit === undefined ? undefined : limitValue(run, q.limit.count, 'LIMIT')
   const offset = q.limit?.offset === undefined ? 0 : limitValue(run, q.limit.offset, 'LIMIT')
+  if (from !== undefined && scope !== undefined) from.sortedBy(sortTable(q.orderBy?.map((o) => o.expr), undefined, items, scope), limitCount === undefined ? Infinity : offset + limitCount)
+  if (from !== undefined && scope !== undefined && node.distinct === true) from.distinctReads(keyAliases(items.flatMap((i) => (i.expr === undefined ? [] : [i.expr])), items, scope))
   const facts = source === undefined ? undefined : whereFacts(run, source.def, source.alias, node.where)
   // A prepare reports a statement before MySQL optimizes it, so it never sees
   // the temporary table: COM_STMT_PREPARE's metadata has no GROUP_FLAG where
@@ -337,8 +376,11 @@ function planSelect(run: Run, q: QueryExpression, node: SelectNode): SelectPlan 
       const name = item.compiled.type.column?.orgName.toLowerCase()
       return name !== undefined && [...facts.pins].some((c) => c.name.toLowerCase() === name)
     }
-    const constant = zero || facts.impossible || facts.constTable || items.every((item) => pinnedName(item))
+    // The range optimizer's proofs too: `g BETWEEN NULL AND 4` over an indexed `g` (8.4.11).
+    const impossible = facts.impossible || (from !== undefined && optimizerFacts(from, node.where, limitCount, compileContext(run, EMPTY_SCOPE, 'where clause'), run.env, false).empty)
+    const constant = zero || impossible || facts.constTable || items.every((item) => pinnedName(item))
     if (!constant) {
+      deduplicated = true
       // A constant is not copied into the table: `SELECT DISTINCT NULL, x`
       // reports its NULL as it always does (8.4.11).
       for (const item of items) {
@@ -348,7 +390,7 @@ function planSelect(run: Run, q: QueryExpression, node: SelectNode): SelectPlan 
         item.compiled = { ...item.compiled, type: { ...item.compiled.type, temporary: pinnedName(item) ? 'pinned' : true } }
       }
     }
-  } else if (from !== undefined && scope !== undefined && run.preparing !== true && (source === undefined || semijoins(node.where, scope) || (q.orderBy !== undefined && node.items.some((i) => correlatedIn(i.expr, scope)))) && (node.distinct === true || (q.orderBy ?? []).length > 0)) {
+  } else if (from !== undefined && scope !== undefined && run.preparing !== true && (source === undefined || semijoinSubqueries(node.where).some((sq) => !emptySubquery(run, sq)) || (q.orderBy !== undefined && node.items.some((i) => correlatedIn(i.expr, scope)))) && (node.distinct === true || (q.orderBy ?? []).length > 0)) {
     // Over a join, a DISTINCT is a temporary table and a sort reads the join's
     // rows streamed into one ("Stream results"): every item that reads the row
     // is copied, a column losing its key flags without gaining GROUP_FLAG, an
@@ -360,16 +402,31 @@ function planSelect(run: Run, q: QueryExpression, node: SelectNode): SelectPlan 
     // An ORDER BY on columns the WHERE holds to constants orders nothing, and
     // MySQL drops it before it plans a sort (8.4.11: `WHERE SCHEMA_NAME = ?
     // ORDER BY SCHEMA_NAME` over INFORMATION_SCHEMA's join streams nothing).
-    const constantOrder = node.distinct !== true && (q.orderBy ?? []).every((o) => o.expr.kind === NODE.COLUMN && pinnedByWhere(node.where, o.expr.parts))
+    const constantOrder = node.distinct !== true && (q.orderBy ?? []).every((o) => (o.expr.kind === NODE.COLUMN && pinnedByWhere(node.where, o.expr.parts)) || constantKey(o))
     const sortedFirst = constantOrder || (node.distinct !== true && (source === undefined ? from.sortsFirst(orderAliases(q, items, lookup)) : nestedLoopSemijoin(node.where, scope) && !node.items.some((i) => correlatedIn(i.expr, scope))))
-    if (!facts.empty && !sortedFirst) {
-      const consts = new Set(facts.constTables.map((t) => t.alias))
-      const fixed = new Set([...consts, ...(facts.nullTables ?? [])])
+    const consts = new Set(facts.constTables.map((t) => t.alias))
+    const fixed = new Set([...consts, ...(facts.nullTables ?? [])])
+    // With every other table a constant, a DISTINCT is one table's, and its
+    // temporary table is keyed as one table's is: GROUP_FLAG on what can be
+    // NULL (8.4.11: `SELECT DISTINCT b.nl, a.x FROM a LEFT JOIN b ON FALSE`).
+    const rest = from.tables.filter((t) => !fixed.has(t.alias))
+    const alone = node.distinct === true && source === undefined && rest.length === 1
+    // …and one that selects that table's unique key is no DISTINCT at all (8.4.11: `SELECT DISTINCT
+    // lt.n, p1.name FROM lt LEFT JOIN pa AS p1 ON … AND p1.id <> NULL` reads lt alone, flags kept).
+    const keyed = alone && facts.nullTables !== undefined && rest[0]?.def !== undefined && holdsKey(rest[0].def, node.items, rest[0].alias)
+    // A DISTINCT of constants alone is one row (8.4.11): over NULL-complemented tables a `Group` of what
+    // is read, keeping each column's flags; over const tables' rows the first row into a temporary table.
+    const exprs = items.flatMap((i) => (i.expr === undefined ? [] : [i.expr]))
+    const reads = exprs.some((e) => refersToRow(e, lookup))
+    if (node.distinct === true && source === undefined && !facts.empty && rest.length > 0 && reads && exprs.length === items.length && exprs.every((e) => !refersToRow(e, lookup, fixed))) {
+      // …but with a LIMIT, NULL-complemented columns are deduplicated as any others.
+      const nullOnly = facts.nullTables !== undefined && exprs.every((e) => !refersToRow(e, lookup, facts.nullTables))
+      constantDistinct = !nullOnly ? 'limit' : limitCount === undefined ? 'group' : undefined
+    }
+    if (!facts.empty && !semijoinEmpty(run, node.where) && !sortedFirst && !keyed && constantDistinct !== 'group') {
+      if (node.distinct === true) deduplicated = true
+      else streamed = true
       const own = items.map((i) => i.compiled.type)
-      // With every other table a constant, a DISTINCT is one table's, and its
-      // temporary table is keyed as one table's is: GROUP_FLAG on what can be
-      // NULL (8.4.11: `SELECT DISTINCT b.nl, a.x FROM a LEFT JOIN b ON FALSE`).
-      const alone = node.distinct === true && source === undefined && from.tables.filter((t) => !fixed.has(t.alias)).length === 1
       items.forEach((item) => {
         if (item.expr !== undefined && !refersToRow(item.expr, lookup, consts)) return
         const temporary = !alone ? 'stream' : item.expr === undefined || refersToRow(item.expr, lookup, fixed) ? true : 'pinned'
@@ -382,9 +439,17 @@ function planSelect(run: Run, q: QueryExpression, node: SelectNode): SelectPlan 
     }
   }
 
-  const where = node.where === undefined ? undefined : compile(node.where, compileContext(run, lookup, 'where clause'))
-  const having = node.having === undefined ? undefined : compile(substituteAliases(node.having, items), compileContext(run, selectedOnly(lookup, items, [], node.having), 'having clause'))
-  const keys = (q.orderBy ?? []).map((o) => orderKey(run, o, items, lookup, windows))
+  // The WHERE, compiled where MySQL resolves it, after the select list: a FROM
+  // applies it itself, each condition at its iterator (M5.43).
+  const whereCtx = compileContext(run, lookup, 'where clause')
+  let where: Compiled | undefined
+  if (from !== undefined) {
+    // [NOT] EXISTS over one indexed equality is a nested loop: the subquery probed for each row, in the outer table's order.
+    const semijoins = scope !== undefined && source !== undefined && nestedLoopSemijoin(node.where, scope)
+    from.filter(node.where, (e) => compile(e, whereCtx), semijoins ? (e) => semijoinNode(run, e) : undefined)
+  } else if (node.where !== undefined) where = compile(node.where, whereCtx)
+  const having = node.having === undefined || neverNullTest(node.having) ? undefined : compile(substituteAliases(node.having, items), compileContext(run, selectedOnly(lookup, items, [], node.having), 'having clause'))
+  const keys = (q.orderBy ?? []).filter((o) => !constantKey(o)).map((o) => orderKey(run, o, items, lookup, windows))
   // A window ORDER BY alone names reads the rows through its table as well.
   if (windows !== undefined && windows.windows.length > 0) {
     for (const item of items) if (item.compiled.type.temporary === undefined) item.compiled = { ...item.compiled, type: { ...item.compiled.type, temporary: 'stream' } }
@@ -395,37 +460,398 @@ function planSelect(run: Run, q: QueryExpression, node: SelectNode): SelectPlan 
   const match = keys.length === 0 && refs.length === 1 && refs[0]?.kind === REF.TABLE ? matchConjunct(node.where) : undefined
   if (match !== undefined) keys.push({ expr: compile(match, compileContext(run, lookup, 'where clause')), desc: true })
   const locking = (q.locking ?? []).length > 0
+  // An ORDER BY the index the table is read by already gives: read in its order, and nothing to sort.
+  const read = source !== undefined && from !== undefined ? from.access(run.env) : undefined
+  // Not under windows, which reorder the rows before the ORDER BY sorts them.
+  const ordered = source !== undefined && read !== undefined && !deduplicated && !windowed && match === undefined && keys.length > 0 && read.ranges === undefined ? orderingIndex(source.def, source.alias, q.orderBy ?? [], items, lookup, read.index) : undefined
+  if (ordered !== undefined) from?.readInOrder(ordered, false, (q.orderBy ?? [])[0]?.desc === true)
 
+  const stages: Stage[] = [
+    ...(where === undefined ? [] : [filterStage(where)]),
+    // HAVING without grouping filters the rows WHERE kept, before any window sees them.
+    ...(having === undefined ? [] : [{ ...filterStage(having), describe: (n: PlanNode) => withSubqueries(run, planNode('Filter', [n]), 'having clause') }]),
+    ...(windows === undefined || windows.windows.length === 0 ? [] : [windowStage(windows, windowBase)]),
+    deliverStage(items.map((i) => i.compiled), ordered === undefined ? keys : [], node.distinct === true, { deduplicated, streamed, keep: limitCount === undefined ? undefined : offset + limitCount, ...(constantDistinct === undefined ? {} : { constant: constantDistinct }) }),
+    ...(limitCount === undefined && offset === 0 ? [] : [limitStage(offset, limitCount)]),
+  ]
   return {
     columns: items.map((i) => ({ name: i.name, type: i.compiled.type })),
     locking,
     ...(dataColumns === undefined ? {} : { columnsAt: (trx: Trx | undefined) => (dataColumns as (t: Trx | undefined) => readonly ResultType[])(trx).map((type, i) => ({ name: (items[i] as { name: string }).name, type })) }),
+    explain() {
+      // An empty result the optimizer proves is no plan at all.
+      if (facts?.impossible === true || provedEmpty(run, from, node, limitCount)) return [planNode('Zero rows')]
+      // A constant table is read while planning: its row, if the WHERE holds of it, is all there is to fetch.
+      // An uncorrelated scalar subquery a unique key equals is evaluated while planning too, so it pins the key (8.4.11).
+      if ((from?.single !== undefined && (facts?.constTable === true || subqueryPinsKey(from.single.def, from.single.alias, node.where, from.scope))) || (from !== undefined && from.tables.every((t) => t.derived?.constant === true))) {
+        for (const _ of from.rows(undefined, run.env, { locking: false })) return [planNode('Rows fetched before execution')]
+        return [planNode('Zero rows')]
+      }
+      const source = from === undefined ? planNode('Rows fetched before execution') : withSubqueries(run, from.explain(run.env), 'where clause')
+      const n = describeStages(source, stages)
+      return n === undefined ? undefined : [n, ...subqueryNodes(run, 'field list')]
+    },
     rows(trx, given) {
       const env = given ?? { ...run.env, ...(trx === undefined ? {} : { trx }) }
-      let rows: Iterable<{ readonly row: Row }>
+      let rows: Iterable<Rowed>
       if (from === undefined) rows = [{ row: [] }]
       else if (facts?.impossible === true) rows = []
-      else rows = from.rows(trx, env, { where: node.where, locking })
-      // HAVING without grouping filters the rows WHERE kept, before any window sees them.
-      let filtered: Iterable<{ readonly row: Row }> = filter(filter(rows, where, env), having, env)
-      if (windows !== undefined && windows.windows.length > 0) {
-        const width = windowBase + windows.windows.length
-        const all = [...filtered].map(({ row }) => {
-          const r = row.slice() as Value[]
-          while (r.length < width) r.push(null)
-          return r
-        })
-        filtered = applyWindows(all, windows.windows, env, windowBase).map((row) => ({ row }))
-      }
-      if (keys.length > 0) filtered = sort(filtered, keys, env)
-      let out: Iterable<Value[]> = project(filtered, items.map((i) => i.compiled), env)
-      if (node.distinct === true) out = distinct(out)
-      return limit(out, offset, limitCount)
+      else rows = from.rows(trx, env, { locking })
+      return values(runStages(rows, stages, env))
     },
   }
 }
 
+// --- the stages above the FROM (M5.43) -----------------------------------------------
+
+/** A condition over the rows: a Filter. */
+function filterStage(condition: Compiled): Stage {
+  return { run: (rows, env) => filter(rows, condition, env), describe: (n) => planNode('Filter', [n]) }
+}
+
+/** Window functions (M5.6), over the whole input: not yet named as 8.4.11 names them, so not explained. */
+function windowStage(windows: WindowSink, base: number): Stage {
+  return {
+    run(rows, env) {
+      const width = base + windows.windows.length
+      const all = [...rows].map(({ row }) => {
+        const r = row.slice() as Value[]
+        while (r.length < width) r.push(null)
+        return r
+      })
+      return applyWindows(all, windows.windows, env, base).map((row) => ({ row }))
+    },
+    describe: () => undefined,
+  }
+}
+
+/**
+ * ORDER BY, the select list and DISTINCT, as one iterator. The server writes
+ * DISTINCT's rows into a temporary table and sorts that; here the rows are
+ * sorted, projected and then de-duplicated, which keeps the same rows in the
+ * same order, since duplicates are identical. A sort over a join reads its
+ * rows streamed into a table first ("Stream results").
+ */
+function deliverStage(items: readonly Compiled[], keys: readonly SortKey[], unique: boolean, through: { readonly deduplicated: boolean; readonly streamed: boolean; readonly described?: boolean; readonly keep?: number | undefined; readonly constant?: 'group' | 'limit' }): Stage {
+  // A LIMIT needs only its first rows of the order, unless a DISTINCT between would drop some.
+  const keep = unique ? undefined : through.keep
+  return {
+    run(rows, env) {
+      const sorted = keys.length > 0 ? sort(rows, keys, env, keep) : rows
+      const projected = project(sorted, items, env)
+      return rowed(unique ? distinct(projected) : projected)
+    },
+    describe(n) {
+      if (through.described === false) return undefined
+      // A LIMIT with nothing to sort above the temporary table stops filling it once it holds enough (8.4.11).
+      const sized = through.keep !== undefined && keys.length === 0
+      if (through.constant === 'group') return planNode('Group (no aggregates)', [n])
+      if (through.constant === 'limit') return planNode('Limit: 1 row(s)', [planNode('Table scan on <temporary>', [planNode('Temporary table', [sized ? planNode(`Limit table size: ${through.keep} row(s)`, [n]) : n])])])
+      let out = through.deduplicated ? planNode('Table scan on <temporary>', [planNode('Temporary table with deduplication', [sized ? planNode(`Limit table size: ${through.keep} unique row(s)`, [n]) : n])]) : n
+      if (keys.length > 0) out = planNode('Sort', [wrap(through.streamed, 'Stream results', out)])
+      return out
+    },
+  }
+}
+
+/** LIMIT and OFFSET. */
+function limitStage(offset: number, count: number | undefined): Stage {
+  return {
+    run: (rows) => rowed(limit(values(rows), offset, count)),
+    describe: (n) => planNode(offset > 0 ? 'Limit/Offset' : 'Limit', [n]),
+  }
+}
+
+function* rowed(rows: Iterable<Value[]>): Generator<Rowed> {
+  for (const row of rows) yield { row }
+}
+
+function* values(rows: Iterable<Rowed>): Generator<Value[]> {
+  for (const { row } of rows) yield row as Value[]
+}
+
 // --- what MySQL's plan reads, and how ----------------------------------------------
+
+/**
+ * The subqueries a clause compiled, as EXPLAIN prints them: `Select #n` over
+ * the subquery's own plan, `n` the query block's number, which the server
+ * gives each SELECT in the order the statement's text has them.
+ */
+function subqueryNodes(run: Run, clause: string): PlanNode[] {
+  const out: PlanNode[] = []
+  // A clause may be compiled more than once (its metadata, then its rows): each subquery is one block.
+  const seen = new Set<QueryExpression>()
+  for (const s of run.subqueries ?? []) {
+    if (s.clause !== clause || seen.has(s.query)) continue
+    seen.add(s.query)
+    const roots = s.plan.explain?.()
+    const how = run.quantified?.get(s.query)
+    const rewritten = how === undefined || how.correlated ? undefined : quantifiedPlan(run, s.query, how, topLevel(run.clauses?.[clause], s.query), roots)
+    out.push(planNode(`Select #${selectNumber(run, s.query)}`, rewritten !== undefined ? [rewritten] : roots === undefined ? [] : [...roots]))
+  }
+  return out
+}
+
+/**
+ * Whether the predicate comparing with `query` stands at the top of a WHERE
+ * or HAVING, under nothing but AND and OR: there a NULL is as good as false,
+ * so an IN need not tell them apart.
+ */
+function topLevel(root: Expression | undefined, query: QueryExpression): boolean {
+  if (root === undefined) return false
+  if (root.kind === NODE.BINARY && ['AND', 'OR', '&&', '||'].includes(root.op.toUpperCase())) return topLevel(root.left, query) || topLevel(root.right, query)
+  return root.kind === NODE.BINARY && root.right.kind === NODE.SUBQUERY && root.right.query === query
+}
+
+/**
+ * How 8.4.11 runs an uncorrelated `[NOT] IN`, `= ALL` or `<> ANY` subquery it
+ * does not join (M5.47), as its plan shows; `undefined` for any other shape.
+ * The subquery is one column of one base table. An equality over an indexed
+ * column becomes EXISTS: a `Limit` of one over a lookup by the outer value,
+ * with a Filter for its WHERE. Where a NULL is not as good as false — NOT IN,
+ * outside the top of a WHERE — a nullable inner column adds two Filters (its
+ * `<is_not_null_test>`, then the equality or its NULL), and a nullable outer
+ * value one, over `Alternative plans for IN subquery`: the lookup, or a scan
+ * when the outer value is NULL. An equality over a column no index leads is
+ * materialized instead, deduplicated, and looked up by its own key. `= ALL`
+ * and `<> ANY` are EXISTS over a scan, the comparison its Filter. Each shape,
+ * and each count of Filters, as 8.4.11 printed it for every combination of
+ * nullable and indexed (M5.47's probes).
+ */
+function quantifiedPlan(run: Run, query: QueryExpression, how: QuantifiedSubquery, top: boolean, roots: readonly PlanNode[] | undefined): PlanNode | undefined {
+  const body = query.body
+  if (body.kind !== QUERY.SELECT || query.with !== undefined || query.orderBy !== undefined || body.groupBy !== undefined || body.having !== undefined || body.windows !== undefined) return undefined
+  const ref = body.from?.length === 1 ? body.from[0] : undefined
+  const item = body.items.length === 1 ? body.items[0]?.expr : undefined
+  if (ref?.kind !== REF.TABLE || item?.kind !== NODE.COLUMN || containsAggregate(item)) return undefined
+  let def: TableDef | undefined
+  try {
+    def = run.catalog?.definition(ref.table.schema ?? run.env.session.database ?? '', ref.table.name)
+  } catch (e) {
+    expectTyped(e)
+  }
+  const column = def?.columns.find((c) => c.name.toLowerCase() === (item.parts[item.parts.length - 1] as string).toLowerCase())
+  if (def === undefined || column === undefined) return undefined
+  const alias = ref.alias ?? ref.table.name
+  const equality = (how.op === '=' && how.quantifier === 'ANY') || (how.op === '<>' && how.quantifier === 'ALL')
+  if (!equality && !(how.op === '=' && how.quantifier === 'ALL') && !(how.op === '<>' && how.quantifier === 'ANY')) return undefined
+  const nulls = !top || !equality || how.op === '<>'
+  const read = new Set([column.name, ...columnNames(body.where)].map((n) => n.toLowerCase()))
+  const pk = def.indexes.find((i) => i.kind === 'primary')
+  const covers = (parts: readonly { column: string }[]): boolean => [...read].every((n) => [...parts, ...(pk?.parts ?? [])].some((p) => p.column.toLowerCase() === n))
+  const index = def.indexes.find((i) => i.invisible !== true && i.parts[0]?.column === column.name && i.parts[0].prefix === undefined)
+  const where = body.where !== undefined ? 1 : 0
+  let access: PlanNode
+  let filters: number
+  if (equality) {
+    if (index === undefined) {
+      const materialized = planNode('Materialize with deduplication', roots === undefined ? [] : [...roots])
+      return planNode('Filter', [planNode('Limit', [planNode('Index lookup on <materialized_subquery> using <auto_distinct_key>', [materialized])])])
+    }
+    const unique = index.parts.length === 1 && (index.kind === 'primary' || index.kind === 'unique')
+    const covering = covers(index.parts)
+    access = planNode(`${unique ? 'Single-row ' : ''}${covering ? (unique ? 'covering index' : 'Covering index') : unique ? 'index' : 'Index'} lookup on ${alias} using ${index.name}`)
+    if (nulls && how.outerNullable) access = planNode('Alternative plans for IN subquery', [access, planNode(`Table scan on ${alias}`)])
+    filters = Math.max(nulls ? (column.nullable ? 2 : how.outerNullable ? 1 : 0) : 0, where)
+  } else {
+    const cover = def.indexes.find((i) => i.invisible !== true && covers(i.parts) && i.kind !== 'primary')
+    access = planNode(cover === undefined ? `Table scan on ${alias}` : `Covering index scan on ${alias} using ${cover.name}`)
+    filters = column.nullable ? 2 : 1
+  }
+  for (let i = 0; i < filters; i++) access = planNode('Filter', [access])
+  return planNode('Limit', [access])
+}
+
+/** Every column a clause names, by its last part. */
+function columnNames(e: unknown, out: string[] = []): string[] {
+  if (e === null || typeof e !== 'object') return out
+  const n = e as { kind?: string; parts?: readonly string[] }
+  if (n.kind === NODE.SUBQUERY) return out
+  if (n.kind === NODE.COLUMN && n.parts !== undefined) out.push(n.parts[n.parts.length - 1] as string)
+  for (const v of Object.values(e as Record<string, unknown>)) if (typeof v === 'object') columnNames(v, out)
+  return out
+}
+
+/**
+ * A WHERE's EXISTS or NOT EXISTS conjunct as the join 8.4.11 makes of it:
+ * the join, with the subquery's plan as its inner side; the outer side is
+ * the Filter's input (`filterOp`). `undefined` for any other conjunct.
+ */
+function semijoinNode(run: Run, e: Expression): PlanNode | undefined {
+  const anti = e.kind === NODE.UNARY && e.op === 'NOT' && e.operand.kind === NODE.UNARY && e.operand.op === 'EXISTS'
+  if (!anti && !(e.kind === NODE.UNARY && e.op === 'EXISTS')) return undefined
+  const query = semijoinSubqueries(e)[0]
+  const sub = (run.subqueries ?? []).find((s) => s.query === query)?.plan.explain?.()?.[0]
+  return sub === undefined ? undefined : planNode(anti ? 'Nested loop antijoin' : 'Nested loop semijoin', [sub])
+}
+
+/** A Filter with a clause's subqueries beside its input, as the server lists them; anything else as it is. */
+function withSubqueries(run: Run, n: PlanNode, clause: string): PlanNode {
+  const subs = subqueryNodes(run, clause)
+  return subs.length === 0 || n.label !== 'Filter' ? n : { ...n, children: [...n.children, ...subs] }
+}
+
+/** A query block's number: how many SELECTs the statement's text has up to its own. */
+function selectNumber(run: Run, q: QueryExpression): number {
+  let body: QueryBody = q.body
+  while (body.kind === QUERY.QUERY) body = body.body
+  const at = body.kind === QUERY.SELECT ? body.at : q.at
+  try {
+    return lex(run.sql, { sqlMode: modeOf(run.env.session.sqlMode) }).filter((t) => t.start <= at && t.kind === TOKEN.IDENTIFIER && t.quoted !== true && t.text.toUpperCase() === 'SELECT').length
+  } catch (e) {
+    expectTyped(e)
+    return 0
+  }
+}
+
+/** `IS NOT NULL` of an aggregate that is never NULL — COUNT and the BIT_ aggregates — which the server folds to TRUE and drops (8.4.11: no Filter). */
+function neverNullTest(e: Expression): boolean {
+  return e.kind === NODE.UNARY && e.op === 'IS NOT NULL' && e.operand.kind === NODE.CALL && ['COUNT', 'BIT_AND', 'BIT_OR', 'BIT_XOR'].includes(e.operand.name.toUpperCase())
+}
+
+/** Whether the WHERE equals a single-column PRIMARY or NOT NULL UNIQUE key to an uncorrelated scalar subquery. */
+function subqueryPinsKey(def: TableDef, alias: string, where: Expression | undefined, scope: TableScope): boolean {
+  const unique = (e: Expression): boolean => {
+    if (e.kind !== NODE.COLUMN || (e.parts.length >= 2 && e.parts[e.parts.length - 2] !== alias)) return false
+    const column = def.columns.find((c) => c.name.toLowerCase() === (e.parts[e.parts.length - 1] as string).toLowerCase())
+    return column !== undefined && !column.nullable && def.indexes.some((i) => i.kind !== 'index' && i.parts.length === 1 && i.parts[0]?.column === column.name && i.parts[0].prefix === undefined)
+  }
+  return splitAnd(where).some((c) => c.kind === NODE.BINARY && c.op === '=' && ([[c.left, c.right], [c.right, c.left]] as const).some(([key, value]) => value.kind === NODE.SUBQUERY && !correlatedIn(value, scope) && unique(key)))
+}
+
+/**
+ * Under STRAIGHT_JOIN a const table is not read ahead of the join order but
+ * joined as a constant row (M5.48): its aliases, which an ORDER BY over them
+ * alone does not sort by, since they are constants.
+ */
+function constRows(run: Run, from: FromPlan | undefined, node: SelectNode): ReadonlySet<string> {
+  if (from === undefined || from.tables.length < 2) return new Set()
+  const facts = optimizerFacts(from, node.where, undefined, compileContext(run, EMPTY_SCOPE, 'where clause'), run.env, (node.options ?? []).includes('STRAIGHT_JOIN'))
+  if (facts.empty) return new Set()
+  const aliases = new Set(facts.constTables.map((t) => t.alias))
+  const readAhead = facts.readAhead ?? new Set<string>()
+  if (aliases.size > 0 || facts.nullTables !== undefined || facts.outerConstants !== undefined) from.constants(new Set([...aliases].filter((a) => !readAhead.has(a))), readAhead, facts.nullTables, facts.outerConstants)
+  // An outer join's tables whose ON never holds are NULL throughout: constants as well.
+  return facts.nullTables === undefined ? aliases : new Set([...aliases, ...facts.nullTables])
+}
+
+/** The one base table a FROM's const tables leave, and where its columns begin in the row; undefined unless every other table is one of `constants`. */
+function soleTable(from: FromPlan | undefined, constants: ReadonlySet<string>): { alias: string; def: TableDef; offset: number } | undefined {
+  if (from === undefined || constants.size === 0) return undefined
+  const rest = from.tables.filter((t) => !constants.has(t.alias))
+  const t = rest.length === 1 ? rest[0] : undefined
+  return t?.def === undefined ? undefined : { alias: t.alias, def: t.def, offset: t.offset }
+}
+
+/** The expression an ORDER BY item sorts by: a select item it names by position or alias, or itself. */
+function orderedExpr(o: OrderItem, items: readonly { expr?: Expression; alias?: string }[]): Expression | undefined {
+  const e = o.expr
+  if (e.kind === NODE.LITERAL && e.type === 'int') return items[Number(e.value as bigint) - 1]?.expr
+  if (e.kind === NODE.COLUMN && e.parts.length === 1) {
+    const alias = items.find((i) => i.alias?.toLowerCase() === (e.parts[0] as string).toLowerCase())
+    if (alias !== undefined) return alias.expr
+  }
+  return e
+}
+
+/**
+ * Whether the optimizer proves the result empty — an impossible condition, a
+ * join that cannot match, a const table with no row for its key, LIMIT 0 — and
+ * plans nothing ("Zero rows (no matching row in const table)", 8.4.11).
+ */
+function provedEmpty(run: Run, from: FromPlan | undefined, node: SelectNode, limitCount: number | undefined): boolean {
+  if (limitCount === 0) return true
+  if (from === undefined) return false
+  const ctx = compileContext(run, EMPTY_SCOPE, 'where clause')
+  const facts = optimizerFacts(from, node.where, limitCount, ctx, run.env, (node.options ?? []).includes('STRAIGHT_JOIN'))
+  return facts.empty || semijoinEmpty(run, node.where) || (facts.constTables.length > 0 && !constTablesHaveRows(facts, ctx, run.env, run.env.trx))
+}
+
+/**
+ * Whether an IN or EXISTS the WHERE joins as a semijoin can never match: its
+ * subquery's own WHERE is impossible, so the whole query is empty (8.4.11:
+ * `id IN (SELECT pa_id FROM ch WHERE ch.id IS NULL)` is "Zero rows"). Only an
+ * uncorrelated subquery over one base table is judged, every column it names
+ * its own; NOT EXISTS keeps every row instead.
+ */
+function semijoinEmpty(run: Run, where: Expression | undefined): boolean {
+  return splitAnd(where).some((c) => {
+    const query = c.kind === NODE.BINARY && c.op === 'IN' && c.right.kind === NODE.SUBQUERY ? c.right.query : c.kind === NODE.UNARY && c.op === 'EXISTS' && c.operand.kind === NODE.SUBQUERY ? c.operand.query : undefined
+    return query !== undefined && emptySubquery(run, query)
+  })
+}
+
+/** Whether an uncorrelated subquery over one base table has an impossible WHERE, judged as the optimizer judges a query's. */
+function emptySubquery(run: Run, query: QueryExpression): boolean {
+  const body = query.body
+  if (body.kind !== QUERY.SELECT || body.where === undefined || body.groupBy !== undefined || body.having !== undefined || query.limit !== undefined) return false
+  const ref = body.from?.length === 1 ? body.from[0] : undefined
+  if (ref?.kind !== REF.TABLE) return false
+  const alias = ref.alias ?? ref.table.name
+  let def: TableDef | undefined
+  try {
+    def = run.catalog?.definition(ref.table.schema ?? run.env.session.database ?? '', ref.table.name)
+  } catch (e) {
+    expectTyped(e)
+  }
+  if (def === undefined) return false
+  const own = (parts: readonly string[]): boolean => (parts.length === 1 ? def.columns.some((col) => col.name.toLowerCase() === (parts[0] as string).toLowerCase()) : parts[parts.length - 2] === alias)
+  if (!columnRefs(body.where).every(own)) return false
+  try {
+    const { parent: _outer, ...alone } = run
+    const sub = planFrom([ref], fromContext(alone), body.where, false)
+    return optimizerFacts(sub, body.where, undefined, compileContext(run, EMPTY_SCOPE, 'where clause'), run.env).empty
+  } catch (e) {
+    expectTyped(e)
+    return false
+  }
+}
+
+/** Every column a clause names, as written, outside its subqueries. */
+function columnRefs(e: unknown, out: (readonly string[])[] = []): (readonly string[])[] {
+  if (e === null || typeof e !== 'object') return out
+  const n = e as { kind?: string; parts?: readonly string[] }
+  if (n.kind === NODE.SUBQUERY) return out
+  if (n.kind === NODE.COLUMN && n.parts !== undefined) out.push(n.parts)
+  for (const v of Object.values(e as Record<string, unknown>)) if (typeof v === 'object') columnRefs(v, out)
+  return out
+}
+
+/**
+ * The index a table read whole is read by — its covering index, else its
+ * clustered one — when an ORDER BY is one direction over a prefix of that
+ * index's key, which for a secondary index ends with the clustered key it
+ * carries; or the whole key and more, since nothing after a unique key orders
+ * anything. 8.4.11 reads the index in that order and sorts nothing ("Index
+ * scan on t using PRIMARY", "Covering index scan on t using name").
+ */
+function orderingIndex(def: TableDef, alias: string, order: readonly OrderItem[], items: readonly { compiled: Compiled; expr?: Expression }[], scope: Scope, readBy: string | undefined): string | undefined {
+  const clustered = def.indexes.find((i) => i.kind === 'primary' || i.name === def.clustered)
+  const index = readBy === undefined ? clustered : def.indexes.find((i) => i.name === readBy)
+  if (index === undefined || clustered === undefined || order.length === 0) return undefined
+  const desc = order[0]?.desc === true
+  const names: string[] = []
+  for (const o of order) {
+    if ((o.desc === true) !== desc) return undefined
+    let e: Expression | undefined = o.expr
+    if (e.kind === NODE.LITERAL && e.type === 'int') e = items[Number(e.value as bigint) - 1]?.expr
+    if (e === undefined || e.kind !== NODE.COLUMN) return undefined
+    let name: string | undefined
+    try {
+      const r = scope.resolve(e.parts, 'order clause')
+      const column = r.type.column
+      name = r.depth === undefined && column !== undefined && column.table === alias ? column.orgName : undefined
+    } catch (err) {
+      expectTyped(err)
+    }
+    if (name === undefined) return undefined
+    names.push(name.toLowerCase())
+  }
+  const own = index.parts.map((p) => p.column.toLowerCase())
+  const parts = index === clustered ? own : [...own, ...clustered.parts.map((p) => p.column.toLowerCase()).filter((c) => !own.includes(c))]
+  const covered = names.length <= parts.length ? names.every((n, i) => n === parts[i]) : parts.every((p, i) => p === names[i])
+  return covered ? index.name : undefined
+}
 
 /** The WHERE's IN and EXISTS subqueries MySQL runs as semijoins (NOT EXISTS, antijoins), each with the subquery. */
 function semijoinSubqueries(where: Expression | undefined): QueryExpression[] {
@@ -435,12 +861,6 @@ function semijoinSubqueries(where: Expression | undefined): QueryExpression[] {
   if (where.kind === NODE.UNARY && where.op === 'EXISTS' && where.operand.kind === NODE.SUBQUERY) return [where.operand.query]
   if (where.kind === NODE.UNARY && where.op === 'NOT' && where.operand.kind === NODE.UNARY && where.operand.op === 'EXISTS' && where.operand.operand.kind === NODE.SUBQUERY) return [where.operand.operand.query]
   return []
-}
-
-/** Whether the query is a join in MySQL's plan because of a semijoin. */
-function semijoins(where: Expression | undefined, scope: TableScope): boolean {
-  void scope
-  return semijoinSubqueries(where).length > 0
 }
 
 /**
@@ -533,24 +953,12 @@ function nullableView(scope: TableScope, aliases: ReadonlySet<string>): Scope {
   }
 }
 
-/** The bytes a column takes in an index key, as `key_length` counts it — what makes one covering index cheaper than another. */
-function keyBytes(c: ColumnDef): number {
-  const t = c.type
-  const widths: Record<number, number> = { [FIELD_TYPE.TINY]: 1, [FIELD_TYPE.SHORT]: 2, [FIELD_TYPE.INT24]: 3, [FIELD_TYPE.LONG]: 4, [FIELD_TYPE.LONGLONG]: 8, [FIELD_TYPE.FLOAT]: 4, [FIELD_TYPE.DOUBLE]: 8, [FIELD_TYPE.DATE]: 3, [FIELD_TYPE.YEAR]: 1 }
-  const fixed = widths[t.type]
-  if (fixed !== undefined) return fixed + (c.nullable ? 1 : 0)
-  if (t.type === FIELD_TYPE.NEWDECIMAL || t.type === FIELD_TYPE.DECIMAL) return Math.ceil((t.precision ?? 10) / 2) + 1 + (c.nullable ? 1 : 0)
-  if (t.type === FIELD_TYPE.DATETIME || t.type === FIELD_TYPE.TIMESTAMP) return 5 + Math.ceil((t.decimals ?? 0) / 2) + (c.nullable ? 1 : 0)
-  const mb = t.collationId === undefined ? 1 : requireCollationInfo(t.collationId).mbmaxlen
-  return (t.length ?? 1) * mb + 2 + (c.nullable ? 1 : 0)
-}
-
 /**
- * For each base table, the smallest secondary index that holds every column
- * the query reads of it — the index and the clustered key it carries — which
- * MySQL scans in place of the table when no condition picks an access path.
+ * The columns a query reads of each table of its FROM, by name in lower case,
+ * or 'all' for a table read whole (`*`): what decides which secondary index
+ * holds everything it needs (`FromPlan.reads`).
  */
-function chooseCovering(from: FromPlan, scope: TableScope, node: SelectNode, q: QueryExpression): void {
+function columnsRead(scope: TableScope, node: SelectNode, q: QueryExpression): Map<string, ReadonlySet<string> | 'all'> {
   const used = new Map<string, Set<string> | 'all'>()
   const aliases = new Set(scope.tables.map((t) => t.alias))
   const add = (alias: string, column: string | 'all'): void => {
@@ -562,9 +970,15 @@ function chooseCovering(from: FromPlan, scope: TableScope, node: SelectNode, q: 
   const visit = (e: unknown, inside: boolean): void => {
     if (e === null || typeof e !== 'object') return
     const n = e as { kind?: string; parts?: readonly string[]; query?: unknown }
+    if (n.kind === NODE.LITERAL || n.kind === NODE.PLACEHOLDER) return
     if (n.kind === NODE.SUBQUERY || n.kind === REF.DERIVED) {
       visit(n.query, true)
       return
+    }
+    // COUNT(*) counts rows and reads no column.
+    if (n.kind === NODE.CALL && String((n as { name?: unknown }).name).toUpperCase() === 'COUNT') {
+      const args = (n as { args?: readonly Expression[] }).args ?? []
+      if (args.length === 1 && args[0]?.kind === NODE.COLUMN && args[0].parts.length === 1 && args[0].parts[0] === '*') return
     }
     if (n.kind === NODE.COLUMN && n.parts !== undefined) {
       const last = n.parts[n.parts.length - 1] as string
@@ -596,22 +1010,7 @@ function chooseCovering(from: FromPlan, scope: TableScope, node: SelectNode, q: 
   visit(node.having, false)
   visit(node.from, false)
   visit(q.orderBy, false)
-  for (const t of scope.tables) {
-    const def = t.def
-    const cols = used.get(t.alias) ?? new Set<string>()
-    if (def === undefined || cols === 'all' || t.nullable) continue
-    const pk = def.indexes.find((i) => i.kind === 'primary' || i.name === def.clustered)
-    if (pk === undefined) continue
-    let best: { name: string; bytes: number } | undefined
-    for (const index of def.indexes) {
-      if (index === pk || index.invisible === true || index.parts.some((p) => p.prefix !== undefined)) continue
-      const holds = new Set([...index.parts, ...pk.parts].map((p) => p.column.toLowerCase()))
-      if (![...cols].every((c) => holds.has(c))) continue
-      const bytes = index.parts.reduce((n, p) => n + keyBytes(def.columns.find((c) => c.name === p.column) as ColumnDef), 0)
-      if (best === undefined || bytes < best.bytes) best = { name: index.name, bytes }
-    }
-    if (best !== undefined) from.cover(t.alias, best.name)
-  }
+  return used
 }
 
 /**
@@ -649,10 +1048,11 @@ function enclosing(scope: Scope, seen: () => void): Scope {
 }
 
 /** A subquery in an expression, planned with the expression's scope enclosing it. */
-function planSubquery(run: Run, q: QueryExpression, outer: Scope): SubqueryPlan {
+function planSubquery(run: Run, q: QueryExpression, outer: Scope): SubqueryPlan & { readonly plan: SelectPlan } {
   let correlated = false
   const plan = planQuery({ ...run, parent: enclosing(outer, () => (correlated = true)) }, q)
   return {
+    plan,
     columns: plan.columns,
     get correlated() {
       return correlated
@@ -688,7 +1088,7 @@ function mergeable(q: QueryExpression): boolean {
 }
 
 /** A derived table, or one reference to a CTE: its columns as the outer query sees them, and its rows. */
-function derivedTable(run: Run, query: QueryExpression, alias: string, names: readonly string[] | undefined, lateral: Scope | undefined, view?: ViewDef): DerivedSource {
+function derivedTable(run: Run, query: QueryExpression, alias: string, names: readonly string[] | undefined, lateral: Scope | undefined, view?: ViewDef, cte?: string): DerivedSource {
   let correlated = false
   const outer = lateral === undefined ? run.parent : enclosing(lateral, () => {})
   const parent: Scope | undefined =
@@ -735,6 +1135,13 @@ function derivedTable(run: Run, query: QueryExpression, alias: string, names: re
   const key = {}
   return {
     columns,
+    ...(lateral === undefined && !hasFrom(query) && query.body.kind === QUERY.SELECT ? { constant: true } : {}),
+    ...(merged ? { merged: true } : {}),
+    explain: (): DerivedPlan | undefined => {
+      const body = plan.explain?.()?.[0]
+      if (body === undefined) return undefined
+      return merged ? { merged, node: body } : { merged, materialize: cte === undefined ? 'Materialize' : `Materialize CTE ${cte}`, children: [body] }
+    },
     // Its rows are a table's fields: a hex literal's number does not survive.
     rows: (trx, env, row) => {
       if (lateral !== undefined || correlated || env.memo === undefined) return fieldRows(plan.rows(trx, lateral === undefined || row === undefined ? env : { ...env, outer: [row, ...(env.outer ?? [])] }))
@@ -790,7 +1197,7 @@ export function withClause(run: Run, w: NonNullable<QueryExpression['with']>): R
     const before: Run = at
     const recursive = w.recursive === true && references(cte.query, cte.name)
     const source = recursive ? recursiveCte(before, cte) : undefined
-    ctes.set(cte.name, () => source ?? derivedTable(before, cte.query, cte.name, cte.columns, undefined))
+    ctes.set(cte.name, () => source ?? derivedTable(before, cte.query, cte.name, cte.columns, undefined, undefined, cte.name))
     at = { ...run, ctes: new Map(ctes) }
   }
   return at
@@ -851,7 +1258,8 @@ function recursiveCte(run: Run, cte: NonNullable<QueryExpression['with']>['table
   // A recursive CTE's table is typed as a set operation's column is, from the anchor alone, and nullable.
   const columns = renamed(anchor.columns, cte.columns).map((c) => ({ name: c.name, type: { ...setOperationType([c.type], run.env.session.characterSet), nullable: true, names: { schema: '', table: cte.name, orgTable: '', orgName: c.name } } }))
   let working: readonly (readonly Value[])[] = []
-  const workingTable: DerivedSource = { columns, rows: () => working }
+  // What a recursive member reads of the CTE: the rows the last round added.
+  const workingTable: DerivedSource = { columns, rows: () => working, explain: () => ({ merged: true, node: planNode(`Scan new records on ${cte.name}`) }) }
   const ctes = new Map(run.ctes ?? [])
   ctes.set(cte.name, () => workingTable)
   const steps = recursive.map((m) => planQuery({ ...run, ctes }, asQuery(m)))
@@ -865,6 +1273,13 @@ function recursiveCte(run: Run, cte: NonNullable<QueryExpression['with']>['table
   const types = columns.map((c) => c.type)
   return {
     columns,
+    // The anchors once, then the recursive members until a round adds nothing.
+    explain: () => {
+      const roots = [...anchorPlans, ...steps].map((p) => p.explain?.()?.[0])
+      if (roots.some((r) => r === undefined)) return undefined
+      const body = roots as PlanNode[]
+      return { merged: false, materialize: `Materialize recursive CTE ${cte.name}${distinctRows ? ' with deduplication' : ''}`, children: [...body.slice(0, anchorPlans.length), planNode('Repeat until convergence', body.slice(anchorPlans.length))] }
+    },
     rows(trx, env) {
       const max = Number(toInteger(run.state.systemVariable('cte_max_recursion_depth', undefined, env.session) ?? intValue(1000n)))
       const seen = new Set<string>()
@@ -910,13 +1325,24 @@ function planSetOperation(run: Run, node: SetOperationNode, parent?: SetOperatio
   const leaves = [...leavesOf(left), ...leavesOf(right)]
   const op = setOperation(node, left.columns, right.columns, run.env.session.characterSet, leaves)
   const columns =
-    parent === undefined || parent === node.op
+    parent !== 'UNION' || parent === node.op
       ? op.columns
       : op.columns.map((c, i) => ({ name: c.name, type: { ...c.type, nullable: nestedNullability(node.op, (left.columns[i] as { type: ResultType }).type.nullable, (right.columns[i] as { type: ResultType }).type.nullable) } }))
+  // EXPLAIN: a chain of one operator is one temporary table, its branches in order.
+  const described = (p: SelectPlan): PlanNode | undefined => p.explain?.(true)?.[0]
+  const flatten = (p: SelectPlan, all: boolean): { node: PlanNode; all: boolean }[] | undefined => {
+    if (p.members !== undefined && p.members.op === node.op) return p.members.items.map((m, i) => (i === 0 ? { ...m, all } : m))
+    const n = described(p)
+    return n === undefined ? undefined : [{ node: n, all }]
+  }
+  const l = flatten(left, false)
+  const r = flatten(right, node.all === true)
+  const members: SetMembers | undefined = l === undefined || r === undefined ? undefined : { op: node.op, items: [...l, ...r] }
   return {
     columns,
     locking: left.locking || right.locking,
     leaves,
+    ...(members === undefined ? {} : { members, explain: (materialized?: boolean): readonly PlanNode[] => [setOperationNode(members, materialized === true || parent !== undefined)] }),
     rows: (trx, env) => {
       const rows = op.rows(() => left.rows(trx, env), () => right.rows(trx, env))
       if (parent !== undefined) return rows
@@ -926,6 +1352,22 @@ function planSetOperation(run: Run, node: SetOperationNode, parent?: SetOperatio
       })()
     },
   }
+}
+
+/**
+ * A set operation as 8.4.11's iterators. Its branches are written into a
+ * temporary table and read back, deduplicated as they are written unless
+ * every branch joined with ALL; branches after the chain's last DISTINCT are
+ * written without it ("Disable deduplication"). A UNION ALL nothing sorts or
+ * limits is not materialized at all: each branch is streamed in turn (Append).
+ */
+function setOperationNode(m: SetMembers, materialized: boolean): PlanNode {
+  const name = m.op === 'UNION' ? 'Union' : m.op === 'INTERSECT' ? 'Intersect' : 'Except'
+  const lastDistinct = m.items.reduce((at, x, i) => (i > 0 && !x.all ? i : at), -1)
+  if (lastDistinct < 0 && m.op === 'UNION' && !materialized) return planNode('Append', m.items.map((x) => planNode('Stream results', [x.node])))
+  const children = m.items.map((x, i) => (lastDistinct >= 0 && i > lastDistinct ? planNode('Disable deduplication', [x.node]) : x.node))
+  const how = lastDistinct < 0 ? `${name} all materialize` : `${name} materialize with deduplication`
+  return planNode(`Table scan on <${m.op.toLowerCase()} temporary>`, [planNode(how, children)])
 }
 
 /**
@@ -950,25 +1392,56 @@ function orderedResult(run: Run, q: QueryExpression, plan: SelectPlan): SelectPl
   })
   const limitCount = q.limit === undefined ? undefined : limitValue(run, q.limit.count, 'LIMIT')
   const offset = q.limit?.offset === undefined ? 0 : limitValue(run, q.limit.offset, 'LIMIT')
+  const stages: Stage[] = [...(keys.length === 0 ? [] : [sortStage(keys)]), ...(limitCount === undefined && offset === 0 ? [] : [limitStage(offset, limitCount)])]
   return {
     columns: plan.columns,
     locking: plan.locking,
     ...(plan.leaves === undefined ? {} : { leaves: plan.leaves }),
+    explain() {
+      if (limitCount === 0) return [planNode('Zero rows')]
+      // Read from a table, for the sort or the limit: a UNION ALL is no longer streamed.
+      const [root, ...rest] = plan.explain?.(true) ?? []
+      const n = root === undefined ? undefined : describeStages(root, stages)
+      return n === undefined ? undefined : [n, ...rest]
+    },
     rows(trx, given) {
       const env = given ?? { ...run.env, ...(trx === undefined ? {} : { trx }) }
-      let rows: Iterable<{ readonly row: Row }> = (function* () {
-        for (const row of plan.rows(trx, given)) yield { row }
-      })()
-      if (keys.length > 0) rows = sort(rows, keys, env)
-      return limit((function* () {
-        for (const { row } of rows) yield row as Value[]
-      })(), offset, limitCount)
+      return values(runStages(rowed(plan.rows(trx, given)), stages, env))
     },
   }
 }
 
+/** A sort of rows that are already a result's values. */
+function sortStage(keys: readonly SortKey[]): Stage {
+  return { run: (rows, env) => sort(rows, keys, env), describe: (n) => planNode('Sort', [n]) }
+}
+
 /** The tables an ORDER BY reads, through positions and aliases to the items they name. */
+/**
+ * The one table an ORDER BY, or a GROUP BY, reads (`get_sort_by_table`):
+ * with both, only if they are the same list; none if any key reads anything
+ * but that table's columns, or reads no table at all.
+ */
+function sortTable(order: readonly Expression[] | undefined, group: readonly Expression[] | undefined, items: readonly { readonly alias?: string; readonly expr?: Expression }[], scope: TableScope): string | undefined {
+  const keys = order ?? group
+  if (keys === undefined || keys.length === 0) return undefined
+  const resolved = (e: Expression): Expression | undefined => {
+    if (e.kind === NODE.LITERAL && e.type === 'int') return items[Number(e.value as bigint) - 1]?.expr
+    if (e.kind === NODE.COLUMN && e.parts.length === 1) return items.find((i) => i.alias?.toLowerCase() === (e.parts[0] as string).toLowerCase())?.expr ?? e
+    return e
+  }
+  const text = (e: Expression | undefined): string => (e === undefined ? '\u0000' : deparse(e))
+  if (order !== undefined && group !== undefined && (order.length !== group.length || order.some((o, i) => text(resolved(o)) !== text(resolved(group[i] as Expression))))) return undefined
+  const aliases = keyAliases(keys, items, scope)
+  return aliases.size === 1 && !aliases.has('\u0000') ? [...aliases][0] : undefined
+}
+
 function orderAliases(q: QueryExpression, items: readonly { readonly alias?: string; readonly expr?: Expression }[], scope: Scope): Set<string> {
+  return keyAliases((q.orderBy ?? []).map((o) => o.expr), items, scope)
+}
+
+/** The tables sort keys read, a position or an alias read through the select list; a name that resolves to nothing as `\u0000`. */
+function keyAliases(keys: readonly Expression[], items: readonly { readonly alias?: string; readonly expr?: Expression }[], scope: Scope): Set<string> {
   const out = new Set<string>()
   const visit = (e: unknown): void => {
     if (e === null || typeof e !== 'object') return
@@ -985,8 +1458,7 @@ function orderAliases(q: QueryExpression, items: readonly { readonly alias?: str
     }
     for (const v of Object.values(e)) if (typeof v === 'object') Array.isArray(v) ? v.forEach(visit) : visit(v)
   }
-  for (const o of q.orderBy ?? []) {
-    const e = o.expr
+  for (const e of keys) {
     if (e.kind === NODE.LITERAL && e.type === 'int') visit(items[Number(e.value as bigint) - 1]?.expr ?? { kind: NODE.COLUMN, parts: ['\u0000'] })
     else if (e.kind === NODE.COLUMN && e.parts.length === 1 && items.some((i) => i.alias?.toLowerCase() === (e.parts[0] as string).toLowerCase())) visit(items.find((i) => i.alias?.toLowerCase() === (e.parts[0] as string).toLowerCase())?.expr)
     else visit(e)
@@ -1043,9 +1515,12 @@ function planGrouped(
   from: FromPlan | undefined,
   lookup: Scope,
   windowed = false,
+  constants: ReadonlySet<string> = new Set(),
 ): SelectPlan {
   const scope = from?.scope
   const source = from?.single
+  // A STRAIGHT_JOIN its const tables reduce to one base table groups as that table alone would (8.4.11, M5.48).
+  const alone = source === undefined ? soleTable(from, constants) : { ...source, offset: 0 }
   const width = from?.width ?? 0
   const rollup = node.groupBy?.rollup === true
   const texts = itemTexts(run, node)
@@ -1095,10 +1570,14 @@ function planGrouped(
   // their columns go through a temporary table.
   // A key the WHERE holds to one value does not order anything: GROUP BY
   // amt, name WHERE amt = -18 groups by the index on name (8.4.11).
-  const pinned = source === undefined ? new Set<string>() : new Set([...whereFacts(run, source.def, source.alias, node.where).pins].map((c) => c.name))
-  const keyColumns = keys.map((k) => (k.index === undefined || source === undefined ? undefined : source.def.columns[k.index]?.name)).filter((c) => c === undefined || !pinned.has(c))
+  const pinned = alone === undefined ? new Set<string>() : new Set([...whereFacts(run, alone.def, alone.alias, node.where).pins].map((c) => c.name))
+  const keyColumns = keys.map((k) => (k.index === undefined || alone === undefined ? undefined : alone.def.columns[k.index - alone.offset]?.name)).filter((c) => c === undefined || !pinned.has(c))
   const distinctAggregate = [...node.items.map((i) => i.expr), ...(node.having === undefined ? [] : [node.having]), ...(q.orderBy ?? []).map((o) => o.expr)].some((e) => needsSortedGroups(e))
-  const { strategy, index: groupIndex } = chooseStrategy(source?.def, keyColumns, rollup, distinctAggregate)
+  // Keys over const tables alone are constants, one group at most: grouped as they come, and not sorted
+  // (8.4.11: `FROM p CROSS JOIN q WHERE p.id = 5 GROUP BY p.g ORDER BY 1, 2` is a Group aggregate over q).
+  const constTable = source !== undefined && run.preparing !== true && whereFacts(run, source.def, source.alias, node.where).constTable
+  const oneGroup = !rollup && keys.length > 0 && (constTable || (constants.size > 0 && keys.every((k) => !refersToRow(k.expr, lookup, constants))))
+  const { strategy, index: groupIndex } = oneGroup ? { strategy: 'index' as const, index: undefined } : chooseStrategy(alone?.def, keyColumns, rollup, distinctAggregate)
 
   const level = width + keys.length
   const sink = new AggregateSink(compileContext(run, lookup, 'field list'), level + 1)
@@ -1153,7 +1632,7 @@ function planGrouped(
   // HAVING sees the select list's aliases, its columns and the keys; a column
   // that is none of those is 1054 even when the table has it (8.4.11).
   let having: Compiled | undefined
-  if (node.having !== undefined) {
+  if (node.having !== undefined && !neverNullTest(node.having)) {
     const havingScope = selectedOnly(lookup, selectItems, keys.flatMap((k) => (k.index === undefined ? [] : [k.index])), node.having)
     having = compile(substituteAliases(node.having, selectItems), postCtx('having clause', havingScope))
   }
@@ -1193,8 +1672,9 @@ function planGrouped(
       if (key.index !== undefined && e.kind === NODE.COLUMN) return safeIndex(lookup, e.parts) === key.index
       return deparse(e) === key.text
     })
-  const stream = (strategy === 'sort' || strategy === 'index') && (q.orderBy ?? []).length > 0 && !orderMatchesKeys
+  const stream = (strategy === 'sort' || strategy === 'index') && (q.orderBy ?? []).length > 0 && !orderMatchesKeys && !oneGroup
   const groupedLimit = q.limit === undefined ? undefined : limitValue(run, q.limit.count, 'LIMIT')
+  if (from !== undefined && scope !== undefined) from.sortedBy(sortTable(q.orderBy?.map((o) => o.expr), node.groupBy?.items, selectItems, scope), groupedLimit === undefined ? Infinity : groupedLimit + (q.limit?.offset === undefined ? 0 : limitValue(run, q.limit.offset, 'LIMIT')))
   const facts = run.preparing === true ? undefined : optimizerFacts(from, node.where, groupedLimit, compileContext(run, EMPTY_SCOPE, 'where clause'), run.env, (node.options ?? []).includes('STRAIGHT_JOIN'))
   let dataColumns: ((trx: Trx | undefined) => readonly ResultType[]) | undefined
   if (facts !== undefined && !facts.empty) {
@@ -1221,7 +1701,8 @@ function planGrouped(
       // everything else is a field beside them.
       const isKeyExpression = e.kind !== NODE.COLUMN && !aggregateCall && keys.some((k) => k.index === undefined && k.text === deparse(e))
       // A key that reads only NULL-complemented tables is a constant, and no part of the table's key.
-      const keyed = (isKey || isKeyExpression) && refersToRow(e, lookup, fixed)
+      // …and so is one the WHERE holds to a constant over a join (8.4.11: `FROM p, q WHERE p.g = 1 GROUP BY q.t, p.g`).
+      const keyed = (isKey || isKeyExpression) && refersToRow(e, lookup, fixed) && !(source === undefined && e.kind === NODE.COLUMN && pinnedByWhere(node.where, e.parts))
       if (strategy === 'temp') item.compiled = { ...item.compiled, type: { ...t, temporary: keyed ? true : 'pinned', ...(aggregateCall ? { names: { schema: '', table: '', orgTable: '', orgName: '' } } : {}) } }
       else if (stream || (source === undefined && from !== undefined && strategy === 'sort' && t.column !== undefined)) {
         // A sort-based grouping over a join sorts the join's rows streamed
@@ -1235,7 +1716,13 @@ function planGrouped(
     }
   }
 
-  const where = node.where === undefined ? undefined : compile(node.where, compileContext(run, lookup, 'where clause'))
+  // The WHERE: a FROM applies it itself (M5.43); one with no FROM is a Filter here.
+  const whereCtx = compileContext(run, lookup, 'where clause')
+  let where: Compiled | undefined
+  if (from !== undefined) from.filter(node.where, (e) => compile(e, whereCtx))
+  else if (node.where !== undefined) where = compile(node.where, whereCtx)
+  // An index-ordered grouping reads that index whole, in its order, whatever range the WHERE would choose.
+  if (strategy === 'index' && groupIndex !== undefined) from?.readInOrder(groupIndex, true, false, alone?.alias)
   const limitCount = q.limit === undefined ? undefined : limitValue(run, q.limit.count, 'LIMIT')
   const offset = q.limit?.offset === undefined ? 0 : limitValue(run, q.limit.offset, 'LIMIT')
   const locking = (q.locking ?? []).length > 0
@@ -1251,41 +1738,56 @@ function planGrouped(
     }
   }
   const plan = { width, keys: keys.map((k) => k.compiled), specs: sink.specs, strategy, rollup }
+  const sortsOutput = orderKeys.length > 0 && !(orderMatchesKeys && strategy !== 'temp') && !oneGroup
+  const groups = rollup ? 'Group aggregate with rollup' : 'Group aggregate'
+  const stages: Stage[] = [
+    ...(where === undefined ? [] : [filterStage(where)]),
+    {
+      run: (rows, env) => groupRows(rows, plan, env),
+      // As the strategy runs: an Aggregate of everything, a temporary table keyed by the groups, or groups read in order — sorted for them first, a join's rows streamed into a table to be.
+      describe(n) {
+        if (strategy === 'implicit') return planNode('Aggregate', [n])
+        if (strategy === 'temp') return planNode('Table scan on <temporary>', [planNode('Aggregate using temporary table', [n])])
+        if (strategy === 'sort') return planNode(groups, [planNode('Sort', [wrap(source === undefined, 'Stream results', n)])])
+        return planNode(groups, [n])
+      },
+    },
+    ...(having === undefined ? [] : [{ ...filterStage(having), describe: (n: PlanNode) => withSubqueries(run, planNode('Filter', [n]), 'having clause') }]),
+    ...(windows === undefined || windows.windows.length === 0 ? [] : [windowStage(windows, windows.base)]),
+    // A DISTINCT over groups is not described yet.
+    deliverStage(items.map((i) => i.compiled), sortsOutput ? orderKeys : [], node.distinct === true, { deduplicated: false, streamed: stream, described: node.distinct !== true, keep: limitCount === undefined ? undefined : offset + limitCount }),
+    ...(limitCount === undefined && offset === 0 ? [] : [limitStage(offset, limitCount)]),
+  ]
 
   return {
     columns: items.map((i) => ({ name: i.name, type: i.compiled.type })),
     locking,
     ...(dataColumns === undefined ? {} : { columnsAt: (trx: Trx | undefined) => (dataColumns as (t: Trx | undefined) => readonly ResultType[])(trx).map((type, i) => ({ name: (items[i] as { name: string }).name, type })) }),
+    explain() {
+      // Implicit grouping answers one row even of nothing: proved empty, it is
+      // "Zero input rows" in the Aggregate's place, with only its HAVING and
+      // LIMIT around it; its one row is not sorted, and its list's subqueries
+      // are not run (8.4.11).
+      if (limitCount !== 0 && provedEmpty(run, from, node, limitCount)) {
+        if (strategy !== 'implicit') return [planNode('Zero rows')]
+        let n = planNode('Zero input rows')
+        if (having !== undefined) n = withSubqueries(run, planNode('Filter', [n]), 'having clause')
+        if (limitCount !== undefined || offset > 0) n = limitStage(offset, limitCount).describe(n) ?? n
+        return [n]
+      }
+      // A const table is read while planning: its row, if the WHERE holds of it, is what is grouped (8.4.11).
+      let fetched = false
+      if (constTable && from !== undefined) {
+        for (const _ of from.rows(undefined, run.env, { locking: false })) fetched = true
+        if (!fetched && strategy !== 'implicit') return [planNode('Zero rows')]
+      }
+      const source = from === undefined || fetched ? planNode('Rows fetched before execution') : withSubqueries(run, from.explain(run.env), 'where clause')
+      const n = describeStages(source, stages)
+      return n === undefined ? undefined : [n, ...subqueryNodes(run, 'field list')]
+    },
     rows(trx, given) {
       const env = given ?? { ...run.env, ...(trx === undefined ? {} : { trx }) }
-      let rows: Iterable<{ readonly row: Row }>
-      if (from === undefined) rows = [{ row: [] }]
-      else if (source === undefined) rows = from.rows(trx, env, { where: node.where, locking })
-      else {
-        let access = chooseAccess(source.def, source.alias, node.where, env)
-        // An index-ordered grouping reads that index whole, in its order.
-        if (strategy === 'index' && groupIndex !== undefined) {
-          const clustered = source.def.indexes.find((i) => i.name === groupIndex)?.kind === 'primary' || source.def.clustered === groupIndex
-          const sameIndex = clustered ? access.index === undefined : access.index === groupIndex
-          if (!sameIndex) access = clustered ? FULL_SCAN : { index: groupIndex }
-        }
-        rows = accessRows(source.table, source.def, access, trx, locking)
-      }
-      let out: Iterable<{ readonly row: Row }> = groupRows(filter(rows, where, env), plan, env)
-      out = filter(out, having, env)
-      if (windows !== undefined && windows.windows.length > 0) {
-        const w = windows
-        const all = [...out].map(({ row }) => {
-          const r = row.slice() as Value[]
-          while (r.length < w.base + w.windows.length) r.push(null)
-          return r
-        })
-        out = applyWindows(all, w.windows, env, w.base).map((row) => ({ row }))
-      }
-      if (orderKeys.length > 0) out = sort(out, orderKeys, env)
-      let projected: Iterable<Value[]> = project(out, items.map((i) => i.compiled), env)
-      if (node.distinct === true) projected = distinct(projected)
-      return limit(projected, offset, limitCount)
+      return values(runStages(from === undefined ? [{ row: [] }] : from.rows(trx, env, { locking }), stages, env))
     },
   }
 }
@@ -1488,8 +1990,9 @@ function checkFullGroupBy(
   const constant = (e: Expression): boolean => e.kind === NODE.LITERAL ? e.type !== 'null' : e.kind === NODE.PLACEHOLDER || (e.kind === NODE.UNARY && e.op === '-' && constant(e.operand))
   const edges: [number, number][] = []
   const aliasOf = (index: number): string | undefined => scope?.columnAt(index)?.table.alias
+  // Only `=`: `<=>` determines nothing, with a constant or a column (8.4.11: `WHERE id <=> 0 GROUP BY g` selecting `n` is 1055).
   for (const { e: c, into } of directed) {
-    if (c.kind !== NODE.BINARY || (c.op !== '=' && c.op !== '<=>')) continue
+    if (c.kind !== NODE.BINARY || c.op !== '=') continue
     const l = c.left.kind === NODE.COLUMN ? safeIndex(lookup, c.left.parts) : undefined
     const r = c.right.kind === NODE.COLUMN ? safeIndex(lookup, c.right.parts) : undefined
     const allowed = (to: number): boolean => into === undefined || into.has(aliasOf(to) ?? '')
@@ -1702,8 +2205,6 @@ function foldable(e: unknown, bound: boolean): boolean {
   return Object.values(e).every((v) => (Array.isArray(v) ? v.every((x) => foldable(x, bound)) : typeof v !== 'object' || foldable(v, bound)))
 }
 
-export { accessRows }
-
 function deparseName(e: Expression): string {
   return e.kind === NODE.LITERAL ? String(e.value) : e.kind
 }
@@ -1762,15 +2263,32 @@ const PACE_ROWS = 256
  * `resultSet`, pausing every `PACE_ROWS` rows (D-77). A read holds no writer
  * slot, so a write may come between two rows: the read's view keeps what it
  * sees the same, and a B+tree scan finds its place again by key (M5.38).
+ * With `emit`, each pause hands the rows read since the last one to it and
+ * keeps none, so a streamed result holds a batch at most (M5.40); what it
+ * returns is the rows after the last pause, and on a failure the rows read
+ * since then are handed out before the error is thrown.
  */
-export function* resultSteps(run: Run, plan: SelectPlan, trx: Trx | undefined): Generator<void, ResultSet> {
+export function* resultSteps(run: Run, plan: SelectPlan, trx: Trx | undefined, emit?: (batch: ResultSet) => void): Generator<void, ResultSet> {
   const described = plan.columnsAt?.(trx) ?? plan.columns
   const columns = described.map((c) => columnDefinition(c.name, c.type, run.env.session.characterSet))
-  const rows: RowValue[][] = []
+  let rows: RowValue[][] = []
   const types = described.map((c) => c.type)
-  for (const values of plan.rows(trx)) {
-    rows.push(values.map((v, i) => toWire(v, types[i] as ResultType, run.protocol, run.env.session)))
-    if (rows.length % PACE_ROWS === 0) yield
+  try {
+    for (const values of plan.rows(trx)) {
+      rows.push(values.map((v, i) => toWire(v, types[i] as ResultType, run.protocol, run.env.session)))
+      if (rows.length % PACE_ROWS !== 0) continue
+      if (emit !== undefined) {
+        emit({ columns, rows })
+        rows = []
+      }
+      yield
+    }
+  } catch (e) {
+    // A server sends each row as it is read, so the rows before a failure
+    // reach the client ahead of its error (8.4.11: a subquery's 1242 at the
+    // 700th row follows 699 rows).
+    if (emit !== undefined && rows.length > 0) emit({ columns, rows })
+    throw e
   }
   return { columns, rows }
 }

@@ -21,7 +21,6 @@ import {
   PacketFramer,
   SERVER_STATUS,
   capabilities,
-  concat,
   hasCap,
   parseColumnDefinition41,
   parseEof,
@@ -37,7 +36,7 @@ import {
   type ErrPacket,
   type OkPacket,
 } from '@myjs/protocol'
-import { MyjsError, ProtocolError, Reader, Writer } from '@myjs/bytes'
+import { MyjsError, ProtocolError, Reader, Writer, concatBytes } from '@myjs/bytes'
 
 /** The packet a connection answers with: its first byte says which (doc 10). */
 const OK = 0x00
@@ -78,6 +77,8 @@ export interface ServerEnd {
   take(): Uint8Array
   feed(chunk: Uint8Array): Promise<void>
   close(): void
+  /** Called as bytes are queued, so a stream reads them while its command runs (M5.40). */
+  onOutput?(listener: (() => void) | undefined): void
 }
 
 export interface ConnectOptions {
@@ -102,6 +103,12 @@ export interface WireOk {
 }
 
 export type WireResult = WireResultSet | WireOk
+
+/** A resultset read as the server sends it: its columns, then its rows' packets as they arrive (M5.40). */
+export interface WireStream {
+  readonly columns: readonly ColumnDefinition[]
+  readonly rows: AsyncGenerator<readonly Uint8Array[], void, undefined>
+}
 
 /** An ERR packet, as the error a call rejects with. */
 export class WireError extends MyjsError {
@@ -191,7 +198,7 @@ export class WireClient {
       }
       if (packet[0] === 0x01 && packet[1] === 4) {
         // AuthMoreData 4: the password itself, which an in-process channel may carry.
-        reply = await exchange(server, framer, concat([password, new Uint8Array([0])]))
+        reply = await exchange(server, framer, concatBytes([password, new Uint8Array([0])]))
         continue
       }
       throw unexpected(`unexpected packet 0x${(packet[0] ?? 0).toString(16)} during authentication`)
@@ -200,6 +207,10 @@ export class WireClient {
 
   /** COM_QUERY: every result it produced, in order. */
   async query(sql: Uint8Array): Promise<WireResult[]> {
+    return this.#results(await this.#command(this.#queryPacket(sql)))
+  }
+
+  #queryPacket(sql: Uint8Array): Uint8Array {
     const w = new Writer(sql.length + 3)
     w.u8(COM.QUERY)
     // CLIENT_QUERY_ATTRIBUTES: no attributes, in one set.
@@ -208,7 +219,92 @@ export class WireClient {
       w.lenEncInt(1)
     }
     w.bytes(sql)
-    return this.#results(await this.#command(w.toBytes()))
+    return w.toBytes()
+  }
+
+  /**
+   * A text query whose rows are read as the server sends them (M5.40), so a
+   * large resultset is never held whole: the server waits while what it has
+   * sent is unread. A statement that answers OK streams no rows. Ending the
+   * rows before they are done closes the connection, which is what ends the
+   * statement on the server and rolls back its transaction.
+   */
+  async stream(sql: Uint8Array): Promise<WireStream> {
+    if (this.#closed) throw new MyjsError('CONNECTION_CLOSED', 'the connection is closed')
+    const server = this.#server
+    const framer = this.#framer
+    const caps = this.#caps
+    let wake: (() => void) | undefined
+    let settled = false
+    let failure: unknown
+    server.onOutput?.(() => wake?.())
+    framer.resetSequence()
+    const running = server.feed(framer.encode(this.#queryPacket(sql))).then(
+      () => void (settled = true),
+      (e: unknown) => void ((settled = true), (failure = e)),
+    ).finally(() => wake?.())
+    let pending: Uint8Array[] = []
+    let at = 0
+    // Packets as they arrive: `next()` waits only when none are left.
+    const next = async (): Promise<Uint8Array> => {
+      for (;;) {
+        if (at < pending.length) return pending[at++] as Uint8Array
+        const bytes = server.take()
+        if (bytes.length > 0) {
+          framer.feed(bytes)
+          pending = [...framer.drain()]
+          at = 0
+          continue
+        }
+        if (settled) throw failure ?? unexpected('the server ended a response early')
+        await new Promise<void>((resolve) => (wake = resolve))
+        wake = undefined
+      }
+    }
+    const end = async (): Promise<void> => {
+      server.onOutput?.(undefined)
+      await running
+    }
+    const head = await next()
+    if (head[0] === ERR || head[0] === OK) {
+      await end()
+      if (head[0] === ERR) throw new WireError(parseErr(head, caps))
+      this.#status = parseOk(head, caps).statusFlags
+      return { columns: [], rows: (async function* () {})() }
+    }
+    const count = Number(new Reader(head).lenEncInt() ?? 0n)
+    const columns: ColumnDefinition[] = []
+    for (let i = 0; i < count; i++) columns.push(parseColumnDefinition41(await next()))
+    await next() // the EOF after the columns
+    const client = this
+    async function* rows(): AsyncGenerator<readonly Uint8Array[], void, undefined> {
+      let answered = false
+      try {
+        for (;;) {
+          // The rows already arrived, up to the terminator, as one batch.
+          const batch: Uint8Array[] = [await next()]
+          while (at < pending.length) batch.push(pending[at++] as Uint8Array)
+          const last = batch.findIndex((row) => row[0] === ERR || (row[0] === EOF && row.length < 9))
+          if (last === -1) {
+            yield batch
+            continue
+          }
+          answered = true
+          const end = batch[last] as Uint8Array
+          if (last > 0) yield batch.slice(0, last)
+          if (end[0] === ERR) throw new WireError(parseErr(end, caps))
+          client.#status = parseEof(end, caps).statusFlags
+          return
+        }
+      } finally {
+        if (!answered) {
+          client.#closed = true
+          server.close()
+        }
+        await end()
+      }
+    }
+    return { columns, rows: rows() }
   }
 
   /** COM_STMT_PREPARE: the statement's id. Its definitions are not read; a result set carries its own. */

@@ -5,8 +5,8 @@
 // packet". It emits *packet payloads*; the connection frames them, so the
 // sequence-id rule stays entirely in the framer (M1.2).
 
-import { Writer } from '@myjs/bytes'
-import { concat, rsaDecrypt, xorRotating, type RsaKeyPair } from '../crypto.ts'
+import { Writer, concatBytes } from '@myjs/bytes'
+import { rsaDecrypt, xorRotating, type RsaKeyPair } from '../crypto.ts'
 import { messages } from '../errors/messages.ts'
 import { errnoOf, sqlStateOf } from '../errors/index.ts'
 import {
@@ -197,7 +197,7 @@ export class ServerAuthenticator {
 
   /** The scramble, plus the trailing NUL an AuthSwitchRequest carries. */
   #pluginData(): Uint8Array {
-    return concat([this.#options.scramble, new Uint8Array([0])])
+    return concatBytes([this.#options.scramble, new Uint8Array([0])])
   }
 
   #denied(): AuthStep {

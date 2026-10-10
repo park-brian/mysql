@@ -75,6 +75,21 @@ const regions = (size: number): readonly [number, number][] => [
 /** Equal bytes shorter than this between two differences are carried in one run: a run costs about this much. */
 const MERGE_GAP = 8
 
+/** Whether two pages hold the same logged content: `diffPage(before, after)` is empty, found without building it. */
+export function samePage(before: Uint8Array, after: Uint8Array): boolean {
+  const aligned = (before.byteOffset & 3) === 0 && (after.byteOffset & 3) === 0
+  for (const [from, to] of regions(after.length)) {
+    let i = from
+    if (aligned) {
+      const a32 = new Uint32Array(after.buffer, after.byteOffset, after.length >> 2)
+      const b32 = new Uint32Array(before.buffer, before.byteOffset, before.length >> 2)
+      for (; i + 4 <= to && (i & 3) === 0; i += 4) if (a32[i >> 2] !== b32[i >> 2]) return false
+    }
+    for (; i < to; i++) if (after[i] !== before[i]) return false
+  }
+  return true
+}
+
 /** The runs that turn `before` — or a zeroed page, for `null` — into `after`. */
 export function diffPage(before: Uint8Array | null, after: Uint8Array): Run[] {
   const runs: Run[] = []

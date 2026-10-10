@@ -8,12 +8,12 @@
 import { CHARSET_BINARY } from '@myjs/bytes'
 import type { CallNode } from '@myjs/parser'
 import { sqlError } from '@myjs/protocol'
-import { COERCIBILITY, bool, bytesValue, intValue, stringValue, toText, type Value } from '@myjs/types'
+import { COERCIBILITY, bool, bytesValue, intValue, stringValue, toText, type Value, valueBytes } from '@myjs/types'
 import { hexOf } from './builtins.ts'
 import { compile, printedArgument, raise, type CompileContext, type Compiled, type Env } from './compile.ts'
 import { intType, stringType, type ResultType } from './meta.ts'
 import { unregistered } from './registry.ts'
-import { bytesOf, intReader } from './string-functions.ts'
+import { intReader } from './string-functions.ts'
 
 export const NETWORK_FUNCTIONS: ReadonlySet<string> = new Set([
   'INET_ATON', 'INET_NTOA', 'INET6_ATON', 'INET6_NTOA', 'IS_IPV4', 'IS_IPV6', 'IS_UUID', 'IS_IPV4_COMPAT', 'IS_IPV4_MAPPED', 'UUID_TO_BIN', 'BIN_TO_UUID',
@@ -257,7 +257,7 @@ export function networkFunction(name: string, e: CallNode, ctx: CompileContext):
         eval: (r, env) => {
           const v = s.eval(r, env)
           if (v === null) return null
-          const b = bytesOf(v)
+          const b = valueBytes(v)
           if (b.length !== 16) throw wrongValue(v.kind === 'bytes' ? hexOf(b) : toText(v), 'bin_to_uuid')
           const sw = swap === undefined ? 0n : swap(r, env)
           const u = sw !== null && sw !== 0n ? unswapped(b) : b

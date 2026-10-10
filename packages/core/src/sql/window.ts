@@ -35,10 +35,12 @@
 import { FIELD_TYPE } from '@myjs/bytes'
 import { NODE, type CallNode, type Expression, type FrameBound, type WindowSpec } from '@myjs/parser'
 import { messages, sqlError } from '@myjs/protocol'
-import { add, compareValues, doubleValue, intValue, sortValues, toInteger, type Value } from '@myjs/types'
+import { add, addInterval, compareValues, doubleValue, intValue, intervalOf, sortValues, timeOrdinal, toInteger, type Interval, type Value } from '@myjs/types'
 import { AGGREGATE_NAMES, aggregate as resultTypeOf, compile, constantEnv, convertTo, type CompileContext, type Compiled, type Env, type Row } from './compile.ts'
 import { AggregateSink, type AggregateSpec } from './group.ts'
 import { warnNonScalar } from './operators.ts'
+import { isInterval } from './interval.ts'
+import { microsToTime } from './temporal-functions.ts'
 import { doubleType, intType, type ResultType } from './meta.ts'
 
 const RANKING = new Set(['ROW_NUMBER', 'RANK', 'DENSE_RANK', 'PERCENT_RANK', 'CUME_DIST', 'NTILE'])
@@ -54,7 +56,10 @@ interface Frame {
 }
 
 /** A frame bound, its offset evaluated: `n` rows or values back (negative) or ahead (positive). */
-type Bound = { readonly kind: 'unbounded-preceding' | 'unbounded-following' | 'current' } | { readonly kind: 'offset'; readonly by: Value; readonly following: boolean }
+type Bound =
+  | { readonly kind: 'unbounded-preceding' | 'unbounded-following' | 'current' }
+  // A RANGE over a temporal key moves by an interval (`INTERVAL 3 DAY PRECEDING`); otherwise by a number.
+  | { readonly kind: 'offset'; readonly by: Value; readonly interval?: Interval; readonly following: boolean }
 
 interface WindowPlan {
   readonly fn: string
@@ -177,11 +182,19 @@ function frameOf(spec: WindowSpec, order: readonly { readonly expr: Compiled }[]
   const bound = (b: FrameBound, start: boolean): Bound => {
     if (b.kind === 'current') return { kind: 'current' }
     if (b.kind === 'unbounded') return { kind: b.direction === 'FOLLOWING' ? 'unbounded-following' : 'unbounded-preceding' }
-    const v = compile(b.value as Expression, ctx).eval([], constantEnv(ctx))
+    const written = b.value as Expression
+    const interval = isInterval(written)
+    const v = compile(interval ? written.value : written, ctx).eval([], constantEnv(ctx))
     if (f.units === 'RANGE') {
-      // A value range needs one key it can add to (8.4.11: 3587).
+      // A value range needs one key it can add to: a number by a number, a date or time by an INTERVAL (8.4.11: 3587).
       const key = order[0]?.expr.type.kind
-      if (order.length !== 1 || !(key === 'int' || key === 'decimal' || key === 'double')) throw sqlError('ER_WINDOW_RANGE_FRAME_ORDER_TYPE', "Window '<unnamed window>' with RANGE N PRECEDING/FOLLOWING frame requires exactly one ORDER BY expression, of numeric or temporal type")
+      const fits = interval ? key === 'datetime' || key === 'time' : key === 'int' || key === 'decimal' || key === 'double'
+      if (order.length !== 1 || !fits) throw sqlError('ER_WINDOW_RANGE_FRAME_ORDER_TYPE', "Window '<unnamed window>' with RANGE N PRECEDING/FOLLOWING frame requires exactly one ORDER BY expression, of numeric or temporal type")
+    }
+    if (interval) {
+      const by = v === null ? undefined : intervalOf(v, written.unit)
+      if (by === undefined || by.months < 0n || by.micros < 0n) throw illegal()
+      return { kind: 'offset', by: v, interval: by, following: b.direction === 'FOLLOWING' }
     }
     if (v === null || compareValues(v, intValue(0n)) === -1 || (f.units === 'ROWS' && v.kind !== 'int')) throw illegal()
     void start
@@ -202,7 +215,6 @@ export function windowNotAllowed(e: CallNode): never {
 
 interface Keyed {
   readonly row: Row
-  readonly at: number
   readonly partition: readonly Value[]
   readonly order: readonly Value[]
 }
@@ -215,7 +227,7 @@ interface Keyed {
 export function applyWindows(rows: Row[], windows: readonly WindowPlan[], env: Env, base: number): Row[] {
   let current = rows
   for (const w of windows) {
-    const keyed: Keyed[] = current.map((row, at) => ({ row, at, partition: w.partition.map((p) => p.eval(row, env)), order: w.order.map((o) => o.expr.eval(row, env)) }))
+    const keyed: Keyed[] = current.map((row) => ({ row, partition: w.partition.map((p) => p.eval(row, env)), order: w.order.map((o) => o.expr.eval(row, env)) }))
     warnNonScalar(keyed.map((k) => k.order), env)
     if (w.partition.length > 0 || w.order.length > 0) {
       keyed.sort((a, b) => {
@@ -227,7 +239,8 @@ export function applyWindows(rows: Row[], windows: readonly WindowPlan[], env: E
           const c = sortValues(a.order[i] ?? null, b.order[i] ?? null)
           if (c !== 0) return (w.order[i] as { desc: boolean }).desc ? -c : c
         }
-        return a.at - b.at
+        // Array.prototype.sort is stable: ties keep the order they came in.
+        return 0
       })
     }
     const same = (x: readonly Value[], y: readonly Value[]): boolean => x.every((v, i) => sortValues(v, y[i] ?? null) === 0)
@@ -334,7 +347,7 @@ function framesOf(w: WindowPlan, part: readonly Keyed[], firstPeer: readonly num
     if (key === null) return isStart ? (firstPeer[i] as number) : (lastPeer[i] as number)
     // Ahead in the window's order is up for ASC and down for DESC.
     const ahead = off.following !== desc
-    const bound = add(key, off.by, ahead ? '+' : '-') as Value
+    const bound = off.interval === undefined ? (add(key, off.by, ahead ? '+' : '-') as Value) : shifted(key, off.interval, !ahead)
     if (isStart) {
       for (let j = 0; j < n; j++) {
         const k = (part[j] as Keyed).order[0] ?? null
@@ -353,6 +366,19 @@ function framesOf(w: WindowPlan, part: readonly Keyed[], firstPeer: readonly num
     return -1
   }
   return part.map((_, i) => [Math.max(0, position(start, i, true)), Math.min(n - 1, position(end, i, false))])
+}
+
+/** A date or time key moved by an interval, for a RANGE frame's edge; NULL past the calendar. */
+function shifted(key: Exclude<Value, null>, by: Interval, back: boolean): Value {
+  if (key.kind === 'datetime') {
+    const t = addInterval(key.v, by, back)
+    return t === undefined ? null : { ...key, v: t }
+  }
+  if (key.kind === 'time') {
+    const t = microsToTime(timeOrdinal(key.v) + (back ? -by.micros : by.micros))
+    return t === undefined ? null : { kind: 'time', v: t, fsp: key.fsp }
+  }
+  return null
 }
 
 /** Whether `e` calls a window function outside its own subqueries. */

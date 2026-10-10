@@ -28,6 +28,7 @@ import {
   parseStatement,
   type CreateDatabaseNode,
   type CreateTableNode,
+  type ExplainNode,
   type InsertNode,
   type CreateViewNode,
   type DropNode,
@@ -51,15 +52,20 @@ import {
   type Parameter,
   type PreparedInfo,
   type Session,
+  type ResultSet,
+  type RowValue,
   type StatementResult,
+  type StreamedResultSet,
 } from '@myjs/protocol'
 import { conditionsFor } from './strict.ts'
 import { renameTables } from './rename.ts'
-import { showCreateView, showQuery, shownColumns } from './show.ts'
+import { showCreateView, showQuery, shownColumns, tableStatusQuery, variablesColumns, variablesQuery } from './show.ts'
 import { COERCIBILITY, doubleValue, intValue, parseDecimal, plainValue, stringValue, toInteger, toText, type Condition, type Value } from '@myjs/types'
 import { charsetChange, ensureCollationResident } from '../transcoder.ts'
 import { PROGRAM_OBJECTS, ServerState, type ProgramStatement, type ServerOptions } from './admin.ts'
 import { compile, EMPTY_SCOPE, raise, type Env } from './compile.ts'
+import { renderTree } from './explain.ts'
+import { analyze, keepShown } from './stats.ts'
 import { alterTable } from './alter.ts'
 import { checkClauses, checkForeignKeyActions, withChecks } from './checks.ts'
 import { showCreateTable } from './show-create.ts'
@@ -241,7 +247,7 @@ export class SqlExecutor implements Executor {
 
   constructor(options: SqlExecutorOptions = {}) {
     this.catalog = options.catalog
-    this.server = new ServerState(options)
+    this.server = new ServerState({ engine: () => this.catalog?.store.stats(), ...options })
     if (this.catalog !== undefined) dropOrphans(this.catalog)
   }
 
@@ -462,7 +468,7 @@ export class SqlExecutor implements Executor {
         // All are parsed under the mode in force when the text arrives; MySQL
         // parses each as it reaches it, so a `SET sql_mode` inside the text
         // governs the rest there and not here — a recorded divergence.
-        for (const statement of statements) results.push(await this.#one(session, sql, statement, params, known, protocol))
+        for (const statement of statements) results.push(await this.#one(session, sql, statement, params, known, protocol, false))
         return results
       }
     }
@@ -471,12 +477,17 @@ export class SqlExecutor implements Executor {
     return this.#one(session, sql, statement, params, known, protocol)
   }
 
-  async #one(session: Session, sql: string, statement: Statement, params: readonly Value[], known: readonly Value[] | undefined, protocol: WireProtocol): Promise<StatementResult> {
+  /**
+   * One statement. With `stream`, a resultset larger than a batch is answered
+   * as a `StreamedResultSet` (M5.40), and its end recorded when it comes.
+   */
+  async #one(session: Session, sql: string, statement: Statement, params: readonly Value[], known: readonly Value[] | undefined, protocol: WireProtocol, stream = true): Promise<StatementResult> {
     const began = performance.now()
     this.#alive(session)
     await this.#preload(session, statement)
     this.#alive(session)
     const state = this.#state(session)
+    state.question()
     // SHOW WARNINGS, SHOW ERRORS and their counts read the diagnostics area
     // and leave it; every other statement starts a new one (8.4.11).
     const diagnostic = statement.kind === STATEMENT.SHOW && (statement.what === 'WARNINGS' || statement.what === 'ERRORS')
@@ -485,16 +496,27 @@ export class SqlExecutor implements Executor {
     let wait = 1
     for (let attempt = 0; ; attempt++) {
       const conditions = conditionsFor(statement, session.sqlMode)
-      try {
-        const run = this.#run(session, sql, params, known, protocol, conditions)
-        const dispatched = this.#dispatch(run, statement)
-        const result = isSteps(dispatched) ? await this.#drive(session, dispatched, began) : dispatched
+      const settle = <R extends StatementResult>(result: R): R => {
         this.#purgeLater()
         if (diagnostic) return result
         // A count no condition stands for is still the count (`warning_count`).
         const warnings = Math.max(result.warnings ?? 0, conditions.length)
         state.diagnostics = { conditions: conditions.slice(0, MAX_ERROR_COUNT), warnings, errors: 0 }
         return warnings === (result.warnings ?? 0) ? result : { ...result, warnings }
+      }
+      // The error is a condition too, after any the statement raised first.
+      const failed = (e: unknown): SqlError => {
+        const error = toSqlError(e)
+        if (!diagnostic) state.diagnostics = { conditions: [...conditions, { level: 'Error' as const, code: error.errno ?? 0, message: error.message }].slice(0, MAX_ERROR_COUNT), warnings: conditions.length + 1, errors: 1 }
+        return error
+      }
+      try {
+        const run = this.#run(session, sql, params, known, protocol, conditions)
+        const batches: ResultSet[] | undefined = stream ? [] : undefined
+        const dispatched = this.#dispatch(run, statement, batches === undefined ? undefined : (batch) => batches.push(batch))
+        if (!isSteps(dispatched)) return settle(dispatched)
+        if (batches === undefined) return settle(await this.#drive(session, dispatched, began))
+        return await this.#streamed(session, dispatched, batches, began, settle, failed)
       } catch (e) {
         const code = codeOf(e)
         if (code === 'ENGINE_WRITER_BUSY') {
@@ -517,10 +539,7 @@ export class SqlExecutor implements Executor {
             continue
           }
         }
-        const error = toSqlError(e)
-        // The error is a condition too, after any the statement raised first.
-        if (!diagnostic) state.diagnostics = { conditions: [...conditions, { level: 'Error' as const, code: error.errno ?? 0, message: error.message }].slice(0, MAX_ERROR_COUNT), warnings: conditions.length + 1, errors: 1 }
-        throw error
+        throw failed(e)
       }
     }
   }
@@ -536,7 +555,7 @@ export class SqlExecutor implements Executor {
    * the statement rolls back as it would on any other error.
    */
   #drive<T>(session: Session, steps: Generator<void, T>, started = performance.now()): Promise<T> {
-    const running = (async () => {
+    return this.#tracked((async () => {
       let since = started
       for (;;) {
         const step = steps.next()
@@ -546,7 +565,96 @@ export class SqlExecutor implements Executor {
         if (this.#ended.has(session)) steps.throw(sqlError('ER_QUERY_INTERRUPTED', 'Query execution was interrupted'))
         since = performance.now()
       }
-    })()
+    })())
+  }
+
+  /**
+   * A statement's steps, driven as `#drive` drives them until a first batch
+   * of rows is out (M5.40). A statement that ends first is answered whole,
+   * as before; a larger resultset is answered as a stream, whose later
+   * batches are read only as the dispatcher pulls them, so that what is held
+   * is a batch, not the result. It pauses as `#drive` does, and a stream
+   * abandoned (`return()`) or interrupted rolls its statement back. `settle`
+   * and `failed` record its end in the diagnostics area when that comes.
+   */
+  async #streamed(
+    session: Session,
+    steps: Generator<void, StatementResult>,
+    batches: ResultSet[],
+    started: number,
+    settle: <R extends StatementResult>(result: R) => R,
+    failed: (e: unknown) => SqlError,
+  ): Promise<StatementResult> {
+    let since = started
+    const step = async (): Promise<StatementResult | undefined> => {
+      for (;;) {
+        const next = steps.next()
+        if (next.done === true) return next.value
+        // Every pause hands out a batch, so the clock is read before it is.
+        if (performance.now() - since >= SLICE_MS) {
+          await pause()
+          if (this.#ended.has(session)) steps.throw(sqlError('ER_QUERY_INTERRUPTED', 'Query execution was interrupted'))
+          since = performance.now()
+        }
+        if (batches.length > 0) return undefined
+      }
+    }
+    // A failure after rows were read is answered after them, as a stream.
+    let failure: unknown
+    let first: StatementResult | undefined
+    try {
+      first = await this.#tracked(step())
+    } catch (e) {
+      if (batches.length === 0) throw e
+      failure = e
+    }
+    if (first !== undefined) return settle(first)
+    const columns = (batches[0] as ResultSet).columns
+    let warnings = 0
+    // The stream is running until it ends or is abandoned: `stop()` waits.
+    let ended!: () => void
+    void this.#tracked(new Promise<void>((resolve) => (ended = resolve)))
+    async function* rest(): AsyncGenerator<readonly (readonly RowValue[])[]> {
+      let done = failure !== undefined
+      try {
+        for (;;) {
+          while (batches.length > 0) yield (batches.shift() as ResultSet).rows
+          if (failure !== undefined) throw failure
+          if (done) return
+          let last: StatementResult | undefined
+          try {
+            last = await step()
+          } catch (e) {
+            // Its rows first: the loop sends what is held, then throws.
+            failure = e
+            done = true
+            continue
+          }
+          if (last === undefined) continue
+          done = true
+          const result = settle(last as ResultSet)
+          warnings = result.warnings ?? 0
+          batches.push(result)
+        }
+      } catch (e) {
+        throw failed(e)
+      } finally {
+        if (!done) steps.return(undefined as never)
+        ended()
+      }
+    }
+    const streamed: StreamedResultSet = {
+      columns,
+      batches: rest(),
+      get warnings() {
+        return warnings
+      },
+    }
+    return streamed
+  }
+
+  /** `running`, counted among the statements `stop()` waits for. */
+  #tracked<T>(running: Promise<T>): Promise<T> {
     this.#running.add(running)
     const done = (): void => void this.#running.delete(running)
     running.then(done, done)
@@ -594,7 +702,7 @@ export class SqlExecutor implements Executor {
 
   #run(session: Session, sql: string, params: readonly Value[], known: readonly Value[] | undefined, protocol: WireProtocol, conditions: Condition[] = []): Run {
     const state = this.#state(session)
-    const env: Env = { params, now: new Date(), session, state, memo: new Map(), conditions }
+    const env: Env = { params, now: state.clock(), session, state, memo: new Map(), conditions }
     return { catalog: this.#catalogOf(session), state, env, sql, protocol, serverVersion: this.server.serverVersion, ...(known === undefined ? {} : { params: known }) }
   }
 
@@ -608,14 +716,14 @@ export class SqlExecutor implements Executor {
    * that may run long (INSERT, UPDATE, DELETE), its steps, which `#drive`
    * runs with pauses between them (D-77).
    */
-  #dispatch(run: Run, statement: Statement): StatementResult | Generator<void, StatementResult> {
+  #dispatch(run: Run, statement: Statement, emit?: (batch: ResultSet) => void): StatementResult | Generator<void, StatementResult> {
     const { state } = run
     const session = run.env.session
     switch (statement.kind) {
       case STATEMENT.QUERY: {
         const plan = planQuery(run, statement)
         if (this.catalog === undefined) return resultSet(run, plan, undefined)
-        return state.steps(this.catalog.store, plan.locking, (trx) => resultSteps(run, plan, trx))
+        return state.steps(this.catalog.store, plan.locking, (trx) => resultSteps(run, plan, trx, emit))
       }
       case STATEMENT.INSERT:
         return this.#counted(run, state.steps(this.#catalog(run).store, true, (trx) => insert(run, statement, trx)))
@@ -733,7 +841,14 @@ export class SqlExecutor implements Executor {
           const by = referencingKeys(this.#catalog(run), schema, statement.table.name).find((r) => r.child.schema !== schema || r.child.name !== statement.table.name)
           if (by !== undefined) throw sqlError('ER_TRUNCATE_ILLEGAL_FK', `Cannot truncate a table referenced in a foreign key constraint (\`${by.child.schema}\`.\`${by.child.name}\`, CONSTRAINT \`${by.fk.name}\`)`)
         }
-        this.#catalog(run).truncateTable(schema, statement.table.name)
+        const before = this.#catalog(run).definition(schema, statement.table.name).id
+        const truncated = this.#catalog(run).truncateTable(schema, statement.table.name)
+        keepShown(this.#catalog(run).store, before, truncated.id)
+        // An emptied table's statistics are an empty table's, until it is analysed again (M5.45).
+        if (truncated.options['stats'] !== undefined) {
+          const { stats: _stats, ...options } = truncated.options
+          this.#catalog(run).setTableOptions(schema, statement.table.name, options)
+        }
         return { affectedRows: 0 }
       }
       case STATEMENT.CREATE_ROUTINE:
@@ -804,6 +919,8 @@ export class SqlExecutor implements Executor {
       case STATEMENT.DESCRIBE:
         // DESCRIBE t [column] is SHOW COLUMNS FROM t [LIKE 'column'].
         return this.#show(run, { kind: STATEMENT.SHOW, what: 'COLUMNS', name: statement.table, ...(statement.column === undefined ? {} : { like: statement.column }), at: statement.at })
+      case STATEMENT.EXPLAIN:
+        return this.#explain(run, statement)
       case STATEMENT.TABLE_MAINTENANCE:
         if (statement.op !== 'ANALYZE') throw sqlError('ER_NOT_SUPPORTED_YET', messages.notSupported(`${statement.op} TABLE`))
         return this.#analyze(run, statement.tables)
@@ -1040,17 +1157,41 @@ export class SqlExecutor implements Executor {
    * `status OK` per table, or the error and `Operation failed` for one that
    * does not exist (8.4.11) — and changes nothing.
    */
+  /**
+   * EXPLAIN FORMAT=TREE of a query (M5.44): the plan it would run, as one
+   * VAR_STRING row (8.4.11: `EXPLAIN`, 78 characters, NOT NULL). Other
+   * formats, ANALYZE, and the plan of a write are refused by name.
+   */
+  #explain(run: Run, statement: ExplainNode): StatementResult {
+    const target = statement.statement
+    if (statement.format !== 'TREE' || statement.analyze === true || statement.into !== undefined || statement.schema !== undefined || target === undefined || target.kind !== STATEMENT.QUERY) {
+      throw sqlError('ER_NOT_SUPPORTED_YET', messages.notSupported(statement.format === 'TREE' ? 'EXPLAIN of this statement' : `EXPLAIN FORMAT=${statement.format ?? 'TRADITIONAL'}`))
+    }
+    const roots = planQuery(run, target).explain?.()
+    if (roots === undefined) throw sqlError('ER_NOT_SUPPORTED_YET', messages.notSupported('EXPLAIN of this query'))
+    const coll = run.env.session.characterSet
+    return { columns: [columnDefinition('EXPLAIN', stringType(78, coll, false), coll)], rows: [[run.env.session.transcoder.encode(renderTree(roots), coll)]] }
+  }
+
   #analyze(run: Run, tables: readonly TableName[]): StatementResult {
     const coll = run.env.session.characterSet
-    const text = (name: string, chars: number, field?: number): ColumnDefinition => columnDefinition(name, { ...stringType(chars, coll, false), ...(field === undefined ? {} : { field }) }, coll)
+    // Nullable, as 8.4.11 reports them.
+    const text = (name: string, chars: number, field?: number): ColumnDefinition => columnDefinition(name, { ...stringType(chars, coll, true), ...(field === undefined ? {} : { field }) }, coll)
     const encode = (s: string) => run.env.session.transcoder.encode(s, coll)
     const rows: Uint8Array[][] = []
     for (const t of tables) {
       const schema = t.schema ?? run.env.session.database
       if (schema === null) throw sqlError('ER_NO_DB_ERROR', messages.noDatabaseSelected())
       const name = `${schema}.${t.name}`
-      const exists = this.catalog?.tables().some((x) => x.schema === schema && x.name === t.name) === true
-      if (exists) rows.push([encode(name), encode('analyze'), encode('status'), encode('OK')])
+      const catalog = this.catalog
+      const exists = catalog?.tables().some((x) => x.schema === schema && x.name === t.name) === true
+      if (exists && catalog !== undefined) {
+        // ANALYZE commits, as DDL does, and keeps what it counted in the table's definition (M5.45).
+        run.state.commit()
+        const def = catalog.definition(schema, t.name)
+        catalog.setTableOptions(schema, t.name, { ...def.options, stats: analyze(def, catalog.table(schema, t.name)) })
+        rows.push([encode(name), encode('analyze'), encode('status'), encode('OK')])
+      }
       else {
         rows.push([encode(name), encode('analyze'), encode('Error'), encode(`Table '${name}' doesn't exist`)])
         rows.push([encode(name), encode('analyze'), encode('status'), encode('Operation failed')])
@@ -1129,12 +1270,29 @@ export class SqlExecutor implements Executor {
         if (statement.full === true) return { columns: [text(label, 64), text('Table_type', 11)], rows: shown.map(([n, kind]) => [encode(n as string), encode(kind as string)]) }
         return { columns: [text(label, 64)], rows: shown.map(([n]) => [encode(n as string)]) }
       }
+      case 'TABLE STATUS': {
+        // A query over INFORMATION_SCHEMA.TABLES, as the server runs it (show.ts).
+        const plan = planQuery(run, tableStatusQuery(run, this.#catalog(run), statement))
+        return run.state.statement(this.#catalog(run).store, false, (trx) => resultSet(run, plan, trx))
+      }
+      case 'ENGINES': {
+        // A query over INFORMATION_SCHEMA.ENGINES, its columns renamed (8.4.11).
+        const plan = planQuery(run, parseStatement('SELECT ENGINE AS Engine, SUPPORT AS Support, COMMENT AS Comment, TRANSACTIONS AS Transactions, XA, SAVEPOINTS AS Savepoints FROM information_schema.ENGINES') as QueryExpression)
+        return resultSet(run, plan, undefined)
+      }
+      case 'VARIABLES':
+      case 'STATUS': {
+        // A query over PERFORMANCE_SCHEMA, as the server runs it (show.ts).
+        const { query, table } = variablesQuery(statement)
+        const plan = planQuery(run, query)
+        const result = this.catalog === undefined ? resultSet(run, plan, undefined) : run.state.statement(this.catalog.store, false, (trx) => resultSet(run, plan, trx))
+        return { ...result, columns: variablesColumns(table, coll, requireCollationInfo(coll).mbmaxlen) }
+      }
       case 'COLUMNS':
       case 'INDEX': {
         // A query over INFORMATION_SCHEMA, as the server runs it (show.ts).
-        const shown: Run = { ...run, ...(statement.what === 'INDEX' ? { exactStatistics: true } : {}) }
-        const plan = planQuery(shown, showQuery(shown, this.#catalog(run), statement))
-        const result = run.state.statement(this.#catalog(run).store, false, (trx) => resultSet(shown, plan, trx))
+        const plan = planQuery(run, showQuery(run, this.#catalog(run), statement))
+        const result = run.state.statement(this.#catalog(run).store, false, (trx) => resultSet(run, plan, trx))
         return { ...result, columns: shownColumns(statement, plan.columns.map((c) => c.name), coll, requireCollationInfo(coll).mbmaxlen) }
       }
       default:

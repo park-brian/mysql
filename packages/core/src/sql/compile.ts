@@ -11,9 +11,9 @@
 // What is not here yet is refused by name rather than approximated: an
 // unknown function is ER_SP_DOES_NOT_EXIST, as MySQL says it, and a builtin we
 // have not written is ER_NOT_SUPPORTED_YET naming it (M5.10 owns the rest).
-import { CHARSET_BINARY, FIELD_TYPE, expectTyped } from '@myjs/bytes'
-import { collation, collationInfoByName, decodeCollation, defaultCollationOf, encodeCollation, requireCollationInfo } from '@myjs/charsets'
-import { LITERAL, NODE, TOKEN, deparse, lex, parseExpression, type CallNode, type CaseNode, type CastNode, type ConvertNode, type Expression, type LiteralNode, type MatchNode, type QueryExpression, type SubqueryNode } from '@myjs/parser'
+import { CHARSET_BINARY, COLUMN_FLAG, FIELD_TYPE, expectTyped } from '@myjs/bytes'
+import { collationInfoByName, decodeCollation, defaultCollationOf, encodeCollation, requireCollationInfo } from '@myjs/charsets'
+import { LITERAL, NODE, TOKEN, deparse, lex, parseExpression, type CallNode, type CaseNode, type CastNode, type ConvertNode, type Expression, type LiteralNode, type MatchNode, type QueryExpression, type SubqueryNode, quoteName } from '@myjs/parser'
 import type { ColumnDef, Table, Trx } from '@myjs/engine'
 import { sqlError, messages, type Session } from '@myjs/protocol'
 import {
@@ -29,6 +29,7 @@ import {
   bool,
   bytesValue,
   compareValues,
+  textComparer,
   plainValue,
   withoutHex,
   decodeField,
@@ -61,6 +62,13 @@ import {
   type StringValue,
   type Value,
   valueOutOfRange,
+  valueBytes,
+  renderFloat,
+  jsonTruth,
+  numberToDateTime,
+  toInteger,
+  mergeTypes,
+  type MergeType,
 } from '@myjs/types'
 import {
   CHARSET_UTF8MB4_BIN,
@@ -83,15 +91,17 @@ import {
 import { castAsJson } from './json.ts'
 import { jsonPathFunction, memberOf, unquote } from './json-path.ts'
 import { regexpLike } from './regexp.ts'
+import { valueKey } from './keys.ts'
 import { TableScope } from './scope.ts'
 import { bitBytes } from './wire.ts'
 import { badAgainst, booleanRank, Corpus, foldFor, fulltextOf, naturalRank, noExpansion, noIndex, parseBoolean, queryText, wordsOf, type Term } from './fulltext.ts'
 import { windowNotAllowed } from './window.ts'
-import { dateAdd, isInterval } from './interval.ts'
+import { dateAdd, isInterval, onToday } from './interval.ts'
 import { escapeString, printExpression, Unprintable } from './print.ts'
 import { modeOf } from './mode.ts'
 import { NOT_YET, VARIES_PER_EVALUATION, functionCompiler } from './registry.ts'
 import { clock } from './builtins.ts'
+import { systemVariableInfo } from './variables.ts'
 
 /** One row as operators pass it: a value per column of the scope. */
 export type Row = readonly Value[]
@@ -127,7 +137,8 @@ export interface Env {
  * empty or only spaces is 0 without one; so is an ENUM, read by its index,
  * and a hex literal, read as a number. The value itself passes unchanged.
  */
-export function asNumber(c: Compiled, kind: 'DOUBLE' | 'INTEGER' | 'DECIMAL', once = false): Compiled {
+export function asNumber(c: Compiled, kind: 'DOUBLE' | 'INTEGER' | 'DECIMAL', once: boolean | Expression = false): Compiled {
+  if (c.type.kind === 'json') return jsonAsNumber(c, kind)
   if (c.type.kind !== 'string' && c.type.kind !== 'bytes') return c
   // A TEXT or BLOB column reads as a double or an integer without a word
   // (`Field_blob::val_real` and `val_int` discard the error).
@@ -138,18 +149,20 @@ export function asNumber(c: Compiled, kind: 'DOUBLE' | 'INTEGER' | 'DECIMAL', on
   // for '1x' and '12x' but not for '1xy', 'xy' or 'é'; in a VARCHAR(400),
   // for those three but not for '1abc' or '1.2.3.4'). A CHAR always warns.
   const quietTail = c.type.column !== undefined && c.type.field === FIELD_TYPE.VAR_STRING && kind !== 'DECIMAL' ? ((c.type.kind === 'bytes' ? c.type.length : c.type.length * requireCollationInfo(c.type.collationId).mbmaxlen) < 256 ? 2 : 4) : undefined
-  const key = {}
+  // Once a statement, a constant: keyed by its node when it has one, so that
+  // the optimizer's own evaluation of it and the plan's share the one warning (8.4.11).
+  const key = typeof once === 'object' ? once : {}
   return {
     ...c,
     eval: (r, env) => {
       const v = c.eval(r, env)
       if (v === null) return v
-      if (once) {
+      if (once !== false) {
         if (env.memo?.has(key) === true) return v
         env.memo?.set(key, true)
       }
       if (quietTail !== undefined && unconvertedBytes(v, kind) === quietTail) return v
-      checkNumber(v, kind, env)
+      checkNumber(v, kind, env, c.type.column !== undefined)
       return v
     },
   }
@@ -166,12 +179,77 @@ function unconvertedBytes(v: Exclude<Value, null>, kind: 'DOUBLE' | 'INTEGER' | 
 }
 
 /** Text on one side and a number on the other: a comparison of doubles. */
+/**
+ * An operand of NOT, AND, OR or XOR: text read as a double, warning once a
+ * statement for a constant; JSON true unless it is a number that is zero (`jsonTruth`).
+ */
+function logicalOperand(c: Compiled, written: Expression | false): Compiled['eval'] {
+  if (c.type.kind === 'json') {
+    // Saying so once a statement, 3986 (8.4.11).
+    const key = {}
+    return (r, env) => {
+      if (env.memo?.has(key) !== true) {
+        env.memo?.set(key, true)
+        raise(env, 3986, 'Evaluating a JSON value in SQL boolean context does an implicit comparison against JSON integer 0; if this is not what you want, consider converting JSON to a SQL numeric type with JSON_VALUE RETURNING')
+      }
+      const v = c.eval(r, env)
+      return v === null || v.kind !== 'json' ? v : bool(jsonTruth(v))
+    }
+  }
+  return asNumber(c, 'DOUBLE', written !== false && constantNode(written) && written).eval
+}
+
+/**
+ * A value's digits, as `Item::decimal_precision` counts them: an integer's or
+ * a DECIMAL's own, a temporal's number's (YYYYMMDD, hhhmmss, and both, with its
+ * fraction), and otherwise its text's width, at most 65.
+ */
+export function decimalPrecision(t: ResultType): number {
+  if (t.literalInt !== undefined) return t.literalInt.digits
+  if (t.kind === 'int') return Math.max(1, Math.min(t.length - (t.unsigned ? 0 : 1), 65))
+  if (t.kind === 'decimal') return Math.max(1, Math.min(t.length, 65))
+  if (t.kind === 'datetime') return t.scale + (t.field === FIELD_TYPE.DATE ? 8 : 14)
+  if (t.kind === 'time') return t.scale + 7
+  return Math.min(charWidth(t), 65)
+}
+
+/** A value's fixed decimals: an integer's none, a DECIMAL's and a temporal's scale, a double's when it has them; text has none to give. */
+function fixedDecimals(t: ResultType): number | undefined {
+  if (t.literalInt !== undefined || t.kind === 'int') return 0
+  if (t.kind === 'decimal' || t.kind === 'datetime' || t.kind === 'time') return t.scale
+  if (t.kind === 'double') return t.scale < 31 ? t.scale : undefined
+  return undefined
+}
+
+const isNumber = (t: ResultType): boolean => t.kind === 'int' || t.kind === 'decimal' || t.kind === 'double'
+
 function textVersusNumber(x: ResultType, y: ResultType): boolean {
-  return (x.kind === 'string' || x.kind === 'bytes') && (y.kind === 'int' || y.kind === 'decimal' || y.kind === 'double')
+  return (x.kind === 'string' || x.kind === 'bytes') && isNumber(y)
+}
+
+/**
+ * JSON read as a number: 3156 each row for what is no number — an array, an
+ * object, `null`, a string that is not wholly one (8.4.11: `"10"` and `true`
+ * are quiet, `"1x"` warns though it reads as 1).
+ */
+function jsonAsNumber(c: Compiled, kind: 'DOUBLE' | 'INTEGER' | 'DECIMAL'): Compiled {
+  const name = c.type.column?.orgName ?? 'json'
+  const cast = kind === 'INTEGER' ? 'SIGNED' : kind
+  return {
+    ...c,
+    eval: (r, env) => {
+      const v = c.eval(r, env)
+      if (v === null || v.kind !== 'json') return v
+      const d = v.v
+      const number = d.t === 'int' || d.t === 'uint' || d.t === 'double' || d.t === 'decimal' || d.t === 'bool' || (d.t === 'string' && numericPrefix(d.v).complete)
+      if (!number) raise(env, 3156, `Invalid JSON value for CAST to ${cast} from column ${name} at row ${rowNumber(env)}`)
+      return v
+    },
+  }
 }
 
 /** `asNumber`'s check, for one value. */
-function checkNumber(v: Exclude<Value, null>, kind: 'DOUBLE' | 'INTEGER' | 'DECIMAL', env: Env): void {
+function checkNumber(v: Exclude<Value, null>, kind: 'DOUBLE' | 'INTEGER' | 'DECIMAL', env: Env, column = false): void {
   if (v.kind === 'string' ? v.ordinal !== undefined : v.kind !== 'bytes' || v.hex === true) return
   const text = toText(v)
   const p = numericPrefix(text)
@@ -184,6 +262,8 @@ function checkNumber(v: Exclude<Value, null>, kind: 'DOUBLE' | 'INTEGER' | 'DECI
   if (p.complete && !(kind === 'INTEGER' && p.fractional) && !overflow) return
   // Nothing at all is 0 quietly, except as a DECIMAL (8.4.11: `CAST('' AS DECIMAL)` warns).
   if (!p.complete && kind !== 'DECIMAL' && /^[ \t\n\r]*$/.test(text)) return
+  // A column's text with no digit at all, read as a DECIMAL, is 1366 first, as its field's conversion says (8.4.11: `CAST(lt AS DECIMAL)` of 'abc').
+  if (column && kind === 'DECIMAL' && !/\d/.test(text)) raise(env, 1366, "Incorrect DECIMAL value: '0' for column '' at row -1")
   raise(env, 1292, `Truncated incorrect ${kind} value: '${warnedText(v)}'`)
 }
 
@@ -198,14 +278,14 @@ export function warnedText(v: Exclude<Value, null>): string {
   return nul === -1 ? text : text.slice(0, nul)
 }
 
+/** An environment for evaluating a constant while compiling: no row, the statement's parameters. */
+export const constantEnv = (ctx: CompileContext): Env => ({ params: ctx.params ?? [], now: ctx.state.clock?.() ?? new Date(), session: ctx.session, state: ctx.state })
+
 /**
  * An argument as `Item::print` shows it in a message that quotes one —
  * INET_ATON's and INET_NTOA's 1411: a column as `schema`.`table`.`column`,
  * a string with its introducer if it was written with one (8.4.11).
  */
-/** An environment for evaluating a constant while compiling: no row, the statement's parameters. */
-export const constantEnv = (ctx: CompileContext): Env => ({ params: ctx.params ?? [], now: new Date(), session: ctx.session, state: ctx.state })
-
 export function printedArgument(a: Expression, ctx: CompileContext): string {
   try {
     return printExpression(a, {
@@ -217,7 +297,7 @@ export function printedArgument(a: Expression, ctx: CompileContext): string {
           expectTyped(e)
           // A column the clause cannot see by itself (an aggregate's, in HAVING) is named as written.
         }
-        const q = (x: string): string => `\`${x.replace(/`/g, '``')}\``
+        const q = quoteName
         return c === undefined ? parts.map(q).join('.') : `${q(c.schema)}.${q(c.table)}.${q(c.orgName === '' ? (parts[parts.length - 1] as string) : c.orgName)}`
       },
       string: (v, cs) => `${cs === undefined ? '' : `_${cs}`}'${escapeString(v)}'`,
@@ -349,6 +429,8 @@ export interface SessionValues {
   rowCount: bigint
   /** A system variable's value, as `@@name` reads it; `undefined` for one that does not exist. */
   systemVariable(name: string, scope: 'GLOBAL' | 'SESSION' | undefined, session: Session): Value | undefined
+  /** The statement's clock: the session's `SET TIMESTAMP`, or the time now. */
+  clock?(): Date
 }
 
 export interface Compiled {
@@ -416,6 +498,8 @@ export interface CompileContext {
   readonly groupKeys?: GroupKeys
   /** Plan a subquery whose enclosing scope is `outer` (M5.1); absent where none is allowed. */
   readonly subquery?: (q: QueryExpression, outer: Scope) => SubqueryPlan
+  /** A subquery compiled as `[NOT] IN`, `= ALL` and their like: how, for the plan EXPLAIN prints of it (M5.47). */
+  readonly quantified?: (q: QueryExpression, how: QuantifiedSubquery) => void
   /** A base table by name, for what reads one whole: MATCH's statistics (M5.26). */
   readonly table?: (schema: string, name: string) => Table | undefined
   /** The statement's diagnostics area, for what resolving a constant warns (1292 at a constant position, say). */
@@ -563,7 +647,7 @@ export function compile(e: Expression, ctx: CompileContext): Compiled {
 
     case NODE.UNARY:
       if (e.op === 'EXISTS' && e.operand.kind === NODE.SUBQUERY) return exists(e.operand, ctx)
-      return unary(e.op, compile(e.operand, ctx), e.op === 'EXISTS')
+      return unary(e.op, compile(e.operand, ctx), e.op === 'EXISTS', constantNode(e.operand) && e.operand, ctx)
 
     case NODE.BINARY:
       return binary(e.op, e.left, e.right, e.extra, ctx)
@@ -678,7 +762,7 @@ function literal(e: LiteralNode, ctx: CompileContext): Compiled {
       return lit(d, decimalType(Math.max(digits, d.scale + (digits > d.scale ? 0 : 1)), d.scale, false))
     }
     case LITERAL.DOUBLE:
-      return lit(doubleValue(e.value as number), doubleType(false, String(e.value).replace('+', '').length))
+      return lit(doubleValue(e.value as number), { ...doubleType(false, (e.text ?? String(e.value).replace('+', '')).length), literalDouble: true })
     case LITERAL.STRING: {
       const id = introducerCollation(e, ctx)
       const coercibility = e.collation !== undefined ? COERCIBILITY.EXPLICIT : COERCIBILITY.COERCIBLE
@@ -785,13 +869,10 @@ function variable(name: string, ctx: CompileContext): Compiled {
   }
 }
 
-/** The system variables that are booleans, which report a width of 1 rather than a BIGINT UNSIGNED's 21. */
-const BOOLEAN_VARIABLES = new Set(['autocommit', 'foreign_key_checks', 'unique_checks', 'sql_safe_updates', 'explicit_defaults_for_timestamp', 'performance_schema'])
-
-/** As 8.4.11 reports them: a string is 21,845 characters, an integer a BIGINT UNSIGNED. */
+/** As 8.4.11 reports them: a string is 21,845 characters, an integer a BIGINT UNSIGNED, a boolean one of width 1. */
 function typeOfSystemVariable(name: string, v: Value, ctx: CompileContext): ResultType {
   if (v === null || v.kind === 'string' || v.kind === 'bytes') return stringType(21845, ctx.connectionCollation, true)
-  if (v.kind === 'int') return BOOLEAN_VARIABLES.has(name) ? intType(1, true) : intType(21, true, true)
+  if (v.kind === 'int') return systemVariableInfo(name)?.kind === 'bool' ? intType(1, true) : intType(21, true, true)
   return { ...typeOfValue(v), nullable: true }
 }
 
@@ -818,6 +899,8 @@ function fixedTolerance(a: ResultType, b: ResultType): number | undefined {
  */
 export function comparer(a: ResultType, b: ResultType): (x: Value, y: Value) => number | null {
   const tolerance = fixedTolerance(a, b)
+  // Text against text: the collation and a constant's encoding decided once for the site, not once a row.
+  if (tolerance === undefined && a.kind === 'string' && b.kind === 'string') return textComparer()
   if (tolerance === undefined) return compareValues
   return (x, y) => {
     if (x === null || y === null) return null
@@ -841,7 +924,7 @@ function divisionDouble(a: ResultType, b: ResultType): ResultType {
   return { ...doubleType(true, Math.min(width, 17 + scale)), scale }
 }
 
-function unary(op: string, a: Compiled, exists: boolean): Compiled {
+function unary(op: string, a: Compiled, exists: boolean, constant: false | Expression = false, ctx?: CompileContext): Compiled {
   if (exists) throw sqlError('ER_NOT_SUPPORTED_YET', messages.notSupported('EXISTS'))
   const at = a.eval
   switch (op) {
@@ -849,7 +932,23 @@ function unary(op: string, a: Compiled, exists: boolean): Compiled {
       const t = a.type
       // Negating an unsigned value needs room for the sign it gains.
       // A hex literal negated is a double, as its string self is (8.4.11: 17 wide, 0 decimals).
-      const type = t.literalInt !== undefined ? floatLength(0, t.nullable) : t.kind === 'int' ? intType(t.length + (t.unsigned ? 1 : 0), t.nullable) : t.kind === 'decimal' ? decimalType(t.length, t.scale, t.nullable) : t.kind === 'null' ? NULL_TYPE : t.kind === 'double' ? floatLength(t.scale, t.nullable) : doubleType(t.nullable)
+      // A temporal negated is a double with its fractional digits, through its number (8.4.11: `-dt` of a DATETIME(3) is 20 wide, 3 decimals).
+      if (t.kind === 'datetime' || t.kind === 'time') {
+        const type = floatLength(t.scale, t.nullable)
+        return { eval: (r, env) => { const v = a.eval(r, env); return v === null ? null : doubleOf(doubleValue(-toDouble(v)), type) }, type }
+      }
+      // A constant integer whose negation may not fit a BIGINT, a negative one or one past 2^63, is negated as a DECIMAL (8.4.11: `--1` is DECIMAL(1,0)).
+      if (t.kind === 'int' && t.literalInt === undefined && constant !== false && ctx !== undefined) {
+        const v = a.eval([], constantEnv(ctx))
+        // Not the literal 2^63, whose negation is BIGINT's least, `-9223372036854775808`.
+        const least = v !== null && v.kind === 'int' && v.v === 2n ** 63n && constant.kind === NODE.LITERAL
+        if (v !== null && v.kind === 'int' && (v.v < 0n || v.v >= 2n ** 63n) && !least) {
+          const type = decimalType(v.v.toString().replace('-', '').length, 0, t.nullable)
+          return { eval: (r, env) => { const x = at(r, env); return x === null ? null : negate(toDecimal(x)) }, type }
+        }
+      }
+      // A boolean's one character gains room for the sign; NULL negated is a DOUBLE (8.4.11: `-FALSE` is 2 wide, `-NULL` DOUBLE(17,0)).
+      const type = t.literalInt !== undefined ? floatLength(0, t.nullable) : t.kind === 'int' ? intType(Math.max(2, t.length + (t.unsigned ? 1 : 0)), t.nullable) : t.kind === 'decimal' ? decimalType(t.length, t.scale, t.nullable) : t.kind === 'null' ? floatLength(0, true) : t.kind === 'double' ? floatLength(t.scale, t.nullable) : doubleType(t.nullable)
       const operand = asNumber(a, 'DOUBLE').eval
       if (type.kind === 'double' && type.scale < 31) return { eval: (r, env) => doubleOf(negate(operand(r, env)), type), type }
       return { eval: (r, env) => negate(operand(r, env)), type }
@@ -861,8 +960,10 @@ function unary(op: string, a: Compiled, exists: boolean): Compiled {
       return { eval: (r, env) => bitNot(x(r, env)), type: intType(21, a.type.nullable, true) }
     }
     case '!':
-    case 'NOT':
-      return { eval: (r, env) => not(at(r, env)), type: boolType(a.type.nullable) }
+    case 'NOT': {
+      const x = logicalOperand(a, constant)
+      return { eval: (r, env) => not(x(r, env)), type: boolType(a.type.nullable) }
+    }
     case 'BINARY':
       return {
         eval: (r, env) => {
@@ -914,13 +1015,30 @@ function intDigits(t: ResultType): number {
   if (t.literalInt !== undefined) return t.literalInt.digits
   if (t.kind === 'decimal') return t.length - t.scale
   if (t.kind === 'int') return t.unsigned ? t.length : t.length - 1
+  // A temporal's number: YYYYMMDD, hhhmmss, or both (8.4.11: `d * 20200102` is 17 wide).
+  if (t.kind === 'datetime') return t.field === FIELD_TYPE.DATE ? 8 : 14
+  if (t.kind === 'time') return 7
   return 0
 }
 
 /** Whether an operand is unsigned as a number: an unsigned type, or a hex literal. */
 const unsignedOf = (t: ResultType): boolean => t.unsigned || t.literalInt?.unsigned === true
 
-const scaleOf = (t: ResultType): number => (t.kind === 'decimal' ? t.scale : 0)
+const scaleOf = (t: ResultType): number => (t.kind === 'decimal' || t.kind === 'datetime' || t.kind === 'time' ? t.scale : 0)
+
+/**
+ * `+`, `-`, `*` or `%` with NULL: a DOUBLE as wide as the other operand, with
+ * its decimals — an integer's none, text's and a double's unspecified, a
+ * temporal's fraction (8.4.11: `NULL * de` of a DECIMAL(6,2) is DOUBLE(8,2), `NULL + dt` 23 wide with 3).
+ */
+function nullArithmetic(a: ResultType, b: ResultType): ResultType {
+  const other = a.kind === 'null' ? b : a
+  if (other.kind === 'null') return { ...doubleType(true, 0), scale: 0 }
+  if (other.kind === 'int') return { ...doubleType(true, other.length), scale: 0 }
+  if (other.kind === 'decimal') return { ...doubleType(true, charWidth(other)), scale: other.scale }
+  if (other.kind === 'datetime' || other.kind === 'time') return { ...doubleType(true, 23), scale: other.scale }
+  return doubleType(true, 23)
+}
 
 /** The numeric kind an arithmetic operator yields, chosen before evaluation as MySQL chooses it. */
 function arithKind(a: ResultType, b: ResultType): 'int' | 'decimal' | 'double' | 'null' {
@@ -958,22 +1076,38 @@ function binary(op: string, left: Expression, right: Expression, extra: Expressi
     const extracted = jsonPathFunction('JSON_EXTRACT', [compile(left, ctx), compile(right, ctx)], 'json_extract')
     return op === '->' ? extracted : unquote(extracted)
   }
-  if (right.kind === NODE.SUBQUERY && right.quantifier !== undefined && COMPARISONS[op] !== undefined) return quantified(op, right.quantifier === 'ALL' ? 'ALL' : 'ANY', left, right, ctx, op)
+  if (right.kind === NODE.SUBQUERY && right.quantifier !== undefined && COMPARISONS[op] !== undefined) return quantified(op, right.quantifier === 'ALL' ? 'ALL' : 'ANY', left, right, ctx)
   if ((COMPARISONS[op] !== undefined || op === '<=>') && (isRow(left) || isRow(right))) return rowComparison(op, left, right, ctx)
   const a = compile(left, ctx)
   if (op === 'BETWEEN' || op === 'NOT BETWEEN') {
     const a0 = a
     const lo0 = timeConstant(a0, left, right, compile(right, ctx))
     const hi0 = timeConstant(a0, left, extra as Expression, compile(extra as Expression, ctx))
-    // Text against a number bound is a double, read once a row.
-    const subject = textVersusNumber(a0.type, lo0.type) || textVersusNumber(a0.type, hi0.type) ? asNumber(a0, 'DOUBLE') : a0
-    const lo = textVersusNumber(lo0.type, a0.type) ? asNumber(lo0, 'DOUBLE', constantNode(right)) : lo0
-    const hi = textVersusNumber(hi0.type, a0.type) ? asNumber(hi0, 'DOUBLE', constantNode(extra as Expression)) : hi0
+    // One comparison type for all three (`agg_cmp_type`). With a number among
+    // them, all are doubles: text read as one with its 1292, a temporal as its
+    // number (8.4.11: `tm BETWEEN 'a' AND db` puts -01:00:00 below 0). With
+    // only dates and text, all are dates, text converted as `=` converts it.
+    const all = [a0, lo0, hi0]
+    // JSON among them: compared as text, its rendering, with 1235 once a statement (8.4.11: `'"b"'` is below 'a').
+    if (all.some((x) => x.type.kind === 'json')) return jsonBetween(op === 'NOT BETWEEN', a0, lo0, hi0)
+    const numeric = all.some((x) => isNumber(x.type))
+    const dateOf = all.find((x) => x.type.kind === 'datetime')
+    const dated = !numeric && dateOf !== undefined && all.every((x) => x.type.kind === 'datetime' || isText(x.type) || x.type.kind === 'null')
+    const operand = (x: Compiled, written: Expression | false): Compiled => {
+      // A constant bound warns each row it is compared, unlike `=`'s once (8.4.11: `tm BETWEEN 'a' AND db` warns for every row).
+      if (numeric && isText(x.type)) return asNumber(x, 'DOUBLE')
+      if (numeric && (x.type.kind === 'datetime' || x.type.kind === 'time')) return { eval: (r, env) => { const v = x.eval(r, env); return v === null ? null : doubleValue(toDouble(v)) }, type: doubleType(x.type.nullable) }
+      if (dated && isText(x.type) && written !== false) return dateConstant(x, written, dateOf as Compiled, ctx, false)
+      return x
+    }
+    const subject = operand(a0, left)
+    const lo = operand(lo0, right)
+    const hi = operand(hi0, extra as Expression)
     const negated = op === 'NOT BETWEEN'
     if (isText(a0.type) && isText(lo0.type) && isText(hi0.type)) aggregateCollations([a0.type, lo0.type, hi0.type], 'between', true)
     // Each bound is its own comparison, fixed decimals and all.
-    const low = comparer(a.type, lo.type)
-    const high = comparer(a.type, hi.type)
+    const low = comparer(subject.type, lo.type)
+    const high = comparer(subject.type, hi.type)
     return {
       eval: (r, env) => {
         const v = subject.eval(r, env)
@@ -994,15 +1128,17 @@ function binary(op: string, left: Expression, right: Expression, extra: Expressi
   // A string constant compared with a date is read as one first, and one
   // that is not is the statement's error (8.4.11: `d = '00-00-00'` is 1525).
   const dated = COMPARISONS[op] !== undefined || op === '<=>'
-  const ca = dated && tb.type.kind === 'datetime' && ta.type.kind === 'string' && constantNode(left) ? asDateConstant(ta, tb.type.field, ctx) : ta
-  const cb = dated && ta.type.kind === 'datetime' && tb.type.kind === 'string' && constantNode(right) ? asDateConstant(tb, ta.type.field, ctx) : tb
+  const ca = dated ? numberBesideDate(yearConstant(dateConstant(ta, left, tb, ctx), left, tb, ctx), left, tb, right) : ta
+  const cb = dated ? numberBesideDate(yearConstant(dateConstant(tb, right, ta, ctx), right, ta, ctx), right, ta, left) : tb
   // A string in arithmetic is read as a double, with 1292 when it is not one.
   const arithmetic = op === '+' || op === '-' || op === '*' || op === '/' || op === '%' || op === 'MOD'
   // And in a comparison with a number, which is of doubles: a constant is
   // converted once a statement (`cache_converted_constant`), a column each row.
   const comparison = (COMPARISONS[op] !== undefined || op === '<=>') && (textVersusNumber(ca.type, cb.type) || textVersusNumber(cb.type, ca.type))
-  const at = arithmetic || comparison ? asNumber(ca, 'DOUBLE', comparison && constantNode(left)).eval : ca.eval
-  const bt = arithmetic || comparison ? asNumber(cb, 'DOUBLE', comparison && constantNode(right)).eval : cb.eval
+  // A logical operator reads its operands' truth as doubles, and a string that is not one warns as it would there.
+  const logical = op === 'AND' || op === '&&' || op === 'OR' || op === '||' || op === 'XOR'
+  const at = logical ? logicalOperand(ca, left) : arithmetic || comparison ? asNumber(ca, 'DOUBLE', comparison && constantNode(left) && left).eval : ca.eval
+  const bt = logical ? logicalOperand(cb, right) : arithmetic || comparison ? asNumber(cb, 'DOUBLE', comparison && constantNode(right) && right).eval : cb.eval
   const nullable = !notNull(a.type, b.type)
   // What an overflow names, as MySQL's message does: the expression's text.
   // Printed only for an error's message: the printing compiles the columns it names.
@@ -1073,7 +1209,7 @@ function binary(op: string, left: Expression, right: Expression, extra: Expressi
         // one when either is (`Item_func_*::result_precision`).
         type = decimalType(digits + s, s, nullable, unsignedOf(a.type) && unsignedOf(b.type))
       } else if (kind === 'double') type = fixedDouble([a.type, b.type], nullable) ?? doubleType(nullable, 23)
-      else type = NULL_TYPE
+      else type = nullArithmetic(a.type, b.type)
       if (type.kind === 'double' && type.scale < 31) {
         const fixed = type
         return { eval: (r, env) => doubleOf(add(at(r, env), bt(r, env), op, label), fixed), type }
@@ -1083,24 +1219,31 @@ function binary(op: string, left: Expression, right: Expression, extra: Expressi
     case '/': {
       const kind = arithKind(a.type, b.type)
       const s = Math.min(30, scaleOf(a.type) + 4)
-      const type = kind === 'double' ? divisionDouble(a.type, b.type) : kind === 'null' ? NULL_TYPE : decimalType(intDigits(a.type) + scaleOf(b.type) + s, s, true, unsignedOf(a.type) && unsignedOf(b.type))
+      // NULL divided, or dividing, is a DOUBLE(4,4) (8.4.11).
+      const type = kind === 'double' ? divisionDouble(a.type, b.type) : kind === 'null' ? { ...doubleType(true, 4), scale: 4 } : decimalType(intDigits(a.type) + scaleOf(b.type) + s, s, true, unsignedOf(a.type) && unsignedOf(b.type))
       const quotient = byZero(at, bt, divide)
       if (type.kind === 'double' && type.scale < 31) return { eval: (r, env) => doubleOf(quotient(r, env), type), type }
       return { eval: quotient, type }
     }
     case 'DIV': {
-      // The dividend's width: an integer's own (a TINYINT UNSIGNED is 3), a
-      // DECIMAL's integer digits and a sign (`score DIV 0` on a DECIMAL(6,2)
-      // is 5), a double's 22 — all read off 8.4.11.
-      const t = a.type
-      const width = t.literalInt !== undefined ? t.literalInt.digits : t.kind === 'int' ? t.length : t.kind === 'decimal' ? intDigits(t) + 1 : 22
-      return { eval: byZero(at, bt, (x, y) => intDivide(x, y, label)), type: intType(width, true, unsignedOf(t) || unsignedOf(b.type)) }
+      // Digits: the dividend's integer digits and the divisor's decimals, or
+      // all its digits when it has no fixed decimals, at most 21, and a sign
+      // unless either is unsigned (`Item_func_div_int::result_precision`; 8.4.11:
+      // `bi DIV vc` of a BIGINT and a VARCHAR(20) is 22, `yr DIV lt` 14).
+      const unsigned = unsignedOf(a.type) || unsignedOf(b.type)
+      const divisor = fixedDecimals(b.type) ?? decimalPrecision(b.type)
+      const digits = Math.min(decimalPrecision(a.type) - (fixedDecimals(a.type) ?? 0) + divisor, 21)
+      // Its operands are read as DECIMALs, text warning each row (8.4.11: `lt DIV 10`).
+      const x = asNumber(ca, 'DECIMAL').eval
+      const y = asNumber(cb, 'DECIMAL').eval
+      return { eval: byZero(x, y, (p, q) => intDivide(p, q, label)), type: intType(digits + (unsigned ? 0 : 1), true, unsigned) }
     }
     case '%':
     case 'MOD': {
       const kind = arithKind(a.type, b.type)
       // The wider operand's digits and a sign, unsigned or not: `flag % 3` on a TINYINT UNSIGNED is 4.
-      const type = kind === 'int' ? intType(Math.max(intDigits(a.type), intDigits(b.type), 1) + 1, true, unsignedOf(a.type)) : kind === 'decimal' ? decimalType(Math.max(a.type.length, b.type.length), Math.max(scaleOf(a.type), scaleOf(b.type)), true) : doubleType(true, 23)
+      // A double keeps the dividend's sign flag (8.4.11: `u % ch` of an INT UNSIGNED is unsigned).
+      const type = kind === 'int' ? intType(Math.max(intDigits(a.type), intDigits(b.type), 1) + 1, true, unsignedOf(a.type)) : kind === 'decimal' ? decimalType(Math.max(a.type.length, b.type.length), Math.max(scaleOf(a.type), scaleOf(b.type)), true) : kind === 'null' ? nullArithmetic(a.type, b.type) : { ...doubleType(true, 23), unsigned: unsignedOf(a.type) }
       return { eval: byZero(at, bt, (x, y) => modulo(x, y, label)), type }
     }
     case '|':
@@ -1116,19 +1259,14 @@ function binary(op: string, left: Expression, right: Expression, extra: Expressi
     default: {
       const test = COMPARISONS[op]
       if (test === undefined) throw sqlError('ER_NOT_SUPPORTED_YET', messages.notSupported(`The operator ${op}`))
-      if (fixedTolerance(a.type, b.type) !== undefined) {
-        const cmp = comparer(a.type, b.type)
-        return {
-          eval: (r, env) => {
-            const c = cmp(at(r, env), bt(r, env))
-            return c === null ? null : bool(test(c))
-          },
-          type: boolType(nullable),
-        }
-      }
+      const cmp = comparer(a.type, b.type)
       return {
+        // The right side is not read when the left is NULL, so its conversion
+        // does not warn (8.4.11's comparators look at the left first).
         eval: (r, env) => {
-          const c = compareValues(at(r, env), bt(r, env))
+          const x = at(r, env)
+          if (x === null) return null
+          const c = cmp(x, bt(r, env))
           return c === null ? null : bool(test(c))
         },
         type: boolType(nullable),
@@ -1138,6 +1276,27 @@ function binary(op: string, left: Expression, right: Expression, extra: Expressi
 }
 
 // --- Constants -------------------------------------------------------------------
+
+/** BETWEEN with JSON among its operands, which 8.4.11 does not compare as JSON: all three as their text, binary, warning once a statement. */
+function jsonBetween(negated: boolean, ...operands: [Compiled, Compiled, Compiled]): Compiled {
+  const key = {}
+  const text = (v: Value): Value => (v === null ? null : stringValue(toText(v), CHARSET_UTF8MB4_BIN))
+  return {
+    eval: (r, env) => {
+      if (env.memo?.has(key) !== true) {
+        env.memo?.set(key, true)
+        raise(env, 1235, "This version of MySQL doesn't yet support 'comparison of JSON in the BETWEEN operator'")
+      }
+      const [v, lo, hi] = operands.map((c) => text(c.eval(r, env))) as [Value, Value, Value]
+      const x = compareValues(v, lo)
+      const y = compareValues(v, hi)
+      if ((x !== null && x < 0) || (y !== null && y > 0)) return bool(negated)
+      if (x === null || y === null) return null
+      return bool(!negated)
+    },
+    type: boolType(true),
+  }
+}
 
 /** An expression whose value the statement fixes: no column, subquery, variable or volatile function in it. */
 export function constantNode(e: unknown): boolean {
@@ -1192,7 +1351,13 @@ function asTimeOfDay(c: Compiled, column: readonly string[]): Compiled {
         return NO_TIME
       }
       const dt = v.kind === 'datetime' ? v : v.kind === 'int' && v.v >= 10_000_000_000n ? toDateTime(v, 'DATETIME') : undefined
-      return toTime(dt ?? v) ?? v
+      const t = toTime(dt ?? v)
+      // A number that is no time says so once, as storing it into the column would (8.4.11: `tm <= 20200102`).
+      if (t === undefined && v.kind === 'int' && env.memo?.has(self) !== true) {
+        env.memo?.set(self, true)
+        raise(env, 1292, `Incorrect time value: '${toText(v)}' for column '${column[column.length - 1] as string}' at row 1`)
+      }
+      return t ?? v
     },
     type: c.type,
   }
@@ -1201,21 +1366,101 @@ function asTimeOfDay(c: Compiled, column: readonly string[]): Compiled {
 
 /** The session's NO_ZERO_DATE and NO_ZERO_IN_DATE, as a scan's flags. */
 /** A string constant compared with a date or datetime: that, or 1292 and then 1525. */
-function asDateConstant(c: Compiled, field: number, ctx: CompileContext): Compiled {
+/**
+ * `c`, text compared with the date or datetime `other`, read as one first: a
+ * constant once, as a date or 1525; a column's each row, as a date or, with
+ * 1292, the zero date (8.4.11: `dt > ch` with ch 'b' is 1). Otherwise `c`.
+ */
+export function dateConstant(c: Compiled, written: Expression, other: Compiled, ctx: CompileContext, strict = true): Compiled {
+  const convert = dateConverter(c, written, other, ctx, strict)
+  return convert === undefined ? c : { eval: (r, env) => convert(c.eval(r, env), env), type: c.type }
+}
+
+/**
+ * `dateConstant`'s conversion of one value, for a caller that keeps the value
+ * itself too (NULLIF returns it unconverted). A constant that is no date is
+ * 1525 when the statement is prepared, rows or none (8.4.11: under `WHERE
+ * NULL` too) — unless not `strict`, as in BETWEEN, where it is the zero date
+ * with 1292 each row, as a column's text is.
+ */
+export function dateConverter(c: Compiled, written: Expression, other: Compiled, ctx: CompileContext, strict = true): ((v: Value, env: Env) => Value) | undefined {
+  if (other.type.kind !== 'datetime' || !isText(c.type)) return undefined
   const flags = modeOf(ctx.session.sqlMode)
-  const date = field === FIELD_TYPE.DATE || field === FIELD_TYPE.NEWDATE
+  const constant = strict && constantNode(written)
+  const what = other.type.field === FIELD_TYPE.DATE || other.type.field === FIELD_TYPE.NEWDATE ? 'date' : 'datetime'
+  if (constant && (written.kind !== NODE.PLACEHOLDER || ctx.params !== undefined)) {
+    let v: Value = null
+    try {
+      v = c.eval([], constantEnv(ctx))
+    } catch (e) {
+      expectTyped(e)
+    }
+    if (v !== null && (v.kind === 'string' || v.kind === 'bytes') && parseDateTime(toText(v), flags) === undefined) throw sqlError('ER_WRONG_VALUE', `Incorrect ${what.toUpperCase()} value: '${warnedText(v)}'`)
+  }
+  return (v, env) => {
+    // Text or bytes, a hex or bit literal's included (8.4.11: `d <= b'1010'` is 1525).
+    if (v === null || (v.kind !== 'string' && v.kind !== 'bytes')) return v
+    const p = parseDateTime(toText(v), flags)
+    if (p !== undefined) return { kind: 'datetime', v: p.v, type: p.hasTime ? 'DATETIME' : 'DATE', fsp: p.fsp }
+    if (!constant) {
+      // Beside a column the conversion says so plainly; beside a literal or an expression it is "truncated", in that one's own word (8.4.11).
+      raise(env, 1292, other.type.column !== undefined ? `Incorrect datetime value: '${warnedText(v)}'` : `Truncated incorrect ${what} value: '${warnedText(v)}'`)
+      return ZERO_DATETIME
+    }
+    raise(env, 1292, `Truncated incorrect ${what} value: '${warnedText(v)}'`)
+    throw sqlError('ER_WRONG_VALUE', `Incorrect ${what.toUpperCase()} value: '${warnedText(v)}'`)
+  }
+}
+
+const ZERO_DATETIME: Value = { kind: 'datetime', v: { year: 0, month: 0, day: 0, hour: 0, minute: 0, second: 0, microsecond: 0 }, type: 'DATETIME', fsp: 0 }
+
+/**
+ * `c`, a number constant compared with a DATE, DATETIME or TIMESTAMP column:
+ * converted into the column's type to compare, and when it is no such value,
+ * 1292 once a statement, naming the column, at row 1, as storing it into the
+ * column says (8.4.11: `dt = 10`, `1e300 >= dt`). The comparison itself is unchanged.
+ */
+function numberBesideDate(c: Compiled, written: Expression, other: Compiled, otherWritten: Expression): Compiled {
+  if (other.type.kind !== 'datetime' || otherWritten.kind !== NODE.COLUMN || !isNumber(c.type) || !constantNode(written)) return c
+  const what = other.type.field === FIELD_TYPE.DATE || other.type.field === FIELD_TYPE.NEWDATE ? 'date' : 'datetime'
+  const column = otherWritten.parts[otherWritten.parts.length - 1] as string
+  const key = written
   return {
+    ...c,
     eval: (r, env) => {
       const v = c.eval(r, env)
-      if (v === null || v.kind !== 'string') return v
-      const p = parseDateTime(v.v, flags)
-      if (p !== undefined) return { kind: 'datetime', v: p.v, type: p.hasTime ? 'DATETIME' : 'DATE', fsp: p.fsp }
-      const what = date ? 'date' : 'datetime'
-      raise(env, 1292, `Truncated incorrect ${what} value: '${v.v}'`)
-      throw sqlError('ER_WRONG_VALUE', `Incorrect ${what.toUpperCase()} value: '${v.v}'`)
+      if (v !== null && env.memo?.has(key) !== true) {
+        env.memo?.set(key, true)
+        const whole = v.kind === 'double' ? (Number.isInteger(v.v) && Math.abs(v.v) < 1e15 ? BigInt(v.v) : undefined) : v.kind === 'int' ? v.v : v.kind === 'decimal' ? toInteger(v) : undefined
+        if (whole === undefined || numberToDateTime(whole) === undefined) raise(env, 1292, `Incorrect ${what} value: '${toText(v)}' for column '${column}' at row 1`)
+      }
+      return v
     },
-    type: c.type,
   }
+}
+
+/**
+ * `c`, a text constant compared with a YEAR column, as the YEAR it would be
+ * stored as, once: two digits are 2000 to 2069 or 1970 to 1999, `'0'` is 2000
+ * (8.4.11: `y > '10:11:12'` compares with 2010). Text with no leading number
+ * is left to compare as a double.
+ */
+function yearConstant(c: Compiled, written: Expression, other: Compiled, ctx: CompileContext): Compiled {
+  if (other.type.field !== FIELD_TYPE.YEAR || other.type.column === undefined || !isText(c.type) || !constantNode(written)) return c
+  if (written.kind === NODE.PLACEHOLDER && ctx.params === undefined) return c
+  let v: Value = null
+  try {
+    v = c.eval([], constantEnv(ctx))
+  } catch (e) {
+    expectTyped(e)
+    return c
+  }
+  if (v === null || (v.kind !== 'string' && v.kind !== 'bytes')) return c
+  const text = toText(v)
+  if (!/^\s*[+-]?(\d|\.\d)/.test(text)) return c
+  const n = Math.trunc(Number(numericPrefix(text).text))
+  const year = n >= 0 && n < 70 ? 2000 + n : n >= 70 && n < 100 ? 1900 + n : n
+  return lit(intValue(BigInt(year)), { ...intType(4, false, true), field: FIELD_TYPE.YEAR })
 }
 
 /** A constant compared with a TIME column, read as a time of day. */
@@ -1381,7 +1626,7 @@ function searchItems(list: SortedItems, v: Exclude<Value, null>): boolean | null
 }
 
 function inList(negated: boolean, left: Expression, right: Expression, ctx: CompileContext): Compiled {
-  if (right.kind === NODE.SUBQUERY) return quantified(negated ? '<>' : '=', negated ? 'ALL' : 'ANY', left, right, ctx, negated ? 'NOT IN' : 'IN')
+  if (right.kind === NODE.SUBQUERY) return quantified(negated ? '<>' : '=', negated ? 'ALL' : 'ANY', left, right, ctx)
   const list = right.kind === NODE.ROW ? right.items : [right]
   if (isRow(left)) {
     // `(a, b) IN ((1, 2), (3, 4))`: = with each row, TRUE if any is.
@@ -1402,7 +1647,8 @@ function inList(negated: boolean, left: Expression, right: Expression, ctx: Comp
     }
   }
   const compiled = compile(left, ctx)
-  const raw = list.map((i) => timeConstant(compiled, left, i, compile(i, ctx), true))
+  // One item is `=`, whose text constant beside a date must be one (1525); a list's need not (8.4.11).
+  const raw = list.map((i) => timeConstant(compiled, left, i, compile(i, ctx), true)).map((c, k) => (list.length === 1 ? dateConstant(c, list[k] as Expression, compiled, ctx) : c))
   // Text against numbers is read as doubles: the left side once a row, and
   // a text item each time it is compared (8.4.11: `id IN ('1x', 2)` warns a row).
   const a = raw.some((i) => textVersusNumber(compiled.type, i.type)) ? asNumber(compiled, 'DOUBLE') : compiled
@@ -1415,7 +1661,8 @@ function inList(negated: boolean, left: Expression, right: Expression, ctx: Comp
   // One element is `=`, which compares fixed decimals within a tolerance;
   // a list compares exactly (8.4.11: a FLOAT(3,1) is IN (1.2) and not IN (1.2, 1.3)).
   const compare = items.length === 1 ? comparer(a.type, (items[0] as Compiled).type) : compareValues
-  let sortedFor: Env | undefined
+  // Constant items: sorted once a statement, which a correlated subquery's per-row environments share the memo of.
+  let sortedFor: object | undefined
   let sorted: SortedItems | undefined
   const timed = compiled.type.kind === 'time' && left.kind === NODE.COLUMN
   return {
@@ -1423,9 +1670,9 @@ function inList(negated: boolean, left: Expression, right: Expression, ctx: Comp
       const v = a.eval(r, env)
       if (v === null) return null
       if (searchable) {
-        if (sortedFor !== env) {
+        if (sortedFor !== (env.memo ?? env)) {
           sorted = sortItems(items.map((i) => i.eval(r, env)))
-          sortedFor = env
+          sortedFor = env.memo ?? env
         }
         const found = sorted === undefined ? undefined : searchItems(sorted, v)
         if (found !== undefined) return found === null ? null : bool(found !== negated)
@@ -1476,29 +1723,59 @@ function like(negated: boolean, a: Compiled, pattern: Compiled, escape: Compiled
   }
 }
 
-function matchLike(s: readonly string[], p: readonly string[], escape: string, collationId: number): boolean {
-  const c = collationId === CHARSET_BINARY ? undefined : collation(collationId)
-  const same = (x: string, y: string): boolean =>
-    x === y || (c !== undefined && c.compare(encodeCollation(x, collationId), encodeCollation(y, collationId)) === 0)
-  // Memoised on (i, j): `%` backtracking is otherwise exponential in the pattern.
-  const memo = new Map<number, boolean>()
-  const go = (i: number, j: number): boolean => {
-    const key = i * (p.length + 1) + j
-    const hit = memo.get(key)
-    if (hit !== undefined) return hit
-    let out: boolean
-    if (j === p.length) out = i === s.length
-    else {
-      const pc = p[j] as string
-      if (pc === escape && j + 1 < p.length) out = i < s.length && same(s[i] as string, p[j + 1] as string) && go(i + 1, j + 2)
-      else if (pc === '%') out = go(i, j + 1) || (i < s.length && go(i + 1, j))
-      else if (pc === '_') out = i < s.length && go(i + 1, j + 1)
-      else out = i < s.length && same(s[i] as string, pc) && go(i + 1, j + 1)
-    }
-    memo.set(key, out)
-    return out
+/**
+ * Each character's equality key under a collation, kept across rows: two
+ * characters are one to LIKE exactly when their keys are (`equalityKey`
+ * drops only trailing pad weights, which for one character is a space's
+ * own). Bounded, since a column's text has few distinct characters.
+ */
+const CHARACTER_KEYS = new Map<number, Map<string, string>>()
+
+function characterKey(ch: string, collationId: number): string {
+  let keys = CHARACTER_KEYS.get(collationId)
+  if (keys === undefined) CHARACTER_KEYS.set(collationId, (keys = new Map()))
+  let k = keys.get(ch)
+  if (k === undefined) {
+    if (keys.size >= 65536) keys.clear()
+    k = equalityKey(ch, collationId)
+    keys.set(ch, k)
   }
-  return go(0, 0)
+  return k
+}
+
+function matchLike(s: readonly string[], p: readonly string[], escape: string, collationId: number): boolean {
+  const binary = collationId === CHARSET_BINARY
+  const same = (x: string, y: string): boolean => x === y || (!binary && characterKey(x, collationId) === characterKey(y, collationId))
+  // The pattern as tokens: `%`, `_`, or a character to match (escaped or not).
+  const ANY = 0
+  const ONE = 1
+  const tokens: (string | typeof ANY | typeof ONE)[] = []
+  for (let j = 0; j < p.length; j++) {
+    const pc = p[j] as string
+    if (pc === escape && j + 1 < p.length) tokens.push(p[++j] as string)
+    else tokens.push(pc === '%' ? ANY : pc === '_' ? ONE : pc)
+  }
+  // Iterative, backtracking only to the last `%`: linear stack, and O(|s|·|p|)
+  // time at worst, as the memoised recursion was without its stack depth.
+  let i = 0
+  let j = 0
+  let star = -1
+  let mark = 0
+  while (i < s.length) {
+    const t = tokens[j]
+    if (t === ONE || (typeof t === 'string' && same(s[i] as string, t))) {
+      i++
+      j++
+    } else if (t === ANY) {
+      star = j++
+      mark = i
+    } else if (star >= 0) {
+      j = star + 1
+      i = ++mark
+    } else return false
+  }
+  while (tokens[j] === ANY) j++
+  return j === tokens.length
 }
 
 /**
@@ -1507,7 +1784,131 @@ function matchLike(s: readonly string[], p: readonly string[], escape: string, c
  * double, else a decimal wide enough for every integer and scale, else an
  * integer. NULL branches take no part.
  */
+/**
+ * The one type CASE, IF, IFNULL and COALESCE give values of several types.
+ * Its field type is MySQL's pairwise merge of theirs (`type-merge.ts`,
+ * captured from 8.4.11); its length, scale and collation are the holder's
+ * (`holderOf`), which the merge then dresses: a CHAR among strings makes a
+ * CHAR, a DATE beside a TIME a DATETIME, a YEAR beside an INT an INT.
+ */
 export function aggregate(types: readonly ResultType[], nullable: boolean, connectionCollation: number, operation?: string, compare = false): ResultType {
+  const type = holderOf(types, nullable, connectionCollation, operation, compare)
+  const live = types.filter((t) => t.kind !== 'null')
+  if (live.length === 0) return type
+  // JSON among other types is a LONGBLOB wherever it stands, which a left fold would lose (8.4.11: `COALESCE(js, tm, d)`).
+  const json = live.some((t) => t.kind === 'json')
+  const merged = signedness(live, json ? 'LONG_BLOB' : live.map(mergeTypeOf).reduce((a, b) => mergeTypes(a, b) as MergeType))
+  const field = merged === 'VARCHAR' ? FIELD_TYPE.VAR_STRING : FIELD_TYPE[merged]
+  switch (merged) {
+    case 'DATE':
+    case 'TIME':
+    case 'DATETIME':
+    case 'TIMESTAMP':
+      // Reported in the connection's charset as text is, the field type kept (8.4.11).
+      return { ...datetimeType(field, Math.max(...live.map((t) => (t.kind === 'datetime' || t.kind === 'time' ? t.scale : 0))), nullable), asText: true }
+    case 'TINY':
+    case 'SHORT':
+    case 'INT24':
+    case 'LONG':
+    case 'LONGLONG':
+    case 'YEAR':
+      return type.kind === 'int' ? { ...type, field } : { ...intType(Math.max(...live.map((t) => t.length)), nullable, live.every((t) => t.unsigned)), field }
+    case 'NEWDECIMAL':
+      // BIGINT UNSIGNED beside a signed integer: a DECIMAL of as many digits as the widest (8.4.11: 21 wide).
+      return type.kind === 'int' ? decimalType(Math.max(...live.map(intDigits)), 0, nullable) : type
+    case 'FLOAT':
+    case 'DOUBLE':
+      return type.kind === 'double' ? { ...type, field } : type
+    case 'STRING':
+    case 'VARCHAR':
+      // A BIT among temporals or numbers that merge to a string makes it a binary one, as wide as the widest (8.4.11: `COALESCE(tm, bt, 1.5)` is VARBINARY(10)).
+      if (type.kind === 'string' && live.some(isBits)) return { ...stringType(Math.max(...live.map((t) => (isBits(t) ? t.length : charWidth(t)))), CHARSET_BINARY, nullable), field, coercibility: COERCIBILITY.IMPLICIT }
+      return type.kind === 'string' || type.kind === 'bytes' ? { ...type, field } : type
+    case 'ENUM':
+    case 'SET':
+    case 'LONG_BLOB':
+      return type.kind === 'string' || type.kind === 'bytes' ? { ...type, field } : type
+    default:
+      return type
+  }
+}
+
+const INTEGERS: readonly MergeType[] = ['TINY', 'SHORT', 'INT24', 'LONG', 'LONGLONG', 'NEWDECIMAL']
+
+/**
+ * The merge table's integers are signed ones. An unsigned one beside a signed
+ * one needs the next larger type to hold both, BIGINT UNSIGNED a DECIMAL; and
+ * a BIT, unsigned, beside only unsigned integers is a BIGINT rather than the
+ * DECIMAL it is beside a signed one (8.4.11: TINYINT with TINYINT UNSIGNED is
+ * SMALLINT, INT with INT UNSIGNED BIGINT). YEAR takes no part.
+ */
+function signedness(live: readonly ResultType[], merged: MergeType): MergeType {
+  const ints = live.filter((t) => t.kind === 'int' && t.field !== FIELD_TYPE.YEAR && !isBits(t))
+  if (live.some(isBits) && merged === 'NEWDECIMAL' && ints.length > 0 && ints.every((t) => t.unsigned) && live.every((t) => t.kind === 'int' || t.kind === 'null')) return 'LONGLONG'
+  const rank = INTEGERS.indexOf(merged)
+  if (rank === -1 || !ints.some((t) => t.unsigned) || !ints.some((t) => !t.unsigned)) return merged
+  const promoted = Math.max(rank, ...ints.filter((t) => t.unsigned).map((t) => INTEGERS.indexOf(mergeTypeOf(t)) + 1))
+  return INTEGERS[Math.min(promoted, INTEGERS.length - 1)] as MergeType
+}
+
+/** A type's field type as the merge table names it: ENUM, SET and the TEXT sizes are read from the column. */
+function mergeTypeOf(t: ResultType): MergeType {
+  if (t.kind === 'null') return 'NULL'
+  if (t.kind === 'json') return 'JSON'
+  const flags = t.column?.flags ?? 0
+  if ((flags & COLUMN_FLAG.ENUM) !== 0 || t.field === FIELD_TYPE.ENUM) return 'ENUM'
+  if ((flags & COLUMN_FLAG.SET) !== 0 || t.field === FIELD_TYPE.SET) return 'SET'
+  switch (t.field) {
+    case FIELD_TYPE.TINY:
+    case FIELD_TYPE.SHORT:
+    case FIELD_TYPE.INT24:
+    case FIELD_TYPE.LONG:
+    case FIELD_TYPE.LONGLONG:
+    case FIELD_TYPE.YEAR:
+    case FIELD_TYPE.BIT:
+    case FIELD_TYPE.NEWDECIMAL:
+    case FIELD_TYPE.FLOAT:
+    case FIELD_TYPE.DOUBLE:
+    case FIELD_TYPE.DATE:
+    case FIELD_TYPE.TIME:
+    case FIELD_TYPE.DATETIME:
+    case FIELD_TYPE.TIMESTAMP:
+    case FIELD_TYPE.STRING:
+    case FIELD_TYPE.TINY_BLOB:
+    case FIELD_TYPE.MEDIUM_BLOB:
+    case FIELD_TYPE.LONG_BLOB:
+      return MERGE_NAME[t.field] as MergeType
+    case FIELD_TYPE.DECIMAL:
+      return 'NEWDECIMAL'
+    case FIELD_TYPE.NEWDATE:
+      return 'DATE'
+    case FIELD_TYPE.BLOB: {
+      const bytes = t.blobBytes ?? 65535
+      return bytes <= 255 ? 'TINY_BLOB' : bytes <= 65535 ? 'BLOB' : bytes <= 16777215 ? 'MEDIUM_BLOB' : 'LONG_BLOB'
+    }
+    default:
+      return 'VARCHAR'
+  }
+}
+
+const MERGE_NAME: Readonly<Record<number, string>> = Object.fromEntries(Object.entries(FIELD_TYPE).map(([name, code]) => [code, name]))
+
+/**
+ * A branch's value as the merged type holds it: a DATE or a TIME where the
+ * merge made a DATETIME is one, a TIME on today's date (8.4.11).
+ */
+export function asMerged(v: Value, result: ResultType, env: Env): Value {
+  if (v === null || result.kind !== 'datetime' || result.field === FIELD_TYPE.DATE) return v
+  if (v.kind === 'time') {
+    if (result.field === FIELD_TYPE.TIME) return v
+    const d = onToday(v.v, env)
+    return d === undefined ? null : { kind: 'datetime', v: d, type: 'DATETIME', fsp: v.fsp }
+  }
+  if (v.kind === 'datetime' && v.type === 'DATE' && result.field !== FIELD_TYPE.TIME) return { ...v, type: 'DATETIME' }
+  return v
+}
+
+function holderOf(types: readonly ResultType[], nullable: boolean, connectionCollation: number, operation?: string, compare = false): ResultType {
   let live = types.filter((t) => t.kind !== 'null')
   if (live.length === 0) return NULL_TYPE
   // JSON with JSON is JSON; JSON with anything else is its text, in JSON's
@@ -1533,7 +1934,12 @@ export function aggregate(types: readonly ResultType[], nullable: boolean, conne
     const binary = derived !== undefined ? derived.collationId === CHARSET_BINARY : texts.some((t) => t.kind === 'bytes' && coercibilityOf(t) === least)
     const collation = binary ? CHARSET_BINARY : (derived?.collationId ?? aggregateTypes(live, connectionCollation))
     const tagged = (t: ResultType): ResultType => (derived === undefined || binary ? t : { ...t, coercibility: derived.derivation })
-    const width = Math.max(...live.map((t) => (binary && t.kind === 'string' ? charWidth(t) * requireCollationInfo(t.collationId).mbmaxlen : charWidth(t))))
+    // In a binary CASE, IF, IFNULL or COALESCE a DOUBLE literal is as wide as
+    // it was written (8.4.11: `IF(c, 2.5e0, 0x61)` is VARBINARY(5)); in a text
+    // one, and in GREATEST and LEAST, it is 22, as a computed double is.
+    const holder = binary && (operation === 'case' || operation === 'if' || operation === 'ifnull' || operation === 'coalesce')
+    const textWidth = (t: ResultType): number => (holder && t.literalDouble === true ? t.length : charWidth(t))
+    const width = Math.max(...live.map((t) => (binary && t.kind === 'string' ? charWidth(t) * requireCollationInfo(t.collationId).mbmaxlen : textWidth(t))))
     const blob = Math.max(0, ...live.map((t) => t.blobBytes ?? 0))
     if (blob > 0 && !binary) return tagged({ ...stringType(width, collation, nullable), field: FIELD_TYPE.BLOB, blobBytes: blob * requireCollationInfo(collation).mbmaxlen })
     return tagged(stringType(width, collation, nullable))
@@ -1603,7 +2009,40 @@ export function convertTo(v: Value, t: ResultType): Value {
  * is what `val_str` passes through (8.4.11: `IF(1, b, 0)` sends 0x05 as the
  * DECIMAL's text, and `IF(1, b8, b12)` one byte).
  */
+/** A value's text as its type shows it: a YEAR is four digits, `0000` for zero; a FLOAT has a float's digits (8.4.11). */
+export function textOf(v: Exclude<Value, null>, t: ResultType): string {
+  if (t.field === FIELD_TYPE.YEAR && t.column !== undefined && v.kind === 'int') return v.v.toString().padStart(4, '0')
+  if (t.field === FIELD_TYPE.FLOAT && v.kind === 'double' && t.scale >= 31) return renderFloat(v.v)
+  return toText(v)
+}
+
+/** Whether a branch of this type, in a string result, is text of its own kind rather than its value's (`textOf`). */
+export const ownText = (t: ResultType): boolean => (t.field === FIELD_TYPE.YEAR && t.column !== undefined) || (t.field === FIELD_TYPE.FLOAT && t.scale >= 31)
+
+/**
+ * A branch's value as a binary result holds it: text in its own charset's
+ * bytes (8.4.11: a latin1 'café' is 63 61 66 E9), a YEAR or FLOAT as its text.
+ */
+export function asBinary(v: Exclude<Value, null>, from: ResultType): Value {
+  if (ownText(from)) return bytesValue(new TextEncoder().encode(textOf(v, from)))
+  return v.kind === 'string' ? bytesValue(encodeCollation(v.v, v.collationId)) : v
+}
+
 export function branchOf(x: Compiled, result: ResultType): Compiled['eval'] {
+  if (ownText(x.type) && result.kind === 'string') {
+    const id = result.collationId
+    return (r, env) => {
+      const v = x.eval(r, env)
+      return v === null ? null : stringValue(textOf(v, x.type), id)
+    }
+  }
+  if (result.kind === 'bytes' && (ownText(x.type) || x.type.kind === 'string')) {
+    return (r, env) => {
+      const v = x.eval(r, env)
+      return v === null ? null : asBinary(v, x.type)
+    }
+  }
+  if (result.kind === 'datetime' && (x.type.kind === 'datetime' || x.type.kind === 'time') && x.type.field !== result.field) return (r, env) => asMerged(x.eval(r, env), result, env)
   if (!isBits(x.type) || !(result.kind === 'decimal' || result.kind === 'bytes' || isBits(result))) return x.eval
   const bits = x.type.length
   return (r, env) => {
@@ -1613,14 +2052,19 @@ export function branchOf(x: Compiled, result: ResultType): Compiled['eval'] {
 }
 
 function caseExpr(e: CaseNode, ctx: CompileContext): Compiled {
-  const operand = e.operand === undefined ? undefined : compile(e.operand, ctx)
-  const whens = e.whens.map((w) => ({ when: compile(w.when, ctx), then: compile(w.then, ctx) }))
+  const given = e.operand === undefined ? undefined : compile(e.operand, ctx)
+  const compiled = e.whens.map((w) => ({ when: compile(w.when, ctx), then: compile(w.then, ctx) }))
+  // `CASE x WHEN y`: one comparison type for x and every y, text read as a
+  // double beside a number (`agg_cmp_type`); a searched CASE reads each WHEN's truth as one.
+  const numeric = given !== undefined && [given, ...compiled.map((w) => w.when)].some((x) => isNumber(x.type))
+  const operand = given !== undefined && numeric && isText(given.type) ? asNumber(given, 'DOUBLE') : given
+  const whens = compiled.map((w) => ({ when: given === undefined || numeric ? asNumber(w.when, 'DOUBLE') : w.when, then: w.then }))
   const otherwise = e.else === undefined ? undefined : compile(e.else, ctx)
   const results = [...whens.map((w) => w.then.type), otherwise?.type ?? NULL_TYPE]
   const nullable = otherwise === undefined || results.some((t) => t.nullable)
   const type = aggregate(results, nullable, ctx.connectionCollation, 'case')
   // `CASE x WHEN y`: the operand and every WHEN compare in one collation.
-  if (operand !== undefined && isText(operand.type) && whens.every((w) => isText(w.when.type))) aggregateCollations([operand.type, ...whens.map((w) => w.when.type)], 'case', true)
+  if (given !== undefined && isText(given.type) && compiled.every((w) => isText(w.when.type))) aggregateCollations([given.type, ...compiled.map((w) => w.when.type)], 'case', true)
   const thens = whens.map((w) => branchOf(w.then, type))
   const elseOf = otherwise === undefined ? undefined : branchOf(otherwise, type)
   return {
@@ -1631,7 +2075,8 @@ function caseExpr(e: CaseNode, ctx: CompileContext): Compiled {
         const hit = operand === undefined ? truth(w.when.eval(r, env)) === true : compareValues(subject ?? null, w.when.eval(r, env)) === 0
         if (hit) return type.kind === 'double' ? doubleOf(w.then.eval(r, env), type) : (thens[i] as Compiled['eval'])(r, env)
       }
-      return elseOf === undefined ? null : elseOf(r, env)
+      if (elseOf === undefined) return null
+      return type.kind === 'double' ? doubleOf(elseOf(r, env), type) : elseOf(r, env)
     },
     type,
   }
@@ -1664,6 +2109,9 @@ function outerOnly(args: readonly Expression[], ctx: CompileContext): boolean {
 
 function call(e: CallNode, ctx: CompileContext): Compiled {
   const name = e.name.toUpperCase()
+  // `NOW ()` with IGNORE_SPACE off names a stored function, which this
+  // executor has none of (8.4.11's wording, M5.33).
+  if (e.stored === true) throw sqlError('ER_FUNC_INEXISTENT_NAME_COLLISION', `FUNCTION ${ctx.session.database ?? ''}.${e.name} does not exist. Check the 'Function Name Parsing and Resolution' section in the Reference Manual`)
   if (e.over !== undefined) {
     if (ctx.windows !== undefined) return ctx.windows.register(e)
     if (/^(where|having|on) clause$/.test(ctx.clause)) windowNotAllowed(e)
@@ -1729,7 +2177,7 @@ function cast(e: CastNode, ctx: CompileContext): Compiled {
         eval: (r, env) => {
           const v = x(r, env)
           if (v === null) return null
-          const b = v.kind === 'bytes' ? v.v : v.kind === 'string' ? encodeCollation(v.v, v.collationId) : new TextEncoder().encode(toText(v))
+          const b = valueBytes(v)
           if (t.length === undefined) return bytesValue(b)
           // BINARY(N) is N bytes: cut, or padded with zero bytes (8.4.11).
           if (b.length > t.length) raise(env, 1292, `Truncated incorrect BINARY(${t.length}) value: '${toText(v)}'`)
@@ -1833,6 +2281,15 @@ function cast(e: CastNode, ctx: CompileContext): Compiled {
 
 // --- subqueries (M5.1) --------------------------------------------------------------
 
+/** A `[NOT] IN`, `= ALL` or `<> ANY` subquery as compiled: its comparison, and what EXPLAIN's choice of strategy turns on. */
+export interface QuantifiedSubquery {
+  readonly op: string
+  readonly quantifier: 'ANY' | 'ALL'
+  /** Whether the expression it is compared with can be NULL. */
+  readonly outerNullable: boolean
+  readonly correlated: boolean
+}
+
 /** A subquery's plan, with the enclosing scope its correlated names resolve in. */
 function planned(e: SubqueryNode, ctx: CompileContext): SubqueryPlan {
   if (ctx.subquery === undefined) throw sqlError('ER_NOT_SUPPORTED_YET', messages.notSupported('Subqueries here'))
@@ -1889,8 +2346,7 @@ function exists(e: SubqueryNode, ctx: CompileContext): Compiled {
  * rows; ALL is false if one comparison is, else NULL if one was, else true —
  * true over no rows. So `x NOT IN` a subquery with a NULL in it is never true.
  */
-function quantified(op: string, quantifier: 'ANY' | 'ALL', left: Expression, right: SubqueryNode, ctx: CompileContext, label: string): Compiled {
-  void label
+function quantified(op: string, quantifier: 'ANY' | 'ALL', left: Expression, right: SubqueryNode, ctx: CompileContext): Compiled {
   // MySQL's own limit, not ours: 8.4.11 refuses `a IN (SELECT … LIMIT 1)`,
   // though a LIMIT inside a derived table there is fine.
   if (right.query.limit !== undefined) throw sqlError('ER_NOT_SUPPORTED_YET', "This version of MySQL doesn't yet support 'LIMIT & IN/ALL/ANY/SOME subquery'")
@@ -1901,6 +2357,7 @@ function quantified(op: string, quantifier: 'ANY' | 'ALL', left: Expression, rig
   const as = lefts.map((l) => compile(l, ctx))
   const plan = planned(right, ctx)
   if (plan.columns.length !== as.length) throw sqlError('ER_OPERAND_COLUMNS', `Operand should contain ${as.length} column(s)`)
+  if (as.length === 1) ctx.quantified?.(right.query, { op, quantifier, outerNullable: (as[0] as Compiled).type.nullable, correlated: plan.correlated })
   const test = COMPARISONS[op] as (c: number) => boolean
   const compareRow = (vs: readonly Value[], r: readonly Value[]): number | null => {
     if (vs.length === 1) return compareValues(vs[0] ?? null, r[0] ?? null)
@@ -1913,8 +2370,54 @@ function quantified(op: string, quantifier: 'ANY' | 'ALL', left: Expression, rig
     return unknown ? null : 0
   }
   const key = {}
-  return {
-    eval: (row, env) => {
+  // IN and NOT IN over one column of an uncorrelated subquery: its values as
+  // a set, built once a statement, where an equal comparison always means an
+  // equal key — two exact numbers, or two strings under one collation (the
+  // hash join's rule). The answer is the loop's: an equal value decides, and
+  // otherwise a NULL on either side makes it NULL.
+  const sub = (plan.columns[0] as { type: ResultType }).type
+  const a0 = as[0] as Compiled
+  const exactNumber = (k: string): boolean => k === 'int' || k === 'decimal'
+  const keyed =
+    as.length === 1 &&
+    ((op === '=' && quantifier === 'ANY') || (op === '<>' && quantifier === 'ALL')) &&
+    ((exactNumber(a0.type.kind) && exactNumber(sub.kind)) || (a0.type.kind === 'string' && sub.kind === 'string' && a0.type.collationId === sub.collationId))
+  const setKey = {}
+  if (keyed) {
+    const membership = (env: Env): { readonly keys: ReadonlySet<string>; readonly empty: boolean; readonly sawNull: boolean } | undefined => {
+      if (plan.correlated || env.memo === undefined) return undefined
+      const hit = env.memo.get(setKey) as ReturnType<typeof membership>
+      if (hit !== undefined) return hit
+      const rows = rowsOf(plan, key, [], env)
+      const keys = new Set<string>()
+      let sawNull = false
+      for (const r of rows) {
+        const x = r[0] ?? null
+        if (x === null) sawNull = true
+        else keys.add(valueKey(x))
+      }
+      const made = { keys, empty: rows.length === 0, sawNull }
+      env.memo.set(setKey, made)
+      return made
+    }
+    const loop = compareAll()
+    return {
+      eval: (row, env) => {
+        const m = membership(env)
+        if (m === undefined) return loop(row, env)
+        if (m.empty) return bool(quantifier === 'ALL')
+        const v = a0.eval(row, env)
+        if (v !== null && m.keys.has(valueKey(v))) return bool(quantifier === 'ANY')
+        return v === null || m.sawNull ? null : bool(quantifier === 'ALL')
+      },
+      type: boolType(true),
+    }
+  }
+  return { eval: compareAll(), type: boolType(true) }
+
+  /** Every subquery row compared in turn. */
+  function compareAll(): Compiled['eval'] {
+    return (row, env) => {
       const rows = rowsOf(plan, key, row, env)
       if (rows.length === 0) return bool(quantifier === 'ALL')
       const v = as.map((a) => a.eval(row, env))
@@ -1930,8 +2433,7 @@ function quantified(op: string, quantifier: 'ANY' | 'ALL', left: Expression, rig
         if (quantifier === 'ALL' && !hit) return bool(false)
       }
       return sawNull ? null : bool(quantifier === 'ALL')
-    },
-    type: boolType(true),
+    }
   }
 }
 
@@ -2029,12 +2531,13 @@ function matchAgainst(e: MatchNode, ctx: CompileContext): Compiled {
   if (boolean && constantNode(e.against)) parseBoolean(queryText(against.eval([], constantEnv(ctx))), fold)
   const positions = index.columns.map((c) => def.columns.findIndex((x) => x.name.toLowerCase() === c.toLowerCase()))
   const wordsIn = (values: readonly Value[], raw?: Map<string, string>) => values.flatMap((v) => (v === null ? [] : wordsOf(toText(v), fold, raw)))
-  let preparedFor: Env | undefined
+  // Read once a statement: the query reads no row's column, so a correlated run shares it through the memo.
+  let preparedFor: object | undefined
   let corpus: Corpus | undefined
   let query: { readonly natural: string[] } | { readonly terms: Term[] } = { natural: [] }
   return {
     eval: (row, env) => {
-      if (preparedFor !== env || corpus === undefined) {
+      if (preparedFor !== (env.memo ?? env) || corpus === undefined) {
         const text = queryText(against.eval(row, env))
         query = boolean ? { terms: parseBoolean(text, fold) } : { natural: wordsOf(text, fold) }
         const table = ctx.table?.(def.schema, def.name)
@@ -2042,7 +2545,7 @@ function matchAgainst(e: MatchNode, ctx: CompileContext): Compiled {
         const raw = new Map<string, string>()
         if (table !== undefined) for (const [, fields] of table.scan(undefined, env.trx)) documents.push(wordsIn(positions.map((p) => decodeField(fields[p] ?? null, (def.columns[p] as ColumnDef).type)), raw))
         corpus = new Corpus(documents, raw, fold)
-        preparedFor = env
+        preparedFor = env.memo ?? env
       }
       const words = wordsIn(slots.map((i) => row[i] ?? null))
       if ('natural' in query) return doubleValue(naturalRank(corpus, query.natural, words))

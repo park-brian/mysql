@@ -74,6 +74,8 @@ export interface LiteralNode {
   readonly unit?: string
   /** A `COLLATE` clause attached to the literal. */
   readonly collation?: string
+  /** For `DOUBLE`: the literal as written, which MySQL sizes it by. */
+  readonly text?: string
   readonly at: number
 }
 
@@ -128,6 +130,8 @@ export interface CallNode {
   readonly using?: string
   /** `RANK() OVER w` names a window; `OVER (…)` defines one inline. */
   readonly over?: string | WindowSpec
+  /** A stored function's call: a builtin's name with a space before its `(`, IGNORE_SPACE off (M5.33). */
+  readonly stored?: true
   readonly at: number
 }
 

@@ -50,6 +50,12 @@ const SCRIPT: readonly (readonly [string, Outcome])[] = [
     ["SELECT x FROM a INTERSECT SELECT x FROM b", [["10"], ["30"]]],
     ["SELECT x FROM b EXCEPT SELECT x FROM a", [[null]]],
     ["SELECT x FROM b EXCEPT ALL SELECT x FROM a ORDER BY 1", [[null], ["10"]]],
+    // The ALL forms' temporary table holds each row once with its count: a row's copies come out together, in first-come order.
+    ["CREATE TABLE l (k INT AUTO_INCREMENT PRIMARY KEY, v INT)", [0, 0, "", 0]],
+    ["INSERT INTO l (v) VALUES (2), (1), (NULL), (2), (3), (1), (2)", [7, 1, "Records: 7  Duplicates: 0  Warnings: 0", 0]],
+    ["SELECT v FROM l EXCEPT ALL SELECT 2 UNION ALL SELECT 5 UNION ALL SELECT 1", [["2"], ["2"], ["1"], ["1"], [null], ["3"], ["5"], ["1"]]],
+    ["SELECT v FROM l EXCEPT ALL (SELECT 2 UNION ALL SELECT 5 UNION ALL SELECT 1)", [["2"], ["2"], ["1"], [null], ["3"]]],
+    ["SELECT v FROM l INTERSECT ALL (SELECT 2 UNION ALL SELECT 5 UNION ALL SELECT 1 UNION ALL SELECT 2 UNION ALL SELECT 3)", [["2"], ["2"], ["1"], ["3"]]],
     ["(SELECT x FROM a ORDER BY x DESC LIMIT 1) UNION ALL (SELECT x FROM b ORDER BY id LIMIT 2)", [["30"], ["10"], [null]]],
     ["SELECT id, s FROM a UNION SELECT id, t FROM b ORDER BY 2 LIMIT 3", [["3", null], ["1", "B1"], ["2", "B2"]]],
     ["SELECT id FROM a UNION SELECT id, t FROM b", 1222],

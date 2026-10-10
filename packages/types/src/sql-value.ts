@@ -18,6 +18,13 @@ import { renderJson, type JsonDoc } from './json-doc.ts'
 import { scanDateTime, scanTime, type Deprecation, type ScanFlags } from './temporal-scan.ts'
 import { daysInMonth } from './calendar.ts'
 
+const UTF8 = new TextEncoder()
+
+/** A value's bytes as a function of bytes reads them: a binary string's own, a string's in its charset, anything else its text in UTF-8. */
+export function valueBytes(v: Exclude<Value, null>): Uint8Array {
+  return v.kind === 'bytes' ? v.v : v.kind === 'string' ? encodeCollation(v.v, v.collationId) : UTF8.encode(toText(v))
+}
+
 export type Value =
   | null
   | IntValue
@@ -252,12 +259,17 @@ export function toDouble(v: Exclude<Value, null>): number {
     case 'datetime':
       return Number(temporalNumber(v))
     case 'time':
-      return Number(timeNumber(v.v))
+      return Number(timeNumber(v.v, v.fsp))
     case 'json': {
       const n = jsonNumber(v)
-      return n === undefined ? Number(numericPrefix(renderJson(v.v)).text) : toDouble(n)
+      return n === undefined ? Number(numericPrefix(jsonNumberText(v)).text) : toDouble(n)
     }
   }
+}
+
+/** The text a JSON value that is no number is read as a number from: a string's own characters, otherwise its rendering (8.4.11: `"10"` is 10). */
+function jsonNumberText(v: JsonDocValue): string {
+  return v.v.t === 'string' ? v.v.v : renderJson(v.v)
 }
 
 /** A JSON number as the SQL number it is; undefined for anything else (`val_real` and friends then read its text). */
@@ -269,6 +281,20 @@ function jsonNumber(v: JsonDocValue): Exclude<Value, null> | undefined {
   if (d.t === 'decimal') return d.v
   if (d.t === 'bool') return int(d.v ? 1n : 0n)
   return undefined
+}
+
+/**
+ * A JSON value's truth where a logical operator reads it: an implicit
+ * comparison against JSON integer 0, so only a number that is zero is false;
+ * `false`, `null`, `[]` and `""` are true (8.4.11). IF and CASE WHEN read it
+ * as a number instead, which is `truth`.
+ */
+export function jsonTruth(v: JsonDocValue): boolean {
+  const d = v.v
+  if (d.t === 'int' || d.t === 'uint') return d.v !== 0n
+  if (d.t === 'double') return d.v !== 0
+  if (d.t === 'decimal') return d.v.v !== 0n
+  return true
 }
 
 /** A value as an exact decimal, as `val_decimal()`. */
@@ -290,10 +316,10 @@ export function toDecimal(v: Exclude<Value, null>): DecimalValue {
     case 'datetime':
       return parseDecimal(temporalNumber(v))
     case 'time':
-      return parseDecimal(timeNumber(v.v))
+      return parseDecimal(timeNumber(v.v, v.fsp))
     case 'json': {
       const n = jsonNumber(v)
-      return n === undefined ? parseDecimal(numericPrefix(renderJson(v.v)).text.replace(/[eE].*$/, '') || '0') : toDecimal(n)
+      return n === undefined ? parseDecimal(numericPrefix(jsonNumberText(v)).text.replace(/[eE].*$/, '') || '0') : toDecimal(n)
     }
   }
 }
@@ -329,10 +355,10 @@ export function toInteger(v: Exclude<Value, null>): bigint {
     case 'datetime':
       return BigInt(temporalNumber(v).split('.')[0] as string)
     case 'time':
-      return BigInt(timeNumber(v.v).split('.')[0] as string)
+      return BigInt(timeNumber(v.v, v.fsp).split('.')[0] as string)
     case 'json': {
       const n = jsonNumber(v)
-      return n === undefined ? toInteger(string(renderJson(v.v), 255)) : toInteger(n)
+      return n === undefined ? toInteger(string(jsonNumberText(v), 255)) : toInteger(n)
     }
   }
 }
@@ -402,9 +428,9 @@ function temporalNumber(v: DateTimeValue): string {
   return `${date}${pad(d.hour, 2)}${pad(d.minute, 2)}${pad(d.second, 2)}${frac}`
 }
 
-function timeNumber(t: MysqlTime): string {
-  const n = `${t.days * 24 + t.hour}${pad(t.minute, 2)}${pad(t.second, 2)}`
-  return `${t.negative ? '-' : ''}${n}`
+function timeNumber(t: MysqlTime, fsp: number): string {
+  const frac = fsp > 0 ? `.${pad(t.microsecond, 6).slice(0, fsp)}` : ''
+  return `${t.negative ? '-' : ''}${t.days * 24 + t.hour}${pad(t.minute, 2)}${pad(t.second, 2)}${frac}`
 }
 
 /** A value as text, as `val_str()`. */
@@ -416,7 +442,7 @@ export function toText(v: Exclude<Value, null>): string {
     case 'decimal':
       return renderDecimal(v)
     case 'double':
-      if (v.decimals !== undefined && Number.isFinite(v.v) && Math.abs(v.v) < 1e21) return v.v.toFixed(v.decimals)
+      if (v.decimals !== undefined && Number.isFinite(v.v) && Math.abs(v.v) < 1e21) return `${Object.is(v.v, -0) ? '-' : ''}${v.v.toFixed(v.decimals)}`
       return v.float === true ? renderFloat(v.v) : renderDouble(v.v)
     case 'string':
       return v.v
@@ -567,9 +593,12 @@ export function toDateTime(v: Exclude<Value, null>, type: TemporalType): DateTim
     case 'int':
     case 'decimal':
     case 'double': {
+      // A datetime's number has at most 14 digits: a double past them is no datetime, and is not narrowed into one.
+      if (v.kind === 'double' && !(Math.abs(v.v) < 1e14)) return undefined
       const t = toText(v.kind === 'double' ? toDecimal(v) : v)
       const whole = t.replace(/^-/, '').split('.')[0] as string
-      if (t.startsWith('-')) return undefined
+      // A datetime's number has at most 14 digits; past them it is no datetime (8.4.11: `1e300 >= dt` compares as numbers).
+      if (t.startsWith('-') || whole.length > 14) return undefined
       // `20240102` is a date and `20240102030405` a datetime, as a number.
       const padded = whole.length <= 8 ? whole.padStart(8, '0') : whole.padStart(14, '0')
       const p = parseDateTime(padded)

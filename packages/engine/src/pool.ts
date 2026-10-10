@@ -212,6 +212,11 @@ export class BufferPool {
     return this.#dirty.size
   }
 
+  /** Frames holding a page. */
+  get residentCount(): number {
+    return this.#frameOf.size
+  }
+
   /** Dirty page numbers in the order a checkpoint would write them. */
   dirtyPages(): number[] {
     return [...this.#dirty.keys()].map((f) => this.#pageOf[f] as number)

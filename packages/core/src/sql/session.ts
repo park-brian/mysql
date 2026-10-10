@@ -17,9 +17,9 @@
 //
 // DDL commits first (MySQL's implicit commit) and then runs as a transaction
 // of its own, which is what `Catalog` already does (D-59).
-import type { Isolation, Store, Trx } from '@myjs/engine'
+import type { Isolation, Store, StoreFigures, Trx, TrxStats } from '@myjs/engine'
 import { sqlError, type Session } from '@myjs/protocol'
-import { intValue, stringValue, type Condition, type Value } from '@myjs/types'
+import { intValue, stringValue, toText, type Condition, type Value } from '@myjs/types'
 import type { SessionValues } from './compile.ts'
 import type { ServerState } from './admin.ts'
 
@@ -69,12 +69,14 @@ export class SqlSession implements SessionValues {
   diagnostics: Diagnostics = NO_DIAGNOSTICS
   /** The diagnostics as the running statement began: what `@@warning_count` reads (8.4.11). */
   previous: Diagnostics = NO_DIAGNOSTICS
+  /** Statements this session has sent, for SHOW SESSION STATUS. */
+  questions = 0
 
   constructor(session: Session, server: ServerState) {
     this.session = session
     this.#server = server
     // A session starts at the server's level, as `SET GLOBAL TRANSACTION` leaves it.
-    this.isolation = isolationOf(String(server.vars.get('transaction_isolation') ?? 'REPEATABLE-READ'))
+    this.isolation = isolationOf(String(server.global('transaction_isolation') ?? 'REPEATABLE-READ'))
   }
 
   /**
@@ -91,8 +93,40 @@ export class SqlSession implements SessionValues {
     this.ownVariables.set('transaction_isolation', stringValue(name, 255))
   }
 
+  /** A statement from the client: counted for SHOW STATUS's `Questions`, for the session and the server. */
+  question(): void {
+    this.questions++
+    this.#server.questions++
+  }
+
+  /** SHOW STATUS's rows for this session, or for the server. */
+  status(_session: Session, scope: 'GLOBAL' | 'SESSION'): (readonly [string, string])[] {
+    return this.#server.status(scope, this.questions)
+  }
+
+  /** The store's figures and when the server started, for INNODB_METRICS; none without a store. */
+  engine(): { readonly figures: StoreFigures & TrxStats; readonly started: number } | undefined {
+    const figures = this.#server.engine?.()
+    return figures === undefined ? undefined : { figures, started: this.#server.started }
+  }
+
+  /**
+   * The statement's clock: what `SET TIMESTAMP` pinned, which NOW(),
+   * CURDATE() and a TIME's date read until it is set to 0 or DEFAULT, or the
+   * time now (SYSDATE() reads its own).
+   */
+  clock(): Date {
+    const pinned = this.ownVariables.get('timestamp')
+    return pinned === undefined || pinned === null ? new Date() : new Date(Number(toText(pinned)) * 1000)
+  }
+
+  systemVariableNames(): string[] {
+    return this.#server.systemVariableNames()
+  }
+
   systemVariable(name: string, scope: 'GLOBAL' | 'SESSION' | undefined, session: Session): Value | undefined {
     if (scope !== 'GLOBAL' && (name === 'warning_count' || name === 'error_count')) return intValue(BigInt(name === 'warning_count' ? this.previous.warnings : this.previous.errors), true)
+    if (scope !== 'GLOBAL' && (name === 'last_insert_id' || name === 'identity') && !this.ownVariables.has(name)) return intValue(this.lastInsertId, true)
     return this.#server.systemVariable(name, scope, session, this.ownVariables)
   }
 
@@ -183,8 +217,8 @@ export class SqlSession implements SessionValues {
    * that yields between mini-transactions, and whoever drives this one
    * decides when to resume it; `statement()` is this run straight through. The transaction is the same — the
    * statement's own under autocommit, the session's otherwise — and so is
-   * its end: a failure, or an error thrown in at a pause, rolls back the
-   * statement whole. The writer slot is held across every pause, so no
+   * its end: a failure, an error thrown in at a pause, or a `return()` at
+   * one, rolls back the statement whole. The writer slot is held across every pause, so no
    * other writer, DDL or purge changes a page while it waits.
    */
   *steps<T>(store: Store, write: boolean, run: (trx: Trx) => Generator<void, T>): Generator<void, T> {
@@ -193,6 +227,9 @@ export class SqlSession implements SessionValues {
       this.trx = this.#begin(store)
       this.#sync()
     }
+    // A run that did not finish is undone, whether it threw or its driver
+    // stopped resuming it (`return()`, a stream abandoned: M5.40).
+    let finished = false
     const kept = this.trx
     if (kept === undefined) {
       const trx = this.#begin(store)
@@ -200,20 +237,21 @@ export class SqlSession implements SessionValues {
         if (write) trx.lock()
         const out = yield* run(trx)
         trx.commit()
+        finished = true
         return out
-      } catch (e) {
-        trx.rollback()
-        throw e
+      } finally {
+        if (!finished) trx.rollback()
       }
     }
     kept.statement()
     if (write) kept.lock()
     const at = kept.savepoint()
     try {
-      return yield* run(kept)
-    } catch (e) {
-      if (kept.state === 'active') kept.rollbackTo(at)
-      throw e
+      const out = yield* run(kept)
+      finished = true
+      return out
+    } finally {
+      if (!finished && kept.state === 'active') kept.rollbackTo(at)
     }
   }
 }

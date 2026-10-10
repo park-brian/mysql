@@ -11,7 +11,7 @@
 //      the values, so the accumulated buffers have to be merged in.
 //   4. `parameter_count` may exceed `num_params` under query attributes.
 
-import { concat } from './crypto.ts'
+import { concatBytes } from '@myjs/bytes'
 import { MAX_PREPARED_STMT_COUNT } from './constants/commands.ts'
 import { messages } from './errors/messages.ts'
 import { sqlError } from './errors/index.ts'
@@ -75,7 +75,7 @@ export class PreparedStatement {
 
   takeLongData(parameterId: number): Uint8Array | undefined {
     const chunks = this.longData.get(parameterId)
-    return chunks === undefined ? undefined : concat(chunks)
+    return chunks === undefined ? undefined : concatBytes(chunks)
   }
 
   /** `COM_STMT_RESET`: drop long data, close the cursor, keep the statement. */

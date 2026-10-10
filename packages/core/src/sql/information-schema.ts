@@ -29,7 +29,8 @@ import { messages, sqlError } from '@myjs/protocol'
 import { COERCIBILITY, decodeField, encodeField, intValue, stringValue, toText, type Value } from '@myjs/types'
 import { compile, EMPTY_SCOPE } from './compile.ts'
 import type { DerivedSource } from './from.ts'
-import { keyCardinalities, printableSources } from './show.ts'
+import { printableSources } from './show.ts'
+import { cardinalities } from './stats.ts'
 import { fulltextOf } from './fulltext.ts'
 import { checkClause, checksOf } from './checks.ts'
 import { foreignKeysOf } from './foreign-keys.ts'
@@ -45,7 +46,7 @@ const COLUMN_FLAG = { PRI_KEY: 2, UNIQUE_KEY: 4, MULTIPLE_KEY: 8 } as const
 const isInformationSchema = (schema: string): boolean => schema.toLowerCase() === 'information_schema'
 
 /** The ResultType of one captured column: what expressions over it compute with, and what a bare reference reports. */
-function typeOf(c: InformationSchemaColumn, table: string, alias: string): ResultType {
+export function systemColumnType(c: InformationSchemaColumn, table: string, alias: string, schema = 'information_schema'): ResultType {
   const nullable = (c.flags & 1) === 0
   const unsigned = (c.flags & 32) !== 0
   let base: ResultType
@@ -61,7 +62,7 @@ function typeOf(c: InformationSchemaColumn, table: string, alias: string): Resul
   // A dictionary column is copied through a temporary table as a table column
   // is, keeping its own flags less its key flags; a computed one as an
   // expression (8.4.11, under a sort over the view's join).
-  if (c.column) return { ...base, wire, column: { schema: 'information_schema', table: alias, orgTable: table, orgName: c.name, flags: c.flags & ~(1 | 32 | 128) } }
+  if (c.column) return { ...base, wire, column: { schema, table: alias, orgTable: table, orgName: c.name, flags: c.flags & ~(1 | 32 | 128) } }
   return { ...base, wire, names: { schema: '', table: alias, orgTable: table, orgName: c.name } }
 }
 
@@ -80,7 +81,7 @@ export function informationSchemaTable(run: Run, name: TableName, alias: string,
     throw sqlError('ER_UNKNOWN_TABLE', `Unknown table '${name.name}' in information_schema`)
   }
   const rowsOf = ROWS[table] as (run: Run) => Iterable<readonly Value[]>
-  const columns = defs.map((c) => ({ name: c.name, type: typeOf(c, table, alias) }))
+  const columns = defs.map((c) => ({ name: c.name, type: systemColumnType(c, table, alias) }))
   // Each string in its column's own collation, so a comparison is made in it.
   const collations = columns.map((c) => (c.type.kind === 'string' ? c.type.collationId : undefined))
   return {
@@ -96,7 +97,7 @@ export function informationSchemaTable(run: Run, name: TableName, alias: string,
 /** The INFORMATION_SCHEMA tables of 8.4 that are not answered here yet. */
 const KNOWN = new Set([
   'ADMINISTRABLE_ROLE_AUTHORIZATIONS', 'APPLICABLE_ROLES', 'CHARACTER_SETS', 'COLLATIONS', 'COLLATION_CHARACTER_SET_APPLICABILITY', 'COLUMN_PRIVILEGES', 'COLUMN_STATISTICS',
-  'COLUMNS_EXTENSIONS', 'ENABLED_ROLES', 'ENGINES', 'EVENTS', 'FILES', 'INNODB_BUFFER_PAGE', 'INNODB_TABLES', 'INNODB_COLUMNS', 'INNODB_INDEXES', 'KEYWORDS', 'OPTIMIZER_TRACE',
+  'COLUMNS_EXTENSIONS', 'ENABLED_ROLES', 'EVENTS', 'FILES', 'INNODB_BUFFER_PAGE', 'INNODB_TABLES', 'INNODB_COLUMNS', 'INNODB_INDEXES', 'KEYWORDS', 'OPTIMIZER_TRACE',
   'PARAMETERS', 'PARTITIONS', 'PLUGINS', 'PROCESSLIST', 'PROFILING', 'RESOURCE_GROUPS', 'ROLE_COLUMN_GRANTS', 'ROLE_ROUTINE_GRANTS', 'ROLE_TABLE_GRANTS', 'SCHEMA_PRIVILEGES',
   'SCHEMATA_EXTENSIONS', 'ST_GEOMETRY_COLUMNS', 'ST_SPATIAL_REFERENCE_SYSTEMS', 'ST_UNITS_OF_MEASURE', 'TABLES_EXTENSIONS', 'TABLE_CONSTRAINTS_EXTENSIONS', 'TABLE_PRIVILEGES',
   'TABLESPACES_EXTENSIONS', 'TRIGGERS', 'USER_ATTRIBUTES', 'USER_PRIVILEGES', 'VIEW_ROUTINE_USAGE', 'VIEW_TABLE_USAGE',
@@ -328,15 +329,55 @@ function zeroOf(run: Run, column: ColumnDef): string | null {
 
 // --- the tables -----------------------------------------------------------------------
 
+/** INFORMATION_SCHEMA.ENGINES: name, support, comment, and transactions, XA and savepoints as Y or N (none for an engine not supported). */
+const ENGINES: readonly (readonly [string, string, string, string?])[] = [
+  ['ndbcluster', 'NO', 'Clustered, fault-tolerant tables'],
+  ['MEMORY', 'YES', 'Hash based, stored in memory, useful for temporary tables', 'NNN'],
+  ['InnoDB', 'DEFAULT', 'Supports transactions, row-level locking, and foreign keys', 'YNY'],
+  ['PERFORMANCE_SCHEMA', 'NO', 'Performance Schema'],
+  ['MyISAM', 'YES', 'MyISAM storage engine', 'NNN'],
+  ['FEDERATED', 'NO', 'Federated MySQL storage engine'],
+  ['ndbinfo', 'NO', 'MySQL Cluster system information storage engine'],
+  ['MRG_MYISAM', 'NO', 'Collection of identical MyISAM tables'],
+  ['BLACKHOLE', 'NO', '/dev/null storage engine (anything you write to it disappears)'],
+  ['CSV', 'NO', 'CSV storage engine'],
+  ['ARCHIVE', 'NO', 'Archive storage engine'],
+]
+
 function* everyTable(run: Run): Generator<{ schema: string; def: TableDef }> {
   for (const schema of schemaNames(run)) for (const def of tablesOf(run, schema)) yield { schema, def }
 }
 
 const ROWS: Readonly<Record<string, (run: Run) => Iterable<readonly Value[]>>> = {
+  // The metrics this engine keeps, as InnoDB names them: the history list's
+  // length, its longest and shortest since the server started (a value
+  // metric has no average), enabled from then on.
+  *INNODB_METRICS(run) {
+    const engine = run.state.engine()
+    if (engine === undefined) return
+    const { figures: f, started } = engine
+    const at = new Date(started)
+    const enabled: Value = { kind: 'datetime', v: { year: at.getUTCFullYear(), month: at.getUTCMonth() + 1, day: at.getUTCDate(), hour: at.getUTCHours(), minute: at.getUTCMinutes(), second: at.getUTCSeconds(), microsecond: 0 }, type: 'DATETIME', fsp: 0 }
+    const [count, max, min] = [n(f.historyLength), n(f.historyMax), n(f.historyMin)]
+    yield [s('trx_rseg_history_len'), s('transaction'), count, max, min, null, count, max, min, null, enabled, null, n(Math.floor((Date.now() - started) / 1000)), null, s('enabled'), s('value'), s('Length of the TRX_RSEG_HISTORY list')]
+  },
+
+  // 8.4.11's engines, in its order, as supported here: InnoDB stores what
+  // MyISAM tables name too, and MEMORY its own; the rest are 1286 at CREATE
+  // TABLE, as a server answers for an engine it lacks. No XA is served.
+  *ENGINES() {
+    for (const [name, support, comment, flags] of ENGINES) {
+      const [t, x, p] = flags === undefined ? [null, null, null] : flags.split('').map((c) => s(c === 'Y' ? 'YES' : 'NO'))
+      yield [s(name), s(support), s(comment), t ?? null, x ?? null, p ?? null]
+    }
+  },
+
+  // In the order the schemas were made, `information_schema` second, after `mysql`, as 8.4.11's dictionary has them.
   *SCHEMATA(run) {
-    for (const x of run.catalog?.schemas() ?? []) {
+    for (const x of [...(run.catalog?.schemas() ?? [])].sort((a, b) => a.id - b.id)) {
       const id = x.collationId ?? 255
       yield [s('def'), s(x.name), s(charsetName(id)), s(collationName(id)), null, s('NO')]
+      if (x.name === 'mysql') yield [s('def'), s('information_schema'), s('utf8mb3'), s('utf8mb3_general_ci'), null, s('NO')]
     }
   },
 
@@ -392,8 +433,7 @@ const ROWS: Readonly<Record<string, (run: Run) => Iterable<readonly Value[]>>> =
 
   *STATISTICS(run) {
     for (const { schema, def } of everyTable(run)) {
-      // Counted only for SHOW INDEX, which asks of one table (show.ts).
-      const counts = run.exactStatistics === true && run.catalog !== undefined ? keyCardinalities(run.catalog, def) : undefined
+      const counts = run.catalog === undefined ? undefined : cardinalities(def, run.catalog.table(schema, def.name), run.catalog.store, fulltextOf(def))
       const cardinality = (index: string, i: number) => n(counts?.get(index)?.[i] ?? 0)
       for (const index of def.indexes) {
         const unique = index.kind === 'primary' || index.kind === 'unique'

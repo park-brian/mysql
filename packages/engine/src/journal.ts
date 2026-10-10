@@ -29,7 +29,7 @@
 import type { FieldBytes } from './record.ts'
 import { misuse } from './errors.ts'
 import type { BufferPool } from './pool.ts'
-import { diffPage, encodeGroup, type Meta, type Redo } from './redo.ts'
+import { diffPage, encodeGroup, samePage, type Meta, type Redo } from './redo.ts'
 import type { Log } from './wal.ts'
 
 /** What the store keeps outside pages, saved when a mini-transaction begins. */
@@ -188,10 +188,15 @@ export class Journal {
       if (t.page === null) {
         records.push({ type: 'page', pageNo, image: true, runs: this.pool.read(pageNo, (p) => diffPage(null, p)) })
       } else {
-        const runs = diffPage(t.before, t.page)
-        if (runs.length === 0) continue
-        // A page clean before this change is logged whole: its image, not the diff just taken.
-        records.push({ type: 'page', pageNo, image: !t.wasDirty, runs: t.wasDirty ? runs : diffPage(null, t.page) })
+        // A page clean before this change is logged whole: its image, not a diff.
+        if (!t.wasDirty) {
+          if (t.before !== null && samePage(t.before, t.page)) continue
+          records.push({ type: 'page', pageNo, image: true, runs: diffPage(null, t.page) })
+        } else {
+          const runs = diffPage(t.before, t.page)
+          if (runs.length === 0) continue
+          records.push({ type: 'page', pageNo, image: false, runs })
+        }
       }
       logged.push(pageNo)
     }

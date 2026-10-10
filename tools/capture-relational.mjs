@@ -19,8 +19,8 @@
 //   - **The plan is a cost decision on statistics InnoDB recomputes in the
 //     background.** Every table is created with `STATS_AUTO_RECALC=0` and
 //     analysed once it is seeded, so a re-capture chooses the same plans. The
-//     `ANALYZE` is the server's alone: it is recorded `serverOnly` and the
-//     replay skips it.
+//     `ANALYZE` is recorded `serverOnly`: run on both sides, since our planner
+//     reads the statistics it keeps too (M5.45), and compared on neither.
 //   - **Half the joins are `STRAIGHT_JOIN`**, so the order of execution is
 //     the statement's rather than the optimizer's.
 //   - **Prepared statements are a second protocol, not a detail.** Prisma
@@ -490,8 +490,8 @@ async function plan(conn, sql) {
 }
 
 /**
- * Run a case: each statement's outcome, `serverOnly` ones run only when
- * `server` is set. With `warnings`, a query's warning count is read after it,
+ * Run a case: each statement's outcome, `serverOnly` ones run and not
+ * recorded. With `warnings`, a query's warning count is read after it,
  * as `@@warning_count`, which the executor answers since M5.28.
  */
 export async function runCase(conn, statements, { server = false, warnings = server } = {}) {
@@ -500,8 +500,9 @@ export async function runCase(conn, statements, { server = false, warnings = ser
   await conn.query(`USE ${SCHEMA}`)
   const out = []
   for (const s of statements) {
+    // Run on both sides, compared on neither: ANALYZE, whose figures the planner reads (M5.45).
     if (s.serverOnly === true) {
-      if (server) await conn.query(s.sql)
+      await conn.query(s.sql)
       out.push({ ...s })
       continue
     }

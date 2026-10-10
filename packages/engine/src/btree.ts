@@ -154,7 +154,8 @@ export class BTree {
     BTree.checkKeyLength(key.length, this.space.pool.pageSize)
     if (ip.cellSize(key, value) > max) throw rowTooBig(max)
     this.space.journal.atomically(() => {
-      this.#upgradeLeaf(this.#leafFor(key))
+      // Nothing is behind version 0: no descent to find out.
+      if (this.#version > 0) this.#upgradeLeaf(this.#leafFor(key))
       const split = this.#insert(this.root, key, value)
       if (split !== null) throw misuse('the root split without being raised')
     })
@@ -163,7 +164,7 @@ export class BTree {
   /** Remove a key. `false` when it was not there. One mini-transaction, or part of the caller's. */
   delete(key: Uint8Array): boolean {
     return this.space.journal.atomically(() => {
-      this.#upgradeLeaf(this.#leafFor(key))
+      if (this.#version > 0) this.#upgradeLeaf(this.#leafFor(key))
       const { removed } = this.#remove(this.root, key)
       this.#collapseRoot()
       return removed
@@ -397,7 +398,16 @@ export class BTree {
   // --- insert -----------------------------------------------------------------
 
   #insert(pageNo: number, key: Uint8Array, value: Uint8Array, expect?: number): Split | null {
-    const level = this.#read(pageNo, (p) => ip.level(p), expect)
+    // One read of the page for its level and, above the leaves, the child the key is under.
+    let level = 0
+    const child = this.#read(
+      pageNo,
+      (p) => {
+        level = ip.level(p)
+        return level === 0 ? -1 : ip.childAt(p, BTree.#childIndex(p, key))
+      },
+      expect,
+    )
     if (level === 0) {
       return this.#write(pageNo, (p) => {
         const { index, found } = ip.search(p, key)
@@ -414,7 +424,6 @@ export class BTree {
         return this.#split(p, pageNo, 0, cells.slice(0, at), cells.slice(at), cells[at]?.key as Uint8Array)
       })
     }
-    const child = this.#read(pageNo, (p) => ip.childAt(p, BTree.#childIndex(p, key)))
     const below = this.#insert(child, key, value, level - 1)
     if (below === null) return null
     return this.#write(pageNo, (p) => {
@@ -503,8 +512,19 @@ export class BTree {
   }
 
   #remove(pageNo: number, key: Uint8Array, expect?: number): { removed: boolean; underflow: boolean } {
-    const level = this.#read(pageNo, (p) => ip.level(p), expect)
-    if (level === 0) {
+    // One read for the level and, above the leaves, which child the key is under.
+    let level = 0
+    const step = this.#read(
+      pageNo,
+      (p) => {
+        level = ip.level(p)
+        if (level === 0) return undefined
+        const at = BTree.#childIndex(p, key)
+        return { at, child: ip.childAt(p, at) }
+      },
+      expect,
+    )
+    if (step === undefined) {
       return this.#write(pageNo, (p) => {
         const { index, found } = ip.search(p, key)
         if (!found) return { removed: false, underflow: false }
@@ -512,10 +532,7 @@ export class BTree {
         return { removed: true, underflow: this.#underfull(p) }
       })
     }
-    const { at, child } = this.#read(pageNo, (p) => {
-      const at = BTree.#childIndex(p, key)
-      return { at, child: ip.childAt(p, at) }
-    })
+    const { at, child } = step
     const result = this.#remove(child, key, level - 1)
     if (result.underflow) this.#rebalance(pageNo, at)
     return { removed: result.removed, underflow: pageNo !== this.root && this.#read(pageNo, (p) => this.#underfull(p)) }

@@ -23,7 +23,7 @@
 // a double past both; `-0` is the integer 0 and `-0.0` the double -0. All of it
 // was read off 8.4.11 (tools/capture-json.mjs, M5.21).
 import type { MysqlDateTime, MysqlTime } from '@myjs/bytes'
-import { MyjsError, renderMysqlDateTime, renderMysqlTime } from '@myjs/bytes'
+import { compareBytes, MyjsError, renderMysqlDateTime, renderMysqlTime } from '@myjs/bytes'
 import { decodeDecimal, encodeDecimal } from './decimal.ts'
 import { invalidJson } from './errors.ts'
 import { JSON_TYPE, compareJsonKeys, isInlined, varint, writeVarint } from './json.ts'
@@ -436,11 +436,6 @@ function compareNumbers(a: JsonDoc, b: JsonDoc): number {
   return da < db ? -1 : da > db ? 1 : 0
 }
 
-function compareBytes(a: Uint8Array, b: Uint8Array): number {
-  const n = Math.min(a.length, b.length)
-  for (let i = 0; i < n; i++) if (a[i] !== b[i]) return (a[i] as number) - (b[i] as number)
-  return a.length - b.length
-}
 
 const utf8 = new TextEncoder()
 
@@ -568,7 +563,7 @@ function custom(field: number, payload: Uint8Array): Piece {
   return { type: JSON_TYPE.CUSTOM, body }
 }
 
-function piece(doc: JsonDoc, large: boolean): Piece {
+function piece(doc: JsonDoc): Piece {
   switch (doc.t) {
     case 'null':
       return { type: JSON_TYPE.LITERAL, body: new Uint8Array(0), inline: 0 }
@@ -622,26 +617,32 @@ function piece(doc: JsonDoc, large: boolean): Piece {
     case 'opaque':
       return custom(doc.field, doc.v)
     case 'array':
-      return { type: large ? JSON_TYPE.LARGE_ARRAY : JSON_TYPE.SMALL_ARRAY, body: container(doc.v.map((v) => [undefined, v] as const), large) }
+      return container(doc.v.map((v) => [undefined, v] as const), false)
     case 'object':
-      return { type: large ? JSON_TYPE.LARGE_OBJECT : JSON_TYPE.SMALL_OBJECT, body: container(doc.v, large) }
+      return container(doc.v, true)
   }
 }
 
-/** A container's bytes: header, key entries for an object, value entries, keys, then out-of-line values. */
-function container(members: readonly (readonly [string | undefined, JsonDoc])[], large: boolean): Uint8Array {
+/**
+ * A container: small unless its bytes cannot be addressed in 16 bits, then
+ * large. Widths are per container, so each child has chosen its own already.
+ */
+function container(members: readonly (readonly [string | undefined, JsonDoc])[], isObject: boolean): Piece {
+  const keys = isObject ? members.map(([k]) => utf8.encode(k as string)) : []
+  const pieces = members.map(([, v]) => piece(v))
+  const small = layout(keys, pieces, false)
+  if (small !== undefined) return { type: isObject ? JSON_TYPE.SMALL_OBJECT : JSON_TYPE.SMALL_ARRAY, body: small }
+  return { type: isObject ? JSON_TYPE.LARGE_OBJECT : JSON_TYPE.LARGE_ARRAY, body: layout(keys, pieces, true) as Uint8Array }
+}
+
+/** A container's bytes: header, key entries for an object, value entries, keys, then out-of-line values; undefined when too large for a small one. */
+function layout(keys: readonly Uint8Array[], pieces: readonly Piece[], large: boolean): Uint8Array | undefined {
   const w = large ? 4 : 2
-  const isObject = members.length > 0 && members[0]?.[0] !== undefined
-  const keys = members.map(([k]) => (k === undefined ? undefined : new TextEncoder().encode(k)))
-  const pieces = members.map(([, v]) => {
-    // A nested container is small unless it cannot be: widths are per container.
-    const small = piece(v, false)
-    return (small.type <= JSON_TYPE.LARGE_ARRAY && small.body.length > 0xffff) ? piece(v, true) : small
-  })
-  let cursor = 2 * w + (isObject ? members.length * (w + 2) : 0) + members.length * (1 + w)
+  const isObject = keys.length > 0
+  let cursor = 2 * w + (isObject ? pieces.length * (w + 2) : 0) + pieces.length * (1 + w)
   const keyAt = keys.map((k) => {
     const at = cursor
-    cursor += k?.length ?? 0
+    cursor += k.length
     return at
   })
   const valueAt = pieces.map((p) => {
@@ -650,21 +651,19 @@ function container(members: readonly (readonly [string | undefined, JsonDoc])[],
     cursor += p.body.length
     return at
   })
-  if (!large && cursor > 0xffff) throw new RangeError('too large for a small container')
+  if (!large && cursor > 0xffff) return undefined
   const out = new Uint8Array(cursor)
   const view = new DataView(out.buffer)
   const put = (at: number, v: number): void => (large ? view.setUint32(at, v, true) : view.setUint16(at, v, true))
-  put(0, members.length)
+  put(0, pieces.length)
   put(w, cursor)
   let at = 2 * w
-  if (isObject) {
-    keys.forEach((k, i) => {
-      put(at, keyAt[i] as number)
-      view.setUint16(at + w, (k as Uint8Array).length, true)
-      out.set(k as Uint8Array, keyAt[i] as number)
-      at += w + 2
-    })
-  }
+  keys.forEach((k, i) => {
+    put(at, keyAt[i] as number)
+    view.setUint16(at + w, k.length, true)
+    out.set(k, keyAt[i] as number)
+    at += w + 2
+  })
   pieces.forEach((p, i) => {
     out[at] = p.type
     const v = valueAt[i] as number
@@ -680,13 +679,7 @@ function container(members: readonly (readonly [string | undefined, JsonDoc])[],
 
 /** A JSON value as MySQL's binary JSON (D-22). */
 export function encodeJsonDoc(doc: JsonDoc): Uint8Array {
-  let p: Piece
-  try {
-    p = piece(doc, false)
-  } catch (e) {
-    if (!(e instanceof RangeError)) throw e
-    p = piece(doc, true)
-  }
+  const p = piece(doc)
   if (isInlined(p.type, false)) {
     // A bare scalar document has no entry to inline into: its value follows the type byte.
     const out = new Uint8Array(p.type === JSON_TYPE.LITERAL ? 2 : 3)
@@ -882,10 +875,89 @@ export function toJsonDoc(v: Exclude<Value, null>): JsonDoc {
  * MySQL's order of two JSON values in a sort — ORDER BY, and a sort-based
  * GROUP BY — which is not `compareJson`: the sort key of an array or an
  * object holds only its type and its number of members, so `[false]` sorts
- * before `[{}, 1, true]` and two one-member objects tie, keeping their input
- * order (8.4.11, M5.21). Scalars sort as they compare.
+ * before `[{}, 1, true]` and two one-member objects tie (8.4.11, M5.21); what
+ * orders a tie is `jsonSortHash`, not the input order (E-22). Scalars sort as
+ * they compare.
  */
 export function orderJson(a: JsonDoc, b: JsonDoc): number {
   if ((a.t === 'array' || a.t === 'object') && a.t === b.t) return sign(a.v.length - (b as typeof a).v.length)
   return compareJson(a, b)
+}
+
+/**
+ * What breaks a tie between rows whose sort keys hold JSON: a 64-bit hash of
+ * the row's JSON key values, chained from 0 in key order (`seed`), appended to
+ * the sort record after the keys and compared as its eight bytes,
+ * little-endian, ascending whichever way the keys sort (8.4.11's filesort,
+ * `Json_wrapper::make_hash_key`). So two arrays of one length — which the key
+ * alone ties — come out in the same order under ASC and DESC, and in neither
+ * the order they went in. The hash is a rolling checksum (`unique_hash`'s)
+ * over a canonical walk of the value: a number as its double's bytes, zero as
+ * one zero byte; a string as its bytes; an object's keys in storage order,
+ * each followed by its value's hash, seeded with the checksum so far.
+ */
+export function jsonSortHash(doc: JsonDoc, seed: bigint): bigint {
+  let crc = seed
+  const add = (byte: number): void => {
+    crc = BigInt.asUintN(64, (crc << 8n) + BigInt(byte) + (crc >> 24n))
+  }
+  const addBytes = (b: Uint8Array): void => b.forEach(add)
+  const addDouble = (d: number): void => {
+    if (d === 0) return add(0)
+    const b = new Uint8Array(8)
+    new DataView(b.buffer).setFloat64(0, d, true)
+    addBytes(b)
+  }
+  const addInteger = (n: bigint): void => addBytes(int64Bytes(n, true))
+  switch (doc.t) {
+    case 'null':
+      add(0x00)
+      break
+    case 'int':
+    case 'uint':
+      addDouble(Number(doc.v))
+      break
+    case 'double':
+      addDouble(doc.v)
+      break
+    case 'decimal':
+      addDouble(Number(renderDecimal(doc.v)))
+      break
+    case 'string':
+      addBytes(utf8.encode(doc.v))
+      break
+    case 'opaque':
+      addBytes(doc.v)
+      break
+    case 'object':
+      add(0x05)
+      for (const [k, v] of doc.v) {
+        addBytes(utf8.encode(k))
+        addInteger(jsonSortHash(v, crc))
+      }
+      break
+    case 'array':
+      add(0x06)
+      for (const v of doc.v) addInteger(jsonSortHash(v, crc))
+      break
+    case 'bool':
+      add(doc.v ? 0x08 : 0x07)
+      break
+    case 'time':
+      addBytes(int64Bytes(packTime(doc.v)))
+      break
+    default:
+      addBytes(int64Bytes(packDateTime(doc.v)))
+  }
+  return crc
+}
+
+/** Two {@link jsonSortHash}es as the sort compares them: their bytes little-endian, the low byte first. */
+export function compareJsonSortHashes(a: bigint, b: bigint): number {
+  for (let shift = 0n; shift < 64n; shift += 8n) {
+    const x = (a >> shift) & 0xffn
+    const y = (b >> shift) & 0xffn
+    if (x !== y) return x < y ? -1 : 1
+  }
+  return 0
 }

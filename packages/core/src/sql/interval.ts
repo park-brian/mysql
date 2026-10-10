@@ -113,7 +113,7 @@ export function isInterval(e: Expression): e is IntervalNode {
 }
 
 /** A TIME on today's date, as a datetime: TIME plus a unit of days or more. */
-function onToday(t: { readonly negative: boolean; readonly days: number; readonly hour: number; readonly minute: number; readonly second: number; readonly microsecond: number }, env: Env): MysqlDateTime | undefined {
+export function onToday(t: { readonly negative: boolean; readonly days: number; readonly hour: number; readonly minute: number; readonly second: number; readonly microsecond: number }, env: Env): MysqlDateTime | undefined {
   const now = env.now
   const today: MysqlDateTime = { year: now.getFullYear(), month: now.getMonth() + 1, day: now.getDate(), hour: 0, minute: 0, second: 0, microsecond: 0 }
   return addInterval(today, { months: 0n, micros: timeOrdinal(t) })

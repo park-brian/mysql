@@ -23,7 +23,7 @@ import { CHARSET_BINARY, FIELD_TYPE, expectTyped } from '@myjs/bytes'
 import { CHARSET_UTF8MB4_0900_AI_CI } from '@myjs/protocol'
 import { requireCollationInfo } from '@myjs/charsets'
 import type { ColumnDef, IndexDef, Table, TableDef } from '@myjs/engine'
-import { NODE, parseExpression, type Expression } from '@myjs/parser'
+import { NODE, parseExpression, type Expression, quoteName } from '@myjs/parser'
 import { checksOf } from './checks.ts'
 import { foreignKeysOf, referenceText } from './foreign-keys.ts'
 import { fulltextOf } from './fulltext.ts'
@@ -33,7 +33,6 @@ import { columnDefault, generatedDefault, tableCollation, typeFacts } from './in
 import { escapeString, printExpression } from './print.ts'
 import type { Run } from './query.ts'
 
-const q = (name: string): string => `\`${name.replace(/`/g, '``')}\``
 /** sql_show.cc's append_unescaped: NUL, newline, CR and backslash escaped, a quote doubled. */
 const quoted = (s: string): string => `'${s.replace(/[\0\n\r\\']/g, (ch) => UNESCAPED[ch] as string)}'`
 const UNESCAPED: Readonly<Record<string, string>> = { '\0': '\\0', '\n': '\\n', '\r': '\\r', '\\': '\\\\', "'": "''" }
@@ -71,7 +70,7 @@ function defaultClause(run: Run, c: ColumnDef): string {
   }
   const charset = requireCollationInfo(run.env.session.characterSet).charset
   try {
-    return ` DEFAULT (${printExpression(e, { column: (parts) => q(parts[parts.length - 1] as string), string: (v, cs) => `_${cs ?? charset}'${escapeString(v)}'`, source: text })})`
+    return ` DEFAULT (${printExpression(e, { column: (parts) => quoteName(parts[parts.length - 1] as string), string: (v, cs) => `_${cs ?? charset}'${escapeString(v)}'`, source: text })})`
   } catch (e) {
     expectTyped(e)
     return ` DEFAULT (${text})`
@@ -80,7 +79,7 @@ function defaultClause(run: Run, c: ColumnDef): string {
 
 export function columnLine(run: Run, def: TableDef, c: ColumnDef): string {
   const facts = typeFacts(c)
-  let out = `  ${q(c.name)} ${facts.columnType}`
+  let out = `  ${quoteName(c.name)} ${facts.columnType}`
   // The charset when it is not the table's or was named, and the collation
   // when it is not its charset's first, was named, or is utf8mb4's in a
   // table of another (`store_create_info`).
@@ -116,9 +115,9 @@ function keyClass(def: TableDef, index: IndexDef): number {
 }
 
 function keyLine(index: IndexDef): string {
-  const parts = index.parts.map((p) => `${q(p.column)}${p.prefix === undefined ? '' : `(${p.prefix})`}${p.descending === true ? ' DESC' : ''}`).join(',')
+  const parts = index.parts.map((p) => `${quoteName(p.column)}${p.prefix === undefined ? '' : `(${p.prefix})`}${p.descending === true ? ' DESC' : ''}`).join(',')
   if (index.kind === 'primary') return `  PRIMARY KEY (${parts})${keyTail(index)}`
-  return `  ${index.kind === 'unique' ? 'UNIQUE KEY' : 'KEY'} ${q(index.name)} (${parts})${keyTail(index)}`
+  return `  ${index.kind === 'unique' ? 'UNIQUE KEY' : 'KEY'} ${quoteName(index.name)} (${parts})${keyTail(index)}`
 }
 
 /** A key's COMMENT, and its invisibility in a versioned comment (8.4.11: `KEY \`k\` (\`b\`) COMMENT 'x' /*!80000 INVISIBLE *\/`). */
@@ -134,17 +133,17 @@ export function showCreateTable(run: Run, def: TableDef, table: Table): string {
   const keys = def.indexes.map((index, i) => ({ index, i })).sort((a, b) => keyClass(def, a.index) - keyClass(def, b.index) || a.i - b.i)
   for (const { index } of keys) lines.push(keyLine(index))
   // FULLTEXT keys sort after every other kind (`sort_keys`).
-  for (const f of fulltextOf(def)) lines.push(`  FULLTEXT KEY ${q(f.name)} (${f.columns.map(q).join(',')})${keyTail(f)}`)
-  for (const fk of [...foreignKeysOf(def)].sort(byName)) lines.push(`  CONSTRAINT ${q(fk.name)} ${referenceText(fk, def.schema, false)}`)
+  for (const f of fulltextOf(def)) lines.push(`  FULLTEXT KEY ${quoteName(f.name)} (${f.columns.map(quoteName).join(',')})${keyTail(f)}`)
+  for (const fk of [...foreignKeysOf(def)].sort(byName)) lines.push(`  CONSTRAINT ${quoteName(fk.name)} ${referenceText(fk, def.schema, false)}`)
   for (const c of [...checksOf(def)].sort(byName)) {
     let clause: string
     try {
-      clause = printExpression(parseExpression(c.text), { column: (parts) => q(parts[parts.length - 1] as string), string: (v, cs) => `_${cs ?? c.charset}'${escapeString(v)}'`, source: c.text })
+      clause = printExpression(parseExpression(c.text), { column: (parts) => quoteName(parts[parts.length - 1] as string), string: (v, cs) => `_${cs ?? c.charset}'${escapeString(v)}'`, source: c.text })
     } catch (e) {
       expectTyped(e)
       clause = c.text
     }
-    lines.push(`  CONSTRAINT ${q(c.name)} CHECK (${clause})${c.enforced ? '' : ' /*!80016 NOT ENFORCED */'}`)
+    lines.push(`  CONSTRAINT ${quoteName(c.name)} CHECK (${clause})${c.enforced ? '' : ' /*!80016 NOT ENFORCED */'}`)
   }
   let options = ` ENGINE=${def.engine === 'memory' ? 'MEMORY' : 'InnoDB'}`
   if (def.columns.some((c) => c.autoIncrement === true)) {
@@ -155,7 +154,9 @@ export function showCreateTable(run: Run, def: TableDef, table: Table): string {
   const info = requireCollationInfo(collation)
   options += ` DEFAULT CHARSET=${info.charset}`
   if (!isPrimary(collation)) options += ` COLLATE=${info.name}`
+  const recalc = def.options['statsAutoRecalc']
+  if (typeof recalc === 'boolean') options += ` STATS_AUTO_RECALC=${recalc ? 1 : 0}`
   const comment = def.options['comment']
   if (typeof comment === 'string' && comment !== '') options += ` COMMENT=${quoted(comment)}`
-  return `CREATE ${isTemporary(def) ? "TEMPORARY " : ""}TABLE ${q(def.name)} (\n${lines.join(',\n')}\n)${options}`
+  return `CREATE ${isTemporary(def) ? "TEMPORARY " : ""}TABLE ${quoteName(def.name)} (\n${lines.join(',\n')}\n)${options}`
 }

@@ -35,6 +35,7 @@
 //   - A cascaded update into a table an update further up the chain is
 //     changing is refused (1451): InnoDB "plays safe" rather than know.
 //   - `foreign_key_checks = 0` turns all of it off, cascades included.
+import { quoteName } from '@myjs/parser'
 import { FIELD_TYPE, CHARSET_BINARY, expectTyped } from '@myjs/bytes'
 import { sqlError } from '@myjs/protocol'
 import type { ColumnDef, FieldBytes, IndexDef, KeyRange, ReadMode, Row, RowId, Table, TableDef, TableSpec, Trx } from '@myjs/engine'
@@ -80,7 +81,6 @@ export function foreignKeysOf(def: TableDef): ForeignKeyDef[] {
   })
 }
 
-const q = (name: string): string => `\`${name.replace(/`/g, '``')}\``
 
 /**
  * `FOREIGN KEY (…) REFERENCES … (…)` and its actions, as SHOW CREATE TABLE and
@@ -89,15 +89,15 @@ const q = (name: string): string => `\`${name.replace(/`/g, '``')}\``
  * prints it (`forError` is InnoDB's text).
  */
 export function referenceText(fk: ForeignKeyDef, childSchema: string, forError: boolean): string {
-  const parent = fk.references.schema === childSchema ? q(fk.references.table) : `${q(fk.references.schema)}.${q(fk.references.table)}`
-  let out = `FOREIGN KEY (${fk.columns.map(q).join(', ')}) REFERENCES ${parent} (${fk.references.columns.map(q).join(', ')})`
+  const parent = fk.references.schema === childSchema ? quoteName(fk.references.table) : `${quoteName(fk.references.schema)}.${quoteName(fk.references.table)}`
+  let out = `FOREIGN KEY (${fk.columns.map(quoteName).join(', ')}) REFERENCES ${parent} (${fk.references.columns.map(quoteName).join(', ')})`
   const shown = (a: ReferentialAction) => a !== 'NO ACTION' && !(forError && a === 'SET DEFAULT')
   if (shown(fk.onDelete)) out += ` ON DELETE ${fk.onDelete}`
   if (shown(fk.onUpdate)) out += ` ON UPDATE ${fk.onUpdate}`
   return out
 }
 
-const constraintText = (fk: ForeignKeyDef, schema: string, table: string): string => `(${q(schema)}.${q(table)}, CONSTRAINT ${q(fk.name)} ${referenceText(fk, schema, true)})`
+const constraintText = (fk: ForeignKeyDef, schema: string, table: string): string => `(${quoteName(schema)}.${quoteName(table)}, CONSTRAINT ${quoteName(fk.name)} ${referenceText(fk, schema, true)})`
 const noParent = (fk: ForeignKeyDef, schema: string, table: string) => sqlError('ER_NO_REFERENCED_ROW_2', `Cannot add or update a child row: a foreign key constraint fails ${constraintText(fk, schema, table)}`)
 const rowIsReferenced = (fk: ForeignKeyDef, schema: string, table: string) => sqlError('ER_ROW_IS_REFERENCED_2', `Cannot delete or update a parent row: a foreign key constraint fails ${constraintText(fk, schema, table)}`)
 const tooDeep = () => sqlError('ER_FK_DEPTH_EXCEEDED', 'Foreign key cascade delete/update exceeds max depth of 15.')

@@ -8,7 +8,8 @@
 // without the rest noticing.
 import type { KeyRange, RowId, Table, Trx } from '@myjs/engine'
 import type { ColumnType } from '@myjs/types'
-import { decodeField, sortValues, truth, type Value } from '@myjs/types'
+import { collation, encodeCollation } from '@myjs/charsets'
+import { compareJsonSortHashes, decodeField, jsonSortHash, sortValues, truth, type Value } from '@myjs/types'
 import { rowKey } from './keys.ts'
 import { raise, setRowNumber, type Compiled, type Env, type Row } from './compile.ts'
 
@@ -69,17 +70,71 @@ export interface SortKey {
  * ties. NULL sorts first ascending and last descending. Materialises: spilling
  * a sort larger than memory is M5.5's.
  */
-export function sort<T extends { readonly row: Row }>(source: Iterable<T>, keys: readonly SortKey[], env: Env): T[] {
-  const decorated = [...source].map((item, at) => ({ item, at, values: keys.map((k) => k.expr.eval(item.row, env)) }))
+export function sort<T extends { readonly row: Row }>(source: Iterable<T>, keys: readonly SortKey[], env: Env, keep?: number): T[] {
+  const decorated = [...source].map((item) => {
+    const values = keys.map((k) => k.expr.eval(item.row, env))
+    return { item, values, sortKeys: values.map(sortKeyOf), hash: 0n }
+  })
   warnNonScalar(decorated.map((d) => d.values), env)
-  decorated.sort((a, b) => {
+  // A JSON key adds the row's JSON hash after the keys (`jsonSortHash`): what orders two that tie.
+  const json = keys.flatMap((k, i) => (k.expr.type.kind === 'json' ? [i] : []))
+  if (json.length > 0) {
+    for (const d of decorated) {
+      for (const i of json) {
+        const v = d.values[i]
+        if (v !== null && v !== undefined && v.kind === 'json') d.hash = jsonSortHash(v.v, d.hash)
+      }
+    }
+  }
+  const compare = (a: (typeof decorated)[number], b: (typeof decorated)[number]): number => {
     for (let i = 0; i < keys.length; i++) {
-      const c = sortValues(a.values[i] ?? null, b.values[i] ?? null)
+      const x = a.sortKeys[i]
+      const y = b.sortKeys[i]
+      const c = x !== undefined && y !== undefined && x.id === y.id ? (x.key < y.key ? -1 : x.key > y.key ? 1 : 0) : sortValues(a.values[i] ?? null, b.values[i] ?? null)
       if (c !== 0) return (keys[i] as SortKey).desc ? -c : c
     }
-    return a.at - b.at
-  })
+    return json.length === 0 ? 0 : compareJsonSortHashes(a.hash, b.hash)
+  }
+  // Only the first `keep` are wanted (a LIMIT): kept sorted as they arrive,
+  // each inserted after any it ties with, which is the stable sort's order.
+  if (keep === 0) return []
+  if (keep !== undefined && keep < decorated.length / 2) {
+    const top: (typeof decorated)[number][] = []
+    for (const d of decorated) {
+      if (top.length === keep && compare(d, top[keep - 1] as (typeof decorated)[number]) >= 0) continue
+      let lo = 0
+      let hi = top.length
+      while (lo < hi) {
+        const mid = (lo + hi) >>> 1
+        if (compare(d, top[mid] as (typeof decorated)[number]) < 0) hi = mid
+        else lo = mid + 1
+      }
+      top.splice(lo, 0, d)
+      if (top.length > keep) top.pop()
+    }
+    return top.map((d) => d.item)
+  }
+  // Array.prototype.sort is stable: rows that tie keep the order they came in.
+  decorated.sort(compare)
   return decorated.map((d) => d.item)
+}
+
+/**
+ * A string's sort key, once a row rather than once a comparison: its
+ * collation's `sortKey` as a string of one character a byte, which orders as
+ * `memcmp` does. Only under a NO PAD collation, where that order is the
+ * comparison's exactly; a PAD SPACE one compares `'a'` equal to `'a '`, which
+ * a key without the column's width cannot say (D-35), and an ENUM sorts by
+ * its member index. Two values sort by their keys only under one collation.
+ */
+function sortKeyOf(v: Value): { readonly id: number; readonly key: string } | undefined {
+  if (v === null || v.kind !== 'string' || v.ordinal !== undefined) return undefined
+  const c = collation(v.collationId)
+  if (c.padAttribute !== 'NO PAD') return undefined
+  const bytes = c.sortKey(encodeCollation(v.v, v.collationId))
+  let key = ''
+  for (let i = 0; i < bytes.length; i += 8192) key += String.fromCharCode(...bytes.subarray(i, i + 8192))
+  return { id: v.collationId, key }
 }
 
 /**

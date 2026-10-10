@@ -24,6 +24,7 @@ import {
   toText,
   truth,
   type Value,
+  valueBytes,
 } from '@myjs/types'
 import {
   aggregate,
@@ -45,6 +46,11 @@ import {
   readsColumn,
   type CompileContext,
   type Compiled,
+  asBinary,
+  asMerged,
+  dateConverter,
+  ownText,
+  textOf,
   type Env,
   type Row,
 } from './compile.ts'
@@ -67,27 +73,42 @@ import { unregistered } from './registry.ts'
 import { bitBytes } from './wire.ts'
 
 /** The names `builtinFunction` compiles. */
-export const BUILTINS: ReadonlySet<string> = new Set([
-  'MOD', 'STRCMP', 'REGEXP_INSTR', 'REGEXP_SUBSTR', 'REGEXP_REPLACE', 'REGEXP_LIKE', 'COLLATION', 'CHARSET', 'IF', 'IFNULL', 'COALESCE', 'RAND',
-  'ANY_VALUE', 'NULLIF', 'CONCAT', 'LENGTH', 'OCTET_LENGTH', 'CHAR_LENGTH', 'CHARACTER_LENGTH', 'LOWER', 'LCASE', 'UPPER', 'UCASE', 'COERCIBILITY',
-  'BIN', 'OCT', 'HEX', 'UNHEX', 'ABS', 'VERSION', 'DATABASE', 'SCHEMA', 'USER', 'CURRENT_USER', 'SESSION_USER', 'SYSTEM_USER',
-  'CONNECTION_ID', 'LAST_INSERT_ID', 'VALUES', 'ROW_COUNT', 'NOW', 'CURRENT_TIMESTAMP', 'LOCALTIME', 'LOCALTIMESTAMP', 'UTC_TIMESTAMP', 'SYSDATE', 'DATE_ADD', 'DATE_SUB',
-  'ADDDATE', 'SUBDATE', 'CURDATE', 'CURRENT_DATE', 'UTC_DATE', 'CURTIME', 'CURRENT_TIME', 'UTC_TIME', 'ISNULL', 'INTERVAL',
-])
+export const BUILTINS: ReadonlySet<string> = new Set(['MOD', 'STRCMP', 'RAND', 'CONCAT', 'LENGTH', 'OCTET_LENGTH', 'CHAR_LENGTH', 'CHARACTER_LENGTH', 'LOWER', 'LCASE', 'UPPER', 'UCASE', 'BIN', 'OCT', 'HEX', 'UNHEX', 'ABS'])
 
-export function builtinFunction(name: string, e: CallNode, ctx: CompileContext): Compiled {
-  const args = (): Compiled[] => e.args.map((a) => compile(a, ctx))
-  const arity = (n: number): void => {
-    if (e.args.length !== n) throw sqlError('ER_WRONG_PARAMCOUNT_TO_NATIVE_FCT', `Incorrect parameter count in the call to native function '${e.name}'`)
-  }
+/** The names `controlFunction` compiles. */
+export const CONTROL_FUNCTIONS: ReadonlySet<string> = new Set(['IF', 'IFNULL', 'COALESCE', 'ANY_VALUE', 'NULLIF', 'ISNULL', 'INTERVAL'])
+
+/** The names `informationFunction` compiles. */
+export const INFORMATION_FUNCTIONS: ReadonlySet<string> = new Set(['COLLATION', 'CHARSET', 'COERCIBILITY', 'VERSION', 'DATABASE', 'SCHEMA', 'USER', 'CURRENT_USER', 'SESSION_USER', 'SYSTEM_USER', 'CONNECTION_ID', 'LAST_INSERT_ID', 'VALUES', 'ROW_COUNT'])
+
+/** The names `regexpFunction` compiles. */
+export const REGEXP_FUNCTIONS: ReadonlySet<string> = new Set(['REGEXP_INSTR', 'REGEXP_SUBSTR', 'REGEXP_REPLACE', 'REGEXP_LIKE'])
+
+/** The names `clockFunction` compiles. */
+export const CLOCK_FUNCTIONS: ReadonlySet<string> = new Set(['NOW', 'CURRENT_TIMESTAMP', 'LOCALTIME', 'LOCALTIMESTAMP', 'UTC_TIMESTAMP', 'SYSDATE', 'DATE_ADD', 'DATE_SUB', 'ADDDATE', 'SUBDATE', 'CURDATE', 'CURRENT_DATE', 'UTC_DATE', 'CURTIME', 'CURRENT_TIME', 'UTC_TIME'])
+
+/** What each family's compiler asks of a call: its arguments compiled, its arity checked, the connection's collation, and a string of the session's (`SYSCONST`). */
+function callOf(e: CallNode, ctx: CompileContext) {
   const conn = ctx.connectionCollation
-  const text = (value: (env: Env) => string | null, chars: number): Compiled => ({
-    eval: (_r, env) => {
-      const v = value(env)
-      return v === null ? null : stringValue(v, conn, COERCIBILITY.SYSCONST)
+  return {
+    args: (): Compiled[] => e.args.map((a) => compile(a, ctx)),
+    arity: (n: number): void => {
+      if (e.args.length !== n) throw sqlError('ER_WRONG_PARAMCOUNT_TO_NATIVE_FCT', `Incorrect parameter count in the call to native function '${e.name}'`)
     },
-    type: stringType(chars, conn, false),
-  })
+    conn,
+    text: (value: (env: Env) => string | null, chars: number): Compiled => ({
+      eval: (_r, env) => {
+        const v = value(env)
+        return v === null ? null : stringValue(v, conn, COERCIBILITY.SYSCONST)
+      },
+      type: stringType(chars, conn, false),
+    }),
+  }
+}
+
+/** The text and number builtins: MOD, STRCMP, RAND, CONCAT, the lengths and cases, the bases, ABS. */
+export function builtinFunction(name: string, e: CallNode, ctx: CompileContext): Compiled {
+  const { args, arity, conn } = callOf(e, ctx)
   // MOD(a, b) is `a % b`, its name included in an overflow's message.
   if (name === 'MOD') {
     arity(2)
@@ -110,118 +131,6 @@ export function builtinFunction(name: string, e: CallNode, ctx: CompileContext):
           return intValue(BigInt(Math.sign(compareValues(asString(a), asString(b)) ?? 0)))
         },
         type: intType(2, x.type.nullable || y.type.nullable),
-      }
-    }
-    case 'REGEXP_INSTR':
-    case 'REGEXP_SUBSTR':
-    case 'REGEXP_REPLACE': {
-      // (subject, pattern[, replacement], position, occurrence[, return option], match type)
-      const replace = name === 'REGEXP_REPLACE'
-      const max = name === 'REGEXP_SUBSTR' ? 5 : 6
-      if (e.args.length < (replace ? 3 : 2) || e.args.length > max) throw sqlError('ER_WRONG_PARAMCOUNT_TO_NATIVE_FCT', `Incorrect parameter count in the call to native function '${e.name}'`)
-      const xs = args()
-      const fn = name.toLowerCase()
-      const at = replace ? 3 : 2
-      const subject = xs[0] as Compiled
-      if (subject.type.kind === 'string' && (xs[1] as Compiled).type.kind === 'string') aggregateCollations([subject.type, (xs[1] as Compiled).type], fn, true)
-      const collation = subject.type.kind === 'string' && (xs[1] as Compiled).type.kind === 'string' ? aggregateTypes([subject.type, (xs[1] as Compiled).type], conn) : subject.type.kind === 'bytes' ? CHARSET_BINARY : subject.type.kind === 'string' ? subject.type.collationId : conn
-      // REGEXP_SUBSTR, and REGEXP_REPLACE of text, may be NULL whatever the
-      // arguments; the others only when an argument may be (8.4.11).
-      const nullable = xs.some((x) => x.type.nullable)
-      const type =
-        name === 'REGEXP_INSTR'
-          ? intType(21, nullable)
-          : replace
-            ? { ...stringType(16_777_216, collation, collation !== CHARSET_BINARY || nullable), field: FIELD_TYPE.LONG_BLOB }
-            : stringType(charWidth(subject.type), collation, true)
-      return {
-        eval: (r, env) => {
-          const vs = xs.map((x) => x.eval(r, env))
-          if (vs.some((v) => v === null)) return null
-          const v = vs as Exclude<Value, null>[]
-          const int = (i: number, fallback: bigint) => (v[i] === undefined ? fallback : toInteger(v[i] as Exclude<Value, null>))
-          const options = name === 'REGEXP_INSTR' ? 3 : 2
-          const mt = v[at + options] === undefined ? undefined : matchType(toText(v[at + options] as Exclude<Value, null>), fn)
-          const search = { subject: v[0] as Exclude<Value, null>, pattern: v[1] as Exclude<Value, null>, position: int(at, 1n), occurrence: int(at + 1, replace ? 0n : 1n), type: mt }
-          if (name === 'REGEXP_INSTR') {
-            const ret = int(at + 2, 0n)
-            if (ret !== 0n && ret !== 1n) throw sqlError('ER_WRONG_ARGUMENTS', 'Incorrect arguments to regexp_instr: return_option must be 1 or 0.')
-            return intValue(regexpInstr(search, ret === 1n))
-          }
-          const out = replace ? regexpReplace(search, v[2] as Exclude<Value, null>) : regexpSubstr(search)
-          if (out === undefined) return null
-          return collation === CHARSET_BINARY ? bytesValue(Uint8Array.from(out, (c) => c.charCodeAt(0))) : stringValue(out, collation, COERCIBILITY.IMPLICIT)
-        },
-        type,
-      }
-    }
-    case 'REGEXP_LIKE': {
-      if (e.args.length < 2 || e.args.length > 3) throw sqlError('ER_WRONG_PARAMCOUNT_TO_NATIVE_FCT', `Incorrect parameter count in the call to native function '${e.name}'`)
-      const [a, p, t] = args() as [Compiled, Compiled, Compiled | undefined]
-      if (a.type.kind === 'string' && p.type.kind === 'string') aggregateCollations([a.type, p.type], 'regexp_like', true)
-      return {
-        eval: (r, env) => {
-          const mt = t === undefined ? undefined : t.eval(r, env)
-          if (mt === null) return null
-          const m = regexpLike(a.eval(r, env), p.eval(r, env), mt === undefined ? undefined : matchType(toText(mt), 'regexp_like'))
-          return m === null ? null : bool(m)
-        },
-        type: boolType(true),
-      }
-    }
-    case 'COLLATION':
-    case 'CHARSET': {
-      // The argument's type decides, not its value: a number, a temporal or
-      // NULL is `binary`, JSON utf8mb4_bin (8.4.11). A VARCHAR(64) in utf8mb3.
-      arity(1)
-      const [x] = args() as [Compiled]
-      const id = x.type.kind === 'json' ? CHARSET_UTF8MB4_BIN : x.type.kind === 'string' ? x.type.collationId : CHARSET_BINARY
-      const info = requireCollationInfo(id)
-      const answer = name === 'COLLATION' ? info.name : info.charset
-      return { eval: () => stringValue(answer, CHARSET_UTF8MB3_GENERAL_CI, COERCIBILITY.IMPLICIT), type: stringType(64, CHARSET_UTF8MB3_GENERAL_CI, true) }
-    }
-    case 'IF': {
-      arity(3)
-      const [c, x, y] = args() as [Compiled, Compiled, Compiled]
-      const type = aggregate([x.type, y.type], x.type.nullable || y.type.nullable, conn, 'if')
-      if (type.kind === 'double') return { eval: (r, env) => doubleOf(truth(c.eval(r, env)) === true ? x.eval(r, env) : y.eval(r, env), type), type }
-      const [xv, yv] = [branchOf(x, type), branchOf(y, type)]
-      return { eval: (r, env) => (truth(c.eval(r, env)) === true ? xv(r, env) : yv(r, env)), type }
-    }
-    case 'IFNULL': {
-      arity(2)
-      const [x, y] = args() as [Compiled, Compiled]
-      const type = aggregate([x.type, y.type], x.type.nullable && y.type.nullable, conn, 'ifnull')
-      const [xv, yv] = [chosenOf(x, type), chosenOf(y, type)]
-      return {
-        eval: (r, env) => {
-          const v = x.eval(r, env)
-          if (v !== null) return xv(v)
-          const w = y.eval(r, env)
-          return w === null ? null : yv(w)
-        },
-        type,
-      }
-    }
-    case 'COALESCE': {
-      if (e.args.length === 0) arity(1)
-      const xs = args()
-      const type = aggregate(
-        xs.map((x) => x.type),
-        xs.every((x) => x.type.nullable),
-        conn,
-        'coalesce',
-      )
-      const chosen = xs.map((x) => chosenOf(x, type))
-      return {
-        eval: (r, env) => {
-          for (let i = 0; i < xs.length; i++) {
-            const v = (xs[i] as Compiled).eval(r, env)
-            if (v !== null) return (chosen[i] as (v: Exclude<Value, null>) => Value)(v)
-          }
-          return null
-        },
-        type,
       }
     }
     case 'RAND': {
@@ -252,25 +161,6 @@ export function builtinFunction(name: string, e: CallNode, ctx: CompileContext):
           return doubleValue(nextRand(seeds))
         },
         type,
-      }
-    }
-    case 'ANY_VALUE': {
-      // A value from the group, with ONLY_FULL_GROUP_BY's check switched off for it.
-      arity(1)
-      const [x] = args() as [Compiled]
-      return { eval: x.eval, type: expressionOf(x.type) }
-    }
-    case 'NULLIF': {
-      arity(2)
-      const [x, y] = args() as [Compiled, Compiled]
-      if (isText(x.type) && isText(y.type)) aggregateCollations([x.type, y.type], 'nullif', true)
-      const cmp = comparer(x.type, y.type)
-      return {
-        eval: (r, env) => {
-          const v = x.eval(r, env)
-          return cmp(v, y.eval(r, env)) === 0 ? null : v
-        },
-        type: { ...expressionOf(x.type), nullable: true },
       }
     }
     case 'CONCAT': {
@@ -349,22 +239,6 @@ export function builtinFunction(name: string, e: CallNode, ctx: CompileContext):
         type: x.type.kind === 'bytes' ? { ...expressionOf(x.type), nullable: true } : { ...stringType(charWidth(x.type), x.type.kind === 'string' ? x.type.collationId : conn, true), coercibility: coercibilityOf(x.type) },
       }
     }
-    case 'COERCIBILITY': {
-      // Text's, as it carries it; 5 for a number or a temporal, 6 for NULL (8.4.11).
-      arity(1)
-      const [x] = args() as [Compiled]
-      return {
-        eval: (r, env) => {
-          const v = x.eval(r, env)
-          // The type's derivation when it says one (IF over two collations is NONE whichever value it returns), else the value's.
-          if (x.type.kind === 'string' && x.type.coercibility !== undefined) return intValue(BigInt(x.type.coercibility))
-          if (v !== null && v.kind === 'string') return intValue(BigInt(v.coercibility))
-          if (x.type.kind === 'string' || x.type.kind === 'bytes') return intValue(BigInt(coercibilityOf(x.type)))
-          return intValue(x.type.kind === 'null' || v === null ? 6n : 5n)
-        },
-        type: intType(10, false),
-      }
-    }
     case 'BIN':
     case 'OCT': {
       // CONV(N, 10, 2 or 8): N read as base-10 text up to its first
@@ -409,7 +283,7 @@ export function builtinFunction(name: string, e: CallNode, ctx: CompileContext):
             const clamped = n > 2n ** 64n - 1n ? 2n ** 64n - 1n : n < -MAX_SIGNED - 1n ? -MAX_SIGNED - 1n : n
             return stringValue(BigInt.asUintN(64, clamped).toString(16).toUpperCase(), conn)
           }
-          const raw = v.kind === 'bytes' ? v.v : v.kind === 'string' ? encodeCollation(v.v, v.collationId) : new TextEncoder().encode(toText(v))
+          const raw = valueBytes(v)
           return stringValue(hexOf(raw), conn)
         },
         type: stringType(numeric ? 16 : bytes * 2, conn, true),
@@ -449,6 +323,152 @@ export function builtinFunction(name: string, e: CallNode, ctx: CompileContext):
           return x.type.kind === 'double' ? doubleOf(out, floatLength(x.type.scale, true)) : out
         },
         type: x.type.literalInt !== undefined ? { ...floatLength(0, x.type.nullable), unsigned: true } : x.type.kind === 'double' ? floatLength(x.type.scale, x.type.nullable) : x.type.kind === 'string' || x.type.kind === 'bytes' ? doubleType(x.type.nullable) : x.type.kind === 'int' ? intType(x.type.length, x.type.nullable, x.type.unsigned) : expressionOf(x.type),
+      }
+    }
+    default:
+      throw unregistered(name)
+  }
+}
+
+/** The control-flow functions: IF, IFNULL, COALESCE, NULLIF, ANY_VALUE, ISNULL, INTERVAL. */
+export function controlFunction(name: string, e: CallNode, ctx: CompileContext): Compiled {
+  const { args, arity, conn } = callOf(e, ctx)
+  switch (name) {
+    case 'IF': {
+      arity(3)
+      const [given, x, y] = args() as [Compiled, Compiled, Compiled]
+      // The condition's truth is a double, and text that is not one warns (8.4.11).
+      const c = asNumber(given, 'DOUBLE')
+      const type = aggregate([x.type, y.type], x.type.nullable || y.type.nullable, conn, 'if')
+      if (type.kind === 'double') return { eval: (r, env) => doubleOf(truth(c.eval(r, env)) === true ? x.eval(r, env) : y.eval(r, env), type), type }
+      const [xv, yv] = [branchOf(x, type), branchOf(y, type)]
+      return { eval: (r, env) => (truth(c.eval(r, env)) === true ? xv(r, env) : yv(r, env)), type }
+    }
+    case 'IFNULL': {
+      arity(2)
+      const [x, y] = args() as [Compiled, Compiled]
+      const type = aggregate([x.type, y.type], x.type.nullable && y.type.nullable, conn, 'ifnull')
+      const [xv, yv] = [chosenOf(x, type), chosenOf(y, type)]
+      return {
+        eval: (r, env) => {
+          const v = x.eval(r, env)
+          if (v !== null) return xv(v, env)
+          const w = y.eval(r, env)
+          return w === null ? null : yv(w, env)
+        },
+        type,
+      }
+    }
+    case 'COALESCE': {
+      if (e.args.length === 0) arity(1)
+      const xs = args()
+      const type = aggregate(
+        xs.map((x) => x.type),
+        xs.every((x) => x.type.nullable),
+        conn,
+        'coalesce',
+      )
+      const chosen = xs.map((x) => chosenOf(x, type))
+      return {
+        eval: (r, env) => {
+          for (let i = 0; i < xs.length; i++) {
+            const v = (xs[i] as Compiled).eval(r, env)
+            if (v !== null) return (chosen[i] as (v: Exclude<Value, null>, env: Env) => Value)(v, env)
+          }
+          return null
+        },
+        type,
+      }
+    }
+    case 'ANY_VALUE': {
+      // A value from the group, with ONLY_FULL_GROUP_BY's check switched off for it.
+      arity(1)
+      const [x] = args() as [Compiled]
+      return { eval: x.eval, type: expressionOf(x.type) }
+    }
+    case 'NULLIF': {
+      arity(2)
+      const [first, y] = args() as [Compiled, Compiled]
+      const x = asBigintConstant(first, y, e.args[0] as Expression, ctx) ?? first
+      // A comparison: text beside a date is read as one for it (or is 1525), though the value returned is the first argument as given.
+      const left = dateConverter(x, e.args[0] as Expression, y, ctx)
+      const right = dateConverter(y, e.args[1] as Expression, x, ctx)
+      if (isText(x.type) && isText(y.type)) aggregateCollations([x.type, y.type], 'nullif', true)
+      const cmp = comparer(x.type, y.type)
+      // A temporal or a YEAR comes back as its text, in the connection's charset (8.4.11).
+      const text = x.type.kind === 'datetime' || x.type.kind === 'time' || x.type.field === FIELD_TYPE.YEAR
+      const type: ResultType = text ? { ...stringType(charWidth(x.type), conn, true), unsigned: x.type.field === FIELD_TYPE.YEAR } : { ...expressionOf(x.type), nullable: true }
+      return {
+        eval: (r, env) => {
+          const v = x.eval(r, env)
+          if (v === null) return null
+          const w = y.eval(r, env)
+          if (cmp(left === undefined ? v : left(v, env), right === undefined ? w : right(w, env)) === 0) return null
+          return text ? stringValue(textOf(v, x.type), conn) : v
+        },
+        type,
+      }
+    }
+    case 'ISNULL': {
+      arity(1)
+      const x = compile(e.args[0] as Expression, ctx)
+      return { eval: (r, env) => bool(x.eval(r, env) === null), type: intType(1, false) }
+    }
+    case 'INTERVAL': {
+      // INTERVAL(n, n1, n2, …): how many bounds n is not below, NULL bounds passed over.
+      if (e.args.length < 2) throw sqlError('ER_WRONG_PARAMCOUNT_TO_NATIVE_FCT', `Incorrect parameter count in the call to native function '${e.name}'`)
+      const xs = args()
+      const exact = xs.every((x) => x.type.kind === 'int' || x.type.kind === 'decimal' || x.type.kind === 'null')
+      const reads = xs.map((x) => asNumber(x, exact ? 'DECIMAL' : 'DOUBLE'))
+      return {
+        eval: (r, env) => {
+          const v = (reads[0] as Compiled).eval(r, env)
+          if (v === null) return intValue(-1n)
+          for (let i = 1; i < reads.length; i++) {
+            const w = (reads[i] as Compiled).eval(r, env)
+            if (w === null) continue
+            const greater = exact ? compareValues(w, v) === 1 : toDouble(w) > toDouble(v)
+            if (greater) return intValue(BigInt(i - 1))
+          }
+          return intValue(BigInt(reads.length - 1))
+        },
+        type: intType(2, false),
+      }
+    }
+    default:
+      throw unregistered(name)
+  }
+}
+
+/** What a statement can ask of its session and its values: the user and the database, the version, the connection's counters, a value's collation and charset. */
+export function informationFunction(name: string, e: CallNode, ctx: CompileContext): Compiled {
+  const { args, arity, conn, text } = callOf(e, ctx)
+  switch (name) {
+    case 'COLLATION':
+    case 'CHARSET': {
+      // The argument's type decides, not its value: a number, a temporal or
+      // NULL is `binary`, JSON utf8mb4_bin (8.4.11). A VARCHAR(64) in utf8mb3.
+      arity(1)
+      const [x] = args() as [Compiled]
+      const id = x.type.kind === 'json' ? CHARSET_UTF8MB4_BIN : x.type.kind === 'string' ? x.type.collationId : CHARSET_BINARY
+      const info = requireCollationInfo(id)
+      const answer = name === 'COLLATION' ? info.name : info.charset
+      return { eval: () => stringValue(answer, CHARSET_UTF8MB3_GENERAL_CI, COERCIBILITY.IMPLICIT), type: stringType(64, CHARSET_UTF8MB3_GENERAL_CI, true) }
+    }
+    case 'COERCIBILITY': {
+      // Text's, as it carries it; 5 for a number or a temporal, 6 for NULL (8.4.11).
+      arity(1)
+      const [x] = args() as [Compiled]
+      return {
+        eval: (r, env) => {
+          const v = x.eval(r, env)
+          // The type's derivation when it says one (IF over two collations is NONE whichever value it returns), else the value's.
+          if (x.type.kind === 'string' && x.type.coercibility !== undefined) return intValue(BigInt(x.type.coercibility))
+          if (v !== null && v.kind === 'string') return intValue(BigInt(v.coercibility))
+          if (x.type.kind === 'string' || x.type.kind === 'bytes') return intValue(BigInt(coercibilityOf(x.type)))
+          return intValue(x.type.kind === 'null' || v === null ? 6n : 5n)
+        },
+        type: intType(10, false),
       }
     }
     case 'VERSION':
@@ -509,6 +529,81 @@ export function builtinFunction(name: string, e: CallNode, ctx: CompileContext):
     case 'ROW_COUNT':
       arity(0)
       return { eval: (_r, env) => intValue(env.state.rowCount), type: intType(21, false) }
+    default:
+      throw unregistered(name)
+  }
+}
+
+/** The REGEXP_ functions. */
+export function regexpFunction(name: string, e: CallNode, ctx: CompileContext): Compiled {
+  const { args, conn } = callOf(e, ctx)
+  switch (name) {
+    case 'REGEXP_INSTR':
+    case 'REGEXP_SUBSTR':
+    case 'REGEXP_REPLACE': {
+      // (subject, pattern[, replacement], position, occurrence[, return option], match type)
+      const replace = name === 'REGEXP_REPLACE'
+      const max = name === 'REGEXP_SUBSTR' ? 5 : 6
+      if (e.args.length < (replace ? 3 : 2) || e.args.length > max) throw sqlError('ER_WRONG_PARAMCOUNT_TO_NATIVE_FCT', `Incorrect parameter count in the call to native function '${e.name}'`)
+      const xs = args()
+      const fn = name.toLowerCase()
+      const at = replace ? 3 : 2
+      const subject = xs[0] as Compiled
+      if (subject.type.kind === 'string' && (xs[1] as Compiled).type.kind === 'string') aggregateCollations([subject.type, (xs[1] as Compiled).type], fn, true)
+      const collation = subject.type.kind === 'string' && (xs[1] as Compiled).type.kind === 'string' ? aggregateTypes([subject.type, (xs[1] as Compiled).type], conn) : subject.type.kind === 'bytes' ? CHARSET_BINARY : subject.type.kind === 'string' ? subject.type.collationId : conn
+      // REGEXP_SUBSTR, and REGEXP_REPLACE of text, may be NULL whatever the
+      // arguments; the others only when an argument may be (8.4.11).
+      const nullable = xs.some((x) => x.type.nullable)
+      const type =
+        name === 'REGEXP_INSTR'
+          ? intType(21, nullable)
+          : replace
+            ? { ...stringType(16_777_216, collation, collation !== CHARSET_BINARY || nullable), field: FIELD_TYPE.LONG_BLOB }
+            : stringType(charWidth(subject.type), collation, true)
+      return {
+        eval: (r, env) => {
+          const vs = xs.map((x) => x.eval(r, env))
+          if (vs.some((v) => v === null)) return null
+          const v = vs as Exclude<Value, null>[]
+          const int = (i: number, fallback: bigint) => (v[i] === undefined ? fallback : toInteger(v[i] as Exclude<Value, null>))
+          const options = name === 'REGEXP_INSTR' ? 3 : 2
+          const mt = v[at + options] === undefined ? undefined : matchType(toText(v[at + options] as Exclude<Value, null>), fn)
+          const search = { subject: v[0] as Exclude<Value, null>, pattern: v[1] as Exclude<Value, null>, position: int(at, 1n), occurrence: int(at + 1, replace ? 0n : 1n), type: mt }
+          if (name === 'REGEXP_INSTR') {
+            const ret = int(at + 2, 0n)
+            if (ret !== 0n && ret !== 1n) throw sqlError('ER_WRONG_ARGUMENTS', 'Incorrect arguments to regexp_instr: return_option must be 1 or 0.')
+            return intValue(regexpInstr(search, ret === 1n))
+          }
+          const out = replace ? regexpReplace(search, v[2] as Exclude<Value, null>) : regexpSubstr(search)
+          if (out === undefined) return null
+          return collation === CHARSET_BINARY ? bytesValue(Uint8Array.from(out, (c) => c.charCodeAt(0))) : stringValue(out, collation, COERCIBILITY.IMPLICIT)
+        },
+        type,
+      }
+    }
+    case 'REGEXP_LIKE': {
+      if (e.args.length < 2 || e.args.length > 3) throw sqlError('ER_WRONG_PARAMCOUNT_TO_NATIVE_FCT', `Incorrect parameter count in the call to native function '${e.name}'`)
+      const [a, p, t] = args() as [Compiled, Compiled, Compiled | undefined]
+      if (a.type.kind === 'string' && p.type.kind === 'string') aggregateCollations([a.type, p.type], 'regexp_like', true)
+      return {
+        eval: (r, env) => {
+          const mt = t === undefined ? undefined : t.eval(r, env)
+          if (mt === null) return null
+          const m = regexpLike(a.eval(r, env), p.eval(r, env), mt === undefined ? undefined : matchType(toText(mt), 'regexp_like'))
+          return m === null ? null : bool(m)
+        },
+        type: boolType(true),
+      }
+    }
+    default:
+      throw unregistered(name)
+  }
+}
+
+/** The session's clock and date arithmetic: NOW and its spellings, SYSDATE, CURDATE, CURTIME, DATE_ADD and DATE_SUB. */
+export function clockFunction(name: string, e: CallNode, ctx: CompileContext): Compiled {
+  const { arity } = callOf(e, ctx)
+  switch (name) {
     case 'NOW':
     case 'CURRENT_TIMESTAMP':
     case 'LOCALTIME':
@@ -549,32 +644,6 @@ export function builtinFunction(name: string, e: CallNode, ctx: CompileContext):
           return { kind: 'time', v: { negative: false, days: 0, hour: d.hour, minute: d.minute, second: d.second, microsecond: d.microsecond }, fsp }
         },
         type: datetimeType(FIELD_TYPE.TIME, fsp, false),
-      }
-    }
-    case 'ISNULL': {
-      arity(1)
-      const x = compile(e.args[0] as Expression, ctx)
-      return { eval: (r, env) => bool(x.eval(r, env) === null), type: intType(1, false) }
-    }
-    case 'INTERVAL': {
-      // INTERVAL(n, n1, n2, …): how many bounds n is not below, NULL bounds passed over.
-      if (e.args.length < 2) throw sqlError('ER_WRONG_PARAMCOUNT_TO_NATIVE_FCT', `Incorrect parameter count in the call to native function '${e.name}'`)
-      const xs = args()
-      const exact = xs.every((x) => x.type.kind === 'int' || x.type.kind === 'decimal' || x.type.kind === 'null')
-      const reads = xs.map((x) => asNumber(x, exact ? 'DECIMAL' : 'DOUBLE'))
-      return {
-        eval: (r, env) => {
-          const v = (reads[0] as Compiled).eval(r, env)
-          if (v === null) return intValue(-1n)
-          for (let i = 1; i < reads.length; i++) {
-            const w = (reads[i] as Compiled).eval(r, env)
-            if (w === null) continue
-            const greater = exact ? compareValues(w, v) === 1 : toDouble(w) > toDouble(v)
-            if (greater) return intValue(BigInt(i - 1))
-          }
-          return intValue(BigInt(reads.length - 1))
-        },
-        type: intType(2, false),
       }
     }
     default:
@@ -633,7 +702,26 @@ function nextRand(s: RandSeeds): number {
  * text is its bytes, and BITs alone are the number, whose text is its
  * digits even under the BIT type (8.4.11: `COALESCE(b)` of b'101' sends '5').
  */
-function chosenOf(x: Compiled, result: ResultType): (v: Exclude<Value, null>) => Value {
+/**
+ * A string or hex constant compared with a BIGINT column, as an integer
+ * constant: MySQL converts it once, so the comparison is exact rather than
+ * in doubles (`convert_constant_item`). Only where it reads as a whole number:
+ * `'1.5'` stays text, `'abc'` is 0 with its 1292 (8.4.11).
+ */
+function asBigintConstant(x: Compiled, y: Compiled, written: Expression, ctx: CompileContext): Compiled | undefined {
+  if (!isText(x.type) || written.kind !== NODE.LITERAL || y.type.column === undefined || y.type.field !== FIELD_TYPE.LONGLONG) return undefined
+  const read = asNumber(x, 'DOUBLE', true)
+  const probe = x.eval([], constantEnv(ctx))
+  const d = probe === null ? NaN : toDouble(probe)
+  if (!Number.isInteger(d) || Math.abs(d) > 2 ** 63) return undefined
+  const v = intValue(BigInt(d))
+  return { eval: (r, env) => (read.eval(r, env), v), type: { ...intType(22, x.type.nullable, y.type.unsigned), field: FIELD_TYPE.LONGLONG } }
+}
+
+function chosenOf(x: Compiled, result: ResultType): (v: Exclude<Value, null>, env: Env) => Value {
+  if (result.kind === 'datetime' && (x.type.kind === 'datetime' || x.type.kind === 'time') && x.type.field !== result.field) return (v, env) => asMerged(v, result, env)
+  if (ownText(x.type) && result.kind === 'string') return (v) => stringValue(textOf(v, x.type), result.collationId)
+  if (result.kind === 'bytes' && (ownText(x.type) || x.type.kind === 'string')) return (v) => asBinary(v, x.type)
   if (!isBits(x.type) || !(result.kind === 'bytes' || isBits(result))) return (v) => convertTo(v, result)
   const bits = x.type.length
   if (result.kind === 'bytes') return (v) => (v.kind === 'int' ? bytesValue(bitBytes(v.v, bits)) : convertTo(v, result))

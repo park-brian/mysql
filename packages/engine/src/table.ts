@@ -25,6 +25,7 @@
 // `consistentReads` (a transaction's reads see its snapshot). Native has both;
 // memory has neither. Everything else — results, errors, orders — is the same,
 // which `tableConformanceCases` and the differential test hold both to.
+import { equalBytes } from '@myjs/bytes'
 import { decodeDouble, decodeFloat, decodeInt, compareFloat, encodeKey, type KeyPart } from '@myjs/types'
 import { collation, memcmp } from '@myjs/charsets'
 import type { Range } from './btree.ts'
@@ -130,7 +131,6 @@ function autoValue(def: TableDef, row: Row): bigint | undefined {
   return v === null ? undefined : decodeInt(v, def.columns[at]?.type.unsigned === true)
 }
 
-const bytesEqual = (a: Uint8Array, b: Uint8Array): boolean => a.length === b.length && memcmp(a, b) === 0
 
 // --- native -----------------------------------------------------------------
 
@@ -225,13 +225,13 @@ class NativeTable implements Table {
       if (old === undefined) return undefined
       const full = this.#hidden ? [...row, id] : row
       const next = this.#clustered.keyOf(full)
-      if (bytesEqual(next, id)) this.#clustered.update(full, t)
+      if (equalBytes(next, id)) this.#clustered.update(full, t)
       else {
         this.#clustered.delete(id, t)
         this.#clustered.insert(full, t)
       }
       for (const s of this.#secondaries) {
-        if (bytesEqual(next, id) && bytesEqual(encodeKey(s.columns.map((c) => old[c.field] ?? null), s.columns.map((c) => c.part)), encodeKey(s.columns.map((c) => full[c.field] ?? null), s.columns.map((c) => c.part)))) continue
+        if (equalBytes(next, id) && equalBytes(encodeKey(s.columns.map((c) => old[c.field] ?? null), s.columns.map((c) => c.part)), encodeKey(s.columns.map((c) => full[c.field] ?? null), s.columns.map((c) => c.part)))) continue
         s.delete(old, id, t)
         s.insert(full, next, t)
       }
@@ -617,7 +617,7 @@ class MemoryTable implements Table {
   }
 
   #find(id: RowId): number {
-    return this.#data.rows.findIndex((r) => bytesEqual(r.id, id))
+    return this.#data.rows.findIndex((r) => equalBytes(r.id, id))
   }
 
   #raise(row: Row): void {

@@ -11,10 +11,11 @@
 // that finds the free gap too small but the garbage large enough compacts the
 // heap in place first. Every function here takes the page as bytes, so the page
 // can be verified, fuzzed and dumped with nothing else in hand.
+import { compareBytes } from '@myjs/bytes'
 import { corrupt } from './errors.ts'
 import { FRAME_TRAILER, PAGE_TYPE, initPage, pageType, readU32 } from './page.ts'
 
-export const INDEX_HEADER_END = 60
+const INDEX_HEADER_END = 60
 
 const LEVEL = 24
 const N_CELLS = 26
@@ -136,22 +137,42 @@ export function cell(p: Uint8Array, i: number): { key: Uint8Array; value: Uint8A
 
 /** The key of the cell at slot `i`, without the value's view `cell` builds too. */
 export function keyAt(p: Uint8Array, i: number): Uint8Array {
+  const at = keyStart(p, i)
+  return p.subarray(at, at + keyLength)
+}
+
+/** Where slot `i`'s key starts; its length is left in `keyLength` (one read, no allocation, for `search`). */
+let keyLength = 0
+function keyStart(p: Uint8Array, i: number): number {
   let at = cellOffset(p, i)
   // The key's length, then the value's, each a varint of at most three bytes.
-  let keyLength = 0
+  keyLength = 0
   for (let shift = 0; ; shift += 7) {
     const b = p[at++] as number
     keyLength |= (b & 0x7f) << shift
     if ((b & 0x80) === 0) break
   }
   while (((p[at++] as number) & 0x80) !== 0);
-  return p.subarray(at, at + keyLength)
+  return at
 }
 
-/** An internal page's child at slot `i`. */
+/** `memcmp` of slot `i`'s key against `key`, read in place. */
+function compareKeyAt(p: Uint8Array, i: number, key: Uint8Array): number {
+  const at = keyStart(p, i)
+  const length = keyLength
+  const n = Math.min(length, key.length)
+  for (let j = 0; j < n; j++) {
+    const d = (p[at + j] as number) - (key[j] as number)
+    if (d !== 0) return d
+  }
+  return length - key.length
+}
+
+/** An internal page's child at slot `i`: the cell's value, a big-endian u32. */
 export const childAt = (p: Uint8Array, i: number): number => {
-  const { value } = cell(p, i)
-  return new DataView(value.buffer, value.byteOffset, 4).getUint32(0)
+  const at = keyStart(p, i) + keyLength
+  if (at + 4 > p.length) throw corrupt(-1, `slot ${i}'s child runs past the page`)
+  return readU32(p, at)
 }
 
 export function childValue(child: number): Uint8Array {
@@ -161,14 +182,7 @@ export function childValue(child: number): Uint8Array {
 }
 
 /** `memcmp`, the only order the tree knows (D-42). */
-export function compareBytes(a: Uint8Array, b: Uint8Array): number {
-  const n = Math.min(a.length, b.length)
-  for (let i = 0; i < n; i++) {
-    const d = (a[i] as number) - (b[i] as number)
-    if (d !== 0) return d
-  }
-  return a.length - b.length
-}
+export { compareBytes }
 
 /**
  * Binary search: the first slot whose key is ≥ `key`, and whether it is equal.
@@ -179,10 +193,10 @@ export function search(p: Uint8Array, key: Uint8Array): { index: number; found: 
   let hi = cellCount(p)
   while (lo < hi) {
     const mid = (lo + hi) >>> 1
-    if (compareBytes(keyAt(p, mid), key) < 0) lo = mid + 1
+    if (compareKeyAt(p, mid, key) < 0) lo = mid + 1
     else hi = mid
   }
-  return { index: lo, found: lo < cellCount(p) && compareBytes(keyAt(p, lo), key) === 0 }
+  return { index: lo, found: lo < cellCount(p) && compareKeyAt(p, lo, key) === 0 }
 }
 
 /** Contiguous free bytes between the heap and the slot array. */

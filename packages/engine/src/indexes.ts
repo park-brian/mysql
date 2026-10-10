@@ -28,6 +28,7 @@
 // record. An update writes every off-page field afresh, so a chain belongs to
 // exactly one version and is freed exactly once. A change with no transaction
 // is one of its own: autocommit.
+import { concatBytes, equalBytes } from '@myjs/bytes'
 import { encodeKey, keyPartLength, type KeyPart } from '@myjs/types'
 import { BTree, type Range, type TreeOptions } from './btree.ts'
 import { corrupt, duplicateKey, misuse, snapshotTooOld } from './errors.ts'
@@ -366,7 +367,7 @@ export class SecondaryIndex {
    */
   insert(row: Row, primaryKey: Uint8Array, trx?: Trx): void {
     const secondary = keyOf(row, this.columns)
-    const key = concat(secondary, primaryKey)
+    const key = concatBytes([secondary, primaryKey])
     this.#change(trx, (t) => {
       if (this.unique && this.columns.every((c) => row[c.field] !== null)) {
         for (const [, value] of this.#entries(secondary)) if (!versionOf(value).marked) throw duplicateKey(this.name)
@@ -391,7 +392,7 @@ export class SecondaryIndex {
 
   /** Delete-mark a row's entry. `false` if it has none. */
   delete(row: Row, primaryKey: Uint8Array, trx?: Trx): boolean {
-    const key = concat(keyOf(row, this.columns), primaryKey)
+    const key = concatBytes([keyOf(row, this.columns), primaryKey])
     return this.#change(trx, (t) => {
       const current = this.tree.get(key)
       if (current === undefined || versionOf(current).marked) return false
@@ -440,7 +441,7 @@ export class SecondaryIndex {
           record = this.clustered.recordAt(pk, v.view)
         } else {
           record = this.clustered.recordAt(pk, v.view)
-          if (record !== undefined && !equal(keyOf(this.clustered.rowOf(record), this.columns), secondary)) continue
+          if (record !== undefined && !equalBytes(keyOf(this.clustered.rowOf(record), this.columns), secondary)) continue
         }
         if (record !== undefined) yield [pk.slice(), this.clustered.rowOf(record)]
       }
@@ -473,7 +474,7 @@ export class SecondaryIndex {
         continue
       }
       const record = this.clustered.recordAt(pk, view)
-      if (record !== undefined && equal(keyOf(this.clustered.rowOf(record), this.columns), secondary)) out.push(pk)
+      if (record !== undefined && equalBytes(keyOf(this.clustered.rowOf(record), this.columns), secondary)) out.push(pk)
     }
     return out
   }
@@ -489,15 +490,4 @@ export class SecondaryIndex {
   }
 }
 
-function equal(a: Uint8Array, b: Uint8Array): boolean {
-  if (a.length !== b.length) return false
-  for (let i = 0; i < a.length; i++) if (a[i] !== b[i]) return false
-  return true
-}
 
-function concat(a: Uint8Array, b: Uint8Array): Uint8Array {
-  const out = new Uint8Array(a.length + b.length)
-  out.set(a)
-  out.set(b, a.length)
-  return out
-}

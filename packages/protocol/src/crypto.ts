@@ -10,7 +10,7 @@
 // trace comparison is only possible if the 20-byte scramble can be fixed, so
 // injectability is a protocol requirement rather than a testing convenience.
 
-import { MyjsError } from '@myjs/bytes'
+import { MyjsError, concatBytes } from '@myjs/bytes'
 
 const subtle: SubtleCrypto = globalThis.crypto.subtle
 
@@ -42,24 +42,13 @@ export function fixedRandom(bytes: Uint8Array): RandomSource {
 }
 
 export async function sha1(...parts: Uint8Array[]): Promise<Uint8Array> {
-  return new Uint8Array(await subtle.digest('SHA-1', bridge(concat(parts))))
+  return new Uint8Array(await subtle.digest('SHA-1', bridge(concatBytes(parts))))
 }
 
 export async function sha256(...parts: Uint8Array[]): Promise<Uint8Array> {
-  return new Uint8Array(await subtle.digest('SHA-256', bridge(concat(parts))))
+  return new Uint8Array(await subtle.digest('SHA-256', bridge(concatBytes(parts))))
 }
 
-export function concat(parts: Uint8Array[]): Uint8Array {
-  let total = 0
-  for (const p of parts) total += p.length
-  const out = new Uint8Array(total)
-  let at = 0
-  for (const p of parts) {
-    out.set(p, at)
-    at += p.length
-  }
-  return out
-}
 
 /** Fixed-length XOR, for the native and sha2 scrambles. */
 export function xor(a: Uint8Array, b: Uint8Array): Uint8Array {

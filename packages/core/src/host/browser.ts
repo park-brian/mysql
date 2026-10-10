@@ -17,41 +17,64 @@ export interface WebDuplex {
 export type DriverStream = WebDuplex
 
 export function createStream(connection: ProtocolConnection): WebDuplex {
-  let push: ((chunk: Uint8Array) => void) | null = null
-  let close: (() => void) | null = null
+  let controller: ReadableStreamDefaultController<Uint8Array> | null = null
+  let closed = false
 
-  const readable = new ReadableStream<Uint8Array>({
-    start(controller) {
-      push = (chunk) => controller.enqueue(chunk)
-      close = () => {
-        try {
-          controller.close()
-        } catch {
-          // Already closed; closing twice is not an error worth surfacing.
-        }
-      }
-      connection.start()
-      const initial = connection.take()
-      if (initial.length > 0) controller.enqueue(initial)
+  // Bytes are enqueued as the connection queues them, while the reader has
+  // room; a full queue leaves them in the connection, where a streamed
+  // resultset waits for the reader to pull (M5.40).
+  function flush(): void {
+    if (controller === null || closed) return
+    if ((controller.desiredSize ?? 1) > 0) {
+      const out = connection.take()
+      if (out.length > 0) controller.enqueue(out)
+    }
+    if (connection.closed) close()
+  }
+
+  function close(): void {
+    if (closed) return
+    const out = connection.take()
+    if (out.length > 0) controller?.enqueue(out)
+    closed = true
+    try {
+      controller?.close()
+    } catch {
+      // Already closed; closing twice is not an error worth surfacing.
+    }
+  }
+
+  const readable = new ReadableStream<Uint8Array>(
+    {
+      start(c) {
+        controller = c
+        connection.onOutput(() => queueMicrotask(flush))
+        connection.start()
+        flush()
+      },
+      pull() {
+        flush()
+      },
+      cancel() {
+        closed = true
+        connection.close()
+      },
     },
-    cancel() {
-      connection.close()
-    },
-  })
+    // Counted in bytes, so the reader's room is what a transport's would be.
+    { highWaterMark: 64 * 1024, size: (chunk) => chunk.byteLength },
+  )
 
   const writable = new WritableStream<Uint8Array>({
     async write(chunk) {
       await connection.feed(chunk)
-      const out = connection.take()
-      if (out.length > 0) push?.(out)
-      if (connection.closed) close?.()
+      flush()
     },
     close() {
-      close?.()
+      close()
       connection.close()
     },
     abort() {
-      close?.()
+      close()
       connection.close()
     },
   })
