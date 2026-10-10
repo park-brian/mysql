@@ -357,6 +357,7 @@ function planSelect(run: Run, q: QueryExpression, node: SelectNode): SelectPlan 
   let dataColumns: ((trx: Trx | undefined) => readonly ResultType[]) | undefined
   // What runs through a temporary table, as the metadata rules below decide: EXPLAIN shows the same.
   let deduplicated = false
+  let constantDistinct: 'group' | 'limit' | undefined
   let streamed = false
   const limitCount = q.limit === undefined ? undefined : limitValue(run, q.limit.count, 'LIMIT')
   const offset = q.limit?.offset === undefined ? 0 : limitValue(run, q.limit.offset, 'LIMIT')
@@ -413,7 +414,16 @@ function planSelect(run: Run, q: QueryExpression, node: SelectNode): SelectPlan 
     // …and one that selects that table's unique key is no DISTINCT at all (8.4.11: `SELECT DISTINCT
     // lt.n, p1.name FROM lt LEFT JOIN pa AS p1 ON … AND p1.id <> NULL` reads lt alone, flags kept).
     const keyed = alone && facts.nullTables !== undefined && rest[0]?.def !== undefined && holdsKey(rest[0].def, node.items, rest[0].alias)
-    if (!facts.empty && !semijoinEmpty(run, node.where) && !sortedFirst && !keyed) {
+    // A DISTINCT of constants alone is one row (8.4.11): over NULL-complemented tables a `Group` of what
+    // is read, keeping each column's flags; over const tables' rows the first row into a temporary table.
+    const exprs = items.flatMap((i) => (i.expr === undefined ? [] : [i.expr]))
+    const reads = exprs.some((e) => refersToRow(e, lookup))
+    if (node.distinct === true && source === undefined && !facts.empty && rest.length > 0 && reads && exprs.length === items.length && exprs.every((e) => !refersToRow(e, lookup, fixed))) {
+      // …but with a LIMIT, NULL-complemented columns are deduplicated as any others.
+      const nullOnly = facts.nullTables !== undefined && exprs.every((e) => !refersToRow(e, lookup, facts.nullTables))
+      constantDistinct = !nullOnly ? 'limit' : limitCount === undefined ? 'group' : undefined
+    }
+    if (!facts.empty && !semijoinEmpty(run, node.where) && !sortedFirst && !keyed && constantDistinct !== 'group') {
       if (node.distinct === true) deduplicated = true
       else streamed = true
       const own = items.map((i) => i.compiled.type)
@@ -461,7 +471,7 @@ function planSelect(run: Run, q: QueryExpression, node: SelectNode): SelectPlan 
     // HAVING without grouping filters the rows WHERE kept, before any window sees them.
     ...(having === undefined ? [] : [{ ...filterStage(having), describe: (n: PlanNode) => withSubqueries(run, planNode('Filter', [n]), 'having clause') }]),
     ...(windows === undefined || windows.windows.length === 0 ? [] : [windowStage(windows, windowBase)]),
-    deliverStage(items.map((i) => i.compiled), ordered === undefined ? keys : [], node.distinct === true, { deduplicated, streamed, keep: limitCount === undefined ? undefined : offset + limitCount }),
+    deliverStage(items.map((i) => i.compiled), ordered === undefined ? keys : [], node.distinct === true, { deduplicated, streamed, keep: limitCount === undefined ? undefined : offset + limitCount, ...(constantDistinct === undefined ? {} : { constant: constantDistinct }) }),
     ...(limitCount === undefined && offset === 0 ? [] : [limitStage(offset, limitCount)]),
   ]
   return {
@@ -522,7 +532,7 @@ function windowStage(windows: WindowSink, base: number): Stage {
  * same order, since duplicates are identical. A sort over a join reads its
  * rows streamed into a table first ("Stream results").
  */
-function deliverStage(items: readonly Compiled[], keys: readonly SortKey[], unique: boolean, through: { readonly deduplicated: boolean; readonly streamed: boolean; readonly described?: boolean; readonly keep?: number | undefined }): Stage {
+function deliverStage(items: readonly Compiled[], keys: readonly SortKey[], unique: boolean, through: { readonly deduplicated: boolean; readonly streamed: boolean; readonly described?: boolean; readonly keep?: number | undefined; readonly constant?: 'group' | 'limit' }): Stage {
   // A LIMIT needs only its first rows of the order, unless a DISTINCT between would drop some.
   const keep = unique ? undefined : through.keep
   return {
@@ -533,7 +543,11 @@ function deliverStage(items: readonly Compiled[], keys: readonly SortKey[], uniq
     },
     describe(n) {
       if (through.described === false) return undefined
-      let out = through.deduplicated ? planNode('Table scan on <temporary>', [planNode('Temporary table with deduplication', [n])]) : n
+      // A LIMIT with nothing to sort above the temporary table stops filling it once it holds enough (8.4.11).
+      const sized = through.keep !== undefined && keys.length === 0
+      if (through.constant === 'group') return planNode('Group (no aggregates)', [n])
+      if (through.constant === 'limit') return planNode('Limit: 1 row(s)', [planNode('Table scan on <temporary>', [planNode('Temporary table', [sized ? planNode(`Limit table size: ${through.keep} row(s)`, [n]) : n])])])
+      let out = through.deduplicated ? planNode('Table scan on <temporary>', [planNode('Temporary table with deduplication', [sized ? planNode(`Limit table size: ${through.keep} unique row(s)`, [n]) : n])]) : n
       if (keys.length > 0) out = planNode('Sort', [wrap(through.streamed, 'Stream results', out)])
       return out
     },
@@ -715,7 +729,8 @@ function constRows(run: Run, from: FromPlan | undefined, node: SelectNode): Read
   const facts = optimizerFacts(from, node.where, undefined, compileContext(run, EMPTY_SCOPE, 'where clause'), run.env, (node.options ?? []).includes('STRAIGHT_JOIN'))
   if (facts.empty) return new Set()
   const aliases = new Set(facts.constTables.map((t) => t.alias))
-  if (aliases.size > 0 || facts.nullTables !== undefined) from.constants(aliases, facts.straight, facts.nullTables)
+  const readAhead = facts.readAhead ?? new Set<string>()
+  if (aliases.size > 0 || facts.nullTables !== undefined) from.constants(new Set([...aliases].filter((a) => !readAhead.has(a))), readAhead, facts.nullTables)
   // An outer join's tables whose ON never holds are NULL throughout: constants as well.
   return facts.nullTables === undefined ? aliases : new Set([...aliases, ...facts.nullTables])
 }
@@ -1686,7 +1701,8 @@ function planGrouped(
       // everything else is a field beside them.
       const isKeyExpression = e.kind !== NODE.COLUMN && !aggregateCall && keys.some((k) => k.index === undefined && k.text === deparse(e))
       // A key that reads only NULL-complemented tables is a constant, and no part of the table's key.
-      const keyed = (isKey || isKeyExpression) && refersToRow(e, lookup, fixed)
+      // …and so is one the WHERE holds to a constant over a join (8.4.11: `FROM p, q WHERE p.g = 1 GROUP BY q.t, p.g`).
+      const keyed = (isKey || isKeyExpression) && refersToRow(e, lookup, fixed) && !(source === undefined && e.kind === NODE.COLUMN && pinnedByWhere(node.where, e.parts))
       if (strategy === 'temp') item.compiled = { ...item.compiled, type: { ...t, temporary: keyed ? true : 'pinned', ...(aggregateCall ? { names: { schema: '', table: '', orgTable: '', orgName: '' } } : {}) } }
       else if (stream || (source === undefined && from !== undefined && strategy === 'sort' && t.column !== undefined)) {
         // A sort-based grouping over a join sorts the join's rows streamed

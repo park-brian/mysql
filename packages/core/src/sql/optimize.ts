@@ -35,9 +35,15 @@ export interface ConstTable {
   readonly alias: string
   readonly def: TableDef
   readonly table: Table
-  /** The key's columns and the constants they are held to. */
-  readonly key: readonly { readonly column: ColumnDef; readonly value: Expression }[]
+  /**
+   * The key's columns and the constants they are held to: an expression, or
+   * a column of a const table found before this one (`from`, its place in
+   * `constTables` and its column's), whose row is read first.
+   */
+  readonly key: readonly ConstKeyPart[]
 }
+
+export type ConstKeyPart = { readonly column: ColumnDef } & ({ readonly value: Expression } | { readonly from: { readonly table: number; readonly column: number } })
 
 export interface OptimizerFacts {
   /** Proved empty without reading a row. */
@@ -49,6 +55,13 @@ export interface OptimizerFacts {
    * are still constants (8.4.11: "Constant row from c1" over an id it lacks).
    */
   readonly straight: boolean
+  /**
+   * The const tables read while planning, ahead of the join: all of them,
+   * except under STRAIGHT_JOIN, where only the run of them the statement
+   * begins with is (8.4.11: `STRAIGHT_JOIN … FROM p JOIN q ON p.id = 2` is
+   * "Table scan on q"); the rest are joined as constant rows.
+   */
+  readonly readAhead?: ReadonlySet<string>
   /**
    * An outer join's inner tables whose ON can never hold, read as one
    * NULL-complemented row (8.4.11: `LEFT JOIN p1 ON … AND p1.id BETWEEN NULL
@@ -215,6 +228,27 @@ export function optimizerFacts(from: FromPlan | undefined, where: Expression | u
     return false
   }
   if (pool.some((c) => impossible(c))) return { empty: true, constTables: [], straight }
+  // Under STRAIGHT_JOIN the join order is known as conditions are substituted, and `k1.g IS NULL` is
+  // rewritten onto its class's first column in that order: a NOT NULL one cannot be NULL (8.4.11:
+  // `ch STRAIGHT_JOIN kl ON ch.qty = kl.g AND kl.g IS NULL` is "Impossible WHERE noticed after reading
+  // const tables"; with kl first, or without STRAIGHT_JOIN, it is a hash join).
+  if (straight) {
+    for (const c of pool) {
+      if (c.kind !== NODE.UNARY || c.op !== 'IS NULL') continue
+      const i = slot(c.operand)
+      if (i === undefined) continue
+      const root = find(i)
+      let first = i
+      for (let x = 0; x < i; x++) {
+        if (find(x) === root) {
+          first = x
+          break
+        }
+      }
+      const col = first === i ? undefined : columnAt(first)
+      if (col !== undefined && !col.column.nullable) return { empty: true, constTables: [], straight }
+    }
+  }
 
   // An outer join's ON, judged as a WHERE over its inner tables.
   const nullTables = new Set<string>()
@@ -261,31 +295,79 @@ export function optimizerFacts(from: FromPlan | undefined, where: Expression | u
 
   // Const tables.
   const constTables: ConstTable[] = []
-  for (const t of from.tables) {
-    if (t.def === undefined || t.table === undefined || nullable.has(t.alias)) continue
-    const def = t.def
-    const keys = def.indexes.filter((i) => i.kind === 'primary' || (i.kind === 'unique' && i.parts.every((p) => def.columns.find((c) => c.name === p.column)?.nullable === false)))
-    for (const index of keys) {
-      if (index.parts.some((p) => p.prefix !== undefined)) continue
-      const key = index.parts.map((p) => {
-        const offset = def.columns.findIndex((c) => c.name === p.column)
-        const value = pinned.get(find(t.offset + offset)) ?? nullPinned.get(find(t.offset + offset))
-        return value === undefined ? undefined : { column: def.columns[offset] as ColumnDef, value }
-      })
-      if (key.every((k) => k !== undefined)) {
-        constTables.push({ alias: t.alias, def, table: t.table, key: key as { column: ColumnDef; value: Expression }[] })
-        break
+  // Under STRAIGHT_JOIN a table's access is the first key whose parts are all bound, by constants or by
+  // the tables before it: only one bound by constants alone makes it const (8.4.11: `q STRAIGHT_JOIN p
+  // ON q.n = p.id AND p.name = 'x y'` looks p up by its PRIMARY KEY; `… ON q.t = p.name AND p.id = 2` is
+  // a constant row).
+  const order = new Map(from.tables.map((t, n) => [t.alias, n]))
+  const boundByEarlier = (index: number, n: number): boolean =>
+    pool.some((c) => {
+      if (c.kind !== NODE.BINARY || c.op !== '=') return false
+      const other = slot(c.left) === index ? c.right : slot(c.right) === index ? c.left : undefined
+      const slots = other === undefined ? [] : columnSlots(other, slot)
+      return slots.length > 0 && slots.every((i) => (order.get(aliasOf(i) ?? '') ?? n) < n)
+    })
+  // A const table's columns are constants once its row is read, so a table whose key they hold is
+  // const too, to a fixed point (8.4.11: `q JOIN p ON q.n = p.id AND p.name = 'x y'` reads p by name,
+  // then q by p.id: "Rows fetched before execution").
+  const fromConst = new Map<number, { table: number; column: number }>()
+  const settled = new Set<string>()
+  for (let found = true; found; ) {
+    found = false
+    from.tables.forEach((t, n) => {
+      if (t.def === undefined || t.table === undefined || nullable.has(t.alias) || settled.has(t.alias)) return
+      const def = t.def
+      const keys = def.indexes.filter((i) => i.kind === 'primary' || (i.kind === 'unique' && i.parts.every((p) => def.columns.find((c) => c.name === p.column)?.nullable === false)))
+      for (const index of keys) {
+        if (index.parts.some((p) => p.prefix !== undefined)) continue
+        const offsets = index.parts.map((p) => def.columns.findIndex((c) => c.name === p.column))
+        const key = offsets.map((offset): ConstKeyPart | undefined => {
+          const root = find(t.offset + offset)
+          const column = def.columns[offset] as ColumnDef
+          const value = pinned.get(root) ?? nullPinned.get(root)
+          if (value !== undefined) return { column, value }
+          const other = fromConst.get(root)
+          return other === undefined ? undefined : { column, from: other }
+        })
+        if (key.every((k) => k !== undefined)) {
+          const at = constTables.length
+          constTables.push({ alias: t.alias, def, table: t.table, key: key as ConstKeyPart[] })
+          settled.add(t.alias)
+          found = true
+          for (let i = 0; i < def.columns.length; i++) {
+            const root = find(t.offset + i)
+            if (!pinned.has(root) && !fromConst.has(root)) fromConst.set(root, { table: at, column: i })
+          }
+          return
+        }
+        if (straight && offsets.every((offset, k) => key[k] !== undefined || boundByEarlier(t.offset + offset, n))) {
+          settled.add(t.alias)
+          return
+        }
       }
-    }
+    })
   }
-  return { empty: false, constTables, straight, ...(nullTables.size > 0 ? { nullTables } : {}) }
+  const readAhead = new Set<string>()
+  for (const t of from.tables) {
+    if (!constTables.some((c) => c.alias === t.alias)) {
+      if (straight) break
+      continue
+    }
+    readAhead.add(t.alias)
+  }
+  return { empty: false, constTables, straight, ...(readAhead.size > 0 ? { readAhead } : {}), ...(nullTables.size > 0 ? { nullTables } : {}) }
 }
 
 /** Whether a const table has its row: read while planning, as MySQL reads it. */
 export function constTablesHaveRows(facts: OptimizerFacts, ctx: CompileContext, env: Env, trx: Trx | undefined): boolean {
-  if (facts.straight) return true
+  const rows: (readonly (Value | undefined)[] | undefined)[] = []
   for (const t of facts.constTables) {
-    const values: Value[] = t.key.map((k) => compile(k.value, ctx).eval([], env))
+    // A constant row of a STRAIGHT_JOIN is read where the join reaches it: a missing one proves nothing here.
+    if (facts.readAhead?.has(t.alias) !== true || t.key.some((k) => 'from' in k && rows[k.from.table] === undefined)) {
+      rows.push(undefined)
+      continue
+    }
+    const values: Value[] = t.key.map((k) => ('value' in k ? compile(k.value, ctx).eval([], env) : (rows[k.from.table]?.[k.from.column] ?? null)))
     if (values.some((v) => v === null)) return false
     const index = t.def.indexes.find((i) => i.parts.length === t.key.length && i.parts.every((p, n) => p.column === t.key[n]?.column.name))
     const access = index !== undefined && t.key.length === 1 ? pointAccess(index, (t.key[0] as { column: ColumnDef }).column, values[0] as Value) : undefined
@@ -294,6 +376,7 @@ export function constTablesHaveRows(facts: OptimizerFacts, ctx: CompileContext, 
       // A full scan when the bound does not convert exactly: match as the comparison would.
       if (t.key.every((k, n) => compareValues(row[t.def.columns.indexOf(k.column)] ?? null, values[n] ?? null) === 0)) {
         found = true
+        rows.push(row)
         break
       }
     }
@@ -308,6 +391,10 @@ export function nullRejected(c: Expression, slot: (e: Expression) => number | un
   if (tableOf !== undefined && c.kind === NODE.BINARY && (c.op === 'OR' || c.op === '||')) {
     const right = new Set(nullRejected(c.right, slot, tableOf).map(tableOf))
     return nullRejected(c.left, slot, tableOf).filter((i) => right.has(tableOf(i)))
+  }
+  if (c.kind === NODE.UNARY && c.op === 'IS NOT NULL') {
+    const i = slot(c.operand)
+    return i === undefined ? [] : [i]
   }
   if (c.kind === NODE.BINARY && ['=', '<', '<=', '>', '>=', '<>', '!=', 'BETWEEN', 'IN', 'LIKE', 'NOT IN', 'NOT BETWEEN', 'NOT LIKE'].includes(c.op)) {
     const out: number[] = []

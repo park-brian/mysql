@@ -160,8 +160,8 @@ export interface FromPlan {
   sortedBy(alias: string | undefined, limit: number): void
   /** SELECT DISTINCT, and the tables its select list reads: the last table in join order it does not read is joined for one match a row. */
   distinctReads(aliases: ReadonlySet<string>): void
-  /** The const tables of a STRAIGHT_JOIN, each joined as a constant row rather than read ahead (M5.48). Given before the plan is first asked for. */
-  constants(aliases: ReadonlySet<string>, straight?: boolean, nullTables?: ReadonlySet<string>): void
+  /** The const tables: those joined as constant rows (a STRAIGHT_JOIN's after its first non-const table), those read ahead and absent from the plan, and the tables an impossible ON NULL-complements (M5.48). Given before the plan is first asked for. */
+  constants(rows: ReadonlySet<string>, readAhead: ReadonlySet<string>, nullTables?: ReadonlySet<string>): void
   /** Read the one base table whole in an index's order, for an ORDER BY or a grouping it gives; `force` drops a range on another index for it, and `reverse` reads it descending. */
   readInOrder(index: string, force: boolean, reverse?: boolean, alias?: string): void
   /** The FROM as 8.4.11's iterators (M5.44): the tree `rows` runs, as EXPLAIN shows it. */
@@ -572,9 +572,9 @@ export function planFrom(refs: readonly TableReference[], ctx: FromContext, wher
     distinctReads(aliases) {
       settings.distinctSelect = aliases
     },
-    constants(aliases, straight = true, nullTables) {
-      if (straight) settings.constants = aliases
-      else settings.hidden = aliases
+    constants(rows, readAhead, nullTables) {
+      settings.constants = rows
+      settings.hidden = readAhead
       if (nullTables !== undefined) settings.nullTables = nullTables
     },
     sortedBy(alias, limit) {
@@ -794,9 +794,9 @@ function idsAt(offset: number, id: RowId): (RowId | undefined)[] {
 /** How the FROM's base tables are read: what the WHERE is, what covers them, and an order asked for. */
 interface LeafSettings {
   where?: Expression | undefined
-  /** A STRAIGHT_JOIN's const tables, joined as constant rows (`constants`). */
+  /** A STRAIGHT_JOIN's const tables past its first non-const one, joined as constant rows (`constants`). */
   constants?: ReadonlySet<string>
-  /** Any other join's const tables, read while planning and absent from the plan (`constants`). */
+  /** The const tables read while planning, absent from the plan (`constants`). */
   hidden?: ReadonlySet<string>
   /** Outer joins' inner tables whose ON can never hold (`OptimizerFacts.nullTables`). */
   nullTables?: ReadonlySet<string>
