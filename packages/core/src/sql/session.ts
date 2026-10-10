@@ -19,7 +19,7 @@
 // of its own, which is what `Catalog` already does (D-59).
 import type { Isolation, Store, StoreFigures, Trx, TrxStats } from '@myjs/engine'
 import { sqlError, type Session } from '@myjs/protocol'
-import { intValue, stringValue, type Condition, type Value } from '@myjs/types'
+import { intValue, stringValue, toText, type Condition, type Value } from '@myjs/types'
 import type { SessionValues } from './compile.ts'
 import type { ServerState } from './admin.ts'
 
@@ -108,6 +108,16 @@ export class SqlSession implements SessionValues {
   engine(): { readonly figures: StoreFigures & TrxStats; readonly started: number } | undefined {
     const figures = this.#server.engine?.()
     return figures === undefined ? undefined : { figures, started: this.#server.started }
+  }
+
+  /**
+   * The statement's clock: what `SET TIMESTAMP` pinned, which NOW(),
+   * CURDATE() and a TIME's date read until it is set to 0 or DEFAULT, or the
+   * time now (SYSDATE() reads its own).
+   */
+  clock(): Date {
+    const pinned = this.ownVariables.get('timestamp')
+    return pinned === undefined || pinned === null ? new Date() : new Date(Number(toText(pinned)) * 1000)
   }
 
   systemVariableNames(): string[] {

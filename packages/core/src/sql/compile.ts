@@ -279,7 +279,7 @@ export function warnedText(v: Exclude<Value, null>): string {
 }
 
 /** An environment for evaluating a constant while compiling: no row, the statement's parameters. */
-export const constantEnv = (ctx: CompileContext): Env => ({ params: ctx.params ?? [], now: new Date(), session: ctx.session, state: ctx.state })
+export const constantEnv = (ctx: CompileContext): Env => ({ params: ctx.params ?? [], now: ctx.state.clock?.() ?? new Date(), session: ctx.session, state: ctx.state })
 
 /**
  * An argument as `Item::print` shows it in a message that quotes one —
@@ -429,6 +429,8 @@ export interface SessionValues {
   rowCount: bigint
   /** A system variable's value, as `@@name` reads it; `undefined` for one that does not exist. */
   systemVariable(name: string, scope: 'GLOBAL' | 'SESSION' | undefined, session: Session): Value | undefined
+  /** The statement's clock: the session's `SET TIMESTAMP`, or the time now. */
+  clock?(): Date
 }
 
 export interface Compiled {
@@ -496,6 +498,8 @@ export interface CompileContext {
   readonly groupKeys?: GroupKeys
   /** Plan a subquery whose enclosing scope is `outer` (M5.1); absent where none is allowed. */
   readonly subquery?: (q: QueryExpression, outer: Scope) => SubqueryPlan
+  /** A subquery compiled as `[NOT] IN`, `= ALL` and their like: how, for the plan EXPLAIN prints of it (M5.47). */
+  readonly quantified?: (q: QueryExpression, how: QuantifiedSubquery) => void
   /** A base table by name, for what reads one whole: MATCH's statistics (M5.26). */
   readonly table?: (schema: string, name: string) => Table | undefined
   /** The statement's diagnostics area, for what resolving a constant warns (1292 at a constant position, say). */
@@ -2277,6 +2281,15 @@ function cast(e: CastNode, ctx: CompileContext): Compiled {
 
 // --- subqueries (M5.1) --------------------------------------------------------------
 
+/** A `[NOT] IN`, `= ALL` or `<> ANY` subquery as compiled: its comparison, and what EXPLAIN's choice of strategy turns on. */
+export interface QuantifiedSubquery {
+  readonly op: string
+  readonly quantifier: 'ANY' | 'ALL'
+  /** Whether the expression it is compared with can be NULL. */
+  readonly outerNullable: boolean
+  readonly correlated: boolean
+}
+
 /** A subquery's plan, with the enclosing scope its correlated names resolve in. */
 function planned(e: SubqueryNode, ctx: CompileContext): SubqueryPlan {
   if (ctx.subquery === undefined) throw sqlError('ER_NOT_SUPPORTED_YET', messages.notSupported('Subqueries here'))
@@ -2344,6 +2357,7 @@ function quantified(op: string, quantifier: 'ANY' | 'ALL', left: Expression, rig
   const as = lefts.map((l) => compile(l, ctx))
   const plan = planned(right, ctx)
   if (plan.columns.length !== as.length) throw sqlError('ER_OPERAND_COLUMNS', `Operand should contain ${as.length} column(s)`)
+  if (as.length === 1) ctx.quantified?.(right.query, { op, quantifier, outerNullable: (as[0] as Compiled).type.nullable, correlated: plan.correlated })
   const test = COMPARISONS[op] as (c: number) => boolean
   const compareRow = (vs: readonly Value[], r: readonly Value[]): number | null => {
     if (vs.length === 1) return compareValues(vs[0] ?? null, r[0] ?? null)

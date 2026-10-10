@@ -29,6 +29,8 @@ const PASSWORD = arg('password', 'root')
 const OUT_DIR = arg('out', new URL('../test/format/fixtures/', import.meta.url).pathname)
 const CASES = Number(arg('cases', '300'))
 const SEED = Number(arg('seed', '20261011'))
+/** The clock the capture runs at: 2026-10-09 12:00:00 UTC, the day the committed corpus was captured. */
+const TIMESTAMP = Number(arg('timestamp', '1791547200'))
 export { CONNECTION, SQL_MODE }
 
 /** xorshift32, seeded (`tools/lib/cli.mjs`), so a seed reproduces the corpus. */
@@ -134,6 +136,9 @@ export function generateCase() {
 if (isMain(import.meta.url)) {
   const conn = await mysql.createConnection({ host: HOST, port: PORT, user: USER, password: PASSWORD, ...CONNECTION })
   await conn.query(`SET sql_mode = '${SQL_MODE}'`)
+  // A TIME compared with a date takes today's date, so the clock is pinned and
+  // recorded, and a replay on another day sets the same one.
+  await conn.query(`SET TIMESTAMP = ${TIMESTAMP}`)
   const [[{ v: version }]] = await conn.query('SELECT VERSION() AS v')
   const cases = []
   const seen = new Set()
@@ -163,6 +168,7 @@ if (isMain(import.meta.url)) {
     capturedAgainst: `mysql-server ${version}`,
     seed: SEED,
     sqlMode: SQL_MODE,
+    timestamp: TIMESTAMP,
   }
   const lines = Object.entries(head).map(([k, v]) => `  ${JSON.stringify(k)}: ${JSON.stringify(v)},`)
   writeFileSync(file, `{\n${lines.join('\n')}\n  "cases": [\n${cases.map((c) => `    ${JSON.stringify(c)}`).join(',\n')}\n  ]\n}\n`)

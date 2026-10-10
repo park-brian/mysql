@@ -261,7 +261,9 @@ export class ServerState {
       if (scope !== 'PERSIST_ONLY') this.vars.set(name, v === null ? null : v.kind === 'int' || v.kind === 'double' ? v.v : toText(v))
       return undefined
     }
-    own.set(name, v)
+    // `SET TIMESTAMP = 0` or DEFAULT gives the session the time now again (8.4.11).
+    if (name === 'timestamp' && (v === null || Number(toText(v)) === 0)) own.delete(name)
+    else own.set(name, v)
     return undefined
   }
 

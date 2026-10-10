@@ -13,7 +13,7 @@ import type { ColumnDef, Table, TableDef, ViewDef } from '@myjs/engine'
 import { NODE, QUERY, REF, TOKEN, deparse, lex, parseStatement, type Expression, type OrderItem, type QueryBody, type QueryExpression, type SelectNode, type SetOperationNode, type TableName, type Token } from '@myjs/parser'
 import { messages, sqlError, type ColumnDefinition, type ResultSet, type RowValue } from '@myjs/protocol'
 import { intValue, toInteger, truth, withoutHex, type Value } from '@myjs/types'
-import { compile, EMPTY_SCOPE, type CompileContext, type Compiled, type Env, type GroupKeys, type Scope, type SubqueryPlan } from './compile.ts'
+import { compile, EMPTY_SCOPE, type CompileContext, type Compiled, type Env, type GroupKeys, type QuantifiedSubquery, type Scope, type SubqueryPlan } from './compile.ts'
 import { AggregateSink, chooseStrategy, containsAggregate, groupRows, isAggregate } from './group.ts'
 import { WindowSink, applyWindows, containsWindow } from './window.ts'
 import { columnDefinition, intType, type ResultType } from './meta.ts'
@@ -63,6 +63,10 @@ export interface Run {
   readonly views?: readonly string[]
   /** The subqueries the SELECT being planned compiles, each with the clause it is in: what its EXPLAIN prints beside it. */
   readonly subqueries?: { readonly clause: string; readonly query: QueryExpression; readonly plan: SelectPlan }[]
+  /** Those subqueries compiled as `[NOT] IN`, `= ALL` and their like, and how (M5.47). */
+  readonly quantified?: Map<QueryExpression, QuantifiedSubquery>
+  /** The SELECT's WHERE and HAVING, where a subquery's predicate may stand at the top, for EXPLAIN (M5.47). */
+  readonly clauses?: Readonly<Record<string, Expression | undefined>>
 }
 
 export function compileContext(run: Run, scope: Scope, clause: string): CompileContext {
@@ -79,6 +83,7 @@ export function compileContext(run: Run, scope: Scope, clause: string): CompileC
       run.subqueries?.push({ clause, query: q, plan: plan.plan })
       return plan
     },
+    quantified: (q, how) => void run.quantified?.set(q, how),
     table: (schema, name) => run.catalog?.table(schema, name),
     ...(run.env.conditions === undefined ? {} : { conditions: run.env.conditions }),
     sql: run.sql,
@@ -282,7 +287,7 @@ export function planQuery(run: Run, q: QueryExpression): SelectPlan {
   const body = q.body
   switch (body.kind) {
     case QUERY.SELECT:
-      return planSelect({ ...r, subqueries: [] }, q, body)
+      return planSelect({ ...r, subqueries: [], quantified: new Map(), clauses: { 'where clause': body.where, 'having clause': body.having } }, q, body)
     case QUERY.QUERY:
       if (q.orderBy === undefined && q.limit === undefined) return planQuery(r, body)
       return orderedResult(r, q, planQuery(r, body))
@@ -560,8 +565,90 @@ function subqueryNodes(run: Run, clause: string): PlanNode[] {
     if (s.clause !== clause || seen.has(s.query)) continue
     seen.add(s.query)
     const roots = s.plan.explain?.()
-    out.push(planNode(`Select #${selectNumber(run, s.query)}`, roots === undefined ? [] : [...roots]))
+    const how = run.quantified?.get(s.query)
+    const rewritten = how === undefined || how.correlated ? undefined : quantifiedPlan(run, s.query, how, topLevel(run.clauses?.[clause], s.query), roots)
+    out.push(planNode(`Select #${selectNumber(run, s.query)}`, rewritten !== undefined ? [rewritten] : roots === undefined ? [] : [...roots]))
   }
+  return out
+}
+
+/**
+ * Whether the predicate comparing with `query` stands at the top of a WHERE
+ * or HAVING, under nothing but AND and OR: there a NULL is as good as false,
+ * so an IN need not tell them apart.
+ */
+function topLevel(root: Expression | undefined, query: QueryExpression): boolean {
+  if (root === undefined) return false
+  if (root.kind === NODE.BINARY && ['AND', 'OR', '&&', '||'].includes(root.op.toUpperCase())) return topLevel(root.left, query) || topLevel(root.right, query)
+  return root.kind === NODE.BINARY && root.right.kind === NODE.SUBQUERY && root.right.query === query
+}
+
+/**
+ * How 8.4.11 runs an uncorrelated `[NOT] IN`, `= ALL` or `<> ANY` subquery it
+ * does not join (M5.47), as its plan shows; `undefined` for any other shape.
+ * The subquery is one column of one base table. An equality over an indexed
+ * column becomes EXISTS: a `Limit` of one over a lookup by the outer value,
+ * with a Filter for its WHERE. Where a NULL is not as good as false — NOT IN,
+ * outside the top of a WHERE — a nullable inner column adds two Filters (its
+ * `<is_not_null_test>`, then the equality or its NULL), and a nullable outer
+ * value one, over `Alternative plans for IN subquery`: the lookup, or a scan
+ * when the outer value is NULL. An equality over a column no index leads is
+ * materialized instead, deduplicated, and looked up by its own key. `= ALL`
+ * and `<> ANY` are EXISTS over a scan, the comparison its Filter. Each shape,
+ * and each count of Filters, as 8.4.11 printed it for every combination of
+ * nullable and indexed (M5.47's probes).
+ */
+function quantifiedPlan(run: Run, query: QueryExpression, how: QuantifiedSubquery, top: boolean, roots: readonly PlanNode[] | undefined): PlanNode | undefined {
+  const body = query.body
+  if (body.kind !== QUERY.SELECT || query.with !== undefined || query.orderBy !== undefined || body.groupBy !== undefined || body.having !== undefined || body.windows !== undefined) return undefined
+  const ref = body.from?.length === 1 ? body.from[0] : undefined
+  const item = body.items.length === 1 ? body.items[0]?.expr : undefined
+  if (ref?.kind !== REF.TABLE || item?.kind !== NODE.COLUMN || containsAggregate(item)) return undefined
+  let def: TableDef | undefined
+  try {
+    def = run.catalog?.definition(ref.table.schema ?? run.env.session.database ?? '', ref.table.name)
+  } catch (e) {
+    expectTyped(e)
+  }
+  const column = def?.columns.find((c) => c.name.toLowerCase() === (item.parts[item.parts.length - 1] as string).toLowerCase())
+  if (def === undefined || column === undefined) return undefined
+  const alias = ref.alias ?? ref.table.name
+  const equality = (how.op === '=' && how.quantifier === 'ANY') || (how.op === '<>' && how.quantifier === 'ALL')
+  if (!equality && !(how.op === '=' && how.quantifier === 'ALL') && !(how.op === '<>' && how.quantifier === 'ANY')) return undefined
+  const nulls = !top || !equality || how.op === '<>'
+  const read = new Set([column.name, ...columnNames(body.where)].map((n) => n.toLowerCase()))
+  const pk = def.indexes.find((i) => i.kind === 'primary')
+  const covers = (parts: readonly { column: string }[]): boolean => [...read].every((n) => [...parts, ...(pk?.parts ?? [])].some((p) => p.column.toLowerCase() === n))
+  const index = def.indexes.find((i) => i.invisible !== true && i.parts[0]?.column === column.name && i.parts[0].prefix === undefined)
+  const where = body.where !== undefined ? 1 : 0
+  let access: PlanNode
+  let filters: number
+  if (equality) {
+    if (index === undefined) {
+      const materialized = planNode('Materialize with deduplication', roots === undefined ? [] : [...roots])
+      return planNode('Filter', [planNode('Limit', [planNode('Index lookup on <materialized_subquery> using <auto_distinct_key>', [materialized])])])
+    }
+    const unique = index.parts.length === 1 && (index.kind === 'primary' || index.kind === 'unique')
+    const covering = covers(index.parts)
+    access = planNode(`${unique ? 'Single-row ' : ''}${covering ? (unique ? 'covering index' : 'Covering index') : unique ? 'index' : 'Index'} lookup on ${alias} using ${index.name}`)
+    if (nulls && how.outerNullable) access = planNode('Alternative plans for IN subquery', [access, planNode(`Table scan on ${alias}`)])
+    filters = Math.max(nulls ? (column.nullable ? 2 : how.outerNullable ? 1 : 0) : 0, where)
+  } else {
+    const cover = def.indexes.find((i) => i.invisible !== true && covers(i.parts) && i.kind !== 'primary')
+    access = planNode(cover === undefined ? `Table scan on ${alias}` : `Covering index scan on ${alias} using ${cover.name}`)
+    filters = column.nullable ? 2 : 1
+  }
+  for (let i = 0; i < filters; i++) access = planNode('Filter', [access])
+  return planNode('Limit', [access])
+}
+
+/** Every column a clause names, by its last part. */
+function columnNames(e: unknown, out: string[] = []): string[] {
+  if (e === null || typeof e !== 'object') return out
+  const n = e as { kind?: string; parts?: readonly string[] }
+  if (n.kind === NODE.SUBQUERY) return out
+  if (n.kind === NODE.COLUMN && n.parts !== undefined) out.push(n.parts[n.parts.length - 1] as string)
+  for (const v of Object.values(e as Record<string, unknown>)) if (typeof v === 'object') columnNames(v, out)
   return out
 }
 

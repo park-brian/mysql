@@ -702,7 +702,7 @@ export class SqlExecutor implements Executor {
 
   #run(session: Session, sql: string, params: readonly Value[], known: readonly Value[] | undefined, protocol: WireProtocol, conditions: Condition[] = []): Run {
     const state = this.#state(session)
-    const env: Env = { params, now: new Date(), session, state, memo: new Map(), conditions }
+    const env: Env = { params, now: state.clock(), session, state, memo: new Map(), conditions }
     return { catalog: this.#catalogOf(session), state, env, sql, protocol, serverVersion: this.server.serverVersion, ...(known === undefined ? {} : { params: known }) }
   }
 

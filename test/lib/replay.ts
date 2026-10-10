@@ -42,6 +42,8 @@ interface Outcome extends Answer {
 export interface Fixture {
   readonly capturedAgainst: string
   readonly sqlMode: string
+  /** The clock the corpus was captured at (`SET TIMESTAMP`), where its answers depend on the date. */
+  readonly timestamp?: number
   readonly cases: readonly (readonly Outcome[])[]
 }
 
@@ -104,6 +106,7 @@ export async function replay(fixture: Fixture, connection: Record<string, unknow
   const db = await MySQL.open(':memory:')
   const conn = await mysql.createConnection({ stream: db.createStream(), user: 'root', password: '', ...connection })
   await conn.query(`SET sql_mode = '${fixture.sqlMode}'`)
+  if (fixture.timestamp !== undefined) await conn.query(`SET TIMESTAMP = ${fixture.timestamp}`)
   const tally: Tally = { statements: 0, agreed: 0, refused: 0, orderedByStatement: 0, orderedByPlan: 0, plansAgreed: 0, plansExplained: 0, unordered: 0, unorderedInOrder: 0, unmodelled: 0, mismatches: [], warningsCompared: 0, warningMismatches: [] }
   try {
     for (const expected of fixture.cases) {
