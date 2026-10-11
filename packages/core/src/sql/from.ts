@@ -144,6 +144,8 @@ export interface FromPlan {
   sortsFirst(aliases: ReadonlySet<string>): boolean
   /** Supply grouping order on the first base table of an inner lookup join, by index or sort. */
   orderGroupsFirst(keys: readonly { readonly expr: Expression; readonly compiled: Compiled }[]): 'index' | 'sort' | undefined
+  /** Sort the first table before its indexed joins expand or discard rows. */
+  sortFirst(alias: string, keys: readonly SortKey[]): void
   /** Choose the bounded integer semijoin's ordered deduplication or outer-first indexed loop. */
   integerSemijoin(alias: string, index: IndexDef, key: Compiled, where: Expression | undefined, looseScan: boolean, firstMatch: boolean): 'loose' | 'loop' | undefined
   /**
@@ -518,7 +520,9 @@ export function planFrom(refs: readonly TableReference[], ctx: FromContext, wher
     return out
   }
   let physical: Op | undefined
-  const physicalTree = (): Op | undefined => (physical ??= physicalOf([]))
+  let conditions: readonly Placed[] = []
+  // Compile filters eagerly, but construct iterators after access/order settings are final.
+  const physicalTree = (): Op | undefined => (physical ??= physicalOf(conditions))
 
   return {
     scope,
@@ -572,9 +576,12 @@ export function planFrom(refs: readonly TableReference[], ctx: FromContext, wher
       // A non-covering secondary scan competes with a scan and sort by cost; leave that choice open.
       const clustered = candidate !== undefined && (node.table.def.clustered === candidate || node.table.def.indexes.some((i) => i.name === candidate && i.kind === 'primary'))
       const index = clustered || settings.covering.get(node.table.alias) === candidate ? candidate : undefined
-      if (index === undefined) settings.groupSort = { alias: node.table.alias, keys: keys.map((k) => ({ expr: k.compiled, desc: false })) }
+      if (index === undefined) this.sortFirst(node.table.alias, keys.map((k) => ({ expr: k.compiled, desc: false })))
       else this.readInOrder(index, true, false, node.table.alias)
       return index === undefined ? 'sort' : 'index'
+    },
+    sortFirst(alias, keys) {
+      settings.firstSort = { alias, keys }
     },
     integerSemijoin(alias, index, key, where, looseScan, firstMatch) {
       if (looseScan) settings.loose = { alias, index, key }
@@ -625,12 +632,12 @@ export function planFrom(refs: readonly TableReference[], ctx: FromContext, wher
         const l = notNull(e.left)
         return l !== undefined ? neverEqual(l, e.right) : neverEqual(notNull(e.right), e.left)
       }
-      const conditions = splitAnd(where).filter((e) => !alwaysTrue(e)).map((e): Placed => {
+      conditions = splitAnd(where).filter((e) => !alwaysTrue(e)).map((e): Placed => {
         const compiled = compile(e)
         const semi = semijoin?.(e)
         return { e, aliases: aliasesOf(e, scope), compiled, ...(semi === undefined ? {} : { semijoin: semi }) }
       })
-      physical = physicalOf(conditions)
+      physical = undefined
     },
     usesLookup(alias) {
       return joinPlan()?.lookups.has(alias) === true
@@ -896,8 +903,8 @@ interface LeafSettings {
   /** The one table read whole in this index's order (`readInOrder`). */
   /** Read in an index's order: the one table's, or `alias`'s in a join its const tables reduce to it. */
   ordered?: { readonly index: string; readonly force: boolean; readonly reverse: boolean; readonly alias?: string }
-  /** Grouping order supplied before an inner lookup join expands the first table's rows. */
-  groupSort?: { readonly alias: string; readonly keys: readonly SortKey[] }
+  /** Order supplied before an indexed join expands or discards first-table rows. */
+  firstSort?: { readonly alias: string; readonly keys: readonly SortKey[] }
   /** LooseScan removes adjacent equal integer keys after the inner filter. */
   loose?: { readonly alias: string; readonly index: IndexDef; readonly key: Compiled }
   firstMatch?: string
@@ -1149,9 +1156,9 @@ function toOp(node: Node, conditions: readonly Placed[], scope: TableScope, sett
         describe: (env) => planNode(`Remove duplicates from input sorted on ${loose.index.parts[0]?.column}`, [input.describe(env)]),
       }
     }
-    if (settings.groupSort?.alias === node.table.alias) {
+    if (settings.firstSort?.alias === node.table.alias) {
       const input = op
-      const keys = settings.groupSort.keys
+      const keys = settings.firstSort.keys
       op = {
         rows: (run, context) => sortRows(input.rows(run, context), keys, run.env),
         describe: (env) => planNode('Sort', [input.describe(env)]),
@@ -2087,10 +2094,10 @@ function coveringIndex(def: TableDef, read: ReadonlySet<string> | 'all'): string
   let best: { name: string; bytes: number } | undefined
   for (const index of def.indexes) {
     if (!covers(def, index, read)) continue
-    const bytes = index.parts.reduce((n, p) => n + keyBytes(def.columns.find((c) => c.name === p.column) as ColumnDef), 0)
+    const bytes = indexBytes(def, index)
     if (best === undefined || bytes < best.bytes) best = { name: index.name, bytes }
   }
   const clustered = clusteredIndex(def)
-  if (best === undefined && read !== 'all' && clustered !== undefined && clustered.invisible !== true && [...read].every((c) => clustered.parts.some((p) => p.column.toLowerCase() === c))) return clustered.name
+  if (best === undefined && clustered !== undefined && holdsRead(def, clustered, read)) return clustered.name
   return best?.name
 }

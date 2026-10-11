@@ -481,15 +481,18 @@ function planSelect(run: Run, q: QueryExpression, node: SelectNode): SelectPlan 
   // An ORDER BY the index the table is read by already gives: read in its order, and nothing to sort.
   const read = source !== undefined && from !== undefined ? from.access(run.env) : undefined
   // Windows and hash antijoins still sort their delivered rows, even over an ordered index.
-  const ordered = source !== undefined && read !== undefined && !deduplicated && !windowed && (anti === undefined || anti.lookup) && match === undefined && keys.length > 0 && read.ranges === undefined ? orderingIndex(source.def, source.alias, q.orderBy ?? [], items, lookup, read.index) : undefined
-  if (ordered !== undefined) from?.readInOrder(ordered, false, (q.orderBy ?? [])[0]?.desc === true)
+  const outerLoop = semi?.loose === false && source !== undefined && sortBy === source.alias
+  const ordered = source !== undefined && read !== undefined && !deduplicated && !windowed && (anti === undefined || anti.lookup) && match === undefined && keys.length > 0 && read.ranges === undefined ? orderingIndex(source.def, source.alias, q.orderBy ?? [], items, lookup, read.index, outerLoop && optimizerEnabled(run, 'prefer_ordering_index')) : undefined
+  if (ordered !== undefined) from?.readInOrder(ordered, false, (q.orderBy ?? [])[0]?.desc === true, source?.alias)
+  const sortedFirst = outerLoop && ordered === undefined && keys.length > 0
+  if (sortedFirst && source !== undefined) from?.sortFirst(source.alias, keys)
 
   const stages: Stage[] = [
     ...(where === undefined ? [] : [filterStage(where)]),
     // HAVING without grouping filters the rows WHERE kept, before any window sees them.
     ...(having === undefined ? [] : [{ ...filterStage(having), describe: (n: PlanNode) => withSubqueries(run, planNode('Filter', [n]), 'having clause') }]),
     ...(windows === undefined || windows.windows.length === 0 ? [] : [windowStage(windows, windowBase)]),
-    deliverStage(items.map((i) => i.compiled), ordered === undefined ? keys : [], node.distinct === true, { deduplicated, streamed, keep: limitCount === undefined ? undefined : offset + limitCount, ...(constantDistinct === undefined ? {} : { constant: constantDistinct }) }),
+    deliverStage(items.map((i) => i.compiled), ordered === undefined && !sortedFirst ? keys : [], node.distinct === true, { deduplicated, streamed, keep: limitCount === undefined ? undefined : offset + limitCount, ...(constantDistinct === undefined ? {} : { constant: constantDistinct }) }),
     ...(limitCount === undefined && offset === 0 ? [] : [limitStage(offset, limitCount)]),
   ]
   return {
@@ -747,7 +750,7 @@ function costedIntegerSemijoin(run: Run, q: QueryExpression, node: SelectNode, f
   const outerAlias = outer.alias ?? outer.table.name
   const innerAlias = inner.alias ?? inner.table.name
   if (outerAlias === innerAlias) return undefined
-  const column = (e: Expression, alias: string): boolean => e.kind === NODE.COLUMN && (e.parts.length === 1 || (e.parts.length === 2 && e.parts[0] === alias))
+  const column = (e: Expression | undefined, alias: string): e is Extract<Expression, { kind: typeof NODE.COLUMN }> => e?.kind === NODE.COLUMN && (e.parts.length === 1 || (e.parts.length === 2 && e.parts[0] === alias))
   let innerKey: Expression | undefined
   let outerKey: Expression | undefined
   let extra = body.where
@@ -763,7 +766,7 @@ function costedIntegerSemijoin(run: Run, q: QueryExpression, node: SelectNode, f
     outerKey = innerKey === equality.left ? equality.right : equality.left
     extra = parts.find((e) => e !== equality)
   }
-  if (innerKey === undefined || outerKey === undefined || !column(innerKey, innerAlias) || !column(outerKey, outerAlias) || innerKey.kind !== NODE.COLUMN || outerKey.kind !== NODE.COLUMN) return undefined
+  if (!column(innerKey, innerAlias) || !column(outerKey, outerAlias)) return undefined
   const innerColumn = innerKey.parts[innerKey.parts.length - 1] as string
   const outerColumn = outerKey.parts[outerKey.parts.length - 1] as string
   const primary = from.single.def.indexes.find((i) => i.kind === 'primary')
@@ -1008,7 +1011,7 @@ function columnRefs(e: unknown, out: (readonly string[])[] = []): (readonly stri
  * anything. 8.4.11 reads the index in that order and sorts nothing ("Index
  * scan on t using PRIMARY", "Covering index scan on t using name").
  */
-function orderingIndex(def: TableDef, alias: string, order: readonly OrderItem[], items: readonly { compiled: Compiled; expr?: Expression }[], scope: Scope, readBy: string | undefined): string | undefined {
+function orderingIndex(def: TableDef, alias: string, order: readonly OrderItem[], items: readonly { compiled: Compiled; expr?: Expression; alias?: string }[], scope: Scope, readBy: string | undefined, primary = false): string | undefined {
   const clustered = def.indexes.find((i) => i.kind === 'primary' || i.name === def.clustered)
   const index = readBy === undefined ? clustered : def.indexes.find((i) => i.name === readBy)
   if (index === undefined || clustered === undefined || order.length === 0) return undefined
@@ -1016,8 +1019,7 @@ function orderingIndex(def: TableDef, alias: string, order: readonly OrderItem[]
   const names: string[] = []
   for (const o of order) {
     if ((o.desc === true) !== desc) return undefined
-    let e: Expression | undefined = o.expr
-    if (e.kind === NODE.LITERAL && e.type === 'int') e = items[Number(e.value as bigint) - 1]?.expr
+    const e = sortExpression(o.expr, items)
     if (e === undefined || e.kind !== NODE.COLUMN) return undefined
     let name: string | undefined
     try {
@@ -1030,10 +1032,16 @@ function orderingIndex(def: TableDef, alias: string, order: readonly OrderItem[]
     if (name === undefined) return undefined
     names.push(name.toLowerCase())
   }
-  const own = index.parts.map((p) => p.column.toLowerCase())
-  const parts = index === clustered ? own : [...own, ...clustered.parts.map((p) => p.column.toLowerCase()).filter((c) => !own.includes(c))]
-  const covered = names.length <= parts.length ? names.every((n, i) => n === parts[i]) : parts.every((p, i) => p === names[i])
-  return covered ? index.name : undefined
+  // An ascending clustered scan covers every row field. For a whole-table outer
+  // loop, MySQL prefers it over a scan plus sort when prefer_ordering_index is on.
+  // Descending schema keys still need test_if_order_by_key's direction handling.
+  for (const candidate of primary && clustered.parts.every((p) => p.descending !== true) ? [index, clustered] : [index]) {
+    const own = candidate.parts.map((p) => p.column.toLowerCase())
+    const parts = candidate === clustered ? own : [...own, ...clustered.parts.map((p) => p.column.toLowerCase()).filter((c) => !own.includes(c))]
+    const covered = names.length <= parts.length ? names.every((n, i) => n === parts[i]) : parts.every((p, i) => p === names[i])
+    if (covered) return candidate.name
+  }
+  return undefined
 }
 
 /** The WHERE's IN and EXISTS subqueries MySQL runs as semijoins (NOT EXISTS, antijoins), each with the subquery. */
@@ -1599,7 +1607,13 @@ function sortStage(keys: readonly SortKey[]): Stage {
   return { run: (rows, env) => sort(rows, keys, env), describe: (n) => planNode('Sort', [n]) }
 }
 
-/** The tables an ORDER BY reads, through positions and aliases to the items they name. */
+/** An ORDER/GROUP key's expression, resolving select-list positions and aliases once. */
+function sortExpression(e: Expression, items: readonly { readonly alias?: string; readonly expr?: Expression }[]): Expression | undefined {
+  if (e.kind === NODE.LITERAL && e.type === 'int') return items[Number(e.value as bigint) - 1]?.expr
+  if (e.kind === NODE.COLUMN && e.parts.length === 1) return items.find((i) => i.alias?.toLowerCase() === (e.parts[0] as string).toLowerCase())?.expr ?? e
+  return e
+}
+
 /**
  * The one table an ORDER BY, or a GROUP BY, reads (`get_sort_by_table`):
  * with both, only if they are the same list; none if any key reads anything
@@ -1608,13 +1622,8 @@ function sortStage(keys: readonly SortKey[]): Stage {
 function sortTable(order: readonly Expression[] | undefined, group: readonly Expression[] | undefined, items: readonly { readonly alias?: string; readonly expr?: Expression }[], scope: TableScope): string | undefined {
   const keys = order ?? group
   if (keys === undefined || keys.length === 0) return undefined
-  const resolved = (e: Expression): Expression | undefined => {
-    if (e.kind === NODE.LITERAL && e.type === 'int') return items[Number(e.value as bigint) - 1]?.expr
-    if (e.kind === NODE.COLUMN && e.parts.length === 1) return items.find((i) => i.alias?.toLowerCase() === (e.parts[0] as string).toLowerCase())?.expr ?? e
-    return e
-  }
   const text = (e: Expression | undefined): string => (e === undefined ? '\u0000' : deparse(e))
-  if (order !== undefined && group !== undefined && (order.length !== group.length || order.some((o, i) => text(resolved(o)) !== text(resolved(group[i] as Expression))))) return undefined
+  if (order !== undefined && group !== undefined && (order.length !== group.length || order.some((o, i) => text(sortExpression(o, items)) !== text(sortExpression(group[i] as Expression, items))))) return undefined
   const aliases = keyAliases(keys, items, scope)
   return aliases.size === 1 && !aliases.has('\u0000') ? [...aliases][0] : undefined
 }
@@ -1642,9 +1651,7 @@ function keyAliases(keys: readonly Expression[], items: readonly { readonly alia
     for (const v of Object.values(e)) if (typeof v === 'object') Array.isArray(v) ? v.forEach(visit) : visit(v)
   }
   for (const e of keys) {
-    if (e.kind === NODE.LITERAL && e.type === 'int') visit(items[Number(e.value as bigint) - 1]?.expr ?? { kind: NODE.COLUMN, parts: ['\u0000'] })
-    else if (e.kind === NODE.COLUMN && e.parts.length === 1 && items.some((i) => i.alias?.toLowerCase() === (e.parts[0] as string).toLowerCase())) visit(items.find((i) => i.alias?.toLowerCase() === (e.parts[0] as string).toLowerCase())?.expr)
-    else visit(e)
+    visit(sortExpression(e, items) ?? { kind: NODE.COLUMN, parts: ['\u0000'] })
   }
   return out
 }
