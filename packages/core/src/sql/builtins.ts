@@ -11,6 +11,8 @@ import { messages, sqlError } from '@myjs/protocol'
 import {
   COERCIBILITY,
   MAX_SIGNED,
+  MAX_UNSIGNED,
+  MIN_SIGNED,
   bool,
   bytesValue,
   compareValues,
@@ -79,6 +81,7 @@ import {
   floatLength,
   intType,
   stringType,
+  stringResultType,
   type ResultType,
 } from './meta.ts'
 import { matchType, regexpInstr, regexpLike, regexpReplace, regexpSubstr } from './regexp.ts'
@@ -293,13 +296,13 @@ export function builtinFunction(name: string, e: CallNode, ctx: CompileContext):
           if (v === null) return null
           if (v.kind === 'int' || v.kind === 'decimal' || v.kind === 'double') {
             const n = toInteger(v)
-            const clamped = n > 2n ** 64n - 1n ? 2n ** 64n - 1n : n < -MAX_SIGNED - 1n ? -MAX_SIGNED - 1n : n
+            const clamped = n > MAX_UNSIGNED ? MAX_UNSIGNED : n < MIN_SIGNED ? MIN_SIGNED : n
             return stringValue(BigInt.asUintN(64, clamped).toString(16).toUpperCase(), conn)
           }
           const raw = valueBytes(v)
           return stringValue(hexOf(raw), conn)
         },
-        type: stringType(numeric ? 16 : bytes * 2, conn, true),
+        type: stringResultType(numeric ? 16 : bytes * 2, false, conn, COERCIBILITY.COERCIBLE),
       }
     }
     case 'UNHEX': {
@@ -531,9 +534,9 @@ export function informationFunction(name: string, e: CallNode, ctx: CompileConte
           const v = x.eval(r, env)
           let n = v === null ? 0n : toInteger(v)
           // An integer past 64 bits is a DECIMAL to MySQL, so it saturates too.
-          if (v !== null && (v.kind !== 'int' || n > 2n ** 64n - 1n || n < -MAX_SIGNED - 1n)) {
+          if (v !== null && (v.kind !== 'int' || n > MAX_UNSIGNED || n < MIN_SIGNED)) {
             if (n > MAX_SIGNED) n = MAX_SIGNED
-            else if (n < -MAX_SIGNED - 1n) throw sqlError('ER_DATA_OUT_OF_RANGE', `BIGINT value is out of range in '${self}'`)
+            else if (n < MIN_SIGNED) throw sqlError('ER_DATA_OUT_OF_RANGE', `BIGINT value is out of range in '${self}'`)
           }
           env.state.lastInsertId = BigInt.asUintN(64, n)
           env.state.insertIdSet = true

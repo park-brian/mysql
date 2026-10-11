@@ -253,6 +253,29 @@ export const stringType = (chars: number, collationId: number, nullable: boolean
     ? { kind: 'bytes', field: FIELD_TYPE.VAR_STRING, nullable, unsigned: false, length: chars, scale: 31, collationId: CHARSET_BINARY }
     : { kind: 'string', field: FIELD_TYPE.VAR_STRING, nullable, unsigned: false, length: chars, scale: 31, collationId }
 
+/** `MAX_BLOB_WIDTH` (`include/mysql_com.h`): unbounded string-result width. */
+const MAX_BLOB_WIDTH = 16_777_216
+
+/**
+ * A string result's native field class and width. Unbounded results have
+ * MAX_BLOB_WIDTH characters; capped (64-bit) sizing holds bytes to that limit.
+ * Above 65,535 bytes the field is MEDIUM_BLOB, above 16,777,215 LONG_BLOB.
+ * Text blob results report their byte width through the results charset.
+ */
+export function stringResultType(chars: number | undefined, binary: boolean, collation: number, coercibility: number, capped = false): ResultType {
+  const mb = binary ? 1 : requireCollationInfo(collation).mbmaxlen
+  let width = chars === undefined ? MAX_BLOB_WIDTH : chars
+  if (capped && width * mb > MAX_BLOB_WIDTH) width = Math.floor(MAX_BLOB_WIDTH / mb)
+  const bytes = width * mb
+  const result = { ...stringType(width, binary ? CHARSET_BINARY : collation, true) }
+  if (!binary) result.coercibility = coercibility
+  if (bytes > 65_535) {
+    result.field = bytes > 16_777_215 ? FIELD_TYPE.LONG_BLOB : FIELD_TYPE.MEDIUM_BLOB
+    if (!binary) result.blobBytes = bytes
+  }
+  return result
+}
+
 export const datetimeType = (field: number, fsp: number, nullable: boolean): ResultType => ({
   kind: field === FIELD_TYPE.TIME ? 'time' : 'datetime',
   field,

@@ -93,6 +93,7 @@ import {
   jsonAsText,
   jsonType,
   stringType,
+  stringResultType,
   type ResultType,
   type SourceColumn,
 } from './meta.ts'
@@ -726,7 +727,7 @@ export function compile(e: Expression, ctx: CompileContext): Compiled {
           if (v === null) return null
           return id === CHARSET_BINARY ? bytesValue(valueBytes(v)) : stringValue(toText(v), id, COERCIBILITY.EXPLICIT)
         },
-        type: { ...stringType(charWidth(t), id, true), coercibility: COERCIBILITY.EXPLICIT },
+        type: { ...stringResultType(charWidth(t), id === CHARSET_BINARY, id, COERCIBILITY.EXPLICIT), coercibility: COERCIBILITY.EXPLICIT },
       }
     }
 
@@ -2687,7 +2688,7 @@ function quantified(op: string, quantifier: 'ANY' | 'ALL', left: Expression, rig
 
 /** A result's width in bytes: a string's characters at its charset's widest, anything else its characters. */
 export function byteWidth(t: ResultType): number {
-  return t.kind === 'string' ? charWidth(t) * requireCollationInfo(t.collationId).mbmaxlen : charWidth(t)
+  return charWidth(t) * (t.kind === 'string' ? requireCollationInfo(t.collationId).mbmaxlen : 1)
 }
 
 // --- MATCH … AGAINST (M5.26) -------------------------------------------------------

@@ -28,7 +28,7 @@
 //     `Item_func_int_val` give it; anything else is a DOUBLE. A double rounds
 //     half to even, as `rint` does; an integer or a decimal half away from zero.
 //   - GREATEST and LEAST take the type CASE would, and compare in it.
-import { CHARSET_BINARY, FIELD_TYPE, expectTyped } from '@myjs/bytes'
+import { CHARSET_BINARY, expectTyped } from '@myjs/bytes'
 import { collationInfoByName, decodeCollation, defaultCollationOf, encodeCollation, requireCollationInfo } from '@myjs/charsets'
 import { NODE, deparse, type CallNode, type Expression } from '@myjs/parser'
 import { messages, sqlError } from '@myjs/protocol'
@@ -81,14 +81,12 @@ import {
   type Env,
   constantEnv,
 } from './compile.ts'
-import { NULL_TYPE, charWidth, decimalType, doubleType, intType, stringType, type ResultType } from './meta.ts'
+import { NULL_TYPE, charWidth, decimalType, doubleType, intType, stringType, stringResultType, type ResultType } from './meta.ts'
 import { unregistered } from './registry.ts'
 import { modeOf } from './mode.ts'
 
 type V = Exclude<Value, null>
 
-/** `MAX_BLOB_WIDTH` (`include/mysql_com.h`): the characters a string result whose width no constant bounds is given. */
-const MAX_BLOB_WIDTH = 16_777_216
 const INT_MAX32 = 2147483647n
 const INT_MIN32 = -2147483648n
 
@@ -159,24 +157,6 @@ function firstCollation(t: ResultType, conn: number): { readonly binary: boolean
   if (t.kind === 'bytes' || t.kind === 'null') return { binary: true, collation: CHARSET_BINARY, coercibility: coercibilityOf(t) }
   if (t.kind === 'string') return { binary: false, collation: t.collationId, coercibility: coercibilityOf(t) }
   return { binary: false, collation: conn, coercibility: COERCIBILITY.NUMERIC }
-}
-
-/**
- * A string result `chars` wide (bytes, for a binary one): `MAX_BLOB_WIDTH`
- * when `chars` is `undefined`. `capped` is `set_data_type_string`'s 64-bit
- * form, which holds the bytes to `MAX_BLOB_WIDTH`; the 32-bit form does not.
- * Past 65,535 bytes it is a MEDIUMTEXT, past 16,777,215 a LONGTEXT, which
- * report their width in bytes (8.4.11: `TRIM(t)` of a TEXT is 250, 1,048,560).
- */
-function textType(chars: number | undefined, binary: boolean, collation: number, coercibility: number, capped = false): ResultType {
-  const mb = binary ? 1 : requireCollationInfo(collation).mbmaxlen
-  let width = chars === undefined ? MAX_BLOB_WIDTH : chars
-  if (capped && width * mb > MAX_BLOB_WIDTH) width = Math.floor(MAX_BLOB_WIDTH / mb)
-  const bytes = width * mb
-  const t = stringType(width, binary ? CHARSET_BINARY : collation, true)
-  if (bytes <= 65_535) return binary ? t : { ...t, coercibility }
-  const field = bytes > 16_777_215 ? FIELD_TYPE.LONG_BLOB : FIELD_TYPE.MEDIUM_BLOB
-  return binary ? { ...t, field } : { ...t, field, coercibility, blobBytes: bytes }
 }
 
 /** An argument's width in characters, or in bytes for a binary result; a TEXT's is its byte capacity, as a field's `max_char_length` is. */
@@ -310,7 +290,7 @@ function libraryFunction(name: string, args: readonly Compiled[], callName: stri
           if (from < 0n || from + 1n > BigInt(s.length)) return empty
           return result(s.slice(Number(from), Number(from) + Number(len < BigInt(s.length) ? len : BigInt(s.length))), binary, collation, coercibility)
         },
-        type: textType(width, binary, collation, coercibility),
+        type: stringResultType(width, binary, collation, coercibility),
       }
     }
     case 'LEFT':
@@ -330,7 +310,7 @@ function libraryFunction(name: string, args: readonly Compiled[], callName: stri
           const k = count >= BigInt(s.length) ? s.length : Number(count)
           return result(name === 'LEFT' ? s.slice(0, k) : s.slice(s.length - k), binary, collation, coercibility)
         },
-        type: textType(width, binary, collation, coercibility),
+        type: stringResultType(width, binary, collation, coercibility),
       }
     }
     case 'LPAD':
@@ -358,7 +338,7 @@ function libraryFunction(name: string, args: readonly Compiled[], callName: stri
           while (fill.length < k - s.length) fill.push(pad[fill.length % pad.length] as string)
           return result(name === 'LPAD' ? [...fill, ...s] : [...s, ...fill], binary, collation, coercibility)
         },
-        type: textType(width, binary, collation, coercibility, width !== undefined),
+        type: stringResultType(width, binary, collation, coercibility, width !== undefined),
       }
     }
     case 'REPEAT': {
@@ -376,7 +356,7 @@ function libraryFunction(name: string, args: readonly Compiled[], callName: stri
           if (BigInt(byteLength(s, binary, collation)) * (count > INT_MAX32 ? INT_MAX32 : count) > BigInt(maxPacket(env))) return packetOverflow(env, name)
           return result(Array.from({ length: Number(count) }, () => s).flat(), binary, collation, coercibility)
         },
-        type: textType(width, binary, collation, coercibility, width !== undefined),
+        type: stringResultType(width, binary, collation, coercibility, width !== undefined),
       }
     }
     case 'REVERSE':
@@ -396,7 +376,7 @@ function libraryFunction(name: string, args: readonly Compiled[], callName: stri
           else while (b > a && s[b - 1] === ' ') b--
           return result(s.slice(a, b), binary, collation, coercibility)
         },
-        type: textType(widthOf((xs[0] as Compiled).type, binary), binary, collation, coercibility),
+        type: stringResultType(widthOf((xs[0] as Compiled).type, binary), binary, collation, coercibility),
       }
     }
     case 'TRIM': {
@@ -423,7 +403,7 @@ function libraryFunction(name: string, args: readonly Compiled[], callName: stri
           if (trailing) while (b - a >= rm.length && startsWith(s, rm, b - rm.length)) b -= rm.length
           return result(s.slice(a, b), binary, collation, coercibility)
         },
-        type: textType(widthOf(subject.type, binary), binary, collation, coercibility),
+        type: stringResultType(widthOf(subject.type, binary), binary, collation, coercibility),
       }
     }
     case 'REPLACE': {
@@ -448,7 +428,7 @@ function libraryFunction(name: string, args: readonly Compiled[], callName: stri
           }
           return result(out, binary, collation, coercibility)
         },
-        type: textType(replacement > 1 ? subjectWidth * (replacement - 1) : subjectWidth, binary, collation, coercibility, true),
+        type: stringResultType(replacement > 1 ? subjectWidth * (replacement - 1) : subjectWidth, binary, collation, coercibility, true),
       }
     }
     case 'CONCAT_WS': {
@@ -475,7 +455,7 @@ function libraryFunction(name: string, args: readonly Compiled[], callName: stri
           const s = strOf(sep, binary, collation).units
           return result(parts.flatMap((p, i) => (i === 0 ? p : [...s, ...p])), binary, collation, coercibility)
         },
-        type: textType(width, binary, collation, coercibility, true),
+        type: stringResultType(width, binary, collation, coercibility, true),
       }
     }
     case 'SPACE': {
@@ -491,7 +471,7 @@ function libraryFunction(name: string, args: readonly Compiled[], callName: stri
           if ((count > INT_MAX32 ? INT_MAX32 : count) * BigInt(requireCollationInfo(conn).mbminlen) > BigInt(maxPacket(env))) return packetOverflow(env, name)
           return stringValue(' '.repeat(Number(count)), conn, COERCIBILITY.COERCIBLE)
         },
-        type: textType(width, false, conn, COERCIBILITY.COERCIBLE, width !== undefined),
+        type: stringResultType(width, false, conn, COERCIBILITY.COERCIBLE, width !== undefined),
       }
     }
     case 'ASCII': {
@@ -1096,7 +1076,7 @@ function moreStringFunction(name: string, xs: readonly Compiled[], callName: str
           return result([...units.slice(0, start), ...inserted, ...units.slice(start + take)], binary, collation, coercibility)
         },
         // A number inserted counts its digits, not the sign's place it has elsewhere (8.4.11: INSERT('', 1, 1, 123) is 3 wide).
-        type: textType(widthOf(s.type, binary) + insertedWidth, binary, collation, coercibility),
+        type: stringResultType(widthOf(s.type, binary) + insertedWidth, binary, collation, coercibility),
       }
     }
     case 'SUBSTRING_INDEX': {
@@ -1129,7 +1109,7 @@ function moreStringFunction(name: string, xs: readonly Compiled[], callName: str
           if (k > BigInt(hits.length)) return result(text, binary, collation, coercibility)
           return result(text.slice((hits[hits.length - Number(k)] as number) + delim.length), binary, collation, coercibility)
         },
-        type: textType(widthOf(s.type, binary), binary, collation, coercibility),
+        type: stringResultType(widthOf(s.type, binary), binary, collation, coercibility),
       }
     }
     case 'QUOTE': {
@@ -1153,7 +1133,7 @@ function moreStringFunction(name: string, xs: readonly Compiled[], callName: str
           return result(out, binary, collation, coercibility)
         },
         // At least 'NULL''s four.
-        type: textType(Math.max(4, s.type.kind === 'null' ? 4 : 2 * widthOf(s.type, binary) + 2), binary, collation, coercibility),
+        type: stringResultType(Math.max(4, s.type.kind === 'null' ? 4 : 2 * widthOf(s.type, binary) + 2), binary, collation, coercibility),
       }
     }
     case 'SOUNDEX': {
@@ -1166,7 +1146,7 @@ function moreStringFunction(name: string, xs: readonly Compiled[], callName: str
           if (v === null) return null
           return result([...soundex(strOf(v, binary, collation).units.join(''))], binary, collation, coercibility)
         },
-        type: textType(Math.max(widthOf(s.type, binary), 4), binary, collation, coercibility),
+        type: stringResultType(Math.max(widthOf(s.type, binary), 4), binary, collation, coercibility),
       }
     }
     default:
@@ -1245,7 +1225,7 @@ function listFunction(name: string, xs: readonly Compiled[], callName: string, l
           const v = (choices[Number(i) - 1] as Compiled).eval(r, env)
           return v === null ? null : result(strOf(v, binary, collation).units, binary, collation, coercibility)
         },
-        type: textType(Math.max(...choices.map((c) => charsOf(c.type))), binary, collation, coercibility),
+        type: stringResultType(Math.max(...choices.map((c) => charsOf(c.type))), binary, collation, coercibility),
       }
     }
     case 'MAKE_SET':
@@ -1303,7 +1283,7 @@ function listFunction(name: string, xs: readonly Compiled[], callName: string, l
           }
           return result(out, binary, collation, coercibility)
         },
-        type: { ...textType(chars, binary, collation, coercibility, true), nullable },
+        type: { ...stringResultType(chars, binary, collation, coercibility, true), nullable },
       }
     }
     case 'FIND_IN_SET': {
