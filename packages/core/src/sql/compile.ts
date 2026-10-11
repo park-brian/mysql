@@ -718,12 +718,13 @@ export function compile(e: Expression, ctx: CompileContext): Compiled {
       const inner = compile(e.expr, ctx)
       // A number or a temporal becomes text in the collation's own charset; NULL and bytes are binary's.
       const t = inner.type
-      const charset = t.kind === 'string' ? requireCollationInfo(t.collationId).charset : t.kind === 'bytes' || t.kind === 'null' ? 'binary' : t.kind === 'json' ? 'utf8mb4' : undefined
-      const id = collateTo(e.collation, charset ?? (collationInfoByName(e.collation.toLowerCase())?.charset as string))
+      const charset = isText(t) || t.kind === 'null' ? charsetOfCollation(t.collationId) : t.kind === 'json' ? 'utf8mb4' : undefined
+      const id = collateTo(e.collation, charset)
       return {
         eval: (row, env) => {
           const v = inner.eval(row, env)
-          return v === null ? null : stringValue(toText(v), id, COERCIBILITY.EXPLICIT)
+          if (v === null) return null
+          return id === CHARSET_BINARY ? bytesValue(valueBytes(v)) : stringValue(toText(v), id, COERCIBILITY.EXPLICIT)
         },
         type: { ...stringType(charWidth(t), id, true), coercibility: COERCIBILITY.EXPLICIT },
       }
@@ -774,12 +775,12 @@ function literal(e: LiteralNode, ctx: CompileContext): Compiled {
   // A hex or bit literal is bytes, unless an introducer names their charset:
   // `_latin1 x'E9'` is the string 'é' (8.4.11).
   const introduced = (b: Uint8Array): Compiled => {
-    const id = e.charset === undefined && !explicit ? CHARSET_BINARY : introducerCollation(e, ctx)
-    if (id === CHARSET_BINARY && e.charset === undefined && !explicit) {
+    if (e.charset === undefined && !explicit) {
       // As a number, as many digits as its largest value has, to 20.
       const digits = Math.min(20, String((1n << BigInt(8 * b.length)) - 1n).length)
-      return lit({ kind: 'bytes', v: b, hex: true }, { ...stringLiteralType(b.length, id), literalInt: { digits, unsigned: e.type === LITERAL.HEX } })
+      return lit({ kind: 'bytes', v: b, hex: true }, { ...stringLiteralType(b.length, CHARSET_BINARY), literalInt: { digits, unsigned: e.type === LITERAL.HEX } })
     }
+    const id = introducerCollation(e, ctx)
     if (id === CHARSET_BINARY) return lit(bytesValue(b), stringLiteralType(b.length, id))
     const info = requireCollationInfo(id)
     const decode = (bytes: Uint8Array): string => {
@@ -877,11 +878,11 @@ function literal(e: LiteralNode, ctx: CompileContext): Compiled {
  * (8.4.11: `'a' COLLATE latin1_bin` from a utf8mb4 client, and anything of
  * binary's). `utf8_` names `utf8mb3_`.
  */
-function collateTo(name: string, charset: string): number {
+function collateTo(name: string, charset?: string): number {
   const lower = name.toLowerCase()
-  const info = collationInfoByName(lower) ?? (lower.startsWith('utf8_') ? collationInfoByName(`utf8mb3_${lower.slice(5)}`) : undefined)
+  const info = collationInfoByName(lower.startsWith('utf8_') ? `utf8mb3_${lower.slice(5)}` : lower)
   if (info === undefined) throw sqlError('ER_UNKNOWN_COLLATION', messages.unknownCollation(name))
-  if (info.charset !== charset) throw sqlError('ER_COLLATION_CHARSET_MISMATCH', `COLLATION '${name}' is not valid for CHARACTER SET '${charset}'`)
+  if (charset !== undefined && info.charset !== charset) throw sqlError('ER_COLLATION_CHARSET_MISMATCH', `COLLATION '${name}' is not valid for CHARACTER SET '${charset}'`)
   return info.id
 }
 
