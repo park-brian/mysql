@@ -11,7 +11,7 @@
 // So connection A runs the bulk statements, each long enough that a stall
 // would show, while connection B times `SELECT 1` round trips. The bound is
 // B's slowest round trip.
-import { test } from 'node:test'
+import { test, type TestContext } from 'node:test'
 import assert from 'node:assert/strict'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -104,23 +104,59 @@ test('a 32,000-row prepared INSERT, a 32,000-item IN-list SELECT and DELETE leav
   await db.end()
 })
 
-/** Start a 32,000-row INSERT on a connection of its own, and give it time to be writing. */
-async function midInsert(db: MySQL, before?: string): Promise<{ destroy: () => void }> {
+/** Reach a real scheduler pause after some inserts, before the statement can commit. */
+async function midInsert(db: MySQL, t: TestContext, before?: string): Promise<{ destroy: () => void }> {
   const conn = await mysql.createConnection({ stream: db.createStream(), user: 'root', password: '' })
   if (before !== undefined) await conn.query(before)
   const ids = Array.from({ length: ROWS }, (_, i) => i + 1)
-  // `mysql2` never settles a command its connection was destroyed under, so nothing waits for this one.
-  void conn.execute(`INSERT INTO d.t (id) VALUES ${ids.map(() => '(?)').join(', ')}`, ids).catch(() => {})
-  await new Promise((resolve) => setTimeout(resolve, 400))
+  let markWriting!: () => void
+  let rejectWriting!: (e: unknown) => void
+  const writing = new Promise<void>((resolve, reject) => { markWriting = resolve; rejectWriting = reject })
+  const catalog = db.catalog
+  assert.ok(catalog)
+  const open = catalog.table.bind(catalog)
+  let inserted = 0
+  let clock = performance.now()
+  // Advance a slice at every scheduler check, independently of machine speed.
+  const now = t.mock.method(performance, 'now', () => (clock += 100))
+  const restoreInserts: (() => void)[] = []
+  const tables = t.mock.method(catalog, 'table', (...args: Parameters<typeof catalog.table>) => {
+    const table = open(...args)
+    const insert = table.insert.bind(table)
+    const observed = t.mock.method(table, 'insert', (...values: Parameters<typeof table.insert>) => {
+      const id = insert(...values)
+      inserted++
+      markWriting()
+      return id
+    })
+    restoreInserts.push(() => observed.mock.restore())
+    return table
+  })
+  try {
+    // `mysql2` never settles a command its connection was destroyed under.
+    void conn.execute(`INSERT INTO d.t (id) VALUES ${ids.map(() => '(?)').join(', ')}`, ids).then(
+      () => rejectWriting(new Error('INSERT completed before interruption')),
+      rejectWriting,
+    )
+    await writing
+    assert.ok(inserted > 0 && inserted < ROWS, `INSERT must be paused mid-write, not complete (${inserted} rows)`)
+  } catch (e) {
+    conn.destroy()
+    throw e
+  } finally {
+    now.mock.restore()
+    tables.mock.restore()
+    for (const restore of restoreInserts) restore()
+  }
   return { destroy: () => conn.destroy() }
 }
 
-test('a connection closed while its statement is paused leaves nothing written, and the writer free', async () => {
+test('a connection closed while its statement is paused leaves nothing written, and the writer free', async (t) => {
   for (const before of [undefined, 'BEGIN']) {
     const db = await MySQL.open(':memory:')
     await db.query('CREATE DATABASE d')
     await db.query("CREATE TABLE d.t (id INT PRIMARY KEY, v VARCHAR(20) DEFAULT 'row')")
-    const a = await midInsert(db, before)
+    const a = await midInsert(db, t, before)
     a.destroy()
     // The statement learns of the close at its next pause and rolls back,
     // giving the writer slot back: a slot kept would make this INSERT wait
@@ -133,13 +169,13 @@ test('a connection closed while its statement is paused leaves nothing written, 
   }
 })
 
-test('a database closed while a statement is paused reopens with nothing of it', async () => {
+test('a database closed while a statement is paused reopens with nothing of it', async (t) => {
   const dir = mkdtempSync(join(tmpdir(), 'myjs-pause-'))
   try {
     const db = await MySQL.open(dir)
     await db.query('CREATE DATABASE d')
     await db.query("CREATE TABLE d.t (id INT PRIMARY KEY, v VARCHAR(20) DEFAULT 'row')")
-    await midInsert(db)
+    await midInsert(db, t)
     await db.end()
     const again = await MySQL.open(dir)
     const [rows] = await again.query('SELECT COUNT(*) AS n FROM d.t')

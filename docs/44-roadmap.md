@@ -62,6 +62,14 @@ validation commands portable and reproducible.
 
 M5.2 is complete against the committed coercion capture: all 3,148 observations and all 1,737 warning counts agree with pinned MySQL 8.4.11 through both protocols. Additional probes cover adjacent BIGINTs, opaque JSON BIT identity, constant delimiter warning timing and YEAR constant boundaries. The gates now require zero disagreements.
 
+CI now reproduces all seven pinned-reference corpora. Its first blocking run
+exposed a bulk-interruption test that assumed a 32,000-row INSERT was still
+running after 400 ms. The test now observes actual inserts and forces the real
+scheduler to yield, asserting a partial write before close; rollback and writer
+release checks remain unchanged. The MySQL suite run also measured 36 of 1,146
+passing files against the committed 37; investigate the per-file differences
+before changing its scoreboard or recorded outcomes.
+
 The next engineering work, in order:
 
 1. **Complete the remaining M5.10 function behavior.** All 8,765 observations
