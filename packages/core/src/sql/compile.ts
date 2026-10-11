@@ -146,8 +146,9 @@ export interface Env {
 
 /**
  * An operand read as a number, with its source reader's diagnostics. Text
- * normally draws 1292 for truncation. DECIMAL fields and CONCAT retain their
- * fatal invalid-prefix policy; BLOB/TEXT and CONCAT discard truncation status.
+ * normally draws 1292 for truncation. DECIMAL fields and function prefix readers
+ * retain fatal invalid-prefix diagnostics; BLOB/TEXT and those functions discard
+ * truncation status.
  * Field readers can suppress empty/whitespace warnings; INTEGER casts retain them.
  * ENUM indices and numeric hex literals are quiet. The value passes unchanged.
  */

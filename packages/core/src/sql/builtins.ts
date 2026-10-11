@@ -363,32 +363,15 @@ export function controlFunction(name: string, e: CallNode, ctx: CompileContext):
       const type = aggregate([x.type, y.type], x.type.nullable || y.type.nullable, conn, 'if')
       return choiceOf([x, y], (r, env) => truth(c.eval(r, env)) === true ? 0 : 1, type)
     }
-    case 'IFNULL': {
-      arity(2)
-      const [x, y] = args() as [Compiled, Compiled]
-      const type = aggregate([x.type, y.type], x.type.nullable && y.type.nullable, conn, 'ifnull')
-      const [xv, yv] = [chosenOf(x, type), chosenOf(y, type)]
-      return {
-        eval: (r, env) => {
-          const v = x.eval(r, env)
-          if (v !== null) return xv(v, env)
-          const w = y.eval(r, env)
-          return w === null ? null : yv(w, env)
-        },
-        type,
-      }
-    }
+    case 'IFNULL':
     case 'COALESCE': {
-      if (e.args.length === 0) arity(1)
+      if (name === 'IFNULL') arity(2)
+      else if (e.args.length === 0) arity(1)
       const xs = args()
-      const type = aggregate(
-        xs.map((x) => x.type),
-        xs.every((x) => x.type.nullable),
-        conn,
-        'coalesce',
-      )
+      const type = aggregate(xs.map((x) => x.type), xs.every((x) => x.type.nullable), conn, name.toLowerCase())
       const chosen = xs.map((x) => chosenOf(x, type))
       return {
+        decimalPrefix: true,
         eval: (r, env) => {
           for (let i = 0; i < xs.length; i++) {
             const v = (xs[i] as Compiled).eval(r, env)
