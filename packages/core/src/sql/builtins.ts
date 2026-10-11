@@ -327,15 +327,21 @@ export function builtinFunction(name: string, e: CallNode, ctx: CompileContext):
     case 'ABS': {
       arity(1)
       const x = asNumber((args() as [Compiled])[0], 'DOUBLE')
+      const real = isText(x.type) || x.type.kind === 'json'
+      const type = x.type.literalInt !== undefined ? { ...floatLength(0, x.type.nullable), unsigned: true }
+        : x.type.kind === 'double' ? floatLength(x.type.scale, x.type.nullable)
+          : real ? doubleType(x.type.nullable)
+            : x.type.kind === 'int' ? intType(x.type.length, x.type.nullable, x.type.unsigned)
+              : expressionOf(x.type)
       return {
         eval: (r, env) => {
           const v = x.eval(r, env)
           if (v === null) return null
+          if (v.kind === 'double' || real) return doubleOf(doubleValue(Math.abs(toDouble(v))), type)
           const sign = compareValues(v, intValue(0n))
-          const out = sign !== null && sign < 0 ? negate(v) : v.kind === 'string' || v.kind === 'bytes' ? doubleValue(Math.abs(toDouble(v))) : v
-          return x.type.kind === 'double' ? doubleOf(out, floatLength(x.type.scale, true)) : out
+          return sign !== null && sign < 0 ? negate(v) : v
         },
-        type: x.type.literalInt !== undefined ? { ...floatLength(0, x.type.nullable), unsigned: true } : x.type.kind === 'double' ? floatLength(x.type.scale, x.type.nullable) : x.type.kind === 'string' || x.type.kind === 'bytes' ? doubleType(x.type.nullable) : x.type.kind === 'int' ? intType(x.type.length, x.type.nullable, x.type.unsigned) : expressionOf(x.type),
+        type,
       }
     }
     default:
