@@ -2444,7 +2444,7 @@ function cast(e: CastNode, ctx: CompileContext): Compiled {
     case 'CHAR':
     case 'NCHAR':
     case 'VARCHAR': {
-      const id = t.charset === undefined ? ctx.connectionCollation : (defaultCollationOf(t.charset.toLowerCase())?.id ?? ctx.connectionCollation)
+      const id = (t.charset ? defaultCollationOf(t.charset.toLowerCase())?.id : undefined) ?? ctx.connectionCollation
       return {
         eval: (r, env) => {
           const v = x(r, env)
@@ -2452,16 +2452,19 @@ function cast(e: CastNode, ctx: CompileContext): Compiled {
           // Bytes, a BIT's included, are read in the target charset: NULL and
           // 1300 when they are no text in it (8.4.11: CAST(X'C3A9' AS CHAR) is 'é').
           const bytes = v.kind === 'bytes' ? v.v : v.kind === 'int' && isBits(inner.type) ? bitBytes(v.v, inner.type.length) : undefined
-          const read = bytes === undefined ? toText(v) : textIn(bytes, id, env)
+          let read = bytes === undefined ? toText(v) : textIn(bytes, id, env)
           if (read === null) return null
-          if (t.length === undefined) return stringValue(read, id, COERCIBILITY.IMPLICIT)
-          const characters = [...read]
-          if (characters.length > t.length) {
-            truncated(env, `CHAR(${t.length})`, read)
-            characters.length = t.length
+          if (t.length !== undefined) {
+            const characters = [...read]
+            if (characters.length > t.length) {
+              truncated(env, `CHAR(${t.length})`, read)
+              characters.length = t.length
+              read = characters.join('')
+            }
           }
-          return stringValue(characters.join(''), id, COERCIBILITY.IMPLICIT)
+          return stringValue(read, id, COERCIBILITY.IMPLICIT)
         },
+        decimalPrefix: true,
         // Nullable whatever its argument, as 8.4.11 reports it.
         type: stringType(t.length ?? charWidth(inner.type), id, true),
       }
@@ -2481,6 +2484,7 @@ function cast(e: CastNode, ctx: CompileContext): Compiled {
           out.set(b.subarray(0, t.length))
           return bytesValue(out)
         },
+        decimalPrefix: true,
         // As wide as its argument's bytes, and nullable whatever it is (8.4.11).
         type: { ...stringType(t.length ?? byteWidth(inner.type), CHARSET_BINARY, true), coercibility: COERCIBILITY.IMPLICIT },
       }
