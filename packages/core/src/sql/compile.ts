@@ -356,6 +356,12 @@ function fixedNumericText(v: Exclude<Value, null>): string {
   return new TextDecoder().decode(new TextEncoder().encode(text).subarray(0, 128))
 }
 
+/** An invalid string argument: one 1411 warning for this evaluation, then NULL. */
+export function invalidString(env: Env, text: string, fn: string): null {
+  raise(env, 1411, `Incorrect string value: '${text}' for function ${fn}`)
+  return null
+}
+
 /** An environment for evaluating a constant while compiling: no row, the statement's parameters. */
 export const constantEnv = (ctx: CompileContext): Env => ({ params: ctx.params ?? [], now: ctx.state.clock?.() ?? new Date(), session: ctx.session, state: ctx.state })
 

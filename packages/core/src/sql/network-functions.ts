@@ -10,7 +10,7 @@ import type { CallNode } from '@myjs/parser'
 import { sqlError } from '@myjs/protocol'
 import { COERCIBILITY, bool, bytesValue, intValue, stringValue, toText, type Value, valueBytes } from '@myjs/types'
 import { hexOf } from './builtins.ts'
-import { compile, printedArgument, raise, type CompileContext, type Compiled, type Env } from './compile.ts'
+import { compile, printedArgument, raise, invalidString, type CompileContext, type Compiled } from './compile.ts'
 import { intType, stringType, type ResultType } from './meta.ts'
 import { unregistered } from './registry.ts'
 import { intReader } from './string-functions.ts'
@@ -137,16 +137,16 @@ export function networkFunction(name: string, e: CallNode, ctx: CompileContext):
             if (ch >= '0' && ch <= '9') {
               byte = byte * 10n + BigInt(ch.charCodeAt(0) - 48)
               digits++
-              if (byte > 255n) return invalidIp(env, args[0] ?? text, 'inet_aton')
+              if (byte > 255n) return invalidString(env, args[0] ?? text, 'inet_aton')
             } else if (ch === '.') {
-              if (digits === 0 || dots >= 3) return invalidIp(env, args[0] ?? text, 'inet_aton')
+              if (digits === 0 || dots >= 3) return invalidString(env, args[0] ?? text, 'inet_aton')
               total = (total << 8n) + byte
               byte = 0n
               digits = 0
               dots++
-            } else return invalidIp(env, args[0] ?? text, 'inet_aton')
+            } else return invalidString(env, args[0] ?? text, 'inet_aton')
           }
-          if (digits === 0) return invalidIp(env, args[0] ?? text, 'inet_aton')
+          if (digits === 0) return invalidString(env, args[0] ?? text, 'inet_aton')
           if (dots === 1) total <<= 16n
           else if (dots === 2) total <<= 8n
           return intValue((total << 8n) + byte, true)
@@ -182,7 +182,7 @@ export function networkFunction(name: string, e: CallNode, ctx: CompileContext):
           if (v === null) return null
           const text = toText(v)
           const out = ipv4(text) ?? ipv6(text)
-          return out === undefined ? invalidIp(env, args[0] ?? text, 'inet6_aton') : bytesValue(out)
+          return out === undefined ? invalidString(env, args[0] ?? text, 'inet6_aton') : bytesValue(out)
         },
         type: stringType(16, CHARSET_BINARY, true),
       }
@@ -194,7 +194,7 @@ export function networkFunction(name: string, e: CallNode, ctx: CompileContext):
         eval: (r, env) => {
           const v = s.eval(r, env)
           if (v === null) return null
-          if (v.kind !== 'bytes' || (v.v.length !== 4 && v.v.length !== 16)) return invalidIp(env, args[0] ?? toText(v), 'inet6_ntoa')
+          if (v.kind !== 'bytes' || (v.v.length !== 4 && v.v.length !== 16)) return invalidString(env, args[0] ?? toText(v), 'inet6_ntoa')
           return conv(v.v.length === 4 ? Array.from(v.v).join('.') : ipv6Text(v.v))
         },
         type: hexText(39, true),
@@ -269,10 +269,4 @@ export function networkFunction(name: string, e: CallNode, ctx: CompileContext):
     }
   }
   throw unregistered(name)
-}
-
-/** An address that is not one: NULL, and 1411 naming the function. */
-function invalidIp(env: Env, text: string, fn: string): null {
-  raise(env, 1411, `Incorrect string value: '${text}' for function ${fn}`)
-  return null
 }

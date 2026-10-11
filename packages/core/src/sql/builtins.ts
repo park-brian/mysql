@@ -66,6 +66,8 @@ import {
   temporalOperands,
   textVersusNumber,
   onStatementDate,
+  printedArgument,
+  invalidString,
   type Env,
   type Row,
 } from './compile.ts'
@@ -306,8 +308,8 @@ export function builtinFunction(name: string, e: CallNode, ctx: CompileContext):
     }
     case 'UNHEX': {
       // Pairs of hex digits as bytes, a lone first digit as its own byte; a
-      // number is read as its decimal digits, and anything not hex is NULL
-      // (8.4.11 warns 1411). The width is half the argument's, in bytes.
+      // number is read as its decimal digits. Invalid input warns with the
+      // argument as written, then is NULL. Width is half the argument's bytes.
       arity(1)
       const [x] = args() as [Compiled]
       return {
@@ -315,7 +317,7 @@ export function builtinFunction(name: string, e: CallNode, ctx: CompileContext):
           const v = x.eval(r, env)
           if (v === null) return null
           const text = toText(v)
-          if (!/^[0-9a-fA-F]*$/.test(text)) return null
+          if (!/^[0-9a-fA-F]*$/.test(text)) return invalidString(env, printedArgument(e.args[0] as Expression, ctx), 'unhex')
           const even = text.length % 2 === 0 ? text : `0${text}`
           const out = new Uint8Array(even.length / 2)
           for (let i = 0; i < out.length; i++) out[i] = parseInt(even.slice(i * 2, i * 2 + 2), 16)
