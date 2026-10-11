@@ -390,7 +390,7 @@ function planSelect(run: Run, q: QueryExpression, node: SelectNode): SelectPlan 
       return name !== undefined && [...facts.pins].some((c) => c.name.toLowerCase() === name)
     }
     // The range optimizer's proofs too: `g BETWEEN NULL AND 4` over an indexed `g` (8.4.11).
-    const impossible = facts.impossible || (from !== undefined && optimizerFacts(from, node.where, limitCount, compileContext(run, EMPTY_SCOPE, 'where clause'), run.env, false).empty)
+    const impossible = facts.impossible || (from !== undefined && optimizerFacts(from, node.where, keep, compileContext(run, EMPTY_SCOPE, 'where clause'), run.env, false).empty)
     const constant = zero || impossible || facts.constTable || items.every((item) => pinnedName(item))
     if (!constant) {
       deduplicated = true
@@ -409,7 +409,7 @@ function planSelect(run: Run, q: QueryExpression, node: SelectNode): SelectPlan 
     // is copied, a column losing its key flags without gaining GROUP_FLAG, an
     // expression keeping only NOT_NULL (8.4.11, M5.18's corpus) — unless the
     // optimizer proved the result empty, when there is no table at all.
-    const facts = optimizerFacts(from, node.where, limitCount, compileContext(run, EMPTY_SCOPE, 'where clause'), run.env, (node.options ?? []).includes('STRAIGHT_JOIN'))
+    const facts = optimizerFacts(from, node.where, keep, compileContext(run, EMPTY_SCOPE, 'where clause'), run.env, (node.options ?? []).includes('STRAIGHT_JOIN'))
     // A sort over the first table alone, ahead of nested-loop joins or a
     // nested-loop semijoin, needs no stream.
     // An ORDER BY on columns the WHERE holds to constants orders nothing, and
@@ -517,7 +517,7 @@ function planSelect(run: Run, q: QueryExpression, node: SelectNode): SelectPlan 
     ...(dataColumns === undefined ? {} : { columnsAt: (trx: Trx | undefined) => (dataColumns as (t: Trx | undefined) => readonly ResultType[])(trx).map((type, i) => ({ name: (items[i] as { name: string }).name, type })) }),
     explain() {
       // An empty result the optimizer proves is no plan at all.
-      if (facts?.impossible === true || provedEmpty(run, from, node, limitCount)) return [planNode('Zero rows')]
+      if (facts?.impossible === true || provedEmpty(run, from, node, keep)) return [planNode('Zero rows')]
       // A constant table is read while planning: its row, if the WHERE holds of it, is all there is to fetch.
       // An uncorrelated scalar subquery a unique key equals is evaluated while planning too, so it pins the key (8.4.11).
       if ((from?.single !== undefined && (facts?.constTable === true || subqueryPinsKey(from.single.def, from.single.alias, node.where, from.scope))) || (from !== undefined && from.tables.every((t) => t.derived?.constant === true))) {
@@ -529,6 +529,8 @@ function planSelect(run: Run, q: QueryExpression, node: SelectNode): SelectPlan 
       return n === undefined ? undefined : [n, ...subqueryNodes(run, 'field list')]
     },
     rows(trx, given) {
+      // A zero count with no offset has no iterator to initialize, including its sort.
+      if (keep === 0 && !windowed) return []
       const env = given ?? { ...run.env, ...(trx === undefined ? {} : { trx }) }
       let rows: Iterable<Rowed>
       if (from === undefined) rows = [{ row: [] }]
