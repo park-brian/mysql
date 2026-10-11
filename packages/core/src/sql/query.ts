@@ -381,17 +381,14 @@ function planSelect(run: Run, q: QueryExpression, node: SelectNode): SelectPlan 
   // the temporary table: COM_STMT_PREPARE's metadata has no GROUP_FLAG where
   // the execute's does (8.4.11, found by review).
   if (node.distinct === true && source !== undefined && facts !== undefined && run.preparing !== true && !holdsKey(source.def, node.items, source.alias)) {
-    // `LIMIT 0` returns nothing before a row is read — unless an offset must
-    // be counted off sorted rows: `ORDER BY 1 LIMIT 0 OFFSET 1` still makes
-    // the table, and the same without the ORDER BY does not (8.4.11).
-    const zero = limitCount === 0 && (offset === 0 || q.orderBy === undefined)
     const pinnedName = (item: { compiled: Compiled }): boolean => {
       const name = item.compiled.type.column?.orgName.toLowerCase()
       return name !== undefined && [...facts.pins].some((c) => c.name.toLowerCase() === name)
     }
     // The range optimizer's proofs too: `g BETWEEN NULL AND 4` over an indexed `g` (8.4.11).
     const impossible = facts.impossible || (from !== undefined && optimizerFacts(from, node.where, keep, compileContext(run, EMPTY_SCOPE, 'where clause'), run.env, false).empty)
-    const constant = zero || impossible || facts.constTable || items.every((item) => pinnedName(item))
+    // LIMIT eliminates initialization only when count plus OFFSET is zero.
+    const constant = keep === 0 || impossible || facts.constTable || items.every(pinnedName)
     if (!constant) {
       deduplicated = true
       // A constant is not copied into the table: `SELECT DISTINCT NULL, x`
@@ -400,7 +397,8 @@ function planSelect(run: Run, q: QueryExpression, node: SelectNode): SelectPlan 
         if (item.expr !== undefined && !refersToRow(item.expr, lookup)) continue
         // Read through a window's table already, a column keeps what that gives it (8.4.11).
         if (item.compiled.type.temporary === 'stream') continue
-        item.compiled = { ...item.compiled, type: { ...item.compiled.type, temporary: pinnedName(item) ? 'pinned' : true } }
+        // A bounded unordered table copies fields without GROUP_FLAG (8.4.11).
+        item.compiled = { ...item.compiled, type: { ...item.compiled.type, temporary: pinnedName(item) || (limitCount !== undefined && q.orderBy === undefined) ? 'pinned' : true } }
       }
     }
   } else if (from !== undefined && scope !== undefined && run.preparing !== true && (source === undefined || (semijoin && semijoinSubqueries(node.where).some((sq) => !emptySubquery(run, sq))) || (q.orderBy !== undefined && node.items.some((i) => correlatedIn(i.expr, scope)))) && (node.distinct === true || (q.orderBy ?? []).length > 0)) {
@@ -591,10 +589,11 @@ function windowStage(windows: WindowSink, base: number): Stage {
 
 /**
  * ORDER BY, the select list and DISTINCT, as one iterator. The server writes
- * DISTINCT's rows into a temporary table and sorts that; here the rows are
- * sorted, projected and then de-duplicated, which keeps the same rows in the
- * same order, since duplicates are identical. A sort over a join reads its
- * rows streamed into a table first ("Stream results").
+ * DISTINCT's rows into a temporary table and sorts that. Bounded unordered
+ * DISTINCT initializes its projected, deduplicated table here. Ordered
+ * DISTINCT still sorts before projection; copying selected values before
+ * sorting remains an observable evaluation-timing gap (M5.49). A sort over
+ * a join reads its rows streamed into a table first ("Stream results").
  */
 function deliverStage(items: readonly Compiled[], keys: readonly SortKey[], unique: boolean, through: { readonly deduplicated: boolean; readonly streamed: boolean; readonly described?: boolean; readonly keep?: number | undefined; readonly buffer?: { readonly estimate: number; readonly capacity: number } | undefined; readonly constant?: 'group' | 'limit' }): Stage {
   // A LIMIT needs only its first rows of the order, unless a DISTINCT between would drop some.
@@ -602,8 +601,11 @@ function deliverStage(items: readonly Compiled[], keys: readonly SortKey[], uniq
   return {
     run(rows, env) {
       const sorted = keys.length > 0 ? sort(rows, keys, env, keep, through.buffer) : rows
-      const projected = project(sorted, items, env)
-      return rowed(unique ? distinct(projected) : projected)
+      let projected = project(sorted, items, env)
+      if (unique) projected = distinct(projected)
+      // Initialize a bounded temporary table even when the enclosing LIMIT returns no rows.
+      if (through.deduplicated && through.keep !== undefined && keys.length === 0) return rowed([...limit(projected, 0, through.keep)])
+      return rowed(projected)
     },
     describe(n) {
       if (through.described === false) return undefined

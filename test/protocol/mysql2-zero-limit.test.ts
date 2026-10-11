@@ -71,7 +71,7 @@ test('zero LIMIT initializes only required sorts and closes their physical sourc
     await db.query('CREATE DATABASE d')
     await db.query('USE d')
     await db.query('CREATE TABLE t(id INT PRIMARY KEY,g INT)')
-    await db.query('INSERT INTO t VALUES(1,3),(2,1),(3,2),(4,0)')
+    await db.query('INSERT INTO t VALUES(1,3),(2,1),(3,1),(4,NULL)')
     const catalog = db.catalog!
     const open = catalog.table.bind(catalog)
     let read = 0
@@ -121,7 +121,29 @@ test('zero LIMIT initializes only required sorts and closes their physical sourc
             assert.equal(db.openConnections, 1)
           }
         }
+        for (const count of [0, 1, 2]) {
+          for (const offset of [0, 1, 2, 3, 8]) {
+            read = closed = 0
+            const sql = `SELECT DISTINCT g FROM d.t LIMIT ${count} OFFSET ${offset} FOR UPDATE`
+            const expected = [3, 1, null].slice(offset, offset + count).map((g) => ({ g }))
+            if (method === 'stream') {
+              const rows = []
+              for await (const row of db.stream(sql)) rows.push(row)
+              assert.deepEqual(rows, expected)
+            } else assert.deepEqual((await db[method](sql))[0], expected)
+            // Input has a duplicate before its third unique row: 3, 1, 1, NULL.
+            const needed = count + offset
+            assert.equal(read, needed === 0 ? 0 : needed === 1 ? 1 : needed === 2 ? 2 : 4, `${method}: reads: ${sql}`)
+            assert.equal(closed, needed === 0 ? 0 : 1, `${method}: closes: ${sql}`)
+            assert.equal(db.openConnections, 1)
+          }
+        }
       }
+      for await (const row of db.stream('SELECT DISTINCT g FROM d.t LIMIT 2 FOR UPDATE')) {
+        assert.deepEqual(row, { g: 3 })
+        break
+      }
+      assert.equal(db.openConnections, 1)
       const other = await db.connect()
       try {
         await other.query('SET innodb_lock_wait_timeout=1')

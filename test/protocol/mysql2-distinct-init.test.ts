@@ -1,0 +1,190 @@
+// M5.49: unordered DISTINCT initializes a bounded temporary table before LIMIT.
+import { test } from 'node:test'
+import assert from 'node:assert/strict'
+import mysql from 'mysql2/promise'
+import { MySQL } from '@myjs/core'
+// @ts-expect-error — the capture owns plan normalization.
+import { planSkeleton } from '../../tools/capture-relational.mjs'
+
+test('unordered DISTINCT matches native materialization, copied fields and LIMIT effects', async () => {
+  const host = process.env.MYSQL_REFERENCE_HOST
+  const db = host === undefined ? await MySQL.open(':memory:') : undefined
+  const conn = await mysql.createConnection(db === undefined
+    ? { host: host ?? '127.0.0.1', port: Number(process.env.MYSQL_REFERENCE_PORT ?? 3306), user: 'root', password: process.env.MYSQL_REFERENCE_PASSWORD ?? 'root' }
+    : { stream: db.createStream(), user: 'root', password: '' })
+  // Literal MySQL 8.4.11 observations; repeated ten-attribute layouts and trees share labels.
+  const fields: Record<string, unknown[][]> = {
+    "g_32768": [["g",3,11,32768,0,63,"distinct_init","t","t","g"]],
+    "g_0": [["g",3,11,0,0,63,"distinct_init","t","t","g"]],
+    "g_32768_calls_33": [["g",3,11,32768,0,63,"distinct_init","t","t","g"],["calls",8,21,33,0,63,"","","","calls"]],
+    "g_0_calls_161": [["g",3,11,0,0,63,"distinct_init","t","t","g"],["calls",8,21,161,0,63,"","","",""]],
+    "g_0_calls_33": [["g",3,11,0,0,63,"distinct_init","t","t","g"],["calls",8,21,33,0,63,"","","","calls"]],
+    "id_20483_g_0": [["id",3,11,20483,0,63,"distinct_init","t","t","id"],["g",3,11,0,0,63,"distinct_init","t","t","g"]],
+    "n_128_g_32768": [["n",6,0,128,0,63,"","","",""],["g",3,11,32768,0,63,"distinct_init","t","t","g"]],
+    "n_128_g_0": [["n",6,0,128,0,63,"","","",""],["g",3,11,0,0,63,"distinct_init","t","t","g"]],
+    "n_129_g_32768": [["n",8,2,129,0,63,"","","",""],["g",3,11,32768,0,63,"distinct_init","t","t","g"]],
+    "n_129_g_0": [["n",8,2,129,0,63,"","","",""],["g",3,11,0,0,63,"distinct_init","t","t","g"]],
+    "calls_161": [["calls",8,21,161,0,63,"","","",""]],
+    "calls_33": [["calls",8,21,33,0,63,"","","","calls"]],
+    "n_32768": [["n",8,21,32768,0,63,"","","","n"]],
+    "n_128": [["n",8,21,128,0,63,"","","",""]],
+    "n_0": [["n",8,21,0,0,63,"","","","n"]],
+  }
+  const plans: Record<string, string> = {
+    "all_temporary_table": "Table scan on <temporary>\n    Temporary table with deduplication\n        Table scan on t",
+    "zero": "Zero rows",
+    "offset_temporary_table": "Limit/Offset\n    Table scan on <temporary>\n        Temporary table with deduplication\n            Limit table size\n                Table scan on t",
+    "limit_temporary_table": "Limit\n    Table scan on <temporary>\n        Temporary table with deduplication\n            Limit table size\n                Table scan on t",
+    "all_direct_table": "Table scan on t",
+    "offset_direct_table": "Limit/Offset\n    Table scan on t",
+    "limit_direct_table": "Limit\n    Table scan on t",
+    "all_temporary_primary": "Table scan on <temporary>\n    Temporary table with deduplication\n        Covering index scan on t using PRIMARY",
+    "offset_temporary_primary": "Limit/Offset\n    Table scan on <temporary>\n        Temporary table with deduplication\n            Limit table size\n                Covering index scan on t using PRIMARY",
+    "limit_temporary_primary": "Limit\n    Table scan on <temporary>\n        Temporary table with deduplication\n            Limit table size\n                Covering index scan on t using PRIMARY",
+  }
+  const fixtures: [string, unknown[][], string, string[], number, string][] = [
+    ["SELECT DISTINCT g FROM t",[[3],[1],[null]],"g_32768",[],0,"all_temporary_table"],
+    ["SELECT DISTINCT g FROM t LIMIT 0 OFFSET 0",[],"g_0",[],0,"zero"],
+    ["SELECT DISTINCT g FROM t LIMIT 0 OFFSET 1",[],"g_0",[],0,"offset_temporary_table"],
+    ["SELECT DISTINCT g FROM t LIMIT 0 OFFSET 2",[],"g_0",[],0,"offset_temporary_table"],
+    ["SELECT DISTINCT g FROM t LIMIT 0 OFFSET 8",[],"g_0",[],0,"offset_temporary_table"],
+    ["SELECT DISTINCT g FROM t LIMIT 1 OFFSET 0",[[3]],"g_0",[],0,"limit_temporary_table"],
+    ["SELECT DISTINCT g FROM t LIMIT 1 OFFSET 1",[[1]],"g_0",[],0,"offset_temporary_table"],
+    ["SELECT DISTINCT g FROM t LIMIT 1 OFFSET 2",[[null]],"g_0",[],0,"offset_temporary_table"],
+    ["SELECT DISTINCT g FROM t LIMIT 1 OFFSET 8",[],"g_0",[],0,"offset_temporary_table"],
+    ["SELECT DISTINCT g FROM t LIMIT 2 OFFSET 0",[[3],[1]],"g_0",[],0,"limit_temporary_table"],
+    ["SELECT DISTINCT g FROM t LIMIT 2 OFFSET 1",[[1],[null]],"g_0",[],0,"offset_temporary_table"],
+    ["SELECT DISTINCT g FROM t LIMIT 2 OFFSET 2",[[null]],"g_0",[],0,"offset_temporary_table"],
+    ["SELECT DISTINCT g FROM t LIMIT 2 OFFSET 8",[],"g_0",[],0,"offset_temporary_table"],
+    ["SELECT DISTINCT g,LAST_INSERT_ID(id) AS calls FROM t",[[3,1],[1,2],[1,3],[null,4]],"g_32768_calls_33",[],4,"all_temporary_table"],
+    ["SELECT DISTINCT g,LAST_INSERT_ID(id) AS calls FROM t LIMIT 0 OFFSET 0",[],"g_0_calls_161",[],0,"zero"],
+    ["SELECT DISTINCT g,LAST_INSERT_ID(id) AS calls FROM t LIMIT 0 OFFSET 1",[],"g_0_calls_33",[],1,"offset_temporary_table"],
+    ["SELECT DISTINCT g,LAST_INSERT_ID(id) AS calls FROM t LIMIT 0 OFFSET 2",[],"g_0_calls_33",[],2,"offset_temporary_table"],
+    ["SELECT DISTINCT g,LAST_INSERT_ID(id) AS calls FROM t LIMIT 0 OFFSET 8",[],"g_0_calls_33",[],4,"offset_temporary_table"],
+    ["SELECT DISTINCT g,LAST_INSERT_ID(id) AS calls FROM t LIMIT 1 OFFSET 0",[[3,1]],"g_0_calls_33",[],1,"limit_temporary_table"],
+    ["SELECT DISTINCT g,LAST_INSERT_ID(id) AS calls FROM t LIMIT 1 OFFSET 1",[[1,2]],"g_0_calls_33",[],2,"offset_temporary_table"],
+    ["SELECT DISTINCT g,LAST_INSERT_ID(id) AS calls FROM t LIMIT 1 OFFSET 2",[[1,3]],"g_0_calls_33",[],3,"offset_temporary_table"],
+    ["SELECT DISTINCT g,LAST_INSERT_ID(id) AS calls FROM t LIMIT 1 OFFSET 8",[],"g_0_calls_33",[],4,"offset_temporary_table"],
+    ["SELECT DISTINCT g,LAST_INSERT_ID(id) AS calls FROM t LIMIT 2 OFFSET 0",[[3,1],[1,2]],"g_0_calls_33",[],2,"limit_temporary_table"],
+    ["SELECT DISTINCT g,LAST_INSERT_ID(id) AS calls FROM t LIMIT 2 OFFSET 1",[[1,2],[1,3]],"g_0_calls_33",[],3,"offset_temporary_table"],
+    ["SELECT DISTINCT g,LAST_INSERT_ID(id) AS calls FROM t LIMIT 2 OFFSET 2",[[1,3],[null,4]],"g_0_calls_33",[],4,"offset_temporary_table"],
+    ["SELECT DISTINCT g,LAST_INSERT_ID(id) AS calls FROM t LIMIT 2 OFFSET 8",[],"g_0_calls_33",[],4,"offset_temporary_table"],
+    ["SELECT DISTINCT id,g FROM t",[[1,3],[2,1],[3,1],[4,null]],"id_20483_g_0",[],0,"all_direct_table"],
+    ["SELECT DISTINCT id,g FROM t LIMIT 0 OFFSET 0",[],"id_20483_g_0",[],0,"zero"],
+    ["SELECT DISTINCT id,g FROM t LIMIT 0 OFFSET 1",[],"id_20483_g_0",[],0,"offset_direct_table"],
+    ["SELECT DISTINCT id,g FROM t LIMIT 0 OFFSET 2",[],"id_20483_g_0",[],0,"offset_direct_table"],
+    ["SELECT DISTINCT id,g FROM t LIMIT 0 OFFSET 8",[],"id_20483_g_0",[],0,"offset_direct_table"],
+    ["SELECT DISTINCT id,g FROM t LIMIT 1 OFFSET 0",[[1,3]],"id_20483_g_0",[],0,"limit_direct_table"],
+    ["SELECT DISTINCT id,g FROM t LIMIT 1 OFFSET 1",[[2,1]],"id_20483_g_0",[],0,"offset_direct_table"],
+    ["SELECT DISTINCT id,g FROM t LIMIT 1 OFFSET 2",[[3,1]],"id_20483_g_0",[],0,"offset_direct_table"],
+    ["SELECT DISTINCT id,g FROM t LIMIT 1 OFFSET 8",[],"id_20483_g_0",[],0,"offset_direct_table"],
+    ["SELECT DISTINCT id,g FROM t LIMIT 2 OFFSET 0",[[1,3],[2,1]],"id_20483_g_0",[],0,"limit_direct_table"],
+    ["SELECT DISTINCT id,g FROM t LIMIT 2 OFFSET 1",[[2,1],[3,1]],"id_20483_g_0",[],0,"offset_direct_table"],
+    ["SELECT DISTINCT id,g FROM t LIMIT 2 OFFSET 2",[[3,1],[4,null]],"id_20483_g_0",[],0,"offset_direct_table"],
+    ["SELECT DISTINCT id,g FROM t LIMIT 2 OFFSET 8",[],"id_20483_g_0",[],0,"offset_direct_table"],
+    ["SELECT DISTINCT NULL AS n,g FROM t",[[null,3],[null,1],[null,null]],"n_128_g_32768",[],0,"all_temporary_table"],
+    ["SELECT DISTINCT NULL AS n,g FROM t LIMIT 0 OFFSET 0",[],"n_128_g_0",[],0,"zero"],
+    ["SELECT DISTINCT NULL AS n,g FROM t LIMIT 0 OFFSET 1",[],"n_128_g_0",[],0,"offset_temporary_table"],
+    ["SELECT DISTINCT NULL AS n,g FROM t LIMIT 0 OFFSET 2",[],"n_128_g_0",[],0,"offset_temporary_table"],
+    ["SELECT DISTINCT NULL AS n,g FROM t LIMIT 0 OFFSET 8",[],"n_128_g_0",[],0,"offset_temporary_table"],
+    ["SELECT DISTINCT NULL AS n,g FROM t LIMIT 1 OFFSET 0",[[null,3]],"n_128_g_0",[],0,"limit_temporary_table"],
+    ["SELECT DISTINCT NULL AS n,g FROM t LIMIT 1 OFFSET 1",[[null,1]],"n_128_g_0",[],0,"offset_temporary_table"],
+    ["SELECT DISTINCT NULL AS n,g FROM t LIMIT 1 OFFSET 2",[[null,null]],"n_128_g_0",[],0,"offset_temporary_table"],
+    ["SELECT DISTINCT NULL AS n,g FROM t LIMIT 1 OFFSET 8",[],"n_128_g_0",[],0,"offset_temporary_table"],
+    ["SELECT DISTINCT NULL AS n,g FROM t LIMIT 2 OFFSET 0",[[null,3],[null,1]],"n_128_g_0",[],0,"limit_temporary_table"],
+    ["SELECT DISTINCT NULL AS n,g FROM t LIMIT 2 OFFSET 1",[[null,1],[null,null]],"n_128_g_0",[],0,"offset_temporary_table"],
+    ["SELECT DISTINCT NULL AS n,g FROM t LIMIT 2 OFFSET 2",[[null,null]],"n_128_g_0",[],0,"offset_temporary_table"],
+    ["SELECT DISTINCT NULL AS n,g FROM t LIMIT 2 OFFSET 8",[],"n_128_g_0",[],0,"offset_temporary_table"],
+    ["SELECT DISTINCT 3 AS n,g FROM t",[[3,3],[3,1],[3,null]],"n_129_g_32768",[],0,"all_temporary_table"],
+    ["SELECT DISTINCT 3 AS n,g FROM t LIMIT 0 OFFSET 0",[],"n_129_g_0",[],0,"zero"],
+    ["SELECT DISTINCT 3 AS n,g FROM t LIMIT 0 OFFSET 1",[],"n_129_g_0",[],0,"offset_temporary_table"],
+    ["SELECT DISTINCT 3 AS n,g FROM t LIMIT 0 OFFSET 2",[],"n_129_g_0",[],0,"offset_temporary_table"],
+    ["SELECT DISTINCT 3 AS n,g FROM t LIMIT 0 OFFSET 8",[],"n_129_g_0",[],0,"offset_temporary_table"],
+    ["SELECT DISTINCT 3 AS n,g FROM t LIMIT 1 OFFSET 0",[[3,3]],"n_129_g_0",[],0,"limit_temporary_table"],
+    ["SELECT DISTINCT 3 AS n,g FROM t LIMIT 1 OFFSET 1",[[3,1]],"n_129_g_0",[],0,"offset_temporary_table"],
+    ["SELECT DISTINCT 3 AS n,g FROM t LIMIT 1 OFFSET 2",[[3,null]],"n_129_g_0",[],0,"offset_temporary_table"],
+    ["SELECT DISTINCT 3 AS n,g FROM t LIMIT 1 OFFSET 8",[],"n_129_g_0",[],0,"offset_temporary_table"],
+    ["SELECT DISTINCT 3 AS n,g FROM t LIMIT 2 OFFSET 0",[[3,3],[3,1]],"n_129_g_0",[],0,"limit_temporary_table"],
+    ["SELECT DISTINCT 3 AS n,g FROM t LIMIT 2 OFFSET 1",[[3,1],[3,null]],"n_129_g_0",[],0,"offset_temporary_table"],
+    ["SELECT DISTINCT 3 AS n,g FROM t LIMIT 2 OFFSET 2",[[3,null]],"n_129_g_0",[],0,"offset_temporary_table"],
+    ["SELECT DISTINCT 3 AS n,g FROM t LIMIT 2 OFFSET 8",[],"n_129_g_0",[],0,"offset_temporary_table"],
+    ["SELECT DISTINCT LAST_INSERT_ID(id) AS calls FROM t WHERE FALSE",[],"calls_161",[],0,"zero"],
+    ["SELECT DISTINCT LAST_INSERT_ID(id) AS calls FROM t WHERE FALSE LIMIT 0 OFFSET 0",[],"calls_161",[],0,"zero"],
+    ["SELECT DISTINCT LAST_INSERT_ID(id) AS calls FROM t WHERE FALSE LIMIT 0 OFFSET 1",[],"calls_161",[],0,"zero"],
+    ["SELECT DISTINCT LAST_INSERT_ID(id) AS calls FROM t WHERE FALSE LIMIT 0 OFFSET 2",[],"calls_161",[],0,"zero"],
+    ["SELECT DISTINCT LAST_INSERT_ID(id) AS calls FROM t WHERE FALSE LIMIT 0 OFFSET 8",[],"calls_161",[],0,"zero"],
+    ["SELECT DISTINCT LAST_INSERT_ID(id) AS calls FROM t WHERE FALSE LIMIT 1 OFFSET 0",[],"calls_161",[],0,"zero"],
+    ["SELECT DISTINCT LAST_INSERT_ID(id) AS calls FROM t WHERE FALSE LIMIT 1 OFFSET 1",[],"calls_161",[],0,"zero"],
+    ["SELECT DISTINCT LAST_INSERT_ID(id) AS calls FROM t WHERE FALSE LIMIT 1 OFFSET 2",[],"calls_161",[],0,"zero"],
+    ["SELECT DISTINCT LAST_INSERT_ID(id) AS calls FROM t WHERE FALSE LIMIT 1 OFFSET 8",[],"calls_161",[],0,"zero"],
+    ["SELECT DISTINCT LAST_INSERT_ID(id) AS calls FROM t WHERE FALSE LIMIT 2 OFFSET 0",[],"calls_161",[],0,"zero"],
+    ["SELECT DISTINCT LAST_INSERT_ID(id) AS calls FROM t WHERE FALSE LIMIT 2 OFFSET 1",[],"calls_161",[],0,"zero"],
+    ["SELECT DISTINCT LAST_INSERT_ID(id) AS calls FROM t WHERE FALSE LIMIT 2 OFFSET 2",[],"calls_161",[],0,"zero"],
+    ["SELECT DISTINCT LAST_INSERT_ID(id) AS calls FROM t WHERE FALSE LIMIT 2 OFFSET 8",[],"calls_161",[],0,"zero"],
+    ["SELECT DISTINCT LAST_INSERT_ID(id) AS calls FROM t WHERE id=99",[],"calls_161",[],0,"zero"],
+    ["SELECT DISTINCT LAST_INSERT_ID(id) AS calls FROM t WHERE id=99 LIMIT 0 OFFSET 0",[],"calls_161",[],0,"zero"],
+    ["SELECT DISTINCT LAST_INSERT_ID(id) AS calls FROM t WHERE id=99 LIMIT 0 OFFSET 1",[],"calls_161",[],0,"zero"],
+    ["SELECT DISTINCT LAST_INSERT_ID(id) AS calls FROM t WHERE id=99 LIMIT 0 OFFSET 2",[],"calls_161",[],0,"zero"],
+    ["SELECT DISTINCT LAST_INSERT_ID(id) AS calls FROM t WHERE id=99 LIMIT 0 OFFSET 8",[],"calls_161",[],0,"zero"],
+    ["SELECT DISTINCT LAST_INSERT_ID(id) AS calls FROM t WHERE id=99 LIMIT 1 OFFSET 0",[],"calls_161",[],0,"zero"],
+    ["SELECT DISTINCT LAST_INSERT_ID(id) AS calls FROM t WHERE id=99 LIMIT 1 OFFSET 1",[],"calls_161",[],0,"zero"],
+    ["SELECT DISTINCT LAST_INSERT_ID(id) AS calls FROM t WHERE id=99 LIMIT 1 OFFSET 2",[],"calls_161",[],0,"zero"],
+    ["SELECT DISTINCT LAST_INSERT_ID(id) AS calls FROM t WHERE id=99 LIMIT 1 OFFSET 8",[],"calls_161",[],0,"zero"],
+    ["SELECT DISTINCT LAST_INSERT_ID(id) AS calls FROM t WHERE id=99 LIMIT 2 OFFSET 0",[],"calls_161",[],0,"zero"],
+    ["SELECT DISTINCT LAST_INSERT_ID(id) AS calls FROM t WHERE id=99 LIMIT 2 OFFSET 1",[],"calls_161",[],0,"zero"],
+    ["SELECT DISTINCT LAST_INSERT_ID(id) AS calls FROM t WHERE id=99 LIMIT 2 OFFSET 2",[],"calls_161",[],0,"zero"],
+    ["SELECT DISTINCT LAST_INSERT_ID(id) AS calls FROM t WHERE id=99 LIMIT 2 OFFSET 8",[],"calls_161",[],0,"zero"],
+    ["SELECT DISTINCT LAST_INSERT_ID(id) AS calls FROM t",[[1],[2],[3],[4]],"calls_33",[],4,"all_temporary_primary"],
+    ["SELECT DISTINCT LAST_INSERT_ID(id) AS calls FROM t LIMIT 0 OFFSET 0",[],"calls_161",[],0,"zero"],
+    ["SELECT DISTINCT LAST_INSERT_ID(id) AS calls FROM t LIMIT 0 OFFSET 1",[],"calls_33",[],1,"offset_temporary_primary"],
+    ["SELECT DISTINCT LAST_INSERT_ID(id) AS calls FROM t LIMIT 0 OFFSET 2",[],"calls_33",[],2,"offset_temporary_primary"],
+    ["SELECT DISTINCT LAST_INSERT_ID(id) AS calls FROM t LIMIT 0 OFFSET 8",[],"calls_33",[],4,"offset_temporary_primary"],
+    ["SELECT DISTINCT LAST_INSERT_ID(id) AS calls FROM t LIMIT 1 OFFSET 0",[[1]],"calls_33",[],1,"limit_temporary_primary"],
+    ["SELECT DISTINCT LAST_INSERT_ID(id) AS calls FROM t LIMIT 1 OFFSET 1",[[2]],"calls_33",[],2,"offset_temporary_primary"],
+    ["SELECT DISTINCT LAST_INSERT_ID(id) AS calls FROM t LIMIT 1 OFFSET 2",[[3]],"calls_33",[],3,"offset_temporary_primary"],
+    ["SELECT DISTINCT LAST_INSERT_ID(id) AS calls FROM t LIMIT 1 OFFSET 8",[],"calls_33",[],4,"offset_temporary_primary"],
+    ["SELECT DISTINCT LAST_INSERT_ID(id) AS calls FROM t LIMIT 2 OFFSET 0",[[1],[2]],"calls_33",[],2,"limit_temporary_primary"],
+    ["SELECT DISTINCT LAST_INSERT_ID(id) AS calls FROM t LIMIT 2 OFFSET 1",[[2],[3]],"calls_33",[],3,"offset_temporary_primary"],
+    ["SELECT DISTINCT LAST_INSERT_ID(id) AS calls FROM t LIMIT 2 OFFSET 2",[[3],[4]],"calls_33",[],4,"offset_temporary_primary"],
+    ["SELECT DISTINCT LAST_INSERT_ID(id) AS calls FROM t LIMIT 2 OFFSET 8",[],"calls_33",[],4,"offset_temporary_primary"],
+    ["SELECT DISTINCT CAST(CONCAT(g,'x') AS SIGNED) AS n FROM t",[[3],[1],[null]],"n_32768",["3x","1x","1x"],0,"all_temporary_table"],
+    ["SELECT DISTINCT CAST(CONCAT(g,'x') AS SIGNED) AS n FROM t LIMIT 0 OFFSET 0",[],"n_128",[],0,"zero"],
+    ["SELECT DISTINCT CAST(CONCAT(g,'x') AS SIGNED) AS n FROM t LIMIT 0 OFFSET 1",[],"n_0",["3x"],0,"offset_temporary_table"],
+    ["SELECT DISTINCT CAST(CONCAT(g,'x') AS SIGNED) AS n FROM t LIMIT 0 OFFSET 2",[],"n_0",["3x","1x"],0,"offset_temporary_table"],
+    ["SELECT DISTINCT CAST(CONCAT(g,'x') AS SIGNED) AS n FROM t LIMIT 0 OFFSET 8",[],"n_0",["3x","1x","1x"],0,"offset_temporary_table"],
+    ["SELECT DISTINCT CAST(CONCAT(g,'x') AS SIGNED) AS n FROM t LIMIT 1 OFFSET 0",[[3]],"n_0",["3x"],0,"limit_temporary_table"],
+    ["SELECT DISTINCT CAST(CONCAT(g,'x') AS SIGNED) AS n FROM t LIMIT 1 OFFSET 1",[[1]],"n_0",["3x","1x"],0,"offset_temporary_table"],
+    ["SELECT DISTINCT CAST(CONCAT(g,'x') AS SIGNED) AS n FROM t LIMIT 1 OFFSET 2",[[null]],"n_0",["3x","1x","1x"],0,"offset_temporary_table"],
+    ["SELECT DISTINCT CAST(CONCAT(g,'x') AS SIGNED) AS n FROM t LIMIT 1 OFFSET 8",[],"n_0",["3x","1x","1x"],0,"offset_temporary_table"],
+    ["SELECT DISTINCT CAST(CONCAT(g,'x') AS SIGNED) AS n FROM t LIMIT 2 OFFSET 0",[[3],[1]],"n_0",["3x","1x"],0,"limit_temporary_table"],
+    ["SELECT DISTINCT CAST(CONCAT(g,'x') AS SIGNED) AS n FROM t LIMIT 2 OFFSET 1",[[1],[null]],"n_0",["3x","1x","1x"],0,"offset_temporary_table"],
+    ["SELECT DISTINCT CAST(CONCAT(g,'x') AS SIGNED) AS n FROM t LIMIT 2 OFFSET 2",[[null]],"n_0",["3x","1x","1x"],0,"offset_temporary_table"],
+    ["SELECT DISTINCT CAST(CONCAT(g,'x') AS SIGNED) AS n FROM t LIMIT 2 OFFSET 8",[],"n_0",["3x","1x","1x"],0,"offset_temporary_table"],
+  ]
+  try {
+    await conn.query('CREATE DATABASE IF NOT EXISTS distinct_init')
+    await conn.query('USE distinct_init')
+    await conn.query('CREATE TABLE t(id INT PRIMARY KEY,g INT)')
+    await conn.query('INSERT INTO t VALUES(1,3),(2,1),(3,1),(4,NULL)')
+    await conn.query('ANALYZE TABLE t')
+    for (const [sql, expected, layout, truncated, calls, plan] of fixtures) {
+      for (const method of ['query', 'execute'] as const) {
+        await conn.query('SELECT LAST_INSERT_ID(0)')
+        const options = { sql, rowsAsArray: true }
+        const [rows, columns] = method === 'query' ? await conn.query(options) : await conn.execute(options)
+        assert.deepEqual(rows, expected, method + ': ' + sql)
+        assert.deepEqual(columns.map((f) => [f.name, f.columnType, f.columnLength, f.flags, f.decimals, f.characterSet, f.schema, f.table, f.orgTable, f.orgName]), fields[layout], method + ': fields: ' + sql)
+        const warnings = truncated.map((value) => ({ Level: 'Warning', Code: 1292, Message: "Truncated incorrect INTEGER value: '" + value + "'" }))
+        assert.deepEqual((await conn.query('SHOW WARNINGS'))[0], warnings, method + ': warnings: ' + sql)
+        assert.deepEqual((await conn.query({ sql: 'SELECT LAST_INSERT_ID()', rowsAsArray: true }))[0], [[calls]], method + ': effects: ' + sql)
+        const [explain] = await conn.query<mysql.RowDataPacket[]>('EXPLAIN FORMAT=TREE ' + sql)
+        assert.equal(planSkeleton(explain[0]?.EXPLAIN), plans[plan], method + ': plan: ' + sql)
+        conn.unprepare(options)
+      }
+    }
+  } finally {
+    await conn.query('DROP DATABASE IF EXISTS distinct_init')
+    await conn.end()
+    await db?.end()
+  }
+})

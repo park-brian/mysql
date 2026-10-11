@@ -86,9 +86,10 @@ export interface ResultType {
   /**
    * Copied through a temporary table — a `SELECT DISTINCT` MySQL runs that
    * way. A column then loses its key flags, and gains `GROUP_FLAG` if it is
-   * nullable and part of the grouping; a column the WHERE pins to one value
-   * (`'pinned'`) is not. An expression keeps only NOT_NULL (8.4.11; the
-   * metadata of an expression there is M5.5's, and differs more than this).
+   * nullable and part of the grouping. A copied field outside that key
+   * (`'pinned'`) is not: a WHERE-pinned column or bounded unordered DISTINCT.
+   * Expressions report their copied field's flags (8.4.11); that metadata
+   * is M5.5's and differs more than this.
    */
   readonly temporary?: boolean | 'pinned' | 'stream'
   /**
