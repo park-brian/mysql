@@ -15,7 +15,7 @@ verbatim.
 mysql-test/t/alias.test        →  mysql-test/r/alias.result
 ```
 
-The format is simple enough to reimplement:
+The format mixes SQL with runner directives:
 
 ```
 --disable_warnings
@@ -33,17 +33,19 @@ Oracle's own definition of correct behaviour, it covers the type system,
 `sql_mode`, collations, edge cases, and error messages, and it is already
 written.
 
-Plan:
+M5.15 uses the official `mysqltest` client shipped in `mysql-community-test`
+8.4.11; a separate interpreter was unnecessary. `tools/mysqltest-run.mjs --ours`
+runs all 1,459 packaged files with recorded results, using a fresh database per
+file over TCP. The reference denominator is the 1,146 files MySQL 8.4.11 passes
+under its own `mysql-test-run.pl`. The `mysqltest-run` CI job repeats our side
+and checks that the roadmap's exact scoreboard matches the measured run.
 
-1. Write a `mysqltest` interpreter in JavaScript supporting the directives that
-   matter — `--disable_warnings`, `--error`, `--replace_result`, `--sorted_result`,
-   `--let`, `if`/`while`, `--echo`, `--source`. Perhaps 1,500 lines; the long
-   tail of directives can throw "unsupported" and skip the file.
-2. Curate an allowlist, growing over time: start with `type_*`, `func_*`,
-   `select`, `join*`, `order_by`, `group_by`, `insert*`, `update`, `delete`,
-   `null`, `varbinary`, `ctype_*`.
-3. Track the pass rate as a headline number in CI. "We pass 812 of MySQL's own
-   test files" is a far more meaningful claim than any prose.
+The recorded outcomes contain file names, pass/fail/skip classifications and
+failure classes, never SQL or result text. Inspect failures before updating a
+measurement: a formerly passing file may have relied on a false-success no-op.
+Keep reference outcomes unchanged unless the reference itself is rerun. The
+separate parse-only census uses 120 files from the pinned source tree, whose
+1,543-file listing differs from the packaged runtime suite.
 
 Note the licensing point: the suite is GPLv2, like the rest of MySQL. Running it
 against our implementation during development is fine; **vendoring it into an
@@ -201,7 +203,9 @@ because in a browser they are performance.
 
 ## 8. What "compatible" will mean concretely
 
-The claim should be a number, published and reproducible:
+The claim should be a number, published and reproducible. This illustrates
+the dashboard format; these are not measured results. The current measurements
+and remaining targets are in [the roadmap's scoreboard](./44-roadmap.md#scoreboard):
 
 ```
 MySQL test suite:      812 / 1,543 files passing   (52.6%)
