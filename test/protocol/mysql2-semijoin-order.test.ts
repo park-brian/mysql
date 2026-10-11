@@ -27,7 +27,7 @@ test('outer-first semijoins choose ordered PRIMARY or covering scans and sort be
   const conn = await mysql.createConnection(db === undefined
     ? { host: host ?? '127.0.0.1', port: Number(process.env.MYSQL_REFERENCE_PORT ?? 3306), user: 'root', password: process.env.MYSQL_REFERENCE_PASSWORD ?? 'root' }
     : { stream: db.createStream(), user: 'root', password: '' })
-  const run = async (sql: string, expected: unknown[][], plan: string | undefined, alias = 'pa', name = 'name') => {
+  const run = async (sql: string, expected: unknown[][], plan: string, alias = 'pa', name = 'name') => {
     for (const method of ['query', 'execute'] as const) {
       const options = { sql, rowsAsArray: true }
       const [rows, fields] = method === 'query' ? await conn.query(options) : await conn.execute(options)
@@ -35,10 +35,8 @@ test('outer-first semijoins choose ordered PRIMARY or covering scans and sort be
       assert.deepEqual(fields.map((f) => [f.name, f.columnType, f.columnLength, f.flags, f.decimals, f.characterSet, f.schema, f.table, f.orgTable, f.orgName]),
         [[name, 253, 48, 20485, 0, 224, 'semi_order', alias, 'pa', 'name']], `${method}: fields`)
       assert.deepEqual((await conn.query('SHOW WARNINGS'))[0], [], `${method}: warnings`)
-      if (plan !== undefined) {
-        const [explain] = await conn.query<mysql.RowDataPacket[]>(`EXPLAIN FORMAT=TREE ${sql}`)
-        assert.equal(planSkeleton(explain[0]?.EXPLAIN), plan, `${method}: ${sql}`)
-      }
+      const [explain] = await conn.query<mysql.RowDataPacket[]>(`EXPLAIN FORMAT=TREE ${sql}`)
+      assert.equal(planSkeleton(explain[0]?.EXPLAIN), plan, `${method}: ${sql}`)
       conn.unprepare(options)
     }
   }
@@ -76,10 +74,21 @@ test('outer-first semijoins choose ordered PRIMARY or covering scans and sort be
     await run(`${base} ORDER BY id`, [['a']], primary)
     await conn.query('DROP TABLE pa,ch')
     await populate((sql) => conn.query(sql), true)
-    // Descending-schema access choices remain open; this ascending fallback
-    // must retain correct values, source fields and warnings through sorting.
-    await run(`${base} ORDER BY id`, [['z'], ['a']], undefined)
-    await run(`${base} ORDER BY id DESC LIMIT 1`, [['a']], undefined)
+    for (const desc of [false, true]) {
+      const order = desc ? ' DESC' : ''
+      const rows = desc ? [['a'], ['z']] : [['z'], ['a']]
+      await run(`${base} ORDER BY id${order}`, rows, primary)
+      await run(`${base} ORDER BY id${order} LIMIT 1`, rows.slice(0, 1), limited(primary))
+      await run(`${base} ORDER BY id${order} LIMIT 1 OFFSET 1`, rows.slice(1), limited(primary, 'Limit/Offset'))
+      await run(`${base} ORDER BY name${order}`, [...rows].reverse(), cover)
+    }
+    await run(`${base} ORDER BY name,id`, [['a'], ['z']], sorted)
+    await conn.query("SET optimizer_switch='prefer_ordering_index=off'")
+    await run(`${base} ORDER BY id`, [['z'], ['a']], sorted)
+    await run(`${base} ORDER BY id DESC LIMIT 1`, [['a']], limited(sorted))
+    await conn.query("SET optimizer_switch='prefer_ordering_index=on,firstmatch=off'")
+    await run(`${base} ORDER BY id`, [['z'], ['a']], distinct)
+    await run(`${base} ORDER BY id DESC LIMIT 1`, [['a']], limited(distinct))
   } finally {
     await conn.query('DROP DATABASE IF EXISTS semi_order')
     await conn.end()
@@ -133,6 +142,62 @@ test('first-table sorting precedes lookup probes and both ordered paths release 
       try {
         await other.query('SET innodb_lock_wait_timeout=1')
         await other.query('UPDATE d.ch SET pa_id=1 WHERE id=2')
+      } finally {
+        await other.end()
+      }
+      assert.equal(db.openConnections, 1)
+    }
+  } finally {
+    await db.end()
+  }
+})
+
+test('DESC PRIMARY scans stop after the first semijoin match and release locks in either direction', async () => {
+  const db = await MySQL.open(':memory:')
+  const sql = base.replace('FROM pa', 'FROM d.pa').replace('FROM ch', 'FROM d.ch')
+  try {
+    await db.query('CREATE DATABASE d')
+    await db.query('USE d')
+    await populate((sql) => db.query(sql), true)
+    const catalog = db.catalog!
+    const open = catalog.table.bind(catalog)
+    let probes = 0
+    let closed = 0
+    catalog.table = (schema, name, trx) => {
+      const table = open(schema, name, trx)
+      if (schema === 'd' && name === 'ch') {
+        const scan = table.indexScan.bind(table)
+        table.indexScan = function*(index, range, transaction, mode) {
+          const probe = index === 'pa_id' && range?.from !== undefined && range.to !== undefined
+          if (probe) probes++
+          try {
+            yield* scan(index, range, transaction, mode)
+          } finally {
+            if (probe) closed++
+          }
+        }
+      }
+      return table
+    }
+    try {
+      for (const [order, name, expectedProbes] of [['id', 'z', 1], ['id DESC', 'a', 2]] as const) {
+        probes = closed = 0
+        assert.deepEqual((await db.query(`${sql} ORDER BY ${order} LIMIT 1`))[0], [{ name }])
+        assert.equal(probes, expectedProbes, 'DESC skips unmatched id=3 before reaching its first match; ASC starts at id=1')
+        assert.equal(closed, expectedProbes)
+      }
+    } finally {
+      catalog.table = open
+    }
+    for (const [order, name] of [['id', 'z'], ['id DESC', 'a']]) {
+      for await (const row of db.stream(`${sql} ORDER BY ${order} FOR UPDATE`)) {
+        assert.deepEqual(row, { name })
+        break
+      }
+      const other = await db.connect()
+      try {
+        await other.query('SET innodb_lock_wait_timeout=1')
+        await other.query('UPDATE d.ch SET pa_id=pa_id WHERE id IN (2,4)')
       } finally {
         await other.end()
       }

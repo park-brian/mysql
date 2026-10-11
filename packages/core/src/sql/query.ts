@@ -351,7 +351,7 @@ function planSelect(run: Run, q: QueryExpression, node: SelectNode): SelectPlan 
   }
 
   // An ORDER BY item that reads only a STRAIGHT_JOIN's const tables is a constant, which nothing sorts by (8.4.11).
-  const constantKey = (o: OrderItem): boolean => constants.size > 0 && !refersToRow(orderedExpr(o, items), lookup, constants)
+  const constantKey = (o: OrderItem): boolean => constants.size > 0 && !refersToRow(sortExpression(o.expr, items), lookup, constants)
 
   // `SELECT DISTINCT` is run through a temporary table — which changes the
   // metadata a client sees — unless the select list holds a whole key of NOT
@@ -483,7 +483,7 @@ function planSelect(run: Run, q: QueryExpression, node: SelectNode): SelectPlan 
   // Windows and hash antijoins still sort their delivered rows, even over an ordered index.
   const outerLoop = semi?.loose === false && source !== undefined && sortBy === source.alias
   const ordered = source !== undefined && read !== undefined && !deduplicated && !windowed && (anti === undefined || anti.lookup) && match === undefined && keys.length > 0 && read.ranges === undefined ? orderingIndex(source.def, source.alias, q.orderBy ?? [], items, lookup, read.index, outerLoop && optimizerEnabled(run, 'prefer_ordering_index')) : undefined
-  if (ordered !== undefined) from?.readInOrder(ordered, false, (q.orderBy ?? [])[0]?.desc === true, source?.alias)
+  if (ordered !== undefined) from?.readInOrder(ordered.index, false, ordered.reverse, source?.alias)
   const sortedFirst = outerLoop && ordered === undefined && keys.length > 0
   if (sortedFirst && source !== undefined) from?.sortFirst(source.alias, keys)
 
@@ -929,17 +929,6 @@ function soleTable(from: FromPlan | undefined, constants: ReadonlySet<string>): 
   return t?.def === undefined ? undefined : { alias: t.alias, def: t.def, offset: t.offset }
 }
 
-/** The expression an ORDER BY item sorts by: a select item it names by position or alias, or itself. */
-function orderedExpr(o: OrderItem, items: readonly { expr?: Expression; alias?: string }[]): Expression | undefined {
-  const e = o.expr
-  if (e.kind === NODE.LITERAL && e.type === 'int') return items[Number(e.value as bigint) - 1]?.expr
-  if (e.kind === NODE.COLUMN && e.parts.length === 1) {
-    const alias = items.find((i) => i.alias?.toLowerCase() === (e.parts[0] as string).toLowerCase())
-    if (alias !== undefined) return alias.expr
-  }
-  return e
-}
-
 /**
  * Whether the optimizer proves the result empty — an impossible condition, a
  * join that cannot match, a const table with no row for its key, LIMIT 0 — and
@@ -1011,7 +1000,7 @@ function columnRefs(e: unknown, out: (readonly string[])[] = []): (readonly stri
  * anything. 8.4.11 reads the index in that order and sorts nothing ("Index
  * scan on t using PRIMARY", "Covering index scan on t using name").
  */
-function orderingIndex(def: TableDef, alias: string, order: readonly OrderItem[], items: readonly { compiled: Compiled; expr?: Expression; alias?: string }[], scope: Scope, readBy: string | undefined, primary = false): string | undefined {
+function orderingIndex(def: TableDef, alias: string, order: readonly OrderItem[], items: readonly { compiled: Compiled; expr?: Expression; alias?: string }[], scope: Scope, readBy: string | undefined, primary = false): { readonly index: string; readonly reverse: boolean } | undefined {
   const clustered = def.indexes.find((i) => i.kind === 'primary' || i.name === def.clustered)
   const index = readBy === undefined ? clustered : def.indexes.find((i) => i.name === readBy)
   if (index === undefined || clustered === undefined || order.length === 0) return undefined
@@ -1021,25 +1010,29 @@ function orderingIndex(def: TableDef, alias: string, order: readonly OrderItem[]
     if ((o.desc === true) !== desc) return undefined
     const e = sortExpression(o.expr, items)
     if (e === undefined || e.kind !== NODE.COLUMN) return undefined
-    let name: string | undefined
     try {
       const r = scope.resolve(e.parts, 'order clause')
       const column = r.type.column
-      name = r.depth === undefined && column !== undefined && column.table === alias ? column.orgName : undefined
+      if (r.depth !== undefined || column === undefined || column.table !== alias) return undefined
+      names.push(column.orgName.toLowerCase())
     } catch (err) {
       expectTyped(err)
+      return undefined
     }
-    if (name === undefined) return undefined
-    names.push(name.toLowerCase())
   }
-  // An ascending clustered scan covers every row field. For a whole-table outer
-  // loop, MySQL prefers it over a scan plus sort when prefer_ordering_index is on.
-  // Descending schema keys still need test_if_order_by_key's direction handling.
-  for (const candidate of primary && clustered.parts.every((p) => p.descending !== true) ? [index, clustered] : [index]) {
+  // A clustered scan covers every row field. For a whole-table outer loop,
+  // MySQL prefers it over a scan plus sort when prefer_ordering_index is on.
+  // A single descending PRIMARY key runs physically opposite to SQL ASC.
+  const descendingPrimary = clustered.parts.length === 1 && clustered.parts[0]?.descending === true
+  const primaryOrder = descendingPrimary || clustered.parts.every((p) => p.descending !== true)
+  const clusteredNames = clustered.parts.map((p) => p.column.toLowerCase())
+  for (const candidate of primary && primaryOrder ? [index, clustered] : [index]) {
     const own = candidate.parts.map((p) => p.column.toLowerCase())
-    const parts = candidate === clustered ? own : [...own, ...clustered.parts.map((p) => p.column.toLowerCase()).filter((c) => !own.includes(c))]
-    const covered = names.length <= parts.length ? names.every((n, i) => n === parts[i]) : parts.every((p, i) => p === names[i])
-    if (covered) return candidate.name
+    // A secondary key followed by DESC PRIMARY is not uniformly ordered.
+    if (candidate !== clustered && names.length > own.length && descendingPrimary) continue
+    const parts = candidate === clustered ? clusteredNames : [...own, ...clusteredNames.filter((c) => !own.includes(c))]
+    const covered = parts.slice(0, names.length).every((p, i) => p === names[i])
+    if (covered) return { index: candidate.name, reverse: desc !== (candidate === clustered && descendingPrimary) }
   }
   return undefined
 }
@@ -1610,7 +1603,10 @@ function sortStage(keys: readonly SortKey[]): Stage {
 /** An ORDER/GROUP key's expression, resolving select-list positions and aliases once. */
 function sortExpression(e: Expression, items: readonly { readonly alias?: string; readonly expr?: Expression }[]): Expression | undefined {
   if (e.kind === NODE.LITERAL && e.type === 'int') return items[Number(e.value as bigint) - 1]?.expr
-  if (e.kind === NODE.COLUMN && e.parts.length === 1) return items.find((i) => i.alias?.toLowerCase() === (e.parts[0] as string).toLowerCase())?.expr ?? e
+  if (e.kind === NODE.COLUMN && e.parts.length === 1) {
+    const alias = items.find((i) => i.alias?.toLowerCase() === (e.parts[0] as string).toLowerCase())
+    if (alias !== undefined) return alias.expr
+  }
   return e
 }
 
