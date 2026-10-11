@@ -40,7 +40,7 @@ import { truth, type Value } from '@myjs/types'
 import type { Compiled, Env, Row, Scope } from './compile.ts'
 import { planNode, type PlanNode } from './explain.ts'
 import { FULL_SCAN, accessRows, chooseAccess, dynamicAccess, keyOrder, pointAccess, splitAnd, type Access, type OuterColumn, type RangeCosting } from './plan.ts'
-import { bestAccess, floorFilter, joinOrder, type Candidate, type KeyChoice, type Positioned } from './cost.ts'
+import { bestAccess, floorFilter, indexScanCost, joinOrder, type Candidate, type KeyChoice, type Positioned } from './cost.ts'
 import { rowKey } from './keys.ts'
 import { chooseStrategy } from './group.ts'
 import { sort as sortRows, type SortKey } from './operators.ts'
@@ -144,10 +144,8 @@ export interface FromPlan {
   sortsFirst(aliases: ReadonlySet<string>): boolean
   /** Supply grouping order on the first base table of an inner lookup join, by index or sort. */
   orderGroupsFirst(keys: readonly { readonly expr: Expression; readonly compiled: Compiled }[]): 'index' | 'sort' | undefined
-  /** Deduplicate an ordered first-table integer key before the chosen outer-key lookup. */
-  looseScan(alias: string, index: string, column: string, key: Compiled): boolean
-  /** Stop the indexed semijoin through FirstMatch or DISTINCT's unused last table. */
-  indexSemijoin(alias: string, where: Expression | undefined, firstMatch: boolean): boolean
+  /** Choose the bounded integer semijoin's ordered deduplication or outer-first indexed loop. */
+  integerSemijoin(alias: string, index: IndexDef, key: Compiled, where: Expression | undefined, looseScan: boolean, firstMatch: boolean): 'loose' | 'loop' | undefined
   /**
    * The columns the query reads of each table (`'all'` for one read whole).
    * A table no condition chooses an access path for is read through the
@@ -578,18 +576,17 @@ export function planFrom(refs: readonly TableReference[], ctx: FromContext, wher
       else this.readInOrder(index, true, false, node.table.alias)
       return index === undefined ? 'sort' : 'index'
     },
-    looseScan(alias, index, column, key) {
+    integerSemijoin(alias, index, key, where, looseScan, firstMatch) {
+      if (looseScan) settings.loose = { alias, index, key }
       const plan = joinPlan()
       const node = plan?.node
-      if (node?.kind !== 'join' || node.left || node.outer.kind !== 'leaf' || node.outer.table.alias !== alias || node.inner.kind !== 'leaf' || !plan?.lookups.has(node.inner.table.alias)) return false
-      this.readInOrder(index, true, false, alias)
-      settings.loose = { alias, column, key }
-      return true
-    },
-    indexSemijoin(alias, where, firstMatch) {
-      const plan = joinPlan()
-      const node = plan?.node
-      if (node?.kind !== 'join' || node.left || node.outer.kind !== 'leaf' || node.inner.kind !== 'leaf' || node.inner.table.alias !== alias || !plan?.lookups.has(alias)) return false
+      if (node?.kind !== 'join' || node.left || node.outer.kind !== 'leaf' || node.inner.kind !== 'leaf') return undefined
+      if (looseScan && node.outer.table.alias === alias && plan?.lookups.has(node.inner.table.alias)) {
+        this.readInOrder(index.name, true, false, alias)
+        return 'loose'
+      }
+      delete settings.loose
+      if (node.inner.table.alias !== alias || !plan?.lookups.has(alias)) return undefined
       // Empty standalone inner ranges use materialization, whose semijoin cost is still open.
       const inner = node.inner.table
       if (ctx.env !== undefined && inner.table !== undefined && inner.def !== undefined) {
@@ -600,12 +597,12 @@ export function planFrom(refs: readonly TableReference[], ctx: FromContext, wher
             empty = false
             break
           }
-          if (empty) return false
+          if (empty) return undefined
         }
       }
       if (firstMatch) settings.firstMatch = alias
       else settings.distinctSelect = new Set([node.outer.table.alias])
-      return true
+      return 'loop'
     },
     ...(single === undefined ? {} : { single }),
     filter(where, compile, semijoin) {
@@ -902,7 +899,7 @@ interface LeafSettings {
   /** Grouping order supplied before an inner lookup join expands the first table's rows. */
   groupSort?: { readonly alias: string; readonly keys: readonly SortKey[] }
   /** LooseScan removes adjacent equal integer keys after the inner filter. */
-  loose?: { readonly alias: string; readonly column: string; readonly key: Compiled }
+  loose?: { readonly alias: string; readonly index: IndexDef; readonly key: Compiled }
   firstMatch?: string
 }
 
@@ -1149,7 +1146,7 @@ function toOp(node: Node, conditions: readonly Placed[], scope: TableScope, sett
             yield row
           }
         },
-        describe: (env) => planNode(`Remove duplicates from input sorted on ${loose.column}`, [input.describe(env)]),
+        describe: (env) => planNode(`Remove duplicates from input sorted on ${loose.index.parts[0]?.column}`, [input.describe(env)]),
       }
     }
     if (settings.groupSort?.alias === node.table.alias) {
@@ -1263,7 +1260,16 @@ function planJoins(root: Node, where: readonly Weighed[], scope: TableScope, set
         place: (prefix) => placeTable(t, lookupAfter(t, new Set(prefix.map((p) => p.alias))), prefix, conditions, scope, settings, statsOf(t), range),
       }
     })
-    const order = joinOrder(candidates, sort)
+    const driver = leaves.find((t) => t.alias === settings.loose?.alias)
+    const index = settings.loose?.index
+    const stats = driver === undefined ? undefined : statsOf(driver)
+    const loose = driver?.def === undefined || index === undefined || stats === undefined ? undefined : {
+      alias: driver.alias,
+      rows: stats.rows,
+      read: indexScanCost(stats.rows, indexBytes(driver.def, index) + indexBytes(driver.def, clusteredIndex(driver.def))),
+      fetched: stats.rows / stats.recordsPerKey(index, 1),
+    }
+    const order = joinOrder(candidates, sort, loose)
     const byAlias = new Map(leaves.map((t) => [t.alias, t]))
     let node: Node = { kind: 'leaf', table: byAlias.get((order[0] as Positioned).alias) as FromTable }
     const before = new Set([(order[0] as Positioned).alias])

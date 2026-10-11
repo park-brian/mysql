@@ -29,7 +29,7 @@ const FIXTURE = fileURLToPath(new URL('./fixtures/relational.json', import.meta.
 const REFUSED_AT_MOST = 0
 
 /** The fewest plans that must agree with the server's, skeleton for skeleton (M5.44). Raised by the planner's work, never lowered. */
-const PLANS_AGREE_AT_LEAST = 2116
+const PLANS_AGREE_AT_LEAST = 2118
 
 test('M5.18: every relational statement the executor runs returns what the server returned', async () => {
   assert.ok(existsSync(FIXTURE), 'the corpus must be committed')
@@ -40,7 +40,6 @@ test('M5.18: every relational statement the executor runs returns what the serve
   console.log(
     `  [relational] ${t.agreed} of ${t.statements} agree, ${t.refused} refused; order checked ${t.orderedByStatement} by ORDER BY, ` +
       `${t.orderedByPlan} by plan; plans agree on ${t.plansAgreed} of ${t.plansExplained}; ${t.unordered} compared as multisets (${t.unorderedInOrder} in the server's order anyway); ` +
-      `${t.unmodelled} under a plan strategy not yet modelled, metadata uncompared; ` +
       `warning counts differ on ${t.warningMismatches.length} of ${t.warningsCompared}`,
   )
   if (process.env.WARNINGS === '1') console.log(t.warningMismatches.join('\n'))

@@ -9,19 +9,6 @@ import { CONNECTION, runCase } from '../../tools/capture-relational.mjs'
 
 const NOT_SUPPORTED = 1235
 
-/**
- * Strategies not yet chosen for every eligible query (M5.7). Where our
- * plan differs, materialization and the column flags are cost decisions
- * too, so metadata is not compared; rows as a multiset and errors still
- * are, and the case is counted. Matching plans always compare metadata
- * through both protocols and compare rows in order.
- */
-const UNMODELLED: readonly (string | RegExp)[] = [
-  // LooseScan, a semijoin strategy (M5.47).
-  'Remove duplicates from input sorted on',
-]
-const unmodelled = (plan: string | null | undefined): boolean => UNMODELLED.some((m) => (typeof m === 'string' ? plan?.includes(m) === true : plan !== null && plan !== undefined && m.test(plan)))
-
 interface Answer {
   readonly columns?: unknown
   readonly rows?: readonly unknown[] | undefined
@@ -61,8 +48,6 @@ export interface Tally {
   /** Queries compared as a multiset, and of those, how many came back in the server's order anyway. */
   unordered: number
   unorderedInOrder: number
-  /** Queries whose differing server plan used a strategy listed in UNMODELLED. */
-  unmodelled: number
   mismatches: string[]
   /** Queries that agree whose warning count was compared, and those whose count did not (M5.28). */
   warningsCompared: number
@@ -107,7 +92,7 @@ export async function replay(fixture: Fixture, connection: Record<string, unknow
   const conn = await mysql.createConnection({ stream: db.createStream(), user: 'root', password: '', ...connection })
   await conn.query(`SET sql_mode = '${fixture.sqlMode}'`)
   if (fixture.timestamp !== undefined) await conn.query(`SET TIMESTAMP = ${fixture.timestamp}`)
-  const tally: Tally = { statements: 0, agreed: 0, refused: 0, orderedByStatement: 0, orderedByPlan: 0, plansAgreed: 0, plansExplained: 0, unordered: 0, unorderedInOrder: 0, unmodelled: 0, mismatches: [], warningsCompared: 0, warningMismatches: [] }
+  const tally: Tally = { statements: 0, agreed: 0, refused: 0, orderedByStatement: 0, orderedByPlan: 0, plansAgreed: 0, plansExplained: 0, unordered: 0, unorderedInOrder: 0, mismatches: [], warningsCompared: 0, warningMismatches: [] }
   try {
     for (const expected of fixture.cases) {
       const actual = (await runCase(conn, expected.map(({ sql, select, ordered, serverOnly }) => ({ sql, select, ordered, serverOnly })), { warnings: true })) as Outcome[]
@@ -130,9 +115,6 @@ export async function replay(fixture: Fixture, connection: Record<string, unknow
         let agrees: boolean
         if (e.select !== true) {
           agrees = JSON.stringify({ ok: e.ok, error: e.error }) === JSON.stringify({ ok: a.ok, error: a.error })
-        } else if (unmodelled(e.plan) && a.plan !== e.plan) {
-          tally.unmodelled++
-          agrees = JSON.stringify(e.error) === JSON.stringify(a.error) && JSON.stringify(sorted(e.rows)) === JSON.stringify(sorted(a.rows))
         } else {
           const strict = e.ordered === true || (e.plan !== undefined && e.plan !== null && a.plan === e.plan)
           if (e.ordered === true) tally.orderedByStatement++

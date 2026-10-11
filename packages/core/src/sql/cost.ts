@@ -101,10 +101,7 @@ const worstSeeks = (t: TableStatistics): number => Math.max(Math.min(PAGE_READ *
 
 /** One lookup's read (`find_cost_for_ref`). */
 function lookupRead(t: TableStatistics, key: KeyChoice): number {
-  if (key.covering) {
-    const perPage = 1 + Math.floor(PAGE_BYTES / 2 / key.recordBytes)
-    return ((key.fanout + perPage - 1) / perPage) * PAGE_READ
-  }
+  if (key.covering) return indexScanCost(key.fanout, key.recordBytes)
   if (key.kind === 'clustered') {
     const rows = Math.trunc(key.fanout)
     return (rows <= 2 ? rows : t.rows < rows ? t.pages : 1 + (rows / t.rows) * t.pages) * PAGE_READ
@@ -205,8 +202,12 @@ const almostEqual = (a: number, b: number): boolean => a >= b * 0.9 && a <= b * 
  * that table has been placed first and read whole where `limit` keeps at
  * least the rows it fetches, every plan pays the sort (`use_tmp_table`): the
  * server's own state, kept as it is, since it decides plans.
+ *
+ * `loose` is supplied only for a two-table integer semijoin. The full index
+ * read and later lookup's read cost remain separate from distinct-key row
+ * evaluation; a final sort pays for outer output rather than inner fanout.
  */
-export function joinOrder(candidates: readonly Candidate[], sort?: { readonly alias: string; readonly limit: number }): Positioned[] {
+export function joinOrder(candidates: readonly Candidate[], sort?: { readonly alias: string; readonly limit: number }, loose?: { readonly alias: string; readonly rows: number; readonly read: number; readonly fetched: number }): Positioned[] {
   let sortBy = sort?.alias
   const sorted = [...candidates].sort((a, b) => {
     if (a.dependent.has(b.alias)) return 1
@@ -220,16 +221,24 @@ export function joinOrder(candidates: readonly Candidate[], sort?: { readonly al
   })
   let best: { readonly cost: number; readonly plan: readonly Positioned[] } | undefined
   const plan: Step[] = []
+  let driving: Positioned | undefined
   const placedAliases = (): Set<string> => new Set(plan.map((p) => p.placed.alias))
   const available = (c: Candidate, remaining: ReadonlySet<string>): boolean => remaining.has(c.alias) && ![...c.dependent].some((d) => remaining.has(d))
   const place = (c: Candidate): Positioned => {
-    const placed = c.place(plan.map((p) => p.placed))
+    // A bounded two-table LooseScan retains the later lookup's original read cost.
+    let placed = c.place(plan.map((p) => p.placed.alias === loose?.alias ? driving ?? p.placed : p.placed))
+    if (loose !== undefined && plan.length === 0 && c.alias === loose.alias) {
+      driving = placed
+      placed = { ...placed, read: loose.read, fetched: loose.fetched, filter: floorFilter(placed.fetched * placed.filter / loose.rows, loose.rows, loose.fetched) }
+    }
     if (plan.length === 0 && c.alias === sortBy && !placed.lookup && sort !== undefined && sort.limit >= placed.fetched) sortBy = undefined
     return placed
   }
   const consider = (): void => {
     const last = plan.at(-1) as Step
-    const cost = last.cost + (sort !== undefined && plan[0]?.placed.alias !== sortBy ? last.rows : 0)
+    // Semijoin output contains only outer fanout; its temporary sort costs that cardinality.
+    const rows = loose === undefined ? last.rows : prefixRows(plan.filter((p) => p.placed.alias !== loose.alias).map((p) => p.placed))
+    const cost = last.cost + (sort !== undefined && plan[0]?.placed.alias !== sortBy ? rows : 0)
     if (best === undefined || cost < best.cost) best = { cost, plan: plan.map((p) => p.placed) }
   }
   // The unique-key tables after the one just placed, each joined in turn while it costs what the one before did (`eq_ref_extension_by_limited_search`).
@@ -288,10 +297,10 @@ export function joinOrder(candidates: readonly Candidate[], sort?: { readonly al
   return [...(best?.plan ?? [])]
 }
 
-/** An index's pages for `rows` of its records (`index_only_read_time`): half a page's bytes of records to a page. */
-const indexPages = (rows: number, recordBytes: number): number => {
+/** Cost of reading `rows` index records (`index_only_read_time`): half a page's bytes of records to a page. */
+export const indexScanCost = (rows: number, recordBytes: number): number => {
   const perPage = 1 + Math.floor(PAGE_BYTES / 2 / recordBytes)
-  return (rows + perPage - 1) / perPage
+  return (rows + perPage - 1) / perPage * PAGE_READ
 }
 
 /**
@@ -302,7 +311,7 @@ const indexPages = (rows: number, recordBytes: number): number => {
 export function rangeBaseline(t: TableStatistics, coveringRecordBytes: number | undefined): number {
   const scan = PAGE_READ * t.pages + 1.1 + ROW_EVALUATE * t.rows + 1
   if (coveringRecordBytes === undefined) return scan
-  return Math.min(scan, indexPages(t.rows, coveringRecordBytes) * PAGE_READ + ROW_EVALUATE * t.rows)
+  return Math.min(scan, indexScanCost(t.rows, coveringRecordBytes) + ROW_EVALUATE * t.rows)
 }
 
 /** How an index is read for a range: through the clustered key, alone because it covers, or a secondary index with a row fetched for each entry. */
@@ -324,7 +333,7 @@ export interface RangeShape {
  */
 export function rangeCost(t: TableStatistics, shape: RangeShape, ranges: number, rows: number): number {
   let pages: number
-  if (shape.covering) pages = indexPages(rows, shape.recordBytes)
+  if (shape.covering) return indexScanCost(rows, shape.recordBytes) + ROW_EVALUATE * rows + 0.01
   else if (shape.clustered) {
     const upper = Math.trunc((2 * t.pages * PAGE_BYTES) / shape.minRecordBytes)
     const whole = Math.trunc(rows)
