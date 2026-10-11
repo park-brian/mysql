@@ -216,7 +216,7 @@ export function builtinFunction(name: string, e: CallNode, ctx: CompileContext):
         },
         // Always nullable on 8.4.11, NOT NULL arguments or not: a result past
         // `max_allowed_packet` is NULL.
-        type: { ...stringType(width, id, true), coercibility },
+        type: { ...stringResultType(width, binary, id, coercibility, true), coercibility },
       }
     }
     case 'LENGTH':
