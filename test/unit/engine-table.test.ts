@@ -8,7 +8,7 @@ import { loadCollation } from '@myjs/charsets'
 import { encodeDouble, encodeInt } from '@myjs/types'
 import { MemoryVfs } from '@myjs/vfs'
 import { runTableConformance, tableConformanceCases, type TableFactory } from '@myjs/engine/conformance'
-import { Catalog, Store, verifyStore, type EngineName, type KeyBound, type KeyRange, type Table, type TableSpec } from '@myjs/engine'
+import { Catalog, ClusteredIndex, Store, verifyStore, type EngineName, type KeyBound, type KeyRange, type Table, type TableSpec } from '@myjs/engine'
 
 await loadCollation(255)
 
@@ -148,6 +148,104 @@ const people: TableSpec = {
 }
 const i32 = (n: number) => encodeInt(BigInt(n), 4, false)
 const row = (id: number, name: string, blob: Uint8Array | null = null) => [i32(id), new TextEncoder().encode(name), blob]
+
+/** Prove a table mutation gets its old row from the write, not a separate current read. */
+function withoutClusteredRead<T>(table: Table, store: Store, change: () => T): T {
+  const indexId = table.def.clustered === null ? table.def.rowIdIndexId : table.def.indexes.find((i) => i.name === table.def.clustered)?.indexId
+  const get = ClusteredIndex.prototype.get
+  ClusteredIndex.prototype.get = function (...args) {
+    if (this.tree.space === store && this.tree.indexId === indexId) throw new Error('table mutation reread its clustered row')
+    return get.apply(this, args)
+  }
+  try {
+    return change()
+  } finally {
+    ClusteredIndex.prototype.get = get
+  }
+}
+
+test('native mutations use their previous row for secondaries, key changes and atomic refusals', async () => {
+  const f = factory('native')
+  const t = await f.make(people)
+  const store = f.catalog().store
+  const original = row(1, 'a', new Uint8Array(8192).fill(0x81))
+  const next = row(1, 'A', new Uint8Array(12288).fill(0x9f))
+  t.insert(original)
+  t.insert(row(2, 'b'))
+  const reader = store.begin()
+  assert.deepEqual(t.get(i32(1), reader), original)
+  const writer = store.begin()
+  const mutate = <T>(change: () => T) => withoutClusteredRead(t, store, change)
+  assert.deepEqual(mutate(() => t.update(i32(1), next, writer)), i32(1), 'collation-equivalent secondary key')
+  assert.deepEqual(t.get(i32(1), writer), next)
+  assert.deepEqual(mutate(() => t.update(i32(1), row(3, 'z', next[2]), writer)), i32(3))
+  assert.equal(t.get(i32(1), writer), undefined)
+  assert.deepEqual([...t.indexScan('name', undefined, writer)].map(([, r]) => r[0]), [i32(2), i32(3)])
+  for (const bad of [row(2, 'x'), row(3, 'b'), row(4, 'b')]) {
+    const savepoint = writer.savepoint()
+    assert.throws(() => mutate(() => t.update(i32(3), bad, writer)), /Duplicate entry/)
+    assert.equal(writer.savepoint(), savepoint)
+    assert.deepEqual(t.get(i32(3), writer), row(3, 'z', next[2]))
+    assert.deepEqual([...t.indexScan('name', undefined, writer)].map(([, r]) => r[0]), [i32(2), i32(3)])
+    f.verify()
+  }
+  assert.equal(mutate(() => t.update(i32(1), row(9, 'missing'), writer)), undefined, 'old key is tombstoned')
+  assert.equal(mutate(() => t.delete(i32(900), writer)), false)
+  assert.equal(mutate(() => t.delete(i32(3), writer)), true)
+  const savepoint = writer.savepoint()
+  assert.equal(mutate(() => t.delete(i32(3), writer)), false)
+  assert.equal(writer.savepoint(), savepoint)
+  assert.deepEqual(t.get(i32(1), reader), original)
+  writer.rollback()
+  assert.deepEqual(t.get(i32(1)), original)
+  assert.equal(t.get(i32(3)), undefined)
+  assert.deepEqual([...t.indexScan('name')].map(([, r]) => r[0]), [i32(1), i32(2)])
+  reader.commit()
+  store.purge()
+  f.verify()
+})
+
+test('native hidden row IDs survive replacement and deletion without a clustered reread', async () => {
+  const f = factory('native')
+  const t = await f.make({ ...people, indexes: [{ name: 'name', kind: 'index', parts: [{ column: 'name' }] }] })
+  assert.equal(t.def.clustered, null)
+  const store = f.catalog().store
+  const id = t.insert(row(1, 'a'))
+  assert.deepEqual(withoutClusteredRead(t, store, () => t.update(id, row(9, 'z'))), id)
+  assert.deepEqual(t.get(id), row(9, 'z'))
+  assert.deepEqual([...t.indexScan('name')].map(([key]) => key), [id])
+  assert.equal(withoutClusteredRead(t, store, () => t.delete(id)), true)
+  assert.equal(t.get(id), undefined)
+  assert.deepEqual([...t.indexScan('name')], [])
+  assert.equal(withoutClusteredRead(t, store, () => t.update(id, row(10, 'missing'))), undefined)
+  f.verify()
+})
+
+test('native collation-equivalent primary keys replace in place and maintain secondary values', async () => {
+  await loadCollation(46)
+  const f = factory('native')
+  const t = await f.make({
+    ...people,
+    columns: people.columns.map((c) => c.name === 'name' ? { ...c, nullable: false, type: { type: FIELD_TYPE.VAR_STRING, length: 8, collationId: 46 } } : c),
+    indexes: [
+      { name: 'PRIMARY', kind: 'primary', parts: [{ column: 'name' }] },
+      { name: 'id', kind: 'index', parts: [{ column: 'id' }] },
+    ],
+  })
+  const store = f.catalog().store
+  const old = row(1, 'a')
+  const next = row(2, 'a ')
+  const id = t.insert(old)
+  const writer = store.begin()
+  assert.deepEqual(withoutClusteredRead(t, store, () => t.update(id, next, writer)), id)
+  writer.commit()
+  assert.deepEqual(t.get(id), next)
+  assert.deepEqual([...t.indexScan('id')].map(([, r]) => r[0]), [i32(2)])
+  const changes = [...store.history()].flatMap((g) => g.records).filter((r) => r.type === 'row' && r.trxId === writer.id)
+  assert.deepEqual(changes, [{ type: 'row', indexId: t.def.indexes[0]?.indexId, trxId: writer.id, before: old, after: next }])
+  assert.equal(withoutClusteredRead(t, store, () => t.delete(id)), true)
+  f.verify()
+})
 
 test('native is transactional: a rollback undoes a row in every index; memory declares it is not', async () => {
   const vfs = new MemoryVfs({ pageSize: 1024 })

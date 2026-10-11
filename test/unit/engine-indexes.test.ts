@@ -118,6 +118,42 @@ test('prepared clustered mutations retain overflow history and roll back failed 
   verify(store, clustered)
 })
 
+test('clustered replacement and delete-mark return detached previous rows', async () => {
+  const { store, clustered } = await table(32)
+  const original: FieldBytes[] = [int(1), utf8('old'), new Uint8Array(8192).fill(0x81)]
+  const next: FieldBytes[] = [int(1), utf8('new'), new Uint8Array(12288).fill(0x9f)]
+  clustered.insert(original)
+  const reader = store.begin()
+  assert.deepEqual(clustered.get(int(1), reader), original)
+  const writer = store.begin()
+  writer.batch(() => {
+    const before = clustered.replace(next, writer)
+    assert.deepEqual(before, original)
+    for (const field of before!) field?.fill(0)
+    assert.deepEqual(clustered.get(int(1), reader), original, 'returned fields do not alias history or overflow')
+    assert.deepEqual(clustered.get(int(1), writer), next)
+    const removed = clustered.remove(int(1), writer)
+    assert.deepEqual(removed, next)
+    for (const field of removed!) field?.fill(0)
+  })
+  store.commit()
+  const changes = [...store.history()].flatMap((g) => g.records).filter((r) => r.type === 'row' && r.trxId === writer.id)
+  assert.deepEqual(changes, [
+    { type: 'row', indexId: clustered.tree.indexId, trxId: writer.id, before: original, after: next },
+    { type: 'row', indexId: clustered.tree.indexId, trxId: writer.id, before: next, after: null },
+  ], 'returned fields do not alias pending ROW images')
+  assert.equal(clustered.get(int(1), writer), undefined)
+  assert.deepEqual(clustered.get(int(1), reader), original)
+  assert.equal(clustered.replace(next, writer), undefined)
+  assert.equal(clustered.remove(int(1), writer), undefined)
+  assert.equal(clustered.replace([int(900), null, null], writer), undefined)
+  writer.rollback()
+  assert.deepEqual(clustered.get(int(1)), original, 'rollback uses its own intact old bytes')
+  reader.commit()
+  store.purge()
+  verify(store, clustered)
+})
+
 test('M4.11: a non-covering secondary lookup costs exactly one extra descent, and the test proves it', async () => {
   const { store, clustered } = await table()
   const names = SecondaryIndex.create(store, clustered, byName)

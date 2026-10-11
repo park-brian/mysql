@@ -198,6 +198,11 @@ export class ClusteredIndex {
 
   /** Replace the row with `row`'s primary key. `false` if there is none. */
   update(row: Row, trx?: Trx): boolean {
+    return this.replace(row, trx) !== undefined
+  }
+
+  /** Replace a live row, returning its detached previous fields; undefined if absent. */
+  replace(row: Row, trx?: Trx): FieldBytes[] | undefined {
     const key = this.keyOf(row)
     return this.#change(trx, (t) => {
       let before: FieldBytes[] | undefined
@@ -217,14 +222,20 @@ export class ClusteredIndex {
         })
         return clusteredValue(false, t.id, ptr, record)
       })
-      if (before === undefined) return false
+      if (before === undefined) return undefined
       this.tree.space.journal.row(this.tree.indexId, t.id, before, row)
-      return true
+      // A caller inside an outer batch must not mutate its pending ROW image.
+      return before.map((field) => field?.slice() ?? null)
     })
   }
 
   /** Delete-mark a row; purge removes it once no view can see it. `false` if there is none. */
   delete(key: Uint8Array, trx?: Trx): boolean {
+    return this.remove(key, trx) !== undefined
+  }
+
+  /** Delete-mark a live row, returning its detached previous fields; undefined if absent. */
+  remove(key: Uint8Array, trx?: Trx): FieldBytes[] | undefined {
     return this.#change(trx, (t) => {
       let before: FieldBytes[] | undefined
       this.tree.upsert(key, (current) => {
@@ -234,9 +245,9 @@ export class ClusteredIndex {
         const ptr = t.undo({ isInsert: false, purgeRemoves: true, indexId: this.tree.indexId, key, old: current, freeOnPurge: this.refsOf(current), freeOnRollback: [] })
         return clusteredValue(true, t.id, ptr, record.slice())
       })
-      if (before === undefined) return false
+      if (before === undefined) return undefined
       this.tree.space.journal.row(this.tree.indexId, t.id, before, null)
-      return true
+      return before.map((field) => field?.slice() ?? null)
     })
   }
 

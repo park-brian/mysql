@@ -221,17 +221,14 @@ class NativeTable implements Table {
     this.#present()
     this.#hooks.alive(trx)
     return this.#change(trx, (t) => {
-      const old = this.#clustered.get(id, t, 'current')
-      if (old === undefined) return undefined
       const full = this.#hidden ? [...row, id] : row
       const next = this.#clustered.keyOf(full)
-      if (equalBytes(next, id)) this.#clustered.update(full, t)
-      else {
-        this.#clustered.delete(id, t)
-        this.#clustered.insert(full, t)
-      }
+      const same = equalBytes(next, id)
+      const old = same ? this.#clustered.replace(full, t) : this.#clustered.remove(id, t)
+      if (old === undefined) return undefined
+      if (!same) this.#clustered.insert(full, t)
       for (const s of this.#secondaries) {
-        if (equalBytes(next, id) && equalBytes(encodeKey(s.columns.map((c) => old[c.field] ?? null), s.columns.map((c) => c.part)), encodeKey(s.columns.map((c) => full[c.field] ?? null), s.columns.map((c) => c.part)))) continue
+        if (same && equalBytes(encodeKey(s.columns.map((c) => old[c.field] ?? null), s.columns.map((c) => c.part)), encodeKey(s.columns.map((c) => full[c.field] ?? null), s.columns.map((c) => c.part)))) continue
         s.delete(old, id, t)
         s.insert(full, next, t)
       }
@@ -244,9 +241,8 @@ class NativeTable implements Table {
     this.#present()
     this.#hooks.alive(trx)
     return this.#change(trx, (t) => {
-      const old = this.#clustered.get(id, t, 'current')
+      const old = this.#clustered.remove(id, t)
       if (old === undefined) return false
-      this.#clustered.delete(id, t)
       for (const s of this.#secondaries) s.delete(old, id, t)
       return true
     })
