@@ -299,6 +299,7 @@ export function planQuery(run: Run, q: QueryExpression): SelectPlan {
 }
 
 function planSelect(run: Run, q: QueryExpression, node: SelectNode): SelectPlan {
+  node = pushCountCondition(run, node)
 
   // FROM: nothing, `DUAL`, or tables joined (M5.4).
   const refs = (node.from ?? []).filter((r) => !(r.kind === REF.TABLE && r.table.schema === undefined && r.table.name.toLowerCase() === 'dual' && r.alias === undefined && (node.from ?? []).length === 1))
@@ -507,6 +508,32 @@ function planSelect(run: Run, q: QueryExpression, node: SelectNode): SelectPlan 
       return values(runStages(rows, stages, env))
     },
   }
+}
+
+/** Filter one grouped derived COUNT output before its rows are materialized (M5.49). */
+function pushCountCondition(run: Run, node: SelectNode): SelectNode {
+  const ref = node.from?.[0]
+  const where = node.where
+  if (node.from?.length !== 1 || ref?.kind !== REF.DERIVED || ref.lateral === true || ref.columns !== undefined || ref.alias === undefined) return node
+  if (where?.kind !== NODE.BINARY || !['=', '<>', '!=', '<', '<=', '>', '>='].includes(where.op) || where.left.kind !== NODE.COLUMN) return node
+  if (where.right.kind !== NODE.PLACEHOLDER && !(where.right.kind === NODE.LITERAL && (where.right.type === LITERAL.INT || where.right.type === LITERAL.NULL))) return node
+  const parts = where.left.parts
+  if (parts.length !== 1 && !(parts.length === 2 && parts[0]?.toLowerCase() === ref.alias.toLowerCase())) return node
+  const query = ref.query
+  const body = query.body
+  if (query.with !== undefined || query.limit !== undefined || query.orderBy !== undefined || query.locking !== undefined || body.kind !== QUERY.SELECT || body.groupBy === undefined || body.groupBy.rollup === true || body.having !== undefined || body.windows !== undefined || body.distinct === true || (body.options?.length ?? 0) > 0) return node
+  const count = (e: Expression): boolean => e.kind === NODE.CALL && e.name.toUpperCase() === 'COUNT' && e.over === undefined && e.stored !== true && e.args.length === 1 && e.args[0]?.kind === NODE.COLUMN
+  // Columns and COUNT of a column or star cannot assign variables or evaluate volatile expressions.
+  if (!body.items.every((i) => i.expr.kind === NODE.COLUMN || count(i.expr)) || !body.groupBy.items.every((e) => e.kind === NODE.COLUMN || (e.kind === NODE.LITERAL && e.type === LITERAL.INT))) return node
+  const name = parts[parts.length - 1]?.toLowerCase()
+  const matches = body.items.filter((i) => (i.alias ?? (i.expr.kind === NODE.COLUMN ? i.expr.parts[i.expr.parts.length - 1] : undefined))?.toLowerCase() === name)
+  const item = matches.length === 1 ? matches[0] : undefined
+  if (item === undefined || !count(item.expr)) return node
+  const setting = run.env.state.systemVariable('optimizer_switch', undefined, run.env.session)
+  if (setting?.kind === 'string' && /(?:^|,)\s*derived_condition_pushdown=off(?:,|$)/i.test(setting.v)) return node
+  const having: Expression = { ...where, left: item.expr }
+  const { where: _where, ...rest } = node
+  return { ...rest, from: [{ ...ref, query: { ...query, body: { ...body, having } } }] }
 }
 
 // --- the stages above the FROM (M5.43) -----------------------------------------------
