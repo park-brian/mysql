@@ -63,7 +63,11 @@ test('mixed secondary and appended PRIMARY directions supply native order, ties 
           for (const backward of [false, true]) {
             const order = backward ? parts.map(inverse) : parts
             const expected = backward ? [...rows].reverse() : rows
-            for (const count of [1, 2, 3]) await variants(order.slice(0, count).join(','), expected, cover)
+            for (const count of [1, 2, 3]) {
+              const prefix = order.slice(0, count)
+              await variants(prefix.join(','), expected, cover)
+              await variants(prefix.flatMap((part) => [part, inverse(part)]).join(','), expected, cover)
+            }
             await variants((backward ? incompatible.map(inverse) : incompatible).join(','), backward ? [...sorted].reverse() : sorted, `Sort\n    ${cover}`)
           }
         }
@@ -110,7 +114,7 @@ test('mixed secondary scans stop at LIMIT plus OFFSET and close locking streams 
     try {
       for (const preference of ['on', 'off']) {
         await db.query(`SET optimizer_switch='prefer_ordering_index=${preference}'`)
-        for (const [order, rows] of [['name,a DESC,b', forward], ['name DESC,a,b DESC', [...forward].reverse()], ['name,a DESC', forward], ['name DESC,a', [...forward].reverse()]] as const) {
+        for (const [order, rows] of [['name,a DESC,b', forward], ['name DESC,a,b DESC', [...forward].reverse()], ['name,a DESC', forward], ['name DESC,a', [...forward].reverse()], ['name,name DESC,a DESC,a,b,b DESC', forward], ['name DESC,name,a,a DESC,b DESC,b', [...forward].reverse()], ['name,a DESC,name DESC', forward], ['name DESC,a,a DESC', [...forward].reverse()]] as const) {
           for (const method of ['query', 'execute'] as const) {
             for (const offset of [0, 1, 2]) {
               read = closed = 0
@@ -121,10 +125,14 @@ test('mixed secondary scans stop at LIMIT plus OFFSET and close locking streams 
               assert.deepEqual(indexes, ['name'])
             }
           }
+          read = closed = 0
+          indexes.length = 0
           for await (const row of db.stream(`SELECT a,b,name FROM d.t ORDER BY ${order} FOR UPDATE`)) {
             assert.deepEqual(row, rows[0])
             break
           }
+          assert.equal(closed, 1, 'return closes the ordered physical source')
+          assert.deepEqual(indexes, ['name'])
           const other = await db.connect()
           try {
             await other.query('SET innodb_lock_wait_timeout=1')

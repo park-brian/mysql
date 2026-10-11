@@ -1051,28 +1051,32 @@ function emptySubquery(run: Run, query: QueryExpression): boolean {
  * the clustered key it carries. 8.4.11 reads the index in that order and sorts nothing ("Index
  * scan on t using PRIMARY", "Covering index scan on t using name").
  */
-function orderingIndex(def: TableDef, alias: string, order: readonly OrderItem[], items: readonly { compiled: Compiled; expr?: Expression; alias?: string }[], scope: Scope, readBy: string | undefined, primary = false): { readonly index: string; readonly reverse: boolean } | undefined {
+function orderingIndex(def: TableDef, alias: string, order: readonly OrderItem[], items: readonly { compiled: Compiled; expr?: Expression; alias?: string }[], scope: Scope, readBy: string | undefined, primary: boolean): { readonly index: string; readonly reverse: boolean } | undefined {
   const clustered = def.indexes.find((i) => i.kind === 'primary' || i.name === def.clustered)
   const index = readBy === undefined ? clustered : def.indexes.find((i) => i.name === readBy)
   if (index === undefined || clustered === undefined || order.length === 0) return undefined
-  const desc = order[0]?.desc === true
-  const names: string[] = []
+  const keys: { name: string; desc: boolean }[] = []
   for (const o of order) {
     const e = sortExpression(o.expr, items)
     if (e === undefined || e.kind !== NODE.COLUMN) return undefined
     const r = safeResolve(scope, e.parts, 'order clause')
     const column = r?.type.column
-    if (r === undefined || r.depth !== undefined || column === undefined || column.table !== alias) return undefined
-    names.push(column.orgName.toLowerCase())
+    if (column === undefined || r?.depth !== undefined || column.table !== alias) return undefined
+    const name = column.orgName.toLowerCase()
+    // A later occurrence cannot break a tie on the very same field.
+    if (!keys.some((k) => k.name === name)) keys.push({ name, desc: o.desc === true })
   }
   // A clustered scan covers every row field. For a whole-table scan,
   // MySQL prefers it over a scan plus sort when prefer_ordering_index is on.
   for (const candidate of primary ? [index, clustered] : [index]) {
     const parts = indexParts(def, candidate)
-    const reverse = desc !== (candidate.parts[0]?.descending === true)
+    const reverse = (keys[0]?.desc === true) !== (candidate.parts[0]?.descending === true)
     // Every requested key part must agree on the scan direction, including
     // the PRIMARY parts carried by a secondary index.
-    const covered = parts.length >= names.length && parts.slice(0, names.length).every((p, i) => p.prefix === undefined && p.column.toLowerCase() === names[i] && ((p.descending === true) !== (order[i]?.desc === true)) === reverse)
+    const covered = keys.every((key, i) => {
+      const part = parts[i]
+      return part !== undefined && part.prefix === undefined && part.column.toLowerCase() === key.name && ((part.descending === true) !== key.desc) === reverse
+    })
     if (covered) return { index: candidate.name, reverse }
   }
   return undefined
