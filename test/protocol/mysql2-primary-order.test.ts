@@ -53,6 +53,8 @@ test('ordinary whole scans choose PRIMARY order and retain covering scans when p
       await run('SELECT name FROM t ORDER BY name DESC', [['z'], ['empty'], ['a']], cover)
       await run('SELECT name FROM t ORDER BY id + 0', [['z'], ['a'], ['empty']], `Sort\n    ${cover}`)
       await run('SELECT name FROM t ORDER BY id DESC,name', [['empty'], ['a'], ['z']], `Sort\n    ${cover}`)
+      await run('SELECT name FROM t ORDER BY id,name', [['z'], ['a'], ['empty']], `Sort\n    ${cover}`)
+      await run('SELECT name FROM t ORDER BY id DESC,name DESC', [['empty'], ['a'], ['z']], `Sort\n    ${cover}`)
       await conn.query("SET optimizer_switch='prefer_ordering_index=off'")
       await run('SELECT name FROM t ORDER BY id', [['z'], ['a'], ['empty']], `Sort\n    ${cover}`)
       await run('SELECT name FROM t ORDER BY id DESC LIMIT 1', [['empty']], limit(`Sort\n    ${cover}`))
@@ -60,6 +62,40 @@ test('ordinary whole scans choose PRIMARY order and retain covering scans when p
       await conn.query("SET optimizer_switch='prefer_ordering_index=on'")
       await conn.query("UPDATE t SET name='new' WHERE id=1")
       await run('SELECT name FROM t ORDER BY id LIMIT 1', [['new']], limit(primary))
+    }
+    for (const key of ['a DESC,b DESC', 'a DESC,b', 'a,b DESC']) {
+      await conn.query('DROP TABLE t')
+      await conn.query(`CREATE TABLE t(a INT,b INT,name VARCHAR(12) NOT NULL,PRIMARY KEY(${key}),UNIQUE KEY(name)) STATS_AUTO_RECALC=0`)
+      await conn.query("INSERT INTO t VALUES(1,1,'z'),(1,2,'a'),(2,1,'empty')")
+      await conn.query('ANALYZE TABLE t')
+      for (const desc of [false, true]) {
+        const order = desc ? ' DESC' : ''
+        const tied = key === 'a DESC,b DESC' ? [['z'], ['a']] : [['a'], ['z']]
+        const rows = desc ? [['empty'], ...[...tied].reverse()] : [...tied, ['empty']]
+        const sql = `SELECT name FROM t ORDER BY a${order}`
+        await run(sql, rows, primary)
+        await run(`${sql} LIMIT 1`, rows.slice(0, 1), limit(primary))
+        await run(`${sql} LIMIT 1 OFFSET 1`, rows.slice(1, 2), limit(primary, true))
+        const full = desc ? [['empty'], ['a'], ['z']] : [['z'], ['a'], ['empty']]
+        const plan = key === 'a DESC,b DESC' ? primary : `Sort\n    ${cover}`
+        const all = `${sql},b${order}`
+        await run(all, full, plan)
+        await run(`${all} LIMIT 1`, full.slice(0, 1), limit(plan))
+        await run(`${all} LIMIT 1 OFFSET 1`, full.slice(1, 2), limit(plan, true))
+        await run(`${all},name${order}`, full, `Sort\n    ${cover}`)
+      }
+      await conn.query("SET optimizer_switch='prefer_ordering_index=off'")
+      const sortedOrders: [string, unknown[][]][] = [
+        ['a', [['a'], ['z'], ['empty']]],
+        ['a DESC', [['empty'], ['a'], ['z']]],
+      ]
+      for (const [order, rows] of sortedOrders) {
+        const sql = `SELECT name FROM t ORDER BY ${order}`
+        await run(sql, rows, `Sort\n    ${cover}`)
+        await run(`${sql} LIMIT 1`, rows.slice(0, 1), limit(`Sort\n    ${cover}`))
+        await run(`${sql} LIMIT 1 OFFSET 1`, rows.slice(1, 2), limit(`Sort\n    ${cover}`, true))
+      }
+      await conn.query("SET optimizer_switch='prefer_ordering_index=on'")
     }
   } finally {
     await conn.query('DROP DATABASE IF EXISTS primary_order')
@@ -111,40 +147,53 @@ test('ordered PRIMARY LIMIT stops its physical scan and cancellation releases th
       return table
     }
     try {
-      for (const [order, first] of [['id', 'z'], ['id DESC', 'empty']]) {
-        for (const offset of [0, 1]) {
+      for (const key of ['id DESC', 'a DESC,b DESC', 'a DESC,b', 'a,b DESC']) {
+        if (key !== 'id DESC') {
+          await db.query('DROP TABLE t')
+          await db.query(`CREATE TABLE t(a INT,b INT,name VARCHAR(12) NOT NULL,PRIMARY KEY(${key}),UNIQUE KEY(name))`)
+          await db.query("INSERT INTO t VALUES(1,1,'z'),(1,2,'a'),(2,1,'empty')")
+        }
+        const tied = key === 'a DESC,b' || key === 'a,b DESC' ? ['a', 'z'] : ['z', 'a']
+        const column = key === 'id DESC' ? 'id' : 'a'
+        const orders: [string, string[]][] = [[column, [...tied, 'empty']], [`${column} DESC`, ['empty', ...[...tied].reverse()]]]
+        if (key === 'a DESC,b DESC') orders.push(['a,b', ['z', 'a', 'empty']], ['a DESC,b DESC', ['empty', 'a', 'z']])
+        for (const [order, rows] of orders) {
+          for (const method of ['query', 'execute'] as const) {
+            for (const offset of [0, 1]) {
+              read = closed = 0
+              indexes.length = 0
+              assert.deepEqual((await db[method](`SELECT name FROM d.t ORDER BY ${order} LIMIT 1 OFFSET ${offset}`))[0], [{ name: rows[offset] }])
+              assert.equal(read, offset + 1, 'LIMIT stops the ordered scan without sorting every row')
+              assert.equal(closed, 1)
+              assert.deepEqual(indexes, ['PRIMARY'])
+            }
+          }
+          for await (const row of db.stream(`SELECT name FROM d.t ORDER BY ${order} FOR UPDATE`)) {
+            assert.deepEqual(row, { name: rows[0] })
+            break
+          }
+          const other = await db.connect()
+          try {
+            await other.query('SET innodb_lock_wait_timeout=1')
+            await other.query("UPDATE d.t SET name=name WHERE name='a'")
+          } finally {
+            await other.end()
+          }
+          assert.equal(db.openConnections, 1)
+        }
+        await db.query("SET optimizer_switch='prefer_ordering_index=off'")
+        for (const method of ['query', 'execute'] as const) {
           read = closed = 0
           indexes.length = 0
-          assert.deepEqual((await db.query(`SELECT name FROM d.t ORDER BY ${order} LIMIT 1 OFFSET ${offset}`))[0], [{ name: offset === 0 ? first : 'a' }])
-          assert.equal(read, offset + 1, 'LIMIT stops the ordered scan without sorting every row')
+          assert.deepEqual((await db[method](`SELECT name FROM d.t ORDER BY ${column} LIMIT 1`))[0], [{ name: column === 'id' ? 'z' : 'a' }])
+          assert.equal(read, 3)
           assert.equal(closed, 1)
-          assert.deepEqual(indexes, ['PRIMARY'])
+          assert.deepEqual(indexes, ['name'])
         }
+        await db.query("SET optimizer_switch='prefer_ordering_index=on'")
       }
-      await db.query("SET optimizer_switch='prefer_ordering_index=off'")
-      read = closed = 0
-      indexes.length = 0
-      await db.query('SELECT name FROM d.t ORDER BY id LIMIT 1')
-      assert.equal(read, 3)
-      assert.equal(closed, 1)
-      assert.deepEqual(indexes, ['name'])
     } finally {
       catalog.table = open
-    }
-    await db.query("SET optimizer_switch='prefer_ordering_index=on'")
-    for (const [order, first] of [['id', 'z'], ['id DESC', 'empty']]) {
-      for await (const row of db.stream(`SELECT name FROM d.t ORDER BY ${order} FOR UPDATE`)) {
-        assert.deepEqual(row, { name: first })
-        break
-      }
-      const other = await db.connect()
-      try {
-        await other.query('SET innodb_lock_wait_timeout=1')
-        await other.query('UPDATE d.t SET name=name WHERE id=2')
-      } finally {
-        await other.end()
-      }
-      assert.equal(db.openConnections, 1)
     }
   } finally {
     await db.end()

@@ -998,8 +998,7 @@ function columnRefs(e: unknown, out: (readonly string[])[] = []): (readonly stri
  * The index a table read whole is read by — its covering index, else its
  * clustered one — when an ORDER BY is one direction over a prefix of that
  * index's key, which for a secondary index ends with the clustered key it
- * carries; or the whole key and more, since nothing after a unique key orders
- * anything. 8.4.11 reads the index in that order and sorts nothing ("Index
+ * carries. 8.4.11 reads the index in that order and sorts nothing ("Index
  * scan on t using PRIMARY", "Covering index scan on t using name").
  */
 function orderingIndex(def: TableDef, alias: string, order: readonly OrderItem[], items: readonly { compiled: Compiled; expr?: Expression; alias?: string }[], scope: Scope, readBy: string | undefined, primary = false): { readonly index: string; readonly reverse: boolean } | undefined {
@@ -1024,14 +1023,12 @@ function orderingIndex(def: TableDef, alias: string, order: readonly OrderItem[]
   }
   // A clustered scan covers every row field. For a whole-table scan,
   // MySQL prefers it over a scan plus sort when prefer_ordering_index is on.
-  // A single descending schema key runs physically opposite to SQL ASC.
-  const primaryOrder = clustered.parts.length === 1 || clustered.parts.every((p) => p.descending !== true)
-  for (const candidate of primary && primaryOrder ? [index, clustered] : [index]) {
+  for (const candidate of primary ? [index, clustered] : [index]) {
     const parts = indexParts(def, candidate)
     const descending = candidate.parts[0]?.descending === true
     // Every requested key part must share the physical direction, including
     // the PRIMARY parts carried by a secondary index.
-    const covered = parts.slice(0, names.length).every((p, i) => p.prefix === undefined && p.column.toLowerCase() === names[i] && (p.descending === true) === descending)
+    const covered = parts.length >= names.length && parts.slice(0, names.length).every((p, i) => p.prefix === undefined && p.column.toLowerCase() === names[i] && (p.descending === true) === descending)
     if (covered) return { index: candidate.name, reverse: desc !== descending }
   }
   return undefined
