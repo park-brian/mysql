@@ -105,6 +105,31 @@ test('zero LIMIT initializes only required sorts and closes their physical sourc
       return table
     }
     try {
+      await db.query("SET sql_mode='ONLY_FULL_GROUP_BY'")
+      for (const method of ['query', 'execute', 'stream'] as const) {
+        const client = method === 'stream' ? await db.connect() : db
+        try {
+          if (client !== db) await client.query("SET sql_mode='ONLY_FULL_GROUP_BY'")
+          for (const tail of ['', ' LIMIT 0', ' LIMIT 0 OFFSET 1']) {
+            await client.query('SELECT LAST_INSERT_ID(0)')
+            read = closed = 0
+            const sql = `SELECT DISTINCT CAST(CONCAT(g,'x') AS SIGNED) AS n FROM d.t ORDER BY LAST_INSERT_ID(id)${tail} FOR UPDATE`
+            await assert.rejects(async () => {
+              if (method === 'stream') {
+                for await (const _row of client.stream(sql)) assert.fail('rejected statement delivered a row')
+              } else await client[method](sql)
+            }, { errno: 3065 })
+            assert.equal(read, 0, method + ': rejected DISTINCT reads')
+            assert.equal(closed, 0, method + ': rejected DISTINCT never initialized its scan')
+            assert.deepEqual((await client.query('SELECT LAST_INSERT_ID() AS calls'))[0], [{ calls: 0 }])
+            const [warnings] = await client.query('SHOW WARNINGS')
+            assert.equal((warnings as { Code: number }[]).some((w) => w.Code === 1292), false)
+          }
+        } finally {
+          if (client !== db) await client.end()
+        }
+        assert.equal(db.openConnections, 1)
+      }
       for (const method of ['query', 'execute', 'stream'] as const) {
         for (const offset of [0, 1, 8]) {
           for (const [select, order, scanned] of [['id,g', '', false], ['id,g', ' ORDER BY id', false], ['id,g', ' ORDER BY g', true], ['DISTINCT g', ' ORDER BY g', true]] as const) {

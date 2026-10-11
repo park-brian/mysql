@@ -24,6 +24,7 @@
 import type { ColumnDef } from '@myjs/engine'
 import { NODE, parseExpression, type Expression, quoteName } from '@myjs/parser'
 import { sqlError } from '@myjs/protocol'
+import { someNode } from './ast.ts'
 import { escapeString, printExpression, Unprintable } from './print.ts'
 import { NOT_ROW_DETERMINED } from './registry.ts'
 
@@ -68,9 +69,7 @@ export function checkGenerated(columns: readonly ColumnDef[]): void {
   columns.forEach((column, at) => {
     const generation = generationOf(column)
     if (generation === undefined) return
-    const walk = (e: unknown): void => {
-      if (e === null || typeof e !== 'object') return
-      if (Array.isArray(e)) return e.forEach(walk)
+    someNode(parseExpression(generation.text), (e) => {
       const n = e as Expression
       switch (n.kind) {
         case NODE.COLUMN: {
@@ -80,7 +79,7 @@ export function checkGenerated(columns: readonly ColumnDef[]): void {
           const other = columns[i] as ColumnDef
           if (generationOf(other) !== undefined && i >= at) throw sqlError('ER_GENERATED_COLUMN_NON_PRIOR', 'Generated column can refer only to generated columns defined prior to it.')
           if (other.autoIncrement === true) throw sqlError('ER_GENERATED_COLUMN_REF_AUTO_INC', `Generated column '${column.name}' cannot refer to auto-increment column.`)
-          return
+          return false
         }
         case NODE.SUBQUERY:
           throw sqlError('ER_GENERATED_COLUMN_FUNCTION_IS_NOT_ALLOWED', `Expression of generated column '${column.name}' contains a disallowed function.`)
@@ -92,8 +91,7 @@ export function checkGenerated(columns: readonly ColumnDef[]): void {
           break
         }
       }
-      for (const v of Object.values(n)) if (typeof v === 'object') walk(v)
-    }
-    walk(parseExpression(generation.text))
+      return undefined
+    })
   })
 }

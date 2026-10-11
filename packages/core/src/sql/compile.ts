@@ -2334,11 +2334,9 @@ function caseExpr(e: CaseNode, ctx: CompileContext): Compiled {
 function outerOnly(args: readonly Expression[], ctx: CompileContext): boolean {
   let outer = 0
   let local = 0
-  const visit = (x: unknown): void => {
-    if (x === null || typeof x !== 'object') return
-    if (Array.isArray(x)) return x.forEach(visit)
-    const n = x as Expression
-    if (n.kind === NODE.SUBQUERY) return
+  someNode(args, (node) => {
+    const n = node as Expression
+    if (n.kind === NODE.SUBQUERY) return false
     if (n.kind === NODE.COLUMN) {
       try {
         if ((ctx.scope.resolve(n.parts, 'field list').depth ?? 0) > 0) outer++
@@ -2347,11 +2345,10 @@ function outerOnly(args: readonly Expression[], ctx: CompileContext): boolean {
         expectTyped(e)
         local++
       }
-      return
+      return false
     }
-    for (const v of Object.values(x)) visit(v)
-  }
-  visit(args)
+    return undefined
+  })
   return outer > 0 && local === 0
 }
 

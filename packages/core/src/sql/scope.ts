@@ -18,9 +18,20 @@
 // An `ON` sees only the tables of its own join (`restrict`): in
 // `a, b JOIN c ON a.x = c.x` the comma binds last, so `a.x` is 1054 there.
 import type { TableDef } from '@myjs/engine'
+import { expectTyped } from '@myjs/bytes'
 import { messages, sqlError } from '@myjs/protocol'
 import type { Scope } from './compile.ts'
 import { columnResultType, type ResultType } from './meta.ts'
+
+/** A planner proof may decline a typed name error; compilation still reports it. */
+export function safeResolve(scope: Scope, parts: readonly string[], clause: string): ReturnType<Scope['resolve']> | undefined {
+  try {
+    return scope.resolve(parts, clause)
+  } catch (e) {
+    expectTyped(e)
+    return undefined
+  }
+}
 
 export interface ScopeColumn {
   readonly name: string

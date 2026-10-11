@@ -22,6 +22,7 @@
 import { expectTyped } from '@myjs/bytes'
 import { requireCollationInfo } from '@myjs/charsets'
 import { sqlError } from '@myjs/protocol'
+import { columnRefs, someNode } from './ast.ts'
 import type { ColumnDef, FieldBytes, TableDef, TableSpec } from '@myjs/engine'
 import { NODE, TOKEN, lex, parseExpression, type CheckConstraint, type CreateTableNode, type Expression, type Token, quoteName } from '@myjs/parser'
 import { decodeField, truth } from '@myjs/types'
@@ -94,18 +95,6 @@ function isCondition(e: Expression): boolean {
   }
 }
 
-/** Every node of an expression tree, depth first. */
-function* nodes(root: unknown): Generator<{ readonly kind: string } & Record<string, unknown>> {
-  if (root === null || typeof root !== 'object') return
-  if (Array.isArray(root)) {
-    for (const x of root) yield* nodes(x)
-    return
-  }
-  const n = root as { kind?: unknown } & Record<string, unknown>
-  if (typeof n.kind === 'string') yield n as { kind: string } & Record<string, unknown>
-  for (const v of Object.values(n)) if (typeof v === 'object') yield* nodes(v)
-}
-
 /**
  * `spec` with its CHECK constraints named, checked and stored. `sql` is the
  * statement they were written in, `charset` the connection's character set.
@@ -127,9 +116,10 @@ export function withChecks(catalog: CatalogApi, schema: string, spec: TableSpec,
     if (taken.has(name.toLowerCase())) throw sqlError('ER_CHECK_CONSTRAINT_DUP_NAME', `Duplicate check constraint name '${name}'.`)
     taken.add(name.toLowerCase())
     const e = clause.expr
-    for (const node of nodes(e)) {
+    someNode(e, (value) => {
+      const node = value as Expression
       if (node.kind === NODE.COLUMN) {
-        const parts = node['parts'] as readonly string[]
+        const parts = node.parts
         const column = columns.get((parts[parts.length - 1] as string).toLowerCase())
         if (column === undefined) throw sqlError('ER_CHECK_CONSTRAINT_REFERS_UNKNOWN_COLUMN', `Check constraint '${name}' refers to non-existing column '${parts[parts.length - 1]}'.`)
         // A column's own constraint names that column alone (3813).
@@ -139,10 +129,11 @@ export function withChecks(catalog: CatalogApi, schema: string, spec: TableSpec,
         throw sqlError('ER_CHECK_CONSTRAINT_FUNCTION_IS_NOT_ALLOWED', `An expression of a check constraint '${name}' contains disallowed function.`)
       } else if (node.kind === NODE.VARIABLE) {
         throw sqlError('ER_CHECK_CONSTRAINT_VARIABLES', `An expression of a check constraint '${name}' cannot refer to a user or system variable.`)
-      } else if (node.kind === NODE.CALL && NOT_ROW_DETERMINED.has(String(node['name']).toUpperCase())) {
-        throw sqlError('ER_CHECK_CONSTRAINT_NAMED_FUNCTION_IS_NOT_ALLOWED', `An expression of a check constraint '${name}' contains disallowed function: ${String(node['name']).toLowerCase()}.`)
+      } else if (node.kind === NODE.CALL && NOT_ROW_DETERMINED.has(node.name.toUpperCase())) {
+        throw sqlError('ER_CHECK_CONSTRAINT_NAMED_FUNCTION_IS_NOT_ALLOWED', `An expression of a check constraint '${name}' contains disallowed function: ${node.name.toLowerCase()}.`)
       }
-    }
+      return undefined
+    })
     if (!isCondition(e)) throw sqlError('ER_NON_BOOLEAN_EXPR_FOR_CHECK_CONSTRAINT', `An expression of non-boolean type specified to a check constraint '${name}'.`)
     made.push({ name, text: conditionText(sql, tokens, clause), enforced: clause.enforced, charset: requireCollationInfo(charset).charset })
   }
@@ -187,9 +178,7 @@ export const checkViolated = (name: string) => sqlError('ER_CHECK_CONSTRAINT_VIO
 
 /** The columns an expression names. */
 export function columnsOf(text: string): Set<string> {
-  const out = new Set<string>()
-  for (const node of nodes(parseExpression(text))) if (node.kind === NODE.COLUMN) out.add(((node['parts'] as readonly string[]).at(-1) as string).toLowerCase())
-  return out
+  return new Set(columnRefs(parseExpression(text), true).map((parts) => (parts.at(-1) as string).toLowerCase()))
 }
 
 /**

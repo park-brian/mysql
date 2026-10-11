@@ -110,14 +110,12 @@ const BLOB_TYPES: ReadonlySet<number> = new Set([FIELD_TYPE.TINY_BLOB, FIELD_TYP
 
 function checkExpressionDefault(column: ColumnDef, e: Expression, table: readonly ColumnDef[]): void {
   const at = table.findIndex((c) => c.name.toLowerCase() === column.name.toLowerCase())
-  const walk = (x: unknown): void => {
-    if (x === null || typeof x !== 'object') return
-    if (Array.isArray(x)) return x.forEach(walk)
-    const n = x as { kind?: unknown } & Record<string, unknown>
+  someNode(e, (x) => {
+    const n = x as Expression
     if (n.kind === NODE.SUBQUERY) throw sqlError('ER_DEFAULT_VAL_GENERATED_FUNCTION_IS_NOT_ALLOWED', `Default value expression of column '${column.name}' contains a disallowed function.`)
     if (n.kind === NODE.VARIABLE) throw sqlError('ER_DEFAULT_VAL_GENERATED_VARIABLES', `Default value expression of column '${column.name}' cannot refer user or system variables.`)
     if (n.kind === NODE.COLUMN) {
-      const parts = n['parts'] as readonly string[]
+      const parts = n.parts
       const name = parts[parts.length - 1] as string
       const i = table.findIndex((c) => c.name.toLowerCase() === name.toLowerCase())
       if (i < 0) throw sqlError('ER_BAD_FIELD_ERROR', `Unknown column '${name}' in 'default value expression'`)
@@ -126,10 +124,10 @@ function checkExpressionDefault(column: ColumnDef, e: Expression, table: readonl
       if (i >= at && other.attributes?.['defaultExpression'] === true) {
         throw sqlError('ER_DEFAULT_VAL_GENERATED_NON_PRIOR', `Default value expression of column '${column.name}' cannot refer to a column defined after it if that column is a generated column or has an expression as default value.`)
       }
+      return false
     }
-    for (const v of Object.values(n)) if (typeof v === 'object') walk(v)
-  }
-  walk(e)
+    return undefined
+  })
 }
 
 /**
@@ -395,18 +393,15 @@ function selectReferences(run: Run, node: InsertNode): ColumnNode[] {
   if (body.kind !== QUERY.SELECT || body.from === undefined || body.groupBy !== undefined || body.having !== undefined || body.distinct === true) return []
   if (body.items.some((i) => containsAggregate(i.expr))) return []
   const refs = new Map<string, ColumnNode>()
-  const walk = (x: unknown): void => {
-    if (x === null || typeof x !== 'object') return
-    if (Array.isArray(x)) return x.forEach(walk)
+  someNode(node.onDuplicate, (x) => {
     const n = x as Expression
-    if (n.kind === NODE.SUBQUERY || (n.kind === NODE.CALL && n.name.toUpperCase() === 'VALUES')) return
+    if (n.kind === NODE.SUBQUERY || (n.kind === NODE.CALL && n.name.toUpperCase() === 'VALUES')) return false
     if (n.kind === NODE.COLUMN) {
       refs.set(n.parts.join('.').toLowerCase(), n)
-      return
+      return false
     }
-    for (const v of Object.values(x)) walk(v)
-  }
-  for (const a of node.onDuplicate) walk(a.value)
+    return undefined
+  })
   return [...refs.values()].filter((ref) => {
     try {
       planQuery(run, { kind: QUERY.QUERY, ...(q.with === undefined ? {} : { with: q.with }), body: { ...body, items: [{ expr: ref }] }, at: q.at })

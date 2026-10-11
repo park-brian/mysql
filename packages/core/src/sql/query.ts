@@ -20,10 +20,11 @@ import { columnDefinition, intType, type ResultType } from './meta.ts'
 import { FIELD_TYPE, expectTyped } from '@myjs/bytes'
 import { distinct, filter, limit, project, sort, type SortKey } from './operators.ts'
 import { isConstant, splitAnd } from './plan.ts'
-import { children, someNode } from './ast.ts'
-import { TableScope } from './scope.ts'
+import { columnRefs, someNode } from './ast.ts'
+import { collationInfoByName } from '@myjs/charsets'
+import { safeResolve, TableScope } from './scope.ts'
 import { indexParts, planFrom, type DerivedPlan, type DerivedSource, type FromContext, type FromPlan, type JoinCondition } from './from.ts'
-import { rowKey } from './keys.ts'
+import { rowKey, valueKey } from './keys.ts'
 import { planNode, wrap, type PlanNode } from './explain.ts'
 import { describeStages, runStages, type Rowed, type Stage } from './pipeline.ts'
 import { convert as convertSetValue, nestedNullability, setOperation, setOperationType } from './setop.ts'
@@ -465,6 +466,8 @@ function planSelect(run: Run, q: QueryExpression, node: SelectNode): SelectPlan 
   } else if (node.where !== undefined) where = compile(node.where, whereCtx)
   const having = node.having === undefined || neverNullTest(node.having) ? undefined : compile(substituteAliases(node.having, items), compileContext(run, selectedOnly(lookup, items, [], node.having), 'having clause'))
   const keys = (q.orderBy ?? []).filter((o) => !constantKey(o)).map((o) => orderKey(run, o, items, lookup, windows))
+  // Resolve every ORDER BY first: name errors precede DISTINCT admission.
+  if (node.distinct === true && source !== undefined && scope !== undefined && !windowed && modeOf(run.env.session.sqlMode).onlyFullGroupBy) checkDistinctOrder(run, q.orderBy ?? [], items, scope)
   // A window ORDER BY alone names reads the rows through its table as well.
   if (windows !== undefined && windows.windows.length > 0) {
     for (const item of items) if (item.compiled.type.temporary === undefined) item.compiled = { ...item.compiled, type: { ...item.compiled.type, temporary: 'stream' } }
@@ -1016,16 +1019,6 @@ function emptySubquery(run: Run, query: QueryExpression): boolean {
   }
 }
 
-/** Every column as written; correlation checks also traverse nested subqueries. */
-function columnRefs(e: unknown, out: (readonly string[])[] = [], subqueries = false): (readonly string[])[] {
-  if (e === null || typeof e !== 'object') return out
-  const n = e as { kind?: string; parts?: readonly string[] }
-  if (n.kind === NODE.SUBQUERY && !subqueries) return out
-  if (n.kind === NODE.COLUMN && n.parts !== undefined) out.push(n.parts)
-  for (const v of children(e)) columnRefs(v, out, subqueries)
-  return out
-}
-
 /**
  * The index a table read whole is read by — its covering index, else its
  * clustered one — when an ORDER BY agrees on one physical scan direction
@@ -1105,15 +1098,13 @@ function correlatedIn(e: unknown, scope: TableScope): boolean {
 /** Whether a query names, by qualifier, one of `aliases` that its own FROM does not define. */
 function readsOuter(q: unknown, aliases: ReadonlySet<string>): boolean {
   const own = new Set<string>()
-  const collect = (x: unknown): void => {
-    if (x === null || typeof x !== 'object') return
+  someNode(q, (x) => {
     const n = x as { kind?: string; alias?: string; table?: TableName }
     if (n.kind === REF.TABLE) own.add(n.alias ?? n.table?.name ?? '')
     if (n.kind === REF.DERIVED && n.alias !== undefined) own.add(n.alias)
-    children(x).forEach(collect)
-  }
-  collect(q)
-  return columnRefs(q, [], true).some((parts) => {
+    return undefined
+  })
+  return columnRefs(q, true).some((parts) => {
     const qualifier = parts.length >= 2 ? parts[parts.length - 2] as string : ''
     return aliases.has(qualifier) && !own.has(qualifier)
   })
@@ -1123,22 +1114,21 @@ function readsOuter(q: unknown, aliases: ReadonlySet<string>): boolean {
 function aggregatingSubqueryTables(node: SelectNode, scope: TableScope): Set<string> {
   const out = new Set<string>()
   const aliases = new Set(scope.tables.map((t) => t.alias))
-  const visit = (e: unknown, inside: boolean): void => {
-    if (e === null || typeof e !== 'object') return
+  const visit = (e: unknown, inside: boolean): boolean => someNode(e, (e) => {
     const n = e as { kind?: string; query?: QueryExpression; parts?: readonly string[] }
     if (n.kind === NODE.SUBQUERY && n.query !== undefined) {
       const body = n.query.body
       const aggregating = body.kind === QUERY.SELECT && body.groupBy === undefined && body.items.some((i) => containsAggregate(i.expr))
       if (aggregating) visit(n.query, true)
-      return
+      return false
     }
     if (inside && n.kind === NODE.COLUMN && (n.parts?.length ?? 0) >= 2) {
       const alias = n.parts?.[(n.parts?.length ?? 0) - 2] as string
       if (aliases.has(alias)) out.add(alias)
     }
-    for (const v of children(e)) visit(v, inside)
-  }
-  for (const item of node.items) visit(item.expr, false)
+    return undefined
+  })
+  visit(node.items, false)
   return out
 }
 
@@ -1167,44 +1157,38 @@ function columnsRead(scope: TableScope, node: SelectNode, q: QueryExpression): M
     if (column === 'all') used.set(alias, 'all')
     else used.set(alias, (cur ?? new Set()).add(column.toLowerCase()))
   }
-  const visit = (e: unknown, inside: boolean): void => {
-    if (e === null || typeof e !== 'object') return
+  const visit = (e: unknown, inside: boolean): boolean => someNode(e, (e) => {
     const n = e as { kind?: string; parts?: readonly string[]; query?: unknown }
-    if (n.kind === NODE.LITERAL || n.kind === NODE.PLACEHOLDER) return
+    if (n.kind === NODE.LITERAL || n.kind === NODE.PLACEHOLDER) return false
     if (n.kind === NODE.SUBQUERY || n.kind === REF.DERIVED) {
       visit(n.query, true)
-      return
+      return false
     }
     // COUNT(*) counts rows and reads no column.
     if (n.kind === NODE.CALL && String((n as { name?: unknown }).name).toUpperCase() === 'COUNT') {
       const args = (n as { args?: readonly Expression[] }).args ?? []
-      if (args.length === 1 && args[0]?.kind === NODE.COLUMN && args[0].parts.length === 1 && args[0].parts[0] === '*') return
+      if (args.length === 1 && args[0]?.kind === NODE.COLUMN && args[0].parts.length === 1 && args[0].parts[0] === '*') return false
     }
     if (n.kind === NODE.COLUMN && n.parts !== undefined) {
       const last = n.parts[n.parts.length - 1] as string
       const qualifier = n.parts.length >= 2 ? (n.parts[n.parts.length - 2] as string) : undefined
       if (last === '*') {
-        if (inside) return
+        if (inside) return false
         for (const t of scope.tables) if (qualifier === undefined || qualifier === t.alias) add(t.alias, 'all')
-        return
+        return false
       }
       if (inside) {
         if (qualifier !== undefined && aliases.has(qualifier)) add(qualifier, last)
-        return
+        return false
       }
       const r = safeResolve(scope, n.parts, 'field list')
       const at = r?.depth === undefined && r !== undefined ? scope.columnAt(r.index) : undefined
       if (at !== undefined) add(at.table.alias, at.column.name)
-      return
+      return false
     }
-    for (const v of children(e)) visit(v, inside)
-  }
-  visit(node.items, false)
-  visit(node.where, false)
-  visit(node.groupBy, false)
-  visit(node.having, false)
-  visit(node.from, false)
-  visit(q.orderBy, false)
+    return undefined
+  })
+  visit([node.items, node.where, node.groupBy, node.having, node.from, q.orderBy], false)
   return used
 }
 
@@ -1213,20 +1197,14 @@ function columnsRead(scope: TableScope, node: SelectNode, q: QueryExpression): M
  * which MySQL refuses unless a derived table materializes the read first.
  */
 export function checkTargetNotRead(target: { readonly schema: string; readonly name: string }, exprs: readonly (Expression | undefined)[], database: string | null): void {
-  const visit = (e: unknown, inSubquery: boolean): void => {
-    if (e === null || typeof e !== 'object') return
+  const visit = (e: unknown, inSubquery: boolean): boolean => someNode(e, (e) => {
     const n = e as { kind?: string; table?: TableName; query?: unknown }
-    if (n.kind === REF.DERIVED) return
-    if (n.kind === NODE.SUBQUERY) {
-      visit(n.query, true)
-      return
-    }
-    if (inSubquery && n.kind === REF.TABLE && n.table !== undefined && n.table.name === target.name && (n.table.schema ?? database) === target.schema) {
-      throw sqlError('ER_UPDATE_TABLE_USED', `You can't specify target table '${target.name}' for update in FROM clause`)
-    }
-    for (const v of children(e)) visit(v, inSubquery)
-  }
-  for (const e of exprs) visit(e, false)
+    if (n.kind === REF.DERIVED) return false
+    if (n.kind === NODE.SUBQUERY) return visit(n.query, true)
+    if (inSubquery && n.kind === REF.TABLE && n.table?.name === target.name && (n.table.schema ?? database) === target.schema) return true
+    return undefined
+  })
+  if (visit(exprs, false)) throw sqlError('ER_UPDATE_TABLE_USED', `You can't specify target table '${target.name}' for update in FROM clause`)
 }
 
 // --- subqueries, derived tables, CTEs and set operations (M5.1, M5.19) --------------
@@ -1623,6 +1601,75 @@ function selectAlias<T extends { readonly alias?: string }>(e: Expression, items
   return items.find((i) => i.alias?.toLowerCase() === name)
 }
 
+/** Resolved AST structure and literal equality keys; never SQL text or call results. */
+function expressionIdentity(e: Expression | undefined, ctx: CompileContext, env: Env): unknown[] | undefined {
+  if (e === undefined) return undefined
+  let identity: unknown[]
+  let args: readonly Expression[]
+  switch (e.kind) {
+    case NODE.COLUMN: {
+      const r = ctx.scope.resolve(e.parts, ctx.clause)
+      return [e.kind, r.index, r.depth ?? 0]
+    }
+    case NODE.LITERAL: {
+      // Only literals are evaluated: calls and statement state are opaque.
+      // COLLATE wraps the original constant; it does not change Item equality
+      // inside that wrapper. Introduced bytes become string constants, while
+      // unintroduced hex and bit spellings share one binary constant class.
+      const { collation, ...bare } = e
+      const c = compile(bare, ctx)
+      const v = c.eval([], env)
+      const kind = e.type === LITERAL.BOOL ? LITERAL.BOOL : v?.kind === 'bytes' && v.hex === true ? LITERAL.HEX : c.type.kind
+      return [e.kind, kind, c.type.collationId, valueKey(v), collation === undefined ? undefined : collationInfoByName(collation.toLowerCase())?.id]
+    }
+    case NODE.PLACEHOLDER: return [e.kind, e.index]
+    case NODE.BINARY:
+      if (e.op !== '+') return undefined
+      identity = [e.kind, e.op]; args = [e.left, e.right]; break
+    case NODE.CAST:
+      if (e.type.name !== 'SIGNED' || e.array === true || e.timeZone !== undefined) return undefined
+      identity = [e.kind]; args = [e.expr]; break
+    case NODE.COLLATE:
+      identity = [e.kind, collationInfoByName(e.collation.toLowerCase())?.id]; args = [e.expr]; break
+    case NODE.CALL: {
+      const name = e.name.toUpperCase()
+      if (!['ABS', 'CONCAT', 'RAND', 'LAST_INSERT_ID'].includes(name) || e.stored === true || e.over !== undefined || e.distinct === true) return undefined
+      identity = [e.kind, name]; args = e.args; break
+    }
+    default: return undefined
+  }
+  const keys = args.map((a) => expressionIdentity(a, ctx, env))
+  return keys.includes(undefined) ? undefined : [...identity, keys]
+}
+
+/** The verified single-table scalar DISTINCT admission boundary (8.4.11). */
+function checkDistinctOrder(run: Run, order: readonly OrderItem[], items: readonly { readonly expr?: Expression; readonly compiled: Compiled; readonly alias?: string }[], scope: TableScope): void {
+  const ctx = compileContext(run, scope, 'order clause')
+  const key = (e: Expression | undefined): string | undefined => JSON.stringify(expressionIdentity(e, ctx, run.env))
+  const selectedKeys = items.flatMap((item) => item.expr === undefined ? [] : [key(item.expr)])
+  // An alias is already bound to a selected item; null needs no expression proof.
+  const orderKeys = order.map((item) => selectAlias(item.expr, items) !== undefined ? null : key(item.expr))
+  if (selectedKeys.includes(undefined) || orderKeys.includes(undefined)) return
+  const selected = items.map((item) => item.compiled.type.column)
+  order.forEach(({ expr: e }, i) => {
+    const k = orderKeys[i]
+    if (k === null || selectedKeys.includes(k)) return
+    for (const parts of columnRefs(e)) {
+      const r = scope.resolve(parts, 'order clause')
+      if ((r.depth ?? 0) > 0 || (r.type.column !== undefined && selected.includes(r.type.column))) continue
+      throw sqlError('ER_FIELD_IN_ORDER_NOT_SELECT', `Expression #${i + 1} of ORDER BY clause is not in SELECT list, references column '${qualifiedColumn(scope, r.index)}' which is not in SELECT list; this is incompatible with DISTINCT`)
+    }
+  })
+}
+
+/** Error spelling for a resolved column, including its table alias and schema. */
+function qualifiedColumn(scope: TableScope | undefined, index: number): string {
+  const at = scope?.columnAt(index)
+  if (at === undefined) return '?'
+  const prefix = at.table.def === undefined ? '' : `${at.table.def.schema}.`
+  return `${prefix}${at.table.alias}.${at.column.name}`
+}
+
 /**
  * The one table an ORDER BY, or a GROUP BY, reads (`get_sort_by_table`):
  * with both, only if they are the same list; none if any key reads anything
@@ -1646,7 +1693,7 @@ function keyAliases(keys: readonly Expression[], items: readonly { readonly alia
   const out = new Set<string>()
   if (!(scope instanceof TableScope)) return out
   for (const e of keys) {
-    for (const parts of columnRefs(sortExpression(e, items) ?? { kind: NODE.COLUMN, parts: ['\u0000'] }, [], true)) {
+    for (const parts of columnRefs(sortExpression(e, items) ?? { kind: NODE.COLUMN, parts: ['\u0000'] }, true)) {
       const r = safeResolve(scope, parts, 'order clause')
       const alias = r === undefined ? '\u0000' : scope.columnAt(r.index)?.table.alias
       if (alias !== undefined) out.add(alias)
@@ -1979,16 +2026,6 @@ function pinnedByWhere(where: Expression | undefined, parts: readonly string[]):
   return splitAnd(where).some((e) => e.kind === NODE.BINARY && e.op === '=' && ((same(e.left) && constant(e.right)) || (same(e.right) && constant(e.left))))
 }
 
-/** Resolve a planner proof; the compiler still reports typed name errors in their original clause. */
-function safeResolve(scope: Scope, parts: readonly string[], clause: string): ReturnType<Scope['resolve']> | undefined {
-  try {
-    return scope.resolve(parts, clause)
-  } catch (e) {
-    expectTyped(e)
-    return undefined
-  }
-}
-
 /** A column's local slot; an enclosing query's column is a constant here. */
 function safeIndex(scope: Scope, parts: readonly string[]): number | undefined {
   const r = safeResolve(scope, parts, 'field list')
@@ -2168,8 +2205,7 @@ function checkFullGroupBy(
       const def = t.def
       if (def === undefined) continue
       const offsetOf = (name: string): number => t.offset + def.columns.findIndex((c) => c.name.toLowerCase() === name.toLowerCase())
-      const unique = def.indexes.filter((i) => uniqueKey(def, i) && (i.kind === 'primary' || i.parts.every((p) => p.prefix === undefined)))
-      if (!unique.some((i) => i.parts.every((p) => determined.has(offsetOf(p.column))))) continue
+      if (!def.indexes.some((i) => uniqueKey(def, i) && (i.kind === 'primary' || i.parts.every((p) => p.prefix === undefined)) && i.parts.every((p) => determined.has(offsetOf(p.column))))) continue
       for (let i = 0; i < def.columns.length; i++) {
         if (!determined.has(t.offset + i)) {
           determined.add(t.offset + i)
@@ -2178,39 +2214,30 @@ function checkFullGroupBy(
       }
     }
   }
-  const nameOf = (index: number): string => {
-    const at = scope?.columnAt(index)
-    if (at === undefined) return '?'
-    // An aliased table is named by its alias, under its schema: `app.p0.id` (8.4.11).
-    return at.table.def === undefined ? `${at.table.alias}.${at.column.name}` : `${at.table.def.schema}.${at.table.alias}.${at.column.name}`
+  const offending = (root: Expression): number | undefined => {
+    let hit: number | undefined
+    someNode(root, (value) => {
+      const e = value as Expression
+      if (e.kind === undefined || keyTexts.has(deparse(e))) return false
+      if (e.kind === NODE.CALL && (isAggregate(e) || e.name.toUpperCase() === 'ANY_VALUE')) return false
+      if (e.kind === NODE.SUBQUERY) return false
+      if (e.kind === NODE.COLUMN) {
+        const at = safeIndex(lookup, e.parts)
+        if (at !== undefined && !determined.has(at)) hit = at
+        return hit !== undefined
+      }
+      return undefined
+    })
+    return hit
   }
-  const offending = (e: Expression): number | undefined => {
-    if (keyTexts.has(deparse(e))) return undefined
-    if (e.kind === NODE.CALL && (isAggregate(e) || e.name.toUpperCase() === 'ANY_VALUE')) return undefined
-    if (e.kind === NODE.SUBQUERY) return undefined
-    if (e.kind === NODE.COLUMN) {
-      const at = safeIndex(lookup, e.parts)
-      return at === undefined || determined.has(at) ? undefined : at
-    }
-    for (const child of children(e)) {
-      if (child === null || typeof child !== 'object' || typeof (child as { kind?: unknown }).kind !== 'string') continue
-      const hit = offending(child as Expression)
-      if (hit !== undefined) return hit
-    }
-    return undefined
-  }
-  selectExprs.forEach((e, i) => {
+  const check = (exprs: readonly Expression[], clause: string): void => exprs.forEach((e, i) => {
     const at = offending(e)
     if (at === undefined) return
-    if (implicit) throw sqlError('ER_MIX_OF_GROUP_FUNC_AND_FIELDS', `In aggregated query without GROUP BY, expression #${i + 1} of SELECT list contains nonaggregated column '${nameOf(at)}'; this is incompatible with sql_mode=only_full_group_by`)
-    throw sqlError('ER_WRONG_FIELD_WITH_GROUP', `Expression #${i + 1} of SELECT list is not in GROUP BY clause and contains nonaggregated column '${nameOf(at)}' which is not functionally dependent on columns in GROUP BY clause; this is incompatible with sql_mode=only_full_group_by`)
+    if (implicit) throw sqlError('ER_MIX_OF_GROUP_FUNC_AND_FIELDS', `In aggregated query without GROUP BY, expression #${i + 1} of SELECT list contains nonaggregated column '${qualifiedColumn(scope, at)}'; this is incompatible with sql_mode=only_full_group_by`)
+    throw sqlError('ER_WRONG_FIELD_WITH_GROUP', `Expression #${i + 1} of ${clause} is not in GROUP BY clause and contains nonaggregated column '${qualifiedColumn(scope, at)}' which is not functionally dependent on columns in GROUP BY clause; this is incompatible with sql_mode=only_full_group_by`)
   })
-  if (implicit) return
-  orderExprs.forEach((e, i) => {
-    const at = offending(e)
-    if (at === undefined) return
-    throw sqlError('ER_WRONG_FIELD_WITH_GROUP', `Expression #${i + 1} of ORDER BY clause is not in GROUP BY clause and contains nonaggregated column '${nameOf(at)}' which is not functionally dependent on columns in GROUP BY clause; this is incompatible with sql_mode=only_full_group_by`)
-  })
+  check(selectExprs, 'SELECT list')
+  if (!implicit) check(orderExprs, 'ORDER BY clause')
 }
 
 /**

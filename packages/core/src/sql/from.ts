@@ -32,6 +32,7 @@
 // never for a table on the inner side of an outer join, where `WHERE b.x IS
 // NULL` must still see the NULL rows the join made.
 import { FIELD_TYPE, expectTyped } from '@myjs/bytes'
+import { someNode } from './ast.ts'
 import { requireCollationInfo } from '@myjs/charsets'
 import type { ColumnDef, IndexDef, RowId, Table, TableDef, Trx } from '@myjs/engine'
 import { NODE, REF, type Expression, type TableReference } from '@myjs/parser'
@@ -46,7 +47,7 @@ import { chooseStrategy } from './group.ts'
 import { sort as sortRows, type SortKey } from './operators.ts'
 import { neverEqual, nullRejected } from './optimize.ts'
 import type { TableStatistics } from './stats.ts'
-import { TableScope, type ScopeColumn, type ScopeTableSpec } from './scope.ts'
+import { safeResolve, TableScope, type ScopeColumn, type ScopeTableSpec } from './scope.ts'
 
 /** A table the FROM reads: a base table, or (M5.1) a derived one. */
 export interface FromTable {
@@ -446,13 +447,8 @@ export function planFrom(refs: readonly TableReference[], ctx: FromContext, wher
       : (e) => {
           if (e.kind !== NODE.COLUMN) return undefined
           if (!outerColumns.has(e)) {
-            let compiled: Compiled | undefined
-            try {
-              if (scope.resolve(e.parts, 'where clause').depth !== undefined) compiled = ctx.compileOn(e, scope)
-            } catch (err) {
-              expectTyped(err)
-            }
-            outerColumns.set(e, compiled)
+            const r = safeResolve(scope, e.parts, 'where clause')
+            outerColumns.set(e, r?.depth === undefined ? undefined : compileProof(e, (e) => ctx.compileOn(e, scope)))
           }
           return outerColumns.get(e)
         }
@@ -691,13 +687,8 @@ function innerWherePossible(root: Node, where: Expression | undefined, scope: Ta
     if (e.kind !== NODE.COLUMN) return undefined
     const p = e.parts[0] as string
     if (e.parts.length === 1 && p.startsWith(SLOT_PREFIX)) return Number(p.slice(SLOT_PREFIX.length))
-    try {
-      const r = scope.resolve(e.parts, 'where clause')
-      return r.depth === undefined ? r.index : undefined
-    } catch (err) {
-      expectTyped(err)
-      return undefined
-    }
+    const r = safeResolve(scope, e.parts, 'where clause')
+    return r !== undefined && r.depth === undefined ? r.index : undefined
   }
   let pool: Expression[] = []
   const converted = new Set<Node>()
@@ -844,15 +835,10 @@ function hashKeys(conditions: readonly Placed[], outer: ReadonlySet<string>, inn
     const l = side(c.left)
     const r = side(c.right)
     if (l === undefined || r === undefined || l === r) continue
-    let a: Compiled
-    let b: Compiled
-    try {
-      a = compile(l === 'outer' ? c.left : c.right)
-      b = compile(l === 'outer' ? c.right : c.left)
-    } catch (e) {
-      expectTyped(e)
-      continue
-    }
+    const a = compileProof(l === 'outer' ? c.left : c.right, compile)
+    if (a === undefined) continue
+    const b = compileProof(l === 'outer' ? c.right : c.left, compile)
+    if (b === undefined) continue
     const keyed = (exact(a.type.kind) && exact(b.type.kind)) || (a.type.kind === 'string' && b.type.kind === 'string' && a.type.collationId === b.type.collationId)
     if (!keyed) continue
     out.push(a)
@@ -1005,13 +991,8 @@ function refOf(t: FromTable, conditions: readonly (Expression | undefined)[], ou
     // The unique key first, else the first index the column leads; whether to look up at all is the cost model's (`toOp`).
     const index = leading.find((i) => unique(i, column)) ?? leading[0]
     if (index === undefined || (best !== undefined && (best.unique || !unique(index, column)))) continue
-    let value: Compiled
-    try {
-      value = compileOuter(other)
-    } catch (e) {
-      expectTyped(e)
-      continue
-    }
+    const value = compileProof(other, compileOuter)
+    if (value === undefined) continue
     // A key read needs the two sides to compare as the key's own type.
     const keyKind = new TableScope([{ alias: t.alias, def }]).resolve([t.alias, column.name], 'on clause').type.kind
     if (value.type.kind !== keyKind || (keyKind === 'string' && value.type.collationId !== column.type.collationId)) continue
@@ -1030,15 +1011,21 @@ function columnOf(t: FromTable, e: Expression, scope: TableScope): ColumnDef | u
     name = at?.table.alias === t.alias ? at.column.name : undefined
   } else if (e.parts.length >= 2) name = e.parts[e.parts.length - 2] === t.alias ? (e.parts[e.parts.length - 1] as string) : undefined
   else {
-    try {
-      const r = scope.resolve(e.parts, 'where clause')
-      const at = r.depth === undefined ? scope.columnAt(r.index) : undefined
-      name = at?.table.alias === t.alias ? at.column.name : undefined
-    } catch (err) {
-      expectTyped(err)
-    }
+    const r = safeResolve(scope, e.parts, 'where clause')
+    const at = r !== undefined && r.depth === undefined ? scope.columnAt(r.index) : undefined
+    name = at?.table.alias === t.alias ? at.column.name : undefined
   }
   return name === undefined ? undefined : t.def.columns.find((c) => c.name.toLowerCase() === (name as string).toLowerCase())
+}
+
+/** Speculative compilation may decline a typed SQL error, never an internal failure. */
+function compileProof(e: Expression, compile: (e: Expression) => Compiled): Compiled | undefined {
+  try {
+    return compile(e)
+  } catch (e) {
+    expectTyped(e)
+    return undefined
+  }
 }
 
 // --- the plan, as EXPLAIN shows it (M5.44) --------------------------------------
@@ -1056,39 +1043,26 @@ interface Placed {
 /** The aliases of the FROM's tables an expression reads, or `undefined` if it reads anything else. */
 function aliasesOf(e: Expression, scope: TableScope): Set<string> | undefined {
   const out = new Set<string>()
-  let other = false
-  const visit = (x: unknown): void => {
-    if (other || x === null || typeof x !== 'object') return
-    if (Array.isArray(x)) return x.forEach(visit)
-    const n = x as { kind?: string; parts?: readonly string[] }
-    if (n.kind === NODE.LITERAL || n.kind === NODE.PLACEHOLDER) return
-    if (n.kind === NODE.SUBQUERY) {
-      other = true
-      return
-    }
+  const other = someNode(e, (node) => {
+    const n = node as { kind?: string; parts?: readonly string[] }
+    if (n.kind === NODE.LITERAL || n.kind === NODE.PLACEHOLDER) return false
+    if (n.kind === NODE.SUBQUERY) return true
     if (n.kind === NODE.COLUMN && n.parts !== undefined) {
       // USING's equalities name slots, which are positions in the FROM's row.
       const p = n.parts[0] as string
+      let at: ReturnType<TableScope['columnAt']>
       if (n.parts.length === 1 && p.startsWith(SLOT_PREFIX)) {
-        const at = scope.columnAt(Number(p.slice(SLOT_PREFIX.length)))
-        if (at === undefined) other = true
-        else out.add(at.table.alias)
-        return
+        at = scope.columnAt(Number(p.slice(SLOT_PREFIX.length)))
+      } else {
+        const r = safeResolve(scope, n.parts, 'where clause')
+        at = r !== undefined && r.depth === undefined ? scope.columnAt(r.index) : undefined
       }
-      try {
-        const r = scope.resolve(n.parts, 'where clause')
-        const at = r.depth === undefined ? scope.columnAt(r.index) : undefined
-        if (at === undefined) other = true
-        else out.add(at.table.alias)
-      } catch (e) {
-        expectTyped(e)
-        other = true
-      }
-      return
+      if (at === undefined) return true
+      out.add(at.table.alias)
+      return false
     }
-    for (const v of Object.values(x)) if (typeof v === 'object') visit(v)
-  }
-  visit(e)
+    return undefined
+  })
   return other ? undefined : out
 }
 
@@ -1406,17 +1380,16 @@ function rangeEstimate(t: FromTable, conditions: readonly Weighed[], leaves: rea
   for (const raw of conjuncts) {
     const e = possible(raw)
     const columns: Expression[] = []
-    let plain = true
-    const visit = (x: unknown): void => {
-      if (!plain || x === null || typeof x !== 'object') return
-      if (Array.isArray(x)) return x.forEach(visit)
-      const n = x as Expression
-      if (n.kind === NODE.SUBQUERY || n.kind === NODE.PLACEHOLDER || n.kind === NODE.VARIABLE) plain = false
-      else if (n.kind === NODE.COLUMN) columns.push(n)
-      else for (const v of Object.values(n)) if (typeof v === 'object') visit(v)
-    }
-    visit(e)
-    if (!plain || columns.length === 0) continue
+    const other = someNode(e, (node) => {
+      const n = node as Expression
+      if (n.kind === NODE.SUBQUERY || n.kind === NODE.PLACEHOLDER || n.kind === NODE.VARIABLE) return true
+      if (n.kind === NODE.COLUMN) {
+        columns.push(n)
+        return false
+      }
+      return undefined
+    })
+    if (other || columns.length === 0) continue
     const resolved = columns.map(resolve)
     const first = resolved[0]
     if (first === undefined || resolved.some((r) => r === undefined || name(r) !== name(first))) continue
@@ -1448,11 +1421,8 @@ function rangeEstimate(t: FromTable, conditions: readonly Weighed[], leaves: rea
   if (per.size === 0) return undefined
   const compiled: [ColumnDef, Compiled][] = []
   for (const [column, es] of per) {
-    try {
-      compiled.push([column, compile(es.reduce((a, b) => ({ kind: NODE.BINARY, op: 'AND', left: a, right: b, at: a.at }) as Expression))])
-    } catch (e) {
-      expectTyped(e)
-    }
+    const c = compileProof(es.reduce((a, b) => ({ kind: NODE.BINARY, op: 'AND', left: a, right: b, at: a.at }) as Expression), compile)
+    if (c !== undefined) compiled.push([column, c])
   }
   if (compiled.length === 0) return undefined
   const counts = new Map<ColumnDef, number>(compiled.map(([c]) => [c, 0]))
@@ -2030,19 +2000,15 @@ function pushedToIndex(t: FromTable, c: Placed, settings: LeafSettings, env: Env
   const clustered = clusteredIndex(def)
   if (access.ranges === undefined || index === undefined || index === clustered || settings.covering.get(t.alias) === index.name) return false
   const held = new Set([...index.parts, ...(clustered?.parts ?? [])].map((p) => p.column.toLowerCase()))
-  let ok = true
-  const visit = (x: unknown): void => {
-    if (!ok || x === null || typeof x !== 'object') return
-    if (Array.isArray(x)) return x.forEach(visit)
-    const n = x as Expression
-    if (n.kind === NODE.SUBQUERY || n.kind === NODE.VARIABLE) ok = false
-    else if (n.kind === NODE.COLUMN) {
+  return !someNode(c.e, (node) => {
+    const n = node as Expression
+    if (n.kind === NODE.SUBQUERY || n.kind === NODE.VARIABLE) return true
+    if (n.kind === NODE.COLUMN) {
       const column = columnOf(t, n, settings.scope as TableScope)
-      if (column === undefined || !held.has(column.name.toLowerCase())) ok = false
-    } else for (const v of Object.values(n)) if (typeof v === 'object') visit(v)
-  }
-  visit(c.e)
-  return ok
+      return column === undefined || !held.has(column.name.toLowerCase())
+    }
+    return undefined
+  })
 }
 
 // --- covering indexes -------------------------------------------------------------

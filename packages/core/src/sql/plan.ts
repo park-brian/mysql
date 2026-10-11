@@ -177,41 +177,29 @@ function exact(v: Value, c: ColumnDef): boolean {
  * is why the plan is made per execution (a `?` is a constant by then).
  */
 export function chooseAccess(def: TableDef, alias: string, where: Expression | undefined, env: Env, outer?: OuterColumn, costing?: RangeCosting): Access {
-  const conditions = splitAnd(where)
+  const conjuncts = splitAnd(where)
+  const conditions = conjuncts
     .map((e) => conditionOf(e, def, alias, outer))
     .filter((c): c is Condition => c !== undefined)
   if (costing !== undefined) {
     // A key read by points stays one (`ref`); otherwise the range optimizer's choice.
-    const points = pointsAccess(def, conditions, env, outer)
-    return points ?? rangeAccess(def, alias, splitAnd(where), env, costing) ?? FULL_SCAN
+    const points = scoredAccess(def, conditions, env, outer, 3)
+    return points ?? rangeAccess(def, alias, conjuncts, env, costing) ?? FULL_SCAN
   }
-  if (conditions.length === 0) return FULL_SCAN
-
-  // An invisible index is kept and enforced, and never chosen (8.4.11: a scan, its rows in table order).
-  const candidates = def.indexes.filter((i) => i.invisible !== true).sort((a, b) => (a.kind === 'primary' ? -1 : 0) - (b.kind === 'primary' ? -1 : 0))
-  let best: { access: Access; score: number } | undefined
-  for (const index of candidates) {
-    const part = index.parts[0]
-    if (part === undefined || part.prefix !== undefined || part.descending === true) continue
-    const column = def.columns.find((c) => c.name === part.column) as ColumnDef
-    const mine = conditions.filter((c) => c.column === column.name)
-    const access = accessFor(index, column, mine, env, outer)
-    if (access === undefined) continue
-    const score = access.score + (index.kind === 'primary' || def.clustered === index.name ? 0.5 : 0)
-    if (best === undefined || score > best.score) best = { access: access.access, score }
-  }
-  return best?.access ?? FULL_SCAN
+  return scoredAccess(def, conditions, env, outer) ?? FULL_SCAN
 }
 
-/** The best key read by points — an equality, IN, `<=>` or IS NULL on an index's leading column — as `chooseAccess` scores them. */
-function pointsAccess(def: TableDef, conditions: readonly Condition[], env: Env, outer: OuterColumn | undefined): Access | undefined {
+/** Shared candidate order and scoring; a minimum of 3 admits only point reads. */
+function scoredAccess(def: TableDef, conditions: readonly Condition[], env: Env, outer: OuterColumn | undefined, minimum = 0): Access | undefined {
+  if (conditions.length === 0) return undefined
   let best: { access: Access; score: number } | undefined
+  // Invisible indexes stay enforced but are never access candidates.
   for (const index of def.indexes.filter((i) => i.invisible !== true).sort((a, b) => (a.kind === 'primary' ? -1 : 0) - (b.kind === 'primary' ? -1 : 0))) {
     const part = index.parts[0]
     if (part === undefined || part.prefix !== undefined || part.descending === true) continue
     const column = def.columns.find((c) => c.name === part.column) as ColumnDef
     const access = accessFor(index, column, conditions.filter((c) => c.column === column.name), env, outer)
-    if (access === undefined || access.score < 3) continue
+    if (access === undefined || access.score < minimum) continue
     const score = access.score + (index.kind === 'primary' || def.clustered === index.name ? 0.5 : 0)
     if (best === undefined || score > best.score) best = { access: access.access, score }
   }
@@ -463,13 +451,9 @@ function accessFor(index: IndexDef, column: ColumnDef, conditions: readonly Cond
     }
   }
   for (const c of conditions) {
-    if (c.op === 'IS NULL') {
-      if (!column.nullable) continue
-      return { access: { index: index.name, ranges: [{ from: { values: [null], inclusive: true }, to: { values: [null], inclusive: true } }] }, score: 3 }
-    }
-    if (c.op === '<=>') {
+    if (c.op === 'IS NULL' || c.op === '<=>') {
       // NULL-safe: `= v` for a value, IS NULL for NULL — a key read either way.
-      const v = evaluate(c.constants[0] as Expression)
+      const v = c.op === 'IS NULL' ? null : evaluate(c.constants[0] as Expression)
       if (v === null && column.nullable) return { access: { index: index.name, ranges: [{ from: { values: [null], inclusive: true }, to: { values: [null], inclusive: true } }] }, score: 3 }
       const b = v === undefined || v === null || !exact(v, column) ? undefined : bound(v, column, true)
       if (b !== undefined) return { access: { index: index.name, ranges: [{ from: b, to: b }] }, score: 3 }
