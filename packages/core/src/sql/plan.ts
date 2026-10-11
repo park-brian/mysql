@@ -539,27 +539,27 @@ export function* accessRows(table: Table, def: TableDef, access: Access, trx: Tr
 }
 
 /** A literal, `-literal` or `?`, evaluated. */
-function constantValue(e: Expression, env: Env): Value {
+function constantValue(e: Expression, env: Env): Value | undefined {
   switch (e.kind) {
     case NODE.PLACEHOLDER:
       return env.params[e.index] ?? null
     case NODE.UNARY: {
       const v = constantValue(e.operand, env)
-      if (v === null) return null
+      if (v === undefined || v === null) return v
       if (v.kind === 'int') return v.unsigned && v.v > (1n << 63n) - 1n ? null : { kind: 'int', v: -v.v, unsigned: false }
       if (v.kind === 'decimal') return { ...v, v: -v.v }
       if (v.kind === 'double') return { kind: 'double', v: -v.v }
-      return null
+      return undefined
     }
     case NODE.LITERAL:
       return literalValue(e, env)
     default:
-      return null
+      return undefined
   }
 }
 
 /** A literal's value, without compiling it: the planner's own small evaluator, kept to the kinds `exact` accepts. */
-function literalValue(e: Expression & { kind: typeof NODE.LITERAL }, env: Env): Value {
+function literalValue(e: Expression & { kind: typeof NODE.LITERAL }, env: Env): Value | undefined {
   switch (e.type) {
     case 'int': {
       const n = e.value as bigint
@@ -574,12 +574,15 @@ function literalValue(e: Expression & { kind: typeof NODE.LITERAL }, env: Env): 
       return { kind: 'double', v: e.value as number }
     case 'string':
       // An introducer or COLLATE changes what the literal compares as; leave those to the scan.
-      if (e.charset !== undefined || e.collation !== undefined) return null
+      if (e.charset !== undefined || e.collation !== undefined) return undefined
       return { kind: 'string', v: e.value as string, collationId: env.session.characterSet, coercibility: 4 }
     case 'hex':
       return { kind: 'bytes', v: e.value as Uint8Array }
-    default:
+    case 'null':
       return null
+    default:
+      // An unevaluated literal is not SQL NULL: leave its comparison to the scan.
+      return undefined
   }
 }
 
