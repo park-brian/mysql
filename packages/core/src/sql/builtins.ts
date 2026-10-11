@@ -595,7 +595,9 @@ export function regexpFunction(name: string, e: CallNode, ctx: CompileContext): 
           }
           const out = replace ? regexpReplace(search, v[2] as Exclude<Value, null>) : regexpSubstr(search)
           if (out === undefined) return null
-          return collation === CHARSET_BINARY ? bytesValue(Uint8Array.from(out, (c) => c.charCodeAt(0))) : stringValue(out, collation, COERCIBILITY.IMPLICIT)
+          // my_charset_latin1 (8) is also the binary regex output map: a
+          // decoded euro sign returns byte 80 rather than its UTF-16 low byte AC.
+          return collation === CHARSET_BINARY ? bytesValue(encodeCollation(out, 8)) : stringValue(out, collation, COERCIBILITY.IMPLICIT)
         },
         type,
       }

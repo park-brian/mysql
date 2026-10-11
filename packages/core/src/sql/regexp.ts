@@ -18,7 +18,7 @@
 // A named divergence: ICU folds case fully, so `'Straße' REGEXP 'STRASSE'` is
 // 1 there; the engine folds code point by code point, and it is 0 here.
 import { CHARSET_BINARY } from '@myjs/bytes'
-import { requireCollationInfo } from '@myjs/charsets'
+import { decodeCharset, requireCollationInfo } from '@myjs/charsets'
 import { sqlError } from '@myjs/protocol'
 import { aggregateCollation, toText, type Value } from '@myjs/types'
 import { compileIcu, type IcuFlags, type IcuPattern } from './icu-pattern.ts'
@@ -124,8 +124,8 @@ function sameKind(a: Exclude<Value, null>, b: Exclude<Value, null>, fn: string):
   }
 }
 
-/** A value as the text the pattern runs over: a binary string byte for byte. */
-const textOf = (v: Exclude<Value, null>): string => (v.kind === 'bytes' ? new TextDecoder('latin1').decode(v.v) : toText(v))
+/** ICU reads a binary string through MySQL's latin1 map, independent of the host decoder. */
+const textOf = (v: Exclude<Value, null>): string => (v.kind === 'bytes' ? decodeCharset(v.v, 'latin1') : toText(v))
 
 /** The subject's and pattern's collation, as the comparison has it. */
 function collationFor(subject: Exclude<Value, null>, pattern: Exclude<Value, null>): number {
