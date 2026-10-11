@@ -39,6 +39,32 @@ test('DATETIME/binary extrema preserve precision, zero fallback and warning iden
         }
       }
     }
+    // TIME arguments use the statement date, including borrow across midnight.
+    await conn.query('SET timestamp = 1791547200')
+    for (const [time, anchored, formatted, fsp] of [
+      ['10:11:12', '2026-10-09 10:11:12', '2026-10-09 10:11:12.000000', 0],
+      ['-01:00:00', '2026-10-08 23:00:00', '2026-10-08 23:00:00.000000', 0],
+      ['-00:00:00.123', '2026-10-08 23:59:59.877', '2026-10-08 23:59:59.877000', 3],
+      ['-25:00:00.123456', '2026-10-07 22:59:59.876544', '2026-10-07 22:59:59.876544', 6],
+      ['25:00:00.123456', '2026-10-10 01:00:00.123456', '2026-10-10 01:00:00.123456', 6],
+    ] as const) {
+      const values = ["TIMESTAMP'2024-01-01 00:00:00'", "X'323032332D30312D3031'", `TIME'${time}'`]
+      for (let first = 0; first < values.length; first++) {
+        const args = [...values.slice(first), ...values.slice(0, first)].join(',')
+        const sql = `SELECT GREATEST(${args}),LEAST(${args}),DATE_FORMAT(TIME'${time}','%Y-%m-%d %H:%i:%s.%f')`
+        for (const method of ['query', 'execute'] as const) {
+          const options = { sql, rowsAsArray: true }
+          const [rows, fields] = method === 'query' ? await conn.query(options) : await conn.execute(options)
+          const minimum = '2023-01-01 00:00:00' + (fsp === 0 ? '' : '.' + '0'.repeat(fsp))
+          assert.deepEqual(rows, [[Buffer.from(anchored), Buffer.from(minimum), formatted]], `${method}: ${sql}`)
+          const width = fsp === 0 ? 19 : 20 + fsp
+          assert.deepEqual(fields.map((f) => [f.columnType, f.columnLength, f.flags, f.decimals, f.characterSet]),
+            [[253, width, 129, 31, 63], [253, width, 129, 31, 63], [253, 124, 0, 31, 224]], `${method}: ${sql}`)
+          const [warnings] = await conn.query('SHOW WARNINGS')
+          assert.deepEqual(warnings, [], `${method}: ${sql}`)
+        }
+      }
+    }
     await conn.query('CREATE DATABASE IF NOT EXISTS datetime_binary_extrema')
     await conn.query('USE datetime_binary_extrema')
     await conn.query('DROP TABLE IF EXISTS t')

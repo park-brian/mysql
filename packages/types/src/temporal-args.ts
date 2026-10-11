@@ -109,8 +109,10 @@ export function dateOf(value: Value, flags: DateFlags, today: () => MysqlDateTim
     case 'time': {
       const t = today()
       const us = (((value.v.days * 24 + value.v.hour) * 60 + value.v.minute) * 60 + value.v.second) * 1_000_000 + value.v.microsecond
-      const d = new Date(Date.UTC(t.year, t.month - 1, t.day) + (value.v.negative ? -1 : 1) * Math.floor(us / 1000))
-      return { v: { year: d.getUTCFullYear(), month: d.getUTCMonth() + 1, day: d.getUTCDate(), hour: d.getUTCHours(), minute: d.getUTCMinutes(), second: d.getUTCSeconds(), microsecond: us % 1_000_000 }, fsp: value.fsp }
+      const signed = value.v.negative ? -us : us
+      const seconds = Math.floor(signed / 1_000_000)
+      const d = new Date(Date.UTC(t.year, t.month - 1, t.day) + seconds * 1000)
+      return { v: { year: d.getUTCFullYear(), month: d.getUTCMonth() + 1, day: d.getUTCDate(), hour: d.getUTCHours(), minute: d.getUTCMinutes(), second: d.getUTCSeconds(), microsecond: signed - seconds * 1_000_000 }, fsp: value.fsp }
     }
     case 'string':
     case 'bytes':

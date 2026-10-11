@@ -39,6 +39,7 @@ import {
   bytesValue,
   compareValues,
   crc32,
+  dateOf,
   decimalValue,
   doubleValue,
   intValue,
@@ -743,7 +744,11 @@ function datetimeExtremum(xs: readonly Compiled[], type: ResultType, greatest: b
         const v = x.eval(r, env)
         if (v === null) return null
         values.push(v)
-        const converted = toDateTime(v, 'DATETIME')
+        let converted = toDateTime(v, 'DATETIME')
+        if (v.kind === 'time') {
+          const anchored = dateOf(v, {}, () => ({ year: env.now.getUTCFullYear(), month: env.now.getUTCMonth() + 1, day: env.now.getUTCDate(), hour: 0, minute: 0, second: 0, microsecond: 0 }))
+          if (anchored.v !== null) converted = { kind: 'datetime', v: anchored.v, type: 'DATETIME', fsp: v.fsp }
+        }
         const packed = converted === undefined ? 0n : temporalOrdinal(converted.v)
         const zero = packed === 0n && (v.kind === 'int' || v.kind === 'decimal' || v.kind === 'double' || modeOf(env.session.sqlMode).noZeroDate)
         if (converted === undefined || (zero && v.kind !== 'datetime')) {

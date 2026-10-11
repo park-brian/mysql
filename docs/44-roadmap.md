@@ -98,6 +98,12 @@ zero minimum. Their precision, metadata and warning identity/order agree in
 live tests for constants, columns and NULL through both protocols. Regex result
 transcoding under UTF-8 remains open. JSON extrema also need their prepare-time
 warnings and NULL metadata rules; TIME/JSON remains explicitly unsupported.
+An additional TIME operand in DATETIME extrema now uses the statement's date;
+negative fractional times borrow the correct second and retain microseconds.
+Live tests pin the clock and compare operand order, positive/negative times,
+midnight rollover and DATE_FORMAT through both protocols. Adjacent probes leave
+CAST(TIME AS DATETIME) anchoring/rounding and the rejection of fractional TIME
+literals beyond 838:59:59 explicitly open for a bounded coercion repair.
 CI's IN-list latency failure led to a reproduced PREPARE stall: a 32,000-parameter
 statement answered another connection only once while its metadata was delivered.
 Large initial packet lists now yield every 512 packets in the existing serialized
