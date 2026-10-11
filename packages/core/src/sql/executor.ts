@@ -280,7 +280,8 @@ export class SqlExecutor implements Executor {
   }
 
   async prepare(session: Session, sql: string): Promise<PreparedInfo> {
-    const started = performance.now()
+    this.#alive(session)
+    let started = performance.now()
     let tokens: Token[]
     try {
       tokens = lex(sql, { sqlMode: modeOf(session.sqlMode) })
@@ -290,18 +291,29 @@ export class SqlExecutor implements Executor {
     const paramCount = tokens.filter((t) => t.kind === TOKEN.PLACEHOLDER).length
     // COM_STMT_PREPARE_OK counts them in two bytes (`sql_prepare.cc`: 1390).
     if (paramCount > 0xffff) throw sqlError('ER_PS_MANY_PARAM', 'Prepared statement contains too many placeholders')
+    // Lexing and parsing are separate slices; do not join their pauses into
+    // one long stall before PREPARE's metadata delivery can yield.
+    if (performance.now() - started > SLICE_MS) await pause()
+    this.#alive(session)
+    started = performance.now()
     // The empty statement a comment makes is not one the protocol prepares.
     if (emptyText(session, sql) === 'comment') throw sqlError('ER_UNSUPPORTED_PS', 'This command is not supported in the prepared statement protocol yet')
     const statement = this.#parse(session, sql, true, tokens)
     // Parsing a statement of 32,000 placeholders is a slice and more on its
     // own: the other connections go next, before its EXECUTE does (D-77).
     if (performance.now() - started > SLICE_MS) await pause()
+    this.#alive(session)
     if (statement === null) return { paramCount, columns: [] }
     await this.#preload(session, statement)
+    this.#alive(session)
     if (statement.kind !== STATEMENT.QUERY) return { paramCount, columns: [] }
     try {
       const run = { ...this.#run(session, sql, [], undefined, 'binary'), preparing: true }
-      return { paramCount, columns: columnsOf(run, planQuery(run, statement)) }
+      const columns = columnsOf(run, planQuery(run, statement))
+      // Give other sessions a turn before allocating the parameter packets.
+      if (paramCount >= MANY_PARAMETERS) await pause()
+      this.#alive(session)
+      return { paramCount, columns }
     } catch (e) {
       throw toSqlError(e)
     }

@@ -8,7 +8,7 @@
 // commands ran side by side.
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { COM, PacketFramer } from '@myjs/protocol'
+import { COM, PacketFramer, Session, capabilities } from '@myjs/protocol'
 import { MySQL, SqlExecutor } from '@myjs/core'
 import type { Executor } from '@myjs/protocol'
 
@@ -114,4 +114,15 @@ test('closing while PREPARE metadata is delivered stops output and ends its sess
     await db.end()
   }
   assert.equal(ended, 1)
+})
+
+test('a PREPARE paused after lexing cannot resume an ended session', async (t) => {
+  const executor = new SqlExecutor()
+  const session = new Session({ connectionId: 1, capabilities: capabilities(0) })
+  let time = 0
+  t.mock.method(performance, 'now', () => (time += 20))
+  const pending = executor.prepare(session, 'SELECT ?')
+  executor.end(session)
+  await assert.rejects(pending, { code: 'ER_QUERY_INTERRUPTED' })
+  await assert.rejects(executor.prepare(session, 'SELECT 1'), { code: 'ER_QUERY_INTERRUPTED' })
 })
