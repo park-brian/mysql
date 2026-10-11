@@ -306,12 +306,15 @@ function checkNumber(v: Exclude<Value, null>, kind: 'DOUBLE' | 'INTEGER' | 'DECI
       : // And a double past the largest, which is read as it (8.4.11: `'1e400' + 0`).
         kind === 'DOUBLE' && p.complete && !Number.isFinite(Number(p.text))
   if (p.complete && !(kind === 'INTEGER' && p.fractional) && !overflow) return
-  const binaryInteger = integerCastKind === 'bytes' && v.kind === 'bytes'
   // INTEGER casts warn even for empty or whitespace-only strings and bytes.
   if (!p.complete && kind !== 'DECIMAL' && integerCastKind === undefined && /^[ \t\n\r]*$/.test(text)) return
   // A column's text with no digit at all, read as a DECIMAL, is 1366 first, as its field's conversion says (8.4.11: `CAST(lt AS DECIMAL)` of 'abc').
   if (column && kind === 'DECIMAL' && !/\d/.test(text)) raise(env, 1366, "Incorrect DECIMAL value: '0' for column '' at row -1")
-  truncated(env, kind, binaryInteger ? escapedBytes(v.v.subarray(0, 128)).slice(0, 128) : warnedText(v))
+  let diagnostic: string
+  if (integerCastKind === 'bytes' && v.kind === 'bytes') diagnostic = escapedBytes(v.v.subarray(0, 128)).slice(0, 128)
+  else if (integerCastKind === 'string') diagnostic = integerCastText(v)
+  else diagnostic = warnedText(v)
+  truncated(env, kind, diagnostic)
 }
 
 /** A truncated conversion's message; each reader retains its text policy. */
@@ -332,6 +335,15 @@ export function warnedText(v: Exclude<Value, null>): string {
   const text = toText(v)
   const nul = text.indexOf('\0')
   return nul === -1 ? text : text.slice(0, nul)
+}
+
+/** utf8mb3 carries no character past the BMP. */
+const bmpText = (text: string): string => text.replace(/[\u{10000}-\u{10FFFF}]/gu, '?')
+
+/** INTEGER CAST diagnostic text is normalized before its UTF-8 byte cap. */
+function integerCastText(v: Exclude<Value, null>): string {
+  const text = bmpText(warnedText(v)).slice(0, 128)
+  return new TextDecoder().decode(new TextEncoder().encode(text).subarray(0, 128))
 }
 
 /** An environment for evaluating a constant while compiling: no row, the statement's parameters. */
@@ -402,9 +414,8 @@ function convertUsing(e: ConvertNode, ctx: CompileContext): Compiled {
       if (v === null) return null
       const bytes = v.kind === 'bytes' ? v.v : v.kind === 'int' && isBits(x.type) ? bitBytes(v.v, x.type.length) : undefined
       if (id === CHARSET_BINARY) return bytesValue(bytes ?? valueBytes(v))
-      // utf8mb3 holds no character past the BMP: it is '?' there.
-      const carried = (t: string): string => (name === 'utf8mb3' ? t.replace(/[\u{10000}-\u{10FFFF}]/gu, '?') : t)
-      const text = bytes === undefined ? carried(decodeCollation(encodeCollation(toText(v), id), id)) : textIn(bytes, id, env)
+      let text = bytes === undefined ? decodeCollation(encodeCollation(toText(v), id), id) : textIn(bytes, id, env)
+      if (bytes === undefined && name === 'utf8mb3' && text !== null) text = bmpText(text)
       return text === null ? null : stringValue(text, id, COERCIBILITY.IMPLICIT)
     },
     type: stringType(width, id, true),
