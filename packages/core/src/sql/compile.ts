@@ -19,6 +19,9 @@ import type { ColumnDef, Table, Trx } from '@myjs/engine'
 import { sqlError, messages, type Session } from '@myjs/protocol'
 import {
   COERCIBILITY,
+  MAX_SIGNED,
+  MAX_UNSIGNED,
+  MIN_SIGNED,
   add,
   DERIVATION_NONE,
   aggregateCollation,
@@ -41,6 +44,7 @@ import {
   doubleValue,
   intDivide,
   intValue,
+  isText as isTextValue,
   jsonValue,
   modulo,
   negate,
@@ -109,7 +113,7 @@ import { dateAdd, isInterval, onToday } from './interval.ts'
 import { escapeString, printExpression, Unprintable } from './print.ts'
 import { modeOf } from './mode.ts'
 import { NOT_YET, VARIES_PER_EVALUATION, functionCompiler } from './registry.ts'
-import { clock } from './builtins.ts'
+import { clock, escapedBytes, hexOf } from './builtins.ts'
 import { systemVariableInfo } from './variables.ts'
 
 /** One row as operators pass it: a value per column of the scope. */
@@ -146,7 +150,7 @@ export interface Env {
  * empty or only spaces is 0 without one; so is an ENUM, read by its index,
  * and a hex literal, read as a number. The value itself passes unchanged.
  */
-export function asNumber(c: Compiled, kind: 'DOUBLE' | 'INTEGER' | 'DECIMAL', once: boolean | Expression = false): Compiled {
+export function asNumber(c: Compiled, kind: 'DOUBLE' | 'INTEGER' | 'DECIMAL', once: boolean | Expression = false, source: 'field' | 'cast' = 'field'): Compiled {
   if (c.type.kind === 'json') return jsonAsNumber(c, kind)
   // my_decimal's nine base-10^9 words hold 81 integer digits. Expanding a
   // DOUBLE beyond that buffer warns with its mantissa (double2decimal).
@@ -154,7 +158,7 @@ export function asNumber(c: Compiled, kind: 'DOUBLE' | 'INTEGER' | 'DECIMAL', on
     const v = c.eval(r, env)
     if (v?.kind === 'double') {
       if (Math.abs(v.v) >= 1e81) {
-        raise(env, 1292, `Truncated incorrect DECIMAL value: '${toText(v).split(/[eE]/)[0] as string}'`)
+        truncated(env, 'DECIMAL', toText(v).split(/[eE]/)[0] as string)
         return decimalValue((v.v < 0 ? -1n : 1n) * (pow10(81) - 1n), 0)
       }
       const d = toDecimal(v)
@@ -164,16 +168,17 @@ export function asNumber(c: Compiled, kind: 'DOUBLE' | 'INTEGER' | 'DECIMAL', on
     }
     return v
   } }
-  if (c.type.kind !== 'string' && c.type.kind !== 'bytes') return c
+  if (!isText(c.type)) return c
+  const column = c.type.column !== undefined
   // A TEXT or BLOB column reads as a double or an integer without a word
   // (`Field_blob::val_real` and `val_int` discard the error).
-  if (c.type.column !== undefined && c.type.field === FIELD_TYPE.BLOB && kind !== 'DECIMAL') return c
+  if (column && c.type.field === FIELD_TYPE.BLOB && kind !== 'DECIMAL') return c
   // A VARCHAR or VARBINARY column, read as a double or an integer, is quiet
   // when the bytes left unconverted are exactly twice its length bytes — 2
   // under 256 bytes, 4 from there (8.4.11: in a VARCHAR(10), `v + 0` warns
   // for '1x' and '12x' but not for '1xy', 'xy' or 'é'; in a VARCHAR(400),
   // for those three but not for '1abc' or '1.2.3.4'). A CHAR always warns.
-  const quietTail = c.type.column !== undefined && c.type.field === FIELD_TYPE.VAR_STRING && kind !== 'DECIMAL' ? ((c.type.kind === 'bytes' ? c.type.length : c.type.length * requireCollationInfo(c.type.collationId).mbmaxlen) < 256 ? 2 : 4) : undefined
+  const quietTail = column && c.type.field === FIELD_TYPE.VAR_STRING && kind !== 'DECIMAL' ? (byteWidth(c.type) < 256 ? 2 : 4) : undefined
   // Once a statement, a constant: keyed by its node when it has one, so that
   // the optimizer's own evaluation of it and the plan's share the one warning (8.4.11).
   const key = typeof once === 'object' ? once : {}
@@ -187,7 +192,7 @@ export function asNumber(c: Compiled, kind: 'DOUBLE' | 'INTEGER' | 'DECIMAL', on
         env.memo?.set(key, true)
       }
       if (quietTail !== undefined && unconvertedBytes(v, kind) === quietTail) return v
-      checkNumber(v, kind, env, c.type.column !== undefined)
+      checkNumber(v, kind, env, column, source === 'cast' && column)
       return v
     },
   }
@@ -215,7 +220,7 @@ function resolveConstant(c: Compiled, ctx: CompileContext): Compiled {
 
 /** The bytes a number's reading leaves over: after the integer for an INTEGER (-1 when there is no digit), after the number for a DOUBLE (all of them, leading spaces too, when there is none). */
 function unconvertedBytes(v: Exclude<Value, null>, kind: 'DOUBLE' | 'INTEGER' | 'DECIMAL'): number {
-  if (v.kind !== 'string' && v.kind !== 'bytes') return 0
+  if (!isTextValue(v)) return 0
   const text = toText(v)
   const m = (kind === 'INTEGER' ? /^[ \t\n\r]*[+-]?\d+/ : /^(?:[ \t\n\r]*[+-]?(?:\d+\.?\d*|\.\d+)(?:[eE][+-]?\d+)?)?/).exec(text)
   if (m === null) return -1
@@ -265,7 +270,7 @@ function fixedDecimals(t: ResultType): number | undefined {
 const isNumber = (t: ResultType): boolean => t.kind === 'int' || t.kind === 'decimal' || t.kind === 'double'
 
 export function textVersusNumber(x: ResultType, y: ResultType): boolean {
-  return (x.kind === 'string' || x.kind === 'bytes') && isNumber(y)
+  return isText(x) && isNumber(y)
 }
 
 /**
@@ -289,31 +294,41 @@ function jsonAsNumber(c: Compiled, kind: 'DOUBLE' | 'INTEGER' | 'DECIMAL'): Comp
 }
 
 /** `asNumber`'s check, for one value. */
-function checkNumber(v: Exclude<Value, null>, kind: 'DOUBLE' | 'INTEGER' | 'DECIMAL', env: Env, column = false): void {
+function checkNumber(v: Exclude<Value, null>, kind: 'DOUBLE' | 'INTEGER' | 'DECIMAL', env: Env, column = false, castColumn = false): void {
   if (v.kind === 'string' ? v.ordinal !== undefined : v.kind !== 'bytes' || v.hex === true) return
   const text = toText(v)
   const p = numericPrefix(text)
   // An integer past 64 bits is truncated too, to the largest there is.
   const overflow =
     kind === 'INTEGER'
-      ? p.complete && !p.fractional && (BigInt(p.text) > 18446744073709551615n || BigInt(p.text) < -9223372036854775808n)
+      ? p.complete && !p.fractional && (BigInt(p.text) > MAX_UNSIGNED || BigInt(p.text) < MIN_SIGNED)
       : // And a double past the largest, which is read as it (8.4.11: `'1e400' + 0`).
         kind === 'DOUBLE' && p.complete && !Number.isFinite(Number(p.text))
   if (p.complete && !(kind === 'INTEGER' && p.fractional) && !overflow) return
-  // Nothing at all is 0 quietly, except as a DECIMAL (8.4.11: `CAST('' AS DECIMAL)` warns).
-  if (!p.complete && kind !== 'DECIMAL' && /^[ \t\n\r]*$/.test(text)) return
+  const binaryInteger = castColumn && kind === 'INTEGER' && v.kind === 'bytes'
+  // Binary-column INTEGER casts warn even for empty or whitespace-only bytes.
+  if (!p.complete && kind !== 'DECIMAL' && !binaryInteger && /^[ \t\n\r]*$/.test(text)) return
   // A column's text with no digit at all, read as a DECIMAL, is 1366 first, as its field's conversion says (8.4.11: `CAST(lt AS DECIMAL)` of 'abc').
   if (column && kind === 'DECIMAL' && !/\d/.test(text)) raise(env, 1366, "Incorrect DECIMAL value: '0' for column '' at row -1")
-  raise(env, 1292, `Truncated incorrect ${kind} value: '${warnedText(v)}'`)
+  truncated(env, kind, binaryInteger ? escapedBytes(v.v.subarray(0, 128)).slice(0, 128) : warnedText(v))
+}
+
+/** A truncated conversion's message; each reader retains its text policy. */
+function truncated(env: Env, kind: string, text: string): void {
+  raise(env, 1292, `Truncated incorrect ${kind} value: '${text}'`)
 }
 
 /**
- * Text or bytes as a 1292 quotes them: up to the first NUL, the message
+ * The default diagnostic text reader: up to the first NUL, the message
  * being a C string, and bytes read as UTF-8 (8.4.11: X'00FF' is quoted as
  * '', X'0A000509' as '\n', X'C3A9' as 'é').
  */
 export function warnedText(v: Exclude<Value, null>): string {
-  const text = v.kind === 'bytes' ? new TextDecoder().decode(v.v.subarray(0, v.v.indexOf(0) === -1 ? v.v.length : v.v.indexOf(0))) : toText(v)
+  if (v.kind === 'bytes') {
+    const nul = v.v.indexOf(0)
+    return new TextDecoder().decode(nul === -1 ? v.v : v.v.subarray(0, nul))
+  }
+  const text = toText(v)
   const nul = text.indexOf('\0')
   return nul === -1 ? text : text.slice(0, nul)
 }
@@ -385,7 +400,7 @@ function convertUsing(e: ConvertNode, ctx: CompileContext): Compiled {
       const v = x.eval(r, env)
       if (v === null) return null
       const bytes = v.kind === 'bytes' ? v.v : v.kind === 'int' && isBits(x.type) ? bitBytes(v.v, x.type.length) : undefined
-      if (id === CHARSET_BINARY) return bytesValue(bytes ?? (v.kind === 'string' ? encodeCollation(v.v, v.collationId) : new TextEncoder().encode(toText(v))))
+      if (id === CHARSET_BINARY) return bytesValue(bytes ?? valueBytes(v))
       // utf8mb3 holds no character past the BMP: it is '?' there.
       const carried = (t: string): string => (name === 'utf8mb3' ? t.replace(/[\u{10000}-\u{10FFFF}]/gu, '?') : t)
       const text = bytes === undefined ? carried(decodeCollation(encodeCollation(toText(v), id), id)) : textIn(bytes, id, env)
@@ -416,7 +431,7 @@ function textIn(bytes: Uint8Array, collationId: number, env: Env): string | null
   if (charset === 'utf8mb4' || charset === 'utf8mb3') {
     const bad = firstInvalidUtf8(bytes, charset === 'utf8mb4' ? 4 : 3)
     if (bad >= 0) {
-      const rest = Array.from(bytes.subarray(bad, bad + 6), (b) => b.toString(16).toUpperCase().padStart(2, '0')).join('')
+      const rest = hexOf(bytes.subarray(bad, bad + 6))
       raise(env, 1300, `Invalid ${charset} character string: '${rest}'`)
       return null
     }
@@ -798,7 +813,7 @@ function literal(e: LiteralNode, ctx: CompileContext): Compiled {
     if (!singleByte) {
       const back = encodeCollation(text, id)
       if (back.length !== b.length || back.some((x, i) => x !== b[i])) {
-        throw sqlError('ER_INVALID_CHARACTER_STRING', `Invalid ${info.charset} character string: '${[...b].map((x) => x.toString(16).toUpperCase().padStart(2, '0')).join('')}'`)
+        throw sqlError('ER_INVALID_CHARACTER_STRING', `Invalid ${info.charset} character string: '${hexOf(b)}'`)
       }
     }
     return lit(stringValue(text, id, coercibility), stringLiteralType(singleByte ? b.length : [...text].length, id))
@@ -927,7 +942,7 @@ function variable(name: string, ctx: CompileContext): Compiled {
 
 /** As 8.4.11 reports them: a string is 21,845 characters, an integer a BIGINT UNSIGNED, a boolean one of width 1. */
 function typeOfSystemVariable(name: string, v: Value, ctx: CompileContext): ResultType {
-  if (v === null || v.kind === 'string' || v.kind === 'bytes') return stringType(21845, ctx.connectionCollation, true)
+  if (v === null || isTextValue(v)) return stringType(21845, ctx.connectionCollation, true)
   if (v.kind === 'int') return systemVariableInfo(name)?.kind === 'bool' ? intType(1, true) : intType(21, true, true)
   return { ...typeOfValue(v), nullable: true }
 }
@@ -1047,7 +1062,7 @@ function unary(op: string, a: Compiled, exists: boolean, constant: false | Expre
       return {
         eval: (r, env) => {
           const v = at(r, env)
-          return v === null ? null : v.kind === 'bytes' ? v : bytesValue(v.kind === 'string' ? encodeCollation(v.v, v.collationId) : new TextEncoder().encode(toText(v)))
+          return v === null ? null : v.kind === 'bytes' ? v : bytesValue(valueBytes(v))
         },
         type: { ...stringType(byteWidth(a.type), CHARSET_BINARY, true), coercibility: COERCIBILITY.IMPLICIT },
       }
@@ -1417,7 +1432,7 @@ function comparisonTime(c: Compiled, preserveDate = true): Compiled {
       if (v === null || v.kind === 'time') return v
       const text = toText(v)
       const p = parseTime(text)
-      if (p === undefined || p.truncated || p.clamped) raise(env, 1292, `Truncated incorrect time value: '${warnedText(v)}'`)
+      if (p === undefined || p.truncated || p.clamped) truncated(env, 'time', warnedText(v))
       if (preserveDate && p?.dateDropped) {
         const d = parseDateTime(text)
         if (d !== undefined) return { kind: 'datetime', v: d.v, type: 'DATETIME', fsp: d.fsp }
@@ -1476,7 +1491,7 @@ function asTimeOfDay(c: Compiled, column: readonly string[], list = false, ctx?:
       // reads it, a datetime written out included ('1970-01-01 14:37' is
       // 14:37:00, '2020-01-01' is 00:20:20), and a number of 11 digits or
       // more as a datetime (8.4.11).
-      if (v.kind === 'string' || v.kind === 'bytes') {
+      if (isTextValue(v)) {
         // A failed conversion keeps the text for ordinary comparisons.
         // In a constant TIME list it prevents building the list, represented
         // by NO_TIME; the conversion warns once as storing into the column does.
@@ -1551,7 +1566,7 @@ export function dateConverter(c: Compiled, written: Expression, other: Compiled,
     } catch (e) {
       expectTyped(e)
     }
-    if (v !== null && (v.kind === 'string' || v.kind === 'bytes')) {
+    if (isTextValue(v)) {
       const p = parseDateTime(toText(v), flags)
       if (p === undefined) throw sqlError('ER_WRONG_VALUE', `Incorrect ${what.toUpperCase()} value: '${warnedText(v)}'`)
       if (p.deprecation !== undefined) {
@@ -1563,7 +1578,7 @@ export function dateConverter(c: Compiled, written: Expression, other: Compiled,
   }
   return (v, env) => {
     // Text or bytes, a hex or bit literal's included (8.4.11: `d <= b'1010'` is 1525).
-    if (v === null || (v.kind !== 'string' && v.kind !== 'bytes')) return v
+    if (!isTextValue(v)) return v
     const p = parseDateTime(toText(v), flags)
     if (p !== undefined) {
       if (p.deprecation !== undefined && !notedAtCompile && (!constant || env.memo?.has(written) !== true)) {
@@ -1575,10 +1590,11 @@ export function dateConverter(c: Compiled, written: Expression, other: Compiled,
     }
     if (!constant) {
       // Beside a column the conversion says so plainly; beside a literal or an expression it is "truncated", in that one's own word (8.4.11).
-      raise(env, 1292, other.type.column !== undefined ? `Incorrect datetime value: '${warnedText(v)}'` : `Truncated incorrect ${what} value: '${warnedText(v)}'`)
+      if (other.type.column !== undefined) raise(env, 1292, `Incorrect datetime value: '${warnedText(v)}'`)
+      else truncated(env, what, warnedText(v))
       return ZERO_DATETIME
     }
-    raise(env, 1292, `Truncated incorrect ${what} value: '${warnedText(v)}'`)
+    truncated(env, what, warnedText(v))
     throw sqlError('ER_WRONG_VALUE', `Incorrect ${what.toUpperCase()} value: '${warnedText(v)}'`)
   }
 }
@@ -1641,7 +1657,7 @@ function yearConstant(c: Compiled, written: Expression, other: Compiled, ctx: Co
     expectTyped(e)
     return c
   }
-  if (v === null || (v.kind !== 'string' && v.kind !== 'bytes')) return c
+  if (!isTextValue(v)) return c
   const text = toText(v)
   if (!/^\s*[+-]?(\d|\.\d)/.test(text)) return c
   const n = Math.trunc(Number(numericPrefix(text).text))
@@ -2392,7 +2408,7 @@ function cast(e: CastNode, ctx: CompileContext): Compiled {
   if (e.type.national === true) warnAtCompile(ctx, 3720, NATIONAL_DEPRECATION)
   // What the target reads its argument as, warning as it goes (1292).
   const reads = e.type.name === 'DECIMAL' ? 'DECIMAL' : e.type.name === 'DOUBLE' || e.type.name === 'FLOAT' || e.type.name === 'REAL' ? 'DOUBLE' : ['SIGNED', 'UNSIGNED', 'INT', 'BIGINT'].includes(e.type.name) ? 'INTEGER' : undefined
-  const inner = reads === undefined ? raw : asNumber(raw, reads)
+  const inner = reads === undefined ? raw : asNumber(raw, reads, false, 'cast')
   const x = inner.eval
   const nullable = inner.type.nullable
   const t = e.type
@@ -2410,10 +2426,13 @@ function cast(e: CastNode, ctx: CompileContext): Compiled {
           const bytes = v.kind === 'bytes' ? v.v : v.kind === 'int' && isBits(inner.type) ? bitBytes(v.v, inner.type.length) : undefined
           const read = bytes === undefined ? toText(v) : textIn(bytes, id, env)
           if (read === null) return null
-          const s = read
-          if (t.length === undefined || [...s].length <= t.length) return stringValue(s, id, COERCIBILITY.IMPLICIT)
-          raise(env, 1292, `Truncated incorrect CHAR(${t.length}) value: '${s}'`)
-          return stringValue([...s].slice(0, t.length).join(''), id, COERCIBILITY.IMPLICIT)
+          if (t.length === undefined) return stringValue(read, id, COERCIBILITY.IMPLICIT)
+          const characters = [...read]
+          if (characters.length > t.length) {
+            truncated(env, `CHAR(${t.length})`, read)
+            characters.length = t.length
+          }
+          return stringValue(characters.join(''), id, COERCIBILITY.IMPLICIT)
         },
         // Nullable whatever its argument, as 8.4.11 reports it.
         type: stringType(t.length ?? charWidth(inner.type), id, true),
@@ -2429,7 +2448,7 @@ function cast(e: CastNode, ctx: CompileContext): Compiled {
           const b = valueBytes(v)
           if (t.length === undefined) return bytesValue(b)
           // BINARY(N) is N bytes: cut, or padded with zero bytes (8.4.11).
-          if (b.length > t.length) raise(env, 1292, `Truncated incorrect BINARY(${t.length}) value: '${toText(v)}'`)
+          if (b.length > t.length) truncated(env, `BINARY(${t.length})`, toText(v))
           const out = new Uint8Array(t.length)
           out.set(b.subarray(0, t.length))
           return bytesValue(out)
@@ -2448,10 +2467,8 @@ function cast(e: CastNode, ctx: CompileContext): Compiled {
           if (v === null) return null
           const n = valInt(v)
           // A negative number written as text, made unsigned, says so (1105).
-          if (unsigned && n < 0n && (v.kind === 'string' || v.kind === 'bytes')) raise(env, 1105, 'Cast to unsigned converted negative integer to its positive complement')
-          const mask = (1n << 64n) - 1n
-          if (!unsigned && n > (1n << 63n) - 1n && (v.kind === 'string' || v.kind === 'bytes')) raise(env, 1105, 'Cast to signed converted positive out-of-range integer to its negative complement')
-          return unsigned ? intValue(n & mask, true) : intValue(n > (1n << 63n) - 1n ? n - (1n << 64n) : n)
+          if (isTextValue(v) && (unsigned ? n < 0n : n > MAX_SIGNED)) raise(env, 1105, unsigned ? 'Cast to unsigned converted negative integer to its positive complement' : 'Cast to signed converted positive out-of-range integer to its negative complement')
+          return unsigned ? intValue(n & MAX_UNSIGNED, true) : intValue(n > MAX_SIGNED ? n - (1n << 64n) : n)
         },
         // 21 wide, unsigned or not (8.4.11).
         type: intType(21, nullable, unsigned),
@@ -2491,7 +2508,6 @@ function cast(e: CastNode, ctx: CompileContext): Compiled {
           type: { ...doubleType(nullable), field: FIELD_TYPE.FLOAT },
         }
       }
-      return { eval: (r, env) => { const v = x(r, env); return v === null ? null : doubleValue(toDouble(v)) }, type: doubleType(nullable) }
     case 'DOUBLE':
     case 'REAL':
       return { eval: (r, env) => { const v = x(r, env); return v === null ? null : doubleValue(toDouble(v)) }, type: doubleType(nullable) }
@@ -2504,6 +2520,7 @@ function cast(e: CastNode, ctx: CompileContext): Compiled {
         eval: (r, env) => {
           const v = x(r, env)
           if (v === null) return null
+          let input = v
           // Text is read under the session's zero-date modes; what is no
           // date is NULL with 1292 (8.4.11: CAST('0000-00-00' AS DATE)).
           if (v.kind === 'string' || (v.kind === 'bytes' && v.hex !== true)) {
@@ -2512,10 +2529,9 @@ function cast(e: CastNode, ctx: CompileContext): Compiled {
               raise(env, 1292, `Incorrect datetime value: '${toText(v)}'`)
               return null
             }
-            const d = toDateTime({ kind: 'datetime', v: p.v, type: p.hasTime ? 'DATETIME' : 'DATE', fsp: p.fsp }, type)
-            return d === undefined ? null : { ...d, fsp }
+            input = { kind: 'datetime', v: p.v, type: p.hasTime ? 'DATETIME' : 'DATE', fsp: p.fsp }
           }
-          const d = toDateTime(v, type)
+          const d = toDateTime(input, type)
           return d === undefined ? null : { ...d, fsp }
         },
         type: datetimeType(type === 'DATE' ? FIELD_TYPE.DATE : FIELD_TYPE.DATETIME, fsp, true),

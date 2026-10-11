@@ -61,7 +61,7 @@ import {
   type Value,
   valueBytes,
 } from '@myjs/types'
-import { hexOf } from './builtins.ts'
+import { escapedBytes, hexOf } from './builtins.ts'
 import {
   aggregate,
   aggregateCollations,
@@ -130,7 +130,7 @@ function converted(text: string, from: number, to: number): string {
   if (a === b || b.startsWith('utf8mb4')) return text
   const back = decodeCollation(encodeCollation(text, to), to)
   if (back !== text) {
-    const shown = Array.from(encodeCollation(text, from).slice(0, 16), (x) => (x >= 0x20 && x < 0x7f ? String.fromCharCode(x) : `\\x${x.toString(16).toUpperCase().padStart(2, '0')}`)).join('')
+    const shown = escapedBytes(encodeCollation(text, from).subarray(0, 16))
     throw sqlError('ER_CANNOT_CONVERT_STRING', `Cannot convert string '${shown}' from ${a} to ${b}`)
   }
   return text
@@ -141,7 +141,7 @@ function asText(bytes: Uint8Array, collation: number): string {
   const text = decodeCollation(bytes, collation)
   const back = encodeCollation(text, collation)
   if (back.length !== bytes.length || back.some((b, i) => b !== bytes[i])) {
-    const shown = Array.from(bytes.slice(0, 16), (b) => (b >= 0x20 && b < 0x7f ? String.fromCharCode(b) : `\\x${b.toString(16).toUpperCase().padStart(2, '0')}`)).join('')
+    const shown = escapedBytes(bytes.subarray(0, 16))
     throw sqlError('ER_CANNOT_CONVERT_STRING', `Cannot convert string '${shown}' from binary to ${requireCollationInfo(collation).charset}`)
   }
   return text
