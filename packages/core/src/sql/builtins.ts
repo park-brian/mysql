@@ -243,6 +243,7 @@ export function builtinFunction(name: string, e: CallNode, ctx: CompileContext):
       const [x] = args() as [Compiled]
       const upper = name === 'UPPER' || name === 'UCASE'
       return {
+        decimalPrefix: true,
         eval: (r, env) => {
           const v = x.eval(r, env)
           if (v === null || v.kind === 'bytes') return v

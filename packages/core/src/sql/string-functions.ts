@@ -1575,10 +1575,11 @@ export function stringFunction(name: string, e: CallNode, ctx: CompileContext): 
   if (LIBRARY.has(name)) {
     // TRIM's side is a keyword argument, carried as such.
     const xs = e.args.map((a): Compiled => (a.kind === NODE.KEYWORD ? Object.assign({ eval: () => null, type: NULL_TYPE }, { keyword: a.word }) : compile(a, ctx)))
-    return NUMBER_FUNCTIONS.has(name)
-      ? numberFunction(name, xs, e.name, constant, ctx, e.args)
-      : libraryFunction(name, xs, e.name, constant, ctx)
+    if (NUMBER_FUNCTIONS.has(name)) return numberFunction(name, xs, e.name, constant, ctx, e.args)
+    // These scalar string constructors own their DECIMAL prefix diagnostics.
+    // Their integral results bypass text conversion in asNumber.
+    return { ...libraryFunction(name, xs, e.name, constant, ctx), decimalPrefix: true }
   }
   const family = HASH_FUNCTIONS.has(name) ? hashFunction : LIST_FUNCTIONS.has(name) ? listFunction : CONVERSION_FUNCTIONS.has(name) ? conversionFunction : moreStringFunction
-  return family(name, e.args.map((a) => compile(a, ctx)), e.name, deparse(e), e.using, constant, ctx, e.args.map((a) => printedArgument(a, ctx)))
+  return { ...family(name, e.args.map((a) => compile(a, ctx)), e.name, deparse(e), e.using, constant, ctx, e.args.map((a) => printedArgument(a, ctx))), decimalPrefix: true }
 }
