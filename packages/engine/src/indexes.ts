@@ -178,11 +178,12 @@ export class ClusteredIndex {
   insert(row: Row, trx?: Trx): Uint8Array {
     const key = this.keyOf(row)
     return this.#change(trx, (t) => {
-      const current = this.tree.get(key)
-      if (current !== undefined && !versionOf(current).marked) throw duplicateKey(this.name)
-      const record = this.#encode(key, row)
-      const ptr = t.undo({ isInsert: current === undefined, purgeRemoves: false, indexId: this.tree.indexId, key, old: current ?? null, freeOnPurge: [], freeOnRollback: externalRefs(this.layout, record) })
-      this.tree.put(key, clusteredValue(false, t.id, ptr, record))
+      this.tree.upsert(key, (current) => {
+        if (current !== undefined && !versionOf(current).marked) throw duplicateKey(this.name)
+        const record = this.#encode(key, row)
+        const ptr = t.undo({ isInsert: current === undefined, purgeRemoves: false, indexId: this.tree.indexId, key, old: current ?? null, freeOnPurge: [], freeOnRollback: externalRefs(this.layout, record) })
+        return clusteredValue(false, t.id, ptr, record)
+      })
       this.tree.space.journal.row(this.tree.indexId, t.id, null, row)
       return key
     })

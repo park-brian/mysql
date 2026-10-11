@@ -81,6 +81,9 @@ interface Split {
 }
 
 const EMPTY = new Uint8Array(0)
+type Prepare = (current: Uint8Array | undefined) => Uint8Array
+// Handles opened on the same journal/index share the preparation boundary.
+const preparing = new WeakMap<Journal, Set<number>>()
 
 export class BTree {
   readonly space: PageSpace
@@ -150,6 +153,7 @@ export class BTree {
 
   /** Insert or replace. One mini-transaction, or part of the caller's. */
   put(key: Uint8Array, value: Uint8Array): void {
+    this.#canChange()
     const max = ip.maxCellSize(this.space.pool.pageSize)
     BTree.checkKeyLength(key.length, this.space.pool.pageSize)
     if (ip.cellSize(key, value) > max) throw rowTooBig(max)
@@ -161,8 +165,42 @@ export class BTree {
     })
   }
 
+  /**
+   * Prepare a replacement from copied old bytes, after releasing the read pin.
+   * Preparation may write undo/overflow pages, but cannot change this tree's
+   * rows through another handle. The key is copied before calling user code.
+   * Current leaves need one descent; schema upgrades retain put's full path.
+   */
+  upsert(key: Uint8Array, prepare: Prepare): void {
+    this.#canChange()
+    const stable = key.slice()
+    BTree.checkKeyLength(stable.length, this.space.pool.pageSize)
+    this.space.journal.atomically(() => {
+      const split = this.#insert(this.root, stable, prepare)
+      if (split !== null) throw misuse('the root split without being raised')
+    })
+  }
+
+  #canChange(): void {
+    if (preparing.get(this.space.journal)?.has(this.indexId) === true) throw misuse('a prepared upsert cannot change its own tree')
+  }
+
+  #prepare(prepare: Prepare, current: Uint8Array | undefined): Uint8Array {
+    let active = preparing.get(this.space.journal)
+    if (active === undefined) preparing.set(this.space.journal, (active = new Set()))
+    active.add(this.indexId)
+    try {
+      const value = prepare(current)
+      if (!(value instanceof Uint8Array)) throw misuse('a prepared upsert must return bytes synchronously')
+      return value
+    } finally {
+      active.delete(this.indexId)
+    }
+  }
+
   /** Remove a key. `false` when it was not there. One mini-transaction, or part of the caller's. */
   delete(key: Uint8Array): boolean {
+    this.#canChange()
     return this.space.journal.atomically(() => {
       if (this.#version > 0) this.#upgradeLeaf(this.#leafFor(key))
       const { removed } = this.#remove(this.root, key)
@@ -397,29 +435,45 @@ export class BTree {
 
   // --- insert -----------------------------------------------------------------
 
-  #insert(pageNo: number, key: Uint8Array, value: Uint8Array, expect?: number): Split | null {
+  #insert(pageNo: number, key: Uint8Array, value: Uint8Array | Prepare, expect?: number): Split | null {
     // One read of the page for its level and, above the leaves, the child the key is under.
     let level = 0
+    let current: Uint8Array | undefined
+    let behind = false
     const child = this.#read(
       pageNo,
       (p) => {
         level = ip.level(p)
+        if (level === 0 && typeof value === 'function') {
+          const { index, found } = ip.search(p, key)
+          const version = ip.schemaVersion(p)
+          current = found ? this.#upgraded(ip.cell(p, index).value.slice(), version) : undefined
+          behind = version < this.#version
+        }
         return level === 0 ? -1 : ip.childAt(p, BTree.#childIndex(p, key))
       },
       expect,
     )
     if (level === 0) {
+      const next = typeof value === 'function' ? this.#prepare(value, current) : value
+      if (ip.cellSize(key, next) > ip.maxCellSize(this.space.pool.pageSize)) throw rowTooBig(ip.maxCellSize(this.space.pool.pageSize))
+      if (behind) {
+        // Upgrading may split this leaf and change its ancestors. Let put redo
+        // the complete path after preparation instead of using stale positions.
+        this.put(key, next)
+        return null
+      }
       return this.#write(pageNo, (p) => {
         const { index, found } = ip.search(p, key)
-        if (found && ip.replaceValue(p, index, value)) return null
+        if (found && ip.replaceValue(p, index, next)) return null
         if (found) ip.removeCell(p, index)
-        if (ip.fits(p, key, value)) {
-          ip.insertCell(p, index, key, value)
+        if (ip.fits(p, key, next)) {
+          ip.insertCell(p, index, key, next)
           ip.noteInsert(p, index)
           return null
         }
         const cells = BTree.#cells(p)
-        cells.splice(index, 0, { key, value })
+        cells.splice(index, 0, { key, value: next })
         const at = this.#leafSplitPoint(p, index, cells)
         return this.#split(p, pageNo, 0, cells.slice(0, at), cells.slice(at), cells[at]?.key as Uint8Array)
       })

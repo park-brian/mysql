@@ -19,6 +19,88 @@ const be = (n: number, width = 4) => {
   return out
 }
 
+test('prepared upsert descends once and releases read pins before preparing bytes', async () => {
+  const store = Store.create(...await freshFiles(), { frames: 32 })
+  const tree = store.createTree({ schemaVersion: 1, upgrade: (v) => v })
+  for (let i = 0; i < 800; i++) tree.put(be(i), be(i))
+  const height = tree.height()
+  assert.ok(height > 1)
+  const before = store.pool.stats.fetches
+  tree.upsert(be(400), (old) => {
+    assert.deepEqual(old, be(400))
+    assert.equal(store.pool.stats.fetches - before, height)
+    assert.equal(store.pool.pinned(), 0)
+    old!.fill(0xff)
+    return be(999)
+  })
+  assert.equal(store.pool.stats.fetches - before, height + 1)
+  assert.deepEqual(tree.get(be(400)), be(999))
+  const key = be(900)
+  tree.upsert(key, (old) => {
+    assert.equal(old, undefined)
+    assert.equal(store.pool.pinned(), 0)
+    key.fill(0)
+    return be(901)
+  })
+  assert.deepEqual(tree.get(be(900)), be(901))
+  assert.deepEqual(tree.get(be(0)), be(0))
+  verifyStore(store, { schemaVersion: () => 1 })
+})
+
+test('prepared upsert rejects same-tree reentry and rolls back preparation failures', async () => {
+  const store = Store.create(...await freshFiles(), { frames: 32 })
+  const tree = store.createTree()
+  const alias = store.openTree(tree.indexId)
+  const other = store.createTree()
+  tree.put(be(1), be(2))
+  other.put(be(1), be(3))
+  for (const change of [() => alias.put(be(1), be(4)), () => alias.delete(be(1)), () => alias.upsert(be(1), () => be(4))]) {
+    assert.throws(() => tree.upsert(be(1), () => {
+      change()
+      return be(5)
+    }), /prepared upsert cannot change its own tree/)
+    assert.deepEqual(tree.get(be(1)), be(2))
+  }
+  const failure = new Error('preparation failed')
+  assert.throws(() => tree.upsert(be(1), (old) => {
+    old!.fill(0xff)
+    other.put(be(1), be(9))
+    throw failure
+  }), (e) => e === failure)
+  assert.deepEqual(tree.get(be(1)), be(2))
+  assert.deepEqual(other.get(be(1)), be(3))
+  assert.equal(store.pool.pinned(), 0)
+  assert.throws(() => tree.upsert(be(1), () => Promise.resolve(be(8)) as unknown as Uint8Array), /return bytes synchronously/)
+  tree.upsert(be(1), () => be(6))
+  assert.deepEqual(tree.get(be(1)), be(6))
+  verifyStore(store)
+})
+
+test('prepared upsert keeps the full schema-upgrade and split path', async () => {
+  const store = Store.create(...await freshFiles(), { frames: 32 })
+  const old = store.createTree({ schemaVersion: 1, upgrade: (v) => v })
+  for (let i = 0; i < 100; i++) old.put(be(i), be(i))
+  const tree = store.openTree(old.indexId, { schemaVersion: 2, upgrade: (v) => {
+    const grown = new Uint8Array(120)
+    grown.set(v)
+    return grown
+  } })
+  let calls = 0
+  tree.upsert(be(50), (current) => {
+    calls++
+    assert.equal(store.pool.pinned(), 0)
+    assert.equal(current?.length, 120)
+    assert.deepEqual(current?.slice(0, 4), be(50))
+    const next = new Uint8Array(120)
+    next.set(be(999))
+    return next
+  })
+  assert.equal(calls, 1)
+  assert.deepEqual(tree.get(be(50))?.slice(0, 4), be(999))
+  for (let i = 0; i < 100; i++) if (i !== 50) assert.deepEqual(tree.get(be(i))?.slice(0, 4), be(i))
+  verifyStore(store, { schemaVersion: () => 2 })
+})
+
 /** A database's two files: data and log. */
 async function freshFiles(pageSize = PAGE): Promise<[VfsFile, VfsFile]> {
   const vfs = new MemoryVfs({ pageSize })
