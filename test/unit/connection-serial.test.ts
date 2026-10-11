@@ -8,7 +8,7 @@
 // commands ran side by side.
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { COM } from '@myjs/protocol'
+import { COM, PacketFramer } from '@myjs/protocol'
 import { MySQL, SqlExecutor } from '@myjs/core'
 import type { Executor } from '@myjs/protocol'
 
@@ -83,4 +83,35 @@ test('concurrent execProtocol calls each get their own response', async () => {
   assert.ok(latin1.decode(a).includes('aaa') && !latin1.decode(a).includes('bbb'))
   assert.ok(latin1.decode(b).includes('bbb') && !latin1.decode(b).includes('aaa'))
   await db.end()
+})
+
+test('closing while PREPARE metadata is delivered stops output and ends its session once', async () => {
+  let ended = 0
+  const db = await MySQL.open(':memory:', { executor: {
+    query: async () => ({ affectedRows: 0 }),
+    prepare: async () => ({ paramCount: 32_000, columns: [] }),
+    execute: async () => ({ affectedRows: 0 }),
+    end: () => { ended++ },
+  } })
+  const connection = db.createConnection()
+  const { WireClient } = await import('../../packages/core/src/client/wire.ts')
+  await WireClient.connect(connection, { user: 'root', password: '' })
+  let packets = 0
+  connection.onOutput(() => {
+    if (connection.take().length === 0) return
+    packets++
+    if (packets === 1000) connection.close()
+  })
+  const framer = new PacketFramer()
+  try {
+    await connection.feed(framer.encode(new Uint8Array([COM.STMT_PREPARE, 0x3f])))
+    assert.equal(packets, 1000, 'metadata continued after close')
+    assert.equal(connection.closed, true)
+    assert.equal(ended, 1)
+    await connection.feed(command('SELECT 1'))
+    assert.equal(packets, 1000)
+  } finally {
+    await db.end()
+  }
+  assert.equal(ended, 1)
 })

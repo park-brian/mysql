@@ -104,6 +104,24 @@ test('a 32,000-row prepared INSERT, a 32,000-item IN-list SELECT and DELETE leav
   await db.end()
 })
 
+test('preparing 32,000 parameters leaves other connections answered during metadata delivery', async () => {
+  const db = await MySQL.open(':memory:')
+  await db.query('CREATE DATABASE d')
+  await db.query('CREATE TABLE d.t (id INT PRIMARY KEY)')
+  const conn = await mysql.createConnection({ stream: db.createStream(), user: 'root', password: '' })
+  try {
+    const prepared = await whileTiming(db, async () => {
+      const statement = await conn.prepare(`SELECT id FROM d.t WHERE id IN (${Array.from({ length: ROWS }, () => '?').join(', ')})`)
+      await statement.close()
+    })
+    assert.ok(prepared.trips >= 3, answered('PREPARE', prepared))
+    assert.ok(prepared.slowest < bound(prepared.took), `SELECT 1 waited ${prepared.slowest.toFixed(0)} ms while PREPARE ran (${prepared.took.toFixed(0)} ms, ${prepared.trips} round trips)`)
+  } finally {
+    await conn.end()
+    await db.end()
+  }
+})
+
 /** Reach a real scheduler pause after some inserts, before the statement can commit. */
 async function midInsert(db: MySQL, t: TestContext, before?: string): Promise<{ destroy: () => void }> {
   const conn = await mysql.createConnection({ stream: db.createStream(), user: 'root', password: '' })

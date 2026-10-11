@@ -405,16 +405,26 @@ export class ProtocolConnection {
       ...(this.#options.now === undefined ? {} : { now: this.#options.now }),
     })
 
-    for (const packet of result.packets) this.#send(packet)
+    for (let i = 0; i < result.packets.length; i++) {
+      if (this.#ended) break
+      this.#send(result.packets[i] as Uint8Array)
+      // PREPARE can send tens of thousands of parameter definitions before
+      // any rows run. Keep delivery cooperative too, in the same serial feed.
+      if ((i + 1) % 512 === 0 && i + 1 < result.packets.length) {
+        await new Promise<void>((resolve) => setTimeout(resolve, 0))
+      }
+    }
     if (result.stream !== undefined) {
       // Each batch is sent before the next is read; a connection that has
       // closed stops reading, which ends the statement (M5.40).
       for await (const packets of result.stream) {
+        if (this.#ended) break
         for (const packet of packets) this.#send(packet)
         await this.#room()
         if (this.#ended) break
       }
     }
+    if (this.#ended) return
     if (result.close === true) {
       this.#phase = 'closed'
       return
