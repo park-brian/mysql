@@ -1234,7 +1234,7 @@ function updateMulti(run: Run, node: UpdateNode, trx: Trx): OkResult {
           : // Over the joined row as it was read: a later SET does not see an
             // earlier one, as it does in the single-table form (8.4.11:
             // `SET q.x = q.x + 1, q.y = q.x * 10` over x = 5 gives y = 50).
-            { ...compiled, eval: (_values, env) => compiled.eval(joined, env) },
+            { type: compiled.type, eval: (_values, env) => compiled.eval(joined, env) },
     })
   }
   // A subquery that reads any of the joined tables is 1093, and the message

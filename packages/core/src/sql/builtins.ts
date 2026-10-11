@@ -39,7 +39,7 @@ import {
   aggregateCollations,
   aggregateTypes,
   asNumber,
-  branchOf,
+  choiceOf,
   byteWidth,
   coercibilityOf,
   comparer,
@@ -361,9 +361,7 @@ export function controlFunction(name: string, e: CallNode, ctx: CompileContext):
       // The condition's truth is a double, and text that is not one warns (8.4.11).
       const c = asNumber(given, 'DOUBLE')
       const type = aggregate([x.type, y.type], x.type.nullable || y.type.nullable, conn, 'if')
-      if (type.kind === 'double') return { eval: (r, env) => doubleOf(truth(c.eval(r, env)) === true ? x.eval(r, env) : y.eval(r, env), type), type }
-      const [xv, yv] = [branchOf(x, type), branchOf(y, type)]
-      return { eval: (r, env) => (truth(c.eval(r, env)) === true ? xv(r, env) : yv(r, env)), type }
+      return choiceOf([x, y], (r, env) => truth(c.eval(r, env)) === true ? 0 : 1, type)
     }
     case 'IFNULL': {
       arity(2)

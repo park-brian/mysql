@@ -148,7 +148,7 @@ export class WindowSink {
     }
     if (convert !== undefined) {
       const to = convert
-      args = args.map((a) => ({ ...a, eval: (r: Row, env: Env) => convertTo(a.eval(r, env), to) }))
+      args = args.map((a) => ({ type: a.type, eval: (r: Row, env: Env) => convertTo(a.eval(r, env), to) }))
     }
     this.windows.push({ fn: name, args, partition: (spec.partitionBy ?? []).map((p) => compile(p, ctx)), order, frame, slot, ...(aggregate === undefined ? {} : { aggregate }), ...(count === undefined ? {} : { count }) })
     // A field of the window's temporary table: a number there carries no BINARY.

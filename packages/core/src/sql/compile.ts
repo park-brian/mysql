@@ -152,6 +152,7 @@ export interface Env {
  * ENUM indices and numeric hex literals are quiet. The value passes unchanged.
  */
 export function asNumber(c: Compiled, kind: 'DOUBLE' | 'INTEGER' | 'DECIMAL', once: boolean | Expression = false, source: 'field' | 'cast' = 'field'): Compiled {
+  if (kind === 'DECIMAL' && c.decimalOf !== undefined) return { type: c.type, eval: c.decimalOf(once) }
   if (c.type.kind === 'json') return jsonAsNumber(c, kind)
   // my_decimal's nine base-10^9 words hold 81 integer digits. Expanding a
   // DOUBLE beyond that buffer warns with its mantissa (double2decimal).
@@ -514,6 +515,8 @@ export interface Compiled {
   readonly type: ResultType
   /** This expression's DECIMAL reader accepts a numeric prefix quietly. */
   readonly decimalPrefix?: true
+  /** Read the selected original branch as DECIMAL, before result-type merging. */
+  readonly decimalOf?: (once: boolean | Expression) => Compiled['eval']
 }
 
 /** Read one immutable row slot with its declared metadata. */
@@ -1446,7 +1449,7 @@ function comparisonText(c: Compiled): Compiled {
 /** cmp_item_datetime's TIME reader keeps a parsed datetime's date in its packed comparison. */
 function comparisonTime(c: Compiled, preserveDate = true): Compiled {
   return {
-    ...c,
+    type: c.type,
     eval: (r, env) => {
       const v = c.eval(r, env)
       if (v === null || v.kind === 'time') return v
@@ -1485,7 +1488,7 @@ export function temporalOperands(left: Expression, right: Expression, a: Compile
   const ak = a.type.kind
   const bk = b.type.kind
   const yearDate = (c: Compiled): Compiled => ({
-    ...c,
+    type: c.type,
     eval: (r, env) => {
       const v = c.eval(r, env)
       if (v === null) return null
@@ -1634,7 +1637,7 @@ function numberBesideDate(c: Compiled, written: Expression, other: Compiled, oth
   const column = otherWritten.parts[otherWritten.parts.length - 1] as string
   const key = written
   const self: Compiled = {
-    ...c,
+    type: c.type,
     eval: (r, env) => {
       const v = c.eval(r, env)
       if (v !== null && env.memo?.has(key) !== true) {
@@ -2319,6 +2322,17 @@ export function branchOf(x: Compiled, result: ResultType): Compiled['eval'] {
   }
 }
 
+/** IF and CASE select once; each numeric reader retains the original branch's policy. */
+export function choiceOf(xs: readonly Compiled[], select: (row: Row, env: Env) => number, type: ResultType): Compiled {
+  const reader = (reads: readonly Compiled['eval'][]): Compiled['eval'] => (r, env) => (reads[select(r, env)] as Compiled['eval'])(r, env)
+  const merged = reader(xs.map((x) => branchOf(x, type)))
+  return {
+    type,
+    eval: type.kind === 'double' ? (r, env) => doubleOf(merged(r, env), type) : merged,
+    decimalOf: (once) => reader(xs.map((x) => asNumber(x, 'DECIMAL', once).eval)),
+  }
+}
+
 function caseExpr(e: CaseNode, ctx: CompileContext): Compiled {
   const given = e.operand === undefined ? undefined : compile(e.operand, ctx)
   const compiled = e.whens.map((w) => ({ when: compile(w.when, ctx), then: compile(w.then, ctx) }))
@@ -2330,7 +2344,7 @@ function caseExpr(e: CaseNode, ctx: CompileContext): Compiled {
   const number = (c: Compiled): Compiled => {
     if (exact) return c
     const checked = asNumber(c, 'DOUBLE')
-    return { ...c, eval: (r, env) => {
+    return { type: c.type, eval: (r, env) => {
       const v = checked.eval(r, env)
       const numericValue = ordinal && c.type.literalInt !== undefined ? withoutHex(v) : v
       return numericValue === null ? null : doubleValue(toDouble(numericValue))
@@ -2346,28 +2360,21 @@ function caseExpr(e: CaseNode, ctx: CompileContext): Compiled {
     return jsonText ? comparisonText(c) : c
   }
   const operand = given === undefined ? undefined : numeric ? number(given) : jsonText ? comparisonText(given) : given
-  const whens = compiled.map((w, i) => ({ when: numeric ? number(w.when) : given === undefined ? asNumber(w.when, 'DOUBLE') : whenComparison(w.when, (e.whens[i] as CaseNode['whens'][number]).when), then: w.then }))
-  const otherwise = e.else === undefined ? undefined : compile(e.else, ctx)
-  const results = [...whens.map((w) => w.then.type), otherwise?.type ?? NULL_TYPE]
-  const nullable = otherwise === undefined || results.some((t) => t.nullable)
-  const type = aggregate(results, nullable, ctx.connectionCollation, 'case')
+  const whens = compiled.map((w, i) => numeric ? number(w.when) : given === undefined ? asNumber(w.when, 'DOUBLE') : whenComparison(w.when, (e.whens[i] as CaseNode['whens'][number]).when))
+  const otherwise = e.else === undefined ? lit(null, NULL_TYPE) : compile(e.else, ctx)
+  const results = [...compiled.map((w) => w.then), otherwise]
+  const type = aggregate(results.map((x) => x.type), results.some((x) => x.type.nullable), ctx.connectionCollation, 'case')
   // `CASE x WHEN y`: the operand and every WHEN compare in one collation.
   if (given !== undefined && isText(given.type) && compiled.every((w) => isText(w.when.type))) aggregateCollations([given.type, ...compiled.map((w) => w.when.type)], 'case', true)
-  const thens = whens.map((w) => branchOf(w.then, type))
-  const elseOf = otherwise === undefined ? undefined : branchOf(otherwise, type)
-  return {
-    eval: (r, env) => {
-      const subject = operand?.eval(r, env)
-      for (let i = 0; i < whens.length; i++) {
-        const w = whens[i] as (typeof whens)[number]
-        const hit = operand === undefined ? truth(w.when.eval(r, env)) === true : subject !== null && compareValues(subject ?? null, w.when.eval(r, env)) === 0
-        if (hit) return type.kind === 'double' ? doubleOf(w.then.eval(r, env), type) : (thens[i] as Compiled['eval'])(r, env)
-      }
-      if (elseOf === undefined) return null
-      return type.kind === 'double' ? doubleOf(elseOf(r, env), type) : elseOf(r, env)
-    },
-    type,
-  }
+  return choiceOf(results, (r, env) => {
+    const subject = operand?.eval(r, env)
+    for (let i = 0; i < whens.length; i++) {
+      const w = whens[i] as (typeof whens)[number]
+      const hit = operand === undefined ? truth(w.eval(r, env)) === true : subject !== null && compareValues(subject ?? null, w.eval(r, env)) === 0
+      if (hit) return i
+    }
+    return whens.length
+  }, type)
 }
 
 /** Whether the columns `args` read, outside their own subqueries, are all an enclosing query's — and there is one. */
