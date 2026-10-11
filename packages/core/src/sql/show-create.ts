@@ -24,13 +24,13 @@ import { CHARSET_UTF8MB4_0900_AI_CI } from '@myjs/protocol'
 import { requireCollationInfo } from '@myjs/charsets'
 import type { ColumnDef, IndexDef, Table, TableDef } from '@myjs/engine'
 import { NODE, parseExpression, type Expression, quoteName } from '@myjs/parser'
-import { checksOf } from './checks.ts'
+import { checkClause, checksOf } from './checks.ts'
 import { foreignKeysOf, referenceText } from './foreign-keys.ts'
 import { fulltextOf } from './fulltext.ts'
 import { isTemporary } from './temporary.ts'
 import { generationOf, printGeneration } from './generated.ts'
 import { columnDefault, generatedDefault, tableCollation, typeFacts } from './information-schema.ts'
-import { printString, printColumnName, printExpression } from './print.ts'
+import { printTableExpression } from './print.ts'
 import type { Run } from './query.ts'
 
 /** sql_show.cc's append_unescaped: NUL, newline, CR and backslash escaped, a quote doubled. */
@@ -70,7 +70,7 @@ function defaultClause(run: Run, c: ColumnDef): string {
   }
   const charset = requireCollationInfo(run.env.session.characterSet).charset
   try {
-    return ` DEFAULT (${printExpression(e, { column: printColumnName, string: (v, cs) => printString(v, cs ?? charset), source: text })})`
+    return ` DEFAULT (${printTableExpression(e, charset, text)})`
   } catch (e) {
     expectTyped(e)
     return ` DEFAULT (${text})`
@@ -136,13 +136,7 @@ export function showCreateTable(run: Run, def: TableDef, table: Table): string {
   for (const f of fulltextOf(def)) lines.push(`  FULLTEXT KEY ${quoteName(f.name)} (${f.columns.map(quoteName).join(',')})${keyTail(f)}`)
   for (const fk of [...foreignKeysOf(def)].sort(byName)) lines.push(`  CONSTRAINT ${quoteName(fk.name)} ${referenceText(fk, def.schema, false)}`)
   for (const c of [...checksOf(def)].sort(byName)) {
-    let clause: string
-    try {
-      clause = printExpression(parseExpression(c.text), { column: printColumnName, string: (v, cs) => printString(v, cs ?? c.charset), source: c.text })
-    } catch (e) {
-      expectTyped(e)
-      clause = c.text
-    }
+    const clause = checkClause(c, false)
     lines.push(`  CONSTRAINT ${quoteName(c.name)} CHECK (${clause})${c.enforced ? '' : ' /*!80016 NOT ENFORCED */'}`)
   }
   let options = ` ENGINE=${def.engine === 'memory' ? 'MEMORY' : 'InnoDB'}`

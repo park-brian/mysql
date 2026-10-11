@@ -14,7 +14,9 @@
 //
 // Anything past that is `Unprintable`, and the caller decides what to show.
 import { MyjsError } from '@myjs/bytes'
+import { encodeCharset } from '@myjs/charsets'
 import { NODE, quoteName, type Expression } from '@myjs/parser'
+import { bytesValue, textOf } from '@myjs/types'
 
 /** Not an error a client sees: the signal that an expression is past what this printer writes. */
 export class Unprintable extends MyjsError {
@@ -40,11 +42,16 @@ export function printString(value: string, charset?: string): string {
 }
 const STRING_ESCAPES: Readonly<Record<string, string>> = { '\0': '0', '\n': 'n', '\r': 'r', '\x1a': 'Z' }
 
-/** The printed expression escaped once more for INFORMATION_SCHEMA. */
-export const escapePrinted = (value: string): string => value.replace(/[\\']/g, (ch) => '\\' + ch)
+/** INFORMATION_SCHEMA treats UTF-8 source expression bytes as U+00xx before escaping. Legacy sources retain their text. */
+export function escapePrinted(value: string, charset = 'utf8mb4'): string {
+  const text = charset.startsWith('utf8') ? textOf(bytesValue(encodeCharset(value, 'utf8mb4'))) : value
+  return text.replace(/[\\']/g, (ch) => '\\' + ch)
+}
 
-/** A resolved column in a table expression carries only its quoted name. */
-export const printColumnName = (parts: readonly string[]): string => quoteName(parts[parts.length - 1] as string)
+/** Generated, CHECK and default expressions share table names and source-charset introducers. */
+export function printTableExpression(expression: Expression, charset: string | undefined, source: string): string {
+  return printExpression(expression, { column: (parts) => quoteName(parts[parts.length - 1] as string), string: (v, cs) => printString(v, cs ?? charset), source })
+}
 
 const NUMBER = /^[0-9.]+(?:[eE][-+]?[0-9]+)?/
 

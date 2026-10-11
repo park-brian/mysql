@@ -39,7 +39,6 @@ import { datetimeType, intType, keyFlags, NULL_TYPE, stringType, type ResultType
 import { planViewQuery, type Run } from './query.ts'
 import { viewDefinition, viewUpdatable } from './view-text.ts'
 import { generationOf, printGeneration } from './generated.ts'
-import { escapePrinted } from './print.ts'
 
 const COLUMN_FLAG = { PRI_KEY: 2, UNIQUE_KEY: 4, MULTIPLE_KEY: 8 } as const
 
@@ -285,7 +284,7 @@ function* columnRows(run: Run, schema: string, table: string, columns: readonly 
     yield [
       s('def'), s(schema), s(table), s(c.name), n(i + 1), s(x.def), s(c.nullable ? 'YES' : 'NO'), s(f.dataType), n(f.charMax), n(f.octets), n(f.precision), n(f.scale), n(f.datetimePrecision),
       s(f.collationId === null ? null : charsetName(f.collationId)), s(f.collationId === null ? null : collationName(f.collationId)), s(f.columnType), s(x.key), s(x.extra),
-      s('select,insert,update,references'), s(typeof comment === 'string' ? comment : ''), s(generation === undefined ? '' : escapePrinted(printGeneration(c, generation))), null,
+      s('select,insert,update,references'), s(typeof comment === 'string' ? comment : ''), s(generation === undefined ? '' : printGeneration(c, generation, true)), null,
     ]
   }
 }

@@ -27,7 +27,7 @@ import type { ColumnDef, FieldBytes, TableDef, TableSpec } from '@myjs/engine'
 import { NODE, TOKEN, lex, parseExpression, type CheckConstraint, type CreateTableNode, type Expression, type Token } from '@myjs/parser'
 import { decodeField, truth } from '@myjs/types'
 import { compile, type Compiled } from './compile.ts'
-import { escapePrinted, printString, printColumnName, printExpression } from './print.ts'
+import { escapePrinted, printTableExpression } from './print.ts'
 import { compileContext, type Run } from './query.ts'
 import { TableScope } from './scope.ts'
 import type { CatalogApi } from './temporary.ts'
@@ -140,20 +140,16 @@ export function withChecks(catalog: CatalogApi, schema: string, spec: TableSpec,
   return { ...spec, options: { ...(spec.options ?? {}), checks: [...existing, ...made] } }
 }
 
-/** CHECK_CLAUSE: the condition as the server reprints it, then escaped as INFORMATION_SCHEMA shows it. */
-export function checkClause(check: CheckDef): string | null {
+/** Resolved CHECK text, escaped for INFORMATION_SCHEMA unless SHOW requests the plain expression. */
+export function checkClause(check: CheckDef, information = true): string | null {
   let printed: string
   try {
-    printed = printExpression(parseExpression(check.text), {
-      column: printColumnName,
-      string: (v, cs) => printString(v, cs ?? check.charset),
-      source: check.text,
-    })
+    printed = printTableExpression(parseExpression(check.text), check.charset, check.text)
   } catch (e) {
     expectTyped(e)
     return check.text
   }
-  return escapePrinted(printed)
+  return information ? escapePrinted(printed, check.charset) : printed
 }
 
 /**

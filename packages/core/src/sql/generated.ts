@@ -25,7 +25,7 @@ import type { ColumnDef } from '@myjs/engine'
 import { NODE, parseExpression, type Expression } from '@myjs/parser'
 import { sqlError } from '@myjs/protocol'
 import { someNode } from './ast.ts'
-import { printString, printColumnName, printExpression, Unprintable } from './print.ts'
+import { escapePrinted, printTableExpression, Unprintable } from './print.ts'
 import { NOT_ROW_DETERMINED } from './registry.ts'
 
 export interface Generation {
@@ -45,18 +45,17 @@ export function generationOf(column: ColumnDef): Generation | undefined {
  * its name, a string with the charset it was read in. SHOW CREATE TABLE
  * wraps it in parentheses; GENERATION_EXPRESSION does not.
  */
-export function printGeneration(column: ColumnDef, generation: Generation): string {
-  const charset = column.attributes?.['generatedCharset']
+export function printGeneration(column: ColumnDef, generation: Generation, information = false): string {
+  const stored = column.attributes?.['generatedCharset']
+  const charset = typeof stored === 'string' ? stored : 'utf8mb4'
+  let printed: string
   try {
-    return printExpression(parseExpression(generation.text), {
-      column: printColumnName,
-      string: (v, cs) => printString(v, cs ?? (typeof charset === 'string' ? charset : 'utf8mb4')),
-      source: generation.text,
-    })
+    printed = printTableExpression(parseExpression(generation.text), charset, generation.text)
   } catch (e) {
-    if (e instanceof Unprintable) return generation.text
-    throw e
+    if (!(e instanceof Unprintable)) throw e
+    return information ? escapePrinted(generation.text, 'binary') : generation.text
   }
+  return information ? escapePrinted(printed, charset) : printed
 }
 
 /** The connection's charset at CREATE or ALTER, which the expression's strings were read in, kept for printing them. */
