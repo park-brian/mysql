@@ -19,7 +19,7 @@
 //     NULLs. A RIGHT JOIN is a LEFT JOIN with its sides swapped.
 //
 // Which order the optimizer would put the tables in is a cost decision (M5.7);
-// here it is the order written, which is what `STRAIGHT_JOIN` asks for. The
+// the cost model chooses it unless `STRAIGHT_JOIN` asks for the order written. The
 // condition is always evaluated in full on every pair, so a hash key could only
 // ever be a faster way to the same rows in the same order.
 //
@@ -42,6 +42,7 @@ import { planNode, type PlanNode } from './explain.ts'
 import { FULL_SCAN, accessRows, chooseAccess, dynamicAccess, keyOrder, pointAccess, splitAnd, type Access, type OuterColumn, type RangeCosting } from './plan.ts'
 import { bestAccess, floorFilter, joinOrder, type Candidate, type KeyChoice, type Positioned } from './cost.ts'
 import { rowKey } from './keys.ts'
+import { sort as sortRows, type SortKey } from './operators.ts'
 import { neverEqual, nullRejected } from './optimize.ts'
 import type { TableStatistics } from './stats.ts'
 import { TableScope, type ScopeColumn, type ScopeTableSpec } from './scope.ts'
@@ -140,6 +141,8 @@ export interface FromPlan {
    * so the join's rows are never streamed into a temporary table to sort.
    */
   sortsFirst(aliases: ReadonlySet<string>): boolean
+  /** Sort plain grouping columns on the first base table of an inner lookup join. */
+  sortGroupsFirst(keys: readonly { readonly expr: Expression; readonly compiled: Compiled }[]): boolean
   /**
    * The columns the query reads of each table (`'all'` for one read whole).
    * A table no condition chooses an access path for is read through the
@@ -545,6 +548,26 @@ export function planFrom(refs: readonly TableReference[], ctx: FromContext, wher
       const looked = plan.lookups
       return spine.every((j) => j.kind === 'join' && ((j.inner.kind === 'leaf' && looked.has(j.inner.table.alias)) || [...nestedLoopJoins].some((s) => [...s].every((a) => innerAliasesOf(j).has(a)) && s.size === innerAliasesOf(j).size)))
     },
+    sortGroupsFirst(keys) {
+      if (keys.length === 0 || keys.some((k) => k.expr.kind !== NODE.COLUMN || k.compiled.type.kind === 'json')) return false
+      const aliases = new Set<string>()
+      for (const key of keys) {
+        const own = aliasesOf(key.expr, scope)
+        if (own === undefined) return false
+        for (const alias of own) aliases.add(alias)
+      }
+      if (!this.sortsFirst(aliases)) return false
+      const plan = joinPlan()
+      if (plan === undefined || plan.node.kind !== 'join') return false
+      let node: Node = plan.node
+      while (node.kind === 'join') {
+        if (node.left || node.inner.kind !== 'leaf' || node.lookup === undefined || !plan.lookups.has(node.inner.table.alias) || plan.dynamic.has(node.inner.table.alias) || settings.constants?.has(node.inner.table.alias)) return false
+        node = node.outer
+      }
+      if (node.table.def === undefined || settings.constants?.has(node.table.alias) || settings.hidden?.has(node.table.alias)) return false
+      settings.groupSort = { alias: node.table.alias, keys: keys.map((k) => ({ expr: k.compiled, desc: false })) }
+      return true
+    },
     ...(single === undefined ? {} : { single }),
     filter(where, compile, semijoin) {
       settings.where = where
@@ -837,6 +860,8 @@ interface LeafSettings {
   /** The one table read whole in this index's order (`readInOrder`). */
   /** Read in an index's order: the one table's, or `alias`'s in a join its const tables reduce to it. */
   ordered?: { readonly index: string; readonly force: boolean; readonly reverse: boolean; readonly alias?: string }
+  /** Grouping order supplied before an inner lookup join expands the first table's rows. */
+  groupSort?: { readonly alias: string; readonly keys: readonly SortKey[] }
 }
 
 /**
@@ -1068,7 +1093,15 @@ function holds(conditions: readonly Placed[], row: Row, env: Env): boolean {
  */
 function toOp(node: Node, conditions: readonly Placed[], scope: TableScope, settings: LeafSettings, ctx: FromContext, preliminary: TableScope): Op {
   if (node.kind === 'leaf') {
-    const op = filterOp(tableOp(node.table, settings), conditions, node.table, settings)
+    let op = filterOp(tableOp(node.table, settings), conditions, node.table, settings)
+    if (settings.groupSort?.alias === node.table.alias) {
+      const input = op
+      const keys = settings.groupSort.keys
+      op = {
+        rows: (run, context) => sortRows(input.rows(run, context), keys, run.env),
+        describe: (env) => planNode('Sort', [input.describe(env)]),
+      }
+    }
     return settings.hidden?.has(node.table.alias) === true ? { ...op, rows: op.rows.bind(op), hidden: true } : op
   }
   const outerAliases = leafAliases(node.outer)

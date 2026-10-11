@@ -1807,6 +1807,7 @@ function planGrouped(
   // The WHERE: a FROM applies it itself (M5.43); one with no FROM is a Filter here.
   const whereCtx = compileContext(run, lookup, 'where clause')
   let where: Compiled | undefined
+  const sortedFirst = strategy === 'sort' && !rollup && from?.sortGroupsFirst(keys) === true
   if (from !== undefined) from.filter(node.where, (e) => compile(e, whereCtx))
   else if (node.where !== undefined) where = compile(node.where, whereCtx)
   // An index-ordered grouping reads that index whole, in its order, whatever range the WHERE would choose.
@@ -1825,7 +1826,7 @@ function planGrouped(
       item.compiled = { ...item.compiled, type: temporary === undefined ? type : { ...type, temporary } }
     }
   }
-  const plan = { width, keys: keys.map((k) => k.compiled), specs: sink.specs, strategy, rollup }
+  const plan = { width, keys: keys.map((k) => k.compiled), specs: sink.specs, strategy: sortedFirst ? 'index' as const : strategy, rollup }
   const sortsOutput = orderKeys.length > 0 && !(orderMatchesKeys && strategy !== 'temp') && !oneGroup
   const groups = rollup ? 'Group aggregate with rollup' : 'Group aggregate'
   const stages: Stage[] = [
@@ -1836,7 +1837,7 @@ function planGrouped(
       describe(n) {
         if (strategy === 'implicit') return planNode('Aggregate', [n])
         if (strategy === 'temp') return planNode('Table scan on <temporary>', [planNode('Aggregate using temporary table', [n])])
-        if (strategy === 'sort') return planNode(groups, [planNode('Sort', [wrap(source === undefined, 'Stream results', n)])])
+        if (strategy === 'sort' && !sortedFirst) return planNode(groups, [planNode('Sort', [wrap(source === undefined, 'Stream results', n)])])
         return planNode(groups, [n])
       },
     },
