@@ -245,6 +245,11 @@ counts. Plan text and legacy SELECT warning counts remain separate executor
 replay gates; those older captures used a different warning-count timing. The runner
 waits for readiness and removes its containers and network on success or failure.
 
+CI runs `npm run verify:docker -- --reference` as the blocking `pinned MySQL
+8.4.11 reference` job on pushes, pull requests and manual runs. The advisory
+recapture jobs against `mysql:8.4` remain separate: a newer server's observations
+do not replace the pinned compatibility gate or its committed fixtures.
+
 For a fresh ORM comparison, use `tools/orm-suites.mjs --ours` or `--server`
 with `--out /tmp/orm-census.json` to keep committed fixtures intact. Server
 mode accepts `MYSQL_HOST`, `MYSQL_PORT`, `MYSQL_USER` and `MYSQL_PASSWORD`;

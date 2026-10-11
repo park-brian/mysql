@@ -39,6 +39,23 @@ jobs:
       - name: bundle size budget
         run: npm run size
 
+  reference:
+    name: pinned MySQL 8.4.11 reference
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22.18'
+          cache: npm
+      - run: npm ci
+      # A required gate, separate from the advisory captures against mysql:8.4.
+      # The same disposable runner pins both images, replays without recapture,
+      # and removes its containers/network even when verification fails.
+      - name: Verify against pinned MySQL without rewriting fixtures
+        run: npm run verify:docker -- --reference
+
   fuzz:
     name: fuzz parsers
     runs-on: ubuntu-latest
