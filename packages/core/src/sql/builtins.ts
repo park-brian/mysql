@@ -407,15 +407,21 @@ export function controlFunction(name: string, e: CallNode, ctx: CompileContext):
       // A temporal or a YEAR comes back as its text, in the connection's charset (8.4.11).
       const text = x.type.kind === 'datetime' || x.type.kind === 'time' || x.type.field === FIELD_TYPE.YEAR
       const type: ResultType = converted?.type ?? (text ? { ...stringType(charWidth(x.type), conn, true), unsigned: x.type.field === FIELD_TYPE.YEAR } : { ...expressionOf(x.type), nullable: true })
-      return {
-        eval: (r, env) => {
-          const v = readA.eval(r, env)
-          if (v === null) return null
+      const read = (result: Compiled['eval']): Compiled['eval'] => (r, env) => {
+        const v = readA.eval(r, env)
+        if (v !== null) {
           const w = readB.eval(r, env)
-          if (cmp(left === undefined ? v : left(v, env), right === undefined ? w : right(w, env)) === 0) return null
+          if (cmp(left ? left(v, env) : v, right ? right(w, env) : w) === 0) return null
+        }
+        // A NULL comparison skips the right argument, but still reads the result.
+        return result(r, env)
+      }
+      return {
+        eval: read((r, env) => {
           const result = x.eval(r, env)
-          return converted !== undefined ? converted.result : text && result !== null ? stringValue(textOf(result, x.type), conn) : result
-        },
+          return converted ? converted.result : text && result !== null ? stringValue(textOf(result, x.type), conn) : result
+        }),
+        decimalOf: (once) => read(asNumber(x, 'DECIMAL', once).eval),
         type,
       }
     }
