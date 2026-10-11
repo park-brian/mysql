@@ -147,7 +147,7 @@ export interface Env {
  * An operand read as a number: when it is text, each value that is not one
  * draws 1292, "Truncated incorrect DOUBLE value" (or INTEGER, or DECIMAL),
  * as `double_from_string_with_check` and its siblings warn. Field readers can
- * suppress empty/whitespace warnings; binary INTEGER casts retain them.
+ * suppress empty/whitespace warnings; INTEGER casts retain them.
  * ENUM indices and numeric hex literals are quiet. The value passes unchanged.
  */
 export function asNumber(c: Compiled, kind: 'DOUBLE' | 'INTEGER' | 'DECIMAL', once: boolean | Expression = false, source: 'field' | 'cast' = 'field'): Compiled {
@@ -170,16 +170,16 @@ export function asNumber(c: Compiled, kind: 'DOUBLE' | 'INTEGER' | 'DECIMAL', on
   } }
   if (!isText(c.type)) return c
   const column = c.type.column !== undefined
-  const binaryCast = source === 'cast' && kind === 'INTEGER' && c.type.kind === 'bytes'
+  const integerCastKind = source === 'cast' && kind === 'INTEGER' ? c.type.kind : undefined
   // A TEXT or BLOB column reads as a double or an integer without a word
   // (`Field_blob::val_real` and `val_int` discard the error).
-  if (!binaryCast && column && c.type.field === FIELD_TYPE.BLOB && kind !== 'DECIMAL') return c
+  if (integerCastKind === undefined && column && c.type.field === FIELD_TYPE.BLOB && kind !== 'DECIMAL') return c
   // A VARCHAR or VARBINARY column, read as a double or an integer, is quiet
   // when the bytes left unconverted are exactly twice its length bytes — 2
   // under 256 bytes, 4 from there (8.4.11: in a VARCHAR(10), `v + 0` warns
   // for '1x' and '12x' but not for '1xy', 'xy' or 'é'; in a VARCHAR(400),
   // for those three but not for '1abc' or '1.2.3.4'). A CHAR always warns.
-  const quietTail = !binaryCast && column && c.type.field === FIELD_TYPE.VAR_STRING && kind !== 'DECIMAL' ? (byteWidth(c.type) < 256 ? 2 : 4) : undefined
+  const quietTail = integerCastKind === undefined && column && c.type.field === FIELD_TYPE.VAR_STRING && kind !== 'DECIMAL' ? (byteWidth(c.type) < 256 ? 2 : 4) : undefined
   // Once a statement, a constant: keyed by its node when it has one, so that
   // the optimizer's own evaluation of it and the plan's share the one warning (8.4.11).
   const key = typeof once === 'object' ? once : {}
@@ -193,7 +193,7 @@ export function asNumber(c: Compiled, kind: 'DOUBLE' | 'INTEGER' | 'DECIMAL', on
         env.memo?.set(key, true)
       }
       if (quietTail !== undefined && unconvertedBytes(v, kind) === quietTail) return v
-      checkNumber(v, kind, env, column, binaryCast)
+      checkNumber(v, kind, env, column, integerCastKind)
       return v
     },
   }
@@ -295,7 +295,7 @@ function jsonAsNumber(c: Compiled, kind: 'DOUBLE' | 'INTEGER' | 'DECIMAL'): Comp
 }
 
 /** `asNumber`'s check, for one value. */
-function checkNumber(v: Exclude<Value, null>, kind: 'DOUBLE' | 'INTEGER' | 'DECIMAL', env: Env, column = false, binaryCast = false): void {
+function checkNumber(v: Exclude<Value, null>, kind: 'DOUBLE' | 'INTEGER' | 'DECIMAL', env: Env, column = false, integerCastKind?: ResultType['kind']): void {
   if (v.kind === 'string' ? v.ordinal !== undefined : v.kind !== 'bytes' || v.hex === true) return
   const text = toText(v)
   const p = numericPrefix(text)
@@ -306,9 +306,9 @@ function checkNumber(v: Exclude<Value, null>, kind: 'DOUBLE' | 'INTEGER' | 'DECI
       : // And a double past the largest, which is read as it (8.4.11: `'1e400' + 0`).
         kind === 'DOUBLE' && p.complete && !Number.isFinite(Number(p.text))
   if (p.complete && !(kind === 'INTEGER' && p.fractional) && !overflow) return
-  const binaryInteger = binaryCast && v.kind === 'bytes'
-  // Binary INTEGER casts warn even for empty or whitespace-only bytes.
-  if (!p.complete && kind !== 'DECIMAL' && !binaryInteger && /^[ \t\n\r]*$/.test(text)) return
+  const binaryInteger = integerCastKind === 'bytes' && v.kind === 'bytes'
+  // INTEGER casts warn even for empty or whitespace-only strings and bytes.
+  if (!p.complete && kind !== 'DECIMAL' && integerCastKind === undefined && /^[ \t\n\r]*$/.test(text)) return
   // A column's text with no digit at all, read as a DECIMAL, is 1366 first, as its field's conversion says (8.4.11: `CAST(lt AS DECIMAL)` of 'abc').
   if (column && kind === 'DECIMAL' && !/\d/.test(text)) raise(env, 1366, "Incorrect DECIMAL value: '0' for column '' at row -1")
   truncated(env, kind, binaryInteger ? escapedBytes(v.v.subarray(0, 128)).slice(0, 128) : warnedText(v))
