@@ -35,6 +35,7 @@ import {
   decodeField,
   encodeField,
   decimalValue,
+  dateOf,
   divide,
   doubleValue,
   intDivide,
@@ -1648,11 +1649,8 @@ export function onStatementDate(c: Compiled): Compiled {
     eval: (r, env) => {
       const v = c.eval(r, env)
       if (v === null || v.kind !== 'time') return v
-      const today = clock(env.now, 0)
-      const ms = Date.UTC(today.year, today.month - 1, today.day) + Number(timeOrdinal(v.v) / 1000n)
-      const d = new Date(ms)
-      const microsecond = Number(((timeOrdinal(v.v) % 1_000_000n) + 1_000_000n) % 1_000_000n)
-      return { kind: 'datetime', v: { year: d.getUTCFullYear(), month: d.getUTCMonth() + 1, day: d.getUTCDate(), hour: d.getUTCHours(), minute: d.getUTCMinutes(), second: d.getUTCSeconds(), microsecond }, type: 'DATETIME', fsp: v.fsp }
+      const anchored = dateOf(v, {}, () => clock(env.now, 0))
+      return anchored.v === null ? null : { kind: 'datetime', v: anchored.v, type: 'DATETIME', fsp: v.fsp }
     },
     type: c.type,
   }
