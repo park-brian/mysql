@@ -1398,15 +1398,20 @@ function comparisonText(c: Compiled): Compiled {
   }
 }
 
-/** cmp_item_datetime's TIME reader parses every STRING result, including a datetime's text. */
-function comparisonTime(c: Compiled): Compiled {
+/** cmp_item_datetime's TIME reader keeps a parsed datetime's date in its packed comparison. */
+function comparisonTime(c: Compiled, preserveDate = true): Compiled {
   return {
     ...c,
     eval: (r, env) => {
       const v = c.eval(r, env)
       if (v === null || v.kind === 'time') return v
-      const p = parseTime(toText(v))
+      const text = toText(v)
+      const p = parseTime(text)
       if (p === undefined || p.truncated || p.clamped) raise(env, 1292, `Truncated incorrect time value: '${warnedText(v)}'`)
+      if (preserveDate && p?.dateDropped) {
+        const d = parseDateTime(text)
+        if (d !== undefined) return { kind: 'datetime', v: d.v, type: 'DATETIME', fsp: d.fsp }
+      }
       return p === undefined ? { ...NO_TIME } : { kind: 'time', v: p.v, fsp: p.fsp }
     },
   }
@@ -2288,7 +2293,10 @@ function caseExpr(e: CaseNode, ctx: CompileContext): Compiled {
   const jsonText = !numeric && [given, ...compiled.map((w) => w.when)].some((c) => c?.type.kind === 'json')
   const whenComparison = (c: Compiled, written: Expression): Compiled => {
     if (given?.type.kind === 'datetime' && !numeric) return c.type.kind === 'time' ? onStatementDate(c) : dateConstant(c.type.kind === 'json' ? comparisonText(c) : c, written, given, ctx, false)
-    if (given?.type.kind === 'time' && !numeric) return comparisonTime(c)
+    if (given?.type.kind === 'time' && !numeric) {
+      // A prepared WHEN parameter inherits TIME; a written dated string keeps its date.
+      return comparisonTime(c, written.kind !== NODE.PLACEHOLDER)
+    }
     return jsonText ? comparisonText(c) : c
   }
   const operand = given === undefined ? undefined : numeric ? number(given) : jsonText ? comparisonText(given) : given
