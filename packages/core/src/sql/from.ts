@@ -2064,6 +2064,12 @@ const clusteredIndex = (def: TableDef): IndexDef | undefined => def.indexes.find
 
 const isClustered = (def: TableDef, index: IndexDef): boolean => index === clusteredIndex(def)
 
+/** The schema key parts, with PRIMARY parts appended only for columns absent from a secondary key. */
+export function indexParts(def: TableDef, index: IndexDef): IndexDef['parts'] {
+  const clustered = clusteredIndex(def)
+  return index === clustered || clustered === undefined ? index.parts : [...index.parts, ...clustered.parts.filter((p) => !index.parts.some((q) => q.column.toLowerCase() === p.column.toLowerCase()))]
+}
+
 /** An index's key bytes (`key_length`); a hidden row id's 6. */
 function indexBytes(def: TableDef, index: IndexDef | undefined): number {
   if (index === undefined) return 6
@@ -2073,14 +2079,14 @@ function indexBytes(def: TableDef, index: IndexDef | undefined): number {
 /** Whether an index holds every column in `read` (`covering_keys`): a secondary one with the clustered key it carries, or the clustered key itself when `read` is only its columns. */
 function holdsRead(def: TableDef, index: IndexDef, read: ReadonlySet<string> | 'all'): boolean {
   if (index !== clusteredIndex(def)) return covers(def, index, read)
-  return read !== 'all' && index.invisible !== true && [...read].every((c) => index.parts.some((p) => p.column.toLowerCase() === c))
+  return read !== 'all' && index.invisible !== true && [...read].every((c) => index.parts.some((p) => p.prefix === undefined && p.column.toLowerCase() === c))
 }
 
 /** Whether a secondary index, with the clustered key it carries, holds every column in `read`. */
 function covers(def: TableDef, index: IndexDef, read: ReadonlySet<string> | 'all'): boolean {
   const clustered = clusteredIndex(def)
-  if (read === 'all' || clustered === undefined || index === clustered || index.invisible === true || index.parts.some((p) => p.prefix !== undefined)) return false
-  const holds = new Set([...index.parts, ...clustered.parts].map((p) => p.column.toLowerCase()))
+  if (read === 'all' || clustered === undefined || index === clustered || index.invisible === true) return false
+  const holds = new Set(indexParts(def, index).filter((p) => p.prefix === undefined).map((p) => p.column.toLowerCase()))
   return [...read].every((c) => holds.has(c))
 }
 

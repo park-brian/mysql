@@ -21,7 +21,7 @@ import { FIELD_TYPE, expectTyped } from '@myjs/bytes'
 import { distinct, filter, limit, project, sort, type SortKey } from './operators.ts'
 import { isConstant, splitAnd } from './plan.ts'
 import { TableScope } from './scope.ts'
-import { planFrom, type DerivedPlan, type DerivedSource, type FromContext, type FromPlan, type JoinCondition } from './from.ts'
+import { indexParts, planFrom, type DerivedPlan, type DerivedSource, type FromContext, type FromPlan, type JoinCondition } from './from.ts'
 import { rowKey } from './keys.ts'
 import { planNode, wrap, type PlanNode } from './explain.ts'
 import { describeStages, runStages, type Rowed, type Stage } from './pipeline.ts'
@@ -1025,12 +1025,11 @@ function orderingIndex(def: TableDef, alias: string, order: readonly OrderItem[]
   // A single descending schema key runs physically opposite to SQL ASC.
   const primaryOrder = clustered.parts.length === 1 || clustered.parts.every((p) => p.descending !== true)
   for (const candidate of primary && primaryOrder ? [index, clustered] : [index]) {
-    const own = candidate.parts
-    const parts = candidate === clustered ? own : [...own, ...clustered.parts.filter((p) => !own.some((q) => q.column.toLowerCase() === p.column.toLowerCase()))]
-    const descending = own[0]?.descending === true
+    const parts = indexParts(def, candidate)
+    const descending = candidate.parts[0]?.descending === true
     // Every requested key part must share the physical direction, including
     // the PRIMARY parts carried by a secondary index.
-    const covered = parts.slice(0, names.length).every((p, i) => p.column.toLowerCase() === names[i] && (p.descending === true) === descending)
+    const covered = parts.slice(0, names.length).every((p, i) => p.prefix === undefined && p.column.toLowerCase() === names[i] && (p.descending === true) === descending)
     if (covered) return { index: candidate.name, reverse: desc !== descending }
   }
   return undefined
