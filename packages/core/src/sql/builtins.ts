@@ -327,12 +327,13 @@ export function builtinFunction(name: string, e: CallNode, ctx: CompileContext):
     case 'ABS': {
       arity(1)
       const x = asNumber((args() as [Compiled])[0], 'DOUBLE')
-      const real = isText(x.type) || x.type.kind === 'json'
-      const type = x.type.literalInt !== undefined ? { ...floatLength(0, x.type.nullable), unsigned: true }
-        : x.type.kind === 'double' ? floatLength(x.type.scale, x.type.nullable)
-          : real ? doubleType(x.type.nullable)
-            : x.type.kind === 'int' ? intType(x.type.length, x.type.nullable, x.type.unsigned)
-              : expressionOf(x.type)
+      const argument = x.type
+      const real = isText(argument) || argument.kind === 'json'
+      const type = argument.literalInt !== undefined ? { ...floatLength(0, argument.nullable), unsigned: argument.literalInt.unsigned }
+        : argument.kind === 'double' ? floatLength(argument.scale, argument.nullable)
+          : real ? doubleType(argument.nullable)
+            : argument.kind === 'int' ? intType(argument.length, argument.nullable, argument.unsigned)
+              : expressionOf(argument)
       return {
         eval: (r, env) => {
           const v = x.eval(r, env)
