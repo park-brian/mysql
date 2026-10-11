@@ -10,14 +10,14 @@
 // name as written, else the expression's own source text — `SELECT 1+1`
 // returns a column called `1+1`, spaces and all, which only the text has.
 import type { ColumnDef, Table, TableDef, ViewDef } from '@myjs/engine'
-import { NODE, QUERY, REF, TOKEN, deparse, lex, parseStatement, type Expression, type OrderItem, type QueryBody, type QueryExpression, type SelectNode, type SetOperationNode, type TableName, type Token } from '@myjs/parser'
+import { LITERAL, NODE, QUERY, REF, TOKEN, deparse, lex, parseStatement, type Expression, type OrderItem, type QueryBody, type QueryExpression, type SelectNode, type SetOperationNode, type TableName, type Token } from '@myjs/parser'
 import { messages, sqlError, type ColumnDefinition, type ResultSet, type RowValue } from '@myjs/protocol'
 import { intValue, toInteger, truth, withoutHex, type Value } from '@myjs/types'
 import { compile, EMPTY_SCOPE, type CompileContext, type Compiled, type Env, type GroupKeys, type QuantifiedSubquery, type Scope, type SubqueryPlan } from './compile.ts'
 import { AggregateSink, chooseStrategy, containsAggregate, groupRows, isAggregate } from './group.ts'
 import { WindowSink, applyWindows, containsWindow } from './window.ts'
 import { columnDefinition, intType, type ResultType } from './meta.ts'
-import { expectTyped } from '@myjs/bytes'
+import { FIELD_TYPE, expectTyped } from '@myjs/bytes'
 import { distinct, filter, limit, project, sort, type SortKey } from './operators.ts'
 import { isConstant, splitAnd } from './plan.ts'
 import { TableScope } from './scope.ts'
@@ -319,6 +319,8 @@ function planSelect(run: Run, q: QueryExpression, node: SelectNode): SelectPlan 
   }
   const windowed = node.items.some((i) => containsWindow(i.expr)) || (q.orderBy ?? []).some((o) => containsWindow(o.expr))
   if (grouped) return planGrouped(run, q, node, from, lookup, windowed, constants)
+  const anti = from === undefined ? undefined : costedAntijoin(run, q, node, from)
+  const loopSemijoin = scope !== undefined && (anti?.lookup === true || nestedLoopSemijoin(node.where, scope))
   // Window functions (M5.6) write into slots past the FROM row.
   const windowBase = from?.width ?? 0
   const windows = windowed ? new WindowSink(compileContext(run, lookup, 'window order by'), windowBase, node.windows) : undefined
@@ -403,7 +405,7 @@ function planSelect(run: Run, q: QueryExpression, node: SelectNode): SelectPlan 
     // MySQL drops it before it plans a sort (8.4.11: `WHERE SCHEMA_NAME = ?
     // ORDER BY SCHEMA_NAME` over INFORMATION_SCHEMA's join streams nothing).
     const constantOrder = node.distinct !== true && (q.orderBy ?? []).every((o) => (o.expr.kind === NODE.COLUMN && pinnedByWhere(node.where, o.expr.parts)) || constantKey(o))
-    const sortedFirst = constantOrder || (node.distinct !== true && (source === undefined ? from.sortsFirst(orderAliases(q, items, lookup)) : nestedLoopSemijoin(node.where, scope) && !node.items.some((i) => correlatedIn(i.expr, scope))))
+    const sortedFirst = constantOrder || (node.distinct !== true && (source === undefined ? from.sortsFirst(orderAliases(q, items, lookup)) : loopSemijoin && !node.items.some((i) => correlatedIn(i.expr, scope))))
     const consts = new Set(facts.constTables.map((t) => t.alias))
     const fixed = new Set([...consts, ...(facts.nullTables ?? [])])
     // With every other table a constant, a DISTINCT is one table's, and its
@@ -444,9 +446,14 @@ function planSelect(run: Run, q: QueryExpression, node: SelectNode): SelectPlan 
   const whereCtx = compileContext(run, lookup, 'where clause')
   let where: Compiled | undefined
   if (from !== undefined) {
-    // [NOT] EXISTS over one indexed equality is a nested loop: the subquery probed for each row, in the outer table's order.
-    const semijoins = scope !== undefined && source !== undefined && nestedLoopSemijoin(node.where, scope)
-    from.filter(node.where, (e) => compile(e, whereCtx), semijoins ? (e) => semijoinNode(run, e) : undefined)
+    // A costed antijoin builds once; a nested loop probes its correlated subquery for each row.
+    if (anti !== undefined && !anti.lookup) {
+      from.filter(undefined, (e) => compile(e, whereCtx))
+      from.hashAntijoin(anti.key, (trx, env) => anti.inner.rows(trx, env), () => anti.plan)
+    } else {
+      const semijoins = source !== undefined && loopSemijoin
+      from.filter(node.where, (e) => compile(e, whereCtx), semijoins ? (e) => semijoinNode(run, e) : undefined)
+    }
   } else if (node.where !== undefined) where = compile(node.where, whereCtx)
   const having = node.having === undefined || neverNullTest(node.having) ? undefined : compile(substituteAliases(node.having, items), compileContext(run, selectedOnly(lookup, items, [], node.having), 'having clause'))
   const keys = (q.orderBy ?? []).filter((o) => !constantKey(o)).map((o) => orderKey(run, o, items, lookup, windows))
@@ -462,8 +469,8 @@ function planSelect(run: Run, q: QueryExpression, node: SelectNode): SelectPlan 
   const locking = (q.locking ?? []).length > 0
   // An ORDER BY the index the table is read by already gives: read in its order, and nothing to sort.
   const read = source !== undefined && from !== undefined ? from.access(run.env) : undefined
-  // Not under windows, which reorder the rows before the ORDER BY sorts them.
-  const ordered = source !== undefined && read !== undefined && !deduplicated && !windowed && match === undefined && keys.length > 0 && read.ranges === undefined ? orderingIndex(source.def, source.alias, q.orderBy ?? [], items, lookup, read.index) : undefined
+  // Windows and hash antijoins still sort their delivered rows, even over an ordered index.
+  const ordered = source !== undefined && read !== undefined && !deduplicated && !windowed && (anti === undefined || anti.lookup) && match === undefined && keys.length > 0 && read.ranges === undefined ? orderingIndex(source.def, source.alias, q.orderBy ?? [], items, lookup, read.index) : undefined
   if (ordered !== undefined) from?.readInOrder(ordered, false, (q.orderBy ?? [])[0]?.desc === true)
 
   const stages: Stage[] = [
@@ -672,11 +679,65 @@ function columnNames(e: unknown, out: string[] = []): string[] {
   return out
 }
 
-/**
- * A WHERE's EXISTS or NOT EXISTS conjunct as the join 8.4.11 makes of it:
- * the join, with the subquery's plan as its inner side; the outer side is
- * the Filter's input (`filterOp`). `undefined` for any other conjunct.
- */
+/** One decorrelatable integer antijoin, costed through the existing preserved-side join planner. */
+function costedAntijoin(run: Run, q: QueryExpression, node: SelectNode, from: FromPlan): { readonly lookup: boolean; readonly key: Compiled; readonly inner: SelectPlan; readonly plan: PlanNode } | undefined {
+  const outer = node.from?.[0]
+  const where = node.where
+  if (from.single === undefined || isTemporary(from.single.def) || node.from?.length !== 1 || outer?.kind !== REF.TABLE || run.parent !== undefined || q.with !== undefined || node.windows !== undefined || (node.options?.length ?? 0) > 0) return undefined
+  if (where?.kind !== NODE.UNARY || where.op !== 'NOT' || where.operand.kind !== NODE.UNARY || where.operand.op !== 'EXISTS' || where.operand.operand.kind !== NODE.SUBQUERY) return undefined
+  const sub = where.operand.operand.query
+  const body = sub.body
+  if (sub.with !== undefined || sub.limit !== undefined || sub.orderBy !== undefined || sub.locking !== undefined || body.kind !== QUERY.SELECT || body.groupBy !== undefined || body.having !== undefined || body.windows !== undefined || body.distinct === true || (body.options?.length ?? 0) > 0) return undefined
+  if (body.from?.length !== 1 || body.items.length !== 1 || body.items[0]?.expr.kind !== NODE.LITERAL || body.items[0].expr.type !== LITERAL.INT) return undefined
+  if (body.where === undefined) return undefined
+  const inner = body.from[0]
+  if (inner?.kind !== REF.TABLE || outer.indexHints !== undefined || inner.indexHints !== undefined) return undefined
+  const outerAlias = outer.alias ?? outer.table.name
+  const innerAlias = inner.alias ?? inner.table.name
+  if (outerAlias.toLowerCase() === innerAlias.toLowerCase()) return undefined
+  const parts = splitAnd(body.where)
+  if (parts.length !== 2) return undefined
+  const column = (e: Expression, alias: string): boolean => e.kind === NODE.COLUMN && e.parts.length === 2 && e.parts[0]?.toLowerCase() === alias.toLowerCase()
+  const equality = parts.find((e) => e.kind === NODE.BINARY && e.op === '=' && ((column(e.left, innerAlias) && column(e.right, outerAlias)) || (column(e.right, innerAlias) && column(e.left, outerAlias))))
+  const extra = parts.find((e) => e !== equality)
+  if (equality?.kind !== NODE.BINARY || extra?.kind !== NODE.BINARY || !['=', '<>', '!=', '<', '<=', '>', '>='].includes(extra.op)) return undefined
+  if (!column(extra.left, innerAlias) || extra.right.kind !== NODE.LITERAL || extra.right.type !== LITERAL.INT) return undefined
+  const innerKey = column(equality.left, innerAlias) ? equality.left : equality.right
+  const outerKey = innerKey === equality.left ? equality.right : equality.left
+  if (innerKey.kind !== NODE.COLUMN || extra.left.kind !== NODE.COLUMN) return undefined
+  const keyColumn = innerKey.parts[1]
+  const predicateColumn = extra.left.parts[1]
+  if (keyColumn === undefined || predicateColumn === undefined) return undefined
+  try {
+    // Costing must not open a temporary table a second time (ER_CANT_REOPEN_TABLE).
+    const schema = inner.table.schema ?? defaultDatabase(run)
+    if (schema === null) return undefined
+    const definition = run.catalog?.definition(schema, inner.table.name)
+    if (definition === undefined || isTemporary(definition)) return undefined
+    // Cost the preserved-side alternative through the existing join planner.
+    // An outer join's ON does not reduce its build estimate, as for this antijoin.
+    const alternative = planFrom([{ kind: REF.JOIN, type: 'LEFT', left: outer, right: inner, on: body.where, at: where.at }], fromContext(run))
+    const innerTable = alternative.tables.find((t) => t.alias === innerAlias)
+    if (innerTable?.def === undefined || innerTable.table === undefined || innerTable.def.indexes.some((i) => i.parts.some((p) => p.column.toLowerCase() === predicateColumn.toLowerCase()))) return undefined
+    const ctx = compileContext(run, alternative.scope, 'where clause')
+    const exactInteger = (c: Compiled): boolean => c.type.kind === 'int' && c.type.field !== FIELD_TYPE.BIT && c.type.field !== FIELD_TYPE.YEAR
+    if (!exactInteger(compile(innerKey, ctx)) || !exactInteger(compile(outerKey, ctx)) || !exactInteger(compile(extra.left, ctx))) return undefined
+    const read = new Map(columnsRead(from.scope, node, q))
+    read.set(innerAlias, new Set([keyColumn.toLowerCase(), predicateColumn.toLowerCase()]))
+    alternative.reads(read)
+    const projected: QueryExpression = { ...sub, body: { ...body, items: [{ expr: innerKey }], where: extra } }
+    const plan = planQuery(run, projected)
+    const described = plan.explain?.()?.[0]
+    if (described === undefined) return undefined
+    return { lookup: alternative.usesLookup(innerAlias), key: compile(outerKey, compileContext(run, from.scope, 'where clause')), inner: plan, plan: described }
+  } catch (error) {
+    expectTyped(error)
+    // The ordinary compiler owns errors and their original clause names.
+    return undefined
+  }
+}
+
+/** A nested-loop EXISTS conjunct with its real correlated subquery as the inner iterator. */
 function semijoinNode(run: Run, e: Expression): PlanNode | undefined {
   const anti = e.kind === NODE.UNARY && e.op === 'NOT' && e.operand.kind === NODE.UNARY && e.operand.op === 'EXISTS'
   if (!anti && !(e.kind === NODE.UNARY && e.op === 'EXISTS')) return undefined
@@ -867,8 +928,8 @@ function semijoinSubqueries(where: Expression | undefined): QueryExpression[] {
  * Whether every semijoin is a nested loop over an index: an EXISTS whose only
  * condition is its own indexed column equal to an outer column (8.4.11:
  * "Nested loop antijoin / Covering index lookup on ch using pa_id"). Then a
- * sort on the outer table goes first, and nothing is streamed; anything more
- * in the condition makes it a hash join, and the rows are.
+ * sort on the outer table goes first, and nothing is streamed. An additional
+ * condition needs a costed choice rather than this equality-only shortcut.
  */
 function nestedLoopSemijoin(where: Expression | undefined, scope: TableScope): boolean {
   const subqueries = semijoinSubqueries(where)

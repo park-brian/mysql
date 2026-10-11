@@ -156,6 +156,10 @@ export interface FromPlan {
    * The FROM's rows are then the WHERE's: no caller applies it again.
    */
   filter(where: Expression | undefined, compile: (e: Expression) => Compiled, semijoin?: (e: Expression) => PlanNode | undefined): void
+  /** The cost model's choice for a table joined after the preserved side. */
+  usesLookup(alias: string): boolean
+  /** Build integer membership once, preserving only unmatched outer rows. */
+  hashAntijoin(key: Compiled, rows: (trx: Trx | undefined, env: Env) => Iterable<readonly Value[]>, describe: () => PlanNode): void
   /** The one table an ORDER BY or GROUP BY reads, and the rows a LIMIT keeps: what the join order pays a sort for (M5.7). Given before the plan is first asked for. */
   sortedBy(alias: string | undefined, limit: number): void
   /** SELECT DISTINCT, and the tables its select list reads: the last table in join order it does not read is joined for one match a row. */
@@ -568,6 +572,13 @@ export function planFrom(refs: readonly TableReference[], ctx: FromContext, wher
         return { e, aliases: aliasesOf(e, scope), compiled, ...(semi === undefined ? {} : { semijoin: semi }) }
       })
       physical = physicalOf(conditions)
+    },
+    usesLookup(alias) {
+      return joinPlan()?.lookups.has(alias) === true
+    },
+    hashAntijoin(key, rows, describe) {
+      const input = physicalTree()
+      if (input !== undefined) physical = hashAntijoinOp(input, key, rows, describe)
     },
     distinctReads(aliases) {
       settings.distinctSelect = aliases
@@ -1558,6 +1569,21 @@ function filterOp(input: Op, conditions: readonly Placed[], leaf?: FromTable, se
       if (semi !== undefined) return { ...semi, children: [below, ...semi.children] }
       return shown.length === 0 ? below : planNode('Filter', [below])
     },
+  }
+}
+
+/** An antijoin builds the filtered inner keys and probes in the outer iterator's order. */
+function hashAntijoinOp(input: Op, key: Compiled, rows: (trx: Trx | undefined, env: Env) => Iterable<readonly Value[]>, describe: () => PlanNode): Op {
+  return {
+    *rows(run, context) {
+      const keys = new Set<string>()
+      for (const row of rows(run.trx, run.env)) if (row[0] != null) keys.add(rowKey([row[0]]))
+      for (const outer of input.rows(run, context)) {
+        const value = key.eval(outer.row, run.env)
+        if (value === null || !keys.has(rowKey([value]))) yield outer
+      }
+    },
+    describe: (env) => planNode('Hash antijoin', [input.describe(env), planNode('Hash', [describe()])]),
   }
 }
 
