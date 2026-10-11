@@ -1022,17 +1022,16 @@ function orderingIndex(def: TableDef, alias: string, order: readonly OrderItem[]
   }
   // A clustered scan covers every row field. For a whole-table outer loop,
   // MySQL prefers it over a scan plus sort when prefer_ordering_index is on.
-  // A single descending PRIMARY key runs physically opposite to SQL ASC.
-  const descendingPrimary = clustered.parts.length === 1 && clustered.parts[0]?.descending === true
-  const primaryOrder = descendingPrimary || clustered.parts.every((p) => p.descending !== true)
-  const clusteredNames = clustered.parts.map((p) => p.column.toLowerCase())
+  // A single descending schema key runs physically opposite to SQL ASC.
+  const primaryOrder = clustered.parts.length === 1 || clustered.parts.every((p) => p.descending !== true)
   for (const candidate of primary && primaryOrder ? [index, clustered] : [index]) {
-    const own = candidate.parts.map((p) => p.column.toLowerCase())
-    // A secondary key followed by DESC PRIMARY is not uniformly ordered.
-    if (candidate !== clustered && names.length > own.length && descendingPrimary) continue
-    const parts = candidate === clustered ? clusteredNames : [...own, ...clusteredNames.filter((c) => !own.includes(c))]
-    const covered = parts.slice(0, names.length).every((p, i) => p === names[i])
-    if (covered) return { index: candidate.name, reverse: desc !== (candidate === clustered && descendingPrimary) }
+    const own = candidate.parts
+    const parts = candidate === clustered ? own : [...own, ...clustered.parts.filter((p) => !own.some((q) => q.column.toLowerCase() === p.column.toLowerCase()))]
+    const descending = own[0]?.descending === true
+    // Every requested key part must share the physical direction, including
+    // the PRIMARY parts carried by a secondary index.
+    const covered = parts.slice(0, names.length).every((p, i) => p.column.toLowerCase() === names[i] && (p.descending === true) === descending)
+    if (covered) return { index: candidate.name, reverse: desc !== descending }
   }
   return undefined
 }

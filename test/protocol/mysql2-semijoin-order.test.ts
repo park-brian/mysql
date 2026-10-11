@@ -13,8 +13,8 @@ const primary = cover.replace('Covering index scan on pa using name', 'Index sca
 const sorted = cover.replace('    Covering index scan', '    Sort\n        Covering index scan')
 const limited = (plan: string, label = 'Limit') => `${label}\n${plan.split('\n').map((s) => `    ${s}`).join('\n')}`
 
-async function populate(query: (sql: string) => Promise<unknown>, descending = false) {
-  await query(`CREATE TABLE pa(id INT,name VARCHAR(12) NOT NULL,PRIMARY KEY(id${descending ? ' DESC' : ''}),UNIQUE KEY(name)) STATS_AUTO_RECALC=0`)
+async function populate(query: (sql: string) => Promise<unknown>, descending = false, secondaryDescending = false, unique = true) {
+  await query(`CREATE TABLE pa(id INT,name VARCHAR(12) NOT NULL,PRIMARY KEY(id${descending ? ' DESC' : ''}),${unique ? 'UNIQUE ' : ''}KEY(name${secondaryDescending ? ' DESC' : ''})) STATS_AUTO_RECALC=0`)
   await query('CREATE TABLE ch(id INT PRIMARY KEY,pa_id INT,KEY(pa_id)) STATS_AUTO_RECALC=0')
   await query("INSERT INTO pa VALUES(1,'z'),(2,'a'),(3,'empty')")
   await query('INSERT INTO ch VALUES(1,1),(2,1),(3,1),(4,2),(5,NULL),' + Array.from({ length: 200 }, (_, i) => `(${i + 10},${i + 10})`).join(','))
@@ -27,13 +27,13 @@ test('outer-first semijoins choose ordered PRIMARY or covering scans and sort be
   const conn = await mysql.createConnection(db === undefined
     ? { host: host ?? '127.0.0.1', port: Number(process.env.MYSQL_REFERENCE_PORT ?? 3306), user: 'root', password: process.env.MYSQL_REFERENCE_PASSWORD ?? 'root' }
     : { stream: db.createStream(), user: 'root', password: '' })
-  const run = async (sql: string, expected: unknown[][], plan: string, alias = 'pa', name = 'name') => {
+  const run = async (sql: string, expected: unknown[][], plan: string, alias = 'pa', name = 'name', expectedFields?: unknown[][]) => {
     for (const method of ['query', 'execute'] as const) {
       const options = { sql, rowsAsArray: true }
       const [rows, fields] = method === 'query' ? await conn.query(options) : await conn.execute(options)
       assert.deepEqual(rows, expected, `${method}: ${sql}`)
       assert.deepEqual(fields.map((f) => [f.name, f.columnType, f.columnLength, f.flags, f.decimals, f.characterSet, f.schema, f.table, f.orgTable, f.orgName]),
-        [[name, 253, 48, 20485, 0, 224, 'semi_order', alias, 'pa', 'name']], `${method}: fields`)
+        expectedFields ?? [[name, 253, 48, 20485, 0, 224, 'semi_order', alias, 'pa', 'name']], `${method}: fields`)
       assert.deepEqual((await conn.query('SHOW WARNINGS'))[0], [], `${method}: warnings`)
       const [explain] = await conn.query<mysql.RowDataPacket[]>(`EXPLAIN FORMAT=TREE ${sql}`)
       assert.equal(planSkeleton(explain[0]?.EXPLAIN), plan, `${method}: ${sql}`)
@@ -89,6 +89,58 @@ test('outer-first semijoins choose ordered PRIMARY or covering scans and sort be
     await conn.query("SET optimizer_switch='prefer_ordering_index=on,firstmatch=off'")
     await run(`${base} ORDER BY id`, [['z'], ['a']], distinct)
     await run(`${base} ORDER BY id DESC LIMIT 1`, [['a']], limited(distinct))
+    await conn.query("SET optimizer_switch='firstmatch=on'")
+    for (const descending of [false, true]) {
+      await conn.query('DROP TABLE pa,ch')
+      await populate((sql) => conn.query(sql), descending, true)
+      await run(base, [['z'], ['a']], cover)
+      for (const desc of [false, true]) {
+        const order = desc ? ' DESC' : ''
+        const rows = desc ? [['z'], ['a']] : [['a'], ['z']]
+        const all = desc ? [['z'], ['empty'], ['a']] : [['a'], ['empty'], ['z']]
+        const scan = 'Covering index scan on pa using name'
+        await run(`${base} ORDER BY name${order}`, rows, cover)
+        await run(`${base} ORDER BY name${order} LIMIT 1`, rows.slice(0, 1), limited(cover))
+        await run(`${base} ORDER BY name${order} LIMIT 1 OFFSET 1`, rows.slice(1), limited(cover, 'Limit/Offset'))
+        await run(`${base} ORDER BY name${order},id${order}`, rows, descending ? cover : sorted)
+        await run(`SELECT name FROM pa ORDER BY name${order}`, all, scan)
+        await run(`SELECT name FROM pa ORDER BY name${order} LIMIT 1`, all.slice(0, 1), limited(scan))
+        await run(`SELECT name FROM pa ORDER BY name${order} LIMIT 1 OFFSET 1`, all.slice(1, 2), limited(scan, 'Limit/Offset'))
+        await run(`SELECT name FROM pa ORDER BY name${order},id${order}`, all, descending ? scan : `Sort\n    ${scan}`)
+      }
+      await conn.query("SET optimizer_switch='prefer_ordering_index=off'")
+      await run(`${base} ORDER BY name DESC LIMIT 1`, [['z']], limited(cover))
+      await run(`${base} ORDER BY name,id`, [['a'], ['z']], descending ? cover : sorted)
+      await conn.query("SET optimizer_switch='prefer_ordering_index=on'")
+    }
+    const tieFields = [
+      ['id', 3, 11, 20483, 0, 63, 'semi_order', 'pa', 'pa', 'id'],
+      ['name', 253, 48, 20489, 0, 224, 'semi_order', 'pa', 'pa', 'name'],
+    ]
+    const ties = (sql: string, rows: unknown[][], plan: string) => run(sql, rows, plan, 'pa', 'name', tieFields)
+    for (const descending of [false, true]) {
+      await conn.query('DROP TABLE pa,ch')
+      await populate((sql) => conn.query(sql), descending, true, false)
+      await conn.query("INSERT INTO pa VALUES(4,'a')")
+      await conn.query('INSERT INTO ch VALUES(6,4)')
+      await conn.query('ANALYZE TABLE pa,ch')
+      for (const desc of [false, true]) {
+        const order = desc ? ' DESC' : ''
+        // Reversing the secondary scan also reverses its appended PRIMARY order.
+        const tied = descending === desc ? [[4, 'a'], [2, 'a']] : [[2, 'a'], [4, 'a']]
+        const rows = desc ? [[1, 'z'], ...tied] : [...tied, [1, 'z']]
+        const all = desc ? [[1, 'z'], [3, 'empty'], ...tied] : [...tied, [3, 'empty'], [1, 'z']]
+        const sql = `${base.replace('SELECT name', 'SELECT id,name')} ORDER BY name${order}`
+        const scan = 'Covering index scan on pa using name'
+        await ties(sql, rows, cover)
+        await ties(`${sql} LIMIT 1`, rows.slice(0, 1), limited(cover))
+        await ties(`${sql} LIMIT 1 OFFSET 1`, rows.slice(1, 2), limited(cover, 'Limit/Offset'))
+        await ties(`SELECT id,name FROM pa ORDER BY name${order}`, all, scan)
+        await ties(`SELECT id,name FROM pa ORDER BY name${order} LIMIT 1`, all.slice(0, 1), limited(scan))
+        const keyed = desc ? [[1, 'z'], [4, 'a'], [2, 'a']] : [[2, 'a'], [4, 'a'], [1, 'z']]
+        await ties(`${sql},id${order}`, keyed, descending ? cover : sorted)
+      }
+    }
   } finally {
     await conn.query('DROP DATABASE IF EXISTS semi_order')
     await conn.end()
@@ -152,13 +204,13 @@ test('first-table sorting precedes lookup probes and both ordered paths release 
   }
 })
 
-test('DESC PRIMARY scans stop after the first semijoin match and release locks in either direction', async () => {
+test('DESC PRIMARY and secondary scans stop after the first semijoin match and release locks in either direction', async () => {
   const db = await MySQL.open(':memory:')
   const sql = base.replace('FROM pa', 'FROM d.pa').replace('FROM ch', 'FROM d.ch')
   try {
     await db.query('CREATE DATABASE d')
     await db.query('USE d')
-    await populate((sql) => db.query(sql), true)
+    await populate((sql) => db.query(sql), true, true)
     const catalog = db.catalog!
     const open = catalog.table.bind(catalog)
     let probes = 0
@@ -180,16 +232,16 @@ test('DESC PRIMARY scans stop after the first semijoin match and release locks i
       return table
     }
     try {
-      for (const [order, name, expectedProbes] of [['id', 'z', 1], ['id DESC', 'a', 2]] as const) {
+      for (const [order, name, expectedProbes] of [['id', 'z', 1], ['id DESC', 'a', 2], ['name', 'a', 1], ['name DESC', 'z', 1]] as const) {
         probes = closed = 0
         assert.deepEqual((await db.query(`${sql} ORDER BY ${order} LIMIT 1`))[0], [{ name }])
-        assert.equal(probes, expectedProbes, 'DESC skips unmatched id=3 before reaching its first match; ASC starts at id=1')
+        assert.equal(probes, expectedProbes, 'id DESC skips unmatched id=3; every ordered scan stops at its first qualifying outer row')
         assert.equal(closed, expectedProbes)
       }
     } finally {
       catalog.table = open
     }
-    for (const [order, name] of [['id', 'z'], ['id DESC', 'a']]) {
+    for (const [order, name] of [['id', 'z'], ['id DESC', 'a'], ['name', 'a'], ['name DESC', 'z']]) {
       for await (const row of db.stream(`${sql} ORDER BY ${order} FOR UPDATE`)) {
         assert.deepEqual(row, { name })
         break
