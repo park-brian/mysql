@@ -50,7 +50,7 @@ test('scalar prefix facts preserve argument counts, numeric readers and statemen
     assert.deepEqual(again.conditions.map(c => c.code),[1366],sql)
     assert.equal(calls,7,sql)
   }
-  for (const sql of ['FLOOR(a)', 'CEIL(a)', 'CEILING(a)', 'ROUND(a)', 'TRUNCATE(a,0)', 'SIGN(a)', "GREATEST(a,'0')", "LEAST(a,'0')"]) {
+  for (const sql of ['FLOOR(a)', 'CEIL(a)', 'CEILING(a)', 'ROUND(a)', 'TRUNCATE(a,0)', 'SIGN(a)', 'GREATEST(1,2)', 'LEAST(1,2)']) {
     assert.equal(compile(parseExpression(sql),ctx).decimalPrefix,undefined,sql)
   }
 })

@@ -654,32 +654,38 @@ function numberFunction(name: string, args: readonly Compiled[], callName: strin
         true,
       )
       const greatest = name === 'GREATEST'
-      if ((type.kind === 'string' || type.kind === 'bytes') && xs.some((x) => x.type.kind === 'datetime')) {
+      const textual = type.kind === 'string' || type.kind === 'bytes'
+      const has = (kind: ResultType['kind']) => xs.some((x) => x.type.kind === kind)
+      if (textual && has('datetime')) {
         const fsp = type.kind === 'bytes' ? temporalPrecision(xs, constant, ctx, 'DATETIME') : undefined
         const dateIndex = xs.findIndex((x) => x.type.kind === 'datetime')
         const dateNode = written[dateIndex] as Expression
         return datetimeExtremum(xs, type, greatest, fsp, sourceText(ctx.sql, dateNode.at) ?? printedArgument(dateNode, ctx))
       }
-      if ((type.kind === 'string' || type.kind === 'bytes') && xs.some((x) => x.type.kind === 'time')) {
-        if (xs.some((x) => x.type.kind === 'json')) {
+      if (textual && has('time')) {
+        if (has('json')) {
           throw sqlError('ER_NOT_SUPPORTED_YET', messages.notSupported(`${name} over TIME and JSON`))
         }
         const fsp = temporalPrecision(xs, constant, ctx, 'TIME')
         if (fsp > 0) type = { ...type, length: Math.max(type.length, 11 + fsp) }
       }
+      const as = type.kind === 'bytes'
+        ? (x: V): V => x.kind === 'bytes' ? x : bytesValue(valueBytes(x))
+        : (x: V): V => convertTo(x, type) as V
       return {
         eval: (r, env) => {
           const v = all(xs, r, env)
           if (v === undefined) return null
-          const as = (x: V): V => (type.kind === 'bytes' ? (x.kind === 'bytes' ? x : bytesValue(x.kind === 'string' ? encodeCollation(x.v, x.collationId) : new TextEncoder().encode(toText(x)))) : (convertTo(x, type) as V))
           let best = as(v[0] as V)
-          for (const x of v.slice(1)) {
-            const c = as(x)
+          for (let i = 1; i < v.length; i++) {
+            const c = as(v[i] as V)
             const k = compareValues(c, best)
             if (k !== null && (greatest ? k > 0 : k < 0)) best = c
           }
           return best
         },
+        // Date results returned above; only non-temporal, non-JSON strings own this reader.
+        ...(textual && !has('time') && !has('json') ? { decimalPrefix: true as const } : {}),
         type,
       }
     }
