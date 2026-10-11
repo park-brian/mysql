@@ -71,7 +71,7 @@ export interface Run {
   readonly clauses?: Readonly<Record<string, Expression | undefined>>
 }
 
-export function compileContext(run: Run, scope: Scope, clause: string): CompileContext {
+export function compileContext(run: Run, scope: Scope, clause: string, windows?: WindowSink): CompileContext {
   return {
     scope,
     clause,
@@ -89,7 +89,13 @@ export function compileContext(run: Run, scope: Scope, clause: string): CompileC
     table: (schema, name) => run.catalog?.table(schema, name),
     ...(run.env.conditions === undefined ? {} : { conditions: run.env.conditions }),
     sql: run.sql,
+    ...(windows === undefined ? {} : { windows }),
   }
+}
+
+/** A caller's environment wins; otherwise bind this execution's transaction. */
+function executionEnv(run: Run, trx: Trx | undefined, given: Env | undefined): Env {
+  return given ?? { ...run.env, ...(trx === undefined ? {} : { trx }) }
 }
 
 /** What planning a FROM needs from the statement: its tables, and a compiler for ON clauses. */
@@ -336,19 +342,13 @@ function planSelect(run: Run, q: QueryExpression, node: SelectNode): SelectPlan 
   // NOT_NULL, the same without the MAX does not).
   const nullableTables = scope === undefined ? new Set<string>() : aggregatingSubqueryTables(node, scope)
   const selectScope: Scope = nullableTables.size === 0 || scope === undefined ? lookup : nullableView(scope, nullableTables)
-  const texts = itemTexts(run, node)
   const items: { name: string; compiled: Compiled; alias?: string; expr?: Expression }[] = []
-  node.items.forEach((item, i) => {
-    const e = item.expr
-    if (e.kind === NODE.COLUMN && e.parts[e.parts.length - 1] === '*') {
-      if (scope === undefined) throw sqlError('ER_NO_TABLES_USED', 'No tables used')
-      const table = e.parts.length >= 2 ? e.parts[e.parts.length - 2] : undefined
-      for (const s of scope.star(table)) items.push({ name: s.name, compiled: readSlot(s.index, nullableTables.has(scope.columnAt(s.index)?.table.alias ?? '') ? { ...s.type, nullable: true } : s.type), expr: { kind: NODE.COLUMN, parts: [scope.columnAt(s.index)?.table.alias as string, s.name], at: e.at } })
-      return
-    }
-    const compiled = compile(e, { ...compileContext(run, selectScope, 'field list'), ...(windows === undefined ? {} : { windows }) })
-    items.push({ name: sourceName(scope, item, itemName(item, texts[i])), compiled, expr: e, ...(item.alias === undefined ? {} : { alias: item.alias }) })
-  })
+  for (const entry of selectList(run, node, scope)) {
+    const { item, slot } = entry
+    const compiled = slot === undefined ? compile(item.expr, compileContext(run, selectScope, 'field list', windows))
+      : readSlot(slot.index, nullableTables.has(scope?.columnAt(slot.index)?.table.alias ?? '') ? { ...slot.type, nullable: true } : slot.type)
+    items.push({ ...item, name: selectName(entry, scope), compiled })
+  }
   // Read through the windows' temporary table: every column a field of it (8.4.11: `id` loses PRI).
   windowColumns(items, windows)
 
@@ -390,17 +390,20 @@ function planSelect(run: Run, q: QueryExpression, node: SelectNode): SelectPlan 
     const constant = keep === 0 || impossible || facts.constTable || items.every(pinnedName)
     if (!constant) {
       deduplicated = true
-      const copied = new Set<number>()
+      const copied = new Set<string>()
+      const fieldCtx = compileContext(run, lookup, 'field list')
       // A constant is not copied into the table: `SELECT DISTINCT NULL, x`
       // reports its NULL as it always does (8.4.11).
       for (const item of items) {
         if (item.expr !== undefined && !refersToRow(item.expr, lookup)) continue
         // Read through a window's table already, a column keeps what that gives it (8.4.11).
         if (item.compiled.type.temporary === 'stream') continue
-        // Only the first copy of a resolved local source field is a key field.
-        const index = localColumn(item.expr, lookup)
-        const repeated = index !== undefined && copied.has(index)
-        if (index !== undefined) copied.add(index)
+        // Fields can share key membership while retaining separate evaluators.
+        // Only local source fields and proved deterministic SIGNED casts qualify.
+        const e = item.expr
+        const key = e?.kind === NODE.COLUMN || e?.kind === NODE.CAST ? JSON.stringify(expressionIdentity(e, fieldCtx, run.env, 'field')) : undefined
+        const repeated = key !== undefined && copied.has(key)
+        if (key !== undefined) copied.add(key)
         // A bounded unordered table copies fields without GROUP_FLAG (8.4.11).
         patchType(item, { temporary: repeated || pinnedName(item) || (limitCount !== undefined && q.orderBy === undefined) ? 'pinned' : true })
       }
@@ -453,12 +456,12 @@ function planSelect(run: Run, q: QueryExpression, node: SelectNode): SelectPlan 
 
   // The WHERE, compiled where MySQL resolves it, after the select list: a FROM
   // applies it itself, each condition at its iterator (M5.43).
-  const whereCtx = compileContext(run, lookup, 'where clause')
+  const whereCtx = compileContext(run, semi?.from.scope ?? lookup, 'where clause')
   let where: Compiled | undefined
   if (from !== undefined) {
     // A costed antijoin builds once; a nested loop probes its correlated subquery for each row.
     if (semi !== undefined) {
-      from.filter(semi.where, (e) => compile(e, compileContext(run, semi.from.scope, 'where clause')))
+      from.filter(semi.where, (e) => compile(e, whereCtx))
     } else if (anti !== undefined && !anti.lookup) {
       from.filter(undefined, (e) => compile(e, whereCtx))
       from.hashAntijoin(anti.key, (trx, env) => anti.inner.rows(trx, env), () => anti.plan)
@@ -468,7 +471,7 @@ function planSelect(run: Run, q: QueryExpression, node: SelectNode): SelectPlan 
     }
   } else if (node.where !== undefined) where = compile(node.where, whereCtx)
   const having = node.having === undefined || neverNullTest(node.having) ? undefined : compile(substituteAliases(node.having, items), compileContext(run, selectedOnly(lookup, items, [], node.having), 'having clause'))
-  const orderCtx = { ...compileContext(run, lookup, 'order clause'), ...(windows === undefined ? {} : { windows }) }
+  const orderCtx = compileContext(run, lookup, 'order clause', windows)
   const keys = order.filter((o) => !constantKey(o)).map((o) => orderKey(o, items, orderCtx))
   // Resolve every ORDER BY first: name errors precede DISTINCT admission.
   const copied = node.distinct === true && source !== undefined && scope !== undefined && !windowed && modeOf(run.env.session.sqlMode).onlyFullGroupBy ? checkDistinctOrder(run, order, items, orderCtx)?.filter((_, i) => !constantKey(order[i] as OrderItem)) : undefined
@@ -530,7 +533,7 @@ function planSelect(run: Run, q: QueryExpression, node: SelectNode): SelectPlan 
     rows(trx, given) {
       // A zero count with no offset has no iterator to initialize, including its sort.
       if (keep === 0 && !windowed) return []
-      const env = given ?? { ...run.env, ...(trx === undefined ? {} : { trx }) }
+      const env = executionEnv(run, trx, given)
       let rows: Iterable<Rowed>
       if (from === undefined) rows = [{ row: [] }]
       else if (facts?.impossible === true) rows = []
@@ -1596,7 +1599,7 @@ function orderedResult(run: Run, q: QueryExpression, plan: SelectPlan): SelectPl
       return n === undefined ? undefined : [n, ...rest]
     },
     rows(trx, given) {
-      const env = given ?? { ...run.env, ...(trx === undefined ? {} : { trx }) }
+      const env = executionEnv(run, trx, given)
       return values(runStages(rowed(plan.rows(trx, given)), stages, env))
     },
   }
@@ -1622,14 +1625,17 @@ function selectedItem<T extends { readonly alias?: string }>(e: Expression, item
   return items.find((i) => i.alias?.toLowerCase() === name)
 }
 
-/** Resolved AST and literal identity; copying uses stricter deterministic equality. */
-function expressionIdentity(e: Expression | undefined, ctx: CompileContext, env: Env, copied = false): unknown[] | undefined {
+type IdentityMode = 'admission' | 'copy' | 'field'
+
+/** Field equality can fold literals; copied-value reuse needs exact strings. */
+function expressionIdentity(e: Expression | undefined, ctx: CompileContext, env: Env, mode: IdentityMode): unknown[] | undefined {
   if (e === undefined) return undefined
   let identity: unknown[]
   let args: readonly Expression[]
   switch (e.kind) {
     case NODE.COLUMN: {
       const r = ctx.scope.resolve(e.parts, ctx.clause)
+      if (mode === 'field' && (r.depth ?? 0) > 0) return undefined
       return [e.kind, r.index, r.depth ?? 0]
     }
     case NODE.LITERAL: {
@@ -1641,7 +1647,7 @@ function expressionIdentity(e: Expression | undefined, ctx: CompileContext, env:
       const c = compile(bare, ctx)
       const v = c.eval([], env)
       const kind = e.type === LITERAL.BOOL ? LITERAL.BOOL : v?.kind === 'bytes' && v.hex === true ? LITERAL.HEX : c.type.kind
-      return [e.kind, kind, c.type.collationId, copied && v?.kind === 'string' ? v.v : valueKey(v), collation === undefined ? undefined : collationInfoByName(collation.toLowerCase())?.id]
+      return [e.kind, kind, c.type.collationId, mode === 'copy' && v?.kind === 'string' ? v.v : valueKey(v), collation === undefined ? undefined : collationInfoByName(collation.toLowerCase())?.id]
     }
     case NODE.PLACEHOLDER: return [e.kind, e.index]
     case NODE.BINARY:
@@ -1654,20 +1660,22 @@ function expressionIdentity(e: Expression | undefined, ctx: CompileContext, env:
       identity = [e.kind, collationInfoByName(e.collation.toLowerCase())?.id]; args = [e.expr]; break
     case NODE.CALL: {
       const name = e.name.toUpperCase()
-      const allowed = copied ? ['ABS', 'CONCAT'] : ['ABS', 'CONCAT', 'RAND', 'LAST_INSERT_ID']
-      if (!allowed.includes(name) || e.stored === true || e.over !== undefined || e.distinct === true) return undefined
+      const allowed = name === 'ABS' || name === 'CONCAT' || (mode === 'admission' && (name === 'RAND' || name === 'LAST_INSERT_ID'))
+      if (!allowed || e.stored === true || e.over !== undefined || e.distinct === true) return undefined
       identity = [e.kind, name]; args = e.args; break
     }
     default: return undefined
   }
-  const keys = args.map((a) => expressionIdentity(a, ctx, env, copied))
-  return keys.includes(undefined) ? undefined : [...identity, keys]
+  const keys = args.map((a) => expressionIdentity(a, ctx, env, mode))
+  if (keys.includes(undefined)) return undefined
+  identity.push(keys)
+  return identity
 }
 
 /** The verified single-table scalar DISTINCT admission boundary (8.4.11). */
 function checkDistinctOrder(run: Run, order: readonly OrderItem[], items: readonly { readonly expr?: Expression; readonly compiled: Compiled; readonly alias?: string }[], ctx: CompileContext): readonly (number | undefined)[] | undefined {
   const scope = ctx.scope as TableScope
-  const key = (e: Expression | undefined, copied = false): string | undefined => JSON.stringify(expressionIdentity(e, ctx, run.env, copied))
+  const key = (e: Expression | undefined, mode: IdentityMode = 'admission'): string | undefined => JSON.stringify(expressionIdentity(e, ctx, run.env, mode))
   const selectedKeys = items.map((item) => key(item.expr))
   // An alias or position is already bound; null needs no expression proof.
   const orderKeys = order.map((item) => selectedItem(item.expr, items) !== undefined ? null : key(item.expr))
@@ -1684,10 +1692,10 @@ function checkDistinctOrder(run: Run, order: readonly OrderItem[], items: readon
   })
   // Admission equality is weaker than copied-value reuse. Only SIGNED casts
   // have a verified evaluation contract here; keep volatile calls conservative.
-  const copied = items.map((item) => key(item.expr, true))
+  const copied = items.map((item) => key(item.expr, 'copy'))
   if (copied.includes(undefined)) return
   return order.map(({ expr }) => {
-    const index = expr.kind === NODE.CAST ? copied.indexOf(key(expr, true)) : -1
+    const index = expr.kind === NODE.CAST ? copied.indexOf(key(expr, 'copy')) : -1
     if (index >= 0) return index
   })
 }
@@ -1730,6 +1738,29 @@ function keyAliases(keys: readonly Expression[], items: readonly { readonly alia
     }
   }
   return out
+}
+
+interface SelectEntry {
+  readonly item: SelectNode['items'][number]
+  readonly text?: string | undefined
+  readonly slot?: { readonly index: number; readonly name: string; readonly type: ResultType }
+}
+
+/** Expand in source order; plain compilation precedes naming, grouped naming precedes its keys. */
+function* selectList(run: Run, node: SelectNode, scope: TableScope | undefined): Generator<SelectEntry> {
+  const texts = itemTexts(run, node)
+  for (const [i, item] of node.items.entries()) {
+    const e = item.expr
+    if (e.kind === NODE.COLUMN && e.parts[e.parts.length - 1] === '*') {
+      if (scope === undefined) throw sqlError('ER_NO_TABLES_USED', 'No tables used')
+      const table = e.parts.length >= 2 ? e.parts[e.parts.length - 2] : undefined
+      for (const slot of scope.star(table)) yield { item: { expr: { kind: NODE.COLUMN, parts: [scope.columnAt(slot.index)?.table.alias as string, slot.name], at: e.at } }, slot }
+    } else yield { item, text: texts[i] }
+  }
+}
+
+function selectName(entry: SelectEntry, scope: TableScope | undefined): string {
+  return entry.slot?.name ?? sourceName(scope, entry.item, itemName(entry.item, entry.text))
 }
 
 /** A result column's name: its alias, a bare column's name as written, a string literal's value, else its source text. */
@@ -1783,24 +1814,8 @@ function planGrouped(
   const alone = source === undefined ? soleTable(from, constants) : { ...source, offset: 0 }
   const width = from?.width ?? 0
   const rollup = node.groupBy?.rollup === true
-  const texts = itemTexts(run, node)
-
-  // The select list with `*` expanded to its columns, as expressions, since
-  // above the grouping a column is not simply its slot.
-  const selectItems: { expr: Expression; name: string; alias?: string }[] = []
-  node.items.forEach((item, i) => {
-    const e = item.expr
-    if (e.kind === NODE.COLUMN && e.parts[e.parts.length - 1] === '*') {
-      if (scope === undefined) throw sqlError('ER_NO_TABLES_USED', 'No tables used')
-      const table = e.parts.length >= 2 ? e.parts[e.parts.length - 2] : undefined
-      for (const s of scope.star(table)) {
-        const at = scope.columnAt(s.index)
-        selectItems.push({ expr: { kind: NODE.COLUMN, parts: [at?.table.alias as string, s.name], at: e.at }, name: s.name })
-      }
-      return
-    }
-    selectItems.push({ expr: e, name: sourceName(scope, item, itemName(item, texts[i])), ...(item.alias === undefined ? {} : { alias: item.alias }) })
-  })
+  // A grouped column is compiled above its grouping rather than read as a slot.
+  const selectItems = Array.from(selectList(run, node, scope), (entry) => ({ ...entry.item, name: selectName(entry, scope) }))
 
   // GROUP BY: a table column first, then a select-list alias, then a
   // position. `SELECT k AS s … GROUP BY s` groups by the column `s` (8.4.11).
@@ -1880,14 +1895,12 @@ function planGrouped(
       }
     },
   }
-  const postCtx = (clause: string, at: Scope = lookup): CompileContext => ({ ...compileContext(run, at, clause), aggregates: sink, groupKeys })
+  const postCtx = (clause: string, at: Scope = lookup, windows?: WindowSink): CompileContext => ({ ...compileContext(run, at, clause, windows), aggregates: sink, groupKeys })
   // Windows over the groups (M5.6): run after HAVING, over the grouped rows,
   // so their arguments and keys may be the groups' aggregates. Their slots
   // follow the aggregates', which are all known only once everything compiled.
   const windows = windowed ? new WindowSink(postCtx('window order by'), 0, node.windows) : undefined
-  const withWindows = (ctx: CompileContext): CompileContext => (windows === undefined ? ctx : { ...ctx, windows })
-
-  const items = selectItems.map((s) => ({ name: s.name, compiled: compile(s.expr, withWindows(postCtx('field list'))), expr: s.expr, ...(s.alias === undefined ? {} : { alias: s.alias }) }))
+  const items = selectItems.map((s) => ({ name: s.name, compiled: compile(s.expr, postCtx('field list', lookup, windows)), expr: s.expr, ...(s.alias === undefined ? {} : { alias: s.alias }) }))
 
   // HAVING sees the select list's aliases, its columns and the keys; a column
   // that is none of those is 1054 even when the table has it (8.4.11).
@@ -1897,7 +1910,7 @@ function planGrouped(
     having = compile(substituteAliases(node.having, selectItems), postCtx('having clause', havingScope))
   }
 
-  const orderKeys = order.map((o) => orderKey(o, items, withWindows(postCtx('order clause'))))
+  const orderKeys = order.map((o) => orderKey(o, items, postCtx('order clause', lookup, windows)))
 
   if (modeOf(run.env.session.sqlMode).onlyFullGroupBy) {
     checkFullGroupBy(lookup, scope, keys, node.where, from?.joins ?? [], items.map((i) => i.expr), order.filter((o) => !(o.expr.kind === NODE.LITERAL && o.expr.type === 'int') && selectedItem(o.expr, items) === undefined).map((o) => o.expr), node.groupBy === undefined, rollup)
@@ -2035,7 +2048,7 @@ function planGrouped(
       return n === undefined ? undefined : [n, ...subqueryNodes(run, 'field list')]
     },
     rows(trx, given) {
-      const env = given ?? { ...run.env, ...(trx === undefined ? {} : { trx }) }
+      const env = executionEnv(run, trx, given)
       return values(runStages(from === undefined ? [{ row: [] }] : from.rows(trx, env, { locking }), stages, env))
     },
   }

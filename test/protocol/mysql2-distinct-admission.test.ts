@@ -14,7 +14,7 @@ test('DISTINCT ORDER BY admission, equality classes and zero LIMIT match MySQL 8
     : { stream: db.createStream(), user: 'root', password: '' })
   // Literal pinned observations, including all ten field attributes.
   // Correlated admission, aliases inside expressions, copied expression
-  // reuse and duplicate-field flags remain explicit roadmap gaps.
+  // classes and broader duplicate-field flags remain explicit roadmap gaps.
   const fixtures: { sql: string; method?: 'query' | 'execute'; params: number[]; rows?: unknown; fields?: unknown; warnings?: unknown; plan?: string; error?: unknown; effects?: unknown }[] = [
     {"sql":"SELECT DISTINCT g FROM t ORDER BY id","error":[3065,"HY000","Expression #1 of ORDER BY clause is not in SELECT list, references column 'distinct_admit.t.id' which is not in SELECT list; this is incompatible with DISTINCT"],"params":[]},
     {"sql":"SELECT DISTINCT g FROM t ORDER BY id LIMIT 0","error":[3065,"HY000","Expression #1 of ORDER BY clause is not in SELECT list, references column 'distinct_admit.t.id' which is not in SELECT list; this is incompatible with DISTINCT"],"params":[]},
