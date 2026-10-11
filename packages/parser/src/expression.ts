@@ -68,7 +68,7 @@ const NOT_LEVEL = 4
 const WORD_OPERATORS = new Set(['AND', 'OR', 'XOR', 'DIV', 'MOD', 'NOT', 'IS', 'BETWEEN', 'IN', 'LIKE', 'REGEXP', 'RLIKE'])
 
 /** Keywords that type the string literal after them — `DATE'2019-10-01'`. */
-const TEMPORAL_KEYWORDS = new Set(['DATE', 'TIME', 'TIMESTAMP', 'DATETIME'])
+const TEMPORAL_KEYWORDS = new Set(['DATE', 'TIME', 'TIMESTAMP'])
 
 /**
  * Reserved words that are a function call **without** parentheses:
