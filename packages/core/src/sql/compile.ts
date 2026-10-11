@@ -49,6 +49,7 @@ import {
   modulo,
   negate,
   numericPrefix,
+  integerPrefix,
   not,
   nullSafeEqual,
   parseDateTime,
@@ -296,7 +297,7 @@ function jsonAsNumber(c: Compiled, kind: 'DOUBLE' | 'INTEGER' | 'DECIMAL'): Comp
 
 /** `asNumber`'s check, for one value. */
 function checkNumber(v: Exclude<Value, null>, kind: 'DOUBLE' | 'INTEGER' | 'DECIMAL', env: Env, column = false, integerCastKind?: ResultType['kind']): void {
-  if (v.kind === 'string' ? v.ordinal !== undefined : v.kind !== 'bytes' || v.hex === true) return
+  if (integerPrefix(v) === undefined) return
   const text = toText(v)
   const p = numericPrefix(text)
   // An integer past 64 bits is truncated too, to the largest there is.
@@ -2477,10 +2478,18 @@ function cast(e: CastNode, ctx: CompileContext): Compiled {
         eval: (r, env) => {
           const v = x(r, env)
           if (v === null) return null
-          const n = valInt(v)
-          // A negative number written as text, made unsigned, says so (1105).
-          if (isTextValue(v) && (unsigned ? n < 0n : n > MAX_SIGNED)) raise(env, 1105, unsigned ? 'Cast to unsigned converted negative integer to its positive complement' : 'Cast to signed converted positive out-of-range integer to its negative complement')
-          return unsigned ? intValue(n & MAX_UNSIGNED, true) : intValue(n > MAX_SIGNED ? n - (1n << 64n) : n)
+          let n = valInt(v)
+          // Complement warnings use the original integer range before saturation.
+          const prefix = integerPrefix(v)
+          if (prefix !== undefined) {
+            const original = BigInt(prefix)
+            // Native INTEGER casts accept leading spaces, but reject these controls.
+            const complemented = !/[\t\n\r]/.test(prefix) && (unsigned ? original < 0n && original >= MIN_SIGNED : original > MAX_SIGNED && original <= MAX_UNSIGNED)
+            if (complemented) raise(env, 1105, unsigned ? 'Cast to unsigned converted negative integer to its positive complement' : 'Cast to signed converted positive out-of-range integer to its negative complement')
+          }
+          if (unsigned) n &= MAX_UNSIGNED
+          else if (n > MAX_SIGNED) n -= 1n << 64n
+          return intValue(n, unsigned)
         },
         // 21 wide, unsigned or not (8.4.11).
         type: intType(21, nullable, unsigned),

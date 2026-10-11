@@ -118,6 +118,7 @@ export {
   plainValue,
   withoutHex,
   numericPrefix,
+  integerPrefix,
   parseDateTime,
   parseDecimal,
   parseTime,

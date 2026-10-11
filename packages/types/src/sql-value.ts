@@ -232,6 +232,12 @@ export function numericPrefix(text: string): { readonly text: string; readonly c
   return { text: t, complete: /^[ \t\n\r]*$/.test(rest), fractional: /[.eE]/.test(t) }
 }
 
+/** Text's integer prefix, retaining whitespace/sign; numeric values have none. */
+export function integerPrefix(v: Exclude<Value, null>): string | undefined {
+  if (!isText(v) || (v.kind === 'string' ? v.ordinal !== undefined : v.hex === true)) return undefined
+  return /^[ \t\n\r]*[+-]?\d+/.exec(textOf(v))?.[0] ?? '0'
+}
+
 export function textOf(v: StringValue | BytesValue): string {
   // A binary string in a numeric context is read byte by byte, as ASCII is.
   return v.kind === 'string' ? v.v : String.fromCharCode(...v.v.subarray(0, 1024))
@@ -340,8 +346,8 @@ export function doubleToDecimal(n: number): DecimalValue {
 
 /**
  * A value as an integer, rounded as MySQL rounds on the way into an integer
- * context (half away from zero). `undefined` when it does not fit a 64-bit
- * integer of either sign.
+ * context (half away from zero). The bigint result can exceed 64 bits;
+ * the destination reader decides how to handle that range.
  */
 export function toInteger(v: Exclude<Value, null>): bigint {
   switch (v.kind) {
@@ -378,15 +384,10 @@ export function toInteger(v: Exclude<Value, null>): bigint {
  * `toInteger`.
  */
 export function valInt(v: Exclude<Value, null>): bigint {
-  if (v.kind !== 'string' && v.kind !== 'bytes') return toInteger(v)
-  if (v.kind === 'string' && v.ordinal !== undefined) return v.ordinal
-  if (v.kind === 'bytes' && v.hex === true) return hexNumber(v.v)
-  const m = /^[ \t\n\r]*([+-]?)(\d*)/.exec(textOf(v)) as RegExpExecArray
-  const digits = m[2] as string
-  if (digits === '') return 0n
-  const n = BigInt(digits)
-  if (m[1] === '-') return n > -MIN_SIGNED ? MIN_SIGNED : -n
-  return n > MAX_UNSIGNED ? MAX_UNSIGNED : n
+  const prefix = integerPrefix(v)
+  if (prefix === undefined) return toInteger(v)
+  const n = BigInt(prefix)
+  return n < MIN_SIGNED ? MIN_SIGNED : n > MAX_UNSIGNED ? MAX_UNSIGNED : n
 }
 
 export function roundDouble(n: number): bigint {
