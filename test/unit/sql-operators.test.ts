@@ -59,3 +59,39 @@ test('M5.3: limit stops pulling from its source — a LIMIT 1 over an endless sc
   }
   assert.deepEqual(show(limit(filter(endless(), column(0), env), 0, 2)), ['1', '2'])
 })
+
+test('bounded sorts preserve stable fallback order and consume and close their whole input', () => {
+  const input = Array.from({ length: 100 }, (_, i) => ({ row: [i % 9 === 0 ? null : n(i % 7), n(i)] }))
+  for (const desc of [false, true]) {
+    const expected = [...input].sort((a, b) => {
+      const x = a.row[0]
+      const y = b.row[0]
+      const comparison = x === y ? 0 : x === null ? -1 : y === null ? 1 : Number(x!.v) - Number(y!.v)
+      return desc ? -comparison : comparison
+    })
+    for (const keep of [0, 1, 2, 5, 15, 50, 100, 101]) {
+      let read = 0
+      let closed = 0
+      function* source() {
+        try { for (const row of input) { read++; yield row } }
+        finally { closed++ }
+      }
+      assert.deepEqual(sort(source(), [{ expr: column(0), desc }], env, keep), expected.slice(0, keep))
+      assert.equal(read, input.length)
+      assert.equal(closed, 1)
+    }
+  }
+})
+
+test('queue eligibility uses the supplied estimate, and cached collation keys keep byte order', () => {
+  const values = [3, 0, 2, 0, 0, 1, 2, 0, 0, 3, 1, 0, 1, 2, 0, 3]
+  const input = values.map((v, i) => ({ row: [n(v), n(i + 1)] }))
+  const keys = [{ expr: column(0), desc: false }]
+  assert.deepEqual(show(sort(input, keys, env, 2, { estimate: 16, capacity: 100 })), ['0,4', '0,2'])
+  assert.deepEqual(show(sort(input, keys, env, 2, { estimate: 2, capacity: 100 })), ['0,2', '0,4'])
+  assert.deepEqual(show(sort(input, keys, env, 6, { estimate: 16, capacity: 15 })), ['0,8', '0,2', '0,12', '0,4', '0,5', '0,9'])
+  const long = 'a'.repeat(10000)
+  const strings = rows([s(`${long}b`)], [s(long)], [s(`${long}A`)], [s(`${long}a`)])
+  assert.deepEqual(show(sort(strings, keys, env)), [long, `${long}A`, `${long}a`, `${long}b`])
+  assert.deepEqual(show(sort(strings, [{ expr: column(0), desc: true }], env, 2)), [`${long}b`, `${long}A`])
+})

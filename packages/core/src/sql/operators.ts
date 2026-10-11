@@ -8,6 +8,7 @@
 // without the rest noticing.
 import type { KeyRange, RowId, Table, Trx } from '@myjs/engine'
 import type { ColumnType } from '@myjs/types'
+import { compareBytes } from '@myjs/bytes'
 import { collation, encodeCollation } from '@myjs/charsets'
 import { compareJsonSortHashes, decodeField, jsonSortHash, sortValues, truth, type Value } from '@myjs/types'
 import { rowKey } from './keys.ts'
@@ -65,15 +66,15 @@ export interface SortKey {
 }
 
 /**
- * Rows ordered by `keys`, stably — rows that tie keep the order they arrived
- * in, which is what makes `ORDER BY` over a clustered scan agree with MySQL on
- * ties. NULL sorts first ascending and last descending. Materialises: spilling
- * a sort larger than memory is M5.5's.
+ * Rows ordered by `keys`. The verified bounded queue retains physical slots;
+ * other sorts preserve arrival order for ties. NULL sorts first ascending and
+ * last descending. Materialises: spilling a sort larger than memory is M5.5's.
  */
-export function sort<T extends { readonly row: Row }>(source: Iterable<T>, keys: readonly SortKey[], env: Env, keep?: number): T[] {
-  const decorated = [...source].map((item) => {
+export function sort<T extends { readonly row: Row }>(source: Iterable<T>, keys: readonly SortKey[], env: Env, keep?: number, buffer?: { readonly estimate: number; readonly capacity: number }): T[] {
+  const queued = keep !== undefined && keep < 16 && buffer !== undefined && (buffer.estimate < buffer.capacity ? keep < buffer.estimate / 3 : keep + 1 < buffer.capacity)
+  const decorated = [...source].map((item, order) => {
     const values = keys.map((k) => k.expr.eval(item.row, env))
-    return { item, values, sortKeys: values.map(sortKeyOf), hash: 0n }
+    return { item, values, sortKeys: values.map(sortKeyOf), hash: 0n, order }
   })
   warnNonScalar(decorated.map((d) => d.values), env)
   // A JSON key adds the row's JSON hash after the keys (`jsonSortHash`): what orders two that tie.
@@ -90,51 +91,61 @@ export function sort<T extends { readonly row: Row }>(source: Iterable<T>, keys:
     for (let i = 0; i < keys.length; i++) {
       const x = a.sortKeys[i]
       const y = b.sortKeys[i]
-      const c = x !== undefined && y !== undefined && x.id === y.id ? (x.key < y.key ? -1 : x.key > y.key ? 1 : 0) : sortValues(a.values[i] ?? null, b.values[i] ?? null)
+      const c = x !== undefined && y !== undefined && x.id === y.id ? compareBytes(x.key, y.key) : sortValues(a.values[i] ?? null, b.values[i] ?? null)
       if (c !== 0) return (keys[i] as SortKey).desc ? -c : c
     }
-    return json.length === 0 ? 0 : compareJsonSortHashes(a.hash, b.hash)
+    return (json.length === 0 ? 0 : compareJsonSortHashes(a.hash, b.hash)) || (queued ? 0 : a.order - b.order)
   }
-  // Only the first `keep` are wanted (a LIMIT): kept sorted as they arrive,
-  // each inserted after any it ties with, which is the stable sort's order.
   if (keep === 0) return []
-  if (keep !== undefined && keep < decorated.length / 2) {
-    const top: (typeof decorated)[number][] = []
-    for (const d of decorated) {
-      if (top.length === keep && compare(d, top[keep - 1] as (typeof decorated)[number]) >= 0) continue
-      let lo = 0
-      let hi = top.length
-      while (lo < hi) {
-        const mid = (lo + hi) >>> 1
-        if (compare(d, top[mid] as (typeof decorated)[number]) < 0) hi = mid
-        else lo = mid + 1
+  let ordered = decorated
+  // Below std::sort's 16-record insertion boundary, sorting these slots is
+  // stable. Larger queues and non-queue nth-element selection remain open.
+  if (keep !== undefined && (queued || keep < decorated.length / 2)) {
+    const slots = decorated.slice(0, keep + 1)
+    const heap: typeof decorated = []
+    for (const d of slots) {
+      heap.push(d)
+      let i = heap.length - 1
+      while (i > 0) {
+        const parent = (i - 1) >>> 1
+        if (compare(d, heap[parent]!) < 0) break
+        heap[i] = heap[parent]!
+        i = parent
       }
-      top.splice(lo, 0, d)
-      if (top.length > keep) top.pop()
+      heap[i] = d
     }
-    return top.map((d) => d.item)
+    for (let n = slots.length; n < decorated.length; n++) {
+      // Heap entries point to fixed slots; replacing the root keeps that
+      // slot's position in the final sort buffer.
+      const root = Object.assign(heap[0]!, decorated[n])
+      let i = 0
+      while (i * 2 + 1 < heap.length) {
+        let child = i * 2 + 1
+        if (child + 1 < heap.length && compare(heap[child]!, heap[child + 1]!) < 0) child++
+        if (compare(root, heap[child]!) >= 0) break
+        heap[i] = heap[child]!
+        i = child
+      }
+      heap[i] = root
+    }
+    ordered = slots
   }
-  // Array.prototype.sort is stable: rows that tie keep the order they came in.
-  decorated.sort(compare)
-  return decorated.map((d) => d.item)
+  return ordered.sort(compare).slice(0, keep).map((d) => d.item)
 }
 
 /**
  * A string's sort key, once a row rather than once a comparison: its
- * collation's `sortKey` as a string of one character a byte, which orders as
- * `memcmp` does. Only under a NO PAD collation, where that order is the
- * comparison's exactly; a PAD SPACE one compares `'a'` equal to `'a '`, which
+ * collation's `sortKey`, compared as bytes. Only under a NO PAD collation,
+ * where that order is the comparison's exactly; a PAD SPACE one compares
+ * `'a'` equal to `'a '`, which
  * a key without the column's width cannot say (D-35), and an ENUM sorts by
  * its member index. Two values sort by their keys only under one collation.
  */
-function sortKeyOf(v: Value): { readonly id: number; readonly key: string } | undefined {
+function sortKeyOf(v: Value): { readonly id: number; readonly key: Uint8Array } | undefined {
   if (v === null || v.kind !== 'string' || v.ordinal !== undefined) return undefined
   const c = collation(v.collationId)
   if (c.padAttribute !== 'NO PAD') return undefined
-  const bytes = c.sortKey(encodeCollation(v.v, v.collationId))
-  let key = ''
-  for (let i = 0; i < bytes.length; i += 8192) key += String.fromCharCode(...bytes.subarray(i, i + 8192))
-  return { id: v.collationId, key }
+  return { id: v.collationId, key: c.sortKey(encodeCollation(v.v, v.collationId)) }
 }
 
 /**
