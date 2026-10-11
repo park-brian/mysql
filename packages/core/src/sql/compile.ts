@@ -435,6 +435,7 @@ function convertUsing(e: ConvertNode, ctx: CompileContext): Compiled {
       return text === null ? null : stringValue(text, id, COERCIBILITY.IMPLICIT)
     },
     type: stringType(width, id, true),
+    decimalPrefix: true,
   }
 }
 
