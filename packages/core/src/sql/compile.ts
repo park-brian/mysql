@@ -846,7 +846,11 @@ function literal(e: LiteralNode, ctx: CompileContext): Compiled {
       const text = e.value as string
       if (e.unit === 'TIME') {
         const t = parseTime(text)
-        if (t === undefined) throw sqlError('ER_WRONG_VALUE', `Incorrect TIME value: '${text}'`)
+        const micros = t === undefined ? 0n : timeOrdinal(t.v)
+        // Typed literals cannot truncate or clamp; rounding can also cross the limit.
+        if (t === undefined || t.truncated || t.clamped || micros < -3_020_399_000_000n || micros > 3_020_399_000_000n) {
+          throw sqlError('ER_WRONG_VALUE', `Incorrect TIME value: '${text}'`)
+        }
         return lit({ kind: 'time', v: t.v, fsp: t.fsp }, datetimeType(FIELD_TYPE.TIME, t.fsp, false))
       }
       // Under the session's zero-date modes: DATE '0000-00-00' is 1525 by default (8.4.11).
