@@ -88,10 +88,47 @@ test('queue eligibility uses the supplied estimate, and cached collation keys ke
   const input = values.map((v, i) => ({ row: [n(v), n(i + 1)] }))
   const keys = [{ expr: column(0), desc: false }]
   assert.deepEqual(show(sort(input, keys, env, 2, { estimate: 16, capacity: 100 })), ['0,4', '0,2'])
-  assert.deepEqual(show(sort(input, keys, env, 2, { estimate: 2, capacity: 100 })), ['0,2', '0,4'])
+  assert.deepEqual(show(sort(input, keys, env, 2)), ['0,2', '0,4'])
   assert.deepEqual(show(sort(input, keys, env, 6, { estimate: 16, capacity: 15 })), ['0,8', '0,2', '0,12', '0,4', '0,5', '0,9'])
   const long = 'a'.repeat(10000)
   const strings = rows([s(`${long}b`)], [s(long)], [s(`${long}A`)], [s(`${long}a`)])
   assert.deepEqual(show(sort(strings, keys, env)), [long, `${long}A`, `${long}a`, `${long}b`])
   assert.deepEqual(show(sort(strings, [{ expr: column(0), desc: true }], env, 2)), [`${long}b`, `${long}A`])
+})
+
+test('preselection uses the actual half-input boundary and leaves unknown or oversized buffers stable', () => {
+  const keys = [{ expr: column(0), desc: false }]
+  const input = Array.from({ length: 20 }, (_, i) => ({ row: [n(1), n(i + 1)] }))
+  const expected = ['1,13', '1,10', '1,11', '1,12', '1,15', '1,16']
+  for (const estimate of [2, 16]) {
+    let reads = 0
+    let closed = 0
+    function* source() {
+      try { for (const item of input.slice(0, 16)) { reads++; yield item } }
+      finally { closed++ }
+    }
+    assert.deepEqual(show(sort(source(), keys, env, 6, { estimate, capacity: 100 })), expected)
+    assert.equal(reads, 16)
+    assert.equal(closed, 1)
+  }
+  const stable = input.slice(0, 6)
+  assert.deepEqual(sort(input.slice(0, 8), keys, env, 6, { estimate: 16, capacity: 100 }), stable)
+  assert.deepEqual(sort(input, keys, env, 6, { estimate: 2, capacity: 100 }), stable)
+  assert.deepEqual(sort(input.slice(0, 16), keys, env, 6, { estimate: 2, capacity: 2 }), stable)
+  assert.deepEqual(sort(input.slice(0, 16), keys, env, 6), stable)
+})
+
+test('large bounded fallback preserves stable winners on monotone and organ-pipe inputs', () => {
+  for (const pattern of ['ascending', 'descending', 'organ']) {
+    const input = Array.from({ length: 4096 }, (_, i) => ({ row: [i % 13 === 0 ? null : n(pattern === 'ascending' ? i : pattern === 'descending' ? 4096 - i : Math.min(i, 4096 - i)), n(i)] }))
+    for (const desc of [false, true]) {
+      const expected = [...input].sort((a, b) => {
+        const x = a.row[0]
+        const y = b.row[0]
+        const order = x === y ? 0 : x === null ? -1 : y === null ? 1 : Number(x!.v) - Number(y!.v)
+        return desc ? -order : order
+      })
+      for (const keep of [1, 7, 500, 1000]) assert.deepEqual(sort(input, [{ expr: column(0), desc }], env, keep), expected.slice(0, keep), `${pattern}: ${desc}: ${keep}`)
+    }
+  }
 })

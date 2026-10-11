@@ -66,27 +66,28 @@ export interface SortKey {
 }
 
 /**
- * Rows ordered by `keys`. The verified bounded queue retains physical slots;
- * other sorts preserve arrival order for ties. NULL sorts first ascending and
- * last descending. Materialises: spilling a sort larger than memory is M5.5's.
+ * Rows ordered by `keys`. Verified integer buffers retain native queue slots
+ * and small-buffer preselection ties; other sorts preserve arrival order.
+ * NULL sorts first ascending and last descending. Materialises: spilling a
+ * sort larger than memory is M5.5's.
  */
 export function sort<T extends { readonly row: Row }>(source: Iterable<T>, keys: readonly SortKey[], env: Env, keep?: number, buffer?: { readonly estimate: number; readonly capacity: number }): T[] {
   const queued = keep !== undefined && keep < 16 && buffer !== undefined && (buffer.estimate < buffer.capacity ? keep < buffer.estimate / 3 : keep + 1 < buffer.capacity)
+  // JSON keys append their combined hash after the ordinary sort keys.
+  const json = keys.flatMap((k, i) => (k.expr.type.kind === 'json' ? [i] : []))
   const decorated = [...source].map((item, order) => {
     const values = keys.map((k) => k.expr.eval(item.row, env))
-    return { item, values, sortKeys: values.map(sortKeyOf), hash: 0n, order }
-  })
-  warnNonScalar(decorated.map((d) => d.values), env)
-  // A JSON key adds the row's JSON hash after the keys (`jsonSortHash`): what orders two that tie.
-  const json = keys.flatMap((k, i) => (k.expr.type.kind === 'json' ? [i] : []))
-  if (json.length > 0) {
-    for (const d of decorated) {
-      for (const i of json) {
-        const v = d.values[i]
-        if (v !== null && v !== undefined && v.kind === 'json') d.hash = jsonSortHash(v.v, d.hash)
-      }
+    let hash = 0n
+    for (const i of json) {
+      const v = values[i]
+      if (v !== null && v !== undefined && v.kind === 'json') hash = jsonSortHash(v.v, hash)
     }
-  }
+    return { item, values, sortKeys: values.map(sortKeyOf), hash, order }
+  })
+  // The small fixed-record buffer fits entirely in memory. The native
+  // half-input threshold uses rows actually read, not the queue's estimate.
+  const selected = !queued && buffer !== undefined && decorated.length <= 16 && decorated.length <= buffer.capacity && keep !== undefined && keep < decorated.length / 2
+  warnNonScalar(decorated.map((d) => d.values), env)
   const compare = (a: (typeof decorated)[number], b: (typeof decorated)[number]): number => {
     for (let i = 0; i < keys.length; i++) {
       const x = a.sortKeys[i]
@@ -94,39 +95,99 @@ export function sort<T extends { readonly row: Row }>(source: Iterable<T>, keys:
       const c = x !== undefined && y !== undefined && x.id === y.id ? compareBytes(x.key, y.key) : sortValues(a.values[i] ?? null, b.values[i] ?? null)
       if (c !== 0) return (keys[i] as SortKey).desc ? -c : c
     }
-    return (json.length === 0 ? 0 : compareJsonSortHashes(a.hash, b.hash)) || (queued ? 0 : a.order - b.order)
+    return (json.length === 0 ? 0 : compareJsonSortHashes(a.hash, b.hash)) || (queued || selected ? 0 : a.order - b.order)
   }
   if (keep === 0) return []
+  type Entry = (typeof decorated)[number]
+  // Queue insertion moves equal parents; queue replacement stops at equals.
+  // Selection repairs descend to a leaf with right-child ties, then rise.
+  const repair = (heap: Entry[], i: number, value: Entry, mode: 'insert' | 'replace' | 'select') => {
+    const top = mode === 'insert' ? 0 : i
+    if (mode !== 'insert') {
+      while (i * 2 + 1 < heap.length) {
+        let child = i * 2 + 1
+        if (child + 1 < heap.length) {
+          const c = compare(heap[child]!, heap[child + 1]!)
+          if (c < 0 || (mode === 'select' && c === 0)) child++
+        }
+        if (mode === 'replace' && compare(value, heap[child]!) >= 0) break
+        heap[i] = heap[child]!
+        i = child
+      }
+    }
+    if (mode !== 'replace') {
+      while (i > top) {
+        const parent = (i - 1) >>> 1
+        const c = compare(value, heap[parent]!)
+        if (c < 0 || (mode === 'select' && c === 0)) break
+        heap[i] = heap[parent]!
+        i = parent
+      }
+    }
+    heap[i] = value
+  }
   let ordered = decorated
-  // Below std::sort's 16-record insertion boundary, sorting these slots is
-  // stable. Larger queues and non-queue nth-element selection remain open.
-  if (keep !== undefined && (queued || keep < decorated.length / 2)) {
+  if (!queued && keep !== undefined && keep < decorated.length / 2) {
+    // Partition around a median pivot; bound adversarial work by switching
+    // to heap selection when the partition depth is exhausted.
+    let first = 0
+    let last = decorated.length
+    let depth = 2 * Math.floor(Math.log2(last))
+    const less = (a: number, b: number) => compare(decorated[a]!, decorated[b]!) < 0
+    const swap = (a: number, b: number) => {
+      const value = decorated[a]!
+      decorated[a] = decorated[b]!
+      decorated[b] = value
+    }
+    while (last - first > 3 && depth-- > 0) {
+      const a = first + 1
+      const b = first + ((last - first) >>> 1)
+      const c = last - 1
+      let pivot = b
+      if (less(a, b)) {
+        if (!less(b, c)) pivot = less(a, c) ? c : a
+      } else if (less(a, c)) pivot = a
+      else if (less(b, c)) pivot = c
+      swap(first, pivot)
+      let left = first + 1
+      let right = last
+      for (;;) {
+        while (less(left, first)) left++
+        while (less(first, --right)) {}
+        if (left >= right) break
+        swap(left++, right)
+      }
+      if (left <= keep - 1) first = left
+      else last = left
+    }
+    if (last - first > 3) {
+      const heap = decorated.slice(first, keep)
+      // Bottom-up construction and replacement descend to a leaf, preferring
+      // the right equal child, then restore the value upward. This differs
+      // from the queue's equal-child policy and physical-slot ownership.
+      for (let i = (heap.length >>> 1) - 1; i >= 0; i--) repair(heap, i, heap[i]!, 'select')
+      for (let i = keep; i < last; i++) if (compare(decorated[i]!, heap[0]!) < 0) repair(heap, 0, decorated[i]!, 'select')
+      const root = heap[0]!
+      heap[0] = heap[heap.length - 1]!
+      heap[heap.length - 1] = root
+      ordered = [...decorated.slice(0, first), ...heap]
+    } else {
+      // Earlier partitions precede this final window. One stable sort of that
+      // prefix both orders the window and chooses its remaining winners.
+      ordered = decorated.slice(0, last)
+    }
+  } else if (queued) {
     const slots = decorated.slice(0, keep + 1)
     const heap: typeof decorated = []
     for (const d of slots) {
       heap.push(d)
-      let i = heap.length - 1
-      while (i > 0) {
-        const parent = (i - 1) >>> 1
-        if (compare(d, heap[parent]!) < 0) break
-        heap[i] = heap[parent]!
-        i = parent
-      }
-      heap[i] = d
+      repair(heap, heap.length - 1, d, 'insert')
     }
     for (let n = slots.length; n < decorated.length; n++) {
       // Heap entries point to fixed slots; replacing the root keeps that
       // slot's position in the final sort buffer.
       const root = Object.assign(heap[0]!, decorated[n])
-      let i = 0
-      while (i * 2 + 1 < heap.length) {
-        let child = i * 2 + 1
-        if (child + 1 < heap.length && compare(heap[child]!, heap[child + 1]!) < 0) child++
-        if (compare(root, heap[child]!) >= 0) break
-        heap[i] = heap[child]!
-        i = child
-      }
-      heap[i] = root
+      repair(heap, 0, root, 'replace')
     }
     ordered = slots
   }

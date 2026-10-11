@@ -33,6 +33,7 @@
 //     NTILE or NTH_VALUE of a count below 1 (1210), a frame that ends before it
 //     starts (3586), RANGE n PRECEDING over anything but one numeric key (3587).
 import { FIELD_TYPE } from '@myjs/bytes'
+import { someNode } from './ast.ts'
 import { NODE, type CallNode, type Expression, type FrameBound, type WindowSpec } from '@myjs/parser'
 import { messages, sqlError } from '@myjs/protocol'
 import { add, addInterval, compareValues, doubleValue, intValue, intervalOf, sortValues, timeOrdinal, toInteger, type Interval, type Value } from '@myjs/types'
@@ -383,9 +384,10 @@ function shifted(key: Exclude<Value, null>, by: Interval, back: boolean): Value 
 
 /** Whether `e` calls a window function outside its own subqueries. */
 export function containsWindow(e: unknown): boolean {
-  if (e === null || typeof e !== 'object') return false
-  const n = e as { kind?: string; over?: unknown }
-  if (n.kind === 'subquery') return false
-  if (n.kind === NODE.CALL && n.over !== undefined) return true
-  return Object.values(e).some((v) => (Array.isArray(v) ? v.some(containsWindow) : typeof v === 'object' && containsWindow(v)))
+  return someNode(e, (value) => {
+    const n = value as { kind?: string; over?: unknown }
+    if (n.kind === NODE.SUBQUERY) return false
+    if (n.kind === NODE.CALL && n.over !== undefined) return true
+    return undefined
+  })
 }

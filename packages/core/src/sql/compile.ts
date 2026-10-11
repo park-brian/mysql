@@ -12,6 +12,7 @@
 // unknown function is ER_SP_DOES_NOT_EXIST, as MySQL says it, and a builtin we
 // have not written is ER_NOT_SUPPORTED_YET naming it (M5.10 owns the rest).
 import { CHARSET_BINARY, COLUMN_FLAG, FIELD_TYPE, expectTyped } from '@myjs/bytes'
+import { someNode } from './ast.ts'
 import { collationInfoByName, decodeCollation, defaultCollationOf, encodeCollation, requireCollationInfo } from '@myjs/charsets'
 import { LITERAL, NODE, TOKEN, deparse, lex, parseExpression, type CallNode, type CaseNode, type CastNode, type ConvertNode, type Expression, type LiteralNode, type MatchNode, type QueryExpression, type SubqueryNode, quoteName } from '@myjs/parser'
 import type { ColumnDef, Table, Trx } from '@myjs/engine'
@@ -1419,12 +1420,12 @@ function comparisonTime(c: Compiled, preserveDate = true): Compiled {
 
 /** An expression whose value the statement fixes: no column, subquery, variable or volatile function in it. */
 export function constantNode(e: unknown): boolean {
-  if (e === null || typeof e !== 'object') return true
-  if (Array.isArray(e)) return e.every(constantNode)
-  const n = e as { kind?: unknown; name?: unknown }
-  if (n.kind === NODE.COLUMN || n.kind === NODE.SUBQUERY || n.kind === NODE.VARIABLE) return false
-  if (n.kind === NODE.CALL && VARIES_PER_EVALUATION.has(String(n.name).toUpperCase())) return false
-  return Object.values(e).every((v) => typeof v !== 'object' || constantNode(v))
+  return !someNode(e, (value) => {
+    const n = value as { kind?: unknown; name?: unknown }
+    if (n.kind === NODE.COLUMN || n.kind === NODE.SUBQUERY || n.kind === NODE.VARIABLE) return true
+    if (n.kind === NODE.CALL && VARIES_PER_EVALUATION.has(String(n.name).toUpperCase())) return true
+    return undefined
+  })
 }
 
 // --- TIME against DATETIME --------------------------------------------------------
@@ -2725,12 +2726,12 @@ function defaultFunction(e: CallNode, ctx: CompileContext): Compiled {
 
 /** Whether an expression reads a column of the row, outside any subquery of its own. */
 export function readsColumn(e: unknown): boolean {
-  if (e === null || typeof e !== 'object') return false
-  if (Array.isArray(e)) return e.some(readsColumn)
-  const n = e as { kind?: unknown }
-  if (n.kind === NODE.COLUMN) return true
-  if (n.kind === NODE.SUBQUERY) return false
-  return Object.values(e).some((v) => typeof v === 'object' && readsColumn(v))
+  return someNode(e, (value) => {
+    const n = value as { kind?: unknown }
+    if (n.kind === NODE.COLUMN) return true
+    if (n.kind === NODE.SUBQUERY) return false
+    return undefined
+  })
 }
 
 /**

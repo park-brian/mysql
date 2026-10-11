@@ -13,6 +13,7 @@
 // `innodb_lock_wait_timeout` the answer is ER_LOCK_WAIT_TIMEOUT (1205), which
 // rolls back the statement and not the transaction, as InnoDB's does.
 import { FIELD_TYPE, MyjsError, expectTyped } from '@myjs/bytes'
+import { someNode } from './ast.ts'
 import { collationInfoByName, defaultCollationOf, requireCollationInfo } from '@myjs/charsets'
 import { collationsOf, type Catalog, type TableDef, type ViewDef } from '@myjs/engine'
 import {
@@ -1315,11 +1316,11 @@ function likeText(name: string, pattern: string): boolean {
 
 /** Whether any node under `root` — expression or query — satisfies `test`. */
 function findNode(root: unknown, test: (n: { readonly kind: string }) => boolean): boolean {
-  if (root === null || typeof root !== 'object') return false
-  if (Array.isArray(root)) return root.some((x) => findNode(x, test))
-  const n = root as { kind?: unknown }
-  if (typeof n.kind === 'string' && test(n as { kind: string })) return true
-  return Object.values(root).some((v) => typeof v === 'object' && findNode(v, test))
+  return someNode(root, (value) => {
+    const n = value as { kind?: unknown }
+    if (typeof n.kind === 'string' && test(n as { kind: string })) return true
+    return undefined
+  })
 }
 
 /**

@@ -33,6 +33,7 @@ import { CHARSET_BINARY, FIELD_TYPE, concatBytes } from '@myjs/bytes'
 import { encodeCollation, requireCollationInfo } from '@myjs/charsets'
 import type { TableDef } from '@myjs/engine'
 import { NODE, deparse, type CallNode, type Expression } from '@myjs/parser'
+import { someNode } from './ast.ts'
 import { messages, sqlError } from '@myjs/protocol'
 import {
   avgAccumulator,
@@ -65,16 +66,12 @@ export const isAggregate = (e: Expression): boolean => e.kind === NODE.CALL && e
 
 /** Whether `e` holds an aggregate of its own query — not one inside a subquery, which aggregates there. */
 export function containsAggregate(e: unknown): boolean {
-  if (e === null || typeof e !== 'object') return false
-  const node = e as { kind?: string }
-  if (node.kind === NODE.SUBQUERY) return false
-  if (node.kind === NODE.CALL && isAggregate(node as Expression)) return true
-  for (const v of Object.values(e)) {
-    if (Array.isArray(v)) {
-      if (v.some((x) => containsAggregate(x))) return true
-    } else if (typeof v === 'object' && containsAggregate(v)) return true
-  }
-  return false
+  return someNode(e, (value) => {
+    const node = value as { kind?: string }
+    if (node.kind === NODE.SUBQUERY) return false
+    if (node.kind === NODE.CALL && isAggregate(node as Expression)) return true
+    return undefined
+  })
 }
 
 // --- types ------------------------------------------------------------------------

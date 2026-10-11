@@ -17,6 +17,7 @@
 // (doc 30: a scan is not interleaved with writes to its own table), so a row
 // an UPDATE moves within the clustered order is never met twice.
 import { CHARSET_BINARY, FIELD_TYPE, MyjsError } from '@myjs/bytes'
+import { someNode } from './ast.ts'
 import { CLIENT, hasCap, messages, sqlError, symbolOf, type OkResult } from '@myjs/protocol'
 import type { ColumnDef, FieldBytes, IndexDef, RowId, Table, TableDef, Trx } from '@myjs/engine'
 import { EngineError } from '@myjs/engine'
@@ -39,10 +40,7 @@ import { modeOf } from './mode.ts'
 /** A column's DEFAULT, compiled: its expression, or NULL, or "none" for a NOT NULL column without one. */
 /** Whether an expression names a column anywhere in it. */
 function namesColumn(e: unknown): boolean {
-  if (e === null || typeof e !== 'object') return false
-  if (Array.isArray(e)) return e.some(namesColumn)
-  if ((e as { kind?: unknown }).kind === NODE.COLUMN) return true
-  return Object.values(e).some((v) => typeof v === 'object' && namesColumn(v))
+  return someNode(e, (value) => (value as { kind?: unknown }).kind === NODE.COLUMN ? true : undefined)
 }
 
 /**

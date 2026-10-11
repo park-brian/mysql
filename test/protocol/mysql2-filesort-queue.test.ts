@@ -74,7 +74,7 @@ test('integer priority-queue filesort matches native LIMIT ties, NULLs, directio
   }
 })
 
-test('a bounded queue reads and closes the source once, and early stream return closes its connection', async () => {
+test('bounded filesort reads and closes the source once, and early stream return closes its connection', async () => {
   const db = await MySQL.open(':memory:')
   try {
     await db.query('CREATE DATABASE d')
@@ -99,14 +99,16 @@ test('a bounded queue reads and closes the source once, and early stream return 
     }
     try {
       for (const method of ['query', 'execute'] as const) {
-        read = closed = 0
-        assert.deepEqual((await db[method]('SELECT id,g FROM t ORDER BY g LIMIT 2'))[0], [{ id: 4, g: 0 }, { id: 2, g: 0 }])
-        assert.equal(read, 16)
-        assert.equal(closed, 1)
+        for (const [keep, ids] of [[2, [4, 2]], [6, [2, 15, 12, 9, 8, 5]]] as const) {
+          read = closed = 0
+          assert.deepEqual((await db[method](`SELECT id,g FROM t ORDER BY g LIMIT ${keep}`))[0], ids.map((id) => ({ id, g: 0 })))
+          assert.equal(read, 16)
+          assert.equal(closed, 1)
+        }
       }
       read = closed = 0
-      for await (const row of db.stream('SELECT id,g FROM d.t ORDER BY g LIMIT 2')) {
-        assert.deepEqual(row, { id: 4, g: 0 })
+      for await (const row of db.stream('SELECT id,g FROM d.t ORDER BY g LIMIT 6')) {
+        assert.deepEqual(row, { id: 2, g: 0 })
         break
       }
       assert.equal(read, 16)

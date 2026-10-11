@@ -23,13 +23,19 @@
 //     to constants is read while planning; with no such row the result is
 //     empty, and with one its columns are constants.
 import { expectTyped } from '@myjs/bytes'
-import type { ColumnDef, Table, TableDef, Trx } from '@myjs/engine'
+import type { ColumnDef, IndexDef, Table, TableDef, Trx } from '@myjs/engine'
 import { NODE, type Expression } from '@myjs/parser'
 import { compareValues, integerRange, truth, type Value } from '@myjs/types'
+
 import { compile, EMPTY_SCOPE, type CompileContext, type Env } from './compile.ts'
 import type { FromPlan } from './from.ts'
 import { accessRows, pointAccess, splitAnd } from './plan.ts'
 import { intersect, rangeOf, type RangeSet } from './ranges.ts'
+
+/** A schema key that identifies a row even when comparisons can see NULL. */
+export function uniqueKey(def: TableDef, index: IndexDef): boolean {
+  return index.kind === 'primary' || (index.kind === 'unique' && index.parts.every((p) => def.columns.find((c) => c.name === p.column)?.nullable === false))
+}
 
 export interface ConstTable {
   readonly alias: string
@@ -325,7 +331,7 @@ export function optimizerFacts(from: FromPlan | undefined, where: Expression | u
     from.tables.forEach((t, n) => {
       if (t.def === undefined || t.table === undefined || nullable.has(t.alias) || settled.has(t.alias)) return
       const def = t.def
-      const keys = def.indexes.filter((i) => i.kind === 'primary' || (i.kind === 'unique' && i.parts.every((p) => def.columns.find((c) => c.name === p.column)?.nullable === false)))
+      const keys = def.indexes.filter((i) => uniqueKey(def, i))
       for (const index of keys) {
         if (index.parts.some((p) => p.prefix !== undefined)) continue
         const offsets = index.parts.map((p) => def.columns.findIndex((c) => c.name === p.column))
@@ -371,7 +377,7 @@ export function optimizerFacts(from: FromPlan | undefined, where: Expression | u
         if (i !== undefined && aliasOf(i) === alias && isConstant(other)) held.set((scope.columnAt(i)?.column.name ?? '').toLowerCase(), c)
       }
     }
-    const key = def.indexes.find((x) => (x.kind === 'primary' || (x.kind === 'unique' && x.parts.every((p) => def.columns.find((c) => c.name === p.column)?.nullable === false))) && x.parts.every((p) => p.prefix === undefined && held.has(p.column.toLowerCase())))
+    const key = def.indexes.find((x) => uniqueKey(def, x) && x.parts.every((p) => p.prefix === undefined && held.has(p.column.toLowerCase())))
     if (key !== undefined) outerConstants.set(alias, key.parts.map((p) => held.get(p.column.toLowerCase()) as Expression))
   })
   const readAhead = new Set<string>()
