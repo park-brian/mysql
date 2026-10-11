@@ -506,13 +506,18 @@ function planSelect(run: Run, q: QueryExpression, node: SelectNode): SelectPlan 
     buffer = { estimate: statisticsOf(source.def, source.table, run.catalog.store).rows, capacity: Math.floor(memory / (width + 8)) }
   }
 
+  // An ordinary ordered scan discards OFFSET rows before evaluating SELECT.
+  // DISTINCT, HAVING and windows retain their projection/materialization boundaries.
+  const limitFirst = ordered !== undefined && node.distinct !== true && having === undefined && !loopSemijoin
+  const take = limitCount === undefined && offset === 0 ? [] : [limitStage(offset, limitCount)]
   const stages: Stage[] = [
     ...(where === undefined ? [] : [filterStage(where)]),
     // HAVING without grouping filters the rows WHERE kept, before any window sees them.
     ...(having === undefined ? [] : [{ ...filterStage(having), describe: (n: PlanNode) => withSubqueries(run, planNode('Filter', [n]), 'having clause') }]),
     ...(windows === undefined || windows.windows.length === 0 ? [] : [windowStage(windows, windowBase)]),
+    ...(limitFirst ? take : []),
     deliverStage(items.map((i) => i.compiled), ordered === undefined && !sortedFirst ? keys : [], node.distinct === true, { deduplicated, streamed, copied, keep: limitCount === undefined ? undefined : keep, buffer, ...(constantDistinct === undefined ? {} : { constant: constantDistinct }) }),
-    ...(limitCount === undefined && offset === 0 ? [] : [limitStage(offset, limitCount)]),
+    ...(limitFirst ? [] : take),
   ]
   return {
     ...resultColumns(items, dataColumns),
@@ -654,7 +659,7 @@ function resultColumns(items: readonly { name: string; compiled: Compiled }[], r
 /** LIMIT and OFFSET. */
 function limitStage(offset: number, count: number | undefined): Stage {
   return {
-    run: (rows) => rowed(limit(values(rows), offset, count)),
+    run: (rows) => limit(rows, offset, count),
     describe: (n) => planNode(offset > 0 ? 'Limit/Offset' : 'Limit', [n]),
   }
 }
@@ -1808,8 +1813,8 @@ function planGrouped(
   node: SelectNode,
   from: FromPlan | undefined,
   lookup: Scope,
-  windowed = false,
-  constants: ReadonlySet<string> = new Set(),
+  windowed: boolean,
+  constants: ReadonlySet<string>,
 ): SelectPlan {
   const order = q.orderBy ?? []
   const scope = from?.scope
