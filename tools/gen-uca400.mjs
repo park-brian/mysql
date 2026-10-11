@@ -22,10 +22,11 @@
 //
 // The output format is `gen-uca.mjs`'s, so `uca.ts` parses both with one
 // function.
+import { fileURLToPath } from 'node:url'
 import { writeFileSync } from 'node:fs'
 import { REPO, REF, banner, check, combinedSha256, fetchAllPinned } from './lib/gen-common.mjs'
 
-const OUT = new URL('../packages/charsets/src/collations/uca400.ts', import.meta.url).pathname
+const OUT = fileURLToPath(new URL('../packages/charsets/src/collations/uca400.ts', import.meta.url))
 const SOURCES = ['strings/uca_data.h']
 
 const sources = await fetchAllPinned(SOURCES)

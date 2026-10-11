@@ -88,22 +88,46 @@ test('M4.26: a process that exits without end() loses no committed row', async (
   `
   const child = spawnSync(process.execPath, ['--input-type=module', '-e', script], { cwd: process.cwd(), encoding: 'utf8' })
   assert.equal(child.status, 0, child.stderr)
+  await assert.rejects(MySQL.open(dir), (e: unknown) => (e as { code?: string }).code === 'VFS_LOCKED')
+  // Recovery is explicit after every owner has stopped; the WAL is untouched.
+  rmSync(join(dir, `.myjs-lock-${encodeURIComponent('/database')}`))
   const db = await MySQL.open(dir)
   assert.deepEqual(await rows(db, 'SELECT id FROM app.t'), [{ id: 1 }, { id: 2 }, { id: 3 }], 'the committed rows, and not the open transaction')
   await db.end()
 })
 
-test('M4.26 review: a lock file whose owner is dead is taken over; one whose owner lives is not', async () => {
+test('stale and live lock files are both refused and left unchanged', async () => {
   const { writeFileSync, existsSync } = await import('node:fs')
   const dir = fresh()
   const file = join(dir, `.myjs-lock-${encodeURIComponent('/database')}`)
   // A pid far above any kernel's pid_max: never running.
   writeFileSync(file, '2147483646')
-  const db = await MySQL.open(dir)
-  await db.end()
-  assert.equal(existsSync(file), false, 'released on end()')
+  await assert.rejects(MySQL.open(dir), (e: unknown) => (e as { code?: string }).code === 'VFS_LOCKED')
+  assert.equal(existsSync(file), true)
+  assert.equal(readFileSync(file, 'utf8'), '2147483646')
   // The parent of this test process is alive and is not this process.
   writeFileSync(file, String(process.ppid))
   await assert.rejects(MySQL.open(dir), (e: unknown) => (e as { code?: string }).code === 'VFS_LOCKED')
   assert.equal(readFileSync(file, 'utf8'), String(process.ppid), "a live owner's lock is left exactly as it was")
+})
+
+test('a symlink alias cannot acquire a second database owner', async () => {
+  const { symlinkSync } = await import('node:fs')
+  const dir = fresh()
+  const alias = join(fresh(), 'alias')
+  symlinkSync(dir, alias, 'junction')
+  const db = await MySQL.open(dir)
+  try {
+    await assert.rejects(MySQL.open(alias), (e: unknown) => (e as { code?: string }).code === 'VFS_LOCKED')
+  } finally { await db.end() }
+})
+
+test('VFS rejects Windows escapes and symlink components on every platform', async () => {
+  const { symlinkSync } = await import('node:fs')
+  const dir = fresh()
+  const vfs = new NodeVfs(dir)
+  symlinkSync(fresh(), join(dir, 'link'), 'junction')
+  for (const path of ['..\\outside', 'C:/outside', '//host/share:stream', 'link/data', 'nul\0']) {
+    await assert.rejects(vfs.open(path, { create: true }), (e: unknown) => (e as { code?: string }).code === 'VFS_BAD_PATH')
+  }
 })

@@ -17,6 +17,7 @@
 // quotes, backslashes, backticks, comment openers, and gbk lead bytes. A
 // generator that never emits a quote never tests the string scanner, and the
 // string scanner is where the interesting bugs are.
+import { fileURLToPath } from 'node:url'
 import { lex, lexBytes, parseExpression, parseStatement, parseSqlMode, ParseError } from '@myjs/parser'
 import { roundTrip } from './lib/round-trip.mjs'
 import { mkdirSync, writeFileSync } from 'node:fs'
@@ -26,7 +27,7 @@ import { xorshift } from './lib/cli.mjs'
 const RUNS = Number(process.env.FUZZ_RUNS ?? 1_000_000)
 const SEED = Number(process.env.FUZZ_SEED ?? (Date.now() & 0x7fffffff))
 const PER_INPUT_BUDGET_MS = Number(process.env.FUZZ_INPUT_BUDGET_MS ?? 250)
-const CORPUS = new URL('../test/format/fuzz-corpus/', import.meta.url).pathname
+const CORPUS = fileURLToPath(new URL('../test/format/fuzz-corpus/', import.meta.url))
 
 /** xorshift32, seeded (`tools/lib/cli.mjs`), so a seed reproduces the corpus. */
 const { rnd } = xorshift(SEED)

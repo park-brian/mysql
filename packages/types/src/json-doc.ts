@@ -511,7 +511,7 @@ export function compareJson(a: JsonDoc, b: JsonDoc): number {
 /** `FIELD_TYPE`s custom data carries, from `include/field_types.h`. */
 const F = { DATE: 10, TIME: 11, DATETIME: 12, TIMESTAMP: 7, NEWDECIMAL: 246 } as const
 
-function packDateTime(v: MysqlDateTime): bigint {
+export function packDateTime(v: MysqlDateTime): bigint {
   const ymd = BigInt(((v.year * 13 + v.month) << 5) | v.day)
   const hms = BigInt((v.hour << 12) | (v.minute << 6) | v.second)
   return (((ymd << 17n) | hms) << 24n) + BigInt(v.microsecond)
@@ -526,7 +526,7 @@ function unpackDateTime(n: bigint): MysqlDateTime {
   return { year: Math.floor(ym / 13), month: ym % 13, day: ymd & 31, hour: hms >> 12, minute: (hms >> 6) & 63, second: hms & 63, microsecond }
 }
 
-function packTime(v: MysqlTime): bigint {
+export function packTime(v: MysqlTime): bigint {
   const hms = BigInt(((v.days * 24 + v.hour) << 12) | (v.minute << 6) | v.second)
   const n = (hms << 24n) + BigInt(v.microsecond)
   return v.negative ? -n : n

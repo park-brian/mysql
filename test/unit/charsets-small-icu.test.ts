@@ -20,7 +20,7 @@ import { mkdtempSync, writeFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
-const CHARSETS = new URL('../../packages/charsets/src/index.ts', import.meta.url).pathname
+const CHARSETS = new URL('../../packages/charsets/src/index.ts', import.meta.url).href
 
 /**
  * Run a script with `TextDecoder` replaced by a small-ICU-shaped one.

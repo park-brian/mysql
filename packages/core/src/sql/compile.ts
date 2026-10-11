@@ -39,6 +39,7 @@ import {
   doubleValue,
   intDivide,
   intValue,
+  jsonValue,
   modulo,
   negate,
   numericPrefix,
@@ -47,6 +48,9 @@ import {
   parseDateTime,
   parseDecimal,
   parseTime,
+  pow10,
+  packTime,
+  roundTime,
   rescale,
   stringValue,
   toDateTime,
@@ -67,6 +71,8 @@ import {
   jsonTruth,
   numberToDateTime,
   toInteger,
+  toJsonDoc,
+  temporalDeprecation,
   mergeTypes,
   type MergeType,
 } from '@myjs/types'
@@ -139,6 +145,22 @@ export interface Env {
  */
 export function asNumber(c: Compiled, kind: 'DOUBLE' | 'INTEGER' | 'DECIMAL', once: boolean | Expression = false): Compiled {
   if (c.type.kind === 'json') return jsonAsNumber(c, kind)
+  // my_decimal's nine base-10^9 words hold 81 integer digits. Expanding a
+  // DOUBLE beyond that buffer warns with its mantissa (double2decimal).
+  if (c.type.kind === 'double' && kind === 'DECIMAL') return { ...c, eval: (r, env) => {
+    const v = c.eval(r, env)
+    if (v?.kind === 'double') {
+      if (Math.abs(v.v) >= 1e81) {
+        raise(env, 1292, `Truncated incorrect DECIMAL value: '${toText(v).split(/[eE]/)[0] as string}'`)
+        return decimalValue((v.v < 0 ? -1n : 1n) * (pow10(81) - 1n), 0)
+      }
+      const d = toDecimal(v)
+      const whole = Math.max(0, (d.v < 0n ? -d.v : d.v).toString().length - d.scale)
+      const fraction = (9 - Math.ceil(whole / 9)) * 9
+      if (d.scale > fraction) return decimalValue(d.v / pow10(d.scale - fraction), fraction)
+    }
+    return v
+  } }
   if (c.type.kind !== 'string' && c.type.kind !== 'bytes') return c
   // A TEXT or BLOB column reads as a double or an integer without a word
   // (`Field_blob::val_real` and `val_int` discard the error).
@@ -168,6 +190,26 @@ export function asNumber(c: Compiled, kind: 'DOUBLE' | 'INTEGER' | 'DECIMAL', on
   }
 }
 
+/** A comparison caches converted constants while resolving, before it reads any rows. */
+const NUMBER_CONSTANTS = new WeakMap<Condition[], Map<Expression, Compiled>>()
+export function numberConstant(c: Compiled, written: Expression, ctx: CompileContext, resolving = false): Compiled {
+  const constant = constantNode(written)
+  const read = asNumber(c, 'DOUBLE', constant && written)
+  if (!constant || (!resolving && ctx.clause !== 'where clause' && ctx.clause !== 'on clause') || (written.kind === NODE.PLACEHOLDER && ctx.params === undefined)) return read
+  let cache = ctx.conditions === undefined ? undefined : NUMBER_CONSTANTS.get(ctx.conditions)
+  if (cache?.has(written)) return cache.get(written) as Compiled
+  const value = resolveConstant(read, ctx)
+  if (ctx.conditions !== undefined) {
+    if (cache === undefined) { cache = new Map(); NUMBER_CONSTANTS.set(ctx.conditions, cache) }
+    cache.set(written, value)
+  }
+  return value
+}
+
+function resolveConstant(c: Compiled, ctx: CompileContext): Compiled {
+  return lit(c.eval([], { ...constantEnv(ctx), memo: new Map(), ...(ctx.conditions === undefined ? {} : { conditions: ctx.conditions }) }), c.type)
+}
+
 /** The bytes a number's reading leaves over: after the integer for an INTEGER (-1 when there is no digit), after the number for a DOUBLE (all of them, leading spaces too, when there is none). */
 function unconvertedBytes(v: Exclude<Value, null>, kind: 'DOUBLE' | 'INTEGER' | 'DECIMAL'): number {
   if (v.kind !== 'string' && v.kind !== 'bytes') return 0
@@ -183,15 +225,11 @@ function unconvertedBytes(v: Exclude<Value, null>, kind: 'DOUBLE' | 'INTEGER' | 
  * An operand of NOT, AND, OR or XOR: text read as a double, warning once a
  * statement for a constant; JSON true unless it is a number that is zero (`jsonTruth`).
  */
-function logicalOperand(c: Compiled, written: Expression | false): Compiled['eval'] {
+function logicalOperand(c: Compiled, written: Expression | false, ctx?: CompileContext): Compiled['eval'] {
   if (c.type.kind === 'json') {
-    // Saying so once a statement, 3986 (8.4.11).
-    const key = {}
+    const message = 'Evaluating a JSON value in SQL boolean context does an implicit comparison against JSON integer 0; if this is not what you want, consider converting JSON to a SQL numeric type with JSON_VALUE RETURNING'
+    if (ctx !== undefined) warnAtCompile(ctx, 3986, message)
     return (r, env) => {
-      if (env.memo?.has(key) !== true) {
-        env.memo?.set(key, true)
-        raise(env, 3986, 'Evaluating a JSON value in SQL boolean context does an implicit comparison against JSON integer 0; if this is not what you want, consider converting JSON to a SQL numeric type with JSON_VALUE RETURNING')
-      }
       const v = c.eval(r, env)
       return v === null || v.kind !== 'json' ? v : bool(jsonTruth(v))
     }
@@ -223,7 +261,7 @@ function fixedDecimals(t: ResultType): number | undefined {
 
 const isNumber = (t: ResultType): boolean => t.kind === 'int' || t.kind === 'decimal' || t.kind === 'double'
 
-function textVersusNumber(x: ResultType, y: ResultType): boolean {
+export function textVersusNumber(x: ResultType, y: ResultType): boolean {
   return (x.kind === 'string' || x.kind === 'bytes') && isNumber(y)
 }
 
@@ -399,9 +437,10 @@ function firstInvalidUtf8(b: Uint8Array, longest: number): number {
 }
 
 /** A division of either kind, with 1365 when the divisor is zero and the answer therefore NULL. */
-function byZero(at: Compiled['eval'], bt: Compiled['eval'], op: (x: Value, y: Value) => Value): Compiled['eval'] {
+function byZero(at: Compiled['eval'], bt: Compiled['eval'], op: (x: Value, y: Value) => Value, shortCircuit = false): Compiled['eval'] {
   return (r, env) => {
     const x = at(r, env)
+    if (x === null && shortCircuit) return null
     const y = bt(r, env)
     const v = op(x, y)
     // Only ERROR_FOR_DIVISION_BY_ZERO makes it a warning: without it the
@@ -898,6 +937,18 @@ function fixedTolerance(a: ResultType, b: ResultType): number | undefined {
  * so do `<=>`, BETWEEN, NULLIF and a one-element IN (8.4.11).
  */
 export function comparer(a: ResultType, b: ResultType): (x: Value, y: Value) => number | null {
+  if (a.kind === 'json' || b.kind === 'json') {
+    const jsonOperand = (v: Value, t: ResultType): Value => v !== null && isBits(t) && v.kind === 'int' ? jsonValue({ t: 'opaque', field: FIELD_TYPE.BIT, v: bitBytes(v.v, t.length) }) : v
+    return (x, y) => compareValues(jsonOperand(x, a), jsonOperand(y, b))
+  }
+  if ((a.kind === 'time' && isText(b)) || (b.kind === 'time' && isText(a))) {
+    return (x, y) => {
+      if (x === null || y === null) return null
+      if (x.kind === 'time' && (y.kind === 'string' || y.kind === 'bytes')) x = stringValue(toText(x), CHARSET_UTF8MB4_BIN, COERCIBILITY.NUMERIC)
+      if (y.kind === 'time' && (x.kind === 'string' || x.kind === 'bytes')) y = stringValue(toText(y), CHARSET_UTF8MB4_BIN, COERCIBILITY.NUMERIC)
+      return compareValues(x, y)
+    }
+  }
   const tolerance = fixedTolerance(a, b)
   // Text against text: the collation and a constant's encoding decided once for the site, not once a row.
   if (tolerance === undefined && a.kind === 'string' && b.kind === 'string') return textComparer()
@@ -922,6 +973,17 @@ function divisionDouble(a: ResultType, b: ResultType): ResultType {
   if (scale >= 31) return doubleType(true, 23)
   const width = (a.kind === 'decimal' ? charWidth(a) : a.length) - a.scale + scale
   return { ...doubleType(true, Math.min(width, 17 + scale)), scale }
+}
+
+/** Division with NULL keeps a DOUBLE result, but still resolves its scale and width. */
+function nullDivision(a: ResultType, b: ResultType): ResultType {
+  const other = a.kind === 'null' ? b : a
+  const scale = Math.min(31, (other.kind === 'null' ? 0 : fixedDecimals(other) ?? 31) + 4)
+  if (scale === 31) return doubleType(true, 23)
+  // NULL's width is its resolved scale. A non-NULL dividend gains four
+  // characters; DATETIME uses its numeric display width, 17 + fsp (8.4.11).
+  const width = a.kind === 'null' ? scale : (a.kind === 'datetime' && a.field !== FIELD_TYPE.DATE ? 17 + a.scale : charWidth(a)) + 4
+  return { ...doubleType(true, width), scale }
 }
 
 function unary(op: string, a: Compiled, exists: boolean, constant: false | Expression = false, ctx?: CompileContext): Compiled {
@@ -961,7 +1023,7 @@ function unary(op: string, a: Compiled, exists: boolean, constant: false | Expre
     }
     case '!':
     case 'NOT': {
-      const x = logicalOperand(a, constant)
+      const x = logicalOperand(a, constant, ctx)
       return { eval: (r, env) => not(x(r, env)), type: boolType(a.type.nullable) }
     }
     case 'BINARY':
@@ -1014,7 +1076,7 @@ const arithWidth = (a: ResultType, b: ResultType, unsigned: boolean): number => 
 function intDigits(t: ResultType): number {
   if (t.literalInt !== undefined) return t.literalInt.digits
   if (t.kind === 'decimal') return t.length - t.scale
-  if (t.kind === 'int') return t.unsigned ? t.length : t.length - 1
+  if (t.kind === 'int') return Math.max(1, t.unsigned ? t.length : t.length - 1)
   // A temporal's number: YYYYMMDD, hhhmmss, or both (8.4.11: `d * 20200102` is 17 wide).
   if (t.kind === 'datetime') return t.field === FIELD_TYPE.DATE ? 8 : 14
   if (t.kind === 'time') return 7
@@ -1081,24 +1143,36 @@ function binary(op: string, left: Expression, right: Expression, extra: Expressi
   const a = compile(left, ctx)
   if (op === 'BETWEEN' || op === 'NOT BETWEEN') {
     const a0 = a
-    const lo0 = timeConstant(a0, left, right, compile(right, ctx))
-    const hi0 = timeConstant(a0, left, extra as Expression, compile(extra as Expression, ctx))
-    // One comparison type for all three (`agg_cmp_type`). With a number among
-    // them, all are doubles: text read as one with its 1292, a temporal as its
-    // number (8.4.11: `tm BETWEEN 'a' AND db` puts -01:00:00 below 0). With
-    // only dates and text, all are dates, text converted as `=` converts it.
+    const lower = compile(right, ctx)
+    const upper = compile(extra as Expression, ctx)
+    const numeric = [a0, lower, upper].some((x) => isNumber(x.type))
+    if (numeric && left.kind === NODE.COLUMN) {
+      columnConstantDiagnostics(lower, right, a0, left, ctx)
+      columnConstantDiagnostics(upper, extra as Expression, a0, left, ctx)
+    }
+    const hasDate = [a0, lower, upper].some((x) => x.type.kind === 'datetime')
+    const lo0 = numeric || hasDate ? lower : timeConstant(a0, left, right, lower, false, ctx)
+    const hi0 = numeric || hasDate ? upper : timeConstant(a0, left, extra as Expression, upper, false, ctx)
+    // One comparison type for all three (`agg_cmp_type`): integers and
+    // decimals stay exact; a number mixed with text or a temporal uses
+    // doubles. With only dates and text, all are dates.
     const all = [a0, lo0, hi0]
-    // JSON among them: compared as text, its rendering, with 1235 once a statement (8.4.11: `'"b"'` is below 'a').
-    if (all.some((x) => x.type.kind === 'json')) return jsonBetween(op === 'NOT BETWEEN', a0, lo0, hi0)
-    const numeric = all.some((x) => isNumber(x.type))
+    const exact = all.every((x) => x.type.kind === 'int' || x.type.kind === 'decimal' || x.type.kind === 'null')
+    const json = all.some((x) => x.type.kind === 'json')
+    if (json) warnAtCompile(ctx, 1235, "This version of MySQL doesn't yet support 'comparison of JSON in the BETWEEN operator'")
     const dateOf = all.find((x) => x.type.kind === 'datetime')
-    const dated = !numeric && dateOf !== undefined && all.every((x) => x.type.kind === 'datetime' || isText(x.type) || x.type.kind === 'null')
+    const dated = !numeric && dateOf !== undefined
     const operand = (x: Compiled, written: Expression | false): Compiled => {
       // A constant bound warns each row it is compared, unlike `=`'s once (8.4.11: `tm BETWEEN 'a' AND db` warns for every row).
-      if (numeric && isText(x.type)) return asNumber(x, 'DOUBLE')
-      if (numeric && (x.type.kind === 'datetime' || x.type.kind === 'time')) return { eval: (r, env) => { const v = x.eval(r, env); return v === null ? null : doubleValue(toDouble(v)) }, type: doubleType(x.type.nullable) }
-      if (dated && isText(x.type) && written !== false) return dateConstant(x, written, dateOf as Compiled, ctx, false)
-      return x
+      if (numeric) {
+        if (exact) return x
+        const checked = a0.type.field === FIELD_TYPE.LONGLONG && left.kind === NODE.COLUMN && written !== false ? numberConstant(x, written, ctx, true) : asNumber(x, 'DOUBLE')
+        return { eval: (r, env) => { const v = checked.eval(r, env); return v === null ? null : doubleValue(toDouble(v)) }, type: x.type }
+      }
+      if (dated && x.type.kind === 'time') return onStatementDate(x)
+      const text = x.type.kind === 'json' ? comparisonText(x) : x
+      if (dated && isText(text.type) && written !== false) return dateConstant(text, written, dateOf as Compiled, ctx, false)
+      return !dated ? comparisonText(text) : text
     }
     const subject = operand(a0, left)
     const lo = operand(lo0, right)
@@ -1108,11 +1182,33 @@ function binary(op: string, left: Expression, right: Expression, extra: Expressi
     // Each bound is its own comparison, fixed decimals and all.
     const low = comparer(subject.type, lo.type)
     const high = comparer(subject.type, hi.type)
+    const timeColumn = !numeric && !dated && a0.type.kind === 'time' && left.kind === NODE.COLUMN
+    const intLo = asNumber(lo0, 'INTEGER')
+    const intHi = asNumber(hi0, 'INTEGER')
     return {
       eval: (r, env) => {
         const v = subject.eval(r, env)
+        if (v === null) return null
+        if (timeColumn) {
+          const lowerValue = lo0.eval(r, env)
+          const upperValue = hi0.eval(r, env)
+          const convertedLo = lo0 !== lower && lowerValue?.kind === 'time'
+          const convertedHi = hi0 !== upper && upperValue?.kind === 'time'
+          // A single converted TIME bound switches the server to val_int.
+          // The replacement constant returns its packed integer; the TIME
+          // column and unconverted bound return their ordinary integers.
+          if ((convertedLo || convertedHi) && !(lowerValue?.kind === 'time' && upperValue?.kind === 'time')) {
+            const integer = (w: Value): Value => w === null ? null : intValue(toInteger(w))
+            const bound = (w: Value, converted: boolean): Value => converted && w?.kind === 'time' ? intValue(packTime(roundTime(w.v, a0.type.scale))) : integer(w)
+            const subjectValue = integer(a0.eval(r, env))
+            const x = compareValues(subjectValue, bound(intLo.eval(r, env), convertedLo))
+            const y = compareValues(subjectValue, bound(intHi.eval(r, env), convertedHi))
+            if ((x !== null && x < 0) || (y !== null && y > 0)) return bool(negated)
+            return x === null || y === null ? null : bool(!negated)
+          }
+        }
         const x = low(v, lo.eval(r, env))
-        const y = high(v, hi.eval(r, env))
+        const y = high(dated ? subject.eval(r, env) : v, hi.eval(r, env))
         // Three-valued: a known failure on either side decides it.
         if ((x !== null && x < 0) || (y !== null && y > 0)) return bool(negated)
         if (x === null || y === null) return null
@@ -1124,12 +1220,12 @@ function binary(op: string, left: Expression, right: Expression, extra: Expressi
   if (op === 'LIKE' || op === 'NOT LIKE') return like(op === 'NOT LIKE', a, compile(right, ctx), extra === undefined ? undefined : compile(extra as Expression, ctx))
 
   const b = compile(right, ctx)
-  const [ta, tb] = COMPARISONS[op] !== undefined || op === '<=>' ? temporalOperands(left, right, a, b) : [a, b]
+  const [ta, tb] = COMPARISONS[op] !== undefined || op === '<=>' ? temporalOperands(left, right, a, b, ctx) : [a, b]
   // A string constant compared with a date is read as one first, and one
   // that is not is the statement's error (8.4.11: `d = '00-00-00'` is 1525).
   const dated = COMPARISONS[op] !== undefined || op === '<=>'
-  const ca = dated ? numberBesideDate(yearConstant(dateConstant(ta, left, tb, ctx), left, tb, ctx), left, tb, right) : ta
-  const cb = dated ? numberBesideDate(yearConstant(dateConstant(tb, right, ta, ctx), right, ta, ctx), right, ta, left) : tb
+  const ca = dated ? numberBesideDate(yearConstant(dateConstant(ta, left, tb, ctx), left, tb, ctx), left, tb, right, ctx) : ta
+  const cb = dated ? numberBesideDate(yearConstant(dateConstant(tb, right, ta, ctx), right, ta, ctx), right, ta, left, ctx) : tb
   // A string in arithmetic is read as a double, with 1292 when it is not one.
   const arithmetic = op === '+' || op === '-' || op === '*' || op === '/' || op === '%' || op === 'MOD'
   // And in a comparison with a number, which is of doubles: a constant is
@@ -1137,8 +1233,8 @@ function binary(op: string, left: Expression, right: Expression, extra: Expressi
   const comparison = (COMPARISONS[op] !== undefined || op === '<=>') && (textVersusNumber(ca.type, cb.type) || textVersusNumber(cb.type, ca.type))
   // A logical operator reads its operands' truth as doubles, and a string that is not one warns as it would there.
   const logical = op === 'AND' || op === '&&' || op === 'OR' || op === '||' || op === 'XOR'
-  const at = logical ? logicalOperand(ca, left) : arithmetic || comparison ? asNumber(ca, 'DOUBLE', comparison && constantNode(left) && left).eval : ca.eval
-  const bt = logical ? logicalOperand(cb, right) : arithmetic || comparison ? asNumber(cb, 'DOUBLE', comparison && constantNode(right) && right).eval : cb.eval
+  const at = logical ? logicalOperand(ca, left, ctx) : comparison ? numberConstant(ca, left, ctx).eval : arithmetic ? asNumber(ca, 'DOUBLE').eval : ca.eval
+  const bt = logical ? logicalOperand(cb, right, ctx) : comparison ? numberConstant(cb, right, ctx).eval : arithmetic ? asNumber(cb, 'DOUBLE').eval : cb.eval
   const nullable = !notNull(a.type, b.type)
   // What an overflow names, as MySQL's message does: the expression's text.
   // Printed only for an error's message: the printing compiles the columns it names.
@@ -1193,7 +1289,12 @@ function binary(op: string, left: Expression, right: Expression, extra: Expressi
           type: boolType(false),
         }
       }
-      return { eval: (r, env) => bool(nullSafeEqual(at(r, env), bt(r, env))), type: boolType(false) }
+      return { eval: (r, env) => {
+        const x = at(r, env)
+        const y = bt(r, env)
+        if (comparison && x !== null && y === null) at(r, env)
+        return bool(nullSafeEqual(x, y))
+      }, type: boolType(false) }
     }
     case '+':
     case '-':
@@ -1219,8 +1320,9 @@ function binary(op: string, left: Expression, right: Expression, extra: Expressi
     case '/': {
       const kind = arithKind(a.type, b.type)
       const s = Math.min(30, scaleOf(a.type) + 4)
-      // NULL divided, or dividing, is a DOUBLE(4,4) (8.4.11).
-      const type = kind === 'double' ? divisionDouble(a.type, b.type) : kind === 'null' ? { ...doubleType(true, 4), scale: 4 } : decimalType(intDigits(a.type) + scaleOf(b.type) + s, s, true, unsignedOf(a.type) && unsignedOf(b.type))
+      // NULL still inherits the other operand's numeric scale. Text and
+      // unspecified doubles produce DOUBLE(23,31); fixed decimals add four.
+      const type = kind === 'double' ? divisionDouble(a.type, b.type) : kind === 'null' ? nullDivision(a.type, b.type) : decimalType(intDigits(a.type) + scaleOf(b.type) + s, s, true, unsignedOf(a.type) && unsignedOf(b.type))
       const quotient = byZero(at, bt, divide)
       if (type.kind === 'double' && type.scale < 31) return { eval: (r, env) => doubleOf(quotient(r, env), type), type }
       return { eval: quotient, type }
@@ -1236,14 +1338,14 @@ function binary(op: string, left: Expression, right: Expression, extra: Expressi
       // Its operands are read as DECIMALs, text warning each row (8.4.11: `lt DIV 10`).
       const x = asNumber(ca, 'DECIMAL').eval
       const y = asNumber(cb, 'DECIMAL').eval
-      return { eval: byZero(x, y, (p, q) => intDivide(p, q, label)), type: intType(digits + (unsigned ? 0 : 1), true, unsigned) }
+      return { eval: byZero(x, y, (p, q) => intDivide(p, q, label), true), type: intType(digits + (unsigned ? 0 : 1), true, unsigned) }
     }
     case '%':
     case 'MOD': {
       const kind = arithKind(a.type, b.type)
       // The wider operand's digits and a sign, unsigned or not: `flag % 3` on a TINYINT UNSIGNED is 4.
       // A double keeps the dividend's sign flag (8.4.11: `u % ch` of an INT UNSIGNED is unsigned).
-      const type = kind === 'int' ? intType(Math.max(intDigits(a.type), intDigits(b.type), 1) + 1, true, unsignedOf(a.type)) : kind === 'decimal' ? decimalType(Math.max(a.type.length, b.type.length), Math.max(scaleOf(a.type), scaleOf(b.type)), true) : kind === 'null' ? nullArithmetic(a.type, b.type) : { ...doubleType(true, 23), unsigned: unsignedOf(a.type) }
+      const type = kind === 'int' ? intType(Math.max(intDigits(a.type), intDigits(b.type), 1) + 1, true, unsignedOf(a.type)) : kind === 'decimal' ? decimalType(Math.max(decimalPrecision(a.type), decimalPrecision(b.type)), Math.max(scaleOf(a.type), scaleOf(b.type)), true) : kind === 'null' ? nullArithmetic(a.type, b.type) : { ...doubleType(true, 23), unsigned: unsignedOf(a.type) }
       return { eval: byZero(at, bt, (x, y) => modulo(x, y, label)), type }
     }
     case '|':
@@ -1277,24 +1379,29 @@ function binary(op: string, left: Expression, right: Expression, extra: Expressi
 
 // --- Constants -------------------------------------------------------------------
 
-/** BETWEEN with JSON among its operands, which 8.4.11 does not compare as JSON: all three as their text, binary, warning once a statement. */
-function jsonBetween(negated: boolean, ...operands: [Compiled, Compiled, Compiled]): Compiled {
-  const key = {}
-  const text = (v: Value): Value => (v === null ? null : stringValue(toText(v), CHARSET_UTF8MB4_BIN))
+/** The STRING comparison context renders temporals and JSON instead of comparing their native values. */
+function comparisonText(c: Compiled): Compiled {
+  if (c.type.kind !== 'json' && c.type.kind !== 'time' && c.type.kind !== 'datetime') return c
   return {
     eval: (r, env) => {
-      if (env.memo?.has(key) !== true) {
-        env.memo?.set(key, true)
-        raise(env, 1235, "This version of MySQL doesn't yet support 'comparison of JSON in the BETWEEN operator'")
-      }
-      const [v, lo, hi] = operands.map((c) => text(c.eval(r, env))) as [Value, Value, Value]
-      const x = compareValues(v, lo)
-      const y = compareValues(v, hi)
-      if ((x !== null && x < 0) || (y !== null && y > 0)) return bool(negated)
-      if (x === null || y === null) return null
-      return bool(!negated)
+      const v = c.eval(r, env)
+      return v === null ? null : stringValue(toText(v), CHARSET_UTF8MB4_BIN, COERCIBILITY.NUMERIC)
     },
-    type: boolType(true),
+    type: { ...c.type, kind: 'string', collationId: CHARSET_UTF8MB4_BIN },
+  }
+}
+
+/** cmp_item_datetime's TIME reader parses every STRING result, including a datetime's text. */
+function comparisonTime(c: Compiled): Compiled {
+  return {
+    ...c,
+    eval: (r, env) => {
+      const v = c.eval(r, env)
+      if (v === null || v.kind === 'time') return v
+      const p = parseTime(toText(v))
+      if (p === undefined || p.truncated || p.clamped) raise(env, 1292, `Truncated incorrect time value: '${warnedText(v)}'`)
+      return p === undefined ? { ...NO_TIME } : { kind: 'time', v: p.v, fsp: p.fsp }
+    },
   }
 }
 
@@ -1317,17 +1424,28 @@ export function constantNode(e: unknown): boolean {
  * a DATETIME on 1970-01-01, and \`tm = ?\` must find the row. Anything else
  * meets as DATETIME, the TIME added to the statement's date, as CURDATE has it.
  */
-function temporalOperands(left: Expression, right: Expression, a: Compiled, b: Compiled): [Compiled, Compiled] {
+export function temporalOperands(left: Expression, right: Expression, a: Compiled, b: Compiled, ctx?: CompileContext): [Compiled, Compiled] {
   const ak = a.type.kind
   const bk = b.type.kind
+  const yearDate = (c: Compiled): Compiled => ({
+    ...c,
+    eval: (r, env) => {
+      const v = c.eval(r, env)
+      if (v === null) return null
+      const year = Number(toInteger(v))
+      return { kind: 'datetime', type: 'DATE', fsp: 0, v: { year, month: year === 0 ? 0 : 1, day: year === 0 ? 0 : 1, hour: 0, minute: 0, second: 0, microsecond: 0 } }
+    },
+  })
+  if (a.type.field === FIELD_TYPE.YEAR && bk === 'datetime') return [yearDate(a), b]
+  if (b.type.field === FIELD_TYPE.YEAR && ak === 'datetime') return [a, yearDate(b)]
   // A string constant too: `tm = '1970-01-01 14:37:36'` finds 14:37:36.
-  if (ak === 'time' && left.kind === NODE.COLUMN && constantNode(right) && (bk === 'datetime' || bk === 'string' || bk === 'int')) return [a, asTimeOfDay(b, left.parts)]
-  if (bk === 'time' && right.kind === NODE.COLUMN && constantNode(left) && (ak === 'datetime' || ak === 'string' || ak === 'int')) return [asTimeOfDay(a, right.parts), b]
+  if (ak === 'time' && left.kind === NODE.COLUMN && constantNode(right) && (bk === 'datetime' || bk === 'string' || bk === 'bytes' || bk === 'int')) return [a, asTimeOfDay(b, left.parts, false, ctx)]
+  if (bk === 'time' && right.kind === NODE.COLUMN && constantNode(left) && (ak === 'datetime' || ak === 'string' || ak === 'bytes' || ak === 'int')) return [asTimeOfDay(a, right.parts, false, ctx), b]
   if (!((ak === 'time' && bk === 'datetime') || (ak === 'datetime' && bk === 'time'))) return [a, b]
   return ak === 'time' ? [onStatementDate(a), b] : [a, onStatementDate(b)]
 }
 
-function asTimeOfDay(c: Compiled, column: readonly string[]): Compiled {
+function asTimeOfDay(c: Compiled, column: readonly string[], list = false, ctx?: CompileContext): Compiled {
   const self: Compiled = {
     eval: (r, env) => {
       const v = c.eval(r, env)
@@ -1337,31 +1455,46 @@ function asTimeOfDay(c: Compiled, column: readonly string[]): Compiled {
       // 14:37:00, '2020-01-01' is 00:20:20), and a number of 11 digits or
       // more as a datetime (8.4.11).
       if (v.kind === 'string' || v.kind === 'bytes') {
-        // Text that leaves anything over, or is no time at all, equals no
-        // time — false, not NULL (8.4.11: `tm = 'garbage'` finds no row, a
-        // midnight included), with 1292 once a statement, as the server's
-        // storing it into the column warns. A time past TIME's range stands
-        // for it.
+        // A failed conversion keeps the text for ordinary comparisons.
+        // In a constant TIME list it prevents building the list, represented
+        // by NO_TIME; the conversion warns once as storing into the column does.
+        if (toText(v).trim() === '') return list ? NO_TIME : v
         const p = parseTime(toText(v))
-        if (p !== undefined && !p.truncated) return { kind: 'time', v: p.v, fsp: p.fsp }
+        // str_to_time rejects exponent forms without setting a truncation
+        // warning; Field_time's failed constant conversion is quiet too.
+        if (p === undefined && numericPrefix(toText(v)).complete && /[eE]/.test(toText(v))) return list ? NO_TIME : v
+        if (p !== undefined && !p.truncated) {
+          if (p.dateDropped && env.memo?.has(self) !== true) {
+            env.memo?.set(self, true)
+            raise(env, 1292, `Incorrect time value: '${toText(v)}' for column '${column[column.length - 1] as string}' at row 1`, 'Note')
+          }
+          return { kind: 'time', v: p.v, fsp: p.fsp }
+        }
         if (env.memo?.has(self) !== true) {
           env.memo?.set(self, true)
           raise(env, 1292, `Incorrect time value: '${toText(v)}' for column '${column[column.length - 1] as string}' at row 1`)
         }
-        return NO_TIME
+        return list ? NO_TIME : v
       }
       const dt = v.kind === 'datetime' ? v : v.kind === 'int' && v.v >= 10_000_000_000n ? toDateTime(v, 'DATETIME') : undefined
-      const t = toTime(dt ?? v)
+      const parsed = dt === undefined ? parseTime(toText(v)) : undefined
+      let t: ReturnType<typeof toTime>
+      if (dt !== undefined) t = toTime(dt)
+      else if (parsed !== undefined && !parsed.truncated && !parsed.clamped) t = { kind: 'time', v: parsed.v, fsp: parsed.fsp }
       // A number that is no time says so once, as storing it into the column would (8.4.11: `tm <= 20200102`).
       if (t === undefined && v.kind === 'int' && env.memo?.has(self) !== true) {
         env.memo?.set(self, true)
         raise(env, 1292, `Incorrect time value: '${toText(v)}' for column '${column[column.length - 1] as string}' at row 1`)
       }
+      if (dt !== undefined && v.kind === 'int' && env.memo?.has(self) !== true) {
+        env.memo?.set(self, true)
+        raise(env, 1292, `Incorrect time value: '${toText(v)}' for column '${column[column.length - 1] as string}' at row 1`, 'Note')
+      }
       return t ?? v
     },
     type: c.type,
   }
-  return self
+  return ctx === undefined ? self : resolveConstant(self, ctx)
 }
 
 /** The session's NO_ZERO_DATE and NO_ZERO_IN_DATE, as a scan's flags. */
@@ -1387,6 +1520,7 @@ export function dateConverter(c: Compiled, written: Expression, other: Compiled,
   if (other.type.kind !== 'datetime' || !isText(c.type)) return undefined
   const flags = modeOf(ctx.session.sqlMode)
   const constant = strict && constantNode(written)
+  let notedAtCompile = false
   const what = other.type.field === FIELD_TYPE.DATE || other.type.field === FIELD_TYPE.NEWDATE ? 'date' : 'datetime'
   if (constant && (written.kind !== NODE.PLACEHOLDER || ctx.params !== undefined)) {
     let v: Value = null
@@ -1395,13 +1529,28 @@ export function dateConverter(c: Compiled, written: Expression, other: Compiled,
     } catch (e) {
       expectTyped(e)
     }
-    if (v !== null && (v.kind === 'string' || v.kind === 'bytes') && parseDateTime(toText(v), flags) === undefined) throw sqlError('ER_WRONG_VALUE', `Incorrect ${what.toUpperCase()} value: '${warnedText(v)}'`)
+    if (v !== null && (v.kind === 'string' || v.kind === 'bytes')) {
+      const p = parseDateTime(toText(v), flags)
+      if (p === undefined) throw sqlError('ER_WRONG_VALUE', `Incorrect ${what.toUpperCase()} value: '${warnedText(v)}'`)
+      if (p.deprecation !== undefined) {
+        const { code, message } = temporalDeprecation(p.deprecation, toText(v), 1)
+        warnAtCompile(ctx, code, message)
+        notedAtCompile = true
+      }
+    }
   }
   return (v, env) => {
     // Text or bytes, a hex or bit literal's included (8.4.11: `d <= b'1010'` is 1525).
     if (v === null || (v.kind !== 'string' && v.kind !== 'bytes')) return v
     const p = parseDateTime(toText(v), flags)
-    if (p !== undefined) return { kind: 'datetime', v: p.v, type: p.hasTime ? 'DATETIME' : 'DATE', fsp: p.fsp }
+    if (p !== undefined) {
+      if (p.deprecation !== undefined && !notedAtCompile && (!constant || env.memo?.has(written) !== true)) {
+        const { code, message } = temporalDeprecation(p.deprecation, toText(v), rowNumber(env))
+        raise(env, code, message)
+        if (constant) env.memo?.set(written, true)
+      }
+      return { kind: 'datetime', v: p.v, type: p.hasTime ? 'DATETIME' : 'DATE', fsp: p.fsp }
+    }
     if (!constant) {
       // Beside a column the conversion says so plainly; beside a literal or an expression it is "truncated", in that one's own word (8.4.11).
       raise(env, 1292, other.type.column !== undefined ? `Incorrect datetime value: '${warnedText(v)}'` : `Truncated incorrect ${what} value: '${warnedText(v)}'`)
@@ -1418,14 +1567,15 @@ const ZERO_DATETIME: Value = { kind: 'datetime', v: { year: 0, month: 0, day: 0,
  * `c`, a number constant compared with a DATE, DATETIME or TIMESTAMP column:
  * converted into the column's type to compare, and when it is no such value,
  * 1292 once a statement, naming the column, at row 1, as storing it into the
- * column says (8.4.11: `dt = 10`, `1e300 >= dt`). The comparison itself is unchanged.
+ * column says (8.4.11: `dt = 10`, `1e300 >= dt`). An invalid constant
+ * retains its numeric value for the comparison.
  */
-function numberBesideDate(c: Compiled, written: Expression, other: Compiled, otherWritten: Expression): Compiled {
+function numberBesideDate(c: Compiled, written: Expression, other: Compiled, otherWritten: Expression, ctx?: CompileContext): Compiled {
   if (other.type.kind !== 'datetime' || otherWritten.kind !== NODE.COLUMN || !isNumber(c.type) || !constantNode(written)) return c
   const what = other.type.field === FIELD_TYPE.DATE || other.type.field === FIELD_TYPE.NEWDATE ? 'date' : 'datetime'
   const column = otherWritten.parts[otherWritten.parts.length - 1] as string
   const key = written
-  return {
+  const self: Compiled = {
     ...c,
     eval: (r, env) => {
       const v = c.eval(r, env)
@@ -1433,10 +1583,24 @@ function numberBesideDate(c: Compiled, written: Expression, other: Compiled, oth
         env.memo?.set(key, true)
         const whole = v.kind === 'double' ? (Number.isInteger(v.v) && Math.abs(v.v) < 1e15 ? BigInt(v.v) : undefined) : v.kind === 'int' ? v.v : v.kind === 'decimal' ? toInteger(v) : undefined
         if (whole === undefined || numberToDateTime(whole) === undefined) raise(env, 1292, `Incorrect ${what} value: '${toText(v)}' for column '${column}' at row 1`)
+        else if (what === 'date') {
+          const t = toDateTime(v, 'DATETIME')
+          if (t !== undefined && (t.v.hour !== 0 || t.v.minute !== 0 || t.v.second !== 0 || t.v.microsecond !== 0)) raise(env, 1292, `Incorrect date value: '${toText(v)}' for column '${column}' at row 1`, 'Note')
+        }
       }
-      return v
+      return v === null ? null : toDateTime(v, what === 'date' ? 'DATE' : 'DATETIME') ?? v
     },
   }
+  return ctx === undefined ? self : resolveConstant(self, ctx)
+}
+
+export function columnConstantDiagnostics(c: Compiled, written: Expression, other: Compiled, column: Expression, ctx: CompileContext): void {
+  if (column.kind !== NODE.COLUMN || !constantNode(written) || (written.kind === NODE.PLACEHOLDER && ctx.params === undefined)) return
+  if (other.type.kind === 'time') { asTimeOfDay(c, column.parts, false, ctx); return }
+  if (other.type.kind !== 'datetime') return
+  if (isNumber(c.type)) { numberBesideDate(c, written, other, column, ctx); return }
+  const v = c.eval([], constantEnv(ctx))
+  if (v !== null && isText(c.type) && toDateTime(v, 'DATETIME') === undefined) warnAtCompile(ctx, 1292, `Incorrect ${other.type.field === FIELD_TYPE.DATE ? 'date' : 'datetime'} value: '${warnedText(v)}' for column '${column.parts.at(-1) as string}' at row 1`)
 }
 
 /**
@@ -1464,16 +1628,16 @@ function yearConstant(c: Compiled, written: Expression, other: Compiled, ctx: Co
 }
 
 /** A constant compared with a TIME column, read as a time of day. */
-const NO_TIME: Value = { kind: 'time', v: { negative: true, days: 41, hour: 23, minute: 59, second: 59, microsecond: 999999 }, fsp: 0 }
+const NO_TIME = { kind: 'time', v: { negative: true, days: 41, hour: 23, minute: 59, second: 59, microsecond: 999999 }, fsp: 0 } as const satisfies Value
 
-function timeConstant(a: Compiled, left: Expression, e: Expression, c: Compiled, list = false): Compiled {
+function timeConstant(a: Compiled, left: Expression, e: Expression, c: Compiled, list = false, ctx?: CompileContext): Compiled {
   // In an IN list a TIMESTAMP literal compares as a datetime, the column on
   // today's date; a CAST to one is still read as a time of day (8.4.11).
-  const kinds = (c.type.kind === 'datetime' && !(list && e.kind === NODE.LITERAL)) || c.type.kind === 'string' || c.type.kind === 'int'
-  return a.type.kind === 'time' && left.kind === NODE.COLUMN && constantNode(e) && kinds ? asTimeOfDay(c, left.parts) : c
+  const kinds = (c.type.kind === 'datetime' && !(list && e.kind === NODE.LITERAL)) || c.type.kind === 'string' || c.type.kind === 'bytes' || c.type.kind === 'int'
+  return a.type.kind === 'time' && left.kind === NODE.COLUMN && constantNode(e) && kinds ? asTimeOfDay(c, left.parts, list, ctx) : c
 }
 
-function onStatementDate(c: Compiled): Compiled {
+export function onStatementDate(c: Compiled): Compiled {
   return {
     eval: (r, env) => {
       const v = c.eval(r, env)
@@ -1647,33 +1811,81 @@ function inList(negated: boolean, left: Expression, right: Expression, ctx: Comp
     }
   }
   const compiled = compile(left, ctx)
+  const literalConstants = list.every(constantItem)
+  const allConstant = literalConstants || list.every(constantNode)
+  const timeColumn = compiled.type.kind === 'time' && left.kind === NODE.COLUMN
   // One item is `=`, whose text constant beside a date must be one (1525); a list's need not (8.4.11).
-  const raw = list.map((i) => timeConstant(compiled, left, i, compile(i, ctx), true)).map((c, k) => (list.length === 1 ? dateConstant(c, list[k] as Expression, compiled, ctx) : c))
+  const entries = list.map((i) => compile(i, ctx))
+  const timeConstants = timeColumn && (list.length === 1 || (allConstant && new Set(entries.filter((c) => c.type.kind !== 'null').map((c) => isNumber(c.type) ? 'number' : 'string')).size <= 1))
+  let raw = timeConstants ? entries.map((c, i) => timeConstant(compiled, left, list[i] as Expression, c, true, ctx)) : entries
+  if (list.length === 1) raw = raw.map((c, k) => yearConstant(dateConstant(c, list[k] as Expression, compiled, ctx), list[k] as Expression, compiled, ctx))
+  if (allConstant && compiled.type.kind === 'datetime') raw = raw.map((c, i) => numberBesideDate(c, list[i] as Expression, compiled, left, ctx))
+  // MySQL selects a datetime comparator for an all-STRING list containing
+  // a date. JSON selects its comparator only through the first nonconstant
+  // list item (the server stops its constant-list scan there).
+  let json = compiled.type.kind === 'json'
+  if (literalConstants) json ||= raw.some((c) => c.type.kind === 'json')
+  else for (let i = 0; i < raw.length; i++) {
+    json ||= (raw[i] as Compiled).type.kind === 'json'
+    if (!constantNode(list[i])) break
+  }
+  const all = isNumber(compiled.type) ? [compiled] : [compiled, ...raw.filter((c, i) => !(timeConstants && c.type.kind === 'datetime' && timeColumn && constantNode(list[i]) && list[i]?.kind !== NODE.LITERAL))]
+  const dateOf = !json && all.every((c) => !isNumber(c.type)) ? all.find((c) => c.type.kind === 'datetime') : undefined
+  const dateItem = (c: Compiled, written: Expression): Compiled => {
+    if (dateOf === undefined) {
+      return !json && compiled.type.kind === 'datetime' && !isNumber(c.type) ? dateConstant(c.type.kind === 'json' ? comparisonText(c) : c, written, compiled, ctx, false) : c
+    }
+    if (c.type.kind === 'time') return onStatementDate(c)
+    return dateConstant(c.type.kind === 'json' ? comparisonText(c) : c, written, dateOf, ctx, false)
+  }
+  if (dateOf !== undefined || compiled.type.kind === 'datetime' || compiled.type.kind === 'time') raw = raw.map((c, i) => dateOf === undefined && !json && list.length > 1 && compiled.type.kind === 'time' && !isNumber(c.type) ? comparisonTime(c) : dateItem(c, list[i] as Expression))
   // Text against numbers is read as doubles: the left side once a row, and
   // a text item each time it is compared (8.4.11: `id IN ('1x', 2)` warns a row).
-  const a = raw.some((i) => textVersusNumber(compiled.type, i.type)) ? asNumber(compiled, 'DOUBLE') : compiled
-  const items = raw.map((i) => (textVersusNumber(i.type, compiled.type) ? asNumber(i, 'DOUBLE') : i))
+  const a = dateOf !== undefined ? dateItem(compiled, left) : !json && raw.some((i) => textVersusNumber(compiled.type, i.type)) ? list.length === 1 ? numberConstant(compiled, left, ctx) : asNumber(compiled, 'DOUBLE') : compiled
+  const items = raw.map((i) => (!json && (textVersusNumber(i.type, compiled.type) || (isNumber(compiled.type) && i.type.kind === 'json')) ? asNumber(i, 'DOUBLE') : i))
   // Strings throughout are compared in one collation; one item is `=`'s.
   if (isText(compiled.type) && raw.some((i) => isText(i.type))) aggregateCollations([compiled.type, ...raw.map((i) => i.type)], raw.length === 1 ? '=' : ' IN ', true)
   // A long list of constants is sorted once per execution and searched, as
   // MySQL's `in_vector` is: Prisma sends 65,535 of them.
-  const searchable = items.length >= 10 && list.every(constantItem) && !(compiled.type.kind === 'time' && left.kind === NODE.COLUMN)
+  const searchable = !json && items.length >= 10 && literalConstants && !timeColumn
   // One element is `=`, which compares fixed decimals within a tolerance;
   // a list compares exactly (8.4.11: a FLOAT(3,1) is IN (1.2) and not IN (1.2, 1.3)).
   const compare = items.length === 1 ? comparer(a.type, (items[0] as Compiled).type) : compareValues
+  const jsonOperand = (v: Value, t: ResultType): Value => v === null ? null : jsonValue(isBits(t) && v.kind === 'int' ? { t: 'opaque', field: FIELD_TYPE.BIT, v: bitBytes(v.v, t.length) } : toJsonDoc(v))
+  const compareItem = (v: Value, w: Value, i: number): number | null => json ? compareValues(jsonOperand(v, compiled.type), jsonOperand(w, (items[i] as Compiled).type)) : compare(v, w)
   // Constant items: sorted once a statement, which a correlated subquery's per-row environments share the memo of.
   let sortedFor: object | undefined
   let sorted: SortedItems | undefined
-  const timed = compiled.type.kind === 'time' && left.kind === NODE.COLUMN
+  const timed = timeColumn
+  const comparisonKind = (t: ResultType): string => {
+    if (isNumber(compiled.type) || isNumber(t)) {
+      if (compiled.type.kind === 'int' && t.kind === 'int') return 'int'
+      if ((compiled.type.kind === 'int' || compiled.type.kind === 'decimal') && (t.kind === 'int' || t.kind === 'decimal')) return 'decimal'
+      return 'double'
+    }
+    return 'string'
+  }
+  const cachedConstants = !searchable && !json && allConstant && new Set(items.filter((i) => i.type.kind !== 'null').map((i) => comparisonKind(i.type))).size <= 1
+  const constantsKey = {}
   return {
     eval: (r, env) => {
+      let constants: Value[] | undefined
+      if (cachedConstants) {
+        constants = env.memo?.get(constantsKey) as Value[] | undefined
+        if (constants === undefined) {
+          constants = items.map((i) => i.eval(r, env))
+          env.memo?.set(constantsKey, constants)
+        }
+      }
       const v = a.eval(r, env)
-      if (v === null) return null
+      if (compiled.type.kind === 'null') return null
+      if (v === null && items.length === 1 && !cachedConstants) return null
       if (searchable) {
         if (sortedFor !== (env.memo ?? env)) {
           sorted = sortItems(items.map((i) => i.eval(r, env)))
           sortedFor = env.memo ?? env
         }
+        if (v === null) return null
         const found = sorted === undefined ? undefined : searchItems(sorted, v)
         if (found !== undefined) return found === null ? null : bool(found !== negated)
       }
@@ -1683,16 +1895,17 @@ function inList(negated: boolean, left: Expression, right: Expression, ctx: Comp
         // the server's list of times could not be built (8.4.11: `t IN
         // ('10:00:00', 'x')` is false for 10:00:00, NULL with a NULL item).
         const values = items.map((i) => i.eval(r, env))
+        if (v === null) return null
         if (values.includes(NO_TIME)) return values.includes(null) ? null : bool(negated)
-        for (const w of values) {
-          const c = compare(v, w)
+        for (let i = 0; i < values.length; i++) {
+          const c = compareItem(v, values[i] as Value, i)
           if (c === 0) return bool(!negated)
           if (c === null) sawNull = true
         }
         return sawNull ? null : bool(negated)
       }
-      for (const item of items) {
-        const c = compare(v, item.eval(r, env))
+      for (let i = 0; i < items.length; i++) {
+        const c = compareItem(v, constants === undefined ? (items[i] as Compiled).eval(r, env) : constants[i] as Value, i)
         if (c === 0) return bool(!negated)
         if (c === null) sawNull = true
       }
@@ -2056,9 +2269,26 @@ function caseExpr(e: CaseNode, ctx: CompileContext): Compiled {
   const compiled = e.whens.map((w) => ({ when: compile(w.when, ctx), then: compile(w.then, ctx) }))
   // `CASE x WHEN y`: one comparison type for x and every y, text read as a
   // double beside a number (`agg_cmp_type`); a searched CASE reads each WHEN's truth as one.
-  const numeric = given !== undefined && [given, ...compiled.map((w) => w.when)].some((x) => isNumber(x.type))
-  const operand = given !== undefined && numeric && isText(given.type) ? asNumber(given, 'DOUBLE') : given
-  const whens = compiled.map((w) => ({ when: given === undefined || numeric ? asNumber(w.when, 'DOUBLE') : w.when, then: w.then }))
+  const ordinal = given?.type.column !== undefined && (given.type.column.flags & (COLUMN_FLAG.ENUM | COLUMN_FLAG.SET)) !== 0
+  const numeric = given !== undefined && ([given, ...compiled.map((w) => w.when)].some((x) => isNumber(x.type)) || (ordinal && compiled.some((w) => w.when.type.literalInt !== undefined)))
+  const exact = [given, ...compiled.map((w) => w.when)].every((c) => c === undefined || c.type.kind === 'int' || c.type.kind === 'decimal' || c.type.kind === 'null')
+  const number = (c: Compiled): Compiled => {
+    if (exact) return c
+    const checked = asNumber(c, 'DOUBLE')
+    return { ...c, eval: (r, env) => {
+      const v = checked.eval(r, env)
+      const numericValue = ordinal && c.type.literalInt !== undefined ? withoutHex(v) : v
+      return numericValue === null ? null : doubleValue(toDouble(numericValue))
+    } }
+  }
+  const jsonText = !numeric && [given, ...compiled.map((w) => w.when)].some((c) => c?.type.kind === 'json')
+  const whenComparison = (c: Compiled, written: Expression): Compiled => {
+    if (given?.type.kind === 'datetime' && !numeric) return c.type.kind === 'time' ? onStatementDate(c) : dateConstant(c.type.kind === 'json' ? comparisonText(c) : c, written, given, ctx, false)
+    if (given?.type.kind === 'time' && !numeric) return comparisonTime(c)
+    return jsonText ? comparisonText(c) : c
+  }
+  const operand = given === undefined ? undefined : numeric ? number(given) : jsonText ? comparisonText(given) : given
+  const whens = compiled.map((w, i) => ({ when: numeric ? number(w.when) : given === undefined ? asNumber(w.when, 'DOUBLE') : whenComparison(w.when, (e.whens[i] as CaseNode['whens'][number]).when), then: w.then }))
   const otherwise = e.else === undefined ? undefined : compile(e.else, ctx)
   const results = [...whens.map((w) => w.then.type), otherwise?.type ?? NULL_TYPE]
   const nullable = otherwise === undefined || results.some((t) => t.nullable)
@@ -2072,7 +2302,7 @@ function caseExpr(e: CaseNode, ctx: CompileContext): Compiled {
       const subject = operand?.eval(r, env)
       for (let i = 0; i < whens.length; i++) {
         const w = whens[i] as (typeof whens)[number]
-        const hit = operand === undefined ? truth(w.when.eval(r, env)) === true : compareValues(subject ?? null, w.when.eval(r, env)) === 0
+        const hit = operand === undefined ? truth(w.when.eval(r, env)) === true : subject !== null && compareValues(subject ?? null, w.when.eval(r, env)) === 0
         if (hit) return type.kind === 'double' ? doubleOf(w.then.eval(r, env), type) : (thens[i] as Compiled['eval'])(r, env)
       }
       if (elseOf === undefined) return null

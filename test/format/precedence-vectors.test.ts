@@ -11,12 +11,13 @@
 // bottom-up and applies one operator per node. All the grouping was decided by
 // the parser, so a misgrouped tree cannot be rescued here — it comes out as a
 // wrong number, checked against what MySQL actually said.
+import { fileURLToPath } from 'node:url'
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { existsSync, readFileSync } from 'node:fs'
 import { NODE, parseExpression, parseSqlMode, type Expression } from '@myjs/parser'
 
-const FIXTURE = new URL('./fixtures/precedence.json', import.meta.url).pathname
+const FIXTURE = fileURLToPath(new URL('./fixtures/precedence.json', import.meta.url))
 
 interface Vector {
   readonly expr: string

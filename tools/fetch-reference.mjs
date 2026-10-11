@@ -14,7 +14,7 @@
 // Blobs are fetched, not filtered. `--filter=blob:none` would make every later
 // read a network round trip, which is the thing this exists to remove.
 import { execFileSync } from 'node:child_process'
-import { existsSync, mkdirSync, rmSync } from 'node:fs'
+import { existsSync, mkdirSync, renameSync, rmSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { join } from 'node:path'
 import { REPO, REF } from './lib/gen-common.mjs'
@@ -52,5 +52,5 @@ git(['remote', 'add', 'origin', `https://github.com/${REPO}.git`], staging)
 git(['fetch', '-q', '--depth', '1', 'origin', FULL_REF], staging)
 git(['checkout', '-q', 'FETCH_HEAD'], staging)
 rmSync(DEST, { recursive: true, force: true })
-execFileSync('mv', [staging, DEST])
+renameSync(staging, DEST)
 console.log(`reference/mysql is at ${FULL_REF}`)

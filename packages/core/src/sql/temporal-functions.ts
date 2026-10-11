@@ -43,6 +43,7 @@ import {
   formatShape,
   fullYear,
   intValue,
+  temporalDeprecation,
   monthToPeriod,
   parseTime,
   periodToMonth,
@@ -97,11 +98,8 @@ function today(env: Env): () => MysqlDateTime {
 export function settle<T>(c: Converted<T>, env: Env): T | null {
   if (c.deprecation !== undefined) {
     const { d, text } = c.deprecation
-    // A control character is named by its escape: '\t' (8.4.11).
-    const char = ({ '\t': '\\t', '\n': '\\n', '\r': '\\r', '\v': '\\v', '\f': '\\f' } as Record<string, string>)[d.char] ?? d.char
-    const where = `Delimiter '${char}' in position ${d.position} in datetime value '${text}' at row ${rowNumber(env)}`
-    if (d.superfluous) raise(env, 4096, `${where} is superfluous and is deprecated. Please remove.`)
-    else raise(env, 4095, `${where} is deprecated. Prefer the standard '${d.prefer}'.`)
+    const { code, message } = temporalDeprecation(d, text, rowNumber(env))
+    raise(env, code, message)
   }
   if (c.warning !== undefined) raise(env, 1292, c.warning)
   return c.v

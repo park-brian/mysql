@@ -18,6 +18,7 @@
     "test:protocol": "node --test \"test/protocol/**/*.test.ts\"",
     "test:crash": "node --test \"test/crash/**/*.test.ts\"",
     "typecheck": "tsc -p tsconfig.json --noEmit",
+    "verify:docker": "node tools/docker-verify.mjs",
     "lint": "node tools/lint-isomorphic.mjs",
     "fuzz": "npm run fuzz:reader && npm run fuzz:parser && npm run fuzz:engine && npm run fuzz:executor",
     "fuzz:reader": "node tools/fuzz-reader.mjs",

@@ -15,6 +15,7 @@
 // operators it checks, and `REFUSED_AT_MOST` ratchets down as each lands. A
 // refused write ends its case, since the state after it is no longer the
 // server's; a refused query does not.
+import { fileURLToPath } from 'node:url'
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { existsSync, readFileSync } from 'node:fs'
@@ -22,7 +23,7 @@ import { existsSync, readFileSync } from 'node:fs'
 import { SQL_MODE } from '../../tools/capture-relational.mjs'
 import { replay, type Fixture } from '../lib/replay.ts'
 
-const FIXTURE = new URL('./fixtures/relational.json', import.meta.url).pathname
+const FIXTURE = fileURLToPath(new URL('./fixtures/relational.json', import.meta.url))
 
 /** The most statements the executor may still refuse. Lowered by every stage of M5.18, never raised. */
 const REFUSED_AT_MOST = 0

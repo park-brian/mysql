@@ -123,20 +123,24 @@ export class MySQL {
     // SHOW STATUS counts the connections the database has, once it exists.
     let db: MySQL | undefined
     const connections = { open: () => db?.openConnections ?? 0, made: () => db?.connectionsMade ?? 0 }
-    if (executor === undefined) {
-      try {
+    try {
+      if (executor === undefined) {
         catalog = await openCatalog(vfs, options)
-      } catch (e) {
-        lock?.release()
-        throw e
+        executor = new SqlExecutor({ catalog, connections, ...(options.serverVersion === undefined ? {} : { serverVersion: options.serverVersion }) })
       }
-      executor = new SqlExecutor({ catalog, connections, ...(options.serverVersion === undefined ? {} : { serverVersion: options.serverVersion }) })
+      const accounts = options.accounts ?? (await defaultAccounts())
+      db = new MySQL(path, vfs, executor, accounts, options, catalog)
+      db.#lock = lock
+      db.#startSync()
+      return db
+    } catch (e) {
+      const errors = [e]
+      for (const close of [() => catalog?.store.close(), () => lock?.release()]) {
+        try { close() } catch (failure) { errors.push(failure) }
+      }
+      if (errors.length > 1) throw new AggregateError(errors, 'database initialization failed')
+      throw e
     }
-    const accounts = options.accounts ?? (await defaultAccounts())
-    db = new MySQL(path, vfs, executor, accounts, options, catalog)
-    db.#lock = lock
-    db.#startSync()
-    return db
   }
 
   /**
@@ -219,17 +223,24 @@ export class MySQL {
     const connection = this.createConnection()
     const channel = new MessageChannel()
     const local = channel.port1
+    const flush = (): void => {
+      const out = connection.take()
+      if (out.length > 0) local.postMessage(out, [out.buffer])
+      if (connection.closed) local.close()
+    }
+    let scheduled = false
+    connection.onOutput(() => {
+      if (scheduled) return
+      scheduled = true
+      queueMicrotask(() => { scheduled = false; flush() })
+    })
     local.onmessage = (event: MessageEvent) => {
       const chunk = toBytes(event.data)
       if (chunk === null) return
       connection.feed(chunk).then(
+        flush,
         () => {
-          const out = connection.take()
-          if (out.length > 0) local.postMessage(out, [out.buffer])
-        },
-        () => {
-          connection.close()
-          local.close()
+          try { connection.close() } finally { local.close() }
         },
       )
     }
@@ -237,8 +248,7 @@ export class MySQL {
     // session ends, and an open transaction releases the writer.
     local.addEventListener('close', () => connection.close())
     connection.start()
-    const initial = connection.take()
-    if (initial.length > 0) local.postMessage(initial, [initial.buffer])
+    flush()
     local.start?.()
     return channel.port2
   }
@@ -340,13 +350,21 @@ export class MySQL {
     return inTransaction(() => this.connect(), fn, options)
   }
 
-  async end(): Promise<void> {
-    if (this.#closed) return
+  #ending: Promise<void> | undefined
+
+  end(): Promise<void> {
     this.#closed = true
+    return (this.#ending ??= Promise.resolve().then(() => this.#shutdown()))
+  }
+
+  async #shutdown(): Promise<void> {
+    const errors: unknown[] = []
     // Every session ends before the store closes, rolling back what is open;
     // closing the store under a live transaction would leave its writer slot
     // and its undo to recovery for no reason.
-    for (const c of this.#connections) c.close()
+    for (const c of this.#connections) {
+      try { c.close() } catch (e) { errors.push(e) }
+    }
     this.#connections.clear()
     this.#implicit = null
     this.#shared = null
@@ -354,9 +372,14 @@ export class MySQL {
     // A statement paused between its steps (D-77) resumes, finds its session
     // ended, and rolls back, and a background purge stops: the store stays
     // open until both have.
-    if (this.#executor instanceof SqlExecutor) await this.#executor.stop()
-    this.store?.close()
-    this.#lock?.release()
+    try {
+      if (this.#executor instanceof SqlExecutor) await this.#executor.stop()
+    } catch (e) { errors.push(e) }
+    for (const close of [() => this.store?.close(), () => this.#lock?.release()]) {
+      try { close() } catch (e) { errors.push(e) }
+    }
+    if (errors.length === 1) throw errors[0]
+    if (errors.length > 1) throw new AggregateError(errors, 'database shutdown failed')
   }
 }
 
@@ -364,27 +387,27 @@ export class MySQL {
 async function openCatalog(vfs: Vfs, options: MySQLOptions): Promise<Catalog> {
   const data = await vfs.open('data', { create: true })
   const log = await vfs.open('log', { create: true }).catch((e: unknown) => {
-    data.close()
+    try { data.close() } catch (failure) { throw new AggregateError([e, failure], 'database initialization failed') }
     throw e
   })
   const storeOptions = {
     ...(options.bufferPoolSize === undefined ? {} : { frames: Math.max(16, Math.floor(options.bufferPoolSize / data.pageSize)) }),
     ...(options.flushLogAtTrxCommit === undefined ? {} : { flushLogAtTrxCommit: options.flushLogAtTrxCommit }),
   }
-  let store: Store
   try {
-    store = data.size() === 0 ? Store.create(data, log, storeOptions) : Store.open(data, log, storeOptions)
+    const store = data.size() === 0 ? Store.create(data, log, storeOptions) : Store.open(data, log, storeOptions)
+    const catalog = Catalog.open(store)
+    // The schemas clients connect to before creating their own database.
+    for (const name of SYSTEM_SCHEMAS) catalog.createSchema(name, { ifNotExists: true })
+    return catalog
   } catch (e) {
-    // A database that fails recovery leaves its files closed, so it can be opened again.
-    data.close()
-    log.close()
+    const errors = [e]
+    for (const file of [data, log]) {
+      try { file.close() } catch (failure) { errors.push(failure) }
+    }
+    if (errors.length > 1) throw new AggregateError(errors, 'database initialization failed')
     throw e
   }
-  const catalog = Catalog.open(store)
-  // The schemas a fresh 8.4.11 has, empty here: clients connect to `mysql`
-  // to create their own database (Prisma's schema engine does).
-  for (const name of SYSTEM_SCHEMAS) catalog.createSchema(name, { ifNotExists: true })
-  return catalog
 }
 
 const SYSTEM_SCHEMAS = ['mysql', 'performance_schema', 'sys']

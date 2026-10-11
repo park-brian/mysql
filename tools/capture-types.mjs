@@ -25,6 +25,7 @@
 //
 // Usage:
 //   node tools/capture-types.mjs --host 127.0.0.1 --port 3306 --user root --password root
+import { fileURLToPath } from 'node:url'
 import { mkdirSync, writeFileSync, readdirSync, existsSync } from 'node:fs'
 import { join } from 'node:path'
 import { execFile } from 'node:child_process'
@@ -41,7 +42,7 @@ const PORT = arg('port', '3306')
 const USER = arg('user', 'root')
 const PASSWORD = arg('password', 'root')
 const DB = arg('db', 'typevectors')
-const OUT_DIR = arg('out', new URL('../test/format/fixtures/', import.meta.url).pathname)
+const OUT_DIR = arg('out', fileURLToPath(new URL('../test/format/fixtures/', import.meta.url)))
 
 /**
  * How every query in this tool connects.

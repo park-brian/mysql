@@ -7,6 +7,7 @@
 // with SHOW WARNINGS and each case with its rows. This replays every case and
 // compares every statement: errors and their messages, counts, each
 // warning's level, code and text, and the values as stored.
+import { fileURLToPath } from 'node:url'
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { existsSync, readFileSync } from 'node:fs'
@@ -15,7 +16,7 @@ import { MySQL } from '@myjs/core'
 // @ts-expect-error — a tool, in plain JavaScript; the replay runs each case exactly as the capture did.
 import { runCase } from '../../tools/capture-temporal-text.mjs'
 
-const FIXTURE = new URL('./fixtures/temporal-text.json', import.meta.url).pathname
+const FIXTURE = fileURLToPath(new URL('./fixtures/temporal-text.json', import.meta.url))
 
 interface Outcome {
   readonly sql: string

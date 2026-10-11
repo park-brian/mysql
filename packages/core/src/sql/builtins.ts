@@ -19,6 +19,12 @@ import {
   intValue,
   negate,
   stringValue,
+  parseTime,
+  packDateTime,
+  packTime,
+  roundTime,
+  toDateTime,
+  toTime,
   toDouble,
   toInteger,
   toText,
@@ -37,6 +43,9 @@ import {
   comparer,
   compile,
   constantEnv,
+  constantNode,
+  numberConstant,
+  columnConstantDiagnostics,
   convertTo,
   doubleOf,
   expressionOf,
@@ -51,6 +60,9 @@ import {
   dateConverter,
   ownText,
   textOf,
+  temporalOperands,
+  textVersusNumber,
+  onStatementDate,
   type Env,
   type Row,
 } from './compile.ts'
@@ -389,22 +401,29 @@ export function controlFunction(name: string, e: CallNode, ctx: CompileContext):
     case 'NULLIF': {
       arity(2)
       const [first, y] = args() as [Compiled, Compiled]
-      const x = asBigintConstant(first, y, e.args[0] as Expression, ctx) ?? first
+      if (first.type.kind === 'int' || first.type.kind === 'decimal' || first.type.kind === 'double') columnConstantDiagnostics(first, e.args[0] as Expression, y, e.args[1] as Expression, ctx)
+      const converted = nullifTemporalConstant(first, y, e.args[0] as Expression, ctx)
+      const x = converted?.comparison ?? asBigintConstant(first, y, e.args[0] as Expression, ctx) ?? first
+      const [a, b] = temporalOperands(e.args[0] as Expression, e.args[1] as Expression, x, y, ctx)
+      const readsNumber = textVersusNumber(a.type, b.type) || textVersusNumber(b.type, a.type)
+      const readA = readsNumber ? numberConstant(a, e.args[0] as Expression, ctx) : a
+      const readB = readsNumber ? numberConstant(b, e.args[1] as Expression, ctx) : b
       // A comparison: text beside a date is read as one for it (or is 1525), though the value returned is the first argument as given.
-      const left = dateConverter(x, e.args[0] as Expression, y, ctx)
-      const right = dateConverter(y, e.args[1] as Expression, x, ctx)
+      const left = dateConverter(a, e.args[0] as Expression, b, ctx)
+      const right = dateConverter(b, e.args[1] as Expression, a, ctx)
       if (isText(x.type) && isText(y.type)) aggregateCollations([x.type, y.type], 'nullif', true)
-      const cmp = comparer(x.type, y.type)
+      const cmp = comparer(a.type, b.type)
       // A temporal or a YEAR comes back as its text, in the connection's charset (8.4.11).
       const text = x.type.kind === 'datetime' || x.type.kind === 'time' || x.type.field === FIELD_TYPE.YEAR
-      const type: ResultType = text ? { ...stringType(charWidth(x.type), conn, true), unsigned: x.type.field === FIELD_TYPE.YEAR } : { ...expressionOf(x.type), nullable: true }
+      const type: ResultType = converted?.type ?? (text ? { ...stringType(charWidth(x.type), conn, true), unsigned: x.type.field === FIELD_TYPE.YEAR } : { ...expressionOf(x.type), nullable: true })
       return {
         eval: (r, env) => {
-          const v = x.eval(r, env)
+          const v = readA.eval(r, env)
           if (v === null) return null
-          const w = y.eval(r, env)
+          const w = readB.eval(r, env)
           if (cmp(left === undefined ? v : left(v, env), right === undefined ? w : right(w, env)) === 0) return null
-          return text ? stringValue(textOf(v, x.type), conn) : v
+          const result = x.eval(r, env)
+          return converted !== undefined ? converted.result : text && result !== null ? stringValue(textOf(result, x.type), conn) : result
         },
         type,
       }
@@ -709,13 +728,52 @@ function nextRand(s: RandSeeds): number {
  * `'1.5'` stays text, `'abc'` is 0 with its 1292 (8.4.11).
  */
 function asBigintConstant(x: Compiled, y: Compiled, written: Expression, ctx: CompileContext): Compiled | undefined {
-  if (!isText(x.type) || written.kind !== NODE.LITERAL || y.type.column === undefined || y.type.field !== FIELD_TYPE.LONGLONG) return undefined
-  const read = asNumber(x, 'DOUBLE', true)
+  if ((!isText(x.type) && x.type.kind !== 'datetime' && x.type.kind !== 'time') || written.kind !== NODE.LITERAL || y.type.column === undefined || y.type.field !== FIELD_TYPE.LONGLONG) return undefined
+  const read = numberConstant(x, written, ctx, true)
   const probe = x.eval([], constantEnv(ctx))
   const d = probe === null ? NaN : toDouble(probe)
   if (!Number.isInteger(d) || Math.abs(d) > 2 ** 63) return undefined
   const v = intValue(BigInt(d))
   return { eval: (r, env) => (read.eval(r, env), v), type: { ...intType(22, x.type.nullable, y.type.unsigned), field: FIELD_TYPE.LONGLONG } }
+}
+
+/** convert_constant_item can replace NULLIF's first argument, including its returned value and metadata. */
+function nullifTemporalConstant(x: Compiled, y: Compiled, written: Expression, ctx: CompileContext): { comparison: Compiled; result: Value; type: ResultType } | undefined {
+  if (y.type.column === undefined || !constantNode(written)) return undefined
+  const v = x.eval([], constantEnv(ctx))
+  if (v === null) return undefined
+  let converted: Value
+  let packed: bigint
+  let unsigned = false
+  if (y.type.field === FIELD_TYPE.YEAR) {
+    const textual = v.kind === 'string' || v.kind === 'bytes'
+    if (textual && !/^\s*[+-]?(\d|\.\d)/.test(toText(v))) return undefined
+    const dated = v.kind === 'time' ? onStatementDate(x).eval([], constantEnv(ctx)) : v
+    const n = dated?.kind === 'datetime' ? dated.v.year : Number(toInteger(v))
+    const year = n === 0 ? textual ? 2000 : 0 : n < 70 && n > 0 ? n + 2000 : n < 100 && n >= 70 ? n + 1900 : n
+    if (year !== 0 && (year < 1901 || year > 2155)) return undefined
+    packed = BigInt(year)
+    converted = intValue(packed, true)
+    unsigned = true
+  } else if (y.type.kind === 'time') {
+    if (v.kind === 'string' || v.kind === 'bytes') {
+      const p = parseTime(toText(v))
+      if (p === undefined || p.truncated || p.clamped) return undefined
+    }
+    const t = toTime(v)
+    if (t === undefined) return undefined
+    converted = { ...t, v: roundTime(t.v, y.type.scale), fsp: y.type.scale }
+    packed = packTime(converted.v)
+  } else if (y.type.kind === 'datetime' && (x.type.kind === 'int' || x.type.kind === 'decimal' || x.type.kind === 'double')) {
+    const t = toDateTime(v, y.type.field === FIELD_TYPE.DATE ? 'DATE' : 'DATETIME')
+    if (t === undefined) return undefined
+    converted = t
+    packed = packDateTime(t.v)
+    unsigned = true
+  } else return undefined
+  const type = { ...stringType(22, ctx.connectionCollation, true), unsigned }
+  const comparisonType = converted.kind === 'time' ? datetimeType(FIELD_TYPE.TIME, converted.fsp, true) : converted.kind === 'datetime' ? datetimeType(y.type.field, converted.fsp, true) : { ...intType(4, true, true), field: FIELD_TYPE.YEAR }
+  return { comparison: lit(converted, comparisonType), result: stringValue(packed.toString(), ctx.connectionCollation), type }
 }
 
 function chosenOf(x: Compiled, result: ResultType): (v: Exclude<Value, null>, env: Env) => Value {

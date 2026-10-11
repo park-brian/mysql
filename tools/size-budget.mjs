@@ -7,10 +7,11 @@
 // there: a committed number per package, and any commit that exceeds it fails.
 //
 // Run with --update to re-commit the numbers after a deliberate growth.
+import { fileURLToPath } from 'node:url'
 import { build } from 'esbuild'
 import { gzipSync } from 'node:zlib'
 import { readFileSync, writeFileSync, existsSync, readdirSync } from 'node:fs'
-import { relative } from 'node:path'
+import { join, resolve } from 'node:path'
 import { check } from './lib/gen-common.mjs'
 
 // `--root <dir>` mirrors `lint-isomorphic.mjs`: proving that the gate excludes
@@ -19,12 +20,12 @@ import { check } from './lib/gen-common.mjs'
 const rootFlag = process.argv.indexOf('--root')
 const ROOT =
   rootFlag === -1
-    ? new URL('..', import.meta.url).pathname
-    : process.argv[rootFlag + 1].replace(/\/?$/, '/')
+    ? fileURLToPath(new URL('..', import.meta.url))
+    : process.argv[rootFlag + 1]
 // `--budget-file <path>` lets the gate's own test point at a throwaway budget,
 // so proving the gate fails does not mean editing the committed numbers.
 const budgetFlag = process.argv.indexOf('--budget-file')
-const BUDGET_FILE = budgetFlag === -1 ? ROOT + 'size-budget.json' : process.argv[budgetFlag + 1]
+const BUDGET_FILE = budgetFlag === -1 ? join(ROOT, 'size-budget.json') : process.argv[budgetFlag + 1]
 
 // M2.22: discovered, not listed. A hardcoded array means a new package lands
 // with no committed number and no gate, and nothing says so — which is exactly
@@ -37,9 +38,9 @@ const BUDGET_FILE = budgetFlag === -1 ? ROOT + 'size-budget.json' : process.argv
 // bundle of it to measure. Listing it here is a deliberate opt-out, not a
 // package someone forgot.
 const HOST_ONLY = ['server']
-const PACKAGES = readdirSync(ROOT + 'packages')
+const PACKAGES = readdirSync(join(ROOT, 'packages'))
   .filter((name) => !HOST_ONLY.includes(name))
-  .filter((name) => existsSync(`${ROOT}packages/${name}/src/index.ts`))
+  .filter((name) => existsSync(join(ROOT, 'packages', name, 'src/index.ts')))
   .sort()
 
 // Headroom so that a one-byte comment change does not fail CI; a real
@@ -59,7 +60,7 @@ const update = process.argv.includes('--update')
 // package, and report the deferred remainder so it is visible rather than
 // merely absent.
 async function measure(pkg) {
-  const entry = `${ROOT}packages/${pkg}/src/index.ts`
+  const entry = join(ROOT, 'packages', pkg, 'src/index.ts')
   if (!existsSync(entry)) return null
   const result = await build({
     entryPoints: [entry],
@@ -72,7 +73,7 @@ async function measure(pkg) {
     // `write: false` nothing reaches the disk.
     write: false,
     splitting: true,
-    outdir: `${ROOT}packages/${pkg}/.size-out`,
+    outdir: join(ROOT, 'packages', pkg, '.size-out'),
     metafile: true,
     // Workspace siblings are bundled in, so each number is the real cost of
     // installing that package alone.
@@ -83,24 +84,21 @@ async function measure(pkg) {
   // Matching on "has an entryPoint at all" is not enough: under `splitting`
   // esbuild gives every dynamically imported module its own entry too, which
   // is precisely the set we want to exclude.
-  const wanted = relative(process.cwd(), entry)
   const outputs = result.metafile.outputs
   let entryPath = null
   for (const [path, info] of Object.entries(outputs)) {
-    if (info.entryPoint === wanted) {
+    if (info.entryPoint !== undefined && resolve(info.entryPoint) === resolve(entry)) {
       check(entryPath === null, `size-budget: ${pkg} produced two entry chunks`)
       entryPath = path
     }
   }
-  check(entryPath !== null, `size-budget: ${pkg} has no output for ${wanted}`)
+  check(entryPath !== null, `size-budget: ${pkg} has no output for ${entry}`)
 
   let entryContents = null
   let deferredRaw = 0
   for (const file of result.outputFiles) {
-    // esbuild reports metafile keys relative to cwd and outputFiles paths
-    // absolutely, so compare on the basename-bearing tail rather than on
-    // either form directly.
-    if (file.path.endsWith(entryPath.slice(entryPath.lastIndexOf('/')))) entryContents = file.contents
+    // esbuild uses forward slashes in its metafile on Windows too.
+    if (resolve(file.path) === resolve(entryPath)) entryContents = file.contents
     else deferredRaw += file.contents.length
   }
   check(entryContents !== null, `size-budget: ${pkg} entry chunk has no contents`)

@@ -38,6 +38,13 @@ export interface Deprecation {
   readonly prefer: '-' | ':' | ' '
 }
 
+/** The diagnostic shared by temporal storage, functions and comparisons. */
+export function temporalDeprecation(d: Deprecation, text: string, row: number): { code: number; message: string } {
+  const char = ({ '\t': '\\t', '\n': '\\n', '\r': '\\r', '\v': '\\v', '\f': '\\f' } as Record<string, string>)[d.char] ?? d.char
+  const where = `Delimiter '${char}' in position ${d.position} in datetime value '${text}' at row ${row}`
+  return d.superfluous ? { code: 4096, message: `${where} is superfluous and is deprecated. Please remove.` } : { code: 4095, message: `${where} is deprecated. Prefer the standard '${d.prefer}'.` }
+}
+
 export interface ScannedDateTime {
   /** The value, its two-digit year expanded, its displacement not yet applied. */
   readonly v: MysqlDateTime

@@ -22,14 +22,15 @@ const run = promisify(execFile)
 const PASSWORD = 'correct horse battery staple'
 
 async function mysqlCli(args, { expectFailure = false } = {}) {
+  let stdout
   try {
-    const { stdout } = await run('mysql', args, { encoding: 'utf8', timeout: 20_000 })
-    if (expectFailure) throw new Error(`expected the client to fail, but it succeeded:\n${stdout}`)
-    return stdout
+    ;({ stdout } = await run('mysql', args, { encoding: 'utf8', timeout: 20_000 }))
   } catch (err) {
-    if (expectFailure) return String(err.stderr ?? err.message)
+    if (expectFailure && typeof err.code === 'number') return String(err.stderr ?? err.message)
     throw new Error(`mysql ${args.join(' ')} failed:\n${err.stderr ?? err.message}`)
   }
+  if (expectFailure) throw new Error(`expected the client to fail, but it succeeded:\n${stdout}`)
+  return stdout
 }
 
 let failures = 0
@@ -50,11 +51,10 @@ const db = await MySQL.open(':memory:', { accounts })
 const server = await serve(db, { port: 0, accounts })
 const base = ['-h', '127.0.0.1', '-P', String(server.port), '--protocol=TCP']
 
-console.log(`myjs listening on 127.0.0.1:${server.port}`)
-const version = (await run('mysql', ['--version'], { encoding: 'utf8' })).stdout.trim()
-console.log(`client: ${version}\n`)
-
 try {
+  console.log(`myjs listening on 127.0.0.1:${server.port}`)
+  const version = (await run('mysql', ['--version'], { encoding: 'utf8' })).stdout.trim()
+  console.log(`client: ${version}\n`)
   // 1. The criterion, verbatim: connect, SELECT 1, quit cleanly.
   const one = await mysqlCli([...base, '-u', 'root', '-e', 'SELECT 1'])
   check('mysql -h 127.0.0.1 ... -e "SELECT 1"', /\n1\n/.test(one), one.trim())
@@ -109,8 +109,7 @@ try {
   const prepared = await mysqlCli([...base, '-u', 'root', '--binary-as-hex=0', '-e', "SELECT 'bound'"])
   check('the CLI runs a statement and quits cleanly', /bound/.test(prepared), prepared.trim())
 } finally {
-  await server.close()
-  await db.end()
+  try { await server.close() } finally { await db.end() }
 }
 
 console.log(failures === 0 ? '\nM1 exit criterion: met' : `\nM1 exit criterion: ${failures} check(s) failed`)

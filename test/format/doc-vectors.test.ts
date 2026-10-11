@@ -10,6 +10,7 @@
 // This is the same discipline as the size gate (M2.22) and the generated-table
 // diff (D-14): a compatibility claim a human maintains by hand is marketing,
 // and one CI maintains is an engineering artefact.
+import { fileURLToPath } from 'node:url'
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync, readdirSync } from 'node:fs'
@@ -31,7 +32,7 @@ interface Dump {
  * scanner. A run of three or more inside a code fence is a dump.
  */
 function dumpsIn(doc: string): Dump[] {
-  const text = readFileSync(new URL(`../../docs/${doc}.md`, import.meta.url).pathname, 'utf8')
+  const text = readFileSync(fileURLToPath(new URL(`../../docs/${doc}.md`, import.meta.url)), 'utf8')
   const out: Dump[] = []
   let fenced = false
   text.split('\n').forEach((line, i) => {
@@ -48,7 +49,7 @@ function dumpsIn(doc: string): Dump[] {
 }
 
 function testSources(): string {
-  const dir = new URL('./', import.meta.url).pathname
+  const dir = fileURLToPath(new URL('./', import.meta.url))
   return readdirSync(dir)
     .filter((f) => f.endsWith('.test.ts'))
     .map((f) => readFileSync(dir + f, 'utf8'))

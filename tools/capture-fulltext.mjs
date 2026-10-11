@@ -11,6 +11,7 @@
 //
 // Usage:
 //   node tools/capture-fulltext.mjs --host 127.0.0.1 --port 3306 --user root --password root
+import { fileURLToPath } from 'node:url'
 import { writeFileSync } from 'node:fs'
 import { execFile } from 'node:child_process'
 import { promisify } from 'node:util'
@@ -23,7 +24,7 @@ const HOST = arg('host', '127.0.0.1')
 const PORT = arg('port', '3306')
 const USER = arg('user', 'root')
 const PASSWORD = arg('password', 'root')
-const OUT = arg('out', new URL('../packages/core/src/sql/fulltext-params.ts', import.meta.url).pathname)
+const OUT = arg('out', fileURLToPath(new URL('../packages/core/src/sql/fulltext-params.ts', import.meta.url)))
 
 const CONNECT = ['-h', HOST, '-P', String(PORT), '--protocol=TCP', '--default-character-set=utf8mb4', '-u', USER, `-p${PASSWORD}`]
 

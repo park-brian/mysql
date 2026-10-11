@@ -73,19 +73,21 @@ PGlite's 3 MB gzipped.
 
 ### 4. The licence — the decisive point
 
-MySQL is **GPLv2** (with the FOSS Exception). MariaDB Server is **GPLv2**.
+MySQL Community Server is **GPLv2**. MariaDB Server is **GPLv2**.
 Postgres is BSD-like; SQLite is public domain; DuckDB is MIT.
 
-A WASM artefact of MySQL is a derivative work of MySQL. An npm package that
-ships it, and the applications that link it into their bundle, inherit GPLv2
-obligations. For a library meant to be dropped into arbitrary web and Node
-applications, that is not a footnote — it changes who can use it at all. The
-"embed the real engine" strategy that is available for Postgres and SQLite is
-simply not available for MySQL on the same terms.
+A WebAssembly port retains MySQL's licence obligations. The effect on another
+application depends on whether the integration is a combined program and how
+it is distributed; the [GNU GPLv2 FAQ](https://www.gnu.org/licenses/old-licenses/gpl-2.0-faq.html#MereAggregation)
+distinguishes combination from aggregation. Oracle offers
+[commercial licensing](https://www.mysql.com/about/legal/licensing/oem/) too.
+The [FOSS Exception applies to client libraries, not the server](https://www.mysql.com/de/about/legal/licensing/foss-exception/).
+This project's goal is an MIT library that can be distributed without MySQL's
+server code, which is why the reimplementation fits its delivery model.
 
 ### 5. The empirical evidence
 
-Nobody has done it. Oracle's own "WebAssembly in MySQL" feature runs WASM
+The projects surveyed here do not provide that portable library. Oracle's own "WebAssembly in MySQL" feature runs WASM
 *inside* the server, not the reverse. The well-known "LAMP in Wasm" demo runs
 MySQL as an ordinary native container and only compiles PHP. Browser demos that
 genuinely run `mysqld` do so under a whole-machine x86 emulator. See

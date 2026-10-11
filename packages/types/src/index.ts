@@ -90,6 +90,8 @@ export {
   quoteJsonString,
   renderJson,
   toJsonDoc,
+  packDateTime,
+  packTime,
 } from './json-doc.ts'
 export type { JsonDoc } from './json-doc.ts'
 export { declaredKeyWidth, encodeKey, encodeKeyPart, keyPartLength } from './keys.ts'
@@ -129,6 +131,7 @@ export {
   string as stringValue,
   textOf,
   timeOrdinal,
+  temporalOrdinal,
   toDateTime,
   toDecimal,
   toDouble,
@@ -147,14 +150,14 @@ export type { Derived } from './compare.ts'
 export { SUM_PRECISION_INCREMENT, avgAccumulator, avgPrecision, bitAccumulator, extremeAccumulator, sumAccumulator, sumPrecision, varianceAccumulator } from './aggregate.ts'
 export type { Accumulator } from './aggregate.ts'
 export { DIV_PRECISION_INCREMENT, add, type ExprLabel, bitNot, bitwise, divide, intDivide, modulo, negate, not } from './arith.ts'
-export { decodeField, encodeField, integerRange, warn } from './encode.ts'
+export { decodeField, encodeField, integerRange, roundTime, warn } from './encode.ts'
 export type { Condition, FieldColumn, StoreContext } from './encode.ts'
 export { columnCannotBeNull, columnOutOfRange, dataTooLong, invalidJsonArgument, invalidJsonCharset, invalidJsonText, valueOutOfRange, wrongTemporalValue, wrongValueForColumn } from './errors.ts'
 export { addInterval, dateOfDayNumber, dayNumber, intervalFsp, intervalOf, isDateUnit, isIntervalUnit, isTimeUnit, type Interval } from './interval.ts'
 export { DAY_NAMES, MAX_DAY_NUMBER, MONTH_NAMES, daysInMonth, daysInYear, fullYear, monthToPeriod, periodToMonth, validPeriod, week, weekBehaviour, weekday } from './calendar.ts'
 export { dateOf, dateStructOf, numberToDateTime, timeDiff, timeOf, timeStructOf, type Converted, type DateFlags, type TimeStruct } from './temporal-args.ts'
 export { extractDateTime, formatDateTime, formatLength, formatShape, type Broken } from './date-format.ts'
-export { scanDateTime, scanTime } from './temporal-scan.ts'
+export { scanDateTime, scanTime, temporalDeprecation } from './temporal-scan.ts'
 export { crc32, md5, sha1, sha256, sha512 } from './digest.ts'
 export { MERGE_TYPES, mergeTypes, type MergeType } from './type-merge.ts'
 export { jsonTruth } from './sql-value.ts'

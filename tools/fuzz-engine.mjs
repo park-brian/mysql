@@ -16,6 +16,7 @@
 // crasher written to the corpus. Some targets draw their own bytes from the
 // generator rather than the input, so what replays a crasher is its seed and
 // iteration; the saved bytes are for reading.
+import { fileURLToPath } from 'node:url'
 import { mkdirSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { MemoryVfs } from '@myjs/vfs'
@@ -52,7 +53,7 @@ import { xorshift } from './lib/cli.mjs'
 const RUNS = Number(process.env.FUZZ_RUNS ?? 1_000_000)
 const SEED = Number(process.env.FUZZ_SEED ?? (Date.now() & 0x7fffffff))
 const PER_INPUT_BUDGET_MS = Number(process.env.FUZZ_INPUT_BUDGET_MS ?? 250)
-const CORPUS = new URL('../test/format/fuzz-corpus/', import.meta.url).pathname
+const CORPUS = fileURLToPath(new URL('../test/format/fuzz-corpus/', import.meta.url))
 const PAGE = 512
 
 /** xorshift32, seeded (`tools/lib/cli.mjs`), so a seed reproduces the corpus. */

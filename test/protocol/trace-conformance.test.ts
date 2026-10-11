@@ -10,6 +10,7 @@
 // string, capability set, connection id and resultset metadata all differ by
 // design — and that claim is made, against our own frozen output, in
 // `self-replay.test.ts`.
+import { fileURLToPath } from 'node:url'
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync, readdirSync } from 'node:fs'
@@ -35,7 +36,7 @@ import {
 } from '@myjs/protocol'
 import { Reader } from '@myjs/bytes'
 
-const FIXTURES = new URL('./fixtures/', import.meta.url).pathname
+const FIXTURES = fileURLToPath(new URL('./fixtures/', import.meta.url))
 
 interface Trace {
   readonly name: string

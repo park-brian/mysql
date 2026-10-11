@@ -14,6 +14,7 @@
 //
 // Doc 44 makes this the acceptance mechanism for M1.1–M1.23: "an item is not
 // done until its trace replays byte-identically."
+import { fileURLToPath } from 'node:url'
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync, readdirSync } from 'node:fs'
@@ -21,7 +22,7 @@ import { join } from 'node:path'
 import { MySQL } from '@myjs/core'
 import { MapAccountStore, fixedRandom } from '@myjs/protocol'
 
-const TRACES = new URL('./self-traces/', import.meta.url).pathname
+const TRACES = fileURLToPath(new URL('./self-traces/', import.meta.url))
 
 interface SelfTrace {
   readonly name: string

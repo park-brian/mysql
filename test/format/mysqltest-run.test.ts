@@ -6,12 +6,13 @@
 // scoreboard says the same. What it may record is narrow on purpose: file
 // names, outcomes, and failure reasons that are an error number or the class
 // of a difference. Never a statement, never a line of a result.
+import { fileURLToPath } from 'node:url'
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 
-const FIXTURE = new URL('./fixtures/mysqltest-run.json', import.meta.url).pathname
-const ROADMAP = new URL('../../docs/44-roadmap.md', import.meta.url).pathname
+const FIXTURE = fileURLToPath(new URL('./fixtures/mysqltest-run.json', import.meta.url))
+const ROADMAP = fileURLToPath(new URL('../../docs/44-roadmap.md', import.meta.url))
 
 interface Run {
   readonly passed: number

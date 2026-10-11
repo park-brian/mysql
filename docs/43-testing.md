@@ -157,18 +157,21 @@ const vfs = new FaultInjectingVfs(memoryVfs, {
 })
 ```
 
-For every `n` from 1 to the length of the workload: run, crash, reopen, and
+For each selected crash point `n`: run, crash, reopen, and
 assert (a) the database is consistent, and (b) every transaction that was
 acknowledged as committed is present. Fully deterministic, fast, and it is the
 only way to actually verify the claims in [41](./41-durability-and-concurrency.md).
 
-**Real browser crashes.** In Playwright, kill the page mid-transaction and
+**Real browser crashes (planned, M6.10).** In Playwright, kill the page mid-transaction and
 reopen. Slower and less exhaustive, but it validates that OPFS behaves as the
 model assumes — which is the assumption most likely to be wrong.
 
 ## 6. Fuzzing
 
 Every parser is an attack surface reachable from a peer:
+
+The current fuzz commands cover the byte reader, SQL parser, native engine
+formats and SQL executor. InnoDB page fuzzing waits for M7's reader.
 
 | Target | Input |
 |---|---|
@@ -219,13 +222,36 @@ number is marketing; with a number it is an engineering artefact.
 test/
   unit/          per-module, memory VFS, fast
   protocol/      trace replay + real client integration
-  format/        golden vectors, property tests, real .ibd files
-  mysqltest/     the .test interpreter and the curated allowlist
-  differential/  against a real mysqld in Docker
+  format/        captured reference observations, codecs, corpus replay
   crash/         fault injection
-  browser/       Playwright, real OPFS
-  bench/         performance regression
+  lib/           shared replay helpers
 ```
 
-`npm test` runs unit, protocol, format and mysqltest — everything that needs no
-Docker and no browser — and should stay under a minute. The rest runs in CI.
+`npm test` runs unit, protocol, format and crash tests (300 injection points).
+It needs no live MySQL or browser. MySQL's own `mysqltest` client is run by
+`tools/mysqltest-run.mjs`; browser integration is M6.10. Benchmarks live in
+`tools/bench.mjs`.
+
+`npm run verify:docker` installs with `npm ci` in a disposable Linux copy,
+using Node 22.18.0, then runs typecheck, lint, tests, size and package smoke
+checks. The checkout is mounted read-only. `-- --full` adds seeded fuzzing
+and 10,000 crash points; `-- --reference` starts MySQL 8.4.11 at a pinned image
+digest, runs the real C client's authentication and query checks against
+this executor, and reproduces seven committed SQL corpora on the reference:
+coercion, execution, functions, JSON, more-functions, relational and
+temporal-functions. It compares values, metadata, errors and DML headers,
+including both protocols where recorded and all 1,737 recorded coercion warning
+counts. Plan text and legacy SELECT warning counts remain separate executor
+replay gates; those older captures used a different warning-count timing. The runner
+waits for readiness and removes its containers and network on success or failure.
+
+For a fresh ORM comparison, use `tools/orm-suites.mjs --ours` or `--server`
+with `--out /tmp/orm-census.json` to keep committed fixtures intact. Server
+mode accepts `MYSQL_HOST`, `MYSQL_PORT`, `MYSQL_USER` and `MYSQL_PASSWORD`;
+use a disposable reference server because it creates/drops test databases
+and truncates `mysql.general_log`. The runner restores logging settings and
+refuses missing or empty reports, including stale reports from an earlier run.
+`--prisma-workers N` bounds Jest's worker count and records it in the report;
+use the same count for the reference and this executor when comparing runs.
+This leaves every test and its timeout intact. Unbounded parallel runs can
+lose interactive-transaction tests to scheduling delays on a busy host.

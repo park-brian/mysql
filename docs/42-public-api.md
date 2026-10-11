@@ -17,9 +17,9 @@ work item that builds the rest:
 | `query()`, `execute()`, `connect()`, `begin()`, `transaction()` | yes (M5.36) | |
 | `execProtocol()`, `createStream()`, `createPort()`, `createConnection()` | yes (M1.24) | |
 | `serve()` from `myjs/server` | yes (M1.24) | |
-| real `INFORMATION_SCHEMA`, `SHOW`, `EXPLAIN` | yes (M5.13 begun) | SHOW VARIABLES, STATUS, ENGINES and TABLE STATUS after 0.3 (M5.13) |
-| `db.stream()` | no | built after 0.3 was staged (M5.40); in 0.4 |
-| `db.schemas()`, `tables()`, `columns()`, `explain()`, `stats()` | no | built after 0.3 was staged (M5.13); in 0.4 |
+| real `INFORMATION_SCHEMA`, `SHOW`, `EXPLAIN` | yes (M5.13) | EXPLAIN supports FORMAT=TREE; unsupported formats are refused |
+| `db.stream()` | yes (M5.40) | included in the current 0.3.0 tarballs |
+| `db.schemas()`, `tables()`, `columns()`, `explain()`, `stats()` | yes (M5.13) | included in the current 0.3.0 tarballs |
 | `MySQLWorker`, `myjs/worker` | no | M6.6 |
 | `dump()`, `MySQL.load()` | no | M6.8 |
 | `importTablespace()`, `exportTablespace()` | no | M7.10, M7.11 |
@@ -50,7 +50,13 @@ const db = await MySQL.open('./data', {
 The URL scheme selects the VFS: `opfs://`, `file://` or a bare path, `:memory:`.
 An explicit `vfs` option accepts a custom implementation, and `accounts` an
 account store for the connections that sign in. A directory is locked by the
-instance that opened it until `end()`.
+instance that opened it until `end()`. Existing lock files fail closed,
+including files left by a crash; [doc 40](./40-vfs.md#node--bun--deno) describes
+explicit recovery. `end()` immediately refuses new connections and shares one
+shutdown promise with concurrent callers. It attempts every cleanup even if
+a checkpoint or another cleanup fails, then rejects with that failure (or an
+`AggregateError` for several). A TCP listener has its own lifetime: call
+`server.close()` as well as `db.end()`.
 
 `sqlMode`, `characterSet`, `collation`, `timeZone` and `readOnly` were drawn
 here once and nothing read them; `open()` refuses each with
@@ -75,7 +81,7 @@ const [result] = await db.execute(
 result.affectedRows   // 1
 result.insertId       // 42
 
-// streaming — never materialise a large resultset (M5.40, in 0.4)
+// streaming — pull rows in batches (M5.40)
 for await (const row of db.stream('SELECT * FROM big_table')) {
   process(row)
 }
@@ -287,7 +293,7 @@ Exactly `mysql2`'s error shape, so existing `catch` blocks keep working.
 ## Introspection
 
 ```js
-// M5.13, in 0.4
+// M5.13, included in the current 0.3.0 tarballs
 await db.schemas()                    // string[], as SHOW DATABASES lists them
 await db.tables('myapp')              // TableInfo[]: name, type, engine, collation, comment
 await db.columns('myapp', 'users')    // ColumnInfo[]: name, position, type, nullable, default, key, extra, collation, comment

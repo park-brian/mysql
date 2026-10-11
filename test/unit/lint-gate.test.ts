@@ -1,5 +1,6 @@
 // M0.2 — the lint gate must actually fail. Ground rule 1 is only worth stating
 // if a violation stops a commit, so the negative case is a test, not a promise.
+import { fileURLToPath } from 'node:url'
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { execFileSync } from 'node:child_process'
@@ -7,7 +8,7 @@ import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
-const LINTER = new URL('../../tools/lint-isomorphic.mjs', import.meta.url).pathname
+const LINTER = fileURLToPath(new URL('../../tools/lint-isomorphic.mjs', import.meta.url))
 
 function lintTree(pkg: string, filename: string, source: string): { code: number; out: string } {
   const root = mkdtempSync(join(tmpdir(), 'myjs-lint-'))
@@ -37,6 +38,19 @@ test('a bare `Buffer` identifier outside the exempt paths fails the gate', () =>
   const { code, out } = lintTree('protocol', 'bad.ts', 'export const b = Buffer.alloc(4)\n')
   assert.equal(code, 1)
   assert.match(out, /uses `Buffer`/)
+})
+
+test('template expressions and bare built-in imports cannot bypass the gate', () => {
+  const template = lintTree('protocol', 'bad.ts', 'export const b = `${Buffer.alloc(4)}`\n')
+  assert.equal(template.code, 1)
+  assert.match(template.out, /uses `Buffer`/)
+  const builtin = lintTree('protocol', 'bad.ts', "import fs from 'fs'\n")
+  assert.equal(builtin.code, 1)
+  assert.match(builtin.out, /imports 'fs'/)
+})
+
+test('an import mentioned in a comment does not create a package edge', () => {
+  assert.equal(lintTree('protocol', 'ok.ts', "// import x from '@myjs/charsets'\nexport const value = 1\n").code, 0)
 })
 
 test('the same violations are permitted inside packages/vfs', () => {

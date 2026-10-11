@@ -6,12 +6,13 @@
 // so it does not run here; this checks what it recorded. What it may record is
 // narrow on purpose: counts, feature names and failure reasons with their
 // quoted text elided. Never a statement.
+import { fileURLToPath } from 'node:url'
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 
-const FIXTURE = new URL('./fixtures/orm-census.json', import.meta.url).pathname
-const ROADMAP = new URL('../../docs/44-roadmap.md', import.meta.url).pathname
+const FIXTURE = fileURLToPath(new URL('./fixtures/orm-census.json', import.meta.url))
+const ROADMAP = fileURLToPath(new URL('../../docs/44-roadmap.md', import.meta.url))
 
 interface Run {
   readonly passed: number

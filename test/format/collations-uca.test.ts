@@ -19,10 +19,11 @@
 // property test we have — stated against `Collation.compare`, never against
 // `sortKey`, because comparing a key against the function that built it is a
 // tautology that passes whatever the encoder does (D-35).
+import { fileURLToPath } from 'node:url'
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { gzipSync } from 'node:zlib'
-import { relative } from 'node:path'
+import { resolve } from 'node:path'
 import { build } from 'esbuild'
 import fc from 'fast-check'
 import {
@@ -313,7 +314,7 @@ test('M2.20: the exit criterion — the charsets bundle carries no UCA weights',
   const probe = PACKED_UCA900_LEVEL1.slice(2000, 2120)
   assert.ok(probe.length === 120, 'the probe must come from the middle of the real table')
 
-  const entry = new URL('../../packages/charsets/src/index.ts', import.meta.url).pathname
+  const entry = fileURLToPath(new URL('../../packages/charsets/src/index.ts', import.meta.url))
   const result = await build({
     entryPoints: [entry],
     bundle: true,
@@ -323,20 +324,19 @@ test('M2.20: the exit criterion — the charsets bundle carries no UCA weights',
     minify: true,
     write: false,
     splitting: true,
-    outdir: new URL('../../packages/charsets/.uca-check', import.meta.url).pathname,
+    outdir: fileURLToPath(new URL('../../packages/charsets/.uca-check', import.meta.url)),
     metafile: true,
     logLevel: 'silent',
   })
 
-  const wanted = relative(process.cwd(), entry)
-  const entryOutput = Object.entries(result.metafile.outputs).find(([, info]) => info.entryPoint === wanted)
+  const entryOutput = Object.entries(result.metafile.outputs).find(([, info]) => info.entryPoint !== undefined && resolve(info.entryPoint) === resolve(entry))
   assert.ok(entryOutput, 'esbuild produced no output for the charsets entry point')
-  const tail = (entryOutput as [string, unknown])[0].slice((entryOutput as [string, unknown])[0].lastIndexOf('/'))
+  const entryPath = resolve(entryOutput[0])
 
   let entryText = ''
   let deferredText = ''
   for (const file of result.outputFiles) {
-    if (file.path.endsWith(tail)) entryText = file.text
+    if (resolve(file.path) === entryPath) entryText = file.text
     else deferredText += file.text
   }
   assert.ok(entryText.length > 0, 'the entry chunk is empty')
@@ -366,7 +366,7 @@ test('D-36, D-66: @myjs/core carries the 8-bit tables now, and still not the UCA
   const uca = PACKED_UCA900_LEVEL1.slice(1000, 1100)
   assert.equal(uca.length, 100, 'the probe must come from the middle of the real table')
 
-  const entry = new URL('../../packages/core/src/index.ts', import.meta.url).pathname
+  const entry = fileURLToPath(new URL('../../packages/core/src/index.ts', import.meta.url))
   const result = await build({
     entryPoints: [entry],
     bundle: true,
@@ -376,15 +376,13 @@ test('D-36, D-66: @myjs/core carries the 8-bit tables now, and still not the UCA
     minify: true,
     write: false,
     splitting: true,
-    outdir: new URL('../../packages/core/.uca-check', import.meta.url).pathname,
+    outdir: fileURLToPath(new URL('../../packages/core/.uca-check', import.meta.url)),
     metafile: true,
     logLevel: 'silent',
   })
-  const wanted = relative(process.cwd(), entry)
-  const found = Object.entries(result.metafile.outputs).find(([, info]) => info.entryPoint === wanted)
+  const found = Object.entries(result.metafile.outputs).find(([, info]) => info.entryPoint !== undefined && resolve(info.entryPoint) === resolve(entry))
   assert.ok(found, 'esbuild produced no output for the core entry point')
-  const tail = (found as [string, unknown])[0].slice((found as [string, unknown])[0].lastIndexOf('/'))
-  const entryText = result.outputFiles.find((f) => f.path.endsWith(tail))?.text ?? ''
+  const entryText = result.outputFiles.find((f) => resolve(f.path) === resolve(found[0]))?.text ?? ''
   assert.ok(entryText.length > 0, 'the entry chunk is empty')
 
   assert.ok(entryText.includes(legacy), 'the 8-bit tables are not in @myjs/core — then nothing in it can compare a latin1 string, and the probe is suspect')

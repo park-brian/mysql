@@ -41,6 +41,7 @@
 // Usage:
 //   node tools/mysqltest-census.mjs             # use the committed file list
 //   node tools/mysqltest-census.mjs --refresh   # re-list the directory (needs a token)
+import { fileURLToPath } from 'node:url'
 import { mkdirSync, readFileSync, writeFileSync, existsSync } from 'node:fs'
 import { join } from 'node:path'
 import { REPO, REF, fetchPinnedBytes, combinedSha256, listPinnedDirectory, sourceMode } from './lib/gen-common.mjs'
@@ -51,7 +52,7 @@ import { arg } from './lib/cli.mjs'
 
 const has = (name) => process.argv.includes(`--${name}`)
 
-const OUT_DIR = arg('out', new URL('../test/format/fixtures/', import.meta.url).pathname)
+const OUT_DIR = arg('out', fileURLToPath(new URL('../test/format/fixtures/', import.meta.url)))
 const FIXTURE = join(OUT_DIR, 'mysqltest-corpus.json')
 const DIRECTORY = 'mysql-test/t'
 

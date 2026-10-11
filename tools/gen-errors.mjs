@@ -15,11 +15,12 @@
 // The source is pinned to the exact tree docs 10–30 were written against
 // (doc 90), so re-running reproduces the committed output byte for byte — the
 // property CI checks with `git diff --exit-code`.
+import { fileURLToPath } from 'node:url'
 import { writeFileSync } from 'node:fs'
 import { REF, REPO, fetchPinned } from './lib/gen-common.mjs'
 
 const PATH = 'share/messages_to_clients.txt'
-const OUT = new URL('../packages/protocol/src/errors/table.ts', import.meta.url).pathname
+const OUT = fileURLToPath(new URL('../packages/protocol/src/errors/table.ts', import.meta.url))
 
 const { text: source, sha256 } = await fetchPinned(PATH)
 

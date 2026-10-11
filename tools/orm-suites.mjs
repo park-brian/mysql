@@ -23,6 +23,7 @@
 // Usage (8.4.11 from `tools/mysql-local.mjs` up for --server):
 //   node tools/orm-suites.mjs --server [--suite drizzle|prisma]   # census + 8.4.11's pass count
 //   node tools/orm-suites.mjs --ours [--suite drizzle|prisma]     # this executor's pass count
+//   Add --out <file> to preserve fixtures, --prisma-workers <N> to bound Jest workers.
 // Each writes its half of its suite in test/format/fixtures/orm-census.json.
 // With no --suite, both run.
 //
@@ -30,14 +31,18 @@
 // functional`), built from source with pnpm 8 as its own CI builds it, run
 // with `--provider mysql`. Its engines are Rust and speak the binary protocol
 // through `mysql_async`; jest-junit's XML is the per-test record.
+import { fileURLToPath } from 'node:url'
 import { execFileSync, spawn } from 'node:child_process'
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import mysql from 'mysql2/promise'
 import { parseStatement } from '@myjs/parser'
+import { npmCommand } from './lib/npm-command.mjs'
 
-const ROOT = new URL('..', import.meta.url).pathname
-const FIXTURE = join(ROOT, 'test/format/fixtures/orm-census.json')
+const ROOT = fileURLToPath(new URL('..', import.meta.url))
+const outFlag = process.argv.indexOf('--out')
+const FIXTURE = outFlag < 0 ? join(ROOT, 'test/format/fixtures/orm-census.json') : process.argv[outFlag + 1]
+const runSync = (command, args, options) => execFileSync(...npmCommand(command, args), options)
 
 const DRIZZLE = {
   name: 'drizzle-orm',
@@ -88,11 +93,11 @@ function preparePrisma(s) {
   }).trim()
   if (head !== s.commit) throw new Error(`${s.name} is at ${head}, not ${s.tag}'s ${s.commit}`)
   if (!existsSync(join(client, 'runtime/library.js'))) {
-    execFileSync('npx', ['-y', s.pnpm, 'install', '--frozen-lockfile'], {
+    runSync('npx', ['-y', s.pnpm, 'install', '--frozen-lockfile'], {
       cwd: s.dir,
       stdio: 'inherit',
     })
-    execFileSync('npx', ['-y', s.pnpm, '-r', 'dev'], {
+    runSync('npx', ['-y', s.pnpm, '-r', 'dev'], {
       cwd: s.dir,
       stdio: 'inherit',
     })
@@ -114,7 +119,7 @@ function prepare(s) {
   if (head !== s.commit) throw new Error(`${s.name} is at ${head}, not ${s.tag}'s ${s.commit}`)
   if (!existsSync(join(tests, 'node_modules/vitest'))) {
     writeFileSync(join(tests, 'package.json'), `${JSON.stringify({ name: 'orm-census', private: true, type: 'module', dependencies: s.dependencies }, null, 2)}\n`)
-    execFileSync('npm', ['install', '--no-audit', '--no-fund', '--loglevel=error'], { cwd: tests, stdio: 'inherit' })
+    runSync('npm', ['install', '--no-audit', '--no-fund', '--loglevel=error'], { cwd: tests, stdio: 'inherit' })
   }
   return tests
 }
@@ -199,32 +204,49 @@ for (const which of chosen === undefined ? ['drizzle', 'prisma'] : [chosen]) {
   }
 
   if (arg('server')) {
+    const host = process.env.MYSQL_HOST ?? '127.0.0.1'
+    const port = Number(process.env.MYSQL_PORT ?? 3306)
+    const user = process.env.MYSQL_USER ?? 'root'
+    const password = process.env.MYSQL_PASSWORD ?? 'root'
     const admin = await mysql.createConnection({
-      host: '127.0.0.1',
-      port: 3306,
-      user: 'root',
-      password: 'root',
+      host, port, user, password,
     })
-    const [[{ v: version }]] = await admin.query('SELECT VERSION() AS v')
-    await admin.query('DROP DATABASE IF EXISTS drizzle')
-    if (which === 'drizzle') await admin.query('CREATE DATABASE drizzle')
-    await admin.query("SET GLOBAL log_output = 'TABLE'")
-    await admin.query('TRUNCATE mysql.general_log')
-    await admin.query('SET GLOBAL general_log = ON')
-    const result = await run('mysql://root:root@127.0.0.1:3306')
-    await admin.query('SET GLOBAL general_log = OFF')
-    const [rows] = await admin.query("SELECT CONVERT(argument USING utf8mb4) AS a FROM mysql.general_log WHERE command_type IN ('Query', 'Execute')")
-    await admin.end()
-    const { reasons, ...counted } = result
-    // Prisma's suite has tests 8.4.11 itself fails, for reasons of this
-    // environment; they are kept, by reason, so the denominator is honest.
-    fixture[which].server = {
-      version,
-      ...counted,
-      ...(which === 'prisma' ? { reasons } : {}),
-      census: census(rows.map((r) => r.a)),
+    let logging
+    try {
+      ;[[logging]] = await admin.query('SELECT @@GLOBAL.general_log AS enabled, @@GLOBAL.log_output AS output')
+      const [[{ v: version }]] = await admin.query('SELECT VERSION() AS v')
+      await admin.query('DROP DATABASE IF EXISTS drizzle')
+      if (which === 'drizzle') await admin.query('CREATE DATABASE drizzle')
+      await admin.query("SET GLOBAL log_output = 'TABLE'")
+      await admin.query('TRUNCATE mysql.general_log')
+      await admin.query('SET GLOBAL general_log = ON')
+      const url = new URL('mysql://localhost')
+      url.hostname = host
+      url.port = String(port)
+      url.username = user
+      url.password = password
+      const result = await run(url.href.replace(/\/$/, ''))
+      await admin.query('SET GLOBAL general_log = OFF')
+      const [rows] = await admin.query("SELECT CONVERT(argument USING utf8mb4) AS a FROM mysql.general_log WHERE command_type IN ('Query', 'Execute')")
+      const { reasons, ...counted } = result
+      // Prisma's suite has tests 8.4.11 itself fails, for reasons of this
+      // environment; they are kept, by reason, so the denominator is honest.
+      fixture[which].server = {
+        version,
+        ...counted,
+        ...(which === 'prisma' ? { reasons } : {}),
+        census: census(rows.map((r) => r.a)),
+      }
+      console.log(`${which} on 8.4.11: ${result.passed} passed, ${result.failed} failed, ${result.skipped} skipped; ${rows.length} statements censused`)
+    } finally {
+      try {
+        if (logging !== undefined) {
+          await admin.query('SET GLOBAL general_log = OFF')
+          await admin.query('SET GLOBAL log_output = ?', [logging.output])
+          await admin.query('SET GLOBAL general_log = ?', [logging.enabled])
+        }
+      } finally { await admin.end() }
     }
-    console.log(`${which} on 8.4.11: ${result.passed} passed, ${result.failed} failed, ${result.skipped} skipped; ${rows.length} statements censused`)
   }
 
   if (arg('ours')) {
@@ -234,24 +256,27 @@ for (const which of chosen === undefined ? ['drizzle', 'prisma'] : [chosen]) {
     const accounts = new MapAccountStore()
     await accounts.add('root', '')
     const db = await MySQL.open(':memory:', { accounts })
-    const server = await serve(db, { port: 0, accounts })
-    if (which === 'drizzle') {
-      const c = await mysql.createConnection({
-        host: '127.0.0.1',
-        port: server.port,
-        user: 'root',
-        password: '',
-      })
-      await c.query('CREATE DATABASE drizzle')
-      await c.end()
+    let server
+    try {
+      server = await serve(db, { port: 0, accounts })
+      if (which === 'drizzle') {
+        const c = await mysql.createConnection({
+          host: '127.0.0.1',
+          port: server.port,
+          user: 'root',
+          password: '',
+        })
+        await c.query('CREATE DATABASE drizzle')
+        await c.end()
+      }
+      // The suites run in a child process; this one answers their connections meanwhile.
+      fixture[which].ours = await run(`mysql://root@127.0.0.1:${server.port}`)
+      const o = fixture[which].ours
+      console.log(`${which}, ours: ${o.passed} passed, ${o.failed} failed, ${o.skipped} skipped`)
+      for (const [reason, n] of Object.entries(o.reasons).slice(0, 15)) console.log(String(n).padStart(5), reason)
+    } finally {
+      try { await server?.close() } finally { await db.end() }
     }
-    // The suites run in a child process; this one answers their connections meanwhile.
-    fixture[which].ours = await run(`mysql://root@127.0.0.1:${server.port}`)
-    await server.close()
-    await db.end()
-    const o = fixture[which].ours
-    console.log(`${which}, ours: ${o.passed} passed, ${o.failed} failed, ${o.skipped} skipped`)
-    for (const [reason, n] of Object.entries(o.reasons).slice(0, 15)) console.log(String(n).padStart(5), reason)
   }
 }
 
@@ -264,13 +289,9 @@ writeFixture(fixture)
  */
 async function runSuites(s, cwd, connectionString) {
   const out = join(cwd, 'vitest-result.json')
-  await new Promise((resolve) => {
-    const child = spawn('npx', ['vitest', 'run', ...s.files, '--reporter=json', `--outputFile=${out}`], {
+  await runReport(out, 'npx', ['vitest', 'run', ...s.files, '--reporter=json', `--outputFile=${out}`], {
       cwd,
       env: { ...process.env, MYSQL_CONNECTION_STRING: connectionString },
-      stdio: 'ignore',
-    })
-    child.on('exit', resolve)
   })
   const result = JSON.parse(readFileSync(out, 'utf8'))
   const files = {}
@@ -315,6 +336,7 @@ function reasonOf(message) {
 }
 
 function tally(files, reasons) {
+  if (Object.keys(files).length === 0) throw new Error('suite report contains no tests')
   const total = (k) => Object.values(files).reduce((n, f) => n + f[k], 0)
   return {
     passed: total('passed'),
@@ -332,16 +354,16 @@ function tally(files, reasons) {
  */
 async function runPrisma(s, cwd, connectionString) {
   const out = join(cwd, 'orm-census-junit.xml')
-  await new Promise((resolve) => {
-    const env = {
-      ...process.env,
-      TEST_FUNCTIONAL_MYSQL_URI: connectionString,
-      JEST_JUNIT_OUTPUT_FILE: out,
-      CI: '',
-    }
-    const child = spawn('npx', ['-y', s.pnpm, 'test:functional:code', '--provider', 'mysql'], { cwd, env, stdio: 'ignore' })
-    child.on('exit', resolve)
-  })
+  const env = {
+    ...process.env,
+    TEST_FUNCTIONAL_MYSQL_URI: connectionString,
+    JEST_JUNIT_OUTPUT_FILE: out,
+    CI: '',
+  }
+  const workers = option('prisma-workers')
+  if (workers !== undefined && (!/^\d+$/.test(workers) || Number(workers) < 1)) throw new Error('--prisma-workers must be a positive integer')
+  const args = ['-y', s.pnpm, 'test:functional:code', '--provider', 'mysql', ...(workers === undefined ? [] : ['--maxWorkers', workers])]
+  await runReport(out, 'npx', args, { cwd, env })
   const xml = readFileSync(out, 'utf8')
   const unescape = (t) =>
     t
@@ -364,5 +386,22 @@ async function runPrisma(s, cwd, connectionString) {
       reasons.set(reason, (reasons.get(reason) ?? 0) + 1)
     } else f.passed++
   }
-  return tally(Object.fromEntries(Object.entries(files).sort()), reasons)
+  return { ...tally(Object.fromEntries(Object.entries(files).sort()), reasons), workers: workers === undefined ? 'upstream default' : Number(workers) }
+}
+
+/** A failed test run may produce a report; a failed launch must never reuse one. */
+async function runReport(out, command, args, options) {
+  rmSync(out, { force: true })
+  await new Promise((resolve, reject) => {
+    const child = spawn(...npmCommand(command, args), { ...options, stdio: ['ignore', 'pipe', 'pipe'] })
+    let log = ''
+    const record = (chunk) => { log = (log + chunk.toString()).slice(-16_384) }
+    child.stdout.on('data', record)
+    child.stderr.on('data', record)
+    child.on('error', reject)
+    child.on('close', (code, signal) => {
+      if (signal !== null || (code !== 0 && code !== 1) || !existsSync(out)) reject(new Error(`${command} produced no complete report (exit ${code}, signal ${signal}):\n${log}`))
+      else resolve()
+    })
+  })
 }

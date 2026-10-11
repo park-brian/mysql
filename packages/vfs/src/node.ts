@@ -12,8 +12,9 @@
 // Two kinds of exclusion, because there are two kinds of contender. Within the
 // process, `lock` queues callers exactly as the memory backend does. Across
 // processes it holds an advisory lock file created with `wx`, which holds the
-// owner's pid: a file whose pid is no longer running is stale, and taken over.
-import { closeSync, existsSync, fstatSync, fsyncSync, ftruncateSync, mkdirSync, openSync, readdirSync, readFileSync, readSync, renameSync, rmSync, statSync, unlinkSync, writeFileSync, writeSync } from 'node:fs'
+// owner's pid for diagnosis. Existing files are never taken over: recovery
+// after a crash requires removing the lock after every owner has stopped.
+import { closeSync, existsSync, fstatSync, fsyncSync, ftruncateSync, lstatSync, mkdirSync, openSync, readdirSync, readSync, realpathSync, rmSync, statSync, unlinkSync, writeFileSync, writeSync } from 'node:fs'
 import { dirname, join, resolve } from 'node:path'
 import { DEFAULT_PAGE_SIZE, VfsError, badPage, fileClosed, fileNotFound, type Lock, type Vfs, type VfsFile } from './vfs.ts'
 
@@ -107,10 +108,6 @@ class LockQueue {
   #held = false
   #waiting: (() => void)[] = []
 
-  get busy(): boolean {
-    return this.#held
-  }
-
   /** Take it if it is free; `false` otherwise. */
   take(): boolean {
     if (this.#held) return false
@@ -133,22 +130,6 @@ class LockQueue {
   }
 }
 
-/**
- * The lock files this process holds, whichever `NodeVfs` took them: two
- * instances over one directory are two owners, and a file naming this pid that
- * is not in here is a leftover from a lock never released.
- */
-const HELD = new Set<string>()
-
-const isRunning = (pid: number): boolean => {
-  try {
-    process.kill(pid, 0)
-    return true
-  } catch (e) {
-    return (e as { code?: string }).code === 'EPERM'
-  }
-}
-
 export interface NodeVfsOptions {
   readonly pageSize?: number
   /** How long to wait between attempts on a lock file another process holds. */
@@ -165,16 +146,26 @@ export class NodeVfs implements Vfs {
   readonly #locks = new Map<string, LockQueue>()
 
   constructor(root: string, options: NodeVfsOptions = {}) {
-    this.root = resolve(root)
+    const directory = resolve(root)
+    mkdirSync(directory, { recursive: true })
+    this.root = realpathSync(directory)
     this.#pageSize = options.pageSize ?? DEFAULT_PAGE_SIZE
     this.#poll = options.lockPollMs ?? 50
-    mkdirSync(this.root, { recursive: true })
   }
 
   /** A VFS path as a real one under the root; `..` is refused. */
   #real(path: string): string {
     const parts = path.split('/').filter((p) => p !== '' && p !== '.')
-    if (parts.includes('..')) throw new VfsError('VFS_BAD_PATH', `a path may not leave the database: ${path}`)
+    if (parts.includes('..') || /[\\:\0]/.test(path)) throw new VfsError('VFS_BAD_PATH', `a path may not leave the database: ${path}`)
+    let current = this.root
+    for (const part of parts) {
+      current = join(current, part)
+      try {
+        if (lstatSync(current).isSymbolicLink()) throw new VfsError('VFS_BAD_PATH', `symlinks are not VFS paths: ${path}`)
+      } catch (e) {
+        if ((e as { code?: string }).code !== 'ENOENT') throw e
+      }
+    }
     return join(this.root, ...parts)
   }
 
@@ -217,22 +208,7 @@ export class NodeVfs implements Vfs {
       queue.release()
       throw e
     }
-    let released = false
-    const release = (): void => {
-      if (released) return
-      released = true
-      HELD.delete(file)
-      rmSync(file, { force: true })
-      queue.release()
-    }
-    return {
-      path,
-      get held() {
-        return !released
-      },
-      release,
-      [Symbol.dispose]: release,
-    }
+    return this.#heldLock(path, file, queue)
   }
 
   /**
@@ -249,18 +225,23 @@ export class NodeVfs implements Vfs {
     }
     if (!queue.take()) return undefined
     const file = join(this.root, `.myjs-lock-${encodeURIComponent(path)}`)
-    if (!this.#tryFile(file)) {
+    try {
+      if (this.#tryFile(file)) return this.#heldLock(path, file, queue)
+    } catch (e) {
       queue.release()
-      return undefined
+      throw e
     }
-    const q = queue
+    queue.release()
+    return undefined
+  }
+
+  /** Release exactly the file and queue acquired by this lock. */
+  #heldLock(path: string, file: string, queue: LockQueue): Lock {
     let released = false
     const release = (): void => {
       if (released) return
       released = true
-      HELD.delete(file)
-      rmSync(file, { force: true })
-      q.release()
+      try { rmSync(file, { force: true }) } finally { queue.release() }
     }
     return {
       path,
@@ -272,56 +253,30 @@ export class NodeVfs implements Vfs {
     }
   }
 
-  /** Create the lock file exclusively, taking over one whose owner is gone. */
+  /** Exclusive creation is the ownership gate; an existing file always wins. */
   #tryFile(file: string): boolean {
-    if (HELD.has(file)) return false
-    for (let attempt = 0; attempt < 2; attempt++) {
-      try {
-        writeFileSync(file, String(process.pid), { flag: 'wx' })
-        HELD.add(file)
-        return true
-      } catch (e) {
-        if ((e as { code?: string }).code !== 'EEXIST') throw e
-      }
-      let owner = NaN
-      try {
-        owner = Number(readFileSync(file, 'utf8'))
-      } catch {
-        continue
-      }
-      if (Number.isInteger(owner) && owner !== process.pid && isRunning(owner)) return false
-      // Take the stale file over by renaming it aside, which only one of two
-      // racing processes can do, and check it was the stale one: a process
-      // that read the dead pid a moment ago and then deleted the file could
-      // otherwise remove a lock another had just created, and both would own
-      // the database (found by review). Moving a fresh lock aside by mistake
-      // puts it back and backs off.
-      const tomb = `${file}.stale-${process.pid}-${Date.now()}`
-      try {
-        renameSync(file, tomb)
-      } catch {
-        continue
-      }
-      let moved = NaN
-      try {
-        moved = Number(readFileSync(tomb, 'utf8'))
-      } catch {
-        // Unreadable: it was the stale one or nothing.
-      }
-      if (moved !== owner && Number.isInteger(moved)) {
-        try {
-          renameSync(tomb, file)
-        } catch {
-          rmSync(tomb, { force: true })
-        }
-        return false
-      }
-      rmSync(tomb, { force: true })
+    let fd: number
+    try {
+      fd = openSync(file, 'wx')
+    } catch (e) {
+      if ((e as { code?: string }).code === 'EEXIST') return false
+      throw e
     }
-    return false
+    try {
+      writeFileSync(fd, String(process.pid))
+    } catch (e) {
+      const errors = [e]
+      for (const clean of [() => closeSync(fd), () => rmSync(file, { force: true })]) {
+        try { clean() } catch (failure) { errors.push(failure) }
+      }
+      if (errors.length > 1) throw new AggregateError(errors, 'lock initialization failed')
+      throw e
+    }
+    closeSync(fd)
+    return true
   }
 
-  /** The cross-process half: create the lock file exclusively, taking over one whose owner has died. */
+  /** Wait for an owner to release; crash recovery is an explicit operation. */
   async #acquireFile(file: string): Promise<void> {
     for (;;) {
       if (this.#tryFile(file)) return

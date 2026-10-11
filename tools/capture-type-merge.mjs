@@ -14,11 +14,12 @@
 //
 // Usage:
 //   node tools/capture-type-merge.mjs --host 127.0.0.1 --port 3306 --user root --password root
+import { fileURLToPath } from 'node:url'
 import { writeFileSync } from 'node:fs'
 import mysql from 'mysql2/promise'
 import { arg } from './lib/cli.mjs'
 
-const OUT = new URL('../packages/types/src/type-merge.ts', import.meta.url).pathname
+const OUT = fileURLToPath(new URL('../packages/types/src/type-merge.ts', import.meta.url))
 
 /** Each column type, by the name the table below uses, and its DDL. */
 const COLUMNS = [

@@ -60,7 +60,7 @@ import {
   type Value,
   valueBytes,
 } from './sql-value.ts'
-import { scanDateTime, scanTime, type Deprecation } from './temporal-scan.ts'
+import { scanDateTime, scanTime, temporalDeprecation, type Deprecation } from './temporal-scan.ts'
 import { decodeBit, decodeEnum, decodeSet, encodeBit, encodeEnum, encodeSet, enumMember, padBinary, padChar, setMembers, trimTrailingSpaces } from './strings.ts'
 import {
   dateFieldToStorage,
@@ -507,11 +507,8 @@ const isText = (v: Exclude<Value, null>): boolean => v.kind === 'string' || (v.k
 
 /** The first deprecated delimiter in a temporal's text: 4095, or 4096 for one too many (8.4.11). */
 function deprecated(ctx: StoreContext, d: Deprecation, text: string, column: string): void {
-  // A control character is named by its escape: '\t' (8.4.11).
-  const char = ({ '\t': '\\t', '\n': '\\n', '\r': '\\r', '\v': '\\v', '\f': '\\f' } as Record<string, string>)[d.char] ?? d.char
-  const where = `Delimiter '${char}' in position ${d.position} in datetime value '${text}' at row ${ctx.row}`
-  if (d.superfluous) warn(ctx, 4096, `${where} is superfluous and is deprecated. Please remove.`)
-  else warn(ctx, 4095, `${where} is deprecated. Prefer the standard '${d.prefer}'.`)
+  const { code, message } = temporalDeprecation(d, text, ctx.row)
+  warn(ctx, code, message)
   void column
 }
 

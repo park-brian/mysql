@@ -8,6 +8,7 @@
 //
 // The fixture is committed facts only: statements this project generated and
 // the results a server gave for them.
+import { fileURLToPath } from 'node:url'
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { existsSync, readFileSync } from 'node:fs'
@@ -16,7 +17,7 @@ import { MySQL } from '@myjs/core'
 // @ts-expect-error — a tool, in plain JavaScript; its runner is shared so the replay cannot drift from the capture.
 import { SQL_MODE, runCase } from '../../tools/capture-execution.mjs'
 
-const FIXTURE = new URL('./fixtures/execution.json', import.meta.url).pathname
+const FIXTURE = fileURLToPath(new URL('./fixtures/execution.json', import.meta.url))
 
 interface Outcome {
   readonly sql: string

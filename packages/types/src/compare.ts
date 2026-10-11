@@ -203,6 +203,10 @@ export function compareValues(a: Value, b: Value): number | null {
   }
 
   if (a.kind === 'time' || b.kind === 'time') {
+    // Numeric operands compare with HHMMSS[.fraction], rather than a
+    // saturated TIME conversion: 20200102 cannot equal 838:59:59 (8.4.11).
+    const other = a.kind === 'time' ? b : a
+    if (other.kind === 'int' || other.kind === 'decimal' || other.kind === 'double') return sign(toDouble(a) - toDouble(b))
     const x = toTime(a)
     const y = toTime(b)
     if (x !== undefined && y !== undefined) return sign(timeOrdinal(x.v) - timeOrdinal(y.v))

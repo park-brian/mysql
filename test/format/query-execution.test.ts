@@ -8,13 +8,14 @@
 // ORDER BY, so rows are compared as multisets and agreement on order is only
 // counted. Refusals by name are counted against a ratchet, as in
 // `relational-vectors.test.ts`.
+import { fileURLToPath } from 'node:url'
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import mysql from 'mysql2/promise'
 import { MySQL } from '@myjs/core'
 
-const FIXTURE = new URL('./fixtures/queries.json', import.meta.url).pathname
+const FIXTURE = fileURLToPath(new URL('./fixtures/queries.json', import.meta.url))
 
 /** The most vectors the executor may still refuse. Lowered as M5.18's stages land, never raised. */
 const REFUSED_AT_MOST = 0

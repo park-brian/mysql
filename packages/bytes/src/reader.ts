@@ -31,7 +31,7 @@ export class Reader {
   #pos: number
 
   constructor(bytes: Uint8Array, start = 0, end = bytes.length) {
-    if (start < 0 || end > bytes.length || start > end) {
+    if (!Number.isSafeInteger(start) || !Number.isSafeInteger(end) || start < 0 || end > bytes.length || start > end) {
       throw new ProtocolError('PROTOCOL_BAD_RANGE', `invalid Reader range ${start}..${end} over ${bytes.length} bytes`)
     }
     this.#bytes = bytes

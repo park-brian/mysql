@@ -8,6 +8,7 @@
 // operands those are was decided by the parser. So a parser that let a comma
 // bind as tightly as `JOIN` produces a tree whose `ON` sees a table it should
 // not, and comes out with rows where MySQL said ER_BAD_FIELD_ERROR.
+import { fileURLToPath } from 'node:url'
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
@@ -22,7 +23,7 @@ import {
   type TableReference,
 } from '@myjs/parser'
 
-const FIXTURE = new URL('./fixtures/queries.json', import.meta.url).pathname
+const FIXTURE = fileURLToPath(new URL('./fixtures/queries.json', import.meta.url))
 
 interface Vector {
   readonly sql: string

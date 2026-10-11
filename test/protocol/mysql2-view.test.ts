@@ -18,6 +18,28 @@ import { MySQL } from '@myjs/core'
 type Names = readonly (readonly (string | number)[])[]
 type Outcome = number | readonly (string | number)[] | readonly [readonly (readonly (string | null)[])[], Names?]
 
+test('a joined view prints its ON expression during introspection', async () => {
+  const db = await MySQL.open(':memory:')
+  const conn = await mysql.createConnection({ stream: db.createStream(), user: 'root', password: '' })
+  try {
+    await conn.query('CREATE DATABASE review_probe')
+    await conn.query('USE review_probe')
+    await conn.query('CREATE TABLE ta (id INT)')
+    await conn.query('CREATE TABLE tb (id INT)')
+    await conn.query('CREATE VIEW joined AS SELECT a.id AS left_id, b.id AS right_id FROM ta a JOIN tb b ON a.id = b.id')
+    // Captured from 8.4.11. Building FROM calls the expression printer
+    // before the select items are printed; that call used to hit a TDZ.
+    const sql = "SELECT VIEW_DEFINITION FROM information_schema.VIEWS WHERE TABLE_SCHEMA='review_probe'"
+    const [rows] = await conn.query({ sql, rowsAsArray: true })
+    assert.deepEqual(rows, [['select `a`.`id` AS `left_id`,`b`.`id` AS `right_id` from (`review_probe`.`ta` `a` join `review_probe`.`tb` `b` on((`a`.`id` = `b`.`id`)))']])
+    await conn.query('SHOW CREATE VIEW joined')
+    await conn.query("SELECT TABLE_NAME FROM information_schema.TABLES WHERE TABLE_SCHEMA='information_schema'")
+  } finally {
+    await conn.end()
+    await db.end()
+  }
+})
+
 const SCRIPT: readonly (readonly [string, Outcome])[] = [
   ['CREATE TABLE t (id INT NOT NULL AUTO_INCREMENT PRIMARY KEY, name VARCHAR(10) NOT NULL, c INT)', [0, 0, '', 0]],
   ["INSERT INTO t (name, c) VALUES ('a', 1), ('b', 2), ('c', 1)", [3, 1, 'Records: 3  Duplicates: 0  Warnings: 0', 0]],

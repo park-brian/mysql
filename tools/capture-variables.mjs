@@ -23,11 +23,12 @@
 // server started, so restart it after a capture as well as before.
 //
 //   node tools/capture-variables.mjs [--host 127.0.0.1 --port 3306 --user root --password root]
+import { fileURLToPath } from 'node:url'
 import { writeFileSync } from 'node:fs'
 import mysql from 'mysql2/promise'
 import { arg } from './lib/cli.mjs'
 
-const OUT = arg('out', new URL('../packages/core/src/sql/system-variables.ts', import.meta.url).pathname)
+const OUT = arg('out', fileURLToPath(new URL('../packages/core/src/sql/system-variables.ts', import.meta.url)))
 const c = await mysql.createConnection({ host: arg('host', '127.0.0.1'), port: Number(arg('port', '3306')), user: arg('user', 'root'), password: arg('password', 'root') })
 
 const version = (await c.query('SELECT VERSION() AS v'))[0][0].v

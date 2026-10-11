@@ -6,6 +6,7 @@
 // were written. This replays them through M5.18's machinery. A statement the
 // executor refuses by name with ER_NOT_SUPPORTED_YET is counted, not failed,
 // and `REFUSED_AT_MOST` ratchets down as the slices land.
+import { fileURLToPath } from 'node:url'
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { existsSync, readFileSync } from 'node:fs'
@@ -13,10 +14,10 @@ import { existsSync, readFileSync } from 'node:fs'
 import { CONNECTION, SQL_MODE } from '../../tools/capture-functions.mjs'
 import { replay, type Fixture } from '../lib/replay.ts'
 
-const FIXTURE = new URL('./fixtures/functions.json', import.meta.url).pathname
+const FIXTURE = fileURLToPath(new URL('./fixtures/functions.json', import.meta.url))
 
 /** The most statements the executor may still refuse. Lowered by M5.10's slices, never raised. */
-const REFUSED_AT_MOST = 6
+const REFUSED_AT_MOST = 0
 
 test('M5.10: every function call the executor runs returns what the server returned', async () => {
   assert.ok(existsSync(FIXTURE), 'the corpus must be committed')

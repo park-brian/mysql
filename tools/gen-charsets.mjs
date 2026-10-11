@@ -31,6 +31,7 @@
 //
 // Weights are facts too — a number per code point — which is what keeps this
 // inside ground rule 7. What we never take is MySQL's prose.
+import { fileURLToPath } from 'node:url'
 import { writeFileSync } from 'node:fs'
 import { REF, REPO, banner, check, combinedSha256, fetchAllPinned, packed } from './lib/gen-common.mjs'
 
@@ -68,10 +69,10 @@ const SOURCES = [
   'strings/ctype-win1250ch.cc',
 ]
 
-const REGISTRY_OUT = new URL('../packages/charsets/src/registry.ts', import.meta.url).pathname
-const WEIGHTS_OUT = new URL('../packages/charsets/src/collations/weights.ts', import.meta.url).pathname
-const METRICS_OUT = new URL('../packages/protocol/src/constants/charset-metrics.ts', import.meta.url).pathname
-const ENCODINGS_OUT = new URL('../packages/charsets/src/encodings.ts', import.meta.url).pathname
+const REGISTRY_OUT = fileURLToPath(new URL('../packages/charsets/src/registry.ts', import.meta.url))
+const WEIGHTS_OUT = fileURLToPath(new URL('../packages/charsets/src/collations/weights.ts', import.meta.url))
+const METRICS_OUT = fileURLToPath(new URL('../packages/protocol/src/constants/charset-metrics.ts', import.meta.url))
+const ENCODINGS_OUT = fileURLToPath(new URL('../packages/charsets/src/encodings.ts', import.meta.url))
 
 // The UCA collations share their state flags through a macro, so expand those
 // before reading the flags. Definitions are in `ctype-uca.cc`.

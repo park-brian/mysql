@@ -128,9 +128,20 @@ fs.fsyncSync(fd)
 drive write caches and macOS's `F_FULLFSYNC`, which `fsync` does *not* imply —
 if strict durability matters on macOS, use `fcntl(F_FULLFSYNC)`).
 
-Cross-process exclusion uses an advisory lock file containing the pid, with
-staleness detection. Deno and Bun both implement `node:fs`, so the same backend
-serves all three.
+Cross-process exclusion uses an advisory lock file created exclusively and
+containing the pid for diagnosis. An existing file is never taken over, even
+when its pid appears dead: pid reuse and a competing opener make automatic
+staleness checks unsafe. The root is canonicalized with `realpathSync`, so a
+symlink alias cannot acquire a second owner. VFS paths use `/`; `..`,
+backslashes, drive/stream colons, NULs and symlink components are refused.
+The root directory is trusted: this is not a sandbox against another process
+replacing files while an operation runs.
+
+After a crash, stop every process using the database, verify the canonical
+directory, and remove its `.myjs-lock-*` file explicitly. Reopen normally;
+WAL recovery runs before the database is returned. Never remove a live
+owner's lock. Deno and Bun implement `node:fs`, so the backend is intended to
+serve all three; the current verification covers Node on Windows and Linux.
 
 ## Memory
 
@@ -174,7 +185,7 @@ batching.
 | Platform | Mechanism |
 |---|---|
 | Browser | **Web Locks API** — `navigator.locks.request(name, { mode: 'exclusive' })`. Leader election across tabs falls straight out of it, and locks are released automatically if the holder's context dies. |
-| Node | an advisory lock file containing the pid, with staleness detection |
+| Node | an exclusive advisory lock file; existing files require explicit recovery |
 | Memory | none needed |
 
 The Web Locks API is genuinely well suited to this: the "the tab holding the

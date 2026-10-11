@@ -9,6 +9,7 @@
 // notice when something is *very* wrong."
 //
 // Run after a deliberate protocol change:  node tools/freeze-traces.mjs
+import { fileURLToPath } from 'node:url'
 import { mkdirSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import net from 'node:net'
@@ -18,7 +19,7 @@ import { MySQL } from '@myjs/core'
 import { MapAccountStore, fixedRandom } from '@myjs/protocol'
 
 const run = promisify(execFile)
-const OUT_DIR = new URL('../test/protocol/self-traces/', import.meta.url).pathname
+const OUT_DIR = fileURLToPath(new URL('../test/protocol/self-traces/', import.meta.url))
 
 // Everything a response depends on is pinned, so the bytes are reproducible.
 export const FIXED_NONCE = Uint8Array.from(

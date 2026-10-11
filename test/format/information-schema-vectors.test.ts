@@ -9,6 +9,7 @@
 // with ER_NOT_SUPPORTED_YET is counted, not failed, with the rest of its
 // script, and `REFUSED_AT_MOST` ratchets down as M5.12 and M5.25 land —
 // captured before any of their code, so it starts at nearly everything.
+import { fileURLToPath } from 'node:url'
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { existsSync, readFileSync } from 'node:fs'
@@ -17,7 +18,7 @@ import { MySQL } from '@myjs/core'
 // @ts-expect-error — a tool, in plain JavaScript.
 import { CONNECTION, SCHEMA, runScript } from '../../tools/capture-information-schema.mjs'
 
-const FIXTURE = new URL('./fixtures/information-schema.json', import.meta.url).pathname
+const FIXTURE = fileURLToPath(new URL('./fixtures/information-schema.json', import.meta.url))
 const NOT_SUPPORTED = 1235
 
 /** The most statements the executor may still refuse. Lowered by M5.12's and M5.25's stages, never raised. */

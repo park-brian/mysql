@@ -22,6 +22,7 @@
 //
 // Usage:
 //   node tools/capture-execution.mjs --host 127.0.0.1 --port 3306 --user root --password root
+import { fileURLToPath } from 'node:url'
 import { mkdirSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import mysql from 'mysql2/promise'
@@ -33,7 +34,7 @@ const HOST = arg('host', '127.0.0.1')
 const PORT = Number(arg('port', '3306'))
 const USER = arg('user', 'root')
 const PASSWORD = arg('password', 'root')
-const OUT_DIR = arg('out', new URL('../test/format/fixtures/', import.meta.url).pathname)
+const OUT_DIR = arg('out', fileURLToPath(new URL('../test/format/fixtures/', import.meta.url)))
 const CASES = Number(arg("cases", "240"))
 const SEED = Number(arg('seed', '20261008'))
 export const SCHEMA = 'myjs_exec'

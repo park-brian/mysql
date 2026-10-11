@@ -190,19 +190,17 @@ test('M3.6: SET NAMES is one item of a list, not the whole statement', async () 
   assert.equal(s.database, 'my db')
 })
 
-test('review: the SETs a driver sends on connect still succeed against the stub', async () => {
+test('review: driver session SETs work and unsupported administration is refused', async () => {
   const { s, run, read } = live()
   await run('SET SESSION TRANSACTION ISOLATION LEVEL READ COMMITTED')
-  await run("SET PASSWORD = 'x'")
-  // Parsed since M3.17, and still answered OK rather than refused.
-  await run('SET ROLE DEFAULT')
-  await run('SET DEFAULT ROLE ALL TO u')
-  await run('FLUSH PRIVILEGES')
-  await run('FLUSH TABLES')
-  await run('SET RESOURCE GROUP g')
+  for (const sql of ["SET PASSWORD = 'x'", 'SET ROLE DEFAULT', 'SET DEFAULT ROLE ALL TO u', 'FLUSH PRIVILEGES', 'FLUSH TABLES', 'SET RESOURCE GROUP g']) {
+    await assert.rejects(run(sql), (e: Error & { errno?: number }) => e.errno === 1235)
+  }
   await run("SET SESSION sql_mode = 'ANSI_QUOTES'")
-  // An expression needs the executor: accepted, and nothing changes.
-  await run("SET SESSION sql_mode = (SELECT REPLACE(@@sql_mode, 'ONLY_FULL_GROUP_BY', ''))")
+  // Scalar expressions are evaluated rather than acknowledged without a change.
+  await run("SET SESSION sql_mode = (SELECT REPLACE(@@sql_mode, 'ANSI_QUOTES', 'NO_BACKSLASH_ESCAPES'))")
+  assert.equal(s.sqlMode, 'NO_BACKSLASH_ESCAPES')
+  await run("SET SESSION sql_mode = 'ANSI_QUOTES'")
   assert.equal(s.sqlMode, 'ANSI_QUOTES')
   await assert.rejects(run('SET sql_mode = NULL'), (e: Error & { errno?: number }) => e.errno === 1231)
   assert.equal(await read('@@local.sql_mode'), 'ANSI_QUOTES')

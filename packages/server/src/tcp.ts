@@ -59,6 +59,7 @@ export class InsecureBindError extends Error {
 }
 
 export async function serve(db: MySQL, options: ServeOptions = {}): Promise<Server> {
+  if (db.closed) throw new Error('cannot serve a closed database')
   const host = options.host ?? '127.0.0.1'
   const port = options.port ?? 3306
   const accounts = options.accounts ?? db.accounts
@@ -89,6 +90,10 @@ export async function serve(db: MySQL, options: ServeOptions = {}): Promise<Serv
 
   const sockets = new Set<net.Socket>()
   const server = net.createServer((socket) => {
+    if (db.closed) {
+      socket.destroy()
+      return
+    }
     sockets.add(socket)
     socket.setNoDelay(true)
 
@@ -156,6 +161,7 @@ export async function serve(db: MySQL, options: ServeOptions = {}): Promise<Serv
 
   const address = server.address()
   const boundPort = typeof address === 'object' && address !== null ? address.port : port
+  let closing: Promise<void> | undefined
 
   return {
     host,
@@ -163,10 +169,13 @@ export async function serve(db: MySQL, options: ServeOptions = {}): Promise<Serv
     get connections() {
       return sockets.size
     },
-    async close() {
-      for (const socket of sockets) socket.destroy()
-      sockets.clear()
-      await new Promise<void>((resolve) => server.close(() => resolve()))
+    close() {
+      closing ??= new Promise<void>((resolve) => {
+        for (const socket of sockets) socket.destroy()
+        sockets.clear()
+        server.close(() => resolve())
+      })
+      return closing
     },
   }
 }

@@ -66,7 +66,9 @@ export function viewDefinition(query: QueryExpression, names: readonly string[],
       if (owner === undefined) throw new Unprintable()
       return `${owner.qualifier}.${quoteName(name)}`
     }
-    const expr = (e: Expression): string => printExpression(e, { column, string: (v) => `'${escapeString(v)}'`, ...(source === undefined ? {} : { source }) })
+    function expr(e: Expression): string {
+      return printExpression(e, { column, string: (v) => `'${escapeString(v)}'`, ...(source === undefined ? {} : { source }) })
+    }
     // `*` expands to the tables' columns, in order.
     const items: string[] = []
     for (const item of body.items) {

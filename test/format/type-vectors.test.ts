@@ -24,6 +24,7 @@
 // `0x61`, because `my_strnxfrm_unicode_full_bin` writes code points rather
 // than copying the value. Nothing we could have checked ourselves would have
 // found that — every other test compared us against our own reading of a doc.
+import { fileURLToPath } from 'node:url'
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { existsSync, readFileSync } from 'node:fs'
@@ -31,7 +32,7 @@ import { encodeCharset, loadCollation } from '@myjs/charsets'
 import { FIELD_TYPE } from '@myjs/bytes'
 import { decodeJson, decodeStorageValue, type ColumnMeta } from '@myjs/types'
 
-const FIXTURES = new URL('./fixtures/', import.meta.url).pathname
+const FIXTURES = fileURLToPath(new URL('./fixtures/', import.meta.url))
 
 interface WeightVector {
   readonly collation: string

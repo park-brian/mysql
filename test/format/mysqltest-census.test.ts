@@ -7,11 +7,12 @@
 // this repository is MIT, so not one line of its SQL may land in a fixture.
 // That is D-29's rule (the generated error table carries numbers and symbols,
 // never MySQL's English text) applied to a corpus rather than to a table.
+import { fileURLToPath } from 'node:url'
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { existsSync, readFileSync } from 'node:fs'
 
-const FIXTURE = new URL('./fixtures/mysqltest-corpus.json', import.meta.url).pathname
+const FIXTURE = fileURLToPath(new URL('./fixtures/mysqltest-corpus.json', import.meta.url))
 
 interface Census {
   readonly source: string

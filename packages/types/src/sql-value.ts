@@ -326,9 +326,15 @@ export function toDecimal(v: Exclude<Value, null>): DecimalValue {
 
 export function doubleToDecimal(n: number): DecimalValue {
   if (!Number.isFinite(n)) return decimal(0n, 0)
-  // The shortest round-trip rendering, as MySQL's `double2decimal` does via `%g`-like output.
-  const text = Math.abs(n) < 1e21 ? String(n) : n.toFixed(0)
-  if (/e/.test(text)) return parseDecimal(n.toFixed(Math.min(30, Math.max(0, -Math.floor(Math.log10(Math.abs(n))) + 15))))
+  // Expand the shortest round-trip rendering without limiting small values
+  // to toFixed's display precision or treating an exponent as trailing text.
+  const text = String(n)
+  if (/[eE]/.test(text)) {
+    const [mantissa, exponent] = n.toExponential().split('e') as [string, string]
+    const d = parseDecimal(mantissa)
+    const scale = d.scale - Number(exponent)
+    return scale >= 0 ? decimal(d.v, scale) : decimal(d.v * pow10(-scale), 0)
+  }
   return parseDecimal(text)
 }
 

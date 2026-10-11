@@ -248,12 +248,17 @@ export class RowStream<T> implements AsyncIterableIterator<T> {
   readonly #batches: AsyncGenerator<readonly T[], void, undefined>
   #batch: readonly T[] = []
   #at = 0
+  #queue: Promise<unknown> = Promise.resolve()
 
   constructor(batches: AsyncGenerator<readonly T[], void, undefined>) {
     this.#batches = batches
   }
 
-  async next(): Promise<IteratorResult<T, undefined>> {
+  next(): Promise<IteratorResult<T, undefined>> {
+    return this.#serial(() => this.#next())
+  }
+
+  async #next(): Promise<IteratorResult<T, undefined>> {
     while (this.#at === this.#batch.length) {
       const next = await this.#batches.next()
       if (next.done === true) return { done: true, value: undefined }
@@ -263,11 +268,19 @@ export class RowStream<T> implements AsyncIterableIterator<T> {
     return { done: false, value: this.#batch[this.#at++] as T }
   }
 
-  async return(): Promise<IteratorResult<T, undefined>> {
-    this.#batch = []
-    this.#at = 0
-    await this.#batches.return()
-    return { done: true, value: undefined }
+  return(): Promise<IteratorResult<T, undefined>> {
+    return this.#serial(async () => {
+      this.#batch = []
+      this.#at = 0
+      await this.#batches.return()
+      return { done: true, value: undefined }
+    })
+  }
+
+  #serial(call: () => Promise<IteratorResult<T, undefined>>): Promise<IteratorResult<T, undefined>> {
+    const next = this.#queue.then(call, call)
+    this.#queue = next.catch(() => undefined)
+    return next
   }
 
   [Symbol.asyncIterator](): this {

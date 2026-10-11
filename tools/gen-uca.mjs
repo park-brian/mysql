@@ -19,10 +19,11 @@
 // implicit weights of UCA, computed from the code point — so 4,203 of 4,352
 // pages cost nothing at all. That is the same discovery Q-04 recorded for
 // `my_unicase_default`, in a table 7.4 MB long.
+import { fileURLToPath } from 'node:url'
 import { writeFileSync } from 'node:fs'
 import { REPO, REF, banner, check, combinedSha256, fetchAllPinned, packed } from './lib/gen-common.mjs'
 
-const OUT = new URL('../packages/charsets/src/collations/uca900.ts', import.meta.url).pathname
+const OUT = fileURLToPath(new URL('../packages/charsets/src/collations/uca900.ts', import.meta.url))
 
 // One file. `strings/ctype-uca.cc` is already parsed by `gen-charsets.mjs` for
 // the `MY_CS_UTF8MB4_UCA_FLAGS` macro that identifies a UCA collation in the

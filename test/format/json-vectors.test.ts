@@ -7,6 +7,7 @@
 // with ER_NOT_SUPPORTED_YET is counted, not failed, and `REFUSED_AT_MOST`
 // ratchets down as M5.21 lands — captured before any JSON code, so it starts
 // at nearly everything.
+import { fileURLToPath } from 'node:url'
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { existsSync, readFileSync } from 'node:fs'
@@ -14,7 +15,7 @@ import { existsSync, readFileSync } from 'node:fs'
 import { CONNECTION, SQL_MODE } from '../../tools/capture-json.mjs'
 import { replay, type Fixture } from '../lib/replay.ts'
 
-const FIXTURE = new URL('./fixtures/json.json', import.meta.url).pathname
+const FIXTURE = fileURLToPath(new URL('./fixtures/json.json', import.meta.url))
 
 /** The most statements the executor may still refuse. Lowered by M5.21's stages, never raised. */
 const REFUSED_AT_MOST = 0

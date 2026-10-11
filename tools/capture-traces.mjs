@@ -10,6 +10,7 @@
 //   node tools/capture-traces.mjs --to 127.0.0.1:3306 --out test/protocol/fixtures
 // then point a client at the printed port. Or let it drive the clients itself:
 //   node tools/capture-traces.mjs --all
+import { fileURLToPath } from 'node:url'
 import { mkdirSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import net from 'node:net'
@@ -21,7 +22,7 @@ const run = promisify(execFile)
 
 
 const [UPSTREAM_HOST, UPSTREAM_PORT] = (arg('to', '127.0.0.1:3306')).split(':')
-const OUT_DIR = arg('out', new URL('../test/protocol/fixtures/', import.meta.url).pathname)
+const OUT_DIR = arg('out', fileURLToPath(new URL('../test/protocol/fixtures/', import.meta.url)))
 
 /**
  * The administrative connection — for `SELECT VERSION()` and `FLUSH

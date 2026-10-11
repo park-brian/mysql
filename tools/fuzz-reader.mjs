@@ -9,6 +9,7 @@
 // Doc 43 says only "a JS fuzzer" and names no package, so this is a seeded
 // generator with no dependency. A crasher is written to the corpus directory
 // and becomes a regression test.
+import { fileURLToPath } from 'node:url'
 import { Reader, ProtocolError } from '@myjs/bytes'
 import { mkdirSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
@@ -18,7 +19,7 @@ const RUNS = Number(process.env.FUZZ_RUNS ?? 1_000_000)
 const SEED = Number(process.env.FUZZ_SEED ?? (Date.now() & 0x7fffffff))
 // A single input must never take long enough to look like a hang.
 const PER_INPUT_BUDGET_MS = Number(process.env.FUZZ_INPUT_BUDGET_MS ?? 250)
-const CORPUS = new URL('../test/format/fuzz-corpus/', import.meta.url).pathname
+const CORPUS = fileURLToPath(new URL('../test/format/fuzz-corpus/', import.meta.url))
 
 // xorshift32 — reproducible from a seed, so a crasher can be replayed.
 const { rnd } = xorshift(SEED)

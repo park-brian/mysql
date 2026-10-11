@@ -14,50 +14,25 @@
 // `packages/core/src/host/*` holds the conditional-export files that adapt to
 // a host runtime — notably the mysql2-facing duplex, which must emit Node
 // `Buffer`s because mysql2's PacketParser calls `chunk.copy()`.
+import { fileURLToPath } from 'node:url'
 import { readdirSync, readFileSync, statSync } from 'node:fs'
 import { join, relative, sep } from 'node:path'
+import { builtinModules } from 'node:module'
+import { API } from 'typescript/unstable/sync'
+import * as ts from 'typescript/unstable/ast'
+const BUILTINS = new Set(builtinModules.map((name) => name.replace(/^node:/, '')))
 
 // `--root <dir>` lets the negative-fixture test point the linter at a throwaway
 // tree, so the repository never has to carry a permanently-failing file.
 const rootFlag = process.argv.indexOf('--root')
 const ROOT = rootFlag === -1
-  ? new URL('..', import.meta.url).pathname
+  ? fileURLToPath(new URL('..', import.meta.url))
   : process.argv[rootFlag + 1]
 const EXEMPT = [
   join('packages', 'vfs') + sep,
   join('packages', 'server') + sep,
   join('packages', 'core', 'src', 'host') + sep,
 ]
-
-/** Blank out comments and string/template literals so we match real code only. */
-function stripLiterals(src) {
-  let out = ''
-  let i = 0
-  const n = src.length
-  while (i < n) {
-    const c = src[i]
-    const c2 = src[i + 1]
-    if (c === '/' && c2 === '/') {
-      while (i < n && src[i] !== '\n') { out += ' '; i++ }
-    } else if (c === '/' && c2 === '*') {
-      out += '  '; i += 2
-      while (i < n && !(src[i] === '*' && src[i + 1] === '/')) { out += src[i] === '\n' ? '\n' : ' '; i++ }
-      out += '  '; i += 2
-    } else if (c === '"' || c === "'" || c === '`') {
-      const quote = c
-      out += ' '; i++
-      while (i < n && src[i] !== quote) {
-        if (src[i] === '\\') { out += ' '; i++ }
-        out += src[i] === '\n' ? '\n' : ' '
-        i++
-      }
-      out += ' '; i++
-    } else {
-      out += c; i++
-    }
-  }
-  return out
-}
 
 function* walk(dir) {
   for (const entry of readdirSync(dir)) {
@@ -66,14 +41,6 @@ function* walk(dir) {
     else if (p.endsWith('.ts')) yield p
   }
 }
-
-// Import/export specifiers are erased along with the surrounding string, so we
-// match them on the raw source and everything else on the stripped source.
-const NODE_SPECIFIER = /(?:^|[\s;])(?:import|export)[\s\S]{0,200}?from\s*['"](node:[^'"]+)['"]/g
-const BARE_NODE_IMPORT = /(?:^|[\s;])import\s*['"](node:[^'"]+)['"]/g
-const DYNAMIC_IMPORT = /\bimport\s*\(\s*['"](node:[^'"]+)['"]\s*\)/g
-const REQUIRE = /\brequire\s*\(\s*['"](node:[^'"]+)['"]\s*\)/g
-const BUFFER = /\bBuffer\b/g
 
 /** Which `@myjs/*` packages each package may depend on. */
 const ALLOWED = {
@@ -88,55 +55,65 @@ const ALLOWED = {
   server: ['core', 'protocol'],
   myjs: ['core', 'server'],
 }
-const MYJS_SPECIFIER = /(?:from\s*|import\s*\(\s*|import\s+)['"]@myjs\/([a-z-]+)(?:\/[^'"]*)?['"]/g
 
+const files = readdirSync(join(ROOT, 'packages')).flatMap((pkg) => {
+  const src = join(ROOT, 'packages', pkg, 'src')
+  try { return [...walk(src)] } catch (e) { if (e.code === 'ENOENT') return []; throw e }
+})
+const api = new API({ cwd: ROOT })
+let snapshot
 const problems = []
-for (const pkg of readdirSync(join(ROOT, 'packages'))) {
-  const srcDir = join(ROOT, 'packages', pkg, 'src')
-  let isDir = false
-  try { isDir = statSync(srcDir).isDirectory() } catch { /* no src yet */ }
-  if (!isDir) continue
+try {
+  snapshot = api.updateSnapshot({ openFiles: files })
+  for (const pkg of readdirSync(join(ROOT, 'packages'))) {
+    const srcDir = join(ROOT, 'packages', pkg, 'src')
+    let isDir = false
+    try { isDir = statSync(srcDir).isDirectory() } catch { /* no src yet */ }
+    if (!isDir) continue
 
-  const imported = new Set()
-  for (const file of walk(srcDir)) {
-    const rel = relative(ROOT, file)
-    const source = readFileSync(file, 'utf8')
-    MYJS_SPECIFIER.lastIndex = 0
-    for (let m; (m = MYJS_SPECIFIER.exec(source)) !== null; ) if (m[1] !== pkg) imported.add(m[1])
-    if (EXEMPT.some((e) => rel.startsWith(e))) continue
-    // A file may opt out only by living in an exempt path — never by comment.
-    const raw = readFileSync(file, 'utf8')
-    const code = stripLiterals(raw)
-
-    const lineOf = (index) => raw.slice(0, index).split('\n').length
-
-    for (const re of [NODE_SPECIFIER, BARE_NODE_IMPORT, DYNAMIC_IMPORT, REQUIRE]) {
-      re.lastIndex = 0
-      let m
-      while ((m = re.exec(raw)) !== null) {
-        problems.push(`${rel}:${lineOf(m.index)}  imports '${m[1]}' outside the exempt paths`)
+    const imported = new Set()
+    for (const file of walk(srcDir)) {
+      const rel = relative(ROOT, file)
+      const source = snapshot.getDefaultProjectForFile(file)?.program.getSourceFile(file)
+      if (source === undefined) throw new Error('compiler did not load ' + file)
+      const exempt = EXEMPT.some((path) => rel.startsWith(path))
+      const report = (node, message) => {
+        const line = source.getLineAndCharacterOfPosition(node.getStart(source)).line + 1
+        problems.push(`${rel}:${line}  ${message}`)
       }
+      const specifier = (node) => {
+        if (node === undefined || (node.kind !== ts.SyntaxKind.StringLiteral && node.kind !== ts.SyntaxKind.NoSubstitutionTemplateLiteral)) return
+        const name = node.text
+        const workspace = /^@myjs\/([a-z-]+)(?:\/|$)/.exec(name)
+        if (workspace !== null && workspace[1] !== pkg) imported.add(workspace[1])
+        if (!exempt && (name.startsWith('node:') || BUILTINS.has(name))) report(node, `imports '${name}' outside the exempt paths`)
+      }
+      const visit = (node) => {
+        if (ts.isImportDeclaration(node) || ts.isExportDeclaration(node)) specifier(node.moduleSpecifier)
+        if (ts.isImportTypeNode(node) && ts.isLiteralTypeNode(node.argument)) specifier(node.argument.literal)
+        if (ts.isCallExpression(node) && (node.expression.kind === ts.SyntaxKind.ImportKeyword || (ts.isIdentifier(node.expression) && node.expression.text === 'require'))) specifier(node.arguments[0])
+        if (!exempt && ts.isIdentifier(node) && node.text === 'Buffer') report(node, 'uses `Buffer`; use Uint8Array/DataView')
+        node.forEachChild(visit)
+      }
+      visit(source)
     }
-    BUFFER.lastIndex = 0
-    let m
-    while ((m = BUFFER.exec(code)) !== null) {
-      problems.push(`${rel}:${lineOf(m.index)}  uses \`Buffer\`; use Uint8Array/DataView`)
+    const allowed = ALLOWED[pkg]
+    if (allowed === undefined) {
+      problems.push(`packages/${pkg}  has no entry in the package graph (ALLOWED in tools/lint-isomorphic.mjs)`)
+      continue
+    }
+    for (const dep of imported) if (!allowed.includes(dep)) problems.push(`packages/${pkg}  imports @myjs/${dep}, an edge the package graph does not allow`)
+    let manifest
+    try { manifest = JSON.parse(readFileSync(join(ROOT, 'packages', pkg, 'package.json'), 'utf8')) } catch { /* a fixture tree has none */ }
+    if (manifest !== undefined) {
+      const declared = Object.keys(manifest.dependencies ?? {}).filter((d) => d.startsWith('@myjs/')).map((d) => d.slice('@myjs/'.length))
+      for (const dep of imported) if (!declared.includes(dep)) problems.push(`packages/${pkg}  imports @myjs/${dep} without declaring it`)
+      for (const dep of declared) if (!imported.has(dep)) problems.push(`packages/${pkg}  declares @myjs/${dep} and never imports it`)
     }
   }
 
-  const allowed = ALLOWED[pkg]
-  if (allowed === undefined) {
-    problems.push(`packages/${pkg}  has no entry in the package graph (ALLOWED in tools/lint-isomorphic.mjs)`)
-    continue
-  }
-  for (const dep of imported) if (!allowed.includes(dep)) problems.push(`packages/${pkg}  imports @myjs/${dep}, an edge the package graph does not allow`)
-  let manifest
-  try { manifest = JSON.parse(readFileSync(join(ROOT, 'packages', pkg, 'package.json'), 'utf8')) } catch { /* a fixture tree has none */ }
-  if (manifest !== undefined) {
-    const declared = Object.keys(manifest.dependencies ?? {}).filter((d) => d.startsWith('@myjs/')).map((d) => d.slice('@myjs/'.length))
-    for (const dep of imported) if (!declared.includes(dep)) problems.push(`packages/${pkg}  imports @myjs/${dep} without declaring it`)
-    for (const dep of declared) if (!imported.has(dep)) problems.push(`packages/${pkg}  declares @myjs/${dep} and never imports it`)
-  }
+} finally {
+  try { snapshot?.dispose() } finally { api.close() }
 }
 
 if (problems.length > 0) {

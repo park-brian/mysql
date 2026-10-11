@@ -17,15 +17,19 @@ the way: DDL, DML and transactions, upserts, relational SELECT (joins,
 grouping, subqueries, CTEs, set operations), window functions, JSON, views,
 foreign keys, CHECK constraints, generated columns, FULLTEXT search,
 INFORMATION_SCHEMA, temporary tables and ALTER TABLE all run through
-unmodified `mysql2` and agree with 8.4.11 on the committed corpora. M5's exit
-criterion is met: Drizzle's MySQL suites and Prisma's functional tests pass
-as they pass on 8.4.11, file for file. Doc 42's query API
+unmodified `mysql2`. The committed execution and relational corpora agree
+with 8.4.11; the committed coercion corpus also agrees completely (M5.2).
+Some function behavior and optimizer strategies remain partial.
+M5's ORM exit criterion holds with recorded test configuration; default
+parallel runs can lose interactive-transaction tests to scheduling delays.
+Doc 42's query API
 (`db.query()`, `db.execute()`, `db.transaction()`) is a client of the same
 protocol, its values `mysql2`'s (M5.36, D-76). The roadmap's **Next** section
 says what comes next: 0.3 is staged (`npm run pack`, D-79/D-80) and waits only
 on being published. The cost-based planner (M5.7, M5.42–M5.46) is done:
 `EXPLAIN FORMAT=TREE` prints the plan that runs, and 2,103 of the relational
-corpus's 2,248 plans agree with 8.4.11's; the strategies left are M5.47–M5.50.
+corpus's 2,248 plans agree with 8.4.11's; M5.47 is in progress, M5.48 is done,
+and M5.49–M5.50 remain.
 `db.stream()` (M5.40) streams with backpressure at every hop (D-85). Then the
 browser (M6).
 The package an application installs is `myjs`, a facade over `@myjs/core`.
@@ -45,6 +49,7 @@ npm run lint      # the isomorphic gate and the package graph
 npm run size      # the ratcheting bundle budget
 npm run fuzz      # 10^6 inputs per parser, and 2 x 10^4 statements into the executor
 npm run pack -- --smoke   # every package as a tarball, installed into an empty project and run
+npm run verify:docker -- --reference  # disposable Node 22.18.0 + pinned MySQL 8.4.11; no fixture recapture
 ```
 
 Because there is no build step, only **erasable** TypeScript is legal: no

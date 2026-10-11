@@ -411,9 +411,12 @@ export class Store {
   }
 
   close(): void {
-    this.checkpoint()
-    this.file.close()
-    this.logFile.close()
+    const errors: unknown[] = []
+    for (const close of [() => this.checkpoint(), () => this.file.close(), () => this.logFile.close()]) {
+      try { close() } catch (e) { errors.push(e) }
+    }
+    if (errors.length === 1) throw errors[0]
+    if (errors.length > 1) throw new AggregateError(errors, 'store shutdown failed')
   }
 
   #nextTrxIdNow(): number {

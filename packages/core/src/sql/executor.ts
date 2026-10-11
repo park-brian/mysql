@@ -17,7 +17,6 @@ import { collationInfoByName, defaultCollationOf, requireCollationInfo } from '@
 import { collationsOf, type Catalog, type TableDef, type ViewDef } from '@myjs/engine'
 import {
   NODE,
-  ParseError,
   QUERY,
   REF,
   parseStatements,
@@ -362,13 +361,6 @@ export class SqlExecutor implements Executor {
       this.#parsed.set(key, statement)
       return statement
     } catch (e) {
-      if (e instanceof ParseError && e.code === 'ER_NOT_SUPPORTED_YET') {
-        // A `SET` the parser names as not implemented (`SET RESOURCE GROUP`)
-        // is answered OK, as it was before M3.6: a driver's connect sequence
-        // must not fail on one. `FLUSH`, `SET PASSWORD` and `SET ROLE` parse
-        // since M3.17 and are answered in `#dispatch`.
-        if (/^\s*SET\b/i.test(sql)) return null
-      }
       throw toSqlError(e)
     }
   }
@@ -924,15 +916,6 @@ export class SqlExecutor implements Executor {
       case STATEMENT.TABLE_MAINTENANCE:
         if (statement.op !== 'ANALYZE') throw sqlError('ER_NOT_SUPPORTED_YET', messages.notSupported(`${statement.op} TABLE`))
         return this.#analyze(run, statement.tables)
-
-      // Answered OK and not run, as they were while the parser refused them:
-      // drivers send them on connect, and there is no cache to flush and no
-      // account store to change (M3.17).
-      case STATEMENT.FLUSH:
-      case STATEMENT.SET_PASSWORD:
-      case STATEMENT.SET_ROLE:
-      case STATEMENT.SET_DEFAULT_ROLE:
-        return { affectedRows: 0 }
 
       default:
         throw sqlError('ER_NOT_SUPPORTED_YET', messages.notSupported(`This statement (${statement.kind})`))

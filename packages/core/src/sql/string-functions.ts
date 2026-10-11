@@ -48,6 +48,8 @@ import {
   sha256,
   sha512,
   stringValue,
+  temporalOrdinal,
+  toDateTime,
   toDecimal,
   toDouble,
   toInteger,
@@ -77,6 +79,7 @@ import {
 } from './compile.ts'
 import { NULL_TYPE, charWidth, decimalType, doubleType, intType, stringType, type ResultType } from './meta.ts'
 import { unregistered } from './registry.ts'
+import { modeOf } from './mode.ts'
 
 type V = Exclude<Value, null>
 
@@ -667,10 +670,11 @@ function numberFunction(name: string, args: readonly Compiled[], callName: strin
         true,
       )
       const greatest = name === 'GREATEST'
-      // Over text and a temporal, the server compares as datetimes and widens
-      // the result to six fractional digits by rules not yet captured.
-      if ((type.kind === 'string' || type.kind === 'bytes') && xs.some((x) => x.type.kind === 'datetime' || x.type.kind === 'time')) {
-        throw sqlError('ER_NOT_SUPPORTED_YET', messages.notSupported(`${name} over a string and a temporal value`))
+      if (type.kind === 'string' && xs.some((x) => x.type.kind === 'datetime')) {
+        return datetimeExtremum(xs, type, greatest)
+      }
+      if ((type.kind === 'string' || type.kind === 'bytes') && xs.some((x) => x.type.kind === 'time' || x.type.kind === 'datetime')) {
+        throw sqlError('ER_NOT_SUPPORTED_YET', messages.notSupported(`${name} over binary text or a TIME`))
       }
       return {
         eval: (r, env) => {
@@ -692,6 +696,47 @@ function numberFunction(name: string, args: readonly Compiled[], callName: strin
       throw unregistered(name)
   }
 }
+
+/** Dates choose by their packed value; a zero minimum falls back to text. */
+function datetimeExtremum(xs: readonly Compiled[], type: ResultType, greatest: boolean): Compiled {
+  const date = xs.find((x) => x.type.kind === 'datetime') as Compiled
+  return {
+    type: { ...type, length: Math.max(type.length, 26) },
+    eval: (r, env) => {
+      const values: V[] = []
+      let best: ReturnType<typeof toDateTime>
+      let ordinal: bigint | undefined
+      let fsp = 0
+      for (const x of xs) {
+        const v = x.eval(r, env)
+        if (v === null) return null
+        values.push(v)
+        const converted = toDateTime(v, 'DATETIME')
+        const packed = converted === undefined ? 0n : temporalOrdinal(converted.v)
+        const zero = packed === 0n && (v.kind === 'int' || v.kind === 'decimal' || v.kind === 'double' || modeOf(env.session.sqlMode).noZeroDate)
+        if (converted === undefined || (zero && v.kind !== 'datetime')) {
+          raise(env, 1292, `Incorrect datetime value: '${warnedText(v)}' for column '${date.type.column?.orgName ?? 'datetime'}' at row 1`)
+        }
+        // Invalid text has unspecified precision, capped at DATETIME's six.
+        fsp = Math.max(fsp, converted?.fsp ?? (x.type.kind === 'string' || x.type.kind === 'bytes' ? 6 : Math.min(x.type.scale, 6)))
+        if (ordinal === undefined || (greatest ? packed > ordinal : packed < ordinal)) {
+          ordinal = packed
+          best = converted
+        }
+      }
+      if (ordinal !== 0n && best !== undefined) return stringValue(toText({ ...best, fsp }), type.collationId)
+      // MySQL returns the original lexical winner when the date minimum is zero.
+      let text = stringValue(toText(values[0] as V), type.collationId)
+      for (const v of values.slice(1)) {
+        const next = stringValue(toText(v), type.collationId)
+        const cmp = compareValues(next, text)
+        if (cmp !== null && (greatest ? cmp > 0 : cmp < 0)) text = next
+      }
+      return text
+    },
+  }
+}
+
 
 /** A decimal's integer part, toward the floor or the ceiling. */
 function toWhole(d: DecimalValue, toward: 'floor' | 'ceil'): bigint {

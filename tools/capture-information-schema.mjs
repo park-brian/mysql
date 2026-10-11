@@ -24,12 +24,13 @@
 //
 // Usage (8.4.11 from `tools/mysql-local.mjs` up):
 //   node tools/capture-information-schema.mjs [--scripts 120] [--seed 7] [--defs-only]
+import { fileURLToPath } from 'node:url'
 import { writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import mysql from 'mysql2/promise'
 import { isMain } from './lib/is-main.mjs'
 
-const ROOT = new URL('..', import.meta.url).pathname
+const ROOT = fileURLToPath(new URL('..', import.meta.url))
 const DEFS = join(ROOT, 'packages/core/src/sql/information-schema-defs.ts')
 const FIXTURE = join(ROOT, 'test/format/fixtures/information-schema.json')
 const option = (name, fallback) => {

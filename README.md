@@ -4,9 +4,9 @@
 > collations, the parser and the storage engine (B+tree, WAL, crash
 > recovery, MVCC) are done, and the executor runs DDL, DML, transactions and
 > relational queries — joins, grouping, subqueries, CTEs, window functions,
-> JSON, foreign keys, FULLTEXT — agreeing with a real MySQL 8.4.11 on every
-> statement of the committed corpora. Drizzle's and Prisma's MySQL test
-> suites pass against it as they pass against that server. Nothing is
+> JSON, foreign keys, FULLTEXT. The committed corpora measure agreement with
+> MySQL 8.4.11; coercion and optimizer gaps remain. The pinned Drizzle and
+> Prisma suites provide an additional compatibility check. Nothing is
 > published to npm yet: 0.3, the first release of `myjs` itself, is packed and
 > smoke-installed by CI, waiting to be published.
 >
@@ -31,25 +31,32 @@ The goal: something you `npm install` and `import` that creates and serves
 MySQL databases with no server process — SQLite's ergonomics, PGlite's delivery
 model, MySQL's semantics.
 
+The query examples assume the application's `users` and `accounts` tables
+already exist in `app`.
+
 ```js
 import { MySQL } from 'myjs'
 
-const db = await MySQL.open('./data')          // Node: a directory on disk
-const db = await MySQL.open(':memory:')        // gone when you close it
+const db = await MySQL.open('./data', { database: 'app' })
+// or ':memory:' for ephemeral storage; create your schemas before selecting one
 // MySQL.open('opfs://app-db') in the browser is M6's
 
 const [rows] = await db.execute('SELECT * FROM users WHERE id = ?', [1])
 await db.transaction(async (tx) => {
   await tx.execute('UPDATE accounts SET balance = balance - ? WHERE id = ?', [10, 1])
 })
+await db.end()
 ```
 
-…and, because the engine speaks the real MySQL wire protocol, the whole existing
-driver ecosystem works against it unchanged:
+Existing drivers can also use its MySQL wire protocol:
 
 ```js
 import mysql from 'mysql2/promise'
-const conn = await mysql.createConnection({ stream: db.createStream() })
+import { MySQL } from 'myjs'
+const db = await MySQL.open(':memory:')
+const conn = await mysql.createConnection({ stream: db.createStream(), user: 'root', password: '' })
+await conn.end()
+await db.end()
 ```
 
 ## Three compatibility contracts
@@ -63,7 +70,7 @@ three, in priority order:
 2. **SQL semantics** — the dialect, the type system, and the quirks: collation
    ordering, implicit coercion, `sql_mode`, `AUTO_INCREMENT` and `TIMESTAMP`
    behaviour. Where the real engineering is.
-3. **File format** — we read and write real InnoDB `.ibd` tablespaces with SDI,
+3. **File format** — the planned interchange API reads and writes InnoDB `.ibd` tablespaces with SDI,
    as an *interchange* format (transportable tablespaces), not as our native
    storage. [Docs 20–30](./docs/README.md) decode it byte by byte.
 
@@ -72,9 +79,12 @@ three, in priority order:
 PGlite compiles Postgres to WebAssembly because Postgres has a single-user mode,
 almost no threading, and a BSD licence. MySQL has none of those: InnoDB starts
 ~20 mandatory background threads, there is no single-user mode, the build pulls
-in ICU/OpenSSL/protobuf/Boost, and **MySQL is GPLv2** — so a WASM artefact of it
-would make every consuming application GPL. Nobody has shipped a WASM MySQL, and
-that is not an accident.
+in ICU/OpenSSL/protobuf/Boost, and **MySQL is GPLv2**. Distributing a port
+would retain its licence obligations; obligations for another application
+depend on how the programs are combined and distributed. The
+[GNU GPLv2 FAQ](https://www.gnu.org/licenses/old-licenses/gpl-2.0-faq.html#MereAggregation)
+distinguishes aggregation from a combined program. Reimplementation lets this
+library remain MIT without distributing MySQL's code.
 
 The full analysis, including the conditions under which this decision should be
 revisited, is in [docs/02-strategy.md](./docs/02-strategy.md).

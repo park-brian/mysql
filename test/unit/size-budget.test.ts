@@ -1,5 +1,6 @@
 // M0.10 — "the size gate fails a commit that exceeds the committed number".
 // A budget that never fails is a dashboard, not a gate.
+import { fileURLToPath } from 'node:url'
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { execFileSync } from 'node:child_process'
@@ -7,8 +8,8 @@ import { mkdtempSync, mkdirSync, writeFileSync, rmSync, readFileSync, existsSync
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
-const TOOL = new URL('../../tools/size-budget.mjs', import.meta.url).pathname
-const COMMITTED = new URL('../../size-budget.json', import.meta.url).pathname
+const TOOL = fileURLToPath(new URL('../../tools/size-budget.mjs', import.meta.url))
+const COMMITTED = fileURLToPath(new URL('../../size-budget.json', import.meta.url))
 
 function runGate(budget: unknown): { code: number; out: string } {
   const dir = mkdtempSync(join(tmpdir(), 'myjs-size-'))

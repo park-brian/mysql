@@ -18,12 +18,14 @@
 // reopen it, and typecheck doc 42's typed example against the installed
 // declarations. Nothing is published from here; `npm publish` of each staged
 // directory, leaves first, is a person's decision.
+import { fileURLToPath } from 'node:url'
 import { execFileSync } from 'node:child_process'
 import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { npmCommand } from './lib/npm-command.mjs'
 
-const ROOT = new URL('..', import.meta.url).pathname
+const ROOT = fileURLToPath(new URL('..', import.meta.url))
 const OUT = join(ROOT, '.pack')
 const REPOSITORY = 'https://github.com/park-brian/mysql'
 /** Leaves first: the order they publish in, so each one's dependencies are already there. */
@@ -33,7 +35,7 @@ const fail = (message) => {
   console.error(`pack: ${message}`)
   process.exit(1)
 }
-const run = (cmd, args, cwd) => execFileSync(cmd, args, { cwd, encoding: 'utf8', stdio: ['ignore', 'pipe', 'inherit'] })
+const run = (cmd, args, cwd) => execFileSync(...npmCommand(cmd, args), { cwd, encoding: 'utf8', stdio: ['ignore', 'pipe', 'inherit'] })
 
 const packages = readdirSync(join(ROOT, 'packages')).sort((a, b) => ORDER.indexOf(a) - ORDER.indexOf(b))
 for (const p of packages) if (!ORDER.includes(p)) fail(`packages/${p} has no place in the publish order`)
@@ -48,9 +50,9 @@ writeFileSync(
   join(OUT, 'tsconfig.json'),
   JSON.stringify(
     {
-      extends: join(ROOT, 'tsconfig.base.json'),
-      compilerOptions: { noEmit: false, declaration: true, outDir: build, rootDir: join(ROOT, 'packages'), typeRoots: [join(ROOT, 'node_modules/@types')] },
-      include: [join(ROOT, 'packages/*/src/**/*.ts')],
+      extends: '../tsconfig.base.json',
+      compilerOptions: { noEmit: false, declaration: true, outDir: './build', rootDir: '../packages', typeRoots: ['../node_modules/@types'] },
+      include: ['../packages/*/src/**/*.ts'],
     },
     null,
     2,
@@ -99,7 +101,9 @@ for (const p of packages) {
   cpSync(join(ROOT, 'LICENSE'), join(dir, 'LICENSE'))
   if (p === 'myjs') cpSync(join(ROOT, 'README.md'), join(dir, 'README.md'))
   else writeFileSync(join(dir, 'README.md'), `# ${source.name}\n\n${source.description}.\n\nPart of [myjs](${REPOSITORY}), an in-process MySQL for JavaScript. Most applications want the \`myjs\` package itself.\n`)
-  const packed = JSON.parse(run('npm', ['pack', '--json', '--pack-destination', join(OUT, 'tarballs')], dir))[0]
+  const report = JSON.parse(run('npm', ['pack', '--json', '--workspaces=false', '--pack-destination', join(OUT, 'tarballs')], dir))
+  const packed = Array.isArray(report) ? report[0] : report[source.name]
+  if (packed?.name !== source.name || typeof packed.filename !== 'string' || !Array.isArray(packed.files)) fail(`npm pack returned no valid report for ${source.name}`)
   const source_ = packed.files.map((f) => f.path).filter((f) => f.endsWith('.ts') && !f.endsWith('.d.ts'))
   if (source_.length > 0) fail(`${source.name} packs TypeScript source, which Node will not run from node_modules: ${source_.slice(0, 3).join(', ')}`)
   tarballs.push(join(OUT, 'tarballs', packed.filename))

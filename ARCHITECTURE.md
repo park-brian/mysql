@@ -121,10 +121,13 @@ which needs cross-origin isolation headers. Those headers break third-party
 embeds, and asking every user to set them is a heavy price for a library
 whose pitch is "just import it".
 
-The licence row is decisive on its own. A WebAssembly build of MySQL is a
-derivative work of MySQL. An npm package that ships it, and every application
-that bundles it, takes on GPLv2 obligations. For a library meant to be dropped
-into any web or Node application, that decides who can use it at all.
+The licence row matters to the delivery model. A WebAssembly port retains
+MySQL's licence obligations. Whether another application is a combined
+program depends on its integration and distribution; the
+[GNU GPLv2 FAQ](https://www.gnu.org/licenses/old-licenses/gpl-2.0-faq.html#MereAggregation)
+distinguishes that from aggregation. Oracle also offers
+[commercial licensing](https://www.mysql.com/about/legal/licensing/oem/).
+An MIT reimplementation avoids distributing the server's GPL code.
 
 So we reimplement. This repository is MIT, and it keeps a strict rule: nothing
 from MySQL's source tree is ever copied into it, tests included. We read
@@ -412,7 +415,8 @@ list of ground rules, enforced by tooling wherever that is possible:
    cross a layer, so every layer can be fuzzed and snapshot-tested.
 3. **Async at the edges, sync in the core.** Anything that waits, whether
    loading a collation table or queueing for the writer, happens before a
-   statement starts running. Nothing inside it awaits.
+   statement starts running. Long statements may pause between synchronous
+   mini-transactions (D-77); no mini-transaction awaits.
 4. **Every format constant cites the MySQL header it came from**, so it can be
    checked again against a newer tree.
 5. **Typed errors, always.** Malformed input produces a typed error: never a
@@ -1203,8 +1207,9 @@ cross-origin isolation is too high a price for a library.
 
 The default is the simplest possible: the engine runs in the calling thread,
 and the Node VFS uses `openSync`, `readSync`, `writeSync` and `fsyncSync` at
-page offsets. An advisory lock file holding the owner's pid, with staleness
-detection, keeps two processes from opening one database. To serve other
+page offsets. An exclusive advisory lock file holds the owner's pid for
+diagnosis. Existing lock files are never taken over, including after a crash;
+[doc 40](./docs/40-vfs.md#node--bun--deno) describes explicit recovery. To serve other
 processes, or the `mysql` command-line client, `@myjs/server` wraps the same
 `execProtocol` in a TCP listener:
 
@@ -1299,7 +1304,7 @@ const [rows, fields] = await db.query('SELECT * FROM users WHERE id > 10')
 const [result] = await db.execute('INSERT INTO users (name) VALUES (?)', ['alice'])
 result.insertId
 
-// never held whole (M5.40, in 0.4)
+// pulls batches (M5.40, included in the current 0.3.0 tarballs)
 for await (const row of db.stream('SELECT * FROM big_table')) { /* … */ }
 
 // transactions: commit on return, roll back on throw,
@@ -1454,7 +1459,7 @@ a blocker and one without is just a note.
 
 ## 21. Where we are
 
-*A snapshot as of 2026-10-09. The [roadmap](./docs/44-roadmap.md) is the live
+*A snapshot as of 2026-10-10. The [roadmap](./docs/44-roadmap.md) is the live
 version, and wins wherever it disagrees with this section.*
 
 ```mermaid
@@ -1475,20 +1480,25 @@ operations and views. It also covers JSON as a value, window functions with
 their frames, `INFORMATION_SCHEMA`, SHOW, foreign keys with their
 referential actions, CHECK constraints, ALTER TABLE by copy, temporary
 tables, generated columns, FULLTEXT, `SHOW CREATE TABLE` byte for byte, JSON
-paths and regular expressions. Generated corpora agree with MySQL 8.4.11
-statement for statement, column names and flags included. Drizzle's MySQL
-suites pass whole, as they do against 8.4.11, and so does every test of
-Prisma's that 8.4.11 passes, file for file, three runs in a row, now that a
-bulk statement pauses between its batches instead of stalling every other
-connection (§11). The query API of §17 exists, typed, and a client of the
+paths and regular expressions. The execution and relational corpora agree
+with MySQL 8.4.11 statement for statement, column names and flags included;
+the committed coercion corpus also agrees completely (M5.2). Broader function
+behavior and optimizer strategies remain partial. Drizzle passes all
+487 tests. Prisma matches the reference file for file at two Jest workers:
+1,122 passes, the same snapshot failure, and 12,139 skips. Default parallel
+runs can still lose interactive-transaction tests to scheduling delays.
+Bulk statements pause between batches (§11). The query API of §17 exists,
+typed, and a client of the
 wire protocol whose answers are compared with `mysql2/promise`'s. `myjs`
 packs, installs into an empty project and runs there, in CI; 0.3 waits only
 on being published. The cost-based planner is built: statistics stored by
 ANALYZE, MySQL's cost model choosing access paths and join order, and
 `EXPLAIN FORMAT=TREE` printed from the same tree of iterators that runs,
-agreeing with 8.4.11 on 2,082 of 2,248 plans. `db.stream()` streams a
+agreeing with 8.4.11 on 2,103 of 2,248 plans. `db.stream()` streams a
 million rows within a few MB of the heap's baseline (M5.40). Next is the
-browser. The core bundle is about 290 KB gzipped against a budget of 500 KB,
+remaining function and planner work, then the browser. The coercion corpus
+now agrees on all 3,148 observations and all 1,737 warning counts. The core entry bundle
+is 330,069 bytes gzipped (322.3 KiB), against the 500 KB release target,
 with the UCA weights in a separate chunk loaded on demand.
 
 The release plan gives each stage something to ship:

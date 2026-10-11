@@ -286,8 +286,8 @@ by fewer than 8 equal bytes are merged.
 encoding: a length-encoded string per field, `0xFB` for NULL. Off-page values
 are read back in, because a change stream cannot follow a reference to pages a
 later change may have freed. Redo ignores `ROW`. `ClusteredIndex.insert` logs
-an after image and `delete` a before image. An update — both images in one
-record — waits for the executor to have one.
+an after image and `delete` a before image. `ClusteredIndex.update` logs both
+images in one record.
 
 ### Blocks and the ring
 
@@ -380,9 +380,10 @@ is durable.
 
 A crash during recovery recovers again.
 
-**Rolling back transactions that were active at the crash** waits for undo
-(M4.20). Until then, an incomplete group is the only unfinished work, and it is
-never applied.
+**Transactions active at the crash are rolled back during `Store.open()`.**
+Redo first restores complete mini-transactions, including durable undo. The
+transaction directory identifies active transactions; their undo removes
+uncommitted changes before the recovered store is returned (M4.20–M4.22).
 
 ### What checks this
 

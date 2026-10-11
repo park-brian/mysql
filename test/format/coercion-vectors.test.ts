@@ -5,6 +5,7 @@
 // arithmetic, BETWEEN, IN, and CASE, IF, IFNULL, COALESCE and NULLIF — on a
 // real 8.4.11 through `mysql2`, each SELECT through both protocols with its
 // metadata and warning count. This replays them through M5.18's machinery.
+import { fileURLToPath } from 'node:url'
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { existsSync, readFileSync } from 'node:fs'
@@ -12,7 +13,7 @@ import { existsSync, readFileSync } from 'node:fs'
 import { CONNECTION, SQL_MODE } from '../../tools/capture-coercion.mjs'
 import { replay, type Fixture } from '../lib/replay.ts'
 
-const FIXTURE = new URL('./fixtures/coercion.json', import.meta.url).pathname
+const FIXTURE = fileURLToPath(new URL('./fixtures/coercion.json', import.meta.url))
 
 /** The most statements the executor may still refuse. */
 const REFUSED_AT_MOST = 0
@@ -22,8 +23,8 @@ const REFUSED_AT_MOST = 0
  * first disagreement, so each fix brings statements into comparison that were
  * not before. M5.2 is done when nothing disagrees. Raised as rules land, never lowered.
  */
-const AGREE_AT_LEAST = 3004
-const WARNINGS_AGREE_AT_LEAST = 1491
+const AGREE_AT_LEAST = 3148
+const WARNINGS_AGREE_AT_LEAST = 1737
 
 test('M5.2: implicit coercions give what the server gave, value, type and warnings, ratcheted to all', async () => {
   assert.ok(existsSync(FIXTURE), 'the corpus must be committed')
@@ -36,7 +37,9 @@ test('M5.2: implicit coercions give what the server gave, value, type and warnin
   if (process.env.WARNINGS === '1') console.log(t.warningMismatches.join('\n'))
   assert.ok(t.statements > 2000, `the corpus is too small to say anything: ${t.statements} statements`)
   assert.ok(t.agreed >= AGREE_AT_LEAST, `${t.agreed} statements agree, fewer than the ${AGREE_AT_LEAST} this stage holds:\n${t.mismatches.slice(0, 3).join('\n')}`)
+  assert.equal(t.agreed, t.statements, t.mismatches.join('\n'))
   assert.ok(t.refused <= REFUSED_AT_MOST, `${t.refused} refusals, more than the ${REFUSED_AT_MOST} this stage allows`)
   const warningsAgree = t.warningsCompared - t.warningMismatches.length
   assert.ok(warningsAgree >= WARNINGS_AGREE_AT_LEAST, `${warningsAgree} queries' warning counts agree, fewer than ${WARNINGS_AGREE_AT_LEAST}:\n${t.warningMismatches.slice(0, 3).join('\n')}`)
+  assert.equal(t.warningMismatches.length, 0, t.warningMismatches.join('\n'))
 })

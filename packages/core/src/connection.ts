@@ -118,7 +118,11 @@ export class ProtocolConnection {
     this.#ended = true
     this.#phase = 'closed'
     this.#roomMade?.()
-    if (this.#session !== null) this.#options.executor.end?.(this.#session)
+    try {
+      if (this.#session !== null) this.#options.executor.end?.(this.#session)
+    } finally {
+      this.#output?.()
+    }
   }
 
   #ended = false
