@@ -349,13 +349,15 @@ export function printedArgument(a: Expression, ctx: CompileContext): string {
 
 /**
  * An expression's text as the statement wrote it, from its start to the
- * parenthesis that closes it: what a warning quoting it quotes.
+ * parenthesis that closes it or the enclosing argument delimiter: what a
+ * warning quoting it quotes.
  */
-function sourceText(sql: string | undefined, at: number): string | undefined {
+export function sourceText(sql: string | undefined, at: number): string | undefined {
   if (sql === undefined) return undefined
   let depth = 0
   for (const t of lex(sql)) {
     if (t.start < at || t.kind !== TOKEN.OPERATOR) continue
+    if (depth === 0 && (t.text === ',' || t.text === ')')) return sql.slice(at, t.start).trimEnd()
     if (t.text === '(') depth++
     else if (t.text === ')' && --depth === 0) return sql.slice(at, t.start + 1)
   }

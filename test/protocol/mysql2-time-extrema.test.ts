@@ -85,6 +85,18 @@ test('TIME/text and TIME/binary extrema agree on values, metadata and warnings',
         }
       }
     }
+    // Text column precision is unspecified even when its declared width is one.
+    await conn.query('CREATE TABLE narrow_t (tm TIME(3), v VARCHAR(1), b VARBINARY(1))')
+    await conn.query("INSERT INTO narrow_t VALUES ('10:11:12.123','2',X'32')")
+    for (const method of ['query', 'execute'] as const) {
+      const options = { sql: 'SELECT GREATEST(tm,v),LEAST(tm,v),GREATEST(tm,b),LEAST(tm,b) FROM narrow_t', rowsAsArray: true }
+      const [rows, fields] = method === 'query' ? await conn.query(options) : await conn.execute(options)
+      assert.deepEqual(rows, [['2', '10:11:12.123', Buffer.from('2'), Buffer.from('10:11:12.123')]])
+      assert.deepEqual(fields.map((f) => [f.columnType, f.columnLength, f.flags, f.decimals, f.characterSet]),
+        [[253, 68, 0, 31, 224], [253, 68, 0, 31, 224], [253, 17, 128, 31, 63], [253, 17, 128, 31, 63]])
+      const [warnings] = await conn.query('SHOW WARNINGS')
+      assert.deepEqual(warnings, [])
+    }
   } finally {
     await conn.query('DROP DATABASE IF EXISTS time_extrema')
     await conn.end()

@@ -30,7 +30,7 @@
 //   - GREATEST and LEAST take the type CASE would, and compare in it.
 import { CHARSET_BINARY, FIELD_TYPE, expectTyped } from '@myjs/bytes'
 import { collationInfoByName, decodeCollation, defaultCollationOf, encodeCollation, requireCollationInfo } from '@myjs/charsets'
-import { NODE, deparse, type CallNode } from '@myjs/parser'
+import { NODE, deparse, type CallNode, type Expression } from '@myjs/parser'
 import { messages, sqlError } from '@myjs/protocol'
 import {
   COERCIBILITY,
@@ -72,6 +72,8 @@ import {
   convertTo,
   printedArgument,
   raise,
+  rowNumber,
+  sourceText,
   warnedText,
   type CompileContext,
   type Compiled,
@@ -541,7 +543,7 @@ function libraryFunction(name: string, args: readonly Compiled[], callName: stri
 }
 
 /** The number functions the library holds: FLOOR, CEIL, ROUND, TRUNCATE, SIGN, GREATEST, LEAST. */
-function numberFunction(name: string, args: readonly Compiled[], callName: string, constant: readonly boolean[], ctx: CompileContext): Compiled {
+function numberFunction(name: string, args: readonly Compiled[], callName: string, constant: readonly boolean[], ctx: CompileContext, written: readonly Expression[]): Compiled {
   const { xs, conn, arity } = libraryCall(name, args, callName, ctx)
   switch (name) {
     case 'FLOOR':
@@ -671,29 +673,17 @@ function numberFunction(name: string, args: readonly Compiled[], callName: strin
         true,
       )
       const greatest = name === 'GREATEST'
-      if (type.kind === 'string' && xs.some((x) => x.type.kind === 'datetime')) {
-        return datetimeExtremum(xs, type, greatest)
-      }
-      if (type.kind === 'bytes' && xs.some((x) => x.type.kind === 'datetime')) {
-        throw sqlError('ER_NOT_SUPPORTED_YET', messages.notSupported(`${name} over binary text and DATETIME`))
+      if ((type.kind === 'string' || type.kind === 'bytes') && xs.some((x) => x.type.kind === 'datetime')) {
+        const fsp = type.kind === 'bytes' ? temporalPrecision(xs, constant, ctx, 'DATETIME') : undefined
+        const dateIndex = xs.findIndex((x) => x.type.kind === 'datetime')
+        const dateNode = written[dateIndex] as Expression
+        return datetimeExtremum(xs, type, greatest, fsp, sourceText(ctx.sql, dateNode.at) ?? printedArgument(dateNode, ctx))
       }
       if ((type.kind === 'string' || type.kind === 'bytes') && xs.some((x) => x.type.kind === 'time')) {
         if (xs.some((x) => x.type.kind === 'json')) {
           throw sqlError('ER_NOT_SUPPORTED_YET', messages.notSupported(`${name} over TIME and JSON`))
         }
-        // Item::time_precision reads constant text without warning; invalid
-        // or nonconstant text falls back to its scale, capped at six.
-        const fsp = Math.max(...xs.map((x, i) => {
-          const fallback = x.type.literalInt === undefined ? Math.min(x.type.scale, 6) : 0
-          if (constant[i] !== true || (x.type.kind !== 'string' && x.type.kind !== 'bytes')) return fallback
-          try {
-            const v = x.eval([], constantEnv(ctx))
-            return v === null ? fallback : (parseTime(toText(v))?.fsp ?? fallback)
-          } catch (e) {
-            expectTyped(e)
-            return fallback
-          }
-        }))
+        const fsp = temporalPrecision(xs, constant, ctx, 'TIME')
         if (fsp > 0) type = { ...type, length: Math.max(type.length, 11 + fsp) }
       }
       return {
@@ -717,16 +707,38 @@ function numberFunction(name: string, args: readonly Compiled[], callName: strin
   }
 }
 
+/** Item's temporal precision reads constant text without warnings; text columns have unspecified precision. */
+function temporalPrecision(xs: readonly Compiled[], constant: readonly boolean[], ctx: CompileContext, kind: 'TIME' | 'DATETIME'): number {
+  let fsp = 0
+  for (const [i, x] of xs.entries()) {
+    const textual = x.type.kind === 'string' || x.type.kind === 'bytes'
+    let precision = Math.min(x.type.scale, 6)
+    if (x.type.literalInt !== undefined) precision = 0
+    else if (textual && x.type.column !== undefined) precision = 6
+    if (constant[i] === true && textual) {
+      try {
+        const v = x.eval([], constantEnv(ctx))
+        if (v !== null) precision = (kind === 'TIME' ? parseTime(toText(v)) : toDateTime(v, 'DATETIME'))?.fsp ?? precision
+      } catch (e) {
+        expectTyped(e)
+      }
+    }
+    fsp = Math.max(fsp, precision)
+  }
+  return fsp
+}
+
 /** Dates choose by their packed value; a zero minimum falls back to text. */
-function datetimeExtremum(xs: readonly Compiled[], type: ResultType, greatest: boolean): Compiled {
+function datetimeExtremum(xs: readonly Compiled[], type: ResultType, greatest: boolean, precision: number | undefined, dateName: string): Compiled {
   const date = xs.find((x) => x.type.kind === 'datetime') as Compiled
+  const textValue = (v: V): V => type.kind === 'bytes' ? bytesValue(valueBytes(v)) : stringValue(toText(v), type.collationId)
   return {
-    type: { ...type, length: Math.max(type.length, 26) },
+    type: { ...type, length: Math.max(type.length, precision === undefined ? 26 : 19 + (precision > 0 ? 1 + precision : 0)) },
     eval: (r, env) => {
       const values: V[] = []
       let best: ReturnType<typeof toDateTime>
       let ordinal: bigint | undefined
-      let fsp = 0
+      let fsp = precision ?? 0
       for (const x of xs) {
         const v = x.eval(r, env)
         if (v === null) return null
@@ -735,20 +747,20 @@ function datetimeExtremum(xs: readonly Compiled[], type: ResultType, greatest: b
         const packed = converted === undefined ? 0n : temporalOrdinal(converted.v)
         const zero = packed === 0n && (v.kind === 'int' || v.kind === 'decimal' || v.kind === 'double' || modeOf(env.session.sqlMode).noZeroDate)
         if (converted === undefined || (zero && v.kind !== 'datetime')) {
-          raise(env, 1292, `Incorrect datetime value: '${warnedText(v)}' for column '${date.type.column?.orgName ?? 'datetime'}' at row 1`)
+          raise(env, 1292, `Incorrect datetime value: '${warnedText(v)}' for column '${date.type.column?.orgName ?? dateName}' at row ${rowNumber(env)}`)
         }
         // Invalid text has unspecified precision, capped at DATETIME's six.
-        fsp = Math.max(fsp, converted?.fsp ?? (x.type.kind === 'string' || x.type.kind === 'bytes' ? 6 : Math.min(x.type.scale, 6)))
+        if (precision === undefined) fsp = Math.max(fsp, converted?.fsp ?? (x.type.kind === 'string' || x.type.kind === 'bytes' ? 6 : Math.min(x.type.scale, 6)))
         if (ordinal === undefined || (greatest ? packed > ordinal : packed < ordinal)) {
           ordinal = packed
           best = converted
         }
       }
-      if (ordinal !== 0n && best !== undefined) return stringValue(toText({ ...best, fsp }), type.collationId)
+      if (ordinal !== 0n && best !== undefined) return textValue({ ...best, fsp })
       // MySQL returns the original lexical winner when the date minimum is zero.
-      let text = stringValue(toText(values[0] as V), type.collationId)
+      let text = textValue(values[0] as V)
       for (const v of values.slice(1)) {
-        const next = stringValue(toText(v), type.collationId)
+        const next = textValue(v)
         const cmp = compareValues(next, text)
         if (cmp !== null && (greatest ? cmp > 0 : cmp < 0)) text = next
       }
@@ -1578,7 +1590,9 @@ export function stringFunction(name: string, e: CallNode, ctx: CompileContext): 
   if (LIBRARY.has(name)) {
     // TRIM's side is a keyword argument, carried as such.
     const xs = e.args.map((a): Compiled => (a.kind === NODE.KEYWORD ? Object.assign({ eval: () => null, type: NULL_TYPE }, { keyword: a.word }) : compile(a, ctx)))
-    return (NUMBER_FUNCTIONS.has(name) ? numberFunction : libraryFunction)(name, xs, e.name, constant, ctx)
+    return NUMBER_FUNCTIONS.has(name)
+      ? numberFunction(name, xs, e.name, constant, ctx, e.args)
+      : libraryFunction(name, xs, e.name, constant, ctx)
   }
   const family = HASH_FUNCTIONS.has(name) ? hashFunction : LIST_FUNCTIONS.has(name) ? listFunction : CONVERSION_FUNCTIONS.has(name) ? conversionFunction : moreStringFunction
   return family(name, e.args.map((a) => compile(a, ctx)), e.name, deparse(e), e.using, constant, ctx, e.args.map((a) => printedArgument(a, ctx)))

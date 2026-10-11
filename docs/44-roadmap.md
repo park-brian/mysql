@@ -91,8 +91,12 @@ metadata for empty BIT/HEX literals also agrees with the reference. Mixed
 TIME/text and TIME/binary GREATEST/LEAST now compare lexically, with result
 width accounting for each operand's fractional precision. Live reference tests
 cover both protocols, operand order, negative times, NULL, empty text, binary
-values and nonconstant text. Binary DATETIME extrema and regex result
-transcoding under UTF-8 remain open. JSON extrema also need their prepare-time
+values and nonconstant text. Narrow text columns keep unspecified fractional
+precision when sizing TIME results. Binary DATETIME extrema now share the
+temporal comparison path, return binary bytes and use lexical fallback for a
+zero minimum. Their precision, metadata and warning identity/order agree in
+live tests for constants, columns and NULL through both protocols. Regex result
+transcoding under UTF-8 remains open. JSON extrema also need their prepare-time
 warnings and NULL metadata rules; TIME/JSON remains explicitly unsupported.
 CI's IN-list latency failure led to a reproduced PREPARE stall: a 32,000-parameter
 statement answered another connection only once while its metadata was delivered.
@@ -113,6 +117,9 @@ session is still alive. The exact-SHA CI run for that repair passed all jobs.
    semijoin/antijoin strategies, M5.49's access paths and ordering, and M5.50's
    write in one descent. M5.48 is done. The measured relational plan floor is
    2,103 of 2,248; rows and metadata agree on all 5,635 statements.
+   The next bounded planner slice is the captured NOT EXISTS hash antijoin over
+   one correlated integer equality and an additional inner-table predicate;
+   it must change execution and EXPLAIN together, preserving NULL and row order.
 3. **Build the browser (M6)** against the established VFS and protocol seams:
    OPFS, worker hosting, leader election and real browser crash tests. InnoDB
    interchange remains M7. Neither is included in the staged Node release.
