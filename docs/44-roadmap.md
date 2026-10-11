@@ -67,11 +67,14 @@ exposed a bulk-interruption test that assumed a 32,000-row INSERT was still
 running after 400 ms. The test now observes actual inserts and forces the real
 scheduler to yield, asserting a partial write before close; rollback and writer
 release checks remain unchanged. The official mysqltest 8.4.11 full run in
-Docker confirms 36 of 1,146 reference-passing files: two former passes depended
+Docker confirms 37 of 1,146 reference-passing files: two former passes depended
 on false-success FLUSH no-ops removed by M5.53, while type_newdecimal_myisam
 now passes. The recorded executor outcomes and exact scoreboard reflect that
 measurement; reference outcomes and the seven zero-disagreement gates remain
 unchanged. FLUSH TABLES and FLUSH STATUS remain unsupported, explicitly.
+The conservative planner-constant repair adds implicit_char_to_num_conversion
+to the passing files: CI measures 38 total passes, 37 shared with the reference,
+and a Docker before/after run confirms that file's improvement.
 
 The next engineering work, in order:
 
@@ -656,7 +659,7 @@ code that moves it (doc 43 §8). A claim without a number is marketing.
 
 | Metric | Today | Target for 1.0 |
 |---|---|---|
-| MySQL `mysql-test` files passing | 36 / 1,146 — the files of `mysql-community-test` 8.4.11 passes under its own `mysql-test-run.pl` (of 1,459; 23 fail there, 290 skip), run by MySQL's own `mysqltest` against this executor over TCP (M5.15). Written by `tools/mysqltest-run.mjs` into `mysqltest-run.json`, and a test fails if this row and that file disagree | ≥ 800 |
+| MySQL `mysql-test` files passing | 37 / 1,146 — the files of `mysql-community-test` 8.4.11 passes under its own `mysql-test-run.pl` (of 1,459; 23 fail there, 290 skip), run by MySQL's own `mysqltest` against this executor over TCP (M5.15). Written by `tools/mysqltest-run.mjs` into `mysqltest-run.json`, and a test fails if this row and that file disagree | ≥ 800 |
 | MySQL `mysql-test` statements lexing | 17,588 lexed + 1 correctly refused = 17,589 / 17,589, over a curated 120 files (112 measured, in 12 charsets; the rest are `--source` wrappers with no SQL). The selection changed with E-14 — it is now drawn from all 1,543 files rather than the first 1,000 by name. The denominator fell from 17,681 when the extractor began honouring `delimiter`, so a routine is one statement rather than one per `;` in its body, and from 17,595 when M3.17 stopped measuring pieces of `let` values and bare `eval`s as statements | the corpus, as it grows |
 | MySQL `mysql-test` statements parsing | 17,534 / 17,589 — **0 failures**, **0 round-trip differences** and **nothing not implemented**: `SELECT` 6,126 / 6,158, `INSERT` 3,304 / 3,313, `CREATE` 2,660 / 2,665, `DROP` 1,946 / 1,946, `SET` 1,138 / 1,138, `EXPLAIN` 733 / 735, `ANALYZE` 292 / 292, `SHOW` 240 / 240, `EXECUTE` 213 / 213, `DELETE` 188 / 194, `UPDATE` 153 / 153, `PREPARE` 80 / 80, `ALTER` 77 / 77, `DO` 77 / 77, `FLUSH` 55 / 55, `CALL` 36 / 36, `CHECK` 24 / 24, `GRANT` 10 / 10, `LOAD` 6 / 6, `TRUNCATE` 6 / 6. Every shortfall is a statement MySQL itself refuses, and one (`GROUPING SETS`) is newer than 8.4 (D-70) | 100% of the curated corpus |
 | `mysql2` test suite | 0 / 253 — not yet run. Its npm package ships no tests, so it needs the repository checked out against a server; nothing runs it yet | ≥ 245 |
