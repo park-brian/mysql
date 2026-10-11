@@ -26,7 +26,7 @@ export class Unprintable extends MyjsError {
 export interface PrintOptions {
   /** A column reference, as this context names one. */
   readonly column: (parts: readonly string[]) => string
-  /** A string literal: a view's is bare, a check's carries its charset. */
+  /** A string literal with the caller's introducer policy. */
   readonly string: (value: string, charset: string | undefined) => string
   /** The text the expression was parsed from, for a float as it was written. */
   readonly source?: string

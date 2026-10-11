@@ -26,7 +26,7 @@ interface Source {
   readonly names: readonly string[]
 }
 
-/** VIEW_DEFINITION for `query`, resolved in `schema` against `tables`; `undefined` past the subset. */
+/** Resolved view text; omitted `current` means INFORMATION_SCHEMA, explicit string/NULL means SHOW CREATE VIEW. */
 export function viewDefinition(query: QueryExpression, names: readonly string[], schema: string, tables: (schema: string, name: string) => TableDef | undefined, source?: string, current?: string | null): string | undefined {
   try {
     if (query.with !== undefined || query.locking !== undefined) return undefined
@@ -67,7 +67,7 @@ export function viewDefinition(query: QueryExpression, names: readonly string[],
       return `${owner.qualifier}.${quoteName(name)}`
     }
     function expr(e: Expression): string {
-      return printExpression(e, { column, string: (v) => printString(v), ...(source === undefined ? {} : { source }) })
+      return printExpression(e, { column, string: current === undefined ? (v) => printString(v) : printString, ...(source === undefined ? {} : { source }) })
     }
     // `*` expands to the tables' columns, in order.
     const items: string[] = []

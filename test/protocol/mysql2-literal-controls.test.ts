@@ -1,7 +1,7 @@
 // Own inputs and complete MySQL 8.4.11 outcomes, captured with the pinned Docker reference.
 // Diagnostic literals cover every byte-valued character. DDL consumers cover controls,
 // quoting, explicit charsets, empty strings and NULL. Non-ASCII I_S conversion and
-// SHOW CREATE VIEW introducer retention remain measured, separate gaps.
+// view-value conversion remain measured, separate gaps.
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import mysql from 'mysql2/promise'
