@@ -321,13 +321,13 @@ function planSelect(run: Run, q: QueryExpression, node: SelectNode): SelectPlan 
   const windowed = node.items.some((i) => containsWindow(i.expr)) || (q.orderBy ?? []).some((o) => containsWindow(o.expr))
   if (grouped) return planGrouped(run, q, node, from, lookup, windowed, constants)
   const semijoin = optimizerEnabled(run, 'semijoin')
-  const loose = from === undefined || windowed || !semijoin ? undefined : costedLooseScan(run, q, node, from)
-  if (loose !== undefined) {
-    from = loose.from
-    source = undefined
+  const semi = from === undefined || windowed || !semijoin ? undefined : costedIntegerSemijoin(run, q, node, from)
+  if (semi !== undefined) {
+    from = semi.from
+    if (semi.loose) source = undefined
   }
   const anti = from === undefined || !semijoin ? undefined : costedAntijoin(run, q, node, from)
-  const loopSemijoin = semijoin && scope !== undefined && (anti?.lookup === true || nestedLoopSemijoin(node.where, scope))
+  const loopSemijoin = semijoin && scope !== undefined && (semi !== undefined || anti?.lookup === true || nestedLoopSemijoin(node.where, scope))
   // Window functions (M5.6) write into slots past the FROM row.
   const windowBase = from?.width ?? 0
   const windows = windowed ? new WindowSink(compileContext(run, lookup, 'window order by'), windowBase, node.windows) : undefined
@@ -454,8 +454,8 @@ function planSelect(run: Run, q: QueryExpression, node: SelectNode): SelectPlan 
   let where: Compiled | undefined
   if (from !== undefined) {
     // A costed antijoin builds once; a nested loop probes its correlated subquery for each row.
-    if (loose !== undefined) {
-      from.filter(loose.where, (e) => compile(e, compileContext(run, loose.from.scope, 'where clause')))
+    if (semi !== undefined) {
+      from.filter(semi.where, (e) => compile(e, compileContext(run, semi.from.scope, 'where clause')))
     } else if (anti !== undefined && !anti.lookup) {
       from.filter(undefined, (e) => compile(e, whereCtx))
       from.hashAntijoin(anti.key, (trx, env) => anti.inner.rows(trx, env), () => anti.plan)
@@ -719,12 +719,11 @@ function optimizerEnabled(run: Run, name: string): boolean {
   return setting?.kind !== 'string' || !new RegExp(`(?:^|,)\\s*${name}=off(?:,|$)`, 'i').test(setting.v)
 }
 
-/** An integer semijoin whose ordinary costed join already chooses the ordered inner first. */
-function costedLooseScan(run: Run, q: QueryExpression, node: SelectNode, from: FromPlan): { readonly from: FromPlan; readonly where: Expression } | undefined {
+/** A bounded integer semijoin using the existing cost search and indexed join iterators. */
+function costedIntegerSemijoin(run: Run, q: QueryExpression, node: SelectNode, from: FromPlan): { readonly from: FromPlan; readonly where: Expression; readonly loose: boolean } | undefined {
   const outer = node.from?.[0]
   const where = node.where
   if (from.single === undefined || isTemporary(from.single.def) || node.from?.length !== 1 || outer?.kind !== REF.TABLE || outer.indexHints !== undefined || run.parent !== undefined || q.with !== undefined || node.having !== undefined || node.windows !== undefined || node.distinct === true || (node.options?.length ?? 0) > 0) return undefined
-  if (!optimizerEnabled(run, 'loosescan')) return undefined
   const sub = where?.kind === NODE.BINARY && where.op === 'IN' && where.right.kind === NODE.SUBQUERY ? where.right.query
     : where?.kind === NODE.UNARY && where.op === 'EXISTS' && where.operand.kind === NODE.SUBQUERY ? where.operand.query : undefined
   if (sub === undefined) return undefined
@@ -781,8 +780,10 @@ function costedLooseScan(run: Run, q: QueryExpression, node: SelectNode, from: F
     alternative.reads(read)
     const clustered = def.indexes.find((i) => i.kind === 'primary' || i.name === def.clustered)
     const covered = new Set([...index.parts, ...(clustered?.parts ?? [])].map((p) => p.column.toLowerCase()))
-    if ([...innerRead].some((c) => !covered.has(c)) || !alternative.looseScan(innerAlias, index.name, innerColumn, key)) return undefined
-    return { from: alternative, where: predicate }
+    if ([...innerRead].some((c) => !covered.has(c))) return undefined
+    const loose = optimizerEnabled(run, 'loosescan') && alternative.looseScan(innerAlias, index.name, innerColumn, key)
+    if (!loose && !alternative.indexSemijoin(innerAlias, extra, optimizerEnabled(run, 'firstmatch'))) return undefined
+    return { from: alternative, where: predicate, loose }
   } catch (error) {
     expectTyped(error)
     return undefined

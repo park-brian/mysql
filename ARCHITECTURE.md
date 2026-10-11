@@ -1498,7 +1498,7 @@ agreeing with 8.4.11 on 2,116 of 2,248 plans. `db.stream()` streams a
 million rows within a few MB of the heap's baseline (M5.40). Next is the
 remaining function and planner work, then the browser. The coercion corpus
 now agrees on all 3,148 observations and all 1,737 warning counts. The core entry bundle
-is 333,870 bytes gzipped (326.0 KiB), against the 500 KB release target,
+is 334,061 bytes gzipped (326.2 KiB), against the 500 KB release target,
 with the UCA weights in a separate chunk loaded on demand.
 
 The release plan gives each stage something to ship:

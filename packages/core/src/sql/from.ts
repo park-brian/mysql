@@ -146,6 +146,8 @@ export interface FromPlan {
   orderGroupsFirst(keys: readonly { readonly expr: Expression; readonly compiled: Compiled }[]): 'index' | 'sort' | undefined
   /** Deduplicate an ordered first-table integer key before the chosen outer-key lookup. */
   looseScan(alias: string, index: string, column: string, key: Compiled): boolean
+  /** Stop the indexed semijoin through FirstMatch or DISTINCT's unused last table. */
+  indexSemijoin(alias: string, where: Expression | undefined, firstMatch: boolean): boolean
   /**
    * The columns the query reads of each table (`'all'` for one read whole).
    * A table no condition chooses an access path for is read through the
@@ -584,6 +586,27 @@ export function planFrom(refs: readonly TableReference[], ctx: FromContext, wher
       settings.loose = { alias, column, key }
       return true
     },
+    indexSemijoin(alias, where, firstMatch) {
+      const plan = joinPlan()
+      const node = plan?.node
+      if (node?.kind !== 'join' || node.left || node.outer.kind !== 'leaf' || node.inner.kind !== 'leaf' || node.inner.table.alias !== alias || !plan?.lookups.has(alias)) return false
+      // Empty standalone inner ranges use materialization, whose semijoin cost is still open.
+      const inner = node.inner.table
+      if (ctx.env !== undefined && inner.table !== undefined && inner.def !== undefined) {
+        const access = chosenAccess(inner, { ...settings, where, chosen: new WeakMap() }, ctx.env)
+        if (access.ranges !== undefined) {
+          let empty = true
+          for (const _ of accessRows(inner.table, inner.def, access, ctx.env.trx, false)) {
+            empty = false
+            break
+          }
+          if (empty) return false
+        }
+      }
+      if (firstMatch) settings.firstMatch = alias
+      else settings.distinctSelect = new Set([node.outer.table.alias])
+      return true
+    },
     ...(single === undefined ? {} : { single }),
     filter(where, compile, semijoin) {
       settings.where = where
@@ -880,6 +903,7 @@ interface LeafSettings {
   groupSort?: { readonly alias: string; readonly keys: readonly SortKey[] }
   /** LooseScan removes adjacent equal integer keys after the inner filter. */
   loose?: { readonly alias: string; readonly column: string; readonly key: Compiled }
+  firstMatch?: string
 }
 
 /**
@@ -1171,7 +1195,7 @@ function toOp(node: Node, conditions: readonly Placed[], scope: TableScope, sett
   if (!node.left && node.inner.kind === 'leaf' && settings.constants?.has(node.inner.table.alias) === true) return constantRowOp(outer, node.inner.table, toInner, spanning, settings)
   if (node.lookup !== undefined && node.inner.kind === 'leaf' && settings.lookups?.has(node.inner.table.alias) !== false) {
     // Under DISTINCT, the last table the select list does not read needs one match a row (`not_used_in_distinct`).
-    const firstOnly = !node.left && settings.distinctLast === node.inner.table.alias
+    const firstOnly = !node.left && (settings.distinctLast === node.inner.table.alias || settings.firstMatch === node.inner.table.alias)
     return filterOp(lookupOp(node, outer, node.inner.table, node.lookup, [...toInner, ...spanning], settings, firstOnly), above)
   }
   const inner = toOp(node.inner, toInner, scope, settings, ctx, preliminary)
@@ -1731,7 +1755,8 @@ function lookupOp(node: Node & { kind: 'join' }, outer: Op, t: FromTable, lookup
       // The lookup's own equality is the key read, not a filter.
       const rest = on.filter((c) => c.e !== lookup.condition)
       const read = rest.length === 0 ? lookupNode : planNode('Filter', [lookupNode])
-      return planNode(node.left ? 'Nested loop left join' : 'Nested loop inner join', [outer.describe(env), firstOnly ? planNode('Limit', [read]) : read])
+      const semi = settings.firstMatch === t.alias
+      return planNode(semi ? 'Nested loop semijoin' : node.left ? 'Nested loop left join' : 'Nested loop inner join', [outer.describe(env), firstOnly && !semi ? planNode('Limit', [read]) : read])
     },
   }
 }
