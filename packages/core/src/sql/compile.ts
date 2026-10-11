@@ -481,6 +481,11 @@ export interface Compiled {
   readonly type: ResultType
 }
 
+/** Read one immutable row slot with its declared metadata. */
+export function readSlot(index: number, type: ResultType): Compiled {
+  return { eval: (row) => row[index] ?? null, type }
+}
+
 /** Where names resolve: the columns of the tables in `FROM`, in row order. */
 export interface Scope {
   /**
@@ -678,7 +683,7 @@ export function compile(e: Expression, ctx: CompileContext): Compiled {
         const d = depth - 1
         return { eval: (_row, env) => env.outer?.[d]?.[index] ?? null, type }
       }
-      return { eval: (row) => row[index] ?? null, type }
+      return readSlot(index, type)
     }
 
     case NODE.SUBQUERY:

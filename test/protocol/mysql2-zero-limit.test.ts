@@ -143,6 +143,39 @@ test('zero LIMIT initializes only required sorts and closes their physical sourc
         assert.deepEqual(row, { g: 3 })
         break
       }
+      // An ordered temporary table fills and closes its source before delivery.
+      // The selected CAST warns in input order, once per input row, even when
+      // duplicates or LIMIT remove its projected values.
+      for (const method of ['query', 'execute', 'stream'] as const) {
+        // Diagnostics belong to the streaming connection, which db.stream()
+        // owns and closes. Keep one explicitly to inspect its warnings.
+        const client = method === 'stream' ? await db.connect() : db
+        try {
+          for (const [count, offset] of [[0, 0], [0, 1], [1, 0], [1, 1], [2, 8]] as const) {
+            read = closed = 0
+            const sql = `SELECT DISTINCT CAST(CONCAT(g,'x') AS SIGNED) AS n FROM d.t ORDER BY n LIMIT ${count} OFFSET ${offset} FOR UPDATE`
+            const expected = [null, 1, 3].slice(offset, offset + count).map((n) => ({ n }))
+            if (method === 'stream') {
+              const rows = []
+              for await (const row of client.stream(sql)) rows.push(row)
+              assert.deepEqual(rows, expected)
+            } else assert.deepEqual((await client[method](sql))[0], expected)
+            assert.equal(read, count + offset === 0 ? 0 : 4, `${method}: copied sort reads: ${sql}`)
+            assert.equal(closed, count + offset === 0 ? 0 : 1, `${method}: copied sort closes: ${sql}`)
+            assert.deepEqual((await client.query('SHOW WARNINGS'))[0], count + offset === 0 ? [] : ['3x', '1x', '1x'].map((value) => ({ Level: 'Warning', Code: 1292, Message: `Truncated incorrect INTEGER value: '${value}'` })), `${method}: copied warnings: ${sql}`)
+          }
+        } finally {
+          if (client !== db) await client.end()
+        }
+        assert.equal(db.openConnections, 1)
+      }
+      read = closed = 0
+      for await (const row of db.stream('SELECT DISTINCT g FROM d.t ORDER BY g LIMIT 2 FOR UPDATE')) {
+        assert.deepEqual(row, { g: null })
+        break
+      }
+      assert.equal(read, 4)
+      assert.equal(closed, 1)
       assert.equal(db.openConnections, 1)
       const other = await db.connect()
       try {

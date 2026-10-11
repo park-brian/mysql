@@ -53,6 +53,7 @@ import {
   isText,
   lit,
   readsColumn,
+  readSlot,
   type CompileContext,
   type Compiled,
   asBinary,
@@ -543,7 +544,7 @@ export function informationFunction(name: string, e: CallNode, ctx: CompileConte
       if (iv === undefined) return lit(null, NULL_TYPE)
       iv.calls++
       const { index, type } = iv.resolve(target.parts[target.parts.length - 1] as string)
-      return { eval: (row) => row[index] ?? null, type }
+      return readSlot(index, type)
     }
     case 'ROW_COUNT':
       arity(0)

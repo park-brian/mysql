@@ -56,7 +56,7 @@ import {
   type Value,
   valueBytes,
 } from '@myjs/types'
-import { AGGREGATE_NAMES, asNumber, compile, type CompileContext, type Compiled, type Env, type Row } from './compile.ts'
+import { AGGREGATE_NAMES, asNumber, compile, readSlot, type CompileContext, type Compiled, type Env, type Row } from './compile.ts'
 import { rowKey, valueKey } from './keys.ts'
 import { asJson } from './json.ts'
 import { decimalType, doubleType, floatLength, intType, jsonType, stringType, type ResultType } from './meta.ts'
@@ -216,7 +216,7 @@ export class AggregateSink {
       this.#seen.set(key, at)
     }
     const slot = this.#base + at
-    return { eval: (row) => row[slot] ?? null, type: (this.specs[at] as AggregateSpec).type }
+    return readSlot(slot, (this.specs[at] as AggregateSpec).type)
   }
 
   /** An aggregate's spec without a slot: a window's (window.ts), which runs it over each row's frame. */
