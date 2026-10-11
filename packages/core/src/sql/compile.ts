@@ -145,10 +145,10 @@ export interface Env {
 }
 
 /**
- * An operand read as a number: when it is text, each value that is not one
- * draws 1292, "Truncated incorrect DOUBLE value" (or INTEGER, or DECIMAL),
- * as `double_from_string_with_check` and its siblings warn. Field readers can
- * suppress empty/whitespace warnings; INTEGER casts retain them.
+ * An operand read as a number, with its source reader's diagnostics. Text
+ * normally draws 1292 for truncation. DECIMAL fields and CONCAT retain their
+ * fatal invalid-prefix policy; BLOB/TEXT and CONCAT discard truncation status.
+ * Field readers can suppress empty/whitespace warnings; INTEGER casts retain them.
  * ENUM indices and numeric hex literals are quiet. The value passes unchanged.
  */
 export function asNumber(c: Compiled, kind: 'DOUBLE' | 'INTEGER' | 'DECIMAL', once: boolean | Expression = false, source: 'field' | 'cast' = 'field'): Compiled {
@@ -194,7 +194,7 @@ export function asNumber(c: Compiled, kind: 'DOUBLE' | 'INTEGER' | 'DECIMAL', on
         env.memo?.set(key, true)
       }
       if (quietTail !== undefined && unconvertedBytes(v, kind) === quietTail) return v
-      checkNumber(v, kind, env, column, integerCastKind)
+      checkNumber(v, kind, env, c, integerCastKind)
       return v
     },
   }
@@ -296,10 +296,17 @@ function jsonAsNumber(c: Compiled, kind: 'DOUBLE' | 'INTEGER' | 'DECIMAL'): Comp
 }
 
 /** `asNumber`'s check, for one value. */
-function checkNumber(v: Exclude<Value, null>, kind: 'DOUBLE' | 'INTEGER' | 'DECIMAL', env: Env, column = false, integerCastKind?: ResultType['kind']): void {
+function checkNumber(v: Exclude<Value, null>, kind: 'DOUBLE' | 'INTEGER' | 'DECIMAL', env: Env, c: Compiled, integerCastKind?: ResultType['kind']): void {
   if (integerPrefix(v) === undefined) return
   const text = toText(v)
   const p = numericPrefix(text)
+  const column = c.type.column !== undefined
+  // Field_blob and CONCAT's Item_str_func reader discard truncation status;
+  // an invalid prefix still raises the decimal converter's fatal 1366.
+  if (kind === 'DECIMAL') {
+    if ((column || c.decimalPrefix === true) && !p.valid) raise(env, 1366, "Incorrect DECIMAL value: '0' for column '' at row -1")
+    if (c.decimalPrefix === true || (column && c.type.field === FIELD_TYPE.BLOB)) return
+  }
   // An integer past 64 bits is truncated too, to the largest there is.
   const overflow =
     kind === 'INTEGER'
@@ -309,8 +316,6 @@ function checkNumber(v: Exclude<Value, null>, kind: 'DOUBLE' | 'INTEGER' | 'DECI
   if (p.complete && !(kind === 'INTEGER' && p.fractional) && !overflow) return
   // INTEGER casts warn even for empty or whitespace-only strings and bytes.
   if (!p.complete && kind !== 'DECIMAL' && integerCastKind === undefined && /^[ \t\n\r]*$/.test(text)) return
-  // A column's text with no digit at all, read as a DECIMAL, is 1366 first, as its field's conversion says (8.4.11: `CAST(lt AS DECIMAL)` of 'abc').
-  if (column && kind === 'DECIMAL' && !/\d/.test(text)) raise(env, 1366, "Incorrect DECIMAL value: '0' for column '' at row -1")
   let diagnostic: string
   if (integerCastKind === 'bytes' && v.kind === 'bytes') diagnostic = escapedBytes(v.v.subarray(0, 128)).slice(0, 128)
   else if (integerCastKind === 'string') diagnostic = integerCastText(v)
@@ -507,6 +512,8 @@ export interface SessionValues {
 export interface Compiled {
   readonly eval: (row: Row, env: Env) => Value
   readonly type: ResultType
+  /** This expression's DECIMAL reader accepts a numeric prefix quietly. */
+  readonly decimalPrefix?: true
 }
 
 /** Read one immutable row slot with its declared metadata. */

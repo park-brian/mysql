@@ -182,19 +182,16 @@ export function builtinFunction(name: string, e: CallNode, ctx: CompileContext):
     case 'CONCAT': {
       if (e.args.length === 0) arity(1)
       const xs = args()
-      const derived = aggregateCollations(
-        xs.map((x) => x.type),
-        'concat',
-        false,
-      )
+      const types = xs.map((x) => x.type)
+      const derived = aggregateCollations(types, 'concat', false)
       // Bytes make the result bytes unless text of a stronger derivation wins (8.4.11: `'a' COLLATE utf8mb4_bin` over `x'61'`).
-      const binary = derived !== undefined ? derived.collationId === CHARSET_BINARY || xs.some((x) => isBits(x.type)) : xs.some((x) => x.type.kind === 'bytes' || isBits(x.type))
-      const id = binary ? CHARSET_BINARY : (derived?.collationId ?? aggregateTypes(xs.map((x) => x.type), conn))
-      const coercibility = derived?.derivation ?? Math.min(...xs.map((x) => coercibilityOf(x.type)))
+      const binary = derived !== undefined ? derived.collationId === CHARSET_BINARY || types.some(isBits) : types.some((t) => t.kind === 'bytes' || isBits(t))
+      const id = binary ? CHARSET_BINARY : (derived?.collationId ?? aggregateTypes(types, conn))
+      const coercibility = derived?.derivation ?? Math.min(...types.map(coercibilityOf))
       // A binary argument makes the result bytes: each argument contributes
       // its own bytes, a string in its own charset, and the width is counted
       // in bytes too (8.4.11).
-      const width = binary ? xs.reduce((n, x) => n + charWidth(x.type) * (x.type.kind === 'string' ? requireCollationInfo(x.type.collationId).mbmaxlen : 1), 0) : xs.reduce((n, x) => n + charWidth(x.type), 0)
+      const width = types.reduce((n, t) => n + charWidth(t) * (binary && t.kind === 'string' ? requireCollationInfo(t.collationId).mbmaxlen : 1), 0)
       return {
         eval: (r, env) => {
           const parts: Exclude<Value, null>[] = []
@@ -205,7 +202,7 @@ export function builtinFunction(name: string, e: CallNode, ctx: CompileContext):
           }
           if (!binary) return stringValue(parts.map(toText).join(''), id, coercibility)
           // A BIT is its bytes in a string, as on the wire (8.4.11).
-          const chunks = parts.map((v, i) => (v.kind === 'bytes' ? v.v : v.kind === 'string' ? encodeCollation(v.v, v.collationId) : v.kind === 'int' && v.str !== undefined ? v.str : v.kind === 'int' && isBits((xs[i] as Compiled).type) ? bitBytes(v.v, (xs[i] as Compiled).type.length) : new TextEncoder().encode(toText(v))))
+          const chunks = parts.map((v, i) => v.kind === 'int' && (v.str !== undefined || isBits((xs[i] as Compiled).type)) ? v.str ?? bitBytes(v.v, (xs[i] as Compiled).type.length) : valueBytes(v))
           const out = new Uint8Array(chunks.reduce((n, c) => n + c.length, 0))
           let at = 0
           for (const c of chunks) {
@@ -217,6 +214,7 @@ export function builtinFunction(name: string, e: CallNode, ctx: CompileContext):
         // Always nullable on 8.4.11, NOT NULL arguments or not: a result past
         // `max_allowed_packet` is NULL.
         type: { ...stringResultType(width, binary, id, coercibility, true), coercibility },
+        decimalPrefix: true,
       }
     }
     case 'LENGTH':

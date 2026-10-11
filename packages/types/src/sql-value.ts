@@ -222,14 +222,15 @@ export function decimalIntegerDigits(d: DecimalValue): number {
  * The longest numeric prefix of a string, as MySQL reads `'12abc'` as 12 in a
  * numeric context. `complete` says whether the whole string was a number (after
  * trailing spaces), which is what decides a warning or, in strict mode on a
- * store, ER_TRUNCATED_WRONG_VALUE_FOR_FIELD.
+ * store, ER_TRUNCATED_WRONG_VALUE_FOR_FIELD. `valid` distinguishes a parsed
+ * zero from the fallback zero used when no numeric prefix exists.
  */
-export function numericPrefix(text: string): { readonly text: string; readonly complete: boolean; readonly fractional: boolean } {
+export function numericPrefix(text: string): { readonly text: string; readonly complete: boolean; readonly fractional: boolean; readonly valid: boolean } {
   const m = /^[ \t\n\r]*([+-]?(?:\d+\.?\d*|\.\d+)(?:[eE][+-]?\d+)?)/.exec(text)
-  if (m === null) return { text: '0', complete: false, fractional: false }
+  if (m === null) return { text: '0', complete: false, fractional: false, valid: false }
   const rest = text.slice(m[0].length)
   const t = m[1] as string
-  return { text: t, complete: /^[ \t\n\r]*$/.test(rest), fractional: /[.eE]/.test(t) }
+  return { text: t, complete: /^[ \t\n\r]*$/.test(rest), fractional: /[.eE]/.test(t), valid: true }
 }
 
 /** Text's integer prefix, retaining whitespace/sign; numeric values have none. */
