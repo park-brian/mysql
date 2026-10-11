@@ -14,7 +14,7 @@
 //
 // Anything past that is `Unprintable`, and the caller decides what to show.
 import { MyjsError } from '@myjs/bytes'
-import { NODE, type Expression } from '@myjs/parser'
+import { NODE, quoteName, type Expression } from '@myjs/parser'
 
 /** Not an error a client sees: the signal that an expression is past what this printer writes. */
 export class Unprintable extends MyjsError {
@@ -34,8 +34,17 @@ export interface PrintOptions {
 
 const OPERATORS: Readonly<Record<string, string>> = { XOR: 'xor', DIV: 'DIV', MOD: '%', '!=': '<>', IS: 'is', 'IS NOT': 'is not' }
 
-/** A string's body as `Item_string::print` escapes it: a backslash and a quote, each after a backslash. */
-export const escapeString = (s: string): string => s.replace(/\\/g, '\\\\').replace(/'/g, "\\'")
+/** A resolved string literal, with its caller's charset introducer. Tabs and backspaces stay literal (8.4.11). */
+export function printString(value: string, charset?: string): string {
+  return `${charset === undefined ? '' : '_' + charset}'${value.replace(/[\0\n\r\x1a\\']/g, (ch) => '\\' + (STRING_ESCAPES[ch] ?? ch))}'`
+}
+const STRING_ESCAPES: Readonly<Record<string, string>> = { '\0': '0', '\n': 'n', '\r': 'r', '\x1a': 'Z' }
+
+/** The printed expression escaped once more for INFORMATION_SCHEMA. */
+export const escapePrinted = (value: string): string => value.replace(/[\\']/g, (ch) => '\\' + ch)
+
+/** A resolved column in a table expression carries only its quoted name. */
+export const printColumnName = (parts: readonly string[]): string => quoteName(parts[parts.length - 1] as string)
 
 const NUMBER = /^[0-9.]+(?:[eE][-+]?[0-9]+)?/
 

@@ -30,7 +30,7 @@ import { fulltextOf } from './fulltext.ts'
 import { isTemporary } from './temporary.ts'
 import { generationOf, printGeneration } from './generated.ts'
 import { columnDefault, generatedDefault, tableCollation, typeFacts } from './information-schema.ts'
-import { escapeString, printExpression } from './print.ts'
+import { printString, printColumnName, printExpression } from './print.ts'
 import type { Run } from './query.ts'
 
 /** sql_show.cc's append_unescaped: NUL, newline, CR and backslash escaped, a quote doubled. */
@@ -70,7 +70,7 @@ function defaultClause(run: Run, c: ColumnDef): string {
   }
   const charset = requireCollationInfo(run.env.session.characterSet).charset
   try {
-    return ` DEFAULT (${printExpression(e, { column: (parts) => quoteName(parts[parts.length - 1] as string), string: (v, cs) => `_${cs ?? charset}'${escapeString(v)}'`, source: text })})`
+    return ` DEFAULT (${printExpression(e, { column: printColumnName, string: (v, cs) => printString(v, cs ?? charset), source: text })})`
   } catch (e) {
     expectTyped(e)
     return ` DEFAULT (${text})`
@@ -138,7 +138,7 @@ export function showCreateTable(run: Run, def: TableDef, table: Table): string {
   for (const c of [...checksOf(def)].sort(byName)) {
     let clause: string
     try {
-      clause = printExpression(parseExpression(c.text), { column: (parts) => quoteName(parts[parts.length - 1] as string), string: (v, cs) => `_${cs ?? c.charset}'${escapeString(v)}'`, source: c.text })
+      clause = printExpression(parseExpression(c.text), { column: printColumnName, string: (v, cs) => printString(v, cs ?? c.charset), source: c.text })
     } catch (e) {
       expectTyped(e)
       clause = c.text

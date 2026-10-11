@@ -22,10 +22,10 @@
 // it, and is an error to a strict UPDATE or DELETE reading the row; here the
 // value is computed once, as the row is written.
 import type { ColumnDef } from '@myjs/engine'
-import { NODE, parseExpression, type Expression, quoteName } from '@myjs/parser'
+import { NODE, parseExpression, type Expression } from '@myjs/parser'
 import { sqlError } from '@myjs/protocol'
 import { someNode } from './ast.ts'
-import { escapeString, printExpression, Unprintable } from './print.ts'
+import { printString, printColumnName, printExpression, Unprintable } from './print.ts'
 import { NOT_ROW_DETERMINED } from './registry.ts'
 
 export interface Generation {
@@ -49,8 +49,8 @@ export function printGeneration(column: ColumnDef, generation: Generation): stri
   const charset = column.attributes?.['generatedCharset']
   try {
     return printExpression(parseExpression(generation.text), {
-      column: (parts) => quoteName(parts[parts.length - 1] as string),
-      string: (v, cs) => `_${cs ?? (typeof charset === 'string' ? charset : 'utf8mb4')}'${escapeString(v)}'`,
+      column: printColumnName,
+      string: (v, cs) => printString(v, cs ?? (typeof charset === 'string' ? charset : 'utf8mb4')),
       source: generation.text,
     })
   } catch (e) {

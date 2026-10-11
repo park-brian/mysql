@@ -111,7 +111,7 @@ import { bitBytes } from './wire.ts'
 import { badAgainst, booleanRank, Corpus, foldFor, fulltextOf, naturalRank, noExpansion, noIndex, parseBoolean, queryText, wordsOf, type Term } from './fulltext.ts'
 import { windowNotAllowed } from './window.ts'
 import { dateAdd, isInterval, onToday } from './interval.ts'
-import { escapeString, printExpression, Unprintable } from './print.ts'
+import { printString, printExpression, Unprintable } from './print.ts'
 import { modeOf } from './mode.ts'
 import { NOT_YET, VARIES_PER_EVALUATION, functionCompiler } from './registry.ts'
 import { clock, escapedBytes, hexOf } from './builtins.ts'
@@ -384,7 +384,7 @@ export function printedArgument(a: Expression, ctx: CompileContext): string {
         const q = quoteName
         return c === undefined ? parts.map(q).join('.') : `${q(c.schema)}.${q(c.table)}.${q(c.orgName === '' ? (parts[parts.length - 1] as string) : c.orgName)}`
       },
-      string: (v, cs) => `${cs === undefined ? '' : `_${cs}`}'${escapeString(v)}'`,
+      string: printString,
       ...(ctx.sql === undefined ? {} : { source: ctx.sql }),
     })
   } catch (err) {

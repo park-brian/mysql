@@ -17,7 +17,7 @@
 // view's own text instead, a named divergence rather than a guess.
 import type { TableDef } from '@myjs/engine'
 import { NODE, QUERY, REF, type Expression, type QueryExpression, type TableReference, quoteName } from '@myjs/parser'
-import { Unprintable, escapeString, printExpression } from './print.ts'
+import { Unprintable, printString, printExpression } from './print.ts'
 
 
 interface Source {
@@ -67,7 +67,7 @@ export function viewDefinition(query: QueryExpression, names: readonly string[],
       return `${owner.qualifier}.${quoteName(name)}`
     }
     function expr(e: Expression): string {
-      return printExpression(e, { column, string: (v) => `'${escapeString(v)}'`, ...(source === undefined ? {} : { source }) })
+      return printExpression(e, { column, string: (v) => printString(v), ...(source === undefined ? {} : { source }) })
     }
     // `*` expands to the tables' columns, in order.
     const items: string[] = []
