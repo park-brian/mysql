@@ -1927,7 +1927,7 @@ function substituteAliases(e: Expression, items: readonly { readonly expr?: Expr
     if (x === null || typeof x !== 'object') return x
     if (Array.isArray(x)) return x.map(walk)
     const node = x as { kind?: string; parts?: readonly string[] }
-    if (node.kind === NODE.SUBQUERY) return x
+    if (node.kind === NODE.SUBQUERY || node.kind === NODE.LITERAL) return x
     if (node.kind === NODE.COLUMN && node.parts?.length === 1) {
       const name = node.parts[0] as string
       const hits = items.filter((i) => i.expr !== undefined && i.alias?.toLowerCase() === name.toLowerCase())

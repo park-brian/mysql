@@ -520,6 +520,8 @@ function partialTruth(e: Expression, known: (column: Expression) => Expression |
     if (x === null || typeof x !== 'object') return x
     if (Array.isArray(x)) return x.map(substitute)
     const node = x as { kind?: string }
+    // Literal payloads include byte arrays, not expression nodes to rewrite.
+    if (node.kind === NODE.LITERAL) return x
     if (node.kind === NODE.SUBQUERY || node.kind === NODE.CALL || node.kind === NODE.VARIABLE) {
       complete = false
       return x

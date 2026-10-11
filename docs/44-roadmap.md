@@ -75,6 +75,15 @@ unchanged. FLUSH TABLES and FLUSH STATUS remain unsupported, explicitly.
 
 The next engineering work, in order:
 
+CI's executor fuzz seed 683176680 found an AST rewrite copying hex-literal
+byte arrays into plain objects. Optimizer folding and HAVING alias substitution
+now preserve literal nodes; the full failing seed and reference-backed regressions
+pass. Additional probes found `id = b''` missing the integer-zero row, still to
+repair. The binary-regex commit's reference job also exposed an IN-list latency
+failure (209 ms longest round trip during a 589 ms SELECT); investigate without
+relaxing its bound. The two-CPU Docker targeted latency run passes, so this still
+needs a reproducible workload before changing the scheduler or its test.
+
 1. **Complete the remaining M5.10 function behavior.** All 8,765 observations
    in the three function corpora now agree, including mixed DATETIME/text
    GREATEST and LEAST. This is coverage of those corpora, not the whole MySQL
@@ -650,7 +659,7 @@ code that moves it (doc 43 §8). A claim without a number is marketing.
 | Statements executing the way a real MySQL 8.4 executed them | 3,629 / 3,629 — 400 generated scripts through `mysql2`, 250 of their statements upserts, REPLACEs or IGNOREs: rows and order, column metadata, `affectedRows`/`insertId`/`info`, errno and SQLSTATE. Three further seeds, 46,346 statements and not committed, agree except four `SELECT DISTINCT` metadata cases that need the range optimizer (M5.7, which owns it since M5.5 closed) | every statement the executor accepts |
 | InnoDB round-trip, by type | 0 / 17 | 17 / 17 |
 | Crash injection points, inconsistencies | 10,000 points, 0 inconsistencies — CI's `crash` job runs `CRASH_POINTS=10000`, and `npm test` 300 of them | 10,000 points, 0 |
-| Core bundle, gzipped | 330,057 B (322.3 KiB) for the browser entry chunk, measured on 2026-10-10; the facade is 329,963 B. The two deferred UCA chunks total 184,654 B raw. `tools/size-budget.mjs` measures each package including its workspace dependencies, so package figures do not add up. The M5.2 coercion and M5.10 binary-regex fixes pass the existing stabilization budgets without raising them | < 500 KB |
+| Core bundle, gzipped | 330,066 B (322.3 KiB) for the browser entry chunk, measured on 2026-10-10; the facade is 329,972 B. The two deferred UCA chunks total 184,654 B raw. `tools/size-budget.mjs` measures each package including its workspace dependencies, so package figures do not add up. The M5.2 coercion and M5.10 binary-regex fixes pass the existing stabilization budgets without raising them | < 500 KB |
 | Function calls returning what a real MySQL 8.4 returned | 8,765 / 8,765 — the string and numeric slices (2,091 / 2,091, including GREATEST and LEAST over text and a DATETIME), the date and time slice (3,463 / 3,463) and the rest of the string, math, hashing and network functions (3,211 / 3,211), both protocols, metadata and warning counts | every function in the library |
 | Implicit coercion | 3,148 / 3,148 captured statements agree, with 0 refusals; warning counts agree on 1,737 / 1,737 queries. All observations are compared with zero disagreements (M5.2 complete) | every captured value, metadata field and warning count |
 | Relational statements executing the way a real MySQL 8.4 executed them | 5,635 / 5,635 agree and none are refused, over 300 multi-table scripts through `mysql2`, both protocols. `queries.json` through the executor: 1,200 / 1,200. Rows are compared in order wherever the statement or an agreeing plan fixes it | every statement the executor accepts, and no refusals |
