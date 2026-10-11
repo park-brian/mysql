@@ -6,11 +6,11 @@ import { MySQL } from '@myjs/core'
 // @ts-expect-error — the capture owns plan normalization.
 import { planSkeleton } from '../../tools/capture-relational.mjs'
 
-test('plain grouping keys sort before inner lookups, with NULLs and collation ties', async () => {
+test('plain grouping keys read in order before inner lookups, with NULLs and collation ties', async () => {
   const host = process.env.MYSQL_REFERENCE_HOST
   const db = host === undefined ? await MySQL.open(':memory:') : undefined
   const conn = await mysql.createConnection(db === undefined
-    ? { host: host ?? '127.0.0.1', user: 'root', password: process.env.MYSQL_REFERENCE_PASSWORD ?? 'root' }
+    ? { host: host ?? '127.0.0.1', port: Number(process.env.MYSQL_REFERENCE_PORT ?? 3306), user: 'root', password: process.env.MYSQL_REFERENCE_PASSWORD ?? 'root' }
     : { stream: db.createStream(), user: 'root', password: '' })
   const base = 'SELECT STRAIGHT_JOIN k.s,GROUP_CONCAT(pa.name ORDER BY pa.name DESC) AS names,SUM(DISTINCT k.g) AS total,COUNT(*) AS n FROM k JOIN pa FORCE INDEX(grp) ON pa.grp=k.g GROUP BY k.s ORDER BY 1,2,3,4'
   const loop = 'Sort\n    Stream results\n        Group aggregate\n            Nested loop inner join\n                Sort\n                    Filter\n                        Table scan on k\n                Index lookup on pa using grp'
@@ -29,6 +29,21 @@ test('plain grouping keys sort before inner lookups, with NULLs and collation ti
       assert.deepEqual((await conn.query('SHOW WARNINGS'))[0], [])
       const [explain] = await conn.query<mysql.RowDataPacket[]>(`EXPLAIN FORMAT=TREE ${sql}`)
       assert.equal(planSkeleton(explain[0]?.EXPLAIN), plan)
+    }
+  }
+  const releaseWriter = async () => {
+    if (db === undefined) return
+    const locking = base.replace('FROM k JOIN pa', 'FROM group_sort.k JOIN group_sort.pa')
+    for await (const row of db.stream(`${locking} FOR UPDATE`)) {
+      assert.deepEqual(row, { s: null, names: 'd,c,b', total: '5', n: 3 })
+      break
+    }
+    const other = await db.connect()
+    try {
+      await other.query('SET innodb_lock_wait_timeout=1')
+      await other.query("UPDATE group_sort.k SET s='qq' WHERE id=7")
+    } finally {
+      await other.end()
     }
   }
   try {
@@ -58,23 +73,32 @@ test('plain grouping keys sort before inner lookups, with NULLs and collation ti
     // Keys on both tables still sort the expanded joined rows.
     const mixed = 'SELECT STRAIGHT_JOIN k.s,GROUP_CONCAT(pa.name ORDER BY pa.name) AS names FROM k JOIN pa FORCE INDEX(grp) ON pa.grp=k.g GROUP BY k.s,pa.name ORDER BY 1,2'
     await run(mixed, [[null, 'b'], [null, 'c'], [null, 'd'], ['A', 'a'], ['a', 'b'], ['a', 'c'], ['A', 'z'], ['b', 'a'], ['b', 'z']], 'Sort\n    Stream results\n        Group aggregate\n            Sort\n                Stream results\n                    Nested loop inner join\n                        Filter\n                            Table scan on k\n                        Index lookup on pa using grp', columns.slice(0, 2))
-    if (db !== undefined) {
-      // Abandoning a sorted locking stream must release the statement's writer.
-      const locking = base.replace('FROM k JOIN pa', 'FROM group_sort.k JOIN group_sort.pa')
-      for await (const row of db.stream(`${locking} FOR UPDATE`)) {
-        assert.deepEqual(row, { s: null, names: 'd,c,b', total: '5', n: 3 })
-        break
-      }
-      const other = await db.connect()
-      try {
-        await other.query('USE group_sort')
-        await other.query('SET innodb_lock_wait_timeout=1')
-        await other.query("UPDATE k SET s='qq' WHERE id=7")
-      } finally {
-        await other.end()
-      }
-      await run(base, ordered, loop)
-    }
+    const primary = base.replaceAll('k.s', 'k.id')
+    await run(primary, [[1, 'z,a', '1', 2], [2, 'c,b', '2', 2], [3, 'z,a', '1', 2], [4, 'd', '3', 1], [5, 'c,b', '2', 2]], 'Sort\n    Stream results\n        Group aggregate\n            Nested loop inner join\n                Filter\n                    Index scan on k using PRIMARY\n                Index lookup on pa using grp', [['id', 3, 11, 4097, 0, 63, 'group_sort', 'k', 'k', 'id'], ...columns.slice(1)])
+    // Abandoning either a sorted or indexed locking stream releases its writer.
+    await releaseWriter()
+    await run(base, ordered, loop)
+    await conn.query('ALTER TABLE k ADD KEY sg(s,g)')
+    await conn.query('ANALYZE TABLE k')
+    const indexed = 'Sort\n    Stream results\n        Group aggregate\n            Nested loop inner join\n                Filter\n                    Covering index scan on k using sg\n                Index lookup on pa using grp'
+    const inIndexOrder = [[null, 'd,c,b', '5', 3], ['A', 'z,c,b,a', '3', 4], ['b', 'z,a', '1', 2]]
+    await run(base, inIndexOrder, indexed)
+    await run(base.replace('GROUP_CONCAT(pa.name ORDER BY pa.name DESC)', 'GROUP_CONCAT(pa.name)'), [[null, 'c,b,d', '5', 3], ['A', 'z,a,c,b', '3', 4], ['b', 'z,a', '1', 2]], indexed)
+    await run(base.replace(' ORDER BY 1,2,3,4', ''), inIndexOrder, indexed.split('\n').slice(2).map((s: string) => s.slice(8)).join('\n'), [
+      ['s', 253, 40, 16392, 0, 224, 'group_sort', 'k', 'k', 's'],
+      ['names', 251, 65536, 0, 31, 224, '', '', '', ''],
+      ['total', 246, 33, 128, 0, 63, '', '', '', ''],
+      ['n', 8, 21, 129, 0, 63, '', '', '', ''],
+    ])
+    await releaseWriter()
+    await run(base, inIndexOrder, indexed)
+    await conn.query('ALTER TABLE k DROP KEY sg,ADD KEY full_s(s)')
+    await conn.query('ANALYZE TABLE k')
+    await run(base, ordered, loop)
+    await conn.query('ALTER TABLE k DROP KEY full_s,ADD KEY short_s(s(1))')
+    await conn.query('ANALYZE TABLE k')
+    await run(base, ordered, loop)
+    await conn.query('ALTER TABLE k DROP KEY short_s')
     await conn.query('DELETE FROM pa WHERE id>=10')
     await conn.query('ANALYZE TABLE pa,k')
     const hash = base.replace(' FORCE INDEX(grp)', '')

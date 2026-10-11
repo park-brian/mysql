@@ -1764,6 +1764,7 @@ function planGrouped(
   const groupedLimit = q.limit === undefined ? undefined : limitValue(run, q.limit.count, 'LIMIT')
   if (from !== undefined && scope !== undefined) from.sortedBy(sortTable(q.orderBy?.map((o) => o.expr), node.groupBy?.items, selectItems, scope), groupedLimit === undefined ? Infinity : groupedLimit + (q.limit?.offset === undefined ? 0 : limitValue(run, q.limit.offset, 'LIMIT')))
   const facts = run.preparing === true ? undefined : optimizerFacts(from, node.where, groupedLimit, compileContext(run, EMPTY_SCOPE, 'where clause'), run.env, (node.options ?? []).includes('STRAIGHT_JOIN'))
+  const firstOrder = strategy === 'sort' && !rollup ? from?.orderGroupsFirst(keys) : undefined
   let dataColumns: ((trx: Trx | undefined) => readonly ResultType[]) | undefined
   if (facts !== undefined && !facts.empty) {
     const consts = new Set(facts.constTables.map((t) => t.alias))
@@ -1792,9 +1793,9 @@ function planGrouped(
       // …and so is one the WHERE holds to a constant over a join (8.4.11: `FROM p, q WHERE p.g = 1 GROUP BY q.t, p.g`).
       const keyed = (isKey || isKeyExpression) && refersToRow(e, lookup, fixed) && !(source === undefined && e.kind === NODE.COLUMN && pinnedByWhere(node.where, e.parts))
       if (strategy === 'temp') item.compiled = { ...item.compiled, type: { ...t, temporary: keyed ? true : 'pinned', ...(aggregateCall ? { names: { schema: '', table: '', orgTable: '', orgName: '' } } : {}) } }
-      else if (stream || (source === undefined && from !== undefined && strategy === 'sort' && t.column !== undefined)) {
-        // A sort-based grouping over a join sorts the join's rows streamed
-        // into a temporary table, so its columns are that table's copies.
+      else if (stream || (source === undefined && from !== undefined && strategy === 'sort' && firstOrder !== 'index' && t.column !== undefined)) {
+        // Streamed output and sort-based grouping expose copied column metadata;
+        // an ordered first-table index without an output sort keeps source flags.
         item.compiled = { ...item.compiled, type: { ...t, temporary: 'stream' } }
       }
     }
@@ -1807,7 +1808,6 @@ function planGrouped(
   // The WHERE: a FROM applies it itself (M5.43); one with no FROM is a Filter here.
   const whereCtx = compileContext(run, lookup, 'where clause')
   let where: Compiled | undefined
-  const sortedFirst = strategy === 'sort' && !rollup && from?.sortGroupsFirst(keys) === true
   if (from !== undefined) from.filter(node.where, (e) => compile(e, whereCtx))
   else if (node.where !== undefined) where = compile(node.where, whereCtx)
   // An index-ordered grouping reads that index whole, in its order, whatever range the WHERE would choose.
@@ -1826,7 +1826,7 @@ function planGrouped(
       item.compiled = { ...item.compiled, type: temporary === undefined ? type : { ...type, temporary } }
     }
   }
-  const plan = { width, keys: keys.map((k) => k.compiled), specs: sink.specs, strategy: sortedFirst ? 'index' as const : strategy, rollup }
+  const plan = { width, keys: keys.map((k) => k.compiled), specs: sink.specs, strategy: firstOrder === undefined ? strategy : 'index' as const, rollup }
   const sortsOutput = orderKeys.length > 0 && !(orderMatchesKeys && strategy !== 'temp') && !oneGroup
   const groups = rollup ? 'Group aggregate with rollup' : 'Group aggregate'
   const stages: Stage[] = [
@@ -1837,7 +1837,7 @@ function planGrouped(
       describe(n) {
         if (strategy === 'implicit') return planNode('Aggregate', [n])
         if (strategy === 'temp') return planNode('Table scan on <temporary>', [planNode('Aggregate using temporary table', [n])])
-        if (strategy === 'sort' && !sortedFirst) return planNode(groups, [planNode('Sort', [wrap(source === undefined, 'Stream results', n)])])
+        if (strategy === 'sort' && firstOrder === undefined) return planNode(groups, [planNode('Sort', [wrap(source === undefined, 'Stream results', n)])])
         return planNode(groups, [n])
       },
     },

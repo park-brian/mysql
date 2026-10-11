@@ -42,6 +42,7 @@ import { planNode, type PlanNode } from './explain.ts'
 import { FULL_SCAN, accessRows, chooseAccess, dynamicAccess, keyOrder, pointAccess, splitAnd, type Access, type OuterColumn, type RangeCosting } from './plan.ts'
 import { bestAccess, floorFilter, joinOrder, type Candidate, type KeyChoice, type Positioned } from './cost.ts'
 import { rowKey } from './keys.ts'
+import { chooseStrategy } from './group.ts'
 import { sort as sortRows, type SortKey } from './operators.ts'
 import { neverEqual, nullRejected } from './optimize.ts'
 import type { TableStatistics } from './stats.ts'
@@ -141,8 +142,8 @@ export interface FromPlan {
    * so the join's rows are never streamed into a temporary table to sort.
    */
   sortsFirst(aliases: ReadonlySet<string>): boolean
-  /** Sort plain grouping columns on the first base table of an inner lookup join. */
-  sortGroupsFirst(keys: readonly { readonly expr: Expression; readonly compiled: Compiled }[]): boolean
+  /** Supply grouping order on the first base table of an inner lookup join, by index or sort. */
+  orderGroupsFirst(keys: readonly { readonly expr: Expression; readonly compiled: Compiled }[]): 'index' | 'sort' | undefined
   /**
    * The columns the query reads of each table (`'all'` for one read whole).
    * A table no condition chooses an access path for is read through the
@@ -548,25 +549,30 @@ export function planFrom(refs: readonly TableReference[], ctx: FromContext, wher
       const looked = plan.lookups
       return spine.every((j) => j.kind === 'join' && ((j.inner.kind === 'leaf' && looked.has(j.inner.table.alias)) || [...nestedLoopJoins].some((s) => [...s].every((a) => innerAliasesOf(j).has(a)) && s.size === innerAliasesOf(j).size)))
     },
-    sortGroupsFirst(keys) {
-      if (keys.length === 0 || keys.some((k) => k.expr.kind !== NODE.COLUMN || k.compiled.type.kind === 'json')) return false
+    orderGroupsFirst(keys) {
+      if (keys.length === 0 || keys.some((k) => k.expr.kind !== NODE.COLUMN || k.compiled.type.kind === 'json')) return undefined
       const aliases = new Set<string>()
       for (const key of keys) {
         const own = aliasesOf(key.expr, scope)
-        if (own === undefined) return false
+        if (own === undefined) return undefined
         for (const alias of own) aliases.add(alias)
       }
-      if (!this.sortsFirst(aliases)) return false
+      if (!this.sortsFirst(aliases)) return undefined
       const plan = joinPlan()
-      if (plan === undefined || plan.node.kind !== 'join') return false
+      if (plan === undefined || plan.node.kind !== 'join') return undefined
       let node: Node = plan.node
       while (node.kind === 'join') {
-        if (node.left || node.inner.kind !== 'leaf' || node.lookup === undefined || !plan.lookups.has(node.inner.table.alias) || plan.dynamic.has(node.inner.table.alias) || settings.constants?.has(node.inner.table.alias)) return false
+        if (node.left || node.inner.kind !== 'leaf' || node.lookup === undefined || !plan.lookups.has(node.inner.table.alias) || plan.dynamic.has(node.inner.table.alias) || settings.constants?.has(node.inner.table.alias)) return undefined
         node = node.outer
       }
-      if (node.table.def === undefined || settings.constants?.has(node.table.alias) || settings.hidden?.has(node.table.alias)) return false
-      settings.groupSort = { alias: node.table.alias, keys: keys.map((k) => ({ expr: k.compiled, desc: false })) }
-      return true
+      if (node.table.def === undefined || settings.constants?.has(node.table.alias) || settings.hidden?.has(node.table.alias)) return undefined
+      const candidate = chooseStrategy(node.table.def, keys.map((k) => columnOf(node.table, k.expr, scope)?.name), false, true).index
+      // A non-covering secondary scan competes with a scan and sort by cost; leave that choice open.
+      const clustered = candidate !== undefined && (node.table.def.clustered === candidate || node.table.def.indexes.some((i) => i.name === candidate && i.kind === 'primary'))
+      const index = clustered || settings.covering.get(node.table.alias) === candidate ? candidate : undefined
+      if (index === undefined) settings.groupSort = { alias: node.table.alias, keys: keys.map((k) => ({ expr: k.compiled, desc: false })) }
+      else this.readInOrder(index, true, false, node.table.alias)
+      return index === undefined ? 'sort' : 'index'
     },
     ...(single === undefined ? {} : { single }),
     filter(where, compile, semijoin) {
