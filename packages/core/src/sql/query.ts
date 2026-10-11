@@ -302,6 +302,7 @@ export function planQuery(run: Run, q: QueryExpression): SelectPlan {
 
 function planSelect(run: Run, q: QueryExpression, node: SelectNode): SelectPlan {
   node = pushCountCondition(run, node)
+  const order = q.orderBy ?? []
 
   // FROM: nothing, `DUAL`, or tables joined (M5.4).
   const refs = (node.from ?? []).filter((r) => !(r.kind === REF.TABLE && r.table.schema === undefined && r.table.name.toLowerCase() === 'dual' && r.alias === undefined && (node.from ?? []).length === 1))
@@ -318,10 +319,10 @@ function planSelect(run: Run, q: QueryExpression, node: SelectNode): SelectPlan 
   // is 3029 (8.4.11).
   const grouped = node.groupBy !== undefined || node.items.some((i) => containsAggregate(i.expr)) || (node.having !== undefined && containsAggregate(node.having))
   if (!grouped) {
-    const at = (q.orderBy ?? []).findIndex((o) => containsAggregate(o.expr))
+    const at = order.findIndex((o) => containsAggregate(o.expr))
     if (at >= 0) throw sqlError('ER_AGGREGATE_ORDER_NON_AGG_QUERY', `Expression #${at + 1} of ORDER BY contains aggregate function and applies to the result of a non-aggregated query`)
   }
-  const windowed = node.items.some((i) => containsWindow(i.expr)) || (q.orderBy ?? []).some((o) => containsWindow(o.expr))
+  const windowed = node.items.some((i) => containsWindow(i.expr)) || order.some((o) => containsWindow(o.expr))
   if (grouped) return planGrouped(run, q, node, from, lookup, windowed, constants)
   const semijoin = optimizerEnabled(run, 'semijoin')
   const anti = from === undefined || !semijoin ? undefined : costedAntijoin(run, q, node, from)
@@ -367,7 +368,7 @@ function planSelect(run: Run, q: QueryExpression, node: SelectNode): SelectPlan 
   let streamed = false
   const limitCount = q.limit === undefined ? undefined : limitValue(run, q.limit.count, 'LIMIT')
   const offset = q.limit?.offset === undefined ? 0 : limitValue(run, q.limit.offset, 'LIMIT')
-  const sortBy = scope === undefined ? undefined : sortTable(q.orderBy?.map((o) => o.expr), undefined, items, scope)
+  const sortBy = scope === undefined ? undefined : sortTable(order.map((o) => o.expr), undefined, items, scope)
   const keep = limitCount === undefined ? Infinity : offset + limitCount
   const semi = from === undefined || windowed || !semijoin ? undefined : costedIntegerSemijoin(run, q, node, from, sortBy, keep)
   if (semi !== undefined) {
@@ -414,7 +415,7 @@ function planSelect(run: Run, q: QueryExpression, node: SelectNode): SelectPlan 
     // An ORDER BY on columns the WHERE holds to constants orders nothing, and
     // MySQL drops it before it plans a sort (8.4.11: `WHERE SCHEMA_NAME = ?
     // ORDER BY SCHEMA_NAME` over INFORMATION_SCHEMA's join streams nothing).
-    const constantOrder = node.distinct !== true && (q.orderBy ?? []).every((o) => (o.expr.kind === NODE.COLUMN && pinnedByWhere(node.where, o.expr.parts)) || constantKey(o))
+    const constantOrder = node.distinct !== true && order.every((o) => (o.expr.kind === NODE.COLUMN && pinnedByWhere(node.where, o.expr.parts)) || constantKey(o))
     const sortedFirst = constantOrder || (node.distinct !== true && (source === undefined ? from.sortsFirst(orderAliases(q, items, lookup)) : loopSemijoin && !node.items.some((i) => correlatedIn(i.expr, scope))))
     const consts = new Set(facts.constTables.map((t) => t.alias))
     const fixed = new Set([...consts, ...(facts.nullTables ?? [])])
@@ -465,9 +466,10 @@ function planSelect(run: Run, q: QueryExpression, node: SelectNode): SelectPlan 
     }
   } else if (node.where !== undefined) where = compile(node.where, whereCtx)
   const having = node.having === undefined || neverNullTest(node.having) ? undefined : compile(substituteAliases(node.having, items), compileContext(run, selectedOnly(lookup, items, [], node.having), 'having clause'))
-  const keys = (q.orderBy ?? []).filter((o) => !constantKey(o)).map((o) => orderKey(run, o, items, lookup, windows))
+  const orderCtx = { ...compileContext(run, lookup, 'order clause'), ...(windows === undefined ? {} : { windows }) }
+  const keys = order.filter((o) => !constantKey(o)).map((o) => orderKey(o, items, orderCtx))
   // Resolve every ORDER BY first: name errors precede DISTINCT admission.
-  if (node.distinct === true && source !== undefined && scope !== undefined && !windowed && modeOf(run.env.session.sqlMode).onlyFullGroupBy) checkDistinctOrder(run, q.orderBy ?? [], items, scope)
+  const copied = node.distinct === true && source !== undefined && scope !== undefined && !windowed && modeOf(run.env.session.sqlMode).onlyFullGroupBy ? checkDistinctOrder(run, order, items, orderCtx)?.filter((_, i) => !constantKey(order[i] as OrderItem)) : undefined
   // A window ORDER BY alone names reads the rows through its table as well.
   if (windows !== undefined && windows.windows.length > 0) {
     for (const item of items) if (item.compiled.type.temporary === undefined) item.compiled = { ...item.compiled, type: { ...item.compiled.type, temporary: 'stream' } }
@@ -484,7 +486,7 @@ function planSelect(run: Run, q: QueryExpression, node: SelectNode): SelectPlan 
   const outerLoop = semi?.loose === false && source !== undefined && sortBy === source.alias
   // Reconsider PRIMARY for ordinary scans and the modeled outer-first loop.
   // DISTINCT keeps its access choice even when a unique key removes deduplication.
-  const ordered = source !== undefined && read !== undefined && !deduplicated && !windowed && (anti === undefined || anti.lookup) && match === undefined && keys.length > 0 && read.ranges === undefined ? orderingIndex(source.def, source.alias, q.orderBy ?? [], items, lookup, read.index, (outerLoop || (!loopSemijoin && node.distinct !== true)) && optimizerEnabled(run, 'prefer_ordering_index')) : undefined
+  const ordered = source !== undefined && read !== undefined && !deduplicated && !windowed && (anti === undefined || anti.lookup) && match === undefined && keys.length > 0 && read.ranges === undefined ? orderingIndex(source.def, source.alias, order, items, lookup, read.index, (outerLoop || (!loopSemijoin && node.distinct !== true)) && optimizerEnabled(run, 'prefer_ordering_index')) : undefined
   if (ordered !== undefined) from?.readInOrder(ordered.index, false, ordered.reverse, source?.alias)
   const sortedFirst = outerLoop && ordered === undefined && keys.length > 0
   if (sortedFirst && source !== undefined) from?.sortFirst(source.alias, keys)
@@ -506,7 +508,7 @@ function planSelect(run: Run, q: QueryExpression, node: SelectNode): SelectPlan 
     // HAVING without grouping filters the rows WHERE kept, before any window sees them.
     ...(having === undefined ? [] : [{ ...filterStage(having), describe: (n: PlanNode) => withSubqueries(run, planNode('Filter', [n]), 'having clause') }]),
     ...(windows === undefined || windows.windows.length === 0 ? [] : [windowStage(windows, windowBase)]),
-    deliverStage(items.map((i) => i.compiled), ordered === undefined && !sortedFirst ? keys : [], node.distinct === true, { deduplicated, streamed, keep: limitCount === undefined ? undefined : offset + limitCount, buffer, ...(constantDistinct === undefined ? {} : { constant: constantDistinct }) }),
+    deliverStage(items.map((i) => i.compiled), ordered === undefined && !sortedFirst ? keys : [], node.distinct === true, { deduplicated, streamed, copied, keep: limitCount === undefined ? undefined : offset + limitCount, buffer, ...(constantDistinct === undefined ? {} : { constant: constantDistinct }) }),
     ...(limitCount === undefined && offset === 0 ? [] : [limitStage(offset, limitCount)]),
   ]
   return {
@@ -592,15 +594,16 @@ function windowStage(windows: WindowSink, base: number): Stage {
  * DISTINCT's rows into a temporary table and sorts that. Selected aliases,
  * positions and columns sort their copied values here, without evaluating
  * their expressions again. Unmapped sort expressions retain the old order
- * of evaluation; matching repeated expressions remains open (M5.49). A sort
+ * of evaluation; only verified repeated SIGNED casts also name copied slots.
+ * Other repeated expressions remain open (M5.49). A sort
  * over a join reads its rows streamed into a table first ("Stream results").
  */
-function deliverStage(items: readonly Compiled[], keys: readonly SortKey[], unique: boolean, through: { readonly deduplicated: boolean; readonly streamed: boolean; readonly described?: boolean; readonly keep?: number | undefined; readonly buffer?: { readonly estimate: number; readonly capacity: number } | undefined; readonly constant?: 'group' | 'limit' }): Stage {
+function deliverStage(items: readonly Compiled[], keys: readonly SortKey[], unique: boolean, through: { readonly deduplicated: boolean; readonly streamed: boolean; readonly copied?: readonly (number | undefined)[] | undefined; readonly described?: boolean; readonly keep?: number | undefined; readonly buffer?: { readonly estimate: number; readonly capacity: number } | undefined; readonly constant?: 'group' | 'limit' }): Stage {
   // A LIMIT needs only its first rows of the order, unless a DISTINCT between would drop some.
   const keep = unique ? undefined : through.keep
-  const copied = through.deduplicated ? keys.flatMap((key) => {
+  const copied = through.deduplicated ? keys.flatMap((key, i) => {
     const column = key.expr.type.column
-    const index = items.findIndex((item) => item === key.expr || (column !== undefined && item.type.column === column))
+    const index = through.copied?.[i] ?? items.findIndex((item) => item === key.expr || (column !== undefined && item.type.column === column))
     return index < 0 ? [] : [{ desc: key.desc, expr: readSlot(index, key.expr.type) }]
   }) : []
   return {
@@ -1589,20 +1592,21 @@ function sortStage(keys: readonly SortKey[]): Stage {
 
 /** An ORDER/GROUP key's expression, resolving select-list positions and aliases once. */
 function sortExpression(e: Expression, items: readonly { readonly alias?: string; readonly expr?: Expression }[]): Expression | undefined {
-  if (e.kind === NODE.LITERAL && e.type === 'int') return items[Number(e.value as bigint) - 1]?.expr
-  const alias = selectAlias(e, items)
+  const alias = selectedItem(e, items)
+  if (e.kind === NODE.LITERAL && e.type === 'int') return alias?.expr
   return alias === undefined ? e : alias.expr
 }
 
-/** The first select-list alias for a bare name, using the SQL name fold. */
-function selectAlias<T extends { readonly alias?: string }>(e: Expression, items: readonly T[]): T | undefined {
+/** A select-list position or first bare alias, using the SQL name fold. */
+function selectedItem<T extends { readonly alias?: string }>(e: Expression, items: readonly T[]): T | undefined {
+  if (e.kind === NODE.LITERAL && e.type === 'int') return items[Number(e.value as bigint) - 1]
   if (e.kind !== NODE.COLUMN || e.parts.length !== 1) return undefined
   const name = (e.parts[0] as string).toLowerCase()
   return items.find((i) => i.alias?.toLowerCase() === name)
 }
 
-/** Resolved AST structure and literal equality keys; never SQL text or call results. */
-function expressionIdentity(e: Expression | undefined, ctx: CompileContext, env: Env): unknown[] | undefined {
+/** Resolved AST and literal identity; copying uses stricter deterministic equality. */
+function expressionIdentity(e: Expression | undefined, ctx: CompileContext, env: Env, copied = false): unknown[] | undefined {
   if (e === undefined) return undefined
   let identity: unknown[]
   let args: readonly Expression[]
@@ -1620,12 +1624,12 @@ function expressionIdentity(e: Expression | undefined, ctx: CompileContext, env:
       const c = compile(bare, ctx)
       const v = c.eval([], env)
       const kind = e.type === LITERAL.BOOL ? LITERAL.BOOL : v?.kind === 'bytes' && v.hex === true ? LITERAL.HEX : c.type.kind
-      return [e.kind, kind, c.type.collationId, valueKey(v), collation === undefined ? undefined : collationInfoByName(collation.toLowerCase())?.id]
+      return [e.kind, kind, c.type.collationId, copied && v?.kind === 'string' ? v.v : valueKey(v), collation === undefined ? undefined : collationInfoByName(collation.toLowerCase())?.id]
     }
     case NODE.PLACEHOLDER: return [e.kind, e.index]
     case NODE.BINARY:
       if (e.op !== '+') return undefined
-      identity = [e.kind, e.op]; args = [e.left, e.right]; break
+      identity = [e.kind]; args = [e.left, e.right]; break
     case NODE.CAST:
       if (e.type.name !== 'SIGNED' || e.array === true || e.timeZone !== undefined) return undefined
       identity = [e.kind]; args = [e.expr]; break
@@ -1633,22 +1637,23 @@ function expressionIdentity(e: Expression | undefined, ctx: CompileContext, env:
       identity = [e.kind, collationInfoByName(e.collation.toLowerCase())?.id]; args = [e.expr]; break
     case NODE.CALL: {
       const name = e.name.toUpperCase()
-      if (!['ABS', 'CONCAT', 'RAND', 'LAST_INSERT_ID'].includes(name) || e.stored === true || e.over !== undefined || e.distinct === true) return undefined
+      const allowed = copied ? ['ABS', 'CONCAT'] : ['ABS', 'CONCAT', 'RAND', 'LAST_INSERT_ID']
+      if (!allowed.includes(name) || e.stored === true || e.over !== undefined || e.distinct === true) return undefined
       identity = [e.kind, name]; args = e.args; break
     }
     default: return undefined
   }
-  const keys = args.map((a) => expressionIdentity(a, ctx, env))
+  const keys = args.map((a) => expressionIdentity(a, ctx, env, copied))
   return keys.includes(undefined) ? undefined : [...identity, keys]
 }
 
 /** The verified single-table scalar DISTINCT admission boundary (8.4.11). */
-function checkDistinctOrder(run: Run, order: readonly OrderItem[], items: readonly { readonly expr?: Expression; readonly compiled: Compiled; readonly alias?: string }[], scope: TableScope): void {
-  const ctx = compileContext(run, scope, 'order clause')
-  const key = (e: Expression | undefined): string | undefined => JSON.stringify(expressionIdentity(e, ctx, run.env))
-  const selectedKeys = items.flatMap((item) => item.expr === undefined ? [] : [key(item.expr)])
-  // An alias is already bound to a selected item; null needs no expression proof.
-  const orderKeys = order.map((item) => selectAlias(item.expr, items) !== undefined ? null : key(item.expr))
+function checkDistinctOrder(run: Run, order: readonly OrderItem[], items: readonly { readonly expr?: Expression; readonly compiled: Compiled; readonly alias?: string }[], ctx: CompileContext): readonly (number | undefined)[] | undefined {
+  const scope = ctx.scope as TableScope
+  const key = (e: Expression | undefined, copied = false): string | undefined => JSON.stringify(expressionIdentity(e, ctx, run.env, copied))
+  const selectedKeys = items.map((item) => key(item.expr))
+  // An alias or position is already bound; null needs no expression proof.
+  const orderKeys = order.map((item) => selectedItem(item.expr, items) !== undefined ? null : key(item.expr))
   if (selectedKeys.includes(undefined) || orderKeys.includes(undefined)) return
   const selected = items.map((item) => item.compiled.type.column)
   order.forEach(({ expr: e }, i) => {
@@ -1659,6 +1664,14 @@ function checkDistinctOrder(run: Run, order: readonly OrderItem[], items: readon
       if ((r.depth ?? 0) > 0 || (r.type.column !== undefined && selected.includes(r.type.column))) continue
       throw sqlError('ER_FIELD_IN_ORDER_NOT_SELECT', `Expression #${i + 1} of ORDER BY clause is not in SELECT list, references column '${qualifiedColumn(scope, r.index)}' which is not in SELECT list; this is incompatible with DISTINCT`)
     }
+  })
+  // Admission equality is weaker than copied-value reuse. Only SIGNED casts
+  // have a verified evaluation contract here; keep volatile calls conservative.
+  const copied = items.map((item) => key(item.expr, true))
+  if (copied.includes(undefined)) return
+  return order.map(({ expr }) => {
+    const index = expr.kind === NODE.CAST ? copied.indexOf(key(expr, true)) : -1
+    if (index >= 0) return index
   })
 }
 
@@ -1784,7 +1797,7 @@ function planGrouped(
       try {
         lookup.resolve(g.parts, 'group statement')
       } catch (e) {
-        const alias = selectAlias(g, selectItems)
+        const alias = selectedItem(g, selectItems)
         if (alias === undefined) throw e
         expr = alias.expr
       }
@@ -1866,17 +1879,10 @@ function planGrouped(
     having = compile(substituteAliases(node.having, selectItems), postCtx('having clause', havingScope))
   }
 
-  const orderItems = items.map((i) => ({ name: i.name, compiled: i.compiled, ...(i.alias === undefined ? {} : { alias: i.alias }) }))
-  const orderKeys = (q.orderBy ?? []).map((o) => {
-    const e = o.expr
-    if ((e.kind === NODE.LITERAL && e.type === 'int') || selectAlias(e, items) !== undefined) {
-      return orderKey(run, o, orderItems, lookup)
-    }
-    return { expr: compile(e, withWindows(postCtx('order clause'))), desc: o.desc === true }
-  })
+  const orderKeys = (q.orderBy ?? []).map((o) => orderKey(o, items, withWindows(postCtx('order clause'))))
 
   if (modeOf(run.env.session.sqlMode).onlyFullGroupBy) {
-    checkFullGroupBy(lookup, scope, keys, node.where, from?.joins ?? [], items.map((i) => i.expr), (q.orderBy ?? []).filter((o) => !(o.expr.kind === NODE.LITERAL && o.expr.type === 'int') && selectAlias(o.expr, items) === undefined).map((o) => o.expr), node.groupBy === undefined, rollup)
+    checkFullGroupBy(lookup, scope, keys, node.where, from?.joins ?? [], items.map((i) => i.expr), (q.orderBy ?? []).filter((o) => !(o.expr.kind === NODE.LITERAL && o.expr.type === 'int') && selectedItem(o.expr, items) === undefined).map((o) => o.expr), node.groupBy === undefined, rollup)
   }
 
   // What a client is told depends on what MySQL copies through a temporary
@@ -2380,19 +2386,12 @@ function deparseName(e: Expression): string {
 }
 
 /** An `ORDER BY` item: a position in the select list, a select-list alias, or an expression over the table. */
-function orderKey(run: Run, o: OrderItem, items: readonly { name: string; compiled: Compiled; alias?: string }[], scope: Scope, windows?: WindowSink): SortKey {
+function orderKey(o: OrderItem, items: readonly { name: string; compiled: Compiled; alias?: string }[], ctx: CompileContext): SortKey {
   const e = o.expr
-  const desc = o.desc === true
-  if (e.kind === NODE.LITERAL && e.type === 'int') {
-    const n = Number(e.value as bigint)
-    const item = items[n - 1]
-    if (item === undefined) throw sqlError('ER_BAD_FIELD_ERROR', messages.unknownColumn(String(n), 'order clause'))
-    return { expr: item.compiled, desc }
-  }
-  const alias = selectAlias(e, items)
-  if (alias !== undefined) return { expr: alias.compiled, desc }
-  // A window function in ORDER BY is the query's too (8.4.11).
-  return { expr: compile(e, { ...compileContext(run, scope, 'order clause'), ...(windows === undefined ? {} : { windows }) }), desc }
+  const item = selectedItem(e, items)
+  if (e.kind === NODE.LITERAL && e.type === 'int' && item === undefined) throw sqlError('ER_BAD_FIELD_ERROR', messages.unknownColumn(String(Number(e.value as bigint)), 'order clause'))
+  // The caller supplies its aggregate/window context for unbound expressions.
+  return { expr: item?.compiled ?? compile(e, ctx), desc: o.desc === true }
 }
 
 /**
