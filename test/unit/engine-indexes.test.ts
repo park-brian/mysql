@@ -154,6 +154,64 @@ test('clustered replacement and delete-mark return detached previous rows', asyn
   verify(store, clustered)
 })
 
+test('secondary mutations descend once after uniqueness checks and retain marked entries for old views', async () => {
+  const { store, clustered } = await table()
+  const names = SecondaryIndex.create(store, clustered, byName, { unique: true, name: 'by_name' })
+  for (let i = 0; i < 800; i++) {
+    const row: FieldBytes[] = [int(i), utf8(`n${i}`), null]
+    names.insert(row, clustered.insert(row))
+  }
+  const tree = names.tree
+  const height = tree.height()
+  assert.ok(height > 1)
+  const old = [int(400), utf8('n400'), null] as const
+  const next = [int(400), utf8('moved'), null] as const
+  const reader = store.begin()
+  assert.deepEqual(names.find([old[1]], reader), [old])
+  const upsert = tree.upsert.bind(tree)
+  let preparations = 0
+  tree.upsert = (key, prepare) => {
+    const before = store.pool.stats.fetches
+    const pins = store.pool.pinned()
+    upsert(key, (current) => {
+      preparations++
+      assert.equal(store.pool.stats.fetches - before, height, 'the required uniqueness scan is outside this descent')
+      assert.equal(store.pool.pinned(), pins)
+      return prepare(current)
+    })
+  }
+  const get = tree.get.bind(tree)
+  const put = tree.put.bind(tree)
+  tree.get = () => { throw new Error('secondary mutation reread its entry') }
+  tree.put = () => { throw new Error('secondary mutation redescended to replace its entry') }
+  const writer = store.begin()
+  assert.throws(() => names.insert(old, int(400), writer), /Duplicate entry/)
+  assert.equal(preparations, 0, 'uniqueness refuses the write before preparation')
+  assert.equal(names.delete(old, int(400), writer), true)
+  const at = writer.savepoint()
+  assert.equal(names.delete(old, int(400), writer), false)
+  assert.equal(names.delete([int(900), utf8('missing'), null], int(900), writer), false)
+  assert.equal(writer.savepoint(), at, 'missing and marked deletes add no undo')
+  names.insert(next, int(400), writer)
+  clustered.update(next, writer)
+  assert.deepEqual(names.find([old[1]], reader), [old])
+  assert.deepEqual(names.find([next[1]], writer), [next])
+  assert.equal(names.delete(next, int(400), writer), true)
+  names.insert(old, int(400), writer)
+  clustered.update(old, writer)
+  assert.deepEqual(names.find([old[1]], reader), [old])
+  assert.deepEqual(names.find([old[1]], writer), [old], 'reinsertion takes back the tombstone')
+  assert.equal(preparations, 6)
+  tree.get = get
+  tree.put = put
+  writer.rollback()
+  assert.deepEqual(names.find([old[1]]), [old])
+  assert.deepEqual(names.find([next[1]]), [])
+  reader.commit()
+  store.purge()
+  verify(store, clustered)
+})
+
 test('M4.11: a non-covering secondary lookup costs exactly one extra descent, and the test proves it', async () => {
   const { store, clustered } = await table()
   const names = SecondaryIndex.create(store, clustered, byName)

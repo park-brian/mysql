@@ -147,7 +147,7 @@ const people: TableSpec = {
   ],
 }
 const i32 = (n: number) => encodeInt(BigInt(n), 4, false)
-const row = (id: number, name: string, blob: Uint8Array | null = null) => [i32(id), new TextEncoder().encode(name), blob]
+const row = (id: number, name: string, blob: Uint8Array | null = null): [Uint8Array, Uint8Array, Uint8Array | null] => [i32(id), new TextEncoder().encode(name), blob]
 
 /** Prove a table mutation gets its old row from the write, not a separate current read. */
 function withoutClusteredRead<T>(table: Table, store: Store, change: () => T): T {
@@ -244,6 +244,27 @@ test('native collation-equivalent primary keys replace in place and maintain sec
   const changes = [...store.history()].flatMap((g) => g.records).filter((r) => r.type === 'row' && r.trxId === writer.id)
   assert.deepEqual(changes, [{ type: 'row', indexId: t.def.indexes[0]?.indexId, trxId: writer.id, before: old, after: next }])
   assert.equal(withoutClusteredRead(t, store, () => t.delete(id)), true)
+  f.verify()
+})
+
+test('a repeatable-read reader becoming a writer maintains secondaries from the current row', async () => {
+  const f = factory('native')
+  const t = await f.make(people)
+  const store = f.catalog().store
+  t.insert(row(1, 'old', new Uint8Array(8192).fill(0x81)))
+  const reader = store.begin()
+  assert.deepEqual(t.get(i32(1), reader), row(1, 'old', new Uint8Array(8192).fill(0x81)))
+  t.update(i32(1), row(1, 'latest', new Uint8Array(12288).fill(0x9f)))
+  assert.deepEqual([...t.indexScan('name', undefined, reader)].map(([, r]) => r[1]), [row(1, 'old')[1]])
+  assert.deepEqual(withoutClusteredRead(t, store, () => t.update(i32(1), row(2, 'mine'), reader)), i32(2))
+  assert.deepEqual([...t.indexScan('name', undefined, reader)].map(([, r]) => r), [row(2, 'mine')])
+  reader.commit()
+  assert.equal(t.get(i32(1)), undefined)
+  assert.deepEqual([...t.indexScan('name')].map(([, r]) => r), [row(2, 'mine')])
+  assert.deepEqual([...t.indexScan('name', { from: { values: [row(1, 'latest')[1]], inclusive: true }, to: { values: [row(1, 'latest')[1]], inclusive: true } })], [], 'the newer secondary key was removed')
+  assert.deepEqual(t.insert(row(3, 'latest')), i32(3), 'no stale live secondary entry can block this key')
+  assert.deepEqual(t.get(i32(3)), row(3, 'latest'))
+  store.purge()
   f.verify()
 })
 

@@ -390,10 +390,11 @@ export class SecondaryIndex {
       if (this.unique && this.columns.every((c) => row[c.field] !== null)) {
         for (const [, value] of this.#entries(secondary)) if (!versionOf(value).marked) throw duplicateKey(this.name)
       }
-      const current = this.tree.get(key)
-      if (current !== undefined && !versionOf(current).marked) throw misuse(`the row is already in ${this.name}`)
-      t.undo({ isInsert: current === undefined, purgeRemoves: false, indexId: this.tree.indexId, key, old: current ?? null, freeOnPurge: [], freeOnRollback: [] })
-      this.tree.put(key, secondaryValue(false, t.id))
+      this.tree.upsert(key, (current) => {
+        if (current !== undefined && !versionOf(current).marked) throw misuse(`the row is already in ${this.name}`)
+        t.undo({ isInsert: current === undefined, purgeRemoves: false, indexId: this.tree.indexId, key, old: current ?? null, freeOnPurge: [], freeOnRollback: [] })
+        return secondaryValue(false, t.id)
+      })
     })
   }
 
@@ -412,11 +413,14 @@ export class SecondaryIndex {
   delete(row: Row, primaryKey: Uint8Array, trx?: Trx): boolean {
     const key = concatBytes([keyOf(row, this.columns), primaryKey])
     return this.#change(trx, (t) => {
-      const current = this.tree.get(key)
-      if (current === undefined || versionOf(current).marked) return false
-      t.undo({ isInsert: false, purgeRemoves: true, indexId: this.tree.indexId, key, old: current, freeOnPurge: [], freeOnRollback: [] })
-      this.tree.put(key, secondaryValue(true, t.id))
-      return true
+      let removed = false
+      this.tree.upsert(key, (current) => {
+        if (current === undefined || versionOf(current).marked) return undefined
+        t.undo({ isInsert: false, purgeRemoves: true, indexId: this.tree.indexId, key, old: current, freeOnPurge: [], freeOnRollback: [] })
+        removed = true
+        return secondaryValue(true, t.id)
+      })
+      return removed
     })
   }
 
