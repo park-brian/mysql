@@ -112,8 +112,8 @@ function/coercion gaps; planner and write-path work remains before the browser:
    ANY_VALUE owns its string DECIMAL prefix diagnostics; NULLIF delegates its
    original result reader and retains its native two-read boundary. CHAR/BINARY
    casts and non-temporal, non-JSON string extrema now own their verified prefix
-   facts. Ordinary field diagnostic caps need proof before the shared binary
-   text reader, which still truncates at 1,024 bytes. Numeric/temporal/JSON
+   facts. Fixed CHAR/BINARY field DECIMAL formatting is verified; variable
+   field diagnostics need proof before the shared binary text reader, which still truncates at 1,024 bytes. Numeric/temporal/JSON
    extrema retain separate reader gaps. Split-multibyte message conversion
    remains separate.
    Numeric-warning escaping, binary IF derivation, packet overflow and explicit
@@ -1906,16 +1906,71 @@ gzipped, three bytes more and unchanged respectively. Captures, caps and the
 2,118-plan floor are unchanged. The preceding b657b63 commit passed every
 required GitHub job.
 
-**Next:** prove ordinary DECIMAL field warning text caps/escaping at the
-existing diagnostic owner before full shared byte reading. Field conversion
-reads full data: native long VARCHAR zero prefixes retain their numeric value,
-while their warning text is capped separately. Do not impose a diagnostic cap
-on numeric conversion. Keep the 1024-byte binary reader, long prefixes,
-81-digit/exponent overflow and alias wording separate until verified. Then
-migrate the shared reader only with zero previously matching component
-regressions. Numeric DECIMAL extrema's first-argument prefetch, temporal/JSON
-readers and prepared diagnostics remain independent subsequent repairs.
-M5.10 stays partial; M5.47/M5.49/M5.50 follow before browser work.
+**Reader sequence:** fixed CHAR/BINARY field DECIMAL formatting is verified
+below. Variable fields use a distinct raw-byte message boundary. Preserve
+complete numeric inputs and warning order. Full shared byte reading still
+requires component-preservation checks; long binary prefixes, decimal-buffer
+overflow and numeric/temporal/JSON extrema remain independent repairs.
+
+### Verified fixed CHAR/BINARY field DECIMAL diagnostics (2026-10-11)
+
+Fixed CHAR/BINARY fields now use the existing INTEGER cast diagnostic policy
+for DECIMAL readings. The compiled diagnostic kind is chosen only for a real
+column with FIELD_TYPE.STRING; it does not follow output metadata alone.
+Binary diagnostics escape every byte, retain embedded NUL and padding, and
+cap escaped output at 128 bytes, including partial final escapes. CHAR
+normalizes supplementary characters before its UTF-8 cap. Diagnostics do
+not truncate the numeric input. Original field, IF and NULLIF readers retain
+their own policy; CONCAT/COALESCE/GREATEST retain their function prefix policy.
+
+This boundary follows the pinned implementation's separate
+[fixed-field and variable-field decimal readers](https://github.com/mysql/mysql-server/blob/mysql-8.4.11/sql/field.cc).
+Fixed fields use a charset-aware error representation. Variable fields pass
+raw stored bytes to the warning formatter; its
+[message precision](https://github.com/mysql/mysql-server/blob/mysql-8.4.11/share/messages_to_clients.txt)
+is distinct from full-data numeric conversion. Do not share these formatters
+without an independent proof.
+
+The 13,368-outcome, nine-class source audit improves from 10,194 to 12,030
+full matches, closing 1,836. BINARY(255) improves from 1,782 to all 3,528;
+CHAR utf8mb4 improves from 330 to 390/420, and CHAR latin1 from 300 to 330/360.
+Five split-multibyte inputs per CHAR class retain message-conversion gaps.
+Every VARCHAR/VARBINARY/TEXT/BLOB outcome remains unchanged. The 270-outcome
+fresh audit improves from 162 to all 270, closing 108. No previously matching
+rows, complete fields, ordered warnings or errors regress. Seven integer/CAST
+and four scalar-reader matrices remain unchanged.
+
+Two protocol tests pin 4,449 complete executions and nine PREPARE checks:
+three fixed field classes, six reader paths, all 256 trailing bytes, embedded
+NUL and zero padding, ASCII/Unicode cap boundaries, numeric prefixes beyond
+the message cap, cached writes and NULLs. Five split-multibyte CHAR inputs
+remain outside the passing fixture groups and measured in the complete
+audit. Captured field tuples are shared without deriving expected behavior.
+Counted tests preserve original read order, lazy IF branches, NULLIF's two
+reads, source-reader separation, full numeric inputs and fresh memo lifetime.
+
+The touched reader now names its broader diagnostic kind explicitly and
+shares the ordinary numeric field predicate for BLOB and VARCHAR suppression.
+It tests existing column/boolean facts directly. The private text formatter
+is named for its fixed diagnostic boundary. Public contracts are unchanged.
+
+All 1,234 Windows/Docker tests, typecheck, lint, nine unchanged size gates,
+package smoke, 20,000 seeded executor statements and seven pinned corpora
+pass; focused native tests pass. Core is 334,346 B and facade 334,259 B
+gzipped, four and five bytes smaller respectively. Captures, caps and the
+2,118-plan floor are unchanged. The preceding e4ac9c6 commit passed every
+required GitHub job.
+
+**Next:** prove and repair variable DECIMAL field warning caps/conversion at
+the existing owner. VARCHAR/VARBINARY use raw stored bytes, terminate at NUL,
+and cap before message conversion; their latin1 and non-BMP behavior differs
+from fixed CHAR. Long VARCHAR zero prefixes still convert fully. Keep the
+split-multibyte message conversion, 1,024-byte numeric binary reader and
+81-digit/exponent buffer/alias gaps separate. Then resume full shared byte
+reading with zero previously matching component regressions. Numeric DECIMAL
+extrema's first-argument prefetch and temporal/JSON/prepared reader gaps remain
+separate subsequent repairs. M5.10 stays partial; M5.47/M5.49/M5.50 follow
+before browser work.
 
 ## M6 — The browser
 
@@ -2031,7 +2086,7 @@ code that moves it (doc 43 §8). A claim without a number is marketing.
 | Statements executing the way a real MySQL 8.4 executed them | 3,629 / 3,629 — 400 generated scripts through `mysql2`, 250 of their statements upserts, REPLACEs or IGNOREs: rows and order, column metadata, `affectedRows`/`insertId`/`info`, errno and SQLSTATE. Three further seeds, 46,346 statements and not committed, agree except four `SELECT DISTINCT` metadata cases that need the range optimizer (M5.7, which owns it since M5.5 closed) | every statement the executor accepts |
 | InnoDB round-trip, by type | 0 / 17 | 17 / 17 |
 | Crash injection points, inconsistencies | 10,000 points, 0 inconsistencies — CI's `crash` job runs `CRASH_POINTS=10000`, and `npm test` 300 of them | 10,000 points, 0 |
-| Core bundle, gzipped | 334,350 B (326.5 KiB) for the browser entry chunk, measured on 2026-10-11; the facade is 334,264 B. The two deferred UCA chunks total 184,654 B raw. `tools/size-budget.mjs` measures each package including its workspace dependencies, so package figures do not add up. The M5.2 coercion and M5.10 function fixes pass the existing stabilization budgets without raising them | < 500 KB |
+| Core bundle, gzipped | 334,346 B (326.5 KiB) for the browser entry chunk, measured on 2026-10-11; the facade is 334,259 B. The two deferred UCA chunks total 184,654 B raw. `tools/size-budget.mjs` measures each package including its workspace dependencies, so package figures do not add up. The M5.2 coercion and M5.10 function fixes pass the existing stabilization budgets without raising them | < 500 KB |
 | Function calls returning what a real MySQL 8.4 returned | 8,765 / 8,765 — the string and numeric slices (2,091 / 2,091, including GREATEST and LEAST over text and a DATETIME), the date and time slice (3,463 / 3,463) and the rest of the string, math, hashing and network functions (3,211 / 3,211), both protocols, metadata and warning counts | every function in the library |
 | Implicit coercion | 3,148 / 3,148 captured statements agree, with 0 refusals; warning counts agree on 1,737 / 1,737 queries. All observations are compared with zero disagreements (M5.2 complete) | every captured value, metadata field and warning count |
 | Relational statements executing the way a real MySQL 8.4 executed them | 5,635 / 5,635 agree and none are refused, over 300 multi-table scripts through `mysql2`, both protocols. `queries.json` through the executor: 1,200 / 1,200. Rows are compared in order wherever the statement or an agreeing plan fixes it | every statement the executor accepts, and no refusals |
