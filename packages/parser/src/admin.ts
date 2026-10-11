@@ -365,7 +365,7 @@ function delimiter(c: Cursor): LiteralNode {
   }
   if (t.kind === TOKEN.BIT) {
     c.skip()
-    return { kind: NODE.LITERAL, type: LITERAL.BIT, value: t.text === '' ? 0n : BigInt('0b' + t.text), at: t.start }
+    return { kind: NODE.LITERAL, type: LITERAL.BIT, value: t.text === '' ? 0n : BigInt('0b' + t.text), text: t.text, at: t.start }
   }
   c.fail()
 }

@@ -765,7 +765,7 @@ function literal(e: LiteralNode, ctx: CompileContext): Compiled {
     const id = e.charset === undefined && e.collation === undefined ? CHARSET_BINARY : introducerCollation(e, ctx)
     if (id === CHARSET_BINARY && e.charset === undefined && e.collation === undefined) {
       // As a number, as many digits as its largest value has, to 20.
-      const digits = Math.min(20, String((1n << BigInt(8 * Math.max(1, b.length))) - 1n).length)
+      const digits = Math.min(20, String((1n << BigInt(8 * b.length)) - 1n).length)
       return lit({ kind: 'bytes', v: b, hex: true }, { ...stringType(b.length, CHARSET_BINARY, false), literalInt: { digits, unsigned: e.type === LITERAL.HEX }, coercibility: COERCIBILITY.COERCIBLE })
     }
     if (id === CHARSET_BINARY) return lit(bytesValue(b), stringType(b.length, CHARSET_BINARY, false))
@@ -827,7 +827,7 @@ function literal(e: LiteralNode, ctx: CompileContext): Compiled {
       return introduced(e.value as Uint8Array)
     case LITERAL.BIT: {
       const n = e.value as bigint
-      const width = Math.max(1, Math.ceil(n.toString(2).length / 8))
+      const width = Math.ceil((e.text ?? n.toString(2)).length / 8)
       const out = new Uint8Array(width)
       let v = n
       for (let i = width - 1; i >= 0; i--) {

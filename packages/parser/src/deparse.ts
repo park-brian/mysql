@@ -165,7 +165,7 @@ class Deparser {
         body = (e.value as Uint8Array).length === 0 ? "X''" : `0x${hex(e.value as Uint8Array).toLowerCase()}`
         break
       case LITERAL.BIT:
-        body = `b'${(e.value as bigint).toString(2)}'`
+        body = `b'${e.text ?? (e.value as bigint).toString(2)}'`
         break
       case LITERAL.NULL:
         body = 'NULL'

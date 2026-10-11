@@ -74,7 +74,7 @@ export interface LiteralNode {
   readonly unit?: string
   /** A `COLLATE` clause attached to the literal. */
   readonly collation?: string
-  /** For `DOUBLE`: the literal as written, which MySQL sizes it by. */
+  /** For DOUBLE and BIT: the written number or bit digits, which preserve their width. */
   readonly text?: string
   readonly at: number
 }

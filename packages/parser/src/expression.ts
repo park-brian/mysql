@@ -500,7 +500,7 @@ class ExpressionParser {
         return { kind: NODE.LITERAL, type: LITERAL.HEX, value: hexBytes(t.text), at: t.start }
       case TOKEN.BIT:
         this.#c.skip()
-        return { kind: NODE.LITERAL, type: LITERAL.BIT, value: t.text === '' ? 0n : BigInt('0b' + t.text), at: t.start }
+        return { kind: NODE.LITERAL, type: LITERAL.BIT, value: t.text === '' ? 0n : BigInt('0b' + t.text), text: t.text, at: t.start }
       case TOKEN.PLACEHOLDER:
         this.#c.skip()
         return { kind: NODE.PLACEHOLDER, index: t.index ?? 0, at: t.start }

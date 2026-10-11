@@ -24,6 +24,14 @@ const statementRoundTrips = (sql: string, mode?: string): void => {
   assert.equal(broken, null, `${sql}\n  -> ${JSON.stringify(broken)}`)
 }
 
+test('BIT literal round trips preserve empty and leading-zero digits', () => {
+  for (const literal of ["b''", "b'0'", "b'000000000'", "b'000000001'", "b'00000000000000001'"]) {
+    assert.equal(deparse(parseExpression(literal)), literal)
+    expressionRoundTrips(literal)
+    statementRoundTrips(`LOAD DATA LOCAL INFILE 'x' INTO TABLE t FIELDS TERMINATED BY ${literal}`)
+  }
+})
+
 test('M3.3: every expression node survives the deparser', () => {
   for (const sql of [
     // Literals, each of which is a different SQL type.
