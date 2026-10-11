@@ -996,9 +996,9 @@ function columnRefs(e: unknown, out: (readonly string[])[] = []): (readonly stri
 
 /**
  * The index a table read whole is read by — its covering index, else its
- * clustered one — when an ORDER BY is one direction over a prefix of that
- * index's key, which for a secondary index ends with the clustered key it
- * carries. 8.4.11 reads the index in that order and sorts nothing ("Index
+ * clustered one — when an ORDER BY agrees on one physical scan direction
+ * over a prefix of that index's key, which for a secondary index ends with
+ * the clustered key it carries. 8.4.11 reads the index in that order and sorts nothing ("Index
  * scan on t using PRIMARY", "Covering index scan on t using name").
  */
 function orderingIndex(def: TableDef, alias: string, order: readonly OrderItem[], items: readonly { compiled: Compiled; expr?: Expression; alias?: string }[], scope: Scope, readBy: string | undefined, primary = false): { readonly index: string; readonly reverse: boolean } | undefined {
@@ -1008,7 +1008,6 @@ function orderingIndex(def: TableDef, alias: string, order: readonly OrderItem[]
   const desc = order[0]?.desc === true
   const names: string[] = []
   for (const o of order) {
-    if ((o.desc === true) !== desc) return undefined
     const e = sortExpression(o.expr, items)
     if (e === undefined || e.kind !== NODE.COLUMN) return undefined
     try {
@@ -1025,11 +1024,11 @@ function orderingIndex(def: TableDef, alias: string, order: readonly OrderItem[]
   // MySQL prefers it over a scan plus sort when prefer_ordering_index is on.
   for (const candidate of primary ? [index, clustered] : [index]) {
     const parts = indexParts(def, candidate)
-    const descending = candidate.parts[0]?.descending === true
-    // Every requested key part must share the physical direction, including
+    const reverse = desc !== (candidate.parts[0]?.descending === true)
+    // Every requested key part must agree on the scan direction, including
     // the PRIMARY parts carried by a secondary index.
-    const covered = parts.length >= names.length && parts.slice(0, names.length).every((p, i) => p.prefix === undefined && p.column.toLowerCase() === names[i] && (p.descending === true) === descending)
-    if (covered) return { index: candidate.name, reverse: desc !== descending }
+    const covered = parts.length >= names.length && parts.slice(0, names.length).every((p, i) => p.prefix === undefined && p.column.toLowerCase() === names[i] && ((p.descending === true) !== (order[i]?.desc === true)) === reverse)
+    if (covered) return { index: candidate.name, reverse }
   }
   return undefined
 }

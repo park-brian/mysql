@@ -84,6 +84,16 @@ test('ordinary whole scans choose PRIMARY order and retain covering scans when p
         await run(`${all} LIMIT 1 OFFSET 1`, full.slice(1, 2), limit(plan, true))
         await run(`${all},name${order}`, full, `Sort\n    ${cover}`)
       }
+      if (key !== 'a DESC,b DESC') {
+        const forward = key === 'a DESC,b' ? [['empty'], ['z'], ['a']] : [['a'], ['z'], ['empty']]
+        const inverse = key === 'a DESC,b' ? 'a,b DESC' : 'a DESC,b'
+        for (const [order, rows] of [[key, forward], [inverse, [...forward].reverse()]] as [string, unknown[][]][]) {
+          const sql = `SELECT name FROM t ORDER BY ${order}`
+          await run(sql, rows, primary)
+          await run(`${sql} LIMIT 1`, rows.slice(0, 1), limit(primary))
+          await run(`${sql} LIMIT 1 OFFSET 1`, rows.slice(1, 2), limit(primary, true))
+        }
+      }
       await conn.query("SET optimizer_switch='prefer_ordering_index=off'")
       const sortedOrders: [string, unknown[][]][] = [
         ['a', [['a'], ['z'], ['empty']]],
@@ -157,6 +167,8 @@ test('ordered PRIMARY LIMIT stops its physical scan and cancellation releases th
         const column = key === 'id DESC' ? 'id' : 'a'
         const orders: [string, string[]][] = [[column, [...tied, 'empty']], [`${column} DESC`, ['empty', ...[...tied].reverse()]]]
         if (key === 'a DESC,b DESC') orders.push(['a,b', ['z', 'a', 'empty']], ['a DESC,b DESC', ['empty', 'a', 'z']])
+        else if (key === 'a DESC,b') orders.push(['a DESC,b', ['empty', 'z', 'a']], ['a,b DESC', ['a', 'z', 'empty']])
+        else if (key === 'a,b DESC') orders.push(['a,b DESC', ['a', 'z', 'empty']], ['a DESC,b', ['empty', 'z', 'a']])
         for (const [order, rows] of orders) {
           for (const method of ['query', 'execute'] as const) {
             for (const offset of [0, 1]) {
