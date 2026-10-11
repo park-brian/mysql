@@ -725,7 +725,7 @@ export function compile(e: Expression, ctx: CompileContext): Compiled {
           const v = inner.eval(row, env)
           return v === null ? null : stringValue(toText(v), id, COERCIBILITY.EXPLICIT)
         },
-        type: { ...stringType(charWidth(inner.type), id, inner.type.nullable), coercibility: COERCIBILITY.EXPLICIT },
+        type: { ...stringType(charWidth(t), id, true), coercibility: COERCIBILITY.EXPLICIT },
       }
     }
 
@@ -762,6 +762,10 @@ function typeOfValue(v: Value): ResultType {
 }
 
 function literal(e: LiteralNode, ctx: CompileContext): Compiled {
+  const explicit = e.collation !== undefined
+  const coercibility = explicit ? COERCIBILITY.EXPLICIT : COERCIBILITY.COERCIBLE
+  const stringLiteralType = (length: number, id: number): ResultType =>
+    ({ ...stringType(length, id, explicit), coercibility })
   // A number or NULL with COLLATE is the COLLATE of it: text in that collation, or 1253 for NULL's binary.
   if (e.collation !== undefined && e.type !== LITERAL.STRING && e.type !== LITERAL.HEX && e.type !== LITERAL.BIT) {
     const { collation, ...bare } = e
@@ -770,13 +774,14 @@ function literal(e: LiteralNode, ctx: CompileContext): Compiled {
   // A hex or bit literal is bytes, unless an introducer names their charset:
   // `_latin1 x'E9'` is the string 'é' (8.4.11).
   const introduced = (b: Uint8Array): Compiled => {
-    const id = e.charset === undefined && e.collation === undefined ? CHARSET_BINARY : introducerCollation(e, ctx)
-    if (id === CHARSET_BINARY && e.charset === undefined && e.collation === undefined) {
+    const id = e.charset === undefined && !explicit ? CHARSET_BINARY : introducerCollation(e, ctx)
+    if (id === CHARSET_BINARY && e.charset === undefined && !explicit) {
       // As a number, as many digits as its largest value has, to 20.
       const digits = Math.min(20, String((1n << BigInt(8 * b.length)) - 1n).length)
-      return lit({ kind: 'bytes', v: b, hex: true }, { ...stringType(b.length, CHARSET_BINARY, false), literalInt: { digits, unsigned: e.type === LITERAL.HEX }, coercibility: COERCIBILITY.COERCIBLE })
+      return lit({ kind: 'bytes', v: b, hex: true }, { ...stringLiteralType(b.length, id), literalInt: { digits, unsigned: e.type === LITERAL.HEX } })
     }
-    if (id === CHARSET_BINARY) return lit(bytesValue(b), stringType(b.length, CHARSET_BINARY, false))
+    if (id === CHARSET_BINARY) return lit(bytesValue(b), stringLiteralType(b.length, id))
+    const info = requireCollationInfo(id)
     const decode = (bytes: Uint8Array): string => {
       try {
         return decodeCollation(bytes, id)
@@ -786,16 +791,15 @@ function literal(e: LiteralNode, ctx: CompileContext): Compiled {
     }
     // A single-byte charset takes any byte, one it cannot map being '?';
     // bytes that are no text in a multi-byte one are refused (8.4.11: 1300).
-    if (requireCollationInfo(id).mbmaxlen === 1) {
-      const text = [...b].map((x) => decode(Uint8Array.of(x)).replace('\uFFFD', '?')).join('')
-      return lit(stringValue(text, id, e.collation !== undefined ? COERCIBILITY.EXPLICIT : COERCIBILITY.COERCIBLE), stringType(b.length, id, e.collation !== undefined))
+    const singleByte = info.mbmaxlen === 1
+    const text = singleByte ? [...b].map((x) => decode(Uint8Array.of(x)).replace('\uFFFD', '?')).join('') : decode(b)
+    if (!singleByte) {
+      const back = encodeCollation(text, id)
+      if (back.length !== b.length || back.some((x, i) => x !== b[i])) {
+        throw sqlError('ER_INVALID_CHARACTER_STRING', `Invalid ${info.charset} character string: '${[...b].map((x) => x.toString(16).toUpperCase().padStart(2, '0')).join('')}'`)
+      }
     }
-    const text = decode(b)
-    const back = encodeCollation(text, id)
-    if (back.length !== b.length || back.some((x, i) => x !== b[i])) {
-      throw sqlError('ER_INVALID_CHARACTER_STRING', `Invalid ${requireCollationInfo(id).charset} character string: '${[...b].map((x) => x.toString(16).toUpperCase().padStart(2, '0')).join('')}'`)
-    }
-    return lit(stringValue(text, id, e.collation !== undefined ? COERCIBILITY.EXPLICIT : COERCIBILITY.COERCIBLE), stringType([...text].length, id, e.collation !== undefined))
+    return lit(stringValue(text, id, coercibility), stringLiteralType(singleByte ? b.length : [...text].length, id))
   }
   switch (e.type) {
     case LITERAL.INT: {
@@ -812,11 +816,10 @@ function literal(e: LiteralNode, ctx: CompileContext): Compiled {
       return lit(doubleValue(e.value as number), { ...doubleType(false, (e.text ?? String(e.value).replace('+', '')).length), literalDouble: true })
     case LITERAL.STRING: {
       const id = introducerCollation(e, ctx)
-      const coercibility = e.collation !== undefined ? COERCIBILITY.EXPLICIT : COERCIBILITY.COERCIBLE
       let text = e.value as string
       if (id === CHARSET_BINARY) {
         const bytes = encodeCollation(text, ctx.connectionCollation)
-        return lit(bytesValue(bytes), stringType(bytes.length, CHARSET_BINARY, false))
+        return lit(bytesValue(bytes), stringLiteralType(bytes.length, id))
       }
       // An introducer names the charset of the literal's bytes as sent:
       // `_latin1'é'` from a utf8mb4 client is the two latin1 characters of
@@ -829,7 +832,7 @@ function literal(e: LiteralNode, ctx: CompileContext): Compiled {
         }
       }
       // With COLLATE it is nullable, as 8.4.11 reports `'abc' COLLATE utf8mb4_bin`.
-      return lit(stringValue(text, id, coercibility), { ...stringType([...text].length, id, e.collation !== undefined), coercibility, literalText: text })
+      return lit(stringValue(text, id, coercibility), { ...stringLiteralType([...text].length, id), literalText: text })
     }
     case LITERAL.HEX:
       return introduced(e.value as Uint8Array)
