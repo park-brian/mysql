@@ -310,20 +310,18 @@ export function builtinFunction(name: string, e: CallNode, ctx: CompileContext):
       // (8.4.11 warns 1411). The width is half the argument's, in bytes.
       arity(1)
       const [x] = args() as [Compiled]
-      const t = x.type
-      const bytes = byteWidth(t)
       return {
         eval: (r, env) => {
           const v = x.eval(r, env)
           if (v === null) return null
-          const text = v.kind === 'bytes' ? String.fromCharCode(...v.v) : toText(v)
+          const text = toText(v)
           if (!/^[0-9a-fA-F]*$/.test(text)) return null
           const even = text.length % 2 === 0 ? text : `0${text}`
           const out = new Uint8Array(even.length / 2)
           for (let i = 0; i < out.length; i++) out[i] = parseInt(even.slice(i * 2, i * 2 + 2), 16)
           return bytesValue(out)
         },
-        type: stringType(Math.ceil(bytes / 2), CHARSET_BINARY, true),
+        type: stringType(Math.ceil(byteWidth(x.type) / 2), CHARSET_BINARY, true),
       }
     }
     case 'ABS': {

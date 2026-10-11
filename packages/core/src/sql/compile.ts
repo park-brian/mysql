@@ -768,6 +768,7 @@ export function compile(e: Expression, ctx: CompileContext): Compiled {
           if (v === null) return null
           return id === CHARSET_BINARY ? bytesValue(valueBytes(v)) : stringValue(toText(v), id, COERCIBILITY.EXPLICIT)
         },
+        decimalPrefix: true,
         type: { ...stringResultType(charWidth(t), id === CHARSET_BINARY, id, COERCIBILITY.EXPLICIT), coercibility: COERCIBILITY.EXPLICIT },
       }
     }

@@ -241,7 +241,14 @@ export function integerPrefix(v: Exclude<Value, null>): string | undefined {
 
 export function textOf(v: StringValue | BytesValue): string {
   // A binary string in a numeric context is read byte by byte, as ASCII is.
-  return v.kind === 'string' ? v.v : String.fromCharCode(...v.v.subarray(0, 1024))
+  return v.kind === 'string' ? v.v : byteText(v.v)
+}
+
+/** Numeric binary text maps every byte to the same code point without an argument limit. */
+function byteText(bytes: Uint8Array): string {
+  let text = ''
+  for (const byte of bytes) text += String.fromCharCode(byte)
+  return text
 }
 
 // --- conversions ----------------------------------------------------------------
@@ -446,7 +453,7 @@ export function toText(v: Exclude<Value, null>): string {
   switch (v.kind) {
     case 'int':
       // A BIT's bytes read as text as a binary string's are, byte by byte.
-      return v.str === undefined ? v.v.toString() : String.fromCharCode(...v.str)
+      return v.str === undefined ? v.v.toString() : byteText(v.str)
     case 'decimal':
       return renderDecimal(v)
     case 'double':
