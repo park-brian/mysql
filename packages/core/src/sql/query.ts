@@ -482,7 +482,9 @@ function planSelect(run: Run, q: QueryExpression, node: SelectNode): SelectPlan 
   const read = source !== undefined && from !== undefined ? from.access(run.env) : undefined
   // Windows and hash antijoins still sort their delivered rows, even over an ordered index.
   const outerLoop = semi?.loose === false && source !== undefined && sortBy === source.alias
-  const ordered = source !== undefined && read !== undefined && !deduplicated && !windowed && (anti === undefined || anti.lookup) && match === undefined && keys.length > 0 && read.ranges === undefined ? orderingIndex(source.def, source.alias, q.orderBy ?? [], items, lookup, read.index, outerLoop && optimizerEnabled(run, 'prefer_ordering_index')) : undefined
+  // Reconsider PRIMARY for ordinary scans and the modeled outer-first loop.
+  // DISTINCT keeps its access choice even when a unique key removes deduplication.
+  const ordered = source !== undefined && read !== undefined && !deduplicated && !windowed && (anti === undefined || anti.lookup) && match === undefined && keys.length > 0 && read.ranges === undefined ? orderingIndex(source.def, source.alias, q.orderBy ?? [], items, lookup, read.index, (outerLoop || (!loopSemijoin && node.distinct !== true)) && optimizerEnabled(run, 'prefer_ordering_index')) : undefined
   if (ordered !== undefined) from?.readInOrder(ordered.index, false, ordered.reverse, source?.alias)
   const sortedFirst = outerLoop && ordered === undefined && keys.length > 0
   if (sortedFirst && source !== undefined) from?.sortFirst(source.alias, keys)
@@ -1020,7 +1022,7 @@ function orderingIndex(def: TableDef, alias: string, order: readonly OrderItem[]
       return undefined
     }
   }
-  // A clustered scan covers every row field. For a whole-table outer loop,
+  // A clustered scan covers every row field. For a whole-table scan,
   // MySQL prefers it over a scan plus sort when prefer_ordering_index is on.
   // A single descending schema key runs physically opposite to SQL ASC.
   const primaryOrder = clustered.parts.length === 1 || clustered.parts.every((p) => p.descending !== true)
