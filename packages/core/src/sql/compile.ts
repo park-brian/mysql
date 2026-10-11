@@ -274,7 +274,6 @@ export function textVersusNumber(x: ResultType, y: ResultType): boolean {
  */
 function jsonAsNumber(c: Compiled, kind: 'DOUBLE' | 'INTEGER' | 'DECIMAL'): Compiled {
   const name = c.type.column?.orgName ?? 'json'
-  const cast = kind === 'INTEGER' ? 'SIGNED' : kind
   return {
     ...c,
     eval: (r, env) => {
@@ -282,7 +281,7 @@ function jsonAsNumber(c: Compiled, kind: 'DOUBLE' | 'INTEGER' | 'DECIMAL'): Comp
       if (v === null || v.kind !== 'json') return v
       const d = v.v
       const number = d.t === 'int' || d.t === 'uint' || d.t === 'double' || d.t === 'decimal' || d.t === 'bool' || (d.t === 'string' && numericPrefix(d.v).complete)
-      if (!number) raise(env, 3156, `Invalid JSON value for CAST to ${cast} from column ${name} at row ${rowNumber(env)}`)
+      if (!number) raise(env, 3156, `Invalid JSON value for CAST to ${kind} from column ${name} at row ${rowNumber(env)}`)
       return v
     },
   }
