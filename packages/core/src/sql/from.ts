@@ -144,6 +144,8 @@ export interface FromPlan {
   sortsFirst(aliases: ReadonlySet<string>): boolean
   /** Supply grouping order on the first base table of an inner lookup join, by index or sort. */
   orderGroupsFirst(keys: readonly { readonly expr: Expression; readonly compiled: Compiled }[]): 'index' | 'sort' | undefined
+  /** Deduplicate an ordered first-table integer key before the chosen outer-key lookup. */
+  looseScan(alias: string, index: string, column: string, key: Compiled): boolean
   /**
    * The columns the query reads of each table (`'all'` for one read whole).
    * A table no condition chooses an access path for is read through the
@@ -574,6 +576,14 @@ export function planFrom(refs: readonly TableReference[], ctx: FromContext, wher
       else this.readInOrder(index, true, false, node.table.alias)
       return index === undefined ? 'sort' : 'index'
     },
+    looseScan(alias, index, column, key) {
+      const plan = joinPlan()
+      const node = plan?.node
+      if (node?.kind !== 'join' || node.left || node.outer.kind !== 'leaf' || node.outer.table.alias !== alias || node.inner.kind !== 'leaf' || !plan?.lookups.has(node.inner.table.alias)) return false
+      this.readInOrder(index, true, false, alias)
+      settings.loose = { alias, column, key }
+      return true
+    },
     ...(single === undefined ? {} : { single }),
     filter(where, compile, semijoin) {
       settings.where = where
@@ -868,6 +878,8 @@ interface LeafSettings {
   ordered?: { readonly index: string; readonly force: boolean; readonly reverse: boolean; readonly alias?: string }
   /** Grouping order supplied before an inner lookup join expands the first table's rows. */
   groupSort?: { readonly alias: string; readonly keys: readonly SortKey[] }
+  /** LooseScan removes adjacent equal integer keys after the inner filter. */
+  loose?: { readonly alias: string; readonly column: string; readonly key: Compiled }
 }
 
 /**
@@ -1100,6 +1112,22 @@ function holds(conditions: readonly Placed[], row: Row, env: Env): boolean {
 function toOp(node: Node, conditions: readonly Placed[], scope: TableScope, settings: LeafSettings, ctx: FromContext, preliminary: TableScope): Op {
   if (node.kind === 'leaf') {
     let op = filterOp(tableOp(node.table, settings), conditions, node.table, settings)
+    const loose = settings.loose
+    if (loose?.alias === node.table.alias) {
+      const input = op
+      op = {
+        *rows(run, context) {
+          let previous: bigint | undefined
+          for (const row of input.rows(run, context)) {
+            const key = loose.key.eval(row.row, run.env)
+            if (key === null || key.kind !== 'int' || key.v === previous) continue
+            previous = key.v
+            yield row
+          }
+        },
+        describe: (env) => planNode(`Remove duplicates from input sorted on ${loose.column}`, [input.describe(env)]),
+      }
+    }
     if (settings.groupSort?.alias === node.table.alias) {
       const input = op
       const keys = settings.groupSort.keys

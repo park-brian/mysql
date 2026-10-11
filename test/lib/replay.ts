@@ -10,11 +10,11 @@ import { CONNECTION, runCase } from '../../tools/capture-relational.mjs'
 const NOT_SUPPORTED = 1235
 
 /**
- * Plan strategies 8.4.11 chooses by cost that this executor does not have
- * yet (M5.7). Where the server's plan uses one, what it materializes — and
- * so the column flags a client sees — is a cost decision too, so those are
- * not compared; the rows (as a multiset) and the error still are, and the
- * case is counted.
+ * Strategies not yet chosen for every eligible query (M5.7). Where our
+ * plan differs, materialization and the column flags are cost decisions
+ * too, so metadata is not compared; rows as a multiset and errors still
+ * are, and the case is counted. Matching plans always compare metadata
+ * through both protocols and compare rows in order.
  */
 const UNMODELLED: readonly (string | RegExp)[] = [
   // LooseScan, a semijoin strategy (M5.47).
@@ -61,7 +61,7 @@ export interface Tally {
   /** Queries compared as a multiset, and of those, how many came back in the server's order anyway. */
   unordered: number
   unorderedInOrder: number
-  /** Queries whose server plan used a strategy listed in UNMODELLED. */
+  /** Queries whose differing server plan used a strategy listed in UNMODELLED. */
   unmodelled: number
   mismatches: string[]
   /** Queries that agree whose warning count was compared, and those whose count did not (M5.28). */
@@ -130,7 +130,7 @@ export async function replay(fixture: Fixture, connection: Record<string, unknow
         let agrees: boolean
         if (e.select !== true) {
           agrees = JSON.stringify({ ok: e.ok, error: e.error }) === JSON.stringify({ ok: a.ok, error: a.error })
-        } else if (unmodelled(e.plan)) {
+        } else if (unmodelled(e.plan) && a.plan !== e.plan) {
           tally.unmodelled++
           agrees = JSON.stringify(e.error) === JSON.stringify(a.error) && JSON.stringify(sorted(e.rows)) === JSON.stringify(sorted(a.rows))
         } else {
