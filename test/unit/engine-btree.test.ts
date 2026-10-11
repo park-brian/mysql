@@ -47,6 +47,34 @@ test('prepared upsert descends once and releases read pins before preparing byte
   verifyStore(store, { schemaVersion: () => 1 })
 })
 
+test('prepared upsert distinguishes no replacement from empty bytes, including old-schema leaves', async () => {
+  const store = Store.create(...await freshFiles(), { frames: 32 })
+  const old = store.createTree({ schemaVersion: 1, upgrade: (v) => v })
+  for (let i = 0; i < 800; i++) old.put(be(i), be(i))
+  const tree = store.openTree(old.indexId, { schemaVersion: 2, upgrade: (v) => {
+    const grown = new Uint8Array(120)
+    grown.set(v)
+    return grown
+  } })
+  const height = tree.height()
+  const lsn = store.lsn
+  for (const id of [400, 900]) {
+    const before = store.pool.stats.fetches
+    tree.upsert(be(id), (current) => {
+      assert.equal(current?.length, id === 400 ? 120 : undefined)
+      current?.fill(0xff)
+      return undefined
+    })
+    assert.equal(store.pool.stats.fetches - before, height)
+    assert.equal(store.lsn, lsn, 'no replacement writes no WAL, including a schema upgrade')
+  }
+  assert.deepEqual(old.get(be(400)), be(400), 'the stored old schema and value are untouched')
+  assert.equal(tree.get(be(900)), undefined)
+  old.upsert(be(400), () => new Uint8Array(0))
+  assert.deepEqual(old.get(be(400)), new Uint8Array(0), 'empty bytes are a replacement')
+  verifyStore(store, { schemaVersion: () => 1 })
+})
+
 test('prepared upsert rejects same-tree reentry and rolls back preparation failures', async () => {
   const store = Store.create(...await freshFiles(), { frames: 32 })
   const tree = store.createTree()
@@ -70,7 +98,7 @@ test('prepared upsert rejects same-tree reentry and rolls back preparation failu
   assert.deepEqual(tree.get(be(1)), be(2))
   assert.deepEqual(other.get(be(1)), be(3))
   assert.equal(store.pool.pinned(), 0)
-  assert.throws(() => tree.upsert(be(1), () => Promise.resolve(be(8)) as unknown as Uint8Array), /return bytes synchronously/)
+  assert.throws(() => tree.upsert(be(1), () => Promise.resolve(be(8)) as unknown as Uint8Array), /return bytes or undefined synchronously/)
   tree.upsert(be(1), () => be(6))
   assert.deepEqual(tree.get(be(1)), be(6))
   verifyStore(store)

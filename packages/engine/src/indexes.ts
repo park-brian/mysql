@@ -200,21 +200,24 @@ export class ClusteredIndex {
   update(row: Row, trx?: Trx): boolean {
     const key = this.keyOf(row)
     return this.#change(trx, (t) => {
-      const current = this.tree.get(key)
-      if (current === undefined || versionOf(current).marked) return false
-      const before = this.#row(current.subarray(CLUSTERED_HEADER))
-      const record = this.#encode(key, row)
-      const ptr = t.undo({
-        isInsert: false,
-        purgeRemoves: false,
-        indexId: this.tree.indexId,
-        key,
-        old: current,
-        // The old version's chains are its own: freed when no view needs it.
-        freeOnPurge: this.refsOf(current),
-        freeOnRollback: externalRefs(this.layout, record),
+      let before: FieldBytes[] | undefined
+      this.tree.upsert(key, (current) => {
+        if (current === undefined || versionOf(current).marked) return undefined
+        before = this.#row(current.subarray(CLUSTERED_HEADER))
+        const record = this.#encode(key, row)
+        const ptr = t.undo({
+          isInsert: false,
+          purgeRemoves: false,
+          indexId: this.tree.indexId,
+          key,
+          old: current,
+          // The old version's chains are its own: freed when no view needs it.
+          freeOnPurge: this.refsOf(current),
+          freeOnRollback: externalRefs(this.layout, record),
+        })
+        return clusteredValue(false, t.id, ptr, record)
       })
-      this.tree.put(key, clusteredValue(false, t.id, ptr, record))
+      if (before === undefined) return false
       this.tree.space.journal.row(this.tree.indexId, t.id, before, row)
       return true
     })
@@ -223,12 +226,15 @@ export class ClusteredIndex {
   /** Delete-mark a row; purge removes it once no view can see it. `false` if there is none. */
   delete(key: Uint8Array, trx?: Trx): boolean {
     return this.#change(trx, (t) => {
-      const current = this.tree.get(key)
-      if (current === undefined || versionOf(current).marked) return false
-      const record = current.subarray(CLUSTERED_HEADER)
-      const before = this.#row(record)
-      const ptr = t.undo({ isInsert: false, purgeRemoves: true, indexId: this.tree.indexId, key, old: current, freeOnPurge: this.refsOf(current), freeOnRollback: [] })
-      this.tree.put(key, clusteredValue(true, t.id, ptr, record.slice()))
+      let before: FieldBytes[] | undefined
+      this.tree.upsert(key, (current) => {
+        if (current === undefined || versionOf(current).marked) return undefined
+        const record = current.subarray(CLUSTERED_HEADER)
+        before = this.#row(record)
+        const ptr = t.undo({ isInsert: false, purgeRemoves: true, indexId: this.tree.indexId, key, old: current, freeOnPurge: this.refsOf(current), freeOnRollback: [] })
+        return clusteredValue(true, t.id, ptr, record.slice())
+      })
+      if (before === undefined) return false
       this.tree.space.journal.row(this.tree.indexId, t.id, before, null)
       return true
     })

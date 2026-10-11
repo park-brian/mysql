@@ -31,6 +31,93 @@ async function table(frames = 64) {
 const verify = (store: Store, clustered: ClusteredIndex) =>
   verifyStore(store, { overflowRefs: (id, value) => (id === clustered.tree.indexId ? clustered.refsOf(value) : []) })
 
+test('clustered UPDATE and delete-mark prepare after one descent and emit only actual row changes', async () => {
+  const { store, clustered } = await table()
+  for (let i = 0; i < 800; i++) clustered.insert([int(i), utf8('old'), null])
+  const tree = clustered.tree
+  const height = tree.height()
+  assert.ok(height > 1)
+  const upsert = tree.upsert.bind(tree)
+  let preparations = 0
+  tree.upsert = (key, prepare) => {
+    const before = store.pool.stats.fetches
+    const pins = store.pool.pinned()
+    upsert(key, (current) => {
+      preparations++
+      assert.equal(store.pool.stats.fetches - before, height)
+      assert.equal(store.pool.pinned(), pins, 'the leaf read adds no retained pin')
+      return prepare(current)
+    })
+  }
+  const get = tree.get.bind(tree)
+  const put = tree.put.bind(tree)
+  tree.get = () => { throw new Error('unexpected second descent through get') }
+  tree.put = () => { throw new Error('unexpected second descent through put') }
+  const writer = store.begin()
+  assert.equal(clustered.update([int(400), utf8('new'), null], writer), true)
+  assert.equal(clustered.delete(int(401), writer), true)
+  const savepoint = writer.savepoint()
+  for (const id of [401, 900]) {
+    assert.equal(clustered.update([int(id), utf8('missing'), null], writer), false)
+    assert.equal(clustered.delete(int(id), writer), false)
+  }
+  assert.equal(writer.savepoint(), savepoint, 'absent and marked rows append no undo')
+  assert.equal(preparations, 6)
+  tree.get = get
+  tree.put = put
+  writer.commit()
+  const changes = [...store.history()].flatMap((g) => g.records).filter((r) => r.type === 'row' && r.trxId === writer.id)
+  assert.deepEqual(changes, [
+    { type: 'row', indexId: tree.indexId, trxId: writer.id, before: [int(400), utf8('old'), null], after: [int(400), utf8('new'), null] },
+    { type: 'row', indexId: tree.indexId, trxId: writer.id, before: [int(401), utf8('old'), null], after: null },
+  ])
+  assert.deepEqual(clustered.get(int(400)), [int(400), utf8('new'), null])
+  assert.equal(clustered.get(int(401)), undefined)
+  verify(store, clustered)
+})
+
+test('prepared clustered mutations retain overflow history and roll back failed preparation', async () => {
+  const { store, clustered } = await table(32)
+  const inlinePages = store.alloc.usedPages().size
+  const original: FieldBytes[] = [int(1), utf8('old'), new Uint8Array(8192).fill(0x81)]
+  const replacement: FieldBytes[] = [int(1), utf8('new'), new Uint8Array(12288).fill(0x9f)]
+  clustered.insert(original)
+  const reader = store.begin()
+  assert.deepEqual(clustered.get(int(1), reader), original)
+  const writer = store.begin()
+  clustered.insert([int(2), null, null], writer)
+  const savepoint = writer.savepoint()
+  const pages = store.alloc.usedPages().size
+  const upsert = clustered.tree.upsert.bind(clustered.tree)
+  const failure = new Error('fail after encoding overflow and undo')
+  clustered.tree.upsert = (key, prepare) => upsert(key, (current) => {
+    prepare(current)
+    throw failure
+  })
+  for (const change of [() => clustered.update(replacement, writer), () => clustered.delete(int(1), writer)]) {
+    assert.throws(change, (e) => e === failure)
+    assert.equal(writer.savepoint(), savepoint)
+    assert.equal(store.alloc.usedPages().size, pages, 'failed preparation frees its overflow and undo')
+    assert.deepEqual(clustered.get(int(1), writer), original)
+    verify(store, clustered)
+  }
+  clustered.tree.upsert = upsert
+  assert.equal(clustered.update(replacement, writer), true)
+  assert.deepEqual(clustered.get(int(1), writer), replacement)
+  assert.deepEqual(clustered.get(int(1), reader), original)
+  writer.commit()
+  store.purge()
+  assert.deepEqual(clustered.get(int(1), reader), original, 'the old overflow survives while its view needs it')
+  assert.equal(clustered.delete(int(1)), true)
+  assert.equal(clustered.get(int(1)), undefined)
+  assert.deepEqual(clustered.get(int(1), reader), original, 'delete-mark retains the historical chain')
+  verify(store, clustered)
+  reader.commit()
+  store.purge()
+  assert.ok(store.alloc.usedPages().size <= inlinePages + 1, 'purge frees both overflow versions')
+  verify(store, clustered)
+})
+
 test('M4.11: a non-covering secondary lookup costs exactly one extra descent, and the test proves it', async () => {
   const { store, clustered } = await table()
   const names = SecondaryIndex.create(store, clustered, byName)

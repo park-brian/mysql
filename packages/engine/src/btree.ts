@@ -81,7 +81,7 @@ interface Split {
 }
 
 const EMPTY = new Uint8Array(0)
-type Prepare = (current: Uint8Array | undefined) => Uint8Array
+type Prepare = (current: Uint8Array | undefined) => Uint8Array | undefined
 // Handles opened on the same journal/index share the preparation boundary.
 const preparing = new WeakMap<Journal, Set<number>>()
 
@@ -169,6 +169,7 @@ export class BTree {
    * Prepare a replacement from copied old bytes, after releasing the read pin.
    * Preparation may write undo/overflow pages, but cannot change this tree's
    * rows through another handle. The key is copied before calling user code.
+   * Returning undefined leaves the row untouched; empty bytes replace it.
    * Current leaves need one descent; schema upgrades retain put's full path.
    */
   upsert(key: Uint8Array, prepare: Prepare): void {
@@ -185,13 +186,13 @@ export class BTree {
     if (preparing.get(this.space.journal)?.has(this.indexId) === true) throw misuse('a prepared upsert cannot change its own tree')
   }
 
-  #prepare(prepare: Prepare, current: Uint8Array | undefined): Uint8Array {
+  #prepare(prepare: Prepare, current: Uint8Array | undefined): Uint8Array | undefined {
     let active = preparing.get(this.space.journal)
     if (active === undefined) preparing.set(this.space.journal, (active = new Set()))
     active.add(this.indexId)
     try {
       const value = prepare(current)
-      if (!(value instanceof Uint8Array)) throw misuse('a prepared upsert must return bytes synchronously')
+      if (value !== undefined && !(value instanceof Uint8Array)) throw misuse('a prepared upsert must return bytes or undefined synchronously')
       return value
     } finally {
       active.delete(this.indexId)
@@ -456,6 +457,7 @@ export class BTree {
     )
     if (level === 0) {
       const next = typeof value === 'function' ? this.#prepare(value, current) : value
+      if (next === undefined) return null
       if (ip.cellSize(key, next) > ip.maxCellSize(this.space.pool.pageSize)) throw rowTooBig(ip.maxCellSize(this.space.pool.pageSize))
       if (behind) {
         // Upgrading may split this leaf and change its ancestors. Let put redo

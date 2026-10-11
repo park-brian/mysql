@@ -51,167 +51,96 @@ with no milestone is a note; with a milestone it is a blocker with a deadline.
 
 ## Next
 
-**0.3 is staged**, with exact workspace versions and package smoke tests.
-M4’s recovery gate and M5’s ORM gate hold: the review repeated 10,000 crash
-points with no inconsistencies, Drizzle passed 487 tests, and Prisma matched
-8.4.11 file for file at two workers (1,122 passes and the same snapshot failure).
-Publication still requires claiming the npm scope and name and publishing the staged
-packages, leaves first. The stabilization review is M5.53; it preserves the
-wire API and native format, repairs ownership and cleanup, and makes the
-validation commands portable and reproducible.
+**0.3 is staged**, with exact workspace versions and installed-package smoke
+checks. Publication still requires claiming the npm scope/name and publishing
+leaves first. M5.53's stabilization preserves the wire API and native format.
+The ORM review measured Drizzle's 487 passes and Prisma's 1,122 passes with the
+same reference snapshot failure at two workers. Browser work remains M6;
+InnoDB interchange remains M7, outside the staged Node release.
 
-M5.2 is complete against the committed coercion capture: all 3,148 observations and all 1,737 warning counts agree with pinned MySQL 8.4.11 through both protocols. Additional probes cover adjacent BIGINTs, opaque JSON BIT identity, constant delimiter warning timing and YEAR constant boundaries. The gates now require zero disagreements.
+**Measured compatibility.** M5.2's committed coercion gate is complete:
+3,148 observations and 1,737 warning counts agree through both protocols.
+The three function corpora agree on 8,765 observations. The relational corpus
+agrees on all 5,635 observations, with 2,113 of 2,248 plans agreeing. CI
+reproduces all seven captures against pinned MySQL 8.4.11 without recapturing
+fixtures. The official mysqltest measurement is 38 total passes, 37 shared with
+the reference's 1,146 passing files. FLUSH TABLES and FLUSH STATUS are explicitly
+unsupported. These are measured gates, not complete MySQL coverage.
 
-CI now reproduces all seven pinned-reference corpora. Its first blocking run
-exposed a bulk-interruption test that assumed a 32,000-row INSERT was still
-running after 400 ms. The test now observes actual inserts and forces the real
-scheduler to yield, asserting a partial write before close; rollback and writer
-release checks remain unchanged. The official mysqltest 8.4.11 full run in
-Docker confirms 37 of 1,146 reference-passing files: two former passes depended
-on false-success FLUSH no-ops removed by M5.53, while type_newdecimal_myisam
-now passes. The recorded executor outcomes and exact scoreboard reflect that
-measurement; reference outcomes and the seven zero-disagreement gates remain
-unchanged. FLUSH TABLES and FLUSH STATUS remain unsupported, explicitly.
-The conservative planner-constant repair adds implicit_char_to_num_conversion
-to the passing files: CI measures 38 total passes, 37 shared with the reference,
-and a Docker before/after run confirms that file's improvement.
+**Commit and continue.** Run the relevant Docker checks, update this roadmap and
+[the changelog](./45-changelog.md), commit and push each validated slice directly
+to main. Inspect GitHub runs by exact SHA during work and at slice boundaries.
+Pending jobs permit continuation; known failures require a reproducible repair.
+Use an independent read-only continuation review after every committed slice.
+Do not weaken thresholds or hide mismatches in captures. Full Docker release
+validation is described in [43](./43-testing.md); retain Prisma's worker count
+when comparing fresh ORM runs. Monitoring stays within the active session.
 
-The next engineering work, in order:
+The engineering work remains ordered as follows; the bounded function repairs
+already completed allow the current write-path slice to continue:
 
-CI's executor fuzz seed 683176680 found an AST rewrite copying hex-literal
-byte arrays into plain objects. Optimizer folding and HAVING alias substitution
-now preserve literal nodes; the full failing seed and reference-backed regressions
-pass. BIT comparisons now agree for primary, unique and unindexed integer
-columns: the planner keeps an unevaluated literal distinct from SQL NULL and
-leaves its comparison to the scan. Reference-backed cases cover operand order,
-IN, BETWEEN, negative literals, NULL and bound parameters through both protocols.
-BIT literals now preserve their written digits through parsing and deparsing:
-empty literals produce empty bytes, and leading zero bytes survive. Numeric
-metadata for empty BIT/HEX literals also agrees with the reference. Mixed
-TIME/text and TIME/binary GREATEST/LEAST now compare lexically, with result
-width accounting for each operand's fractional precision. Live reference tests
-cover both protocols, operand order, negative times, NULL, empty text, binary
-values and nonconstant text. Narrow text columns keep unspecified fractional
-precision when sizing TIME results. Binary DATETIME extrema now share the
-temporal comparison path, return binary bytes and use lexical fallback for a
-zero minimum. Their precision, metadata and warning identity/order agree in
-live tests for constants, columns and NULL through both protocols. Regex result
-transcoding under UTF-8 remains open. JSON extrema also need their prepare-time
-warnings and NULL metadata rules; TIME/JSON remains explicitly unsupported.
-An additional TIME operand in DATETIME extrema now uses the statement's date;
-negative fractional times borrow the correct second and retain microseconds.
-Live tests pin the clock and compare operand order, positive/negative times,
-midnight rollover and DATE_FORMAT through both protocols. Typed TIME literals
-now reject clamped or truncated input, including rounding beyond ±838:59:59,
-with the reference's exact 1525 error through both protocols. Ordinary string
-conversion keeps its existing clamping behavior. CAST(TIME AS DATETIME)
-anchoring/rounding remains open, as do prepare-time deprecation warnings for
-noncanonical temporal literal spelling (such as leading/trailing spaces).
-Mixed temporal comparisons now reuse that shared date reader, removing a
-second conversion that lost the borrowed second for negative sub-millisecond
-fractions. Clock-pinned tests cover equality, BETWEEN, IN, searched CASE,
-NULLIF and NULLs through both protocols. Simple CASE with a TIME operand and
-multi-item IN lists now retain dates in their parsed text readings instead of
-making distinct values equal. Prepared CASE WHEN parameters still inherit TIME,
-unlike the dated literals interpolated by query(); live tests cover that protocol
-difference, column expressions, NULLs and exact truncation warnings. Prepared
-multi-item IN parameters remain a separate mismatch: 8.4.11 excludes a matching
-time-text parameter where this executor currently matches it.
-The [8.4.11 comparison implementation](https://github.com/mysql/mysql-server/blob/mysql-8.4.11/sql/item_cmpfunc.cc)
-distinguishes sorted STRING IN lists from the packed temporal
-reader used by simple CASE. Prepared TIME parameters have precision six, which
-changes their rendered strings; CAST parameters can instead inherit DATETIME.
-This executor currently infers a placeholder's type from its bound value. A
-future coercion slice must establish one expected-type contract across prepare
-metadata, parameter conversion and evaluation, then verify TIME IN and CAST
-together. Do not exclude matching parameters or add independent conversions
-inside each function. COUNT comparison parameters expose the same missing contract:
-invalid bound text such as '1x' produces an INTEGER warning per group in 8.4.11,
-while this executor emits one DOUBLE warning. Invalid text literals also have a
-prepare-time warning difference. These remain coercion work, separate from the
-bounded numeric predicate placement verified below.
-CI's IN-list latency failure led to a reproduced PREPARE stall: a 32,000-parameter
-statement answered another connection only once while its metadata was delivered.
-Large initial packet lists now yield every 512 packets in the existing serialized
-feed, stopping on close and finalizing any streamed response. Cold and warmed
-PREPARE tests, the original bulk latency bound and close-during-metadata checks
-pass without changing thresholds or protocol bytes.
-The first push still exceeded the PREPARE bound in CI before packet delivery;
-lexing now yields separately from parsing, and large prepares yield between
-metadata planning and packet allocation. Every resumption checks that the
-session is still alive. The exact-SHA CI run for that repair passed all jobs.
-
-1. **Complete the remaining M5.10 function behavior.** All 8,765 observations
-   in the three function corpora now agree, including mixed DATETIME/text
-   GREATEST and LEAST. This is coverage of those corpora, not the whole MySQL
-   library; named divergences such as ICU's full Unicode case folding remain.
-2. **Finish the planner and write paths already named:** M5.47's remaining
-   semijoin/antijoin strategies, M5.49's access paths and ordering, and M5.50's
-   write in one descent. M5.48 is done. The measured relational plan floor is
-   2,113 of 2,248; rows and metadata agree on all 5,635 statements.
-   NOT EXISTS over one correlated integer equality and one unindexed inner
-   integer/literal predicate now costs an indexed nested loop against a hash
-   build through the existing join planner. Execution and EXPLAIN share that
-   choice; hash builds skip NULL keys, retain unmatched NULL outer keys, and
-   sort above the antijoin even over an ordered outer index. Live tests cover
-   both protocols, aliases, reversed equality, duplicate/NULL keys, changed and
-   empty inputs. Temporary tables retain their one-open rule by skipping speculative
-   costing. Returning a FOR UPDATE stream releases its writer. M5.47 stays
-   partial: broader predicate shapes, semijoin strategies and LooseScan remain.
-   M5.49's first condition-pushdown slice now moves six captured COUNT-alias
-   predicates into HAVING, filtering after grouping and before materialization.
-   Eligibility is limited to a single derived SELECT with plain column/COUNT
-   outputs and a comparison with an integer, NULL or parameter. Live checks cover
-   full fields, NULL groups, COUNT DISTINCT, numeric/NULL parameters, alias errors,
-   empty inputs and the optimizer switch. Limits, windows, outer joins and shared
-   CTEs retain their boundaries. Broader predicates and coercion warnings remain.
-   Window materialization still omits its inner EXPLAIN children here; the excluded
-   window regression verifies the outer filter boundary and full result fields.
-   Grouping now sorts the first base table before an inner lookup join expands it,
-   when the existing planner selects that path and all keys are plain non-JSON
-   columns of that table. The shared stable sort retains row identities; grouping
-   consumes its ordered output without sorting the joined rows again. Live tests
-   compare both protocols, full fields and warnings for NULLs, collation ties,
-   duplicate matches, ordered/unordered aggregates, aliases, positions, limits,
-   first/inner filters and empty inputs. Hash joins, mixed-table keys, outer joins,
-   ROLLUP and unsupported key shapes retain their paths. Early stream return releases
-   its writer. M5.49 and M5.47 stay partial. New probes also expose HAVING/stream
-   placement, index-ordered grouping over joins and FORCE/IGNORE INDEX costing
-   divergences; none is hidden in a fixture. Compatible clustered/covering indexes
-   now supply first-table grouping order through the existing grouping-index
-   selector and ordered reader, avoiding the sort. Without an output sort, fields
-   retain their source key flags; non-covering and prefix indexes retain the sort.
-   Their broader cost comparisons remain open. Live checks pin
-   index order through unordered GROUP_CONCAT, NULLs and collation ties as well as
-   values, full fields, warnings, actual plans and early stream cancellation.
-   The committed corpus plan floor remains 2,113; this improvement is measured by
-   new live regressions. HAVING/stream placement needs a behavioral justification
-   before changing its boundary. M5.50 now begins with a synchronous prepared
-   BTree upsert for clustered INSERT. It copies the key and old bytes and releases
-   the read pin before overflow encoding and undo writes, then resumes insertion
-   under the existing writer/journal. Row-write reentry is refused across handles
-   on the same journal/index. Callback failures roll back preparation writes;
-   schema upgrades keep the full put path rather than reuse stale ancestors.
-   Current versioned leaves prove one descent (height + one write fetch), with
-   no read pin during preparation. Duplicate/tombstone, overflow, split and
-   historical-reader tests exercise the migrated insert. A first best-of-five
-   Docker INSERT benchmark moves 43.8 → 39.8 ms; that is within the documented
-   machine noise, so the benchmark completion criterion remains unmet. Update,
-   delete, secondary writes and remaining versioned paths stay open, along with
-   index hints and broader grouping shapes. All 1,101 Windows/Docker tests,
-   typecheck, lint, nine unchanged size gates, package smoke, 20,000 seeded
-   executor statements and 10,000 Docker crash points pass. Next, extend the
-   prepared mutation to clustered UPDATE/delete-mark with an explicit no-change
-   result for absent rows, preserving undo and historical readers; then remove
-   redundant table reads using the old row returned by that mutation.
-3. **Build the browser (M6)** against the established VFS and protocol seams:
-   OPFS, worker hosting, leader election and real browser crash tests. InnoDB
-   interchange remains M7. Neither is included in the staged Node release.
-
-For release validation, run the Docker gate described in [43](./43-testing.md)
-and compare fresh ORM reports without rewriting the committed captures. Record
-Prisma's worker count on both sides; default parallel runs on a busy host can
-lose interactive-transaction tests to scheduling delays.
+1. **M5.10: remaining function and coercion behavior.** Mixed TIME/text/binary
+   and binary DATETIME extrema, typed TIME bounds, shared statement-date
+   anchoring and dated readings in CASE/IN now have live regressions. Remaining
+   work includes UTF-8 transcoding of binary regex results, full ICU Unicode
+   folding, JSON extrema's prepare-time warnings and NULL metadata,
+   CAST(TIME AS DATETIME) anchoring/rounding, and temporal-literal spelling
+   deprecation warnings. TIME/JSON extrema remain explicitly unsupported.
+   Prepared multi-item TIME IN and CAST need one expected-type contract across
+   prepare metadata, binding conversion and evaluation. MySQL's prepared TIME
+   parameters have precision six; CAST parameters can inherit DATETIME. This
+   executor currently infers a placeholder's type from its bound value. Prepared
+   CASE WHEN already inherits TIME and preserves its query/execute difference.
+   [MySQL's comparison implementation](https://github.com/mysql/mysql-server/blob/mysql-8.4.11/sql/item_cmpfunc.cc)
+   distinguishes sorted STRING IN lists from simple CASE's packed temporal
+   reader. Verify IN and CAST together; do not add per-function parameter
+   exceptions. COUNT comparisons expose the same contract: bound '1x' produces
+   INTEGER warnings per group on MySQL, versus one DOUBLE warning here; invalid
+   text literals also differ at prepare time.
+2. **M5.47: semijoin/antijoin strategies.** Integer NOT EXISTS with one correlated
+   equality and an unindexed integer/literal predicate now selects a real
+   indexed loop or filtered hash build through the existing cost planner.
+   Live tests pin both protocols, NULLs/duplicates, fresh execution after writes,
+   output order and early locking-stream cancellation. Broader predicates,
+   semijoin strategies and LooseScan remain open. Temporary tables retain their
+   one-open rule by bypassing speculative costing. M5.48's optimizer proofs are
+   complete.
+3. **M5.49: access paths and order.** Single-derived column/COUNT condition
+   pushdown filters after grouping and before materialization; integer, NULL
+   and numeric/NULL parameter cases have live coverage. Limits, windows, outer
+   joins and shared CTEs retain their boundaries. Compatible first-table keys
+   sort before inner lookup joins, or reuse a clustered/chosen covering index;
+   grouping consumes that order without sorting expanded rows again. Live tests
+   pin full fields, warnings, plans, aggregate input order and cancellation.
+   Non-covering/prefix indexes retain their scan and sort pending broader cost
+   comparisons. Open work includes actual covering reads, FORCE/IGNORE INDEX
+   costing, broader grouping/pushdown, COUNT conversion warnings, and missing
+   inner EXPLAIN children under window materialization. HAVING/stream placement
+   needs a real projection/materialization boundary; do not add an identity
+   stage merely to move an EXPLAIN label.
+4. **M5.50: finish writes in one descent.** Prepared BTree upsert copies key/old
+   bytes and releases the read pin before overflow encoding and undo writes.
+   Row-write reentry is refused across handles sharing a journal/index;
+   callback failures roll back preparation writes. Clustered INSERT, UPDATE and
+   delete-mark use it. Undefined means no replacement, while empty bytes replace;
+   absent/marked UPDATE/delete rows add no undo or ROW event. Exact descent/pin
+   tests, ROW images, failed overflow/undo preparation, historical visibility,
+   purge and schema-growth splits are covered. All 1,104 Windows/Docker tests,
+   typecheck, lint, nine unchanged size gates, installed-package smoke,
+   20,000 executor statements at seed 20261010 and 10,000 Docker crash points
+   pass. All seven pinned-reference corpora reproduced unchanged after INSERT.
+   **Immediate next:** return the old row from the actual clustered mutation to
+   remove redundant table reads, preserving key-change and secondary sequencing;
+   then migrate secondary writes. Best-of-five INSERT of 5k moves 43.8 → 39.8 ms,
+   within the documented ±30% noise, so the performance criterion remains unmet.
+   Schema upgrades retain the full insertion fallback. Transactional schema
+   upgrades need shared durable schema ownership: Store rollback/purge reopen
+   trees at version zero and cannot process a manually versioned transactional
+   tree. A baseline/current probe confirms this pre-existing limitation. Native
+   SQL tables use version zero; generic BTree upgrade/split behavior is verified.
+5. **M6: browser storage and hosting**, after the outstanding engine/planner work.
+   Build against established VFS/protocol seams: OPFS, workers, leader election
+   and actual browser crash tests. InnoDB interchange remains M7.
 
 ---
 
@@ -650,7 +579,7 @@ inconsistencies and zero lost acknowledged commits.
 | M5.47 | **Semijoin and antijoin strategies**, as 8.4.11 chooses them: NOT EXISTS and NOT IN as a nested-loop or hash antijoin; `[NOT] IN` rewritten to EXISTS ("Limit / Filter / Filter" over the pushed equality, "Alternative plans for IN subquery" when the outer side can be NULL); LooseScan ("Remove duplicates from input sorted on"); materialization ("Materialize with deduplication"); duplicate weedout ("Remove duplicate … rows using temporary table") | core | — | M5.7 | ◐ | every relational plan using one of these strategies agrees, and `UNMODELLED` no longer lists LooseScan. Each strategy changes row order, which the corpus then checks **Begun: the subqueries it does not join (2,090 → 2,100).** An uncorrelated `[NOT] IN`, `= ALL` or `<> ANY` over one column of one table, which 8.4.11 neither semijoins nor antijoins, is now planned as it plans it. Probed over every combination of nullable and indexed, in each context: - An equality over an indexed column becomes EXISTS: a `Limit` of one over a lookup by the outer value. A unique key's lookup is `Single-row`. - Where a NULL is not as good as false (NOT IN, outside the top of a WHERE), a nullable inner column adds two Filters, and a nullable outer value adds one, over `Alternative plans for IN subquery`. Otherwise the subquery's WHERE is one Filter. - With no index leading the column, the subquery is materialized, deduplicated, and looked up by its own key. - `= ALL` and `<> ANY` are EXISTS over a scan, with one Filter or two. The two plans left choose a scan over the lookup when the subquery's WHERE ORs the column `IS NOT NULL`, a cost decision **Then costed integer NOT EXISTS (2,103 → 2,106).** One correlated integer equality with one unindexed inner integer/literal predicate now selects an indexed nested loop or a real filtered hash build through the existing preserved-side join planner. Both protocols agree on values, complete metadata and warnings; aliases, reversed equality, duplicates, NULL keys, fresh execution after writes and empty inputs are covered. An ordered hash antijoin still sorts and streams its result, as 8.4.11 does. Returning a FOR UPDATE stream releases the writer. Broader predicates, other semijoin/antijoin strategies and LooseScan remain open |
 | M5.48 | **The optimizer's remaining proofs and constants**: an empty result proved across columns (`id IS NULL OR name IS NULL`) or through a semijoin over an empty subquery; an outer join whose ON is impossible, whose table is then NULL-complemented and left out of the plan; constant tables inside a join and on the grouped path; the nullability of an EXCEPT over a nested INTERSECT | core | — | M5.7 | ☑ | three fresh `capture:relational` seeds show none of these four kinds among their divergences, and `UNMODELLED` no longer lists grouping over a join reduced to one table Found by M5.13's test: a const lookup in an empty table is `Zero rows (no matching row in const table)` on 8.4.11 and `Zero rows` here **Begun (2,082 → 2,089).** Two proofs the optimizer already made were never reported in the plan. An aggregate with no GROUP BY over an input proved empty is `Zero input rows` in the Aggregate's place, with only its HAVING's Filter and its LIMIT around it. The single row is not sorted, and a subquery of its select list is dropped (8.4.11, probed for each). A const table found with no row for its key now empties the plan, as it already emptied the result: `Zero rows (no matching row in const table)`, including where an outer join's WHERE turned it inner and its ON pinned the key **Then the constant tables of a STRAIGHT_JOIN.** The optimizer does not read them ahead of the written order, but it still treats them as constants. Each is joined last as `Constant row from c1`, by a nested loop, with its own conditions folded while planning. An ORDER BY over such tables alone sorts nothing. A join they reduce to one base table groups as that table alone would, reading its index in order, so the `UNMODELLED` entry for it is gone and its metadata is compared **Then constant tables in every other join, emptiness across columns and through a semijoin, and the impossible ON (2,100 → 2,102).** Outside STRAIGHT_JOIN a const table is read ahead and is not in the plan at all: `FROM kl, pa WHERE pa.id = 1` is `Table scan on kl`, a condition over both a Filter on the other side, and a join of nothing but const tables is `Rows fetched before execution`. The optimizer already knew these tables; only the plan still joined them. An outer join whose ON can never hold drops its inner tables the same way. An OR is impossible when each of its sides is (`id IS NULL OR name IS NULL` over NOT NULL columns), but in an ON only the range proofs count, since `IS NULL` there is still a join. A semijoin over an uncorrelated one-table subquery the optimizer proves empty empties the outer query, while NOT EXISTS over one does not. What 8.4.11 does not prove was probed too and left alone: `a = b AND b IS NULL` in a plain join is a hash join there, and a LEFT JOIN whose ON pins the inner table's key is `Constant row from pa` under a nested loop, done below **Then the three fresh seeds' metadata (2,102 → 2,103).** Replaying them named the rest, each asked of 8.4.11. A set operation nested under an INTERSECT or an EXCEPT is nullable where any of its operands is; only under a UNION does a nested INTERSECT or EXCEPT narrow it. An OR rejects NULL on a table both its sides reject it on, so `WHERE ch.id BETWEEN … OR ch.id BETWEEN …` turns a LEFT JOIN to ch inner. An impossible ON condition counts only over the inner tables' columns: `p2.grp <> NULL` on the preserved side proves nothing. A DISTINCT that the range optimizer proves empty makes no temporary table, and one whose single remaining table's unique key is selected, beside NULL-complemented tables, is no DISTINCT at all. GROUP BY keys over const tables alone make one group, grouped as the rows come and never sorted, and a single const table's grouping reads its row while planning. `col IS NULL` holds its class to NULL when const tables are sought (`kl.g = ch.id AND kl.g IS NULL` is `no matching row in const table`), but not when conditions are folded, as the server does **Then a DISTINCT of constants, and the IS NULL that STRAIGHT_JOIN proves.** A DISTINCT whose items read only NULL-complemented tables is `Group (no aggregates)` over the rest, its columns' flags kept; over const tables' rows it is `Limit: 1 row(s)` over a temporary table without deduplication. Under a LIMIT the first becomes an ordinary deduplicating table, and any deduplicating table under a LIMIT with nothing sorted above it is filled only to `Limit table size`, which was missing everywhere. Under STRAIGHT_JOIN, `k1.g IS NULL` is rewritten onto the first column of its equality class in the written order, so `ch STRAIGHT_JOIN kl ON ch.qty = kl.g AND kl.g IS NULL` over a NOT NULL `qty` is impossible; with kl first, or without STRAIGHT_JOIN, it is a hash join **Then how const tables are found.** A const table's columns are constants once its row is read, so a table whose key they hold is const too, to a fixed point: `q JOIN p ON q.n = p.id AND p.name = 'x y'` reads p by name, then q by `p.id`, and is `Rows fetched before execution`. Under STRAIGHT_JOIN a table's access is the first key, PRIMARY first, whose parts are all bound, by constants or by the tables before it, and only one bound by constants alone makes it const: `q STRAIGHT_JOIN p ON q.n = p.id AND p.name = 'x y'` looks p up by its PRIMARY KEY. The run of const tables a STRAIGHT_JOIN begins with is read ahead and absent from the plan, and the rest are constant rows. `IS NOT NULL` rejects NULL, so it turns an outer join inner, and a GROUP BY key that the WHERE holds to a constant is no part of the temporary table's key over a join **Done: an outer join's constant row, and the seeds clean.** An outer join's single inner table whose ON holds its PRIMARY or NOT NULL UNIQUE key to constants is read once, as `Constant row from p` under a nested-loop left join, NULL-complemented where the rest of its ON fails. `IS NULL` holds a class to NULL only for a PRIMARY KEY: over a unique key it is a lookup. Replayed whole, the three fresh seeds' remaining divergences are M5.47's antijoins and M5.49's grouped-path, sort-first and ordering choices, plus ROLLUP over a join through a temporary table, recorded for M5.49. None is one of this item's four kinds |
 | M5.49 | **The access paths left**: index merge ("Sort-deduplicate by row ID"); ranges over more than an index's first column; derived condition pushdown (a Filter inside its Materialize); a sort of the first table ahead of any nested-loop join; the grouped path's choice of index, range or temporary table; index hints, today parsed and ignored; a materialized derived table read by `<auto_key0>` for a constant equality (`WHERE rn = 1` over a window function's derived table), with the key flag it gives the column; a covering read that skips the clustered row, which needs a secondary key that holds values rather than collation weights; the order of ties under `ORDER BY … LIMIT`, which 8.4.11's filesort priority queue leaves in heap order (`ORDER BY g LIMIT 4` over ties gives ids 5 8 2 9 there, where our stable top-k gives 2 5 8 4, a full sort's first rows) | core, engine | — | M5.7 | ◐ | every relational plan of these kinds agrees, `ORDER BY … LIMIT` over ties returns 8.4.11's rows in its order, and `npm run bench`'s covering lookup join is within twice its hash join **Begun: grouped COUNT condition pushdown (2,106 → 2,112).** A single derived SELECT with plain column and COUNT(column/star) items, simple grouping, and one comparison of a COUNT alias with an integer, NULL or parameter moves that predicate into HAVING before materialization. COUNT DISTINCT is included; aliases resolve once and duplicate/unknown aliases retain their errors. Limits, windows, ROLLUP, existing HAVING, lateral/outer joins, explicit derived column lists, shared CTEs and volatile select items stay outside this slice. The optimizer switch can disable it. Live tests compare both protocols, full fields, NULL groups, numeric/NULL parameters and empty inputs; excluded limits, windows, outer joins and CTE readers keep their semantics. General string parameter and prepare-time conversion warnings remain under M5.2/M5.10. **Then first-table grouped sorts (2,112 → 2,113).** Plain non-JSON column keys on the first base table of an inner indexed nested-loop join sort that filtered table before joining. The existing cost decision is reused; the shared sort preserves row identities and ties, and streaming aggregation avoids sorting expanded rows again. Both protocols pin values, complete fields, warnings and plans for NULLs, collation ties, duplicate matches, ordered/unordered aggregates, aliases, positions, filters, limits and empty inputs. Hash joins, mixed keys, outer joins and ROLLUP retain their paths; early stream return releases the writer. **Then indexed first-table grouping.** The same eligibility now selects an existing compatible clustered/covering grouping index through chooseStrategy and readInOrder, avoiding the sort and retaining native source key flags when output is not sorted. New live regressions pin actual indexed access, metadata, warnings, NULL/collation ties, duplicate matches, unordered aggregate input order and early cancellation; non-covering and prefix indexes still sort, with broader cost comparisons left open. The corpus floor remains 2,113. Grouped HAVING/stream placement and index-hint costing remain open, alongside other access paths, ordering and grouping strategies |
-| M5.50 | **A row write in one tree descent**: insert, update and delete find the leaf once, the undo written before the leaf is held (a `BTree.upsert` that answers the old value) | engine | [26](./26-redo-and-recovery.md) | M5.46 | ◐ | `npm run bench`'s INSERT of 5k rows is faster than the figure M5.46 recorded by more than the bench's noise, and `CRASH_POINTS=10000 npm run test:crash` stays clean **Begun: clustered INSERT.** Prepared BTree upsert supplies detached old bytes with no read pin held, after copying the key. Its synchronous callback may encode overflow and write undo before the leaf update; row-write reentry through another handle is refused by journal/index identity. Preparation failures roll back, and schema upgrades retain the full put path. Current versioned leaves require one descent; exact fetch-count tests, callback/key isolation, reentry, failure rollback and schema-growth splits are pinned. Existing duplicate/tombstone, overflow and historical-reader tests cover the migrated INSERT. A first best-of-five benchmark moves 43.8 → 39.8 ms, inside machine noise; this does not meet the completion threshold. Update/delete, secondary writes and upgrade fallback optimization remain open. All 1,101 Windows/Docker tests, typecheck, lint, nine unchanged size gates, package smoke, 20,000 seeded executor statements and 10,000 Docker crash points pass |
+| M5.50 | **A row write in one tree descent**: insert, update and delete find the leaf once, the undo written before the leaf is held (a `BTree.upsert` that answers the old value) | engine | [26](./26-redo-and-recovery.md) | M5.46 | ◐ | `npm run bench`'s INSERT of 5k rows is faster than the figure M5.46 recorded by more than the bench's noise, and `CRASH_POINTS=10000 npm run test:crash` stays clean **Begun: clustered INSERT.** Prepared BTree upsert supplies detached old bytes with no read pin held, after copying the key. Its synchronous callback may encode overflow and write undo before the leaf update; row-write reentry through another handle is refused by journal/index identity. Preparation failures roll back, and schema upgrades retain the full put path. Current versioned leaves require one descent; exact fetch-count tests, callback/key isolation, reentry, failure rollback and schema-growth splits are pinned. Existing duplicate/tombstone, overflow and historical-reader tests cover the migrated INSERT. A first best-of-five benchmark moves 43.8 → 39.8 ms, inside machine noise; this does not meet the completion threshold. **Then clustered UPDATE/delete-mark.** The same callback now returns undefined for no replacement, distinct from empty bytes. Existing boolean APIs and undo/ROW images are preserved. Absent and marked rows add no undo or ROW event. Tests pin one descent, reject get/put re-descent, and cover rollback after overflow/undo preparation, historical overflow visibility and purge. Redundant table reads, secondary writes and upgrade fallback optimization remain open. Store rollback/purge currently reopen trees at schema version zero; transactional schema upgrades require a shared schema reader before they can work. Native SQL tables use version zero, and the generic BTree upgrade/split fallback remains verified. All 1,104 Windows/Docker tests, typecheck, lint, nine unchanged size gates, installed-package smoke, 20,000 seeded executor statements and 10,000 Docker crash points pass |
 | M5.51 | **The JSON functions that change a document**, and JSON_TABLE: JSON_SET, JSON_INSERT, JSON_REPLACE, JSON_REMOVE, JSON_ARRAY_APPEND, JSON_ARRAY_INSERT, JSON_MERGE_PATCH, JSON_MERGE_PRESERVE, JSON_QUOTE, JSON_SEARCH, JSON_VALUE, JSON_PRETTY, JSON_STORAGE_SIZE; JSON_TABLE, refused by the parser today. Split from M5.11, whose done-when they were never part of | core, parser | [28](./28-json-binary.md) | M5.11 | ☐ | a `capture:json` corpus of these functions over every JSON shape, paths and errors included, agrees with 8.4.11 whole |
 | M5.52 | **`VALUES` and `TABLE` as queries**: `VALUES ROW(…), ROW(…)` alone, in a set operation and as a derived table with its column list, and `TABLE t`, both refused with 1235 today | core | [00](./00-goals-and-scope.md) | M5.4 | ☐ | a script captured from 8.4.11 of each form, metadata included, agrees statement by statement. Found while building SHOW VARIABLES (M5.13): `VALUES` is not typed as the UNION ALL it resembles. Over a DECIMAL column it sends the integer 1 as "1", not "1.0", with other flags and decimals; and a derived VALUES table's integers are INT, not BIGINT. So it needs its own item type, not a rewrite |
 | M5.53 | **Stabilization review:** exclusive Node ownership, safe initialization/shutdown, serialized row reads, explicit unsupported administration errors, portable paths and validation tooling, and documentation reconciled with measured behavior | core, engine, vfs, tools | [40](./40-vfs.md), [42](./42-public-api.md), [43](./43-testing.md) | M5.41 | ☑ | targeted regressions and the full Windows/Linux test gates pass; a disposable Docker copy installs dependencies, checks packages, and compares recorded observations with pinned MySQL 8.4.11 without recapturing fixtures. No third-party runtime dependencies added. Stale locks require explicit recovery (D-87). The review also repairs joined-view introspection, large-double DIV, numeric TIME range comparisons, NULL-division metadata, CASE over ENUM/SET, and mixed DATETIME/text GREATEST/LEAST. At this review M5.2 remained partial; the subsequent coercion slice completes its captured gate. CI now runs the disposable pinned-reference verifier as a blocking job |
