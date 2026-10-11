@@ -87,9 +87,13 @@ leaves its comparison to the scan. Reference-backed cases cover operand order,
 IN, BETWEEN, negative literals, NULL and bound parameters through both protocols.
 BIT literals now preserve their written digits through parsing and deparsing:
 empty literals produce empty bytes, and leading zero bytes survive. Numeric
-metadata for empty BIT/HEX literals also agrees with the reference. The next
-bounded function repair is mixed TIME/text and TIME/binary GREATEST/LEAST;
-binary DATETIME extrema and regex result transcoding under UTF-8 remain open.
+metadata for empty BIT/HEX literals also agrees with the reference. Mixed
+TIME/text and TIME/binary GREATEST/LEAST now compare lexically, with result
+width accounting for each operand's fractional precision. Live reference tests
+cover both protocols, operand order, negative times, NULL, empty text, binary
+values and nonconstant text. Binary DATETIME extrema and regex result
+transcoding under UTF-8 remain open. JSON extrema also need their prepare-time
+warnings and NULL metadata rules; TIME/JSON remains explicitly unsupported.
 CI's IN-list latency failure led to a reproduced PREPARE stall: a 32,000-parameter
 statement answered another connection only once while its metadata was delivered.
 Large initial packet lists now yield every 512 packets in the existing serialized
@@ -99,7 +103,7 @@ pass without changing thresholds or protocol bytes.
 The first push still exceeded the PREPARE bound in CI before packet delivery;
 lexing now yields separately from parsing, and large prepares yield between
 metadata planning and packet allocation. Every resumption checks that the
-session is still alive. Exact-SHA CI will verify this additional repair.
+session is still alive. The exact-SHA CI run for that repair passed all jobs.
 
 1. **Complete the remaining M5.10 function behavior.** All 8,765 observations
    in the three function corpora now agree, including mixed DATETIME/text

@@ -43,6 +43,7 @@ import {
   doubleValue,
   intValue,
   md5,
+  parseTime,
   rescale,
   sha1,
   sha256,
@@ -662,7 +663,7 @@ function numberFunction(name: string, args: readonly Compiled[], callName: strin
     case 'GREATEST':
     case 'LEAST': {
       arity(2, Infinity)
-      const type = aggregate(
+      let type = aggregate(
         xs.map((x) => x.type),
         xs.some((x) => x.type.nullable),
         conn,
@@ -673,8 +674,27 @@ function numberFunction(name: string, args: readonly Compiled[], callName: strin
       if (type.kind === 'string' && xs.some((x) => x.type.kind === 'datetime')) {
         return datetimeExtremum(xs, type, greatest)
       }
-      if ((type.kind === 'string' || type.kind === 'bytes') && xs.some((x) => x.type.kind === 'time' || x.type.kind === 'datetime')) {
-        throw sqlError('ER_NOT_SUPPORTED_YET', messages.notSupported(`${name} over binary text or a TIME`))
+      if (type.kind === 'bytes' && xs.some((x) => x.type.kind === 'datetime')) {
+        throw sqlError('ER_NOT_SUPPORTED_YET', messages.notSupported(`${name} over binary text and DATETIME`))
+      }
+      if ((type.kind === 'string' || type.kind === 'bytes') && xs.some((x) => x.type.kind === 'time')) {
+        if (xs.some((x) => x.type.kind === 'json')) {
+          throw sqlError('ER_NOT_SUPPORTED_YET', messages.notSupported(`${name} over TIME and JSON`))
+        }
+        // Item::time_precision reads constant text without warning; invalid
+        // or nonconstant text falls back to its scale, capped at six.
+        const fsp = Math.max(...xs.map((x, i) => {
+          const fallback = x.type.literalInt === undefined ? Math.min(x.type.scale, 6) : 0
+          if (constant[i] !== true || (x.type.kind !== 'string' && x.type.kind !== 'bytes')) return fallback
+          try {
+            const v = x.eval([], constantEnv(ctx))
+            return v === null ? fallback : (parseTime(toText(v))?.fsp ?? fallback)
+          } catch (e) {
+            expectTyped(e)
+            return fallback
+          }
+        }))
+        if (fsp > 0) type = { ...type, length: Math.max(type.length, 11 + fsp) }
       }
       return {
         eval: (r, env) => {
