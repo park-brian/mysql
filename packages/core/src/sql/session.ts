@@ -49,13 +49,13 @@ export class SqlSession implements SessionValues {
   readOnly = false
   readonly savepoints = new Map<string, number>()
   readonly userVariables = new Map<string, Value>()
-  /** What the session has `SET` that is not one of the variables it holds itself. */
-  readonly ownVariables = new Map<string, Value>()
+  /** Captured global overrides and SET values not held by the protocol session. */
+  readonly ownVariables: Map<string, Value>
   lastInsertId = 0n
   insertIdSet = false
   rowCount = -1n
   /** `SET SESSION TRANSACTION ISOLATION LEVEL`. */
-  isolation: Isolation = 'REPEATABLE READ'
+  isolation: Isolation
   /** `SET TRANSACTION …` with no scope: the next transaction only. */
   nextIsolation: Isolation | undefined
   /**
@@ -72,12 +72,13 @@ export class SqlSession implements SessionValues {
   /** Statements this session has sent, for SHOW SESSION STATUS. */
   questions = 0
 
-  constructor(session: Session, server: ServerState) {
+  constructor(session: Session, server: ServerState, defaults?: ReadonlyMap<string, Value>) {
     this.session = session
     this.#server = server
-    server.snapshotSession(this.ownVariables)
+    this.ownVariables = defaults === undefined ? server.snapshotSession() : new Map(defaults)
     // A session starts at the server's level, as `SET GLOBAL TRANSACTION` leaves it.
-    this.isolation = isolationOf(String(server.global('transaction_isolation') ?? 'REPEATABLE-READ'))
+    const isolation = this.ownVariables.get('transaction_isolation')
+    this.isolation = isolationOf(isolation == null ? 'REPEATABLE-READ' : toText(isolation))
   }
 
   /**
@@ -184,7 +185,7 @@ export class SqlSession implements SessionValues {
     this.trx.rollbackTo(at)
     // Later savepoints are gone; this one stays.
     let after = false
-    for (const k of [...this.savepoints.keys()]) {
+    for (const k of this.savepoints.keys()) {
       if (after) this.savepoints.delete(k)
       if (k === key) after = true
     }
@@ -194,7 +195,7 @@ export class SqlSession implements SessionValues {
     const key = name.toLowerCase()
     if (!this.savepoints.has(key)) throw sqlError('ER_SP_DOES_NOT_EXIST', `SAVEPOINT ${name} does not exist`)
     let after = false
-    for (const k of [...this.savepoints.keys()]) {
+    for (const k of this.savepoints.keys()) {
       if (k === key) after = true
       if (after) this.savepoints.delete(k)
     }

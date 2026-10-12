@@ -133,6 +133,9 @@ export interface PreparedInfo {
  * protocol layer changing.
  */
 export interface Executor {
+  /** Capture connection defaults before the greeting; initialize the authenticated session once. */
+  openSession?(reset?: boolean): (session: Session) => void
+
   /**
    * Text protocol. Returning an array produces a multi-resultset response.
    * A single result may be a `StreamedResultSet`, whose rows the dispatcher

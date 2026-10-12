@@ -43,6 +43,7 @@ import {
 } from '@myjs/parser'
 import {
   CHARSET_UTF8MB4_0900_AI_CI,
+  defaultStatistics,
   SqlError,
   messages,
   sqlError,
@@ -259,13 +260,27 @@ export class SqlExecutor implements Executor {
     return sessionCatalog(this.catalog, temporary)
   }
 
-  #state(session: Session): SqlSession {
+  #state(session: Session, defaults?: ReadonlyMap<string, Value>): SqlSession {
     let s = this.#sessions.get(session)
     if (s === undefined) {
-      s = new SqlSession(session, this.server)
+      s = new SqlSession(session, this.server, defaults)
       this.#sessions.set(session, s)
     }
     return s
+  }
+
+  /** Capture globals independently of the later authentication and first query. */
+  openSession(reset = false): (session: Session) => void {
+    const defaults = this.server.snapshotSession()
+    return (session) => {
+      this.#alive(session)
+      this.#state(session, defaults)
+      // RESET uses server defaults; an initial/change-user handshake supplies its charset.
+      if (reset) {
+        const collation = defaults.get('collation_connection')
+        session.characterSet = (collation == null ? undefined : collationInfoByName(toText(collation).toLowerCase())?.id) ?? CHARSET_UTF8MB4_0900_AI_CI
+      }
+    }
   }
 
   async query(session: Session, sql: string): Promise<StatementResult | StatementResult[]> {
@@ -333,11 +348,7 @@ export class SqlExecutor implements Executor {
   }
 
   statistics(session: Session): string {
-    return (
-      `Uptime: 0  Threads: 1  Questions: 0  Slow queries: 0  Opens: 0  ` +
-      `Flush tables: 1  Open tables: 0  Queries per second avg: 0.000  ` +
-      `Connection: ${session.connectionId}`
-    )
+    return defaultStatistics(session)
   }
 
   reset(session: Session): void {

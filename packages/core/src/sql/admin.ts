@@ -40,22 +40,10 @@ export interface ServerOptions {
 }
 
 export type ProgramStatement = CreateRoutineNode | CreateTriggerNode | CreateEventNode | CallStatementNode | DropNode
-type ProgramObject = 'PROCEDURE' | 'FUNCTION' | 'TRIGGER' | 'EVENT'
+const PROGRAM_ERRORS = { PROCEDURE: 'SP', FUNCTION: 'SP', TRIGGER: 'TRG', EVENT: 'EVENT' } as const
+type ProgramObject = keyof typeof PROGRAM_ERRORS
 
-const EXISTS = {
-  PROCEDURE: 'ER_SP_ALREADY_EXISTS',
-  FUNCTION: 'ER_SP_ALREADY_EXISTS',
-  TRIGGER: 'ER_TRG_ALREADY_EXISTS',
-  EVENT: 'ER_EVENT_ALREADY_EXISTS',
-} as const
-const MISSING = {
-  PROCEDURE: 'ER_SP_DOES_NOT_EXIST',
-  FUNCTION: 'ER_SP_DOES_NOT_EXIST',
-  TRIGGER: 'ER_TRG_DOES_NOT_EXIST',
-  EVENT: 'ER_EVENT_DOES_NOT_EXIST',
-} as const
-
-export const PROGRAM_OBJECTS: ReadonlySet<string> = new Set(['PROCEDURE', 'FUNCTION', 'TRIGGER', 'EVENT'])
+export const PROGRAM_OBJECTS: ReadonlySet<string> = new Set(Object.keys(PROGRAM_ERRORS))
 
 /** `db.name`, in the session's database when unqualified. */
 const qualified = (name: TableName, session: Session): string => `${name.schema ?? session.database ?? ''}.${name.name}`
@@ -67,9 +55,8 @@ const MAX_SIGNED = (1n << 63n) - 1n
 /** A `SqlValue` as an evaluation value, for a system variable: a DOUBLE for one that is, an unsigned integer past BIGINT's range. */
 function fromSqlValue(v: SqlValue, info?: SystemVariable): Value {
   if (v === null) return null
-  if (info?.kind === 'double' && (typeof v === 'number' || typeof v === 'bigint')) return doubleValue(Number(v))
-  if (typeof v === 'number') return Number.isInteger(v) ? intValue(BigInt(v)) : doubleValue(v)
-  if (typeof v === 'bigint') return intValue(v, v > MAX_SIGNED)
+  if (typeof v === 'number') return info?.kind === 'double' || !Number.isInteger(v) ? doubleValue(v) : intValue(BigInt(v))
+  if (typeof v === 'bigint') return info?.kind === 'double' ? doubleValue(Number(v)) : intValue(v, v > MAX_SIGNED)
   if (typeof v === 'boolean') return intValue(v ? 1n : 0n)
   if (v instanceof Uint8Array) return { kind: 'bytes', v }
   return stringValue(String(v), CHARSET_UTF8MB4_0900_AI_CI, COERCIBILITY.SYSCONST)
@@ -87,8 +74,8 @@ function assigned(info: SystemVariable, v: Value, warn: (code: number, message: 
   const text = toText(v)
   if (info.kind === 'bool') {
     const word = text.toUpperCase()
-    if (word === '1' || word === 'ON' || word === 'TRUE') return intValue(1n)
-    if (word === '0' || word === 'OFF' || word === 'FALSE') return intValue(0n)
+    const on = word === '1' || word === 'ON' || word === 'TRUE'
+    if (on || word === '0' || word === 'OFF' || word === 'FALSE') return intValue(on ? 1n : 0n)
     throw sqlError('ER_WRONG_VALUE_FOR_VAR', messages.wrongVariableValue(info.name, text))
   }
   if (v.kind !== 'int' && !(info.kind === 'double' && (v.kind === 'decimal' || v.kind === 'double'))) throw sqlError('ER_WRONG_TYPE_FOR_VAR', `Incorrect argument type to variable '${info.name}'`)
@@ -102,7 +89,7 @@ function assigned(info: SystemVariable, v: Value, warn: (code: number, message: 
 }
 
 /** Apply named optimizer switches atomically, retaining flags omitted by SET. */
-function optimizerSwitch(value: Value, previous: Value | undefined, defaults: string): Value {
+function optimizerSwitch(value: Value, previous?: Value, defaults = systemVariableInfo('optimizer_switch')?.value as string): string {
   if (value === null) throw sqlError('ER_WRONG_VALUE_FOR_VAR', messages.wrongVariableValue('optimizer_switch', 'NULL'))
   const entries = (text: string): [string, string][] => text.split(',').map((part) => part.split('=') as [string, string])
   const flags = new Map(entries(defaults))
@@ -135,7 +122,7 @@ function optimizerSwitch(value: Value, previous: Value | undefined, defaults: st
     for (const [name, setting] of commands) if (setting === 'on' || setting === 'off') flags.set(name, setting)
   }
   if (flags.get('hypergraph_optimizer') === 'on') throw sqlError('ER_HYPERGRAPH_NOT_SUPPORTED_YET', "The hypergraph optimizer does not yet support 'use in non-debug builds'")
-  return stringValue([...flags].map(([name, setting]) => name + '=' + setting).join(','), CHARSET_UTF8MB4_0900_AI_CI)
+  return Array.from(flags, ([name, setting]) => name + '=' + setting).join(',')
 }
 
 /**
@@ -167,6 +154,8 @@ export class ServerState {
       ...(options.versionComment === undefined ? [] : [['version_comment', options.versionComment] as const]),
       ...Object.entries(options.systemVariables ?? {}),
     ])
+    const switches = this.vars.get('optimizer_switch')
+    if (switches !== undefined) this.vars.set('optimizer_switch', optimizerSwitch(fromSqlValue(switches)))
   }
 
   /**
@@ -212,21 +201,26 @@ export class ServerState {
 
   /** A variable's global value, or `undefined` for none. */
   global(name: string): SqlValue | undefined {
-    return this.vars.has(name) ? this.vars.get(name) : systemVariableInfo(name)?.value
+    const value = this.vars.get(name)
+    return value === undefined ? systemVariableInfo(name)?.value : value
   }
 
   /** Both-scope variables are connection defaults, copied before later global SETs. */
-  snapshotSession(own: Map<string, Value>): void {
-    for (const name of systemVariableNames()) {
+  snapshotSession(): Map<string, Value> {
+    const own = new Map<string, Value>()
+    // Compiled defaults are immutable; capture only actual global overrides.
+    for (const [name, value] of this.vars) {
       const info = systemVariableInfo(name)
-      if (info?.scope === 'both') own.set(name, fromSqlValue(this.global(name) ?? null, info))
+      if (info?.scope === 'both') own.set(name, fromSqlValue(value, info))
     }
+    return own
   }
 
   /**
    * A system variable as `@@name` reads it. The session's own values come
    * first — its `sql_mode`, its charset variables, anything it has `SET` —
-   * then the global ones. `undefined` when there is no such variable.
+   * then immutable compiled defaults for both-scope variables or shared global
+   * values. `undefined` when there is no such variable.
    */
   systemVariable(name: string, scope: 'GLOBAL' | 'SESSION' | undefined, session: Session, own: ReadonlyMap<string, Value>): Value | undefined {
     const info = systemVariableInfo(name)
@@ -247,8 +241,8 @@ export class ServerState {
       // The session's clock, to the microsecond, as `@@timestamp` reads it.
       if (name === 'timestamp') return doubleValue(Math.round(Date.now() * 1000) / 1e6)
     }
-    const global = this.global(name)
-    return global === undefined ? null : fromSqlValue(global, info)
+    const value = scope !== 'GLOBAL' && info?.scope === 'both' ? info.value : this.global(name)
+    return fromSqlValue(value ?? null, info)
   }
 
   /**
@@ -291,7 +285,7 @@ export class ServerState {
     if (name === 'sql_mode') return this.#setSqlMode(session, scope, v, warn) ? 'sql_mode' : undefined
 
     if (name === 'optimizer_switch') {
-      v = optimizerSwitch(v, this.systemVariable(name, global ? 'GLOBAL' : undefined, session, own), (global ? info?.value : this.global(name)) as string)
+      v = stringValue(optimizerSwitch(v, this.systemVariable(name, global ? 'GLOBAL' : undefined, session, own), (global ? undefined : this.global(name)) as string | undefined), CHARSET_UTF8MB4_0900_AI_CI)
     }
 
     if (name === 'autocommit') {
@@ -353,7 +347,7 @@ export class ServerState {
       const object = statement.object as ProgramObject
       const name = statement.names[0] as TableName
       if (!this.#programs.delete(programKey(object, name, session)) && statement.ifExists !== true) {
-        throw sqlError(MISSING[object], messages.objectMissing(object, qualified(name, session)))
+        throw sqlError(`ER_${PROGRAM_ERRORS[object]}_DOES_NOT_EXIST`, messages.objectMissing(object, qualified(name, session)))
       }
       return
     }
@@ -361,7 +355,7 @@ export class ServerState {
     const key = programKey(object, statement.name, session)
     if (this.#programs.has(key)) {
       if (statement.ifNotExists === true) return
-      throw sqlError(EXISTS[object], messages.objectExists(object, statement.name.name))
+      throw sqlError(`ER_${PROGRAM_ERRORS[object]}_ALREADY_EXISTS`, messages.objectExists(object, statement.name.name))
     }
     this.#programs.add(key)
   }

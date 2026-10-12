@@ -38,7 +38,7 @@ import {
   type RandomSource,
   type RsaKeyPair,
 } from '@myjs/protocol'
-import { MyjsError, ProtocolError, Writer } from '@myjs/bytes'
+import { expectTyped, Writer } from '@myjs/bytes'
 import { charsetTranscoder } from './transcoder.ts'
 import { DEFAULT_SQL_MODE } from '@myjs/parser'
 
@@ -78,7 +78,7 @@ export interface ConnectionOptions {
  */
 const HIGH_WATER = 64 * 1024
 
-type Phase = 'new' | 'awaiting-handshake-response' | 'authenticating' | 'command' | 'closed'
+type Phase = 'new' | 'awaiting-handshake-response' | 'authenticating' | 'command'
 
 export class ProtocolConnection {
   readonly connectionId: number
@@ -92,6 +92,7 @@ export class ProtocolConnection {
   #capabilities: Capabilities = capabilities(0)
   #session: Session | null = null
   #auth: ServerAuthenticator | null = null
+  #initialize: ((session: Session) => void) | undefined
 
   constructor(options: ConnectionOptions) {
     this.#options = options
@@ -105,7 +106,7 @@ export class ProtocolConnection {
   }
 
   get closed(): boolean {
-    return this.#phase === 'closed'
+    return this.#ended
   }
 
   /**
@@ -116,7 +117,7 @@ export class ProtocolConnection {
   close(): void {
     if (this.#ended) return
     this.#ended = true
-    this.#phase = 'closed'
+    this.#initialize = undefined
     this.#roomMade?.()
     try {
       if (this.#session !== null) this.#options.executor.end?.(this.#session)
@@ -137,7 +138,8 @@ export class ProtocolConnection {
 
   /** Emit `HandshakeV10`. Must be called once, before any client bytes. */
   start(): void {
-    if (this.#phase !== 'new') return
+    if (this.#ended || this.#phase !== 'new') return
+    this.#initialize = this.#options.executor.openSession?.()
     const advertised = this.#options.advertisedCapabilities ?? SERVER_ADVERTISED_CAPABILITIES
     const w = new Writer(128)
     writeHandshakeV10(w, {
@@ -146,12 +148,13 @@ export class ProtocolConnection {
       scramble: this.scramble,
       capabilities: advertised,
     })
-    this.#send(w.toBytes())
     this.#phase = 'awaiting-handshake-response'
+    this.#send(w.toBytes())
   }
 
   /** Frame and queue one packet payload for sending. */
   #send(payload: Uint8Array): void {
+    if (this.#ended) return
     const framed = this.#framer.encode(payload)
     this.#out.push(framed)
     this.#queued += framed.length
@@ -182,13 +185,12 @@ export class ProtocolConnection {
 
   /** Everything queued for the client since the last call. */
   take(): Uint8Array {
+    const total = this.#queued
     this.#queued = 0
     const made = this.#roomMade
     this.#roomMade = undefined
     made?.()
     if (this.#out.length === 0) return new Uint8Array(0)
-    let total = 0
-    for (const chunk of this.#out) total += chunk.length
     const out = new Uint8Array(total)
     let at = 0
     for (const chunk of this.#out) {
@@ -222,7 +224,7 @@ export class ProtocolConnection {
 
   async #feed(chunk: Uint8Array): Promise<void> {
     if (this.#phase === 'new') this.start()
-    if (this.#phase === 'closed') return
+    if (this.#ended) return
     this.#framer.feed(chunk)
     await this.#pump()
   }
@@ -237,25 +239,15 @@ export class ProtocolConnection {
 
   async #pump(): Promise<void> {
     for (;;) {
-      if (this.#phase === 'closed') {
-        this.close()
-        return
-      }
+      if (this.#ended) return
       // The sequence resets per command, and runs continuously through the
       // whole connection phase (doc 10). Resetting here — before the framer
       // validates the header — is the entire rule.
       if (this.#phase === 'command') this.#framer.resetSequence()
 
-      let payload: Uint8Array | null
       try {
-        payload = this.#framer.next()
-      } catch (err) {
-        this.#failAndClose(err)
-        return
-      }
-      if (payload === null) return
-
-      try {
+        const payload = this.#framer.next()
+        if (payload === null) return
         await this.#handle(payload)
       } catch (err) {
         this.#failAndClose(err)
@@ -282,8 +274,8 @@ export class ProtocolConnection {
     if (parsed.kind === 'ssl-request') {
       // TLS is the TCP listener's business (D-12); a core connection has no
       // channel to secure, and saying so beats a hang.
-      this.#writeErr('ER_NOT_SUPPORTED_YET', 'TLS is not available on this connection')
-      this.#phase = 'closed'
+      this.#writeErr({ message: 'TLS is not available on this connection' }, 'ER_NOT_SUPPORTED_YET')
+      this.close()
       return
     }
 
@@ -334,65 +326,55 @@ export class ProtocolConnection {
   async #onAuthPacket(payload: Uint8Array): Promise<void> {
     const auth = this.#auth
     if (auth === null) {
-      this.#writeErr('ER_ACCESS_DENIED_ERROR', 'authentication is not in progress')
-      this.#phase = 'closed'
+      this.#writeErr({ message: 'authentication is not in progress' }, 'ER_ACCESS_DENIED_ERROR')
+      this.close()
       return
     }
     await this.#applyAuthStep(await auth.next(payload))
   }
 
   async #applyAuthStep(step: Awaited<ReturnType<ServerAuthenticator['begin']>>): Promise<void> {
+    if (this.#ended) return
     if (step.status === 'failure') {
-      const w = new Writer(96)
-      writeErr(w, this.#capabilities, {
-        errno: step.errno,
-        sqlState: step.sqlState,
-        message: step.message,
-      })
-      this.#send(w.toBytes())
-      this.#phase = 'closed'
+      this.#writeErr(step)
+      this.close()
       return
     }
 
+    if (step.status === 'continue') this.#phase = 'authenticating'
     for (const packet of step.send) this.#send(packet)
-
-    if (step.status === 'continue') {
-      this.#phase = 'authenticating'
-      return
-    }
+    if (this.#ended || step.status === 'continue') return
 
     // Success. The OK is a *separate* packet after any AuthMoreData — M1.12's
     // whole point, and the reason `send` is a list.
     const session = this.#session
-    if (session !== null) session.user = step.user
+    if (session === null) { this.close(); return }
+    session.user = step.user
     // A database named in the handshake must exist: 8.4.11 answers ERR 1049
     // and closes, and Prisma creates its database only on that answer.
-    if (session !== null && session.database !== null && session.database !== '' && this.#options.executor.initDb !== undefined) {
+    if (session.database !== null && session.database !== '' && this.#options.executor.initDb !== undefined) {
       try {
         await this.#options.executor.initDb(session, session.database)
       } catch (e) {
-        if (!(e instanceof MyjsError)) throw e
-        const w = new Writer(96)
-        writeErr(w, this.#capabilities, {
-          errno: e.errno ?? errnoOf('ER_BAD_DB_ERROR'),
-          sqlState: e.sqlState ?? sqlStateOf('ER_BAD_DB_ERROR'),
-          message: e.message,
-        })
-        this.#send(w.toBytes())
-        this.#phase = 'closed'
+        expectTyped(e)
+        this.#writeErr(e, 'ER_BAD_DB_ERROR')
+        this.close()
         return
       }
     }
+    if (this.#ended) return
+    this.#initialize?.(session)
+    this.#initialize = undefined
     const ok = new Writer(32)
-    writeOk(ok, this.#capabilities, { statusFlags: session?.statusFlags ?? 0 })
-    this.#send(ok.toBytes())
+    writeOk(ok, this.#capabilities, { statusFlags: session.statusFlags })
     this.#phase = 'command'
+    this.#send(ok.toBytes())
   }
 
   async #onCommand(payload: Uint8Array): Promise<void> {
     const session = this.#session
     if (session === null) {
-      this.#phase = 'closed'
+      this.close()
       return
     }
     const result = await dispatch(payload, {
@@ -426,11 +408,11 @@ export class ProtocolConnection {
     }
     if (this.#ended) return
     if (result.close === true) {
-      this.#phase = 'closed'
+      this.close()
       return
     }
     if (result.changeUser !== undefined) {
-      await this.#onChangeUser(result.changeUser)
+      await this.#onChangeUser(result.changeUser, session)
     }
   }
 
@@ -441,21 +423,19 @@ export class ProtocolConnection {
    * resetting again — the one place the per-command reset and the continuous
    * connection-phase numbering meet.
    */
-  async #onChangeUser(payload: Uint8Array): Promise<void> {
+  async #onChangeUser(payload: Uint8Array, session: Session): Promise<void> {
     const changed = parseComChangeUser(payload, this.#capabilities)
-    const session = this.#session
-    if (session !== null) {
-      this.#options.executor.reset?.(session)
-      session.reset()
-      session.user = changed.username
-      session.database = changed.database
-      if (changed.characterSet !== 0) session.characterSet = changed.characterSet
-      for (const [k, v] of changed.connectAttrs) session.connectAttrs.set(k, v)
-    }
+    this.#options.executor.reset?.(session)
+    session.reset()
+    this.#initialize = this.#options.executor.openSession?.()
+    session.user = changed.username
+    session.database = changed.database
+    if (changed.characterSet !== 0) session.characterSet = changed.characterSet
+    for (const [k, v] of changed.connectAttrs) session.connectAttrs.set(k, v)
     const synthesised: HandshakeResponse41 = {
       kind: 'handshake-response',
       capabilities: this.#capabilities,
-      maxPacketSize: session?.maxAllowedPacket ?? 0,
+      maxPacketSize: session.maxAllowedPacket,
       characterSet: changed.characterSet,
       username: changed.username,
       authResponse: changed.authResponse,
@@ -468,38 +448,23 @@ export class ProtocolConnection {
     await this.#applyAuthStep(await this.#auth.begin(synthesised))
   }
 
-  #writeErr(symbol: string, message: string): void {
+  #writeErr(error: { readonly errno?: number | undefined; readonly sqlState?: string | undefined; readonly message: string }, fallback = 'ER_MALFORMED_PACKET'): void {
     const w = new Writer(96)
     writeErr(w, this.#capabilities, {
-      errno: errnoOf(symbol),
-      sqlState: sqlStateOf(symbol),
-      message,
+      errno: error.errno ?? errnoOf(fallback),
+      sqlState: error.sqlState ?? sqlStateOf(fallback),
+      message: error.message,
     })
     this.#send(w.toBytes())
   }
 
-  /** Close even when the fault is not ours to report and is rethrown. */
+  /** A reported framing/parse fault or an internal failure always ends the connection. */
   #failAndClose(err: unknown): void {
     try {
-      this.#fail(err)
+      expectTyped(err)
+      this.#writeErr(err)
     } finally {
       this.close()
     }
-  }
-
-  /** A framing or parse fault ends the connection, after saying why. */
-  #fail(err: unknown): void {
-    if (err instanceof ProtocolError || err instanceof MyjsError) {
-      const w = new Writer(96)
-      writeErr(w, this.#capabilities, {
-        errno: err.errno ?? errnoOf('ER_MALFORMED_PACKET'),
-        sqlState: err.sqlState ?? sqlStateOf('ER_MALFORMED_PACKET'),
-        message: err.message,
-      })
-      this.#send(w.toBytes())
-      this.#phase = 'closed'
-      return
-    }
-    throw err
   }
 }

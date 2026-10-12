@@ -197,6 +197,7 @@ async function handle(command: number, payload: Uint8Array, ctx: DispatchContext
     case COM.RESET_CONNECTION:
       executor.reset?.(session)
       session.reset()
+      executor.openSession?.(true)(session)
       return { packets: [okPacket(ctx)] }
 
     case COM.CHANGE_USER:
@@ -411,7 +412,7 @@ function responseFor(
   return packets
 }
 
-function defaultStatistics(session: Session): string {
+export function defaultStatistics(session: Session): string {
   return (
     `Uptime: 0  Threads: 1  Questions: 0  Slow queries: 0  Opens: 0  ` +
     `Flush tables: 1  Open tables: 0  Queries per second avg: 0.000  ` +

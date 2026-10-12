@@ -1,8 +1,9 @@
 // Own SQL probes against pinned MySQL 8.4.11; neither names nor masks read our registry.
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
+import { createConnection as tcpConnection } from 'node:net'
 import mysql from 'mysql2/promise'
-import { MySQL } from '@myjs/core'
+import { MySQL, SqlExecutor } from '@myjs/core'
 
 const names = ["index_merge","index_merge_union","index_merge_sort_union","index_merge_intersection","engine_condition_pushdown","index_condition_pushdown","mrr","mrr_cost_based","block_nested_loop","batched_key_access","materialization","semijoin","loosescan","firstmatch","duplicateweedout","subquery_materialization_cost_based","use_index_extensions","condition_fanout_filter","derived_merge","use_invisible_indexes","skip_scan","hash_join","subquery_to_derived","prefer_ordering_index","hypergraph_optimizer","derived_condition_pushdown","hash_set_operations"]
 const vectors: readonly (readonly (readonly [string, number, { errno: number; sqlState: string; message: string } | null])[])[] = [
@@ -150,5 +151,96 @@ test('optimizer_switch snapshots globals for new connections and uses global def
     await admin.query('SET GLOBAL optimizer_switch=' + mysql.escape(saved[0]?.flags))
     for (const conn of connections.values()) await conn.end()
     await admin.end(); await db?.end()
+  }
+})
+
+
+test('embedding optimizer_switch values share SET normalization and compiled reset defaults', async () => {
+  for (const [value, mask] of [['', 112721407], ['default', 112721407], ['firstmatch=off', 112713215], ['loosescan=off', 112717311], [0, 0], [1n, 1], [134217728n, 0], [new TextEncoder().encode('firstmatch=off'), 112713215]] as const) {
+    const variables = { optimizer_switch: value }
+    const executor = new SqlExecutor({ systemVariables: variables })
+    assert.equal(executor.server.global('optimizer_switch'), flagText(mask))
+    assert.equal(variables.optimizer_switch, value, 'normalization never mutates supplied configuration')
+    const db = await MySQL.open(':memory:', { executor })
+    const conn = await mysql.createConnection({ stream: db.createStream(), user: 'root', password: '' })
+    try {
+      for (const method of ['query', 'execute'] as const) {
+        const run = (sql: string) => method === 'query' ? conn.query(sql) : conn.execute(sql)
+        await run('SET optimizer_switch=DEFAULT')
+        const [rows] = await run('SELECT @@optimizer_switch AS flags')
+        assert.equal((rows as mysql.RowDataPacket[])[0]?.flags, flagText(mask))
+        await run("SET optimizer_switch='firstmatch=off'")
+        await run("SET optimizer_switch='default'")
+        const [reset] = await run('SELECT @@optimizer_switch AS flags')
+        assert.equal((reset as mysql.RowDataPacket[])[0]?.flags, flagText(mask), 'SESSION quoted reset uses configured GLOBAL defaults')
+      }
+      await conn.query('SET GLOBAL optimizer_switch=DEFAULT')
+      const [rows] = await conn.query<mysql.RowDataPacket[]>('SELECT @@GLOBAL.optimizer_switch AS flags')
+      assert.equal(rows[0]?.flags, flagText(112721407), 'GLOBAL reset uses builtin defaults')
+      const next = await mysql.createConnection({ stream: db.createStream(), user: 'root', password: '' })
+      try {
+        const [rows] = await next.query<mysql.RowDataPacket[]>('SELECT @@optimizer_switch AS flags')
+        assert.equal(rows[0]?.flags, flagText(112721407))
+      } finally { await next.end() }
+      const [old] = await conn.query<mysql.RowDataPacket[]>('SELECT @@optimizer_switch AS flags')
+      assert.equal(old[0]?.flags, flagText(mask), 'existing SESSION snapshot survives GLOBAL reset')
+    } finally { await conn.end(); await db.end() }
+  }
+  for (const [value, errno] of [[null, 1231], [-1, 1231], [268435456n, 1231], [1.5, 1232], ['unknown=off', 1231], ['firstmatch=off,firstmatch=on', 1231], [16777216, 3999]] as const) {
+    const variables = { optimizer_switch: value, version_comment: 'unchanged' }
+    assert.throws(() => new SqlExecutor({ systemVariables: variables }), { errno })
+    assert.deepEqual(variables, { optimizer_switch: value, version_comment: 'unchanged' })
+  }
+})
+
+
+test('optimizer defaults are captured before greeting, first statement, reset and CHANGE_USER', async () => {
+  const { db, conn: admin } = await connected()
+  const host = process.env.MYSQL_REFERENCE_HOST ?? '127.0.0.1'
+  const password = db === undefined ? process.env.MYSQL_REFERENCE_PASSWORD ?? 'root' : ''
+  const open = () => mysql.createConnection(db === undefined ? { host, user: 'root', password } : { stream: db.createStream(), user: 'root', password })
+  const [saved] = await admin.query<mysql.RowDataPacket[]>('SELECT @@GLOBAL.optimizer_switch AS flags')
+  const read = 'SELECT @@SESSION.optimizer_switch AS flags,@@GLOBAL.optimizer_switch AS globalFlags'
+  const check = async (conn: mysql.Connection, method: 'query' | 'execute', own: number, global: number, charset = 224) => {
+    const [rows, fields] = method === 'query' ? await conn.query<mysql.RowDataPacket[]>(read) : await conn.execute<mysql.RowDataPacket[]>(read)
+    assert.deepEqual(rows, [{ flags: flagText(own), globalFlags: flagText(global) }])
+    assert.deepEqual(fields.map(f => [f.name, f.columnType, f.columnLength, f.flags, f.characterSet]), [['flags', 253, 87380, 0, charset], ['globalFlags', 253, 87380, 0, charset]])
+    assert.deepEqual((await conn.query('SHOW WARNINGS'))[0], [])
+  }
+  try {
+    for (const method of ['query', 'execute'] as const) {
+      await admin.query("SET GLOBAL optimizer_switch='default'")
+      const cold = await open()
+      try {
+        await admin.query("SET GLOBAL optimizer_switch='firstmatch=off'")
+        await check(cold, method, 112721407, 112713215)
+        await cold.reset()
+        // Do not warm the reset session before the next global change.
+        await admin.query("SET GLOBAL optimizer_switch='loosescan=off'")
+        await check(cold, method, 112713215, 112709119, 255)
+        await admin.query("SET GLOBAL optimizer_switch='default'")
+        await cold.changeUser({ user: 'root', password })
+        await admin.query("SET GLOBAL optimizer_switch='firstmatch=off'")
+        await check(cold, method, 112721407, 112713215)
+      } finally { await cold.end() }
+      await admin.query("SET GLOBAL optimizer_switch='default'")
+      const stream = db === undefined ? tcpConnection({ host, port: Number(process.env.MYSQL_REFERENCE_PORT ?? 3306) }) : db.createStream()
+      stream.pause()
+      let late: mysql.Connection | undefined
+      try {
+        await new Promise<void>((resolve, reject) => { stream.once('readable', resolve); stream.once('error', reject) })
+        // MySQL already copied globals when it emitted the greeting, before
+        // receiving the username, capabilities or authentication response.
+        await admin.query("SET GLOBAL optimizer_switch='firstmatch=off'")
+        const pending = mysql.createConnection({ stream, user: 'root', password })
+        stream.resume()
+        late = await pending
+        await check(late, method, 112721407, 112713215)
+      } finally { await late?.end(); stream.destroy() }
+    }
+  } finally {
+    await admin.query('SET GLOBAL optimizer_switch=' + mysql.escape(saved[0]?.flags))
+    await admin.end()
+    await db?.end()
   }
 })

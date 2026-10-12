@@ -8,7 +8,7 @@
 // commands ran side by side.
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { COM, PacketFramer, Session, capabilities } from '@myjs/protocol'
+import { COM, MapAccountStore, PacketFramer, Session, capabilities, sqlError } from '@myjs/protocol'
 import { MySQL, SqlExecutor } from '@myjs/core'
 import type { Executor } from '@myjs/protocol'
 
@@ -125,4 +125,125 @@ test('a PREPARE paused after lexing cannot resume an ended session', async (t) =
   executor.end(session)
   await assert.rejects(pending, { code: 'ER_QUERY_INTERRUPTED' })
   await assert.rejects(executor.prepare(session, 'SELECT 1'), { code: 'ER_QUERY_INTERRUPTED' })
+})
+
+test('session initialization captures before greeting, waits for authentication and repeats after reset', async () => {
+  let global = 1
+  const events: string[] = []
+  const db = await MySQL.open(':memory:', { executor: {
+    query: async () => ({ affectedRows: 0 }),
+    prepare: async () => ({ paramCount: 0, columns: [] }),
+    execute: async () => ({ affectedRows: 0 }),
+    openSession(reset) {
+      const captured = global
+      events.push(`capture:${captured}:${reset === true}`)
+      return (session) => { assert.equal(session.user, 'root'); events.push(`apply:${captured}`) }
+    },
+    reset: () => { events.push('reset') },
+    end: () => { events.push('end') },
+  } })
+  const connection = db.createConnection()
+  try {
+    connection.start()
+    global = 2
+    const { WireClient } = await import('../../packages/core/src/client/wire.ts')
+    await WireClient.connect(connection, { user: 'root', password: '' })
+    assert.deepEqual(events, ['capture:1:false', 'apply:1'])
+    const framer = new PacketFramer()
+    await connection.feed(framer.encode(new Uint8Array([COM.RESET_CONNECTION])))
+    assert.deepEqual(events, ['capture:1:false', 'apply:1', 'reset', 'capture:2:true', 'apply:2'])
+  } finally { await db.end() }
+  assert.equal(events.filter((e) => e === 'end').length, 1)
+})
+
+test('failed authentication never applies the captured initializer', async () => {
+  let captured = 0
+  let initialized = 0
+  let ended = 0
+  const db = await MySQL.open(':memory:', { executor: {
+    query: async () => ({ affectedRows: 0 }),
+    prepare: async () => ({ paramCount: 0, columns: [] }),
+    execute: async () => ({ affectedRows: 0 }),
+    openSession: () => { captured++; return () => { initialized++ } },
+    end: () => { ended++ },
+  } })
+  try {
+    const connection = db.createConnection()
+    const { WireClient } = await import('../../packages/core/src/client/wire.ts')
+    await assert.rejects(WireClient.connect(connection, { user: 'root', password: 'wrong' }), { errno: 1045 })
+    assert.equal(connection.closed, true)
+    assert.equal(captured, 1)
+    assert.equal(initialized, 0)
+    assert.equal(ended, 1)
+  } finally { await db.end() }
+  assert.equal(ended, 1)
+})
+
+test('closing while the handshake database waits never initializes or emits a late OK or ERR', async () => {
+  for (const fail of [false, true]) {
+    let enter!: () => void
+    let release!: () => void
+    const entered = new Promise<void>((resolve) => { enter = resolve })
+    const held = new Promise<void>((resolve) => { release = resolve })
+    let initialized = 0
+    let ended = 0
+    const db = await MySQL.open(':memory:', { executor: {
+      query: async () => ({ affectedRows: 0 }),
+      prepare: async () => ({ paramCount: 0, columns: [] }),
+      execute: async () => ({ affectedRows: 0 }),
+      openSession: () => () => { initialized++ },
+      async initDb() { enter(); await held; if (fail) throw sqlError('ER_BAD_DB_ERROR', 'missing') },
+      end: () => { ended++ },
+    } })
+    try {
+      const connection = db.createConnection()
+      const { WireClient } = await import('../../packages/core/src/client/wire.ts')
+      const pending = WireClient.connect(connection, { user: 'root', password: '', database: 'd' })
+      await entered
+      connection.close()
+      let late = 0
+      connection.onOutput(() => { late += connection.take().length })
+      release()
+      await assert.rejects(pending)
+      assert.equal(connection.closed, true)
+      assert.equal(initialized, 0)
+      assert.equal(ended, 1)
+      assert.equal(late, 0)
+    } finally { release(); await db.end() }
+    assert.equal(ended, 1)
+  }
+})
+
+test('closing from greeting or authentication output never reopens the command phase', async () => {
+  for (const stage of ['greeting', 'authenticating', 'authenticated']) {
+    let queries = 0
+    let initialized = 0
+    let databases = 0
+    const accounts = new MapAccountStore()
+    const password = stage === 'authenticating' ? 'secret' : ''
+    await accounts.add('root', password)
+    const db = await MySQL.open(':memory:', { accounts, executor: {
+      query: async () => { queries++; return { affectedRows: 0 } },
+      initDb: async () => { databases++ },
+      prepare: async () => ({ paramCount: 0, columns: [] }),
+      execute: async () => ({ affectedRows: 0 }),
+      openSession: () => () => { initialized++ },
+    } })
+    try {
+      const connection = db.createConnection()
+      connection.onOutput(() => { if (stage === 'greeting' || connection.session?.user === 'root') connection.close() })
+      if (stage === 'greeting') connection.start()
+      else {
+        const { WireClient } = await import('../../packages/core/src/client/wire.ts')
+        const pending = WireClient.connect(connection, { user: 'root', password, database: 'd' })
+        if (stage === 'authenticating') await assert.rejects(pending)
+        else await pending
+      }
+      assert.equal(connection.closed, true)
+      assert.equal(initialized, stage === 'authenticated' ? 1 : 0)
+      assert.equal(databases, stage === 'authenticated' ? 1 : 0)
+      await connection.feed(command('SELECT 1'))
+      assert.equal(queries, 0, 'a closed custom executor must receive no commands')
+    } finally { await db.end() }
+  }
 })
