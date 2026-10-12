@@ -39,7 +39,7 @@ import { NODE, REF, type Expression, type TableReference } from '@myjs/parser'
 import { messages, sqlError } from '@myjs/protocol'
 import { truth, type Value } from '@myjs/types'
 import type { Compiled, Env, Row, Scope } from './compile.ts'
-import { planNode, type PlanNode } from './explain.ts'
+import { indexLookup, planNode, type PlanNode } from './explain.ts'
 import { FULL_SCAN, accessRows, chooseAccess, dynamicAccess, keyOrder, pointAccess, splitAnd, type Access, type OuterColumn, type RangeCosting } from './plan.ts'
 import { bestAccess, floorFilter, indexScanCost, joinOrder, type Candidate, type KeyChoice, type Positioned } from './cost.ts'
 import { rowKey } from './keys.ts'
@@ -1428,7 +1428,7 @@ function rangeEstimate(t: FromTable, conditions: readonly Weighed[], leaves: rea
   const counts = new Map<ColumnDef, number>(compiled.map(([c]) => [c, 0]))
   const row = new Array<Value>(width).fill(null)
   for (const { row: values } of accessRows(t.table, def, FULL_SCAN, undefined, false)) {
-    for (let i = 0; i < t.width; i++) row[t.offset + i] = values[i] ?? null
+    fillTable(t, values, row)
     for (const [column, c] of compiled) if (truth(c.eval(row, env)) === true) counts.set(column, (counts.get(column) as number) + 1)
   }
   for (const [c, n] of counts) counts.set(c, Math.max(1, n))
@@ -1604,15 +1604,17 @@ function rowBytes(prefix: readonly Positioned[], settings: LeafSettings): number
   return bytes
 }
 
+/** Fill one table's local values into its logical slots without changing other tables. */
+function fillTable(t: FromTable, values: readonly Value[], row: Value[]): Value[] {
+  for (let i = 0; i < t.width; i++) row[t.offset + i] = values[i] ?? null
+  return row
+}
+
 /** A base or derived table, read by `leafAccess`, each row as wide as the whole FROM. */
 function tableOp(t: FromTable, settings: LeafSettings): Op {
   return {
     *rows(run, context) {
-      const fill = (values: readonly Value[]): Value[] => {
-        const row = new Array<Value>(run.width).fill(null)
-        for (let i = 0; i < t.width; i++) row[t.offset + i] = values[i] ?? null
-        return row
-      }
+      const fill = (values: readonly Value[]): Value[] => fillTable(t, values, new Array<Value>(run.width).fill(null))
       if (t.derived !== undefined) {
         for (const values of t.derived.rows(run.trx, run.env, t.lateral ? context : undefined)) yield { row: fill(values) }
         return
@@ -1721,8 +1723,7 @@ function lookupOp(node: Node & { kind: 'join' }, outer: Op, t: FromTable, lookup
         if (v !== null) {
           // A value that does not convert exactly is a filtered scan, which finds the same rows (D-65).
           for (const { id, row: values } of accessRows(t.table as Table, t.def as TableDef, pointAccess(lookup.index, lookup.column, v) ?? FULL_SCAN, run.trx, run.locking)) {
-            const combined = o.row.slice()
-            for (let i = 0; i < t.width; i++) combined[t.offset + i] = values[i] ?? null
+            const combined = fillTable(t, values, o.row.slice())
             if (!holds(on, combined, env)) continue
             matched = true
             yield joined(combined, run.ids ? joinIds(o, { row: values, ids: idsAt(t.offset, id) }) : undefined)
@@ -1734,7 +1735,7 @@ function lookupOp(node: Node & { kind: 'join' }, outer: Op, t: FromTable, lookup
     },
     describe(env) {
       const covering = t.def !== undefined && holdsRead(t.def, lookup.index, settings.read.get(t.alias) ?? 'all')
-      const lookupNode = planNode(`${lookup.unique ? 'Single-row ' : ''}${covering ? (lookup.unique ? 'covering index' : 'Covering index') : lookup.unique ? 'index' : 'Index'} lookup on ${t.alias} using ${lookup.index.name}`)
+      const lookupNode = indexLookup(t.alias, lookup.index.name, lookup.unique, covering)
       // The lookup's own equality is the key read, not a filter.
       const rest = on.filter((c) => c.e !== lookup.condition)
       const read = rest.length === 0 ? lookupNode : planNode('Filter', [lookupNode])
@@ -1863,8 +1864,7 @@ function dynamicOp(node: Node & { kind: 'join' }, outer: Op, t: FromTable, on: r
         const access = costing === undefined ? FULL_SCAN : dynamicAccess(t.def as TableDef, t.alias, conjuncts, env, costing, value)
         let matched = false
         for (const { id, row: values } of accessRows(t.table as Table, t.def as TableDef, access, run.trx, run.locking)) {
-          const combined = o.row.slice()
-          for (let i = 0; i < t.width; i++) combined[t.offset + i] = values[i] ?? null
+          const combined = fillTable(t, values, o.row.slice())
           if (!holds(on, combined, env)) continue
           matched = true
           yield joined(combined, run.ids ? joinIds(o, { row: values, ids: idsAt(t.offset, id) }) : undefined)

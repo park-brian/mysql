@@ -25,7 +25,7 @@ import { collationInfoByName } from '@myjs/charsets'
 import { safeResolve, TableScope } from './scope.ts'
 import { indexParts, planFrom, type DerivedPlan, type DerivedSource, type FromContext, type FromPlan, type JoinCondition } from './from.ts'
 import { rowKey, valueKey } from './keys.ts'
-import { planNode, wrap, type PlanNode } from './explain.ts'
+import { indexLookup, planNode, wrap, type PlanNode } from './explain.ts'
 import { describeStages, runStages, type Rowed, type Stage } from './pipeline.ts'
 import { convert as convertSetValue, nestedNullability, setOperation, setOperationType } from './setop.ts'
 import { constTablesHaveRows, neverEqual, optimizerFacts, uniqueKey, type OptimizerFacts } from './optimize.ts'
@@ -752,7 +752,7 @@ function quantifiedPlan(run: Run, query: QueryExpression, how: QuantifiedSubquer
     }
     const unique = index.parts.length === 1 && (index.kind === 'primary' || index.kind === 'unique')
     const covering = covers(index.parts)
-    access = planNode(`${unique ? 'Single-row ' : ''}${covering ? (unique ? 'covering index' : 'Covering index') : unique ? 'index' : 'Index'} lookup on ${alias} using ${index.name}`)
+    access = indexLookup(alias, index.name, unique, covering)
     if (nulls && how.outerNullable) access = planNode('Alternative plans for IN subquery', [access, planNode(`Table scan on ${alias}`)])
     filters = Math.max(nulls ? (column.nullable ? 2 : how.outerNullable ? 1 : 0) : 0, where)
   } else {
@@ -792,6 +792,17 @@ function boundedOuter(run: Run, q: QueryExpression, node: SelectNode) {
   return node.from?.length === 1 && outer?.kind === REF.TABLE && outer.indexHints === undefined && run.parent === undefined && q.with === undefined && node.windows === undefined && (node.options?.length ?? 0) === 0 ? outer : undefined
 }
 
+/** The qualified equality and at most one residual shared by correlated join candidates. */
+function correlatedPair(where: Expression | undefined, inner: string, outer: string, fold = false) {
+  const parts = splitAnd(where)
+  if (parts.length > 2) return undefined
+  const column = (e: Expression, alias: string): boolean => e.kind === NODE.COLUMN && e.parts.length === 2 && (fold ? e.parts[0]?.toLowerCase() === alias.toLowerCase() : e.parts[0] === alias)
+  const equality = parts.find((e) => e.kind === NODE.BINARY && e.op === '=' && ((column(e.left, inner) && column(e.right, outer)) || (column(e.right, inner) && column(e.left, outer))))
+  if (equality?.kind !== NODE.BINARY) return undefined
+  const innerKey = column(equality.left, inner) ? equality.left : equality.right
+  return { innerKey, outerKey: innerKey === equality.left ? equality.right : equality.left, extra: parts.find((e) => e !== equality) }
+}
+
 /** A bounded integer semijoin using the existing cost search and indexed join iterators. */
 function costedIntegerSemijoin(run: Run, q: QueryExpression, node: SelectNode, from: FromPlan, sortBy: string | undefined, keep: number): { readonly from: FromPlan; readonly where: Expression; readonly loose: boolean } | undefined {
   const outer = boundedOuter(run, q, node)
@@ -816,12 +827,11 @@ function costedIntegerSemijoin(run: Run, q: QueryExpression, node: SelectNode, f
     outerKey = where.left
   } else {
     if (body.items[0]?.expr.kind !== NODE.LITERAL || body.items[0].expr.type !== LITERAL.INT) return undefined
-    const parts = splitAnd(body.where)
-    const equality = parts.find((e) => e.kind === NODE.BINARY && e.op === '=' && e.left.kind === NODE.COLUMN && e.right.kind === NODE.COLUMN && e.left.parts.length === 2 && e.right.parts.length === 2 && ((e.left.parts[0] === innerAlias && e.right.parts[0] === outerAlias) || (e.right.parts[0] === innerAlias && e.left.parts[0] === outerAlias)))
-    if (equality?.kind !== NODE.BINARY || parts.length > 2) return undefined
-    innerKey = column(equality.left, innerAlias) ? equality.left : equality.right
-    outerKey = innerKey === equality.left ? equality.right : equality.left
-    extra = parts.find((e) => e !== equality)
+    const pair = correlatedPair(body.where, innerAlias, outerAlias)
+    if (pair === undefined) return undefined
+    innerKey = pair.innerKey
+    outerKey = pair.outerKey
+    extra = pair.extra
   }
   if (!column(innerKey, innerAlias) || !column(outerKey, outerAlias)) return undefined
   const innerColumn = innerKey.parts[innerKey.parts.length - 1] as string
@@ -876,15 +886,12 @@ function costedAntijoin(run: Run, q: QueryExpression, node: SelectNode, from: Fr
   const outerAlias = outer.alias ?? outer.table.name
   const innerAlias = inner.alias ?? inner.table.name
   if (outerAlias.toLowerCase() === innerAlias.toLowerCase()) return undefined
-  const parts = splitAnd(body.where)
-  if (parts.length !== 2) return undefined
   const column = (e: Expression, alias: string): boolean => e.kind === NODE.COLUMN && e.parts.length === 2 && e.parts[0]?.toLowerCase() === alias.toLowerCase()
-  const equality = parts.find((e) => e.kind === NODE.BINARY && e.op === '=' && ((column(e.left, innerAlias) && column(e.right, outerAlias)) || (column(e.right, innerAlias) && column(e.left, outerAlias))))
-  const extra = parts.find((e) => e !== equality)
-  if (equality?.kind !== NODE.BINARY || extra?.kind !== NODE.BINARY || !['=', '<>', '!=', '<', '<=', '>', '>='].includes(extra.op)) return undefined
+  const pair = correlatedPair(body.where, innerAlias, outerAlias, true)
+  if (pair === undefined) return undefined
+  const { innerKey, outerKey, extra } = pair
+  if (extra?.kind !== NODE.BINARY || !['=', '<>', '!=', '<', '<=', '>', '>='].includes(extra.op)) return undefined
   if (!column(extra.left, innerAlias) || extra.right.kind !== NODE.LITERAL || extra.right.type !== LITERAL.INT) return undefined
-  const innerKey = column(equality.left, innerAlias) ? equality.left : equality.right
-  const outerKey = innerKey === equality.left ? equality.right : equality.left
   if (innerKey.kind !== NODE.COLUMN || extra.left.kind !== NODE.COLUMN) return undefined
   const keyColumn = innerKey.parts[1]
   const predicateColumn = extra.left.parts[1]
