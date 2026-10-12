@@ -2093,16 +2093,25 @@ preserved, so native hidden-key wildcard projection differs. Do not infer a
 visibility implementation from a key-coverage repair. ALTER column visibility
 is explicitly unsupported. These gaps remain open under M5.49/M5.12.
 
-**Next:** continue M5.47 with the captured empty-inner semijoin strategy
-gaps. The earlier 288-observation non-primary integer audit has 28 remaining
-plan differences, while its rows, fields and warnings agree. Reproduce those
-against pinned 8.4.11 and inspect the existing empty-range admission and shared
-strategy costs. Begin with the bounded FirstMatch/indexed-loop alternatives;
-retain actual iterators and cost decisions instead of adding EXPLAIN labels or
-choosing a strategy from an empty-data special case. Test both protocols and
-retained statements as rows change between empty, duplicate, matching and NULL
-states. Preserve all previously matching observations and the 2,118-plan floor;
-weedout and broader materialization need their own verified implementation.
+**Next:** repair M5.47 candidate legality at the shared join-order owner.
+The 288-observation non-primary audit exactly reproduces its 28 empty-inner
+plan differences; rows, fields and warnings all agree. Twenty-four untruncated
+native optimizer traces show distinct LooseScan, FirstMatch, weedout and
+materialization cost choices. Removing the later empty-range admission guard
+alone changes none of the 288 outcomes: the mismatch occurs earlier.
+The ordinary join search chooses a cheaper inner-first hash plan, which has no
+outer-row deduplication proof for this semijoin; the bounded candidate then
+rejects it and falls back to the filtered subquery.
+
+Investigate expressing FirstMatch's required outer-before-inner order through
+the existing candidate dependencies before the cost search, while preserving
+eligible LooseScan alternatives. Verify actual indexed-loop admission without
+empty-data or ORDER BY special cases. Keep cheaper unsupported weedout/hash
+LooseScan/materialization strategies explicitly open; their EXPLAIN labels
+require their actual deduplication/materialization iterators. Preserve all
+previously matching observations, both protocols, retained statements across
+empty/duplicate/matching/NULL writes and the 2,118-plan floor. Record the
+verified dependency/strategy boundary before retaining any implementation.
 
 The preparation destruction repair is verified below. Three isolated Docker
 INSERT profiles did not establish a material duplicate-search cost, so no
@@ -2628,6 +2637,39 @@ eaa5e03 commit. Its GitHub run is in progress with no reported failure at this
 boundary. M5.50 remains partial, with the performance criterion and durable
 transactional schema ownership explicitly open. Continue the concrete M5.47
 empty-inner strategy differences through the existing cost/iterator owners.
+
+### Verified empty-inner semijoin candidate boundary (2026-10-12)
+
+The pinned 8.4.11 server exactly reproduces all 288 observations in the earlier
+non-primary integer audit. Current code retains 260 complete matches, and all
+rows, fields and warnings agree. The 28 plan differences belong to six plan
+classes. Twenty-four optimizer traces (two captured schemas, four switch sets,
+three ORDER/LIMIT forms) are complete, with zero omitted trace bytes.
+
+For the empty-inner two-row outer case, native outer-first FirstMatch costs
+1.15. Unordered with LooseScan disabled it beats materialized lookup at 2.1 and
+weedout at 2.55. Enabled LooseScan can run inner-first deduplication followed by
+hash join at about 0.800005; the current bounded LooseScan requires an outer
+PRIMARY lookup and cannot run that hash alternative. Ordered and disabled-
+FirstMatch forms select weedout or materialization, so blanket admission cannot
+make every plan match.
+
+Current shared join search also selects the approximately 0.8 ordinary
+inner-first hash plan for these empty cases, without the semijoin's required
+outer-row deduplication proof. The bounded integer candidate rejects that
+topology before reaching its empty-range guard. An isolated temporary removal
+of the guard changes none of the 288 complete outcomes and is restored.
+Diagnostic candidate logging likewise preserves every outcome and is restored;
+source-byte verification confirms production code is unchanged.
+
+The next candidate investigation belongs at the existing dependency/cost owner:
+FirstMatch requires outer-before-inner placement unless an eligible LooseScan
+alternative exists. Do not add an empty-data rule or a plan label for an
+unimplemented strategy. This research closes no plan difference yet. Code and
+tests remain the eaa5e03 state validated by 1,277 Windows/Docker tests, seven
+pinned corpora and 10,000 crash points. Every required GitHub job for eaa5e03
+has passed; the profiling-documentation commit's CI is still running without a
+reported failure. M5.47 and M5.50 remain partial.
 
 ## M6 — The browser
 
