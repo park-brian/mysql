@@ -2108,8 +2108,48 @@ deduplicated iterators against native traces before broader weedout admission.
 The 192-record nonempty strategy audit has all rows, fields and warnings native
 but only 24 complete plan matches: unordered, ordered-LIMIT and disabled-strategy
 alternatives remain separate. Keep captures, size caps and the 2,118-plan floor
-unchanged. M5.47 stays partial. The preceding c169779 exact-SHA GitHub run
-38307010117 passed every required job; monitor subsequent runs while working.
+unchanged. M5.47 stays partial. The 468254b exact-SHA GitHub run
+38316521358 passed all eleven required jobs; monitor subsequent runs while working.
+
+**Measured materialization boundary:** a fresh pinned matrix has 144 query/
+execute outcomes across 20/200 outer rows, 0/8/80 inner rows, nullable duplicate
+keys, unordered/ordered-LIMIT reads and six switch combinations. All rows, full
+fields and warnings agree; only 44 complete outcomes match. Of 72 configurations,
+22 native LooseScan plans match; 48 native materialized plans and two fallback
+plans remain open. Switches independently disable FirstMatch, LooseScan,
+materialization and weedout; all measured groups remain in the audit.
+
+Seventy-two native traces pin competing costs. For 200 outer/8 inner rows with
+FirstMatch disabled, MaterializeLookup costs 43.1 against LooseScan 80.9019;
+disabling materialization selects LooseScan. MaterializeLookup costs are 7.1/
+21.5 for 20 outer rows with 8/80 inner rows, and 43.1/57.5 for 200 outer rows.
+Thirty-six EXPLAIN ANALYZE observations distinguish planning from lifetime:
+where materialization is selected, eight inner rows yield three non-NULL keys
+in one build; unordered execution probes 150 non-NULL outer rows, retaining
+separate duplicate outer identities. Ordered LIMIT 1 still builds once and
+probes once. Empty/all-NULL outer inputs can change the selected strategy and
+execute no inner read; do not infer cached prepared choices from text EXPLAIN.
+
+The existing keyed IN membership builder already owns one build/probe per
+statement. The verified cleanup streams rows directly into its key set rather
+than retaining a second complete row array in the memo. Empty input remains distinct
+from NULL-only input; correlated/non-keyed fallbacks are unchanged. Two focused
+subquery tests, typecheck, lint and every size cap pass; all 144 audit outcomes
+are strictly unchanged. A direct before/after measurement over 200 outer
+evaluations keeps one eight-row build, three keys and one closed source iterator;
+retained full-row copies fall from eight to zero. Core/facade are
+334,308/334,240 B gzipped. Full Docker verification passes: all 1,288 tests, package smoke, 20,000 executor statements
+seeded 20261010 and seven pinned corpora. Seventeen native checks pass; the
+272/288 base matches, 262/352 fresh matches with 328 fields, 192 earlier fresh
+outcomes and 2,243 older controls are unchanged. Plans remain 2,124/2,248 against
+the unchanged 2,118 floor. No cap, fixture or lazy chunk changes.
+
+No materialized strategy admission is shipped by this audit. Reuse the physical
+deduplication and indexed lookup/hash owners; compare selected costs through the existing
+search, preserve every previously matching component, and test changing data,
+NULLs, exact integer widths and early stream closure. Build/probe counters must
+verify execution rather than inferred plan labels. Keep broader grammar and
+prepared-choice gaps, all caps/fixtures and the 2,118 floor unchanged.
 
 The preparation destruction repair is verified below. Three isolated Docker
 INSERT profiles did not establish a material duplicate-search cost, so no
@@ -2798,6 +2838,25 @@ Plans stay 2,124/2,248 against the unchanged 2,118 floor. Core/facade are
 334,329/334,232 bytes gzipped, engine 56,582; no caps, fixtures or lazy chunks
 change. The preceding c169779 GitHub run passed every required job. M5.47 and
 the full roadmap remain partial.
+
+### Verified streamed membership foundation (2026-10-12)
+
+Uncorrelated keyed IN/NOT IN now builds its existing membership set directly
+from the source iterator. It no longer retains another complete row array;
+empty and NULL-only input remain distinct, and correlated/non-keyed fallbacks
+keep their own policy. A direct 200-probe before/after measurement keeps one
+eight-row build, three keys and one source closure, removing eight cached row
+copies. This is a foundation cleanup; materialized semijoin admission is open.
+
+All 1,288 Docker tests, typecheck, lint, nine unchanged size gates, package smoke,
+20,000 seeded executor statements and seven pinned-reference corpora pass.
+Two focused subquery tests and seventeen live native controls pass. The fresh
+144-outcome materialization audit is strictly unchanged: all rows/fields/
+warnings agree, 44 complete outcomes match. The base/fresh/older plan controls
+and 2,124/2,248 plans are unchanged; caps, fixtures and the 2,118 floor stay fixed.
+Core/facade are 334,308/334,240 B, engine 56,582. The preceding 468254b GitHub
+run passed all eleven required jobs. Native costs and build/probe lifetimes
+are recorded above for the next selected-strategy repair; M5.47 remains partial.
 
 ## M6 — The browser
 

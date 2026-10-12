@@ -2703,15 +2703,16 @@ function quantified(op: string, quantifier: 'ANY' | 'ALL', left: Expression, rig
       if (plan.correlated || env.memo === undefined) return undefined
       const hit = env.memo.get(setKey) as ReturnType<typeof membership>
       if (hit !== undefined) return hit
-      const rows = rowsOf(plan, key, [], env)
       const keys = new Set<string>()
+      let empty = true
       let sawNull = false
-      for (const r of rows) {
+      for (const r of plan.rows(env)) {
+        empty = false
         const x = r[0] ?? null
         if (x === null) sawNull = true
         else keys.add(valueKey(x))
       }
-      const made = { keys, empty: rows.length === 0, sawNull }
+      const made = { keys, empty, sawNull }
       env.memo.set(setKey, made)
       return made
     }
