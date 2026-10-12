@@ -342,7 +342,7 @@ function planSelect(run: Run, q: QueryExpression, node: SelectNode): SelectPlan 
   // NOT_NULL, the same without the MAX does not).
   const nullableTables = scope === undefined ? new Set<string>() : aggregatingSubqueryTables(node, scope)
   const selectScope: Scope = nullableTables.size === 0 || scope === undefined ? lookup : nullableView(scope, nullableTables)
-  const items: { name: string; compiled: Compiled; alias?: string; expr?: Expression }[] = []
+  const items: { name: string; compiled: Compiled; alias?: string; expr: Expression }[] = []
   for (const entry of selectList(run, node, scope)) {
     const { item, slot } = entry
     const compiled = slot === undefined ? compile(item.expr, compileContext(run, selectScope, 'field list', windows))
@@ -374,12 +374,12 @@ function planSelect(run: Run, q: QueryExpression, node: SelectNode): SelectPlan 
   }
   const loopSemijoin = semijoin && scope !== undefined && (semi !== undefined || anti?.lookup === true || nestedLoopSemijoin(node.where, scope))
   if (from !== undefined && scope !== undefined) from.sortedBy(sortBy, keep)
-  if (from !== undefined && scope !== undefined && node.distinct === true) from.distinctReads(keyAliases(items.flatMap((i) => (i.expr === undefined ? [] : [i.expr])), items, scope))
+  if (from !== undefined && scope !== undefined && node.distinct === true) from.distinctReads(keyAliases(items.map((i) => i.expr), items, scope))
   const facts = source === undefined ? undefined : whereFacts(run, source.def, source.alias, node.where)
   // A prepare reports a statement before MySQL optimizes it, so it never sees
   // the temporary table: COM_STMT_PREPARE's metadata has no GROUP_FLAG where
   // the execute's does (8.4.11, found by review).
-  if (node.distinct === true && source !== undefined && facts !== undefined && run.preparing !== true && !distinctKey(source.def, node.items, source.alias)) {
+  if (node.distinct === true && source !== undefined && facts !== undefined && run.preparing !== true && !distinctKey(source.def, items, lookup)) {
     const pinnedName = (item: { compiled: Compiled }): boolean => {
       const name = item.compiled.type.column?.orgName.toLowerCase()
       return name !== undefined && facts.pins.has(name)
@@ -395,13 +395,13 @@ function planSelect(run: Run, q: QueryExpression, node: SelectNode): SelectPlan 
       // A constant is not copied into the table: `SELECT DISTINCT NULL, x`
       // reports its NULL as it always does (8.4.11).
       for (const item of items) {
-        if (item.expr !== undefined && !refersToRow(item.expr, lookup)) continue
+        if (!refersToRow(item.expr, lookup)) continue
         // Read through a window's table already, a column keeps what that gives it (8.4.11).
         if (item.compiled.type.temporary === 'stream') continue
         // Fields can share key membership while retaining separate evaluators.
         // Only local source fields and proved deterministic SIGNED casts qualify.
         const e = item.expr
-        const key = e?.kind === NODE.COLUMN || e?.kind === NODE.CAST ? JSON.stringify(expressionIdentity(e, fieldCtx, run.env, 'field')) : undefined
+        const key = e.kind === NODE.COLUMN || e.kind === NODE.CAST ? JSON.stringify(expressionIdentity(e, fieldCtx, run.env, 'field')) : undefined
         const repeated = key !== undefined && copied.has(key)
         if (key !== undefined) copied.add(key)
         // A bounded unordered table copies fields without GROUP_FLAG (8.4.11).
@@ -431,12 +431,12 @@ function planSelect(run: Run, q: QueryExpression, node: SelectNode): SelectPlan 
     const alone = node.distinct === true && source === undefined && rest.length === 1
     // …and one that selects that table's unique key is no DISTINCT at all (8.4.11: `SELECT DISTINCT
     // lt.n, p1.name FROM lt LEFT JOIN pa AS p1 ON … AND p1.id <> NULL` reads lt alone, flags kept).
-    const keyed = alone && facts.nullTables !== undefined && rest[0]?.def !== undefined && distinctKey(rest[0].def, node.items, rest[0].alias)
+    const keyed = alone && facts.nullTables !== undefined && rest[0]?.def !== undefined && distinctKey(rest[0].def, items, lookup)
     // A DISTINCT of constants alone is one row (8.4.11): over NULL-complemented tables a `Group` of what
     // is read, keeping each column's flags; over const tables' rows the first row into a temporary table.
-    const exprs = items.flatMap((i) => (i.expr === undefined ? [] : [i.expr]))
+    const exprs = items.map((i) => i.expr)
     const reads = exprs.some((e) => refersToRow(e, lookup))
-    if (node.distinct === true && source === undefined && !facts.empty && rest.length > 0 && reads && exprs.length === items.length && exprs.every((e) => !refersToRow(e, lookup, fixed))) {
+    if (node.distinct === true && source === undefined && !facts.empty && rest.length > 0 && reads && exprs.every((e) => !refersToRow(e, lookup, fixed))) {
       // …but with a LIMIT, NULL-complemented columns are deduplicated as any others.
       const nullOnly = facts.nullTables !== undefined && exprs.every((e) => !refersToRow(e, lookup, facts.nullTables))
       constantDistinct = !nullOnly ? 'limit' : limitCount === undefined ? 'group' : undefined
@@ -446,8 +446,8 @@ function planSelect(run: Run, q: QueryExpression, node: SelectNode): SelectPlan 
       else streamed = true
       const own = items.map((i) => i.compiled.type)
       items.forEach((item) => {
-        if (item.expr !== undefined && !refersToRow(item.expr, lookup, consts)) return
-        const temporary = !alone ? 'stream' : item.expr === undefined || refersToRow(item.expr, lookup, fixed) ? true : 'pinned'
+        if (!refersToRow(item.expr, lookup, consts)) return
+        const temporary = !alone ? 'stream' : refersToRow(item.expr, lookup, fixed) ? true : 'pinned'
         patchType(item, { temporary })
       })
       dataColumns = copiedColumns(run, facts, own, items)
@@ -512,7 +512,7 @@ function planSelect(run: Run, q: QueryExpression, node: SelectNode): SelectPlan 
   const take = limitCount === undefined && offset === 0 ? [] : [limitStage(offset, limitCount)]
   // Metadata's indexed-prefix shortcut does not prove row uniqueness.
   // An outer field with the same name cannot supply a local UNIQUE key.
-  const deduplicate = node.distinct === true && (source === undefined || !distinctKey(source.def, node.items, source.alias, lookup))
+  const deduplicate = node.distinct === true && (source === undefined || !distinctKey(source.def, items, lookup, true))
   const stages: Stage[] = [
     ...(where === undefined ? [] : [filterStage(where)]),
     // HAVING without grouping filters the rows WHERE kept, before any window sees them.
@@ -2305,21 +2305,23 @@ function checkFullGroupBy(
  * already; when it is nothing but the leading columns of an index, the index
  * delivers them grouped (8.4.11 reports `SELECT DISTINCT age` with `age`'s own
  * key flags when `age` is indexed, and with GROUP_FLAG when it is not).
- * A supplied scope restricts the proof to local fields and a whole UNIQUE
- * key. Without it, indexed prefixes and wildcards are metadata shortcuts.
+ * Read the compiler's expanded select list through local resolution. Physical
+ * elimination requires a whole UNIQUE key; metadata also accepts a visible
+ * indexed prefix when every selected expression is a local source column.
  */
-function distinctKey(def: TableDef, items: SelectNode['items'], alias: string, local?: Scope): boolean {
+function distinctKey(def: TableDef, items: readonly { readonly expr: Expression }[], scope: Scope, whole = false): boolean {
   const named = new Set<string>()
+  let onlyColumns = true
   for (const item of items) {
     const e = item.expr
-    if (e.kind !== NODE.COLUMN || (local !== undefined && safeIndex(local, e.parts) === undefined)) continue
-    const last = e.parts.at(-1) as string
-    if (last === '*' && (e.parts.length === 1 || e.parts.at(-2) === alias)) return true
-    named.add(last.toLowerCase())
+    if (e.kind !== NODE.COLUMN || safeIndex(scope, e.parts) === undefined) {
+      onlyColumns = false
+      continue
+    }
+    named.add((e.parts.at(-1) as string).toLowerCase())
   }
   const covered = (parts: IndexDef['parts'], count = parts.length): boolean => parts.length >= count && parts.slice(0, count).every((p) => p.prefix === undefined && named.has(p.column.toLowerCase()))
-  if (def.indexes.some((i) => uniqueKey(def, i) && covered(i.parts))) return true
-  return local === undefined && items.every((i) => i.expr.kind === NODE.COLUMN) && def.indexes.some((i) => covered(i.parts, named.size))
+  return def.indexes.some((i) => (uniqueKey(def, i) && covered(i.parts)) || (!whole && onlyColumns && i.invisible !== true && covered(i.parts, named.size)))
 }
 
 /**
