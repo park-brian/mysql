@@ -84,15 +84,18 @@ const SCRIPT: readonly (readonly [string, Outcome])[] = [
 ]
 
 test('SET sql_mode evaluates its expression as 8.4.11 does', async () => {
-  const db = await MySQL.open(':memory:')
-  const conn = await mysql.createConnection({ stream: db.createStream(), user: 'root', password: '', supportBigNumbers: true, bigNumberStrings: true, dateStrings: true })
+  const host = process.env.MYSQL_REFERENCE_HOST
+  const db = host === undefined ? await MySQL.open(':memory:') : undefined
+  const conn = await mysql.createConnection({ supportBigNumbers: true, bigNumberStrings: true, dateStrings: true,
+    ...(db === undefined ? { host: host ?? '127.0.0.1', port: Number(process.env.MYSQL_REFERENCE_PORT ?? 3306), user: 'root', password: process.env.MYSQL_REFERENCE_PASSWORD ?? 'root' }
+      : { stream: db.createStream(), user: 'root', password: '' }) })
   try {
-    await conn.query('CREATE DATABASE app')
-    await conn.query('USE app')
-    for (const [sql, expected] of SCRIPT) {
+    for (const method of ['query', 'execute'] as const) for (const [sql, expected] of SCRIPT) {
       let actual: Outcome
       try {
-        const [r] = await conn.query({ sql, rowsAsArray: true })
+        const options = { sql, rowsAsArray: true }
+        // Native SHOW WARNINGS has no prepared-statement protocol.
+        const [r] = method === 'query' || sql === 'SHOW WARNINGS' ? await conn.query(options) : await conn.execute(options)
         if (Array.isArray(r)) actual = (r as unknown[][]).map((row) => row.map((v) => (v === null ? null : v instanceof Uint8Array ? `0x${Array.from(v, (b) => b.toString(16).padStart(2, '0')).join('')}` : typeof v === 'object' ? JSON.stringify(v) : String(v))))
         else {
           const h = r as mysql.ResultSetHeader
@@ -102,10 +105,10 @@ test('SET sql_mode evaluates its expression as 8.4.11 does', async () => {
         const err = e as { errno: number; message: string }
         actual = [err.errno, err.message]
       }
-      assert.deepEqual(actual, expected, sql)
+      assert.deepEqual(actual, expected, `${method}: ${sql}`)
     }
   } finally {
     await conn.end()
-    await db.end()
+    await db?.end()
   }
 })

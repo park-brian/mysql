@@ -49,6 +49,12 @@ import { intersect, normalize, rangeOf, type Constant, type Interval, type Range
 import type { TableStatistics } from './stats.ts'
 import { scan, type ScannedRow } from './operators.ts'
 
+/** Whether a named optimizer transformation is enabled in this statement's session. */
+export function optimizerEnabled(env: Env | undefined, name: string): boolean {
+  const setting = env?.state.systemVariable('optimizer_switch', undefined, env.session)
+  return setting?.kind !== 'string' || !new RegExp(`(?:^|,)\\s*${name}=off(?:,|$)`, 'i').test(setting.v)
+}
+
 /** How to read a table: an index and the ranges of it, in index order, or a full scan. */
 export interface Access {
   readonly index?: string

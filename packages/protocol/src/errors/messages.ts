@@ -38,6 +38,7 @@ export const messages = {
   duplicateEntry: (value: string, key: string): string => `Duplicate entry '${value}' for key '${key}'`,
   noSuchTable: (schema: string, table: string): string => `Table '${schema}.${table}' doesn't exist`,
   wrongValueCount: (row: number): string => `Column count doesn't match value count at row ${row}`,
+  wrongVariableValue: (name: string, value: string): string => `Variable '${name}' can't be set to the value of '${value}'`,
   noDefaultForField: (column: string): string => `Field '${column}' doesn't have a default value`,
   lockWaitTimeout: (): string => 'Lock wait timeout exceeded; try restarting transaction',
   nonUniqueTable: (alias: string): string => `Not unique table/alias: '${alias}'`,

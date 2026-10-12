@@ -19,11 +19,11 @@ import { WindowSink, applyWindows, containsWindow } from './window.ts'
 import { columnDefinition, intType, type ResultType } from './meta.ts'
 import { FIELD_TYPE, expectTyped } from '@myjs/bytes'
 import { distinct, filter, limit, project, sort, type SortKey } from './operators.ts'
-import { isConstant, splitAnd } from './plan.ts'
+import { isConstant, optimizerEnabled, splitAnd } from './plan.ts'
 import { columnRefs, someNode } from './ast.ts'
 import { collationInfoByName } from '@myjs/charsets'
 import { safeResolve, TableScope } from './scope.ts'
-import { indexParts, planFrom, type DerivedPlan, type DerivedSource, type FromContext, type FromPlan, type JoinCondition } from './from.ts'
+import { holdsRead, indexParts, planFrom, type DerivedPlan, type DerivedSource, type FromContext, type FromPlan, type JoinCondition } from './from.ts'
 import { rowKey, valueKey } from './keys.ts'
 import { indexLookup, planNode, wrap, type PlanNode } from './explain.ts'
 import { describeStages, runStages, type Rowed, type Stage } from './pipeline.ts'
@@ -330,7 +330,7 @@ function planSelect(run: Run, q: QueryExpression, node: SelectNode): SelectPlan 
   }
   const windowed = node.items.some((i) => containsWindow(i.expr)) || order.some((o) => containsWindow(o.expr))
   if (grouped) return planGrouped(run, q, node, from, lookup, windowed, constants)
-  const semijoin = optimizerEnabled(run, 'semijoin')
+  const semijoin = optimizerEnabled(run.env, 'semijoin')
   const anti = from === undefined || !semijoin ? undefined : costedAntijoin(run, q, node, from)
   // Window functions (M5.6) write into slots past the FROM row.
   const windowBase = from?.width ?? 0
@@ -494,7 +494,7 @@ function planSelect(run: Run, q: QueryExpression, node: SelectNode): SelectPlan 
   const outerLoop = semi?.loose === false && source !== undefined && sortBy === source.alias
   // Reconsider PRIMARY for ordinary scans and the modeled outer-first loop.
   // A proved UNIQUE projection can reconsider PRIMARY as an ordinary scan does.
-  const ordered = source !== undefined && read !== undefined && !deduplicated && !windowed && (anti === undefined || anti.lookup) && match === undefined && keys.length > 0 && read.ranges === undefined ? orderingIndex(source.def, source.alias, order, items, lookup, read.index, (outerLoop || (!loopSemijoin && !deduplicate)) && optimizerEnabled(run, 'prefer_ordering_index')) : undefined
+  const ordered = source !== undefined && read !== undefined && !deduplicated && !windowed && (anti === undefined || anti.lookup) && match === undefined && keys.length > 0 && read.ranges === undefined ? orderingIndex(source.def, source.alias, order, items, lookup, read.index, (outerLoop || (!loopSemijoin && !deduplicate)) && optimizerEnabled(run.env, 'prefer_ordering_index')) : undefined
   if (ordered !== undefined) from?.readInOrder(ordered.index, false, ordered.reverse, source?.alias)
   const sortedFirst = outerLoop && ordered === undefined && keys.length > 0
   if (sortedFirst && source !== undefined) from?.sortFirst(source.alias, keys)
@@ -572,7 +572,7 @@ function pushCountCondition(run: Run, node: SelectNode): SelectNode {
   const matches = body.items.filter((i) => (i.alias ?? (i.expr.kind === NODE.COLUMN ? i.expr.parts[i.expr.parts.length - 1] : undefined))?.toLowerCase() === name)
   const item = matches.length === 1 ? matches[0] : undefined
   if (item === undefined || !count(item.expr)) return node
-  if (!optimizerEnabled(run, 'derived_condition_pushdown')) return node
+  if (!optimizerEnabled(run.env, 'derived_condition_pushdown')) return node
   const having: Expression = { ...where, left: item.expr }
   const { where: _where, ...rest } = node
   return { ...rest, from: [{ ...ref, query: { ...query, body: { ...body, having } } }] }
@@ -771,13 +771,7 @@ function quantifiedPlan(run: Run, query: QueryExpression, how: QuantifiedSubquer
 
 /** A lookup key and the columns its residual condition reads, by folded name. */
 function keyReads(column: string, where: unknown): Set<string> {
-  return new Set([column, ...columnRefs(where).map((parts) => parts[parts.length - 1] as string)].map((n) => n.toLowerCase()))
-}
-
-/** Whether a named optimizer transformation is enabled in this statement's session. */
-function optimizerEnabled(run: Run, name: string): boolean {
-  const setting = run.env.state.systemVariable('optimizer_switch', undefined, run.env.session)
-  return setting?.kind !== 'string' || !new RegExp(`(?:^|,)\\s*${name}=off(?:,|$)`, 'i').test(setting.v)
+  return new Set([column, ...columnRefs(where).map((parts) => parts.at(-1) as string)].map((n) => n.toLowerCase()))
 }
 
 /** BIT and YEAR have their own comparison representations rather than exact integer keys. */
@@ -797,15 +791,28 @@ function boundedOuter(run: Run, q: QueryExpression, node: SelectNode) {
   return node.from?.length === 1 && outer?.kind === REF.TABLE && outer.indexHints === undefined && run.parent === undefined && q.with === undefined && node.windows === undefined && (node.options?.length ?? 0) === 0 ? outer : undefined
 }
 
+type QualifiedColumn = Extract<Expression, { kind: typeof NODE.COLUMN }> & { readonly parts: readonly [string, string] }
+
+function isQualifiedColumn(e: Expression, alias: string, fold = false): e is QualifiedColumn {
+  return e.kind === NODE.COLUMN && e.parts.length === 2 && typeof e.parts[1] === 'string' && (fold ? e.parts[0]?.toLowerCase() === alias.toLowerCase() : e.parts[0] === alias)
+}
+
 /** The qualified equality and at most one residual shared by correlated join candidates. */
 function correlatedPair(where: Expression | undefined, inner: string, outer: string, fold = false) {
   const parts = splitAnd(where)
   if (parts.length > 2) return undefined
-  const column = (e: Expression, alias: string): boolean => e.kind === NODE.COLUMN && e.parts.length === 2 && (fold ? e.parts[0]?.toLowerCase() === alias.toLowerCase() : e.parts[0] === alias)
-  const equality = parts.find((e) => e.kind === NODE.BINARY && e.op === '=' && ((column(e.left, inner) && column(e.right, outer)) || (column(e.right, inner) && column(e.left, outer))))
-  if (equality?.kind !== NODE.BINARY) return undefined
-  const innerKey = column(equality.left, inner) ? equality.left : equality.right
-  return { innerKey, outerKey: innerKey === equality.left ? equality.right : equality.left, extra: parts.find((e) => e !== equality) }
+  for (const equality of parts) {
+    if (equality.kind !== NODE.BINARY || equality.op !== '=') continue
+    let innerKey = equality.left
+    let outerKey = equality.right
+    if (!isQualifiedColumn(innerKey, inner, fold) || !isQualifiedColumn(outerKey, outer, fold)) {
+      innerKey = equality.right
+      outerKey = equality.left
+      if (!isQualifiedColumn(innerKey, inner, fold) || !isQualifiedColumn(outerKey, outer, fold)) continue
+    }
+    return { innerKey, outerKey, extra: parts.find((e) => e !== equality) }
+  }
+  return undefined
 }
 
 /** A bounded integer semijoin using the existing cost search and indexed join iterators. */
@@ -823,7 +830,7 @@ function costedIntegerSemijoin(run: Run, q: QueryExpression, node: SelectNode, f
   const outerAlias = outer.alias ?? outer.table.name
   const innerAlias = inner.alias ?? inner.table.name
   if (outerAlias === innerAlias) return undefined
-  const column = (e: Expression | undefined, alias: string): e is Extract<Expression, { kind: typeof NODE.COLUMN }> => e?.kind === NODE.COLUMN && (e.parts.length === 1 || (e.parts.length === 2 && e.parts[0] === alias))
+  const column = (e: Expression | undefined, alias: string): e is Extract<Expression, { kind: typeof NODE.COLUMN }> => e?.kind === NODE.COLUMN && (e.parts.length === 1 || isQualifiedColumn(e, alias))
   let innerKey: Expression | undefined
   let outerKey: Expression | undefined
   let extra = body.where
@@ -839,10 +846,8 @@ function costedIntegerSemijoin(run: Run, q: QueryExpression, node: SelectNode, f
     extra = pair.extra
   }
   if (!column(innerKey, innerAlias) || !column(outerKey, outerAlias)) return undefined
-  const innerColumn = innerKey.parts[innerKey.parts.length - 1] as string
-  const outerColumn = outerKey.parts[outerKey.parts.length - 1] as string
-  const primary = from.single.def.indexes.find((i) => i.kind === 'primary')
-  const primaryKey = primary?.parts.length === 1 && primary.parts[0]?.column.toLowerCase() === outerColumn.toLowerCase()
+  const innerColumn = innerKey.parts.at(-1) as string
+  const outerColumn = outerKey.parts.at(-1) as string
   if (extra !== undefined && !(extra.kind === NODE.BINARY && ['=', '<>', '!=', '<', '<=', '>', '>='].includes(extra.op) && column(extra.left, innerAlias) && extra.right.kind === NODE.LITERAL && numeric(extra.right))) return undefined
   try {
     const schema = inner.table.schema ?? defaultDatabase(run)
@@ -852,7 +857,7 @@ function costedIntegerSemijoin(run: Run, q: QueryExpression, node: SelectNode, f
     if (index === undefined) return undefined
     innerKey = { ...innerKey, parts: [innerAlias, innerColumn] }
     outerKey = { ...outerKey, parts: [outerAlias, outerColumn] }
-    if (extra?.kind === NODE.BINARY && extra.left.kind === NODE.COLUMN) extra = { ...extra, left: { ...extra.left, parts: [innerAlias, extra.left.parts[extra.left.parts.length - 1] as string] } }
+    if (extra?.kind === NODE.BINARY && extra.left.kind === NODE.COLUMN) extra = { ...extra, left: { ...extra.left, parts: [innerAlias, extra.left.parts.at(-1) as string] } }
     const equality: Expression = { kind: NODE.BINARY, op: '=', left: innerKey, right: outerKey, at: where?.at ?? node.at }
     const predicate: Expression = extra === undefined ? equality : { kind: NODE.BINARY, op: 'AND', left: equality, right: extra, at: equality.at }
     // Keep the outer table's slots first: its logical scope remains the SELECT's scope.
@@ -865,9 +870,8 @@ function costedIntegerSemijoin(run: Run, q: QueryExpression, node: SelectNode, f
     read.set(innerAlias, innerRead)
     alternative.reads(read)
     alternative.sortedBy(sortBy, keep)
-    const covered = new Set(indexParts(def, index).map((p) => p.column.toLowerCase()))
-    if ([...innerRead].some((c) => !covered.has(c))) return undefined
-    const strategy = alternative.integerSemijoin(innerAlias, index, key, extra, primaryKey && optimizerEnabled(run, 'loosescan'), optimizerEnabled(run, 'firstmatch'))
+    if (!holdsRead(def, index, innerRead)) return undefined
+    const strategy = alternative.integerSemijoin(innerAlias, index, key, extra, optimizerEnabled(run.env, 'loosescan'), optimizerEnabled(run.env, 'firstmatch'))
     return strategy === undefined ? undefined : { from: alternative, where: predicate, loose: strategy === 'loose' }
   } catch (error) {
     expectTyped(error)
@@ -891,16 +895,13 @@ function costedAntijoin(run: Run, q: QueryExpression, node: SelectNode, from: Fr
   const outerAlias = outer.alias ?? outer.table.name
   const innerAlias = inner.alias ?? inner.table.name
   if (outerAlias.toLowerCase() === innerAlias.toLowerCase()) return undefined
-  const column = (e: Expression, alias: string): boolean => e.kind === NODE.COLUMN && e.parts.length === 2 && e.parts[0]?.toLowerCase() === alias.toLowerCase()
   const pair = correlatedPair(body.where, innerAlias, outerAlias, true)
   if (pair === undefined) return undefined
   const { innerKey, outerKey, extra } = pair
   if (extra?.kind !== NODE.BINARY || !['=', '<>', '!=', '<', '<=', '>', '>='].includes(extra.op)) return undefined
-  if (!column(extra.left, innerAlias) || extra.right.kind !== NODE.LITERAL || extra.right.type !== LITERAL.INT) return undefined
-  if (innerKey.kind !== NODE.COLUMN || extra.left.kind !== NODE.COLUMN) return undefined
+  if (!isQualifiedColumn(extra.left, innerAlias, true) || extra.right.kind !== NODE.LITERAL || extra.right.type !== LITERAL.INT) return undefined
   const keyColumn = innerKey.parts[1]
   const predicateColumn = extra.left.parts[1]
-  if (keyColumn === undefined || predicateColumn === undefined) return undefined
   try {
     // Costing must not open a temporary table a second time (ER_CANT_REOPEN_TABLE).
     const schema = inner.table.schema ?? defaultDatabase(run)

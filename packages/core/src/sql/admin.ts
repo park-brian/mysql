@@ -9,7 +9,6 @@ import { CHARSET_UTF8MB4_0900_AI_CI, messages, sqlError, type Session, type SqlV
 import {
   NODE,
   STATEMENT,
-  DEFAULT_SQL_MODE,
   RESERVED_SQL_MODE_BITS,
   SQL_MODE_BITS,
   badMode,
@@ -21,7 +20,6 @@ import {
   type CreateTriggerNode,
   type DropNode,
   type Expression,
-  type KeywordNode,
   type SetItem,
   type TableName,
 } from '@myjs/parser'
@@ -73,7 +71,6 @@ function fromSqlValue(v: SqlValue, info?: SystemVariable): Value {
   if (typeof v === 'number') return Number.isInteger(v) ? intValue(BigInt(v)) : doubleValue(v)
   if (typeof v === 'bigint') return intValue(v, v > MAX_SIGNED)
   if (typeof v === 'boolean') return intValue(v ? 1n : 0n)
-  if (typeof v === 'string') return stringValue(v, CHARSET_UTF8MB4_0900_AI_CI, COERCIBILITY.SYSCONST)
   if (v instanceof Uint8Array) return { kind: 'bytes', v }
   return stringValue(String(v), CHARSET_UTF8MB4_0900_AI_CI, COERCIBILITY.SYSCONST)
 }
@@ -92,17 +89,53 @@ function assigned(info: SystemVariable, v: Value, warn: (code: number, message: 
     const word = text.toUpperCase()
     if (word === '1' || word === 'ON' || word === 'TRUE') return intValue(1n)
     if (word === '0' || word === 'OFF' || word === 'FALSE') return intValue(0n)
-    throw sqlError('ER_WRONG_VALUE_FOR_VAR', `Variable '${info.name}' can't be set to the value of '${text}'`)
+    throw sqlError('ER_WRONG_VALUE_FOR_VAR', messages.wrongVariableValue(info.name, text))
   }
   if (v.kind !== 'int' && !(info.kind === 'double' && (v.kind === 'decimal' || v.kind === 'double'))) throw sqlError('ER_WRONG_TYPE_FOR_VAR', `Incorrect argument type to variable '${info.name}'`)
   if (info.kind === 'double') return doubleValue(Number(text))
   const n = (v as { v: bigint }).v
   const min = info.min ?? n
   const max = info.max ?? n
-  if (n >= min && n <= max) return intValue(n, n > MAX_SIGNED)
-  warn(1292, `Truncated incorrect ${info.name} value: '${text}'`)
-  const clamped = n < min ? min : max
+  const clamped = n < min ? min : n > max ? max : n
+  if (clamped !== n) warn(1292, `Truncated incorrect ${info.name} value: '${text}'`)
   return intValue(clamped, clamped > MAX_SIGNED)
+}
+
+/** Apply named optimizer switches atomically, retaining flags omitted by SET. */
+function optimizerSwitch(value: Value, previous: Value | undefined, defaults: string): Value {
+  if (value === null) throw sqlError('ER_WRONG_VALUE_FOR_VAR', messages.wrongVariableValue('optimizer_switch', 'NULL'))
+  const entries = (text: string): [string, string][] => text.split(',').map((part) => part.split('=') as [string, string])
+  const flags = new Map(entries(defaults))
+  if (value.kind === 'int') {
+    // Native accepts one reserved high bit; it has no displayed switch.
+    if (value.v < 0n || value.v >= 1n << BigInt(flags.size + 1)) throw sqlError('ER_WRONG_VALUE_FOR_VAR', messages.wrongVariableValue('optimizer_switch', toText(value)))
+    let bit = 1n
+    for (const name of flags.keys()) {
+      flags.set(name, (value.v & bit) !== 0n ? 'on' : 'off')
+      bit <<= 1n
+    }
+  } else {
+    if (value.kind !== 'string' && value.kind !== 'bytes') throw sqlError('ER_WRONG_TYPE_FOR_VAR', "Incorrect argument type to variable 'optimizer_switch'")
+    const text = toText(value)
+    const commands = new Map<string, string | undefined>()
+    let offset = 0
+    for (const part of text === '' ? [] : text.split(',')) {
+      const words = part.toLowerCase().split('=').map((word) => word.trimEnd())
+      const [name, setting] = words as [string, string | undefined]
+      if (commands.has(name) || (name === 'default' ? words.length !== 1 : words.length !== 2 || !flags.has(name) || !['on', 'off', 'default'].includes(setting ?? ''))) {
+        throw sqlError('ER_WRONG_VALUE_FOR_VAR', messages.wrongVariableValue('optimizer_switch', text.slice(offset)))
+      }
+      commands.set(name, setting)
+      offset += part.length + 1
+    }
+    // Explicit commands win; omitted names retain their prior values unless reset.
+    if (!commands.has('default') && previous?.kind === 'string') for (const [name, setting] of entries(previous.v)) {
+      if (flags.has(name) && !commands.has(name)) flags.set(name, setting)
+    }
+    for (const [name, setting] of commands) if (setting === 'on' || setting === 'off') flags.set(name, setting)
+  }
+  if (flags.get('hypergraph_optimizer') === 'on') throw sqlError('ER_HYPERGRAPH_NOT_SUPPORTED_YET', "The hypergraph optimizer does not yet support 'use in non-debug builds'")
+  return stringValue([...flags].map(([name, setting]) => name + '=' + setting).join(','), CHARSET_UTF8MB4_0900_AI_CI)
 }
 
 /**
@@ -182,6 +215,14 @@ export class ServerState {
     return this.vars.has(name) ? this.vars.get(name) : systemVariableInfo(name)?.value
   }
 
+  /** Both-scope variables are connection defaults, copied before later global SETs. */
+  snapshotSession(own: Map<string, Value>): void {
+    for (const name of systemVariableNames()) {
+      const info = systemVariableInfo(name)
+      if (info?.scope === 'both') own.set(name, fromSqlValue(this.global(name) ?? null, info))
+    }
+  }
+
   /**
    * A system variable as `@@name` reads it. The session's own values come
    * first — its `sql_mode`, its charset variables, anything it has `SET` —
@@ -228,7 +269,6 @@ export class ServerState {
     const name = (item.base === undefined ? item.name : `${item.base}.${item.name}`).toLowerCase()
     const scope = item.type === 'system' ? item.scope : undefined
     const value = item.value
-    if (name === 'sql_mode') return this.#setSqlMode(session, scope, value, evaluate, warn) ? 'sql_mode' : undefined
 
     const global = scope === 'GLOBAL' || scope === 'PERSIST' || scope === 'PERSIST_ONLY'
     const info = systemVariableInfo(name)
@@ -240,7 +280,7 @@ export class ServerState {
 
     let v: Value
     if (value.kind === NODE.KEYWORD) {
-      const word = (value as KeywordNode).word.toUpperCase()
+      const word = value.word.toUpperCase()
       // DEFAULT is the global value for a session, and the compiled-in default for the global itself.
       v = word !== 'DEFAULT' ? stringValue(word, CHARSET_UTF8MB4_0900_AI_CI) : !global && info?.zeroDefault === true ? intValue(0n) : fromSqlValue((global ? (OURS[name] ?? info?.value) : this.global(name)) ?? null, info)
     } else if (value.kind === NODE.COLUMN && value.parts.length === 1) {
@@ -248,11 +288,16 @@ export class ServerState {
       v = stringValue(value.parts[0] as string, CHARSET_UTF8MB4_0900_AI_CI)
     } else v = evaluate(value)
     if (info !== undefined) v = assigned(info, v, warn)
+    if (name === 'sql_mode') return this.#setSqlMode(session, scope, v, warn) ? 'sql_mode' : undefined
+
+    if (name === 'optimizer_switch') {
+      v = optimizerSwitch(v, this.systemVariable(name, global ? 'GLOBAL' : undefined, session, own), (global ? info?.value : this.global(name)) as string)
+    }
 
     if (name === 'autocommit') {
-      const text = v === null ? '' : toText(v).toUpperCase()
-      const on = text === '1' || text === 'ON' || text === 'TRUE'
-      if (!on && text !== '0' && text !== 'OFF' && text !== 'FALSE') throw sqlError('ER_WRONG_VALUE_FOR_VAR', `Variable 'autocommit' can't be set to the value of '${text}'`)
+      // assigned() has already normalized this known boolean to 0 or 1.
+      if (v === null) throw sqlError('ER_WRONG_VALUE_FOR_VAR', messages.wrongVariableValue(name, ''))
+      const on = toText(v) === '1'
       if (scope === 'GLOBAL' || scope === 'PERSIST') this.vars.set(name, on ? 1 : 0)
       else session.autocommit = on
       return undefined
@@ -268,23 +313,12 @@ export class ServerState {
   }
 
   /** Whether the session's own `sql_mode` was assigned. */
-  #setSqlMode(session: Session, scope: string | undefined, value: Expression | KeywordNode, evaluate: (e: Expression) => Value, warn: (code: number, message: string) => void): boolean {
-    let text: string
-    if (value.kind === NODE.LITERAL && value.type === 'string' && typeof value.value === 'string') text = value.value
-    else if (value.kind === NODE.COLUMN && value.parts.length === 1) text = value.parts[0] as string
-    // DEFAULT is the global value for a session, and the compiled-in default for the global itself.
-    else if (value.kind === NODE.KEYWORD && value.word === 'DEFAULT') text = scope === 'GLOBAL' || scope === 'PERSIST' || scope === 'PERSIST_ONLY' ? DEFAULT_SQL_MODE : String(this.global('sql_mode'))
-    else if ((value.kind === NODE.LITERAL && value.type === 'null') || value.kind === NODE.KEYWORD) throw badMode(value.kind === NODE.KEYWORD ? value.word : 'NULL')
-    // An expression is evaluated, as 8.4.11 evaluates it: an integer is the
-    // modes' bits, any text their names (`CONCAT(@@sql_mode, ',ANSI')`, a
-    // user variable, a subquery), and a DECIMAL or a DOUBLE neither (1232).
-    // Until M5.36 an expression was accepted and changed nothing.
-    else {
-      const v = evaluate(value)
-      if (v === null) throw badMode('NULL')
-      if (v.kind === 'decimal' || v.kind === 'double') throw sqlError('ER_WRONG_TYPE_FOR_VAR', "Incorrect argument type to variable 'sql_mode'")
-      text = v.kind === 'int' ? sqlModeOfBits(v.v) : toText(v)
-    }
+  #setSqlMode(session: Session, scope: string | undefined, value: Value, warn: (code: number, message: string) => void): boolean {
+    // SET operand evaluation is shared; modes retain their integer-bit and
+    // diagnostic policy before the session's parser state changes.
+    if (value === null) throw badMode('NULL')
+    if (value.kind === 'decimal' || value.kind === 'double') throw sqlError('ER_WRONG_TYPE_FOR_VAR', "Incorrect argument type to variable 'sql_mode'")
+    const text = value.kind === 'int' ? sqlModeOfBits(value.v) : toText(value)
     // Validated even for `PERSIST_ONLY`, which stores without applying: an
     // unknown mode is ER_WRONG_VALUE_FOR_VAR whatever the scope.
     const parsed = parseSqlMode(text)

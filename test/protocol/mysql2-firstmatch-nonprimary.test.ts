@@ -54,11 +54,16 @@ test('non-primary FirstMatch matches native captures 36/88 across nullable and d
             assert.deepEqual(actual, rows, `${capture}/${state}/${switches}/${variant}/${method}`)
             assert.deepEqual(fieldsOf(fields), [['g', 3, 11, 0, 0, 63, 'nonprimary77', 'kl', 'kl', 'g'], ['s', 253, 40, 0, 0, 255, 'nonprimary77', 'kl', 'kl', 's']])
             assert.deepEqual((await conn.query('SHOW WARNINGS'))[0], [])
-            // Empty-inner hash/weedout/materialization and disabled transformations remain separate.
+            // Empty-inner hash LooseScan and FirstMatch use native topology assertions.
             const emptyFirstMatch = state === 'emptyInner' && switches === 'loosescan=off' && variant === 'unordered'
-            if ((state !== 'emptyInner' && switches !== 'semijoin=off') || emptyFirstMatch) {
+            const emptyHash = state === 'emptyInner' && switches === 'default' && variant !== 'limit'
+            if ((state !== 'emptyInner' && switches !== 'semijoin=off') || emptyFirstMatch || emptyHash) {
               let plan = firstMatch('kl', 'pa', 'grp', true, switches !== 'firstmatch=off')
               if (variant === 'unordered') plan = plan.replace('    Sort\n        Filter\n            ', '    Filter\n        ')
+              if (emptyHash) {
+                const hash = 'Inner hash join\n    Table scan on kl\n    Hash\n        Remove duplicates from input sorted on grp\n            Covering index scan on pa using grp'
+                plan = variant === 'ordered' ? `Sort\n    Stream results\n${hash.split('\n').map((line) => `        ${line}`).join('\n')}` : hash
+              }
               if (variant === 'limit') plan = `Limit\n${plan.split('\n').map((line) => `    ${line}`).join('\n')}`
               const [explain] = await conn.query<mysql.RowDataPacket[]>(`EXPLAIN FORMAT=TREE ${sql}`)
               assert.equal(planSkeleton(explain[0]?.EXPLAIN), plan)
@@ -230,5 +235,88 @@ test('non-primary FirstMatch probes each outer occurrence once and closes scans 
     assert.deepEqual((await db.query(sql))[0], [{ g: 9, s: 'absent' }])
   } finally {
     await db.end()
+  }
+})
+
+
+test('hash LooseScan preserves duplicate outer rows and filters before key deduplication', async () => {
+  const { conn, db } = await connect('hash_loose87')
+  const hash = 'Inner hash join\n    Table scan on pa\n    Hash\n        Remove duplicates from input sorted on g\n'
+  try {
+    await conn.query('CREATE TABLE pa(id INT NOT NULL,g INT,s VARCHAR(12)) STATS_AUTO_RECALC=0')
+    await conn.query('CREATE TABLE ch(id INT PRIMARY KEY,g INT,KEY(g)) STATS_AUTO_RECALC=0')
+    // The first g=2 row fails the residual, but the next one qualifies. g=1
+    // has only a failing row; NULL must never enter the equality hash.
+    await conn.query('INSERT INTO ch VALUES(0,1),(1,2),(2,2),(3,2),(4,NULL),(5,3),(6,3)')
+    for (const count of [20, 200]) {
+      await conn.query('DELETE FROM pa')
+      await conn.query('INSERT INTO pa VALUES' + Array.from({ length: count }, (_, i) => `(${i + 1},${i % 4 === 0 ? 'NULL' : i % 4},'same')`).join(','))
+      await conn.query('ANALYZE TABLE pa,ch')
+      for (const switches of ['default', 'default,firstmatch=off']) {
+        await conn.query(`SET optimizer_switch=${mysql.escape(switches)}`)
+        for (const variant of ['in', 'filter', 'exists']) {
+          const predicate = variant === 'in' ? 'g IN(SELECT g FROM ch)' : variant === 'filter'
+            ? 'g IN(SELECT g FROM ch WHERE id>1)' : 'EXISTS(SELECT 1 FROM ch WHERE pa.g=ch.g AND ch.id>1)'
+          const sql = `SELECT g,s FROM pa WHERE ${predicate} ORDER BY 1,2`
+          const expected = (variant === 'in' ? [1, 2, 3] : [2, 3]).flatMap((g) => Array.from({ length: count / 4 }, () => [g, 'same']))
+          const input = variant === 'in' ? '            Covering index scan on ch using g' : '            Filter\n                Covering index scan on ch using g'
+          const plan = `Sort\n    Stream results\n${(hash + input).split('\n').map((line) => `        ${line}`).join('\n')}`
+          for (const method of ['query', 'execute'] as const) {
+            const options = { sql, rowsAsArray: true }
+            const [rows, fields] = method === 'query' ? await conn.query(options) : await conn.execute(options)
+            assert.deepEqual(rows, expected, `${count}/${switches}/${variant}/${method}`)
+            assert.deepEqual(fieldsOf(fields), [['g', 3, 11, 0, 0, 63, 'hash_loose87', 'pa', 'pa', 'g'], ['s', 253, 48, 0, 0, 224, 'hash_loose87', 'pa', 'pa', 's']])
+            assert.deepEqual((await conn.query('SHOW WARNINGS'))[0], [])
+            const [explain] = await conn.query<mysql.RowDataPacket[]>(`EXPLAIN FORMAT=TREE ${sql}`)
+            assert.equal(planSkeleton(explain[0]?.EXPLAIN), plan)
+            conn.unprepare(options)
+          }
+        }
+      }
+    }
+    if (db !== undefined) {
+      await conn.query("SET optimizer_switch='default'")
+      const catalog = db.catalog!
+      const open = catalog.table.bind(catalog)
+      let scans = 0
+      let examined = 0
+      let closed = 0
+      catalog.table = (schema, name, trx) => {
+        const table = open(schema, name, trx)
+        if (schema === 'hash_loose87' && name === 'ch') {
+          const scan = table.indexScan.bind(table)
+          table.indexScan = function*(index, range, transaction, mode) {
+            if (mode !== 'current') { yield* scan(index, range, transaction, mode); return }
+            assert.equal(index, 'g')
+            assert.equal(range?.from, undefined, 'build the inner key input once, without per-outer probes')
+            scans++
+            try {
+              for (const row of scan(index, range, transaction, mode)) { examined++; yield row }
+            } finally { closed++ }
+          }
+        }
+        return table
+      }
+      try {
+        const sql = 'SELECT g,s FROM hash_loose87.pa WHERE g IN(SELECT g FROM hash_loose87.ch WHERE id>1) ORDER BY 1,2 FOR UPDATE'
+        for await (const row of db.stream(sql)) { assert.deepEqual(row, { g: 2, s: 'same' }); break }
+        assert.equal(scans, 1)
+        assert.equal(examined, 7, 'filter and deduplicate one complete index scan')
+        assert.equal(closed, 1)
+      } finally { catalog.table = open }
+      const writer = await db.connect()
+      try {
+        await writer.query('SET innodb_lock_wait_timeout=1')
+        await writer.query('UPDATE hash_loose87.ch SET g=9 WHERE g=2')
+      } finally { await writer.end() }
+      assert.deepEqual((await conn.query({ sql: 'SELECT g,s FROM pa WHERE g IN(SELECT g FROM ch WHERE id>1) ORDER BY 1,2', rowsAsArray: true }))[0], Array.from({ length: 50 }, () => [3, 'same']))
+    }
+    await conn.query("SET optimizer_switch='default,block_nested_loop=off'")
+    const [explain] = await conn.query<mysql.RowDataPacket[]>('EXPLAIN FORMAT=TREE SELECT g,s FROM pa WHERE g IN(SELECT g FROM ch WHERE id>1) ORDER BY 1,2')
+    assert.doesNotMatch(planSkeleton(explain[0]?.EXPLAIN), /Inner hash join/)
+  } finally {
+    await conn.query('DROP DATABASE IF EXISTS hash_loose87')
+    await conn.end()
+    await db?.end()
   }
 })

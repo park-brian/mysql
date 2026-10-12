@@ -76,7 +76,7 @@ export function checkConnectionCharset(item: { readonly charset?: string; readon
   const change = charsetChange(item)
   if (change === 'unknown') throw sqlError('ER_UNKNOWN_CHARACTER_SET', `Unknown character set: '${item.collation ?? item.charset ?? ''}'`)
   if ((collationInfo(change.collationId)?.mbminlen ?? 1) > 1) {
-    throw sqlError('ER_WRONG_VALUE_FOR_VAR', `Variable 'character_set_client' can't be set to the value of '${change.charset}'`)
+    throw sqlError('ER_WRONG_VALUE_FOR_VAR', messages.wrongVariableValue('character_set_client', change.charset))
   }
   try {
     decodeCollation(new Uint8Array([0x61]), change.collationId)

@@ -18,7 +18,7 @@
 // DDL commits first (MySQL's implicit commit) and then runs as a transaction
 // of its own, which is what `Catalog` already does (D-59).
 import type { Isolation, Store, StoreFigures, Trx, TrxStats } from '@myjs/engine'
-import { sqlError, type Session } from '@myjs/protocol'
+import { messages, sqlError, type Session } from '@myjs/protocol'
 import { intValue, stringValue, toText, type Condition, type Value } from '@myjs/types'
 import type { SessionValues } from './compile.ts'
 import type { ServerState } from './admin.ts'
@@ -75,6 +75,7 @@ export class SqlSession implements SessionValues {
   constructor(session: Session, server: ServerState) {
     this.session = session
     this.#server = server
+    server.snapshotSession(this.ownVariables)
     // A session starts at the server's level, as `SET GLOBAL TRANSACTION` leaves it.
     this.isolation = isolationOf(String(server.global('transaction_isolation') ?? 'REPEATABLE-READ'))
   }
@@ -87,7 +88,7 @@ export class SqlSession implements SessionValues {
   setIsolation(level: string): void {
     const name = level.toUpperCase().replace(/[ _]/g, '-')
     if (!['READ-UNCOMMITTED', 'READ-COMMITTED', 'REPEATABLE-READ', 'SERIALIZABLE'].includes(name)) {
-      throw sqlError('ER_WRONG_VALUE_FOR_VAR', `Variable 'transaction_isolation' can't be set to the value of '${level}'`)
+      throw sqlError('ER_WRONG_VALUE_FOR_VAR', messages.wrongVariableValue('transaction_isolation', level))
     }
     this.isolation = isolationOf(name)
     this.ownVariables.set('transaction_isolation', stringValue(name, 255))
