@@ -183,6 +183,11 @@ function step(before: Step | undefined, placed: Positioned): Step {
 
 const almostEqual = (a: number, b: number): boolean => a >= b * 0.9 && a <= b * 1.1
 
+function overlaps(a: ReadonlySet<string>, b: ReadonlySet<string>): boolean {
+  for (const alias of a) if (b.has(alias)) return true
+  return false
+}
+
 /**
  * The cheapest join order (`greedy_search` at the default search depth,
  * which on fewer than 62 tables is `best_extension_by_limited_search` over
@@ -206,8 +211,12 @@ const almostEqual = (a: number, b: number): boolean => a >= b * 0.9 && a <= b * 
  * `loose` is supplied only for a two-table integer semijoin. The full index
  * read and later lookup's read cost remain separate from distinct-key row
  * evaluation; a final sort pays for outer output rather than inner fanout.
+ * `firstMatch` names the second written table of that bounded semijoin.
+ * Its first written candidate supplies the outer cardinality. An inner-first order
+ * pays for memory temporary deduplication and sorts its distinct outer rows.
+ * The caller rejects that order until it can execute the deduplication strategy.
  */
-export function joinOrder(candidates: readonly Candidate[], sort?: { readonly alias: string; readonly limit: number }, loose?: { readonly alias: string; readonly rows: number; readonly read: number; readonly fetched: number }): Positioned[] {
+export function joinOrder(candidates: readonly Candidate[], sort?: { readonly alias: string; readonly limit: number }, loose?: { readonly alias: string; readonly rows: number; readonly read: number; readonly fetched: number }, firstMatch?: string): Positioned[] {
   let sortBy = sort?.alias
   const sorted = [...candidates].sort((a, b) => {
     if (a.dependent.has(b.alias)) return 1
@@ -219,11 +228,10 @@ export function joinOrder(candidates: readonly Candidate[], sort?: { readonly al
     if (a.rows !== b.rows) return a.rows - b.rows
     return candidates.indexOf(a) - candidates.indexOf(b)
   })
-  let best: { readonly cost: number; readonly plan: readonly Positioned[] } | undefined
+  let best: { readonly cost: number; readonly plan: Positioned[] } | undefined
   const plan: Step[] = []
   let driving: Positioned | undefined
-  const placedAliases = (): Set<string> => new Set(plan.map((p) => p.placed.alias))
-  const available = (c: Candidate, remaining: ReadonlySet<string>): boolean => remaining.has(c.alias) && ![...c.dependent].some((d) => remaining.has(d))
+  const available = (c: Candidate, remaining: ReadonlySet<string>): boolean => remaining.has(c.alias) && !overlaps(c.dependent, remaining)
   const place = (c: Candidate): Positioned => {
     // A bounded two-table LooseScan retains the later lookup's original read cost.
     let placed = c.place(plan.map((p) => p.placed.alias === loose?.alias ? driving ?? p.placed : p.placed))
@@ -236,17 +244,21 @@ export function joinOrder(candidates: readonly Candidate[], sort?: { readonly al
   }
   const consider = (): void => {
     const last = plan.at(-1) as Step
-    // Semijoin output contains only outer fanout; its temporary sort costs that cardinality.
-    const rows = loose === undefined ? last.rows : prefixRows(plan.filter((p) => p.placed.alias !== loose.alias).map((p) => p.placed))
-    const cost = last.cost + (sort !== undefined && plan[0]?.placed.alias !== sortBy ? rows : 0)
+    // An inner-first semijoin needs a temporary deduplication strategy.
+    let rows = loose === undefined ? last.rows : plan.reduce((n, p) => p.placed.alias === loose.alias ? n : n * p.placed.fetched * p.placed.filter, 1)
+    let cost = last.cost
+    // Default memory temporary costs: creation 1, each write/lookup 0.1.
+    if (loose === undefined && plan[0]?.placed.alias === firstMatch) {
+      rows = Math.min(rows, (candidates[0] as Candidate).rows * last.placed.filter)
+      cost += 1 + 0.1 * (rows + last.rows)
+    }
+    cost += sort !== undefined && plan[0]?.placed.alias !== sortBy ? rows : 0
     if (best === undefined || cost < best.cost) best = { cost, plan: plan.map((p) => p.placed) }
   }
   // The unique-key tables after the one just placed, each joined in turn while it costs what the one before did (`eq_ref_extension_by_limited_search`).
-  const extendByUniqueKeys = (order: readonly Candidate[], remaining: Set<string>): Set<string> => {
-    if (remaining.size === 0) return new Set()
-    const done = placedAliases()
-    for (const c of order) {
-      if (!available(c, remaining) || c.keyDependent.size === 0 || ![...c.keyDependent].some((a) => done.has(a))) continue
+  const extendByUniqueKeys = (remaining: Set<string>): Set<string> => {
+    for (const c of sorted) {
+      if (!available(c, remaining) || !plan.some((p) => c.keyDependent.has(p.placed.alias))) continue
       const placed = place(c)
       const previous = (plan.at(-1) as Step).placed
       if (!(placed.lookup && almostEqual(placed.read, previous.read) && almostEqual(placed.fetched, previous.fetched))) continue
@@ -254,25 +266,26 @@ export function joinOrder(candidates: readonly Candidate[], sort?: { readonly al
       if (best !== undefined && next.cost >= best.cost) continue
       plan.push(next)
       remaining.delete(c.alias)
-      const extended = new Set([c.alias, ...(remaining.size > 0 ? extendByUniqueKeys(order, remaining) : (consider(), []))])
+      const extended = remaining.size > 0 ? extendByUniqueKeys(remaining) : (consider(), new Set<string>())
+      extended.add(c.alias)
       remaining.add(c.alias)
       plan.pop()
       return extended
     }
-    search(order, remaining)
+    search(remaining)
     return new Set()
   }
-  const search = (order: readonly Candidate[], remaining: Set<string>): void => {
+  const search = (remaining: Set<string>): void => {
     let bestRows = Infinity
     let bestCost = Infinity
-    let extended = new Set<string>()
-    for (const c of order) {
-      if (!available(c, remaining) || extended.has(c.alias)) continue
+    let extended: Set<string> | undefined
+    for (const c of sorted) {
+      if (!available(c, remaining) || extended?.has(c.alias)) continue
       const placed = place(c)
       const next = step(plan.at(-1), placed)
       if (best !== undefined && next.cost >= best.cost) continue
       if (bestRows > next.rows || bestCost > next.cost || (plan.length === 0 && c.alias === sortBy)) {
-        if (bestRows >= next.rows && bestCost >= next.cost && (![...c.keyDependent].some((a) => remaining.has(a)) || placed.fetched < 2)) {
+        if (bestRows >= next.rows && bestCost >= next.cost && (!overlaps(c.keyDependent, remaining) || placed.fetched < 2)) {
           bestRows = next.rows
           bestCost = next.cost
         }
@@ -281,20 +294,19 @@ export function joinOrder(candidates: readonly Candidate[], sort?: { readonly al
       remaining.delete(c.alias)
       if (remaining.size === 0) consider()
       else if (placed.lookup && placed.fetched <= 1) {
-        if (extended.size === 0) {
-          extended = new Set([c.alias, ...extendByUniqueKeys(order, remaining)])
-          remaining.add(c.alias)
-          plan.pop()
-          if ([...remaining].every((a) => extended.has(a))) return
-          continue
+        if (extended === undefined) {
+          extended = extendByUniqueKeys(remaining)
+          extended.add(c.alias)
         }
-      } else search(order, remaining)
+      } else search(remaining)
       remaining.add(c.alias)
       plan.pop()
+      // Extension aliases are a subset of this restored remaining set.
+      if (extended?.size === remaining.size) return
     }
   }
-  search(sorted, new Set(candidates.map((c) => c.alias)))
-  return [...(best?.plan ?? [])]
+  search(new Set(candidates.map((c) => c.alias)))
+  return best?.plan ?? []
 }
 
 /** Cost of reading `rows` index records (`index_only_read_time`): half a page's bytes of records to a page. */

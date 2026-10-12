@@ -549,7 +549,7 @@ export function planFrom(refs: readonly TableReference[], ctx: FromContext, wher
       if (node.table.derived?.joined === true) return false
       if ([...aliases].some((a) => a !== first)) return false
       const looked = plan.lookups
-      return spine.every((j) => j.kind === 'join' && ((j.inner.kind === 'leaf' && looked.has(j.inner.table.alias)) || [...nestedLoopJoins].some((s) => [...s].every((a) => innerAliasesOf(j).has(a)) && s.size === innerAliasesOf(j).size)))
+      return spine.every((j) => j.kind === 'join' && ((j.inner.kind === 'leaf' && looked.has(j.inner.table.alias)) || [...nestedLoopJoins].some((s) => subsetOf(s, innerAliasesOf(j)) && s.size === innerAliasesOf(j).size)))
     },
     orderGroupsFirst(keys) {
       if (keys.length === 0 || keys.some((k) => k.expr.kind !== NODE.COLUMN || k.compiled.type.kind === 'json')) return undefined
@@ -580,32 +580,32 @@ export function planFrom(refs: readonly TableReference[], ctx: FromContext, wher
       settings.firstSort = { alias, keys }
     },
     integerSemijoin(alias, index, key, where, looseScan, firstMatch) {
+      let strategy: 'loose' | 'loop' | undefined
       if (looseScan) settings.loose = { alias, index, key }
-      const plan = joinPlan()
-      const node = plan?.node
-      if (node?.kind !== 'join' || node.left || node.outer.kind !== 'leaf' || node.inner.kind !== 'leaf') return undefined
-      if (looseScan && node.outer.table.alias === alias && plan?.lookups.has(node.inner.table.alias)) {
-        this.readInOrder(index.name, true, false, alias)
-        return 'loose'
-      }
-      delete settings.loose
-      if (node.inner.table.alias !== alias || !plan?.lookups.has(alias)) return undefined
-      // Empty standalone inner ranges use materialization, whose semijoin cost is still open.
-      const inner = node.inner.table
-      if (ctx.env !== undefined && inner.table !== undefined && inner.def !== undefined) {
-        const access = chosenAccess(inner, { ...settings, where, chosen: new WeakMap() }, ctx.env)
-        if (access.ranges !== undefined) {
-          let empty = true
-          for (const _ of accessRows(inner.table, inner.def, access, ctx.env.trx, false)) {
-            empty = false
-            break
-          }
-          if (empty) return undefined
+      if (firstMatch && where === undefined) settings.firstMatch = alias
+      try {
+        const plan = joinPlan()
+        const node = plan?.node
+        if (node?.kind !== 'join' || node.left || node.outer.kind !== 'leaf' || node.inner.kind !== 'leaf') return undefined
+        if (looseScan && node.outer.table.alias === alias && plan?.lookups.has(node.inner.table.alias)) {
+          this.readInOrder(index.name, true, false, alias)
+          return strategy = 'loose'
         }
+        if (node.inner.table.alias !== alias || !plan?.lookups.has(alias)) return undefined
+        // Empty residual ranges retain their materialization boundary.
+        const inner = node.inner.table
+        if (where !== undefined && ctx.env !== undefined && inner.table !== undefined && inner.def !== undefined) {
+          const access = chooseAccess(inner.def, alias, where, ctx.env, settings.outer, rangeCosting(inner, settings, ctx.env))
+          if (access.ranges !== undefined && countRows(accessRows(inner.table, inner.def, access, ctx.env.trx, false), 0) === 0) return undefined
+        }
+        if (firstMatch) settings.firstMatch = alias
+        else settings.distinctSelect = new Set([node.outer.table.alias])
+        return strategy = 'loop'
+      } finally {
+        if (strategy !== 'loop') delete settings.firstMatch
+        if (strategy !== 'loose') delete settings.loose
+        if (strategy === undefined) planned = undefined
       }
-      if (firstMatch) settings.firstMatch = alias
-      else settings.distinctSelect = new Set([node.outer.table.alias])
-      return 'loop'
     },
     ...(single === undefined ? {} : { single }),
     filter(where, compile, semijoin) {
@@ -782,6 +782,12 @@ const joined = (row: Row, ids: readonly (RowId | undefined)[] | undefined): Join
 
 const hasLateral = (node: Node): boolean => (node.kind === 'leaf' ? node.table.lateral : hasLateral(node.outer) || hasLateral(node.inner))
 
+/** Whether every alias or column in one proof belongs to the other set. */
+function subsetOf(a: ReadonlySet<string>, b: ReadonlySet<string>): boolean {
+  for (const value of a) if (!b.has(value)) return false
+  return true
+}
+
 const NONE: readonly number[] = []
 
 /** A row's hash key: its key values' `rowKey`, or `undefined` when one is NULL, which `=` matches to nothing. */
@@ -824,8 +830,8 @@ function hashKeys(conditions: readonly Placed[], outer: ReadonlySet<string>, inn
   const side = (e: Expression): 'outer' | 'inner' | undefined => {
     const a = aliasesOf(e, scope)
     if (a === undefined || a.size === 0) return undefined
-    if ([...a].every((x) => outer.has(x))) return 'outer'
-    if ([...a].every((x) => inner.has(x))) return 'inner'
+    if (subsetOf(a, outer)) return 'outer'
+    if (subsetOf(a, inner)) return 'inner'
     return undefined
   }
   const exact = (k: string): boolean => k === 'int' || k === 'decimal'
@@ -952,11 +958,16 @@ function rangeCosting(t: FromTable, settings: LeafSettings, env: Env): RangeCost
     coveringScan: cover === undefined ? undefined : def.indexes.find((i) => i.name === cover),
     minRecordBytes: 5 + 13 + Math.ceil(def.columns.filter((c) => c.nullable).length / 8) + fixed,
     count(index, range, limit) {
-      let n = 0
-      for (const _ of accessRows(table, def, { index, ranges: [range] }, env.trx, false)) if (++n > limit) break
-      return n
+      return countRows(accessRows(table, def, { index, ranges: [range] }, env.trx, false), limit)
     },
   }
+}
+
+/** Count until the limit is exceeded, closing the reader even on early return. */
+function countRows(rows: Iterable<unknown>, limit: number): number {
+  let count = 0
+  for (const _ of rows) if (++count > limit) break
+  return count
 }
 
 /**
@@ -977,7 +988,7 @@ function refOf(t: FromTable, conditions: readonly (Expression | undefined)[], ou
   const own = (e: Expression): ColumnDef | undefined => columnOf(t, e, scope)
   const fromOuter = (e: Expression): boolean => {
     const a = aliasesOf(e, scope)
-    return a !== undefined && a.size > 0 && [...a].every((x) => outerAliases.has(x))
+    return a !== undefined && a.size > 0 && subsetOf(a, outerAliases)
   }
   const unique = (i: IndexDef, c: ColumnDef): boolean => i.parts.length === 1 && (i.kind === 'primary' || (i.kind === 'unique' && !c.nullable))
   let best: EqRef | undefined
@@ -1066,7 +1077,7 @@ function aliasesOf(e: Expression, scope: TableScope): Set<string> | undefined {
   return other ? undefined : out
 }
 
-const within = (c: Placed, aliases: ReadonlySet<string>): boolean => c.aliases !== undefined && c.aliases.size > 0 && [...c.aliases].every((a) => aliases.has(a))
+const within = (c: Placed, aliases: ReadonlySet<string>): boolean => c.aliases !== undefined && c.aliases.size > 0 && subsetOf(c.aliases, aliases)
 
 
 // --- the iterators (M5.43) --------------------------------------------------------
@@ -1166,7 +1177,7 @@ function toOp(node: Node, conditions: readonly Placed[], scope: TableScope, sett
     const t = node.inner.table
     const known = (e: Expression): Compiled | undefined => {
       const a = aliasesOf(e, scope)
-      return a !== undefined && a.size > 0 && [...a].every((x) => outerAliases.has(x)) ? ctx.compileOn(e, slotScope(preliminary.restrict(outerAliases), preliminary)) : undefined
+      return a !== undefined && a.size > 0 && subsetOf(a, outerAliases) ? ctx.compileOn(e, slotScope(preliminary.restrict(outerAliases), preliminary)) : undefined
     }
     return filterOp(dynamicOp(node, outer, t, [...toInner, ...spanning], settings, known), above)
   }
@@ -1250,7 +1261,7 @@ function planJoins(root: Node, where: readonly Weighed[], scope: TableScope, set
       read: indexScanCost(stats.rows, indexBytes(driver.def, index) + indexBytes(driver.def, clusteredIndex(driver.def))),
       fetched: stats.rows / stats.recordsPerKey(index, 1),
     }
-    const order = joinOrder(candidates, sort, loose)
+    const order = joinOrder(candidates, sort, loose, settings.firstMatch)
     const byAlias = new Map(leaves.map((t) => [t.alias, t]))
     let node: Node = { kind: 'leaf', table: byAlias.get((order[0] as Positioned).alias) as FromTable }
     const before = new Set([(order[0] as Positioned).alias])
@@ -1317,7 +1328,7 @@ function comparesWithEarlier(t: FromTable, e: Expression, before: ReadonlySet<st
   }
   const earlier = (x: Expression | undefined): boolean => {
     const a = x === undefined ? undefined : aliasesOf(x, scope)
-    return a !== undefined && a.size > 0 && [...a].every((alias) => before.has(alias))
+    return a !== undefined && a.size > 0 && subsetOf(a, before)
   }
   return splitAnd(e).some((c) => {
     if (c.kind !== NODE.BINARY) return false
@@ -1508,7 +1519,7 @@ function filterEffect(e: Expression, t: FromTable, stats: TableStatistics, avail
   const atLeast = (f: number): number => Math.max(Math.fround(1 / stats.rows), f)
   const known = (x: Expression): boolean => {
     const a = aliasesOf(x, scope)
-    return a !== undefined && [...a].every((alias) => available.has(alias))
+    return a !== undefined && subsetOf(a, available)
   }
   const own = (x: Expression): ColumnDef | undefined => columnOf(t, x, scope)
   // A comparison counts where one side is this table's column, not the lookup's, and the other is known.
@@ -1942,7 +1953,7 @@ function isEquiJoin(c: Placed, outer: ReadonlySet<string>, inner: ReadonlySet<st
   if (e.kind !== NODE.BINARY || e.op !== '=') return false
   const l = aliasesOf(e.left, scope)
   const r = aliasesOf(e.right, scope)
-  const on = (a: Set<string> | undefined, side: ReadonlySet<string>): boolean => a !== undefined && a.size > 0 && [...a].every((x) => side.has(x))
+  const on = (a: Set<string> | undefined, side: ReadonlySet<string>): boolean => a !== undefined && a.size > 0 && subsetOf(a, side)
   return (on(l, outer) && on(r, inner)) || (on(l, inner) && on(r, outer))
 }
 
@@ -2017,12 +2028,16 @@ function pushedToIndex(t: FromTable, c: Placed, settings: LeafSettings, env: Env
 function keyBytes(c: ColumnDef): number {
   const t = c.type
   const widths: Record<number, number> = { [FIELD_TYPE.TINY]: 1, [FIELD_TYPE.SHORT]: 2, [FIELD_TYPE.INT24]: 3, [FIELD_TYPE.LONG]: 4, [FIELD_TYPE.LONGLONG]: 8, [FIELD_TYPE.FLOAT]: 4, [FIELD_TYPE.DOUBLE]: 8, [FIELD_TYPE.DATE]: 3, [FIELD_TYPE.YEAR]: 1 }
-  const fixed = widths[t.type]
-  if (fixed !== undefined) return fixed + (c.nullable ? 1 : 0)
-  if (t.type === FIELD_TYPE.NEWDECIMAL || t.type === FIELD_TYPE.DECIMAL) return Math.ceil((t.precision ?? 10) / 2) + 1 + (c.nullable ? 1 : 0)
-  if (t.type === FIELD_TYPE.DATETIME || t.type === FIELD_TYPE.TIMESTAMP) return 5 + Math.ceil((t.decimals ?? 0) / 2) + (c.nullable ? 1 : 0)
-  const mb = t.collationId === undefined ? 1 : requireCollationInfo(t.collationId).mbmaxlen
-  return (t.length ?? 1) * mb + 2 + (c.nullable ? 1 : 0)
+  let bytes = widths[t.type]
+  if (bytes === undefined) {
+    if (t.type === FIELD_TYPE.NEWDECIMAL || t.type === FIELD_TYPE.DECIMAL) bytes = Math.ceil((t.precision ?? 10) / 2) + 1
+    else if (t.type === FIELD_TYPE.DATETIME || t.type === FIELD_TYPE.TIMESTAMP) bytes = 5 + Math.ceil((t.decimals ?? 0) / 2)
+    else {
+      const mb = t.collationId === undefined ? 1 : requireCollationInfo(t.collationId).mbmaxlen
+      bytes = (t.length ?? 1) * mb + 2
+    }
+  }
+  return bytes + (c.nullable ? 1 : 0)
 }
 
 /** The index a table's rows are stored in: its PRIMARY KEY, or the unique key InnoDB chose in its place; none for a hidden row id. */
@@ -2053,7 +2068,7 @@ function covers(def: TableDef, index: IndexDef, read: ReadonlySet<string> | 'all
   const clustered = clusteredIndex(def)
   if (read === 'all' || index === clustered || index.invisible === true) return false
   const holds = new Set(indexParts(def, index).filter((p) => p.prefix === undefined).map((p) => p.column.toLowerCase()))
-  return [...read].every((c) => holds.has(c))
+  return subsetOf(read, holds)
 }
 
 /**

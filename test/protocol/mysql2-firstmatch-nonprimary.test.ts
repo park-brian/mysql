@@ -54,8 +54,9 @@ test('non-primary FirstMatch matches native captures 36/88 across nullable and d
             assert.deepEqual(actual, rows, `${capture}/${state}/${switches}/${variant}/${method}`)
             assert.deepEqual(fieldsOf(fields), [['g', 3, 11, 0, 0, 63, 'nonprimary77', 'kl', 'kl', 'g'], ['s', 253, 40, 0, 0, 255, 'nonprimary77', 'kl', 'kl', 's']])
             assert.deepEqual((await conn.query('SHOW WARNINGS'))[0], [])
-            // Empty-inner materialization and disabled transformations retain their separate costing work.
-            if (state !== 'emptyInner' && switches !== 'semijoin=off') {
+            // Empty-inner hash/weedout/materialization and disabled transformations remain separate.
+            const emptyFirstMatch = state === 'emptyInner' && switches === 'loosescan=off' && variant === 'unordered'
+            if ((state !== 'emptyInner' && switches !== 'semijoin=off') || emptyFirstMatch) {
               let plan = firstMatch('kl', 'pa', 'grp', true, switches !== 'firstmatch=off')
               if (variant === 'unordered') plan = plan.replace('    Sort\n        Filter\n            ', '    Filter\n        ')
               if (variant === 'limit') plan = `Limit\n${plan.split('\n').map((line) => `    ${line}`).join('\n')}`
@@ -120,6 +121,52 @@ test('non-primary integer keys preserve duplicates, exact BIGINTs and cached pla
     }
   } finally {
     await conn.query('DROP DATABASE IF EXISTS nonprimary_fresh77')
+    await conn.end()
+    await db?.end()
+  }
+})
+
+test('FirstMatch admission retains native copied fields as a prepared inner changes cardinality', async () => {
+  const { conn, db } = await connect('firstmatch_fresh86')
+  try {
+    await conn.query('CREATE TABLE pa(id INT NOT NULL,g INT UNSIGNED,s VARCHAR(12),KEY(g)) STATS_AUTO_RECALC=0')
+    await conn.query('CREATE TABLE ch(id INT PRIMARY KEY,g INT UNSIGNED,KEY(g)) STATS_AUTO_RECALC=0')
+    await conn.query("INSERT INTO pa VALUES(1,2,'same'),(2,2,'same'),(3,NULL,'null'),(4,9,'absent')")
+    const initial = 'INSERT INTO ch VALUES ' + [[1, 2], [2, 2], [3, 2], [4, null], ...Array.from({ length: 200 }, (_, i) => [i + 10, i + 10])].map(([id, g]) => `(${id},${g === null ? 'NULL' : g})`).join(',')
+    await conn.query(initial)
+    await conn.query("SET optimizer_switch='default,loosescan=off'")
+    await conn.query('ANALYZE TABLE pa,ch')
+    const sql = 'SELECT p.g,p.s FROM pa p WHERE p.g IN(SELECT c.g FROM ch c) ORDER BY 1,2'
+    const expectedFields = (flags: number) => [['g', 3, 10, flags, 0, 63, 'firstmatch_fresh86', 'p', 'pa', 'g'], ['s', 253, 48, 0, 0, 224, 'firstmatch_fresh86', 'p', 'pa', 's']]
+    const statement = await conn.prepare({ sql, rowsAsArray: true })
+    const columns = (statement as unknown as { statement: { columns: mysql.FieldPacket[] } }).statement.columns
+    assert.deepEqual(fieldsOf(columns), expectedFields(16424))
+    try {
+      for (const [state, writes] of [
+        ['initial', []], ['empty', ['DELETE FROM ch']],
+        ['duplicates', ['INSERT INTO ch VALUES(1,2),(2,2),(3,2),(4,NULL)']],
+        ['nulls', ['UPDATE ch SET g=NULL']], ['restored', ['DELETE FROM ch', initial]],
+        ['firstoff', ["SET optimizer_switch='firstmatch=off'"]], ['firston', ["SET optimizer_switch='firstmatch=on'"]],
+      ] as const) {
+        for (const write of writes) await conn.query(write)
+        await conn.query('ANALYZE TABLE pa,ch')
+        const expected: unknown[][] = state === 'empty' || state === 'nulls' ? [] : [[2, 'same'], [2, 'same']]
+        const flags = state === 'empty' || state === 'duplicates' || state === 'nulls' ? 32 : 16424
+        for (const method of ['query', 'execute', 'prepared'] as const) {
+          await conn.query('DO 0')
+          const options = { sql, rowsAsArray: true }
+          const [rows, fields] = method === 'prepared' ? await statement.execute([]) : method === 'query' ? await conn.query(options) : await conn.execute(options)
+          assert.deepEqual(rows, method === 'prepared' ? expected.map(([g, s]) => ({ g, s })) : expected, `${state}/${method}`)
+          assert.deepEqual(fieldsOf(fields), expectedFields(flags), `${state}/${method}`)
+          assert.deepEqual((await conn.query('SHOW WARNINGS'))[0], [])
+        }
+      }
+    } finally {
+      await statement.close()
+      conn.unprepare({ sql, rowsAsArray: true })
+    }
+  } finally {
+    await conn.query('DROP DATABASE IF EXISTS firstmatch_fresh86')
     await conn.end()
     await db?.end()
   }

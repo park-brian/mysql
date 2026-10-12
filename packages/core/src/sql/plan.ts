@@ -226,7 +226,7 @@ export interface RangeCosting {
   readonly coveringScan: IndexDef | undefined
   /** The shortest a clustered record can be. */
   readonly minRecordBytes: number
-  /** The rows a range of an index reads, counted up to `limit` and no further: the server's index dives, exact on a small table. */
+  /** Count until more than `limit` rows are found: the server's index dives, exact on a small table. */
   count(index: string, range: KeyRange, limit: number): number
 }
 
