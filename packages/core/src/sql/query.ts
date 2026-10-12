@@ -837,7 +837,7 @@ function costedIntegerSemijoin(run: Run, q: QueryExpression, node: SelectNode, f
   const innerColumn = innerKey.parts[innerKey.parts.length - 1] as string
   const outerColumn = outerKey.parts[outerKey.parts.length - 1] as string
   const primary = from.single.def.indexes.find((i) => i.kind === 'primary')
-  if (primary?.parts.length !== 1 || primary.parts[0]?.column.toLowerCase() !== outerColumn.toLowerCase()) return undefined
+  const primaryKey = primary?.parts.length === 1 && primary.parts[0]?.column.toLowerCase() === outerColumn.toLowerCase()
   if (extra !== undefined && !(extra.kind === NODE.BINARY && ['=', '<>', '!=', '<', '<=', '>', '>='].includes(extra.op) && column(extra.left, innerAlias) && extra.right.kind === NODE.LITERAL && numeric(extra.right))) return undefined
   try {
     const schema = inner.table.schema ?? defaultDatabase(run)
@@ -862,7 +862,7 @@ function costedIntegerSemijoin(run: Run, q: QueryExpression, node: SelectNode, f
     alternative.sortedBy(sortBy, keep)
     const covered = new Set(indexParts(def, index).map((p) => p.column.toLowerCase()))
     if ([...innerRead].some((c) => !covered.has(c))) return undefined
-    const strategy = alternative.integerSemijoin(innerAlias, index, key, extra, optimizerEnabled(run, 'loosescan'), optimizerEnabled(run, 'firstmatch'))
+    const strategy = alternative.integerSemijoin(innerAlias, index, key, extra, primaryKey && optimizerEnabled(run, 'loosescan'), optimizerEnabled(run, 'firstmatch'))
     return strategy === undefined ? undefined : { from: alternative, where: predicate, loose: strategy === 'loose' }
   } catch (error) {
     expectTyped(error)

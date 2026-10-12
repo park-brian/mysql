@@ -27,7 +27,7 @@ Doc 42's query API
 protocol, its values `mysql2`'s (M5.36, D-76). The roadmap's **Next** section
 says what comes next: 0.3 is staged (`npm run pack`, D-79/D-80) and waits only
 on being published. The cost-based planner (M5.7, M5.42–M5.46) is done:
-`EXPLAIN FORMAT=TREE` prints the plan that runs, and 2,122 of the relational
+`EXPLAIN FORMAT=TREE` prints the plan that runs, and 2,124 of the relational
 corpus's 2,248 plans agree with 8.4.11's; M5.47 is in progress, M5.48 is done,
 M5.49 and M5.50 are in progress.
 `db.stream()` (M5.40) streams with backpressure at every hop (D-85). Then the

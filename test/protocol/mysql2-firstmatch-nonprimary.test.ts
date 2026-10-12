@@ -1,0 +1,187 @@
+// M5.47: FirstMatch preserves outer row identity without a unique outer key.
+import { test } from 'node:test'
+import assert from 'node:assert/strict'
+import { readFileSync } from 'node:fs'
+import mysql from 'mysql2/promise'
+import { MySQL } from '@myjs/core'
+// @ts-expect-error — the capture owns plan normalization.
+import { CONNECTION, SQL_MODE, planSkeleton } from '../../tools/capture-relational.mjs'
+
+function firstMatch(outer: string, inner: string, index: string, nullable = true, first = true) {
+  return `${first ? 'Nested loop semijoin' : 'Nested loop inner join'}\n    Sort\n${nullable ? '        Filter\n            ' : '        '}Table scan on ${outer}\n${first ? '    ' : '    Limit\n        '}Covering index lookup on ${inner} using ${index}`
+}
+
+async function connect(schema: string, utf8 = false) {
+  const host = process.env.MYSQL_REFERENCE_HOST
+  const db = host === undefined ? await MySQL.open(':memory:') : undefined
+  const conn = await mysql.createConnection({ ...(utf8 ? CONNECTION : {}), supportBigNumbers: true, bigNumberStrings: true,
+    ...(db === undefined ? { host: host ?? '127.0.0.1', port: Number(process.env.MYSQL_REFERENCE_PORT ?? 3306), user: 'root', password: process.env.MYSQL_REFERENCE_PASSWORD ?? 'root' }
+      : { stream: db.createStream(), user: 'root', password: '' }) })
+  await conn.query(`CREATE DATABASE IF NOT EXISTS ${schema}`)
+  await conn.query(`USE ${schema}`)
+  return { conn, db }
+}
+
+function fieldsOf(fields: mysql.FieldPacket[]) {
+  return fields.map((f) => [f.name, f.columnType, f.columnLength, f.flags, f.decimals, f.characterSet, f.schema, f.table, f.orgTable, f.orgName])
+}
+
+test('non-primary FirstMatch matches native captures 36/88 across nullable and duplicate outer keys', async () => {
+  const { conn, db } = await connect('nonprimary77', true)
+  const fixture = JSON.parse(readFileSync(new URL('../format/fixtures/relational.json', import.meta.url), 'utf8')) as { cases: { sql: string }[][] }
+  try {
+    await conn.query(`SET sql_mode=${mysql.escape(SQL_MODE)}`)
+    for (const capture of [36, 88]) for (const state of ['captured', 'matches', 'duplicates', 'nulls', 'emptyOuter', 'emptyInner']) {
+      await conn.query('DROP TABLE IF EXISTS pa,kl')
+      for (const o of fixture.cases[capture]!) if (/^(CREATE TABLE (pa|kl) |INSERT INTO (pa|kl) )/.test(o.sql)) await conn.query(o.sql)
+      if (state !== 'captured') {
+        await conn.query('DELETE FROM kl')
+        if (state !== 'emptyOuter') await conn.query('INSERT INTO kl(g,s) VALUES ' + (state === 'matches' ? "(1,'a'),(2,'b')" : state === 'duplicates' ? "(2,'same'),(2,'same')" : "(NULL,'null'),(2,'match')"))
+        if (state === 'nulls') await conn.query('UPDATE pa SET grp=NULL WHERE id=1')
+        if (state === 'emptyInner') await conn.query('DELETE FROM pa')
+      }
+      await conn.query('ANALYZE TABLE pa,kl')
+      for (const switches of ['default', 'loosescan=off', 'firstmatch=off', 'semijoin=off']) {
+        await conn.query(`SET optimizer_switch=${mysql.escape(switches)}`)
+        for (const variant of ['ordered', 'unordered', 'limit']) {
+          const sql = 'SELECT g,s FROM kl WHERE g IN(SELECT grp FROM pa)' + (variant === 'ordered' ? ' ORDER BY 1,2' : variant === 'limit' ? ' ORDER BY 1,2 LIMIT 1' : '')
+          let rows: unknown[][] = state === 'duplicates' ? [[2, 'same'], [2, 'same']] : state === 'nulls' ? [[2, 'match']]
+            : state === 'matches' ? (capture === 36 ? [[1, 'a'], [2, 'b']] : [[2, 'b']]) : []
+          if (variant === 'limit') rows = rows.slice(0, 1)
+          for (const method of ['query', 'execute'] as const) {
+            const options = { sql, rowsAsArray: true }
+            const [actual, fields] = method === 'query' ? await conn.query(options) : await conn.execute(options)
+            assert.deepEqual(actual, rows, `${capture}/${state}/${switches}/${variant}/${method}`)
+            assert.deepEqual(fieldsOf(fields), [['g', 3, 11, 0, 0, 63, 'nonprimary77', 'kl', 'kl', 'g'], ['s', 253, 40, 0, 0, 255, 'nonprimary77', 'kl', 'kl', 's']])
+            assert.deepEqual((await conn.query('SHOW WARNINGS'))[0], [])
+            // Empty-inner materialization and disabled transformations retain their separate costing work.
+            if (state !== 'emptyInner' && switches !== 'semijoin=off') {
+              let plan = firstMatch('kl', 'pa', 'grp', true, switches !== 'firstmatch=off')
+              if (variant === 'unordered') plan = plan.replace('    Sort\n        Filter\n            ', '    Filter\n        ')
+              if (variant === 'limit') plan = `Limit\n${plan.split('\n').map((line) => `    ${line}`).join('\n')}`
+              const [explain] = await conn.query<mysql.RowDataPacket[]>(`EXPLAIN FORMAT=TREE ${sql}`)
+              assert.equal(planSkeleton(explain[0]?.EXPLAIN), plan)
+            }
+            conn.unprepare(options)
+          }
+        }
+      }
+      await conn.query("SET optimizer_switch='default'")
+    }
+  } finally {
+    await conn.query('DROP DATABASE IF EXISTS nonprimary77')
+    await conn.end()
+    await db?.end()
+  }
+})
+
+test('non-primary integer keys preserve duplicates, exact BIGINTs and cached plans after writes', async () => {
+  const { conn, db } = await connect('nonprimary_fresh77')
+  try {
+    for (const [type, key, code, width, flags] of [['INT', '', 3, 11, 0], ['INT UNSIGNED', ',KEY(g)', 3, 10, 16424], ['SMALLINT', ',PRIMARY KEY(id,g)', 2, 6, 20483], ['BIGINT', ',PRIMARY KEY(id)', 8, 20, 0]] as const) {
+      const matched = type === 'BIGINT' ? '9007199254740993' : 2
+      const absent = type === 'BIGINT' ? '9007199254740994' : 9
+      const nullable = type !== 'SMALLINT'
+      await conn.query('DROP TABLE IF EXISTS pa,ch')
+      await conn.query(`CREATE TABLE pa(id INT NOT NULL,g ${type},s VARCHAR(12)${key}) STATS_AUTO_RECALC=0`)
+      await conn.query(`CREATE TABLE ch(id INT PRIMARY KEY,g ${type},KEY(g)) STATS_AUTO_RECALC=0`)
+      await conn.query(`INSERT INTO pa VALUES(1,${matched},'same'),(2,${matched},'same'),(3,${nullable ? 'NULL' : absent},'null'),(4,${absent},'absent')`)
+      await conn.query('INSERT INTO ch VALUES ' + [[1, matched], [2, matched], [3, matched], [4, null], ...Array.from({ length: 200 }, (_, i) => [i + 10, i + 10])].map(([i, g]) => `(${i},${g === null ? 'NULL' : g})`).join(','))
+      await conn.query('ANALYZE TABLE pa,ch')
+      const expectedFields = [['g', code, width, flags, 0, 63, 'nonprimary_fresh77', 'p', 'pa', 'g'], ['s', 253, 48, 0, 0, 224, 'nonprimary_fresh77', 'p', 'pa', 's']]
+      for (const variant of ['in', 'exists', 'limit']) {
+        const sql = variant === 'exists' ? 'SELECT p.g,p.s FROM pa p WHERE EXISTS(SELECT 1 FROM ch c WHERE p.g=c.g) ORDER BY 1,2'
+          : 'SELECT p.g,p.s FROM pa p WHERE p.g IN(SELECT c.g FROM ch c) ORDER BY 1,2' + (variant === 'limit' ? ' LIMIT 1' : '')
+        const statement = await conn.prepare({ sql, rowsAsArray: true })
+        const columns = (statement as unknown as { statement: { columns: mysql.FieldPacket[] } }).statement.columns
+        assert.deepEqual(fieldsOf(columns), expectedFields, `${type}: prepare fields`)
+        try {
+          for (const [state, write] of [['initial', ''], ['removed', `UPDATE ch SET g=${absent} WHERE id IN(1,2,3)`], ['restored', `UPDATE ch SET g=${matched} WHERE id IN(1,2,3)`], ['firstoff', "SET optimizer_switch='firstmatch=off'"], ['firston', "SET optimizer_switch='firstmatch=on'"]]) {
+            if (write !== '') await conn.query(write!)
+            let expected: unknown[][] = state === 'removed' ? (nullable ? [[absent, 'absent']] : [[absent, 'absent'], [absent, 'null']]) : [[matched, 'same'], [matched, 'same']]
+            if (variant === 'limit') expected = expected.slice(0, 1)
+            for (const method of ['query', 'execute', 'prepared']) {
+              const options = { sql, rowsAsArray: true }
+              const [rows, fields] = method === 'prepared' ? await statement.execute([]) : method === 'query' ? await conn.query(options) : await conn.execute(options)
+              assert.deepEqual(rows, method === 'prepared' ? expected.map(([g, s]) => ({ g, s })) : expected, `${type}/${variant}/${state}/${method}`)
+              assert.deepEqual(fieldsOf(fields), expectedFields)
+              assert.deepEqual((await conn.query('SHOW WARNINGS'))[0], [])
+              let plan = firstMatch('p', 'c', 'g', nullable, state !== 'firstoff')
+              if (variant === 'limit') plan = `Limit\n${plan.split('\n').map((line) => `    ${line}`).join('\n')}`
+              const [explain] = await conn.query<mysql.RowDataPacket[]>(`EXPLAIN FORMAT=TREE ${sql}`)
+              assert.equal(planSkeleton(explain[0]?.EXPLAIN), plan)
+            }
+          }
+        } finally {
+          await statement.close()
+          conn.unprepare({ sql, rowsAsArray: true })
+        }
+      }
+    }
+  } finally {
+    await conn.query('DROP DATABASE IF EXISTS nonprimary_fresh77')
+    await conn.end()
+    await db?.end()
+  }
+})
+
+test('non-primary FirstMatch probes each outer occurrence once and closes scans on early return', async () => {
+  const db = await MySQL.open(':memory:')
+  try {
+    await db.query('CREATE DATABASE d')
+    await db.query('USE d')
+    await db.query('CREATE TABLE pa(g INT,s VARCHAR(12)) STATS_AUTO_RECALC=0')
+    await db.query('CREATE TABLE ch(id INT PRIMARY KEY,g INT,KEY(g)) STATS_AUTO_RECALC=0')
+    await db.query("INSERT INTO pa VALUES(2,'same'),(2,'same'),(NULL,'null'),(9,'absent')")
+    await db.query('INSERT INTO ch VALUES ' + [[1, 2], [2, 2], [3, 2], ...Array.from({ length: 200 }, (_, i) => [i + 10, i + 10])].map(([i, g]) => `(${i},${g})`).join(','))
+    await db.query('ANALYZE TABLE pa,ch')
+    const catalog = db.catalog!
+    const open = catalog.table.bind(catalog)
+    let probes = 0
+    let examined = 0
+    let closed = 0
+    catalog.table = (schema, name, trx) => {
+      const table = open(schema, name, trx)
+      if (schema === 'd' && name === 'ch') {
+        const scan = table.indexScan.bind(table)
+        table.indexScan = function*(index, range, transaction, mode) {
+          const probe = index === 'g' && range?.from !== undefined && range.to !== undefined
+          if (probe) probes++
+          try {
+            for (const row of scan(index, range, transaction, mode)) {
+              if (probe) examined++
+              yield row
+            }
+          } finally {
+            if (probe) closed++
+          }
+        }
+      }
+      return table
+    }
+    const sql = 'SELECT g,s FROM d.pa WHERE g IN(SELECT g FROM d.ch) ORDER BY 1,2'
+    try {
+      assert.deepEqual((await db.query(sql))[0], [{ g: 2, s: 'same' }, { g: 2, s: 'same' }])
+      assert.equal(probes, 3, 'two duplicate outer occurrences and one absent key')
+      assert.equal(examined, 2, 'one match for each occurrence, despite three inner duplicates')
+      assert.equal(closed, probes)
+    } finally {
+      catalog.table = open
+    }
+    for await (const row of db.stream(`${sql} FOR UPDATE`)) {
+      assert.deepEqual(row, { g: 2, s: 'same' })
+      break
+    }
+    assert.equal(db.openConnections, 1)
+    const writer = await db.connect()
+    try {
+      await writer.query('SET innodb_lock_wait_timeout=1')
+      await writer.query('UPDATE d.ch SET g=9 WHERE g=2')
+    } finally {
+      await writer.end()
+    }
+    assert.deepEqual((await db.query(sql))[0], [{ g: 9, s: 'absent' }])
+  } finally {
+    await db.end()
+  }
+})
