@@ -33,6 +33,87 @@ function create(store: Store, trx: Trx): ClusteredIndex {
 
 const refsOf = (t: ClusteredIndex) => (id: number, v: Uint8Array) => (id === t.tree.indexId ? t.refsOf(v) : [])
 
+test('M5.50: preparation refuses own-tree destruction before changing store state', async () => {
+  for (const count of [1, 800]) {
+    const { store } = await fresh()
+    const tree = store.createTree()
+    const alias = store.openTree(tree.indexId)
+    const other = store.createTree()
+    for (let i = 0; i < count; i++) tree.put(be(i), be(i))
+    other.put(be(0), be(0))
+    store.takeCounter(tree.indexId, 0, 7)
+    store.takeCounter(tree.indexId, 1, 3)
+    const before = {
+      lsn: store.lsn, drops: store.drops, pages: store.alloc.usedPages(),
+      rows: [...tree.entries()], counters: [store.counter(tree.indexId, 0), store.counter(tree.indexId, 1)],
+    }
+    for (const nested of [false, true]) for (const replacement of [undefined, be(9)]) {
+      assert.throws(() => alias.upsert(be(0), () => {
+        other.put(be(0), be(8))
+        // Nesting another preparation must not hide the outer tree's guard.
+        if (nested) other.upsert(be(1), () => {
+          store.dropTree(tree.indexId)
+          return replacement
+        })
+        else store.dropTree(tree.indexId)
+        return replacement
+      }), (e: EngineError) => e.code === 'ENGINE_MISUSE')
+      assert.equal(store.hasTree(tree.indexId), true)
+      assert.equal(store.lsn, before.lsn)
+      assert.equal(store.drops, before.drops)
+      assert.deepEqual(store.alloc.usedPages(), before.pages)
+      assert.deepEqual([...tree.entries()], before.rows)
+      assert.deepEqual([store.counter(tree.indexId, 0), store.counter(tree.indexId, 1)], before.counters)
+      assert.deepEqual([...other.entries()], [[be(0), be(0)]], 'independent writes roll back with the failed preparation')
+      assert.equal(store.pool.pinned(), 0)
+      verifyStore(store)
+    }
+    alias.upsert(be(0), () => be(10))
+    other.upsert(be(1), () => be(11))
+    assert.deepEqual(tree.get(be(0)), be(10))
+    assert.deepEqual(other.get(be(1)), be(11))
+    store.dropTree(tree.indexId)
+    store.dropTree(other.indexId)
+    assert.equal(store.pool.pinned(), 0)
+    verifyStore(store)
+  }
+})
+
+test('M5.50: caught destruction refusal permits replacement and independent-tree drops', async () => {
+  const { vfs, store } = await fresh()
+  const tree = store.createTree()
+  const other = store.createTree()
+  tree.put(be(0), be(1))
+  other.put(be(0), be(2))
+  store.takeCounter(tree.indexId, 0, 7)
+  store.takeCounter(other.indexId, 0, 4)
+  const drops = store.drops
+  tree.upsert(be(0), () => {
+    assert.throws(() => store.dropTree(tree.indexId), (e: EngineError) => e.code === 'ENGINE_MISUSE')
+    assert.equal(store.drops, drops)
+    assert.equal(store.counter(tree.indexId, 0), 8n)
+    store.dropTree(other.indexId)
+    return be(3)
+  })
+  assert.equal(store.drops, drops + 1)
+  assert.equal(store.hasTree(tree.indexId), true)
+  assert.equal(store.hasTree(other.indexId), false)
+  assert.equal(store.counter(other.indexId, 0), 1n)
+  assert.deepEqual(tree.get(be(0)), be(3))
+  assert.equal(store.pool.pinned(), 0)
+  verifyStore(store)
+  store.sync()
+  const reopened = Store.open(...(await files(vfs)), { frames: 64 })
+  assert.deepEqual(reopened.openTree(tree.indexId).get(be(0)), be(3))
+  assert.equal(reopened.counter(tree.indexId, 0), 8n)
+  assert.equal(reopened.hasTree(other.indexId), false)
+  reopened.dropTree(tree.indexId)
+  assert.equal(reopened.counter(tree.indexId, 0), 1n)
+  assert.equal(reopened.hasTree(tree.indexId), false)
+  assert.equal(reopened.pool.pinned(), 0)
+  verifyStore(reopened)
+})
+
 test('M4.23: a tree undo record round-trips, and a mangled one is a typed error', () => {
   const r = { trees: { onRollback: [{ indexId: 17, layout }], onPurge: [{ indexId: 18, layout: null }, { indexId: 2 ** 23, layout: [] }] } }
   assert.deepEqual(decodeUndo(encodeUndo(r)), r)

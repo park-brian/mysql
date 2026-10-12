@@ -20,7 +20,7 @@
 // then checkpoints everything and starts the log afresh under a new salt.
 import type { VfsFile } from '@myjs/vfs'
 import { Allocator, type AllocatorState } from './alloc.ts'
-import { BTree, type TreeOptions } from './btree.ts'
+import { BTree, checkTreeChange, type TreeOptions } from './btree.ts'
 import { EngineError, corrupt, misuse } from './errors.ts'
 import { Journal } from './journal.ts'
 import { BufferPool, type PoolOptions } from './pool.ts'
@@ -295,6 +295,7 @@ export class Store {
    */
   dropTree(indexId: number, layout: RecordLayout | null = null): void {
     if (indexId === DIRECTORY || indexId === TRX_INDEX || indexId === COUNTERS_INDEX) throw misuse(`index ${indexId} is the store's own`)
+    checkTreeChange(this.journal, indexId)
     this.#drops++
     this.journal.atomically(() => {
       const tree = this.openTree(indexId)

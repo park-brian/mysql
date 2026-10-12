@@ -85,6 +85,11 @@ type Prepare = (current: Uint8Array | undefined) => Uint8Array | undefined
 // Handles opened on the same journal/index share the preparation boundary.
 const preparing = new WeakMap<Journal, Set<number>>()
 
+/** Internal preparation boundary, shared with Store's tree destruction. */
+export function checkTreeChange(journal: Journal, indexId: number): void {
+  if (preparing.get(journal)?.has(indexId) === true) throw misuse('a prepared upsert cannot change its own tree')
+}
+
 export class BTree {
   readonly space: PageSpace
   readonly indexId: number
@@ -153,7 +158,7 @@ export class BTree {
 
   /** Insert or replace. One mini-transaction, or part of the caller's. */
   put(key: Uint8Array, value: Uint8Array): void {
-    this.#canChange()
+    checkTreeChange(this.space.journal, this.indexId)
     const max = ip.maxCellSize(this.space.pool.pageSize)
     BTree.checkKeyLength(key.length, this.space.pool.pageSize)
     if (ip.cellSize(key, value) > max) throw rowTooBig(max)
@@ -168,22 +173,18 @@ export class BTree {
   /**
    * Prepare a replacement from copied old bytes, after releasing the read pin.
    * Preparation may write undo/overflow pages, but cannot change this tree's
-   * rows through another handle. The key is copied before calling user code.
+   * rows through another handle or drop it. The key is copied before user code.
    * Returning undefined leaves the row untouched; empty bytes replace it.
    * Current and in-place upgraded leaves need one descent; rebuilding restarts.
    */
   upsert(key: Uint8Array, prepare: Prepare): void {
-    this.#canChange()
+    checkTreeChange(this.space.journal, this.indexId)
     const stable = key.slice()
     BTree.checkKeyLength(stable.length, this.space.pool.pageSize)
     this.space.journal.atomically(() => {
       const split = this.#insert(this.root, stable, prepare)
       if (split !== null) throw misuse('the root split without being raised')
     })
-  }
-
-  #canChange(): void {
-    if (preparing.get(this.space.journal)?.has(this.indexId) === true) throw misuse('a prepared upsert cannot change its own tree')
   }
 
   #prepare(prepare: Prepare, current: Uint8Array | undefined): Uint8Array | undefined {
@@ -201,7 +202,7 @@ export class BTree {
 
   /** Remove a key. `false` when it was not there. One mini-transaction, or part of the caller's. */
   delete(key: Uint8Array): boolean {
-    this.#canChange()
+    checkTreeChange(this.space.journal, this.indexId)
     return this.space.journal.atomically(() => {
       if (this.#version > 0) this.#upgradeLeaf(this.#leafFor(key))
       const { removed } = this.#remove(this.root, key)
