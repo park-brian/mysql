@@ -379,7 +379,9 @@ function planSelect(run: Run, q: QueryExpression, node: SelectNode): SelectPlan 
   // A prepare reports a statement before MySQL optimizes it, so it never sees
   // the temporary table: COM_STMT_PREPARE's metadata has no GROUP_FLAG where
   // the execute's does (8.4.11, found by review).
-  if (node.distinct === true && source !== undefined && facts !== undefined && run.preparing !== true && !distinctKey(source.def, items, lookup)) {
+  // A bounded unordered DISTINCT copies fields even over an indexed prefix.
+  // Only whole-key uniqueness can remove that boundary; PREPARE precedes it.
+  if (node.distinct === true && source !== undefined && facts !== undefined && run.preparing !== true && !distinctKey(source.def, items, lookup, limitCount !== undefined && q.orderBy === undefined)) {
     const pinnedName = (item: { compiled: Compiled }): boolean => {
       const name = item.compiled.type.column?.orgName.toLowerCase()
       return name !== undefined && facts.pins.has(name)

@@ -40,7 +40,9 @@ const FIELDS: unknown[][][] = [
   [["all",3,11,16392,0,63,"covering80_fresh","a","a","all"],["y",253,48,0,0,224,"covering80_fresh","a","a","y"]],
   [["all",3,11,32768,0,63,"covering80_fresh","a","a","all"],["y",253,48,32768,0,224,"covering80_fresh","a","a","y"]],
   [["all",3,11,0,0,63,"covering80_fresh","a","a","all"],["y",253,48,0,0,224,"covering80_fresh","a","a","y"]],
-  [["all",3,11,16392,0,63,"covering80_fresh","a","a","all"]]
+  [["all",3,11,16392,0,63,"covering80_fresh","a","a","all"]],
+  [["x",3,11,0,0,63,"covering80","hidden","hidden","x"],["y",253,48,0,0,224,"covering80","hidden","hidden","y"]],
+  [["x",3,11,0,0,63,"covering80_fresh","h","h","x"],["y",253,48,0,0,224,"covering80_fresh","h","h","y"]]
 ]
 const DEFS: string[][] = [
   ["hidden","x INT,y VARCHAR(12),KEY k(x,y)","(1,'one'),(1,'one'),(NULL,'null'),(NULL,'null')"],
@@ -51,7 +53,7 @@ const DEFS: string[][] = [
   ["binary_key","id INT PRIMARY KEY,x VARBINARY(8),KEY k(x)","(1,X'80FF'),(2,X'0001'),(3,NULL),(4,X'80FF')"],
   ["named_all","`all` INT,y VARCHAR(12),KEY k(`all`)","(1,'one'),(1,'two'),(NULL,'null'),(NULL,'null')"]
 ]
-const CASES: { table: string; sql: string; prepare: number; fields?: number; rows: unknown[][] }[] = [
+const CASES: { table: string; sql: string; prepare: number; fields: number; rows: unknown[][] }[] = [
   {"table":"hidden","sql":"SELECT * FROM hidden","prepare":0,"fields":0,"rows":[[null,"null"],[null,"null"],[1,"one"],[1,"one"]]},
   {"table":"hidden","sql":"SELECT t.* FROM hidden t","prepare":1,"fields":1,"rows":[[null,"null"],[null,"null"],[1,"one"],[1,"one"]]},
   {"table":"hidden","sql":"SELECT * FROM hidden LIMIT 1","prepare":0,"fields":0,"rows":[[null,"null"]]},
@@ -59,8 +61,8 @@ const CASES: { table: string; sql: string; prepare: number; fields?: number; row
   {"table":"hidden","sql":"SELECT DISTINCT * FROM hidden","prepare":0,"fields":0,"rows":[[null,"null"],[1,"one"]]},
   {"table":"hidden","sql":"SELECT DISTINCT * FROM hidden ORDER BY 1,2","prepare":0,"fields":0,"rows":[[null,"null"],[1,"one"]]},
   {"table":"hidden","sql":"SELECT DISTINCT t.* FROM hidden t ORDER BY 1,2","prepare":1,"fields":1,"rows":[[null,"null"],[1,"one"]]},
-  {"table":"hidden","sql":"SELECT DISTINCT * FROM hidden LIMIT 1","prepare":0,"rows":[[null,"null"]]},
-  {"table":"hidden","sql":"SELECT DISTINCT * FROM hidden LIMIT 0 OFFSET 1","prepare":0,"rows":[]},
+  {"table":"hidden","sql":"SELECT DISTINCT * FROM hidden LIMIT 1","prepare":0,"rows":[[null,"null"]],"fields":35},
+  {"table":"hidden","sql":"SELECT DISTINCT * FROM hidden LIMIT 0 OFFSET 1","prepare":0,"rows":[],"fields":35},
   {"table":"hidden","sql":"SELECT COUNT(*) FROM hidden","prepare":2,"fields":2,"rows":[[4]]},
   {"table":"primary_key","sql":"SELECT * FROM primary_key","prepare":3,"fields":3,"rows":[[3,null,"null"],[2,1,"one"],[4,1,"one"],[1,2,"two"]]},
   {"table":"primary_key","sql":"SELECT t.* FROM primary_key t","prepare":4,"fields":4,"rows":[[3,null,"null"],[2,1,"one"],[4,1,"one"],[1,2,"two"]]},
@@ -132,11 +134,11 @@ const FRESH_DEFS: string[][] = [
   ["b","id BIGINT PRIMARY KEY,x VARBINARY(8),KEY k(x)","(9007199254740993,X'80FF'),(9007199254740994,X'0001'),(9007199254740995,NULL),(9007199254740996,X'80FF')","x","UPDATE b SET x=X'00FF' WHERE id=9007199254740993","DELETE FROM b WHERE id=9007199254740993"],
   ["a","`all` INT,y VARCHAR(12),KEY k(`all`)","(1,'one'),(1,'two'),(NULL,'null'),(NULL,'null')","`all`","UPDATE a SET y=CONCAT('z',y)","DELETE FROM a WHERE `all`=1"]
 ]
-const FRESH_CASES: { table: string; sql: string; prepare: number; fields?: number; rows: unknown[][][] }[] = [
+const FRESH_CASES: { table: string; sql: string; prepare: number; fields: number; rows: unknown[][][] }[] = [
   {"table":"h","sql":"SELECT * FROM h","prepare":25,"fields":25,"rows":[[[null,"null"],[null,"null"],[1,"one"],[1,"one"]],[[null,"znull"],[null,"znull"],[1,"zone"],[1,"zone"]],[[null,"znull"],[null,"znull"]],[[null,"null"],[null,"null"],[1,"one"],[1,"one"]]]},
   {"table":"h","sql":"SELECT * FROM h LIMIT 1","prepare":25,"fields":25,"rows":[[[null,"null"]],[[null,"znull"]],[[null,"znull"]],[[null,"null"]]]},
   {"table":"h","sql":"SELECT DISTINCT * FROM h ORDER BY 1,2 LIMIT 2 OFFSET 1","prepare":25,"fields":25,"rows":[[[1,"one"]],[[1,"zone"]],[],[[1,"one"]]]},
-  {"table":"h","sql":"SELECT DISTINCT * FROM h LIMIT 1","prepare":25,"rows":[[[null,"null"]],[[null,"znull"]],[[null,"znull"]],[[null,"null"]]]},
+  {"table":"h","sql":"SELECT DISTINCT * FROM h LIMIT 1","prepare":25,"rows":[[[null,"null"]],[[null,"znull"]],[[null,"znull"]],[[null,"null"]]],"fields":36},
   {"table":"h","sql":"SELECT x FROM h","prepare":26,"fields":26,"rows":[[[null],[null],[1],[1]],[[null],[null],[1],[1]],[[null],[null]],[[null],[null],[1],[1]]]},
   {"table":"p","sql":"SELECT * FROM p","prepare":27,"fields":27,"rows":[[[3,null,"null"],[2,1,"one"],[4,1,"one"],[1,2,"two"]],[[3,null,"znull"],[2,1,"zone"],[4,1,"zone"],[1,2,"ztwo"]],[[3,null,"znull"],[2,1,"zone"],[4,1,"zone"]],[[3,null,"null"],[2,1,"one"],[4,1,"one"],[1,2,"two"]]]},
   {"table":"p","sql":"SELECT * FROM p LIMIT 1","prepare":27,"fields":27,"rows":[[[3,null,"null"]],[[3,null,"znull"]],[[3,null,"znull"]],[[3,null,"null"]]]},
@@ -176,13 +178,12 @@ async function withTables(schema: string, definitions: string[][], run: (conn: m
   } finally { await conn.query(`DROP DATABASE IF EXISTS ${schema}`); await conn.end(); await db?.end() }
 }
 
-async function assertExecution(conn: mysql.Connection, statement: mysql.PreparedStatementInfo, entry: { sql: string; prepare: number; fields?: number }, expected: unknown[][], state: number): Promise<void> {
+async function assertExecution(conn: mysql.Connection, statement: mysql.PreparedStatementInfo, entry: { sql: string; prepare: number; fields: number }, expected: unknown[][], state: number): Promise<void> {
   const options = { sql: entry.sql, rowsAsArray: true }
   for (const method of ['query', 'execute', 'prepared']) {
     const [rows, fields] = method === 'prepared' ? await statement.execute([]) : method === 'query' ? await conn.query(options) : await conn.execute(options)
     assert.deepEqual(jsonRows(rows), method === 'prepared' ? objectRows(expected, entry.prepare) : expected, `${entry.sql}/${state}/${method}: rows and bytes`)
-    // Bounded unordered DISTINCT copied-field policy remains a separate native gap.
-    if (entry.fields !== undefined) assert.deepEqual(fieldsOf(fields), FIELDS[entry.fields], `${entry.sql}/${state}/${method}: fields`)
+    assert.deepEqual(fieldsOf(fields), FIELDS[entry.fields], `${entry.sql}/${state}/${method}: fields`)
     assert.deepEqual((await conn.query('SHOW WARNINGS'))[0], [], `${entry.sql}/${state}/${method}: warnings`)
   }
 }
