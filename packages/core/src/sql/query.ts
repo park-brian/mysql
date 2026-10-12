@@ -483,13 +483,16 @@ function planSelect(run: Run, q: QueryExpression, node: SelectNode): SelectPlan 
   const match = keys.length === 0 && refs.length === 1 && refs[0]?.kind === REF.TABLE ? matchConjunct(node.where) : undefined
   if (match !== undefined) keys.push({ expr: compile(match, compileContext(run, lookup, 'where clause')), desc: true })
   const locking = (q.locking ?? []).length > 0
+  // Metadata's indexed-prefix shortcut does not prove row uniqueness.
+  // An outer field with the same name cannot supply a local UNIQUE key.
+  const deduplicate = node.distinct === true && (source === undefined || !distinctKey(source.def, items, lookup, true))
   // An ORDER BY the index the table is read by already gives: read in its order, and nothing to sort.
   const read = source !== undefined && from !== undefined ? from.access(run.env) : undefined
   // Windows and hash antijoins still sort their delivered rows, even over an ordered index.
   const outerLoop = semi?.loose === false && source !== undefined && sortBy === source.alias
   // Reconsider PRIMARY for ordinary scans and the modeled outer-first loop.
-  // DISTINCT keeps its access choice even when a unique key removes deduplication.
-  const ordered = source !== undefined && read !== undefined && !deduplicated && !windowed && (anti === undefined || anti.lookup) && match === undefined && keys.length > 0 && read.ranges === undefined ? orderingIndex(source.def, source.alias, order, items, lookup, read.index, (outerLoop || (!loopSemijoin && node.distinct !== true)) && optimizerEnabled(run, 'prefer_ordering_index')) : undefined
+  // A proved UNIQUE projection can reconsider PRIMARY as an ordinary scan does.
+  const ordered = source !== undefined && read !== undefined && !deduplicated && !windowed && (anti === undefined || anti.lookup) && match === undefined && keys.length > 0 && read.ranges === undefined ? orderingIndex(source.def, source.alias, order, items, lookup, read.index, (outerLoop || (!loopSemijoin && !deduplicate)) && optimizerEnabled(run, 'prefer_ordering_index')) : undefined
   if (ordered !== undefined) from?.readInOrder(ordered.index, false, ordered.reverse, source?.alias)
   const sortedFirst = outerLoop && ordered === undefined && keys.length > 0
   if (sortedFirst && source !== undefined) from?.sortFirst(source.alias, keys)
@@ -510,9 +513,6 @@ function planSelect(run: Run, q: QueryExpression, node: SelectNode): SelectPlan 
   // DISTINCT, HAVING and windows retain their projection/materialization boundaries.
   const limitFirst = ordered !== undefined && node.distinct !== true && having === undefined && !loopSemijoin
   const take = limitCount === undefined && offset === 0 ? [] : [limitStage(offset, limitCount)]
-  // Metadata's indexed-prefix shortcut does not prove row uniqueness.
-  // An outer field with the same name cannot supply a local UNIQUE key.
-  const deduplicate = node.distinct === true && (source === undefined || !distinctKey(source.def, items, lookup, true))
   const stages: Stage[] = [
     ...(where === undefined ? [] : [filterStage(where)]),
     // HAVING without grouping filters the rows WHERE kept, before any window sees them.
@@ -1188,19 +1188,14 @@ function nullableView(scope: TableScope, aliases: ReadonlySet<string>): Scope {
 }
 
 /**
- * The columns a query reads of each table of its FROM, by name in lower case,
- * or 'all' for a table read whole (`*`): what decides which secondary index
- * holds everything it needs (`FromPlan.reads`).
+ * The source columns a query reads of each FROM table, by name in lower case:
+ * what decides which secondary index holds everything it needs (`FromPlan.reads`).
+ * Stars conservatively require all source columns, including join inputs.
  */
 function columnsRead(scope: TableScope, node: SelectNode, q: QueryExpression): Map<string, ReadonlySet<string> | 'all'> {
-  const used = new Map<string, Set<string> | 'all'>()
+  const used = new Map<string, Set<string>>()
   const aliases = new Set(scope.tables.map((t) => t.alias))
-  const add = (alias: string, column: string | 'all'): void => {
-    const cur = used.get(alias)
-    if (cur === 'all') return
-    if (column === 'all') used.set(alias, 'all')
-    else used.set(alias, (cur ?? new Set()).add(column.toLowerCase()))
-  }
+  const add = (alias: string, column: string): void => { used.set(alias, (used.get(alias) ?? new Set()).add(column.toLowerCase())) }
   const visit = (e: unknown, inside: boolean): boolean => someNode(e, (e) => {
     const n = e as { kind?: string; parts?: readonly string[]; query?: unknown }
     if (n.kind === NODE.LITERAL || n.kind === NODE.PLACEHOLDER) return false
@@ -1218,7 +1213,7 @@ function columnsRead(scope: TableScope, node: SelectNode, q: QueryExpression): M
       const qualifier = n.parts.length >= 2 ? (n.parts[n.parts.length - 2] as string) : undefined
       if (last === '*') {
         if (inside) return false
-        for (const t of scope.tables) if (qualifier === undefined || qualifier === t.alias) add(t.alias, 'all')
+        for (const t of scope.tables) if (qualifier === undefined || qualifier === t.alias) for (const c of t.columns) add(t.alias, c.name)
         return false
       }
       if (inside) {

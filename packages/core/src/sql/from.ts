@@ -2051,7 +2051,7 @@ function holdsRead(def: TableDef, index: IndexDef, read: ReadonlySet<string> | '
 /** Whether a secondary index, with the clustered key it carries, holds every column in `read`. */
 function covers(def: TableDef, index: IndexDef, read: ReadonlySet<string> | 'all'): boolean {
   const clustered = clusteredIndex(def)
-  if (read === 'all' || clustered === undefined || index === clustered || index.invisible === true) return false
+  if (read === 'all' || index === clustered || index.invisible === true) return false
   const holds = new Set(indexParts(def, index).filter((p) => p.prefix === undefined).map((p) => p.column.toLowerCase()))
   return [...read].every((c) => holds.has(c))
 }
