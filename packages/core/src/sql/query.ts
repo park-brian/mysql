@@ -9,7 +9,7 @@
 // A result column is named as MySQL names it: its alias, else a bare column's
 // name as written, else the expression's own source text — `SELECT 1+1`
 // returns a column called `1+1`, spaces and all, which only the text has.
-import type { ColumnDef, Table, TableDef, ViewDef } from '@myjs/engine'
+import type { ColumnDef, IndexDef, Table, TableDef, ViewDef } from '@myjs/engine'
 import { LITERAL, NODE, QUERY, REF, TOKEN, deparse, lex, parseStatement, type Expression, type OrderItem, type QueryBody, type QueryExpression, type SelectNode, type SetOperationNode, type TableName, type Token } from '@myjs/parser'
 import { messages, sqlError, type ColumnDefinition, type ResultSet, type RowValue } from '@myjs/protocol'
 import { intValue, storageWidth, toInteger, truth, withoutHex, type Value } from '@myjs/types'
@@ -379,7 +379,7 @@ function planSelect(run: Run, q: QueryExpression, node: SelectNode): SelectPlan 
   // A prepare reports a statement before MySQL optimizes it, so it never sees
   // the temporary table: COM_STMT_PREPARE's metadata has no GROUP_FLAG where
   // the execute's does (8.4.11, found by review).
-  if (node.distinct === true && source !== undefined && facts !== undefined && run.preparing !== true && !holdsKey(source.def, node.items, source.alias)) {
+  if (node.distinct === true && source !== undefined && facts !== undefined && run.preparing !== true && !distinctKey(source.def, node.items, source.alias)) {
     const pinnedName = (item: { compiled: Compiled }): boolean => {
       const name = item.compiled.type.column?.orgName.toLowerCase()
       return name !== undefined && facts.pins.has(name)
@@ -431,7 +431,7 @@ function planSelect(run: Run, q: QueryExpression, node: SelectNode): SelectPlan 
     const alone = node.distinct === true && source === undefined && rest.length === 1
     // …and one that selects that table's unique key is no DISTINCT at all (8.4.11: `SELECT DISTINCT
     // lt.n, p1.name FROM lt LEFT JOIN pa AS p1 ON … AND p1.id <> NULL` reads lt alone, flags kept).
-    const keyed = alone && facts.nullTables !== undefined && rest[0]?.def !== undefined && holdsKey(rest[0].def, node.items, rest[0].alias)
+    const keyed = alone && facts.nullTables !== undefined && rest[0]?.def !== undefined && distinctKey(rest[0].def, node.items, rest[0].alias)
     // A DISTINCT of constants alone is one row (8.4.11): over NULL-complemented tables a `Group` of what
     // is read, keeping each column's flags; over const tables' rows the first row into a temporary table.
     const exprs = items.flatMap((i) => (i.expr === undefined ? [] : [i.expr]))
@@ -510,13 +510,16 @@ function planSelect(run: Run, q: QueryExpression, node: SelectNode): SelectPlan 
   // DISTINCT, HAVING and windows retain their projection/materialization boundaries.
   const limitFirst = ordered !== undefined && node.distinct !== true && having === undefined && !loopSemijoin
   const take = limitCount === undefined && offset === 0 ? [] : [limitStage(offset, limitCount)]
+  // Metadata's indexed-prefix shortcut does not prove row uniqueness.
+  // An outer field with the same name cannot supply a local UNIQUE key.
+  const deduplicate = node.distinct === true && (source === undefined || !distinctKey(source.def, node.items, source.alias, lookup))
   const stages: Stage[] = [
     ...(where === undefined ? [] : [filterStage(where)]),
     // HAVING without grouping filters the rows WHERE kept, before any window sees them.
     ...(having === undefined ? [] : [{ ...filterStage(having), describe: (n: PlanNode) => withSubqueries(run, planNode('Filter', [n]), 'having clause') }]),
     ...(windows === undefined || windows.windows.length === 0 ? [] : [windowStage(windows, windowBase)]),
     ...(limitFirst ? take : []),
-    deliverStage(items.map((i) => i.compiled), ordered === undefined && !sortedFirst ? keys : [], node.distinct === true, { deduplicated, streamed, copied, keep: limitCount === undefined ? undefined : keep, buffer, ...(constantDistinct === undefined ? {} : { constant: constantDistinct }) }),
+    deliverStage(items.map((i) => i.compiled), ordered === undefined && !sortedFirst ? keys : [], deduplicate, { deduplicated, streamed, copied, keep: limitCount === undefined ? undefined : keep, buffer, ...(constantDistinct === undefined ? {} : { constant: constantDistinct }) }),
     ...(limitFirst ? [] : take),
   ]
   return {
@@ -605,9 +608,9 @@ function windowStage(windows: WindowSink, base: number): Stage {
  * Other repeated expressions remain open (M5.49). A sort
  * over a join reads its rows streamed into a table first ("Stream results").
  */
-function deliverStage(items: readonly Compiled[], keys: readonly SortKey[], unique: boolean, through: { readonly deduplicated: boolean; readonly streamed: boolean; readonly copied?: readonly (number | undefined)[] | undefined; readonly described?: boolean; readonly keep?: number | undefined; readonly buffer?: { readonly estimate: number; readonly capacity: number } | undefined; readonly constant?: 'group' | 'limit' }): Stage {
+function deliverStage(items: readonly Compiled[], keys: readonly SortKey[], deduplicate: boolean, through: { readonly deduplicated: boolean; readonly streamed: boolean; readonly copied?: readonly (number | undefined)[] | undefined; readonly described?: boolean; readonly keep?: number | undefined; readonly buffer?: { readonly estimate: number; readonly capacity: number } | undefined; readonly constant?: 'group' | 'limit' }): Stage {
   // A LIMIT needs only its first rows of the order, unless a DISTINCT between would drop some.
-  const keep = unique ? undefined : through.keep
+  const keep = deduplicate ? undefined : through.keep
   const copied = through.deduplicated ? keys.flatMap((key, i) => {
     const column = key.expr.type.column
     const index = through.copied?.[i] ?? items.findIndex((item) => item === key.expr || (column !== undefined && item.type.column === column))
@@ -618,7 +621,7 @@ function deliverStage(items: readonly Compiled[], keys: readonly SortKey[], uniq
       if (keys.length > 0 && copied.length === keys.length) return sort(rowed(distinct(project(rows, items, env))), copied, env)
       const sorted = keys.length > 0 ? sort(rows, keys, env, keep, through.buffer) : rows
       let projected = project(sorted, items, env)
-      if (unique) projected = distinct(projected)
+      if (deduplicate) projected = distinct(projected)
       // Initialize a bounded temporary table even when the enclosing LIMIT returns no rows.
       if (through.deduplicated && through.keep !== undefined && keys.length === 0) return rowed([...limit(projected, 0, through.keep)])
       return rowed(projected)
@@ -2302,26 +2305,21 @@ function checkFullGroupBy(
  * already; when it is nothing but the leading columns of an index, the index
  * delivers them grouped (8.4.11 reports `SELECT DISTINCT age` with `age`'s own
  * key flags when `age` is indexed, and with GROUP_FLAG when it is not).
+ * A supplied scope restricts the proof to local fields and a whole UNIQUE
+ * key. Without it, indexed prefixes and wildcards are metadata shortcuts.
  */
-function holdsKey(def: TableDef, items: SelectNode['items'], alias: string): boolean {
+function distinctKey(def: TableDef, items: SelectNode['items'], alias: string, local?: Scope): boolean {
   const named = new Set<string>()
-  let onlyColumns = true
   for (const item of items) {
     const e = item.expr
-    if (e.kind !== NODE.COLUMN) {
-      onlyColumns = false
-      continue
-    }
-    const last = e.parts[e.parts.length - 1] as string
-    if (last === '*' && (e.parts.length === 1 || e.parts[e.parts.length - 2] === alias)) return true
+    if (e.kind !== NODE.COLUMN || (local !== undefined && safeIndex(local, e.parts) === undefined)) continue
+    const last = e.parts.at(-1) as string
+    if (last === '*' && (e.parts.length === 1 || e.parts.at(-2) === alias)) return true
     named.add(last.toLowerCase())
   }
-  if (onlyColumns && def.indexes.some((i) => i.parts.length >= named.size && i.parts.slice(0, named.size).every((p) => p.prefix === undefined && named.has(p.column.toLowerCase())))) return true
-  return def.indexes.some(
-    (i) =>
-      uniqueKey(def, i) &&
-      i.parts.every((p) => p.prefix === undefined && named.has(p.column.toLowerCase())),
-  )
+  const covered = (parts: IndexDef['parts'], count = parts.length): boolean => parts.length >= count && parts.slice(0, count).every((p) => p.prefix === undefined && named.has(p.column.toLowerCase()))
+  if (def.indexes.some((i) => uniqueKey(def, i) && covered(i.parts))) return true
+  return local === undefined && items.every((i) => i.expr.kind === NODE.COLUMN) && def.indexes.some((i) => covered(i.parts, named.size))
 }
 
 /**
