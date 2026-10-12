@@ -5,6 +5,7 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import fc from 'fast-check'
 import { MemoryVfs, type VfsFile } from '@myjs/vfs'
+import { FaultInjectingVfs } from '@myjs/vfs/fault'
 import { BTree, EngineError, Store, indexPage as ip, verifyStore, type TreeOptions } from '@myjs/engine'
 
 const PAGE = 1024
@@ -127,6 +128,127 @@ test('prepared upsert keeps the full schema-upgrade and split path', async () =>
   assert.deepEqual(tree.get(be(50))?.slice(0, 4), be(999))
   for (let i = 0; i < 100; i++) if (i !== 50) assert.deepEqual(tree.get(be(i))?.slice(0, 4), be(i))
   verifyStore(store, { schemaVersion: () => 2 })
+})
+
+test('prepared upsert retains one descended path when an old-schema leaf upgrades in place', async () => {
+  for (const count of [1, 800, 4000]) for (const replace of [false, true]) {
+    const store = Store.create(...await freshFiles(count === 4000 ? 512 : PAGE), { frames: 32 })
+    const old = store.createTree({ schemaVersion: 1, upgrade: (v) => v })
+    for (let i = 0; i < count; i++) old.put(be(i), be(i))
+    const upgrade = (v: Uint8Array) => { const next = v.slice(); next[0] = next[0]! ^ 0x80; return next }
+    const tree = store.openTree(old.indexId, { schemaVersion: 2, upgrade })
+    const height = tree.height()
+    if (count === 4000) assert.ok(height >= 3)
+    const target = replace ? 0 : count + 1
+    const before = store.pool.stats.fetches
+    const lsn = store.lsn
+    tree.upsert(be(target), () => undefined)
+    assert.equal(store.pool.stats.fetches - before, height)
+    assert.equal(store.lsn, lsn, 'a no-op does not upgrade the leaf')
+    assert.deepEqual(old.get(be(0)), be(0))
+    const start = store.pool.stats.fetches
+    const key = be(target)
+    let calls = 0
+    tree.upsert(key, (current) => {
+      calls++
+      assert.equal(store.pool.stats.fetches - start, height)
+      assert.equal(store.pool.pinned(), 0)
+      assert.deepEqual(current, replace ? upgrade(be(0)) : undefined)
+      current?.fill(0xff)
+      key.fill(0xff)
+      return be(999)
+    })
+    assert.equal(calls, 1)
+    assert.equal(store.pool.stats.fetches - start, height + 3, 'upgrade reads/writes only the descended leaf')
+    assert.equal(tree.height(), height)
+    const expected = Array.from({ length: count }, (_, i) => [be(i), i === target ? be(999) : upgrade(be(i))])
+    if (!replace) expected.push([be(target), be(999)])
+    assert.deepEqual([...tree.entries()], expected)
+    assert.equal(store.pool.pinned(), 0)
+    verifyStore(store, { schemaVersion: () => 2 })
+    store.close()
+  }
+})
+
+test('in-place upgrade preparation and codec failures leave old leaves and other writes intact', async () => {
+  const store = Store.create(...await freshFiles(), { frames: 32 })
+  const old = store.createTree({ schemaVersion: 1, upgrade: (v) => v })
+  for (let i = 0; i < 10; i++) old.put(be(i), be(i))
+  const other = store.createTree()
+  other.put(be(0), be(0))
+  const failure = new Error('codec failed')
+  const tree = store.openTree(old.indexId, { schemaVersion: 2, upgrade: (v) => {
+    if (v[3] === 1) throw failure
+    return v.slice()
+  } })
+  const lsn = store.lsn
+  assert.throws(() => tree.upsert(be(0), () => { other.put(be(0), be(1)); throw failure }), (e) => e === failure)
+  assert.throws(() => tree.upsert(be(0), () => { other.put(be(0), be(2)); return be(999) }), (e) => e === failure)
+  assert.equal(store.lsn, lsn)
+  assert.deepEqual(other.get(be(0)), be(0))
+  assert.deepEqual([...old.entries()], Array.from({ length: 10 }, (_, i) => [be(i), be(i)]))
+  assert.equal(store.pool.pinned(), 0)
+  verifyStore(store, { schemaVersion: () => 1 })
+  store.close()
+})
+
+test('an in-place schema upgrade propagates a subsequent replacement split through its original ancestors', async () => {
+  for (const count of [75, 800]) {
+    const store = Store.create(...await freshFiles(), { frames: 32 })
+    const old = store.createTree({ schemaVersion: 1, upgrade: (v) => v })
+    for (let i = 0; i < count; i++) old.put(be(i), be(i))
+    const tree = store.openTree(old.indexId, { schemaVersion: 2, upgrade: (v) => v.slice() })
+    const pages = tree.nodePages().length
+    let calls = 0
+    tree.upsert(be(0), () => { calls++; return new Uint8Array(300).fill(0x80) })
+    assert.equal(calls, 1)
+    assert.ok(tree.nodePages().length > pages, 'replacement growth actually splits the upgraded leaf')
+    assert.deepEqual(tree.get(be(0)), new Uint8Array(300).fill(0x80))
+    for (let i = 1; i < count; i++) assert.deepEqual(tree.get(be(i)), be(i))
+    verifyStore(store, { schemaVersion: () => 2 })
+    store.close()
+  }
+})
+
+test('in-place upgrade and replacement splits recover atomically at every storage write', async () => {
+  for (const count of [75, 800]) {
+    const baseline = new FaultInjectingVfs({ pageSize: PAGE })
+    const files = async (vfs: FaultInjectingVfs): Promise<[VfsFile, VfsFile]> => [await vfs.open('data', {}), await vfs.open('log', {})]
+    const store = Store.create(await baseline.open('data', { create: true }), await baseline.open('log', { create: true }), { frames: 32 })
+    const old = store.createTree({ schemaVersion: 1, upgrade: (v) => v })
+    for (let i = 0; i < count; i++) old.put(be(i), be(i))
+    store.close()
+    const upgrade = (v: Uint8Array) => { const next = v.slice(); next[0] = next[0]! ^ 0x80; return next }
+    const changed = new Uint8Array(300).fill(0x80)
+    const run = async (crashAt?: number) => {
+      const vfs = baseline.afterCrash({ kind: 'process', ...(crashAt === undefined ? {} : { crashAt }) })
+      let acknowledged = false
+      try {
+        const active = Store.open(...await files(vfs), { frames: 32 })
+        active.openTree(old.indexId, { schemaVersion: 2, upgrade }).upsert(be(0), () => changed)
+        active.commit()
+        acknowledged = true
+        active.close()
+      } catch (e) { if ((e as { code?: string }).code !== 'VFS_CRASHED') throw e }
+      return { vfs, acknowledged }
+    }
+    const total = (await run()).vfs.operations
+    for (let point = 1; point <= total; point++) {
+      const { vfs, acknowledged } = await run(point)
+      for (const kind of ['process', 'power'] as const) {
+        const recovered = Store.open(...await files(vfs.afterCrash({ kind, seed: point })), { frames: 32 })
+        // The caller still owns this bare tree's codec; no transaction schema registry is implied.
+        const tree = recovered.openTree(old.indexId, { schemaVersion: 2, upgrade })
+        const value = tree.get(be(0))
+        if (acknowledged) assert.deepEqual(value, changed, `${count}/${point}/${kind}: durable replacement`)
+        else assert.ok(hex(value!) === hex(changed) || hex(value!) === hex(upgrade(be(0))), `${count}/${point}/${kind}: whole before/after value`)
+        for (let i = 1; i < count; i++) assert.deepEqual(tree.get(be(i)), upgrade(be(i)))
+        assert.equal([...tree.entries()].length, count)
+        verifyStore(recovered, { schemaVersion: () => 2 })
+        recovered.close()
+      }
+    }
+  }
 })
 
 /** A database's two files: data and log. */

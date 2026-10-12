@@ -170,7 +170,7 @@ export class BTree {
    * Preparation may write undo/overflow pages, but cannot change this tree's
    * rows through another handle. The key is copied before calling user code.
    * Returning undefined leaves the row untouched; empty bytes replace it.
-   * Current leaves need one descent; schema upgrades retain put's full path.
+   * Current and in-place upgraded leaves need one descent; rebuilding restarts.
    */
   upsert(key: Uint8Array, prepare: Prepare): void {
     this.#canChange()
@@ -459,9 +459,8 @@ export class BTree {
       const next = typeof value === 'function' ? this.#prepare(value, current) : value
       if (next === undefined) return null
       if (ip.cellSize(key, next) > ip.maxCellSize(this.space.pool.pageSize)) throw rowTooBig(ip.maxCellSize(this.space.pool.pageSize))
-      if (behind) {
-        // Upgrading may split this leaf and change its ancestors. Let put redo
-        // the complete path after preparation instead of using stale positions.
+      if (behind && !this.#upgradeLeaf(pageNo)) {
+        // Rebuilding changes the ancestors; an in-place upgrade keeps the path.
         this.put(key, next)
         return null
       }
@@ -670,11 +669,11 @@ export class BTree {
    * Bring a leaf to the current schema version before it is written. When the
    * upgraded records still fit, the page is rewritten in place; when they have
    * grown, it is emptied and they go back in through `put`, splitting it as an
-   * insert would.
+   * insert would. Returns whether the leaf and its ancestor path stay in place.
    */
-  #upgradeLeaf(leafNo: number): void {
+  #upgradeLeaf(leafNo: number): boolean {
     const behind = this.#read(leafNo, (p) => ip.schemaVersion(p) < this.#version)
-    if (!behind) return
+    if (!behind) return true
     const cells = this.#read(leafNo, (p) => this.#current(p))
     // Checked before the leaf is touched: a record the upgrade has made too big
     // for any page is refused with every row still in place.
@@ -683,9 +682,10 @@ export class BTree {
     const bytes = BTree.#bytes(cells)
     if (bytes <= ip.usableSpace(this.space.pool.pageSize)) {
       this.#write(leafNo, (p) => this.#fill(p, leafNo, 0, cells))
-      return
+      return true
     }
     this.#write(leafNo, (p) => this.#fill(p, leafNo, 0, []))
     for (const c of cells) this.put(c.key, c.value)
+    return false
   }
 }
