@@ -787,7 +787,7 @@ function subsetOf(a: ReadonlySet<string>, b: ReadonlySet<string>): boolean {
   return true
 }
 
-const NONE: readonly number[] = []
+const NONE: readonly never[] = []
 
 /** A row's hash key: its key values' `rowKey`, or `undefined` when one is NULL, which `=` matches to nothing. */
 function keyOf(exprs: readonly Compiled[], row: Row, env: Env): string | undefined {
@@ -800,15 +800,15 @@ function keyOf(exprs: readonly Compiled[], row: Row, env: Env): string | undefin
   return rowKey(values)
 }
 
-/** The build rows' positions by key, ascending, so a probe walks its bucket newest first as it walked them all. */
-function bucket(rows: readonly JoinedRow[], exprs: readonly Compiled[], env: Env): Map<string, number[]> {
-  const out = new Map<string, number[]>()
-  rows.forEach((r, i) => {
+/** Build rows by key in insertion order; hash probes walk each bucket newest first. */
+function bucket(rows: readonly JoinedRow[], exprs: readonly Compiled[], env: Env): Map<string, JoinedRow[]> {
+  const out = new Map<string, JoinedRow[]>()
+  rows.forEach((r) => {
     const k = keyOf(exprs, r.row, env)
     if (k === undefined) return
     const list = out.get(k)
-    if (list === undefined) out.set(k, [i])
-    else list.push(i)
+    if (list === undefined) out.set(k, [r])
+    else list.push(r)
   })
   return out
 }
@@ -1694,13 +1694,12 @@ function hashJoinOp(node: Node & { kind: 'join' }, outer: Op, inner: Op, on: rea
     *rows(run, context) {
       const env = run.env
       const [build, probe, buildKey, probeKey] = node.left ? [inner, outer, keys?.inner, keys?.outer] : [outer, inner, keys?.outer, keys?.inner]
-      const built = [...build.rows(run, context)]
-      const buckets = buildKey === undefined ? undefined : bucket(built, buildKey, env)
+      const built = buildKey === undefined ? [...build.rows(run, context)] : bucket([...build.rows(run, context)], buildKey, env)
       for (const p of probe.rows(run, context)) {
-        const candidates = buckets === undefined ? undefined : (buckets.get(keyOf(probeKey ?? [], p.row, env) ?? '') ?? NONE)
+        const candidates = built instanceof Map ? built.get(keyOf(probeKey ?? [], p.row, env) ?? '') ?? NONE : built
         let matched = false
-        for (let n = (candidates ?? built).length - 1; n >= 0; n--) {
-          const b = built[candidates === undefined ? n : (candidates[n] as number)] as JoinedRow
+        for (let n = candidates.length - 1; n >= 0; n--) {
+          const b = candidates[n] as JoinedRow
           const [o, i] = node.left ? [p, b] : [b, p]
           const combined = merge(o.row, i.row, node.innerSlots)
           if (!holds(on, combined, env)) continue
@@ -1861,13 +1860,11 @@ function autoKeyOp(node: Node & { kind: 'join' }, outer: Op, inner: Op, t: FromT
   return {
     *rows(run, context) {
       const env = run.env
-      const built = [...inner.rows(run, context)]
-      const byKey = bucket(built, keys.inner, env)
+      const byKey = bucket([...inner.rows(run, context)], keys.inner, env)
       for (const o of outer.rows(run, context)) {
         const k = keyOf(keys.outer, o.row, env)
         let matched = false
-        for (const i of k === undefined ? NONE : (byKey.get(k) ?? NONE)) {
-          const r = built[i] as JoinedRow
+        for (const r of k === undefined ? NONE : (byKey.get(k) ?? NONE)) {
           const combined = merge(o.row, r.row, node.innerSlots)
           if (!holds(on, combined, env)) continue
           matched = true

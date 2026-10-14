@@ -2173,6 +2173,20 @@ fields, 192 earlier fresh outcomes and 2,243 older controls are unchanged.
 Plans remain 2,124/2,248 against the unchanged 2,118 floor. M5.47 remains partial;
 materialized lookup admission is next.
 
+**Verified keyed build ownership cleanup (2026-10-13):** Following the
+independent slice review, hash joins and automatic derived-table indexes now
+store joined-row references directly in their keyed buckets. A keyed build
+retains no separate full row array plus positional index lists. The source is
+still consumed completely before key evaluation; hash buckets probe newest
+first, automatic indexes oldest first, and unkeyed hash joins retain their full
+rows. No materialized semijoin is admitted. All 1,289 Docker tests, ten focused
+checks, eighteen live native controls, typecheck, lint, nine unchanged caps,
+package smoke, 20,000 seeded executor statements and seven pinned corpora pass.
+The 144 materialization research outcomes, base/fresh/192 earlier fresh/2,243
+older controls and 2,124/2,248 plans are unchanged, floor 2,118. Core/facade
+are 334,283/334,201 B gzipped. All eleven required jobs in preceding FirstMatch
+CI run 38503905854 pass. Selected materialization admission remains next and M5.47 remains partial.
+
 **Preserved materialized-lookup prototype (not shipped):** the positive exact-integer
 candidate compares materialization inside the shared join search. A cheaper
 materialized choice participates in prefix pruning; LooseScan retains its

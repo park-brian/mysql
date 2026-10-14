@@ -1503,12 +1503,14 @@ closure owned once across authentication and database validation. FirstMatch
 sorting now costs its outer cardinality rather than duplicate inner fanout.
 Materialization costs, wider switch scopes and broader builtin inheritance remain open under M5.47.
 Cached keyed subqueries build directly from the iterator without another row
-array; selected materialized semijoin admission still needs the recorded native
-cost and lifetime evidence.
+array. Keyed hash and automatic derived-table indexes also retain their build
+rows directly in their buckets, preserving read/key timing and probe order.
+Selected materialized semijoin admission still needs the recorded native cost
+and lifetime evidence.
 `db.stream()` streams a million rows within a few MB of the heap's baseline (M5.40). Next is the
 remaining function and planner work, then the browser. The coercion corpus
 now agrees on all 3,148 observations and all 1,737 warning counts. The core entry bundle
-is 334,319 bytes gzipped (326.5 KiB), against the 500 KB release target,
+is 334,283 bytes gzipped (326.4 KiB), against the 500 KB release target,
 with the UCA weights in a separate chunk loaded on demand.
 
 The release plan gives each stage something to ship:
