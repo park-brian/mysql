@@ -1459,7 +1459,7 @@ a blocker and one without is just a note.
 
 ## 21. Where we are
 
-*A snapshot as of 2026-10-13. The [roadmap](./docs/44-roadmap.md) is the live
+*A snapshot as of 2026-10-14. The [roadmap](./docs/44-roadmap.md) is the live
 version, and wins wherever it disagrees with this section.*
 
 ```mermaid
@@ -1505,12 +1505,14 @@ Materialization costs, wider switch scopes and broader builtin inheritance remai
 Cached keyed subqueries build directly from the iterator without another row
 array. Keyed hash and automatic derived-table indexes also retain their build
 rows directly in their buckets, preserving read/key timing and probe order.
+Quantified subqueries share the complete-column coverage proof, so a partial
+string index is not described as covering its complete residual column.
 Selected materialized semijoin admission still needs the recorded native cost
 and lifetime evidence.
 `db.stream()` streams a million rows within a few MB of the heap's baseline (M5.40). Next is the
 remaining function and planner work, then the browser. The coercion corpus
 now agrees on all 3,148 observations and all 1,737 warning counts. The core entry bundle
-is 334,283 bytes gzipped (326.4 KiB), against the 500 KB release target,
+is 334,226 bytes gzipped (326.4 KiB), against the 500 KB release target,
 with the UCA weights in a separate chunk loaded on demand.
 
 The release plan gives each stage something to ship:

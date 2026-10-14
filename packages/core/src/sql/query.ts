@@ -744,8 +744,6 @@ function quantifiedPlan(run: Run, query: QueryExpression, how: QuantifiedSubquer
   if (!equality && !(how.op === '=' && how.quantifier === 'ALL') && !(how.op === '<>' && how.quantifier === 'ANY')) return undefined
   const nulls = !top || !equality || how.op === '<>'
   const read = keyReads(column.name, body.where)
-  const pk = def.indexes.find((i) => i.kind === 'primary')
-  const covers = (parts: readonly { column: string }[]): boolean => [...read].every((n) => [...parts, ...(pk?.parts ?? [])].some((p) => p.column.toLowerCase() === n))
   const index = def.indexes.find((i) => i.invisible !== true && i.parts[0]?.column === column.name && i.parts[0].prefix === undefined)
   const where = body.where !== undefined ? 1 : 0
   let access: PlanNode
@@ -756,12 +754,12 @@ function quantifiedPlan(run: Run, query: QueryExpression, how: QuantifiedSubquer
       return planNode('Filter', [planNode('Limit', [planNode('Index lookup on <materialized_subquery> using <auto_distinct_key>', [materialized])])])
     }
     const unique = index.parts.length === 1 && (index.kind === 'primary' || index.kind === 'unique')
-    const covering = covers(index.parts)
+    const covering = holdsRead(def, index, read)
     access = indexLookup(alias, index.name, unique, covering)
     if (nulls && how.outerNullable) access = planNode('Alternative plans for IN subquery', [access, planNode(`Table scan on ${alias}`)])
     filters = Math.max(nulls ? (column.nullable ? 2 : how.outerNullable ? 1 : 0) : 0, where)
   } else {
-    const cover = def.indexes.find((i) => i.invisible !== true && covers(i.parts) && i.kind !== 'primary')
+    const cover = def.indexes.find((i) => holdsRead(def, i, read) && i.kind !== 'primary')
     access = planNode(cover === undefined ? `Table scan on ${alias}` : `Covering index scan on ${alias} using ${cover.name}`)
     filters = column.nullable ? 2 : 1
   }

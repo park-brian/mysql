@@ -2187,6 +2187,55 @@ older controls and 2,124/2,248 plans are unchanged, floor 2,118. Core/facade
 are 334,283/334,201 B gzipped. All eleven required jobs in preceding FirstMatch
 CI run 38503905854 pass. Selected materialization admission remains next and M5.47 remains partial.
 
+**Next bounded MaterializeLookup contract (implementation in progress):**
+Admit only positive IN over one unhinted, nontemporary base outer table and one
+unfiltered inner base table, with one exact integer column on each side and a
+complete ascending single-column covering secondary inner index. Keep the
+existing no-CTE/parent/window/options boundaries; reject GROUP BY and additional
+SELECT subqueries in the select list or ORDER BY for this virtual-table proof.
+EXISTS, NOT IN, residual filters, BIT/YEAR, other types, materialized scans/hash
+and weedout retain their existing paths. The materialization switch must enable
+admission. Compare the native temporary-build/probe cost inside join search,
+including pruning; retain FirstMatch outer cardinality and LooseScan's original
+prefix estimates. The selected plan must execute through the automatic-index
+owner. Consume and deduplicate the inner exactly once per execution after the
+first non-NULL outer probe, with no inner build for empty/all-NULL outer inputs.
+Keep eager derived-table index initialization unchanged. Preserve duplicate
+outer identities, exact BIGINT keys, fresh retained-statement data and early
+closure/writer release. Preserve every matching row/field/warning/plan component,
+all size caps, captures, lazy chunks and the 2,118 plan floor. No unrelated
+prototype cleanup is included. Both preceding committed slices now passed every required GitHub job:
+FirstMatch 8fb64b1/run 38503905854 and bucket ownership 3a43d33/run 38504964361.
+
+The minimum candidate is preserved locally and remains unshipped. A shared
+build/probe iterator retains eager hash/derived initialization and the selected
+materialized lookup's lazy boundary. Its unique keyed build owns NULL exclusion
+and deduplication rather than borrowing LooseScan's sorted iterator. Switch
+reading stays with the FROM planner; the caller supplies semantic eligibility.
+Twenty-one native checks and focused tests pass; the materialization audit still
+matches 128/144 complete outcomes with every row/full field/warning native.
+Fresh matches improve 262 to 292/352, with every previously matching component
+kept; base/older controls and 2,124/2,248 plans are unchanged. A full run before later settings/name cleanup has
+1,291 passes and one failure, the existing size-budget test. Subsequent local
+cleanup passes focused tests and typecheck, but the preserved candidate remains
+212/227 B over core/facade caps at 334,573/334,493 B. Full shipping gates need to
+pass after the size repair. Unrelated broad prototype rewrites stay excluded.
+
+**Verified quantified prefix coverage repair (2026-10-14):** Native MySQL
+confirms that a trailing prefix key does not cover its complete string column.
+The dependent-subquery descriptor now uses the same complete-column reader as
+physical access selection, replacing a duplicate check that ignored prefixes.
+A 16-outcome native probe improves six to twelve complete matches, preserving
+all matching components and all rows/full fields/warnings. Permanent regressions
+pin the six new prefix plans plus four complete-key ANY/ALL controls through
+query and execute. Complete-key IN residual-filter placement and prefix NOT IN
+strategy selection remain separate open gaps. All 1,290 Docker tests, nineteen live native checks, typecheck, lint, nine
+unchanged caps, package smoke, 20,000 executor statements seeded 20261010 and
+seven pinned corpora pass. Base/fresh/192 earlier fresh/2,243 older controls and
+2,124/2,248 plans are unchanged, floor 2,118. Core/facade are 334,226/334,145 B
+gzipped. Preceding 3a43d33 CI passed all eleven required jobs. Materialized
+lookup admission resumes next, and M5.47 remains partial.
+
 **Preserved materialized-lookup prototype (not shipped):** the positive exact-integer
 candidate compares materialization inside the shared join search. A cheaper
 materialized choice participates in prefix pruning; LooseScan retains its
