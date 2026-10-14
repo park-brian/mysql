@@ -364,6 +364,59 @@ function materializedLookup(ordered: boolean) {
   return ordered ? 'Limit\n' + plan.split('\n').map((line) => '    ' + line).join('\n') : plan
 }
 
+test('LooseScan-only competition preserves native pruning, weedout ties and all-disabled fallback', async () => {
+  const { conn, db } = await connect('semijoin_only99')
+  try {
+    await conn.query('CREATE TABLE pa(id INT NOT NULL,g INT,s VARCHAR(12)) STATS_AUTO_RECALC=0')
+    await conn.query('CREATE TABLE ch(id INT PRIMARY KEY,g INT,KEY(g)) STATS_AUTO_RECALC=0')
+    for (const [outer, inner, switches, loose] of [
+      [1, 0, 'default,firstmatch=off,materialization=off', false],
+      [2, 0, 'default,firstmatch=off,materialization=off', true],
+      [8, 4, 'default,firstmatch=off,materialization=off', true],
+      [1, 0, 'default,firstmatch=off,materialization=off,duplicateweedout=off', true],
+      [1, 0, 'default,firstmatch=off,loosescan=off,materialization=off,duplicateweedout=off', false],
+    ] as const) {
+      await conn.query('DELETE FROM pa'); await conn.query('DELETE FROM ch')
+      await conn.query('INSERT INTO pa VALUES' + Array.from({ length: outer }, (_, i) => `(${i+1},${i%4===0 ? 'NULL' : i%4},'same')`).join(','))
+      if (inner > 0) await conn.query('INSERT INTO ch VALUES(1,NULL),(2,1),(3,2),(4,3)')
+      await conn.query('ANALYZE TABLE pa,ch')
+      await conn.query('SET optimizer_switch=' + mysql.escape(switches))
+      const expected = inner === 0 ? [] : Array.from({ length: outer }, (_, i) => i%4===0 ? [] : [[i%4, 'same']]).flat()
+      for (const ordered of [false, true]) {
+        const sql = 'SELECT g,s FROM pa WHERE g IN(SELECT g FROM ch)' + (ordered ? ' ORDER BY g,s LIMIT 1' : '')
+        for (const method of ['query', 'execute'] as const) {
+          const options = { sql, rowsAsArray: true }
+          const [rows, fields] = method === 'query' ? await conn.query(options) : await conn.execute(options)
+          assert.deepEqual(rows, ordered ? expected.slice(0, 1) : expected)
+          assert.deepEqual(fieldsOf(fields), [['g', 3, 11, 0, 0, 63, 'semijoin_only99', 'pa', 'pa', 'g'], ['s', 253, 48, 0, 0, 224, 'semijoin_only99', 'pa', 'pa', 's']])
+          assert.deepEqual((await conn.query('SHOW WARNINGS'))[0], [])
+          conn.unprepare(options)
+        }
+        const [explain] = await conn.query<mysql.RowDataPacket[]>('EXPLAIN FORMAT=TREE ' + sql)
+        const hash = 'Inner hash join\n    Table scan on pa\n    Hash\n        Remove duplicates from input sorted on g\n            Covering index scan on ch using g'
+        const loop = ordered ? firstMatch('pa', 'ch', 'g', true, false) : 'Nested loop inner join\n    Filter\n        Table scan on pa\n    Limit\n        Covering index lookup on ch using g'
+        const plan = loose ? hash : loop
+        const orderedPlan = loose ? 'Limit\n    Sort\n        Stream results\n' + hash.split('\n').map((line) => '            ' + line).join('\n') : 'Limit\n' + loop.split('\n').map((line) => '    ' + line).join('\n')
+        assert.equal(planSkeleton(explain[0]?.EXPLAIN), ordered ? orderedPlan : plan, `${outer}/${inner}/${switches}/${ordered}`)
+      }
+      if (inner > 0) {
+        const sql = 'SELECT g,s FROM pa WHERE g IN(SELECT g FROM ch)'
+        const statement = await conn.prepare({ sql, rowsAsArray: true })
+        try {
+          assert.deepEqual((await statement.execute([]))[0], expected.map(([g, s]) => ({ g, s })))
+          await conn.query('UPDATE ch SET g=2 WHERE g IS NOT NULL')
+          assert.deepEqual((await statement.execute([]))[0], [{ g: 2, s: 'same' }, { g: 2, s: 'same' }])
+          await conn.query('DELETE FROM ch')
+          assert.deepEqual((await statement.execute([]))[0], [])
+        } finally { await statement.close(); conn.unprepare({ sql, rowsAsArray: true }) }
+      }
+    }
+  } finally {
+    await conn.query('DROP DATABASE IF EXISTS semijoin_only99')
+    await conn.end(); await db?.end()
+  }
+})
+
 test('materialized lookup respects weedout ties, disabled alternatives and last-resort fallback', async () => {
   const { conn, db } = await connect('semijoin_tie98')
   try {

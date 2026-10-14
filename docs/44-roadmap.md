@@ -195,8 +195,10 @@ for separate verification. The current state and remaining work are:
    of materialization availability, including the disabled-materialization loop.
    Bounded outer-first weedout now pays its temporary cost and respects its
    switch when FirstMatch or materialized lookup provides an enabled alternative.
-   **Next:** repair remaining LooseScan/disabled-strategy competition and
-   unordered materialized scan/hash, then broaden access/order cost comparisons
+   LooseScan-only competition now also models explicit unfiltered disablement
+   and preserves native finite-bound pruning.
+   **Next:** implement bounded materialized scan/hash and physical weedout,
+   then broaden access/order cost comparisons
    and semijoin eligibility. Baseline/current live probes show
    ordered IN over a nullable
    non-primary key or two empty tables still loses source key flags here
@@ -2244,6 +2246,59 @@ seven pinned corpora pass. Base/fresh/192 earlier fresh/2,243 older controls and
 2,124/2,248 plans are unchanged, floor 2,118. Core/facade are 334,226/334,145 B
 gzipped. Preceding 3a43d33 CI passed all eleven required jobs. Materialized
 lookup admission resumes next, and M5.47 remains partial.
+
+**Verified LooseScan-only competition (2026-10-14):** Unfiltered
+FirstMatch distinguishes explicit disablement from an unmodeled filtered
+identity. The existing cost owner derives LooseScan-only semijoin identity and
+charges its outer-first temporary competitor. Heuristic pruning requires a
+finite complete-plan bound, allowing enabled LooseScan to replace an excluded
+temporary choice. Enabled weedout ties and all-four-disabled fallback retain
+their native behavior; filtered costing stays within its previous boundary.
+
+The original driving access and prefix cost now share one captured step. Base
+and derived leaves use the existing joined-row envelope, with row IDs captured
+only at requested base leaves. Filter, constant-row and lateral descriptions
+reuse the established wrapper; no iterator stage or resource lifetime is added.
+Permanent tests pin query/execute results, full fields/warnings/plans, raw-prefix
+pruning, ties, disabled alternatives and prepared executions after writes.
+
+The 2,160-outcome audit improves 2,066 to 2,100 complete matches, and the
+180-outcome switch probe improves 142 to 160. Every previously matched component
+is preserved. Base 276/288, fresh 292/352 with 328 matching fields,
+materialization 136/144, 192 earlier fresh, 2,243 older controls and 2,124/2,248
+corpus plans are retained, with floor 2,118 unchanged. Twelve focused tests
+pass locally and natively; twenty-five broader native controls and 20,000
+executor statements with seed 20261010 pass. All 1,296 tests, typecheck, lint,
+nine unchanged caps, package/typed-example smoke, real-client exit criterion
+and seven corpora pass through `npm run verify:docker -- --reference`.
+Core/facade are 334,349/334,258 B, under unchanged caps; captures and lazy chunks
+are unchanged.
+
+M5.47 remains partial. The 60 remaining threshold differences require
+materialized scan/hash (48) or physical hash weedout (12). The new switch probe
+retains 20 differences in those same categories; its 18 LooseScan-only choices
+now agree. Eight unordered materialized scan/hash matrix outcomes remain open.
+Wider predicates, filtered costs, order/access, physical weedout and retained
+prepared strategy choices remain open. Preceding ddf286b/run 38526382659 passed
+all eleven required jobs.
+
+**Pinned LooseScan-only boundary (2026-10-14):** The preceding 94 threshold
+differences classify as 34 existing LooseScan choices, 48 materialized scan/hash
+choices and 12 physical hash-weedout choices. Repair the existing LooseScan
+competition first. When unfiltered FirstMatch is explicitly disabled and
+materialization is unavailable, the cost owner still needs the inner semijoin
+identity to charge its outer-first weedout competitor. Absence of a modeled
+FirstMatch identity in filtered queries is a separate condition; preserve those
+existing boundaries rather than interpreting every missing alias as disabled.
+
+Native FirstMatch/materialization/weedout-off controls allow last-resort weedout
+until enabled LooseScan wins. An excluded temporary competitor must not supply
+a finite complete-plan bound for heuristic pruning. Preserve raw driving-prefix
+costs, dependency guards, enabled ties and the all-four-disabled fallback. Use
+the existing LooseScan and unused-last-table iterators; do not infer broader
+physical weedout or materialized scan/hash support. Prior matched components
+and unchanged caps remain required. CI for ddf286b/run 38526382659 is running
+with no known failure.
 
 **Verified bounded weedout competition (2026-10-14):**
 The existing cost search charges temporary creation and writes/lookups for

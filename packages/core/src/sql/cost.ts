@@ -211,14 +211,15 @@ function overlaps(a: ReadonlySet<string>, b: ReadonlySet<string>): boolean {
  * `loose` is supplied only for a two-table integer semijoin. The full index
  * read and later lookup's read cost remain separate from distinct-key row
  * evaluation; a final sort pays for outer output rather than inner fanout.
- * `firstMatch` names the second written table of that bounded semijoin.
+ * `firstMatch` names the second written table, or is false when its unfiltered
+ * strategy is explicitly disabled. Undefined retains unmodeled filtered costs.
  * Its first written candidate supplies the outer cardinality. An inner-first order
  * pays for memory temporary deduplication and sorts its distinct outer rows.
  * The caller rejects that order until it can execute the deduplication strategy.
- * `weedout` controls temporary competitors when an enabled FirstMatch or
- * materialized alternative exists; the ordinary last-resort fallback remains.
+ * `weedout` controls temporary competitors when an enabled semijoin alternative
+ * exists; the ordinary last-resort fallback remains.
  */
-export function joinOrder(candidates: readonly Candidate[], sort?: { readonly alias: string; readonly limit: number }, loose?: { readonly alias: string; readonly rows: number; readonly read: number; readonly fetched: number }, firstMatch?: string, materialization = false, weedout = true): Positioned[] {
+export function joinOrder(candidates: readonly Candidate[], sort?: { readonly alias: string; readonly limit: number }, loose?: { readonly alias: string; readonly rows: number; readonly read: number; readonly fetched: number }, firstMatch?: string | false, materialization = false, weedout = true): Positioned[] {
   let sortBy = sort?.alias
   const sorted = [...candidates].sort((a, b) => {
     if (a.dependent.has(b.alias)) return 1
@@ -230,13 +231,13 @@ export function joinOrder(candidates: readonly Candidate[], sort?: { readonly al
   })
   let best: { readonly cost: number; readonly plan: Positioned[] } | undefined
   const plan: Step[] = []
-  let driving: Positioned | undefined
+  let driving: Step | undefined
   const available = (c: Candidate, remaining: ReadonlySet<string>): boolean => remaining.has(c.alias) && !overlaps(c.dependent, remaining)
   const place = (c: Candidate): Positioned => {
     // A bounded two-table LooseScan retains the later lookup's original read cost.
     let placed = c.place(plan.map((p) => p.alias === driving?.alias ? driving! : p))
     if (loose !== undefined && plan.length === 0 && c.alias === loose.alias) {
-      driving = placed
+      driving = step(undefined, placed)
       placed = { ...placed, read: loose.read, fetched: loose.fetched, filter: floorFilter(placed.fetched * placed.filter / loose.rows, loose.rows, loose.fetched) }
     }
     if (plan.length === 0 && c.alias === sortBy && !placed.lookup && sort !== undefined && sort.limit >= placed.fetched) sortBy = undefined
@@ -256,7 +257,7 @@ export function joinOrder(candidates: readonly Candidate[], sort?: { readonly al
     return material === undefined || outer === undefined || outer.alias !== candidates[0]?.alias ? Infinity
       : step(outer, material).cost + sortCost(outer.rows)
   }
-  const semijoin = firstMatch ?? material?.alias
+  const semijoin = material?.alias ?? (firstMatch === false ? loose?.alias : firstMatch)
   const consider = (): void => {
     const first = plan[0] as Step
     const last = plan.at(-1) as Step
@@ -267,7 +268,7 @@ export function joinOrder(candidates: readonly Candidate[], sort?: { readonly al
     let cost = last.cost
     // Either order can need weedout when an enabled alternative is available.
     // Default memory temporary costs: creation 1, each write/lookup 0.1.
-    if (semijoin !== undefined && (first.alias === semijoin ? loose === undefined : firstMatch === undefined)) {
+    if (semijoin !== undefined && (first.alias === semijoin ? loose === undefined : firstMatch !== semijoin)) {
       rows = Math.min(rows, (candidates[0] as Candidate).rows * last.filter)
       cost += weedout ? 1 + 0.1 * (rows + last.rows) : Infinity
     }
@@ -305,7 +306,7 @@ export function joinOrder(candidates: readonly Candidate[], sort?: { readonly al
       const placed = place(c)
       const next = step(plan.at(-1), placed)
       // Native heuristic pruning uses the original driver, before LooseScan fanout.
-      const pruned = plan.length === 0 && c.alias === loose?.alias ? step(undefined, driving as Positioned) : next
+      const pruned = plan.length === 0 && c.alias === loose?.alias ? driving as Step : next
       const costOfMaterial = materialCost()
       const cost = Math.min(pruned.cost, costOfMaterial)
       const rows = costOfMaterial === Infinity ? pruned.rows : Math.min(pruned.rows, (plan[0] as Step).rows)
@@ -315,7 +316,7 @@ export function joinOrder(candidates: readonly Candidate[], sort?: { readonly al
           bestRows = rows
           bestCost = cost
         }
-      } else if (best !== undefined) continue
+      } else if (Number.isFinite(best?.cost)) continue
       plan.push(next)
       remaining.delete(c.alias)
       if (remaining.size === 0) consider()

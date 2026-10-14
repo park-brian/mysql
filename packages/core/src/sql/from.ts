@@ -582,7 +582,7 @@ export function planFrom(refs: readonly TableReference[], ctx: FromContext, wher
       const firstMatch = optimizerEnabled(ctx.env, 'firstmatch')
       let strategy: 'loose' | 'loop' | 'materialize' | undefined
       if (looseScan) settings.loose = { alias, index, key }
-      if (firstMatch && where === undefined) settings.firstMatch = alias
+      if (where === undefined) settings.firstMatch = firstMatch && alias
       try {
         const plan = joinPlan(materializationEligible && where === undefined && optimizerEnabled(ctx.env, 'materialization'))
         if (plan === undefined) return undefined
@@ -785,7 +785,7 @@ function joinIds(a: JoinedRow['ids'], b: JoinedRow['ids']): JoinedRow['ids'] {
   return out
 }
 
-const joined = (row: Row, ids: readonly (RowId | undefined)[] | undefined): JoinedRow => (ids === undefined ? { row } : { row, ids })
+const joined = (row: Row, ids?: readonly (RowId | undefined)[]): JoinedRow => (ids === undefined ? { row } : { row, ids })
 
 const hasLateral = (node: Node): boolean => (node.kind === 'leaf' ? node.table.lateral : hasLateral(node.outer) || hasLateral(node.inner))
 
@@ -906,7 +906,8 @@ interface LeafSettings {
   firstSort?: { readonly alias: string; readonly keys: readonly SortKey[] }
   /** LooseScan removes adjacent equal integer keys after the inner filter. */
   loose?: { readonly alias: string; readonly index: IndexDef; readonly key: Compiled }
-  firstMatch?: string
+  /** Inner alias, or explicit unfiltered disablement; undefined keeps filtered costs. */
+  firstMatch?: string | false
   /** Selected only for the bounded two-table materialized semijoin. */
   materialized?: boolean
 }
@@ -1629,11 +1630,11 @@ function tableOp(t: FromTable, settings: LeafSettings): Op {
     *rows(run, context) {
       const fill = (values: readonly Value[]): Value[] => fillTable(t, values, new Array<Value>(run.width).fill(null))
       if (t.derived !== undefined) {
-        for (const values of t.derived.rows(run.trx, run.env, t.lateral ? context : undefined)) yield { row: fill(values) }
+        for (const values of t.derived.rows(run.trx, run.env, t.lateral ? context : undefined)) yield joined(fill(values))
         return
       }
       for (const { id, row } of accessRows(t.table as Table, t.def as TableDef, leafAccess(t, settings, run.env), run.trx, run.locking)) {
-        yield run.ids ? { row: fill(row), ids: idsAt(t.offset, id) } : { row: fill(row) }
+        yield joined(fill(row), run.ids ? idsAt(t.offset, id) : undefined)
       }
     },
     describe: (env) => describeLeaf(t, settings, env),
@@ -1656,7 +1657,7 @@ function filterOp(input: Op, conditions: readonly Placed[], leaf?: FromTable, se
       const below = input.describe(env)
       const semi = shown.length === 1 ? shown[0]?.semijoin : undefined
       if (semi !== undefined) return { ...semi, children: [below, ...semi.children] }
-      return shown.length === 0 ? below : planNode('Filter', [below])
+      return wrap(shown.length > 0, 'Filter', below)
     },
   }
 }
@@ -1845,7 +1846,7 @@ function constantRowOp(outer: Op, t: FromTable, slots: readonly number[], own: r
     describe(env) {
       const row = planNode(`Constant row from ${t.alias}`)
       const shown = heldKey === undefined ? on : [...own, ...on].filter((c) => !heldKey.includes(c.e))
-      return nestedLoop(heldKey !== undefined, outer.describe(env), shown.length === 0 ? row : planNode('Filter', [row]))
+      return nestedLoop(heldKey !== undefined, outer.describe(env), wrap(shown.length > 0, 'Filter', row))
     },
   }
 }
@@ -1869,7 +1870,7 @@ function lateralOp(node: Node & { kind: 'join' }, outer: Op, inner: Op, on: read
     },
     describe(env) {
       const innerNode = inner.describe(env)
-      return nestedLoop(node.left, planNode('Invalidate materialized tables', [outer.describe(env)]), node.left || on.length === 0 ? innerNode : planNode('Filter', [innerNode]))
+      return nestedLoop(node.left, planNode('Invalidate materialized tables', [outer.describe(env)]), wrap(!node.left && on.length > 0, 'Filter', innerNode))
     },
   }
 }
