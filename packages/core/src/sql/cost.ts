@@ -246,6 +246,8 @@ export function joinOrder(candidates: readonly Candidate[], sort?: { readonly al
     const last = plan.at(-1) as Step
     // An inner-first semijoin needs a temporary deduplication strategy.
     let rows = loose === undefined ? last.rows : plan.reduce((n, p) => p.placed.alias === loose.alias ? n : n * p.placed.fetched * p.placed.filter, 1)
+    // FirstMatch emits outer rows, independent of inner duplicate fanout.
+    if (last.placed.alias === firstMatch && plan[0]?.placed.alias !== firstMatch) rows = (plan[0] as Step).rows
     let cost = last.cost
     // Default memory temporary costs: creation 1, each write/lookup 0.1.
     if (loose === undefined && plan[0]?.placed.alias === firstMatch) {

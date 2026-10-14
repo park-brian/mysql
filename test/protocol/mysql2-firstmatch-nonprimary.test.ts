@@ -4,6 +4,7 @@ import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import mysql from 'mysql2/promise'
 import { MySQL } from '@myjs/core'
+import { joinOrder, type Candidate } from '../../packages/core/src/sql/cost.ts'
 // @ts-expect-error — the capture owns plan normalization.
 import { CONNECTION, SQL_MODE, planSkeleton } from '../../tools/capture-relational.mjs'
 
@@ -318,5 +319,41 @@ test('hash LooseScan preserves duplicate outer rows and filters before key dedup
     await conn.query('DROP DATABASE IF EXISTS hash_loose87')
     await conn.end()
     await db?.end()
+  }
+})
+
+
+test('FirstMatch sort costing counts outer rows instead of duplicate inner fanout', async () => {
+  // At this fanout the old sort cost incorrectly prefers inner-first deduplication.
+  const candidates: Candidate[] = ['p', 'c'].map((alias) => ({
+    alias, rows: 4, dependent: new Set<string>(), keyDependent: new Set([alias === 'p' ? 'c' : 'p']),
+    place: (prefix) => ({ alias, fetched: prefix.length === 0 ? 4 : 2, filter: 1, keyFrom: new Set<string>(), lookup: prefix.length > 0, read: prefix.length === 0 ? 0.25 : 1.0011 }),
+  }))
+  assert.deepEqual(joinOrder(candidates, { alias: 'p', limit: Infinity }, undefined, 'c').map((p) => p.alias), ['p', 'c'])
+  const { conn, db } = await connect('firstmatch_sort90')
+  try {
+    await conn.query('CREATE TABLE pa(id INT NOT NULL,g INT,s VARCHAR(12)) STATS_AUTO_RECALC=0')
+    await conn.query('CREATE TABLE ch(id INT PRIMARY KEY,g INT,KEY(g)) STATS_AUTO_RECALC=0')
+    await conn.query("INSERT INTO pa VALUES(1,2,'same'),(2,2,'same'),(3,NULL,'null'),(4,9,'absent')")
+    await conn.query('INSERT INTO ch VALUES(1,2),(2,2),(3,2),(4,NULL)')
+    await conn.query('ANALYZE TABLE pa,ch')
+    await conn.query("SET optimizer_switch='default,loosescan=off'")
+    for (const limited of [false, true]) {
+      const sql = 'SELECT p.g,p.s FROM pa p WHERE p.g IN(SELECT c.g FROM ch c) ORDER BY 1,2' + (limited ? ' LIMIT 1' : '')
+      for (const method of ['query', 'execute'] as const) {
+        const options = { sql, rowsAsArray: true }
+        const [rows, fields] = method === 'query' ? await conn.query(options) : await conn.execute(options)
+        assert.deepEqual(rows, limited ? [[2, 'same']] : [[2, 'same'], [2, 'same']])
+        assert.deepEqual(fieldsOf(fields), [['g', 3, 11, 0, 0, 63, 'firstmatch_sort90', 'p', 'pa', 'g'], ['s', 253, 48, 0, 0, 224, 'firstmatch_sort90', 'p', 'pa', 's']])
+        assert.deepEqual((await conn.query('SHOW WARNINGS'))[0], [])
+        conn.unprepare(options)
+      }
+      const [explain] = await conn.query<mysql.RowDataPacket[]>(`EXPLAIN FORMAT=TREE ${sql}`)
+      const plan = firstMatch('p', 'c', 'g')
+      assert.equal(planSkeleton(explain[0]?.EXPLAIN), limited ? 'Limit\n' + plan.split('\n').map((line) => '    ' + line).join('\n') : plan)
+    }
+  } finally {
+    await conn.query('DROP DATABASE IF EXISTS firstmatch_sort90')
+    await conn.end(); await db?.end()
   }
 })

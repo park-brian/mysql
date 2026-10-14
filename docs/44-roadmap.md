@@ -175,15 +175,21 @@ for separate verification. The current state and remaining work are:
    matches, writes between prepared executions, empty inputs and cancellation.
    A counted test observes three inner records for three outer probes, including
    one rejected duplicate and one absent key, and verifies that every scan closes.
-   Empty standalone inner ranges retain the existing path while materialization
-   costing remains open. With firstmatch=off, the existing lookup for DISTINCT's
+   Unfiltered empty-inner FirstMatch and hash LooseScan now use their physical
+   strategies and native cost boundaries; filtered empty ranges retain the
+   existing fallback. FirstMatch sort cardinality counts outer rows rather than
+   duplicate inner fanout. Selected materialization admission remains open.
+   With firstmatch=off, the existing lookup for DISTINCT's
    unused last table supplies a one-row Limit and preserves source fields. M5.49
    now supplies a compatible ordered PRIMARY scan, including single-key DESC
    schemas, or sorts the outer table
    before probing when order needs a sort. The existing ordered reader and
    first-table sort are shared; prefer_ordering_index=off retains the covering
-   scan and sort. **Next:** broaden access/order cost comparisons and remaining
-   semijoin strategy eligibility. Baseline/current live probes show
+   scan and sort. **Next:** admit the measured materialized lookup through the
+   existing cost and indexed-build owners within unchanged size caps, proving
+   lazy non-NULL initialization, one build, duplicate outer identity, fresh
+   executions and early closure. Then broaden access/order cost comparisons
+   and remaining semijoin strategy eligibility. Baseline/current live probes show
    ordered IN over a nullable
    non-primary key or two empty tables still loses source key flags here
    (4,097 versus the reference's 20,485). MySQL also retains prepare-time
@@ -2150,6 +2156,60 @@ search, preserve every previously matching component, and test changing data,
 NULLs, exact integer widths and early stream closure. Build/probe counters must
 verify execution rather than inferred plan labels. Keep broader grammar and
 prepared-choice gaps, all caps/fixtures and the 2,118 floor unchanged.
+
+**Verified FirstMatch sort-cardinality repair (2026-10-13):**
+The shared join search charges an outer-first FirstMatch sort for its outer
+rows, independent of duplicate inner fanout. The pinned four-outer/four-inner
+trace selects FirstMatch at 2.4511 over MaterializeLookup at 3.1. A permanent
+regression verifies ordered and ordered-LIMIT rows, all ten field attributes,
+warnings and the physical plan through query and execute on both implementations.
+Focused Docker/native tests and all nine unchanged size gates pass: core
+334,319 B and facade 334,236 B. All 1,289 Docker tests, typecheck, lint,
+package smoke, 20,000 executor
+statements seeded 20261010 and seven pinned corpora pass. Eighteen live native
+checks pass; the completed regression also pins a cost-search choice that
+failed on the previous implementation. Base 272/288, fresh 262/352 with 328
+fields, 192 earlier fresh outcomes and 2,243 older controls are unchanged.
+Plans remain 2,124/2,248 against the unchanged 2,118 floor. M5.47 remains partial;
+materialized lookup admission is next.
+
+**Preserved materialized-lookup prototype (not shipped):** the positive exact-integer
+candidate compares materialization inside the shared join search. A cheaper
+materialized choice participates in prefix pruning; LooseScan retains its
+original prefix estimate for that pruning. FirstMatch sorts its outer rowcount,
+not duplicate inner fanout: a native four-outer/four-inner trace pins FirstMatch
+2.4511 versus MaterializeLookup 3.1. One bounded strategy state holds the eligible
+switches and selected physical mode. The existing indexed derived-table probe
+builds lazily for selected materialization after a non-NULL outer row; existing
+sorted integer deduplication removes NULLs and repeated inner keys. Generic
+quantified NULL semantics and ordinary derived initialization remain separate.
+
+Earlier prototype audits improve 44 to 128 complete matches in 144 outcomes with every row, full
+field and warning native. Base matches remain 272/288; the 352-record changing-
+data audit improves 262 to 292, with every previously matching component kept.
+All 192 earlier fresh outcomes and 2,243 older controls are unchanged. Eleven
+focused local semijoin tests and nineteen live native checks passed before the
+latest cleanup, which still needs verification. Indexed/range table probes share
+pair testing
+and accepted-first-match scan closure; lookup descriptions use their existing
+formatter. MySQL's other materialized scan/hash and disabled-strategy outcomes
+remain open.
+
+The preserved prototype is not validated for shipping: core is 334,636 B
+against 334,361 and facade 334,566 against 334,266 (275/300 over), under
+unchanged caps. Its source snapshot is retained as ignored local evidence;
+only the independent FirstMatch cardinality repair is currently in production.
+The new
+INT/BIGINT/unsigned-BIGINT, switch and retained-data regression passes
+locally and against pinned MySQL. Counted locking tests prove one eight-row build,
+no inner read for empty/NULL-only outer input, source closure and writer release
+after early return. Buckets retain rows directly rather than positions plus
+another retained array, preserving hash traversal order. Full Docker tests,
+package smoke, fuzz and reference gates still need to pass after cleanup. Keep
+all caps, captures, lazy chunks and the plan floor unchanged. The f7cdf29
+exact-SHA GitHub run 38318367503 passed all eleven
+required jobs. Docker's completed update required restarting only this task's
+Node 22.18.0 and digest-pinned MySQL 8.4.11 containers; both are available again.
 
 The preparation destruction repair is verified below. Three isolated Docker
 INSERT profiles did not establish a material duplicate-search cost, so no
