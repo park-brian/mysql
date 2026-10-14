@@ -364,6 +364,36 @@ function materializedLookup(ordered: boolean) {
   return ordered ? 'Limit\n' + plan.split('\n').map((line) => '    ' + line).join('\n') : plan
 }
 
+test('LooseScan pruning retains the raw driver when materialization is disabled', async () => {
+  const { conn, db } = await connect('semijoin_prune97')
+  try {
+    await conn.query('CREATE TABLE pa(id INT NOT NULL,g INT,s VARCHAR(12)) STATS_AUTO_RECALC=0')
+    await conn.query('CREATE TABLE ch(id INT PRIMARY KEY,g INT,KEY(g)) STATS_AUTO_RECALC=0')
+    await conn.query('INSERT INTO pa VALUES' + Array.from({ length: 20 }, (_, i) => `(${i+1},${i%4===0 ? 'NULL' : i%4},'same')`).join(','))
+    await conn.query('INSERT INTO ch VALUES' + Array.from({ length: 80 }, (_, i) => `(${i+1},${i%4===0 ? 'NULL' : i%4})`).join(','))
+    await conn.query('ANALYZE TABLE pa,ch')
+    await conn.query("SET optimizer_switch='default,firstmatch=off,materialization=off'")
+    for (const ordered of [false, true]) {
+      const sql = 'SELECT g,s FROM pa WHERE g IN(SELECT g FROM ch)' + (ordered ? ' ORDER BY g,s LIMIT 1' : '')
+      const expected = ordered ? [[1, 'same']] : Array.from({ length: 20 }, (_, i) => i%4===0 ? [] : [[i%4, 'same']]).flat()
+      for (const method of ['query', 'execute'] as const) {
+        const options = { sql, rowsAsArray: true }
+        const [rows, fields] = method === 'query' ? await conn.query(options) : await conn.execute(options)
+        assert.deepEqual(rows, expected)
+        assert.deepEqual(fieldsOf(fields), [['g', 3, 11, 0, 0, 63, 'semijoin_prune97', 'pa', 'pa', 'g'], ['s', 253, 48, 0, 0, 224, 'semijoin_prune97', 'pa', 'pa', 's']])
+        assert.deepEqual((await conn.query('SHOW WARNINGS'))[0], [])
+        conn.unprepare(options)
+      }
+      const [explain] = await conn.query<mysql.RowDataPacket[]>('EXPLAIN FORMAT=TREE ' + sql)
+      const plan = ordered ? firstMatch('pa', 'ch', 'g', true, false) : 'Nested loop inner join\n    Filter\n        Table scan on pa\n    Limit\n        Covering index lookup on ch using g'
+      assert.equal(planSkeleton(explain[0]?.EXPLAIN), ordered ? 'Limit\n' + plan.split('\n').map((line) => '    ' + line).join('\n') : plan)
+    }
+  } finally {
+    await conn.query('DROP DATABASE IF EXISTS semijoin_prune97')
+    await conn.end(); await db?.end()
+  }
+})
+
 test('ordered empty-inner materialization costs weedout with FirstMatch and LooseScan disabled', async () => {
   const { conn, db } = await connect('material_empty96')
   try {

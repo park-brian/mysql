@@ -191,8 +191,10 @@ for separate verification. The current state and remaining work are:
    duplicate outer identity, fresh executions and early closure verified.
    Ordered empty-inner lookup now also costs its competing weedout strategy when
    FirstMatch and LooseScan are disabled; see the verified cost repair below.
-   **Next:** repair the remaining unordered materialized scan/hash and
-   disabled-materialization choices, then broaden access/order cost comparisons
+   LooseScan heuristic pruning now retains the raw driving prefix independently
+   of materialization availability, including the disabled-materialization loop.
+   **Next:** repair the remaining unordered materialized scan/hash and broader
+   disabled-strategy choices, then broaden access/order cost comparisons
    and semijoin eligibility. Baseline/current live probes show
    ordered IN over a nullable
    non-primary key or two empty tables still loses source key flags here
@@ -2240,6 +2242,38 @@ seven pinned corpora pass. Base/fresh/192 earlier fresh/2,243 older controls and
 2,124/2,248 plans are unchanged, floor 2,118. Core/facade are 334,226/334,145 B
 gzipped. Preceding 3a43d33 CI passed all eleven required jobs. Materialized
 lookup admission resumes next, and M5.47 remains partial.
+
+**Verified LooseScan raw-prefix pruning (2026-10-14):**
+The join search uses the original driving-table prefix for heuristic pruning
+before LooseScan substitutes its distinct-key fanout. This rule now applies
+independently of materialization eligibility; dependency guards and the selected
+iterator's actual fanout stay intact. No strategy is forced.
+
+Pinned MySQL 8.4.11, with FirstMatch and materialization disabled, starts with
+20 outer rows at cost 2.25, then prunes an 80-row inner-first scan at cost 8.25
+by its heuristic. Its final DuplicateWeedout choice costs 90.3543; because the
+last table is unused, it runs an outer loop with a one-row inner limit. The
+existing unused-last-table iterator supplies that behavior here. This is not
+general physical weedout admission. Permanent query/execute regressions pin
+both ordered and unordered results, full fields, warnings and iterator plans.
+
+The materialization audit improves 132 to 136/144 complete matches, and the
+threshold audit improves 1,724 to 1,766/2,160. Every previously matching component
+is retained; all rows, full fields and warnings remain native in those audits.
+Base 272/288, fresh 292/352 with 328 matching fields, 192 earlier fresh and
+2,243 older controls and 2,124/2,248 corpus plans are retained, with floor 2,118
+unchanged. Ten focused local/native tests and twenty-three native controls pass;
+20,000 executor statements with seed 20261010 pass. All 1,294 tests, typecheck,
+lint, nine unchanged size gates, package/typed-example smoke, real-client exit
+criterion and seven corpora pass through `npm run verify:docker -- --reference`.
+The preceding slice also passed three million fuzz inputs and 10,000 crash
+points. Core/facade are 334,348/334,260 B under unchanged caps.
+
+M5.47 remains partial. Eight unordered materialized-scan/hash audit outcomes and
+394 threshold configurations still have plan differences. Broader predicates,
+order/access, physical weedout and retained prepared strategy choices remain
+open. CI for preceding 550064e/run 38523224503 has nine successful required jobs
+and no known failure; remaining running jobs do not block continued work.
 
 **Verified materialized lookup competing-cost repair (2026-10-14):**
 The cost owner derives the bounded semijoin identity from FirstMatch or the

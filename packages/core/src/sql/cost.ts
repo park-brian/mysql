@@ -304,7 +304,8 @@ export function joinOrder(candidates: readonly Candidate[], sort?: { readonly al
       if (!available(c, remaining) || extended?.has(c.alias)) continue
       const placed = place(c)
       const next = step(plan.at(-1), placed)
-      const pruned = material !== undefined && plan.length === 0 && c.alias === loose?.alias ? step(undefined, driving as Positioned) : next
+      // Native heuristic pruning uses the original driver, before LooseScan fanout.
+      const pruned = plan.length === 0 && c.alias === loose?.alias ? step(undefined, driving as Positioned) : next
       const costOfMaterial = materialCost()
       const cost = Math.min(pruned.cost, costOfMaterial)
       const rows = costOfMaterial === Infinity ? pruned.rows : Math.min(pruned.rows, (plan[0] as Step).rows)
