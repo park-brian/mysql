@@ -150,7 +150,8 @@ export function floorFilter(filter: number, rows: number, fetched: number): numb
 
 /** A table placed in a join order: its position, how it is read, and what that costs. */
 export interface Positioned extends Position {
-  readonly lookup: boolean
+  /** False for scans, true for base-index probes, or a materialized key probe. */
+  readonly lookup: boolean | 'materialized'
   /** `read_cost`. */
   readonly read: number
 }
@@ -168,8 +169,7 @@ export interface Candidate {
   place(prefix: readonly Positioned[]): Positioned
 }
 
-interface Step {
-  readonly placed: Positioned
+interface Step extends Positioned {
   /** `prefix_rowcount`, `prefix_cost`. */
   readonly rows: number
   readonly cost: number
@@ -178,7 +178,7 @@ interface Step {
 /** One more table on a plan (`set_prefix_join_cost`): its rows evaluated once for each it fetches, its filter applied after. */
 function step(before: Step | undefined, placed: Positioned): Step {
   const fetched = (before?.rows ?? 1) * placed.fetched
-  return { placed, rows: fetched * placed.filter, cost: (before?.cost ?? 0) + placed.read + ROW_EVALUATE * fetched }
+  return { ...placed, rows: fetched * placed.filter, cost: (before?.cost ?? 0) + placed.read + ROW_EVALUATE * fetched }
 }
 
 const almostEqual = (a: number, b: number): boolean => a >= b * 0.9 && a <= b * 1.1
@@ -216,7 +216,7 @@ function overlaps(a: ReadonlySet<string>, b: ReadonlySet<string>): boolean {
  * pays for memory temporary deduplication and sorts its distinct outer rows.
  * The caller rejects that order until it can execute the deduplication strategy.
  */
-export function joinOrder(candidates: readonly Candidate[], sort?: { readonly alias: string; readonly limit: number }, loose?: { readonly alias: string; readonly rows: number; readonly read: number; readonly fetched: number }, firstMatch?: string): Positioned[] {
+export function joinOrder(candidates: readonly Candidate[], sort?: { readonly alias: string; readonly limit: number }, loose?: { readonly alias: string; readonly rows: number; readonly read: number; readonly fetched: number }, firstMatch?: string, materialization = false): Positioned[] {
   let sortBy = sort?.alias
   const sorted = [...candidates].sort((a, b) => {
     if (a.dependent.has(b.alias)) return 1
@@ -234,7 +234,7 @@ export function joinOrder(candidates: readonly Candidate[], sort?: { readonly al
   const available = (c: Candidate, remaining: ReadonlySet<string>): boolean => remaining.has(c.alias) && !overlaps(c.dependent, remaining)
   const place = (c: Candidate): Positioned => {
     // A bounded two-table LooseScan retains the later lookup's original read cost.
-    let placed = c.place(plan.map((p) => p.placed.alias === loose?.alias ? driving ?? p.placed : p.placed))
+    let placed = c.place(plan.map((p) => p.alias === loose?.alias ? driving ?? p : p))
     if (loose !== undefined && plan.length === 0 && c.alias === loose.alias) {
       driving = placed
       placed = { ...placed, read: loose.read, fetched: loose.fetched, filter: floorFilter(placed.fetched * placed.filter / loose.rows, loose.rows, loose.fetched) }
@@ -242,27 +242,44 @@ export function joinOrder(candidates: readonly Candidate[], sort?: { readonly al
     if (plan.length === 0 && c.alias === sortBy && !placed.lookup && sort !== undefined && sort.limit >= placed.fetched) sortBy = undefined
     return placed
   }
+  // A materialized lookup pays its build once; step adds one probe per outer row.
+  let material: Positioned | undefined
+  if (materialization && candidates.length === 2) {
+    const scan = (candidates[1] as Candidate).place([])
+    const built = step(undefined, scan)
+    material = { ...scan, read: built.cost + 1 + ROW_EVALUATE * built.rows, lookup: 'materialized', fetched: 1, filter: 1 }
+  }
+  const sortCost = (rows: number): number => sort !== undefined && plan[0]?.alias !== sortBy ? rows : 0
+  // Only a two-table outer-first prefix can probe this materialized candidate.
+  const materialCost = (): number => {
+    const outer = plan[0]
+    return material === undefined || outer === undefined || outer.alias !== candidates[0]?.alias ? Infinity
+      : step(outer, material).cost + sortCost(outer.rows)
+  }
   const consider = (): void => {
+    const first = plan[0] as Step
     const last = plan.at(-1) as Step
     // An inner-first semijoin needs a temporary deduplication strategy.
-    let rows = loose === undefined ? last.rows : plan.reduce((n, p) => p.placed.alias === loose.alias ? n : n * p.placed.fetched * p.placed.filter, 1)
+    let rows = loose === undefined ? last.rows : first.alias === loose.alias ? last.fetched * last.filter : first.rows
     // FirstMatch emits outer rows, independent of inner duplicate fanout.
-    if (last.placed.alias === firstMatch && plan[0]?.placed.alias !== firstMatch) rows = (plan[0] as Step).rows
+    if (last.alias === firstMatch && first.alias !== firstMatch) rows = first.rows
     let cost = last.cost
     // Default memory temporary costs: creation 1, each write/lookup 0.1.
-    if (loose === undefined && plan[0]?.placed.alias === firstMatch) {
-      rows = Math.min(rows, (candidates[0] as Candidate).rows * last.placed.filter)
+    if (loose === undefined && first.alias === firstMatch) {
+      rows = Math.min(rows, (candidates[0] as Candidate).rows * last.filter)
       cost += 1 + 0.1 * (rows + last.rows)
     }
-    cost += sort !== undefined && plan[0]?.placed.alias !== sortBy ? rows : 0
-    if (best === undefined || cost < best.cost) best = { cost, plan: plan.map((p) => p.placed) }
+    cost += sortCost(rows)
+    const costOfMaterial = materialCost()
+    const cheapest = Math.min(cost, costOfMaterial)
+    if (best === undefined || cheapest < best.cost) best = { cost: cheapest, plan: costOfMaterial < cost ? [first, step(first, material!)] : plan.slice() }
   }
   // The unique-key tables after the one just placed, each joined in turn while it costs what the one before did (`eq_ref_extension_by_limited_search`).
   const extendByUniqueKeys = (remaining: Set<string>): Set<string> => {
     for (const c of sorted) {
-      if (!available(c, remaining) || !plan.some((p) => c.keyDependent.has(p.placed.alias))) continue
+      if (!available(c, remaining) || !plan.some((p) => c.keyDependent.has(p.alias))) continue
       const placed = place(c)
-      const previous = (plan.at(-1) as Step).placed
+      const previous = (plan.at(-1) as Step)
       if (!(placed.lookup && almostEqual(placed.read, previous.read) && almostEqual(placed.fetched, previous.fetched))) continue
       const next = step(plan.at(-1), placed)
       if (best !== undefined && next.cost >= best.cost) continue
@@ -285,11 +302,15 @@ export function joinOrder(candidates: readonly Candidate[], sort?: { readonly al
       if (!available(c, remaining) || extended?.has(c.alias)) continue
       const placed = place(c)
       const next = step(plan.at(-1), placed)
-      if (best !== undefined && next.cost >= best.cost) continue
-      if (bestRows > next.rows || bestCost > next.cost || (plan.length === 0 && c.alias === sortBy)) {
-        if (bestRows >= next.rows && bestCost >= next.cost && (!overlaps(c.keyDependent, remaining) || placed.fetched < 2)) {
-          bestRows = next.rows
-          bestCost = next.cost
+      const pruned = materialization && plan.length === 0 && c.alias === loose?.alias ? step(undefined, driving as Positioned) : next
+      const costOfMaterial = materialCost()
+      const cost = Math.min(pruned.cost, costOfMaterial)
+      const rows = costOfMaterial === Infinity ? pruned.rows : Math.min(pruned.rows, (plan[0] as Step).rows)
+      if (best !== undefined && cost >= best.cost) continue
+      if (bestRows > rows || bestCost > cost || (plan.length === 0 && c.alias === sortBy)) {
+        if (bestRows >= rows && bestCost >= cost && (!overlaps(c.keyDependent, remaining) || placed.fetched < 2)) {
+          bestRows = rows
+          bestCost = cost
         }
       } else if (best !== undefined) continue
       plan.push(next)

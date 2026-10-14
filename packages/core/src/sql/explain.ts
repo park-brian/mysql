@@ -22,8 +22,10 @@ export interface PlanNode {
 export const planNode = (label: string, children: readonly PlanNode[] = [], detail?: string): PlanNode => (detail === undefined ? { label, children } : { label, detail, children })
 
 /** The same index-read facts name physical and dependent-subquery lookups. */
-export function indexLookup(alias: string, index: string, unique: boolean, covering: boolean): PlanNode {
-  return planNode(`${unique ? 'Single-row ' : ''}${covering ? (unique ? 'covering index' : 'Covering index') : unique ? 'index' : 'Index'} lookup on ${alias} using ${index}`)
+export function indexLookup(alias: string, index: string, unique: boolean, covering: boolean, children: readonly PlanNode[] = []): PlanNode {
+  let label = unique ? 'Single-row index' : 'Index'
+  if (covering) label = unique ? 'Single-row covering index' : 'Covering index'
+  return planNode(`${label} lookup on ${alias} using ${index}`, children)
 }
 
 /** `node` under `label`, or `node` alone when `when` is false. */

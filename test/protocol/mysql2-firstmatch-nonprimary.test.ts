@@ -357,3 +357,111 @@ test('FirstMatch sort costing counts outer rows instead of duplicate inner fanou
     await conn.end(); await db?.end()
   }
 })
+
+
+function materializedLookup(ordered: boolean) {
+  const plan = `Nested loop inner join\n${ordered ? '    Sort\n        Filter\n            ' : '    Filter\n        '}Table scan on pa\n    Single-row index lookup on <subquery2> using <auto_distinct_key>\n        Materialize with deduplication\n            Filter\n                Covering index scan on ch using g`
+  return ordered ? 'Limit\n' + plan.split('\n').map((line) => '    ' + line).join('\n') : plan
+}
+
+test('materialized integer lookup retains duplicate outer identity, native fields and fresh prepared data', async () => {
+  const { conn, db } = await connect('material_lookup90')
+  try {
+    for (const type of ['INT', 'BIGINT', 'BIGINT UNSIGNED']) {
+      await conn.query('DROP TABLE IF EXISTS pa,ch')
+      await conn.query(`CREATE TABLE pa(id INT NOT NULL,g ${type},s VARCHAR(12)) STATS_AUTO_RECALC=0`)
+      await conn.query(`CREATE TABLE ch(id INT PRIMARY KEY,g ${type},KEY(g)) STATS_AUTO_RECALC=0`)
+      const base = type === 'INT' ? 0n : 9007199254740992n
+      await conn.query('INSERT INTO pa VALUES' + Array.from({ length: 200 }, (_, i) => `(${i+1},${i%4===0 ? 'NULL' : base+BigInt(i%4)},'same')`).join(','))
+      const insert = 'INSERT INTO ch VALUES' + Array.from({ length: 8 }, (_, i) => `(${i+1},${i%4===0 ? 'NULL' : base+BigInt(i%4)})`).join(',')
+      await conn.query(insert)
+      await conn.query('ANALYZE TABLE pa,ch')
+      const value = (n: number) => type === 'INT' ? n : String(base + BigInt(n))
+      const expected = Array.from({ length: 200 }, (_, i) => i%4===0 ? [] : [[value(i%4), 'same']]).flat()
+      for (const switches of ['default', 'default,firstmatch=off', 'default,loosescan=off', 'default,firstmatch=off,duplicateweedout=off']) {
+        await conn.query('SET optimizer_switch=' + mysql.escape(switches))
+        for (const ordered of [false, true]) {
+          const sql = 'SELECT g,s FROM pa WHERE g IN(SELECT g FROM ch)' + (ordered ? ' ORDER BY g,s LIMIT 1' : '')
+          for (const method of ['query', 'execute'] as const) {
+            const options = { sql, rowsAsArray: true }
+            const [rows, fields] = method === 'query' ? await conn.query(options) : await conn.execute(options)
+            assert.deepEqual(rows, ordered ? [[value(1), 'same']] : expected, `${type}/${switches}/${ordered}/${method}`)
+            assert.deepEqual(fieldsOf(fields), [['g', type === 'INT' ? 3 : 8, type === 'INT' ? 11 : 20, type.endsWith('UNSIGNED') ? 32 : 0, 0, 63, 'material_lookup90', 'pa', 'pa', 'g'], ['s', 253, 48, 0, 0, 224, 'material_lookup90', 'pa', 'pa', 's']])
+            assert.deepEqual((await conn.query('SHOW WARNINGS'))[0], [])
+            conn.unprepare(options)
+          }
+          const [explain] = await conn.query<mysql.RowDataPacket[]>(`EXPLAIN FORMAT=TREE ${sql}`)
+          assert.equal(planSkeleton(explain[0]?.EXPLAIN), materializedLookup(ordered))
+        }
+      }
+      await conn.query("SET optimizer_switch='default'")
+      const sql = 'SELECT g,s FROM pa WHERE g IN(SELECT g FROM ch) ORDER BY g,s LIMIT 1'
+      const statement = await conn.prepare({ sql, rowsAsArray: true })
+      try {
+        assert.deepEqual((await statement.execute([]))[0], [{ g: value(1), s: 'same' }])
+        await conn.query(`UPDATE ch SET g=${base+2n} WHERE g IS NOT NULL`)
+        assert.deepEqual((await statement.execute([]))[0], [{ g: value(2), s: 'same' }])
+        await conn.query('UPDATE ch SET g=NULL')
+        assert.deepEqual((await statement.execute([]))[0], [])
+        await conn.query('DELETE FROM ch')
+        assert.deepEqual((await statement.execute([]))[0], [])
+        await conn.query(insert)
+        assert.deepEqual((await statement.execute([]))[0], [{ g: value(1), s: 'same' }])
+      } finally { await statement.close(); conn.unprepare({ sql, rowsAsArray: true }) }
+    }
+    await conn.query("SET optimizer_switch='default,firstmatch=off,materialization=off'")
+    const [explain] = await conn.query<mysql.RowDataPacket[]>('EXPLAIN FORMAT=TREE SELECT g,s FROM pa WHERE g IN(SELECT g FROM ch)')
+    assert.doesNotMatch(planSkeleton(explain[0]?.EXPLAIN), /Materialize with deduplication/)
+  } finally {
+    await conn.query('DROP DATABASE IF EXISTS material_lookup90')
+    await conn.end(); await db?.end()
+  }
+})
+
+test('materialized lookup builds once after a non-NULL outer probe and closes a locking stream', async () => {
+  const db = await MySQL.open(':memory:')
+  try {
+    await db.query('CREATE DATABASE material_reads90')
+    await db.query('USE material_reads90')
+    await db.query('CREATE TABLE pa(id INT NOT NULL,g INT,s VARCHAR(12)) STATS_AUTO_RECALC=0')
+    await db.query('CREATE TABLE ch(id INT PRIMARY KEY,g INT,KEY(g)) STATS_AUTO_RECALC=0')
+    await db.query('INSERT INTO pa VALUES' + Array.from({ length: 200 }, (_, i) => `(${i+1},${i%4===0 ? 'NULL' : i%4},'same')`).join(','))
+    await db.query('INSERT INTO ch VALUES(1,NULL),(2,1),(3,2),(4,3),(5,NULL),(6,1),(7,2),(8,3)')
+    await db.query('ANALYZE TABLE pa,ch')
+    const catalog = db.catalog!
+    const open = catalog.table.bind(catalog)
+    let builds = 0, examined = 0, closed = 0
+    catalog.table = (schema, name, trx) => {
+      const table = open(schema, name, trx)
+      if (schema === 'material_reads90' && name === 'ch') {
+        const scan = table.indexScan.bind(table)
+        table.indexScan = function*(index, range, transaction, mode) {
+          if (mode !== 'current') { yield* scan(index, range, transaction, mode); return }
+          assert.equal(index, 'g')
+          assert.equal(range?.from, undefined, 'one full key build rather than per-outer base lookups')
+          builds++
+          try { for (const row of scan(index, range, transaction, mode)) { examined++; yield row } }
+          finally { closed++ }
+        }
+      }
+      return table
+    }
+    const sql = 'SELECT g,s FROM material_reads90.pa WHERE g IN(SELECT g FROM material_reads90.ch) FOR UPDATE'
+    try {
+      for await (const row of db.stream(sql)) { assert.deepEqual(row, { g: 1, s: 'same' }); break }
+      assert.deepEqual([builds, examined, closed], [1, 8, 1])
+      await db.query('UPDATE material_reads90.pa SET g=NULL')
+      builds = examined = closed = 0
+      assert.deepEqual((await db.query(sql))[0], [])
+      assert.deepEqual([builds, examined, closed], [0, 0, 0], 'NULL-only outer input must not initialize its inner build')
+      await db.query('DELETE FROM material_reads90.pa')
+      assert.deepEqual((await db.query(sql))[0], [])
+      assert.deepEqual([builds, examined, closed], [0, 0, 0], 'empty outer input must not initialize its inner build')
+    } finally { catalog.table = open }
+    const writer = await db.connect()
+    try {
+      await writer.query('SET innodb_lock_wait_timeout=1')
+      await writer.query('UPDATE material_reads90.ch SET g=9 WHERE g=2')
+    } finally { await writer.end() }
+  } finally { await db.end() }
+})

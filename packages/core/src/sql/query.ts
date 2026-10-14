@@ -10,7 +10,7 @@
 // name as written, else the expression's own source text — `SELECT 1+1`
 // returns a column called `1+1`, spaces and all, which only the text has.
 import type { ColumnDef, IndexDef, Table, TableDef, ViewDef } from '@myjs/engine'
-import { LITERAL, NODE, QUERY, REF, TOKEN, deparse, lex, parseStatement, type Expression, type OrderItem, type QueryBody, type QueryExpression, type SelectNode, type SetOperationNode, type TableName, type Token } from '@myjs/parser'
+import { LITERAL, NODE, QUERY, REF, TOKEN, deparse, lex, parseStatement, type Expression, type OrderItem, type QueryBody, type QueryExpression, type SelectNode, type TableReference, type SetOperationNode, type TableName, type Token } from '@myjs/parser'
 import { messages, sqlError, type ColumnDefinition, type ResultSet, type RowValue } from '@myjs/protocol'
 import { intValue, storageWidth, toInteger, truth, withoutHex, type Value } from '@myjs/types'
 import { compile, EMPTY_SCOPE, readSlot, type CompileContext, type Compiled, type Env, type GroupKeys, type QuantifiedSubquery, type Scope, type SubqueryPlan } from './compile.ts'
@@ -769,7 +769,10 @@ function quantifiedPlan(run: Run, query: QueryExpression, how: QuantifiedSubquer
 
 /** A lookup key and the columns its residual condition reads, by folded name. */
 function keyReads(column: string, where: unknown): Set<string> {
-  return new Set([column, ...columnRefs(where).map((parts) => parts.at(-1) as string)].map((n) => n.toLowerCase()))
+  const read = new Set<string>()
+  read.add(column.toLowerCase())
+  for (const parts of columnRefs(where)) read.add((parts.at(-1) as string).toLowerCase())
+  return read
 }
 
 /** BIT and YEAR have their own comparison representations rather than exact integer keys. */
@@ -777,16 +780,23 @@ function exactInteger(c: { readonly type: ResultType }): boolean {
   return c.type.kind === 'int' && c.type.field !== FIELD_TYPE.BIT && c.type.field !== FIELD_TYPE.YEAR
 }
 
-/** Structural boundary shared by the bounded semijoin and antijoin candidates. */
-function boundedSubquery(q: QueryExpression): SelectNode | undefined {
-  const body = q.body
-  return q.with === undefined && q.limit === undefined && q.orderBy === undefined && q.locking === undefined && body.kind === QUERY.SELECT && body.from?.length === 1 && body.items.length === 1 && body.groupBy === undefined && body.having === undefined && body.windows === undefined && body.distinct !== true && (body.options?.length ?? 0) === 0 ? body : undefined
+/** An integer literal used by the bounded EXISTS proofs. */
+function integerLiteral(e: Expression): boolean {
+  return e.kind === NODE.LITERAL && e.type === LITERAL.INT
 }
 
-/** The one unhinted base-table reference shared by bounded join alternatives. */
-function boundedOuter(run: Run, q: QueryExpression, node: SelectNode) {
-  const outer = node.from?.[0]
-  return node.from?.length === 1 && outer?.kind === REF.TABLE && outer.indexHints === undefined && run.parent === undefined && q.with === undefined && node.windows === undefined && (node.options?.length ?? 0) === 0 ? outer : undefined
+/** Structural boundary shared by the bounded semijoin and antijoin candidates. */
+type BaseSubquery = SelectNode & { readonly from: readonly [Extract<TableReference, { kind: typeof REF.TABLE }>]; readonly items: readonly [SelectNode['items'][number]] }
+
+function boundedSubquery(q: QueryExpression): BaseSubquery | undefined {
+  const body = q.body
+  return q.limit === undefined && q.orderBy === undefined && q.locking === undefined && body.kind === QUERY.SELECT && unhintedBase(q, body) !== undefined && body.items.length === 1 && body.groupBy === undefined && body.having === undefined && body.distinct !== true ? body as BaseSubquery : undefined
+}
+
+/** The unhinted single base-table shape shared by outer and inner join proofs. */
+function unhintedBase(q: QueryExpression, node: SelectNode) {
+  const table = node.from?.[0]
+  return node.from?.length === 1 && table?.kind === REF.TABLE && table.indexHints === undefined && q.with === undefined && node.windows === undefined && (node.options?.length ?? 0) === 0 ? table : undefined
 }
 
 type QualifiedColumn = Extract<Expression, { kind: typeof NODE.COLUMN }> & { readonly parts: readonly [string, string] }
@@ -813,18 +823,24 @@ function correlatedPair(where: Expression | undefined, inner: string, outer: str
   return undefined
 }
 
+/** Costed join alternatives read definitions without reopening temporary tables. */
+function nonTemporaryDefinition(run: Run, table: { readonly schema?: string; readonly name: string }): TableDef | undefined {
+  const schema = table.schema ?? defaultDatabase(run)
+  const def = schema === null ? undefined : run.catalog?.definition(schema, table.name)
+  return def === undefined || isTemporary(def) ? undefined : def
+}
+
 /** A bounded integer semijoin using the existing cost search and indexed join iterators. */
 function costedIntegerSemijoin(run: Run, q: QueryExpression, node: SelectNode, from: FromPlan, sortBy: string | undefined, keep: number): { readonly from: FromPlan; readonly where: Expression; readonly loose: boolean } | undefined {
-  const outer = boundedOuter(run, q, node)
+  const outer = run.parent === undefined ? unhintedBase(q, node) : undefined
   const where = node.where
   if (from.single === undefined || isTemporary(from.single.def) || outer === undefined || node.having !== undefined || node.distinct === true) return undefined
-  const sub = where?.kind === NODE.BINARY && where.op === 'IN' && where.right.kind === NODE.SUBQUERY ? where.right.query
-    : where?.kind === NODE.UNARY && where.op === 'EXISTS' && where.operand.kind === NODE.SUBQUERY ? where.operand.query : undefined
+  const sub = positiveSubquery(where)
   if (sub === undefined) return undefined
   const body = boundedSubquery(sub)
   if (body === undefined) return undefined
-  const inner = body.from?.[0]
-  if (inner?.kind !== REF.TABLE || inner.indexHints !== undefined) return undefined
+  const inner = body.from[0]
+  const item = body.items[0].expr
   const outerAlias = outer.alias ?? outer.table.name
   const innerAlias = inner.alias ?? inner.table.name
   if (outerAlias === innerAlias) return undefined
@@ -833,10 +849,10 @@ function costedIntegerSemijoin(run: Run, q: QueryExpression, node: SelectNode, f
   let outerKey: Expression | undefined
   let extra = body.where
   if (where?.kind === NODE.BINARY) {
-    innerKey = body.items[0]?.expr
+    innerKey = item
     outerKey = where.left
   } else {
-    if (body.items[0]?.expr.kind !== NODE.LITERAL || body.items[0].expr.type !== LITERAL.INT) return undefined
+    if (!integerLiteral(item)) return undefined
     const pair = correlatedPair(body.where, innerAlias, outerAlias)
     if (pair === undefined) return undefined
     innerKey = pair.innerKey
@@ -848,9 +864,8 @@ function costedIntegerSemijoin(run: Run, q: QueryExpression, node: SelectNode, f
   const outerColumn = outerKey.parts.at(-1) as string
   if (extra !== undefined && !(extra.kind === NODE.BINARY && ['=', '<>', '!=', '<', '<=', '>', '>='].includes(extra.op) && column(extra.left, innerAlias) && extra.right.kind === NODE.LITERAL && numeric(extra.right))) return undefined
   try {
-    const schema = inner.table.schema ?? defaultDatabase(run)
-    const def = schema === null ? undefined : run.catalog?.definition(schema, inner.table.name)
-    if (def === undefined || isTemporary(def)) return undefined
+    const def = nonTemporaryDefinition(run, inner.table)
+    if (def === undefined) return undefined
     const index = def.indexes.find((i) => i.kind === 'index' && i.invisible !== true && i.parts.length === 1 && i.parts[0]?.column.toLowerCase() === innerColumn.toLowerCase() && i.parts[0].prefix === undefined && i.parts[0].descending !== true)
     if (index === undefined) return undefined
     innerKey = { ...innerKey, parts: [innerAlias, innerColumn] }
@@ -869,7 +884,7 @@ function costedIntegerSemijoin(run: Run, q: QueryExpression, node: SelectNode, f
     alternative.reads(read)
     alternative.sortedBy(sortBy, keep)
     if (!holdsRead(def, index, innerRead)) return undefined
-    const strategy = alternative.integerSemijoin(innerAlias, index, key, extra, optimizerEnabled(run.env, 'loosescan'), optimizerEnabled(run.env, 'firstmatch'))
+    const strategy = alternative.integerSemijoin(innerAlias, index, key, extra, where?.kind === NODE.BINARY && node.groupBy === undefined && !someNode([node.items, q.orderBy], (n) => (n as { kind?: string }).kind === NODE.SUBQUERY ? true : undefined))
     return strategy === undefined ? undefined : { from: alternative, where: predicate, loose: strategy === 'loose' }
   } catch (error) {
     expectTyped(error)
@@ -879,17 +894,17 @@ function costedIntegerSemijoin(run: Run, q: QueryExpression, node: SelectNode, f
 
 /** One decorrelatable integer antijoin, costed through the existing preserved-side join planner. */
 function costedAntijoin(run: Run, q: QueryExpression, node: SelectNode, from: FromPlan): { readonly lookup: boolean; readonly key: Compiled; readonly inner: SelectPlan; readonly plan: PlanNode } | undefined {
-  const outer = boundedOuter(run, q, node)
+  const outer = run.parent === undefined ? unhintedBase(q, node) : undefined
   const where = node.where
   if (from.single === undefined || isTemporary(from.single.def) || outer === undefined) return undefined
-  if (where?.kind !== NODE.UNARY || where.op !== 'NOT' || where.operand.kind !== NODE.UNARY || where.operand.op !== 'EXISTS' || where.operand.operand.kind !== NODE.SUBQUERY) return undefined
-  const sub = where.operand.operand.query
+  const sub = negativeExistsSubquery(where)
+  if (sub === undefined || where === undefined) return undefined
   const body = boundedSubquery(sub)
   if (body === undefined) return undefined
-  if (body.items[0]?.expr.kind !== NODE.LITERAL || body.items[0].expr.type !== LITERAL.INT) return undefined
+  const item = body.items[0].expr
+  if (!integerLiteral(item)) return undefined
   if (body.where === undefined) return undefined
-  const inner = body.from?.[0]
-  if (inner?.kind !== REF.TABLE || inner.indexHints !== undefined) return undefined
+  const inner = body.from[0]
   const outerAlias = outer.alias ?? outer.table.name
   const innerAlias = inner.alias ?? inner.table.name
   if (outerAlias.toLowerCase() === innerAlias.toLowerCase()) return undefined
@@ -897,15 +912,12 @@ function costedAntijoin(run: Run, q: QueryExpression, node: SelectNode, from: Fr
   if (pair === undefined) return undefined
   const { innerKey, outerKey, extra } = pair
   if (extra?.kind !== NODE.BINARY || !['=', '<>', '!=', '<', '<=', '>', '>='].includes(extra.op)) return undefined
-  if (!isQualifiedColumn(extra.left, innerAlias, true) || extra.right.kind !== NODE.LITERAL || extra.right.type !== LITERAL.INT) return undefined
+  if (!isQualifiedColumn(extra.left, innerAlias, true) || !integerLiteral(extra.right)) return undefined
   const keyColumn = innerKey.parts[1]
   const predicateColumn = extra.left.parts[1]
   try {
-    // Costing must not open a temporary table a second time (ER_CANT_REOPEN_TABLE).
-    const schema = inner.table.schema ?? defaultDatabase(run)
-    if (schema === null) return undefined
-    const definition = run.catalog?.definition(schema, inner.table.name)
-    if (definition === undefined || isTemporary(definition)) return undefined
+    const definition = nonTemporaryDefinition(run, inner.table)
+    if (definition === undefined) return undefined
     // Cost the preserved-side alternative through the existing join planner.
     // An outer join's ON does not reduce its build estimate, as for this antijoin.
     const alternative = planFrom([{ kind: REF.JOIN, type: 'LEFT', left: outer, right: inner, on: body.where, at: where.at }], fromContext(run))
@@ -914,7 +926,7 @@ function costedAntijoin(run: Run, q: QueryExpression, node: SelectNode, from: Fr
     const ctx = compileContext(run, alternative.scope, 'where clause')
     if (!exactInteger(compile(innerKey, ctx)) || !exactInteger(compile(outerKey, ctx)) || !exactInteger(compile(extra.left, ctx))) return undefined
     const read = new Map(columnsRead(from.scope, node, q))
-    read.set(innerAlias, new Set([keyColumn.toLowerCase(), predicateColumn.toLowerCase()]))
+    read.set(innerAlias, keyReads(keyColumn, extra))
     alternative.reads(read)
     const projected: QueryExpression = { ...sub, body: { ...body, items: [{ expr: innerKey }], where: extra } }
     const plan = planQuery(run, projected)
@@ -930,11 +942,11 @@ function costedAntijoin(run: Run, q: QueryExpression, node: SelectNode, from: Fr
 
 /** A nested-loop EXISTS conjunct with its real correlated subquery as the inner iterator. */
 function semijoinNode(run: Run, e: Expression): PlanNode | undefined {
-  const anti = e.kind === NODE.UNARY && e.op === 'NOT' && e.operand.kind === NODE.UNARY && e.operand.op === 'EXISTS'
-  if (!anti && !(e.kind === NODE.UNARY && e.op === 'EXISTS')) return undefined
-  const query = semijoinSubqueries(e)[0]
+  const anti = negativeExistsSubquery(e)
+  const query = anti ?? (e.kind === NODE.UNARY && e.op === 'EXISTS' ? positiveSubquery(e) : undefined)
+  if (query === undefined) return undefined
   const sub = (run.subqueries ?? []).find((s) => s.query === query)?.plan.explain?.()?.[0]
-  return sub === undefined ? undefined : planNode(anti ? 'Nested loop antijoin' : 'Nested loop semijoin', [sub])
+  return sub === undefined ? undefined : planNode(anti !== undefined ? 'Nested loop antijoin' : 'Nested loop semijoin', [sub])
 }
 
 /** A Filter with a clause's subqueries beside its input, as the server lists them; anything else as it is. */
@@ -1029,7 +1041,7 @@ function copiedColumns(run: Run, facts: OptimizerFacts, own: readonly ResultType
  */
 function semijoinEmpty(run: Run, where: Expression | undefined): boolean {
   return splitAnd(where).some((c) => {
-    const query = c.kind === NODE.BINARY && c.op === 'IN' && c.right.kind === NODE.SUBQUERY ? c.right.query : c.kind === NODE.UNARY && c.op === 'EXISTS' && c.operand.kind === NODE.SUBQUERY ? c.operand.query : undefined
+    const query = positiveSubquery(c)
     return query !== undefined && emptySubquery(run, query)
   })
 }
@@ -1098,13 +1110,23 @@ function orderingIndex(def: TableDef, alias: string, order: readonly OrderItem[]
   return undefined
 }
 
+/** One positive IN or EXISTS predicate; NOT and conjunctions stay with their callers. */
+function positiveSubquery(e: Expression | undefined): QueryExpression | undefined {
+  if (e?.kind === NODE.BINARY && e.op === 'IN' && e.right.kind === NODE.SUBQUERY) return e.right.query
+  if (e?.kind === NODE.UNARY && e.op === 'EXISTS' && e.operand.kind === NODE.SUBQUERY) return e.operand.query
+  return undefined
+}
+
+/** The negative EXISTS form; a negated IN is a different nullable contract. */
+function negativeExistsSubquery(e: Expression | undefined): QueryExpression | undefined {
+  return e?.kind === NODE.UNARY && e.op === 'NOT' && e.operand.kind === NODE.UNARY && e.operand.op === 'EXISTS' ? positiveSubquery(e.operand) : undefined
+}
+
 /** The WHERE's IN and EXISTS subqueries MySQL runs as semijoins (NOT EXISTS, antijoins), each with the subquery. */
 function semijoinSubqueries(where: Expression | undefined): QueryExpression[] {
   return splitAnd(where).flatMap((e) => {
-    if (e.kind === NODE.BINARY && e.op === 'IN' && e.right.kind === NODE.SUBQUERY) return [e.right.query]
-    if (e.kind === NODE.UNARY && e.op === 'EXISTS' && e.operand.kind === NODE.SUBQUERY) return [e.operand.query]
-    if (e.kind === NODE.UNARY && e.op === 'NOT' && e.operand.kind === NODE.UNARY && e.operand.op === 'EXISTS' && e.operand.operand.kind === NODE.SUBQUERY) return [e.operand.operand.query]
-    return []
+    const query = positiveSubquery(e) ?? negativeExistsSubquery(e)
+    return query === undefined ? [] : [query]
   })
 }
 
