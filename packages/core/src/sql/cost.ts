@@ -215,18 +215,18 @@ function overlaps(a: ReadonlySet<string>, b: ReadonlySet<string>): boolean {
  * Its first written candidate supplies the outer cardinality. An inner-first order
  * pays for memory temporary deduplication and sorts its distinct outer rows.
  * The caller rejects that order until it can execute the deduplication strategy.
+ * `weedout` controls temporary competitors when an enabled FirstMatch or
+ * materialized alternative exists; the ordinary last-resort fallback remains.
  */
-export function joinOrder(candidates: readonly Candidate[], sort?: { readonly alias: string; readonly limit: number }, loose?: { readonly alias: string; readonly rows: number; readonly read: number; readonly fetched: number }, firstMatch?: string, materialization = false): Positioned[] {
+export function joinOrder(candidates: readonly Candidate[], sort?: { readonly alias: string; readonly limit: number }, loose?: { readonly alias: string; readonly rows: number; readonly read: number; readonly fetched: number }, firstMatch?: string, materialization = false, weedout = true): Positioned[] {
   let sortBy = sort?.alias
   const sorted = [...candidates].sort((a, b) => {
     if (a.dependent.has(b.alias)) return 1
     if (b.dependent.has(a.alias)) return -1
     const ab = a.keyDependent.has(b.alias)
     const ba = b.keyDependent.has(a.alias)
-    if (ab && !ba) return 1
-    if (ba && !ab) return -1
-    if (a.rows !== b.rows) return a.rows - b.rows
-    return candidates.indexOf(a) - candidates.indexOf(b)
+    if (ab !== ba) return ab ? 1 : -1
+    return a.rows - b.rows || candidates.indexOf(a) - candidates.indexOf(b)
   })
   let best: { readonly cost: number; readonly plan: Positioned[] } | undefined
   const plan: Step[] = []
@@ -234,7 +234,7 @@ export function joinOrder(candidates: readonly Candidate[], sort?: { readonly al
   const available = (c: Candidate, remaining: ReadonlySet<string>): boolean => remaining.has(c.alias) && !overlaps(c.dependent, remaining)
   const place = (c: Candidate): Positioned => {
     // A bounded two-table LooseScan retains the later lookup's original read cost.
-    let placed = c.place(plan.map((p) => p.alias === loose?.alias ? driving ?? p : p))
+    let placed = c.place(plan.map((p) => p.alias === driving?.alias ? driving! : p))
     if (loose !== undefined && plan.length === 0 && c.alias === loose.alias) {
       driving = placed
       placed = { ...placed, read: loose.read, fetched: loose.fetched, filter: floorFilter(placed.fetched * placed.filter / loose.rows, loose.rows, loose.fetched) }
@@ -263,13 +263,13 @@ export function joinOrder(candidates: readonly Candidate[], sort?: { readonly al
     // An inner-first semijoin needs a temporary deduplication strategy.
     let rows = loose === undefined ? last.rows : first.alias === loose.alias ? last.fetched * last.filter : first.rows
     // A semijoin emits outer rows, independent of inner duplicate fanout.
-    if (last.alias === semijoin && first.alias !== semijoin) rows = first.rows
+    if (last.alias === semijoin) rows = first.rows
     let cost = last.cost
-    // Inner-first weedout competes even when FirstMatch is disabled.
+    // Either order can need weedout when an enabled alternative is available.
     // Default memory temporary costs: creation 1, each write/lookup 0.1.
-    if (loose === undefined && first.alias === semijoin) {
+    if (semijoin !== undefined && (first.alias === semijoin ? loose === undefined : firstMatch === undefined)) {
       rows = Math.min(rows, (candidates[0] as Candidate).rows * last.filter)
-      cost += 1 + 0.1 * (rows + last.rows)
+      cost += weedout ? 1 + 0.1 * (rows + last.rows) : Infinity
     }
     cost += sortCost(rows)
     const costOfMaterial = materialCost()

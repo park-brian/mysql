@@ -1507,6 +1507,8 @@ Its competing weedout cost and output estimate remain present when FirstMatch
 is disabled, including ordered empty-inner lookup choices.
 LooseScan heuristic pruning keeps the original driving prefix even when
 materialization is disabled; selected iterators retain their distinct-key fanout.
+Bounded competing weedout costs honor enabled alternatives and native ties;
+the ordinary last-resort fallback remains available when those are absent.
 Broader materialization, weedout, prepared choices, wider switch scopes and
 builtin inheritance remain open under M5.47.
 Cached keyed subqueries build directly from the iterator without another row
@@ -1520,7 +1522,7 @@ The full Docker gates, pinned-reference audits and 10,000 crash points pass.
 `db.stream()` streams a million rows within a few MB of the heap's baseline (M5.40). Next is the
 remaining function and planner work, then the browser. The coercion corpus
 now agrees on all 3,148 observations and all 1,737 warning counts. The core entry bundle
-is 334,348 bytes gzipped (326.5 KiB), against the 500 KB release target,
+is 334,346 bytes gzipped (326.5 KiB), against the 500 KB release target,
 with the UCA weights in a separate chunk loaded on demand.
 
 The release plan gives each stage something to ship:

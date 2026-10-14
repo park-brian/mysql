@@ -364,6 +364,46 @@ function materializedLookup(ordered: boolean) {
   return ordered ? 'Limit\n' + plan.split('\n').map((line) => '    ' + line).join('\n') : plan
 }
 
+test('materialized lookup respects weedout ties, disabled alternatives and last-resort fallback', async () => {
+  const { conn, db } = await connect('semijoin_tie98')
+  try {
+    for (const type of ['INT', 'BIGINT', 'BIGINT UNSIGNED']) {
+      await conn.query('DROP TABLE IF EXISTS pa,ch')
+      await conn.query(`CREATE TABLE pa(id INT NOT NULL,g ${type},s VARCHAR(12)) STATS_AUTO_RECALC=0`)
+      await conn.query(`CREATE TABLE ch(id INT PRIMARY KEY,g ${type},KEY(g)) STATS_AUTO_RECALC=0`)
+      const value = type === 'INT' ? 2 : '9007199254740994'
+      await conn.query(`INSERT INTO pa VALUES(1,${value},'same')`)
+      for (const [switches, materialized] of [
+        ['default,firstmatch=off', false],
+        ['default,firstmatch=off,duplicateweedout=off', true],
+        ['default,firstmatch=off,loosescan=off,materialization=off,duplicateweedout=off', false],
+      ] as const) {
+        await conn.query('DELETE FROM ch')
+        await conn.query('ANALYZE TABLE pa,ch')
+        await conn.query('SET optimizer_switch=' + mysql.escape(switches))
+        for (const ordered of [false, true]) {
+          const sql = 'SELECT g,s FROM pa WHERE g IN(SELECT g FROM ch)' + (ordered ? ' ORDER BY g,s LIMIT 1' : '')
+          const [explain] = await conn.query<mysql.RowDataPacket[]>('EXPLAIN FORMAT=TREE ' + sql)
+          const loop = ordered ? firstMatch('pa', 'ch', 'g', true, false) : 'Nested loop inner join\n    Filter\n        Table scan on pa\n    Limit\n        Covering index lookup on ch using g'
+          const plan = ordered ? 'Limit\n' + loop.split('\n').map((line) => '    ' + line).join('\n') : loop
+          assert.equal(planSkeleton(explain[0]?.EXPLAIN), materialized ? materializedLookup(ordered) : plan, `${type}/${switches}/${ordered}`)
+          for (const method of ['query', 'execute'] as const) {
+            const options = { sql, rowsAsArray: true }
+            const [rows, fields] = method === 'query' ? await conn.query(options) : await conn.execute(options)
+            assert.deepEqual(rows, [])
+            assert.deepEqual(fieldsOf(fields), [['g', type === 'INT' ? 3 : 8, type === 'INT' ? 11 : 20, type.endsWith('UNSIGNED') ? 32 : 0, 0, 63, 'semijoin_tie98', 'pa', 'pa', 'g'], ['s', 253, 48, 0, 0, 224, 'semijoin_tie98', 'pa', 'pa', 's']])
+            assert.deepEqual((await conn.query('SHOW WARNINGS'))[0], [])
+            conn.unprepare(options)
+          }
+        }
+      }
+    }
+  } finally {
+    await conn.query('DROP DATABASE IF EXISTS semijoin_tie98')
+    await conn.end(); await db?.end()
+  }
+})
+
 test('LooseScan pruning retains the raw driver when materialization is disabled', async () => {
   const { conn, db } = await connect('semijoin_prune97')
   try {

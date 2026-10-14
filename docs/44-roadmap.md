@@ -193,8 +193,10 @@ for separate verification. The current state and remaining work are:
    FirstMatch and LooseScan are disabled; see the verified cost repair below.
    LooseScan heuristic pruning now retains the raw driving prefix independently
    of materialization availability, including the disabled-materialization loop.
-   **Next:** repair the remaining unordered materialized scan/hash and broader
-   disabled-strategy choices, then broaden access/order cost comparisons
+   Bounded outer-first weedout now pays its temporary cost and respects its
+   switch when FirstMatch or materialized lookup provides an enabled alternative.
+   **Next:** repair remaining LooseScan/disabled-strategy competition and
+   unordered materialized scan/hash, then broaden access/order cost comparisons
    and semijoin eligibility. Baseline/current live probes show
    ordered IN over a nullable
    non-primary key or two empty tables still loses source key flags here
@@ -2106,8 +2108,8 @@ visibility implementation from a key-coverage repair. ALTER column visibility
 is explicitly unsupported. These gaps remain open under M5.49/M5.12.
 
 **Next:** finish the remaining M5.47 strategy differences through the existing
-cost and physical iterator owners. Bounded FirstMatch and hash LooseScan match
-272 of 288 non-primary observations; sixteen strategy plans remain open. All
+cost and physical iterator owners. Bounded integer semijoins match
+276 of 288 non-primary observations; twelve strategy plans remain open. All
 rows, full fields and warnings agree with pinned MySQL. The 352-record changing-
 data matrix now agrees on 292/352 complete configurations and 328 matching
 fields; 24 execution fields and 60 complete configurations remain open. All 192 earlier fresh
@@ -2242,6 +2244,62 @@ seven pinned corpora pass. Base/fresh/192 earlier fresh/2,243 older controls and
 2,124/2,248 plans are unchanged, floor 2,118. Core/facade are 334,226/334,145 B
 gzipped. Preceding 3a43d33 CI passed all eleven required jobs. Materialized
 lookup admission resumes next, and M5.47 remains partial.
+
+**Verified bounded weedout competition (2026-10-14):**
+The existing cost search charges temporary creation and writes/lookups for
+either order when it needs weedout, and reads duplicateweedout from the same
+statement environment. With an enabled FirstMatch or materialized alternative,
+a disabled temporary competitor cannot displace it. Enabled weedout retains
+its native equal-cost tie priority. When no such alternative is modeled, the
+existing last-resort fallback remains; general physical weedout is not admitted.
+
+Permanent tests pin both protocols, ordered/unordered plans, full fields and
+warnings for enabled ties, disabled weedout and all-four-disabled fallback,
+including signed/unsigned BIGINTs beyond 2^53. Constant joins choose their
+immutable fixed/shown sides once; source reads remain inside execution. The
+descriptor uses the existing filter wrapper. Dependency ordering retains native
+priority and written-order ties; original LooseScan driving access is reused.
+
+The 180-outcome probe improves 96 to 142 complete matches; the 2,160-outcome
+threshold audit improves 1,766 to 2,066. Base matches improve 272 to 276/288;
+fresh matches remain 292/352 with 328 matching fields. Every previously matching
+component is preserved. All rows/full fields/warnings remain native in the new,
+threshold, materialization and base audits. The materialization matrix remains
+136/144; 192 earlier fresh and 2,243 older controls and 2,124/2,248 corpus plans
+are retained, floor 2,118 unchanged. Eleven local/native focused tests and
+twenty-four broader native controls pass, along with 20,000 seeded executor
+statements. All 1,295 tests, typecheck, lint, nine unchanged size gates,
+package/typed-example smoke, real-client exit criterion and seven corpora pass
+through `npm run verify:docker -- --reference`. Core/facade are 334,346/334,266 B
+under unchanged caps; captures and lazy chunks are unchanged.
+
+M5.47 stays partial. The remaining 94 threshold and 38 new switch-control
+configurations include LooseScan/materialized choices and disabled-strategy
+pruning that still need independent proofs. Eight unordered materialized
+scan/hash matrix outcomes remain open, alongside wider predicates/order,
+physical weedout and retained prepared strategy choices. Preceding e7d5e53/run
+38523972634 passed all eleven required CI jobs.
+
+**Pinned competing-strategy contract (2026-10-14):** A fresh 180-outcome
+native probe spans 1/4/20 outer rows, 0/2/8 inner rows, ordered/unordered input,
+both protocols and five FirstMatch/LooseScan/materialization/weedout switch
+combinations. Every row, full field and warning already agrees; 96 complete
+plans agree before repair. The existing 2,160-outcome audit contains 276
+unused-last-table-loop versus MaterializeLookup differences, making this smaller
+than introducing materialized scan/hash execution.
+
+For one outer row and empty inner input, MySQL costs both outer-first lookup
+and weedout at 1.9. Enabled weedout wins that tie; disabling it retains
+MaterializeLookup. Disabling materialization as well permits last-resort
+weedout until an enabled LooseScan wins. With all four strategies disabled,
+native still uses weedout as its fallback. Disabling a switch therefore cannot
+mean unconditional rejection of the only executable fallback. Pin outer-first
+temporary costs, legal alternatives, tie priority and search pruning together
+before changing selection. Preserve the existing unused-last-table iterator;
+do not infer general physical weedout support from its one-row inner limit.
+All previously matching components, heuristic dependency guards and unchanged
+size caps remain required. The preceding 550064e CI now passed all eleven
+required jobs; e7d5e53/run 38523972634 is running with no known failure.
 
 **Verified LooseScan raw-prefix pruning (2026-10-14):**
 The join search uses the original driving-table prefix for heuristic pruning

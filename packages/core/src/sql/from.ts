@@ -480,7 +480,7 @@ export function planFrom(refs: readonly TableReference[], ctx: FromContext, wher
     const env = ctx.env
     const rangeOf = (t: FromTable, conditions: readonly Weighed[]): RangeEstimate | undefined =>
       env === undefined ? undefined : rangeEstimate(t, conditions, tables, scope, (e) => ctx.compileOn(e, preliminary.restrict(new Set([t.alias]))), env, width)
-    planned ??= planJoins(tree.node, splitAnd(where).map((e) => ({ e, aliases: aliasesOf(e, scope) })), scope, settings, straight ? undefined : lookupAfter, rangeOf, sort, materialization)
+    planned ??= planJoins(tree.node, splitAnd(where).map((e) => ({ e, aliases: aliasesOf(e, scope) })), scope, settings, straight ? undefined : lookupAfter, rangeOf, sort, materialization, optimizerEnabled(env, 'duplicateweedout'))
     settings.lookups = planned.lookups
     settings.dynamic = planned.dynamic
     return planned
@@ -1231,7 +1231,7 @@ interface JoinPlan {
  * its lookup but filters nothing (`where_cond`). A table with no statistics
  * to cost it by is looked up.
  */
-function planJoins(root: Node, where: readonly Weighed[], scope: TableScope, settings: LeafSettings, lookupAfter: ((t: FromTable, before: ReadonlySet<string>) => EqRef | undefined) | undefined, rangeOf: (t: FromTable, conditions: readonly Weighed[]) => RangeEstimate | undefined, sort: { readonly alias: string; readonly limit: number } | undefined, materialization = false): JoinPlan {
+function planJoins(root: Node, where: readonly Weighed[], scope: TableScope, settings: LeafSettings, lookupAfter: ((t: FromTable, before: ReadonlySet<string>) => EqRef | undefined) | undefined, rangeOf: (t: FromTable, conditions: readonly Weighed[]) => RangeEstimate | undefined, sort: { readonly alias: string; readonly limit: number } | undefined, materialization: boolean, weedout: boolean): JoinPlan {
   const conditions = [...where]
   const gather = (node: Node, nullable: boolean): void => {
     if (node.kind === 'leaf') return
@@ -1263,7 +1263,7 @@ function planJoins(root: Node, where: readonly Weighed[], scope: TableScope, set
       read: indexScanCost(stats.rows, indexBytes(driver.def, index) + indexBytes(driver.def, clusteredIndex(driver.def))),
       fetched: stats.rows / stats.recordsPerKey(index, 1),
     }
-    const order = joinOrder(candidates, sort, loose, settings.firstMatch, materialization)
+    const order = joinOrder(candidates, sort, loose, settings.firstMatch, materialization, weedout)
     settings.materialized = order.some((p) => p.lookup === 'materialized')
     let node: Node = { kind: 'leaf', table: settings.tables.get((order[0] as Positioned).alias) as FromTable }
     const before = new Set([(order[0] as Positioned).alias])
@@ -1797,27 +1797,26 @@ function indexedJoinOp(node: Node & { kind: 'join' }, outer: Op, t: FromTable, l
  * 1` is "Table scan on kl").
  */
 function constJoinOp(outer: Op, inner: Op, innerSlots: readonly number[], on: readonly Placed[]): Op {
+  const fixedOuter = outer.hidden === true
+  const fixed = fixedOuter ? outer : inner
+  const other = fixedOuter ? inner : outer
   return {
     *rows(run, context) {
-      const fixed = outer.hidden ? outer : inner
-      const other = fixed === outer ? inner : outer
       const held = [...fixed.rows(run, context)]
       if (held.length === 0) return
       for (const r of other.rows(run, context)) {
         for (const h of held) {
-          const o = fixed === outer ? h : r
-          const i = fixed === outer ? r : h
+          const o = fixedOuter ? h : r
+          const i = fixedOuter ? r : h
           const row = matchingRow(o, i, innerSlots, on, run.env)
           if (row !== undefined) yield row
         }
       }
     },
     describe(env) {
-      const shown = outer.hidden ? inner : outer
-      const below = shown.describe(env)
-      return on.length === 0 ? below : planNode('Filter', [below])
+      return wrap(on.length > 0, 'Filter', other.describe(env))
     },
-    ...(outer.hidden && inner.hidden ? { hidden: true } : {}),
+    hidden: fixedOuter && inner.hidden === true,
   }
 }
 
