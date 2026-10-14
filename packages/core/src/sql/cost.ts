@@ -256,16 +256,18 @@ export function joinOrder(candidates: readonly Candidate[], sort?: { readonly al
     return material === undefined || outer === undefined || outer.alias !== candidates[0]?.alias ? Infinity
       : step(outer, material).cost + sortCost(outer.rows)
   }
+  const semijoin = firstMatch ?? material?.alias
   const consider = (): void => {
     const first = plan[0] as Step
     const last = plan.at(-1) as Step
     // An inner-first semijoin needs a temporary deduplication strategy.
     let rows = loose === undefined ? last.rows : first.alias === loose.alias ? last.fetched * last.filter : first.rows
-    // FirstMatch emits outer rows, independent of inner duplicate fanout.
-    if (last.alias === firstMatch && first.alias !== firstMatch) rows = first.rows
+    // A semijoin emits outer rows, independent of inner duplicate fanout.
+    if (last.alias === semijoin && first.alias !== semijoin) rows = first.rows
     let cost = last.cost
+    // Inner-first weedout competes even when FirstMatch is disabled.
     // Default memory temporary costs: creation 1, each write/lookup 0.1.
-    if (loose === undefined && first.alias === firstMatch) {
+    if (loose === undefined && first.alias === semijoin) {
       rows = Math.min(rows, (candidates[0] as Candidate).rows * last.filter)
       cost += 1 + 0.1 * (rows + last.rows)
     }
@@ -279,9 +281,9 @@ export function joinOrder(candidates: readonly Candidate[], sort?: { readonly al
     for (const c of sorted) {
       if (!available(c, remaining) || !plan.some((p) => c.keyDependent.has(p.alias))) continue
       const placed = place(c)
-      const previous = (plan.at(-1) as Step)
+      const previous = plan.at(-1) as Step
       if (!(placed.lookup && almostEqual(placed.read, previous.read) && almostEqual(placed.fetched, previous.fetched))) continue
-      const next = step(plan.at(-1), placed)
+      const next = step(previous, placed)
       if (best !== undefined && next.cost >= best.cost) continue
       plan.push(next)
       remaining.delete(c.alias)
@@ -302,7 +304,7 @@ export function joinOrder(candidates: readonly Candidate[], sort?: { readonly al
       if (!available(c, remaining) || extended?.has(c.alias)) continue
       const placed = place(c)
       const next = step(plan.at(-1), placed)
-      const pruned = materialization && plan.length === 0 && c.alias === loose?.alias ? step(undefined, driving as Positioned) : next
+      const pruned = material !== undefined && plan.length === 0 && c.alias === loose?.alias ? step(undefined, driving as Positioned) : next
       const costOfMaterial = materialCost()
       const cost = Math.min(pruned.cost, costOfMaterial)
       const rows = costOfMaterial === Infinity ? pruned.rows : Math.min(pruned.rows, (plan[0] as Step).rows)

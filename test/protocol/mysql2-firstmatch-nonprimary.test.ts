@@ -364,6 +364,42 @@ function materializedLookup(ordered: boolean) {
   return ordered ? 'Limit\n' + plan.split('\n').map((line) => '    ' + line).join('\n') : plan
 }
 
+test('ordered empty-inner materialization costs weedout with FirstMatch and LooseScan disabled', async () => {
+  const { conn, db } = await connect('material_empty96')
+  try {
+    await conn.query('CREATE TABLE pa(id INT NOT NULL,g INT,s VARCHAR(12)) STATS_AUTO_RECALC=0')
+    await conn.query('CREATE TABLE ch(id INT PRIMARY KEY,g INT,KEY(g)) STATS_AUTO_RECALC=0')
+    await conn.query("SET optimizer_switch='default,firstmatch=off,loosescan=off'")
+    const sql = 'SELECT g,s FROM pa WHERE g IN(SELECT g FROM ch) ORDER BY g,s LIMIT 1'
+    for (const outer of [20, 200]) {
+      await conn.query('DELETE FROM pa')
+      await conn.query('INSERT INTO pa VALUES' + Array.from({ length: outer }, (_, i) => `(${i+1},${i%4===0 ? 'NULL' : i%4},'same')`).join(','))
+      await conn.query('ANALYZE TABLE pa,ch')
+      const [explain] = await conn.query<mysql.RowDataPacket[]>('EXPLAIN FORMAT=TREE ' + sql)
+      assert.equal(planSkeleton(explain[0]?.EXPLAIN), materializedLookup(true))
+      for (const method of ['query', 'execute'] as const) {
+        const options = { sql, rowsAsArray: true }
+        const [rows, fields] = method === 'query' ? await conn.query(options) : await conn.execute(options)
+        assert.deepEqual(rows, [])
+        assert.deepEqual(fieldsOf(fields), [['g', 3, 11, 0, 0, 63, 'material_empty96', 'pa', 'pa', 'g'], ['s', 253, 48, 0, 0, 224, 'material_empty96', 'pa', 'pa', 's']])
+        assert.deepEqual((await conn.query('SHOW WARNINGS'))[0], [])
+        conn.unprepare(options)
+      }
+      const statement = await conn.prepare({ sql, rowsAsArray: true })
+      try {
+        assert.deepEqual((await statement.execute([]))[0], [])
+        await conn.query('INSERT INTO ch VALUES(1,NULL),(2,2),(3,2)')
+        assert.deepEqual((await statement.execute([]))[0], [{ g: 2, s: 'same' }])
+        await conn.query('DELETE FROM ch')
+        assert.deepEqual((await statement.execute([]))[0], [])
+      } finally { await statement.close(); conn.unprepare({ sql, rowsAsArray: true }) }
+    }
+  } finally {
+    await conn.query('DROP DATABASE IF EXISTS material_empty96')
+    await conn.end(); await db?.end()
+  }
+})
+
 test('materialized integer lookup retains duplicate outer identity, native fields and fresh prepared data', async () => {
   const { conn, db } = await connect('material_lookup90')
   try {
