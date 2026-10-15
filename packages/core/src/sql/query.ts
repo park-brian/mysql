@@ -370,7 +370,7 @@ function planSelect(run: Run, q: QueryExpression, node: SelectNode): SelectPlan 
   const semi = from === undefined || windowed || !semijoin ? undefined : costedIntegerSemijoin(run, q, node, from, sortBy, keep)
   if (semi !== undefined) {
     from = semi.from
-    if (semi.loose) source = undefined
+    if (semi.innerFirst) source = undefined
   }
   const loopSemijoin = semijoin && scope !== undefined && (semi !== undefined || anti?.lookup === true || nestedLoopSemijoin(node.where, scope))
   if (from !== undefined && scope !== undefined) from.sortedBy(sortBy, keep)
@@ -491,7 +491,7 @@ function planSelect(run: Run, q: QueryExpression, node: SelectNode): SelectPlan 
   // An ORDER BY the index the table is read by already gives: read in its order, and nothing to sort.
   const read = source !== undefined && from !== undefined ? from.access(run.env) : undefined
   // Windows and hash antijoins still sort their delivered rows, even over an ordered index.
-  const outerLoop = semi?.loose === false && source !== undefined && sortBy === source.alias
+  const outerLoop = semi?.innerFirst === false && source !== undefined && sortBy === source.alias
   // Reconsider PRIMARY for ordinary scans and the modeled outer-first loop.
   // A proved UNIQUE projection can reconsider PRIMARY as an ordinary scan does.
   const ordered = source !== undefined && read !== undefined && !deduplicated && !windowed && (anti === undefined || anti.lookup) && match === undefined && keys.length > 0 && read.ranges === undefined ? orderingIndex(source.def, source.alias, order, items, lookup, read.index, (outerLoop || (!loopSemijoin && !deduplicate)) && optimizerEnabled(run.env, 'prefer_ordering_index')) : undefined
@@ -769,8 +769,7 @@ function quantifiedPlan(run: Run, query: QueryExpression, how: QuantifiedSubquer
 
 /** A lookup key and the columns its residual condition reads, by folded name. */
 function keyReads(column: string, where: unknown): Set<string> {
-  const read = new Set<string>()
-  read.add(column.toLowerCase())
+  const read = new Set([column.toLowerCase()])
   for (const parts of columnRefs(where)) read.add((parts.at(-1) as string).toLowerCase())
   return read
 }
@@ -830,11 +829,16 @@ function nonTemporaryDefinition(run: Run, table: { readonly schema?: string; rea
   return def === undefined || isTemporary(def) ? undefined : def
 }
 
+/** Both costed join proofs require one nontemporary outer table in the root query. */
+function joinOuter(run: Run, q: QueryExpression, node: SelectNode, from: FromPlan) {
+  return run.parent === undefined && from.single !== undefined && !isTemporary(from.single.def) ? unhintedBase(q, node) : undefined
+}
+
 /** A bounded integer semijoin using the existing cost search and indexed join iterators. */
-function costedIntegerSemijoin(run: Run, q: QueryExpression, node: SelectNode, from: FromPlan, sortBy: string | undefined, keep: number): { readonly from: FromPlan; readonly where: Expression; readonly loose: boolean } | undefined {
-  const outer = run.parent === undefined ? unhintedBase(q, node) : undefined
+function costedIntegerSemijoin(run: Run, q: QueryExpression, node: SelectNode, from: FromPlan, sortBy: string | undefined, keep: number): { readonly from: FromPlan; readonly where: Expression; readonly innerFirst: boolean } | undefined {
+  const outer = joinOuter(run, q, node, from)
   const where = node.where
-  if (from.single === undefined || isTemporary(from.single.def) || outer === undefined || node.having !== undefined || node.distinct === true) return undefined
+  if (outer === undefined || node.having !== undefined || node.distinct === true) return undefined
   const sub = positiveSubquery(where)
   if (sub === undefined) return undefined
   const body = boundedSubquery(sub)
@@ -861,16 +865,16 @@ function costedIntegerSemijoin(run: Run, q: QueryExpression, node: SelectNode, f
   }
   if (!column(innerKey, innerAlias) || !column(outerKey, outerAlias)) return undefined
   const innerColumn = innerKey.parts.at(-1) as string
-  const outerColumn = outerKey.parts.at(-1) as string
   if (extra !== undefined && !(extra.kind === NODE.BINARY && ['=', '<>', '!=', '<', '<=', '>', '>='].includes(extra.op) && column(extra.left, innerAlias) && extra.right.kind === NODE.LITERAL && numeric(extra.right))) return undefined
   try {
     const def = nonTemporaryDefinition(run, inner.table)
     if (def === undefined) return undefined
     const index = def.indexes.find((i) => i.kind === 'index' && i.invisible !== true && i.parts.length === 1 && i.parts[0]?.column.toLowerCase() === innerColumn.toLowerCase() && i.parts[0].prefix === undefined && i.parts[0].descending !== true)
     if (index === undefined) return undefined
-    innerKey = { ...innerKey, parts: [innerAlias, innerColumn] }
-    outerKey = { ...outerKey, parts: [outerAlias, outerColumn] }
-    if (extra?.kind === NODE.BINARY && extra.left.kind === NODE.COLUMN) extra = { ...extra, left: { ...extra.left, parts: [innerAlias, extra.left.parts.at(-1) as string] } }
+    const qualify = (e: Extract<Expression, { kind: typeof NODE.COLUMN }>, alias: string): Expression => ({ ...e, parts: [alias, e.parts.at(-1) as string] })
+    innerKey = qualify(innerKey, innerAlias)
+    outerKey = qualify(outerKey, outerAlias)
+    if (extra?.kind === NODE.BINARY && extra.left.kind === NODE.COLUMN) extra = { ...extra, left: qualify(extra.left, innerAlias) }
     const equality: Expression = { kind: NODE.BINARY, op: '=', left: innerKey, right: outerKey, at: where?.at ?? node.at }
     const predicate: Expression = extra === undefined ? equality : { kind: NODE.BINARY, op: 'AND', left: equality, right: extra, at: equality.at }
     // Keep the outer table's slots first: its logical scope remains the SELECT's scope.
@@ -884,8 +888,8 @@ function costedIntegerSemijoin(run: Run, q: QueryExpression, node: SelectNode, f
     alternative.reads(read)
     alternative.sortedBy(sortBy, keep)
     if (!holdsRead(def, index, innerRead)) return undefined
-    const strategy = alternative.integerSemijoin(innerAlias, index, key, extra, where?.kind === NODE.BINARY && node.groupBy === undefined && !someNode([node.items, q.orderBy], (n) => (n as { kind?: string }).kind === NODE.SUBQUERY ? true : undefined))
-    return strategy === undefined ? undefined : { from: alternative, where: predicate, loose: strategy === 'loose' }
+    const innerFirst = alternative.integerSemijoin(innerAlias, index, key, extra, where?.kind === NODE.BINARY && node.groupBy === undefined && !someNode([node.items, q.orderBy], (n) => (n as { kind?: string }).kind === NODE.SUBQUERY ? true : undefined))
+    return innerFirst === undefined ? undefined : { from: alternative, where: predicate, innerFirst }
   } catch (error) {
     expectTyped(error)
     return undefined
@@ -894,9 +898,9 @@ function costedIntegerSemijoin(run: Run, q: QueryExpression, node: SelectNode, f
 
 /** One decorrelatable integer antijoin, costed through the existing preserved-side join planner. */
 function costedAntijoin(run: Run, q: QueryExpression, node: SelectNode, from: FromPlan): { readonly lookup: boolean; readonly key: Compiled; readonly inner: SelectPlan; readonly plan: PlanNode } | undefined {
-  const outer = run.parent === undefined ? unhintedBase(q, node) : undefined
+  const outer = joinOuter(run, q, node, from)
   const where = node.where
-  if (from.single === undefined || isTemporary(from.single.def) || outer === undefined) return undefined
+  if (outer === undefined) return undefined
   const sub = negativeExistsSubquery(where)
   if (sub === undefined || where === undefined) return undefined
   const body = boundedSubquery(sub)

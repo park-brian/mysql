@@ -1459,7 +1459,7 @@ a blocker and one without is just a note.
 
 ## 21. Where we are
 
-*A snapshot as of 2026-10-14. The [roadmap](./docs/44-roadmap.md) is the live
+*A snapshot as of 2026-10-15. The [roadmap](./docs/44-roadmap.md) is the live
 version, and wins wherever it disagrees with this section.*
 
 ```mermaid
@@ -1511,6 +1511,12 @@ Bounded competing weedout costs honor enabled alternatives and native ties;
 the ordinary last-resort fallback remains available when those are absent.
 LooseScan-only competition distinguishes explicit FirstMatch disablement from
 filtered costs, and heuristic pruning requires a finite complete-plan bound.
+Bounded materialized scan/hash now competes with lookup and weedout through
+that search. Its deduplicated inner build is eager and skips outer probing
+when empty; lazy lookup retains its valid-outer-key initialization. Duplicate
+outer identity, NULLs, integer metadata, ordering, fresh executions and early
+stream closure are pinned against MySQL. The same owner runs both forms.
+Indexed materialized scan probes remain open alongside physical hash weedout.
 Broader materialization, weedout, prepared choices, wider switch scopes and
 builtin inheritance remain open under M5.47.
 Cached keyed subqueries build directly from the iterator without another row
@@ -1524,7 +1530,7 @@ The full Docker gates, pinned-reference audits and 10,000 crash points pass.
 `db.stream()` streams a million rows within a few MB of the heap's baseline (M5.40). Next is the
 remaining function and planner work, then the browser. The coercion corpus
 now agrees on all 3,148 observations and all 1,737 warning counts. The core entry bundle
-is 334,349 bytes gzipped (326.5 KiB), against the 500 KB release target,
+is 334,340 bytes gzipped (326.5 KiB), against the 500 KB release target,
 with the UCA weights in a separate chunk loaded on demand.
 
 The release plan gives each stage something to ship:

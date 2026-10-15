@@ -150,8 +150,8 @@ export function floorFilter(filter: number, rows: number, fetched: number): numb
 
 /** A table placed in a join order: its position, how it is read, and what that costs. */
 export interface Positioned extends Position {
-  /** False for scans, true for base-index probes, or a materialized key probe. */
-  readonly lookup: boolean | 'materialized'
+  /** Base scan/probe, materialized key probe, or materialized scan. */
+  readonly lookup: boolean | 'materialized' | 'materialized-scan'
   /** `read_cost`. */
   readonly read: number
 }
@@ -243,19 +243,24 @@ export function joinOrder(candidates: readonly Candidate[], sort?: { readonly al
     if (plan.length === 0 && c.alias === sortBy && !placed.lookup && sort !== undefined && sort.limit >= placed.fetched) sortBy = undefined
     return placed
   }
-  // A materialized lookup pays its build once; step adds one probe per outer row.
+  // Both materialized accesses pay the same build; step adds scan or probe reads.
   let material: Positioned | undefined
   if (materialization && candidates.length === 2) {
-    const scan = (candidates[1] as Candidate).place([])
-    const built = step(undefined, scan)
-    material = { ...scan, read: built.cost + 1 + ROW_EVALUATE * built.rows, lookup: 'materialized', fetched: 1, filter: 1 }
+    const built = step(undefined, (candidates[1] as Candidate).place([]))
+    material = { ...built, read: built.cost + 1 + ROW_EVALUATE * built.rows, lookup: 'materialized-scan', fetched: built.rows, filter: 1 }
   }
   const sortCost = (rows: number): number => sort !== undefined && plan[0]?.alias !== sortBy ? rows : 0
-  // Only a two-table outer-first prefix can probe this materialized candidate.
-  const materialCost = (): number => {
-    const outer = plan[0]
-    return material === undefined || outer === undefined || outer.alias !== candidates[0]?.alias ? Infinity
-      : step(outer, material).cost + sortCost(outer.rows)
+  // Lookup probes after the outer prefix; scan builds before the outer scan.
+  const materialPlan = (): { readonly plan: Step[]; readonly cost: number } | undefined => {
+    const first = plan[0]
+    if (material === undefined || first === undefined) return undefined
+    const outerFirst = first.alias !== material.alias
+    const before = outerFirst ? first : step(undefined, material)
+    const placed = outerFirst ? { ...material, lookup: 'materialized' as const, fetched: 1 } : (candidates[0] as Candidate).place([before])
+    // Indexed materialized scans need their own physical probe admission.
+    if (!outerFirst && placed.lookup) return undefined
+    const last = step(before, placed)
+    return { plan: [before, last], cost: last.cost + sortCost(outerFirst ? before.rows : placed.fetched * placed.filter) }
   }
   const semijoin = material?.alias ?? (firstMatch === false ? loose?.alias : firstMatch)
   const consider = (): void => {
@@ -273,9 +278,11 @@ export function joinOrder(candidates: readonly Candidate[], sort?: { readonly al
       cost += weedout ? 1 + 0.1 * (rows + last.rows) : Infinity
     }
     cost += sortCost(rows)
-    const costOfMaterial = materialCost()
-    const cheapest = Math.min(cost, costOfMaterial)
-    if (best === undefined || cheapest < best.cost) best = { cost: cheapest, plan: costOfMaterial < cost ? [first, step(first, material!)] : plan.slice() }
+    const alternative = materialPlan()
+    // An inner-first materialized scan wins its native equal-cost weedout tie.
+    const chosen = alternative !== undefined && (alternative.cost < cost || (alternative.cost === cost && loose === undefined && first.alias === semijoin))
+      ? alternative : { cost, plan: plan.slice() }
+    if (best === undefined || chosen.cost < best.cost) best = chosen
   }
   // The unique-key tables after the one just placed, each joined in turn while it costs what the one before did (`eq_ref_extension_by_limited_search`).
   const extendByUniqueKeys = (remaining: Set<string>): Set<string> => {
@@ -307,7 +314,7 @@ export function joinOrder(candidates: readonly Candidate[], sort?: { readonly al
       const next = step(plan.at(-1), placed)
       // Native heuristic pruning uses the original driver, before LooseScan fanout.
       const pruned = plan.length === 0 && c.alias === loose?.alias ? driving as Step : next
-      const costOfMaterial = materialCost()
+      const costOfMaterial = materialPlan()?.cost ?? Infinity
       const cost = Math.min(pruned.cost, costOfMaterial)
       const rows = costOfMaterial === Infinity ? pruned.rows : Math.min(pruned.rows, (plan[0] as Step).rows)
       if (best !== undefined && cost >= best.cost) continue
