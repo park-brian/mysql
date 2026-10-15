@@ -1515,7 +1515,9 @@ Bounded materialized scan/hash now competes with lookup and weedout through
 that search. Its deduplicated inner build is eager and skips outer probing
 when empty; lazy lookup retains its valid-outer-key initialization. Duplicate
 outer identity, NULLs, integer metadata, ordering, fresh executions and early
-stream closure are pinned against MySQL. The same owner runs both forms.
+stream closure are pinned against MySQL. Disabling hashing selects a real
+nested scan, whose costs and repeated outer reads follow the deduplicated
+inner keys. The same build/pair owner runs lookup, hash scan and nested scan.
 Indexed materialized scan probes remain open alongside physical hash weedout.
 Broader materialization, weedout, prepared choices, wider switch scopes and
 builtin inheritance remain open under M5.47.
@@ -1530,7 +1532,7 @@ The full Docker gates, pinned-reference audits and 10,000 crash points pass.
 `db.stream()` streams a million rows within a few MB of the heap's baseline (M5.40). Next is the
 remaining function and planner work, then the browser. The coercion corpus
 now agrees on all 3,148 observations and all 1,737 warning counts. The core entry bundle
-is 334,340 bytes gzipped (326.5 KiB), against the 500 KB release target,
+is 334,351 bytes gzipped (326.5 KiB), against the 500 KB release target,
 with the UCA weights in a separate chunk loaded on demand.
 
 The release plan gives each stage something to ship:

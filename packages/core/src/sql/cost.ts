@@ -121,13 +121,13 @@ export interface Access {
 /**
  * Whether a table is read by its index lookup or whole after `prefix`
  * (`best_access_path`). `rowBytes` is what a join buffer holds for each
- * prefix row.
+ * prefix row. Without buffering, each prefix row pays a complete scan.
  */
-export function bestAccess(t: TableFacts, prefix: readonly Position[], key: KeyChoice | undefined, rowBytes: number): Access {
+export function bestAccess(t: TableFacts, prefix: readonly Position[], key: KeyChoice | undefined, rowBytes: number, buffered = true): Access {
   const s = t.stats
   const before = prefixRows(prefix)
   const kept = s.rows * t.constantFilter
-  const refills = 1 + (rowBytes * before) / JOIN_BUFFER
+  const refills = buffered ? 1 + (rowBytes * before) / JOIN_BUFFER : before
   const whole: Access = { lookup: false, fetched: kept, read: refills * (scanCost(s) + ROW_EVALUATE * (s.rows - kept)) }
   if (key === undefined) return whole
   const fanout = key.kind === 'unique' ? 1 : key.fanout

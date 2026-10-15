@@ -413,7 +413,58 @@ test('materialized hash scan preserves outer identity, integer fields, ordering 
   }
 })
 
-test('materialized hash builds before probing and skips an empty build without retaining scans', async () => {
+test('materialized nested loops retain distinct build keys, outer identities and fresh integer fields', async () => {
+  const { conn, db } = await connect('material_loop101')
+  try {
+    await conn.query("SET optimizer_switch='default,firstmatch=off,loosescan=off,block_nested_loop=off'")
+    for (const type of ['INT', 'BIGINT', 'BIGINT UNSIGNED']) {
+      await conn.query('DROP TABLE IF EXISTS pa,ch')
+      await conn.query(`CREATE TABLE pa(id INT NOT NULL,g ${type},s VARCHAR(12)) STATS_AUTO_RECALC=0`)
+      await conn.query(`CREATE TABLE ch(id INT PRIMARY KEY,g ${type},KEY(g)) STATS_AUTO_RECALC=0`)
+      const base = type === 'INT' ? 0n : 9007199254740992n
+      await conn.query('INSERT INTO pa VALUES' + Array.from({ length: 20 }, (_, i) => `(${i+1},${i%4===0 ? 'NULL' : base+BigInt(i%4)},'same')`).join(','))
+      for (const state of ['empty', 'key', 'duplicates', 'null'] as const) {
+        await conn.query('DELETE FROM ch')
+        if (state === 'duplicates') await conn.query(`INSERT INTO ch VALUES(1,${base+1n}),(2,${base+1n}),(3,${base+2n}),(4,NULL)`)
+        else if (state !== 'empty') await conn.query(`INSERT INTO ch VALUES(1,${state === 'null' ? 'NULL' : base+1n})`)
+        await conn.query('ANALYZE TABLE pa,ch')
+        const values = state === 'duplicates' ? [1, 2] : state === 'key' ? [1] : []
+        const expected = values.flatMap((n) => Array.from({ length: 5 }, (_, i) => [n+1+i*4, type === 'INT' ? n : String(base+BigInt(n)), 'same']))
+        for (const ordered of state === 'duplicates' ? [true] : [false, true]) {
+          const sql = 'SELECT id,g,s FROM pa WHERE g IN(SELECT g FROM ch)' + (ordered ? ' ORDER BY g,s,id' : '')
+          for (const method of ['query', 'execute'] as const) {
+            const options = { sql, rowsAsArray: true }
+            const [rows, fields] = method === 'query' ? await conn.query(options) : await conn.execute(options)
+            assert.deepEqual(rows, expected)
+            assert.deepEqual(fieldsOf(fields), [['id', 3, 11, 4097, 0, 63, 'material_loop101', 'pa', 'pa', 'id'], ['g', type === 'INT' ? 3 : 8, type === 'INT' ? 11 : 20, type.endsWith('UNSIGNED') ? 32 : 0, 0, 63, 'material_loop101', 'pa', 'pa', 'g'], ['s', 253, 48, 0, 0, 224, 'material_loop101', 'pa', 'pa', 's']])
+            assert.deepEqual((await conn.query('SHOW WARNINGS'))[0], [])
+            conn.unprepare(options)
+          }
+          const [explain] = await conn.query<mysql.RowDataPacket[]>('EXPLAIN FORMAT=TREE ' + sql)
+          const loop = 'Nested loop inner join\n    Table scan on <subquery2>\n        Materialize with deduplication\n            Filter\n                Covering index scan on ch using g\n    Filter\n        Table scan on pa'
+          assert.equal(planSkeleton(explain[0]?.EXPLAIN), ordered ? 'Sort\n    Stream results\n' + loop.split('\n').map((line) => '        ' + line).join('\n') : loop)
+        }
+      }
+      await conn.query(`UPDATE ch SET g=${base+1n}`)
+      const sql = 'SELECT id,g,s FROM pa WHERE g IN(SELECT g FROM ch)'
+      const statement = await conn.prepare({ sql, rowsAsArray: true })
+      try {
+        const value = (n: number) => type === 'INT' ? n : String(base + BigInt(n))
+        assert.deepEqual((await statement.execute([]))[0], Array.from({ length: 5 }, (_, i) => ({ id: 2+i*4, g: value(1), s: 'same' })))
+        await conn.query(`UPDATE ch SET g=${base+2n}`)
+        assert.deepEqual((await statement.execute([]))[0], Array.from({ length: 5 }, (_, i) => ({ id: 3+i*4, g: value(2), s: 'same' })))
+        await conn.query('DELETE FROM ch')
+        assert.deepEqual((await statement.execute([]))[0], [])
+      } finally { await statement.close(); conn.unprepare({ sql, rowsAsArray: true }) }
+    }
+  } finally {
+    await conn.query('DROP DATABASE IF EXISTS material_loop101')
+    await conn.end(); await db?.end()
+  }
+})
+
+test('materialized scans build before probing and close repeated scans under backpressure', async () => {
+  for (const buffered of [true, false]) {
   const db = await MySQL.open(':memory:')
   const count = 4096
   const payload = 'same'.repeat(50)
@@ -423,7 +474,7 @@ test('materialized hash builds before probing and skips an empty build without r
     await db.query('CREATE TABLE material_reads100.ch(id INT PRIMARY KEY,g INT,KEY(g)) STATS_AUTO_RECALC=0')
     await db.query('INSERT INTO material_reads100.pa VALUES' + Array.from({ length: count }, (_, i) => `(${i+1},${i%4===0 ? 'NULL' : i%4},'${payload}')`).join(','))
     await db.query('ANALYZE TABLE material_reads100.pa,material_reads100.ch')
-    await db.query("SET optimizer_switch='default,firstmatch=off,loosescan=off'")
+    await db.query("SET optimizer_switch='default,firstmatch=off,loosescan=off" + (buffered ? '' : ',block_nested_loop=off') + "'")
     const open = db.catalog!.table.bind(db.catalog)
     let events: string[] = []
     db.catalog!.table = (schema, name, trx) => {
@@ -462,6 +513,13 @@ test('materialized hash builds before probing and skips an empty build without r
       events = []
       assert.deepEqual((await db.query(sql))[0], [])
       assert.deepEqual(events, ['build', 'inner', 'built', 'probe', ...Array<string>(count).fill('outer'), 'closed'])
+      await db.query('UPDATE material_reads100.pa SET g=CASE WHEN MOD(id-1,4)=0 THEN NULL ELSE MOD(id-1,4) END')
+      await db.query('INSERT INTO material_reads100.ch VALUES(2,1),(3,2),(4,NULL)')
+      events = []
+      const [rows] = await db.query(sql.replace(' FOR UPDATE', ' ORDER BY g,s FOR UPDATE'))
+      assert.deepEqual(rows, [1, 2].flatMap((g) => Array.from({ length: count/4 }, () => ({ g, s: payload }))))
+      const scans = buffered ? 1 : 2
+      assert.deepEqual(['build', 'inner', 'built', 'probe', 'outer', 'closed'].map((kind) => events.filter((event) => event === kind).length), [1, 4, 1, scans, count*scans, scans])
     } finally { db.catalog!.table = open }
     const writer = await db.connect()
     try {
@@ -469,6 +527,7 @@ test('materialized hash builds before probing and skips an empty build without r
       await writer.query('UPDATE material_reads100.ch SET g=2')
     } finally { await writer.end() }
   } finally { await db.end() }
+  }
 })
 
 test('LooseScan-only competition preserves native pruning, weedout ties and all-disabled fallback', async () => {

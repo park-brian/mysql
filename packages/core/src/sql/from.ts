@@ -391,7 +391,8 @@ export function planFrom(refs: readonly TableReference[], ctx: FromContext, wher
         }
         const scope = preliminary.restrict(aliases, within)
         const onScope = slotScope(scope, preliminary)
-        const on = splitAnd(onAst).map((e) => ({ e, aliases: aliasesOf(e, preliminary), compiled: ctx.compileOn(e, onScope) }))
+        const predicates = splitAnd(onAst)
+        const on = predicates.map((e) => ({ e, aliases: aliasesOf(e, preliminary), compiled: ctx.compileOn(e, onScope) }))
         const outer = right ? r : l
         const inner = right ? l : r
         const innerSlots = [...inner.aliases].flatMap((a) => {
@@ -404,7 +405,7 @@ export function planFrom(refs: readonly TableReference[], ctx: FromContext, wher
         // hash join's, but it lets a sort go first.
         // A join by an index on the later table, where one serves it: an outer join by its ON, an inner one by its WHERE too.
         const lateral = [...inner.aliases].some((a) => byAlias.get(a)?.lateral === true)
-        const lookup = inner.node.kind !== 'leaf' || lateral ? undefined : refOf(inner.node.table, [onAst, ...(!isLeft && (ref.type === 'STRAIGHT' || ref.type === 'INNER') ? [where] : [])], outer.aliases, preliminary, (e) => ctx.compileOn(e, slotScope(preliminary.restrict(outer.aliases, within), preliminary)))
+        const lookup = inner.node.kind !== 'leaf' || lateral ? undefined : refOf(inner.node.table, [...predicates, ...(!isLeft && (ref.type === 'STRAIGHT' || ref.type === 'INNER') ? splitAnd(where) : [])], outer.aliases, preliminary, (e) => ctx.compileOn(e, slotScope(preliminary.restrict(outer.aliases, within), preliminary)))
         // A LATERAL table is read again for each row before it: a nested loop,
         // so a sort over the tables before it goes first (8.4.11: Drizzle's
         // `LEFT JOIN LATERAL … ORDER BY parent.id` keeps parent.id's key flags).
@@ -422,7 +423,7 @@ export function planFrom(refs: readonly TableReference[], ctx: FromContext, wher
       const t = byAlias.get(a) as FromTable
       return Array.from({ length: t.width }, (_, i) => t.offset + i)
     })
-    const lookup = r.node.kind !== 'leaf' || r.node.table.lateral ? undefined : refOf(r.node.table, [where], l.aliases, preliminary, (e) => ctx.compileOn(e, preliminary.restrict(l.aliases)))
+    const lookup = r.node.kind !== 'leaf' || r.node.table.lateral ? undefined : refOf(r.node.table, splitAnd(where), l.aliases, preliminary, (e) => ctx.compileOn(e, preliminary.restrict(l.aliases)))
     if ([...r.aliases].some((a) => byAlias.get(a)?.lateral === true)) nestedLoopJoins.add(r.aliases)
     return {
       node: { kind: 'join', outer: l.node, inner: r.node, left: false, on: [], onAst: undefined, innerSlots, lookup } as Node,
@@ -459,17 +460,9 @@ export function planFrom(refs: readonly TableReference[], ctx: FromContext, wher
   // The physical tree: built once the WHERE is placed (`filter`), or without one.
   const settings: LeafSettings = { covering, read: new Map(), chosen: new WeakMap(), scope, tables: byAlias, ...(outer === undefined ? {} : { outer }), ...(ctx.statistics === undefined ? {} : { statistics: ctx.statistics }) }
   // The join order and each join's access: the cost model's, over the WHERE's conjuncts, once the columns read are known (M5.7).
-  const onAsts: Expression[] = []
-  const gatherOn = (node: Node): void => {
-    if (node.kind === 'leaf') return
-    if (node.onAst !== undefined) onAsts.push(node.onAst)
-    gatherOn(node.outer)
-    gatherOn(node.inner)
-  }
-  if (tree !== undefined) gatherOn(tree.node)
   // The index lookup into `t` after the tables in `before`, by the WHERE or an ON.
-  const lookupAfter = (t: FromTable, before: ReadonlySet<string>): EqRef | undefined => {
-    return refOf(t, [where, ...onAsts], before, preliminary, (e) => ctx.compileOn(e, slotScope(preliminary.restrict(before, groupsWithin(before)), preliminary)))
+  const lookupAfter = (t: FromTable, before: ReadonlySet<string>, conditions: readonly Expression[]): EqRef | undefined => {
+    return refOf(t, conditions, before, preliminary, (e) => ctx.compileOn(e, slotScope(preliminary.restrict(before, groupsWithin(before)), preliminary)))
   }
   let planned: JoinPlan | undefined
   let sort: { readonly alias: string; readonly limit: number } | undefined
@@ -580,9 +573,12 @@ export function planFrom(refs: readonly TableReference[], ctx: FromContext, wher
     integerSemijoin(alias, index, key, where, materializationEligible) {
       const looseScan = optimizerEnabled(ctx.env, 'loosescan')
       const firstMatch = optimizerEnabled(ctx.env, 'firstmatch')
-      let strategy: 'loose' | 'loop' | 'scan' | true | undefined
+      let strategy: 'loose' | 'first' | 'lookup' | 'scan' | 'loop' | undefined
       if (looseScan) settings.loose = { alias, index, key }
-      if (where === undefined) settings.firstMatch = firstMatch && alias
+      if (where === undefined) {
+        settings.firstMatch = firstMatch && alias
+        settings.buffered = optimizerEnabled(ctx.env, 'block_nested_loop')
+      }
       try {
         const plan = joinPlan(materializationEligible && where === undefined && optimizerEnabled(ctx.env, 'materialization'))
         if (plan === undefined) return undefined
@@ -593,7 +589,7 @@ export function planFrom(refs: readonly TableReference[], ctx: FromContext, wher
         else if (looseScan && node.outer.table.alias === alias && ((node.lookup === undefined && optimizerEnabled(ctx.env, 'block_nested_loop')) || (node.lookup?.unique === true && node.lookup.index.kind === 'primary'))) strategy = 'loose'
         if (strategy !== undefined) {
           this.readInOrder(index.name, true, false, alias)
-          return strategy === 'loose' || strategy === 'scan'
+          return strategy !== 'lookup'
         }
         if (node.inner.table.alias !== alias || !plan.lookups.has(alias)) return undefined
         // Empty residual ranges retain their materialization boundary.
@@ -604,10 +600,10 @@ export function planFrom(refs: readonly TableReference[], ctx: FromContext, wher
         }
         if (firstMatch) settings.firstMatch = alias
         else settings.distinctSelect = new Set([node.outer.table.alias])
-        strategy = 'loop'
+        strategy = 'first'
         return false
       } finally {
-        if (strategy !== 'loop') delete settings.firstMatch
+        if (strategy !== 'first') delete settings.firstMatch
         if (strategy !== 'loose') delete settings.loose
         if (strategy === undefined) {
           planned = undefined
@@ -858,6 +854,8 @@ function idsAt(offset: number, id: RowId): (RowId | undefined)[] {
   return out
 }
 
+type Materialization = false | 'lookup' | 'scan' | 'loop'
+
 /** How the FROM's base tables are read: what the WHERE is, what covers them, and an order asked for. */
 interface LeafSettings {
   where?: Expression | undefined
@@ -898,8 +896,10 @@ interface LeafSettings {
   loose?: { readonly alias: string; readonly index: IndexDef; readonly key: Compiled }
   /** Inner alias, or explicit unfiltered disablement; undefined keeps filtered costs. */
   firstMatch?: string | false
-  /** Bounded materialization: true selects lazy lookup, 'scan' the eager hash build. */
-  materialized?: boolean | 'scan'
+  /** Whether the bounded semijoin can buffer its scanned inner side. */
+  buffered?: boolean
+  /** Bounded lazy lookup, eager hash scan or eager nested loop. */
+  materialized?: Materialization
 }
 
 /**
@@ -982,13 +982,13 @@ function countRows(rows: Iterable<unknown>, limit: number): number {
  * `<=>` matches NULL, which a key lookup would not find; and only a top-level
  * conjunct, which every row the join returns must satisfy.
  */
-function refOf(t: FromTable, conditions: readonly (Expression | undefined)[], outerAliases: ReadonlySet<string>, scope: TableScope, compileOuter: (e: Expression) => Compiled): EqRef | undefined {
+function refOf(t: FromTable, conditions: readonly Expression[], outerAliases: ReadonlySet<string>, scope: TableScope, compileOuter: (e: Expression) => Compiled): EqRef | undefined {
   const def = t.def
   if (def === undefined || t.table === undefined) return undefined
   const fromOuter = (e: Expression): boolean => within(aliasesOf(e, scope), outerAliases)
   const unique = (i: IndexDef, c: ColumnDef): boolean => i.parts.length === 1 && (i.kind === 'primary' || (i.kind === 'unique' && !c.nullable))
   let best: EqRef | undefined
-  for (const c of conditions.flatMap((x) => splitAnd(x))) {
+  for (const c of conditions) {
     if (c.kind !== NODE.BINARY || c.op !== '=') continue
     let column = columnOf(t, c.left, scope)
     let other = c.right
@@ -1186,7 +1186,7 @@ function toOp(node: Node, conditions: readonly Placed[], scope: TableScope, sett
   const keys = hashKeys(spanning, outerAliases, innerAliases, scope, (e) => ctx.compileOn(e, joinScope))
   // Automatic derived indexes and MaterializeLookup build on the inner side.
   const d = node.inner.kind === 'leaf' ? node.inner.table : undefined
-  const indexed = d !== undefined && keys !== undefined && (materialized === true || (d.derived !== undefined && !d.lateral && d.derived.merged !== true && d.derived.constant !== true))
+  const indexed = d !== undefined && keys !== undefined && (materialized === 'lookup' || (d.derived !== undefined && !d.lateral && d.derived.merged !== true && d.derived.constant !== true))
   // Inner equalities belong to the join; other spanning conditions filter its output.
   const on = node.left ? spanning : spanning.filter((c) => equalitySides(c.e, outerAliases, innerAliases, scope) !== undefined)
   return filterOp(buildJoinOp(node, outer, inner, on, keys, indexed ? d : undefined, materialized), node.left ? above : spanning.filter((c) => !on.includes(c)))
@@ -1194,7 +1194,7 @@ function toOp(node: Node, conditions: readonly Placed[], scope: TableScope, sett
 
 // --- the cost model's choices (M5.7) -----------------------------------------------
 
-/** A condition as the cost model weighs it: its text and the tables it reads. */
+/** An already split conjunct: its text and the tables it reads. */
 type Weighed = Pick<Placed, 'e' | 'aliases'>
 
 /** The joins as they run: in the order chosen, each later table read by its lookup or hashed, and the ON conditions a reordered tree applies above its joins. */
@@ -1218,7 +1218,7 @@ interface JoinPlan {
  * its lookup but filters nothing (`where_cond`). A table with no statistics
  * to cost it by is looked up.
  */
-function planJoins(root: Node, where: readonly Weighed[], scope: TableScope, settings: LeafSettings, lookupAfter: ((t: FromTable, before: ReadonlySet<string>) => EqRef | undefined) | undefined, rangeOf: (t: FromTable, conditions: readonly Weighed[]) => RangeEstimate | undefined, sort: { readonly alias: string; readonly limit: number } | undefined, materialization: boolean, weedout: boolean): JoinPlan {
+function planJoins(root: Node, where: readonly Weighed[], scope: TableScope, settings: LeafSettings, lookupAfter: ((t: FromTable, before: ReadonlySet<string>, onAsts: readonly Expression[]) => EqRef | undefined) | undefined, rangeOf: (t: FromTable, conditions: readonly Weighed[]) => RangeEstimate | undefined, sort: { readonly alias: string; readonly limit: number } | undefined, materialization: boolean, weedout: boolean): JoinPlan {
   const conditions = [...where]
   const on: Placed[] = []
   const leaves: FromTable[] = []
@@ -1234,6 +1234,7 @@ function planJoins(root: Node, where: readonly Weighed[], scope: TableScope, set
     gather(node.inner, nullable || node.left)
   }
   gather(root, false)
+  const lookupConditions = [...where, ...on].map((c) => c.e)
   const statsOf = (t: FromTable): TableStatistics | undefined => (t.def !== undefined && t.table !== undefined ? settings.statistics?.(t.def, t.table) : undefined)
   if (lookupAfter !== undefined && reorderable && leaves.length > 1 && leaves.every((t) => !t.lateral && statsOf(t) !== undefined)) {
     const candidates: Candidate[] = leaves.map((t) => {
@@ -1244,7 +1245,7 @@ function planJoins(root: Node, where: readonly Weighed[], scope: TableScope, set
         rows: range?.rows ?? stats.rows,
         dependent: new Set(),
         keyDependent: keySources(t, conditions, scope),
-        place: (prefix) => placeTable(t, lookupAfter(t, new Set(prefix.map((p) => p.alias))), prefix, conditions, scope, settings, stats, range),
+        place: (prefix) => placeTable(t, lookupAfter(t, new Set(prefix.map((p) => p.alias)), lookupConditions), prefix, conditions, scope, settings, stats, range),
       }
     })
     const driver = leaves.find((t) => t.alias === settings.loose?.alias)
@@ -1257,13 +1258,15 @@ function planJoins(root: Node, where: readonly Weighed[], scope: TableScope, set
       fetched: stats.rows / stats.recordsPerKey(index, 1),
     }
     const order = joinOrder(candidates, sort, loose, settings.firstMatch, materialization, weedout)
-    settings.materialized = order[0]?.lookup === 'materialized-scan' ? 'scan' : order[1]?.lookup === 'materialized'
+    settings.materialized = false
+    if (order[0]?.lookup === 'materialized-scan') settings.materialized = settings.buffered === false ? 'loop' : 'scan'
+    else if (order[1]?.lookup === 'materialized') settings.materialized = 'lookup'
     const first = (order[0] as Positioned).alias
     let node: Node = { kind: 'leaf', table: settings.tables.get(first) as FromTable }
     const before = new Set([first])
     for (const p of order.slice(1)) {
       const t = settings.tables.get(p.alias) as FromTable
-      const lookup = p.lookup ? lookupAfter(t, before) : undefined
+      const lookup = p.lookup ? lookupAfter(t, before, lookupConditions) : undefined
       node = { kind: 'join', outer: node, inner: { kind: 'leaf', table: t }, left: false, on: [], onAst: undefined, innerSlots: Array.from({ length: t.width }, (_, i) => t.offset + i), lookup }
       before.add(p.alias)
     }
@@ -1350,11 +1353,10 @@ function rangeEstimate(t: FromTable, conditions: readonly Weighed[], leaves: rea
     return undefined
   }
   const name = (r: { readonly t: FromTable; readonly c: ColumnDef }): string => `${r.t.alias}\u0000${r.c.name.toLowerCase()}`
-  const conjuncts = conditions.flatMap((c) => splitAnd(c.e))
   // The multiple equalities: classes of columns joined by `=`.
   const classes: Set<string>[] = []
   const classOf = (k: string): Set<string> => classes.find((c) => c.has(k)) ?? (classes.push(new Set([k])), classes.at(-1) as Set<string>)
-  for (const e of conjuncts) {
+  for (const { e } of conditions) {
     if (e.kind !== NODE.BINARY || e.op !== '=') continue
     const l = resolve(e.left)
     const r = resolve(e.right)
@@ -1372,7 +1374,7 @@ function rangeEstimate(t: FromTable, conditions: readonly Weighed[], leaves: rea
     return kept.length === 2 ? { ...e, left: kept[0] as Expression, right: kept[1] as Expression } : (kept[0] ?? e)
   }
   const per = new Map<ColumnDef, Expression[]>()
-  for (const raw of conjuncts) {
+  for (const { e: raw } of conditions) {
     const e = possible(raw)
     const columns: Expression[] = []
     const other = someNode(e, (node) => {
@@ -1476,7 +1478,7 @@ function placeTable(t: FromTable, lookup: EqRef | undefined, prefix: readonly Po
         }
   const coveredByAnyIndex = def.indexes.some((i) => holdsRead(def, i, read))
   const constant = stats.rows < 1 ? 1 : floorFilter(filter(new Set()), stats.rows, stats.rows)
-  const access = bestAccess({ stats, coveredByAnyIndex, constantFilter: constant }, prefix, key, rowBytes(prefix, settings))
+  const access = bestAccess({ stats, coveredByAnyIndex, constantFilter: constant }, prefix, key, rowBytes(prefix, settings), settings.buffered)
   const kept = access.lookup
     ? access.fetched < 1
       ? 1
@@ -1677,7 +1679,7 @@ function nestedLoop(left: boolean, outer: PlanNode, inner: PlanNode, semi = fals
  * and visit matches oldest first. MaterializeLookup defers its build until a
  * non-NULL outer key. MaterializeScan builds eagerly and skips an empty probe.
  */
-function buildJoinOp(node: Node & { kind: 'join' }, outer: Op, inner: Op, on: readonly Placed[], keys: HashKeys | undefined, index?: FromTable, materialized: boolean | 'scan' = false): Op {
+function buildJoinOp(node: Node & { kind: 'join' }, outer: Op, inner: Op, on: readonly Placed[], keys: HashKeys | undefined, index?: FromTable, materialized: Materialization = false): Op {
   const buildOuter = index === undefined && !node.left
   const build = buildOuter ? outer : inner
   const probe = buildOuter ? inner : outer
@@ -1690,12 +1692,14 @@ function buildJoinOp(node: Node & { kind: 'join' }, outer: Op, inner: Op, on: re
         const rows = [...build.rows(run, context)]
         return buildKey === undefined ? rows : bucket(rows, buildKey, env, !!materialized)
       }
-      let built = materialized === true ? undefined : read()
-      if (materialized === 'scan' && built instanceof Map && built.size === 0) return
-      for (const p of probe.rows(run, context)) {
+      let built = materialized === 'lookup' ? undefined : read()
+      if (materialized && built instanceof Map && built.size === 0) return
+      // Buffered probes run once; each materialized loop key owns an outer scan.
+      const groups = materialized === 'loop' && built instanceof Map ? built.values() : [undefined]
+      for (const group of groups) for (const p of probe.rows(run, context)) {
         const key = probeKey === undefined ? undefined : keyOf(probeKey, p.row, env)
         if (key !== undefined) built ??= read()
-        const candidates = built instanceof Map ? built.get(key ?? '') ?? NONE : built ?? NONE
+        const candidates = group ?? (built instanceof Map ? built.get(key ?? '') ?? NONE : built ?? NONE)
         let matched = false
         for (let n = 0; n < candidates.length; n++) {
           const b = candidates[index === undefined ? candidates.length - 1 - n : n] as JoinedRow
@@ -1711,8 +1715,12 @@ function buildJoinOp(node: Node & { kind: 'join' }, outer: Op, inner: Op, on: re
     },
     describe(env) {
       const built = materialized ? planNode('Materialize with deduplication', [wrap(buildKey?.[0]?.type.nullable === true, 'Filter', build.describe(env))]) : undefined
-      if (materialized === true) return nestedLoop(false, outer.describe(env), indexLookup('<subquery2>', '<auto_distinct_key>', true, false, [built!]))
-      if (index === undefined) return planNode(node.left ? 'Left hash join' : 'Inner hash join', [probe.describe(env), planNode('Hash', [wrap(built !== undefined, 'Table scan on <subquery2>', built ?? build.describe(env))])])
+      if (materialized === 'lookup') return nestedLoop(false, outer.describe(env), indexLookup('<subquery2>', '<auto_distinct_key>', true, false, [built!]))
+      if (index === undefined) {
+        const input = wrap(built !== undefined, 'Table scan on <subquery2>', built ?? build.describe(env))
+        if (materialized === 'loop') return nestedLoop(false, input, wrap(on.length > 0, 'Filter', probe.describe(env)))
+        return planNode(node.left ? 'Left hash join' : 'Inner hash join', [probe.describe(env), planNode('Hash', [input])])
+      }
       const d = index.derived?.explain?.()
       const lookup = indexLookup(index.alias, '<auto_key0>', false, false, d === undefined || d.merged ? [] : [planNode(d.materialize, d.children)])
       const rest = on.filter((c) => !keys?.conditions.includes(c))
