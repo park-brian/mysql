@@ -43,6 +43,7 @@ import { indexLookup, planNode, wrap, type PlanNode } from './explain.ts'
 import { FULL_SCAN, accessRows, chooseAccess, dynamicAccess, keyOrder, optimizerEnabled, pointAccess, splitAnd, type Access, type OuterColumn, type RangeCosting } from './plan.ts'
 import { bestAccess, floorFilter, indexScanCost, joinOrder, type Candidate, type KeyChoice, type Positioned } from './cost.ts'
 import { rowKey } from './keys.ts'
+import { columnResultType } from './meta.ts'
 import { chooseStrategy } from './group.ts'
 import { sort as sortRows, type SortKey } from './operators.ts'
 import { neverEqual, nullRejected } from './optimize.ts'
@@ -409,7 +410,7 @@ export function planFrom(refs: readonly TableReference[], ctx: FromContext, wher
         // A LATERAL table is read again for each row before it: a nested loop,
         // so a sort over the tables before it goes first (8.4.11: Drizzle's
         // `LEFT JOIN LATERAL … ORDER BY parent.id` keeps parent.id's key flags).
-        if ([...inner.aliases].some((a) => byAlias.get(a)?.lateral === true)) nestedLoopJoins.add(inner.aliases)
+        if (lateral) nestedLoopJoins.add(inner.aliases)
         return {
           node: { kind: 'join', outer: outer.node, inner: inner.node, left: isLeft, on, onAst, innerSlots, lookup },
           aliases,
@@ -573,33 +574,41 @@ export function planFrom(refs: readonly TableReference[], ctx: FromContext, wher
     integerSemijoin(alias, index, key, where, materializationEligible) {
       const looseScan = optimizerEnabled(ctx.env, 'loosescan')
       const firstMatch = optimizerEnabled(ctx.env, 'firstmatch')
-      let strategy: 'loose' | 'first' | 'lookup' | 'scan' | 'loop' | undefined
+      const buffered = optimizerEnabled(ctx.env, 'block_nested_loop')
+      let strategy: 'loose' | 'first' | 'lookup' | 'scan' | 'loop' | 'weedout' | undefined
       if (looseScan) settings.loose = { alias, index, key }
       if (where === undefined) {
         settings.firstMatch = firstMatch && alias
-        settings.buffered = optimizerEnabled(ctx.env, 'block_nested_loop')
+        settings.buffered = buffered
       }
       try {
         const plan = joinPlan(materializationEligible && where === undefined && optimizerEnabled(ctx.env, 'materialization'))
         if (plan === undefined) return undefined
         const node = plan.node
         if (node.kind !== 'join' || node.left || node.outer.kind !== 'leaf' || node.inner.kind !== 'leaf') return undefined
+        const outer = node.outer.table
+        const inner = node.inner.table
         if (settings.materialized) strategy = settings.materialized
-        // Indexed LooseScan retains PRIMARY identity; a hash probe keeps every outer row.
-        else if (looseScan && node.outer.table.alias === alias && ((node.lookup === undefined && optimizerEnabled(ctx.env, 'block_nested_loop')) || (node.lookup?.unique === true && node.lookup.index.kind === 'primary'))) strategy = 'loose'
+        // Indexed LooseScan retains PRIMARY identity; each hash probe owns one outer row.
+        else if (outer.alias === alias) {
+          if (looseScan && ((node.lookup === undefined && buffered) || (node.lookup?.unique === true && node.lookup.index.kind === 'primary'))) strategy = 'loose'
+          else if (where === undefined && buffered && node.lookup === undefined) {
+            settings.weedout = inner.alias
+            strategy = 'weedout'
+          }
+        }
         if (strategy !== undefined) {
           this.readInOrder(index.name, true, false, alias)
           return strategy !== 'lookup'
         }
-        if (node.inner.table.alias !== alias || !plan.lookups.has(alias)) return undefined
+        if (inner.alias !== alias || !plan.lookups.has(alias)) return undefined
         // Empty residual ranges retain their materialization boundary.
-        const inner = node.inner.table
         if (where !== undefined && ctx.env !== undefined && inner.table !== undefined && inner.def !== undefined) {
           const access = chooseAccess(inner.def, alias, where, ctx.env, settings.outer, rangeCosting(inner, settings, ctx.env))
           if (access.ranges !== undefined && countRows(accessRows(inner.table, inner.def, access, ctx.env.trx, false), 0) === 0) return undefined
         }
         if (firstMatch) settings.firstMatch = alias
-        else settings.distinctSelect = new Set([node.outer.table.alias])
+        else settings.distinctSelect = new Set([outer.alias])
         strategy = 'first'
         return false
       } finally {
@@ -900,6 +909,8 @@ interface LeafSettings {
   buffered?: boolean
   /** Bounded lazy lookup, eager hash scan or eager nested loop. */
   materialized?: Materialization
+  /** Each raw hash probe owns one physical outer identity. */
+  weedout?: string
 }
 
 /**
@@ -1004,7 +1015,7 @@ function refOf(t: FromTable, conditions: readonly Expression[], outerAliases: Re
     const value = compileProof(other, compileOuter)
     if (value === undefined) continue
     // A key read needs the two sides to compare as the key's own type.
-    const keyKind = new TableScope([{ alias: t.alias, def }]).resolve([t.alias, column.name], 'on clause').type.kind
+    const keyKind = columnResultType(def, column, t.alias).kind
     if (value.type.kind !== keyKind || (keyKind === 'string' && value.type.collationId !== column.type.collationId)) continue
     best = { index, column, value, unique: unique(index, column), condition: c }
   }
@@ -1118,7 +1129,6 @@ function holds(conditions: readonly Placed[], row: Row, env: Env): boolean {
  * nor an outer join's ON condition into its preserved side.
  */
 function toOp(node: Node, conditions: readonly Placed[], scope: TableScope, settings: LeafSettings, ctx: FromContext, preliminary: TableScope): Op {
-  const materialized = settings.materialized
   if (node.kind === 'leaf') {
     let op = filterOp(tableOp(node.table, settings), conditions, node.table, settings)
     const loose = settings.loose
@@ -1147,6 +1157,7 @@ function toOp(node: Node, conditions: readonly Placed[], scope: TableScope, sett
     }
     return settings.hidden?.has(node.table.alias) === true ? { ...op, rows: op.rows.bind(op), hidden: true } : op
   }
+  const materialized = settings.materialized
   const outerAliases = leafAliases(node.outer)
   const innerAliases = leafAliases(node.inner)
   // An inner join's ON is its WHERE; an outer join's ON may go down only into the side it nulls.
@@ -1189,7 +1200,7 @@ function toOp(node: Node, conditions: readonly Placed[], scope: TableScope, sett
   const indexed = d !== undefined && keys !== undefined && (materialized === 'lookup' || (d.derived !== undefined && !d.lateral && d.derived.merged !== true && d.derived.constant !== true))
   // Inner equalities belong to the join; other spanning conditions filter its output.
   const on = node.left ? spanning : spanning.filter((c) => equalitySides(c.e, outerAliases, innerAliases, scope) !== undefined)
-  return filterOp(buildJoinOp(node, outer, inner, on, keys, indexed ? d : undefined, materialized), node.left ? above : spanning.filter((c) => !on.includes(c)))
+  return filterOp(buildJoinOp(node, outer, inner, on, keys, indexed ? d : undefined, materialized, settings.weedout), node.left ? above : spanning.filter((c) => !on.includes(c)))
 }
 
 // --- the cost model's choices (M5.7) -----------------------------------------------
@@ -1660,11 +1671,23 @@ function hashAntijoinOp(input: Op, key: Compiled, rows: (trx: Trx | undefined, e
   }
 }
 
-/** Combine logical rows and test the pair; the leaves own identity capture. */
-function matchingRow(outer: JoinedRow, inner: JoinedRow, slots: readonly number[], on: readonly Placed[], env: Env): JoinedRow | undefined {
-  const row = outer.row.slice()
-  for (const s of slots) row[s] = inner.row[s] ?? null
-  return holds(on, row, env) ? joined(row, joinIds(outer.ids, inner.ids)) : undefined
+/**
+ * Candidate pairs share ON evaluation and preserve an unmatched outer identity.
+ * Reverse maps physical build/probe order to logical slots. Weedout consumes
+ * every candidate, but emits only the first match for this one outer identity.
+ */
+function* matchingRows(outer: JoinedRow, inner: Iterable<JoinedRow>, slots: readonly number[], on: readonly Placed[], env: Env, left: boolean, reverse = false, weedout = false): Iterable<JoinedRow> {
+  let matched = false
+  for (const candidate of inner) {
+    const o = reverse ? candidate : outer
+    const i = reverse ? outer : candidate
+    const row = o.row.slice()
+    for (const slot of slots) row[slot] = i.row[slot] ?? null
+    if (!holds(on, row, env)) continue
+    if (!weedout || !matched) yield joined(row, joinIds(o.ids, i.ids))
+    matched = true
+  }
+  if (left && !matched) yield outer
 }
 
 /** The ordinary nested-loop topology shared by constant, dynamic and derived reads. */
@@ -1679,7 +1702,8 @@ function nestedLoop(left: boolean, outer: PlanNode, inner: PlanNode, semi = fals
  * and visit matches oldest first. MaterializeLookup defers its build until a
  * non-NULL outer key. MaterializeScan builds eagerly and skips an empty probe.
  */
-function buildJoinOp(node: Node & { kind: 'join' }, outer: Op, inner: Op, on: readonly Placed[], keys: HashKeys | undefined, index?: FromTable, materialized: Materialization = false): Op {
+function buildJoinOp(node: Node & { kind: 'join' }, outer: Op, inner: Op, on: readonly Placed[], keys: HashKeys | undefined, index?: FromTable, materialized: Materialization = false, weedout?: string): Op {
+  const deduplicate = weedout !== undefined
   const buildOuter = index === undefined && !node.left
   const build = buildOuter ? outer : inner
   const probe = buildOuter ? inner : outer
@@ -1693,24 +1717,17 @@ function buildJoinOp(node: Node & { kind: 'join' }, outer: Op, inner: Op, on: re
         return buildKey === undefined ? rows : bucket(rows, buildKey, env, !!materialized)
       }
       let built = materialized === 'lookup' ? undefined : read()
-      if (materialized && built instanceof Map && built.size === 0) return
+      if ((materialized || deduplicate) && built instanceof Map && built.size === 0) return
       // Buffered probes run once; each materialized loop key owns an outer scan.
       const groups = materialized === 'loop' && built instanceof Map ? built.values() : [undefined]
       for (const group of groups) for (const p of probe.rows(run, context)) {
         const key = probeKey === undefined ? undefined : keyOf(probeKey, p.row, env)
         if (key !== undefined) built ??= read()
         const candidates = group ?? (built instanceof Map ? built.get(key ?? '') ?? NONE : built ?? NONE)
-        let matched = false
-        for (let n = 0; n < candidates.length; n++) {
-          const b = candidates[index === undefined ? candidates.length - 1 - n : n] as JoinedRow
-          const o = buildOuter ? b : p
-          const i = buildOuter ? p : b
-          const row = matchingRow(o, i, node.innerSlots, on, env)
-          if (row === undefined) continue
-          matched = true
-          yield row
+        function* ordered(): Iterable<JoinedRow> {
+          for (let n = 0; n < candidates.length; n++) yield candidates[index === undefined ? candidates.length - 1 - n : n] as JoinedRow
         }
-        if (node.left && !matched) yield p
+        yield* matchingRows(p, ordered(), node.innerSlots, on, env, node.left, buildOuter, deduplicate)
       }
     },
     describe(env) {
@@ -1719,7 +1736,7 @@ function buildJoinOp(node: Node & { kind: 'join' }, outer: Op, inner: Op, on: re
       if (index === undefined) {
         const input = wrap(built !== undefined, 'Table scan on <subquery2>', built ?? build.describe(env))
         if (materialized === 'loop') return nestedLoop(false, input, wrap(on.length > 0, 'Filter', probe.describe(env)))
-        return planNode(node.left ? 'Left hash join' : 'Inner hash join', [probe.describe(env), planNode('Hash', [input])])
+        return wrap(deduplicate, `Remove duplicate ${weedout} rows using temporary table`, planNode(node.left ? 'Left hash join' : 'Inner hash join', [probe.describe(env), planNode('Hash', [input])]))
       }
       const d = index.derived?.explain?.()
       const lookup = indexLookup(index.alias, '<auto_key0>', false, false, d === undefined || d.merged ? [] : [planNode(d.materialize, d.children)])
@@ -1789,14 +1806,7 @@ function constJoinOp(outer: Op, inner: Op, innerSlots: readonly number[], on: re
     *rows(run, context) {
       const held = [...fixed.rows(run, context)]
       if (held.length === 0) return
-      for (const r of other.rows(run, context)) {
-        for (const h of held) {
-          const o = fixedOuter ? h : r
-          const i = fixedOuter ? r : h
-          const row = matchingRow(o, i, innerSlots, on, run.env)
-          if (row !== undefined) yield row
-        }
-      }
+      for (const r of other.rows(run, context)) yield* matchingRows(r, held, innerSlots, on, run.env, false, fixedOuter)
     },
     describe(env) {
       return wrap(on.length > 0, 'Filter', other.describe(env))
@@ -1817,14 +1827,7 @@ function constantRowOp(outer: Op, t: FromTable, slots: readonly number[], own: r
       let inner: JoinedRow[] | undefined
       for (const o of outer.rows(run, context)) {
         inner ??= [...leaf.rows(run, context)]
-        let matched = false
-        for (const i of inner) {
-          const row = matchingRow(o, i, slots, on, run.env)
-          if (row === undefined) continue
-          matched = true
-          yield row
-        }
-        if (heldKey !== undefined && !matched) yield o
+        yield* matchingRows(o, inner, slots, on, run.env, heldKey !== undefined)
       }
     },
     describe(env) {
@@ -1841,20 +1844,11 @@ function lateralOp(node: Node & { kind: 'join' }, outer: Op, inner: Op, on: read
     *rows(run, context) {
       for (const o of outer.rows(run, context)) {
         const row = context === undefined ? o.row : o.row.map((v, i) => v ?? context[i] ?? null)
-        const before = joined(row, o.ids)
-        let matched = false
-        for (const i of inner.rows(run, row)) {
-          const match = matchingRow(before, i, node.innerSlots, on, run.env)
-          if (match === undefined) continue
-          matched = true
-          yield match
-        }
-        if (node.left && !matched) yield joined(row, o.ids)
+        yield* matchingRows(joined(row, o.ids), inner.rows(run, row), node.innerSlots, on, run.env, node.left)
       }
     },
     describe(env) {
-      const innerNode = inner.describe(env)
-      return nestedLoop(node.left, planNode('Invalidate materialized tables', [outer.describe(env)]), wrap(!node.left && on.length > 0, 'Filter', innerNode))
+      return nestedLoop(node.left, planNode('Invalidate materialized tables', [outer.describe(env)]), wrap(!node.left && on.length > 0, 'Filter', inner.describe(env)))
     },
   }
 }
