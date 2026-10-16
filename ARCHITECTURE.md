@@ -1459,7 +1459,7 @@ a blocker and one without is just a note.
 
 ## 21. Where we are
 
-*A snapshot as of 2026-10-15. The [roadmap](./docs/44-roadmap.md) is the live
+*A snapshot as of 2026-10-16. The [roadmap](./docs/44-roadmap.md) is the live
 version, and wins wherever it disagrees with this section.*
 
 ```mermaid
@@ -1522,8 +1522,12 @@ Bounded inner-first hash weedout keeps raw inner duplicates, checks every pair
 and emits each physical outer identity once; equal projected outer rows stay
 separate. Empty/all-NULL hash builds skip probing. Hash, automatic-index,
 constant and lateral joins share pair evaluation, while their scan owners
-retain initialization and closure. Indexed materialized scan probes and
-repeated-scan weedout remain open. FirstMatch availability retains its logical
+retain initialization and closure. With buffering disabled, bounded weedout
+streams raw inner rows and reopens the outer scan for every duplicate or NULL
+key. A statement-local set retains physical outer identity across visits;
+the same byte identity policy serves joined UPDATE/DELETE. Both scans close
+on early return. The 480 disabled-hash outcomes agree, including metadata
+and warnings. Indexed materialized scan probes remain open. FirstMatch availability retains its logical
 inner alias when disabled, allowing native last-resort weedout costs and
 switch-dependent root-prefix pruning. All 180 bounded switch outcomes agree. Broader materialization, weedout, prepared choices, wider switch scopes and
 builtin inheritance remain open under M5.47.
@@ -1538,7 +1542,7 @@ The full Docker gates, pinned-reference audits and 10,000 crash points pass.
 `db.stream()` streams a million rows within a few MB of the heap's baseline (M5.40). Next is the
 remaining function and planner work, then the browser. The coercion corpus
 now agrees on all 3,148 observations and all 1,737 warning counts. The core entry bundle
-is 334,340 bytes gzipped (326.5 KiB), against the 500 KB release target,
+is 334,343 bytes gzipped (326.5 KiB), against the 500 KB release target,
 with the UCA weights in a separate chunk loaded on demand.
 
 The release plan gives each stage something to ship:

@@ -44,7 +44,7 @@ export interface ScopeTable {
   /** Its schema; empty for a derived table, which has none. */
   readonly schema: string
   /** A base table's definition; absent for a derived table or a CTE. */
-  readonly def?: TableDef
+  readonly def?: TableDef | undefined
   readonly columns: readonly ScopeColumn[]
   /** Where its first column sits in the row. */
   readonly offset: number
@@ -55,10 +55,10 @@ export interface ScopeTable {
 /** A table as a statement names it, before it has a place in the row. */
 export interface ScopeTableSpec {
   readonly alias: string
-  readonly def?: TableDef
-  readonly schema?: string
+  readonly def?: TableDef | undefined
+  readonly schema?: string | undefined
   /** A derived table's columns; a base table's come from `def`. */
-  readonly columns?: readonly ScopeColumn[]
+  readonly columns?: readonly ScopeColumn[] | undefined
   readonly nullable?: boolean
 }
 
@@ -70,7 +70,7 @@ export class TableScope implements Scope {
   readonly #visible: readonly number[] | undefined
   readonly #parent: Scope | undefined
 
-  constructor(specs: readonly ScopeTableSpec[], options: { readonly coalesced?: readonly (readonly number[])[]; readonly visible?: readonly number[]; readonly parent?: Scope } = {}) {
+  constructor(specs: readonly ScopeTableSpec[], options: { readonly coalesced?: readonly (readonly number[])[]; readonly visible?: readonly number[] | undefined; readonly parent?: Scope | undefined } = {}) {
     let offset = 0
     const out: ScopeTable[] = []
     const seen = new Set<string>()
@@ -79,9 +79,9 @@ export class TableScope implements Scope {
       seen.add(spec.alias)
       const nullable = spec.nullable === true
       const def = spec.def
-      const base = spec.columns ?? (def === undefined ? [] : def.columns.map((c) => ({ name: c.name, type: columnResultType(def, c, spec.alias) })))
+      const base = spec.columns ?? def?.columns.map((c) => ({ name: c.name, type: columnResultType(def, c, spec.alias) })) ?? []
       const columns = nullable ? base.map((c) => ({ name: c.name, type: { ...c.type, nullable: true } })) : base
-      out.push({ alias: spec.alias, schema: spec.schema ?? def?.schema ?? '', ...(def === undefined ? {} : { def }), columns, offset, nullable })
+      out.push({ alias: spec.alias, schema: spec.schema ?? def?.schema ?? '', def, columns, offset, nullable })
       offset += columns.length
     }
     this.tables = out
@@ -93,11 +93,9 @@ export class TableScope implements Scope {
   /** The same row with only some of its tables visible — what an ON clause sees. */
   restrict(aliases: ReadonlySet<string>, coalesced: readonly (readonly number[])[] = []): Scope {
     const tables = this.tables.filter((t) => aliases.has(t.alias))
-    const groups = coalesced
     // An enclosing query's columns stay visible: a correlated ON is legal.
-    const parent = this.#parent
     return {
-      resolve: (parts, clause) => resolveIn(tables, groups, parts, clause, parent),
+      resolve: (parts, clause) => resolveIn(tables, coalesced, parts, clause, this.#parent),
       // MATCH looks for its FULLTEXT index among them (8.4.11: `JOIN b ON MATCH(b.t) AGAINST(…)`).
       tables,
     } as Scope & { readonly tables: readonly ScopeTable[] }

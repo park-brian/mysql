@@ -31,7 +31,7 @@ import { containsAggregate } from './group.ts'
 import { filter, limit, sort, type ScannedRow } from './operators.ts'
 import { accessRows, chooseAccess } from './plan.ts'
 import { checkTargetNotRead, compileContext, fromContext, limitValue, openTable, planQuery, withClause, type Run } from './query.ts'
-import { planFrom, type FromPlan, type FromTable, type JoinedRow } from './from.ts'
+import { firstVisit, planFrom, type FromPlan, type FromTable, type JoinedRow } from './from.ts'
 import { TableScope } from './scope.ts'
 import { NULL_TYPE, type ResultType } from './meta.ts'
 import { modeOf } from './mode.ts'
@@ -1264,10 +1264,7 @@ function updateMulti(run: Run, node: UpdateNode, trx: Trx): OkResult {
     const seen = new Set<string>()
     for (const r of rows) {
       const id = r.ids?.[target.from.offset]
-      if (id === undefined) continue
-      const key = String.fromCharCode(...id)
-      if (seen.has(key)) continue
-      seen.add(key)
+      if (id === undefined || !firstVisit(seen, id)) continue
       matched++
       store.row = matched
       joined = r.row
@@ -1326,10 +1323,7 @@ function removeMulti(run: Run, node: DeleteNode, trx: Trx): OkResult {
     const seen = new Set<string>()
     for (const r of rows) {
       const id = r.ids?.[t.from.offset]
-      if (id === undefined) continue
-      const key = String.fromCharCode(...id)
-      if (seen.has(key)) continue
-      seen.add(key)
+      if (id === undefined || !firstVisit(seen, id)) continue
       const at = node.ignore === true ? trx.savepoint() : 0
       try {
         if (t.table.delete(id, trx)) deleted++

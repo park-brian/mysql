@@ -468,53 +468,57 @@ test('materialized nested loops retain distinct build keys, outer identities and
   }
 })
 
-test('hash weedout retains duplicate outer identities, exact integer fields and fresh data', async () => {
-  const { conn, db } = await connect('weedout102')
-  try {
-    await conn.query("SET optimizer_switch='default,firstmatch=off,loosescan=off,materialization=off,duplicateweedout=off'")
-    for (const type of ['INT', 'BIGINT', 'BIGINT UNSIGNED']) {
-      await conn.query('DROP TABLE IF EXISTS pa,ch')
-      await conn.query(`CREATE TABLE pa(id INT NOT NULL,g ${type},s VARCHAR(12)) STATS_AUTO_RECALC=0`)
-      await conn.query(`CREATE TABLE ch(id INT PRIMARY KEY,g ${type},KEY(g)) STATS_AUTO_RECALC=0`)
-      const base = type === 'INT' ? 0n : 9007199254740992n
-      await conn.query('INSERT INTO pa VALUES' + Array.from({ length: 20 }, (_, i) => `(${i+1},${i%4===0 ? 'NULL' : base+BigInt(i%4)},'same')`).join(','))
-      for (const state of ['empty', 'key', 'duplicates', 'null'] as const) {
-        await conn.query('DELETE FROM ch')
-        if (state === 'duplicates') await conn.query(`INSERT INTO ch VALUES(1,${base+1n}),(2,${base+1n}),(3,${base+2n}),(4,NULL)`)
-        else if (state !== 'empty') await conn.query(`INSERT INTO ch VALUES(1,${state === 'null' ? 'NULL' : base+1n})`)
-        await conn.query('ANALYZE TABLE pa,ch')
-        const values = state === 'duplicates' ? [1, 2] : state === 'key' ? [1] : []
-        const expected = values.flatMap((n) => Array.from({ length: 5 }, (_, i) => [n+1+i*4, type === 'INT' ? n : String(base+BigInt(n)), 'same']))
-        for (const ordered of [false, true]) {
-          const sql = 'SELECT id,g,s FROM pa WHERE g IN(SELECT g FROM ch)' + (ordered ? ' ORDER BY g,s,id' : '')
-          for (const method of ['query', 'execute'] as const) {
-            const options = { sql, rowsAsArray: true }
-            const [rows, fields] = method === 'query' ? await conn.query(options) : await conn.execute(options)
-            assert.deepEqual(rows, ordered ? expected : expected.toSorted((a, b) => Number(a[0])-Number(b[0])))
-            assert.deepEqual(fieldsOf(fields), [['id', 3, 11, 4097, 0, 63, 'weedout102', 'pa', 'pa', 'id'], ['g', type === 'INT' ? 3 : 8, type === 'INT' ? 11 : 20, type.endsWith('UNSIGNED') ? 32 : 0, 0, 63, 'weedout102', 'pa', 'pa', 'g'], ['s', 253, 48, 0, 0, 224, 'weedout102', 'pa', 'pa', 's']])
-            assert.deepEqual((await conn.query('SHOW WARNINGS'))[0], [])
-            conn.unprepare(options)
+test('hash and repeated-scan weedout retain duplicate outer identities, exact integer fields and fresh data', async () => {
+  for (const buffered of [true, false]) {
+    const { conn, db } = await connect('weedout102')
+    try {
+      await conn.query("SET optimizer_switch='default,firstmatch=off,loosescan=off,materialization=off,duplicateweedout=off" + (buffered ? '' : ',block_nested_loop=off') + "'")
+      for (const type of ['INT', 'BIGINT', 'BIGINT UNSIGNED']) {
+        await conn.query('DROP TABLE IF EXISTS pa,ch')
+        await conn.query(`CREATE TABLE pa(id INT NOT NULL,g ${type},s VARCHAR(12)) STATS_AUTO_RECALC=0`)
+        await conn.query(`CREATE TABLE ch(id INT PRIMARY KEY,g ${type},KEY(g)) STATS_AUTO_RECALC=0`)
+        const base = type === 'INT' ? 0n : 9007199254740992n
+        await conn.query('INSERT INTO pa VALUES' + Array.from({ length: 20 }, (_, i) => `(${i+1},${i%4===0 ? 'NULL' : base+BigInt(i%4)},'same')`).join(','))
+        for (const state of ['empty', 'key', 'duplicates', 'null'] as const) {
+          await conn.query('DELETE FROM ch')
+          if (state === 'duplicates') await conn.query(`INSERT INTO ch VALUES(1,${base+1n}),(2,${base+1n}),(3,${base+2n}),(4,NULL)`)
+          else if (state !== 'empty') await conn.query(`INSERT INTO ch VALUES(1,${state === 'null' ? 'NULL' : base+1n})`)
+          await conn.query('ANALYZE TABLE pa,ch')
+          const values = state === 'duplicates' ? [1, 2] : state === 'key' ? [1] : []
+          const expected = values.flatMap((n) => Array.from({ length: 5 }, (_, i) => [n+1+i*4, type === 'INT' ? n : String(base+BigInt(n)), 'same']))
+          for (const ordered of [false, true]) for (const limited of [false, true]) {
+            const sql = 'SELECT id,g,s FROM pa WHERE g IN(SELECT g FROM ch)' + (ordered ? ' ORDER BY g,s,id' : '') + (limited ? ' LIMIT 1' : '')
+            for (const method of ['query', 'execute'] as const) {
+              const options = { sql, rowsAsArray: true }
+              const [rows, fields] = method === 'query' ? await conn.query(options) : await conn.execute(options)
+              const output = ordered || !buffered ? expected : expected.toSorted((a, b) => Number(a[0])-Number(b[0]))
+              assert.deepEqual(rows, limited ? output.slice(0, 1) : output)
+              assert.deepEqual(fieldsOf(fields), [['id', 3, 11, 4097, 0, 63, 'weedout102', 'pa', 'pa', 'id'], ['g', type === 'INT' ? 3 : 8, type === 'INT' ? 11 : 20, type.endsWith('UNSIGNED') ? 32 : 0, 0, 63, 'weedout102', 'pa', 'pa', 'g'], ['s', 253, 48, 0, 0, 224, 'weedout102', 'pa', 'pa', 's']])
+              assert.deepEqual((await conn.query('SHOW WARNINGS'))[0], [])
+              conn.unprepare(options)
+            }
+            const [explain] = await conn.query<mysql.RowDataPacket[]>('EXPLAIN FORMAT=TREE ' + sql)
+            const loop = buffered ? 'Remove duplicate pa rows using temporary table\n    Inner hash join\n        Table scan on pa\n        Hash\n            Covering index scan on ch using g' : 'Remove duplicate pa rows using temporary table\n    Nested loop inner join\n        Covering index scan on ch using g\n        Filter\n            Table scan on pa'
+            const plan = ordered ? 'Sort\n    Stream results\n' + loop.split('\n').map((line) => '        ' + line).join('\n') : loop
+            assert.equal(planSkeleton(explain[0]?.EXPLAIN), limited ? 'Limit\n' + plan.split('\n').map((line) => '    ' + line).join('\n') : plan)
           }
-          const [explain] = await conn.query<mysql.RowDataPacket[]>('EXPLAIN FORMAT=TREE ' + sql)
-          const loop = 'Remove duplicate pa rows using temporary table\n    Inner hash join\n        Table scan on pa\n        Hash\n            Covering index scan on ch using g'
-          assert.equal(planSkeleton(explain[0]?.EXPLAIN), ordered ? 'Sort\n    Stream results\n' + loop.split('\n').map((line) => '        ' + line).join('\n') : loop)
         }
+        await conn.query(`UPDATE ch SET g=${base+1n}`)
+        const sql = 'SELECT id,g,s FROM pa WHERE g IN(SELECT g FROM ch)'
+        const statement = await conn.prepare({ sql, rowsAsArray: true })
+        try {
+          const value = (n: number) => type === 'INT' ? n : String(base + BigInt(n))
+          assert.deepEqual((await statement.execute([]))[0], Array.from({ length: 5 }, (_, i) => ({ id: 2+i*4, g: value(1), s: 'same' })))
+          await conn.query(`UPDATE ch SET g=${base+2n}`)
+          assert.deepEqual((await statement.execute([]))[0], Array.from({ length: 5 }, (_, i) => ({ id: 3+i*4, g: value(2), s: 'same' })))
+          await conn.query('DELETE FROM ch')
+          assert.deepEqual((await statement.execute([]))[0], [])
+        } finally { await statement.close(); conn.unprepare({ sql, rowsAsArray: true }) }
       }
-      await conn.query(`UPDATE ch SET g=${base+1n}`)
-      const sql = 'SELECT id,g,s FROM pa WHERE g IN(SELECT g FROM ch)'
-      const statement = await conn.prepare({ sql, rowsAsArray: true })
-      try {
-        const value = (n: number) => type === 'INT' ? n : String(base + BigInt(n))
-        assert.deepEqual((await statement.execute([]))[0], Array.from({ length: 5 }, (_, i) => ({ id: 2+i*4, g: value(1), s: 'same' })))
-        await conn.query(`UPDATE ch SET g=${base+2n}`)
-        assert.deepEqual((await statement.execute([]))[0], Array.from({ length: 5 }, (_, i) => ({ id: 3+i*4, g: value(2), s: 'same' })))
-        await conn.query('DELETE FROM ch')
-        assert.deepEqual((await statement.execute([]))[0], [])
-      } finally { await statement.close(); conn.unprepare({ sql, rowsAsArray: true }) }
+    } finally {
+      await conn.query('DROP DATABASE IF EXISTS weedout102')
+      await conn.end(); await db?.end()
     }
-  } finally {
-    await conn.query('DROP DATABASE IF EXISTS weedout102')
-    await conn.end(); await db?.end()
   }
 })
 
@@ -585,115 +589,123 @@ test('materialized scans build before probing and close repeated scans under bac
   }
 })
 
-test('hash weedout builds raw duplicates and closes probes under backpressure', async () => {
-  {
-  const db = await MySQL.open(':memory:')
-  const count = 4096
-  const payload = 'same'.repeat(50)
-  try {
-    await db.query('CREATE DATABASE weedout_reads102')
-    await db.query('CREATE TABLE weedout_reads102.pa(id INT NOT NULL,g INT,s VARCHAR(255)) STATS_AUTO_RECALC=0')
-    await db.query('CREATE TABLE weedout_reads102.ch(id INT PRIMARY KEY,g INT,KEY(g)) STATS_AUTO_RECALC=0')
-    await db.query('INSERT INTO weedout_reads102.pa VALUES' + Array.from({ length: count }, (_, i) => `(${i+1},${i%4===0 ? 'NULL' : i%4},'${payload}')`).join(','))
-    await db.query('ANALYZE TABLE weedout_reads102.pa,weedout_reads102.ch')
-    await db.query("SET optimizer_switch='default,firstmatch=off,loosescan=off,materialization=off,duplicateweedout=off'")
-    const open = db.catalog!.table.bind(db.catalog)
-    let events: string[] = []
-    db.catalog!.table = (schema, name, trx) => {
-      const table = open(schema, name, trx)
-      if (schema === 'weedout_reads102' && name === 'ch') {
-        const scan = table.indexScan.bind(table)
-        table.indexScan = function*(index, range, transaction, mode) {
-          if (mode !== 'current') { yield* scan(index, range, transaction, mode); return }
-          events.push('build')
-          try { for (const row of scan(index, range, transaction, mode)) { events.push('inner'); yield row } }
-          finally { events.push('built') }
+test('hash and repeated-scan weedout retain raw reads and close both scans under backpressure', async () => {
+  for (const buffered of [true, false]) {
+    const db = await MySQL.open(':memory:')
+    const count = 4096
+    const payload = 'same'.repeat(50)
+    try {
+      await db.query('CREATE DATABASE weedout_reads102')
+      await db.query('CREATE TABLE weedout_reads102.pa(id INT NOT NULL,g INT,s VARCHAR(255)) STATS_AUTO_RECALC=0')
+      await db.query('CREATE TABLE weedout_reads102.ch(id INT PRIMARY KEY,g INT,KEY(g)) STATS_AUTO_RECALC=0')
+      await db.query('INSERT INTO weedout_reads102.pa VALUES' + Array.from({ length: count }, (_, i) => `(${i+1},${i%4===0 ? 'NULL' : i%4},'${payload}')`).join(','))
+      await db.query('ANALYZE TABLE weedout_reads102.pa,weedout_reads102.ch')
+      await db.query("SET optimizer_switch='default,firstmatch=off,loosescan=off,materialization=off,duplicateweedout=off" + (buffered ? '' : ',block_nested_loop=off') + "'")
+      const open = db.catalog!.table.bind(db.catalog)
+      let events: string[] = []
+      db.catalog!.table = (schema, name, trx) => {
+        const table = open(schema, name, trx)
+        if (schema === 'weedout_reads102' && name === 'ch') {
+          const scan = table.indexScan.bind(table)
+          table.indexScan = function*(index, range, transaction, mode) {
+            if (mode !== 'current') { yield* scan(index, range, transaction, mode); return }
+            events.push('build')
+            try { for (const row of scan(index, range, transaction, mode)) { events.push('inner'); yield row } }
+            finally { events.push('built') }
+          }
+        } else if (schema === 'weedout_reads102' && name === 'pa') {
+          const scan = table.scan.bind(table)
+          table.scan = function*(range, transaction, mode) {
+            if (mode !== 'current') { yield* scan(range, transaction, mode); return }
+            events.push('probe')
+            // Row identifiers may be a Uint8Array subclass; compare bytes across allocations.
+            try { for (const row of scan(range, transaction, mode)) { events.push('outer'); yield [Buffer.from(row[0]), row[1]] } }
+            finally { events.push('closed') }
+          }
         }
-      } else if (schema === 'weedout_reads102' && name === 'pa') {
-        const scan = table.scan.bind(table)
-        table.scan = function*(range, transaction, mode) {
-          if (mode !== 'current') { yield* scan(range, transaction, mode); return }
-          events.push('probe')
-          try { for (const row of scan(range, transaction, mode)) { events.push('outer'); yield row } }
-          finally { events.push('closed') }
-        }
+        return table
       }
-      return table
-    }
-    const sql = 'SELECT g,s FROM weedout_reads102.pa WHERE g IN(SELECT g FROM weedout_reads102.ch) FOR UPDATE'
-    try {
-      assert.deepEqual((await db.query(sql))[0], [])
-      assert.deepEqual(events, ['build', 'built'])
-      await db.query('INSERT INTO weedout_reads102.ch VALUES(1,1)')
-      events = []
-      for await (const row of db.stream(sql)) { assert.deepEqual(row, { g: 1, s: payload }); break }
-      assert.deepEqual(events.slice(0, 4), ['build', 'inner', 'built', 'probe'])
-      assert.equal(events.at(-1), 'closed')
-      const examined = events.filter((event) => event === 'outer').length
-      assert.ok(examined > 0 && examined < count, 'backpressure and early return must leave outer rows unread')
-      await db.query('UPDATE weedout_reads102.pa SET g=NULL')
-      events = []
-      assert.deepEqual((await db.query(sql))[0], [])
-      assert.deepEqual(events, ['build', 'inner', 'built', 'probe', ...Array<string>(count).fill('outer'), 'closed'])
-      await db.query('UPDATE weedout_reads102.pa SET g=CASE WHEN MOD(id-1,4)=0 THEN NULL ELSE MOD(id-1,4) END')
-      await db.query('INSERT INTO weedout_reads102.ch VALUES(2,1),(3,2),(4,NULL)')
-      events = []
-      const [rows] = await db.query(sql.replace(' FOR UPDATE', ' ORDER BY g,s FOR UPDATE'))
-      assert.deepEqual(rows, [1, 2].flatMap((g) => Array.from({ length: count/4 }, () => ({ g, s: payload }))))
-      const scans = 1
-      assert.deepEqual(['build', 'inner', 'built', 'probe', 'outer', 'closed'].map((kind) => events.filter((event) => event === kind).length), [1, 4, 1, scans, count*scans, scans])
-      await db.query('UPDATE weedout_reads102.ch SET g=NULL')
-      events = []
-      assert.deepEqual((await db.query(sql))[0], [])
-      assert.deepEqual(events, ['build', 'inner', 'inner', 'inner', 'inner', 'built'])
-    } finally { db.catalog!.table = open }
-    const writer = await db.connect()
-    try {
-      await writer.query('SET innodb_lock_wait_timeout=1')
-      await writer.query('UPDATE weedout_reads102.ch SET g=2')
-    } finally { await writer.end() }
-  } finally { await db.end() }
+      const sql = 'SELECT g,s FROM weedout_reads102.pa WHERE g IN(SELECT g FROM weedout_reads102.ch) FOR UPDATE'
+      try {
+        assert.deepEqual((await db.query(sql))[0], [])
+        assert.deepEqual(events, ['build', 'built'])
+        await db.query('INSERT INTO weedout_reads102.ch VALUES(1,1)')
+        events = []
+        const streaming = await db.connect()
+        try {
+          await streaming.query("SET optimizer_switch='default,firstmatch=off,loosescan=off,materialization=off,duplicateweedout=off" + (buffered ? '' : ',block_nested_loop=off') + "'")
+          for await (const row of streaming.stream(sql)) { assert.deepEqual(row, { g: 1, s: payload }); break }
+        } finally { await streaming.end() }
+        assert.deepEqual(events.slice(0, 4), buffered ? ['build', 'inner', 'built', 'probe'] : ['build', 'inner', 'probe', 'outer'])
+        assert.equal(events.at(-1), buffered ? 'closed' : 'built')
+        assert.equal(events.filter((e) => e === 'probe').length, events.filter((e) => e === 'closed').length)
+        const examined = events.filter((event) => event === 'outer').length
+        assert.ok(examined > 0 && examined < count, 'backpressure and early return must leave outer rows unread')
+        await db.query('UPDATE weedout_reads102.pa SET g=NULL')
+        events = []
+        assert.deepEqual((await db.query(sql))[0], [])
+        assert.deepEqual(events, buffered ? ['build', 'inner', 'built', 'probe', ...Array<string>(count).fill('outer'), 'closed'] : ['build', 'inner', 'probe', ...Array<string>(count).fill('outer'), 'closed', 'built'])
+        await db.query('UPDATE weedout_reads102.pa SET g=CASE WHEN MOD(id-1,4)=0 THEN NULL ELSE MOD(id-1,4) END')
+        await db.query('INSERT INTO weedout_reads102.ch VALUES(2,1),(3,2),(4,NULL)')
+        events = []
+        const [rows] = await db.query(sql.replace(' FOR UPDATE', ' ORDER BY g,s FOR UPDATE'))
+        assert.deepEqual(rows, [1, 2].flatMap((g) => Array.from({ length: count/4 }, () => ({ g, s: payload }))))
+        const scans = buffered ? 1 : 4
+        assert.deepEqual(['build', 'inner', 'built', 'probe', 'outer', 'closed'].map((kind) => events.filter((event) => event === kind).length), [1, 4, 1, scans, count*scans, scans])
+        await db.query('UPDATE weedout_reads102.ch SET g=NULL')
+        events = []
+        assert.deepEqual((await db.query(sql))[0], [])
+        assert.deepEqual(events, buffered ? ['build', 'inner', 'inner', 'inner', 'inner', 'built'] : ['build', ...Array.from({ length: 4 }, () => ['inner', 'probe', ...Array<string>(count).fill('outer'), 'closed']).flat(), 'built'])
+      } finally { db.catalog!.table = open }
+      const writer = await db.connect()
+      try {
+        await writer.query('SET innodb_lock_wait_timeout=1')
+        await writer.query('UPDATE weedout_reads102.ch SET g=2')
+      } finally { await writer.end() }
+    } finally { await db.end() }
   }
 })
 
-test('hash weedout evaluates every raw candidate after an outer identity has matched', async () => {
-  const db = await MySQL.open(':memory:')
-  try {
-    await db.query('CREATE DATABASE weedout_pairs102')
-    await db.query('CREATE TABLE weedout_pairs102.pa(id INT NOT NULL,g INT,s VARCHAR(12)) STATS_AUTO_RECALC=0')
-    await db.query('CREATE TABLE weedout_pairs102.ch(id INT PRIMARY KEY,g INT,KEY(g)) STATS_AUTO_RECALC=0')
-    await db.query('INSERT INTO weedout_pairs102.pa VALUES' + Array.from({ length: 20 }, (_, i) => `(${i+1},${i%4===0 ? 'NULL' : i%4},'same')`).join(','))
-    await db.query('INSERT INTO weedout_pairs102.ch VALUES(1,1),(2,1),(3,2),(4,NULL)')
-    await db.query('ANALYZE TABLE weedout_pairs102.pa,weedout_pairs102.ch')
-    const session = new Session({ connectionId: 1, capabilities: capabilities(0) })
-    const state: SessionValues = {
-      userVariables: new Map(), lastInsertId: 0n, insertIdSet: false, rowCount: 0n,
-      systemVariable: (name) => name === 'optimizer_switch' ? { kind: 'string', v: 'firstmatch=off,loosescan=off,materialization=off,duplicateweedout=off', collationId: 255, coercibility: 4 } : undefined,
-    }
-    const env: Env = { params: [], now: new Date(), session, state }
-    const compiled = (e: Parameters<typeof compile>[0], scope: CompileContext['scope']) =>
-      compile(e, { scope, session, state, connectionCollation: 255, clause: 'on clause', serverVersion: '8.4.11' })
-    const query = parseStatement('SELECT pa.g,pa.s FROM pa JOIN ch ON pa.g=ch.g')
-    if (query.kind !== 'query' || query.body.kind !== 'select') throw new Error('expected SELECT')
-    let pairs = 0
-    const plan = planFrom(query.body.from!, {
-      env,
-      open: (ref) => ({ schema: 'weedout_pairs102', def: db.catalog!.definition('weedout_pairs102', ref.name), table: db.catalog!.table('weedout_pairs102', ref.name) }),
-      statistics: (def, table) => statisticsOf(def, table, db.store!),
-      compileOn(e, scope) {
-        const c = compiled(e, scope)
-        if (e.kind !== NODE.BINARY || e.op !== '=') return c
-        return { ...c, eval(row, env) { pairs++; return c.eval(row, env) } }
-      },
-    })
-    plan.reads(new Map([['pa', new Set(['g', 's'])], ['ch', new Set(['g'])]]))
-    const index = plan.tables[1]!.def!.indexes.find((i) => i.name === 'g')!
-    assert.equal(plan.integerSemijoin('ch', index, compiled(parseExpression('ch.g'), plan.scope), undefined, false), true)
-    const rows = [...plan.rows(undefined, env, { locking: false })]
-    assert.equal(rows.length, 10)
-    assert.equal(pairs, 15, 'weedout must evaluate all raw matching pairs after emitting each outer identity')
-    assert.equal(plan.explain(env).label, 'Remove duplicate pa rows using temporary table')
-  } finally { await db.end() }
+test('hash and repeated-scan weedout evaluate every raw candidate after an outer identity has matched', async () => {
+  for (const buffered of [true, false]) {
+    const db = await MySQL.open(':memory:')
+    try {
+      await db.query('CREATE DATABASE weedout_pairs102')
+      await db.query('CREATE TABLE weedout_pairs102.pa(id INT NOT NULL,g INT,s VARCHAR(12)) STATS_AUTO_RECALC=0')
+      await db.query('CREATE TABLE weedout_pairs102.ch(id INT PRIMARY KEY,g INT,KEY(g)) STATS_AUTO_RECALC=0')
+      await db.query('INSERT INTO weedout_pairs102.pa VALUES' + Array.from({ length: 20 }, (_, i) => `(${i+1},${i%4===0 ? 'NULL' : i%4},'same')`).join(','))
+      await db.query('INSERT INTO weedout_pairs102.ch VALUES(1,1),(2,1),(3,2),(4,NULL)')
+      await db.query('ANALYZE TABLE weedout_pairs102.pa,weedout_pairs102.ch')
+      const session = new Session({ connectionId: 1, capabilities: capabilities(0) })
+      const state: SessionValues = {
+        userVariables: new Map(), lastInsertId: 0n, insertIdSet: false, rowCount: 0n,
+        systemVariable: (name) => name === 'optimizer_switch' ? { kind: 'string', v: 'firstmatch=off,loosescan=off,materialization=off,duplicateweedout=off' + (buffered ? '' : ',block_nested_loop=off'), collationId: 255, coercibility: 4 } : undefined,
+      }
+      const env: Env = { params: [], now: new Date(), session, state }
+      const compiled = (e: Parameters<typeof compile>[0], scope: CompileContext['scope']) =>
+        compile(e, { scope, session, state, connectionCollation: 255, clause: 'on clause', serverVersion: '8.4.11' })
+      const query = parseStatement('SELECT pa.g,pa.s FROM pa JOIN ch ON pa.g=ch.g')
+      if (query.kind !== 'query' || query.body.kind !== 'select') throw new Error('expected SELECT')
+      let pairs = 0
+      const plan = planFrom(query.body.from!, {
+        env,
+        open: (ref) => ({ schema: 'weedout_pairs102', def: db.catalog!.definition('weedout_pairs102', ref.name), table: db.catalog!.table('weedout_pairs102', ref.name) }),
+        statistics: (def, table) => statisticsOf(def, table, db.store!),
+        compileOn(e, scope) {
+          const c = compiled(e, scope)
+          if (e.kind !== NODE.BINARY || e.op !== '=') return c
+          return { ...c, eval(row, env) { pairs++; return c.eval(row, env) } }
+        },
+      })
+      plan.reads(new Map([['pa', new Set(['g', 's'])], ['ch', new Set(['g'])]]))
+      const index = plan.tables[1]!.def!.indexes.find((i) => i.name === 'g')!
+      assert.equal(plan.integerSemijoin('ch', index, compiled(parseExpression('ch.g'), plan.scope), undefined, false), true)
+      const rows = [...plan.rows(undefined, env, { locking: false })]
+      assert.equal(rows.length, 10)
+      assert.equal(pairs, buffered ? 15 : 80, 'weedout must evaluate all raw matching pairs after emitting each outer identity')
+      assert.equal(plan.explain(env).label, 'Remove duplicate pa rows using temporary table')
+    } finally { await db.end() }
+  }
 })
 
 test('last-resort weedout costs the ordered hash competition with every alternative disabled', async () => {
