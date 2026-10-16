@@ -1523,8 +1523,9 @@ and emits each physical outer identity once; equal projected outer rows stay
 separate. Empty/all-NULL hash builds skip probing. Hash, automatic-index,
 constant and lateral joins share pair evaluation, while their scan owners
 retain initialization and closure. Indexed materialized scan probes and
-repeated-scan weedout remain open alongside the last disabled-strategy ordered
-cost boundary. Broader materialization, weedout, prepared choices, wider switch scopes and
+repeated-scan weedout remain open. FirstMatch availability retains its logical
+inner alias when disabled, allowing native last-resort weedout costs and
+switch-dependent root-prefix pruning. All 180 bounded switch outcomes agree. Broader materialization, weedout, prepared choices, wider switch scopes and
 builtin inheritance remain open under M5.47.
 Cached keyed subqueries build directly from the iterator without another row
 array. Keyed hash and automatic derived-table indexes also retain their build
@@ -1537,7 +1538,7 @@ The full Docker gates, pinned-reference audits and 10,000 crash points pass.
 `db.stream()` streams a million rows within a few MB of the heap's baseline (M5.40). Next is the
 remaining function and planner work, then the browser. The coercion corpus
 now agrees on all 3,148 observations and all 1,737 warning counts. The core entry bundle
-is 334,337 bytes gzipped (326.5 KiB), against the 500 KB release target,
+is 334,340 bytes gzipped (326.5 KiB), against the 500 KB release target,
 with the UCA weights in a separate chunk loaded on demand.
 
 The release plan gives each stage something to ship:

@@ -334,7 +334,7 @@ test('FirstMatch sort costing counts outer rows instead of duplicate inner fanou
     alias, rows: 4, dependent: new Set<string>(), keyDependent: new Set([alias === 'p' ? 'c' : 'p']),
     place: (prefix) => ({ alias, fetched: prefix.length === 0 ? 4 : 2, filter: 1, keyFrom: new Set<string>(), lookup: prefix.length > 0, read: prefix.length === 0 ? 0.25 : 1.0011 }),
   }))
-  assert.deepEqual(joinOrder(candidates, { alias: 'p', limit: Infinity }, undefined, 'c').map((p) => p.alias), ['p', 'c'])
+  assert.deepEqual(joinOrder(candidates, { alias: 'p', limit: Infinity }, undefined, { alias: 'c', enabled: true }).map((p) => p.alias), ['p', 'c'])
   const { conn, db } = await connect('firstmatch_sort90')
   try {
     await conn.query('CREATE TABLE pa(id INT NOT NULL,g INT,s VARCHAR(12)) STATS_AUTO_RECALC=0')
@@ -694,6 +694,41 @@ test('hash weedout evaluates every raw candidate after an outer identity has mat
     assert.equal(pairs, 15, 'weedout must evaluate all raw matching pairs after emitting each outer identity')
     assert.equal(plan.explain(env).label, 'Remove duplicate pa rows using temporary table')
   } finally { await db.end() }
+})
+
+test('last-resort weedout costs the ordered hash competition with every alternative disabled', async () => {
+  const { conn, db } = await connect('weedout_cost103')
+  try {
+    await conn.query('CREATE TABLE pa(id INT NOT NULL,g INT,s VARCHAR(12)) STATS_AUTO_RECALC=0')
+    await conn.query('CREATE TABLE ch(id INT PRIMARY KEY,g INT,KEY(g)) STATS_AUTO_RECALC=0')
+    await conn.query('INSERT INTO ch VALUES(1,NULL),(2,1)')
+    const hash = 'Remove duplicate pa rows using temporary table\n    Inner hash join\n        Table scan on pa\n        Hash\n            Covering index scan on ch using g'
+    for (const count of [2, 4]) {
+      await conn.query('DELETE FROM pa')
+      await conn.query('INSERT INTO pa VALUES' + Array.from({ length: count }, (_, i) => `(${i+1},${i === 0 ? 'NULL' : i},'same')`).join(','))
+      await conn.query('ANALYZE TABLE pa,ch')
+      const sql = 'SELECT g,s FROM pa WHERE g IN(SELECT g FROM ch)' + (count === 4 ? ' ORDER BY g,s LIMIT 1' : '')
+      for (const weedout of ['on', 'off']) {
+        await conn.query("SET optimizer_switch='default,firstmatch=off,loosescan=off,materialization=off,duplicateweedout=" + weedout + "'")
+        for (const method of ['query', 'execute'] as const) {
+          const options = { sql, rowsAsArray: true }
+          const [rows, fields] = method === 'query' ? await conn.query(options) : await conn.execute(options)
+          assert.deepEqual(rows, [[1, 'same']])
+          assert.deepEqual(fieldsOf(fields), [['g', 3, 11, 0, 0, 63, 'weedout_cost103', 'pa', 'pa', 'g'], ['s', 253, 48, 0, 0, 224, 'weedout_cost103', 'pa', 'pa', 's']])
+          assert.deepEqual((await conn.query('SHOW WARNINGS'))[0], [])
+          const [explain] = await conn.query<mysql.RowDataPacket[]>('EXPLAIN FORMAT=TREE ' + sql)
+          let plan = hash
+          if (count === 4) plan = 'Limit\n    Sort\n        Stream results\n' + hash.split('\n').map((line) => '            ' + line).join('\n')
+          else if (weedout === 'on') plan = 'Nested loop inner join\n    Filter\n        Table scan on pa\n    Limit\n        Covering index lookup on ch using g'
+          assert.equal(planSkeleton(explain[0]?.EXPLAIN), plan, `${count}/${weedout}/${method}`)
+          conn.unprepare(options)
+        }
+      }
+    }
+  } finally {
+    await conn.query('DROP DATABASE IF EXISTS weedout_cost103')
+    await conn.end(); await db?.end()
+  }
 })
 
 test('LooseScan-only competition preserves native pruning, weedout ties and all-disabled fallback', async () => {

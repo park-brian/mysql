@@ -188,6 +188,12 @@ function overlaps(a: ReadonlySet<string>, b: ReadonlySet<string>): boolean {
   return false
 }
 
+/** The bounded semijoin's logical inner and FirstMatch availability. */
+export interface FirstMatch {
+  readonly alias: string
+  readonly enabled: boolean
+}
+
 /**
  * The cheapest join order (`greedy_search` at the default search depth,
  * which on fewer than 62 tables is `best_extension_by_limited_search` over
@@ -211,15 +217,15 @@ function overlaps(a: ReadonlySet<string>, b: ReadonlySet<string>): boolean {
  * `loose` is supplied only for a two-table integer semijoin. The full index
  * read and later lookup's read cost remain separate from distinct-key row
  * evaluation; a final sort pays for outer output rather than inner fanout.
- * `firstMatch` names the second written table, or is false when its unfiltered
- * strategy is explicitly disabled. Undefined retains unmodeled filtered costs.
+ * `firstMatch` retains the second written table and whether its unfiltered
+ * strategy is enabled. Undefined retains unmodeled filtered costs.
  * Its first written candidate supplies the outer cardinality. An inner-first order
  * pays for memory temporary deduplication and sorts its distinct outer rows.
- * The caller rejects that order until it can execute the deduplication strategy.
+ * The caller admits only orders whose physical deduplication strategy it supports.
  * `weedout` controls temporary competitors when an enabled semijoin alternative
  * exists; the ordinary last-resort fallback remains.
  */
-export function joinOrder(candidates: readonly Candidate[], sort?: { readonly alias: string; readonly limit: number }, loose?: { readonly alias: string; readonly rows: number; readonly read: number; readonly fetched: number }, firstMatch?: string | false, materialization = false, weedout = true): Positioned[] {
+export function joinOrder(candidates: readonly Candidate[], sort?: { readonly alias: string; readonly limit: number }, loose?: { readonly alias: string; readonly rows: number; readonly read: number; readonly fetched: number }, firstMatch?: FirstMatch, materialization = false, weedout = true): Positioned[] {
   let sortBy = sort?.alias
   const sorted = [...candidates].sort((a, b) => {
     if (a.dependent.has(b.alias)) return 1
@@ -262,7 +268,9 @@ export function joinOrder(candidates: readonly Candidate[], sort?: { readonly al
     const last = step(before, placed)
     return { plan: [before, last], cost: last.cost + sortCost(outerFirst ? before.rows : placed.fetched * placed.filter) }
   }
-  const semijoin = material?.alias ?? (firstMatch === false ? loose?.alias : firstMatch)
+  // The bounded caller retains the logical inner even when FirstMatch is disabled.
+  const semijoin = material?.alias ?? firstMatch?.alias
+  const lastResort = !weedout && firstMatch?.enabled === false && !loose && !material
   const consider = (): void => {
     const first = plan[0] as Step
     const last = plan.at(-1) as Step
@@ -273,9 +281,9 @@ export function joinOrder(candidates: readonly Candidate[], sort?: { readonly al
     let cost = last.cost
     // Either order can need weedout when an enabled alternative is available.
     // Default memory temporary costs: creation 1, each write/lookup 0.1.
-    if (semijoin !== undefined && (first.alias === semijoin ? loose === undefined : firstMatch !== semijoin)) {
+    if (semijoin !== undefined && (first.alias === semijoin ? loose === undefined : firstMatch?.enabled !== true)) {
       rows = Math.min(rows, (candidates[0] as Candidate).rows * last.filter)
-      cost += weedout ? 1 + 0.1 * (rows + last.rows) : Infinity
+      cost += weedout || lastResort ? 1 + 0.1 * (rows + last.rows) : Infinity
     }
     cost += sortCost(rows)
     const alternative = materialPlan()
@@ -318,7 +326,7 @@ export function joinOrder(candidates: readonly Candidate[], sort?: { readonly al
       const cost = Math.min(pruned.cost, costOfMaterial)
       const rows = costOfMaterial === Infinity ? pruned.rows : Math.min(pruned.rows, (plan[0] as Step).rows)
       if (best !== undefined && cost >= best.cost) continue
-      if (bestRows > rows || bestCost > cost || (plan.length === 0 && c.alias === sortBy)) {
+      if (bestRows > rows || bestCost > cost || (plan.length === 0 && (c.alias === sortBy || lastResort))) {
         if (bestRows >= rows && bestCost >= cost && (!overlaps(c.keyDependent, remaining) || placed.fetched < 2)) {
           bestRows = rows
           bestCost = cost
