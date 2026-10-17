@@ -221,7 +221,9 @@ for separate verification. The current state and remaining work are:
    its separate 1,920-outcome audit agrees completely.
    Selected constant-range join quotes now share the range selector and its
    row/count/cost readers (M5.49); the 72-outcome range/ref audit agrees fully.
-   **Next:** verified equality-inferred access before bounded residual admission,
+   Compatible two-table integer equalities now share inferred physical ranges
+   and join quotes; every row in the 48-case inference audit agrees.
+   **Next:** candidate/build cost proof before bounded residual admission,
    then broader eligibility and access/order comparisons. Baseline/current live probes show
    ordered IN over a nullable
    non-primary key or two empty tables still loses source key flags here
@@ -2569,20 +2571,55 @@ and all seven pinned corpora. The tested production, runner/package script and
 all 302 files under test match the workspace. Preceding 7fccd53/run 39062684849
 passed all eleven required GitHub jobs.
 
-**Next prerequisite:** carry the same access proof through multiple-equality
-range inference before readmitting the bounded inner-key numeric residual.
-The current quote uses the actual WHERE's selected range; inferred outer
-ranges from equality propagation are not yet the same execution authority.
-A separate 48-outcome ordinary-equality audit pins that prerequisite across
-INT/BIGINT/unsigned BIGINT, buffering, ORDER BY and both protocols: all fields,
-warnings and row multisets agree, but no plan agrees and twelve unordered
-results differ in arrival order. Every ordered result agrees. Native reads
-the inferred outer range; the current reader scans and filters.
-Prove candidate/build costs for the 20-outer/eight-inner native trace, then
-admit only the verified residual class. Preserve every previously matching
-component and unfiltered semijoin choice. Multi-interval quotes, broader
-predicates, retained prepared choices and sampled-statistics access differences
-remain open; M5.47 and M5.49 stay partial.
+**Verified equality-inferred access proof (M5.49, 2026-10-17):** physical
+reads and join quotes now share a statement-local inferred predicate. Initial
+admission is two base tables without a nullable join side, a direct equality
+between matching INT/BIGINT storage types and signedness, and `column > integer
+literal`. Base-column resolution excludes derived/LATERAL sources. Other
+comparisons, types, expressions, transitive classes and bound parameters retain
+their existing path. The selector, range shape/price and index dives remain the
+same authority. Quotations now use the existing statement access cache.
+
+The separate 48-outcome ordinary-equality audit improves from 36 to 48 matching
+row results; every field and warning vector remains native. All twelve
+unordered arrival differences close. The inferred outer range now runs, while
+a redundant child filter remains in all 48 plans. Filter elimination is not
+claimed. Permanent tests pin 72 further executions through both protocols for
+reversed equality, NULLs, exact BIGINT bounds, buffering, order and LIMIT, plus
+LEFT JOIN/LATERAL exclusions and real prepared statements after parameter/data
+changes. Prepared tests retain a literal inferred bound and vary a separate
+outer-id parameter; inference from a bound parameter remains open. A separate
+32-outcome guard audit preserves complete native results, fields and warnings
+for INT/DOUBLE, INT/VARCHAR, BIGINT/DOUBLE and signed/unsigned BIGINT pairs;
+none admits the excluded outer range. A further 144-outcome audit agrees on
+rows, full fields and warnings around INT, signed/unsigned 64-bit and over-64-bit
+literal bounds. A 192-outcome empty/small-inner cardinality sweep also matches
+every row, full field and warning vector, preserving every previously native
+component; its remaining plan differences include the same child-filter gap.
+
+Conjunction construction is shared with the existing semijoin/SHOW readers.
+Base-column proofs resolve through the existing scope owner instead of a
+second qualified-name shortcut. Range sample counters are accumulated locally
+and converted to the result map once; repeated recursive filter estimates
+share their already bound context. These changes preserve their existing
+source positions and evaluation order. All nine unchanged size caps pass
+(core/facade 334,350/334,258 B gzipped).
+
+The preceding constant-range commit 3ceed5a/run 39065277424 passed all eleven
+CI jobs. Focused native-mode checks, previously matching audit components,
+2,124/2,248 plans and 20,000 seeded executor statements pass. Full Docker
+verification with --reference passes all 1,320 tests, typecheck, lint, nine
+size gates, installed-package/typed-example smoke, the real client and all
+seven pinned corpora. Tested production, runner/package script and all 303
+files under test match the workspace. Captures and lazy chunks are unchanged.
+
+**Next:** prove candidate/build costs for the 20-outer/eight-inner native trace
+before readmitting the bounded inner-key numeric residual. The 1,920-outcome
+filtered-semijoin baseline remains separate and admission is still closed.
+Preserve every previously matching component and unfiltered semijoin choice.
+Redundant inferred-filter elimination, multi-interval quotes, broader predicates,
+bound-parameter inference, retained prepared choices and sampled-statistics
+access differences remain open; M5.47 and M5.49 stay partial.
 
 The pinned source cross-check is MySQL 8.4.11's
 [sql_planner.cc](https://github.com/mysql/mysql-server/blob/mysql-8.4.11/sql/sql_planner.cc),

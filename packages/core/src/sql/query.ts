@@ -20,7 +20,7 @@ import { columnDefinition, intType, type ResultType } from './meta.ts'
 import { FIELD_TYPE, expectTyped } from '@myjs/bytes'
 import { distinct, filter, limit, project, sort, type SortKey } from './operators.ts'
 import { isConstant, optimizerEnabled, splitAnd } from './plan.ts'
-import { columnRefs, someNode } from './ast.ts'
+import { and, columnRefs, someNode } from './ast.ts'
 import { collationInfoByName } from '@myjs/charsets'
 import { safeResolve, TableScope } from './scope.ts'
 import { holdsRead, indexParts, planFrom, type DerivedPlan, type DerivedSource, type FromContext, type FromPlan, type JoinCondition } from './from.ts'
@@ -876,7 +876,7 @@ function costedIntegerSemijoin(run: Run, q: QueryExpression, node: SelectNode, f
     outerKey = qualify(outerKey, outerAlias)
     if (extra?.kind === NODE.BINARY && extra.left.kind === NODE.COLUMN) extra = { ...extra, left: qualify(extra.left, innerAlias) }
     const equality: Expression = { kind: NODE.BINARY, op: '=', left: innerKey, right: outerKey, at: where?.at ?? node.at }
-    const predicate: Expression = extra === undefined ? equality : { kind: NODE.BINARY, op: 'AND', left: equality, right: extra, at: equality.at }
+    const predicate: Expression = and(equality, extra)
     // Keep the outer table's slots first: its logical scope remains the SELECT's scope.
     const alternative = planFrom([outer, inner], fromContext(run), predicate)
     const ctx = compileContext(run, alternative.scope, 'where clause')

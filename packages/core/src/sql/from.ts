@@ -32,10 +32,10 @@
 // never for a table on the inner side of an outer join, where `WHERE b.x IS
 // NULL` must still see the NULL rows the join made.
 import { FIELD_TYPE, expectTyped } from '@myjs/bytes'
-import { someNode } from './ast.ts'
+import { and, someNode } from './ast.ts'
 import { requireCollationInfo } from '@myjs/charsets'
 import type { ColumnDef, IndexDef, RowId, Table, TableDef, Trx } from '@myjs/engine'
-import { NODE, REF, type Expression, type TableReference } from '@myjs/parser'
+import { LITERAL, NODE, REF, type Expression, type TableReference } from '@myjs/parser'
 import { messages, sqlError } from '@myjs/protocol'
 import { truth, type Value } from '@myjs/types'
 import type { Compiled, Env, Row, Scope } from './compile.ts'
@@ -388,7 +388,7 @@ export function planFrom(refs: readonly TableReference[], ctx: FromContext, wher
             const [a, b] = [g[0] as number, g[1] as number]
             return { kind: NODE.BINARY, op: '=', left: slotRef(a), right: slotRef(b), at: ref.at } as Expression
           })
-          onAst = eqs.reduce((acc, e) => ({ kind: NODE.BINARY, op: 'AND', left: acc, right: e, at: ref.at }) as Expression)
+          onAst = eqs.reduce(and)
         }
         const scope = preliminary.restrict(aliases, within)
         const onScope = slotScope(scope, preliminary)
@@ -453,7 +453,7 @@ export function planFrom(refs: readonly TableReference[], ctx: FromContext, wher
   const single = only?.def !== undefined && only.table !== undefined ? { alias: only.alias, def: only.def, table: only.table } : undefined
 
   // The physical tree: built once the WHERE is placed (`filter`), or without one.
-  const settings: LeafSettings = { covering, read: new Map(), chosen: new WeakMap(), scope, tables: byAlias, outer, where, statistics: ctx.statistics, buffered: optimizerEnabled(ctx.env, 'block_nested_loop') }
+  const settings: LeafSettings = { covering, read: new Map(), inferred: new Map(), chosen: new WeakMap(), scope, tables: byAlias, outer, where, statistics: ctx.statistics, buffered: optimizerEnabled(ctx.env, 'block_nested_loop') }
   // The join order and each join's access: the cost model's, over the WHERE's conjuncts, once the columns read are known (M5.7).
   // The index lookup into `t` after the tables in `before`, by the WHERE or an ON.
   const lookupAfter = (t: FromTable, before: ReadonlySet<string>, conditions: readonly Expression[]): EqRef | undefined => {
@@ -851,6 +851,8 @@ type Materialization = false | 'lookup' | 'scan' | 'loop'
 /** How the FROM's base tables are read: what the WHERE is, what covers them, and an order asked for. */
 interface LeafSettings {
   where?: Expression | undefined
+  /** Proven integer-equality range predicates, shared by costing and physical reads. */
+  readonly inferred: Map<string, Expression | undefined>
   /** A STRAIGHT_JOIN's const tables past its first non-const one, joined as constant rows (`constants`). */
   constants?: ReadonlySet<string>
   /** The const tables read while planning, absent from the plan (`constants`). */
@@ -921,12 +923,12 @@ function leafAccess(t: FromTable, settings: LeafSettings, env: Env): Access {
 const orderFor = (t: FromTable, settings: LeafSettings): LeafSettings['ordered'] => (settings.ordered?.alias === undefined || settings.ordered.alias === t.alias ? settings.ordered : undefined)
 
 /** The access `chooseAccess` picks for a table under the WHERE, once per statement's environment: a range is weighed by counting its rows. */
-function chosenAccess(t: FromTable, settings: LeafSettings, env: Env): Access {
+function chosenAccess(t: FromTable, settings: LeafSettings, env: Env, quote = false): Access {
   if (t.nullable || t.def === undefined) return FULL_SCAN
   let chosen = settings.chosen.get(env)
   if (chosen === undefined) settings.chosen.set(env, (chosen = new Map()))
   let access = chosen.get(t.alias)
-  if (access === undefined) chosen.set(t.alias, (access = chooseAccess(t.def, t.alias, settings.where, env, settings.outer, rangeCosting(t, settings, env))))
+  if (access === undefined) chosen.set(t.alias, (access = chooseAccess(t.def, t.alias, and(settings.where, settings.inferred.get(t.alias)), env, settings.outer, rangeCosting(t, settings, env, quote))))
   return access
 }
 
@@ -1015,13 +1017,8 @@ function localColumn(parts: readonly string[], scope: TableScope): ReturnType<Ta
 /** A column of a base table an expression names: qualified by its alias, one of USING's slots, or a bare name the scope gives it. */
 function columnOf(t: FromTable, e: Expression, scope: TableScope): ColumnDef | undefined {
   if (e.kind !== NODE.COLUMN || t.def === undefined) return undefined
-  let name: string | undefined
-  if (e.parts.length >= 2) name = e.parts[e.parts.length - 2] === t.alias ? (e.parts.at(-1) as string) : undefined
-  else {
-    const at = localColumn(e.parts, scope)
-    name = at?.table.alias === t.alias ? at.column.name : undefined
-  }
-  return name === undefined ? undefined : t.def.columns.find((c) => c.name.toLowerCase() === (name as string).toLowerCase())
+  const at = localColumn(e.parts, scope)
+  return at?.table.alias === t.alias ? t.def.columns.find((c) => c.name.toLowerCase() === at.column.name.toLowerCase()) : undefined
 }
 
 /** Speculative compilation may decline a typed SQL error, never an internal failure. */
@@ -1365,10 +1362,13 @@ function rangeEstimate(t: FromTable, conditions: readonly Weighed[], leaves: rea
   const isNullOfNotNull = (e: Expression): boolean => e.kind === NODE.UNARY && e.op === 'IS NULL' && resolve(e.operand)?.c.nullable === false
   const possible = (e: Expression): Expression => {
     if (e.kind !== NODE.BINARY || (e.op !== 'OR' && e.op !== '||')) return e
-    const kept = [possible(e.left), possible(e.right)].filter((x) => !isNullOfNotNull(x))
-    return kept.length === 2 ? { ...e, left: kept[0] as Expression, right: kept[1] as Expression } : (kept[0] ?? e)
+    const left = possible(e.left)
+    const right = possible(e.right)
+    if (isNullOfNotNull(left)) return isNullOfNotNull(right) ? e : right
+    return isNullOfNotNull(right) ? left : { ...e, left, right }
   }
-  const per = new Map<ColumnDef, Expression[]>()
+  const per = new Map<ColumnDef, Expression>()
+  let inferred: Expression | undefined
   for (const { e: raw } of conditions) {
     const e = possible(raw)
     const columns: Expression[] = []
@@ -1408,25 +1408,29 @@ function rangeEstimate(t: FromTable, conditions: readonly Weighed[], leaves: rea
     }
     const range = sargable(e)
     if (range === undefined) continue
-    per.set(target, [...(per.get(target) ?? []), range])
+    per.set(target, and(per.get(target), range))
+    // columnOf resolves base tables only. A direct, non-nullable integer equality preserves this literal bound.
+    const type = target.type
+    const source = first.c.type
+    if (first.t !== t && leaves.length === 2 && !first.t.nullable && classOf(name(first)).size === 2 && (type.type === FIELD_TYPE.LONG || type.type === FIELD_TYPE.LONGLONG) && source.type === type.type && source.unsigned === type.unsigned && e.kind === NODE.BINARY && e.op === '>' && e.right.kind === NODE.LITERAL && e.right.type === LITERAL.INT) {
+      inferred = and(inferred, range)
+    }
   }
-  if (per.size === 0) return undefined
-  const compiled: [ColumnDef, Compiled][] = []
-  for (const [column, es] of per) {
-    const c = compileProof(es.reduce((a, b) => ({ kind: NODE.BINARY, op: 'AND', left: a, right: b, at: a.at }) as Expression), compile)
-    if (c !== undefined) compiled.push([column, c])
+  const compiled: [column: ColumnDef, condition: Compiled, rows: number][] = []
+  for (const [column, e] of per) {
+    const c = compileProof(e, compile)
+    if (c !== undefined) compiled.push([column, c, 0])
   }
+  settings.inferred.set(t.alias, inferred)
   if (compiled.length === 0) return undefined
-  const counts = new Map<ColumnDef, number>(compiled.map(([c]) => [c, 0]))
   const row = new Array<Value>(width).fill(null)
   for (const { row: values } of accessRows(t.table, def, FULL_SCAN, undefined, false)) {
     fillTable(t, values, row)
-    for (const [column, c] of compiled) if (truth(c.eval(row, env)) === true) counts.set(column, (counts.get(column) as number) + 1)
+    for (const c of compiled) if (truth(c[1].eval(row, env)) === true) c[2]++
   }
-  for (const [c, n] of counts) counts.set(c, Math.max(1, n))
-  const costing = rangeCosting(t, settings, env, true)
-  const access = costing === undefined ? undefined : chooseAccess(def, t.alias, settings.where, env, settings.outer, costing)
-  const range = access?.ranges?.length === 1 ? access.quote : undefined
+  const counts = new Map(compiled.map(([column, , rows]) => [column, Math.max(1, rows)]))
+  const access = chosenAccess(t, settings, env, true)
+  const range = access.ranges?.length === 1 ? access.quote : undefined
   return { rows: Math.min(...counts.values()), counts, range }
 }
 
@@ -1482,7 +1486,7 @@ function placeTable(t: FromTable, lookup: EqRef | undefined, prefix: readonly Po
       ? 1
       : floorFilter(filter(before, lookup?.column), stats.rows, access.fetched)
     : Math.min(1, (stats.rows * floorFilter(filter(before), stats.rows, stats.rows)) / access.fetched)
-  return { alias: t.alias, fetched: access.fetched, filter: kept, keyFrom: access.lookup ? (key?.keyFrom ?? new Set()) : new Set(), lookup: access.lookup, read: access.read }
+  return { alias: t.alias, fetched: access.fetched, filter: kept, keyFrom: access.lookup && key !== undefined ? key.keyFrom : new Set(), lookup: access.lookup, read: access.read }
 }
 
 const NO_COLUMNS: ReadonlySet<ColumnDef> = new Set()
@@ -1502,6 +1506,7 @@ const negateFilter = (fraction: number): number => fraction === 1 ? 1 : 1 - frac
  * and the columns a range was estimated on.
  */
 function filterEffect(e: Expression, t: FromTable, stats: TableStatistics, available: ReadonlySet<string>, scope: TableScope, ignore: ReadonlySet<ColumnDef> = NO_COLUMNS): number {
+  const effect = (expression: Expression): number => filterEffect(expression, t, stats, available, scope, ignore)
   const atLeast = (f: number): number => Math.max(Math.fround(1 / stats.rows), f)
   const known = (x: Expression): boolean => {
     const a = aliasesOf(x, scope)
@@ -1517,7 +1522,7 @@ function filterEffect(e: Expression, t: FromTable, stats: TableStatistics, avail
   const comparison = (x: Expression, y: Expression, f: number): number => (compared(x, y) || compared(y, x) ? atLeast(f) : 1)
   if (e.kind === NODE.UNARY) {
     if (e.op === 'NOT' || e.op === '!') {
-      return negateFilter(filterEffect(e.operand, t, stats, available, scope, ignore))
+      return negateFilter(effect(e.operand))
     }
     const c = own(e.operand)
     if (c === undefined || ignore.has(c)) return 1
@@ -1530,11 +1535,11 @@ function filterEffect(e: Expression, t: FromTable, stats: TableStatistics, avail
   switch (op) {
     case 'AND':
     case '&&':
-      return filterEffect(e.left, t, stats, available, scope, ignore) * filterEffect(e.right, t, stats, available, scope, ignore)
+      return effect(e.left) * effect(e.right)
     case 'OR':
     case '||': {
-      const a = filterEffect(e.left, t, stats, available, scope, ignore)
-      const b = filterEffect(e.right, t, stats, available, scope, ignore)
+      const a = effect(e.left)
+      const b = effect(e.right)
       return a + b - a * b
     }
     case '=': {

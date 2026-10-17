@@ -9,8 +9,9 @@
 //
 // A key's cardinality is what the table's statistics say, through the
 // server's cache of them (`cardinalities` in stats.ts, M5.45).
+import { and } from './ast.ts'
 import { expectTyped } from '@myjs/bytes'
-import { NODE, parseStatement, type Expression, type QueryExpression, type ShowNode, type TableName, quoteName } from '@myjs/parser'
+import { parseStatement, type Expression, type QueryExpression, type ShowNode, type TableName, quoteName } from '@myjs/parser'
 import { messages, sqlError, type ColumnDefinition } from '@myjs/protocol'
 import type { TableDef, ViewDef } from '@myjs/engine'
 import { planViewQuery, type Run } from './query.ts'
@@ -81,7 +82,7 @@ export function variablesQuery(node: ShowNode): { query: QueryExpression; table:
 function withWhere(query: QueryExpression, where: Expression | undefined): QueryExpression {
   if (where === undefined || query.body.kind !== 'select') return query
   const own = query.body.where
-  return { ...query, body: { ...query.body, where: own === undefined ? where : { kind: NODE.BINARY, op: 'AND', left: own, right: where, at: own.at } } }
+  return { ...query, body: { ...query.body, where: and(own, where) } }
 }
 
 /** SHOW VARIABLES' and SHOW STATUS's columns, as 8.4.11 describes them: its PERFORMANCE_SCHEMA table's, renamed. */

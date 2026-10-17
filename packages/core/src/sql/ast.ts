@@ -1,4 +1,4 @@
-import { NODE } from '@myjs/parser'
+import { NODE, type Expression } from '@myjs/parser'
 
 /** Object-valued AST children, with lists visited in their written order. */
 export function children(e: object): unknown[] {
@@ -23,4 +23,14 @@ export function columnRefs(e: unknown, subqueries = false): (readonly string[])[
     return undefined
   })
   return out
+}
+
+/** Conjuncts retain their original expressions and source positions. */
+export function and(a: Expression | undefined, b: Expression): Expression
+export function and(a: Expression, b: Expression | undefined): Expression
+export function and(a: Expression | undefined, b: Expression | undefined): Expression | undefined
+export function and(a: Expression | undefined, b: Expression | undefined): Expression | undefined {
+  if (a === undefined) return b
+  if (b === undefined) return a
+  return { kind: NODE.BINARY, op: 'AND', left: a, right: b, at: a.at }
 }
