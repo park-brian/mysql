@@ -175,6 +175,8 @@ export interface Candidate {
   readonly found: number
   /** Unfiltered table rows cap distinct outer identities for weedout. */
   readonly rows: number
+  /** Whether a constant range was selected before join placement. */
+  readonly range: boolean
   /** Tables an index lookup into it could take its key from (`key_dependent`). */
   readonly keyDependent: ReadonlySet<string>
   /** How it is best read after `prefix` (`best_access_path`). */
@@ -255,7 +257,7 @@ export function joinOrder(candidates: readonly Candidate[], sort?: { readonly al
     let placed = c.place(plan.map((p) => p.alias === driving?.alias ? driving! : p))
     if (loose !== undefined && plan.length === 0 && c.alias === loose.alias) {
       driving = step(undefined, placed)
-      placed = { ...placed, read: loose.read, fetched: loose.fetched, filter: floorFilter(placed.fetched * placed.filter / loose.rows, loose.rows, loose.fetched) }
+      placed = { ...placed, read: loose.read, fetched: loose.fetched, filter: c.range ? placed.filter : floorFilter(placed.fetched * placed.filter / loose.rows, loose.rows, loose.fetched) }
     }
     if (plan.length === 0 && c.alias === sortBy && !placed.lookup && sort !== undefined && sort.limit >= placed.fetched) sortBy = undefined
     return placed

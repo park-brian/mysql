@@ -1241,6 +1241,7 @@ function planJoins(root: Node, where: readonly Weighed[], scope: TableScope, set
         alias: t.alias,
         found: range?.rows ?? stats.rows,
         rows: stats.rows,
+        range: range?.range !== undefined,
         keyDependent: keySources(t, conditions, scope),
         place: (prefix) => placeTable(t, lookupAfter(t, new Set(prefix.map((p) => p.alias)), lookupConditions), prefix, conditions, scope, settings, stats, range),
       }

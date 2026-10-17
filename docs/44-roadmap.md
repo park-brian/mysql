@@ -231,9 +231,11 @@ for separate verification. The current state and remaining work are:
    agree; all rows/warnings and 2,532 complete plans remain native.
    Native temporary-cost grouping now also corrects 156 small-inner materialized-
    scan choices; exact comparisons and complete-plan counts are unchanged.
-   **Next:** the twelve remaining default-FirstMatch ordered-LIMIT field cases,
-   then redundant Filter placement, broader eligibility and access/order
-   comparisons. Baseline/current live probes show
+   Selected-range filtering facts now also repair default FirstMatch under a
+   small ordered LIMIT; all 5,760 row/full-field/warning vectors agree, retaining
+   earlier components. Complete plans remain 2,532/5,760.
+   **Next:** redundant child Filter placement, broader eligibility and
+   access/order comparisons. Baseline/current live probes show
    ordered IN over a nullable
    non-primary key or two empty tables still loses source key flags here
    (4,097 versus the reference's 20,485). MySQL also retains prepare-time
@@ -2740,14 +2742,48 @@ smoke, the real client and all seven pinned corpora. All 305 test files and
 touched production match the tested source. Captures, thresholds and lazy
 chunks are unchanged. Preceding f1729d2/run 39069311634 passed all eleven CI jobs.
 
-**Next:** repair the twelve remaining field vectors: four-outer/two-inner
-default-FirstMatch ordered LIMIT 1 across types, protocols and buffering.
-Check its native strategy without changing the now-verified exact temporary
-cost ties, distinct cardinality or range/build prices; preserve every earlier
-matching component. Redundant-filter elimination, broader predicates,
-multi-interval and bound-parameter inference, retained prepared choices and
-sampled-statistics access differences remain separate. M5.47 and M5.49 stay
-partial.
+**Remaining FirstMatch competition evidence (2026-10-17):** The four-outer,
+two-inner default ordered LIMIT 1 trace prices LooseScan at 0.900274423710
+plus one output row of sort, versus FirstMatch 1.86 with the outer sorted
+before its probes. Locally LooseScan is 0.800274423710 and prunes FirstMatch
+at 1.800274423710. The full loose-index scan reapplies filtering already covered
+by the selected constant range. Native condition filtering retains those
+range-covered fields even when pricing a loose full-index scan; the local
+ordinary placed filter already owns that exclusion. Each existing candidate
+now retains whether its constant range was selected; LooseScan costing reuses
+that fact and its placed filter without another range-estimation scan. Physical predicates, full-index reads, original lookup
+read prices and ordinary unselected-range filtering are preserved.
+
+The twelve remaining field differences are closed: all 5,760 row, full-field
+and warning vectors in the two filtered sweeps now agree with native, retaining
+every earlier matching component. Complete plans remain 2,532/5,760; redundant
+child filters and broader strategy/access differences stay open. A permanent
+648-execution query/execute regression covers IN/both EXISTS directions, three
+integer classes, buffering, six neighboring cardinality pairs and default,
+LooseScan-off and FirstMatch-off settings. It passes native mode and fails on
+the preceding implementation. Exact FirstMatch/materialization choices and
+all ten field attributes are pinned; remaining LooseScan/weedout controls
+compare their selected known boundaries without claiming complete trees.
+Counted local tests prove two outer range records close before one inner probe,
+including a wide returned locking stream and writer access to both tables.
+All nine unchanged size caps pass (core/facade 334,315/334,250 B gzipped).
+Fresh Docker --reference passes all 1,326 tests, typecheck, lint, nine unchanged
+size caps, installed-package/typed-example smoke, the real client and all seven
+pinned corpora. All 306 test files and touched production match the tested
+source. The executor seed passes 20,000 statements. Existing base/fresh and
+older controls pass, as do 2,124/2,248 relational plans. All 960 indexed
+materialization and 1,920 trivial-EXISTS outcomes remain fully native; 320
+excluded controls are unchanged. Captures, thresholds and lazy chunks are
+unchanged. Preceding bace47f/run 39070023703 passed all eleven CI jobs.
+
+**Next:** verify redundant child Filter elimination against the actual executed
+range and integer-equality proof; retain physical predicates unless those
+existing facts prove them redundant. The candidate's selected-range cost fact
+alone is insufficient: a full LooseScan still evaluates its bound. Preserve exact temporary-cost ties,
+distinct cardinality, range/build prices and every earlier matching component.
+Broader strategy/predicate coverage, multi-interval and bound-parameter
+inference, retained prepared choices and sampled-statistics access differences
+remain separate. M5.47 and M5.49 stay partial.
 
 The pinned source cross-check is MySQL 8.4.11's
 [sql_planner.cc](https://github.com/mysql/mysql-server/blob/mysql-8.4.11/sql/sql_planner.cc),
