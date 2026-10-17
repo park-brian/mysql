@@ -21,9 +21,10 @@ import { FIELD_TYPE, expectTyped } from '@myjs/bytes'
 import { distinct, filter, limit, project, sort, type SortKey } from './operators.ts'
 import { isConstant, optimizerEnabled, splitAnd } from './plan.ts'
 import { and, columnRefs, someNode } from './ast.ts'
+import { clusteredIndex, indexParts } from './indexes.ts'
 import { collationInfoByName } from '@myjs/charsets'
 import { safeResolve, TableScope } from './scope.ts'
-import { holdsRead, indexParts, planFrom, type DerivedPlan, type DerivedSource, type FromContext, type FromPlan, type JoinCondition } from './from.ts'
+import { holdsRead, planFrom, type DerivedPlan, type DerivedSource, type FromContext, type FromPlan, type JoinCondition } from './from.ts'
 import { rowKey, valueKey } from './keys.ts'
 import { indexLookup, planNode, wrap, type PlanNode } from './explain.ts'
 import { describeStages, runStages, type Rowed, type Stage } from './pipeline.ts'
@@ -1084,7 +1085,7 @@ function emptySubquery(run: Run, query: QueryExpression): boolean {
  * scan on t using PRIMARY", "Covering index scan on t using name").
  */
 function orderingIndex(def: TableDef, alias: string, order: readonly OrderItem[], items: readonly { compiled: Compiled; expr?: Expression; alias?: string }[], scope: Scope, readBy: string | undefined, primary: boolean): { readonly index: string; readonly reverse: boolean } | undefined {
-  const clustered = def.indexes.find((i) => i.kind === 'primary' || i.name === def.clustered)
+  const clustered = clusteredIndex(def)
   const index = readBy === undefined ? clustered : def.indexes.find((i) => i.name === readBy)
   if (index === undefined || clustered === undefined || order.length === 0) return undefined
   const keys: { name: string; desc: boolean }[] = []

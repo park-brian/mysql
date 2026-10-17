@@ -223,7 +223,10 @@ for separate verification. The current state and remaining work are:
    row/count/cost readers (M5.49); the 72-outcome range/ref audit agrees fully.
    Compatible two-table integer equalities now share inferred physical ranges
    and join quotes; every row in the 48-case inference audit agrees.
-   **Next:** candidate/build cost proof before bounded residual admission,
+   Bounded inner-key literal residuals now use those prices for partial
+   materialization/weedout admission; 2,532/5,760 new outcomes agree completely,
+   preserving every earlier matched component.
+   **Next:** remaining filtered cardinality/strategy/field comparisons,
    then broader eligibility and access/order comparisons. Baseline/current live probes show
    ordered IN over a nullable
    non-primary key or two empty tables still loses source key flags here
@@ -2613,13 +2616,70 @@ size gates, installed-package/typed-example smoke, the real client and all
 seven pinned corpora. Tested production, runner/package script and all 303
 files under test match the workspace. Captures and lazy chunks are unchanged.
 
-**Next:** prove candidate/build costs for the 20-outer/eight-inner native trace
-before readmitting the bounded inner-key numeric residual. The 1,920-outcome
-filtered-semijoin baseline remains separate and admission is still closed.
-Preserve every previously matching component and unfiltered semijoin choice.
-Redundant inferred-filter elimination, multi-interval quotes, broader predicates,
-bound-parameter inference, retained prepared choices and sampled-statistics
-access differences remain open; M5.47 and M5.49 stay partial.
+**Verified filtered candidate/build proof (M5.47, 2026-10-17):** the
+20-outer/eight-inner trace now uses the shared access quotations: covering
+inner range 0.660823271131 and non-covering outer range 3.76. Measured
+MaterializeScan is 6.860823271131 versus MaterializeLookup 8.220823271131,
+matching pinned native costs and the winning strategy. The selected access,
+not a second selectivity formula, supplies these prices.
+
+Bounded residual admission now consumes that same inference proof. The actual
+predicate stays with the FROM's filters; only its cost/strategy eligibility
+changes. The existing grouping/nested-expression materialization boundary
+must hold. Matching INT/BIGINT types and signedness, a direct two-column
+integer equality, an indexed outer key and `inner_key > integer_literal`
+remain the admitted class. Other residuals retain their prior behavior.
+Proven inferred entries are rebuilt for each table; absent proofs are removed.
+FirstMatch's captured logical-inner configuration is shared across its uses.
+
+The original 1,920-outcome sweep improves from zero to 1,188 complete native
+matches, with all rows/warnings and 1,836 full field vectors agreeing. An
+additional 3,840-outcome default/FirstMatch/LooseScan/materialization/buffering
+sweep improves from zero to 1,344 complete matches; all rows/warnings and
+3,780 full field vectors agree. Every previously matching component is
+preserved in both sweeps. Combined: 2,532/5,760 complete matches, all 5,760 row
+and warning vectors native, and 5,616 field vectors native. The remaining 144
+field vectors and strategy/access/filter-placement differences stay open;
+this is partial admission, not completion of the residual class.
+
+Permanent regressions pin 216 executions through query/execute over IN and
+both EXISTS equality directions, three integer classes, buffering, order and
+LIMIT, all ten field attributes and warnings. Real prepared LIMIT values and
+changed data retain fresh results. Counted local lifecycle tests over 4,096
+outer rows pin the four-row filtered build completing before two point probes,
+eager build under LIMIT, cancellation, both reader closures and writer release.
+The native-mode run passes both new tests; its positive cases compare selected
+operators and exact values/fields, while the redundant native child Filter
+remains explicitly separate. These local large-data lifecycle counts do not
+claim full native large-data plan equivalence.
+
+Clustered-index identity and appended key parts now have one schema owner in
+`indexes.ts`, shared by access, ordering and grouping. Range shapes use that
+selected index identity. Eighteen mixed-case, UNIQUE-clustered and prefix-part
+grouping outcomes agree fully with native and are unchanged from the previous
+implementation. All 320 excluded-type/temporary/grouping/nested-expression
+controls remain strictly unchanged, retaining their prior 312 field matches
+and open plan differences. Existing audit components, 337/352 fresh matches
+with 340 field matches, 2,124/2,248 plans and 20,000 seeded executor statements
+pass. All nine unchanged size caps pass (core/facade 334,326/334,265 B gzipped).
+Full Docker verification with --reference passes all 1,322 tests, typecheck,
+lint, installed-package/typed-example smoke, the real client and all seven
+pinned corpora. Tested production, runner/package script and all 304 files
+under test match the workspace. Captures, caps and lazy chunks are unchanged.
+An 80-outcome outer-index direction/composite audit preserves every previously
+matched component: native row matches improve 64 to 72, field matches 64 to 68,
+and complete plan matches zero to eight. Remaining direction/access differences
+stay under M5.49. Preceding ab1cb31/run 39066562883 passed all eleven CI jobs.
+
+**Next:** repair the remaining bounded filtered cost/cardinality and metadata
+comparisons. The 20/eight trace also exposes weedout: native quotes 10.060823,
+while the current candidate is 9.060823 after capping distinct outer rows by
+the inferred-range candidate cardinality. Verify the logical outer-cardinality
+contract before changing it; retain the now-correct range/build prices. Small
+inner/tied strategy choices and copied fields need their own native checks.
+Redundant-filter elimination, broader predicates, multi-interval and bound-
+parameter inference, retained prepared choices and sampled-statistics access
+differences remain separate. M5.47 and M5.49 stay partial.
 
 The pinned source cross-check is MySQL 8.4.11's
 [sql_planner.cc](https://github.com/mysql/mysql-server/blob/mysql-8.4.11/sql/sql_planner.cc),

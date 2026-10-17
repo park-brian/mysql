@@ -34,6 +34,7 @@ import { encodeCollation, requireCollationInfo } from '@myjs/charsets'
 import type { TableDef } from '@myjs/engine'
 import { NODE, deparse, type CallNode, type Expression } from '@myjs/parser'
 import { someNode } from './ast.ts'
+import { clusteredIndex, indexParts } from './indexes.ts'
 import { messages, sqlError } from '@myjs/protocol'
 import {
   avgAccumulator,
@@ -573,11 +574,11 @@ export function* groupRows(source: Iterable<{ readonly row: Row }>, plan: GroupP
 export function chooseStrategy(def: TableDef | undefined, keyColumns: readonly (string | undefined)[], rollup: boolean, distinctAggregate: boolean): { strategy: GroupStrategy; index?: string } {
   if (keyColumns.length === 0) return { strategy: 'implicit' }
   if (def !== undefined && keyColumns.every((c) => c !== undefined)) {
-    const pk = def.indexes.find((i) => i.kind === 'primary' || i.name === def.clustered)
+    const pk = clusteredIndex(def)
     const ordered = def.indexes.filter((i) => i.invisible !== true).sort((a, b) => (a === pk ? -1 : b === pk ? 1 : 0))
     for (const index of ordered) {
       // A secondary index carries the clustered key after its own parts.
-      const parts = [...index.parts, ...(index === pk || pk === undefined ? [] : pk.parts.filter((p) => !index.parts.some((q) => q.column === p.column)))]
+      const parts = indexParts(def, index)
       if (parts.length < keyColumns.length) continue
       if (parts.slice(0, keyColumns.length).every((p, i) => p.prefix === undefined && p.descending !== true && p.column.toLowerCase() === (keyColumns[i] as string).toLowerCase())) {
         return { strategy: 'index', index: index.name }

@@ -45,6 +45,7 @@ import { bestAccess, floorFilter, indexScanCost, joinOrder, type Candidate, type
 import { rowKey } from './keys.ts'
 import { columnResultType } from './meta.ts'
 import { chooseStrategy } from './group.ts'
+import { clusteredIndex, indexParts } from './indexes.ts'
 import { distinct, sort as sortRows, type SortKey } from './operators.ts'
 import { neverEqual, nullRejected } from './optimize.ts'
 import type { TableStatistics } from './stats.ts'
@@ -149,7 +150,7 @@ export interface FromPlan {
   /** Sort the first table before its indexed joins expand or discard rows. */
   sortFirst(alias: string, keys: readonly SortKey[]): void
   /** Select a bounded integer semijoin; return whether its physical order is inner-first. */
-  integerSemijoin(alias: string, index: IndexDef, key: Compiled, where: Expression | undefined, materializationEligible: boolean): boolean | undefined
+  integerSemijoin(alias: string, index: IndexDef, key: Compiled, residual: Expression | undefined, materializationEligible: boolean): boolean | undefined
   /**
    * The columns the query reads of each table (`'all'` for one read whole).
    * A table no condition chooses an access path for is read through the
@@ -565,17 +566,23 @@ export function planFrom(refs: readonly TableReference[], ctx: FromContext, wher
     sortFirst(alias, keys) {
       settings.firstSort = { alias, keys }
     },
-    integerSemijoin(alias, index, key, where, materializationEligible) {
+    integerSemijoin(alias, index, key, residual, materializationEligible) {
       const looseScan = optimizerEnabled(ctx.env, 'loosescan')
-      const firstMatch = optimizerEnabled(ctx.env, 'firstmatch')
+      const firstMatch = { alias, enabled: optimizerEnabled(ctx.env, 'firstmatch') }
       const buffered = settings.buffered
       let strategy: 'loose' | 'first' | 'lookup' | 'scan' | 'loop' | 'weedout' | undefined
       if (looseScan) settings.loose = { alias, index, key }
-      if (where === undefined) {
-        settings.firstMatch = { alias, enabled: firstMatch }
-      }
       try {
-        const plan = joinPlan(materializationEligible && where === undefined && optimizerEnabled(ctx.env, 'materialization'))
+        if (residual !== undefined && materializationEligible) {
+          joinPlan()
+          // The actual predicate stays in settings.where; only its bounded cost admission changes.
+          if (settings.inferred.size > 0) {
+            residual = undefined
+            planned = undefined
+          }
+        }
+        if (residual === undefined) settings.firstMatch = firstMatch
+        const plan = joinPlan(materializationEligible && residual === undefined && optimizerEnabled(ctx.env, 'materialization'))
         if (plan === undefined) return undefined
         const node = plan.node
         if (node.kind !== 'join' || node.left || node.outer.kind !== 'leaf' || node.inner.kind !== 'leaf') return undefined
@@ -585,7 +592,7 @@ export function planFrom(refs: readonly TableReference[], ctx: FromContext, wher
         // Indexed LooseScan retains PRIMARY identity; weedout retains physical outer identity.
         else if (outer.alias === alias) {
           if (looseScan && ((node.lookup === undefined && buffered) || (node.lookup?.unique === true && node.lookup.index.kind === 'primary'))) strategy = 'loose'
-          else if (where === undefined) {
+          else if (residual === undefined) {
             settings.weedout = inner
             strategy = 'weedout'
           }
@@ -596,11 +603,11 @@ export function planFrom(refs: readonly TableReference[], ctx: FromContext, wher
         }
         if (inner.alias !== alias || !plan.lookups.has(alias)) return undefined
         // Empty residual ranges retain their materialization boundary.
-        if (where !== undefined && ctx.env !== undefined && inner.table !== undefined && inner.def !== undefined) {
-          const access = chooseAccess(inner.def, alias, where, ctx.env, settings.outer, rangeCosting(inner, settings, ctx.env))
+        if (residual !== undefined && ctx.env !== undefined && inner.table !== undefined && inner.def !== undefined) {
+          const access = chooseAccess(inner.def, alias, residual, ctx.env, settings.outer, rangeCosting(inner, settings, ctx.env))
           if (access.ranges !== undefined && countRows(accessRows(inner.table, inner.def, access, ctx.env.trx, false), 0) === 0) return undefined
         }
-        if (firstMatch) settings.firstMatch = { alias, enabled: true }
+        if (firstMatch.enabled) settings.firstMatch = firstMatch
         else settings.distinctSelect = new Set([outer.alias])
         strategy = 'first'
         return false
@@ -852,7 +859,7 @@ type Materialization = false | 'lookup' | 'scan' | 'loop'
 interface LeafSettings {
   where?: Expression | undefined
   /** Proven integer-equality range predicates, shared by costing and physical reads. */
-  readonly inferred: Map<string, Expression | undefined>
+  readonly inferred: Map<string, Expression>
   /** A STRAIGHT_JOIN's const tables past its first non-const one, joined as constant rows (`constants`). */
   constants?: ReadonlySet<string>
   /** The const tables read while planning, absent from the plan (`constants`). */
@@ -950,7 +957,7 @@ function rangeCosting(t: FromTable, settings: LeafSettings, env: Env, quote = fa
       return (stats ??= statistics(def, table))
     },
     quote,
-    shape: (i) => ({ clustered: i.kind === 'primary' || i.name === def.clustered, covering: holdsRead(def, i, read), recordBytes: indexBytes(def, i) + indexBytes(def, clustered), minRecordBytes }),
+    shape: (i) => ({ clustered: i === clustered, covering: holdsRead(def, i, read), recordBytes: indexBytes(def, i) + indexBytes(def, clustered), minRecordBytes }),
     coveringScan: cover === undefined ? undefined : def.indexes.find((i) => i.name === cover),
     count(index, range, limit) {
       return countRows(accessRows(table, def, { index, ranges: [range] }, env.trx, false), limit)
@@ -1334,6 +1341,7 @@ interface RangeEstimate {
  * `lt.n`. A range that finds nothing estimates one row (`records_in_range`).
  */
 function rangeEstimate(t: FromTable, conditions: readonly Weighed[], leaves: readonly FromTable[], scope: TableScope, compile: (e: Expression) => Compiled, env: Env, width: number, settings: LeafSettings): RangeEstimate | undefined {
+  settings.inferred.delete(t.alias)
   const def = t.def
   if (def === undefined || t.table === undefined || t.nullable) return undefined
   const leading = new Set(def.indexes.filter((i) => i.invisible !== true && i.parts[0]?.prefix === undefined).map((i) => i.parts[0]?.column))
@@ -1421,8 +1429,8 @@ function rangeEstimate(t: FromTable, conditions: readonly Weighed[], leaves: rea
     const c = compileProof(e, compile)
     if (c !== undefined) compiled.push([column, c, 0])
   }
-  settings.inferred.set(t.alias, inferred)
   if (compiled.length === 0) return undefined
+  if (inferred !== undefined) settings.inferred.set(t.alias, inferred)
   const row = new Array<Value>(width).fill(null)
   for (const { row: values } of accessRows(t.table, def, FULL_SCAN, undefined, false)) {
     fillTable(t, values, row)
@@ -1963,15 +1971,6 @@ function keyBytes(c: ColumnDef): number {
     }
   }
   return bytes + (c.nullable ? 1 : 0)
-}
-
-/** The index a table's rows are stored in: its PRIMARY KEY, or the unique key InnoDB chose in its place; none for a hidden row id. */
-const clusteredIndex = (def: TableDef): IndexDef | undefined => def.indexes.find((i) => i.kind === 'primary' || i.name === def.clustered)
-
-/** The schema key parts, with PRIMARY parts appended only for columns absent from a secondary key. */
-export function indexParts(def: TableDef, index: IndexDef): IndexDef['parts'] {
-  const clustered = clusteredIndex(def)
-  return index === clustered || clustered === undefined ? index.parts : [...index.parts, ...clustered.parts.filter((p) => !index.parts.some((q) => q.column.toLowerCase() === p.column.toLowerCase()))]
 }
 
 /** An index's key bytes (`key_length`); a hidden row id's 6. */
