@@ -16,7 +16,7 @@
 // UPDATE and DELETE read every row they will change before changing any
 // (doc 30: a scan is not interleaved with writes to its own table), so a row
 // an UPDATE moves within the clustered order is never met twice.
-import { CHARSET_BINARY, FIELD_TYPE, MyjsError } from '@myjs/bytes'
+import { CHARSET_BINARY, FIELD_TYPE, MyjsError, equalBytes } from '@myjs/bytes'
 import { someNode } from './ast.ts'
 import { CLIENT, hasCap, messages, sqlError, symbolOf, type OkResult } from '@myjs/protocol'
 import type { ColumnDef, FieldBytes, IndexDef, RowId, Table, TableDef, Trx } from '@myjs/engine'
@@ -229,7 +229,7 @@ function uniqueKeys(def: TableDef): IndexDef[] {
 function conflictOf(table: Table, keys: readonly IndexDef[], fields: readonly FieldBytes[], trx: Trx, except?: RowId): { index: IndexDef; id: RowId } | undefined {
   for (const index of keys) {
     const id = table.duplicateOf(index.name, fields, trx)
-    if (id !== undefined && (except === undefined || !sameBytes(id, except))) return { index, id }
+    if (id !== undefined && (except === undefined || !equalBytes(id, except))) return { index, id }
   }
   return undefined
 }
@@ -1129,16 +1129,11 @@ function sameRow(a: readonly FieldBytes[], b: readonly FieldBytes[]): boolean {
       if (x !== y) return false
       continue
     }
-    if (!sameBytes(x, y)) return false
+    if (!equalBytes(x, y)) return false
   }
   return true
 }
 
-function sameBytes(x: Uint8Array, y: Uint8Array): boolean {
-  if (x.length !== y.length) return false
-  for (let j = 0; j < x.length; j++) if (x[j] !== y[j]) return false
-  return true
-}
 
 export function* remove(run: Run, node: DeleteNode, trx: Trx): Generator<void, OkResult> {
   run = { ...run, env: { ...run.env, trx } }

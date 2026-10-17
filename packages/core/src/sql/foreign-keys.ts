@@ -36,7 +36,7 @@
 //     changing is refused (1451): InnoDB "plays safe" rather than know.
 //   - `foreign_key_checks = 0` turns all of it off, cascades included.
 import { quoteName } from '@myjs/parser'
-import { FIELD_TYPE, CHARSET_BINARY, expectTyped } from '@myjs/bytes'
+import { FIELD_TYPE, CHARSET_BINARY, expectTyped, equalBytes } from '@myjs/bytes'
 import { sqlError } from '@myjs/protocol'
 import type { ColumnDef, FieldBytes, IndexDef, KeyRange, ReadMode, Row, RowId, Table, TableDef, TableSpec, Trx } from '@myjs/engine'
 import type { KeyDefinition } from '@myjs/parser'
@@ -291,12 +291,7 @@ function convert(field: Uint8Array, from: ColumnDef, to: ColumnDef): Uint8Array 
   }
 }
 
-const same = (a: FieldBytes, b: FieldBytes): boolean => {
-  if (a === null || b === null) return a === b
-  if (a.length !== b.length) return false
-  for (let i = 0; i < a.length; i++) if (a[i] !== b[i]) return false
-  return true
-}
+const same = (a: FieldBytes, b: FieldBytes): boolean => a === null || b === null ? a === b : equalBytes(a, b)
 
 const position = (def: TableDef, name: string): number => def.columns.findIndex((c) => c.name.toLowerCase() === name.toLowerCase())
 

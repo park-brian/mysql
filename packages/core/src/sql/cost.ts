@@ -72,6 +72,7 @@ export function distinctRows(prefix: readonly Position[], keyFrom: ReadonlySet<s
 
 /** An index lookup a table could be read by. */
 export interface KeyChoice {
+  readonly index: string
   /** `eq_ref` (one row at most), the clustered key read by a prefix of it, or any other index. */
   readonly kind: 'unique' | 'clustered' | 'ref'
   /** Rows found for each value looked up. */
@@ -91,6 +92,14 @@ export interface TableFacts {
   readonly coveredByAnyIndex: boolean
   /** The fraction of its rows its conditions on constants keep. */
   readonly constantFilter: number
+  readonly range?: RangeRead | undefined
+}
+
+/** A selected constant index range, before join row evaluation. */
+export interface RangeRead {
+  readonly index: string
+  readonly rows: number
+  readonly cost: number
 }
 
 /** A table scan: each of its clustered index's pages. */
@@ -127,14 +136,17 @@ export function bestAccess(t: TableFacts, prefix: readonly Position[], key: KeyC
   const s = t.stats
   const before = prefixRows(prefix)
   const kept = s.rows * t.constantFilter
-  const refills = buffered ? 1 + (rowBytes * before) / JOIN_BUFFER : before
-  const whole: Access = { lookup: false, fetched: kept, read: refills * (scanCost(s) + ROW_EVALUATE * (s.rows - kept)) }
+  const range = t.range
+  const found = range?.rows ?? s.rows
+  const scan = range?.cost ?? scanCost(s)
+  const refills = buffered && range === undefined ? 1 + (rowBytes * before) / JOIN_BUFFER : before
+  const whole: Access = { lookup: false, fetched: kept, read: refills * (scan + ROW_EVALUATE * (found - kept)) }
   if (key === undefined) return whole
   const fanout = key.kind === 'unique' ? 1 : key.fanout
   const read = key.kind === 'unique' ? distinctRows(prefix, key.keyFrom) * PAGE_READ : before * lookupRead(s, key)
   const lookup: Access = { lookup: true, fetched: fanout, read }
-  if (fanout < s.rows && read <= scanCost(s)) return lookup
-  if (t.coveredByAnyIndex) return lookup
+  if (fanout < found && read <= scan) return lookup
+  if (range === undefined ? t.coveredByAnyIndex : range.index === key.index) return lookup
   return whole.read + ROW_EVALUATE * before * kept < read + ROW_EVALUATE * before * fanout ? whole : lookup
 }
 

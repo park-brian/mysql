@@ -219,7 +219,10 @@ for separate verification. The current state and remaining work are:
    materialization audit matches all 1,920 outcomes.
    Bounded trivial correlated EXISTS now shares the same materialized operators;
    its separate 1,920-outcome audit agrees completely.
-   **Next:** broader residual eligibility and access/order cost comparisons. Baseline/current live probes show
+   Selected constant-range join quotes now share the range selector and its
+   row/count/cost readers (M5.49); the 72-outcome range/ref audit agrees fully.
+   **Next:** verified equality-inferred access before bounded residual admission,
+   then broader eligibility and access/order comparisons. Baseline/current live probes show
    ordered IN over a nullable
    non-primary key or two empty tables still loses source key flags here
    (4,097 versus the reference's 20,485). MySQL also retains prepare-time
@@ -2516,22 +2519,70 @@ in this sweep but reaches only 144 complete matches. It is not shipped.
 Pinned optimizer trace for 20 outer/eight inner INT rows prices the four-row
 covering inner range at 0.660823, before the join's row evaluation. It prices
 the ten-row non-covering outer range at 3.76, likewise before join evaluation.
-MaterializeScan wins at 6.86082 versus MaterializeLookup at 8.22082. The current
-join-placement quote instead charges filtered scans (0.65 inner, 1.25 outer);
+MaterializeScan wins at 6.86082 versus MaterializeLookup at 8.22082. The inspected pre-quote
+prototype instead charges filtered scans (0.65 inner, 1.25 outer);
 with the existing formulas the prototype prefers lookup at 5.7 over scan at
 6.85. Cardinalities are already correct (inner four, outer ten, ref fanout five).
-The missing range access quote, not another eligibility guard, reverses the
+This identifies the missing range access quote as the cause of the reversed
 strategy comparison.
 
-**Next prerequisite (M5.49 feeding M5.47):** connect join placement to the
-existing standalone range selection/pricing authority. Retain the selected
-range's real cost, filtered row count and repeated-probe lifetime; compare it
-with ref access using the native heuristics. Reuse `rangeCost` and the existing
-range/count/shape readers rather than inventing a second formula or guessing
-selectivity. Prove the candidate/build costs before readmitting the bounded
-inner-key numeric residual. Preserve every previously matching component and
-the unfiltered semijoin choices. Broader predicates, residual eligibility and
-prepared strategy retention remain open.
+**Verified constant-range quote boundary (M5.49 feeding M5.47, 2026-10-17):**
+Join placement now consumes the selected single-interval constant range's
+index, row estimate and price from the existing range selector and index dives.
+It retains the ordinary scan when no range wins. Range reads are priced once
+per prefix row, regardless of buffering, with discarded-row evaluation before
+the join's kept-row evaluation. Ref heuristics use the selected range's rows
+and price; a compatible ref on the same index retains native precedence.
+Selection and quoting share the existing range shape/count/cost readers.
+
+Unbuffered ordinary joins now execute repeated inner reads through the existing
+nested-loop owner. Each logical inner row retains its outer context so ON and
+local predicates can share one filter before identity suppression. Materialized
+build/probe lifetimes retain their existing owners. Shared slot construction,
+planner bookkeeping and byte equality replace duplicated implementations;
+public APIs, captures, caps and lazy chunks are unchanged.
+
+The 72-outcome pinned native audit agrees on every row, all ten field
+attributes, warnings and plans for covering/non-covering range versus ref,
+both buffering settings, selective/broad/empty ranges, ORDER BY and LIMIT,
+through query and execute. A real prepared statement also sees changed bounds
+and data without stale access. A separate 24-outcome native guard audit pins
+nested LEFT JOIN, three-table ON and LATERAL results, field flags/origins and
+warnings with buffering on/off. Three cost tests pin repeated reads, discarded
+row evaluation and ref precedence. Counted local lifecycle tests over 16,384
+rows pin one buffered range versus twenty repeated ranges (2,048 versus 40,960
+visits), LIMIT's one-row stop, active-stream cancellation, closure and writer
+release. These larger lifecycle counts are implementation invariants, not a
+native plan-equivalence claim: a separate native probe chooses per-iteration
+range replanning on this larger sampled-statistics dataset. That broader
+statistics/access-path divergence remains M5.49 work.
+
+Thirty-nine focused checks pass in the Docker native-mode run against pinned
+8.4.11, including local lifecycle instrumentation. Prior native
+threshold/switch/materialization/order controls and every previously matched
+audit component remain intact; the fresh audit retains 337/352 complete and
+340 full-field matches, and the corpus retains 2,124/2,248 plans. All nine size
+caps pass (core/facade 334,328/334,254 B gzipped). Full Docker verification with --full --reference passes all 1,319 tests,
+typecheck, lint, installed-package/typed-example smoke, three million fuzz
+inputs, 20,000 seeded executor statements, 10,000 crash points, the real client
+and all seven pinned corpora. The tested production, runner/package script and
+all 302 files under test match the workspace. Preceding 7fccd53/run 39062684849
+passed all eleven required GitHub jobs.
+
+**Next prerequisite:** carry the same access proof through multiple-equality
+range inference before readmitting the bounded inner-key numeric residual.
+The current quote uses the actual WHERE's selected range; inferred outer
+ranges from equality propagation are not yet the same execution authority.
+A separate 48-outcome ordinary-equality audit pins that prerequisite across
+INT/BIGINT/unsigned BIGINT, buffering, ORDER BY and both protocols: all fields,
+warnings and row multisets agree, but no plan agrees and twelve unordered
+results differ in arrival order. Every ordered result agrees. Native reads
+the inferred outer range; the current reader scans and filters.
+Prove candidate/build costs for the 20-outer/eight-inner native trace, then
+admit only the verified residual class. Preserve every previously matching
+component and unfiltered semijoin choice. Multi-interval quotes, broader
+predicates, retained prepared choices and sampled-statistics access differences
+remain open; M5.47 and M5.49 stay partial.
 
 The pinned source cross-check is MySQL 8.4.11's
 [sql_planner.cc](https://github.com/mysql/mysql-server/blob/mysql-8.4.11/sql/sql_planner.cc),

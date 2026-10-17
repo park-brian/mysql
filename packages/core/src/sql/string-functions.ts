@@ -28,7 +28,7 @@
 //     `Item_func_int_val` give it; anything else is a DOUBLE. A double rounds
 //     half to even, as `rint` does; an integer or a decimal half away from zero.
 //   - GREATEST and LEAST take the type CASE would, and compare in it.
-import { CHARSET_BINARY, expectTyped } from '@myjs/bytes'
+import { CHARSET_BINARY, expectTyped, equalBytes } from '@myjs/bytes'
 import { collationInfoByName, decodeCollation, defaultCollationOf, encodeCollation, requireCollationInfo } from '@myjs/charsets'
 import { NODE, deparse, type CallNode, type Expression } from '@myjs/parser'
 import { messages, sqlError } from '@myjs/protocol'
@@ -140,7 +140,7 @@ function converted(text: string, from: number, to: number): string {
 function asText(bytes: Uint8Array, collation: number): string {
   const text = decodeCollation(bytes, collation)
   const back = encodeCollation(text, collation)
-  if (back.length !== bytes.length || back.some((b, i) => b !== bytes[i])) {
+  if (!equalBytes(back, bytes)) {
     const shown = escapedBytes(bytes.subarray(0, 16))
     throw sqlError('ER_CANNOT_CONVERT_STRING', `Cannot convert string '${shown}' from binary to ${requireCollationInfo(collation).charset}`)
   }
@@ -1354,7 +1354,7 @@ function conversionFunction(name: string, xs: readonly Compiled[], callName: str
           }
           const text = decodeCollation(b, target as number)
           const back = encodeCollation(text, target as number)
-          if (back.length !== b.length || back.some((x, i) => x !== b[i])) {
+          if (!equalBytes(back, b)) {
             raise(env, 1300, `Invalid ${requireCollationInfo(target as number).charset} character string: '${hexOf(b)}'`)
             return null
           }

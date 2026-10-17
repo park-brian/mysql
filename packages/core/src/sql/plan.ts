@@ -44,7 +44,7 @@ import {
 } from '@myjs/types'
 import type { Table, Trx } from '@myjs/engine'
 import type { Compiled, Env } from './compile.ts'
-import { rangeBaseline, rangeCost, type RangeShape } from './cost.ts'
+import { rangeBaseline, rangeCost, type RangeShape, type RangeRead } from './cost.ts'
 import { intersect, normalize, rangeOf, type Constant, type Interval, type RangeSet } from './ranges.ts'
 import type { TableStatistics } from './stats.ts'
 import { scan, type ScannedRow } from './operators.ts'
@@ -57,6 +57,8 @@ export function optimizerEnabled(env: Env | undefined, name: string): boolean {
 
 /** How to read a table: an index and the ranges of it, in index order, or a full scan. */
 export interface Access {
+  /** Requested range estimate, from the same selection and index dives. */
+  readonly quote?: RangeRead | undefined
   readonly index?: string
   /** Disjoint, ascending. Absent for a full scan. */
   readonly ranges?: readonly KeyRange[]
@@ -223,15 +225,13 @@ export function dynamicAccess(def: TableDef, alias: string, conjuncts: readonly 
 
 /** What the range optimizer weighs a table's ranges by (M5.7). */
 export interface RangeCosting {
+  /** Request selected-range row estimates alongside the physical access. */
+  readonly quote?: boolean
   readonly stats: TableStatistics
-  /** Whether an index holds every column the query reads of the table. */
-  covers(index: IndexDef): boolean
-  /** An index record's bytes: its key and the clustered key it carries. */
-  recordBytes(index: IndexDef): number
+  /** The existing range price inputs for one index. */
+  shape(index: IndexDef): RangeShape
   /** The shortest index that covers the query, for a full scan of it, if any. */
   readonly coveringScan: IndexDef | undefined
-  /** The shortest a clustered record can be. */
-  readonly minRecordBytes: number
   /** Count until more than `limit` rows are found: the server's index dives, exact on a small table. */
   count(index: string, range: KeyRange, limit: number): number
 }
@@ -258,16 +258,16 @@ function rangeAccess(def: TableDef, alias: string, conjuncts: readonly Expressio
     const intervals = normalize(set)
     const keyed = keyRanges(intervals, column)
     if (keyed === undefined) continue
-    candidates.push({ index, column, intervals, keyed, shape: { clustered: index.kind === 'primary' || index.name === def.clustered, covering: costing.covers(index), recordBytes: costing.recordBytes(index), minRecordBytes: costing.minRecordBytes } })
+    candidates.push({ index, column, intervals, keyed, shape: costing.shape(index) })
   }
   // No range at all reads no statistics.
   if (candidates.length === 0) return undefined
   const t = costing.stats
-  let best = rangeBaseline(t, costing.coveringScan === undefined ? undefined : costing.recordBytes(costing.coveringScan))
-  const access = (c: (typeof candidates)[number]): Access => ({ index: c.index.name, ranges: c.keyed.map((k) => k.range), over: describeIntervals(c.intervals, c.column.name) })
+  let best = rangeBaseline(t, costing.coveringScan === undefined ? undefined : costing.shape(costing.coveringScan).recordBytes)
+  const access = (c: (typeof candidates)[number], rows: number): Access => ({ index: c.index.name, ranges: c.keyed.map((k) => k.range), over: describeIntervals(c.intervals, c.column.name), quote: costing.quote ? { index: c.index.name, rows, cost: best } : undefined })
   // One range that wins even reading every row needs no count: no other is weighed against it.
   const only = candidates.length === 1 ? candidates[0] : undefined
-  if (only !== undefined && rangeCost(t, only.shape, only.keyed.length, t.rows) < best) return access(only)
+  if (!costing.quote && only !== undefined && rangeCost(t, only.shape, only.keyed.length, t.rows) < best) return access(only, t.rows)
   let chosen: Access | undefined
   for (const c of candidates) {
     const limit = mostRows((rows) => rangeCost(t, c.shape, c.keyed.length, rows), best)
@@ -281,7 +281,7 @@ function rangeAccess(def: TableDef, alias: string, conjuncts: readonly Expressio
     }
     if (rows > limit) continue
     best = rangeCost(t, c.shape, c.keyed.length, rows)
-    chosen = access(c)
+    chosen = access(c, rows)
   }
   return chosen
 }

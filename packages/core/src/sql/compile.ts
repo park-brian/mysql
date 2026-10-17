@@ -11,7 +11,7 @@
 // What is not here yet is refused by name rather than approximated: an
 // unknown function is ER_SP_DOES_NOT_EXIST, as MySQL says it, and a builtin we
 // have not written is ER_NOT_SUPPORTED_YET naming it (M5.10 owns the rest).
-import { CHARSET_BINARY, COLUMN_FLAG, FIELD_TYPE, expectTyped } from '@myjs/bytes'
+import { CHARSET_BINARY, COLUMN_FLAG, FIELD_TYPE, expectTyped, equalBytes } from '@myjs/bytes'
 import { someNode } from './ast.ts'
 import { collationInfoByName, decodeCollation, defaultCollationOf, encodeCollation, requireCollationInfo } from '@myjs/charsets'
 import { LITERAL, NODE, TOKEN, deparse, lex, parseExpression, type CallNode, type CaseNode, type CastNode, type ConvertNode, type Expression, type LiteralNode, type MatchNode, type QueryExpression, type SubqueryNode, quoteName } from '@myjs/parser'
@@ -846,7 +846,7 @@ function literal(e: LiteralNode, ctx: CompileContext): Compiled {
     const text = singleByte ? [...b].map((x) => decode(Uint8Array.of(x)).replace('\uFFFD', '?')).join('') : decode(b)
     if (!singleByte) {
       const back = encodeCollation(text, id)
-      if (back.length !== b.length || back.some((x, i) => x !== b[i])) {
+      if (!equalBytes(back, b)) {
         throw sqlError('ER_INVALID_CHARACTER_STRING', `Invalid ${info.charset} character string: '${hexOf(b)}'`)
       }
     }
