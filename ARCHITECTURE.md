@@ -1530,9 +1530,11 @@ on early return. The 480 disabled-hash outcomes agree, including metadata
 and warnings. Bounded indexed materialized scans now finish a unique non-NULL
 key build before the ordinary point reader probes the outer index, once per
 key. Deferred scan costs must beat their local strategy competitor before the
-final sort is priced. The 960-outcome indexed audit improves from 534 to 768
-complete matches; all indexed materialized scans, rows, fields and warnings
-agree. Its remaining 192 plans need indexed physical weedout. FirstMatch
+final sort is priced. Indexed raw weedout streams duplicate drivers through
+the same point reader, skips NULL keys and suppresses physical identities
+after every ON check. Point reads and repeated scans share the statement
+identity operator and generator closure. All 960 indexed-audit outcomes and
+1,920 materialization-disabled outcomes agree completely. FirstMatch
 availability retains its logical inner alias when disabled, allowing native
 last-resort weedout costs and switch-dependent root-prefix pruning. All 180
 bounded switch outcomes agree. Broader materialization, weedout, prepared
@@ -1551,7 +1553,7 @@ The full Docker gates, pinned-reference audits and 10,000 crash points pass.
 `db.stream()` streams a million rows within a few MB of the heap's baseline (M5.40). Next is the
 remaining function and planner work, then the browser. The coercion corpus
 now agrees on all 3,148 observations and all 1,737 warning counts. The core entry bundle
-is 334,316 bytes gzipped (326.5 KiB), against the 500 KB release target,
+is 334,333 bytes gzipped (326.5 KiB), against the 500 KB release target,
 with the UCA weights in a separate chunk loaded on demand.
 
 The release plan gives each stage something to ship:

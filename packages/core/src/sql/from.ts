@@ -42,7 +42,7 @@ import type { Compiled, Env, Row, Scope } from './compile.ts'
 import { indexLookup, planNode, wrap, type PlanNode } from './explain.ts'
 import { FULL_SCAN, accessRows, chooseAccess, dynamicAccess, keyOrder, optimizerEnabled, pointAccess, splitAnd, type Access, type OuterColumn, type RangeCosting } from './plan.ts'
 import { bestAccess, floorFilter, indexScanCost, joinOrder, type Candidate, type FirstMatch, type KeyChoice, type Positioned } from './cost.ts'
-import { firstKey, rowKey } from './keys.ts'
+import { rowKey } from './keys.ts'
 import { columnResultType } from './meta.ts'
 import { chooseStrategy } from './group.ts'
 import { distinct, sort as sortRows, type SortKey } from './operators.ts'
@@ -592,7 +592,7 @@ export function planFrom(refs: readonly TableReference[], ctx: FromContext, wher
         // Indexed LooseScan retains PRIMARY identity; weedout retains physical outer identity.
         else if (outer.alias === alias) {
           if (looseScan && ((node.lookup === undefined && buffered) || (node.lookup?.unique === true && node.lookup.index.kind === 'primary'))) strategy = 'loose'
-          else if (where === undefined && node.lookup === undefined) {
+          else if (where === undefined) {
             settings.weedout = inner
             strategy = 'weedout'
           }
@@ -1175,10 +1175,10 @@ function toOp(node: Node, conditions: readonly Placed[], scope: TableScope, sett
   }
   if (!node.left && node.inner.kind === 'leaf' && settings.constants?.has(node.inner.table.alias) === true) return constantRowOp(outer, node.inner.table, node.innerSlots, toInner, spanning, settings)
   if (node.lookup !== undefined && node.inner.kind === 'leaf' && settings.lookups?.has(node.inner.table.alias) !== false && materialized !== 'lookup') {
-    return filterOp(indexedJoinOp(node, outer, node.inner.table, node.lookup, [...toInner, ...spanning], settings), above)
+    return filterOp(weedoutOp(indexedJoinOp(node, outer, node.inner.table, node.lookup, [...toInner, ...spanning], settings), settings.weedout), above)
   }
   const inner = toOp(node.inner, toInner, scope, settings, ctx, preliminary)
-  if (settings.weedout !== undefined && settings.buffered === false) return nestedJoinOp(node, outer, inner, spanning, settings.weedout)
+  if (settings.weedout !== undefined && settings.buffered === false) return weedoutOp(nestedJoinOp(node, outer, inner, spanning), settings.weedout)
   const joinScope = slotScope(preliminary.restrict(new Set([...outerAliases, ...innerAliases])), preliminary)
   const keys = hashKeys(spanning, outerAliases, innerAliases, scope, (e) => ctx.compileOn(e, joinScope))
   // Automatic derived indexes and MaterializeLookup build on the inner side.
@@ -1747,7 +1747,7 @@ function indexedJoinOp(node: Node & { kind: 'join' }, outer: Op, t: FromTable, l
   const materialized = point && !!settings.materialized
   const semi = point && settings.firstMatch?.enabled === true && settings.firstMatch.alias === t.alias
   // DISTINCT's unused final table and FirstMatch both stop after one qualifying point-read match.
-  const firstOnly = point && (settings.distinctLast === t.alias || semi)
+  const firstOnly = point && settings.weedout === undefined && (settings.distinctLast === t.alias || semi)
   return {
     *rows(run, context) {
       const env = run.env
@@ -1841,23 +1841,27 @@ function constantRowOp(outer: Op, t: FromTable, slots: readonly number[], own: r
   }
 }
 
-/** Repeated inner scans, with LATERAL context or statement-scoped physical weedout. */
-function nestedJoinOp(node: Node & { kind: 'join' }, outer: Op, inner: Op, on: readonly Placed[], weedout?: FromTable): Op {
+/** Each emitted physical identity once, after the input checks every candidate pair. */
+function weedoutOp(input: Op, table: FromTable | undefined): Op {
+  if (table === undefined) return input
+  return {
+    rows: (run, context) => distinct(input.rows({ ...run, ids: true }, context), (row) => row.ids![table.offset]!.join()),
+    describe: (env) => planNode(`Remove duplicate ${table.alias} rows using temporary table`, [input.describe(env)]),
+  }
+}
+
+/** Repeated inner scans share LATERAL context and ordinary generator closure. */
+function nestedJoinOp(node: Node & { kind: 'join' }, outer: Op, inner: Op, on: readonly Placed[]): Op {
   return {
     *rows(run, context) {
-      const seen = new Set<string>()
-      if (weedout !== undefined) run = { ...run, ids: true }
       for (const o of outer.rows(run, context)) {
         const row = context === undefined ? o.row : o.row.map((v, i) => v ?? context[i] ?? null)
-        for (const pair of matchingRows(joined(row, o.ids), inner.rows(run, row), node.innerSlots, on, run.env, node.left)) {
-          if (weedout !== undefined && !firstKey(seen, pair.ids![weedout.offset]!.join())) continue
-          yield pair
-        }
+        yield* matchingRows(joined(row, o.ids), inner.rows(run, row), node.innerSlots, on, run.env, node.left)
       }
     },
     describe(env) {
-      const input = wrap(weedout === undefined, 'Invalidate materialized tables', outer.describe(env))
-      return wrap(weedout !== undefined, `Remove duplicate ${weedout?.alias} rows using temporary table`, nestedLoop(node.left, input, wrap(!node.left && on.length > 0, 'Filter', inner.describe(env))))
+      const input = wrap(hasLateral(node.inner), 'Invalidate materialized tables', outer.describe(env))
+      return nestedLoop(node.left, input, wrap(!node.left && on.length > 0, 'Filter', inner.describe(env)))
     },
   }
 }
