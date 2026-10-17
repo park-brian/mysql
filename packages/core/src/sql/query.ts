@@ -888,7 +888,7 @@ function costedIntegerSemijoin(run: Run, q: QueryExpression, node: SelectNode, f
     alternative.reads(read)
     alternative.sortedBy(sortBy, keep)
     if (!holdsRead(def, index, innerRead)) return undefined
-    const innerFirst = alternative.integerSemijoin(innerAlias, index, key, extra, where?.kind === NODE.BINARY && node.groupBy === undefined && !someNode([node.items, q.orderBy], (n) => (n as { kind?: string }).kind === NODE.SUBQUERY ? true : undefined))
+    const innerFirst = alternative.integerSemijoin(innerAlias, index, key, extra, node.groupBy === undefined && !someNode([node.items, q.orderBy], (n) => (n as { kind?: string }).kind === NODE.SUBQUERY ? true : undefined))
     return innerFirst === undefined ? undefined : { from: alternative, where: predicate, innerFirst }
   } catch (error) {
     expectTyped(error)

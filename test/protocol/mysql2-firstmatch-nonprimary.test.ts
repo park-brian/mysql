@@ -373,7 +373,7 @@ test('materialized hash scan preserves outer identity, integer fields, ordering 
   const { conn, db } = await connect('material_scan100')
   try {
     await conn.query("SET optimizer_switch='default,firstmatch=off,loosescan=off'")
-    for (const type of ['INT', 'BIGINT', 'BIGINT UNSIGNED']) {
+    for (const predicate of ['g IN(SELECT g FROM ch)', 'EXISTS(SELECT 1 FROM ch WHERE pa.g=ch.g)', 'EXISTS(SELECT 1 FROM ch WHERE ch.g=pa.g)']) for (const type of ['INT', 'BIGINT', 'BIGINT UNSIGNED']) {
       await conn.query('DROP TABLE IF EXISTS pa,ch')
       await conn.query(`CREATE TABLE pa(id INT NOT NULL,g ${type},s VARCHAR(12)) STATS_AUTO_RECALC=0`)
       await conn.query(`CREATE TABLE ch(id INT PRIMARY KEY,g ${type},KEY(g)) STATS_AUTO_RECALC=0`)
@@ -386,7 +386,7 @@ test('materialized hash scan preserves outer identity, integer fields, ordering 
         const value = type === 'INT' ? 1 : String(base + 1n)
         const expected = state !== 'key' ? [] : Array.from({ length: 5 }, (_, i) => [2+i*4, value, 'same'])
         for (const ordered of [false, true]) {
-          const sql = 'SELECT id,g,s FROM pa WHERE g IN(SELECT g FROM ch)' + (ordered ? ' ORDER BY g,s' : '')
+          const sql = 'SELECT id,g,s FROM pa WHERE ' + predicate + (ordered ? ' ORDER BY g,s' : '')
           for (const method of ['query', 'execute'] as const) {
             const options = { sql, rowsAsArray: true }
             const [rows, fields] = method === 'query' ? await conn.query(options) : await conn.execute(options)
@@ -401,7 +401,7 @@ test('materialized hash scan preserves outer identity, integer fields, ordering 
         }
       }
       await conn.query(`UPDATE ch SET g=${base+1n}`)
-      const sql = 'SELECT id,g,s FROM pa WHERE g IN(SELECT g FROM ch)'
+      const sql = 'SELECT id,g,s FROM pa WHERE ' + predicate
       const statement = await conn.prepare({ sql, rowsAsArray: true })
       try {
         const value = (n: number) => type === 'INT' ? n : String(base + BigInt(n))
@@ -422,7 +422,7 @@ test('materialized nested loops retain distinct build keys, outer identities and
   const { conn, db } = await connect('material_loop101')
   try {
     await conn.query("SET optimizer_switch='default,firstmatch=off,loosescan=off,block_nested_loop=off'")
-    for (const type of ['INT', 'BIGINT', 'BIGINT UNSIGNED']) {
+    for (const predicate of ['g IN(SELECT g FROM ch)', 'EXISTS(SELECT 1 FROM ch WHERE pa.g=ch.g)', 'EXISTS(SELECT 1 FROM ch WHERE ch.g=pa.g)']) for (const type of ['INT', 'BIGINT', 'BIGINT UNSIGNED']) {
       await conn.query('DROP TABLE IF EXISTS pa,ch')
       await conn.query(`CREATE TABLE pa(id INT NOT NULL,g ${type},s VARCHAR(12)) STATS_AUTO_RECALC=0`)
       await conn.query(`CREATE TABLE ch(id INT PRIMARY KEY,g ${type},KEY(g)) STATS_AUTO_RECALC=0`)
@@ -436,7 +436,7 @@ test('materialized nested loops retain distinct build keys, outer identities and
         const values = state === 'duplicates' ? [1, 2] : state === 'key' ? [1] : []
         const expected = values.flatMap((n) => Array.from({ length: 5 }, (_, i) => [n+1+i*4, type === 'INT' ? n : String(base+BigInt(n)), 'same']))
         for (const ordered of state === 'duplicates' ? [true] : [false, true]) {
-          const sql = 'SELECT id,g,s FROM pa WHERE g IN(SELECT g FROM ch)' + (ordered ? ' ORDER BY g,s,id' : '')
+          const sql = 'SELECT id,g,s FROM pa WHERE ' + predicate + (ordered ? ' ORDER BY g,s,id' : '')
           for (const method of ['query', 'execute'] as const) {
             const options = { sql, rowsAsArray: true }
             const [rows, fields] = method === 'query' ? await conn.query(options) : await conn.execute(options)
@@ -451,7 +451,7 @@ test('materialized nested loops retain distinct build keys, outer identities and
         }
       }
       await conn.query(`UPDATE ch SET g=${base+1n}`)
-      const sql = 'SELECT id,g,s FROM pa WHERE g IN(SELECT g FROM ch)'
+      const sql = 'SELECT id,g,s FROM pa WHERE ' + predicate
       const statement = await conn.prepare({ sql, rowsAsArray: true })
       try {
         const value = (n: number) => type === 'INT' ? n : String(base + BigInt(n))
@@ -472,7 +472,7 @@ test('indexed materialized scans retain distinct keys, physical outer identities
   const { conn, db } = await connect('material_index105')
   try {
     await conn.query("SET optimizer_switch='default,firstmatch=off,loosescan=off,block_nested_loop=off'")
-    for (const type of ['INT', 'BIGINT', 'BIGINT UNSIGNED']) {
+    for (const predicate of ['g IN(SELECT g FROM ch)', 'EXISTS(SELECT 1 FROM ch WHERE pa.g=ch.g)', 'EXISTS(SELECT 1 FROM ch WHERE ch.g=pa.g)']) for (const type of ['INT', 'BIGINT', 'BIGINT UNSIGNED']) {
       await conn.query('DROP TABLE IF EXISTS pa,ch')
       await conn.query(`CREATE TABLE pa(id INT NOT NULL,g ${type},s VARCHAR(12),KEY(g)) STATS_AUTO_RECALC=0`)
       await conn.query(`CREATE TABLE ch(id INT PRIMARY KEY,g ${type},KEY(g)) STATS_AUTO_RECALC=0`)
@@ -486,7 +486,7 @@ test('indexed materialized scans retain distinct keys, physical outer identities
         const values = state === 'duplicates' ? [1, 2] : state === 'key' ? [1] : []
         const expected = values.flatMap((n) => Array.from({ length: 5 }, (_, i) => [n+1+i*4, type === 'INT' ? n : String(base+BigInt(n)), 'same']))
         for (const ordered of state === 'duplicates' ? [true] : [false, true]) {
-          const sql = 'SELECT id,g,s FROM pa WHERE g IN(SELECT g FROM ch)' + (ordered ? ' ORDER BY g,s,id' : '')
+          const sql = 'SELECT id,g,s FROM pa WHERE ' + predicate + (ordered ? ' ORDER BY g,s,id' : '')
           for (const method of ['query', 'execute'] as const) {
             const options = { sql, rowsAsArray: true }
             const [rows, fields] = method === 'query' ? await conn.query(options) : await conn.execute(options)
@@ -501,7 +501,7 @@ test('indexed materialized scans retain distinct keys, physical outer identities
         }
       }
       await conn.query(`UPDATE ch SET g=${base+1n}`)
-      const sql = 'SELECT id,g,s FROM pa WHERE g IN(SELECT g FROM ch)'
+      const sql = 'SELECT id,g,s FROM pa WHERE ' + predicate
       const statement = await conn.prepare({ sql, rowsAsArray: true })
       try {
         const value = (n: number) => type === 'INT' ? n : String(base + BigInt(n))
@@ -655,7 +655,7 @@ test('hash and repeated-scan weedout retain duplicate outer identities, exact in
 })
 
 test('materialized scans build before probing and close repeated scans under backpressure', async () => {
-  for (const buffered of [true, false]) {
+  for (const correlated of [false, true]) for (const buffered of [true, false]) {
   const db = await MySQL.open(':memory:')
   const count = 4096
   const payload = 'same'.repeat(50)
@@ -689,7 +689,7 @@ test('materialized scans build before probing and close repeated scans under bac
       }
       return table
     }
-    const sql = 'SELECT g,s FROM material_reads100.pa WHERE g IN(SELECT g FROM material_reads100.ch) FOR UPDATE'
+    const sql = 'SELECT g,s FROM material_reads100.pa WHERE ' + (correlated ? 'EXISTS(SELECT 1 FROM material_reads100.ch WHERE pa.g=ch.g)' : 'g IN(SELECT g FROM material_reads100.ch)') + ' FOR UPDATE'
     try {
       assert.deepEqual((await db.query(sql))[0], [])
       assert.deepEqual(events, ['build', 'built'])
@@ -722,7 +722,7 @@ test('materialized scans build before probing and close repeated scans under bac
 })
 
 test('indexed materialized scans build once and close point reads under backpressure', async () => {
-  for (const buffered of [true, false]) {
+  for (const correlated of [false, true]) for (const buffered of [true, false]) {
     const db = await MySQL.open(':memory:')
     const count = 4096
     const payload = 'same'.repeat(50)
@@ -756,7 +756,7 @@ test('indexed materialized scans build once and close point reads under backpres
         }
         return table
       }
-      const sql = 'SELECT g,s FROM material_index_reads105.pa WHERE g IN(SELECT g FROM material_index_reads105.ch) FOR UPDATE'
+      const sql = 'SELECT g,s FROM material_index_reads105.pa WHERE ' + (correlated ? 'EXISTS(SELECT 1 FROM material_index_reads105.ch WHERE pa.g=ch.g)' : 'g IN(SELECT g FROM material_index_reads105.ch)') + ' FOR UPDATE'
       try {
         assert.deepEqual((await db.query(sql))[0], [])
         assert.deepEqual(events, ['build', 'built'])
@@ -1210,7 +1210,7 @@ test('ordered empty-inner materialization costs weedout with FirstMatch and Loos
 test('materialized integer lookup retains duplicate outer identity, native fields and fresh prepared data', async () => {
   const { conn, db } = await connect('material_lookup90')
   try {
-    for (const type of ['INT', 'BIGINT', 'BIGINT UNSIGNED']) {
+    for (const predicate of ['g IN(SELECT g FROM ch)', 'EXISTS(SELECT 1 FROM ch WHERE pa.g=ch.g)', 'EXISTS(SELECT 1 FROM ch WHERE ch.g=pa.g)']) for (const type of ['INT', 'BIGINT', 'BIGINT UNSIGNED']) {
       await conn.query('DROP TABLE IF EXISTS pa,ch')
       await conn.query(`CREATE TABLE pa(id INT NOT NULL,g ${type},s VARCHAR(12)) STATS_AUTO_RECALC=0`)
       await conn.query(`CREATE TABLE ch(id INT PRIMARY KEY,g ${type},KEY(g)) STATS_AUTO_RECALC=0`)
@@ -1224,7 +1224,7 @@ test('materialized integer lookup retains duplicate outer identity, native field
       for (const switches of ['default', 'default,firstmatch=off', 'default,loosescan=off', 'default,firstmatch=off,duplicateweedout=off']) {
         await conn.query('SET optimizer_switch=' + mysql.escape(switches))
         for (const ordered of [false, true]) {
-          const sql = 'SELECT g,s FROM pa WHERE g IN(SELECT g FROM ch)' + (ordered ? ' ORDER BY g,s LIMIT 1' : '')
+          const sql = 'SELECT g,s FROM pa WHERE ' + predicate + (ordered ? ' ORDER BY g,s LIMIT 1' : '')
           for (const method of ['query', 'execute'] as const) {
             const options = { sql, rowsAsArray: true }
             const [rows, fields] = method === 'query' ? await conn.query(options) : await conn.execute(options)
@@ -1238,7 +1238,7 @@ test('materialized integer lookup retains duplicate outer identity, native field
         }
       }
       await conn.query("SET optimizer_switch='default'")
-      const sql = 'SELECT g,s FROM pa WHERE g IN(SELECT g FROM ch) ORDER BY g,s LIMIT 1'
+      const sql = 'SELECT g,s FROM pa WHERE ' + predicate + ' ORDER BY g,s LIMIT 1'
       const statement = await conn.prepare({ sql, rowsAsArray: true })
       try {
         assert.deepEqual((await statement.execute([]))[0], [{ g: value(1), s: 'same' }])
@@ -1262,49 +1262,51 @@ test('materialized integer lookup retains duplicate outer identity, native field
 })
 
 test('materialized lookup builds once after a non-NULL outer probe and closes a locking stream', async () => {
-  const db = await MySQL.open(':memory:')
-  try {
-    await db.query('CREATE DATABASE material_reads90')
-    await db.query('USE material_reads90')
-    await db.query('CREATE TABLE pa(id INT NOT NULL,g INT,s VARCHAR(12)) STATS_AUTO_RECALC=0')
-    await db.query('CREATE TABLE ch(id INT PRIMARY KEY,g INT,KEY(g)) STATS_AUTO_RECALC=0')
-    await db.query('INSERT INTO pa VALUES' + Array.from({ length: 200 }, (_, i) => `(${i+1},${i%4===0 ? 'NULL' : i%4},'same')`).join(','))
-    await db.query('INSERT INTO ch VALUES(1,NULL),(2,1),(3,2),(4,3),(5,NULL),(6,1),(7,2),(8,3)')
-    await db.query('ANALYZE TABLE pa,ch')
-    const catalog = db.catalog!
-    const open = catalog.table.bind(catalog)
-    let builds = 0, examined = 0, closed = 0
-    catalog.table = (schema, name, trx) => {
-      const table = open(schema, name, trx)
-      if (schema === 'material_reads90' && name === 'ch') {
-        const scan = table.indexScan.bind(table)
-        table.indexScan = function*(index, range, transaction, mode) {
-          if (mode !== 'current') { yield* scan(index, range, transaction, mode); return }
-          assert.equal(index, 'g')
-          assert.equal(range?.from, undefined, 'one full key build rather than per-outer base lookups')
-          builds++
-          try { for (const row of scan(index, range, transaction, mode)) { examined++; yield row } }
-          finally { closed++ }
+  for (const correlated of [false, true]) {
+    const db = await MySQL.open(':memory:')
+    try {
+      await db.query('CREATE DATABASE material_reads90')
+      await db.query('USE material_reads90')
+      await db.query('CREATE TABLE pa(id INT NOT NULL,g INT,s VARCHAR(12)) STATS_AUTO_RECALC=0')
+      await db.query('CREATE TABLE ch(id INT PRIMARY KEY,g INT,KEY(g)) STATS_AUTO_RECALC=0')
+      await db.query('INSERT INTO pa VALUES' + Array.from({ length: 200 }, (_, i) => `(${i+1},${i%4===0 ? 'NULL' : i%4},'same')`).join(','))
+      await db.query('INSERT INTO ch VALUES(1,NULL),(2,1),(3,2),(4,3),(5,NULL),(6,1),(7,2),(8,3)')
+      await db.query('ANALYZE TABLE pa,ch')
+      const catalog = db.catalog!
+      const open = catalog.table.bind(catalog)
+      let builds = 0, examined = 0, closed = 0
+      catalog.table = (schema, name, trx) => {
+        const table = open(schema, name, trx)
+        if (schema === 'material_reads90' && name === 'ch') {
+          const scan = table.indexScan.bind(table)
+          table.indexScan = function*(index, range, transaction, mode) {
+            if (mode !== 'current') { yield* scan(index, range, transaction, mode); return }
+            assert.equal(index, 'g')
+            assert.equal(range?.from, undefined, 'one full key build rather than per-outer base lookups')
+            builds++
+            try { for (const row of scan(index, range, transaction, mode)) { examined++; yield row } }
+            finally { closed++ }
+          }
         }
+        return table
       }
-      return table
-    }
-    const sql = 'SELECT g,s FROM material_reads90.pa WHERE g IN(SELECT g FROM material_reads90.ch) FOR UPDATE'
-    try {
-      for await (const row of db.stream(sql)) { assert.deepEqual(row, { g: 1, s: 'same' }); break }
-      assert.deepEqual([builds, examined, closed], [1, 8, 1])
-      await db.query('UPDATE material_reads90.pa SET g=NULL')
-      builds = examined = closed = 0
-      assert.deepEqual((await db.query(sql))[0], [])
-      assert.deepEqual([builds, examined, closed], [0, 0, 0], 'NULL-only outer input must not initialize its inner build')
-      await db.query('DELETE FROM material_reads90.pa')
-      assert.deepEqual((await db.query(sql))[0], [])
-      assert.deepEqual([builds, examined, closed], [0, 0, 0], 'empty outer input must not initialize its inner build')
-    } finally { catalog.table = open }
-    const writer = await db.connect()
-    try {
-      await writer.query('SET innodb_lock_wait_timeout=1')
-      await writer.query('UPDATE material_reads90.ch SET g=9 WHERE g=2')
-    } finally { await writer.end() }
-  } finally { await db.end() }
+      const sql = 'SELECT g,s FROM material_reads90.pa WHERE ' + (correlated ? 'EXISTS(SELECT 1 FROM material_reads90.ch WHERE pa.g=ch.g)' : 'g IN(SELECT g FROM material_reads90.ch)') + ' FOR UPDATE'
+      try {
+        for await (const row of db.stream(sql)) { assert.deepEqual(row, { g: 1, s: 'same' }); break }
+        assert.deepEqual([builds, examined, closed], [1, 8, 1])
+        await db.query('UPDATE material_reads90.pa SET g=NULL')
+        builds = examined = closed = 0
+        assert.deepEqual((await db.query(sql))[0], [])
+        assert.deepEqual([builds, examined, closed], [0, 0, 0], 'NULL-only outer input must not initialize its inner build')
+        await db.query('DELETE FROM material_reads90.pa')
+        assert.deepEqual((await db.query(sql))[0], [])
+        assert.deepEqual([builds, examined, closed], [0, 0, 0], 'empty outer input must not initialize its inner build')
+      } finally { catalog.table = open }
+      const writer = await db.connect()
+      try {
+        await writer.query('SET innodb_lock_wait_timeout=1')
+        await writer.query('UPDATE material_reads90.ch SET g=9 WHERE g=2')
+      } finally { await writer.end() }
+    } finally { await db.end() }
+  }
 })
