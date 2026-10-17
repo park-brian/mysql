@@ -168,13 +168,13 @@ export interface Positioned extends Position {
   readonly read: number
 }
 
-/** A table the join order may put anywhere its dependencies allow. */
+/** A table in a freely reorderable inner join. */
 export interface Candidate {
   readonly alias: string
-  /** Its estimated rows before any join (`found_records`), which orders the search. */
+  /** Estimated records under constant conditions (`found_records`), which order the search. */
+  readonly found: number
+  /** Unfiltered table rows cap distinct outer identities for weedout. */
   readonly rows: number
-  /** Tables that must come before it: an outer join's preserved side. */
-  readonly dependent: ReadonlySet<string>
   /** Tables an index lookup into it could take its key from (`key_dependent`). */
   readonly keyDependent: ReadonlySet<string>
   /** How it is best read after `prefix` (`best_access_path`). */
@@ -209,8 +209,8 @@ export interface FirstMatch {
 /**
  * The cheapest join order (`greedy_search` at the default search depth,
  * which on fewer than 62 tables is `best_extension_by_limited_search` over
- * every order). The tables are first sorted as the server sorts them: a table
- * after those it depends on, then after those its keys read from, then fewer
+ * every order). The caller supplies only freely reorderable inner joins.
+ * Tables are first sorted after those their keys read from, then fewer
  * rows first, then as written. Each prefix is extended by each table it may
  * take next, in that order, and abandoned once it costs as much as the best
  * whole plan found. `prune_level=1`'s heuristics are kept, since they decide
@@ -229,8 +229,9 @@ export interface FirstMatch {
  * `loose` is supplied only for a two-table integer semijoin. The full index
  * read and later lookup's read cost remain separate from distinct-key row
  * evaluation; a final sort pays for outer output rather than inner fanout.
- * `firstMatch` retains the second written table and whether its unfiltered
- * strategy is enabled. Undefined retains unmodeled filtered costs.
+ * `firstMatch` retains the second written table and whether its
+ * strategy is enabled for an unfiltered or proved filtered semijoin.
+ * Undefined retains unmodeled residual costs.
  * Its first written candidate supplies the outer cardinality. An inner-first order
  * pays for memory temporary deduplication and sorts its distinct outer rows.
  * The caller admits only orders whose physical deduplication strategy it supports.
@@ -240,17 +241,15 @@ export interface FirstMatch {
 export function joinOrder(candidates: readonly Candidate[], sort?: { readonly alias: string; readonly limit: number }, loose?: { readonly alias: string; readonly rows: number; readonly read: number; readonly fetched: number }, firstMatch?: FirstMatch, materialization = false, weedout = true): Positioned[] {
   let sortBy = sort?.alias
   const sorted = [...candidates].sort((a, b) => {
-    if (a.dependent.has(b.alias)) return 1
-    if (b.dependent.has(a.alias)) return -1
     const ab = a.keyDependent.has(b.alias)
     const ba = b.keyDependent.has(a.alias)
     if (ab !== ba) return ab ? 1 : -1
-    return a.rows - b.rows || candidates.indexOf(a) - candidates.indexOf(b)
+    return a.found - b.found || candidates.indexOf(a) - candidates.indexOf(b)
   })
   let best: { readonly cost: number; readonly plan: Positioned[] } | undefined
   const plan: Step[] = []
   let driving: Step | undefined
-  const available = (c: Candidate, remaining: ReadonlySet<string>): boolean => remaining.has(c.alias) && !overlaps(c.dependent, remaining)
+  const available = (c: Candidate, remaining: ReadonlySet<string>): boolean => remaining.has(c.alias)
   const place = (c: Candidate): Positioned => {
     // A bounded two-table LooseScan retains the later lookup's original read cost.
     let placed = c.place(plan.map((p) => p.alias === driving?.alias ? driving! : p))

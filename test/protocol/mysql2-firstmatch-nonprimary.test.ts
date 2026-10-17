@@ -331,7 +331,7 @@ test('hash LooseScan preserves duplicate outer rows and filters before key dedup
 test('FirstMatch sort costing counts outer rows instead of duplicate inner fanout', async () => {
   // At this fanout the old sort cost incorrectly prefers inner-first deduplication.
   const candidates: Candidate[] = ['p', 'c'].map((alias) => ({
-    alias, rows: 4, dependent: new Set<string>(), keyDependent: new Set([alias === 'p' ? 'c' : 'p']),
+    alias, found: 4, rows: 4, keyDependent: new Set([alias === 'p' ? 'c' : 'p']),
     place: (prefix) => ({ alias, fetched: prefix.length === 0 ? 4 : 2, filter: 1, keyFrom: new Set<string>(), lookup: prefix.length > 0, read: prefix.length === 0 ? 0.25 : 1.0011 }),
   }))
   assert.deepEqual(joinOrder(candidates, { alias: 'p', limit: Infinity }, undefined, { alias: 'c', enabled: true }).map((p) => p.alias), ['p', 'c'])

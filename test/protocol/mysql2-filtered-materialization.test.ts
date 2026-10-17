@@ -129,3 +129,61 @@ test('filtered eager builds finish before point probes and close on LIMIT and ca
     } finally { await db.end() }
   }
 })
+
+
+test('filtered last-resort weedout caps distinct identities by full outer cardinality', async () => {
+  const host = process.env.MYSQL_REFERENCE_HOST
+  const db = host === undefined ? await MySQL.open(':memory:') : undefined
+  const conn = await mysql.createConnection(db === undefined
+    ? { host: host ?? 'reference', user: 'root', password: process.env.MYSQL_REFERENCE_PASSWORD ?? 'root', supportBigNumbers: true, bigNumberStrings: true }
+    : { stream: db.createStream(), user: 'root', supportBigNumbers: true, bigNumberStrings: true })
+  const schema = 'filtered_weedout113'
+  try {
+    await conn.query(`CREATE DATABASE ${schema}`)
+    await conn.query(`USE ${schema}`)
+    for (const type of ['INT', 'BIGINT', 'BIGINT UNSIGNED']) {
+      const base = type === 'INT' ? 0n : 9007199254740992n
+      const value = (g: number) => g === 0 ? 'NULL' : String(base + BigInt(g))
+      const result = (g: number): number | string => type === 'INT' ? g : String(base + BigInt(g))
+      await conn.query(`CREATE TABLE pa(id INT NOT NULL,g ${type},s VARCHAR(12),KEY(g)) STATS_AUTO_RECALC=0`)
+      await conn.query(`CREATE TABLE ch(id INT PRIMARY KEY,g ${type},KEY(g)) STATS_AUTO_RECALC=0`)
+      await conn.query('INSERT INTO ch VALUES' + Array.from({ length: 8 }, (_, i) => `(${i+1},${value((i+1)%4)})`).join(','))
+      for (const outer of [20, 200]) {
+        await conn.query('DELETE FROM pa')
+        await conn.query('INSERT INTO pa VALUES' + Array.from({ length: outer }, (_, i) => `(${i+1},${value(i%4)},'same')`).join(','))
+        await conn.query('ANALYZE TABLE pa,ch')
+        const all = [2, 3].flatMap((g) => Array.from({ length: outer/4 }, (_, i) => [g+1+i*4, result(g), 'same']))
+        for (const buffered of [true, false]) {
+          await conn.query("SET optimizer_switch='default,firstmatch=off,loosescan=off,materialization=off" + (buffered ? '' : ',block_nested_loop=off') + "'")
+          const suffixes = outer === 20 ? [' ORDER BY g,s,id', ' ORDER BY g,s,id LIMIT 10', ' ORDER BY id DESC LIMIT 10'] : [' ORDER BY g,s,id']
+          for (const suffix of suffixes) {
+            const sql = 'SELECT id,g,s FROM pa WHERE EXISTS(SELECT 1 FROM ch WHERE pa.g=ch.g AND ch.g>' + value(1) + ')' + suffix
+            const [plan] = await conn.query<mysql.RowDataPacket[]>('EXPLAIN FORMAT=TREE ' + sql)
+            const text = String(plan[0]?.EXPLAIN)
+            assert.match(text, /Nested loop inner join/)
+            assert.match(text, /Covering index lookup on ch using g/)
+            assert.doesNotMatch(text, /Remove duplicate|Materialize with deduplication/)
+            // The additional redundant child Filter remains separate from this cardinality repair.
+            const expected = suffix.includes('DESC') ? [...all].sort((a, b) => Number(b[0]) - Number(a[0])) : all
+            for (const method of ['query', 'execute'] as const) {
+              const options = { sql, rowsAsArray: true }
+              const [rows, fields] = method === 'query' ? await conn.query(options) : await conn.execute(options)
+              assert.deepEqual(rows, expected)
+              assert.deepEqual(fields.map((f) => [f.name, f.columnType, f.columnLength, f.flags, f.decimals, f.characterSet, f.schema, f.table, f.orgTable, f.orgName]), [
+                ['id', 3, 11, 4097, 0, 63, schema, 'pa', 'pa', 'id'],
+                ['g', type === 'INT' ? 3 : 8, type === 'INT' ? 11 : 20, type.endsWith('UNSIGNED') ? 16424 : 16392, 0, 63, schema, 'pa', 'pa', 'g'],
+                ['s', 253, 48, 0, 0, 224, schema, 'pa', 'pa', 's'],
+              ])
+              assert.deepEqual((await conn.query('SHOW WARNINGS'))[0], [])
+              conn.unprepare({ sql, rowsAsArray: true })
+            }
+          }
+        }
+      }
+      await conn.query('DROP TABLE pa,ch')
+    }
+  } finally {
+    await conn.query(`DROP DATABASE IF EXISTS ${schema}`)
+    await conn.end(); await db?.end()
+  }
+})

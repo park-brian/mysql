@@ -895,7 +895,7 @@ interface LeafSettings {
   firstSort?: { readonly alias: string; readonly keys: readonly SortKey[] }
   /** LooseScan removes adjacent equal integer keys after the inner filter. */
   loose?: { readonly alias: string; readonly index: IndexDef; readonly key: Compiled }
-  /** Logical inner and unfiltered FirstMatch availability; undefined keeps filtered costs. */
+  /** Logical inner and FirstMatch availability for admitted semijoins; undefined keeps unmodeled residual costs. */
   firstMatch?: FirstMatch
   /** Whether scanned joins may buffer their inner side. */
   buffered: boolean
@@ -1239,8 +1239,8 @@ function planJoins(root: Node, where: readonly Weighed[], scope: TableScope, set
       const stats = statsOf(t) as TableStatistics
       return {
         alias: t.alias,
-        rows: range?.rows ?? stats.rows,
-        dependent: new Set(),
+        found: range?.rows ?? stats.rows,
+        rows: stats.rows,
         keyDependent: keySources(t, conditions, scope),
         place: (prefix) => placeTable(t, lookupAfter(t, new Set(prefix.map((p) => p.alias)), lookupConditions), prefix, conditions, scope, settings, stats, range),
       }
