@@ -294,7 +294,9 @@ export function joinOrder(candidates: readonly Candidate[], sort?: { readonly al
     // Default memory temporary costs: creation 1, each write/lookup 0.1.
     if (semijoin !== undefined && (first.alias === semijoin ? loose === undefined : firstMatch?.enabled !== true)) {
       rows = Math.min(rows, (candidates[0] as Candidate).rows * last.filter)
-      cost += weedout || lastResort ? 1 + 0.1 * (rows + last.rows) : Infinity
+      // Native charges creation before row operations; the grouping decides exact ties.
+      cost += weedout || lastResort ? 1 : Infinity
+      cost += 0.1 * (rows + last.rows)
     }
     const alternative = materialPlan(cost)
     cost += sortCost(rows)

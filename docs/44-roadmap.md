@@ -229,9 +229,11 @@ for separate verification. The current state and remaining work are:
    identities with full table cardinality, retaining filtered search order and
    range/build prices. This closes 132 field mismatches: 5,748/5,760 field vectors
    agree; all rows/warnings and 2,532 complete plans remain native.
-   **Next:** small-inner materialized-scan/weedout ties and the twelve remaining
-   default-FirstMatch ordered-LIMIT field cases, then broader eligibility and
-   access/order comparisons. Baseline/current live probes show
+   Native temporary-cost grouping now also corrects 156 small-inner materialized-
+   scan choices; exact comparisons and complete-plan counts are unchanged.
+   **Next:** the twelve remaining default-FirstMatch ordered-LIMIT field cases,
+   then redundant Filter placement, broader eligibility and access/order
+   comparisons. Baseline/current live probes show
    ordered IN over a nullable
    non-primary key or two empty tables still loses source key flags here
    (4,097 versus the reference's 20,485). MySQL also retains prepare-time
@@ -2706,11 +2708,43 @@ excluded controls are unchanged. Existing base/fresh controls and 2,124/2,248
 plans pass. Captures, thresholds and lazy chunks are unchanged.
 Preceding ffbb6b7/run 39068161106 passed all eleven CI jobs.
 
-**Next:** repair small-inner materialized-scan/weedout tie choices against the
-native optimizer trace, retaining distinct cardinality, range/build prices and
-all previously matching components. The twelve remaining field vectors are the four-outer/two-inner
-default-FirstMatch ordered LIMIT 1 case across types, protocols and buffering;
-check its native strategy separately. Redundant-filter elimination, broader predicates,
+**Small-inner arithmetic evidence (2026-10-17):** In the two/four-outer,
+two-inner cases, the local materialized scan is 2.0100000000000002 while
+weedout is 2.01; native chooses the materialized scan at the displayed 2.01
+tie. Grouping the outer read/evaluation alone does not remove this difference.
+Pinned [`sql_planner.cc`](https://github.com/mysql/mysql-server/blob/mysql-8.4.11/sql/sql_planner.cc#L3715-L3718)
+charges weedout temporary creation before its separate read/write contribution;
+[`opt_costmodel.h`](https://github.com/mysql/mysql-server/blob/mysql-8.4.11/sql/opt_costmodel.h#L178-L185)
+combines write/read row counts.
+The local folded creation-plus-rows addition rounds differently. Creation is
+now charged first at the existing weedout owner, reproducing exact scan/weedout
+2.0100000000000002 ties. The 4.260823271131 tie and neighboring 2.66/3.46 and
+6.860823271131/10.060823271131 non-ties are retained. Materialization, the
+ordinary step and exact strategy comparisons are unchanged.
+
+This corrects 108 materialized-scan choices in the original filtered sweep and
+48 in the expanded switch sweep. Every previously matching component remains;
+all 5,760 row/warning vectors, 5,748 field vectors and 2,532 complete plans
+remain native. Redundant child Filter placement prevents these strategy
+repairs from increasing complete-plan counts. The twelve default-FirstMatch
+field cases remain separate. A permanent 216-execution query/execute regression
+covers IN/both EXISTS directions, three integer classes, two buffer settings,
+ties and neighboring non-ties. It passes native mode and fails on the preceding
+implementation. All nine unchanged size caps pass (core/facade 334,300/334,236 B
+gzipped). Broader controls preserve all existing matched components, including
+960 indexed materialization and 1,920 trivial-EXISTS outcomes; 320 excluded
+controls are unchanged. The executor seed passes 20,000 statements and the
+relational plan count remains 2,124/2,248. Fresh full Docker --reference passes
+all 1,324 tests, typecheck, lint, nine size caps, installed-package/typed-example
+smoke, the real client and all seven pinned corpora. All 305 test files and
+touched production match the tested source. Captures, thresholds and lazy
+chunks are unchanged. Preceding f1729d2/run 39069311634 passed all eleven CI jobs.
+
+**Next:** repair the twelve remaining field vectors: four-outer/two-inner
+default-FirstMatch ordered LIMIT 1 across types, protocols and buffering.
+Check its native strategy without changing the now-verified exact temporary
+cost ties, distinct cardinality or range/build prices; preserve every earlier
+matching component. Redundant-filter elimination, broader predicates,
 multi-interval and bound-parameter inference, retained prepared choices and
 sampled-statistics access differences remain separate. M5.47 and M5.49 stay
 partial.
