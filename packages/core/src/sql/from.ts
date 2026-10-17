@@ -37,7 +37,7 @@ import { requireCollationInfo } from '@myjs/charsets'
 import type { ColumnDef, IndexDef, RowId, Table, TableDef, Trx } from '@myjs/engine'
 import { LITERAL, NODE, REF, type Expression, type TableReference } from '@myjs/parser'
 import { messages, sqlError } from '@myjs/protocol'
-import { truth, type Value } from '@myjs/types'
+import { integerBytes, truth, type Value } from '@myjs/types'
 import type { Compiled, Env, Row, Scope } from './compile.ts'
 import { indexLookup, planNode, wrap, type PlanNode } from './explain.ts'
 import { FULL_SCAN, accessRows, chooseAccess, dynamicAccess, keyOrder, optimizerEnabled, pointAccess, splitAnd, type Access, type OuterColumn, type RangeCosting } from './plan.ts'
@@ -1961,8 +1961,8 @@ function pushedToIndex(t: FromTable, c: Placed, settings: LeafSettings, env: Env
 /** The bytes a column takes in an index key, as `key_length` counts it: what makes one covering index cheaper than another. */
 function keyBytes(c: ColumnDef): number {
   const t = c.type
-  const widths: Record<number, number> = { [FIELD_TYPE.TINY]: 1, [FIELD_TYPE.SHORT]: 2, [FIELD_TYPE.INT24]: 3, [FIELD_TYPE.LONG]: 4, [FIELD_TYPE.LONGLONG]: 8, [FIELD_TYPE.FLOAT]: 4, [FIELD_TYPE.DOUBLE]: 8, [FIELD_TYPE.DATE]: 3, [FIELD_TYPE.YEAR]: 1 }
-  let bytes = widths[t.type]
+  const widths: Record<number, number> = { [FIELD_TYPE.FLOAT]: 4, [FIELD_TYPE.DOUBLE]: 8, [FIELD_TYPE.DATE]: 3, [FIELD_TYPE.YEAR]: 1 }
+  let bytes = integerBytes(t.type) ?? widths[t.type]
   if (bytes === undefined) {
     if (t.type === FIELD_TYPE.NEWDECIMAL || t.type === FIELD_TYPE.DECIMAL) bytes = Math.ceil((t.precision ?? 10) / 2) + 1
     else if (t.type === FIELD_TYPE.DATETIME || t.type === FIELD_TYPE.TIMESTAMP) bytes = 5 + Math.ceil((t.decimals ?? 0) / 2)

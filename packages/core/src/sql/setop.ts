@@ -35,7 +35,7 @@ import { CHARSET_BINARY, FIELD_TYPE } from '@myjs/bytes'
 import { encodeCollation, requireCollationInfo } from '@myjs/charsets'
 import type { SetOperationNode } from '@myjs/parser'
 import { sqlError } from '@myjs/protocol'
-import { COERCIBILITY, bytesValue, stringValue, toDateTime, toText, withoutHex, type Value } from '@myjs/types'
+import { COERCIBILITY, bytesValue, integerBytes, stringValue, toDateTime, toText, withoutHex, type Value } from '@myjs/types'
 import { aggregateCollations, aggregateTypes, convertTo } from './compile.ts'
 import { rowKey } from './keys.ts'
 import { charWidth, decimalType, doubleType, jsonAsText, jsonType, stringType, type ResultType } from './meta.ts'
@@ -46,14 +46,6 @@ type Columns = readonly { readonly name: string; readonly type: ResultType }[]
 export interface SetOperationPlan {
   readonly columns: Columns
   rows(left: () => Iterable<readonly Value[]>, right: () => Iterable<readonly Value[]>): Iterable<Value[]>
-}
-
-const INT_RANK: Readonly<Record<number, number>> = {
-  [FIELD_TYPE.TINY]: 1,
-  [FIELD_TYPE.SHORT]: 2,
-  [FIELD_TYPE.INT24]: 3,
-  [FIELD_TYPE.LONG]: 4,
-  [FIELD_TYPE.LONGLONG]: 5,
 }
 
 const intDigits = (t: ResultType): number => (t.kind === 'decimal' ? t.length - t.scale : t.kind === 'int' ? (t.unsigned ? t.length : t.length - 1) : 0)
@@ -74,8 +66,8 @@ export function setOperationType(types: readonly ResultType[], connectionCollati
   if (live.every((t) => t.kind === 'json')) return done(jsonType(nullable))
   if (live.some((t) => t.kind === 'json')) return setOperationType(types.map((t) => (t.kind === 'json' ? { ...jsonAsText(t.nullable), ...(t.column === undefined ? {} : { column: t.column }) } : t)), connectionCollation)
   const kinds = new Set(live.map((t) => t.kind))
-  if (kinds.size === 1 && kinds.has('int') && live.every((t) => INT_RANK[t.field] !== undefined)) {
-    const widest = live.reduce((a, b) => ((INT_RANK[b.field] ?? 0) > (INT_RANK[a.field] ?? 0) ? b : a))
+  if (kinds.size === 1 && kinds.has('int') && live.every((t) => integerBytes(t.field) !== undefined)) {
+    const widest = live.reduce((a, b) => ((integerBytes(b.field) ?? 0) > (integerBytes(a.field) ?? 0) ? b : a))
     return done({ ...widest, length: Math.max(...live.map((t) => t.length)), unsigned: live.every((t) => t.unsigned) })
   }
   const numeric = [...kinds].every((k) => k === 'int' || k === 'decimal' || k === 'double')

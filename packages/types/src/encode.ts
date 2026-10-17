@@ -125,13 +125,16 @@ const INT_WIDTH: Readonly<Record<number, number>> = {
   [FIELD_TYPE.LONGLONG]: 8,
 }
 
+/** Packed bytes of a SQL integer field; other types, including YEAR, have their own policies. */
+export const integerBytes = (field: number): number | undefined => INT_WIDTH[field]
+
 /**
  * An integer type's range, from its pack length (`Field_tiny` … `Field_longlong`
  * in `sql/field.h`): what a column of it can hold. `undefined` for any other
  * type.
  */
 export function integerRange(t: { readonly type: number; readonly unsigned?: boolean }): { readonly min: bigint; readonly max: bigint } | undefined {
-  const width = INT_WIDTH[t.type]
+  const width = integerBytes(t.type)
   if (width === undefined) return undefined
   const bits = BigInt(width * 8)
   return t.unsigned === true ? { min: 0n, max: 2n ** bits - 1n } : { min: -(2n ** (bits - 1n)), max: 2n ** (bits - 1n) - 1n }
@@ -214,7 +217,7 @@ export function encodeField(value: Value, column: FieldColumn, ctx: StoreContext
     if (!column.nullable) throw columnCannotBeNull(column.name)
     return null
   }
-  const width = INT_WIDTH[t.type]
+  const width = integerBytes(t.type)
   if (width !== undefined) return encodeIntField(numericSource(value, column, ctx), width, column, ctx)
 
   switch (t.type) {
@@ -588,7 +591,7 @@ function encodeTextField(value: Exclude<Value, null>, column: FieldColumn, ctx: 
 /** A column's field bytes back into a value. */
 export function decodeField(field: Uint8Array | null, t: ColumnType): Value {
   if (field === null) return null
-  const width = INT_WIDTH[t.type]
+  const width = integerBytes(t.type)
   if (width !== undefined) return int(decodeInt(field, t.unsigned === true), t.unsigned === true)
   switch (t.type) {
     case FIELD_TYPE.DECIMAL:

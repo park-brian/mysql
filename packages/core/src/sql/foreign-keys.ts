@@ -41,7 +41,7 @@ import { sqlError } from '@myjs/protocol'
 import type { ColumnDef, FieldBytes, IndexDef, KeyRange, ReadMode, Row, RowId, Table, TableDef, TableSpec, Trx } from '@myjs/engine'
 import type { KeyDefinition } from '@myjs/parser'
 import type { ColumnType } from '@myjs/types'
-import { decodeField, encodeField, type StoreContext } from '@myjs/types'
+import { decodeField, encodeField, integerBytes, type StoreContext } from '@myjs/types'
 import type { Run } from './query.ts'
 import { isTemporary, type CatalogApi } from './temporary.ts'
 import { generationOf } from './generated.ts'
@@ -112,12 +112,11 @@ export const foreignKeyChecks = (run: Run): boolean => {
 
 // --- making one -------------------------------------------------------------------
 
-const INT_BYTES: Readonly<Record<number, number>> = { [FIELD_TYPE.TINY]: 1, [FIELD_TYPE.SHORT]: 2, [FIELD_TYPE.INT24]: 3, [FIELD_TYPE.LONG]: 4, [FIELD_TYPE.LONGLONG]: 8, [FIELD_TYPE.YEAR]: 1 }
 const STRINGS: ReadonlySet<number> = new Set([FIELD_TYPE.STRING, FIELD_TYPE.VAR_STRING, FIELD_TYPE.VARCHAR, FIELD_TYPE.TINY_BLOB, FIELD_TYPE.BLOB, FIELD_TYPE.MEDIUM_BLOB, FIELD_TYPE.LONG_BLOB])
 
 /** A column as InnoDB stores it, which is what a foreign key compares (`get_innobase_type_from_mysql_type`). */
 export function storageClass(t: ColumnType): string {
-  const width = INT_BYTES[t.type]
+  const width = t.type === FIELD_TYPE.YEAR ? 1 : integerBytes(t.type)
   if (width !== undefined) return `int ${width} ${t.type === FIELD_TYPE.YEAR || t.unsigned === true ? 'unsigned' : 'signed'}`
   switch (t.type) {
     case FIELD_TYPE.DATE:

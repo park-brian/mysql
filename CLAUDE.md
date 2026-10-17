@@ -19,14 +19,16 @@ foreign keys, CHECK constraints, generated columns, FULLTEXT search,
 INFORMATION_SCHEMA, temporary tables and ALTER TABLE all run through
 unmodified `mysql2`. The committed execution and relational corpora agree
 with 8.4.11; the committed coercion corpus also agrees completely (M5.2).
-Some function behavior and optimizer strategies remain partial.
+Some function behavior and optimizer strategies remain partial. Fresh integer
+UNION boundary probes reopen set-operation typing under M5.19; the roadmap
+records the wrong execute() values and the next repair.
 M5's ORM exit criterion holds with recorded test configuration; default
 parallel runs can lose interactive-transaction tests to scheduling delays.
 Doc 42's query API
 (`db.query()`, `db.execute()`, `db.transaction()`) is a client of the same
 protocol, its values `mysql2`'s (M5.36, D-76). The roadmap's **Next** section
-says what comes next: 0.3 is staged (`npm run pack`, D-79/D-80) and waits only
-on being published. The cost-based planner (M5.7, M5.42–M5.46) is done:
+says what comes next: 0.3 packaging is staged (`npm run pack`, D-79/D-80);
+publication remains pending, and the fresh M5.19 boundary repair is next. The cost-based planner (M5.7, M5.42–M5.46) is done:
 `EXPLAIN FORMAT=TREE` prints the plan that runs, and 2,124 of the relational
 corpus's 2,248 plans agree with 8.4.11's; M5.47 is in progress, M5.48 is done,
 M5.49 and M5.50 are in progress.
