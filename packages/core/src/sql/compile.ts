@@ -2231,13 +2231,8 @@ function holderOf(types: readonly ResultType[], nullable: boolean, connectionCol
     return datetimeType(first.field, Math.max(...live.map((t) => t.scale)), nullable)
   }
   if (live.some((t) => t.kind === 'datetime' || t.kind === 'time')) return stringType(Math.max(...live.map(charWidth)), connectionCollation, nullable)
-  if (live.some((t) => t.kind === 'double')) {
-    const type = fixedDouble(live, nullable) ?? doubleType(nullable, 23)
-    // FLOAT stays FLOAT beside FLOAT, the smaller integers, BIGINT and YEAR,
-    // and is DOUBLE beside INT or DECIMAL (`field_types_merge_rules`).
-    const float = live.every((t) => (t.kind === 'double' && t.field === FIELD_TYPE.FLOAT) || (t.kind === 'int' && FLOAT_PARTNERS.has(t.field)))
-    return float ? { ...type, field: FIELD_TYPE.FLOAT } : type
-  }
+  // The merger owns FLOAT/DOUBLE field selection; the holder owns width and scale.
+  if (live.some((t) => t.kind === 'double')) return fixedDouble(live, nullable) ?? doubleType(nullable)
   if (live.some((t) => t.kind === 'decimal')) {
     const s = Math.max(...live.map(scaleOf))
     return decimalType(Math.max(...live.map(intDigits)) + s, s, nullable)
@@ -2250,8 +2245,6 @@ function holderOf(types: readonly ResultType[], nullable: boolean, connectionCol
   const field = live.every((t) => t.field === first.field) ? first.field : FIELD_TYPE.LONGLONG
   return { ...intType(Math.max(...live.map((t) => t.length)), nullable, live.every((t) => t.unsigned)), field }
 }
-
-const FLOAT_PARTNERS: ReadonlySet<number> = new Set([FIELD_TYPE.TINY, FIELD_TYPE.SHORT, FIELD_TYPE.INT24, FIELD_TYPE.LONGLONG, FIELD_TYPE.YEAR])
 
 /** A value as a double of this type: a FLOAT's text, or a fixed number of decimals, or neither. */
 export function doubleOf(v: Value, t: ResultType): Value {

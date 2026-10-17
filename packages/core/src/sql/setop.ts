@@ -72,8 +72,8 @@ export function setOperationType(types: readonly ResultType[], connectionCollati
   }
   const numeric = live.every((t) => t.kind === 'int' || t.kind === 'decimal' || t.kind === 'double')
   if (numeric) {
-    if (live.some((t) => t.kind === 'double')) return done(doubleType(nullable, 23))
-    return done(aggregate(live, nullable, connectionCollation))
+    const fixed = live.some((t) => t.kind === 'double' && t.scale < 31)
+    return done(fixed ? doubleType(nullable) : aggregate(live, nullable, connectionCollation))
   }
   const temporal = live.every((t) => t.kind === 'datetime' || t.kind === 'time')
   if (temporal) {
@@ -133,7 +133,9 @@ export function convert(v: Value, t: ResultType): Value {
   if (t.kind === 'string') return stringValue(v.kind === 'string' ? v.v : toText(v), t.collationId, COERCIBILITY.IMPLICIT)
   if (t.kind === 'datetime' && v.kind === 'datetime' && t.field === FIELD_TYPE.DATETIME && v.type === 'DATE') return toDateTime(v, 'DATETIME') ?? v
   if (t.kind === 'bytes' && v.kind !== 'bytes') return bytesValue(v.kind === 'string' ? encodeCollation(v.v, v.collationId) : new TextEncoder().encode(toText(v)))
-  return convertTo(v, t)
+  const converted = convertTo(v, t)
+  // Comparisons use the stored FLOAT, not the double read from a branch.
+  return converted?.kind === 'double' && converted.float === true ? { ...converted, v: Math.fround(converted.v) } : converted
 }
 
 /**

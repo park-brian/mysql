@@ -22,7 +22,8 @@ with 8.4.11; the committed coercion corpus also agrees completely (M5.2).
 Some function behavior and optimizer strategies remain partial. Fresh integer
 UNION boundary probes reopen set-operation typing under M5.19. Integer
 signedness, YEAR/integer holders and unsigned DECIMAL metadata are repaired.
-FLOAT value/field behavior and fixed-scale floating metadata remain open.
+Default FLOAT value/field behavior is repaired; fixed-scale floating metadata
+remains open.
 M5's ORM exit criterion holds with recorded test configuration; default
 parallel runs can lose interactive-transaction tests to scheduling delays.
 Doc 42's query API
