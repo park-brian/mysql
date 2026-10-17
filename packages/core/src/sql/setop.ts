@@ -5,8 +5,9 @@
 // type before the rows meet — so `SELECT 1 UNION SELECT 'a'` is two strings,
 // and a DISTINCT compares them as strings. The rules, read off 8.4.11:
 //
-//   - Integers keep the widest field among them, and the widest width: INT
-//     with TINYINT is an INT, INT with BIGINT a BIGINT, 20 wide.
+//   - Integers keep the widest width. Mixed signedness widens the field
+//     to hold both ranges: TINYINT with TINYINT UNSIGNED is SMALLINT,
+//     BIGINT with BIGINT UNSIGNED is DECIMAL.
 //   - A DECIMAL among integers and DECIMALs holds the most integer digits and
 //     the most scale; a DOUBLE anywhere is a DOUBLE, 23 wide.
 //   - Two temporals of one kind keep it; DATE with DATETIME is a DATETIME.
@@ -36,7 +37,7 @@ import { encodeCollation, requireCollationInfo } from '@myjs/charsets'
 import type { SetOperationNode } from '@myjs/parser'
 import { sqlError } from '@myjs/protocol'
 import { COERCIBILITY, bytesValue, integerBytes, stringValue, toDateTime, toText, withoutHex, type Value } from '@myjs/types'
-import { aggregateCollations, aggregateTypes, convertTo } from './compile.ts'
+import { aggregate, aggregateCollations, aggregateTypes, convertTo } from './compile.ts'
 import { rowKey } from './keys.ts'
 import { charWidth, decimalType, doubleType, jsonAsText, jsonType, stringType, type ResultType } from './meta.ts'
 
@@ -67,8 +68,7 @@ export function setOperationType(types: readonly ResultType[], connectionCollati
   if (live.some((t) => t.kind === 'json')) return setOperationType(types.map((t) => (t.kind === 'json' ? { ...jsonAsText(t.nullable), ...(t.column === undefined ? {} : { column: t.column }) } : t)), connectionCollation)
   const kinds = new Set(live.map((t) => t.kind))
   if (kinds.size === 1 && kinds.has('int') && live.every((t) => integerBytes(t.field) !== undefined)) {
-    const widest = live.reduce((a, b) => ((integerBytes(b.field) ?? 0) > (integerBytes(a.field) ?? 0) ? b : a))
-    return done({ ...widest, length: Math.max(...live.map((t) => t.length)), unsigned: live.every((t) => t.unsigned) })
+    return done(aggregate(live, nullable, connectionCollation))
   }
   const numeric = [...kinds].every((k) => k === 'int' || k === 'decimal' || k === 'double')
   if (numeric) {
