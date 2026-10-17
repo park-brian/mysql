@@ -1549,11 +1549,15 @@ function recursiveCte(run: Run, cte: NonNullable<QueryExpression['with']>['table
 }
 
 /** UNION, INTERSECT or EXCEPT over two branches, each any query (M5.19). `parent` is the operator it is a branch of. */
-function planSetOperation(run: Run, node: SetOperationNode, parent?: SetOperationNode['op']): SelectPlan {
+function planSetOperation(run: Run, node: SetOperationNode, parent?: { readonly op: SetOperationNode['op']; readonly types: () => readonly ResultType[] }): SelectPlan {
+  // Nested set operations compare in the final holder, including DISTINCT.
+  // The getter is read only during execution, after every branch is typed.
+  const comparisonTypes = (): readonly ResultType[] => parent?.types() ?? op.columns.map((c) => c.type)
+  const context = { op: node.op, types: comparisonTypes }
   const branch = (b: QueryBody): SelectPlan => {
-    if (b.kind === QUERY.SET_OPERATION) return planSetOperation(run, b, node.op)
+    if (b.kind === QUERY.SET_OPERATION) return planSetOperation(run, b, context)
     // A parenthesised set operation is still a branch of this one.
-    if (b.kind === QUERY.QUERY && b.body.kind === QUERY.SET_OPERATION && b.with === undefined) return orderedResult(run, b, planSetOperation(run, b.body, node.op))
+    if (b.kind === QUERY.QUERY && b.body.kind === QUERY.SET_OPERATION && b.with === undefined) return orderedResult(run, b, planSetOperation(run, b.body, context))
     return planQuery(run, b.kind === QUERY.QUERY ? b : { kind: QUERY.QUERY, body: b, at: b.at })
   }
   const left = branch(node.left)
@@ -1562,7 +1566,7 @@ function planSetOperation(run: Run, node: SetOperationNode, parent?: SetOperatio
   const leaves = [...leavesOf(left), ...leavesOf(right)]
   const op = setOperation(node, left.columns, right.columns, run.env.session.characterSet, leaves)
   const columns =
-    parent !== 'UNION' || parent === node.op
+    parent?.op !== 'UNION' || parent.op === node.op
       ? op.columns
       : op.columns.map((c, i) => ({ name: c.name, type: { ...c.type, nullable: nestedNullability(node.op, (left.columns[i] as { type: ResultType }).type.nullable, (right.columns[i] as { type: ResultType }).type.nullable) } }))
   // EXPLAIN: a chain of one operator is one temporary table, its branches in order.
@@ -1581,9 +1585,9 @@ function planSetOperation(run: Run, node: SetOperationNode, parent?: SetOperatio
     leaves,
     ...(members === undefined ? {} : { members, explain: (materialized?: boolean): readonly PlanNode[] => [setOperationNode(members, materialized === true || parent !== undefined)] }),
     rows: (trx, env) => {
-      const rows = op.rows(() => left.rows(trx, env), () => right.rows(trx, env))
+      const types = comparisonTypes()
+      const rows = op.rows(() => left.rows(trx, env), () => right.rows(trx, env), types)
       if (parent !== undefined) return rows
-      const types = op.columns.map((c) => c.type)
       return (function* () {
         for (const r of rows) yield r.map((v, i) => convertSetValue(v, types[i] as ResultType))
       })()

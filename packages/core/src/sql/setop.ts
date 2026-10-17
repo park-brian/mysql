@@ -32,24 +32,22 @@
 // once with its count, so a row's copies come out together, in the order
 // rows first came (8.4.11: `2,1,NULL,2,3,1,2 EXCEPT ALL 2,5,1` is
 // 2, 2, 1, NULL, 3).
-import { CHARSET_BINARY, FIELD_TYPE } from '@myjs/bytes'
+import { CHARSET_BINARY, COLUMN_FLAG, FIELD_TYPE } from '@myjs/bytes'
 import { encodeCollation, requireCollationInfo } from '@myjs/charsets'
 import type { SetOperationNode } from '@myjs/parser'
 import { sqlError } from '@myjs/protocol'
-import { COERCIBILITY, bytesValue, integerBytes, stringValue, toDateTime, toText, withoutHex, type Value } from '@myjs/types'
+import { COERCIBILITY, bytesValue, intValue, stringValue, toDateTime, toText, withoutHex, type Value } from '@myjs/types'
 import { aggregate, aggregateCollations, aggregateTypes, convertTo } from './compile.ts'
 import { rowKey } from './keys.ts'
-import { charWidth, decimalType, doubleType, jsonAsText, jsonType, stringType, type ResultType } from './meta.ts'
+import { charWidth, doubleType, jsonAsText, jsonType, stringType, type ResultType } from './meta.ts'
 
 type Columns = readonly { readonly name: string; readonly type: ResultType }[]
 
 /** A set operation, typed: its columns, and how it makes its rows from its branches'. */
 export interface SetOperationPlan {
   readonly columns: Columns
-  rows(left: () => Iterable<readonly Value[]>, right: () => Iterable<readonly Value[]>): Iterable<Value[]>
+  rows(left: () => Iterable<readonly Value[]>, right: () => Iterable<readonly Value[]>, types?: readonly ResultType[]): Iterable<Value[]>
 }
-
-const intDigits = (t: ResultType): number => (t.kind === 'decimal' ? t.length - t.scale : t.kind === 'int' ? (t.unsigned ? t.length : t.length - 1) : 0)
 
 /** The type a column of a set operation has, given each branch's. */
 export function setOperationType(types: readonly ResultType[], connectionCollation: number): ResultType {
@@ -67,14 +65,16 @@ export function setOperationType(types: readonly ResultType[], connectionCollati
   if (live.every((t) => t.kind === 'json')) return done(jsonType(nullable))
   if (live.some((t) => t.kind === 'json')) return setOperationType(types.map((t) => (t.kind === 'json' ? { ...jsonAsText(t.nullable), ...(t.column === undefined ? {} : { column: t.column }) } : t)), connectionCollation)
   const kinds = new Set(live.map((t) => t.kind))
-  if (kinds.size === 1 && kinds.has('int') && live.every((t) => integerBytes(t.field) !== undefined)) {
-    return done(aggregate(live, nullable, connectionCollation))
+  if (live.every((t) => t.kind === 'int' && t.field !== FIELD_TYPE.BIT)) {
+    // UNION's YEAR holder takes no part in integer field selection or signedness.
+    const integers = live.filter((t) => t.field !== FIELD_TYPE.YEAR)
+    const type = aggregate(integers.length === 0 ? live : integers, nullable, connectionCollation)
+    return done({ ...type, length: Math.max(...live.map((t) => t.length)), ...(type.field === FIELD_TYPE.YEAR ? { fieldFlags: COLUMN_FLAG.ZEROFILL } : {}) })
   }
   const numeric = [...kinds].every((k) => k === 'int' || k === 'decimal' || k === 'double')
   if (numeric) {
     if (kinds.has('double')) return done(doubleType(nullable, 23))
-    const scale = Math.max(...live.map((t) => (t.kind === 'decimal' ? t.scale : 0)))
-    return done(decimalType(Math.max(...live.map(intDigits)) + scale, scale, nullable, live.every((t) => t.unsigned)))
+    return done({ ...aggregate(live, nullable, connectionCollation), unsigned: live.every((t) => t.unsigned) })
   }
   const temporal = [...kinds].every((k) => k === 'datetime' || k === 'time')
   if (temporal) {
@@ -125,6 +125,12 @@ export function nestedNullability(op: SetOperationNode['op'], left: boolean, rig
  */
 export function convert(v: Value, t: ResultType): Value {
   if (v === null) return null
+  // YEAR may meet a TINYINT without widening it. Its temporary field quietly
+  // saturates at the TINYINT maximum, before DISTINCT compares the rows.
+  if (t.field === FIELD_TYPE.TINY && v.kind === 'int') {
+    const max = t.unsigned ? 255n : 127n
+    if (v.v > max) return intValue(max, t.unsigned)
+  }
   if (t.kind === 'string') return stringValue(v.kind === 'string' ? v.v : toText(v), t.collationId, COERCIBILITY.IMPLICIT)
   if (t.kind === 'datetime' && v.kind === 'datetime' && t.field === FIELD_TYPE.DATETIME && v.type === 'DATE') return toDateTime(v, 'DATETIME') ?? v
   if (t.kind === 'bytes' && v.kind !== 'bytes') return bytesValue(v.kind === 'string' ? encodeCollation(v.v, v.collationId) : new TextEncoder().encode(toText(v)))
@@ -147,11 +153,10 @@ export function setOperation(node: SetOperationNode, left: Columns, right: Colum
     const folded = leaves.map((l) => l[i] as ResultType).reduce((acc, t) => setOperationType([acc, t], connectionCollation))
     return { name: c.name, type: { ...folded, nullable: c.type.nullable || r.nullable } }
   })
-  const types = columns.map((c) => c.type)
   const all = node.all === true
   return {
     columns,
-    *rows(leftRows, rightRows) {
+    *rows(leftRows, rightRows, types = columns.map((c) => c.type)) {
       const conv = (r: readonly Value[]): Value[] => r.map((v, i) => convert(v, types[i] as ResultType))
       if (node.op === 'UNION') {
         const seen = new Set<string>()
