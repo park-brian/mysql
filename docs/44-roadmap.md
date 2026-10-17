@@ -2503,10 +2503,40 @@ one inner-key numeric-literal residual to the correlated equality. Across
 INT/BIGINT/unsigned BIGINT, buffering/materialization switches, cardinalities,
 ordering/LIMIT and both protocols, the baseline agrees on 1,872 row results,
 1,560 full field vectors and all warning vectors, but no complete plan. This
-is a separate eligibility/cost proof, not covered by the trivial-EXISTS repair.
-Before admission, identify the smallest residual class supported by the existing
-cost search and preserve all earlier matched components, raw-pair evaluation,
-metadata and iterator lifetimes. Broader predicates stay open.
+is a separate eligibility/cost proof, not covered by the trivial-EXISTS repair. All 48 row
+mismatches are unordered, unbounded output order, twelve per switch set;
+every row multiset and physical identity agrees with native. Native selected
+materialized scan or raw weedout groups point probes by driving key, whereas
+the current fallback retains outer scan order. Preserve this distinction;
+no value, multiplicity or ordered/LIMIT result mismatch was found in this
+sweep. The next proof must price the filtered range/build before admission,
+retaining materialization-disabled and other residual controls.
+A discarded admission prototype preserves all previously matched components
+in this sweep but reaches only 144 complete matches. It is not shipped.
+Pinned optimizer trace for 20 outer/eight inner INT rows prices the four-row
+covering inner range at 0.660823, before the join's row evaluation. It prices
+the ten-row non-covering outer range at 3.76, likewise before join evaluation.
+MaterializeScan wins at 6.86082 versus MaterializeLookup at 8.22082. The current
+join-placement quote instead charges filtered scans (0.65 inner, 1.25 outer);
+with the existing formulas the prototype prefers lookup at 5.7 over scan at
+6.85. Cardinalities are already correct (inner four, outer ten, ref fanout five).
+The missing range access quote, not another eligibility guard, reverses the
+strategy comparison.
+
+**Next prerequisite (M5.49 feeding M5.47):** connect join placement to the
+existing standalone range selection/pricing authority. Retain the selected
+range's real cost, filtered row count and repeated-probe lifetime; compare it
+with ref access using the native heuristics. Reuse `rangeCost` and the existing
+range/count/shape readers rather than inventing a second formula or guessing
+selectivity. Prove the candidate/build costs before readmitting the bounded
+inner-key numeric residual. Preserve every previously matching component and
+the unfiltered semijoin choices. Broader predicates, residual eligibility and
+prepared strategy retention remain open.
+
+The pinned source cross-check is MySQL 8.4.11's
+[sql_planner.cc](https://github.com/mysql/mysql-server/blob/mysql-8.4.11/sql/sql_planner.cc),
+particularly `calculate_scan_cost` and `best_access_path`. The Docker trace,
+not an EXPLAIN spelling change, supplies the acceptance evidence.
 
 **Verified last-resort weedout costs (2026-10-16):** The two
 remaining 180-case switch mismatches were the four-row outer/two-row inner
