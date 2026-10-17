@@ -232,6 +232,12 @@ test/
 ```
 
 `npm test` runs unit, protocol, format and crash tests (300 injection points).
+The canonical runner discovers each file once, retains ordinary file
+parallelism, then runs `bulk-latency.test.ts` in its own required phase. Its two
+client connections still run simultaneously; unrelated test processes cannot
+distort its relative timing bound. Both phases propagate failures. The
+protocol-only command uses the same phases; unit, format and crash commands
+retain their direct Node runner. No bound, case or assertion is skipped.
 It needs no live MySQL or browser. MySQL's own `mysqltest` client is run by
 `tools/mysqltest-run.mjs`; browser integration is M6.10. Benchmarks live in
 `tools/bench.mjs`.

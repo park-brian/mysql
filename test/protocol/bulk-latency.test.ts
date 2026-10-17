@@ -23,9 +23,10 @@ import { MySQL } from '@myjs/core'
 const ROWS = 32_000
 /**
  * The longest a second connection may go unanswered while a bulk statement
- * runs: a third of the statement's own time, so that a loaded machine, which
- * slows both alike, does not decide the result. Run alone it is under 200 ms
- * in about 1 s; unpaused, the statement holds it for three quarters of its run.
+ * runs: a third of the statement's own time. Unrelated test processes can
+ * delay either measurement unevenly, so the canonical runner gives this file
+ * its own phase. Both connections still compete within the same event loop;
+ * unpaused, the statement holds the probe for three quarters of its run.
  */
 const bound = (took: number): number => took / 3
 

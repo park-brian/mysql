@@ -52,6 +52,10 @@ npm run pack -- --smoke   # every package as a tarball, installed into an empty 
 npm run verify:docker -- --reference  # disposable Node 22.18.0 + pinned MySQL 8.4.11; no fixture recapture
 ```
 
+`npm test` and `npm run test:protocol` run ordinary files with Node's normal
+parallelism, then run the full bulk-latency file separately. Both phases are
+required; the latency bound and its competing connections are unchanged.
+
 Because there is no build step, only **erasable** TypeScript is legal: no
 `enum`, no `namespace`, no parameter properties, no decorators. `tsc` enforces
 it with `erasableSyntaxOnly`, so the constraint fails at commit time.

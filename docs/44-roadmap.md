@@ -2460,13 +2460,43 @@ workspace. The preceding slice also passed its full fuzz/crash gate locally.
 
 Preceding 6112f4d/run 39060657177 passed ten required CI jobs; the pinned-
 reference job failed its internal bulk-PREPARE latency test (125 ms versus
-one-third of 372 ms), before reference replay. An unchanged rerun is pending.
+one-third of 372 ms), before reference replay. The unchanged second attempt passed all required jobs.
 Ten isolated Docker repetitions pass; one of four simultaneous copies pinned
 to one CPU reproduces the ratio failure. Thresholds remain unchanged. Investigate
 this scheduling-sensitive check before more optimizer work; the independently
 validated EXISTS slice is preserved. Broader residual materialization, semijoin
 eligibility, access/order costing and retained prepare choices remain open;
 M5.47 stays partial.
+
+**Verified CI latency isolation repair (2026-10-17):**
+The required pinned-reference job exposed process contention in the relative
+PREPARE latency assertion. Ten isolated repetitions pass; one of four test
+processes pinned to the same CPU reproduces the failure despite 23 answered
+round trips. External processes can delay either measurement unevenly, so a
+relative bound cannot cancel that interference.
+
+The canonical npm test and protocol-test commands now discover the same test
+files, run ordinary files with Node's existing parallelism, then run the full
+bulk-latency file as a separate required phase. Both client connections still
+compete within that test; its one-third bound, minimum trip counts, data sizes,
+cancellation assertions and every case remain unchanged. Failure of either
+phase fails the command. Docker and CI already invoke the canonical command.
+Runner fixtures pin nested discovery, protocol-only selection, exactly-once
+execution, phase ordering and failure propagation from either phase. No runtime
+SQL, scheduler, protocol, fixture or bundle-budget change is part of this repair.
+The latency comment now states the actual limitation of external CPU load.
+
+Discovery matches the original globs exactly: 260 test modules, 259 ordinary
+and one latency file. Fresh Docker --reference verification passes all 1,314
+cases (1,310 ordinary plus four latency), typecheck, lint, nine size gates,
+package/typed-example smoke, the real client and all seven pinned corpora.
+The three runner fixtures also pass on Windows; protocol CLI option forwarding
+passes in Docker. The tested source, runner, package script and all 300 files
+under test match the workspace. Core/facade remain 334,329/334,253 B gzipped.
+Historical changelog entries and all latency code from the bound onward are
+byte-for-byte unchanged. Preceding ed507e5/run 39061469118 passed all eleven
+required CI jobs. The earlier 6112f4d reference failure passed on unchanged
+attempt two. Continue with the bounded filtered-equality evidence below.
 
 **Next filtered-equality evidence:** A separate 1,920-outcome native sweep adds
 one inner-key numeric-literal residual to the correlated equality. Across

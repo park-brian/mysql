@@ -12,10 +12,10 @@
     "node": ">=22.18"
   },
   "scripts": {
-    "test": "node --test \"test/unit/**/*.test.ts\" \"test/format/**/*.test.ts\" \"test/protocol/**/*.test.ts\" \"test/crash/**/*.test.ts\"",
+    "test": "node tools/test.mjs",
     "test:unit": "node --test \"test/unit/**/*.test.ts\"",
     "test:format": "node --test \"test/format/**/*.test.ts\"",
-    "test:protocol": "node --test \"test/protocol/**/*.test.ts\"",
+    "test:protocol": "node tools/test.mjs protocol",
     "test:crash": "node --test \"test/crash/**/*.test.ts\"",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "verify:docker": "node tools/docker-verify.mjs",
