@@ -64,19 +64,18 @@ export function setOperationType(types: readonly ResultType[], connectionCollati
   // JSON with JSON is JSON; with anything else, its text: a LONGTEXT in utf8mb4_bin (8.4.11, M5.21).
   if (live.every((t) => t.kind === 'json')) return done(jsonType(nullable))
   if (live.some((t) => t.kind === 'json')) return setOperationType(types.map((t) => (t.kind === 'json' ? { ...jsonAsText(t.nullable), ...(t.column === undefined ? {} : { column: t.column }) } : t)), connectionCollation)
-  const kinds = new Set(live.map((t) => t.kind))
   if (live.every((t) => t.kind === 'int' && t.field !== FIELD_TYPE.BIT)) {
     // UNION's YEAR holder takes no part in integer field selection or signedness.
     const integers = live.filter((t) => t.field !== FIELD_TYPE.YEAR)
     const type = aggregate(integers.length === 0 ? live : integers, nullable, connectionCollation)
     return done({ ...type, length: Math.max(...live.map((t) => t.length)), ...(type.field === FIELD_TYPE.YEAR ? { fieldFlags: COLUMN_FLAG.ZEROFILL } : {}) })
   }
-  const numeric = [...kinds].every((k) => k === 'int' || k === 'decimal' || k === 'double')
+  const numeric = live.every((t) => t.kind === 'int' || t.kind === 'decimal' || t.kind === 'double')
   if (numeric) {
-    if (kinds.has('double')) return done(doubleType(nullable, 23))
-    return done({ ...aggregate(live, nullable, connectionCollation), unsigned: live.every((t) => t.unsigned) })
+    if (live.some((t) => t.kind === 'double')) return done(doubleType(nullable, 23))
+    return done(aggregate(live, nullable, connectionCollation))
   }
-  const temporal = [...kinds].every((k) => k === 'datetime' || k === 'time')
+  const temporal = live.every((t) => t.kind === 'datetime' || t.kind === 'time')
   if (temporal) {
     const fields = new Set(live.map((t) => t.field))
     const scale = Math.max(...live.map((t) => t.scale))
@@ -86,7 +85,7 @@ export function setOperationType(types: readonly ResultType[], connectionCollati
     }
   }
   // Text: as wide as the widest as text, in the aggregated collation, binary if bytes are among them.
-  const binary = kinds.has('bytes')
+  const binary = live.some((t) => t.kind === 'bytes')
   aggregateCollations(live, 'UNION', false)
   const collationId = binary ? CHARSET_BINARY : aggregateTypes(live, connectionCollation)
   const blob = live.find((t) => t.blobBytes !== undefined || t.field === FIELD_TYPE.BLOB)
@@ -150,7 +149,8 @@ export function setOperation(node: SetOperationNode, left: Columns, right: Colum
   // operation that is itself a branch.
   const columns = left.map((c, i) => {
     const r = (right[i] as { type: ResultType }).type
-    const folded = leaves.map((l) => l[i] as ResultType).reduce((acc, t) => setOperationType([acc, t], connectionCollation))
+    // A NULL-only prefix has no holder yet; only an all-NULL final result does.
+    const folded = leaves.map((l) => l[i] as ResultType).reduce((acc, t, at) => acc.kind === 'null' && t.kind === 'null' && at < leaves.length - 1 ? acc : setOperationType([acc, t], connectionCollation))
     return { name: c.name, type: { ...folded, nullable: c.type.nullable || r.nullable } }
   })
   const all = node.all === true
