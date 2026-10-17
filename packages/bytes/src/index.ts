@@ -2,6 +2,7 @@ export { MyjsError, ProtocolError, expectTyped, outOfBounds } from './errors.ts'
 export type { ErrorInfo } from './errors.ts'
 export { compareBytes, equalBytes } from './compare.ts'
 export { concatBytes } from './concat.ts'
+export { hex } from './hex.ts'
 export { Reader } from './reader.ts'
 export { Writer } from './writer.ts'
 export {

@@ -4,7 +4,7 @@
 // cannot be (ground rule 3). Each is the published algorithm (RFC 1321,
 // FIPS 180-4, ISO 3309); `digest.test.ts` holds them to their test vectors.
 
-const hex = (bytes: Uint8Array): string => Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('')
+import { hex } from '@myjs/bytes'
 
 /** The message padded to a multiple of 64 (or 128) bytes, its bit length appended big- or little-endian. */
 function pad(message: Uint8Array, block: number, lengthBytes: number, littleEndian: boolean): Uint8Array {

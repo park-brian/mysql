@@ -21,6 +21,7 @@
 // String literals are the one place `sql_mode` reaches in here: whether `\` is
 // an escape character is `NO_BACKSLASH_ESCAPES`'s decision, so a literal is
 // escaped for the mode it will be parsed under.
+import { hex } from '@myjs/bytes'
 import { NODE, LITERAL, type CallNode, type Expression, type LiteralNode } from './ast.ts'
 import type { DataType } from './data-type.ts'
 import { RESERVED } from './keywords.ts'
@@ -112,7 +113,6 @@ export function quoteName(name: string): string {
   return '`' + name.replaceAll('`', '``') + '`'
 }
 
-const hex = (bytes: Uint8Array): string => [...bytes].map((b) => b.toString(16).padStart(2, '0')).join('')
 
 class Deparser {
   readonly #mode: SqlMode

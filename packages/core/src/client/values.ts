@@ -13,7 +13,7 @@
 // Two deliberate differences, both from ground rule 1: bytes are a
 // `Uint8Array` where `mysql2` gives a `Buffer`, and a `Uint8Array` parameter
 // is sent as bytes (a BLOB) as `mysql2` sends a `Buffer`.
-import { FIELD_TYPE, Reader, Writer } from '@myjs/bytes'
+import { FIELD_TYPE, hex, Reader, Writer } from '@myjs/bytes'
 import { COLUMN_FLAG, COM, type ColumnDefinition } from '@myjs/protocol'
 import { collationInfo, decodeCollation } from '@myjs/charsets'
 
@@ -569,7 +569,7 @@ function escapeValue(v: unknown, noBackslashEscapes: boolean, timezone: string):
     case 'object': {
       if (v instanceof Date) return dateLiteral(v, timezone, noBackslashEscapes)
       if (Array.isArray(v)) return v.map((x) => (Array.isArray(x) ? `(${escapeValue(x, noBackslashEscapes, timezone)})` : escapeValue(x, noBackslashEscapes, timezone))).join(', ')
-      if (v instanceof Uint8Array) return `X'${Array.from(v, (b) => b.toString(16).padStart(2, '0')).join('')}'`
+      if (v instanceof Uint8Array) return `X'${hex(v)}'`
       if (typeof (v as { toSqlString?: unknown }).toSqlString === 'function') return String((v as { toSqlString: () => unknown }).toSqlString())
       throw new TypeError('an object is not a query value: pass it to execute(), which sends it as JSON, or JSON.stringify it')
     }

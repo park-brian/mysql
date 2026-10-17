@@ -132,3 +132,21 @@ test('large bounded fallback preserves stable winners on monotone and organ-pipe
     }
   }
 })
+
+
+test('keyed distinct excludes absent keys, retains first identities and closes a lazy source', () => {
+  const items = [{ id: 1, key: undefined }, { id: 2, key: 'a' }, { id: 3, key: 'a' }, { id: 4, key: 'b' }]
+  let reads = 0
+  let closed = false
+  function* source() {
+    try { for (const item of items) { reads++; yield item } }
+    finally { closed = true }
+  }
+  const result = distinct(source(), (row) => row.key)
+  assert.deepEqual(result.next(), { done: false, value: items[1] })
+  assert.equal(reads, 2)
+  result.return(undefined)
+  assert.equal(closed, true)
+  assert.deepEqual([...distinct(items, (row) => row.key)], [items[1], items[3]])
+  assert.deepEqual([...distinct([[null], [null]])], [[null]])
+})

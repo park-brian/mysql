@@ -69,7 +69,7 @@ testable and several are independently useful.
 
 | Package | Responsibility | Depends on |
 |---|---|---|
-| `@myjs/bytes` | Cursor/writer over `Uint8Array`; LE/BE ints, varints, length-encoded values | — |
+| `@myjs/bytes` | Cursor/writer over `Uint8Array`; LE/BE ints, varints, length-encoded values, byte comparison and lowercase `hex()` | — |
 | `@myjs/protocol` | Packet framing, all packet types, both directions; auth plugins | `bytes` — never `charsets` or `types` (D-33) |
 | `@myjs/charsets` | Charset ids, encoders/decoders, collation key transforms | `bytes` |
 | `@myjs/types` | MySQL value model, coercion rules, comparison, index key encoding | `bytes`, `charsets` |

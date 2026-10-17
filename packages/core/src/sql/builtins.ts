@@ -4,7 +4,7 @@
 // LAST_INSERT_ID), and the statement's clock (NOW, CURDATE, SYSDATE).
 // `registry.ts` routes a call here by name, so nothing here returns
 // "not mine".
-import { CHARSET_BINARY, FIELD_TYPE, type MysqlDateTime } from '@myjs/bytes'
+import { CHARSET_BINARY, FIELD_TYPE, hex, type MysqlDateTime } from '@myjs/bytes'
 import { encodeCollation, requireCollationInfo } from '@myjs/charsets'
 import { NODE, deparse, type CallNode, type Expression } from '@myjs/parser'
 import { messages, sqlError } from '@myjs/protocol'
@@ -786,11 +786,8 @@ function chosenOf(x: Compiled, result: ResultType): (v: Exclude<Value, null>, en
 }
 
 /** Bytes as `HEX()` writes them: two upper-case digits each. */
-/** Bytes as upper-case hex digits, two to a byte. */
 export function hexOf(b: Uint8Array): string {
-  let out = ''
-  for (const x of b) out += x.toString(16).toUpperCase().padStart(2, '0')
-  return out
+  return hex(b).toUpperCase()
 }
 
 /** Diagnostic bytes: printable ASCII retained, other bytes as upper-case escapes. */

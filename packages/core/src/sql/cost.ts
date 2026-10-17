@@ -257,15 +257,15 @@ export function joinOrder(candidates: readonly Candidate[], sort?: { readonly al
   }
   const sortCost = (rows: number): number => sort !== undefined && plan[0]?.alias !== sortBy ? rows : 0
   // Lookup probes after the outer prefix; scan builds before the outer scan.
-  const materialPlan = (): { readonly plan: Step[]; readonly cost: number } | undefined => {
+  const materialPlan = (competitor = Infinity): { readonly plan: Step[]; readonly cost: number } | undefined => {
     const first = plan[0]
     if (material === undefined || first === undefined) return undefined
     const outerFirst = first.alias !== material.alias
     const before = outerFirst ? first : step(undefined, material)
     const placed = outerFirst ? { ...material, lookup: 'materialized' as const, fetched: 1 } : (candidates[0] as Candidate).place([before])
-    // Indexed materialized scans need their own physical probe admission.
-    if (!outerFirst && placed.lookup) return undefined
     const last = step(before, placed)
+    // Deferred indexed scans must win their strategy cost before the final sort.
+    if (!outerFirst && placed.lookup && last.cost > competitor) return undefined
     return { plan: [before, last], cost: last.cost + sortCost(outerFirst ? before.rows : placed.fetched * placed.filter) }
   }
   // The bounded caller retains the logical inner even when FirstMatch is disabled.
@@ -285,8 +285,8 @@ export function joinOrder(candidates: readonly Candidate[], sort?: { readonly al
       rows = Math.min(rows, (candidates[0] as Candidate).rows * last.filter)
       cost += weedout || lastResort ? 1 + 0.1 * (rows + last.rows) : Infinity
     }
+    const alternative = materialPlan(cost)
     cost += sortCost(rows)
-    const alternative = materialPlan()
     // An inner-first materialized scan wins its native equal-cost weedout tie.
     const chosen = alternative !== undefined && (alternative.cost < cost || (alternative.cost === cost && loose === undefined && first.alias === semijoin))
       ? alternative : { cost, plan: plan.slice() }

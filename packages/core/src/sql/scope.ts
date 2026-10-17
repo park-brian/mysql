@@ -113,8 +113,7 @@ export class TableScope implements Scope {
   /** The slots `*` or `t.*` expands to, in order. ER_BAD_TABLE_ERROR for a `t.*` naming no table. */
   star(table: string | undefined): { readonly index: number; readonly name: string; readonly type: ResultType }[] {
     const at = (index: number): { index: number; name: string; type: ResultType } => {
-      const t = this.tables.find((x) => index >= x.offset && index < x.offset + x.columns.length) as ScopeTable
-      const c = t.columns[index - t.offset] as ScopeColumn
+      const c = this.columnAt(index)!.column
       return { index, name: c.name, type: c.type }
     }
     if (table === undefined && this.#visible !== undefined) return this.#visible.map(at)

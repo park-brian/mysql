@@ -9,15 +9,9 @@
 // trailing pad weights dropped), a number's is its exact decimal with no
 // trailing zeros, and a temporal's is its ordinal text. `distinct()` compared
 // each row against every earlier one; a key makes it one lookup.
-import { CHARSET_BINARY } from '@myjs/bytes'
+import { CHARSET_BINARY, hex } from '@myjs/bytes'
 import { encodeCollation } from '@myjs/charsets'
 import { equalityKey, jsonKey, renderDecimal, toDecimal, toText, type Value } from '@myjs/types'
-
-const hex = (b: Uint8Array): string => {
-  let s = ''
-  for (const x of b) s += x.toString(16).padStart(2, '0')
-  return s
-}
 
 /** The key of one value. */
 export function valueKey(v: Value): string {
@@ -61,4 +55,11 @@ export function rowKey(values: readonly Value[]): string {
     s += `${k.length}:${k}`
   }
   return s
+}
+
+/** Insert a canonical key once, without a second hash lookup. */
+export function firstKey(seen: Set<string>, key: string): boolean {
+  const before = seen.size
+  seen.add(key)
+  return seen.size > before
 }

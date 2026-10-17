@@ -5,7 +5,7 @@
 // Written against `tools/capture-more-functions.mjs`'s corpus, captured from
 // 8.4.11 first. An address or a UUID that does not parse is NULL with a 1411
 // warning naming the function, except where the server refuses it outright.
-import { CHARSET_BINARY } from '@myjs/bytes'
+import { CHARSET_BINARY, hex } from '@myjs/bytes'
 import type { CallNode } from '@myjs/parser'
 import { sqlError } from '@myjs/protocol'
 import { COERCIBILITY, bool, bytesValue, intValue, stringValue, toText, type Value, valueBytes } from '@myjs/types'
@@ -261,7 +261,7 @@ export function networkFunction(name: string, e: CallNode, ctx: CompileContext):
           if (b.length !== 16) throw wrongValue(v.kind === 'bytes' ? hexOf(b) : toText(v), 'bin_to_uuid')
           const sw = swap === undefined ? 0n : swap(r, env)
           const u = sw !== null && sw !== 0n ? unswapped(b) : b
-          const h = Array.from(u, (x) => x.toString(16).padStart(2, '0')).join('')
+          const h = hex(u)
           return conv(`${h.slice(0, 8)}-${h.slice(8, 12)}-${h.slice(12, 16)}-${h.slice(16, 20)}-${h.slice(20)}`)
         },
         type: hexText(36, true),

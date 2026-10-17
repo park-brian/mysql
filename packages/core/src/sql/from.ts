@@ -42,10 +42,10 @@ import type { Compiled, Env, Row, Scope } from './compile.ts'
 import { indexLookup, planNode, wrap, type PlanNode } from './explain.ts'
 import { FULL_SCAN, accessRows, chooseAccess, dynamicAccess, keyOrder, optimizerEnabled, pointAccess, splitAnd, type Access, type OuterColumn, type RangeCosting } from './plan.ts'
 import { bestAccess, floorFilter, indexScanCost, joinOrder, type Candidate, type FirstMatch, type KeyChoice, type Positioned } from './cost.ts'
-import { rowKey } from './keys.ts'
+import { firstKey, rowKey } from './keys.ts'
 import { columnResultType } from './meta.ts'
 import { chooseStrategy } from './group.ts'
-import { sort as sortRows, type SortKey } from './operators.ts'
+import { distinct, sort as sortRows, type SortKey } from './operators.ts'
 import { neverEqual, nullRejected } from './optimize.ts'
 import type { TableStatistics } from './stats.ts'
 import { safeResolve, TableScope, type ScopeColumn, type ScopeTableSpec } from './scope.ts'
@@ -780,13 +780,6 @@ export interface JoinedRow {
   readonly ids?: readonly (RowId | undefined)[]
 }
 
-/** Mark one physical row in a statement's identity set, independent of byte-array allocation. */
-export function firstVisit(seen: Set<string>, id: RowId): boolean {
-  const before = seen.size
-  seen.add(id.join())
-  return seen.size > before
-}
-
 /** Two sides' ids as one row's. */
 function joinIds(a: JoinedRow['ids'], b: JoinedRow['ids']): JoinedRow['ids'] {
   if (a === undefined) return b
@@ -1181,7 +1174,7 @@ function toOp(node: Node, conditions: readonly Placed[], scope: TableScope, sett
     return filterOp(indexedJoinOp(node, outer, t, undefined, [...toInner, ...spanning], settings, known), above)
   }
   if (!node.left && node.inner.kind === 'leaf' && settings.constants?.has(node.inner.table.alias) === true) return constantRowOp(outer, node.inner.table, node.innerSlots, toInner, spanning, settings)
-  if (node.lookup !== undefined && node.inner.kind === 'leaf' && settings.lookups?.has(node.inner.table.alias) !== false && !materialized) {
+  if (node.lookup !== undefined && node.inner.kind === 'leaf' && settings.lookups?.has(node.inner.table.alias) !== false && materialized !== 'lookup') {
     return filterOp(indexedJoinOp(node, outer, node.inner.table, node.lookup, [...toInner, ...spanning], settings), above)
   }
   const inner = toOp(node.inner, toInner, scope, settings, ctx, preliminary)
@@ -1751,6 +1744,7 @@ function buildJoinOp(node: Node & { kind: 'join' }, outer: Op, inner: Op, on: re
 function indexedJoinOp(node: Node & { kind: 'join' }, outer: Op, t: FromTable, lookup: EqRef | undefined, on: readonly Placed[], settings: LeafSettings, known?: (e: Expression) => Compiled | undefined): Op {
   const compiled = new Map<Expression, Compiled | undefined>()
   const point = lookup !== undefined && !node.left
+  const materialized = point && !!settings.materialized
   const semi = point && settings.firstMatch?.enabled === true && settings.firstMatch.alias === t.alias
   // DISTINCT's unused final table and FirstMatch both stop after one qualifying point-read match.
   const firstOnly = point && (settings.distinctLast === t.alias || semi)
@@ -1759,7 +1753,10 @@ function indexedJoinOp(node: Node & { kind: 'join' }, outer: Op, t: FromTable, l
       const env = run.env
       const costing = lookup === undefined ? rangeCosting(t, settings, env) : undefined
       const conjuncts = on.map((c) => c.e)
-      for (const o of outer.rows(run, context)) {
+      // Materialized drivers finish their unique build before the first point read.
+      const rows = outer.rows(run, context)
+      const source = materialized ? [...distinct([...rows], (row) => keyOf([lookup!.value], row.row, env))] : rows
+      for (const o of source) {
         let access: Access | undefined
         if (lookup !== undefined) {
           const v = lookup.value.eval(o.row, env)
@@ -1784,13 +1781,15 @@ function indexedJoinOp(node: Node & { kind: 'join' }, outer: Op, t: FromTable, l
       }
     },
     describe(env) {
-      if (lookup === undefined) return nestedLoop(node.left, outer.describe(env), wrap(on.length > 0, 'Filter', planNode(`Index range scan on ${t.alias} (re-planned for each iteration)`)))
+      let input = outer.describe(env)
+      if (materialized) input = wrap(lookup!.value.type.nullable, 'Filter', planNode('Table scan on <subquery2>', [planNode('Materialize with deduplication', [input])]))
+      if (lookup === undefined) return nestedLoop(node.left, input, wrap(on.length > 0, 'Filter', planNode(`Index range scan on ${t.alias} (re-planned for each iteration)`)))
       const covering = t.def !== undefined && holdsRead(t.def, lookup.index, settings.read.get(t.alias) ?? 'all')
       const lookupNode = indexLookup(t.alias, lookup.index.name, lookup.unique, covering)
       // The lookup's own equality is the key read, not a filter.
       const rest = on.filter((c) => c.e !== lookup.condition)
       const read = wrap(rest.length > 0, 'Filter', lookupNode)
-      return nestedLoop(node.left, outer.describe(env), wrap(firstOnly && !semi, 'Limit', read), semi)
+      return nestedLoop(node.left, input, wrap(firstOnly && !semi, 'Limit', read), semi)
     },
   }
 }
@@ -1851,7 +1850,7 @@ function nestedJoinOp(node: Node & { kind: 'join' }, outer: Op, inner: Op, on: r
       for (const o of outer.rows(run, context)) {
         const row = context === undefined ? o.row : o.row.map((v, i) => v ?? context[i] ?? null)
         for (const pair of matchingRows(joined(row, o.ids), inner.rows(run, row), node.innerSlots, on, run.env, node.left)) {
-          if (weedout !== undefined && !firstVisit(seen, pair.ids![weedout.offset]!)) continue
+          if (weedout !== undefined && !firstKey(seen, pair.ids![weedout.offset]!.join())) continue
           yield pair
         }
       }

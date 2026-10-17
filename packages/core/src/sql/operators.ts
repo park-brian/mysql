@@ -11,7 +11,7 @@ import type { ColumnType } from '@myjs/types'
 import { compareBytes } from '@myjs/bytes'
 import { collation, encodeCollation } from '@myjs/charsets'
 import { compareJsonSortHashes, decodeField, jsonSortHash, sortValues, truth, type Value } from '@myjs/types'
-import { rowKey } from './keys.ts'
+import { firstKey, rowKey } from './keys.ts'
 import { raise, setRowNumber, type Compiled, type Env, type Row } from './compile.ts'
 
 /** A row as a scan produces it: its values, and the id to write it back by. */
@@ -230,15 +230,16 @@ const NON_SCALAR = Symbol('non-scalar JSON sorted')
 /**
  * The first of each set of rows equal on every value — `SELECT DISTINCT`, over
  * projected rows. Equal, not "sorts the same": two JSON arrays of one length
- * sort together but are distinct (M5.21), so this keys on `rowKey`.
+ * sort together but are distinct (M5.21), so projected rows key on `rowKey`.
+ * A keyed source may instead exclude a row by returning undefined.
  */
-export function* distinct(source: Iterable<Value[]>): Generator<Value[]> {
+export function distinct(source: Iterable<Value[]>): Generator<Value[]>
+export function distinct<T>(source: Iterable<T>, key: (row: T) => string | undefined): Generator<T>
+export function* distinct<T>(source: Iterable<T>, key: (row: T) => string | undefined = rowKey as (row: T) => string): Generator<T> {
   const seen = new Set<string>()
   for (const row of source) {
-    const k = rowKey(row)
-    if (seen.has(k)) continue
-    seen.add(k)
-    yield row
+    const k = key(row)
+    if (k !== undefined && firstKey(seen, k)) yield row
   }
 }
 

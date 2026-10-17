@@ -468,6 +468,88 @@ test('materialized nested loops retain distinct build keys, outer identities and
   }
 })
 
+test('indexed materialized scans retain distinct keys, physical outer identities and fresh integer fields', async () => {
+  const { conn, db } = await connect('material_index105')
+  try {
+    await conn.query("SET optimizer_switch='default,firstmatch=off,loosescan=off,block_nested_loop=off'")
+    for (const type of ['INT', 'BIGINT', 'BIGINT UNSIGNED']) {
+      await conn.query('DROP TABLE IF EXISTS pa,ch')
+      await conn.query(`CREATE TABLE pa(id INT NOT NULL,g ${type},s VARCHAR(12),KEY(g)) STATS_AUTO_RECALC=0`)
+      await conn.query(`CREATE TABLE ch(id INT PRIMARY KEY,g ${type},KEY(g)) STATS_AUTO_RECALC=0`)
+      const base = type === 'INT' ? 0n : 9007199254740992n
+      await conn.query('INSERT INTO pa VALUES' + Array.from({ length: 20 }, (_, i) => `(${i+1},${i%4===0 ? 'NULL' : base+BigInt(i%4)},'same')`).join(','))
+      for (const state of ['empty', 'key', 'duplicates', 'null'] as const) {
+        await conn.query('DELETE FROM ch')
+        if (state === 'duplicates') await conn.query(`INSERT INTO ch VALUES(1,${base+1n}),(2,${base+1n}),(3,${base+2n}),(4,NULL)`)
+        else if (state !== 'empty') await conn.query(`INSERT INTO ch VALUES(1,${state === 'null' ? 'NULL' : base+1n})`)
+        await conn.query('ANALYZE TABLE pa,ch')
+        const values = state === 'duplicates' ? [1, 2] : state === 'key' ? [1] : []
+        const expected = values.flatMap((n) => Array.from({ length: 5 }, (_, i) => [n+1+i*4, type === 'INT' ? n : String(base+BigInt(n)), 'same']))
+        for (const ordered of state === 'duplicates' ? [true] : [false, true]) {
+          const sql = 'SELECT id,g,s FROM pa WHERE g IN(SELECT g FROM ch)' + (ordered ? ' ORDER BY g,s,id' : '')
+          for (const method of ['query', 'execute'] as const) {
+            const options = { sql, rowsAsArray: true }
+            const [rows, fields] = method === 'query' ? await conn.query(options) : await conn.execute(options)
+            assert.deepEqual(rows, expected)
+            assert.deepEqual(fieldsOf(fields), [['id', 3, 11, 4097, 0, 63, 'material_index105', 'pa', 'pa', 'id'], ['g', type === 'INT' ? 3 : 8, type === 'INT' ? 11 : 20, (ordered ? 0 : 16392) | (type.endsWith('UNSIGNED') ? 32 : 0), 0, 63, 'material_index105', 'pa', 'pa', 'g'], ['s', 253, 48, 0, 0, 224, 'material_index105', 'pa', 'pa', 's']], `${type}/${state}/${ordered}/${method}`)
+            assert.deepEqual((await conn.query('SHOW WARNINGS'))[0], [])
+            conn.unprepare(options)
+          }
+          const [explain] = await conn.query<mysql.RowDataPacket[]>('EXPLAIN FORMAT=TREE ' + sql)
+          const loop = 'Nested loop inner join\n    Filter\n        Table scan on <subquery2>\n            Materialize with deduplication\n                Filter\n                    Covering index scan on ch using g\n    Index lookup on pa using g'
+          assert.equal(planSkeleton(explain[0]?.EXPLAIN), ordered ? 'Sort\n    Stream results\n' + loop.split('\n').map((line) => '        ' + line).join('\n') : loop)
+        }
+      }
+      await conn.query(`UPDATE ch SET g=${base+1n}`)
+      const sql = 'SELECT id,g,s FROM pa WHERE g IN(SELECT g FROM ch)'
+      const statement = await conn.prepare({ sql, rowsAsArray: true })
+      try {
+        const value = (n: number) => type === 'INT' ? n : String(base + BigInt(n))
+        assert.deepEqual((await statement.execute([]))[0], Array.from({ length: 5 }, (_, i) => ({ id: 2+i*4, g: value(1), s: 'same' })))
+        await conn.query(`UPDATE ch SET g=${base+2n}`)
+        assert.deepEqual((await statement.execute([]))[0], Array.from({ length: 5 }, (_, i) => ({ id: 3+i*4, g: value(2), s: 'same' })))
+        await conn.query('DELETE FROM ch')
+        assert.deepEqual((await statement.execute([]))[0], [])
+      } finally { await statement.close(); conn.unprepare({ sql, rowsAsArray: true }) }
+    }
+  } finally {
+    await conn.query('DROP DATABASE IF EXISTS material_index105')
+    await conn.end(); await db?.end()
+  }
+})
+
+test('indexed MaterializeScan must win its deferred strategy cost before final sorting', async () => {
+  const { conn, db } = await connect('material_cost105')
+  try {
+    await conn.query('CREATE TABLE pa(id INT NOT NULL,g INT,s VARCHAR(12),KEY(g)) STATS_AUTO_RECALC=0')
+    await conn.query('CREATE TABLE ch(id INT PRIMARY KEY,g INT,KEY(g)) STATS_AUTO_RECALC=0')
+    await conn.query("INSERT INTO pa VALUES(1,NULL,'same'),(2,1,'same'),(3,2,'same'),(4,3,'same')")
+    await conn.query('INSERT INTO ch VALUES(1,1),(2,2),(3,3),(4,NULL),(5,1),(6,2),(7,3),(8,NULL)')
+    await conn.query('ANALYZE TABLE pa,ch')
+    const plan = 'Nested loop inner join\n    Sort\n        Filter\n            Table scan on pa\n    Single-row index lookup on <subquery2> using <auto_distinct_key>\n        Materialize with deduplication\n            Filter\n                Covering index scan on ch using g'
+    for (const buffered of [true, false]) {
+      await conn.query("SET optimizer_switch='default,firstmatch=off,loosescan=off" + (buffered ? '' : ',block_nested_loop=off') + "'")
+      for (const limit of [undefined, 1, 10]) {
+        const sql = 'SELECT id,g,s FROM pa WHERE g IN(SELECT g FROM ch) ORDER BY g,s,id' + (limit === undefined ? '' : ` LIMIT ${limit}`)
+        const [explain] = await conn.query<mysql.RowDataPacket[]>('EXPLAIN FORMAT=TREE ' + sql)
+        assert.equal(planSkeleton(explain[0]?.EXPLAIN), limit === undefined ? plan : 'Limit\n' + plan.split('\n').map((line) => '    ' + line).join('\n'))
+        for (const method of ['query', 'execute'] as const) {
+          const options = { sql, rowsAsArray: true }
+          const [rows, fields] = method === 'query' ? await conn.query(options) : await conn.execute(options)
+          const expected = [[2, 1, 'same'], [3, 2, 'same'], [4, 3, 'same']]
+          assert.deepEqual(rows, limit === 1 ? expected.slice(0, 1) : expected)
+          assert.deepEqual(fieldsOf(fields), [['id', 3, 11, 4097, 0, 63, 'material_cost105', 'pa', 'pa', 'id'], ['g', 3, 11, 16392, 0, 63, 'material_cost105', 'pa', 'pa', 'g'], ['s', 253, 48, 0, 0, 224, 'material_cost105', 'pa', 'pa', 's']])
+          assert.deepEqual((await conn.query('SHOW WARNINGS'))[0], [])
+          conn.unprepare(options)
+        }
+      }
+    }
+  } finally {
+    await conn.query('DROP DATABASE IF EXISTS material_cost105')
+    await conn.end(); await db?.end()
+  }
+})
+
 test('hash and repeated-scan weedout retain duplicate outer identities, exact integer fields and fresh data', async () => {
   for (const buffered of [true, false]) {
     const { conn, db } = await connect('weedout102')
@@ -586,6 +668,91 @@ test('materialized scans build before probing and close repeated scans under bac
       await writer.query('UPDATE material_reads100.ch SET g=2')
     } finally { await writer.end() }
   } finally { await db.end() }
+  }
+})
+
+test('indexed materialized scans build once and close point reads under backpressure', async () => {
+  for (const buffered of [true, false]) {
+    const db = await MySQL.open(':memory:')
+    const count = 4096
+    const payload = 'same'.repeat(50)
+    try {
+      await db.query('CREATE DATABASE material_index_reads105')
+      await db.query('CREATE TABLE material_index_reads105.pa(id INT NOT NULL,g INT,s VARCHAR(255),KEY(g)) STATS_AUTO_RECALC=0')
+      await db.query('CREATE TABLE material_index_reads105.ch(id INT PRIMARY KEY,g INT,KEY(g)) STATS_AUTO_RECALC=0')
+      await db.query('INSERT INTO material_index_reads105.pa VALUES' + Array.from({ length: count }, (_, i) => `(${i+1},${i%4===0 ? 'NULL' : i%4},'${payload}')`).join(','))
+      await db.query('ANALYZE TABLE material_index_reads105.pa,material_index_reads105.ch')
+      await db.query("SET optimizer_switch='default,firstmatch=off,loosescan=off" + (buffered ? '' : ',block_nested_loop=off') + "'")
+      const open = db.catalog!.table.bind(db.catalog)
+      let events: string[] = []
+      db.catalog!.table = (schema, name, trx) => {
+        const table = open(schema, name, trx)
+        if (schema === 'material_index_reads105' && name === 'ch') {
+          const scan = table.indexScan.bind(table)
+          table.indexScan = function*(index, range, transaction, mode) {
+            if (mode !== 'current') { yield* scan(index, range, transaction, mode); return }
+            events.push('build')
+            try { for (const row of scan(index, range, transaction, mode)) { events.push('inner'); yield row } }
+            finally { events.push('built') }
+          }
+        } else if (schema === 'material_index_reads105' && name === 'pa') {
+          const scan = table.indexScan.bind(table)
+          table.indexScan = function*(index, range, transaction, mode) {
+            if (mode !== 'current') { yield* scan(index, range, transaction, mode); return }
+            events.push('probe')
+            try { for (const row of scan(index, range, transaction, mode)) { events.push('outer'); yield row } }
+            finally { events.push('closed') }
+          }
+        }
+        return table
+      }
+      const sql = 'SELECT g,s FROM material_index_reads105.pa WHERE g IN(SELECT g FROM material_index_reads105.ch) FOR UPDATE'
+      try {
+        assert.deepEqual((await db.query(sql))[0], [])
+        assert.deepEqual(events, ['build', 'built'])
+        await db.query('INSERT INTO material_index_reads105.ch VALUES(1,1)')
+        events = []
+        const streaming = await db.connect()
+        try {
+          await streaming.query("SET optimizer_switch='default,firstmatch=off,loosescan=off" + (buffered ? '' : ',block_nested_loop=off') + "'")
+          for await (const row of streaming.stream(sql)) { assert.deepEqual(row, { g: 1, s: payload }); break }
+        } finally { await streaming.end() }
+        assert.deepEqual(events.slice(0, 4), ['build', 'inner', 'built', 'probe'])
+        assert.equal(events.at(-1), 'closed')
+        const examined = events.filter((event) => event === 'outer').length
+        assert.ok(examined > 0 && examined < count, 'backpressure and early return must leave outer rows unread')
+        await db.query('UPDATE material_index_reads105.pa SET g=NULL')
+        events = []
+        assert.deepEqual((await db.query(sql))[0], [])
+        assert.deepEqual(events, ['build', 'inner', 'built', 'probe', 'closed'])
+        await db.query('UPDATE material_index_reads105.pa SET g=CASE WHEN MOD(id-1,4)=0 THEN NULL ELSE MOD(id-1,4) END')
+        await db.query('INSERT INTO material_index_reads105.ch VALUES(2,1),(3,2),(4,NULL)')
+        events = []
+        const [rows] = await db.query(sql.replace(' FOR UPDATE', ' ORDER BY g,s FOR UPDATE'))
+        assert.deepEqual(rows, [1, 2].flatMap((g) => Array.from({ length: count/4 }, () => ({ g, s: payload }))))
+        const scans = 2
+        assert.deepEqual(['build', 'inner', 'built', 'probe', 'outer', 'closed'].map((kind) => events.filter((event) => event === kind).length), [1, 4, 1, scans, count/2, scans])
+        events = []
+        const repeated = await db.connect()
+        try {
+          await repeated.query("SET optimizer_switch='default,firstmatch=off,loosescan=off" + (buffered ? '' : ',block_nested_loop=off') + "'")
+          for await (const row of repeated.stream(sql)) { assert.deepEqual(row, { g: 1, s: payload }); break }
+        } finally { await repeated.end() }
+        assert.deepEqual(events.slice(0, 7), ['build', 'inner', 'inner', 'inner', 'inner', 'built', 'probe'])
+        assert.equal(events.at(-1), 'closed')
+        assert.equal(events.filter((e) => e === 'probe').length, 1)
+        assert.ok(events.filter((e) => e === 'outer').length < count/4)
+        await db.query('UPDATE material_index_reads105.ch SET g=NULL')
+        events = []
+        assert.deepEqual((await db.query(sql))[0], [])
+        assert.deepEqual(events, ['build', 'inner', 'inner', 'inner', 'inner', 'built'])
+      } finally { db.catalog!.table = open }
+      const writer = await db.connect()
+      try {
+        await writer.query('SET innodb_lock_wait_timeout=1')
+        await writer.query('UPDATE material_index_reads105.ch SET g=2')
+      } finally { await writer.end() }
+    } finally { await db.end() }
   }
 })
 
