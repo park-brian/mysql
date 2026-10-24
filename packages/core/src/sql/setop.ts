@@ -52,7 +52,7 @@ export interface SetOperationPlan {
 /** The type a column of a set operation has, given each branch's. */
 export function setOperationType(types: readonly ResultType[], connectionCollation: number): ResultType {
   const nullable = types.some((t) => t.nullable)
-  const live = types.filter((t) => t.kind !== 'null')
+  let live = types.filter((t) => t.kind !== 'null')
   const fromField = types.some((t) => t.column !== undefined || t.fromField === true)
   const done = (t: ResultType): ResultType => {
     const { column: _c, temporary: _t, asText: _a, fromField: _f, names: _n, ...rest } = t
@@ -81,9 +81,10 @@ export function setOperationType(types: readonly ResultType[], connectionCollati
       return done({ ...(live.find((t) => t.field !== FIELD_TYPE.DATE) as ResultType), field: FIELD_TYPE.DATETIME, scale })
     }
   }
-  // Text: as wide as the widest as text, in the aggregated collation, binary if bytes are among them.
-  const binary = live.some((t) => t.kind === 'bytes')
-  aggregateCollations(live, 'UNION', false)
+  // Raw BIT fields join collation resolution as binary columns; an explicit
+  // text collation can still win. Computed BIT expressions stay numeric.
+  live = live.map((t) => t.field === FIELD_TYPE.BIT && t.column !== undefined ? { ...t, kind: 'bytes', coercibility: COERCIBILITY.IMPLICIT } : t)
+  const binary = aggregateCollations(live, 'UNION', false)?.collationId === CHARSET_BINARY
   const collationId = binary ? CHARSET_BINARY : aggregateTypes(live, connectionCollation)
   const blob = live.find((t) => t.blobBytes !== undefined || t.field === FIELD_TYPE.BLOB)
   if (blob !== undefined) {
@@ -91,13 +92,12 @@ export function setOperationType(types: readonly ResultType[], connectionCollati
     const mb = blob.kind === 'string' ? requireCollationInfo(blob.collationId).mbmaxlen : 1
     return done({ ...stringType(bytes * mb, collationId, nullable), field: FIELD_TYPE.BLOB, blobBytes: bytes * mb })
   }
-  const width = Math.max(...live.map((t) => (t.kind === 'string' || t.kind === 'bytes' ? t.length : charWidth(t))))
   const sameField = live.every((t) => t.field === (live[0] as ResultType).field) && (live[0] as ResultType).field === FIELD_TYPE.STRING
   // Binary: as wide as the widest branch in its own bytes — a string's
   // characters at its charset's widest, bytes as they are (8.4.11:
   // VARBINARY(10) UNION 'k' is 10, UNION a 13-character literal 52).
-  const bytes = Math.max(...live.map((t) => (t.kind === 'string' ? t.length * requireCollationInfo(t.collationId).mbmaxlen : t.kind === 'bytes' ? t.length : charWidth(t))))
-  const text = stringType(binary ? bytes : width, collationId, nullable)
+  const width = Math.max(...live.map((t) => charWidth(t) * (binary && t.kind === 'string' ? requireCollationInfo(t.collationId).mbmaxlen : 1)))
+  const text = stringType(width, collationId, nullable)
   return done(sameField ? { ...text, field: FIELD_TYPE.STRING } : text)
 }
 
