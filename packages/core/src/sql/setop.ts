@@ -39,7 +39,7 @@ import { sqlError } from '@myjs/protocol'
 import { COERCIBILITY, bytesValue, intValue, stringValue, toDateTime, toText, withoutHex, type Value } from '@myjs/types'
 import { aggregate, aggregateCollations, aggregateTypes, convertTo } from './compile.ts'
 import { rowKey } from './keys.ts'
-import { charWidth, doubleType, jsonAsText, jsonType, stringType, type ResultType } from './meta.ts'
+import { charWidth, jsonAsText, jsonType, stringType, type ResultType } from './meta.ts'
 
 type Columns = readonly { readonly name: string; readonly type: ResultType }[]
 
@@ -71,10 +71,7 @@ export function setOperationType(types: readonly ResultType[], connectionCollati
     return done({ ...type, length: Math.max(...live.map((t) => t.length)), ...(type.field === FIELD_TYPE.YEAR ? { fieldFlags: COLUMN_FLAG.ZEROFILL } : {}) })
   }
   const numeric = live.every((t) => t.kind === 'int' || t.kind === 'decimal' || t.kind === 'double')
-  if (numeric) {
-    const fixed = live.some((t) => t.kind === 'double' && t.scale < 31)
-    return done(fixed ? doubleType(nullable) : aggregate(live, nullable, connectionCollation))
-  }
+  if (numeric) return done(aggregate(live, nullable, connectionCollation))
   const temporal = live.every((t) => t.kind === 'datetime' || t.kind === 'time')
   if (temporal) {
     const fields = new Set(live.map((t) => t.field))
