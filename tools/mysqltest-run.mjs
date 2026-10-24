@@ -33,6 +33,7 @@ import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { arg } from './lib/cli.mjs'
+import { assertMysqlVersion, assertMysqltestFiles } from './lib/mysql-reference.mjs'
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url))
 const FIXTURE = join(ROOT, 'test/format/fixtures/mysqltest-run.json')
@@ -48,7 +49,7 @@ if (!existsSync(join(SUITE, 't'))) {
   console.error(`no suite at ${SUITE}: sudo node tools/mysql-local.mjs install puts mysql-community-test there`)
   process.exit(1)
 }
-const version = execFileSync('mysqltest', ['--version'], { encoding: 'utf8' }).trim().replace(/^mysqltest\s+Ver\s+(\S+).*$/, '$1')
+const version = assertMysqlVersion(execFileSync('mysqltest', ['--version'], { encoding: 'utf8' }), 'mysqltest')
 const files = readdirSync(join(SUITE, 't'))
   .filter((f) => f.endsWith('.test') && existsSync(join(SUITE, 'r', f.replace(/\.test$/, '.result'))))
   .map((f) => f.replace(/\.test$/, ''))
@@ -222,6 +223,9 @@ async function onOurs() {
 }
 
 const fixture = existsSync(FIXTURE) ? JSON.parse(readFileSync(FIXTURE, 'utf8')) : {}
+if (flag('ours') && !flag('server') && only === undefined && fixture.server !== undefined) {
+  assertMysqltestFiles(files, Object.keys(fixture.server.files))
+}
 if (flag('server')) {
   fixture.server = await onServer()
   report(`8.4.11 (${fixture.server.version})`, fixture.server)

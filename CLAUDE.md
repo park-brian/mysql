@@ -69,7 +69,7 @@ Most of what this project knows about MySQL that no document states came from
 asking a server. Get one:
 
 ```bash
-sudo node tools/mysql-local.mjs install    # MySQL 8.4.11 from repo.mysql.com
+sudo node tools/mysql-local.mjs install    # Ubuntu 24.04 x64; checksum-pinned MySQL 8.4.11
 node tools/mysql-local.mjs start           # binlog on, FULL row images
 node tools/mysql-local.mjs provision       # the accounts capture:traces needs
 npm run fetch:reference                    # the pinned MySQL source tree

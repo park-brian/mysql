@@ -77,6 +77,22 @@ Do not weaken thresholds or hide mismatches in captures. Full Docker release
 validation is described in [43](./43-testing.md); retain Prisma's worker count
 when comparing fresh ORM runs. Monitoring stays within the active session.
 
+**Current CI repair (2026-10-24):** the first 6d90b36 run passed pinned
+reference and local gates but failed its packaged mysqltest cohort check.
+The apt installer fetched 8.4.13 (1,465 suite files) against the committed
+8.4.11 denominator (1,459). The repair pins versioned package bytes and rejects
+binary/file-cohort mismatches before writing a run. Ubuntu 24.04 Docker with
+Node 22.18.0 reproduces the complete job as an unprivileged user: the same 37
+reference-supported files pass, and all three scoreboard checks pass. Wrong
+versions and file cohorts are rejected before fixture mutation. No baseline
+is recaptured or loosened. Fresh Docker --reference passes all 1,336 tests,
+typecheck, lint, nine size gates, installed-package/typed-example smoke, the
+real client and seven pinned corpora. All 316 files under test/ and the changed
+reference scripts, pins and declarations match the tested copy; the final
+sudo command was also verified separately in Ubuntu Docker with Node 22.18.0.
+The failed historical run remains visible; monitor the repair commit by its
+own SHA. Source-to-text work below is next.
+
 Bounded function/coercion repairs are verified below. A fresh set-operation
 boundary audit reopens M5.19. All 400 integer-only and 84 YEAR/integer UNION
 outcomes now agree, including signedness, quiet clipping and nested final-type
@@ -2959,6 +2975,13 @@ native string 16777216; BIT with text is natively a binary holder but locally
 retains text metadata. YEAR zero and the fixed-scale controls in this probe
 already agree. These are pre-existing M5.19 boundaries; do not close the
 milestone based on the repaired numeric matrices alone.
+The continuation audit expands this to 960 observations over fractional and
+exponent FLOAT values, fixed trailing zeros, BIT(1/8/16/64), latin1/utf8mb4
+text, binary targets, NULLs and computed sources. Only 408 row and 688 field
+vectors match; warnings agree in all 960. Native FLOAT-to-text formatting
+depends on the final holder width: 1.2 becomes 1.2000000477 at width 12 and
+1.2000000476837158 at width 32. A global FLOAT-flag change would not reproduce
+that boundary. DOUBLE and YEAR controls already agree; preserve them.
 
 **Next:** repair M5.19 source-to-text conversion and BIT/text holder metadata
 using the existing readers and binary type policy. Extend the native probe

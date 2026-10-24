@@ -1,12 +1,9 @@
 #!/usr/bin/env node
-// A real MySQL 8.4 on this machine, for the checks that can only come from one.
+// Pinned MySQL 8.4.11 for Ubuntu 24.04 x64 compatibility checks.
 //
 // Every compatibility fact this project has that a document could not supply
 // came from a server: `utf8mb4_bin`'s sort key, `<=>` being null-*safe*, an
-// unsigned BIGINT negation saturating, `%` and `DIV` not promoting. Until now
-// the only server was a container in GitHub Actions, which made the loop
-// "push a branch, wait, download an artifact, commit it" — so the corpora
-// stayed small and the two jobs that own them are `continue-on-error`.
+// unsigned BIGINT negation saturating, `%` and `DIV` not promoting.
 //
 // This is that server, locally, in one command. It is deliberately a *tool*
 // rather than a README paragraph for the same reason the generators are tools:
@@ -26,6 +23,7 @@ import { execFileSync, spawn } from 'node:child_process'
 import { existsSync, mkdirSync, openSync, readFileSync, rmSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { join } from 'node:path'
+import { MYSQL_REFERENCE, assertMysqlVersion } from './lib/mysql-reference.mjs'
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url))
 const DATADIR = join(ROOT, '.tmp/mysql')
@@ -35,13 +33,7 @@ const PIDFILE = join(DATADIR, 'mysqld.pid')
 const PORT = Number(process.env.MYJS_MYSQL_PORT ?? 3306)
 const PASSWORD = 'root'
 
-const APT_LIST = '/etc/apt/sources.list.d/mysql.list'
-const KEYRING = '/usr/share/keyrings/mysql.gpg'
-// The 2023 key was re-signed with a 2027 expiry and published as -2025; the
-// original -2023 file still carries the expired signature and apt refuses the
-// repository outright with EXPKEYSIG. Same fingerprint, longer life.
-const KEY_URL = 'https://repo.mysql.com/RPM-GPG-KEY-mysql-2025'
-const COMPONENT = 'mysql-8.4-lts'
+const PACKAGE_CACHE = join(ROOT, '.tmp/mysql-packages', MYSQL_REFERENCE.revision)
 
 const sh = (cmd, args, opts = {}) =>
   execFileSync(cmd, args, { stdio: 'inherit', ...opts })
@@ -74,20 +66,28 @@ const client = (extra = []) => [
 
 function install() {
   if (process.getuid?.() !== 0) {
-    console.error('install needs root (it adds an apt source); re-run with sudo')
+    console.error('install needs root; re-run with sudo')
     process.exit(1)
   }
   // Debian's postinst wants to start a service, and a container has no init.
   sh('sh', ['-c', "printf '#!/bin/sh\\nexit 101\\n' > /usr/sbin/policy-rc.d && chmod +x /usr/sbin/policy-rc.d"])
-  sh('sh', ['-c', `curl -fsSL ${KEY_URL} | gpg --dearmor --yes -o ${KEYRING}`])
-  sh('sh', ['-c', `echo 'deb [signed-by=${KEYRING}] http://repo.mysql.com/apt/ubuntu noble ${COMPONENT}' > ${APT_LIST}`])
   const env = { ...process.env, DEBIAN_FRONTEND: 'noninteractive' }
+  mkdirSync(PACKAGE_CACHE, { recursive: true })
+  const checksum = (path) => execFileSync('sha256sum', [path], { encoding: 'utf8' }).split(/\s+/)[0]
+  const packages = MYSQL_REFERENCE.packages.map((pkg) => {
+    const path = join(PACKAGE_CACHE, pkg.filename)
+    if (existsSync(path) && checksum(path) === pkg.sha256) return path
+    sh('curl', ['-fsSL', '--retry', '3', '--output', path, pkg.url])
+    if (checksum(path) !== pkg.sha256) throw new Error(`SHA256 mismatch for ${pkg.filename}`)
+    return path
+  })
+  // Moving apt indexes retain only the newest release. Install the exact
+  // archived packages, verified before apt sees them; apt supplies OS dependencies.
   sh('apt-get', ['update', '-qq'], { env })
-  // `mysql-community-test` carries the real `mysqltest` binary and MySQL's own
-  // `.result` files. It is not needed to capture anything, and it is what makes
-  // M5.15 answerable — the interpreter doc 43 §1 describes may not need writing
-  // if the real one can drive our server over the protocol we already speak.
-  sh('apt-get', ['install', '-y', '-qq', 'mysql-community-server', 'mysql-community-client', 'mysql-community-test'], { env })
+  sh('apt-get', ['install', '-y', '-qq', ...packages], { env })
+  for (const binary of ['mysqld', 'mysql', 'mysqltest']) {
+    assertMysqlVersion(execFileSync(binary, ['--version'], { encoding: 'utf8' }), binary)
+  }
   status()
 }
 

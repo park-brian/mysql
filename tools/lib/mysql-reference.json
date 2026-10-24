@@ -1,0 +1,72 @@
+{
+  "version": "8.4.11",
+  "revision": "8.4.11-1ubuntu24.04",
+  "packages": [
+    {
+      "name": "mysql-common",
+      "filename": "mysql-common_8.4.11-1ubuntu24.04_amd64.deb",
+      "url": "https://repo.mysql.com/apt/ubuntu/pool/mysql-8.4-lts/m/mysql-community/mysql-common_8.4.11-1ubuntu24.04_amd64.deb",
+      "sha256": "5d08dad757a862bf7c7bb9be85ba39c86a9239481867a620ca62ce3597c01e09"
+    },
+    {
+      "name": "mysql-community-client-plugins",
+      "filename": "mysql-community-client-plugins_8.4.11-1ubuntu24.04_amd64.deb",
+      "url": "https://repo.mysql.com/apt/ubuntu/pool/mysql-8.4-lts/m/mysql-community/mysql-community-client-plugins_8.4.11-1ubuntu24.04_amd64.deb",
+      "sha256": "1b48ea921a15622c2bf2756dded1f2c82e074458f8bcc00f5d27f857ce882bf4"
+    },
+    {
+      "name": "mysql-community-client-core",
+      "filename": "mysql-community-client-core_8.4.11-1ubuntu24.04_amd64.deb",
+      "url": "https://repo.mysql.com/apt/ubuntu/pool/mysql-8.4-lts/m/mysql-community/mysql-community-client-core_8.4.11-1ubuntu24.04_amd64.deb",
+      "sha256": "6660b0d31fe5113997baabd48d1f4bdce66ab7e1e8446886366a3c3896424e9d"
+    },
+    {
+      "name": "mysql-community-client",
+      "filename": "mysql-community-client_8.4.11-1ubuntu24.04_amd64.deb",
+      "url": "https://repo.mysql.com/apt/ubuntu/pool/mysql-8.4-lts/m/mysql-community/mysql-community-client_8.4.11-1ubuntu24.04_amd64.deb",
+      "sha256": "3f429d66881f78e366a9b2ecc241d62f5baa121a8bd65f89ab1306655849a6bc"
+    },
+    {
+      "name": "mysql-client",
+      "filename": "mysql-client_8.4.11-1ubuntu24.04_amd64.deb",
+      "url": "https://repo.mysql.com/apt/ubuntu/pool/mysql-8.4-lts/m/mysql-community/mysql-client_8.4.11-1ubuntu24.04_amd64.deb",
+      "sha256": "493bbd7c1dbeaa670a2ba700a78bb48781e8713fdbae74b0898797c70852f09e"
+    },
+    {
+      "name": "mysql-community-server-core",
+      "filename": "mysql-community-server-core_8.4.11-1ubuntu24.04_amd64.deb",
+      "url": "https://repo.mysql.com/apt/ubuntu/pool/mysql-8.4-lts/m/mysql-community/mysql-community-server-core_8.4.11-1ubuntu24.04_amd64.deb",
+      "sha256": "dafb704d3e602980ef6dcadfbd9ca8b8660736cdbfbcbd1cdd5c0638ab097cfd"
+    },
+    {
+      "name": "mysql-community-server",
+      "filename": "mysql-community-server_8.4.11-1ubuntu24.04_amd64.deb",
+      "url": "https://repo.mysql.com/apt/ubuntu/pool/mysql-8.4-lts/m/mysql-community/mysql-community-server_8.4.11-1ubuntu24.04_amd64.deb",
+      "sha256": "f5d1178b5d2aac565ff77549bb80d1636828808d80c7106456d91f4d4ddd0bf0"
+    },
+    {
+      "name": "mysql-server",
+      "filename": "mysql-server_8.4.11-1ubuntu24.04_amd64.deb",
+      "url": "https://repo.mysql.com/apt/ubuntu/pool/mysql-8.4-lts/m/mysql-community/mysql-server_8.4.11-1ubuntu24.04_amd64.deb",
+      "sha256": "9db9caaee84bb8d660fdce67970a996ffa391a3ab73cae46f5ab6e2e1b7acd90"
+    },
+    {
+      "name": "libmysqlclient24",
+      "filename": "libmysqlclient24_8.4.11-1ubuntu24.04_amd64.deb",
+      "url": "https://repo.mysql.com/apt/ubuntu/pool/mysql-8.4-lts/m/mysql-community/libmysqlclient24_8.4.11-1ubuntu24.04_amd64.deb",
+      "sha256": "e53ffe3b5ceae92c3bd2b805527f68f1750b1c0a1cffec6e656ef44c180979f6"
+    },
+    {
+      "name": "libmysqlclient-dev",
+      "filename": "libmysqlclient-dev_8.4.11-1ubuntu24.04_amd64.deb",
+      "url": "https://repo.mysql.com/apt/ubuntu/pool/mysql-8.4-lts/m/mysql-community/libmysqlclient-dev_8.4.11-1ubuntu24.04_amd64.deb",
+      "sha256": "2e05e3405487d97f2e3f26e81296c430b73d94e7ab724ad64d227ba96ff39833"
+    },
+    {
+      "name": "mysql-community-test",
+      "filename": "mysql-community-test_8.4.11-1ubuntu24.04_amd64.deb",
+      "url": "https://repo.mysql.com/apt/ubuntu/pool/mysql-8.4-lts/m/mysql-community/mysql-community-test_8.4.11-1ubuntu24.04_amd64.deb",
+      "sha256": "3cce547a199d9ca47f63f710f5029625c159ff00e36061d767e371678f505f8e"
+    }
+  ]
+}

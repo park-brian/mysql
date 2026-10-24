@@ -337,7 +337,7 @@ jobs:
 
   mysqltest-run:
     name: MySQL's own suite, run
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     # M5.15. MySQL's suite, run file by file by MySQL's own `mysqltest` from
     # `mysql-community-test`, against this executor over TCP. The fixture's
     # other half, 8.4.11 under its own `mysql-test-run.pl`, is the
@@ -352,11 +352,11 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: '22.18'
+          node-version: '22.18.0'
           cache: npm
       - run: npm ci
       - name: install mysql-community-test (the suite and mysqltest)
-        run: sudo node tools/mysql-local.mjs install
+        run: sudo "$(command -v node)" tools/mysql-local.mjs install
       - name: run every file against this executor
         run: node tools/mysqltest-run.mjs --ours --jobs 4
       - name: the scoreboard is the run

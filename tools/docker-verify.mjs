@@ -3,6 +3,7 @@
 import { spawnSync } from 'node:child_process'
 import { randomUUID } from 'node:crypto'
 import { fileURLToPath } from 'node:url'
+import { MYSQL_IMAGE } from './lib/mysql-reference.mjs'
 
 const root = fileURLToPath(new URL('..', import.meta.url))
 const name = `myjs-verify-${randomUUID()}`
@@ -11,7 +12,6 @@ const full = process.argv.includes('--full')
 const mysqlName = `${name}-mysql`
 const network = `${name}-network`
 const NODE = 'node:22.18.0-bookworm'
-const MYSQL = 'mysql:8.4.11@sha256:6ea90827b1100f8f2ae306a539f86d2c264a26ed435a2a9f75551dd5c3aeb242'
 
 function docker(args, { capture = false, allowFailure = false } = {}) {
   const result = spawnSync('docker', args, { encoding: 'utf8', stdio: capture ? 'pipe' : 'inherit' })
@@ -28,7 +28,7 @@ try {
     docker(['network', 'create', network])
     networkCreated = true
     docker(['run', '-d', '--name', mysqlName, '--network', network, '--network-alias', 'reference',
-      '-e', 'MYSQL_ROOT_PASSWORD=review-root', '-e', 'MYSQL_ROOT_HOST=%', MYSQL])
+      '-e', 'MYSQL_ROOT_PASSWORD=review-root', '-e', 'MYSQL_ROOT_HOST=%', MYSQL_IMAGE])
     mysqlStarted = true
     let ready = false
     for (let n = 0; n < 90; n++) {

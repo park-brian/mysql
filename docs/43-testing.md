@@ -39,6 +39,12 @@ runs all 1,459 packaged files with recorded results, using a fresh database per
 file over TCP. The reference denominator is the 1,146 files MySQL 8.4.11 passes
 under its own `mysql-test-run.pl`. The `mysqltest-run` CI job repeats our side
 and checks that the roadmap's exact scoreboard matches the measured run.
+The installer targets Ubuntu 24.04 x64 and downloads the versioned 8.4.11
+packages with committed SHA256 pins from tools/lib/mysql-reference.json.
+The same reference definition retains the pinned Docker image digest. Moving
+apt release indexes cannot select a newer mysqltest or suite. Before running,
+the suite tool checks the binary version and, when reusing the server baseline,
+the exact file identities; a mismatch fails before results are recorded.
 
 The recorded outcomes contain file names, pass/fail/skip classifications and
 failure classes, never SQL or result text. Inspect failures before updating a
