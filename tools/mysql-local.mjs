@@ -33,7 +33,8 @@ const PIDFILE = join(DATADIR, 'mysqld.pid')
 const PORT = Number(process.env.MYJS_MYSQL_PORT ?? 3306)
 const PASSWORD = 'root'
 
-const PACKAGE_CACHE = join(ROOT, '.tmp/mysql-packages', MYSQL_REFERENCE.revision)
+// Root-owned package downloads must not claim the caller's project scratch.
+const PACKAGE_CACHE = join('/var/cache/myjs/mysql', MYSQL_REFERENCE.revision)
 
 const sh = (cmd, args, opts = {}) =>
   execFileSync(cmd, args, { stdio: 'inherit', ...opts })

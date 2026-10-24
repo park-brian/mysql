@@ -41,9 +41,12 @@ under its own `mysql-test-run.pl`. The `mysqltest-run` CI job repeats our side
 and checks that the roadmap's exact scoreboard matches the measured run.
 The installer targets Ubuntu 24.04 x64 and downloads the versioned 8.4.11
 packages with committed SHA256 pins from tools/lib/mysql-reference.json.
-The same reference definition retains the pinned Docker image digest. Moving
-apt release indexes cannot select a newer mysqltest or suite. Before running,
-the suite tool checks the binary version and, when reusing the server baseline,
+Root installation caches packages under /var/cache/myjs/mysql, outside the
+checkout, so it cannot create root-owned project scratch before the suite runs
+as the checkout owner. Validate that privilege handoff without a post-install
+ownership change. The same reference definition retains the pinned Docker
+image digest. Moving apt release indexes cannot select a newer mysqltest or
+suite. Before running, the suite tool checks the binary version and, when reusing the server baseline,
 the exact file identities; a mismatch fails before results are recorded.
 
 The recorded outcomes contain file names, pass/fail/skip classifications and
