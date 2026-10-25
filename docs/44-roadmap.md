@@ -114,11 +114,14 @@ and browser work follow the outstanding engine/planner work. Remaining function
 boundaries stay open for separate verification. The current state and remaining
 work are:
 
-**Next bounded slice: PREPARE diagnostic lifecycle, then M5.5 wire boundaries.**
+**Next bounded slice: system-variable identity and diagnostic-count admission.**
 Failed PREPARE publication and diagnostic SHOW admission are repaired below.
-Next preserve system-variable quoting/qualification identities, then reject
-diagnostic-count readers at native PREPARE admission, including nested
-expressions and the measured refusal precedence. Then repair WHERE
+COM_QUERY preflight failure publication and comment-only completion are now
+verified below. Preserve system-variable quoting/qualification and add diagnostic-count
+PREPARE admission together, including nested expressions and refusal precedence.
+The identity-only prototype would replace four accidental matching null field
+vectors with descriptors on commands native refuses, so those repairs must
+land together. Then repair WHERE
 resolution warnings and error precedence. Literal failures are raised at
 PREPARE after SELECT-list resolution and before GROUP/HAVING/ORDER resolution,
 even with LIMIT 0; they are not late iterator initialization. Complete successful
@@ -218,6 +221,63 @@ only 31 complete outcomes match across diagnostic counts, sql_mode, unknown
 names, four scopes, both quoting forms and dead-expression controls. Preserve
 the identifier boundary before applying an admission predicate to normalized
 text. GLOBAL diagnostic-count lookup retains its separate 1238 refusal.
+
+**Query preflight diagnostics, verified (2026-10-25):** COM_QUERY now captures
+the session before parsing and publishes preflight failures through the existing
+failure normalizer. Execution, including awaited multi-result execution, stays
+outside that catch so runtime warnings survive failure. Comment-only success
+clears diagnostics. The diagnostic writer owns one kept prefix and complete
+warning/error counters; the failure normalizer constructs its SQL error entry,
+including the existing 1390 admission exception.
+
+Protocol-aware parsing now lexes once and reuses that token stream for empty/
+comment classification and single/multiple parsing. Binary cache hits avoid
+lexing again; PREPARE keeps its existing lexical/parse pauses and freshly counted
+parameters. The redundant parser error-normalization layer is gone, and an
+enabled single statement retains streaming. parseStatements now honors its
+existing prelexed-token option. Parameter admission belongs to LexOptions:
+the public/default lexer permits markers; COM_QUERY disables them under the
+correct sql_mode, eliminating the separate default-mode scan. One ASCII
+whitespace matcher serves scanner membership and parameter-error suffix
+trimming before the cap; non-ASCII end characters remain intact. Existing
+multi-statement mode changes still parse under the initial mode, a separate gap.
+
+A new native-backed regression pins 448 complete outcomes across two SQL modes,
+both multi-statement capability settings, four prior diagnostic states, malformed
+and empty text, comments, placeholder precedence, quoted/commented question marks,
+ASCII suffix truncation and Unicode non-trimming. It improves eight complete
+matches to 448 without losing a matching component; native/current pass. Eight
+additional native controls cover query/execute and both capability settings:
+1,200 streamed rows retain total warnings 1,200 with a stored prefix of 1,024;
+a scalar error at row 700 retains 699 rows and all 701 warning/error conditions.
+Every row, field, error and count is strictly unchanged from preceding code and
+agrees with native. All 110 PREPARE failure outcomes still pass.
+
+Fresh Docker passes 1,351 ordinary plus four latency tests, typecheck, lint,
+nine unchanged caps, package/typed smoke, the real client and all seven pinned
+corpora. Its 350 test files/fixtures, 201 runtime sources and reference tooling/
+manifests/CI match the workspace; 20,000 executor statements seeded 20261010 pass.
+Core/facade are 334,312/334,219 B. Native Node 22 exposed unsupported private
+overload declarations during development; the final parser uses one implementation
+and an explicit binary-result type assertion. Preceding 3066f4b passes all eleven
+required CI jobs; optional ORM is skipped. Totals remain 144/190.
+
+A separate eighteen-message suffix audit matches fifteen native messages. Three
+long UTF-8 cases still differ because native caps bytes and renders a partial
+trailing sequence, while the current cap counts characters. Keep this M3.9
+message-formatting follow-up open; it is not hidden in the ASCII/short-Unicode
+fixture or claimed as repaired.
+
+The parked parts-based identity prototype passes typecheck and 63 parser tests;
+its first 96-outcome audit improves 31 to 72 complete matches, including all
+48 query outcomes. Sixteen count-reader refusals and eight successful-PREPARE
+warning vectors remain open. A separate 39-outcome SET/user/deparse probe and
+96-outcome quote/mode probe distinguish whole backtick names, quoted final
+components, qualified strings permitted only in reads, and syntax refusal for
+whole string-quoted system names. Preserve delimiter and component identity in
+tokens/AST; do not guess scope from a suffix. Its first size measurement still
+exceeds core/facade caps by 93/98 B. It is not shipped; later grammar refinements
+must be remeasured and fully validated.
 
 **Blocking lifetime proof (2026-10-25):** Native retained DISTINCT finishes
 aggregate argument reads before projection calls LAST_INSERT_ID(5). With

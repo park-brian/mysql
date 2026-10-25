@@ -306,3 +306,10 @@ test('M3.3: a variable keeps its @ however its name is written', () => {
   assert.equal(only('@a').text, '@a')
   assert.equal(only("@@'x'").text, '@@x')
 })
+
+test('M3.1: a text-protocol lexer rejects markers while keeping quoted and commented question marks', () => {
+  assert.throws(() => lex('SELECT ?', { parameters: false }), { code: 'ER_PARSE_ERROR', errno: 1064, sqlState: '42000', offset: 7 })
+  const text = "SELECT '?' /* ? */ -- ?" + String.fromCharCode(10)
+  assert.equal(lex(text, { parameters: false }).some((t) => t.kind === TOKEN.PLACEHOLDER), false)
+  assert.deepEqual(lex('SELECT ?, ?', { parameters: true }).filter((t) => t.kind === TOKEN.PLACEHOLDER).map((t) => t.index), [0, 1])
+})

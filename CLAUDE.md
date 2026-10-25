@@ -53,9 +53,11 @@ ROLLUP retains its positional keys. Selected grouping keys now eliminate
 redundant outer DISTINCT without copying aggregate readers. Failed PREPARE now
 publishes command-local diagnostics and preserves native warning-prefix totals;
 its placeholder admission refusal clears diagnostics. Native diagnostic SHOW
-commands now refuse PREPARE before resolution. Successful PREPARE warning
-publication follows system-variable identity, diagnostic-count admission and WHERE
-resolution order. Then repair the
+commands now refuse PREPARE before resolution. Query preflight now publishes
+its failures, clears comment diagnostics and shares one lexical pass with parsing;
+parameter admission uses the actual SQL mode. Next are system-variable identity
+and count-reader admission together. Successful PREPARE publication follows
+WHERE resolution warnings and precedence. Then repair the
 DISTINCT fill/read boundary, including column-header readiness after a failed
 fill. Then repair ordinary AVG's temporary strategy and AVG(DISTINCT)'s
 intermediate field copy, preserving the proved blocking lifetimes. Retained

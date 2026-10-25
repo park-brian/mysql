@@ -119,29 +119,6 @@ function parameterValue(p: Parameter, session: Session): Value {
 /** 3554: a system schema a statement may not touch. */
 const systemSchema = (name: string) => sqlError('ER_NO_SYSTEM_SCHEMA_ACCESS', `Access to system schema '${name}' is rejected.`)
 
-/**
- * A text with no statement in it: `empty` when it is nothing but whitespace
- * and semicolons, `comment` when a comment is there too; `undefined` when
- * there is a statement.
- */
-function emptyText(session: Session, sql: string): 'empty' | 'comment' | undefined {
-  const lead = /^[\s;]*/.exec(sql)?.[0].length ?? 0
-  if (lead === sql.length) return 'empty'
-  // Only a comment can make a text with something in it empty, and a comment
-  // begins with `/*`, `--` or `#`: anything else is a statement, and lexing a
-  // 32,000-row INSERT to learn so took half its PREPARE (M5.37).
-  const first = sql[lead]
-  if (first !== '/' && first !== '-' && first !== '#') return undefined
-  let tokens
-  try {
-    tokens = lex(sql, { sqlMode: modeOf(session.sqlMode) })
-  } catch (e) {
-    expectTyped(e)
-    return undefined
-  }
-  return tokens.every((t) => t.kind === TOKEN.EOF || (t.kind === TOKEN.OPERATOR && t.text === ';')) ? 'comment' : undefined
-}
-
 /** Every error a statement can raise, as the `SqlError` a client is sent: typed errors keep their number. */
 export function toSqlError(e: unknown): SqlError {
   if (e instanceof SqlError) return e
@@ -224,11 +201,18 @@ function isDiagnostic(statement: Statement): boolean {
 /** `max_error_count`'s default: how many conditions SHOW WARNINGS keeps. */
 const MAX_ERROR_COUNT = 1024
 
-/** Publish the command's SQL diagnostic area, or clear it after protocol admission fails. */
+/** One owner for the kept condition prefix and the command's complete counters. */
+function recordDiagnostics(state: SqlSession, conditions: readonly Condition[], warnings = 0, errors = 0): number {
+  warnings = Math.max(warnings, conditions.length)
+  state.diagnostics = { conditions: conditions.slice(0, MAX_ERROR_COUNT), warnings, errors }
+  return warnings
+}
+
+/** Protocol admission without a SQL condition area clears diagnostics. */
 function recordFailure(state: SqlSession, conditions: readonly Condition[] | undefined, failure: unknown): SqlError {
   const error = toSqlError(failure)
   const all = conditions === undefined ? [] : [...conditions, { level: 'Error' as const, code: error.errno, message: error.message }]
-  state.diagnostics = { conditions: all.slice(0, MAX_ERROR_COUNT), warnings: all.length, errors: conditions ? 1 : 0 }
+  recordDiagnostics(state, all, 0, conditions ? 1 : 0)
   return error
 }
 
@@ -326,7 +310,7 @@ export class SqlExecutor implements Executor {
       if (performance.now() - started > SLICE_MS) await pause()
       this.#alive(session)
       started = performance.now()
-      const statement = this.#parse(session, sql, true, tokens)
+      const statement = this.#parse(session, sql, 'binary', tokens) as Statement | null
       // Parsing a statement of 32,000 placeholders is a slice and more on its
       // own: the other connections go next, before its EXECUTE does (D-77).
       if (performance.now() - started > SLICE_MS) await pause()
@@ -385,24 +369,27 @@ export class SqlExecutor implements Executor {
     }
   }
 
-  /** Parse, or `null` for a statement that is answered OK without being run. */
-  #parse(session: Session, sql: string, keep = false, tokens?: Token[]): Statement | null {
-    const empty = emptyText(session, sql)
-    // The grammar's END_OF_INPUT: ER_EMPTY_QUERY, unless the text held a comment.
-    if (empty === 'empty') throw sqlError('ER_EMPTY_QUERY', 'Query was empty')
-    if (empty === 'comment') return null
-    try {
-      if (!keep) return parseStatement(sql, { sqlMode: modeOf(session.sqlMode) })
-      const key = `${session.sqlMode}\n${sql}`
+  /** Protocol-aware parsing; comment-only text is answered OK without running. */
+  #parse(session: Session, sql: string, protocol: WireProtocol, tokens?: Token[]): Statement | Statement[] | null {
+    const key = protocol === 'binary' ? `${session.sqlMode}\n${sql}` : undefined
+    if (key !== undefined) {
       const cached = this.#parsed.get(key)
       if (cached !== undefined) return cached
-      const statement = parseStatement(sql, { sqlMode: modeOf(session.sqlMode), ...(tokens === undefined ? {} : { tokens }) })
+    }
+    const options = { sqlMode: modeOf(session.sqlMode), parameters: protocol === 'binary' }
+    tokens ??= lex(sql, options)
+    if (tokens.every((t) => t.kind === TOKEN.EOF || (t.kind === TOKEN.OPERATOR && t.text === ';'))) {
+      if (/^[\s;]*$/.test(sql)) throw sqlError('ER_EMPTY_QUERY', 'Query was empty')
+      return null
+    }
+    const parsing = { ...options, tokens }
+    if (protocol === 'text' && session.multipleStatementsEnabled) return parseStatements(sql, parsing)
+    const statement = parseStatement(sql, parsing)
+    if (key !== undefined) {
       if (this.#parsed.size >= PARSED_KEPT) this.#parsed.delete(this.#parsed.keys().next().value as string)
       this.#parsed.set(key, statement)
-      return statement
-    } catch (e) {
-      throw toSqlError(e)
     }
+    return statement
   }
 
   /** The async half: every collation the statement can reach, resident before it runs (D-36). */
@@ -479,34 +466,29 @@ export class SqlExecutor implements Executor {
    * does on MySQL.
    */
   async #statement(session: Session, sql: string, params: readonly Value[], known: readonly Value[] | undefined, protocol: WireProtocol): Promise<StatementResult | StatementResult[]> {
-    // A `?` belongs to a prepared statement: in a plain query it is the
-    // grammar's error, at the `?` (8.4.11: `SELECT ?` is 1064).
-    if (protocol === 'text' && params.length === 0 && known === undefined && sql.includes('?')) {
-      const mark = lex(sql).find((t) => t.kind === TOKEN.PLACEHOLDER)
-      if (mark !== undefined) {
-        const line = sql.slice(0, mark.start).split('\n').length
-        throw sqlError('ER_PARSE_ERROR', messages.parseError(sql.slice(mark.start), line))
-      }
+    this.#alive(session)
+    const state = this.#state(session)
+    let parsed: Statement | Statement[] | null
+    try {
+      // Multi-statements still share the initial sql_mode: a recorded divergence.
+      parsed = this.#parse(session, sql, protocol)
+    } catch (e) {
+      throw recordFailure(state, [], e)
     }
-    if (session.multipleStatementsEnabled && protocol === 'text' && !/^[\s;]*$/.test(sql)) {
-      let statements: Statement[]
-      try {
-        statements = parseStatements(sql, { sqlMode: modeOf(session.sqlMode) })
-      } catch (e) {
-        throw toSqlError(e)
-      }
-      if (statements.length > 1) {
+    if (Array.isArray(parsed)) {
+      if (parsed.length > 1) {
         const results: StatementResult[] = []
-        // All are parsed under the mode in force when the text arrives; MySQL
-        // parses each as it reaches it, so a `SET sql_mode` inside the text
-        // governs the rest there and not here — a recorded divergence.
-        for (const statement of statements) results.push(await this.#one(session, sql, statement, params, known, protocol, false))
+        for (const statement of parsed) results.push(await this.#one(session, sql, statement, params, known, protocol, false))
         return results
       }
+      parsed = parsed[0] ?? null
     }
-    const statement = this.#parse(session, sql, protocol === 'binary')
-    if (statement === null) return { affectedRows: 0 }
-    return this.#one(session, sql, statement, params, known, protocol)
+    if (parsed === null) {
+      recordDiagnostics(state, [])
+      return { affectedRows: 0 }
+    }
+    // Keep the single result streaming, including a multi-enabled connection.
+    return this.#one(session, sql, parsed, params, known, protocol)
   }
 
   /**
@@ -532,8 +514,7 @@ export class SqlExecutor implements Executor {
         this.#purgeLater()
         if (diagnostic) return result
         // A count no condition stands for is still the count (`warning_count`).
-        const warnings = Math.max(result.warnings ?? 0, conditions.length)
-        state.diagnostics = { conditions: conditions.slice(0, MAX_ERROR_COUNT), warnings, errors: 0 }
+        const warnings = recordDiagnostics(state, conditions, result.warnings ?? 0)
         return warnings === (result.warnings ?? 0) ? result : { ...result, warnings }
       }
       // The error is a condition too, after any the statement raised first.

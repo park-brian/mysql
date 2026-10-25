@@ -29,6 +29,8 @@ import { TOKEN, OPERATORS, type Token, type TokenKind } from './tokens.ts'
 import { NO_SQL_MODE, type SqlMode } from './sql-mode.ts'
 
 export interface LexOptions {
+  /** Whether ? may be a parameter marker; text-protocol statements disable it. */
+  readonly parameters?: boolean
   /** The session's collation id — what the wire carries (`SET NAMES`, the handshake). */
   readonly collationId?: number
   /** Parsed `sql_mode`. Defaults to no modes, which is the permissive reading. */
@@ -36,7 +38,8 @@ export interface LexOptions {
 }
 
 /** Characters MySQL treats as whitespace between tokens. */
-const SPACE = new Set([' ', '\t', '\n', '\r', '\f', '\v'])
+// Terminal ASCII whitespace; scanner membership checks pass a single character.
+const SPACE = /[ \t\n\r\f\v]+(?![\s\S])/
 
 const DIGITS = /[0-9]/
 /**
@@ -100,7 +103,7 @@ export function lexBytes(bytes: Uint8Array, options: LexOptions = {}): Token[] {
  * without bounds-checking — the kind of thing ground rule 5 is about.
  */
 export function lex(sql: string, options: LexOptions = {}): Token[] {
-  return new Lexer(sql, options.sqlMode ?? NO_SQL_MODE).run()
+  return new Lexer(sql, options).run()
 }
 
 /** `OPERATORS` by first character, each list still longest first. */
@@ -117,13 +120,14 @@ class Lexer {
   readonly #mode: SqlMode
   #at = 0
   #line = 1
-  #placeholders = 0
+  #placeholders: number | undefined = 0
   /** Depth of open version-gated bodies, whose contents are live SQL. */
   #executableComments = 0
 
-  constructor(sql: string, mode: SqlMode) {
+  constructor(sql: string, options: LexOptions) {
     this.#sql = sql
-    this.#mode = mode
+    this.#mode = options.sqlMode ?? NO_SQL_MODE
+    if (options.parameters === false) this.#placeholders = undefined
   }
 
   run(): Token[] {
@@ -150,11 +154,10 @@ class Lexer {
     }
   }
 
-  #fail(): never {
-    // MySQL's `near` is a *suffix* — everything from here to the end, capped.
-    // Clients and its own test suite match on that shape, so it is part of the
-    // compatibility surface rather than a nicety.
-    throw parseError(this.#sql.slice(this.#at, this.#at + 80), this.#line, this.#at)
+  #fail(trim = false): never {
+    // Parameter admission trims trailing SQL whitespace before capping the suffix.
+    const sql = trim ? this.#sql.replace(SPACE, '') : this.#sql
+    throw parseError(sql.slice(this.#at, this.#at + 80), this.#line, this.#at)
   }
 
   #token(kind: TokenKind, text: string, start: number, startLine: number, extra: Partial<Token> = {}): Token {
@@ -168,7 +171,7 @@ class Lexer {
     for (;;) {
       const c = this.#peek()
       if (c === '') return
-      if (SPACE.has(c)) {
+      if (SPACE.test(c)) {
         this.#advance()
         continue
       }
@@ -181,7 +184,7 @@ class Lexer {
       // arithmetic, not a comment, and MySQL differs from most dialects here.
       if (c === '-' && this.#peek(1) === '-') {
         const after = this.#peek(2)
-        if (after === '' || SPACE.has(after)) {
+        if (after === '' || SPACE.test(after)) {
           this.#skipToEol()
           continue
         }
@@ -269,6 +272,7 @@ class Lexer {
     }
     if (c === "'") return this.#string("'", start, startLine)
     if (c === '?') {
+      if (this.#placeholders === undefined) this.#fail(true)
       this.#advance()
       return this.#token(TOKEN.PLACEHOLDER, '?', start, startLine, { index: this.#placeholders++ })
     }

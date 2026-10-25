@@ -87,7 +87,7 @@ export function parseStatementBytes(bytes: Uint8Array, options: ParseStatementOp
  * default, and how mysqltest's `delimiter` blocks are sent.
  */
 export function parseStatements(sql: string, options: ParseStatementOptions = {}): Statement[] {
-  const c = new Cursor(lex(sql, options), sql)
+  const c = new Cursor(options.tokens ?? lex(sql, options), sql)
   const sqlMode = options.sqlMode ?? NO_SQL_MODE
   const out = [checked(c, sqlMode)]
   while (c.takeOp(';') && !c.atEnd()) out.push(checked(c, sqlMode))
