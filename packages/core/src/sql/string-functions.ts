@@ -612,7 +612,7 @@ function numberFunction(name: string, args: readonly Compiled[], callName: strin
             const p = placesOf(r, env)
             if (v === null || p === null) return null
             const d = toDecimal(v)
-            const at = Number(p < -65n ? -65n : p > 30n ? 30n : p)
+            const at = Math.max(-65, Math.min(scale, Number(p)))
             const rounded = roundDecimal(d, at, truncate)
             return convertTo(rounded, type)
           },

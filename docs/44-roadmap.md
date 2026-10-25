@@ -114,19 +114,14 @@ and browser work follow the outstanding engine/planner work. Remaining function
 boundaries stay open for separate verification. The current state and remaining
 work are:
 
-**Next bounded slice: M5.10 ROUND/TRUNCATE effective places.** Their
-canonical result writer is repaired below. The expanded audit also proves a
-separate algorithm gap: TRUNCATE(2/3,8) returns 0.6666 natively versus 0.6667
-here, despite both declaring scale four. ROUND(1/20001,8) returns 0.0000
-natively versus 0.0001 here through double rounding. The pinned
-[implementation](https://github.com/mysql/mysql-server/blob/mysql-8.4.11/sql/item_func.cc)
-clamps nonnegative requested places to the resolved result scale before its
-single rounding/truncation operation. Pin that rule with literal/row-dependent
-places and preserve every prior matching component. Prepared places remain
-separate: ten retained ROUND/TRUNCATE executions currently resolve a placeholder
-as constant NULL and incorrectly choose scale zero; native retains the input
-scale. Pin their prepare/execute metadata and NULL behavior before changing
-constant classification.
+**Next bounded slice: M5.10 prepared rounding places.** The declared result
+writer and effective rounding places are repaired below. Eighty retained
+ROUND/TRUNCATE observations cover direct places and seven nested placeholder
+forms. Current resolution reads placeholders as constant NULL, choosing scale
+zero or folding a fallback/boolean to scale four or one; native retains input
+scale nine in every case. Pin prepare/execute metadata, rebinding and NULL
+behavior before changing constant classification. Keep literal NULL, row-dependent
+places, integer/DOUBLE behavior and shared constant consumers authoritative.
 
 Then resume retained DECIMAL division precision. Both operand word padding and
 result-buffer bounds matter in the pinned [division implementation](https://github.com/mysql/mysql-server/blob/mysql-8.4.11/mysys/decimal.cc).
@@ -378,6 +373,32 @@ fixtures and 201 runtime sources match the fresh tested snapshot. All 768
 non-IF controls in the broader audit are strictly unchanged. Preceding
 f058304/run 40202476175 passes all eleven blocking jobs; optional ORM is
 skipped. M5.10 stays partial; totals remain 144/190.
+
+**Verified ROUND/TRUNCATE effective-places repair (2026-10-25):**
+DECIMAL places are clamped to the resolved result scale before the existing
+single rounding operation, following the pinned native implementation. This
+prevents ROUND's double rounding and TRUNCATE's accidental final rounding.
+The lower safety bound, argument order, NULLs, metadata, rounding algorithm
+and integer/DOUBLE branches remain unchanged. The bounded numeric clamp also
+handles extreme signed/unsigned places without converting an unbounded exponent
+into a power. Native/current regressions pin 1,272 complete query/execute
+outcomes across raw division, IF and field sources, half ties, signs and
+BIGINT precision, negative and extreme signed/unsigned literals and columns,
+NULLs, raw and arithmetic consumers, integer/DOUBLE controls, seeded evaluation
+count and twelve retained executions across writes. Preceding code fails.
+
+The complete 1,024-outcome audit improves 884 to 1,020 matching rows with every
+field/warning vector native and no previous matching component lost. All 512
+field/integer/DOUBLE/IF controls are strictly unchanged. Four row-dependent IF
+results consumed by division remain separate. All seven
+focused regressions, typecheck and nine unchanged caps pass; core/facade are
+334,339/334,264 B. Fresh Docker --reference passes 1,345 main tests, four
+latency tests, typecheck, lint, all nine size caps, installed-package/typed-
+example smoke, real-client checks and all seven pinned corpora. Another
+20,000 executor statements seeded 20261010 pass. All 340 test files/fixtures
+and 201 runtime sources exactly match the fresh tested snapshot. M5.10 stays
+partial, totals 144/190. Preceding e812105/run 40205924201 passes all eleven
+blocking jobs; optional ORM is skipped.
 
 **Next word-precision proof:** sixteen more native observations match every
 field/warning/error but only four current row vectors. A denominator's retained
