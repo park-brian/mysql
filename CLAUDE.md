@@ -40,8 +40,10 @@ publication remains pending. Bounded FirstMatch now omits physically proved
 integer bounds under the existing caps. M5.19 field copying now shares the
 BLOB promotion rule with metadata. Actual DISTINCT/group/derived writers now
 normalize stored DECIMAL values, closing the measured streamed-join copy gaps.
-Next is AVG precision through arithmetic versus actual stored-field scale,
-followed by supplementary identifier-alias admission. Broader strategy and
+Grouped AVG arithmetic now retains quotient digits while actual window and
+derived/CTE fields keep their stored scale. Next is fractional AVG storage in
+temporary running totals and DISTINCT argument copies, followed by
+supplementary identifier-alias admission. Broader strategy and
 measured field-copy gaps stay open.
 The cost-based planner (M5.7, M5.42–M5.46) is done:
 `EXPLAIN FORMAT=TREE` prints the plan that runs, and 2,124 of the relational

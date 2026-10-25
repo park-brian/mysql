@@ -58,7 +58,7 @@ import {
   valueBytes,
 } from '@myjs/types'
 import { AGGREGATE_NAMES, asNumber, compile, readSlot, type CompileContext, type Compiled, type Env, type Row } from './compile.ts'
-import { rowKey, valueKey } from './keys.ts'
+import { firstKey, rowKey, valueKey } from './keys.ts'
 import { asJson } from './json.ts'
 import { decimalType, doubleType, floatLength, intType, jsonType, stringType, type ResultType } from './meta.ts'
 import type { SortKey } from './operators.ts'
@@ -238,15 +238,6 @@ export class AggregateSink {
     if (!arity) throw sqlError('ER_WRONG_PARAMCOUNT_TO_NATIVE_FCT', `Incorrect parameter count in the call to native function '${e.name}'`)
     const type = aggregateType(name, args, ctx)
     const distinct = e.distinct === true
-    const evalArgs = (row: Row, env: Env): Value[] | undefined => {
-      const out: Value[] = []
-      for (const a of args) {
-        const v = a.eval(row, env)
-        if (v === null) return undefined
-        out.push(v)
-      }
-      return out
-    }
     switch (name) {
       case 'COUNT':
         return {
@@ -261,13 +252,9 @@ export class AggregateSink {
                   n++
                   return
                 }
-                const vs = evalArgs(row, env)
+                const vs = argumentValues(args, row, env)
                 if (vs === undefined) return
-                if (seen !== undefined) {
-                  const k = rowKey(vs)
-                  if (seen.has(k)) return
-                  seen.add(k)
-                }
+                if (seen !== undefined && !firstKey(seen, rowKey(vs))) return
                 n++
               },
               result: () => intValue(n),
@@ -281,31 +268,37 @@ export class AggregateSink {
         return jsonAggregate(name, args, type)
       default: {
         const arg = args[0] as Compiled
-        const make = (): Accumulator => accumulator(name, arg.type)
         return {
           name,
           type,
           start() {
-            const acc = make()
+            const acc = accumulator(name, arg.type)
             const seen = distinct ? new Set<string>() : undefined
             return {
               add(row, env) {
                 const v = arg.eval(row, env)
                 if (v === null) return
-                if (seen !== undefined) {
-                  const k = valueKey(v)
-                  if (seen.has(k)) return
-                  seen.add(k)
-                }
+                if (seen !== undefined && !firstKey(seen, valueKey(v))) return
                 acc.add(v)
               },
-              result: () => acc.result(),
+              result: acc.result,
             }
           },
         }
       }
     }
   }
+}
+
+/** Evaluate arguments in order, stopping at the first NULL. */
+function argumentValues(args: readonly Compiled[], row: Row, env: Env): Value[] | undefined {
+  const out: Value[] = []
+  for (const a of args) {
+    const v = a.eval(row, env)
+    if (v === null) return undefined
+    out.push(v)
+  }
+  return out
 }
 
 /**
@@ -397,17 +390,9 @@ function groupConcat(e: CallNode, args: readonly Compiled[], type: ResultType, d
       const seen = distinct ? new Set<string>() : undefined
       return {
         add(row, env) {
-          const vs: Value[] = []
-          for (const a of args) {
-            const v = a.eval(row, env)
-            if (v === null) return
-            vs.push(v)
-          }
-          if (seen !== undefined) {
-            const k = rowKey(vs)
-            if (seen.has(k)) return
-            seen.add(k)
-          }
+          const vs = argumentValues(args, row, env)
+          if (vs === undefined) return
+          if (seen !== undefined && !firstKey(seen, rowKey(vs))) return
           // A binary result joins bytes, which need not be text in any charset.
           const parts = vs as Exclude<Value, null>[]
           entries.push({ text: binary ? '' : parts.map(toText).join(''), bytes: binary ? concatBytes(parts.map(valueBytes)) : undefined, keys: order.map((o) => o.expr.eval(row, env)) })

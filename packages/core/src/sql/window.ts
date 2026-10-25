@@ -152,7 +152,11 @@ export class WindowSink {
     }
     this.windows.push({ fn: name, args, partition: (spec.partitionBy ?? []).map((p) => compile(p, ctx)), order, frame, slot, ...(aggregate === undefined ? {} : { aggregate }), ...(count === undefined ? {} : { count }) })
     // A field of the window's temporary table: a number there carries no BINARY.
-    return { eval: (row) => row[this.base + slot] ?? null, type: { ...type, temporary: 'stream' } }
+    return { eval: (row) => {
+      const v = row[this.base + slot] ?? null
+      // A window AVG reads its final field, not the grouped sum/count intermediate.
+      return name === 'AVG' && type.kind === 'decimal' ? convertTo(v, type) : v
+    }, type: { ...type, temporary: 'stream' } }
   }
 
   /** The window a call names: its own, or a named one, or a named one it extends. */
