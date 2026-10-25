@@ -114,14 +114,50 @@ and browser work follow the outstanding engine/planner work. Remaining function
 boundaries stay open for separate verification. The current state and remaining
 work are:
 
-**Next bounded slice: M5.5 grouped DISTINCT physical boundaries.** Prove and
-repair bounded, non-eliminated outer DISTINCT over grouped exact AVG before
-promoting the division repair. Native ordinary AVG uses temporary aggregation;
-AVG(DISTINCT ...) uses sorted grouping followed by an actual aggregate-field
-copy before enclosing arithmetic. Preserve index-streamed reads when DISTINCT
+**Next bounded slice: M5.5 DISTINCT fill/read and wire-error boundaries.**
+First repair unbounded temporary-table reads together with their column-header
+readiness on failure, preserving earlier source/optimization failures before
+headers. Then repair bounded, non-eliminated outer DISTINCT over computed ordinary exact AVG,
+using the existing temporary-group writer and a real final deduplication
+barrier. Then repair AVG(DISTINCT ...), which uses sorted grouping followed by
+an additional aggregate-field copy before enclosing arithmetic. Complete both
+before promoting the division repair. Preserve index-streamed reads when DISTINCT
 is absent or eliminated by the retained grouping keys. Pin that elimination
 proof and both aggregate kinds before broadening to HAVING, LIMIT, ROLLUP or
 windows. The native plan and its actual writers must make the decision.
+
+**Blocking lifetime proof (2026-10-25):** Native retained DISTINCT finishes
+aggregate argument reads before projection calls LAST_INSERT_ID(5). With
+AVG(DISTINCT IF(LAST_INSERT_ID()=0,n,n+100)) plus that call, native returns
+3, 6.5 and 7; the current streamed path returns 3, 106.5 and 107. Key-covered
+DISTINCT and no-DISTINCT controls retain their streamed side effects. Both
+protocols confirm the distinction without relying on EXPLAIN labels. A parked
+integrated candidate reproduces those values, metadata and operator trees,
+passes eleven focused tests and typecheck, and improves the unfiltered
+2,100-outcome AVG audit from 1,574 to 1,668 complete matches, losing no matching
+component. It still exceeds the unchanged core/facade caps by 84/112 B and is
+not production code. Preserve both barriers and this timing proof; implement
+ordinary AVG's existing temporary writer first rather than removing a required
+lifetime or searching for unrelated size savings. The ordinary-AVG split also
+remains experimental, exceeding core/facade caps by 20/54 B after sharing the
+final barrier. Division remains parked.
+
+**Wire-error prerequisite (2026-10-25):** Native query/execute sends the 699
+earlier rows when a plain SELECT's scalar subquery fails at row 700, but sends
+zero rows from an unordered DISTINCT table whose fill failed. It still sends
+that result's resolved column headers. The current shared reader streams those
+699 DISTINCT rows too. Buffering the fill alone corrects the rows but loses
+twelve previously matching header observations in an unfiltered 576-observation
+audit. A blanket empty-batch/header emission passes a bounded 384-observation
+wire test, yet an independent 88-observation audit loses 38 matching header
+cases: constant WHERE/HAVING and some subquery/order failures precede native
+headers. Both experiments are rejected despite fitting the caps. Establish the
+actual execution/readiness boundary; do not infer it from SQL spelling or emit
+headers for every runtime error. The wider audit also retains pre-existing
+projection/OFFSET and ordered-field gaps. All experimental code/tests remain
+parked; production runtime stays at validated ab34f7d, whose eleven required
+CI jobs passed. The restored Docker snapshot matches all 346 test files/fixtures
+and 201 runtime sources. This proof does not complete M5.5.
 
 **Grouping-key index proof, verified (2026-10-25):** The
 elimination controls exposed a prerequisite within the existing strategy

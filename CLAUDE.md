@@ -51,9 +51,10 @@ retain input scale; FLOOR/CEIL now share the native eighteen-digit BIGINT
 boundary. Repeated grouping columns now require each physical index part once;
 ROLLUP retains its positional keys. Selected grouping keys now eliminate
 redundant outer DISTINCT without copying aggregate readers. Next is the
-retained grouped DISTINCT strategy and intermediate AVG-field
-copy proved necessary to preserve matching rows; retained division precision
-across both operands and result-buffer bounds follows,
+DISTINCT fill/read boundary, including column-header readiness after a failed
+fill. Then repair ordinary AVG's temporary strategy and AVG(DISTINCT)'s
+intermediate field copy, preserving the proved blocking lifetimes. Retained
+division precision across both operands and result-buffer bounds follows,
 followed by supplementary identifier-alias admission. Broader strategy and
 measured field-copy gaps stay open.
 The cost-based planner (M5.7, M5.42–M5.46) is done:
