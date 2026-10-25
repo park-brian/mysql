@@ -58,7 +58,7 @@ export function rowKey(values: readonly Value[]): string {
 }
 
 /** Insert a canonical key once, without a second hash lookup. */
-export function firstKey(seen: Set<string>, key: string): boolean {
+export function firstKey<T>(seen: Set<T>, key: T): boolean {
   const before = seen.size
   seen.add(key)
   return seen.size > before

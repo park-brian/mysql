@@ -19,7 +19,8 @@ foreign keys, CHECK constraints, generated columns, FULLTEXT search,
 INFORMATION_SCHEMA, temporary tables and ALTER TABLE all run through
 unmodified `mysql2`. The committed execution and relational corpora agree
 with 8.4.11; the committed coercion corpus also agrees completely (M5.2).
-Some function behavior and optimizer strategies remain partial. M5.19 numeric
+Some function behavior and optimizer strategies remain partial. M5.1 naming and
+M5.5 aggregate precision are reopened by native probes in the roadmap. M5.19 numeric
 set-operation holders now agree with the expanded native audits, including
 default/fixed FLOAT behavior. Raw BIT with VARCHAR/VARBINARY now shares the
 collation resolver, including explicit text overrides. BLOB holders now size
@@ -27,7 +28,7 @@ raw/computed branches in the proper charset without counting bytes twice.
 Binary BLOB copies now distinguish raw packed BIT fields from computed
 numeric readings, with reference coverage for nested LIMIT sorts and derived
 DECIMAL fields. Source-to-text FLOAT, explicit text-BLOB transcoding, non-BLOB
-computed BIT readers and streamed-join copies remain open, alongside nested
+computed BIT readers remain open, alongside nested
 set ordering/multiplicity and a separate M5.10 scalar COALESCE reader.
 M5's ORM exit criterion holds with recorded test configuration; default
 parallel runs can lose interactive-transaction tests to scheduling delays.
@@ -37,9 +38,11 @@ protocol, its values `mysql2`'s (M5.36, D-76). The roadmap's **Next** section
 says what comes next: 0.3 packaging is staged (`npm run pack`, D-79/D-80);
 publication remains pending. Bounded FirstMatch now omits physically proved
 integer bounds under the existing caps. M5.19 field copying now shares the
-BLOB promotion rule with metadata. The next bounded repair distinguishes
-actual numeric materialization from streamed wire metadata; broader strategy
-and measured field-copy gaps stay open.
+BLOB promotion rule with metadata. Actual DISTINCT/group/derived writers now
+normalize stored DECIMAL values, closing the measured streamed-join copy gaps.
+Next is AVG precision through arithmetic versus actual stored-field scale,
+followed by supplementary identifier-alias admission. Broader strategy and
+measured field-copy gaps stay open.
 The cost-based planner (M5.7, M5.42–M5.46) is done:
 `EXPLAIN FORMAT=TREE` prints the plan that runs, and 2,124 of the relational
 corpus's 2,248 plans agree with 8.4.11's; M5.47 is in progress, M5.48 is done,

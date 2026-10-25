@@ -13,22 +13,22 @@ import type { ColumnDef, IndexDef, Table, TableDef, ViewDef } from '@myjs/engine
 import { LITERAL, NODE, QUERY, REF, TOKEN, deparse, lex, parseStatement, type Expression, type OrderItem, type QueryBody, type QueryExpression, type SelectNode, type TableReference, type SetOperationNode, type TableName, type Token } from '@myjs/parser'
 import { messages, sqlError, type ColumnDefinition, type ResultSet, type RowValue } from '@myjs/protocol'
 import { intValue, storageWidth, toInteger, truth, withoutHex, type Value } from '@myjs/types'
-import { compile, EMPTY_SCOPE, readSlot, type CompileContext, type Compiled, type Env, type GroupKeys, type QuantifiedSubquery, type Scope, type SubqueryPlan } from './compile.ts'
+import { compile, convertTo, EMPTY_SCOPE, readSlot, type CompileContext, type Compiled, type Env, type GroupKeys, type QuantifiedSubquery, type Scope, type SubqueryPlan } from './compile.ts'
 import { AggregateSink, chooseStrategy, containsAggregate, groupRows, isAggregate } from './group.ts'
 import { WindowSink, applyWindows, containsWindow } from './window.ts'
-import { columnDefinition, intType, type ResultType } from './meta.ts'
+import { CHARSET_UTF8MB4_BIN, columnDefinition, intType, type ResultType } from './meta.ts'
 import { FIELD_TYPE, expectTyped } from '@myjs/bytes'
 import { distinct, filter, limit, project, sort, type SortKey } from './operators.ts'
 import { isConstant, optimizerEnabled, splitAnd } from './plan.ts'
 import { and, columnRefs, someNode } from './ast.ts'
 import { clusteredIndex, indexParts } from './indexes.ts'
-import { collationInfoByName } from '@myjs/charsets'
+import { collationInfoByName, encodeCollation } from '@myjs/charsets'
 import { safeResolve, TableScope } from './scope.ts'
 import { holdsRead, planFrom, type DerivedPlan, type DerivedSource, type FromContext, type FromPlan, type JoinCondition } from './from.ts'
-import { rowKey, valueKey } from './keys.ts'
+import { firstKey, rowKey, valueKey } from './keys.ts'
 import { indexLookup, planNode, wrap, type PlanNode } from './explain.ts'
 import { describeStages, runStages, type Rowed, type Stage } from './pipeline.ts'
-import { convert as convertSetValue, nestedNullability, setOperation, setOperationType } from './setop.ts'
+import { convert as convertSetValue, checkSetWidth, nestedNullability, setOperation, setOperationType } from './setop.ts'
 import { constTablesHaveRows, neverEqual, optimizerFacts, uniqueKey, type OptimizerFacts } from './optimize.ts'
 import { informationSchemaTable } from './information-schema.ts'
 import { performanceSchemaTable } from './performance-schema.ts'
@@ -39,6 +39,7 @@ import type { Trx } from '@myjs/engine'
 import { isTemporary, type CatalogApi } from './temporary.ts'
 import { modeOf } from './mode.ts'
 import { finish } from './session.ts'
+import { escapedBytes } from './builtins.ts'
 
 /** Everything one statement execution needs. */
 export interface Run {
@@ -399,6 +400,7 @@ function planSelect(run: Run, q: QueryExpression, node: SelectNode): SelectPlan 
       // reports its NULL as it always does (8.4.11).
       for (const item of items) {
         if (!refersToRow(item.expr, lookup)) continue
+        item.compiled = decimalField(item.compiled)
         // Read through a window's table already, a column keeps what that gives it (8.4.11).
         if (item.compiled.type.temporary === 'stream') continue
         // Fields can share key membership while retaining separate evaluators.
@@ -452,6 +454,7 @@ function planSelect(run: Run, q: QueryExpression, node: SelectNode): SelectPlan 
         if (!refersToRow(item.expr, lookup, consts)) return
         const temporary = !alone ? 'stream' : refersToRow(item.expr, lookup, fixed) ? true : 'pinned'
         patchType(item, { temporary })
+        if (node.distinct === true) item.compiled = decimalField(item.compiled)
       })
       dataColumns = copiedColumns(run, facts, own, items)
     }
@@ -614,6 +617,8 @@ function windowStage(windows: WindowSink, base: number): Stage {
 function deliverStage(items: readonly Compiled[], keys: readonly SortKey[], deduplicate: boolean, through: { readonly deduplicated: boolean; readonly streamed: boolean; readonly copied?: readonly (number | undefined)[] | undefined; readonly described?: boolean; readonly keep?: number | undefined; readonly buffer?: { readonly estimate: number; readonly capacity: number } | undefined; readonly constant?: 'group' | 'limit' }): Stage {
   // A LIMIT needs only its first rows of the order, unless a DISTINCT between would drop some.
   const keep = deduplicate ? undefined : through.keep
+  const ordered = keys.length > 0
+  const bounded = through.keep !== undefined && !ordered
   const copied = through.deduplicated ? keys.flatMap((key, i) => {
     const column = key.expr.type.column
     const index = through.copied?.[i] ?? items.findIndex((item) => item === key.expr || (column !== undefined && item.type.column === column))
@@ -621,25 +626,29 @@ function deliverStage(items: readonly Compiled[], keys: readonly SortKey[], dedu
   }) : []
   return {
     run(rows, env) {
-      if (keys.length > 0 && copied.length === keys.length) return sort(rowed(distinct(project(rows, items, env))), copied, env)
-      const sorted = keys.length > 0 ? sort(rows, keys, env, keep, through.buffer) : rows
+      if (ordered && copied.length === keys.length) return sort(rowed(distinct(project(rows, items, env))), copied, env)
+      const sorted = ordered ? sort(rows, keys, env, keep, through.buffer) : rows
       let projected = project(sorted, items, env)
       if (deduplicate) projected = distinct(projected)
       // Initialize a bounded temporary table even when the enclosing LIMIT returns no rows.
-      if (through.deduplicated && through.keep !== undefined && keys.length === 0) return rowed([...limit(projected, 0, through.keep)])
+      if (through.deduplicated && bounded) return rowed([...limit(projected, 0, through.keep)])
       return rowed(projected)
     },
     describe(n) {
       if (through.described === false) return undefined
       // A LIMIT with nothing to sort above the temporary table stops filling it once it holds enough (8.4.11).
-      const sized = through.keep !== undefined && keys.length === 0
       if (through.constant === 'group') return planNode('Group (no aggregates)', [n])
-      if (through.constant === 'limit') return planNode('Limit: 1 row(s)', [planNode('Table scan on <temporary>', [planNode('Temporary table', [sized ? planNode(`Limit table size: ${through.keep} row(s)`, [n]) : n])])])
-      let out = through.deduplicated ? planNode('Table scan on <temporary>', [planNode('Temporary table with deduplication', [sized ? planNode(`Limit table size: ${through.keep} unique row(s)`, [n]) : n])]) : n
-      if (keys.length > 0) out = planNode('Sort', [wrap(through.streamed, 'Stream results', out)])
+      if (through.constant === 'limit') return planNode('Limit: 1 row(s)', [planNode('Table scan on <temporary>', [planNode('Temporary table', [bounded ? planNode(`Limit table size: ${through.keep} row(s)`, [n]) : n])])])
+      let out = through.deduplicated ? planNode('Table scan on <temporary>', [planNode('Temporary table with deduplication', [bounded ? planNode(`Limit table size: ${through.keep} unique row(s)`, [n]) : n])]) : n
+      if (ordered) out = planNode('Sort', [wrap(through.streamed, 'Stream results', out)])
       return out
     },
   }
+}
+
+/** A stored DECIMAL reads its declared value, not the original item's branch reader. */
+function decimalField(item: Compiled): Compiled {
+  return item.type.kind === 'decimal' ? { type: item.type, eval: (row, env) => convertTo(item.eval(row, env), item.type) } : item
 }
 
 /** Patch output metadata without replacing the expression's evaluator. */
@@ -690,8 +699,7 @@ function subqueryNodes(run: Run, clause: string): PlanNode[] {
   // A clause may be compiled more than once (its metadata, then its rows): each subquery is one block.
   const seen = new Set<QueryExpression>()
   for (const s of run.subqueries ?? []) {
-    if (s.clause !== clause || seen.has(s.query)) continue
-    seen.add(s.query)
+    if (s.clause !== clause || !firstKey(seen, s.query)) continue
     const roots = s.plan.explain?.()
     const how = run.quantified?.get(s.query)
     const rewritten = how === undefined || how.correlated ? undefined : quantifiedPlan(run, s.query, how, topLevel(run.clauses?.[clause], s.query), roots)
@@ -1368,6 +1376,14 @@ function derivedTable(run: Run, query: QueryExpression, alias: string, names: re
     const type = asColumn === undefined ? { ...rest, names: asExpression } : { ...rest, column: asColumn }
     return { name: c.name, type: merged ? type : { ...type, temporary: 'stream' as const } }
   })
+  // Memoization can cache a merged query too; only an unmerged table copies fields.
+  function* fieldRows(trx: Trx | undefined, env: Env, row?: readonly Value[]): Generator<Value[]> {
+    const given = lateral === undefined || row === undefined ? env : { ...env, outer: [row, ...(env.outer ?? [])] }
+    for (const r of plan.rows(trx, given)) yield r.map((v, i) => {
+      const type = columns[i]!.type
+      return withoutHex(!merged && type.kind === 'decimal' ? convertTo(v, type) : v)
+    })
+  }
   // Read once per statement unless it reads an enclosing query: so an UPDATE
   // whose subquery reads its own table through a derived table sees the
   // table as it was before the first row changed (8.4.11: `UPDATE t SET a =
@@ -1384,10 +1400,10 @@ function derivedTable(run: Run, query: QueryExpression, alias: string, names: re
     },
     // Its rows are a table's fields: a hex literal's number does not survive.
     rows: (trx, env, row) => {
-      if (lateral !== undefined || correlated || env.memo === undefined) return fieldRows(plan.rows(trx, lateral === undefined || row === undefined ? env : { ...env, outer: [row, ...(env.outer ?? [])] }))
+      if (lateral !== undefined || correlated || env.memo === undefined) return fieldRows(trx, env, row)
       let all = env.memo.get(key) as Value[][] | undefined
       if (all === undefined) {
-        all = [...fieldRows(plan.rows(trx, env))]
+        all = [...fieldRows(trx, env)]
         env.memo.set(key, all)
       }
       return all
@@ -1406,24 +1422,18 @@ function plainColumn(t: ResultType): ResultType {
   return { ...rest, wasLiteralInt: true }
 }
 
-function* fieldRows(rows: Iterable<Value[]>): Generator<Value[]> {
-  for (const r of rows) yield r.map(withoutHex)
-}
-
 /** A derived table's or CTE's column names: its own list, or its items' — 1353 when they differ in number, 1060 for a name twice. */
 function renamed(columns: readonly { readonly name: string; readonly type: ResultType }[], names: readonly string[] | undefined): { name: string; type: ResultType }[] {
   if (names !== undefined && names.length !== columns.length) {
     throw sqlError('ER_VIEW_WRONG_LIST', 'In definition of view, derived table or common table expression, SELECT list and column names list have different column counts')
   }
   // A hex literal's column is bytes again, as its rows are (`fieldRows`).
-  const out = columns.map((c, i) => ({ name: names?.[i] ?? c.name, type: plainColumn(c.type) }))
   const seen = new Set<string>()
-  for (const c of out) {
-    const k = c.name.toLowerCase()
-    if (seen.has(k)) throw sqlError('ER_DUP_FIELDNAME', `Duplicate column name '${c.name}'`)
-    seen.add(k)
-  }
-  return out
+  return columns.map((c, i) => {
+    const name = names?.[i] ?? c.name
+    if (!firstKey(seen, name.toLowerCase())) throw sqlError('ER_DUP_FIELDNAME', `Duplicate column name '${name}'`)
+    return { name, type: plainColumn(c.type) }
+  })
 }
 
 /** The CTEs a WITH defines, each visible to the ones after it and to the query. */
@@ -1502,7 +1512,7 @@ function recursiveCte(run: Run, cte: NonNullable<QueryExpression['with']>['table
   ctes.set(cte.name, () => workingTable)
   const steps = recursive.map((m) => planQuery({ ...run, ctes }, asQuery(m)))
   for (const p of [...anchorPlans, ...steps]) {
-    if (p.columns.length !== columns.length) throw sqlError('ER_WRONG_NUMBER_OF_COLUMNS_IN_SELECT', 'The used SELECT statements have a different number of columns')
+    checkSetWidth(p.columns, columns)
   }
   // A LIMIT on the whole CTE stops the recursion once it has its rows (8.4.11).
   const [limitCount, offset] = queryLimit(run, query)
@@ -1528,8 +1538,7 @@ function recursiveCte(run: Run, cte: NonNullable<QueryExpression['with']>['table
           const row = r.map((v, i) => convertSetValue(v, types[i] as ResultType))
           if (distinctRows) {
             const k = rowKey(row)
-            if (seen.has(k)) continue
-            seen.add(k)
+            if (!firstKey(seen, k)) continue
           }
           out.push(row)
         }
@@ -1805,38 +1814,37 @@ function* selectList(run: Run, node: SelectNode, scope: TableScope | undefined):
   }
 }
 
-function selectName(entry: SelectEntry, scope: TableScope | undefined): string {
-  return entry.slot?.name ?? sourceName(scope, entry.item, itemName(entry.item, entry.text))
-}
-
-/** A result column's name: its alias, a bare column's name as written, a string literal's value, else its source text. */
-function itemName(item: SelectNode['items'][number], text: string | undefined): string {
-  const e = item.expr
-  if (item.alias !== undefined) {
-    // A name is utf8mb3: a character past the BMP in an alias is refused (8.4.11).
-    const astral = /[\u{10000}-\u{10FFFF}]/u.exec(item.alias)
-    if (astral !== null) {
-      const bytes = Array.from(new TextEncoder().encode(astral[0]), (b) => `\\x${b.toString(16).toUpperCase()}`).join('')
-      throw sqlError('ER_CANNOT_CONVERT_STRING', `Cannot convert string '${bytes}' from utf8mb4 to utf8mb3`)
-    }
-    return item.alias
-  }
-  // A name made from the expression has such a character as '?'.
-  const made = e.kind === NODE.COLUMN ? (e.parts[e.parts.length - 1] as string) : e.kind === NODE.LITERAL && e.type === 'string' ? (e.value as string) : text === undefined ? deparseName(e) : text
-  return made.replace(/[\u{10000}-\u{10FFFF}]/gu, '?')
-}
-
 /**
  * A bare column of a view, a derived table, a CTE or an INFORMATION_SCHEMA
  * table is named as that source names it, whatever the query wrote: only a
  * base table's column takes the query's spelling (8.4.11 — `SELECT
  * table_name FROM information_schema.tables` reads as TABLE_NAME).
  */
-function sourceName(scope: TableScope | undefined, item: SelectNode['items'][number], name: string): string {
+function selectName(entry: SelectEntry, scope: TableScope | undefined): string {
+  if (entry.slot !== undefined) return entry.slot.name
+  const { item } = entry
+  const name = itemName(item, entry.text)
   if (scope === undefined || item.alias !== undefined || item.expr.kind !== NODE.COLUMN) return name
-  const r = safeResolve(scope, item.expr.parts, 'field list')
-  const at = r === undefined || (r.depth ?? 0) > 0 ? undefined : scope.columnAt(r.index)
-  return at === undefined || at.table.def !== undefined ? name : at.column.name
+  const index = safeIndex(scope, item.expr.parts)
+  const source = index === undefined ? undefined : scope.columnAt(index)
+  return source === undefined || source.table.def !== undefined ? name : source.column.name
+}
+
+/** A result column's name: its alias, a bare column's name as written, a string literal's value, else its source text. */
+function itemName(item: SelectNode['items'][number], text: string | undefined): string {
+  const e = item.expr
+  if (item.alias !== undefined) {
+    // String aliases require utf8mb3; identifier-alias admission remains M5.1.
+    const astral = /[\u{10000}-\u{10FFFF}]/u.exec(item.alias)
+    if (astral !== null) {
+      const bytes = escapedBytes(encodeCollation(astral[0], CHARSET_UTF8MB4_BIN))
+      throw sqlError('ER_CANNOT_CONVERT_STRING', `Cannot convert string '${bytes}' from utf8mb4 to utf8mb3`)
+    }
+    return item.alias
+  }
+  // A name made from the expression has such a character as '?'.
+  const made = e.kind === NODE.COLUMN ? (e.parts[e.parts.length - 1] as string) : e.kind === NODE.LITERAL && e.type === 'string' ? (e.value as string) : text ?? (e.kind === NODE.LITERAL ? String(e.value) : e.kind)
+  return made.replace(/[\u{10000}-\u{10FFFF}]/gu, '?')
 }
 
 /**
@@ -2016,7 +2024,11 @@ function planGrouped(
       // A key that reads only NULL-complemented tables is a constant, and no part of the table's key.
       // …and so is one the WHERE holds to a constant over a join (8.4.11: `FROM p, q WHERE p.g = 1 GROUP BY q.t, p.g`).
       const keyed = (isKey || isKeyExpression) && refersToRow(e, lookup, fixed) && !(source === undefined && e.kind === NODE.COLUMN && pinnedByWhere(node.where, e.parts))
-      if (strategy === 'temp') patchType(item, { temporary: keyed ? true : 'pinned', ...(aggregateCall ? { names: { schema: '', table: '', orgTable: '', orgName: '' } } : {}) })
+      if (strategy === 'temp') {
+        patchType(item, { temporary: keyed ? true : 'pinned', ...(aggregateCall ? { names: { schema: '', table: '', orgTable: '', orgName: '' } } : {}) })
+        // AVG and similar aggregates retain an intermediate, not this final value.
+        if (t.ownInTemporary !== true) item.compiled = decimalField(item.compiled)
+      }
       else if (stream || (source === undefined && from !== undefined && strategy === 'sort' && firstOrder !== 'index' && t.column !== undefined)) {
         // Streamed output and sort-based grouping expose copied column metadata;
         // an ordered first-table index without an output sort keeps source flags.
@@ -2458,10 +2470,6 @@ function foldable(e: unknown, bound: boolean): boolean {
   })
 }
 
-function deparseName(e: Expression): string {
-  return e.kind === NODE.LITERAL ? String(e.value) : e.kind
-}
-
 /** An `ORDER BY` item: a position in the select list, a select-list alias, or an expression over the table. */
 function orderKey(o: OrderItem, items: readonly { name: string; compiled: Compiled; alias?: string }[], ctx: CompileContext): SortKey {
   const e = o.expr
@@ -2489,16 +2497,14 @@ export function limitValue(run: Run, e: Expression, what: string): number {
   if (e.kind === NODE.PLACEHOLDER && run.params === undefined) return 0
   const v = compile(e, compileContext(run, EMPTY_SCOPE, what)).eval([], run.env)
   const where = e.kind === NODE.PLACEHOLDER ? 'mysqld_stmt_execute' : what
-  if (v === null || (v.kind === 'double' && !Number.isInteger(v.v)) || v.kind === 'decimal' || v.kind === 'datetime' || v.kind === 'time') {
-    throw sqlError('ER_WRONG_ARGUMENTS', `Incorrect arguments to ${where}`)
-  }
-  const n = toInteger(v)
+  // Invalid representations and negative counts have the same argument error.
+  const n = v === null || (v.kind === 'double' && !Number.isInteger(v.v)) || v.kind === 'decimal' || v.kind === 'datetime' || v.kind === 'time' ? -1n : toInteger(v)
   if (n < 0n) throw sqlError('ER_WRONG_ARGUMENTS', `Incorrect arguments to ${where}`)
-  return n > BigInt(Number.MAX_SAFE_INTEGER) ? Number.MAX_SAFE_INTEGER : Number(n)
+  return Math.min(Number.MAX_SAFE_INTEGER, Number(n))
 }
 
 /** The statement's column definitions, for its resultset and for `COM_STMT_PREPARE`. */
-export function columnsOf(run: Run, plan: SelectPlan): ColumnDefinition[] {
+export function columnsOf(run: Run, plan: Pick<SelectPlan, 'columns'>): ColumnDefinition[] {
   return plan.columns.map((c) => columnDefinition(c.name, c.type, run.env.session.characterSet))
 }
 
@@ -2521,12 +2527,11 @@ const PACE_ROWS = 256
  */
 export function* resultSteps(run: Run, plan: SelectPlan, trx: Trx | undefined, emit?: (batch: ResultSet) => void): Generator<void, ResultSet> {
   const described = plan.columnsAt?.(trx) ?? plan.columns
-  const columns = described.map((c) => columnDefinition(c.name, c.type, run.env.session.characterSet))
+  const columns = columnsOf(run, { columns: described })
   let rows: RowValue[][] = []
-  const types = described.map((c) => c.type)
   try {
     for (const values of plan.rows(trx)) {
-      rows.push(values.map((v, i) => toWire(v, types[i] as ResultType, run.protocol, run.env.session)))
+      rows.push(values.map((v, i) => toWire(v, described[i]!.type, run.protocol, run.env.session)))
       if (rows.length % PACE_ROWS !== 0) continue
       if (emit !== undefined) {
         emit({ columns, rows })

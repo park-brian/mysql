@@ -44,6 +44,11 @@ import { bitBytes } from './wire.ts'
 
 type Columns = readonly { readonly name: string; readonly type: ResultType }[]
 
+/** Every set-operation branch, including a recursive member, has the same arity. */
+export function checkSetWidth(left: Columns, right: Columns): void {
+  if (left.length !== right.length) throw sqlError('ER_WRONG_NUMBER_OF_COLUMNS_IN_SELECT', 'The used SELECT statements have a different number of columns')
+}
+
 /** A set operation, typed: its columns, and how it makes its rows from its branches'. */
 export interface SetOperationPlan {
   readonly columns: Columns
@@ -145,7 +150,7 @@ export function convert(v: Value, t: ResultType): Value {
  * INTERSECT amt)` is 44 (8.4.11).
  */
 export function setOperation(node: SetOperationNode, left: Columns, right: Columns, connectionCollation: number, leaves: readonly (readonly ResultType[])[]): SetOperationPlan {
-  if (left.length !== right.length) throw sqlError('ER_WRONG_NUMBER_OF_COLUMNS_IN_SELECT', 'The used SELECT statements have a different number of columns')
+  checkSetWidth(left, right)
   // Nullable if either side is; `nestedNullability` narrows it for an
   // operation that is itself a branch.
   const columns = left.map((c, i) => {
@@ -161,11 +166,9 @@ export function setOperation(node: SetOperationNode, left: Columns, right: Colum
       const prepare = (r: readonly Value[], source: Columns): Value[] => r.map((v, i) => {
         const from = source[i]!.type
         const to = types[i]!
-        if (v?.kind !== 'int' || !isNumber(from) || to.kind !== 'bytes' || (to.field !== FIELD_TYPE.BLOB && !promotesToBlob(to))) return v
-        if (from.field === FIELD_TYPE.BIT && from.column !== undefined) return bytesValue(bitBytes(v.v, from.length))
-        // A materialized numeric field reads its declared scale.
-        const value = from.temporary ? convertTo(v, from) : v
-        return bytesValue(valueBytes(plainValue(value)!))
+        if (v === null || !isNumber(from) || to.kind !== 'bytes' || (to.field !== FIELD_TYPE.BLOB && !promotesToBlob(to))) return v
+        if (v.kind === 'int' && from.field === FIELD_TYPE.BIT && from.column !== undefined) return bytesValue(bitBytes(v.v, from.length))
+        return convert(v.kind === 'int' ? plainValue(v) : v, to)
       })
       const keyOf = (r: readonly Value[]): string => rowKey(r.map((v, i) => convert(v, types[i] as ResultType)))
       if (node.op === 'UNION') {
