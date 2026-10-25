@@ -114,25 +114,35 @@ and browser work follow the outstanding engine/planner work. Remaining function
 boundaries stay open for separate verification. The current state and remaining
 work are:
 
-**Next bounded slice: M5.5/M5.10 retained DECIMAL division precision.** Explicit
-DECIMAL CAST now owns its declared scale, with raw readers, diagnostics and
-cached execution preserved. Division still truncates retained precision too
-early: (1/3/7)*1000000000 returns 47619047.00000000 here versus native
-47619047.57142857. Both operands matter: native 1.0/(1.0/3.0), cast to eighteen
-places, is 3.000000000000000003 versus the current 3.000000003000000000.
+**Next bounded slice: M5.10 ROUND/TRUNCATE effective places.** Their
+canonical result writer is repaired below. The expanded audit also proves a
+separate algorithm gap: TRUNCATE(2/3,8) returns 0.6666 natively versus 0.6667
+here, despite both declaring scale four. ROUND(1/20001,8) returns 0.0000
+natively versus 0.0001 here through double rounding. The pinned
+[implementation](https://github.com/mysql/mysql-server/blob/mysql-8.4.11/sql/item_func.cc)
+clamps nonnegative requested places to the resolved result scale before its
+single rounding/truncation operation. Pin that rule with literal/row-dependent
+places and preserve every prior matching component. Prepared places remain
+separate: ten retained ROUND/TRUNCATE executions currently resolve a placeholder
+as constant NULL and incorrectly choose scale zero; native retains the input
+scale. Pin their prepare/execute metadata and NULL behavior before changing
+constant classification.
 
-Read the pinned [decimal division implementation](https://github.com/mysql/mysql-server/blob/mysql-8.4.11/mysys/decimal.cc)
-before changing the numeric owner. It adjusts the increment for both operands'
-nine-digit word padding and fits integer/fraction words to the result buffer.
-Prove zero handling, operand scales, buffer bounds, nested/AVG division and
-CAST/cache/DOUBLE controls; display scale alone cannot determine held precision.
-Keep maximum-precision arithmetic wire widths, AVG maximum-scale metadata,
-MIN/MAX empty-index-group flags and other grouping/function boundaries separate.
+Then resume retained DECIMAL division precision. Both operand word padding and
+result-buffer bounds matter in the pinned [division implementation](https://github.com/mysql/mysql-server/blob/mysql-8.4.11/mysys/decimal.cc).
+Eighteen additional zero/cancellation/AVG observations have every field/warning/
+error native but only ten current row matches. CAST((0/3+1)/7 AS DECIMAL(30,18))
+and the analogous cancellation of 1/3 already agree at 0.142857142000000000;
+actual DECIMAL(30,9) field-zero plus one agrees at 0.142857142857142857. Preserve
+that distinction. A high-declared-scale AVG operand also exposes physical-scale
+padding: native outer division keeps eighteen digits followed by zeros, while
+current code invents later quotient digits. Prove representation before changing
+the shared word rule; keep unrelated multiplication, arithmetic wire widths,
+AVG maximum-scale metadata and MIN/MAX grouping flags separate.
 M5.1 identifier-alias quote-kind/warning timing follows. M5.19 text-BLOB
 conversion, derived capacity, computed BIT, nested ordering/multiplicity and
-FLOAT formatting remain open. The proved FirstMatch exception is D-89; broader
-strategy, access/order and prepared-choice work remains M5.47/M5.49. Preserve
-earlier matching components and all existing size caps.
+FLOAT formatting remain open. Broader strategy, access/order and prepared-choice
+work remains M5.47/M5.49. Preserve earlier matching components and all size caps.
 
 **Verified binary BLOB field-copy repair (2026-10-24):** Fresh native probes cover
 1,920 direct BIT/TEXT/BLOB outcomes and 1,548 nested, derived and computed
@@ -339,6 +349,35 @@ real-client checks and all seven pinned corpora. Another 20,000 executor
 statements seeded 20261010 pass. All 336 test files/fixtures and 201 runtime
 sources exactly match the fresh tested snapshot. Preceding c6617ed/run
 40172117773 passes all eleven blocking jobs; optional ORM is skipped.
+
+**Verified ROUND/TRUNCATE declared-result repair (2026-10-25):**
+The DECIMAL result writer now uses existing canonical typed conversion rather
+than preserving an expression's smaller display at equal physical scales. No
+argument/places evaluation, NULL rule, metadata, rounding/truncation algorithm
+or integer/DOUBLE branch changes. A new native capture pins 640 complete
+query/execute outcomes: two functions, equal/narrow/wide/negative literal
+places, row-dependent places, half ties, signs and BIGINT precision, NULLs,
+raw IF readers, arithmetic consumers, integer/DOUBLE controls, seeded evaluation
+count and twelve retained executions across writes. It passes against native
+8.4.11/current and fails against preceding code. Six focused regressions and
+typecheck pass. All nine caps pass at core/facade 334,341/334,264 B.
+
+The complete 896-outcome exploratory audit improves from 752 to 796 matching
+row vectors with all field/warning/error and previously matching components
+preserved. Its one hundred remaining row differences are preexisting hidden-
+digit TRUNCATE and row-dependent-result division gaps, not new expected
+outputs. The permanent result-writer regression uses full literal matrices
+for raw IF, DECIMAL field, integer and DOUBLE sources; row-dependent consumers
+cover direct/multiplication/addition, leaving physical-word division explicit.
+The separate ten prepared-place mismatches remain open. Fresh Docker
+--full --reference passes 1,344 main tests, four latency tests, typecheck, lint,
+nine unchanged caps, installed-package/typed-example smoke, three million
+seeded reader/parser/engine inputs, 20,000 seeded executor statements, 10,000
+crash points, the real client and all seven pinned corpora. All 338 test files/
+fixtures and 201 runtime sources match the fresh tested snapshot. All 768
+non-IF controls in the broader audit are strictly unchanged. Preceding
+f058304/run 40202476175 passes all eleven blocking jobs; optional ORM is
+skipped. M5.10 stays partial; totals remain 144/190.
 
 **Next word-precision proof:** sixteen more native observations match every
 field/warning/error but only four current row vectors. A denominator's retained

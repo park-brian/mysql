@@ -45,7 +45,6 @@ import {
   intValue,
   md5,
   parseTime,
-  rescale,
   sha1,
   sha256,
   sha512,
@@ -615,7 +614,7 @@ function numberFunction(name: string, args: readonly Compiled[], callName: strin
             const d = toDecimal(v)
             const at = Number(p < -65n ? -65n : p > 30n ? 30n : p)
             const rounded = roundDecimal(d, at, truncate)
-            return rescale(rounded, scale)
+            return convertTo(rounded, type)
           },
           type,
         }
