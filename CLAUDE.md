@@ -33,7 +33,10 @@ Doc 42's query API
 (`db.query()`, `db.execute()`, `db.transaction()`) is a client of the same
 protocol, its values `mysql2`'s (M5.36, D-76). The roadmap's **Next** section
 says what comes next: 0.3 packaging is staged (`npm run pack`, D-79/D-80);
-publication remains pending, and the measured M5.19 source-to-text repair is next. The cost-based planner (M5.7, M5.42–M5.46) is done:
+publication remains pending. Bounded FirstMatch now omits physically proved
+integer bounds under the existing caps. The next slice returns to M5.19 packed-BIT
+field copying; broader strategy and measured field-copy gaps stay open.
+The cost-based planner (M5.7, M5.42–M5.46) is done:
 `EXPLAIN FORMAT=TREE` prints the plan that runs, and 2,124 of the relational
 corpus's 2,248 plans agree with 8.4.11's; M5.47 is in progress, M5.48 is done,
 M5.49 and M5.50 are in progress.

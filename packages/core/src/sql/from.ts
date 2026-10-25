@@ -31,6 +31,8 @@
 // could reject (D-65); a table's key range only narrows what is read, and
 // never for a table on the inner side of an outer join, where `WHERE b.x IS
 // NULL` must still see the NULL rows the join made.
+// D-89 permits omitting a FirstMatch integer bound only when its selected
+// physical range and exact point equality already enforce it.
 import { FIELD_TYPE, expectTyped } from '@myjs/bytes'
 import { and, someNode } from './ast.ts'
 import { requireCollationInfo } from '@myjs/charsets'
@@ -40,12 +42,12 @@ import { messages, sqlError } from '@myjs/protocol'
 import { integerBytes, truth, type Value } from '@myjs/types'
 import type { Compiled, Env, Row, Scope } from './compile.ts'
 import { indexLookup, planNode, wrap, type PlanNode } from './explain.ts'
-import { FULL_SCAN, accessRows, chooseAccess, dynamicAccess, keyOrder, optimizerEnabled, pointAccess, splitAnd, type Access, type OuterColumn, type RangeCosting } from './plan.ts'
+import { FULL_SCAN, accessRows, chooseAccess, dynamicAccess, keyOrder, optimizerEnabled, pointAccess, splitAnd, type Access, type InferredRange, type OuterColumn, type RangeCosting } from './plan.ts'
 import { bestAccess, floorFilter, indexScanCost, joinOrder, type Candidate, type FirstMatch, type KeyChoice, type Positioned, type RangeRead } from './cost.ts'
 import { rowKey } from './keys.ts'
 import { columnResultType } from './meta.ts'
 import { chooseStrategy } from './group.ts'
-import { clusteredIndex, indexParts } from './indexes.ts'
+import { clusteredIndex, forwardKeyColumn, indexParts } from './indexes.ts'
 import { distinct, sort as sortRows, type SortKey } from './operators.ts'
 import { neverEqual, nullRejected } from './optimize.ts'
 import type { TableStatistics } from './stats.ts'
@@ -696,13 +698,7 @@ export function planFrom(refs: readonly TableReference[], ctx: FromContext, wher
  * report).
  */
 function innerWherePossible(root: Node, where: Expression | undefined, scope: TableScope): Node {
-  const slot = (e: Expression): number | undefined => {
-    if (e.kind !== NODE.COLUMN) return undefined
-    const p = e.parts[0] as string
-    if (e.parts.length === 1 && p.startsWith(SLOT_PREFIX)) return Number(p.slice(SLOT_PREFIX.length))
-    const r = safeResolve(scope, e.parts, 'where clause')
-    return r !== undefined && r.depth === undefined ? r.index : undefined
-  }
+  const slot = (e: Expression): number | undefined => e.kind === NODE.COLUMN ? localSlot(e.parts, scope) : undefined
   let pool: Expression[] = []
   const converted = new Set<Node>()
   // The ONs that hold as a WHERE does: an inner join's, or a converted one's, outside any nullable side.
@@ -760,13 +756,18 @@ const inTable = (t: FromTable | undefined, index: number): boolean => t !== unde
 const SLOT_PREFIX = '\u0000slot'
 const slotRef = (index: number): Expression => ({ kind: NODE.COLUMN, parts: [`${SLOT_PREFIX}${index}`], at: 0 }) as Expression
 
+/** Decode the compiler's synthetic slot reference in either planning scope. */
+function syntheticSlot(parts: readonly string[]): number | undefined {
+  const first = parts[0] as string
+  return parts.length === 1 && first.startsWith(SLOT_PREFIX) ? Number(first.slice(SLOT_PREFIX.length)) : undefined
+}
+
 /** A scope that also answers the slot references USING's equalities are written with. */
 function slotScope(scope: Scope, full: TableScope): Scope {
   return {
     resolve(parts, clause) {
-      const p = parts[0] as string
-      if (parts.length === 1 && p.startsWith(SLOT_PREFIX)) {
-        const index = Number(p.slice(SLOT_PREFIX.length))
+      const index = syntheticSlot(parts)
+      if (index !== undefined) {
         const at = full.columnAt(index)
         return { index, type: (at?.column as ScopeColumn).type }
       }
@@ -846,20 +847,13 @@ function hashKeys(conditions: readonly Placed[], outer: ReadonlySet<string>, inn
   return out.length === 0 ? undefined : { outer: out, inner: inn, conditions: used }
 }
 
-/** One table's row id, at its offset. */
-function idsAt(offset: number, id: RowId): (RowId | undefined)[] {
-  const out: (RowId | undefined)[] = []
-  out[offset] = id
-  return out
-}
-
 type Materialization = false | 'lookup' | 'scan' | 'loop'
 
 /** How the FROM's base tables are read: what the WHERE is, what covers them, and an order asked for. */
 interface LeafSettings {
   where?: Expression | undefined
   /** Proven integer-equality range predicates, shared by costing and physical reads. */
-  readonly inferred: Map<string, Expression>
+  readonly inferred: Map<string, InferredRange>
   /** A STRAIGHT_JOIN's const tables past its first non-const one, joined as constant rows (`constants`). */
   constants?: ReadonlySet<string>
   /** The const tables read while planning, absent from the plan (`constants`). */
@@ -874,7 +868,7 @@ interface LeafSettings {
   /** A base table's statistics, for the cost model (M5.7). */
   readonly statistics: ((def: TableDef, table: Table) => TableStatistics) | undefined
   /** The FROM's scope, which names a condition's columns. */
-  readonly scope?: TableScope
+  readonly scope: TableScope
   /** The FROM's tables by alias, for the cost model. */
   readonly tables: ReadonlyMap<string, FromTable>
   /** The tables the cost model reads by their join's index lookup (`planJoins`). */
@@ -935,7 +929,7 @@ function chosenAccess(t: FromTable, settings: LeafSettings, env: Env, quote = fa
   let chosen = settings.chosen.get(env)
   if (chosen === undefined) settings.chosen.set(env, (chosen = new Map()))
   let access = chosen.get(t.alias)
-  if (access === undefined) chosen.set(t.alias, (access = chooseAccess(t.def, t.alias, and(settings.where, settings.inferred.get(t.alias)), env, settings.outer, rangeCosting(t, settings, env, quote))))
+  if (access === undefined) chosen.set(t.alias, (access = chooseAccess(t.def, t.alias, settings.where, env, settings.outer, rangeCosting(t, settings, env, quote), settings.inferred.get(t.alias))))
   return access
 }
 
@@ -987,45 +981,44 @@ function countRows(rows: Iterable<unknown>, limit: number): number {
 function refOf(t: FromTable, conditions: readonly Expression[], outerAliases: ReadonlySet<string>, scope: TableScope, compileOuter: (e: Expression) => Compiled): EqRef | undefined {
   const def = t.def
   if (def === undefined || t.table === undefined) return undefined
-  const fromOuter = (e: Expression): boolean => within(aliasesOf(e, scope), outerAliases)
+  const own = new Set([t.alias])
   const unique = (i: IndexDef, c: ColumnDef): boolean => i.parts.length === 1 && (i.kind === 'primary' || (i.kind === 'unique' && !c.nullable))
   let best: EqRef | undefined
   for (const c of conditions) {
-    if (c.kind !== NODE.BINARY || c.op !== '=') continue
-    let column = columnOf(t, c.left, scope)
-    let other = c.right
-    if (column === undefined || !fromOuter(other)) {
-      column = columnOf(t, c.right, scope)
-      other = c.left
-      if (column === undefined || !fromOuter(other)) continue
-    }
-    const leading = def.indexes.filter((i) => i.invisible !== true && i.parts[0]?.column === column.name && i.parts[0].prefix === undefined && i.parts[0].descending !== true)
-    // The unique key first, else the first index the column leads; whether to look up at all is the cost model's (`toOp`).
+    const pair = equalitySides(c, outerAliases, own, scope)
+    if (pair === undefined) continue
+    const column = columnOf(t, pair[1], scope)
+    if (column === undefined) continue
+    const leading = def.indexes.filter((i) => forwardKeyColumn(def, i) === column)
+    // Prefer a unique key, retaining declaration order within each class.
     const index = leading.find((i) => unique(i, column)) ?? leading[0]
-    if (index === undefined || (best !== undefined && (best.unique || !unique(index, column)))) continue
-    const value = compileProof(other, compileOuter)
+    if (index === undefined) continue
+    const single = unique(index, column)
+    if (best !== undefined && !single) continue
+    const value = compileProof(pair[0], compileOuter)
     if (value === undefined) continue
     // A key read needs the two sides to compare as the key's own type.
     const keyKind = columnResultType(def, column, t.alias).kind
     if (value.type.kind !== keyKind || (keyKind === 'string' && value.type.collationId !== column.type.collationId)) continue
-    best = { index, column, value, unique: unique(index, column), condition: c }
+    best = { index, column, value, unique: single, condition: c }
+    if (single) return best
   }
   return best
 }
 
-/** A local logical slot, including USING's synthetic column names. */
-function localColumn(parts: readonly string[], scope: TableScope): ReturnType<TableScope['columnAt']> {
-  const first = parts[0] as string
-  if (parts.length === 1 && first.startsWith(SLOT_PREFIX)) return scope.columnAt(Number(first.slice(SLOT_PREFIX.length)))
+/** A local logical slot, including USING's synthetic references; correlations decline. */
+function localSlot(parts: readonly string[], scope: TableScope): number | undefined {
+  const index = syntheticSlot(parts)
+  if (index !== undefined) return index
   const resolved = safeResolve(scope, parts, 'where clause')
-  return resolved !== undefined && resolved.depth === undefined ? scope.columnAt(resolved.index) : undefined
+  return resolved !== undefined && resolved.depth === undefined ? resolved.index : undefined
 }
 
 /** A column of a base table an expression names: qualified by its alias, one of USING's slots, or a bare name the scope gives it. */
 function columnOf(t: FromTable, e: Expression, scope: TableScope): ColumnDef | undefined {
   if (e.kind !== NODE.COLUMN || t.def === undefined) return undefined
-  const at = localColumn(e.parts, scope)
-  return at?.table.alias === t.alias ? t.def.columns.find((c) => c.name.toLowerCase() === at.column.name.toLowerCase()) : undefined
+  const index = localSlot(e.parts, scope)
+  return index !== undefined && inTable(t, index) ? t.def.columns[index - t.offset] : undefined
 }
 
 /** Speculative compilation may decline a typed SQL error, never an internal failure. */
@@ -1058,7 +1051,8 @@ function aliasesOf(e: Expression, scope: TableScope): Set<string> | undefined {
     if (n.kind === NODE.LITERAL || n.kind === NODE.PLACEHOLDER) return false
     if (n.kind === NODE.SUBQUERY) return true
     if (n.kind === NODE.COLUMN && n.parts !== undefined) {
-      const at = localColumn(n.parts, scope)
+      const index = localSlot(n.parts, scope)
+      const at = index === undefined ? undefined : scope.columnAt(index)
       if (at === undefined) return true
       out.add(at.table.alias)
       return false
@@ -1353,17 +1347,24 @@ function rangeEstimate(t: FromTable, conditions: readonly Weighed[], leaves: rea
     }
     return undefined
   }
-  const name = (r: { readonly t: FromTable; readonly c: ColumnDef }): string => `${r.t.alias}\u0000${r.c.name.toLowerCase()}`
+  const slotOf = (r: { readonly t: FromTable; readonly c: ColumnDef }): number => r.t.offset + r.t.def!.columns.indexOf(r.c)
   // The multiple equalities: classes of columns joined by `=`.
-  const classes: Set<string>[] = []
-  const classOf = (k: string): Set<string> => classes.find((c) => c.has(k)) ?? (classes.push(new Set([k])), classes.at(-1) as Set<string>)
+  const classes: Set<number>[] = []
+  const classOf = (k: number): Set<number> => {
+    let group = classes.find((c) => c.has(k))
+    if (group === undefined) {
+      group = new Set([k])
+      classes.push(group)
+    }
+    return group
+  }
   for (const { e } of conditions) {
     if (e.kind !== NODE.BINARY || e.op !== '=') continue
     const l = resolve(e.left)
     const r = resolve(e.right)
     if (l === undefined || r === undefined || l.t === r.t) continue
-    const a = classOf(name(l))
-    const b = classOf(name(r))
+    const a = classOf(slotOf(l))
+    const b = classOf(slotOf(r))
     if (a === b) continue
     for (const k of b) a.add(k)
     classes.splice(classes.indexOf(b), 1)
@@ -1377,31 +1378,30 @@ function rangeEstimate(t: FromTable, conditions: readonly Weighed[], leaves: rea
     return isNullOfNotNull(right) ? left : { ...e, left, right }
   }
   const per = new Map<ColumnDef, Expression>()
-  let inferred: Expression | undefined
+  let inferred: InferredRange | undefined
   for (const { e: raw } of conditions) {
     const e = possible(raw)
-    const columns: Expression[] = []
+    let first: ReturnType<typeof resolve>
     const other = someNode(e, (node) => {
       const n = node as Expression
       if (n.kind === NODE.SUBQUERY || n.kind === NODE.PLACEHOLDER || n.kind === NODE.VARIABLE) return true
       if (n.kind === NODE.COLUMN) {
-        columns.push(n)
-        return false
+        const resolved = resolve(n)
+        if (resolved === undefined) return true
+        first ??= resolved
+        return resolved.t !== first.t || resolved.c !== first.c
       }
       return undefined
     })
-    if (other || columns.length === 0) continue
-    const resolved = columns.map(resolve)
-    const first = resolved[0]
-    if (first === undefined || resolved.some((r) => r === undefined || name(r) !== name(first))) continue
-    const target = first.t === t ? first.c : def.columns.find((c) => classOf(name(first)).has(name({ t, c })))
+    if (other || first === undefined) continue
+    const sourceSlot = slotOf(first)
+    const target = first.t === t ? first.c : def.columns.find((c) => classOf(sourceSlot).has(slotOf({ t, c })))
     if (target === undefined || !leading.has(target.name)) continue
     const column: Expression = { kind: NODE.COLUMN, parts: [t.alias, target.name], at: e.at } as Expression
-    const own = (x: Expression): boolean => x.kind === NODE.COLUMN && resolve(x) !== undefined && name(resolve(x) as { t: FromTable; c: ColumnDef }) === name(first)
-    const rewrite = (x: Expression): Expression => (own(x) ? column : x)
+    // Every column in this expression was resolved above to this one source.
+    const constant = (y: Expression | undefined): boolean => y !== undefined && aliasesOf(y, scope)?.size === 0
     const sargable = (x: Expression): Expression | undefined => {
-      const constant = (y: Expression | undefined): boolean => y !== undefined && !own(y) && aliasesOf(y, scope)?.size === 0
-      if (x.kind === NODE.UNARY) return (x.op === 'IS NULL' || x.op === 'IS NOT NULL') && own(x.operand) ? { ...x, operand: column } : undefined
+      if (x.kind === NODE.UNARY) return (x.op === 'IS NULL' || x.op === 'IS NOT NULL') && x.operand.kind === NODE.COLUMN ? { ...x, operand: column } : undefined
       if (x.kind !== NODE.BINARY) return undefined
       const op = x.op.toUpperCase()
       if (op === 'AND' || op === '&&' || op === 'OR' || op === '||') {
@@ -1409,20 +1409,38 @@ function rangeEstimate(t: FromTable, conditions: readonly Weighed[], leaves: rea
         const b = sargable(x.right)
         return a === undefined || b === undefined ? undefined : { ...x, left: a, right: b }
       }
-      if (['=', '<=>', '<', '<=', '>', '>=', '<>', '!='].includes(op)) return (own(x.left) && constant(x.right)) || (own(x.right) && constant(x.left)) ? { ...x, left: rewrite(x.left), right: rewrite(x.right) } : undefined
-      if (op === 'BETWEEN' || op === 'NOT BETWEEN') return own(x.left) && constant(x.right) && constant(x.extra as Expression) ? { ...x, left: column } : undefined
-      if (op === 'IN' || op === 'NOT IN') return own(x.left) && x.right.kind === NODE.ROW && x.right.items.every((i) => constant(i)) ? { ...x, left: column } : undefined
-      if (op === 'LIKE') return own(x.left) && x.right.kind === NODE.LITERAL && typeof x.right.value === 'string' && !/^[%_]/.test(x.right.value) && x.extra === undefined ? { ...x, left: column } : undefined
-      return undefined
+      if (['=', '<=>', '<', '<=', '>', '>=', '<>', '!='].includes(op)) {
+        if (x.left.kind === NODE.COLUMN && constant(x.right)) return { ...x, left: column }
+        if (x.right.kind === NODE.COLUMN && constant(x.left)) return { ...x, right: column }
+        return undefined
+      }
+      if (x.left.kind !== NODE.COLUMN) return undefined
+      let eligible: boolean
+      switch (op) {
+        case 'BETWEEN':
+        case 'NOT BETWEEN':
+          eligible = constant(x.right) && constant(x.extra as Expression)
+          break
+        case 'IN':
+        case 'NOT IN':
+          eligible = x.right.kind === NODE.ROW && x.right.items.every(constant)
+          break
+        case 'LIKE':
+          eligible = x.right.kind === NODE.LITERAL && typeof x.right.value === 'string' && !/^[%_]/.test(x.right.value) && x.extra === undefined
+          break
+        default:
+          return undefined
+      }
+      return eligible ? { ...x, left: column } : undefined
     }
     const range = sargable(e)
     if (range === undefined) continue
     per.set(target, and(per.get(target), range))
     // columnOf resolves base tables only. A direct, non-nullable integer equality preserves this literal bound.
     const type = target.type
-    const source = first.c.type
-    if (first.t !== t && leaves.length === 2 && !first.t.nullable && classOf(name(first)).size === 2 && (type.type === FIELD_TYPE.LONG || type.type === FIELD_TYPE.LONGLONG) && source.type === type.type && source.unsigned === type.unsigned && e.kind === NODE.BINARY && e.op === '>' && e.right.kind === NODE.LITERAL && e.right.type === LITERAL.INT) {
-      inferred = and(inferred, range)
+    const sourceType = first.c.type
+    if (first.t !== t && leaves.length === 2 && !first.t.nullable && classOf(sourceSlot).size === 2 && (type.type === FIELD_TYPE.LONG || type.type === FIELD_TYPE.LONGLONG) && sourceType.type === type.type && sourceType.unsigned === type.unsigned && e.kind === NODE.BINARY && e.op === '>' && e.right.kind === NODE.LITERAL && e.right.type === LITERAL.INT) {
+      inferred = inferred === undefined ? { condition: range, column: target, from: first.c, predicate: e } : { condition: and(inferred.condition, range) }
     }
   }
   const compiled: [column: ColumnDef, condition: Compiled, rows: number][] = []
@@ -1613,9 +1631,9 @@ function rowBytes(prefix: readonly Positioned[], settings: LeafSettings): number
   return bytes
 }
 
-/** Fill a table's local values (or a logical row's slice) without changing other tables. */
-function fillTable(t: FromTable, values: readonly Value[], row: Value[], valueOffset = 0): Value[] {
-  for (let i = 0; i < t.width; i++) row[t.offset + i] = values[valueOffset + i] ?? null
+/** Fill a table's local values without changing other tables. */
+function fillTable(t: FromTable, values: readonly Value[], row: Value[]): Value[] {
+  for (let i = 0; i < t.width; i++) row[t.offset + i] = values[i] ?? null
   return row
 }
 
@@ -1623,16 +1641,23 @@ function fillTable(t: FromTable, values: readonly Value[], row: Value[], valueOf
 function tableOp(t: FromTable, settings: LeafSettings): Op {
   return {
     *rows(run, context) {
-      const fill = (values: readonly Value[]): Value[] => fillTable(t, values, context?.slice() ?? new Array<Value>(run.width).fill(null))
       if (t.derived !== undefined) {
-        for (const values of t.derived.rows(run.trx, run.env, t.lateral ? context : undefined)) yield joined(fill(values))
+        for (const values of t.derived.rows(run.trx, run.env, t.lateral ? context : undefined)) yield joined(fillTable(t, values, context?.slice() ?? new Array<Value>(run.width).fill(null)))
         return
       }
-      for (const { id, row } of accessRows(t.table as Table, t.def as TableDef, leafAccess(t, settings, run.env), run.trx, run.locking)) {
-        yield joined(fill(row), run.ids ? idsAt(t.offset, id) : undefined)
-      }
+      yield* scanTable(t, leafAccess(t, settings, run.env), run, context)
     },
     describe: (env) => describeLeaf(t, settings, env),
+  }
+}
+
+/** A base reader projects storage values and identities into one logical row frame. */
+function* scanTable(t: FromTable, access: Access | undefined, run: FromRun, context?: Row, ids?: JoinedRow['ids']): Generator<JoinedRow> {
+  if (access === undefined) return
+  for (const { id, row } of accessRows(t.table as Table, t.def as TableDef, access, run.trx, run.locking)) {
+    const result = { row: fillTable(t, row, context?.slice() ?? new Array<Value>(run.width).fill(null)), ids: run.ids ? ids?.slice() ?? [] : undefined }
+    if (result.ids !== undefined) result.ids[t.offset] = id
+    yield result
   }
 }
 
@@ -1764,9 +1789,22 @@ function indexedJoinOp(node: Node & { kind: 'join' }, outer: Op, t: FromTable, l
   const semi = point && settings.firstMatch?.enabled === true && settings.firstMatch.alias === t.alias
   // DISTINCT's unused final table and FirstMatch both stop after one qualifying point-read match.
   const firstOnly = point && settings.weedout === undefined && (settings.distinctLast === t.alias || semi)
+  // The range reader's own constraints, carried through exact integer
+  // equality, can subsume an inner bound. Cost quotes alone cannot.
+  const driver = semi && node.outer.kind === 'leaf' ? node.outer.table : undefined
+  // In refOf's restricted slot scope, DEFAULT and correlations decline.
+  // Field provenance needs both the alias and name, including self-joins.
+  const key = lookup?.value.type.column
+  const remaining = (env: Env): readonly Placed[] => {
+    if (driver === undefined) return on
+    const source = leafAccess(driver, settings, env).implied
+    if (source === undefined || source.from !== lookup!.column || key?.table !== driver.alias || key.orgName !== source.column.name) return on
+    return on.filter((c) => c.e !== source.predicate)
+  }
   return {
     *rows(run, context) {
       const env = run.env
+      const checked = remaining(env)
       const costing = lookup === undefined ? rangeCosting(t, settings, env) : undefined
       const conjuncts = on.map((c) => c.e)
       // Materialized drivers finish their unique build before the first point read.
@@ -1786,11 +1824,10 @@ function indexedJoinOp(node: Node & { kind: 'join' }, outer: Op, t: FromTable, l
           access = costing === undefined ? FULL_SCAN : dynamicAccess(t.def as TableDef, t.alias, conjuncts, env, costing, value)
         }
         let matched = false
-        if (access !== undefined) for (const { id, row: values } of accessRows(t.table as Table, t.def as TableDef, access, run.trx, run.locking)) {
-          const combined = fillTable(t, values, o.row.slice())
-          if (!holds(on, combined, env)) continue
+        for (const candidate of scanTable(t, access, run, o.row, o.ids)) {
+          if (!holds(checked, candidate.row, env)) continue
           matched = true
-          yield joined(combined, run.ids ? joinIds(o.ids, idsAt(t.offset, id)) : undefined)
+          yield candidate
           if (firstOnly) break
         }
         if (node.left && !matched) yield o
@@ -1803,7 +1840,7 @@ function indexedJoinOp(node: Node & { kind: 'join' }, outer: Op, t: FromTable, l
       const covering = t.def !== undefined && holdsRead(t.def, lookup.index, settings.read.get(t.alias) ?? 'all')
       const lookupNode = indexLookup(t.alias, lookup.index.name, lookup.unique, covering)
       // The lookup's own equality is the key read, not a filter.
-      const rest = on.filter((c) => c.e !== lookup.condition)
+      const rest = remaining(env).filter((c) => c.e !== lookup.condition)
       const read = wrap(rest.length > 0, 'Filter', lookupNode)
       return nestedLoop(node.left, input, wrap(firstOnly && !semi, 'Limit', read), semi)
     },
@@ -1881,7 +1918,7 @@ function nestedJoinOp(node: Node & { kind: 'join' }, outer: Op, inner: Op, on: r
   }
 }
 
-/** An equality's expressions in outer/inner order, shared by placement and hash keys. */
+/** An equality's expressions in outer/inner order, shared by placement, point and hash keys. */
 function equalitySides(e: Expression, outer: ReadonlySet<string>, inner: ReadonlySet<string>, scope: TableScope): readonly [Expression, Expression] | undefined {
   if (e.kind !== NODE.BINARY || e.op !== '=') return undefined
   const l = aliasesOf(e.left, scope)
@@ -1949,7 +1986,7 @@ function pushedToIndex(t: FromTable, c: Placed, settings: LeafSettings, env: Env
     const n = node as Expression
     if (n.kind === NODE.SUBQUERY || n.kind === NODE.VARIABLE) return true
     if (n.kind === NODE.COLUMN) {
-      const column = columnOf(t, n, settings.scope as TableScope)
+      const column = columnOf(t, n, settings.scope)
       return column === undefined || !held.has(column.name.toLowerCase())
     }
     return undefined
@@ -1958,11 +1995,12 @@ function pushedToIndex(t: FromTable, c: Placed, settings: LeafSettings, env: Env
 
 // --- covering indexes -------------------------------------------------------------
 
+const INDEX_WIDTHS: Readonly<Record<number, number>> = { [FIELD_TYPE.FLOAT]: 4, [FIELD_TYPE.DOUBLE]: 8, [FIELD_TYPE.DATE]: 3, [FIELD_TYPE.YEAR]: 1 }
+
 /** The bytes a column takes in an index key, as `key_length` counts it: what makes one covering index cheaper than another. */
 function keyBytes(c: ColumnDef): number {
   const t = c.type
-  const widths: Record<number, number> = { [FIELD_TYPE.FLOAT]: 4, [FIELD_TYPE.DOUBLE]: 8, [FIELD_TYPE.DATE]: 3, [FIELD_TYPE.YEAR]: 1 }
-  let bytes = integerBytes(t.type) ?? widths[t.type]
+  let bytes = integerBytes(t.type) ?? INDEX_WIDTHS[t.type]
   if (bytes === undefined) {
     if (t.type === FIELD_TYPE.NEWDECIMAL || t.type === FIELD_TYPE.DECIMAL) bytes = Math.ceil((t.precision ?? 10) / 2) + 1
     else if (t.type === FIELD_TYPE.DATETIME || t.type === FIELD_TYPE.TIMESTAMP) bytes = 5 + Math.ceil((t.decimals ?? 0) / 2)

@@ -2,7 +2,10 @@
 // pins an index's leading column, a full scan otherwise.
 //
 // The rule that keeps this safe (D-65): **the whole WHERE clause is applied
-// to every row the range returns.** A range can therefore only ever lose rows
+// to every row the range returns.** D-89 permits one FirstMatch integer bound
+// to be omitted when a selected physical range and its point-key binding
+// already enforce it; cost estimates alone are insufficient.
+// A range can therefore only ever lose rows
 // by being too narrow, never add wrong ones, and the planner's one job is to
 // never be too narrow. It narrows only when a constant converts to the
 // column's type *exactly*, so the bound it encodes is the value the
@@ -35,6 +38,7 @@ import {
   encodeField,
   encodeKey,
   integerRange,
+  integerBytes,
   renderDecimal,
   textOf,
   keyPartOf,
@@ -48,12 +52,21 @@ import { rangeBaseline, rangeCost, type RangeShape, type RangeRead } from './cos
 import { intersect, normalize, rangeOf, type Constant, type Interval, type RangeSet } from './ranges.ts'
 import type { TableStatistics } from './stats.ts'
 import { scan, type ScannedRow } from './operators.ts'
+import { forwardKeyColumn } from './indexes.ts'
 
 /** Whether a named optimizer transformation is enabled in this statement's session. */
 export function optimizerEnabled(env: Env | undefined, name: string): boolean {
   const setting = env?.state.systemVariable('optimizer_switch', undefined, env.session)
   return setting?.kind !== 'string' || !new RegExp(`(?:^|,)\\s*${name}=off(?:,|$)`, 'i').test(setting.v)
 }
+
+/** An inferred access condition, with source identity only for one proved integer bound. */
+export type InferredRange = { readonly condition: Expression } & (
+  | { readonly column: ColumnDef; readonly from: ColumnDef; readonly predicate: Extract<Expression, { kind: typeof NODE.BINARY }> }
+  | { readonly column?: undefined; readonly from?: undefined; readonly predicate?: undefined }
+)
+
+type ImpliedRange = Extract<InferredRange, { readonly column: ColumnDef }>
 
 /** How to read a table: an index and the ranges of it, in index order, or a full scan. */
 export interface Access {
@@ -64,7 +77,9 @@ export interface Access {
   readonly ranges?: readonly KeyRange[]
   /** Read in descending key order, for an ORDER BY … DESC the index gives. */
   readonly reverse?: boolean
-  /** The ranges as EXPLAIN prints them after `over`, where the range optimizer chose them. */
+  /** Exact compiler-produced integer bound applied by this selected range. */
+  readonly implied?: ImpliedRange | undefined
+  /** The range description for EXPLAIN. */
   readonly over?: string
 }
 
@@ -138,14 +153,8 @@ function conditionOf(e: Expression, def: TableDef, alias: string, outer: OuterCo
 function exact(v: Value, c: ColumnDef): boolean {
   if (v === null) return false
   const t = c.type
+  if (integerBytes(t.type) !== undefined) return v.kind === 'int'
   switch (t.type) {
-    case FIELD_TYPE.TINY:
-    case FIELD_TYPE.SHORT:
-    case FIELD_TYPE.INT24:
-    case FIELD_TYPE.LONG:
-    case FIELD_TYPE.LONGLONG:
-    case FIELD_TYPE.YEAR:
-      return v.kind === 'int' && t.type !== FIELD_TYPE.YEAR
     case FIELD_TYPE.DECIMAL:
     case FIELD_TYPE.NEWDECIMAL:
       return v.kind === 'int' || (v.kind === 'decimal' && v.scale <= (t.scale ?? 0) && v.display === undefined)
@@ -184,15 +193,15 @@ function exact(v: Value, c: ColumnDef): boolean {
  * statement gives the table. Constants are evaluated now, with `env`, which
  * is why the plan is made per execution (a `?` is a constant by then).
  */
-export function chooseAccess(def: TableDef, alias: string, where: Expression | undefined, env: Env, outer?: OuterColumn, costing?: RangeCosting): Access {
-  const conjuncts = splitAnd(where)
+export function chooseAccess(def: TableDef, alias: string, where: Expression | undefined, env: Env, outer?: OuterColumn, costing?: RangeCosting, inferred?: InferredRange): Access {
+  const conjuncts = splitAnd(inferred?.condition, splitAnd(where))
   const conditions = conjuncts
     .map((e) => conditionOf(e, def, alias, outer))
     .filter((c): c is Condition => c !== undefined)
   if (costing !== undefined) {
     // A key read by points stays one (`ref`); otherwise the range optimizer's choice.
     const points = scoredAccess(def, conditions, env, outer, 3)
-    return points ?? rangeAccess(def, alias, conjuncts, env, costing) ?? FULL_SCAN
+    return points ?? rangeAccess(def, alias, conjuncts, env, costing, undefined, inferred) ?? FULL_SCAN
   }
   return scoredAccess(def, conditions, env, outer) ?? FULL_SCAN
 }
@@ -202,10 +211,9 @@ function scoredAccess(def: TableDef, conditions: readonly Condition[], env: Env,
   if (conditions.length === 0) return undefined
   let best: { access: Access; score: number } | undefined
   // Invisible indexes stay enforced but are never access candidates.
-  for (const index of def.indexes.filter((i) => i.invisible !== true).sort((a, b) => (a.kind === 'primary' ? -1 : 0) - (b.kind === 'primary' ? -1 : 0))) {
-    const part = index.parts[0]
-    if (part === undefined || part.prefix !== undefined || part.descending === true) continue
-    const column = def.columns.find((c) => c.name === part.column) as ColumnDef
+  for (const index of def.indexes.slice().sort((a, b) => (a.kind === 'primary' ? -1 : 0) - (b.kind === 'primary' ? -1 : 0))) {
+    const column = forwardKeyColumn(def, index)
+    if (column === undefined) continue
     const access = accessFor(index, column, conditions.filter((c) => c.column === column.name), env, outer)
     if (access === undefined || access.score < minimum) continue
     const score = access.score + (index.kind === 'primary' || def.clustered === index.name ? 0.5 : 0)
@@ -245,26 +253,30 @@ export interface RangeCosting {
  * point one; its cost `rangeCost`. Indexes are tried in the server's key order
  * and a later one wins only if strictly cheaper.
  */
-function rangeAccess(def: TableDef, alias: string, conjuncts: readonly Expression[], env: Env, costing: RangeCosting, known?: Constant): Access | undefined {
+function rangeAccess(def: TableDef, alias: string, conjuncts: readonly Expression[], env: Env, costing: RangeCosting, known?: Constant, inferred?: InferredRange): Access | undefined {
   const value = (e: Expression): Value | undefined => (e.kind === NODE.PLACEHOLDER && e.index >= env.params.length ? undefined : isConstant(e) ? constantValue(e, env) : known?.(e))
-  const candidates: { readonly index: IndexDef; readonly column: ColumnDef; readonly intervals: Interval[]; readonly keyed: { readonly range: KeyRange; readonly point: boolean }[]; readonly shape: RangeShape }[] = []
+  const candidates: { readonly index: IndexDef; readonly column: ColumnDef; readonly intervals: Interval[]; readonly keyed: { readonly range: KeyRange; readonly point: boolean }[]; readonly shape: RangeShape; readonly implied: ImpliedRange | undefined }[] = []
   for (const index of keyOrder(def)) {
-    const part = index.parts[0]
-    if (part === undefined || part.prefix !== undefined || part.descending === true) continue
-    const column = def.columns.find((c) => c.name === part.column) as ColumnDef
+    const column = forwardKeyColumn(def, index)
+    if (column === undefined) continue
     let set: RangeSet = 'all'
-    for (const c of conjuncts) set = intersect(set, rangeOf(c, (e) => columnOf(e, def, alias) === column.name, column, value))
+    let implied: ImpliedRange | undefined
+    for (const c of conjuncts) {
+      const range = rangeOf(c, (e) => columnOf(e, def, alias) === column.name, column, value)
+      if (c === inferred?.condition && range !== 'all' && inferred.column === column) implied = inferred
+      set = intersect(set, range)
+    }
     if (set === 'all') continue
     const intervals = normalize(set)
     const keyed = keyRanges(intervals, column)
     if (keyed === undefined) continue
-    candidates.push({ index, column, intervals, keyed, shape: costing.shape(index) })
+    candidates.push({ index, column, intervals, keyed, shape: costing.shape(index), implied })
   }
   // No range at all reads no statistics.
   if (candidates.length === 0) return undefined
   const t = costing.stats
   let best = rangeBaseline(t, costing.coveringScan === undefined ? undefined : costing.shape(costing.coveringScan).recordBytes)
-  const access = (c: (typeof candidates)[number], rows: number): Access => ({ index: c.index.name, ranges: c.keyed.map((k) => k.range), over: describeIntervals(c.intervals, c.column.name), quote: costing.quote ? { index: c.index.name, rows, cost: best } : undefined })
+  const access = (c: (typeof candidates)[number], rows: number): Access => ({ index: c.index.name, ranges: c.keyed.map((k) => k.range), over: describeIntervals(c.intervals, c.column.name), implied: c.implied, quote: costing.quote ? { index: c.index.name, rows, cost: best } : undefined })
   // One range that wins even reading every row needs no count: no other is weighed against it.
   const only = candidates.length === 1 ? candidates[0] : undefined
   if (!costing.quote && only !== undefined && rangeCost(t, only.shape, only.keyed.length, t.rows) < best) return access(only, t.rows)
@@ -420,13 +432,8 @@ function bound(v: Value, column: ColumnDef, inclusive: boolean): KeyBound | unde
  * reads the same index.
  */
 function exactType(t: Compiled['type'], c: ColumnDef): boolean {
+  if (integerBytes(c.type.type) !== undefined) return t.kind === 'int' && t.literalInt === undefined
   switch (c.type.type) {
-    case FIELD_TYPE.TINY:
-    case FIELD_TYPE.SHORT:
-    case FIELD_TYPE.INT24:
-    case FIELD_TYPE.LONG:
-    case FIELD_TYPE.LONGLONG:
-      return t.kind === 'int' && t.literalInt === undefined
     case FIELD_TYPE.DECIMAL:
     case FIELD_TYPE.NEWDECIMAL:
       return (t.kind === 'int' && t.literalInt === undefined) || (t.kind === 'decimal' && t.scale <= (c.type.scale ?? 0))
