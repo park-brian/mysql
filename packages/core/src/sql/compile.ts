@@ -95,6 +95,7 @@ import {
   fixedDouble,
   floatLength,
   intType,
+  isNumber,
   jsonAsText,
   jsonType,
   stringType,
@@ -272,8 +273,6 @@ function fixedDecimals(t: ResultType): number | undefined {
   if (t.kind === 'double') return t.scale < 31 ? t.scale : undefined
   return undefined
 }
-
-const isNumber = (t: ResultType): boolean => t.kind === 'int' || t.kind === 'decimal' || t.kind === 'double'
 
 export function textVersusNumber(x: ResultType, y: ResultType): boolean {
   return isText(x) && isNumber(y)
@@ -991,8 +990,7 @@ function typeOfUserVariable(v: Value | undefined, ctx: CompileContext): ResultTy
 
 /** `5 / 10^(D+1)` when a comparison is of doubles and both sides have fixed decimals. */
 function fixedTolerance(a: ResultType, b: ResultType): number | undefined {
-  const numeric = (t: ResultType) => t.kind === 'int' || t.kind === 'decimal' || t.kind === 'double'
-  if (!(a.kind === 'double' || b.kind === 'double') || !numeric(a) || !numeric(b) || a.scale >= 31 || b.scale >= 31) return undefined
+  if (!(a.kind === 'double' || b.kind === 'double') || !isNumber(a) || !isNumber(b) || a.scale >= 31 || b.scale >= 31) return undefined
   return 5 / 10 ** (Math.max(a.scale, b.scale) + 1)
 }
 

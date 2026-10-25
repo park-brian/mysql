@@ -128,6 +128,9 @@ export interface ResultType {
   readonly fromField?: boolean
 }
 
+/** Whether an expression has a numeric result type. */
+export const isNumber = (t: ResultType): boolean => t.kind === 'int' || t.kind === 'decimal' || t.kind === 'double'
+
 /** `GROUP_FLAG`, `include/mysql_com.h` — the same bit as `NUM_FLAG`. */
 export const GROUP_FLAG = 0x8000
 /**
@@ -163,7 +166,6 @@ const BLOB_BYTES: Readonly<Record<number, number>> = {
   [FIELD_TYPE.MEDIUM_BLOB]: 16777215,
   [FIELD_TYPE.LONG_BLOB]: 4294967295,
 }
-
 
 export const NULL_TYPE: ResultType = {
   kind: 'null',
@@ -238,7 +240,7 @@ export const doubleType = (nullable: boolean, length = 23): ResultType => ({
  */
 export function fixedDouble(types: readonly ResultType[], nullable: boolean): ResultType | undefined {
   if (!types.some((t) => t.kind === 'double' && t.scale < 31)) return undefined
-  if (!types.every((t) => (t.kind === 'int' || t.kind === 'decimal' || t.kind === 'double') && t.scale < 31)) return undefined
+  if (!types.every((t) => isNumber(t) && t.scale < 31)) return undefined
   const scale = Math.max(...types.map((t) => t.scale))
   const whole = Math.max(...types.map((t) => (t.kind === 'decimal' ? charWidth(t) : t.length) - t.scale))
   return { ...doubleType(nullable, whole + scale), scale }

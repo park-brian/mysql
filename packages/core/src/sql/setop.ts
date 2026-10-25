@@ -39,7 +39,7 @@ import { sqlError } from '@myjs/protocol'
 import { COERCIBILITY, bytesValue, intValue, plainValue, stringValue, toDateTime, toText, valueBytes, withoutHex, type Value } from '@myjs/types'
 import { aggregate, aggregateCollations, aggregateTypes, convertTo } from './compile.ts'
 import { rowKey } from './keys.ts'
-import { charWidth, jsonAsText, jsonType, promotesToBlob, stringType, type ResultType } from './meta.ts'
+import { charWidth, jsonAsText, jsonType, isNumber, promotesToBlob, stringType, type ResultType } from './meta.ts'
 import { bitBytes } from './wire.ts'
 
 type Columns = readonly { readonly name: string; readonly type: ResultType }[]
@@ -71,7 +71,7 @@ export function setOperationType(types: readonly ResultType[], connectionCollati
     const type = aggregate(integers.length === 0 ? live : integers, nullable, connectionCollation)
     return done({ ...type, length: Math.max(...live.map((t) => t.length)), ...(type.field === FIELD_TYPE.YEAR ? { fieldFlags: COLUMN_FLAG.ZEROFILL } : {}) })
   }
-  if (live.every((t) => t.kind === 'int' || t.kind === 'decimal' || t.kind === 'double')) return done(aggregate(live, nullable, connectionCollation))
+  if (live.every(isNumber)) return done(aggregate(live, nullable, connectionCollation))
   if (live.every((t) => t.kind === 'datetime' || t.kind === 'time')) {
     const same = live.every((t) => t.field === live[0]!.field)
     if (same || live.every((t) => t.field === FIELD_TYPE.DATE || t.field === FIELD_TYPE.DATETIME || t.field === FIELD_TYPE.TIMESTAMP)) {
@@ -156,12 +156,16 @@ export function setOperation(node: SetOperationNode, left: Columns, right: Colum
   return {
     columns,
     *rows(leftRows, rightRows, types) {
-      // Copy BIT sources into the proved final binary BLOB holder before comparison.
+      // Copy numeric sources into the final binary BLOB before comparison.
+      // Only a raw BIT field uses packed bytes; computed numbers use digits.
       const prepare = (r: readonly Value[], source: Columns): Value[] => r.map((v, i) => {
         const from = source[i]!.type
         const to = types[i]!
-        if (v?.kind !== 'int' || from.field !== FIELD_TYPE.BIT || to.kind !== 'bytes' || (to.field !== FIELD_TYPE.BLOB && !promotesToBlob(to))) return v
-        return bytesValue(from.column === undefined ? valueBytes(plainValue(v)!) : bitBytes(v.v, from.length))
+        if (v?.kind !== 'int' || !isNumber(from) || to.kind !== 'bytes' || (to.field !== FIELD_TYPE.BLOB && !promotesToBlob(to))) return v
+        if (from.field === FIELD_TYPE.BIT && from.column !== undefined) return bytesValue(bitBytes(v.v, from.length))
+        // A materialized numeric field reads its declared scale.
+        const value = from.temporary ? convertTo(v, from) : v
+        return bytesValue(valueBytes(plainValue(value)!))
       })
       const keyOf = (r: readonly Value[]): string => rowKey(r.map((v, i) => convert(v, types[i] as ResultType)))
       if (node.op === 'UNION') {
