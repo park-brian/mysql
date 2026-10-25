@@ -164,7 +164,6 @@ const BLOB_BYTES: Readonly<Record<number, number>> = {
   [FIELD_TYPE.LONG_BLOB]: 4294967295,
 }
 
-const isBinaryCollation = (id: number | undefined): boolean => id === undefined || id === CHARSET_BINARY
 
 export const NULL_TYPE: ResultType = {
   kind: 'null',
@@ -248,10 +247,10 @@ export function fixedDouble(types: readonly ResultType[], nullable: boolean): Re
 /** A function of one fixed-decimal double, or an aggregate of it: `float_length`, DBL_DIG + 2 + D wide. */
 export const floatLength = (scale: number, nullable: boolean): ResultType => (scale >= 31 ? doubleType(nullable, 23) : { ...doubleType(nullable, 17 + scale), scale })
 
-export const stringType = (chars: number, collationId: number, nullable: boolean): ResultType =>
-  isBinaryCollation(collationId)
-    ? { kind: 'bytes', field: FIELD_TYPE.VAR_STRING, nullable, unsigned: false, length: chars, scale: 31, collationId: CHARSET_BINARY }
-    : { kind: 'string', field: FIELD_TYPE.VAR_STRING, nullable, unsigned: false, length: chars, scale: 31, collationId }
+export const stringType = (chars: number, collationId: number, nullable: boolean): ResultType => {
+  const binary = collationId === undefined || collationId === CHARSET_BINARY
+  return { kind: binary ? 'bytes' : 'string', field: FIELD_TYPE.VAR_STRING, nullable, unsigned: false, length: chars, scale: 31, collationId: binary ? CHARSET_BINARY : collationId }
+}
 
 /** `MAX_BLOB_WIDTH` (`include/mysql_com.h`): unbounded string-result width. */
 const MAX_BLOB_WIDTH = 16_777_216
@@ -338,13 +337,11 @@ export function columnResultType(def: TableDef, column: ColumnDef, tableAlias: s
       return { ...decimalType(t.precision ?? 10, t.scale ?? 0, nullable, unsigned), ...base }
     // FLOAT(M,D) reports M as its length and D as its decimals (8.4.11).
     case FIELD_TYPE.FLOAT:
-      return { ...doubleType(nullable, t.precision ?? 12), ...fixedScale(t), ...base, field: FIELD_TYPE.FLOAT }
     case FIELD_TYPE.DOUBLE:
-      return { ...doubleType(nullable, t.precision ?? 22), ...fixedScale(t), ...base }
+      return { ...doubleType(nullable, t.precision ?? (t.type === FIELD_TYPE.FLOAT ? 12 : 22)), ...fixedScale(t), ...base, field: t.type }
     case FIELD_TYPE.YEAR:
-      return { ...intType(4, nullable, true), ...base, field: FIELD_TYPE.YEAR, unsigned: true }
     case FIELD_TYPE.BIT:
-      return { ...intType(t.bits ?? 1, nullable, true), ...base, field: FIELD_TYPE.BIT, unsigned: true }
+      return { ...intType(t.type === FIELD_TYPE.YEAR ? 4 : t.bits ?? 1, nullable, true), ...base, field: t.type, unsigned: true }
     case FIELD_TYPE.DATE:
     case FIELD_TYPE.NEWDATE:
       return { ...datetimeType(FIELD_TYPE.DATE, 0, nullable), ...base }
@@ -361,19 +358,21 @@ export function columnResultType(def: TableDef, column: ColumnDef, tableAlias: s
       return { ...jsonType(nullable), ...base, column: { ...source, flags: flags | COLUMN_FLAG.BLOB } }
     case FIELD_TYPE.ENUM:
     case FIELD_TYPE.SET: {
-      const longest = Math.max(0, ...(t.members ?? []).map((m) => [...m].length))
-      const length = t.type === FIELD_TYPE.SET ? (t.members ?? []).reduce((n, m) => n + [...m].length, 0) + Math.max(0, (t.members ?? []).length - 1) : longest
+      const lengths = (t.members ?? []).map((m) => [...m].length)
+      const length = t.type === FIELD_TYPE.SET ? lengths.reduce((n, size) => n + size, 0) + Math.max(0, lengths.length - 1) : Math.max(0, ...lengths)
       const kindFlag = t.type === FIELD_TYPE.ENUM ? COLUMN_FLAG.ENUM : COLUMN_FLAG.SET
       return { ...stringType(length, t.collationId ?? 255, nullable), ...base, field: FIELD_TYPE.STRING, scale: 0, coercibility: 2, column: { ...source, flags: flags | kindFlag } }
     }
     default: {
       const blob = BLOB_BYTES[t.type]
-      if (blob !== undefined) {
-        const s = stringType(blob, t.collationId ?? CHARSET_BINARY, nullable)
-        return { ...s, ...base, field: FIELD_TYPE.BLOB, scale: 0, blobBytes: blob, coercibility: 2, column: { ...source, flags: flags | COLUMN_FLAG.BLOB } }
+      return {
+        ...stringType(blob ?? t.length ?? 1, t.collationId ?? CHARSET_BINARY, nullable),
+        ...base,
+        field: blob !== undefined ? FIELD_TYPE.BLOB : t.type === FIELD_TYPE.STRING ? FIELD_TYPE.STRING : FIELD_TYPE.VAR_STRING,
+        scale: 0,
+        coercibility: 2,
+        ...(blob === undefined ? {} : { blobBytes: blob, column: { ...source, flags: flags | COLUMN_FLAG.BLOB } }),
       }
-      const s = stringType(t.length ?? 1, t.collationId ?? CHARSET_BINARY, nullable)
-      return { ...s, ...base, field: t.type === FIELD_TYPE.STRING ? FIELD_TYPE.STRING : FIELD_TYPE.VAR_STRING, scale: 0, coercibility: 2 }
     }
   }
 }
@@ -381,8 +380,6 @@ export function columnResultType(def: TableDef, column: ColumnDef, tableAlias: s
 /** The width a result's text takes, in characters — what string functions and `CAST(… AS CHAR)` size by. */
 export function charWidth(t: ResultType): number {
   switch (t.kind) {
-    case 'int':
-      return t.length
     case 'decimal':
       return t.length + (t.scale > 0 ? 1 : 0) + (t.unsigned ? 0 : 1)
     case 'double':
@@ -400,15 +397,21 @@ export function charWidth(t: ResultType): number {
   }
 }
 
+/** Whether copying a string expression promotes its field to BLOB. */
+export function promotesToBlob(t: Pick<ResultType, 'field' | 'length' | 'wireLength'>): boolean {
+  return t.length > 512 && t.wireLength === undefined && (t.field === FIELD_TYPE.VAR_STRING || t.field === FIELD_TYPE.VARCHAR || t.field === FIELD_TYPE.STRING)
+}
+
 /**
  * The ColumnDefinition41 a client receives. `resultsCollation` is the
  * session's: text is converted into it, so its charset and its width are what
  * the column reports.
  */
 export function columnDefinition(name: string, t: ResultType, resultsCollation: number): ColumnDefinition {
+  const materialized = t.temporary !== undefined && t.temporary !== false
   // A NULL constant in the view is not copied into a temporary table: it
   // reports what it always does (8.4.11: STATISTICS.PACKED under a sort).
-  if (t.wire !== undefined && (t.temporary === undefined || t.temporary === false || t.temporary === 'stream' || t.wire.field === FIELD_TYPE.NULL)) {
+  if (t.wire !== undefined && (!materialized || t.temporary === 'stream' || t.wire.field === FIELD_TYPE.NULL)) {
     // Under a sort, what 8.4.11 reports for the column streamed through a
     // temporary table, captured as such: a constant is not copied at all.
     const streamed = t.temporary === 'stream' ? t.wire.streamed : undefined
@@ -436,18 +439,19 @@ export function columnDefinition(name: string, t: ResultType, resultsCollation: 
   if (!t.nullable) flags |= COLUMN_FLAG.NOT_NULL
   // A hex literal is reported unsigned, bytes or not, as the integer it can be (8.4.11).
   if ((t.unsigned || t.literalInt?.unsigned === true) && t.kind !== 'null') flags |= COLUMN_FLAG.UNSIGNED
-  const isText = t.kind === 'string' || (t.asText === true && !(t.temporary !== undefined && t.temporary !== false))
+  const asText = t.asText === true && !materialized
+  const isText = t.kind === 'string' || asText
+  const binaryString = t.kind === 'string' && requireCollationInfo(t.collationId).name.endsWith('_bin')
   // A bare column of a number type carries no BINARY flag; every other
   // non-text result does, a literal and an expression included.
   const numericColumn = t.column !== undefined && (t.kind === 'int' || t.kind === 'decimal' || t.kind === 'double')
   // A BIT, column or expression (MAX(b), COALESCE(b)), carries none either (8.4.11).
   if (!isText && !numericColumn && !(t.field === FIELD_TYPE.BIT && t.kind === 'int')) flags |= COLUMN_FLAG.BINARY
   // A string in a `_bin` collation is flagged binary too, column or expression.
-  if (t.kind === 'string' && requireCollationInfo(t.collationId).name.endsWith('_bin')) flags |= COLUMN_FLAG.BINARY
+  if (binaryString) flags |= COLUMN_FLAG.BINARY
   if (t.field === FIELD_TYPE.BLOB && t.kind === 'bytes') flags |= COLUMN_FLAG.BINARY
   // Read from a temporary table's field rather than from the item: what a
   // grouping, a DISTINCT or a sort after grouping copies into one (M5.5).
-  const materialized = t.temporary !== undefined && t.temporary !== false
   if (materialized) {
     // GROUP_FLAG marks a nullable field of the table's key — a DISTINCT's
     // every item, a grouping's keys — column or expression: every non-key
@@ -458,27 +462,26 @@ export function columnDefinition(name: string, t: ResultType, resultsCollation: 
     else if (!(t.ownInTemporary === true && t.temporary !== 'stream')) {
       // A number's field carries no BINARY; a temporal's, a byte string's and
       // a `_bin` string's do.
-      const binaryField = t.kind === 'datetime' || t.kind === 'time' || t.kind === 'bytes' || (t.kind === 'string' && requireCollationInfo(t.collationId).name.endsWith('_bin'))
+      const binaryField = t.kind === 'datetime' || t.kind === 'time' || t.kind === 'bytes' || binaryString
       const keep = COLUMN_FLAG.NOT_NULL | COLUMN_FLAG.UNSIGNED | (binaryField ? COLUMN_FLAG.BINARY : 0)
       flags = (flags & keep) | ((t.fieldFlags ?? 0) & ~KEY_FLAGS & ~COLUMN_FLAG.NOT_NULL) | grouped
     }
   }
   // A materialized temporal is a temporal field again, binary and its own width.
-  const asText = t.asText === true && !materialized
   if (t.asText === true && materialized && t.column === undefined) flags |= COLUMN_FLAG.BINARY
 
-  let length: number
+  const stored = t.column !== undefined || materialized
+  let length = t.length
+  let textBytes = 1
   let decimals = t.scale
   switch (t.kind) {
     case 'int':
-      length = t.length
       decimals = 0
       break
     case 'decimal':
       length = charWidth(t)
       break
     case 'double':
-      length = t.length
       // 31, NOT_FIXED_DEC, unless a FLOAT(M,D) fixed them (8.4.11).
       decimals = t.scale < 31 ? t.scale : 31
       break
@@ -491,17 +494,16 @@ export function columnDefinition(name: string, t: ResultType, resultsCollation: 
       decimals = 0
       break
     case 'bytes':
-      length = t.length
-      decimals = t.column !== undefined || materialized || t.literalInt !== undefined || t.wasLiteralInt === true ? 0 : 31
+      decimals = stored || t.literalInt !== undefined || t.wasLiteralInt === true ? 0 : 31
       break
     case 'string': {
-      const mb = requireCollationInfo(resultsCollation).mbmaxlen
-      length = Math.min(4294967295, t.blobBytes !== undefined ? t.blobBytes * mb : t.length * mb)
-      decimals = t.column !== undefined || materialized ? 0 : 31
+      textBytes = requireCollationInfo(resultsCollation).mbmaxlen
+      length = Math.min(4294967295, (t.blobBytes ?? t.length) * textBytes)
+      decimals = stored ? 0 : 31
       break
     }
     case 'json': {
-      if (t.column !== undefined || materialized) {
+      if (stored) {
         length = JSON_MAX
         decimals = 0
         flags |= COLUMN_FLAG.BLOB | COLUMN_FLAG.BINARY
@@ -518,30 +520,20 @@ export function columnDefinition(name: string, t: ResultType, resultsCollation: 
   // and a BIGINT from there (8.4.11: `n IS NULL` is type 3, `LENGTH(s)` type 8);
   // MIN and MAX of a column copy the column's own field.
   if (materialized && t.kind === 'int' && t.column === undefined && t.fieldFlags === undefined && t.ownInTemporary !== true && t.keepField !== true) field = t.length < 10 ? FIELD_TYPE.LONG : FIELD_TYPE.LONGLONG
-  // A temporary table holds a string expression over 512 characters as a
-  // BLOB of its bytes (`CONVERT_IF_BIGGER_TO_BLOB`); a column's copy keeps its
-  // own field (8.4.11: `e UNION 'k'` over a VARCHAR(513) is type 252, 8,208).
-  if (materialized && t.column === undefined && (t.kind === 'string' || t.kind === 'bytes') && (field === FIELD_TYPE.VAR_STRING || field === FIELD_TYPE.VARCHAR || field === FIELD_TYPE.STRING) && t.length > 512 && t.wireLength === undefined) {
+  // Copied expressions share the same physical field selection with set writes.
+  if (materialized && t.column === undefined && (t.kind === 'string' || t.kind === 'bytes') && promotesToBlob(t)) {
     field = FIELD_TYPE.BLOB
-    length = t.kind === 'bytes' ? t.length : Math.min(4294967295, t.length * requireCollationInfo(t.collationId).mbmaxlen * requireCollationInfo(resultsCollation).mbmaxlen)
+    length = t.kind === 'bytes' ? t.length : Math.min(4294967295, t.length * requireCollationInfo(t.collationId).mbmaxlen * textBytes)
     decimals = 0
   }
-  // A BLOB field says so, column or not, and a temporary table's is a BLOB
-  // whatever its size: LONGTEXT's 251 is reported as 252 (8.4.11).
-  if (materialized && t.column === undefined && field >= FIELD_TYPE.TINY_BLOB && field <= FIELD_TYPE.BLOB) {
+  if (t.wireLength !== undefined) {
+    // GROUP_CONCAT's captured width overrides ordinary field sizing.
+    length = materialized ? Math.floor(t.wireLength / (t.kind === 'string' ? requireCollationInfo(t.collationId).mbmaxlen : 1)) : t.wireLength
+  }
+  // Normalize BLOB class and flags once, after all width overrides.
+  if (materialized && (t.wireLength !== undefined || (t.column === undefined && field >= FIELD_TYPE.TINY_BLOB && field <= FIELD_TYPE.BLOB))) {
     flags |= COLUMN_FLAG.BLOB
     field = FIELD_TYPE.BLOB
-  }
-  if (t.wireLength !== undefined) {
-    // GROUP_CONCAT's BLOB: as the item, a length no rule gives; as a
-    // temporary table's field, a BLOB of that many bytes over the argument
-    // charset's width, flagged BLOB (8.4.11: 252, 16,384 over utf8mb4 and
-    // 4,096 over latin1, 0x10).
-    if (materialized) {
-      field = FIELD_TYPE.BLOB
-      length = Math.floor(t.wireLength / (t.kind === 'string' ? requireCollationInfo(t.collationId).mbmaxlen : 1))
-      flags |= COLUMN_FLAG.BLOB
-    } else length = t.wireLength
   }
   return {
     ...(t.column === undefined ? (materialized && t.names?.viewSchema !== undefined ? { schema: t.names.viewSchema, table: t.names.table, orgTable: '', orgName: t.names.orgName } : (t.names ?? { schema: '', table: '', orgTable: '', orgName: materialized ? name : '' })) : { schema: t.column.schema, table: t.column.table, orgTable: t.column.orgTable, orgName: t.column.orgName }),

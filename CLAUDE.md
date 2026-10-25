@@ -24,9 +24,11 @@ set-operation holders now agree with the expanded native audits, including
 default/fixed FLOAT behavior. Raw BIT with VARCHAR/VARBINARY now shares the
 collation resolver, including explicit text overrides. BLOB holders now size
 raw/computed branches in the proper charset without counting bytes twice.
-Source-to-text FLOAT,
-BIT-to-BLOB copying and computed BIT reads remain open, as does a separate
-M5.10 scalar COALESCE reader.
+Raw BIT fields now copy packed bytes into actual binary BLOB holders;
+computed BIT fields copy decimal digits, including nested LIMIT sorting.
+Source-to-text FLOAT, explicit text-BLOB transcoding, numeric-merged computed
+BIT readers and nested set ordering/multiplicity remain open, as does a
+separate M5.10 scalar COALESCE reader.
 M5's ORM exit criterion holds with recorded test configuration; default
 parallel runs can lose interactive-transaction tests to scheduling delays.
 Doc 42's query API
@@ -34,8 +36,10 @@ Doc 42's query API
 protocol, its values `mysql2`'s (M5.36, D-76). The roadmap's **Next** section
 says what comes next: 0.3 packaging is staged (`npm run pack`, D-79/D-80);
 publication remains pending. Bounded FirstMatch now omits physically proved
-integer bounds under the existing caps. The next slice returns to M5.19 packed-BIT
-field copying; broader strategy and measured field-copy gaps stay open.
+integer bounds under the existing caps. M5.19 field copying now shares the
+BLOB promotion rule with metadata. The next bounded repair targets computed
+BIT readers whose IF result merged with another numeric type; broader
+strategy and measured field-copy gaps stay open.
 The cost-based planner (M5.7, M5.42–M5.46) is done:
 `EXPLAIN FORMAT=TREE` prints the plan that runs, and 2,124 of the relational
 corpus's 2,248 plans agree with 8.4.11's; M5.47 is in progress, M5.48 is done,

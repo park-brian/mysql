@@ -33,20 +33,21 @@
 // rows first came (8.4.11: `2,1,NULL,2,3,1,2 EXCEPT ALL 2,5,1` is
 // 2, 2, 1, NULL, 3).
 import { CHARSET_BINARY, COLUMN_FLAG, FIELD_TYPE } from '@myjs/bytes'
-import { encodeCollation, requireCollationInfo } from '@myjs/charsets'
+import { requireCollationInfo } from '@myjs/charsets'
 import type { SetOperationNode } from '@myjs/parser'
 import { sqlError } from '@myjs/protocol'
-import { COERCIBILITY, bytesValue, intValue, stringValue, toDateTime, toText, withoutHex, type Value } from '@myjs/types'
+import { COERCIBILITY, bytesValue, intValue, plainValue, stringValue, toDateTime, toText, valueBytes, withoutHex, type Value } from '@myjs/types'
 import { aggregate, aggregateCollations, aggregateTypes, convertTo } from './compile.ts'
 import { rowKey } from './keys.ts'
-import { charWidth, jsonAsText, jsonType, stringType, type ResultType } from './meta.ts'
+import { charWidth, jsonAsText, jsonType, promotesToBlob, stringType, type ResultType } from './meta.ts'
+import { bitBytes } from './wire.ts'
 
 type Columns = readonly { readonly name: string; readonly type: ResultType }[]
 
 /** A set operation, typed: its columns, and how it makes its rows from its branches'. */
 export interface SetOperationPlan {
   readonly columns: Columns
-  rows(left: () => Iterable<readonly Value[]>, right: () => Iterable<readonly Value[]>, types?: readonly ResultType[]): Iterable<Value[]>
+  rows(left: () => Iterable<readonly Value[]>, right: () => Iterable<readonly Value[]>, types: readonly ResultType[]): Iterable<Value[]>
 }
 
 /** The type a column of a set operation has, given each branch's. */
@@ -60,7 +61,7 @@ export function setOperationType(types: readonly ResultType[], connectionCollati
     // column's (IMPLICIT), so a nested `_bin` union keeps it against a latin1 side.
     return { ...rest, nullable, temporary: 'stream', keepField: true, ...(t.kind === 'string' ? { coercibility: COERCIBILITY.IMPLICIT } : {}), ...(fromField ? { fromField } : {}) }
   }
-  if (live.length === 0) return done({ ...stringType(0, CHARSET_BINARY, true) })
+  if (live.length === 0) return done(stringType(0, CHARSET_BINARY, true))
   // JSON with JSON is JSON; with anything else, its text: a LONGTEXT in utf8mb4_bin (8.4.11, M5.21).
   if (live.every((t) => t.kind === 'json')) return done(jsonType(nullable))
   if (live.some((t) => t.kind === 'json')) return setOperationType(types.map((t) => (t.kind === 'json' ? { ...jsonAsText(t.nullable), ...(t.column === undefined ? {} : { column: t.column }) } : t)), connectionCollation)
@@ -70,15 +71,12 @@ export function setOperationType(types: readonly ResultType[], connectionCollati
     const type = aggregate(integers.length === 0 ? live : integers, nullable, connectionCollation)
     return done({ ...type, length: Math.max(...live.map((t) => t.length)), ...(type.field === FIELD_TYPE.YEAR ? { fieldFlags: COLUMN_FLAG.ZEROFILL } : {}) })
   }
-  const numeric = live.every((t) => t.kind === 'int' || t.kind === 'decimal' || t.kind === 'double')
-  if (numeric) return done(aggregate(live, nullable, connectionCollation))
-  const temporal = live.every((t) => t.kind === 'datetime' || t.kind === 'time')
-  if (temporal) {
-    const fields = new Set(live.map((t) => t.field))
-    const scale = Math.max(...live.map((t) => t.scale))
-    if (fields.size === 1) return done({ ...(live[0] as ResultType), scale })
-    if ([...fields].every((f) => f === FIELD_TYPE.DATE || f === FIELD_TYPE.DATETIME || f === FIELD_TYPE.TIMESTAMP)) {
-      return done({ ...(live.find((t) => t.field !== FIELD_TYPE.DATE) as ResultType), field: FIELD_TYPE.DATETIME, scale })
+  if (live.every((t) => t.kind === 'int' || t.kind === 'decimal' || t.kind === 'double')) return done(aggregate(live, nullable, connectionCollation))
+  if (live.every((t) => t.kind === 'datetime' || t.kind === 'time')) {
+    const same = live.every((t) => t.field === live[0]!.field)
+    if (same || live.every((t) => t.field === FIELD_TYPE.DATE || t.field === FIELD_TYPE.DATETIME || t.field === FIELD_TYPE.TIMESTAMP)) {
+      const source = same ? live[0] : live.find((t) => t.field !== FIELD_TYPE.DATE)
+      return done({ ...source, ...aggregate(live, nullable, connectionCollation) })
     }
   }
   // Raw BIT fields join collation resolution as binary columns; an explicit
@@ -96,7 +94,7 @@ export function setOperationType(types: readonly ResultType[], connectionCollati
     })))
     return done({ ...stringType(bytes, collationId, nullable), field: FIELD_TYPE.BLOB, blobBytes: bytes })
   }
-  const sameField = live.every((t) => t.field === (live[0] as ResultType).field) && (live[0] as ResultType).field === FIELD_TYPE.STRING
+  const sameField = live.every((t) => t.field === FIELD_TYPE.STRING)
   // Binary: as wide as the widest branch in its own bytes — a string's
   // characters at its charset's widest, bytes as they are (8.4.11:
   // VARBINARY(10) UNION 'k' is 10, UNION a 13-character literal 52).
@@ -131,9 +129,9 @@ export function convert(v: Value, t: ResultType): Value {
     const max = t.unsigned ? 255n : 127n
     if (v.v > max) return intValue(max, t.unsigned)
   }
-  if (t.kind === 'string') return stringValue(v.kind === 'string' ? v.v : toText(v), t.collationId, COERCIBILITY.IMPLICIT)
+  if (t.kind === 'string') return stringValue(toText(v), t.collationId, COERCIBILITY.IMPLICIT)
   if (t.kind === 'datetime' && v.kind === 'datetime' && t.field === FIELD_TYPE.DATETIME && v.type === 'DATE') return toDateTime(v, 'DATETIME') ?? v
-  if (t.kind === 'bytes' && v.kind !== 'bytes') return bytesValue(v.kind === 'string' ? encodeCollation(v.v, v.collationId) : new TextEncoder().encode(toText(v)))
+  if (t.kind === 'bytes' && v.kind !== 'bytes') return bytesValue(valueBytes(v))
   const converted = convertTo(v, t)
   // Comparisons use the stored FLOAT, not the double read from a branch.
   return converted?.kind === 'double' && converted.float === true ? { ...converted, v: Math.fround(converted.v) } : converted
@@ -146,27 +144,33 @@ export function convert(v: Value, t: ResultType): Value {
  * 14 wide as text, then a VARCHAR(10), so 56 bytes, where `grp UNION (s
  * INTERSECT amt)` is 44 (8.4.11).
  */
-export function setOperation(node: SetOperationNode, left: Columns, right: Columns, connectionCollation: number, leaves: readonly (readonly ResultType[])[] = [left.map((c) => c.type), right.map((c) => c.type)]): SetOperationPlan {
+export function setOperation(node: SetOperationNode, left: Columns, right: Columns, connectionCollation: number, leaves: readonly (readonly ResultType[])[]): SetOperationPlan {
   if (left.length !== right.length) throw sqlError('ER_WRONG_NUMBER_OF_COLUMNS_IN_SELECT', 'The used SELECT statements have a different number of columns')
   // Nullable if either side is; `nestedNullability` narrows it for an
   // operation that is itself a branch.
   const columns = left.map((c, i) => {
-    const r = (right[i] as { type: ResultType }).type
     // A NULL-only prefix has no holder yet; only an all-NULL final result does.
     const folded = leaves.map((l) => l[i] as ResultType).reduce((acc, t, at) => acc.kind === 'null' && t.kind === 'null' && at < leaves.length - 1 ? acc : setOperationType([acc, t], connectionCollation))
-    return { name: c.name, type: { ...folded, nullable: c.type.nullable || r.nullable } }
+    return { name: c.name, type: { ...folded, nullable: c.type.nullable || right[i]!.type.nullable } }
   })
-  const all = node.all === true
   return {
     columns,
-    *rows(leftRows, rightRows, types = columns.map((c) => c.type)) {
-      const conv = (r: readonly Value[]): Value[] => r.map((v, i) => convert(v, types[i] as ResultType))
+    *rows(leftRows, rightRows, types) {
+      // Copy BIT sources into the proved final binary BLOB holder before comparison.
+      const prepare = (r: readonly Value[], source: Columns): Value[] => r.map((v, i) => {
+        const from = source[i]!.type
+        const to = types[i]!
+        if (v?.kind !== 'int' || from.field !== FIELD_TYPE.BIT || to.kind !== 'bytes' || (to.field !== FIELD_TYPE.BLOB && !promotesToBlob(to))) return v
+        return bytesValue(from.column === undefined ? valueBytes(plainValue(v)!) : bitBytes(v.v, from.length))
+      })
+      const keyOf = (r: readonly Value[]): string => rowKey(r.map((v, i) => convert(v, types[i] as ResultType)))
       if (node.op === 'UNION') {
         const seen = new Set<string>()
-        for (const side of [leftRows, rightRows]) {
-          for (const r of side()) {
-            if (!all) {
-              const k = rowKey(conv(r))
+        for (const [side, source] of [[leftRows, left], [rightRows, right]] as const) {
+          for (const raw of side()) {
+            const r = prepare(raw, source)
+            if (!node.all) {
+              const k = keyOf(r)
               if (seen.has(k)) continue
               seen.add(k)
             }
@@ -177,21 +181,20 @@ export function setOperation(node: SetOperationNode, left: Columns, right: Colum
       }
       // INTERSECT and EXCEPT: the right side counted, the left side filtered.
       const counts = new Map<string, number>()
-      for (const r of rightRows()) {
-        const k = rowKey(conv(r))
+      for (const raw of rightRows()) {
+        const k = keyOf(prepare(raw, right))
         counts.set(k, (counts.get(k) ?? 0) + 1)
       }
-      if (all) {
-        // The left side counted too, each row once in a temporary table with how often it came, in the order rows
-        // first came; then each is sent that many times less the right's (EXCEPT), or at most the right's (8.4.11).
-        const left = new Map<string, { row: Value[]; n: number }>()
-        for (const r of leftRows()) {
-          const k = rowKey(conv(r))
-          const seen = left.get(k)
-          if (seen === undefined) left.set(k, { row: [...r], n: 1 })
-          else seen.n++
+      if (node.all) {
+        const held = new Map<string, { row: Value[]; n: number }>()
+        for (const raw of leftRows()) {
+          const row = prepare(raw, left)
+          const k = keyOf(row)
+          const entry = held.get(k)
+          if (entry === undefined) held.set(k, { row, n: 1 })
+          else entry.n++
         }
-        for (const [k, { row, n }] of left) {
+        for (const [k, { row, n }] of held) {
           const right = counts.get(k) ?? 0
           const times = node.op === 'INTERSECT' ? Math.min(n, right) : n - right
           for (let i = 0; i < times; i++) yield row
@@ -199,10 +202,10 @@ export function setOperation(node: SetOperationNode, left: Columns, right: Colum
         return
       }
       const seen = new Set<string>()
-      for (const r of leftRows()) {
-        const row = [...r]
-        const k = rowKey(conv(r))
-        if ((node.op === 'INTERSECT') !== (counts.has(k)) || seen.has(k)) continue
+      for (const raw of leftRows()) {
+        const row = prepare(raw, left)
+        const k = keyOf(row)
+        if ((node.op === 'INTERSECT') !== counts.has(k) || seen.has(k)) continue
         seen.add(k)
         yield row
       }
