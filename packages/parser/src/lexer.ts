@@ -405,10 +405,11 @@ class Lexer {
   #variable(start: number, startLine: number): Token {
     this.#advance()
     if (this.#peek() === '@') this.#advance()
-    if (this.#peek() === '`' || this.#peek() === "'" || this.#peek() === '"') {
+    const quote = this.#peek()
+    if (quote === '`' || quote === "'" || quote === '"') {
       const prefix = this.#sql.slice(start, this.#at)
-      const inner = this.#quotedIdentifier(this.#peek(), this.#at, startLine)
-      return this.#token(TOKEN.VARIABLE, prefix + inner.text, start, startLine)
+      const inner = this.#quotedIdentifier(quote, this.#at, startLine)
+      return this.#token(TOKEN.VARIABLE, prefix + inner.text, start, startLine, { quote, user: prefix === '@' })
     }
     // A system variable may be qualified: `@@session.sql_mode`.
     while (this.#at < this.#sql.length && (isIdentPart(this.#peek()) || this.#peek() === '.')) this.#advance()

@@ -15,6 +15,7 @@
 //                       `NOT` binds tighter than comparison, as it did before
 //                       5.0, so `NOT a = b` regroups from `NOT (a = b)` to
 //                       `(NOT a) = b`.
+import { systemVariableParts } from './variable.ts'
 import { Cursor, checkTreeDepth } from './cursor.ts'
 import { RESERVED } from './keywords.ts'
 import { TOKEN, type Token } from './tokens.ts'
@@ -505,8 +506,12 @@ class ExpressionParser {
         this.#c.skip()
         return { kind: NODE.PLACEHOLDER, index: t.index ?? 0, at: t.start }
       case TOKEN.VARIABLE:
+        if (!t.user && t.text.startsWith('@@')) {
+          const parts = systemVariableParts(this.#c, true)
+          return { kind: NODE.VARIABLE, name: '@@' + parts.join('.'), parts, at: t.start }
+        }
         this.#c.skip()
-        return { kind: NODE.VARIABLE, name: t.text, at: t.start }
+        return { kind: NODE.VARIABLE, name: t.text, user: true, at: t.start }
       case TOKEN.OPERATOR:
         if (t.text === '(') return this.#parenthesised()
         this.#fail()

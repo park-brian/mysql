@@ -14,7 +14,7 @@
 import { CHARSET_BINARY, COLUMN_FLAG, FIELD_TYPE, expectTyped, equalBytes } from '@myjs/bytes'
 import { someNode } from './ast.ts'
 import { collationInfoByName, decodeCollation, defaultCollationOf, encodeCollation, requireCollationInfo } from '@myjs/charsets'
-import { LITERAL, NODE, TOKEN, deparse, lex, parseExpression, type CallNode, type CaseNode, type CastNode, type ConvertNode, type Expression, type LiteralNode, type MatchNode, type QueryExpression, type SubqueryNode, quoteName } from '@myjs/parser'
+import { LITERAL, NODE, TOKEN, deparse, lex, parseExpression, type CallNode, type CaseNode, type CastNode, type ConvertNode, type Expression, type LiteralNode, type MatchNode, type QueryExpression, type SubqueryNode, type VariableNode, quoteName } from '@myjs/parser'
 import type { ColumnDef, Table, Trx } from '@myjs/engine'
 import { sqlError, messages, type Session } from '@myjs/protocol'
 import {
@@ -739,7 +739,7 @@ export function compile(e: Expression, ctx: CompileContext): Compiled {
       return scalarSubquery(e, ctx)
 
     case NODE.VARIABLE:
-      return variable(e.name, ctx)
+      return variable(e, ctx)
 
     case NODE.UNARY:
       if (e.op === 'EXISTS' && e.operand.kind === NODE.SUBQUERY) return exists(e.operand, ctx)
@@ -953,24 +953,33 @@ function introducerCollation(e: LiteralNode, ctx: CompileContext): number {
   return ctx.connectionCollation
 }
 
-function variable(name: string, ctx: CompileContext): Compiled {
-  if (name.startsWith('@@')) {
-    const m = /^@@(?:(global|session|local)\.)?(.+)$/i.exec(name)
-    const scope = m?.[1]?.toLowerCase() === 'global' ? 'GLOBAL' : m?.[1] === undefined ? undefined : 'SESSION'
-    const varName = (m?.[2] ?? name.slice(2)).toLowerCase()
-    const probe = ctx.state.systemVariable(varName, scope, ctx.session)
-    if (probe === undefined) throw sqlError('ER_UNKNOWN_SYSTEM_VARIABLE', `Unknown system variable '${varName}'`)
-    return { eval: (_row, env) => env.state.systemVariable(varName, scope, env.session) ?? null, type: typeOfSystemVariable(varName, probe, ctx) }
+/** Resolve identity once for compilation and command admission. */
+export function systemVariable(node: VariableNode, state: SessionValues, session: Session) {
+  if (node.user || !node.name.startsWith('@@')) return undefined
+  const parts = node.parts ?? node.name.slice(2).split('.')
+  const first = parts[0]?.toLowerCase()
+  const qualified = parts.length > 1 && (first === 'global' || first === 'session' || first === 'local')
+  const scope: 'GLOBAL' | 'SESSION' | undefined = !qualified ? undefined : first === 'global' ? 'GLOBAL' : 'SESSION'
+  const name = parts.slice(qualified ? 1 : 0).join('.').toLowerCase()
+  const value = state.systemVariable(name, scope, session)
+  if (value === undefined) throw sqlError('ER_UNKNOWN_SYSTEM_VARIABLE', `Unknown system variable '${name}'`)
+  return { name, scope, value }
+}
+
+function variable(node: VariableNode, ctx: CompileContext): Compiled {
+  const ref = systemVariable(node, ctx.state, ctx.session)
+  if (ref !== undefined) {
+    const { name, scope, value } = ref
+    return { eval: (_row, env) => env.state.systemVariable(name, scope, env.session) ?? null, type: typeOfSystemVariable(name, value, ctx) }
   }
-  const key = name.slice(1).toLowerCase()
-  const known = ctx.state.userVariables.get(key)
+  const key = node.name.slice(1).toLowerCase()
   // A user variable's text is IMPLICIT, whatever it was set from (8.4.11).
   return {
     eval: (_row, env) => {
       const v = env.state.userVariables.get(key) ?? null
       return v !== null && v.kind === 'string' && v.coercibility !== COERCIBILITY.IMPLICIT ? stringValue(v.v, v.collationId, COERCIBILITY.IMPLICIT) : v
     },
-    type: typeOfUserVariable(known, ctx),
+    type: typeOfUserVariable(ctx.state.userVariables.get(key), ctx),
   }
 }
 
@@ -981,9 +990,12 @@ function typeOfSystemVariable(name: string, v: Value, ctx: CompileContext): Resu
   return { ...typeOfValue(v), nullable: true }
 }
 
-/** A user variable: a BIGINT, a LONGTEXT for a string, a 16,383-byte binary string when unset. */
+/** A user variable: a BIGINT, a LONGTEXT for a string, a binary string with a whole-character VARCHAR byte limit when unset. */
 function typeOfUserVariable(v: Value | undefined, ctx: CompileContext): ResultType {
-  if (v === undefined || v === null) return { ...stringType(16383, CHARSET_BINARY, true), coercibility: COERCIBILITY.IMPLICIT }
+  if (v === undefined || v === null) {
+    const width = v === null ? 16777215 : 65535 - 65535 % requireCollationInfo(ctx.connectionCollation).mbmaxlen
+    return { ...stringResultType(width, true, CHARSET_BINARY, COERCIBILITY.IMPLICIT), coercibility: COERCIBILITY.IMPLICIT }
+  }
   if (v.kind === 'string') return { ...stringType(67108860, ctx.connectionCollation, true), field: FIELD_TYPE.LONG_BLOB }
   if (v.kind === 'int') return intType(21, true, v.unsigned)
   return { ...typeOfValue(v), nullable: true }

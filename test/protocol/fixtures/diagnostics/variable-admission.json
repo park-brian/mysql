@@ -1,0 +1,5606 @@
+{
+  "mysqlVersion": "8.4.11",
+  "outcomes": [
+    {
+      "prior": [
+        {
+          "Level": "Warning",
+          "Code": 1365,
+          "Message": "Division by 0"
+        }
+      ],
+      "rows": [
+        [
+          1
+        ]
+      ],
+      "fields": [
+        [
+          "@@warning_count",
+          8,
+          21,
+          160,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "error": null,
+      "warnings": [],
+      "warningCount": 0,
+      "errorCount": 0
+    },
+    {
+      "prior": [],
+      "rows": null,
+      "fields": null,
+      "error": [
+        "ER_UNSUPPORTED_PS",
+        1295,
+        "HY000",
+        "This command is not supported in the prepared statement protocol yet"
+      ],
+      "warnings": [
+        {
+          "Level": "Error",
+          "Code": 1295,
+          "Message": "This command is not supported in the prepared statement protocol yet"
+        }
+      ],
+      "warningCount": 1,
+      "errorCount": 1
+    },
+    {
+      "prior": [
+        {
+          "Level": "Warning",
+          "Code": 1365,
+          "Message": "Division by 0"
+        }
+      ],
+      "rows": [
+        [
+          1
+        ]
+      ],
+      "fields": [
+        [
+          "@@`warning_count`",
+          8,
+          21,
+          160,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "error": null,
+      "warnings": [],
+      "warningCount": 0,
+      "errorCount": 0
+    },
+    {
+      "prior": [
+        {
+          "Level": "Warning",
+          "Code": 1365,
+          "Message": "Division by 0"
+        }
+      ],
+      "rows": [
+        [
+          1
+        ]
+      ],
+      "fields": [
+        [
+          "@@session.warning_count",
+          8,
+          21,
+          160,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "error": null,
+      "warnings": [],
+      "warningCount": 0,
+      "errorCount": 0
+    },
+    {
+      "prior": [
+        {
+          "Level": "Warning",
+          "Code": 1365,
+          "Message": "Division by 0"
+        }
+      ],
+      "rows": [
+        [
+          1
+        ]
+      ],
+      "fields": [
+        [
+          "@@session.`warning_count`",
+          8,
+          21,
+          160,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "error": null,
+      "warnings": [],
+      "warningCount": 0,
+      "errorCount": 0
+    },
+    {
+      "prior": [
+        {
+          "Level": "Warning",
+          "Code": 1365,
+          "Message": "Division by 0"
+        }
+      ],
+      "rows": null,
+      "fields": null,
+      "error": [
+        "ER_UNKNOWN_SYSTEM_VARIABLE",
+        1193,
+        "HY000",
+        "Unknown system variable 'session.warning_count'"
+      ],
+      "warnings": [
+        {
+          "Level": "Error",
+          "Code": 1193,
+          "Message": "Unknown system variable 'session.warning_count'"
+        }
+      ],
+      "warningCount": 1,
+      "errorCount": 1
+    },
+    {
+      "prior": [],
+      "rows": null,
+      "fields": null,
+      "error": [
+        "ER_UNKNOWN_SYSTEM_VARIABLE",
+        1193,
+        "HY000",
+        "Unknown system variable 'session.warning_count'"
+      ],
+      "warnings": [
+        {
+          "Level": "Error",
+          "Code": 1193,
+          "Message": "Unknown system variable 'session.warning_count'"
+        }
+      ],
+      "warningCount": 1,
+      "errorCount": 1
+    },
+    {
+      "prior": [
+        {
+          "Level": "Warning",
+          "Code": 1365,
+          "Message": "Division by 0"
+        }
+      ],
+      "rows": [
+        [
+          1
+        ]
+      ],
+      "fields": [
+        [
+          "@@local.warning_count",
+          8,
+          21,
+          160,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "error": null,
+      "warnings": [],
+      "warningCount": 0,
+      "errorCount": 0
+    },
+    {
+      "prior": [
+        {
+          "Level": "Warning",
+          "Code": 1365,
+          "Message": "Division by 0"
+        }
+      ],
+      "rows": [
+        [
+          1
+        ]
+      ],
+      "fields": [
+        [
+          "@@local.`warning_count`",
+          8,
+          21,
+          160,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "error": null,
+      "warnings": [],
+      "warningCount": 0,
+      "errorCount": 0
+    },
+    {
+      "prior": [
+        {
+          "Level": "Warning",
+          "Code": 1365,
+          "Message": "Division by 0"
+        }
+      ],
+      "rows": null,
+      "fields": null,
+      "error": [
+        "ER_UNKNOWN_SYSTEM_VARIABLE",
+        1193,
+        "HY000",
+        "Unknown system variable 'local.warning_count'"
+      ],
+      "warnings": [
+        {
+          "Level": "Error",
+          "Code": 1193,
+          "Message": "Unknown system variable 'local.warning_count'"
+        }
+      ],
+      "warningCount": 1,
+      "errorCount": 1
+    },
+    {
+      "prior": [],
+      "rows": null,
+      "fields": null,
+      "error": [
+        "ER_UNKNOWN_SYSTEM_VARIABLE",
+        1193,
+        "HY000",
+        "Unknown system variable 'local.warning_count'"
+      ],
+      "warnings": [
+        {
+          "Level": "Error",
+          "Code": 1193,
+          "Message": "Unknown system variable 'local.warning_count'"
+        }
+      ],
+      "warningCount": 1,
+      "errorCount": 1
+    },
+    {
+      "prior": [
+        {
+          "Level": "Warning",
+          "Code": 1365,
+          "Message": "Division by 0"
+        }
+      ],
+      "rows": null,
+      "fields": null,
+      "error": [
+        "ER_INCORRECT_GLOBAL_LOCAL_VAR",
+        1238,
+        "HY000",
+        "Variable 'warning_count' is a SESSION variable"
+      ],
+      "warnings": [
+        {
+          "Level": "Error",
+          "Code": 1238,
+          "Message": "Variable 'warning_count' is a SESSION variable"
+        }
+      ],
+      "warningCount": 1,
+      "errorCount": 1
+    },
+    {
+      "prior": [],
+      "rows": null,
+      "fields": null,
+      "error": [
+        "ER_INCORRECT_GLOBAL_LOCAL_VAR",
+        1238,
+        "HY000",
+        "Variable 'warning_count' is a SESSION variable"
+      ],
+      "warnings": [
+        {
+          "Level": "Error",
+          "Code": 1238,
+          "Message": "Variable 'warning_count' is a SESSION variable"
+        }
+      ],
+      "warningCount": 1,
+      "errorCount": 1
+    },
+    {
+      "prior": [
+        {
+          "Level": "Warning",
+          "Code": 1365,
+          "Message": "Division by 0"
+        }
+      ],
+      "rows": null,
+      "fields": null,
+      "error": [
+        "ER_UNKNOWN_SYSTEM_VARIABLE",
+        1193,
+        "HY000",
+        "Unknown system variable 'global.warning_count'"
+      ],
+      "warnings": [
+        {
+          "Level": "Error",
+          "Code": 1193,
+          "Message": "Unknown system variable 'global.warning_count'"
+        }
+      ],
+      "warningCount": 1,
+      "errorCount": 1
+    },
+    {
+      "prior": [],
+      "rows": null,
+      "fields": null,
+      "error": [
+        "ER_UNKNOWN_SYSTEM_VARIABLE",
+        1193,
+        "HY000",
+        "Unknown system variable 'global.warning_count'"
+      ],
+      "warnings": [
+        {
+          "Level": "Error",
+          "Code": 1193,
+          "Message": "Unknown system variable 'global.warning_count'"
+        }
+      ],
+      "warningCount": 1,
+      "errorCount": 1
+    },
+    {
+      "prior": [
+        {
+          "Level": "Warning",
+          "Code": 1365,
+          "Message": "Division by 0"
+        }
+      ],
+      "rows": [
+        [
+          0
+        ]
+      ],
+      "fields": [
+        [
+          "@@error_count",
+          8,
+          21,
+          160,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "error": null,
+      "warnings": [],
+      "warningCount": 0,
+      "errorCount": 0
+    },
+    {
+      "prior": [
+        {
+          "Level": "Warning",
+          "Code": 1365,
+          "Message": "Division by 0"
+        }
+      ],
+      "rows": [
+        [
+          0
+        ]
+      ],
+      "fields": [
+        [
+          "@@`error_count`",
+          8,
+          21,
+          160,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "error": null,
+      "warnings": [],
+      "warningCount": 0,
+      "errorCount": 0
+    },
+    {
+      "prior": [
+        {
+          "Level": "Warning",
+          "Code": 1365,
+          "Message": "Division by 0"
+        }
+      ],
+      "rows": [
+        [
+          0
+        ]
+      ],
+      "fields": [
+        [
+          "@@session.error_count",
+          8,
+          21,
+          160,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "error": null,
+      "warnings": [],
+      "warningCount": 0,
+      "errorCount": 0
+    },
+    {
+      "prior": [
+        {
+          "Level": "Warning",
+          "Code": 1365,
+          "Message": "Division by 0"
+        }
+      ],
+      "rows": [
+        [
+          0
+        ]
+      ],
+      "fields": [
+        [
+          "@@session.`error_count`",
+          8,
+          21,
+          160,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "error": null,
+      "warnings": [],
+      "warningCount": 0,
+      "errorCount": 0
+    },
+    {
+      "prior": [
+        {
+          "Level": "Warning",
+          "Code": 1365,
+          "Message": "Division by 0"
+        }
+      ],
+      "rows": null,
+      "fields": null,
+      "error": [
+        "ER_UNKNOWN_SYSTEM_VARIABLE",
+        1193,
+        "HY000",
+        "Unknown system variable 'session.error_count'"
+      ],
+      "warnings": [
+        {
+          "Level": "Error",
+          "Code": 1193,
+          "Message": "Unknown system variable 'session.error_count'"
+        }
+      ],
+      "warningCount": 1,
+      "errorCount": 1
+    },
+    {
+      "prior": [],
+      "rows": null,
+      "fields": null,
+      "error": [
+        "ER_UNKNOWN_SYSTEM_VARIABLE",
+        1193,
+        "HY000",
+        "Unknown system variable 'session.error_count'"
+      ],
+      "warnings": [
+        {
+          "Level": "Error",
+          "Code": 1193,
+          "Message": "Unknown system variable 'session.error_count'"
+        }
+      ],
+      "warningCount": 1,
+      "errorCount": 1
+    },
+    {
+      "prior": [
+        {
+          "Level": "Warning",
+          "Code": 1365,
+          "Message": "Division by 0"
+        }
+      ],
+      "rows": [
+        [
+          0
+        ]
+      ],
+      "fields": [
+        [
+          "@@local.error_count",
+          8,
+          21,
+          160,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "error": null,
+      "warnings": [],
+      "warningCount": 0,
+      "errorCount": 0
+    },
+    {
+      "prior": [
+        {
+          "Level": "Warning",
+          "Code": 1365,
+          "Message": "Division by 0"
+        }
+      ],
+      "rows": [
+        [
+          0
+        ]
+      ],
+      "fields": [
+        [
+          "@@local.`error_count`",
+          8,
+          21,
+          160,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "error": null,
+      "warnings": [],
+      "warningCount": 0,
+      "errorCount": 0
+    },
+    {
+      "prior": [
+        {
+          "Level": "Warning",
+          "Code": 1365,
+          "Message": "Division by 0"
+        }
+      ],
+      "rows": null,
+      "fields": null,
+      "error": [
+        "ER_UNKNOWN_SYSTEM_VARIABLE",
+        1193,
+        "HY000",
+        "Unknown system variable 'local.error_count'"
+      ],
+      "warnings": [
+        {
+          "Level": "Error",
+          "Code": 1193,
+          "Message": "Unknown system variable 'local.error_count'"
+        }
+      ],
+      "warningCount": 1,
+      "errorCount": 1
+    },
+    {
+      "prior": [],
+      "rows": null,
+      "fields": null,
+      "error": [
+        "ER_UNKNOWN_SYSTEM_VARIABLE",
+        1193,
+        "HY000",
+        "Unknown system variable 'local.error_count'"
+      ],
+      "warnings": [
+        {
+          "Level": "Error",
+          "Code": 1193,
+          "Message": "Unknown system variable 'local.error_count'"
+        }
+      ],
+      "warningCount": 1,
+      "errorCount": 1
+    },
+    {
+      "prior": [
+        {
+          "Level": "Warning",
+          "Code": 1365,
+          "Message": "Division by 0"
+        }
+      ],
+      "rows": null,
+      "fields": null,
+      "error": [
+        "ER_INCORRECT_GLOBAL_LOCAL_VAR",
+        1238,
+        "HY000",
+        "Variable 'error_count' is a SESSION variable"
+      ],
+      "warnings": [
+        {
+          "Level": "Error",
+          "Code": 1238,
+          "Message": "Variable 'error_count' is a SESSION variable"
+        }
+      ],
+      "warningCount": 1,
+      "errorCount": 1
+    },
+    {
+      "prior": [],
+      "rows": null,
+      "fields": null,
+      "error": [
+        "ER_INCORRECT_GLOBAL_LOCAL_VAR",
+        1238,
+        "HY000",
+        "Variable 'error_count' is a SESSION variable"
+      ],
+      "warnings": [
+        {
+          "Level": "Error",
+          "Code": 1238,
+          "Message": "Variable 'error_count' is a SESSION variable"
+        }
+      ],
+      "warningCount": 1,
+      "errorCount": 1
+    },
+    {
+      "prior": [
+        {
+          "Level": "Warning",
+          "Code": 1365,
+          "Message": "Division by 0"
+        }
+      ],
+      "rows": null,
+      "fields": null,
+      "error": [
+        "ER_UNKNOWN_SYSTEM_VARIABLE",
+        1193,
+        "HY000",
+        "Unknown system variable 'global.error_count'"
+      ],
+      "warnings": [
+        {
+          "Level": "Error",
+          "Code": 1193,
+          "Message": "Unknown system variable 'global.error_count'"
+        }
+      ],
+      "warningCount": 1,
+      "errorCount": 1
+    },
+    {
+      "prior": [],
+      "rows": null,
+      "fields": null,
+      "error": [
+        "ER_UNKNOWN_SYSTEM_VARIABLE",
+        1193,
+        "HY000",
+        "Unknown system variable 'global.error_count'"
+      ],
+      "warnings": [
+        {
+          "Level": "Error",
+          "Code": 1193,
+          "Message": "Unknown system variable 'global.error_count'"
+        }
+      ],
+      "warningCount": 1,
+      "errorCount": 1
+    },
+    {
+      "prior": [
+        {
+          "Level": "Warning",
+          "Code": 1365,
+          "Message": "Division by 0"
+        }
+      ],
+      "rows": [
+        [
+          "ERROR_FOR_DIVISION_BY_ZERO"
+        ]
+      ],
+      "fields": [
+        [
+          "@@sql_mode",
+          253,
+          87380,
+          0,
+          31,
+          224,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "error": null,
+      "warnings": [],
+      "warningCount": 0,
+      "errorCount": 0
+    },
+    {
+      "prior": [],
+      "rows": null,
+      "fields": [
+        [
+          "@@sql_mode",
+          253,
+          87380,
+          0,
+          31,
+          224,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "error": null,
+      "warnings": [],
+      "warningCount": 0,
+      "errorCount": 0
+    },
+    {
+      "prior": [
+        {
+          "Level": "Warning",
+          "Code": 1365,
+          "Message": "Division by 0"
+        }
+      ],
+      "rows": [
+        [
+          "ERROR_FOR_DIVISION_BY_ZERO"
+        ]
+      ],
+      "fields": [
+        [
+          "@@`sql_mode`",
+          253,
+          87380,
+          0,
+          31,
+          224,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "error": null,
+      "warnings": [],
+      "warningCount": 0,
+      "errorCount": 0
+    },
+    {
+      "prior": [],
+      "rows": null,
+      "fields": [
+        [
+          "@@`sql_mode`",
+          253,
+          87380,
+          0,
+          31,
+          224,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "error": null,
+      "warnings": [],
+      "warningCount": 0,
+      "errorCount": 0
+    },
+    {
+      "prior": [
+        {
+          "Level": "Warning",
+          "Code": 1365,
+          "Message": "Division by 0"
+        }
+      ],
+      "rows": [
+        [
+          "ERROR_FOR_DIVISION_BY_ZERO"
+        ]
+      ],
+      "fields": [
+        [
+          "@@session.sql_mode",
+          253,
+          87380,
+          0,
+          31,
+          224,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "error": null,
+      "warnings": [],
+      "warningCount": 0,
+      "errorCount": 0
+    },
+    {
+      "prior": [],
+      "rows": null,
+      "fields": [
+        [
+          "@@session.sql_mode",
+          253,
+          87380,
+          0,
+          31,
+          224,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "error": null,
+      "warnings": [],
+      "warningCount": 0,
+      "errorCount": 0
+    },
+    {
+      "prior": [
+        {
+          "Level": "Warning",
+          "Code": 1365,
+          "Message": "Division by 0"
+        }
+      ],
+      "rows": [
+        [
+          "ERROR_FOR_DIVISION_BY_ZERO"
+        ]
+      ],
+      "fields": [
+        [
+          "@@session.`sql_mode`",
+          253,
+          87380,
+          0,
+          31,
+          224,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "error": null,
+      "warnings": [],
+      "warningCount": 0,
+      "errorCount": 0
+    },
+    {
+      "prior": [],
+      "rows": null,
+      "fields": [
+        [
+          "@@session.`sql_mode`",
+          253,
+          87380,
+          0,
+          31,
+          224,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "error": null,
+      "warnings": [],
+      "warningCount": 0,
+      "errorCount": 0
+    },
+    {
+      "prior": [
+        {
+          "Level": "Warning",
+          "Code": 1365,
+          "Message": "Division by 0"
+        }
+      ],
+      "rows": null,
+      "fields": null,
+      "error": [
+        "ER_UNKNOWN_SYSTEM_VARIABLE",
+        1193,
+        "HY000",
+        "Unknown system variable 'session.sql_mode'"
+      ],
+      "warnings": [
+        {
+          "Level": "Error",
+          "Code": 1193,
+          "Message": "Unknown system variable 'session.sql_mode'"
+        }
+      ],
+      "warningCount": 1,
+      "errorCount": 1
+    },
+    {
+      "prior": [],
+      "rows": null,
+      "fields": null,
+      "error": [
+        "ER_UNKNOWN_SYSTEM_VARIABLE",
+        1193,
+        "HY000",
+        "Unknown system variable 'session.sql_mode'"
+      ],
+      "warnings": [
+        {
+          "Level": "Error",
+          "Code": 1193,
+          "Message": "Unknown system variable 'session.sql_mode'"
+        }
+      ],
+      "warningCount": 1,
+      "errorCount": 1
+    },
+    {
+      "prior": [
+        {
+          "Level": "Warning",
+          "Code": 1365,
+          "Message": "Division by 0"
+        }
+      ],
+      "rows": [
+        [
+          "ERROR_FOR_DIVISION_BY_ZERO"
+        ]
+      ],
+      "fields": [
+        [
+          "@@local.sql_mode",
+          253,
+          87380,
+          0,
+          31,
+          224,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "error": null,
+      "warnings": [],
+      "warningCount": 0,
+      "errorCount": 0
+    },
+    {
+      "prior": [],
+      "rows": null,
+      "fields": [
+        [
+          "@@local.sql_mode",
+          253,
+          87380,
+          0,
+          31,
+          224,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "error": null,
+      "warnings": [],
+      "warningCount": 0,
+      "errorCount": 0
+    },
+    {
+      "prior": [
+        {
+          "Level": "Warning",
+          "Code": 1365,
+          "Message": "Division by 0"
+        }
+      ],
+      "rows": [
+        [
+          "ERROR_FOR_DIVISION_BY_ZERO"
+        ]
+      ],
+      "fields": [
+        [
+          "@@local.`sql_mode`",
+          253,
+          87380,
+          0,
+          31,
+          224,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "error": null,
+      "warnings": [],
+      "warningCount": 0,
+      "errorCount": 0
+    },
+    {
+      "prior": [],
+      "rows": null,
+      "fields": [
+        [
+          "@@local.`sql_mode`",
+          253,
+          87380,
+          0,
+          31,
+          224,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "error": null,
+      "warnings": [],
+      "warningCount": 0,
+      "errorCount": 0
+    },
+    {
+      "prior": [
+        {
+          "Level": "Warning",
+          "Code": 1365,
+          "Message": "Division by 0"
+        }
+      ],
+      "rows": null,
+      "fields": null,
+      "error": [
+        "ER_UNKNOWN_SYSTEM_VARIABLE",
+        1193,
+        "HY000",
+        "Unknown system variable 'local.sql_mode'"
+      ],
+      "warnings": [
+        {
+          "Level": "Error",
+          "Code": 1193,
+          "Message": "Unknown system variable 'local.sql_mode'"
+        }
+      ],
+      "warningCount": 1,
+      "errorCount": 1
+    },
+    {
+      "prior": [],
+      "rows": null,
+      "fields": null,
+      "error": [
+        "ER_UNKNOWN_SYSTEM_VARIABLE",
+        1193,
+        "HY000",
+        "Unknown system variable 'local.sql_mode'"
+      ],
+      "warnings": [
+        {
+          "Level": "Error",
+          "Code": 1193,
+          "Message": "Unknown system variable 'local.sql_mode'"
+        }
+      ],
+      "warningCount": 1,
+      "errorCount": 1
+    },
+    {
+      "prior": [
+        {
+          "Level": "Warning",
+          "Code": 1365,
+          "Message": "Division by 0"
+        }
+      ],
+      "rows": [
+        [
+          "ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION"
+        ]
+      ],
+      "fields": [
+        [
+          "@@global.sql_mode",
+          253,
+          87380,
+          0,
+          31,
+          224,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "error": null,
+      "warnings": [],
+      "warningCount": 0,
+      "errorCount": 0
+    },
+    {
+      "prior": [],
+      "rows": null,
+      "fields": [
+        [
+          "@@global.sql_mode",
+          253,
+          87380,
+          0,
+          31,
+          224,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "error": null,
+      "warnings": [],
+      "warningCount": 0,
+      "errorCount": 0
+    },
+    {
+      "prior": [
+        {
+          "Level": "Warning",
+          "Code": 1365,
+          "Message": "Division by 0"
+        }
+      ],
+      "rows": [
+        [
+          "ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION"
+        ]
+      ],
+      "fields": [
+        [
+          "@@global.`sql_mode`",
+          253,
+          87380,
+          0,
+          31,
+          224,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "error": null,
+      "warnings": [],
+      "warningCount": 0,
+      "errorCount": 0
+    },
+    {
+      "prior": [],
+      "rows": null,
+      "fields": [
+        [
+          "@@global.`sql_mode`",
+          253,
+          87380,
+          0,
+          31,
+          224,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "error": null,
+      "warnings": [],
+      "warningCount": 0,
+      "errorCount": 0
+    },
+    {
+      "prior": [
+        {
+          "Level": "Warning",
+          "Code": 1365,
+          "Message": "Division by 0"
+        }
+      ],
+      "rows": null,
+      "fields": null,
+      "error": [
+        "ER_UNKNOWN_SYSTEM_VARIABLE",
+        1193,
+        "HY000",
+        "Unknown system variable 'global.sql_mode'"
+      ],
+      "warnings": [
+        {
+          "Level": "Error",
+          "Code": 1193,
+          "Message": "Unknown system variable 'global.sql_mode'"
+        }
+      ],
+      "warningCount": 1,
+      "errorCount": 1
+    },
+    {
+      "prior": [],
+      "rows": null,
+      "fields": null,
+      "error": [
+        "ER_UNKNOWN_SYSTEM_VARIABLE",
+        1193,
+        "HY000",
+        "Unknown system variable 'global.sql_mode'"
+      ],
+      "warnings": [
+        {
+          "Level": "Error",
+          "Code": 1193,
+          "Message": "Unknown system variable 'global.sql_mode'"
+        }
+      ],
+      "warningCount": 1,
+      "errorCount": 1
+    },
+    {
+      "prior": [
+        {
+          "Level": "Warning",
+          "Code": 1365,
+          "Message": "Division by 0"
+        }
+      ],
+      "rows": null,
+      "fields": null,
+      "error": [
+        "ER_UNKNOWN_SYSTEM_VARIABLE",
+        1193,
+        "HY000",
+        "Unknown system variable 'absent_variable'"
+      ],
+      "warnings": [
+        {
+          "Level": "Error",
+          "Code": 1193,
+          "Message": "Unknown system variable 'absent_variable'"
+        }
+      ],
+      "warningCount": 1,
+      "errorCount": 1
+    },
+    {
+      "prior": [],
+      "rows": null,
+      "fields": null,
+      "error": [
+        "ER_UNKNOWN_SYSTEM_VARIABLE",
+        1193,
+        "HY000",
+        "Unknown system variable 'absent_variable'"
+      ],
+      "warnings": [
+        {
+          "Level": "Error",
+          "Code": 1193,
+          "Message": "Unknown system variable 'absent_variable'"
+        }
+      ],
+      "warningCount": 1,
+      "errorCount": 1
+    },
+    {
+      "prior": [
+        {
+          "Level": "Warning",
+          "Code": 1365,
+          "Message": "Division by 0"
+        }
+      ],
+      "rows": null,
+      "fields": null,
+      "error": [
+        "ER_UNKNOWN_SYSTEM_VARIABLE",
+        1193,
+        "HY000",
+        "Unknown system variable 'session.absent_variable'"
+      ],
+      "warnings": [
+        {
+          "Level": "Error",
+          "Code": 1193,
+          "Message": "Unknown system variable 'session.absent_variable'"
+        }
+      ],
+      "warningCount": 1,
+      "errorCount": 1
+    },
+    {
+      "prior": [],
+      "rows": null,
+      "fields": null,
+      "error": [
+        "ER_UNKNOWN_SYSTEM_VARIABLE",
+        1193,
+        "HY000",
+        "Unknown system variable 'session.absent_variable'"
+      ],
+      "warnings": [
+        {
+          "Level": "Error",
+          "Code": 1193,
+          "Message": "Unknown system variable 'session.absent_variable'"
+        }
+      ],
+      "warningCount": 1,
+      "errorCount": 1
+    },
+    {
+      "prior": [
+        {
+          "Level": "Warning",
+          "Code": 1365,
+          "Message": "Division by 0"
+        }
+      ],
+      "rows": null,
+      "fields": null,
+      "error": [
+        "ER_UNKNOWN_SYSTEM_VARIABLE",
+        1193,
+        "HY000",
+        "Unknown system variable 'local.absent_variable'"
+      ],
+      "warnings": [
+        {
+          "Level": "Error",
+          "Code": 1193,
+          "Message": "Unknown system variable 'local.absent_variable'"
+        }
+      ],
+      "warningCount": 1,
+      "errorCount": 1
+    },
+    {
+      "prior": [],
+      "rows": null,
+      "fields": null,
+      "error": [
+        "ER_UNKNOWN_SYSTEM_VARIABLE",
+        1193,
+        "HY000",
+        "Unknown system variable 'local.absent_variable'"
+      ],
+      "warnings": [
+        {
+          "Level": "Error",
+          "Code": 1193,
+          "Message": "Unknown system variable 'local.absent_variable'"
+        }
+      ],
+      "warningCount": 1,
+      "errorCount": 1
+    },
+    {
+      "prior": [
+        {
+          "Level": "Warning",
+          "Code": 1365,
+          "Message": "Division by 0"
+        }
+      ],
+      "rows": null,
+      "fields": null,
+      "error": [
+        "ER_UNKNOWN_SYSTEM_VARIABLE",
+        1193,
+        "HY000",
+        "Unknown system variable 'global.absent_variable'"
+      ],
+      "warnings": [
+        {
+          "Level": "Error",
+          "Code": 1193,
+          "Message": "Unknown system variable 'global.absent_variable'"
+        }
+      ],
+      "warningCount": 1,
+      "errorCount": 1
+    },
+    {
+      "prior": [],
+      "rows": null,
+      "fields": null,
+      "error": [
+        "ER_UNKNOWN_SYSTEM_VARIABLE",
+        1193,
+        "HY000",
+        "Unknown system variable 'global.absent_variable'"
+      ],
+      "warnings": [
+        {
+          "Level": "Error",
+          "Code": 1193,
+          "Message": "Unknown system variable 'global.absent_variable'"
+        }
+      ],
+      "warningCount": 1,
+      "errorCount": 1
+    },
+    {
+      "prior": [
+        {
+          "Level": "Warning",
+          "Code": 1365,
+          "Message": "Division by 0"
+        }
+      ],
+      "rows": [
+        [
+          "0"
+        ]
+      ],
+      "fields": [
+        [
+          "IF(FALSE,@@warning_count,0)",
+          246,
+          22,
+          128,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "error": null,
+      "warnings": [],
+      "warningCount": 0,
+      "errorCount": 0
+    },
+    {
+      "prior": [
+        {
+          "Level": "Warning",
+          "Code": 1365,
+          "Message": "Division by 0"
+        }
+      ],
+      "rows": [],
+      "fields": [
+        [
+          "@@warning_count",
+          8,
+          21,
+          160,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "error": null,
+      "warnings": [],
+      "warningCount": 0,
+      "errorCount": 0
+    },
+    {
+      "prior": [
+        {
+          "Level": "Warning",
+          "Code": 1365,
+          "Message": "Division by 0"
+        }
+      ],
+      "rows": [
+        [
+          1
+        ]
+      ],
+      "fields": [
+        [
+          "1",
+          8,
+          2,
+          129,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "error": null,
+      "warnings": [],
+      "warningCount": 0,
+      "errorCount": 0
+    },
+    {
+      "prior": [
+        {
+          "Level": "Warning",
+          "Code": 1365,
+          "Message": "Division by 0"
+        }
+      ],
+      "rows": [
+        [
+          "ERROR_FOR_DIVISION_BY_ZERO"
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          253,
+          87380,
+          0,
+          31,
+          224,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "error": null,
+      "warnings": [],
+      "warningCount": 0,
+      "errorCount": 0
+    },
+    {
+      "prior": [],
+      "rows": null,
+      "fields": [
+        [
+          "v",
+          253,
+          87380,
+          0,
+          31,
+          224,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "error": null,
+      "warnings": [],
+      "warningCount": 0,
+      "errorCount": 0
+    },
+    {
+      "prior": [
+        {
+          "Level": "Warning",
+          "Code": 1365,
+          "Message": "Division by 0"
+        }
+      ],
+      "rows": [
+        [
+          1
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          8,
+          21,
+          160,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "error": null,
+      "warnings": [],
+      "warningCount": 0,
+      "errorCount": 0
+    },
+    {
+      "prior": [
+        {
+          "Level": "Warning",
+          "Code": 1365,
+          "Message": "Division by 0"
+        }
+      ],
+      "rows": {
+        "affectedRows": 0,
+        "insertId": 0,
+        "warningStatus": 0,
+        "info": "",
+        "serverStatus": 2,
+        "fieldCount": 0
+      },
+      "fields": null,
+      "error": null,
+      "warnings": [],
+      "warningCount": 0,
+      "errorCount": 0
+    },
+    {
+      "prior": [],
+      "rows": null,
+      "fields": [],
+      "error": null,
+      "warnings": [],
+      "warningCount": 0,
+      "errorCount": 0
+    },
+    {
+      "prior": [
+        {
+          "Level": "Warning",
+          "Code": 1365,
+          "Message": "Division by 0"
+        }
+      ],
+      "rows": [
+        [
+          7
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          8,
+          21,
+          128,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "error": null,
+      "warnings": [],
+      "warningCount": 0,
+      "errorCount": 0
+    },
+    {
+      "prior": [],
+      "rows": null,
+      "fields": [
+        [
+          "v",
+          8,
+          21,
+          128,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "error": null,
+      "warnings": [],
+      "warningCount": 0,
+      "errorCount": 0
+    },
+    {
+      "prior": [
+        {
+          "Level": "Warning",
+          "Code": 1365,
+          "Message": "Division by 0"
+        }
+      ],
+      "rows": null,
+      "fields": null,
+      "error": [
+        "ER_PARSE_ERROR",
+        1064,
+        "42000",
+        "You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near ''sql_mode' AS v' at line 1"
+      ],
+      "warnings": [
+        {
+          "Level": "Error",
+          "Code": 1064,
+          "Message": "You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near ''sql_mode' AS v' at line 1"
+        }
+      ],
+      "warningCount": 1,
+      "errorCount": 1
+    },
+    {
+      "prior": [],
+      "rows": null,
+      "fields": null,
+      "error": [
+        "ER_PARSE_ERROR",
+        1064,
+        "42000",
+        "You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near ''sql_mode' AS v' at line 1"
+      ],
+      "warnings": [
+        {
+          "Level": "Error",
+          "Code": 1064,
+          "Message": "You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near ''sql_mode' AS v' at line 1"
+        }
+      ],
+      "warningCount": 1,
+      "errorCount": 1
+    },
+    {
+      "prior": [
+        {
+          "Level": "Warning",
+          "Code": 1365,
+          "Message": "Division by 0"
+        }
+      ],
+      "rows": null,
+      "fields": null,
+      "error": [
+        "ER_PARSE_ERROR",
+        1064,
+        "42000",
+        "You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near ''session.sql_mode' AS v' at line 1"
+      ],
+      "warnings": [
+        {
+          "Level": "Error",
+          "Code": 1064,
+          "Message": "You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near ''session.sql_mode' AS v' at line 1"
+        }
+      ],
+      "warningCount": 1,
+      "errorCount": 1
+    },
+    {
+      "prior": [],
+      "rows": null,
+      "fields": null,
+      "error": [
+        "ER_PARSE_ERROR",
+        1064,
+        "42000",
+        "You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near ''session.sql_mode' AS v' at line 1"
+      ],
+      "warnings": [
+        {
+          "Level": "Error",
+          "Code": 1064,
+          "Message": "You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near ''session.sql_mode' AS v' at line 1"
+        }
+      ],
+      "warningCount": 1,
+      "errorCount": 1
+    },
+    {
+      "prior": [
+        {
+          "Level": "Warning",
+          "Code": 1365,
+          "Message": "Division by 0"
+        }
+      ],
+      "rows": null,
+      "fields": null,
+      "error": [
+        "ER_PARSE_ERROR",
+        1064,
+        "42000",
+        "You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near ''max_execution_time'=0' at line 1"
+      ],
+      "warnings": [
+        {
+          "Level": "Error",
+          "Code": 1064,
+          "Message": "You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near ''max_execution_time'=0' at line 1"
+        }
+      ],
+      "warningCount": 1,
+      "errorCount": 1
+    },
+    {
+      "prior": [],
+      "rows": null,
+      "fields": null,
+      "error": [
+        "ER_PARSE_ERROR",
+        1064,
+        "42000",
+        "You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near ''max_execution_time'=0' at line 1"
+      ],
+      "warnings": [
+        {
+          "Level": "Error",
+          "Code": 1064,
+          "Message": "You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near ''max_execution_time'=0' at line 1"
+        }
+      ],
+      "warningCount": 1,
+      "errorCount": 1
+    },
+    {
+      "prior": [
+        {
+          "Level": "Warning",
+          "Code": 1365,
+          "Message": "Division by 0"
+        }
+      ],
+      "rows": null,
+      "fields": null,
+      "error": [
+        "ER_PARSE_ERROR",
+        1064,
+        "42000",
+        "You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near '\"sql_mode\" AS v' at line 1"
+      ],
+      "warnings": [
+        {
+          "Level": "Error",
+          "Code": 1064,
+          "Message": "You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near '\"sql_mode\" AS v' at line 1"
+        }
+      ],
+      "warningCount": 1,
+      "errorCount": 1
+    },
+    {
+      "prior": [],
+      "rows": null,
+      "fields": null,
+      "error": [
+        "ER_PARSE_ERROR",
+        1064,
+        "42000",
+        "You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near '\"sql_mode\" AS v' at line 1"
+      ],
+      "warnings": [
+        {
+          "Level": "Error",
+          "Code": 1064,
+          "Message": "You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near '\"sql_mode\" AS v' at line 1"
+        }
+      ],
+      "warningCount": 1,
+      "errorCount": 1
+    },
+    {
+      "prior": [
+        {
+          "Level": "Warning",
+          "Code": 1365,
+          "Message": "Division by 0"
+        }
+      ],
+      "rows": null,
+      "fields": null,
+      "error": [
+        "ER_PARSE_ERROR",
+        1064,
+        "42000",
+        "You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near '\"session.sql_mode\" AS v' at line 1"
+      ],
+      "warnings": [
+        {
+          "Level": "Error",
+          "Code": 1064,
+          "Message": "You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near '\"session.sql_mode\" AS v' at line 1"
+        }
+      ],
+      "warningCount": 1,
+      "errorCount": 1
+    },
+    {
+      "prior": [],
+      "rows": null,
+      "fields": null,
+      "error": [
+        "ER_PARSE_ERROR",
+        1064,
+        "42000",
+        "You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near '\"session.sql_mode\" AS v' at line 1"
+      ],
+      "warnings": [
+        {
+          "Level": "Error",
+          "Code": 1064,
+          "Message": "You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near '\"session.sql_mode\" AS v' at line 1"
+        }
+      ],
+      "warningCount": 1,
+      "errorCount": 1
+    },
+    {
+      "prior": [
+        {
+          "Level": "Warning",
+          "Code": 1365,
+          "Message": "Division by 0"
+        }
+      ],
+      "rows": null,
+      "fields": null,
+      "error": [
+        "ER_PARSE_ERROR",
+        1064,
+        "42000",
+        "You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near '\"max_execution_time\"=0' at line 1"
+      ],
+      "warnings": [
+        {
+          "Level": "Error",
+          "Code": 1064,
+          "Message": "You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near '\"max_execution_time\"=0' at line 1"
+        }
+      ],
+      "warningCount": 1,
+      "errorCount": 1
+    },
+    {
+      "prior": [],
+      "rows": null,
+      "fields": null,
+      "error": [
+        "ER_PARSE_ERROR",
+        1064,
+        "42000",
+        "You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near '\"max_execution_time\"=0' at line 1"
+      ],
+      "warnings": [
+        {
+          "Level": "Error",
+          "Code": 1064,
+          "Message": "You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near '\"max_execution_time\"=0' at line 1"
+        }
+      ],
+      "warningCount": 1,
+      "errorCount": 1
+    },
+    {
+      "prior": [
+        {
+          "Level": "Warning",
+          "Code": 1365,
+          "Message": "Division by 0"
+        }
+      ],
+      "rows": [
+        [
+          "ANSI_QUOTES,ERROR_FOR_DIVISION_BY_ZERO"
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          253,
+          87380,
+          0,
+          31,
+          224,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "error": null,
+      "warnings": [],
+      "warningCount": 0,
+      "errorCount": 0
+    },
+    {
+      "prior": [
+        {
+          "Level": "Warning",
+          "Code": 1365,
+          "Message": "Division by 0"
+        }
+      ],
+      "rows": null,
+      "fields": null,
+      "error": [
+        "ER_UNSUPPORTED_PS",
+        1295,
+        "HY000",
+        "This command is not supported in the prepared statement protocol yet"
+      ],
+      "warnings": [
+        {
+          "Level": "Error",
+          "Code": 1295,
+          "Message": "This command is not supported in the prepared statement protocol yet"
+        }
+      ],
+      "warningCount": 1,
+      "errorCount": 1
+    },
+    {
+      "prior": [
+        {
+          "Level": "Warning",
+          "Code": 1365,
+          "Message": "Division by 0"
+        }
+      ],
+      "rows": null,
+      "fields": null,
+      "error": [
+        "ER_PARSE_ERROR",
+        1064,
+        "42000",
+        "You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near '' at line 1"
+      ],
+      "warnings": [
+        {
+          "Level": "Error",
+          "Code": 1064,
+          "Message": "You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near '' at line 1"
+        }
+      ],
+      "warningCount": 1,
+      "errorCount": 1
+    },
+    {
+      "prior": [
+        {
+          "Level": "Warning",
+          "Code": 1365,
+          "Message": "Division by 0"
+        }
+      ],
+      "rows": null,
+      "fields": null,
+      "error": [
+        "ER_REGEXP_MISSING_CLOSE_BRACKET",
+        3696,
+        "HY000",
+        "The regular expression contains an unclosed bracket expression."
+      ],
+      "warnings": [
+        {
+          "Level": "Error",
+          "Code": 3696,
+          "Message": "The regular expression contains an unclosed bracket expression."
+        }
+      ],
+      "warningCount": 1,
+      "errorCount": 1
+    },
+    {
+      "prior": [
+        {
+          "Level": "Warning",
+          "Code": 1365,
+          "Message": "Division by 0"
+        }
+      ],
+      "rows": null,
+      "fields": null,
+      "error": [
+        "ER_BAD_FIELD_ERROR",
+        1054,
+        "42S22",
+        "Unknown column 'absent' in 'field list'"
+      ],
+      "warnings": [
+        {
+          "Level": "Error",
+          "Code": 1054,
+          "Message": "Unknown column 'absent' in 'field list'"
+        }
+      ],
+      "warningCount": 1,
+      "errorCount": 1
+    },
+    {
+      "prior": [
+        {
+          "Level": "Warning",
+          "Code": 1365,
+          "Message": "Division by 0"
+        }
+      ],
+      "rows": null,
+      "fields": null,
+      "error": [
+        "ER_UNKNOWN_SYSTEM_VARIABLE",
+        1193,
+        "HY000",
+        "Unknown system variable 'foo.bar'"
+      ],
+      "warnings": [
+        {
+          "Level": "Error",
+          "Code": 1193,
+          "Message": "Unknown system variable 'foo.bar'"
+        }
+      ],
+      "warningCount": 1,
+      "errorCount": 1
+    },
+    {
+      "prior": [
+        {
+          "Level": "Warning",
+          "Code": 1365,
+          "Message": "Division by 0"
+        }
+      ],
+      "rows": null,
+      "fields": null,
+      "error": [
+        "ER_UNKNOWN_SYSTEM_VARIABLE",
+        1193,
+        "HY000",
+        "Unknown system variable 'warning.count'"
+      ],
+      "warnings": [
+        {
+          "Level": "Error",
+          "Code": 1193,
+          "Message": "Unknown system variable 'warning.count'"
+        }
+      ],
+      "warningCount": 1,
+      "errorCount": 1
+    },
+    {
+      "prior": [
+        {
+          "Level": "Warning",
+          "Code": 1365,
+          "Message": "Division by 0"
+        }
+      ],
+      "rows": null,
+      "fields": null,
+      "error": [
+        "ER_VIEW_SELECT_VARIABLE",
+        1351,
+        "HY000",
+        "View's SELECT contains a variable or parameter"
+      ],
+      "warnings": [
+        {
+          "Level": "Error",
+          "Code": 1351,
+          "Message": "View's SELECT contains a variable or parameter"
+        }
+      ],
+      "warningCount": 1,
+      "errorCount": 1
+    },
+    {
+      "prior": [
+        {
+          "Level": "Warning",
+          "Code": 1365,
+          "Message": "Division by 0"
+        }
+      ],
+      "rows": null,
+      "fields": null,
+      "error": [
+        "ER_UNKNOWN_SYSTEM_VARIABLE",
+        1193,
+        "HY000",
+        "Unknown system variable 'absent_two'"
+      ],
+      "warnings": [
+        {
+          "Level": "Error",
+          "Code": 1193,
+          "Message": "Unknown system variable 'absent_two'"
+        }
+      ],
+      "warningCount": 1,
+      "errorCount": 1
+    },
+    {
+      "prior": [
+        {
+          "Level": "Warning",
+          "Code": 1365,
+          "Message": "Division by 0"
+        }
+      ],
+      "rows": null,
+      "fields": null,
+      "error": [
+        "ER_UNKNOWN_SYSTEM_VARIABLE",
+        1193,
+        "HY000",
+        "Unknown system variable 'absent_one'"
+      ],
+      "warnings": [
+        {
+          "Level": "Error",
+          "Code": 1193,
+          "Message": "Unknown system variable 'absent_one'"
+        }
+      ],
+      "warningCount": 1,
+      "errorCount": 1
+    },
+    {
+      "prior": [
+        {
+          "Level": "Warning",
+          "Code": 1365,
+          "Message": "Division by 0"
+        }
+      ],
+      "rows": [
+        [
+          null
+        ]
+      ],
+      "fields": [
+        [
+          "@partial",
+          253,
+          65532,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "error": null,
+      "warnings": [],
+      "warningCount": 0,
+      "errorCount": 0
+    },
+    {
+      "prior": [],
+      "rows": null,
+      "fields": [
+        [
+          "@partial",
+          253,
+          65532,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "error": null,
+      "warnings": [],
+      "warningCount": 0,
+      "errorCount": 0
+    },
+    {
+      "prior": [
+        {
+          "Level": "Warning",
+          "Code": 1365,
+          "Message": "Division by 0"
+        }
+      ],
+      "rows": [
+        [
+          1
+        ]
+      ],
+      "fields": [
+        [
+          "@partial",
+          8,
+          21,
+          128,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "error": null,
+      "warnings": [],
+      "warningCount": 0,
+      "errorCount": 0
+    },
+    {
+      "prior": [],
+      "rows": null,
+      "fields": [
+        [
+          "@partial",
+          8,
+          21,
+          128,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "error": null,
+      "warnings": [],
+      "warningCount": 0,
+      "errorCount": 0
+    },
+    {
+      "prior": [],
+      "rows": {
+        "affectedRows": 0,
+        "insertId": 0,
+        "warningStatus": 0,
+        "info": "",
+        "serverStatus": 2,
+        "fieldCount": 0
+      },
+      "fields": null,
+      "error": null,
+      "warnings": [],
+      "warningCount": 0,
+      "errorCount": 0
+    },
+    {
+      "prior": [],
+      "rows": [
+        [
+          17
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          8,
+          21,
+          128,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "error": null,
+      "warnings": [],
+      "warningCount": 0,
+      "errorCount": 0
+    },
+    {
+      "prior": [
+        {
+          "Level": "Warning",
+          "Code": 1365,
+          "Message": "Division by 0"
+        }
+      ],
+      "rows": {
+        "affectedRows": 0,
+        "insertId": 0,
+        "warningStatus": 1,
+        "info": "",
+        "serverStatus": 2,
+        "fieldCount": 0
+      },
+      "fields": null,
+      "error": null,
+      "warnings": [
+        {
+          "Level": "Warning",
+          "Code": 1681,
+          "Message": "Integer display width is deprecated and will be removed in a future release."
+        }
+      ],
+      "warningCount": 1,
+      "errorCount": 0
+    },
+    {
+      "prior": [
+        {
+          "Level": "Warning",
+          "Code": 1365,
+          "Message": "Division by 0"
+        }
+      ],
+      "rows": {
+        "affectedRows": 1,
+        "insertId": 0,
+        "warningStatus": 1,
+        "info": "Records: 1  Duplicates: 0  Warnings: 1",
+        "serverStatus": 2,
+        "fieldCount": 0
+      },
+      "fields": null,
+      "error": null,
+      "warnings": [
+        {
+          "Level": "Warning",
+          "Code": 1681,
+          "Message": "Integer display width is deprecated and will be removed in a future release."
+        }
+      ],
+      "warningCount": 1,
+      "errorCount": 0
+    },
+    {
+      "prior": [
+        {
+          "Level": "Warning",
+          "Code": 1365,
+          "Message": "Division by 0"
+        }
+      ],
+      "rows": {
+        "affectedRows": 0,
+        "insertId": 0,
+        "warningStatus": 2,
+        "info": "",
+        "serverStatus": 2,
+        "fieldCount": 0
+      },
+      "fields": null,
+      "error": null,
+      "warnings": [
+        {
+          "Level": "Warning",
+          "Code": 1681,
+          "Message": "Integer display width is deprecated and will be removed in a future release."
+        },
+        {
+          "Level": "Note",
+          "Code": 1050,
+          "Message": "Table 'warn_query' already exists"
+        }
+      ],
+      "warningCount": 2,
+      "errorCount": 0
+    },
+    {
+      "prior": [
+        {
+          "Level": "Warning",
+          "Code": 1365,
+          "Message": "Division by 0"
+        }
+      ],
+      "rows": {
+        "affectedRows": 0,
+        "insertId": 0,
+        "warningStatus": 1,
+        "info": "",
+        "serverStatus": 2,
+        "fieldCount": 0
+      },
+      "fields": null,
+      "error": null,
+      "warnings": [
+        {
+          "Level": "Note",
+          "Code": 1051,
+          "Message": "Unknown table 'variable_admission.missing_query'"
+        }
+      ],
+      "warningCount": 1,
+      "errorCount": 0
+    },
+    {
+      "prior": [
+        {
+          "Level": "Warning",
+          "Code": 1365,
+          "Message": "Division by 0"
+        }
+      ],
+      "rows": {
+        "affectedRows": 0,
+        "insertId": 0,
+        "warningStatus": 1,
+        "info": "",
+        "serverStatus": 2,
+        "fieldCount": 0
+      },
+      "fields": null,
+      "error": null,
+      "warnings": [
+        {
+          "Level": "Note",
+          "Code": 1051,
+          "Message": "Unknown table 'variable_admission.absent_view_query'"
+        }
+      ],
+      "warningCount": 1,
+      "errorCount": 0
+    },
+    {
+      "prior": [
+        {
+          "Level": "Warning",
+          "Code": 1365,
+          "Message": "Division by 0"
+        }
+      ],
+      "rows": {
+        "affectedRows": 0,
+        "insertId": 0,
+        "warningStatus": 1,
+        "info": "",
+        "serverStatus": 2,
+        "fieldCount": 0
+      },
+      "fields": null,
+      "error": null,
+      "warnings": [
+        {
+          "Level": "Warning",
+          "Code": 3135,
+          "Message": "'NO_ZERO_DATE', 'NO_ZERO_IN_DATE' and 'ERROR_FOR_DIVISION_BY_ZERO' sql modes should be used with strict mode. They will be merged with strict mode in a future release."
+        }
+      ],
+      "warningCount": 1,
+      "errorCount": 0
+    },
+    {
+      "prior": [
+        {
+          "Level": "Warning",
+          "Code": 1365,
+          "Message": "Division by 0"
+        }
+      ],
+      "rows": {
+        "affectedRows": 1,
+        "insertId": 0,
+        "warningStatus": 0,
+        "info": "Records: 1  Duplicates: 0  Warnings: 0",
+        "serverStatus": 2,
+        "fieldCount": 0
+      },
+      "fields": null,
+      "error": null,
+      "warnings": [],
+      "warningCount": 0,
+      "errorCount": 0
+    },
+    {
+      "prior": [
+        {
+          "Level": "Warning",
+          "Code": 1365,
+          "Message": "Division by 0"
+        }
+      ],
+      "rows": {
+        "affectedRows": 0,
+        "insertId": 0,
+        "warningStatus": 1,
+        "info": "",
+        "serverStatus": 2,
+        "fieldCount": 0
+      },
+      "fields": null,
+      "error": null,
+      "warnings": [
+        {
+          "Level": "Note",
+          "Code": 1050,
+          "Message": "Table 'warn_execute' already exists"
+        }
+      ],
+      "warningCount": 1,
+      "errorCount": 0
+    },
+    {
+      "prior": [
+        {
+          "Level": "Warning",
+          "Code": 1365,
+          "Message": "Division by 0"
+        }
+      ],
+      "rows": {
+        "affectedRows": 0,
+        "insertId": 0,
+        "warningStatus": 1,
+        "info": "",
+        "serverStatus": 2,
+        "fieldCount": 0
+      },
+      "fields": null,
+      "error": null,
+      "warnings": [
+        {
+          "Level": "Note",
+          "Code": 1051,
+          "Message": "Unknown table 'variable_admission.missing_execute'"
+        }
+      ],
+      "warningCount": 1,
+      "errorCount": 0
+    },
+    {
+      "prior": [
+        {
+          "Level": "Warning",
+          "Code": 1365,
+          "Message": "Division by 0"
+        }
+      ],
+      "rows": {
+        "affectedRows": 0,
+        "insertId": 0,
+        "warningStatus": 1,
+        "info": "",
+        "serverStatus": 2,
+        "fieldCount": 0
+      },
+      "fields": null,
+      "error": null,
+      "warnings": [
+        {
+          "Level": "Note",
+          "Code": 1051,
+          "Message": "Unknown table 'variable_admission.absent_view_execute'"
+        }
+      ],
+      "warningCount": 1,
+      "errorCount": 0
+    },
+    {
+      "prior": [],
+      "rows": [
+        [
+          null
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          253,
+          65535,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "error": null,
+      "warnings": [],
+      "warningCount": 0,
+      "errorCount": 0
+    },
+    {
+      "prior": [],
+      "rows": null,
+      "fields": [
+        [
+          "v",
+          253,
+          65535,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "error": null,
+      "warnings": [],
+      "warningCount": 0,
+      "errorCount": 0
+    },
+    {
+      "prior": [],
+      "rows": [
+        [
+          null
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          250,
+          16777215,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "error": null,
+      "warnings": [],
+      "warningCount": 0,
+      "errorCount": 0
+    },
+    {
+      "prior": [],
+      "rows": null,
+      "fields": [
+        [
+          "v",
+          250,
+          16777215,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "error": null,
+      "warnings": [],
+      "warningCount": 0,
+      "errorCount": 0
+    },
+    {
+      "prior": [],
+      "rows": [
+        [
+          null
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          253,
+          65532,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "error": null,
+      "warnings": [],
+      "warningCount": 0,
+      "errorCount": 0
+    },
+    {
+      "prior": [],
+      "rows": null,
+      "fields": [
+        [
+          "v",
+          253,
+          65532,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "error": null,
+      "warnings": [],
+      "warningCount": 0,
+      "errorCount": 0
+    }
+  ],
+  "observations": [
+    {
+      "sql": "SELECT @@warning_count",
+      "api": "query",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "seed": "DO 1/0",
+      "outcome": 0
+    },
+    {
+      "sql": "SELECT @@warning_count",
+      "api": "prepare",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "seed": "DO 0",
+      "outcome": 1
+    },
+    {
+      "sql": "SELECT @@`warning_count`",
+      "api": "query",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "seed": "DO 1/0",
+      "outcome": 2
+    },
+    {
+      "sql": "SELECT @@`warning_count`",
+      "api": "prepare",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "seed": "DO 0",
+      "outcome": 1
+    },
+    {
+      "sql": "SELECT @@session.warning_count",
+      "api": "query",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "seed": "DO 1/0",
+      "outcome": 3
+    },
+    {
+      "sql": "SELECT @@session.warning_count",
+      "api": "prepare",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "seed": "DO 0",
+      "outcome": 1
+    },
+    {
+      "sql": "SELECT @@session.`warning_count`",
+      "api": "query",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "seed": "DO 1/0",
+      "outcome": 4
+    },
+    {
+      "sql": "SELECT @@session.`warning_count`",
+      "api": "prepare",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "seed": "DO 0",
+      "outcome": 1
+    },
+    {
+      "sql": "SELECT @@`session.warning_count`",
+      "api": "query",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "seed": "DO 1/0",
+      "outcome": 5
+    },
+    {
+      "sql": "SELECT @@`session.warning_count`",
+      "api": "prepare",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "seed": "DO 0",
+      "outcome": 6
+    },
+    {
+      "sql": "SELECT @@local.warning_count",
+      "api": "query",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "seed": "DO 1/0",
+      "outcome": 7
+    },
+    {
+      "sql": "SELECT @@local.warning_count",
+      "api": "prepare",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "seed": "DO 0",
+      "outcome": 1
+    },
+    {
+      "sql": "SELECT @@local.`warning_count`",
+      "api": "query",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "seed": "DO 1/0",
+      "outcome": 8
+    },
+    {
+      "sql": "SELECT @@local.`warning_count`",
+      "api": "prepare",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "seed": "DO 0",
+      "outcome": 1
+    },
+    {
+      "sql": "SELECT @@`local.warning_count`",
+      "api": "query",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "seed": "DO 1/0",
+      "outcome": 9
+    },
+    {
+      "sql": "SELECT @@`local.warning_count`",
+      "api": "prepare",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "seed": "DO 0",
+      "outcome": 10
+    },
+    {
+      "sql": "SELECT @@global.warning_count",
+      "api": "query",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "seed": "DO 1/0",
+      "outcome": 11
+    },
+    {
+      "sql": "SELECT @@global.warning_count",
+      "api": "prepare",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "seed": "DO 0",
+      "outcome": 12
+    },
+    {
+      "sql": "SELECT @@global.`warning_count`",
+      "api": "query",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "seed": "DO 1/0",
+      "outcome": 11
+    },
+    {
+      "sql": "SELECT @@global.`warning_count`",
+      "api": "prepare",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "seed": "DO 0",
+      "outcome": 12
+    },
+    {
+      "sql": "SELECT @@`global.warning_count`",
+      "api": "query",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "seed": "DO 1/0",
+      "outcome": 13
+    },
+    {
+      "sql": "SELECT @@`global.warning_count`",
+      "api": "prepare",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "seed": "DO 0",
+      "outcome": 14
+    },
+    {
+      "sql": "SELECT @@error_count",
+      "api": "query",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "seed": "DO 1/0",
+      "outcome": 15
+    },
+    {
+      "sql": "SELECT @@error_count",
+      "api": "prepare",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "seed": "DO 0",
+      "outcome": 1
+    },
+    {
+      "sql": "SELECT @@`error_count`",
+      "api": "query",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "seed": "DO 1/0",
+      "outcome": 16
+    },
+    {
+      "sql": "SELECT @@`error_count`",
+      "api": "prepare",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "seed": "DO 0",
+      "outcome": 1
+    },
+    {
+      "sql": "SELECT @@session.error_count",
+      "api": "query",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "seed": "DO 1/0",
+      "outcome": 17
+    },
+    {
+      "sql": "SELECT @@session.error_count",
+      "api": "prepare",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "seed": "DO 0",
+      "outcome": 1
+    },
+    {
+      "sql": "SELECT @@session.`error_count`",
+      "api": "query",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "seed": "DO 1/0",
+      "outcome": 18
+    },
+    {
+      "sql": "SELECT @@session.`error_count`",
+      "api": "prepare",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "seed": "DO 0",
+      "outcome": 1
+    },
+    {
+      "sql": "SELECT @@`session.error_count`",
+      "api": "query",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "seed": "DO 1/0",
+      "outcome": 19
+    },
+    {
+      "sql": "SELECT @@`session.error_count`",
+      "api": "prepare",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "seed": "DO 0",
+      "outcome": 20
+    },
+    {
+      "sql": "SELECT @@local.error_count",
+      "api": "query",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "seed": "DO 1/0",
+      "outcome": 21
+    },
+    {
+      "sql": "SELECT @@local.error_count",
+      "api": "prepare",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "seed": "DO 0",
+      "outcome": 1
+    },
+    {
+      "sql": "SELECT @@local.`error_count`",
+      "api": "query",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "seed": "DO 1/0",
+      "outcome": 22
+    },
+    {
+      "sql": "SELECT @@local.`error_count`",
+      "api": "prepare",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "seed": "DO 0",
+      "outcome": 1
+    },
+    {
+      "sql": "SELECT @@`local.error_count`",
+      "api": "query",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "seed": "DO 1/0",
+      "outcome": 23
+    },
+    {
+      "sql": "SELECT @@`local.error_count`",
+      "api": "prepare",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "seed": "DO 0",
+      "outcome": 24
+    },
+    {
+      "sql": "SELECT @@global.error_count",
+      "api": "query",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "seed": "DO 1/0",
+      "outcome": 25
+    },
+    {
+      "sql": "SELECT @@global.error_count",
+      "api": "prepare",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "seed": "DO 0",
+      "outcome": 26
+    },
+    {
+      "sql": "SELECT @@global.`error_count`",
+      "api": "query",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "seed": "DO 1/0",
+      "outcome": 25
+    },
+    {
+      "sql": "SELECT @@global.`error_count`",
+      "api": "prepare",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "seed": "DO 0",
+      "outcome": 26
+    },
+    {
+      "sql": "SELECT @@`global.error_count`",
+      "api": "query",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "seed": "DO 1/0",
+      "outcome": 27
+    },
+    {
+      "sql": "SELECT @@`global.error_count`",
+      "api": "prepare",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "seed": "DO 0",
+      "outcome": 28
+    },
+    {
+      "sql": "SELECT @@sql_mode",
+      "api": "query",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "seed": "DO 1/0",
+      "outcome": 29
+    },
+    {
+      "sql": "SELECT @@sql_mode",
+      "api": "prepare",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "seed": "DO 0",
+      "outcome": 30
+    },
+    {
+      "sql": "SELECT @@`sql_mode`",
+      "api": "query",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "seed": "DO 1/0",
+      "outcome": 31
+    },
+    {
+      "sql": "SELECT @@`sql_mode`",
+      "api": "prepare",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "seed": "DO 0",
+      "outcome": 32
+    },
+    {
+      "sql": "SELECT @@session.sql_mode",
+      "api": "query",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "seed": "DO 1/0",
+      "outcome": 33
+    },
+    {
+      "sql": "SELECT @@session.sql_mode",
+      "api": "prepare",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "seed": "DO 0",
+      "outcome": 34
+    },
+    {
+      "sql": "SELECT @@session.`sql_mode`",
+      "api": "query",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "seed": "DO 1/0",
+      "outcome": 35
+    },
+    {
+      "sql": "SELECT @@session.`sql_mode`",
+      "api": "prepare",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "seed": "DO 0",
+      "outcome": 36
+    },
+    {
+      "sql": "SELECT @@`session.sql_mode`",
+      "api": "query",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "seed": "DO 1/0",
+      "outcome": 37
+    },
+    {
+      "sql": "SELECT @@`session.sql_mode`",
+      "api": "prepare",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "seed": "DO 0",
+      "outcome": 38
+    },
+    {
+      "sql": "SELECT @@local.sql_mode",
+      "api": "query",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "seed": "DO 1/0",
+      "outcome": 39
+    },
+    {
+      "sql": "SELECT @@local.sql_mode",
+      "api": "prepare",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "seed": "DO 0",
+      "outcome": 40
+    },
+    {
+      "sql": "SELECT @@local.`sql_mode`",
+      "api": "query",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "seed": "DO 1/0",
+      "outcome": 41
+    },
+    {
+      "sql": "SELECT @@local.`sql_mode`",
+      "api": "prepare",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "seed": "DO 0",
+      "outcome": 42
+    },
+    {
+      "sql": "SELECT @@`local.sql_mode`",
+      "api": "query",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "seed": "DO 1/0",
+      "outcome": 43
+    },
+    {
+      "sql": "SELECT @@`local.sql_mode`",
+      "api": "prepare",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "seed": "DO 0",
+      "outcome": 44
+    },
+    {
+      "sql": "SELECT @@global.sql_mode",
+      "api": "query",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "seed": "DO 1/0",
+      "outcome": 45
+    },
+    {
+      "sql": "SELECT @@global.sql_mode",
+      "api": "prepare",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "seed": "DO 0",
+      "outcome": 46
+    },
+    {
+      "sql": "SELECT @@global.`sql_mode`",
+      "api": "query",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "seed": "DO 1/0",
+      "outcome": 47
+    },
+    {
+      "sql": "SELECT @@global.`sql_mode`",
+      "api": "prepare",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "seed": "DO 0",
+      "outcome": 48
+    },
+    {
+      "sql": "SELECT @@`global.sql_mode`",
+      "api": "query",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "seed": "DO 1/0",
+      "outcome": 49
+    },
+    {
+      "sql": "SELECT @@`global.sql_mode`",
+      "api": "prepare",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "seed": "DO 0",
+      "outcome": 50
+    },
+    {
+      "sql": "SELECT @@absent_variable",
+      "api": "query",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "seed": "DO 1/0",
+      "outcome": 51
+    },
+    {
+      "sql": "SELECT @@absent_variable",
+      "api": "prepare",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "seed": "DO 0",
+      "outcome": 52
+    },
+    {
+      "sql": "SELECT @@`absent_variable`",
+      "api": "query",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "seed": "DO 1/0",
+      "outcome": 51
+    },
+    {
+      "sql": "SELECT @@`absent_variable`",
+      "api": "prepare",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "seed": "DO 0",
+      "outcome": 52
+    },
+    {
+      "sql": "SELECT @@session.absent_variable",
+      "api": "query",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "seed": "DO 1/0",
+      "outcome": 51
+    },
+    {
+      "sql": "SELECT @@session.absent_variable",
+      "api": "prepare",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "seed": "DO 0",
+      "outcome": 52
+    },
+    {
+      "sql": "SELECT @@session.`absent_variable`",
+      "api": "query",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "seed": "DO 1/0",
+      "outcome": 51
+    },
+    {
+      "sql": "SELECT @@session.`absent_variable`",
+      "api": "prepare",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "seed": "DO 0",
+      "outcome": 52
+    },
+    {
+      "sql": "SELECT @@`session.absent_variable`",
+      "api": "query",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "seed": "DO 1/0",
+      "outcome": 53
+    },
+    {
+      "sql": "SELECT @@`session.absent_variable`",
+      "api": "prepare",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "seed": "DO 0",
+      "outcome": 54
+    },
+    {
+      "sql": "SELECT @@local.absent_variable",
+      "api": "query",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "seed": "DO 1/0",
+      "outcome": 51
+    },
+    {
+      "sql": "SELECT @@local.absent_variable",
+      "api": "prepare",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "seed": "DO 0",
+      "outcome": 52
+    },
+    {
+      "sql": "SELECT @@local.`absent_variable`",
+      "api": "query",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "seed": "DO 1/0",
+      "outcome": 51
+    },
+    {
+      "sql": "SELECT @@local.`absent_variable`",
+      "api": "prepare",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "seed": "DO 0",
+      "outcome": 52
+    },
+    {
+      "sql": "SELECT @@`local.absent_variable`",
+      "api": "query",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "seed": "DO 1/0",
+      "outcome": 55
+    },
+    {
+      "sql": "SELECT @@`local.absent_variable`",
+      "api": "prepare",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "seed": "DO 0",
+      "outcome": 56
+    },
+    {
+      "sql": "SELECT @@global.absent_variable",
+      "api": "query",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "seed": "DO 1/0",
+      "outcome": 51
+    },
+    {
+      "sql": "SELECT @@global.absent_variable",
+      "api": "prepare",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "seed": "DO 0",
+      "outcome": 52
+    },
+    {
+      "sql": "SELECT @@global.`absent_variable`",
+      "api": "query",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "seed": "DO 1/0",
+      "outcome": 51
+    },
+    {
+      "sql": "SELECT @@global.`absent_variable`",
+      "api": "prepare",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "seed": "DO 0",
+      "outcome": 52
+    },
+    {
+      "sql": "SELECT @@`global.absent_variable`",
+      "api": "query",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "seed": "DO 1/0",
+      "outcome": 57
+    },
+    {
+      "sql": "SELECT @@`global.absent_variable`",
+      "api": "prepare",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "seed": "DO 0",
+      "outcome": 58
+    },
+    {
+      "sql": "SELECT IF(FALSE,@@warning_count,0)",
+      "api": "query",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "seed": "DO 1/0",
+      "outcome": 59
+    },
+    {
+      "sql": "SELECT IF(FALSE,@@warning_count,0)",
+      "api": "prepare",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "seed": "DO 0",
+      "outcome": 1
+    },
+    {
+      "sql": "SELECT @@warning_count WHERE FALSE",
+      "api": "query",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "seed": "DO 1/0",
+      "outcome": 60
+    },
+    {
+      "sql": "SELECT @@warning_count WHERE FALSE",
+      "api": "prepare",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "seed": "DO 0",
+      "outcome": 1
+    },
+    {
+      "sql": "SELECT 1 ORDER BY @@error_count",
+      "api": "query",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "seed": "DO 1/0",
+      "outcome": 61
+    },
+    {
+      "sql": "SELECT 1 ORDER BY @@error_count",
+      "api": "prepare",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "seed": "DO 0",
+      "outcome": 1
+    },
+    {
+      "sql": "SELECT @@warning_count LIMIT 0",
+      "api": "query",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "seed": "DO 1/0",
+      "outcome": 60
+    },
+    {
+      "sql": "SELECT @@warning_count LIMIT 0",
+      "api": "prepare",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "seed": "DO 0",
+      "outcome": 1
+    },
+    {
+      "sql": "SELECT @@`sql_mode` AS v",
+      "api": "query",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "seed": "DO 1/0",
+      "outcome": 62
+    },
+    {
+      "sql": "SELECT @@`sql_mode` AS v",
+      "api": "prepare",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "seed": "DO 0",
+      "outcome": 63
+    },
+    {
+      "sql": "SELECT @@session.`sql_mode` AS v",
+      "api": "query",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "seed": "DO 1/0",
+      "outcome": 62
+    },
+    {
+      "sql": "SELECT @@session.`sql_mode` AS v",
+      "api": "prepare",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "seed": "DO 0",
+      "outcome": 63
+    },
+    {
+      "sql": "SELECT @@`session.sql_mode` AS v",
+      "api": "query",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "seed": "DO 1/0",
+      "outcome": 37
+    },
+    {
+      "sql": "SELECT @@`session.sql_mode` AS v",
+      "api": "prepare",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "seed": "DO 0",
+      "outcome": 38
+    },
+    {
+      "sql": "SELECT @@session.`warning_count` AS v",
+      "api": "query",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "seed": "DO 1/0",
+      "outcome": 64
+    },
+    {
+      "sql": "SELECT @@session.`warning_count` AS v",
+      "api": "prepare",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "seed": "DO 0",
+      "outcome": 1
+    },
+    {
+      "sql": "SET @@`max_execution_time`=0",
+      "api": "query",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "seed": "DO 1/0",
+      "outcome": 65
+    },
+    {
+      "sql": "SET @@`max_execution_time`=0",
+      "api": "prepare",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "seed": "DO 0",
+      "outcome": 66
+    },
+    {
+      "sql": "SET @@session.`max_execution_time`=0",
+      "api": "query",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "seed": "DO 1/0",
+      "outcome": 65
+    },
+    {
+      "sql": "SET @@session.`max_execution_time`=0",
+      "api": "prepare",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "seed": "DO 0",
+      "outcome": 66
+    },
+    {
+      "sql": "SET @`a.b`=7",
+      "api": "query",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "seed": "DO 1/0",
+      "outcome": 65
+    },
+    {
+      "sql": "SET @`a.b`=7",
+      "api": "prepare",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "seed": "DO 0",
+      "outcome": 66
+    },
+    {
+      "sql": "SELECT @`a.b` AS v",
+      "api": "query",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "seed": "DO 1/0",
+      "outcome": 67
+    },
+    {
+      "sql": "SELECT @`a.b` AS v",
+      "api": "prepare",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "seed": "DO 0",
+      "outcome": 68
+    },
+    {
+      "sql": "SELECT @@'sql_mode' AS v",
+      "api": "query",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "seed": "DO 1/0",
+      "outcome": 69
+    },
+    {
+      "sql": "SELECT @@'sql_mode' AS v",
+      "api": "prepare",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "seed": "DO 0",
+      "outcome": 70
+    },
+    {
+      "sql": "SELECT @@session.'sql_mode' AS v",
+      "api": "query",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "seed": "DO 1/0",
+      "outcome": 62
+    },
+    {
+      "sql": "SELECT @@session.'sql_mode' AS v",
+      "api": "prepare",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "seed": "DO 0",
+      "outcome": 63
+    },
+    {
+      "sql": "SELECT @@'session.sql_mode' AS v",
+      "api": "query",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "seed": "DO 1/0",
+      "outcome": 71
+    },
+    {
+      "sql": "SELECT @@'session.sql_mode' AS v",
+      "api": "prepare",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "seed": "DO 0",
+      "outcome": 72
+    },
+    {
+      "sql": "SELECT @@session.'warning_count' AS v",
+      "api": "query",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "seed": "DO 1/0",
+      "outcome": 64
+    },
+    {
+      "sql": "SELECT @@session.'warning_count' AS v",
+      "api": "prepare",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "seed": "DO 0",
+      "outcome": 1
+    },
+    {
+      "sql": "SET @@'max_execution_time'=0",
+      "api": "query",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "seed": "DO 1/0",
+      "outcome": 73
+    },
+    {
+      "sql": "SET @@'max_execution_time'=0",
+      "api": "prepare",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "seed": "DO 0",
+      "outcome": 74
+    },
+    {
+      "sql": "SET @@session.'max_execution_time'=0",
+      "api": "query",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "seed": "DO 1/0",
+      "outcome": 73
+    },
+    {
+      "sql": "SET @@session.'max_execution_time'=0",
+      "api": "prepare",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "seed": "DO 0",
+      "outcome": 74
+    },
+    {
+      "sql": "SET @'a.b'=7",
+      "api": "query",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "seed": "DO 1/0",
+      "outcome": 65
+    },
+    {
+      "sql": "SET @'a.b'=7",
+      "api": "prepare",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "seed": "DO 0",
+      "outcome": 66
+    },
+    {
+      "sql": "SELECT @'a.b' AS v",
+      "api": "query",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "seed": "DO 1/0",
+      "outcome": 67
+    },
+    {
+      "sql": "SELECT @'a.b' AS v",
+      "api": "prepare",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "seed": "DO 0",
+      "outcome": 68
+    },
+    {
+      "sql": "SELECT @@\"sql_mode\" AS v",
+      "api": "query",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "seed": "DO 1/0",
+      "outcome": 75
+    },
+    {
+      "sql": "SELECT @@\"sql_mode\" AS v",
+      "api": "prepare",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "seed": "DO 0",
+      "outcome": 76
+    },
+    {
+      "sql": "SELECT @@session.\"sql_mode\" AS v",
+      "api": "query",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "seed": "DO 1/0",
+      "outcome": 62
+    },
+    {
+      "sql": "SELECT @@session.\"sql_mode\" AS v",
+      "api": "prepare",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "seed": "DO 0",
+      "outcome": 63
+    },
+    {
+      "sql": "SELECT @@\"session.sql_mode\" AS v",
+      "api": "query",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "seed": "DO 1/0",
+      "outcome": 77
+    },
+    {
+      "sql": "SELECT @@\"session.sql_mode\" AS v",
+      "api": "prepare",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "seed": "DO 0",
+      "outcome": 78
+    },
+    {
+      "sql": "SELECT @@session.\"warning_count\" AS v",
+      "api": "query",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "seed": "DO 1/0",
+      "outcome": 64
+    },
+    {
+      "sql": "SELECT @@session.\"warning_count\" AS v",
+      "api": "prepare",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "seed": "DO 0",
+      "outcome": 1
+    },
+    {
+      "sql": "SET @@\"max_execution_time\"=0",
+      "api": "query",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "seed": "DO 1/0",
+      "outcome": 79
+    },
+    {
+      "sql": "SET @@\"max_execution_time\"=0",
+      "api": "prepare",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "seed": "DO 0",
+      "outcome": 80
+    },
+    {
+      "sql": "SET @@session.\"max_execution_time\"=0",
+      "api": "query",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "seed": "DO 1/0",
+      "outcome": 79
+    },
+    {
+      "sql": "SET @@session.\"max_execution_time\"=0",
+      "api": "prepare",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "seed": "DO 0",
+      "outcome": 80
+    },
+    {
+      "sql": "SET @\"a.b\"=7",
+      "api": "query",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "seed": "DO 1/0",
+      "outcome": 65
+    },
+    {
+      "sql": "SET @\"a.b\"=7",
+      "api": "prepare",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "seed": "DO 0",
+      "outcome": 66
+    },
+    {
+      "sql": "SELECT @\"a.b\" AS v",
+      "api": "query",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "seed": "DO 1/0",
+      "outcome": 67
+    },
+    {
+      "sql": "SELECT @\"a.b\" AS v",
+      "api": "prepare",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "seed": "DO 0",
+      "outcome": 68
+    },
+    {
+      "sql": "SELECT @@`sql_mode` AS v",
+      "api": "query",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO,ANSI_QUOTES",
+      "seed": "DO 1/0",
+      "outcome": 81
+    },
+    {
+      "sql": "SELECT @@`sql_mode` AS v",
+      "api": "prepare",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO,ANSI_QUOTES",
+      "seed": "DO 0",
+      "outcome": 63
+    },
+    {
+      "sql": "SELECT @@session.`sql_mode` AS v",
+      "api": "query",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO,ANSI_QUOTES",
+      "seed": "DO 1/0",
+      "outcome": 81
+    },
+    {
+      "sql": "SELECT @@session.`sql_mode` AS v",
+      "api": "prepare",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO,ANSI_QUOTES",
+      "seed": "DO 0",
+      "outcome": 63
+    },
+    {
+      "sql": "SELECT @@`session.sql_mode` AS v",
+      "api": "query",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO,ANSI_QUOTES",
+      "seed": "DO 1/0",
+      "outcome": 37
+    },
+    {
+      "sql": "SELECT @@`session.sql_mode` AS v",
+      "api": "prepare",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO,ANSI_QUOTES",
+      "seed": "DO 0",
+      "outcome": 38
+    },
+    {
+      "sql": "SELECT @@session.`warning_count` AS v",
+      "api": "query",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO,ANSI_QUOTES",
+      "seed": "DO 1/0",
+      "outcome": 64
+    },
+    {
+      "sql": "SELECT @@session.`warning_count` AS v",
+      "api": "prepare",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO,ANSI_QUOTES",
+      "seed": "DO 0",
+      "outcome": 1
+    },
+    {
+      "sql": "SET @@`max_execution_time`=0",
+      "api": "query",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO,ANSI_QUOTES",
+      "seed": "DO 1/0",
+      "outcome": 65
+    },
+    {
+      "sql": "SET @@`max_execution_time`=0",
+      "api": "prepare",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO,ANSI_QUOTES",
+      "seed": "DO 0",
+      "outcome": 66
+    },
+    {
+      "sql": "SET @@session.`max_execution_time`=0",
+      "api": "query",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO,ANSI_QUOTES",
+      "seed": "DO 1/0",
+      "outcome": 65
+    },
+    {
+      "sql": "SET @@session.`max_execution_time`=0",
+      "api": "prepare",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO,ANSI_QUOTES",
+      "seed": "DO 0",
+      "outcome": 66
+    },
+    {
+      "sql": "SET @`a.b`=7",
+      "api": "query",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO,ANSI_QUOTES",
+      "seed": "DO 1/0",
+      "outcome": 65
+    },
+    {
+      "sql": "SET @`a.b`=7",
+      "api": "prepare",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO,ANSI_QUOTES",
+      "seed": "DO 0",
+      "outcome": 66
+    },
+    {
+      "sql": "SELECT @`a.b` AS v",
+      "api": "query",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO,ANSI_QUOTES",
+      "seed": "DO 1/0",
+      "outcome": 67
+    },
+    {
+      "sql": "SELECT @`a.b` AS v",
+      "api": "prepare",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO,ANSI_QUOTES",
+      "seed": "DO 0",
+      "outcome": 68
+    },
+    {
+      "sql": "SELECT @@'sql_mode' AS v",
+      "api": "query",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO,ANSI_QUOTES",
+      "seed": "DO 1/0",
+      "outcome": 69
+    },
+    {
+      "sql": "SELECT @@'sql_mode' AS v",
+      "api": "prepare",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO,ANSI_QUOTES",
+      "seed": "DO 0",
+      "outcome": 70
+    },
+    {
+      "sql": "SELECT @@session.'sql_mode' AS v",
+      "api": "query",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO,ANSI_QUOTES",
+      "seed": "DO 1/0",
+      "outcome": 81
+    },
+    {
+      "sql": "SELECT @@session.'sql_mode' AS v",
+      "api": "prepare",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO,ANSI_QUOTES",
+      "seed": "DO 0",
+      "outcome": 63
+    },
+    {
+      "sql": "SELECT @@'session.sql_mode' AS v",
+      "api": "query",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO,ANSI_QUOTES",
+      "seed": "DO 1/0",
+      "outcome": 71
+    },
+    {
+      "sql": "SELECT @@'session.sql_mode' AS v",
+      "api": "prepare",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO,ANSI_QUOTES",
+      "seed": "DO 0",
+      "outcome": 72
+    },
+    {
+      "sql": "SELECT @@session.'warning_count' AS v",
+      "api": "query",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO,ANSI_QUOTES",
+      "seed": "DO 1/0",
+      "outcome": 64
+    },
+    {
+      "sql": "SELECT @@session.'warning_count' AS v",
+      "api": "prepare",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO,ANSI_QUOTES",
+      "seed": "DO 0",
+      "outcome": 1
+    },
+    {
+      "sql": "SET @@'max_execution_time'=0",
+      "api": "query",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO,ANSI_QUOTES",
+      "seed": "DO 1/0",
+      "outcome": 73
+    },
+    {
+      "sql": "SET @@'max_execution_time'=0",
+      "api": "prepare",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO,ANSI_QUOTES",
+      "seed": "DO 0",
+      "outcome": 74
+    },
+    {
+      "sql": "SET @@session.'max_execution_time'=0",
+      "api": "query",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO,ANSI_QUOTES",
+      "seed": "DO 1/0",
+      "outcome": 73
+    },
+    {
+      "sql": "SET @@session.'max_execution_time'=0",
+      "api": "prepare",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO,ANSI_QUOTES",
+      "seed": "DO 0",
+      "outcome": 74
+    },
+    {
+      "sql": "SET @'a.b'=7",
+      "api": "query",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO,ANSI_QUOTES",
+      "seed": "DO 1/0",
+      "outcome": 65
+    },
+    {
+      "sql": "SET @'a.b'=7",
+      "api": "prepare",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO,ANSI_QUOTES",
+      "seed": "DO 0",
+      "outcome": 66
+    },
+    {
+      "sql": "SELECT @'a.b' AS v",
+      "api": "query",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO,ANSI_QUOTES",
+      "seed": "DO 1/0",
+      "outcome": 67
+    },
+    {
+      "sql": "SELECT @'a.b' AS v",
+      "api": "prepare",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO,ANSI_QUOTES",
+      "seed": "DO 0",
+      "outcome": 68
+    },
+    {
+      "sql": "SELECT @@\"sql_mode\" AS v",
+      "api": "query",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO,ANSI_QUOTES",
+      "seed": "DO 1/0",
+      "outcome": 75
+    },
+    {
+      "sql": "SELECT @@\"sql_mode\" AS v",
+      "api": "prepare",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO,ANSI_QUOTES",
+      "seed": "DO 0",
+      "outcome": 76
+    },
+    {
+      "sql": "SELECT @@session.\"sql_mode\" AS v",
+      "api": "query",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO,ANSI_QUOTES",
+      "seed": "DO 1/0",
+      "outcome": 81
+    },
+    {
+      "sql": "SELECT @@session.\"sql_mode\" AS v",
+      "api": "prepare",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO,ANSI_QUOTES",
+      "seed": "DO 0",
+      "outcome": 63
+    },
+    {
+      "sql": "SELECT @@\"session.sql_mode\" AS v",
+      "api": "query",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO,ANSI_QUOTES",
+      "seed": "DO 1/0",
+      "outcome": 77
+    },
+    {
+      "sql": "SELECT @@\"session.sql_mode\" AS v",
+      "api": "prepare",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO,ANSI_QUOTES",
+      "seed": "DO 0",
+      "outcome": 78
+    },
+    {
+      "sql": "SELECT @@session.\"warning_count\" AS v",
+      "api": "query",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO,ANSI_QUOTES",
+      "seed": "DO 1/0",
+      "outcome": 64
+    },
+    {
+      "sql": "SELECT @@session.\"warning_count\" AS v",
+      "api": "prepare",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO,ANSI_QUOTES",
+      "seed": "DO 0",
+      "outcome": 1
+    },
+    {
+      "sql": "SET @@\"max_execution_time\"=0",
+      "api": "query",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO,ANSI_QUOTES",
+      "seed": "DO 1/0",
+      "outcome": 79
+    },
+    {
+      "sql": "SET @@\"max_execution_time\"=0",
+      "api": "prepare",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO,ANSI_QUOTES",
+      "seed": "DO 0",
+      "outcome": 80
+    },
+    {
+      "sql": "SET @@session.\"max_execution_time\"=0",
+      "api": "query",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO,ANSI_QUOTES",
+      "seed": "DO 1/0",
+      "outcome": 65
+    },
+    {
+      "sql": "SET @@session.\"max_execution_time\"=0",
+      "api": "prepare",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO,ANSI_QUOTES",
+      "seed": "DO 0",
+      "outcome": 66
+    },
+    {
+      "sql": "SET @\"a.b\"=7",
+      "api": "query",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO,ANSI_QUOTES",
+      "seed": "DO 1/0",
+      "outcome": 65
+    },
+    {
+      "sql": "SET @\"a.b\"=7",
+      "api": "prepare",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO,ANSI_QUOTES",
+      "seed": "DO 0",
+      "outcome": 66
+    },
+    {
+      "sql": "SELECT @\"a.b\" AS v",
+      "api": "query",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO,ANSI_QUOTES",
+      "seed": "DO 1/0",
+      "outcome": 67
+    },
+    {
+      "sql": "SELECT @\"a.b\" AS v",
+      "api": "prepare",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO,ANSI_QUOTES",
+      "seed": "DO 0",
+      "outcome": 68
+    },
+    {
+      "sql": "SHOW WARNINGS",
+      "api": "prepare",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "seed": "DO 1/0",
+      "outcome": 82
+    },
+    {
+      "sql": "SHOW ERRORS",
+      "api": "prepare",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "seed": "DO 1/0",
+      "outcome": 82
+    },
+    {
+      "sql": "SHOW COUNT(*) WARNINGS",
+      "api": "prepare",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "seed": "DO 1/0",
+      "outcome": 82
+    },
+    {
+      "sql": "SHOW COUNT(*) ERRORS",
+      "api": "prepare",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "seed": "DO 1/0",
+      "outcome": 82
+    },
+    {
+      "sql": "SHOW WARNINGS LIMIT 1",
+      "api": "prepare",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "seed": "DO 1/0",
+      "outcome": 82
+    },
+    {
+      "sql": "SHOW WARNINGS LIMIT 0",
+      "api": "prepare",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "seed": "DO 1/0",
+      "outcome": 82
+    },
+    {
+      "sql": "SELECT @@warning_count",
+      "api": "prepare",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "seed": "DO 1/0",
+      "outcome": 82
+    },
+    {
+      "sql": "SELECT @@error_count",
+      "api": "prepare",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "seed": "DO 1/0",
+      "outcome": 82
+    },
+    {
+      "sql": "SELECT @@session.warning_count",
+      "api": "prepare",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "seed": "DO 1/0",
+      "outcome": 82
+    },
+    {
+      "sql": "SELECT @@local.error_count",
+      "api": "prepare",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "seed": "DO 1/0",
+      "outcome": 82
+    },
+    {
+      "sql": "SELECT @@global.warning_count",
+      "api": "prepare",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "seed": "DO 1/0",
+      "outcome": 11
+    },
+    {
+      "sql": "SELECT @@warning_count FROM absent",
+      "api": "prepare",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "seed": "DO 1/0",
+      "outcome": 82
+    },
+    {
+      "sql": "SELECT absent,@@warning_count FROM a",
+      "api": "prepare",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "seed": "DO 1/0",
+      "outcome": 82
+    },
+    {
+      "sql": "SELECT @@warning_count,absent FROM a",
+      "api": "prepare",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "seed": "DO 1/0",
+      "outcome": 82
+    },
+    {
+      "sql": "SELECT CAST(1 AS JSON) AND TRUE,@@warning_count",
+      "api": "prepare",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "seed": "DO 1/0",
+      "outcome": 82
+    },
+    {
+      "sql": "SELECT @@warning_count,CAST(1 AS JSON) AND TRUE",
+      "api": "prepare",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "seed": "DO 1/0",
+      "outcome": 82
+    },
+    {
+      "sql": "SELECT id FROM a WHERE @@warning_count",
+      "api": "prepare",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "seed": "DO 1/0",
+      "outcome": 82
+    },
+    {
+      "sql": "SELECT id FROM a ORDER BY @@warning_count",
+      "api": "prepare",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "seed": "DO 1/0",
+      "outcome": 82
+    },
+    {
+      "sql": "SELECT id FROM a GROUP BY @@warning_count",
+      "api": "prepare",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "seed": "DO 1/0",
+      "outcome": 82
+    },
+    {
+      "sql": "SELECT (SELECT @@warning_count)",
+      "api": "prepare",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "seed": "DO 1/0",
+      "outcome": 82
+    },
+    {
+      "sql": "WITH x AS (SELECT @@warning_count) SELECT * FROM x",
+      "api": "prepare",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "seed": "DO 1/0",
+      "outcome": 82
+    },
+    {
+      "sql": "EXPLAIN SELECT @@warning_count",
+      "api": "prepare",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "seed": "DO 1/0",
+      "outcome": 82
+    },
+    {
+      "sql": "DO @@warning_count",
+      "api": "prepare",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "seed": "DO 1/0",
+      "outcome": 82
+    },
+    {
+      "sql": "SET @x=@@warning_count",
+      "api": "prepare",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "seed": "DO 1/0",
+      "outcome": 82
+    },
+    {
+      "sql": "INSERT INTO a SELECT @@warning_count",
+      "api": "prepare",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "seed": "DO 1/0",
+      "outcome": 82
+    },
+    {
+      "sql": "UPDATE a SET id=@@warning_count",
+      "api": "prepare",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "seed": "DO 1/0",
+      "outcome": 82
+    },
+    {
+      "sql": "DELETE FROM a WHERE @@warning_count",
+      "api": "prepare",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "seed": "DO 1/0",
+      "outcome": 82
+    },
+    {
+      "sql": "SELECT @@warning_count,@@absent_variable",
+      "api": "query",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "seed": "DO 1/0",
+      "outcome": 51
+    },
+    {
+      "sql": "SELECT @@warning_count,@@absent_variable",
+      "api": "prepare",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "seed": "DO 1/0",
+      "outcome": 51
+    },
+    {
+      "sql": "SELECT @@absent_variable,@@warning_count",
+      "api": "query",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "seed": "DO 1/0",
+      "outcome": 51
+    },
+    {
+      "sql": "SELECT @@absent_variable,@@warning_count",
+      "api": "prepare",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "seed": "DO 1/0",
+      "outcome": 51
+    },
+    {
+      "sql": "SELECT @@warning_count,@@global.warning_count",
+      "api": "query",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "seed": "DO 1/0",
+      "outcome": 11
+    },
+    {
+      "sql": "SELECT @@warning_count,@@global.warning_count",
+      "api": "prepare",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "seed": "DO 1/0",
+      "outcome": 11
+    },
+    {
+      "sql": "SELECT @@global.warning_count,@@warning_count",
+      "api": "query",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "seed": "DO 1/0",
+      "outcome": 11
+    },
+    {
+      "sql": "SELECT @@global.warning_count,@@warning_count",
+      "api": "prepare",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "seed": "DO 1/0",
+      "outcome": 11
+    },
+    {
+      "sql": "SELECT @@warning_count,@@`session.warning_count`",
+      "api": "query",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "seed": "DO 1/0",
+      "outcome": 5
+    },
+    {
+      "sql": "SELECT @@warning_count,@@`session.warning_count`",
+      "api": "prepare",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "seed": "DO 1/0",
+      "outcome": 5
+    },
+    {
+      "sql": "SELECT @@absent_variable FROM",
+      "api": "query",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "seed": "DO 1/0",
+      "outcome": 83
+    },
+    {
+      "sql": "SELECT @@absent_variable FROM",
+      "api": "prepare",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "seed": "DO 1/0",
+      "outcome": 83
+    },
+    {
+      "sql": "SELECT @@absent_variable,",
+      "api": "query",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "seed": "DO 1/0",
+      "outcome": 83
+    },
+    {
+      "sql": "SELECT @@absent_variable,",
+      "api": "prepare",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "seed": "DO 1/0",
+      "outcome": 83
+    },
+    {
+      "sql": "SELECT @@absent_variable, (",
+      "api": "query",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "seed": "DO 1/0",
+      "outcome": 83
+    },
+    {
+      "sql": "SELECT @@absent_variable, (",
+      "api": "prepare",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "seed": "DO 1/0",
+      "outcome": 83
+    },
+    {
+      "sql": "SELECT @@warning_count FROM",
+      "api": "query",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "seed": "DO 1/0",
+      "outcome": 83
+    },
+    {
+      "sql": "SELECT @@warning_count FROM",
+      "api": "prepare",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "seed": "DO 1/0",
+      "outcome": 83
+    },
+    {
+      "sql": "SELECT @@warning_count,",
+      "api": "query",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "seed": "DO 1/0",
+      "outcome": 83
+    },
+    {
+      "sql": "SELECT @@warning_count,",
+      "api": "prepare",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "seed": "DO 1/0",
+      "outcome": 83
+    },
+    {
+      "sql": "SELECT @@warning_count, (",
+      "api": "query",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "seed": "DO 1/0",
+      "outcome": 83
+    },
+    {
+      "sql": "SELECT @@warning_count, (",
+      "api": "prepare",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "seed": "DO 1/0",
+      "outcome": 83
+    },
+    {
+      "sql": "SELECT @@warning_count, REGEXP_LIKE('x','[')",
+      "api": "query",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "seed": "DO 1/0",
+      "outcome": 84
+    },
+    {
+      "sql": "SELECT @@warning_count, REGEXP_LIKE('x','[')",
+      "api": "prepare",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "seed": "DO 1/0",
+      "outcome": 82
+    },
+    {
+      "sql": "SELECT CAST(1 AS JSON) AND TRUE,@@absent_variable",
+      "api": "query",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "seed": "DO 1/0",
+      "outcome": 51
+    },
+    {
+      "sql": "SELECT CAST(1 AS JSON) AND TRUE,@@absent_variable",
+      "api": "prepare",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "seed": "DO 1/0",
+      "outcome": 51
+    },
+    {
+      "sql": "SELECT absent,@@absent_variable",
+      "api": "query",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "seed": "DO 1/0",
+      "outcome": 51
+    },
+    {
+      "sql": "SELECT absent,@@absent_variable",
+      "api": "prepare",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "seed": "DO 1/0",
+      "outcome": 51
+    },
+    {
+      "sql": "SELECT absent,@@warning_count",
+      "api": "query",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "seed": "DO 1/0",
+      "outcome": 85
+    },
+    {
+      "sql": "SELECT absent,@@warning_count",
+      "api": "prepare",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "seed": "DO 1/0",
+      "outcome": 82
+    },
+    {
+      "sql": "SELECT @@foo.bar",
+      "api": "query",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "seed": "DO 1/0",
+      "outcome": 86
+    },
+    {
+      "sql": "SELECT @@foo.bar",
+      "api": "prepare",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "seed": "DO 1/0",
+      "outcome": 86
+    },
+    {
+      "sql": "SELECT @@session.foo.bar",
+      "api": "query",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "seed": "DO 1/0",
+      "outcome": 86
+    },
+    {
+      "sql": "SELECT @@session.foo.bar",
+      "api": "prepare",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "seed": "DO 1/0",
+      "outcome": 86
+    },
+    {
+      "sql": "SELECT @@`warning.count`",
+      "api": "query",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "seed": "DO 1/0",
+      "outcome": 87
+    },
+    {
+      "sql": "SELECT @@`warning.count`",
+      "api": "prepare",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "seed": "DO 1/0",
+      "outcome": 87
+    },
+    {
+      "sql": "CREATE VIEW v AS SELECT @@absent_variable",
+      "api": "query",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "seed": "DO 1/0",
+      "outcome": 88
+    },
+    {
+      "sql": "CREATE VIEW v AS SELECT @@absent_variable",
+      "api": "prepare",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "seed": "DO 1/0",
+      "outcome": 88
+    },
+    {
+      "sql": "CREATE VIEW v AS SELECT @@warning_count",
+      "api": "query",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "seed": "DO 1/0",
+      "outcome": 88
+    },
+    {
+      "sql": "CREATE VIEW v AS SELECT @@warning_count",
+      "api": "prepare",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "seed": "DO 1/0",
+      "outcome": 88
+    },
+    {
+      "sql": "CREATE TABLE t(a INT DEFAULT (@@absent_variable))",
+      "api": "query",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "seed": "DO 1/0",
+      "outcome": 51
+    },
+    {
+      "sql": "CREATE TABLE t(a INT DEFAULT (@@absent_variable))",
+      "api": "prepare",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "seed": "DO 1/0",
+      "outcome": 51
+    },
+    {
+      "sql": "CREATE TABLE t(a INT CHECK(a>@@absent_variable))",
+      "api": "query",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "seed": "DO 1/0",
+      "outcome": 51
+    },
+    {
+      "sql": "CREATE TABLE t(a INT CHECK(a>@@absent_variable))",
+      "api": "prepare",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "seed": "DO 1/0",
+      "outcome": 51
+    },
+    {
+      "sql": "SET @@absent_variable=0",
+      "api": "query",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "seed": "DO 1/0",
+      "outcome": 51
+    },
+    {
+      "sql": "SET @@absent_variable=0",
+      "api": "prepare",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "seed": "DO 1/0",
+      "outcome": 51
+    },
+    {
+      "sql": "SET @@absent_variable=@@warning_count",
+      "api": "query",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "seed": "DO 1/0",
+      "outcome": 51
+    },
+    {
+      "sql": "SET @@absent_variable=@@warning_count",
+      "api": "prepare",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "seed": "DO 1/0",
+      "outcome": 51
+    },
+    {
+      "sql": "EXPLAIN SELECT @@absent_variable",
+      "api": "query",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "seed": "DO 1/0",
+      "outcome": 51
+    },
+    {
+      "sql": "EXPLAIN SELECT @@absent_variable",
+      "api": "prepare",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "seed": "DO 1/0",
+      "outcome": 51
+    },
+    {
+      "sql": "DO @@absent_variable",
+      "api": "query",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "seed": "DO 1/0",
+      "outcome": 51
+    },
+    {
+      "sql": "DO @@absent_variable",
+      "api": "prepare",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "seed": "DO 1/0",
+      "outcome": 51
+    },
+    {
+      "sql": "SET @@absent_one=@@absent_two",
+      "api": "query",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "seed": "DO 1/0",
+      "outcome": 89
+    },
+    {
+      "sql": "SET @@absent_one=@@absent_two",
+      "api": "prepare",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "seed": "DO 1/0",
+      "outcome": 89
+    },
+    {
+      "sql": "SET @@global.warning_count=@@absent_two",
+      "api": "query",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "seed": "DO 1/0",
+      "outcome": 89
+    },
+    {
+      "sql": "SET @@global.warning_count=@@absent_two",
+      "api": "prepare",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "seed": "DO 1/0",
+      "outcome": 89
+    },
+    {
+      "sql": "SET @@warning_count=@@absent_two",
+      "api": "query",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "seed": "DO 1/0",
+      "outcome": 89
+    },
+    {
+      "sql": "SET @@warning_count=@@absent_two",
+      "api": "prepare",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "seed": "DO 1/0",
+      "outcome": 89
+    },
+    {
+      "sql": "SET @partial=1,@@absent_one=0",
+      "api": "query",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "seed": "DO 1/0",
+      "outcome": 90
+    },
+    {
+      "sql": "SET @partial=1,@@absent_one=0",
+      "api": "prepare",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "seed": "DO 1/0",
+      "outcome": 90
+    },
+    {
+      "sql": "SELECT @partial",
+      "api": "query",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "seed": "DO 1/0",
+      "outcome": 91
+    },
+    {
+      "sql": "SELECT @partial",
+      "api": "prepare",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "seed": "DO 0",
+      "outcome": 92
+    },
+    {
+      "sql": "SET @partial=1;SELECT @@absent_two",
+      "api": "query",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "seed": "DO 1/0",
+      "outcome": 89
+    },
+    {
+      "sql": "SELECT @partial",
+      "api": "query",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "seed": "DO 1/0",
+      "outcome": 93
+    },
+    {
+      "sql": "SELECT @partial",
+      "api": "prepare",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "seed": "DO 0",
+      "outcome": 94
+    },
+    {
+      "sql": "SELECT @@warning_count",
+      "api": "execute",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "seed": "DO 1/0",
+      "outcome": 82
+    },
+    {
+      "sql": "SELECT @@`warning_count`",
+      "api": "execute",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "seed": "DO 1/0",
+      "outcome": 82
+    },
+    {
+      "sql": "SELECT @@session.warning_count",
+      "api": "execute",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "seed": "DO 1/0",
+      "outcome": 82
+    },
+    {
+      "sql": "SELECT @@session.`warning_count`",
+      "api": "execute",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "seed": "DO 1/0",
+      "outcome": 82
+    },
+    {
+      "sql": "SELECT @@`session.warning_count`",
+      "api": "execute",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "seed": "DO 1/0",
+      "outcome": 5
+    },
+    {
+      "sql": "SELECT @@local.warning_count",
+      "api": "execute",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "seed": "DO 1/0",
+      "outcome": 82
+    },
+    {
+      "sql": "SELECT @@local.`warning_count`",
+      "api": "execute",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "seed": "DO 1/0",
+      "outcome": 82
+    },
+    {
+      "sql": "SELECT @@`local.warning_count`",
+      "api": "execute",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "seed": "DO 1/0",
+      "outcome": 9
+    },
+    {
+      "sql": "SELECT @@global.warning_count",
+      "api": "execute",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "seed": "DO 1/0",
+      "outcome": 11
+    },
+    {
+      "sql": "SELECT @@global.`warning_count`",
+      "api": "execute",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "seed": "DO 1/0",
+      "outcome": 11
+    },
+    {
+      "sql": "SELECT @@`global.warning_count`",
+      "api": "execute",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "seed": "DO 1/0",
+      "outcome": 13
+    },
+    {
+      "sql": "SELECT @@error_count",
+      "api": "execute",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "seed": "DO 1/0",
+      "outcome": 82
+    },
+    {
+      "sql": "SELECT @@`error_count`",
+      "api": "execute",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "seed": "DO 1/0",
+      "outcome": 82
+    },
+    {
+      "sql": "SELECT @@session.error_count",
+      "api": "execute",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "seed": "DO 1/0",
+      "outcome": 82
+    },
+    {
+      "sql": "SELECT @@session.`error_count`",
+      "api": "execute",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "seed": "DO 1/0",
+      "outcome": 82
+    },
+    {
+      "sql": "SELECT @@`session.error_count`",
+      "api": "execute",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "seed": "DO 1/0",
+      "outcome": 19
+    },
+    {
+      "sql": "SELECT @@local.error_count",
+      "api": "execute",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "seed": "DO 1/0",
+      "outcome": 82
+    },
+    {
+      "sql": "SELECT @@local.`error_count`",
+      "api": "execute",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "seed": "DO 1/0",
+      "outcome": 82
+    },
+    {
+      "sql": "SELECT @@`local.error_count`",
+      "api": "execute",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "seed": "DO 1/0",
+      "outcome": 23
+    },
+    {
+      "sql": "SELECT @@global.error_count",
+      "api": "execute",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "seed": "DO 1/0",
+      "outcome": 25
+    },
+    {
+      "sql": "SELECT @@global.`error_count`",
+      "api": "execute",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "seed": "DO 1/0",
+      "outcome": 25
+    },
+    {
+      "sql": "SELECT @@`global.error_count`",
+      "api": "execute",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "seed": "DO 1/0",
+      "outcome": 27
+    },
+    {
+      "sql": "SELECT @@absent_variable",
+      "api": "execute",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "seed": "DO 1/0",
+      "outcome": 51
+    },
+    {
+      "sql": "SELECT @@`absent_variable`",
+      "api": "execute",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "seed": "DO 1/0",
+      "outcome": 51
+    },
+    {
+      "sql": "SELECT @@session.absent_variable",
+      "api": "execute",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "seed": "DO 1/0",
+      "outcome": 51
+    },
+    {
+      "sql": "SELECT @@session.`absent_variable`",
+      "api": "execute",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "seed": "DO 1/0",
+      "outcome": 51
+    },
+    {
+      "sql": "SELECT @@`session.absent_variable`",
+      "api": "execute",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "seed": "DO 1/0",
+      "outcome": 53
+    },
+    {
+      "sql": "SELECT @@local.absent_variable",
+      "api": "execute",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "seed": "DO 1/0",
+      "outcome": 51
+    },
+    {
+      "sql": "SELECT @@local.`absent_variable`",
+      "api": "execute",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "seed": "DO 1/0",
+      "outcome": 51
+    },
+    {
+      "sql": "SELECT @@`local.absent_variable`",
+      "api": "execute",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "seed": "DO 1/0",
+      "outcome": 55
+    },
+    {
+      "sql": "SELECT @@global.absent_variable",
+      "api": "execute",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "seed": "DO 1/0",
+      "outcome": 51
+    },
+    {
+      "sql": "SELECT @@global.`absent_variable`",
+      "api": "execute",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "seed": "DO 1/0",
+      "outcome": 51
+    },
+    {
+      "sql": "SELECT @@`global.absent_variable`",
+      "api": "execute",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "seed": "DO 1/0",
+      "outcome": 57
+    },
+    {
+      "sql": "SELECT IF(FALSE,@@warning_count,0)",
+      "api": "execute",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "seed": "DO 1/0",
+      "outcome": 82
+    },
+    {
+      "sql": "SELECT @@warning_count WHERE FALSE",
+      "api": "execute",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "seed": "DO 1/0",
+      "outcome": 82
+    },
+    {
+      "sql": "SELECT 1 ORDER BY @@error_count",
+      "api": "execute",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "seed": "DO 1/0",
+      "outcome": 82
+    },
+    {
+      "sql": "SELECT @@warning_count LIMIT 0",
+      "api": "execute",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "seed": "DO 1/0",
+      "outcome": 82
+    },
+    {
+      "sql": "SET @`@x`=17",
+      "api": "query",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "seed": "DO 0",
+      "outcome": 95
+    },
+    {
+      "sql": "SELECT @`@x` AS v",
+      "api": "query",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "seed": "DO 0",
+      "outcome": 96
+    },
+    {
+      "sql": "SET @`@x`=17",
+      "api": "execute",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "seed": "DO 0",
+      "outcome": 95
+    },
+    {
+      "sql": "SELECT @`@x` AS v",
+      "api": "execute",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "seed": "DO 0",
+      "outcome": 96
+    },
+    {
+      "sql": "SET @`@@x`=17",
+      "api": "query",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "seed": "DO 0",
+      "outcome": 95
+    },
+    {
+      "sql": "SELECT @`@@x` AS v",
+      "api": "query",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "seed": "DO 0",
+      "outcome": 96
+    },
+    {
+      "sql": "SET @`@@x`=17",
+      "api": "execute",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "seed": "DO 0",
+      "outcome": 95
+    },
+    {
+      "sql": "SELECT @`@@x` AS v",
+      "api": "execute",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "seed": "DO 0",
+      "outcome": 96
+    },
+    {
+      "sql": "SET @`a.b`=17",
+      "api": "query",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "seed": "DO 0",
+      "outcome": 95
+    },
+    {
+      "sql": "SELECT @`a.b` AS v",
+      "api": "query",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "seed": "DO 0",
+      "outcome": 96
+    },
+    {
+      "sql": "SET @`a.b`=17",
+      "api": "execute",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "seed": "DO 0",
+      "outcome": 95
+    },
+    {
+      "sql": "SELECT @`a.b` AS v",
+      "api": "execute",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "seed": "DO 0",
+      "outcome": 96
+    },
+    {
+      "sql": "SET @`a b`=17",
+      "api": "query",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "seed": "DO 0",
+      "outcome": 95
+    },
+    {
+      "sql": "SELECT @`a b` AS v",
+      "api": "query",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "seed": "DO 0",
+      "outcome": 96
+    },
+    {
+      "sql": "SET @`a b`=17",
+      "api": "execute",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "seed": "DO 0",
+      "outcome": 95
+    },
+    {
+      "sql": "SELECT @`a b` AS v",
+      "api": "execute",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "seed": "DO 0",
+      "outcome": 96
+    },
+    {
+      "sql": "SET @`a``b`=17",
+      "api": "query",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "seed": "DO 0",
+      "outcome": 95
+    },
+    {
+      "sql": "SELECT @`a``b` AS v",
+      "api": "query",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "seed": "DO 0",
+      "outcome": 96
+    },
+    {
+      "sql": "SET @`a``b`=17",
+      "api": "execute",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "seed": "DO 0",
+      "outcome": 95
+    },
+    {
+      "sql": "SELECT @`a``b` AS v",
+      "api": "execute",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "seed": "DO 0",
+      "outcome": 96
+    },
+    {
+      "sql": "CREATE TABLE warn_query(n INT(11))",
+      "api": "query",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "seed": "DO 1/0",
+      "outcome": 97
+    },
+    {
+      "sql": "CREATE TABLE warn_fill_query(n INT(11)) SELECT 1 AS x",
+      "api": "query",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "seed": "DO 1/0",
+      "outcome": 98
+    },
+    {
+      "sql": "CREATE TABLE IF NOT EXISTS warn_query(n INT(11))",
+      "api": "query",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "seed": "DO 1/0",
+      "outcome": 99
+    },
+    {
+      "sql": "DROP TABLE IF EXISTS missing_query",
+      "api": "query",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "seed": "DO 1/0",
+      "outcome": 100
+    },
+    {
+      "sql": "DROP VIEW IF EXISTS absent_view_query",
+      "api": "query",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "seed": "DO 1/0",
+      "outcome": 101
+    },
+    {
+      "sql": "SET sql_mode='ERROR_FOR_DIVISION_BY_ZERO'",
+      "api": "query",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "seed": "DO 1/0",
+      "outcome": 102
+    },
+    {
+      "sql": "CREATE TABLE warn_execute(n INT(11))",
+      "api": "execute",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "seed": "DO 1/0",
+      "outcome": 65
+    },
+    {
+      "sql": "CREATE TABLE warn_fill_execute(n INT(11)) SELECT 1 AS x",
+      "api": "execute",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "seed": "DO 1/0",
+      "outcome": 103
+    },
+    {
+      "sql": "CREATE TABLE IF NOT EXISTS warn_execute(n INT(11))",
+      "api": "execute",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "seed": "DO 1/0",
+      "outcome": 104
+    },
+    {
+      "sql": "DROP TABLE IF EXISTS missing_execute",
+      "api": "execute",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "seed": "DO 1/0",
+      "outcome": 105
+    },
+    {
+      "sql": "DROP VIEW IF EXISTS absent_view_execute",
+      "api": "execute",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "seed": "DO 1/0",
+      "outcome": 106
+    },
+    {
+      "sql": "SET sql_mode='ERROR_FOR_DIVISION_BY_ZERO'",
+      "api": "execute",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "seed": "DO 1/0",
+      "outcome": 102
+    },
+    {
+      "sql": "SELECT @never_assigned AS v",
+      "api": "query",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "seed": "DO 0",
+      "charset": "utf8mb3",
+      "outcome": 107
+    },
+    {
+      "sql": "SELECT @never_assigned AS v",
+      "api": "prepare",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "seed": "DO 0",
+      "charset": "utf8mb3",
+      "outcome": 108
+    },
+    {
+      "sql": "SELECT @never_assigned AS v",
+      "api": "execute",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "seed": "DO 0",
+      "charset": "utf8mb3",
+      "outcome": 107
+    },
+    {
+      "sql": "SET @null_width=NULL",
+      "api": "query",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "seed": "DO 0",
+      "charset": "utf8mb3",
+      "outcome": 95
+    },
+    {
+      "sql": "SELECT @null_width AS v",
+      "api": "query",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "seed": "DO 0",
+      "charset": "utf8mb3",
+      "outcome": 109
+    },
+    {
+      "sql": "SELECT @null_width AS v",
+      "api": "prepare",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "seed": "DO 0",
+      "charset": "utf8mb3",
+      "outcome": 110
+    },
+    {
+      "sql": "SELECT @null_width AS v",
+      "api": "execute",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "seed": "DO 0",
+      "charset": "utf8mb3",
+      "outcome": 109
+    },
+    {
+      "sql": "SELECT @never_assigned AS v",
+      "api": "query",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "seed": "DO 0",
+      "charset": "latin1",
+      "outcome": 107
+    },
+    {
+      "sql": "SELECT @never_assigned AS v",
+      "api": "prepare",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "seed": "DO 0",
+      "charset": "latin1",
+      "outcome": 108
+    },
+    {
+      "sql": "SELECT @never_assigned AS v",
+      "api": "execute",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "seed": "DO 0",
+      "charset": "latin1",
+      "outcome": 107
+    },
+    {
+      "sql": "SET @null_width=NULL",
+      "api": "query",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "seed": "DO 0",
+      "charset": "latin1",
+      "outcome": 95
+    },
+    {
+      "sql": "SELECT @null_width AS v",
+      "api": "query",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "seed": "DO 0",
+      "charset": "latin1",
+      "outcome": 109
+    },
+    {
+      "sql": "SELECT @null_width AS v",
+      "api": "prepare",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "seed": "DO 0",
+      "charset": "latin1",
+      "outcome": 110
+    },
+    {
+      "sql": "SELECT @null_width AS v",
+      "api": "execute",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "seed": "DO 0",
+      "charset": "latin1",
+      "outcome": 109
+    },
+    {
+      "sql": "SELECT @never_assigned AS v",
+      "api": "query",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "seed": "DO 0",
+      "charset": "ascii",
+      "outcome": 107
+    },
+    {
+      "sql": "SELECT @never_assigned AS v",
+      "api": "prepare",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "seed": "DO 0",
+      "charset": "ascii",
+      "outcome": 108
+    },
+    {
+      "sql": "SELECT @never_assigned AS v",
+      "api": "execute",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "seed": "DO 0",
+      "charset": "ascii",
+      "outcome": 107
+    },
+    {
+      "sql": "SET @null_width=NULL",
+      "api": "query",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "seed": "DO 0",
+      "charset": "ascii",
+      "outcome": 95
+    },
+    {
+      "sql": "SELECT @null_width AS v",
+      "api": "query",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "seed": "DO 0",
+      "charset": "ascii",
+      "outcome": 109
+    },
+    {
+      "sql": "SELECT @null_width AS v",
+      "api": "prepare",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "seed": "DO 0",
+      "charset": "ascii",
+      "outcome": 110
+    },
+    {
+      "sql": "SELECT @null_width AS v",
+      "api": "execute",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "seed": "DO 0",
+      "charset": "ascii",
+      "outcome": 109
+    },
+    {
+      "sql": "SELECT @never_assigned AS v",
+      "api": "query",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "seed": "DO 0",
+      "charset": "utf8mb4",
+      "outcome": 111
+    },
+    {
+      "sql": "SELECT @never_assigned AS v",
+      "api": "prepare",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "seed": "DO 0",
+      "charset": "utf8mb4",
+      "outcome": 112
+    },
+    {
+      "sql": "SELECT @never_assigned AS v",
+      "api": "execute",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "seed": "DO 0",
+      "charset": "utf8mb4",
+      "outcome": 111
+    },
+    {
+      "sql": "SET @null_width=NULL",
+      "api": "query",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "seed": "DO 0",
+      "charset": "utf8mb4",
+      "outcome": 95
+    },
+    {
+      "sql": "SELECT @null_width AS v",
+      "api": "query",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "seed": "DO 0",
+      "charset": "utf8mb4",
+      "outcome": 109
+    },
+    {
+      "sql": "SELECT @null_width AS v",
+      "api": "prepare",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "seed": "DO 0",
+      "charset": "utf8mb4",
+      "outcome": 110
+    },
+    {
+      "sql": "SELECT @null_width AS v",
+      "api": "execute",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "seed": "DO 0",
+      "charset": "utf8mb4",
+      "outcome": 109
+    }
+  ]
+}

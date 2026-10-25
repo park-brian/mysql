@@ -96,7 +96,11 @@ export interface ColumnNode {
 export interface VariableNode {
   readonly kind: typeof NODE.VARIABLE
   readonly name: string
+  /** System-variable identifier components; a quoted dot stays within its component. */
+  readonly parts?: readonly string[]
   readonly at: number
+  /** Parsed user references stay users even when their name starts with @. */
+  readonly user?: true
 }
 
 export interface UnaryNode {

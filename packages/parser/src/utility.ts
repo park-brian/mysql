@@ -18,6 +18,7 @@
 //   - `START TRANSACTION READ ONLY, READ WRITE` and `COMMIT AND CHAIN RELEASE`
 //     are syntax errors, while a repeated characteristic is not.
 import { NODE, type Expression, type KeywordNode } from './ast.ts'
+import { systemVariableParts } from './variable.ts'
 import { flag, opt, type Cursor } from './cursor.ts'
 import { parseSetDefaultRole, parseSetPassword, parseSetRole } from './admin.ts'
 import { parseUser } from './ddl.ts'
@@ -113,7 +114,7 @@ function setItem(c: Cursor, mode: SqlMode, sticky: VariableScope | undefined): S
   }
 
   const t = c.peek()
-  if (t.kind === TOKEN.VARIABLE && !t.text.startsWith('@@')) {
+  if (t.kind === TOKEN.VARIABLE && (t.user || !t.text.startsWith('@@'))) {
     c.skip()
     return { type: 'user', name: t.text.slice(1), value: assigned(c, mode, false) }
   }
@@ -147,14 +148,7 @@ function identifierOrString(c: Cursor): string {
  * as a separate token after it, so both shapes are reassembled here.
  */
 function systemVariable(c: Cursor): { scope?: VariableScope; base?: string; name: string } {
-  const parts = c.take().text.slice(2).split('.')
-  // `@@session.`x``: the lexer stops at the quote, leaving a trailing `.`.
-  if (parts[parts.length - 1] === '') {
-    parts.pop()
-    parts.push(c.expectNamePart())
-  }
-  // `@@global . x` and `@@global.`a b`.x`: the rest are tokens of their own.
-  while (parts.length < 3 && c.takeOp('.')) parts.push(c.expectNamePart())
+  const parts = systemVariableParts(c)
 
   let scope: VariableScope | undefined
   const first = parts[0]?.toUpperCase()
@@ -165,9 +159,9 @@ function systemVariable(c: Cursor): { scope?: VariableScope; base?: string; name
     else if (first === 'PERSIST_ONLY') scope = 'PERSIST_ONLY'
     if (scope !== undefined) parts.shift()
   }
-  if (parts.length === 0 || parts.length > 2 || parts.some((p) => p === '')) c.fail()
-  const name = parts[parts.length - 1] as string
-  return parts.length === 2 ? { ...opt('scope', scope), base: parts[0] as string, name } : { ...opt('scope', scope), name }
+  if (parts.length > 2 || parts.some((p) => p === '')) c.fail()
+  const name = parts.pop() as string
+  return { ...opt('scope', scope), ...opt('base', parts[0]), name }
 }
 
 /** `x`, `base.x`, or `DEFAULT.x`: a system variable written without `@@`. */

@@ -114,15 +114,10 @@ and browser work follow the outstanding engine/planner work. Remaining function
 boundaries stay open for separate verification. The current state and remaining
 work are:
 
-**Next bounded slice: system-variable identity and diagnostic-count admission.**
-Failed PREPARE publication and diagnostic SHOW admission are repaired below.
-COM_QUERY preflight failure publication, comment-only completion and linear
-error trimming are verified below. Preserve system-variable quoting/qualification
-and add diagnostic-count
-PREPARE admission together, including nested expressions and refusal precedence.
-The identity-only prototype would replace four accidental matching null field
-vectors with descriptors on commands native refuses, so those repairs must
-land together. Then repair WHERE
+**Next bounded slice: WHERE resolution warnings and error precedence.**
+System-variable identity and diagnostic-count PREPARE admission are verified
+below, alongside failed-command publication, diagnostic SHOW admission and
+linear lexical error trimming. Next repair WHERE
 resolution warnings and error precedence. Literal failures are raised at
 PREPARE after SELECT-list resolution and before GROUP/HAVING/ORDER resolution,
 even with LIMIT 0; they are not late iterator initialization. Complete successful
@@ -138,6 +133,50 @@ before promoting the division repair. Preserve index-streamed reads when DISTINC
 is absent or eliminated by the retained grouping keys. Pin that elimination
 proof and both aggregate kinds before broadening to HAVING, LIMIT, ROLLUP or
 windows. The native plan and its actual writers must make the decision.
+
+**Variable identity and PREPARE admission, verified (2026-10-25):** System
+references retain identifier components, so a wholly quoted dotted name remains
+one name while a qualified quoted final component retains its scope. The shared
+reader validates every system reference after successful parsing and before
+expression/source resolution. Unknown names and invalid scopes precede the
+1295 diagnostic-count refusal, including dead branches, subqueries, CTEs,
+EXPLAIN, DO, SET values and writes. Query binding stays within each statement's
+failure boundary, preserving earlier statements' writes. SET target validation
+shares its assignment owner and follows read-reference validation. View
+restrictions retain their earlier precedence. Quoted user names beginning with
+@ remain users through parsing, deparsing, assignment and compilation; legacy
+AST names remain accepted. Whole string-quoted system names retain native 1064
+positions even under ANSI_QUOTES.
+
+A new native fixture pins 381 complete outcomes through query, execute and
+explicit PREPARE: rows/OK status, fields, error tuples, prior/post diagnostics
+and both condition totals. The previous commit matches 155 completely; the
+repair matches all 381 and retains every previously matched component. Parser
+regressions pin component identity, user-name round trips, legacy AST deparsing
+and original-delimiter error offsets. Unset user fields now use the native
+whole-character VARCHAR byte limit; assigned NULL uses a binary MEDIUMBLOB.
+Both are verified in utf8mb4, utf8mb3, latin1 and ascii. Admitted PREPARE controls
+start with clear diagnostics: seeded successful PREPARE clearing/compiled
+warnings and PREPARE_OK counts remain the separate open work below. Native
+SET NAMES utf8mb3 deprecation/session-state reporting and binary connection
+charset admission also remain open; charset changes are setup for these
+metadata checks, not claimed as repaired commands. Stored-routine body binding
+remains outside this slice.
+
+Collation preload now shares the AST visitor and reaches nested sources.
+SET, DROP, ROLLBACK and CREATE use the existing diagnostic writer's condition
+totals instead of duplicate counters. CREATE TABLE SELECT no longer adds its
+syntax-warning prefix twice, and binary execution does not repeat declaration
+deprecations from PREPARE. Native controls pin both protocols' warning totals,
+including IF NOT EXISTS. The existing bundle caps and all seven committed
+reference corpora remain unchanged; M5.8/M5.53 remain partial.
+Fresh Docker Node 22.18.0 verification passes 1,355 ordinary tests and four
+latency tests, typecheck, lint, nine size gates, installed-package/typed-example
+smoke, the real MySQL client and all seven pinned MySQL 8.4.11 corpora. The
+354 test files/fixtures and 202 runtime sources match the workspace. A million
+seeded parser inputs (32,244 statement round trips) and 20,000 seeded executor
+statements pass. Core/facade are 334,354/334,264 B gzipped; their unchanged caps
+are 334,361/334,266 B.
 
 **Failed PREPARE diagnostics, verified (2026-10-25):** The existing executor
 now publishes the failed command's conditions through the same bounded diagnostic

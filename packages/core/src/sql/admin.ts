@@ -245,6 +245,22 @@ export class ServerState {
     return fromSqlValue(value ?? null, info)
   }
 
+  /** Validate a system SET target before evaluating its value. */
+  assignment(item: Extract<SetItem, { type: 'name' | 'system' }>) {
+    const name = (item.base === undefined ? item.name : `${item.base}.${item.name}`).toLowerCase()
+    const scope = item.type === 'system' ? item.scope : undefined
+
+    const global = scope === 'GLOBAL' || scope === 'PERSIST' || scope === 'PERSIST_ONLY'
+    const info = systemVariableInfo(name)
+    if (info === undefined && !this.vars.has(name)) throw sqlError('ER_UNKNOWN_SYSTEM_VARIABLE', `Unknown system variable '${name}'`)
+    if (info?.readOnly === true) throw sqlError('ER_INCORRECT_GLOBAL_LOCAL_VAR', `Variable '${name}' is a read only variable`)
+    if (!global && info?.scope === 'global') throw sqlError('ER_GLOBAL_VARIABLE', `Variable '${name}' is a GLOBAL variable and should be set with SET GLOBAL`)
+    if (global && info?.scope === 'session') throw sqlError('ER_LOCAL_VARIABLE', `Variable '${name}' is a SESSION variable and can't be used with SET GLOBAL`)
+    if (!global && info?.globalOnly === true) throw sqlError('ER_VARIABLE_IS_READONLY', `SESSION variable '${name}' is read-only. Use SET GLOBAL to assign the value`)
+
+    return { name, scope, global, info }
+  }
+
   /**
    * One `SET` item that is not a user variable. `evaluate` reads an
    * expression value; `own` is the session's store for what it sets.
@@ -260,17 +276,8 @@ export class ServerState {
       return undefined
     }
     if (item.type === 'user') return undefined
-    const name = (item.base === undefined ? item.name : `${item.base}.${item.name}`).toLowerCase()
-    const scope = item.type === 'system' ? item.scope : undefined
+    const { name, scope, global, info } = this.assignment(item)
     const value = item.value
-
-    const global = scope === 'GLOBAL' || scope === 'PERSIST' || scope === 'PERSIST_ONLY'
-    const info = systemVariableInfo(name)
-    if (info === undefined && !this.vars.has(name)) throw sqlError('ER_UNKNOWN_SYSTEM_VARIABLE', `Unknown system variable '${name}'`)
-    if (info?.readOnly === true) throw sqlError('ER_INCORRECT_GLOBAL_LOCAL_VAR', `Variable '${name}' is a read only variable`)
-    if (!global && info?.scope === 'global') throw sqlError('ER_GLOBAL_VARIABLE', `Variable '${name}' is a GLOBAL variable and should be set with SET GLOBAL`)
-    if (global && info?.scope === 'session') throw sqlError('ER_LOCAL_VARIABLE', `Variable '${name}' is a SESSION variable and can't be used with SET GLOBAL`)
-    if (!global && info?.globalOnly === true) throw sqlError('ER_VARIABLE_IS_READONLY', `SESSION variable '${name}' is read-only. Use SET GLOBAL to assign the value`)
 
     let v: Value
     if (value.kind === NODE.KEYWORD) {

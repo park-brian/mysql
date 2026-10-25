@@ -19,7 +19,7 @@ import { MyjsError } from '@myjs/bytes'
 
 /** Anything this package refuses. Carries `errno` and `sqlState` like `SqlError`. */
 export class ParseError extends MyjsError {
-  /** Byte offset into the original statement, when one is known. */
+  /** UTF-16 code-unit offset into the original statement, when one is known. */
   readonly offset: number | undefined
 
   constructor(

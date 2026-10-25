@@ -54,6 +54,10 @@ export interface Token {
   readonly line: number
   /** Set on an identifier that was written in quotes, which cannot be a keyword. */
   readonly quoted?: boolean
+  /** Delimiter on an entirely quoted variable name. */
+  readonly quote?: string
+  /** A quoted user variable, even when its name starts with @. */
+  readonly user?: boolean
   /** 0-based order of a `?` among the placeholders in the statement. */
   readonly index?: number
 }

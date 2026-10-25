@@ -64,7 +64,7 @@ import { showCreateView, showQuery, shownColumns, tableStatusQuery, variablesCol
 import { COERCIBILITY, doubleValue, intValue, parseDecimal, plainValue, stringValue, toInteger, toText, type Condition, type Value } from '@myjs/types'
 import { charsetChange, ensureCollationResident } from '../transcoder.ts'
 import { PROGRAM_OBJECTS, ServerState, type ProgramStatement, type ServerOptions } from './admin.ts'
-import { compile, EMPTY_SCOPE, raise, type Env } from './compile.ts'
+import { systemVariable, compile, EMPTY_SCOPE, raise, type Env } from './compile.ts'
 import { renderTree } from './explain.ts'
 import { analyze, keepShown } from './stats.ts'
 import { alterTable } from './alter.ts'
@@ -150,7 +150,6 @@ const pause = (): Promise<void> => sleep(0)
 
 const isSteps = <T>(x: T | Generator<void, T>): x is Generator<void, T> => typeof (x as { next?: unknown }).next === 'function' && typeof (x as { throw?: unknown }).throw === 'function'
 
-/** The tables a statement reads or writes, for loading their collations before it runs. */
 /**
  * Which of a query's columns are made as a literal's are, rather than a
  * function's: a literal select item, or any column of a set operation,
@@ -165,32 +164,6 @@ function literalColumns(q: QueryExpression): (i: number) => boolean {
     const item = body.items[i]
     return item !== undefined && 'expr' in item && item.expr.kind === NODE.LITERAL
   }
-}
-
-function tablesOf(statement: Statement): TableName[] {
-  const out: TableName[] = []
-  const refs = (r: readonly TableReference[] | undefined): void => {
-    for (const t of r ?? []) {
-      if (t.kind === REF.TABLE) out.push(t.table)
-      else if (t.kind === REF.JOIN) refs([t.left, t.right])
-      else if (t.kind === REF.LIST) refs(t.items)
-    }
-  }
-  switch (statement.kind) {
-    case STATEMENT.QUERY:
-      if (statement.body.kind === 'select') refs(statement.body.from)
-      break
-    case STATEMENT.INSERT:
-      out.push(statement.table)
-      break
-    case STATEMENT.UPDATE:
-    case STATEMENT.DELETE:
-      refs(statement.tables)
-      break
-    default:
-      break
-  }
-  return out
 }
 
 /** Diagnostic SHOW statements retain the area they inspect and cannot be prepared. */
@@ -316,7 +289,7 @@ export class SqlExecutor implements Executor {
       if (performance.now() - started > SLICE_MS) await pause()
       this.#alive(session)
       // Native refuses diagnostics before resolving fields or opening sources.
-      if (statement === null || isDiagnostic(statement)) throw sqlError('ER_UNSUPPORTED_PS', 'This command is not supported in the prepared statement protocol yet')
+      if (statement === null || this.#variables(statement, state, session) || isDiagnostic(statement)) throw sqlError('ER_UNSUPPORTED_PS', 'This command is not supported in the prepared statement protocol yet')
       await this.#preload(session, statement)
       this.#alive(session)
       if (statement.kind !== STATEMENT.QUERY) return { paramCount, columns: [] }
@@ -329,6 +302,26 @@ export class SqlExecutor implements Executor {
     } catch (e) {
       throw recordFailure(state, conditions, e)
     }
+  }
+
+  /** Bind all system names before expression resolution and PREPARE admission. */
+  #variables(statement: Statement, state: SqlSession, session: Session): boolean {
+    const view = statement.kind === STATEMENT.CREATE_VIEW
+    if (view && someNode(statement.query, (n) => ((n as QueryExpression).kind === QUERY.QUERY && (n as QueryExpression).into !== undefined) || undefined)) throw sqlError('ER_VIEW_SELECT_CLAUSE', "View's SELECT contains a 'INTO' clause")
+    let diagnostic = false
+    someNode(statement, (node) => {
+      const e = node as Expression
+      if (view && (e.kind === NODE.VARIABLE || e.kind === NODE.PLACEHOLDER)) throw sqlError('ER_VIEW_SELECT_VARIABLE', "View's SELECT contains a variable or parameter")
+      if (e.kind === NODE.VARIABLE) {
+        const name = systemVariable(e, state, session)?.name
+        if (name === 'warning_count' || name === 'error_count') diagnostic = true
+      }
+      return undefined
+    })
+    if (statement.kind === STATEMENT.SET) for (const item of statement.items) {
+      if (item.type === 'system' || item.type === 'name') this.server.assignment(item)
+    }
+    return diagnostic
   }
 
   async initDb(session: Session, database: string): Promise<void> {
@@ -403,19 +396,19 @@ export class SqlExecutor implements Executor {
       }
     }
     const catalog = this.catalog
-    if (catalog !== undefined) {
-      for (const name of tablesOf(statement)) {
-        const schema = name.schema ?? session.database
-        if (schema === null) continue
-        let def: TableDef
-        try {
-          def = catalog.definition(schema, name.name)
-        } catch (e) {
-          expectTyped(e)
-          continue
-        }
-        for (const id of collationsOf(def)) ids.add(id)
+    // Every source, including nested query blocks, contributes its field collations.
+    const tableCollations = (name: TableName): void => {
+      const schema = name.schema ?? session.database
+      if (catalog === undefined || schema === null) return
+      try {
+        for (const id of collationsOf(catalog.definition(schema, name.name))) ids.add(id)
+      } catch (e) {
+        expectTyped(e)
+        // The statement itself will report a missing source.
       }
+    }
+    if (statement.kind === STATEMENT.INSERT) tableCollations(statement.table)
+    if (catalog !== undefined) {
       if (statement.kind === STATEMENT.CREATE_TABLE) {
         try {
           const schema = statement.table.schema ?? session.database
@@ -432,24 +425,20 @@ export class SqlExecutor implements Executor {
     // Every collation the statement names itself — `COLLATE x`, `_latin1'…'`,
     // `CAST(… AS CHAR CHARACTER SET x)` — found by walking the tree for the
     // fields that carry one.
-    const walk = (node: unknown, depth: number): void => {
-      if (depth > 1200 || node === null || typeof node !== 'object') return
-      if (Array.isArray(node)) {
-        for (const n of node) walk(n, depth + 1)
-        return
-      }
+    someNode(statement, (node) => {
       const o = node as Record<string, unknown>
+      const ref = node as TableReference
+      if (ref.kind === REF.TABLE) tableCollations(ref.table)
       if (typeof o['collation'] === 'string') {
-        const info = collationInfoByName((o['collation'] as string).toLowerCase())
+        const info = collationInfoByName(o['collation'].toLowerCase())
         if (info !== undefined) ids.add(info.id)
       }
       if (typeof o['charset'] === 'string') {
-        const info = defaultCollationOf((o['charset'] as string).toLowerCase())
+        const info = defaultCollationOf(o['charset'].toLowerCase())
         if (info !== undefined) ids.add(info.id)
       }
-      for (const v of Object.values(o)) if (typeof v === 'object') walk(v, depth + 1)
-    }
-    walk(statement, 0)
+      return undefined
+    })
     for (const id of ids) {
       try {
         await ensureCollationResident(id)
@@ -520,6 +509,7 @@ export class SqlExecutor implements Executor {
       // The error is a condition too, after any the statement raised first.
       const failed = (e: unknown): SqlError => diagnostic ? toSqlError(e) : recordFailure(state, conditions, e)
       try {
+        this.#variables(statement, state, session)
         const run = this.#run(session, sql, params, known, protocol, conditions)
         const batches: ResultSet[] | undefined = stream ? [] : undefined
         const dispatched = this.#dispatch(run, statement, batches === undefined ? undefined : (batch) => batches.push(batch))
@@ -767,9 +757,8 @@ export class SqlExecutor implements Executor {
           spec = withForeignKeys(catalog, schema, spec, statement.keys.filter((k) => k.type === KEY.FOREIGN).map(foreignKeyClause), foreignKeyChecks(run))
           checkForeignKeyActions(spec, foreignKeysOf({ ...spec, schema, options: spec.options ?? {} } as TableDef))
         }
-        const deprecated = deprecationWarnings(statement)
-        for (const d of deprecated) raise(run.env, d.code, d.message)
-        const notes = checkDefaults(run, spec.columns)
+        if (run.protocol === 'text') for (const d of deprecationWarnings(statement)) raise(run.env, d.code, d.message)
+        checkDefaults(run, spec.columns)
         if (temporary !== undefined) {
           if (exists && statement.ifNotExists !== true) throw sqlError('ER_TABLE_EXISTS_ERROR', `Table '${spec.name}' already exists`)
           if (!exists) {
@@ -780,15 +769,13 @@ export class SqlExecutor implements Executor {
         } else catalog.createTable(schema, spec, { ifNotExists: statement.ifNotExists === true })
         if (exists) {
           raise(run.env, 1050, `Table '${spec.name}' already exists`, 'Note')
-          return { affectedRows: 0, warnings: deprecated.length + notes + 1 }
+          return { affectedRows: 0 }
         }
         // AUTO_INCREMENT = n starts the counter there (8.4.11: the first row is n).
         const counter = Object.entries(statement.options).find(([k]) => k.toUpperCase() === 'AUTO_INCREMENT')?.[1]
         if (counter !== undefined && /^\d+$/.test(counter)) catalog.table(schema, spec.name).raiseAutoIncrement(BigInt(counter))
-        const duplicates = duplicateKeys(spec.indexes ?? [], fulltextOf(spec))
-        for (const key of duplicates) raise(run.env, 1831, duplicateKeyText(key, schema, spec.name))
-        const warnings = deprecated.length + notes + duplicates.length
-        if (statement.query === undefined || selected === undefined) return { affectedRows: 0, ...(warnings > 0 ? { warnings } : {}) }
+        for (const key of duplicateKeys(spec.indexes ?? [], fulltextOf(spec))) raise(run.env, 1831, duplicateKeyText(key, schema, spec.name))
+        if (statement.query === undefined || selected === undefined) return { affectedRows: 0 }
         // The rows are the INSERT … SELECT of them; a failure takes the table with it (8.4.11: 1062 leaves none).
         const fill: InsertNode = {
           kind: STATEMENT.INSERT,
@@ -813,8 +800,7 @@ export class SqlExecutor implements Executor {
               },
             }
         try {
-          const filled = state.statement(catalog.store, true, (trx) => finish(insert(filling, fill, trx)))
-          return { ...filled, ...(warnings + (filled.warnings ?? 0) > 0 ? { warnings: warnings + (filled.warnings ?? 0) } : {}) }
+          return state.statement(catalog.store, true, (trx) => finish(insert(filling, fill, trx)))
         } catch (e) {
           if (temporary !== undefined) temporary.drop(schema, spec.name)
           else catalog.dropTable(schema, spec.name, { ifExists: true })
@@ -899,17 +885,14 @@ export class SqlExecutor implements Executor {
         else state.rollback()
         // What the rollback took of the session's temporary tables is put back, with a warning (8.4.11: 1751, 1752).
         const restored = run.catalog?.temporary?.reconcile(rolledBack)
-        let warnings = 0
         if (restored?.made === true) {
           raise(run.env, 1751, 'The creation of some temporary tables could not be rolled back.')
-          warnings++
         }
         if (restored?.dropped === true) {
           raise(run.env, 1752, 'Some temporary tables were dropped, but these operations could not be rolled back.')
-          warnings++
         }
         if (statement.savepoint === undefined && statement.chain === true && this.catalog !== undefined) state.begin(this.catalog.store)
-        return { affectedRows: 0, ...(warnings > 0 ? { warnings } : {}) }
+        return { affectedRows: 0 }
       }
       case STATEMENT.SAVEPOINT:
         state.savepoint(statement.name)
@@ -957,10 +940,7 @@ export class SqlExecutor implements Executor {
     if (statement.name === 'mysql' && statement.ifNotExists !== true) throw systemSchema(statement.name)
     const made = catalog.createSchema(statement.name, { ifNotExists: statement.ifNotExists === true, collationId })
     // One that exists is a note under IF NOT EXISTS, and still "1 row affected" (8.4.11).
-    if (made === undefined) {
-      run.env.conditions?.push({ level: 'Note', code: 1007, message: `Can't create database '${statement.name}'; database exists` })
-      return { affectedRows: 1, warnings: 1 }
-    }
+    if (made === undefined) raise(run.env, 1007, `Can't create database '${statement.name}'; database exists`, 'Note')
     return { affectedRows: 1 }
   }
 
@@ -983,7 +963,7 @@ export class SqlExecutor implements Executor {
     if (exists) {
       if (statement.ifNotExists !== true) throw sqlError('ER_TABLE_EXISTS_ERROR', `Table '${name}' already exists`)
       raise(run.env, 1050, `Table '${name}' already exists`, 'Note')
-      return { affectedRows: 0, warnings: 1 }
+      return { affectedRows: 0 }
     }
     const spec = likeSpec(source, name)
     if (temporary !== undefined) {
@@ -998,17 +978,16 @@ export class SqlExecutor implements Executor {
     const session = run.env.session
     const schema = statement.view.schema ?? session.database
     if (schema === null) throw sqlError('ER_NO_DB_ERROR', messages.noDatabaseSelected())
-    if (findNode(statement.query, (n) => n.kind === QUERY.QUERY && (n as QueryExpression).into !== undefined)) throw sqlError('ER_VIEW_SELECT_CLAUSE', "View's SELECT contains a 'INTO' clause")
-    if (findNode(statement.query, (n) => n.kind === NODE.VARIABLE || n.kind === NODE.PLACEHOLDER)) throw sqlError('ER_VIEW_SELECT_VARIABLE', "View's SELECT contains a variable or parameter")
     const catalog = this.#catalog(run)
     catalog.schema(schema)
     // A view may not read a temporary table (8.4.11: 1352).
     let temporary: string | undefined
-    findNode(statement.query, (n) => {
+    someNode(statement.query, (node) => {
+      const n = node as { kind?: string }
       const t = n.kind === REF.TABLE ? (n as unknown as { table: TableName }).table : undefined
       const at = t?.schema ?? session.database
       if (t !== undefined && temporary === undefined && at !== null && catalog.temporary?.has(at, t.name) === true) temporary = t.name
-      return false
+      return undefined
     })
     if (temporary !== undefined) throw sqlError('ER_VIEW_SELECT_TMPTABLE', `View's SELECT refers to a temporary table '${temporary}'`)
     const def: ViewDef = {
@@ -1018,11 +997,10 @@ export class SqlExecutor implements Executor {
       ...(session.database === null ? {} : { database: session.database }),
       definer: `${session.user}@%`,
       collationConnection: session.characterSet,
-      ...(statement.columns === undefined ? {} : { columns: statement.columns }),
+      ...(statement.columns === undefined ? {} : { columns: statement.columns, listed: true as const }),
       ...(statement.algorithm === undefined ? {} : { algorithm: statement.algorithm }),
       ...(statement.checkOption === undefined ? {} : { checkOption: statement.checkOption }),
       ...(statement.security === undefined ? {} : { security: statement.security }),
-      ...(statement.columns === undefined ? {} : { listed: true as const }),
     }
     const planned = viewTable(run, { schema, name: def.name }, def.name, def)
     const columns = planned?.source.columns.map((c) => c.name) ?? def.columns
@@ -1050,7 +1028,7 @@ export class SqlExecutor implements Executor {
       run.state.commit()
       if (!catalog.schemas().some((s) => s.name === name) && statement.ifExists === true) {
         raise(run.env, 1008, `Can't drop database '${name}'; database doesn't exist`, 'Note')
-        return { affectedRows: 0, warnings: 1 }
+        return { affectedRows: 0 }
       }
       const tables = catalog.dropSchema(name, { ifExists: statement.ifExists === true })
       if (session.database === name) session.database = null
@@ -1062,14 +1040,12 @@ export class SqlExecutor implements Executor {
       run.state.commit()
       // One schema at a time, as the names are given; MySQL checks every name
       // first, and so does each call.
-      let notes = 0
       for (const schema of schemas as Set<string>) {
         const names = statement.names.filter((n) => (n.schema ?? session.database) === schema).map((n) => n.name)
         const missing = catalog.dropViews(schema, names, { ifExists: statement.ifExists === true })
         for (const name of missing) raise(run.env, 1051, `Unknown table '${schema}.${name}'`, 'Note')
-        notes += missing.length
       }
-      return { affectedRows: 0, ...(notes > 0 ? { warnings: notes } : {}) }
+      return { affectedRows: 0 }
     }
     // `DROP INDEX i ON t` is `ALTER TABLE t DROP INDEX i`, as MySQL runs it.
     if (statement.object === 'INDEX' && statement.on !== undefined) {
@@ -1089,7 +1065,7 @@ export class SqlExecutor implements Executor {
       if (missing.length > 0 && statement.ifExists !== true) throw sqlError('ER_BAD_TABLE_ERROR', `Unknown table '${missing.map((m) => `${m.schema}.${m.name}`).join(',')}'`)
       for (const n of names) temporary?.drop(n.schema, n.name)
       for (const m of missing) raise(run.env, 1051, `Unknown table '${m.schema}.${m.name}'`, 'Note')
-      return { affectedRows: 0, ...(missing.length > 0 ? { warnings: missing.length } : {}) }
+      return { affectedRows: 0 }
     }
     const held = (n: { schema: string; name: string }) => temporary?.has(n.schema, n.name) === true || catalog.tables().some((t) => t.schema === n.schema && t.name === n.name)
     // All or nothing, as 8.0's atomic DDL is: every missing table is named,
@@ -1108,14 +1084,12 @@ export class SqlExecutor implements Executor {
       }
     }
     run.state.commit()
-    let notes = 0
     for (const n of names) {
       if (catalog.dropTable(n.schema, n.name, { ifExists: true })) continue
       raise(run.env, 1051, `Unknown table '${n.schema}.${n.name}'`, 'Note')
-      notes++
     }
     // IF EXISTS notes each name it did not find, a view's included (8.4.11: 1051).
-    return { affectedRows: 0, ...(notes > 0 ? { warnings: notes } : {}) }
+    return { affectedRows: 0 }
   }
 
   #set(run: Run, statement: SetNode): StatementResult {
@@ -1123,15 +1097,12 @@ export class SqlExecutor implements Executor {
     const session = run.env.session
     const evaluate = (e: Expression): Value => compile(e, compileContext(run, EMPTY_SCOPE, 'field list')).eval([], run.env)
     const wasAutocommit = session.autocommit
-    let warnings = 0
     for (const item of statement.items) {
       if (item.type === 'user') {
-        const v = evaluate(item.value)
-        state.userVariables.set(item.name.replace(/^@/, '').toLowerCase(), plainValue(v))
+        state.userVariables.set(item.name.toLowerCase(), plainValue(evaluate(item.value)))
         continue
       }
       const changed = this.server.set(session, item, evaluate, state.ownVariables, (code, message) => {
-        warnings++
         raise(run.env, code, message)
       })
       if (changed === 'sql_mode') state.sqlModeAssigned = true
@@ -1139,14 +1110,15 @@ export class SqlExecutor implements Executor {
       // setting, so the variable reaches the transactions (found by review).
       const sessionScoped = item.type === 'name' || (item.type === 'system' && (item.scope === undefined || item.scope === 'SESSION'))
       if (sessionScoped && /^(transaction_isolation|tx_isolation)$/i.test(item.name)) {
-        const v = state.ownVariables.get(item.name.toLowerCase())
-        state.ownVariables.delete(item.name.toLowerCase())
+        const name = item.name.toLowerCase()
+        const v = state.ownVariables.get(name)
+        state.ownVariables.delete(name)
         if (v !== undefined && v !== null) state.setIsolation(toText(v))
       }
     }
     // `SET autocommit = 1` commits whatever the session had open.
     if (!wasAutocommit && session.autocommit) state.commit()
-    return { affectedRows: 0, ...(warnings > 0 ? { warnings } : {}) }
+    return { affectedRows: 0 }
   }
 
   /**
@@ -1314,15 +1286,6 @@ function likeText(name: string, pattern: string): boolean {
     else re += c.replace(/[.*+?^${}()|[\]\\/]/g, '\\$&')
   }
   return new RegExp(`^${re}$`, 'is').test(name)
-}
-
-/** Whether any node under `root` — expression or query — satisfies `test`. */
-function findNode(root: unknown, test: (n: { readonly kind: string }) => boolean): boolean {
-  return someNode(root, (value) => {
-    const n = value as { kind?: unknown }
-    if (typeof n.kind === 'string' && test(n as { kind: string })) return true
-    return undefined
-  })
 }
 
 /**

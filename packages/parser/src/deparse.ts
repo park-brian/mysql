@@ -193,9 +193,10 @@ class Deparser {
       case NODE.COLUMN:
         return e.parts.map((p, i) => (p === '*' && i === e.parts.length - 1 ? '*' : quoteName(p))).join('.')
       case NODE.VARIABLE: {
-        // `@a` stays as written; `@'a b'` is re-quoted. A system variable is
-        // never quoted: `@@session.sql_mode` is three tokens' worth of name.
-        const prefix = e.name.startsWith('@@') ? '@@' : '@'
+        // System components retain quoted dots; only their first qualifier is bare.
+        const parts = e.parts
+        if (parts !== undefined) return '@@' + parts.map((part, i) => i === 0 && parts.length > 1 ? part : quoteName(part)).join('.')
+        const prefix = !e.user && e.name.startsWith('@@') ? '@@' : '@'
         const name = e.name.slice(prefix.length)
         return prefix === '@@' || /^[A-Za-z0-9_$.]+$/.test(name) ? e.name : prefix + quoteName(name)
       }
