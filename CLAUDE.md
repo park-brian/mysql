@@ -42,9 +42,10 @@ BLOB promotion rule with metadata. Actual DISTINCT/group/derived writers now
 normalize stored DECIMAL values, closing the measured streamed-join copy gaps.
 Grouped AVG arithmetic now retains quotient digits while actual window and
 derived/CTE fields keep their stored scale. Ordinary temporary AVG now stores
-its running total at input scale, preserving accumulation order. Next is
-DISTINCT AVG argument copying, followed by supplementary identifier-alias
-admission. Broader strategy and
+its running total at input scale, preserving accumulation order. DISTINCT AVG
+and typed DECIMAL caches now share canonical declared-scale values. Next is
+explicit DECIMAL CAST display, then chained-division precision and supplementary
+identifier-alias admission. Broader strategy and
 measured field-copy gaps stay open.
 The cost-based planner (M5.7, M5.42–M5.46) is done:
 `EXPLAIN FORMAT=TREE` prints the plan that runs, and 2,124 of the relational

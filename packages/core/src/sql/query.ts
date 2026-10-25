@@ -13,7 +13,7 @@ import type { ColumnDef, IndexDef, Table, TableDef, ViewDef } from '@myjs/engine
 import { LITERAL, NODE, QUERY, REF, TOKEN, deparse, lex, parseStatement, type Expression, type OrderItem, type QueryBody, type QueryExpression, type SelectNode, type TableReference, type SetOperationNode, type TableName, type Token } from '@myjs/parser'
 import { messages, sqlError, type ColumnDefinition, type ResultSet, type RowValue } from '@myjs/protocol'
 import { intValue, storageWidth, toInteger, truth, withoutHex, type Value } from '@myjs/types'
-import { compile, convertTo, EMPTY_SCOPE, readSlot, type CompileContext, type Compiled, type Env, type GroupKeys, type QuantifiedSubquery, type Scope, type SubqueryPlan } from './compile.ts'
+import { compile, convertTo, decimalField, EMPTY_SCOPE, readSlot, type CompileContext, type Compiled, type Env, type GroupKeys, type QuantifiedSubquery, type Scope, type SubqueryPlan } from './compile.ts'
 import { AggregateSink, chooseStrategy, containsAggregate, groupRows, isAggregate } from './group.ts'
 import { WindowSink, applyWindows, containsWindow } from './window.ts'
 import { CHARSET_UTF8MB4_BIN, columnDefinition, intType, type ResultType } from './meta.ts'
@@ -644,11 +644,6 @@ function deliverStage(items: readonly Compiled[], keys: readonly SortKey[], dedu
       return out
     },
   }
-}
-
-/** A stored DECIMAL reads its declared value, not the original item's branch reader. */
-function decimalField(item: Compiled): Compiled {
-  return item.type.kind === 'decimal' ? { type: item.type, eval: (row, env) => convertTo(item.eval(row, env), item.type) } : item
 }
 
 /** Patch output metadata without replacing the expression's evaluator. */

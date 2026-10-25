@@ -57,7 +57,7 @@ import {
   type Value,
   valueBytes,
 } from '@myjs/types'
-import { AGGREGATE_NAMES, asNumber, compile, readSlot, type CompileContext, type Compiled, type Env, type Row } from './compile.ts'
+import { AGGREGATE_NAMES, asNumber, compile, decimalField, readSlot, type CompileContext, type Compiled, type Env, type Row } from './compile.ts'
 import { firstKey, rowKey, valueKey } from './keys.ts'
 import { asJson } from './json.ts'
 import { decimalType, doubleType, floatLength, intType, jsonType, stringType, type ResultType } from './meta.ts'
@@ -267,7 +267,9 @@ export class AggregateSink {
       case 'JSON_OBJECTAGG':
         return jsonAggregate(name, args, type)
       default: {
-        const arg = args[0] as Compiled
+        const source = args[0] as Compiled
+        // DISTINCT AVG copies its DECIMAL argument before either keying or addition.
+        const arg = distinct && name === 'AVG' ? decimalField(source) : source
         return {
           name,
           type,

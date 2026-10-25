@@ -2263,7 +2263,8 @@ export function convertTo(v: Value, t: ResultType): Value {
   if (v === null) return null
   switch (t.kind) {
     case 'decimal':
-      return v.kind === 'int' || v.kind === 'decimal' ? rescale(toDecimal(v), t.scale) : v
+      // The declared type owns display scale, even when held and target scales match.
+      return v.kind === 'int' || v.kind === 'decimal' ? decimalValue(rescale(toDecimal(v), t.scale).v, t.scale) : v
     case 'double':
       return doubleOf(v, t)
     case 'bytes':
@@ -2276,12 +2277,11 @@ export function convertTo(v: Value, t: ResultType): Value {
   }
 }
 
-/**
- * A branch of IF or CASE, as its result reads it: a BIT branch under a
- * DECIMAL, binary or BIT result is its own bytes, as wide as it is, which
- * is what `val_str` passes through (8.4.11: `IF(1, b, 0)` sends 0x05 as the
- * DECIMAL's text, and `IF(1, b8, b12)` one byte).
- */
+/** A stored DECIMAL reads its declared value, not the original item's branch reader. */
+export function decimalField(item: Compiled): Compiled {
+  return item.type.kind === 'decimal' ? { type: item.type, eval: (row, env) => convertTo(item.eval(row, env), item.type) } : item
+}
+
 /** A value's text as its type shows it: a YEAR is four digits, `0000` for zero; a FLOAT has a float's digits (8.4.11). */
 export function textOf(v: Exclude<Value, null>, t: ResultType): string {
   if (t.field === FIELD_TYPE.YEAR && t.column !== undefined && v.kind === 'int') return v.v.toString().padStart(4, '0')
@@ -2301,6 +2301,12 @@ export function asBinary(v: Exclude<Value, null>, from: ResultType): Value {
   return v.kind === 'string' ? bytesValue(encodeCollation(v.v, v.collationId)) : v
 }
 
+/**
+ * A branch of IF or CASE, as its result reads it: a BIT branch under a
+ * DECIMAL, binary or BIT result is its own bytes, as wide as it is, which
+ * is what `val_str` passes through (8.4.11: `IF(1, b, 0)` sends 0x05 as the
+ * DECIMAL's text, and `IF(1, b8, b12)` one byte).
+ */
 export function branchOf(x: Compiled, result: ResultType): Compiled['eval'] {
   if (ownText(x.type) && result.kind === 'string') {
     const id = result.collationId
