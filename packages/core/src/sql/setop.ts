@@ -86,11 +86,15 @@ export function setOperationType(types: readonly ResultType[], connectionCollati
   live = live.map((t) => t.field === FIELD_TYPE.BIT && t.column !== undefined ? { ...t, kind: 'bytes', coercibility: COERCIBILITY.IMPLICIT } : t)
   const binary = aggregateCollations(live, 'UNION', false)?.collationId === CHARSET_BINARY
   const collationId = binary ? CHARSET_BINARY : aggregateTypes(live, connectionCollation)
-  const blob = live.find((t) => t.blobBytes !== undefined || t.field === FIELD_TYPE.BLOB)
-  if (blob !== undefined) {
-    const bytes = Math.max(...live.map((t) => t.blobBytes ?? 0))
-    const mb = blob.kind === 'string' ? requireCollationInfo(blob.collationId).mbmaxlen : 1
-    return done({ ...stringType(bytes * mb, collationId, nullable), field: FIELD_TYPE.BLOB, blobBytes: bytes * mb })
+  if (live.some((t) => t.blobBytes !== undefined || t.field === FIELD_TYPE.BLOB)) {
+    // Computed BLOB widths already count bytes. Other branches are sized
+    // in their own charset for binary output, or in the text holder's charset.
+    const bytes = Math.min(4294967295, Math.max(...live.map((t) => {
+      const width = t.blobBytes ?? charWidth(t)
+      if (t.blobBytes !== undefined && t.column === undefined) return width
+      return width * requireCollationInfo(binary && t.kind === 'string' ? t.collationId : collationId).mbmaxlen
+    })))
+    return done({ ...stringType(bytes, collationId, nullable), field: FIELD_TYPE.BLOB, blobBytes: bytes })
   }
   const sameField = live.every((t) => t.field === (live[0] as ResultType).field) && (live[0] as ResultType).field === FIELD_TYPE.STRING
   // Binary: as wide as the widest branch in its own bytes — a string's

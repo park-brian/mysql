@@ -22,7 +22,9 @@ with 8.4.11; the committed coercion corpus also agrees completely (M5.2).
 Some function behavior and optimizer strategies remain partial. M5.19 numeric
 set-operation holders now agree with the expanded native audits, including
 default/fixed FLOAT behavior. Raw BIT with VARCHAR/VARBINARY now shares the
-collation resolver, including explicit text overrides. Source-to-text FLOAT,
+collation resolver, including explicit text overrides. BLOB holders now size
+raw/computed branches in the proper charset without counting bytes twice.
+Source-to-text FLOAT,
 BIT-to-BLOB copying and computed BIT reads remain open, as does a separate
 M5.10 scalar COALESCE reader.
 M5's ORM exit criterion holds with recorded test configuration; default
