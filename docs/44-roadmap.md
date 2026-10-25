@@ -116,8 +116,9 @@ work are:
 
 **Next bounded slice: system-variable identity and diagnostic-count admission.**
 Failed PREPARE publication and diagnostic SHOW admission are repaired below.
-COM_QUERY preflight failure publication and comment-only completion are now
-verified below. Preserve system-variable quoting/qualification and add diagnostic-count
+COM_QUERY preflight failure publication, comment-only completion and linear
+error trimming are verified below. Preserve system-variable quoting/qualification
+and add diagnostic-count
 PREPARE admission together, including nested expressions and refusal precedence.
 The identity-only prototype would replace four accidental matching null field
 vectors with descriptors on commands native refuses, so those repairs must
@@ -267,6 +268,31 @@ long UTF-8 cases still differ because native caps bytes and renders a partial
 trailing sequence, while the current cap counts characters. Keep this M3.9
 message-formatting follow-up open; it is not hidden in the ASCII/short-Unicode
 fixture or claimed as repaired.
+
+**Linear error-suffix repair, verified (2026-10-25):** Independent review
+found that 3f50bad's whitespace regex could retry an interior run from each
+starting position. The lexer now scans the trailing ASCII suffix backwards
+with a strictly decreasing index, then caps the retained text. Scanner
+membership and suffix trimming share the six-character set; no regex retry
+or SQL-spelling exception is involved. Native non-ASCII endings stay intact.
+
+Five golden errors captured from MySQL 8.4.11 encode million-space inputs
+losslessly as recipes: interior whitespace followed by text, interior plus
+trailing whitespace, all-trailing whitespace and two non-ASCII endings. An
+isolated child process bounds a regression's failure to ten seconds. The prior
+code actually hits that timeout; all five repaired cases finish in roughly
+140 ms in local Docker and match every native error field; the marker stays
+at source offset seven.
+All 448 prior query outcomes are strictly unchanged and native; all 110 PREPARE
+failure outcomes still pass. The long UTF-8 byte-cutoff follow-up stays open.
+
+Fresh Docker passes 1,352 ordinary plus four latency tests, typecheck, lint,
+nine unchanged caps, package/typed smoke, the real client and all seven pinned
+corpora. All 351 test files/fixtures, 201 runtime sources and reference tooling/
+manifests/CI match its snapshot; 20,000 executor statements seeded 20261010 pass.
+Core/facade are 334,311/334,219 B. Preceding 3f50bad passes all eleven required
+CI jobs; the new regression covers a case those jobs previously missed.
+Optional ORM is skipped. Totals remain 144/190.
 
 The parked parts-based identity prototype passes typecheck and 63 parser tests;
 its first 96-outcome audit improves 31 to 72 complete matches, including all

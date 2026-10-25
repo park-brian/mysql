@@ -4,6 +4,8 @@
 // not be able to swallow a backslash and escape a quote. Everything else here
 // exists so that the lexer is trustworthy enough for that claim to mean
 // something.
+import { spawnSync } from 'node:child_process'
+import largeErrors from './fixtures/lexer-large-errors.json' with { type: 'json' }
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { encodeCharset } from '@myjs/charsets'
@@ -312,4 +314,29 @@ test('M3.1: a text-protocol lexer rejects markers while keeping quoted and comme
   const text = "SELECT '?' /* ? */ -- ?" + String.fromCharCode(10)
   assert.equal(lex(text, { parameters: false }).some((t) => t.kind === TOKEN.PLACEHOLDER), false)
   assert.deepEqual(lex('SELECT ?, ?', { parameters: true }).filter((t) => t.kind === TOKEN.PLACEHOLDER).map((t) => t.index), [0, 1])
+})
+
+test('large rejected texts finish without backtracking over interior whitespace', () => {
+  assert.equal(largeErrors.mysqlVersion, '8.4.11')
+  const script = `
+    import { lex } from '@myjs/parser'
+    import { readFileSync } from 'node:fs'
+    const capture = JSON.parse(readFileSync(0, 'utf8'))
+    const failures = capture.cases.map((entry) => {
+      const sql = capture.prefix + entry.tail.map((part) => typeof part === 'string' ? part : ' '.repeat(part.spaces)).join('')
+      try {
+        lex(sql, { parameters: false })
+        return null
+      } catch (e) {
+        return [e.code, e.errno, e.sqlState, e.message, e.offset]
+      }
+    })
+    process.stdout.write(JSON.stringify(failures))
+  `
+  const child = spawnSync(process.execPath, ['--input-type=module', '-e', script], {
+    cwd: new URL('../..', import.meta.url), input: JSON.stringify(largeErrors), encoding: 'utf8', timeout: 10_000,
+  })
+  assert.equal(child.error, undefined)
+  assert.equal(child.status, 0, child.stderr)
+  assert.deepEqual(JSON.parse(child.stdout), largeErrors.cases.map((entry) => [...entry.error, 7]))
 })

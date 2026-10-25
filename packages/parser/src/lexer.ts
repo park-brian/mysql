@@ -38,8 +38,7 @@ export interface LexOptions {
 }
 
 /** Characters MySQL treats as whitespace between tokens. */
-// Terminal ASCII whitespace; scanner membership checks pass a single character.
-const SPACE = /[ \t\n\r\f\v]+(?![\s\S])/
+const SPACE = new Set([' ', '\t', '\n', '\r', '\f', '\v'])
 
 const DIGITS = /[0-9]/
 /**
@@ -156,8 +155,9 @@ class Lexer {
 
   #fail(trim = false): never {
     // Parameter admission trims trailing SQL whitespace before capping the suffix.
-    const sql = trim ? this.#sql.replace(SPACE, '') : this.#sql
-    throw parseError(sql.slice(this.#at, this.#at + 80), this.#line, this.#at)
+    let end = this.#sql.length
+    while (trim && SPACE.has(this.#sql[end - 1] ?? '')) end--
+    throw parseError(this.#sql.slice(this.#at, Math.min(end, this.#at + 80)), this.#line, this.#at)
   }
 
   #token(kind: TokenKind, text: string, start: number, startLine: number, extra: Partial<Token> = {}): Token {
@@ -171,7 +171,7 @@ class Lexer {
     for (;;) {
       const c = this.#peek()
       if (c === '') return
-      if (SPACE.test(c)) {
+      if (SPACE.has(c)) {
         this.#advance()
         continue
       }
@@ -184,7 +184,7 @@ class Lexer {
       // arithmetic, not a comment, and MySQL differs from most dialects here.
       if (c === '-' && this.#peek(1) === '-') {
         const after = this.#peek(2)
-        if (after === '' || SPACE.test(after)) {
+        if (after === '' || SPACE.has(after)) {
           this.#skipToEol()
           continue
         }
