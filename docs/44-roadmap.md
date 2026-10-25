@@ -114,17 +114,14 @@ and browser work follow the outstanding engine/planner work. Remaining function
 boundaries stay open for separate verification. The current state and remaining
 work are:
 
-**Next bounded slice: M5.10 prepared rounding places.** The declared result
-writer and effective rounding places are repaired below. Eighty retained
-ROUND/TRUNCATE observations cover direct places and seven nested placeholder
-forms. Current resolution reads placeholders as constant NULL, choosing scale
-zero or folding a fallback/boolean to scale four or one; native retains input
-scale nine in every case. Pin prepare/execute metadata, rebinding and NULL
-behavior before changing constant classification. Keep literal NULL, row-dependent
-places, integer/DOUBLE behavior and shared constant consumers authoritative.
+**Next bounded slice: M5.10 retained DECIMAL division precision.** Prepared
+rounding scales and FLOOR boundaries are verified below. Prove the physical/
+displayed scale contract across zero, cancellation and AVG before changing
+division. Preserve typed field/cache boundaries, already matching arithmetic,
+NULL/warning behavior and both protocols. Both operand word padding and result
+buffer capacity must follow the pinned implementation.
 
-Then resume retained DECIMAL division precision. Both operand word padding and
-result-buffer bounds matter in the pinned [division implementation](https://github.com/mysql/mysql-server/blob/mysql-8.4.11/mysys/decimal.cc).
+Both operand word padding and result-buffer bounds matter in the pinned [division implementation](https://github.com/mysql/mysql-server/blob/mysql-8.4.11/mysys/decimal.cc).
 Eighteen additional zero/cancellation/AVG observations have every field/warning/
 error native but only ten current row matches. CAST((0/3+1)/7 AS DECIMAL(30,18))
 and the analogous cancellation of 1/3 already agree at 0.142857142000000000;
@@ -399,6 +396,42 @@ example smoke, real-client checks and all seven pinned corpora. Another
 and 201 runtime sources exactly match the fresh tested snapshot. M5.10 stays
 partial, totals 144/190. Preceding e812105/run 40205924201 passes all eleven
 blocking jobs; optional ORM is skipped.
+
+**Verified prepared places and FLOOR boundaries (2026-10-25):**
+The existing constant AST proof gains an opt-in parameter exclusion for
+ROUND/TRUNCATE type resolution; default statement-constant consumers retain
+their classification. Both callback consumers use explicit wrappers so array
+indices cannot become policy arguments. A new native regression pins 3,962
+complete observations, including eighty PREPARE descriptors, direct and seven
+nested place forms, query/execute/retained-statement rebinding, NULLs and two
+write states. Literal NULL, parameter-free and volatile functions, row-dependent
+places and integer/DOUBLE branches remain controls. The nearby numeric helper
+shares DECIMAL construction and removes redundant metadata and dead conditional
+logic under the unchanged caps.
+
+Native FLOOR/CEIL/CEILING boundary controls exposed an existing error: the
+decimal-to-BIGINT threshold was four digits too small. The pinned native rule
+admits at most eighteen result integer digits, including the carry already
+reserved for fractional inputs. The corrected value reader and descriptor use
+that same condition. All 282 boundary/reader controls agree, including the
+18/19-digit transition, signed/unsigned integers, DOUBLE, arithmetic and CAST
+consumers. This additional semantic repair is explicit, rather than described
+as cleanup. No public API, default constant-folding or shared division change.
+
+The complete native matrix improves from 2,810 to all 3,962 matching outcomes;
+row vectors improve 3,050 to 3,962, and every warning vector is preserved. No
+earlier matching component is lost. Preceding code fails PREPARE; the initial
+parameter-only repair also fails the added decimal FLOOR boundary controls.
+All eight focused regressions pass. All 1,024 earlier literal/row-place audit
+outcomes are strictly unchanged; all eighty original prepared-place outcomes
+now agree. Fresh Docker --reference passes 1,346 main tests, four latency
+tests, typecheck, lint, nine unchanged size caps, installed-package/typed-example
+smoke, real-client checks and all seven pinned corpora. Another 20,000 executor
+statements seeded 20261010 pass. All 342 test files/fixtures and 201 runtime
+sources exactly match the fresh tested snapshot. Core/facade are
+334,359/334,266 B. Preceding f37765f/run 40206806807 passes all
+eleven blocking jobs; optional ORM is skipped. M5.10 remains partial, totals
+144/190. Retained division representation remains the next proof below.
 
 **Next word-precision proof:** sixteen more native observations match every
 field/warning/error but only four current row vectors. A denominator's retained

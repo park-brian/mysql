@@ -533,12 +533,12 @@ function numberFunction(name: string, args: readonly Compiled[], callName: strin
       const x = xs[0] as Compiled
       const up = name !== 'FLOOR'
       const t = x.type
-      if (t.kind === 'int') return { eval: (r, env) => x.eval(r, env), type: { ...intType(21, t.nullable, t.unsigned), unsigned: t.unsigned } }
+      if (t.kind === 'int') return { eval: (r, env) => x.eval(r, env), type: intType(21, t.nullable, t.unsigned) }
       if (t.kind === 'decimal') {
         const precision = Math.min(65, t.length - t.scale + (t.scale !== 0 ? 1 : 0))
-        const asInt = precision + 1 < 18 - 2 || precision < 18 - 2
         const type = decimalType(precision, 0, t.nullable)
-        const small = charWidth(type) < 18 - 2
+        // Eighteen result digits always fit in a signed BIGINT.
+        const small = precision < 19
         return {
           eval: (r, env) => {
             const v = x.eval(r, env)
@@ -547,7 +547,7 @@ function numberFunction(name: string, args: readonly Compiled[], callName: strin
             const q = toWhole(d, up ? 'ceil' : 'floor')
             return small ? intValue(q) : decimalValue(q, 0)
           },
-          type: small || asInt ? (small ? intType(21, t.nullable) : type) : type,
+          type: small ? intType(21, t.nullable) : type,
         }
       }
       return {
@@ -591,7 +591,7 @@ function numberFunction(name: string, args: readonly Compiled[], callName: strin
         }
       }
       if (t.kind === 'decimal') {
-        const fixed = places === undefined ? 0n : constantInt(places, constant[1] === true, ctx, false)
+        const fixed = places === undefined ? 0n : constantInt(places, constantNode(written[1], false), ctx, false)
         const wanted = fixed === undefined ? t.scale : fixed === null ? 0 : Number(fixed < -30n ? -30n : fixed > 30n ? 30n : fixed)
         let precision = t.length
         let scale = t.scale
@@ -611,10 +611,8 @@ function numberFunction(name: string, args: readonly Compiled[], callName: strin
             const v = x.eval(r, env)
             const p = placesOf(r, env)
             if (v === null || p === null) return null
-            const d = toDecimal(v)
             const at = Math.max(-65, Math.min(scale, Number(p)))
-            const rounded = roundDecimal(d, at, truncate)
-            return convertTo(rounded, type)
+            return convertTo(roundDecimal(toDecimal(v), at, truncate), type)
           },
           type,
         }
@@ -779,7 +777,7 @@ function roundDecimal(d: DecimalValue, places: number, truncate: boolean): Decim
   const rem = d.v % unit
   const away = !truncate && (rem < 0n ? -rem : rem) * 2n >= unit
   const whole = q + (away ? (d.v < 0n ? -1n : 1n) : 0n)
-  return places >= 0 ? { kind: 'decimal', v: whole, scale: places } : { kind: 'decimal', v: whole * 10n ** BigInt(-places), scale: 0 }
+  return decimalValue(places < 0 ? whole * 10n ** BigInt(-places) : whole, Math.max(0, places))
 }
 
 /** `my_double_round`: half to even, as `rint`, at `places`, which may be negative. */
@@ -1576,7 +1574,7 @@ const HASH_FUNCTIONS: ReadonlySet<string> = new Set(['MD5', 'SHA1', 'SHA', 'CRC3
 export const STRING_FUNCTIONS: ReadonlySet<string> = new Set([...LIBRARY, ...MORE_STRING_FUNCTIONS])
 
 export function stringFunction(name: string, e: CallNode, ctx: CompileContext): Compiled {
-  const constant = e.args.map(constantNode)
+  const constant = e.args.map((a) => constantNode(a))
   if (LIBRARY.has(name)) {
     // TRIM's side is a keyword argument, carried as such.
     const xs = e.args.map((a): Compiled => (a.kind === NODE.KEYWORD ? Object.assign({ eval: () => null, type: NULL_TYPE }, { keyword: a.word }) : compile(a, ctx)))

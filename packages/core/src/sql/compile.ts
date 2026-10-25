@@ -1475,11 +1475,11 @@ function comparisonTime(c: Compiled, preserveDate = true): Compiled {
   }
 }
 
-/** An expression whose value the statement fixes: no column, subquery, variable or volatile function in it. */
-export function constantNode(e: unknown): boolean {
+/** A statement-fixed value; type resolution can also exclude parameters. */
+export function constantNode(e: unknown, parameters = true): boolean {
   return !someNode(e, (value) => {
     const n = value as { kind?: unknown; name?: unknown }
-    if (n.kind === NODE.COLUMN || n.kind === NODE.SUBQUERY || n.kind === NODE.VARIABLE) return true
+    if (n.kind === NODE.COLUMN || n.kind === NODE.SUBQUERY || n.kind === NODE.VARIABLE || (!parameters && n.kind === NODE.PLACEHOLDER)) return true
     if (n.kind === NODE.CALL && VARIES_PER_EVALUATION.has(String(n.name).toUpperCase())) return true
     return undefined
   })
@@ -1880,7 +1880,7 @@ function inList(negated: boolean, left: Expression, right: Expression, ctx: Comp
   }
   const compiled = compile(left, ctx)
   const literalConstants = list.every(constantItem)
-  const allConstant = literalConstants || list.every(constantNode)
+  const allConstant = literalConstants || list.every((e) => constantNode(e))
   const timeColumn = compiled.type.kind === 'time' && left.kind === NODE.COLUMN
   // One item is `=`, whose text constant beside a date must be one (1525); a list's need not (8.4.11).
   const entries = list.map((i) => compile(i, ctx))

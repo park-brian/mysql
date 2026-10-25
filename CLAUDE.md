@@ -46,9 +46,10 @@ its running total at input scale, preserving accumulation order. DISTINCT AVG
 and typed DECIMAL caches now share canonical declared-scale values; explicit
 DECIMAL CAST reuses that conversion and preserves its diagnostics. ROUND and
 TRUNCATE now use it at their declared result writer, preserving raw IF readers,
-and clamp places before a single rounding operation. Next is prepared-place
-resolution, then
-retained division precision across both operands and result-buffer bounds,
+and clamp places before a single rounding operation. Prepared rounding places
+retain input scale; FLOOR/CEIL now share the native eighteen-digit BIGINT
+boundary. Next is retained division precision across both operands and
+result-buffer bounds,
 followed by supplementary identifier-alias admission. Broader strategy and
 measured field-copy gaps stay open.
 The cost-based planner (M5.7, M5.42–M5.46) is done:
