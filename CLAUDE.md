@@ -48,7 +48,8 @@ DECIMAL CAST reuses that conversion and preserves its diagnostics. ROUND and
 TRUNCATE now use it at their declared result writer, preserving raw IF readers,
 and clamp places before a single rounding operation. Prepared rounding places
 retain input scale; FLOOR/CEIL now share the native eighteen-digit BIGINT
-boundary. Next is the grouped DISTINCT strategy and intermediate AVG-field
+boundary. Repeated grouping columns now require each physical index part once;
+ROLLUP retains its positional keys. Next is the grouped DISTINCT strategy and intermediate AVG-field
 copy proved necessary to preserve matching rows; retained division precision
 across both operands and result-buffer bounds follows,
 followed by supplementary identifier-alias admission. Broader strategy and

@@ -123,6 +123,28 @@ is absent or eliminated by the retained grouping keys. Pin that elimination
 proof and both aggregate kinds before broadening to HAVING, LIMIT, ROLLUP or
 windows. The native plan and its actual writers must make the decision.
 
+**Grouping-key index proof, verified (2026-10-25):** The
+elimination controls exposed a prerequisite within the existing strategy
+owner: repeated non-ROLLUP grouping columns must require each physical index
+part only once. Name normalization is computed once, and the prefix proof
+checks every required column without allocating a sliced index-part array.
+Logical key tuples and ROLLUP positions remain intact. Single-use integer and
+temporal aggregate precision helpers are folded into their existing shape
+resolver; YEAR remains an integer input. A native-backed regression pins 498
+complete observations, including both protocols, plans, aliases/positions,
+composite keys, appended primary-key parts, NULLs, two PREPARE descriptors,
+twelve retained executions across writes, empty inputs and temporal controls.
+It passes against native/current and fails on preceding code. Complete matches
+improve from 210 to 498, rows from 350 to 498 and fields from 346 to 498;
+no previously matching component is lost. All 32 ROLLUP and 32 temporal
+observations remain strictly unchanged. All nine caps pass at core/facade
+334,340/334,243 B. Docker passes 1,347 ordinary tests plus all four latency
+tests, typecheck, lint, package smoke, the real-client exit criterion and all
+seven pinned corpora. The reusable Docker snapshot matches all 344 test
+files/fixtures and 201 runtime sources exactly; 20,000 seeded executor
+statements also pass. This does not complete grouped DISTINCT materialization
+or M5.5.
+
 **Division prototype is parked (2026-10-25):** committed dab5aa4 remains the
 validated baseline. A disposable-container experiment with separate physical/
 display scales, both operand paddings and nine-word division capacity improves

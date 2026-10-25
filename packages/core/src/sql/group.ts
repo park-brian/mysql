@@ -77,29 +77,20 @@ export function containsAggregate(e: unknown): boolean {
 
 // --- types ------------------------------------------------------------------------
 
-/** The digits of an integer type, its sign aside. */
-const intPrecision = (t: ResultType): number => (t.unsigned ? t.length : t.length - 1)
-
-/** The digits a temporal is as a number: a DATE is 8, a DATETIME 14, a TIME 7, and each fractional digit one more. */
-function temporalPrecision(t: ResultType): number {
-  if (t.field === FIELD_TYPE.DATE || t.field === FIELD_TYPE.NEWDATE) return 8
-  if (t.field === FIELD_TYPE.TIME) return 7 + t.scale
-  if (t.field === FIELD_TYPE.YEAR) return 4
-  return 14 + t.scale
-}
-
 /** The precision and scale an argument has as a DECIMAL, or `undefined` for one that sums as a double. */
 function exactShape(t: ResultType): { precision: number; scale: number } | undefined {
   // A hex literal sums as the unsigned integer it is.
   if (t.literalInt !== undefined) return { precision: t.literalInt.digits, scale: 0 }
   switch (t.kind) {
     case 'int':
-      return { precision: intPrecision(t), scale: 0 }
+      return { precision: t.length - (t.unsigned ? 0 : 1), scale: 0 }
     case 'decimal':
       return { precision: t.length, scale: t.scale }
     case 'datetime':
-    case 'time':
-      return { precision: temporalPrecision(t), scale: t.field === FIELD_TYPE.DATE ? 0 : t.scale }
+    case 'time': {
+      const date = t.field === FIELD_TYPE.DATE || t.field === FIELD_TYPE.NEWDATE
+      return { precision: date ? 8 : (t.kind === 'time' ? 7 : 14) + t.scale, scale: date ? 0 : t.scale }
+    }
     default:
       return undefined
   }
@@ -562,13 +553,18 @@ export function* groupRows(source: Iterable<{ readonly row: Row }>, plan: GroupP
 export function chooseStrategy(def: TableDef | undefined, keyColumns: readonly (string | undefined)[], rollup: boolean, distinctAggregate: boolean): { strategy: GroupStrategy; index?: string } {
   if (keyColumns.length === 0) return { strategy: 'implicit' }
   if (def !== undefined && keyColumns.every((c) => c !== undefined)) {
+    // Match canonical names once; repeated grouping columns need one physical part.
+    const normalized = keyColumns.map((column) => column.toLowerCase())
+    const columns = rollup ? normalized : [...new Set(normalized)]
     const pk = clusteredIndex(def)
     const ordered = def.indexes.filter((i) => i.invisible !== true).sort((a, b) => (a === pk ? -1 : b === pk ? 1 : 0))
     for (const index of ordered) {
       // A secondary index carries the clustered key after its own parts.
       const parts = indexParts(def, index)
-      if (parts.length < keyColumns.length) continue
-      if (parts.slice(0, keyColumns.length).every((p, i) => p.prefix === undefined && p.descending !== true && p.column.toLowerCase() === (keyColumns[i] as string).toLowerCase())) {
+      if (columns.every((column, i) => {
+        const part = parts[i]
+        return part?.column.toLowerCase() === column && part.prefix === undefined && part.descending !== true
+      })) {
         return { strategy: 'index', index: index.name }
       }
     }
