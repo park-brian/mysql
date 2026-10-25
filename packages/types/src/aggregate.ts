@@ -36,8 +36,11 @@ export interface Accumulator {
   result(): Value
 }
 
-/** `SUM`: exact over integers, DECIMALs and temporals; a double over anything else. NULL over no rows. */
-export function sumAccumulator(exact: boolean): Accumulator {
+/**
+ * `SUM`: exact over integers, DECIMALs and temporals; a double over anything else.
+ * NULL over no rows. An actual stored exact total rounds to `storedScale` after each add.
+ */
+export function sumAccumulator(exact: boolean, storedScale?: number): Accumulator {
   let total: DecimalValue | number | undefined
   return {
     add(v) {
@@ -49,6 +52,8 @@ export function sumAccumulator(exact: boolean): Accumulator {
           const scale = Math.max(t.scale, d.scale)
           total = decimal(rescale(t, scale).v + rescale(d, scale).v, scale)
         }
+        // An actual temporary aggregate stores its running sum after each add.
+        if (storedScale !== undefined) total = rescale(total, storedScale)
       } else total = ((total as number | undefined) ?? 0) + toDouble(v)
     },
     result() {
@@ -58,9 +63,12 @@ export function sumAccumulator(exact: boolean): Accumulator {
   }
 }
 
-/** `AVG`, held at the argument's scale plus `div_precision_increment` when exact. */
-export function avgAccumulator(exact: boolean, argScale: number): Accumulator {
-  const sum = sumAccumulator(exact)
+/**
+ * `AVG`, shown at the argument's scale plus `div_precision_increment` when exact.
+ * An optional stored sum scale belongs to the caller's numeric field writer.
+ */
+export function avgAccumulator(exact: boolean, argScale: number, storedScale?: number): Accumulator {
+  const sum = sumAccumulator(exact, storedScale)
   let count = 0
   return {
     add(v) {

@@ -181,8 +181,8 @@ const maxLength = (ctx: CompileContext): bigint => {
 export interface AggregateSpec {
   readonly name: string
   readonly type: ResultType
-  /** A fresh accumulator, for one group. */
-  start(): AggregateState
+  /** A fresh accumulator; only the actual temporary-group writer requests stored state. */
+  start(temporary?: boolean): AggregateState
 }
 
 export interface AggregateState {
@@ -271,8 +271,8 @@ export class AggregateSink {
         return {
           name,
           type,
-          start() {
-            const acc = accumulator(name, arg.type)
+          start(temporary) {
+            const acc = accumulator(name, arg.type, temporary)
             const seen = distinct ? new Set<string>() : undefined
             return {
               add(row, env) {
@@ -333,13 +333,13 @@ function jsonAggregate(name: string, args: readonly Compiled[], type: ResultType
   }
 }
 
-function accumulator(name: string, t: ResultType): Accumulator {
+function accumulator(name: string, t: ResultType, temporary?: boolean): Accumulator {
   const shape = exactShape(t)
   switch (name) {
     case 'SUM':
       return sumAccumulator(shape !== undefined)
     case 'AVG':
-      return avgAccumulator(shape !== undefined, shape?.scale ?? 0)
+      return avgAccumulator(shape !== undefined, shape?.scale ?? 0, temporary ? shape?.scale : undefined)
     case 'MIN':
       return extremeAccumulator(false)
     case 'MAX':
@@ -455,7 +455,8 @@ export function* groupRows(source: Iterable<{ readonly row: Row }>, plan: GroupP
     for (const s of states) row.push(s.result())
     return { row }
   }
-  const start = (): AggregateState[] => plan.specs.map((s) => s.start())
+  const temporary = plan.strategy === 'temp' && !plan.rollup
+  const start = (): AggregateState[] => plan.specs.map((s) => s.start(temporary))
   const keysOf = (row: Row): Value[] => plan.keys.map((k) => k.eval(row, env))
 
   if (plan.strategy === 'implicit') {
@@ -478,7 +479,7 @@ export function* groupRows(source: Iterable<{ readonly row: Row }>, plan: GroupP
     return
   }
 
-  if (plan.strategy === 'temp' && !plan.rollup) {
+  if (temporary) {
     const groups = new Map<string, { first: Row; keys: Value[]; states: AggregateState[] }>()
     for (const { row } of source) {
       const keys = keysOf(row)
