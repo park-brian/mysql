@@ -49,13 +49,15 @@ TRUNCATE now use it at their declared result writer, preserving raw IF readers,
 and clamp places before a single rounding operation. Prepared rounding places
 retain input scale; FLOOR/CEIL now share the native eighteen-digit BIGINT
 boundary. Repeated grouping columns now require each physical index part once;
-ROLLUP retains its positional keys. Next is the grouped DISTINCT strategy and intermediate AVG-field
+ROLLUP retains its positional keys. Selected grouping keys now eliminate
+redundant outer DISTINCT without copying aggregate readers. Next is the
+retained grouped DISTINCT strategy and intermediate AVG-field
 copy proved necessary to preserve matching rows; retained division precision
 across both operands and result-buffer bounds follows,
 followed by supplementary identifier-alias admission. Broader strategy and
 measured field-copy gaps stay open.
 The cost-based planner (M5.7, M5.42–M5.46) is done:
-`EXPLAIN FORMAT=TREE` prints the plan that runs, and 2,124 of the relational
+`EXPLAIN FORMAT=TREE` prints the plan that runs, and 2,126 of the relational
 corpus's 2,248 plans agree with 8.4.11's; M5.47 is in progress, M5.48 is done,
 M5.49 and M5.50 are in progress.
 `db.stream()` (M5.40) streams with backpressure at every hop (D-85). Then the

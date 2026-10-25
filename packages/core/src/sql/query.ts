@@ -1903,6 +1903,15 @@ function planGrouped(
   const oneGroup = !rollup && keys.length > 0 && (constTable || (constants.size > 0 && keys.every((k) => !refersToRow(k.expr, lookup, constants))))
   const { strategy, index: groupIndex } = oneGroup ? { strategy: 'index' as const, index: undefined } : chooseStrategy(alone?.def, keyColumns, rollup, distinctAggregate)
 
+  const matchesKey = (e: Expression | undefined, key: (typeof keys)[number]): boolean =>
+    e !== undefined && (key.index !== undefined && e.kind === NODE.COLUMN
+      ? safeIndex(lookup, e.parts) === key.index
+      : deparse(e) === key.text)
+  // Retained grouping keys identify each output group; ROLLUP levels do not.
+  const deduplicate = node.distinct === true && (rollup || (
+    keys.length > 0 && !oneGroup && keyColumns.length > 0 &&
+    !keys.every((key) => selectItems.some((item) => matchesKey(item.expr, key)))
+  ))
   const level = width + keys.length
   const sink = new AggregateSink(compileContext(run, lookup, 'field list'), level + 1)
   const groupKeys: GroupKeys = {
@@ -1910,15 +1919,7 @@ function planGrouped(
       // Only ROLLUP needs a key read from its slot: elsewhere the group's
       // first row holds the same value.
       if (!rollup) return undefined
-      let j = -1
-      if (e.kind === NODE.COLUMN) {
-        const at = safeIndex(lookup, e.parts)
-        if (at === undefined) return undefined
-        j = keys.findIndex((k) => k.index === at)
-      } else {
-        const text = deparse(e)
-        j = keys.findIndex((k) => k.index === undefined && k.text === text)
-      }
+      const j = keys.findIndex((key) => matchesKey(e, key))
       if (j < 0) return undefined
       const key = keys[j] as (typeof keys)[number]
       const slot = width + j
@@ -1928,8 +1929,7 @@ function planGrouped(
     grouping(args) {
       if (!rollup) throw sqlError('ER_INVALID_GROUP_FUNC_USE', 'Invalid use of group function')
       const positions = args.map((a, n) => {
-        const text = deparse(a)
-        const j = keys.findIndex((k) => k.text === text || (k.index !== undefined && localColumn(a, lookup) === k.index))
+        const j = keys.findIndex((key) => matchesKey(a, key))
         if (j < 0) throw sqlError('ER_FIELD_IN_GROUPING_NOT_GROUP_BY', `Argument #${n + 1} of GROUPING function is not in GROUP BY`)
         return j
       })
@@ -1983,9 +1983,7 @@ function planGrouped(
       if (o.desc === true) return false
       const key = keys[i] as (typeof keys)[number]
       const e = o.expr.kind === NODE.LITERAL && o.expr.type === 'int' ? selectItems[Number(o.expr.value as bigint) - 1]?.expr : o.expr
-      if (e === undefined) return false
-      if (key.index !== undefined && e.kind === NODE.COLUMN) return safeIndex(lookup, e.parts) === key.index
-      return deparse(e) === key.text
+      return matchesKey(e, key)
     })
   const stream = (strategy === 'sort' || strategy === 'index') && order.length > 0 && !orderMatchesKeys && !oneGroup
   const limitCount = q.limit === undefined ? undefined : limitValue(run, q.limit.count, 'LIMIT')
@@ -2070,8 +2068,8 @@ function planGrouped(
     },
     ...(having === undefined ? [] : [{ ...filterStage(having), describe: (n: PlanNode) => withSubqueries(run, planNode('Filter', [n]), 'having clause') }]),
     ...(windows === undefined || windows.windows.length === 0 ? [] : [windowStage(windows, windows.base)]),
-    // A DISTINCT over groups is not described yet.
-    deliverStage(items.map((i) => i.compiled), sortsOutput ? orderKeys : [], node.distinct === true, { deduplicated: false, streamed: stream, described: node.distinct !== true, keep: limitCount === undefined ? undefined : offset + limitCount }),
+    // Retained DISTINCT and unverified ordered/limited forms remain unexplained.
+    deliverStage(items.map((i) => i.compiled), sortsOutput ? orderKeys : [], deduplicate, { deduplicated: false, streamed: stream, described: node.distinct !== true || (!deduplicate && order.length === 0 && q.limit === undefined), keep: limitCount === undefined ? undefined : offset + limitCount }),
     ...(limitCount === undefined && offset === 0 ? [] : [limitStage(offset, limitCount)]),
   ]
 

@@ -1459,7 +1459,7 @@ a blocker and one without is just a note.
 
 ## 21. Where we are
 
-*A snapshot as of 2026-10-16. The [roadmap](./docs/44-roadmap.md) is the live
+*A snapshot as of 2026-10-25. The [roadmap](./docs/44-roadmap.md) is the live
 version, and wins wherever it disagrees with this section.*
 
 ```mermaid
@@ -1494,7 +1494,7 @@ packs, installs into an empty project and runs there, in CI; 0.3 waits only
 on being published. The cost-based planner is built: statistics stored by
 ANALYZE, MySQL's cost model choosing access paths and join order, and
 `EXPLAIN FORMAT=TREE` printed from the same tree of iterators that runs,
-agreeing with 8.4.11 on 2,124 of 2,248 plans; the required floor stays 2,118.
+agreeing with 8.4.11 on 2,126 of 2,248 plans; the required floor stays 2,118.
 Bounded hash LooseScan now retains duplicate outer rows through the actual hash
 iterator; optimizer switch updates and connection snapshots agree with pinned
 MySQL. Embedding switch values share SET normalization; connection defaults are

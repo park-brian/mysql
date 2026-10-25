@@ -61,7 +61,7 @@ InnoDB interchange remains M7, outside the staged Node release.
 **Measured compatibility.** M5.2's committed coercion gate is complete:
 3,148 observations and 1,737 warning counts agree through both protocols.
 The three function corpora agree on 8,765 observations. The relational corpus
-agrees on all 5,635 observations, with 2,124 of 2,248 plans agreeing;
+agrees on all 5,635 observations, with 2,126 of 2,248 plans agreeing;
 its required floor remains 2,118. CI reproduces all seven captures against
 pinned MySQL 8.4.11 without recapturing
 fixtures. The official mysqltest measurement is 38 total passes, 37 shared with
@@ -145,8 +145,32 @@ files/fixtures and 201 runtime sources exactly; 20,000 seeded executor
 statements also pass. This does not complete grouped DISTINCT materialization
 or M5.5.
 
-**Division prototype is parked (2026-10-25):** committed dab5aa4 remains the
-validated baseline. A disposable-container experiment with separate physical/
+**Grouping-key DISTINCT elimination, verified (2026-10-25):**
+The grouped delivery decision now removes outer DISTINCT when retained keys
+already identify every group, or grouping can produce at most one row.
+ROLLUP levels and incompletely selected keys retain deduplication. The key
+matcher is shared with ROLLUP, GROUPING and ordering proofs. Native-backed
+regression coverage pins 1,137 complete observations, including three index
+layouts, aliases/positions, computed and repeated keys, composite-key order,
+ordinary/DISTINCT AVG readers, HAVING, three PREPARE descriptors and eighteen
+retained executions across writes. Previously matching rows, fields and
+warnings are unchanged; complete matches improve from 561 to 1,137 as verified
+plans become available. The unfiltered 1,161-observation audit improves from
+545 to 1,121 complete matches without losing a matching component. Its retained
+ROLLUP/partial-key field and order gaps, ordered metadata/access choices and
+LIMIT-zero plans remain open. Ordered/limited outer-DISTINCT plans remain
+explicitly unsupported. Nine unchanged caps pass at 334,327/334,245 B. Fresh
+Docker passes 1,348 ordinary tests plus four latency tests, typecheck, lint,
+package smoke, the real-client exit criterion and all seven pinned corpora.
+All 346 test files/fixtures and 201 runtime sources match the tested snapshot;
+20,000 seeded executor statements also pass. The native regression passes and
+the preceding code fails it. The relational diagnostic improves
+from 2,124 to 2,126 of 2,248 plans; its required floor stays 2,118.
+The retained DISTINCT strategy and
+aggregate-field writer remain next; division is still parked.
+
+**Division prototype is parked (2026-10-25):** the numeric kernel remains at
+validated dab5aa4. A disposable-container experiment with separate physical/
 display scales, both operand paddings and nine-word division capacity improves
 284 to 556 complete matches in a 566-observation native audit, retaining every
 previously matching component. All eighteen actual-field controls agree, and
@@ -4758,7 +4782,7 @@ code that moves it (doc 43 §8). A claim without a number is marketing.
 | Function calls returning what a real MySQL 8.4 returned | 8,765 / 8,765 — the string and numeric slices (2,091 / 2,091, including GREATEST and LEAST over text and a DATETIME), the date and time slice (3,463 / 3,463) and the rest of the string, math, hashing and network functions (3,211 / 3,211), both protocols, metadata and warning counts | every function in the library |
 | Implicit coercion | 3,148 / 3,148 captured statements agree, with 0 refusals; warning counts agree on 1,737 / 1,737 queries. All observations are compared with zero disagreements (M5.2 complete) | every captured value, metadata field and warning count |
 | Relational statements executing the way a real MySQL 8.4 executed them | 5,635 / 5,635 agree and none are refused, over 300 multi-table scripts through `mysql2`, both protocols. `queries.json` through the executor: 1,200 / 1,200. Rows are compared in order wherever the statement or an agreeing plan fixes it | every statement the executor accepts, and no refusals |
-| Plans agreeing with a real MySQL 8.4 (`EXPLAIN FORMAT=TREE`, costs stripped) | 2,124 / 2,248 relational SELECTs observed; 2,118 required, skeleton for skeleton (M5.44, M5.7), ratcheted by `relational-vectors.test.ts`; a plan that agrees also has its rows compared in order. `npm run plans` lists the rest. They are the cost model's (M5.7): join order, `ref` access, semijoins and constant tables | every corpus SELECT |
+| Plans agreeing with a real MySQL 8.4 (`EXPLAIN FORMAT=TREE`, costs stripped) | 2,126 / 2,248 relational SELECTs observed; 2,118 required, skeleton for skeleton (M5.44, M5.7), ratcheted by `relational-vectors.test.ts`; a plan that agrees also has its rows compared in order. `npm run plans` lists the rest. They are the cost model's (M5.7): join order, `ref` access, semijoins and constant tables | every corpus SELECT |
 | Cold start, browser | — | published, tracked |
 
 ---
