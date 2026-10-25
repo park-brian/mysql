@@ -84,6 +84,7 @@ export function hasErrorSymbol(symbol: string): boolean {
  * `sqlState`, `sqlMessage` — so existing `catch` blocks keep working.
  */
 export class SqlError extends MyjsError {
+  declare readonly errno: number
   readonly sqlMessage: string
 
   constructor(symbol: string, sqlMessage: string, options: { errno?: number; sqlState?: string } = {}) {

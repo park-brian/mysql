@@ -114,8 +114,13 @@ and browser work follow the outstanding engine/planner work. Remaining function
 boundaries stay open for separate verification. The current state and remaining
 work are:
 
-**Next bounded slice: M5.5 DISTINCT fill/read and wire-error boundaries.**
-First repair unbounded temporary-table reads together with their column-header
+**Next bounded slice: PREPARE diagnostic lifecycle, then M5.5 wire boundaries.**
+Failed PREPARE publication is repaired below. Finish successful-PREPARE
+diagnostic clearing, compiled warnings and its wire warning count before moving
+the pure WHERE failure into native resolution order. Those literal failures
+are raised at PREPARE after SELECT-list resolution and before GROUP/HAVING/ORDER
+resolution, even with LIMIT 0; they are not late iterator initialization.
+Then repair unbounded temporary-table reads together with their column-header
 readiness on failure, preserving earlier source/optimization failures before
 headers. Then repair bounded, non-eliminated outer DISTINCT over computed ordinary exact AVG,
 using the existing temporary-group writer and a real final deduplication
@@ -125,6 +130,36 @@ before promoting the division repair. Preserve index-streamed reads when DISTINC
 is absent or eliminated by the retained grouping keys. Pin that elimination
 proof and both aggregate kinds before broadening to HAVING, LIMIT, ROLLUP or
 windows. The native plan and its actual writers must make the decision.
+
+**Failed PREPARE diagnostics, verified (2026-10-25):** The existing executor
+now publishes the failed command's conditions through the same bounded diagnostic
+writer used for execution failures. Lexing, parsing, source lookup and SELECT
+resolution share that failure boundary. The session state is captured before any
+pause, preserving close/reset ownership. Existing cooperative pauses and liveness
+checks remain. The protocol's 65,536-placeholder admission refusal clears the
+area instead of appending a SQL condition, matching native error 1390. SqlError's
+errno type now reflects the number its constructor always supplies.
+
+A native-backed regression pins 78 complete outcomes across four previous
+condition states, fifteen failure classes, warning prefixes of 1/1,023/1,024/1,100
+conditions, raw ERR-only responses and interleaved sessions. It reconstructs every
+stored warning row, error tuple and total count from a lossless dictionary;
+the 1,024-row prefix does not cap the total or hide a following error count.
+Complete matches improve from 1 to 78 with no lost matching component. Both
+native/current pass. Successful PREPARE clearing, successful compiled warnings,
+PREPARE_OK warning counts and pure-WHERE resolution remain separate open work.
+A fresh 68-outcome completion audit also pins native PREPARE refusals for
+diagnostic SHOW and warning/error-count readers; those admissions remain open.
+Fresh Docker verification passes 1,349 ordinary plus four latency tests,
+typecheck, lint, nine unchanged caps, package/typed-example smoke, the real
+client and seven pinned corpora. The tested snapshot matches all 348 test
+files/fixtures and 201 runtime sources, reference tooling, manifests and CI.
+Another 20,000 executor statements seeded 20261010 pass. Core/facade are
+334,351/334,266 B. The initial full test caught this observation fixture among
+top-level packet traces; moving it into the diagnostics subdirectory preserves
+all trace checks. Preceding 64292c6 passes all eleven required CI jobs; optional
+ORM is skipped. This repair does not complete M5.5 or the roadmap
+(144/190; M5 42/53).
 
 **Blocking lifetime proof (2026-10-25):** Native retained DISTINCT finishes
 aggregate argument reads before projection calls LAST_INSERT_ID(5). With
@@ -155,9 +190,10 @@ headers. Both experiments are rejected despite fitting the caps. Establish the
 actual execution/readiness boundary; do not infer it from SQL spelling or emit
 headers for every runtime error. The wider audit also retains pre-existing
 projection/OFFSET and ordered-field gaps. All experimental code/tests remain
-parked; production runtime stays at validated ab34f7d, whose eleven required
-CI jobs passed. The restored Docker snapshot matches all 346 test files/fixtures
-and 201 runtime sources. This proof does not complete M5.5.
+parked; the grouped runtime remains the validated ab34f7d implementation, whose
+eleven required CI jobs passed. The restored proof snapshot matched all 346 test
+files/fixtures and 201 runtime sources. The subsequent failed-PREPARE repair
+above changes diagnostics only. This proof does not complete M5.5.
 
 **Grouping-key index proof, verified (2026-10-25):** The
 elimination controls exposed a prerequisite within the existing strategy

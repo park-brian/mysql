@@ -219,6 +219,14 @@ function tablesOf(statement: Statement): TableName[] {
 /** `max_error_count`'s default: how many conditions SHOW WARNINGS keeps. */
 const MAX_ERROR_COUNT = 1024
 
+/** Publish the command's SQL diagnostic area, or clear it after protocol admission fails. */
+function recordFailure(state: SqlSession, conditions: readonly Condition[] | undefined, failure: unknown): SqlError {
+  const error = toSqlError(failure)
+  const all = conditions === undefined ? [] : [...conditions, { level: 'Error' as const, code: error.errno, message: error.message }]
+  state.diagnostics = { conditions: all.slice(0, MAX_ERROR_COUNT), warnings: all.length, errors: conditions ? 1 : 0 }
+  return error
+}
+
 /** How many parsed statements `SqlExecutor` keeps. */
 const PARSED_KEPT = 16
 
@@ -297,41 +305,41 @@ export class SqlExecutor implements Executor {
 
   async prepare(session: Session, sql: string): Promise<PreparedInfo> {
     this.#alive(session)
-    let started = performance.now()
-    let tokens: Token[]
+    const state = this.#state(session)
+    let conditions: Condition[] | undefined = []
     try {
-      tokens = lex(sql, { sqlMode: modeOf(session.sqlMode) })
-    } catch (e) {
-      throw toSqlError(e)
-    }
-    const paramCount = tokens.filter((t) => t.kind === TOKEN.PLACEHOLDER).length
-    // COM_STMT_PREPARE_OK counts them in two bytes (`sql_prepare.cc`: 1390).
-    if (paramCount > 0xffff) throw sqlError('ER_PS_MANY_PARAM', 'Prepared statement contains too many placeholders')
-    // Lexing and parsing are separate slices; do not join their pauses into
-    // one long stall before PREPARE's metadata delivery can yield.
-    if (performance.now() - started > SLICE_MS) await pause()
-    this.#alive(session)
-    started = performance.now()
-    // The empty statement a comment makes is not one the protocol prepares.
-    if (emptyText(session, sql) === 'comment') throw sqlError('ER_UNSUPPORTED_PS', 'This command is not supported in the prepared statement protocol yet')
-    const statement = this.#parse(session, sql, true, tokens)
-    // Parsing a statement of 32,000 placeholders is a slice and more on its
-    // own: the other connections go next, before its EXECUTE does (D-77).
-    if (performance.now() - started > SLICE_MS) await pause()
-    this.#alive(session)
-    if (statement === null) return { paramCount, columns: [] }
-    await this.#preload(session, statement)
-    this.#alive(session)
-    if (statement.kind !== STATEMENT.QUERY) return { paramCount, columns: [] }
-    try {
-      const run = { ...this.#run(session, sql, [], undefined, 'binary'), preparing: true }
+      let started = performance.now()
+      const tokens = lex(sql, { sqlMode: modeOf(session.sqlMode) })
+      const paramCount = tokens.filter((t) => t.kind === TOKEN.PLACEHOLDER).length
+      // COM_STMT_PREPARE_OK counts them in two bytes (`sql_prepare.cc`: 1390).
+      if (paramCount > 0xffff) {
+        conditions = undefined
+        throw sqlError('ER_PS_MANY_PARAM', 'Prepared statement contains too many placeholders')
+      }
+      // Lexing and parsing are separate slices; do not join their pauses into
+      // one long stall before PREPARE's metadata delivery can yield.
+      if (performance.now() - started > SLICE_MS) await pause()
+      this.#alive(session)
+      started = performance.now()
+      // The empty statement a comment makes is not one the protocol prepares.
+      if (emptyText(session, sql) === 'comment') throw sqlError('ER_UNSUPPORTED_PS', 'This command is not supported in the prepared statement protocol yet')
+      // Comment-only text was refused above, so parsing must produce a statement.
+      const statement = this.#parse(session, sql, true, tokens)!
+      // Parsing a statement of 32,000 placeholders is a slice and more on its
+      // own: the other connections go next, before its EXECUTE does (D-77).
+      if (performance.now() - started > SLICE_MS) await pause()
+      this.#alive(session)
+      await this.#preload(session, statement)
+      this.#alive(session)
+      if (statement.kind !== STATEMENT.QUERY) return { paramCount, columns: [] }
+      const run = { ...this.#run(session, sql, [], undefined, 'binary', conditions), preparing: true }
       const columns = columnsOf(run, planQuery(run, statement))
       // Give other sessions a turn before allocating the parameter packets.
       if (paramCount >= MANY_PARAMETERS) await pause()
       this.#alive(session)
       return { paramCount, columns }
     } catch (e) {
-      throw toSqlError(e)
+      throw recordFailure(state, conditions, e)
     }
   }
 
@@ -521,11 +529,7 @@ export class SqlExecutor implements Executor {
         return warnings === (result.warnings ?? 0) ? result : { ...result, warnings }
       }
       // The error is a condition too, after any the statement raised first.
-      const failed = (e: unknown): SqlError => {
-        const error = toSqlError(e)
-        if (!diagnostic) state.diagnostics = { conditions: [...conditions, { level: 'Error' as const, code: error.errno ?? 0, message: error.message }].slice(0, MAX_ERROR_COUNT), warnings: conditions.length + 1, errors: 1 }
-        return error
-      }
+      const failed = (e: unknown): SqlError => diagnostic ? toSqlError(e) : recordFailure(state, conditions, e)
       try {
         const run = this.#run(session, sql, params, known, protocol, conditions)
         const batches: ResultSet[] | undefined = stream ? [] : undefined
