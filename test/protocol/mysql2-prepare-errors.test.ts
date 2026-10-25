@@ -23,6 +23,14 @@ const cases = [
   ['parameter_limit', 'SELECT ' + Array.from({ length: 65536 }, () => '?').join(',')],
   ['qualified', 'SELECT x.absent FROM a AS x'],
   ['lexical', "SELECT 'unterminated"],
+  ['show_warnings', 'SHOW WARNINGS'],
+  ['show_errors', 'SHOW ERRORS'],
+  ['show_warning_count', 'SHOW COUNT(*) WARNINGS'],
+  ['show_error_count', 'SHOW COUNT(*) ERRORS'],
+  ['show_limit', 'SHOW WARNINGS LIMIT 1'],
+  ['show_zero', 'SHOW WARNINGS LIMIT 0'],
+  ['show_lower', 'show errors'],
+  ['show_comment', '/* leading */ SHOW WARNINGS LIMIT 1'],
   ...[1, 1023, 1024, 1100].map((count) => ['prefix_' + count, 'SELECT ' + Array.from({ length: count }, (_, i) => 'CAST(1 AS JSON) AND TRUE AS j' + i).join(',') + ',absent FROM a']),
 ] as const
 const seeds = ['DO 0', 'DO 1/0', 'DO CAST(1 AS JSON) AND CAST(2 AS JSON)', 'SELECT old_seed FROM a']
@@ -81,7 +89,7 @@ test('a failed PREPARE publishes its own diagnostics, with warning prefix and se
   let peer: Client | undefined
   try {
     assert.equal(reference.mysqlVersion, '8.4.11')
-    assert.equal(reference.observations, 78)
+    assert.equal(reference.observations, 110)
     await client.conn.query('CREATE DATABASE prepare_error_lifetime')
     await client.conn.query('USE prepare_error_lifetime')
     await client.conn.query('CREATE TABLE a(id INT PRIMARY KEY)')

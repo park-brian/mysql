@@ -216,6 +216,11 @@ function tablesOf(statement: Statement): TableName[] {
   return out
 }
 
+/** Diagnostic SHOW statements retain the area they inspect and cannot be prepared. */
+function isDiagnostic(statement: Statement): boolean {
+  return statement.kind === STATEMENT.SHOW && (statement.what === 'WARNINGS' || statement.what === 'ERRORS')
+}
+
 /** `max_error_count`'s default: how many conditions SHOW WARNINGS keeps. */
 const MAX_ERROR_COUNT = 1024
 
@@ -321,14 +326,13 @@ export class SqlExecutor implements Executor {
       if (performance.now() - started > SLICE_MS) await pause()
       this.#alive(session)
       started = performance.now()
-      // The empty statement a comment makes is not one the protocol prepares.
-      if (emptyText(session, sql) === 'comment') throw sqlError('ER_UNSUPPORTED_PS', 'This command is not supported in the prepared statement protocol yet')
-      // Comment-only text was refused above, so parsing must produce a statement.
-      const statement = this.#parse(session, sql, true, tokens)!
+      const statement = this.#parse(session, sql, true, tokens)
       // Parsing a statement of 32,000 placeholders is a slice and more on its
       // own: the other connections go next, before its EXECUTE does (D-77).
       if (performance.now() - started > SLICE_MS) await pause()
       this.#alive(session)
+      // Native refuses diagnostics before resolving fields or opening sources.
+      if (statement === null || isDiagnostic(statement)) throw sqlError('ER_UNSUPPORTED_PS', 'This command is not supported in the prepared statement protocol yet')
       await this.#preload(session, statement)
       this.#alive(session)
       if (statement.kind !== STATEMENT.QUERY) return { paramCount, columns: [] }
@@ -372,9 +376,13 @@ export class SqlExecutor implements Executor {
     this.reset(session)
   }
 
-  /** ER_QUERY_INTERRUPTED, for a statement whose connection ended while it waited. */
-  #alive(session: Session): void {
-    if (this.#ended.has(session)) throw sqlError('ER_QUERY_INTERRUPTED', 'Query execution was interrupted')
+  /** Refuse an ended session, throwing into active steps so they can roll back. */
+  #alive(session: Session, steps?: Generator<void, unknown>): void {
+    if (this.#ended.has(session)) {
+      const error = sqlError('ER_QUERY_INTERRUPTED', 'Query execution was interrupted')
+      if (steps === undefined) throw error
+      steps.throw(error)
+    }
   }
 
   /** Parse, or `null` for a statement that is answered OK without being run. */
@@ -514,7 +522,7 @@ export class SqlExecutor implements Executor {
     state.question()
     // SHOW WARNINGS, SHOW ERRORS and their counts read the diagnostics area
     // and leave it; every other statement starts a new one (8.4.11).
-    const diagnostic = statement.kind === STATEMENT.SHOW && (statement.what === 'WARNINGS' || statement.what === 'ERRORS')
+    const diagnostic = isDiagnostic(statement)
     if (!diagnostic) state.previous = state.diagnostics
     const started = Date.now()
     let wait = 1
@@ -582,7 +590,7 @@ export class SqlExecutor implements Executor {
         if (step.done === true) return step.value
         if (performance.now() - since < SLICE_MS) continue
         await pause()
-        if (this.#ended.has(session)) steps.throw(sqlError('ER_QUERY_INTERRUPTED', 'Query execution was interrupted'))
+        this.#alive(session, steps)
         since = performance.now()
       }
     })())
@@ -613,7 +621,7 @@ export class SqlExecutor implements Executor {
         // Every pause hands out a batch, so the clock is read before it is.
         if (performance.now() - since >= SLICE_MS) {
           await pause()
-          if (this.#ended.has(session)) steps.throw(sqlError('ER_QUERY_INTERRUPTED', 'Query execution was interrupted'))
+          this.#alive(session, steps)
           since = performance.now()
         }
         if (batches.length > 0) return undefined
@@ -693,7 +701,7 @@ export class SqlExecutor implements Executor {
     const store = this.catalog?.store
     if (store === undefined || this.#purging || this.#stopping || !store.purgeDue) return
     this.#purging = true
-    const running = (async () => {
+    void this.#tracked((async () => {
       try {
         while (!this.#stopping && store.purgeDue) {
           await pause()
@@ -705,9 +713,7 @@ export class SqlExecutor implements Executor {
       } finally {
         this.#purging = false
       }
-    })()
-    this.#running.add(running)
-    void running.then(() => this.#running.delete(running))
+    })())
   }
 
   /**

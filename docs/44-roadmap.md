@@ -115,11 +115,15 @@ boundaries stay open for separate verification. The current state and remaining
 work are:
 
 **Next bounded slice: PREPARE diagnostic lifecycle, then M5.5 wire boundaries.**
-Failed PREPARE publication is repaired below. Finish successful-PREPARE
-diagnostic clearing, compiled warnings and its wire warning count before moving
-the pure WHERE failure into native resolution order. Those literal failures
-are raised at PREPARE after SELECT-list resolution and before GROUP/HAVING/ORDER
-resolution, even with LIMIT 0; they are not late iterator initialization.
+Failed PREPARE publication and diagnostic SHOW admission are repaired below.
+Next preserve system-variable quoting/qualification identities, then reject
+diagnostic-count readers at native PREPARE admission, including nested
+expressions and the measured refusal precedence. Then repair WHERE
+resolution warnings and error precedence. Literal failures are raised at
+PREPARE after SELECT-list resolution and before GROUP/HAVING/ORDER resolution,
+even with LIMIT 0; they are not late iterator initialization. Complete successful
+PREPARE diagnostic clearing, compiled warnings and its wire warning count after
+those prerequisites.
 Then repair unbounded temporary-table reads together with their column-header
 readiness on failure, preserving earlier source/optimization failures before
 headers. Then repair bounded, non-eliminated outer DISTINCT over computed ordinary exact AVG,
@@ -149,7 +153,8 @@ Complete matches improve from 1 to 78 with no lost matching component. Both
 native/current pass. Successful PREPARE clearing, successful compiled warnings,
 PREPARE_OK warning counts and pure-WHERE resolution remain separate open work.
 A fresh 68-outcome completion audit also pins native PREPARE refusals for
-diagnostic SHOW and warning/error-count readers; those admissions remain open.
+diagnostic SHOW and warning/error-count readers. Direct SHOW admission is now
+repaired below; expression-based diagnostic-count admission remains open.
 Fresh Docker verification passes 1,349 ordinary plus four latency tests,
 typecheck, lint, nine unchanged caps, package/typed-example smoke, the real
 client and seven pinned corpora. The tested snapshot matches all 348 test
@@ -160,6 +165,59 @@ top-level packet traces; moving it into the diagnostics subdirectory preserves
 all trace checks. Preceding 64292c6 passes all eleven required CI jobs; optional
 ORM is skipped. This repair does not complete M5.5 or the roadmap
 (144/190; M5 42/53).
+
+**PREPARE completion prerequisites (2026-10-25):** A 68-outcome native audit
+contains 48 ordinary completion cases and twenty diagnostic statements native
+refuses with 1295 before resolving sources or fields. Publishing successful
+conditions alone improves complete matches from nine to 44, but loses previously
+matching warning/count components while those refusals remain unimplemented and
+the WHERE compiler omits a JSON boolean warning. Its shared-writer prototype
+typechecks and preserves all 78 failure outcomes, but the facade exceeds its cap
+by 40 B. It is parked. Repair semantic admission first, WHERE resolution next,
+then successful publication and packet counts together; do not retain stale
+diagnostics as a compatibility branch. A separate native prefix probe confirms
+PREPARE_OK carries total counts 1/1,023/1,024/1,100 while only 1,024 conditions
+are stored. Existing pauses, session ownership and 1390 admission remain required.
+
+**Diagnostic SHOW admission, verified (2026-10-25):** PREPARE now refuses
+SHOW WARNINGS/ERRORS and their COUNT/LIMIT forms with native 1295. The parsed
+statement identity is shared with ordinary diagnostic reads, which still retain
+their inspected area. Parsing supplies the existing null comment result, removing
+PREPARE's duplicate empty-text scan and non-null assertion. Refusal occurs before
+source preload and uses the failure publisher above. Scalar diagnostic-count
+readers remain a separate expression-feature admission gap, including nested
+SELECT/CTE, EXPLAIN, DO, SET and DML; native refuses these before resolving
+missing sources/fields. GLOBAL.warning_count instead raises 1238. Neither gap
+is hidden in success-publication fixtures.
+
+The execution owner also shares its existing interruption guard with both
+generator drivers: the same error is thrown into active steps for rollback,
+with every pause/check retained. Background purge now uses the existing tracked
+task owner that stop() waits for. No new scheduling boundary is introduced.
+
+The native failure regression expands from 78 to 110 complete outcomes, adding
+eight SHOW forms across four earlier diagnostic states, including lowercase,
+a leading comment and LIMIT 0. All 78 earlier native observations are strictly
+unchanged; complete matches improve from 78 to 110 without a lost component.
+The unfiltered 68-outcome completion audit improves from nine to 25 complete
+matches without a lost matching component. The earlier combined diagnostic
+SHOW/variable admission draft exceeded caps by 57/76 B; direct statement
+admission and nested expression-feature admission are kept as distinct repairs.
+All nine unchanged caps pass at core/facade 334,341/334,256 B. Fresh Docker
+passes 1,349 ordinary plus four latency tests, typecheck, lint, package/typed
+smoke, the real client and all seven pinned corpora. All 348 test files/fixtures,
+201 runtime sources and reference tooling/manifests/CI match its snapshot;
+20,000 executor statements seeded 20261010 pass. Preceding 992519b passes all
+eleven required CI jobs; optional ORM is skipped. Totals remain 144/190.
+
+A further 96-outcome query/PREPARE audit pins a semantic-identity prerequisite:
+quoting the whole `session.warning_count` after `@@` names an unknown variable
+(1193), while quoting only `warning_count` after the `@@session.` qualifier is
+valid for query and refused at PREPARE (1295). The current lexer/AST loses that distinction;
+only 31 complete outcomes match across diagnostic counts, sql_mode, unknown
+names, four scopes, both quoting forms and dead-expression controls. Preserve
+the identifier boundary before applying an admission predicate to normalized
+text. GLOBAL diagnostic-count lookup retains its separate 1238 refusal.
 
 **Blocking lifetime proof (2026-10-25):** Native retained DISTINCT finishes
 aggregate argument reads before projection calls LAST_INSERT_ID(5). With
