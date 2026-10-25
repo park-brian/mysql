@@ -69,6 +69,7 @@ import {
   truth,
   valInt,
   type Condition,
+  type DecimalValue,
   type Derived,
   type StringValue,
   type Value,
@@ -2254,6 +2255,11 @@ export function doubleOf(v: Value, t: ResultType): Value {
   return { kind: 'double', v: n, ...(float ? { float: true as const } : {}), ...(decimals === undefined ? {} : { decimals }) }
 }
 
+/** Typed DECIMAL results discard expression-only display precision, even at equal scales. */
+function decimalAt(v: Exclude<Value, null>, scale: number): DecimalValue {
+  return decimalValue(rescale(toDecimal(v), scale).v, scale)
+}
+
 /**
  * A value brought to an aggregated result type, as `COALESCE` and `IFNULL`
  * return theirs: `COALESCE(1, 1.5)` is `1.0`. (`IF` and `CASE` do not — `IF(1, 1,
@@ -2263,8 +2269,7 @@ export function convertTo(v: Value, t: ResultType): Value {
   if (v === null) return null
   switch (t.kind) {
     case 'decimal':
-      // The declared type owns display scale, even when held and target scales match.
-      return v.kind === 'int' || v.kind === 'decimal' ? decimalValue(rescale(toDecimal(v), t.scale).v, t.scale) : v
+      return v.kind === 'int' || v.kind === 'decimal' ? decimalAt(v, t.scale) : v
     case 'double':
       return doubleOf(v, t)
     case 'bytes':
@@ -2530,7 +2535,7 @@ function cast(e: CastNode, ctx: CompileContext): Compiled {
         eval: (r, env) => {
           const v = x(r, env)
           if (v === null) return null
-          const d = rescale(toDecimal(v), scale)
+          const d = decimalAt(v, scale)
           // Past DECIMAL(M,D)'s digits: the largest it holds, and 1264 (8.4.11).
           if (d.v <= limit && d.v >= -limit) return d
           raise(env, 1264, `Out of range value for column '${label()}' at row 1`)
