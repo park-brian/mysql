@@ -114,12 +114,54 @@ and browser work follow the outstanding engine/planner work. Remaining function
 boundaries stay open for separate verification. The current state and remaining
 work are:
 
-**Next bounded slice: M5.10 retained DECIMAL division precision.** Prepared
-rounding scales and FLOOR boundaries are verified below. Prove the physical/
-displayed scale contract across zero, cancellation and AVG before changing
-division. Preserve typed field/cache boundaries, already matching arithmetic,
-NULL/warning behavior and both protocols. Both operand word padding and result
-buffer capacity must follow the pinned implementation.
+**Next bounded slice: M5.5 grouped DISTINCT physical boundaries.** Prove and
+repair bounded, non-eliminated outer DISTINCT over grouped exact AVG before
+promoting the division repair. Native ordinary AVG uses temporary aggregation;
+AVG(DISTINCT ...) uses sorted grouping followed by an actual aggregate-field
+copy before enclosing arithmetic. Preserve index-streamed reads when DISTINCT
+is absent or eliminated by the retained grouping keys. Pin that elimination
+proof and both aggregate kinds before broadening to HAVING, LIMIT, ROLLUP or
+windows. The native plan and its actual writers must make the decision.
+
+**Division prototype is parked (2026-10-25):** committed dab5aa4 remains the
+validated baseline. A disposable-container experiment with separate physical/
+display scales, both operand paddings and nine-word division capacity improves
+284 to 556 complete matches in a 566-observation native audit, retaining every
+previously matching component. All eighteen actual-field controls agree, and
+all eight focused regressions still pass. The wider 2,100-outcome AVG audit,
+however, gains row matches from 1,902 to 1,968 while losing two previously
+matching rows: SELECT DISTINCT AVG(DISTINCT IF(1,n,0.0000000001))/7 GROUP BY g
+must end in ...428, not ...429. The prototype also exceeds the unchanged
+core/facade caps by 109/112 B. It is not promoted or committed, and the reusable
+container has been restored to the validated source. Remaining prototype
+zero-multiplication, wide-value display and CAST diagnostic-printing mismatches
+stay separate; no captures or checks were weakened.
+
+Eight new native plan observations locate the missing authority. Without
+outer DISTINCT, GROUP BY g streams the index; GROUP BY g+0 uses temporary
+aggregation for ordinary AVG and sorted grouping for AVG(DISTINCT ...). With
+outer DISTINCT retained, ordinary AVG uses temporary aggregation followed by
+deduplication, while AVG(DISTINCT ...) uses sorted grouping, an intermediate
+temporary table and deduplication. The current grouped planner ignores outer
+DISTINCT when choosing that strategy and explicitly declines its EXPLAIN.
+Repair those physical boundaries rather than truncating a selected quotient.
+Then resume the DECIMAL representation/division proof below, preserving typed
+fields, zero/cancellation, AVG, NULL/warnings and every earlier matching
+component. An independent continuation review confirms this ordering. All
+required CI jobs for dab5aa4 pass.
+
+The expanded eighty-observation admission audit also proves elimination when
+all grouping keys are selected, including aliases and computed keys. A pinned
+key or const table can remove DISTINCT as well. Partial key coverage retains
+it. Direct aggregate projections use separate sort-unique paths, so those
+must not be confused with a temporary table over computed AVG expressions.
+A query-only experiment repairs the bounded computed-AVG field boundary and
+metadata without losing an earlier matching row/field/warning component in
+that audit, but exceeds the unchanged caps by 205/207 B. It is not promoted;
+production runtime and the reusable container remain at validated dab5aa4.
+The implementation still needs meaningful simplification, complete native
+regressions and normal gates. HAVING, LIMIT, ordering, ROLLUP, windows and
+non-AVG grouping paths remain separate until verified.
 
 Both operand word padding and result-buffer bounds matter in the pinned [division implementation](https://github.com/mysql/mysql-server/blob/mysql-8.4.11/mysys/decimal.cc).
 Eighteen additional zero/cancellation/AVG observations have every field/warning/
