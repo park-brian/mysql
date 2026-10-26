@@ -130,7 +130,8 @@ aggregate/window/GROUPING readers remain row-dependent. The premature GROUPING
 admission/input expansion from 149 is withdrawn below. Its reference captures
 remain available, and its source-preparation prerequisites stay open. The bounded
 per-invocation ORDER-key startup phase now runs under the actual transaction.
-Finish its physical point-key elimination proof and the remaining optimization
+Pinned complete PRIMARY points now omit ORDER readers only when the condition
+owner and final physical access agree. Finish the remaining optimization
 profiles: constant scalar subqueries must remain unexecuted at PREPARE but may
 fail before query headers, even over an empty source. Use bound correlation and
 lifetime facts, not SQL spelling. Then repair unbounded temporary-table reads with column-header
@@ -143,6 +144,46 @@ before promoting the division repair. Preserve index-streamed reads when DISTINC
 is absent or eliminated by the retained grouping keys. Pin that elimination
 proof and both aggregate kinds before broadening to HAVING, LIMIT, ROLLUP or
 windows. The native plan and its actual writers must make the decision.
+
+**Pinned physical PRIMARY point ORDER elimination, verified (2026-10-26):**
+ORDER name/type binding still runs before elimination. The shared condition
+owner must pin the actual PRIMARY column, and the final chosen access must
+supply one compiler-produced complete point on that single-column PRIMARY key.
+Only whole scans can be replaced by the preceding ordering override, so the
+selected point remains final. Opaque/hinted sources, HAVING/windows, prefixes,
+nullable UNIQUEs, unproved coercions and unknown bounds supply no such proof.
+
+Native distinguishes const admission from physical cardinality: duplicate IN can
+collapse to one local point while native still initializes its ORDER scalar.
+The uncommitted cardinality-only candidate was rejected by supplementary probes;
+it is absent from the final candidate. A different nullable UNIQUE pin cannot
+admit a PRIMARY range. The existing metadata const-table flag is never used as
+the sole proof. The permanent regression pins 309 complete outcomes (251 before
+the repair), including duplicate-IN/range controls over populated sources,
+PRIMARY text/DECIMAL/DATE keys, binding errors, correlation and compound/error
+keys. Native/current replay agrees on every retained row/field event, packet,
+diagnostic, total and LAST_INSERT_ID.
+
+The broader audits improve 844 to 864 of 1,008, 412 to 471 of 570, 46 to 56 of 72
+and 7 to 9 of nine complete observations, without losing a previously matching
+component. Empty filtered-startup, folded/coerced primary keys, unproved primary
+parameters, hints, window/HAVING and other UNIQUE profiles remain open; neither
+the complete 570 nor the complete 72 is claimed as conformance. The shared
+constant-input walker permits own-row inputs only under the existing bound
+independence/single-base proof; ordinary fixed operands retain their policy.
+Alias/position resolution and physical ordering retain their binding owner and
+nonempty-key invariant, eliminating redundant branches rather than changing
+admission. The runtime grows 37 B raw from 151; core/facade are 334,361/334,265 B,
+inside the unchanged 334,361/334,266 B caps. Earlier WHERE/phase/HAVING-parameter,
+wire and fill audits retain every matching component. The 309-frame native/core
+regressions, HAVING/source-precedence controls and 20,000 executor statements
+(seed 20261010) pass. Fresh Docker passes 1,362 ordinary plus four latency tests,
+typecheck, lint, all nine unchanged caps, package/typed smoke, the real client and
+all seven pinned MySQL 8.4.11 corpora. The fresh source proof matches 367 test
+files/fixtures and 202 runtime sources, plus reference tooling/manifests/CI.
+Preceding a446758 passes all eleven required GitHub jobs. Remaining bounded
+optimization/read readiness precedes the DISTINCT fill/read repair; the roadmap
+remains 144/190, M5 42/53.
 
 **ORDER-key startup optimization, verified (2026-10-26):** Each actual result
 invocation now has an optimization hook before metadata/read readiness. For an

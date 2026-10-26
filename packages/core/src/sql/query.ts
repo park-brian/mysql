@@ -40,7 +40,6 @@ import { isTemporary, type CatalogApi } from './temporary.ts'
 import { modeOf } from './mode.ts'
 import { finish } from './session.ts'
 import { escapedBytes } from './builtins.ts'
-import { VARIES_PER_EVALUATION } from './registry.ts'
 
 /** Everything one statement execution needs. */
 export interface Run {
@@ -476,20 +475,15 @@ function planSelect(run: Run, q: QueryExpression, node: SelectNode): SelectPlan 
   }
   const having = node.having === undefined || neverNullTest(node.having) ? undefined : resolveCondition(run, compileContext(run, selectedOnly(lookup, items, [], node.having), 'having clause'), substituteAliases(node.having, items), limitCount).predicates
   const orderCtx = compileContext(run, lookup, 'order clause', windows)
-  const base = unhintedBase(q, node) && source
+  const base = !windowed && having === undefined && unhintedBase(q, node) && source
   const initialize: Compiled[] = []
   const keys = order.filter((o) => !constantKey(o)).map((o) => {
     const key = orderKey(o, items, orderCtx)
     const e = sortExpression(o.expr, items)
-    if (base && node.where === undefined && !windowed && node.having === undefined && limitCount !== 0 && e?.kind === NODE.SUBQUERY) {
+    if (base && node.where === undefined && limitCount !== 0 && e?.kind === NODE.SUBQUERY) {
       const bound = run.subqueries?.find((s) => s.query === e.query)
       // Only ordinary single-base queries with bound independence enter this startup role.
-      if (bound?.plan.source && !bound.correlated && !someNode(e.query, (node) => {
-        const n = node as Expression
-        if (n.kind === NODE.SUBQUERY || n.kind === NODE.VARIABLE) return true
-        if (n.kind === NODE.CALL && (n.over !== undefined || VARIES_PER_EVALUATION.has(n.name.toUpperCase()))) return true
-        return undefined
-      })) initialize.push(key.expr)
+      if (bound?.plan.source && !bound.correlated && constantNode(e.query, true, true)) initialize.push(key.expr)
     }
     return key
   })
@@ -514,6 +508,10 @@ function planSelect(run: Run, q: QueryExpression, node: SelectNode): SelectPlan 
   // A proved UNIQUE projection can reconsider PRIMARY as an ordinary scan does.
   const ordered = source !== undefined && read !== undefined && !deduplicated && !windowed && (anti === undefined || anti.lookup) && match === undefined && keys.length > 0 && read.ranges === undefined ? orderingIndex(source.def, source.alias, order, items, lookup, read.index, (outerLoop || (!loopSemijoin && !deduplicate)) && optimizerEnabled(run.env, 'prefer_ordering_index')) : undefined
   if (ordered !== undefined) from?.readInOrder(ordered.index, false, ordered.reverse, source?.alias)
+  // Only whole scans can be replaced above, so this selected range is final.
+  // A pinned complete PRIMARY point binds ORDER but needs none of its readers.
+  const point = read?.ranges?.length === 1 ? read.ranges[0] : undefined
+  if (base && point?.from?.values.length === 1 && point.from === point.to && base.def.indexes.some((i) => i.name === read!.index && i.kind === 'primary' && i.parts.length === 1 && facts?.pins.has(i.parts[0]!.column.toLowerCase()))) keys.length = 0
   const sortedFirst = outerLoop && ordered === undefined && keys.length > 0
   if (sortedFirst && source !== undefined) from?.sortFirst(source.alias, keys)
   // Whole single-table integer sorts have a known fixed record layout and
@@ -1112,7 +1110,8 @@ function emptySubquery(run: Run, query: QueryExpression): boolean {
 function orderingIndex(def: TableDef, alias: string, order: readonly OrderItem[], items: readonly { compiled: Compiled; expr?: Expression; alias?: string }[], scope: Scope, readBy: string | undefined, primary: boolean): { readonly index: string; readonly reverse: boolean } | undefined {
   const clustered = clusteredIndex(def)
   const index = readBy === undefined ? clustered : def.indexes.find((i) => i.name === readBy)
-  if (index === undefined || clustered === undefined || order.length === 0) return undefined
+  if (index === undefined || clustered === undefined) return undefined
+  // The caller has nonempty ORDER keys; successful binding keeps this list nonempty.
   const keys: { name: string; desc: boolean }[] = []
   for (const o of order) {
     const e = sortExpression(o.expr, items)
@@ -1128,14 +1127,13 @@ function orderingIndex(def: TableDef, alias: string, order: readonly OrderItem[]
   // MySQL prefers it over a scan plus sort when prefer_ordering_index is on.
   for (const candidate of primary ? [index, clustered] : [index]) {
     const parts = indexParts(def, candidate)
-    const reverse = (keys[0]?.desc === true) !== (candidate.parts[0]?.descending === true)
+    const reverse = keys[0]!.desc !== (candidate.parts[0]?.descending === true)
     // Every requested key part must agree on the scan direction, including
     // the PRIMARY parts carried by a secondary index.
-    const covered = keys.every((key, i) => {
+    if (keys.every((key, i) => {
       const part = parts[i]
       return part !== undefined && part.prefix === undefined && part.column.toLowerCase() === key.name && ((part.descending === true) !== key.desc) === reverse
-    })
-    if (covered) return { index: candidate.name, reverse }
+    })) return { index: candidate.name, reverse }
   }
   return undefined
 }
@@ -1686,10 +1684,10 @@ function orderedResult(run: Run, q: QueryExpression, plan: SelectPlan): SelectPl
 
 /** Resolve aliases and positions; GROUP BY gives source columns priority. */
 function sortExpression(e: Expression, items: readonly { readonly alias?: string; readonly expr?: Expression }[], scope?: Scope): Expression | undefined {
-  if (scope !== undefined && e.kind === NODE.COLUMN && safeResolve(scope, e.parts, 'group statement') !== undefined) return e
+  if (scope && e.kind === NODE.COLUMN && safeResolve(scope, e.parts, 'group statement')) return e
   const alias = selectedItem(e, items)
-  if (integerLiteral(e)) return alias?.expr
-  return alias === undefined ? e : alias.expr
+  if (integerLiteral(e) || alias !== undefined) return alias?.expr
+  return e
 }
 
 /** A select-list position or first bare alias, using the SQL name fold. */

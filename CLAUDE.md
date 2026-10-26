@@ -70,9 +70,11 @@ after a late-source regression; its native captures remain research evidence.
 Bounded constant ORDER-key startup now uses bound correlation and the existing
 statement memo under the actual invocation transaction before metadata, preserving
 PREPARE and ordinary projection timing. Filtered, grouped, opaque and stateful
-profiles remain open. Next prove ORDER elimination from the actual selected
-single-column PRIMARY point access; metadata's const-table flag is insufficient.
-Then finish optimization/read readiness before repairing the DISTINCT fill/read
+profiles remain open. Pinned complete single-column PRIMARY points now omit
+ORDER readers after binding, requiring both the condition owner's PRIMARY pin
+and the final physical access. Duplicate IN retains its readers; physical
+cardinality and metadata const-table flags are insufficient alone. Finish the
+remaining optimization/read readiness before repairing the DISTINCT fill/read
 boundary, including column-header readiness after a failed fill. Then repair ordinary AVG's temporary strategy and AVG(DISTINCT)'s
 intermediate field copy, preserving the proved blocking lifetimes. Retained
 division precision across both operands and result-buffer bounds follows,
