@@ -123,6 +123,8 @@ export class Session {
 export interface PreparedInfo {
   readonly paramCount: number
   readonly columns: readonly ColumnDefinition[]
+  /** Complete count before the packet's two-byte encoding and stored-prefix truncation. */
+  readonly warnings?: number
 }
 
 /**

@@ -43,6 +43,14 @@ if `num_columns > 0`, `num_columns` column definitions, likewise terminated.
 
 Notes:
 
+- A successful PREPARE replaces the connection's diagnostic area, including
+  clearing previous conditions when it produces none. This also applies to
+  supported statements without result columns. On 8.4.11, the complete
+  condition total is independent of the stored prefix: with the default
+  1,024-row limit, 1,100 conditions still report 1,100. The packet encodes the
+  total's low sixteen bits: 65,536 conditions produce `warning_count = 0`,
+  while `SHOW COUNT(*) WARNINGS` reports 65,536. These boundaries are pinned
+  by the [native regression](../test/protocol/mysql2-prepare-success.test.ts).
 - The parameter definitions are largely **placeholders**: MySQL reports every
   `?` as `VAR_STRING` (`0xFD`) with charset `63`, since it cannot know the type
   until execution. In the specification's own worked example the parameter

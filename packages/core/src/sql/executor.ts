@@ -128,8 +128,6 @@ export function toSqlError(e: unknown): SqlError {
   return new SqlError('ER_INTERNAL_ERROR', `Internal error: ${message}`, { errno: 1815, sqlState: 'HY000' })
 }
 
-const codeOf = (e: unknown): string | undefined => (e instanceof MyjsError ? e.code : undefined)
-
 /** Whether a statement can change rows: the ones that may not simply be run again after failing part-way. */
 const writes = (statement: Statement): boolean =>
   statement.kind === STATEMENT.INSERT || statement.kind === STATEMENT.UPDATE || statement.kind === STATEMENT.DELETE
@@ -184,8 +182,7 @@ function recordDiagnostics(state: SqlSession, conditions: readonly Condition[], 
 /** Protocol admission without a SQL condition area clears diagnostics. */
 function recordFailure(state: SqlSession, conditions: readonly Condition[] | undefined, failure: unknown): SqlError {
   const error = toSqlError(failure)
-  const all = conditions === undefined ? [] : [...conditions, { level: 'Error' as const, code: error.errno, message: error.message }]
-  recordDiagnostics(state, all, 0, conditions ? 1 : 0)
+  recordDiagnostics(state, conditions?.concat({ level: 'Error', code: error.errno, message: error.message }) ?? [], 0, conditions ? 1 : 0)
   return error
 }
 
@@ -292,13 +289,15 @@ export class SqlExecutor implements Executor {
       if (statement === null || this.#variables(statement, state, session) || isDiagnostic(statement)) throw sqlError('ER_UNSUPPORTED_PS', 'This command is not supported in the prepared statement protocol yet')
       await this.#preload(session, statement)
       this.#alive(session)
-      if (statement.kind !== STATEMENT.QUERY) return { paramCount, columns: [] }
-      const run = { ...this.#run(session, sql, [], undefined, 'binary', conditions), preparing: true }
-      const columns = columnsOf(run, planQuery(run, statement))
-      // Give other sessions a turn before allocating the parameter packets.
+      let columns: PreparedInfo['columns'] = []
+      if (statement.kind === STATEMENT.QUERY) {
+        const run = { ...this.#run(session, sql, [], undefined, 'binary', conditions), preparing: true }
+        columns = columnsOf(run, planQuery(run, statement))
+      }
+      // Every supported statement may have a large parameter response.
       if (paramCount >= MANY_PARAMETERS) await pause()
       this.#alive(session)
-      return { paramCount, columns }
+      return { paramCount, columns, warnings: recordDiagnostics(state, conditions) }
     } catch (e) {
       throw recordFailure(state, conditions, e)
     }
@@ -503,7 +502,7 @@ export class SqlExecutor implements Executor {
         this.#purgeLater()
         if (diagnostic) return result
         // A count no condition stands for is still the count (`warning_count`).
-        const warnings = recordDiagnostics(state, conditions, result.warnings ?? 0)
+        const warnings = recordDiagnostics(state, conditions, result.warnings)
         return warnings === (result.warnings ?? 0) ? result : { ...result, warnings }
       }
       // The error is a condition too, after any the statement raised first.
@@ -517,7 +516,7 @@ export class SqlExecutor implements Executor {
         if (batches === undefined) return settle(await this.#drive(session, dispatched, began))
         return await this.#streamed(session, dispatched, batches, began, settle, failed)
       } catch (e) {
-        const code = codeOf(e)
+        const code = e instanceof MyjsError ? e.code : undefined
         if (code === 'ENGINE_WRITER_BUSY') {
           const timeout = Number(toInteger(state.systemVariable('innodb_lock_wait_timeout', undefined, session) ?? intValue(50n)))
           if (Date.now() - started >= timeout * 1000) throw sqlError('ER_LOCK_WAIT_TIMEOUT', messages.lockWaitTimeout())

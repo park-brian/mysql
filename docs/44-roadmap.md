@@ -114,16 +114,17 @@ and browser work follow the outstanding engine/planner work. Remaining function
 boundaries stay open for separate verification. The current state and remaining
 work are:
 
-**Next bounded slice: successful PREPARE diagnostic publication and packet counts.**
+**Next bounded slice: temporary-table fill/read and column-header readiness.**
 System-variable identity and diagnostic-count PREPARE admission are verified
 below, alongside failed-command publication, diagnostic SHOW admission and
 linear lexical error trimming. WHERE resolution now binds the written conjuncts
 once after SELECT-list resolution and initializes admitted constants before
-GROUP/HAVING/ORDER, including PREPARE and text LIMIT 0. Complete successful
-PREPARE diagnostic clearing, compiled warnings and its wire warning count next.
-Preserve the separate binary-execution boundary: fixed diagnostics belong to
-PREPARE, while bound parameters initialize at execution unless LIMIT is zero.
-Then repair unbounded temporary-table reads together with their column-header
+GROUP/HAVING/ORDER, including PREPARE and text LIMIT 0. Successful PREPARE now
+clears or publishes its collected conditions through the shared diagnostic writer
+and reports complete totals in its OK packet. Preserve the separate binary
+boundary: fixed diagnostics belong to PREPARE, while bound parameters initialize
+at execution unless LIMIT is zero.
+Next repair unbounded temporary-table reads together with their column-header
 readiness on failure, preserving earlier source/optimization failures before
 headers. Then repair bounded, non-eliminated outer DISTINCT over computed ordinary exact AVG,
 using the existing temporary-group writer and a real final deduplication
@@ -133,6 +134,51 @@ before promoting the division repair. Preserve index-streamed reads when DISTINC
 is absent or eliminated by the retained grouping keys. Pin that elimination
 proof and both aggregate kinds before broadening to HAVING, LIMIT, ROLLUP or
 windows. The native plan and its actual writers must make the decision.
+
+**Successful PREPARE diagnostics, verified (2026-10-25):** Every supported
+success path, including non-query statements, publishes through the existing
+bounded diagnostic writer after binding and the final liveness check. Empty
+conditions clear the previous area; collected conditions replace it. PreparedInfo
+carries an optional warning total to the existing PREPARE packet writer; existing
+executors may omit it. Counts are independent of the stored prefix. Metadata and
+parameter delivery share the final cooperative pause for queries and non-queries.
+Parsing/source guards, diagnostic-command admission, placeholder overflow, failed
+publication and captured session ownership retain their behavior.
+
+A new native regression pins 78 complete observations: four seeded diagnostic
+states, seventeen statement forms, prefix counts 1/1,023/1,024/1,100, two
+interleaved sessions and the two-byte wire boundary. It checks every field
+descriptor, full error tuples, raw response packet kinds and PREPARE_OK warning totals, stored conditions, both
+condition totals and the peer's untouched area. The 1,100-condition case reports
+1,100 in the header/count and keeps exactly 1,024 rows. At 65,535 and 65,536
+conditions, the diagnostic total stays complete while the native two-byte header
+encodes 65,535 and zero respectively. The existing writer already preserves this
+encoding. A lossless dictionary shares captured warnings and field tuples.
+Complete matches improve 29 to 78 with no lost matching component; both native/current replay pass. Existing
+failed-PREPARE and WHERE regressions remain green. The refreshed 68-case
+completion audit now agrees entirely, as do all four prefix probes. The earlier
+360-frame three-protocol WHERE audit improves 348 to all 360; the 776-frame
+clause audit improves 655 to 743 without component regressions. The 36 bound
+parameter controls remain 32/36. Remaining nested eager conversions, ON
+initialization/JSON warnings, GROUP aggregate error spelling, binary SELECT/GROUP
+warning replay, correlated metadata/readers and bad-string parameter reader
+kinds remain explicitly open. The old WHERE fixture changes only its scope
+annotation to point to the new successful-PREPARE coverage; all 751 captured
+observations/outcomes are unchanged.
+
+The diagnostics caller now uses its writer's default zero total, and the retry
+boundary tests its error type directly instead of using a one-call wrapper.
+Failure-condition appending shares the same nullable-area rule. All nine existing
+caps pass: core/facade 334,355/334,265 B against 334,361/334,266 B. Typecheck,
+focused tests and 20,000 executor statements seeded 20261010 pass. Fresh Docker
+Node 22.18.0 verification passes 1,358 ordinary plus four latency tests, typecheck,
+lint, installed-package/typed-example smoke, the real client and all seven pinned
+MySQL 8.4.11 corpora. After adding the wire-boundary cases, a second fresh
+Docker run passes typecheck, lint, all 1,358 ordinary/four latency tests, nine caps
+and installed-package smoke. The final 358 test files/fixtures and 202 runtime
+sources match the workspace. Native replay and the focused regression pass.
+Preceding e4cae17 passes all eleven required GitHub jobs. No capture threshold or milestone status changes; the roadmap
+remains 144/190 with M5 42/53.
 
 **WHERE resolution and clause precedence, verified (2026-10-25):** Each SELECT
 owns its written WHERE readers. All maximal AND roots bind before their admitted
@@ -165,8 +211,8 @@ field flags. Their whole protocol/expression groups remain open, with every
 native outcome retained in the audit. The separate 776-frame clause audit
 improves 255 to 655, the 360-frame three-protocol audit improves 104 to 348,
 and 36 bound-parameter frames improve 27 to 32, all without component regression.
-Successful PREPARE publication explains the remaining twelve main three-protocol
-frames. Bound bad-string INTEGER/DECIMAL diagnostics, nested eager comparison
+Successful PREPARE publication explained the remaining twelve main three-protocol
+frames at this capture; the subsequent completion above closes them. Bound bad-string INTEGER/DECIMAL diagnostics, nested eager comparison
 conversions, ON initialization/JSON warnings, aggregate GROUP BY error spelling
 and correlated ROLLUP metadata/readers remain open; none is claimed repaired.
 The filter unit test pins FALSE/NULL short circuits, empty conjunctions,
@@ -262,10 +308,9 @@ conditions alone improves complete matches from nine to 44, but loses previously
 matching warning/count components while those refusals remain unimplemented and
 the WHERE compiler omits a JSON boolean warning. Its shared-writer prototype
 typechecks and preserves all 78 failure outcomes, but the facade exceeds its cap
-by 40 B. That prototype is historical: semantic admission and WHERE resolution
-are now verified above. Next implement successful publication and packet counts
-together under the existing caps; do not retain stale
-diagnostics as a compatibility branch. A separate native prefix probe confirms
+by 40 B. That prototype is historical: semantic admission, WHERE resolution and
+successful publication/packet counts are now verified above under the existing
+caps. No stale-diagnostic compatibility branch is retained. A separate native prefix probe confirms
 PREPARE_OK carries total counts 1/1,023/1,024/1,100 while only 1,024 conditions
 are stored. Existing pauses, session ownership and 1390 admission remain required.
 
@@ -419,11 +464,14 @@ cases: constant WHERE/HAVING and some subquery/order failures precede native
 headers. Both experiments are rejected despite fitting the caps. Establish the
 actual execution/readiness boundary; do not infer it from SQL spelling or emit
 headers for every runtime error. The wider audit also retains pre-existing
-projection/OFFSET and ordered-field gaps. All experimental code/tests remain
-parked; the grouped runtime remains the validated ab34f7d implementation, whose
-eleven required CI jobs passed. The restored proof snapshot matched all 346 test
-files/fixtures and 201 runtime sources. The subsequent failed-PREPARE repair
-above changes diagnostics only. This proof does not complete M5.5.
+projection/OFFSET and ordered-field gaps. Experimental fill/header code and
+tests remain parked. The original restored proof snapshot matched 346 test
+files/fixtures and 201 runtime sources. Subsequent validated grouping-key, WHERE
+and PREPARE repairs above supersede that source revision without implementing
+the missing fill/read barrier. Refresh the complete native audits against current
+HEAD before changing readiness; preserve resolution/optimization failures before
+headers and actual fill failures after resolved headers. Do not restore either
+rejected prototype. This proof does not complete M5.5.
 
 **Grouping-key index proof, verified (2026-10-25):** The
 elimination controls exposed a prerequisite within the existing strategy
