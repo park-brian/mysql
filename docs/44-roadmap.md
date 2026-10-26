@@ -155,6 +155,49 @@ is absent or eliminated by the retained grouping keys. Pin that elimination
 proof and both aggregate kinds before broadening to HAVING, LIMIT, ROLLUP or
 windows. The native plan and its actual writers must make the decision.
 
+**Native readiness test transport, verified (2026-10-26):** The two read-readiness
+regressions request TCP_NODELAY on their native reference sockets. All 954
+serialized native phase observations are byte-identical with the option enabled,
+including rows, descriptors, errors, raw packet kinds, conditions, totals,
+LAST_INSERT_ID and normalized plans. The four existing conformance matrices keep
+all 5,216 complete expected outcomes and every assertion. Their seven native
+regressions, including closure/cancellation controls, finish in 16.7 seconds on
+this host. This changes test transport only; no fixture, threshold or production
+SQL reader is altered. Docker verification against the committed SQL baseline
+checks type safety and the same seven regressions through both engines.
+
+**Retained DISTINCT/AVG field ownership, in progress (2026-10-26):**
+Fresh pinned 8.4.11 evidence covers 954 complete query/PREPARE/EXECUTE phase
+observations with empty, seven-row and 700-group inputs. Plans use the existing
+relational skeleton normalizer. The validated baseline matches 620 complete
+outcomes. Native retained DISTINCT emits metadata but no rows when its final
+copied projection fails at group 700; the current streamed implementation exposes
+699 rows first. Merely choosing temporary aggregation cannot repair that final
+writer. Its blocking read must also report readiness before fill, while SELECT
+constants and scalar subqueries retain the native optimizer/field boundary.
+The same scalar subquery can fail before headers under plain DISTINCT and after
+headers under grouped DISTINCT, so no global header or buffering rule is inferred.
+
+The working prototype uses the existing temporary-group accumulator, copies
+row/aggregate-dependent output fields even on empty inputs, and gives the existing
+delivery owner an explicit blocking boundary. Physical reader construction supplies
+its invocation-local readiness. The admitted profile is an unhinted ordinary
+single base with retained DISTINCT, deterministic row-dependent grouping keys,
+computed exact ordinary AVG, and no WHERE/HAVING/ORDER/LIMIT/ROLLUP/window/locking
+or full-text initialization. Direct aggregate projections, AVG(DISTINCT), other
+aggregates and absent/eliminated DISTINCT retain their paths. Complete matches
+improve 620 to 764 with no previously matching component lost in the phase audit.
+Late DECIMAL/JSON projection errors and observable effects now pass all their
+72-frame profiles. Field-list scalar subqueries now belong to the intermediate
+temporary reader in EXPLAIN. A fresh 2,100-outcome numeric audit improves 1,574
+to 1,660 complete row/field/warning/error matches without component loss.
+Later division-field rounding remains open; the numeric division kernel is
+unchanged. The prototype is not committed or promoted: it exceeds the unchanged
+core/facade caps by 196/207 B and still needs meaningful simplification, wider
+index/argument controls, permanent regressions and full final gates. The production SQL
+runtime remains c0baaa5, whose eleven required GitHub jobs all pass. Roadmap
+totals remain 144/190, M5 42/53.
+
 **OFFSET-to-projection boundary, verified (2026-10-26):**
 Ordinary delivery now passes its existing LIMIT stage into the delivery owner,
 after the complete sort and before SELECT projection. That same stage describes
