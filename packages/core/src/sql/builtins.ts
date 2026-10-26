@@ -44,6 +44,7 @@ import {
   coercibilityOf,
   comparer,
   compile,
+  memoValue,
   constantEnv,
   constantNode,
   numberConstant,
@@ -171,12 +172,7 @@ export function builtinFunction(name: string, e: CallNode, ctx: CompileContext):
       return {
         eval: (r, env) => {
           if (perRow) return doubleValue(nextRand(seeded(r, env)))
-          let seeds = env.memo?.get(state) as RandSeeds | undefined
-          if (seeds === undefined) {
-            seeds = seeded(r, env)
-            env.memo?.set(state, seeds)
-          }
-          return doubleValue(nextRand(seeds))
+          return doubleValue(nextRand(memoValue(env.memo, state, () => seeded(r, env))))
         },
         type,
       }

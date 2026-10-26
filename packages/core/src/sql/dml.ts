@@ -1038,7 +1038,7 @@ function* matching(run: Run, def: TableDef, table: Table, alias: string, node: U
   const scope = new TableScope([{ alias, def }])
   const where = node.where === undefined ? undefined : compile(node.where, compileContext(run, scope, 'where clause'))
   const keys = (node.orderBy ?? []).map((o) => ({ expr: compile(o.expr, compileContext(run, scope, 'order clause')), desc: o.desc === true }))
-  const count = node.limit === undefined ? undefined : limitValue(run, node.limit, 'LIMIT')
+  const count = node.limit === undefined ? undefined : limitValue(run, node.limit)
   const access = chooseAccess(def, alias, node.where, run.env)
   let rows: Iterable<ScannedRow> = filter(accessRows(table, def, access, trx, true), where, run.env)
   if (keys.length > 0) rows = sort(rows, keys, run.env)

@@ -108,7 +108,7 @@ import { castAsJson } from './json.ts'
 import { jsonPathFunction, memberOf, unquote } from './json-path.ts'
 import { regexpLike } from './regexp.ts'
 import { valueKey } from './keys.ts'
-import { TableScope } from './scope.ts'
+import { safeResolve, TableScope } from './scope.ts'
 import { bitBytes } from './wire.ts'
 import { badAgainst, booleanRank, Corpus, foldFor, fulltextOf, naturalRank, noExpansion, noIndex, parseBoolean, queryText, wordsOf, type Term } from './fulltext.ts'
 import { windowNotAllowed } from './window.ts'
@@ -1952,14 +1952,7 @@ function inList(negated: boolean, left: Expression, right: Expression, ctx: Comp
   const constantsKey = {}
   return {
     eval: (r, env) => {
-      let constants: Value[] | undefined
-      if (cachedConstants) {
-        constants = env.memo?.get(constantsKey) as Value[] | undefined
-        if (constants === undefined) {
-          constants = items.map((i) => i.eval(r, env))
-          env.memo?.set(constantsKey, constants)
-        }
-      }
+      const constants = cachedConstants ? memoValue(env.memo, constantsKey, () => items.map((i) => i.eval(r, env))) : undefined
       const v = a.eval(r, env)
       if (compiled.type.kind === 'null') return null
       if (v === null && items.length === 1 && !cachedConstants) return null
@@ -2413,13 +2406,8 @@ function outerOnly(args: readonly Expression[], ctx: CompileContext): boolean {
     const n = node as Expression
     if (n.kind === NODE.SUBQUERY) return false
     if (n.kind === NODE.COLUMN) {
-      try {
-        if ((ctx.scope.resolve(n.parts, 'field list').depth ?? 0) > 0) outer++
-        else local++
-      } catch (e) {
-        expectTyped(e)
-        local++
-      }
+      if ((safeResolve(ctx.scope, n.parts, 'field list')?.depth ?? 0) > 0) outer++
+      else local++
       return false
     }
     return undefined
@@ -2628,14 +2616,20 @@ function planned(e: SubqueryNode, ctx: CompileContext): SubqueryPlan {
   return ctx.subquery(e.query, ctx.scope)
 }
 
+/** Reuse a statement-owned value; only successful initializers publish, and undefined remains a miss. */
+export function memoValue<T>(memo: Map<unknown, unknown> | undefined, key: unknown, read: () => T): T {
+  let value = memo?.get(key) as T | undefined
+  if (value === undefined) {
+    value = read()
+    memo?.set(key, value)
+  }
+  return value
+}
+
 /** Its rows for this outer row: run again for each if correlated, else once per statement. */
 function rowsOf(plan: SubqueryPlan, key: object, row: Row, env: Env): readonly (readonly Value[])[] {
   if (!plan.correlated && env.memo !== undefined) {
-    const hit = env.memo.get(key) as (readonly Value[])[] | undefined
-    if (hit !== undefined) return hit
-    const all = [...plan.rows(env)]
-    env.memo.set(key, all)
-    return all
+    return memoValue(env.memo, key, () => [...plan.rows(env)])
   }
   return [...plan.rows({ ...env, outer: [row, ...(env.outer ?? [])] })]
 }
@@ -2718,20 +2712,18 @@ function quantified(op: string, quantifier: 'ANY' | 'ALL', left: Expression, rig
   if (keyed) {
     const membership = (env: Env): { readonly keys: ReadonlySet<string>; readonly empty: boolean; readonly sawNull: boolean } | undefined => {
       if (plan.correlated || env.memo === undefined) return undefined
-      const hit = env.memo.get(setKey) as ReturnType<typeof membership>
-      if (hit !== undefined) return hit
-      const keys = new Set<string>()
-      let empty = true
-      let sawNull = false
-      for (const r of plan.rows(env)) {
-        empty = false
-        const x = r[0] ?? null
-        if (x === null) sawNull = true
-        else keys.add(valueKey(x))
-      }
-      const made = { keys, empty, sawNull }
-      env.memo.set(setKey, made)
-      return made
+      return memoValue(env.memo, setKey, () => {
+        const keys = new Set<string>()
+        let empty = true
+        let sawNull = false
+        for (const r of plan.rows(env)) {
+          empty = false
+          const x = r[0] ?? null
+          if (x === null) sawNull = true
+          else keys.add(valueKey(x))
+        }
+        return { keys, empty, sawNull }
+      })
     }
     const loop = compareAll()
     return {

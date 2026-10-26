@@ -31,6 +31,7 @@ import { compile, EMPTY_SCOPE, type CompileContext, type Env } from './compile.t
 import type { FromPlan } from './from.ts'
 import { accessRows, pointAccess, splitAnd } from './plan.ts'
 import { intersect, rangeOf, type RangeSet } from './ranges.ts'
+import { safeResolve } from './scope.ts'
 
 /** A schema key that identifies a row even when comparisons can see NULL. */
 export function uniqueKey(def: TableDef, index: IndexDef): boolean {
@@ -95,15 +96,7 @@ export function optimizerFacts(from: FromPlan | undefined, where: Expression | u
   straight = straight || from.straight
   const scope = from.scope
 
-  const slot = (e: Expression): number | undefined => {
-    if (e.kind !== NODE.COLUMN) return undefined
-    try {
-      return scope.resolve(e.parts, 'where clause').index
-    } catch (e) {
-      expectTyped(e)
-      return undefined
-    }
-  }
+  const slot = (e: Expression): number | undefined => e.kind === NODE.COLUMN ? safeResolve(scope, e.parts, 'where clause')?.index : undefined
   const aliasOf = (index: number): string | undefined => scope.columnAt(index)?.table.alias
 
   // Outer-join simplification, to a fixed point: a null-rejecting condition on

@@ -67,10 +67,13 @@ its packet encodes their low sixteen bits. HAVING now shares clause-local
 condition admission with WHERE, while aggregate/window/grouping readers retain
 their row lifetimes. The later GROUPING admission/input expansion is withdrawn
 after a late-source regression; its native captures remain research evidence.
-Start transaction-bound optimization with constant ORDER-key subqueries, using
-bound correlation and the existing evaluator. That phase still precedes
-read readiness; finish that phase before repairing the DISTINCT fill/read boundary, including column-header readiness after a failed
-fill. Then repair ordinary AVG's temporary strategy and AVG(DISTINCT)'s
+Bounded constant ORDER-key startup now uses bound correlation and the existing
+statement memo under the actual invocation transaction before metadata, preserving
+PREPARE and ordinary projection timing. Filtered, grouped, opaque and stateful
+profiles remain open. Next prove ORDER elimination from the actual selected
+single-column PRIMARY point access; metadata's const-table flag is insufficient.
+Then finish optimization/read readiness before repairing the DISTINCT fill/read
+boundary, including column-header readiness after a failed fill. Then repair ordinary AVG's temporary strategy and AVG(DISTINCT)'s
 intermediate field copy, preserving the proved blocking lifetimes. Retained
 division precision across both operands and result-buffer bounds follows,
 followed by supplementary identifier-alias admission. Broader strategy and

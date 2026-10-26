@@ -292,7 +292,7 @@ export class SqlExecutor implements Executor {
       let columns: PreparedInfo['columns'] = []
       if (statement.kind === STATEMENT.QUERY) {
         const run = { ...this.#run(session, sql, [], undefined, 'binary', conditions), preparing: true }
-        columns = columnsOf(run, planQuery(run, statement))
+        columns = columnsOf(run, planQuery(run, statement).columns)
       }
       // Every supported statement may have a large parameter response.
       if (paramCount >= MANY_PARAMETERS) await pause()

@@ -1,14 +1,9 @@
-import { NODE, type Expression } from '@myjs/parser'
-
-/** Object-valued AST children, with lists visited in their written order. */
-export function children(e: object): unknown[] {
-  return Object.values(e).flat().filter((v) => typeof v === 'object')
-}
+import { LITERAL, NODE, type Expression, type LiteralNode } from '@myjs/parser'
 
 /** Read-only AST proofs: true matches, false prunes, undefined visits children. */
 export function someNode(e: unknown, check: (node: object) => boolean | undefined): boolean {
   if (e === null || typeof e !== 'object') return false
-  return check(e) ?? children(e).some((child) => someNode(child, check))
+  return check(e) ?? Object.values(e).flat().some((child) => someNode(child, check))
 }
 /** Columns in written order; callers decide whether nested query blocks count. */
 export function columnRefs(e: unknown, subqueries = false): (readonly string[])[] {
@@ -33,4 +28,9 @@ export function and(a: Expression | undefined, b: Expression | undefined): Expre
   if (a === undefined) return b
   if (b === undefined) return a
   return { kind: NODE.BINARY, op: 'AND', left: a, right: b, at: a.at }
+}
+
+/** A written integer literal; expressions, placeholders and DECIMAL spellings stay distinct. */
+export function integerLiteral(e: Expression): e is LiteralNode & { readonly type: typeof LITERAL.INT; readonly value: bigint } {
+  return e.kind === NODE.LITERAL && e.type === LITERAL.INT
 }

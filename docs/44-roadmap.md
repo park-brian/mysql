@@ -128,11 +128,12 @@ at execution unless LIMIT is zero.
 Fixed HAVING diagnostics now share WHERE's admission owner before ORDER binding;
 aggregate/window/GROUPING readers remain row-dependent. The premature GROUPING
 admission/input expansion from 149 is withdrawn below. Its reference captures
-remain available, and its source-preparation prerequisites stay open. Establish
-the per-invocation optimization phase under the actual transaction first: constant scalar
-subqueries must remain unexecuted at PREPARE but may fail before query headers,
-even over an empty source. Use bound correlation and lifetime facts, not SQL
-spelling. Then repair unbounded temporary-table reads with column-header
+remain available, and its source-preparation prerequisites stay open. The bounded
+per-invocation ORDER-key startup phase now runs under the actual transaction.
+Finish its physical point-key elimination proof and the remaining optimization
+profiles: constant scalar subqueries must remain unexecuted at PREPARE but may
+fail before query headers, even over an empty source. Use bound correlation and
+lifetime facts, not SQL spelling. Then repair unbounded temporary-table reads with column-header
 readiness on failure, preserving earlier source/optimization failures before
 headers. Then repair bounded, non-eliminated outer DISTINCT over computed ordinary exact AVG,
 using the existing temporary-group writer and a real final deduplication
@@ -142,6 +143,53 @@ before promoting the division repair. Preserve index-streamed reads when DISTINC
 is absent or eliminated by the retained grouping keys. Pin that elimination
 proof and both aggregate kinds before broadening to HAVING, LIMIT, ROLLUP or
 windows. The native plan and its actual writers must make the decision.
+
+**ORDER-key startup optimization, verified (2026-10-26):** Each actual result
+invocation now has an optimization hook before metadata/read readiness. For an
+unfiltered, unhinted ordinary single-base SELECT, a directly named or alias/ordinal
+scalar ORDER key over an independent ordinary single-base subquery initializes
+through its existing memoized reader under the invocation's transaction. Bound
+correlation supplies independence; nested subqueries, opaque sources, variables,
+volatile/stateful and window readers do not enter this bounded role. PREPARE does
+not invoke it. LIMIT 0 and written FALSE retain their non-execution, and ordinary
+projection readers keep their row lifetime.
+
+A fresh 1,008-frame native audit improves 804 to 844 complete outcomes without
+losing a previously matching component. The permanent regression pins 296 complete
+query/execute/PREPARE outcomes, improving 252 to 296, including empty sources, aliases/positions,
+source-free and correlated controls, transaction snapshots, peer writes and cached
+parameter rebinding. Native/current replay agrees on every retained packet,
+field/row event, diagnostic, total and LAST_INSERT_ID. Entire filtered/point/range
+startup families, grouped parents, populated projection/header failures, compound
+expressions, stateful inner readers and opaque sources remain open; this bounded
+fixture does not claim the full audit passes.
+
+The broader 78-frame point/coercion/hint probe found why metadata's const-table
+flag cannot remove ORDER readers: it does not prove physical uniqueness, honor
+index hints or settle nullable/coerced comparisons. The attempted shortcut is
+absent from this slice. Next, prove ORDER elimination from the actual selected
+complete single-column PRIMARY point access, retaining ORDER binding and explicit
+hint/parameter controls, under the unchanged caps. Keep other access profiles
+open. Then finish the remaining optimization/read-readiness boundaries before
+repairing DISTINCT fill/read behavior; no blanket header emission is admitted.
+
+The shared bound-subquery object replaces a wrapper, and statement-owned cache
+initialization shares one successful-publication helper while preserving
+correlated/lateral bypass and diagnostic once-markers. Integer proofs, deferred
+GROUPING membership, view creation context, HAVING names and dependency closure
+share their existing owners without restoring the withdrawn GROUPING admission
+or aggregate-input expansion. Raw core/facade shrink 599 B from the rollback;
+compressed sizes are 334,330/334,237 B under the unchanged 334,361/334,266 B caps.
+The 1,172 earlier WHERE observations, 468 phase frames, 36 HAVING parameter frames,
+88 wire-error frames and 576 fill frames retain all previously matching
+components. The phase audit improves 400 to 402 complete outcomes; the existing
+641-frame HAVING and thirty source-precedence regressions pass. Fresh Docker
+passes 1,361 ordinary plus four latency tests, typecheck, lint, all nine unchanged
+caps, package/typed smoke, the real client and all seven pinned 8.4.11 corpora.
+The fresh source proof matches 365 test files/fixtures and 202 runtime sources,
+plus reference tooling/manifests/CI. Native/current regression replay and 20,000
+executor statements (seed 20261010) pass. Preceding 8a4a2d3 passes all eleven
+required GitHub jobs. The roadmap remains 144/190, M5 42/53.
 
 **GROUPING regression rollback, verified (2026-10-26):** Supplementary native
 probes found a missing case in 149's preservation audit. A missing source in a
