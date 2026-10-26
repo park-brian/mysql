@@ -3,9 +3,9 @@ import assert from 'node:assert/strict'
 import { connect } from 'node:net'
 import mysql from 'mysql2'
 import { MySQL } from '@myjs/core'
-import reference from './fixtures/diagnostics/grouping-binding.json' with { type: 'json' }
+import reference from './fixtures/diagnostics/grouping-source-precedence.json' with { type: 'json' }
 
-test('GROUPING validates written argument types and binds aggregate inputs before ROLLUP readers', async () => {
+test('missing scalar-subquery sources precede positional GROUPING refusal across clauses', async () => {
   const host = process.env.MYSQL_REFERENCE_HOST
   const db = host === undefined ? await MySQL.open(':memory:') : undefined
   const transport = db === undefined ? connect({ host: host ?? 'reference', port: Number(process.env.MYSQL_REFERENCE_PORT ?? 3306) }) : db.createStream()
@@ -16,7 +16,7 @@ test('GROUPING validates written argument types and binds aggregate inputs befor
   const descriptors = (list: readonly mysql.FieldPacket[]) => list.map((f) => [f.name, f.columnType, f.columnLength, f.flags, f.decimals, f.characterSet, f.schema, f.table, f.orgTable, f.orgName])
   try {
     assert.equal(reference.mysqlVersion, '8.4.11')
-    assert.equal(reference.observations.length, 3666)
+    assert.equal(reference.observations.length, 30)
     if (host !== undefined) assert.equal(String((await conn.query<mysql.RowDataPacket[]>('SELECT VERSION() AS v'))[0][0]!.v).split('-')[0], reference.mysqlVersion)
     await conn.query('CREATE DATABASE grouping_admission')
     await conn.query('USE grouping_admission')
@@ -51,7 +51,7 @@ test('GROUPING validates written argument types and binds aggregate inputs befor
           const collected: unknown[] = []
           rows = collected
           await new Promise<void>((resolve, reject) => {
-            const command = api === 'execute' ? raw.execute(options, 'params' in entry ? entry.params : []) : raw.query(options, 'params' in entry ? entry.params : [])
+            const command = api === 'execute' ? raw.execute(options, []) : raw.query(options)
             command.on('fields', (list: mysql.FieldPacket[]) => { fields = descriptors(list) })
             command.on('result', (row: unknown) => collected.push(row))
             command.once('error', reject)
@@ -63,7 +63,7 @@ test('GROUPING validates written argument types and binds aggregate inputs befor
         error = [failure.code, failure.errno, failure.sqlState, failure.sqlMessage]
       } finally {
         transport.off('data', received)
-        if (api !== 'query' && !('retain' in entry && entry.retain)) conn.unprepare(options)
+        if (api !== 'query') conn.unprepare(options)
       }
       const bytes = Buffer.concat(chunks)
       const packets: number[] = []
@@ -83,7 +83,6 @@ test('GROUPING validates written argument types and binds aggregate inputs befor
       assert.deepEqual(canonical({ prior, rows, fields, error, packets, warnings, warningCount, errorCount, insertId }), {
         ...expected,
         prior: expected.prior.map((i) => reference.warnings[i]),
-        fields: expected.fields?.map((i) => reference.fields[i]) ?? null,
         warnings: expected.warnings.map((i) => reference.warnings[i]),
       }, `${api}: filled=${filled}: ${sql}`)
     }

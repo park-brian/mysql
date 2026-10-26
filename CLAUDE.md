@@ -65,11 +65,10 @@ PREPARE now publishes or clears its collected diagnostics on every supported
 success path, retaining complete totals independently of the kept prefix while
 its packet encodes their low sixteen bits. HAVING now shares clause-local
 condition admission with WHERE, while aggregate/window/grouping readers retain
-their row lifetimes. GROUPING now refuses written integer positions and reads
-ordinary input rows inside aggregates, with key-slot substitution only above
-grouping. Mixed-error precedence still needs source-only preparation before
-argument field binding; placeholder identity and arity remain open.
-Transaction-bound scalar-subquery optimization still precedes
+their row lifetimes. The later GROUPING admission/input expansion is withdrawn
+after a late-source regression; its native captures remain research evidence.
+Start transaction-bound optimization with constant ORDER-key subqueries, using
+bound correlation and the existing evaluator. That phase still precedes
 read readiness; finish that phase before repairing the DISTINCT fill/read boundary, including column-header readiness after a failed
 fill. Then repair ordinary AVG's temporary strategy and AVG(DISTINCT)'s
 intermediate field copy, preserving the proved blocking lifetimes. Retained

@@ -16,7 +16,7 @@ test('HAVING binds native diagnostics before ORDER while group readers and prepa
   const descriptors = (list: readonly mysql.FieldPacket[]) => list.map((f) => [f.name, f.columnType, f.columnLength, f.flags, f.decimals, f.characterSet, f.schema, f.table, f.orgTable, f.orgName])
   try {
     assert.equal(reference.mysqlVersion, '8.4.11')
-    assert.equal(reference.observations.length, 653)
+    assert.equal(reference.observations.length, 641)
     if (host !== undefined) assert.equal(String((await conn.query<mysql.RowDataPacket[]>('SELECT VERSION() AS v'))[0][0]!.v).split('-')[0], reference.mysqlVersion)
     await conn.query('CREATE DATABASE having_resolution')
     await conn.query('USE having_resolution')

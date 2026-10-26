@@ -114,7 +114,7 @@ and browser work follow the outstanding engine/planner work. Remaining function
 boundaries stay open for separate verification. The current state and remaining
 work are:
 
-**Next bounded slice: source preparation before GROUPING admission and read readiness.**
+**Next bounded slice: transaction-bound optimization and read readiness.**
 System-variable identity and diagnostic-count PREPARE admission are verified
 below, alongside failed-command publication, diagnostic SHOW admission and
 linear lexical error trimming. WHERE resolution now binds the written conjuncts
@@ -126,13 +126,10 @@ Preserve the separate binary
 boundary: fixed diagnostics belong to PREPARE, while bound parameters initialize
 at execution unless LIMIT is zero.
 Fixed HAVING diagnostics now share WHERE's admission owner before ORDER binding;
-aggregate/window/GROUPING readers remain row-dependent. GROUPING now refuses
-written integer positions and distinguishes aggregate inputs from ROLLUP output.
-Finish source-only preparation before moving its refusal ahead of argument field
-binding: missing tables must win over 1210, which must win over unknown argument
-columns and fixed failures. Preserve lexical CTE/view scope and diagnostic ownership;
-do not use speculative expression compilation as a source check. Then establish
-the per-invocation optimization phase under the actual transaction: constant scalar
+aggregate/window/GROUPING readers remain row-dependent. The premature GROUPING
+admission/input expansion from 149 is withdrawn below. Its reference captures
+remain available, and its source-preparation prerequisites stay open. Establish
+the per-invocation optimization phase under the actual transaction first: constant scalar
 subqueries must remain unexecuted at PREPARE but may fail before query headers,
 even over an empty source. Use bound correlation and lifetime facts, not SQL
 spelling. Then repair unbounded temporary-table reads with column-header
@@ -146,7 +143,66 @@ is absent or eliminated by the retained grouping keys. Pin that elimination
 proof and both aggregate kinds before broadening to HAVING, LIMIT, ROLLUP or
 windows. The native plan and its actual writers must make the decision.
 
-**GROUPING binding and input lifetime, verified (2026-10-25):** A fresh pinned
+**GROUPING regression rollback, verified (2026-10-26):** Supplementary native
+probes found a missing case in 149's preservation audit. A missing source in a
+later WHERE/HAVING scalar subquery or SELECT item must produce 1146 before
+positional GROUPING refusal. Native and f9c621e agree; 25c3d7a instead produces
+1210. The separate ORDER source case was already wrong on f9c621e (3602 versus
+native 1146), so it remains a preexisting gap rather than a restored behavior.
+
+The three changed runtime files, the HAVING fixture and its test are restored
+to f9c621e. The aggregate-input expansion and associated cleanup are withdrawn
+together with positional admission. There is no runtime diff from that validated
+commit, and the existing HAVING contract again pins 641 complete frames with its
+twelve integer-GROUPING cases explicitly open. The unchanged 3,666 native expected
+outcomes remain in `grouping-binding.json` as clearly marked research evidence;
+current conformance returns to 2,298/3,666, not the withdrawn 3,666 claim. The
+broader binding/aggregate audits return to 2,185/3,300 and 252/684. No expected
+native values, legacy tests, size caps or corpus thresholds are adjusted to make
+the regression appear correct. The withdrawn feature's conformance test is
+replaced by permanent coverage of the restored source-error contract.
+
+The new regression pins thirty complete query/execute/PREPARE outcomes across
+empty/populated sources and five WHERE/HAVING/later-SELECT forms, including a
+fixed regex failure earlier in WHERE's written order. It fails all thirty on
+25c3d7a and agrees completely with native and the restored runtime: raw packets,
+field/row events, errors, diagnostics and totals. Native preparation probes also
+show that unused CTEs remain unopened, forward CTE names retain their declaration
+scope, and derived-table fields bind at a different phase from scalar-subquery
+fields. A local eager argument guard cannot establish source preparation. Keep
+that coherent prerequisite open for the later GROUPING repair; no SQL-shape
+exceptions, blanket error suppression or speculative compilation are added.
+
+The independent review supersedes its initial continuation decision and requires
+this rollback before further work. Next is bounded constant ORDER-key scalar-
+subquery optimization using bound correlation, the actual invocation transaction
+and the existing memoized evaluator. Preserve PREPARE non-execution, ordinary
+projection timing, empty-source behavior and errors before headers. Source/field
+preparation remains open and must precede any renewed eager GROUPING refusal.
+Fresh Docker Node 22.18.0 verification passes 1,360 ordinary plus four latency
+tests, typecheck, lint, all nine unchanged caps, package/typed-example smoke, the
+real client and all seven pinned MySQL 8.4.11 corpora. Native/current thirty-frame
+replays and another 20,000 executor statements seeded 20261010 pass. Fresh and
+reusable source proofs match 363 test files/fixtures and 202 runtime sources,
+reference tooling, manifests and CI. Core/facade return to 334,343/334,262 B under
+334,361/334,266 B caps. All eleven required jobs for 25c3d7a passed, demonstrating
+the supplementary coverage gap rather than certifying the withdrawn behavior.
+The roadmap remains 144/190 with M5 42/53; M5.10 remains partial.
+
+**GROUPING binding and input lifetime, withdrawn (2026-10-26):**
+Supplementary verification found a shipped regression in 25c3d7a: a missing table
+in a later WHERE/HAVING scalar subquery or SELECT item must precede GROUPING
+positional refusal. Both native and f9c621e return 1146; 25c3d7a returns 1210.
+ORDER has a separate preexisting mismatch. The local admission and its aggregate
+input expansion are withdrawn together; their native captures remain
+reference evidence, not a completed conformance claim. A correct source phase
+must preserve unused/forward/recursive CTE scope, view creation scope and the
+difference between derived and scalar field binding. A generic AST table walk
+or speculative expression compilation does not establish that contract.
+
+The following records the withdrawn slice and its initially bounded evidence;
+it is superseded by this repair notice.
+ A fresh pinned
 8.4.11 audit records 3,300 complete query/execute/PREPARE outcomes over empty and
 populated sources. Written integer arguments from zero through unsigned BIGINT's
 maximum, including parentheses and unary plus, now produce 1210. Unary minus,
@@ -217,9 +273,9 @@ A new native fixture pins 641 complete query/execute/PREPARE observations,
 improving 435 to all 641: raw field events and packet kinds, rows, error tuples,
 prior/post conditions and both totals, PREPARE LAST_INSERT_ID controls and cached bound
 COUNT readers across writes. The full 653-frame audit reaches 641 without losing
-any matched component. Its twelve then-remaining frames were the entire preexisting
-constant-GROUPING argument family. The GROUPING repair above now closes all twelve
-and expands the regression to all 653 complete outcomes.
+any matched component. Its remaining twelve frames are the entire preexisting
+constant-GROUPING argument family: native raises 1210 while the binder admits it.
+That family remains open after the GROUPING rollback above.
 The separate 468-frame phase audit improves 335 to 400; 88 clause/header frames
 improve 34 to 38. The 576-frame fill audit stays 456, retaining its missing barrier,
 header, projection/OFFSET and ordered-field gaps. Every previously matching

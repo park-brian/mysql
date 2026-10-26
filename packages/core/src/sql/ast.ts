@@ -1,4 +1,4 @@
-import { LITERAL, NODE, type Expression, type LiteralNode } from '@myjs/parser'
+import { NODE, type Expression } from '@myjs/parser'
 
 /** Object-valued AST children, with lists visited in their written order. */
 export function children(e: object): unknown[] {
@@ -33,9 +33,4 @@ export function and(a: Expression | undefined, b: Expression | undefined): Expre
   if (a === undefined) return b
   if (b === undefined) return a
   return { kind: NODE.BINARY, op: 'AND', left: a, right: b, at: a.at }
-}
-
-/** A written integer literal; expressions, placeholders and DECIMAL spellings stay distinct. */
-export function integerLiteral(e: Expression): e is LiteralNode & { readonly type: typeof LITERAL.INT; readonly value: bigint } {
-  return e.kind === NODE.LITERAL && e.type === LITERAL.INT
 }
