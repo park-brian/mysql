@@ -1,13 +1,12 @@
 // M5.3 — the Volcano operators: each one a generator over the rows of the one
 // below it, so a `LIMIT 1` over a million-row scan reads one row.
 //
-// They are deliberately ignorant of where rows come from: `scan` is the only
-// one that touches a `Table`, and every other operator takes any iterable of
-// rows. That is the item's done-when — each is testable over a fixed array —
+// They take any iterable of rows; only `accessRows` owns physical table
+// reads and decoding. The other operators are testable over a fixed array
 // and it is what lets a join (M5.4) or a sort that spills (M5.5) slot in
 // without the rest noticing.
-import type { KeyRange, RowId, Table, Trx } from '@myjs/engine'
-import type { ColumnType } from '@myjs/types'
+import type { RowId, Table, Trx } from '@myjs/engine'
+import type { Access } from './plan.ts'
 import { compareBytes } from '@myjs/bytes'
 import { collation, encodeCollation } from '@myjs/charsets'
 import { compareJsonSortHashes, decodeField, jsonSortHash, sortValues, truth, type Value } from '@myjs/types'
@@ -20,25 +19,18 @@ export interface ScannedRow {
   readonly row: Row
 }
 
-export interface ScanSource {
-  readonly table: Table
-  /** An index to read in its order, or the clustered order when absent. */
-  readonly index?: string
-  readonly range?: KeyRange
-  readonly trx?: Trx
-  /** `'current'` for a locking read or a write's own reads. */
-  readonly mode?: 'consistent' | 'current'
-  readonly types: readonly ColumnType[]
-}
-
-/** Every row of a table, or of a range of one of its indexes, decoded. */
-export function* scan(source: ScanSource): Generator<ScannedRow> {
-  const { table, types } = source
-  const rows = source.index === undefined ? table.scan(source.range, source.trx, source.mode) : table.indexScan(source.index, source.range, source.trx, source.mode)
-  for (const [id, fields] of rows) {
-    const row = new Array<Value>(types.length)
-    for (let i = 0; i < types.length; i++) row[i] = decodeField(fields[i] ?? null, types[i] as ColumnType)
-    yield { id, row }
+/** The rows an access path reads, in its order. */
+export function* accessRows(table: Table, access: Access, trx?: Trx, current?: boolean, ready?: () => void): Generator<ScannedRow> {
+  const { columns } = table.def
+  const { index, ranges, reverse } = access
+  const mode = current ? 'current' : undefined
+  const ordered = ranges === undefined ? [{ reverse: reverse === true }]
+    : reverse === true ? [...ranges].reverse().map((r) => ({ ...r, reverse: true })) : ranges
+  for (const range of ordered) {
+    const rows = index === undefined ? table.scan(range, trx, mode) : table.indexScan(index, range, trx, mode)
+    // Construction precedes readiness; deferred visibility checks and decoding follow it.
+    if (ranges === undefined) ready?.()
+    for (const [id, fields] of rows) yield { id, row: columns.map((column, i) => decodeField(fields[i] ?? null, column.type)) }
   }
 }
 

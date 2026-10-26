@@ -29,7 +29,8 @@ import { compareValues, integerRange, truth, type Value } from '@myjs/types'
 
 import { compile, EMPTY_SCOPE, type CompileContext, type Env } from './compile.ts'
 import type { FromPlan } from './from.ts'
-import { accessRows, pointAccess, splitAnd } from './plan.ts'
+import { pointAccess, splitAnd } from './plan.ts'
+import { accessRows } from './operators.ts'
 import { intersect, rangeOf, type RangeSet } from './ranges.ts'
 import { safeResolve } from './scope.ts'
 
@@ -398,7 +399,7 @@ export function constTablesHaveRows(facts: OptimizerFacts, ctx: CompileContext, 
     const index = t.def.indexes.find((i) => i.parts.length === t.key.length && i.parts.every((p, n) => p.column === t.key[n]?.column.name))
     const access = index !== undefined && t.key.length === 1 ? pointAccess(index, (t.key[0] as { column: ColumnDef }).column, values[0] as Value) : undefined
     let found = false
-    for (const { row } of accessRows(t.table, t.def, access ?? {}, trx, false)) {
+    for (const { row } of accessRows(t.table, access ?? {}, trx)) {
       // A full scan when the bound does not convert exactly: match as the comparison would.
       if (t.key.every((k, n) => compareValues(row[t.def.columns.indexOf(k.column)] ?? null, values[n] ?? null) === 0)) {
         found = true

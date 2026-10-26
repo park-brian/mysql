@@ -46,12 +46,10 @@ import {
   type StoreContext,
   type Value,
 } from '@myjs/types'
-import type { Table, Trx } from '@myjs/engine'
 import type { Compiled, Env } from './compile.ts'
 import { rangeBaseline, rangeCost, type RangeShape, type RangeRead } from './cost.ts'
 import { intersect, normalize, rangeOf, type Constant, type Interval, type RangeSet } from './ranges.ts'
 import type { TableStatistics } from './stats.ts'
-import { scan, type ScannedRow } from './operators.ts'
 import { forwardKeyColumn } from './indexes.ts'
 
 /** Whether a named optimizer transformation is enabled in this statement's session. */
@@ -520,19 +518,6 @@ export function pointAccess(index: IndexDef, column: ColumnDef, v: Value): Acces
   if (!exact(v, column)) return undefined
   const b = bound(v, column, true)
   return b === undefined ? undefined : { index: index.name, ranges: [{ from: b, to: b }] }
-}
-
-/** The rows an access path reads, in its order. */
-export function* accessRows(table: Table, def: TableDef, access: Access, trx: Trx | undefined, current: boolean): Generator<ScannedRow> {
-  const types = def.columns.map((c) => c.type)
-  const mode = current ? 'current' : 'consistent'
-  const base = { table, types, mode, ...(trx === undefined ? {} : { trx }), ...(access.index === undefined ? {} : { index: access.index }) } as const
-  if (access.ranges === undefined) {
-    yield* scan(access.reverse === true ? { ...base, range: { reverse: true } } : base)
-    return
-  }
-  const ranges = access.reverse === true ? [...access.ranges].reverse().map((r) => ({ ...r, reverse: true })) : access.ranges
-  for (const range of ranges) yield* scan({ ...base, range })
 }
 
 /** A literal, `-literal` or `?`, evaluated. */

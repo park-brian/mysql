@@ -137,13 +137,13 @@ export interface Env {
   readonly session: Session
   readonly state: SessionValues
   /** The transaction a subquery reads in (M5.1). */
-  readonly trx?: Trx
+  readonly trx?: Trx | undefined
   /** The rows of the enclosing queries, innermost first: what a correlated reference reads (D-74). */
   readonly outer?: readonly Row[]
   /** One statement's memory: an uncorrelated subquery's answer, computed once. */
   readonly memo?: Map<unknown, unknown>
   /** The statement's conditions, as SHOW WARNINGS will list them. */
-  readonly conditions?: Condition[]
+  readonly conditions?: Condition[] | undefined
 }
 
 /**
@@ -223,7 +223,7 @@ export function numberConstant(c: Compiled, written: Expression, ctx: CompileCon
 }
 
 function resolveConstant(c: Compiled, ctx: CompileContext): Compiled {
-  return lit(c.eval([], { ...constantEnv(ctx), memo: new Map(), ...(ctx.conditions === undefined ? {} : { conditions: ctx.conditions }) }), c.type)
+  return lit(c.eval([], { ...constantEnv(ctx), memo: new Map(), conditions: ctx.conditions }), c.type)
 }
 
 /** The bytes a number's reading leaves over: after the integer for an INTEGER (-1 when there is no digit), after the number for a DOUBLE (all of them, leading spaces too, when there is none). */
@@ -566,7 +566,7 @@ export interface CompileContext {
   /** `collation_connection`: what a string literal is in. */
   readonly connectionCollation: number
   /** The parameters' values when they are known (an execute), so `?` has a type. */
-  readonly params?: readonly Value[]
+  readonly params?: readonly Value[] | undefined
   /** The clause being compiled, for "Unknown column 'x' in 'where clause'". */
   readonly clause: string
   readonly session: Session
@@ -587,7 +587,7 @@ export interface CompileContext {
    */
   readonly aggregates?: { register(e: CallNode, ctx: CompileContext): Compiled }
   /** Where a select list's window functions are collected (M5.6); absent where none may be. */
-  readonly windows?: { register(e: CallNode): Compiled }
+  readonly windows?: { register(e: CallNode): Compiled } | undefined
   /** Inside an aggregate's arguments, where another aggregate is 1111 too. */
   readonly inAggregate?: boolean
   /** Above a grouping: the expressions that are its keys, which read the key slot (NULL in a ROLLUP super-aggregate row). */
@@ -599,7 +599,7 @@ export interface CompileContext {
   /** A base table by name, for what reads one whole: MATCH's statistics (M5.26). */
   readonly table?: (schema: string, name: string) => Table | undefined
   /** The statement's diagnostics area, for what resolving a constant warns (1292 at a constant position, say). */
-  readonly conditions?: Condition[]
+  readonly conditions?: Condition[] | undefined
   /** The statement's text, which a warning that quotes an expression quotes from. */
   readonly sql?: string
 }

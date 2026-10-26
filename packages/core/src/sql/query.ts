@@ -82,7 +82,7 @@ export function compileContext(run: Run, scope: Scope, clause: string, windows?:
     session,
     state: run.state,
     serverVersion: run.serverVersion,
-    ...(params === undefined ? {} : { params }),
+    params,
     subquery: (q, outer) => {
       const plan = planSubquery(run, q, outer, clause)
       run.subqueries?.push(plan)
@@ -90,29 +90,30 @@ export function compileContext(run: Run, scope: Scope, clause: string, windows?:
     },
     quantified: (q, how) => void run.quantified?.set(q, how),
     table: (schema, name) => run.catalog?.table(schema, name),
-    ...(conditions === undefined ? {} : { conditions }),
+    conditions,
     sql: run.sql,
-    ...(windows === undefined ? {} : { windows }),
+    windows,
   }
 }
 
 /** A caller's environment wins; otherwise bind this execution's transaction. */
 function executionEnv(run: Run, trx: Trx | undefined, given?: Env): Env {
-  return given ?? { ...run.env, ...(trx === undefined ? {} : { trx }) }
+  return given ?? { ...run.env, trx: trx ?? run.env.trx }
 }
 
 /** What planning a FROM needs from the statement: its tables, and a compiler for ON clauses. */
 export function fromContext(run: Run): FromContext {
+  const catalog = run.catalog
   return {
     open: (name, alias) => openTable(run, name, alias),
     compileOn: (e, scope) => compile(e, compileContext(run, scope, 'on clause')),
     env: run.env,
-    ...(run.catalog === undefined ? {} : { statistics: (def: TableDef, table: Table) => statisticsOf(def, table, (run.catalog as CatalogApi).store) }),
+    statistics: catalog && ((def, table) => statisticsOf(def, table, catalog.store)),
     derived: (ref, lateral) => derivedTable(run, ref.query, ref.alias as string, ref.columns, lateral),
     cte: (name) => run.ctes?.get(name)?.(),
     view: (name, alias) => viewTable(run, name, alias),
     system: (name, alias) => informationSchemaTable(run, name, alias, defaultDatabase(run)) ?? performanceSchemaTable(run, name, alias, defaultDatabase(run)),
-    ...(run.parent === undefined ? {} : { parent: run.parent }),
+    parent: run.parent,
   }
 }
 
@@ -252,7 +253,7 @@ export interface SelectPlan {
    * transaction. `env` is the statement's unless a correlated subquery
    * passes its own, carrying the outer row.
    */
-  rows(trx: Trx | undefined, env?: Env): Iterable<Value[]>
+  rows(trx: Trx | undefined, env?: Env, ready?: () => void): Iterable<Value[]>
   /** `FOR UPDATE` / `FOR SHARE`: the read takes the writer slot. */
   readonly locking: boolean
   /**
@@ -265,7 +266,7 @@ export interface SelectPlan {
    * on data the optimizer reads while planning — a const table's row, whose
    * absence makes the result empty and its metadata unmaterialized (M5.4).
    */
-  columnsAt?(trx: Trx | undefined): readonly { readonly name: string; readonly type: ResultType }[]
+  readonly columnsAt?: ((trx: Trx | undefined) => readonly { readonly name: string; readonly type: ResultType }[]) | undefined
   /**
    * The plan as 8.4.11's iterators (M5.44): the tree, then each subquery's,
    * as EXPLAIN FORMAT=TREE prints them. Absent where the plan is not yet
@@ -496,7 +497,9 @@ function planSelect(run: Run, q: QueryExpression, node: SelectNode): SelectPlan 
   // own that is the order they come in (8.4.11, M5.26).
   const match = keys.length === 0 && refs.length === 1 && refs[0]?.kind === REF.TABLE ? matchConjunct(node.where) : undefined
   if (match !== undefined) keys.push({ expr: compile(match, compileContext(run, lookup, 'where clause')), desc: true })
-  const locking = (q.locking ?? []).length > 0
+  const locking = (q.locking?.length ?? 0) > 0
+  // Full-text projections still have an unmodeled pre-metadata initialization phase.
+  const fulltext = someNode(node.items, (n) => (n as Expression).kind === NODE.MATCH || undefined)
   // Metadata's indexed-prefix shortcut does not prove row uniqueness.
   // An outer field with the same name cannot supply a local UNIQUE key.
   const deduplicate = node.distinct === true && (source === undefined || !distinctKey(source.def, items, lookup, true))
@@ -537,7 +540,7 @@ function planSelect(run: Run, q: QueryExpression, node: SelectNode): SelectPlan 
     ...(having === undefined ? [] : [filterStage(having, run)]),
     ...(windows === undefined || windows.windows.length === 0 ? [] : [windowStage(windows, windowBase)]),
     ...(limitFirst ? take : []),
-    deliverStage(items.map((i) => i.compiled), ordered === undefined && !sortedFirst ? keys : [], deduplicate, { deduplicated, streamed, copied, keep: limitCount === undefined ? undefined : keep, buffer, ...(constantDistinct === undefined ? {} : { constant: constantDistinct }) }),
+    deliverStage(items.map((i) => i.compiled), ordered === undefined && !sortedFirst ? keys : [], deduplicate, { deduplicated, streamed, copied, keep: limitCount === undefined ? undefined : keep, buffer, constant: constantDistinct }),
     ...(limitFirst ? [] : take),
   ]
   return {
@@ -562,14 +565,14 @@ function planSelect(run: Run, q: QueryExpression, node: SelectNode): SelectPlan 
       const n = describeStages(source, stages)
       return n === undefined ? undefined : [n, ...subqueryNodes(run, 'field list')]
     },
-    rows(trx, given) {
+    rows(trx, given, ready) {
       // A zero count with no offset has no iterator to initialize, including its sort.
       if (keep === 0 && !windowed) return []
       const env = executionEnv(run, trx, given)
       let rows: Iterable<Rowed>
       if (from === undefined) rows = [{ row: [] }]
       else if (facts?.impossible === true) rows = []
-      else rows = from.rows(trx, env, { locking })
+      else rows = from.rows(trx, env, { locking, ready: base && !node.where && !order.length && !node.distinct && !locking && !fulltext ? ready : undefined })
       return values(runStages(rows, stages, env))
     },
   }
@@ -638,7 +641,7 @@ function windowStage(windows: WindowSink, base: number): Stage {
  * Other repeated expressions remain open (M5.49). A sort
  * over a join reads its rows streamed into a table first ("Stream results").
  */
-function deliverStage(items: readonly Compiled[], keys: readonly SortKey[], deduplicate: boolean, through: { readonly deduplicated: boolean; readonly streamed: boolean; readonly copied?: readonly (number | undefined)[] | undefined; readonly described?: boolean; readonly keep?: number | undefined; readonly buffer?: { readonly estimate: number; readonly capacity: number } | undefined; readonly constant?: 'group' | 'limit' }): Stage {
+function deliverStage(items: readonly Compiled[], keys: readonly SortKey[], deduplicate: boolean, through: { readonly deduplicated: boolean; readonly streamed: boolean; readonly copied?: readonly (number | undefined)[] | undefined; readonly described?: boolean; readonly keep?: number | undefined; readonly buffer?: { readonly estimate: number; readonly capacity: number } | undefined; readonly constant?: 'group' | 'limit' | undefined }): Stage {
   // A LIMIT needs only its first rows of the order, unless a DISTINCT between would drop some.
   const keep = deduplicate ? undefined : through.keep
   const ordered = keys.length > 0
@@ -687,7 +690,7 @@ function resultColumns(items: readonly { name: string; compiled: Compiled }[], r
   const columns = items.map((i) => ({ name: i.name, type: i.compiled.type }))
   return {
     columns,
-    ...(read === undefined ? {} : { columnsAt: (trx: Trx | undefined) => read(trx).map((type, i) => ({ name: columns[i]!.name, type })) }),
+    columnsAt: read && ((trx) => read(trx).map((type, i) => ({ name: columns[i]!.name, type }))),
   }
 }
 
@@ -2072,7 +2075,7 @@ function planGrouped(
   if (from !== undefined) from.filter(node.where, resolved.read)
   // An index-ordered grouping reads that index whole, in its order, whatever range the WHERE would choose.
   if (strategy === 'index' && groupIndex !== undefined) from?.readInOrder(groupIndex, true, false, alone?.alias)
-  const locking = (q.locking ?? []).length > 0
+  const locking = (q.locking?.length ?? 0) > 0
   if (windows !== undefined) {
     windows.base = level + 1 + sink.specs.length
     // Read through the windows' temporary table, which takes the groups'
@@ -2504,7 +2507,8 @@ const PACE_ROWS = 256
  * `resultSet`, pausing every `PACE_ROWS` rows (D-77). A read holds no writer
  * slot, so a write may come between two rows: the read's view keeps what it
  * sees the same, and a B+tree scan finds its place again by key (M5.38).
- * With `emit`, each pause hands the rows read since the last one to it and
+ * With `emit`, admitted reader construction first enqueues metadata with no rows.
+ * Each pause then hands the rows read since the last one to it and
  * keeps none, so a streamed result holds a batch at most (M5.40); what it
  * returns is the rows after the last pause, and on a failure the rows read
  * since then are handed out before the error is thrown.
@@ -2515,7 +2519,7 @@ export function* resultSteps(run: Run, plan: SelectPlan, trx: Trx | undefined, e
   const columns = columnsOf(run, described)
   let rows: RowValue[][] = []
   try {
-    for (const values of plan.rows(trx)) {
+    for (const values of plan.rows(trx, undefined, () => emit?.({ columns, rows: [] }))) {
       rows.push(values.map((v, i) => toWire(v, described[i]!.type, run.protocol, run.env.session)))
       if (rows.length % PACE_ROWS !== 0) continue
       if (emit !== undefined) {
@@ -2528,7 +2532,7 @@ export function* resultSteps(run: Run, plan: SelectPlan, trx: Trx | undefined, e
     // A server sends each row as it is read, so the rows before a failure
     // reach the client ahead of its error (8.4.11: a subquery's 1242 at the
     // 700th row follows 699 rows).
-    if (emit !== undefined && rows.length > 0) emit({ columns, rows })
+    if (rows.length > 0) emit?.({ columns, rows })
     throw e
   }
   return { columns, rows }

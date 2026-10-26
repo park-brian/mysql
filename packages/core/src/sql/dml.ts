@@ -28,8 +28,8 @@ import { compile, EMPTY_SCOPE, type Compiled, type Row, type Scope } from './com
 import { checker, checkViolated } from './checks.ts'
 import { guarded, isReferenced } from './foreign-keys.ts'
 import { containsAggregate } from './group.ts'
-import { filter, limit, sort, type ScannedRow } from './operators.ts'
-import { accessRows, chooseAccess } from './plan.ts'
+import { accessRows, filter, limit, sort, type ScannedRow } from './operators.ts'
+import { chooseAccess } from './plan.ts'
 import { checkTargetNotRead, compileContext, fromContext, limitValue, openTable, planQuery, withClause, type Run } from './query.ts'
 import { planFrom, type FromPlan, type FromTable, type JoinedRow } from './from.ts'
 import { TableScope } from './scope.ts'
@@ -1040,7 +1040,7 @@ function* matching(run: Run, def: TableDef, table: Table, alias: string, node: U
   const keys = (node.orderBy ?? []).map((o) => ({ expr: compile(o.expr, compileContext(run, scope, 'order clause')), desc: o.desc === true }))
   const count = node.limit === undefined ? undefined : limitValue(run, node.limit)
   const access = chooseAccess(def, alias, node.where, run.env)
-  let rows: Iterable<ScannedRow> = filter(accessRows(table, def, access, trx, true), where, run.env)
+  let rows: Iterable<ScannedRow> = filter(accessRows(table, access, trx, true), where, run.env)
   if (keys.length > 0) rows = sort(rows, keys, run.env)
   const out: ScannedRow[] = []
   for (const row of limit(rows, 0, count)) {

@@ -42,13 +42,13 @@ import { messages, sqlError } from '@myjs/protocol'
 import { integerBytes, truth, type Value } from '@myjs/types'
 import type { Compiled, Env, Row, Scope } from './compile.ts'
 import { indexLookup, planNode, wrap, type PlanNode } from './explain.ts'
-import { FULL_SCAN, accessRows, chooseAccess, dynamicAccess, keyOrder, optimizerEnabled, pointAccess, splitAnd, type Access, type InferredRange, type OuterColumn, type RangeCosting } from './plan.ts'
+import { FULL_SCAN, chooseAccess, dynamicAccess, keyOrder, optimizerEnabled, pointAccess, splitAnd, type Access, type InferredRange, type OuterColumn, type RangeCosting } from './plan.ts'
 import { bestAccess, floorFilter, indexScanCost, joinOrder, type Candidate, type FirstMatch, type KeyChoice, type Positioned, type RangeRead } from './cost.ts'
 import { rowKey } from './keys.ts'
 import { columnResultType } from './meta.ts'
 import { chooseStrategy } from './group.ts'
 import { clusteredIndex, forwardKeyColumn, indexParts } from './indexes.ts'
-import { distinct, sort as sortRows, type SortKey } from './operators.ts'
+import { accessRows, distinct, sort as sortRows, type SortKey } from './operators.ts'
 import { neverEqual, nullRejected } from './optimize.ts'
 import type { TableStatistics } from './stats.ts'
 import { safeResolve, TableScope, type ScopeColumn, type ScopeTableSpec } from './scope.ts'
@@ -186,7 +186,7 @@ export interface FromPlan {
   /** How the one base table of a single-table FROM is read: what `rows` and `explain` read it by. */
   access(env: Env): Access
   /** The rows of the FROM, the WHERE applied; `ids` asks for each base table's row id too. */
-  rows(trx: Trx | undefined, env: Env, options: { readonly locking: boolean; readonly ids?: boolean }): Iterable<JoinedRow>
+  rows(trx: Trx | undefined, env: Env, options: { readonly locking: boolean; readonly ids?: boolean; readonly ready?: (() => void) | undefined }): Iterable<JoinedRow>
 }
 
 export interface JoinCondition {
@@ -204,7 +204,7 @@ export interface FromContext {
   /** Compile an ON clause against the scope its join sees. */
   compileOn(e: Expression, scope: Scope): Compiled
   /** A base table's statistics, as the optimizer reads them (M5.45). */
-  statistics?(def: TableDef, table: Table): TableStatistics
+  readonly statistics?: ((def: TableDef, table: Table) => TableStatistics) | undefined
   /** The statement's environment, which the cost model evaluates constant conditions in (M5.7). */
   readonly env?: Env
   /** Plan a derived table (M5.1); `lateral` is the scope of the tables before it, for LATERAL. */
@@ -216,7 +216,7 @@ export interface FromContext {
   /** A view of this name, planned for one reference to it, or `undefined` when there is none. */
   view?(ref: { readonly schema?: string; readonly name: string }, alias: string): { readonly schema: string; readonly source: DerivedSource } | undefined
   /** The scope an enclosing query gives a correlated name, if any. */
-  readonly parent?: Scope
+  readonly parent?: Scope | undefined
 }
 
 /** The written FROM, as a plan: its scope, and how to read it. */
@@ -296,7 +296,7 @@ export function planFrom(refs: readonly TableReference[], ctx: FromContext, wher
     if (p.derivedRef !== undefined) {
       if (ctx.derived === undefined) throw sqlError('ER_NOT_SUPPORTED_YET', messages.notSupported('Derived tables'))
       const visible = specs.filter((sp) => p.hidden?.has(sp.alias) !== true)
-      const before = visible.length > 0 ? new TableScope(visible, ctx.parent === undefined ? {} : { parent: ctx.parent }) : ctx.parent
+      const before = visible.length > 0 ? new TableScope(visible, { parent: ctx.parent }) : ctx.parent
       derived = ctx.derived(p.derivedRef, p.derivedRef.lateral === true ? before : undefined)
       p.width = derived.columns.length
     }
@@ -312,7 +312,7 @@ export function planFrom(refs: readonly TableReference[], ctx: FromContext, wher
   const coalesced: number[][] = []
   const byAlias = new Map(tables.map((t) => [t.alias, t]))
   const groupsWithin = (aliases: ReadonlySet<string>): number[][] => coalesced.filter((g) => g.every((i) => [...aliases].some((a) => inTable(byAlias.get(a), i))))
-  const preliminary = new TableScope(specs, ctx.parent === undefined ? {} : { parent: ctx.parent })
+  const preliminary = new TableScope(specs, { parent: ctx.parent })
   const columnName = (index: number): string => {
     const at = preliminary.columnAt(index)
     return at === undefined ? '' : at.column.name
@@ -607,7 +607,7 @@ export function planFrom(refs: readonly TableReference[], ctx: FromContext, wher
         // Empty residual ranges retain their materialization boundary.
         if (residual !== undefined && ctx.env !== undefined && inner.table !== undefined && inner.def !== undefined) {
           const access = chooseAccess(inner.def, alias, residual, ctx.env, settings.outer, rangeCosting(inner, settings, ctx.env))
-          if (access.ranges !== undefined && countRows(accessRows(inner.table, inner.def, access, ctx.env.trx, false), 0) === 0) return undefined
+          if (access.ranges !== undefined && countRows(accessRows(inner.table, access, ctx.env.trx), 0) === 0) return undefined
         }
         if (firstMatch.enabled) settings.firstMatch = firstMatch
         else settings.distinctSelect = new Set([outer.alias])
@@ -682,7 +682,7 @@ export function planFrom(refs: readonly TableReference[], ctx: FromContext, wher
     rows(trx, env, options) {
       const op = physicalTree()
       if (op === undefined) return [{ row: [] }]
-      return op.rows({ trx, env, locking: options.locking, ids: options.ids === true, width })
+      return op.rows({ ...options, trx, env, width })
     },
   }
 }
@@ -954,7 +954,7 @@ function rangeCosting(t: FromTable, settings: LeafSettings, env: Env, quote = fa
     shape: (i) => ({ clustered: i === clustered, covering: holdsRead(def, i, read), recordBytes: indexBytes(def, i) + indexBytes(def, clustered), minRecordBytes }),
     coveringScan: cover === undefined ? undefined : def.indexes.find((i) => i.name === cover),
     count(index, range, limit) {
-      return countRows(accessRows(table, def, { index, ranges: [range] }, env.trx, false), limit)
+      return countRows(accessRows(table, { index, ranges: [range] }, env.trx), limit)
     },
   }
 }
@@ -1073,8 +1073,9 @@ interface FromRun {
   readonly trx: Trx | undefined
   readonly env: Env
   readonly locking: boolean
-  readonly ids: boolean
+  readonly ids?: boolean
   readonly width: number
+  readonly ready?: (() => void) | undefined
 }
 
 /**
@@ -1451,7 +1452,7 @@ function rangeEstimate(t: FromTable, conditions: readonly Weighed[], leaves: rea
   if (compiled.length === 0) return undefined
   if (inferred !== undefined) settings.inferred.set(t.alias, inferred)
   const row = new Array<Value>(width).fill(null)
-  for (const { row: values } of accessRows(t.table, def, FULL_SCAN, undefined, false)) {
+  for (const { row: values } of accessRows(t.table, FULL_SCAN)) {
     fillTable(t, values, row)
     for (const c of compiled) if (truth(c[1].eval(row, env)) === true) c[2]++
   }
@@ -1654,7 +1655,7 @@ function tableOp(t: FromTable, settings: LeafSettings): Op {
 /** A base reader projects storage values and identities into one logical row frame. */
 function* scanTable(t: FromTable, access: Access | undefined, run: FromRun, context?: Row, ids?: JoinedRow['ids']): Generator<JoinedRow> {
   if (access === undefined) return
-  for (const { id, row } of accessRows(t.table as Table, t.def as TableDef, access, run.trx, run.locking)) {
+  for (const { id, row } of accessRows(t.table as Table, access, run.trx, run.locking, run.ready)) {
     const result = { row: fillTable(t, row, context?.slice() ?? new Array<Value>(run.width).fill(null)), ids: run.ids ? ids?.slice() ?? [] : undefined }
     if (result.ids !== undefined) result.ids[t.offset] = id
     yield result
