@@ -58,8 +58,10 @@ its failures, clears comment diagnostics and shares one lexical pass with parsin
 parameter admission uses the actual SQL mode. System-variable components and quoted user names now retain their identity.
 Read-reference validation and SET target validation precede diagnostic-count
 PREPARE admission; view restrictions retain precedence. Native field widths
-distinguish unset user variables from assigned NULL. Successful PREPARE publication follows
-WHERE resolution warnings and precedence. Then repair the
+distinguish unset user variables from assigned NULL. WHERE now shares one
+SELECT-local resolution owner and preserves grouped clause precedence, written
+FALSE/NULL short circuits and binary LIMIT 0 parameter initialization. Successful
+PREPARE diagnostic publication and packet counts come next. Then repair the
 DISTINCT fill/read boundary, including column-header readiness after a failed
 fill. Then repair ordinary AVG's temporary strategy and AVG(DISTINCT)'s
 intermediate field copy, preserving the proved blocking lifetimes. Retained

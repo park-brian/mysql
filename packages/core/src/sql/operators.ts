@@ -43,12 +43,13 @@ export function* scan(source: ScanSource): Generator<ScannedRow> {
 }
 
 /** The rows a predicate is TRUE for — not FALSE, and not NULL. */
-export function* filter<T extends { readonly row: Row }>(source: Iterable<T>, predicate: Compiled | undefined, env: Env): Generator<T> {
+export function* filter<T extends { readonly row: Row }>(source: Iterable<T>, predicate: Pick<Compiled, 'eval'> | readonly Pick<Compiled, 'eval'>[] | undefined, env: Env): Generator<T> {
   if (predicate === undefined) {
     yield* source
     return
   }
-  for (const item of source) if (truth(predicate.eval(item.row, env)) === true) yield item
+  const predicates: readonly Pick<Compiled, 'eval'>[] = Array.isArray(predicate) ? predicate : [predicate as Pick<Compiled, 'eval'>]
+  for (const item of source) if (predicates.every((c) => truth(c.eval(item.row, env)) === true)) yield item
 }
 
 /** Each row through a list of expressions. */

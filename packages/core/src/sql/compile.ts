@@ -241,7 +241,7 @@ function unconvertedBytes(v: Exclude<Value, null>, kind: 'DOUBLE' | 'INTEGER' | 
  * An operand of NOT, AND, OR or XOR: text read as a double, warning once a
  * statement for a constant; JSON true unless it is a number that is zero (`jsonTruth`).
  */
-function logicalOperand(c: Compiled, written: Expression | false, ctx?: CompileContext): Compiled['eval'] {
+export function logicalOperand(c: Compiled, written: Expression | false, ctx?: CompileContext): Compiled['eval'] {
   if (c.type.kind === 'json') {
     const message = 'Evaluating a JSON value in SQL boolean context does an implicit comparison against JSON integer 0; if this is not what you want, consider converting JSON to a SQL numeric type with JSON_VALUE RETURNING'
     if (ctx !== undefined) warnAtCompile(ctx, 3986, message)
@@ -609,7 +609,7 @@ export interface GroupKeys {
   /** The key `e` is, read from its slot, or `undefined` when it is not one. */
   match(e: Expression): Compiled | undefined
   /** `GROUPING(e, …)`: which of the named keys a ROLLUP row has rolled up, as bits. */
-  grouping(args: readonly Expression[]): Compiled
+  grouping(args: readonly Expression[], ctx: CompileContext): Compiled
 }
 
 /** The aggregate functions, `Item_sum`'s subclasses that a select list can name (M5.5). */
@@ -2444,7 +2444,7 @@ function call(e: CallNode, ctx: CompileContext): Compiled {
   }
   if (name === 'GROUPING') {
     if (ctx.groupKeys === undefined || ctx.inAggregate === true) throw sqlError('ER_INVALID_GROUP_FUNC_USE', 'Invalid use of group function')
-    return ctx.groupKeys.grouping(e.args)
+    return ctx.groupKeys.grouping(e.args, ctx)
   }
   if (name === 'DEFAULT' && e.args.length === 1) return defaultFunction(e, ctx)
   const compiler = functionCompiler(name)

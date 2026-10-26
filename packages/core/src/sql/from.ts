@@ -168,7 +168,7 @@ export interface FromPlan {
    * equality between two sides by their join, and the rest above (M5.43).
    * The FROM's rows are then the WHERE's: no caller applies it again.
    */
-  filter(where: Expression | undefined, compile: (e: Expression) => Compiled, semijoin?: (e: Expression) => PlanNode | undefined): void
+  filter(where: Expression | undefined, compile: (e: Expression) => Pick<Compiled, 'eval'>, semijoin?: (e: Expression) => PlanNode | undefined): void
   /** The cost model's choice for a table joined after the preserved side. */
   usesLookup(alias: string): boolean
   /** Build integer membership once, preserving only unmatched outer rows. */
@@ -1038,7 +1038,7 @@ interface Placed {
   readonly e: Expression
   /** The tables it reads; `undefined` when it reads more than a table's row (a subquery, an outer query's column). */
   readonly aliases: ReadonlySet<string> | undefined
-  readonly compiled: Compiled
+  readonly compiled: Pick<Compiled, 'eval'>
   /** A [NOT] EXISTS the server runs as a semijoin: what EXPLAIN shows in place of its Filter. */
   readonly semijoin?: PlanNode | undefined
 }

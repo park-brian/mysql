@@ -34,6 +34,29 @@ test('M5.3: filter keeps a row only when its predicate is TRUE, not FALSE and no
   assert.deepEqual(show(filter(source, undefined, env)), ['1', '0', 'NULL', '2'])
 })
 
+test('written conjunct filters stop at FALSE or NULL and close a partially read source', () => {
+  let reads = 0
+  let closed = false
+  let later = 0
+  function* source() {
+    try {
+      for (const value of [n(0), null, n(1), n(2)]) {
+        reads++
+        yield { row: [value] }
+      }
+    } finally { closed = true }
+  }
+  const result = filter(source(), [column(0), { eval: () => { later++; return n(1) } }], env)
+  assert.deepEqual(result.next(), { done: false, value: { row: [n(1)] } })
+  assert.equal(reads, 3)
+  assert.equal(later, 1)
+  result.return(undefined)
+  assert.equal(closed, true)
+  const unreachable = { eval: () => { throw new Error('untaken conjunct') } }
+  assert.deepEqual([...filter(rows([n(0)], [null]), [column(0), unreachable], env)], [])
+  assert.deepEqual(show(filter(rows([n(1)]), [], env)), ['1'])
+})
+
 test('M5.3: sort orders by collation, NULL first ascending and last descending, and is stable', () => {
   const source = rows([s('b'), n(1)], [null, n(2)], [s('A'), n(3)], [s('a'), n(4)], [s('B'), n(5)])
   // utf8mb4_0900_ai_ci: case does not distinguish, so 'A' and 'a' tie and keep their order.

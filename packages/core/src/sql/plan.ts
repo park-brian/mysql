@@ -117,31 +117,31 @@ export function splitAnd(e: Expression | undefined, out: Expression[] = []): Exp
 }
 
 /** A column reference that names a column of this table, by its own name. */
-function columnOf(e: Expression, def: TableDef, alias: string): string | undefined {
+export function tableColumn(e: Expression, def: TableDef, alias: string): ColumnDef | undefined {
   if (e.kind !== NODE.COLUMN) return undefined
   const parts = e.parts
-  if (parts.length === 3 && (parts[0] !== def.schema || parts[1] !== alias)) return undefined
-  if (parts.length === 2 && parts[0] !== alias) return undefined
-  const name = (parts[parts.length - 1] as string).toLowerCase()
-  return def.columns.find((c) => c.name.toLowerCase() === name)?.name
+  if (parts.length >= 2 && parts.at(-2) !== alias) return undefined
+  if (parts.length === 3 && parts[0] !== def.schema) return undefined
+  const name = parts.at(-1)!.toLowerCase()
+  return def.columns.find((c) => c.name.toLowerCase() === name)
 }
 
 function conditionOf(e: Expression, def: TableDef, alias: string, outer: OuterColumn | undefined): Condition | undefined {
   const constant = (x: Expression): boolean => isConstant(x) || outer?.(x) !== undefined
   if (e.kind === NODE.UNARY && e.op === 'IS NULL') {
-    const column = columnOf(e.operand, def, alias)
+    const column = tableColumn(e.operand, def, alias)?.name
     return column === undefined ? undefined : { column, op: 'IS NULL', constants: [] }
   }
   if (e.kind !== NODE.BINARY) return undefined
   if (e.op === 'IN' && e.right.kind === NODE.ROW && e.right.items.every(constant)) {
-    const column = columnOf(e.left, def, alias)
+    const column = tableColumn(e.left, def, alias)?.name
     return column === undefined ? undefined : { column, op: 'IN', constants: e.right.items }
   }
   const op = FLIP[e.op === '<>' || e.op === '!=' ? '' : e.op]
   if (op === undefined) return undefined
-  const left = columnOf(e.left, def, alias)
+  const left = tableColumn(e.left, def, alias)?.name
   if (left !== undefined && constant(e.right)) return { column: left, op: e.op as Op, constants: [e.right] }
-  const right = columnOf(e.right, def, alias)
+  const right = tableColumn(e.right, def, alias)?.name
   if (right !== undefined && constant(e.left)) return { column: right, op, constants: [e.left] }
   return undefined
 }
@@ -262,7 +262,7 @@ function rangeAccess(def: TableDef, alias: string, conjuncts: readonly Expressio
     let set: RangeSet = 'all'
     let implied: ImpliedRange | undefined
     for (const c of conjuncts) {
-      const range = rangeOf(c, (e) => columnOf(e, def, alias) === column.name, column, value)
+      const range = rangeOf(c, (e) => tableColumn(e, def, alias)?.name === column.name, column, value)
       if (c === inferred?.condition && range !== 'all' && inferred.column === column) implied = inferred
       set = intersect(set, range)
     }

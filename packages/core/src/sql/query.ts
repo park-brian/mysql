@@ -13,13 +13,13 @@ import type { ColumnDef, IndexDef, Table, TableDef, ViewDef } from '@myjs/engine
 import { LITERAL, NODE, QUERY, REF, TOKEN, deparse, lex, parseStatement, type Expression, type OrderItem, type QueryBody, type QueryExpression, type SelectNode, type TableReference, type SetOperationNode, type TableName, type Token } from '@myjs/parser'
 import { messages, sqlError, type ColumnDefinition, type ResultSet, type RowValue } from '@myjs/protocol'
 import { intValue, storageWidth, toInteger, truth, withoutHex, type Value } from '@myjs/types'
-import { compile, convertTo, decimalField, EMPTY_SCOPE, readSlot, type CompileContext, type Compiled, type Env, type GroupKeys, type QuantifiedSubquery, type Scope, type SubqueryPlan } from './compile.ts'
+import { compile, constantNode, logicalOperand, convertTo, decimalField, EMPTY_SCOPE, readSlot, type CompileContext, type Compiled, type Env, type GroupKeys, type QuantifiedSubquery, type Scope, type SubqueryPlan } from './compile.ts'
 import { AggregateSink, chooseStrategy, containsAggregate, groupRows, isAggregate } from './group.ts'
 import { WindowSink, applyWindows, containsWindow } from './window.ts'
 import { CHARSET_UTF8MB4_BIN, columnDefinition, intType, type ResultType } from './meta.ts'
 import { FIELD_TYPE, expectTyped } from '@myjs/bytes'
 import { distinct, filter, limit, project, sort, type SortKey } from './operators.ts'
-import { isConstant, optimizerEnabled, splitAnd } from './plan.ts'
+import { isConstant, optimizerEnabled, splitAnd, tableColumn } from './plan.ts'
 import { and, columnRefs, someNode } from './ast.ts'
 import { clusteredIndex, indexParts } from './indexes.ts'
 import { collationInfoByName, encodeCollation } from '@myjs/charsets'
@@ -316,7 +316,6 @@ function planSelect(run: Run, q: QueryExpression, node: SelectNode): SelectPlan 
   const refs = (node.from ?? []).filter((r) => !(r.kind === REF.TABLE && r.table.schema === undefined && r.table.name.toLowerCase() === 'dual' && r.alias === undefined && (node.from ?? []).length === 1))
   let from = refs.length === 0 ? undefined : planFrom(refs, fromContext(run), node.where, (node.options ?? []).includes('STRAIGHT_JOIN'))
   const scope = from?.scope
-  const constants = constRows(run, from, node)
   let source = from?.single
   const lookup: Scope = scope ?? run.parent ?? EMPTY_SCOPE
   const reads = scope === undefined ? undefined : columnsRead(scope, node, q)
@@ -325,13 +324,13 @@ function planSelect(run: Run, q: QueryExpression, node: SelectNode): SelectPlan 
   // An aggregate anywhere in the select list or HAVING makes the query a
   // grouped one, even with no GROUP BY; one in ORDER BY alone does not, and
   // is 3029 (8.4.11).
-  const grouped = node.groupBy !== undefined || node.items.some((i) => containsAggregate(i.expr)) || (node.having !== undefined && containsAggregate(node.having))
+  const grouped = node.groupBy !== undefined || containsAggregate([node.items, node.having])
   if (!grouped) {
-    const at = order.findIndex((o) => containsAggregate(o.expr))
+    const at = order.findIndex(containsAggregate)
     if (at >= 0) throw sqlError('ER_AGGREGATE_ORDER_NON_AGG_QUERY', `Expression #${at + 1} of ORDER BY contains aggregate function and applies to the result of a non-aggregated query`)
   }
-  const windowed = node.items.some((i) => containsWindow(i.expr)) || order.some((o) => containsWindow(o.expr))
-  if (grouped) return planGrouped(run, q, node, from, lookup, windowed, constants)
+  const windowed = containsWindow([node.items, order])
+  if (grouped) return planGrouped(run, q, node, from, lookup, windowed)
   const semijoin = optimizerEnabled(run.env, 'semijoin')
   const anti = from === undefined || !semijoin ? undefined : costedAntijoin(run, q, node, from)
   // Window functions (M5.6) write into slots past the FROM row.
@@ -345,14 +344,18 @@ function planSelect(run: Run, q: QueryExpression, node: SelectNode): SelectPlan 
   const nullableTables = scope === undefined ? new Set<string>() : aggregatingSubqueryTables(node, scope)
   const selectScope: Scope = nullableTables.size === 0 || scope === undefined ? lookup : nullableView(scope, nullableTables)
   const items: { name: string; compiled: Compiled; alias?: string; expr: Expression }[] = []
+  const selectCtx = compileContext(run, selectScope, 'field list', windows)
   for (const entry of selectList(run, node, scope)) {
     const { item, slot } = entry
-    const compiled = slot === undefined ? compile(item.expr, compileContext(run, selectScope, 'field list', windows))
+    const compiled = slot === undefined ? compile(item.expr, selectCtx)
       : readSlot(slot.index, nullableTables.has(scope?.columnAt(slot.index)?.table.alias ?? '') ? { ...slot.type, nullable: true } : slot.type)
     items.push({ ...item, name: selectName(entry, scope), compiled })
   }
   // Read through the windows' temporary table: every column a field of it (8.4.11: `id` loses PRI).
   windowColumns(items, windows)
+  const [limitCount, offset] = queryLimit(run, q)
+  const resolved = resolveWhere(run, lookup, node.where, limitCount)
+  const constants = constRows(run, from, node)
 
   // An ORDER BY item that reads only a STRAIGHT_JOIN's const tables is a constant, which nothing sorts by (8.4.11).
   const constantKey = (o: OrderItem): boolean => constants.size > 0 && !refersToRow(sortExpression(o.expr, items), lookup, constants)
@@ -366,7 +369,6 @@ function planSelect(run: Run, q: QueryExpression, node: SelectNode): SelectPlan 
   let deduplicated = false
   let constantDistinct: 'group' | 'limit' | undefined
   let streamed = false
-  const [limitCount, offset] = queryLimit(run, q)
   const sortBy = scope === undefined ? undefined : sortTable(order.map((o) => o.expr), undefined, items, scope)
   const keep = limitCount === undefined ? Infinity : offset + limitCount
   const semi = from === undefined || windowed || !semijoin ? undefined : costedIntegerSemijoin(run, q, node, from, sortBy, keep)
@@ -377,7 +379,7 @@ function planSelect(run: Run, q: QueryExpression, node: SelectNode): SelectPlan 
   const loopSemijoin = semijoin && scope !== undefined && (semi !== undefined || anti?.lookup === true || nestedLoopSemijoin(node.where, scope))
   if (from !== undefined && scope !== undefined) from.sortedBy(sortBy, keep)
   if (from !== undefined && scope !== undefined && node.distinct === true) from.distinctReads(keyAliases(items.map((i) => i.expr), items, scope))
-  const facts = source === undefined ? undefined : whereFacts(run, source.def, source.alias, node.where)
+  const facts = source === undefined ? undefined : resolved.facts(source.def, source.alias)
   // A prepare reports a statement before MySQL optimizes it, so it never sees
   // the temporary table: COM_STMT_PREPARE's metadata has no GROUP_FLAG where
   // the execute's does (8.4.11, found by review).
@@ -463,19 +465,19 @@ function planSelect(run: Run, q: QueryExpression, node: SelectNode): SelectPlan 
   // The WHERE, compiled where MySQL resolves it, after the select list: a FROM
   // applies it itself, each condition at its iterator (M5.43).
   const whereCtx = compileContext(run, semi?.from.scope ?? lookup, 'where clause')
-  let where: Compiled | undefined
+  let where: readonly Pick<Compiled, 'eval'>[] | undefined
   if (from !== undefined) {
     // A costed antijoin builds once; a nested loop probes its correlated subquery for each row.
     if (semi !== undefined) {
-      from.filter(semi.where, (e) => compile(e, whereCtx))
+      from.filter(semi.where, (e) => resolved.read(e, whereCtx))
     } else if (anti !== undefined && !anti.lookup) {
-      from.filter(undefined, (e) => compile(e, whereCtx))
+      from.filter(undefined, resolved.read)
       from.hashAntijoin(anti.key, (trx, env) => anti.inner.rows(trx, env), () => anti.plan)
     } else {
       const semijoins = source !== undefined && loopSemijoin
-      from.filter(node.where, (e) => compile(e, whereCtx), semijoins ? (e) => semijoinNode(run, e) : undefined)
+      from.filter(node.where, resolved.read, semijoins ? (e) => semijoinNode(run, e) : undefined)
     }
-  } else if (node.where !== undefined) where = compile(node.where, whereCtx)
+  } else if (node.where !== undefined) where = resolved.predicates
   const having = node.having === undefined || neverNullTest(node.having) ? undefined : compile(substituteAliases(node.having, items), compileContext(run, selectedOnly(lookup, items, [], node.having), 'having clause'))
   const orderCtx = compileContext(run, lookup, 'order clause', windows)
   const keys = order.filter((o) => !constantKey(o)).map((o) => orderKey(o, items, orderCtx))
@@ -585,7 +587,7 @@ function pushCountCondition(run: Run, node: SelectNode): SelectNode {
 // --- the stages above the FROM (M5.43) -----------------------------------------------
 
 /** A condition over the rows: a Filter. */
-function filterStage(condition: Compiled): Stage {
+function filterStage(condition: Pick<Compiled, 'eval'> | readonly Pick<Compiled, 'eval'>[]): Stage {
   return { run: (rows, env) => filter(rows, condition, env), describe: (n) => planNode('Filter', [n]) }
 }
 
@@ -660,9 +662,10 @@ function windowColumns(items: readonly { compiled: Compiled }[], windows: Window
 
 /** Both planners report copied field metadata from the current execution's facts. */
 function resultColumns(items: readonly { name: string; compiled: Compiled }[], read?: (trx: Trx | undefined) => readonly ResultType[]): Pick<SelectPlan, 'columns' | 'columnsAt'> {
+  const columns = items.map((i) => ({ name: i.name, type: i.compiled.type }))
   return {
-    columns: items.map((i) => ({ name: i.name, type: i.compiled.type })),
-    ...(read === undefined ? {} : { columnsAt: (trx: Trx | undefined) => read(trx).map((type, i) => ({ name: (items[i] as { name: string }).name, type })) }),
+    columns,
+    ...(read === undefined ? {} : { columnsAt: (trx: Trx | undefined) => read(trx).map((type, i) => ({ ...columns[i]!, type })) }),
   }
 }
 
@@ -734,16 +737,17 @@ function quantifiedPlan(run: Run, query: QueryExpression, how: QuantifiedSubquer
   if (body.kind !== QUERY.SELECT || query.with !== undefined || query.orderBy !== undefined || body.groupBy !== undefined || body.having !== undefined || body.windows !== undefined) return undefined
   const ref = body.from?.length === 1 ? body.from[0] : undefined
   const item = body.items.length === 1 ? body.items[0]?.expr : undefined
-  if (ref?.kind !== REF.TABLE || item?.kind !== NODE.COLUMN || containsAggregate(item)) return undefined
+  if (ref?.kind !== REF.TABLE || item === undefined) return undefined
   let def: TableDef | undefined
   try {
     def = run.catalog?.definition(ref.table.schema ?? run.env.session.database ?? '', ref.table.name)
   } catch (e) {
     expectTyped(e)
   }
-  const column = def?.columns.find((c) => c.name.toLowerCase() === (item.parts[item.parts.length - 1] as string).toLowerCase())
-  if (def === undefined || column === undefined) return undefined
+  if (def === undefined) return undefined
   const alias = ref.alias ?? ref.table.name
+  const column = tableColumn(item, def, alias)
+  if (column === undefined) return undefined
   const equality = (how.op === '=' && how.quantifier === 'ANY') || (how.op === '<>' && how.quantifier === 'ALL')
   if (!equality && !(how.op === '=' && how.quantifier === 'ALL') && !(how.op === '<>' && how.quantifier === 'ANY')) return undefined
   const nulls = !top || !equality || how.op === '<>'
@@ -984,8 +988,7 @@ function neverNullTest(e: Expression): boolean {
 /** Whether the WHERE equals a single-column PRIMARY or NOT NULL UNIQUE key to an uncorrelated scalar subquery. */
 function subqueryPinsKey(def: TableDef, alias: string, where: Expression | undefined, scope: TableScope): boolean {
   const unique = (e: Expression): boolean => {
-    if (e.kind !== NODE.COLUMN || (e.parts.length >= 2 && e.parts[e.parts.length - 2] !== alias)) return false
-    const column = def.columns.find((c) => c.name.toLowerCase() === (e.parts[e.parts.length - 1] as string).toLowerCase())
+    const column = tableColumn(e, def, alias)
     return column !== undefined && !column.nullable && def.indexes.some((i) => i.kind !== 'index' && i.parts.length === 1 && i.parts[0]?.column === column.name && i.parts[0].prefix === undefined)
   }
   return splitAnd(where).some((c) => c.kind === NODE.BINARY && c.op === '=' && ([[c.left, c.right], [c.right, c.left]] as const).some(([key, value]) => value.kind === NODE.SUBQUERY && !correlatedIn(value, scope) && unique(key)))
@@ -1193,7 +1196,7 @@ function aggregatingSubqueryTables(node: SelectNode, scope: TableScope): Set<str
     const n = e as { kind?: string; query?: QueryExpression; parts?: readonly string[] }
     if (n.kind === NODE.SUBQUERY && n.query !== undefined) {
       const body = n.query.body
-      const aggregating = body.kind === QUERY.SELECT && body.groupBy === undefined && body.items.some((i) => containsAggregate(i.expr))
+      const aggregating = body.kind === QUERY.SELECT && body.groupBy === undefined && containsAggregate(body.items)
       if (aggregating) visit(n.query, true)
       return false
     }
@@ -1327,7 +1330,7 @@ function mergeable(q: QueryExpression): boolean {
   if (body.kind !== QUERY.SELECT) return false
   // A derived table with no FROM is a constant row MySQL materializes ("Rows fetched before execution").
   if (!hasFrom(q)) return false
-  return body.groupBy === undefined && body.having === undefined && body.distinct !== true && body.windows === undefined && !body.items.some((i) => containsAggregate(i.expr) || containsWindow(i.expr))
+  return body.groupBy === undefined && body.having === undefined && body.distinct !== true && body.windows === undefined && !containsAggregate(body.items) && !containsWindow(body.items)
 }
 
 /** A derived table, or one reference to a CTE: its columns as the outer query sees them, and its rows. */
@@ -1489,7 +1492,7 @@ function recursiveCte(run: Run, cte: NonNullable<QueryExpression['with']>['table
     const select = m.kind === QUERY.QUERY ? m.body : m
     if (m.kind === QUERY.QUERY && (m.orderBy !== undefined || m.limit !== undefined)) throw notYet('ORDER BY / LIMIT / SELECT DISTINCT in recursive query block of Common Table Expression')
     if (select.kind !== QUERY.SELECT) continue
-    if (select.groupBy !== undefined || select.items.some((i) => containsAggregate(i.expr)) || (select.having !== undefined && containsAggregate(select.having))) {
+    if (select.groupBy !== undefined || containsAggregate([select.items, select.having])) {
       throw sqlError('ER_CTE_RECURSIVE_FORBIDS_AGGREGATION', `Recursive Common Table Expression '${cte.name}' can contain neither aggregation nor window functions in recursive query block`)
     }
     if (select.distinct === true) throw notYet('ORDER BY / LIMIT / SELECT DISTINCT in recursive query block of Common Table Expression')
@@ -1660,8 +1663,9 @@ function sortStage(keys: readonly SortKey[]): Stage {
   return { run: (rows, env) => sort(rows, keys, env), describe: (n) => planNode('Sort', [n]) }
 }
 
-/** An ORDER/GROUP key's expression, resolving select-list positions and aliases once. */
-function sortExpression(e: Expression, items: readonly { readonly alias?: string; readonly expr?: Expression }[]): Expression | undefined {
+/** Resolve aliases and positions; GROUP BY gives source columns priority. */
+function sortExpression(e: Expression, items: readonly { readonly alias?: string; readonly expr?: Expression }[], scope?: Scope): Expression | undefined {
+  if (scope !== undefined && e.kind === NODE.COLUMN && safeResolve(scope, e.parts, 'group statement') !== undefined) return e
   const alias = selectedItem(e, items)
   if (e.kind === NODE.LITERAL && e.type === 'int') return alias?.expr
   return alias === undefined ? e : alias.expr
@@ -1854,13 +1858,11 @@ function planGrouped(
   from: FromPlan | undefined,
   lookup: Scope,
   windowed: boolean,
-  constants: ReadonlySet<string>,
 ): SelectPlan {
   const order = q.orderBy ?? []
   const scope = from?.scope
   const source = from?.single
   // A STRAIGHT_JOIN its const tables reduce to one base table groups as that table alone would (8.4.11, M5.48).
-  const alone = source === undefined ? soleTable(from, constants) : { ...source, offset: 0 }
   const width = from?.width ?? 0
   const rollup = node.groupBy?.rollup === true
   // A grouped column is compiled above its grouping rather than read as a slot.
@@ -1868,71 +1870,55 @@ function planGrouped(
 
   // GROUP BY: a table column first, then a select-list alias, then a
   // position. `SELECT k AS s … GROUP BY s` groups by the column `s` (8.4.11).
-  const rowCtx = compileContext(run, lookup, 'group statement')
-  const keys = (node.groupBy?.items ?? []).map((g) => {
-    let expr: Expression = g
-    if (g.kind === NODE.LITERAL && g.type === 'int') {
-      const item = selectItems[Number(g.value as bigint) - 1]
-      if (item === undefined) throw sqlError('ER_BAD_FIELD_ERROR', messages.unknownColumn(String(g.value), 'group statement'))
-      expr = item.expr
-    } else if (g.kind === NODE.COLUMN && g.parts.length === 1) {
-      try {
-        lookup.resolve(g.parts, 'group statement')
-      } catch (e) {
-        const alias = selectedItem(g, selectItems)
-        if (alias === undefined) throw e
-        expr = alias.expr
-      }
-    }
-    if (containsAggregate(expr)) throw sqlError('ER_WRONG_GROUP_FIELD', `Can't group on '${deparse(g)}'`)
-    const compiled = compile(expr, rowCtx)
-    const index = expr.kind === NODE.COLUMN ? lookup.resolve(expr.parts, 'group statement').index : undefined
-    return { expr, compiled, index, text: deparse(expr) }
+  const baseCtx = compileContext(run, lookup, 'field list')
+  type KeyDescription = {
+    readonly written: Expression
+    readonly expr: Expression | undefined
+    readonly index: number | undefined
+    readonly text: string | undefined
+    compiled?: Compiled
+  }
+  const descriptions = (node.groupBy?.items ?? []).map((g): KeyDescription => {
+    const expr = sortExpression(g, selectItems, lookup)
+    const index = expr?.kind === NODE.COLUMN ? safeResolve(lookup, expr.parts, 'group statement')?.index : undefined
+    return { written: g, expr, index, text: expr === undefined ? undefined : deparse(expr) }
   })
+  type GroupKey = (typeof descriptions)[number] & { expr: Expression; compiled: Compiled; text: string }
+  let keys: GroupKey[] | undefined
+  const groupingChecks: (() => void)[] = []
 
-  // The strategy, which decides the order the groups come out in and whether
-  // their columns go through a temporary table.
-  // A key the WHERE holds to one value does not order anything: GROUP BY
-  // amt, name WHERE amt = -18 groups by the index on name (8.4.11).
-  const pinned = alone === undefined ? new Set<string>() : whereFacts(run, alone.def, alone.alias, node.where).pins
-  const keyColumns = keys.map((k) => (k.index === undefined || alone === undefined ? undefined : alone.def.columns[k.index - alone.offset]?.name)).filter((c) => c === undefined || !pinned.has(c.toLowerCase()))
-  const distinctAggregate = [...node.items.map((i) => i.expr), ...(node.having === undefined ? [] : [node.having]), ...order.map((o) => o.expr)].some((e) => needsSortedGroups(e))
-  // Keys over const tables alone are constants, one group at most: grouped as they come, and not sorted
-  // (8.4.11: `FROM p CROSS JOIN q WHERE p.id = 5 GROUP BY p.g ORDER BY 1, 2` is a Group aggregate over q).
-  const constTable = source !== undefined && run.preparing !== true && whereFacts(run, source.def, source.alias, node.where).constTable
-  const oneGroup = !rollup && keys.length > 0 && (constTable || (constants.size > 0 && keys.every((k) => !refersToRow(k.expr, lookup, constants))))
-  const { strategy, index: groupIndex } = oneGroup ? { strategy: 'index' as const, index: undefined } : chooseStrategy(alone?.def, keyColumns, rollup, distinctAggregate)
-
-  const matchesKey = (e: Expression | undefined, key: (typeof keys)[number]): boolean =>
+  const matchesKey = (e: Expression | undefined, key: { readonly index: number | undefined; readonly text: string | undefined }): boolean =>
     e !== undefined && (key.index !== undefined && e.kind === NODE.COLUMN
       ? safeIndex(lookup, e.parts) === key.index
       : deparse(e) === key.text)
-  // Retained grouping keys identify each output group; ROLLUP levels do not.
-  const deduplicate = node.distinct === true && (rollup || (
-    keys.length > 0 && !oneGroup && keyColumns.length > 0 &&
-    !keys.every((key) => selectItems.some((item) => matchesKey(item.expr, key)))
-  ))
-  const level = width + keys.length
-  const sink = new AggregateSink(compileContext(run, lookup, 'field list'), level + 1)
+  const level = width + descriptions.length
+  const sink = new AggregateSink(baseCtx, level + 1)
   const groupKeys: GroupKeys = {
     match(e) {
       // Only ROLLUP needs a key read from its slot: elsewhere the group's
       // first row holds the same value.
       if (!rollup) return undefined
-      const j = keys.findIndex((key) => matchesKey(e, key))
+      const j = descriptions.findIndex((key) => matchesKey(e, key))
       if (j < 0) return undefined
-      const key = keys[j] as (typeof keys)[number]
+      const key = descriptions[j]!
+      const expr = key.expr
+      if (expr === undefined || containsAggregate(expr) || containsWindow(expr)) return undefined
       const slot = width + j
+      key.compiled ??= compile(expr, baseCtx)
       const { column: _c, temporary: _t, blobBytes: _b, ...type } = key.compiled.type
       return readSlot(slot, { ...type, nullable: true })
     },
-    grouping(args) {
+    grouping(args, ctx) {
       if (!rollup) throw sqlError('ER_INVALID_GROUP_FUNC_USE', 'Invalid use of group function')
-      const positions = args.map((a, n) => {
-        const j = keys.findIndex((key) => matchesKey(a, key))
-        if (j < 0) throw sqlError('ER_FIELD_IN_GROUPING_NOT_GROUP_BY', `Argument #${n + 1} of GROUPING function is not in GROUP BY`)
-        return j
-      })
+      const { groupKeys: _groupKeys, ...binding } = ctx
+      for (const arg of args) compile(arg, binding)
+      const positions = args.map((a) => descriptions.findIndex((key) => matchesKey(a, key)))
+      const check = () => {
+        const n = positions.indexOf(-1)
+        if (n >= 0) throw sqlError('ER_FIELD_IN_GROUPING_NOT_GROUP_BY', `Argument #${n + 1} of GROUPING function is not in GROUP BY`)
+      }
+      if (keys === undefined) groupingChecks.push(check)
+      else check()
       return {
         eval: (row) => {
           const kept = Number(toInteger(row[level] ?? intValue(0n)))
@@ -1949,7 +1935,41 @@ function planGrouped(
   // so their arguments and keys may be the groups' aggregates. Their slots
   // follow the aggregates', which are all known only once everything compiled.
   const windows = windowed ? new WindowSink(postCtx('window order by'), 0, node.windows) : undefined
-  const items = selectItems.map((s) => ({ name: s.name, compiled: compile(s.expr, postCtx('field list', lookup, windows)), expr: s.expr, ...(s.alias === undefined ? {} : { alias: s.alias }) }))
+  const selectCtx = postCtx('field list', lookup, windows)
+  const items = selectItems.map((s) => ({ ...s, compiled: compile(s.expr, selectCtx) }))
+  const [limitCount, offset] = queryLimit(run, q)
+  const resolved = resolveWhere(run, lookup, node.where, limitCount)
+  const keep = limitCount === undefined ? Infinity : offset + limitCount
+  const constants = constRows(run, from, node)
+  const alone = source === undefined ? soleTable(from, constants) : { ...source, offset: 0 }
+  const groupCtx = compileContext(run, lookup, 'group statement')
+  keys = descriptions.map((key) => {
+    const expr = key.expr
+    if (expr === undefined) throw sqlError('ER_BAD_FIELD_ERROR', messages.unknownColumn(deparse(key.written), 'group statement'))
+    if (containsAggregate(expr)) throw sqlError('ER_WRONG_GROUP_FIELD', `Can't group on '${deparse(key.written)}'`)
+    key.compiled ??= compile(expr, groupCtx)
+    // This description has passed both binding phases and now owns the final reader.
+    return key as GroupKey
+  })
+  // The strategy, which decides the order the groups come out in and whether
+  // their columns go through a temporary table.
+  // A key the WHERE holds to one value does not order anything: GROUP BY
+  // amt, name WHERE amt = -18 groups by the index on name (8.4.11).
+  const groupFacts = alone === undefined ? undefined : resolved.facts(alone.def, alone.alias)
+  const pinned = groupFacts?.pins ?? new Set<string>()
+  const keyColumns = keys.map((k) => (k.index === undefined || alone === undefined ? undefined : alone.def.columns[k.index - alone.offset]?.name)).filter((c) => c === undefined || !pinned.has(c.toLowerCase()))
+  const distinctAggregate = needsSortedGroups([node.items, node.having, order])
+  // Keys over const tables alone are constants, one group at most: grouped as they come, and not sorted
+  // (8.4.11: `FROM p CROSS JOIN q WHERE p.id = 5 GROUP BY p.g ORDER BY 1, 2` is a Group aggregate over q).
+  const constTable = source !== undefined && run.preparing !== true && groupFacts?.constTable
+  const oneGroup = !rollup && keys.length > 0 && (constTable || (constants.size > 0 && keys.every((k) => !refersToRow(k.expr, lookup, constants))))
+  const { strategy, index: groupIndex } = oneGroup ? { strategy: 'index' as const, index: undefined } : chooseStrategy(alone?.def, keyColumns, rollup, distinctAggregate)
+
+  // Retained grouping keys identify each output group; ROLLUP levels do not.
+  const deduplicate = node.distinct === true && (rollup || (
+    keys.length > 0 && !oneGroup && keyColumns.length > 0 &&
+    !keys.every((key) => selectItems.some((item) => matchesKey(item.expr, key)))
+  ))
 
   // HAVING sees the select list's aliases, its columns and the keys; a column
   // that is none of those is 1054 even when the table has it (8.4.11).
@@ -1958,6 +1978,8 @@ function planGrouped(
     const havingScope = selectedOnly(lookup, selectItems, keys.flatMap((k) => (k.index === undefined ? [] : [k.index])), node.having)
     having = compile(substituteAliases(node.having, selectItems), postCtx('having clause', havingScope))
   }
+
+  for (const check of groupingChecks) check()
 
   const orderKeys = order.map((o) => orderKey(o, items, postCtx('order clause', lookup, windows)))
 
@@ -1986,8 +2008,7 @@ function planGrouped(
       return matchesKey(e, key)
     })
   const stream = (strategy === 'sort' || strategy === 'index') && order.length > 0 && !orderMatchesKeys && !oneGroup
-  const limitCount = q.limit === undefined ? undefined : limitValue(run, q.limit.count, 'LIMIT')
-  if (from !== undefined) from.sortedBy(sortTable(q.orderBy?.map((o) => o.expr), node.groupBy?.items, selectItems, from.scope), limitCount === undefined ? Infinity : limitCount + (q.limit?.offset === undefined ? 0 : limitValue(run, q.limit.offset, 'LIMIT')))
+  if (from !== undefined) from.sortedBy(sortTable(q.orderBy?.map((o) => o.expr), node.groupBy?.items, selectItems, from.scope), keep)
   const facts = run.preparing === true ? undefined : selectFacts(run, from, node, limitCount)
   const firstOrder = strategy === 'sort' && !rollup ? from?.orderGroupsFirst(keys) : undefined
   let dataColumns: ((trx: Trx | undefined) => readonly ResultType[]) | undefined
@@ -2032,13 +2053,11 @@ function planGrouped(
   }
 
   // The WHERE: a FROM applies it itself (M5.43); one with no FROM is a Filter here.
-  const whereCtx = compileContext(run, lookup, 'where clause')
-  let where: Compiled | undefined
-  if (from !== undefined) from.filter(node.where, (e) => compile(e, whereCtx))
-  else if (node.where !== undefined) where = compile(node.where, whereCtx)
+  let where: readonly Pick<Compiled, 'eval'>[] | undefined
+  if (from !== undefined) from.filter(node.where, resolved.read)
+  else if (node.where !== undefined) where = resolved.predicates
   // An index-ordered grouping reads that index whole, in its order, whatever range the WHERE would choose.
   if (strategy === 'index' && groupIndex !== undefined) from?.readInOrder(groupIndex, true, false, alone?.alias)
-  const offset = q.limit?.offset === undefined ? 0 : limitValue(run, q.limit.offset, 'LIMIT')
   const locking = (q.locking ?? []).length > 0
   if (windows !== undefined) {
     windows.base = level + 1 + sink.specs.length
@@ -2069,7 +2088,7 @@ function planGrouped(
     ...(having === undefined ? [] : [{ ...filterStage(having), describe: (n: PlanNode) => withSubqueries(run, planNode('Filter', [n]), 'having clause') }]),
     ...(windows === undefined || windows.windows.length === 0 ? [] : [windowStage(windows, windows.base)]),
     // Retained DISTINCT and unverified ordered/limited forms remain unexplained.
-    deliverStage(items.map((i) => i.compiled), sortsOutput ? orderKeys : [], deduplicate, { deduplicated: false, streamed: stream, described: node.distinct !== true || (!deduplicate && order.length === 0 && q.limit === undefined), keep: limitCount === undefined ? undefined : offset + limitCount }),
+    deliverStage(items.map((i) => i.compiled), sortsOutput ? orderKeys : [], deduplicate, { deduplicated: false, streamed: stream, described: node.distinct !== true || (!deduplicate && order.length === 0 && q.limit === undefined), keep: limitCount === undefined ? undefined : keep }),
     ...(limitCount === undefined && offset === 0 ? [] : [limitStage(offset, limitCount)]),
   ]
 
@@ -2356,55 +2375,49 @@ function distinctKey(def: TableDef, items: readonly { readonly expr: Expression 
   return def.indexes.some((i) => (uniqueKey(def, i) && covered(i.parts)) || (!whole && onlyColumns && i.invisible !== true && covered(i.parts, named.size)))
 }
 
-/**
- * What MySQL's optimizer knows of a one-table WHERE before it reads a row,
- * which decides whether a `SELECT DISTINCT` makes its temporary table and
- * whether the scan runs at all. Each rule is 8.4.11's, probed shape by shape:
- *
- *   - `impossible`: a conjunct folds to false — a NOT NULL column `IS NULL`,
- *     `int_col = 9.5`, or a conjunct of constants that is not
- *     true. Nothing is read, so nothing in the WHERE is evaluated: `WHERE
- *     LAST_INSERT_ID(8) = 8 AND 1 = 0` leaves `LAST_INSERT_ID()` alone.
- *   - `pins`: the columns the WHERE holds to one value, as MySQL's
- *     `check_field_is_const` finds them — `c = 5`, `<=>`, `IN (5)`, `NOT (c <>
- *     5)`; through AND, any conjunct; through OR, every branch, with the same
- *     constant. Two placeholders are two values, whatever they are bound to,
- *     and NULL pins nothing.
- *     A string column against a number pins nothing (`b = 5` holds for `'5'`
- *     and `'5.0'`), and neither does `IS NULL`, on 8.4.
- *   - `constTable`: every part of the primary key or of a UNIQUE key pinned
- *     makes the table a constant one: a row or none. NULL pins nothing, which
- *     matters here: a nullable UNIQUE key holds many NULLs.
- *
- * Folding never evaluates a call, a variable or a subquery, and a placeholder
- * only once it is bound, so planning has no side effects and a prepare sees
- * what the statement says rather than NULLs.
- */
-function whereFacts(run: Run, def: TableDef, alias: string, where: Expression | undefined): { impossible: boolean; pins: Set<string>; constTable: boolean } {
-  // Column names are case-insensitive; share the same pin set with both readers.
-  const facts = { impossible: false, pins: new Set<string>(), constTable: false }
-  if (where === undefined) return facts
-  const columnOf = (e: Expression): ColumnDef | undefined => {
-    if (e.kind !== NODE.COLUMN || e.parts.length > 3 || (e.parts.length >= 2 && e.parts[e.parts.length - 2] !== alias)) return undefined
-    const name = (e.parts[e.parts.length - 1] as string).toLowerCase()
-    return def.columns.find((c) => c.name.toLowerCase() === name)
-  }
-  const conjuncts = splitAnd(where)
-  for (const c of conjuncts) {
-    if (c.kind === NODE.UNARY && c.op === 'IS NULL' && columnOf(c.operand)?.nullable === false) facts.impossible = true
-    else if (neverEqualIn(c, columnOf)) facts.impossible = true
-    else if (foldable(c, run.params !== undefined)) {
-      try {
-        if (truth(compile(c, compileContext(run, EMPTY_SCOPE, 'where clause')).eval([], run.env)) !== true) facts.impossible = true
-      } catch (e) {
-        expectTyped(e)
-        // Not something the optimizer folds; the scan will say.
-      }
+/** One SELECT's WHERE readers and written constant outcomes. */
+function resolveWhere(run: Run, scope: Scope, where: Expression | undefined, count: number | undefined) {
+  type Predicate = { eval: Compiled['eval'] }
+  const ctx = compileContext(run, scope, 'where clause')
+  const resolving = run.preparing || run.protocol === 'text'
+  const { conditions: _conditions, ...fixedEnv } = run.env
+  // Binding precedes evaluation, including warnings in an untaken conjunct.
+  const entries = new Map<Expression, Predicate>(splitAnd(where).map((e) => {
+    const c = compile(e, ctx)
+    return [e, { eval: logicalOperand(c, e, resolving ? ctx : undefined) }]
+  }))
+  let impossible = false
+  // Only a written constant stops this pass; inferred row facts cannot.
+  for (const [e, c] of entries) {
+    if (!constantNode(e, run.params !== undefined && (resolving || count !== 0))) continue
+    // PREPARE owns fixed-literal diagnostics; bound parameters still execute here.
+    const value = c.eval([], !resolving && constantNode(e, false) ? fixedEnv : run.env)
+    c.eval = () => value
+    if (truth(value) !== true) {
+      impossible = true
+      break
     }
   }
-  for (const column of def.columns) if (pinOf(where, column, columnOf) !== undefined) facts.pins.add(column.name.toLowerCase())
-  facts.constTable = def.indexes.some((i) => i.kind !== 'index' && i.parts.every((p) => p.prefix === undefined && facts.pins.has(p.column.toLowerCase())))
-  return facts
+  return {
+    // New semijoin nodes are verified integer comparisons, in their expanded scope.
+    read: (e: Expression, at = ctx) => entries.get(e) ?? compile(e, at),
+    predicates: [...entries.values()],
+    facts(def: TableDef, alias: string) {
+      // Column names are case-insensitive; share the same pin set with both readers.
+      const facts = { impossible, pins: new Set<string>(), constTable: false }
+      if (where === undefined) return facts
+      const columnOf = (e: Expression) => tableColumn(e, def, alias)
+      for (const e of entries.keys()) {
+        if (impossiblePredicate(e, columnOf)) {
+          facts.impossible = true
+          break
+        }
+      }
+      for (const column of def.columns) if (pinOf(where, column, columnOf) !== undefined) facts.pins.add(column.name.toLowerCase())
+      facts.constTable = def.indexes.some((i) => i.kind !== 'index' && i.parts.every((p) => p.prefix === undefined && facts.pins.has(p.column.toLowerCase())))
+      return facts
+    },
+  }
 }
 
 /**
@@ -2442,25 +2455,11 @@ const numeric = (e: Expression): boolean => (e.kind === NODE.LITERAL && (e.type 
  * (8.4.11 answers `SELECT DISTINCT score FROM p WHERE flag = 9.5` without its
  * temporary table). `c = NULL` is not folded, on 8.4.
  */
-function neverEqualIn(e: Expression, columnOf: (e: Expression) => ColumnDef | undefined): boolean {
+function impossiblePredicate(e: Expression, columnOf: (e: Expression) => ColumnDef | undefined): boolean {
+  if (e.kind === NODE.UNARY && e.op === 'IS NULL') return columnOf(e.operand)?.nullable === false
   if (e.kind !== NODE.BINARY || e.op !== '=') return false
   const left = columnOf(e.left)
   return neverEqual(left ?? columnOf(e.right), left !== undefined ? e.right : e.left)
-}
-
-/**
- * Whether the optimizer can evaluate an expression before reading a row:
- * literals and operators over them, and placeholders once bound — never a
- * column, a variable, a subquery or a call, any of which may have an effect
- * or depend on the row.
- */
-function foldable(e: unknown, bound: boolean): boolean {
-  return !someNode(e, (value) => {
-    const node = value as { kind?: string }
-    if (node.kind === NODE.COLUMN || node.kind === NODE.SUBQUERY || node.kind === NODE.VARIABLE || node.kind === NODE.CALL) return true
-    if (node.kind === NODE.PLACEHOLDER) return !bound
-    return undefined
-  })
 }
 
 /** An `ORDER BY` item: a position in the select list, a select-list alias, or an expression over the table. */

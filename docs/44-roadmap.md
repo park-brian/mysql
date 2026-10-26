@@ -114,15 +114,15 @@ and browser work follow the outstanding engine/planner work. Remaining function
 boundaries stay open for separate verification. The current state and remaining
 work are:
 
-**Next bounded slice: WHERE resolution warnings and error precedence.**
+**Next bounded slice: successful PREPARE diagnostic publication and packet counts.**
 System-variable identity and diagnostic-count PREPARE admission are verified
 below, alongside failed-command publication, diagnostic SHOW admission and
-linear lexical error trimming. Next repair WHERE
-resolution warnings and error precedence. Literal failures are raised at
-PREPARE after SELECT-list resolution and before GROUP/HAVING/ORDER resolution,
-even with LIMIT 0; they are not late iterator initialization. Complete successful
-PREPARE diagnostic clearing, compiled warnings and its wire warning count after
-those prerequisites.
+linear lexical error trimming. WHERE resolution now binds the written conjuncts
+once after SELECT-list resolution and initializes admitted constants before
+GROUP/HAVING/ORDER, including PREPARE and text LIMIT 0. Complete successful
+PREPARE diagnostic clearing, compiled warnings and its wire warning count next.
+Preserve the separate binary-execution boundary: fixed diagnostics belong to
+PREPARE, while bound parameters initialize at execution unless LIMIT is zero.
 Then repair unbounded temporary-table reads together with their column-header
 readiness on failure, preserving earlier source/optimization failures before
 headers. Then repair bounded, non-eliminated outer DISTINCT over computed ordinary exact AVG,
@@ -133,6 +133,52 @@ before promoting the division repair. Preserve index-streamed reads when DISTINC
 is absent or eliminated by the retained grouping keys. Pin that elimination
 proof and both aggregate kinds before broadening to HAVING, LIMIT, ROLLUP or
 windows. The native plan and its actual writers must make the decision.
+
+**WHERE resolution and clause precedence, verified (2026-10-25):** Each SELECT
+owns its written WHERE readers. All maximal AND roots bind before their admitted
+constant values are read in written order. FALSE or NULL stops that pass;
+inferred row impossibility does not. Existing IF/OR readers preserve lazy
+branches. The same roots feed the placed FROM filters, source-free filters and
+optimizer facts, without recompilation or synthetic AND metadata. SELECT names
+resolve first, WHERE follows, then GROUP/HAVING/ORDER. Grouped SELECT binding
+shares GROUP/ORDER alias resolution and defers GROUP-key validity and GROUPING
+membership checks to their native phases; later HAVING/ORDER calls validate
+immediately. Source-column proofs share schema/alias qualification.
+
+The WHERE owner leaves fixed-literal diagnostics with PREPARE. Its binary
+constant readers omit their replay but retain parameter-dependent evaluation
+and conditions. Native binary LIMIT 0
+binds without initializing bound values, including a malformed regex parameter;
+text and PREPARE still initialize admitted literals. Fixed FALSE facts remain
+available at LIMIT 0, preserving DISTINCT field metadata. Cached statements
+rebind zero/one/NULL and regex parameters across writes and failed executions.
+
+A new scoped native fixture pins 751 complete query/execute/failed-PREPARE
+outcomes: rows, every field descriptor, error tuples, prior/post diagnostics and
+both condition totals. The previous commit matches 300; all 751 now agree,
+including empty/populated sources, joins, source-free SELECT, written FALSE/NULL,
+ROLLUP aliases/ordinals, GROUPING precedence and retained prepared statements.
+The full 763-outcome exploratory replay improves 302 to 755 without losing any
+matching component. Eight existing outcomes remain outside the admitted fixture:
+binary SELECT/GROUP JSON compiled-warning replay and correlated quantified
+field flags. Their whole protocol/expression groups remain open, with every
+native outcome retained in the audit. The separate 776-frame clause audit
+improves 255 to 655, the 360-frame three-protocol audit improves 104 to 348,
+and 36 bound-parameter frames improve 27 to 32, all without component regression.
+Successful PREPARE publication explains the remaining twelve main three-protocol
+frames. Bound bad-string INTEGER/DECIMAL diagnostics, nested eager comparison
+conversions, ON initialization/JSON warnings, aggregate GROUP BY error spelling
+and correlated ROLLUP metadata/readers remain open; none is claimed repaired.
+The filter unit test pins FALSE/NULL short circuits, empty conjunctions,
+backpressure and source closure. Native replay of the permanent fixture passes;
+20,000 executor statements seeded 20261010 pass. Fresh Docker Node 22.18.0
+verification passes 1,357 ordinary tests and four latency tests, typecheck, lint,
+nine size gates, installed-package/typed-example smoke, the real client and all
+seven pinned MySQL 8.4.11 corpora. All 356 test files/fixtures and 202 runtime
+sources match the tested checkout, as do reference tooling, manifests and CI.
+Core/facade are 334,359/334,264 B under unchanged 334,361/334,266 B caps. The
+preceding 38a9b90 commit passes all eleven required GitHub jobs. No capture or
+threshold is changed. M5.10 and the roadmap remain partial (144/190; M5 42/53).
 
 **Variable identity and PREPARE admission, verified (2026-10-25):** System
 references retain identifier components, so a wholly quoted dotted name remains
@@ -216,8 +262,9 @@ conditions alone improves complete matches from nine to 44, but loses previously
 matching warning/count components while those refusals remain unimplemented and
 the WHERE compiler omits a JSON boolean warning. Its shared-writer prototype
 typechecks and preserves all 78 failure outcomes, but the facade exceeds its cap
-by 40 B. It is parked. Repair semantic admission first, WHERE resolution next,
-then successful publication and packet counts together; do not retain stale
+by 40 B. That prototype is historical: semantic admission and WHERE resolution
+are now verified above. Next implement successful publication and packet counts
+together under the existing caps; do not retain stale
 diagnostics as a compatibility branch. A separate native prefix probe confirms
 PREPARE_OK carries total counts 1/1,023/1,024/1,100 while only 1,024 conditions
 are stored. Existing pauses, session ownership and 1390 admission remain required.
