@@ -1490,9 +1490,12 @@ function comparisonTime(c: Compiled, preserveDate = true): Compiled {
 /** A statement-fixed value; type resolution can also exclude parameters. */
 export function constantNode(e: unknown, parameters = true): boolean {
   return !someNode(e, (value) => {
-    const n = value as { kind?: unknown; name?: unknown }
+    const n = value as { kind?: unknown; name?: unknown; over?: unknown }
     if (n.kind === NODE.COLUMN || n.kind === NODE.SUBQUERY || n.kind === NODE.VARIABLE || (!parameters && n.kind === NODE.PLACEHOLDER)) return true
-    if (n.kind === NODE.CALL && VARIES_PER_EVALUATION.has(String(n.name).toUpperCase())) return true
+    if (n.kind === NODE.CALL) {
+      const name = String(n.name).toUpperCase()
+      if (n.over !== undefined || AGGREGATE_NAMES.has(name) || name === 'GROUPING' || VARIES_PER_EVALUATION.has(name)) return true
+    }
     return undefined
   })
 }

@@ -62,9 +62,11 @@ distinguish unset user variables from assigned NULL. WHERE now shares one
 SELECT-local resolution owner and preserves grouped clause precedence, written
 FALSE/NULL short circuits and binary LIMIT 0 parameter initialization. Successful
 PREPARE now publishes or clears its collected diagnostics on every supported
-success path and reports complete wire warning totals independently of the kept
-prefix. Next repair the
-DISTINCT fill/read boundary, including column-header readiness after a failed
+success path, retaining complete totals independently of the kept prefix while
+its packet encodes their low sixteen bits. HAVING now shares clause-local
+condition admission with WHERE, while aggregate/window/grouping readers retain
+their row lifetimes. Transaction-bound scalar-subquery optimization still precedes
+read readiness; finish that phase before repairing the DISTINCT fill/read boundary, including column-header readiness after a failed
 fill. Then repair ordinary AVG's temporary strategy and AVG(DISTINCT)'s
 intermediate field copy, preserving the proved blocking lifetimes. Retained
 division precision across both operands and result-buffer bounds follows,

@@ -114,17 +114,23 @@ and browser work follow the outstanding engine/planner work. Remaining function
 boundaries stay open for separate verification. The current state and remaining
 work are:
 
-**Next bounded slice: temporary-table fill/read and column-header readiness.**
+**Next bounded slice: transaction-bound optimization before row-read readiness.**
 System-variable identity and diagnostic-count PREPARE admission are verified
 below, alongside failed-command publication, diagnostic SHOW admission and
 linear lexical error trimming. WHERE resolution now binds the written conjuncts
 once after SELECT-list resolution and initializes admitted constants before
 GROUP/HAVING/ORDER, including PREPARE and text LIMIT 0. Successful PREPARE now
 clears or publishes its collected conditions through the shared diagnostic writer
-and reports complete totals in its OK packet. Preserve the separate binary
+and retains complete totals while its OK packet encodes their low sixteen bits.
+Preserve the separate binary
 boundary: fixed diagnostics belong to PREPARE, while bound parameters initialize
 at execution unless LIMIT is zero.
-Next repair unbounded temporary-table reads together with their column-header
+Fixed HAVING diagnostics now share WHERE's admission owner before ORDER binding;
+aggregate/window/GROUPING readers remain row-dependent. Next establish the
+per-invocation optimization phase under the actual transaction: constant scalar
+subqueries must remain unexecuted at PREPARE but may fail before query headers,
+even over an empty source. Use bound correlation and lifetime facts, not SQL
+spelling. Then repair unbounded temporary-table reads with column-header
 readiness on failure, preserving earlier source/optimization failures before
 headers. Then repair bounded, non-eliminated outer DISTINCT over computed ordinary exact AVG,
 using the existing temporary-group writer and a real final deduplication
@@ -135,12 +141,65 @@ is absent or eliminated by the retained grouping keys. Pin that elimination
 proof and both aggregate kinds before broadening to HAVING, LIMIT, ROLLUP or
 windows. The native plan and its actual writers must make the decision.
 
+**HAVING resolution prerequisite, verified (2026-10-25):** The complete fill/error
+audits are refreshed against 147: 456/576 complete streaming observations and
+34/88 clause/header observations agree before this repair. They expose distinct
+phases: fixed HAVING failures already belong to PREPARE, while scalar subqueries
+remain unexecuted there and may fail during later optimization. The native
+[8.4.11 execution owner](https://github.com/mysql/mysql-server/blob/mysql-8.4.11/sql/sql_union.cc#L1593)
+sends metadata after its startup work and before iterator initialization. A known
+column description alone is not a readiness signal. The
+[optimizer](https://github.com/mysql/mysql-server/blob/mysql-8.4.11/sql/sql_optimizer.cc#L9645)
+also distinguishes dropped constant keys from subquery evaluation; a unique
+non-null key may eliminate grouping before its other keys are read.
+
+WHERE and HAVING now share clause-local condition admission through their actual
+compile contexts. Both SELECT planners preserve alias substitution and grouped
+readers, bind all written conjuncts, then initialize admitted fixed values in
+written order. FALSE/NULL and IF/OR branches retain their existing short circuits.
+Fixed failures/warnings precede ORDER binding even at LIMIT 0; unknown GROUP
+names still precede HAVING. Binary execution keeps bound-parameter initialization
+and omits fixed diagnostic replay. Aggregate, window and GROUPING calls are not
+statement-fixed merely because their explicit arguments contain no column.
+Source-free WHERE stages consume their readers directly; the HAVING filter
+shares its subquery description, and expanded semijoin contexts are created only
+when needed. These changes remove redundant state and wrapper allocations.
+
+A new native fixture pins 641 complete query/execute/PREPARE observations,
+improving 435 to all 641: raw field events and packet kinds, rows, error tuples,
+prior/post conditions and both totals, PREPARE LAST_INSERT_ID controls and cached bound
+COUNT readers across writes. The full 653-frame audit reaches 641 without losing
+any matched component. Its remaining twelve frames are the entire preexisting
+constant-GROUPING argument family: native raises 1210 while our binder admits it.
+That family stays explicitly open rather than receiving partial assertions.
+The separate 468-frame phase audit improves 335 to 400; 88 clause/header frames
+improve 34 to 38. The 576-frame fill audit stays 456, retaining its missing barrier,
+header, projection/OFFSET and ordered-field gaps. Every previously matching
+component in these audits and all twelve earlier WHERE matrices is preserved.
+The 36-frame HAVING parameter audit improves 25 to 32; the four remaining
+INTEGER/DECIMAL-versus-DOUBLE bad-string diagnostics retain their expected-reader
+gap. Scalar-subquery and empty-source setter optimization remain open.
+
+Native/current fixture replay passes. Proof-reader controls cover COUNT(1),
+SUM(1), GROUPING(1) and column-free windows; existing group/rollup/window,
+WHERE and PREPARE tests pass. Core/facade are 334,343/334,262 B under unchanged
+334,361/334,266 B caps. Fresh Docker Node 22.18.0 verification passes 1,359
+ordinary tests and four latency tests, typecheck, lint, all nine caps, package and
+typed-example smoke, the real client and all seven pinned MySQL 8.4.11 corpora.
+Source proof matches 360 test files/fixtures and 202 runtime sources, reference
+tooling, manifests and CI. Another 20,000
+executor statements seeded 20261010 pass. Preceding 6ca171a passes all eleven
+required GitHub jobs. This repairs admission before the actual fill/read boundary;
+it does not send speculative headers or implement the missing barrier. The
+roadmap remains 144/190 with M5 42/53.
+
 **Successful PREPARE diagnostics, verified (2026-10-25):** Every supported
 success path, including non-query statements, publishes through the existing
 bounded diagnostic writer after binding and the final liveness check. Empty
 conditions clear the previous area; collected conditions replace it. PreparedInfo
-carries an optional warning total to the existing PREPARE packet writer; existing
-executors may omit it. Counts are independent of the stored prefix. Metadata and
+carries the complete optional warning total to the existing PREPARE packet writer,
+which encodes its low sixteen bits; existing executors may omit it. Totals are
+independent of the stored prefix. Metadata and
 parameter delivery share the final cooperative pause for queries and non-queries.
 Parsing/source guards, diagnostic-command admission, placeholder overflow, failed
 publication and captured session ownership retain their behavior.

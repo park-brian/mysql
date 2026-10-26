@@ -354,7 +354,7 @@ function planSelect(run: Run, q: QueryExpression, node: SelectNode): SelectPlan 
   // Read through the windows' temporary table: every column a field of it (8.4.11: `id` loses PRI).
   windowColumns(items, windows)
   const [limitCount, offset] = queryLimit(run, q)
-  const resolved = resolveWhere(run, lookup, node.where, limitCount)
+  const resolved = resolveCondition(run, compileContext(run, lookup, 'where clause'), node.where, limitCount)
   const constants = constRows(run, from, node)
 
   // An ORDER BY item that reads only a STRAIGHT_JOIN's const tables is a constant, which nothing sorts by (8.4.11).
@@ -464,11 +464,10 @@ function planSelect(run: Run, q: QueryExpression, node: SelectNode): SelectPlan 
 
   // The WHERE, compiled where MySQL resolves it, after the select list: a FROM
   // applies it itself, each condition at its iterator (M5.43).
-  const whereCtx = compileContext(run, semi?.from.scope ?? lookup, 'where clause')
-  let where: readonly Pick<Compiled, 'eval'>[] | undefined
   if (from !== undefined) {
     // A costed antijoin builds once; a nested loop probes its correlated subquery for each row.
     if (semi !== undefined) {
+      const whereCtx = compileContext(run, semi.from.scope, 'where clause')
       from.filter(semi.where, (e) => resolved.read(e, whereCtx))
     } else if (anti !== undefined && !anti.lookup) {
       from.filter(undefined, resolved.read)
@@ -477,8 +476,8 @@ function planSelect(run: Run, q: QueryExpression, node: SelectNode): SelectPlan 
       const semijoins = source !== undefined && loopSemijoin
       from.filter(node.where, resolved.read, semijoins ? (e) => semijoinNode(run, e) : undefined)
     }
-  } else if (node.where !== undefined) where = resolved.predicates
-  const having = node.having === undefined || neverNullTest(node.having) ? undefined : compile(substituteAliases(node.having, items), compileContext(run, selectedOnly(lookup, items, [], node.having), 'having clause'))
+  }
+  const having = node.having === undefined || neverNullTest(node.having) ? undefined : resolveCondition(run, compileContext(run, selectedOnly(lookup, items, [], node.having), 'having clause'), substituteAliases(node.having, items), limitCount).predicates
   const orderCtx = compileContext(run, lookup, 'order clause', windows)
   const keys = order.filter((o) => !constantKey(o)).map((o) => orderKey(o, items, orderCtx))
   // Resolve every ORDER BY first: name errors precede DISTINCT admission.
@@ -522,9 +521,9 @@ function planSelect(run: Run, q: QueryExpression, node: SelectNode): SelectPlan 
   const limitFirst = ordered !== undefined && node.distinct !== true && having === undefined && !loopSemijoin
   const take = limitCount === undefined && offset === 0 ? [] : [limitStage(offset, limitCount)]
   const stages: Stage[] = [
-    ...(where === undefined ? [] : [filterStage(where)]),
+    ...(from === undefined && node.where !== undefined ? [filterStage(resolved.predicates)] : []),
     // HAVING without grouping filters the rows WHERE kept, before any window sees them.
-    ...(having === undefined ? [] : [{ ...filterStage(having), describe: (n: PlanNode) => withSubqueries(run, planNode('Filter', [n]), 'having clause') }]),
+    ...(having === undefined ? [] : [filterStage(having, run)]),
     ...(windows === undefined || windows.windows.length === 0 ? [] : [windowStage(windows, windowBase)]),
     ...(limitFirst ? take : []),
     deliverStage(items.map((i) => i.compiled), ordered === undefined && !sortedFirst ? keys : [], deduplicate, { deduplicated, streamed, copied, keep: limitCount === undefined ? undefined : keep, buffer, ...(constantDistinct === undefined ? {} : { constant: constantDistinct }) }),
@@ -586,9 +585,15 @@ function pushCountCondition(run: Run, node: SelectNode): SelectNode {
 
 // --- the stages above the FROM (M5.43) -----------------------------------------------
 
-/** A condition over the rows: a Filter. */
-function filterStage(condition: Pick<Compiled, 'eval'> | readonly Pick<Compiled, 'eval'>[]): Stage {
-  return { run: (rows, env) => filter(rows, condition, env), describe: (n) => planNode('Filter', [n]) }
+/** A Filter, including the clause's subquery plans when it is a HAVING. */
+function filterStage(condition: Pick<Compiled, 'eval'> | readonly Pick<Compiled, 'eval'>[], having?: Run): Stage {
+  return {
+    run: (rows, env) => filter(rows, condition, env),
+    describe(n) {
+      const out = planNode('Filter', [n])
+      return having === undefined ? out : withSubqueries(having, out, 'having clause')
+    },
+  }
 }
 
 /** Window functions (M5.6), over the whole input: not yet named as 8.4.11 names them, so not explained. */
@@ -1938,7 +1943,7 @@ function planGrouped(
   const selectCtx = postCtx('field list', lookup, windows)
   const items = selectItems.map((s) => ({ ...s, compiled: compile(s.expr, selectCtx) }))
   const [limitCount, offset] = queryLimit(run, q)
-  const resolved = resolveWhere(run, lookup, node.where, limitCount)
+  const resolved = resolveCondition(run, compileContext(run, lookup, 'where clause'), node.where, limitCount)
   const keep = limitCount === undefined ? Infinity : offset + limitCount
   const constants = constRows(run, from, node)
   const alone = source === undefined ? soleTable(from, constants) : { ...source, offset: 0 }
@@ -1973,10 +1978,10 @@ function planGrouped(
 
   // HAVING sees the select list's aliases, its columns and the keys; a column
   // that is none of those is 1054 even when the table has it (8.4.11).
-  let having: Compiled | undefined
+  let having: readonly Pick<Compiled, 'eval'>[] | undefined
   if (node.having !== undefined && !neverNullTest(node.having)) {
     const havingScope = selectedOnly(lookup, selectItems, keys.flatMap((k) => (k.index === undefined ? [] : [k.index])), node.having)
-    having = compile(substituteAliases(node.having, selectItems), postCtx('having clause', havingScope))
+    having = resolveCondition(run, postCtx('having clause', havingScope), substituteAliases(node.having, selectItems), limitCount).predicates
   }
 
   for (const check of groupingChecks) check()
@@ -2053,9 +2058,7 @@ function planGrouped(
   }
 
   // The WHERE: a FROM applies it itself (M5.43); one with no FROM is a Filter here.
-  let where: readonly Pick<Compiled, 'eval'>[] | undefined
   if (from !== undefined) from.filter(node.where, resolved.read)
-  else if (node.where !== undefined) where = resolved.predicates
   // An index-ordered grouping reads that index whole, in its order, whatever range the WHERE would choose.
   if (strategy === 'index' && groupIndex !== undefined) from?.readInOrder(groupIndex, true, false, alone?.alias)
   const locking = (q.locking ?? []).length > 0
@@ -2074,7 +2077,7 @@ function planGrouped(
   const sortsOutput = orderKeys.length > 0 && !(orderMatchesKeys && strategy !== 'temp') && !oneGroup
   const groups = rollup ? 'Group aggregate with rollup' : 'Group aggregate'
   const stages: Stage[] = [
-    ...(where === undefined ? [] : [filterStage(where)]),
+    ...(from === undefined && node.where !== undefined ? [filterStage(resolved.predicates)] : []),
     {
       run: (rows, env) => groupRows(rows, plan, env),
       // As the strategy runs: an Aggregate of everything, a temporary table keyed by the groups, or groups read in order — sorted for them first, a join's rows streamed into a table to be.
@@ -2085,7 +2088,7 @@ function planGrouped(
         return planNode(groups, [n])
       },
     },
-    ...(having === undefined ? [] : [{ ...filterStage(having), describe: (n: PlanNode) => withSubqueries(run, planNode('Filter', [n]), 'having clause') }]),
+    ...(having === undefined ? [] : [filterStage(having, run)]),
     ...(windows === undefined || windows.windows.length === 0 ? [] : [windowStage(windows, windows.base)]),
     // Retained DISTINCT and unverified ordered/limited forms remain unexplained.
     deliverStage(items.map((i) => i.compiled), sortsOutput ? orderKeys : [], deduplicate, { deduplicated: false, streamed: stream, described: node.distinct !== true || (!deduplicate && order.length === 0 && q.limit === undefined), keep: limitCount === undefined ? undefined : keep }),
@@ -2375,14 +2378,14 @@ function distinctKey(def: TableDef, items: readonly { readonly expr: Expression 
   return def.indexes.some((i) => (uniqueKey(def, i) && covered(i.parts)) || (!whole && onlyColumns && i.invisible !== true && covered(i.parts, named.size)))
 }
 
-/** One SELECT's WHERE readers and written constant outcomes. */
-function resolveWhere(run: Run, scope: Scope, where: Expression | undefined, count: number | undefined) {
+/** A clause's readers and written constant outcomes, bound in its own context. */
+function resolveCondition(run: Run, ctx: CompileContext, condition: Expression | undefined, count: number | undefined) {
   type Predicate = { eval: Compiled['eval'] }
-  const ctx = compileContext(run, scope, 'where clause')
   const resolving = run.preparing || run.protocol === 'text'
   const { conditions: _conditions, ...fixedEnv } = run.env
+  const conjuncts = splitAnd(condition)
   // Binding precedes evaluation, including warnings in an untaken conjunct.
-  const entries = new Map<Expression, Predicate>(splitAnd(where).map((e) => {
+  const entries = new Map<Expression, Predicate>(conjuncts.map((e) => {
     const c = compile(e, ctx)
     return [e, { eval: logicalOperand(c, e, resolving ? ctx : undefined) }]
   }))
@@ -2405,15 +2408,10 @@ function resolveWhere(run: Run, scope: Scope, where: Expression | undefined, cou
     facts(def: TableDef, alias: string) {
       // Column names are case-insensitive; share the same pin set with both readers.
       const facts = { impossible, pins: new Set<string>(), constTable: false }
-      if (where === undefined) return facts
+      if (condition === undefined) return facts
       const columnOf = (e: Expression) => tableColumn(e, def, alias)
-      for (const e of entries.keys()) {
-        if (impossiblePredicate(e, columnOf)) {
-          facts.impossible = true
-          break
-        }
-      }
-      for (const column of def.columns) if (pinOf(where, column, columnOf) !== undefined) facts.pins.add(column.name.toLowerCase())
+      facts.impossible ||= conjuncts.some((e) => impossiblePredicate(e, columnOf))
+      for (const column of def.columns) if (pinOf(condition, column, columnOf) !== undefined) facts.pins.add(column.name.toLowerCase())
       facts.constTable = def.indexes.some((i) => i.kind !== 'index' && i.parts.every((p) => p.prefix === undefined && facts.pins.has(p.column.toLowerCase())))
       return facts
     },
