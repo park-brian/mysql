@@ -78,9 +78,12 @@ unfiltered ordinary base readers now enqueue metadata after physical reader
 construction, before deferred reading/projection. Full-text projections retain
 their earlier initialization boundary; their empty-source errors and InnoDB
 warning 159 remain open. One physical operator owns access, decoding and closure;
-slow-consumer cancellation releases its read view. Finish bounded blocking-reader
-readiness and remaining optimization profiles before repairing the DISTINCT fill/read
-boundary, including column-header readiness after a failed fill. Then repair ordinary AVG's temporary strategy and AVG(DISTINCT)'s
+slow-consumer cancellation releases its read view. Unlimited deterministic
+row-dependent ORDER keys now share that boundary through their existing binding
+pass. Every written HAVING is excluded: its nonnullable-aggregate fold still masks
+COUNT/BIT_AND window admission and needs source-preparation precedence repaired.
+Bounded sort readiness and remaining optimization profiles precede the DISTINCT
+fill/read boundary, including column-header readiness after a failed fill. Then repair ordinary AVG's temporary strategy and AVG(DISTINCT)'s
 intermediate field copy, preserving the proved blocking lifetimes. Retained
 division precision across both operands and result-buffer bounds follows,
 followed by supplementary identifier-alias admission. Broader strategy and

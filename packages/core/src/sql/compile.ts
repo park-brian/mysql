@@ -1487,14 +1487,14 @@ function comparisonTime(c: Compiled, preserveDate = true): Compiled {
   }
 }
 
-/** Statement-fixed inputs; bound independent queries may include their own row/aggregate readers. */
-export function constantNode(e: unknown, parameters = true, queryRows = false): boolean {
+/** Statement-fixed inputs; a proved local read may permit its own row/aggregate inputs. */
+export function constantNode(e: unknown, parameters = true, rowInputs = false): boolean {
   return !someNode(e, (value) => {
     const n = value as { kind?: unknown; name?: unknown; over?: unknown }
-    if ((!queryRows && n.kind === NODE.COLUMN) || n.kind === NODE.SUBQUERY || n.kind === NODE.VARIABLE || (!parameters && n.kind === NODE.PLACEHOLDER)) return true
+    if ((!rowInputs && n.kind === NODE.COLUMN) || n.kind === NODE.SUBQUERY || n.kind === NODE.VARIABLE || (!parameters && n.kind === NODE.PLACEHOLDER)) return true
     if (n.kind === NODE.CALL) {
       const name = String(n.name).toUpperCase()
-      if (n.over !== undefined || VARIES_PER_EVALUATION.has(name) || (!queryRows && (AGGREGATE_NAMES.has(name) || name === 'GROUPING'))) return true
+      if (n.over !== undefined || VARIES_PER_EVALUATION.has(name) || (!rowInputs && (AGGREGATE_NAMES.has(name) || name === 'GROUPING'))) return true
     }
     return undefined
   })

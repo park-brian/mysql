@@ -478,9 +478,12 @@ function planSelect(run: Run, q: QueryExpression, node: SelectNode): SelectPlan 
   const orderCtx = compileContext(run, lookup, 'order clause', windows)
   const base = !windowed && having === undefined && unhintedBase(q, node) && source
   const initialize: Compiled[] = []
+  // The admitted single-base reader has no const-table ORDER keys to omit.
+  let rowOrder = keep === Infinity
   const keys = order.filter((o) => !constantKey(o)).map((o) => {
     const key = orderKey(o, items, orderCtx)
     const e = sortExpression(o.expr, items)
+    rowOrder &&= constantNode(e, true, true) && refersToRow(e, lookup)
     if (base && node.where === undefined && limitCount !== 0 && e?.kind === NODE.SUBQUERY) {
       const bound = run.subqueries?.find((s) => s.query === e.query)
       // Only ordinary single-base queries with bound independence enter this startup role.
@@ -499,7 +502,7 @@ function planSelect(run: Run, q: QueryExpression, node: SelectNode): SelectPlan 
   if (match !== undefined) keys.push({ expr: compile(match, compileContext(run, lookup, 'where clause')), desc: true })
   const locking = (q.locking?.length ?? 0) > 0
   // Full-text projections still have an unmodeled pre-metadata initialization phase.
-  const fulltext = someNode(node.items, (n) => (n as Expression).kind === NODE.MATCH || undefined)
+  const fulltext = someNode([node.items, order], (n) => (n as Expression).kind === NODE.MATCH || undefined)
   // Metadata's indexed-prefix shortcut does not prove row uniqueness.
   // An outer field with the same name cannot supply a local UNIQUE key.
   const deduplicate = node.distinct === true && (source === undefined || !distinctKey(source.def, items, lookup, true))
@@ -520,7 +523,7 @@ function planSelect(run: Run, q: QueryExpression, node: SelectNode): SelectPlan 
   // Whole single-table integer sorts have a known fixed record layout and
   // source estimate. Do not infer queue eligibility from the rows emitted.
   let buffer: { estimate: number; capacity: number } | undefined
-  if (limitCount !== undefined && keep < 16 && ordered === undefined && source !== undefined && scope !== undefined && run.catalog !== undefined && read?.ranges === undefined && node.where === undefined && having === undefined && !windowed && !locking && node.distinct !== true && keys.length > 0 && keys.every((k) => exactInteger(k.expr)) && scope.tables[0]?.columns.every(exactInteger)) {
+  if (keep < 16 && ordered === undefined && source !== undefined && run.catalog !== undefined && read!.ranges === undefined && node.where === undefined && having === undefined && !windowed && !locking && node.distinct !== true && keys.length > 0 && keys.every((k) => exactInteger(k.expr)) && scope!.tables[0]!.columns.every(exactInteger)) {
     const readColumns = reads?.get(source.alias)
     const columns = source.def.columns.filter((c) => readColumns === 'all' || readColumns?.has(c.name.toLowerCase()))
     const width = keys.reduce((n, k) => n + 8 + Number(k.expr.type.nullable), 0)
@@ -540,7 +543,7 @@ function planSelect(run: Run, q: QueryExpression, node: SelectNode): SelectPlan 
     ...(having === undefined ? [] : [filterStage(having, run)]),
     ...(windows === undefined || windows.windows.length === 0 ? [] : [windowStage(windows, windowBase)]),
     ...(limitFirst ? take : []),
-    deliverStage(items.map((i) => i.compiled), ordered === undefined && !sortedFirst ? keys : [], deduplicate, { deduplicated, streamed, copied, keep: limitCount === undefined ? undefined : keep, buffer, constant: constantDistinct }),
+    deliverStage(items.map((i) => i.compiled), ordered === undefined && !sortedFirst ? keys : [], deduplicate, { deduplicated, streamed, copied, keep: q.limit && keep, buffer, constant: constantDistinct }),
     ...(limitFirst ? [] : take),
   ]
   return {
@@ -572,7 +575,7 @@ function planSelect(run: Run, q: QueryExpression, node: SelectNode): SelectPlan 
       let rows: Iterable<Rowed>
       if (from === undefined) rows = [{ row: [] }]
       else if (facts?.impossible === true) rows = []
-      else rows = from.rows(trx, env, { locking, ready: base && !node.where && !order.length && !node.distinct && !locking && !fulltext ? ready : undefined })
+      else rows = from.rows(trx, env, { locking, ready: base && !node.having && !node.where && (!order.length || rowOrder) && !node.distinct && !locking && !fulltext ? ready : undefined })
       return values(runStages(rows, stages, env))
     },
   }
@@ -2105,7 +2108,7 @@ function planGrouped(
     ...(having === undefined ? [] : [filterStage(having, run)]),
     ...(windows === undefined || windows.windows.length === 0 ? [] : [windowStage(windows, windows.base)]),
     // Retained DISTINCT and unverified ordered/limited forms remain unexplained.
-    deliverStage(items.map((i) => i.compiled), sortsOutput ? orderKeys : [], deduplicate, { deduplicated: false, streamed: stream, described: node.distinct !== true || (!deduplicate && order.length === 0 && q.limit === undefined), keep: limitCount === undefined ? undefined : keep }),
+    deliverStage(items.map((i) => i.compiled), sortsOutput ? orderKeys : [], deduplicate, { deduplicated: false, streamed: stream, described: node.distinct !== true || (!deduplicate && order.length === 0 && q.limit === undefined), keep: q.limit && keep }),
     ...(limitCount === undefined && offset === 0 ? [] : [limitStage(offset, limitCount)]),
   ]
 
