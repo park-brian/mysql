@@ -114,7 +114,7 @@ and browser work follow the outstanding engine/planner work. Remaining function
 boundaries stay open for separate verification. The current state and remaining
 work are:
 
-**Next bounded slice: transaction-bound optimization and read readiness.**
+**Next bounded slice: DISTINCT/AVG field ownership.**
 System-variable identity and diagnostic-count PREPARE admission are verified
 below, alongside failed-command publication, diagnostic SHOW admission and
 linear lexical error trimming. WHERE resolution now binds the written conjuncts
@@ -134,13 +134,11 @@ Pinned complete PRIMARY points now omit ORDER readers only when the condition
 owner and final physical access agree. Bounded unfiltered ordinary-source
 readiness and both unlimited and bounded row-dependent sort readiness are
 verified below.
-**Immediate Next: exhausted-OFFSET projection timing.** Refresh native ordinary
-row-sort evidence for offsets within and beyond the input, including alias/
-ordinal keys, projection effects/errors, queue/full-sort paths, prepared
-rebinding and early closure. Put the offset at the actual sort-to-projection
-boundary only when the writer permits it; never truncate sort input or move
-DISTINCT/group/window field copies. Preserve LIMIT 0 and genuine preheader
-optimizer failures. DISTINCT, filtered sources, full-text
+The ordinary OFFSET/projection boundary is verified below.
+**Immediate Next: retained DISTINCT over computed ordinary exact AVG.** Prove
+its temporary-group writer and final deduplication boundary against the native
+plan. Preserve index-streamed aggregation when DISTINCT is absent or eliminated,
+and preserve genuine preheader failures and already copied fields. DISTINCT, filtered sources, full-text
 initialization, compound aliases and other temporary-table readers remain
 separate work. The discovered HAVING/window masking exception also stays open;
 prove source-preparation precedence before changing that admission path.
@@ -150,14 +148,66 @@ Retain empty/LIMIT 0, PREPARE, first/late projection failures and partial-row
 visibility. Filtered startup, wrapped/coerced points, opaque sources, full-text
 argument initialization and the missing InnoDB warning 159 remain separate open
 work; do not broaden admission merely because their metadata is available.
-Then repair bounded, non-eliminated outer DISTINCT over computed ordinary exact AVG,
-using the existing temporary-group writer and a real final deduplication
-barrier. Then repair AVG(DISTINCT ...), which uses sorted grouping followed by
+After the bounded ordinary-AVG repair, address AVG(DISTINCT ...), which uses sorted grouping followed by
 an additional aggregate-field copy before enclosing arithmetic. Complete both
 before promoting the division repair. Preserve index-streamed reads when DISTINCT
 is absent or eliminated by the retained grouping keys. Pin that elimination
 proof and both aggregate kinds before broadening to HAVING, LIMIT, ROLLUP or
 windows. The native plan and its actual writers must make the decision.
+
+**OFFSET-to-projection boundary, verified (2026-10-26):**
+Ordinary delivery now passes its existing LIMIT stage into the delivery owner,
+after the complete sort and before SELECT projection. That same stage describes
+the executed boundary. DISTINCT/group/window and real multi-table copied-row
+writers retain their placement; a single physical table can defer projection
+even when correlated-expression metadata carries the stream flag. Metadata
+alone cannot decide the writer. The existing ordered-index path retains its HAVING proof,
+and newly admitted paths exclude every written HAVING. No sort input is truncated.
+The 2,970-frame native audit improves 2,455 to 2,785 complete outcomes, with no
+lost matching component. The strict fixture pins 2,601 complete native outcomes
+(2,273 before), including empty/three/700-row inputs, exhausted and partial offsets,
+LIMIT zero, alias/ordinal sorting, errors, warnings, LAST_INSERT_ID effects,
+parameters and retained EXECUTE rebinding. Another 1,296 writer controls improve
+868 to 900 matches without component loss, including correlated projections,
+joins, views, folded HAVING and the known masked HAVING/window exception.
+A further 162 correlated error controls retain all matching components and
+repair skipped projection values/errors, while descriptor gaps leave 66 full
+matches before and after. Removing the multi-table fence lost 108 matching
+components in the writer audit; using the actual physical-source proof restores
+them. The resource regression pins both the deferred correlated projection and
+the real-join early projection error. Complete native outcomes remain in a
+separate research fixture rather than claiming descriptor conformance.
+The prior 1,710-frame audit improves 1,668 to 1,692: all 24 exhausted-OFFSET
+projection failures now agree. Its six NULL LIMIT and twelve excluded-source
+header differences remain open. The new audit's excluded 369 observations and
+all supplementary writer observations retain complete native outcomes in separate
+research fixtures. Nested/stateful alias-key headers/effects, source-free JSON
+headers and copied-reader initialization remain open, with no conformance claim.
+
+A resource regression checks both query and execute: an ordinary scan reads only
+OFFSET plus the requested count, a sort still reads every key, a late key failure
+is retained, every opened physical iterator closes once and read views return to
+their initial count. LIMIT-zero offsets preserve eager-sort initialization.
+Canonical LIMIT-node presence replaces redundant count/offset guards; operands
+are already validated finite. The actual single source also proves its FromPlan,
+selected access and alias, removing duplicate optional guards without changing
+PRIMARY-point or ordering choices. The FromPlan already proves its scope; the
+first-table sort also proves its physical source, so their redundant guards are removed under the same producer
+invariants. All nine unchanged caps pass at 334,332/334,259 B; raw
+1,029,506/1,029,320 B, forty bytes below 155.
+The native/core matrix and resource regression pass; preceding code fails both
+new regressions. Earlier ordinary (849), full-text (36), phase (468),
+HAVING-parameter (36), ORDER (1,008), point (570/72/nine), WHERE (1,172) and
+wire (88) audits retain every matching component; fill (576) improves 468 to 472.
+All 20,000 seeded executor statements pass. Fresh final Docker passes typecheck,
+lint, 1,374 ordinary plus four latency tests, all nine caps, package/typed smoke
+the real client and all seven pinned 8.4.11 reference corpora. The live verification
+container matches all 380 test files/fixtures and 202 runtime sources plus
+reference tooling/manifests/CI. The resource test fails both with the metadata-only
+guard and with no copied-writer fence, then passes with the physical-source proof
+restored.
+The preceding 093b0c6 passes all eleven required GitHub jobs. Totals remain
+144/190, M5 42/53.
 
 **Bounded row-dependent sort readiness, verified (2026-10-26):**
 The existing row-key proof now admits finite sort capacities under the same

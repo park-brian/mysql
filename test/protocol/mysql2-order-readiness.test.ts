@@ -6,11 +6,13 @@ import { MySQL } from '@myjs/core'
 import unlimited from './fixtures/diagnostics/order-readiness.json' with { type: 'json' }
 
 import bounded from './fixtures/diagnostics/bounded-order-readiness.json' with { type: 'json' }
+import offset from './fixtures/diagnostics/offset-projection.json' with { type: 'json' }
 
 for (const { reference, database, count, limited } of [
   { reference: unlimited, database: 'readiness154', count: 750, limited: false },
   { reference: bounded, database: 'readiness155', count: 1341, limited: true },
-]) test(`row-dependent ${limited ? 'bounded' : 'unlimited'} sorts preserve optimization, fill and projection phases`, async () => {
+  { reference: offset, database: 'offset156', count: 2601, limited: true },
+]) test(`${database}: row-dependent ${limited ? 'bounded' : 'unlimited'} sorts preserve optimization, fill and projection phases`, async () => {
   const host = process.env.MYSQL_REFERENCE_HOST
   const db = host === undefined ? await MySQL.open(':memory:') : undefined
   const transport = db === undefined ? connect({ host: host ?? 'reference', port: Number(process.env.MYSQL_REFERENCE_PORT ?? 3306) }) : db.createStream()
@@ -134,6 +136,75 @@ test('written HAVING cannot borrow ordinary reader-construction readiness', asyn
       assert.equal(fields, false, 'the unsupported HAVING plan receives no ordinary-source readiness')
       assert.equal(rows, 0)
     }
+  } finally {
+    await conn.end()
+    await db.end()
+  }
+})
+
+test('ordinary LIMIT closes its reader after OFFSET without truncating sort input', async () => {
+  const db = await MySQL.open(':memory:')
+  const conn = mysql.createConnection({ stream: db.createStream(), user: 'root' }).promise()
+  await conn.connect()
+  try {
+    await conn.query('CREATE DATABASE offset156_close')
+    await conn.query('USE offset156_close')
+    await conn.query('CREATE TABLE a(id INT PRIMARY KEY)')
+    await conn.query('CREATE TABLE b(n INT)')
+    await conn.query('INSERT INTO b VALUES(1),(2)')
+    await conn.query('INSERT INTO a VALUES' + Array.from({ length: 700 }, (_, i) => '(' + (i + 1) + ')').join(','))
+    const catalog = db.catalog!
+    const views = catalog.store.transactions.stats().openViews
+    const open = catalog.table.bind(catalog)
+    const patched = new WeakSet()
+    let read = 0
+    let closed = 0
+    catalog.table = (schema, name, trx) => {
+      const table = open(schema, name, trx)
+      if (schema === 'offset156_close' && name === 'a' && !patched.has(table)) {
+        patched.add(table)
+        const scan = table.scan.bind(table)
+        table.scan = function*(range, transaction, mode) {
+          try {
+            for (const row of scan(range, transaction, mode)) {
+              if (transaction !== undefined) read++
+              yield row
+            }
+          } finally { if (transaction !== undefined) closed++ }
+        }
+      }
+      return table
+    }
+    try {
+      for (const api of ['query', 'execute'] as const) {
+        const invoke = (sql: string) => api === 'query' ? conn.query({ sql, rowsAsArray: true }) : conn.execute({ sql, rowsAsArray: true })
+        const json = "IF(id=1,CAST('bad' AS JSON),id)"
+        for (const [projection, order, count, expected, consumed] of [
+          [json, '', 1, [['2']], 2],
+          [json, ' ORDER BY id+0', 1, [['2']], 700],
+          [json, '', 0, [], 0],
+          [json, ' ORDER BY id+0', 0, [], 700],
+          ['IF(id=1,(SELECT n FROM b WHERE n<=a.id+1),id)', ' ORDER BY id+0', 1, [[2]], 700],
+        ] as const) {
+          read = closed = 0
+          const sql = 'SELECT ' + projection + ' AS v FROM a' + order + ' LIMIT ' + count + ' OFFSET 1'
+          const [rows] = await invoke(sql)
+          assert.deepEqual(rows, expected)
+          assert.equal(read, consumed, api + sql)
+          assert.equal(closed, consumed === 0 ? 0 : 1)
+          assert.equal(catalog.store.transactions.stats().openViews, views)
+        }
+        read = closed = 0
+        await assert.rejects(invoke("SELECT id FROM a ORDER BY IF(id=700,CAST('bad' AS JSON),id) LIMIT 1 OFFSET 1"), { errno: 3141 })
+        assert.equal(read, 700, 'the sort still evaluates every input key')
+        assert.equal(closed, 1)
+        assert.equal(catalog.store.transactions.stats().openViews, views)
+        // A real multi-table copy evaluates SELECT before its enclosing OFFSET.
+        await assert.rejects(invoke('SELECT ' + json + ' AS v FROM a JOIN b ON b.n=a.id ORDER BY id LIMIT 1 OFFSET 1'), { errno: 3141 })
+        assert.equal(catalog.store.transactions.stats().openViews, views)
+      }
+    } finally { catalog.table = open }
+    await conn.query('INSERT INTO a VALUES(701)')
   } finally {
     await conn.end()
     await db.end()

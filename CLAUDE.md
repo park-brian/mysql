@@ -82,9 +82,11 @@ slow-consumer cancellation releases its read view. Deterministic row-dependent
 ORDER keys, including bounded sorts, now share that boundary through their
 existing binding pass. Every written HAVING is excluded: its nonnullable-aggregate fold still masks
 COUNT/BIT_AND window admission and needs source-preparation precedence repaired.
-Exhausted-OFFSET projection timing and remaining optimization profiles precede
-the DISTINCT fill/read boundary, including headers after a failed fill. NULL
-LIMIT coercion remains coupled to the HAVING/source-preparation repair. Then repair ordinary AVG's temporary strategy and AVG(DISTINCT)'s
+Ordinary delivery now applies LIMIT after sorting and before SELECT projection,
+retaining copied-field writers and closing its reader on early termination.
+Remaining optimization/readiness profiles stay open. NULL LIMIT coercion remains
+coupled to the HAVING/source-preparation repair. Next repair ordinary AVG's
+temporary strategy and AVG(DISTINCT)'s
 intermediate field copy, preserving the proved blocking lifetimes. Retained
 division precision across both operands and result-buffer bounds follows,
 followed by supplementary identifier-alias admission. Broader strategy and

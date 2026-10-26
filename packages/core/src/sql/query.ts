@@ -374,8 +374,8 @@ function planSelect(run: Run, q: QueryExpression, node: SelectNode): SelectPlan 
     if (semi.innerFirst) source = undefined
   }
   const loopSemijoin = semijoin && scope !== undefined && (semi !== undefined || anti?.lookup === true || nestedLoopSemijoin(node.where, scope))
-  if (from !== undefined && scope !== undefined) from.sortedBy(sortBy, keep)
-  if (from !== undefined && scope !== undefined && node.distinct === true) from.distinctReads(keyAliases(items.map((i) => i.expr), items, scope))
+  if (from !== undefined) from.sortedBy(sortBy, keep)
+  if (from !== undefined && node.distinct === true) from.distinctReads(keyAliases(items.map((i) => i.expr), items, scope!))
   const facts = source === undefined ? undefined : resolved.facts(source.def, source.alias)
   // A prepare reports a statement before MySQL optimizes it, so it never sees
   // the temporary table: COM_STMT_PREPARE's metadata has no GROUP_FLAG where
@@ -507,19 +507,19 @@ function planSelect(run: Run, q: QueryExpression, node: SelectNode): SelectPlan 
   // An outer field with the same name cannot supply a local UNIQUE key.
   const deduplicate = node.distinct === true && (source === undefined || !distinctKey(source.def, items, lookup, true))
   // An ORDER BY the index the table is read by already gives: read in its order, and nothing to sort.
-  const read = source !== undefined && from !== undefined ? from.access(run.env) : undefined
+  const read = source && from!.access(run.env)
   // Windows and hash antijoins still sort their delivered rows, even over an ordered index.
   const outerLoop = semi?.innerFirst === false && source !== undefined && sortBy === source.alias
   // Reconsider PRIMARY for ordinary scans and the modeled outer-first loop.
   // A proved UNIQUE projection can reconsider PRIMARY as an ordinary scan does.
-  const ordered = source !== undefined && read !== undefined && !deduplicated && !windowed && (anti === undefined || anti.lookup) && match === undefined && keys.length > 0 && read.ranges === undefined ? orderingIndex(source.def, source.alias, order, items, lookup, read.index, (outerLoop || (!loopSemijoin && !deduplicate)) && optimizerEnabled(run.env, 'prefer_ordering_index')) : undefined
-  if (ordered !== undefined) from?.readInOrder(ordered.index, false, ordered.reverse, source?.alias)
+  const ordered = source !== undefined && !deduplicated && !windowed && (anti === undefined || anti.lookup) && match === undefined && keys.length > 0 && read!.ranges === undefined ? orderingIndex(source.def, source.alias, order, items, lookup, read!.index, (outerLoop || (!loopSemijoin && !deduplicate)) && optimizerEnabled(run.env, 'prefer_ordering_index')) : undefined
+  if (ordered !== undefined) from!.readInOrder(ordered.index, false, ordered.reverse, source!.alias)
   // Only whole scans can be replaced above, so this selected range is final.
   // A pinned complete PRIMARY point binds ORDER but needs none of its readers.
   const point = read?.ranges?.length === 1 ? read.ranges[0] : undefined
   if (base && point?.from?.values.length === 1 && point.from === point.to && base.def.indexes.some((i) => i.name === read!.index && i.kind === 'primary' && i.parts.length === 1 && facts?.pins.has(i.parts[0]!.column.toLowerCase()))) keys.length = 0
   const sortedFirst = outerLoop && ordered === undefined && keys.length > 0
-  if (sortedFirst && source !== undefined) from?.sortFirst(source.alias, keys)
+  if (sortedFirst) from!.sortFirst(source!.alias, keys)
   // Whole single-table integer sorts have a known fixed record layout and
   // source estimate. Do not infer queue eligibility from the rows emitted.
   let buffer: { estimate: number; capacity: number } | undefined
@@ -533,18 +533,17 @@ function planSelect(run: Run, q: QueryExpression, node: SelectNode): SelectPlan 
     buffer = { estimate: statisticsOf(source.def, source.table, run.catalog.store).rows, capacity: Math.floor(memory / (width + 8)) }
   }
 
-  // An ordinary ordered scan discards OFFSET rows before evaluating SELECT.
-  // DISTINCT, HAVING and windows retain their projection/materialization boundaries.
-  const limitFirst = ordered !== undefined && node.distinct !== true && having === undefined && !loopSemijoin
-  const take = limitCount === undefined && offset === 0 ? [] : [limitStage(offset, limitCount)]
+  // Ordinary readers apply LIMIT after sorting and before SELECT evaluation.
+  // Multi-table copies, written HAVING and windows retain their materialization boundary.
+  const limitFirst = !windowed && !node.distinct && !loopSemijoin && (ordered === undefined ? !node.having && (source !== undefined || !streamed) : having === undefined)
+  const take = q.limit && limitStage(offset, limitCount)
   const stages: Stage[] = [
     ...(from === undefined && node.where !== undefined ? [filterStage(resolved.predicates)] : []),
     // HAVING without grouping filters the rows WHERE kept, before any window sees them.
     ...(having === undefined ? [] : [filterStage(having, run)]),
     ...(windows === undefined || windows.windows.length === 0 ? [] : [windowStage(windows, windowBase)]),
-    ...(limitFirst ? take : []),
-    deliverStage(items.map((i) => i.compiled), ordered === undefined && !sortedFirst ? keys : [], deduplicate, { deduplicated, streamed, copied, keep: q.limit && keep, buffer, constant: constantDistinct }),
-    ...(limitFirst ? [] : take),
+    deliverStage(items.map((i) => i.compiled), ordered === undefined && !sortedFirst ? keys : [], deduplicate, { deduplicated, streamed, copied, keep: q.limit && keep, buffer, constant: constantDistinct, limit: limitFirst ? take : undefined }),
+    ...(!limitFirst && take ? [take] : []),
   ]
   return {
     ...resultColumns(items, dataColumns),
@@ -644,7 +643,7 @@ function windowStage(windows: WindowSink, base: number): Stage {
  * Other repeated expressions remain open (M5.49). A sort
  * over a join reads its rows streamed into a table first ("Stream results").
  */
-function deliverStage(items: readonly Compiled[], keys: readonly SortKey[], deduplicate: boolean, through: { readonly deduplicated: boolean; readonly streamed: boolean; readonly copied?: readonly (number | undefined)[] | undefined; readonly described?: boolean; readonly keep?: number | undefined; readonly buffer?: { readonly estimate: number; readonly capacity: number } | undefined; readonly constant?: 'group' | 'limit' | undefined }): Stage {
+function deliverStage(items: readonly Compiled[], keys: readonly SortKey[], deduplicate: boolean, through: { readonly deduplicated: boolean; readonly streamed: boolean; readonly copied?: readonly (number | undefined)[] | undefined; readonly described?: boolean; readonly keep?: number | undefined; readonly buffer?: { readonly estimate: number; readonly capacity: number } | undefined; readonly constant?: 'group' | 'limit' | undefined; readonly limit?: Stage | undefined }): Stage {
   // A LIMIT needs only its first rows of the order, unless a DISTINCT between would drop some.
   const keep = deduplicate ? undefined : through.keep
   const ordered = keys.length > 0
@@ -658,7 +657,7 @@ function deliverStage(items: readonly Compiled[], keys: readonly SortKey[], dedu
     run(rows, env) {
       if (ordered && copied.length === keys.length) return sort(rowed(distinct(project(rows, items, env))), copied, env)
       const sorted = ordered ? sort(rows, keys, env, keep, through.buffer) : rows
-      let projected = project(sorted, items, env)
+      let projected = project(through.limit?.run(sorted, env) ?? sorted, items, env)
       if (deduplicate) projected = distinct(projected)
       // Initialize a bounded temporary table even when the enclosing LIMIT returns no rows.
       if (through.deduplicated && bounded) return rowed([...limit(projected, 0, through.keep)])
@@ -671,7 +670,7 @@ function deliverStage(items: readonly Compiled[], keys: readonly SortKey[], dedu
       if (through.constant === 'limit') return planNode('Limit: 1 row(s)', [planNode('Table scan on <temporary>', [planNode('Temporary table', [bounded ? planNode(`Limit table size: ${through.keep} row(s)`, [n]) : n])])])
       let out = through.deduplicated ? planNode('Table scan on <temporary>', [planNode('Temporary table with deduplication', [bounded ? planNode(`Limit table size: ${through.keep} unique row(s)`, [n]) : n])]) : n
       if (ordered) out = planNode('Sort', [wrap(through.streamed, 'Stream results', out)])
-      return out
+      return through.limit?.describe(out) ?? out
     },
   }
 }
@@ -1669,7 +1668,7 @@ function orderedResult(run: Run, q: QueryExpression, plan: SelectPlan): SelectPl
   const [limitCount, offset] = queryLimit(run, q)
   const stages: Stage[] = []
   if (keys.length > 0) stages.push({ run: (rows, env) => sort(rows, keys, env), describe: (n) => planNode('Sort', [n]) })
-  if (limitCount !== undefined || offset > 0) stages.push(limitStage(offset, limitCount))
+  if (q.limit) stages.push(limitStage(offset, limitCount))
   return {
     columns: plan.columns,
     locking: plan.locking,
@@ -2109,7 +2108,7 @@ function planGrouped(
     ...(windows === undefined || windows.windows.length === 0 ? [] : [windowStage(windows, windows.base)]),
     // Retained DISTINCT and unverified ordered/limited forms remain unexplained.
     deliverStage(items.map((i) => i.compiled), sortsOutput ? orderKeys : [], deduplicate, { deduplicated: false, streamed: stream, described: node.distinct !== true || (!deduplicate && order.length === 0 && q.limit === undefined), keep: q.limit && keep }),
-    ...(limitCount === undefined && offset === 0 ? [] : [limitStage(offset, limitCount)]),
+    ...(q.limit ? [limitStage(offset, limitCount)] : []),
   ]
 
   return {
@@ -2124,7 +2123,7 @@ function planGrouped(
         if (strategy !== 'implicit') return [planNode('Zero rows')]
         let n = planNode('Zero input rows')
         if (having !== undefined) n = withSubqueries(run, planNode('Filter', [n]), 'having clause')
-        if (limitCount !== undefined || offset > 0) n = limitStage(offset, limitCount).describe(n) ?? n
+        if (q.limit) n = limitStage(offset, limitCount).describe(n) ?? n
         return [n]
       }
       // A const table is read while planning: its row, if the WHERE holds of it, is what is grouped (8.4.11).
