@@ -132,12 +132,15 @@ remain available, and its source-preparation prerequisites stay open. The bounde
 per-invocation ORDER-key startup phase now runs under the actual transaction.
 Pinned complete PRIMARY points now omit ORDER readers only when the condition
 owner and final physical access agree. Bounded unfiltered ordinary-source
-readiness and unlimited row-dependent sort readiness are verified below.
-**Immediate Next:
-bounded row-dependent sort readiness.** Refresh native LIMIT/OFFSET/parameter,
-queue, empty and exhausted-input phase evidence before admitting a bounded sort
-through the same callback. Preserve LIMIT 0, actual field-copy strategies and
-genuine preheader optimizer failures. DISTINCT, filtered sources, full-text
+readiness and both unlimited and bounded row-dependent sort readiness are
+verified below.
+**Immediate Next: exhausted-OFFSET projection timing.** Refresh native ordinary
+row-sort evidence for offsets within and beyond the input, including alias/
+ordinal keys, projection effects/errors, queue/full-sort paths, prepared
+rebinding and early closure. Put the offset at the actual sort-to-projection
+boundary only when the writer permits it; never truncate sort input or move
+DISTINCT/group/window field copies. Preserve LIMIT 0 and genuine preheader
+optimizer failures. DISTINCT, filtered sources, full-text
 initialization, compound aliases and other temporary-table readers remain
 separate work. The discovered HAVING/window masking exception also stays open;
 prove source-preparation precedence before changing that admission path.
@@ -155,6 +158,45 @@ before promoting the division repair. Preserve index-streamed reads when DISTINC
 is absent or eliminated by the retained grouping keys. Pin that elimination
 proof and both aggregate kinds before broadening to HAVING, LIMIT, ROLLUP or
 windows. The native plan and its actual writers must make the decision.
+
+**Bounded row-dependent sort readiness, verified (2026-10-26):**
+The existing row-key proof now admits finite sort capacities under the same
+ordinary single-base, no-WHERE/HAVING/DISTINCT/hint/window/full-text fences.
+No transaction, iterator, output or sort-strategy mechanism changes. A pinned
+8.4.11 audit spans 1,710 complete query/PREPARE/EXECUTE observations: LIMIT 0,
+small queue capacities, full sorts, offsets, empty/one/700-row inputs, first/late
+sort and projection errors, parameter coercion and retained EXECUTE rebinding.
+Complete matches improve from 1,382 to 1,668 with no lost matching component.
+The strict fixture selects whole passing profiles (1,341 outcomes; 1,109 before),
+including independent-scalar and full-text preheader controls. The test shares
+the existing wire recorder with the unlimited matrix and checks every component.
+
+The separate research fixture retains the 369 excluded native observations:
+computed projections with OFFSET, NULL LIMIT parameters and hinted/DISTINCT/
+opaque sources. Of the full audit's remaining 42 differences, 24 evaluate a
+computed projection after OFFSET has exhausted the input, six reject NULL
+LIMIT at EXECUTE instead of converting it to zero, and twelve involve the
+excluded source shapes. Move neither LIMIT ahead of a fused sort/project stage
+nor NULL into the shared integer converter without phase evidence. The latter
+is coupled to the known masked HAVING/window admission: accepting NULL as zero
+can turn an earlier wrong-error/no-header result into success with headers.
+Preserve native source-preparation/3593 precedence before changing that shared
+SELECT/DML LIMIT conversion. M5.10 and roadmap totals remain incomplete.
+Native optimizer traces on the 700-row INT table confirm priority queues for
+LIMIT 2, LIMIT 2 OFFSET 1 and LIMIT 16, full sorts for LIMIT 700 and exhausted
+OFFSET 701, and no sort for LIMIT 0. This proves phase coverage, not complete
+queue-strategy parity: the local small-buffer model remains narrower under M5.49.
+The native/core matrix passes and preceding code fails the bounded regression.
+Earlier ordinary (849), full-text (36), phase (468), HAVING-parameter (36), fill
+(576), ORDER (1,008), point (570/72/nine), WHERE (1,172) and wire (88) audits
+retain every matching component. All 20,000 seeded executor statements pass.
+Fresh Docker passes typecheck, lint, 1,372 ordinary plus four latency tests,
+all nine unchanged size caps, package/typed smoke, the real 8.4.11 client and
+all seven pinned reference corpora. The live verification container matches
+all 376 test files/fixtures and 202 runtime sources plus reference tooling,
+manifests and CI. Core/facade are 334,340/334,261 B, raw 1,029,546/1,029,360 B
+(five bytes smaller than 154). Preceding acca078 passes all eleven required
+GitHub jobs. Totals remain 144/190, M5 42/53.
 
 **Unlimited row-dependent sort readiness, verified (2026-10-26):**
 The existing ORDER binding pass now proves each key permits only its own row
@@ -180,8 +222,9 @@ command; it does not close a cached statement that a later EXECUTE then reuses.
 An initial audit-harness mistake in that sequence was corrected before selecting
 regressions; all final audits contain zero unknown-statement-handler outcomes.
 
-Compound scalar ORDER initialization, compound alias resolution, bounded/filter/
-hinted/opaque headers and volatile-key metadata remain open. The audit also
+Compound scalar ORDER initialization, compound alias resolution, filtered/
+hinted/opaque headers and volatile-key metadata remain open. Bounded unfiltered
+sorts are covered in the later slice above. The audit also
 retains two preexisting diagnostic gaps: a binary bad-string parameter expects
 INTEGER rather than DOUBLE, and JSON-null numeric conversion names cast_as_json
 rather than json. Entire affected families remain outside the passing fixture;

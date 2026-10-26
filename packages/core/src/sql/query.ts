@@ -479,7 +479,7 @@ function planSelect(run: Run, q: QueryExpression, node: SelectNode): SelectPlan 
   const base = !windowed && having === undefined && unhintedBase(q, node) && source
   const initialize: Compiled[] = []
   // The admitted single-base reader has no const-table ORDER keys to omit.
-  let rowOrder = keep === Infinity
+  let rowOrder = true
   const keys = order.filter((o) => !constantKey(o)).map((o) => {
     const key = orderKey(o, items, orderCtx)
     const e = sortExpression(o.expr, items)

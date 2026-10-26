@@ -3,9 +3,14 @@ import assert from 'node:assert/strict'
 import { connect } from 'node:net'
 import mysql from 'mysql2'
 import { MySQL } from '@myjs/core'
-import reference from './fixtures/diagnostics/order-readiness.json' with { type: 'json' }
+import unlimited from './fixtures/diagnostics/order-readiness.json' with { type: 'json' }
 
-test('row-dependent unlimited sorts preserve optimization, fill and projection phases', async () => {
+import bounded from './fixtures/diagnostics/bounded-order-readiness.json' with { type: 'json' }
+
+for (const { reference, database, count, limited } of [
+  { reference: unlimited, database: 'readiness154', count: 750, limited: false },
+  { reference: bounded, database: 'readiness155', count: 1341, limited: true },
+]) test(`row-dependent ${limited ? 'bounded' : 'unlimited'} sorts preserve optimization, fill and projection phases`, async () => {
   const host = process.env.MYSQL_REFERENCE_HOST
   const db = host === undefined ? await MySQL.open(':memory:') : undefined
   const transport = db === undefined ? connect({ host: host ?? 'reference', port: Number(process.env.MYSQL_REFERENCE_PORT ?? 3306) }) : db.createStream()
@@ -16,11 +21,15 @@ test('row-dependent unlimited sorts preserve optimization, fill and projection p
   const descriptors = (list: readonly mysql.FieldPacket[]) => list.map((f) => [f.name, f.columnType, f.columnLength, f.flags, f.decimals, f.characterSet, f.schema, f.table, f.orgTable, f.orgName])
   try {
     assert.equal(reference.mysqlVersion, '8.4.11')
-    assert.equal(reference.observations.length, 750)
+    assert.equal(reference.observations.length, count)
     if (host !== undefined) assert.equal(String((await conn.query<mysql.RowDataPacket[]>('SELECT VERSION() AS v'))[0][0]!.v).split('-')[0], reference.mysqlVersion)
-    await conn.query('CREATE DATABASE readiness154')
-    await conn.query('USE readiness154')
-    await conn.query('CREATE TABLE a(id INT PRIMARY KEY,t TEXT,FULLTEXT INDEX ft(t))')
+    await conn.query('CREATE DATABASE ' + database)
+    await conn.query('USE ' + database)
+    if (limited) {
+      await conn.query('CREATE TABLE a(id INT PRIMARY KEY) STATS_AUTO_RECALC=0')
+      await conn.query('CREATE TABLE fa(id INT PRIMARY KEY,t TEXT,FULLTEXT INDEX ft(t))')
+      await conn.query("INSERT INTO fa VALUES(1,'apple banana')")
+    } else await conn.query('CREATE TABLE a(id INT PRIMARY KEY,t TEXT,FULLTEXT INDEX ft(t))')
     await conn.query('CREATE TABLE b(n INT)')
     await conn.query('INSERT INTO b VALUES(1),(2)')
     await conn.query("SET sql_mode='ERROR_FOR_DIVISION_BY_ZERO'")
@@ -33,6 +42,7 @@ test('row-dependent unlimited sorts preserve optimization, fill and projection p
         await conn.query('TRUNCATE TABLE a')
         if (entry.size > 0) await conn.query('INSERT INTO a(id) VALUES' + Array.from({ length: entry.size }, (_, i) => '(' + (i + 1) + ')').join(','))
         size = entry.size
+        if (limited) await conn.query('ANALYZE TABLE a')
       }
       await conn.query('SELECT LAST_INSERT_ID(0)')
       await conn.query('DO 1/0')
@@ -91,7 +101,7 @@ test('row-dependent unlimited sorts preserve optimization, fill and projection p
       }, `${api}: size=${size}: ${sql}`)
     }
   } finally {
-    await conn.query('DROP DATABASE IF EXISTS readiness154')
+    await conn.query('DROP DATABASE IF EXISTS ' + database)
     await conn.end()
     await db?.end()
   }
