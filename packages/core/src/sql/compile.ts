@@ -12,7 +12,7 @@
 // unknown function is ER_SP_DOES_NOT_EXIST, as MySQL says it, and a builtin we
 // have not written is ER_NOT_SUPPORTED_YET naming it (M5.10 owns the rest).
 import { CHARSET_BINARY, COLUMN_FLAG, FIELD_TYPE, expectTyped, equalBytes } from '@myjs/bytes'
-import { someNode } from './ast.ts'
+import { integerLiteral, someNode } from './ast.ts'
 import { collationInfoByName, decodeCollation, defaultCollationOf, encodeCollation, requireCollationInfo } from '@myjs/charsets'
 import { LITERAL, NODE, TOKEN, deparse, lex, parseExpression, type CallNode, type CaseNode, type CastNode, type ConvertNode, type Expression, type LiteralNode, type MatchNode, type QueryExpression, type SubqueryNode, type VariableNode, quoteName } from '@myjs/parser'
 import type { ColumnDef, Table, Trx } from '@myjs/engine'
@@ -604,10 +604,10 @@ export interface CompileContext {
   readonly sql?: string
 }
 
-/** A grouped query's keys, as the expressions above the grouping see them. */
+/** GROUPING admission, plus key-slot readers only above the grouping. */
 export interface GroupKeys {
   /** The key `e` is, read from its slot, or `undefined` when it is not one. */
-  match(e: Expression): Compiled | undefined
+  match?(e: Expression): Compiled | undefined
   /** `GROUPING(e, …)`: which of the named keys a ROLLUP row has rolled up, as bits. */
   grouping(args: readonly Expression[], ctx: CompileContext): Compiled
 }
@@ -709,10 +709,8 @@ export function expressionOf(t: ResultType): ResultType {
 const notNull = (...ts: ResultType[]): boolean => ts.every((t) => !t.nullable)
 
 export function compile(e: Expression, ctx: CompileContext): Compiled {
-  if (ctx.groupKeys !== undefined) {
-    const key = ctx.groupKeys.match(e)
-    if (key !== undefined) return key
-  }
+  const key = ctx.groupKeys?.match?.(e)
+  if (key !== undefined) return key
   switch (e.kind) {
     case NODE.LITERAL:
       return literal(e, ctx)
@@ -2446,8 +2444,17 @@ function call(e: CallNode, ctx: CompileContext): Compiled {
     return ctx.aggregates.register(e, ctx)
   }
   if (name === 'GROUPING') {
-    if (ctx.groupKeys === undefined || ctx.inAggregate === true) throw sqlError('ER_INVALID_GROUP_FUNC_USE', 'Invalid use of group function')
-    return ctx.groupKeys.grouping(e.args, ctx)
+    // Keep source failures ahead of refusal; earlier positional admission needs source-only preparation.
+    const { groupKeys, ...binding } = ctx
+    let positional = false
+    for (let arg of e.args) {
+      compile(arg, binding)
+      while (arg.kind === NODE.UNARY && arg.op === '+') arg = arg.operand
+      positional ||= integerLiteral(arg) && arg.collation === undefined && arg.value <= MAX_UNSIGNED
+    }
+    if (positional) throw sqlError('ER_WRONG_ARGUMENTS', 'Incorrect arguments to GROUPING function')
+    if (groupKeys === undefined) throw sqlError('ER_INVALID_GROUP_FUNC_USE', 'Invalid use of group function')
+    return groupKeys.grouping(e.args, ctx)
   }
   if (name === 'DEFAULT' && e.args.length === 1) return defaultFunction(e, ctx)
   const compiler = functionCompiler(name)

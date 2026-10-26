@@ -20,7 +20,7 @@ import { CHARSET_UTF8MB4_BIN, columnDefinition, intType, type ResultType } from 
 import { FIELD_TYPE, expectTyped } from '@myjs/bytes'
 import { distinct, filter, limit, project, sort, type SortKey } from './operators.ts'
 import { isConstant, optimizerEnabled, splitAnd, tableColumn } from './plan.ts'
-import { and, columnRefs, someNode } from './ast.ts'
+import { and, columnRefs, integerLiteral, someNode } from './ast.ts'
 import { clusteredIndex, indexParts } from './indexes.ts'
 import { collationInfoByName, encodeCollation } from '@myjs/charsets'
 import { safeResolve, TableScope } from './scope.ts'
@@ -428,7 +428,7 @@ function planSelect(run: Run, q: QueryExpression, node: SelectNode): SelectPlan 
     // MySQL drops it before it plans a sort (8.4.11: `WHERE SCHEMA_NAME = ?
     // ORDER BY SCHEMA_NAME` over INFORMATION_SCHEMA's join streams nothing).
     const constantOrder = node.distinct !== true && order.every((o) => (o.expr.kind === NODE.COLUMN && pinnedByWhere(node.where, o.expr.parts)) || constantKey(o))
-    const sortedFirst = constantOrder || (node.distinct !== true && (source === undefined ? from.sortsFirst(orderAliases(q, items, lookup)) : loopSemijoin && !node.items.some((i) => correlatedIn(i.expr, scope))))
+    const sortedFirst = constantOrder || (node.distinct !== true && (source === undefined ? from.sortsFirst(keyAliases(order.map((o) => o.expr), items, lookup)) : loopSemijoin && !node.items.some((i) => correlatedIn(i.expr, scope))))
     const consts = new Set(facts.constTables.map((t) => t.alias))
     const fixed = new Set([...consts, ...(facts.nullTables ?? [])])
     // With every other table a constant, a DISTINCT is one table's, and its
@@ -572,7 +572,7 @@ function pushCountCondition(run: Run, node: SelectNode): SelectNode {
   if (query.with !== undefined || query.limit !== undefined || query.orderBy !== undefined || query.locking !== undefined || body.kind !== QUERY.SELECT || body.groupBy === undefined || body.groupBy.rollup === true || body.having !== undefined || body.windows !== undefined || body.distinct === true || (body.options?.length ?? 0) > 0) return node
   const count = (e: Expression): boolean => e.kind === NODE.CALL && e.name.toUpperCase() === 'COUNT' && e.over === undefined && e.stored !== true && e.args.length === 1 && e.args[0]?.kind === NODE.COLUMN
   // Columns and COUNT of a column or star cannot assign variables or evaluate volatile expressions.
-  if (!body.items.every((i) => i.expr.kind === NODE.COLUMN || count(i.expr)) || !body.groupBy.items.every((e) => e.kind === NODE.COLUMN || (e.kind === NODE.LITERAL && e.type === LITERAL.INT))) return node
+  if (!body.items.every((i) => i.expr.kind === NODE.COLUMN || count(i.expr)) || !body.groupBy.items.every((e) => e.kind === NODE.COLUMN || integerLiteral(e))) return node
   const name = parts[parts.length - 1]?.toLowerCase()
   const matches = body.items.filter((i) => (i.alias ?? (i.expr.kind === NODE.COLUMN ? i.expr.parts[i.expr.parts.length - 1] : undefined))?.toLowerCase() === name)
   const item = matches.length === 1 ? matches[0] : undefined
@@ -790,11 +790,6 @@ function keyReads(column: string, where: unknown): Set<string> {
 /** BIT and YEAR have their own comparison representations rather than exact integer keys. */
 function exactInteger(c: { readonly type: ResultType }): boolean {
   return c.type.kind === 'int' && c.type.field !== FIELD_TYPE.BIT && c.type.field !== FIELD_TYPE.YEAR
-}
-
-/** An integer literal used by the bounded EXISTS proofs. */
-function integerLiteral(e: Expression): boolean {
-  return e.kind === NODE.LITERAL && e.type === LITERAL.INT
 }
 
 /** Structural boundary shared by the bounded semijoin and antijoin candidates. */
@@ -1633,7 +1628,7 @@ function orderedResult(run: Run, q: QueryExpression, plan: SelectPlan): SelectPl
   const scope = new TableScope([{ alias: '\u0000result', columns: plan.columns.map((c) => ({ name: c.name, type: c.type })) }])
   const keys = (q.orderBy ?? []).map((o): SortKey => {
     const e = o.expr
-    if (e.kind === NODE.LITERAL && e.type === 'int') {
+    if (integerLiteral(e)) {
       const n = Number(e.value as bigint)
       if (n < 1 || n > plan.columns.length) throw sqlError('ER_BAD_FIELD_ERROR', messages.unknownColumn(String(n), 'order clause'))
       return { expr: readSlot(n - 1, (plan.columns[n - 1] as { type: ResultType }).type), desc: o.desc === true }
@@ -1644,7 +1639,9 @@ function orderedResult(run: Run, q: QueryExpression, plan: SelectPlan): SelectPl
     return { expr: compile(e, compileContext(run, scope, 'order clause')), desc: o.desc === true }
   })
   const [limitCount, offset] = queryLimit(run, q)
-  const stages: Stage[] = [...(keys.length === 0 ? [] : [sortStage(keys)]), ...(limitCount === undefined && offset === 0 ? [] : [limitStage(offset, limitCount)])]
+  const stages: Stage[] = []
+  if (keys.length > 0) stages.push({ run: (rows, env) => sort(rows, keys, env), describe: (n) => planNode('Sort', [n]) })
+  if (limitCount !== undefined || offset > 0) stages.push(limitStage(offset, limitCount))
   return {
     columns: plan.columns,
     locking: plan.locking,
@@ -1663,22 +1660,17 @@ function orderedResult(run: Run, q: QueryExpression, plan: SelectPlan): SelectPl
   }
 }
 
-/** A sort of rows that are already a result's values. */
-function sortStage(keys: readonly SortKey[]): Stage {
-  return { run: (rows, env) => sort(rows, keys, env), describe: (n) => planNode('Sort', [n]) }
-}
-
 /** Resolve aliases and positions; GROUP BY gives source columns priority. */
 function sortExpression(e: Expression, items: readonly { readonly alias?: string; readonly expr?: Expression }[], scope?: Scope): Expression | undefined {
   if (scope !== undefined && e.kind === NODE.COLUMN && safeResolve(scope, e.parts, 'group statement') !== undefined) return e
   const alias = selectedItem(e, items)
-  if (e.kind === NODE.LITERAL && e.type === 'int') return alias?.expr
+  if (integerLiteral(e)) return alias?.expr
   return alias === undefined ? e : alias.expr
 }
 
 /** A select-list position or first bare alias, using the SQL name fold. */
 function selectedItem<T extends { readonly alias?: string }>(e: Expression, items: readonly T[]): T | undefined {
-  if (e.kind === NODE.LITERAL && e.type === 'int') return items[Number(e.value as bigint) - 1]
+  if (integerLiteral(e)) return items[Number(e.value as bigint) - 1]
   if (e.kind !== NODE.COLUMN || e.parts.length !== 1) return undefined
   const name = (e.parts[0] as string).toLowerCase()
   return items.find((i) => i.alias?.toLowerCase() === name)
@@ -1779,10 +1771,6 @@ function sortTable(order: readonly Expression[] | undefined, group: readonly Exp
   if (order !== undefined && group !== undefined && (order.length !== group.length || order.some((o, i) => text(sortExpression(o, items)) !== text(sortExpression(group[i] as Expression, items))))) return undefined
   const aliases = keyAliases(keys, items, scope)
   return aliases.size === 1 && !aliases.has('\u0000') ? [...aliases][0] : undefined
-}
-
-function orderAliases(q: QueryExpression, items: readonly { readonly alias?: string; readonly expr?: Expression }[], scope: Scope): Set<string> {
-  return keyAliases((q.orderBy ?? []).map((o) => o.expr), items, scope)
 }
 
 /** The tables sort keys read, a position or an alias read through the select list; a name that resolves to nothing as `\u0000`. */
@@ -1890,20 +1878,20 @@ function planGrouped(
   })
   type GroupKey = (typeof descriptions)[number] & { expr: Expression; compiled: Compiled; text: string }
   let keys: GroupKey[] | undefined
-  const groupingChecks: (() => void)[] = []
+  let groupingError: Error | undefined
 
   const matchesKey = (e: Expression | undefined, key: { readonly index: number | undefined; readonly text: string | undefined }): boolean =>
     e !== undefined && (key.index !== undefined && e.kind === NODE.COLUMN
       ? safeIndex(lookup, e.parts) === key.index
       : deparse(e) === key.text)
+  const keyIndex = (e: Expression): number => descriptions.findIndex((key) => matchesKey(e, key))
   const level = width + descriptions.length
-  const sink = new AggregateSink(baseCtx, level + 1)
   const groupKeys: GroupKeys = {
     match(e) {
       // Only ROLLUP needs a key read from its slot: elsewhere the group's
       // first row holds the same value.
       if (!rollup) return undefined
-      const j = descriptions.findIndex((key) => matchesKey(e, key))
+      const j = keyIndex(e)
       if (j < 0) return undefined
       const key = descriptions[j]!
       const expr = key.expr
@@ -1915,18 +1903,17 @@ function planGrouped(
     },
     grouping(args, ctx) {
       if (!rollup) throw sqlError('ER_INVALID_GROUP_FUNC_USE', 'Invalid use of group function')
-      const { groupKeys: _groupKeys, ...binding } = ctx
-      for (const arg of args) compile(arg, binding)
-      const positions = args.map((a) => descriptions.findIndex((key) => matchesKey(a, key)))
-      const check = () => {
-        const n = positions.indexOf(-1)
-        if (n >= 0) throw sqlError('ER_FIELD_IN_GROUPING_NOT_GROUP_BY', `Argument #${n + 1} of GROUPING function is not in GROUP BY`)
+      // Aggregate inputs precede ROLLUP and have no synthetic grouping bits.
+      const positions = ctx.inAggregate === true ? [] : args.map(keyIndex)
+      const n = positions.indexOf(-1)
+      if (n >= 0) {
+        const error = sqlError('ER_FIELD_IN_GROUPING_NOT_GROUP_BY', `Argument #${n + 1} of GROUPING function is not in GROUP BY`)
+        if (keys === undefined) groupingError ??= error
+        else throw error
       }
-      if (keys === undefined) groupingChecks.push(check)
-      else check()
       return {
         eval: (row) => {
-          const kept = Number(toInteger(row[level] ?? intValue(0n)))
+          const kept = Number((row[level] as ReturnType<typeof intValue> | undefined)?.v ?? 0n)
           let bits = 0n
           for (const j of positions) bits = (bits << 1n) | (j >= kept ? 1n : 0n)
           return intValue(bits)
@@ -1935,6 +1922,7 @@ function planGrouped(
       }
     },
   }
+  const sink = new AggregateSink({ ...baseCtx, groupKeys: { grouping: groupKeys.grouping } }, level + 1)
   const postCtx = (clause: string, at: Scope = lookup, windows?: WindowSink): CompileContext => ({ ...compileContext(run, at, clause, windows), aggregates: sink, groupKeys })
   // Windows over the groups (M5.6): run after HAVING, over the grouped rows,
   // so their arguments and keys may be the groups' aggregates. Their slots
@@ -1984,12 +1972,12 @@ function planGrouped(
     having = resolveCondition(run, postCtx('having clause', havingScope), substituteAliases(node.having, selectItems), limitCount).predicates
   }
 
-  for (const check of groupingChecks) check()
+  if (groupingError !== undefined) throw groupingError
 
   const orderKeys = order.map((o) => orderKey(o, items, postCtx('order clause', lookup, windows)))
 
   if (modeOf(run.env.session.sqlMode).onlyFullGroupBy) {
-    checkFullGroupBy(lookup, scope, keys, node.where, from?.joins ?? [], items.map((i) => i.expr), order.filter((o) => !(o.expr.kind === NODE.LITERAL && o.expr.type === 'int') && selectedItem(o.expr, items) === undefined).map((o) => o.expr), node.groupBy === undefined, rollup)
+    checkFullGroupBy(lookup, scope, keys, node.where, from?.joins ?? [], items.map((i) => i.expr), order.filter((o) => !integerLiteral(o.expr) && selectedItem(o.expr, items) === undefined).map((o) => o.expr), node.groupBy === undefined, rollup)
   }
 
   // What a client is told depends on what MySQL copies through a temporary
@@ -2009,7 +1997,7 @@ function planGrouped(
     order.every((o, i) => {
       if (o.desc === true) return false
       const key = keys[i] as (typeof keys)[number]
-      const e = o.expr.kind === NODE.LITERAL && o.expr.type === 'int' ? selectItems[Number(o.expr.value as bigint) - 1]?.expr : o.expr
+      const e = integerLiteral(o.expr) ? selectItems[Number(o.expr.value as bigint) - 1]?.expr : o.expr
       return matchesKey(e, key)
     })
   const stream = (strategy === 'sort' || strategy === 'index') && order.length > 0 && !orderMatchesKeys && !oneGroup
@@ -2026,7 +2014,7 @@ function planGrouped(
       const e = item.expr
       const t = item.compiled.type
       if (!refersToRow(e, lookup, consts)) continue
-      const aggregateCall = e.kind === NODE.CALL && isAggregate(e)
+      const aggregateCall = isAggregate(e)
       if (!aggregateCall && containsAggregate(e)) continue
       if (strategy === 'implicit') {
         if (!aggregateCall) patchType(item, { nullable: true })
@@ -2122,7 +2110,7 @@ function planGrouped(
     },
     rows(trx, given) {
       const env = executionEnv(run, trx, given)
-      return values(runStages(from === undefined ? [{ row: [] }] : from.rows(trx, env, { locking }), stages, env))
+      return values(runStages(from?.rows(trx, env, { locking }) ?? [{ row: [] }], stages, env))
     },
   }
 }
@@ -2150,7 +2138,7 @@ function needsSortedGroups(e: unknown): boolean {
   return someNode(e, (node) => {
     const n = node as { kind?: string; distinct?: boolean; name?: string }
     if (n.kind === NODE.SUBQUERY) return false
-    if (n.kind === NODE.CALL && isAggregate(n as Expression)) {
+    if (isAggregate(n as Expression)) {
       const name = (n.name as string).toUpperCase()
       // JSON aggregates sort their groups as GROUP_CONCAT does (M5.21).
       if (name === 'GROUP_CONCAT' || name === 'JSON_ARRAYAGG' || name === 'JSON_OBJECTAGG' || (n.distinct === true && name !== 'MIN' && name !== 'MAX')) return true
@@ -2169,49 +2157,46 @@ function refersToRow(e: unknown, scope?: Scope, consts?: ReadonlySet<string>): b
   return someNode(e, (node) => {
     const n = node as { kind?: string; op?: string; operand?: Expression; parts?: readonly string[] }
     // A const table's column is a constant: the optimizer read its one row.
-    if (n.kind === NODE.COLUMN && consts !== undefined && consts.size > 0 && scope instanceof TableScope) {
-      const r = safeResolve(scope, n.parts as string[], 'field list')
-      const alias = r === undefined ? undefined : scope.columnAt(r.index)?.table.alias
-      if (alias !== undefined && consts.has(alias)) return false
+    if (n.kind === NODE.COLUMN) {
+      if (consts !== undefined && consts.size > 0 && scope instanceof TableScope) {
+        const r = safeResolve(scope, n.parts as string[], 'field list')
+        const alias = r === undefined ? undefined : scope.columnAt(r.index)?.table.alias
+        if (alias !== undefined && consts.has(alias)) return false
+      }
+      return true
     }
     if (n.kind === NODE.UNARY && (n.op === 'IS NULL' || n.op === 'IS NOT NULL') && n.operand?.kind === NODE.COLUMN && scope !== undefined) {
       if (safeResolve(scope, n.operand.parts, 'field list')?.type.nullable === false) return false
     }
-    if (n.kind === NODE.COLUMN) return true
-    if (n.kind === NODE.CALL && isAggregate(n as Expression)) return true
+    if (isAggregate(n as Expression)) return true
     // A correlated subquery is evaluated per row and copied like any value; an uncorrelated one is a constant.
     if (n.kind === NODE.SUBQUERY) return scope instanceof TableScope && correlatedIn(n, scope)
     return undefined
   })
 }
 
-/** HAVING's bare names that are select-list aliases, replaced by the expressions they name. */
 /**
  * The scope HAVING reads columns through: the select list's columns, and
  * `also` (a grouped query's keys), and nothing else of the row — a column
  * that is neither is 1054 even when the table has it (8.4.11).
  */
-function selectedOnly(lookup: Scope, items: readonly { readonly expr?: Expression; readonly alias?: string }[], also: readonly number[] = [], having?: Expression): Scope {
+function selectedOnly(lookup: Scope, items: readonly { readonly expr?: Expression; readonly alias?: string }[], also: readonly number[], having: Expression): Scope {
   const allowed = new Set<number>(also)
+  const names = new Set(columnRefs(having).filter((parts) => parts.length === 1).map((parts) => parts[0]!.toLowerCase()))
   for (const i of items) {
     const at = localColumn(i.expr, lookup)
     if (at !== undefined) allowed.add(at)
-  }
-  // What an alias HAVING names reads is read through the alias: `a + 1 AS b
-  // … HAVING b > 20` reads `a`, which is not itself selected.
-  if (having !== undefined) {
-    for (const i of items) {
-      const alias = i.alias?.toLowerCase()
-      if (alias === undefined || i.expr === undefined || !namesColumn(having, alias)) continue
-      for (const parts of columnRefs(i.expr)) {
-        const at = safeIndex(lookup, parts)
-        if (at !== undefined) allowed.add(at)
-      }
+    // A named alias exposes its expression's columns through HAVING.
+    const alias = i.alias?.toLowerCase()
+    if (alias === undefined || i.expr === undefined || !names.has(alias)) continue
+    for (const parts of columnRefs(i.expr)) {
+      const at = safeIndex(lookup, parts)
+      if (at !== undefined) allowed.add(at)
     }
   }
   // MATCH finds its index through the tables, then names its columns
   // through `resolve`: one not selected is 1054 there too (8.4.11).
-  const tables = lookup instanceof TableScope ? lookup.tables : (lookup as { readonly tables?: TableScope['tables'] }).tables
+  const tables = (lookup as { readonly tables?: TableScope['tables'] }).tables
   return {
     ...(tables === undefined ? {} : { tables }),
     resolve(parts, clause) {
@@ -2221,11 +2206,6 @@ function selectedOnly(lookup: Scope, items: readonly { readonly expr?: Expressio
       return r
     },
   }
-}
-
-/** Whether an expression names a column `name` (one part, any case), outside its subqueries. */
-function namesColumn(e: Expression, name: string): boolean {
-  return columnRefs(e).some((parts) => parts.length === 1 && (parts[0] as string).toLowerCase() === name)
 }
 
 /**
@@ -2249,7 +2229,7 @@ function substituteAliases(e: Expression, items: readonly { readonly expr?: Expr
       }
     }
     const out: Record<string, unknown> = {}
-    for (const [k, v] of Object.entries(x)) out[k] = typeof v === 'object' ? walk(v) : v
+    for (const [k, v] of Object.entries(x)) out[k] = walk(v)
     return out
   }
   return walk(e) as Expression
@@ -2306,25 +2286,16 @@ function checkFullGroupBy(
     } else if (l !== undefined && constant(c.right) && allowed(l)) determined.add(l)
     else if (r !== undefined && constant(c.left) && allowed(r)) determined.add(r)
   }
-  for (let changed = true; changed; ) {
-    changed = false
-    for (const [a, b] of edges) {
-      if (determined.has(a) && !determined.has(b)) {
-        determined.add(b)
-        changed = true
-      }
-    }
+  // Equality and unique keys only grow this set; its size is the fixed-point test.
+  for (let before = -1; before !== determined.size; ) {
+    before = determined.size
+    for (const [a, b] of edges) if (determined.has(a)) determined.add(b)
     for (const t of rollup ? [] : (scope?.tables ?? [])) {
       const def = t.def
       if (def === undefined) continue
       const offsetOf = (name: string): number => t.offset + def.columns.findIndex((c) => c.name.toLowerCase() === name.toLowerCase())
       if (!def.indexes.some((i) => uniqueKey(def, i) && (i.kind === 'primary' || i.parts.every((p) => p.prefix === undefined)) && i.parts.every((p) => determined.has(offsetOf(p.column))))) continue
-      for (let i = 0; i < def.columns.length; i++) {
-        if (!determined.has(t.offset + i)) {
-          determined.add(t.offset + i)
-          changed = true
-        }
-      }
+      for (let i = 0; i < def.columns.length; i++) determined.add(t.offset + i)
     }
   }
   const offending = (root: Expression): number | undefined => {
@@ -2464,7 +2435,7 @@ function impossiblePredicate(e: Expression, columnOf: (e: Expression) => ColumnD
 function orderKey(o: OrderItem, items: readonly { name: string; compiled: Compiled; alias?: string }[], ctx: CompileContext): SortKey {
   const e = o.expr
   const item = selectedItem(e, items)
-  if (e.kind === NODE.LITERAL && e.type === 'int' && item === undefined) throw sqlError('ER_BAD_FIELD_ERROR', messages.unknownColumn(String(Number(e.value as bigint)), 'order clause'))
+  if (integerLiteral(e) && item === undefined) throw sqlError('ER_BAD_FIELD_ERROR', messages.unknownColumn(String(Number(e.value as bigint)), 'order clause'))
   // The caller supplies its aggregate/window context for unbound expressions.
   return { expr: item?.compiled ?? compile(e, ctx), desc: o.desc === true }
 }

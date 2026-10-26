@@ -114,7 +114,7 @@ and browser work follow the outstanding engine/planner work. Remaining function
 boundaries stay open for separate verification. The current state and remaining
 work are:
 
-**Next bounded slice: transaction-bound optimization before row-read readiness.**
+**Next bounded slice: source preparation before GROUPING admission and read readiness.**
 System-variable identity and diagnostic-count PREPARE admission are verified
 below, alongside failed-command publication, diagnostic SHOW admission and
 linear lexical error trimming. WHERE resolution now binds the written conjuncts
@@ -126,8 +126,13 @@ Preserve the separate binary
 boundary: fixed diagnostics belong to PREPARE, while bound parameters initialize
 at execution unless LIMIT is zero.
 Fixed HAVING diagnostics now share WHERE's admission owner before ORDER binding;
-aggregate/window/GROUPING readers remain row-dependent. Next establish the
-per-invocation optimization phase under the actual transaction: constant scalar
+aggregate/window/GROUPING readers remain row-dependent. GROUPING now refuses
+written integer positions and distinguishes aggregate inputs from ROLLUP output.
+Finish source-only preparation before moving its refusal ahead of argument field
+binding: missing tables must win over 1210, which must win over unknown argument
+columns and fixed failures. Preserve lexical CTE/view scope and diagnostic ownership;
+do not use speculative expression compilation as a source check. Then establish
+the per-invocation optimization phase under the actual transaction: constant scalar
 subqueries must remain unexecuted at PREPARE but may fail before query headers,
 even over an empty source. Use bound correlation and lifetime facts, not SQL
 spelling. Then repair unbounded temporary-table reads with column-header
@@ -140,6 +145,49 @@ before promoting the division repair. Preserve index-streamed reads when DISTINC
 is absent or eliminated by the retained grouping keys. Pin that elimination
 proof and both aggregate kinds before broadening to HAVING, LIMIT, ROLLUP or
 windows. The native plan and its actual writers must make the decision.
+
+**GROUPING binding and input lifetime, verified (2026-10-25):** A fresh pinned
+8.4.11 audit records 3,300 complete query/execute/PREPARE outcomes over empty and
+populated sources. Written integer arguments from zero through unsigned BIGINT's
+maximum, including parentheses and unary plus, now produce 1210. Unary minus,
+DECIMAL/DOUBLE spellings, quoted columns, parameters, expressions, explicit
+COLLATE and out-of-range integer spellings keep their distinct admission. The
+binder shares argument resolution for grouped and non-grouped contexts. It still
+binds all arguments before positional refusal so that nested missing-source errors
+remain 1146; this deliberately leaves mixed unknown-field precedence unfinished.
+A second 684-frame audit proves GROUPING within SUM/AVG/COUNT/extrema/bitwise and
+GROUP_CONCAT inputs, DISTINCT aggregates, HAVING/ORDER, LIMIT 0 and empty sources.
+Those inputs see ordinary source columns and no synthetic grouping bits. Only
+readers above grouping receive key-slot substitution. Nested aggregate refusal
+and post-group GROUPING validation retain their existing owners.
+
+Complete matches improve 2,185 to 3,147 of 3,300, and 252 to all 684 aggregate
+frames. Neither audit loses a previously matching component. A losslessly pooled
+native regression asserts 3,666 complete outcomes (2,298 before), including all
+684 aggregate frames and 2,982 binding frames. The binding scope excludes entire
+argument families `absent,1`, `1,absent`, `+id` and `++id`, plus the separate
+placeholder-identity and arity families; their failures remain in the full audit.
+The remaining 153 complete mismatches include mixed-error precedence, unary-plus
+column identity, distinct placeholders with the same SQL spelling, zero/65-argument
+admission and a 64-argument field boundary. These are open, not fixture exceptions
+or reasons to mark M5.10 complete. The earlier HAVING regression now asserts all
+653 native frames, including the formerly excluded twelve integer-GROUPING frames.
+
+Cleanup keeps one deferred GROUPING error instead of allocating check closures,
+shares the integer-literal proof with GROUP/ORDER and bounded join admission,
+traverses HAVING names once, and uses the growing dependency set's size as its
+fixed-point test. Single-use sort/name wrappers and redundant AST guards are
+removed. Raw core/facade shrink 310 B; compressed sizes are 334,360/334,263 B,
+under unchanged 334,361/334,266 B caps. All sixteen earlier WHERE/HAVING/phase/
+header/fill audit families preserve every matching component; the 468/88/576
+matrices remain 400/38/456 complete. Native/current regressions and 20,000 executor
+statements seeded 20261010 pass. Fresh Docker Node 22.18.0 verification passes
+1,360 ordinary plus four latency tests, typecheck, lint, all nine caps, package and
+typed-example smoke, the real client and all seven pinned MySQL 8.4.11 corpora.
+The source proof matches 362 test files/fixtures and 202 runtime sources, reference
+tooling, manifests and CI. Preceding f9c621e passes all eleven required GitHub jobs.
+Source preparation and transaction-bound readiness precede the retained DISTINCT
+fill/read barrier; the roadmap remains 144/190 with M5 42/53.
 
 **HAVING resolution prerequisite, verified (2026-10-25):** The complete fill/error
 audits are refreshed against 147: 456/576 complete streaming observations and
@@ -169,9 +217,9 @@ A new native fixture pins 641 complete query/execute/PREPARE observations,
 improving 435 to all 641: raw field events and packet kinds, rows, error tuples,
 prior/post conditions and both totals, PREPARE LAST_INSERT_ID controls and cached bound
 COUNT readers across writes. The full 653-frame audit reaches 641 without losing
-any matched component. Its remaining twelve frames are the entire preexisting
-constant-GROUPING argument family: native raises 1210 while our binder admits it.
-That family stays explicitly open rather than receiving partial assertions.
+any matched component. Its twelve then-remaining frames were the entire preexisting
+constant-GROUPING argument family. The GROUPING repair above now closes all twelve
+and expands the regression to all 653 complete outcomes.
 The separate 468-frame phase audit improves 335 to 400; 88 clause/header frames
 improve 34 to 38. The 576-frame fill audit stays 456, retaining its missing barrier,
 header, projection/OFFSET and ordered-field gaps. Every previously matching
