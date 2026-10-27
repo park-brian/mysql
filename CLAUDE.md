@@ -129,6 +129,10 @@ histories while preserving the first error by identity and keeping invalid ASTs
 out of execution. Unknown charsets and DDL collation failures stop parsing; raw
 cursor APIs still refuse immediately. Parser conditions publish the native
 1,024-entry prefix; ordinary runtime warning totals retain their existing rules.
+Admission fixtures protect individual matching conditions and primary-error
+attributes even when a whole outcome remains open. Further modifier tightening
+is parked until parser admission warnings retain NCHAR's warning before syntax
+failure; the otherwise improved prototype lost 1,248 such warning facts.
 CAST/CONVERT targets leave internal COLLATE to the syntax boundary while column
 datatype readers retain it. Cursor string reading concatenates adjacent literals
 only when expression or ENUM/SET grammar requests it; ordinary callers consume

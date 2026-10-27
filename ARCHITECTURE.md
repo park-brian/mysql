@@ -1589,6 +1589,10 @@ error by identity with nonenumerable history. Charset and DDL collation failures
 remain fatal; low-level cursor calls still throw immediately. SQL diagnostics
 retain the native first 1,024 parser conditions without changing runtime warning
 totals. Cursor scopes release their history and nesting counters after failures.
+Admission fixtures protect individual matching conditions and primary-error
+attributes even when a whole outcome remains open. Further modifier tightening
+is parked until parser admission warnings retain NCHAR's warning before syntax
+failure; the otherwise improved prototype lost 1,248 such warning facts.
 CAST/CONVERT targets leave internal COLLATE to the syntax boundary while column
 datatype readers retain it. Cursor string reading concatenates adjacent literals
 only when expression or ENUM/SET grammar requests it; ordinary callers consume

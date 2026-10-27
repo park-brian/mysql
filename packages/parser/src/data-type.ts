@@ -21,7 +21,7 @@
 // wrong and none of which is visible from the type name alone:
 //
 //   - **`FLOAT(p)` with one argument is a precision, not a display width**, and
-//     `p` in 24..53 makes the column a DOUBLE. `FLOAT(24)` and `FLOAT(24,2)`
+//     `p` in 25..53 makes the column a DOUBLE. `FLOAT(25)` and `FLOAT(25,2)`
 //     are therefore different types.
 //   - **`REAL` is DOUBLE**, except under `REAL_AS_FLOAT`, where it is FLOAT.
 //     That mode has been parsed since M3.7 and read by nothing until now.
@@ -283,7 +283,7 @@ export function parseDataType(c: Cursor, mode: SqlMode, withCollation = true): D
       const args = numberList(c, 2)
       if (args.length === 1) {
         // **The trap.** One argument to `FLOAT` is a *precision* in bits of
-        // mantissa, not a display width, and 24 or more makes the column a
+        // mantissa, not a display width, and above 24 makes the column a
         // DOUBLE. `FLOAT(25)` and `FLOAT(25,2)` are different types; 24 is
         // still a FLOAT (8.4.11).
         const p = args[0] as number

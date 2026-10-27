@@ -7,6 +7,7 @@ import { observeCommand } from './packet-observation.ts'
 import literalAdmission from './fixtures/diagnostics/parser-literal-admission.json' with { type: 'json' }
 import conditionHistories from './fixtures/diagnostics/parser-condition-histories.json' with { type: 'json' }
 import castDatatype from './fixtures/diagnostics/cast-datatype-grammar.json' with { type: 'json' }
+import castModifiers from './fixtures/diagnostics/cast-modifier-grammar.json' with { type: 'json' }
 
 /** Restore binary rows and numeric facts that JSON cannot represent directly. */
 function capturedValue(value: unknown): unknown {
@@ -20,7 +21,7 @@ function capturedValue(value: unknown): unknown {
   return value
 }
 
-for (const [reference, total, matched] of [[literalAdmission, 1623, 1521], [conditionHistories, 198, 192], [castDatatype, 480, 302]] as const) test('M5.10: admission preserves primary errors, condition histories, headers and effects: ' + reference.schema, async () => {
+for (const [reference, total, matched] of [[literalAdmission, 1623, 1521], [conditionHistories, 198, 192], [castDatatype, 480, 302], [castModifiers, 16648, 9220]] as const) test('M5.10: admission preserves primary errors, condition histories, headers and effects: ' + reference.schema, async () => {
   const host = process.env.MYSQL_REFERENCE_HOST
   const db = host === undefined ? await MySQL.open(':memory:', { multipleStatements: true }) : undefined
   const transport = db === undefined
@@ -67,6 +68,20 @@ for (const [reference, total, matched] of [[literalAdmission, 1623, 1521], [cond
       if (db === undefined || entry.header) assert.equal(observed.outcome.fields !== null, outcome.fields !== null, label + ': header presence')
       for (const key of reference.preserved[entry.preserved]! as (keyof typeof outcome)[]) {
         assert.deepEqual(observed.outcome[key], outcome[key], label + ': preserved ' + key)
+      }
+      if (db === undefined || entry.errorPresence) assert.equal(observed.outcome.error === null, outcome.error === null, label + ': error presence')
+      if (entry.errorChecks !== 0) {
+        const received = observed.outcome.error, expectedError = outcome.error
+        assert.ok(Array.isArray(received), label + ': primary error')
+        assert.ok(Array.isArray(expectedError), label + ': captured primary error')
+        for (let attribute = 0; attribute < 4; attribute++) {
+          if (entry.errorChecks & (1 << attribute)) assert.equal(received[attribute], expectedError[attribute], label + ': error attribute ' + attribute)
+        }
+      }
+      if (entry.conditionChecks.length !== 0) {
+        const conditions = observed.outcome.warnings
+        assert.ok(Array.isArray(conditions), label + ': diagnostics')
+        for (const condition of entry.conditionChecks) assert.deepEqual(conditions[condition], outcome.warnings[condition], label + ': condition ' + condition)
       }
       for (const [column, mask] of entry.fieldChecks.entries()) {
         if (mask === 0) continue
