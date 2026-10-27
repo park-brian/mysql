@@ -1,0 +1,7277 @@
+{
+  "mysqlVersion": "8.4.11",
+  "schema": "derived169",
+  "strict": [
+    0,
+    1,
+    2,
+    5,
+    6,
+    7,
+    8,
+    11,
+    14,
+    15,
+    16,
+    17,
+    18,
+    19,
+    20,
+    26,
+    29,
+    32,
+    33,
+    34,
+    35,
+    38,
+    41,
+    42,
+    43,
+    44,
+    47,
+    53,
+    56,
+    59,
+    60,
+    61,
+    62,
+    63,
+    64,
+    65,
+    66,
+    67,
+    68,
+    71,
+    72,
+    73,
+    74,
+    77,
+    78,
+    79,
+    80,
+    83,
+    92,
+    95,
+    96,
+    97,
+    98,
+    99,
+    100,
+    101,
+    102,
+    103,
+    104,
+    105,
+    106,
+    107,
+    110,
+    113,
+    116,
+    119,
+    132,
+    133,
+    134,
+    135,
+    136,
+    137,
+    140,
+    143,
+    146,
+    149,
+    152,
+    155,
+    158,
+    161,
+    162,
+    165,
+    168,
+    169,
+    170,
+    171,
+    172,
+    173,
+    176,
+    179,
+    182,
+    183,
+    184,
+    185,
+    189,
+    190,
+    191,
+    195,
+    196,
+    197,
+    200,
+    204,
+    205,
+    206,
+    207,
+    208,
+    209,
+    210,
+    211,
+    212,
+    215,
+    218,
+    219,
+    220,
+    221,
+    222,
+    223,
+    224,
+    227,
+    230,
+    233,
+    234,
+    235,
+    236,
+    237,
+    238,
+    239,
+    242,
+    245,
+    248,
+    249,
+    250,
+    251,
+    252,
+    253,
+    254,
+    257,
+    260,
+    263,
+    264,
+    265,
+    266,
+    267,
+    268,
+    269,
+    272,
+    275,
+    278,
+    279,
+    280,
+    281,
+    282,
+    283,
+    284,
+    287,
+    295,
+    298
+  ],
+  "preserved": [
+    [
+      "prior",
+      "rows",
+      "error",
+      "warnings",
+      "warningCount",
+      "errorCount",
+      "insertId"
+    ],
+    [
+      "prior",
+      "rows",
+      "fields",
+      "error",
+      "packets",
+      "warnings",
+      "warningCount",
+      "errorCount",
+      "insertId"
+    ],
+    [
+      "prior",
+      "rows",
+      "fields",
+      "packets",
+      "warningCount",
+      "errorCount",
+      "insertId"
+    ],
+    [
+      "prior",
+      "rows",
+      "fields",
+      "warningCount",
+      "errorCount",
+      "insertId"
+    ],
+    [
+      "prior",
+      "rows",
+      "insertId"
+    ],
+    [
+      "prior",
+      "rows",
+      "error",
+      "packets",
+      "warnings",
+      "warningCount",
+      "errorCount",
+      "insertId"
+    ],
+    [
+      "prior",
+      "rows",
+      "warningCount",
+      "errorCount",
+      "insertId"
+    ],
+    [
+      "prior",
+      "insertId"
+    ],
+    [
+      "prior",
+      "rows",
+      "error",
+      "errorCount",
+      "insertId"
+    ],
+    [
+      "prior",
+      "rows",
+      "fields",
+      "error",
+      "packets",
+      "errorCount",
+      "insertId"
+    ],
+    [
+      "prior",
+      "rows",
+      "fields",
+      "packets",
+      "errorCount",
+      "insertId"
+    ],
+    [
+      "prior",
+      "rows",
+      "fields",
+      "errorCount",
+      "insertId"
+    ]
+  ],
+  "fields": [
+    [
+      "v",
+      8,
+      21,
+      129,
+      0,
+      63,
+      "",
+      "",
+      "",
+      ""
+    ],
+    [
+      "v",
+      8,
+      22,
+      161,
+      0,
+      63,
+      "",
+      "",
+      "",
+      ""
+    ],
+    [
+      "v",
+      245,
+      4294967292,
+      128,
+      31,
+      224,
+      "",
+      "",
+      "",
+      ""
+    ],
+    [
+      "v",
+      8,
+      1,
+      129,
+      0,
+      63,
+      "",
+      "",
+      "",
+      ""
+    ],
+    [
+      "n",
+      8,
+      21,
+      33,
+      0,
+      63,
+      "",
+      "a",
+      "",
+      "n"
+    ],
+    [
+      "n",
+      8,
+      21,
+      33,
+      0,
+      63,
+      "",
+      "b",
+      "",
+      "n"
+    ],
+    [
+      "v",
+      8,
+      21,
+      161,
+      0,
+      63,
+      "",
+      "",
+      "",
+      ""
+    ],
+    [
+      "n",
+      3,
+      2,
+      1,
+      0,
+      63,
+      "",
+      "a",
+      "",
+      "n"
+    ],
+    [
+      "n",
+      3,
+      2,
+      0,
+      0,
+      63,
+      "",
+      "b",
+      "",
+      "n"
+    ],
+    [
+      "v",
+      8,
+      21,
+      128,
+      0,
+      63,
+      "",
+      "",
+      "",
+      ""
+    ],
+    [
+      "v",
+      5,
+      23,
+      129,
+      31,
+      63,
+      "",
+      "",
+      "",
+      ""
+    ],
+    [
+      "v",
+      8,
+      22,
+      128,
+      0,
+      63,
+      "",
+      "",
+      "",
+      ""
+    ]
+  ],
+  "warnings": [
+    {
+      "Level": "Warning",
+      "Code": 1365,
+      "Message": "Division by 0"
+    },
+    {
+      "Level": "Error",
+      "Code": 1690,
+      "Message": "BIGINT value is out of range in '(9223372036854775807 + 1)'"
+    },
+    {
+      "Level": "Error",
+      "Code": 1054,
+      "Message": "Unknown column 'missing' in 'window order by'"
+    },
+    {
+      "Level": "Error",
+      "Code": 1690,
+      "Message": "BIGINT UNSIGNED value is out of range in '(cast(-(1) as unsigned) + 1)'"
+    },
+    {
+      "Level": "Error",
+      "Code": 3143,
+      "Message": "Invalid JSON path expression. The error is around character position 1."
+    },
+    {
+      "Level": "Error",
+      "Code": 3696,
+      "Message": "The regular expression contains an unclosed bracket expression."
+    },
+    {
+      "Level": "Error",
+      "Code": 1690,
+      "Message": "BIGINT value is out of range in '(`derived169`.`v`.`n` + 9223372036854775807)'"
+    },
+    {
+      "Level": "Error",
+      "Code": 1690,
+      "Message": "BIGINT value is out of range in '(`c`.`n` + 9223372036854775807)'"
+    },
+    {
+      "Level": "Error",
+      "Code": 1690,
+      "Message": "BIGINT value is out of range in '(`c`.`m` + 9223372036854775807)'"
+    },
+    {
+      "Level": "Error",
+      "Code": 1690,
+      "Message": "BIGINT value is out of range in '(9223372036854775807 + `d`.`n`)'"
+    },
+    {
+      "Level": "Error",
+      "Code": 1690,
+      "Message": "BIGINT value is out of range in '(`d`.`n` + ?)'"
+    },
+    {
+      "Level": "Error",
+      "Code": 1066,
+      "Message": "Not unique table/alias: 'c'"
+    },
+    {
+      "Level": "Error",
+      "Code": 1054,
+      "Message": "Unknown column 'missing_column' in 'window order by'"
+    },
+    {
+      "Level": "Error",
+      "Code": 3593,
+      "Message": "You cannot use the window function 'count' in this context.'"
+    },
+    {
+      "Level": "Warning",
+      "Code": 1287,
+      "Message": "SQL_CALC_FOUND_ROWS is deprecated and will be removed in a future release. Consider using two separate queries instead."
+    },
+    {
+      "Level": "Error",
+      "Code": 1426,
+      "Message": "Too-big precision 66 specified for '1'. Maximum is 65."
+    },
+    {
+      "Level": "Error",
+      "Code": 1427,
+      "Message": "For float(M,D), double(M,D) or decimal(M,D), M must be >= D (column '')."
+    },
+    {
+      "Level": "Error",
+      "Code": 1064,
+      "Message": "You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'NUMERIC(10,0)) AS n LIMIT 1)d' at line 1"
+    },
+    {
+      "Level": "Error",
+      "Code": 1235,
+      "Message": "This version of MySQL doesn't yet support 'Use of CAST( .. AS .. ARRAY) outside of functional index in CREATE(non-SELECT)/ALTER TABLE or in general expressions'"
+    }
+  ],
+  "outcomes": [
+    {
+      "prior": [
+        0
+      ],
+      "rows": [],
+      "fields": [
+        0
+      ],
+      "error": [
+        "ER_DATA_OUT_OF_RANGE",
+        1690,
+        "22003",
+        "BIGINT value is out of range in '(9223372036854775807 + 1)'"
+      ],
+      "packets": [
+        1,
+        3,
+        254,
+        255
+      ],
+      "warnings": [
+        1
+      ],
+      "warningCount": 1,
+      "errorCount": 1,
+      "insertId": "0"
+    },
+    {
+      "prior": [
+        0
+      ],
+      "rows": [],
+      "fields": [
+        0
+      ],
+      "error": [
+        "ER_DATA_OUT_OF_RANGE",
+        1690,
+        "22003",
+        "BIGINT value is out of range in '(9223372036854775807 + 1)'"
+      ],
+      "packets": [
+        0,
+        3,
+        254,
+        1,
+        3,
+        254,
+        255
+      ],
+      "warnings": [
+        1
+      ],
+      "warningCount": 1,
+      "errorCount": 1,
+      "insertId": "0"
+    },
+    {
+      "prior": [
+        0
+      ],
+      "rows": null,
+      "fields": [
+        0
+      ],
+      "error": null,
+      "packets": [
+        0,
+        3,
+        254
+      ],
+      "warnings": [],
+      "warningCount": 0,
+      "errorCount": 0,
+      "insertId": "0"
+    },
+    {
+      "prior": [
+        0
+      ],
+      "rows": [],
+      "fields": [
+        0
+      ],
+      "error": null,
+      "packets": [
+        1,
+        3,
+        254,
+        254
+      ],
+      "warnings": [],
+      "warningCount": 0,
+      "errorCount": 0,
+      "insertId": "0"
+    },
+    {
+      "prior": [
+        0
+      ],
+      "rows": [],
+      "fields": [
+        0
+      ],
+      "error": null,
+      "packets": [
+        0,
+        3,
+        254,
+        1,
+        3,
+        254,
+        254
+      ],
+      "warnings": [],
+      "warningCount": 0,
+      "errorCount": 0,
+      "insertId": "0"
+    },
+    {
+      "prior": [
+        0
+      ],
+      "rows": [],
+      "fields": null,
+      "error": [
+        "ER_BAD_FIELD_ERROR",
+        1054,
+        "42S22",
+        "Unknown column 'missing' in 'window order by'"
+      ],
+      "packets": [
+        255
+      ],
+      "warnings": [
+        2
+      ],
+      "warningCount": 1,
+      "errorCount": 1,
+      "insertId": "0"
+    },
+    {
+      "prior": [
+        0
+      ],
+      "rows": null,
+      "fields": null,
+      "error": [
+        "ER_BAD_FIELD_ERROR",
+        1054,
+        "42S22",
+        "Unknown column 'missing' in 'window order by'"
+      ],
+      "packets": [
+        255
+      ],
+      "warnings": [
+        2
+      ],
+      "warningCount": 1,
+      "errorCount": 1,
+      "insertId": "0"
+    },
+    {
+      "prior": [
+        0
+      ],
+      "rows": [],
+      "fields": [
+        1
+      ],
+      "error": [
+        "ER_DATA_OUT_OF_RANGE",
+        1690,
+        "22003",
+        "BIGINT UNSIGNED value is out of range in '(cast(-(1) as unsigned) + 1)'"
+      ],
+      "packets": [
+        1,
+        3,
+        254,
+        255
+      ],
+      "warnings": [
+        3
+      ],
+      "warningCount": 1,
+      "errorCount": 1,
+      "insertId": "0"
+    },
+    {
+      "prior": [
+        0
+      ],
+      "rows": [],
+      "fields": [
+        1
+      ],
+      "error": [
+        "ER_DATA_OUT_OF_RANGE",
+        1690,
+        "22003",
+        "BIGINT UNSIGNED value is out of range in '(cast(-(1) as unsigned) + 1)'"
+      ],
+      "packets": [
+        0,
+        3,
+        254,
+        1,
+        3,
+        254,
+        255
+      ],
+      "warnings": [
+        3
+      ],
+      "warningCount": 1,
+      "errorCount": 1,
+      "insertId": "0"
+    },
+    {
+      "prior": [
+        0
+      ],
+      "rows": null,
+      "fields": [
+        1
+      ],
+      "error": null,
+      "packets": [
+        0,
+        3,
+        254
+      ],
+      "warnings": [],
+      "warningCount": 0,
+      "errorCount": 0,
+      "insertId": "0"
+    },
+    {
+      "prior": [
+        0
+      ],
+      "rows": [],
+      "fields": [
+        2
+      ],
+      "error": [
+        "ER_INVALID_JSON_PATH",
+        3143,
+        "42000",
+        "Invalid JSON path expression. The error is around character position 1."
+      ],
+      "packets": [
+        1,
+        3,
+        254,
+        255
+      ],
+      "warnings": [
+        4
+      ],
+      "warningCount": 1,
+      "errorCount": 1,
+      "insertId": "0"
+    },
+    {
+      "prior": [
+        0
+      ],
+      "rows": [],
+      "fields": [
+        2
+      ],
+      "error": [
+        "ER_INVALID_JSON_PATH",
+        3143,
+        "42000",
+        "Invalid JSON path expression. The error is around character position 1."
+      ],
+      "packets": [
+        0,
+        3,
+        254,
+        1,
+        3,
+        254,
+        255
+      ],
+      "warnings": [
+        4
+      ],
+      "warningCount": 1,
+      "errorCount": 1,
+      "insertId": "0"
+    },
+    {
+      "prior": [
+        0
+      ],
+      "rows": null,
+      "fields": [
+        2
+      ],
+      "error": null,
+      "packets": [
+        0,
+        3,
+        254
+      ],
+      "warnings": [],
+      "warningCount": 0,
+      "errorCount": 0,
+      "insertId": "0"
+    },
+    {
+      "prior": [
+        0
+      ],
+      "rows": [],
+      "fields": [
+        3
+      ],
+      "error": [
+        "ER_REGEXP_MISSING_CLOSE_BRACKET",
+        3696,
+        "HY000",
+        "The regular expression contains an unclosed bracket expression."
+      ],
+      "packets": [
+        1,
+        3,
+        254,
+        255
+      ],
+      "warnings": [
+        5
+      ],
+      "warningCount": 1,
+      "errorCount": 1,
+      "insertId": "0"
+    },
+    {
+      "prior": [
+        0
+      ],
+      "rows": [],
+      "fields": [
+        3
+      ],
+      "error": [
+        "ER_REGEXP_MISSING_CLOSE_BRACKET",
+        3696,
+        "HY000",
+        "The regular expression contains an unclosed bracket expression."
+      ],
+      "packets": [
+        0,
+        3,
+        254,
+        1,
+        3,
+        254,
+        255
+      ],
+      "warnings": [
+        5
+      ],
+      "warningCount": 1,
+      "errorCount": 1,
+      "insertId": "0"
+    },
+    {
+      "prior": [
+        0
+      ],
+      "rows": null,
+      "fields": [
+        3
+      ],
+      "error": null,
+      "packets": [
+        0,
+        3,
+        254
+      ],
+      "warnings": [],
+      "warningCount": 0,
+      "errorCount": 0,
+      "insertId": "0"
+    },
+    {
+      "prior": [
+        0
+      ],
+      "rows": [],
+      "fields": [
+        0
+      ],
+      "error": [
+        "ER_DATA_OUT_OF_RANGE",
+        1690,
+        "22003",
+        "BIGINT value is out of range in '(`derived169`.`v`.`n` + 9223372036854775807)'"
+      ],
+      "packets": [
+        1,
+        3,
+        254,
+        255
+      ],
+      "warnings": [
+        6
+      ],
+      "warningCount": 1,
+      "errorCount": 1,
+      "insertId": "0"
+    },
+    {
+      "prior": [
+        0
+      ],
+      "rows": [],
+      "fields": [
+        0
+      ],
+      "error": [
+        "ER_DATA_OUT_OF_RANGE",
+        1690,
+        "22003",
+        "BIGINT value is out of range in '(`derived169`.`v`.`n` + 9223372036854775807)'"
+      ],
+      "packets": [
+        0,
+        3,
+        254,
+        1,
+        3,
+        254,
+        255
+      ],
+      "warnings": [
+        6
+      ],
+      "warningCount": 1,
+      "errorCount": 1,
+      "insertId": "0"
+    },
+    {
+      "prior": [
+        0
+      ],
+      "rows": [],
+      "fields": [
+        0
+      ],
+      "error": [
+        "ER_DATA_OUT_OF_RANGE",
+        1690,
+        "22003",
+        "BIGINT value is out of range in '(`c`.`n` + 9223372036854775807)'"
+      ],
+      "packets": [
+        1,
+        3,
+        254,
+        255
+      ],
+      "warnings": [
+        7
+      ],
+      "warningCount": 1,
+      "errorCount": 1,
+      "insertId": "0"
+    },
+    {
+      "prior": [
+        0
+      ],
+      "rows": [],
+      "fields": [
+        0
+      ],
+      "error": [
+        "ER_DATA_OUT_OF_RANGE",
+        1690,
+        "22003",
+        "BIGINT value is out of range in '(`c`.`n` + 9223372036854775807)'"
+      ],
+      "packets": [
+        0,
+        3,
+        254,
+        1,
+        3,
+        254,
+        255
+      ],
+      "warnings": [
+        7
+      ],
+      "warningCount": 1,
+      "errorCount": 1,
+      "insertId": "0"
+    },
+    {
+      "prior": [
+        0
+      ],
+      "rows": [],
+      "fields": null,
+      "error": [
+        "ER_INVALID_JSON_PATH",
+        3143,
+        "42000",
+        "Invalid JSON path expression. The error is around character position 1."
+      ],
+      "packets": [
+        255
+      ],
+      "warnings": [
+        4
+      ],
+      "warningCount": 1,
+      "errorCount": 1,
+      "insertId": "0"
+    },
+    {
+      "prior": [
+        0
+      ],
+      "rows": [],
+      "fields": null,
+      "error": [
+        "ER_INVALID_JSON_PATH",
+        3143,
+        "42000",
+        "Invalid JSON path expression. The error is around character position 1."
+      ],
+      "packets": [
+        0,
+        3,
+        254,
+        255
+      ],
+      "warnings": [
+        4
+      ],
+      "warningCount": 1,
+      "errorCount": 1,
+      "insertId": "0"
+    },
+    {
+      "prior": [
+        0
+      ],
+      "rows": [],
+      "fields": [
+        0
+      ],
+      "error": [
+        "ER_DATA_OUT_OF_RANGE",
+        1690,
+        "22003",
+        "BIGINT value is out of range in '(`c`.`m` + 9223372036854775807)'"
+      ],
+      "packets": [
+        1,
+        3,
+        254,
+        255
+      ],
+      "warnings": [
+        8
+      ],
+      "warningCount": 1,
+      "errorCount": 1,
+      "insertId": "0"
+    },
+    {
+      "prior": [
+        0
+      ],
+      "rows": [],
+      "fields": [
+        0
+      ],
+      "error": [
+        "ER_DATA_OUT_OF_RANGE",
+        1690,
+        "22003",
+        "BIGINT value is out of range in '(`c`.`m` + 9223372036854775807)'"
+      ],
+      "packets": [
+        0,
+        3,
+        254,
+        1,
+        3,
+        254,
+        255
+      ],
+      "warnings": [
+        8
+      ],
+      "warningCount": 1,
+      "errorCount": 1,
+      "insertId": "0"
+    },
+    {
+      "prior": [
+        0
+      ],
+      "rows": [
+        [
+          "7",
+          "7",
+          "7"
+        ]
+      ],
+      "fields": [
+        4,
+        5,
+        6
+      ],
+      "error": null,
+      "packets": [
+        3,
+        3,
+        3,
+        3,
+        254,
+        1,
+        254
+      ],
+      "warnings": [],
+      "warningCount": 0,
+      "errorCount": 0,
+      "insertId": "7"
+    },
+    {
+      "prior": [
+        0
+      ],
+      "rows": [
+        [
+          "7",
+          "7",
+          "7"
+        ]
+      ],
+      "fields": [
+        4,
+        5,
+        6
+      ],
+      "error": null,
+      "packets": [
+        0,
+        3,
+        3,
+        3,
+        254,
+        3,
+        3,
+        3,
+        3,
+        254,
+        0,
+        254
+      ],
+      "warnings": [],
+      "warningCount": 0,
+      "errorCount": 0,
+      "insertId": "7"
+    },
+    {
+      "prior": [
+        0
+      ],
+      "rows": null,
+      "fields": [
+        4,
+        5,
+        6
+      ],
+      "error": null,
+      "packets": [
+        0,
+        3,
+        3,
+        3,
+        254
+      ],
+      "warnings": [],
+      "warningCount": 0,
+      "errorCount": 0,
+      "insertId": "0"
+    },
+    {
+      "prior": [
+        0
+      ],
+      "rows": [],
+      "fields": [
+        7,
+        8
+      ],
+      "error": null,
+      "packets": [
+        2,
+        3,
+        3,
+        254,
+        254
+      ],
+      "warnings": [],
+      "warningCount": 0,
+      "errorCount": 0,
+      "insertId": "0"
+    },
+    {
+      "prior": [
+        0
+      ],
+      "rows": [],
+      "fields": [
+        7,
+        8
+      ],
+      "error": null,
+      "packets": [
+        0,
+        3,
+        3,
+        254,
+        2,
+        3,
+        3,
+        254,
+        254
+      ],
+      "warnings": [],
+      "warningCount": 0,
+      "errorCount": 0,
+      "insertId": "0"
+    },
+    {
+      "prior": [
+        0
+      ],
+      "rows": null,
+      "fields": [
+        7,
+        8
+      ],
+      "error": null,
+      "packets": [
+        0,
+        3,
+        3,
+        254
+      ],
+      "warnings": [],
+      "warningCount": 0,
+      "errorCount": 0,
+      "insertId": "0"
+    },
+    {
+      "prior": [
+        0
+      ],
+      "rows": [
+        [
+          "7",
+          "9",
+          "9"
+        ]
+      ],
+      "fields": [
+        4,
+        5,
+        6
+      ],
+      "error": null,
+      "packets": [
+        3,
+        3,
+        3,
+        3,
+        254,
+        1,
+        254
+      ],
+      "warnings": [],
+      "warningCount": 0,
+      "errorCount": 0,
+      "insertId": "9"
+    },
+    {
+      "prior": [
+        0
+      ],
+      "rows": [
+        [
+          "7",
+          "9",
+          "9"
+        ]
+      ],
+      "fields": [
+        4,
+        5,
+        6
+      ],
+      "error": null,
+      "packets": [
+        0,
+        3,
+        3,
+        3,
+        254,
+        3,
+        3,
+        3,
+        3,
+        254,
+        0,
+        254
+      ],
+      "warnings": [],
+      "warningCount": 0,
+      "errorCount": 0,
+      "insertId": "9"
+    },
+    {
+      "prior": [
+        0
+      ],
+      "rows": [],
+      "fields": [
+        9
+      ],
+      "error": [
+        "ER_DATA_OUT_OF_RANGE",
+        1690,
+        "22003",
+        "BIGINT value is out of range in '(9223372036854775807 + `d`.`n`)'"
+      ],
+      "packets": [
+        1,
+        3,
+        254,
+        255
+      ],
+      "warnings": [
+        9
+      ],
+      "warningCount": 1,
+      "errorCount": 1,
+      "insertId": "0"
+    },
+    {
+      "prior": [
+        0
+      ],
+      "rows": [],
+      "fields": [
+        9
+      ],
+      "error": [
+        "ER_DATA_OUT_OF_RANGE",
+        1690,
+        "22003",
+        "BIGINT value is out of range in '(9223372036854775807 + `d`.`n`)'"
+      ],
+      "packets": [
+        0,
+        3,
+        254,
+        1,
+        3,
+        254,
+        255
+      ],
+      "warnings": [
+        9
+      ],
+      "warningCount": 1,
+      "errorCount": 1,
+      "insertId": "0"
+    },
+    {
+      "prior": [
+        0
+      ],
+      "rows": null,
+      "fields": [
+        9
+      ],
+      "error": null,
+      "packets": [
+        0,
+        3,
+        254
+      ],
+      "warnings": [],
+      "warningCount": 0,
+      "errorCount": 0,
+      "insertId": "0"
+    },
+    {
+      "prior": [
+        0
+      ],
+      "rows": [
+        [
+          9223372036854776000
+        ]
+      ],
+      "fields": [
+        10
+      ],
+      "error": null,
+      "packets": [
+        1,
+        3,
+        254,
+        20,
+        254
+      ],
+      "warnings": [],
+      "warningCount": 0,
+      "errorCount": 0,
+      "insertId": "0"
+    },
+    {
+      "prior": [
+        0
+      ],
+      "rows": [],
+      "fields": [
+        11
+      ],
+      "error": [
+        "ER_DATA_OUT_OF_RANGE",
+        1690,
+        "22003",
+        "BIGINT value is out of range in '(`d`.`n` + ?)'"
+      ],
+      "packets": [
+        0,
+        3,
+        254,
+        3,
+        254,
+        1,
+        3,
+        254,
+        255
+      ],
+      "warnings": [
+        10
+      ],
+      "warningCount": 1,
+      "errorCount": 1,
+      "insertId": "0"
+    },
+    {
+      "prior": [
+        0
+      ],
+      "rows": null,
+      "fields": [
+        11
+      ],
+      "error": null,
+      "packets": [
+        0,
+        3,
+        254,
+        3,
+        254
+      ],
+      "warnings": [],
+      "warningCount": 0,
+      "errorCount": 0,
+      "insertId": "0"
+    },
+    {
+      "prior": [
+        0
+      ],
+      "rows": [],
+      "fields": null,
+      "error": [
+        "ER_INVALID_JSON_PATH",
+        3143,
+        "42000",
+        "Invalid JSON path expression. The error is around character position 1."
+      ],
+      "packets": [
+        0,
+        3,
+        254,
+        3,
+        254,
+        255
+      ],
+      "warnings": [
+        4
+      ],
+      "warningCount": 1,
+      "errorCount": 1,
+      "insertId": "0"
+    },
+    {
+      "prior": [
+        0
+      ],
+      "rows": null,
+      "fields": [
+        0
+      ],
+      "error": null,
+      "packets": [
+        0,
+        3,
+        254,
+        3,
+        254
+      ],
+      "warnings": [],
+      "warningCount": 0,
+      "errorCount": 0,
+      "insertId": "0"
+    },
+    {
+      "prior": [
+        0
+      ],
+      "rows": [],
+      "fields": null,
+      "error": [
+        "ER_NONUNIQ_TABLE",
+        1066,
+        "42000",
+        "Not unique table/alias: 'c'"
+      ],
+      "packets": [
+        255
+      ],
+      "warnings": [
+        11
+      ],
+      "warningCount": 1,
+      "errorCount": 1,
+      "insertId": "0"
+    },
+    {
+      "prior": [
+        0
+      ],
+      "rows": null,
+      "fields": null,
+      "error": [
+        "ER_NONUNIQ_TABLE",
+        1066,
+        "42000",
+        "Not unique table/alias: 'c'"
+      ],
+      "packets": [
+        255
+      ],
+      "warnings": [
+        11
+      ],
+      "warningCount": 1,
+      "errorCount": 1,
+      "insertId": "0"
+    },
+    {
+      "prior": [
+        0
+      ],
+      "rows": [],
+      "fields": null,
+      "error": [
+        "ER_BAD_FIELD_ERROR",
+        1054,
+        "42S22",
+        "Unknown column 'missing_column' in 'window order by'"
+      ],
+      "packets": [
+        255
+      ],
+      "warnings": [
+        12
+      ],
+      "warningCount": 1,
+      "errorCount": 1,
+      "insertId": "0"
+    },
+    {
+      "prior": [
+        0
+      ],
+      "rows": null,
+      "fields": null,
+      "error": [
+        "ER_BAD_FIELD_ERROR",
+        1054,
+        "42S22",
+        "Unknown column 'missing_column' in 'window order by'"
+      ],
+      "packets": [
+        255
+      ],
+      "warnings": [
+        12
+      ],
+      "warningCount": 1,
+      "errorCount": 1,
+      "insertId": "0"
+    },
+    {
+      "prior": [
+        0
+      ],
+      "rows": [],
+      "fields": null,
+      "error": [
+        "ER_WINDOW_INVALID_WINDOW_FUNC_USE",
+        3593,
+        "HY000",
+        "You cannot use the window function 'count' in this context.'"
+      ],
+      "packets": [
+        255
+      ],
+      "warnings": [
+        13
+      ],
+      "warningCount": 1,
+      "errorCount": 1,
+      "insertId": "0"
+    },
+    {
+      "prior": [
+        0
+      ],
+      "rows": null,
+      "fields": null,
+      "error": [
+        "ER_WINDOW_INVALID_WINDOW_FUNC_USE",
+        3593,
+        "HY000",
+        "You cannot use the window function 'count' in this context.'"
+      ],
+      "packets": [
+        255
+      ],
+      "warnings": [
+        13
+      ],
+      "warningCount": 1,
+      "errorCount": 1,
+      "insertId": "0"
+    },
+    {
+      "prior": [
+        0
+      ],
+      "rows": [],
+      "fields": [
+        0
+      ],
+      "error": [
+        "ER_DATA_OUT_OF_RANGE",
+        1690,
+        "22003",
+        "BIGINT value is out of range in '(9223372036854775807 + 1)'"
+      ],
+      "packets": [
+        1,
+        3,
+        254,
+        255
+      ],
+      "warnings": [
+        14,
+        1
+      ],
+      "warningCount": 2,
+      "errorCount": 1,
+      "insertId": "0"
+    },
+    {
+      "prior": [
+        0
+      ],
+      "rows": null,
+      "fields": [
+        0
+      ],
+      "error": null,
+      "packets": [
+        0,
+        3,
+        254
+      ],
+      "warnings": [
+        14
+      ],
+      "warningCount": 1,
+      "errorCount": 0,
+      "insertId": "0"
+    },
+    {
+      "prior": [
+        0
+      ],
+      "rows": [],
+      "fields": [
+        0
+      ],
+      "error": null,
+      "packets": [
+        1,
+        3,
+        254,
+        254
+      ],
+      "warnings": [
+        14
+      ],
+      "warningCount": 1,
+      "errorCount": 0,
+      "insertId": "0"
+    },
+    {
+      "prior": [
+        0
+      ],
+      "rows": [],
+      "fields": null,
+      "error": [
+        "ER_INVALID_JSON_PATH",
+        3143,
+        "42000",
+        "Invalid JSON path expression. The error is around character position 1."
+      ],
+      "packets": [
+        255
+      ],
+      "warnings": [
+        14,
+        4
+      ],
+      "warningCount": 2,
+      "errorCount": 1,
+      "insertId": "0"
+    },
+    {
+      "prior": [
+        0
+      ],
+      "rows": [],
+      "fields": null,
+      "error": [
+        "ER_TOO_BIG_PRECISION",
+        1426,
+        "42000",
+        "Too-big precision 66 specified for '1'. Maximum is 65."
+      ],
+      "packets": [
+        255
+      ],
+      "warnings": [
+        15
+      ],
+      "warningCount": 1,
+      "errorCount": 1,
+      "insertId": "0"
+    },
+    {
+      "prior": [
+        0
+      ],
+      "rows": null,
+      "fields": null,
+      "error": [
+        "ER_TOO_BIG_PRECISION",
+        1426,
+        "42000",
+        "Too-big precision 66 specified for '1'. Maximum is 65."
+      ],
+      "packets": [
+        255
+      ],
+      "warnings": [
+        15
+      ],
+      "warningCount": 1,
+      "errorCount": 1,
+      "insertId": "0"
+    },
+    {
+      "prior": [
+        0
+      ],
+      "rows": [],
+      "fields": null,
+      "error": [
+        "ER_M_BIGGER_THAN_D",
+        1427,
+        "42000",
+        "For float(M,D), double(M,D) or decimal(M,D), M must be >= D (column '')."
+      ],
+      "packets": [
+        255
+      ],
+      "warnings": [
+        16
+      ],
+      "warningCount": 1,
+      "errorCount": 1,
+      "insertId": "0"
+    },
+    {
+      "prior": [
+        0
+      ],
+      "rows": null,
+      "fields": null,
+      "error": [
+        "ER_M_BIGGER_THAN_D",
+        1427,
+        "42000",
+        "For float(M,D), double(M,D) or decimal(M,D), M must be >= D (column '')."
+      ],
+      "packets": [
+        255
+      ],
+      "warnings": [
+        16
+      ],
+      "warningCount": 1,
+      "errorCount": 1,
+      "insertId": "0"
+    },
+    {
+      "prior": [
+        0
+      ],
+      "rows": [],
+      "fields": null,
+      "error": [
+        "ER_PARSE_ERROR",
+        1064,
+        "42000",
+        "You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'NUMERIC(10,0)) AS n LIMIT 1)d' at line 1"
+      ],
+      "packets": [
+        255
+      ],
+      "warnings": [
+        17
+      ],
+      "warningCount": 1,
+      "errorCount": 1,
+      "insertId": "0"
+    },
+    {
+      "prior": [
+        0
+      ],
+      "rows": null,
+      "fields": null,
+      "error": [
+        "ER_PARSE_ERROR",
+        1064,
+        "42000",
+        "You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'NUMERIC(10,0)) AS n LIMIT 1)d' at line 1"
+      ],
+      "packets": [
+        255
+      ],
+      "warnings": [
+        17
+      ],
+      "warningCount": 1,
+      "errorCount": 1,
+      "insertId": "0"
+    },
+    {
+      "prior": [
+        0
+      ],
+      "rows": [],
+      "fields": null,
+      "error": [
+        "ER_NOT_SUPPORTED_YET",
+        1235,
+        "42000",
+        "This version of MySQL doesn't yet support 'Use of CAST( .. AS .. ARRAY) outside of functional index in CREATE(non-SELECT)/ALTER TABLE or in general expressions'"
+      ],
+      "packets": [
+        255
+      ],
+      "warnings": [
+        18
+      ],
+      "warningCount": 1,
+      "errorCount": 1,
+      "insertId": "0"
+    },
+    {
+      "prior": [
+        0
+      ],
+      "rows": null,
+      "fields": null,
+      "error": [
+        "ER_NOT_SUPPORTED_YET",
+        1235,
+        "42000",
+        "This version of MySQL doesn't yet support 'Use of CAST( .. AS .. ARRAY) outside of functional index in CREATE(non-SELECT)/ALTER TABLE or in general expressions'"
+      ],
+      "packets": [
+        255
+      ],
+      "warnings": [
+        18
+      ],
+      "warningCount": 1,
+      "errorCount": 1,
+      "insertId": "0"
+    }
+  ],
+  "observations": [
+    {
+      "group": "constant",
+      "layout": "plain",
+      "sql": "SELECT 9223372036854775807+1 AS v FROM(SELECT 1 AS n LIMIT 1)d",
+      "api": "query",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "after": [
+        [
+          1
+        ],
+        [
+          2
+        ]
+      ],
+      "outcome": 0,
+      "preserved": 0
+    },
+    {
+      "group": "constant",
+      "layout": "plain",
+      "sql": "SELECT 9223372036854775807+1 AS v FROM(SELECT 1 AS n LIMIT 1)d",
+      "api": "execute",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "after": [
+        [
+          1
+        ],
+        [
+          2
+        ]
+      ],
+      "outcome": 1,
+      "preserved": 0
+    },
+    {
+      "group": "constant",
+      "layout": "plain",
+      "sql": "SELECT 9223372036854775807+1 AS v FROM(SELECT 1 AS n LIMIT 1)d",
+      "api": "prepare",
+      "prepareWarnings": 0,
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "after": [
+        [
+          1
+        ],
+        [
+          2
+        ]
+      ],
+      "outcome": 2,
+      "preserved": 1
+    },
+    {
+      "group": "constant",
+      "layout": "where_true",
+      "sql": "SELECT 9223372036854775807+1 AS v FROM(SELECT 1 AS n LIMIT 1)d WHERE 1",
+      "api": "query",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "after": [
+        [
+          1
+        ],
+        [
+          2
+        ]
+      ],
+      "outcome": 0,
+      "preserved": 0
+    },
+    {
+      "group": "constant",
+      "layout": "where_true",
+      "sql": "SELECT 9223372036854775807+1 AS v FROM(SELECT 1 AS n LIMIT 1)d WHERE 1",
+      "api": "execute",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "after": [
+        [
+          1
+        ],
+        [
+          2
+        ]
+      ],
+      "outcome": 1,
+      "preserved": 0
+    },
+    {
+      "group": "constant",
+      "layout": "where_true",
+      "sql": "SELECT 9223372036854775807+1 AS v FROM(SELECT 1 AS n LIMIT 1)d WHERE 1",
+      "api": "prepare",
+      "prepareWarnings": 0,
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "after": [
+        [
+          1
+        ],
+        [
+          2
+        ]
+      ],
+      "outcome": 2,
+      "preserved": 1
+    },
+    {
+      "group": "constant",
+      "layout": "where_false",
+      "sql": "SELECT 9223372036854775807+1 AS v FROM(SELECT 1 AS n LIMIT 1)d WHERE 0",
+      "api": "query",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "after": [
+        [
+          1
+        ],
+        [
+          2
+        ]
+      ],
+      "outcome": 3,
+      "preserved": 1
+    },
+    {
+      "group": "constant",
+      "layout": "where_false",
+      "sql": "SELECT 9223372036854775807+1 AS v FROM(SELECT 1 AS n LIMIT 1)d WHERE 0",
+      "api": "execute",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "after": [
+        [
+          1
+        ],
+        [
+          2
+        ]
+      ],
+      "outcome": 4,
+      "preserved": 1
+    },
+    {
+      "group": "constant",
+      "layout": "where_false",
+      "sql": "SELECT 9223372036854775807+1 AS v FROM(SELECT 1 AS n LIMIT 1)d WHERE 0",
+      "api": "prepare",
+      "prepareWarnings": 0,
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "after": [
+        [
+          1
+        ],
+        [
+          2
+        ]
+      ],
+      "outcome": 2,
+      "preserved": 1
+    },
+    {
+      "group": "constant",
+      "layout": "having",
+      "sql": "SELECT 9223372036854775807+1 AS v FROM(SELECT 1 AS n LIMIT 1)d HAVING 1",
+      "api": "query",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "after": [
+        [
+          1
+        ],
+        [
+          2
+        ]
+      ],
+      "outcome": 0,
+      "preserved": 0
+    },
+    {
+      "group": "constant",
+      "layout": "having",
+      "sql": "SELECT 9223372036854775807+1 AS v FROM(SELECT 1 AS n LIMIT 1)d HAVING 1",
+      "api": "execute",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "after": [
+        [
+          1
+        ],
+        [
+          2
+        ]
+      ],
+      "outcome": 1,
+      "preserved": 0
+    },
+    {
+      "group": "constant",
+      "layout": "having",
+      "sql": "SELECT 9223372036854775807+1 AS v FROM(SELECT 1 AS n LIMIT 1)d HAVING 1",
+      "api": "prepare",
+      "prepareWarnings": 0,
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "after": [
+        [
+          1
+        ],
+        [
+          2
+        ]
+      ],
+      "outcome": 2,
+      "preserved": 1
+    },
+    {
+      "group": "constant",
+      "layout": "order",
+      "sql": "SELECT 9223372036854775807+1 AS v FROM(SELECT 1 AS n LIMIT 1)d ORDER BY 1",
+      "api": "query",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "after": [
+        [
+          1
+        ],
+        [
+          2
+        ]
+      ],
+      "outcome": 0,
+      "preserved": 0
+    },
+    {
+      "group": "constant",
+      "layout": "order",
+      "sql": "SELECT 9223372036854775807+1 AS v FROM(SELECT 1 AS n LIMIT 1)d ORDER BY 1",
+      "api": "execute",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "after": [
+        [
+          1
+        ],
+        [
+          2
+        ]
+      ],
+      "outcome": 1,
+      "preserved": 0
+    },
+    {
+      "group": "constant",
+      "layout": "order",
+      "sql": "SELECT 9223372036854775807+1 AS v FROM(SELECT 1 AS n LIMIT 1)d ORDER BY 1",
+      "api": "prepare",
+      "prepareWarnings": 0,
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "after": [
+        [
+          1
+        ],
+        [
+          2
+        ]
+      ],
+      "outcome": 2,
+      "preserved": 1
+    },
+    {
+      "group": "constant",
+      "layout": "limit_zero",
+      "sql": "SELECT 9223372036854775807+1 AS v FROM(SELECT 1 AS n LIMIT 1)d LIMIT 0",
+      "api": "query",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "after": [
+        [
+          1
+        ],
+        [
+          2
+        ]
+      ],
+      "outcome": 3,
+      "preserved": 1
+    },
+    {
+      "group": "constant",
+      "layout": "limit_zero",
+      "sql": "SELECT 9223372036854775807+1 AS v FROM(SELECT 1 AS n LIMIT 1)d LIMIT 0",
+      "api": "execute",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "after": [
+        [
+          1
+        ],
+        [
+          2
+        ]
+      ],
+      "outcome": 4,
+      "preserved": 1
+    },
+    {
+      "group": "constant",
+      "layout": "limit_zero",
+      "sql": "SELECT 9223372036854775807+1 AS v FROM(SELECT 1 AS n LIMIT 1)d LIMIT 0",
+      "api": "prepare",
+      "prepareWarnings": 0,
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "after": [
+        [
+          1
+        ],
+        [
+          2
+        ]
+      ],
+      "outcome": 2,
+      "preserved": 1
+    },
+    {
+      "group": "constant",
+      "layout": "offset",
+      "sql": "SELECT 9223372036854775807+1 AS v FROM(SELECT 1 AS n LIMIT 1)d LIMIT 1 OFFSET 1",
+      "api": "query",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "after": [
+        [
+          1
+        ],
+        [
+          2
+        ]
+      ],
+      "outcome": 3,
+      "preserved": 1
+    },
+    {
+      "group": "constant",
+      "layout": "offset",
+      "sql": "SELECT 9223372036854775807+1 AS v FROM(SELECT 1 AS n LIMIT 1)d LIMIT 1 OFFSET 1",
+      "api": "execute",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "after": [
+        [
+          1
+        ],
+        [
+          2
+        ]
+      ],
+      "outcome": 4,
+      "preserved": 1
+    },
+    {
+      "group": "constant",
+      "layout": "offset",
+      "sql": "SELECT 9223372036854775807+1 AS v FROM(SELECT 1 AS n LIMIT 1)d LIMIT 1 OFFSET 1",
+      "api": "prepare",
+      "prepareWarnings": 0,
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "after": [
+        [
+          1
+        ],
+        [
+          2
+        ]
+      ],
+      "outcome": 2,
+      "preserved": 1
+    },
+    {
+      "group": "constant",
+      "layout": "window",
+      "sql": "SELECT 9223372036854775807+1 AS v FROM(SELECT 1 AS n LIMIT 1)d WINDOW unused AS(ORDER BY missing)",
+      "api": "query",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "after": [
+        [
+          1
+        ],
+        [
+          2
+        ]
+      ],
+      "outcome": 5,
+      "preserved": 2
+    },
+    {
+      "group": "constant",
+      "layout": "window",
+      "sql": "SELECT 9223372036854775807+1 AS v FROM(SELECT 1 AS n LIMIT 1)d WINDOW unused AS(ORDER BY missing)",
+      "api": "execute",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "after": [
+        [
+          1
+        ],
+        [
+          2
+        ]
+      ],
+      "outcome": 5,
+      "preserved": 3
+    },
+    {
+      "group": "constant",
+      "layout": "window",
+      "sql": "SELECT 9223372036854775807+1 AS v FROM(SELECT 1 AS n LIMIT 1)d WINDOW unused AS(ORDER BY missing)",
+      "api": "prepare",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "after": [
+        [
+          1
+        ],
+        [
+          2
+        ]
+      ],
+      "outcome": 6,
+      "preserved": 4
+    },
+    {
+      "group": "constant",
+      "layout": "locking",
+      "sql": "SELECT 9223372036854775807+1 AS v FROM(SELECT 1 AS n LIMIT 1)d FOR UPDATE",
+      "api": "query",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "after": [
+        [
+          1
+        ],
+        [
+          2
+        ]
+      ],
+      "outcome": 0,
+      "preserved": 0
+    },
+    {
+      "group": "constant",
+      "layout": "locking",
+      "sql": "SELECT 9223372036854775807+1 AS v FROM(SELECT 1 AS n LIMIT 1)d FOR UPDATE",
+      "api": "execute",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "after": [
+        [
+          1
+        ],
+        [
+          2
+        ]
+      ],
+      "outcome": 1,
+      "preserved": 0
+    },
+    {
+      "group": "constant",
+      "layout": "locking",
+      "sql": "SELECT 9223372036854775807+1 AS v FROM(SELECT 1 AS n LIMIT 1)d FOR UPDATE",
+      "api": "prepare",
+      "prepareWarnings": 0,
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "after": [
+        [
+          1
+        ],
+        [
+          2
+        ]
+      ],
+      "outcome": 2,
+      "preserved": 1
+    },
+    {
+      "group": "nonconstant",
+      "layout": "plain",
+      "sql": "SELECT 9223372036854775807+1 AS v FROM(SELECT v AS n FROM r)d",
+      "api": "query",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "after": [
+        [
+          1
+        ],
+        [
+          2
+        ]
+      ],
+      "outcome": 0,
+      "preserved": 0
+    },
+    {
+      "group": "nonconstant",
+      "layout": "plain",
+      "sql": "SELECT 9223372036854775807+1 AS v FROM(SELECT v AS n FROM r)d",
+      "api": "execute",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "after": [
+        [
+          1
+        ],
+        [
+          2
+        ]
+      ],
+      "outcome": 1,
+      "preserved": 0
+    },
+    {
+      "group": "nonconstant",
+      "layout": "plain",
+      "sql": "SELECT 9223372036854775807+1 AS v FROM(SELECT v AS n FROM r)d",
+      "api": "prepare",
+      "prepareWarnings": 0,
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "after": [
+        [
+          1
+        ],
+        [
+          2
+        ]
+      ],
+      "outcome": 2,
+      "preserved": 1
+    },
+    {
+      "group": "nonconstant",
+      "layout": "where_true",
+      "sql": "SELECT 9223372036854775807+1 AS v FROM(SELECT v AS n FROM r)d WHERE 1",
+      "api": "query",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "after": [
+        [
+          1
+        ],
+        [
+          2
+        ]
+      ],
+      "outcome": 0,
+      "preserved": 0
+    },
+    {
+      "group": "nonconstant",
+      "layout": "where_true",
+      "sql": "SELECT 9223372036854775807+1 AS v FROM(SELECT v AS n FROM r)d WHERE 1",
+      "api": "execute",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "after": [
+        [
+          1
+        ],
+        [
+          2
+        ]
+      ],
+      "outcome": 1,
+      "preserved": 0
+    },
+    {
+      "group": "nonconstant",
+      "layout": "where_true",
+      "sql": "SELECT 9223372036854775807+1 AS v FROM(SELECT v AS n FROM r)d WHERE 1",
+      "api": "prepare",
+      "prepareWarnings": 0,
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "after": [
+        [
+          1
+        ],
+        [
+          2
+        ]
+      ],
+      "outcome": 2,
+      "preserved": 1
+    },
+    {
+      "group": "nonconstant",
+      "layout": "where_false",
+      "sql": "SELECT 9223372036854775807+1 AS v FROM(SELECT v AS n FROM r)d WHERE 0",
+      "api": "query",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "after": [
+        [
+          1
+        ],
+        [
+          2
+        ]
+      ],
+      "outcome": 3,
+      "preserved": 1
+    },
+    {
+      "group": "nonconstant",
+      "layout": "where_false",
+      "sql": "SELECT 9223372036854775807+1 AS v FROM(SELECT v AS n FROM r)d WHERE 0",
+      "api": "execute",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "after": [
+        [
+          1
+        ],
+        [
+          2
+        ]
+      ],
+      "outcome": 4,
+      "preserved": 1
+    },
+    {
+      "group": "nonconstant",
+      "layout": "where_false",
+      "sql": "SELECT 9223372036854775807+1 AS v FROM(SELECT v AS n FROM r)d WHERE 0",
+      "api": "prepare",
+      "prepareWarnings": 0,
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "after": [
+        [
+          1
+        ],
+        [
+          2
+        ]
+      ],
+      "outcome": 2,
+      "preserved": 1
+    },
+    {
+      "group": "nonconstant",
+      "layout": "having",
+      "sql": "SELECT 9223372036854775807+1 AS v FROM(SELECT v AS n FROM r)d HAVING 1",
+      "api": "query",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "after": [
+        [
+          1
+        ],
+        [
+          2
+        ]
+      ],
+      "outcome": 0,
+      "preserved": 0
+    },
+    {
+      "group": "nonconstant",
+      "layout": "having",
+      "sql": "SELECT 9223372036854775807+1 AS v FROM(SELECT v AS n FROM r)d HAVING 1",
+      "api": "execute",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "after": [
+        [
+          1
+        ],
+        [
+          2
+        ]
+      ],
+      "outcome": 1,
+      "preserved": 0
+    },
+    {
+      "group": "nonconstant",
+      "layout": "having",
+      "sql": "SELECT 9223372036854775807+1 AS v FROM(SELECT v AS n FROM r)d HAVING 1",
+      "api": "prepare",
+      "prepareWarnings": 0,
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "after": [
+        [
+          1
+        ],
+        [
+          2
+        ]
+      ],
+      "outcome": 2,
+      "preserved": 1
+    },
+    {
+      "group": "nonconstant",
+      "layout": "order",
+      "sql": "SELECT 9223372036854775807+1 AS v FROM(SELECT v AS n FROM r)d ORDER BY 1",
+      "api": "query",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "after": [
+        [
+          1
+        ],
+        [
+          2
+        ]
+      ],
+      "outcome": 0,
+      "preserved": 0
+    },
+    {
+      "group": "nonconstant",
+      "layout": "order",
+      "sql": "SELECT 9223372036854775807+1 AS v FROM(SELECT v AS n FROM r)d ORDER BY 1",
+      "api": "execute",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "after": [
+        [
+          1
+        ],
+        [
+          2
+        ]
+      ],
+      "outcome": 1,
+      "preserved": 0
+    },
+    {
+      "group": "nonconstant",
+      "layout": "order",
+      "sql": "SELECT 9223372036854775807+1 AS v FROM(SELECT v AS n FROM r)d ORDER BY 1",
+      "api": "prepare",
+      "prepareWarnings": 0,
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "after": [
+        [
+          1
+        ],
+        [
+          2
+        ]
+      ],
+      "outcome": 2,
+      "preserved": 1
+    },
+    {
+      "group": "nonconstant",
+      "layout": "limit_zero",
+      "sql": "SELECT 9223372036854775807+1 AS v FROM(SELECT v AS n FROM r)d LIMIT 0",
+      "api": "query",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "after": [
+        [
+          1
+        ],
+        [
+          2
+        ]
+      ],
+      "outcome": 3,
+      "preserved": 1
+    },
+    {
+      "group": "nonconstant",
+      "layout": "limit_zero",
+      "sql": "SELECT 9223372036854775807+1 AS v FROM(SELECT v AS n FROM r)d LIMIT 0",
+      "api": "execute",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "after": [
+        [
+          1
+        ],
+        [
+          2
+        ]
+      ],
+      "outcome": 4,
+      "preserved": 1
+    },
+    {
+      "group": "nonconstant",
+      "layout": "limit_zero",
+      "sql": "SELECT 9223372036854775807+1 AS v FROM(SELECT v AS n FROM r)d LIMIT 0",
+      "api": "prepare",
+      "prepareWarnings": 0,
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "after": [
+        [
+          1
+        ],
+        [
+          2
+        ]
+      ],
+      "outcome": 2,
+      "preserved": 1
+    },
+    {
+      "group": "nonconstant",
+      "layout": "offset",
+      "sql": "SELECT 9223372036854775807+1 AS v FROM(SELECT v AS n FROM r)d LIMIT 1 OFFSET 1",
+      "api": "query",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "after": [
+        [
+          1
+        ],
+        [
+          2
+        ]
+      ],
+      "outcome": 0,
+      "preserved": 0
+    },
+    {
+      "group": "nonconstant",
+      "layout": "offset",
+      "sql": "SELECT 9223372036854775807+1 AS v FROM(SELECT v AS n FROM r)d LIMIT 1 OFFSET 1",
+      "api": "execute",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "after": [
+        [
+          1
+        ],
+        [
+          2
+        ]
+      ],
+      "outcome": 1,
+      "preserved": 0
+    },
+    {
+      "group": "nonconstant",
+      "layout": "offset",
+      "sql": "SELECT 9223372036854775807+1 AS v FROM(SELECT v AS n FROM r)d LIMIT 1 OFFSET 1",
+      "api": "prepare",
+      "prepareWarnings": 0,
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "after": [
+        [
+          1
+        ],
+        [
+          2
+        ]
+      ],
+      "outcome": 2,
+      "preserved": 1
+    },
+    {
+      "group": "nonconstant",
+      "layout": "window",
+      "sql": "SELECT 9223372036854775807+1 AS v FROM(SELECT v AS n FROM r)d WINDOW unused AS(ORDER BY missing)",
+      "api": "query",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "after": [
+        [
+          1
+        ],
+        [
+          2
+        ]
+      ],
+      "outcome": 5,
+      "preserved": 2
+    },
+    {
+      "group": "nonconstant",
+      "layout": "window",
+      "sql": "SELECT 9223372036854775807+1 AS v FROM(SELECT v AS n FROM r)d WINDOW unused AS(ORDER BY missing)",
+      "api": "execute",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "after": [
+        [
+          1
+        ],
+        [
+          2
+        ]
+      ],
+      "outcome": 5,
+      "preserved": 3
+    },
+    {
+      "group": "nonconstant",
+      "layout": "window",
+      "sql": "SELECT 9223372036854775807+1 AS v FROM(SELECT v AS n FROM r)d WINDOW unused AS(ORDER BY missing)",
+      "api": "prepare",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "after": [
+        [
+          1
+        ],
+        [
+          2
+        ]
+      ],
+      "outcome": 6,
+      "preserved": 4
+    },
+    {
+      "group": "nonconstant",
+      "layout": "locking",
+      "sql": "SELECT 9223372036854775807+1 AS v FROM(SELECT v AS n FROM r)d FOR UPDATE",
+      "api": "query",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "after": [
+        [
+          1
+        ],
+        [
+          2
+        ]
+      ],
+      "outcome": 0,
+      "preserved": 0
+    },
+    {
+      "group": "nonconstant",
+      "layout": "locking",
+      "sql": "SELECT 9223372036854775807+1 AS v FROM(SELECT v AS n FROM r)d FOR UPDATE",
+      "api": "execute",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "after": [
+        [
+          1
+        ],
+        [
+          2
+        ]
+      ],
+      "outcome": 1,
+      "preserved": 0
+    },
+    {
+      "group": "nonconstant",
+      "layout": "locking",
+      "sql": "SELECT 9223372036854775807+1 AS v FROM(SELECT v AS n FROM r)d FOR UPDATE",
+      "api": "prepare",
+      "prepareWarnings": 0,
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "after": [
+        [
+          1
+        ],
+        [
+          2
+        ]
+      ],
+      "outcome": 2,
+      "preserved": 1
+    },
+    {
+      "group": "distinct",
+      "sql": "SELECT DISTINCT 9223372036854775807+1 AS v FROM(SELECT 1 AS n LIMIT 1)d",
+      "api": "query",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "after": [
+        [
+          1
+        ],
+        [
+          2
+        ]
+      ],
+      "outcome": 0,
+      "preserved": 0
+    },
+    {
+      "group": "distinct",
+      "sql": "SELECT DISTINCT 9223372036854775807+1 AS v FROM(SELECT 1 AS n LIMIT 1)d",
+      "api": "execute",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "after": [
+        [
+          1
+        ],
+        [
+          2
+        ]
+      ],
+      "outcome": 1,
+      "preserved": 0
+    },
+    {
+      "group": "distinct",
+      "sql": "SELECT DISTINCT 9223372036854775807+1 AS v FROM(SELECT 1 AS n LIMIT 1)d",
+      "api": "prepare",
+      "prepareWarnings": 0,
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "after": [
+        [
+          1
+        ],
+        [
+          2
+        ]
+      ],
+      "outcome": 2,
+      "preserved": 1
+    },
+    {
+      "group": "distinct",
+      "sql": "SELECT DISTINCT 9223372036854775807+1 AS v FROM(SELECT 1 AS n)d",
+      "api": "query",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "after": [
+        [
+          1
+        ],
+        [
+          2
+        ]
+      ],
+      "outcome": 0,
+      "preserved": 0
+    },
+    {
+      "group": "distinct",
+      "sql": "SELECT DISTINCT 9223372036854775807+1 AS v FROM(SELECT 1 AS n)d",
+      "api": "execute",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "after": [
+        [
+          1
+        ],
+        [
+          2
+        ]
+      ],
+      "outcome": 1,
+      "preserved": 0
+    },
+    {
+      "group": "distinct",
+      "sql": "SELECT DISTINCT 9223372036854775807+1 AS v FROM(SELECT 1 AS n)d",
+      "api": "prepare",
+      "prepareWarnings": 0,
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "after": [
+        [
+          1
+        ],
+        [
+          2
+        ]
+      ],
+      "outcome": 2,
+      "preserved": 1
+    },
+    {
+      "group": "distinct",
+      "sql": "SELECT DISTINCT 9223372036854775807+1 AS v FROM(SELECT 1 AS n LIMIT 0)d",
+      "api": "query",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "after": [
+        [
+          1
+        ],
+        [
+          2
+        ]
+      ],
+      "outcome": 3,
+      "preserved": 1
+    },
+    {
+      "group": "distinct",
+      "sql": "SELECT DISTINCT 9223372036854775807+1 AS v FROM(SELECT 1 AS n LIMIT 0)d",
+      "api": "execute",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "after": [
+        [
+          1
+        ],
+        [
+          2
+        ]
+      ],
+      "outcome": 4,
+      "preserved": 1
+    },
+    {
+      "group": "distinct",
+      "sql": "SELECT DISTINCT 9223372036854775807+1 AS v FROM(SELECT 1 AS n LIMIT 0)d",
+      "api": "prepare",
+      "prepareWarnings": 0,
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "after": [
+        [
+          1
+        ],
+        [
+          2
+        ]
+      ],
+      "outcome": 2,
+      "preserved": 1
+    },
+    {
+      "group": "distinct",
+      "sql": "SELECT DISTINCT 9223372036854775807+1 AS v FROM(SELECT 1 AS n WHERE 0)d",
+      "api": "query",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "after": [
+        [
+          1
+        ],
+        [
+          2
+        ]
+      ],
+      "outcome": 3,
+      "preserved": 1
+    },
+    {
+      "group": "distinct",
+      "sql": "SELECT DISTINCT 9223372036854775807+1 AS v FROM(SELECT 1 AS n WHERE 0)d",
+      "api": "execute",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "after": [
+        [
+          1
+        ],
+        [
+          2
+        ]
+      ],
+      "outcome": 4,
+      "preserved": 1
+    },
+    {
+      "group": "distinct",
+      "sql": "SELECT DISTINCT 9223372036854775807+1 AS v FROM(SELECT 1 AS n WHERE 0)d",
+      "api": "prepare",
+      "prepareWarnings": 0,
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "after": [
+        [
+          1
+        ],
+        [
+          2
+        ]
+      ],
+      "outcome": 2,
+      "preserved": 1
+    },
+    {
+      "group": "view",
+      "sql": "SELECT 9223372036854775807+1 AS v FROM v",
+      "api": "query",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "after": [
+        [
+          1
+        ],
+        [
+          2
+        ]
+      ],
+      "outcome": 0,
+      "preserved": 0
+    },
+    {
+      "group": "view",
+      "sql": "SELECT 9223372036854775807+1 AS v FROM v",
+      "api": "execute",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "after": [
+        [
+          1
+        ],
+        [
+          2
+        ]
+      ],
+      "outcome": 1,
+      "preserved": 0
+    },
+    {
+      "group": "view",
+      "sql": "SELECT 9223372036854775807+1 AS v FROM v",
+      "api": "prepare",
+      "prepareWarnings": 0,
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "after": [
+        [
+          1
+        ],
+        [
+          2
+        ]
+      ],
+      "outcome": 2,
+      "preserved": 1
+    },
+    {
+      "group": "cte",
+      "sql": "WITH c AS(SELECT 1 AS n LIMIT 1) SELECT 9223372036854775807+1 AS v FROM c",
+      "api": "query",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "after": [
+        [
+          1
+        ],
+        [
+          2
+        ]
+      ],
+      "outcome": 0,
+      "preserved": 0
+    },
+    {
+      "group": "cte",
+      "sql": "WITH c AS(SELECT 1 AS n LIMIT 1) SELECT 9223372036854775807+1 AS v FROM c",
+      "api": "execute",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "after": [
+        [
+          1
+        ],
+        [
+          2
+        ]
+      ],
+      "outcome": 1,
+      "preserved": 0
+    },
+    {
+      "group": "cte",
+      "sql": "WITH c AS(SELECT 1 AS n LIMIT 1) SELECT 9223372036854775807+1 AS v FROM c",
+      "api": "prepare",
+      "prepareWarnings": 0,
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "after": [
+        [
+          1
+        ],
+        [
+          2
+        ]
+      ],
+      "outcome": 2,
+      "preserved": 1
+    },
+    {
+      "group": "view",
+      "sql": "SELECT CAST(-1 AS UNSIGNED)+1 AS v FROM v",
+      "api": "query",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "after": [
+        [
+          1
+        ],
+        [
+          2
+        ]
+      ],
+      "outcome": 7,
+      "preserved": 0
+    },
+    {
+      "group": "view",
+      "sql": "SELECT CAST(-1 AS UNSIGNED)+1 AS v FROM v",
+      "api": "execute",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "after": [
+        [
+          1
+        ],
+        [
+          2
+        ]
+      ],
+      "outcome": 8,
+      "preserved": 0
+    },
+    {
+      "group": "view",
+      "sql": "SELECT CAST(-1 AS UNSIGNED)+1 AS v FROM v",
+      "api": "prepare",
+      "prepareWarnings": 0,
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "after": [
+        [
+          1
+        ],
+        [
+          2
+        ]
+      ],
+      "outcome": 9,
+      "preserved": 1
+    },
+    {
+      "group": "cte",
+      "sql": "WITH c AS(SELECT 1 AS n LIMIT 1) SELECT CAST(-1 AS UNSIGNED)+1 AS v FROM c",
+      "api": "query",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "after": [
+        [
+          1
+        ],
+        [
+          2
+        ]
+      ],
+      "outcome": 7,
+      "preserved": 0
+    },
+    {
+      "group": "cte",
+      "sql": "WITH c AS(SELECT 1 AS n LIMIT 1) SELECT CAST(-1 AS UNSIGNED)+1 AS v FROM c",
+      "api": "execute",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "after": [
+        [
+          1
+        ],
+        [
+          2
+        ]
+      ],
+      "outcome": 8,
+      "preserved": 0
+    },
+    {
+      "group": "cte",
+      "sql": "WITH c AS(SELECT 1 AS n LIMIT 1) SELECT CAST(-1 AS UNSIGNED)+1 AS v FROM c",
+      "api": "prepare",
+      "prepareWarnings": 0,
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "after": [
+        [
+          1
+        ],
+        [
+          2
+        ]
+      ],
+      "outcome": 9,
+      "preserved": 1
+    },
+    {
+      "group": "view",
+      "sql": "SELECT JSON_EXTRACT('{}','bad') AS v FROM v",
+      "api": "query",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "after": [
+        [
+          1
+        ],
+        [
+          2
+        ]
+      ],
+      "outcome": 10,
+      "preserved": 0
+    },
+    {
+      "group": "view",
+      "sql": "SELECT JSON_EXTRACT('{}','bad') AS v FROM v",
+      "api": "execute",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "after": [
+        [
+          1
+        ],
+        [
+          2
+        ]
+      ],
+      "outcome": 11,
+      "preserved": 0
+    },
+    {
+      "group": "view",
+      "sql": "SELECT JSON_EXTRACT('{}','bad') AS v FROM v",
+      "api": "prepare",
+      "prepareWarnings": 0,
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "after": [
+        [
+          1
+        ],
+        [
+          2
+        ]
+      ],
+      "outcome": 12,
+      "preserved": 1
+    },
+    {
+      "group": "cte",
+      "sql": "WITH c AS(SELECT 1 AS n LIMIT 1) SELECT JSON_EXTRACT('{}','bad') AS v FROM c",
+      "api": "query",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "after": [
+        [
+          1
+        ],
+        [
+          2
+        ]
+      ],
+      "outcome": 10,
+      "preserved": 0
+    },
+    {
+      "group": "cte",
+      "sql": "WITH c AS(SELECT 1 AS n LIMIT 1) SELECT JSON_EXTRACT('{}','bad') AS v FROM c",
+      "api": "execute",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "after": [
+        [
+          1
+        ],
+        [
+          2
+        ]
+      ],
+      "outcome": 11,
+      "preserved": 0
+    },
+    {
+      "group": "cte",
+      "sql": "WITH c AS(SELECT 1 AS n LIMIT 1) SELECT JSON_EXTRACT('{}','bad') AS v FROM c",
+      "api": "prepare",
+      "prepareWarnings": 0,
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "after": [
+        [
+          1
+        ],
+        [
+          2
+        ]
+      ],
+      "outcome": 12,
+      "preserved": 1
+    },
+    {
+      "group": "view",
+      "sql": "SELECT REGEXP_LIKE('a','[') AS v FROM v",
+      "api": "query",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "after": [
+        [
+          1
+        ],
+        [
+          2
+        ]
+      ],
+      "outcome": 13,
+      "preserved": 0
+    },
+    {
+      "group": "view",
+      "sql": "SELECT REGEXP_LIKE('a','[') AS v FROM v",
+      "api": "execute",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "after": [
+        [
+          1
+        ],
+        [
+          2
+        ]
+      ],
+      "outcome": 14,
+      "preserved": 0
+    },
+    {
+      "group": "view",
+      "sql": "SELECT REGEXP_LIKE('a','[') AS v FROM v",
+      "api": "prepare",
+      "prepareWarnings": 0,
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "after": [
+        [
+          1
+        ],
+        [
+          2
+        ]
+      ],
+      "outcome": 15,
+      "preserved": 5
+    },
+    {
+      "group": "cte",
+      "sql": "WITH c AS(SELECT 1 AS n LIMIT 1) SELECT REGEXP_LIKE('a','[') AS v FROM c",
+      "api": "query",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "after": [
+        [
+          1
+        ],
+        [
+          2
+        ]
+      ],
+      "outcome": 13,
+      "preserved": 0
+    },
+    {
+      "group": "cte",
+      "sql": "WITH c AS(SELECT 1 AS n LIMIT 1) SELECT REGEXP_LIKE('a','[') AS v FROM c",
+      "api": "execute",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "after": [
+        [
+          1
+        ],
+        [
+          2
+        ]
+      ],
+      "outcome": 14,
+      "preserved": 0
+    },
+    {
+      "group": "cte",
+      "sql": "WITH c AS(SELECT 1 AS n LIMIT 1) SELECT REGEXP_LIKE('a','[') AS v FROM c",
+      "api": "prepare",
+      "prepareWarnings": 0,
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "after": [
+        [
+          1
+        ],
+        [
+          2
+        ]
+      ],
+      "outcome": 15,
+      "preserved": 5
+    },
+    {
+      "group": "view",
+      "sql": "SELECT n+9223372036854775807 AS v FROM v",
+      "api": "query",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "after": [
+        [
+          1
+        ],
+        [
+          2
+        ]
+      ],
+      "outcome": 16,
+      "preserved": 6
+    },
+    {
+      "group": "view",
+      "sql": "SELECT n+9223372036854775807 AS v FROM v",
+      "api": "execute",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "after": [
+        [
+          1
+        ],
+        [
+          2
+        ]
+      ],
+      "outcome": 17,
+      "preserved": 6
+    },
+    {
+      "group": "view",
+      "sql": "SELECT n+9223372036854775807 AS v FROM v",
+      "api": "prepare",
+      "prepareWarnings": 0,
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "after": [
+        [
+          1
+        ],
+        [
+          2
+        ]
+      ],
+      "outcome": 2,
+      "preserved": 1
+    },
+    {
+      "group": "cte",
+      "sql": "WITH c AS(SELECT 1 AS n LIMIT 1) SELECT n+9223372036854775807 AS v FROM c",
+      "api": "query",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "after": [
+        [
+          1
+        ],
+        [
+          2
+        ]
+      ],
+      "outcome": 18,
+      "preserved": 6
+    },
+    {
+      "group": "cte",
+      "sql": "WITH c AS(SELECT 1 AS n LIMIT 1) SELECT n+9223372036854775807 AS v FROM c",
+      "api": "execute",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "after": [
+        [
+          1
+        ],
+        [
+          2
+        ]
+      ],
+      "outcome": 19,
+      "preserved": 6
+    },
+    {
+      "group": "cte",
+      "sql": "WITH c AS(SELECT 1 AS n LIMIT 1) SELECT n+9223372036854775807 AS v FROM c",
+      "api": "prepare",
+      "prepareWarnings": 0,
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "after": [
+        [
+          1
+        ],
+        [
+          2
+        ]
+      ],
+      "outcome": 2,
+      "preserved": 1
+    },
+    {
+      "group": "cte_empty",
+      "sql": "WITH c AS(SELECT 1 AS n LIMIT 0) SELECT 9223372036854775807+1 AS v FROM c",
+      "repeat": 0,
+      "api": "query",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "after": [
+        [
+          1
+        ],
+        [
+          2
+        ]
+      ],
+      "outcome": 3,
+      "preserved": 1
+    },
+    {
+      "group": "cte_empty",
+      "sql": "WITH c AS(SELECT 1 AS n LIMIT 0) SELECT 9223372036854775807+1 AS v FROM c",
+      "repeat": 0,
+      "api": "execute",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "after": [
+        [
+          1
+        ],
+        [
+          2
+        ]
+      ],
+      "outcome": 4,
+      "preserved": 1
+    },
+    {
+      "group": "cte_empty",
+      "sql": "WITH c AS(SELECT 1 AS n LIMIT 0) SELECT 9223372036854775807+1 AS v FROM c",
+      "repeat": 0,
+      "api": "prepare",
+      "prepareWarnings": 0,
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "after": [
+        [
+          1
+        ],
+        [
+          2
+        ]
+      ],
+      "outcome": 2,
+      "preserved": 1
+    },
+    {
+      "group": "cte_empty",
+      "sql": "WITH c AS(SELECT 1 AS n LIMIT 0) SELECT 9223372036854775807+1 AS v FROM c",
+      "repeat": 1,
+      "api": "query",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "after": [
+        [
+          1
+        ],
+        [
+          2
+        ]
+      ],
+      "outcome": 3,
+      "preserved": 1
+    },
+    {
+      "group": "cte_empty",
+      "sql": "WITH c AS(SELECT 1 AS n LIMIT 0) SELECT 9223372036854775807+1 AS v FROM c",
+      "repeat": 1,
+      "api": "execute",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "after": [
+        [
+          1
+        ],
+        [
+          2
+        ]
+      ],
+      "outcome": 4,
+      "preserved": 1
+    },
+    {
+      "group": "cte_empty",
+      "sql": "WITH c AS(SELECT 1 AS n LIMIT 0) SELECT 9223372036854775807+1 AS v FROM c",
+      "repeat": 1,
+      "api": "prepare",
+      "prepareWarnings": 0,
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "after": [
+        [
+          1
+        ],
+        [
+          2
+        ]
+      ],
+      "outcome": 2,
+      "preserved": 1
+    },
+    {
+      "group": "cte_fill",
+      "sql": "WITH c AS(SELECT JSON_EXTRACT('{}','bad') AS n LIMIT 1) SELECT 9223372036854775807+1 AS v FROM c",
+      "repeat": 0,
+      "api": "query",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "after": [
+        [
+          1
+        ],
+        [
+          2
+        ]
+      ],
+      "outcome": 20,
+      "preserved": 1
+    },
+    {
+      "group": "cte_fill",
+      "sql": "WITH c AS(SELECT JSON_EXTRACT('{}','bad') AS n LIMIT 1) SELECT 9223372036854775807+1 AS v FROM c",
+      "repeat": 0,
+      "api": "execute",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "after": [
+        [
+          1
+        ],
+        [
+          2
+        ]
+      ],
+      "outcome": 21,
+      "preserved": 1
+    },
+    {
+      "group": "cte_fill",
+      "sql": "WITH c AS(SELECT JSON_EXTRACT('{}','bad') AS n LIMIT 1) SELECT 9223372036854775807+1 AS v FROM c",
+      "repeat": 0,
+      "api": "prepare",
+      "prepareWarnings": 0,
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "after": [
+        [
+          1
+        ],
+        [
+          2
+        ]
+      ],
+      "outcome": 2,
+      "preserved": 1
+    },
+    {
+      "group": "cte_fill",
+      "sql": "WITH c AS(SELECT JSON_EXTRACT('{}','bad') AS n LIMIT 1) SELECT 9223372036854775807+1 AS v FROM c",
+      "repeat": 1,
+      "api": "query",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "after": [
+        [
+          1
+        ],
+        [
+          2
+        ]
+      ],
+      "outcome": 20,
+      "preserved": 1
+    },
+    {
+      "group": "cte_fill",
+      "sql": "WITH c AS(SELECT JSON_EXTRACT('{}','bad') AS n LIMIT 1) SELECT 9223372036854775807+1 AS v FROM c",
+      "repeat": 1,
+      "api": "execute",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "after": [
+        [
+          1
+        ],
+        [
+          2
+        ]
+      ],
+      "outcome": 21,
+      "preserved": 1
+    },
+    {
+      "group": "cte_fill",
+      "sql": "WITH c AS(SELECT JSON_EXTRACT('{}','bad') AS n LIMIT 1) SELECT 9223372036854775807+1 AS v FROM c",
+      "repeat": 1,
+      "api": "prepare",
+      "prepareWarnings": 0,
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "after": [
+        [
+          1
+        ],
+        [
+          2
+        ]
+      ],
+      "outcome": 2,
+      "preserved": 1
+    },
+    {
+      "group": "cte_alias",
+      "sql": "WITH c(m) AS(SELECT 1 AS n LIMIT 1) SELECT m+9223372036854775807 AS v FROM c",
+      "repeat": 0,
+      "api": "query",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "after": [
+        [
+          1
+        ],
+        [
+          2
+        ]
+      ],
+      "outcome": 22,
+      "preserved": 6
+    },
+    {
+      "group": "cte_alias",
+      "sql": "WITH c(m) AS(SELECT 1 AS n LIMIT 1) SELECT m+9223372036854775807 AS v FROM c",
+      "repeat": 0,
+      "api": "execute",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "after": [
+        [
+          1
+        ],
+        [
+          2
+        ]
+      ],
+      "outcome": 23,
+      "preserved": 6
+    },
+    {
+      "group": "cte_alias",
+      "sql": "WITH c(m) AS(SELECT 1 AS n LIMIT 1) SELECT m+9223372036854775807 AS v FROM c",
+      "repeat": 0,
+      "api": "prepare",
+      "prepareWarnings": 0,
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "after": [
+        [
+          1
+        ],
+        [
+          2
+        ]
+      ],
+      "outcome": 2,
+      "preserved": 1
+    },
+    {
+      "group": "cte_alias",
+      "sql": "WITH c(m) AS(SELECT 1 AS n LIMIT 1) SELECT m+9223372036854775807 AS v FROM c",
+      "repeat": 1,
+      "api": "query",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "after": [
+        [
+          1
+        ],
+        [
+          2
+        ]
+      ],
+      "outcome": 22,
+      "preserved": 6
+    },
+    {
+      "group": "cte_alias",
+      "sql": "WITH c(m) AS(SELECT 1 AS n LIMIT 1) SELECT m+9223372036854775807 AS v FROM c",
+      "repeat": 1,
+      "api": "execute",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "after": [
+        [
+          1
+        ],
+        [
+          2
+        ]
+      ],
+      "outcome": 23,
+      "preserved": 6
+    },
+    {
+      "group": "cte_alias",
+      "sql": "WITH c(m) AS(SELECT 1 AS n LIMIT 1) SELECT m+9223372036854775807 AS v FROM c",
+      "repeat": 1,
+      "api": "prepare",
+      "prepareWarnings": 0,
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "after": [
+        [
+          1
+        ],
+        [
+          2
+        ]
+      ],
+      "outcome": 2,
+      "preserved": 1
+    },
+    {
+      "group": "cte_unused",
+      "sql": "WITH c AS(SELECT v FROM r) SELECT 9223372036854775807+1 AS v FROM(SELECT 1 AS n LIMIT 1)d",
+      "repeat": 0,
+      "api": "query",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "after": [
+        [
+          1
+        ],
+        [
+          2
+        ]
+      ],
+      "outcome": 0,
+      "preserved": 0
+    },
+    {
+      "group": "cte_unused",
+      "sql": "WITH c AS(SELECT v FROM r) SELECT 9223372036854775807+1 AS v FROM(SELECT 1 AS n LIMIT 1)d",
+      "repeat": 0,
+      "api": "execute",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "after": [
+        [
+          1
+        ],
+        [
+          2
+        ]
+      ],
+      "outcome": 1,
+      "preserved": 0
+    },
+    {
+      "group": "cte_unused",
+      "sql": "WITH c AS(SELECT v FROM r) SELECT 9223372036854775807+1 AS v FROM(SELECT 1 AS n LIMIT 1)d",
+      "repeat": 0,
+      "api": "prepare",
+      "prepareWarnings": 0,
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "after": [
+        [
+          1
+        ],
+        [
+          2
+        ]
+      ],
+      "outcome": 2,
+      "preserved": 1
+    },
+    {
+      "group": "cte_unused",
+      "sql": "WITH c AS(SELECT v FROM r) SELECT 9223372036854775807+1 AS v FROM(SELECT 1 AS n LIMIT 1)d",
+      "repeat": 1,
+      "api": "query",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "after": [
+        [
+          1
+        ],
+        [
+          2
+        ]
+      ],
+      "outcome": 0,
+      "preserved": 0
+    },
+    {
+      "group": "cte_unused",
+      "sql": "WITH c AS(SELECT v FROM r) SELECT 9223372036854775807+1 AS v FROM(SELECT 1 AS n LIMIT 1)d",
+      "repeat": 1,
+      "api": "execute",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "after": [
+        [
+          1
+        ],
+        [
+          2
+        ]
+      ],
+      "outcome": 1,
+      "preserved": 0
+    },
+    {
+      "group": "cte_unused",
+      "sql": "WITH c AS(SELECT v FROM r) SELECT 9223372036854775807+1 AS v FROM(SELECT 1 AS n LIMIT 1)d",
+      "repeat": 1,
+      "api": "prepare",
+      "prepareWarnings": 0,
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "after": [
+        [
+          1
+        ],
+        [
+          2
+        ]
+      ],
+      "outcome": 2,
+      "preserved": 1
+    },
+    {
+      "group": "cte_cached",
+      "sql": "WITH c AS(SELECT LAST_INSERT_ID(7) AS n LIMIT 1) SELECT a.n,b.n,LAST_INSERT_ID() AS v FROM c a JOIN c b",
+      "repeat": 0,
+      "api": "query",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "after": [
+        [
+          1
+        ],
+        [
+          2
+        ]
+      ],
+      "outcome": 24,
+      "preserved": 5
+    },
+    {
+      "group": "cte_cached",
+      "sql": "WITH c AS(SELECT LAST_INSERT_ID(7) AS n LIMIT 1) SELECT a.n,b.n,LAST_INSERT_ID() AS v FROM c a JOIN c b",
+      "repeat": 0,
+      "api": "execute",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "after": [
+        [
+          1
+        ],
+        [
+          2
+        ]
+      ],
+      "outcome": 25,
+      "preserved": 5
+    },
+    {
+      "group": "cte_cached",
+      "sql": "WITH c AS(SELECT LAST_INSERT_ID(7) AS n LIMIT 1) SELECT a.n,b.n,LAST_INSERT_ID() AS v FROM c a JOIN c b",
+      "repeat": 0,
+      "api": "prepare",
+      "prepareWarnings": 0,
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "after": [
+        [
+          1
+        ],
+        [
+          2
+        ]
+      ],
+      "outcome": 26,
+      "preserved": 5
+    },
+    {
+      "group": "cte_cached",
+      "sql": "WITH c AS(SELECT LAST_INSERT_ID(7) AS n LIMIT 1) SELECT a.n,b.n,LAST_INSERT_ID() AS v FROM c a JOIN c b",
+      "repeat": 1,
+      "api": "query",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "after": [
+        [
+          1
+        ],
+        [
+          2
+        ]
+      ],
+      "outcome": 24,
+      "preserved": 5
+    },
+    {
+      "group": "cte_cached",
+      "sql": "WITH c AS(SELECT LAST_INSERT_ID(7) AS n LIMIT 1) SELECT a.n,b.n,LAST_INSERT_ID() AS v FROM c a JOIN c b",
+      "repeat": 1,
+      "api": "execute",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "after": [
+        [
+          1
+        ],
+        [
+          2
+        ]
+      ],
+      "outcome": 25,
+      "preserved": 5
+    },
+    {
+      "group": "cte_cached",
+      "sql": "WITH c AS(SELECT LAST_INSERT_ID(7) AS n LIMIT 1) SELECT a.n,b.n,LAST_INSERT_ID() AS v FROM c a JOIN c b",
+      "repeat": 1,
+      "api": "prepare",
+      "prepareWarnings": 0,
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "after": [
+        [
+          1
+        ],
+        [
+          2
+        ]
+      ],
+      "outcome": 26,
+      "preserved": 5
+    },
+    {
+      "group": "cte_cached_empty",
+      "sql": "WITH c AS(SELECT 1 AS n LIMIT 0) SELECT a.n,b.n FROM c a LEFT JOIN c b ON TRUE",
+      "repeat": 0,
+      "api": "query",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "after": [
+        [
+          1
+        ],
+        [
+          2
+        ]
+      ],
+      "outcome": 27,
+      "preserved": 5
+    },
+    {
+      "group": "cte_cached_empty",
+      "sql": "WITH c AS(SELECT 1 AS n LIMIT 0) SELECT a.n,b.n FROM c a LEFT JOIN c b ON TRUE",
+      "repeat": 0,
+      "api": "execute",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "after": [
+        [
+          1
+        ],
+        [
+          2
+        ]
+      ],
+      "outcome": 28,
+      "preserved": 5
+    },
+    {
+      "group": "cte_cached_empty",
+      "sql": "WITH c AS(SELECT 1 AS n LIMIT 0) SELECT a.n,b.n FROM c a LEFT JOIN c b ON TRUE",
+      "repeat": 0,
+      "api": "prepare",
+      "prepareWarnings": 0,
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "after": [
+        [
+          1
+        ],
+        [
+          2
+        ]
+      ],
+      "outcome": 29,
+      "preserved": 5
+    },
+    {
+      "group": "cte_cached_empty",
+      "sql": "WITH c AS(SELECT 1 AS n LIMIT 0) SELECT a.n,b.n FROM c a LEFT JOIN c b ON TRUE",
+      "repeat": 1,
+      "api": "query",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "after": [
+        [
+          1
+        ],
+        [
+          2
+        ]
+      ],
+      "outcome": 27,
+      "preserved": 5
+    },
+    {
+      "group": "cte_cached_empty",
+      "sql": "WITH c AS(SELECT 1 AS n LIMIT 0) SELECT a.n,b.n FROM c a LEFT JOIN c b ON TRUE",
+      "repeat": 1,
+      "api": "execute",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "after": [
+        [
+          1
+        ],
+        [
+          2
+        ]
+      ],
+      "outcome": 28,
+      "preserved": 5
+    },
+    {
+      "group": "cte_cached_empty",
+      "sql": "WITH c AS(SELECT 1 AS n LIMIT 0) SELECT a.n,b.n FROM c a LEFT JOIN c b ON TRUE",
+      "repeat": 1,
+      "api": "prepare",
+      "prepareWarnings": 0,
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "after": [
+        [
+          1
+        ],
+        [
+          2
+        ]
+      ],
+      "outcome": 29,
+      "preserved": 5
+    },
+    {
+      "group": "distinct_sources",
+      "sql": "SELECT a.n,b.n,LAST_INSERT_ID() AS v FROM(SELECT LAST_INSERT_ID(7) AS n LIMIT 1)a JOIN(SELECT LAST_INSERT_ID(9) AS n LIMIT 1)b",
+      "repeat": 0,
+      "api": "query",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "after": [
+        [
+          1
+        ],
+        [
+          2
+        ]
+      ],
+      "outcome": 30,
+      "preserved": 1
+    },
+    {
+      "group": "distinct_sources",
+      "sql": "SELECT a.n,b.n,LAST_INSERT_ID() AS v FROM(SELECT LAST_INSERT_ID(7) AS n LIMIT 1)a JOIN(SELECT LAST_INSERT_ID(9) AS n LIMIT 1)b",
+      "repeat": 0,
+      "api": "execute",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "after": [
+        [
+          1
+        ],
+        [
+          2
+        ]
+      ],
+      "outcome": 31,
+      "preserved": 1
+    },
+    {
+      "group": "distinct_sources",
+      "sql": "SELECT a.n,b.n,LAST_INSERT_ID() AS v FROM(SELECT LAST_INSERT_ID(7) AS n LIMIT 1)a JOIN(SELECT LAST_INSERT_ID(9) AS n LIMIT 1)b",
+      "repeat": 0,
+      "api": "prepare",
+      "prepareWarnings": 0,
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "after": [
+        [
+          1
+        ],
+        [
+          2
+        ]
+      ],
+      "outcome": 26,
+      "preserved": 1
+    },
+    {
+      "group": "distinct_sources",
+      "sql": "SELECT a.n,b.n,LAST_INSERT_ID() AS v FROM(SELECT LAST_INSERT_ID(7) AS n LIMIT 1)a JOIN(SELECT LAST_INSERT_ID(9) AS n LIMIT 1)b",
+      "repeat": 1,
+      "api": "query",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "after": [
+        [
+          1
+        ],
+        [
+          2
+        ]
+      ],
+      "outcome": 30,
+      "preserved": 1
+    },
+    {
+      "group": "distinct_sources",
+      "sql": "SELECT a.n,b.n,LAST_INSERT_ID() AS v FROM(SELECT LAST_INSERT_ID(7) AS n LIMIT 1)a JOIN(SELECT LAST_INSERT_ID(9) AS n LIMIT 1)b",
+      "repeat": 1,
+      "api": "execute",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "after": [
+        [
+          1
+        ],
+        [
+          2
+        ]
+      ],
+      "outcome": 31,
+      "preserved": 1
+    },
+    {
+      "group": "distinct_sources",
+      "sql": "SELECT a.n,b.n,LAST_INSERT_ID() AS v FROM(SELECT LAST_INSERT_ID(7) AS n LIMIT 1)a JOIN(SELECT LAST_INSERT_ID(9) AS n LIMIT 1)b",
+      "repeat": 1,
+      "api": "prepare",
+      "prepareWarnings": 0,
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "after": [
+        [
+          1
+        ],
+        [
+          2
+        ]
+      ],
+      "outcome": 26,
+      "preserved": 1
+    },
+    {
+      "group": "multiple_sources",
+      "sql": "SELECT 9223372036854775807+1 AS v FROM(SELECT 1 AS n LIMIT 1)a JOIN(SELECT 1 AS n LIMIT 1)b",
+      "repeat": 0,
+      "api": "query",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "after": [
+        [
+          1
+        ],
+        [
+          2
+        ]
+      ],
+      "outcome": 0,
+      "preserved": 0
+    },
+    {
+      "group": "multiple_sources",
+      "sql": "SELECT 9223372036854775807+1 AS v FROM(SELECT 1 AS n LIMIT 1)a JOIN(SELECT 1 AS n LIMIT 1)b",
+      "repeat": 0,
+      "api": "execute",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "after": [
+        [
+          1
+        ],
+        [
+          2
+        ]
+      ],
+      "outcome": 1,
+      "preserved": 0
+    },
+    {
+      "group": "multiple_sources",
+      "sql": "SELECT 9223372036854775807+1 AS v FROM(SELECT 1 AS n LIMIT 1)a JOIN(SELECT 1 AS n LIMIT 1)b",
+      "repeat": 0,
+      "api": "prepare",
+      "prepareWarnings": 0,
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "after": [
+        [
+          1
+        ],
+        [
+          2
+        ]
+      ],
+      "outcome": 2,
+      "preserved": 1
+    },
+    {
+      "group": "multiple_sources",
+      "sql": "SELECT 9223372036854775807+1 AS v FROM(SELECT 1 AS n LIMIT 1)a JOIN(SELECT 1 AS n LIMIT 1)b",
+      "repeat": 1,
+      "api": "query",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "after": [
+        [
+          1
+        ],
+        [
+          2
+        ]
+      ],
+      "outcome": 0,
+      "preserved": 0
+    },
+    {
+      "group": "multiple_sources",
+      "sql": "SELECT 9223372036854775807+1 AS v FROM(SELECT 1 AS n LIMIT 1)a JOIN(SELECT 1 AS n LIMIT 1)b",
+      "repeat": 1,
+      "api": "execute",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "after": [
+        [
+          1
+        ],
+        [
+          2
+        ]
+      ],
+      "outcome": 1,
+      "preserved": 0
+    },
+    {
+      "group": "multiple_sources",
+      "sql": "SELECT 9223372036854775807+1 AS v FROM(SELECT 1 AS n LIMIT 1)a JOIN(SELECT 1 AS n LIMIT 1)b",
+      "repeat": 1,
+      "api": "prepare",
+      "prepareWarnings": 0,
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "after": [
+        [
+          1
+        ],
+        [
+          2
+        ]
+      ],
+      "outcome": 2,
+      "preserved": 1
+    },
+    {
+      "group": "lateral",
+      "sql": "SELECT 9223372036854775807+1 AS v FROM r JOIN LATERAL(SELECT r.v AS n LIMIT 1)d ON TRUE",
+      "repeat": 0,
+      "api": "query",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "after": [
+        [
+          1
+        ],
+        [
+          2
+        ]
+      ],
+      "outcome": 0,
+      "preserved": 0
+    },
+    {
+      "group": "lateral",
+      "sql": "SELECT 9223372036854775807+1 AS v FROM r JOIN LATERAL(SELECT r.v AS n LIMIT 1)d ON TRUE",
+      "repeat": 0,
+      "api": "execute",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "after": [
+        [
+          1
+        ],
+        [
+          2
+        ]
+      ],
+      "outcome": 1,
+      "preserved": 0
+    },
+    {
+      "group": "lateral",
+      "sql": "SELECT 9223372036854775807+1 AS v FROM r JOIN LATERAL(SELECT r.v AS n LIMIT 1)d ON TRUE",
+      "repeat": 0,
+      "api": "prepare",
+      "prepareWarnings": 0,
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "after": [
+        [
+          1
+        ],
+        [
+          2
+        ]
+      ],
+      "outcome": 2,
+      "preserved": 1
+    },
+    {
+      "group": "lateral",
+      "sql": "SELECT 9223372036854775807+1 AS v FROM r JOIN LATERAL(SELECT r.v AS n LIMIT 1)d ON TRUE",
+      "repeat": 1,
+      "api": "query",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "after": [
+        [
+          1
+        ],
+        [
+          2
+        ]
+      ],
+      "outcome": 0,
+      "preserved": 0
+    },
+    {
+      "group": "lateral",
+      "sql": "SELECT 9223372036854775807+1 AS v FROM r JOIN LATERAL(SELECT r.v AS n LIMIT 1)d ON TRUE",
+      "repeat": 1,
+      "api": "execute",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "after": [
+        [
+          1
+        ],
+        [
+          2
+        ]
+      ],
+      "outcome": 1,
+      "preserved": 0
+    },
+    {
+      "group": "lateral",
+      "sql": "SELECT 9223372036854775807+1 AS v FROM r JOIN LATERAL(SELECT r.v AS n LIMIT 1)d ON TRUE",
+      "repeat": 1,
+      "api": "prepare",
+      "prepareWarnings": 0,
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "after": [
+        [
+          1
+        ],
+        [
+          2
+        ]
+      ],
+      "outcome": 2,
+      "preserved": 1
+    },
+    {
+      "group": "correlated",
+      "sql": "SELECT(SELECT 9223372036854775807+d.n FROM(SELECT r.v AS n LIMIT 1)d) AS v FROM r",
+      "repeat": 0,
+      "api": "query",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "after": [
+        [
+          1
+        ],
+        [
+          2
+        ]
+      ],
+      "outcome": 32,
+      "preserved": 2
+    },
+    {
+      "group": "correlated",
+      "sql": "SELECT(SELECT 9223372036854775807+d.n FROM(SELECT r.v AS n LIMIT 1)d) AS v FROM r",
+      "repeat": 0,
+      "api": "execute",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "after": [
+        [
+          1
+        ],
+        [
+          2
+        ]
+      ],
+      "outcome": 33,
+      "preserved": 2
+    },
+    {
+      "group": "correlated",
+      "sql": "SELECT(SELECT 9223372036854775807+d.n FROM(SELECT r.v AS n LIMIT 1)d) AS v FROM r",
+      "repeat": 0,
+      "api": "prepare",
+      "prepareWarnings": 0,
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "after": [
+        [
+          1
+        ],
+        [
+          2
+        ]
+      ],
+      "outcome": 34,
+      "preserved": 1
+    },
+    {
+      "group": "correlated",
+      "sql": "SELECT(SELECT 9223372036854775807+d.n FROM(SELECT r.v AS n LIMIT 1)d) AS v FROM r",
+      "repeat": 1,
+      "api": "query",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "after": [
+        [
+          1
+        ],
+        [
+          2
+        ]
+      ],
+      "outcome": 32,
+      "preserved": 2
+    },
+    {
+      "group": "correlated",
+      "sql": "SELECT(SELECT 9223372036854775807+d.n FROM(SELECT r.v AS n LIMIT 1)d) AS v FROM r",
+      "repeat": 1,
+      "api": "execute",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "after": [
+        [
+          1
+        ],
+        [
+          2
+        ]
+      ],
+      "outcome": 33,
+      "preserved": 2
+    },
+    {
+      "group": "correlated",
+      "sql": "SELECT(SELECT 9223372036854775807+d.n FROM(SELECT r.v AS n LIMIT 1)d) AS v FROM r",
+      "repeat": 1,
+      "api": "prepare",
+      "prepareWarnings": 0,
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "after": [
+        [
+          1
+        ],
+        [
+          2
+        ]
+      ],
+      "outcome": 34,
+      "preserved": 1
+    },
+    {
+      "group": "recursive",
+      "sql": "WITH RECURSIVE c(n) AS(SELECT 1 UNION ALL SELECT n+1 FROM c WHERE n<2) SELECT 9223372036854775807+1 AS v FROM c",
+      "repeat": 0,
+      "api": "query",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "after": [
+        [
+          1
+        ],
+        [
+          2
+        ]
+      ],
+      "outcome": 0,
+      "preserved": 0
+    },
+    {
+      "group": "recursive",
+      "sql": "WITH RECURSIVE c(n) AS(SELECT 1 UNION ALL SELECT n+1 FROM c WHERE n<2) SELECT 9223372036854775807+1 AS v FROM c",
+      "repeat": 0,
+      "api": "execute",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "after": [
+        [
+          1
+        ],
+        [
+          2
+        ]
+      ],
+      "outcome": 1,
+      "preserved": 0
+    },
+    {
+      "group": "recursive",
+      "sql": "WITH RECURSIVE c(n) AS(SELECT 1 UNION ALL SELECT n+1 FROM c WHERE n<2) SELECT 9223372036854775807+1 AS v FROM c",
+      "repeat": 0,
+      "api": "prepare",
+      "prepareWarnings": 0,
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "after": [
+        [
+          1
+        ],
+        [
+          2
+        ]
+      ],
+      "outcome": 2,
+      "preserved": 1
+    },
+    {
+      "group": "recursive",
+      "sql": "WITH RECURSIVE c(n) AS(SELECT 1 UNION ALL SELECT n+1 FROM c WHERE n<2) SELECT 9223372036854775807+1 AS v FROM c",
+      "repeat": 1,
+      "api": "query",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "after": [
+        [
+          1
+        ],
+        [
+          2
+        ]
+      ],
+      "outcome": 0,
+      "preserved": 0
+    },
+    {
+      "group": "recursive",
+      "sql": "WITH RECURSIVE c(n) AS(SELECT 1 UNION ALL SELECT n+1 FROM c WHERE n<2) SELECT 9223372036854775807+1 AS v FROM c",
+      "repeat": 1,
+      "api": "execute",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "after": [
+        [
+          1
+        ],
+        [
+          2
+        ]
+      ],
+      "outcome": 1,
+      "preserved": 0
+    },
+    {
+      "group": "recursive",
+      "sql": "WITH RECURSIVE c(n) AS(SELECT 1 UNION ALL SELECT n+1 FROM c WHERE n<2) SELECT 9223372036854775807+1 AS v FROM c",
+      "repeat": 1,
+      "api": "prepare",
+      "prepareWarnings": 0,
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "after": [
+        [
+          1
+        ],
+        [
+          2
+        ]
+      ],
+      "outcome": 2,
+      "preserved": 1
+    },
+    {
+      "group": "parameter",
+      "sql": "SELECT n+? AS v FROM(SELECT 1 AS n LIMIT 1)d",
+      "repeat": 0,
+      "params": [
+        "9223372036854775807"
+      ],
+      "api": "query",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "after": [
+        [
+          1
+        ],
+        [
+          2
+        ]
+      ],
+      "outcome": 35,
+      "preserved": 1
+    },
+    {
+      "group": "parameter",
+      "sql": "SELECT n+? AS v FROM(SELECT 1 AS n LIMIT 1)d",
+      "repeat": 0,
+      "params": [
+        "9223372036854775807"
+      ],
+      "api": "execute",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "after": [
+        [
+          1
+        ],
+        [
+          2
+        ]
+      ],
+      "outcome": 36,
+      "preserved": 7
+    },
+    {
+      "group": "parameter",
+      "sql": "SELECT n+? AS v FROM(SELECT 1 AS n LIMIT 1)d",
+      "repeat": 0,
+      "params": [
+        "9223372036854775807"
+      ],
+      "api": "prepare",
+      "prepareWarnings": 0,
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "after": [
+        [
+          1
+        ],
+        [
+          2
+        ]
+      ],
+      "outcome": 37,
+      "preserved": 5
+    },
+    {
+      "group": "parameter",
+      "sql": "SELECT n+? AS v FROM(SELECT 1 AS n LIMIT 1)d",
+      "repeat": 1,
+      "params": [
+        "9223372036854775807"
+      ],
+      "api": "query",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "after": [
+        [
+          1
+        ],
+        [
+          2
+        ]
+      ],
+      "outcome": 35,
+      "preserved": 1
+    },
+    {
+      "group": "parameter",
+      "sql": "SELECT n+? AS v FROM(SELECT 1 AS n LIMIT 1)d",
+      "repeat": 1,
+      "params": [
+        "9223372036854775807"
+      ],
+      "api": "execute",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "after": [
+        [
+          1
+        ],
+        [
+          2
+        ]
+      ],
+      "outcome": 36,
+      "preserved": 7
+    },
+    {
+      "group": "parameter",
+      "sql": "SELECT n+? AS v FROM(SELECT 1 AS n LIMIT 1)d",
+      "repeat": 1,
+      "params": [
+        "9223372036854775807"
+      ],
+      "api": "prepare",
+      "prepareWarnings": 0,
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "after": [
+        [
+          1
+        ],
+        [
+          2
+        ]
+      ],
+      "outcome": 37,
+      "preserved": 5
+    },
+    {
+      "group": "parameter_fill",
+      "sql": "SELECT 9223372036854775807+1 AS v FROM(SELECT JSON_EXTRACT('{}',?) AS n LIMIT 1)d",
+      "repeat": 0,
+      "params": [
+        "bad"
+      ],
+      "api": "query",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "after": [
+        [
+          1
+        ],
+        [
+          2
+        ]
+      ],
+      "outcome": 20,
+      "preserved": 1
+    },
+    {
+      "group": "parameter_fill",
+      "sql": "SELECT 9223372036854775807+1 AS v FROM(SELECT JSON_EXTRACT('{}',?) AS n LIMIT 1)d",
+      "repeat": 0,
+      "params": [
+        "bad"
+      ],
+      "api": "execute",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "after": [
+        [
+          1
+        ],
+        [
+          2
+        ]
+      ],
+      "outcome": 38,
+      "preserved": 1
+    },
+    {
+      "group": "parameter_fill",
+      "sql": "SELECT 9223372036854775807+1 AS v FROM(SELECT JSON_EXTRACT('{}',?) AS n LIMIT 1)d",
+      "repeat": 0,
+      "params": [
+        "bad"
+      ],
+      "api": "prepare",
+      "prepareWarnings": 0,
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "after": [
+        [
+          1
+        ],
+        [
+          2
+        ]
+      ],
+      "outcome": 39,
+      "preserved": 1
+    },
+    {
+      "group": "parameter_fill",
+      "sql": "SELECT 9223372036854775807+1 AS v FROM(SELECT JSON_EXTRACT('{}',?) AS n LIMIT 1)d",
+      "repeat": 1,
+      "params": [
+        "bad"
+      ],
+      "api": "query",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "after": [
+        [
+          1
+        ],
+        [
+          2
+        ]
+      ],
+      "outcome": 20,
+      "preserved": 1
+    },
+    {
+      "group": "parameter_fill",
+      "sql": "SELECT 9223372036854775807+1 AS v FROM(SELECT JSON_EXTRACT('{}',?) AS n LIMIT 1)d",
+      "repeat": 1,
+      "params": [
+        "bad"
+      ],
+      "api": "execute",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "after": [
+        [
+          1
+        ],
+        [
+          2
+        ]
+      ],
+      "outcome": 38,
+      "preserved": 1
+    },
+    {
+      "group": "parameter_fill",
+      "sql": "SELECT 9223372036854775807+1 AS v FROM(SELECT JSON_EXTRACT('{}',?) AS n LIMIT 1)d",
+      "repeat": 1,
+      "params": [
+        "bad"
+      ],
+      "api": "prepare",
+      "prepareWarnings": 0,
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "after": [
+        [
+          1
+        ],
+        [
+          2
+        ]
+      ],
+      "outcome": 39,
+      "preserved": 1
+    },
+    {
+      "group": "with_invalid_column",
+      "sql": "WITH c AS(SELECT missing FROM r) SELECT 9223372036854775807+1 AS v FROM(SELECT 1 AS n LIMIT 1)d",
+      "api": "query",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "after": [
+        [
+          1
+        ],
+        [
+          2
+        ]
+      ],
+      "outcome": 0,
+      "preserved": 0
+    },
+    {
+      "group": "with_invalid_column",
+      "sql": "WITH c AS(SELECT missing FROM r) SELECT 9223372036854775807+1 AS v FROM(SELECT 1 AS n LIMIT 1)d",
+      "api": "execute",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "after": [
+        [
+          1
+        ],
+        [
+          2
+        ]
+      ],
+      "outcome": 1,
+      "preserved": 0
+    },
+    {
+      "group": "with_invalid_column",
+      "sql": "WITH c AS(SELECT missing FROM r) SELECT 9223372036854775807+1 AS v FROM(SELECT 1 AS n LIMIT 1)d",
+      "api": "prepare",
+      "prepareWarnings": 0,
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "after": [
+        [
+          1
+        ],
+        [
+          2
+        ]
+      ],
+      "outcome": 2,
+      "preserved": 1
+    },
+    {
+      "group": "with_missing_table",
+      "sql": "WITH c AS(SELECT v FROM missing) SELECT 9223372036854775807+1 AS v FROM(SELECT 1 AS n LIMIT 1)d",
+      "api": "query",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "after": [
+        [
+          1
+        ],
+        [
+          2
+        ]
+      ],
+      "outcome": 0,
+      "preserved": 0
+    },
+    {
+      "group": "with_missing_table",
+      "sql": "WITH c AS(SELECT v FROM missing) SELECT 9223372036854775807+1 AS v FROM(SELECT 1 AS n LIMIT 1)d",
+      "api": "execute",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "after": [
+        [
+          1
+        ],
+        [
+          2
+        ]
+      ],
+      "outcome": 1,
+      "preserved": 0
+    },
+    {
+      "group": "with_missing_table",
+      "sql": "WITH c AS(SELECT v FROM missing) SELECT 9223372036854775807+1 AS v FROM(SELECT 1 AS n LIMIT 1)d",
+      "api": "prepare",
+      "prepareWarnings": 0,
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "after": [
+        [
+          1
+        ],
+        [
+          2
+        ]
+      ],
+      "outcome": 2,
+      "preserved": 1
+    },
+    {
+      "group": "with_unused_error",
+      "sql": "WITH c AS(SELECT JSON_EXTRACT('{}','bad')) SELECT 9223372036854775807+1 AS v FROM(SELECT 1 AS n LIMIT 1)d",
+      "api": "query",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "after": [
+        [
+          1
+        ],
+        [
+          2
+        ]
+      ],
+      "outcome": 0,
+      "preserved": 0
+    },
+    {
+      "group": "with_unused_error",
+      "sql": "WITH c AS(SELECT JSON_EXTRACT('{}','bad')) SELECT 9223372036854775807+1 AS v FROM(SELECT 1 AS n LIMIT 1)d",
+      "api": "execute",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "after": [
+        [
+          1
+        ],
+        [
+          2
+        ]
+      ],
+      "outcome": 1,
+      "preserved": 0
+    },
+    {
+      "group": "with_unused_error",
+      "sql": "WITH c AS(SELECT JSON_EXTRACT('{}','bad')) SELECT 9223372036854775807+1 AS v FROM(SELECT 1 AS n LIMIT 1)d",
+      "api": "prepare",
+      "prepareWarnings": 0,
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "after": [
+        [
+          1
+        ],
+        [
+          2
+        ]
+      ],
+      "outcome": 2,
+      "preserved": 1
+    },
+    {
+      "group": "with_duplicate",
+      "sql": "WITH c AS(SELECT 1),c AS(SELECT 2) SELECT 9223372036854775807+1 AS v FROM(SELECT 1 AS n LIMIT 1)d",
+      "api": "query",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "after": [
+        [
+          1
+        ],
+        [
+          2
+        ]
+      ],
+      "outcome": 40,
+      "preserved": 1
+    },
+    {
+      "group": "with_duplicate",
+      "sql": "WITH c AS(SELECT 1),c AS(SELECT 2) SELECT 9223372036854775807+1 AS v FROM(SELECT 1 AS n LIMIT 1)d",
+      "api": "execute",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "after": [
+        [
+          1
+        ],
+        [
+          2
+        ]
+      ],
+      "outcome": 40,
+      "preserved": 1
+    },
+    {
+      "group": "with_duplicate",
+      "sql": "WITH c AS(SELECT 1),c AS(SELECT 2) SELECT 9223372036854775807+1 AS v FROM(SELECT 1 AS n LIMIT 1)d",
+      "api": "prepare",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "after": [
+        [
+          1
+        ],
+        [
+          2
+        ]
+      ],
+      "outcome": 41,
+      "preserved": 1
+    },
+    {
+      "group": "with_invalid_recursive",
+      "sql": "WITH RECURSIVE c AS(SELECT n FROM c) SELECT 9223372036854775807+1 AS v FROM(SELECT 1 AS n LIMIT 1)d",
+      "api": "query",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "after": [
+        [
+          1
+        ],
+        [
+          2
+        ]
+      ],
+      "outcome": 0,
+      "preserved": 6
+    },
+    {
+      "group": "with_invalid_recursive",
+      "sql": "WITH RECURSIVE c AS(SELECT n FROM c) SELECT 9223372036854775807+1 AS v FROM(SELECT 1 AS n LIMIT 1)d",
+      "api": "execute",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "after": [
+        [
+          1
+        ],
+        [
+          2
+        ]
+      ],
+      "outcome": 1,
+      "preserved": 6
+    },
+    {
+      "group": "with_invalid_recursive",
+      "sql": "WITH RECURSIVE c AS(SELECT n FROM c) SELECT 9223372036854775807+1 AS v FROM(SELECT 1 AS n LIMIT 1)d",
+      "api": "prepare",
+      "prepareWarnings": 0,
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "after": [
+        [
+          1
+        ],
+        [
+          2
+        ]
+      ],
+      "outcome": 2,
+      "preserved": 4
+    },
+    {
+      "group": "source_duplicate",
+      "sql": "SELECT 9223372036854775807+1 AS v FROM(WITH c AS(SELECT 1),c AS(SELECT 2) SELECT 1 AS n LIMIT 1)d",
+      "api": "query",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "after": [
+        [
+          1
+        ],
+        [
+          2
+        ]
+      ],
+      "outcome": 40,
+      "preserved": 1
+    },
+    {
+      "group": "source_duplicate",
+      "sql": "SELECT 9223372036854775807+1 AS v FROM(WITH c AS(SELECT 1),c AS(SELECT 2) SELECT 1 AS n LIMIT 1)d",
+      "api": "execute",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "after": [
+        [
+          1
+        ],
+        [
+          2
+        ]
+      ],
+      "outcome": 40,
+      "preserved": 1
+    },
+    {
+      "group": "source_duplicate",
+      "sql": "SELECT 9223372036854775807+1 AS v FROM(WITH c AS(SELECT 1),c AS(SELECT 2) SELECT 1 AS n LIMIT 1)d",
+      "api": "prepare",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "after": [
+        [
+          1
+        ],
+        [
+          2
+        ]
+      ],
+      "outcome": 41,
+      "preserved": 1
+    },
+    {
+      "group": "source_window",
+      "sql": "SELECT 9223372036854775807+1 AS v FROM(SELECT 1 AS n WINDOW w AS(ORDER BY missing_column))d",
+      "api": "query",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "after": [
+        [
+          1
+        ],
+        [
+          2
+        ]
+      ],
+      "outcome": 42,
+      "preserved": 2
+    },
+    {
+      "group": "source_window",
+      "sql": "SELECT 9223372036854775807+1 AS v FROM(SELECT 1 AS n WINDOW w AS(ORDER BY missing_column))d",
+      "api": "execute",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "after": [
+        [
+          1
+        ],
+        [
+          2
+        ]
+      ],
+      "outcome": 42,
+      "preserved": 3
+    },
+    {
+      "group": "source_window",
+      "sql": "SELECT 9223372036854775807+1 AS v FROM(SELECT 1 AS n WINDOW w AS(ORDER BY missing_column))d",
+      "api": "prepare",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "after": [
+        [
+          1
+        ],
+        [
+          2
+        ]
+      ],
+      "outcome": 43,
+      "preserved": 4
+    },
+    {
+      "group": "source_having",
+      "sql": "SELECT 9223372036854775807+1 AS v FROM(SELECT 1 AS n HAVING COUNT(1) OVER())d",
+      "api": "query",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "after": [
+        [
+          1
+        ],
+        [
+          2
+        ]
+      ],
+      "outcome": 44,
+      "preserved": 1
+    },
+    {
+      "group": "source_having",
+      "sql": "SELECT 9223372036854775807+1 AS v FROM(SELECT 1 AS n HAVING COUNT(1) OVER())d",
+      "api": "execute",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "after": [
+        [
+          1
+        ],
+        [
+          2
+        ]
+      ],
+      "outcome": 44,
+      "preserved": 1
+    },
+    {
+      "group": "source_having",
+      "sql": "SELECT 9223372036854775807+1 AS v FROM(SELECT 1 AS n HAVING COUNT(1) OVER())d",
+      "api": "prepare",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "after": [
+        [
+          1
+        ],
+        [
+          2
+        ]
+      ],
+      "outcome": 45,
+      "preserved": 1
+    },
+    {
+      "group": "source_with",
+      "sql": "SELECT 9223372036854775807+1 AS v FROM(WITH c AS(SELECT 1) SELECT 1 AS n LIMIT 1)d",
+      "api": "query",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "after": [
+        [
+          1
+        ],
+        [
+          2
+        ]
+      ],
+      "outcome": 0,
+      "preserved": 0
+    },
+    {
+      "group": "source_with",
+      "sql": "SELECT 9223372036854775807+1 AS v FROM(WITH c AS(SELECT 1) SELECT 1 AS n LIMIT 1)d",
+      "api": "execute",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "after": [
+        [
+          1
+        ],
+        [
+          2
+        ]
+      ],
+      "outcome": 1,
+      "preserved": 0
+    },
+    {
+      "group": "source_with",
+      "sql": "SELECT 9223372036854775807+1 AS v FROM(WITH c AS(SELECT 1) SELECT 1 AS n LIMIT 1)d",
+      "api": "prepare",
+      "prepareWarnings": 0,
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "after": [
+        [
+          1
+        ],
+        [
+          2
+        ]
+      ],
+      "outcome": 2,
+      "preserved": 1
+    },
+    {
+      "group": "deep_window",
+      "sql": "SELECT 9223372036854775807+1 AS v FROM(SELECT(SELECT 1 WINDOW w AS(ORDER BY missing_column)) AS n LIMIT 1)d",
+      "api": "query",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "after": [
+        [
+          1
+        ],
+        [
+          2
+        ]
+      ],
+      "outcome": 42,
+      "preserved": 2
+    },
+    {
+      "group": "deep_window",
+      "sql": "SELECT 9223372036854775807+1 AS v FROM(SELECT(SELECT 1 WINDOW w AS(ORDER BY missing_column)) AS n LIMIT 1)d",
+      "api": "execute",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "after": [
+        [
+          1
+        ],
+        [
+          2
+        ]
+      ],
+      "outcome": 42,
+      "preserved": 3
+    },
+    {
+      "group": "deep_window",
+      "sql": "SELECT 9223372036854775807+1 AS v FROM(SELECT(SELECT 1 WINDOW w AS(ORDER BY missing_column)) AS n LIMIT 1)d",
+      "api": "prepare",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "after": [
+        [
+          1
+        ],
+        [
+          2
+        ]
+      ],
+      "outcome": 43,
+      "preserved": 4
+    },
+    {
+      "group": "deep_duplicate",
+      "sql": "SELECT 9223372036854775807+1 AS v FROM(SELECT(WITH c AS(SELECT 1),c AS(SELECT 2) SELECT 1) AS n LIMIT 1)d",
+      "api": "query",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "after": [
+        [
+          1
+        ],
+        [
+          2
+        ]
+      ],
+      "outcome": 40,
+      "preserved": 1
+    },
+    {
+      "group": "deep_duplicate",
+      "sql": "SELECT 9223372036854775807+1 AS v FROM(SELECT(WITH c AS(SELECT 1),c AS(SELECT 2) SELECT 1) AS n LIMIT 1)d",
+      "api": "execute",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "after": [
+        [
+          1
+        ],
+        [
+          2
+        ]
+      ],
+      "outcome": 40,
+      "preserved": 1
+    },
+    {
+      "group": "deep_duplicate",
+      "sql": "SELECT 9223372036854775807+1 AS v FROM(SELECT(WITH c AS(SELECT 1),c AS(SELECT 2) SELECT 1) AS n LIMIT 1)d",
+      "api": "prepare",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "after": [
+        [
+          1
+        ],
+        [
+          2
+        ]
+      ],
+      "outcome": 41,
+      "preserved": 1
+    },
+    {
+      "group": "deep_having",
+      "sql": "SELECT 9223372036854775807+1 AS v FROM(SELECT(SELECT 1 HAVING COUNT(1) OVER()) AS n LIMIT 1)d",
+      "api": "query",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "after": [
+        [
+          1
+        ],
+        [
+          2
+        ]
+      ],
+      "outcome": 44,
+      "preserved": 1
+    },
+    {
+      "group": "deep_having",
+      "sql": "SELECT 9223372036854775807+1 AS v FROM(SELECT(SELECT 1 HAVING COUNT(1) OVER()) AS n LIMIT 1)d",
+      "api": "execute",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "after": [
+        [
+          1
+        ],
+        [
+          2
+        ]
+      ],
+      "outcome": 44,
+      "preserved": 1
+    },
+    {
+      "group": "deep_having",
+      "sql": "SELECT 9223372036854775807+1 AS v FROM(SELECT(SELECT 1 HAVING COUNT(1) OVER()) AS n LIMIT 1)d",
+      "api": "prepare",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "after": [
+        [
+          1
+        ],
+        [
+          2
+        ]
+      ],
+      "outcome": 45,
+      "preserved": 1
+    },
+    {
+      "group": "deep_where",
+      "sql": "SELECT 9223372036854775807+1 AS v FROM(SELECT(SELECT 1 WHERE 0 AND COUNT(1) OVER()) AS n LIMIT 1)d",
+      "api": "query",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "after": [
+        [
+          1
+        ],
+        [
+          2
+        ]
+      ],
+      "outcome": 44,
+      "preserved": 1
+    },
+    {
+      "group": "deep_where",
+      "sql": "SELECT 9223372036854775807+1 AS v FROM(SELECT(SELECT 1 WHERE 0 AND COUNT(1) OVER()) AS n LIMIT 1)d",
+      "api": "execute",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "after": [
+        [
+          1
+        ],
+        [
+          2
+        ]
+      ],
+      "outcome": 44,
+      "preserved": 1
+    },
+    {
+      "group": "deep_where",
+      "sql": "SELECT 9223372036854775807+1 AS v FROM(SELECT(SELECT 1 WHERE 0 AND COUNT(1) OVER()) AS n LIMIT 1)d",
+      "api": "prepare",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "after": [
+        [
+          1
+        ],
+        [
+          2
+        ]
+      ],
+      "outcome": 45,
+      "preserved": 1
+    },
+    {
+      "group": "option:HIGH_PRIORITY",
+      "sql": "SELECT HIGH_PRIORITY 9223372036854775807+1 AS v FROM(SELECT 1 AS n LIMIT 1)d",
+      "api": "query",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "after": [
+        [
+          1
+        ],
+        [
+          2
+        ]
+      ],
+      "outcome": 0,
+      "preserved": 0
+    },
+    {
+      "group": "option:HIGH_PRIORITY",
+      "sql": "SELECT HIGH_PRIORITY 9223372036854775807+1 AS v FROM(SELECT 1 AS n LIMIT 1)d",
+      "api": "execute",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "after": [
+        [
+          1
+        ],
+        [
+          2
+        ]
+      ],
+      "outcome": 1,
+      "preserved": 0
+    },
+    {
+      "group": "option:HIGH_PRIORITY",
+      "sql": "SELECT HIGH_PRIORITY 9223372036854775807+1 AS v FROM(SELECT 1 AS n LIMIT 1)d",
+      "api": "prepare",
+      "prepareWarnings": 0,
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "after": [
+        [
+          1
+        ],
+        [
+          2
+        ]
+      ],
+      "outcome": 2,
+      "preserved": 1
+    },
+    {
+      "group": "option:HIGH_PRIORITY",
+      "sql": "SELECT HIGH_PRIORITY 9223372036854775807+1 AS v FROM(SELECT 1 AS n)d",
+      "api": "query",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "after": [
+        [
+          1
+        ],
+        [
+          2
+        ]
+      ],
+      "outcome": 0,
+      "preserved": 0
+    },
+    {
+      "group": "option:HIGH_PRIORITY",
+      "sql": "SELECT HIGH_PRIORITY 9223372036854775807+1 AS v FROM(SELECT 1 AS n)d",
+      "api": "execute",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "after": [
+        [
+          1
+        ],
+        [
+          2
+        ]
+      ],
+      "outcome": 1,
+      "preserved": 0
+    },
+    {
+      "group": "option:HIGH_PRIORITY",
+      "sql": "SELECT HIGH_PRIORITY 9223372036854775807+1 AS v FROM(SELECT 1 AS n)d",
+      "api": "prepare",
+      "prepareWarnings": 0,
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "after": [
+        [
+          1
+        ],
+        [
+          2
+        ]
+      ],
+      "outcome": 2,
+      "preserved": 1
+    },
+    {
+      "group": "option:HIGH_PRIORITY",
+      "sql": "SELECT HIGH_PRIORITY 9223372036854775807+1 AS v FROM(SELECT 1 AS n LIMIT 0)d",
+      "api": "query",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "after": [
+        [
+          1
+        ],
+        [
+          2
+        ]
+      ],
+      "outcome": 3,
+      "preserved": 1
+    },
+    {
+      "group": "option:HIGH_PRIORITY",
+      "sql": "SELECT HIGH_PRIORITY 9223372036854775807+1 AS v FROM(SELECT 1 AS n LIMIT 0)d",
+      "api": "execute",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "after": [
+        [
+          1
+        ],
+        [
+          2
+        ]
+      ],
+      "outcome": 4,
+      "preserved": 1
+    },
+    {
+      "group": "option:HIGH_PRIORITY",
+      "sql": "SELECT HIGH_PRIORITY 9223372036854775807+1 AS v FROM(SELECT 1 AS n LIMIT 0)d",
+      "api": "prepare",
+      "prepareWarnings": 0,
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "after": [
+        [
+          1
+        ],
+        [
+          2
+        ]
+      ],
+      "outcome": 2,
+      "preserved": 1
+    },
+    {
+      "group": "option:HIGH_PRIORITY",
+      "sql": "SELECT HIGH_PRIORITY 9223372036854775807+1 AS v FROM(SELECT JSON_EXTRACT('{}','bad') AS n LIMIT 1)d",
+      "api": "query",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "after": [
+        [
+          1
+        ],
+        [
+          2
+        ]
+      ],
+      "outcome": 20,
+      "preserved": 1
+    },
+    {
+      "group": "option:HIGH_PRIORITY",
+      "sql": "SELECT HIGH_PRIORITY 9223372036854775807+1 AS v FROM(SELECT JSON_EXTRACT('{}','bad') AS n LIMIT 1)d",
+      "api": "execute",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "after": [
+        [
+          1
+        ],
+        [
+          2
+        ]
+      ],
+      "outcome": 21,
+      "preserved": 1
+    },
+    {
+      "group": "option:HIGH_PRIORITY",
+      "sql": "SELECT HIGH_PRIORITY 9223372036854775807+1 AS v FROM(SELECT JSON_EXTRACT('{}','bad') AS n LIMIT 1)d",
+      "api": "prepare",
+      "prepareWarnings": 0,
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "after": [
+        [
+          1
+        ],
+        [
+          2
+        ]
+      ],
+      "outcome": 2,
+      "preserved": 1
+    },
+    {
+      "group": "option:HIGH_PRIORITY",
+      "sql": "SELECT HIGH_PRIORITY 9223372036854775807+1 AS v FROM(SELECT n FROM v)d",
+      "api": "query",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "after": [
+        [
+          1
+        ],
+        [
+          2
+        ]
+      ],
+      "outcome": 0,
+      "preserved": 0
+    },
+    {
+      "group": "option:HIGH_PRIORITY",
+      "sql": "SELECT HIGH_PRIORITY 9223372036854775807+1 AS v FROM(SELECT n FROM v)d",
+      "api": "execute",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "after": [
+        [
+          1
+        ],
+        [
+          2
+        ]
+      ],
+      "outcome": 1,
+      "preserved": 0
+    },
+    {
+      "group": "option:HIGH_PRIORITY",
+      "sql": "SELECT HIGH_PRIORITY 9223372036854775807+1 AS v FROM(SELECT n FROM v)d",
+      "api": "prepare",
+      "prepareWarnings": 0,
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "after": [
+        [
+          1
+        ],
+        [
+          2
+        ]
+      ],
+      "outcome": 2,
+      "preserved": 1
+    },
+    {
+      "group": "option:STRAIGHT_JOIN",
+      "sql": "SELECT STRAIGHT_JOIN 9223372036854775807+1 AS v FROM(SELECT 1 AS n LIMIT 1)d",
+      "api": "query",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "after": [
+        [
+          1
+        ],
+        [
+          2
+        ]
+      ],
+      "outcome": 0,
+      "preserved": 0
+    },
+    {
+      "group": "option:STRAIGHT_JOIN",
+      "sql": "SELECT STRAIGHT_JOIN 9223372036854775807+1 AS v FROM(SELECT 1 AS n LIMIT 1)d",
+      "api": "execute",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "after": [
+        [
+          1
+        ],
+        [
+          2
+        ]
+      ],
+      "outcome": 1,
+      "preserved": 0
+    },
+    {
+      "group": "option:STRAIGHT_JOIN",
+      "sql": "SELECT STRAIGHT_JOIN 9223372036854775807+1 AS v FROM(SELECT 1 AS n LIMIT 1)d",
+      "api": "prepare",
+      "prepareWarnings": 0,
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "after": [
+        [
+          1
+        ],
+        [
+          2
+        ]
+      ],
+      "outcome": 2,
+      "preserved": 1
+    },
+    {
+      "group": "option:STRAIGHT_JOIN",
+      "sql": "SELECT STRAIGHT_JOIN 9223372036854775807+1 AS v FROM(SELECT 1 AS n)d",
+      "api": "query",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "after": [
+        [
+          1
+        ],
+        [
+          2
+        ]
+      ],
+      "outcome": 0,
+      "preserved": 0
+    },
+    {
+      "group": "option:STRAIGHT_JOIN",
+      "sql": "SELECT STRAIGHT_JOIN 9223372036854775807+1 AS v FROM(SELECT 1 AS n)d",
+      "api": "execute",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "after": [
+        [
+          1
+        ],
+        [
+          2
+        ]
+      ],
+      "outcome": 1,
+      "preserved": 0
+    },
+    {
+      "group": "option:STRAIGHT_JOIN",
+      "sql": "SELECT STRAIGHT_JOIN 9223372036854775807+1 AS v FROM(SELECT 1 AS n)d",
+      "api": "prepare",
+      "prepareWarnings": 0,
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "after": [
+        [
+          1
+        ],
+        [
+          2
+        ]
+      ],
+      "outcome": 2,
+      "preserved": 1
+    },
+    {
+      "group": "option:STRAIGHT_JOIN",
+      "sql": "SELECT STRAIGHT_JOIN 9223372036854775807+1 AS v FROM(SELECT 1 AS n LIMIT 0)d",
+      "api": "query",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "after": [
+        [
+          1
+        ],
+        [
+          2
+        ]
+      ],
+      "outcome": 3,
+      "preserved": 1
+    },
+    {
+      "group": "option:STRAIGHT_JOIN",
+      "sql": "SELECT STRAIGHT_JOIN 9223372036854775807+1 AS v FROM(SELECT 1 AS n LIMIT 0)d",
+      "api": "execute",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "after": [
+        [
+          1
+        ],
+        [
+          2
+        ]
+      ],
+      "outcome": 4,
+      "preserved": 1
+    },
+    {
+      "group": "option:STRAIGHT_JOIN",
+      "sql": "SELECT STRAIGHT_JOIN 9223372036854775807+1 AS v FROM(SELECT 1 AS n LIMIT 0)d",
+      "api": "prepare",
+      "prepareWarnings": 0,
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "after": [
+        [
+          1
+        ],
+        [
+          2
+        ]
+      ],
+      "outcome": 2,
+      "preserved": 1
+    },
+    {
+      "group": "option:STRAIGHT_JOIN",
+      "sql": "SELECT STRAIGHT_JOIN 9223372036854775807+1 AS v FROM(SELECT JSON_EXTRACT('{}','bad') AS n LIMIT 1)d",
+      "api": "query",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "after": [
+        [
+          1
+        ],
+        [
+          2
+        ]
+      ],
+      "outcome": 20,
+      "preserved": 1
+    },
+    {
+      "group": "option:STRAIGHT_JOIN",
+      "sql": "SELECT STRAIGHT_JOIN 9223372036854775807+1 AS v FROM(SELECT JSON_EXTRACT('{}','bad') AS n LIMIT 1)d",
+      "api": "execute",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "after": [
+        [
+          1
+        ],
+        [
+          2
+        ]
+      ],
+      "outcome": 21,
+      "preserved": 1
+    },
+    {
+      "group": "option:STRAIGHT_JOIN",
+      "sql": "SELECT STRAIGHT_JOIN 9223372036854775807+1 AS v FROM(SELECT JSON_EXTRACT('{}','bad') AS n LIMIT 1)d",
+      "api": "prepare",
+      "prepareWarnings": 0,
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "after": [
+        [
+          1
+        ],
+        [
+          2
+        ]
+      ],
+      "outcome": 2,
+      "preserved": 1
+    },
+    {
+      "group": "option:STRAIGHT_JOIN",
+      "sql": "SELECT STRAIGHT_JOIN 9223372036854775807+1 AS v FROM(SELECT n FROM v)d",
+      "api": "query",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "after": [
+        [
+          1
+        ],
+        [
+          2
+        ]
+      ],
+      "outcome": 0,
+      "preserved": 0
+    },
+    {
+      "group": "option:STRAIGHT_JOIN",
+      "sql": "SELECT STRAIGHT_JOIN 9223372036854775807+1 AS v FROM(SELECT n FROM v)d",
+      "api": "execute",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "after": [
+        [
+          1
+        ],
+        [
+          2
+        ]
+      ],
+      "outcome": 1,
+      "preserved": 0
+    },
+    {
+      "group": "option:STRAIGHT_JOIN",
+      "sql": "SELECT STRAIGHT_JOIN 9223372036854775807+1 AS v FROM(SELECT n FROM v)d",
+      "api": "prepare",
+      "prepareWarnings": 0,
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "after": [
+        [
+          1
+        ],
+        [
+          2
+        ]
+      ],
+      "outcome": 2,
+      "preserved": 1
+    },
+    {
+      "group": "option:SQL_SMALL_RESULT",
+      "sql": "SELECT SQL_SMALL_RESULT 9223372036854775807+1 AS v FROM(SELECT 1 AS n LIMIT 1)d",
+      "api": "query",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "after": [
+        [
+          1
+        ],
+        [
+          2
+        ]
+      ],
+      "outcome": 0,
+      "preserved": 0
+    },
+    {
+      "group": "option:SQL_SMALL_RESULT",
+      "sql": "SELECT SQL_SMALL_RESULT 9223372036854775807+1 AS v FROM(SELECT 1 AS n LIMIT 1)d",
+      "api": "execute",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "after": [
+        [
+          1
+        ],
+        [
+          2
+        ]
+      ],
+      "outcome": 1,
+      "preserved": 0
+    },
+    {
+      "group": "option:SQL_SMALL_RESULT",
+      "sql": "SELECT SQL_SMALL_RESULT 9223372036854775807+1 AS v FROM(SELECT 1 AS n LIMIT 1)d",
+      "api": "prepare",
+      "prepareWarnings": 0,
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "after": [
+        [
+          1
+        ],
+        [
+          2
+        ]
+      ],
+      "outcome": 2,
+      "preserved": 1
+    },
+    {
+      "group": "option:SQL_SMALL_RESULT",
+      "sql": "SELECT SQL_SMALL_RESULT 9223372036854775807+1 AS v FROM(SELECT 1 AS n)d",
+      "api": "query",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "after": [
+        [
+          1
+        ],
+        [
+          2
+        ]
+      ],
+      "outcome": 0,
+      "preserved": 0
+    },
+    {
+      "group": "option:SQL_SMALL_RESULT",
+      "sql": "SELECT SQL_SMALL_RESULT 9223372036854775807+1 AS v FROM(SELECT 1 AS n)d",
+      "api": "execute",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "after": [
+        [
+          1
+        ],
+        [
+          2
+        ]
+      ],
+      "outcome": 1,
+      "preserved": 0
+    },
+    {
+      "group": "option:SQL_SMALL_RESULT",
+      "sql": "SELECT SQL_SMALL_RESULT 9223372036854775807+1 AS v FROM(SELECT 1 AS n)d",
+      "api": "prepare",
+      "prepareWarnings": 0,
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "after": [
+        [
+          1
+        ],
+        [
+          2
+        ]
+      ],
+      "outcome": 2,
+      "preserved": 1
+    },
+    {
+      "group": "option:SQL_SMALL_RESULT",
+      "sql": "SELECT SQL_SMALL_RESULT 9223372036854775807+1 AS v FROM(SELECT 1 AS n LIMIT 0)d",
+      "api": "query",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "after": [
+        [
+          1
+        ],
+        [
+          2
+        ]
+      ],
+      "outcome": 3,
+      "preserved": 1
+    },
+    {
+      "group": "option:SQL_SMALL_RESULT",
+      "sql": "SELECT SQL_SMALL_RESULT 9223372036854775807+1 AS v FROM(SELECT 1 AS n LIMIT 0)d",
+      "api": "execute",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "after": [
+        [
+          1
+        ],
+        [
+          2
+        ]
+      ],
+      "outcome": 4,
+      "preserved": 1
+    },
+    {
+      "group": "option:SQL_SMALL_RESULT",
+      "sql": "SELECT SQL_SMALL_RESULT 9223372036854775807+1 AS v FROM(SELECT 1 AS n LIMIT 0)d",
+      "api": "prepare",
+      "prepareWarnings": 0,
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "after": [
+        [
+          1
+        ],
+        [
+          2
+        ]
+      ],
+      "outcome": 2,
+      "preserved": 1
+    },
+    {
+      "group": "option:SQL_SMALL_RESULT",
+      "sql": "SELECT SQL_SMALL_RESULT 9223372036854775807+1 AS v FROM(SELECT JSON_EXTRACT('{}','bad') AS n LIMIT 1)d",
+      "api": "query",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "after": [
+        [
+          1
+        ],
+        [
+          2
+        ]
+      ],
+      "outcome": 20,
+      "preserved": 1
+    },
+    {
+      "group": "option:SQL_SMALL_RESULT",
+      "sql": "SELECT SQL_SMALL_RESULT 9223372036854775807+1 AS v FROM(SELECT JSON_EXTRACT('{}','bad') AS n LIMIT 1)d",
+      "api": "execute",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "after": [
+        [
+          1
+        ],
+        [
+          2
+        ]
+      ],
+      "outcome": 21,
+      "preserved": 1
+    },
+    {
+      "group": "option:SQL_SMALL_RESULT",
+      "sql": "SELECT SQL_SMALL_RESULT 9223372036854775807+1 AS v FROM(SELECT JSON_EXTRACT('{}','bad') AS n LIMIT 1)d",
+      "api": "prepare",
+      "prepareWarnings": 0,
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "after": [
+        [
+          1
+        ],
+        [
+          2
+        ]
+      ],
+      "outcome": 2,
+      "preserved": 1
+    },
+    {
+      "group": "option:SQL_SMALL_RESULT",
+      "sql": "SELECT SQL_SMALL_RESULT 9223372036854775807+1 AS v FROM(SELECT n FROM v)d",
+      "api": "query",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "after": [
+        [
+          1
+        ],
+        [
+          2
+        ]
+      ],
+      "outcome": 0,
+      "preserved": 0
+    },
+    {
+      "group": "option:SQL_SMALL_RESULT",
+      "sql": "SELECT SQL_SMALL_RESULT 9223372036854775807+1 AS v FROM(SELECT n FROM v)d",
+      "api": "execute",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "after": [
+        [
+          1
+        ],
+        [
+          2
+        ]
+      ],
+      "outcome": 1,
+      "preserved": 0
+    },
+    {
+      "group": "option:SQL_SMALL_RESULT",
+      "sql": "SELECT SQL_SMALL_RESULT 9223372036854775807+1 AS v FROM(SELECT n FROM v)d",
+      "api": "prepare",
+      "prepareWarnings": 0,
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "after": [
+        [
+          1
+        ],
+        [
+          2
+        ]
+      ],
+      "outcome": 2,
+      "preserved": 1
+    },
+    {
+      "group": "option:SQL_BIG_RESULT",
+      "sql": "SELECT SQL_BIG_RESULT 9223372036854775807+1 AS v FROM(SELECT 1 AS n LIMIT 1)d",
+      "api": "query",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "after": [
+        [
+          1
+        ],
+        [
+          2
+        ]
+      ],
+      "outcome": 0,
+      "preserved": 0
+    },
+    {
+      "group": "option:SQL_BIG_RESULT",
+      "sql": "SELECT SQL_BIG_RESULT 9223372036854775807+1 AS v FROM(SELECT 1 AS n LIMIT 1)d",
+      "api": "execute",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "after": [
+        [
+          1
+        ],
+        [
+          2
+        ]
+      ],
+      "outcome": 1,
+      "preserved": 0
+    },
+    {
+      "group": "option:SQL_BIG_RESULT",
+      "sql": "SELECT SQL_BIG_RESULT 9223372036854775807+1 AS v FROM(SELECT 1 AS n LIMIT 1)d",
+      "api": "prepare",
+      "prepareWarnings": 0,
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "after": [
+        [
+          1
+        ],
+        [
+          2
+        ]
+      ],
+      "outcome": 2,
+      "preserved": 1
+    },
+    {
+      "group": "option:SQL_BIG_RESULT",
+      "sql": "SELECT SQL_BIG_RESULT 9223372036854775807+1 AS v FROM(SELECT 1 AS n)d",
+      "api": "query",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "after": [
+        [
+          1
+        ],
+        [
+          2
+        ]
+      ],
+      "outcome": 0,
+      "preserved": 0
+    },
+    {
+      "group": "option:SQL_BIG_RESULT",
+      "sql": "SELECT SQL_BIG_RESULT 9223372036854775807+1 AS v FROM(SELECT 1 AS n)d",
+      "api": "execute",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "after": [
+        [
+          1
+        ],
+        [
+          2
+        ]
+      ],
+      "outcome": 1,
+      "preserved": 0
+    },
+    {
+      "group": "option:SQL_BIG_RESULT",
+      "sql": "SELECT SQL_BIG_RESULT 9223372036854775807+1 AS v FROM(SELECT 1 AS n)d",
+      "api": "prepare",
+      "prepareWarnings": 0,
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "after": [
+        [
+          1
+        ],
+        [
+          2
+        ]
+      ],
+      "outcome": 2,
+      "preserved": 1
+    },
+    {
+      "group": "option:SQL_BIG_RESULT",
+      "sql": "SELECT SQL_BIG_RESULT 9223372036854775807+1 AS v FROM(SELECT 1 AS n LIMIT 0)d",
+      "api": "query",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "after": [
+        [
+          1
+        ],
+        [
+          2
+        ]
+      ],
+      "outcome": 3,
+      "preserved": 1
+    },
+    {
+      "group": "option:SQL_BIG_RESULT",
+      "sql": "SELECT SQL_BIG_RESULT 9223372036854775807+1 AS v FROM(SELECT 1 AS n LIMIT 0)d",
+      "api": "execute",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "after": [
+        [
+          1
+        ],
+        [
+          2
+        ]
+      ],
+      "outcome": 4,
+      "preserved": 1
+    },
+    {
+      "group": "option:SQL_BIG_RESULT",
+      "sql": "SELECT SQL_BIG_RESULT 9223372036854775807+1 AS v FROM(SELECT 1 AS n LIMIT 0)d",
+      "api": "prepare",
+      "prepareWarnings": 0,
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "after": [
+        [
+          1
+        ],
+        [
+          2
+        ]
+      ],
+      "outcome": 2,
+      "preserved": 1
+    },
+    {
+      "group": "option:SQL_BIG_RESULT",
+      "sql": "SELECT SQL_BIG_RESULT 9223372036854775807+1 AS v FROM(SELECT JSON_EXTRACT('{}','bad') AS n LIMIT 1)d",
+      "api": "query",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "after": [
+        [
+          1
+        ],
+        [
+          2
+        ]
+      ],
+      "outcome": 20,
+      "preserved": 1
+    },
+    {
+      "group": "option:SQL_BIG_RESULT",
+      "sql": "SELECT SQL_BIG_RESULT 9223372036854775807+1 AS v FROM(SELECT JSON_EXTRACT('{}','bad') AS n LIMIT 1)d",
+      "api": "execute",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "after": [
+        [
+          1
+        ],
+        [
+          2
+        ]
+      ],
+      "outcome": 21,
+      "preserved": 1
+    },
+    {
+      "group": "option:SQL_BIG_RESULT",
+      "sql": "SELECT SQL_BIG_RESULT 9223372036854775807+1 AS v FROM(SELECT JSON_EXTRACT('{}','bad') AS n LIMIT 1)d",
+      "api": "prepare",
+      "prepareWarnings": 0,
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "after": [
+        [
+          1
+        ],
+        [
+          2
+        ]
+      ],
+      "outcome": 2,
+      "preserved": 1
+    },
+    {
+      "group": "option:SQL_BIG_RESULT",
+      "sql": "SELECT SQL_BIG_RESULT 9223372036854775807+1 AS v FROM(SELECT n FROM v)d",
+      "api": "query",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "after": [
+        [
+          1
+        ],
+        [
+          2
+        ]
+      ],
+      "outcome": 0,
+      "preserved": 0
+    },
+    {
+      "group": "option:SQL_BIG_RESULT",
+      "sql": "SELECT SQL_BIG_RESULT 9223372036854775807+1 AS v FROM(SELECT n FROM v)d",
+      "api": "execute",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "after": [
+        [
+          1
+        ],
+        [
+          2
+        ]
+      ],
+      "outcome": 1,
+      "preserved": 0
+    },
+    {
+      "group": "option:SQL_BIG_RESULT",
+      "sql": "SELECT SQL_BIG_RESULT 9223372036854775807+1 AS v FROM(SELECT n FROM v)d",
+      "api": "prepare",
+      "prepareWarnings": 0,
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "after": [
+        [
+          1
+        ],
+        [
+          2
+        ]
+      ],
+      "outcome": 2,
+      "preserved": 1
+    },
+    {
+      "group": "option:SQL_BUFFER_RESULT",
+      "sql": "SELECT SQL_BUFFER_RESULT 9223372036854775807+1 AS v FROM(SELECT 1 AS n LIMIT 1)d",
+      "api": "query",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "after": [
+        [
+          1
+        ],
+        [
+          2
+        ]
+      ],
+      "outcome": 0,
+      "preserved": 0
+    },
+    {
+      "group": "option:SQL_BUFFER_RESULT",
+      "sql": "SELECT SQL_BUFFER_RESULT 9223372036854775807+1 AS v FROM(SELECT 1 AS n LIMIT 1)d",
+      "api": "execute",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "after": [
+        [
+          1
+        ],
+        [
+          2
+        ]
+      ],
+      "outcome": 1,
+      "preserved": 0
+    },
+    {
+      "group": "option:SQL_BUFFER_RESULT",
+      "sql": "SELECT SQL_BUFFER_RESULT 9223372036854775807+1 AS v FROM(SELECT 1 AS n LIMIT 1)d",
+      "api": "prepare",
+      "prepareWarnings": 0,
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "after": [
+        [
+          1
+        ],
+        [
+          2
+        ]
+      ],
+      "outcome": 2,
+      "preserved": 1
+    },
+    {
+      "group": "option:SQL_BUFFER_RESULT",
+      "sql": "SELECT SQL_BUFFER_RESULT 9223372036854775807+1 AS v FROM(SELECT 1 AS n)d",
+      "api": "query",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "after": [
+        [
+          1
+        ],
+        [
+          2
+        ]
+      ],
+      "outcome": 0,
+      "preserved": 0
+    },
+    {
+      "group": "option:SQL_BUFFER_RESULT",
+      "sql": "SELECT SQL_BUFFER_RESULT 9223372036854775807+1 AS v FROM(SELECT 1 AS n)d",
+      "api": "execute",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "after": [
+        [
+          1
+        ],
+        [
+          2
+        ]
+      ],
+      "outcome": 1,
+      "preserved": 0
+    },
+    {
+      "group": "option:SQL_BUFFER_RESULT",
+      "sql": "SELECT SQL_BUFFER_RESULT 9223372036854775807+1 AS v FROM(SELECT 1 AS n)d",
+      "api": "prepare",
+      "prepareWarnings": 0,
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "after": [
+        [
+          1
+        ],
+        [
+          2
+        ]
+      ],
+      "outcome": 2,
+      "preserved": 1
+    },
+    {
+      "group": "option:SQL_BUFFER_RESULT",
+      "sql": "SELECT SQL_BUFFER_RESULT 9223372036854775807+1 AS v FROM(SELECT 1 AS n LIMIT 0)d",
+      "api": "query",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "after": [
+        [
+          1
+        ],
+        [
+          2
+        ]
+      ],
+      "outcome": 3,
+      "preserved": 1
+    },
+    {
+      "group": "option:SQL_BUFFER_RESULT",
+      "sql": "SELECT SQL_BUFFER_RESULT 9223372036854775807+1 AS v FROM(SELECT 1 AS n LIMIT 0)d",
+      "api": "execute",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "after": [
+        [
+          1
+        ],
+        [
+          2
+        ]
+      ],
+      "outcome": 4,
+      "preserved": 1
+    },
+    {
+      "group": "option:SQL_BUFFER_RESULT",
+      "sql": "SELECT SQL_BUFFER_RESULT 9223372036854775807+1 AS v FROM(SELECT 1 AS n LIMIT 0)d",
+      "api": "prepare",
+      "prepareWarnings": 0,
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "after": [
+        [
+          1
+        ],
+        [
+          2
+        ]
+      ],
+      "outcome": 2,
+      "preserved": 1
+    },
+    {
+      "group": "option:SQL_BUFFER_RESULT",
+      "sql": "SELECT SQL_BUFFER_RESULT 9223372036854775807+1 AS v FROM(SELECT JSON_EXTRACT('{}','bad') AS n LIMIT 1)d",
+      "api": "query",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "after": [
+        [
+          1
+        ],
+        [
+          2
+        ]
+      ],
+      "outcome": 20,
+      "preserved": 1
+    },
+    {
+      "group": "option:SQL_BUFFER_RESULT",
+      "sql": "SELECT SQL_BUFFER_RESULT 9223372036854775807+1 AS v FROM(SELECT JSON_EXTRACT('{}','bad') AS n LIMIT 1)d",
+      "api": "execute",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "after": [
+        [
+          1
+        ],
+        [
+          2
+        ]
+      ],
+      "outcome": 21,
+      "preserved": 1
+    },
+    {
+      "group": "option:SQL_BUFFER_RESULT",
+      "sql": "SELECT SQL_BUFFER_RESULT 9223372036854775807+1 AS v FROM(SELECT JSON_EXTRACT('{}','bad') AS n LIMIT 1)d",
+      "api": "prepare",
+      "prepareWarnings": 0,
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "after": [
+        [
+          1
+        ],
+        [
+          2
+        ]
+      ],
+      "outcome": 2,
+      "preserved": 1
+    },
+    {
+      "group": "option:SQL_BUFFER_RESULT",
+      "sql": "SELECT SQL_BUFFER_RESULT 9223372036854775807+1 AS v FROM(SELECT n FROM v)d",
+      "api": "query",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "after": [
+        [
+          1
+        ],
+        [
+          2
+        ]
+      ],
+      "outcome": 0,
+      "preserved": 0
+    },
+    {
+      "group": "option:SQL_BUFFER_RESULT",
+      "sql": "SELECT SQL_BUFFER_RESULT 9223372036854775807+1 AS v FROM(SELECT n FROM v)d",
+      "api": "execute",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "after": [
+        [
+          1
+        ],
+        [
+          2
+        ]
+      ],
+      "outcome": 1,
+      "preserved": 0
+    },
+    {
+      "group": "option:SQL_BUFFER_RESULT",
+      "sql": "SELECT SQL_BUFFER_RESULT 9223372036854775807+1 AS v FROM(SELECT n FROM v)d",
+      "api": "prepare",
+      "prepareWarnings": 0,
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "after": [
+        [
+          1
+        ],
+        [
+          2
+        ]
+      ],
+      "outcome": 2,
+      "preserved": 1
+    },
+    {
+      "group": "option:SQL_CALC_FOUND_ROWS",
+      "sql": "SELECT SQL_CALC_FOUND_ROWS 9223372036854775807+1 AS v FROM(SELECT 1 AS n LIMIT 1)d",
+      "api": "query",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "after": [
+        [
+          1
+        ],
+        [
+          2
+        ]
+      ],
+      "outcome": 46,
+      "preserved": 8
+    },
+    {
+      "group": "option:SQL_CALC_FOUND_ROWS",
+      "sql": "SELECT SQL_CALC_FOUND_ROWS 9223372036854775807+1 AS v FROM(SELECT 1 AS n LIMIT 1)d",
+      "api": "execute",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "after": [
+        [
+          1
+        ],
+        [
+          2
+        ]
+      ],
+      "outcome": 1,
+      "preserved": 0
+    },
+    {
+      "group": "option:SQL_CALC_FOUND_ROWS",
+      "sql": "SELECT SQL_CALC_FOUND_ROWS 9223372036854775807+1 AS v FROM(SELECT 1 AS n LIMIT 1)d",
+      "api": "prepare",
+      "prepareWarnings": 1,
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "after": [
+        [
+          1
+        ],
+        [
+          2
+        ]
+      ],
+      "outcome": 47,
+      "preserved": 9
+    },
+    {
+      "group": "option:SQL_CALC_FOUND_ROWS",
+      "sql": "SELECT SQL_CALC_FOUND_ROWS 9223372036854775807+1 AS v FROM(SELECT 1 AS n)d",
+      "api": "query",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "after": [
+        [
+          1
+        ],
+        [
+          2
+        ]
+      ],
+      "outcome": 46,
+      "preserved": 8
+    },
+    {
+      "group": "option:SQL_CALC_FOUND_ROWS",
+      "sql": "SELECT SQL_CALC_FOUND_ROWS 9223372036854775807+1 AS v FROM(SELECT 1 AS n)d",
+      "api": "execute",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "after": [
+        [
+          1
+        ],
+        [
+          2
+        ]
+      ],
+      "outcome": 1,
+      "preserved": 0
+    },
+    {
+      "group": "option:SQL_CALC_FOUND_ROWS",
+      "sql": "SELECT SQL_CALC_FOUND_ROWS 9223372036854775807+1 AS v FROM(SELECT 1 AS n)d",
+      "api": "prepare",
+      "prepareWarnings": 1,
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "after": [
+        [
+          1
+        ],
+        [
+          2
+        ]
+      ],
+      "outcome": 47,
+      "preserved": 9
+    },
+    {
+      "group": "option:SQL_CALC_FOUND_ROWS",
+      "sql": "SELECT SQL_CALC_FOUND_ROWS 9223372036854775807+1 AS v FROM(SELECT 1 AS n LIMIT 0)d",
+      "api": "query",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "after": [
+        [
+          1
+        ],
+        [
+          2
+        ]
+      ],
+      "outcome": 48,
+      "preserved": 9
+    },
+    {
+      "group": "option:SQL_CALC_FOUND_ROWS",
+      "sql": "SELECT SQL_CALC_FOUND_ROWS 9223372036854775807+1 AS v FROM(SELECT 1 AS n LIMIT 0)d",
+      "api": "execute",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "after": [
+        [
+          1
+        ],
+        [
+          2
+        ]
+      ],
+      "outcome": 4,
+      "preserved": 1
+    },
+    {
+      "group": "option:SQL_CALC_FOUND_ROWS",
+      "sql": "SELECT SQL_CALC_FOUND_ROWS 9223372036854775807+1 AS v FROM(SELECT 1 AS n LIMIT 0)d",
+      "api": "prepare",
+      "prepareWarnings": 1,
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "after": [
+        [
+          1
+        ],
+        [
+          2
+        ]
+      ],
+      "outcome": 47,
+      "preserved": 9
+    },
+    {
+      "group": "option:SQL_CALC_FOUND_ROWS",
+      "sql": "SELECT SQL_CALC_FOUND_ROWS 9223372036854775807+1 AS v FROM(SELECT JSON_EXTRACT('{}','bad') AS n LIMIT 1)d",
+      "api": "query",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "after": [
+        [
+          1
+        ],
+        [
+          2
+        ]
+      ],
+      "outcome": 49,
+      "preserved": 9
+    },
+    {
+      "group": "option:SQL_CALC_FOUND_ROWS",
+      "sql": "SELECT SQL_CALC_FOUND_ROWS 9223372036854775807+1 AS v FROM(SELECT JSON_EXTRACT('{}','bad') AS n LIMIT 1)d",
+      "api": "execute",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "after": [
+        [
+          1
+        ],
+        [
+          2
+        ]
+      ],
+      "outcome": 21,
+      "preserved": 1
+    },
+    {
+      "group": "option:SQL_CALC_FOUND_ROWS",
+      "sql": "SELECT SQL_CALC_FOUND_ROWS 9223372036854775807+1 AS v FROM(SELECT JSON_EXTRACT('{}','bad') AS n LIMIT 1)d",
+      "api": "prepare",
+      "prepareWarnings": 1,
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "after": [
+        [
+          1
+        ],
+        [
+          2
+        ]
+      ],
+      "outcome": 47,
+      "preserved": 9
+    },
+    {
+      "group": "option:SQL_CALC_FOUND_ROWS",
+      "sql": "SELECT SQL_CALC_FOUND_ROWS 9223372036854775807+1 AS v FROM(SELECT n FROM v)d",
+      "api": "query",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "after": [
+        [
+          1
+        ],
+        [
+          2
+        ]
+      ],
+      "outcome": 46,
+      "preserved": 8
+    },
+    {
+      "group": "option:SQL_CALC_FOUND_ROWS",
+      "sql": "SELECT SQL_CALC_FOUND_ROWS 9223372036854775807+1 AS v FROM(SELECT n FROM v)d",
+      "api": "execute",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "after": [
+        [
+          1
+        ],
+        [
+          2
+        ]
+      ],
+      "outcome": 1,
+      "preserved": 0
+    },
+    {
+      "group": "option:SQL_CALC_FOUND_ROWS",
+      "sql": "SELECT SQL_CALC_FOUND_ROWS 9223372036854775807+1 AS v FROM(SELECT n FROM v)d",
+      "api": "prepare",
+      "prepareWarnings": 1,
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "after": [
+        [
+          1
+        ],
+        [
+          2
+        ]
+      ],
+      "outcome": 47,
+      "preserved": 9
+    },
+    {
+      "sql": "SELECT 9223372036854775807+1 AS v FROM(SELECT CAST(1 AS DECIMAL(66,0)) AS n LIMIT 1)d",
+      "api": "query",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "after": [
+        [
+          1
+        ],
+        [
+          2
+        ]
+      ],
+      "outcome": 50,
+      "preserved": 2
+    },
+    {
+      "sql": "SELECT 9223372036854775807+1 AS v FROM(SELECT CAST(1 AS DECIMAL(66,0)) AS n LIMIT 1)d",
+      "api": "execute",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "after": [
+        [
+          1
+        ],
+        [
+          2
+        ]
+      ],
+      "outcome": 50,
+      "preserved": 3
+    },
+    {
+      "sql": "SELECT 9223372036854775807+1 AS v FROM(SELECT CAST(1 AS DECIMAL(66,0)) AS n LIMIT 1)d",
+      "api": "prepare",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "after": [
+        [
+          1
+        ],
+        [
+          2
+        ]
+      ],
+      "outcome": 51,
+      "preserved": 4
+    },
+    {
+      "sql": "SELECT 9223372036854775807+1 AS v FROM(SELECT CAST(1 AS DECIMAL(0,2)) AS n LIMIT 1)d",
+      "api": "query",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "after": [
+        [
+          1
+        ],
+        [
+          2
+        ]
+      ],
+      "outcome": 52,
+      "preserved": 10
+    },
+    {
+      "sql": "SELECT 9223372036854775807+1 AS v FROM(SELECT CAST(1 AS DECIMAL(0,2)) AS n LIMIT 1)d",
+      "api": "execute",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "after": [
+        [
+          1
+        ],
+        [
+          2
+        ]
+      ],
+      "outcome": 52,
+      "preserved": 11
+    },
+    {
+      "sql": "SELECT 9223372036854775807+1 AS v FROM(SELECT CAST(1 AS DECIMAL(0,2)) AS n LIMIT 1)d",
+      "api": "prepare",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "after": [
+        [
+          1
+        ],
+        [
+          2
+        ]
+      ],
+      "outcome": 53,
+      "preserved": 4
+    },
+    {
+      "sql": "SELECT 9223372036854775807+1 AS v FROM(SELECT CAST(1 AS DECIMAL(8,9)) AS n LIMIT 1)d",
+      "api": "query",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "after": [
+        [
+          1
+        ],
+        [
+          2
+        ]
+      ],
+      "outcome": 52,
+      "preserved": 10
+    },
+    {
+      "sql": "SELECT 9223372036854775807+1 AS v FROM(SELECT CAST(1 AS DECIMAL(8,9)) AS n LIMIT 1)d",
+      "api": "execute",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "after": [
+        [
+          1
+        ],
+        [
+          2
+        ]
+      ],
+      "outcome": 52,
+      "preserved": 11
+    },
+    {
+      "sql": "SELECT 9223372036854775807+1 AS v FROM(SELECT CAST(1 AS DECIMAL(8,9)) AS n LIMIT 1)d",
+      "api": "prepare",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "after": [
+        [
+          1
+        ],
+        [
+          2
+        ]
+      ],
+      "outcome": 53,
+      "preserved": 4
+    },
+    {
+      "sql": "SELECT 9223372036854775807+1 AS v FROM(SELECT CAST(1 AS NUMERIC(10,0)) AS n LIMIT 1)d",
+      "api": "query",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "after": [
+        [
+          1
+        ],
+        [
+          2
+        ]
+      ],
+      "outcome": 54,
+      "preserved": 2
+    },
+    {
+      "sql": "SELECT 9223372036854775807+1 AS v FROM(SELECT CAST(1 AS NUMERIC(10,0)) AS n LIMIT 1)d",
+      "api": "execute",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "after": [
+        [
+          1
+        ],
+        [
+          2
+        ]
+      ],
+      "outcome": 54,
+      "preserved": 3
+    },
+    {
+      "sql": "SELECT 9223372036854775807+1 AS v FROM(SELECT CAST(1 AS NUMERIC(10,0)) AS n LIMIT 1)d",
+      "api": "prepare",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "after": [
+        [
+          1
+        ],
+        [
+          2
+        ]
+      ],
+      "outcome": 55,
+      "preserved": 4
+    },
+    {
+      "sql": "SELECT 9223372036854775807+1 AS v FROM(SELECT CAST(1 AS SIGNED ARRAY) AS n LIMIT 1)d",
+      "api": "query",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "after": [
+        [
+          1
+        ],
+        [
+          2
+        ]
+      ],
+      "outcome": 56,
+      "preserved": 2
+    },
+    {
+      "sql": "SELECT 9223372036854775807+1 AS v FROM(SELECT CAST(1 AS SIGNED ARRAY) AS n LIMIT 1)d",
+      "api": "execute",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "after": [
+        [
+          1
+        ],
+        [
+          2
+        ]
+      ],
+      "outcome": 56,
+      "preserved": 3
+    },
+    {
+      "sql": "SELECT 9223372036854775807+1 AS v FROM(SELECT CAST(1 AS SIGNED ARRAY) AS n LIMIT 1)d",
+      "api": "prepare",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "after": [
+        [
+          1
+        ],
+        [
+          2
+        ]
+      ],
+      "outcome": 57,
+      "preserved": 4
+    }
+  ]
+}

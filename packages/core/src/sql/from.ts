@@ -54,7 +54,7 @@ import type { TableStatistics } from './stats.ts'
 import { safeResolve, TableScope, type ScopeColumn, type ScopeTableSpec } from './scope.ts'
 
 /** A table the FROM reads: a base table, or (M5.1) a derived one. */
-export interface FromTable {
+export interface FromTable extends ScopeTableSpec {
   readonly alias: string
   readonly def?: TableDef | undefined
   readonly table?: Table | undefined
@@ -80,7 +80,7 @@ export interface DerivedSource {
   /** Merged into the query that reads it (`derived_merge`), rather than materialized. */
   readonly merged?: boolean
   /** Its rows, as values in column order. `lateral` is the FROM's row so far, for LATERAL. */
-  rows(trx: Trx | undefined, env: Env, lateral: Row | undefined): Iterable<readonly Value[]>
+  rows(trx: Trx | undefined, env: Env, lateral: Row | undefined, ready?: () => void): Iterable<readonly Value[]>
   /**
    * Its plan (M5.44): its query's, and whether the server merges it into the
    * query that reads it (`derived_merge`) or materializes it first, and as
@@ -232,42 +232,33 @@ export function planFrom(refs: readonly TableReference[], ctx: FromContext, wher
     hidden?: ReadonlySet<string>
     cte?: DerivedSource
     /** A view's schema, which a qualified name may name it by. */
-    schema?: string
+    schema?: string | undefined
     nullable: boolean
-    width: number
   }
   const pending: Pending[] = []
   const collect = (ref: TableReference, nullable: boolean, hidden: ReadonlySet<string> = new Set()): void => {
     switch (ref.kind) {
       case REF.TABLE: {
-        // A CTE of the statement hides a table of the same name.
-        const cte = ref.table.schema === undefined ? ctx.cte?.(ref.table.name) : undefined
-        if (cte !== undefined) {
-          pending.push({ alias: ref.alias ?? ref.table.name, cte, nullable, width: cte.columns.length })
-          return
-        }
+        // A CTE hides base/system tables; only a missing base table falls back to a view.
         const alias = ref.alias ?? ref.table.name
-        const system = ctx.system?.(ref.table, alias)
-        if (system !== undefined) {
-          pending.push({ alias, cte: system.source, schema: system.schema, nullable, width: system.source.columns.length })
-          return
+        const cte = ref.table.schema === undefined ? ctx.cte?.(ref.table.name) : undefined
+        let source = cte === undefined ? ctx.system?.(ref.table, alias) : { source: cte, schema: undefined }
+        if (source === undefined) {
+          try {
+            const opened = ctx.open(ref.table, alias)
+            pending.push({ alias, def: opened.def, table: opened.table, nullable })
+            return
+          } catch (e) {
+            source = (e as { errno?: number }).errno === 1146 ? ctx.view?.(ref.table, alias) : undefined
+            if (source === undefined) throw e
+          }
         }
-        let opened: ReturnType<FromContext['open']>
-        try {
-          opened = ctx.open(ref.table, alias)
-        } catch (e) {
-          // Tables and views share their names: a name that is no table may be a view.
-          const view = (e as { errno?: number }).errno === 1146 ? ctx.view?.(ref.table, alias) : undefined
-          if (view === undefined) throw e
-          pending.push({ alias, cte: view.source, schema: view.schema, nullable, width: view.source.columns.length })
-          return
-        }
-        pending.push({ alias, def: opened.def, table: opened.table, nullable, width: opened.def.columns.length })
+        pending.push({ alias, cte: source.source, schema: source.schema, nullable })
         return
       }
       case REF.DERIVED:
         if (ref.alias === undefined) throw sqlError('ER_DERIVED_MUST_HAVE_ALIAS', 'Every derived table must have its own alias')
-        pending.push({ alias: ref.alias, derivedRef: ref, nullable, width: -1, hidden })
+        pending.push({ alias: ref.alias, derivedRef: ref, nullable, hidden })
         return
       case REF.LIST:
         for (const item of ref.items) collect(item, nullable, hidden)
@@ -285,24 +276,23 @@ export function planFrom(refs: readonly TableReference[], ctx: FromContext, wher
 
   // A derived table's columns are known only once it is planned, and a
   // LATERAL one sees the tables before it, so they are planned in order.
-  const specs: ScopeTableSpec[] = []
   const tables: FromTable[] = []
-  const seen = new Set<string>()
+  const byAlias = new Map<string, FromTable>()
   let offset = 0
   for (const p of pending) {
-    if (seen.has(p.alias)) throw sqlError('ER_NONUNIQ_TABLE', messages.nonUniqueTable(p.alias))
-    seen.add(p.alias)
+    if (byAlias.has(p.alias)) throw sqlError('ER_NONUNIQ_TABLE', messages.nonUniqueTable(p.alias))
     let derived: DerivedSource | undefined = p.cte
     if (p.derivedRef !== undefined) {
       if (ctx.derived === undefined) throw sqlError('ER_NOT_SUPPORTED_YET', messages.notSupported('Derived tables'))
-      const visible = specs.filter((sp) => p.hidden?.has(sp.alias) !== true)
+      const visible = tables.filter((sp) => p.hidden?.has(sp.alias) !== true)
       const before = visible.length > 0 ? new TableScope(visible, { parent: ctx.parent }) : ctx.parent
       derived = ctx.derived(p.derivedRef, p.derivedRef.lateral === true ? before : undefined)
-      p.width = derived.columns.length
     }
-    specs.push({ alias: p.alias, def: p.def, columns: derived?.columns, schema: p.schema, nullable: p.nullable })
-    tables.push({ alias: p.alias, def: p.def, table: p.table, derived, nullable: p.nullable, offset, width: p.width, lateral: p.derivedRef?.lateral === true })
-    offset += p.width
+    const width = derived?.columns.length ?? p.def!.columns.length
+    const table: FromTable = { alias: p.alias, def: p.def, table: p.table, columns: derived?.columns, schema: p.schema, derived, nullable: p.nullable, offset, width, lateral: p.derivedRef?.lateral === true }
+    byAlias.set(p.alias, table)
+    tables.push(table)
+    offset += width
   }
   const width = offset
 
@@ -310,9 +300,8 @@ export function planFrom(refs: readonly TableReference[], ctx: FromContext, wher
   // what a bare name means and what `*` is; each ON is resolved in the scope
   // of its own two sides.
   const coalesced: number[][] = []
-  const byAlias = new Map(tables.map((t) => [t.alias, t]))
   const groupsWithin = (aliases: ReadonlySet<string>): number[][] => coalesced.filter((g) => g.every((i) => [...aliases].some((a) => inTable(byAlias.get(a), i))))
-  const preliminary = new TableScope(specs, { parent: ctx.parent })
+  const preliminary = new TableScope(tables, { parent: ctx.parent })
   const columnName = (index: number): string => {
     const at = preliminary.columnAt(index)
     return at === undefined ? '' : at.column.name
@@ -437,7 +426,7 @@ export function planFrom(refs: readonly TableReference[], ctx: FromContext, wher
     tree = tree === undefined ? next : crossJoin(tree, next)
   }
 
-  const scope = new TableScope(specs, { coalesced, visible: tree?.visible, parent: ctx.parent })
+  const scope = new TableScope(tables, { coalesced, visible: tree?.visible, parent: ctx.parent })
   if (tree !== undefined) tree.node = innerWherePossible(tree.node, where, scope)
   // A column of an enclosing query, compiled once: a constant for each run of this one.
   const outerColumns = new Map<Expression, Compiled | undefined>()
@@ -728,18 +717,16 @@ function innerWherePossible(root: Node, where: Expression | undefined, scope: Ta
     gather(root, false)
   } while (visit(root, false))
   if (converted.size === 0) return root
-  const rebuilt = (n: Node): Node => (n.kind === 'leaf' ? n : { ...n, outer: rebuilt(n.outer), inner: rebuilt(n.inner), left: n.left && !converted.has(n) })
-  const node = rebuilt(root)
-  const mark = (n: Node, nullable: boolean): void => {
+  // Rebuild converted joins and mark their leaves in the same ownership pass.
+  const rebuilt = (n: Node, nullable: boolean): Node => {
     if (n.kind === 'leaf') {
       ;(n.table as { nullable: boolean }).nullable = nullable
-      return
+      return n
     }
-    mark(n.outer, nullable)
-    mark(n.inner, nullable || n.left)
+    const left = n.left && !converted.has(n)
+    return { ...n, outer: rebuilt(n.outer, nullable), inner: rebuilt(n.inner, nullable || left), left }
   }
-  mark(node, false)
-  return node
+  return rebuilt(root, false)
 }
 
 /** The aliases of a join's inner side. */
@@ -1137,7 +1124,7 @@ function toOp(node: Node, conditions: readonly Placed[], scope: TableScope, sett
         describe: (env) => planNode('Sort', [input.describe(env)]),
       }
     }
-    return settings.hidden?.has(node.table.alias) === true ? { ...op, rows: op.rows.bind(op), hidden: true } : op
+    return settings.hidden?.has(node.table.alias) === true ? { ...op, hidden: true } : op
   }
   const materialized = settings.materialized
   const outerAliases = leafAliases(node.outer)
@@ -1644,12 +1631,33 @@ function tableOp(t: FromTable, settings: LeafSettings): Op {
   return {
     *rows(run, context) {
       if (t.derived !== undefined) {
-        for (const values of t.derived.rows(run.trx, run.env, t.lateral ? context : undefined)) yield joined(fillTable(t, values, context?.slice() ?? new Array<Value>(run.width).fill(null)))
+        for (const values of t.derived.rows(run.trx, run.env, t.lateral ? context : undefined, run.ready)) yield joined(fillTable(t, values, context?.slice() ?? new Array<Value>(run.width).fill(null)))
         return
       }
       yield* scanTable(t, leafAccess(t, settings, run.env), run, context)
     },
-    describe: (env) => describeLeaf(t, settings, env),
+    describe(env) {
+      if (t.def === undefined) {
+        const d = t.derived?.explain?.()
+        if (d === undefined) return planNode(`Table scan on ${t.alias}`, [planNode('Materialize')])
+        return d.merged ? d.node : planNode(`Table scan on ${t.alias}`, [planNode(d.materialize, d.children)])
+      }
+      const access = leafAccess(t, settings, env)
+      const order = orderFor(t, settings)
+      if (order !== undefined && access.ranges === undefined) {
+        // Read whole in an index's order: covering when it holds every column the query reads.
+        const covers = settings.covering.get(t.alias) === order.index
+        return planNode(`${covers ? 'Covering index' : 'Index'} scan on ${t.alias} using ${order.index}${order.reverse ? ' (reverse)' : ''}`)
+      }
+      if (access.index === undefined) return planNode(`Table scan on ${t.alias}`)
+      if (access.ranges === undefined) return planNode(`Covering index scan on ${t.alias} using ${access.index}`)
+      const index = t.def.indexes.find((i) => i.name === access.index)
+      const points = access.ranges.every((r) => r.from !== undefined && r.from === r.to)
+      // A secondary index that holds every column the query reads is read alone.
+      const covering = settings.covering.get(t.alias) === access.index ? 'Covering index' : 'Index'
+      if (points && access.ranges.length === 1 && index !== undefined && index.kind !== 'primary') return planNode(`${covering} lookup on ${t.alias} using ${access.index}`)
+      return planNode(`${covering} range scan on ${t.alias} using ${access.index}${access.over === undefined ? '' : ` over ${access.over}`}`)
+    },
   }
 }
 
@@ -1930,30 +1938,6 @@ function equalitySides(e: Expression, outer: ReadonlySet<string>, inner: Readonl
   return undefined
 }
 
-
-/** A base or derived table's iterator, as EXPLAIN names it. */
-function describeLeaf(t: FromTable, settings: LeafSettings, env: Env): PlanNode {
-  if (t.def === undefined) {
-    const d = t.derived?.explain?.()
-    if (d === undefined) return planNode(`Table scan on ${t.alias}`, [planNode('Materialize')])
-    return d.merged ? d.node : planNode(`Table scan on ${t.alias}`, [planNode(d.materialize, d.children)])
-  }
-  const access = leafAccess(t, settings, env)
-  const order = orderFor(t, settings)
-  if (order !== undefined && access.ranges === undefined) {
-    // Read whole in an index's order: covering when it holds every column the query reads.
-    const covers = settings.covering.get(t.alias) === order.index
-    return planNode(`${covers ? 'Covering index' : 'Index'} scan on ${t.alias} using ${order.index}${order.reverse ? ' (reverse)' : ''}`)
-  }
-  if (access.index === undefined) return planNode(`Table scan on ${t.alias}`)
-  if (access.ranges === undefined) return planNode(`Covering index scan on ${t.alias} using ${access.index}`)
-  const index = t.def.indexes.find((i) => i.name === access.index)
-  const points = access.ranges.every((r) => r.from !== undefined && r.from === r.to)
-  // A secondary index that holds every column the query reads is read alone.
-  const covering = settings.covering.get(t.alias) === access.index ? 'Covering index' : 'Index'
-  if (points && access.ranges.length === 1 && index !== undefined && index.kind !== 'primary') return planNode(`${covering} lookup on ${t.alias} using ${access.index}`)
-  return planNode(`${covering} range scan on ${t.alias} using ${access.index}${access.over === undefined ? '' : ` over ${access.over}`}`)
-}
 
 /**
  * Whether a condition is the equality a table's single-point lookup reads by:

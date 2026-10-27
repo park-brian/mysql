@@ -114,7 +114,9 @@ and browser work follow the outstanding engine/planner work. Remaining function
 boundaries stay open for separate verification. The current state and remaining
 work are:
 
-**Next bounded slice: positive constant-source reader proof.**
+**Next bounded slice: recheck integer DIV at the verified source boundary.**
+The positive literal/typed-integer-NULL source proof is verified under unchanged
+size caps. Its bounded grammar and remaining limits are recorded below.
 System-variable identity and diagnostic-count PREPARE admission are verified
 below, alongside failed-command publication, diagnostic SHOW admission and
 linear lexical error trimming. WHERE resolution now binds the written conjuncts
@@ -294,17 +296,51 @@ pinned corpora. One million parser inputs and 20,000 executor statements seeded
 reference tooling. Preceding e1e1e3a passed all eleven required CI jobs. M5.10 stays
 partial, totals 144/190 and M5 42/53.
 
-**Immediate Next:** prove a positive constant-source reader profile: integer literals,
-the signed-minimum literal form and typed integer NULL, with explicitly supported
-clauses and literal limits. Keep cardinality classification separate from
-readiness admission. Fit that proof under existing caps before rechecking both
-DIV candidates against complete native outcomes. Arbitrary CASTs, subqueries,
-functions, broader source/clause readiness, CTE sharing, expression spelling,
-wider metadata and UPDATE status-bit gaps remain open. Native integer minimum
-rejection must preserve DECIMAL conditional acceptance.
+**Positive constant-source reader proof (2026-10-27):**
+A memoized derived/view source announces readiness only after its actual field
+rows have materialized. The caller first proves one unfiltered, unordered source
+without DISTINCT, windows, options, WITH or locking. The producer independently
+admits raw unsigned-range integer literals, signed negation through the minimum,
+NULL and plain SIGNED/UNSIGNED NULL casts. Bare DUAL is already normalized away;
+quoted DUAL is excluded. Literal LIMIT counts through UINT64_MAX are admitted;
+written offsets and other clauses retain their existing boundary. Cardinality's
+constant classification is unchanged. LATERAL, correlated and non-memoized
+producers retain their lazy path without publishing readiness.
+
+The 246-command query/execute/PREPARE matrix improves 94 to 146 complete matches.
+The wider 2,547-source audit improves 1,451 to 1,469, and all 15 invalid CAST
+controls retain every previously matched component. The permanent 564 native
+observations enforce 303 complete outcomes and all already-matched components
+of the remaining cases, including metadata absence, diagnostics and packet
+order. All table-state and reader-release checks pass. Native replay reproduces
+all 564; both regressions fail on 089af2e for missing metadata before the error.
+
+FROM collection shares one owned table record with its scope specification,
+checks aliases through the physical lookup map, and computes widths after
+binding. CTE/system/view collection shares its source path while preserving
+fallback/error order. Converted joins rebuild their nullability in one walk.
+Scalar subquery binding owns registration directly, outer-reference tracking
+shares its resolver, and recursive members are partitioned once. The expression
+parser delegates directly to its existing cursor rather than nine forwarding
+methods; naming and EXPLAIN share their lexical error/keyword readers. All
+136,495 parser AST/admission/error contracts remain identical to 089af2e.
+The core/facade bundles are 334,323/334,228 B gzipped, 295 B raw smaller than
+089af2e, under all nine unchanged caps. One million parser inputs and 20,000
+executor statements seeded 20261010 pass. Fresh Docker validation passes 1,430
+main tests, four latency tests, typecheck, lint, package/typed smoke and the real
+client. Source proof matches 422 test files/fixtures and all 202 runtime files
+plus reference tooling. All seven pinned MySQL 8.4.11 corpora pass.
+Preceding 089af2e passed all eleven required GitHub jobs. M5.10 remains partial;
+totals remain 144/190 and M5 42/53.
+
+**Immediate Next:** recheck both DIV candidates against complete native outcomes,
+using the verified positive source boundary. Native integer-minimum rejection
+must preserve DECIMAL conditional acceptance. Arbitrary CASTs, subqueries,
+functions, decimal sources, broader source/clause readiness, CTE sharing,
+expression spelling, wider metadata and UPDATE status-bit gaps remain open.
 Whole-command lexing, SQL-mode changes within a command and later-statement line
-numbers remain separate limits unless verified. Readiness and DIV candidates
-stay parked.
+numbers remain separate limits unless verified. The DIV candidates stay parked
+until this slice's commit and continuation review complete.
 
 **DIV conversion diagnostics, verified (2026-10-27):**
 Arithmetic retains a rejected integer as a non-enumerable immutable fact; its

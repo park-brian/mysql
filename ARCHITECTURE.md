@@ -1471,7 +1471,7 @@ a blocker and one without is just a note.
 
 ## 21. Where we are
 
-*A snapshot as of 2026-10-25. The [roadmap](./docs/44-roadmap.md) is the live
+*A snapshot as of 2026-10-27. The [roadmap](./docs/44-roadmap.md) is the live
 version, and wins wherever it disagrees with this section.*
 
 ```mermaid
@@ -1564,8 +1564,12 @@ lazy initialization distinct; indexed joins share pair checking and closure.
 Derived/view and recursive-CTE field construction shares one owner. It validates
 all names before conversion, then builds fresh field types and the final array
 without intermediate field wrappers. Each statement caches rows under its bound source instance; unchanged planning
-scopes reuse their Run. Broader source-readiness
-admission remains open while declaration and CAST validation are incomplete.
+scopes reuse their Run. A memoized derived/view producer publishes bounded
+literal-source readiness after actual materialization; its positive grammar is
+independent of constant cardinality. Caller admission retains clause and source
+fences. Broader source-readiness and CAST admission remain open. FROM binding
+shares one table record with its scope specification and one alias lookup;
+column widths are computed after each source is planned.
 Buffered multi-statement runtime errors retain completed results on the primary
 SQL error, with each completion's status and warnings. The protocol emits those
 results before one ERR through the shared text/binary batch writer. Completion
@@ -1586,7 +1590,7 @@ The full Docker gates, pinned-reference audits and 10,000 crash points pass.
 `db.stream()` streams a million rows within a few MB of the heap's baseline (M5.40). Next is the
 remaining function and planner work, then the browser. The coercion corpus
 now agrees on all 3,148 observations and all 1,737 warning counts. The core entry bundle
-is 334,270 bytes gzipped (326.5 KiB), against the 500 KB release target,
+is 334,323 bytes gzipped (326.5 KiB), against the 500 KB release target,
 with the UCA weights in a separate chunk loaded on demand.
 
 The release plan gives each stage something to ship:

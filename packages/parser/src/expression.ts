@@ -18,7 +18,7 @@
 import { systemVariableParts } from './variable.ts'
 import { Cursor, checkTreeDepth, wordOrString } from './cursor.ts'
 import { RESERVED } from './keywords.ts'
-import { TOKEN, type Token } from './tokens.ts'
+import { TOKEN } from './tokens.ts'
 import { NODE, LITERAL, type Expression, type LiteralType } from './ast.ts'
 import { lex, type LexOptions } from './lexer.ts'
 import { hexBytes, parseDataType, type DataType } from './data-type.ts'
@@ -167,44 +167,6 @@ class ExpressionParser {
     return this.#binary(0)
   }
 
-  // --- token helpers, all delegating to the shared cursor -------------------
-
-  #peek(ahead = 0): Token {
-    return this.#c.peek(ahead)
-  }
-
-  #take(): Token {
-    return this.#c.take()
-  }
-
-  #fail(): never {
-    this.#c.fail()
-  }
-
-  #atWord(word: string, ahead = 0): boolean {
-    return this.#c.atWord(word, ahead)
-  }
-
-  #takeWord(word: string): boolean {
-    return this.#c.takeWord(word)
-  }
-
-  #expectWord(word: string): void {
-    this.#c.expectWord(word)
-  }
-
-  #atOp(op: string, ahead = 0): boolean {
-    return this.#c.atOp(op, ahead)
-  }
-
-  #takeOp(op: string): boolean {
-    return this.#c.takeOp(op)
-  }
-
-  #expectOp(op: string): void {
-    this.#c.expectOp(op)
-  }
-
   // --- precedence climbing -------------------------------------------------
 
   /**
@@ -216,7 +178,7 @@ class ExpressionParser {
    * token* belongs to a different level depending on `sql_mode`.
    */
   #binaryOpAt(level: number): string | null {
-    const t = this.#peek()
+    const t = this.#c.peek()
     if (t.kind === TOKEN.OPERATOR && t.text === '||') {
       // `PIPES_AS_CONCAT` moves it to the extra level above `^`; otherwise it
       // is an OR at the bottom of the table. Checked before the bounds guard
@@ -242,13 +204,14 @@ class ExpressionParser {
    * level `PIPES_AS_CONCAT` creates between `^` and the unary operators.
    */
   #binary(level: number): Expression {
+    const cursor = this.#c
     if (level > LEVELS.length) return this.#unary()
 
     // `NOT` is prefix, not infix, but it sits *between* two binary levels — so
     // it is handled at the level it occupies rather than with the other unary
     // operators. `HIGH_NOT_PRECEDENCE` moves it up beside them instead.
-    if (!this.#mode.highNotPrecedence && level === NOT_LEVEL && this.#atWord('NOT')) {
-      const t = this.#take()
+    if (!this.#mode.highNotPrecedence && level === NOT_LEVEL && cursor.atWord('NOT')) {
+      const t = cursor.take()
       return { kind: NODE.UNARY, op: 'NOT', operand: this.#binary(level), at: t.start }
     }
 
@@ -261,8 +224,8 @@ class ExpressionParser {
       if (op === null) return left
       // Only a user variable can be assigned: `a := 1`, `@@sql_mode := 1` and
       // `a = 1 := 2` are all ER_PARSE_ERROR on a real 8.4.
-      if (op === ':=' && !(left.kind === NODE.VARIABLE && !left.name.startsWith('@@'))) this.#fail()
-      const t = this.#take()
+      if (op === ':=' && !(left.kind === NODE.VARIABLE && !left.name.startsWith('@@'))) cursor.fail()
+      const t = cursor.take()
       // `a = ANY (SELECT …)`: a comparison against every row of a subquery.
       // `SOME` is `ANY`'s synonym; `<=>` takes no quantifier.
       const quantified = level === COMPARISON_LEVEL && op !== '<=>' ? this.#quantifiedSubquery() : null
@@ -275,19 +238,21 @@ class ExpressionParser {
   }
 
   #quantifiedSubquery(): Expression | null {
-    const t = this.#peek()
+    const cursor = this.#c
+    const t = cursor.peek()
     const word = t.kind === TOKEN.IDENTIFIER && t.quoted !== true ? t.text.toUpperCase() : ''
-    if ((word !== 'ANY' && word !== 'SOME' && word !== 'ALL') || !this.#atOp('(', 1)) return null
-    this.#c.skip()
+    if ((word !== 'ANY' && word !== 'SOME' && word !== 'ALL') || !cursor.atOp('(', 1)) return null
+    cursor.skip()
     const quantifier = word === 'ALL' ? 'ALL' : 'ANY'
     return { kind: NODE.SUBQUERY, query: this.#parenthesisedQuery(), quantifier, at: t.start }
   }
 
   /** `( query )`, with the cursor on the `(`. */
   #parenthesisedQuery() {
-    this.#expectOp('(')
-    const query = parseQueryFrom(this.#c, this.#mode)
-    this.#expectOp(')')
+    const cursor = this.#c
+    cursor.expectOp('(')
+    const query = parseQueryFrom(cursor, this.#mode)
+    cursor.expectOp(')')
     return query
   }
 
@@ -300,17 +265,18 @@ class ExpressionParser {
    * is why this loops rather than running once.
    */
   #predicate(left: Expression): Expression {
+    const cursor = this.#c
     for (;;) {
-      const at = this.#peek().start
+      const at = cursor.peek().start
 
-      if (this.#takeWord('IS')) {
-        const negated = this.#takeWord('NOT')
+      if (cursor.takeWord('IS')) {
+        const negated = cursor.takeWord('NOT')
         let op = 'IS'
-        if (this.#takeWord('NULL')) op = negated ? 'IS NOT NULL' : 'IS NULL'
-        else if (this.#takeWord('TRUE')) op = negated ? 'IS NOT TRUE' : 'IS TRUE'
-        else if (this.#takeWord('FALSE')) op = negated ? 'IS NOT FALSE' : 'IS FALSE'
-        else if (this.#takeWord('UNKNOWN')) op = negated ? 'IS NOT UNKNOWN' : 'IS UNKNOWN'
-        else this.#fail()
+        if (cursor.takeWord('NULL')) op = negated ? 'IS NOT NULL' : 'IS NULL'
+        else if (cursor.takeWord('TRUE')) op = negated ? 'IS NOT TRUE' : 'IS TRUE'
+        else if (cursor.takeWord('FALSE')) op = negated ? 'IS NOT FALSE' : 'IS FALSE'
+        else if (cursor.takeWord('UNKNOWN')) op = negated ? 'IS NOT UNKNOWN' : 'IS UNKNOWN'
+        else cursor.fail()
         left = { kind: NODE.UNARY, op, operand: left, at }
         continue
       }
@@ -319,37 +285,37 @@ class ExpressionParser {
       // `NOT REGEXP`, and nothing else — so it is only consumed once one of
       // those follows.
       const negated =
-        this.#atWord('NOT') &&
-        (this.#atWord('BETWEEN', 1) || this.#atWord('IN', 1) || this.#atWord('LIKE', 1) || this.#atWord('REGEXP', 1) || this.#atWord('RLIKE', 1))
-      if (negated) this.#c.skip()
+        cursor.atWord('NOT') &&
+        (cursor.atWord('BETWEEN', 1) || cursor.atWord('IN', 1) || cursor.atWord('LIKE', 1) || cursor.atWord('REGEXP', 1) || cursor.atWord('RLIKE', 1))
+      if (negated) cursor.skip()
 
-      if (this.#takeWord('BETWEEN')) {
+      if (cursor.takeWord('BETWEEN')) {
         // The upper bound is parsed *above* the AND level, or the `AND` that
         // separates the bounds would be read as a conjunction and swallow the
         // rest of the expression.
         const lower = this.#binary(COMPARISON_LEVEL + 1)
-        this.#expectWord('AND')
+        cursor.expectWord('AND')
         const upper = this.#binary(COMPARISON_LEVEL + 1)
         left = { kind: NODE.BINARY, op: negated ? 'NOT BETWEEN' : 'BETWEEN', left, right: lower, extra: upper, at }
         continue
       }
 
-      if (this.#takeWord('IN')) {
+      if (cursor.takeWord('IN')) {
         // `IN (SELECT …)` is a membership test against a subquery's rows, not
         // a list holding one scalar subquery — which is what `IN ((SELECT …))`
         // is. The two are told apart by the token after the parenthesis.
-        if (this.#atOp('(') && atQueryStart(this.#c, 1)) {
-          const open = this.#peek().start
+        if (cursor.atOp('(') && atQueryStart(cursor, 1)) {
+          const open = cursor.peek().start
           const right = { kind: NODE.SUBQUERY, query: this.#parenthesisedQuery(), at: open } as const
           left = { kind: NODE.BINARY, op: negated ? 'NOT IN' : 'IN', left, right, at }
           continue
         }
         // At least one item: `a IN ()` is a syntax error.
-        this.#expectOp('(')
+        cursor.expectOp('(')
         const items: Expression[] = []
         do items.push(this.#binary(0))
-        while (this.#takeOp(','))
-        this.#expectOp(')')
+        while (cursor.takeOp(','))
+        cursor.expectOp(')')
         left = {
           kind: NODE.BINARY,
           op: negated ? 'NOT IN' : 'IN',
@@ -360,17 +326,17 @@ class ExpressionParser {
         continue
       }
 
-      if (this.#takeWord('LIKE')) {
+      if (cursor.takeWord('LIKE')) {
         const pattern = this.#binary(COMPARISON_LEVEL + 1)
         const node = { kind: NODE.BINARY, op: negated ? 'NOT LIKE' : 'LIKE', left, right: pattern, at } as const
-        left = this.#takeWord('ESCAPE')
+        left = cursor.takeWord('ESCAPE')
           ? { ...node, extra: this.#binary(COMPARISON_LEVEL + 1) }
           : node
         continue
       }
 
-      if (this.#atWord('REGEXP') || this.#atWord('RLIKE')) {
-        this.#c.skip()
+      if (cursor.atWord('REGEXP') || cursor.atWord('RLIKE')) {
+        cursor.skip()
         const pattern = this.#binary(COMPARISON_LEVEL + 1)
         left = { kind: NODE.BINARY, op: negated ? 'NOT REGEXP' : 'REGEXP', left, right: pattern, at }
         continue
@@ -378,23 +344,23 @@ class ExpressionParser {
 
       // `a MEMBER OF (json)` (8.0.17) and `a SOUNDS LIKE b`, neither of which
       // takes a `NOT`.
-      if (!negated && this.#atWord('MEMBER') && this.#atWord('OF', 1)) {
-        this.#c.skip()
-        this.#c.skip()
-        this.#expectOp('(')
+      if (!negated && cursor.atWord('MEMBER') && cursor.atWord('OF', 1)) {
+        cursor.skip()
+        cursor.skip()
+        cursor.expectOp('(')
         const right = this.#binary(0)
-        this.#expectOp(')')
+        cursor.expectOp(')')
         left = { kind: NODE.BINARY, op: 'MEMBER OF', left, right, at }
         continue
       }
-      if (!negated && this.#atWord('SOUNDS') && this.#atWord('LIKE', 1)) {
-        this.#c.skip()
-        this.#c.skip()
+      if (!negated && cursor.atWord('SOUNDS') && cursor.atWord('LIKE', 1)) {
+        cursor.skip()
+        cursor.skip()
         left = { kind: NODE.BINARY, op: 'SOUNDS LIKE', left, right: this.#binary(COMPARISON_LEVEL + 1), at }
         continue
       }
 
-      if (negated) this.#fail() // consumed a NOT with nothing to attach it to
+      if (negated) cursor.fail() // consumed a NOT with nothing to attach it to
       return left
     }
   }
@@ -415,21 +381,22 @@ class ExpressionParser {
   }
 
   #unaryInner(): Expression {
-    const t = this.#peek()
+    const cursor = this.#c
+    const t = cursor.peek()
 
-    if (this.#mode.highNotPrecedence && this.#atWord('NOT')) {
-      this.#c.skip()
+    if (this.#mode.highNotPrecedence && cursor.atWord('NOT')) {
+      cursor.skip()
       return { kind: NODE.UNARY, op: 'NOT', operand: this.#unary(), at: t.start }
     }
-    if (this.#atOp('-') || this.#atOp('+') || this.#atOp('~') || this.#atOp('!')) {
-      const op = this.#take().text
+    if (cursor.atOp('-') || cursor.atOp('+') || cursor.atOp('~') || cursor.atOp('!')) {
+      const op = cursor.take().text
       return { kind: NODE.UNARY, op, operand: this.#unary(), at: t.start }
     }
-    if (this.#atWord('BINARY')) {
-      this.#c.skip()
+    if (cursor.atWord('BINARY')) {
+      cursor.skip()
       return { kind: NODE.UNARY, op: 'BINARY', operand: this.#unary(), at: t.start }
     }
-    if (this.#atWord('INTERVAL')) {
+    if (cursor.atWord('INTERVAL')) {
       // `INTERVAL(n, a, b, …)` is a function — the index of the first bound
       // `n` is below — and `INTERVAL (n) DAY` is an interval with a
       // parenthesised value. The comma after the first argument is what tells
@@ -438,26 +405,26 @@ class ExpressionParser {
       // exponential in nesting depth, which is a hang for anyone who can send
       // `INTERVAL((INTERVAL((…`.
       let value: Expression
-      if (this.#atOp('(', 1)) {
-        this.#c.skip()
-        this.#c.skip()
+      if (cursor.atOp('(', 1)) {
+        cursor.skip()
+        cursor.skip()
         const first = this.#binary(0)
-        if (this.#takeOp(',')) {
+        if (cursor.takeOp(',')) {
           const args = [first]
           do args.push(this.#binary(0))
-          while (this.#takeOp(','))
-          this.#expectOp(')')
+          while (cursor.takeOp(','))
+          cursor.expectOp(')')
           return { kind: NODE.CALL, name: t.text, args, at: t.start }
         }
-        this.#expectOp(')')
+        cursor.expectOp(')')
         value = first
       } else {
-        this.#c.skip()
+        cursor.skip()
         value = this.#binary(COMPARISON_LEVEL + 1)
       }
-      const unit = this.#peek()
-      if (unit.kind !== TOKEN.IDENTIFIER || !INTERVAL_UNITS.has(unit.text.toUpperCase())) this.#fail()
-      this.#c.skip()
+      const unit = cursor.peek()
+      if (unit.kind !== TOKEN.IDENTIFIER || !INTERVAL_UNITS.has(unit.text.toUpperCase())) cursor.fail()
+      cursor.skip()
       return { kind: NODE.INTERVAL, value, unit: unit.text.toUpperCase(), at: t.start }
     }
     return this.#postfixCollate(this.#primary())
@@ -469,57 +436,56 @@ class ExpressionParser {
    * the keyword, not a collation, and so 1064 (8.4.11).
    */
   #postfixCollate(expr: Expression): Expression {
+    const cursor = this.#c
     let out = expr
-    while (this.#atWord('COLLATE')) {
-      this.#c.skip()
-      if (this.#atWord('BINARY')) this.#fail()
-      const name = wordOrString(this.#c)
+    while (cursor.atWord('COLLATE')) {
+      cursor.skip()
+      if (cursor.atWord('BINARY')) cursor.fail()
+      const name = wordOrString(cursor)
       out = out.kind === NODE.LITERAL && out.collation === undefined ? { ...out, collation: name } : { kind: NODE.COLLATE, expr: out, collation: name, at: out.at }
     }
     return out
   }
 
   #primary(): Expression {
-    const t = this.#peek()
+    const cursor = this.#c
+    const t = cursor.peek()
 
     switch (t.kind) {
       case TOKEN.NUMBER:
-        this.#c.skip()
+        cursor.skip()
         return { kind: NODE.LITERAL, ...numericLiteral(t.text), at: t.start }
       case TOKEN.STRING: {
-        this.#c.skip()
+        cursor.skip()
         // Adjacent string literals concatenate — `'a' 'b'` is `'ab'`, which is
         // SQL-standard and which MySQL does at the lexical level.
         let value = t.text
-        while (this.#peek().kind === TOKEN.STRING) value += this.#take().text
+        while (cursor.peek().kind === TOKEN.STRING) value += cursor.take().text
         return { kind: NODE.LITERAL, type: LITERAL.STRING, value, at: t.start }
       }
       case TOKEN.HEX:
-        this.#c.skip()
+        cursor.skip()
         return { kind: NODE.LITERAL, type: LITERAL.HEX, value: hexBytes(t.text), at: t.start }
       case TOKEN.BIT:
-        this.#c.skip()
+        cursor.skip()
         return { kind: NODE.LITERAL, type: LITERAL.BIT, value: t.text === '' ? 0n : BigInt('0b' + t.text), text: t.text, at: t.start }
       case TOKEN.PLACEHOLDER:
-        this.#c.skip()
+        cursor.skip()
         return { kind: NODE.PLACEHOLDER, index: t.index ?? 0, at: t.start }
       case TOKEN.VARIABLE:
         if (!t.user && t.text.startsWith('@@')) {
-          const parts = systemVariableParts(this.#c, true)
+          const parts = systemVariableParts(cursor, true)
           return { kind: NODE.VARIABLE, name: '@@' + parts.join('.'), parts, at: t.start }
         }
-        this.#c.skip()
+        cursor.skip()
         return { kind: NODE.VARIABLE, name: t.text, user: true, at: t.start }
       case TOKEN.OPERATOR:
         if (t.text === '(') return this.#parenthesised()
-        this.#fail()
         break
       case TOKEN.IDENTIFIER:
         return this.#identifierLike()
-      default:
-        this.#fail()
     }
-    this.#fail()
+    return cursor.fail()
   }
 
   /**
@@ -533,83 +499,85 @@ class ExpressionParser {
    * parsing twice.
    */
   #parenthesised(): Expression {
-    const open = this.#peek()
-    if (atQueryStart(this.#c, 1)) {
+    const cursor = this.#c
+    const open = cursor.peek()
+    if (atQueryStart(cursor, 1)) {
       return { kind: NODE.SUBQUERY, query: this.#parenthesisedQuery(), at: open.start }
     }
-    this.#c.skip()
+    cursor.skip()
     let first = this.#binary(0)
-    if (first.kind === NODE.SUBQUERY && first.quantifier === undefined && atQueryContinuation(this.#c)) {
-      first = { kind: NODE.SUBQUERY, query: continueQueryFrom(this.#c, this.#mode, first.query), at: open.start }
+    if (first.kind === NODE.SUBQUERY && first.quantifier === undefined && atQueryContinuation(cursor)) {
+      first = { kind: NODE.SUBQUERY, query: continueQueryFrom(cursor, this.#mode, first.query), at: open.start }
     }
-    if (!this.#atOp(',')) {
-      this.#expectOp(')')
+    if (!cursor.atOp(',')) {
+      cursor.expectOp(')')
       return first
     }
     const items: Expression[] = [first]
-    while (this.#takeOp(',')) items.push(this.#binary(0))
-    this.#expectOp(')')
+    while (cursor.takeOp(',')) items.push(this.#binary(0))
+    cursor.expectOp(')')
     return { kind: NODE.ROW, items, at: open.start }
   }
 
   #identifierLike(): Expression {
-    const t = this.#peek()
+    const cursor = this.#c
+    const t = cursor.peek()
     const upper = t.text.toUpperCase()
 
     if (t.quoted !== true) {
       if (upper === 'NULL') {
-        this.#c.skip()
+        cursor.skip()
         return { kind: NODE.LITERAL, type: LITERAL.NULL, value: null, at: t.start }
       }
       if (upper === 'TRUE' || upper === 'FALSE') {
-        this.#c.skip()
+        cursor.skip()
         return { kind: NODE.LITERAL, type: LITERAL.BOOL, value: upper === 'TRUE', at: t.start }
       }
       if (upper === 'CASE') return this.#case()
       // `_latin1'x'` — a charset introducer. MySQL lexes this as its own token
       // kind; here the lexer leaves it an identifier and the shape is
       // recognised at the point where it can only mean one thing.
-      if (t.text.startsWith('_') && this.#peek(1).kind === TOKEN.STRING) {
-        this.#c.skip()
-        let value = this.#take().text
-        while (this.#peek().kind === TOKEN.STRING) value += this.#take().text
+      if (t.text.startsWith('_') && cursor.peek(1).kind === TOKEN.STRING) {
+        cursor.skip()
+        let value = cursor.take().text
+        while (cursor.peek().kind === TOKEN.STRING) value += cursor.take().text
         return { kind: NODE.LITERAL, type: LITERAL.STRING, value, charset: t.text.slice(1).toLowerCase(), at: t.start }
       }
       // …and before a hex or bit literal: `_binary 0x41`, `_utf8mb4 x'C3A6'`.
-      if (t.text.startsWith('_') && (this.#peek(1).kind === TOKEN.HEX || this.#peek(1).kind === TOKEN.BIT)) {
-        this.#c.skip()
+      if (t.text.startsWith('_') && (cursor.peek(1).kind === TOKEN.HEX || cursor.peek(1).kind === TOKEN.BIT)) {
+        cursor.skip()
         const lit = this.#primary()
         return { ...(lit as Extract<Expression, { kind: 'literal' }>), charset: t.text.slice(1).toLowerCase(), at: t.start }
       }
       // `N'x'` is the national charset's literal, which MySQL defines as utf8mb3.
-      if (upper === 'N' && this.#peek(1).kind === TOKEN.STRING && this.#peek(1).start === t.end) {
-        this.#c.skip()
-        let value = this.#take().text
-        while (this.#peek().kind === TOKEN.STRING) value += this.#take().text
+      if (upper === 'N' && cursor.peek(1).kind === TOKEN.STRING && cursor.peek(1).start === t.end) {
+        cursor.skip()
+        let value = cursor.take().text
+        while (cursor.peek().kind === TOKEN.STRING) value += cursor.take().text
         return { kind: NODE.LITERAL, type: LITERAL.STRING, value, charset: 'utf8mb3', at: t.start }
       }
-      if (upper === 'EXISTS' && this.#atOp('(', 1)) {
-        this.#c.skip()
-        const open = this.#peek().start
+      if (upper === 'EXISTS' && cursor.atOp('(', 1)) {
+        cursor.skip()
+        const open = cursor.peek().start
         const operand = { kind: NODE.SUBQUERY, query: this.#parenthesisedQuery(), at: open } as const
         return { kind: NODE.UNARY, op: 'EXISTS', operand, at: t.start }
       }
       // `ROW(1, 2)` is the row constructor `(1, 2)` spelled out.
-      if (upper === 'ROW' && this.#atOp('(', 1)) {
-        this.#c.skip()
-        const open = this.#take()
+      if (upper === 'ROW' && cursor.atOp('(', 1)) {
+        cursor.skip()
+        const open = cursor.take()
         const items: Expression[] = []
         do items.push(this.#binary(0))
-        while (this.#takeOp(','))
-        this.#expectOp(')')
+        while (cursor.takeOp(','))
+        cursor.expectOp(')')
         return { kind: NODE.ROW, items, at: open.start }
       }
-      if (upper === 'MATCH' && (this.#atOp('(', 1) || this.#peek(1).kind === TOKEN.IDENTIFIER)) return this.#match()
-      if (this.#atOp('(', 1)) {
+      if (upper === 'MATCH' && (cursor.atOp('(', 1) || cursor.peek(1).kind === TOKEN.IDENTIFIER)) return this.#match()
+      if (cursor.atOp('(', 1)) {
         // One of the builtins the lexer knows by name, a space before its
         // `(`, and IGNORE_SPACE off: not the builtin, but a stored function
         // of that name (8.4.11: `COUNT (*)` is 1064, `NOW ()` is 1630).
-        if (SPACE_SENSITIVE.has(upper) && !this.#mode.ignoreSpace && this.#peek(1).start !== t.start + t.text.length) return this.#storedCall()
+        if (SPACE_SENSITIVE.has(upper) && !this.#mode.ignoreSpace && cursor.peek(1).start !== t.start + t.text.length) return this.#storedCall()
         const special = this.#specialCall(upper)
         if (special !== null) return special
       }
@@ -618,9 +586,9 @@ class ExpressionParser {
       // is a DATE rather than the string it is written with — which is why
       // `DEFAULT DATE'…'` is legal on a DATE column where a bare string is
       // not. Found by M3.11's census in `default.test`.
-      if (TEMPORAL_KEYWORDS.has(upper) && this.#peek(1).kind === TOKEN.STRING) {
-        this.#c.skip()
-        const s = this.#take()
+      if (TEMPORAL_KEYWORDS.has(upper) && cursor.peek(1).kind === TOKEN.STRING) {
+        cursor.skip()
+        const s = cursor.take()
         return { kind: NODE.LITERAL, type: LITERAL.TEMPORAL, value: s.text, unit: upper, at: t.start }
       }
       // A reserved word is never a column reference (M3.15). It may be a
@@ -628,11 +596,11 @@ class ExpressionParser {
       // without its parentheses — and is otherwise where the expression ends,
       // which is what lets `SELECT a FROM t` stop at `FROM`.
       if (RESERVED.has(upper)) {
-        if (NILADIC.has(upper) && !this.#atOp('(', 1)) {
-          this.#c.skip()
+        if (NILADIC.has(upper) && !cursor.atOp('(', 1)) {
+          cursor.skip()
           return { kind: NODE.CALL, name: t.text, args: [], at: t.start }
         }
-        if (!RESERVED_FUNCTIONS.has(upper) || !this.#atOp('(', 1)) this.#fail()
+        if (!RESERVED_FUNCTIONS.has(upper) || !cursor.atOp('(', 1)) cursor.fail()
         return this.#call()
       }
     }
@@ -649,29 +617,29 @@ class ExpressionParser {
     // rule applies only to the builtins its lexer knows by name, which
     // `SPACE_SENSITIVE` lists and the branch above reads as stored functions
     // when a space comes first (M5.33).
-    if (this.#atOp('(', 1)) return this.#call()
+    if (cursor.atOp('(', 1)) return this.#call()
 
     // A qualified name: `a`, `t.a`, `db.t.a`, `t.*` or `db.t.*` — three parts
     // at most, since `a.b.c.d` names nothing.
-    this.#c.skip()
+    cursor.skip()
     const parts = [t.text]
-    while (this.#atOp('.') && parts.length < 3) {
-      this.#c.skip()
-      if (this.#atOp('*')) {
-        this.#c.skip()
+    while (cursor.atOp('.') && parts.length < 3) {
+      cursor.skip()
+      if (cursor.atOp('*')) {
+        cursor.skip()
         parts.push('*')
         break
       }
-      parts.push(this.#c.expectNamePart())
+      parts.push(cursor.expectNamePart())
     }
     const column = { kind: NODE.COLUMN, parts, at: t.start } as const
     // `col->'$.a'` and `col->>'$.a'`: JSON extraction, which MySQL's grammar
     // allows only on a column name and only with a string literal path.
-    if (this.#atOp('->') || this.#atOp('->>')) {
-      const op = this.#take()
-      const path = this.#peek()
-      if (path.kind !== TOKEN.STRING) this.#fail()
-      this.#c.skip()
+    if (cursor.atOp('->') || cursor.atOp('->>')) {
+      const op = cursor.take()
+      const path = cursor.peek()
+      if (path.kind !== TOKEN.STRING) cursor.fail()
+      cursor.skip()
       const right = { kind: NODE.LITERAL, type: LITERAL.STRING, value: path.text, at: path.start } as const
       return { kind: NODE.BINARY, op: op.text, left: column, right, at: op.start }
     }
@@ -679,23 +647,24 @@ class ExpressionParser {
   }
 
   #call(): Expression {
-    const name = this.#take()
+    const cursor = this.#c
+    const name = cursor.take()
     const upper = name.text.toUpperCase()
-    this.#expectOp('(')
-    const distinct = this.#takeWord('DISTINCT')
+    cursor.expectOp('(')
+    const distinct = cursor.takeWord('DISTINCT')
     // `SUM(ALL a)` is `SUM(a)`: `ALL` is the default an aggregate may spell out.
-    if (!distinct && AGGREGATES.has(upper)) this.#takeWord('ALL')
+    if (!distinct && AGGREGATES.has(upper)) cursor.takeWord('ALL')
     const args: Expression[] = []
-    if (this.#atOp('*') && !distinct) {
+    if (cursor.atOp('*') && !distinct) {
       // `COUNT(*)` — the only place a bare star is an argument.
-      this.#c.skip()
-      args.push({ kind: NODE.COLUMN, parts: ['*'], at: this.#peek().start })
-    } else if (!this.#atOp(')')) {
+      cursor.skip()
+      args.push({ kind: NODE.COLUMN, parts: ['*'], at: cursor.peek().start })
+    } else if (!cursor.atOp(')')) {
       do {
         // LAG's and LEAD's distance is a number as written or a `?`, nothing signed (8.4.11: `LAG(v, -1)` is 1064 at the `-`).
-        if (args.length === 1 && (upper === 'LAG' || upper === 'LEAD') && this.#peek().kind !== TOKEN.NUMBER && this.#peek().kind !== TOKEN.PLACEHOLDER) this.#fail()
+        if (args.length === 1 && (upper === 'LAG' || upper === 'LEAD') && cursor.peek().kind !== TOKEN.NUMBER && cursor.peek().kind !== TOKEN.PLACEHOLDER) cursor.fail()
         args.push(this.#binary(0))
-      } while (this.#takeOp(','))
+      } while (cursor.takeOp(','))
     }
     // `GROUP_CONCAT` is the one aggregate with clauses inside its parentheses,
     // and `CHAR` the one function that names a charset there.
@@ -703,11 +672,11 @@ class ExpressionParser {
     let separator: string | undefined
     let using: string | undefined
     if (upper === 'GROUP_CONCAT') {
-      if (this.#atWord('ORDER') && this.#atWord('BY', 1)) orderBy = parseOrderBy(this.#c, this.#mode)
-      if (this.#takeWord('SEPARATOR')) separator = this.#stringText()
+      if (cursor.atWord('ORDER') && cursor.atWord('BY', 1)) orderBy = parseOrderBy(cursor, this.#mode)
+      if (cursor.takeWord('SEPARATOR')) separator = this.#stringText()
     }
-    if (upper === 'CHAR' && this.#takeWord('USING')) using = this.#charsetName()
-    this.#expectOp(')')
+    if (upper === 'CHAR' && cursor.takeWord('USING')) using = this.#charsetName()
+    cursor.expectOp(')')
     const over = this.#over()
     return {
       kind: NODE.CALL,
@@ -724,24 +693,26 @@ class ExpressionParser {
 
   /** `OVER w` or `OVER (…)` after a call — a window function, or an aggregate used as one. */
   #over() {
-    if (!this.#takeWord('OVER')) return undefined
-    if (this.#c.atIdentifier()) return this.#take().text
-    this.#expectOp('(')
-    const spec = parseWindowSpec(this.#c, this.#mode)
-    this.#expectOp(')')
+    const cursor = this.#c
+    if (!cursor.takeWord('OVER')) return undefined
+    if (cursor.atIdentifier()) return cursor.take().text
+    cursor.expectOp('(')
+    const spec = parseWindowSpec(cursor, this.#mode)
+    cursor.expectOp(')')
     return spec
   }
 
   /** `name (args)` read as a stored function's call: plain arguments, none of a builtin's own syntax. */
   #storedCall(): Expression {
-    const name = this.#take()
-    this.#expectOp('(')
+    const cursor = this.#c
+    const name = cursor.take()
+    cursor.expectOp('(')
     const args: Expression[] = []
-    if (!this.#atOp(')')) {
+    if (!cursor.atOp(')')) {
       do args.push(this.#binary(0))
-      while (this.#takeOp(','))
+      while (cursor.takeOp(','))
     }
-    this.#expectOp(')')
+    cursor.expectOp(')')
     return { kind: NODE.CALL, name: name.text, args, stored: true, at: name.start }
   }
 
@@ -754,109 +725,110 @@ class ExpressionParser {
    * Only an unquoted name gets here: `` `cast`(x) `` is a stored function.
    */
   #specialCall(upper: string): Expression | null {
-    const t = this.#peek()
+    const cursor = this.#c
+    const t = cursor.peek()
     switch (upper) {
       case 'CAST': {
-        this.#c.skip()
-        this.#expectOp('(')
+        cursor.skip()
+        cursor.expectOp('(')
         const expr = this.#binary(0)
         let timeZone: string | undefined
-        if (this.#takeWord('AT')) {
-          this.#expectWord('TIME')
-          this.#expectWord('ZONE')
-          this.#takeWord('INTERVAL')
+        if (cursor.takeWord('AT')) {
+          cursor.expectWord('TIME')
+          cursor.expectWord('ZONE')
+          cursor.takeWord('INTERVAL')
           timeZone = this.#stringText()
         }
-        this.#expectWord('AS')
+        cursor.expectWord('AS')
         const type = this.#castType()
-        const array = this.#takeWord('ARRAY')
-        this.#expectOp(')')
+        const array = cursor.takeWord('ARRAY')
+        cursor.expectOp(')')
         return { kind: NODE.CAST, expr, type, ...(array ? { array } : {}), ...(timeZone === undefined ? {} : { timeZone }), at: t.start }
       }
       case 'CONVERT': {
-        this.#c.skip()
-        this.#expectOp('(')
+        cursor.skip()
+        cursor.expectOp('(')
         const expr = this.#binary(0)
-        if (this.#takeWord('USING')) {
+        if (cursor.takeWord('USING')) {
           const charset = this.#charsetName()
-          this.#expectOp(')')
+          cursor.expectOp(')')
           return { kind: NODE.CONVERT, expr, charset, at: t.start }
         }
-        this.#expectOp(',')
+        cursor.expectOp(',')
         const type = this.#castType()
-        this.#expectOp(')')
+        cursor.expectOp(')')
         return { kind: NODE.CAST, expr, type, at: t.start }
       }
       case 'EXTRACT': {
-        this.#c.skip()
-        this.#expectOp('(')
+        cursor.skip()
+        cursor.expectOp('(')
         const unit = this.#unitKeyword()
-        this.#expectWord('FROM')
+        cursor.expectWord('FROM')
         const expr = this.#binary(0)
-        this.#expectOp(')')
+        cursor.expectOp(')')
         return { kind: NODE.CALL, name: t.text, args: [unit, expr], at: t.start }
       }
       case 'TIMESTAMPADD':
       case 'TIMESTAMPDIFF': {
-        this.#c.skip()
-        this.#expectOp('(')
+        cursor.skip()
+        cursor.expectOp('(')
         const args: Expression[] = [this.#unitKeyword(true)]
-        while (this.#takeOp(',')) args.push(this.#binary(0))
-        this.#expectOp(')')
+        while (cursor.takeOp(',')) args.push(this.#binary(0))
+        cursor.expectOp(')')
         return { kind: NODE.CALL, name: t.text, args, at: t.start }
       }
       case 'GET_FORMAT': {
-        this.#c.skip()
-        this.#expectOp('(')
-        const k = this.#peek()
-        if (!['DATE', 'TIME', 'DATETIME', 'TIMESTAMP'].some((w) => this.#atWord(w))) this.#fail()
-        this.#c.skip()
-        this.#expectOp(',')
+        cursor.skip()
+        cursor.expectOp('(')
+        const k = cursor.peek()
+        if (!['DATE', 'TIME', 'DATETIME', 'TIMESTAMP'].some((w) => cursor.atWord(w))) cursor.fail()
+        cursor.skip()
+        cursor.expectOp(',')
         const args: Expression[] = [{ kind: NODE.KEYWORD, word: k.text.toUpperCase(), at: k.start }, this.#binary(0)]
-        this.#expectOp(')')
+        cursor.expectOp(')')
         return { kind: NODE.CALL, name: t.text, args, at: t.start }
       }
       case 'POSITION': {
         // `POSITION(a IN b)`: `a` is read above the comparison level, or its
         // `IN` would be taken for the membership predicate.
-        this.#c.skip()
-        this.#expectOp('(')
+        cursor.skip()
+        cursor.expectOp('(')
         const needle = this.#binary(COMPARISON_LEVEL + 1)
-        this.#expectWord('IN')
+        cursor.expectWord('IN')
         const haystack = this.#binary(0)
-        this.#expectOp(')')
+        cursor.expectOp(')')
         return { kind: NODE.CALL, name: t.text, args: [needle, haystack], at: t.start }
       }
       case 'SUBSTRING':
       case 'SUBSTR': {
         if (!this.#substringHasFrom()) return null
-        this.#c.skip()
-        this.#expectOp('(')
+        cursor.skip()
+        cursor.expectOp('(')
         const args: Expression[] = [this.#binary(0)]
-        this.#expectWord('FROM')
+        cursor.expectWord('FROM')
         args.push(this.#binary(0))
-        if (this.#takeWord('FOR')) args.push(this.#binary(0))
-        this.#expectOp(')')
+        if (cursor.takeWord('FOR')) args.push(this.#binary(0))
+        cursor.expectOp(')')
         return { kind: NODE.CALL, name: t.text, args, at: t.start }
       }
       case 'TRIM': {
         // `TRIM(s)`, `TRIM(r FROM s)`, `TRIM(LEADING [r] FROM s)`. The side is
         // a keyword argument first; the string being trimmed is always last.
-        this.#c.skip()
-        this.#expectOp('(')
+        cursor.skip()
+        cursor.expectOp('(')
         const args: Expression[] = []
-        const side = this.#peek()
-        if (this.#atWord('LEADING') || this.#atWord('TRAILING') || this.#atWord('BOTH')) {
-          this.#c.skip()
+        const side = cursor.peek()
+        if (cursor.atWord('LEADING') || cursor.atWord('TRAILING') || cursor.atWord('BOTH')) {
+          cursor.skip()
           args.push({ kind: NODE.KEYWORD, word: side.text.toUpperCase(), at: side.start })
-          if (!this.#atWord('FROM')) args.push(this.#binary(0))
-          this.#expectWord('FROM')
+          if (!cursor.atWord('FROM')) args.push(this.#binary(0))
+          cursor.expectWord('FROM')
           args.push(this.#binary(0))
         } else {
           args.push(this.#binary(0))
-          if (this.#takeWord('FROM')) args.push(this.#binary(0))
+          if (cursor.takeWord('FROM')) args.push(this.#binary(0))
         }
-        this.#expectOp(')')
+        cursor.expectOp(')')
         return { kind: NODE.CALL, name: t.text, args, at: t.start }
       }
       case 'WEIGHT_STRING': {
@@ -865,23 +837,23 @@ class ExpressionParser {
         // two keyword-ish arguments rather than a CAST node, because it is not
         // one — it changes the length the weights are computed over, not the
         // value's type.
-        this.#c.skip()
-        this.#expectOp('(')
+        cursor.skip()
+        cursor.expectOp('(')
         const args: Expression[] = [this.#binary(0)]
-        if (this.#takeWord('AS')) {
-          const k = this.#peek()
-          if (!this.#atWord('CHAR') && !this.#atWord('BINARY')) this.#fail()
-          this.#c.skip()
+        if (cursor.takeWord('AS')) {
+          const k = cursor.peek()
+          if (!cursor.atWord('CHAR') && !cursor.atWord('BINARY')) cursor.fail()
+          cursor.skip()
           args.push({ kind: NODE.KEYWORD, word: k.text.toUpperCase(), at: k.start })
-          this.#expectOp('(')
-          const n = this.#peek()
-          if (n.kind !== TOKEN.NUMBER || !/^\d+$/.test(n.text)) this.#fail()
-          this.#c.skip()
+          cursor.expectOp('(')
+          const n = cursor.peek()
+          if (n.kind !== TOKEN.NUMBER || !/^\d+$/.test(n.text)) cursor.fail()
+          cursor.skip()
           args.push({ kind: NODE.LITERAL, type: LITERAL.INT, value: BigInt(n.text), at: n.start })
-          this.#expectOp(')')
+          cursor.expectOp(')')
         }
-        while (this.#takeOp(',')) args.push(this.#binary(0))
-        this.#expectOp(')')
+        while (cursor.takeOp(',')) args.push(this.#binary(0))
+        cursor.expectOp(')')
         return { kind: NODE.CALL, name: t.text, args, at: t.start }
       }
       default:
@@ -891,14 +863,15 @@ class ExpressionParser {
 
   /** Whether `SUBSTRING(` uses the `FROM` form, by finding `FROM` before the closing paren. */
   #substringHasFrom(): boolean {
+    const cursor = this.#c
     let depth = 0
     for (let i = 1; ; i++) {
-      const t = this.#peek(i)
+      const t = cursor.peek(i)
       if (t.kind === TOKEN.EOF) return false
       if (t.kind === TOKEN.OPERATOR && t.text === '(') depth++
       else if (t.kind === TOKEN.OPERATOR && t.text === ')') {
         if (--depth === 0) return false
-      } else if (depth === 1 && this.#atWord('FROM', i)) return true
+      } else if (depth === 1 && cursor.atWord('FROM', i)) return true
     }
   }
 
@@ -908,11 +881,12 @@ class ExpressionParser {
    * deparser must write back a word the same function accepts.
    */
   #unitKeyword(odbc = false): Expression {
-    const u = this.#peek()
+    const cursor = this.#c
+    const u = cursor.peek()
     const word = u.text.toUpperCase()
     const unit = odbc && word.startsWith('SQL_TSI_') ? word.slice('SQL_TSI_'.length) : word
-    if (u.kind !== TOKEN.IDENTIFIER || u.quoted === true || !INTERVAL_UNITS.has(unit)) this.#fail()
-    this.#c.skip()
+    if (u.kind !== TOKEN.IDENTIFIER || u.quoted === true || !INTERVAL_UNITS.has(unit)) cursor.fail()
+    cursor.skip()
     return { kind: NODE.KEYWORD, word, at: u.start }
   }
 
@@ -922,18 +896,19 @@ class ExpressionParser {
    * `UNSIGNED`, each optionally followed by `INT` or `INTEGER`.
    */
   #castType(): DataType {
-    const t = this.#peek()
-    if (this.#atWord('SIGNED') || this.#atWord('UNSIGNED')) {
-      const name = this.#take().text.toUpperCase()
-      this.#takeWord('INTEGER') || this.#takeWord('INT')
+    const cursor = this.#c
+    const t = cursor.peek()
+    if (cursor.atWord('SIGNED') || cursor.atWord('UNSIGNED')) {
+      const name = cursor.take().text.toUpperCase()
+      cursor.takeWord('INTEGER') || cursor.takeWord('INT')
       return { name, code: FIELD_TYPE.LONGLONG, at: t.start }
     }
-    const type = parseDataType(this.#c, this.#mode)
-    if (!CAST_TYPES.has(type.name) || type.unsigned !== undefined || type.zerofill !== undefined) this.#fail()
+    const type = parseDataType(cursor, this.#mode)
+    if (!CAST_TYPES.has(type.name) || type.unsigned !== undefined || type.zerofill !== undefined) cursor.fail()
     // `FLOAT(p)` is a precision and becomes FLOAT or DOUBLE; `FLOAT(m,d)`,
     // `DOUBLE(m)` and `REAL(m)` are column syntax a `CAST` refuses — the
     // corpus's `cast.test` marks all five spellings ER_PARSE_ERROR.
-    if ((type.name === 'FLOAT' || type.name === 'DOUBLE') && type.length !== undefined) this.#fail()
+    if ((type.name === 'FLOAT' || type.name === 'DOUBLE') && type.length !== undefined) cursor.fail()
     return type
   }
 
@@ -942,60 +917,63 @@ class ExpressionParser {
   }
 
   #stringText(): string {
-    const t = this.#peek()
-    if (t.kind !== TOKEN.STRING) this.#fail()
-    this.#c.skip()
+    const cursor = this.#c
+    const t = cursor.peek()
+    if (t.kind !== TOKEN.STRING) cursor.fail()
+    cursor.skip()
     let text = t.text
-    while (this.#peek().kind === TOKEN.STRING) text += this.#take().text
+    while (cursor.peek().kind === TOKEN.STRING) text += cursor.take().text
     return text
   }
 
   /** `MATCH (a, b) AGAINST ('x' [IN NATURAL LANGUAGE MODE | IN BOOLEAN MODE] [WITH QUERY EXPANSION])`. */
   #match(): Expression {
-    const t = this.#take()
+    const cursor = this.#c
+    const t = cursor.take()
     // The column list may go without its parentheses: `MATCH a AGAINST (…)`.
-    const parenthesised = this.#takeOp('(')
+    const parenthesised = cursor.takeOp('(')
     // Each is a column's name, qualified or not, and nothing else: the
     // grammar's `simple_ident` (8.4.11: `MATCH(UPPER(t))` is 1064 at its `(`).
     const columns: Expression[] = []
     do {
-      const c = this.#peek()
-      if (c.kind !== TOKEN.IDENTIFIER) this.#fail()
-      this.#c.skip()
+      const c = cursor.peek()
+      if (c.kind !== TOKEN.IDENTIFIER) cursor.fail()
+      cursor.skip()
       const parts = [c.text]
-      while (this.#atOp('.') && parts.length < 3) {
-        this.#c.skip()
-        parts.push(this.#c.expectNamePart())
+      while (cursor.atOp('.') && parts.length < 3) {
+        cursor.skip()
+        parts.push(cursor.expectNamePart())
       }
       columns.push({ kind: NODE.COLUMN, parts, at: c.start })
-    } while (this.#takeOp(','))
-    if (parenthesised) this.#expectOp(')')
-    this.#expectWord('AGAINST')
-    this.#expectOp('(')
+    } while (cursor.takeOp(','))
+    if (parenthesised) cursor.expectOp(')')
+    cursor.expectWord('AGAINST')
+    cursor.expectOp('(')
     const against = this.#binary(COMPARISON_LEVEL + 1)
     let modifier: string | undefined
-    if (this.#c.takeWords('IN', 'NATURAL', 'LANGUAGE', 'MODE')) {
-      modifier = this.#c.takeWords('WITH', 'QUERY', 'EXPANSION') ? 'IN NATURAL LANGUAGE MODE WITH QUERY EXPANSION' : 'IN NATURAL LANGUAGE MODE'
-    } else if (this.#c.takeWords('IN', 'BOOLEAN', 'MODE')) modifier = 'IN BOOLEAN MODE'
-    else if (this.#c.takeWords('WITH', 'QUERY', 'EXPANSION')) modifier = 'WITH QUERY EXPANSION'
-    this.#expectOp(')')
+    if (cursor.takeWords('IN', 'NATURAL', 'LANGUAGE', 'MODE')) {
+      modifier = cursor.takeWords('WITH', 'QUERY', 'EXPANSION') ? 'IN NATURAL LANGUAGE MODE WITH QUERY EXPANSION' : 'IN NATURAL LANGUAGE MODE'
+    } else if (cursor.takeWords('IN', 'BOOLEAN', 'MODE')) modifier = 'IN BOOLEAN MODE'
+    else if (cursor.takeWords('WITH', 'QUERY', 'EXPANSION')) modifier = 'WITH QUERY EXPANSION'
+    cursor.expectOp(')')
     return { kind: NODE.MATCH, columns, against, ...(modifier === undefined ? {} : { modifier }), at: t.start }
   }
 
   #case(): Expression {
-    const at = this.#take().start
+    const cursor = this.#c
+    const at = cursor.take().start
     // Two forms: `CASE x WHEN …` compares, `CASE WHEN …` tests. They are told
     // apart by whether an expression follows `CASE`.
-    const operand = this.#atWord('WHEN') ? undefined : this.#binary(0)
+    const operand = cursor.atWord('WHEN') ? undefined : this.#binary(0)
     const whens: { when: Expression; then: Expression }[] = []
-    while (this.#takeWord('WHEN')) {
+    while (cursor.takeWord('WHEN')) {
       const when = this.#binary(0)
-      this.#expectWord('THEN')
+      cursor.expectWord('THEN')
       whens.push({ when, then: this.#binary(0) })
     }
-    if (whens.length === 0) this.#fail()
-    const otherwise = this.#takeWord('ELSE') ? this.#binary(0) : undefined
-    this.#expectWord('END')
+    if (whens.length === 0) cursor.fail()
+    const otherwise = cursor.takeWord('ELSE') ? this.#binary(0) : undefined
+    cursor.expectWord('END')
     return {
       kind: NODE.CASE,
       ...(operand === undefined ? {} : { operand }),

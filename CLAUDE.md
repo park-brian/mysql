@@ -109,9 +109,10 @@ warning; strict writes retain primary 1292 plus later 1690, with complete counts
 before prefix truncation. Strict membership is generated from the pinned native
 handler. Derived/view and recursive-CTE metadata now shares one owner for
 whole-list name validation and fresh field-type construction, avoiding redundant
-arrays and copies. Each statement caches rows under the bound source instance. Broader constant-source
-readiness remains parked: native declaration and CAST-admission errors can
-precede successful core materialization. Buffered multi-statement runtime failures
+arrays and copies. Each statement caches rows under the bound source instance.
+Bounded literal/typed-integer-NULL sources now announce readiness after actual
+materialization, with a separate positive grammar and caller admission. Cardinality
+alone supplies no readiness proof. Broader source and CAST admission remain open. Buffered multi-statement runtime failures
 now retain completed results with their own status and warnings before the ERR
 packet. Private completion facts preserve direct-call error identity and JSON;
 one batch writer serves text and binary rows. Incremental parsing now preserves
@@ -126,7 +127,9 @@ construction shares optional-field writers, local cursors and the common word/st
 reader for charsets, collations, accounts and plugins.
 Whole-command lexing, later multiline error line numbers, the failing statement's
 own partial response, optional session tracking and shared CTE effects remain
-open. A positive literal/typed-NULL source profile is next.
+open. The positive literal/typed-NULL profile fits under unchanged caps, with
+564 native command/state controls and all already-matched components enforced.
+Both DIV candidates are next after this slice's continuation review.
 Integer-only minimum-boundary behavior, expression spelling, wider
 copied-field/parameter metadata, invalid-dimension admission and CAST warning labels,
 broader multiplication precision and supplementary identifier-alias admission

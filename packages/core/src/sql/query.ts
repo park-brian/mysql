@@ -12,7 +12,7 @@
 import type { ColumnDef, IndexDef, Table, TableDef, ViewDef } from '@myjs/engine'
 import { LITERAL, NODE, QUERY, REF, TOKEN, deparse, lex, parseStatement, type Expression, type OrderItem, type QueryBody, type QueryExpression, type SelectNode, type TableReference, type SetOperationNode, type TableName, type Token } from '@myjs/parser'
 import { messages, sqlError, type ColumnDefinition, type ResultSet, type RowValue } from '@myjs/protocol'
-import { intValue, storageWidth, toInteger, truth, withoutHex, type Value } from '@myjs/types'
+import { MAX_UNSIGNED, MIN_SIGNED, intValue, storageWidth, toInteger, truth, withoutHex, type Value } from '@myjs/types'
 import { compile, constantNode, memoValue, logicalOperand, convertTo, decimalField, EMPTY_SCOPE, readSlot, type CompileContext, type Compiled, type Env, type GroupKeys, type QuantifiedSubquery, type Scope, type SubqueryPlan } from './compile.ts'
 import { AggregateSink, chooseStrategy, containsAggregate, groupRows, isAggregate } from './group.ts'
 import { WindowSink, applyWindows, containsWindow } from './window.ts'
@@ -84,9 +84,21 @@ export function compileContext(run: Run, scope: Scope, clause: string, windows?:
     serverVersion: run.serverVersion,
     params,
     subquery: (q, outer) => {
-      const plan = planSubquery(run, q, outer, clause)
-      run.subqueries?.push(plan)
-      return plan
+      let correlated = false
+      const plan = planQuery({ ...run, parent: enclosing(outer, () => (correlated = true)) }, q)
+      const bound: BoundSubquery = {
+        clause,
+        query: q,
+        plan,
+        columns: plan.columns,
+        get correlated() {
+          return correlated
+        },
+        hasFrom: hasFrom(q),
+        rows: (env) => plan.rows(env.trx, env),
+      }
+      run.subqueries?.push(bound)
+      return bound
     },
     quantified: (q, how) => void run.quantified?.set(q, how),
     table: (schema, name) => run.catalog?.table(schema, name),
@@ -198,30 +210,38 @@ export function planViewQuery(run: Run, view: ViewDef): { query: QueryExpression
 const CLAUSE_WORDS = new Set(['FROM', 'WHERE', 'GROUP', 'HAVING', 'WINDOW', 'ORDER', 'LIMIT', 'INTO', 'FOR', 'LOCK', 'UNION', 'EXCEPT', 'INTERSECT'])
 const MODIFIERS = new Set(['ALL', 'DISTINCT', 'DISTINCTROW', 'HIGH_PRIORITY', 'STRAIGHT_JOIN', 'SQL_SMALL_RESULT', 'SQL_BIG_RESULT', 'SQL_BUFFER_RESULT', 'SQL_NO_CACHE', 'SQL_CALC_FOUND_ROWS'])
 
+/** Only unquoted identifier tokens carry SQL keywords. */
+function queryWord(t: Token): string {
+  return t.kind === TOKEN.IDENTIFIER && t.quoted !== true ? t.text.toUpperCase() : ''
+}
+
+/** Naming and EXPLAIN share one lexical error boundary. */
+function queryTokens(run: Run): Token[] {
+  try {
+    return lex(run.sql, { sqlMode: modeOf(run.env.session.sqlMode) })
+  } catch (e) {
+    expectTyped(e)
+    return []
+  }
+}
+
 /**
  * The source text of each select item, from the tokens between `SELECT` and
  * its first clause, split at top-level commas. `undefined` when the tokens do
  * not line up with the tree, in which case the caller deparses instead.
  */
 function itemTexts(run: Run, node: SelectNode): (string | undefined)[] {
-  let tokens
-  try {
-    tokens = lex(run.sql, { sqlMode: modeOf(run.env.session.sqlMode) })
-  } catch (e) {
-    expectTyped(e)
-    return []
-  }
+  const tokens = queryTokens(run)
   let i = tokens.findIndex((t) => t.start === node.at)
   if (i < 0) return []
   i++
-  const word = (t: Token): string => (t.kind === TOKEN.IDENTIFIER && t.quoted !== true ? t.text.toUpperCase() : '')
-  while (i < tokens.length && MODIFIERS.has(word(tokens[i] as Token))) i++
+  while (i < tokens.length && MODIFIERS.has(queryWord(tokens[i] as Token))) i++
   const out: (string | undefined)[] = []
   let depth = 0
   let first = i
   for (; i <= tokens.length; i++) {
     const t = tokens[i]
-    const end = t === undefined || t.kind === TOKEN.EOF || (depth === 0 && (CLAUSE_WORDS.has(word(t)) || t.text === ';' || (t.kind === TOKEN.OPERATOR && t.text === ')')))
+    const end = t === undefined || t.kind === TOKEN.EOF || (depth === 0 && (CLAUSE_WORDS.has(queryWord(t)) || t.text === ';' || (t.kind === TOKEN.OPERATOR && t.text === ')')))
     if (end || (depth === 0 && t?.kind === TOKEN.OPERATOR && t.text === ',')) {
       const a = tokens[first]
       const b = tokens[i - 1]
@@ -498,7 +518,7 @@ function planSelect(run: Run, q: QueryExpression, node: SelectNode): SelectPlan 
   // A MATCH in the WHERE of one table is read through its full-text index,
   // which yields rows by relevance, highest first: with no ORDER BY of its
   // own that is the order they come in (8.4.11, M5.26).
-  const match = keys.length === 0 && refs.length === 1 && refs[0]?.kind === REF.TABLE ? matchConjunct(node.where) : undefined
+  const match = keys.length === 0 && refs.length === 1 && refs[0]?.kind === REF.TABLE ? splitAnd(node.where).find((c) => c.kind === NODE.MATCH) : undefined
   if (match !== undefined) keys.push({ expr: compile(match, compileContext(run, lookup, 'where clause')), desc: true })
   const locking = (q.locking?.length ?? 0) > 0
   // Metadata's indexed-prefix shortcut does not prove row uniqueness.
@@ -534,6 +554,9 @@ function planSelect(run: Run, q: QueryExpression, node: SelectNode): SelectPlan 
   // Ordinary readers apply LIMIT after sorting and before SELECT evaluation.
   // Multi-table copies, written HAVING and windows retain their materialization boundary.
   const limitFirst = !windowed && !node.distinct && !loopSemijoin && (ordered === undefined ? !node.having && (source !== undefined || !streamed) : having === undefined)
+  const readerReady = !windowed && wholeReaderReady(q, node) && (from === undefined
+    ? !order.length
+    : !node.distinct && ((base && (!order.length || rowOrder)) || (!order.length && !q.with && !node.options && from.tables.length === 1 && from.tables[0]?.derived)))
   const take = q.limit && limitStage(offset, limitCount)
   const stages: Stage[] = [
     ...(from === undefined && node.where !== undefined ? [filterStage(resolved.predicates)] : []),
@@ -573,9 +596,9 @@ function planSelect(run: Run, q: QueryExpression, node: SelectNode): SelectPlan 
       if (from === undefined) {
         rows = [{ row: [] }]
         // The unit source is ready before ordinary projection, just as a physical reader is.
-        if (!windowed && !order.length && wholeReaderReady(q, node)) ready?.()
+        if (readerReady) ready?.()
       } else if (facts?.impossible === true) rows = []
-      else rows = from.rows(trx, env, { locking, ready: base && wholeReaderReady(q, node) && (!order.length || rowOrder) && !node.distinct ? ready : undefined })
+      else rows = from.rows(trx, env, { locking, ready: readerReady ? ready : undefined })
       return values(runStages(rows, stages, env))
     },
   }
@@ -1006,12 +1029,7 @@ function selectNumber(run: Run, q: QueryExpression): number {
   let body: QueryBody = q.body
   while (body.kind === QUERY.QUERY) body = body.body
   const at = body.kind === QUERY.SELECT ? body.at : q.at
-  try {
-    return lex(run.sql, { sqlMode: modeOf(run.env.session.sqlMode) }).filter((t) => t.start <= at && t.kind === TOKEN.IDENTIFIER && t.quoted !== true && t.text.toUpperCase() === 'SELECT').length
-  } catch (e) {
-    expectTyped(e)
-    return 0
-  }
+  return queryTokens(run).filter((t) => t.start <= at && queryWord(t) === 'SELECT').length
 }
 
 /** `IS NOT NULL` of an aggregate that is never NULL — COUNT and the BIT_ aggregates — which the server folds to TRUE and drops (8.4.11: no Filter). */
@@ -1303,13 +1321,13 @@ export function checkTargetNotRead(target: { readonly schema: string; readonly n
 
 // --- subqueries, derived tables, CTEs and set operations (M5.1, M5.19) --------------
 
-/** A scope one query further out: every name it resolves is a correlated reference, one level deeper. */
-function enclosing(scope: Scope, seen: () => void): Scope {
+/** Observe outer references; only a newly nested query adds a level. */
+function enclosing(scope: Scope, seen: () => void, deeper = true): Scope {
   return {
     resolve(parts, clause) {
       const r = scope.resolve(parts, clause)
       seen()
-      return { ...r, depth: (r.depth ?? 0) + 1 }
+      return deeper ? { ...r, depth: (r.depth ?? 0) + 1 } : r
     },
   }
 }
@@ -1318,23 +1336,6 @@ interface BoundSubquery extends SubqueryPlan {
   readonly clause: string
   readonly query: QueryExpression
   readonly plan: SelectPlan
-}
-
-/** A subquery in an expression, planned with the expression's scope enclosing it. */
-function planSubquery(run: Run, q: QueryExpression, outer: Scope, clause: string): BoundSubquery {
-  let correlated = false
-  const plan = planQuery({ ...run, parent: enclosing(outer, () => (correlated = true)) }, q)
-  return {
-    clause,
-    query: q,
-    plan,
-    columns: plan.columns,
-    get correlated() {
-      return correlated
-    },
-    hasFrom: hasFrom(q),
-    rows: (env) => plan.rows(env.trx, env),
-  }
 }
 
 /** Whether a query reads a table: one with no FROM is a constant row. */
@@ -1365,17 +1366,8 @@ function mergeable(q: QueryExpression): boolean {
 /** A derived table, or one reference to a CTE: its columns as the outer query sees them, and its rows. */
 function derivedTable(run: Run, query: QueryExpression, alias: string, names: readonly string[] | undefined, lateral: Scope | undefined, view?: ViewDef, cte?: string): DerivedSource {
   let correlated = false
-  const outer = lateral === undefined ? run.parent : enclosing(lateral, () => {})
-  const parent: Scope | undefined =
-    outer === undefined
-      ? undefined
-      : {
-          resolve(parts, clause) {
-            const r = outer.resolve(parts, clause)
-            correlated = true
-            return r
-          },
-        }
+  const outer = lateral ?? run.parent
+  const parent = outer === undefined ? undefined : enclosing(outer, () => (correlated = true), lateral !== undefined)
   const plan = planQuery(parent === undefined ? run : { ...run, parent }, query)
   // A LATERAL one merges as any other does when it can (8.4.11: Drizzle's
   // `LEFT JOIN LATERAL (SELECT JSON_ARRAY(…) FROM (… LIMIT 1) p)` reports its
@@ -1423,17 +1415,27 @@ function derivedTable(run: Run, query: QueryExpression, alias: string, names: re
       return merged ? { merged, node: body } : { merged, materialize: cte === undefined ? 'Materialize' : `Materialize CTE ${cte}`, children: [body] }
     },
     // Its rows are a table's fields: a hex literal's number does not survive.
-    rows: (trx, env, row) => {
+    rows: (trx, env, row, ready) => {
       if (lateral !== undefined || correlated || env.memo === undefined) return fieldRows(trx, env, row)
-      return memoValue(env.memo, source, () => [...fieldRows(trx, env)])
+      const rows = memoValue(env.memo, source, () => [...fieldRows(trx, env)])
+      if (ready !== undefined && literalReader(query)) ready()
+      return rows
     },
   }
   return source
 }
 
-/** The first MATCH a WHERE requires: itself, or a conjunct of a top-level AND. */
-function matchConjunct(e: Expression | undefined): Expression | undefined {
-  return splitAnd(e).find((c) => c.kind === NODE.MATCH)
+/** Closed literal source grammar; cardinality alone cannot prove native initialization. */
+function literalReader(q: QueryExpression): boolean {
+  const body = q.body
+  if (body.kind !== QUERY.SELECT || body.from || body.groupBy || body.distinct || body.options || q.with || q.orderBy || !wholeReaderReady(q, body)) return false
+  const integer = (e: Expression, maximum = MAX_UNSIGNED): boolean => integerLiteral(e) && e.value <= maximum
+  if (q.limit && (q.limit.offset || !integer(q.limit.count))) return false
+  return body.items.every(({ expr }) => {
+    if (integer(expr) || (expr.kind === NODE.UNARY && expr.op === '-' && integer(expr.operand, -MIN_SIGNED))) return true
+    if (expr.kind === NODE.CAST && expr.array === undefined && expr.timeZone === undefined && (expr.type.name === 'SIGNED' || expr.type.name === 'UNSIGNED')) expr = expr.expr
+    return expr.kind === NODE.LITERAL && expr.type === LITERAL.NULL
+  })
 }
 
 /** Owned field types and names: 1353 for a mismatched list, 1060 for a name twice. */
@@ -1507,8 +1509,9 @@ function recursiveCte(run: Run, cte: NonNullable<QueryExpression['with']>['table
     } else members.push(b)
   }
   flatten(body)
-  const recursive = members.filter((m) => references(m, cte.name))
-  const anchors = members.filter((m) => !references(m, cte.name))
+  const recursive: QueryBody[] = []
+  const anchors: QueryBody[] = []
+  for (const member of members) (references(member, cte.name) ? recursive : anchors).push(member)
   for (const m of recursive) {
     const select = m.kind === QUERY.QUERY ? m.body : m
     if (m.kind === QUERY.QUERY && (m.orderBy !== undefined || m.limit !== undefined)) throw notYet('ORDER BY / LIMIT / SELECT DISTINCT in recursive query block of Common Table Expression')
@@ -1648,7 +1651,7 @@ function setOperationNode(m: SetMembers, materialized: boolean): PlanNode {
  */
 function orderedResult(run: Run, q: QueryExpression, plan: SelectPlan): SelectPlan {
   if (q.orderBy === undefined && q.limit === undefined) return plan
-  const scope = new TableScope([{ alias: '\u0000result', columns: plan.columns.map((c) => ({ name: c.name, type: c.type })) }])
+  const scope = new TableScope([{ alias: '\u0000result', columns: plan.columns }])
   const keys = (q.orderBy ?? []).map((o): SortKey => {
     const e = o.expr
     if (integerLiteral(e)) {
@@ -2500,10 +2503,8 @@ function orderKey(o: OrderItem, items: readonly { name: string; compiled: Compil
 
 /** Parse the count before the offset, preserving LIMIT error precedence. */
 function queryLimit(run: Run, q: QueryExpression): [count: number | undefined, offset: number] {
-  return [
-    q.limit === undefined ? undefined : limitValue(run, q.limit.count),
-    q.limit?.offset === undefined ? 0 : limitValue(run, q.limit.offset),
-  ]
+  const bound = q.limit
+  return bound === undefined ? [undefined, 0] : [limitValue(run, bound.count), bound.offset === undefined ? 0 : limitValue(run, bound.offset)]
 }
 
 /**
