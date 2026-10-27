@@ -23,6 +23,12 @@ import type { ColumnDefinition } from '@myjs/protocol'
 /** `PART_KEY_FLAG`, `include/mysql_com.h`: the column is in some index. */
 const PART_KEY_FLAG = 0x4000
 
+/** DECIMAL CAST defaults; a written zero precision and zero scale mean (10,0). */
+export function decimalCastShape(t: { readonly length?: number; readonly scale?: number }): { readonly precision: number; readonly scale: number } {
+  const scale = t.scale ?? 0
+  return { precision: t.length === 0 && scale === 0 ? 10 : t.length ?? 10, scale }
+}
+
 /** What an expression yields, before a result charset turns it into metadata. */
 export type ResultKind = 'int' | 'decimal' | 'double' | 'string' | 'bytes' | 'datetime' | 'time' | 'json' | 'null'
 

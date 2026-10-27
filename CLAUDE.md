@@ -99,9 +99,12 @@ retains both operands' fractional words; cancelled zeros and AVG keep display
 scale independent of held digits. Actual field copies retain their declared
 scales. Ordinary no-FROM sources now publish metadata before projection errors;
 written WHERE/HAVING/WINDOW/ORDER and locking retain their earlier fences.
-Resolved CAST diagnostic printing and result-buffer capacity remain next,
-followed by broader multiplication precision and supplementary identifier-alias
-admission. Broader
+Numeric CAST printing shares its resolved dimensions with evaluation, including
+zero precision at scale zero. View writability uses the canonical aggregate
+inventory, retaining nested-query exclusions. Division result-buffer capacity
+and overflow follow; invalid-dimension admission, aliased CAST warning labels,
+broader multiplication precision and supplementary identifier-alias admission
+remain open. Broader
 strategy and measured field-copy gaps stay open.
 The cost-based planner (M5.7, M5.42–M5.46) is done:
 `EXPLAIN FORMAT=TREE` prints the plan that runs, and 2,126 of the relational

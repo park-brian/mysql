@@ -18,6 +18,8 @@
 import type { TableDef } from '@myjs/engine'
 import { NODE, QUERY, REF, type Expression, type QueryExpression, type TableReference, quoteName } from '@myjs/parser'
 import { Unprintable, printString, printExpression } from './print.ts'
+import { someNode } from './ast.ts'
+import { AGGREGATE_NAMES } from './compile.ts'
 
 
 interface Source {
@@ -56,18 +58,13 @@ export function viewDefinition(query: QueryExpression, names: readonly string[],
     }
     function column(parts: readonly string[]): string {
       const name = parts[parts.length - 1] as string
-      if (parts.length === 1) {
-        const owner = sources.find((s) => s.columns.has(name.toLowerCase()))
-        if (owner === undefined) throw new Unprintable()
-        return `${owner.qualifier}.${quoteName(name)}`
-      }
-      const table = parts[parts.length - 2] as string
-      const owner = sources.find((s) => s.qualifier === quoteName(table) || s.qualifier.endsWith(`.${quoteName(table)}`))
+      const table = parts.length === 1 ? undefined : quoteName(parts[parts.length - 2] as string)
+      const owner = sources.find((s) => table === undefined ? s.columns.has(name.toLowerCase()) : s.qualifier === table || s.qualifier.endsWith(`.${table}`))
       if (owner === undefined) throw new Unprintable()
       return `${owner.qualifier}.${quoteName(name)}`
     }
     function expr(e: Expression): string {
-      return printExpression(e, { column, string: current === undefined ? (v) => printString(v) : printString, ...(source === undefined ? {} : { source }) })
+      return printExpression(e, { column, string: current === undefined ? (v) => printString(v) : printString, source })
     }
     // `*` expands to the tables' columns, in order.
     const items: string[] = []
@@ -106,7 +103,9 @@ export function viewUpdatable(query: QueryExpression): boolean {
   if (body.groupBy !== undefined || body.having !== undefined || body.distinct === true) return false
   const from = body.from ?? []
   if (from.length !== 1 || from[0]?.kind !== REF.TABLE) return false
-  const aggregates = /"kind":"call","name":"(COUNT|SUM|AVG|MIN|MAX|GROUP_CONCAT|JSON_ARRAYAGG|JSON_OBJECTAGG|BIT_AND|BIT_OR|BIT_XOR|STD|STDDEV|VARIANCE)"|"over":/i
-  if (body.items.some((i) => aggregates.test(JSON.stringify(i.expr, (_k, v) => (typeof v === 'bigint' ? String(v) : v))))) return false
+  if (someNode(body.items, (value) => {
+    const e = value as Expression
+    return e.kind === NODE.CALL && (e.over !== undefined || AGGREGATE_NAMES.has(e.name.toUpperCase())) || undefined
+  })) return false
   return body.items.some((i) => i.expr.kind === NODE.COLUMN)
 }

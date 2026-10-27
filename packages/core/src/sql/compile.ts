@@ -92,6 +92,7 @@ import {
   charWidth,
   datetimeType,
   decimalType,
+  decimalCastShape,
   doubleType,
   fixedDouble,
   floatLength,
@@ -385,7 +386,7 @@ export function printedArgument(a: Expression, ctx: CompileContext): string {
         return c === undefined ? parts.map(q).join('.') : `${q(c.schema)}.${q(c.table)}.${q(c.orgName === '' ? (parts[parts.length - 1] as string) : c.orgName)}`
       },
       string: printString,
-      ...(ctx.sql === undefined ? {} : { source: ctx.sql }),
+      source: ctx.sql,
     })
   } catch (err) {
     if (err instanceof Unprintable) return deparse(a)
@@ -2530,8 +2531,7 @@ function cast(e: CastNode, ctx: CompileContext): Compiled {
       }
     }
     case 'DECIMAL': {
-      const precision = t.length ?? 10
-      const scale = t.scale ?? 0
+      const { precision, scale } = decimalCastShape(t)
       const limit = 10n ** BigInt(precision) - 1n
       const label = () => sourceText(ctx.sql, e.at) ?? deparse(e)
       return {

@@ -13,7 +13,7 @@ interface Command {
 /** Observe one complete command, including partial output and its command-local diagnostics. */
 export async function observeCommand(raw: mysql.Connection, conn: PromiseConnection, transport: Duplex, entry: Command) {
   const { sql, api } = entry
-  const descriptors = (list: readonly mysql.FieldPacket[]) => list.map((f) => [f.name, f.columnType, f.columnLength, f.flags, f.decimals, f.characterSet, f.schema, f.table, f.orgTable, f.orgName])
+  const descriptors = (list: readonly mysql.FieldPacket[] | undefined) => list?.map((f) => [f.name, f.columnType, f.columnLength, f.flags, f.decimals, f.characterSet, f.schema, f.table, f.orgTable, f.orgName]) ?? null
   await conn.query('SELECT LAST_INSERT_ID(0)')
   await conn.query('DO 1/0')
   const prior = (await conn.query('SHOW WARNINGS'))[0]
@@ -36,7 +36,7 @@ export async function observeCommand(raw: mysql.Connection, conn: PromiseConnect
       await new Promise<void>((resolve, reject) => {
         const command = api === 'execute' ? raw.execute(options, entry.params ?? []) : raw.query(options, entry.params ?? [])
         command.on('fields', (list: mysql.FieldPacket[]) => { fields = descriptors(list) })
-        command.on('result', (row: unknown) => collected.push(row))
+        command.on('result', (row: unknown) => collected.push(Array.isArray(row) ? row : { ...(row as mysql.ResultSetHeader) }))
         command.once('error', reject)
         command.once('end', resolve)
       })

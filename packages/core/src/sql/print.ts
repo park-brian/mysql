@@ -17,6 +17,7 @@ import { MyjsError } from '@myjs/bytes'
 import { encodeCharset } from '@myjs/charsets'
 import { NODE, quoteName, type Expression } from '@myjs/parser'
 import { bytesValue, textOf } from '@myjs/types'
+import { decimalCastShape } from './meta.ts'
 
 /** Not an error a client sees: the signal that an expression is past what this printer writes. */
 export class Unprintable extends MyjsError {
@@ -31,7 +32,7 @@ export interface PrintOptions {
   /** A string literal with the caller's introducer policy. */
   readonly string: (value: string, charset: string | undefined) => string
   /** The text the expression was parsed from, for a float as it was written. */
-  readonly source?: string
+  readonly source?: string | undefined
 }
 
 const OPERATORS: Readonly<Record<string, string>> = { XOR: 'xor', DIV: 'DIV', MOD: '%', '!=': '<>', IS: 'is', 'IS NOT': 'is not' }
@@ -55,6 +56,9 @@ export function printTableExpression(expression: Expression, charset: string | u
 
 const NUMBER = /^[0-9.]+(?:[eE][-+]?[0-9]+)?/
 
+/** The connective whose same-word children print as one group. */
+const logicalWord = (op: string): 'and' | 'or' | undefined => op === 'AND' || op === '&&' ? 'and' : op === 'OR' || op === '||' ? 'or' : undefined
+
 export function printExpression(e: Expression, o: PrintOptions): string {
   const p = (x: Expression): string => printExpression(x, o)
   switch (e.kind) {
@@ -69,7 +73,7 @@ export function printExpression(e: Expression, o: PrintOptions): string {
         const written = o.source === undefined ? undefined : NUMBER.exec(o.source.slice(e.at))?.[0]
         return written ?? String(e.value)
       }
-      throw new Unprintable()
+      break
     case NODE.UNARY:
       if (e.op === '-') return `-(${p(e.operand)})`
       // The optimizer's rewrite is what is stored: NOT c is (0 = c).
@@ -77,15 +81,15 @@ export function printExpression(e: Expression, o: PrintOptions): string {
       if (e.op === 'IS NULL' || e.op === 'IS NOT NULL') return `(${p(e.operand)} ${e.op.toLowerCase()})`
       // IS [NOT] TRUE and FALSE test a truth value: a column is made one, `(0 <> c)`.
       if (/^IS (NOT )?(TRUE|FALSE|UNKNOWN)$/.test(e.op)) return `(${e.operand.kind === NODE.COLUMN ? `(0 <> ${p(e.operand)})` : p(e.operand)} ${e.op.toLowerCase()})`
-      throw new Unprintable()
+      break
     case NODE.BINARY: {
       const op = e.op.toUpperCase()
-      if (op === 'AND' || op === '&&' || op === 'OR' || op === '||') {
+      const word = logicalWord(op)
+      if (word !== undefined) {
         // An AND (or OR) of ANDs is one condition with all their arguments.
-        const word = op === 'AND' || op === '&&' ? 'and' : 'or'
         const flat: Expression[] = []
         const gather = (x: Expression) => {
-          if (x.kind === NODE.BINARY && (word === 'and' ? x.op === 'AND' || x.op === '&&' : x.op === 'OR' || x.op === '||')) {
+          if (x.kind === NODE.BINARY && logicalWord(x.op) === word) {
             gather(x.left)
             gather(x.right)
           } else flat.push(x)
@@ -94,7 +98,7 @@ export function printExpression(e: Expression, o: PrintOptions): string {
         return `(${flat.map(p).join(` ${word} `)})`
       }
       if (op === 'IN' || op === 'NOT IN') {
-        if (e.right.kind !== NODE.ROW) throw new Unprintable()
+        if (e.right.kind !== NODE.ROW) break
         return `(${p(e.left)} ${op.toLowerCase()} (${e.right.items.map(p).join(',')}))`
       }
       if (op === 'BETWEEN' || op === 'NOT BETWEEN') return `(${p(e.left)} ${op.toLowerCase()} ${p(e.right)} and ${p(e.extra as Expression)})`
@@ -108,20 +112,30 @@ export function printExpression(e: Expression, o: PrintOptions): string {
         const like = `(${p(e.left)} like ${p(e.right)}${escape})`
         return op === 'LIKE' ? like : `(not(${like}))`
       }
-      if (op === 'REGEXP' || op === 'RLIKE' || op === 'NOT REGEXP' || op === 'NOT RLIKE') {
+      if (/^(NOT )?(REGEXP|RLIKE)$/.test(op)) {
         const call = `regexp_like(${p(e.left)},${p(e.right)})`
         return op.startsWith('NOT') ? `(not(${call}))` : call
       }
       return `(${p(e.left)} ${OPERATORS[op] ?? e.op} ${p(e.right)})`
     }
     case NODE.CALL: {
-      if (e.over !== undefined || e.distinct === true || e.orderBy !== undefined) throw new Unprintable()
+      if (e.over !== undefined || e.distinct === true || e.orderBy !== undefined) break
       const star = e.args.length === 1 && e.args[0]?.kind === NODE.COLUMN && e.args[0].parts.at(-1) === '*'
       return `${e.name.toLowerCase()}(${star ? '0' : e.args.map(p).join(',')})`
     }
+    case NODE.CAST: {
+      if (e.array === true || e.timeZone !== undefined) break
+      const t = e.type
+      let type = t.name
+      if (type === 'DECIMAL') {
+        const { precision, scale } = decimalCastShape(t)
+        type += `(${precision},${scale})`
+      }
+      else if (type !== 'SIGNED' && type !== 'UNSIGNED') break
+      return `cast(${p(e.expr)} as ${type.toLowerCase()})`
+    }
     case NODE.CASE:
       return `(case ${e.operand === undefined ? '' : `${p(e.operand)} `}${e.whens.map((w) => `when ${p(w.when)} then ${p(w.then)}`).join(' ')}${e.else === undefined ? '' : ` else ${p(e.else)}`} end)`
-    default:
-      throw new Unprintable()
   }
+  throw new Unprintable()
 }
