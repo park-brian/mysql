@@ -114,7 +114,54 @@ and browser work follow the outstanding engine/planner work. Remaining function
 boundaries stay open for separate verification. The current state and remaining
 work are:
 
-**Next bounded slice: audit nonfinite DOUBLE literal admission.**
+**Nonfinite DOUBLE admission, verified (2026-10-27).**
+The 1,623-command pinned MySQL audit covers literal spelling, finite boundaries,
+underflow and negative zero, charset/collation names, query/execute/PREPARE,
+CTE and syntax priority, text command prefixes and effects. Complete matches
+rise from 376 to 1,085, retaining every earlier matching outcome component,
+header, field attribute, PREPARE warning count and captured effect. The permanent
+regression passes locally and reproduces all 1,623 commands against native;
+37b6e73 fails it for an incorrectly published header. A 144,910-case parser
+contract audit changes 674 targeted admission outcomes; trees accepted by both
+versions remain identical within that matrix. Invalid legacy round-trip cases
+now require native refusals while valid finite boundaries and keyword DEFAULT
+retain round-trip coverage.
+
+Fresh Docker --reference passes 1,441 main tests, four latency tests, typecheck,
+lint, package/typed smoke, the real client and all seven pinned corpora. All nine
+unchanged caps pass: core/facade 334,308/334,237 B gzipped, both 596 B raw smaller
+than 37b6e73. Final fresh source proof matches all 432 test files/fixtures,
+204 runtime sources and reference tooling before container cleanup. The seeded
+million-input parser and 20,000-statement executor fuzz runs pass. Preceding
+37b6e73 passes all eleven required CI jobs. Runtime and tests stayed frozen
+through the final release gate.
+
+The literal grammar raises 1367/22007 before resolution, preserving the token's
+spelling and 192-byte label. Registered charset and collation names resolve at
+their grammar use; an unknown introducer follows identifier/alias grammar.
+The registry owns case, legacy utf8 aliases and NUL-prefix lookup; one SQL
+resolver now serves expressions and DDL. Shared name readers, actual metadata
+records and warning texts replace duplicated policies under the existing caps.
+
+**Remaining admission gaps:** native parsing can retain multiple conditions
+after an unknown COLLATE name, such as primary 1273 followed by 1367 or 1064.
+Conversion of four-byte collation-name characters can also publish warning 1300
+before the primary error. These captured histories remain open; the current
+repair establishes primary admission only. DECIMAL precision error priority,
+finite negative-double CAST overflow and broader source readiness are separate
+repairs. Review the shared parser diagnostic boundary next; do not add token or
+special-value exceptions to source readiness. M5.10 remains partial, totals
+144/190 and M5 42/53.
+
+**Next bounded slice:** preserve native recoverable COLLATE diagnostic histories
+through one checked parser boundary. Keep the earliest error primary while
+retaining later parsing conditions and their counts; refuse the invalid statement
+before execution. Preserve direct-call error identity/JSON, PREPARE non-execution,
+completed text-command prefixes and reader closure. Strengthen the captured
+history checks without recapturing answers or changing caps. Determine charset
+conversion warning admission separately from fatal literal overflow; do not
+continue past a grammar failure that native treats as fatal.
+
 The positive literal/typed-integer-NULL source proof now includes plain
 SIGNED/UNSIGNED casts of integer, boolean and text literals under unchanged
 caps. Their actual materializer owns conversion, saturation and warnings. Quoted `dual` resolves as an
@@ -494,9 +541,9 @@ parameters and effects. Together with the existing 5,076-command matrix, all
 The wider all-literal hypothesis is withheld: 540 native preheader refusals
 cover nonfinite doubles, finite negative-double CAST overflow and invalid typed
 temporals. These negative controls remain captured and enforced wherever they
-already match. Nonfinite DOUBLE literal admission and finite negative-double
-CAST overflow remain measured gaps; the readiness predicate does not implement
-their conversion or validation policy.
+already match. The nonfinite DOUBLE admission repair is recorded in the current
+slice above; finite negative-double CAST overflow remains a measured gap. The
+readiness predicate does not implement conversion or validation policy.
 
 Original CAST complete matches rise 3,542 to 3,718; the expanded matrix improves
 4,308 to 4,708. Across all 11,880 audit commands there is no lost matched outcome
@@ -522,10 +569,9 @@ Final fresh source proof matches 430 test files/fixtures, 202 runtime files and
 reference tooling. Preceding f15b61f passes all eleven required GitHub jobs.
 M5.10 stays partial, totals 144/190 and M5 42/53.
 
-**Immediate Next:** audit native nonfinite DOUBLE literal admission and error
-priority across query/execute/PREPARE, including spelling and long labels, before
-choosing its shared parser/constant-admission owner. Keep negative finite-double
-CAST overflow as a separate conversion repair. Introduced/collated literals,
+**Follow-through:** the native nonfinite DOUBLE audit and parser repair are
+recorded in the current slice above. Preserve recoverable parser condition
+histories next; keep negative finite-double CAST overflow separate. Introduced/collated literals,
 written source clauses and nullable-function initialization still need their
 own phase proofs before retrying integer minimum rejection across all contracts. Keep integer
 rejection separate from DECIMAL conditional acceptance, without special-value

@@ -247,7 +247,7 @@ export class SqlExecutor implements Executor {
       // RESET uses server defaults; an initial/change-user handshake supplies its charset.
       if (reset) {
         const collation = defaults.get('collation_connection')
-        session.characterSet = (collation == null ? undefined : collationInfoByName(toText(collation).toLowerCase())?.id) ?? CHARSET_UTF8MB4_0900_AI_CI
+        session.characterSet = (collation == null ? undefined : collationInfoByName(toText(collation))?.id) ?? CHARSET_UTF8MB4_0900_AI_CI
       }
     }
   }
@@ -431,11 +431,11 @@ export class SqlExecutor implements Executor {
       const ref = node as TableReference
       if (ref.kind === REF.TABLE) tableCollations(ref.table)
       if (typeof o['collation'] === 'string') {
-        const info = collationInfoByName(o['collation'].toLowerCase())
+        const info = collationInfoByName(o['collation'])
         if (info !== undefined) ids.add(info.id)
       }
       if (typeof o['charset'] === 'string') {
-        const info = defaultCollationOf(o['charset'].toLowerCase())
+        const info = defaultCollationOf(o['charset'])
         if (info !== undefined) ids.add(info.id)
       }
       return undefined

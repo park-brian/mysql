@@ -1321,7 +1321,7 @@ function conversionFunction(name: string, xs: readonly Compiled[], callName: str
     case 'CHAR': {
       arity(1, Infinity)
       const reads = xs.map(intReader)
-      const target = using === undefined ? undefined : using.toLowerCase() === 'binary' ? CHARSET_BINARY : (defaultCollationOf(using.toLowerCase() === 'utf8' ? 'utf8mb3' : using.toLowerCase())?.id ?? collationInfoByName(using.toLowerCase())?.id)
+      const target = using === undefined ? undefined : (defaultCollationOf(using)?.id ?? collationInfoByName(using)?.id)
       if (using !== undefined && target === undefined) throw sqlError('ER_UNKNOWN_CHARACTER_SET', `Unknown character set: '${using}'`)
       const binary = target === undefined || target === CHARSET_BINARY
       return {

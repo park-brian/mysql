@@ -125,10 +125,13 @@ test('review: SET DEFAULT takes no NOW(); CREATE DATABASE takes no READ ONLY and
   refused('ALTER TABLE t ALTER a SET DEFAULT NOW()', 'CREATE DATABASE d READ ONLY = 1', 'CREATE DATABASE d CHARACTER SET 1')
 })
 
-test('review: DEFAULT the keyword and default the name are different trees, and both round-trip', () => {
-  for (const sql of ["CREATE DATABASE d CHARACTER SET 'default'", 'CREATE DATABASE d CHARACTER SET `default`', 'CREATE DATABASE d CHARACTER SET DEFAULT', "CREATE TABLE t (a INT) CHARACTER SET 'default'", 'CREATE TABLE t (a INT) DEFAULT CHARSET = DEFAULT']) {
+test('review: DEFAULT the keyword round-trips; quoted default is an unknown charset or collation', () => {
+  for (const sql of ['CREATE DATABASE d CHARACTER SET DEFAULT', 'CREATE TABLE t (a INT) DEFAULT CHARSET = DEFAULT', "CREATE TABLE t (a INT) CHARACTER SET 'utf8mb4'"]) {
     parse(sql)
   }
-  assert.notDeepEqual(withoutPositions(parse("CREATE DATABASE d CHARACTER SET 'default'")), withoutPositions(parse('CREATE DATABASE d CHARACTER SET DEFAULT')))
+  for (const sql of ["CREATE DATABASE d CHARACTER SET 'default'", 'CREATE DATABASE d CHARACTER SET `default`', "CREATE TABLE t (a INT) CHARACTER SET 'default'"]) {
+    assert.throws(() => parseStatement(sql), { code: 'ER_UNKNOWN_CHARACTER_SET', errno: 1115, sqlState: '42000' }, sql)
+  }
+  assert.throws(() => parseStatement("CREATE TABLE t (a INT) COLLATE 'default'"), { code: 'ER_UNKNOWN_COLLATION', errno: 1273, sqlState: 'HY000' })
   refused('CREATE TABLE t (x INT) PARTITION BY HASH (x) PARTITIONS 1000000000000000000000')
 })

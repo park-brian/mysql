@@ -36,7 +36,8 @@
 //     `LONG VARBINARY`, `NATIONAL CHAR`), so the table cannot be a single-token
 //     lookup.
 import { FIELD_TYPE, type FieldTypeCode } from '@myjs/bytes'
-import { wordOrString, type Cursor } from './cursor.ts'
+import type { Cursor } from './cursor.ts'
+import { charsetName, collationName } from './names.ts'
 import { TOKEN } from './tokens.ts'
 import type { SqlMode } from './sql-mode.ts'
 
@@ -361,11 +362,11 @@ export function parseDataType(c: Cursor, mode: SqlMode): DataType {
         continue
       }
       if (c.takeWords('CHARACTER', 'SET') || c.takeWord('CHARSET')) {
-        charset = charsetName(c)
+        charset = charsetName(c).toLowerCase()
         continue
       }
       if (c.takeWord('COLLATE')) {
-        collation = charsetName(c)
+        collation = collationName(c).toLowerCase()
         continue
       }
     }
@@ -421,11 +422,6 @@ function shorthandCharset(c: Cursor): string | null {
     if (c.takeWord(word)) return charset
   }
   return null
-}
-
-/** A charset or collation name: a bare word, or a quoted string. */
-function charsetName(c: Cursor): string {
-  return wordOrString(c).toLowerCase()
 }
 
 /** `(1)` or `(10, 2)` — up to `max` integers, or nothing at all. */

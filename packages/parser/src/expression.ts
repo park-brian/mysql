@@ -16,7 +16,7 @@
 //                       5.0, so `NOT a = b` regroups from `NOT (a = b)` to
 //                       `(NOT a) = b`.
 import { systemVariableParts } from './variable.ts'
-import { Cursor, checkTreeDepth, wordOrString } from './cursor.ts'
+import { Cursor, checkTreeDepth } from './cursor.ts'
 import { RESERVED } from './keywords.ts'
 import { TOKEN } from './tokens.ts'
 import { NODE, LITERAL, type Expression, type LiteralType } from './ast.ts'
@@ -31,6 +31,9 @@ import {
   parseWindowSpec,
 } from './query.ts'
 import { FIELD_TYPE } from '@myjs/bytes'
+import { defaultCollationOf } from '@myjs/charsets'
+import { illegalDouble } from './errors.ts'
+import { charsetName, collationName } from './names.ts'
 import { NO_SQL_MODE, type SqlMode } from './sql-mode.ts'
 
 /**
@@ -438,10 +441,8 @@ class ExpressionParser {
   #postfixCollate(expr: Expression): Expression {
     const cursor = this.#c
     let out = expr
-    while (cursor.atWord('COLLATE')) {
-      cursor.skip()
-      if (cursor.atWord('BINARY')) cursor.fail()
-      const name = wordOrString(cursor)
+    while (cursor.takeWord('COLLATE')) {
+      const name = collationName(cursor)
       out = out.kind === NODE.LITERAL && out.collation === undefined ? { ...out, collation: name } : { kind: NODE.COLLATE, expr: out, collation: name, at: out.at }
     }
     return out
@@ -528,27 +529,21 @@ class ExpressionParser {
         return { kind: NODE.LITERAL, type: LITERAL.BOOL, value: upper === 'TRUE', at: t.start }
       }
       if (upper === 'CASE') return this.#case()
-      // `_latin1'x'` — a charset introducer. MySQL lexes this as its own token
-      // kind; here the lexer leaves it an identifier and the shape is
-      // recognised at the point where it can only mean one thing.
-      if (t.text.startsWith('_') && cursor.peek(1).kind === TOKEN.STRING) {
-        cursor.skip()
-        let value = cursor.take().text
-        while (cursor.peek().kind === TOKEN.STRING) value += cursor.take().text
-        return { kind: NODE.LITERAL, type: LITERAL.STRING, value, charset: t.text.slice(1).toLowerCase(), at: t.start }
-      }
-      // …and before a hex or bit literal: `_binary 0x41`, `_utf8mb4 x'C3A6'`.
-      if (t.text.startsWith('_') && (cursor.peek(1).kind === TOKEN.HEX || cursor.peek(1).kind === TOKEN.BIT)) {
-        cursor.skip()
-        const lit = this.#primary()
-        return { ...(lit as Extract<Expression, { kind: 'literal' }>), charset: t.text.slice(1).toLowerCase(), at: t.start }
+      // Only a registered charset makes an introducer; otherwise this is a name.
+      const next = cursor.peek(1).kind
+      if (t.text.startsWith('_') && (next === TOKEN.STRING || next === TOKEN.HEX || next === TOKEN.BIT)) {
+        const charset = t.text.slice(1).toLowerCase()
+        if (defaultCollationOf(charset) !== undefined) {
+          cursor.skip()
+          if (next === TOKEN.STRING) return { kind: NODE.LITERAL, type: LITERAL.STRING, value: this.#stringText(), charset, at: t.start }
+          const lit = this.#primary()
+          return { ...(lit as Extract<Expression, { kind: 'literal' }>), charset, at: t.start }
+        }
       }
       // `N'x'` is the national charset's literal, which MySQL defines as utf8mb3.
-      if (upper === 'N' && cursor.peek(1).kind === TOKEN.STRING && cursor.peek(1).start === t.end) {
+      if (upper === 'N' && next === TOKEN.STRING && cursor.peek(1).start === t.end) {
         cursor.skip()
-        let value = cursor.take().text
-        while (cursor.peek().kind === TOKEN.STRING) value += cursor.take().text
-        return { kind: NODE.LITERAL, type: LITERAL.STRING, value, charset: 'utf8mb3', at: t.start }
+        return { kind: NODE.LITERAL, type: LITERAL.STRING, value: this.#stringText(), charset: 'utf8mb3', at: t.start }
       }
       if (upper === 'EXISTS' && cursor.atOp('(', 1)) {
         cursor.skip()
@@ -669,7 +664,7 @@ class ExpressionParser {
       if (cursor.atWord('ORDER') && cursor.atWord('BY', 1)) orderBy = parseOrderBy(cursor, this.#mode)
       if (cursor.takeWord('SEPARATOR')) separator = this.#stringText()
     }
-    if (upper === 'CHAR' && cursor.takeWord('USING')) using = this.#charsetName()
+    if (upper === 'CHAR' && cursor.takeWord('USING')) using = charsetName(cursor).toLowerCase()
     cursor.expectOp(')')
     const over = this.#over()
     return {
@@ -744,7 +739,7 @@ class ExpressionParser {
         cursor.expectOp('(')
         const expr = this.#binary(0)
         if (cursor.takeWord('USING')) {
-          const charset = this.#charsetName()
+          const charset = charsetName(cursor).toLowerCase()
           cursor.expectOp(')')
           return { kind: NODE.CONVERT, expr, charset, at: t.start }
         }
@@ -906,10 +901,6 @@ class ExpressionParser {
     return type
   }
 
-  #charsetName(): string {
-    return wordOrString(this.#c).toLowerCase()
-  }
-
   /** Adjacent literals concatenate here for expressions, separators and time zones. */
   #stringText(): string {
     const cursor = this.#c
@@ -987,7 +978,11 @@ class ExpressionParser {
  */
 function numericLiteral(text: string): { type: LiteralType; value: bigint | number | string; text?: string } {
   // A DOUBLE keeps its text: MySQL sizes the literal by how it was written (`1e1` is 3 wide).
-  if (/[eE]/.test(text)) return { type: LITERAL.DOUBLE, value: Number(text), text }
+  if (/[eE]/.test(text)) {
+    const value = Number(text)
+    if (!Number.isFinite(value)) throw illegalDouble(text)
+    return { type: LITERAL.DOUBLE, value, text }
+  }
   if (text.includes('.')) return { type: LITERAL.DECIMAL, value: text }
   return { type: LITERAL.INT, value: BigInt(text) }
 }

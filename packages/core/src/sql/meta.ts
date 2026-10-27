@@ -558,6 +558,9 @@ export function columnDefinition(name: string, t: ResultType, resultsCollation: 
   }
 }
 
+/** 1287: the explicit utf8mb3 name in column definitions and CONVERT USING. */
+export const UTF8MB3_DEPRECATION = "'utf8mb3' is deprecated and will be removed in a future release. Please use utf8mb4 instead"
+
 /** 3720: what NATIONAL, NCHAR and NVARCHAR draw, in a column or a CAST (8.4.11). */
 export const NATIONAL_DEPRECATION =
   'NATIONAL/NCHAR/NVARCHAR implies the character set UTF8MB3, which will be replaced by UTF8MB4 in a future release. Please consider using CHAR(x) CHARACTER SET UTF8MB4 in order to be unambiguous.'

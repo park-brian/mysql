@@ -50,7 +50,7 @@ export function charsetChange(item: { readonly charset?: string; readonly collat
   // An absent charset is `SET NAMES DEFAULT`: the server default, not a name.
   const charset = (item.charset ?? 'utf8mb4').toLowerCase()
   if (item.collation !== undefined) {
-    const info = collationInfoByName(item.collation.toLowerCase())
+    const info = collationInfoByName(item.collation)
     // A COLLATE that does not belong to the named charset is an error in
     // MySQL, not a silent override.
     if (info === undefined || info.charset !== charset) return 'unknown'

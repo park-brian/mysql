@@ -16,6 +16,7 @@
 // skipped, because skipping is how a `CREATE TABLE` silently loses a
 // `CHARACTER SET` and produces a table that stores different bytes.
 import { flag, opt, wordOrString, type Cursor } from './cursor.ts'
+import { charsetName, collationName } from './names.ts'
 import { TOKEN } from './tokens.ts'
 import { NODE, type Expression } from './ast.ts'
 import { parseExpressionFrom } from './expression.ts'
@@ -201,7 +202,7 @@ export function parseCreateDatabase(c: Cursor): CreateDatabaseNode {
     else if (defaulted) c.fail()
     else break
     c.takeOp('=')
-    options[option] = option === 'ENCRYPTION' ? c.expectString() : charsetValue(c)
+    options[option] = option === 'ENCRYPTION' ? c.expectString() : charsetValue(c, option === 'COLLATE' ? collationName : charsetName)
   }
   return { kind: STATEMENT.CREATE_DATABASE, name, ...flag('ifNotExists', ifNotExists), options, at }
 }
@@ -515,7 +516,7 @@ function columnDefinition(c: Cursor, options: DdlOptions, at: number): ColumnDef
     // the type. Recording the late one on the column made them two trees for
     // one definition (found by the deparser's round-trip, M3.3).
     if (c.takeWord('COLLATE')) {
-      type = { ...type, collation: nameOrString(c).toLowerCase() }
+      type = { ...type, collation: collationName(c).toLowerCase() }
       continue
     }
     if (c.takeWord('INVISIBLE')) {
@@ -826,7 +827,7 @@ export function tableOption(c: Cursor, out: Record<string, string>): boolean {
   }
   if (c.takeWords('DEFAULT', 'COLLATE') || c.takeWord('COLLATE')) {
     c.takeOp('=')
-    out['COLLATE'] = charsetValue(c)
+    out['COLLATE'] = charsetValue(c, collationName)
     return true
   }
   const t = c.peek()
@@ -875,9 +876,9 @@ export function tableOption(c: Cursor, out: Record<string, string>): boolean {
  * `'DEFAULT'`, which is how the deparser knows to write the keyword back rather
  * than a string naming a charset called `default`.
  */
-function charsetValue(c: Cursor): string {
+function charsetValue(c: Cursor, read = charsetName): string {
   if (c.takeWord('DEFAULT')) return 'DEFAULT'
-  return wordOrString(c)
+  return read(c)
 }
 
 /** A value that may be written as a bare word, a quoted string, or a number. */

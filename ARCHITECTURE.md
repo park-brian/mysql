@@ -1577,8 +1577,12 @@ column widths are computed after each source is planned.
 DIV minimum rejection and NULL-reader ordering remain open: exact integer CAST
 sources are verified within their positive grammar, while introduced/collated
 literals, written source clauses and function sources still need initialization
-proofs. Nonfinite DOUBLE literal admission and finite negative-double CAST
-overflow need separate repairs.
+proofs. The literal grammar rejects nonfinite DOUBLE tokens before resolution,
+retaining native spelling and bounded labels. Grammar readers validate registered
+charset/collation names; registry lookup owns case, utf8 aliases and NUL prefixes.
+Expressions and DDL share SQL collation resolution. Recoverable parser condition
+histories, collation-name conversion warnings, DECIMAL precision priority and
+finite negative-double CAST overflow remain separate repairs.
 A minimum-boundary trial remains parked after broader controls exposed lost
 headers. Native contracts retain matched metadata, diagnostics, operand effects
 and state before those repairs proceed.

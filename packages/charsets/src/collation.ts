@@ -65,11 +65,13 @@ export interface Collation extends CollationInfo {
 
 let table: Map<number, CollationInfo> | null = null
 let byName: Map<string, CollationInfo> | null = null
+let defaults: Map<string, CollationInfo> | null = null
 
 function expand(): Map<number, CollationInfo> {
   if (table !== null) return table
   const byId = new Map<number, CollationInfo>()
   const names = new Map<string, CollationInfo>()
+  const charsets = new Map<string, CollationInfo>()
   for (const line of PACKED_COLLATIONS.split('\n')) {
     const parts = line.split(' ')
     const [id, name, charset, mbminlen, mbmaxlen] = parts
@@ -86,9 +88,11 @@ function expand(): Map<number, CollationInfo> {
     }
     byId.set(info.id, info)
     names.set(info.name, info)
+    if (info.isDefault) charsets.set(info.charset, info)
   }
   table = byId
   byName = names
+  defaults = charsets
   return byId
 }
 
@@ -106,15 +110,19 @@ export function requireCollationInfo(id: number): CollationInfo {
 
 export function collationInfoByName(name: string): CollationInfo | undefined {
   expand()
-  return byName?.get(name)
+  return byName?.get(sqlName(name))
 }
 
 /** The default collation of a charset, e.g. `utf8mb4` → `utf8mb4_0900_ai_ci`. */
 export function defaultCollationOf(charset: string): CollationInfo | undefined {
-  for (const info of expand().values()) {
-    if (info.charset === charset && info.isDefault) return info
-  }
-  return undefined
+  expand()
+  return defaults?.get(sqlName(charset))
+}
+
+/** SQL names ignore case, use a NUL-terminated prefix and retain the utf8 alias. */
+function sqlName(name: string): string {
+  name = name.split('\0', 1)[0]!.toLowerCase()
+  return name.replace(/^utf8(?=_|$)/, 'utf8mb3')
 }
 
 export function allCollations(): readonly CollationInfo[] {

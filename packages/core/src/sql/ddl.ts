@@ -18,14 +18,17 @@
 // What the engine does not interpret rides in `attributes`: a column's
 // `DEFAULT` and `ON UPDATE` as SQL text, compiled when a row needs them.
 import { CHARSET_BINARY, FIELD_TYPE } from '@myjs/bytes'
-import { collationInfoByName, defaultCollationOf, requireCollationInfo } from '@myjs/charsets'
+import { requireCollationInfo } from '@myjs/charsets'
 import { clusteredIndexOf, type ColumnDef, type EngineName, type IndexDef, type TableSpec } from '@myjs/engine'
-import { KEY, NODE, deparse, type ColumnDefinition, type CreateTableNode, type DataType, type Expression, type KeyDefinition } from '@myjs/parser'
+import { KEY, NODE, deparse, type ColumnDefinition, type CreateTableNode, type DataType, type KeyDefinition } from '@myjs/parser'
 import { messages, sqlError } from '@myjs/protocol'
 import type { ColumnType } from '@myjs/types'
 import { checkFulltext, type FulltextDef } from './fulltext.ts'
 import { checkGenerated } from './generated.ts'
-import { NATIONAL_DEPRECATION } from './meta.ts'
+import { NATIONAL_DEPRECATION, UTF8MB3_DEPRECATION } from './meta.ts'
+import { resolveCollation } from './collation.ts'
+
+export { resolveCollation } from './collation.ts'
 
 const INTEGER_CODES: ReadonlySet<number> = new Set([FIELD_TYPE.TINY, FIELD_TYPE.SHORT, FIELD_TYPE.INT24, FIELD_TYPE.LONG, FIELD_TYPE.LONGLONG])
 
@@ -61,7 +64,7 @@ export function columnDeprecations(c: ColumnDefinition): Deprecation[] {
   // The charset's, in the order the definition meets them (8.4.11).
   if (t.binary === true) out.push({ code: 1287, message: "'BINARY as attribute of a type' is deprecated and will be removed in a future release. Please use a CHARACTER SET clause with _bin collation instead" })
   if (t.national === true) out.push({ code: 3720, message: NATIONAL_DEPRECATION })
-  else if (t.charset === 'utf8mb3') out.push({ code: 1287, message: "'utf8mb3' is deprecated and will be removed in a future release. Please use utf8mb4 instead" })
+  else if (t.charset === 'utf8mb3') out.push({ code: 1287, message: UTF8MB3_DEPRECATION })
   else if (t.charset === 'utf8') out.push({ code: 3719, message: "'utf8' is currently an alias for the character set UTF8MB3, but will be an alias for UTF8MB4 in a future release. Please consider using UTF8MB4 in order to be unambiguous." })
   return out
 }
@@ -116,48 +119,6 @@ const STRING_CODES: ReadonlySet<number> = new Set([
   FIELD_TYPE.ENUM,
   FIELD_TYPE.SET,
 ])
-
-/** A charset name as MySQL spells it in 8.4: `utf8` is `utf8mb3`. */
-const charsetName = (name: string): string => {
-  const n = name.toLowerCase()
-  return n === 'utf8' ? 'utf8mb3' : n
-}
-
-function collationByName(name: string): number {
-  const info = collationInfoByName(name.toLowerCase() === 'utf8_bin' ? 'utf8mb3_bin' : name.toLowerCase().replace(/^utf8_/, 'utf8mb3_'))
-  if (info === undefined) throw sqlError('ER_UNKNOWN_COLLATION', messages.unknownCollation(name))
-  return info.id
-}
-
-function charsetDefault(name: string): number {
-  const cs = charsetName(name)
-  if (cs === 'binary') return CHARSET_BINARY
-  const info = defaultCollationOf(cs)
-  if (info === undefined) throw sqlError('ER_UNKNOWN_CHARACTER_SET', `Unknown character set: '${name}'`)
-  return info.id
-}
-
-/** The `_bin` collation of a collation's charset. */
-function binCollationOf(id: number): number {
-  const cs = requireCollationInfo(id).charset
-  if (cs === 'binary') return CHARSET_BINARY
-  const info = collationInfoByName(`${cs}_bin`)
-  if (info === undefined) throw sqlError('ER_UNKNOWN_COLLATION', messages.unknownCollation(`${cs}_bin`))
-  return info.id
-}
-
-/** A charset and collation pair, as table and schema options give them, to one collation. */
-export function resolveCollation(charset: string | undefined, collate: string | undefined, fallback: number): number {
-  if (collate !== undefined) {
-    const id = collationByName(collate)
-    if (charset !== undefined && requireCollationInfo(id).charset !== charsetName(charset)) {
-      throw sqlError('ER_COLLATION_CHARSET_MISMATCH', `COLLATION '${collate}' is not valid for CHARACTER SET '${charset}'`)
-    }
-    return id
-  }
-  if (charset !== undefined) return charsetDefault(charset)
-  return fallback
-}
 
 /** A table option, looked up by any of its spellings. */
 function option(options: Readonly<Record<string, string>>, ...names: string[]): string | undefined {
@@ -299,8 +260,9 @@ function resolveColumnType(t: DataType, tableCollation: number, column: string):
   let collationId: number
   if (declaredBinary) collationId = CHARSET_BINARY
   else {
-    collationId = t.collation !== undefined ? collationByName(t.collation) : t.charset !== undefined ? charsetDefault(t.charset) : tableCollation
-    if (t.binary === true) collationId = binCollationOf(collationId)
+    collationId = resolveCollation(t.charset, t.collation, tableCollation)
+    // BINARY selects this charset's _bin collation; binary itself already is one.
+    if (t.binary === true && collationId !== CHARSET_BINARY) collationId = resolveCollation(undefined, `${requireCollationInfo(collationId).charset}_bin`, collationId)
   }
   const length = t.length
   if (code === FIELD_TYPE.ENUM || code === FIELD_TYPE.SET) {
@@ -315,9 +277,6 @@ function resolveColumnType(t: DataType, tableCollation: number, column: string):
   if (code === FIELD_TYPE.STRING) return { type, length: length ?? 1, collationId }
   return { type, collationId }
 }
-
-/** The SQL text a default is kept as. */
-const sqlText = (e: Expression): string => deparse(e)
 
 /**
  * `CREATE TABLE` → the catalog's spec. `schemaCollation` is the schema's
@@ -437,15 +396,15 @@ export function column(c: ColumnDefinition, tableCollation: number, inPrimary: b
   const attributes: Record<string, unknown> = {}
   // A nullable TEXT or BLOB's DEFAULT NULL is no default at all: SHOW CREATE TABLE writes none (8.4.11).
   const nullDefault = c.default?.kind === NODE.LITERAL && c.default.type === 'null' && c.defaultExpression !== true
-  if (c.default !== undefined && !(nullDefault && nullable && BLOB_CODES.has(type.type))) attributes['default'] = sqlText(c.default)
+  if (c.default !== undefined && !(nullDefault && nullable && BLOB_CODES.has(type.type))) attributes['default'] = deparse(c.default)
   if (c.defaultExpression === true) attributes['defaultExpression'] = true
   if (c.generated !== undefined) {
-    attributes['generated'] = sqlText(c.generated.expr)
+    attributes['generated'] = deparse(c.generated.expr)
     if (c.generated.stored) attributes['stored'] = true
   }
   // A charset or collation the column names itself, which SHOW CREATE TABLE then always writes (`is_explicit_collation`).
   if (type.collationId !== undefined && type.collationId !== CHARSET_BINARY && (c.type.charset !== undefined || c.type.collation !== undefined || c.type.binary === true)) attributes['explicitCollation'] = true
-  if (c.onUpdate !== undefined) attributes['onUpdate'] = sqlText(c.onUpdate)
+  if (c.onUpdate !== undefined) attributes['onUpdate'] = deparse(c.onUpdate)
   if (c.comment !== undefined) attributes['comment'] = c.comment
   if (c.type.zerofill === true) attributes['zerofill'] = true
   // BOOL and BOOLEAN are TINYINT(1), width and all.

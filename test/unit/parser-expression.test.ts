@@ -6,7 +6,7 @@
 // the refusals ground rule 5 requires.
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { NODE, ParseError, parseExpression, parseSqlMode, type Expression } from '@myjs/parser'
+import { NODE, ParseError, parseExpression, parseStatement, parseSqlMode, type Expression, type QueryExpression } from '@myjs/parser'
 
 /**
  * A parenthesised rendering of a tree.
@@ -222,6 +222,41 @@ test('M3.10 / ground rule 5: deep nesting is refused, not a stack overflow', () 
   assert.throws(() => parseExpression('-'.repeat(100_000) + '1'), ParseError)
   // And the limit is generous enough that real SQL never reaches it.
   assert.equal(tree('('.repeat(50) + '1 + 2' + ')'.repeat(50)), '(1 + 2)')
+})
+
+test('M5.10: DOUBLE overflow is a parsing refusal with the original bounded label', () => {
+  for (const text of ['1e309', '1E309', '1e+309', '1e000309', '2e308', '1.7976931348623159e308', '1e' + '9'.repeat(250)]) {
+    for (const sign of ['', '-', '+']) assert.throws(() => parseExpression(sign + text), {
+      code: 'ER_ILLEGAL_VALUE_FOR_TYPE', errno: 1367, sqlState: '22007',
+      message: `Illegal double '${text.slice(0, 192)}' value found during parsing`,
+    })
+  }
+  for (const text of ['1e308', '1.7976931348623157e308', '.1e309', '0e999', '0.0e999', '1e-999', '1e-324', '5e-324', '1e-323']) {
+    const node = parseExpression(text)
+    assert.equal(node.kind, NODE.LITERAL)
+    if (node.kind === NODE.LITERAL) {
+      assert.equal(node.value, Number(text), text)
+      assert.equal(node.text, text)
+    }
+  }
+})
+
+test('M5.10: grammar admission precedes name resolution without crossing earlier grammar failures', () => {
+  for (const sql of ['SELECT missing,1e309', 'SELECT 1 FROM missing WHERE 1e309', "SELECT _unknown'x',1e309", "SELECT 'x' COLLATE latin1_swedish_ci,1e309"]) {
+    assert.throws(() => parseStatement(sql), { errno: 1367 }, sql)
+  }
+  assert.throws(() => parseStatement('WITH c AS(SELECT 1),c AS(SELECT 2) SELECT 1e309'), { errno: 1066 })
+  assert.throws(() => parseStatement("SELECT 'x' COLLATE unknown_collation,1e309"), { errno: 1273 })
+  assert.throws(() => parseStatement("SELECT CONVERT('x' USING unknown),1e309"), { errno: 1115 })
+  for (const sql of ['SELECT FROM 1e309', 'SELECT 1 LIMIT 1e309', 'SELECT CAST(1 AS DECIMAL(1e309,0))', "SELECT 'x' COLLATE DEFAULT,1e309"]) {
+    assert.throws(() => parseStatement(sql), { errno: 1064 }, sql)
+  }
+  const unknown = parseStatement("SELECT _unknown'x'") as QueryExpression
+  assert.equal(unknown.body.kind, 'select')
+  if (unknown.body.kind === 'select') {
+    assert.deepEqual(unknown.body.items[0]!.expr, { kind: NODE.COLUMN, parts: ['_unknown'], at: 7 })
+    assert.equal(unknown.body.items[0]!.alias, 'x')
+  }
 })
 
 test('M3.15: a reserved word ends an expression, unless it names a function', () => {

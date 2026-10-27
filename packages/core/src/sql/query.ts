@@ -1742,7 +1742,7 @@ function expressionIdentity(e: Expression | undefined, ctx: CompileContext, env:
       const c = compile(bare, ctx)
       const v = c.eval([], env)
       const kind = e.type === LITERAL.BOOL ? LITERAL.BOOL : v?.kind === 'bytes' && v.hex === true ? LITERAL.HEX : c.type.kind
-      return [e.kind, kind, c.type.collationId, mode === 'copy' && v?.kind === 'string' ? v.v : valueKey(v), collation === undefined ? undefined : collationInfoByName(collation.toLowerCase())?.id]
+      return [e.kind, kind, c.type.collationId, mode === 'copy' && v?.kind === 'string' ? v.v : valueKey(v), collation === undefined ? undefined : collationInfoByName(collation)?.id]
     }
     case NODE.PLACEHOLDER: return [e.kind, e.index]
     case NODE.BINARY:
@@ -1752,7 +1752,7 @@ function expressionIdentity(e: Expression | undefined, ctx: CompileContext, env:
       if (e.type.name !== 'SIGNED' || e.array === true || e.timeZone !== undefined) return undefined
       identity = [e.kind]; args = [e.expr]; break
     case NODE.COLLATE:
-      identity = [e.kind, collationInfoByName(e.collation.toLowerCase())?.id]; args = [e.expr]; break
+      identity = [e.kind, collationInfoByName(e.collation)?.id]; args = [e.expr]; break
     case NODE.CALL: {
       const name = e.name.toUpperCase()
       const allowed = name === 'ABS' || name === 'CONCAT' || (mode === 'admission' && (name === 'RAND' || name === 'LAST_INSERT_ID'))

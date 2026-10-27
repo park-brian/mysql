@@ -117,8 +117,12 @@ length/range conversion policy; the CAST writer owns wrapping, saturation and
 warnings. Raw uncast bounds and caller/source fences remain intact. Cardinality
 alone supplies no readiness proof. Quoted DUAL retains ordinary table lookup and row identity;
 the parser owns unquoted DUAL normalization. Broader CAST and function-source
-admission remain open. Nonfinite DOUBLE literal admission and finite negative-
-double CAST overflow remain measured gaps. Integer DIV minimum rejection also remains parked after
+admission remain open. Nonfinite DOUBLE literals now fail during parsing, with
+native spelling and label bounds, and preserve earlier namespace refusals. Shared grammar name
+readers validate registered charsets/collations; the registry owns case, utf8
+aliases and NUL prefixes, and one SQL resolver serves expressions and DDL.
+Recoverable parser condition histories, collation-name conversion warnings,
+DECIMAL precision priority and finite negative-double CAST overflow remain open. Integer DIV minimum rejection also remains parked after
 broader CAST and written-clause controls exposed lost headers. Evaluation-count
 contracts preserve actual operand effects and prepared non-execution. Buffered multi-statement runtime failures
 now retain completed results with their own status and warnings before the ERR

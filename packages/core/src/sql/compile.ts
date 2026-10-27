@@ -13,7 +13,8 @@
 // have not written is ER_NOT_SUPPORTED_YET naming it (M5.10 owns the rest).
 import { CHARSET_BINARY, COLUMN_FLAG, FIELD_TYPE, expectTyped, equalBytes } from '@myjs/bytes'
 import { someNode } from './ast.ts'
-import { collationInfoByName, decodeCollation, defaultCollationOf, encodeCollation, requireCollationInfo } from '@myjs/charsets'
+import { resolveCollation } from './collation.ts'
+import { decodeCollation, defaultCollationOf, encodeCollation, requireCollationInfo } from '@myjs/charsets'
 import { LITERAL, NODE, TOKEN, deparse, lex, parseExpression, type CallNode, type CaseNode, type CastNode, type ConvertNode, type Expression, type LiteralNode, type MatchNode, type QueryExpression, type SubqueryNode, type VariableNode, quoteName } from '@myjs/parser'
 import type { ColumnDef, Table, Trx } from '@myjs/engine'
 import { sqlError, messages, type Session } from '@myjs/protocol'
@@ -91,6 +92,7 @@ import {
 import {
   CHARSET_UTF8MB4_BIN,
   NATIONAL_DEPRECATION,
+  UTF8MB3_DEPRECATION,
   NULL_TYPE,
   boolType,
   charWidth,
@@ -422,10 +424,10 @@ export function sourceText(sql: string | undefined, at: number): string | undefi
  */
 function convertUsing(e: ConvertNode, ctx: CompileContext): Compiled {
   const x = compile(e.expr, ctx)
-  const name = e.charset.toLowerCase() === 'utf8' ? 'utf8mb3' : e.charset.toLowerCase()
-  const id = name === 'binary' ? CHARSET_BINARY : defaultCollationOf(name)?.id
-  if (id === undefined) throw sqlError('ER_UNKNOWN_CHARACTER_SET', `Unknown character set: '${e.charset}'`)
-  if (name === 'utf8mb3') warnAtCompile(ctx, 1287, "'utf8mb3' is deprecated and will be removed in a future release. Please use utf8mb4 instead")
+  const info = defaultCollationOf(e.charset)
+  if (info === undefined) throw sqlError('ER_UNKNOWN_CHARACTER_SET', `Unknown character set: '${e.charset}'`)
+  const { id, charset } = info
+  if (charset === 'utf8mb3') warnAtCompile(ctx, 1287, UTF8MB3_DEPRECATION)
   // Characters, or bytes as many as the text could take when the result is bytes.
   const width = x.type.kind === 'bytes' || isBits(x.type) ? bitsOrBytesWidth(x.type) : charWidth(x.type) * (id === CHARSET_BINARY && x.type.kind === 'string' ? requireCollationInfo(x.type.collationId).mbmaxlen : 1)
   return {
@@ -435,7 +437,7 @@ function convertUsing(e: ConvertNode, ctx: CompileContext): Compiled {
       const bytes = v.kind === 'bytes' ? v.v : v.kind === 'int' && isBits(x.type) ? bitBytes(v.v, x.type.length) : undefined
       if (id === CHARSET_BINARY) return bytesValue(bytes ?? valueBytes(v))
       let text = bytes === undefined ? decodeCollation(encodeCollation(toText(v), id), id) : textIn(bytes, id, env)
-      if (bytes === undefined && name === 'utf8mb3' && text !== null) text = bmpText(text)
+      if (bytes === undefined && charset === 'utf8mb3' && text !== null) text = bmpText(text)
       return text === null ? null : stringValue(text, id, COERCIBILITY.IMPLICIT)
     },
     type: stringType(width, id, true),
@@ -772,7 +774,7 @@ export function compile(e: Expression, ctx: CompileContext): Compiled {
       // A number or a temporal becomes text in the collation's own charset; NULL and bytes are binary's.
       const t = inner.type
       const charset = isText(t) || t.kind === 'null' ? charsetOfCollation(t.collationId) : t.kind === 'json' ? 'utf8mb4' : undefined
-      const id = collateTo(e.collation, charset)
+      const id = resolveCollation(charset, e.collation, ctx.connectionCollation)
       return {
         eval: (row, env) => {
           const v = inner.eval(row, env)
@@ -859,7 +861,7 @@ function literal(e: LiteralNode, ctx: CompileContext): Compiled {
   switch (e.type) {
     case LITERAL.INT: {
       const n = e.value as bigint
-      const unsigned = n > (1n << 63n) - 1n
+      const unsigned = n > MAX_SIGNED
       return lit(intValue(n, unsigned), intType(n.toString().length + (unsigned ? 0 : 1), false, unsigned))
     }
     case LITERAL.DECIMAL: {
@@ -927,34 +929,14 @@ function literal(e: LiteralNode, ctx: CompileContext): Compiled {
   }
 }
 
-/**
- * A COLLATE's collation, which must be one of `charset`'s, else 1253
- * (8.4.11: `'a' COLLATE latin1_bin` from a utf8mb4 client, and anything of
- * binary's). `utf8_` names `utf8mb3_`.
- */
-function collateTo(name: string, charset?: string): number {
-  const lower = name.toLowerCase()
-  const info = collationInfoByName(lower.startsWith('utf8_') ? `utf8mb3_${lower.slice(5)}` : lower)
-  if (info === undefined) throw sqlError('ER_UNKNOWN_COLLATION', messages.unknownCollation(name))
-  if (charset !== undefined && info.charset !== charset) throw sqlError('ER_COLLATION_CHARSET_MISMATCH', `COLLATION '${name}' is not valid for CHARACTER SET '${charset}'`)
-  return info.id
-}
-
 /** A string literal's collation: its `COLLATE`, else its introducer's charset default, else the connection's. */
 function introducerCollation(e: LiteralNode, ctx: CompileContext): number {
-  if (e.collation !== undefined) {
+  let charset = e.charset
+  if (charset === undefined && e.collation !== undefined) {
     // A hex or bit literal with no introducer is binary's.
-    const cs = e.charset?.toLowerCase() ?? (e.type === LITERAL.STRING ? undefined : 'binary')
-    return collateTo(e.collation, cs === undefined ? requireCollationInfo(ctx.connectionCollation).charset : cs === 'utf8' ? 'utf8mb3' : cs)
+    charset = e.type === LITERAL.STRING ? requireCollationInfo(ctx.connectionCollation).charset : 'binary'
   }
-  if (e.charset !== undefined) {
-    const cs = e.charset.toLowerCase()
-    if (cs === 'binary') return CHARSET_BINARY
-    const def = defaultCollationOf(cs === 'utf8' ? 'utf8mb3' : cs)
-    if (def === undefined) throw sqlError('ER_UNKNOWN_CHARACTER_SET', messages.unsupportedCharset(0))
-    return def.id
-  }
-  return ctx.connectionCollation
+  return resolveCollation(charset, e.collation, ctx.connectionCollation)
 }
 
 /** Resolve identity once for compilation and command admission. */
@@ -2477,7 +2459,7 @@ function cast(e: CastNode, ctx: CompileContext): Compiled {
     case 'CHAR':
     case 'NCHAR':
     case 'VARCHAR': {
-      const id = (t.charset ? defaultCollationOf(t.charset.toLowerCase())?.id : undefined) ?? ctx.connectionCollation
+      const id = (t.charset ? defaultCollationOf(t.charset)?.id : undefined) ?? ctx.connectionCollation
       return {
         eval: (r, env) => {
           const v = x(r, env)

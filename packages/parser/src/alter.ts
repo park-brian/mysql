@@ -16,13 +16,13 @@
 //     ER_PARSE_ERROR.
 import { unsupportedStatement } from './errors.ts'
 import { opt, type Cursor } from './cursor.ts'
+import { charsetName, collationName } from './names.ts'
 import {
   algorithmAndLock,
   defaultExpression,
   indexColumns,
   indexOptions,
   indexType,
-  nameOrString,
   tableElement,
   tableOption,
   type DdlOptions,
@@ -204,8 +204,8 @@ function alterAction(c: Cursor, options: DdlOptions, actions: AlterAction[]): bo
 
   if (c.takeWords('CONVERT', 'TO')) {
     if (!c.takeWords('CHARACTER', 'SET')) c.expectWord('CHARSET')
-    const charset = c.takeWord('DEFAULT') ? undefined : c.takeWord('BINARY') ? 'binary' : nameOrString(c)
-    const collation = c.takeWord('COLLATE') ? nameOrString(c) : undefined
+    const charset = c.takeWord('DEFAULT') ? undefined : c.atWord('BINARY') ? charsetName(c).toLowerCase() : charsetName(c)
+    const collation = c.takeWord('COLLATE') ? collationName(c) : undefined
     actions.push({
       type: 'convert',
       ...opt('charset', charset),

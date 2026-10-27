@@ -22,6 +22,7 @@ import {
   type Token,
 } from '@myjs/parser'
 import { errnoOf, sqlStateOf } from '@myjs/protocol'
+import { illegalDouble, unknownCollation } from '../../packages/parser/src/errors.ts'
 
 const kinds = (sql: string, mode?: string) =>
   lex(sql, mode === undefined ? {} : { sqlMode: parseSqlMode(mode) })
@@ -289,6 +290,8 @@ test('M3.9: the parser’s hardcoded errnos agree with the generated table', () 
   for (const [make, symbol, errno, sqlState] of [
     [() => parseError('x', 1), 'ER_PARSE_ERROR', 1064, '42000'],
     [() => unknownCharset('x'), 'ER_UNKNOWN_CHARACTER_SET', 1115, '42000'],
+    [() => unknownCollation('x'), 'ER_UNKNOWN_COLLATION', 1273, 'HY000'],
+    [() => illegalDouble('1e309'), 'ER_ILLEGAL_VALUE_FOR_TYPE', 1367, '22007'],
     [() => badMode('x'), 'ER_WRONG_VALUE_FOR_VAR', 1231, '42000'],
   ] as const) {
     const err = make()

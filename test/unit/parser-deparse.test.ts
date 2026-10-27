@@ -35,7 +35,7 @@ test('BIT literal round trips preserve empty and leading-zero digits', () => {
 test('M3.3: every expression node survives the deparser', () => {
   for (const sql of [
     // Literals, each of which is a different SQL type.
-    '1', '1.50', '1.5e0', '2e308', "'it''s'", "'back\\\\slash'", "x'C3A6'", "b'101'", 'NULL', 'TRUE', 'FALSE',
+    '1', '1.50', '1.5e0', '2e307', '1.7976931348623157e308', "'it''s'", "'back\\\\slash'", "x'C3A6'", "b'101'", 'NULL', 'TRUE', 'FALSE',
     "DATE '2019-10-01'", "TIMESTAMP'2019-10-01 01:02:03'", "_latin1'x'", "'a' COLLATE utf8mb4_bin",
     // Names and variables.
     'a', 't.a', 'db.t.a', 't.*', '`we``ird`', 't.select', '@a', "@'a b'", '@@session.sql_mode', '?',
@@ -49,6 +49,7 @@ test('M3.3: every expression node survives the deparser', () => {
   ]) {
     expressionRoundTrips(sql)
   }
+  assert.throws(() => parseExpression('2e308'), { code: 'ER_ILLEGAL_VALUE_FOR_TYPE', errno: 1367, sqlState: '22007' })
 })
 
 test('M3.3: string literals are escaped for the mode they will be read in', () => {

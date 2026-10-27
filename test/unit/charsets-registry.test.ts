@@ -63,6 +63,18 @@ test('D-10: utf8mb4 defaults to utf8mb4_0900_ai_ci', () => {
   assert.equal(collationInfoByName('utf8mb4_0900_ai_ci')?.id, 255)
 })
 
+test('M5.10: SQL charset and collation names share case, utf8 alias and NUL-prefix rules', () => {
+  for (const [name, id] of [['UTF8_GENERAL_CI', 33], ['utf8_bin', 83], ['Utf8mb4_Bin\0suffix', 46], ['BINARY', 63]] as const) {
+    assert.equal(collationInfoByName(name), requireCollationInfo(id), name)
+  }
+  for (const [name, id] of [['UTF8', 33], ['utf8mb3', 33], ['UTF8MB4\0suffix', 255], ['BINARY', 63]] as const) {
+    assert.equal(defaultCollationOf(name), requireCollationInfo(id), name)
+  }
+  for (const name of ['utf8mb4_bin ', 'unknown', 'utf8mb4']) assert.equal(collationInfoByName(name), undefined, name)
+  for (const name of ['utf8mb4 ', 'utf8_general_ci', 'unknown']) assert.equal(defaultCollationOf(name), undefined, name)
+  for (const info of allCollations()) if (info.isDefault) assert.equal(defaultCollationOf(info.charset), info)
+})
+
 test('doc 29: the 8.0 family is NO PAD and everything older is PAD SPACE', () => {
   // This is the upgrade surprise doc 29 calls out: `'a' = 'a '` flips.
   for (const info of allCollations()) {
