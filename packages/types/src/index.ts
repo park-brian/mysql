@@ -109,6 +109,8 @@ export {
   bytes as bytesValue,
   json as jsonValue,
   decimal as decimalValue,
+  decimalFractionCapacity,
+  magnitudeDigits,
   doubleToDecimal,
   double as doubleValue,
   int as intValue,

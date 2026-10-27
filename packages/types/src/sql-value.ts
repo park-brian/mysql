@@ -176,10 +176,8 @@ export const isText = (v: Value): v is StringValue | BytesValue => v !== null &&
 
 // --- DECIMAL ------------------------------------------------------------------
 
-const TEN = 10n
-
 export function pow10(n: number): bigint {
-  return TEN ** BigInt(n)
+  return 10n ** BigInt(n)
 }
 
 /** `'-12.50'` → 1250n at scale 2. The text must already be a plain decimal numeral. */
@@ -202,19 +200,21 @@ export function rescale(d: DecimalValue, scale: number): DecimalValue {
   return decimal(away ? q + (d.v < 0n ? -1n : 1n) : q, scale)
 }
 
+/** A coefficient's decimal digits, independently of its sign. */
+export const magnitudeDigits = (v: bigint): string => (v < 0n ? -v : v).toString()
+
 export function renderDecimal(value: DecimalValue): string {
-  const d = value.display === undefined ? value : rescale(decimal(value.v, value.scale), value.display)
-  const negative = d.v < 0n
-  const digits = (negative ? -d.v : d.v).toString().padStart(d.scale + 1, '0')
-  const intPart = digits.slice(0, digits.length - d.scale)
-  const text = d.scale === 0 ? intPart : `${intPart}.${digits.slice(digits.length - d.scale)}`
-  return negative ? `-${text}` : text
+  const d = value.display === undefined ? value : rescale(value, value.display)
+  const digits = magnitudeDigits(d.v).padStart(d.scale + 1, '0')
+  return (d.v < 0n ? '-' : '') + (d.scale === 0 ? digits : `${digits.slice(0, -d.scale)}.${digits.slice(-d.scale)}`)
 }
+
+/** Fractional digits left in the native nine-word buffer; negative means integer overflow. */
+export const decimalFractionCapacity = (integerDigits: number): number => (9 - Math.max(0, Math.ceil(integerDigits / 9))) * 9
 
 /** The digits before the point, for a precision check. */
 export function decimalIntegerDigits(d: DecimalValue): number {
-  const whole = (d.v < 0n ? -d.v : d.v) / pow10(d.scale)
-  return whole === 0n ? 0 : whole.toString().length
+  return d.v === 0n ? 0 : Math.max(0, magnitudeDigits(d.v).length - d.scale)
 }
 
 // --- strings to numbers ---------------------------------------------------------
@@ -343,14 +343,11 @@ export function doubleToDecimal(n: number): DecimalValue {
   if (!Number.isFinite(n)) return decimal(0n, 0)
   // Expand the shortest round-trip rendering without limiting small values
   // to toFixed's display precision or treating an exponent as trailing text.
-  const text = String(n)
-  if (/[eE]/.test(text)) {
-    const [mantissa, exponent] = n.toExponential().split('e') as [string, string]
-    const d = parseDecimal(mantissa)
-    const scale = d.scale - Number(exponent)
-    return scale >= 0 ? decimal(d.v, scale) : decimal(d.v * pow10(-scale), 0)
-  }
-  return parseDecimal(text)
+  const [mantissa, exponent] = String(n).split('e') as [string, string?]
+  const d = parseDecimal(mantissa)
+  if (exponent === undefined) return d
+  const scale = d.scale - Number(exponent)
+  return scale >= 0 ? decimal(d.v, scale) : decimal(d.v * pow10(-scale), 0)
 }
 
 /**

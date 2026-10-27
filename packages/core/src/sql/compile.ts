@@ -41,6 +41,8 @@ import {
   decimalValue,
   dateOf,
   divide,
+  decimalFractionCapacity,
+  magnitudeDigits,
   doubleValue,
   intDivide,
   intValue,
@@ -168,8 +170,7 @@ export function asNumber(c: Compiled, kind: 'DOUBLE' | 'INTEGER' | 'DECIMAL', on
         return decimalValue((v.v < 0 ? -1n : 1n) * (pow10(81) - 1n), 0)
       }
       const d = toDecimal(v)
-      const whole = Math.max(0, (d.v < 0n ? -d.v : d.v).toString().length - d.scale)
-      const fraction = (9 - Math.ceil(whole / 9)) * 9
+      const fraction = decimalFractionCapacity(magnitudeDigits(d.v).length - d.scale)
       if (d.scale > fraction) return decimalValue(d.v / pow10(d.scale - fraction), fraction)
     }
     return v
@@ -795,9 +796,9 @@ function typeOfValue(v: Value): ResultType {
   if (v === null) return NULL_TYPE
   switch (v.kind) {
     case 'int':
-      return intType(v.v.toString().length + (v.unsigned ? 0 : 1) - (v.v < 0n ? 1 : 0), false, v.unsigned)
+      return intType(magnitudeDigits(v.v).length + (v.unsigned ? 0 : 1), false, v.unsigned)
     case 'decimal':
-      return decimalType(Math.max(1, (v.v < 0n ? -v.v : v.v).toString().length), v.scale, false)
+      return decimalType(magnitudeDigits(v.v).length, v.scale, false)
     case 'double':
       return doubleType(false, 23)
     case 'string':
@@ -861,8 +862,8 @@ function literal(e: LiteralNode, ctx: CompileContext): Compiled {
     }
     case LITERAL.DECIMAL: {
       const d = parseDecimal(e.value as string)
-      const digits = (d.v < 0n ? -d.v : d.v).toString().length
-      return lit(d, decimalType(Math.max(digits, d.scale + (digits > d.scale ? 0 : 1)), d.scale, false))
+      const digits = magnitudeDigits(d.v).length
+      return lit(d, decimalType(Math.max(digits, d.scale + 1), d.scale, false))
     }
     case LITERAL.DOUBLE:
       return lit(doubleValue(e.value as number), { ...doubleType(false, (e.text ?? String(e.value).replace('+', '')).length), literalDouble: true })
@@ -1401,7 +1402,7 @@ function binary(op: string, left: Expression, right: Expression, extra: Expressi
       // NULL still inherits the other operand's numeric scale. Text and
       // unspecified doubles produce DOUBLE(23,31); fixed decimals add four.
       const type = kind === 'double' ? divisionDouble(a.type, b.type) : kind === 'null' ? nullDivision(a.type, b.type) : decimalType(intDigits(a.type) + scaleOf(b.type) + s, s, true, unsignedOf(a.type) && unsignedOf(b.type))
-      const quotient = byZero(at, bt, divide)
+      const quotient = byZero(at, bt, (p, q) => divide(p, q, label))
       if (type.kind === 'double' && type.scale < 31) return { eval: (r, env) => doubleOf(quotient(r, env), type), type }
       return { eval: quotient, type }
     }
@@ -2532,7 +2533,7 @@ function cast(e: CastNode, ctx: CompileContext): Compiled {
     }
     case 'DECIMAL': {
       const { precision, scale } = decimalCastShape(t)
-      const limit = 10n ** BigInt(precision) - 1n
+      const limit = pow10(precision) - 1n
       const label = () => sourceText(ctx.sql, e.at) ?? deparse(e)
       return {
         eval: (r, env) => {

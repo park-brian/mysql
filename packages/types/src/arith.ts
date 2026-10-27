@@ -26,10 +26,11 @@ import {
   MIN_SIGNED,
   bool,
   decimal,
+  decimalFractionCapacity,
+  magnitudeDigits,
   displayScale,
   double,
   int,
-  pow10,
   rescale,
   toDecimal,
   toDouble,
@@ -146,8 +147,25 @@ export function negate(a: Value, expr: string = '-'): Value {
   }
 }
 
+/** The quotient reserves integer words using exponent difference and leading-word order. */
+function divisionCapacity(x: DecimalValue, y: DecimalValue): number {
+  const a = magnitudeDigits(x.v)
+  const b = magnitudeDigits(y.v)
+  const digits = a.length - x.scale - b.length + y.scale
+  // Only a whole-word exponent difference is sensitive to this comparison;
+  // then both operands have the same leading-word width.
+  const first = (a.length + 8 - x.scale % 9) % 9 + 1
+  return decimalFractionCapacity(a.slice(0, first).padEnd(first, '0') >= b.slice(0, first).padEnd(first, '0') ? digits + 1 : digits)
+}
+
+/** Exact coefficient after non-rounding alignment; callers own zero and range checks. */
+function decimalQuotient(a: DecimalValue, b: DecimalValue, fraction = 0): bigint {
+  const scale = Math.max(a.scale, b.scale)
+  return rescale(a, scale + fraction).v / rescale(b, scale).v
+}
+
 /** `a / b`: NULL for a zero divisor. */
-export function divide(a: Value, b: Value): Value {
+export function divide(a: Value, b: Value, expr: ExprLabel = '/'): Value {
   if (a === null || b === null) return null
   if (resultKind(a, b) === 'double') {
     const y = toDouble(b)
@@ -159,10 +177,12 @@ export function divide(a: Value, b: Value): Value {
   if (y.v === 0n) return null
   const display = Math.min(MAX_SCALE, displayScale(x) + DIV_PRECISION_INCREMENT)
   if (x.v === 0n) return decimal(0n, 0, display)
-  // Both operands occupy whole fractional words. Their existing padding
-  // supplies the increment before another word is allocated.
-  const held = Math.max(Math.ceil(x.scale / 9) + Math.ceil(y.scale / 9), Math.ceil((x.scale + y.scale + DIV_PRECISION_INCREMENT) / 9)) * 9
-  return decimal((x.v * pow10(y.scale + held)) / (y.v * pow10(x.scale)), held, display)
+  const capacity = divisionCapacity(x, y)
+  if (capacity < 0) throw valueOutOfRange('DECIMAL', labelOf(expr))
+  const words = Math.max(Math.ceil(x.scale / 9) + Math.ceil(y.scale / 9), Math.ceil((x.scale + y.scale + DIV_PRECISION_INCREMENT) / 9))
+  const held = Math.min(capacity, words * 9)
+  const value = decimalQuotient(x, y, held)
+  return value === 0n ? decimal(0n, 0, display) : decimal(value, held, Math.min(display, held))
 }
 
 /** `a DIV b`: an integer quotient, truncated, unsigned if either side is; NULL for a zero divisor. */
@@ -171,8 +191,7 @@ export function intDivide(a: Value, b: Value, expr: ExprLabel = 'DIV'): Value {
   const x = toDecimal(a)
   const y = toDecimal(b)
   if (y.v === 0n) return null
-  const scale = Math.max(x.scale, y.scale)
-  return checked(rescale(x, scale).v / rescale(y, scale).v, isUnsigned(a) || isUnsigned(b), expr)
+  return checked(decimalQuotient(x, y), isUnsigned(a) || isUnsigned(b), expr)
 }
 
 /** `a % b` and `MOD(a, b)`: the remainder takes the dividend's sign; NULL for a zero divisor. */
