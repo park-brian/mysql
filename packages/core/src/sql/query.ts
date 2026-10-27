@@ -12,7 +12,7 @@
 import type { ColumnDef, IndexDef, Table, TableDef, ViewDef } from '@myjs/engine'
 import { LITERAL, NODE, QUERY, REF, TOKEN, deparse, lex, parseStatement, type Expression, type OrderItem, type QueryBody, type QueryExpression, type SelectNode, type TableReference, type SetOperationNode, type TableName, type Token } from '@myjs/parser'
 import { messages, sqlError, type ColumnDefinition, type ResultSet, type RowValue } from '@myjs/protocol'
-import { MAX_UNSIGNED, MIN_SIGNED, intValue, storageWidth, toInteger, truth, withoutHex, type Value } from '@myjs/types'
+import { MAX_SIGNED, MAX_UNSIGNED, MIN_SIGNED, intValue, storageWidth, toInteger, truth, withoutHex, type Value } from '@myjs/types'
 import { compile, constantNode, memoValue, logicalOperand, convertTo, decimalField, EMPTY_SCOPE, readSlot, type CompileContext, type Compiled, type Env, type GroupKeys, type QuantifiedSubquery, type Scope, type SubqueryPlan } from './compile.ts'
 import { AggregateSink, chooseStrategy, containsAggregate, groupRows, isAggregate } from './group.ts'
 import { WindowSink, applyWindows, containsWindow } from './window.ts'
@@ -329,8 +329,8 @@ function planSelect(run: Run, q: QueryExpression, node: SelectNode): SelectPlan 
   node = pushCountCondition(run, node)
   const order = q.orderBy ?? []
 
-  // FROM: nothing, `DUAL`, or tables joined (M5.4).
-  const refs = (node.from ?? []).filter((r) => !(r.kind === REF.TABLE && r.table.schema === undefined && r.table.name.toLowerCase() === 'dual' && r.alias === undefined && (node.from ?? []).length === 1))
+  // The parser normalizes unquoted DUAL; every retained reference names a table.
+  const refs = node.from ?? []
   let from = refs.length === 0 ? undefined : planFrom(refs, fromContext(run), node.where, (node.options ?? []).includes('STRAIGHT_JOIN'))
   const scope = from?.scope
   let source = from?.single
@@ -562,7 +562,7 @@ function planSelect(run: Run, q: QueryExpression, node: SelectNode): SelectPlan 
     ...(from === undefined && node.where !== undefined ? [filterStage(resolved.predicates)] : []),
     // HAVING without grouping filters the rows WHERE kept, before any window sees them.
     ...(having === undefined ? [] : [filterStage(having, run)]),
-    ...(windows === undefined || windows.windows.length === 0 ? [] : [windowStage(windows, windowBase)]),
+    ...(windows === undefined || windows.windows.length === 0 ? [] : [windowStage(windows)]),
     deliverStage(items.map((i) => i.compiled), ordered === undefined && !sortedFirst ? keys : [], deduplicate, { deduplicated, streamed, copied, keep: q.limit && keep, buffer, constant: constantDistinct, limit: limitFirst ? take : undefined }),
     ...(!limitFirst && take ? [take] : []),
   ]
@@ -643,7 +643,8 @@ function filterStage(condition: Pick<Compiled, 'eval'> | readonly Pick<Compiled,
 }
 
 /** Window functions (M5.6), over the whole input: not yet named as 8.4.11 names them, so not explained. */
-function windowStage(windows: WindowSink, base: number): Stage {
+function windowStage(windows: WindowSink): Stage {
+  const base = windows.base
   return {
     run(rows, env) {
       const width = base + windows.windows.length
@@ -652,7 +653,7 @@ function windowStage(windows: WindowSink, base: number): Stage {
         while (r.length < width) r.push(null)
         return r
       })
-      return applyWindows(all, windows.windows, env, base).map((row) => ({ row }))
+      return rowed(applyWindows(all, windows.windows, env, base))
     },
     describe: () => undefined,
   }
@@ -728,7 +729,7 @@ function limitStage(offset: number, count: number | undefined): Stage {
   }
 }
 
-function* rowed(rows: Iterable<Value[]>): Generator<Rowed> {
+function* rowed(rows: Iterable<readonly Value[]>): Generator<Rowed> {
   for (const row of rows) yield { row }
 }
 
@@ -752,7 +753,7 @@ function subqueryNodes(run: Run, clause: string): PlanNode[] {
     const roots = s.plan.explain?.()
     const how = run.quantified?.get(s.query)
     const rewritten = how === undefined || how.correlated ? undefined : quantifiedPlan(run, s.query, how, topLevel(run.clauses?.[clause], s.query), roots)
-    out.push(planNode(`Select #${selectNumber(run, s.query)}`, rewritten !== undefined ? [rewritten] : roots === undefined ? [] : [...roots]))
+    out.push(planNode(`Select #${selectNumber(run, s.query)}`, rewritten !== undefined ? [rewritten] : roots))
   }
   return out
 }
@@ -804,7 +805,7 @@ function quantifiedPlan(run: Run, query: QueryExpression, how: QuantifiedSubquer
   let filters: number
   if (equality) {
     if (index === undefined) {
-      const materialized = planNode('Materialize with deduplication', roots === undefined ? [] : [...roots])
+      const materialized = planNode('Materialize with deduplication', roots)
       return planNode('Filter', [planNode('Limit', [planNode('Index lookup on <materialized_subquery> using <auto_distinct_key>', [materialized])])])
     }
     const unique = index.parts.length === 1 && (index.kind === 'primary' || index.kind === 'unique')
@@ -947,7 +948,7 @@ function costedIntegerSemijoin(run: Run, q: QueryExpression, node: SelectNode, f
     const ctx = compileContext(run, alternative.scope, 'where clause')
     const key = compile(innerKey, ctx)
     if (!exactInteger(key) || !exactInteger(compile(outerKey, ctx)) || (extra?.kind === NODE.BINARY && !exactInteger(compile(extra.left, ctx)))) return undefined
-    const read = new Map(columnsRead(from.scope, node, q))
+    const read = columnsRead(from.scope, node, q)
     const innerRead = keyReads(innerColumn, extra)
     read.set(innerAlias, innerRead)
     alternative.reads(read)
@@ -994,7 +995,7 @@ function costedAntijoin(run: Run, q: QueryExpression, node: SelectNode, from: Fr
     if (innerTable?.def === undefined || innerTable.table === undefined || innerTable.def.indexes.some((i) => i.parts.some((p) => p.column.toLowerCase() === predicateColumn.toLowerCase()))) return undefined
     const ctx = compileContext(run, alternative.scope, 'where clause')
     if (!exactInteger(compile(innerKey, ctx)) || !exactInteger(compile(outerKey, ctx)) || !exactInteger(compile(extra.left, ctx))) return undefined
-    const read = new Map(columnsRead(from.scope, node, q))
+    const read = columnsRead(from.scope, node, q)
     read.set(innerAlias, keyReads(keyColumn, extra))
     alternative.reads(read)
     const projected: QueryExpression = { ...sub, body: { ...body, items: [{ expr: innerKey }], where: extra } }
@@ -1059,7 +1060,8 @@ function constRows(run: Run, from: FromPlan | undefined, node: SelectNode): Read
   const readAhead = facts.readAhead ?? new Set<string>()
   if (aliases.size > 0 || facts.nullTables !== undefined || facts.outerConstants !== undefined) from.constants(new Set([...aliases].filter((a) => !readAhead.has(a))), readAhead, facts.nullTables, facts.outerConstants)
   // An outer join's tables whose ON never holds are NULL throughout: constants as well.
-  return facts.nullTables === undefined ? aliases : new Set([...aliases, ...facts.nullTables])
+  for (const alias of facts.nullTables ?? []) aliases.add(alias)
+  return aliases
 }
 
 /**
@@ -1341,7 +1343,7 @@ interface BoundSubquery extends SubqueryPlan {
 /** Whether a query reads a table: one with no FROM is a constant row. */
 function hasFrom(q: QueryExpression): boolean {
   const body = q.body
-  if (body.kind === QUERY.SELECT) return body.from?.some((r) => !(r.kind === REF.TABLE && r.table.schema === undefined && r.table.name.toLowerCase() === 'dual')) ?? false
+  if (body.kind === QUERY.SELECT) return (body.from?.length ?? 0) > 0
   if (body.kind === QUERY.QUERY) return hasFrom(body)
   return true
 }
@@ -1429,13 +1431,26 @@ function derivedTable(run: Run, query: QueryExpression, alias: string, names: re
 function literalReader(q: QueryExpression): boolean {
   const body = q.body
   if (body.kind !== QUERY.SELECT || body.from || body.groupBy || body.distinct || body.options || q.with || q.orderBy || !wholeReaderReady(q, body)) return false
-  const integer = (e: Expression, maximum = MAX_UNSIGNED): boolean => integerLiteral(e) && e.value <= maximum
-  if (q.limit && (q.limit.offset || !integer(q.limit.count))) return false
+  if (q.limit && (q.limit.offset || !integerLiteral(q.limit.count) || q.limit.count.value > MAX_UNSIGNED)) return false
   return body.items.every(({ expr }) => {
-    if (integer(expr) || (expr.kind === NODE.UNARY && expr.op === '-' && integer(expr.operand, -MIN_SIGNED))) return true
-    if (expr.kind === NODE.CAST && expr.array === undefined && expr.timeZone === undefined && (expr.type.name === 'SIGNED' || expr.type.name === 'UNSIGNED')) expr = expr.expr
-    return expr.kind === NODE.LITERAL && expr.type === LITERAL.NULL
+    let cast: 'SIGNED' | 'UNSIGNED' | undefined
+    if (expr.kind === NODE.CAST && expr.array === undefined && expr.timeZone === undefined && (expr.type.name === 'SIGNED' || expr.type.name === 'UNSIGNED')) {
+      cast = expr.type.name
+      expr = expr.expr
+    }
+    const value = sourceInteger(expr, cast !== undefined)
+    return value === undefined ? expr.kind === NODE.LITERAL && expr.type === LITERAL.NULL : value >= (cast === 'UNSIGNED' ? 0n : MIN_SIGNED) && value <= (cast === 'SIGNED' ? MAX_SIGNED : MAX_UNSIGNED)
   })
+}
+
+/** Read only the closed integer grammar; CAST additionally admits plain integer text. */
+function sourceInteger(e: Expression, cast: boolean): bigint | undefined {
+  const negative = e.kind === NODE.UNARY && e.op === '-'
+  const literal = negative ? e.operand : e
+  if (literal.kind !== NODE.LITERAL || (cast && (literal.charset !== undefined || literal.collation !== undefined))) return undefined
+  if (integerLiteral(literal)) return negative ? -literal.value : literal.value
+  if (cast && !negative && literal.type === LITERAL.STRING && /^[+-]?[0-9]{1,20}$/.test(literal.value as string)) return BigInt(literal.value as string)
+  return undefined
 }
 
 /** Owned field types and names: 1353 for a mismatched list, 1060 for a name twice. */
@@ -1459,7 +1474,7 @@ function renamed(columns: readonly { readonly name: string; readonly type: Resul
 
 /** The CTEs a WITH defines, each visible to the ones after it and to the query. */
 export function withClause(run: Run, w: NonNullable<QueryExpression['with']>): Run {
-  const ctes = new Map(run.ctes ?? [])
+  const ctes = new Map(run.ctes)
   let at: Run = { ...run, ctes }
   for (const cte of w.tables) {
     const before: Run = at
@@ -1529,7 +1544,7 @@ function recursiveCte(run: Run, cte: NonNullable<QueryExpression['with']>['table
   let working: readonly (readonly Value[])[] = []
   // What a recursive member reads of the CTE: the rows the last round added.
   const workingTable: DerivedSource = { columns, rows: () => working, explain: () => ({ merged: true, node: planNode(`Scan new records on ${cte.name}`) }) }
-  const ctes = new Map(run.ctes ?? [])
+  const ctes = new Map(run.ctes)
   ctes.set(cte.name, () => workingTable)
   const steps = recursive.map((m) => planQuery({ ...run, ctes }, asQuery(m)))
   const plans = [...anchorPlans, ...steps]
@@ -1545,7 +1560,8 @@ function recursiveCte(run: Run, cte: NonNullable<QueryExpression['with']>['table
       const roots = plans.map((p) => p.explain?.()?.[0])
       if (roots.some((r) => r === undefined)) return undefined
       const body = roots as PlanNode[]
-      return { merged: false, materialize: `Materialize recursive CTE ${cte.name}${distinctRows ? ' with deduplication' : ''}`, children: [...body.slice(0, anchorPlans.length), planNode('Repeat until convergence', body.slice(anchorPlans.length))] }
+      body.push(planNode('Repeat until convergence', body.splice(anchorPlans.length)))
+      return { merged: false, materialize: `Materialize recursive CTE ${cte.name}${distinctRows ? ' with deduplication' : ''}`, children: body }
     },
     rows(trx, env) {
       const max = Number(toInteger(run.state.systemVariable('cte_max_recursion_depth', undefined, env.session) ?? intValue(1000n)))
@@ -2134,7 +2150,7 @@ function planGrouped(
       },
     },
     ...(having === undefined ? [] : [filterStage(having, run)]),
-    ...(windows === undefined || windows.windows.length === 0 ? [] : [windowStage(windows, windows.base)]),
+    ...(windows === undefined || windows.windows.length === 0 ? [] : [windowStage(windows)]),
     // Retained DISTINCT and unverified ordered/limited forms remain unexplained.
     deliverStage(items.map((i) => i.compiled), sortsOutput ? orderKeys : [], deduplicate, { deduplicated: copiedAverage, streamed: stream, described: node.distinct !== true || copiedAverage || (!deduplicate && unordered && q.limit === undefined), keep: q.limit && keep }),
     ...(q.limit ? [limitStage(offset, limitCount)] : []),

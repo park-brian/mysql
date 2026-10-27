@@ -455,14 +455,8 @@ class ExpressionParser {
       case TOKEN.NUMBER:
         cursor.skip()
         return { kind: NODE.LITERAL, ...numericLiteral(t.text), at: t.start }
-      case TOKEN.STRING: {
-        cursor.skip()
-        // Adjacent string literals concatenate — `'a' 'b'` is `'ab'`, which is
-        // SQL-standard and which MySQL does at the lexical level.
-        let value = t.text
-        while (cursor.peek().kind === TOKEN.STRING) value += cursor.take().text
-        return { kind: NODE.LITERAL, type: LITERAL.STRING, value, at: t.start }
-      }
+      case TOKEN.STRING:
+        return { kind: NODE.LITERAL, type: LITERAL.STRING, value: this.#stringText(), at: t.start }
       case TOKEN.HEX:
         cursor.skip()
         return { kind: NODE.LITERAL, type: LITERAL.HEX, value: hexBytes(t.text), at: t.start }
@@ -916,12 +910,10 @@ class ExpressionParser {
     return wordOrString(this.#c).toLowerCase()
   }
 
+  /** Adjacent literals concatenate here for expressions, separators and time zones. */
   #stringText(): string {
     const cursor = this.#c
-    const t = cursor.peek()
-    if (t.kind !== TOKEN.STRING) cursor.fail()
-    cursor.skip()
-    let text = t.text
+    let text = cursor.expectString()
     while (cursor.peek().kind === TOKEN.STRING) text += cursor.take().text
     return text
   }

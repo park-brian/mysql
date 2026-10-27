@@ -19,7 +19,7 @@ for (const reference of [literals, controls]) test(reference.schema + ': constan
   const control = reference === controls
   const table = control ? 'r' : 't'
   assert.equal(reference.observations.length, control ? 318 : 246)
-  assert.equal(strict.size, control ? 157 : 146)
+  assert.equal(strict.size, control ? 157 : 152)
   let created = false
   let compared = 0
   try {

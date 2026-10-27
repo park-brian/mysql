@@ -110,9 +110,12 @@ before prefix truncation. Strict membership is generated from the pinned native
 handler. Derived/view and recursive-CTE metadata now shares one owner for
 whole-list name validation and fresh field-type construction, avoiding redundant
 arrays and copies. Each statement caches rows under the bound source instance.
-Bounded literal/typed-integer-NULL sources now announce readiness after actual
-materialization, with a separate positive grammar and caller admission. Cardinality
-alone supplies no readiness proof. Broader source and CAST admission remain open. Buffered multi-statement runtime failures
+Bounded literal/typed-integer-NULL sources and exact plain SIGNED/UNSIGNED
+integer casts now announce readiness after actual materialization, with a
+separate positive grammar and caller admission. Cardinality alone supplies no
+readiness proof. Quoted DUAL retains ordinary table lookup and row identity;
+the parser owns unquoted DUAL normalization. Broader CAST and function-source
+admission remain open. Buffered multi-statement runtime failures
 now retain completed results with their own status and warnings before the ERR
 packet. Private completion facts preserve direct-call error identity and JSON;
 one batch writer serves text and binary rows. Incremental parsing now preserves

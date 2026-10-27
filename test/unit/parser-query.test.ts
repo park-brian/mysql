@@ -178,6 +178,12 @@ test('M3.3: WITH, VALUES, TABLE, windows and locking', () => {
   assert.deepEqual(locks, [{ strength: 'UPDATE', of: [{ name: 't' }], wait: 'NOWAIT' }, { strength: 'SHARE', legacy: true }])
   // `FROM DUAL` is no FROM at all.
   assert.deepEqual(withoutPositions(query('SELECT 1 FROM DUAL')), withoutPositions(query('SELECT 1')))
+  // Quoting or qualifying the name retains an ordinary table reference.
+  for (const sql of ['SELECT 1 FROM `dual`', 'SELECT 1 FROM db.dual', 'SELECT 1 FROM `dual` AS d']) {
+    const parsed = query(sql).body
+    assert.ok(parsed.kind === 'select' && parsed.from?.length === 1, sql)
+    assert.equal(parsed.from[0]!.kind, 'table', sql)
+  }
 })
 
 test('WITH duplicate admission follows each completed definition and keeps nested error priority', () => {
