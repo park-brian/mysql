@@ -49,8 +49,10 @@ TRUNCATE now use it at their declared result writer, preserving raw IF readers,
 and clamp places before a single rounding operation. Prepared rounding places
 retain input scale; FLOOR/CEIL now share the native eighteen-digit BIGINT
 boundary. Repeated grouping columns now require each physical index part once;
-ROLLUP retains its positional keys. Selected grouping keys now eliminate
-redundant outer DISTINCT without copying aggregate readers. Failed PREPARE now
+ROLLUP retains its positional keys. Selected grouping keys, including unary-plus
+readers, now eliminate redundant outer DISTINCT without copying aggregate readers;
+copied computed keys retain their key metadata without rewriting the parsed
+expression. Failed PREPARE now
 publishes command-local diagnostics and preserves native warning-prefix totals;
 its placeholder admission refusal clears diagnostics. Native diagnostic SHOW
 commands now refuse PREPARE before resolution. Query preflight now publishes

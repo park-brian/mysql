@@ -1037,14 +1037,6 @@ function constRows(run: Run, from: FromPlan | undefined, node: SelectNode): Read
   return facts.nullTables === undefined ? aliases : new Set([...aliases, ...facts.nullTables])
 }
 
-/** The one base table a FROM's const tables leave, and where its columns begin in the row; undefined unless every other table is one of `constants`. */
-function soleTable(from: FromPlan | undefined, constants: ReadonlySet<string>): { alias: string; def: TableDef; offset: number } | undefined {
-  if (from === undefined || constants.size === 0) return undefined
-  const rest = from.tables.filter((t) => !constants.has(t.alias))
-  const t = rest.length === 1 ? rest[0] : undefined
-  return t?.def === undefined ? undefined : { alias: t.alias, def: t.def, offset: t.offset }
-}
-
 /**
  * Whether the optimizer proves the result empty — an impossible condition, a
  * join that cannot match, a const table with no row for its key, LIMIT 0 — and
@@ -1687,6 +1679,12 @@ function orderedResult(run: Run, q: QueryExpression, plan: SelectPlan): SelectPl
   }
 }
 
+/** Unary plus preserves reader identity without changing its written names or diagnostics. */
+function withoutUnaryPlus(e: Expression): Expression {
+  while (e.kind === NODE.UNARY && e.op === '+') e = e.operand
+  return e
+}
+
 /** Resolve aliases and positions; GROUP BY gives source columns priority. */
 function sortExpression(e: Expression, items: readonly { readonly alias?: string; readonly expr?: Expression }[], scope?: Scope): Expression | undefined {
   if (scope && e.kind === NODE.COLUMN && safeResolve(scope, e.parts, 'group statement')) return e
@@ -1912,10 +1910,13 @@ function planGrouped(
   let keys: GroupKey[] | undefined
   let missingGrouping = -1
 
-  const matchesKey = (e: Expression | undefined, key: { readonly index: number | undefined; readonly text: string | undefined }): boolean =>
-    e !== undefined && (key.index !== undefined && e.kind === NODE.COLUMN
-      ? safeIndex(lookup, e.parts) === key.index
-      : deparse(e) === key.text)
+  const matchesKey = (e: Expression | undefined, key: KeyDescription): boolean => {
+    if (e === undefined || key.expr === undefined) return false
+    e = withoutUnaryPlus(e)
+    const bound = withoutUnaryPlus(key.expr)
+    const at = key.index ?? localColumn(bound, lookup)
+    return at !== undefined && e.kind === NODE.COLUMN ? safeIndex(lookup, e.parts) === at : deparse(e) === deparse(bound)
+  }
   const level = width + descriptions.length
   const sink = new AggregateSink(baseCtx, level + 1)
   const groupKeys: GroupKeys = {
@@ -1962,23 +1963,23 @@ function planGrouped(
   const resolved = resolveCondition(run, compileContext(run, lookup, 'where clause'), node.where, limitCount)
   const keep = offset + (limitCount ?? Infinity)
   const constants = constRows(run, from, node)
-  const alone = source === undefined ? soleTable(from, constants) : { ...source, offset: 0 }
+  const remaining = from?.tables.filter((table) => !constants.has(table.alias))
+  const alone = remaining?.length === 1 ? remaining[0] : undefined
   const groupCtx = compileContext(run, lookup, 'group statement')
-  keys = descriptions.map((key) => {
+  for (const key of descriptions) {
     const expr = key.expr
     if (expr === undefined) throw sqlError('ER_BAD_FIELD_ERROR', messages.unknownColumn(deparse(key.written), 'group statement'))
     if (containsAggregate(expr)) throw sqlError('ER_WRONG_GROUP_FIELD', `Can't group on '${deparse(key.written)}'`)
     key.compiled ??= compile(expr, groupCtx)
-    // This description has passed both binding phases and now owns the final reader.
-    return key as GroupKey
-  })
+  }
+  // Publish the same descriptions only after every key has completed binding.
+  keys = descriptions as GroupKey[]
   // The strategy, which decides the order the groups come out in and whether
   // their columns go through a temporary table.
   // A key the WHERE holds to one value does not order anything: GROUP BY
   // amt, name WHERE amt = -18 groups by the index on name (8.4.11).
-  const groupFacts = alone === undefined ? undefined : resolved.facts(alone.def, alone.alias)
-  const pinned = groupFacts?.pins ?? new Set<string>()
-  const keyColumns = keys.map((k) => (k.index === undefined || alone === undefined ? undefined : alone.def.columns[k.index - alone.offset]?.name)).filter((c) => c === undefined || !pinned.has(c.toLowerCase()))
+  const groupFacts = alone?.def === undefined ? undefined : resolved.facts(alone.def, alone.alias)
+  const keyColumns = keys.map((k) => (k.index === undefined || alone?.def === undefined ? undefined : alone.def.columns[k.index - alone.offset]?.name)).filter((c) => c === undefined || !groupFacts!.pins.has(c.toLowerCase()))
   const distinctAggregate = needsSortedGroups([node.items, node.having, order])
   // Keys over const tables alone are constants, one group at most: grouped as they come, and not sorted
   // (8.4.11: `FROM p CROSS JOIN q WHERE p.id = 5 GROUP BY p.g ORDER BY 1, 2` is a Group aggregate over q).
@@ -2039,7 +2040,7 @@ function planGrouped(
     const own = items.map((i) => i.compiled.type)
     const seenKeys = new Set<number>()
     for (const item of items) {
-      const e = item.expr
+      const e = withoutUnaryPlus(item.expr)
       const t = item.compiled.type
       if (!refersToRow(e, lookup, consts)) continue
       const aggregateCall = isAggregate(e)
@@ -2055,7 +2056,7 @@ function planGrouped(
       if (at !== undefined) seenKeys.add(at)
       // The keys are the temporary table's key, columns or expressions;
       // everything else is a field beside them.
-      const isKeyExpression = e.kind !== NODE.COLUMN && !aggregateCall && keys.some((k) => k.index === undefined && k.text === deparse(e))
+      const isKeyExpression = e.kind !== NODE.COLUMN && !aggregateCall && keys.some((k) => k.index === undefined && matchesKey(e, k))
       // A key that reads only NULL-complemented tables is a constant, and no part of the table's key.
       // …and so is one the WHERE holds to a constant over a join (8.4.11: `FROM p, q WHERE p.g = 1 GROUP BY q.t, p.g`).
       const keyed = (isKey || isKeyExpression) && refersToRow(e, lookup, fixed) && !(source === undefined && e.kind === NODE.COLUMN && pinnedByWhere(node.where, e.parts))

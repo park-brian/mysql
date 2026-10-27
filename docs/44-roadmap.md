@@ -166,6 +166,36 @@ this host. This changes test transport only; no fixture, threshold or production
 SQL reader is altered. Docker verification against the committed SQL baseline
 checks type safety and the same seven regressions through both engines.
 
+**Unary-plus grouping identity, verified (2026-10-26):** Group-key equality
+and copied-field classification now recognize unary plus as the same reader.
+`SELECT DISTINCT +g, AVG(n/3) ... GROUP BY g` no longer copies an aggregate
+merely because the selected key is wrapped; computed keys such as `+(g+0)`
+retain their native key metadata. Comparison unwraps only the identity proof,
+leaving the written AST, names, diagnostics, ordinal binding and raw key facts
+intact. Broader GROUP BY unary-plus strategy/ordinal admission remains open.
+The new native fixture pins 417 complete row/descriptor/warning/plan outcomes
+across three index layouts, ordinary and DISTINCT AVG, five result readers,
+repeated keys, empty inputs and cached executions after writes. It reuses the
+existing recorder and keeps all 1,137 earlier outcomes and assertions unchanged;
+preceding code fails the new regression. The broader 2,208-observation wrapper
+audit improves 1,096 to 1,232 complete outcomes with no matching component lost.
+The 2,712 argument/index audit, 954 phase audit, 2,100 numeric audit and earlier
+readiness/WHERE/wire audits retain every previously matching component.
+
+Grouping now reuses its actual remaining FromTable and key-description array,
+publishing keys only after all binding succeeds. A physical column name proves
+that the same table's pin facts exist, so no fallback empty Set is allocated.
+There is no new source descriptor or parallel key owner. Core/facade measure
+334,295/334,226 B gzipped under all nine unchanged caps, 35 B raw smaller than
+the preceding runtime. Seeded executor fuzzing passes 20,000 statements.
+Fresh Docker verification passes 1,375 ordinary plus four latency tests,
+typecheck, lint, package/typed smoke, the real client and all seven pinned 8.4.11
+reference corpora. The live snapshot matches 381 test files/fixtures and 202
+runtime sources plus reference tooling/manifests/CI.
+The preceding 1832540 CI rerun is green for every required job. The larger AVG
+writer prototype remains separate and unshipped; roadmap totals stay 144/190,
+M5 42/53.
+
 **Retained DISTINCT/AVG field ownership, in progress (2026-10-26):**
 Fresh pinned 8.4.11 evidence covers 954 complete query/PREPARE/EXECUTE phase
 observations with empty, seven-row and 700-group inputs. Plans use the existing
@@ -178,9 +208,9 @@ constants and scalar subqueries retain the native optimizer/field boundary.
 The same scalar subquery can fail before headers under plain DISTINCT and after
 headers under grouped DISTINCT, so no global header or buffering rule is inferred.
 
-The working prototype uses the existing temporary-group accumulator, copies
-row/aggregate-dependent output fields even on empty inputs, and gives the existing
-delivery owner an explicit blocking boundary. Physical reader construction supplies
+The preserved research prototype uses the existing temporary-group accumulator, copies
+row/aggregate-dependent output fields even on empty inputs, and completes the final
+copy in the grouped reader before delivery. Physical reader construction supplies
 its invocation-local readiness. The admitted profile is an unhinted ordinary
 single base with retained DISTINCT, deterministic row-dependent grouping keys,
 computed exact ordinary AVG, and no WHERE/HAVING/ORDER/LIMIT/ROLLUP/window/locking
@@ -193,10 +223,22 @@ temporary reader in EXPLAIN. A fresh 2,100-outcome numeric audit improves 1,574
 to 1,660 complete row/field/warning/error matches without component loss.
 Later division-field rounding remains open; the numeric division kernel is
 unchanged. The prototype is not committed or promoted: it exceeds the unchanged
-core/facade caps by 196/207 B and still needs meaningful simplification, wider
-index/argument controls, permanent regressions and full final gates. The production SQL
-runtime remains c0baaa5, whose eleven required GitHub jobs all pass. Roadmap
-totals remain 144/190, M5 42/53.
+core/facade caps and still needs meaningful simplification, permanent regressions
+and full final gates. Another 2,712 native observations cover three index layouts,
+exact input types, retained/eliminated DISTINCT and cached parameter updates;
+complete matches improve 1,964 to 2,636 with no matching component lost.
+A further 2,208 wrapper controls exposed 84 prototype regressions: unary plus
+preserves aggregate/key identity. Broad binder normalization was rejected after
+18 metadata regressions. Local identity comparison preserves the written AST,
+names, ordinal binding and legacy key metadata; it removes all 84 losses and
+improves complete matches from 1,096 to 1,332 without component loss. GROUP BY
+unary-plus ordinals and broader direct-aggregate plans remain open.
+The preceding c0baaa5 production runtime passes all eleven required GitHub
+jobs. The later transport-only commit's first CI attempt reported a Node SIGILL in
+the DECIMAL rounding test, without an assertion failure. The test passes three
+Docker repetitions against the committed runtime, and the failed CI job's rerun
+passes; every required job for 1832540 is now green. Roadmap totals remain
+144/190, M5 42/53.
 
 **OFFSET-to-projection boundary, verified (2026-10-26):**
 Ordinary delivery now passes its existing LIMIT stage into the delivery owner,

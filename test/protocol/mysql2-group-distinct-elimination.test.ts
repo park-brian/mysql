@@ -6,9 +6,10 @@ import { MySQL } from '@myjs/core'
 // @ts-expect-error — the capture owns plan normalization.
 import { planSkeleton } from '../../tools/capture-relational.mjs'
 import capture from './fixtures/aggregates/group-distinct-elimination.json' with { type: 'json' }
+import positive from './fixtures/aggregates/group-positive-elimination.json' with { type: 'json' }
 
 interface Outcome { readonly rows: unknown; readonly fields: unknown; readonly warnings: unknown; readonly plan: unknown }
-const reference = capture as { mysqlVersion: string; observations: number; outcomes: Outcome[]; index: number[] }
+type Reference = { mysqlVersion: string; observations: number; outcomes: Outcome[]; index: number[] }
 const layouts = [
   ['G AS k', 'G'], ['G AS k', 'k,k'], ['G AS k', '1,1'],
   ['G AS k,G AS again', 'g,G'], ['G+0 AS k', 'G+0,G+0'],
@@ -18,7 +19,10 @@ const layouts = [
 const readers = ['$', '$*3', '$/7', 'ROUND($,4)', 'CAST($ AS DECIMAL(35,14))']
 const values = '(1,2,1,1.2345),(2,0,0,NULL),(3,1,2,2.5000),(4,2,-1,-2.5050),(5,0,3,3.0000),(6,1,NULL,4.1250),(7,NULL,-2,0.0000),(8,2,6,-1.2300),(9,0,0,NULL)'
 
-test('retained grouping keys eliminate outer DISTINCT without copying aggregate readers', async () => {
+for (const { reference, selections, count, title } of [
+  { reference: capture as Reference, selections: layouts, count: 1137, title: 'retained grouping keys' },
+  { reference: positive as Reference, selections: [['+G AS k', 'G'], ['++G AS k', 'G,G'], ['+(G+0) AS k', 'G+0,G+0']], count: 417, title: 'unary-plus grouping keys' },
+]) test(`${title} eliminate outer DISTINCT without copying aggregate readers`, async () => {
   const host = process.env.MYSQL_REFERENCE_HOST
   const db = host === undefined ? await MySQL.open(':memory:') : undefined
   const conn = await mysql.createConnection(db === undefined
@@ -45,13 +49,13 @@ test('retained grouping keys eliminate outer DISTINCT without copying aggregate 
   }
   try {
     assert.equal(reference.mysqlVersion, '8.4.11')
-    assert.equal(reference.observations, 1137)
+    assert.equal(reference.observations, count)
     await conn.query('CREATE DATABASE grouping_distinct_elimination')
     await conn.query('USE grouping_distinct_elimination')
     for (const index of ['', ',KEY kG(G)', ',KEY kGN(G,n)']) {
       await conn.query('CREATE TABLE a(id INT PRIMARY KEY,G INT,n INT,d DECIMAL(20,4)' + index + ') STATS_AUTO_RECALC=0')
       await conn.query('INSERT INTO a VALUES ' + values)
-      for (const [selected, group] of layouts) for (const distinct of [false, true]) for (const reader of readers) {
+      for (const [selected, group] of selections) for (const distinct of [false, true]) for (const reader of readers) {
         const average = reader.replaceAll('$', 'AVG(' + (distinct ? 'DISTINCT ' : '') + 'n/3)')
         for (const outer of ['', 'DISTINCT ']) await run('SELECT ' + outer + selected + ',' + average + ' AS v,COUNT(d) AS c FROM a GROUP BY ' + group)
       }
