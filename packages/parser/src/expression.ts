@@ -459,7 +459,7 @@ class ExpressionParser {
         cursor.skip()
         return { kind: NODE.LITERAL, ...numericLiteral(t.text, cursor), at: t.start }
       case TOKEN.STRING:
-        return { kind: NODE.LITERAL, type: LITERAL.STRING, value: this.#stringText(), at: t.start }
+        return { kind: NODE.LITERAL, type: LITERAL.STRING, value: cursor.expectString(true), at: t.start }
       case TOKEN.HEX:
         cursor.skip()
         return { kind: NODE.LITERAL, type: LITERAL.HEX, value: hexBytes(t.text), at: t.start }
@@ -537,7 +537,7 @@ class ExpressionParser {
         const charset = t.text.slice(1).toLowerCase()
         if (defaultCollationOf(charset) !== undefined) {
           cursor.skip()
-          if (next === TOKEN.STRING) return { kind: NODE.LITERAL, type: LITERAL.STRING, value: this.#stringText(), charset, at: t.start }
+          if (next === TOKEN.STRING) return { kind: NODE.LITERAL, type: LITERAL.STRING, value: cursor.expectString(true), charset, at: t.start }
           const lit = this.#primary()
           return { ...(lit as Extract<Expression, { kind: 'literal' }>), charset, at: t.start }
         }
@@ -545,7 +545,7 @@ class ExpressionParser {
       // `N'x'` is the national charset's literal, which MySQL defines as utf8mb3.
       if (upper === 'N' && next === TOKEN.STRING && cursor.peek(1).start === t.end) {
         cursor.skip()
-        return { kind: NODE.LITERAL, type: LITERAL.STRING, value: this.#stringText(), charset: 'utf8mb3', at: t.start }
+        return { kind: NODE.LITERAL, type: LITERAL.STRING, value: cursor.expectString(true), charset: 'utf8mb3', at: t.start }
       }
       if (upper === 'EXISTS' && cursor.atOp('(', 1)) {
         cursor.skip()
@@ -664,7 +664,7 @@ class ExpressionParser {
     let using: string | undefined
     if (upper === 'GROUP_CONCAT') {
       if (cursor.atWord('ORDER') && cursor.atWord('BY', 1)) orderBy = parseOrderBy(cursor, this.#mode)
-      if (cursor.takeWord('SEPARATOR')) separator = this.#stringText()
+      if (cursor.takeWord('SEPARATOR')) separator = cursor.expectString(true)
     }
     if (upper === 'CHAR' && cursor.takeWord('USING')) using = charsetName(cursor).toLowerCase()
     cursor.expectOp(')')
@@ -728,7 +728,7 @@ class ExpressionParser {
           cursor.expectWord('TIME')
           cursor.expectWord('ZONE')
           cursor.takeWord('INTERVAL')
-          timeZone = this.#stringText()
+          timeZone = cursor.expectString(true)
         }
         cursor.expectWord('AS')
         const type = this.#castType()
@@ -894,21 +894,13 @@ class ExpressionParser {
       cursor.takeWord('INTEGER') || cursor.takeWord('INT')
       return { name, code: FIELD_TYPE.LONGLONG, at: t.start }
     }
-    const type = parseDataType(cursor, this.#mode)
-    if (!CAST_TYPES.has(type.name) || type.unsigned !== undefined || type.zerofill !== undefined) cursor.fail()
+    const type = parseDataType(cursor, this.#mode, false)
+    if (!CAST_TYPES.has(type.name) || type.unsigned !== undefined) cursor.fail()
     // `FLOAT(p)` is a precision and becomes FLOAT or DOUBLE; `FLOAT(m,d)`,
     // `DOUBLE(m)` and `REAL(m)` are column syntax a `CAST` refuses — the
     // corpus's `cast.test` marks all five spellings ER_PARSE_ERROR.
     if ((type.name === 'FLOAT' || type.name === 'DOUBLE') && type.length !== undefined) cursor.fail()
     return type
-  }
-
-  /** Adjacent literals concatenate here for expressions, separators and time zones. */
-  #stringText(): string {
-    const cursor = this.#c
-    let text = cursor.expectString()
-    while (cursor.peek().kind === TOKEN.STRING) text += cursor.take().text
-    return text
   }
 
   /** `MATCH (a, b) AGAINST ('x' [IN NATURAL LANGUAGE MODE | IN BOOLEAN MODE] [WITH QUERY EXPANSION])`. */

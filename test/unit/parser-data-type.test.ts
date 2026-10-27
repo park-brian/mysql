@@ -1,0 +1,44 @@
+import { test } from 'node:test'
+import assert from 'node:assert/strict'
+import { Cursor, NO_SQL_MODE, ParseError, lex, parseDataType, parseExpression, parseStatement } from '@myjs/parser'
+
+test('column and cast targets keep their own COLLATE boundaries', () => {
+  const c = new Cursor(lex('CHAR(2) COLLATE utf8mb4_bin CHARACTER SET utf8mb4'))
+  const type = parseDataType(c, NO_SQL_MODE)
+  assert.equal(type.collation, 'utf8mb4_bin')
+  assert.equal(type.charset, 'utf8mb4')
+  assert.equal(c.atEnd(), true)
+  const target = new Cursor(lex('CHAR(2) COLLATE missing'))
+  assert.equal(parseDataType(target, NO_SQL_MODE, false).name, 'CHAR')
+  assert.equal(target.atWord('COLLATE'), true)
+  for (const sql of ["SELECT CAST('x' AS CHAR COLLATE missing)", "SELECT CONVERT('x', CHAR COLLATE utf8mb4_bin)"]) {
+    assert.throws(() => parseStatement(sql), { errno: 1064 })
+  }
+  assert.throws(() => parseStatement("SELECT 1 COLLATE earlier,CAST('x' AS CHAR COLLATE missing),1e309"), (error: unknown) => {
+    assert.ok(error instanceof ParseError)
+    assert.equal(error.errno, 1273)
+    assert.deepEqual(error.conditions?.map(c => c.errno), [1273, 1064])
+    return true
+  })
+})
+
+test('ZEROFILL always supplies the signedness that CAST refuses, including repeated modifiers', () => {
+  for (const text of ['CHAR ZEROFILL', 'DECIMAL ZEROFILL', 'FLOAT ZEROFILL', 'CHAR ZEROFILL SIGNED', 'DECIMAL SIGNED ZEROFILL', 'DECIMAL ZEROFILL SIGNED']) {
+    const type = parseDataType(new Cursor(lex(text)), NO_SQL_MODE)
+    assert.equal(type.zerofill, true)
+    assert.equal(type.unsigned, !text.endsWith(' SIGNED'))
+    assert.throws(() => parseExpression("CAST('x' AS " + text + ')'), { errno: 1064 })
+  }
+})
+
+test('adjacent literal reading is explicit, while ENUM preserves text and byte members', () => {
+  const single = new Cursor(lex("'a' /* separator */ 'b'"))
+  assert.equal(single.expectString(), 'a')
+  assert.equal(single.expectString(), 'b')
+  const adjacent = new Cursor(lex("'a' /* separator */ 'b'"))
+  assert.equal(adjacent.expectString(true), 'ab')
+  assert.equal(adjacent.atEnd(), true)
+  const type = parseDataType(new Cursor(lex("ENUM('a' 'b',0x63,b'1100100')")), NO_SQL_MODE)
+  assert.deepEqual(type.values, ['ab', Uint8Array.of(99), Uint8Array.of(100)])
+  assert.throws(() => parseStatement("CREATE TABLE t(a INT COMMENT 'a' 'b')"), { errno: 1064 })
+})

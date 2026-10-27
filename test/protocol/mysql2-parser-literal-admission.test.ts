@@ -6,19 +6,21 @@ import { MySQL } from '@myjs/core'
 import { observeCommand } from './packet-observation.ts'
 import literalAdmission from './fixtures/diagnostics/parser-literal-admission.json' with { type: 'json' }
 import conditionHistories from './fixtures/diagnostics/parser-condition-histories.json' with { type: 'json' }
+import castDatatype from './fixtures/diagnostics/cast-datatype-grammar.json' with { type: 'json' }
 
-/** JSON captures retain the sign of zero and distinguish nonfinite values from NULL. */
-function numbers(value: unknown): unknown {
-  if (Array.isArray(value)) return value.map(numbers)
+/** Restore binary rows and numeric facts that JSON cannot represent directly. */
+function capturedValue(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(capturedValue)
   if (value !== null && typeof value === 'object') {
+    if ('type' in value && value.type === 'Buffer' && 'data' in value && Array.isArray(value.data)) return Buffer.from(value.data)
     if ('negativeZero' in value) return -0
     if ('nonfinite' in value) return Number(value.nonfinite)
-    return Object.fromEntries(Object.entries(value).map(([key, item]) => [key, numbers(item)]))
+    return Object.fromEntries(Object.entries(value).map(([key, item]) => [key, capturedValue(item)]))
   }
   return value
 }
 
-for (const [reference, total, matched] of [[literalAdmission, 1623, 1497], [conditionHistories, 198, 180]] as const) test('M5.10: admission preserves primary errors, condition histories, headers and effects: ' + reference.schema, async () => {
+for (const [reference, total, matched] of [[literalAdmission, 1623, 1521], [conditionHistories, 198, 192], [castDatatype, 480, 302]] as const) test('M5.10: admission preserves primary errors, condition histories, headers and effects: ' + reference.schema, async () => {
   const host = process.env.MYSQL_REFERENCE_HOST
   const db = host === undefined ? await MySQL.open(':memory:', { multipleStatements: true }) : undefined
   const transport = db === undefined
@@ -57,7 +59,7 @@ for (const [reference, total, matched] of [[literalAdmission, 1623, 1497], [cond
       const expected = reference.outcomes[entry.outcome]!
       const outcome = {
         ...expected,
-        rows: numbers(expected.rows),
+        rows: capturedValue(expected.rows),
         fields: expected.fields?.map(j => reference.fields[j]) ?? null,
         prior: expected.prior.map(j => reference.warnings[j]),
         warnings: expected.warnings.map(j => reference.warnings[j]),

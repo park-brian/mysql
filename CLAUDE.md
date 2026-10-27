@@ -129,6 +129,10 @@ histories while preserving the first error by identity and keeping invalid ASTs
 out of execution. Unknown charsets and DDL collation failures stop parsing; raw
 cursor APIs still refuse immediately. Parser conditions publish the native
 1,024-entry prefix; ordinary runtime warning totals retain their existing rules.
+CAST/CONVERT targets leave internal COLLATE to the syntax boundary while column
+datatype readers retain it. Cursor string reading concatenates adjacent literals
+only when expression or ENUM/SET grammar requests it; ordinary callers consume
+one token. Other CAST grammar, metadata and conversion gaps remain open.
 DDL preloading gathers collation IDs while the writer alone validates the full
 table spec. Lexical lookahead, CAST type grammar, builtin arity admission,
 collation-name conversion warnings,

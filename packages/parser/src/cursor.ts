@@ -246,14 +246,15 @@ export class Cursor {
   }
 
   /**
-   * One string literal's text. Adjacent literals concatenate only inside an
-   * expression, which reads them itself; here — a `COMMENT`, a file name — a
-   * second literal is a second token.
+   * One string literal's text, optionally concatenating adjacent literals for
+   * expression and ENUM/SET readers. A COMMENT or file name keeps one token.
    */
-  expectString(): string {
+  expectString(adjacent = false): string {
     const t = this.peek()
     if (t.kind !== TOKEN.STRING) this.fail()
-    return this.take().text
+    let text = this.take().text
+    if (adjacent) while (this.peek().kind === TOKEN.STRING) text += this.take().text
+    return text
   }
 
   /** Run `parse` one nesting level deeper, refusing past `MAX_DEPTH`. */

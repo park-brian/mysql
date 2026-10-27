@@ -1589,6 +1589,10 @@ error by identity with nonenumerable history. Charset and DDL collation failures
 remain fatal; low-level cursor calls still throw immediately. SQL diagnostics
 retain the native first 1,024 parser conditions without changing runtime warning
 totals. Cursor scopes release their history and nesting counters after failures.
+CAST/CONVERT targets leave internal COLLATE to the syntax boundary while column
+datatype readers retain it. Cursor string reading concatenates adjacent literals
+only when expression or ENUM/SET grammar requests it; ordinary callers consume
+one token. Other CAST grammar, metadata and conversion gaps remain open.
 DDL preloading resolves required collation IDs; full table-spec validation belongs
 to the actual writer. Shared option resolution and physical type normalization
 avoid duplicate metadata work. Lexical lookahead, CAST type grammar, builtin

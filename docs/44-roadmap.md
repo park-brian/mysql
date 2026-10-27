@@ -219,14 +219,47 @@ and all nine size gates pass again in that fresh container.
 Lexical lookahead, CAST type grammar, builtin arity admission and collation-name
 conversion warnings remain captured or explicitly open.
 
-**Next bounded slice:** audit CAST type grammar against pinned MySQL before
-changing the shared datatype reader. The retained `CAST('x' AS CHAR COLLATE ...)`
-controls require a syntax refusal at COLLATE, including after an earlier
-recoverable error. Keep DDL column collations and valid CAST charset options in
-their own grammar contexts; preserve native error ordering, metadata, PREPARE
-non-execution and size caps. Lexical lookahead and collation-name conversion
-warnings need separate repairs. Do not execute an invalid AST to discover later
-semantic errors or continue past a native fatal grammar boundary.
+**CAST datatype COLLATE boundary, verified (2026-10-27):** CAST and
+CONVERT targets now stop before internal COLLATE, so their closing-delimiter
+check produces the native syntax refusal. Column datatype readers retain their
+existing collation behavior and ordering. Earlier recoverable conditions remain
+primary, with the later syntax condition retained and subsequent invalid tokens
+unread. One cursor reader now owns opt-in adjacent-string concatenation for
+expressions and ENUM/SET; ordinary string readers still consume one token.
+Shorthand charset reading, numeric-list consumption and member dispatch avoid
+duplicate lookups. CAST's signedness check already covers ZEROFILL, whose datatype
+reader always supplies signedness.
+
+A new 480-command pinned capture improves complete matches from 194 to 302;
+178 open outcomes remain captured, including other CAST grammar, metadata and
+conversion differences. The old 1,623 and 198 native answer pools are unchanged;
+their strict matches improve 1,497 to 1,521 and 180 to 192, with every previously
+matching component, header, field attribute, PREPARE count and effect retained.
+The shared harness restores binary rows from JSON before comparison. The new
+regression fails on a9e0201 for the actual COLLATE boundary. The 42 focused parser
+tests and typecheck pass. All nine unchanged caps pass at core/facade
+334,341/334,264 B gzipped, 104 B raw smaller than a9e0201. The actual 120-file
+census and its second replay remain byte-identical at 17,530/17,589. The full
+official suite retains all 37 shared passes and its entire measurement fixture
+is unchanged. Native replay passes all 2,301 captured commands plus both command
+modes. Fresh Docker --reference passes 1,459 main tests, four latency tests,
+typecheck, lint, package/typed smoke, the real client and all seven pinned corpora.
+Final fresh source proof matches 439 test files/fixtures, 204 runtime sources
+and reference/generator/census/helper tooling before cleanup. Executable code and tests
+stayed frozen throughout the release gate. A final correction to two overbroad
+grammar comments emits identical JavaScript; typecheck, 42 affected parser tests
+and all nine size gates pass again in the fresh container. The preceding a9e0201 CI run
+40594932881 passed all eleven required jobs. M5.10 remains partial.
+
+**Next bounded slice:** audit the remaining CAST target modifier grammar as one
+class against pinned MySQL. The retained NCHAR charset, repeated charset and
+signedness/ZEROFILL controls show where column grammar still accepts invalid
+CAST forms or reports their syntax error too late. Keep valid CHAR charset and
+binary modifiers, column/routine datatype contracts, earlier diagnostic history,
+PREPARE non-execution, metadata and caps intact. Decide the grammar context at
+the existing datatype owner instead of adding independent modifier exceptions.
+National/conversion warnings, lexical lookahead and value conversion remain
+separate repairs; the open capture must continue to retain them.
 
 The positive literal/typed-integer-NULL source proof now includes plain
 SIGNED/UNSIGNED casts of integer, boolean and text literals under unchanged

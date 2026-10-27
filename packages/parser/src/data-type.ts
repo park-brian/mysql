@@ -197,9 +197,6 @@ const MULTI_WORD: readonly (readonly string[])[] = Object.keys(TYPES)
   .map((name) => name.split(' '))
   .sort((a, b) => b.length - a.length)
 
-/** Shorthand charsets that appear where a `CHARACTER SET` clause would. */
-const SHORTHAND_CHARSETS: Readonly<Record<string, string>> = { ASCII: 'latin1', UNICODE: 'ucs2' }
-
 /** A column's declared type, as written. */
 export interface DataType {
   /** The canonical MySQL spelling: `INT`, `VARCHAR`, `DOUBLE`. */
@@ -255,12 +252,10 @@ export function atDataType(c: Cursor): boolean {
 /**
  * Parse a column type and everything that belongs to it.
  *
- * Everything that belongs to it is more than the parentheses: `UNSIGNED`,
- * `ZEROFILL`, `CHARACTER SET`, `COLLATE`, `BINARY`, `ASCII` and `UNICODE` are
- * all part of the type rather than attributes of the column, and MySQL accepts
- * them in any order.
+ * Modifiers such as `UNSIGNED`, `CHARACTER SET`, `COLLATE` and `BINARY` belong
+ * on the type node. CAST targets leave COLLATE to their closing-delimiter check.
  */
-export function parseDataType(c: Cursor, mode: SqlMode): DataType {
+export function parseDataType(c: Cursor, mode: SqlMode, withCollation = true): DataType {
   const at = c.peek().start
   const name = typeName(c)
   if (name === null) c.fail()
@@ -328,8 +323,8 @@ export function parseDataType(c: Cursor, mode: SqlMode): DataType {
   let collation: string | undefined
   let binaryModifier: boolean | undefined
 
-  // MySQL accepts these in any order and repeated, so this is a loop rather
-  // than a fixed sequence. `ZEROFILL` implies `UNSIGNED`, which is a real rule
+  // Collect modifiers until the next grammar token. Some ordering restrictions
+  // remain open in the native capture. `ZEROFILL` implies `UNSIGNED`, a real rule
   // and not a convenience: `INT(4) ZEROFILL` is an unsigned column.
   for (;;) {
     if (c.takeWord('UNSIGNED')) {
@@ -365,7 +360,7 @@ export function parseDataType(c: Cursor, mode: SqlMode): DataType {
         charset = charsetName(c).toLowerCase()
         continue
       }
-      if (c.takeWord('COLLATE')) {
+      if (withCollation && c.takeWord('COLLATE')) {
         collation = collationName(c).toLowerCase()
         continue
       }
@@ -418,16 +413,14 @@ function typeName(c: Cursor): string | null {
  * so a bare match is safe here.
  */
 function shorthandCharset(c: Cursor): string | null {
-  for (const [word, charset] of Object.entries(SHORTHAND_CHARSETS)) {
-    if (c.takeWord(word)) return charset
-  }
+  if (c.takeWord('ASCII')) return 'latin1'
+  if (c.takeWord('UNICODE')) return 'ucs2'
   return null
 }
 
 /** `(1)` or `(10, 2)` — up to `max` integers, or nothing at all. */
 function numberList(c: Cursor, max: number): number[] {
-  if (!c.atOp('(')) return []
-  c.skip()
+  if (!c.takeOp('(')) return []
   const out: number[] = []
   do {
     const t = c.peek()
@@ -458,16 +451,13 @@ function valueList(c: Cursor): (string | Uint8Array)[] {
     // hex or bit literal is a string constant written another way, so it is a
     // member like any other — refusing it would have failed nine `CREATE`s in
     // the corpus for a syntax MySQL accepts.
-    if (t.kind !== TOKEN.STRING && t.kind !== TOKEN.HEX && t.kind !== TOKEN.BIT) c.fail()
-    c.skip()
     if (t.kind === TOKEN.STRING) {
       // Adjacent literals concatenate here as they do in an expression.
-      let text = t.text
-      while (c.peek().kind === TOKEN.STRING) text += c.take().text
-      out.push(text)
-    } else {
+      out.push(c.expectString(true))
+    } else if (t.kind === TOKEN.HEX || t.kind === TOKEN.BIT) {
+      c.skip()
       out.push(t.kind === TOKEN.HEX ? hexBytes(t.text) : bitBytes(t.text))
-    }
+    } else c.fail()
   } while (c.takeOp(','))
   c.expectOp(')')
   return out
