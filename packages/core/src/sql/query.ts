@@ -16,7 +16,7 @@ import { intValue, storageWidth, toInteger, truth, withoutHex, type Value } from
 import { compile, constantNode, memoValue, logicalOperand, convertTo, decimalField, EMPTY_SCOPE, readSlot, type CompileContext, type Compiled, type Env, type GroupKeys, type QuantifiedSubquery, type Scope, type SubqueryPlan } from './compile.ts'
 import { AggregateSink, chooseStrategy, containsAggregate, groupRows, isAggregate } from './group.ts'
 import { WindowSink, applyWindows, containsWindow } from './window.ts'
-import { CHARSET_UTF8MB4_BIN, columnDefinition, intType, type ResultType } from './meta.ts'
+import { CHARSET_UTF8MB4_BIN, EMPTY_NAMES, columnDefinition, intType, type ResultType } from './meta.ts'
 import { FIELD_TYPE, expectTyped } from '@myjs/bytes'
 import { distinct, filter, limit, project, sort, type SortKey } from './operators.ts'
 import { isConstant, optimizerEnabled, splitAnd, tableColumn } from './plan.ts'
@@ -1109,7 +1109,7 @@ function emptySubquery(run: Run, query: QueryExpression): boolean {
  * the clustered key it carries. 8.4.11 reads the index in that order and sorts nothing ("Index
  * scan on t using PRIMARY", "Covering index scan on t using name").
  */
-function orderingIndex(def: TableDef, alias: string, order: readonly OrderItem[], items: readonly { compiled: Compiled; expr?: Expression; alias?: string }[], scope: Scope, readBy: string | undefined, primary: boolean): { readonly index: string; readonly reverse: boolean } | undefined {
+function orderingIndex(def: TableDef, alias: string, order: readonly OrderItem[], items: readonly { compiled: Compiled; expr: Expression; alias?: string }[], scope: Scope, readBy: string | undefined, primary: boolean): { readonly index: string; readonly reverse: boolean } | undefined {
   const clustered = clusteredIndex(def)
   const index = readBy === undefined ? clustered : def.indexes.find((i) => i.name === readBy)
   if (index === undefined || clustered === undefined) return undefined
@@ -1691,11 +1691,9 @@ function withoutUnaryPlus(e: Expression): Expression {
 }
 
 /** Resolve aliases and positions; GROUP BY gives source columns priority. */
-function sortExpression(e: Expression, items: readonly { readonly alias?: string; readonly expr?: Expression }[], scope?: Scope): Expression | undefined {
+function sortExpression(e: Expression, items: readonly { readonly alias?: string; readonly expr: Expression }[], scope?: Scope): Expression | undefined {
   if (scope && e.kind === NODE.COLUMN && safeResolve(scope, e.parts, 'group statement')) return e
-  const alias = selectedItem(e, items)
-  if (integerLiteral(e) || alias !== undefined) return alias?.expr
-  return e
+  return selectedItem(e, items)?.expr ?? (integerLiteral(e) ? undefined : e)
 }
 
 /** A select-list position or first bare alias, using the SQL name fold. */
@@ -1754,7 +1752,7 @@ function expressionIdentity(e: Expression | undefined, ctx: CompileContext, env:
 }
 
 /** The verified single-table scalar DISTINCT admission boundary (8.4.11). */
-function checkDistinctOrder(run: Run, order: readonly OrderItem[], items: readonly { readonly expr?: Expression; readonly compiled: Compiled; readonly alias?: string }[], ctx: CompileContext): readonly (number | undefined)[] | undefined {
+function checkDistinctOrder(run: Run, order: readonly OrderItem[], items: readonly { readonly expr: Expression; readonly compiled: Compiled; readonly alias?: string }[], ctx: CompileContext): readonly (number | undefined)[] | undefined {
   const scope = ctx.scope as TableScope
   const key = (e: Expression | undefined, mode: IdentityMode = 'admission'): string | undefined => JSON.stringify(expressionIdentity(e, ctx, run.env, mode))
   const selectedKeys = items.map((item) => key(item.expr))
@@ -1794,7 +1792,7 @@ function qualifiedColumn(scope: TableScope | undefined, index: number): string {
  * with both, only if they are the same list; none if any key reads anything
  * but that table's columns, or reads no table at all.
  */
-function sortTable(order: readonly Expression[] | undefined, group: readonly Expression[] | undefined, items: readonly { readonly alias?: string; readonly expr?: Expression }[], scope: TableScope): string | undefined {
+function sortTable(order: readonly Expression[] | undefined, group: readonly Expression[] | undefined, items: readonly { readonly alias?: string; readonly expr: Expression }[], scope: TableScope): string | undefined {
   const keys = order ?? group
   if (keys === undefined || keys.length === 0) return undefined
   const text = (e: Expression | undefined): string => (e === undefined ? '\u0000' : deparse(e))
@@ -1804,7 +1802,7 @@ function sortTable(order: readonly Expression[] | undefined, group: readonly Exp
 }
 
 /** The tables sort keys read, a position or an alias read through the select list; a name that resolves to nothing as `\u0000`. */
-function keyAliases(keys: readonly Expression[], items: readonly { readonly alias?: string; readonly expr?: Expression }[], scope: Scope): Set<string> {
+function keyAliases(keys: readonly Expression[], items: readonly { readonly alias?: string; readonly expr: Expression }[], scope: Scope): Set<string> {
   const out = new Set<string>()
   if (!(scope instanceof TableScope)) return out
   for (const e of keys) {
@@ -2001,13 +1999,13 @@ function planGrouped(
     !keys.every((key) => selectItems.some((item) => matchesKey(item.expr, key)))
   ))
 
-  // Retained DISTINCT over computed exact AVG uses the temporary-group writer.
-  const temporaryDistinct = run.preparing !== true && deduplicate && !distinctAggregate && wholeReaderReady(q, node, !windowed && unhintedBase(q, node) && source) &&
+  // Retained DISTINCT copies completed AVG values through the native group writer.
+  const copiedAverage = run.preparing !== true && deduplicate && wholeReaderReady(q, node, !windowed && unhintedBase(q, node) && source) &&
     !rollup && q.limit === undefined && unordered &&
     keys.every((key) => constantNode(key.expr, true, true) && refersToRow(key.expr, lookup)) &&
     sink.specs.length > 0 && sink.specs.every((spec) => spec.name === 'AVG' && spec.type.kind === 'decimal') &&
     !items.some((item) => aggregateReaders.includes(item.compiled))
-  const { strategy, index: groupIndex } = oneGroup ? { strategy: 'index' as const, index: undefined } : chooseStrategy(temporaryDistinct ? undefined : alone?.def, keyColumns, rollup, distinctAggregate)
+  const { strategy, index: groupIndex } = oneGroup ? { strategy: 'index' as const, index: undefined } : chooseStrategy(copiedAverage ? undefined : alone?.def, keyColumns, rollup, distinctAggregate)
 
   // HAVING sees the select list's aliases, its columns and the keys; a column
   // that is none of those is 1054 even when the table has it (8.4.11).
@@ -2046,12 +2044,12 @@ function planGrouped(
       return matchesKey(e, key)
     })
   const stream = (strategy === 'sort' || strategy === 'index') && !unordered && !orderMatchesKeys && !oneGroup
-  if (from !== undefined && !temporaryDistinct) from.sortedBy(sortTable(q.orderBy?.map((o) => o.expr), node.groupBy?.items, selectItems, from.scope), keep)
+  if (from !== undefined && !copiedAverage) from.sortedBy(sortTable(q.orderBy?.map((o) => o.expr), node.groupBy?.items, selectItems, from.scope), keep)
   const firstOrder = strategy === 'sort' && !rollup ? from?.orderGroupsFirst(keys) : undefined
   let dataColumns: ((trx: Trx | undefined) => readonly ResultType[]) | undefined
   if (run.preparing !== true) {
     const facts = selectFacts(run, from, node, limitCount)
-    if (temporaryDistinct || !facts.empty) {
+    if (copiedAverage || !facts.empty) {
       const consts = new Set(facts.constTables.map((t) => t.alias))
       const fixed = new Set([...consts, ...(facts.nullTables ?? [])])
       const own = items.map((i) => i.compiled.type)
@@ -2061,7 +2059,7 @@ function planGrouped(
         const t = item.compiled.type
         if (!refersToRow(e, lookup, consts)) continue
         const aggregateCall = aggregateReaders.includes(item.compiled)
-        if (!temporaryDistinct && !aggregateCall && containsAggregate(e)) continue
+        if (!copiedAverage && !aggregateCall && containsAggregate(e)) continue
         if (strategy === 'implicit') {
           if (!aggregateCall) patchType(item, { nullable: true })
           continue
@@ -2077,10 +2075,10 @@ function planGrouped(
         // A key that reads only NULL-complemented tables is a constant, and no part of the table's key.
         // …and so is one the WHERE holds to a constant over a join (8.4.11: `FROM p, q WHERE p.g = 1 GROUP BY q.t, p.g`).
         const keyed = (isKey || isKeyExpression) && refersToRow(e, lookup, fixed) && !(source === undefined && e.kind === NODE.COLUMN && pinnedByWhere(node.where, e.parts))
-        if (strategy === 'temp') {
-          patchType(item, { temporary: !temporaryDistinct && keyed ? true : 'pinned', ownInTemporary: !temporaryDistinct && t.ownInTemporary === true, ...(aggregateCall ? { names: { schema: '', table: '', orgTable: '', orgName: '' } } : {}) })
+        if (strategy === 'temp' || copiedAverage) {
+          patchType(item, { temporary: !copiedAverage && keyed ? true : 'pinned', ownInTemporary: !copiedAverage && t.ownInTemporary === true, ...(aggregateCall ? { names: EMPTY_NAMES } : {}) })
           // AVG and similar aggregates retain an intermediate, not this final value.
-          if (temporaryDistinct || t.ownInTemporary !== true) item.compiled = decimalField(item.compiled)
+          if (copiedAverage || t.ownInTemporary !== true) item.compiled = decimalField(item.compiled)
         }
         else if (stream || (source === undefined && from !== undefined && strategy === 'sort' && firstOrder !== 'index' && t.column !== undefined)) {
           // Streamed output and sort-based grouping expose copied column metadata;
@@ -2109,24 +2107,34 @@ function planGrouped(
     }
   }
   const plan = { width, keys: keys.map((k) => k.compiled), specs: sink.specs, strategy: firstOrder === undefined ? strategy : 'index' as const, rollup }
+  const copyResults = copiedAverage && distinctAggregate
   const sortsOutput = orderKeys.length > 0 && !(orderMatchesKeys && strategy !== 'temp') && !oneGroup
   const groups = rollup ? 'Group aggregate with rollup' : 'Group aggregate'
   const stages: Stage[] = [
     ...(from === undefined && node.where !== undefined ? [filterStage(resolved.predicates)] : []),
     {
-      run: (rows, env) => groupRows(rows, plan, env),
+      run(rows, env) {
+        const grouped = groupRows(rows, plan, env)
+        return copyResults ? Array.from(grouped, (item) => {
+          let at = level + 1
+          for (const spec of sink.specs) item.row[at++] = convertTo(spec.eval(item.row, env), spec.type)
+          return item
+        }) : grouped
+      },
       // As the strategy runs: an Aggregate of everything, a temporary table keyed by the groups, or groups read in order — sorted for them first, a join's rows streamed into a table to be.
       describe(n) {
         if (strategy === 'implicit') return planNode('Aggregate', [n])
-        if (strategy === 'temp') return planNode('Table scan on <temporary>', [planNode('Aggregate using temporary table', [n]), ...(temporaryDistinct ? subqueryNodes(run, 'field list') : [])])
-        if (strategy === 'sort' && firstOrder === undefined) return planNode(groups, [planNode('Sort', [wrap(source === undefined, 'Stream results', n)])])
-        return planNode(groups, [n])
+        let grouped: PlanNode
+        if (strategy === 'temp') grouped = planNode('Aggregate using temporary table', [n])
+        else grouped = planNode(groups, [strategy === 'sort' && firstOrder === undefined ? planNode('Sort', [wrap(source === undefined, 'Stream results', n)]) : n])
+        if (copyResults) grouped = planNode('Temporary table', [grouped])
+        return strategy === 'temp' || copyResults ? planNode('Table scan on <temporary>', [grouped, ...(copiedAverage ? subqueryNodes(run, 'field list') : [])]) : grouped
       },
     },
     ...(having === undefined ? [] : [filterStage(having, run)]),
     ...(windows === undefined || windows.windows.length === 0 ? [] : [windowStage(windows, windows.base)]),
     // Retained DISTINCT and unverified ordered/limited forms remain unexplained.
-    deliverStage(items.map((i) => i.compiled), sortsOutput ? orderKeys : [], deduplicate, { deduplicated: temporaryDistinct, streamed: stream, described: node.distinct !== true || temporaryDistinct || (!deduplicate && unordered && q.limit === undefined), keep: q.limit && keep }),
+    deliverStage(items.map((i) => i.compiled), sortsOutput ? orderKeys : [], deduplicate, { deduplicated: copiedAverage, streamed: stream, described: node.distinct !== true || copiedAverage || (!deduplicate && unordered && q.limit === undefined), keep: q.limit && keep }),
     ...(q.limit ? [limitStage(offset, limitCount)] : []),
   ]
 
@@ -2153,13 +2161,13 @@ function planGrouped(
       }
       const source = from === undefined || fetched ? planNode('Rows fetched before execution') : withSubqueries(run, from.explain(run.env), 'where clause')
       const n = describeStages(source, stages)
-      return n === undefined ? undefined : [n, ...(temporaryDistinct ? [] : subqueryNodes(run, 'field list'))]
+      return n === undefined ? undefined : [n, ...(copiedAverage ? [] : subqueryNodes(run, 'field list'))]
     },
     rows(trx, given, ready) {
       const env = executionEnv(run, trx, given)
-      const rows = values(runStages(from === undefined ? [{ row: [] }] : from.rows(trx, env, { locking, ready: temporaryDistinct ? ready : undefined }), stages, env))
+      const rows = values(runStages(from === undefined ? [{ row: [] }] : from.rows(trx, env, { locking, ready: copiedAverage ? ready : undefined }), stages, env))
       // The admitted unordered DISTINCT finishes its final field copy before delivery.
-      return temporaryDistinct ? [...rows] : rows
+      return copiedAverage ? [...rows] : rows
     },
   }
 }
@@ -2230,15 +2238,16 @@ function refersToRow(e: unknown, scope?: Scope, consts?: ReadonlySet<string>): b
  * `also` (a grouped query's keys), and nothing else of the row — a column
  * that is neither is 1054 even when the table has it (8.4.11).
  */
-function selectedOnly(lookup: Scope, items: readonly { readonly expr?: Expression; readonly alias?: string }[], also: readonly number[], having: Expression): Scope {
+function selectedOnly(lookup: Scope, items: readonly { readonly expr: Expression; readonly alias?: string }[], also: readonly number[], having: Expression): Scope {
   const allowed = new Set<number>(also)
-  const names = new Set(columnRefs(having).filter((parts) => parts.length === 1).map((parts) => parts[0]!.toLowerCase()))
+  const names = new Set<string>()
+  for (const parts of columnRefs(having)) if (parts.length === 1) names.add(parts[0]!.toLowerCase())
   for (const i of items) {
     const at = localColumn(i.expr, lookup)
     if (at !== undefined) allowed.add(at)
     // A named alias exposes its expression's columns through HAVING.
     const alias = i.alias?.toLowerCase()
-    if (alias === undefined || i.expr === undefined || !names.has(alias)) continue
+    if (alias === undefined || !names.has(alias)) continue
     for (const parts of columnRefs(i.expr)) {
       const at = safeIndex(lookup, parts)
       if (at !== undefined) allowed.add(at)
@@ -2262,7 +2271,7 @@ function selectedOnly(lookup: Scope, items: readonly { readonly expr?: Expressio
  * HAVING's names, an alias replaced by what it names: two items of that
  * alias are 1052, and one holding a window function is 3594 (8.4.11).
  */
-function substituteAliases(e: Expression, items: readonly { readonly expr?: Expression; readonly alias?: string }[]): Expression {
+function substituteAliases(e: Expression, items: readonly { readonly expr: Expression; readonly alias?: string }[]): Expression {
   const walk = (x: unknown): unknown => {
     if (x === null || typeof x !== 'object') return x
     if (Array.isArray(x)) return x.map(walk)
@@ -2270,10 +2279,10 @@ function substituteAliases(e: Expression, items: readonly { readonly expr?: Expr
     if (node.kind === NODE.SUBQUERY || node.kind === NODE.LITERAL) return x
     if (node.kind === NODE.COLUMN && node.parts?.length === 1) {
       const name = node.parts[0] as string
-      const hits = items.filter((i) => i.expr !== undefined && i.alias?.toLowerCase() === name.toLowerCase())
-      if (hits.length > 1) throw sqlError('ER_NON_UNIQ_ERROR', `Column '${name}' in having clause is ambiguous`)
+      const hits = items.filter((i) => i.alias?.toLowerCase() === name.toLowerCase())
+      if (hits.length > 1) throw sqlError('ER_NON_UNIQ_ERROR', messages.ambiguousColumn(name, 'having clause'))
       const hit = hits[0]
-      if (hit?.expr !== undefined) {
+      if (hit !== undefined) {
         if (containsWindow(hit.expr)) throw sqlError('ER_WINDOW_INVALID_WINDOW_FUNC_ALIAS_USE', `You cannot use the alias '${name}' of an expression containing a window function in this context.'`)
         return hit.expr
       }

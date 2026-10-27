@@ -444,9 +444,9 @@ export interface GroupPlan {
 }
 
 /** The rows of a grouped query, one per group (and per super-aggregate under ROLLUP). */
-export function* groupRows(source: Iterable<{ readonly row: Row }>, plan: GroupPlan, env: Env): Generator<{ readonly row: Row }> {
+export function* groupRows(source: Iterable<{ readonly row: Row }>, plan: GroupPlan, env: Env): Generator<{ readonly row: Value[] }> {
   const K = plan.keys.length
-  const compose = (first: Row | undefined, keys: readonly Value[], level: number, states: readonly AggregateState[]): { row: Row } => {
+  const compose = (first: Row | undefined, keys: readonly Value[], level: number, states: readonly AggregateState[]): { row: Value[] } => {
     const row: Value[] = first === undefined ? new Array<Value>(plan.width).fill(null) : first.slice(0, plan.width)
     for (let i = 0; i < K; i++) row.push(i < level ? (keys[i] ?? null) : null)
     row.push(intValue(BigInt(level)))
@@ -464,15 +464,10 @@ export function* groupRows(source: Iterable<{ readonly row: Row }>, plan: GroupP
       if (first === undefined) first = row
       for (const s of states) s.add(row, env)
     }
-    if (K === 0) {
-      yield compose(first, [], 0, states)
-      return
-    }
-    // A GROUP BY whose every key the WHERE pins is one group, with the
-    // metadata of no grouping at all — but no rows in, no rows out, and ROLLUP
-    // still adds its super-aggregates (8.4.11).
-    if (first === undefined) return
-    const keys = keysOf(first)
+    // No GROUP BY always emits one group. Pinned GROUP BY keys need input,
+    // and are evaluated after accumulation; ROLLUP adds its super-aggregates.
+    if (K > 0 && first === undefined) return
+    const keys = first === undefined ? [] : keysOf(first)
     for (let level = K; level >= (plan.rollup ? 0 : K); level--) yield compose(first, keys, level, states)
     return
   }
@@ -512,41 +507,34 @@ export function* groupRows(source: Iterable<{ readonly row: Row }>, plan: GroupP
     })
     input = all
   }
-  const levels = plan.rollup ? K : 0
+  const levelCount = plan.rollup ? K + 1 : 1
   let current: { keys: Value[]; firsts: Row[]; states: AggregateState[][] } | undefined
-  const flush = function* (down: number): Generator<{ row: Row }> {
-    if (current === undefined) return
-    // Levels K, K-1, … down to `down`, finest first.
-    for (let level = K; level >= down; level--) {
-      const i = K - level
-      if (level < K && !plan.rollup) break
-      yield compose(current.firsts[i], current.keys, level, current.states[i] as AggregateState[])
+  const flush = function* (group: NonNullable<typeof current>, down: number): Generator<{ row: Value[] }> {
+    // Active states are finest first: levels K, K-1, … down to `down`.
+    for (let i = 0; i < group.states.length && K - i >= down; i++) {
+      yield compose(group.firsts[i], group.keys, K - i, group.states[i] as AggregateState[])
     }
   }
-  for (const item of input) {
-    if (current === undefined) {
-      current = { keys: item.keys, firsts: Array.from({ length: levels + 1 }, () => item.row), states: Array.from({ length: levels + 1 }, start) }
+  for (const { row, keys } of input) {
+    if (!current) {
+      current = { keys, firsts: new Array<Row>(levelCount).fill(row), states: Array.from({ length: levelCount }, start) }
     } else {
       let j = 0
-      while (j < K && valueKey(item.keys[j] ?? null) === valueKey(current.keys[j] ?? null)) j++
+      while (j < K && valueKey(keys[j] ?? null) === valueKey(current.keys[j] ?? null)) j++
       if (j < K) {
         // Levels deeper than j end here: emit them, then start them afresh.
-        yield* flush(j + 1)
-        for (let level = K; level > j; level--) {
-          const i = K - level
-          if (i > levels) continue
-          current.firsts[i] = item.row
+        yield* flush(current, j + 1)
+        for (let i = 0; i < current.states.length && K - i > j; i++) {
+          current.firsts[i] = row
           current.states[i] = start()
         }
-        current.keys = item.keys
+        current.keys = keys
       }
     }
-    for (const states of current.states) for (const s of states) s.add(item.row, env)
+    for (const states of current.states) for (const s of states) s.add(row, env)
   }
-  if (current !== undefined) yield* flush(plan.rollup ? 0 : K)
-  else if (plan.rollup && K > 0) {
-    // ROLLUP over no rows has no grand total either (8.4.11).
-  }
+  // ROLLUP over no sorted groups has no grand total either (8.4.11).
+  if (current) yield* flush(current, 0)
 }
 
 /**

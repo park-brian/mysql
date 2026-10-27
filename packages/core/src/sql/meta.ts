@@ -151,6 +151,9 @@ export interface SourceColumn {
   readonly flags: number
 }
 
+/** Explicitly blank origin names; a copied expression's absent names still default to its alias. */
+export const EMPTY_NAMES = { schema: '', table: '', orgTable: '', orgName: '' } as const
+
 const INT_WIDTH: Readonly<Record<number, readonly [number, number]>> = {
   // [signed, unsigned] display widths, as `Field_*::max_display_length()`.
   [FIELD_TYPE.TINY]: [4, 3],
@@ -410,6 +413,7 @@ export function promotesToBlob(t: Pick<ResultType, 'field' | 'length' | 'wireLen
  * the column reports.
  */
 export function columnDefinition(name: string, t: ResultType, resultsCollation: number): ColumnDefinition {
+  const { column, names } = t
   const materialized = t.temporary !== undefined && t.temporary !== false
   // A NULL constant in the view is not copied into a temporary table: it
   // reports what it always does (8.4.11: STATISTICS.PACKED under a sort).
@@ -417,17 +421,17 @@ export function columnDefinition(name: string, t: ResultType, resultsCollation: 
     // Under a sort, what 8.4.11 reports for the column streamed through a
     // temporary table, captured as such: a constant is not copied at all.
     const streamed = t.temporary === 'stream' ? t.wire.streamed : undefined
-    const w = streamed === undefined ? t.wire : { ...t.wire, field: streamed[0], length: streamed[1], flags: streamed[2], decimals: streamed[3] }
+    const w = streamed ? { ...t.wire, field: streamed[0], length: streamed[1], flags: streamed[2], decimals: streamed[3] } : t.wire
     const mb = requireCollationInfo(resultsCollation).mbmaxlen
     return {
       // A dictionary column names its table, as any column does. Read from a
       // temporary table's field instead, it is named for the item, and a
       // computed one has no table behind it (8.4.11, under ORDER BY).
-      ...(t.column !== undefined
-        ? { schema: t.column.schema, table: t.column.table, orgTable: t.column.orgTable, orgName: streamed === undefined ? t.column.orgName : name }
-        : t.names !== undefined && streamed !== undefined
-          ? { ...t.names, orgTable: '', orgName: name }
-          : (t.names ?? { schema: '', table: '', orgTable: '', orgName: '' })),
+      ...(column !== undefined
+        ? { ...column, orgName: streamed ? name : column.orgName }
+        : names !== undefined && streamed
+          ? { ...names, orgTable: '', orgName: name }
+          : (names ?? EMPTY_NAMES)),
       name,
       characterSet: w.text ? resultsCollation : CHARSET_BINARY,
       columnLength: w.text ? Math.min(4294967295, Math.ceil(w.length / 4) * mb) : w.length,
@@ -437,7 +441,7 @@ export function columnDefinition(name: string, t: ResultType, resultsCollation: 
       decimals: w.decimals,
     }
   }
-  let flags = t.column?.flags ?? 0
+  let flags = column?.flags ?? 0
   if (!t.nullable) flags |= COLUMN_FLAG.NOT_NULL
   // A hex literal is reported unsigned, bytes or not, as the integer it can be (8.4.11).
   if ((t.unsigned || t.literalInt?.unsigned === true) && t.kind !== 'null') flags |= COLUMN_FLAG.UNSIGNED
@@ -446,7 +450,7 @@ export function columnDefinition(name: string, t: ResultType, resultsCollation: 
   const binaryString = t.kind === 'string' && requireCollationInfo(t.collationId).name.endsWith('_bin')
   // A bare column of a number type carries no BINARY flag; every other
   // non-text result does, a literal and an expression included.
-  const numericColumn = t.column !== undefined && (t.kind === 'int' || t.kind === 'decimal' || t.kind === 'double')
+  const numericColumn = column !== undefined && (t.kind === 'int' || t.kind === 'decimal' || t.kind === 'double')
   // A BIT, column or expression (MAX(b), COALESCE(b)), carries none either (8.4.11).
   if (!isText && !numericColumn && !(t.field === FIELD_TYPE.BIT && t.kind === 'int')) flags |= COLUMN_FLAG.BINARY
   // A string in a `_bin` collation is flagged binary too, column or expression.
@@ -460,7 +464,7 @@ export function columnDefinition(name: string, t: ResultType, resultsCollation: 
     // DISTINCT column the first corpus drew was nullable, which hid the
     // NOT NULL half of that (8.4.11, E-17, M5.18).
     const grouped = t.temporary === true && t.nullable ? GROUP_FLAG : 0
-    if (t.column !== undefined) flags = (flags & ~KEY_FLAGS) | grouped
+    if (column !== undefined) flags = (flags & ~KEY_FLAGS) | grouped
     else if (!(t.ownInTemporary === true && t.temporary !== 'stream')) {
       // A number's field carries no BINARY; a temporal's, a byte string's and
       // a `_bin` string's do.
@@ -470,9 +474,9 @@ export function columnDefinition(name: string, t: ResultType, resultsCollation: 
     }
   }
   // A materialized temporal is a temporal field again, binary and its own width.
-  if (t.asText === true && materialized && t.column === undefined) flags |= COLUMN_FLAG.BINARY
+  if (t.asText === true && materialized && column === undefined) flags |= COLUMN_FLAG.BINARY
 
-  const stored = t.column !== undefined || materialized
+  const stored = column !== undefined || materialized
   let length = t.length
   let textBytes = 1
   let decimals = t.scale
@@ -521,9 +525,9 @@ export function columnDefinition(name: string, t: ResultType, resultsCollation: 
   // An integer expression's temporary field is an INT below ten characters
   // and a BIGINT from there (8.4.11: `n IS NULL` is type 3, `LENGTH(s)` type 8);
   // MIN and MAX of a column copy the column's own field.
-  if (materialized && t.kind === 'int' && t.column === undefined && t.fieldFlags === undefined && t.ownInTemporary !== true && t.keepField !== true) field = t.length < 10 ? FIELD_TYPE.LONG : FIELD_TYPE.LONGLONG
+  if (materialized && t.kind === 'int' && column === undefined && t.fieldFlags === undefined && t.ownInTemporary !== true && t.keepField !== true) field = t.length < 10 ? FIELD_TYPE.LONG : FIELD_TYPE.LONGLONG
   // Copied expressions share the same physical field selection with set writes.
-  if (materialized && t.column === undefined && (t.kind === 'string' || t.kind === 'bytes') && promotesToBlob(t)) {
+  if (materialized && column === undefined && (t.kind === 'string' || t.kind === 'bytes') && promotesToBlob(t)) {
     field = FIELD_TYPE.BLOB
     length = t.kind === 'bytes' ? t.length : Math.min(4294967295, t.length * requireCollationInfo(t.collationId).mbmaxlen * textBytes)
     decimals = 0
@@ -533,14 +537,14 @@ export function columnDefinition(name: string, t: ResultType, resultsCollation: 
     length = materialized ? Math.floor(t.wireLength / (t.kind === 'string' ? requireCollationInfo(t.collationId).mbmaxlen : 1)) : t.wireLength
   }
   // Normalize BLOB class and flags once, after all width overrides.
-  if (materialized && (t.wireLength !== undefined || (t.column === undefined && field >= FIELD_TYPE.TINY_BLOB && field <= FIELD_TYPE.BLOB))) {
+  if (materialized && (t.wireLength !== undefined || (column === undefined && field >= FIELD_TYPE.TINY_BLOB && field <= FIELD_TYPE.BLOB))) {
     flags |= COLUMN_FLAG.BLOB
     field = FIELD_TYPE.BLOB
   }
   return {
-    ...(t.column === undefined ? (materialized && t.names?.viewSchema !== undefined ? { schema: t.names.viewSchema, table: t.names.table, orgTable: '', orgName: t.names.orgName } : (t.names ?? { schema: '', table: '', orgTable: '', orgName: materialized ? name : '' })) : { schema: t.column.schema, table: t.column.table, orgTable: t.column.orgTable, orgName: t.column.orgName }),
+    ...(column === undefined ? (materialized && names?.viewSchema !== undefined ? { schema: names.viewSchema, table: names.table, orgTable: '', orgName: names.orgName } : (names ?? { ...EMPTY_NAMES, orgName: materialized ? name : '' })) : column),
     name,
-    characterSet: isText || (t.kind === 'json' && t.column === undefined && !materialized) ? resultsCollation : CHARSET_BINARY,
+    characterSet: isText || (t.kind === 'json' && column === undefined && !materialized) ? resultsCollation : CHARSET_BINARY,
     columnLength: length,
     type: field,
     flags,

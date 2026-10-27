@@ -9,8 +9,13 @@ import { observeCommand } from './packet-observation.ts'
 // @ts-expect-error — the reference capture owns plan normalization.
 import { planSkeleton } from '../../tools/capture-relational.mjs'
 import reference from './fixtures/aggregates/avg-distinct-readiness.json' with { type: 'json' }
+import distinctReference from './fixtures/aggregates/distinct-avg-fields.json' with { type: 'json' }
 
-test('retained DISTINCT finishes computed AVG fields after headers and before returning rows', async () => {
+for (const profile of [
+  { reference, database: 'avg157phase', count: 288, title: 'retained DISTINCT finishes computed AVG fields after headers and before returning rows' },
+  { reference: distinctReference, database: 'avg162', count: 462, title: 'retained DISTINCT copies completed DISTINCT AVG fields before projection' },
+]) test(profile.title, async () => {
+  const reference = profile.reference
   const host = process.env.MYSQL_REFERENCE_HOST
   const db = host === undefined ? await MySQL.open(':memory:') : undefined
   const transport = db === undefined ? connect({ host: host ?? 'reference', port: Number(process.env.MYSQL_REFERENCE_PORT ?? 3306), noDelay: true }) : db.createStream()
@@ -20,19 +25,21 @@ test('retained DISTINCT finishes computed AVG fields after headers and before re
   const canonical = (value: unknown): unknown => JSON.parse(JSON.stringify(value))
   try {
     assert.equal(reference.mysqlVersion, '8.4.11')
-    assert.equal(reference.observations.length, 288)
+    assert.equal(reference.observations.length, profile.count)
     if (host !== undefined) assert.equal(String((await conn.query<mysql.RowDataPacket[]>('SELECT VERSION() AS v'))[0][0]!.v).split('-')[0], reference.mysqlVersion)
-    await conn.query('CREATE DATABASE avg157phase')
-    await conn.query('USE avg157phase')
+    await conn.query('CREATE DATABASE ' + profile.database)
+    await conn.query('USE ' + profile.database)
     await conn.query('CREATE TABLE a(id INT PRIMARY KEY,g INT,n INT,KEY(g)) STATS_AUTO_RECALC=0')
     await conn.query("SET sql_mode='ERROR_FOR_DIVISION_BY_ZERO'")
+    const fixedRows: Readonly<Record<number, string>> = {
+      7: '(1,0,0),(2,1,1),(3,0,0),(4,1,0),(5,0,0),(6,1,0),(7,0,NULL)',
+      8: '(1,0,0),(2,0,1),(3,0,1),(4,0,3),(5,1,0),(6,1,2),(7,1,3),(8,1,3)',
+    }
     let size = 0
     for (const entry of reference.observations) {
       if (entry.size !== size) {
         await conn.query('TRUNCATE TABLE a')
-        if (entry.size > 0) await conn.query('INSERT INTO a VALUES' + (entry.size === 7
-          ? '(1,0,0),(2,1,1),(3,0,0),(4,1,0),(5,0,0),(6,1,0),(7,0,NULL)'
-          : Array.from({ length: entry.size }, (_, i) => '(' + (i + 1) + ',' + i + ',' + i + ')').join(',')))
+        if (entry.size > 0) await conn.query('INSERT INTO a VALUES' + (fixedRows[entry.size] ?? Array.from({ length: entry.size }, (_, i) => '(' + (i + 1) + ',' + i + ',' + i + ')').join(',')))
         size = entry.size
         await conn.query('ANALYZE TABLE a')
       }
@@ -50,14 +57,14 @@ test('retained DISTINCT finishes computed AVG fields after headers and before re
       if (db !== undefined) assert.equal(db.catalog!.store.transactions.stats().openViews, views, entry.sql + ': read view released')
     }
   } finally {
-    await conn.query('DROP DATABASE IF EXISTS avg157phase')
+    await conn.query('DROP DATABASE IF EXISTS ' + profile.database)
     await conn.end()
     await db?.end()
   }
 })
 
 
-test('grouped final-field fill releases its physical reader before buffered delivery and cancellation', { timeout: 15000 }, async () => {
+for (const average of ['AVG(n)', 'AVG(DISTINCT n)']) test('grouped final-field fill releases its reader before buffered delivery and cancellation: ' + average, { timeout: 15000 }, async () => {
   const db = await MySQL.open(':memory:')
   let raw: mysql.Connection | undefined
   try {
@@ -90,7 +97,7 @@ test('grouped final-field fill releases its physical reader before buffered deli
     let notifications = 0
     protocol.onOutput(() => { notifications++ })
     const columns = 2000
-    const command = raw.query('SELECT DISTINCT ' + Array.from({ length: columns }, (_, i) => 'ROUND(AVG(n),0) AS c' + i).join(',') + ' FROM avg161_lifetime.a GROUP BY g')
+    const command = raw.query('SELECT DISTINCT ' + Array.from({ length: columns }, (_, i) => 'ROUND(' + average + ',0) AS c' + i).join(',') + ' FROM avg161_lifetime.a GROUP BY g')
     command.on('error', () => {})
     // Stop draining after authentication: metadata alone fills the output queue.
     for (let i = 0; i < 2000 && notifications < columns + 2; i++) await turn()
