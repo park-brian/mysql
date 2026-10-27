@@ -501,7 +501,6 @@ function planSelect(run: Run, q: QueryExpression, node: SelectNode): SelectPlan 
   const match = keys.length === 0 && refs.length === 1 && refs[0]?.kind === REF.TABLE ? matchConjunct(node.where) : undefined
   if (match !== undefined) keys.push({ expr: compile(match, compileContext(run, lookup, 'where clause')), desc: true })
   const locking = (q.locking?.length ?? 0) > 0
-  const readyBase = wholeReaderReady(q, node, base)
   // Metadata's indexed-prefix shortcut does not prove row uniqueness.
   // An outer field with the same name cannot supply a local UNIQUE key.
   const deduplicate = node.distinct === true && (source === undefined || !distinctKey(source.def, items, lookup, true))
@@ -571,9 +570,12 @@ function planSelect(run: Run, q: QueryExpression, node: SelectNode): SelectPlan 
       if (keep === 0 && !windowed) return []
       const env = executionEnv(run, trx, given)
       let rows: Iterable<Rowed>
-      if (from === undefined) rows = [{ row: [] }]
-      else if (facts?.impossible === true) rows = []
-      else rows = from.rows(trx, env, { locking, ready: readyBase && (!order.length || rowOrder) && !node.distinct ? ready : undefined })
+      if (from === undefined) {
+        rows = [{ row: [] }]
+        // The unit source is ready before ordinary projection, just as a physical reader is.
+        if (!windowed && !order.length && wholeReaderReady(q, node)) ready?.()
+      } else if (facts?.impossible === true) rows = []
+      else rows = from.rows(trx, env, { locking, ready: base && wholeReaderReady(q, node) && (!order.length || rowOrder) && !node.distinct ? ready : undefined })
       return values(runStages(rows, stages, env))
     },
   }
@@ -822,9 +824,9 @@ function unhintedBase(q: QueryExpression, node: SelectNode) {
   return node.from?.length === 1 && table?.kind === REF.TABLE && table.indexHints === undefined && q.with === undefined && node.windows === undefined && (node.options?.length ?? 0) === 0 ? table : undefined
 }
 
-/** A proved ordinary base reader still needs its written binding/initialization fences. */
-function wholeReaderReady(q: QueryExpression, node: SelectNode, base: FromPlan['single'] | false): boolean {
-  return !!base && !node.where && !node.having && !q.locking?.length &&
+/** Written binding/initialization fences, after the caller proves its source shape. */
+function wholeReaderReady(q: QueryExpression, node: SelectNode): boolean {
+  return !node.where && !node.having && !node.windows && !q.locking?.length &&
     !someNode([node, q.orderBy], (n) => (n as Expression).kind === NODE.MATCH || undefined)
 }
 
@@ -2000,7 +2002,7 @@ function planGrouped(
   ))
 
   // Retained DISTINCT copies completed AVG values through the native group writer.
-  const copiedAverage = run.preparing !== true && deduplicate && wholeReaderReady(q, node, !windowed && unhintedBase(q, node) && source) &&
+  const copiedAverage = run.preparing !== true && deduplicate && !windowed && source !== undefined && unhintedBase(q, node) !== undefined && wholeReaderReady(q, node) &&
     !rollup && q.limit === undefined && unordered &&
     keys.every((key) => constantNode(key.expr, true, true) && refersToRow(key.expr, lookup)) &&
     sink.specs.length > 0 && sink.specs.every((spec) => spec.name === 'AVG' && spec.type.kind === 'decimal') &&

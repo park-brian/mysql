@@ -97,8 +97,11 @@ uses ordinary AVG's temporary strategy and copies completed AVG(DISTINCT)
 fields before projection, preserving both blocking lifetimes. Exact division
 retains both operands' fractional words; cancelled zeros and AVG keep display
 scale independent of held digits. Actual field copies retain their declared
-scales. Result-buffer capacity, overflow delivery/printing, broader multiplication
-precision and supplementary identifier-alias admission remain next. Broader
+scales. Ordinary no-FROM sources now publish metadata before projection errors;
+written WHERE/HAVING/WINDOW/ORDER and locking retain their earlier fences.
+Resolved CAST diagnostic printing and result-buffer capacity remain next,
+followed by broader multiplication precision and supplementary identifier-alias
+admission. Broader
 strategy and measured field-copy gaps stay open.
 The cost-based planner (M5.7, M5.42–M5.46) is done:
 `EXPLAIN FORMAT=TREE` prints the plan that runs, and 2,126 of the relational
