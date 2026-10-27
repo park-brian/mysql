@@ -453,7 +453,8 @@ export function planFrom(refs: readonly TableReference[], ctx: FromContext, wher
           return outerColumns.get(e)
         }
   const only = tables.length === 1 ? tables[0] : undefined
-  const single = only?.def !== undefined && only.table !== undefined ? { alias: only.alias, def: only.def, table: only.table } : undefined
+  // Keep the physical table record as the source proof; both required fields are bound.
+  const single = only?.def !== undefined && only.table !== undefined ? only as NonNullable<FromPlan['single']> : undefined
 
   // The physical tree: built once the WHERE is placed (`filter`), or without one.
   const settings: LeafSettings = { covering, read: new Map(), inferred: new Map(), chosen: new WeakMap(), scope, tables: byAlias, outer, where, statistics: ctx.statistics, buffered: optimizerEnabled(ctx.env, 'block_nested_loop') }

@@ -194,6 +194,42 @@ open. A group-state-cell rehearsal was also discarded: it did not shrink the
 bundle and added ROLLUP allocations. Keep the existing key-evaluation phases,
 finest-first flush, reset order and current-key subtotal semantics intact.
 
+**Compiler object ownership, verified (2026-10-26):** Each grouped aggregate
+slot now has one canonical descriptor for its accumulator definition and pure
+result reader. Repeated references reuse that reader; transformed readers and
+window frame factories remain separate. Metadata identifies unchanged readers
+by exact object membership, before any metadata/field-copy cloning. It does not
+infer query planning from executable accumulator inventory. The raw declaration
+policy and its folded-HAVING/unused-WINDOW evidence remain intact.
+
+A unit regression pins independent sinks/calls, unary-plus identity, wrapped
+readers, unchanged sibling metadata, pure result reads and fresh accumulator
+states; preceding code fails it. A native regression pins 240 complete
+query/PREPARE/EXECUTE outcomes for repeated fields, ORDER aliases and DISTINCT
+elimination across eight ordinary/DISTINCT aggregate forms and empty/seven-row
+inputs. All 2,112 native observations remain in a separate research fixture;
+1,364 currently agree completely, with the remaining descriptor/plan/header gaps
+open. The complete core observations in that audit and 816 wrapper controls
+are exactly unchanged from the preceding runtime, including already-open cases.
+The 954 phase, 2,208 wrapper, 2,712 argument/index and 360 declaration audits also
+remain exactly unchanged; the 2,100 numeric audit retains all matched components.
+
+The physical source proof now reuses its actual FromTable. Named grouped items
+complete binding in their original records, and raw key text is derived only
+when FULL_GROUP_BY needs it. This avoids redundant compiler records without
+moving naming, binding, key evaluation or row-reading phases. The first slot
+registration still allocates a temporary reader during assignment; repeated
+references allocate no replacement reader. No accumulator execution state is
+shared. Core/facade measure 334,321/334,242 B gzipped under all nine unchanged
+caps, two bytes raw smaller than the preceding runtime. Fresh Docker passes
+1,377 ordinary plus four latency tests, typecheck, lint, package/typed smoke,
+the real client and all seven pinned 8.4.11 corpora. Its live snapshot matches
+387 test files/fixtures and 202 runtime sources plus reference tooling/manifests/CI.
+The new 240-frame regression also passes against MySQL directly. Seeded executor
+fuzzing passes 20,000 statements. All required a8ad325 CI jobs pass.
+The separate AVG writer candidate remains unshipped over unchanged caps; no
+roadmap item is marked complete by this ownership cleanup (144/190, M5 42/53).
+
 **Unary-plus grouping identity, verified (2026-10-26):** Group-key equality
 and copied-field classification now recognize unary plus as the same reader.
 `SELECT DISTINCT +g, AVG(n/3) ... GROUP BY g` no longer copies an aggregate
@@ -262,7 +298,7 @@ names, ordinal binding and legacy key metadata; it removes all 84 losses and
 improved complete matches from 1,096 to 1,332 without component loss. After the
 committed identity repair, the integrated writer candidate improves the same
 audit from 1,232 to 1,428, again without matched-component loss. Phase and wrapper replays preserve the latest
-owner-only cleanups; final full validation is still pending. Core/facade remain 114/129 B over
+owner-only cleanups; final full validation is still pending. After the canonical-slot integration, core/facade remain 140/150 B over
 the unchanged caps. Permanent fill/error regressions have been prepared and pass
 against both engines, but remain outside the committed tests until the repair
 meets all gates. GROUP BY

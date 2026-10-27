@@ -1889,7 +1889,8 @@ function planGrouped(
   const width = from?.width ?? 0
   const rollup = node.groupBy?.rollup === true
   // A grouped column is compiled above its grouping rather than read as a slot.
-  const selectItems = Array.from(selectList(run, node, scope), (entry) => ({ ...entry.item, name: selectName(entry, scope) }))
+  type GroupItem = SelectNode['items'][number] & { name: string; compiled?: Compiled }
+  const selectItems: GroupItem[] = Array.from(selectList(run, node, scope), (entry) => ({ ...entry.item, name: selectName(entry, scope) }))
 
   // GROUP BY: a table column first, then a select-list alias, then a
   // position. `SELECT k AS s … GROUP BY s` groups by the column `s` (8.4.11).
@@ -1898,15 +1899,14 @@ function planGrouped(
     readonly written: Expression
     readonly expr: Expression | undefined
     readonly index: number | undefined
-    readonly text: string | undefined
     compiled?: Compiled
   }
   const descriptions = (node.groupBy?.items ?? []).map((g): KeyDescription => {
     const expr = sortExpression(g, selectItems, lookup)
     const index = expr?.kind === NODE.COLUMN ? safeResolve(lookup, expr.parts, 'group statement')?.index : undefined
-    return { written: g, expr, index, text: expr === undefined ? undefined : deparse(expr) }
+    return { written: g, expr, index }
   })
-  type GroupKey = (typeof descriptions)[number] & { expr: Expression; compiled: Compiled; text: string }
+  type GroupKey = (typeof descriptions)[number] & { expr: Expression; compiled: Compiled }
   let keys: GroupKey[] | undefined
   let missingGrouping = -1
 
@@ -1919,6 +1919,7 @@ function planGrouped(
   }
   const level = width + descriptions.length
   const sink = new AggregateSink(baseCtx, level + 1)
+  const aggregateReaders: readonly Compiled[] = sink.specs
   const groupKeys: GroupKeys = {
     match(e) {
       // Only ROLLUP needs a key read from its slot: elsewhere the group's
@@ -1958,7 +1959,9 @@ function planGrouped(
   // follow the aggregates', which are all known only once everything compiled.
   const windows = windowed ? new WindowSink(postCtx('window order by'), 0, node.windows) : undefined
   const selectCtx = postCtx('field list', lookup, windows)
-  const items = selectItems.map((s) => ({ ...s, compiled: compile(s.expr, selectCtx) }))
+  for (const item of selectItems) item.compiled = compile(item.expr, selectCtx)
+  // Naming and binding complete before the same records become output fields.
+  const items = selectItems as (GroupItem & { compiled: Compiled })[]
   const [limitCount, offset] = queryLimit(run, q)
   const resolved = resolveCondition(run, compileContext(run, lookup, 'where clause'), node.where, limitCount)
   const keep = offset + (limitCount ?? Infinity)
@@ -2043,7 +2046,7 @@ function planGrouped(
       const e = withoutUnaryPlus(item.expr)
       const t = item.compiled.type
       if (!refersToRow(e, lookup, consts)) continue
-      const aggregateCall = isAggregate(e)
+      const aggregateCall = aggregateReaders.includes(item.compiled)
       if (!aggregateCall && containsAggregate(e)) continue
       if (strategy === 'implicit') {
         if (!aggregateCall) patchType(item, { nullable: true })
@@ -2276,7 +2279,7 @@ function substituteAliases(e: Expression, items: readonly { readonly expr?: Expr
 function checkFullGroupBy(
   lookup: Scope,
   scope: TableScope | undefined,
-  keys: readonly { readonly index: number | undefined; readonly text: string }[],
+  keys: readonly { readonly index: number | undefined; readonly expr: Expression }[],
   where: Expression | undefined,
   joins: readonly JoinCondition[],
   selectExprs: readonly Expression[],
@@ -2286,7 +2289,7 @@ function checkFullGroupBy(
 ): void {
   const determined = new Set<number>()
   for (const k of keys) if (k.index !== undefined) determined.add(k.index)
-  const keyTexts = new Set(keys.filter((k) => k.index === undefined).map((k) => k.text))
+  const keyTexts = new Set(keys.filter((k) => k.index === undefined).map((k) => deparse(k.expr)))
   // Under ROLLUP a key can be NULL where its row's other columns are not, so
   // nothing is functionally dependent on it: not through a key, a WHERE
   // equality or a constant (8.4.11: `WHERE grp = 1 GROUP BY id WITH ROLLUP`

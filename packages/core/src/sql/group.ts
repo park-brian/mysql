@@ -184,10 +184,11 @@ export interface AggregateState {
 /**
  * Where a grouped query's aggregates are collected as its select list, HAVING
  * and ORDER BY compile. Each distinct call (by its text) gets one slot in the
- * grouped row; its arguments compile against the FROM row.
+ * grouped row; its arguments compile against the FROM row. The slot descriptor
+ * owns both its accumulator definition and its unchanged result reader.
  */
 export class AggregateSink {
-  readonly specs: AggregateSpec[] = []
+  readonly specs: (AggregateSpec & Compiled)[] = []
   readonly #seen = new Map<string, number>()
   readonly #rowCtx: CompileContext
   readonly #base: number
@@ -204,11 +205,11 @@ export class AggregateSink {
     let at = this.#seen.get(key)
     if (at === undefined) {
       at = this.specs.length
-      this.specs.push(this.#spec(e, ctx.clause))
+      const spec = this.#spec(e, ctx.clause)
+      this.specs.push(Object.assign(spec, readSlot(this.#base + at, spec.type)))
       this.#seen.set(key, at)
     }
-    const slot = this.#base + at
-    return readSlot(slot, (this.specs[at] as AggregateSpec).type)
+    return this.specs[at]!
   }
 
   /** An aggregate's spec without a slot: a window's (window.ts), which runs it over each row's frame. */
