@@ -9,6 +9,7 @@ import {
   STATEMENT,
   parseStatement,
   parseStatements,
+  parseStatementSequence,
   type CallStatementNode,
   type CreateEventNode,
   type CreateRoutineNode,
@@ -80,6 +81,22 @@ test('parseStatements splits a multi-statement text where the parser says, not a
   assert.deepEqual(nodes.map((n) => n.kind), [STATEMENT.DROP, STATEMENT.CREATE_ROUTINE])
   assert.throws(() => parseStatements(''), ParseError)
   assert.throws(() => parseStatement('SELECT 1; SELECT 2'), ParseError, 'one statement only, as D-13 requires')
+})
+
+test('statement sequencing validates each boundary before yielding and defers later syntax', () => {
+  const sequence = parseStatementSequence('SELECT 1;SELECT FROM')
+  const first = sequence.next()
+  assert.equal(first.done, false)
+  assert.equal(first.value!.statement.kind, STATEMENT.QUERY)
+  assert.equal(first.value!.more, true)
+  assert.throws(() => sequence.next(), ParseError)
+  assert.throws(() => parseStatements('SELECT 1;SELECT FROM'), ParseError, 'the array API remains eager')
+  assert.throws(() => parseStatementSequence('SELECT 1 SELECT 2').next(), ParseError, 'an invalid boundary yields nothing')
+  const single = parseStatementSequence('SELECT 1; /* trailing comment */')
+  assert.equal(single.next().value!.more, false)
+  assert.equal(single.next().done, true)
+  const routine = [...parseStatementSequence('CREATE PROCEDURE p() BEGIN SELECT 1; END;SELECT 2')]
+  assert.deepEqual(routine.map(({ statement, more }) => [statement.kind, more]), [[STATEMENT.CREATE_ROUTINE, true], [STATEMENT.QUERY, false]])
 })
 
 test('M3.8: CREATE PROCEDURE stores; CALL errors with a clear "not yet supported"', async () => {

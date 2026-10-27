@@ -87,12 +87,21 @@ export function parseStatementBytes(bytes: Uint8Array, options: ParseStatementOp
  * default, and how mysqltest's `delimiter` blocks are sent.
  */
 export function parseStatements(sql: string, options: ParseStatementOptions = {}): Statement[] {
+  return Array.from(parseStatementSequence(sql, options), ({ statement }) => statement)
+}
+
+/** Parse the next statement only when asked; `more` describes its checked boundary. */
+export function* parseStatementSequence(sql: string, options: ParseStatementOptions = {}): Generator<{ statement: Statement; more: boolean }, void> {
   const c = new Cursor(options.tokens ?? lex(sql, options), sql)
   const sqlMode = options.sqlMode ?? NO_SQL_MODE
-  const out = [checked(c, sqlMode)]
-  while (c.takeOp(';') && !c.atEnd()) out.push(checked(c, sqlMode))
-  if (!c.atEnd()) c.fail()
-  return out
+  for (;;) {
+    const statement = checked(c, sqlMode)
+    const separated = c.takeOp(';')
+    if (!separated && !c.atEnd()) c.fail()
+    const more = !c.atEnd()
+    yield { statement, more }
+    if (!more) return
+  }
 }
 
 /** One statement, refused if there is none or if it nests too deep. */

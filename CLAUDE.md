@@ -114,10 +114,13 @@ readiness remains parked: native declaration and CAST-admission errors can
 precede successful core materialization. Buffered multi-statement runtime failures
 now retain completed results with their own status and warnings before the ERR
 packet. Private completion facts preserve direct-call error identity and JSON;
-one batch writer serves text and binary rows. Incremental parsing and duplicate
-CTE admission are next. Parse-error prefixes, the failing statement's own partial
-response, optional session tracking and shared CTE effects remain open before a
-positive literal/typed-NULL source profile.
+one batch writer serves text and binary rows. Incremental parsing now preserves
+earlier execution before later syntax failures, while checked boundaries retain
+single-result streaming. Parser failures publish diagnostics once; settled SQL
+failures retain their own condition history. Duplicate CTE admission is next.
+Whole-command lexing, later multiline error line numbers, the failing statement's
+own partial response, optional session tracking and shared CTE effects remain
+open before a positive literal/typed-NULL source profile.
 Integer-only minimum-boundary behavior, expression spelling, wider
 copied-field/parameter metadata, invalid-dimension admission and CAST warning labels,
 broader multiplication precision and supplementary identifier-alias admission

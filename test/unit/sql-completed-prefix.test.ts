@@ -68,6 +68,27 @@ test('a completed write retains bigint insert identity without changing error JS
   } finally { executor.end(session); await db.end() }
 })
 
+test('later syntax preserves completed results and cannot replace an earlier runtime error', async () => {
+  const executor = new SqlExecutor()
+  const session = new Session({ connectionId: 1, capabilities: classic, multipleStatements: true })
+  try {
+    await assert.rejects(executor.query(session, 'SELECT 1 AS v;SELECT FROM'), (error: unknown) => {
+      assert.ok(error instanceof SqlError)
+      assert.equal(error.errno, 1064)
+      assert.equal(error.completed?.length, 1)
+      assert.ok(isResultSet(error.completed![0]!))
+      assert.doesNotThrow(() => JSON.stringify(error))
+      return true
+    })
+    await assert.rejects(executor.query(session, 'SELECT missing;SELECT FROM'), (error: unknown) => {
+      assert.ok(error instanceof SqlError)
+      assert.equal(error.errno, 1054)
+      assert.equal(error.completed?.length, 0)
+      return true
+    })
+  } finally { executor.end(session) }
+})
+
 for (const modern of [false, true]) test('completed prefix terminators advertise the following error: ' + (modern ? 'modern' : 'classic'), async () => {
   const caps = capabilities(Number(classic) | (modern ? CLIENT.DEPRECATE_EOF : 0))
   const executor = new SqlExecutor()

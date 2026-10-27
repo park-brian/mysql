@@ -20,7 +20,8 @@ import {
   NODE,
   QUERY,
   REF,
-  parseStatements,
+  parseStatementSequence,
+  ParseError,
   KEY,
   STATEMENT,
   TOKEN,
@@ -363,7 +364,7 @@ export class SqlExecutor implements Executor {
   }
 
   /** Protocol-aware parsing; comment-only text is answered OK without running. */
-  #parse(session: Session, sql: string, protocol: WireProtocol, tokens?: Token[]): Statement | Statement[] | null {
+  #parse(session: Session, sql: string, protocol: WireProtocol, tokens?: Token[]): Statement | ReturnType<typeof parseStatementSequence> | null {
     const key = protocol === 'binary' ? `${session.sqlMode}\n${sql}` : undefined
     if (key !== undefined) {
       const cached = this.#parsed.get(key)
@@ -376,7 +377,7 @@ export class SqlExecutor implements Executor {
       return null
     }
     const parsing = { ...options, tokens }
-    if (protocol === 'text' && session.multipleStatementsEnabled) return parseStatements(sql, parsing)
+    if (protocol === 'text' && session.multipleStatementsEnabled) return parseStatementSequence(sql, parsing)
     const statement = parseStatement(sql, parsing)
     if (key !== undefined) {
       if (this.#parsed.size >= PARSED_KEPT) this.#parsed.delete(this.#parsed.keys().next().value as string)
@@ -457,28 +458,29 @@ export class SqlExecutor implements Executor {
   async #statement(session: Session, sql: string, params: readonly Value[], known: readonly Value[] | undefined, protocol: WireProtocol): Promise<StatementResult | StatementResult[]> {
     this.#alive(session)
     const state = this.#state(session)
-    let parsed: Statement | Statement[] | null
+    let parsed: Statement | ReturnType<typeof parseStatementSequence> | null
     try {
       // Multi-statements still share the initial sql_mode: a recorded divergence.
       parsed = this.#parse(session, sql, protocol)
     } catch (e) {
       throw recordFailure(state, [], e)
     }
-    if (Array.isArray(parsed)) {
-      if (parsed.length > 1) {
-        const results: StatementResult[] = []
-        try {
-          for (const statement of parsed) {
-            const result = await this.#one(session, sql, statement, params, known, protocol, false)
-            Object.defineProperty(result, 'statusFlags', { value: session.statusFlags })
-            results.push(result)
-          }
-        } catch (e) {
-          throw Object.defineProperty(toSqlError(e), 'completed', { value: results })
+    if (parsed !== null && 'next' in parsed) {
+      const results: StatementResult[] = []
+      try {
+        for (const { statement, more } of parsed) {
+          // A checked final boundary proves this is a single streaming result.
+          if (!more && results.length === 0) return this.#one(session, sql, statement, params, known, protocol)
+          const result = await this.#one(session, sql, statement, params, known, protocol, false)
+          Object.defineProperty(result, 'statusFlags', { value: session.statusFlags })
+          results.push(result)
         }
-        return results
+      } catch (e) {
+        // Iterator failures have no statement condition area. #one owns its failures.
+        const error = e instanceof ParseError ? recordFailure(state, [], e) : toSqlError(e)
+        throw Object.defineProperty(error, 'completed', { value: results })
       }
-      parsed = parsed[0] ?? null
+      return results
     }
     if (parsed === null) {
       recordDiagnostics(state, [])
