@@ -52,7 +52,10 @@ export interface StreamedResultSet {
 }
 
 /** What the executor hands back for one statement. */
-export type StatementResult = ResultSet | OkResult | StreamedResultSet
+export type StatementResult = (ResultSet | OkResult | StreamedResultSet) & {
+  /** A buffered statement's status at completion, before the next one runs. */
+  readonly statusFlags?: number
+}
 
 export function isResultSet(result: StatementResult): result is ResultSet {
   return 'rows' in result
@@ -70,9 +73,11 @@ export async function collectRows(result: StreamedResultSet): Promise<ResultSet>
 }
 
 export interface ResultsetOptions {
-  readonly statusFlags?: number
+  /** The row format chosen by the command; text by default. */
+  readonly binary?: boolean
+  readonly statusFlags?: number | undefined
   readonly warnings?: number
-  /** Sets `SERVER_MORE_RESULTS_EXISTS` on this resultset's terminator. */
+  /** Another response follows this result in the current command. */
   readonly moreResults?: boolean
 }
 
@@ -115,7 +120,7 @@ export function resultsetHeadPackets(
   for (const c of columns) packets.push(columnDefinitionPacket(c))
   if (!hasCap(caps, CLIENT.DEPRECATE_EOF)) {
     const w = new Writer(8)
-    writeTerminator(w, caps, { statusFlags: options.statusFlags ?? SERVER_STATUS.AUTOCOMMIT })
+    writeTerminator(w, caps, { statusFlags: statusFor(options) })
     packets.push(w.toBytes())
   }
   return packets
@@ -134,10 +139,7 @@ export function textResultsetPackets(
   result: ResultSet,
   options: ResultsetOptions = {},
 ): Uint8Array[] {
-  const packets = resultsetHeadPackets(caps, result.columns, options)
-  for (const row of result.rows) packets.push(textRowPacket(result.columns, row))
-  packets.push(resultsetEndPacket(caps, result.warnings, options))
-  return packets
+  return statementResultPackets(caps, result, { ...options, binary: false })
 }
 
 /** An OK response for a statement that produced no resultset. */
@@ -164,9 +166,12 @@ export function statementResultPackets(
   result: StatementResult,
   options: ResultsetOptions = {},
 ): Uint8Array[] {
-  return isResultSet(result)
-    ? textResultsetPackets(caps, result, options)
-    : okResultPackets(caps, result, options)
+  if (!isResultSet(result)) return okResultPackets(caps, result, options)
+  const packets = resultsetHeadPackets(caps, result.columns, options)
+  const rowPacket = options.binary === true ? binaryRowPacket : textRowPacket
+  for (const row of result.rows) packets.push(rowPacket(result.columns, row))
+  packets.push(resultsetEndPacket(caps, result.warnings, options))
+  return packets
 }
 
 /**
@@ -184,7 +189,11 @@ export function responsePackets(
   const packets: Uint8Array[] = []
   for (const [i, result] of results.entries()) {
     // A loop, not a spread: a resultset's packets can outnumber the stack.
-    for (const packet of statementResultPackets(caps, result, { ...options, moreResults: i < results.length - 1 })) packets.push(packet)
+    for (const packet of statementResultPackets(caps, result, {
+      ...options,
+      statusFlags: result.statusFlags ?? options.statusFlags,
+      moreResults: i < results.length - 1 || options.moreResults === true,
+    })) packets.push(packet)
   }
   return packets
 }
@@ -236,10 +245,7 @@ export function binaryResultsetPackets(
   result: ResultSet,
   options: ResultsetOptions = {},
 ): Uint8Array[] {
-  const packets = resultsetHeadPackets(caps, result.columns, options)
-  for (const row of result.rows) packets.push(binaryRowPacket(result.columns, row))
-  packets.push(resultsetEndPacket(caps, result.warnings, options))
-  return packets
+  return statementResultPackets(caps, result, { ...options, binary: true })
 }
 
 /**

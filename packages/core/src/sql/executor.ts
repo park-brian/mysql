@@ -467,7 +467,15 @@ export class SqlExecutor implements Executor {
     if (Array.isArray(parsed)) {
       if (parsed.length > 1) {
         const results: StatementResult[] = []
-        for (const statement of parsed) results.push(await this.#one(session, sql, statement, params, known, protocol, false))
+        try {
+          for (const statement of parsed) {
+            const result = await this.#one(session, sql, statement, params, known, protocol, false)
+            Object.defineProperty(result, 'statusFlags', { value: session.statusFlags })
+            results.push(result)
+          }
+        } catch (e) {
+          throw Object.defineProperty(toSqlError(e), 'completed', { value: results })
+        }
         return results
       }
       parsed = parsed[0] ?? null

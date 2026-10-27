@@ -10,10 +10,10 @@
 //   Error conversion. Any `SqlError` a handler throws becomes an ERR packet
 //   with its errno and SQLSTATE, so handlers throw and never format.
 
-import { MyjsError, ProtocolError, Writer } from '@myjs/bytes'
+import { expectTyped, Writer } from '@myjs/bytes'
 import { CLIENT, SERVER_STATUS, hasCap, type Capabilities } from './constants/capabilities.ts'
 import { COM, CURSOR_TYPE, NO_RESPONSE_COMMANDS, SET_OPTION, commandName } from './constants/commands.ts'
-import { errnoOf, sqlError, sqlStateOf, SqlError } from './errors/index.ts'
+import { sqlError, sqlStateOf, SqlError } from './errors/index.ts'
 import { messages } from './errors/messages.ts'
 import {
   parseComFieldList,
@@ -29,7 +29,6 @@ import {
 } from './commands.ts'
 import { writeEof, writeErr, writeOk } from './packets/generic.ts'
 import {
-  binaryResultsetPackets,
   binaryRowPacket,
   collectRows,
   cursorOpenedPackets,
@@ -37,7 +36,6 @@ import {
   fieldListPackets,
   isResultSet,
   isStreamed,
-  okResultPackets,
   preparePackets,
   responsePackets,
   resultsetEndPacket,
@@ -106,13 +104,16 @@ export async function dispatch(payload: Uint8Array, ctx: DispatchContext): Promi
     // A no-response command stays silent even when it fails. The error
     // surfaces on the next command that does answer.
     if (NO_RESPONSE_COMMANDS.has(command)) return NOTHING
-    return { packets: [errorPacket(ctx, err)] }
+    const packets = command === COM.QUERY && ctx.session.multipleStatementsEnabled && err instanceof SqlError && err.completed !== undefined
+      ? responseFor(ctx, err.completed, false, true) : []
+    packets.push(errorPacket(ctx, err))
+    return { packets }
   }
 }
 
 /** A typed error as its ERR packet; anything else is a fault, and rethrown. */
 function errorPacket(ctx: DispatchContext, err: unknown): Uint8Array {
-  if (!(err instanceof ProtocolError || err instanceof MyjsError)) throw err
+  expectTyped(err)
   if (err.errno === undefined) return errPacket(ctx, 'ER_MALFORMED_PACKET', err.message)
   // The error's own number: its code need not be a MySQL symbol (a
   // CharsetError's `ER_COLLATION_NOT_IMPLEMENTED` is ours, and 1273).
@@ -149,13 +150,7 @@ function errPackets(ctx: DispatchContext, symbol: string, message: string): Disp
 }
 
 function errPacket(ctx: DispatchContext, symbol: string, message: string): Uint8Array {
-  const w = new Writer(64)
-  writeErr(w, ctx.capabilities, {
-    errno: errnoOf(symbol),
-    sqlState: sqlStateOf(symbol),
-    message,
-  })
-  return w.toBytes()
+  return errorPacket(ctx, sqlError(symbol, message))
 }
 
 function okPacket(ctx: DispatchContext, info?: string): Uint8Array {
@@ -380,36 +375,20 @@ function reclaimCursors(ctx: DispatchContext): void {
 
 function responseFor(
   ctx: DispatchContext,
-  results: StatementResult | StatementResult[],
+  results: StatementResult | readonly StatementResult[],
   binary: boolean,
+  moreResults = false,
 ): Uint8Array[] {
   const { session, capabilities: caps } = ctx
-  const list = Array.isArray(results) ? results : [results]
+  // Array.isArray's type predicate does not include readonly arrays.
+  const list = Array.isArray(results) ? results : [results as StatementResult]
   if (list.length > 1 && !session.multipleStatementsEnabled) {
     // D-13's engine-level switch, enforced at the protocol boundary too: a
     // client that negotiated the capability still cannot get more than one
     // resultset out of us while the switch is off.
-    const w = new Writer(64)
-    writeErr(w, caps, {
-      errno: errnoOf('ER_UNKNOWN_COM_ERROR'),
-      sqlState: sqlStateOf('ER_UNKNOWN_COM_ERROR'),
-      message: messages.multiStatementsDisabled(),
-    })
-    return [w.toBytes()]
+    return [errPacket(ctx, 'ER_UNKNOWN_COM_ERROR', messages.multiStatementsDisabled())]
   }
-  if (!binary) {
-    return responsePackets(caps, list, { statusFlags: session.statusFlags })
-  }
-  const packets: Uint8Array[] = []
-  for (const [i, result] of list.entries()) {
-    const options = {
-      statusFlags: session.statusFlags,
-      moreResults: i < list.length - 1,
-    }
-    // A loop, not a spread: a resultset's packets can outnumber the stack.
-    for (const packet of isResultSet(result) ? binaryResultsetPackets(caps, result, options) : okResultPackets(caps, result, options)) packets.push(packet)
-  }
-  return packets
+  return responsePackets(caps, list, { statusFlags: session.statusFlags, binary, moreResults })
 }
 
 export function defaultStatistics(session: Session): string {

@@ -11,7 +11,7 @@ interface Command {
 }
 
 /** Observe one complete command, including partial output and its command-local diagnostics. */
-export async function observeCommand(raw: mysql.Connection, conn: PromiseConnection, transport: Duplex, entry: Command) {
+export async function observeCommand(raw: mysql.Connection, conn: PromiseConnection, transport: Duplex, entry: Command, captureWire = false) {
   const { sql, api } = entry
   const descriptors = (list: readonly mysql.FieldPacket[] | undefined) => list?.map((f) => [f.name, f.columnType, f.columnLength, f.flags, f.decimals, f.characterSet, f.schema, f.table, f.orgTable, f.orgName]) ?? null
   await conn.query('SELECT LAST_INSERT_ID(0)')
@@ -50,10 +50,12 @@ export async function observeCommand(raw: mysql.Connection, conn: PromiseConnect
   }
   const bytes = Buffer.concat(chunks)
   const packets: number[] = []
+  const wire: string[] | undefined = captureWire ? [] : undefined
   let at = 0
   while (at < bytes.length) {
     const length = bytes.readUIntLE(at, 3)
     packets.push(bytes[at + 4]!)
+    wire?.push(bytes.subarray(at + 4, at + 4 + length).toString('hex'))
     at += length + 4
   }
   assert.equal(at, bytes.length, sql + ': complete packets')
@@ -64,5 +66,6 @@ export async function observeCommand(raw: mysql.Connection, conn: PromiseConnect
   return {
     outcome: { prior, rows, fields, error, packets, warnings, warningCount, errorCount, insertId },
     prepareWarnings: api === 'prepare' && error === null ? bytes.readUInt16LE(14) : undefined,
+    wire,
   }
 }

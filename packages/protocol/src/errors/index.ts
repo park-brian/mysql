@@ -9,6 +9,7 @@
 
 import { MyjsError, ProtocolError } from '@myjs/bytes'
 import { PACKED_ERROR_TABLE, STRICT_ERROR_CODES } from './table.ts'
+import type { StatementResult } from '../packets/resultset.ts'
 
 /** MySQL's fallback SQLSTATE for a code that declares none. */
 export const DEFAULT_SQLSTATE = 'HY000'
@@ -90,6 +91,8 @@ export function isStrictErrorCode(errno: number): boolean {
  */
 export class SqlError extends MyjsError {
   declare readonly errno: number
+  /** Completed buffered statements preceding this command's terminal error. */
+  declare readonly completed?: readonly StatementResult[]
   readonly sqlMessage: string
 
   constructor(symbol: string, sqlMessage: string, options: { errno?: number | undefined; sqlState?: string | undefined } = {}) {

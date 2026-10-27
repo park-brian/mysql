@@ -61,8 +61,8 @@ test('ordinary base reader construction permits headers before first-read and pr
   }
 })
 
-test('metadata-only readiness preserves backpressure and cancellation before row delivery', { timeout: 10000 }, async () => {
-  const db = await MySQL.open(':memory:')
+for (const multipleStatements of [false, true]) test('metadata-only readiness preserves backpressure and cancellation before row delivery' + (multipleStatements ? ' with multi-statements enabled' : ''), { timeout: 10000 }, async () => {
+  const db = await MySQL.open(':memory:', { multipleStatements })
   let raw: mysql.Connection | undefined
   try {
     await db.query('CREATE DATABASE readiness153_slow')
@@ -89,7 +89,7 @@ test('metadata-only readiness preserves backpressure and cancellation before row
       return table
     }
     const protocol = db.createConnection()
-    raw = mysql.createConnection({ stream: createStream(protocol), user: 'root' })
+    raw = mysql.createConnection({ stream: createStream(protocol), user: 'root', multipleStatements })
     await raw.promise().connect()
     // Stop draining after authentication. The large metadata head alone exceeds
     // the connection's high-water mark, before its empty readiness batch drains.

@@ -1566,6 +1566,11 @@ all names before conversion, then builds fresh field types and the final array
 without intermediate field wrappers. Each statement caches rows under its bound source instance; unchanged planning
 scopes reuse their Run. Broader source-readiness
 admission remains open while declaration and CAST validation are incomplete.
+Buffered multi-statement runtime errors retain completed results on the primary
+SQL error, with each completion's status and warnings. The protocol emits those
+results before one ERR through the shared text/binary batch writer. Completion
+facts stay out of ordinary error JSON. Incremental parsing, the failing
+statement's own partial response and optional session tracking remain open.
 Keyed DISTINCT shares canonical-key insertion with physical weedout and joined
 writes. Hex formatting lives in @myjs/bytes and serves the parser, digests,
 client literals and SQL functions with the same encodings.

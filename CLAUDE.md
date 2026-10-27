@@ -111,8 +111,13 @@ handler. Derived/view and recursive-CTE metadata now shares one owner for
 whole-list name validation and fresh field-type construction, avoiding redundant
 arrays and copies. Each statement caches rows under the bound source instance. Broader constant-source
 readiness remains parked: native declaration and CAST-admission errors can
-precede successful core materialization. A positive literal/typed-NULL source
-profile is next; duplicate CTE validation and shared effects remain open.
+precede successful core materialization. Buffered multi-statement runtime failures
+now retain completed results with their own status and warnings before the ERR
+packet. Private completion facts preserve direct-call error identity and JSON;
+one batch writer serves text and binary rows. Incremental parsing and duplicate
+CTE admission are next. Parse-error prefixes, the failing statement's own partial
+response, optional session tracking and shared CTE effects remain open before a
+positive literal/typed-NULL source profile.
 Integer-only minimum-boundary behavior, expression spelling, wider
 copied-field/parameter metadata, invalid-dimension admission and CAST warning labels,
 broader multiplication precision and supplementary identifier-alias admission
