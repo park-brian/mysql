@@ -1433,24 +1433,21 @@ function literalReader(q: QueryExpression): boolean {
   if (body.kind !== QUERY.SELECT || body.from || body.groupBy || body.distinct || body.options || q.with || q.orderBy || !wholeReaderReady(q, body)) return false
   if (q.limit && (q.limit.offset || !integerLiteral(q.limit.count) || q.limit.count.value > MAX_UNSIGNED)) return false
   return body.items.every(({ expr }) => {
-    let cast: 'SIGNED' | 'UNSIGNED' | undefined
     if (expr.kind === NODE.CAST && expr.array === undefined && expr.timeZone === undefined && (expr.type.name === 'SIGNED' || expr.type.name === 'UNSIGNED')) {
-      cast = expr.type.name
       expr = expr.expr
+      if (expr.kind === NODE.UNARY && expr.op === '-' && integerLiteral(expr.operand)) expr = expr.operand
+      // The materializer owns CAST conversion, including saturation and warnings.
+      return expr.kind === NODE.LITERAL && (expr.type === LITERAL.NULL || (expr.charset === undefined && expr.collation === undefined && (expr.type === LITERAL.INT || expr.type === LITERAL.STRING || expr.type === LITERAL.BOOL)))
     }
-    const value = sourceInteger(expr, cast !== undefined)
-    // A SIGNED CAST owns wrapping an unsigned magnitude during materialization.
-    return value === undefined ? expr.kind === NODE.LITERAL && expr.type === LITERAL.NULL : value >= (cast === 'UNSIGNED' ? 0n : MIN_SIGNED) && value <= MAX_UNSIGNED
+    const value = sourceInteger(expr)
+    return value === undefined ? expr.kind === NODE.LITERAL && expr.type === LITERAL.NULL : value >= MIN_SIGNED && value <= MAX_UNSIGNED
   })
 }
 
-/** Read only the closed integer grammar; CAST additionally admits plain integer text. */
-function sourceInteger(e: Expression, cast: boolean): bigint | undefined {
-  const negative = e.kind === NODE.UNARY && e.op === '-'
-  const literal = negative ? e.operand : e
-  if (literal.kind !== NODE.LITERAL || (cast && (literal.charset !== undefined || literal.collation !== undefined))) return undefined
-  if (integerLiteral(literal)) return negative ? -literal.value : literal.value
-  if (cast && !negative && literal.type === LITERAL.STRING && /^[+-]?[0-9]{1,20}$/.test(literal.value as string)) return BigInt(literal.value as string)
+/** The raw integer grammar; CAST conversion belongs to the materializer. */
+function sourceInteger(e: Expression): bigint | undefined {
+  if (integerLiteral(e)) return e.value
+  if (e.kind === NODE.UNARY && e.op === '-' && integerLiteral(e.operand)) return -e.operand.value
   return undefined
 }
 

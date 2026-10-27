@@ -110,13 +110,15 @@ before prefix truncation. Strict membership is generated from the pinned native
 handler. Derived/view and recursive-CTE metadata now shares one owner for
 whole-list name validation and fresh field-type construction, avoiding redundant
 arrays and copies. Each statement caches rows under the bound source instance.
-Bounded literal/typed-integer-NULL sources and exact plain SIGNED/UNSIGNED
-integer casts now announce readiness after actual materialization, with a
-separate positive grammar and caller admission. SIGNED casts admit unsigned
-magnitudes through UINT64_MAX; their actual CAST writer owns wrapping during
-materialization. Cardinality alone supplies no readiness proof. Quoted DUAL retains ordinary table lookup and row identity;
+Bounded literal/typed-integer-NULL sources and plain SIGNED/UNSIGNED casts of
+integer, boolean, NULL and text literals now announce readiness after actual
+materialization. The separate positive grammar no longer duplicates integer-text
+length/range conversion policy; the CAST writer owns wrapping, saturation and
+warnings. Raw uncast bounds and caller/source fences remain intact. Cardinality
+alone supplies no readiness proof. Quoted DUAL retains ordinary table lookup and row identity;
 the parser owns unquoted DUAL normalization. Broader CAST and function-source
-admission remain open. Integer DIV minimum rejection also remains parked after
+admission remain open. Nonfinite DOUBLE literal admission and finite negative-
+double CAST overflow remain measured gaps. Integer DIV minimum rejection also remains parked after
 broader CAST and written-clause controls exposed lost headers. Evaluation-count
 contracts preserve actual operand effects and prepared non-execution. Buffered multi-statement runtime failures
 now retain completed results with their own status and warnings before the ERR

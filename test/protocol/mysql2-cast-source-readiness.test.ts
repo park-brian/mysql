@@ -6,8 +6,9 @@ import { MySQL } from '@myjs/core'
 import { observeCommand } from './packet-observation.ts'
 import casts from './fixtures/diagnostics/cast-source-readiness.json' with { type: 'json' }
 import dual from './fixtures/diagnostics/dual-source-readiness.json' with { type: 'json' }
+import literals from './fixtures/diagnostics/integer-cast-source-class.json' with { type: 'json' }
 
-for (const reference of [casts, dual]) test(reference.schema + ': source construction preserves readiness and table identity', async () => {
+for (const reference of [casts, dual, literals]) test(reference.schema + ': source construction preserves readiness and table identity', async () => {
   const host = process.env.MYSQL_REFERENCE_HOST
   const db = host === undefined ? await MySQL.open(':memory:') : undefined
   const transport = db === undefined
@@ -17,9 +18,10 @@ for (const reference of [casts, dual]) test(reference.schema + ': source constru
   const conn = raw.promise()
   const strict = new Set(reference.strict)
   const quotedTable = reference === dual
+  const literalClass = reference === literals
   const marker = quotedTable ? 'marker' : 't'
-  assert.equal(reference.observations.length, quotedTable ? 600 : 5076)
-  assert.equal(strict.size, quotedTable ? 552 : 3542)
+  assert.equal(reference.observations.length, literalClass ? 6804 : quotedTable ? 600 : 5076)
+  assert.equal(strict.size, literalClass ? 4708 : quotedTable ? 552 : 3718)
   let created = false
   let phase: string | undefined
   let compared = 0
