@@ -1570,6 +1570,9 @@ independent of constant cardinality. Caller admission retains clause and source
 fences. Broader source-readiness and CAST admission remain open. FROM binding
 shares one table record with its scope specification and one alias lookup;
 column widths are computed after each source is planned.
+DIV minimum rejection and NULL-reader ordering remain open: broader CAST and
+function sources still need verified initialization boundaries. Native contracts
+retain matched metadata, diagnostics and state before those repairs proceed.
 Buffered multi-statement runtime errors retain completed results on the primary
 SQL error, with each completion's status and warnings. The protocol emits those
 results before one ERR through the shared text/binary batch writer. Completion

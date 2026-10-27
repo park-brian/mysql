@@ -129,7 +129,11 @@ Whole-command lexing, later multiline error line numbers, the failing statement'
 own partial response, optional session tracking and shared CTE effects remain
 open. The positive literal/typed-NULL profile fits under unchanged caps, with
 564 native command/state controls and all already-matched components enforced.
-Both DIV candidates are next after this slice's continuation review.
+Fresh DIV audits reject both parked candidates for derived-source metadata
+regressions. The 2,536-command native contracts retain 1,957 complete matches,
+all already-matched components, 2,412 header-presence controls and 2,520 matched
+table states. Exact plain integer
+CAST-source admission is next; nullable function sources need separate proofs.
 Integer-only minimum-boundary behavior, expression spelling, wider
 copied-field/parameter metadata, invalid-dimension admission and CAST warning labels,
 broader multiplication precision and supplementary identifier-alias admission
