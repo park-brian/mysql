@@ -95,13 +95,15 @@ function checked(n: bigint, unsigned: boolean, expr: ExprLabel): Value {
 function decimalOp(a: DecimalValue, b: DecimalValue, op: '+' | '-' | '*'): DecimalValue {
   if (op === '*') {
     const product = decimal(a.v * b.v, a.scale + b.scale)
-    const display = Math.min(MAX_SCALE, displayScale(a) + displayScale(b))
-    return product.scale > MAX_SCALE ? decimal(rescale(product, MAX_SCALE).v, MAX_SCALE, display) : decimal(product.v, product.scale, display)
+    const scale = product.v === 0n ? 0 : Math.min(MAX_SCALE, product.scale)
+    return decimal(rescale(product, scale).v, scale, Math.min(MAX_SCALE, displayScale(a) + displayScale(b)))
   }
   const scale = Math.max(a.scale, b.scale)
   const x = rescale(a, scale).v
   const y = rescale(b, scale).v
-  return decimal(op === '+' ? x + y : x - y, scale, Math.max(displayScale(a), displayScale(b)))
+  const v = op === '+' ? x + y : x - y
+  // Subtraction and cancellation normalize zero; adding two zeros retains scale.
+  return decimal(v, v === 0n && (op === '-' || x !== 0n) ? 0 : scale, Math.max(displayScale(a), displayScale(b)))
 }
 
 /** `a + b`, `a - b`, `a * b`. */
@@ -155,26 +157,22 @@ export function divide(a: Value, b: Value): Value {
   const x = toDecimal(a)
   const y = toDecimal(b)
   if (y.v === 0n) return null
-  // Held to the next whole group of nine digits and truncated there, shown
-  // at the dividend's scale plus the increment.
   const display = Math.min(MAX_SCALE, displayScale(x) + DIV_PRECISION_INCREMENT)
-  const held = Math.min(MAX_SCALE, Math.ceil(display / 9) * 9)
+  if (x.v === 0n) return decimal(0n, 0, display)
+  // Both operands occupy whole fractional words. Their existing padding
+  // supplies the increment before another word is allocated.
+  const held = Math.max(Math.ceil(x.scale / 9) + Math.ceil(y.scale / 9), Math.ceil((x.scale + y.scale + DIV_PRECISION_INCREMENT) / 9)) * 9
   return decimal((x.v * pow10(y.scale + held)) / (y.v * pow10(x.scale)), held, display)
 }
 
 /** `a DIV b`: an integer quotient, truncated, unsigned if either side is; NULL for a zero divisor. */
 export function intDivide(a: Value, b: Value, expr: ExprLabel = 'DIV'): Value {
   if (a === null || b === null) return null
-  const unsigned = isUnsigned(a) || isUnsigned(b)
-  if (resultKind(a, b) === 'int') {
-    const y = toInteger(b)
-    if (y === 0n) return null
-    return checked(toInteger(a) / y, unsigned, expr)
-  }
   const x = toDecimal(a)
   const y = toDecimal(b)
   if (y.v === 0n) return null
-  return checked((x.v * pow10(y.scale)) / (y.v * pow10(x.scale)), unsigned, expr)
+  const scale = Math.max(x.scale, y.scale)
+  return checked(rescale(x, scale).v / rescale(y, scale).v, isUnsigned(a) || isUnsigned(b), expr)
 }
 
 /** `a % b` and `MOD(a, b)`: the remainder takes the dividend's sign; NULL for a zero divisor. */
@@ -201,15 +199,13 @@ export function modulo(a: Value, b: Value, expr: ExprLabel = '%'): Value {
   }
 }
 
-const U64 = MAX_UNSIGNED
-
 /** An operand of a bitwise operator: its 64-bit two's-complement pattern. */
 function bits(v: Exclude<Value, null>): bigint {
   // Text is read as `val_uint` reads it: '1.5' | 0 is 1 (8.4.11).
   const n = v.kind === 'string' || v.kind === 'bytes' ? valInt(v) : numericKind(v) === 'int' ? toInteger(v) : toInteger(toDecimal(v))
-  if (n > MAX_UNSIGNED) return U64
+  if (n > MAX_UNSIGNED) return MAX_UNSIGNED
   if (n < MIN_SIGNED) return 1n << 63n
-  return n & U64
+  return n & MAX_UNSIGNED
 }
 
 /** `|`, `&`, `^`, `<<`, `>>`: always an unsigned BIGINT, whatever went in. */
@@ -225,7 +221,7 @@ export function bitwise(a: Value, b: Value, op: '|' | '&' | '^' | '<<' | '>>'): 
     case '^':
       return int(x ^ y, true)
     case '<<':
-      return int(y >= 64n ? 0n : (x << y) & U64, true)
+      return int(y >= 64n ? 0n : (x << y) & MAX_UNSIGNED, true)
     case '>>':
       return int(y >= 64n ? 0n : x >> y, true)
   }
@@ -233,7 +229,7 @@ export function bitwise(a: Value, b: Value, op: '|' | '&' | '^' | '<<' | '>>'): 
 
 /** `~a`. */
 export function bitNot(a: Value): Value {
-  return a === null ? null : int(~bits(a) & U64, true)
+  return a === null ? null : int(~bits(a) & MAX_UNSIGNED, true)
 }
 
 /** `NOT a` and `!a`. */

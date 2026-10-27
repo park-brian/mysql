@@ -92,12 +92,14 @@ COUNT/BIT_AND window admission and needs source-preparation precedence repaired.
 Ordinary delivery now applies LIMIT after sorting and before SELECT projection,
 retaining copied-field writers and closing its reader on early termination.
 Remaining optimization/readiness profiles stay open. NULL LIMIT coercion remains
-coupled to the HAVING/source-preparation repair. Next repair ordinary AVG's
-temporary strategy and AVG(DISTINCT)'s
-intermediate field copy, preserving the proved blocking lifetimes. Retained
-division precision across both operands and result-buffer bounds follows,
-followed by supplementary identifier-alias admission. Broader strategy and
-measured field-copy gaps stay open.
+coupled to the HAVING/source-preparation repair. Bounded retained DISTINCT now
+uses ordinary AVG's temporary strategy and copies completed AVG(DISTINCT)
+fields before projection, preserving both blocking lifetimes. Exact division
+retains both operands' fractional words; cancelled zeros and AVG keep display
+scale independent of held digits. Actual field copies retain their declared
+scales. Result-buffer capacity, overflow delivery/printing, broader multiplication
+precision and supplementary identifier-alias admission remain next. Broader
+strategy and measured field-copy gaps stay open.
 The cost-based planner (M5.7, M5.42–M5.46) is done:
 `EXPLAIN FORMAT=TREE` prints the plan that runs, and 2,126 of the relational
 corpus's 2,248 plans agree with 8.4.11's; M5.47 is in progress, M5.48 is done,

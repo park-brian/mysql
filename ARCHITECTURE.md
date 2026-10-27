@@ -557,8 +557,11 @@ apart has paid for itself several times:
 
 `Value` exists because evaluation needs three things the other two shapes
 erase. An integer's signedness matters, since negating an unsigned value
-saturates. A DECIMAL's exact scale matters, since `1/7*7` is `1.0000` and not
-`1.0003`. A string's coercibility matters, since a column's collation
+saturates. A DECIMAL keeps held fractional digits separately from its displayed
+scale: `1/7*7` is `1.0000` and not `1.0003`. Division reads both operands'
+fractional words; AVG can display more digits than its quotient holds. Actual
+field writers round to their declared scale before later readers see the value.
+A string's coercibility matters, since a column's collation
 beats a literal's. Where strings meet, at a comparison, CONCAT, IF or a
 UNION, their collations are aggregated at compile time as MySQL's
 `DTCollation::aggregate` does it, and a mix it cannot decide is the

@@ -56,11 +56,12 @@ export interface DecimalValue {
   readonly v: bigint
   readonly scale: number
   /**
-   * The scale it is shown at, when that is less than it holds. A division
+   * The scale it is shown at, independently of its held digits. A division
    * keeps its quotient to the next multiple of nine digits — MySQL's `decimal_t`
    * is base 10^9 — but shows only `div_precision_increment` more than its
    * dividend, so `2/3` holds 0.666666666 and shows `0.6667`, and `1/7*7` shows
-   * `1.0000` rather than `1.0003` (both read off 8.4.11).
+   * `1.0000` rather than `1.0003` (both read off 8.4.11). A cancelled zero
+   * or AVG may display more fractional digits than it physically holds.
    */
   readonly display?: number
 }
@@ -155,8 +156,8 @@ export const MAX_UNSIGNED = (1n << 64n) - 1n
 export const int = (v: bigint, unsigned = false): IntValue => ({ kind: 'int', v, unsigned })
 export const bool = (b: boolean): IntValue => ({ kind: 'int', v: b ? 1n : 0n, unsigned: false })
 export const double = (v: number): DoubleValue => ({ kind: 'double', v })
-export const decimal = (v: bigint, scale: number, display?: number): DecimalValue =>
-  display === undefined || display >= scale ? { kind: 'decimal', v, scale } : { kind: 'decimal', v, scale, display }
+export const decimal = (v: bigint, scale: number, display = scale): DecimalValue =>
+  display === scale ? { kind: 'decimal', v, scale } : { kind: 'decimal', v, scale, display }
 
 /** The scale a decimal is shown at. */
 export const displayScale = (d: DecimalValue): number => d.display ?? d.scale

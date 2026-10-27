@@ -82,8 +82,7 @@ export function avgAccumulator(exact: boolean, argScale: number, storedScale?: n
       const q = divide(s, int(BigInt(count))) as DecimalValue
       // Arithmetic reads the quotient's held digits; only display or a real field
       // rounds to the declared scale (Item_sum_avg::val_decimal, 8.4.11).
-      const scale = argScale + DIV_PRECISION_INCREMENT
-      return q.scale <= scale ? rescale(q, scale) : decimal(q.v, q.scale, scale)
+      return decimal(q.v, q.scale, argScale + DIV_PRECISION_INCREMENT)
     },
   }
 }
