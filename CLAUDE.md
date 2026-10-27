@@ -117,10 +117,16 @@ packet. Private completion facts preserve direct-call error identity and JSON;
 one batch writer serves text and binary rows. Incremental parsing now preserves
 earlier execution before later syntax failures, while checked boundaries retain
 single-result streaming. Parser failures publish diagnostics once; settled SQL
-failures retain their own condition history. Duplicate CTE admission is next.
+failures retain their own condition history. CTE definitions now enter one
+ordered name map after each closing parenthesis, preserving case-sensitive local
+scope and nested error priority. Typed duplicate admission precedes later syntax
+and execution, with earlier multi-statement results and writes retained. Duplicate
+labels retain the native 192-byte UTF-8 limit and partial-byte replacements. Query
+construction shares optional-field writers, local cursors and the common word/string
+reader for charsets, collations, accounts and plugins.
 Whole-command lexing, later multiline error line numbers, the failing statement's
 own partial response, optional session tracking and shared CTE effects remain
-open before a positive literal/typed-NULL source profile.
+open. A positive literal/typed-NULL source profile is next.
 Integer-only minimum-boundary behavior, expression spelling, wider
 copied-field/parameter metadata, invalid-dimension admission and CAST warning labels,
 broader multiplication precision and supplementary identifier-alias admission

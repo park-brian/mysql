@@ -1572,7 +1572,11 @@ results before one ERR through the shared text/binary batch writer. Completion
 facts stay out of ordinary error JSON. The parser yields checked statement
 boundaries before parsing later statements; the public array API remains eager.
 Earlier execution survives later syntax failures, while a checked final boundary
-preserves single-result streaming. Whole-command lexing, later multiline error
+preserves single-result streaming. CTE admission checks each completed definition
+in one ordered name map, keeping case-sensitive local scope and nested error
+priority. Duplicate labels respect the native UTF-8 byte budget. Query construction
+shares optional-field writers, local cursors and the common word/string reader.
+Whole-command lexing, later multiline error
 line numbers, the failing statement's own partial response and optional session
 tracking remain open.
 Keyed DISTINCT shares canonical-key insertion with physical weedout and joined

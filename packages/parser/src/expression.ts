@@ -16,7 +16,7 @@
 //                       5.0, so `NOT a = b` regroups from `NOT (a = b)` to
 //                       `(NOT a) = b`.
 import { systemVariableParts } from './variable.ts'
-import { Cursor, checkTreeDepth } from './cursor.ts'
+import { Cursor, checkTreeDepth, wordOrString } from './cursor.ts'
 import { RESERVED } from './keywords.ts'
 import { TOKEN, type Token } from './tokens.ts'
 import { NODE, LITERAL, type Expression, type LiteralType } from './ast.ts'
@@ -472,11 +472,9 @@ class ExpressionParser {
     let out = expr
     while (this.#atWord('COLLATE')) {
       this.#c.skip()
-      const name = this.#peek()
-      if (name.kind !== TOKEN.IDENTIFIER && name.kind !== TOKEN.STRING) this.#fail()
-      if (name.kind === TOKEN.IDENTIFIER && name.quoted !== true && name.text.toUpperCase() === 'BINARY') this.#fail()
-      this.#c.skip()
-      out = out.kind === NODE.LITERAL && out.collation === undefined ? { ...out, collation: name.text } : { kind: NODE.COLLATE, expr: out, collation: name.text, at: out.at }
+      if (this.#atWord('BINARY')) this.#fail()
+      const name = wordOrString(this.#c)
+      out = out.kind === NODE.LITERAL && out.collation === undefined ? { ...out, collation: name } : { kind: NODE.COLLATE, expr: out, collation: name, at: out.at }
     }
     return out
   }
@@ -940,10 +938,7 @@ class ExpressionParser {
   }
 
   #charsetName(): string {
-    const t = this.#peek()
-    if (t.kind !== TOKEN.IDENTIFIER && t.kind !== TOKEN.STRING) this.#fail()
-    this.#c.skip()
-    return t.text.toLowerCase()
+    return wordOrString(this.#c).toLowerCase()
   }
 
   #stringText(): string {

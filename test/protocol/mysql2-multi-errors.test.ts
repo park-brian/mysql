@@ -8,8 +8,8 @@ import runtimeErrors from './fixtures/diagnostics/multi-errors.json' with { type
 import parsingErrors from './fixtures/diagnostics/multi-parsing.json' with { type: 'json' }
 
 const matrices = [
-  { reference: runtimeErrors, total: 392, strictCount: 160, defaultCount: 70, commonCount: 90, states: 178, excluded: ['declaration'] },
-  { reference: parsingErrors, total: 236, strictCount: 142, defaultCount: 66, commonCount: 76, states: 94, excluded: ['lexical', 'declaration'] },
+  { reference: runtimeErrors, total: 392, strictCount: 188, defaultCount: 82, commonCount: 106, states: 196, excluded: [] as string[] },
+  { reference: parsingErrors, total: 236, strictCount: 164, defaultCount: 76, commonCount: 88, states: 106, excluded: ['lexical'] },
 ]
 for (const { reference, total, strictCount, defaultCount, commonCount, states: expectedStates, excluded } of matrices)
 for (const profile of ['default', 'common']) test('completed statements precede a multi-statement failure: ' + reference.schema + ' ' + profile, async () => {

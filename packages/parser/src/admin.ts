@@ -30,7 +30,7 @@
 //   - `RESET MASTER`, `RESET SLAVE`, `FLUSH HOSTS` and `RESET QUERY CACHE` are
 //     gone from 8.4: refused as syntax errors, which is what 8.4.11 answers.
 import { LITERAL, NODE, type ColumnNode, type LiteralNode } from './ast.ts'
-import { flag, opt, type Cursor } from './cursor.ts'
+import { flag, opt, wordOrString, type Cursor } from './cursor.ts'
 import { hexBytes } from './data-type.ts'
 import { assignments, column } from './dml.ts'
 import { charsetName } from './utility.ts'
@@ -672,9 +672,7 @@ export function parseRevoke(c: Cursor): RevokeNode {
 function identification(c: Cursor): Identification {
   if (c.takeWord('BY')) return byPassword(c)
   c.expectWord('WITH')
-  const t = c.peek()
-  if (t.kind !== TOKEN.STRING && t.kind !== TOKEN.IDENTIFIER) c.fail()
-  const plugin = c.take().text
+  const plugin = wordOrString(c)
   if (c.takeWord('BY')) return { plugin, ...byPassword(c) }
   if (c.takeWord('AS')) return { plugin, hash: stringLiteral(c) }
   return { plugin }

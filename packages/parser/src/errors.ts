@@ -63,6 +63,16 @@ export function unknownCharset(charset: string): ParseError {
   })
 }
 
+/** A repeated WITH name; native formatting clips 192 UTF-8 bytes, replacing partial bytes. */
+export function duplicateTable(name: string): ParseError {
+  const { read, written } = new TextEncoder().encodeInto(name, new Uint8Array(192))
+  const label = name.slice(0, read) + '?'.repeat(read < name.length ? 192 - written : 0)
+  return new ParseError('ER_NONUNIQ_TABLE', `Not unique table/alias: '${label}'`, {
+    errno: 1066,
+    sqlState: '42000',
+  })
+}
+
 /**
  * An expression nested deeper than this parser will recurse.
  *

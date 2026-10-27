@@ -238,6 +238,13 @@ export class Cursor {
   }
 }
 
+/** One string token or any identifier, including a reserved word. */
+export function wordOrString(c: Cursor): string {
+  const t = c.peek()
+  if (t.kind !== TOKEN.IDENTIFIER && t.kind !== TOKEN.STRING) c.fail()
+  return c.take().text
+}
+
 /** `{ key: value }` when defined, `{}` when not — an absent field, never `undefined`. */
 export const opt = <K extends string, V>(key: K, value: V | undefined): { [P in K]?: V } =>
   (value === undefined ? {} : { [key]: value }) as { [P in K]?: V }

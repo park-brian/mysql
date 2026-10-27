@@ -36,7 +36,7 @@
 //     `LONG VARBINARY`, `NATIONAL CHAR`), so the table cannot be a single-token
 //     lookup.
 import { FIELD_TYPE, type FieldTypeCode } from '@myjs/bytes'
-import type { Cursor } from './cursor.ts'
+import { wordOrString, type Cursor } from './cursor.ts'
 import { TOKEN } from './tokens.ts'
 import type { SqlMode } from './sql-mode.ts'
 
@@ -425,15 +425,7 @@ function shorthandCharset(c: Cursor): string | null {
 
 /** A charset or collation name: a bare word, or a quoted string. */
 function charsetName(c: Cursor): string {
-  const t = c.peek()
-  if (t.kind === TOKEN.IDENTIFIER || t.kind === TOKEN.STRING) {
-    c.skip()
-    return t.text.toLowerCase()
-  }
-  // `DEFAULT` is legal here and means "the table's", which the parser records
-  // as written and M4 resolves.
-  if (c.takeWord('DEFAULT')) return 'default'
-  c.fail()
+  return wordOrString(c).toLowerCase()
 }
 
 /** `(1)` or `(10, 2)` — up to `max` integers, or nothing at all. */

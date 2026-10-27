@@ -22,8 +22,8 @@
 //     M3.16's corpus found it on its first run: 8.4 answers `t1 CROSS JOIN t2
 //     CROSS JOIN t3 ON t1.b < t1.a` with rows, where a tree that kept `t1` out
 //     of the `ON`'s reach says ER_BAD_FIELD_ERROR.
-import { unsupportedStatement } from './errors.ts'
-import type { Cursor } from './cursor.ts'
+import { duplicateTable, unsupportedStatement } from './errors.ts'
+import { flag, opt, wordOrString, type Cursor } from './cursor.ts'
 import { TOKEN } from './tokens.ts'
 import { NODE, type Expression } from './ast.ts'
 import { parseExpressionFrom } from './expression.ts'
@@ -195,11 +195,11 @@ class QueryParser {
     into = this.#oneInto(into, true)
     return {
       kind: QUERY.QUERY,
-      ...(withClause === undefined ? {} : { with: withClause }),
+      ...opt('with', withClause),
       body,
-      ...(orderBy === undefined ? {} : { orderBy }),
-      ...(limit === undefined ? {} : { limit }),
-      ...(into === undefined ? {} : { into }),
+      ...opt('orderBy', orderBy),
+      ...opt('limit', limit),
+      ...opt('into', into),
       ...(locking.length === 0 ? {} : { locking }),
       at,
     }
@@ -222,14 +222,13 @@ class QueryParser {
   #setOperation(first: QueryBody): QueryBody {
     let left = first
     for (;;) {
-      const t = this.#c.peek()
       const op = this.#c.atWord('UNION') ? 'UNION' : this.#c.atWord('EXCEPT') ? 'EXCEPT' : null
       if (op === null) return left
       this.#noPendingInto()
-      this.#c.skip()
+      const t = this.#c.take()
       const all = this.#quantifier()
       const right = this.#intersection(this.#primary())
-      left = { kind: QUERY.SET_OPERATION, op, ...(all ? { all } : {}), left, right, at: t.start }
+      left = { kind: QUERY.SET_OPERATION, op, ...flag('all', all), left, right, at: t.start }
     }
   }
 
@@ -237,13 +236,12 @@ class QueryParser {
   #intersection(first: QueryBody): QueryBody {
     let left = first
     for (;;) {
-      const t = this.#c.peek()
       if (!this.#c.atWord('INTERSECT')) return left
       this.#noPendingInto()
-      this.#c.skip()
+      const t = this.#c.take()
       const all = this.#quantifier()
       const right = this.#primary()
-      left = { kind: QUERY.SET_OPERATION, op: 'INTERSECT', ...(all ? { all } : {}), left, right, at: t.start }
+      left = { kind: QUERY.SET_OPERATION, op: 'INTERSECT', ...flag('all', all), left, right, at: t.start }
     }
   }
 
@@ -267,7 +265,7 @@ class QueryParser {
     if (c.atWord('VALUES')) return this.#values()
     if (c.atWord('TABLE')) {
       const at = c.take().start
-      return { kind: QUERY.TABLE, table: this.#c.expectTableName(), at }
+      return { kind: QUERY.TABLE, table: c.expectTableName(), at }
     }
     return c.fail()
   }
@@ -276,17 +274,18 @@ class QueryParser {
     const c = this.#c
     c.expectWord('WITH')
     const recursive = c.takeWord('RECURSIVE')
-    const tables: CommonTable[] = []
+    const tables = new Map<string, CommonTable>()
     do {
       const name = c.expectIdentifier()
-      const columns = c.atOp('(') ? this.#c.expectNameList() : undefined
+      const columns = c.atOp('(') ? c.expectNameList() : undefined
       c.expectWord('AS')
       c.expectOp('(')
       const query = this.#nestedQuery()
       c.expectOp(')')
-      tables.push({ name, ...(columns === undefined ? {} : { columns }), query })
+      if (tables.has(name)) throw duplicateTable(name)
+      tables.set(name, { name, ...opt('columns', columns), query })
     } while (c.takeOp(','))
-    return { ...(recursive ? { recursive } : {}), tables }
+    return { ...flag('recursive', recursive), tables: [...tables.values()] }
   }
 
   #values() {
@@ -295,22 +294,16 @@ class QueryParser {
     const rows: Expression[][] = []
     do {
       c.expectWord('ROW')
-      rows.push(this.#row())
+      c.expectOp('(')
+      const items: Expression[] = []
+      if (!c.atOp(')')) {
+        do items.push(this.valueOrDefault())
+        while (c.takeOp(','))
+      }
+      c.expectOp(')')
+      rows.push(items)
     } while (c.takeOp(','))
     return { kind: QUERY.VALUES, rows, at }
-  }
-
-  /** `(a, DEFAULT, b)` — a row of values; `DEFAULT` is a keyword node. */
-  #row(): Expression[] {
-    const c = this.#c
-    c.expectOp('(')
-    const items: Expression[] = []
-    if (!c.atOp(')')) {
-      do items.push(this.valueOrDefault())
-      while (c.takeOp(','))
-    }
-    c.expectOp(')')
-    return items
   }
 
   /** An expression, or the bare `DEFAULT` a row of values may contain. */
@@ -354,7 +347,10 @@ class QueryParser {
     let from: TableReference[] | undefined
     if (c.takeWord('FROM')) {
       // `FROM DUAL` is the absence of a table, spelled out.
-      if (!c.takeWord('DUAL')) from = this.#tableReferences()
+      if (!c.takeWord('DUAL')) {
+        from = [this.tableReference()]
+        while (c.takeOp(',')) from.push(this.tableReference())
+      }
     }
     into = this.#oneInto(into)
     this.#pendingInto = into
@@ -365,14 +361,14 @@ class QueryParser {
 
     return {
       kind: QUERY.SELECT,
-      ...(distinct ? { distinct } : {}),
+      ...flag('distinct', distinct),
       ...(options.length === 0 ? {} : { options }),
       items,
-      ...(from === undefined ? {} : { from }),
-      ...(where === undefined ? {} : { where }),
-      ...(groupBy === undefined ? {} : { groupBy }),
-      ...(having === undefined ? {} : { having }),
-      ...(windows === undefined ? {} : { windows }),
+      ...opt('from', from),
+      ...opt('where', where),
+      ...opt('groupBy', groupBy),
+      ...opt('having', having),
+      ...opt('windows', windows),
       at,
     }
   }
@@ -399,13 +395,8 @@ class QueryParser {
    */
   #alias(): string | undefined {
     const c = this.#c
-    if (c.takeWord('AS')) {
-      if (c.peek().kind === TOKEN.STRING) return c.take().text
-      return c.expectIdentifier()
-    }
-    if (c.atIdentifier()) return c.take().text
-    if (c.peek().kind === TOKEN.STRING) return c.take().text
-    return undefined
+    if (c.takeWord('AS')) return c.peek().kind === TOKEN.STRING ? c.take().text : c.expectIdentifier()
+    return c.atIdentifier() || c.peek().kind === TOKEN.STRING ? c.take().text : undefined
   }
 
   #groupBy(): GroupBy {
@@ -420,7 +411,7 @@ class QueryParser {
     do items.push(this.#expr())
     while (c.takeOp(','))
     const rollup = c.takeWords('WITH', 'ROLLUP')
-    return { items, ...(rollup ? { rollup } : {}) }
+    return { items, ...flag('rollup', rollup) }
   }
 
   orderBy(): OrderItem[] {
@@ -453,25 +444,25 @@ class QueryParser {
     const c = this.#c
     if (!c.takeWord('INTO')) return undefined
     if (c.takeWord('OUTFILE')) {
-      const file = this.#c.expectString()
+      const file = c.expectString()
       let charset: string | undefined
-      if (c.takeWords('CHARACTER', 'SET') || c.takeWord('CHARSET')) charset = this.#word().toLowerCase()
+      if (c.takeWords('CHARACTER', 'SET') || c.takeWord('CHARSET')) charset = wordOrString(c).toLowerCase()
       const options: Record<string, string> = {}
       for (const section of ['FIELDS', 'COLUMNS', 'LINES']) {
         if (!c.takeWord(section)) continue
         const key = section === 'COLUMNS' ? 'FIELDS' : section
         for (;;) {
-          if (c.takeWords('TERMINATED', 'BY')) options[`${key} TERMINATED BY`] = this.#c.expectString()
-          else if (c.takeWords('OPTIONALLY', 'ENCLOSED', 'BY')) options[`${key} OPTIONALLY ENCLOSED BY`] = this.#c.expectString()
-          else if (c.takeWords('ENCLOSED', 'BY')) options[`${key} ENCLOSED BY`] = this.#c.expectString()
-          else if (c.takeWords('ESCAPED', 'BY')) options[`${key} ESCAPED BY`] = this.#c.expectString()
-          else if (c.takeWords('STARTING', 'BY')) options[`${key} STARTING BY`] = this.#c.expectString()
+          if (c.takeWords('TERMINATED', 'BY')) options[`${key} TERMINATED BY`] = c.expectString()
+          else if (c.takeWords('OPTIONALLY', 'ENCLOSED', 'BY')) options[`${key} OPTIONALLY ENCLOSED BY`] = c.expectString()
+          else if (c.takeWords('ENCLOSED', 'BY')) options[`${key} ENCLOSED BY`] = c.expectString()
+          else if (c.takeWords('ESCAPED', 'BY')) options[`${key} ESCAPED BY`] = c.expectString()
+          else if (c.takeWords('STARTING', 'BY')) options[`${key} STARTING BY`] = c.expectString()
           else break
         }
       }
-      return { kind: 'outfile', file, ...(charset === undefined ? {} : { charset }), options }
+      return { kind: 'outfile', file, ...opt('charset', charset), options }
     }
-    if (c.takeWord('DUMPFILE')) return { kind: 'dumpfile', file: this.#c.expectString() }
+    if (c.takeWord('DUMPFILE')) return { kind: 'dumpfile', file: c.expectString() }
     const targets: Expression[] = []
     do {
       const t = c.peek()
@@ -495,13 +486,13 @@ class QueryParser {
     let of: TableName[] | undefined
     if (c.takeWord('OF')) {
       of = []
-      do of.push(this.#c.expectTableName())
+      do of.push(c.expectTableName())
       while (c.takeOp(','))
     }
     let wait: 'NOWAIT' | 'SKIP LOCKED' | undefined
     if (c.takeWord('NOWAIT')) wait = 'NOWAIT'
     else if (c.takeWords('SKIP', 'LOCKED')) wait = 'SKIP LOCKED'
-    return { strength, ...(of === undefined ? {} : { of }), ...(wait === undefined ? {} : { wait }) }
+    return { strength, ...opt('of', of), ...opt('wait', wait) }
   }
 
   // --- windows --------------------------------------------------------------
@@ -543,10 +534,10 @@ class QueryParser {
       }
     }
     return {
-      ...(base === undefined ? {} : { base }),
-      ...(partitionBy === undefined ? {} : { partitionBy }),
-      ...(orderBy === undefined ? {} : { orderBy }),
-      ...(frame === undefined ? {} : { frame }),
+      ...opt('base', base),
+      ...opt('partitionBy', partitionBy),
+      ...opt('orderBy', orderBy),
+      ...opt('frame', frame),
     }
   }
 
@@ -566,13 +557,6 @@ class QueryParser {
   }
 
   // --- table references -----------------------------------------------------
-
-  #tableReferences(): TableReference[] {
-    const out: TableReference[] = []
-    do out.push(this.tableReference())
-    while (this.#c.takeOp(','))
-    return out
-  }
 
   /**
    * One table reference: a factor and the joins that follow it.
@@ -615,7 +599,7 @@ class QueryParser {
         if (c.takeWord('ON')) {
           left = { kind: REF.JOIN, type, left, right, on: this.#expr(), at }
         } else if (c.takeWord('USING')) {
-          left = { kind: REF.JOIN, type, left, right, using: this.#c.expectNameList(), at }
+          left = { kind: REF.JOIN, type, left, right, using: c.expectNameList(), at }
         } else {
           // An outer join must say how; an inner one need not — and an inner
           // one that does not is re-hung on its right side's leftmost table.
@@ -667,22 +651,22 @@ class QueryParser {
       // take the alias the inner one did not.
       if (items.length === 1 && first.kind === REF.DERIVED && first.alias === undefined && (c.atWord('AS') || c.atIdentifier())) {
         const alias = this.#alias() as string
-        const columns = c.atOp('(') ? this.#c.expectNameList() : undefined
-        return { ...first, alias, ...(columns === undefined ? {} : { columns }) }
+        const columns = c.atOp('(') ? c.expectNameList() : undefined
+        return { ...first, alias, ...opt('columns', columns) }
       }
       return { kind: REF.LIST, items, at }
     }
     if (c.atWord('JSON_TABLE')) throw unsupportedStatement('JSON_TABLE')
-    const table = this.#c.expectTableName()
+    const table = c.expectTableName()
     let partitions: string[] | undefined
-    if (c.takeWord('PARTITION')) partitions = this.#c.expectNameList()
+    if (c.takeWord('PARTITION')) partitions = c.expectNameList()
     const alias = this.#alias()
     const indexHints = this.#indexHints()
     return {
       kind: REF.TABLE,
       table,
-      ...(partitions === undefined ? {} : { partitions }),
-      ...(alias === undefined ? {} : { alias }),
+      ...opt('partitions', partitions),
+      ...opt('alias', alias),
       ...(indexHints.length === 0 ? {} : { indexHints }),
       at,
     }
@@ -693,13 +677,13 @@ class QueryParser {
     const c = this.#c
     c.expectOp(')')
     const alias = this.#alias()
-    const columns = alias !== undefined && c.atOp('(') ? this.#c.expectNameList() : undefined
+    const columns = alias !== undefined && c.atOp('(') ? c.expectNameList() : undefined
     return {
       kind: REF.DERIVED,
       query,
-      ...(lateral ? { lateral } : {}),
-      ...(alias === undefined ? {} : { alias }),
-      ...(columns === undefined ? {} : { columns }),
+      ...flag('lateral', lateral),
+      ...opt('alias', alias),
+      ...opt('columns', columns),
       at,
     }
   }
@@ -738,18 +722,10 @@ class QueryParser {
         while (c.takeOp(','))
       }
       c.expectOp(')')
-      out.push({ type: type as IndexHint['type'], ...(scope === undefined ? {} : { for: scope }), indexes })
+      out.push({ type: type as IndexHint['type'], ...opt('for', scope), indexes })
     }
   }
 
-  // --- small pieces ---------------------------------------------------------
-
-  #word(): string {
-    const t = this.#c.peek()
-    if (t.kind !== TOKEN.IDENTIFIER && t.kind !== TOKEN.STRING) this.#c.fail()
-    this.#c.skip()
-    return t.text
-  }
 }
 
 /**

@@ -15,7 +15,7 @@
 // clause this parser does not know is a parse error rather than something
 // skipped, because skipping is how a `CREATE TABLE` silently loses a
 // `CHARACTER SET` and produces a table that stores different bytes.
-import { flag, opt, type Cursor } from './cursor.ts'
+import { flag, opt, wordOrString, type Cursor } from './cursor.ts'
 import { TOKEN } from './tokens.ts'
 import { NODE, type Expression } from './ast.ts'
 import { parseExpressionFrom } from './expression.ts'
@@ -274,15 +274,13 @@ export function parseUser(c: Cursor): Definer {
     if (c.takeOp('(')) c.expectOp(')')
     return 'CURRENT_USER'
   }
-  const u = c.peek()
-  if (u.kind !== TOKEN.STRING && u.kind !== TOKEN.IDENTIFIER) c.fail()
-  c.skip()
+  const user = wordOrString(c)
   const h = c.peek()
   if (h.kind === TOKEN.VARIABLE && h.text.startsWith('@') && !h.text.startsWith('@@')) {
     c.skip()
-    return { user: u.text, host: h.text.slice(1) }
+    return { user, host: h.text.slice(1) }
   }
-  return { user: u.text }
+  return { user }
 }
 
 /** Parse a `DROP`, with the cursor on `DROP`. */
@@ -879,19 +877,13 @@ export function tableOption(c: Cursor, out: Record<string, string>): boolean {
  */
 function charsetValue(c: Cursor): string {
   if (c.takeWord('DEFAULT')) return 'DEFAULT'
-  const t = c.peek()
-  if (t.kind !== TOKEN.IDENTIFIER && t.kind !== TOKEN.STRING) c.fail()
-  return c.take().text
+  return wordOrString(c)
 }
 
 /** A value that may be written as a bare word, a quoted string, or a number. */
 export function nameOrString(c: Cursor): string {
-  const t = c.peek()
-  if (t.kind === TOKEN.IDENTIFIER || t.kind === TOKEN.STRING || t.kind === TOKEN.NUMBER) {
-    c.skip()
-    return t.text
-  }
-  c.fail()
+  if (c.peek().kind === TOKEN.NUMBER) return c.take().text
+  return wordOrString(c)
 }
 
 /**

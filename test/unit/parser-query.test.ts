@@ -20,6 +20,7 @@ import {
   type TableReference,
 } from '@myjs/parser'
 import { roundTrip, withoutPositions } from '../../tools/lib/round-trip.mjs'
+import { errnoOf, sqlStateOf } from '@myjs/protocol'
 
 const query = (sql: string): QueryExpression => {
   const node = parseStatement(sql)
@@ -177,6 +178,52 @@ test('M3.3: WITH, VALUES, TABLE, windows and locking', () => {
   assert.deepEqual(locks, [{ strength: 'UPDATE', of: [{ name: 't' }], wait: 'NOWAIT' }, { strength: 'SHARE', legacy: true }])
   // `FROM DUAL` is no FROM at all.
   assert.deepEqual(withoutPositions(query('SELECT 1 FROM DUAL')), withoutPositions(query('SELECT 1')))
+})
+
+test('WITH duplicate admission follows each completed definition and keeps nested error priority', () => {
+  for (const [sql, name] of [
+    ['WITH c AS(SELECT 1),c AS(SELECT 2) SELECT FROM', 'c'],
+    ['WITH c AS(SELECT 1),c AS(SELECT 2), SELECT 1', 'c'],
+    ['WITH c AS(SELECT 1),c AS(WITH d AS(SELECT 2),d AS(SELECT 3) SELECT 1) SELECT 1', 'd'],
+    ['WITH `c` AS(SELECT 1),c AS(SELECT 2) SELECT 1', 'c'],
+  ] as const) assert.throws(() => parseStatement(sql), (error: unknown) => {
+    assert.ok(error instanceof ParseError)
+    assert.equal(error.code, 'ER_NONUNIQ_TABLE')
+    assert.equal(error.errno, errnoOf('ER_NONUNIQ_TABLE'))
+    assert.equal(error.errno, 1066)
+    assert.equal(error.sqlState, sqlStateOf('ER_NONUNIQ_TABLE'))
+    assert.equal(error.message, `Not unique table/alias: '${name}'`)
+    return true
+  })
+  assert.throws(() => parseStatement('WITH c AS(SELECT 1),c AS(SELECT FROM) SELECT 1'), (error: unknown) => error instanceof ParseError && error.errno === 1064)
+})
+
+test('WITH uniqueness is case-sensitive, local to its scope and preserves declaration order', () => {
+  const ast = query('WITH c AS(SELECT 1),C AS(SELECT 2),i AS(SELECT 3),I AS(SELECT 4) SELECT 1')
+  assert.deepEqual(ast.with!.tables.map(t => t.name), ['c', 'C', 'i', 'I'])
+  const nested = query('WITH c AS(SELECT 1),d AS(WITH c AS(SELECT 2) SELECT * FROM c) SELECT * FROM d')
+  assert.equal(nested.with!.tables[1]!.query.with!.tables[0]!.name, 'c')
+  assert.equal(roundTrip(ast), null)
+  assert.equal(roundTrip(nested), null)
+})
+
+test('duplicate-name labels clip native UTF-8 bytes and replace each partial trailing byte', () => {
+  for (const [name, label] of [
+    ['a'.repeat(193), 'a'.repeat(192)],
+    ['a'.repeat(191) + 'é', 'a'.repeat(191) + '?'],
+    ['a'.repeat(190) + '界', 'a'.repeat(190) + '??'],
+    ['界'.repeat(65), '界'.repeat(64)],
+    ["a'b", "a'b"],
+    ['a`b', 'a`b'],
+  ] as const) {
+    const quoted = '`' + name.replaceAll('`', '``') + '`'
+    assert.throws(() => parseStatement('WITH ' + quoted + ' AS(SELECT 1),' + quoted + ' AS(SELECT 2) SELECT 1'), (error: unknown) => {
+      assert.ok(error instanceof ParseError)
+      assert.equal(error.errno, 1066)
+      assert.equal(error.message, `Not unique table/alias: '${label}'`)
+      return true
+    })
+  }
 })
 
 test('M3.3: subqueries in expressions', () => {

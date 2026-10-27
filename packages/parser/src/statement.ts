@@ -96,8 +96,7 @@ export function* parseStatementSequence(sql: string, options: ParseStatementOpti
   const sqlMode = options.sqlMode ?? NO_SQL_MODE
   for (;;) {
     const statement = checked(c, sqlMode)
-    const separated = c.takeOp(';')
-    if (!separated && !c.atEnd()) c.fail()
+    if (!c.takeOp(';') && !c.atEnd()) c.fail()
     const more = !c.atEnd()
     yield { statement, more }
     if (!more) return
@@ -106,7 +105,6 @@ export function* parseStatementSequence(sql: string, options: ParseStatementOpti
 
 /** One statement, refused if there is none or if it nests too deep. */
 function checked(c: Cursor, sqlMode: SqlMode): Statement {
-  if (c.atEnd()) c.fail()
   const statement = dispatch(c, sqlMode)
   checkTreeDepth(statement)
   return statement
