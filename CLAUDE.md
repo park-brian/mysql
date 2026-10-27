@@ -107,7 +107,13 @@ truncated zero without losing display scale. DIV result width is at least one
 after its sign contribution. Decimal-path DIV overflow emits its conversion
 warning; strict writes retain primary 1292 plus later 1690, with complete counts
 before prefix truncation. Strict membership is generated from the pinned native
-handler. Integer-only minimum-boundary behavior, expression spelling, wider
+handler. Derived/view and recursive-CTE metadata now shares one owner for
+whole-list name validation and fresh field-type construction, avoiding redundant
+arrays and copies. Each statement caches rows under the bound source instance. Broader constant-source
+readiness remains parked: native declaration and CAST-admission errors can
+precede successful core materialization. A positive literal/typed-NULL source
+profile is next; duplicate CTE validation and shared effects remain open.
+Integer-only minimum-boundary behavior, expression spelling, wider
 copied-field/parameter metadata, invalid-dimension admission and CAST warning labels,
 broader multiplication precision and supplementary identifier-alias admission
 remain open. Broader

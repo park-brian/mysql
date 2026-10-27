@@ -1561,6 +1561,11 @@ Quantified subqueries share the complete-column coverage proof, so a partial
 string index is not described as covering its complete residual column.
 Hash/derived/materialized builds share their row owner while keeping eager and
 lazy initialization distinct; indexed joins share pair checking and closure.
+Derived/view and recursive-CTE field construction shares one owner. It validates
+all names before conversion, then builds fresh field types and the final array
+without intermediate field wrappers. Each statement caches rows under its bound source instance; unchanged planning
+scopes reuse their Run. Broader source-readiness
+admission remains open while declaration and CAST validation are incomplete.
 Keyed DISTINCT shares canonical-key insertion with physical weedout and joined
 writes. Hex formatting lives in @myjs/bytes and serves the parser, digests,
 client literals and SQL functions with the same encodings.
@@ -1568,7 +1573,7 @@ The full Docker gates, pinned-reference audits and 10,000 crash points pass.
 `db.stream()` streams a million rows within a few MB of the heap's baseline (M5.40). Next is the
 remaining function and planner work, then the browser. The coercion corpus
 now agrees on all 3,148 observations and all 1,737 warning counts. The core entry bundle
-is 334,329 bytes gzipped (326.5 KiB), against the 500 KB release target,
+is 334,270 bytes gzipped (326.5 KiB), against the 500 KB release target,
 with the UCA weights in a separate chunk loaded on demand.
 
 The release plan gives each stage something to ship:

@@ -1340,7 +1340,7 @@ function planSubquery(run: Run, q: QueryExpression, outer: Scope, clause: string
 /** Whether a query reads a table: one with no FROM is a constant row. */
 function hasFrom(q: QueryExpression): boolean {
   const body = q.body
-  if (body.kind === QUERY.SELECT) return (body.from ?? []).some((r) => !(r.kind === REF.TABLE && r.table.schema === undefined && r.table.name.toLowerCase() === 'dual'))
+  if (body.kind === QUERY.SELECT) return body.from?.some((r) => !(r.kind === REF.TABLE && r.table.schema === undefined && r.table.name.toLowerCase() === 'dual')) ?? false
   if (body.kind === QUERY.QUERY) return hasFrom(body)
   return true
 }
@@ -1376,7 +1376,7 @@ function derivedTable(run: Run, query: QueryExpression, alias: string, names: re
             return r
           },
         }
-  const plan = planQuery({ ...run, ...(parent === undefined ? {} : { parent }) }, query)
+  const plan = planQuery(parent === undefined ? run : { ...run, parent }, query)
   // A LATERAL one merges as any other does when it can (8.4.11: Drizzle's
   // `LEFT JOIN LATERAL (SELECT JSON_ARRAY(…) FROM (… LIMIT 1) p)` reports its
   // JSON_ARRAY as an expression, not a temporary table's field).
@@ -1387,21 +1387,19 @@ function derivedTable(run: Run, query: QueryExpression, alias: string, names: re
   // a materialized view's table columns keep their base table, and its
   // expressions take the view's names instead (8.4.11).
   const merged = mergeable(query) && view?.algorithm !== 'TEMPTABLE'
-  const columns = renamed(plan.columns, names).map((c) => {
-    const { column, ...rest } = c.type
-    const derived = { table: alias, orgName: c.name }
-    const asColumn = column === undefined ? undefined : { ...column, ...derived, ...(merged && view !== undefined ? { schema: view.schema, orgTable: view.name } : {}) }
-    // A materialized derived table's field, merged into a view, is a field of
-    // the view's: its schema is the view's (8.4.11).
-    const field = rest.temporary !== undefined && rest.temporary !== false
-    const asExpression =
-      view === undefined
+  const columns = renamed(plan.columns, names, (name, type) => {
+    const column = type.column
+    const derived = { table: alias, orgName: name }
+    // A materialized field keeps its view's schema; a merged expression does not.
+    if (column === undefined) {
+      type.names = view === undefined
         ? { ...derived, schema: '', orgTable: '' }
-        : merged && !field
+        : merged && !type.temporary
           ? { ...derived, schema: '', orgTable: view.name, viewSchema: view.schema }
           : { ...derived, schema: view.schema, orgTable: view.name }
-    const type = asColumn === undefined ? { ...rest, names: asExpression } : { ...rest, column: asColumn }
-    return { name: c.name, type: merged ? type : { ...type, temporary: 'stream' as const } }
+    } else type.column = { ...column, ...derived, ...(merged && view !== undefined ? { schema: view.schema, orgTable: view.name } : {}) }
+    if (!merged) type.temporary = 'stream'
+    return type
   })
   // Memoization can cache a merged query too; only an unmerged table copies fields.
   function* fieldRows(trx: Trx | undefined, env: Env, row?: readonly Value[]): Generator<Value[]> {
@@ -1415,11 +1413,10 @@ function derivedTable(run: Run, query: QueryExpression, alias: string, names: re
   // whose subquery reads its own table through a derived table sees the
   // table as it was before the first row changed (8.4.11: `UPDATE t SET a =
   // a + (SELECT COUNT(*) FROM (SELECT a FROM t) d WHERE d.a > t.a)` is 3, 3, 3).
-  const key = {}
-  return {
+  const source: DerivedSource = {
     columns,
-    ...(lateral === undefined && !hasFrom(query) && query.body.kind === QUERY.SELECT ? { constant: true } : {}),
-    ...(merged ? { merged: true } : {}),
+    constant: lateral === undefined && !hasFrom(query) && query.body.kind === QUERY.SELECT,
+    merged,
     explain: (): DerivedPlan | undefined => {
       const body = plan.explain?.()?.[0]
       if (body === undefined) return undefined
@@ -1428,9 +1425,10 @@ function derivedTable(run: Run, query: QueryExpression, alias: string, names: re
     // Its rows are a table's fields: a hex literal's number does not survive.
     rows: (trx, env, row) => {
       if (lateral !== undefined || correlated || env.memo === undefined) return fieldRows(trx, env, row)
-      return memoValue(env.memo, key, () => [...fieldRows(trx, env)])
+      return memoValue(env.memo, source, () => [...fieldRows(trx, env)])
     },
   }
+  return source
 }
 
 /** The first MATCH a WHERE requires: itself, or a conjunct of a top-level AND. */
@@ -1438,23 +1436,22 @@ function matchConjunct(e: Expression | undefined): Expression | undefined {
   return splitAnd(e).find((c) => c.kind === NODE.MATCH)
 }
 
-function plainColumn(t: ResultType): ResultType {
-  if (t.literalInt === undefined) return t
-  const { literalInt: _l, ...rest } = t
-  return { ...rest, wasLiteralInt: true }
-}
-
-/** A derived table's or CTE's column names: its own list, or its items' — 1353 when they differ in number, 1060 for a name twice. */
-function renamed(columns: readonly { readonly name: string; readonly type: ResultType }[], names: readonly string[] | undefined): { name: string; type: ResultType }[] {
+/** Owned field types and names: 1353 for a mismatched list, 1060 for a name twice. */
+function renamed(columns: readonly { readonly name: string; readonly type: ResultType }[], names: readonly string[] | undefined, fieldType: (name: string, type: { -readonly [K in keyof ResultType]: ResultType[K] }) => ResultType) {
   if (names !== undefined && names.length !== columns.length) {
     throw sqlError('ER_VIEW_WRONG_LIST', 'In definition of view, derived table or common table expression, SELECT list and column names list have different column counts')
   }
-  // A hex literal's column is bytes again, as its rows are (`fieldRows`).
   const seen = new Set<string>()
+  for (const [i, column] of columns.entries()) {
+    const name = names?.[i] ?? column.name
+    if (!firstKey(seen, name.toLowerCase())) throw sqlError('ER_DUP_FIELDNAME', `Duplicate column name '${name}'`)
+  }
+  // Validate every name before a caller's metadata conversion can fail.
   return columns.map((c, i) => {
     const name = names?.[i] ?? c.name
-    if (!firstKey(seen, name.toLowerCase())) throw sqlError('ER_DUP_FIELDNAME', `Duplicate column name '${name}'`)
-    return { name, type: plainColumn(c.type) }
+    const { literalInt, ...type } = c.type
+    if (literalInt !== undefined) type.wasLiteralInt = true
+    return { name, type: fieldType(name, type) }
   })
 }
 
@@ -1525,7 +1522,7 @@ function recursiveCte(run: Run, cte: NonNullable<QueryExpression['with']>['table
   const anchor = anchorPlans[0]
   if (anchor === undefined) throw sqlError('ER_CTE_RECURSIVE_REQUIRES_NONRECURSIVE_FIRST', `Recursive Common Table Expression '${cte.name}' should have one or more non-recursive query blocks followed by one or more recursive ones`)
   // A recursive CTE's table is typed as a set operation's column is, from the anchor alone, and nullable.
-  const columns = renamed(anchor.columns, cte.columns).map((c) => ({ name: c.name, type: { ...setOperationType([c.type], run.env.session.characterSet), nullable: true, names: { schema: '', table: cte.name, orgTable: '', orgName: c.name } } }))
+  const columns = renamed(anchor.columns, cte.columns, (name, type) => ({ ...setOperationType([type], run.env.session.characterSet), nullable: true, names: { schema: '', table: cte.name, orgTable: '', orgName: name } }))
   let working: readonly (readonly Value[])[] = []
   // What a recursive member reads of the CTE: the rows the last round added.
   const workingTable: DerivedSource = { columns, rows: () => working, explain: () => ({ merged: true, node: planNode(`Scan new records on ${cte.name}`) }) }
