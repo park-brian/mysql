@@ -112,8 +112,9 @@ whole-list name validation and fresh field-type construction, avoiding redundant
 arrays and copies. Each statement caches rows under the bound source instance.
 Bounded literal/typed-integer-NULL sources and exact plain SIGNED/UNSIGNED
 integer casts now announce readiness after actual materialization, with a
-separate positive grammar and caller admission. Cardinality alone supplies no
-readiness proof. Quoted DUAL retains ordinary table lookup and row identity;
+separate positive grammar and caller admission. SIGNED casts admit unsigned
+magnitudes through UINT64_MAX; their actual CAST writer owns wrapping during
+materialization. Cardinality alone supplies no readiness proof. Quoted DUAL retains ordinary table lookup and row identity;
 the parser owns unquoted DUAL normalization. Broader CAST and function-source
 admission remain open. Integer DIV minimum rejection also remains parked after
 broader CAST and written-clause controls exposed lost headers. Evaluation-count

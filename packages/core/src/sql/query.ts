@@ -12,7 +12,7 @@
 import type { ColumnDef, IndexDef, Table, TableDef, ViewDef } from '@myjs/engine'
 import { LITERAL, NODE, QUERY, REF, TOKEN, deparse, lex, parseStatement, type Expression, type OrderItem, type QueryBody, type QueryExpression, type SelectNode, type TableReference, type SetOperationNode, type TableName, type Token } from '@myjs/parser'
 import { messages, sqlError, type ColumnDefinition, type ResultSet, type RowValue } from '@myjs/protocol'
-import { MAX_SIGNED, MAX_UNSIGNED, MIN_SIGNED, intValue, storageWidth, toInteger, truth, withoutHex, type Value } from '@myjs/types'
+import { MAX_UNSIGNED, MIN_SIGNED, intValue, storageWidth, toInteger, truth, withoutHex, type Value } from '@myjs/types'
 import { compile, constantNode, memoValue, logicalOperand, convertTo, decimalField, EMPTY_SCOPE, readSlot, type CompileContext, type Compiled, type Env, type GroupKeys, type QuantifiedSubquery, type Scope, type SubqueryPlan } from './compile.ts'
 import { AggregateSink, chooseStrategy, containsAggregate, groupRows, isAggregate } from './group.ts'
 import { WindowSink, applyWindows, containsWindow } from './window.ts'
@@ -1439,7 +1439,8 @@ function literalReader(q: QueryExpression): boolean {
       expr = expr.expr
     }
     const value = sourceInteger(expr, cast !== undefined)
-    return value === undefined ? expr.kind === NODE.LITERAL && expr.type === LITERAL.NULL : value >= (cast === 'UNSIGNED' ? 0n : MIN_SIGNED) && value <= (cast === 'SIGNED' ? MAX_SIGNED : MAX_UNSIGNED)
+    // A SIGNED CAST owns wrapping an unsigned magnitude during materialization.
+    return value === undefined ? expr.kind === NODE.LITERAL && expr.type === LITERAL.NULL : value >= (cast === 'UNSIGNED' ? 0n : MIN_SIGNED) && value <= MAX_UNSIGNED
   })
 }
 

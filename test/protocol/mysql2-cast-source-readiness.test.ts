@@ -19,7 +19,7 @@ for (const reference of [casts, dual]) test(reference.schema + ': source constru
   const quotedTable = reference === dual
   const marker = quotedTable ? 'marker' : 't'
   assert.equal(reference.observations.length, quotedTable ? 600 : 5076)
-  assert.equal(strict.size, quotedTable ? 552 : 3510)
+  assert.equal(strict.size, quotedTable ? 552 : 3542)
   let created = false
   let phase: string | undefined
   let compared = 0

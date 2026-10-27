@@ -1566,14 +1566,15 @@ all names before conversion, then builds fresh field types and the final array
 without intermediate field wrappers. Each statement caches rows under its bound source instance; unchanged planning
 scopes reuse their Run. A memoized derived/view producer publishes bounded
 literal-source readiness after actual materialization; its positive grammar now
-includes exact plain SIGNED/UNSIGNED integer casts and remains independent of
-constant cardinality. Caller admission retains clause and source fences. The
+includes plain SIGNED/UNSIGNED integer casts. SIGNED admits unsigned magnitudes
+through UINT64_MAX, with wrapping owned by the actual CAST writer during
+materialization. The proof remains independent of constant cardinality. Caller admission retains clause and source fences. The
 parser owns unquoted DUAL normalization; retained table references, including
 quoted DUAL, use ordinary lookup. Broader CAST and function-source readiness
 remain open. FROM binding shares one table record with its scope specification and one alias lookup;
 column widths are computed after each source is planned.
 DIV minimum rejection and NULL-reader ordering remain open: exact integer CAST
-sources are verified within their positive grammar, while out-of-target casts,
+sources are verified within their positive grammar, while negative-overflow casts,
 written source clauses and function sources still need initialization proofs.
 A minimum-boundary trial remains parked after broader controls exposed lost
 headers. Native contracts retain matched metadata, diagnostics, operand effects
