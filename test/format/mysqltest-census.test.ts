@@ -40,12 +40,17 @@ interface Census {
   readonly unsupported: Readonly<Record<string, number>>
   readonly newerThanTarget?: Readonly<Record<string, number>>
   readonly parseFailuresByKeyword: Readonly<Record<string, number>>
+  readonly annotatedAdmissionRefusals: Readonly<Record<string, number>>
   readonly wronglyAcceptedByKeyword: Readonly<Record<string, number>>
   readonly notMeasured: readonly { readonly file: string; readonly reason: string }[]
   readonly failures: readonly { readonly file: string; readonly kind: string }[]
 }
 
 const census = (): Census => JSON.parse(readFileSync(FIXTURE, 'utf8')) as Census
+
+test('native-annotated non-syntax admission refusals remain visible in the census', () => {
+  assert.deepEqual(census().annotatedAdmissionRefusals, { ER_ILLEGAL_VALUE_FOR_TYPE: 2, ER_UNKNOWN_COLLATION: 2 })
+})
 
 test('M3.11: the census is committed and says its numbers out loud', () => {
   assert.ok(existsSync(FIXTURE), 'the census fixture must be committed')

@@ -442,6 +442,7 @@ class ExpressionParser {
     const cursor = this.#c
     let out = expr
     while (cursor.takeWord('COLLATE')) {
+      if (cursor.atWord('BINARY')) cursor.fail()
       const name = collationName(cursor)
       out = out.kind === NODE.LITERAL && out.collation === undefined ? { ...out, collation: name } : { kind: NODE.COLLATE, expr: out, collation: name, at: out.at }
     }

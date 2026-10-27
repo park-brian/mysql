@@ -1580,7 +1580,10 @@ literals, written source clauses and function sources still need initialization
 proofs. The literal grammar rejects nonfinite DOUBLE tokens before resolution,
 retaining native spelling and bounded labels. Grammar readers validate registered
 charset/collation names; registry lookup owns case, utf8 aliases and NUL prefixes.
-Expressions and DDL share SQL collation resolution. Recoverable parser condition
+Expressions and DDL share SQL collation resolution. DDL permits the BINARY collation keyword while expression COLLATE rejects it.
+The generated registry includes utf8mb4_0900_bin (309) and its protocol widths;
+its NO PAD ordering uses UTF-8 byte keys.
+Recoverable parser condition
 histories, collation-name conversion warnings, DECIMAL precision priority and
 finite negative-double CAST overflow remain separate repairs.
 A minimum-boundary trial remains parked after broader controls exposed lost

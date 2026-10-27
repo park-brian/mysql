@@ -121,6 +121,9 @@ admission remain open. Nonfinite DOUBLE literals now fail during parsing, with
 native spelling and label bounds, and preserve earlier namespace refusals. Shared grammar name
 readers validate registered charsets/collations; the registry owns case, utf8
 aliases and NUL prefixes, and one SQL resolver serves expressions and DDL.
+DDL permits the BINARY collation keyword while expression COLLATE rejects it.
+The generated registry includes utf8mb4_0900_bin (309) and its protocol widths;
+its NO PAD ordering uses UTF-8 byte keys.
 Recoverable parser condition histories, collation-name conversion warnings,
 DECIMAL precision priority and finite negative-double CAST overflow remain open. Integer DIV minimum rejection also remains parked after
 broader CAST and written-clause controls exposed lost headers. Evaluation-count

@@ -30,7 +30,7 @@
 // Source:  mysql/mysql-server@e174239c strings/ctype-ujis.cc
 // Source:  mysql/mysql-server@e174239c strings/ctype-utf8.cc
 // Source:  mysql/mysql-server@e174239c strings/ctype-win1250ch.cc
-// Collations: 290
+// Collations: 291
 // Classes: 8
 
 /** SHA-256 over every source file's own hash — the same value the registry carries. */
@@ -40,14 +40,14 @@ export const CHARSET_METRICS_SOURCE_SHA256 =
 /**
  * `mbminlen mbmaxlen id-ranges`, one width class per line.
  *
- * Only a handful of distinct widths exist across 290 collations and the ids
+ * Only a handful of distinct widths exist across 291 collations and the ids
  * within a class are mostly contiguous, so ranges beat one line per id by an
  * order of magnitude.
  */
 export const PACKED_CHARSET_METRICS = `1 1 2-11,14-16,18,20-23,25-27,29-32,34,36-44,47-53,57-59,63-75,77-82,89,92-94,99
 1 2 1,13,19,24,28,84-88,95-96
 1 3 12,33,76,83,91,97-98,192-215,223
-1 4 45-46,224-250,255-300,303-308,310-323
+1 4 45-46,224-250,255-300,303-323
 1 5 17
 2 2 35,90,128-151,159
 2 4 54-56,62,101-124

@@ -24,7 +24,7 @@
 // Source:  mysql/mysql-server@e174239c strings/ctype-ujis.cc
 // Source:  mysql/mysql-server@e174239c strings/ctype-utf8.cc
 // Source:  mysql/mysql-server@e174239c strings/ctype-win1250ch.cc
-// Collations: 290
+// Collations: 291
 
 /** The upstream files this registry was generated from, for re-verification. */
 export const COLLATION_TABLE_SOURCE = 'mysql/mysql-server@e174239c strings/ctype-*.cc'
@@ -34,14 +34,14 @@ export const COLLATION_TABLE_SOURCE_SHA256 =
   '037f18f34aac7c6d3eed67a3d3763202ab89824c8972627f96364fbe052aa473'
 
 /** Number of collations MySQL e174239c compiles in. */
-export const COLLATION_TABLE_SIZE = 290
+export const COLLATION_TABLE_SIZE = 291
 
 /**
  * One collation per line: `id collation charset mbminlen mbmaxlen [flags]`.
  *
  * Flags are a subset of `n` (NO PAD), `d` (the charset's default collation)
  * and `b` (binary). Expanded lazily by `registry` — a minified object
- * literal of 290 entries costs several times this in the bundle.
+ * literal of 291 entries costs several times this in the bundle.
  */
 export const PACKED_COLLATIONS = `1 big5_chinese_ci big5 1 2 d
 2 latin2_czech_cs latin2 1 1
@@ -319,6 +319,7 @@ export const PACKED_COLLATIONS = `1 big5_chinese_ci big5 1 2 d
 306 utf8mb4_ru_0900_ai_ci utf8mb4 1 4 n
 307 utf8mb4_ru_0900_as_cs utf8mb4 1 4 n
 308 utf8mb4_zh_0900_as_cs utf8mb4 1 4 n
+309 utf8mb4_0900_bin utf8mb4 1 4 nb
 310 utf8mb4_nb_0900_ai_ci utf8mb4 1 4 n
 311 utf8mb4_nb_0900_as_cs utf8mb4 1 4 n
 312 utf8mb4_nn_0900_ai_ci utf8mb4 1 4 n

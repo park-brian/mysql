@@ -17,6 +17,8 @@ import {
   isProhibitedConnectionCollation,
   requireCollationInfo,
   CharsetError,
+  collation,
+  encodeCollation,
 } from '@myjs/charsets'
 import { charsetWidths, charsetWidthTableSize, CHARSET_METRICS_SOURCE_SHA256, isProhibitedConnectionCharset } from '@myjs/protocol'
 
@@ -32,6 +34,7 @@ test('M2.1: every id the roadmap names resolves', () => {
     [246, 'utf8mb4_unicode_520_ci', 'utf8mb4', 4, 'PAD SPACE'],
     [255, 'utf8mb4_0900_ai_ci', 'utf8mb4', 4, 'NO PAD'],
     [278, 'utf8mb4_0900_as_cs', 'utf8mb4', 4, 'NO PAD'],
+    [309, 'utf8mb4_0900_bin', 'utf8mb4', 4, 'NO PAD'],
   ]
   for (const [id, name, charset, mbmaxlen, pad] of expected) {
     const info = requireCollationInfo(id)
@@ -73,6 +76,17 @@ test('M5.10: SQL charset and collation names share case, utf8 alias and NUL-pref
   for (const name of ['utf8mb4_bin ', 'unknown', 'utf8mb4']) assert.equal(collationInfoByName(name), undefined, name)
   for (const name of ['utf8mb4 ', 'utf8_general_ci', 'unknown']) assert.equal(defaultCollationOf(name), undefined, name)
   for (const info of allCollations()) if (info.isDefault) assert.equal(defaultCollationOf(info.charset), info)
+})
+
+test('M2.17: utf8mb4_0900_bin uses native NO PAD byte keys, including supplementary characters', () => {
+  const binary = collation(309)
+  assert.equal(binary.padAttribute, 'NO PAD')
+  assert.equal(binary.isBinary, true)
+  for (const text of ['', 'a', 'a ', 'é', '中', '😀']) {
+    const bytes = encodeCollation(text, 309)
+    assert.deepEqual(binary.sortKey(bytes), bytes, text)
+  }
+  assert.notEqual(binary.compare(encodeCollation('a', 309), encodeCollation('a ', 309)), 0)
 })
 
 test('doc 29: the 8.0 family is NO PAD and everything older is PAD SPACE', () => {

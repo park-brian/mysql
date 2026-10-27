@@ -48,6 +48,7 @@ import { REPO, REF, fetchPinnedBytes, combinedSha256, listPinnedDirectory, sourc
 import { lex, parseStatement, parseStatements, ParseError } from '@myjs/parser'
 import { roundTrip } from './lib/round-trip.mjs'
 import { extract } from './lib/mysqltest-extract.mjs'
+import { annotatedAdmission } from './lib/mysqltest-admission.mjs'
 import { arg } from './lib/cli.mjs'
 
 const has = (name) => process.argv.includes(`--${name}`)
@@ -220,6 +221,8 @@ const newerThanTarget = new Map()
 let unsupportedPrinted = 0
 /** Statements that lexed and would not parse, by leading keyword. */
 const parseFailures = new Map()
+/** Non-syntax grammar refusals whose full error facts match the corpus annotation. */
+const admissionRefusals = new Map()
 /**
  * Statements that parsed and did not survive `parse(deparse(ast))` (M3.3), by
  * leading keyword. Gated at zero: a tree the deparser cannot write back holds
@@ -315,6 +318,10 @@ for (const source of sources) {
     } catch (e) {
       if (shouldFail) {
         expectedToFailAndDid++
+      } else if (annotatedAdmission(e, expectedError)) {
+        expectedToFail++
+        expectedToFailAndDid++
+        admissionRefusals.set(e.code, (admissionRefusals.get(e.code) ?? 0) + 1)
       } else if (e instanceof ParseError && e.code === 'ER_NOT_SUPPORTED_YET') {
         const what = /support '([^']*)'/.exec(String(e.message))?.[1] ?? '(unknown)'
         unsupported.set(what, (unsupported.get(what) ?? 0) + 1)
@@ -409,6 +416,7 @@ writeFileSync(
       unsupported: Object.fromEntries([...unsupported].sort((a, b) => b[1] - a[1])),
       newerThanTarget: Object.fromEntries([...newerThanTarget].sort((a, b) => b[1] - a[1])),
       parseFailuresByKeyword: Object.fromEntries([...parseFailures].sort((a, b) => b[1] - a[1])),
+      annotatedAdmissionRefusals: Object.fromEntries([...admissionRefusals].sort((a, b) => a[0].localeCompare(b[0]))),
       wronglyAcceptedByKeyword: Object.fromEntries([...tooPermissive].sort((a, b) => b[1] - a[1])),
       roundTripFailuresByKeyword: Object.fromEntries([...roundTripFailures].sort((a, b) => b[1] - a[1])),
       byCharset: Object.fromEntries(charsetRanked),

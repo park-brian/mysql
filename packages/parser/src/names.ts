@@ -5,14 +5,19 @@ import type { Cursor } from './cursor.ts'
 
 /** A COLLATE name resolves during parsing, before later expression admission. */
 export function collationName(c: Cursor): string {
-  const name = c.peek().kind === TOKEN.STRING ? c.take().text : c.expectIdentifier()
+  const name = readName(c)
   if (collationInfoByName(name) === undefined) throw unknownCollation(name)
   return name
 }
 
 /** BINARY is also a charset keyword; unknown names are refused at their use. */
 export function charsetName(c: Cursor): string {
-  const name = c.peek().kind === TOKEN.STRING || c.atWord('BINARY') ? c.take().text : c.expectIdentifier()
+  const name = readName(c)
   if (defaultCollationOf(name) === undefined) throw unknownCharset(name)
   return name
+}
+
+/** DDL permits BINARY as a collation name; expression COLLATE excludes it. */
+function readName(c: Cursor): string {
+  return c.peek().kind === TOKEN.STRING || c.atWord('BINARY') ? c.take().text : c.expectIdentifier()
 }

@@ -96,7 +96,9 @@ const FLAG_MACROS = {
  */
 function parseCharsetInfo(source) {
   const found = []
-  const head = /\{\s*(\d+)\s*,\s*\d+\s*,\s*(?:\/\*[^*]*\*\/\s*)?\d+\s*,\s*(?:\/\*[^*]*\*\/\s*)?((?:MY_CS_\w+\s*\|?\s*)+)/g
+  // Initializers use both block comments and C++ line comments between fields.
+  const space = String.raw`(?:\s|\/\*(?:[^*]|\*(?!\/))*\*\/|\/\/[^\r\n]*(?:\r?\n|$))*`
+  const head = new RegExp(String.raw`\{${space}(\d+)${space},${space}\d+${space},${space}\d+${space},${space}((?:MY_CS_\w+${space}\|?${space})+)`, 'g')
   let m
   while ((m = head.exec(source)) !== null) {
     const id = Number(m[1])
@@ -109,7 +111,7 @@ function parseCharsetInfo(source) {
     // `utf8mb4_unicode_ci` leaves both `sort_order` and `uca` null and is
     // distinguishable only by its state macro.
     let usesUca = false
-    for (const raw of m[2].replace(/\s+/g, '').split('|').filter(Boolean)) {
+    for (const raw of withoutComments(m[2]).replace(/\s+/g, '').split('|').filter(Boolean)) {
       if (FLAG_MACROS[raw] !== undefined) usesUca = true
       for (const f of FLAG_MACROS[raw] ?? [raw]) flags.add(f)
     }
@@ -130,6 +132,11 @@ function parseCharsetInfo(source) {
         i = source.indexOf('*/', i) + 1
         continue
       }
+      if (c === '/' && source[i + 1] === '/') {
+        i = source.indexOf('\n', i)
+        if (i === -1) break
+        continue
+      }
       if (c === '{') depth++
       else if (c === '}' && --depth === 0) {
         end = i
@@ -140,8 +147,8 @@ function parseCharsetInfo(source) {
     const body = source.slice(m.index, end + 1)
 
     const strings = [...body.matchAll(/"((?:[^"\\]|\\.)*)"/g)].map((s) => s[1])
-    const mbminlen = /(\d+)\s*,\s*\/\*\s*mbminlen/.exec(body)
-    const mbmaxlen = /(\d+)\s*,\s*\/\*\s*mbmaxlen/.exec(body)
+    const mbminlen = /(\d+)\s*,\s*(?:\/\*|\/\/)\s*mbminlen\b/.exec(body)
+    const mbmaxlen = /(\d+)\s*,\s*(?:\/\*|\/\/)\s*mbmaxlen\b/.exec(body)
     const pad = /\bNO_PAD\b/.test(body) ? 'NO PAD' : /\bPAD_SPACE\b/.test(body) ? 'PAD SPACE' : null
     // The two weight sources a collation can name. An 8-bit collation points
     // at a 256-entry `sort_order_*`; a Unicode one points at a
@@ -152,7 +159,7 @@ function parseCharsetInfo(source) {
     // `tab_to_uni` field rather than guessed from the charset name. The field
     // is commented `/* tab_to_uni */` in the hand-written files and
     // `/* to_uni */` in the generated one, so both spellings are accepted.
-    const toUni = /\b(\w*to_uni\w*)\s*,\s*\/\*\s*(?:tab_)?to_uni/.exec(body)?.[1] ?? null
+    const toUni = /\b(\w*to_uni\w*)\s*,\s*(?:\/\*|\/\/)\s*(?:tab_)?to_uni\b/.exec(body)?.[1] ?? null
     // M2.21: which `MY_COLLATION_HANDLER` this collation points at. The
     // handler is what decides the *shape* of a sort key, and the shape is not
     // guessable from the flags: `utf8mb4_bin` and `utf8mb3_bin` are both
@@ -183,6 +190,11 @@ function parseCharsetInfo(source) {
     })
   }
   return found
+}
+
+/** Flags and handler fields contain identifiers, not quoted C++ literals. */
+function withoutComments(text) {
+  return text.replace(/\/\*[\s\S]*?\*\/|\/\/[^\r\n]*/g, '')
 }
 
 /**
@@ -216,9 +228,7 @@ function parseCollationHandlers(source) {
       }
     }
     check(end !== -1, `gen-charsets: unterminated MY_COLLATION_HANDLER ${m[1]}`)
-    const fields = source
-      .slice(open + 1, end)
-      .replace(/\/\*[\s\S]*?\*\//g, '')
+    const fields = withoutComments(source.slice(open + 1, end))
       .split(',')
       .map((f) => f.trim())
     check(fields.length > 5, `gen-charsets: ${m[1]} has too few fields to carry a strnxfrm`)
@@ -262,6 +272,7 @@ expect(246, 'utf8mb4_unicode_520_ci', 'utf8mb4', 4, 'PAD SPACE')
 // `'a' = 'a '` is false where it was true in 5.7.
 expect(255, 'utf8mb4_0900_ai_ci', 'utf8mb4', 4, 'NO PAD')
 expect(278, 'utf8mb4_0900_as_cs', 'utf8mb4', 4, 'NO PAD')
+expect(309, 'utf8mb4_0900_bin', 'utf8mb4', 4, 'NO PAD')
 check(by(63).isBinary, 'gen-charsets: id 63 must be a binary collation')
 check(by(255).isDefault, 'gen-charsets: id 255 must be utf8mb4 default')
 check(by(159)?.mbminlen === 2, 'gen-charsets: id 159 (ucs2_general_mysql500_ci) must be multibyte')
