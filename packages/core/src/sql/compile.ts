@@ -273,7 +273,7 @@ export function decimalPrecision(t: ResultType): number {
 function fixedDecimals(t: ResultType): number | undefined {
   if (t.literalInt !== undefined || t.kind === 'int') return 0
   if (t.kind === 'decimal' || t.kind === 'datetime' || t.kind === 'time') return t.scale
-  if (t.kind === 'double') return t.scale < 31 ? t.scale : undefined
+  if (t.kind === 'double' && t.scale < 31) return t.scale
   return undefined
 }
 
@@ -1413,11 +1413,12 @@ function binary(op: string, left: Expression, right: Expression, extra: Expressi
       // `bi DIV vc` of a BIGINT and a VARCHAR(20) is 22, `yr DIV lt` 14).
       const unsigned = unsignedOf(a.type) || unsignedOf(b.type)
       const divisor = fixedDecimals(b.type) ?? decimalPrecision(b.type)
-      const digits = Math.min(decimalPrecision(a.type) - (fixedDecimals(a.type) ?? 0) + divisor, 21)
+      // DIV fields are at least one character, including unsigned NULL results.
+      const width = Math.max(1, Math.min(decimalPrecision(a.type) - (fixedDecimals(a.type) ?? 0) + divisor, 21) + (unsigned ? 0 : 1))
       // Its operands are read as DECIMALs, text warning each row (8.4.11: `lt DIV 10`).
       const x = asNumber(ca, 'DECIMAL').eval
       const y = asNumber(cb, 'DECIMAL').eval
-      return { eval: byZero(x, y, (p, q) => intDivide(p, q, label), true), type: intType(digits + (unsigned ? 0 : 1), true, unsigned) }
+      return { eval: byZero(x, y, (p, q) => intDivide(p, q, label), true), type: intType(width, true, unsigned) }
     }
     case '%':
     case 'MOD': {

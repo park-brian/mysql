@@ -103,8 +103,9 @@ Numeric CAST printing shares its resolved dimensions with evaluation, including
 zero precision at scale zero. View writability uses the canonical aggregate
 inventory, retaining nested-query exclusions. Decimal division now respects
 nine-word capacity and leading-word ties, raises native overflow and normalizes
-truncated zero without losing display scale. Integer-DIV diagnostic/NULL-field
-gaps, invalid-dimension admission, aliased CAST warning labels,
+truncated zero without losing display scale. DIV result width is at least one
+after its sign contribution. Wider copied-field/parameter metadata and DIV
+diagnostics, invalid-dimension admission, aliased CAST warning labels,
 broader multiplication precision and supplementary identifier-alias admission
 remain open. Broader
 strategy and measured field-copy gaps stay open.

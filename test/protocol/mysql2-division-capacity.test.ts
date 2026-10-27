@@ -16,7 +16,7 @@ test('exact division respects nine-word capacity, leading-word ties and zero und
   const conn = raw.promise()
   const strict = new Set(reference.strict)
   assert.equal(reference.observations.length, 2043)
-  assert.equal(strict.size, 2026)
+  assert.equal(strict.size, 2029)
   let compared = 0
   try {
     await conn.connect()
