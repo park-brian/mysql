@@ -124,7 +124,14 @@ aliases and NUL prefixes, and one SQL resolver serves expressions and DDL.
 DDL permits the BINARY collation keyword while expression COLLATE rejects it.
 The generated registry includes utf8mb4_0900_bin (309) and its protocol widths;
 its NO PAD ordering uses UTF-8 byte keys.
-Recoverable parser condition histories, collation-name conversion warnings,
+Checked parser boundaries retain recoverable COLLATE and DOUBLE-overflow condition
+histories while preserving the first error by identity and keeping invalid ASTs
+out of execution. Unknown charsets and DDL collation failures stop parsing; raw
+cursor APIs still refuse immediately. Parser conditions publish the native
+1,024-entry prefix; ordinary runtime warning totals retain their existing rules.
+DDL preloading gathers collation IDs while the writer alone validates the full
+table spec. Lexical lookahead, CAST type grammar, builtin arity admission,
+collation-name conversion warnings,
 DECIMAL precision priority and finite negative-double CAST overflow remain open. Integer DIV minimum rejection also remains parked after
 broader CAST and written-clause controls exposed lost headers. Evaluation-count
 contracts preserve actual operand effects and prepared non-execution. Buffered multi-statement runtime failures

@@ -102,16 +102,9 @@ export const duplicateKeyText = (key: string, schema: string, table: string): st
 /** The server default (D-10). */
 export const DEFAULT_COLLATION = 255
 
-const TEXT_TO_BINARY: Readonly<Record<number, number>> = {
-  [FIELD_TYPE.STRING]: FIELD_TYPE.STRING,
-  [FIELD_TYPE.VAR_STRING]: FIELD_TYPE.VAR_STRING,
-  [FIELD_TYPE.VARCHAR]: FIELD_TYPE.VAR_STRING,
-}
-
 const STRING_CODES: ReadonlySet<number> = new Set([
   FIELD_TYPE.STRING,
   FIELD_TYPE.VAR_STRING,
-  FIELD_TYPE.VARCHAR,
   FIELD_TYPE.TINY_BLOB,
   FIELD_TYPE.BLOB,
   FIELD_TYPE.MEDIUM_BLOB,
@@ -126,6 +119,11 @@ function option(options: Readonly<Record<string, string>>, ...names: string[]): 
     if (names.includes(k.toUpperCase().replace(/^DEFAULT /, ''))) return v
   }
   return undefined
+}
+
+/** Schema and table options share collation resolution and option spellings. */
+export function resolveOptionsCollation(options: Readonly<Record<string, string>>, fallback: number): number {
+  return resolveCollation(option(options, 'CHARACTER SET', 'CHARSET'), option(options, 'COLLATE'), fallback)
 }
 
 /** `ENGINE=…` to the engine that stores it. */
@@ -220,7 +218,9 @@ export function columnType(t: DataType, tableCollation: number, column = ''): Co
 const mBiggerThanD = (column: string) => sqlError('ER_M_BIGGER_THAN_D', `For float(M,D), double(M,D) or decimal(M,D), M must be >= D (column '${column}').`)
 
 function resolveColumnType(t: DataType, tableCollation: number, column: string): ColumnType {
-  const code = t.code as number
+  let code = t.code as number
+  if (code === FIELD_TYPE.VARCHAR) code = FIELD_TYPE.VAR_STRING
+  const { length, scale: writtenScale } = t
   if (code === FIELD_TYPE.JSON) return { type: FIELD_TYPE.JSON }
   if (code === FIELD_TYPE.GEOMETRY || code === FIELD_TYPE.VECTOR) {
     throw sqlError('ER_NOT_SUPPORTED_YET', messages.notSupported(`The ${t.name} type`))
@@ -231,8 +231,8 @@ function resolveColumnType(t: DataType, tableCollation: number, column: string):
       case FIELD_TYPE.NEWDECIMAL:
       case FIELD_TYPE.DECIMAL: {
         // DECIMAL(0) is DECIMAL(10) (8.4.11).
-        const precision = t.length === undefined || t.length === 0 ? 10 : t.length
-        const scale = t.scale ?? 0
+        const precision = length === undefined || length === 0 ? 10 : length
+        const scale = writtenScale ?? 0
         if (scale > precision) throw mBiggerThanD(column)
         return { type: FIELD_TYPE.NEWDECIMAL, precision, scale, ...unsigned }
       }
@@ -240,19 +240,18 @@ function resolveColumnType(t: DataType, tableCollation: number, column: string):
       case FIELD_TYPE.DOUBLE: {
         // FLOAT(M,D): a width and a fixed number of decimals, which every
         // value is rounded to as it is stored (`Field_real::truncate`).
-        if (t.length === undefined || t.scale === undefined) return { type: code, ...unsigned }
-        return { type: code, precision: t.length, scale: t.scale, ...unsigned }
+        if (length !== undefined && writtenScale !== undefined) return { type: code, precision: length, scale: writtenScale, ...unsigned }
+        break
       }
       case FIELD_TYPE.DATETIME:
       case FIELD_TYPE.TIMESTAMP:
       case FIELD_TYPE.TIME: {
-        return { type: code, decimals: t.length ?? 0 }
+        return { type: code, decimals: length ?? 0 }
       }
       case FIELD_TYPE.BIT:
-        return { type: code, bits: t.length ?? 1 }
-      default:
-        return { type: code, ...unsigned }
+        return { type: code, bits: length ?? 1 }
     }
+    return { type: code, ...unsigned }
   }
 
   // A string family type: text, or bytes when it is binary.
@@ -264,18 +263,16 @@ function resolveColumnType(t: DataType, tableCollation: number, column: string):
     // BINARY selects this charset's _bin collation; binary itself already is one.
     if (t.binary === true && collationId !== CHARSET_BINARY) collationId = resolveCollation(undefined, `${requireCollationInfo(collationId).charset}_bin`, collationId)
   }
-  const length = t.length
   if (code === FIELD_TYPE.ENUM || code === FIELD_TYPE.SET) {
     const members = (t.values ?? []).map((v) => (typeof v === 'string' ? v : new TextDecoder().decode(v)))
     return { type: code, members, collationId }
   }
-  const type = collationId === CHARSET_BINARY ? (TEXT_TO_BINARY[code] ?? code) : code === FIELD_TYPE.VARCHAR ? FIELD_TYPE.VAR_STRING : code
-  if (code === FIELD_TYPE.VAR_STRING || code === FIELD_TYPE.VARCHAR) {
+  if (code === FIELD_TYPE.VAR_STRING) {
     if (length === undefined) throw sqlError('ER_PARSE_ERROR', messages.parseError(')', 1))
-    return { type, length, collationId }
+    return { type: code, length, collationId }
   }
-  if (code === FIELD_TYPE.STRING) return { type, length: length ?? 1, collationId }
-  return { type, collationId }
+  if (code === FIELD_TYPE.STRING) return { type: code, length: length ?? 1, collationId }
+  return { type: code, collationId }
 }
 
 /**
@@ -285,42 +282,41 @@ function resolveColumnType(t: DataType, tableCollation: number, column: string):
 export function createTableSpec(node: CreateTableNode, schemaCollation: number): TableSpec {
   if (node.partition !== undefined) throw sqlError('ER_NOT_SUPPORTED_YET', messages.notSupported('Partitioning'))
 
-  const tableCollation = resolveCollation(option(node.options, 'CHARACTER SET', 'CHARSET'), option(node.options, 'COLLATE'), schemaCollation)
+  const tableCollation = resolveOptionsCollation(node.options, schemaCollation)
   const engine = engineFor(option(node.options, 'ENGINE'))
 
+  const inlinePrimary = node.columns.filter((c) => c.primary === true)
+  const tablePrimary = node.keys.filter((k) => k.type === KEY.PRIMARY)
   const primary = new Set<string>()
-  for (const c of node.columns) if (c.primary === true) primary.add(c.name.toLowerCase())
-  for (const k of node.keys) if (k.type === KEY.PRIMARY) for (const p of k.columns) if (p.name !== undefined) primary.add(p.name.toLowerCase())
+  for (const c of inlinePrimary) primary.add(c.name.toLowerCase())
+  for (const k of tablePrimary) for (const p of k.columns) if (p.name !== undefined) primary.add(p.name.toLowerCase())
 
-  const seen = new Set<string>()
+  const declared = new Map<string, string>()
   const columns: ColumnDef[] = node.columns.map((c) => {
     const lower = c.name.toLowerCase()
-    if (seen.has(lower)) throw sqlError('ER_DUP_FIELDNAME', `Duplicate column name '${c.name}'`)
-    seen.add(lower)
+    if (declared.has(lower)) throw sqlError('ER_DUP_FIELDNAME', `Duplicate column name '${c.name}'`)
+    declared.set(lower, c.name)
     return column(c, tableCollation, primary.has(lower))
   })
 
   const indexes: IndexDef[] = []
   const names = new Set<string>()
   const nameFor = (wanted: string | undefined, first: string): string => {
-    if (wanted !== undefined) {
-      if (names.has(wanted.toLowerCase())) throw sqlError('ER_DUP_KEYNAME', `Duplicate key name '${wanted}'`)
-      names.add(wanted.toLowerCase())
-      return wanted
+    let name = wanted ?? first
+    if (wanted === undefined) {
+      for (let i = 2; names.has(name.toLowerCase()) || name.toUpperCase() === 'PRIMARY'; i++) name = `${first}_${i}`
     }
-    let name = first
-    for (let i = 2; names.has(name.toLowerCase()) || name.toUpperCase() === 'PRIMARY'; i++) name = `${first}_${i}`
-    names.add(name.toLowerCase())
+    const lower = name.toLowerCase()
+    if (names.has(lower)) throw sqlError('ER_DUP_KEYNAME', `Duplicate key name '${name}'`)
+    names.add(lower)
     return name
   }
   const known = (name: string): string => {
-    const c = node.columns.find((col) => col.name.toLowerCase() === name.toLowerCase())
+    const c = declared.get(name.toLowerCase())
     if (c === undefined) throw sqlError('ER_KEY_COLUMN_DOES_NOT_EXITS', `Key column '${name}' doesn't exist in table`)
-    return c.name
+    return c
   }
 
-  const inlinePrimary = node.columns.filter((c) => c.primary === true)
-  const tablePrimary = node.keys.filter((k) => k.type === KEY.PRIMARY)
   if (inlinePrimary.length + tablePrimary.length > 1) throw sqlError('ER_MULTIPLE_PRI_KEY', 'Multiple primary key defined')
   if (inlinePrimary.length === 1) {
     names.add('primary')
@@ -345,14 +341,12 @@ export function createTableSpec(node: CreateTableNode, schemaCollation: number):
     })
     if (k.type === KEY.PRIMARY) {
       names.add('primary')
-      indexes.push({ name: 'PRIMARY', kind: 'primary', parts, ...keyExtras(k) })
+      indexes.unshift({ name: 'PRIMARY', kind: 'primary', parts, ...keyExtras(k) })
     } else indexes.push({ name: nameFor(k.name ?? k.constraint, (parts[0] as { column: string }).column), kind: k.type === KEY.UNIQUE ? 'unique' : 'index', parts, ...keyExtras(k) })
   }
   for (const c of node.columns) {
     if (c.unique === true || c.type.serial === true) indexes.push({ name: nameFor(undefined, c.name), kind: 'unique', parts: [{ column: c.name }] })
   }
-  // The primary key first, as MySQL lists it.
-  indexes.sort((a, b) => (a.kind === 'primary' ? -1 : 0) - (b.kind === 'primary' ? -1 : 0))
   visiblePrimary(columns, indexes)
 
   const options: Record<string, unknown> = { collationId: tableCollation }
@@ -366,9 +360,6 @@ export function createTableSpec(node: CreateTableNode, schemaCollation: number):
   checkGenerated(columns)
   return { name: node.table.name, engine, columns, indexes, options }
 }
-
-/** TEXT and BLOB, which no default but NULL suits. */
-const BLOB_CODES: ReadonlySet<number> = new Set([FIELD_TYPE.TINY_BLOB, FIELD_TYPE.BLOB, FIELD_TYPE.MEDIUM_BLOB, FIELD_TYPE.LONG_BLOB])
 
 /** A key's COMMENT and INVISIBLE, as a definition keeps them. */
 export function keyExtras(k: KeyDefinition): { comment?: string; invisible?: true } {
@@ -387,29 +378,30 @@ export function visiblePrimary(columns: readonly ColumnDef[], indexes: readonly 
 export function column(c: ColumnDefinition, tableCollation: number, inPrimary: boolean): ColumnDef {
   // A generated column has its expression and no default (8.4.11: 1221).
   if (c.generated !== undefined && c.default !== undefined) throw sqlError('ER_WRONG_USAGE', 'Incorrect usage of DEFAULT and generated column')
-  const type = columnType(c.type, tableCollation, c.name)
-  const serial = c.type.serial === true
+  const declaration = c.type
+  const type = columnType(declaration, tableCollation, c.name)
+  const code = type.type
+  const serial = declaration.serial === true
   const nullable = !(c.notNull === true || inPrimary || serial) && c.nullable !== false
   if (inPrimary && c.nullable === true) throw sqlError('ER_PRIMARY_CANT_HAVE_NULL', 'All parts of a PRIMARY KEY must be NOT NULL; if you need NULL in a key, use UNIQUE instead')
   // AUTO_INCREMENT is for integers alone: 8.4 refuses FLOAT, DOUBLE and DECIMAL.
-  if (c.autoIncrement === true && INEXACT_CODES.has(c.type.code as number)) throw sqlError('ER_WRONG_FIELD_SPEC', `Incorrect column specifier for column '${c.name}'`)
+  if (c.autoIncrement === true && INEXACT_CODES.has(code)) throw sqlError('ER_WRONG_FIELD_SPEC', `Incorrect column specifier for column '${c.name}'`)
   const attributes: Record<string, unknown> = {}
   // A nullable TEXT or BLOB's DEFAULT NULL is no default at all: SHOW CREATE TABLE writes none (8.4.11).
   const nullDefault = c.default?.kind === NODE.LITERAL && c.default.type === 'null' && c.defaultExpression !== true
-  if (c.default !== undefined && !(nullDefault && nullable && BLOB_CODES.has(type.type))) attributes['default'] = deparse(c.default)
+  if (c.default !== undefined && !(nullDefault && nullable && code >= FIELD_TYPE.TINY_BLOB && code <= FIELD_TYPE.BLOB)) attributes['default'] = deparse(c.default)
   if (c.defaultExpression === true) attributes['defaultExpression'] = true
   if (c.generated !== undefined) {
     attributes['generated'] = deparse(c.generated.expr)
     if (c.generated.stored) attributes['stored'] = true
   }
   // A charset or collation the column names itself, which SHOW CREATE TABLE then always writes (`is_explicit_collation`).
-  if (type.collationId !== undefined && type.collationId !== CHARSET_BINARY && (c.type.charset !== undefined || c.type.collation !== undefined || c.type.binary === true)) attributes['explicitCollation'] = true
+  if (type.collationId !== undefined && type.collationId !== CHARSET_BINARY && (declaration.charset !== undefined || declaration.collation !== undefined || declaration.binary === true)) attributes['explicitCollation'] = true
   if (c.onUpdate !== undefined) attributes['onUpdate'] = deparse(c.onUpdate)
   if (c.comment !== undefined) attributes['comment'] = c.comment
-  if (c.type.zerofill === true) attributes['zerofill'] = true
+  if (declaration.zerofill === true) attributes['zerofill'] = true
   // BOOL and BOOLEAN are TINYINT(1), width and all.
-  const boolean = c.type.boolean === true
-  if (INTEGER_CODES.has(c.type.code as number) && (c.type.length !== undefined || boolean)) attributes['width'] = c.type.length ?? 1
+  if (INTEGER_CODES.has(code) && (declaration.length !== undefined || declaration.boolean === true)) attributes['width'] = declaration.length ?? 1
   return {
     name: c.name,
     type,

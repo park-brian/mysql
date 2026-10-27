@@ -17,8 +17,16 @@
 // GPLv2 and this project is MIT.
 import { MyjsError } from '@myjs/bytes'
 
+/** Grammar conditions, independent of the executor's diagnostic area. */
+export interface ParseCondition {
+  readonly errno: number
+  readonly message: string
+}
+
 /** Anything this package refuses. Carries `errno` and `sqlState` like `SqlError`. */
 export class ParseError extends MyjsError {
+  /** Nonenumerable history when the grammar reported more than the primary error. */
+  declare readonly conditions?: readonly ParseCondition[]
   /** UTF-16 code-unit offset into the original statement, when one is known. */
   readonly offset: number | undefined
 

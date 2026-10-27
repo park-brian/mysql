@@ -71,7 +71,7 @@ import { analyze, keepShown } from './stats.ts'
 import { alterTable } from './alter.ts'
 import { checkClauses, checkForeignKeyActions, withChecks } from './checks.ts'
 import { showCreateTable } from './show-create.ts'
-import { DEFAULT_COLLATION, createTableSpec, deprecationWarnings, duplicateKeys, duplicateKeyText, resolveCollation } from './ddl.ts'
+import { DEFAULT_COLLATION, createTableSpec, deprecationWarnings, duplicateKeys, duplicateKeyText, resolveOptionsCollation } from './ddl.ts'
 import { foreignKeyChecks, foreignKeyClause, foreignKeysOf, referencingKeys, withForeignKeys } from './foreign-keys.ts'
 import { checkDefaults, insert, remove, update } from './dml.ts'
 import { fulltextOf } from './fulltext.ts'
@@ -183,7 +183,10 @@ function recordDiagnostics(state: SqlSession, conditions: readonly Condition[], 
 /** Protocol admission without a SQL condition area clears diagnostics. */
 function recordFailure(state: SqlSession, conditions: Condition[] | undefined, failure: unknown): SqlError {
   const error = toSqlError(failure)
-  if (!promotedError(conditions, error)) conditions?.push({ level: 'Error', code: error.errno, message: error.message })
+  if (!promotedError(conditions, error)) {
+    const parsing = failure instanceof ParseError ? failure.conditions : undefined
+    for (const e of parsing?.slice(0, MAX_ERROR_COUNT) ?? [error]) conditions?.push({ level: 'Error', code: e.errno, message: e.message })
+  }
   recordDiagnostics(state, conditions ?? [])
   return error
 }
@@ -409,18 +412,13 @@ export class SqlExecutor implements Executor {
       }
     }
     if (statement.kind === STATEMENT.INSERT) tableCollations(statement.table)
-    if (catalog !== undefined) {
-      if (statement.kind === STATEMENT.CREATE_TABLE) {
-        try {
-          const schema = statement.table.schema ?? session.database
-          const fallback = schema === null ? DEFAULT_COLLATION : (catalog.schema(schema).collationId ?? DEFAULT_COLLATION)
-          ids.add(fallback)
-          const spec = createTableSpec(statement, fallback)
-          for (const c of spec.columns) if (c.type.collationId !== undefined) ids.add(c.type.collationId)
-        } catch (e) {
-          expectTyped(e)
-          // The statement itself will say what is wrong.
-        }
+    if (catalog !== undefined && statement.kind === STATEMENT.CREATE_TABLE) {
+      try {
+        const schema = statement.table.schema ?? session.database
+        if (schema !== null) ids.add(resolveOptionsCollation(statement.options, catalog.schema(schema).collationId ?? DEFAULT_COLLATION))
+      } catch (e) {
+        expectTyped(e)
+        // The DDL writer owns complete table-spec validation.
       }
     }
     // Every collation the statement names itself — `COLLATE x`, `_latin1'…'`,
@@ -940,12 +938,7 @@ export class SqlExecutor implements Executor {
 
   #createDatabase(run: Run, statement: CreateDatabaseNode): StatementResult {
     const catalog = this.#catalog(run)
-    const options = statement.options
-    const pick = (...names: string[]): string | undefined => {
-      for (const [k, v] of Object.entries(options)) if (names.includes(k.toUpperCase().replace(/^DEFAULT /, ''))) return v
-      return undefined
-    }
-    const collationId = resolveCollation(pick('CHARACTER SET', 'CHARSET'), pick('COLLATE'), DEFAULT_COLLATION)
+    const collationId = resolveOptionsCollation(statement.options, DEFAULT_COLLATION)
     // The data dictionary's own schema is refused by name (sql_db.cc), before anything else.
     if (statement.name === 'mysql' && statement.ifNotExists !== true) throw systemSchema(statement.name)
     const made = catalog.createSchema(statement.name, { ifNotExists: statement.ifNotExists === true, collationId })

@@ -4,7 +4,8 @@ import { connect } from 'node:net'
 import mysql from 'mysql2'
 import { MySQL } from '@myjs/core'
 import { observeCommand } from './packet-observation.ts'
-import reference from './fixtures/diagnostics/parser-literal-admission.json' with { type: 'json' }
+import literalAdmission from './fixtures/diagnostics/parser-literal-admission.json' with { type: 'json' }
+import conditionHistories from './fixtures/diagnostics/parser-condition-histories.json' with { type: 'json' }
 
 /** JSON captures retain the sign of zero and distinguish nonfinite values from NULL. */
 function numbers(value: unknown): unknown {
@@ -17,17 +18,17 @@ function numbers(value: unknown): unknown {
   return value
 }
 
-test('M5.10: literal and namespace admission preserves primary errors, headers and effects', async () => {
+for (const [reference, total, matched] of [[literalAdmission, 1623, 1497], [conditionHistories, 198, 180]] as const) test('M5.10: admission preserves primary errors, condition histories, headers and effects: ' + reference.schema, async () => {
   const host = process.env.MYSQL_REFERENCE_HOST
-  const db = host === undefined ? await MySQL.open(':memory:') : undefined
+  const db = host === undefined ? await MySQL.open(':memory:', { multipleStatements: true }) : undefined
   const transport = db === undefined
     ? connect({ host: host!, port: Number(process.env.MYSQL_REFERENCE_PORT ?? 3306), noDelay: true })
     : db.createStream()
   const raw = mysql.createConnection({ stream: transport, user: 'root', ...(db === undefined ? { password: process.env.MYSQL_REFERENCE_PASSWORD ?? 'root' } : {}), supportBigNumbers: true, bigNumberStrings: true, multipleStatements: true })
   const conn = raw.promise()
   const strict = new Set(reference.strict)
-  assert.equal(reference.observations.length, 1623)
-  assert.equal(strict.size, 1085)
+  assert.equal(reference.observations.length, total)
+  assert.equal(strict.size, matched)
   let created = false
   let compared = 0
   try {
@@ -94,6 +95,29 @@ test('M5.10: literal and namespace admission preserves primary errors, headers a
     assert.equal(compared, db === undefined ? reference.observations.length : strict.size)
   } finally {
     if (created) await conn.query('DROP DATABASE ' + reference.schema)
+    await conn.end()
+    await db?.end()
+  }
+})
+
+for (const multipleStatements of [false, true]) test('parser histories honor negotiated multiple statements: ' + multipleStatements, async () => {
+  const host = process.env.MYSQL_REFERENCE_HOST
+  const db = host === undefined ? await MySQL.open(':memory:', { multipleStatements }) : undefined
+  const transport = db === undefined ? connect({ host: host!, port: Number(process.env.MYSQL_REFERENCE_PORT ?? 3306), noDelay: true }) : db.createStream()
+  const raw = mysql.createConnection({ stream: transport, user: 'root', ...(db === undefined ? { password: process.env.MYSQL_REFERENCE_PASSWORD ?? 'root' } : {}), multipleStatements })
+  const conn = raw.promise()
+  try {
+    for (const [sql, code] of [['SELECT 1 COLLATE missing_c1; SELECT 2', 1273], ['SELECT 1e309; SELECT 2', 1367]] as const) {
+      const observed = await observeCommand(raw, conn, transport, { sql, api: 'query' })
+      assert.equal((observed.outcome.error as unknown[])[1], code)
+      const codes = (observed.outcome.warnings as mysql.RowDataPacket[]).map(c => c.Code)
+      assert.deepEqual(codes, multipleStatements ? [code] : [code, 1064])
+      assert.equal(observed.outcome.warningCount, codes.length)
+      assert.equal(observed.outcome.errorCount, codes.length)
+      assert.deepEqual(observed.outcome.rows, [])
+      assert.equal(observed.outcome.fields, null)
+    }
+  } finally {
     await conn.end()
     await db?.end()
   }

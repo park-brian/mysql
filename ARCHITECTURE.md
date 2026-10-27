@@ -1583,9 +1583,17 @@ charset/collation names; registry lookup owns case, utf8 aliases and NUL prefixe
 Expressions and DDL share SQL collation resolution. DDL permits the BINARY collation keyword while expression COLLATE rejects it.
 The generated registry includes utf8mb4_0900_bin (309) and its protocol widths;
 its NO PAD ordering uses UTF-8 byte keys.
-Recoverable parser condition
-histories, collation-name conversion warnings, DECIMAL precision priority and
-finite negative-double CAST overflow remain separate repairs.
+One checked cursor boundary collects recoverable expression-COLLATE and DOUBLE
+overflow conditions, flushes before publishing an AST and preserves the primary
+error by identity with nonenumerable history. Charset and DDL collation failures
+remain fatal; low-level cursor calls still throw immediately. SQL diagnostics
+retain the native first 1,024 parser conditions without changing runtime warning
+totals. Cursor scopes release their history and nesting counters after failures.
+DDL preloading resolves required collation IDs; full table-spec validation belongs
+to the actual writer. Shared option resolution and physical type normalization
+avoid duplicate metadata work. Lexical lookahead, CAST type grammar, builtin
+arity admission, collation-name conversion warnings, DECIMAL precision priority
+and finite negative-double CAST overflow remain separate repairs.
 A minimum-boundary trial remains parked after broader controls exposed lost
 headers. Native contracts retain matched metadata, diagnostics, operand effects
 and state before those repairs proceed.

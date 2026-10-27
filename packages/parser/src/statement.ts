@@ -12,7 +12,7 @@
 // sends `SHOW TABLES` today should be told this server cannot do that yet, not
 // that its SQL is malformed.
 import { unsupportedStatement } from './errors.ts'
-import { Cursor, checkTreeDepth } from './cursor.ts'
+import { Cursor } from './cursor.ts'
 import { TOKEN, type Token } from './tokens.ts'
 import { decodeStatement, lex, type LexOptions } from './lexer.ts'
 import { NO_SQL_MODE, type SqlMode } from './sql-mode.ts'
@@ -74,8 +74,7 @@ export function parseStatement(sql: string, options: ParseStatementOptions = {})
  * charset-aware lexing reachable at all.
  */
 export function parseStatementBytes(bytes: Uint8Array, options: ParseStatementOptions = {}): Statement {
-  const sql = decodeStatement(bytes, options.collationId ?? 255)
-  return parseFromTokens(new Cursor(lex(sql, options), sql), options.sqlMode ?? NO_SQL_MODE)
+  return parseStatement(decodeStatement(bytes, options.collationId ?? 255), options)
 }
 
 /**
@@ -95,31 +94,21 @@ export function* parseStatementSequence(sql: string, options: ParseStatementOpti
   const c = new Cursor(options.tokens ?? lex(sql, options), sql)
   const sqlMode = options.sqlMode ?? NO_SQL_MODE
   for (;;) {
-    const statement = checked(c, sqlMode)
-    if (!c.takeOp(';') && !c.atEnd()) c.fail()
+    const statement = parseFromTokens(c, sqlMode, true)
     const more = !c.atEnd()
     yield { statement, more }
     if (!more) return
   }
 }
 
-/** One statement, refused if there is none or if it nests too deep. */
-function checked(c: Cursor, sqlMode: SqlMode): Statement {
-  const statement = dispatch(c, sqlMode)
-  checkTreeDepth(statement)
-  return statement
-}
-
-function parseFromTokens(c: Cursor, sqlMode: SqlMode): Statement {
-  const statement = checked(c, sqlMode)
-
-  // A trailing `;` is part of the statement as clients send it. Anything after
-  // one is a second statement, and D-13 gates multi-statement execution off
-  // precisely because it "turns a SQL-injection point into arbitrary statement
-  // execution" — so the leftover is refused here rather than ignored.
-  c.takeOp(';')
-  if (!c.atEnd()) c.fail()
-  return statement
+/** Check the complete grammar boundary before publishing either an AST or errors. */
+function parseFromTokens(c: Cursor, sqlMode: SqlMode, multiple = false): Statement {
+  return c.checked(() => {
+    const statement = dispatch(c, sqlMode)
+    const separator = c.takeOp(';')
+    if (!c.atEnd() && (!multiple || !separator)) c.fail()
+    return statement
+  })
 }
 
 function dispatch(c: Cursor, sqlMode: SqlMode): Statement {

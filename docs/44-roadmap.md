@@ -180,16 +180,53 @@ unchanged caps pass at core/facade 334,300/334,249 B gzipped. One million parser
 inputs and 20,000 executor statements seeded 20261010 pass. The new protocol test
 passes against native and fails on dd1213a at schema admission. The preceding
 run finished with nine required jobs passed and these two failures; monitor the
-repair's exact SHA while continuing after its independent review.
+repair's exact SHA while continuing after its independent review. Run 40584480812
+for 30d97d7 subsequently passed all eleven required jobs.
 
-**After the CI repair:** preserve native recoverable COLLATE diagnostic histories
-through one checked parser boundary. Keep the earliest error primary while
-retaining later parsing conditions and their counts; refuse the invalid statement
-before execution. Preserve direct-call error identity/JSON, PREPARE non-execution,
-completed text-command prefixes and reader closure. Strengthen the captured
-history checks without recapturing answers or changing caps. Determine charset
-conversion warning admission separately from fatal literal overflow; do not
-continue past a grammar failure that native treats as fatal.
+**Parser histories, verified (2026-10-27):** the checked cursor boundary now collects
+recoverable expression-COLLATE and DOUBLE-overflow errors, preserves the original
+primary error by identity and attaches its later conditions outside ordinary
+error JSON. Unknown charsets and DDL collation failures retain their native fatal
+boundaries. Invalid ASTs cannot reach execution; raw cursor entry points retain
+immediate refusal. Native research covers repeated errors, syntax/CTE failures,
+PREPARE, command prefixes and the 1,024-condition parser limit. Existing runtime
+warning totals keep their separate publication rules.
+
+The old admission harness now explicitly enables multiple statements on the test
+server, matching its client and native capture; its 1,623 observations and all
+prior preservation checks pass without changing native answers. With matched
+server/client settings, complete matches improve from 1,097 to 1,497; all old
+strict cases remain strict. A new 198-command capture improves 80 to 180 complete
+matches, retaining the 18 open cases and every previously matching component,
+header, field attribute, PREPARE count and captured effect. Separate native
+checks confirm both enabled and disabled modes. DDL preloading now gathers needed
+collation IDs while the actual writer owns full table-spec validation. Shared
+option resolution, canonical physical type codes, one declaration-name map and
+PRIMARY insertion remove duplicated metadata work. All nine unchanged size caps
+pass at core/facade 334,346/334,266 B gzipped (171 B raw smaller than 30d97d7).
+Direct parser identity/JSON, fatal boundaries, untyped failures, cursor reuse,
+local bounds, command modes and cold schema/table/column collation loading tests
+pass. One million parser inputs and 20,000 executor statements seeded 20261010
+pass. Native replay passes all 1,821 captured commands and both command modes.
+The actual 120-file census reproduces byte for byte at 17,530/17,589; the official
+1,459-file suite retains all 37 shared passes and its entire measurement fixture
+is byte-identical. Fresh Docker --reference passes 1,455 main tests, four latency
+tests, typecheck, lint, package/typed smoke, the real client and all seven pinned
+corpora. Final source proof matches 437 test files/fixtures, 204 runtime sources
+and reference/generator/census/helper tooling before cleanup. An indentation-only
+final review fix emits identical JavaScript; the affected 15 tests, typecheck
+and all nine size gates pass again in that fresh container.
+Lexical lookahead, CAST type grammar, builtin arity admission and collation-name
+conversion warnings remain captured or explicitly open.
+
+**Next bounded slice:** audit CAST type grammar against pinned MySQL before
+changing the shared datatype reader. The retained `CAST('x' AS CHAR COLLATE ...)`
+controls require a syntax refusal at COLLATE, including after an earlier
+recoverable error. Keep DDL column collations and valid CAST charset options in
+their own grammar contexts; preserve native error ordering, metadata, PREPARE
+non-execution and size caps. Lexical lookahead and collation-name conversion
+warnings need separate repairs. Do not execute an invalid AST to discover later
+semantic errors or continue past a native fatal grammar boundary.
 
 The positive literal/typed-integer-NULL source proof now includes plain
 SIGNED/UNSIGNED casts of integer, boolean and text literals under unchanged

@@ -4,9 +4,13 @@ import { TOKEN } from './tokens.ts'
 import type { Cursor } from './cursor.ts'
 
 /** A COLLATE name resolves during parsing, before later expression admission. */
-export function collationName(c: Cursor): string {
+export function collationName(c: Cursor, recoverable = false): string {
   const name = readName(c)
-  if (collationInfoByName(name) === undefined) throw unknownCollation(name)
+  if (collationInfoByName(name) === undefined) {
+    const error = unknownCollation(name)
+    if (!recoverable) throw error
+    c.report(error)
+  }
   return name
 }
 

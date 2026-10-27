@@ -9,7 +9,7 @@
 // Composition rather than inheritance, because the two parsers share a position
 // and nothing else: precedence climbing and DDL have no common shape worth
 // modelling as a base class.
-import { parseError, tooDeep } from './errors.ts'
+import { ParseError, parseError, tooDeep, type ParseCondition } from './errors.ts'
 import { RESERVED } from './keywords.ts'
 import { TOKEN, type Token } from './tokens.ts'
 import type { TableName } from './statement-ast.ts'
@@ -78,10 +78,39 @@ export class Cursor {
   readonly source: string
   at = 0
   #depth = 0
+  #primary: ParseError | undefined
+  #conditions: ParseCondition[] | undefined
 
   constructor(tokens: readonly Token[], source = '') {
     this.tokens = tokens
     this.source = source
+  }
+
+  /** Recoverable grammar errors collect only inside a checked entry point. */
+  report(error: ParseError): void {
+    if (!this.#conditions) throw error
+    this.#primary ??= error
+    this.#conditions.push({ errno: error.errno!, message: error.message })
+  }
+
+  /** Refuse an invalid statement before its AST reaches a consumer. */
+  checked<T extends object>(parse: () => T): T {
+    if (this.#conditions) return parse()
+    this.#conditions = []
+    try {
+      const result = parse()
+      if (this.#primary !== undefined) throw this.#primary
+      checkTreeDepth(result)
+      return result
+    } catch (error) {
+      if (!(error instanceof ParseError) || this.#primary === undefined) throw error
+      if (error !== this.#primary) this.report(error)
+      if (this.#conditions.length > 1) Object.defineProperty(this.#primary, 'conditions', { value: this.#conditions })
+      throw this.#primary
+    } finally {
+      this.#primary = undefined
+      this.#conditions = undefined
+    }
   }
 
   /**
@@ -229,7 +258,8 @@ export class Cursor {
 
   /** Run `parse` one nesting level deeper, refusing past `MAX_DEPTH`. */
   nested<T>(parse: () => T): T {
-    if (++this.#depth > MAX_DEPTH) throw tooDeep(MAX_DEPTH)
+    if (this.#depth >= MAX_DEPTH) throw this.#primary ?? tooDeep(MAX_DEPTH)
+    this.#depth++
     try {
       return parse()
     } finally {

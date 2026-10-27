@@ -16,7 +16,7 @@
 //                       5.0, so `NOT a = b` regroups from `NOT (a = b)` to
 //                       `(NOT a) = b`.
 import { systemVariableParts } from './variable.ts'
-import { Cursor, checkTreeDepth } from './cursor.ts'
+import { Cursor } from './cursor.ts'
 import { RESERVED } from './keywords.ts'
 import { TOKEN } from './tokens.ts'
 import { NODE, LITERAL, type Expression, type LiteralType } from './ast.ts'
@@ -140,10 +140,11 @@ export interface ParseExpressionOptions extends LexOptions {
 export function parseExpression(sql: string, options: ParseExpressionOptions = {}): Expression {
   const mode = options.sqlMode ?? NO_SQL_MODE
   const cursor = new Cursor(lex(sql, options))
-  const expr = new ExpressionParser(cursor, mode).parse()
-  if (!cursor.atEnd()) cursor.fail()
-  checkTreeDepth(expr)
-  return expr
+  return cursor.checked(() => {
+    const expr = new ExpressionParser(cursor, mode).parse()
+    if (!cursor.atEnd()) cursor.fail()
+    return expr
+  })
 }
 
 /**
@@ -443,7 +444,7 @@ class ExpressionParser {
     let out = expr
     while (cursor.takeWord('COLLATE')) {
       if (cursor.atWord('BINARY')) cursor.fail()
-      const name = collationName(cursor)
+      const name = collationName(cursor, true)
       out = out.kind === NODE.LITERAL && out.collation === undefined ? { ...out, collation: name } : { kind: NODE.COLLATE, expr: out, collation: name, at: out.at }
     }
     return out
@@ -456,7 +457,7 @@ class ExpressionParser {
     switch (t.kind) {
       case TOKEN.NUMBER:
         cursor.skip()
-        return { kind: NODE.LITERAL, ...numericLiteral(t.text), at: t.start }
+        return { kind: NODE.LITERAL, ...numericLiteral(t.text, cursor), at: t.start }
       case TOKEN.STRING:
         return { kind: NODE.LITERAL, type: LITERAL.STRING, value: this.#stringText(), at: t.start }
       case TOKEN.HEX:
@@ -977,11 +978,11 @@ class ExpressionParser {
  * it in JavaScript — the same reasoning behind D-15 mapping DECIMAL to a
  * string rather than to a float.
  */
-function numericLiteral(text: string): { type: LiteralType; value: bigint | number | string; text?: string } {
+function numericLiteral(text: string, cursor: Cursor): { type: LiteralType; value: bigint | number | string; text?: string } {
   // A DOUBLE keeps its text: MySQL sizes the literal by how it was written (`1e1` is 3 wide).
   if (/[eE]/.test(text)) {
     const value = Number(text)
-    if (!Number.isFinite(value)) throw illegalDouble(text)
+    if (!Number.isFinite(value)) cursor.report(illegalDouble(text))
     return { type: LITERAL.DOUBLE, value, text }
   }
   if (text.includes('.')) return { type: LITERAL.DECIMAL, value: text }
