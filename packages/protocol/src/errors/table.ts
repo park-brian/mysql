@@ -1,7 +1,7 @@
 // GENERATED FILE — do not edit by hand. Run `npm run gen:errors`.
 //
 // M1.6 / D-14: generated from MySQL's own error source rather than
-// transcribed. D-29: facts only — error number, symbol and SQLSTATE. The
+// transcribed. D-29: facts only — codes, SQLSTATEs and strict membership. The
 // English message templates are not reproduced; ground rule 7 keeps this
 // repository free of MySQL source, which is GPLv2 to our MIT.
 //
@@ -18,6 +18,13 @@ export const ERROR_TABLE_SOURCE_SHA256 =
 
 /** Number of entries, including OBSOLETE_* symbols, which still consume codes. */
 export const ERROR_TABLE_SIZE = 2132
+
+/** The pinned source of strict warning-promotion membership. Facts only. */
+export const STRICT_ERROR_SOURCE = 'mysql/mysql-server@e174239c sql/error_handler.cc'
+export const STRICT_ERROR_SOURCE_SHA256 = '709fff0c6c4f005e9bb95e16c605014a11a1f63764fb897efbf5d8f1fd346fba'
+
+/** Native codes promoted by Strict_error_handler; no eager symbol-table lookup. */
+export const STRICT_ERROR_CODES: ReadonlySet<number> = new Set([1292, 1411, 1264, 3752, 1365, 1366, 1265, 3751, 1406, 1048, 1364, 1071, 1423, 1263, 1260, 1441, 6527, 1261, 1262, 3020, 3155, 3156, 1301])
 
 /**
  * One entry per line: `errno symbol` with an optional trailing SQLSTATE.

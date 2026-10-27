@@ -2,7 +2,10 @@
 import { MyjsError } from '@myjs/bytes'
 
 /** A value that cannot be encoded, or bytes that cannot be decoded. */
-export class TypeError_ extends MyjsError {}
+export class TypeError_ extends MyjsError {
+  /** The exact integer rejected by arithmetic, when a SQL reader needs its diagnostic text. */
+  declare readonly integer?: bigint
+}
 
 export function outOfRange(what: string, value: unknown): TypeError_ {
   return new TypeError_('ER_DATA_OUT_OF_RANGE', `${what}: ${String(value)} is out of range`, {

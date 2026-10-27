@@ -13,6 +13,9 @@ export {
   ERROR_TABLE_SOURCE,
   ERROR_TABLE_SOURCE_SHA256,
   ERROR_TABLE_SIZE,
+  STRICT_ERROR_SOURCE,
+  STRICT_ERROR_SOURCE_SHA256,
+  isStrictErrorCode,
 } from './errors/index.ts'
 export { messages } from './errors/messages.ts'
 export { PacketFramer, MAX_PAYLOAD, HEADER_SIZE } from './framer.ts'

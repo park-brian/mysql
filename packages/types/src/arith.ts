@@ -88,7 +88,8 @@ const labelOf = (expr: ExprLabel): string => (typeof expr === 'string' ? expr : 
 /** A BIGINT result, range-checked. `expr` names the expression in the error, as MySQL's message does. */
 function checked(n: bigint, unsigned: boolean, expr: ExprLabel): Value {
   if (unsigned ? n < 0n || n > MAX_UNSIGNED : n < MIN_SIGNED || n > MAX_SIGNED) {
-    throw valueOutOfRange(unsigned ? 'BIGINT UNSIGNED' : 'BIGINT', labelOf(expr))
+    // Retain the coefficient without changing direct callers' error serialization.
+    throw Object.defineProperty(valueOutOfRange(unsigned ? 'BIGINT UNSIGNED' : 'BIGINT', labelOf(expr)), 'integer', { value: n })
   }
   return int(n, unsigned)
 }

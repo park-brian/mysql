@@ -17,6 +17,9 @@ import {
   ERROR_TABLE_SOURCE,
   ERROR_TABLE_SOURCE_SHA256,
   SqlError,
+  isStrictErrorCode,
+  STRICT_ERROR_SOURCE,
+  STRICT_ERROR_SOURCE_SHA256,
 } from '@myjs/protocol'
 
 test('1062 is ER_DUP_ENTRY with SQLSTATE 23000', () => {
@@ -100,4 +103,11 @@ test('SqlError carries mysql2s exact shape', () => {
   assert.equal(err.sqlState, '23000')
   assert.equal(err.sqlMessage, "Duplicate entry 'a@b' for key 'users.email'")
   assert.ok(err instanceof Error)
+})
+
+test('strict membership comes from the same pinned native tree', () => {
+  assert.equal(STRICT_ERROR_SOURCE.replace('sql/error_handler.cc', 'share/messages_to_clients.txt'), ERROR_TABLE_SOURCE)
+  assert.match(STRICT_ERROR_SOURCE_SHA256, /^[0-9a-f]{64}$/)
+  for (const code of [1048, 1264, 1292, 1365]) assert.equal(isStrictErrorCode(code), true)
+  for (const code of [0, 1062, 1690, 65535]) assert.equal(isStrictErrorCode(code), false)
 })

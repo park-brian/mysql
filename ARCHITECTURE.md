@@ -583,8 +583,17 @@ division by zero, a logarithm of zero. Its `Strict_error_handler` decides
 this for every condition at the one point they all pass through. Here that
 point is the statement's list of conditions (`strict.ts`): the executor
 chooses the list from the statement and the mode, and a list for a strict
-statement throws when a listed code is pushed. No expression knows which
-statement it is in.
+statement records the promoted error and throws that exact object. Membership
+comes from generated facts in the pinned native handler; statement, mode,
+IGNORE and severity policy stay here. No expression knows which statement it is in.
+
+Arithmetic errors can retain an exact integer as a non-enumerable fact without
+emitting SQL diagnostics. DIV's adapter uses bound SQL kinds to select decimal
+conversion: hex literals take that path, while two integer operands do not.
+A conversion warning can promote to primary error 1292 before range error 1690.
+The statement retains both conditions in order while returning the first error.
+Final publication recognizes that primary by identity, appends other terminal
+errors once, and counts the full area before keeping its bounded prefix.
 
 ### One property that makes the engine simple
 

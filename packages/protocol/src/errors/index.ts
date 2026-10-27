@@ -8,7 +8,7 @@
 // D-29: the table carries facts only. Message text is ours (see `messages.ts`).
 
 import { MyjsError, ProtocolError } from '@myjs/bytes'
-import { PACKED_ERROR_TABLE } from './table.ts'
+import { PACKED_ERROR_TABLE, STRICT_ERROR_CODES } from './table.ts'
 
 /** MySQL's fallback SQLSTATE for a code that declares none. */
 export const DEFAULT_SQLSTATE = 'HY000'
@@ -79,6 +79,11 @@ export function hasErrorSymbol(symbol: string): boolean {
   return load().bySymbol.has(symbol)
 }
 
+/** Whether the native strict handler promotes a warning with this code. */
+export function isStrictErrorCode(errno: number): boolean {
+  return STRICT_ERROR_CODES.has(errno)
+}
+
 /**
  * An error a client sees, in `mysql2`'s exact shape (doc 42): `code`, `errno`,
  * `sqlState`, `sqlMessage` — so existing `catch` blocks keep working.
@@ -87,7 +92,7 @@ export class SqlError extends MyjsError {
   declare readonly errno: number
   readonly sqlMessage: string
 
-  constructor(symbol: string, sqlMessage: string, options: { errno?: number; sqlState?: string } = {}) {
+  constructor(symbol: string, sqlMessage: string, options: { errno?: number | undefined; sqlState?: string | undefined } = {}) {
     const errno = options.errno ?? errnoOf(symbol)
     const sqlState = options.sqlState ?? sqlStateOf(symbol)
     super(symbol, sqlMessage, { errno, sqlState })
@@ -111,4 +116,4 @@ export function protocolError(symbol: string, message: string): ProtocolError {
   return new ProtocolError(symbol, message, { errno: errnoOf(symbol), sqlState: sqlStateOf(symbol) })
 }
 
-export { ERROR_TABLE_SOURCE, ERROR_TABLE_SOURCE_SHA256, ERROR_TABLE_SIZE } from './table.ts'
+export { ERROR_TABLE_SOURCE, ERROR_TABLE_SOURCE_SHA256, ERROR_TABLE_SIZE, STRICT_ERROR_SOURCE, STRICT_ERROR_SOURCE_SHA256 } from './table.ts'

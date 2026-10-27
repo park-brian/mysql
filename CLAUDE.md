@@ -104,8 +104,11 @@ zero precision at scale zero. View writability uses the canonical aggregate
 inventory, retaining nested-query exclusions. Decimal division now respects
 nine-word capacity and leading-word ties, raises native overflow and normalizes
 truncated zero without losing display scale. DIV result width is at least one
-after its sign contribution. Wider copied-field/parameter metadata and DIV
-diagnostics, invalid-dimension admission, aliased CAST warning labels,
+after its sign contribution. Decimal-path DIV overflow emits its conversion
+warning; strict writes retain primary 1292 plus later 1690, with complete counts
+before prefix truncation. Strict membership is generated from the pinned native
+handler. Integer-only minimum-boundary behavior, expression spelling, wider
+copied-field/parameter metadata, invalid-dimension admission and CAST warning labels,
 broader multiplication precision and supplementary identifier-alias admission
 remain open. Broader
 strategy and measured field-copy gaps stay open.

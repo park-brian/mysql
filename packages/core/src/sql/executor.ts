@@ -58,7 +58,7 @@ import {
   type StatementResult,
   type StreamedResultSet,
 } from '@myjs/protocol'
-import { conditionsFor } from './strict.ts'
+import { conditionsFor, promotedError } from './strict.ts'
 import { renameTables } from './rename.ts'
 import { showCreateView, showQuery, shownColumns, tableStatusQuery, variablesColumns, variablesQuery } from './show.ts'
 import { COERCIBILITY, doubleValue, intValue, parseDecimal, plainValue, stringValue, toInteger, toText, type Condition, type Value } from '@myjs/types'
@@ -121,11 +121,9 @@ const systemSchema = (name: string) => sqlError('ER_NO_SYSTEM_SCHEMA_ACCESS', `A
 
 /** Every error a statement can raise, as the `SqlError` a client is sent: typed errors keep their number. */
 export function toSqlError(e: unknown): SqlError {
-  if (e instanceof SqlError) return e
-  if (e instanceof MyjsError && e.errno !== undefined) return new SqlError(e.code, e.message, { errno: e.errno, ...(e.sqlState === undefined ? {} : { sqlState: e.sqlState }) })
+  if (e instanceof MyjsError && e.errno !== undefined) return e instanceof SqlError ? e : new SqlError(e.code, e.message, e)
   // A fault that is not the client's: reported, never a crash of the connection (ground rule 5).
-  const message = e instanceof Error ? e.message : String(e)
-  return new SqlError('ER_INTERNAL_ERROR', `Internal error: ${message}`, { errno: 1815, sqlState: 'HY000' })
+  return new SqlError('ER_INTERNAL_ERROR', `Internal error: ${e instanceof Error ? e.message : String(e)}`)
 }
 
 /** Whether a statement can change rows: the ones that may not simply be run again after failing part-way. */
@@ -173,16 +171,19 @@ function isDiagnostic(statement: Statement): boolean {
 const MAX_ERROR_COUNT = 1024
 
 /** One owner for the kept condition prefix and the command's complete counters. */
-function recordDiagnostics(state: SqlSession, conditions: readonly Condition[], warnings = 0, errors = 0): number {
+function recordDiagnostics(state: SqlSession, conditions: readonly Condition[], warnings = 0): number {
   warnings = Math.max(warnings, conditions.length)
+  let errors = 0
+  for (const condition of conditions) if (condition.level === 'Error') errors++
   state.diagnostics = { conditions: conditions.slice(0, MAX_ERROR_COUNT), warnings, errors }
   return warnings
 }
 
 /** Protocol admission without a SQL condition area clears diagnostics. */
-function recordFailure(state: SqlSession, conditions: readonly Condition[] | undefined, failure: unknown): SqlError {
+function recordFailure(state: SqlSession, conditions: Condition[] | undefined, failure: unknown): SqlError {
   const error = toSqlError(failure)
-  recordDiagnostics(state, conditions?.concat({ level: 'Error', code: error.errno, message: error.message }) ?? [], 0, conditions ? 1 : 0)
+  if (!promotedError(conditions, error)) conditions?.push({ level: 'Error', code: error.errno, message: error.message })
+  recordDiagnostics(state, conditions ?? [])
   return error
 }
 

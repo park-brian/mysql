@@ -17,11 +17,13 @@ import { collationInfoByName, decodeCollation, defaultCollationOf, encodeCollati
 import { LITERAL, NODE, TOKEN, deparse, lex, parseExpression, type CallNode, type CaseNode, type CastNode, type ConvertNode, type Expression, type LiteralNode, type MatchNode, type QueryExpression, type SubqueryNode, type VariableNode, quoteName } from '@myjs/parser'
 import type { ColumnDef, Table, Trx } from '@myjs/engine'
 import { sqlError, messages, type Session } from '@myjs/protocol'
+import { promotedError } from './strict.ts'
 import {
   COERCIBILITY,
   MAX_SIGNED,
   MAX_UNSIGNED,
   MIN_SIGNED,
+  TypeError as ValueError,
   add,
   DERIVATION_NONE,
   aggregateCollation,
@@ -487,12 +489,12 @@ function firstInvalidUtf8(b: Uint8Array, longest: number): number {
 }
 
 /** A division of either kind, with 1365 when the divisor is zero and the answer therefore NULL. */
-function byZero(at: Compiled['eval'], bt: Compiled['eval'], op: (x: Value, y: Value) => Value, shortCircuit = false): Compiled['eval'] {
+function byZero(at: Compiled['eval'], bt: Compiled['eval'], op: (x: Value, y: Value, env: Env) => Value, shortCircuit = false): Compiled['eval'] {
   return (r, env) => {
     const x = at(r, env)
     if (x === null && shortCircuit) return null
     const y = bt(r, env)
-    const v = op(x, y)
+    const v = op(x, y, env)
     // Only ERROR_FOR_DIVISION_BY_ZERO makes it a warning: without it the
     // answer is NULL and nothing is said (`signal_divide_by_null`, 8.4.11).
     if (v === null && x !== null && y !== null && modeOf(env.session.sqlMode).errorForDivisionByZero) raise(env, 1365, 'Division by 0')
@@ -1418,7 +1420,20 @@ function binary(op: string, left: Expression, right: Expression, extra: Expressi
       // Its operands are read as DECIMALs, text warning each row (8.4.11: `lt DIV 10`).
       const x = asNumber(ca, 'DECIMAL').eval
       const y = asNumber(cb, 'DECIMAL').eval
-      return { eval: byZero(x, y, (p, q) => intDivide(p, q, label), true), type: intType(width, true, unsigned) }
+      const decimal = a.type.kind !== 'int' || b.type.kind !== 'int'
+      return { eval: byZero(x, y, (p, q, env) => {
+        try { return intDivide(p, q, label) }
+        catch (error) {
+          if (decimal && error instanceof ValueError && error.integer !== undefined) {
+            try { truncated(env, 'DECIMAL', String(error.integer)) }
+            catch (primary) {
+              if (promotedError(env.conditions, primary)) raise(env, error.errno!, error.message, 'Error')
+              throw primary
+            }
+          }
+          throw error
+        }
+      }, true), type: intType(width, true, unsigned) }
     }
     case '%':
     case 'MOD': {

@@ -8,7 +8,7 @@
 // repository. The source is fetched, hashed, and discarded.
 //
 // D-29 narrows what "generated" means here: we emit **facts only** — the error
-// number, the symbol and the SQLSTATE. The English message templates are
+// number, the symbol, the SQLSTATE and strict-warning membership. The English message templates are
 // expression rather than fact, and they are not reproduced. Message strings
 // for the codes we actually emit are authored in `messages.ts`.
 //
@@ -20,9 +20,12 @@ import { writeFileSync } from 'node:fs'
 import { REF, REPO, fetchPinned } from './lib/gen-common.mjs'
 
 const PATH = 'share/messages_to_clients.txt'
+const STRICT_PATH = 'sql/error_handler.cc'
 const OUT = fileURLToPath(new URL('../packages/protocol/src/errors/table.ts', import.meta.url))
 
-const { text: source, sha256 } = await fetchPinned(PATH)
+const [{ text: source, sha256 }, { text: strictSource, sha256: strictSha256 }] = await Promise.all([
+  fetchPinned(PATH), fetchPinned(STRICT_PATH),
+])
 
 // Grammar (verified against the pinned file):
 //   column 0, lowercase  -> a directive (`start-error-number N`, `languages`,
@@ -86,6 +89,16 @@ check('ER_LOCK_DEADLOCK', 1213, '40001') // D-09
 check('ER_ROW_IS_REFERENCED_2', 1451, '23000') // the pair doc 14 warns about
 check('ER_NO_REFERENCED_ROW_2', 1452, '23000')
 
+// Keep only membership facts from this handler's errno switch, not C++ source
+// or the neighboring handlers' rules. Fail closed if the pinned shape changes.
+const handler = /bool Strict_error_handler::handle_condition\([\s\S]*?\n\}/.exec(strictSource)?.[0]
+const cases = handler === undefined ? undefined : /switch \(sql_errno\) \{((?:\s*case [A-Z0-9_]+:)+)/.exec(handler)?.[1]
+const strictSymbols = cases === undefined ? [] : [...cases.matchAll(/case ([A-Z0-9_]+):/g)].map((m) => m[1])
+if (strictSymbols.length !== 23 || new Set(strictSymbols).size !== 23 || strictSymbols.some((s) => !bySymbol.has(s))) {
+  throw new Error('gen-errors: unexpected pinned strict-handler cases')
+}
+const strictCodes = strictSymbols.map((s) => bySymbol.get(s).errno)
+
 // Packed one entry per line: `errno symbol [sqlstate]`. A minified object
 // literal of 1,400 entries costs far more in the bundle than a string the
 // consumer expands lazily on first lookup.
@@ -96,7 +109,7 @@ const packed = entries
 const out = `// GENERATED FILE — do not edit by hand. Run \`npm run gen:errors\`.
 //
 // M1.6 / D-14: generated from MySQL's own error source rather than
-// transcribed. D-29: facts only — error number, symbol and SQLSTATE. The
+// transcribed. D-29: facts only — codes, SQLSTATEs and strict membership. The
 // English message templates are not reproduced; ground rule 7 keeps this
 // repository free of MySQL source, which is GPLv2 to our MIT.
 //
@@ -113,6 +126,13 @@ export const ERROR_TABLE_SOURCE_SHA256 =
 
 /** Number of entries, including OBSOLETE_* symbols, which still consume codes. */
 export const ERROR_TABLE_SIZE = ${entries.length}
+
+/** The pinned source of strict warning-promotion membership. Facts only. */
+export const STRICT_ERROR_SOURCE = '${REPO}@${REF} ${STRICT_PATH}'
+export const STRICT_ERROR_SOURCE_SHA256 = '${strictSha256}'
+
+/** Native codes promoted by Strict_error_handler; no eager symbol-table lookup. */
+export const STRICT_ERROR_CODES: ReadonlySet<number> = new Set([${strictCodes.join(', ')}])
 
 /**
  * One entry per line: \`errno symbol\` with an optional trailing SQLSTATE.
