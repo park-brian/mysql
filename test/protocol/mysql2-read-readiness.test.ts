@@ -5,6 +5,7 @@ import { setImmediate as turn } from 'node:timers/promises'
 import { createStream } from '../../packages/core/src/host/node.ts'
 import mysql from 'mysql2'
 import { MySQL } from '@myjs/core'
+import { observeCommand } from './packet-observation.ts'
 import reference from './fixtures/diagnostics/read-readiness.json' with { type: 'json' }
 
 test('ordinary base reader construction permits headers before first-read and projection failures', async () => {
@@ -15,7 +16,6 @@ test('ordinary base reader construction permits headers before first-read and pr
   const conn = raw.promise()
   await conn.connect()
   const canonical = (value: unknown): unknown => JSON.parse(JSON.stringify(value))
-  const descriptors = (list: readonly mysql.FieldPacket[]) => list.map((f) => [f.name, f.columnType, f.columnLength, f.flags, f.decimals, f.characterSet, f.schema, f.table, f.orgTable, f.orgName])
   try {
     assert.equal(reference.mysqlVersion, '8.4.11')
     assert.equal(reference.observations.length, 524)
@@ -44,55 +44,10 @@ test('ordinary base reader construction permits headers before first-read and pr
         if (fulltext) await conn.query("UPDATE a SET t='apple banana'")
         size = entry.size
       }
-      await conn.query('SELECT LAST_INSERT_ID(0)')
-      await conn.query('DO 1/0')
-      const prior = (await conn.query('SHOW WARNINGS'))[0]
-      const options = { sql, rowsAsArray: true }
-      const chunks: Buffer[] = []
-      const received = (value: Uint8Array): void => { chunks.push(Buffer.from(value)) }
-      let rows: unknown[] | null = null
-      let fields: unknown = null
-      let error: unknown = null
-      transport.on('data', received)
-      try {
-        if (api === 'prepare') {
-          const statement = await conn.prepare(options)
-          fields = descriptors((statement as unknown as { statement: { columns: mysql.FieldPacket[] } }).statement.columns)
-          await statement.close()
-        } else {
-          const collected: unknown[] = []
-          rows = collected
-          await new Promise<void>((resolve, reject) => {
-            const command = api === 'execute' ? raw.execute(options, 'params' in entry ? entry.params : []) : raw.query(options, 'params' in entry ? entry.params : [])
-            command.on('fields', (list: mysql.FieldPacket[]) => { fields = descriptors(list) })
-            command.on('result', (row: unknown) => collected.push(row))
-            command.once('error', reject)
-            command.once('end', resolve)
-          })
-        }
-      } catch (e) {
-        const failure = e as { code: string; errno: number; sqlState: string; sqlMessage: string }
-        error = [failure.code, failure.errno, failure.sqlState, failure.sqlMessage]
-      } finally {
-        transport.off('data', received)
-        if (api !== 'query' && !('retain' in entry && entry.retain)) conn.unprepare(options)
-      }
-      const bytes = Buffer.concat(chunks)
-      const packets: number[] = []
-      let at = 0
-      while (at < bytes.length) {
-        const length = bytes.readUIntLE(at, 3)
-        packets.push(bytes[at + 4]!)
-        at += length + 4
-      }
-      assert.equal(at, bytes.length, sql + ': complete packets')
-      const warnings = (await conn.query('SHOW WARNINGS'))[0]
-      const warningCount = Number(Object.values((await conn.query<mysql.RowDataPacket[]>('SHOW COUNT(*) WARNINGS'))[0][0]!)[0])
-      const errorCount = Number(Object.values((await conn.query<mysql.RowDataPacket[]>('SHOW COUNT(*) ERRORS'))[0][0]!)[0])
-      const insertId = (await conn.query<mysql.RowDataPacket[]>('SELECT LAST_INSERT_ID() AS v'))[0][0]!.v
+      const observed = await observeCommand(raw, conn, transport, entry)
       const expected = reference.outcomes[entry.outcome]!
-      if (api === 'prepare' && error === null) assert.equal(bytes.readUInt16LE(14), expected.warningCount & 0xffff, sql + ': PREPARE warning count')
-      assert.deepEqual(canonical({ prior, rows, fields, error, packets, warnings, warningCount, errorCount, insertId }), {
+      if (api === 'prepare' && observed.outcome.error === null) assert.equal(observed.prepareWarnings, expected.warningCount & 0xffff, sql + ': PREPARE warning count')
+      assert.deepEqual(canonical(observed.outcome), {
         ...expected,
         prior: expected.prior.map((i) => reference.warnings[i]),
         fields: expected.fields?.map((i) => reference.fields[i]) ?? null,

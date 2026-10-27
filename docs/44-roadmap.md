@@ -166,6 +166,34 @@ this host. This changes test transport only; no fixture, threshold or production
 SQL reader is altered. Docker verification against the committed SQL baseline
 checks type safety and the same seven regressions through both engines.
 
+**Command-observation owner, verified (2026-10-26):** The two readiness
+regressions share one command recorder for headers, partial rows, complete packet
+framing/kinds, errors, diagnostics, totals and LAST_INSERT_ID. Callers retain their
+source setup and resource/cancellation controls. All 5,216 complete expected
+outcomes, warning-prefix checks and PREPARE warning-count assertions remain;
+no existing fixture or threshold changes. The recorder reuses the caller's
+promise connection. Docker checks type safety and all seven regressions against
+the committed 07723bc SQL runtime and pinned MySQL 8.4.11. Every required GitHub
+job for 07723bc passes. This test-only extraction also supports the separate
+AVG repair's pending phase regressions; it does not ship that repair.
+
+**Grouping-strategy declaration audit (2026-10-26):** A fresh 360-outcome native
+capture covers folded HAVING and named/unused WINDOW declarations through query,
+PREPARE and EXECUTE on empty and populated sources. Complete native records live
+in `test/protocol/fixtures/aggregates/group-strategy-declarations-open.json`;
+128 complete outcomes currently agree, with no conformance claim for the rest.
+Replacing the raw strategy scan with bound accumulator specifications is
+rejected: native retains sorted grouping for folded
+`HAVING COUNT(DISTINCT n) IS NOT NULL`, whose accumulator the current admission
+path omits. Unused WINDOW declarations can influence native strategy/access too.
+Executable accumulators do not own all planning declarations. Preserve the
+existing policy and repair admission/source preparation separately; do not force
+binding to populate a planner flag. Named-window planning, the BIT DISTINCT
+parse refusals in this capture and the earlier HAVING/window masking gap remain
+open. A group-state-cell rehearsal was also discarded: it did not shrink the
+bundle and added ROLLUP allocations. Keep the existing key-evaluation phases,
+finest-first flush, reset order and current-key subtotal semantics intact.
+
 **Unary-plus grouping identity, verified (2026-10-26):** Group-key equality
 and copied-field classification now recognize unary plus as the same reader.
 `SELECT DISTINCT +g, AVG(n/3) ... GROUP BY g` no longer copies an aggregate
@@ -231,7 +259,13 @@ A further 2,208 wrapper controls exposed 84 prototype regressions: unary plus
 preserves aggregate/key identity. Broad binder normalization was rejected after
 18 metadata regressions. Local identity comparison preserves the written AST,
 names, ordinal binding and legacy key metadata; it removes all 84 losses and
-improves complete matches from 1,096 to 1,332 without component loss. GROUP BY
+improved complete matches from 1,096 to 1,332 without component loss. After the
+committed identity repair, the integrated writer candidate improves the same
+audit from 1,232 to 1,428, again without matched-component loss. Phase and wrapper replays preserve the latest
+owner-only cleanups; final full validation is still pending. Core/facade remain 114/129 B over
+the unchanged caps. Permanent fill/error regressions have been prepared and pass
+against both engines, but remain outside the committed tests until the repair
+meets all gates. GROUP BY
 unary-plus ordinals and broader direct-aggregate plans remain open.
 The preceding c0baaa5 production runtime passes all eleven required GitHub
 jobs. The later transport-only commit's first CI attempt reported a Node SIGILL in
