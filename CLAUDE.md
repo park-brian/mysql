@@ -115,7 +115,9 @@ integer casts now announce readiness after actual materialization, with a
 separate positive grammar and caller admission. Cardinality alone supplies no
 readiness proof. Quoted DUAL retains ordinary table lookup and row identity;
 the parser owns unquoted DUAL normalization. Broader CAST and function-source
-admission remain open. Buffered multi-statement runtime failures
+admission remain open. Integer DIV minimum rejection also remains parked after
+broader CAST and written-clause controls exposed lost headers. Evaluation-count
+contracts preserve actual operand effects and prepared non-execution. Buffered multi-statement runtime failures
 now retain completed results with their own status and warnings before the ERR
 packet. Private completion facts preserve direct-call error identity and JSON;
 one batch writer serves text and binary rows. Incremental parsing now preserves

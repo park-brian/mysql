@@ -6,8 +6,9 @@ import { MySQL } from '@myjs/core'
 import { observeCommand } from './packet-observation.ts'
 import boundaries from './fixtures/diagnostics/div-reader-boundaries.json' with { type: 'json' }
 import nullable from './fixtures/diagnostics/div-nullable-readers.json' with { type: 'json' }
+import evaluation from './fixtures/diagnostics/div-evaluation-counts.json' with { type: 'json' }
 
-for (const reference of [boundaries, nullable]) test('DIV ' + (reference.nullable ? 'nullable reader evaluation' : 'integer and decimal boundaries'), async () => {
+for (const reference of [boundaries, nullable, evaluation]) test('DIV ' + (reference === evaluation ? 'operand evaluation counts' : reference.nullable ? 'nullable reader evaluation' : 'integer and decimal boundaries'), async () => {
   const host = process.env.MYSQL_REFERENCE_HOST
   const db = host === undefined ? await MySQL.open(':memory:') : undefined
   const transport = db === undefined
@@ -16,8 +17,9 @@ for (const reference of [boundaries, nullable]) test('DIV ' + (reference.nullabl
   const raw = mysql.createConnection({ stream: transport, user: 'root', ...(db === undefined ? { password: process.env.MYSQL_REFERENCE_PASSWORD ?? 'root' } : {}), supportBigNumbers: true, bigNumberStrings: true })
   const conn = raw.promise()
   const strict = new Set(reference.strict)
-  assert.equal(reference.observations.length, reference.nullable ? 1182 : 1354)
-  assert.equal(strict.size, reference.nullable ? 889 : 1068)
+  const counts = reference === evaluation
+  assert.equal(reference.observations.length, counts ? 72 : reference.nullable ? 1182 : 1354)
+  assert.equal(strict.size, counts ? 60 : reference.nullable ? 889 : 1068)
   let created = false
   let compared = 0
   let states = 0
@@ -69,8 +71,8 @@ for (const reference of [boundaries, nullable]) test('DIV ' + (reference.nullabl
       if (db !== undefined) assert.equal(db.catalog!.store.transactions.stats().openViews, views, entry.sql + ': readers released')
     }
     assert.equal(compared, db === undefined ? reference.observations.length : strict.size)
-    assert.equal(states, db === undefined ? reference.observations.length : reference.nullable ? 1174 : 1346)
-    assert.equal(headers, db === undefined ? reference.observations.length : reference.nullable ? 1122 : 1290)
+    assert.equal(states, db === undefined ? reference.observations.length : counts ? 72 : reference.nullable ? 1174 : 1346)
+    assert.equal(headers, db === undefined ? reference.observations.length : counts ? 72 : reference.nullable ? 1122 : 1290)
   } finally {
     if (created) await conn.query('DROP DATABASE ' + reference.schema)
     await conn.end()

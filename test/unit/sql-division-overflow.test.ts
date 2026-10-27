@@ -30,6 +30,16 @@ test('integer overflow retains its exact coefficient without changing the public
   assert.equal(JSON.stringify(error), JSON.stringify(previousShape))
 })
 
+test('direct DIV retains signed-minimum acceptance without reading a successful expression label', () => {
+  const minimum = -9223372036854775808n
+  const label = () => assert.fail('successful arithmetic must not print its expression')
+  for (const value of [int(minimum), decimal(minimum, 0)]) {
+    assert.deepEqual(intDivide(value, int(1n), label), int(minimum))
+    assert.deepEqual(intDivide(value, int(2n), label), int(minimum / 2n))
+    assert.equal(intDivide(value, int(0n), label), null)
+  }
+})
+
 test('strict promotion records the exact primary and retains later errors in order', () => {
   const statement = parseStatement('INSERT INTO t VALUES(1)')
   const area = conditionsFor(statement, 'STRICT_TRANS_TABLES')
