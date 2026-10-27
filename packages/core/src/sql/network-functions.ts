@@ -12,7 +12,7 @@ import { COERCIBILITY, bool, bytesValue, intValue, stringValue, toText, type Val
 import { hexOf } from './builtins.ts'
 import { compile, printedArgument, raise, invalidString, type CompileContext, type Compiled } from './compile.ts'
 import { intType, stringType, type ResultType } from './meta.ts'
-import { unregistered } from './registry.ts'
+import { nativeArity, unregistered } from './registry.ts'
 import { intReader } from './string-functions.ts'
 
 export const NETWORK_FUNCTIONS: ReadonlySet<string> = new Set([
@@ -112,9 +112,7 @@ const wrongValue = (text: string, fn: string) => sqlError('ER_WRONG_VALUE_FOR_TY
 
 export function networkFunction(name: string, e: CallNode, ctx: CompileContext): Compiled {
   const xs = e.args.map((a) => compile(a, ctx))
-  const arity = (min: number, max = min): void => {
-    if (xs.length < min || xs.length > max) throw sqlError('ER_WRONG_PARAMCOUNT_TO_NATIVE_FCT', `Incorrect parameter count in the call to native function '${e.name}'`)
-  }
+  const arity = nativeArity(e.name, xs.length)
   const conn = ctx.connectionCollation
   // Each argument as the server prints it, for the messages that quote one.
   const args = e.args.map((a) => printedArgument(a, ctx))

@@ -30,7 +30,7 @@ import {
 import type { Compiled, Env, Row } from './compile.ts'
 import { jsonType, type ResultType } from './meta.ts'
 import { bitBytes } from './wire.ts'
-import { unregistered } from './registry.ts'
+import { unregistered, wrongParameterCount } from './registry.ts'
 
 /** A value of type `t` as JSON; SQL NULL is JSON null. */
 export function asJson(v: Value, t: ResultType): JsonDoc {
@@ -63,7 +63,7 @@ export function jsonConstructor(name: string, args: readonly Compiled[], callNam
     }
   }
   if (name === 'JSON_OBJECT') {
-    if (args.length % 2 !== 0) throw sqlError('ER_WRONG_PARAMCOUNT_TO_NATIVE_FCT', `Incorrect parameter count in the call to native function '${callName}'`)
+    if (args.length % 2 !== 0) throw wrongParameterCount(callName)
     return {
       eval: (r, env) => {
         const members: [string, JsonDoc][] = []

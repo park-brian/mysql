@@ -68,7 +68,7 @@ import {
 import { asNumber, compile, constantNode, raise, rowNumber, type Compiled, type CompileContext, type Env, constantEnv } from './compile.ts'
 import { dateAdd } from './interval.ts'
 import { charWidth, datetimeType, decimalType, intType, stringType, type ResultType } from './meta.ts'
-import { unregistered } from './registry.ts'
+import { nativeArity, unregistered } from './registry.ts'
 
 type Row = Parameters<Compiled['eval']>[0]
 
@@ -280,9 +280,7 @@ const EXTRACT_WIDTH: Readonly<Record<string, number>> = {
 /** What a temporal function's compiler asks of its call: its arguments compiled one at a time, a keyword argument read, its count checked, a constant one evaluated. */
 function temporalCall(e: CallNode, ctx: CompileContext) {
   const conn = ctx.connectionCollation
-  const count = (min: number, max = min): void => {
-    if (e.args.length < min || e.args.length > max) throw sqlError('ER_WRONG_PARAMCOUNT_TO_NATIVE_FCT', `Incorrect parameter count in the call to native function '${e.name}'`)
-  }
+  const count = nativeArity(e.name, e.args.length)
   const keyword = (i: number): string => {
     const a = e.args[i] as Expression
     if (a.kind === NODE.KEYWORD) return a.word.toUpperCase()

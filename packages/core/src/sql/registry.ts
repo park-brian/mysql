@@ -14,6 +14,7 @@
 // `compile.ts`, which imports this, and a module in that cycle can be the
 // first one loaded.
 import { MyjsError } from '@myjs/bytes'
+import { sqlError, type SqlError } from '@myjs/protocol'
 import type { CallNode } from '@myjs/parser'
 import { BUILTINS, CLOCK_FUNCTIONS, CONTROL_FUNCTIONS, INFORMATION_FUNCTIONS, REGEXP_FUNCTIONS, builtinFunction, clockFunction, controlFunction, informationFunction, regexpFunction } from './builtins.ts'
 import { compile, type CompileContext, type Compiled } from './compile.ts'
@@ -23,6 +24,18 @@ import { MATH_FUNCTIONS, mathFunction } from './math-functions.ts'
 import { NETWORK_FUNCTIONS, networkFunction } from './network-functions.ts'
 import { STRING_FUNCTIONS, stringFunction } from './string-functions.ts'
 import { TEMPORAL_ARITHMETIC, TEMPORAL_FUNCTIONS, TEMPORAL_TEXT_FUNCTIONS, temporalArithmetic, temporalFunction, temporalTextFunction } from './temporal-functions.ts'
+
+/** Native-call arity failures retain the spelling of the written function name. */
+export function wrongParameterCount(name: string): SqlError {
+  return sqlError('ER_WRONG_PARAMCOUNT_TO_NATIVE_FCT', `Incorrect parameter count in the call to native function '${name}'`)
+}
+
+/** Build a count check; the caller decides when binding has reached arity validation. */
+export function nativeArity(name: string, count: number): (min: number, max?: number) => void {
+  return (min, max = min) => {
+    if (count < min || count > max) throw wrongParameterCount(name)
+  }
+}
 
 /** Compile one call of the function `name` (upper case). */
 export type FunctionCompiler = (name: string, e: CallNode, ctx: CompileContext) => Compiled

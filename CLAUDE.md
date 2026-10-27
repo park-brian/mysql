@@ -53,8 +53,10 @@ ROLLUP retains its positional keys. Selected grouping keys, including unary-plus
 readers, now eliminate redundant outer DISTINCT without copying aggregate readers;
 copied computed keys retain their key metadata without rewriting the parsed
 expression. Grouped slots now share their unchanged result readers while field
-copies and window frames keep separate ownership. Raw declarations still decide
-grouping strategy. Failed PREPARE now
+copies and window frames keep separate ownership. Bounded retained DISTINCT over
+computed exact ordinary AVG now finishes its final field copy before delivery,
+with readiness after physical reader construction. AVG(DISTINCT) field ownership
+and division rounding remain open. Raw declarations still decide grouping strategy. Failed PREPARE now
 publishes command-local diagnostics and preserves native warning-prefix totals;
 its placeholder admission refusal clears diagnostics. Native diagnostic SHOW
 commands now refuse PREPARE before resolution. Query preflight now publishes

@@ -11,7 +11,7 @@ import { sqlError } from '@myjs/protocol'
 import { doubleValue, intValue, toDouble } from '@myjs/types'
 import { asNumber, compile, raise, type CompileContext, type Compiled, type Env, type Row } from './compile.ts'
 import { doubleType, intType, type ResultType } from './meta.ts'
-import { unregistered } from './registry.ts'
+import { nativeArity, unregistered } from './registry.ts'
 import { intReader } from './string-functions.ts'
 
 export const MATH_FUNCTIONS: ReadonlySet<string> = new Set([
@@ -34,9 +34,7 @@ const doubleOutOfRange = (expr: string) => sqlError('ER_DATA_OUT_OF_RANGE', `DOU
 export function mathFunction(name: string, e: CallNode, ctx: CompileContext): Compiled {
   const xs = e.args.map((a) => compile(a, ctx))
   const label = deparse(e)
-  const arity = (min: number, max = min): void => {
-    if (xs.length < min || xs.length > max) throw sqlError('ER_WRONG_PARAMCOUNT_TO_NATIVE_FCT', `Incorrect parameter count in the call to native function '${e.name}'`)
-  }
+  const arity = nativeArity(e.name, xs.length)
   const dbl = (nullable = true): ResultType => doubleType(nullable, 23)
   switch (name) {
     case 'PI':

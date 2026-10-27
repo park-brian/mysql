@@ -81,7 +81,7 @@ import {
   constantEnv,
 } from './compile.ts'
 import { NULL_TYPE, charWidth, decimalType, doubleType, intType, stringType, stringResultType, type ResultType } from './meta.ts'
-import { unregistered } from './registry.ts'
+import { nativeArity, unregistered } from './registry.ts'
 import { modeOf } from './mode.ts'
 
 type V = Exclude<Value, null>
@@ -243,9 +243,7 @@ function libraryCall(name: string, args: readonly Compiled[], callName: string, 
   const integers = READS_INTEGER[name]
   const xs = READS_DOUBLE.has(name) && args[0] !== undefined ? [asNumber(args[0], 'DOUBLE'), ...args.slice(1)] : integers !== undefined ? args.map((a, i) => (integers.includes(i) ? asNumber(a, 'INTEGER') : a)) : args
   const conn = ctx.connectionCollation
-  const arity = (min: number, max = min) => {
-    if (xs.length < min || xs.length > max) throw sqlError('ER_WRONG_PARAMCOUNT_TO_NATIVE_FCT', `Incorrect parameter count in the call to native function '${callName}'`)
-  }
+  const arity = nativeArity(callName, xs.length)
   const first = () => firstCollation((xs[0] as Compiled).type, conn)
   return {
     integers,
@@ -1023,9 +1021,7 @@ function fromBase64(text: string): Uint8Array | undefined {
 /** What the other string functions' compilers ask of a call: its count checked, whether any argument may be NULL, a hex string's type, a string in the connection's collation, the name as the server prints it. */
 function stringCall(name: string, xs: readonly Compiled[], callName: string, ctx: CompileContext) {
   const conn = ctx.connectionCollation
-  const arity = (min: number, max = min): void => {
-    if (xs.length < min || xs.length > max) throw sqlError('ER_WRONG_PARAMCOUNT_TO_NATIVE_FCT', `Incorrect parameter count in the call to native function '${callName}'`)
-  }
+  const arity = nativeArity(callName, xs.length)
   const nullableAny = (...cs: readonly Compiled[]): boolean => cs.some((c) => c.type.nullable)
   const hexText = (chars: number, nullable: boolean): ResultType => ({ ...stringType(chars, conn, nullable), coercibility: COERCIBILITY.COERCIBLE })
   const conv = (s: string): Value => stringValue(s, conn, COERCIBILITY.COERCIBLE)

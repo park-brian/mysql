@@ -39,7 +39,7 @@ import {
 } from '@myjs/types'
 import type { Compiled } from './compile.ts'
 import { CHARSET_UTF8MB4_BIN, charWidth, intType, jsonType, stringType, type ResultType } from './meta.ts'
-import { unregistered } from './registry.ts'
+import { nativeArity, unregistered } from './registry.ts'
 
 /** The collation of every text these functions make, whatever the connection's (8.4.11: `JSON_UNQUOTE('"ABC"') = 'abc'` is 0). */
 
@@ -427,9 +427,7 @@ export const JSON_PATH_FUNCTIONS: ReadonlySet<string> = new Set(['JSON_EXTRACT',
 
 export function jsonPathFunction(name: string, args: readonly Compiled[], callName: string): Compiled {
   const fn = name.toLowerCase()
-  const arity = (min: number, max: number) => {
-    if (args.length < min || args.length > max) throw sqlError('ER_WRONG_PARAMCOUNT_TO_NATIVE_FCT', `Incorrect parameter count in the call to native function '${callName}'`)
-  }
+  const arity = nativeArity(callName, args.length)
   const path = pathReader()
   switch (name) {
     case 'JSON_EXTRACT':

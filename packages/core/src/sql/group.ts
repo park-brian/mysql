@@ -59,6 +59,7 @@ import {
 } from '@myjs/types'
 import { AGGREGATE_NAMES, asNumber, compile, decimalField, readSlot, type CompileContext, type Compiled, type Env, type Row } from './compile.ts'
 import { firstKey, rowKey, valueKey } from './keys.ts'
+import { wrongParameterCount } from './registry.ts'
 import { asJson } from './json.ts'
 import { decimalType, doubleType, floatLength, intType, jsonType, stringType, type ResultType } from './meta.ts'
 import type { SortKey } from './operators.ts'
@@ -181,6 +182,8 @@ export interface AggregateState {
   result(): Value
 }
 
+type GroupSlot = AggregateSpec & Compiled
+
 /**
  * Where a grouped query's aggregates are collected as its select list, HAVING
  * and ORDER BY compile. Each distinct call (by its text) gets one slot in the
@@ -188,8 +191,8 @@ export interface AggregateState {
  * owns both its accumulator definition and its unchanged result reader.
  */
 export class AggregateSink {
-  readonly specs: (AggregateSpec & Compiled)[] = []
-  readonly #seen = new Map<string, number>()
+  readonly specs: GroupSlot[] = []
+  readonly #seen = new Map<string, GroupSlot>()
   readonly #rowCtx: CompileContext
   readonly #base: number
 
@@ -202,14 +205,15 @@ export class AggregateSink {
   /** The slot of the aggregate `e`, collecting it if it is new. `ctx` is the caller's, which names the clause. */
   register(e: CallNode, ctx: CompileContext): Compiled {
     const key = deparse(e)
-    let at = this.#seen.get(key)
-    if (at === undefined) {
-      at = this.specs.length
+    let slot = this.#seen.get(key)
+    if (slot === undefined) {
+      const index = this.#base + this.specs.length
       const spec = this.#spec(e, ctx.clause)
-      this.specs.push(Object.assign(spec, readSlot(this.#base + at, spec.type)))
-      this.#seen.set(key, at)
+      slot = Object.assign(spec, readSlot(index, spec.type))
+      this.specs.push(slot)
+      this.#seen.set(key, slot)
     }
-    return this.specs[at]!
+    return slot
   }
 
   /** An aggregate's spec without a slot: a window's (window.ts), which runs it over each row's frame. */
@@ -227,7 +231,7 @@ export class AggregateSink {
     const numeric = name === 'SUM' || name === 'AVG' || /^(STD|STDDEV|STDDEV_POP|STDDEV_SAMP|VARIANCE|VAR_POP|VAR_SAMP)$/.test(name)
     const args = star ? [] : e.args.map((a) => (numeric ? asNumber(compile(a, ctx), 'DOUBLE') : compile(a, ctx)))
     const arity = name === 'COUNT' || name === 'GROUP_CONCAT' ? args.length >= 1 || star : name === 'JSON_OBJECTAGG' ? args.length === 2 : args.length === 1
-    if (!arity) throw sqlError('ER_WRONG_PARAMCOUNT_TO_NATIVE_FCT', `Incorrect parameter count in the call to native function '${e.name}'`)
+    if (!arity) throw wrongParameterCount(e.name)
     const type = aggregateType(name, args, ctx)
     const distinct = e.distinct === true
     switch (name) {

@@ -501,8 +501,7 @@ function planSelect(run: Run, q: QueryExpression, node: SelectNode): SelectPlan 
   const match = keys.length === 0 && refs.length === 1 && refs[0]?.kind === REF.TABLE ? matchConjunct(node.where) : undefined
   if (match !== undefined) keys.push({ expr: compile(match, compileContext(run, lookup, 'where clause')), desc: true })
   const locking = (q.locking?.length ?? 0) > 0
-  // Full-text projections still have an unmodeled pre-metadata initialization phase.
-  const fulltext = someNode([node.items, order], (n) => (n as Expression).kind === NODE.MATCH || undefined)
+  const readyBase = wholeReaderReady(q, node, base)
   // Metadata's indexed-prefix shortcut does not prove row uniqueness.
   // An outer field with the same name cannot supply a local UNIQUE key.
   const deduplicate = node.distinct === true && (source === undefined || !distinctKey(source.def, items, lookup, true))
@@ -574,7 +573,7 @@ function planSelect(run: Run, q: QueryExpression, node: SelectNode): SelectPlan 
       let rows: Iterable<Rowed>
       if (from === undefined) rows = [{ row: [] }]
       else if (facts?.impossible === true) rows = []
-      else rows = from.rows(trx, env, { locking, ready: base && !node.having && !node.where && (!order.length || rowOrder) && !node.distinct && !locking && !fulltext ? ready : undefined })
+      else rows = from.rows(trx, env, { locking, ready: readyBase && (!order.length || rowOrder) && !node.distinct ? ready : undefined })
       return values(runStages(rows, stages, env))
     },
   }
@@ -821,6 +820,12 @@ function boundedSubquery(q: QueryExpression): BaseSubquery | undefined {
 function unhintedBase(q: QueryExpression, node: SelectNode) {
   const table = node.from?.[0]
   return node.from?.length === 1 && table?.kind === REF.TABLE && table.indexHints === undefined && q.with === undefined && node.windows === undefined && (node.options?.length ?? 0) === 0 ? table : undefined
+}
+
+/** A proved ordinary base reader still needs its written binding/initialization fences. */
+function wholeReaderReady(q: QueryExpression, node: SelectNode, base: FromPlan['single'] | false): boolean {
+  return !!base && !node.where && !node.having && !q.locking?.length &&
+    !someNode([node, q.orderBy], (n) => (n as Expression).kind === NODE.MATCH || undefined)
 }
 
 type QualifiedColumn = Extract<Expression, { kind: typeof NODE.COLUMN }> & { readonly parts: readonly [string, string] }
@@ -1883,6 +1888,7 @@ function planGrouped(
   windowed: boolean,
 ): SelectPlan {
   const order = q.orderBy ?? []
+  const unordered = order.length === 0
   const scope = from?.scope
   const source = from?.single
   // A STRAIGHT_JOIN its const tables reduce to one base table groups as that table alone would (8.4.11, M5.48).
@@ -1988,13 +1994,20 @@ function planGrouped(
   // (8.4.11: `FROM p CROSS JOIN q WHERE p.id = 5 GROUP BY p.g ORDER BY 1, 2` is a Group aggregate over q).
   const constTable = source !== undefined && run.preparing !== true && groupFacts?.constTable
   const oneGroup = !rollup && keys.length > 0 && (constTable || (constants.size > 0 && keys.every((k) => !refersToRow(k.expr, lookup, constants))))
-  const { strategy, index: groupIndex } = oneGroup ? { strategy: 'index' as const, index: undefined } : chooseStrategy(alone?.def, keyColumns, rollup, distinctAggregate)
 
   // Retained grouping keys identify each output group; ROLLUP levels do not.
   const deduplicate = node.distinct === true && (rollup || (
     keys.length > 0 && !oneGroup && keyColumns.length > 0 &&
     !keys.every((key) => selectItems.some((item) => matchesKey(item.expr, key)))
   ))
+
+  // Retained DISTINCT over computed exact AVG uses the temporary-group writer.
+  const temporaryDistinct = run.preparing !== true && deduplicate && !distinctAggregate && wholeReaderReady(q, node, !windowed && unhintedBase(q, node) && source) &&
+    !rollup && q.limit === undefined && unordered &&
+    keys.every((key) => constantNode(key.expr, true, true) && refersToRow(key.expr, lookup)) &&
+    sink.specs.length > 0 && sink.specs.every((spec) => spec.name === 'AVG' && spec.type.kind === 'decimal') &&
+    !items.some((item) => aggregateReaders.includes(item.compiled))
+  const { strategy, index: groupIndex } = oneGroup ? { strategy: 'index' as const, index: undefined } : chooseStrategy(temporaryDistinct ? undefined : alone?.def, keyColumns, rollup, distinctAggregate)
 
   // HAVING sees the select list's aliases, its columns and the keys; a column
   // that is none of those is 1054 even when the table has it (8.4.11).
@@ -2032,49 +2045,51 @@ function planGrouped(
       const e = integerLiteral(o.expr) ? selectItems[Number(o.expr.value as bigint) - 1]?.expr : o.expr
       return matchesKey(e, key)
     })
-  const stream = (strategy === 'sort' || strategy === 'index') && order.length > 0 && !orderMatchesKeys && !oneGroup
-  if (from !== undefined) from.sortedBy(sortTable(q.orderBy?.map((o) => o.expr), node.groupBy?.items, selectItems, from.scope), keep)
-  const facts = run.preparing === true ? undefined : selectFacts(run, from, node, limitCount)
+  const stream = (strategy === 'sort' || strategy === 'index') && !unordered && !orderMatchesKeys && !oneGroup
+  if (from !== undefined && !temporaryDistinct) from.sortedBy(sortTable(q.orderBy?.map((o) => o.expr), node.groupBy?.items, selectItems, from.scope), keep)
   const firstOrder = strategy === 'sort' && !rollup ? from?.orderGroupsFirst(keys) : undefined
   let dataColumns: ((trx: Trx | undefined) => readonly ResultType[]) | undefined
-  if (facts !== undefined && !facts.empty) {
-    const consts = new Set(facts.constTables.map((t) => t.alias))
-    const fixed = new Set([...consts, ...(facts.nullTables ?? [])])
-    const own = items.map((i) => i.compiled.type)
-    const seenKeys = new Set<number>()
-    for (const item of items) {
-      const e = withoutUnaryPlus(item.expr)
-      const t = item.compiled.type
-      if (!refersToRow(e, lookup, consts)) continue
-      const aggregateCall = aggregateReaders.includes(item.compiled)
-      if (!aggregateCall && containsAggregate(e)) continue
-      if (strategy === 'implicit') {
-        if (!aggregateCall) patchType(item, { nullable: true })
-        continue
+  if (run.preparing !== true) {
+    const facts = selectFacts(run, from, node, limitCount)
+    if (temporaryDistinct || !facts.empty) {
+      const consts = new Set(facts.constTables.map((t) => t.alias))
+      const fixed = new Set([...consts, ...(facts.nullTables ?? [])])
+      const own = items.map((i) => i.compiled.type)
+      const seenKeys = new Set<number>()
+      for (const item of items) {
+        const e = withoutUnaryPlus(item.expr)
+        const t = item.compiled.type
+        if (!refersToRow(e, lookup, consts)) continue
+        const aggregateCall = aggregateReaders.includes(item.compiled)
+        if (!temporaryDistinct && !aggregateCall && containsAggregate(e)) continue
+        if (strategy === 'implicit') {
+          if (!aggregateCall) patchType(item, { nullable: true })
+          continue
+        }
+        // A key named twice is one field of the table: only its first mention
+        // carries GROUP_FLAG (8.4.11, `SELECT t, t … GROUP BY t`).
+        const at = localColumn(e, lookup)
+        const isKey = at !== undefined && keys.some((k) => k.index === at) && !seenKeys.has(at)
+        if (at !== undefined) seenKeys.add(at)
+        // The keys are the temporary table's key, columns or expressions;
+        // everything else is a field beside them.
+        const isKeyExpression = e.kind !== NODE.COLUMN && !aggregateCall && keys.some((k) => k.index === undefined && matchesKey(e, k))
+        // A key that reads only NULL-complemented tables is a constant, and no part of the table's key.
+        // …and so is one the WHERE holds to a constant over a join (8.4.11: `FROM p, q WHERE p.g = 1 GROUP BY q.t, p.g`).
+        const keyed = (isKey || isKeyExpression) && refersToRow(e, lookup, fixed) && !(source === undefined && e.kind === NODE.COLUMN && pinnedByWhere(node.where, e.parts))
+        if (strategy === 'temp') {
+          patchType(item, { temporary: !temporaryDistinct && keyed ? true : 'pinned', ownInTemporary: !temporaryDistinct && t.ownInTemporary === true, ...(aggregateCall ? { names: { schema: '', table: '', orgTable: '', orgName: '' } } : {}) })
+          // AVG and similar aggregates retain an intermediate, not this final value.
+          if (temporaryDistinct || t.ownInTemporary !== true) item.compiled = decimalField(item.compiled)
+        }
+        else if (stream || (source === undefined && from !== undefined && strategy === 'sort' && firstOrder !== 'index' && t.column !== undefined)) {
+          // Streamed output and sort-based grouping expose copied column metadata;
+          // an ordered first-table index without an output sort keeps source flags.
+          patchType(item, { temporary: 'stream' })
+        }
       }
-      // A key named twice is one field of the table: only its first mention
-      // carries GROUP_FLAG (8.4.11, `SELECT t, t … GROUP BY t`).
-      const at = localColumn(e, lookup)
-      const isKey = at !== undefined && keys.some((k) => k.index === at) && !seenKeys.has(at)
-      if (at !== undefined) seenKeys.add(at)
-      // The keys are the temporary table's key, columns or expressions;
-      // everything else is a field beside them.
-      const isKeyExpression = e.kind !== NODE.COLUMN && !aggregateCall && keys.some((k) => k.index === undefined && matchesKey(e, k))
-      // A key that reads only NULL-complemented tables is a constant, and no part of the table's key.
-      // …and so is one the WHERE holds to a constant over a join (8.4.11: `FROM p, q WHERE p.g = 1 GROUP BY q.t, p.g`).
-      const keyed = (isKey || isKeyExpression) && refersToRow(e, lookup, fixed) && !(source === undefined && e.kind === NODE.COLUMN && pinnedByWhere(node.where, e.parts))
-      if (strategy === 'temp') {
-        patchType(item, { temporary: keyed ? true : 'pinned', ...(aggregateCall ? { names: { schema: '', table: '', orgTable: '', orgName: '' } } : {}) })
-        // AVG and similar aggregates retain an intermediate, not this final value.
-        if (t.ownInTemporary !== true) item.compiled = decimalField(item.compiled)
-      }
-      else if (stream || (source === undefined && from !== undefined && strategy === 'sort' && firstOrder !== 'index' && t.column !== undefined)) {
-        // Streamed output and sort-based grouping expose copied column metadata;
-        // an ordered first-table index without an output sort keeps source flags.
-        patchType(item, { temporary: 'stream' })
-      }
+      dataColumns = copiedColumns(run, facts, own, items)
     }
-    dataColumns = copiedColumns(run, facts, own, items)
   }
 
   // The WHERE: a FROM applies it itself (M5.43); one with no FROM is a Filter here.
@@ -2103,7 +2118,7 @@ function planGrouped(
       // As the strategy runs: an Aggregate of everything, a temporary table keyed by the groups, or groups read in order — sorted for them first, a join's rows streamed into a table to be.
       describe(n) {
         if (strategy === 'implicit') return planNode('Aggregate', [n])
-        if (strategy === 'temp') return planNode('Table scan on <temporary>', [planNode('Aggregate using temporary table', [n])])
+        if (strategy === 'temp') return planNode('Table scan on <temporary>', [planNode('Aggregate using temporary table', [n]), ...(temporaryDistinct ? subqueryNodes(run, 'field list') : [])])
         if (strategy === 'sort' && firstOrder === undefined) return planNode(groups, [planNode('Sort', [wrap(source === undefined, 'Stream results', n)])])
         return planNode(groups, [n])
       },
@@ -2111,7 +2126,7 @@ function planGrouped(
     ...(having === undefined ? [] : [filterStage(having, run)]),
     ...(windows === undefined || windows.windows.length === 0 ? [] : [windowStage(windows, windows.base)]),
     // Retained DISTINCT and unverified ordered/limited forms remain unexplained.
-    deliverStage(items.map((i) => i.compiled), sortsOutput ? orderKeys : [], deduplicate, { deduplicated: false, streamed: stream, described: node.distinct !== true || (!deduplicate && order.length === 0 && q.limit === undefined), keep: q.limit && keep }),
+    deliverStage(items.map((i) => i.compiled), sortsOutput ? orderKeys : [], deduplicate, { deduplicated: temporaryDistinct, streamed: stream, described: node.distinct !== true || temporaryDistinct || (!deduplicate && unordered && q.limit === undefined), keep: q.limit && keep }),
     ...(q.limit ? [limitStage(offset, limitCount)] : []),
   ]
 
@@ -2138,11 +2153,13 @@ function planGrouped(
       }
       const source = from === undefined || fetched ? planNode('Rows fetched before execution') : withSubqueries(run, from.explain(run.env), 'where clause')
       const n = describeStages(source, stages)
-      return n === undefined ? undefined : [n, ...subqueryNodes(run, 'field list')]
+      return n === undefined ? undefined : [n, ...(temporaryDistinct ? [] : subqueryNodes(run, 'field list'))]
     },
-    rows(trx, given) {
+    rows(trx, given, ready) {
       const env = executionEnv(run, trx, given)
-      return values(runStages(from === undefined ? [{ row: [] }] : from.rows(trx, env, { locking }), stages, env))
+      const rows = values(runStages(from === undefined ? [{ row: [] }] : from.rows(trx, env, { locking, ready: temporaryDistinct ? ready : undefined }), stages, env))
+      // The admitted unordered DISTINCT finishes its final field copy before delivery.
+      return temporaryDistinct ? [...rows] : rows
     },
   }
 }

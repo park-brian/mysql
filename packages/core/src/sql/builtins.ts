@@ -88,7 +88,7 @@ import {
   type ResultType,
 } from './meta.ts'
 import { matchType, regexpInstr, regexpLike, regexpReplace, regexpSubstr } from './regexp.ts'
-import { unregistered } from './registry.ts'
+import { nativeArity, unregistered } from './registry.ts'
 import { bitBytes } from './wire.ts'
 
 /** The names `builtinFunction` compiles. */
@@ -111,9 +111,7 @@ function callOf(e: CallNode, ctx: CompileContext) {
   const conn = ctx.connectionCollation
   return {
     args: (): Compiled[] => e.args.map((a) => compile(a, ctx)),
-    arity: (n: number): void => {
-      if (e.args.length !== n) throw sqlError('ER_WRONG_PARAMCOUNT_TO_NATIVE_FCT', `Incorrect parameter count in the call to native function '${e.name}'`)
-    },
+    arity: nativeArity(e.name, e.args.length),
     conn,
     text: (value: (env: Env) => string | null, chars: number): Compiled => ({
       eval: (_r, env) => {
@@ -428,7 +426,7 @@ export function controlFunction(name: string, e: CallNode, ctx: CompileContext):
     }
     case 'INTERVAL': {
       // INTERVAL(n, n1, n2, …): how many bounds n is not below, NULL bounds passed over.
-      if (e.args.length < 2) throw sqlError('ER_WRONG_PARAMCOUNT_TO_NATIVE_FCT', `Incorrect parameter count in the call to native function '${e.name}'`)
+      arity(2, Infinity)
       const xs = args()
       const exact = xs.every((x) => x.type.kind === 'int' || x.type.kind === 'decimal' || x.type.kind === 'null')
       const reads = xs.map((x) => asNumber(x, exact ? 'DECIMAL' : 'DOUBLE'))
@@ -548,7 +546,7 @@ export function informationFunction(name: string, e: CallNode, ctx: CompileConte
 
 /** The REGEXP_ functions. */
 export function regexpFunction(name: string, e: CallNode, ctx: CompileContext): Compiled {
-  const { args, conn } = callOf(e, ctx)
+  const { args, arity, conn } = callOf(e, ctx)
   switch (name) {
     case 'REGEXP_INSTR':
     case 'REGEXP_SUBSTR':
@@ -556,7 +554,7 @@ export function regexpFunction(name: string, e: CallNode, ctx: CompileContext): 
       // (subject, pattern[, replacement], position, occurrence[, return option], match type)
       const replace = name === 'REGEXP_REPLACE'
       const max = name === 'REGEXP_SUBSTR' ? 5 : 6
-      if (e.args.length < (replace ? 3 : 2) || e.args.length > max) throw sqlError('ER_WRONG_PARAMCOUNT_TO_NATIVE_FCT', `Incorrect parameter count in the call to native function '${e.name}'`)
+      arity(replace ? 3 : 2, max)
       const xs = args()
       const fn = name.toLowerCase()
       const at = replace ? 3 : 2
@@ -596,7 +594,7 @@ export function regexpFunction(name: string, e: CallNode, ctx: CompileContext): 
       }
     }
     case 'REGEXP_LIKE': {
-      if (e.args.length < 2 || e.args.length > 3) throw sqlError('ER_WRONG_PARAMCOUNT_TO_NATIVE_FCT', `Incorrect parameter count in the call to native function '${e.name}'`)
+      arity(2, 3)
       const [a, p, t] = args() as [Compiled, Compiled, Compiled | undefined]
       if (a.type.kind === 'string' && p.type.kind === 'string') aggregateCollations([a.type, p.type], 'regexp_like', true)
       return {
