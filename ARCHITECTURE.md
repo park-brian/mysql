@@ -1645,8 +1645,8 @@ functions remain admitted. A pure postorder check shares only traversal and nati
 diagnostic construction with generated columns. ALTER SET DEFAULT retains its
 late execution boundary and non-executing PREPARE behavior. The extended tests
 pass 153 transaction boundaries and nine missing-database cases against both
-engines. Twenty-six admission captures enforce 36,840/46,055 complete commands,
-with unchanged native answers and 9,215 open outcomes. CHECK permissions/namespace,
+engines. Twenty-seven admission captures enforce 38,615/48,368 complete commands,
+with unchanged native answers and 9,753 open outcomes. CHECK permissions/namespace,
 malformed declaration ordering, ANSI SHOW CREATE and other function gaps remain
 open. A CHECK permission-only trial was withdrawn: native clock precision and
 RANDOM_BYTES evaluation must be repaired first. A deterministic 702-command
@@ -1657,7 +1657,10 @@ context-dependent precision precedence stays open. Ordinary fractional clocks
 now share the optional unsigned NUM31 production with the bare column-clock reader;
 generic quoted/spaced roles, OVER fields and semantic precision timing remain intact.
 Two native captures retain 2,619 commands and improve 510 to 1,728 complete matches
-without losing earlier matching facts. All nine unchanged size caps pass. Bare DEFAULT/ON UPDATE now use their four timestamp aliases, require NOW
+without losing earlier matching facts. The clock compiler now narrows precision to
+a byte before checking 0..6, preserving existing admission and resolution timing.
+A further 2,313-command capture improves 857 to 1,775 complete matches; empty-result
+controls retain the separate TIME display-width gap. All nine unchanged size caps pass. Bare DEFAULT/ON UPDATE now use their four timestamp aliases, require NOW
 parentheses and validate the NUM token before BigInt conversion, producing typed
 syntax errors for malformed precision. A shared integer-token reader preserves
 caller bounds, raw spelling, conversions and AST ownership. Three native captures
@@ -1694,7 +1697,7 @@ The full Docker gates, pinned-reference audits and 10,000 crash points pass.
 `db.stream()` streams a million rows within a few MB of the heap's baseline (M5.40). Next is the
 remaining function and planner work, then the browser. The coercion corpus
 now agrees on all 3,148 observations and all 1,737 warning counts. The core entry bundle
-is 334,336 bytes gzipped (326.5 KiB), against the 500 KB release target,
+is 334,340 bytes gzipped (326.5 KiB), against the 500 KB release target,
 with the UCA weights in a separate chunk loaded on demand.
 
 The release plan gives each stage something to ship:

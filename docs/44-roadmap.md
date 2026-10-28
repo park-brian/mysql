@@ -798,13 +798,41 @@ Core/facade/parser measure 334,336/334,225/45,613 B gzipped. The preceding 4031e
 passes all eleven required CI jobs. M5.10 stays partial; totals remain 144/190 and
 M5 42/53.
 
-**Next bounded slice:** repair the captured context-dependent clock precision
-precedence through the existing compiler/value-generator owners. Preserve missing
-table/column priority, generated/CHECK admission and DEFAULT timing; syntax through
-NUM31 does not imply semantic precision acceptance. In particular, SYSDATE(7)
-precision, forbidden function admission and enclosing-function diagnostic labels
-remain separate measured gaps. RANDOM_BYTES evaluation follows before CHECK
-permission repairs, then bounded function work, M5.47, M5.49, M5.50 and browser work.
+**Clock precision bytes, verified (2026-10-28):** the existing clock compiler now
+narrows precision to its native byte before checking 0..6. For example, 256/257/262
+become 0/1/6; 263 reports 7 and NUM31's maximum reports 255. The parser still admits
+only the same unsigned NUM31 production. Resolution, source readiness, generated/
+CHECK admission and DEFAULT validation retain their existing boundaries; no phase
+reordering is introduced. The compiler still owns argument evaluation and errors.
+A 2,313-command native capture covers all nine clocks, query/execute/PREPARE and
+three modes, missing table/column and enclosing-function controls, generated/CHECK/
+DEFAULT declarations, and empty-result field metadata. Complete matches improve
+857 to 1,775 without losing any earlier matching component, primary attribute,
+condition, field, PREPARE count or effect. The original 0c08906 fails the permanent
+regression at NOW(256)'s missing header. Native answer pools reconstruct exactly,
+independently of guard selection; all older fixtures remain unchanged. Twenty-seven
+captures enforce 38,615/48,368 complete commands, retain 9,753 open outcomes and
+protect 173,325 conditions. Of the 243 new empty-result metadata controls, 162 match
+completely; 81 retain the separate TIME display-width mismatch. Their fractional
+scales and other matching field attributes are enforced independently.
+Fresh Docker --reference passes 1,507 main tests, four latency tests, typecheck,
+lint, all nine unchanged caps, package/typed smoke, the real client and all seven
+pinned corpora. The 2,313 permanent native replays and seeded 20,000-statement
+executor fuzz pass. Repeated actual census and the entire official fixture remain
+byte-identical at 17,530/17,589 and all 37 shared passes. Frozen-source proof covers
+465 test files/fixtures, 206 runtime sources and reference tooling before cleanup.
+Core/facade/parser measure 334,340/334,227/45,613 B gzipped. The preceding 0c08906
+passes all eleven required CI jobs. M5.10 stays partial; totals remain 144/190 and
+M5 42/53.
+
+**Next bounded slice:** resolve the newly measured ordinary clock TIME display
+width through its existing result-type owner, preserving general TIME holders and
+fractional scale. Then repair context-dependent precision precedence through the
+existing compiler/value-generator owners. Preserve missing table/column priority,
+generated/CHECK admission and DEFAULT timing: SYSDATE constructor validation and
+enclosing-function diagnostic labels remain open. RANDOM_BYTES evaluation follows
+before CHECK permission repairs, then bounded function work, M5.47, M5.49, M5.50
+and browser work.
 
 Keep function, keyword and value namespaces distinct. Charset-value validation,
 separate event behavior, valid-AST warnings/limits, later binding failures,

@@ -666,8 +666,9 @@ export function clockFunction(name: string, e: CallNode, ctx: CompileContext): C
 function fspArgument(e: CallNode, ctx: CompileContext): number {
   if (e.args.length === 0) return 0
   const v = compile(e.args[0] as Expression, ctx).eval([], constantEnv(ctx))
-  const n = v === null ? 0 : Number(toInteger(v))
-  if (n < 0 || n > 6) throw sqlError('ER_TOO_BIG_PRECISION', `Too-big precision ${n} specified for '${canonicalFunctionName(e.name.toUpperCase())}'. Maximum is 6.`)
+  // Native clock constructors retain one precision byte before validating 0..6.
+  const n = (v === null ? 0 : Number(toInteger(v))) & 0xff
+  if (n > 6) throw sqlError('ER_TOO_BIG_PRECISION', `Too-big precision ${n} specified for '${canonicalFunctionName(e.name.toUpperCase())}'. Maximum is 6.`)
   return n
 }
 
