@@ -3,7 +3,7 @@
 import { NODE, type Expression, type SqlMode } from '@myjs/parser'
 import { sqlError } from '@myjs/protocol'
 import { nativeCallName } from './ast.ts'
-import { valueGeneratorFunctionName } from './registry.ts'
+import { canonicalFunctionName } from './registry.ts'
 
 export const GENERATED_ADMISSION = {
   label: 'Expression of generated column',
@@ -31,7 +31,7 @@ export function admitValueGenerator(expression: Expression, column: string, mode
     if (n.kind !== NODE.CALL) return
     const name = nativeCallName(n)
     if (name === '') refuse(diagnostic.named, `: ${quote + n.name.replaceAll(quote, quote + quote) + quote}`)
-    if (forbidden.has(name)) refuse(diagnostic.named, `: ${valueGeneratorFunctionName(name)}`)
+    if (forbidden.has(name)) refuse(diagnostic.named, `: ${canonicalFunctionName(name)}`)
   }
   admit(expression)
 }

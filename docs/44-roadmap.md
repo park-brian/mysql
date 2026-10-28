@@ -704,13 +704,41 @@ All 702 permanent commands replay successfully against pinned 8.4.11. The tested
 copy matches 458 test files/fixtures, 206 runtime sources and reference tooling.
 The preceding 2c9a5ff passes all eleven required CI jobs.
 
-**Next bounded slice:** establish native fractional-clock precision validation and
-its error precedence across SELECT, generated columns, DEFAULT and CHECK before
-choosing the existing owner to repair. Then implement RANDOM_BYTES through the
-existing function family before retrying CHECK permissions. Preserve native-call
-identity, source-specific admission and transaction boundaries. Continue bounded
-function work before M5.47, M5.49, M5.50 and browser work. M5.10 stays partial;
-roadmap totals remain 144/190 and M5 42/53.
+**Canonical fractional-clock diagnostics, verified (2026-10-28):** the 174-profile,
+1,566-command native probe confirms canonical lowercase labels and clock aliases.
+The existing clock compiler now shares the registry's diagnostic spelling; arity
+errors keep their written-name contract. The internal helper is named for this
+shared purpose, with the same alias data and generated/DEFAULT/CHECK metadata.
+No validation phase, parser behavior, evaluation or transaction boundary moves.
+Complete matches improve 430 to 490 without losing a matching component, error
+attribute, condition, field, PREPARE count or effect. The full native answer pool
+is retained separately from match guards. All nine unchanged caps pass:
+core/facade are 334,323/334,224 B gzipped, with raw output 18 B above 9f485dd.
+Native precedence forbids a broad early precision check: SYSDATE(7) can beat a
+generated-column refusal, while NOW(7) retains that refusal; missing source tables
+and earlier columns retain their existing priority. Clock argument grammar,
+SYSDATE-specific precision timing and DEFAULT/CHECK precision validation remain
+open, alongside RANDOM_BYTES evaluation and CHECK permissions. Twenty-one captures
+now enforce 34,392/41,636 complete commands, retain 7,244 open outcomes and protect
+168,942 conditions. All 26 focused tests and all 1,566 permanent native replays
+pass; the actual 9f485dd baseline fails the canonical-name regression. All older
+admission fixtures remain byte-identical. Fresh Docker --reference passes 1,498
+main tests, four latency tests, typecheck, lint, nine unchanged caps, package/typed
+smoke, the real client and all seven pinned corpora. Seeded executor fuzzing
+passes 20,000 statements. All 24 parser sources remain unchanged. Repeated actual
+census and the entire official fixture remain byte-identical at 17,530/17,589 and
+all 37 shared passes. Frozen-source proof covers 459 test files/fixtures, 206
+runtime sources and reference tooling before cleanup. The prior 9f485dd passed all
+eleven required CI jobs. M5.10 remains partial.
+
+**Next bounded slice:** establish fractional-clock argument grammar at uint32,
+arity and token boundaries for all native clock spellings, then repair the bounded
+native-call reader under unchanged caps. Preserve generic quoted/spaced collision
+roles, valid ASTs, canonical labels and each source's precision-error precedence.
+Any parser change requires native replay, parser-contract preservation and seeded
+parser fuzzing. Then repair remaining precision validation/timing and RANDOM_BYTES
+evaluation before retrying CHECK permissions. Continue bounded function work
+before M5.47, M5.49, M5.50 and browser work.
 
 Keep function, keyword and value namespaces distinct. Charset-value validation,
 separate event behavior, valid-AST warnings/limits, later binding failures,

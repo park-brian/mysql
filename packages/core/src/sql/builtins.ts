@@ -88,7 +88,7 @@ import {
   type ResultType,
 } from './meta.ts'
 import { matchType, regexpInstr, regexpLike, regexpReplace, regexpSubstr } from './regexp.ts'
-import { nativeArity, unregistered } from './registry.ts'
+import { canonicalFunctionName, nativeArity, unregistered } from './registry.ts'
 import { bitBytes } from './wire.ts'
 
 /** The names `builtinFunction` compiles. */
@@ -667,7 +667,7 @@ function fspArgument(e: CallNode, ctx: CompileContext): number {
   if (e.args.length === 0) return 0
   const v = compile(e.args[0] as Expression, ctx).eval([], constantEnv(ctx))
   const n = v === null ? 0 : Number(toInteger(v))
-  if (n < 0 || n > 6) throw sqlError('ER_TOO_BIG_PRECISION', `Too-big precision ${n} specified for '${e.name}'. Maximum is 6.`)
+  if (n < 0 || n > 6) throw sqlError('ER_TOO_BIG_PRECISION', `Too-big precision ${n} specified for '${canonicalFunctionName(e.name.toUpperCase())}'. Maximum is 6.`)
   return n
 }
 

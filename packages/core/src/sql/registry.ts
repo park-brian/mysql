@@ -108,7 +108,7 @@ export const VARIES_PER_EVALUATION: ReadonlySet<string> = new Set([
 ])
 
 /** Native diagnostic spelling differs from the lookup key only for these aliases. */
-const GENERATOR_FUNCTION_ALIASES: Readonly<Record<string, string>> = {
+const FUNCTION_DIAGNOSTIC_ALIASES: Readonly<Record<string, string>> = {
   CURRENT_TIMESTAMP: 'now',
   LOCALTIME: 'now',
   LOCALTIMESTAMP: 'now',
@@ -121,9 +121,9 @@ const GENERATOR_FUNCTION_ALIASES: Readonly<Record<string, string>> = {
   VERSION: 'version()',
 }
 
-/** Diagnostic spelling for a native ASCII lookup key, independent of admission policy. */
-export function valueGeneratorFunctionName(name: string): string {
-  return GENERATOR_FUNCTION_ALIASES[name] ?? name.toLowerCase()
+/** Canonical labels for value-generator and clock-precision diagnostics, not arity spelling. */
+export function canonicalFunctionName(name: string): string {
+  return FUNCTION_DIAGNOSTIC_ALIASES[name] ?? name.toLowerCase()
 }
 
 // These cohorts describe only the 39 verified names below, not CHECK or
@@ -148,7 +148,7 @@ export const DISALLOWED_DEFAULT_FUNCTIONS: ReadonlySet<string> = new Set(GENERAT
 
 /** Native generated-column diagnostic spelling; CHECK's distinct permissions remain separate. */
 export const NOT_ROW_DETERMINED: ReadonlyMap<string, string> = new Map(
-  [...GENERATED_ONLY, ...GENERATED_AND_DEFAULT].map((name) => [name, valueGeneratorFunctionName(name)] as const),
+  [...GENERATED_ONLY, ...GENERATED_AND_DEFAULT].map((name) => [name, canonicalFunctionName(name)] as const),
 )
 
 /** The functions that are conditions themselves, as a comparison is: a CHECK may be one alone. */

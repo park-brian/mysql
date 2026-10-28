@@ -1645,12 +1645,15 @@ functions remain admitted. A pure postorder check shares only traversal and nati
 diagnostic construction with generated columns. ALTER SET DEFAULT retains its
 late execution boundary and non-executing PREPARE behavior. The extended tests
 pass 153 transaction boundaries and nine missing-database cases against both
-engines. Twenty admission captures enforce 33,902/40,070 complete commands,
-with unchanged native answers and 6,168 open outcomes. CHECK permissions/namespace,
+engines. Twenty-one admission captures enforce 34,392/41,636 complete commands,
+with unchanged native answers and 7,244 open outcomes. CHECK permissions/namespace,
 malformed declaration ordering, ANSI SHOW CREATE and other function gaps remain
 open. A CHECK permission-only trial was withdrawn: native clock precision and
 RANDOM_BYTES evaluation must be repaired first. A deterministic 702-command
-capture protects these boundaries; runtime sources remain unchanged.
+capture protects these boundaries. The clock compiler now shares canonical native
+labels with value-generator diagnostics, retaining separate arity spelling and
+validation timing. Its 1,566-command capture improves 430 to 490 complete matches;
+clock argument grammar and context-dependent precision precedence stay open.
 M5.10 stays partial.
 CAST/CONVERT targets leave internal COLLATE to the syntax boundary while column
 datatype readers retain it. Cursor string reading concatenates adjacent literals
@@ -1684,7 +1687,7 @@ The full Docker gates, pinned-reference audits and 10,000 crash points pass.
 `db.stream()` streams a million rows within a few MB of the heap's baseline (M5.40). Next is the
 remaining function and planner work, then the browser. The coercion corpus
 now agrees on all 3,148 observations and all 1,737 warning counts. The core entry bundle
-is 334,313 bytes gzipped (326.5 KiB), against the 500 KB release target,
+is 334,323 bytes gzipped (326.5 KiB), against the 500 KB release target,
 with the UCA weights in a separate chunk loaded on demand.
 
 The release plan gives each stage something to ship:
