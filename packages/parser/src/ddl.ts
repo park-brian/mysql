@@ -683,8 +683,7 @@ export function indexColumns(c: Cursor, options: DdlOptions): IndexColumn[] {
   do {
     // A functional index: `((UPPER(a)))`. The inner parentheses are required
     // and are what distinguishes it from a column named by an expression.
-    if (c.atOp('(')) {
-      c.skip()
+    if (c.takeOp('(')) {
       const expr = parseExpressionFrom(c, options.sqlMode)
       c.expectOp(')')
       out.push({ expr, ...direction(c) })

@@ -134,7 +134,7 @@ export interface CallNode {
   readonly using?: string
   /** `RANK() OVER w` names a window; `OVER (…)` defines one inline. */
   readonly over?: string | WindowSpec
-  /** Generic syntax for a lexer-function name: quoted, or spaced with IGNORE_SPACE off. */
+  /** Generic syntax colliding with lexer names or reserved words; includes spaced native names without IGNORE_SPACE. */
   readonly stored?: true
   readonly at: number
 }

@@ -21,11 +21,12 @@
 // text, a default as the column stores it (`'0.00'` for DECIMAL(10,2)),
 // EXTRA's `DEFAULT_GENERATED on update CURRENT_TIMESTAMP(3)`, COLUMN_KEY from
 // the same key flags a column's metadata carries.
+import { notSupported } from './errors.ts'
 import { CHARSET_BINARY, FIELD_TYPE, expectTyped } from '@myjs/bytes'
 import { collationInfoByName, requireCollationInfo } from '@myjs/charsets'
 import type { ColumnDef, TableDef, ViewDef } from '@myjs/engine'
 import { parseExpression, type TableName } from '@myjs/parser'
-import { messages, sqlError } from '@myjs/protocol'
+import { sqlError } from '@myjs/protocol'
 import { COERCIBILITY, decodeField, encodeField, intValue, stringValue, toText, type Value } from '@myjs/types'
 import { compile, EMPTY_SCOPE } from './compile.ts'
 import type { DerivedSource } from './from.ts'
@@ -77,7 +78,7 @@ export function informationSchemaTable(run: Run, name: TableName, alias: string,
   const table = name.name.toUpperCase()
   const defs = INFORMATION_SCHEMA[table]
   if (defs === undefined) {
-    if (KNOWN.has(table)) throw sqlError('ER_NOT_SUPPORTED_YET', messages.notSupported(`INFORMATION_SCHEMA.${table}`))
+    if (KNOWN.has(table)) throw notSupported(`INFORMATION_SCHEMA.${table}`)
     throw sqlError('ER_UNKNOWN_TABLE', `Unknown table '${name.name}' in information_schema`)
   }
   const rowsOf = ROWS[table] as (run: Run) => Iterable<readonly Value[]>

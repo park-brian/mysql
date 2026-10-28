@@ -209,3 +209,18 @@ test('deparsed collision calls retain their generic role across SQL modes', () =
   }
   for (const sql of ['SUM (1)', 'NOW ()', 'SUBSTRING (1,2)']) expressionRoundTrips(sql)
 })
+
+
+test('M5.10: function names retain generic spelling and lexer collisions through deparse', () => {
+  const names = ['ſUM', '雪', 'X`Y', 'X"Y', 'X`"Y', 'X\\M', 'X Y', '12f', '', 'CASE', 'SELECT', 'SUM', 'SIN', 'INTERVAL', 'IF']
+  for (const mode of ['', 'IGNORE_SPACE', 'ANSI_QUOTES,IGNORE_SPACE', 'ANSI_QUOTES,NO_BACKSLASH_ESCAPES', 'ANSI']) {
+    for (const name of names) {
+      const call = `${quoteName(name)}(1)`
+      expressionRoundTrips(call, mode)
+      statementRoundTrips(`CREATE TABLE t(v INT, g INT AS (${call}))`, mode)
+    }
+    for (const call of ['12f(1)', 'INTERVAL(1, 2, 3)', 'IF(1, 2, 3)', 'COUNT(*)']) expressionRoundTrips(call, mode)
+  }
+  // quoteName is also an Array.map callback throughout the parser.
+  assert.deepEqual(names.map(quoteName), names.map((name) => quoteName(name)))
+})

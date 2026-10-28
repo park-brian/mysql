@@ -28,10 +28,11 @@
 //     `Item_func_int_val` give it; anything else is a DOUBLE. A double rounds
 //     half to even, as `rint` does; an integer or a decimal half away from zero.
 //   - GREATEST and LEAST take the type CASE would, and compare in it.
+import { notSupported } from './errors.ts'
 import { CHARSET_BINARY, expectTyped, equalBytes } from '@myjs/bytes'
 import { collationInfoByName, decodeCollation, defaultCollationOf, encodeCollation, requireCollationInfo } from '@myjs/charsets'
 import { NODE, deparse, type CallNode, type Expression } from '@myjs/parser'
-import { messages, sqlError } from '@myjs/protocol'
+import { sqlError } from '@myjs/protocol'
 import {
   COERCIBILITY,
   MAX_SIGNED,
@@ -659,7 +660,7 @@ function numberFunction(name: string, args: readonly Compiled[], callName: strin
       }
       if (textual && has('time')) {
         if (has('json')) {
-          throw sqlError('ER_NOT_SUPPORTED_YET', messages.notSupported(`${name} over TIME and JSON`))
+          throw notSupported(`${name} over TIME and JSON`)
         }
         const fsp = temporalPrecision(xs, constant, ctx, 'TIME')
         if (fsp > 0) type = { ...type, length: Math.max(type.length, 11 + fsp) }

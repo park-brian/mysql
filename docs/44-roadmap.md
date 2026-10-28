@@ -553,11 +553,41 @@ covers 449 test files/fixtures, 204 runtime sources and tooling before cleanup.
 Core/facade measure 334,346/334,265 B gzipped; raw output is 591 B below dc63d3b.
 That preceding commit passed all eleven required CI jobs.
 
-**Next bounded slice:** finish generated-column raw-name diagnostics under
-ANSI_QUOTES, then repair non-executing PREPARE admission through the existing
-owners. Preserve validation timing and the absence of table effects. DEFAULT,
-CHECK, ASCII function availability and other generated/function gaps remain
-separate follow-ups. M5.10 stays partial; totals remain 144/190 and M5 42/53.
+**Function-name quoting, verified (2026-10-28):** generated-column raw-name
+diagnostics use the actual statement SQL mode, including ANSI_QUOTES, doubled
+delimiters and unchanged backslashes. CREATE/ALTER retain both admission phases.
+Function lookup and serialization share the parser's ASCII/native syntax
+eligibility. Quoted reserved words retain their collision role; generic Unicode,
+punctuation, empty and digit-leading names survive serialization. Native INTERVAL
+remains available. Public quoteName keeps its callback signature. Standard named
+unsupported-feature and ambiguous-column errors share construction while each
+caller retains its validation phase, message input and custom refusals.
+The new 3,573-command pinned capture improves 414 to 2,580 complete matches across
+five modes and three APIs, including all 262 quoted reserved words. Every matching
+component, condition, field, primary-error attribute, PREPARE count and effect is
+retained. The older function capture strengthens 5,313 to 5,319 with unchanged
+native answer pools; its six ANSI query-message gaps close, leaving 48 generated
+execute/PREPARE outcomes open. The 3,276-command generated capture remains 1,106
+complete matches with stronger individual facts. Thirteen captures enforce
+30,791/36,145 complete commands, retain 5,354 open outcomes and protect 165,273
+individual condition facts. All 35 focused tests and all 3,573 native replays pass;
+35ff10b fails the actual quoted-name generated-column regression.
+Fresh Docker --reference passes 1,488 main tests, four latency tests, typecheck,
+lint, all nine unchanged caps, package/typed smoke, the real client and all seven
+pinned corpora. Seeded fuzzing passes one million parser inputs and 20,000 executor
+statements. All 186,695 parser contracts retain admission/error behavior; 1,190
+AST differences are collision-role flags only, and all 10,224 raw datatype
+contracts are byte-identical. Repeated actual census and the entire official-suite
+fixture remain byte-identical at 17,530/17,589 and all 37 shared passes. Frozen
+source proof covers 450 test files/fixtures, 205 runtime sources and tooling.
+Core/facade/parser measure 334,251/334,172/45,616 B gzipped; core raw output is
+1,480 B below 35ff10b. That preceding commit passed all eleven required CI jobs.
+
+**Next bounded slice:** repair generated-column non-executing PREPARE admission
+through the existing owners. Preserve validation timing and the absence of table
+effects; keep execute framing separate. ANSI SHOW CREATE formatting, DEFAULT,
+CHECK, ASCII function availability and other function gaps remain open. M5.10
+stays partial; totals remain 144/190 and M5 42/53.
 
 Keep function, keyword and value namespaces distinct. Charset-value validation,
 separate event behavior, valid-AST warnings/limits, later binding failures,
@@ -6852,7 +6882,7 @@ code that moves it (doc 43 §8). A claim without a number is marketing.
 | Statements executing the way a real MySQL 8.4 executed them | 3,629 / 3,629 — 400 generated scripts through `mysql2`, 250 of their statements upserts, REPLACEs or IGNOREs: rows and order, column metadata, `affectedRows`/`insertId`/`info`, errno and SQLSTATE. Three further seeds, 46,346 statements and not committed, agree except four `SELECT DISTINCT` metadata cases that need the range optimizer (M5.7, which owns it since M5.5 closed) | every statement the executor accepts |
 | InnoDB round-trip, by type | 0 / 17 | 17 / 17 |
 | Crash injection points, inconsistencies | 10,000 points, 0 inconsistencies — CI's `crash` job runs `CRASH_POINTS=10000`, and `npm test` 300 of them | 10,000 points, 0 |
-| Core bundle, gzipped | 334,346 B (326.5 KiB) for the browser entry chunk, measured on 2026-10-28; the facade is 334,265 B. The two deferred UCA chunks total 184,654 B raw. `tools/size-budget.mjs` measures each package including its workspace dependencies, so package figures do not add up. The M5.2 coercion and M5.10 function fixes pass the existing stabilization budgets without raising them | < 500 KB |
+| Core bundle, gzipped | 334,251 B (326.4 KiB) for the browser entry chunk, measured on 2026-10-28; the facade is 334,172 B. The two deferred UCA chunks total 184,654 B raw. `tools/size-budget.mjs` measures each package including its workspace dependencies, so package figures do not add up. The M5.2 coercion and M5.10 function fixes pass the existing stabilization budgets without raising them | < 500 KB |
 | Function calls returning what a real MySQL 8.4 returned | 8,765 / 8,765 — the string and numeric slices (2,091 / 2,091, including GREATEST and LEAST over text and a DATETIME), the date and time slice (3,463 / 3,463) and the rest of the string, math, hashing and network functions (3,211 / 3,211), both protocols, metadata and warning counts | every function in the library |
 | Implicit coercion | 3,148 / 3,148 captured statements agree, with 0 refusals; warning counts agree on 1,737 / 1,737 queries. All observations are compared with zero disagreements (M5.2 complete) | every captured value, metadata field and warning count |
 | Relational statements executing the way a real MySQL 8.4 executed them | 5,635 / 5,635 agree and none are refused, over 300 multi-table scripts through `mysql2`, both protocols. `queries.json` through the executor: 1,200 / 1,200. Rows are compared in order wherever the statement or an agreeing plan fixes it | every statement the executor accepts, and no refusals |

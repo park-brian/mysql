@@ -23,6 +23,11 @@ import { messages, sqlError, type SqlError } from '@myjs/protocol'
 import type { Scope } from './compile.ts'
 import { columnResultType, type ResultType } from './meta.ts'
 
+/** The resolver supplies the same raw name and clause on multiple matches. */
+export function ambiguousColumnError(column: string, clause: string): SqlError {
+  return sqlError('ER_NON_UNIQ_ERROR', messages.ambiguousColumn(column, clause))
+}
+
 /** Callers retain resolution timing and the native clause spelling. */
 export function unknownColumnError(column: string, clause: string): SqlError {
   return sqlError('ER_BAD_FIELD_ERROR', messages.unknownColumn(column, clause))
@@ -174,7 +179,7 @@ function resolveIn(
   if (found.length > 1) {
     // One merged column of a USING or NATURAL join, reached through each side.
     const group = coalesced.find((g) => found.every((f) => g.includes(f.index)))
-    if (group === undefined) throw sqlError('ER_NON_UNIQ_ERROR', messages.ambiguousColumn(parts.join('.'), clause))
+    if (group === undefined) throw ambiguousColumnError(parts.join('.'), clause)
     const first = group[0] as number
     return found.find((f) => f.index === first) ?? (found[0] as { index: number; type: ResultType })
   }

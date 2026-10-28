@@ -17,10 +17,11 @@
 //
 // What the engine does not interpret rides in `attributes`: a column's
 // `DEFAULT` and `ON UPDATE` as SQL text, compiled when a row needs them.
+import { notSupported } from './errors.ts'
 import { CHARSET_BINARY, FIELD_TYPE } from '@myjs/bytes'
 import { requireCollationInfo } from '@myjs/charsets'
 import { clusteredIndexOf, type ColumnDef, type EngineName, type IndexDef, type TableSpec } from '@myjs/engine'
-import { BINARY_DEPRECATION, KEY, NODE, deparse, type ColumnDefinition, type CreateTableNode, type DataType, type KeyDefinition } from '@myjs/parser'
+import { BINARY_DEPRECATION, KEY, NODE, NO_SQL_MODE, deparse, type ColumnDefinition, type CreateTableNode, type DataType, type KeyDefinition, type SqlMode } from '@myjs/parser'
 import { messages, sqlError } from '@myjs/protocol'
 import type { ColumnType } from '@myjs/types'
 import { checkFulltext, type FulltextDef } from './fulltext.ts'
@@ -223,7 +224,7 @@ function resolveColumnType(t: DataType, tableCollation: number, column: string):
   const { length, scale: writtenScale } = t
   if (code === FIELD_TYPE.JSON) return { type: FIELD_TYPE.JSON }
   if (code === FIELD_TYPE.GEOMETRY || code === FIELD_TYPE.VECTOR) {
-    throw sqlError('ER_NOT_SUPPORTED_YET', messages.notSupported(`The ${t.name} type`))
+    throw notSupported(`The ${t.name} type`)
   }
   if (!STRING_CODES.has(code)) {
     const unsigned = t.unsigned === true || t.zerofill === true || t.serial === true ? { unsigned: true } : {}
@@ -279,8 +280,8 @@ function resolveColumnType(t: DataType, tableCollation: number, column: string):
  * `CREATE TABLE` → the catalog's spec. `schemaCollation` is the schema's
  * default, which a table without a charset of its own inherits.
  */
-export function createTableSpec(node: CreateTableNode, schemaCollation: number): TableSpec {
-  if (node.partition !== undefined) throw sqlError('ER_NOT_SUPPORTED_YET', messages.notSupported('Partitioning'))
+export function createTableSpec(node: CreateTableNode, schemaCollation: number, mode: SqlMode = NO_SQL_MODE): TableSpec {
+  if (node.partition !== undefined) throw notSupported('Partitioning')
 
   const tableCollation = resolveOptionsCollation(node.options, schemaCollation)
   const engine = engineFor(option(node.options, 'ENGINE'))
@@ -326,17 +327,17 @@ export function createTableSpec(node: CreateTableNode, schemaCollation: number):
   for (const k of node.keys) {
     // A foreign key needs its parent, so the catalog: `withForeignKeys` (M5.25).
     if (k.type === KEY.FOREIGN) continue
-    if (k.type === KEY.SPATIAL) throw sqlError('ER_NOT_SUPPORTED_YET', messages.notSupported('SPATIAL indexes'))
+    if (k.type === KEY.SPATIAL) throw notSupported('SPATIAL indexes')
     if (k.type === KEY.FULLTEXT) {
       // Kept in the definition and not built: MATCH reads the table (M5.26).
       const names = k.columns.map((p) => known(p.name ?? ''))
       checkFulltext(engine, columns, names, k.columns.some((p) => p.desc === true || p.asc === true))
-      if (k.parser !== undefined) throw sqlError('ER_NOT_SUPPORTED_YET', messages.notSupported('WITH PARSER'))
+      if (k.parser !== undefined) throw notSupported('WITH PARSER')
       fulltext.push({ name: nameFor(k.name ?? k.constraint, names[0] as string), columns: names, ...keyExtras(k) })
       continue
     }
     const parts = k.columns.map((p) => {
-      if (p.name === undefined) throw sqlError('ER_NOT_SUPPORTED_YET', messages.notSupported('Functional key parts'))
+      if (p.name === undefined) throw notSupported('Functional key parts')
       return { column: known(p.name), ...(p.length === undefined ? {} : { prefix: p.length }), ...(p.desc === true ? { descending: true } : {}) }
     })
     if (k.type === KEY.PRIMARY) {
@@ -357,7 +358,7 @@ export function createTableSpec(node: CreateTableNode, schemaCollation: number):
   // STATS_AUTO_RECALC=0 freezes the table's statistics at its last ANALYZE (M5.45); either value written is shown again.
   const recalc = option(node.options, 'STATS_AUTO_RECALC')
   if (recalc === '0' || recalc === '1') options['statsAutoRecalc'] = recalc === '1'
-  checkGenerated(columns)
+  checkGenerated(columns, mode)
   return { name: node.table.name, engine, columns, indexes, options }
 }
 

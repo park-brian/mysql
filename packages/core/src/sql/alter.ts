@@ -13,10 +13,11 @@
 // (keys, foreign keys on both sides, CHECKs, FULLTEXT), then keys renamed,
 // columns added, indexes and foreign keys added. One not here is refused by
 // name.
+import { notSupported } from './errors.ts'
 import { unknownColumnError, requireSchema } from './scope.ts'
 import { nativeCallName } from './ast.ts'
 import { FIELD_TYPE, MyjsError, expectTyped } from '@myjs/bytes'
-import { sqlError, messages, type OkResult } from '@myjs/protocol'
+import { sqlError, type OkResult } from '@myjs/protocol'
 import type { ColumnDef, FieldBytes, IndexDef, TableDef } from '@myjs/engine'
 import { KEY, NODE, STATEMENT, deparse, type AlterAction, type AlterTableNode, type ColumnDefinition, type Expression } from '@myjs/parser'
 import { decodeField, encodeField, type StoreContext, type Value } from '@myjs/types'
@@ -33,7 +34,6 @@ import { isTemporary, type CatalogApi } from './temporary.ts'
 import { renameTables } from './rename.ts'
 import { modeOf } from './mode.ts'
 
-const notSupported = (what: string) => sqlError('ER_NOT_SUPPORTED_YET', messages.notSupported(what))
 const cantDrop = (name: string) => sqlError('ER_CANT_DROP_FIELD_OR_KEY', `Can't DROP '${name}'; check that column/key exists`)
 
 const ACTION_NAMES: Readonly<Record<string, string>> = {
@@ -373,7 +373,7 @@ export function alterTable(run: Run, catalog: CatalogApi, statement: AlterTableN
     const named = [...columnsOf(generation.text)].find((n) => dropped.has(n))
     if (named !== undefined) throw sqlError('ER_DEPENDENT_BY_GENERATED_COLUMN', `Column '${def.columns.find((x) => x.name.toLowerCase() === named)?.name ?? named}' has a generated column dependency.`)
   }
-  checkGenerated(columns)
+  checkGenerated(columns, modeOf(run.env.session.sqlMode))
   columns.splice(0, columns.length, ...stampGenerated(columns, requireCollationInfo(run.env.session.characterSet).charset))
   const checkClausesAdded = columnChecks(of('addCheck').map((a) => a.check), added)
   const withNewChecks = withChecks(catalog, schema, { name, engine: def.engine, columns, indexes, options }, run.sql, checkClausesAdded, run.env.session.characterSet)

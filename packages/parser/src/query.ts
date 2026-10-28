@@ -255,8 +255,7 @@ class QueryParser {
   /** One branch: a `SELECT`, a `VALUES`, a `TABLE`, or a parenthesised query. */
   #primary(): QueryBody {
     const c = this.#c
-    if (c.atOp('(')) {
-      c.skip()
+    if (c.takeOp('(')) {
       const inner = this.query()
       c.expectOp(')')
       return inner
@@ -572,8 +571,7 @@ class QueryParser {
       for (;;) {
         const c = this.#c
         const at = c.peek().start
-        if (c.atWord('NATURAL')) {
-          c.skip()
+        if (c.takeWord('NATURAL')) {
           let type: 'INNER' | 'LEFT' | 'RIGHT' = 'INNER'
           if (c.takeWord('LEFT')) type = 'LEFT'
           else if (c.takeWord('RIGHT')) type = 'RIGHT'

@@ -26,6 +26,8 @@ import { NODE, LITERAL, type CallNode, type Expression, type LiteralNode } from 
 import type { DataType } from './data-type.ts'
 import { RESERVED } from './keywords.ts'
 import { asciiWord } from './tokens.ts'
+import { nativeFunctionWord } from './expression.ts'
+import { opt } from './cursor.ts'
 import { NO_SQL_MODE, type SqlMode } from './sql-mode.ts'
 import {
   QUERY,
@@ -248,8 +250,9 @@ class Deparser {
    */
   call(e: CallNode): string {
     const args = e.args.map((a) => this.expr(a))
-    let body: string
-    switch (e.stored ? '' : asciiWord(e.name)) {
+    const native = e.stored ? '' : nativeFunctionWord(e.name)
+    let body = args.join(', ')
+    switch (native) {
       case 'EXTRACT':
         body = `${args[0]} FROM ${args[1]}`
         break
@@ -257,10 +260,7 @@ class Deparser {
         body = `${args[0]} IN ${args[1]}`
         break
       case 'WEIGHT_STRING':
-        body =
-          e.args[1]?.kind === NODE.KEYWORD
-            ? [`${args[0]} AS ${args[1]}(${args[2]})`, ...args.slice(3)].join(', ')
-            : args.join(', ')
+        if (e.args[1]?.kind === NODE.KEYWORD) body = [`${args[0]} AS ${args[1]}(${args[2]})`, ...args.slice(3)].join(', ')
         break
       case 'TRIM':
         body =
@@ -270,17 +270,14 @@ class Deparser {
               ? `${args[0]} FROM ${args[1]}`
               : (args[0] as string)
         break
-      default: {
-        const star = e.args.length === 1 && e.args[0]!.kind === NODE.COLUMN && e.args[0]!.parts.length === 1 && e.args[0]!.parts[0] === '*'
-        body = star ? '*' : args.join(', ')
-      }
     }
     if (e.distinct === true) body = `DISTINCT ${body}`
     if (e.orderBy !== undefined) body += ` ${this.orderBy(e.orderBy)}`
     if (e.separator !== undefined) body += ` SEPARATOR ${this.string(e.separator)}`
     if (e.using !== undefined) body += ` USING ${quoteName(e.using)}`
     const over = e.over === undefined ? '' : ` OVER ${typeof e.over === 'string' ? quoteName(e.over) : `(${this.windowSpec(e.over)})`}`
-    return `${e.stored ? quoteName(e.name) : e.name}(${body})${over}`
+    const name = native === '' ? quoteName(e.name) : e.name
+    return `${name}(${body})${over}`
   }
 
   binary(op: string, left: Expression, right: Expression, extra: Expression | readonly Expression[] | undefined): string {
@@ -617,7 +614,7 @@ class Deparser {
   privileges(list: readonly Privilege[]): string {
     return list
       .map((p) => {
-        if ('name' in p) return this.definer({ user: p.name, ...(p.host === undefined ? {} : { host: p.host }) })
+        if ('name' in p) return this.definer({ user: p.name, ...opt('host', p.host) })
         return p.columns === undefined ? p.privilege : `${p.privilege} (${p.columns.map(quoteName).join(', ')})`
       })
       .join(', ')

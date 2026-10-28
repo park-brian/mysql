@@ -107,9 +107,16 @@ const AGGREGATES = new Set([
 const LEXICAL_FUNCTIONS = new Set([
   ...NILADIC, ...SPACE_SENSITIVE, ...AGGREGATES,
   'CHAR', 'CONVERT', 'DATABASE', 'DEFAULT', 'IF', 'INSERT', 'LEFT', 'RIGHT', 'MOD', 'REPEAT', 'REPLACE',
-  'SCHEMA', 'VALUES', 'GROUPING', 'CUME_DIST', 'DENSE_RANK', 'FIRST_VALUE', 'LAG', 'LAST_VALUE', 'LEAD',
+  'SCHEMA', 'VALUES', 'INTERVAL', 'GROUPING', 'CUME_DIST', 'DENSE_RANK', 'FIRST_VALUE', 'LAG', 'LAST_VALUE', 'LEAD',
   'NTH_VALUE', 'NTILE', 'PERCENT_RANK', 'RANK', 'ROW_NUMBER',
 ])
+
+/** ASCII eligibility for native-call syntax, not a catalogue of existing functions. */
+export function nativeFunctionWord(text: string): string {
+  const name = asciiWord(text)
+  if (RESERVED.has(name)) return LEXICAL_FUNCTIONS.has(name) ? name : ''
+  return /^[A-Z_$][\w$]*$/.test(name) ? name : ''
+}
 
 /** `INTERVAL 1 DAY` and friends. */
 export const INTERVAL_UNITS: ReadonlySet<string> = new Set([
@@ -378,16 +385,14 @@ class ExpressionParser {
     const cursor = this.#c
     const t = cursor.peek()
 
-    if (this.#mode.highNotPrecedence && cursor.atWord('NOT')) {
-      cursor.skip()
+    if (this.#mode.highNotPrecedence && cursor.takeWord('NOT')) {
       return { kind: NODE.UNARY, op: 'NOT', operand: this.#unary(), at: t.start }
     }
     if (cursor.atOp('-') || cursor.atOp('+') || cursor.atOp('~') || cursor.atOp('!')) {
       const op = cursor.take().text
       return { kind: NODE.UNARY, op, operand: this.#unary(), at: t.start }
     }
-    if (cursor.atWord('BINARY')) {
-      cursor.skip()
+    if (cursor.takeWord('BINARY')) {
       return { kind: NODE.UNARY, op: 'BINARY', operand: this.#unary(), at: t.start }
     }
     if (cursor.atWord('INTERVAL')) {
@@ -510,6 +515,7 @@ class ExpressionParser {
     const cursor = this.#c
     const t = cursor.peek()
     const upper = asciiWord(t.text)
+    const followedByParen = cursor.atOp('(', 1)
 
     if (!t.quoted) {
       if (upper === 'NULL') {
@@ -537,14 +543,14 @@ class ExpressionParser {
         cursor.skip()
         return { kind: NODE.LITERAL, type: LITERAL.STRING, value: cursor.expectString(true), charset: 'utf8mb3', at: t.start }
       }
-      if (upper === 'EXISTS' && cursor.atOp('(', 1)) {
+      if (upper === 'EXISTS' && followedByParen) {
         cursor.skip()
         const open = cursor.peek().start
         const operand = { kind: NODE.SUBQUERY, query: this.#parenthesisedQuery(), at: open } as const
         return { kind: NODE.UNARY, op: 'EXISTS', operand, at: t.start }
       }
       // `ROW(1, 2)` is the row constructor `(1, 2)` spelled out.
-      if (upper === 'ROW' && cursor.atOp('(', 1)) {
+      if (upper === 'ROW' && followedByParen) {
         cursor.skip()
         const open = cursor.take()
         const items: Expression[] = []
@@ -553,8 +559,8 @@ class ExpressionParser {
         cursor.expectOp(')')
         return { kind: NODE.ROW, items, at: open.start }
       }
-      if (upper === 'MATCH' && (cursor.atOp('(', 1) || cursor.peek(1).kind === TOKEN.IDENTIFIER)) return this.#match()
-      if (cursor.atOp('(', 1)) {
+      if (upper === 'MATCH' && (followedByParen || cursor.peek(1).kind === TOKEN.IDENTIFIER)) return this.#match()
+      if (followedByParen) {
         // One of the builtins the lexer knows by name, a space before its
         // `(`, and IGNORE_SPACE off: not the builtin, but a stored function
         // of that name (8.4.11: `COUNT (*)` is 1064, `NOW ()` is 1630).
@@ -590,7 +596,7 @@ class ExpressionParser {
     // Quoted names use generic argument grammar. Lexer-function names retain
     // their collision role; quoted scalar names remain callable. Unquoted
     // calls, including whitespace-sensitive names, were handled above.
-    if (cursor.atOp('(', 1)) return this.#call(LEXICAL_FUNCTIONS.has(upper))
+    if (followedByParen) return this.#call(RESERVED.has(upper) || LEXICAL_FUNCTIONS.has(upper))
 
     // A qualified name: `a`, `t.a`, `db.t.a`, `t.*` or `db.t.*` — three parts
     // at most, since `a.b.c.d` names nothing.
@@ -598,8 +604,7 @@ class ExpressionParser {
     const parts = [t.text]
     while (cursor.atOp('.') && parts.length < 3) {
       cursor.skip()
-      if (cursor.atOp('*')) {
-        cursor.skip()
+      if (cursor.takeOp('*')) {
         parts.push('*')
         break
       }
@@ -630,9 +635,8 @@ class ExpressionParser {
     // `SUM(ALL a)` is `SUM(a)`: `ALL` is the default an aggregate may spell out.
     if (aggregate && !distinct) cursor.takeWord('ALL')
     const args: Expression[] = []
-    if (upper === 'COUNT' && cursor.atOp('*') && !distinct) {
+    if (upper === 'COUNT' && !distinct && cursor.takeOp('*')) {
       // `COUNT(*)` — the only place a bare star is an argument.
-      cursor.skip()
       args.push({ kind: NODE.COLUMN, parts: ['*'], at: cursor.peek().start })
     } else if (!cursor.atOp(')')) {
       do {

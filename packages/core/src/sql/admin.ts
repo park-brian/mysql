@@ -5,6 +5,7 @@
 // again: what a driver sends on connect (`SET NAMES`, `SET sql_mode`,
 // `SELECT @@version_comment`) worked before the executor existed and must keep
 // working exactly as it did.
+import { notSupported } from './errors.ts'
 import { CHARSET_UTF8MB4_0900_AI_CI, messages, sqlError, type Session, type SqlValue } from '@myjs/protocol'
 import {
   NODE,
@@ -348,7 +349,7 @@ export class ServerState {
   program(session: Session, statement: ProgramStatement): void {
     if (statement.kind === STATEMENT.CALL) {
       if (!this.#programs.has(programKey('PROCEDURE', statement.name, session))) throw sqlError('ER_SP_DOES_NOT_EXIST', messages.objectMissing('PROCEDURE', qualified(statement.name, session)))
-      throw sqlError('ER_NOT_SUPPORTED_YET', messages.notSupported('CALL'))
+      throw notSupported('CALL')
     }
     if (statement.kind === STATEMENT.DROP) {
       const object = statement.object as ProgramObject

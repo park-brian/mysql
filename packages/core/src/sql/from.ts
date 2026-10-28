@@ -33,6 +33,7 @@
 // NULL` must still see the NULL rows the join made.
 // D-89 permits omitting a FirstMatch integer bound only when its selected
 // physical range and exact point equality already enforce it.
+import { notSupported } from './errors.ts'
 import { FIELD_TYPE, expectTyped } from '@myjs/bytes'
 import { and, someNode } from './ast.ts'
 import { requireCollationInfo } from '@myjs/charsets'
@@ -283,7 +284,7 @@ export function planFrom(refs: readonly TableReference[], ctx: FromContext, wher
     if (byAlias.has(p.alias)) throw sqlError('ER_NONUNIQ_TABLE', messages.nonUniqueTable(p.alias))
     let derived: DerivedSource | undefined = p.cte
     if (p.derivedRef !== undefined) {
-      if (ctx.derived === undefined) throw sqlError('ER_NOT_SUPPORTED_YET', messages.notSupported('Derived tables'))
+      if (ctx.derived === undefined) throw notSupported('Derived tables')
       const visible = tables.filter((sp) => p.hidden?.has(sp.alias) !== true)
       const before = visible.length > 0 ? new TableScope(visible, { parent: ctx.parent }) : ctx.parent
       derived = ctx.derived(p.derivedRef, p.derivedRef.lateral === true ? before : undefined)

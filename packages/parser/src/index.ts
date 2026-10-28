@@ -40,7 +40,7 @@ export type {
   UnaryNode,
   VariableNode,
 } from './ast.ts'
-export { parseExpression } from './expression.ts'
+export { nativeFunctionWord, parseExpression } from './expression.ts'
 export type { ParseExpressionOptions } from './expression.ts'
 export { Cursor } from './cursor.ts'
 export { atDataType, parseDataType } from './data-type.ts'

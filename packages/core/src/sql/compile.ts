@@ -13,6 +13,7 @@
 // have not written is ER_NOT_SUPPORTED_YET naming it (M5.10 owns the rest).
 import { CHARSET_BINARY, COLUMN_FLAG, FIELD_TYPE, expectTyped, equalBytes } from '@myjs/bytes'
 import { nativeCallName, someNode } from './ast.ts'
+import { notSupported } from './errors.ts'
 import { resolveCollation } from './collation.ts'
 import { decodeCollation, defaultCollationOf, encodeCollation, requireCollationInfo } from '@myjs/charsets'
 import { LITERAL, NODE, TOKEN, deparse, lex, parseExpression, type CallNode, type CaseNode, type CastNode, type ConvertNode, type Expression, type LiteralNode, type MatchNode, type QueryExpression, type SubqueryNode, type VariableNode, quoteName } from '@myjs/parser'
@@ -791,7 +792,7 @@ export function compile(e: Expression, ctx: CompileContext): Compiled {
       throw sqlError('ER_OPERAND_COLUMNS', 'Operand should contain 1 column(s)')
 
     default:
-      throw sqlError('ER_NOT_SUPPORTED_YET', messages.notSupported(`This expression (${e.kind})`))
+      throw notSupported(`This expression (${e.kind})`)
   }
 }
 
@@ -1050,7 +1051,7 @@ function nullDivision(a: ResultType, b: ResultType): ResultType {
 }
 
 function unary(op: string, a: Compiled, exists: boolean, constant: false | Expression = false, ctx?: CompileContext): Compiled {
-  if (exists) throw sqlError('ER_NOT_SUPPORTED_YET', messages.notSupported('EXISTS'))
+  if (exists) throw notSupported('EXISTS')
   const at = a.eval
   switch (op) {
     case '-': {
@@ -1114,7 +1115,7 @@ function unary(op: string, a: Compiled, exists: boolean, constant: false | Expre
     case 'IS NOT UNKNOWN':
       return { eval: (r, env) => bool(truth(at(r, env)) !== null), type: boolType(false) }
     default:
-      throw sqlError('ER_NOT_SUPPORTED_YET', messages.notSupported(`The operator ${op}`))
+      throw notSupported(`The operator ${op}`)
   }
 }
 
@@ -1437,7 +1438,7 @@ function binary(op: string, left: Expression, right: Expression, extra: Expressi
     }
     default: {
       const test = COMPARISONS[op]
-      if (test === undefined) throw sqlError('ER_NOT_SUPPORTED_YET', messages.notSupported(`The operator ${op}`))
+      if (test === undefined) throw notSupported(`The operator ${op}`)
       const cmp = comparer(a.type, b.type)
       return {
         // The right side is not read when the left is NULL, so its conversion
@@ -2422,13 +2423,13 @@ function call(e: CallNode, ctx: CompileContext): Compiled {
     if (e.over !== undefined) {
       if (ctx.windows !== undefined) return ctx.windows.register(e)
       if (/^(where|having|on) clause$/.test(ctx.clause)) windowNotAllowed(e)
-      throw sqlError('ER_NOT_SUPPORTED_YET', messages.notSupported('Window functions here'))
+      throw notSupported('Window functions here')
     }
     if (AGGREGATE_NAMES.has(name)) {
       // An aggregate of an enclosing query's columns alone is that query's, and
       // makes it aggregate (8.4.11: `SELECT (SELECT COUNT(t1.x) FROM t2) FROM
       // t1` is one row). Refused by name until the outer query can take it.
-      if (outerOnly(e.args, ctx)) throw sqlError('ER_NOT_SUPPORTED_YET', messages.notSupported("An aggregate of an enclosing query's columns"))
+      if (outerOnly(e.args, ctx)) throw notSupported("An aggregate of an enclosing query's columns")
       if (ctx.aggregates === undefined || ctx.inAggregate === true) throw invalidGroupFunction()
       return ctx.aggregates.register(e, ctx)
     }
@@ -2439,7 +2440,7 @@ function call(e: CallNode, ctx: CompileContext): Compiled {
     if (name === 'DEFAULT' && e.args.length === 1) return defaultFunction(e, ctx)
     const compiler = functionCompiler(name)
     if (compiler !== undefined) return compiler(name, e, ctx)
-    if (NOT_YET.includes(name)) throw sqlError('ER_NOT_SUPPORTED_YET', messages.notSupported(`The function ${name}`))
+    if (NOT_YET.includes(name)) throw notSupported(`The function ${name}`)
   }
   const collision = e.stored
   const message = messages.objectMissing('FUNCTION', `${requireSchema(ctx.session.database)}.${e.name}`)
@@ -2596,7 +2597,7 @@ function cast(e: CastNode, ctx: CompileContext): Compiled {
     case 'TIME':
       return { eval: (r, env) => { const v = x(r, env); return v === null ? null : (toTime(v) ?? null) }, type: datetimeType(FIELD_TYPE.TIME, t.length ?? 0, true) }
     default:
-      throw sqlError('ER_NOT_SUPPORTED_YET', messages.notSupported(`CAST AS ${t.name}`))
+      throw notSupported(`CAST AS ${t.name}`)
   }
 }
 
@@ -2613,7 +2614,7 @@ export interface QuantifiedSubquery {
 
 /** A subquery's plan, with the enclosing scope its correlated names resolve in. */
 function planned(e: SubqueryNode, ctx: CompileContext): SubqueryPlan {
-  if (ctx.subquery === undefined) throw sqlError('ER_NOT_SUPPORTED_YET', messages.notSupported('Subqueries here'))
+  if (ctx.subquery === undefined) throw notSupported('Subqueries here')
   return ctx.subquery(e.query, ctx.scope)
 }
 
@@ -2680,7 +2681,7 @@ function quantified(op: string, quantifier: 'ANY' | 'ALL', left: Expression, rig
   // `(a, b) IN (SELECT x, y …)`: a row is equal where every element is, and
   // unequal where any is not, whatever the others hold (8.4.11).
   const lefts = left.kind === NODE.ROW && left.items.length > 1 ? left.items : [left]
-  if (lefts.length > 1 && op !== '=' && op !== '<>') throw sqlError('ER_NOT_SUPPORTED_YET', messages.notSupported(`A row compared with ${op} ${quantifier}`))
+  if (lefts.length > 1 && op !== '=' && op !== '<>') throw notSupported(`A row compared with ${op} ${quantifier}`)
   const as = lefts.map((l) => compile(l, ctx))
   const plan = planned(right, ctx)
   if (plan.columns.length !== as.length) throw sqlError('ER_OPERAND_COLUMNS', `Operand should contain ${as.length} column(s)`)
@@ -2784,7 +2785,7 @@ function defaultFunction(e: CallNode, ctx: CompileContext): Compiled {
   const at = scope instanceof TableScope && (r.depth ?? 0) === 0 ? scope.columnAt(r.index) : undefined
   const def = at?.table.def
   const column = def?.columns.find((c) => c.name.toLowerCase() === (at?.column.name ?? '').toLowerCase())
-  if (column === undefined) throw sqlError('ER_NOT_SUPPORTED_YET', messages.notSupported('DEFAULT() of a column that is not a base table\'s'))
+  if (column === undefined) throw notSupported('DEFAULT() of a column that is not a base table\'s')
   const type = { ...r.type, nullable: true }
   const text = column.attributes?.['default']
   if (column.attributes?.['defaultExpression'] === true) throw sqlError('ER_DEFAULT_AS_VAL_GENERATED', 'DEFAULT function cannot be used with default value expressions')
@@ -2830,7 +2831,7 @@ function matchAgainst(e: MatchNode, ctx: CompileContext): Compiled {
   const slots = e.columns.map((c) => {
     if (c.kind !== NODE.COLUMN) throw noIndex()
     const r = scope.resolve(c.parts, ctx.clause)
-    if ((r.depth ?? 0) > 0) throw sqlError('ER_NOT_SUPPORTED_YET', messages.notSupported('MATCH on an outer query\'s columns'))
+    if ((r.depth ?? 0) > 0) throw notSupported('MATCH on an outer query\'s columns')
     return r.index
   })
   // Columns of more than one collation are a mix before they are an index (8.4.11: `MATCH(t, id)` is 1267).

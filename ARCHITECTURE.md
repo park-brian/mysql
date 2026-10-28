@@ -1620,13 +1620,19 @@ resolution phases or explicit-name handling. The 378-command capture protects
 Native function classification now shares an ASCII spelling key and the existing
 call-role flag. Quoted/spaced lexer names retain collision grammar, and Unicode
 lookalikes bypass native binding before argument effects. The 6,084-command
-capture improves 2,916 to 5,295 complete matches without losing protected facts;
-all 789 remaining outcomes stay recorded. Generated-column execution admission now checks arguments before calls, then
+capture now protects 5,319 complete matches with unchanged native answers;
+all 765 remaining outcomes stay recorded. Generated-column execution admission now checks arguments before calls, then
 references, aggregates and windows in written order through its existing owner.
 The 3,276-command capture improves 658 to 1,106 complete matches without losing
 protected facts; definitions and existing rows are checked on every frame.
-ANSI quote formatting and PREPARE admission remain open. DEFAULT and CHECK
-admission keep their separate follow-ups.
+Raw-name diagnostics now use actual SQL mode and double only the chosen quote.
+Lookup and serialization share native syntax eligibility; quoted reserved words
+retain their collision role and generic names survive serialization. A new
+3,573-command capture enforces 2,580 complete matches across five modes and all
+three APIs. All matching facts are retained. Six older ANSI query-message gaps
+close, leaving 48 generated execute/PREPARE outcomes open in the function capture.
+PREPARE admission is next; ANSI SHOW CREATE formatting, DEFAULT and CHECK retain
+separate follow-ups.
 CAST/CONVERT targets leave internal COLLATE to the syntax boundary while column
 datatype readers retain it. Cursor string reading concatenates adjacent literals
 only when expression or ENUM/SET grammar requests it; ordinary callers consume

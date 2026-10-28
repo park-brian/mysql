@@ -22,9 +22,10 @@ import { distinct, filter, limit, project, sort, type SortKey } from './operator
 import { isConstant, optimizerEnabled, splitAnd, tableColumn } from './plan.ts'
 import { and, columnRefs, integerLiteral, nativeCallName, someNode } from './ast.ts'
 import { invalidGroupFunction } from './registry.ts'
+import { notSupported } from './errors.ts'
 import { clusteredIndex, indexParts } from './indexes.ts'
 import { collationInfoByName, encodeCollation } from '@myjs/charsets'
-import { unknownColumnError, requireSchema, safeResolve, TableScope } from './scope.ts'
+import { ambiguousColumnError, unknownColumnError, requireSchema, safeResolve, TableScope } from './scope.ts'
 import { holdsRead, planFrom, type DerivedPlan, type DerivedSource, type FromContext, type FromPlan, type JoinCondition } from './from.ts'
 import { firstKey, rowKey, valueKey } from './keys.ts'
 import { indexLookup, planNode, wrap, type PlanNode } from './explain.ts'
@@ -134,7 +135,7 @@ export function fromContext(run: Run): FromContext {
 export function openTable(run: Run, name: TableName, alias = name.name): { readonly schema: string; readonly def: TableDef; readonly table: Table } {
   const schema = requireSchema(name.schema ?? defaultDatabase(run))
   // M5.12: refused by name until its tables exist, never answered as a missing table.
-  if (schema.toLowerCase() === 'information_schema') throw sqlError('ER_NOT_SUPPORTED_YET', messages.notSupported('INFORMATION_SCHEMA'))
+  if (schema.toLowerCase() === 'information_schema') throw notSupported('INFORMATION_SCHEMA')
   if (run.catalog === undefined) throw sqlError('ER_NO_SUCH_TABLE', messages.noSuchTable(schema, name.name))
   const def = run.catalog.definition(schema, name.name)
   // A temporary table is opened once a statement: a second reference to it is 1137, naming the first (8.4.11).
@@ -309,7 +310,7 @@ interface SetMembers {
  * LIMIT, or a set operation, under the CTEs its WITH defines.
  */
 export function planQuery(run: Run, q: QueryExpression): SelectPlan {
-  if (q.into !== undefined) throw sqlError('ER_NOT_SUPPORTED_YET', messages.notSupported('SELECT … INTO'))
+  if (q.into !== undefined) throw notSupported('SELECT … INTO')
   const r = q.with === undefined ? run : withClause(run, q.with)
   const body = q.body
   switch (body.kind) {
@@ -321,7 +322,7 @@ export function planQuery(run: Run, q: QueryExpression): SelectPlan {
     case QUERY.SET_OPERATION:
       return orderedResult(r, q, planSetOperation(r, body))
     default:
-      throw sqlError('ER_NOT_SUPPORTED_YET', messages.notSupported(body.kind.toUpperCase()))
+      throw notSupported(body.kind.toUpperCase())
   }
 }
 
@@ -2296,7 +2297,7 @@ function substituteAliases(e: Expression, items: readonly { readonly expr: Expre
     if (node.kind === NODE.COLUMN && node.parts?.length === 1) {
       const name = node.parts[0] as string
       const hits = items.filter((i) => i.alias?.toLowerCase() === name.toLowerCase())
-      if (hits.length > 1) throw sqlError('ER_NON_UNIQ_ERROR', messages.ambiguousColumn(name, 'having clause'))
+      if (hits.length > 1) throw ambiguousColumnError(name, 'having clause')
       const hit = hits[0]
       if (hit !== undefined) {
         if (containsWindow(hit.expr)) throw sqlError('ER_WINDOW_INVALID_WINDOW_FUNC_ALIAS_USE', `You cannot use the alias '${name}' of an expression containing a window function in this context.'`)

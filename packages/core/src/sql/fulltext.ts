@@ -40,10 +40,11 @@
 // takes rows in the order they were inserted, where this takes them in
 // the table's; after a sync to disk a prefix scans its words in order; and
 // MATCH over a derived table, which the server merges, is 1191 here.
+import { notSupported } from './errors.ts'
 import { CHARSET_BINARY, FIELD_TYPE } from '@myjs/bytes'
 import { collation, encodeCollation, requireCollationInfo } from '@myjs/charsets'
 import type { ColumnDef, TableDef } from '@myjs/engine'
-import { SqlError, messages, sqlError } from '@myjs/protocol'
+import { SqlError, sqlError } from '@myjs/protocol'
 import { toText, type Value } from '@myjs/types'
 import { FT_MAX_TOKEN, FT_MIN_TOKEN, FT_STOPWORDS } from './fulltext-params.ts'
 
@@ -565,7 +566,7 @@ export const queryText = (v: Value): string => (v === null ? '' : toText(v))
 
 export const noIndex = () => sqlError('ER_FT_MATCHING_KEY_NOT_FOUND', "Can't find FULLTEXT index matching the column list")
 export const badAgainst = () => sqlError('ER_WRONG_ARGUMENTS', 'Incorrect arguments to AGAINST')
-export const noExpansion = () => sqlError('ER_NOT_SUPPORTED_YET', messages.notSupported('WITH QUERY EXPANSION'))
+export const noExpansion = () => notSupported('WITH QUERY EXPANSION')
 
 /** The fold a set of columns' words take: their collation's. */
 export function foldFor(def: TableDef, columns: readonly string[]): (w: string) => string {

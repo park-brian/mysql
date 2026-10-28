@@ -12,6 +12,7 @@
 // statement again later is the same as having waited. Past
 // `innodb_lock_wait_timeout` the answer is ER_LOCK_WAIT_TIMEOUT (1205), which
 // rolls back the statement and not the transaction, as InnoDB's does.
+import { notSupported } from './errors.ts'
 import { requireSchema } from './scope.ts'
 import { FIELD_TYPE, MyjsError, expectTyped } from '@myjs/bytes'
 import { someNode } from './ast.ts'
@@ -716,7 +717,7 @@ export class SqlExecutor implements Executor {
   }
 
   #catalog(run: Run): CatalogApi {
-    if (run.catalog === undefined) throw sqlError('ER_NOT_SUPPORTED_YET', messages.notSupported('This statement without a database'))
+    if (run.catalog === undefined) throw notSupported('This statement without a database')
     return run.catalog
   }
 
@@ -752,7 +753,7 @@ export class SqlExecutor implements Executor {
         const selected = statement.query === undefined ? undefined : selectColumns(run, planQuery(run, statement.query).columns, literalColumns(statement.query))
         const { query: _query, ...declared } = statement
         const node: CreateTableNode = selected === undefined ? statement : { ...declared, columns: mergedColumns(statement.columns, selected.columns) }
-        let spec = createTableSpec(node, catalog.schema(schema).collationId ?? DEFAULT_COLLATION)
+        let spec = createTableSpec(node, catalog.schema(schema).collationId ?? DEFAULT_COLLATION, modeOf(session.sqlMode))
         if (selected !== undefined) spec = withCollations(spec, selected.collations, statement.columns)
         spec = { ...spec, columns: stampGenerated(spec.columns, requireCollationInfo(session.characterSet).charset) }
         // CHECK constraints are resolved first, IF NOT EXISTS or not (8.4.11: 3820 over a table that exists).
@@ -922,11 +923,11 @@ export class SqlExecutor implements Executor {
       case STATEMENT.EXPLAIN:
         return this.#explain(run, statement)
       case STATEMENT.TABLE_MAINTENANCE:
-        if (statement.op !== 'ANALYZE') throw sqlError('ER_NOT_SUPPORTED_YET', messages.notSupported(`${statement.op} TABLE`))
+        if (statement.op !== 'ANALYZE') throw notSupported(`${statement.op} TABLE`)
         return this.#analyze(run, statement.tables)
 
       default:
-        throw sqlError('ER_NOT_SUPPORTED_YET', messages.notSupported(`This statement (${statement.kind})`))
+        throw notSupported(`This statement (${statement.kind})`)
     }
   }
 
@@ -1056,7 +1057,7 @@ export class SqlExecutor implements Executor {
       const name = (statement.names[0] as TableName).name
       return alterTable(run, catalog, { kind: STATEMENT.ALTER_TABLE, table: statement.on, actions: [{ type: 'drop', what: 'INDEX', name }], options: {}, at: statement.at })
     }
-    if (statement.object !== 'TABLE') throw sqlError('ER_NOT_SUPPORTED_YET', messages.notSupported(`DROP ${statement.object}`))
+    if (statement.object !== 'TABLE') throw notSupported(`DROP ${statement.object}`)
     const names = statement.names.map((n) => {
       const schema = requireSchema(n.schema ?? session.database)
       return { schema, name: n.name }
@@ -1138,10 +1139,10 @@ export class SqlExecutor implements Executor {
   #explain(run: Run, statement: ExplainNode): StatementResult {
     const target = statement.statement
     if (statement.format !== 'TREE' || statement.analyze === true || statement.into !== undefined || statement.schema !== undefined || target === undefined || target.kind !== STATEMENT.QUERY) {
-      throw sqlError('ER_NOT_SUPPORTED_YET', messages.notSupported(statement.format === 'TREE' ? 'EXPLAIN of this statement' : `EXPLAIN FORMAT=${statement.format ?? 'TRADITIONAL'}`))
+      throw notSupported(statement.format === 'TREE' ? 'EXPLAIN of this statement' : `EXPLAIN FORMAT=${statement.format ?? 'TRADITIONAL'}`)
     }
     const roots = planQuery(run, target).explain?.()
-    if (roots === undefined) throw sqlError('ER_NOT_SUPPORTED_YET', messages.notSupported('EXPLAIN of this query'))
+    if (roots === undefined) throw notSupported('EXPLAIN of this query')
     const coll = run.env.session.characterSet
     return { columns: [columnDefinition('EXPLAIN', stringType(78, coll, false), coll)], rows: [[run.env.session.transcoder.encode(renderTree(roots), coll)]] }
   }
@@ -1265,7 +1266,7 @@ export class SqlExecutor implements Executor {
         return { ...result, columns: shownColumns(statement, plan.columns.map((c) => c.name), coll, requireCollationInfo(coll).mbmaxlen) }
       }
       default:
-        throw sqlError('ER_NOT_SUPPORTED_YET', messages.notSupported(`SHOW ${statement.what}`))
+        throw notSupported(`SHOW ${statement.what}`)
     }
   }
 }

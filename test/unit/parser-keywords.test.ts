@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { Cursor, NODE, NO_SQL_MODE, ParseError, atDataType, lex, parseDataType, parseExpression, parseSqlMode, parseStatement } from '@myjs/parser'
+import { Cursor, NODE, NO_SQL_MODE, ParseError, atDataType, lex, nativeFunctionWord, parseDataType, parseExpression, parseSqlMode, parseStatement } from '@myjs/parser'
 
 test('ASCII keywords and Unicode identifiers keep distinct identities', () => {
   for (const word of ['ſelect', 'ıf', 'falſe', 'caſe', 'unıcode', 'bıNARY']) {
@@ -67,4 +67,18 @@ test('resource selectors use the same keyword rule for first and subsequent limi
       assert.throws(() => parseStatement('CREATE USER u WITH ' + prefix + lookalike + ' 1'), { errno: 1064 })
     }
   }
+})
+
+
+test('M5.10: native function eligibility preserves raw generic and reserved names', () => {
+  for (const name of ['ſUM', '雪', '12f', '', 'X Y', 'X`Y', 'CASE', 'SELECT']) assert.equal(nativeFunctionWord(name), '', name)
+  for (const name of ['missing_fn', 'sin', 'SUM', 'INTERVAL', 'IF', '$name', '_name']) assert.equal(nativeFunctionWord(name), name.toUpperCase(), name)
+  for (const name of ['CASE', 'SELECT', 'SUM', 'INTERVAL']) {
+    const call = parseExpression('`' + name + '`(1)')
+    assert.equal(call.kind, NODE.CALL)
+    assert.equal('stored' in call && call.stored, true, name)
+  }
+  const generic = parseExpression('12f(1)')
+  assert.equal(generic.kind, NODE.CALL)
+  assert.equal('name' in generic && generic.name, '12f')
 })

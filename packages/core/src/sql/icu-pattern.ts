@@ -43,7 +43,8 @@
 // case-insensitive stretch fold, not properties or backreferences; `\X` is
 // a character and its marks, not a full grapheme cluster, and its warning
 // 4077 is not raised.
-import { messages, sqlError } from '@myjs/protocol'
+import { notSupported } from './errors.ts'
+import { sqlError } from '@myjs/protocol'
 
 /** One compiled pattern: the engine's source and flags, and where ICU's groups went. */
 export interface IcuPattern {
@@ -108,7 +109,7 @@ const err = {
   flag: () => sqlError('ER_REGEXP_INVALID_FLAG', 'Invalid match mode flag in regular expression.'),
   tooBig: () => sqlError('ER_REGEX_NUMBER_TOO_BIG', 'Decimal number in regular expression is too large.'),
   illegal: () => sqlError('ER_REGEXP_ILLEGAL_ARGUMENT', 'Illegal argument to a regular expression.'),
-  unsupported: (what: string) => sqlError('ER_NOT_SUPPORTED_YET', messages.notSupported(what)),
+  unsupported: (what: string) => notSupported(what),
 }
 
 // --- The tree ---------------------------------------------------------------

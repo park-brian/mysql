@@ -23,7 +23,7 @@
 // it, and is an error to a strict UPDATE or DELETE reading the row; here the
 // value is computed once, as the row is written.
 import type { ColumnDef } from '@myjs/engine'
-import { NODE, parseExpression, quoteName, type Expression } from '@myjs/parser'
+import { NODE, parseExpression, type Expression, type SqlMode } from '@myjs/parser'
 import { sqlError, type SqlError } from '@myjs/protocol'
 import { nativeCallName, someNode } from './ast.ts'
 import { unknownColumnError } from './scope.ts'
@@ -73,7 +73,7 @@ export function stampGenerated(columns: readonly ColumnDef[], charset: string): 
 }
 
 /** The table's generated columns, checked as CREATE TABLE and ALTER TABLE check them. */
-export function checkGenerated(columns: readonly ColumnDef[]): void {
+export function checkGenerated(columns: readonly ColumnDef[], mode: SqlMode): void {
   columns.forEach((column, at) => {
     const generation = generationOf(column)
     if (generation === undefined) return
@@ -88,7 +88,8 @@ export function checkGenerated(columns: readonly ColumnDef[]): void {
       if (n.kind === NODE.VARIABLE) throw columnVariableError(column.name)
       if (n.kind === NODE.CALL) {
         const name = nativeCallName(n)
-        const named = name === '' ? quoteName(n.name) : NOT_ROW_DETERMINED.get(name)
+        const quote = mode.ansiQuotes ? '"' : '`'
+        const named = name === '' ? quote + n.name.replaceAll(quote, quote + quote) + quote : NOT_ROW_DETERMINED.get(name)
         if (named !== undefined) throw sqlError('ER_GENERATED_COLUMN_NAMED_FUNCTION_IS_NOT_ALLOWED', `${invalid}: ${named}.`)
       }
     }

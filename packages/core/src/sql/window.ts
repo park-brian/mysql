@@ -32,6 +32,7 @@
 //     or an ON (3593), DISTINCT in one (1235), GROUP_CONCAT as one (1235),
 //     NTILE or NTH_VALUE of a count below 1 (1210), a frame that ends before it
 //     starts (3586), RANGE n PRECEDING over anything but one numeric key (3587).
+import { notSupported } from './errors.ts'
 import { FIELD_TYPE } from '@myjs/bytes'
 import { nativeCallName, someNode } from './ast.ts'
 import { NODE, type CallNode, type Expression, type FrameBound, type WindowSpec } from '@myjs/parser'
@@ -103,7 +104,7 @@ export class WindowSink {
     if (e.distinct === true) throw sqlError('ER_NOT_SUPPORTED_YET', "This version of MySQL doesn't yet support '<window function>(DISTINCT ..)'")
     if (name === 'GROUP_CONCAT') throw sqlError('ER_NOT_SUPPORTED_YET', "This version of MySQL doesn't yet support 'group_concat as window function'")
     const known = RANKING.has(name) || OFFSET.has(name) || VALUE.has(name) || windowAggregate(name)
-    if (!known) throw sqlError('ER_NOT_SUPPORTED_YET', messages.notSupported(`The window function ${name}`))
+    if (!known) throw notSupported(`The window function ${name}`)
     const order = (spec.orderBy ?? []).map((o) => ({ expr: compile(o.expr, ctx), desc: o.desc === true }))
     const frame = frameOf(spec, order, ctx)
     const slot = this.windows.length

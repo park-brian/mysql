@@ -16,6 +16,7 @@
 // UPDATE and DELETE read every row they will change before changing any
 // (doc 30: a scan is not interleaved with writes to its own table), so a row
 // an UPDATE moves within the clustered order is never met twice.
+import { notSupported } from './errors.ts'
 import { CHARSET_BINARY, FIELD_TYPE, MyjsError, equalBytes } from '@myjs/bytes'
 import { nativeCallName, someNode } from './ast.ts'
 import { CLIENT, hasCap, messages, sqlError, symbolOf, type OkResult } from '@myjs/protocol'
@@ -32,7 +33,7 @@ import { accessRows, filter, limit, sort, type ScannedRow } from './operators.ts
 import { chooseAccess } from './plan.ts'
 import { checkTargetNotRead, compileContext, fromContext, limitValue, openTable, planQuery, withClause, type Run } from './query.ts'
 import { planFrom, type FromPlan, type FromTable, type JoinedRow } from './from.ts'
-import { unknownColumnError, TableScope } from './scope.ts'
+import { ambiguousColumnError, unknownColumnError, TableScope } from './scope.ts'
 import { firstKey } from './keys.ts'
 import { NULL_TYPE, type ResultType } from './meta.ts'
 import { modeOf } from './mode.ts'
@@ -464,7 +465,7 @@ function compileUpsert(run: Run, def: TableDef, node: InsertNode, targets: reado
         if (e instanceof MyjsError && e.errno === 1054) return selected
         throw e
       }
-      if (parts.length === 1) throw sqlError('ER_NON_UNIQ_ERROR', messages.ambiguousColumn(parts.join('.'), clause))
+      if (parts.length === 1) throw ambiguousColumnError(parts.join('.'), clause)
       return target
     },
   }
@@ -587,7 +588,7 @@ function insertSource(run: Run, node: InsertNode, def: TableDef, trx: Trx): {
 export function* insert(run: Run, node: InsertNode, trx: Trx): Generator<void, OkResult> {
   // A subquery, or the SELECT of `INSERT … SELECT`, reads in the statement's transaction.
   run = { ...run, env: { ...run.env, trx } }
-  if (node.partitions !== undefined) throw sqlError('ER_NOT_SUPPORTED_YET', messages.notSupported('Partitions'))
+  if (node.partitions !== undefined) throw notSupported('Partitions')
 
   const opened = openTarget(run, node.table)
   const def = opened.def
@@ -999,7 +1000,7 @@ function openTarget(run: Run, name: TableName): ReturnType<typeof openTable> {
   } catch (e) {
     const schema = name.schema ?? run.env.session.database
     if ((e as { errno?: number }).errno === 1146 && schema !== null && run.catalog?.view(schema, name.name) !== undefined) {
-      throw sqlError('ER_NOT_SUPPORTED_YET', messages.notSupported('INSERT, UPDATE and DELETE through a view'))
+      throw notSupported('INSERT, UPDATE and DELETE through a view')
     }
     throw e
   }
@@ -1008,7 +1009,7 @@ function openTarget(run: Run, name: TableName): ReturnType<typeof openTable> {
 /** The single table an UPDATE or DELETE names; ER_NOT_SUPPORTED_YET for the multi-table forms. */
 function singleTable(run: Run, tables: UpdateNode['tables'], what: string): { def: TableDef; table: Table; alias: string } {
   const ref = tables[0]
-  if (tables.length !== 1 || ref === undefined || ref.kind !== REF.TABLE) throw sqlError('ER_NOT_SUPPORTED_YET', messages.notSupported(`Multiple-table ${what}`))
+  if (tables.length !== 1 || ref === undefined || ref.kind !== REF.TABLE) throw notSupported(`Multiple-table ${what}`)
   const { def, table } = openTarget(run, ref.table)
   return { def, table, alias: ref.alias ?? ref.table.name }
 }
