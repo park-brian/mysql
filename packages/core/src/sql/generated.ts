@@ -23,8 +23,9 @@
 // it, and is an error to a strict UPDATE or DELETE reading the row; here the
 // value is computed once, as the row is written.
 import type { ColumnDef } from '@myjs/engine'
-import { NODE, parseExpression, type Expression, type SqlMode } from '@myjs/parser'
+import { NODE, parseExpression, type ColumnDefinition, type Expression, type SqlMode } from '@myjs/parser'
 import { sqlError, type SqlError } from '@myjs/protocol'
+import { wrongUsage } from './errors.ts'
 import { nativeCallName, someNode } from './ast.ts'
 import { unknownColumnError } from './scope.ts'
 import { isAggregate } from './group.ts'
@@ -72,28 +73,38 @@ export function stampGenerated(columns: readonly ColumnDef[], charset: string): 
   return columns.map((c) => (generationOf(c) === undefined || c.attributes?.['generatedCharset'] !== undefined ? c : { ...c, attributes: { ...c.attributes, generatedCharset: charset } }))
 }
 
+/** DEFAULT and generated expressions are mutually exclusive in both DDL phases. */
+export function checkGeneratedDefault(column: Pick<ColumnDefinition, 'generated' | 'default'>): void {
+  if (column.generated !== undefined && column.default !== undefined) throw wrongUsage('DEFAULT', 'generated column')
+}
+
+/** Early generated-expression admission, before references, aggregates or table effects. */
+export function checkGeneratedAdmission(expression: Expression, column: string, mode: SqlMode): void {
+  const invalid = `Expression of generated column '${column}' contains a disallowed function`
+  const quote = mode.ansiQuotes ? '"' : '`'
+  // Admission visits arguments before calls, before binding table references.
+  const admission = (value: unknown): void => {
+    if (value === null || typeof value !== 'object') return
+    for (const child of Object.values(value)) admission(child)
+    const n = value as Expression
+    if (n.kind === NODE.SUBQUERY || n.kind === NODE.PLACEHOLDER) throw sqlError('ER_GENERATED_COLUMN_FUNCTION_IS_NOT_ALLOWED', invalid + '.')
+    if (n.kind === NODE.VARIABLE) throw columnVariableError(column)
+    if (n.kind === NODE.CALL) {
+      const name = nativeCallName(n)
+      const named = name === '' ? quote + n.name.replaceAll(quote, quote + quote) + quote : NOT_ROW_DETERMINED.get(name)
+      if (named !== undefined) throw sqlError('ER_GENERATED_COLUMN_NAMED_FUNCTION_IS_NOT_ALLOWED', `${invalid}: ${named}.`)
+    }
+  }
+  admission(expression)
+}
+
 /** The table's generated columns, checked as CREATE TABLE and ALTER TABLE check them. */
 export function checkGenerated(columns: readonly ColumnDef[], mode: SqlMode): void {
   columns.forEach((column, at) => {
     const generation = generationOf(column)
     if (generation === undefined) return
     const expression = parseExpression(generation.text)
-    const invalid = `Expression of generated column '${column.name}' contains a disallowed function`
-    // Admission visits arguments before calls, before binding table references.
-    const admission = (value: unknown): void => {
-      if (value === null || typeof value !== 'object') return
-      for (const child of Object.values(value)) admission(child)
-      const n = value as Expression
-      if (n.kind === NODE.SUBQUERY) throw sqlError('ER_GENERATED_COLUMN_FUNCTION_IS_NOT_ALLOWED', invalid + '.')
-      if (n.kind === NODE.VARIABLE) throw columnVariableError(column.name)
-      if (n.kind === NODE.CALL) {
-        const name = nativeCallName(n)
-        const quote = mode.ansiQuotes ? '"' : '`'
-        const named = name === '' ? quote + n.name.replaceAll(quote, quote + quote) + quote : NOT_ROW_DETERMINED.get(name)
-        if (named !== undefined) throw sqlError('ER_GENERATED_COLUMN_NAMED_FUNCTION_IS_NOT_ALLOWED', `${invalid}: ${named}.`)
-      }
-    }
-    admission(expression)
+    checkGeneratedAdmission(expression, column.name, mode)
     someNode(expression, (e) => {
       const n = e as Expression
       switch (n.kind) {

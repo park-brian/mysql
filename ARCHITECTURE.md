@@ -1620,19 +1620,23 @@ resolution phases or explicit-name handling. The 378-command capture protects
 Native function classification now shares an ASCII spelling key and the existing
 call-role flag. Quoted/spaced lexer names retain collision grammar, and Unicode
 lookalikes bypass native binding before argument effects. The 6,084-command
-capture now protects 5,319 complete matches with unchanged native answers;
-all 765 remaining outcomes stay recorded. Generated-column execution admission now checks arguments before calls, then
+capture now protects 5,367 complete matches with unchanged native answers;
+all 717 remaining outcomes stay recorded. Generated-column execution admission now checks arguments before calls, then
 references, aggregates and windows in written order through its existing owner.
-The 3,276-command capture improves 658 to 1,106 complete matches without losing
+The 3,276-command capture now protects 1,786 complete matches without losing
 protected facts; definitions and existing rows are checked on every frame.
 Raw-name diagnostics now use actual SQL mode and double only the chosen quote.
 Lookup and serialization share native syntax eligibility; quoted reserved words
 retain their collision role and generic names survive serialization. A new
-3,573-command capture enforces 2,580 complete matches across five modes and all
-three APIs. All matching facts are retained. Six older ANSI query-message gaps
-close, leaving 48 generated execute/PREPARE outcomes open in the function capture.
-PREPARE admission is next; ANSI SHOW CREATE formatting, DEFAULT and CHECK retain
-separate follow-ups.
+3,573-command capture now enforces 2,820 complete matches across five modes and all
+three APIs. All matching facts are retained. PREPARE now shares early generated
+expression admission, without resolving columns/aggregates or executing DDL. It
+rejects variables, subqueries, placeholders and prohibited calls after system-name
+binding, preserving SQL mode and generated/DEFAULT precedence. All 48 generated
+execute/PREPARE gaps in the older function capture close. A new 685-command capture
+protects 252 complete matches and 670 primary diagnostics across five modes.
+CREATE expression-default PREPARE admission is next; ALTER SET DEFAULT keeps its
+separate timing. ANSI SHOW CREATE, CHECK and other function gaps remain open.
 CAST/CONVERT targets leave internal COLLATE to the syntax boundary while column
 datatype readers retain it. Cursor string reading concatenates adjacent literals
 only when expression or ENUM/SET grammar requests it; ordinary callers consume

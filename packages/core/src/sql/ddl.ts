@@ -25,7 +25,7 @@ import { BINARY_DEPRECATION, KEY, NODE, NO_SQL_MODE, deparse, type ColumnDefinit
 import { messages, sqlError } from '@myjs/protocol'
 import type { ColumnType } from '@myjs/types'
 import { checkFulltext, type FulltextDef } from './fulltext.ts'
-import { checkGenerated } from './generated.ts'
+import { checkGenerated, checkGeneratedDefault } from './generated.ts'
 import { NATIONAL_DEPRECATION, UTF8MB3_DEPRECATION } from './meta.ts'
 import { resolveCollation } from './collation.ts'
 
@@ -378,7 +378,7 @@ export function visiblePrimary(columns: readonly ColumnDef[], indexes: readonly 
 
 export function column(c: ColumnDefinition, tableCollation: number, inPrimary: boolean): ColumnDef {
   // A generated column has its expression and no default (8.4.11: 1221).
-  if (c.generated !== undefined && c.default !== undefined) throw sqlError('ER_WRONG_USAGE', 'Incorrect usage of DEFAULT and generated column')
+  checkGeneratedDefault(c)
   const declaration = c.type
   const type = columnType(declaration, tableCollation, c.name)
   const code = type.type

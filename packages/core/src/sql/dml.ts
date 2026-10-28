@@ -16,7 +16,7 @@
 // UPDATE and DELETE read every row they will change before changing any
 // (doc 30: a scan is not interleaved with writes to its own table), so a row
 // an UPDATE moves within the clustered order is never met twice.
-import { notSupported } from './errors.ts'
+import { notSupported, wrongUsage } from './errors.ts'
 import { CHARSET_BINARY, FIELD_TYPE, MyjsError, equalBytes } from '@myjs/bytes'
 import { nativeCallName, someNode } from './ast.ts'
 import { CLIENT, hasCap, messages, sqlError, symbolOf, type OkResult } from '@myjs/protocol'
@@ -1205,8 +1205,8 @@ function targetAt(run: Run, from: FromPlan, index: number, what: 'UPDATE' | 'DEL
  * are 1221; a derived table as a target is 1288.
  */
 function updateMulti(run: Run, node: UpdateNode, trx: Trx): OkResult {
-  if (node.orderBy !== undefined) throw sqlError('ER_WRONG_USAGE', 'Incorrect usage of UPDATE and ORDER BY')
-  if (node.limit !== undefined) throw sqlError('ER_WRONG_USAGE', 'Incorrect usage of UPDATE and LIMIT')
+  if (node.orderBy !== undefined) throw wrongUsage('UPDATE', 'ORDER BY')
+  if (node.limit !== undefined) throw wrongUsage('UPDATE', 'LIMIT')
   const { from, rows } = joinedRows(run, node, trx)
   const scope = from.scope
   const ignore = node.ignore === true

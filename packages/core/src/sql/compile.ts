@@ -18,7 +18,7 @@ import { resolveCollation } from './collation.ts'
 import { decodeCollation, defaultCollationOf, encodeCollation, requireCollationInfo } from '@myjs/charsets'
 import { LITERAL, NODE, TOKEN, deparse, lex, parseExpression, type CallNode, type CaseNode, type CastNode, type ConvertNode, type Expression, type LiteralNode, type MatchNode, type QueryExpression, type SubqueryNode, type VariableNode, quoteName } from '@myjs/parser'
 import type { ColumnDef, Table, Trx } from '@myjs/engine'
-import { sqlError, messages, type Session } from '@myjs/protocol'
+import { sqlError, messages, type Session, type SqlError } from '@myjs/protocol'
 import { promotedError } from './strict.ts'
 import {
   COERCIBILITY,
@@ -789,7 +789,7 @@ export function compile(e: Expression, ctx: CompileContext): Compiled {
 
     case NODE.ROW:
       if (e.items.length === 1) return compile(e.items[0] as Expression, ctx)
-      throw sqlError('ER_OPERAND_COLUMNS', 'Operand should contain 1 column(s)')
+      throw operandColumnsError(1)
 
     default:
       throw notSupported(`This expression (${e.kind})`)
@@ -1751,9 +1751,14 @@ function shapeOf(e: Expression, ctx: CompileContext): Shape {
 
 const widthOf = (s: Shape): number => (Array.isArray(s) ? s.length : 1)
 
+/** The caller owns shape validation; the native refusal names its expected width. */
+function operandColumnsError(width: number): SqlError {
+  return sqlError('ER_OPERAND_COLUMNS', `Operand should contain ${width} column(s)`)
+}
+
 /** ER_OPERAND_COLUMNS unless the two shapes match, element by element, as the left one asks. */
 function sameShape(a: Shape, b: Shape): void {
-  if (widthOf(a) !== widthOf(b) || Array.isArray(a) !== Array.isArray(b)) throw sqlError('ER_OPERAND_COLUMNS', `Operand should contain ${widthOf(a)} column(s)`)
+  if (widthOf(a) !== widthOf(b) || Array.isArray(a) !== Array.isArray(b)) throw operandColumnsError(widthOf(a))
   if (Array.isArray(a)) a.forEach((x, i) => sameShape(x, (b as readonly Shape[])[i] as Shape))
 }
 
@@ -2644,7 +2649,7 @@ function rowsOf(plan: SubqueryPlan, key: object, row: Row, env: Env): readonly (
  */
 function scalarSubquery(e: SubqueryNode, ctx: CompileContext): Compiled {
   const plan = planned(e, ctx)
-  if (plan.columns.length !== 1) throw sqlError('ER_OPERAND_COLUMNS', 'Operand should contain 1 column(s)')
+  if (plan.columns.length !== 1) throw operandColumnsError(1)
   const t = (plan.columns[0] as { type: ResultType }).type
   const key = {}
   return {
@@ -2684,7 +2689,7 @@ function quantified(op: string, quantifier: 'ANY' | 'ALL', left: Expression, rig
   if (lefts.length > 1 && op !== '=' && op !== '<>') throw notSupported(`A row compared with ${op} ${quantifier}`)
   const as = lefts.map((l) => compile(l, ctx))
   const plan = planned(right, ctx)
-  if (plan.columns.length !== as.length) throw sqlError('ER_OPERAND_COLUMNS', `Operand should contain ${as.length} column(s)`)
+  if (plan.columns.length !== as.length) throw operandColumnsError(as.length)
   if (as.length === 1) ctx.quantified?.(right.query, { op, quantifier, outerNullable: (as[0] as Compiled).type.nullable, correlated: plan.correlated })
   const test = COMPARISONS[op] as (c: number) => boolean
   const compareRow = (vs: readonly Value[], r: readonly Value[]): number | null => {

@@ -30,6 +30,7 @@ import {
   lex,
   parseStatement,
   type CreateDatabaseNode,
+  type ColumnDefinition as ParsedColumnDefinition,
   type CreateTableNode,
   type ExplainNode,
   type InsertNode,
@@ -83,7 +84,7 @@ import { columnsOf, compileContext, planQuery, resultSet, resultSteps, viewTable
 import { SqlSession, finish, isolationOf } from './session.ts'
 import { dropOrphans, sessionCatalog, TemporaryTables, type CatalogApi } from './temporary.ts'
 import { likeSpec, mergedColumns, selectColumns, withCollations } from './create-select.ts'
-import { stampGenerated } from './generated.ts'
+import { checkGeneratedAdmission, checkGeneratedDefault, stampGenerated } from './generated.ts'
 import type { WireProtocol } from './wire.ts'
 import { modeOf } from './mode.ts'
 
@@ -295,8 +296,19 @@ export class SqlExecutor implements Executor {
       // own: the other connections go next, before its EXECUTE does (D-77).
       if (performance.now() - started > SLICE_MS) await pause()
       this.#alive(session)
-      // Native refuses diagnostics before resolving fields or opening sources.
-      if (statement === null || this.#variables(statement, state, session) || isDiagnostic(statement)) throw sqlError('ER_UNSUPPORTED_PS', 'This command is not supported in the prepared statement protocol yet')
+      // Bind system names first; generated admission precedes diagnostic-count
+      // PREPARE refusal without resolving columns or opening tables.
+      const diagnostic = statement !== null && this.#variables(statement, state, session)
+      if (statement !== null && (statement.kind === STATEMENT.CREATE_TABLE || statement.kind === STATEMENT.ALTER_TABLE)) {
+        someNode(statement, (node) => {
+          const column = node as ParsedColumnDefinition
+          if (column.generated === undefined) return undefined
+          checkGeneratedDefault(column)
+          checkGeneratedAdmission(column.generated.expr, column.name, modeOf(session.sqlMode))
+          return false
+        })
+      }
+      if (statement === null || diagnostic || isDiagnostic(statement)) throw sqlError('ER_UNSUPPORTED_PS', 'This command is not supported in the prepared statement protocol yet')
       await this.#preload(session, statement)
       this.#alive(session)
       let columns: PreparedInfo['columns'] = []

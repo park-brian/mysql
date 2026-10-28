@@ -40,7 +40,7 @@
 // takes rows in the order they were inserted, where this takes them in
 // the table's; after a sync to disk a prefix scans its words in order; and
 // MATCH over a derived table, which the server merges, is 1191 here.
-import { notSupported } from './errors.ts'
+import { notSupported, wrongUsage } from './errors.ts'
 import { CHARSET_BINARY, FIELD_TYPE } from '@myjs/bytes'
 import { collation, encodeCollation, requireCollationInfo } from '@myjs/charsets'
 import type { ColumnDef, TableDef } from '@myjs/engine'
@@ -64,7 +64,7 @@ const TEXT_TYPES: ReadonlySet<number> = new Set([FIELD_TYPE.STRING, FIELD_TYPE.V
 
 /** A FULLTEXT key's columns, checked: text columns of an engine that has full-text search. */
 export function checkFulltext(engine: string, columns: readonly ColumnDef[], names: readonly string[], ordered = false): void {
-  if (ordered) throw sqlError('ER_WRONG_USAGE', 'Incorrect usage of spatial/fulltext/hash index and explicit index order')
+  if (ordered) throw wrongUsage('spatial/fulltext/hash index', 'explicit index order')
   if (engine === 'memory') throw sqlError('ER_TABLE_CANT_HANDLE_FT', "The used table type doesn't support FULLTEXT indexes")
   let charset: string | undefined
   for (const name of names) {

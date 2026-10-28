@@ -12,6 +12,7 @@ import warningAdmission from './fixtures/diagnostics/parser-warning-admission.js
 import modifierDeprecation from './fixtures/diagnostics/modifier-deprecation-admission.json' with { type: 'json' }
 import keywordIdentity from './fixtures/diagnostics/keyword-identity.json' with { type: 'json' }
 import keywordSelectors from './fixtures/diagnostics/keyword-selectors.json' with { type: 'json' }
+import generatedPrepare from './fixtures/diagnostics/generated-prepare-admission.json' with { type: 'json' }
 import functionQuoting from './fixtures/diagnostics/function-name-quoting.json' with { type: 'json' }
 import generatedAdmission from './fixtures/diagnostics/generated-column-admission.json' with { type: 'json' }
 import functionIdentity from './fixtures/diagnostics/function-identity.json' with { type: 'json' }
@@ -31,7 +32,7 @@ function capturedValue(value: unknown): unknown {
   return value
 }
 
-for (const [reference, total, matched] of [[literalAdmission, 1623, 1521], [conditionHistories, 198, 192], [castDatatype, 480, 398], [castModifiers, 16648, 16274], [warningAdmission, 325, 248], [modifierDeprecation, 1008, 764], [keywordIdentity, 150, 146], [keywordSelectors, 1850, 1670], [shorthandWarnings, 552, 396], [schemaPresence, 378, 177], [functionIdentity, 6084, 5319], [generatedAdmission, 3276, 1106], [functionQuoting, 3573, 2580]] as const) test('M5.10: admission preserves primary errors, condition histories, headers and effects: ' + reference.schema, async () => {
+for (const [reference, total, matched] of [[literalAdmission, 1623, 1521], [conditionHistories, 198, 192], [castDatatype, 480, 398], [castModifiers, 16648, 16274], [warningAdmission, 325, 248], [modifierDeprecation, 1008, 764], [keywordIdentity, 150, 146], [keywordSelectors, 1850, 1670], [shorthandWarnings, 552, 396], [schemaPresence, 378, 177], [functionIdentity, 6084, 5367], [generatedAdmission, 3276, 1786], [functionQuoting, 3573, 2820], [generatedPrepare, 685, 252]] as const) test('M5.10: admission preserves primary errors, condition histories, headers and effects: ' + reference.schema, async () => {
   const host = process.env.MYSQL_REFERENCE_HOST
   const db = host === undefined ? await MySQL.open(':memory:', { multipleStatements: true }) : undefined
   const transport = db === undefined
