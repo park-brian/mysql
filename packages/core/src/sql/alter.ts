@@ -13,6 +13,7 @@
 // (keys, foreign keys on both sides, CHECKs, FULLTEXT), then keys renamed,
 // columns added, indexes and foreign keys added. One not here is refused by
 // name.
+import { requireSchema } from './scope.ts'
 import { FIELD_TYPE, MyjsError, expectTyped } from '@myjs/bytes'
 import { sqlError, messages, type OkResult } from '@myjs/protocol'
 import type { ColumnDef, FieldBytes, IndexDef, TableDef } from '@myjs/engine'
@@ -44,8 +45,7 @@ const ACTION_NAMES: Readonly<Record<string, string>> = {
 }
 
 export function alterTable(run: Run, catalog: CatalogApi, statement: AlterTableNode): OkResult {
-  const schema = statement.table.schema ?? run.env.session.database
-  if (schema === null) throw sqlError('ER_NO_DB_ERROR', messages.noDatabaseSelected())
+  const schema = requireSchema(statement.table.schema ?? run.env.session.database)
   // Table options: a COMMENT, an AUTO_INCREMENT counter, and the ENGINE it already has.
   for (const k of Object.keys(statement.options)) if (!['COMMENT', 'AUTO_INCREMENT', 'ENGINE'].includes(k.toUpperCase())) throw notSupported('ALTER TABLE table options')
   // DDL: an implicit commit first, as every DDL statement makes.

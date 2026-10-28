@@ -23,6 +23,12 @@ import { messages, sqlError } from '@myjs/protocol'
 import type { Scope } from './compile.ts'
 import { columnResultType, type ResultType } from './meta.ts'
 
+/** A resolved schema is required here; explicit names are returned unchanged. */
+export function requireSchema(schema: string | null | undefined): string {
+  if (schema === null || schema === undefined) throw sqlError('ER_NO_DB_ERROR', messages.noDatabaseSelected())
+  return schema
+}
+
 /** A planner proof may decline a typed name error; compilation still reports it. */
 export function safeResolve(scope: Scope, parts: readonly string[], clause: string): ReturnType<Scope['resolve']> | undefined {
   try {

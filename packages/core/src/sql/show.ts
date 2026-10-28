@@ -9,10 +9,11 @@
 //
 // A key's cardinality is what the table's statistics say, through the
 // server's cache of them (`cardinalities` in stats.ts, M5.45).
+import { requireSchema } from './scope.ts'
 import { and } from './ast.ts'
 import { expectTyped } from '@myjs/bytes'
 import { parseStatement, type Expression, type QueryExpression, type ShowNode, type TableName, quoteName } from '@myjs/parser'
-import { messages, sqlError, type ColumnDefinition } from '@myjs/protocol'
+import type { ColumnDefinition } from '@myjs/protocol'
 import type { TableDef, ViewDef } from '@myjs/engine'
 import { planViewQuery, type Run } from './query.ts'
 import { viewDefinition } from './view-text.ts'
@@ -23,8 +24,7 @@ const quote = (s: string): string => `'${s.replace(/\\/g, '\\\\').replace(/'/g, 
 /** The query a SHOW COLUMNS, SHOW INDEX or DESCRIBE stands for. */
 export function showQuery(run: Run, catalog: CatalogApi, node: ShowNode): QueryExpression {
   const name = node.name as TableName
-  const schema = node.database ?? name.schema ?? run.env.session.database
-  if (schema === null) throw sqlError('ER_NO_DB_ERROR', messages.noDatabaseSelected())
+  const schema = requireSchema(node.database ?? name.schema ?? run.env.session.database)
   // The database first, then the table (8.4.11: 1049 before 1146).
   catalog.schema(schema)
   if (catalog.view(schema, name.name) === undefined) catalog.definition(schema, name.name)
@@ -54,8 +54,7 @@ const TABLE_STATUS = [
  * and dropped with it, which its column metadata shows too.
  */
 export function tableStatusQuery(run: Run, catalog: CatalogApi, node: ShowNode): QueryExpression {
-  const schema = node.database ?? run.env.session.database
-  if (schema === null) throw sqlError('ER_NO_DB_ERROR', messages.noDatabaseSelected())
+  const schema = requireSchema(node.database ?? run.env.session.database)
   catalog.schema(schema)
   const renamed = TABLE_STATUS.map(([name, column]) => `${column} AS \`${name}\``).join(', ')
   const like = node.like === undefined ? '' : ` AND TABLE_NAME LIKE ${quote(node.like)}`

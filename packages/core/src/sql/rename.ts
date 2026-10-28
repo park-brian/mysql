@@ -10,8 +10,9 @@
 //     become `u_ibfk_1` and `u_chk_1`, a name written in that shape too. A
 //     name given otherwise stays. The keys of other tables that name a
 //     renamed one name it by its new name.
+import { requireSchema } from './scope.ts'
 import type { RenameTableNode } from '@myjs/parser'
-import { messages, sqlError, type OkResult } from '@myjs/protocol'
+import { sqlError, type OkResult } from '@myjs/protocol'
 import type { TableDef, Trx } from '@myjs/engine'
 import { checksOf } from './checks.ts'
 import { foreignKeysOf, type ForeignKeyDef } from './foreign-keys.ts'
@@ -21,8 +22,7 @@ type Place = { readonly schema: string; readonly name: string }
 
 export function renameTables(catalog: CatalogApi, node: RenameTableNode, database: string | null): OkResult {
   const placeOf = (t: { readonly schema?: string; readonly name: string }): Place => {
-    const schema = t.schema ?? database
-    if (schema === null) throw sqlError('ER_NO_DB_ERROR', messages.noDatabaseSelected())
+    const schema = requireSchema(t.schema ?? database)
     return { schema, name: t.name }
   }
   const pairs = node.pairs.map((p) => ({ from: placeOf(p.from), to: placeOf(p.to) }))

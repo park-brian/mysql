@@ -467,12 +467,47 @@ fixtures, 204 runtime sources and reference/generator/census/helper tooling
 before cleanup; code and tests remained frozen throughout. Preceding 4f29ace
 passed all eleven required CI jobs.
 
-**Next bounded slice:** audit function-name identity against the retained
-Unicode SUM and spaced-call controls, then repair builtin classification through
-the existing parser/binder owners. Preserve function, keyword and value namespace
-contracts. Charset-value validation, separate event behavior, valid-AST warnings
-and their limits, later binding failures, lexical lookahead and other CAST
-metadata/conversion and function gaps remain open. M5.10 stays partial.
+**Schema presence, verified (2026-10-28):** unresolved/collision functions now
+require a selected database before formatting their missing-function errors.
+Thirteen existing required-schema guards share that presence check at their
+original resolution phases. Explicit schema names pass through unchanged;
+catalogue existence and case rules retain their owners. All 24 parser sources
+are byte-identical to 7893fe9.
+A 378-command MySQL 8.4.11 capture covers three APIs, three SQL modes,
+DDL/DML/SHOW, qualified-name controls and session/table effects. It fixes 48
+primary errors without losing a matching component, condition, field, PREPARE
+count or effect. Complete agreement remains 177 commands: duplicate native
+1046 diagnostics, earlier-column precedence and function identity remain open.
+The previous commit fails the actual missing-function regression; current code
+passes. All 6,084 selected-schema function observations retain their native
+matches and every previously matching fact. The new fixture preserves all
+native answers independently of its match selection.
+Ten admission captures now enforce 21,774/23,212 complete commands and retain
+1,438 open outcomes. Native replay passes all 378 new commands. Fresh Docker
+--reference passes 1,481 main tests, four latency tests, typecheck, lint, nine
+unchanged caps, package/typed smoke, the real client and all seven pinned
+corpora. Seeded executor fuzzing passes 20,000 statements. Repeated actual
+census and entire official-suite fixtures remain byte-identical at
+17,530/17,589 and all 37 shared passes. Frozen-source proof covers 447 test
+files/fixtures, 204 runtime sources and tooling before cleanup. Core/facade
+measure 334,287/334,213 B gzipped, with raw output 708 B below 7893fe9.
+The preceding commit passed all eleven required CI jobs.
+
+**Next bounded slice:** the retained 6,084-command function-identity audit measures
+2,916 baseline matches across spelling, spacing, IGNORE_SPACE, quoting, argument
+precedence, windows and DDL/session/write effects. All seventy lexer-function
+names produce the distinct collision error when quoted in a selected database;
+generic scalar names remain callable. A prototype improves 2,916 to 5,361 matches
+without losing matching components or effects, but still exceeds the unchanged
+caps and remains uncommitted. Continue through the common spelling key, parser
+call grammar and classification readers after the schema-presence foundation.
+Default/generated/CHECK admission remains separate. Preceding 7893fe9 passed all
+eleven required CI jobs.
+
+Keep function, keyword and value namespaces distinct. Charset-value validation,
+separate event behavior, valid-AST warnings/limits, later binding failures,
+lexical lookahead and other CAST metadata/conversion and function gaps remain
+open. M5.10 stays partial.
 
 The positive literal/typed-integer-NULL source proof now includes plain
 SIGNED/UNSIGNED casts of integer, boolean and text literals under unchanged
@@ -6762,7 +6797,7 @@ code that moves it (doc 43 §8). A claim without a number is marketing.
 | Statements executing the way a real MySQL 8.4 executed them | 3,629 / 3,629 — 400 generated scripts through `mysql2`, 250 of their statements upserts, REPLACEs or IGNOREs: rows and order, column metadata, `affectedRows`/`insertId`/`info`, errno and SQLSTATE. Three further seeds, 46,346 statements and not committed, agree except four `SELECT DISTINCT` metadata cases that need the range optimizer (M5.7, which owns it since M5.5 closed) | every statement the executor accepts |
 | InnoDB round-trip, by type | 0 / 17 | 17 / 17 |
 | Crash injection points, inconsistencies | 10,000 points, 0 inconsistencies — CI's `crash` job runs `CRASH_POINTS=10000`, and `npm test` 300 of them | 10,000 points, 0 |
-| Core bundle, gzipped | 334,322 B (326.5 KiB) for the browser entry chunk, measured on 2026-10-27; the facade is 334,256 B. The two deferred UCA chunks total 184,654 B raw. `tools/size-budget.mjs` measures each package including its workspace dependencies, so package figures do not add up. The M5.2 coercion and M5.10 function fixes pass the existing stabilization budgets without raising them | < 500 KB |
+| Core bundle, gzipped | 334,287 B (326.5 KiB) for the browser entry chunk, measured on 2026-10-28; the facade is 334,213 B. The two deferred UCA chunks total 184,654 B raw. `tools/size-budget.mjs` measures each package including its workspace dependencies, so package figures do not add up. The M5.2 coercion and M5.10 function fixes pass the existing stabilization budgets without raising them | < 500 KB |
 | Function calls returning what a real MySQL 8.4 returned | 8,765 / 8,765 — the string and numeric slices (2,091 / 2,091, including GREATEST and LEAST over text and a DATETIME), the date and time slice (3,463 / 3,463) and the rest of the string, math, hashing and network functions (3,211 / 3,211), both protocols, metadata and warning counts | every function in the library |
 | Implicit coercion | 3,148 / 3,148 captured statements agree, with 0 refusals; warning counts agree on 1,737 / 1,737 queries. All observations are compared with zero disagreements (M5.2 complete) | every captured value, metadata field and warning count |
 | Relational statements executing the way a real MySQL 8.4 executed them | 5,635 / 5,635 agree and none are refused, over 300 multi-table scripts through `mysql2`, both protocols. `queries.json` through the executor: 1,200 / 1,200. Rows are compared in order wherever the statement or an agreeing plan fixes it | every statement the executor accepts, and no refusals |

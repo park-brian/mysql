@@ -12,6 +12,7 @@ import warningAdmission from './fixtures/diagnostics/parser-warning-admission.js
 import modifierDeprecation from './fixtures/diagnostics/modifier-deprecation-admission.json' with { type: 'json' }
 import keywordIdentity from './fixtures/diagnostics/keyword-identity.json' with { type: 'json' }
 import keywordSelectors from './fixtures/diagnostics/keyword-selectors.json' with { type: 'json' }
+import schemaPresence from './fixtures/diagnostics/schema-presence.json' with { type: 'json' }
 import shorthandWarnings from './fixtures/diagnostics/shorthand-warning-admission.json' with { type: 'json' }
 
 /** Restore dates, binary rows and numeric facts that JSON cannot represent directly. */
@@ -27,7 +28,7 @@ function capturedValue(value: unknown): unknown {
   return value
 }
 
-for (const [reference, total, matched] of [[literalAdmission, 1623, 1521], [conditionHistories, 198, 192], [castDatatype, 480, 398], [castModifiers, 16648, 16274], [warningAdmission, 325, 248], [modifierDeprecation, 1008, 764], [keywordIdentity, 150, 134], [keywordSelectors, 1850, 1670], [shorthandWarnings, 552, 396]] as const) test('M5.10: admission preserves primary errors, condition histories, headers and effects: ' + reference.schema, async () => {
+for (const [reference, total, matched] of [[literalAdmission, 1623, 1521], [conditionHistories, 198, 192], [castDatatype, 480, 398], [castModifiers, 16648, 16274], [warningAdmission, 325, 248], [modifierDeprecation, 1008, 764], [keywordIdentity, 150, 134], [keywordSelectors, 1850, 1670], [shorthandWarnings, 552, 396], [schemaPresence, 378, 177]] as const) test('M5.10: admission preserves primary errors, condition histories, headers and effects: ' + reference.schema, async () => {
   const host = process.env.MYSQL_REFERENCE_HOST
   const db = host === undefined ? await MySQL.open(':memory:', { multipleStatements: true }) : undefined
   const transport = db === undefined
@@ -39,6 +40,8 @@ for (const [reference, total, matched] of [[literalAdmission, 1623, 1521], [cond
   assert.equal(reference.observations.length, total)
   assert.equal(strict.size, matched)
   let created = false
+  const noDatabase = 'noDatabase' in reference && reference.noDatabase
+  const prefix = noDatabase ? reference.schema + '.' : ''
   const victim = 'victim' in reference ? reference.victim : undefined
   let victimCreated = false
   let compared = 0
@@ -47,8 +50,9 @@ for (const [reference, total, matched] of [[literalAdmission, 1623, 1521], [cond
     if (db === undefined) assert.equal(String((await conn.query<mysql.RowDataPacket[]>('SELECT VERSION() AS v'))[0][0]!.v).split('-')[0], reference.mysqlVersion)
     await conn.query('CREATE DATABASE ' + reference.schema)
     created = true
-    await conn.query('USE ' + reference.schema)
-    await conn.query('CREATE TABLE t(v INT)')
+    if (!noDatabase) await conn.query('USE ' + reference.schema)
+    await conn.query('CREATE TABLE ' + prefix + 't(v INT)')
+    if (noDatabase) assert.equal((await conn.query<mysql.RowDataPacket[]>('SELECT DATABASE() AS v'))[0][0]!.v, null)
     if (victim !== undefined) {
       await conn.query('CREATE DATABASE ' + victim)
       victimCreated = true
@@ -58,17 +62,18 @@ for (const [reference, total, matched] of [[literalAdmission, 1623, 1521], [cond
       if ('resetResults' in reference && reference.resetResults) await conn.query('SET character_set_results=utf8mb4')
       const expectedEffects: Readonly<Record<string, unknown>> = reference.effects[entry.effects]!
       if (entry.stateful) {
-        await conn.query('TRUNCATE TABLE t')
-        await conn.query('INSERT INTO t VALUES(1),(2)')
+        await conn.query('TRUNCATE TABLE ' + prefix + 't')
+        await conn.query('INSERT INTO ' + prefix + 't VALUES(1),(2)')
         await conn.query('SET @x=3')
-        await conn.query('DROP VIEW IF EXISTS w')
-        await conn.query('DROP TABLE IF EXISTS u')
+        await conn.query('DROP VIEW IF EXISTS ' + prefix + 'w')
+        await conn.query('DROP TABLE IF EXISTS ' + prefix + 'u')
         if ('columns' in expectedEffects) {
           await conn.query('DROP TABLE IF EXISTS r')
           await conn.query('CREATE TABLE r(v INT)')
         }
         if ('event' in expectedEffects) await conn.query('DROP EVENT IF EXISTS e')
       }
+      if ('resetInsertId' in reference && reference.resetInsertId) await conn.query('SELECT LAST_INSERT_ID(0)')
       const sql = reference.commands[entry.sql]!
       const api = reference.apis[entry.api]!
       const label = sql + ' [' + api + ', ' + reference.modes[entry.mode] + ']'
@@ -115,7 +120,7 @@ for (const [reference, total, matched] of [[literalAdmission, 1623, 1521], [cond
         assert.deepEqual(observed.outcome, outcome, label)
       }
       if (entry.stateful) {
-        const after = (await conn.query({ sql: 'SELECT * FROM t', rowsAsArray: true }))[0]
+        const after = (await conn.query({ sql: 'SELECT * FROM ' + prefix + 't', rowsAsArray: true }))[0]
         const variable = (await conn.query<mysql.RowDataPacket[]>('SELECT CAST(@x AS CHAR) AS v'))[0][0]!.v as string
         const effects: Record<string, unknown> = { after, variable }
         if ('columns' in expectedEffects) effects.columns = (await conn.query<mysql.RowDataPacket[]>('SHOW COLUMNS FROM r'))[0].map(row => row.Field as string)
@@ -124,7 +129,9 @@ for (const [reference, total, matched] of [[literalAdmission, 1623, 1521], [cond
           assert.ok(victim !== undefined, label + ': owned schema')
           effects.schemas = ((await conn.query('SHOW DATABASES LIKE ?', [victim]))[0] as unknown[]).length
         }
-        if ('tables' in expectedEffects) effects.tables = (await conn.query('SHOW FULL TABLES'))[0]
+        if ('tables' in expectedEffects) effects.tables = (await conn.query('SHOW FULL TABLES' + (noDatabase ? ' FROM ' + reference.schema : '')))[0]
+        if ('database' in expectedEffects) effects.database = (await conn.query<mysql.RowDataPacket[]>('SELECT DATABASE() AS v'))[0][0]!.v
+        if ('lastInsertId' in expectedEffects) effects.lastInsertId = (await conn.query<mysql.RowDataPacket[]>('SELECT CAST(LAST_INSERT_ID() AS CHAR) AS v'))[0][0]!.v
         if ('event' in expectedEffects) {
           try {
             await conn.query('DROP EVENT e')

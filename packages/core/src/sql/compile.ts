@@ -9,8 +9,9 @@
 // Recursion is safe: D-40 bounds a parsed tree at 1,000 levels.
 //
 // What is not here yet is refused by name rather than approximated: an
-// unknown function is ER_SP_DOES_NOT_EXIST, as MySQL says it, and a builtin we
+// unknown function in a selected schema is ER_SP_DOES_NOT_EXIST; a builtin we
 // have not written is ER_NOT_SUPPORTED_YET naming it (M5.10 owns the rest).
+import { requireSchema } from './scope.ts'
 import { CHARSET_BINARY, COLUMN_FLAG, FIELD_TYPE, expectTyped, equalBytes } from '@myjs/bytes'
 import { someNode } from './ast.ts'
 import { resolveCollation } from './collation.ts'
@@ -2419,7 +2420,7 @@ function call(e: CallNode, ctx: CompileContext): Compiled {
   const name = e.name.toUpperCase()
   // `NOW ()` with IGNORE_SPACE off names a stored function, which this
   // executor has none of (8.4.11's wording, M5.33).
-  if (e.stored === true) throw sqlError('ER_FUNC_INEXISTENT_NAME_COLLISION', `FUNCTION ${ctx.session.database ?? ''}.${e.name} does not exist. Check the 'Function Name Parsing and Resolution' section in the Reference Manual`)
+  if (e.stored === true) throw sqlError('ER_FUNC_INEXISTENT_NAME_COLLISION', `FUNCTION ${requireSchema(ctx.session.database)}.${e.name} does not exist. Check the 'Function Name Parsing and Resolution' section in the Reference Manual`)
   if (e.over !== undefined) {
     if (ctx.windows !== undefined) return ctx.windows.register(e)
     if (/^(where|having|on) clause$/.test(ctx.clause)) windowNotAllowed(e)
@@ -2441,7 +2442,7 @@ function call(e: CallNode, ctx: CompileContext): Compiled {
   const compiler = functionCompiler(name)
   if (compiler !== undefined) return compiler(name, e, ctx)
   if (NOT_YET.has(name)) throw sqlError('ER_NOT_SUPPORTED_YET', messages.notSupported(`The function ${name}`))
-  throw sqlError('ER_SP_DOES_NOT_EXIST', `FUNCTION ${ctx.session.database ?? ''}.${e.name} does not exist`)
+  throw sqlError('ER_SP_DOES_NOT_EXIST', `FUNCTION ${requireSchema(ctx.session.database)}.${e.name} does not exist`)
 }
 
 const FLT_MAX = 3.4028234663852886e38

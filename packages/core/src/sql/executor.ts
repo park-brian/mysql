@@ -12,6 +12,7 @@
 // statement again later is the same as having waited. Past
 // `innodb_lock_wait_timeout` the answer is ER_LOCK_WAIT_TIMEOUT (1205), which
 // rolls back the statement and not the transaction, as InnoDB's does.
+import { requireSchema } from './scope.ts'
 import { FIELD_TYPE, MyjsError, expectTyped } from '@myjs/bytes'
 import { someNode } from './ast.ts'
 import { collationInfoByName, defaultCollationOf, requireCollationInfo } from '@myjs/charsets'
@@ -742,8 +743,7 @@ export class SqlExecutor implements Executor {
 
       case STATEMENT.CREATE_TABLE: {
         const catalog = this.#catalog(run)
-        const schema = statement.table.schema ?? session.database
-        if (schema === null) throw sqlError('ER_NO_DB_ERROR', messages.noDatabaseSelected())
+        const schema = requireSchema(statement.table.schema ?? session.database)
         const temporary = statement.temporary === true ? catalog.temporary : undefined
         // CREATE TEMPORARY TABLE does not commit (8.4.11).
         if (temporary === undefined) state.commit()
@@ -838,8 +838,7 @@ export class SqlExecutor implements Executor {
       case STATEMENT.TRUNCATE: {
         // DDL: an implicit commit, then the table made again, empty and its
         // AUTO_INCREMENT from 1 (8.4.11; ER_NO_SUCH_TABLE for a missing one).
-        const schema = statement.table.schema ?? session.database
-        if (schema === null) throw sqlError('ER_NO_DB_ERROR', messages.noDatabaseSelected())
+        const schema = requireSchema(statement.table.schema ?? session.database)
         state.commit()
         if (foreignKeyChecks(run)) {
           const by = referencingKeys(this.#catalog(run), schema, statement.table.name).find((r) => r.child.schema !== schema || r.child.name !== statement.table.name)
@@ -982,8 +981,7 @@ export class SqlExecutor implements Executor {
 
   #createView(run: Run, statement: CreateViewNode): StatementResult {
     const session = run.env.session
-    const schema = statement.view.schema ?? session.database
-    if (schema === null) throw sqlError('ER_NO_DB_ERROR', messages.noDatabaseSelected())
+    const schema = requireSchema(statement.view.schema ?? session.database)
     const catalog = this.#catalog(run)
     catalog.schema(schema)
     // A view may not read a temporary table (8.4.11: 1352).
@@ -1060,8 +1058,7 @@ export class SqlExecutor implements Executor {
     }
     if (statement.object !== 'TABLE') throw sqlError('ER_NOT_SUPPORTED_YET', messages.notSupported(`DROP ${statement.object}`))
     const names = statement.names.map((n) => {
-      const schema = n.schema ?? session.database
-      if (schema === null) throw sqlError('ER_NO_DB_ERROR', messages.noDatabaseSelected())
+      const schema = requireSchema(n.schema ?? session.database)
       return { schema, name: n.name }
     })
     // DROP TEMPORARY TABLE drops the session's own and nothing else, and does not commit (8.4.11).
@@ -1156,8 +1153,7 @@ export class SqlExecutor implements Executor {
     const encode = (s: string) => run.env.session.transcoder.encode(s, coll)
     const rows: Uint8Array[][] = []
     for (const t of tables) {
-      const schema = t.schema ?? run.env.session.database
-      if (schema === null) throw sqlError('ER_NO_DB_ERROR', messages.noDatabaseSelected())
+      const schema = requireSchema(t.schema ?? run.env.session.database)
       const name = `${schema}.${t.name}`
       const catalog = this.catalog
       const exists = catalog?.tables().some((x) => x.schema === schema && x.name === t.name) === true
@@ -1209,8 +1205,7 @@ export class SqlExecutor implements Executor {
       }
       case 'CREATE TABLE': {
         const name = statement.name as TableName
-        const schema = name.schema ?? run.env.session.database
-        if (schema === null) throw sqlError('ER_NO_DB_ERROR', messages.noDatabaseSelected())
+        const schema = requireSchema(name.schema ?? run.env.session.database)
         const catalog = this.#catalog(run)
         // A view's SHOW CREATE TABLE is its SHOW CREATE VIEW (8.4.11).
         if (catalog.temporary?.has(schema, name.name) !== true && catalog.view(schema, name.name) !== undefined) return this.#show(run, { ...statement, what: 'CREATE VIEW' })
@@ -1220,8 +1215,7 @@ export class SqlExecutor implements Executor {
       }
       case 'CREATE VIEW': {
         const name = statement.name as TableName
-        const schema = name.schema ?? run.env.session.database
-        if (schema === null) throw sqlError('ER_NO_DB_ERROR', messages.noDatabaseSelected())
+        const schema = requireSchema(name.schema ?? run.env.session.database)
         const catalog = this.#catalog(run)
         const view = catalog.view(schema, name.name)
         if (view === undefined) {
@@ -1236,8 +1230,7 @@ export class SqlExecutor implements Executor {
         }
       }
       case 'TABLES': {
-        const schema = statement.database ?? run.env.session.database
-        if (schema === null) throw sqlError('ER_NO_DB_ERROR', messages.noDatabaseSelected())
+        const schema = requireSchema(statement.database ?? run.env.session.database)
         // Views beside tables, and under FULL, which is which (8.4.11).
         const catalog = this.#catalog(run)
         const tables = [...catalog.tables(schema).map((t) => [t.name, 'BASE TABLE']), ...catalog.views(schema).map((v) => [v.name, 'VIEW'])].sort((a, b) => ((a[0] as string) < (b[0] as string) ? -1 : 1))

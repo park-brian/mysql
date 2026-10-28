@@ -1471,7 +1471,7 @@ a blocker and one without is just a note.
 
 ## 21. Where we are
 
-*A snapshot as of 2026-10-27. The [roadmap](./docs/44-roadmap.md) is the live
+*A snapshot as of 2026-10-28. The [roadmap](./docs/44-roadmap.md) is the live
 version, and wins wherever it disagrees with this section.*
 
 ```mermaid
@@ -1612,8 +1612,12 @@ warnings around BINARY in written order at the existing datatype reduction phase
 Unknown charsets and malformed clauses suppress attributes; named charset values
 are not shorthand modifiers. All 276 failed-grammar controls agree in the
 552-command capture, while its 156 valid-outcome gaps stay open. Valid-AST warning
-publication and runtime limits retain their existing owners. Function-name identity
-is next, starting with the retained Unicode SUM and spaced-call controls.
+publication and runtime limits retain their existing owners. Unresolved functions
+now require a selected database and report native error 1046 when absent. Thirteen
+existing required-schema checks share that presence rule without changing their
+resolution phases or explicit-name handling. The 378-command capture protects
+48 repaired primary errors; diagnostic-count and precedence gaps remain open.
+Function-name identity is next, starting with Unicode SUM and spaced-call controls.
 CAST/CONVERT targets leave internal COLLATE to the syntax boundary while column
 datatype readers retain it. Cursor string reading concatenates adjacent literals
 only when expression or ENUM/SET grammar requests it; ordinary callers consume

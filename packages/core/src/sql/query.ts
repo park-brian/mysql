@@ -23,7 +23,7 @@ import { isConstant, optimizerEnabled, splitAnd, tableColumn } from './plan.ts'
 import { and, columnRefs, integerLiteral, someNode } from './ast.ts'
 import { clusteredIndex, indexParts } from './indexes.ts'
 import { collationInfoByName, encodeCollation } from '@myjs/charsets'
-import { safeResolve, TableScope } from './scope.ts'
+import { requireSchema, safeResolve, TableScope } from './scope.ts'
 import { holdsRead, planFrom, type DerivedPlan, type DerivedSource, type FromContext, type FromPlan, type JoinCondition } from './from.ts'
 import { firstKey, rowKey, valueKey } from './keys.ts'
 import { indexLookup, planNode, wrap, type PlanNode } from './explain.ts'
@@ -131,8 +131,7 @@ export function fromContext(run: Run): FromContext {
 
 /** A table a statement names, opened: ER_NO_DB_ERROR with no schema, ER_NO_SUCH_TABLE with no table. */
 export function openTable(run: Run, name: TableName, alias = name.name): { readonly schema: string; readonly def: TableDef; readonly table: Table } {
-  const schema = name.schema ?? defaultDatabase(run)
-  if (schema === null || schema === undefined) throw sqlError('ER_NO_DB_ERROR', messages.noDatabaseSelected())
+  const schema = requireSchema(name.schema ?? defaultDatabase(run))
   // M5.12: refused by name until its tables exist, never answered as a missing table.
   if (schema.toLowerCase() === 'information_schema') throw sqlError('ER_NOT_SUPPORTED_YET', messages.notSupported('INFORMATION_SCHEMA'))
   if (run.catalog === undefined) throw sqlError('ER_NO_SUCH_TABLE', messages.noSuchTable(schema, name.name))
