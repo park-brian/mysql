@@ -354,8 +354,7 @@ export type TableElement =
 export function tableElement(c: Cursor, options: DdlOptions): TableElement {
   const at = c.peek().start
 
-  if (c.atWord('CONSTRAINT')) {
-    c.skip()
+  if (c.takeWord('CONSTRAINT')) {
     // The symbol is optional: `CONSTRAINT PRIMARY KEY (a)` names nothing.
     const symbol = c.atIdentifier() ? c.expectIdentifier() : undefined
     if (c.atWord('CHECK')) return { what: 'check', check: checkConstraint(c, options, at, symbol) }
@@ -424,11 +423,11 @@ function keyDefinition(c: Cursor, options: DdlOptions, at: number): KeyDefinitio
     type,
     ...opt('name', name),
     columns,
-    ...(using ?? rest.using ? { using: (using ?? rest.using) as string } : {}),
+    ...opt('using', using ?? rest.using),
     ...opt('references', references),
     ...opt('comment', rest.comment),
     ...opt('parser', rest.parser),
-    ...(rest.invisible === true ? { invisible: true as const } : {}),
+    ...flag('invisible', rest.invisible === true),
     at,
   }
 }
@@ -587,7 +586,7 @@ function columnDefinition(c: Cursor, options: DdlOptions, at: number): ColumnDef
     ...opt('notNull', notNull),
     ...opt('nullable', nullable),
     ...opt('default', defaultValue),
-    ...(parenthesised ? { defaultExpression: true } : {}),
+    ...flag('defaultExpression', parenthesised),
     ...opt('onUpdate', onUpdate),
     ...opt('autoIncrement', autoIncrement),
     ...opt('unique', unique),
@@ -671,7 +670,7 @@ function nowFunction(c: Cursor): Expression | undefined {
 
 // --- index and reference clauses -------------------------------------------
 
-export function indexType(c: Cursor): string | undefined {
+export function indexType(c: Cursor): 'BTREE' | 'HASH' | 'RTREE' | undefined {
   if (!c.takeWord('USING')) return undefined
   if (c.takeWord('BTREE')) return 'BTREE'
   if (c.takeWord('HASH')) return 'HASH'

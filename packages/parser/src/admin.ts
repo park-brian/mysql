@@ -181,7 +181,7 @@ export function parseTableMaintenance(c: Cursor): TableMaintenanceNode {
     op,
     ...flag('noWriteToBinlog', noWriteToBinlog),
     tables,
-    ...(options.length > 0 ? { options } : {}),
+    ...opt('options', options.length ? options : undefined),
     ...opt('histogram', histogram),
     at,
   }
@@ -768,7 +768,7 @@ function accountOptions(c: Cursor): AccountOptions {
   return {
     ...opt('require', require),
     ...opt('resources', resources),
-    ...(passwordOptions.length > 0 ? { passwordOptions } : {}),
+    ...opt('passwordOptions', passwordOptions.length ? passwordOptions : undefined),
     ...opt('comment', comment),
     ...opt('attribute', attribute),
   }

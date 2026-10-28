@@ -119,7 +119,7 @@ function parameter(c: Cursor, mode: SqlMode, procedure: boolean): RoutineParamet
   const name = c.expectIdentifier()
   // `IN` is the default, and is recorded as absent so `(IN a INT)` and
   // `(a INT)` are one tree.
-  return { ...(direction === undefined || direction === 'IN' ? {} : { mode: direction }), name, type: parseDataType(c, mode) }
+  return { ...opt('mode', direction === 'IN' ? undefined : direction), name, type: parseDataType(c, mode) }
 }
 
 /** `CREATE TRIGGER`, with the cursor on `CREATE`. */

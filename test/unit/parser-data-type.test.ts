@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { Cursor, NO_SQL_MODE, ParseError, lex, parseDataType, parseExpression, parseStatement } from '@myjs/parser'
+import { BINARY_DEPRECATION, Cursor, NO_SQL_MODE, ParseError, lex, parseDataType, parseExpression, parseStatement } from '@myjs/parser'
 
 test('column and cast targets keep their own COLLATE boundaries', () => {
   const c = new Cursor(lex('CHAR(2) COLLATE utf8mb4_bin CHARACTER SET utf8mb4'))
@@ -53,6 +53,22 @@ test('modifier refusal keeps preceding warnings and stops before later charset l
     assert.throws(() => parseExpression(expression), (error: unknown) => error instanceof ParseError && error.errno === 1064 && String(error.conditions?.map(c => c.errno)) === '3720,1064')
   }
   assert.throws(() => parseStatement("SELECT 1 COLLATE earlier,CAST('x' AS CHAR CHARACTER SET utf8mb4 CHARACTER SET unknown),1e309"), (error: unknown) => error instanceof ParseError && error.errno === 1273 && String(error.conditions?.map(c => c.errno)) === '1273,1064')
+})
+
+test('CAST BINARY warnings reduce after a valid charset and before later refusal', () => {
+  for (const expression of ["CAST('x' AS CHAR BINARY BINARY)", "CONVERT('x', CHAR CHARACTER SET utf8mb4 BINARY BINARY)", "CAST('x' AS CHAR BINARY) + (1 COLLATE missing)"]) {
+    assert.throws(() => parseExpression(expression), (error: unknown) => {
+      assert.ok(error instanceof ParseError)
+      assert.deepEqual(error.conditions?.[0], { errno: 1287, message: BINARY_DEPRECATION, level: 'Warning' })
+      assert.equal(error.conditions?.length, 2)
+      assert.equal(error.conditions?.[1]?.errno, error.errno)
+      return true
+    })
+  }
+  for (const type of ['CHAR BINARY CHARACTER SET unknown', 'CHAR BINARY CHARSET unknown', 'CHAR BINARY CHARACTER', 'CHAR BINARY CHARACTER what', 'CHAR BINARY CHARACTER SET']) {
+    assert.throws(() => parseExpression("CAST('x' AS " + type + ')'), (error: unknown) => error instanceof ParseError && error.conditions === undefined)
+  }
+  assert.throws(() => parseStatement("SELECT 1 COLLATE earlier,CAST('x' AS CHAR BINARY BINARY)"), (error: unknown) => error instanceof ParseError && error.errno === 1273 && String(error.conditions?.map(c => c.errno)) === '1273,1287,1064')
 })
 
 test('adjacent literal reading is explicit, while ENUM preserves text and byte members', () => {

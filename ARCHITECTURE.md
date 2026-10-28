@@ -1597,6 +1597,10 @@ Docker verification: character targets take one charset clause and at most one
 BINARY, while national/numeric targets leave column modifiers for syntax refusal.
 Default column readers retain their grammar. A warning-filled 1,024-condition prefix can accompany ERR with zero
 retained errors. Valid-AST warning limits and later binding failures remain open.
+The BINARY attribute warning now survives failed CAST/CONVERT admission only after
+its optional charset succeeds; the parser and DDL share its text. This bounded
+repair passes Docker verification. Failed-admission ASCII/UNICODE warnings are
+next, with their captured native timing retained.
 CAST/CONVERT targets leave internal COLLATE to the syntax boundary while column
 datatype readers retain it. Cursor string reading concatenates adjacent literals
 only when expression or ENUM/SET grammar requests it; ordinary callers consume

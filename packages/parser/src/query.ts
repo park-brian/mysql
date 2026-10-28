@@ -200,7 +200,7 @@ class QueryParser {
       ...opt('orderBy', orderBy),
       ...opt('limit', limit),
       ...opt('into', into),
-      ...(locking.length === 0 ? {} : { locking }),
+      ...opt('locking', locking.length ? locking : undefined),
       at,
     }
   }
@@ -362,7 +362,7 @@ class QueryParser {
     return {
       kind: QUERY.SELECT,
       ...flag('distinct', distinct),
-      ...(options.length === 0 ? {} : { options }),
+      ...opt('options', options.length ? options : undefined),
       items,
       ...opt('from', from),
       ...opt('where', where),
@@ -667,7 +667,7 @@ class QueryParser {
       table,
       ...opt('partitions', partitions),
       ...opt('alias', alias),
-      ...(indexHints.length === 0 ? {} : { indexHints }),
+      ...opt('indexHints', indexHints.length ? indexHints : undefined),
       at,
     }
   }

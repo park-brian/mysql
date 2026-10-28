@@ -29,6 +29,9 @@ export interface ParseCondition {
 export const NATIONAL_DEPRECATION =
   'NATIONAL/NCHAR/NVARCHAR implies the character set UTF8MB3, which will be replaced by UTF8MB4 in a future release. Please consider using CHAR(x) CHARACTER SET UTF8MB4 in order to be unambiguous.'
 
+/** 1287 text shared by grammar failures and execution of valid ASTs. */
+export const BINARY_DEPRECATION = "'BINARY as attribute of a type' is deprecated and will be removed in a future release. Please use a CHARACTER SET clause with _bin collation instead"
+
 /** Anything this package refuses. Carries `errno` and `sqlState` like `SqlError`. */
 export class ParseError extends MyjsError {
   /** Nonenumerable history when grammar conditions precede or follow the primary error. */
@@ -39,7 +42,7 @@ export class ParseError extends MyjsError {
   constructor(
     symbol: string,
     message: string,
-    options: { errno: number; sqlState: string; offset?: number },
+    options: { errno: number; sqlState: string; offset?: number | undefined },
   ) {
     super(symbol, message, { errno: options.errno, sqlState: options.sqlState })
     this.offset = options.offset
@@ -58,7 +61,7 @@ export function parseError(near: string, line: number, offset?: number): ParseEr
   return new ParseError(
     'ER_PARSE_ERROR',
     `You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near '${near}' at line ${line}`,
-    { errno: 1064, sqlState: '42000', ...(offset === undefined ? {} : { offset }) },
+    { errno: 1064, sqlState: '42000', offset },
   )
 }
 

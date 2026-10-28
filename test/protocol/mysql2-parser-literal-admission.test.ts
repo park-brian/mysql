@@ -9,6 +9,7 @@ import conditionHistories from './fixtures/diagnostics/parser-condition-historie
 import castDatatype from './fixtures/diagnostics/cast-datatype-grammar.json' with { type: 'json' }
 import castModifiers from './fixtures/diagnostics/cast-modifier-grammar.json' with { type: 'json' }
 import warningAdmission from './fixtures/diagnostics/parser-warning-admission.json' with { type: 'json' }
+import modifierDeprecation from './fixtures/diagnostics/modifier-deprecation-admission.json' with { type: 'json' }
 
 /** Restore binary rows and numeric facts that JSON cannot represent directly. */
 function capturedValue(value: unknown): unknown {
@@ -22,7 +23,7 @@ function capturedValue(value: unknown): unknown {
   return value
 }
 
-for (const [reference, total, matched] of [[literalAdmission, 1623, 1521], [conditionHistories, 198, 192], [castDatatype, 480, 398], [castModifiers, 16648, 15710], [warningAdmission, 325, 248]] as const) test('M5.10: admission preserves primary errors, condition histories, headers and effects: ' + reference.schema, async () => {
+for (const [reference, total, matched] of [[literalAdmission, 1623, 1521], [conditionHistories, 198, 192], [castDatatype, 480, 398], [castModifiers, 16648, 15874], [warningAdmission, 325, 248], [modifierDeprecation, 1008, 362]] as const) test('M5.10: admission preserves primary errors, condition histories, headers and effects: ' + reference.schema, async () => {
   const host = process.env.MYSQL_REFERENCE_HOST
   const db = host === undefined ? await MySQL.open(':memory:', { multipleStatements: true }) : undefined
   const transport = db === undefined

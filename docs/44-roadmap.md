@@ -345,9 +345,42 @@ and reference/generator/census/helper tooling before cleanup. Preceding 5cdd9d0
 passed all eleven required CI jobs.
 
 The remaining grammar-class profiles concentrate on modifier deprecations (1287),
-CAST field flags and selected value conversions. **Next bounded slice:** audit
-modifier warnings on failed admissions at the checked grammar boundary,
-with source-order and primary-error guards intact. Valid-AST warning limits and
+CAST field flags and selected value conversions. **Failed-parser BINARY warnings, verified (2026-10-27):** failed CAST/CONVERT
+admissions now retain BINARY
+attribute warning 1287 through the existing checked cursor. The warning reduces
+after its optional charset succeeds; an unknown charset or malformed CHARACTER
+clause suppresses it. A single publisher preserves the warning before later syntax
+or recoverable errors. DDL and the parser share the same BINARY diagnostic text;
+valid AST warning ownership remains unchanged.
+
+A 1,008-command native capture covers BINARY, ASCII and UNICODE timing, both
+forms and SQL modes, all three APIs, effects, prefixes, malformed charset clauses
+and condition limits. This bounded BINARY repair improves complete matches from
+196 to 362 and retains all 646 open outcomes, including shorthand warnings. The
+existing modifier capture strengthens from 15,710 to 15,874 complete outcomes.
+Every previously matching component, condition, primary-error attribute, header,
+field, PREPARE count and effect remains protected; native answer pools are
+unchanged. All 23 focused tests pass. All nine existing caps pass at core/facade
+334,353/334,266 B gzipped. Existing optional-node helpers replace the remaining
+duplicated parser DTO construction, keeping zero, false and absent fields intact;
+CONSTRAINT consumes through the existing atomic word reader. ParseError already
+stores an optional offset directly, so its factory no longer conditionally builds
+that internal options field. The 177,625 parser contracts preserve every admitted
+AST; only forty syntax locations change for eight malformed CHARACTER clauses
+across five modes, as the native capture requires. All 10,224 raw column contracts
+remain byte-identical. Seeded parser/executor fuzzing passes one million inputs
+and 20,000 statements. The entire official-suite fixture is byte-identical with
+all 37 shared passes preserved. Fresh Docker passes 1,468 main tests, four latency
+tests, typecheck, lint, package/typed smoke, the real client and all seven pinned
+corpora. Native replay passes all 20,282 captured commands plus both negotiated
+command modes. The actual census and its repeated refresh are byte-identical at
+17,530/17,589. Frozen-source proof matches 442 test files/fixtures, 204 runtime
+sources and reference/generator/census/helper tooling before cleanup; code and
+tests remained frozen throughout. Preceding 6f58311 passed all eleven required
+CI jobs.
+
+**Next bounded slice:** finish failed-admission ASCII/UNICODE warning publication
+against the retained native timing captures. Valid-AST warning limits and
 later binding failures remain separate gaps; lexical lookahead, other CAST
 metadata/conversion warnings and broader function repairs remain open. M5.10
 stays partial.
@@ -6640,7 +6673,7 @@ code that moves it (doc 43 §8). A claim without a number is marketing.
 | Statements executing the way a real MySQL 8.4 executed them | 3,629 / 3,629 — 400 generated scripts through `mysql2`, 250 of their statements upserts, REPLACEs or IGNOREs: rows and order, column metadata, `affectedRows`/`insertId`/`info`, errno and SQLSTATE. Three further seeds, 46,346 statements and not committed, agree except four `SELECT DISTINCT` metadata cases that need the range optimizer (M5.7, which owns it since M5.5 closed) | every statement the executor accepts |
 | InnoDB round-trip, by type | 0 / 17 | 17 / 17 |
 | Crash injection points, inconsistencies | 10,000 points, 0 inconsistencies — CI's `crash` job runs `CRASH_POINTS=10000`, and `npm test` 300 of them | 10,000 points, 0 |
-| Core bundle, gzipped | 334,347 B (326.5 KiB) for the browser entry chunk, measured on 2026-10-27; the facade is 334,264 B. The two deferred UCA chunks total 184,654 B raw. `tools/size-budget.mjs` measures each package including its workspace dependencies, so package figures do not add up. The M5.2 coercion and M5.10 function fixes pass the existing stabilization budgets without raising them | < 500 KB |
+| Core bundle, gzipped | 334,353 B (326.5 KiB) for the browser entry chunk, measured on 2026-10-27; the facade is 334,266 B. The two deferred UCA chunks total 184,654 B raw. `tools/size-budget.mjs` measures each package including its workspace dependencies, so package figures do not add up. The M5.2 coercion and M5.10 function fixes pass the existing stabilization budgets without raising them | < 500 KB |
 | Function calls returning what a real MySQL 8.4 returned | 8,765 / 8,765 — the string and numeric slices (2,091 / 2,091, including GREATEST and LEAST over text and a DATETIME), the date and time slice (3,463 / 3,463) and the rest of the string, math, hashing and network functions (3,211 / 3,211), both protocols, metadata and warning counts | every function in the library |
 | Implicit coercion | 3,148 / 3,148 captured statements agree, with 0 refusals; warning counts agree on 1,737 / 1,737 queries. All observations are compared with zero disagreements (M5.2 complete) | every captured value, metadata field and warning count |
 | Relational statements executing the way a real MySQL 8.4 executed them | 5,635 / 5,635 agree and none are refused, over 300 multi-table scripts through `mysql2`, both protocols. `queries.json` through the executor: 1,200 / 1,200. Rows are compared in order wherever the statement or an agreeing plan fixes it | every statement the executor accepts, and no refusals |

@@ -37,7 +37,7 @@
 //     lookup.
 import { FIELD_TYPE, type FieldTypeCode } from '@myjs/bytes'
 import { flag, opt, type Cursor } from './cursor.ts'
-import { NATIONAL_DEPRECATION } from './errors.ts'
+import { BINARY_DEPRECATION, NATIONAL_DEPRECATION } from './errors.ts'
 import { charsetName, collationName } from './names.ts'
 import { TOKEN } from './tokens.ts'
 import type { SqlMode } from './sql-mode.ts'
@@ -367,6 +367,9 @@ export function parseDataType(c: Cursor, mode: SqlMode, column = true): DataType
       charset = specifiedCharset
       binaryModifier ||= c.takeWord('BINARY')
     } else if (!binaryModifier && c.takeWord('BYTE')) charset = 'binary'
+    else if (c.takeWord('CHARACTER')) c.fail()
+    // BINARY reduces after its optional charset; an invalid clause suppresses it.
+    if (binaryModifier) c.warn(1287, BINARY_DEPRECATION)
   }
 
   return {

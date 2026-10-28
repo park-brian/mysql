@@ -15,7 +15,7 @@
 //   - `CREATE INDEX` requires a name: `CREATE INDEX ON t (a)` is
 //     ER_PARSE_ERROR.
 import { unsupportedStatement } from './errors.ts'
-import { opt, type Cursor } from './cursor.ts'
+import { flag, opt, type Cursor } from './cursor.ts'
 import { charsetName, collationName } from './names.ts'
 import {
   algorithmAndLock,
@@ -95,7 +95,7 @@ export function parseCreateIndex(c: Cursor, options: DdlOptions): AlterTableNode
     ...opt('using', using),
     ...opt('comment', rest.comment),
     ...opt('parser', rest.parser),
-    ...(rest.invisible === true ? { invisible: true as const } : {}),
+    ...flag('invisible', rest.invisible === true),
     at: keyAt,
   }
   return { kind: STATEMENT.ALTER_TABLE, table, actions: [{ type: 'addKey', key }], options: {}, at }
@@ -165,7 +165,7 @@ function alterAction(c: Cursor, options: DdlOptions, actions: AlterAction[]): bo
     if (c.takeWords('DROP', 'DEFAULT')) actions.push({ type: 'dropDefault', column })
     else if (c.takeWords('SET', 'DEFAULT')) {
       const expression = c.atOp('(')
-      actions.push({ type: 'setDefault', column, value: defaultExpression(c, options, false), ...(expression ? { expression: true } : {}) })
+      actions.push({ type: 'setDefault', column, value: defaultExpression(c, options, false), ...flag('expression', expression) })
     }
     else {
       c.expectWord('SET')

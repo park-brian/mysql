@@ -20,7 +20,7 @@
 import { CHARSET_BINARY, FIELD_TYPE } from '@myjs/bytes'
 import { requireCollationInfo } from '@myjs/charsets'
 import { clusteredIndexOf, type ColumnDef, type EngineName, type IndexDef, type TableSpec } from '@myjs/engine'
-import { KEY, NODE, deparse, type ColumnDefinition, type CreateTableNode, type DataType, type KeyDefinition } from '@myjs/parser'
+import { BINARY_DEPRECATION, KEY, NODE, deparse, type ColumnDefinition, type CreateTableNode, type DataType, type KeyDefinition } from '@myjs/parser'
 import { messages, sqlError } from '@myjs/protocol'
 import type { ColumnType } from '@myjs/types'
 import { checkFulltext, type FulltextDef } from './fulltext.ts'
@@ -62,7 +62,7 @@ export function columnDeprecations(c: ColumnDefinition): Deprecation[] {
   if ((code === FIELD_TYPE.FLOAT || code === FIELD_TYPE.DOUBLE) && t.scale !== undefined) form(DEPRECATED.digits)
   if (INEXACT_CODES.has(code) && t.unsigned === true && t.zerofill !== true) form(DEPRECATED.unsigned)
   // The charset's, in the order the definition meets them (8.4.11).
-  if (t.binary === true) out.push({ code: 1287, message: "'BINARY as attribute of a type' is deprecated and will be removed in a future release. Please use a CHARACTER SET clause with _bin collation instead" })
+  if (t.binary === true) out.push({ code: 1287, message: BINARY_DEPRECATION })
   if (t.national === true) out.push({ code: 3720, message: NATIONAL_DEPRECATION })
   else if (t.charset === 'utf8mb3') out.push({ code: 1287, message: UTF8MB3_DEPRECATION })
   else if (t.charset === 'utf8') out.push({ code: 3719, message: "'utf8' is currently an alias for the character set UTF8MB3, but will be an alias for UTF8MB4 in a future release. Please consider using UTF8MB4 in order to be unambiguous." })
