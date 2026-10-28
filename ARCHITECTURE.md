@@ -1645,10 +1645,13 @@ functions remain admitted. A pure postorder check shares only traversal and nati
 diagnostic construction with generated columns. ALTER SET DEFAULT retains its
 late execution boundary and non-executing PREPARE behavior. The extended tests
 pass 153 transaction boundaries and nine missing-database cases against both
-engines. Nineteen admission captures enforce 33,678/39,368 complete commands,
-with unchanged native answers and 5,690 open outcomes. CHECK permissions/namespace,
+engines. Twenty admission captures enforce 33,902/40,070 complete commands,
+with unchanged native answers and 6,168 open outcomes. CHECK permissions/namespace,
 malformed declaration ordering, ANSI SHOW CREATE and other function gaps remain
-open. M5.10 stays partial.
+open. A CHECK permission-only trial was withdrawn: native clock precision and
+RANDOM_BYTES evaluation must be repaired first. A deterministic 702-command
+capture protects these boundaries; runtime sources remain unchanged.
+M5.10 stays partial.
 CAST/CONVERT targets leave internal COLLATE to the syntax boundary while column
 datatype readers retain it. Cursor string reading concatenates adjacent literals
 only when expression or ENUM/SET grammar requests it; ordinary callers consume

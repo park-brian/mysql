@@ -683,12 +683,34 @@ The preceding 4a60141 CI passed all eleven required jobs. CHECK permissions/
 namespace, malformed declaration ordering, ANSI SHOW CREATE and other function
 gaps remain open; M5.10 stays partial.
 
-**Next bounded slice:** repair CHECK's independently verified RANDOM_BYTES and
-SYSDATE permission differences using its existing validator. Preserve generated
-and DEFAULT permissions, raw/native function identity, diagnostic aliases and
-validation timing. Keep namespace/order differences separate until native probes
-establish their behavior. Then continue the bounded function work before the
-remaining M5.47, M5.49 and M5.50 strategies and browser work.
+**CHECK permission prerequisites, native-verified (2026-10-28):** a validator-only
+trial for RANDOM_BYTES and SYSDATE fit all nine caps, but the broader 78-profile
+probe found lost matching facts: CREATE wrongly accepted SYSDATE(7), and ALTER
+reached the missing RANDOM_BYTES evaluator. That trial is withdrawn; all runtime
+sources remain byte-identical to 2c9a5ff. Native clock precision and actual function
+availability are prerequisites for the permission change. Quoted SYSDATE and
+Unicode lookalikes retain stored-function identity; quoted RANDOM_BYTES remains a
+native call. Permitted parents must still expose prohibited children, variables,
+subqueries and missing references to validation.
+A fresh deterministic 702-command capture uses random-byte presence/length rather
+than unpredictable numeric byte comparisons. It retains all native answers,
+224 complete matches and 478 open outcomes through three modes and all APIs,
+covering CREATE/ALTER, column/table clauses, NOT ENFORCED and generated/DEFAULT
+controls. Its component, error, condition, header, PREPARE and effect guards reject
+the withdrawn trial's invalid-precision success. Twenty captures now protect
+33,902/40,070 complete commands and 168,459 conditions; 6,168 outcomes stay open.
+Typecheck, all 25 focused tests and four roadmap/official-fixture checks pass.
+All 702 permanent commands replay successfully against pinned 8.4.11. The tested
+copy matches 458 test files/fixtures, 206 runtime sources and reference tooling.
+The preceding 2c9a5ff passes all eleven required CI jobs.
+
+**Next bounded slice:** establish native fractional-clock precision validation and
+its error precedence across SELECT, generated columns, DEFAULT and CHECK before
+choosing the existing owner to repair. Then implement RANDOM_BYTES through the
+existing function family before retrying CHECK permissions. Preserve native-call
+identity, source-specific admission and transaction boundaries. Continue bounded
+function work before M5.47, M5.49, M5.50 and browser work. M5.10 stays partial;
+roadmap totals remain 144/190 and M5 42/53.
 
 Keep function, keyword and value namespaces distinct. Charset-value validation,
 separate event behavior, valid-AST warnings/limits, later binding failures,
