@@ -18,7 +18,7 @@
 import { systemVariableParts } from './variable.ts'
 import { Cursor, flag, opt } from './cursor.ts'
 import { RESERVED } from './keywords.ts'
-import { TOKEN, keywordText } from './tokens.ts'
+import { TOKEN, asciiWord, keywordText } from './tokens.ts'
 import { NODE, LITERAL, type Expression, type LiteralType } from './ast.ts'
 import { lex, type LexOptions } from './lexer.ts'
 import { hexBytes, parseDataType, type DataType } from './data-type.ts'
@@ -97,17 +97,15 @@ const SPACE_SENSITIVE: ReadonlySet<string> = new Set([
   'ST_COLLECT', 'SUBDATE', 'SUBSTR', 'SUBSTRING', 'SUM', 'SYSDATE', 'SYSTEM_USER', 'TRIM', 'VARIANCE', 'VAR_POP', 'VAR_SAMP',
 ])
 
-/**
- * Reserved words that are also builtin functions, so a `(` after one makes it a
- * call rather than a syntax error: `IF(a, b, c)`, `LEFT(s, 2)`, `RANK() OVER w`.
- *
- * Written out rather than generated, for the reason M3.5's type table is: the
- * server publishes which words are reserved (M3.15) but not which of those its
- * grammar also accepts as a function name, and the grammar is Bison. The census
- * keeps it honest — a missing name is a corpus statement that fails to parse.
- */
-const RESERVED_FUNCTIONS = new Set([
-  ...NILADIC,
+/** Aggregates alone may spell their default ALL or explicit DISTINCT. */
+const AGGREGATES = new Set([
+  'AVG', 'BIT_AND', 'BIT_OR', 'BIT_XOR', 'COUNT', 'GROUP_CONCAT', 'MAX', 'MIN', 'STD', 'STDDEV',
+  'STDDEV_POP', 'STDDEV_SAMP', 'SUM', 'VARIANCE', 'VAR_POP', 'VAR_SAMP',
+])
+
+/** Lexer-function names use native grammar and collide when read as generic calls. */
+const LEXICAL_FUNCTIONS = new Set([
+  ...NILADIC, ...SPACE_SENSITIVE, ...AGGREGATES,
   'CHAR', 'CONVERT', 'DATABASE', 'DEFAULT', 'IF', 'INSERT', 'LEFT', 'RIGHT', 'MOD', 'REPEAT', 'REPLACE',
   'SCHEMA', 'VALUES', 'GROUPING', 'CUME_DIST', 'DENSE_RANK', 'FIRST_VALUE', 'LAG', 'LAST_VALUE', 'LEAD',
   'NTH_VALUE', 'NTILE', 'PERCENT_RANK', 'RANK', 'ROW_NUMBER',
@@ -118,12 +116,6 @@ export const INTERVAL_UNITS: ReadonlySet<string> = new Set([
   'MICROSECOND', 'SECOND', 'MINUTE', 'HOUR', 'DAY', 'WEEK', 'MONTH', 'QUARTER', 'YEAR',
   'SECOND_MICROSECOND', 'MINUTE_MICROSECOND', 'MINUTE_SECOND', 'HOUR_MICROSECOND', 'HOUR_SECOND',
   'HOUR_MINUTE', 'DAY_MICROSECOND', 'DAY_SECOND', 'DAY_MINUTE', 'DAY_HOUR', 'YEAR_MONTH',
-])
-
-/** Aggregates, which alone may spell out their default `ALL`: `SUM(ALL a)`. */
-const AGGREGATES = new Set([
-  'AVG', 'BIT_AND', 'BIT_OR', 'BIT_XOR', 'COUNT', 'GROUP_CONCAT', 'MAX', 'MIN', 'STD', 'STDDEV',
-  'STDDEV_POP', 'STDDEV_SAMP', 'SUM', 'VARIANCE', 'VAR_POP', 'VAR_SAMP',
 ])
 
 /** The types a `CAST` may name, by their canonical names. */
@@ -517,19 +509,18 @@ class ExpressionParser {
   #identifierLike(): Expression {
     const cursor = this.#c
     const t = cursor.peek()
-    const keyword = keywordText(t)
-    const upper = keyword || t.text.toUpperCase()
+    const upper = asciiWord(t.text)
 
-    if (t.quoted !== true) {
-      if (keyword === 'NULL') {
+    if (!t.quoted) {
+      if (upper === 'NULL') {
         cursor.skip()
         return { kind: NODE.LITERAL, type: LITERAL.NULL, value: null, at: t.start }
       }
-      if (keyword === 'TRUE' || keyword === 'FALSE') {
+      if (upper === 'TRUE' || upper === 'FALSE') {
         cursor.skip()
         return { kind: NODE.LITERAL, type: LITERAL.BOOL, value: upper === 'TRUE', at: t.start }
       }
-      if (keyword === 'CASE') return this.#case()
+      if (upper === 'CASE') return this.#case()
       // Only a registered charset makes an introducer; otherwise this is a name.
       const next = cursor.peek(1).kind
       if (t.text.startsWith('_') && (next === TOKEN.STRING || next === TOKEN.HEX || next === TOKEN.BIT)) {
@@ -542,18 +533,18 @@ class ExpressionParser {
         }
       }
       // `N'x'` is the national charset's literal, which MySQL defines as utf8mb3.
-      if (keyword === 'N' && next === TOKEN.STRING && cursor.peek(1).start === t.end) {
+      if (upper === 'N' && next === TOKEN.STRING && cursor.peek(1).start === t.end) {
         cursor.skip()
         return { kind: NODE.LITERAL, type: LITERAL.STRING, value: cursor.expectString(true), charset: 'utf8mb3', at: t.start }
       }
-      if (keyword === 'EXISTS' && cursor.atOp('(', 1)) {
+      if (upper === 'EXISTS' && cursor.atOp('(', 1)) {
         cursor.skip()
         const open = cursor.peek().start
         const operand = { kind: NODE.SUBQUERY, query: this.#parenthesisedQuery(), at: open } as const
         return { kind: NODE.UNARY, op: 'EXISTS', operand, at: t.start }
       }
       // `ROW(1, 2)` is the row constructor `(1, 2)` spelled out.
-      if (keyword === 'ROW' && cursor.atOp('(', 1)) {
+      if (upper === 'ROW' && cursor.atOp('(', 1)) {
         cursor.skip()
         const open = cursor.take()
         const items: Expression[] = []
@@ -562,52 +553,44 @@ class ExpressionParser {
         cursor.expectOp(')')
         return { kind: NODE.ROW, items, at: open.start }
       }
-      if (keyword === 'MATCH' && (cursor.atOp('(', 1) || cursor.peek(1).kind === TOKEN.IDENTIFIER)) return this.#match()
+      if (upper === 'MATCH' && (cursor.atOp('(', 1) || cursor.peek(1).kind === TOKEN.IDENTIFIER)) return this.#match()
       if (cursor.atOp('(', 1)) {
         // One of the builtins the lexer knows by name, a space before its
         // `(`, and IGNORE_SPACE off: not the builtin, but a stored function
         // of that name (8.4.11: `COUNT (*)` is 1064, `NOW ()` is 1630).
-        if (SPACE_SENSITIVE.has(upper) && !this.#mode.ignoreSpace && cursor.peek(1).start !== t.start + t.text.length) return this.#storedCall()
-        const special = this.#specialCall(keyword)
+        if (SPACE_SENSITIVE.has(upper) && !this.#mode.ignoreSpace && cursor.peek(1).start !== t.start + t.text.length) return this.#call(true)
+        const special = this.#specialCall(upper)
         if (special !== null) return special
+        if (RESERVED.has(upper) && !LEXICAL_FUNCTIONS.has(upper)) cursor.fail()
+        return this.#call()
       }
       // A typed temporal literal: `DATE'2019-10-01'`, and its `TIME` and
       // `TIMESTAMP` siblings. The keyword types the string beside it, so this
       // is a DATE rather than the string it is written with — which is why
       // `DEFAULT DATE'…'` is legal on a DATE column where a bare string is
       // not. Found by M3.11's census in `default.test`.
-      if (TEMPORAL_KEYWORDS.has(keyword) && cursor.peek(1).kind === TOKEN.STRING) {
+      if (TEMPORAL_KEYWORDS.has(upper) && cursor.peek(1).kind === TOKEN.STRING) {
         cursor.skip()
         const s = cursor.take()
-        return { kind: NODE.LITERAL, type: LITERAL.TEMPORAL, value: s.text, unit: keyword, at: t.start }
+        return { kind: NODE.LITERAL, type: LITERAL.TEMPORAL, value: s.text, unit: upper, at: t.start }
       }
       // A reserved word is never a column reference (M3.15). It may be a
       // builtin function — `IF(`, `LEFT(`, or `CURRENT_TIMESTAMP` with or
       // without its parentheses — and is otherwise where the expression ends,
       // which is what lets `SELECT a FROM t` stop at `FROM`.
-      if (RESERVED.has(keyword)) {
-        if (NILADIC.has(keyword) && !cursor.atOp('(', 1)) {
+      if (RESERVED.has(upper)) {
+        if (NILADIC.has(upper)) {
           cursor.skip()
           return { kind: NODE.CALL, name: t.text, args: [], at: t.start }
         }
-        if (!RESERVED_FUNCTIONS.has(keyword) || !cursor.atOp('(', 1)) cursor.fail()
-        return this.#call()
+        cursor.fail()
       }
     }
 
-    // `name(` is a call, **and a space before the `(` is allowed**.
-    //
-    // This started life as the opposite rule, on the strength of the manual's
-    // "there must be no whitespace between a function name and the following
-    // parenthesis". M3.11's census disagreed: `default_as_expr.test` contains
-    //
-    //     something VARCHAR(64) NOT NULL DEFAULT (CONCAT ('[', data, ']'))
-    //
-    // with no `--error` in front of it, so a real 8.4 accepts it. The manual's
-    // rule applies only to the builtins its lexer knows by name, which
-    // `SPACE_SENSITIVE` lists and the branch above reads as stored functions
-    // when a space comes first (M5.33).
-    if (cursor.atOp('(', 1)) return this.#call()
+    // Quoted names use generic argument grammar. Lexer-function names retain
+    // their collision role; quoted scalar names remain callable. Unquoted
+    // calls, including whitespace-sensitive names, were handled above.
+    if (cursor.atOp('(', 1)) return this.#call(LEXICAL_FUNCTIONS.has(upper))
 
     // A qualified name: `a`, `t.a`, `db.t.a`, `t.*` or `db.t.*` — three parts
     // at most, since `a.b.c.d` names nothing.
@@ -636,16 +619,18 @@ class ExpressionParser {
     return column
   }
 
-  #call(): Expression {
+  /** One argument reader; quoted and spaced lexer names retain their collision role. */
+  #call(stored = false): Expression {
     const cursor = this.#c
     const name = cursor.take()
-    const upper = name.text.toUpperCase()
+    const upper = stored ? '' : keywordText(name)
     cursor.expectOp('(')
-    const distinct = cursor.takeWord('DISTINCT')
+    const aggregate = AGGREGATES.has(upper)
+    const distinct = aggregate && cursor.takeWord('DISTINCT')
     // `SUM(ALL a)` is `SUM(a)`: `ALL` is the default an aggregate may spell out.
-    if (!distinct && AGGREGATES.has(upper)) cursor.takeWord('ALL')
+    if (aggregate && !distinct) cursor.takeWord('ALL')
     const args: Expression[] = []
-    if (cursor.atOp('*') && !distinct) {
+    if (upper === 'COUNT' && cursor.atOp('*') && !distinct) {
       // `COUNT(*)` — the only place a bare star is an argument.
       cursor.skip()
       args.push({ kind: NODE.COLUMN, parts: ['*'], at: cursor.peek().start })
@@ -667,7 +652,7 @@ class ExpressionParser {
     }
     if (upper === 'CHAR' && cursor.takeWord('USING')) using = charsetName(cursor).toLowerCase()
     cursor.expectOp(')')
-    const over = this.#over()
+    const over = LEXICAL_FUNCTIONS.has(upper) ? this.#over() : undefined
     return {
       kind: NODE.CALL,
       name: name.text,
@@ -677,6 +662,7 @@ class ExpressionParser {
       ...opt('separator', separator),
       ...opt('using', using),
       ...opt('over', over),
+      ...flag('stored', stored),
       at: name.start,
     }
   }
@@ -690,20 +676,6 @@ class ExpressionParser {
     const spec = parseWindowSpec(cursor, this.#mode)
     cursor.expectOp(')')
     return spec
-  }
-
-  /** `name (args)` read as a stored function's call: plain arguments, none of a builtin's own syntax. */
-  #storedCall(): Expression {
-    const cursor = this.#c
-    const name = cursor.take()
-    cursor.expectOp('(')
-    const args: Expression[] = []
-    if (!cursor.atOp(')')) {
-      do args.push(this.#binary(0))
-      while (cursor.takeOp(','))
-    }
-    cursor.expectOp(')')
-    return { kind: NODE.CALL, name: name.text, args, stored: true, at: name.start }
   }
 
   /**

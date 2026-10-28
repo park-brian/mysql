@@ -1,4 +1,9 @@
-import { LITERAL, NODE, type Expression, type LiteralNode } from '@myjs/parser'
+import { LITERAL, NODE, asciiWord, type CallNode, type Expression, type LiteralNode } from '@myjs/parser'
+
+/** Native-call lookup excludes collision syntax while retaining the raw name. */
+export function nativeCallName(e: Pick<CallNode, 'name' | 'stored'>): string {
+  return e.stored ? '' : asciiWord(e.name)
+}
 
 /** Read-only AST proofs: true matches, false prunes, undefined visits children. */
 export function someNode(e: unknown, check: (node: object) => boolean | undefined): boolean {

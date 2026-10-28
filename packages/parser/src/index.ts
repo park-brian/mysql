@@ -15,7 +15,7 @@ export { ParseError, parseError, unknownCharset, badMode, tooDeep, unsupportedSt
 export type { ParseCondition } from './errors.ts'
 export { DEFAULT_SQL_MODE, NO_SQL_MODE, RESERVED_SQL_MODE_BITS, SQL_MODE_BITS, formatSqlMode, parseSqlMode } from './sql-mode.ts'
 export type { SqlMode } from './sql-mode.ts'
-export { TOKEN, OPERATORS } from './tokens.ts'
+export { TOKEN, OPERATORS, asciiWord } from './tokens.ts'
 export type { Token, TokenKind } from './tokens.ts'
 export { decodeStatement, lex, lexBytes } from './lexer.ts'
 export { NODE, LITERAL } from './ast.ts'

@@ -201,3 +201,11 @@ test('D-40: a run of one operator is written flat, and `:=` is the exception', (
   expressionRoundTrips('@a := @b := 1')
   expressionRoundTrips('a OR b OR c AND d OR e')
 })
+
+
+test('deparsed collision calls retain their generic role across SQL modes', () => {
+  for (const mode of ['', 'IGNORE_SPACE', 'ANSI_QUOTES,IGNORE_SPACE']) {
+    for (const sql of ['`SUM`(1)', '`CURRENT_TIMESTAMP`(1)', '`EXTRACT`(1)', '`CHAR`(1)', '`SIN`(1)', 'ſUM(1)', 'ſIN(1)']) expressionRoundTrips(sql, mode)
+  }
+  for (const sql of ['SUM (1)', 'NOW ()', 'SUBSTRING (1,2)']) expressionRoundTrips(sql)
+})

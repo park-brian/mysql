@@ -33,7 +33,7 @@ import { CHARSET_BINARY, FIELD_TYPE, concatBytes } from '@myjs/bytes'
 import { encodeCollation, requireCollationInfo } from '@myjs/charsets'
 import type { TableDef } from '@myjs/engine'
 import { NODE, deparse, type CallNode, type Expression } from '@myjs/parser'
-import { someNode } from './ast.ts'
+import { nativeCallName, someNode } from './ast.ts'
 import { clusteredIndex, indexParts } from './indexes.ts'
 import { messages, sqlError } from '@myjs/protocol'
 import {
@@ -64,7 +64,7 @@ import { asJson } from './json.ts'
 import { decimalType, doubleType, floatLength, intType, jsonType, stringType, type ResultType } from './meta.ts'
 import type { SortKey } from './operators.ts'
 
-export const isAggregate = (e: Expression): boolean => e.kind === NODE.CALL && e.over === undefined && AGGREGATE_NAMES.has(e.name.toUpperCase())
+export const isAggregate = (e: Expression): boolean => e.kind === NODE.CALL && e.over === undefined && AGGREGATE_NAMES.has(nativeCallName(e))
 
 /** Whether `e` holds an aggregate of its own query — not one inside a subquery, which aggregates there. */
 export function containsAggregate(e: unknown): boolean {
@@ -223,7 +223,7 @@ export class AggregateSink {
 
   /** `overGroups`: a window's over a grouped query, whose argument may be the group's own aggregate. */
   #spec(e: CallNode, clause: string, overGroups = false): AggregateSpec {
-    const name = e.name.toUpperCase()
+    const name = nativeCallName(e)
     const ctx: CompileContext = { ...this.#rowCtx, clause, ...(overGroups ? {} : { inAggregate: true }) }
     const star = e.args.length === 1 && e.args[0]?.kind === NODE.COLUMN && e.args[0].parts.length === 1 && e.args[0].parts[0] === '*'
     if (star && name !== 'COUNT') throw sqlError('ER_PARSE_ERROR', messages.parseError('*', 1))

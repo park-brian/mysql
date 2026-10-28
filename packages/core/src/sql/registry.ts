@@ -90,12 +90,12 @@ export function unregistered(name: string): MyjsError {
 }
 
 /** Builtins MySQL has that this executor refuses by name, rather than as a function that does not exist. */
-export const NOT_YET: ReadonlySet<string> = new Set([
+export const NOT_YET: readonly string[] = [
   'UUID',
   // Without OVER these are MySQL's 1064; refused by name until the parser makes them that.
   'ROW_NUMBER',
   'RANK',
-])
+]
 
 /** Functions whose value can change between two evaluations in one statement: never folded to a constant. */
 export const VARIES_PER_EVALUATION: ReadonlySet<string> = new Set([

@@ -14,6 +14,7 @@
 // columns added, indexes and foreign keys added. One not here is refused by
 // name.
 import { requireSchema } from './scope.ts'
+import { nativeCallName } from './ast.ts'
 import { FIELD_TYPE, MyjsError, expectTyped } from '@myjs/bytes'
 import { sqlError, messages, type OkResult } from '@myjs/protocol'
 import type { ColumnDef, FieldBytes, IndexDef, TableDef } from '@myjs/engine'
@@ -492,7 +493,7 @@ function deprecated(run: Run, c: ColumnDefinition): number {
 function isConstantDefault(e: Expression): boolean {
   if (e.kind === NODE.LITERAL) return true
   if (e.kind === NODE.UNARY && (e.op === '-' || e.op === '+') && e.operand.kind === NODE.LITERAL) return true
-  return e.kind === NODE.CALL && ['CURRENT_TIMESTAMP', 'NOW', 'LOCALTIME', 'LOCALTIMESTAMP'].includes(e.name.toUpperCase()) && e.args.length <= 1
+  return e.kind === NODE.CALL && ['CURRENT_TIMESTAMP', 'NOW', 'LOCALTIME', 'LOCALTIMESTAMP'].includes(nativeCallName(e)) && e.args.length <= 1
 }
 
 /** A change InnoDB makes in place: a VARCHAR made longer in the same collation, or only NULL allowed. */

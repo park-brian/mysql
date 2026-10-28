@@ -17,7 +17,7 @@
 // (doc 30: a scan is not interleaved with writes to its own table), so a row
 // an UPDATE moves within the clustered order is never met twice.
 import { CHARSET_BINARY, FIELD_TYPE, MyjsError, equalBytes } from '@myjs/bytes'
-import { someNode } from './ast.ts'
+import { nativeCallName, someNode } from './ast.ts'
 import { CLIENT, hasCap, messages, sqlError, symbolOf, type OkResult } from '@myjs/protocol'
 import type { ColumnDef, FieldBytes, IndexDef, RowId, Table, TableDef, Trx } from '@myjs/engine'
 import { EngineError } from '@myjs/engine'
@@ -396,7 +396,7 @@ function selectReferences(run: Run, node: InsertNode): ColumnNode[] {
   const refs = new Map<string, ColumnNode>()
   someNode(node.onDuplicate, (x) => {
     const n = x as Expression
-    if (n.kind === NODE.SUBQUERY || (n.kind === NODE.CALL && n.name.toUpperCase() === 'VALUES')) return false
+    if (n.kind === NODE.SUBQUERY || (n.kind === NODE.CALL && nativeCallName(n) === 'VALUES')) return false
     if (n.kind === NODE.COLUMN) {
       refs.set(n.parts.join('.').toLowerCase(), n)
       return false

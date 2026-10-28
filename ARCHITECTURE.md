@@ -1617,7 +1617,12 @@ now require a selected database and report native error 1046 when absent. Thirte
 existing required-schema checks share that presence rule without changing their
 resolution phases or explicit-name handling. The 378-command capture protects
 48 repaired primary errors; diagnostic-count and precedence gaps remain open.
-Function-name identity is next, starting with Unicode SUM and spaced-call controls.
+Native function classification now shares an ASCII spelling key and the existing
+call-role flag. Quoted/spaced lexer names retain collision grammar, and Unicode
+lookalikes bypass native binding before argument effects. The 6,084-command
+capture improves 2,916 to 5,295 complete matches without losing protected facts;
+all 789 remaining outcomes stay recorded. Native table-expression admission is
+next, retaining generated/default/CHECK precedence and their existing owners.
 CAST/CONVERT targets leave internal COLLATE to the syntax boundary while column
 datatype readers retain it. Cursor string reading concatenates adjacent literals
 only when expression or ENUM/SET grammar requests it; ordinary callers consume

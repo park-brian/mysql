@@ -33,7 +33,7 @@
 //     NTILE or NTH_VALUE of a count below 1 (1210), a frame that ends before it
 //     starts (3586), RANGE n PRECEDING over anything but one numeric key (3587).
 import { FIELD_TYPE } from '@myjs/bytes'
-import { someNode } from './ast.ts'
+import { nativeCallName, someNode } from './ast.ts'
 import { NODE, type CallNode, type Expression, type FrameBound, type WindowSpec } from '@myjs/parser'
 import { messages, sqlError } from '@myjs/protocol'
 import { add, addInterval, compareValues, doubleValue, intValue, intervalOf, sortValues, timeOrdinal, toInteger, type Interval, type Value } from '@myjs/types'
@@ -97,7 +97,7 @@ export class WindowSink {
   }
 
   register(e: CallNode): Compiled {
-    const name = e.name.toUpperCase()
+    const name = nativeCallName(e)
     const spec = this.#spec(e.over as string | WindowSpec)
     const ctx = { ...this.#rowCtx, clause: 'window order by' }
     if (e.distinct === true) throw sqlError('ER_NOT_SUPPORTED_YET', "This version of MySQL doesn't yet support '<window function>(DISTINCT ..)'")

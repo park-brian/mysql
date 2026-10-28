@@ -279,3 +279,20 @@ test('M3.15: a reserved word ends an expression, unless it names a function', ()
   assert.deepEqual(parseExpression('t.select'), { kind: NODE.COLUMN, parts: ['t', 'select'], at: 0 })
   assert.deepEqual(parseExpression('`select`'), { kind: NODE.COLUMN, parts: ['select'], at: 0 })
 })
+
+
+test('function grammar separates spelling, quoting and aggregate modifiers', () => {
+  for (const mode of ['', 'IGNORE_SPACE', 'ANSI_QUOTES,IGNORE_SPACE']) {
+    const options = { sqlMode: parseSqlMode(mode) }
+    for (const [sql, stored] of [['`SUM`(1)', true], ['`SIN`(1)', undefined], ['ſUM(1)', undefined], ['sum(1)', undefined], ['SUM (1)', mode === '' ? true : undefined]] as const) {
+      const node = parseExpression(sql, options)
+      assert.equal(node.kind, NODE.CALL, sql)
+      if (node.kind !== NODE.CALL) throw new Error('expected call')
+      assert.equal(node.stored, stored, sql + ' [' + mode + ']')
+      assert.equal(node.name, sql.split('(')[0]!.trim().replaceAll('`', ''), sql)
+    }
+    for (const sql of ['ſUM(DISTINCT 1)', 'ſUM(ALL 1)', '`SUM`(ALL 1)', 'SIN(DISTINCT 1)', 'ſUM(1) OVER()', '`SUM`(1) OVER()']) {
+      assert.throws(() => parseExpression(sql, options), ParseError, sql + ' [' + mode + ']')
+    }
+  }
+})

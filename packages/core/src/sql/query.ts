@@ -10,7 +10,7 @@
 // name as written, else the expression's own source text — `SELECT 1+1`
 // returns a column called `1+1`, spaces and all, which only the text has.
 import type { ColumnDef, IndexDef, Table, TableDef, ViewDef } from '@myjs/engine'
-import { LITERAL, NODE, QUERY, REF, TOKEN, deparse, lex, parseStatement, type Expression, type OrderItem, type QueryBody, type QueryExpression, type SelectNode, type TableReference, type SetOperationNode, type TableName, type Token } from '@myjs/parser'
+import { LITERAL, NODE, QUERY, REF, TOKEN, deparse, lex, parseStatement, type CallNode, type Expression, type OrderItem, type QueryBody, type QueryExpression, type SelectNode, type TableReference, type SetOperationNode, type TableName, type Token } from '@myjs/parser'
 import { messages, sqlError, type ColumnDefinition, type ResultSet, type RowValue } from '@myjs/protocol'
 import { MAX_UNSIGNED, MIN_SIGNED, intValue, storageWidth, toInteger, truth, withoutHex, type Value } from '@myjs/types'
 import { compile, constantNode, memoValue, logicalOperand, convertTo, decimalField, EMPTY_SCOPE, readSlot, type CompileContext, type Compiled, type Env, type GroupKeys, type QuantifiedSubquery, type Scope, type SubqueryPlan } from './compile.ts'
@@ -20,7 +20,7 @@ import { CHARSET_UTF8MB4_BIN, EMPTY_NAMES, columnDefinition, intType, type Resul
 import { FIELD_TYPE, expectTyped } from '@myjs/bytes'
 import { distinct, filter, limit, project, sort, type SortKey } from './operators.ts'
 import { isConstant, optimizerEnabled, splitAnd, tableColumn } from './plan.ts'
-import { and, columnRefs, integerLiteral, someNode } from './ast.ts'
+import { and, columnRefs, integerLiteral, nativeCallName, someNode } from './ast.ts'
 import { clusteredIndex, indexParts } from './indexes.ts'
 import { collationInfoByName, encodeCollation } from '@myjs/charsets'
 import { requireSchema, safeResolve, TableScope } from './scope.ts'
@@ -615,7 +615,7 @@ function pushCountCondition(run: Run, node: SelectNode): SelectNode {
   const query = ref.query
   const body = query.body
   if (query.with !== undefined || query.limit !== undefined || query.orderBy !== undefined || query.locking !== undefined || body.kind !== QUERY.SELECT || body.groupBy === undefined || body.groupBy.rollup === true || body.having !== undefined || body.windows !== undefined || body.distinct === true || (body.options?.length ?? 0) > 0) return node
-  const count = (e: Expression): boolean => e.kind === NODE.CALL && e.name.toUpperCase() === 'COUNT' && e.over === undefined && e.stored !== true && e.args.length === 1 && e.args[0]?.kind === NODE.COLUMN
+  const count = (e: Expression): boolean => e.kind === NODE.CALL && nativeCallName(e) === 'COUNT' && e.over === undefined && e.args.length === 1 && e.args[0]?.kind === NODE.COLUMN
   // Columns and COUNT of a column or star cannot assign variables or evaluate volatile expressions.
   if (!body.items.every((i) => i.expr.kind === NODE.COLUMN || count(i.expr)) || !body.groupBy.items.every((e) => e.kind === NODE.COLUMN || integerLiteral(e))) return node
   const name = parts[parts.length - 1]?.toLowerCase()
@@ -1034,7 +1034,7 @@ function selectNumber(run: Run, q: QueryExpression): number {
 
 /** `IS NOT NULL` of an aggregate that is never NULL — COUNT and the BIT_ aggregates — which the server folds to TRUE and drops (8.4.11: no Filter). */
 function neverNullTest(e: Expression): boolean {
-  return e.kind === NODE.UNARY && e.op === 'IS NOT NULL' && e.operand.kind === NODE.CALL && ['COUNT', 'BIT_AND', 'BIT_OR', 'BIT_XOR'].includes(e.operand.name.toUpperCase())
+  return e.kind === NODE.UNARY && e.op === 'IS NOT NULL' && e.operand.kind === NODE.CALL && ['COUNT', 'BIT_AND', 'BIT_OR', 'BIT_XOR'].includes(nativeCallName(e.operand))
 }
 
 /** Whether the WHERE equals a single-column PRIMARY or NOT NULL UNIQUE key to an uncorrelated scalar subquery. */
@@ -1278,7 +1278,7 @@ function columnsRead(scope: TableScope, node: SelectNode, q: QueryExpression): M
       return false
     }
     // COUNT(*) counts rows and reads no column.
-    if (n.kind === NODE.CALL && String((n as { name?: unknown }).name).toUpperCase() === 'COUNT') {
+    if (n.kind === NODE.CALL && nativeCallName(n as CallNode) === 'COUNT') {
       const args = (n as { args?: readonly Expression[] }).args ?? []
       if (args.length === 1 && args[0]?.kind === NODE.COLUMN && args[0].parts.length === 1 && args[0].parts[0] === '*') return false
     }
@@ -1753,9 +1753,9 @@ function expressionIdentity(e: Expression | undefined, ctx: CompileContext, env:
     case NODE.COLLATE:
       identity = [e.kind, collationInfoByName(e.collation)?.id]; args = [e.expr]; break
     case NODE.CALL: {
-      const name = e.name.toUpperCase()
+      const name = nativeCallName(e)
       const allowed = name === 'ABS' || name === 'CONCAT' || (mode === 'admission' && (name === 'RAND' || name === 'LAST_INSERT_ID'))
-      if (!allowed || e.stored === true || e.over !== undefined || e.distinct === true) return undefined
+      if (!allowed || e.over !== undefined || e.distinct === true) return undefined
       identity = [e.kind, name]; args = e.args; break
     }
     default: return undefined
@@ -2211,7 +2211,7 @@ function needsSortedGroups(e: unknown): boolean {
     const n = node as { kind?: string; distinct?: boolean; name?: string }
     if (n.kind === NODE.SUBQUERY) return false
     if (isAggregate(n as Expression)) {
-      const name = (n.name as string).toUpperCase()
+      const name = nativeCallName(n as CallNode)
       // JSON aggregates sort their groups as GROUP_CONCAT does (M5.21).
       if (name === 'GROUP_CONCAT' || name === 'JSON_ARRAYAGG' || name === 'JSON_OBJECTAGG' || (n.distinct === true && name !== 'MIN' && name !== 'MAX')) return true
     }
@@ -2377,7 +2377,7 @@ function checkFullGroupBy(
     someNode(root, (value) => {
       const e = value as Expression
       if (e.kind === undefined || keyTexts.has(deparse(e))) return false
-      if (e.kind === NODE.CALL && (isAggregate(e) || e.name.toUpperCase() === 'ANY_VALUE')) return false
+      if (e.kind === NODE.CALL && (isAggregate(e) || nativeCallName(e) === 'ANY_VALUE')) return false
       if (e.kind === NODE.SUBQUERY) return false
       if (e.kind === NODE.COLUMN) {
         const at = safeIndex(lookup, e.parts)

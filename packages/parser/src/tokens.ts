@@ -62,10 +62,14 @@ export interface Token {
   readonly index?: number
 }
 
+/** ASCII lookup spelling, or empty when Unicode text cannot name a builtin. */
+export function asciiWord(text: string): string {
+  return /[^\x00-\x7f]/.test(text) ? '' : text.toUpperCase()
+}
+
 /** Unquoted ASCII keyword spelling, or empty for tokens ineligible as keywords. */
 export function keywordText(token: Token): string {
-  if (token.kind !== TOKEN.IDENTIFIER || token.quoted === true || /[^\x00-\x7f]/.test(token.text)) return ''
-  return token.text.toUpperCase()
+  return token.kind === TOKEN.IDENTIFIER && !token.quoted ? asciiWord(token.text) : ''
 }
 
 /**

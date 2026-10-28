@@ -134,7 +134,7 @@ export interface CallNode {
   readonly using?: string
   /** `RANK() OVER w` names a window; `OVER (…)` defines one inline. */
   readonly over?: string | WindowSpec
-  /** A stored function's call: a builtin's name with a space before its `(`, IGNORE_SPACE off (M5.33). */
+  /** Generic syntax for a lexer-function name: quoted, or spaced with IGNORE_SPACE off. */
   readonly stored?: true
   readonly at: number
 }

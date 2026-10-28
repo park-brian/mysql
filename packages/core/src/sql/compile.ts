@@ -13,7 +13,7 @@
 // have not written is ER_NOT_SUPPORTED_YET naming it (M5.10 owns the rest).
 import { requireSchema } from './scope.ts'
 import { CHARSET_BINARY, COLUMN_FLAG, FIELD_TYPE, expectTyped, equalBytes } from '@myjs/bytes'
-import { someNode } from './ast.ts'
+import { nativeCallName, someNode } from './ast.ts'
 import { resolveCollation } from './collation.ts'
 import { decodeCollation, defaultCollationOf, encodeCollation, requireCollationInfo } from '@myjs/charsets'
 import { LITERAL, NODE, TOKEN, deparse, lex, parseExpression, type CallNode, type CaseNode, type CastNode, type ConvertNode, type Expression, type LiteralNode, type MatchNode, type QueryExpression, type SubqueryNode, type VariableNode, quoteName } from '@myjs/parser'
@@ -1494,7 +1494,7 @@ export function constantNode(e: unknown, parameters = true, rowInputs = false): 
     const n = value as { kind?: unknown; name?: unknown; over?: unknown }
     if ((!rowInputs && n.kind === NODE.COLUMN) || n.kind === NODE.SUBQUERY || n.kind === NODE.VARIABLE || (!parameters && n.kind === NODE.PLACEHOLDER)) return true
     if (n.kind === NODE.CALL) {
-      const name = String(n.name).toUpperCase()
+      const name = nativeCallName(n as CallNode)
       if (n.over !== undefined || VARIES_PER_EVALUATION.has(name) || (!rowInputs && (AGGREGATE_NAMES.has(name) || name === 'GROUPING'))) return true
     }
     return undefined
@@ -2417,32 +2417,34 @@ function outerOnly(args: readonly Expression[], ctx: CompileContext): boolean {
 }
 
 function call(e: CallNode, ctx: CompileContext): Compiled {
-  const name = e.name.toUpperCase()
-  // `NOW ()` with IGNORE_SPACE off names a stored function, which this
-  // executor has none of (8.4.11's wording, M5.33).
-  if (e.stored === true) throw sqlError('ER_FUNC_INEXISTENT_NAME_COLLISION', `FUNCTION ${requireSchema(ctx.session.database)}.${e.name} does not exist. Check the 'Function Name Parsing and Resolution' section in the Reference Manual`)
-  if (e.over !== undefined) {
-    if (ctx.windows !== undefined) return ctx.windows.register(e)
-    if (/^(where|having|on) clause$/.test(ctx.clause)) windowNotAllowed(e)
-    throw sqlError('ER_NOT_SUPPORTED_YET', messages.notSupported('Window functions here'))
+  // Ineligible names bypass native binding, including argument compilation.
+  const name = nativeCallName(e)
+  if (name !== '') {
+    if (e.over !== undefined) {
+      if (ctx.windows !== undefined) return ctx.windows.register(e)
+      if (/^(where|having|on) clause$/.test(ctx.clause)) windowNotAllowed(e)
+      throw sqlError('ER_NOT_SUPPORTED_YET', messages.notSupported('Window functions here'))
+    }
+    if (AGGREGATE_NAMES.has(name)) {
+      // An aggregate of an enclosing query's columns alone is that query's, and
+      // makes it aggregate (8.4.11: `SELECT (SELECT COUNT(t1.x) FROM t2) FROM
+      // t1` is one row). Refused by name until the outer query can take it.
+      if (outerOnly(e.args, ctx)) throw sqlError('ER_NOT_SUPPORTED_YET', messages.notSupported("An aggregate of an enclosing query's columns"))
+      if (ctx.aggregates === undefined || ctx.inAggregate === true) throw sqlError('ER_INVALID_GROUP_FUNC_USE', 'Invalid use of group function')
+      return ctx.aggregates.register(e, ctx)
+    }
+    if (name === 'GROUPING') {
+      if (ctx.groupKeys === undefined || ctx.inAggregate === true) throw sqlError('ER_INVALID_GROUP_FUNC_USE', 'Invalid use of group function')
+      return ctx.groupKeys.grouping(e.args, ctx)
+    }
+    if (name === 'DEFAULT' && e.args.length === 1) return defaultFunction(e, ctx)
+    const compiler = functionCompiler(name)
+    if (compiler !== undefined) return compiler(name, e, ctx)
+    if (NOT_YET.includes(name)) throw sqlError('ER_NOT_SUPPORTED_YET', messages.notSupported(`The function ${name}`))
   }
-  if (AGGREGATE_NAMES.has(name)) {
-    // An aggregate of an enclosing query's columns alone is that query's, and
-    // makes it aggregate (8.4.11: `SELECT (SELECT COUNT(t1.x) FROM t2) FROM
-    // t1` is one row). Refused by name until the outer query can take it.
-    if (outerOnly(e.args, ctx)) throw sqlError('ER_NOT_SUPPORTED_YET', messages.notSupported("An aggregate of an enclosing query's columns"))
-    if (ctx.aggregates === undefined || ctx.inAggregate === true) throw sqlError('ER_INVALID_GROUP_FUNC_USE', 'Invalid use of group function')
-    return ctx.aggregates.register(e, ctx)
-  }
-  if (name === 'GROUPING') {
-    if (ctx.groupKeys === undefined || ctx.inAggregate === true) throw sqlError('ER_INVALID_GROUP_FUNC_USE', 'Invalid use of group function')
-    return ctx.groupKeys.grouping(e.args, ctx)
-  }
-  if (name === 'DEFAULT' && e.args.length === 1) return defaultFunction(e, ctx)
-  const compiler = functionCompiler(name)
-  if (compiler !== undefined) return compiler(name, e, ctx)
-  if (NOT_YET.has(name)) throw sqlError('ER_NOT_SUPPORTED_YET', messages.notSupported(`The function ${name}`))
-  throw sqlError('ER_SP_DOES_NOT_EXIST', `FUNCTION ${requireSchema(ctx.session.database)}.${e.name} does not exist`)
+  const collision = e.stored
+  const message = messages.objectMissing('FUNCTION', `${requireSchema(ctx.session.database)}.${e.name}`)
+  throw sqlError(collision ? 'ER_FUNC_INEXISTENT_NAME_COLLISION' : 'ER_SP_DOES_NOT_EXIST', message + (collision ? ". Check the 'Function Name Parsing and Resolution' section in the Reference Manual" : ''))
 }
 
 const FLT_MAX = 3.4028234663852886e38

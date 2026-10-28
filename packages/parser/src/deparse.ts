@@ -25,6 +25,7 @@ import { hex } from '@myjs/bytes'
 import { NODE, LITERAL, type CallNode, type Expression, type LiteralNode } from './ast.ts'
 import type { DataType } from './data-type.ts'
 import { RESERVED } from './keywords.ts'
+import { asciiWord } from './tokens.ts'
 import { NO_SQL_MODE, type SqlMode } from './sql-mode.ts'
 import {
   QUERY,
@@ -248,7 +249,7 @@ class Deparser {
   call(e: CallNode): string {
     const args = e.args.map((a) => this.expr(a))
     let body: string
-    switch (e.name.toUpperCase()) {
+    switch (e.stored ? '' : asciiWord(e.name)) {
       case 'EXTRACT':
         body = `${args[0]} FROM ${args[1]}`
         break
@@ -279,7 +280,7 @@ class Deparser {
     if (e.separator !== undefined) body += ` SEPARATOR ${this.string(e.separator)}`
     if (e.using !== undefined) body += ` USING ${quoteName(e.using)}`
     const over = e.over === undefined ? '' : ` OVER ${typeof e.over === 'string' ? quoteName(e.over) : `(${this.windowSpec(e.over)})`}`
-    return `${e.name}(${body})${over}`
+    return `${e.stored ? quoteName(e.name) : e.name}(${body})${over}`
   }
 
   binary(op: string, left: Expression, right: Expression, extra: Expression | readonly Expression[] | undefined): string {
@@ -1123,7 +1124,7 @@ class Deparser {
     if (e.kind === NODE.LITERAL) return this.literal(e)
     // A signed number stays bare: parenthesised, it would be an expression default.
     if (e.kind === NODE.UNARY && (e.op === '-' || e.op === '+') && e.operand.kind === NODE.LITERAL) return `${e.op}${this.literal(e.operand)}`
-    if (e.kind === NODE.CALL && DEFAULT_FUNCTIONS.has(e.name.toUpperCase())) return this.expr(e)
+    if (e.kind === NODE.CALL && DEFAULT_FUNCTIONS.has(asciiWord(e.name))) return this.expr(e)
     return `(${this.expr(e)})`
   }
 
