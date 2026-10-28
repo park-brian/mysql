@@ -12,6 +12,7 @@ import assert from 'node:assert/strict'
 import { FIELD_TYPE } from '@myjs/bytes'
 import {
   KEY,
+  NODE,
   ParseError,
   STATEMENT,
   parseSqlMode,
@@ -306,4 +307,51 @@ test('M3.5: a second statement is refused rather than ignored', () => {
   // dropping the rest would be the same hole with a quieter failure mode.
   assert.equal(drop('DROP TABLE t;').names.length, 1)
   assert.throws(() => parseStatement('DROP TABLE t; DROP TABLE u'), ParseError)
+})
+
+// 8.4.11: the special DEFAULT/ON UPDATE clock production uses NUM, not an expression.
+test('M5.10: column clock precision refusals are typed and retain their token offsets', () => {
+  for (const mode of ['', 'IGNORE_SPACE', 'ANSI_QUOTES,IGNORE_SPACE']) {
+    for (const name of ['CURRENT_TIMESTAMP', 'NOW', 'LOCALTIME', 'LOCALTIMESTAMP']) {
+      for (const clause of ['DEFAULT', 'ON UPDATE']) {
+        for (const value of ['1.5', '7e0', '?', '2147483648', '4294967295']) {
+          const sql = `CREATE TABLE u(v DATETIME ${clause} ${name}(${value}))`
+          assert.throws(() => create(sql, mode), (error: unknown) => {
+            assert.ok(error instanceof ParseError, sql)
+            assert.equal(error.errno, 1064, sql)
+            assert.equal(error.sqlState, '42000', sql)
+            assert.equal(error.offset, sql.indexOf(value), sql)
+            return true
+          })
+        }
+      }
+    }
+    for (const name of ['NOW', 'CURRENT_DATE', 'CURRENT_TIME', 'UTC_TIMESTAMP']) {
+      for (const clause of ['DEFAULT', 'ON UPDATE']) {
+        const sql = `CREATE TABLE u(v DATETIME ${clause} ${name})`
+        assert.throws(() => create(sql, mode), (error: unknown) => {
+          assert.ok(error instanceof ParseError, sql)
+          assert.equal(error.errno, 1064, sql)
+          assert.equal(error.offset, sql.indexOf(name), sql)
+          return true
+        })
+      }
+    }
+  }
+})
+
+test('M5.10: column clock syntax preserves written names, integer ASTs and later precision validation', () => {
+  for (const name of ['current_timestamp', 'now', 'localtime', 'localtimestamp']) {
+    for (const clause of ['DEFAULT', 'ON UPDATE']) {
+      for (const value of ['0', '6', '7', '2147483647']) {
+        const sql = `CREATE TABLE u(v DATETIME ${clause} ${name}(${value}))`
+        const column = create(sql).columns[0]!
+        const call = clause === 'DEFAULT' ? column.default : column.onUpdate
+        assert.equal(call?.kind, NODE.CALL, sql)
+        if (call?.kind !== NODE.CALL) continue
+        assert.equal(call.name, name, sql)
+        assert.deepEqual(call.args, [{ kind: NODE.LITERAL, type: 'int', value: BigInt(value), at: sql.indexOf(value) }], sql)
+      }
+    }
+  }
 })

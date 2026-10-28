@@ -30,7 +30,7 @@
 //   - `RESET MASTER`, `RESET SLAVE`, `FLUSH HOSTS` and `RESET QUERY CACHE` are
 //     gone from 8.4: refused as syntax errors, which is what 8.4.11 answers.
 import { LITERAL, NODE, type ColumnNode, type LiteralNode } from './ast.ts'
-import { flag, opt, wordOrString, type Cursor } from './cursor.ts'
+import { flag, opt, wordOrString, type Cursor, unsignedValue } from './cursor.ts'
 import { hexBytes } from './data-type.ts'
 import { assignments, column } from './dml.ts'
 import { charsetName } from './utility.ts'
@@ -76,7 +76,7 @@ import type { SqlMode } from './sql-mode.ts'
 /** An unsigned integer literal, as written: `10`, and where the grammar allows it, `0x1`. */
 function unsigned(c: Cursor, hex = false): string {
   const t = c.peek()
-  if (t.kind === TOKEN.NUMBER && /^\d+$/.test(t.text)) return c.take().text
+  if (t.kind === TOKEN.NUMBER) return unsignedValue(c)
   if (hex && t.kind === TOKEN.HEX) return `0x${c.take().text}`
   c.fail()
 }
@@ -454,7 +454,7 @@ export function parseLoad(c: Cursor, mode: SqlMode): LoadDataNode {
     c.expectOp('=')
     // `100`, or a size the lexer reads as one identifier: `100M`, `1G`.
     const t = c.peek()
-    if (t.kind === TOKEN.NUMBER && /^\d+$/.test(t.text)) memory = c.take().text
+    if (t.kind === TOKEN.NUMBER) memory = unsignedValue(c)
     else memory = c.expectIdentifier()
   }
   let algorithm: 'BULK' | undefined

@@ -36,7 +36,7 @@
 //     `LONG VARBINARY`, `NATIONAL CHAR`), so the table cannot be a single-token
 //     lookup.
 import { FIELD_TYPE, type FieldTypeCode } from '@myjs/bytes'
-import { flag, opt, type Cursor } from './cursor.ts'
+import { flag, opt, type Cursor, unsignedValue } from './cursor.ts'
 import { BINARY_DEPRECATION, NATIONAL_DEPRECATION } from './errors.ts'
 import { charsetName, collationName } from './names.ts'
 import { TOKEN, keywordText } from './tokens.ts'
@@ -428,10 +428,7 @@ function numberList(c: Cursor, max: number): number[] {
   if (!c.takeOp('(')) return []
   const out: number[] = []
   do {
-    const t = c.peek()
-    if (t.kind !== TOKEN.NUMBER || !/^\d+$/.test(t.text)) c.fail()
-    c.skip()
-    out.push(Number(t.text))
+    out.push(Number(unsignedValue(c)))
   } while (c.takeOp(','))
   c.expectOp(')')
   if (out.length > max) c.fail()

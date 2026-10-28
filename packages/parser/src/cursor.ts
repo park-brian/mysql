@@ -274,6 +274,14 @@ export class Cursor {
   }
 }
 
+/** Decimal-digit NUMBER spelling; callers own the grammar bound and its later meaning. */
+export function unsignedValue(c: Cursor, max?: number): string {
+  const t = c.peek()
+  if (t.kind !== TOKEN.NUMBER || !/^\d+$/.test(t.text) || (max !== undefined && Number(t.text) > max)) c.fail()
+  c.at++ // The validated NUMBER is not EOF; consume the token already read.
+  return t.text
+}
+
 /** One string token or any identifier, including a reserved word. */
 export function wordOrString(c: Cursor): string {
   const t = c.peek()

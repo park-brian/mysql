@@ -7,8 +7,8 @@
 // `RANGE` and a `KEY ()` with no primary key are all refused only after
 // parsing, with errors of their own.
 import { NODE, type Expression } from './ast.ts'
-import { opt, type Cursor } from './cursor.ts'
-import { nameOrString, ulongValue, type DdlOptions } from './ddl.ts'
+import { opt, type Cursor, unsignedValue } from './cursor.ts'
+import { nameOrString, type DdlOptions } from './ddl.ts'
 import { parseExpressionFrom } from './expression.ts'
 import type { PartitionDefinition, PartitionMethod, Partitioning } from './statement-ast.ts'
 import { TOKEN } from './tokens.ts'
@@ -55,7 +55,7 @@ function partitionMethod(c: Cursor, options: DdlOptions, countWord: string, top:
   } else {
     return c.fail()
   }
-  if (c.takeWord(countWord)) out = { ...out, count: Number(ulongValue(c, 0xffffffff)) }
+  if (c.takeWord(countWord)) out = { ...out, count: Number(unsignedValue(c, 0xffffffff)) }
   return linear ? { linear, ...out } : out
 }
 

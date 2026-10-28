@@ -23,7 +23,7 @@
 //     CROSS JOIN t3 ON t1.b < t1.a` with rows, where a tree that kept `t1` out
 //     of the `ON`'s reach says ER_BAD_FIELD_ERROR.
 import { duplicateTable, unsupportedStatement } from './errors.ts'
-import { flag, opt, wordOrString, type Cursor } from './cursor.ts'
+import { flag, opt, wordOrString, type Cursor, unsignedValue } from './cursor.ts'
 import { TOKEN, keywordText } from './tokens.ts'
 import { NODE, type Expression } from './ast.ts'
 import { parseExpressionFrom } from './expression.ts'
@@ -754,10 +754,7 @@ function hangCrossJoin(ref: TableReference, make: (leaf: TableReference) => Tabl
  */
 export function parseLimitValue(c: Cursor): Expression {
   const t = c.peek()
-  if (t.kind === TOKEN.NUMBER && /^\d+$/.test(t.text)) {
-    c.skip()
-    return { kind: NODE.LITERAL, type: 'int', value: BigInt(t.text), at: t.start }
-  }
+  if (t.kind === TOKEN.NUMBER) return { kind: NODE.LITERAL, type: 'int', value: BigInt(unsignedValue(c)), at: t.start }
   if (t.kind === TOKEN.PLACEHOLDER) {
     c.skip()
     return { kind: NODE.PLACEHOLDER, index: t.index ?? 0, at: t.start }

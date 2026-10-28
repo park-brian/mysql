@@ -19,7 +19,7 @@
 //     are syntax errors, while a repeated characteristic is not.
 import { NODE, type Expression, type KeywordNode } from './ast.ts'
 import { systemVariableParts } from './variable.ts'
-import { flag, opt, type Cursor } from './cursor.ts'
+import { flag, opt, type Cursor, unsignedValue } from './cursor.ts'
 import { parseSetDefaultRole, parseSetPassword, parseSetRole } from './admin.ts'
 import { parseUser } from './ddl.ts'
 import { parseDelete, parseInsert, parseUpdate } from './dml.ts'
@@ -416,7 +416,7 @@ export function parseExplain(c: Cursor, mode: SqlMode): ExplainNode | DescribeNo
       ...flag('analyze', analyze),
       ...opt('format', format),
       ...opt('into', into),
-      connection: unsignedInteger(c),
+      connection: BigInt(unsignedValue(c)),
       at,
     }
   }
@@ -441,16 +441,8 @@ function describe(c: Cursor, at: number): DescribeNode {
   const table = c.expectTableName()
   const t = c.peek()
   let column: string | undefined
-  if (t.kind === TOKEN.STRING) column = c.take().text
-  else if (c.atIdentifier()) column = c.take().text
+  if (t.kind === TOKEN.STRING || c.atIdentifier()) column = c.take().text
   return { kind: STATEMENT.DESCRIBE, table, ...opt('column', column), at }
-}
-
-function unsignedInteger(c: Cursor): bigint {
-  const t = c.peek()
-  if (t.kind !== TOKEN.NUMBER || !/^\d+$/.test(t.text)) c.fail()
-  c.skip()
-  return BigInt(t.text)
 }
 
 // --- SHOW ----------------------------------------------------------------------

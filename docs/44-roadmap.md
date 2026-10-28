@@ -731,14 +731,47 @@ all 37 shared passes. Frozen-source proof covers 459 test files/fixtures, 206
 runtime sources and reference tooling before cleanup. The prior 9f485dd passed all
 eleven required CI jobs. M5.10 remains partial.
 
-**Next bounded slice:** establish fractional-clock argument grammar at uint32,
-arity and token boundaries for all native clock spellings, then repair the bounded
-native-call reader under unchanged caps. Preserve generic quoted/spaced collision
-roles, valid ASTs, canonical labels and each source's precision-error precedence.
-Any parser change requires native replay, parser-contract preservation and seeded
-parser fuzzing. Then repair remaining precision validation/timing and RANDOM_BYTES
-evaluation before retrying CHECK permissions. Continue bounded function work
-before M5.47, M5.49, M5.50 and browser work.
+**Bare DDL clock grammar, verified (2026-10-28):** DEFAULT/ON UPDATE now admit
+only their four timestamp aliases, require NOW parentheses and validate one optional
+unsigned decimal NUM token before BigInt conversion. The syntax bound is
+2,147,483,647; precision 0..6 and storage validation remain later. Malformed
+precision produces typed SQL errors rather than JavaScript SyntaxError. The
+shared token reader preserves written spelling and caller-owned limits,
+conversions, AST construction and refusal offsets. Unbounded callers do not coerce
+the token numerically; administrative hex, LIMIT placeholders and identifiers
+retain their existing alternatives. Public root exports are unchanged.
+Three independent pinned captures retain 1,800 commands and strengthen 164 to 720
+complete agreements. Available baseline frames lose no matching component, primary
+attribute, condition, field, PREPARE count or effect. For decimal/exponent cases
+where the baseline parser threw before producing SQL frames, that actual untyped
+failure is recorded explicitly; no baseline packet or effect is synthesized.
+All native answers reconstruct exactly independently of guard selection. Twenty-four
+captures enforce 35,112/43,436 complete commands, retain 8,324 open outcomes and
+protect 169,950 conditions. All older admission fixtures remain unchanged.
+All 200 focused tests and all 1,800 permanent native replays pass. Public parser
+regressions pin typed errors, offsets, written names, integer ASTs and later range
+validation; the actual 69176a2 parser fails them. Across 268,254 parser contracts,
+every still-admitted AST is byte-identical and no new input is admitted. The 630
+changes cover exactly 90 native-confirmed syntax refusals: 462 new refusals,
+140 untyped-to-typed repairs and 28 corrected error locations. All changed public
+error tuples match every captured native mode/API. Another 3,388 integer-reader
+contracts preserve ASTs, errors and offsets across all migrated callers.
+Fresh Docker --reference passes 1,503 main tests, four latency tests, typecheck,
+lint, all nine unchanged caps, package/typed smoke, the real client and all seven
+pinned corpora. One million parser inputs and 20,000 executor statements seeded
+20261010 pass. Repeated actual census and the entire official fixture remain
+byte-identical at 17,530/17,589 and all 37 shared passes. Frozen-source proof covers
+462 test files/fixtures, 206 runtime sources and reference tooling before cleanup.
+Core/facade/parser measure 334,292/334,199/45,593 B gzipped; raw core/parser output
+is 389/399 B below 69176a2, whose eleven required CI jobs passed. M5.10 stays partial.
+
+**Next bounded slice:** repair the independently captured ordinary fractional-clock
+argument grammar under existing caps. Its 2,376 native observations and an unshipped
+prototype remain research evidence; the larger combined trial was withheld for
+exceeding the parser cap. Preserve quoted/spaced generic-call roles, OVER fields,
+valid ASTs and each source's precision-error precedence. Remaining precision timing
+and RANDOM_BYTES evaluation still precede CHECK permission repairs; continue
+bounded function work before M5.47, M5.49, M5.50 and browser work.
 
 Keep function, keyword and value namespaces distinct. Charset-value validation,
 separate event behavior, valid-AST warnings/limits, later binding failures,

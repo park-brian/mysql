@@ -16,7 +16,7 @@
 //                       5.0, so `NOT a = b` regroups from `NOT (a = b)` to
 //                       `(NOT a) = b`.
 import { systemVariableParts } from './variable.ts'
-import { Cursor, flag, opt } from './cursor.ts'
+import { Cursor, flag, opt, unsignedValue } from './cursor.ts'
 import { RESERVED } from './keywords.ts'
 import { TOKEN, asciiWord, keywordText } from './tokens.ts'
 import { NODE, LITERAL, type Expression, type LiteralType } from './ast.ts'
@@ -813,9 +813,7 @@ class ExpressionParser {
           args.push({ kind: NODE.KEYWORD, word: k.text.toUpperCase(), at: k.start })
           cursor.expectOp('(')
           const n = cursor.peek()
-          if (n.kind !== TOKEN.NUMBER || !/^\d+$/.test(n.text)) cursor.fail()
-          cursor.skip()
-          args.push({ kind: NODE.LITERAL, type: LITERAL.INT, value: BigInt(n.text), at: n.start })
+          args.push({ kind: NODE.LITERAL, type: LITERAL.INT, value: BigInt(unsignedValue(cursor)), at: n.start })
           cursor.expectOp(')')
         }
         while (cursor.takeOp(',')) args.push(this.#binary(0))

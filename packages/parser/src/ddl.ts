@@ -15,7 +15,7 @@
 // clause this parser does not know is a parse error rather than something
 // skipped, because skipping is how a `CREATE TABLE` silently loses a
 // `CHARACTER SET` and produces a table that stores different bytes.
-import { flag, opt, wordOrString, type Cursor } from './cursor.ts'
+import { flag, opt, wordOrString, type Cursor, unsignedValue } from './cursor.ts'
 import { charsetName, collationName } from './names.ts'
 import { TOKEN, keywordText } from './tokens.ts'
 import { NODE, type Expression } from './ast.ts'
@@ -643,22 +643,20 @@ export function defaultExpression(c: Cursor, options: DdlOptions, now = true): E
 }
 
 /**
- * `CURRENT_TIMESTAMP`, `NOW()`, `LOCALTIME` and friends — a function that may
- * be written without parentheses, optionally with an fsp argument — or
- * `undefined` with nothing consumed. The only thing `ON UPDATE` accepts.
+ * The four column-clock aliases, with optional NUM precision; NOW requires
+ * parentheses. Other names return undefined without consuming a token.
+ * The only function production a bare DEFAULT or ON UPDATE accepts.
  */
 function nowFunction(c: Cursor): Expression | undefined {
   const t = c.peek()
   const word = keywordText(t)
-  if (!['CURRENT_TIMESTAMP', 'NOW', 'LOCALTIME', 'LOCALTIMESTAMP', 'CURRENT_DATE', 'CURRENT_TIME', 'UTC_TIMESTAMP'].includes(word)) return undefined
+  if (!['CURRENT_TIMESTAMP', 'NOW', 'LOCALTIME', 'LOCALTIMESTAMP'].includes(word) || (word === 'NOW' && !c.atOp('(', 1))) return undefined
   c.skip()
   const args: Expression[] = []
   if (c.takeOp('(')) {
     if (!c.atOp(')')) {
-      const n = c.peek()
-      if (n.kind !== TOKEN.NUMBER) c.fail()
-      c.skip()
-      args.push({ kind: NODE.LITERAL, type: 'int', value: BigInt(n.text), at: n.start })
+      const token = c.peek()
+      args.push({ kind: NODE.LITERAL, type: 'int', value: BigInt(unsignedValue(c, 0x7fffffff)), at: token.start })
     }
     c.expectOp(')')
   }
@@ -852,7 +850,7 @@ export function tableOption(c: Cursor, out: Record<string, string>): boolean {
   c.takeOp('=')
   const max = ULONG_OPTIONS[word]
   if (max !== undefined) {
-    out[word] = ulongValue(c, max)
+    out[word] = unsignedValue(c, max)
     return true
   }
   if (word === 'ROW_FORMAT') {
@@ -903,13 +901,6 @@ const ULONG_OPTIONS: Readonly<Record<string, number>> = {
   AVG_ROW_LENGTH: 0xffffffff,
   STATS_SAMPLE_PAGES: 0xffff,
   AUTOEXTEND_SIZE: 0xffffffff,
-}
-
-export function ulongValue(c: Cursor, max: number): string {
-  const t = c.peek()
-  if (t.kind !== TOKEN.NUMBER || !/^\d+$/.test(t.text) || Number(t.text) > max) c.fail()
-  c.skip()
-  return t.text
 }
 
 /**
