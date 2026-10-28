@@ -781,7 +781,7 @@ export class SqlExecutor implements Executor {
         if (selected !== undefined) spec = withCollations(spec, selected.collations, statement.columns)
         spec = { ...spec, columns: stampGenerated(spec.columns, requireCollationInfo(session.characterSet).charset) }
         // CHECK constraints are resolved first, IF NOT EXISTS or not (8.4.11: 3820 over a table that exists).
-        spec = withChecks(catalog, schema, spec, run.sql, checkClauses(statement), session.characterSet)
+        spec = withChecks(catalog, schema, spec, run.sql, checkClauses(statement), session.characterSet, modeOf(session.sqlMode))
         // A table that exists is 1050, or IF NOT EXISTS's note, whatever its keys would say; a
         // temporary one meets only the session's others.
         const exists = temporary !== undefined ? temporary.has(schema, spec.name) : catalog.tables(schema).some((t) => t.name === spec.name)

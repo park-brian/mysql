@@ -22,10 +22,11 @@
 import { expectTyped } from '@myjs/bytes'
 import { requireCollationInfo } from '@myjs/charsets'
 import { sqlError } from '@myjs/protocol'
-import { columnRefs, someNode } from './ast.ts'
+import { columnRefs, nativeCallName, someNode, visitPostorder } from './ast.ts'
 import type { ColumnDef, FieldBytes, TableDef, TableSpec } from '@myjs/engine'
-import { NODE, TOKEN, lex, parseExpression, type CheckConstraint, type CreateTableNode, type Expression, type Token } from '@myjs/parser'
+import { NODE, TOKEN, lex, parseExpression, type CheckConstraint, type CreateTableNode, type Expression, type Token, type SqlMode } from '@myjs/parser'
 import { decodeField, truth } from '@myjs/types'
+import { quotedFunctionName } from './value-generator.ts'
 import { compile, type Compiled } from './compile.ts'
 import { escapePrinted, printTableExpression } from './print.ts'
 import { compileContext, type Run } from './query.ts'
@@ -87,7 +88,7 @@ function isCondition(e: Expression): boolean {
     case NODE.LITERAL:
       return e.type === 'bool'
     case NODE.CALL:
-      return CONDITION_FUNCTIONS.has(e.name.toUpperCase())
+      return CONDITION_FUNCTIONS.has(nativeCallName(e))
     case NODE.ROW:
       return e.items.length === 1 && isCondition(e.items[0] as Expression)
     default:
@@ -99,7 +100,7 @@ function isCondition(e: Expression): boolean {
  * `spec` with its CHECK constraints named, checked and stored. `sql` is the
  * statement they were written in, `charset` the connection's character set.
  */
-export function withChecks(catalog: CatalogApi, schema: string, spec: TableSpec, sql: string, clauses: readonly CheckClause[], charset: number): TableSpec {
+export function withChecks(catalog: CatalogApi, schema: string, spec: TableSpec, sql: string, clauses: readonly CheckClause[], charset: number, mode: SqlMode): TableSpec {
   if (clauses.length === 0) return spec
   const tokens = lex(sql)
   const taken = new Set<string>()
@@ -116,6 +117,9 @@ export function withChecks(catalog: CatalogApi, schema: string, spec: TableSpec,
     if (taken.has(name.toLowerCase())) throw sqlError('ER_CHECK_CONSTRAINT_DUP_NAME', `Duplicate check constraint name '${name}'.`)
     taken.add(name.toLowerCase())
     const e = clause.expr
+    const refuseFunction = (named?: string): never => {
+      throw sqlError(named === undefined ? 'ER_CHECK_CONSTRAINT_FUNCTION_IS_NOT_ALLOWED' : 'ER_CHECK_CONSTRAINT_NAMED_FUNCTION_IS_NOT_ALLOWED', `An expression of a check constraint '${name}' contains disallowed function${named === undefined ? '' : ': ' + named}.`)
+    }
     someNode(e, (value) => {
       const node = value as Expression
       if (node.kind === NODE.COLUMN) {
@@ -126,16 +130,21 @@ export function withChecks(catalog: CatalogApi, schema: string, spec: TableSpec,
         if (clause.column !== undefined && column.name.toLowerCase() !== clause.column.toLowerCase()) throw sqlError('ER_COLUMN_CHECK_CONSTRAINT_REFERENCES_OTHER_COLUMN', `Column check constraint '${name}' references other column.`)
         if (column.autoIncrement === true) throw sqlError('ER_CHECK_CONSTRAINT_REFERS_AUTO_INCREMENT_COLUMN', `Check constraint '${name}' cannot refer to an auto-increment column.`)
       } else if (node.kind === NODE.SUBQUERY) {
-        throw sqlError('ER_CHECK_CONSTRAINT_FUNCTION_IS_NOT_ALLOWED', `An expression of a check constraint '${name}' contains disallowed function.`)
+        refuseFunction()
       } else if (node.kind === NODE.VARIABLE) {
         throw sqlError('ER_CHECK_CONSTRAINT_VARIABLES', `An expression of a check constraint '${name}' cannot refer to a user or system variable.`)
       } else if (node.kind === NODE.CALL) {
-        const named = NOT_ROW_DETERMINED.get(node.name.toUpperCase())
-        if (named !== undefined) throw sqlError('ER_CHECK_CONSTRAINT_NAMED_FUNCTION_IS_NOT_ALLOWED', `An expression of a check constraint '${name}' contains disallowed function: ${named}.`)
+        const named = NOT_ROW_DETERMINED.get(nativeCallName(node))
+        if (named !== undefined) refuseFunction(named)
       }
       return undefined
     })
     if (!isCondition(e)) throw sqlError('ER_NON_BOOLEAN_EXPR_FOR_CHECK_CONSTRAINT', `An expression of non-boolean type specified to a check constraint '${name}'.`)
+    // Stored calls have no native boolean type; their permission check follows it.
+    visitPostorder(e, (value) => {
+      const node = value as Expression
+      if (node.kind === NODE.CALL && nativeCallName(node) === '') refuseFunction(quotedFunctionName(node, mode))
+    })
     made.push({ name, text: conditionText(sql, tokens, clause), enforced: clause.enforced, charset: requireCollationInfo(charset).charset })
   }
   return { ...spec, options: { ...(spec.options ?? {}), checks: [...existing, ...made] } }

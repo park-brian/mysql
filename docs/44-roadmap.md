@@ -946,17 +946,46 @@ test files/fixtures, 206 runtime sources and reference tooling. Core/facade/pars
 measure 334,304/334,206/45,615 B gzipped; raw core is 101 B below c198c05, whose
 eleven required CI jobs pass. M5.10 stays partial; totals remain 144/190 and M5 42/53.
 
-**Next bounded slice:** audit and repair qualified function-name admission and
-resolution through the existing name/parser/compiler owners. Preserve explicit
-stored namespaces, quoted/spaced roles, native collision labels, namespace and
-condition priority, and the public AST contract. Qualified calls and result metadata
-remain open in the new audit. Prepared temporal metadata, JSON extraction,
+**Qualified function identity, verified (2026-10-28):** explicit schemas now
+remain separate from function spelling and native-name collision roles on the
+AST. Qualified calls use generic arguments, bypass native binding and retain the
+written schema even without a selected database. Quoted dots stay within their
+components. Deparsing and DEFAULT/generated diagnostics preserve both components;
+CREATE/ALTER CHECK diagnostics share the session-aware identifier formatter.
+Stored CHECK calls fail boolean validation or their own permission check, including
+quoted/spaced collision names. Child-before-parent stored-reference admission now
+shares the existing value-generator traversal. Native CHECK constructor and mixed
+prerequisite order remain partial; an attempted broader phase reorder was rejected
+by the unchanged SLEEP(SYSDATE(7)) regression and removed.
+A 2,172-command fixed-clock capture covers three command APIs in four modes,
+selected/no-default schemas, reserved/quoted components, generic grammar, missing
+names, conditions, DEFAULT/generated/CHECK, ALTER and batch effects. Complete
+matches improve 253 to 1,559 without losing matching components, conditions,
+attributes or effects. All native answer pools are preserved. Three new fixtures
+bring the admission captures to 34, protecting 48,506/60,710 complete commands and
+181,101 conditions; 12,204 outcomes remain open. Shared column/list/operator readers
+remove duplicate grammar mechanics. Fresh Docker --reference passes 1,516 main
+and four latency tests, typecheck, lint, all nine unchanged caps, package/typed
+smoke, the real client and all seven pinned corpora. Three focused regressions,
+all 2,172 native replays, one million seeded parser inputs and 20,000 seeded executor
+statements pass; the archived 04a4710 baseline fails the new regressions. The actual
+parser census remains byte-identical at 17,529 ASTs from 17,589 statements. All
+37 shared official passes and every file status remain unchanged; one aggregate
+failure reason moves from syntax error 1064 to missing function 1305. Frozen-source
+proof covers 472 test files/fixtures and 206 runtime sources. Core/facade/parser
+measure 334,193/334,121/45,617 B gzipped; raw core is 92 B below 04a4710. Its eleven
+required CI jobs pass. M5.10 stays partial; totals remain 144/190 and M5 42/53.
+
+**Next bounded slice:** audit qualified identifier constructor limits and diagnostic
+timing against the pinned engine before repairing the measured 65-character name
+mismatch. Preserve separate schema/name components, generic grammar, conditions and
+preceding batch effects. Mixed CHECK column/variable/native-function precedence,
+native aggregate permission and long-name/later-warning/result-metadata profiles
+remain open. Establish SYSDATE/RANDOM_BYTES constructor behavior before changing
+CHECK's native permission cohort. Prepared temporal metadata, JSON extraction,
 consumer-specific range warnings and declaration phase remain open, alongside
-string nullability, merged temporal charset and ANSI SHOW CREATE. Then address
-context-dependent clock precision through existing compiler/value-generator owners,
-retaining DEFAULT/generated/CHECK timing. SYSDATE constructor validation and
-enclosing labels remain open; RANDOM_BYTES evaluation precedes CHECK permission
-repairs. Continue bounded function work before M5.47, M5.49, M5.50 and browser work.
+string nullability, merged temporal charset and ANSI SHOW CREATE. Continue bounded
+function work before M5.47, M5.49, M5.50 and browser work.
 
 Keep function, keyword and value namespaces distinct. Charset-value validation,
 separate event behavior, valid-AST warnings/limits, later binding failures,

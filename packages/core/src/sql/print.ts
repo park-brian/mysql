@@ -119,7 +119,7 @@ export function printExpression(e: Expression, o: PrintOptions): string {
       return `(${p(e.left)} ${OPERATORS[op] ?? e.op} ${p(e.right)})`
     }
     case NODE.CALL: {
-      if (e.over !== undefined || e.distinct === true || e.orderBy !== undefined) break
+      if (e.schema !== undefined || e.over !== undefined || e.distinct === true || e.orderBy !== undefined) break
       const star = e.args.length === 1 && e.args[0]?.kind === NODE.COLUMN && e.args[0].parts.at(-1) === '*'
       return `${e.name.toLowerCase()}(${star ? '0' : e.args.map(p).join(',')})`
     }

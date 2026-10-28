@@ -376,7 +376,7 @@ export function alterTable(run: Run, catalog: CatalogApi, statement: AlterTableN
   checkGenerated(columns, modeOf(run.env.session.sqlMode))
   columns.splice(0, columns.length, ...stampGenerated(columns, requireCollationInfo(run.env.session.characterSet).charset))
   const checkClausesAdded = columnChecks(of('addCheck').map((a) => a.check), added)
-  const withNewChecks = withChecks(catalog, schema, { name, engine: def.engine, columns, indexes, options }, run.sql, checkClausesAdded, run.env.session.characterSet)
+  const withNewChecks = withChecks(catalog, schema, { name, engine: def.engine, columns, indexes, options }, run.sql, checkClausesAdded, run.env.session.characterSet, modeOf(run.env.session.sqlMode))
   for (const c of checksOf(withNewChecks).slice(checkDefs.length)) if (c.enforced) enabled.add(c.name)
   const spec = withForeignKeys(catalog, schema, withNewChecks, clauses, checks)
   checkForeignKeyActions(spec, foreignKeysOf({ ...def, ...spec, options: spec.options ?? {} } as TableDef))

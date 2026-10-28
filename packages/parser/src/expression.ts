@@ -19,7 +19,7 @@ import { systemVariableParts } from './variable.ts'
 import { Cursor, flag, opt, unsignedValue } from './cursor.ts'
 import { RESERVED } from './keywords.ts'
 import { TOKEN, asciiWord, keywordText } from './tokens.ts'
-import { NODE, LITERAL, type Expression, type LiteralType } from './ast.ts'
+import { NODE, LITERAL, type Expression, type LiteralType, type ColumnNode, type CallNode } from './ast.ts'
 import { lex, type LexOptions } from './lexer.ts'
 import { hexBytes, parseCastType } from './data-type.ts'
 import {
@@ -122,6 +122,11 @@ const LEXICAL_FUNCTIONS = new Set([
   'SCHEMA', 'VALUES', 'INTERVAL', 'GROUPING', 'CUME_DIST', 'DENSE_RANK', 'FIRST_VALUE', 'LAG', 'LAST_VALUE', 'LEAD',
   'NTH_VALUE', 'NTILE', 'PERCENT_RANK', 'RANK', 'ROW_NUMBER',
 ])
+
+/** Generic calls retain a diagnostic collision role even without native binding. */
+function functionCollision(name: string): boolean {
+  return RESERVED.has(name) || LEXICAL_FUNCTIONS.has(name)
+}
 
 /** ASCII eligibility for native-call syntax, not a catalogue of existing functions. */
 export function nativeFunctionWord(text: string): string {
@@ -305,63 +310,46 @@ class ExpressionParser {
 
       if (word === 'IN') {
         cursor.skip()
-        // `IN (SELECT …)` is a membership test against a subquery's rows, not
-        // a list holding one scalar subquery — which is what `IN ((SELECT …))`
-        // is. The two are told apart by the token after the parenthesis.
+        let right: Expression
+        // A query directly after '(' is membership, rather than a scalar in a list.
         if (cursor.atOp('(') && atQueryStart(cursor, 1)) {
           const open = cursor.peek().start
-          const right = { kind: NODE.SUBQUERY, query: this.#parenthesisedQuery(), at: open } as const
-          left = { kind: NODE.BINARY, op, left, right, at }
-          continue
+          right = { kind: NODE.SUBQUERY, query: this.#parenthesisedQuery(), at: open }
+        } else {
+          // At least one item: `a IN ()` is a syntax error.
+          cursor.expectOp('(')
+          const items = this.#expressionList([this.#binary(0)])
+          cursor.expectOp(')')
+          right = { kind: NODE.ROW, items, at }
         }
-        // At least one item: `a IN ()` is a syntax error.
-        cursor.expectOp('(')
-        const items: Expression[] = []
-        do items.push(this.#binary(0))
-        while (cursor.takeOp(','))
-        cursor.expectOp(')')
-        left = {
-          kind: NODE.BINARY,
-          op,
-          left,
-          right: { kind: NODE.ROW, items, at },
-          at,
-        }
+        left = { kind: NODE.BINARY, op, left, right, at }
         continue
       }
 
-      if (word === 'LIKE') {
+      if (word === 'LIKE' || word === 'REGEXP' || word === 'RLIKE') {
         cursor.skip()
         const pattern = this.#binary(COMPARISON_LEVEL + 1)
         const node = { kind: NODE.BINARY, op, left, right: pattern, at } as const
-        left = cursor.takeWord('ESCAPE')
+        left = word === 'LIKE' && cursor.takeWord('ESCAPE')
           ? { ...node, extra: this.#binary(COMPARISON_LEVEL + 1) }
           : node
         continue
       }
 
-      if (word === 'REGEXP' || word === 'RLIKE') {
-        cursor.skip()
-        const pattern = this.#binary(COMPARISON_LEVEL + 1)
-        left = { kind: NODE.BINARY, op, left, right: pattern, at }
-        continue
-      }
-
       // `a MEMBER OF (json)` (8.0.17) and `a SOUNDS LIKE b`, neither of which
       // takes a `NOT`.
-      if (!negated && cursor.takeWords('MEMBER', 'OF')) {
+      if (cursor.takeWords('MEMBER', 'OF')) {
         cursor.expectOp('(')
         const right = this.#binary(0)
         cursor.expectOp(')')
         left = { kind: NODE.BINARY, op: 'MEMBER OF', left, right, at }
         continue
       }
-      if (!negated && cursor.takeWords('SOUNDS', 'LIKE')) {
+      if (cursor.takeWords('SOUNDS', 'LIKE')) {
         left = { kind: NODE.BINARY, op: 'SOUNDS LIKE', left, right: this.#binary(COMPARISON_LEVEL + 1), at }
         continue
       }
 
-      if (negated) cursor.fail() // consumed a NOT with nothing to attach it to
       return left
     }
   }
@@ -385,15 +373,11 @@ class ExpressionParser {
     const cursor = this.#c
     const t = cursor.peek()
 
-    if (this.#mode.highNotPrecedence && cursor.takeWord('NOT')) {
-      return { kind: NODE.UNARY, op: 'NOT', operand: this.#unary(), at: t.start }
-    }
-    if (t.kind === TOKEN.OPERATOR && ['-', '+', '~', '!'].includes(t.text)) {
+    const word = keywordText(t)
+    const prefix = t.kind === TOKEN.OPERATOR && ['-', '+', '~', '!'].includes(t.text)
+    if (prefix || word === 'BINARY' || (this.#mode.highNotPrecedence && word === 'NOT')) {
       cursor.skip()
-      return { kind: NODE.UNARY, op: t.text, operand: this.#unary(), at: t.start }
-    }
-    if (cursor.takeWord('BINARY')) {
-      return { kind: NODE.UNARY, op: 'BINARY', operand: this.#unary(), at: t.start }
+      return { kind: NODE.UNARY, op: word || t.text, operand: this.#unary(), at: t.start }
     }
     if (cursor.atWord('INTERVAL')) {
       // `INTERVAL(n, a, b, …)` is a function — the index of the first bound
@@ -408,10 +392,8 @@ class ExpressionParser {
         cursor.skip()
         cursor.skip()
         const first = this.#binary(0)
-        if (cursor.takeOp(',')) {
-          const args = [first]
-          do args.push(this.#binary(0))
-          while (cursor.takeOp(','))
+        if (cursor.atOp(',')) {
+          const args = this.#expressionList([first])
           cursor.expectOp(')')
           return { kind: NODE.CALL, name: t.text, args, at: t.start }
         }
@@ -505,10 +487,15 @@ class ExpressionParser {
       cursor.expectOp(')')
       return first
     }
-    const items: Expression[] = [first]
-    while (cursor.takeOp(',')) items.push(this.#binary(0))
+    const items = this.#expressionList([first])
     cursor.expectOp(')')
     return { kind: NODE.ROW, items, at: open.start }
+  }
+
+  /** Append ordinary comma arguments to an already parsed list prefix. */
+  #expressionList(items: Expression[]): Expression[] {
+    while (this.#c.takeOp(',')) items.push(this.#binary(0))
+    return items
   }
 
   #identifierLike(): Expression {
@@ -516,6 +503,13 @@ class ExpressionParser {
     const t = cursor.peek()
     const upper = asciiWord(t.text)
     const followedByParen = cursor.atOp('(', 1)
+
+    // After a schema dot, names use generic stored-function grammar.
+    if (cursor.atOp('.', 1) && cursor.peek(2).kind === TOKEN.IDENTIFIER && cursor.atOp('(', 3)) {
+      cursor.at += 2
+      const name = asciiWord(cursor.peek().text)
+      return { ...this.#call(functionCollision(name)), schema: t.text, at: t.start }
+    }
 
     if (!t.quoted) {
       if (upper === 'NULL') {
@@ -553,9 +547,7 @@ class ExpressionParser {
       if (upper === 'ROW' && followedByParen) {
         cursor.skip()
         const open = cursor.take()
-        const items: Expression[] = []
-        do items.push(this.#binary(0))
-        while (cursor.takeOp(','))
+        const items = this.#expressionList([this.#binary(0)])
         cursor.expectOp(')')
         return { kind: NODE.ROW, items, at: open.start }
       }
@@ -596,21 +588,11 @@ class ExpressionParser {
     // Quoted names use generic argument grammar. Lexer-function names retain
     // their collision role; quoted scalar names remain callable. Unquoted
     // calls, including whitespace-sensitive names, were handled above.
-    if (followedByParen) return this.#call(RESERVED.has(upper) || LEXICAL_FUNCTIONS.has(upper))
+    if (followedByParen) return this.#call(functionCollision(upper))
 
     // A qualified name: `a`, `t.a`, `db.t.a`, `t.*` or `db.t.*` — three parts
     // at most, since `a.b.c.d` names nothing.
-    cursor.skip()
-    const parts = [t.text]
-    while (cursor.atOp('.') && parts.length < 3) {
-      cursor.skip()
-      if (cursor.takeOp('*')) {
-        parts.push('*')
-        break
-      }
-      parts.push(cursor.expectNamePart())
-    }
-    const column = { kind: NODE.COLUMN, parts, at: t.start } as const
+    const column = this.#columnName(true)
     // `col->'$.a'` and `col->>'$.a'`: JSON extraction, which MySQL's grammar
     // allows only on a column name and only with a string literal path.
     if (cursor.atOp('->') || cursor.atOp('->>')) {
@@ -624,8 +606,23 @@ class ExpressionParser {
     return column
   }
 
+  /** Qualified identifiers share component and arity rules; only projection admits a star. */
+  #columnName(star = false): ColumnNode {
+    const cursor = this.#c
+    const at = cursor.peek().start
+    const parts = [cursor.expectNamePart()]
+    while (parts.length < 3 && cursor.takeOp('.')) {
+      if (star && cursor.takeOp('*')) {
+        parts.push('*')
+        break
+      }
+      parts.push(cursor.expectNamePart())
+    }
+    return { kind: NODE.COLUMN, parts, at }
+  }
+
   /** One argument reader; quoted and spaced lexer names retain their collision role. */
-  #call(stored = false): Expression {
+  #call(stored = false): CallNode {
     const cursor = this.#c
     const name = cursor.take()
     const upper = stored ? '' : keywordText(name)
@@ -745,8 +742,7 @@ class ExpressionParser {
       case 'TIMESTAMPADD':
       case 'TIMESTAMPDIFF': {
         cursor.at += 2
-        args = [this.#unitKeyword(true)]
-        while (cursor.takeOp(',')) args.push(this.#binary(0))
+        args = this.#expressionList([this.#unitKeyword(true)])
         break
       }
       case 'GET_FORMAT': {
@@ -805,7 +801,7 @@ class ExpressionParser {
           args.push({ kind: NODE.LITERAL, type: LITERAL.INT, value: BigInt(unsignedValue(cursor)), at: n.start })
           cursor.expectOp(')')
         }
-        while (cursor.takeOp(',')) args.push(this.#binary(0))
+        this.#expressionList(args)
         break
       }
       default:
@@ -840,21 +836,17 @@ class ExpressionParser {
     // grammar's `simple_ident` (8.4.11: `MATCH(UPPER(t))` is 1064 at its `(`).
     const columns: Expression[] = []
     do {
-      const c = cursor.peek()
-      const parts = [cursor.expectNamePart()]
-      while (cursor.atOp('.') && parts.length < 3) {
-        cursor.skip()
-        parts.push(cursor.expectNamePart())
-      }
-      columns.push({ kind: NODE.COLUMN, parts, at: c.start })
+      columns.push(this.#columnName())
     } while (cursor.takeOp(','))
     if (parenthesised) cursor.expectOp(')')
     cursor.expectWord('AGAINST')
     cursor.expectOp('(')
     const against = this.#binary(COMPARISON_LEVEL + 1)
     const modeStart = cursor.at
-    if (cursor.takeWords('IN', 'NATURAL', 'LANGUAGE', 'MODE')) cursor.takeWords('WITH', 'QUERY', 'EXPANSION')
-    else if (!cursor.takeWords('IN', 'BOOLEAN', 'MODE')) cursor.takeWords('WITH', 'QUERY', 'EXPANSION')
+    if (!cursor.takeWords('IN', 'BOOLEAN', 'MODE')) {
+      cursor.takeWords('IN', 'NATURAL', 'LANGUAGE', 'MODE')
+      cursor.takeWords('WITH', 'QUERY', 'EXPANSION')
+    }
     const modifier = cursor.at === modeStart ? undefined : cursor.tokens.slice(modeStart, cursor.at).map(keywordText).join(' ')
     cursor.expectOp(')')
     return { kind: NODE.MATCH, columns, against, ...opt('modifier', modifier), at: t.start }

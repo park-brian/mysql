@@ -185,8 +185,8 @@ functions remain admitted. A pure postorder check shares only traversal and nati
 diagnostic construction with generated columns. ALTER SET DEFAULT retains its
 late execution boundary and non-executing PREPARE behavior. The extended tests
 pass 153 transaction boundaries and nine missing-database cases against both
-engines. Thirty-one admission captures enforce 46,947/58,538 complete commands,
-with unchanged native answers and 11,591 open outcomes. CHECK permissions/namespace,
+engines. Thirty-four admission captures enforce 48,506/60,710 complete commands,
+with unchanged native answers and 12,204 open outcomes. CHECK permissions/namespace,
 malformed declaration ordering, ANSI SHOW CREATE and other function gaps remain
 open. A CHECK permission-only trial was withdrawn: native clock precision and
 RANDOM_BYTES evaluation must be repaired first. A deterministic 702-command
@@ -222,9 +222,17 @@ and refuses OVER before later admission or binding. Stored roles retain their ow
 grammar; preceding batch writes and conditions survive. A 1,728-command audit
 improves 324 to 1,107 complete matches without losing earlier matching facts.
 Existing name/operator readers and mandatory CASE construction remove redundant
-mechanics under unchanged caps. Qualified function calls, result metadata, prepared
-temporal metadata, JSON extraction, consumer range warnings, declaration phase,
-string nullability and merged temporal charset remain open. Bare DEFAULT/ON UPDATE now use their four timestamp aliases, require NOW
+mechanics under unchanged caps. Qualified calls now preserve explicit schema identity,
+generic grammar and collision diagnostics, including no-default-database sessions.
+Stored CHECK calls retain their boolean and permission refusals; DEFAULT/generated
+and CREATE/ALTER CHECK share component-aware diagnostic quoting. Shared column,
+list and postorder declaration readers remove duplicate mechanics. A 2,172-command
+native audit improves 253 to 1,559 complete matches without losing matching facts.
+Mixed CHECK prerequisites and native constructor/permission behavior remain open;
+a broader phase reorder was removed after the existing SYSDATE guard rejected it.
+Long identifiers, later warnings, result/prepared temporal metadata, JSON extraction,
+consumer range warnings, declaration phase, string nullability and merged temporal
+charset remain open. Bare DEFAULT/ON UPDATE now use their four timestamp aliases, require NOW
 parentheses and validate the NUM token before BigInt conversion, producing typed
 syntax errors for malformed precision. A shared integer-token reader preserves
 caller bounds, raw spelling, conversions and AST ownership. Three native captures

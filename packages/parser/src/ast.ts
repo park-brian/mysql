@@ -123,6 +123,8 @@ export interface BinaryNode {
 export interface CallNode {
   readonly kind: typeof NODE.CALL
   readonly name: string
+  /** Explicit stored-function schema, independent of native-name collisions. */
+  readonly schema?: string
   readonly args: readonly Expression[]
   /** `COUNT(DISTINCT x)`. */
   readonly distinct?: boolean

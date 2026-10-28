@@ -8,7 +8,7 @@
 // here, and each of those three mutations fails a case below.
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { deparse, parseExpression, parseSqlMode, parseStatement, quoteName } from '@myjs/parser'
+import { NODE, deparse, parseExpression, parseSqlMode, parseStatement, quoteName } from '@myjs/parser'
 import { roundTrip, withoutPositions } from '../../tools/lib/round-trip.mjs'
 
 const expressionRoundTrips = (sql: string, mode?: string): void => {
@@ -223,4 +223,28 @@ test('M5.10: function names retain generic spelling and lexer collisions through
   }
   // quoteName is also an Array.map callback throughout the parser.
   assert.deepEqual(names.map(quoteName), names.map((name) => quoteName(name)))
+})
+
+
+test('M5.10: qualified function names preserve schema components and collision roles', () => {
+  for (const mode of ['', 'IGNORE_SPACE', 'ANSI_QUOTES', 'ANSI_QUOTES,IGNORE_SPACE']) {
+    for (const [sql, schema, name, stored] of [
+      ['db.ABS(1)', 'db', 'ABS', undefined],
+      ['db.`SUBSTRING`(1)', 'db', 'SUBSTRING', true],
+      ['db.SUBSTRING (1)', 'db', 'SUBSTRING', true],
+      ['`db.with.dot`.`f.dot`(1)', 'db.with.dot', 'f.dot', undefined],
+      ['current_user.ABS(1)', 'current_user', 'ABS', undefined],
+      ['db.SELECT()', 'db', 'SELECT', true],
+      ['`db``name`.`f``name`()', 'db`name', 'f`name', undefined],
+    ] as const) {
+      const call = parseExpression(sql, { sqlMode: parseSqlMode(mode) })
+      assert.equal(call.kind, NODE.CALL, sql)
+      if (call.kind !== NODE.CALL) throw new Error('expected call')
+      assert.equal(call.schema, schema, sql)
+      assert.equal(call.name, name, sql)
+      assert.equal(call.stored, stored, sql)
+      assert.equal(call.at, 0, sql)
+      expressionRoundTrips(sql, mode)
+    }
+  }
 })

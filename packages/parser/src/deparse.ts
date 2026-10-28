@@ -250,7 +250,7 @@ class Deparser {
    */
   call(e: CallNode): string {
     const args = e.args.map((a) => this.expr(a))
-    const native = e.stored ? '' : nativeFunctionWord(e.name)
+    const native = e.stored || e.schema !== undefined ? '' : nativeFunctionWord(e.name)
     let body = args.join(', ')
     switch (native) {
       case 'EXTRACT':
@@ -276,7 +276,7 @@ class Deparser {
     if (e.separator !== undefined) body += ` SEPARATOR ${this.string(e.separator)}`
     if (e.using !== undefined) body += ` USING ${quoteName(e.using)}`
     const over = e.over === undefined ? '' : ` OVER ${typeof e.over === 'string' ? quoteName(e.over) : `(${this.windowSpec(e.over)})`}`
-    const name = native === '' ? quoteName(e.name) : e.name
+    const name = native === '' ? this.table(e) : e.name
     return `${name}(${body})${over}`
   }
 
