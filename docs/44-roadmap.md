@@ -1003,7 +1003,9 @@ repeated-session counter tests, one million seeded parser inputs and 20,000 seed
 executor statements pass; archived 507e753 fails all four new fixture regressions.
 The actual parser census and the entire official result remain byte-identical,
 with all 37 shared passes. Frozen-source proofs cover 477 test files/fixtures and
-206 runtime sources. Predecessor CI's eleven required jobs pass. M5.10 remains
+206 runtime sources. A separate line-ending repair normalizes the new protocol
+regression to LF; its four Docker tests and the staged whitespace check pass.
+Predecessor CI's eleven required jobs pass. M5.10 remains
 partial; totals remain 144/190 and M5 42/53.
 
 **Next bounded slice:** establish the missing RANDOM_BYTES evaluator against the
