@@ -36,7 +36,8 @@
 //     `LONG VARBINARY`, `NATIONAL CHAR`), so the table cannot be a single-token
 //     lookup.
 import { FIELD_TYPE, type FieldTypeCode } from '@myjs/bytes'
-import type { Cursor } from './cursor.ts'
+import { flag, opt, type Cursor } from './cursor.ts'
+import { NATIONAL_DEPRECATION } from './errors.ts'
 import { charsetName, collationName } from './names.ts'
 import { TOKEN } from './tokens.ts'
 import type { SqlMode } from './sql-mode.ts'
@@ -255,9 +256,9 @@ export function atDataType(c: Cursor): boolean {
  * Modifiers such as `UNSIGNED`, `CHARACTER SET`, `COLLATE` and `BINARY` belong
  * on the type node. CAST targets leave COLLATE to their closing-delimiter check.
  */
-export function parseDataType(c: Cursor, mode: SqlMode, withCollation = true): DataType {
+export function parseDataType(c: Cursor, mode: SqlMode, column = true): DataType {
   const at = c.peek().start
-  const name = typeName(c)
+  const name = typeName(c, column)
   if (name === null) c.fail()
   const spec = TYPES[name] as TypeSpec
 
@@ -279,49 +280,42 @@ export function parseDataType(c: Cursor, mode: SqlMode, withCollation = true): D
     case SHAPE.VALUES:
       values = valueList(c)
       break
-    case SHAPE.FLOAT: {
+    case SHAPE.FLOAT:
+    case SHAPE.DECIMAL: {
       const args = numberList(c, 2)
-      if (args.length === 1) {
+      if (spec.shape === SHAPE.FLOAT && args.length === 1) {
         // **The trap.** One argument to `FLOAT` is a *precision* in bits of
         // mantissa, not a display width, and above 24 makes the column a
         // DOUBLE. `FLOAT(25)` and `FLOAT(25,2)` are different types; 24 is
         // still a FLOAT (8.4.11).
-        const p = args[0] as number
-        precision = p
-        if (p > 24) {
+        precision = args[0] as number
+        if (precision > 24) {
           code = FIELD_TYPE.DOUBLE
           canonical = 'DOUBLE'
         }
-      } else if (args.length === 2) {
-        length = args[0]
-        scale = args[1]
+      } else {
+        [length, scale] = args
       }
-      break
-    }
-    case SHAPE.DECIMAL: {
-      const args = numberList(c, 2)
-      length = args[0]
-      scale = args[1]
       break
     }
     case SHAPE.INTEGER:
     case SHAPE.FSP:
     case SHAPE.WIDTH:
     case SHAPE.TEXT:
-    case SHAPE.BYTES: {
-      const args = numberList(c, 1)
-      length = args[0]
+    case SHAPE.BYTES:
+      [length] = numberList(c, 1)
       break
-    }
     case SHAPE.NONE:
       break
   }
 
+  if (spec.charset !== undefined && (column || canonical === 'CHAR')) c.warn(3720, NATIONAL_DEPRECATION)
+
   let unsigned: boolean | undefined
-  let zerofill: boolean | undefined
+  let zerofill = false
   let charset = spec.charset
   let collation: string | undefined
-  let binaryModifier: boolean | undefined
+  let binaryModifier = false
 
   // Collect modifiers until the next grammar token. Some ordering restrictions
   // remain open in the native capture. `ZEROFILL` implies `UNSIGNED`, a real rule
@@ -360,7 +354,7 @@ export function parseDataType(c: Cursor, mode: SqlMode, withCollation = true): D
         charset = charsetName(c).toLowerCase()
         continue
       }
-      if (withCollation && c.takeWord('COLLATE')) {
+      if (column && c.takeWord('COLLATE')) {
         collation = collationName(c).toLowerCase()
         continue
       }
@@ -371,18 +365,18 @@ export function parseDataType(c: Cursor, mode: SqlMode, withCollation = true): D
   return {
     name: canonical,
     code,
-    ...(length === undefined ? {} : { length }),
-    ...(scale === undefined ? {} : { scale }),
-    ...(precision === undefined ? {} : { precision }),
-    ...(unsigned === undefined ? {} : { unsigned }),
-    ...(zerofill === undefined ? {} : { zerofill }),
-    ...(values === undefined ? {} : { values }),
-    ...(charset === undefined ? {} : { charset }),
-    ...(collation === undefined ? {} : { collation }),
-    ...(binaryModifier === undefined ? {} : { binary: binaryModifier }),
-    ...(name === 'SERIAL' ? { serial: true } : {}),
-    ...(name === 'BOOL' || name === 'BOOLEAN' ? { boolean: true } : {}),
-    ...(spec.charset !== undefined ? { national: true as const } : {}),
+    ...opt('length', length),
+    ...opt('scale', scale),
+    ...opt('precision', precision),
+    ...opt('unsigned', unsigned),
+    ...flag('zerofill', zerofill),
+    ...opt('values', values),
+    ...opt('charset', charset),
+    ...opt('collation', collation),
+    ...flag('binary', binaryModifier),
+    ...flag('serial', name === 'SERIAL'),
+    ...flag('boolean', name === 'BOOL' || name === 'BOOLEAN'),
+    ...flag('national', spec.charset !== undefined),
     at,
   }
 }
@@ -393,7 +387,9 @@ export function parseDataType(c: Cursor, mode: SqlMode, withCollation = true): D
  * Returns `null` without moving when this is not a type name, so a caller can
  * use it to decide between a column definition and something else.
  */
-function typeName(c: Cursor): string | null {
+function typeName(c: Cursor, column: boolean): string | null {
+  // A national CHAR cast reduces before a following VARCHAR/VARYING token.
+  if (!column && (c.takeWord('NCHAR') || c.takeWords('NATIONAL', 'CHAR') || c.takeWords('NATIONAL', 'CHARACTER'))) return 'NCHAR'
   for (const words of MULTI_WORD) {
     if (c.takeWords(...words)) return words.join(' ')
   }

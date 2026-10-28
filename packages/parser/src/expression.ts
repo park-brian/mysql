@@ -16,7 +16,7 @@
 //                       5.0, so `NOT a = b` regroups from `NOT (a = b)` to
 //                       `(NOT a) = b`.
 import { systemVariableParts } from './variable.ts'
-import { Cursor } from './cursor.ts'
+import { Cursor, flag, opt } from './cursor.ts'
 import { RESERVED } from './keywords.ts'
 import { TOKEN } from './tokens.ts'
 import { NODE, LITERAL, type Expression, type LiteralType } from './ast.ts'
@@ -673,11 +673,11 @@ class ExpressionParser {
       kind: NODE.CALL,
       name: name.text,
       args,
-      ...(distinct ? { distinct: true } : {}),
-      ...(orderBy === undefined ? {} : { orderBy }),
-      ...(separator === undefined ? {} : { separator }),
-      ...(using === undefined ? {} : { using }),
-      ...(over === undefined ? {} : { over }),
+      ...flag('distinct', distinct),
+      ...opt('orderBy', orderBy),
+      ...opt('separator', separator),
+      ...opt('using', using),
+      ...opt('over', over),
       at: name.start,
     }
   }
@@ -734,7 +734,7 @@ class ExpressionParser {
         const type = this.#castType()
         const array = cursor.takeWord('ARRAY')
         cursor.expectOp(')')
-        return { kind: NODE.CAST, expr, type, ...(array ? { array } : {}), ...(timeZone === undefined ? {} : { timeZone }), at: t.start }
+        return { kind: NODE.CAST, expr, type, ...flag('array', array), ...opt('timeZone', timeZone), at: t.start }
       }
       case 'CONVERT': {
         cursor.skip()
@@ -933,7 +933,7 @@ class ExpressionParser {
     } else if (cursor.takeWords('IN', 'BOOLEAN', 'MODE')) modifier = 'IN BOOLEAN MODE'
     else if (cursor.takeWords('WITH', 'QUERY', 'EXPANSION')) modifier = 'WITH QUERY EXPANSION'
     cursor.expectOp(')')
-    return { kind: NODE.MATCH, columns, against, ...(modifier === undefined ? {} : { modifier }), at: t.start }
+    return { kind: NODE.MATCH, columns, against, ...opt('modifier', modifier), at: t.start }
   }
 
   #case(): Expression {
@@ -953,9 +953,9 @@ class ExpressionParser {
     cursor.expectWord('END')
     return {
       kind: NODE.CASE,
-      ...(operand === undefined ? {} : { operand }),
+      ...opt('operand', operand),
       whens,
-      ...(otherwise === undefined ? {} : { else: otherwise }),
+      ...opt('else', otherwise),
       at,
     }
   }

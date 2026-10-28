@@ -1,9 +1,61 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { Cursor, NODE, NO_SQL_MODE, ParseError, lex, parseCreateTable, parseExpression, parseStatement, parseStatementBytes, parseStatementSequence } from '@myjs/parser'
+import { Cursor, NATIONAL_DEPRECATION, NODE, NO_SQL_MODE, ParseError, lex, parseCreateTable, parseExpression, parseStatement, parseStatementBytes, parseStatementSequence } from '@myjs/parser'
 
 const unknown = () => new ParseError('ER_UNKNOWN_COLLATION', "Unknown collation: 'missing'", { errno: 1273, sqlState: 'HY000' })
 const overflow = () => new ParseError('ER_ILLEGAL_VALUE_FOR_TYPE', "Illegal double '1e309' value found during parsing", { errno: 1367, sqlState: '22007' })
+
+test('grammar warnings precede a fatal error without replacing its identity or JSON', () => {
+  const c = new Cursor(lex(''))
+  const fatal = unknown(), json = JSON.stringify(fatal), keys = Object.keys(fatal)
+  assert.throws(() => c.checked(() => {
+    c.warn(3720, NATIONAL_DEPRECATION)
+    throw fatal
+  }), (error: unknown) => error === fatal)
+  assert.equal(Object.getPrototypeOf(fatal), ParseError.prototype)
+  assert.equal(JSON.stringify(fatal), json)
+  assert.deepEqual(Object.keys(fatal), keys)
+  assert.equal(Object.getOwnPropertyDescriptor(fatal, 'conditions')?.enumerable, false)
+  assert.deepEqual(fatal.conditions, [
+    { errno: 3720, message: NATIONAL_DEPRECATION, level: 'Warning' },
+    { errno: 1273, message: fatal.message },
+  ])
+  assert.deepEqual(c.checked(() => ({ valid: true })), { valid: true })
+  assert.throws(() => c.checked(() => { throw overflow() }), (error: unknown) => error instanceof ParseError && error.conditions === undefined)
+})
+
+test('warning collection is scoped, nested and discarded on success or an untyped failure', () => {
+  const c = new Cursor(lex(''))
+  c.warn(3720, NATIONAL_DEPRECATION)
+  const ast = { valid: true }
+  assert.equal(c.checked(() => { c.warn(3720, NATIONAL_DEPRECATION); return ast }), ast)
+  assert.deepEqual(Reflect.ownKeys(ast), ['valid'])
+  const bug = new TypeError('test failure')
+  assert.throws(() => c.checked(() => { c.warn(3720, NATIONAL_DEPRECATION); throw bug }), (error: unknown) => error === bug)
+  const first = unknown(), later = overflow()
+  assert.throws(() => c.checked(() => {
+    c.warn(3720, NATIONAL_DEPRECATION)
+    c.checked(() => { c.report(first); c.warn(3720, NATIONAL_DEPRECATION); return {} })
+    throw later
+  }), (error: unknown) => error === first)
+  assert.deepEqual(first.conditions?.map(e => [e.errno, e.level ?? 'Error']), [[3720, 'Warning'], [1273, 'Error'], [3720, 'Warning'], [1367, 'Error']])
+  assert.throws(() => c.report(later), (error: unknown) => error === later)
+})
+
+test('national CHAR warnings retain source order at checked roots and native reduction boundaries', () => {
+  const sql = "SELECT CAST('x' AS NCHAR),1 COLLATE missing,CAST('x' AS NATIONAL CHAR),1e309"
+  for (const parse of [() => parseStatement(sql), () => parseStatementBytes(new TextEncoder().encode(sql)), () => parseExpression("CAST('x' AS NCHAR)+(1 COLLATE missing)+CAST('x' AS NATIONAL CHAR)+1e309")]) {
+    assert.throws(parse, (error: unknown) => error instanceof ParseError && error.errno === 1273 && String(error.conditions?.map(e => e.errno)) === '3720,1273,3720,1367')
+  }
+  for (const type of ['NCHAR VARCHAR(2)', 'NCHAR VARYING(2)', 'NATIONAL CHARACTER VARYING(2)']) {
+    assert.throws(() => parseStatement("SELECT CAST('x' AS " + type + ')'), (error: unknown) => error instanceof ParseError && error.errno === 1064 && String(error.conditions?.map(e => e.errno)) === '3720,1064')
+  }
+  for (const type of ['NVARCHAR(2)', 'NATIONAL VARCHAR(2)', 'NCHAR(-1)', 'NCHAR(1e309)', 'NCHAR(2,3)']) {
+    assert.throws(() => parseStatement("SELECT CAST('x' AS " + type + ')'), (error: unknown) => error instanceof ParseError && !error.conditions?.some(e => e.errno === 3720))
+  }
+  const source = 'CREATE TABLE t(v NCHAR(2) COLLATE missing)'
+  assert.throws(() => parseCreateTable(new Cursor(lex(source), source), { sqlMode: NO_SQL_MODE }), (error: unknown) => error instanceof ParseError && error.errno === 1273 && error.conditions === undefined)
+})
 
 test('checked parsing preserves the first error by identity and keeps history out of its JSON', () => {
   const c = new Cursor(lex(''))

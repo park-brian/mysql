@@ -31,6 +31,7 @@ import {
   type CreateTableNode,
   type ExplainNode,
   type InsertNode,
+  type ParseCondition,
   type CreateViewNode,
   type DropNode,
   type Expression,
@@ -185,7 +186,9 @@ function recordFailure(state: SqlSession, conditions: Condition[] | undefined, f
   const error = toSqlError(failure)
   if (!promotedError(conditions, error)) {
     const parsing = failure instanceof ParseError ? failure.conditions : undefined
-    for (const e of parsing?.slice(0, MAX_ERROR_COUNT) ?? [error]) conditions?.push({ level: 'Error', code: e.errno, message: e.message })
+    // A full parser prefix may contain only warnings even when it returns ERR.
+    const kept: readonly ParseCondition[] = parsing?.slice(0, MAX_ERROR_COUNT) ?? [error]
+    for (const e of kept) conditions?.push({ level: parsing ? e.level ?? 'Error' : 'Error', code: e.errno, message: e.message })
   }
   recordDiagnostics(state, conditions ?? [])
   return error

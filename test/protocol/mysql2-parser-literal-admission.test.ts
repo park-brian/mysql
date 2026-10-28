@@ -8,6 +8,7 @@ import literalAdmission from './fixtures/diagnostics/parser-literal-admission.js
 import conditionHistories from './fixtures/diagnostics/parser-condition-histories.json' with { type: 'json' }
 import castDatatype from './fixtures/diagnostics/cast-datatype-grammar.json' with { type: 'json' }
 import castModifiers from './fixtures/diagnostics/cast-modifier-grammar.json' with { type: 'json' }
+import warningAdmission from './fixtures/diagnostics/parser-warning-admission.json' with { type: 'json' }
 
 /** Restore binary rows and numeric facts that JSON cannot represent directly. */
 function capturedValue(value: unknown): unknown {
@@ -21,7 +22,7 @@ function capturedValue(value: unknown): unknown {
   return value
 }
 
-for (const [reference, total, matched] of [[literalAdmission, 1623, 1521], [conditionHistories, 198, 192], [castDatatype, 480, 302], [castModifiers, 16648, 9220]] as const) test('M5.10: admission preserves primary errors, condition histories, headers and effects: ' + reference.schema, async () => {
+for (const [reference, total, matched] of [[literalAdmission, 1623, 1521], [conditionHistories, 198, 192], [castDatatype, 480, 302], [castModifiers, 16648, 9220], [warningAdmission, 325, 248]] as const) test('M5.10: admission preserves primary errors, condition histories, headers and effects: ' + reference.schema, async () => {
   const host = process.env.MYSQL_REFERENCE_HOST
   const db = host === undefined ? await MySQL.open(':memory:', { multipleStatements: true }) : undefined
   const transport = db === undefined
@@ -124,13 +125,13 @@ for (const multipleStatements of [false, true]) test('parser histories honor neg
   const raw = mysql.createConnection({ stream: transport, user: 'root', ...(db === undefined ? { password: process.env.MYSQL_REFERENCE_PASSWORD ?? 'root' } : {}), multipleStatements })
   const conn = raw.promise()
   try {
-    for (const [sql, code] of [['SELECT 1 COLLATE missing_c1; SELECT 2', 1273], ['SELECT 1e309; SELECT 2', 1367]] as const) {
+    for (const [sql, code, warnings] of [['SELECT 1 COLLATE missing_c1; SELECT 2', 1273, []], ['SELECT 1e309; SELECT 2', 1367, []], ["SELECT CAST('x' AS NCHAR) COLLATE missing_c1; SELECT 2", 1273, [3720]]] as const) {
       const observed = await observeCommand(raw, conn, transport, { sql, api: 'query' })
       assert.equal((observed.outcome.error as unknown[])[1], code)
       const codes = (observed.outcome.warnings as mysql.RowDataPacket[]).map(c => c.Code)
-      assert.deepEqual(codes, multipleStatements ? [code] : [code, 1064])
+      assert.deepEqual(codes, [...warnings, code, ...(multipleStatements ? [] : [1064])])
       assert.equal(observed.outcome.warningCount, codes.length)
-      assert.equal(observed.outcome.errorCount, codes.length)
+      assert.equal(observed.outcome.errorCount, codes.length - warnings.length)
       assert.deepEqual(observed.outcome.rows, [])
       assert.equal(observed.outcome.fields, null)
     }

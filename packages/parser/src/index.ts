@@ -11,7 +11,8 @@
 // It depends on `@myjs/bytes` and `@myjs/charsets` only: values are
 // `@myjs/types`' business and the wire `@myjs/protocol`'s, and the two meet
 // the parser in `@myjs/core`, never here.
-export { ParseError, parseError, unknownCharset, badMode, tooDeep, unsupportedStatement } from './errors.ts'
+export { ParseError, parseError, unknownCharset, badMode, tooDeep, unsupportedStatement, NATIONAL_DEPRECATION } from './errors.ts'
+export type { ParseCondition } from './errors.ts'
 export { DEFAULT_SQL_MODE, NO_SQL_MODE, RESERVED_SQL_MODE_BITS, SQL_MODE_BITS, formatSqlMode, parseSqlMode } from './sql-mode.ts'
 export type { SqlMode } from './sql-mode.ts'
 export { TOKEN, OPERATORS } from './tokens.ts'

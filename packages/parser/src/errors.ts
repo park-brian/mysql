@@ -21,11 +21,17 @@ import { MyjsError } from '@myjs/bytes'
 export interface ParseCondition {
   readonly errno: number
   readonly message: string
+  /** Errors keep their existing two-field representation. */
+  readonly level?: 'Warning'
 }
+
+/** 3720: national character types, shared with execution of valid ASTs. */
+export const NATIONAL_DEPRECATION =
+  'NATIONAL/NCHAR/NVARCHAR implies the character set UTF8MB3, which will be replaced by UTF8MB4 in a future release. Please consider using CHAR(x) CHARACTER SET UTF8MB4 in order to be unambiguous.'
 
 /** Anything this package refuses. Carries `errno` and `sqlState` like `SqlError`. */
 export class ParseError extends MyjsError {
-  /** Nonenumerable history when the grammar reported more than the primary error. */
+  /** Nonenumerable history when grammar conditions precede or follow the primary error. */
   declare readonly conditions?: readonly ParseCondition[]
   /** UTF-16 code-unit offset into the original statement, when one is known. */
   readonly offset: number | undefined

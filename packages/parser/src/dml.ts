@@ -11,7 +11,7 @@
 //   - `DELETE t.* FROM t` is `DELETE t FROM t`, and `DELETE FROM t USING …`
 //     is the same statement as `DELETE t FROM …`.
 import { NODE, type ColumnNode, type Expression } from './ast.ts'
-import type { Cursor } from './cursor.ts'
+import { flag, opt, type Cursor } from './cursor.ts'
 import { parseExpressionFrom } from './expression.ts'
 import {
   atParenthesisedQuery,
@@ -89,17 +89,17 @@ export function parseInsert(c: Cursor, mode: SqlMode): InsertNode {
 
   return {
     kind: STATEMENT.INSERT,
-    ...(replace ? { replace } : {}),
-    ...(priority === undefined ? {} : { priority }),
-    ...(ignore ? { ignore } : {}),
+    ...flag('replace', replace),
+    ...opt('priority', priority),
+    ...flag('ignore', ignore),
     table,
-    ...(partitions === undefined ? {} : { partitions }),
-    ...(columns === undefined ? {} : { columns }),
-    ...(values === undefined ? {} : { values }),
-    ...(set === undefined ? {} : { set }),
-    ...(query === undefined ? {} : { query }),
-    ...(rowAlias === undefined ? {} : { rowAlias }),
-    ...(onDuplicate === undefined ? {} : { onDuplicate }),
+    ...opt('partitions', partitions),
+    ...opt('columns', columns),
+    ...opt('values', values),
+    ...opt('set', set),
+    ...opt('query', query),
+    ...opt('rowAlias', rowAlias),
+    ...opt('onDuplicate', onDuplicate),
     at,
   }
 }
@@ -117,14 +117,14 @@ export function parseUpdate(c: Cursor, mode: SqlMode, withClause?: With, at = c.
   const { where, orderBy, limit } = tail(c, mode)
   return {
     kind: STATEMENT.UPDATE,
-    ...(withClause === undefined ? {} : { with: withClause }),
-    ...(priority === undefined ? {} : { priority }),
-    ...(ignore ? { ignore } : {}),
+    ...opt('with', withClause),
+    ...opt('priority', priority),
+    ...flag('ignore', ignore),
     tables,
     set,
-    ...(where === undefined ? {} : { where }),
-    ...(orderBy === undefined ? {} : { orderBy }),
-    ...(limit === undefined ? {} : { limit }),
+    ...opt('where', where),
+    ...opt('orderBy', orderBy),
+    ...opt('limit', limit),
     at,
   }
 }
@@ -172,15 +172,15 @@ export function parseDelete(c: Cursor, mode: SqlMode, withClause?: With, at = c.
   const { where, orderBy, limit } = targets === undefined ? tail(c, mode) : c.takeWord('WHERE') ? { where: parseExpressionFrom(c, mode), orderBy: undefined, limit: undefined } : { where: undefined, orderBy: undefined, limit: undefined }
   return {
     kind: STATEMENT.DELETE,
-    ...(withClause === undefined ? {} : { with: withClause }),
-    ...(priority === undefined ? {} : { priority }),
-    ...(quick ? { quick } : {}),
-    ...(ignore ? { ignore } : {}),
-    ...(targets === undefined ? {} : { targets }),
+    ...opt('with', withClause),
+    ...opt('priority', priority),
+    ...flag('quick', quick),
+    ...flag('ignore', ignore),
+    ...opt('targets', targets),
     tables,
-    ...(where === undefined ? {} : { where }),
-    ...(orderBy === undefined ? {} : { orderBy }),
-    ...(limit === undefined ? {} : { limit }),
+    ...opt('where', where),
+    ...opt('orderBy', orderBy),
+    ...opt('limit', limit),
     at,
   }
 }
@@ -192,9 +192,9 @@ function tail(c: Cursor, mode: SqlMode): { where?: Expression; orderBy?: OrderIt
   const orderBy = c.atWords('ORDER', 'BY') ? parseOrderBy(c, mode) : undefined
   const limit = c.takeWord('LIMIT') ? parseLimitValue(c) : undefined
   return {
-    ...(where === undefined ? {} : { where }),
-    ...(orderBy === undefined ? {} : { orderBy }),
-    ...(limit === undefined ? {} : { limit }),
+    ...opt('where', where),
+    ...opt('orderBy', orderBy),
+    ...opt('limit', limit),
   }
 }
 
@@ -255,8 +255,8 @@ function singleTable(c: Cursor, table: TableName, at: number): TableReference {
   return {
     kind: REF.TABLE,
     table,
-    ...(partitions === undefined ? {} : { partitions }),
-    ...(alias === undefined ? {} : { alias }),
+    ...opt('partitions', partitions),
+    ...opt('alias', alias),
     at,
   }
 }

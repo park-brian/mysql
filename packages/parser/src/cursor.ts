@@ -93,6 +93,11 @@ export class Cursor {
     this.#conditions.push({ errno: error.errno!, message: error.message })
   }
 
+  /** Retain grammar warnings for failure; valid ASTs keep their existing publisher. */
+  warn(errno: number, message: string): void {
+    this.#conditions?.push({ errno, message, level: 'Warning' })
+  }
+
   /** Refuse an invalid statement before its AST reaches a consumer. */
   checked<T extends object>(parse: () => T): T {
     if (this.#conditions) return parse()
@@ -103,10 +108,11 @@ export class Cursor {
       checkTreeDepth(result)
       return result
     } catch (error) {
-      if (!(error instanceof ParseError) || this.#primary === undefined) throw error
+      if (!(error instanceof ParseError) || this.#conditions.length === 0) throw error
+      const primary = this.#primary ?? error
       if (error !== this.#primary) this.report(error)
-      if (this.#conditions.length > 1) Object.defineProperty(this.#primary, 'conditions', { value: this.#conditions })
-      throw this.#primary
+      if (this.#conditions.length > 1) Object.defineProperty(primary, 'conditions', { value: this.#conditions })
+      throw primary
     } finally {
       this.#primary = undefined
       this.#conditions = undefined

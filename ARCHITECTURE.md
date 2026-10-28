@@ -1590,9 +1590,11 @@ remain fatal; low-level cursor calls still throw immediately. SQL diagnostics
 retain the native first 1,024 parser conditions without changing runtime warning
 totals. Cursor scopes release their history and nesting counters after failures.
 Admission fixtures protect individual matching conditions and primary-error
-attributes even when a whole outcome remains open. Further modifier tightening
-is parked until parser admission warnings retain NCHAR's warning before syntax
-failure; the otherwise improved prototype lost 1,248 such warning facts.
+attributes even when a whole outcome remains open. The current parser-warning
+repair retains NCHAR warning 3720 on checked grammar failures; valid ASTs keep
+their existing publisher. Docker verification is complete; bounded modifier
+tightening is next. A warning-filled 1,024-condition prefix can accompany ERR with zero
+retained errors. Valid-AST warning limits and later binding failures remain open.
 CAST/CONVERT targets leave internal COLLATE to the syntax boundary while column
 datatype readers retain it. Cursor string reading concatenates adjacent literals
 only when expression or ENUM/SET grammar requests it; ordinary callers consume
