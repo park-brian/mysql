@@ -1,3 +1,4 @@
+import { missingKeyColumn } from './errors.ts'
 // M5.25 — foreign keys: what one is, what makes one, and what it does to a write.
 //
 // A foreign key lives in its child table's definition (`options.foreignKeys`),
@@ -35,6 +36,7 @@
 //   - A cascaded update into a table an update further up the chain is
 //     changing is refused (1451): InnoDB "plays safe" rather than know.
 //   - `foreign_key_checks = 0` turns all of it off, cascades included.
+import { columnIndex as indexOfColumn } from './scope.ts'
 import { quoteName } from '@myjs/parser'
 import { FIELD_TYPE, CHARSET_BINARY, expectTyped, equalBytes } from '@myjs/bytes'
 import { sqlError } from '@myjs/protocol'
@@ -187,7 +189,6 @@ export function withForeignKeys(catalog: CatalogApi, schema: string, spec: Table
   for (const fk of existing) taken.add(fk.name.toLowerCase())
   const prefix = `${spec.name}_ibfk_`
   let next = 1 + Math.max(0, ...existing.map((fk) => (fk.name.startsWith(prefix) && /^\d+$/.test(fk.name.slice(prefix.length)) ? Number(fk.name.slice(prefix.length)) : 0)))
-  const column = (name: string): ColumnDef | undefined => spec.columns.find((c) => c.name.toLowerCase() === name.toLowerCase())
 
   for (const clause of clauses) {
     const name = clause.constraint ?? `${prefix}${next++}`
@@ -195,8 +196,8 @@ export function withForeignKeys(catalog: CatalogApi, schema: string, spec: Table
     if (taken.has(name.toLowerCase())) throw sqlError('ER_FK_DUP_NAME', `Duplicate foreign key constraint name '${name}'`)
     taken.add(name.toLowerCase())
     const children = clause.columns.map((c) => {
-      const col = column(c)
-      if (col === undefined) throw sqlError('ER_KEY_COLUMN_DOES_NOT_EXITS', `Key column '${c}' doesn't exist in table`)
+      const col = spec.columns[indexOfColumn(spec.columns, c)]
+      if (col === undefined) throw missingKeyColumn(c)
       // A VIRTUAL column holds no value an index could check (8.4.11: 3733).
       const generation = generationOf(col)
       if (generation !== undefined && !generation.stored) throw sqlError('ER_FK_CANNOT_USE_VIRTUAL_COLUMN', `Foreign key '${name}' uses virtual column '${col.name}' which is not supported.`)
@@ -228,7 +229,7 @@ export function withForeignKeys(catalog: CatalogApi, schema: string, spec: Table
       if (parent === undefined || parent.engine === 'memory') throw sqlError('ER_FK_CANNOT_OPEN_PARENT', `Failed to open the referenced table '${clause.references.table}'`)
       const p = parent
       parentColumns = clause.references.columns.map((c, k) => {
-        const col = p.columns.find((x) => x.name.toLowerCase() === c.toLowerCase())
+        const col = p.columns[indexOfColumn(p.columns, c)]
         if (col === undefined) throw sqlError('ER_FK_NO_COLUMN_PARENT', `Failed to add the foreign key constraint. Missing column '${c}' for constraint '${name}' in the referenced table '${clause.references.table}'`)
         if (storageClass(col.type) !== storageClass((children[k] as ColumnDef).type)) throw sqlError('ER_FK_INCOMPATIBLE_COLUMNS', `Referencing column '${(children[k] as ColumnDef).name}' and referenced column '${col.name}' in foreign key constraint '${name}' are incompatible.`)
         // The parent's spelling, as the dictionary keeps it.
@@ -292,7 +293,7 @@ function convert(field: Uint8Array, from: ColumnDef, to: ColumnDef): Uint8Array 
 
 const same = (a: FieldBytes, b: FieldBytes): boolean => a === null || b === null ? a === b : equalBytes(a, b)
 
-const position = (def: TableDef, name: string): number => def.columns.findIndex((c) => c.name.toLowerCase() === name.toLowerCase())
+const position = (def: TableDef, name: string): number => indexOfColumn(def.columns, name)
 
 /** What a statement's writes share: its tables, opened once, and the keys that reference each. */
 class Enforcer {

@@ -16,14 +16,16 @@
 // UPDATE and DELETE read every row they will change before changing any
 // (doc 30: a scan is not interleaved with writes to its own table), so a row
 // an UPDATE moves within the clustered order is never met twice.
+import { DISALLOWED_DEFAULT_FUNCTIONS } from './registry.ts'
+import { admitValueGenerator, DEFAULT_ADMISSION } from './value-generator.ts'
 import { notSupported, wrongUsage } from './errors.ts'
 import { CHARSET_BINARY, FIELD_TYPE, MyjsError, equalBytes } from '@myjs/bytes'
 import { nativeCallName, someNode } from './ast.ts'
 import { CLIENT, hasCap, messages, sqlError, symbolOf, type OkResult } from '@myjs/protocol'
 import type { ColumnDef, FieldBytes, IndexDef, RowId, Table, TableDef, Trx } from '@myjs/engine'
 import { EngineError } from '@myjs/engine'
-import { NODE, QUERY, REF, parseExpression, type Assignment, type ColumnNode, type DeleteNode, type Expression, type InsertNode, type TableName, type UpdateNode } from '@myjs/parser'
-import { columnVariableError, generationOf, type Generation } from './generated.ts'
+import { NODE, QUERY, REF, parseExpression, type Assignment, type ColumnNode, type DeleteNode, type Expression, type InsertNode, type SqlMode, type TableName, type UpdateNode } from '@myjs/parser'
+import { generationOf, type Generation } from './generated.ts'
 import { decodeField, encodeEnum, encodeField, integerRange, intValue, toInteger, toText, warn, type Condition, type StoreContext, type Value } from '@myjs/types'
 import { compile, EMPTY_SCOPE, type Compiled, type Row, type Scope } from './compile.ts'
 import { checker, checkViolated } from './checks.ts'
@@ -33,7 +35,7 @@ import { accessRows, filter, limit, sort, type ScannedRow } from './operators.ts
 import { chooseAccess } from './plan.ts'
 import { checkTargetNotRead, compileContext, fromContext, limitValue, openTable, planQuery, withClause, type Run } from './query.ts'
 import { planFrom, type FromPlan, type FromTable, type JoinedRow } from './from.ts'
-import { ambiguousColumnError, unknownColumnError, TableScope } from './scope.ts'
+import { columnIndex as indexOfColumn, ambiguousColumnError, unknownColumnError, TableScope } from './scope.ts'
 import { firstKey } from './keys.ts'
 import { NULL_TYPE, type ResultType } from './meta.ts'
 import { modeOf } from './mode.ts'
@@ -77,7 +79,8 @@ export function checkDefaults(run: Run, columns: readonly ColumnDef[], table: re
     if (typeof text !== 'string') continue
     const e = parseExpression(text)
     if (column.attributes?.['defaultExpression'] === true) {
-      checkExpressionDefault(column, e, table)
+      checkDefaultAdmission(e, column.name, modeOf(run.env.session.sqlMode))
+      checkDefaultReferences(column, e, table)
       continue
     }
     // DEFAULT NULL is a default any nullable column may have, a BLOB's too (8.4.11: `JSON DEFAULT NULL`).
@@ -110,16 +113,19 @@ export function checkDefaults(run: Run, columns: readonly ColumnDef[], table: re
 
 const BLOB_TYPES: ReadonlySet<number> = new Set([FIELD_TYPE.TINY_BLOB, FIELD_TYPE.BLOB, FIELD_TYPE.MEDIUM_BLOB, FIELD_TYPE.LONG_BLOB, FIELD_TYPE.JSON, FIELD_TYPE.GEOMETRY])
 
-function checkExpressionDefault(column: ColumnDef, e: Expression, table: readonly ColumnDef[]): void {
-  const at = table.findIndex((c) => c.name.toLowerCase() === column.name.toLowerCase())
+/** Source policy is independent of generated-column membership; no expression is evaluated. */
+export function checkDefaultAdmission(expression: Expression, column: string, mode: SqlMode): void {
+  admitValueGenerator(expression, column, mode, DEFAULT_ADMISSION, DISALLOWED_DEFAULT_FUNCTIONS)
+}
+
+function checkDefaultReferences(column: ColumnDef, e: Expression, table: readonly ColumnDef[]): void {
+  const at = indexOfColumn(table, column.name)
   someNode(e, (x) => {
     const n = x as Expression
-    if (n.kind === NODE.SUBQUERY) throw sqlError('ER_DEFAULT_VAL_GENERATED_FUNCTION_IS_NOT_ALLOWED', `Default value expression of column '${column.name}' contains a disallowed function.`)
-    if (n.kind === NODE.VARIABLE) throw columnVariableError(column.name)
     if (n.kind === NODE.COLUMN) {
       const parts = n.parts
       const name = parts[parts.length - 1] as string
-      const i = table.findIndex((c) => c.name.toLowerCase() === name.toLowerCase())
+      const i = indexOfColumn(table, name)
       if (i < 0) throw unknownColumnError(name, 'default value expression')
       const other = table[i] as ColumnDef
       if (other.autoIncrement === true) throw sqlError('ER_DEFAULT_VAL_GENERATED_REF_AUTO_INC', `Default value expression of column '${column.name}' cannot refer to an auto-increment column.`)
@@ -444,7 +450,7 @@ function compileUpsert(run: Run, def: TableDef, node: InsertNode, targets: reado
   const tried = n + (alias === undefined ? 0 : targets.length)
   const insertValues = {
     resolve: (name: string) => {
-      const i = def.columns.findIndex((c) => c.name.toLowerCase() === name.toLowerCase())
+      const i = indexOfColumn(def.columns, name)
       if (i < 0) throw unknownColumnError(name, 'field list')
       return { index: tried + i, type: own.resolve([name], 'field list').type }
     },
@@ -510,7 +516,7 @@ function insertSource(run: Run, node: InsertNode, def: TableDef, trx: Trx): {
   readonly selectRefs: readonly { readonly ref: ColumnNode; readonly type: ResultType }[]
 } {
   const columnIndex = (name: string): number => {
-    const i = def.columns.findIndex((c) => c.name.toLowerCase() === name.toLowerCase())
+    const i = indexOfColumn(def.columns, name)
     if (i < 0) throw unknownColumnError(name, 'field list')
     return i
   }

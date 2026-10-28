@@ -40,7 +40,8 @@
 // takes rows in the order they were inserted, where this takes them in
 // the table's; after a sync to disk a prefix scans its words in order; and
 // MATCH over a derived table, which the server merges, is 1191 here.
-import { notSupported, wrongUsage, wrongArgumentsError } from './errors.ts'
+import { columnIndex as indexOfColumn } from './scope.ts'
+import { notSupported, wrongUsage, wrongArgumentsError, missingKeyColumn } from './errors.ts'
 import { CHARSET_BINARY, FIELD_TYPE } from '@myjs/bytes'
 import { collation, encodeCollation, requireCollationInfo } from '@myjs/charsets'
 import type { ColumnDef, TableDef } from '@myjs/engine'
@@ -68,8 +69,8 @@ export function checkFulltext(engine: string, columns: readonly ColumnDef[], nam
   if (engine === 'memory') throw sqlError('ER_TABLE_CANT_HANDLE_FT', "The used table type doesn't support FULLTEXT indexes")
   let charset: string | undefined
   for (const name of names) {
-    const c = columns.find((x) => x.name.toLowerCase() === name.toLowerCase())
-    if (c === undefined) throw sqlError('ER_KEY_COLUMN_DOES_NOT_EXITS', `Key column '${name}' doesn't exist in table`)
+    const c = columns[indexOfColumn(columns, name)]
+    if (c === undefined) throw missingKeyColumn(name)
     if (c.type.type === FIELD_TYPE.JSON) throw sqlError('ER_JSON_USED_AS_KEY', `JSON column '${c.name}' supports indexing only via generated columns on a specified JSON path.`)
     // Every column of one index is text in one character set (8.4.11: 1283 on the first that is not).
     const own = c.type.collationId === undefined || c.type.collationId === CHARSET_BINARY ? undefined : requireCollationInfo(c.type.collationId).charset
@@ -570,6 +571,6 @@ export const noExpansion = () => notSupported('WITH QUERY EXPANSION')
 
 /** The fold a set of columns' words take: their collation's. */
 export function foldFor(def: TableDef, columns: readonly string[]): (w: string) => string {
-  const c = def.columns.find((x) => x.name.toLowerCase() === (columns[0] ?? '').toLowerCase())
+  const c = def.columns[indexOfColumn(def.columns, columns[0] ?? '')]
   return folder(c?.type.collationId ?? 255)
 }

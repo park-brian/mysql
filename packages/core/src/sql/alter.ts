@@ -13,8 +13,8 @@
 // (keys, foreign keys on both sides, CHECKs, FULLTEXT), then keys renamed,
 // columns added, indexes and foreign keys added. One not here is refused by
 // name.
-import { notSupported, tableExistsError } from './errors.ts'
-import { unknownColumnError, requireSchema } from './scope.ts'
+import { notSupported, tableExistsError, missingKeyColumn } from './errors.ts'
+import { unknownColumnError, requireSchema, columnIndex as indexOfColumn } from './scope.ts'
 import { nativeCallName } from './ast.ts'
 import { FIELD_TYPE, MyjsError, expectTyped } from '@myjs/bytes'
 import { sqlError, type OkResult } from '@myjs/protocol'
@@ -82,7 +82,7 @@ export function alterTable(run: Run, catalog: CatalogApi, statement: AlterTableN
   const dropped = new Set<string>()
   const renamed = new Map<string, string>()
   const columnAt = (name: string): number => {
-    const i = columns.findIndex((c) => c.name.toLowerCase() === name.toLowerCase())
+    const i = indexOfColumn(columns, name)
     if (i < 0) throw unknownColumnError(name, def.name)
     return i
   }
@@ -92,7 +92,7 @@ export function alterTable(run: Run, catalog: CatalogApi, statement: AlterTableN
     const [from] = sources.splice(i, 1)
     let at = 0
     if (position !== 'FIRST') {
-      const j = columns.findIndex((x) => x.name.toLowerCase() === position.after.toLowerCase())
+      const j = indexOfColumn(columns, position.after)
       if (j < 0) throw unknownColumnError(position.after, 'table definition')
       at = j + 1
     }
@@ -112,7 +112,7 @@ export function alterTable(run: Run, catalog: CatalogApi, statement: AlterTableN
   for (const a of of('drop')) {
     const name = a.name as string
     if (a.what === 'COLUMN') {
-      const i = columns.findIndex((c) => same(c.name, name))
+      const i = indexOfColumn(columns, name)
       if (i < 0) throw cantDrop(name)
       columns.splice(i, 1)
       sources.splice(i, 1)
@@ -232,7 +232,7 @@ export function alterTable(run: Run, catalog: CatalogApi, statement: AlterTableN
     const touched = named.find((n) => now(n) !== n)
     if (touched === undefined) return true
     if (named.length === 1 && dropped.has(touched)) return false
-    const original = def.columns.find((x) => x.name.toLowerCase() === touched)?.name ?? touched
+    const original = def.columns[indexOfColumn(def.columns, touched)]?.name ?? touched
     throw sqlError('ER_DEPENDENT_BY_CHECK_CONSTRAINT', `Check constraint '${c.name}' uses column '${original}', hence column cannot be dropped or renamed.`)
   })
 
@@ -270,7 +270,7 @@ export function alterTable(run: Run, catalog: CatalogApi, statement: AlterTableN
     if (a.position === 'FIRST') at = 0
     else if (a.position !== undefined) {
       const after = a.position.after
-      const i = columns.findIndex((c) => c.name.toLowerCase() === after.toLowerCase())
+      const i = indexOfColumn(columns, after)
       if (i < 0) throw unknownColumnError(after, 'table definition')
       at = i + 1
     }
@@ -294,8 +294,8 @@ export function alterTable(run: Run, catalog: CatalogApi, statement: AlterTableN
     return name
   }
   const known = (name: string): string => {
-    const c = columns.find((col) => col.name.toLowerCase() === name.toLowerCase())
-    if (c === undefined) throw sqlError('ER_KEY_COLUMN_DOES_NOT_EXITS', `Key column '${name}' doesn't exist in table`)
+    const c = columns[indexOfColumn(columns, name)]
+    if (c === undefined) throw missingKeyColumn(name)
     return c.name
   }
   for (const c of added) if (c.unique === true) indexes.push({ name: nameFor(undefined, c.name), kind: 'unique', parts: [{ column: c.name }] })
@@ -371,7 +371,7 @@ export function alterTable(run: Run, catalog: CatalogApi, statement: AlterTableN
     const generation = generationOf(c)
     if (generation === undefined) continue
     const named = [...columnsOf(generation.text)].find((n) => dropped.has(n))
-    if (named !== undefined) throw sqlError('ER_DEPENDENT_BY_GENERATED_COLUMN', `Column '${def.columns.find((x) => x.name.toLowerCase() === named)?.name ?? named}' has a generated column dependency.`)
+    if (named !== undefined) throw sqlError('ER_DEPENDENT_BY_GENERATED_COLUMN', `Column '${def.columns[indexOfColumn(def.columns, named)]?.name ?? named}' has a generated column dependency.`)
   }
   checkGenerated(columns, modeOf(run.env.session.sqlMode))
   columns.splice(0, columns.length, ...stampGenerated(columns, requireCollationInfo(run.env.session.characterSet).charset))

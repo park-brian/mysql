@@ -77,7 +77,7 @@ import { checkClauses, checkForeignKeyActions, withChecks } from './checks.ts'
 import { showCreateTable } from './show-create.ts'
 import { DEFAULT_COLLATION, createTableSpec, deprecationWarnings, duplicateKeys, duplicateKeyText, resolveCollation, resolveOptionsCollation } from './ddl.ts'
 import { foreignKeyChecks, foreignKeyClause, foreignKeysOf, referencingKeys, withForeignKeys } from './foreign-keys.ts'
-import { checkDefaults, insert, remove, update } from './dml.ts'
+import { checkDefaultAdmission, checkDefaults, insert, remove, update } from './dml.ts'
 import { fulltextOf } from './fulltext.ts'
 import { columnDefinition, intType, stringType } from './meta.ts'
 import { columnsOf, compileContext, planQuery, resultSet, resultSteps, viewTable, type Run } from './query.ts'
@@ -336,6 +336,7 @@ export class SqlExecutor implements Executor {
       const expression = generated?.expr ?? value
       if (expression !== undefined) someNode(expression, bind)
       if (generated !== undefined) checkGeneratedAdmission(generated.expr, column.name, modeOf(session.sqlMode))
+      else if (column.defaultExpression === true && value !== undefined) checkDefaultAdmission(value, column.name, modeOf(session.sqlMode))
       someNode(remaining, bind)
     }
     if (statement.kind === STATEMENT.CREATE_TABLE) {

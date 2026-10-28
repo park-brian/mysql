@@ -29,6 +29,13 @@ const cases = [
   ['CREATE TABLE u(v INT,g INT AS(ROW_NUMBER() OVER()))', 3593, true],
   ['ALTER TABLE t ADD COLUMN g INT AS(SLEEP(v))', 3763, false],
   ['ALTER TABLE t ADD COLUMN g INT AS(missing)', 1054, true],
+  ['CREATE TABLE u(v INT DEFAULT(SLEEP(0)))', 3770, false],
+  ['CREATE TABLE u(v INT DEFAULT(SLEEP(@x:=@x+1)))', 3772, false],
+  ['CREATE TABLE u(v INT DEFAULT((SELECT 1)))', 3769, false],
+  ['CREATE TABLE u(v INT DEFAULT(?))', 3769, false],
+  ['ALTER TABLE t ADD COLUMN g INT DEFAULT(SLEEP(v))', 3770, false],
+  ['ALTER TABLE t MODIFY COLUMN v INT DEFAULT(SLEEP(0))', 3770, false],
+  ['ALTER TABLE t ALTER COLUMN v SET DEFAULT(SLEEP(0))', 3770, true],
   ['ALTER TABLE t ALTER COLUMN v SET DEFAULT((SELECT 1))', 3769, true],
 ] as const
 const apis = ['query', 'execute', 'prepare'] as const
@@ -68,7 +75,8 @@ test('M5.10: column admission preserves rollbackability while later resolution r
         let error: unknown
         try { await command(conn, sql, api) } catch (e) { error = e }
         if (api === 'prepare' && late) assert.equal(error, undefined, label)
-        else assert.equal((error as mysql.QueryError | undefined)?.errno, code, label)
+        // Text protocol rejects placeholder syntax before column admission.
+        else assert.equal((error as mysql.QueryError | undefined)?.errno, api === 'query' && sql.includes('?') ? 1064 : code, label)
         await conn.query('ROLLBACK')
         const rows = (await conn.query({ sql: 'SELECT * FROM t', rowsAsArray: true }))[0]
         assert.deepEqual(rows, api !== 'prepare' && late ? [[7]] : [], label + ': prior write')

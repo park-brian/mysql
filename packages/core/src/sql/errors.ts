@@ -24,3 +24,8 @@ export function unknownTableError(name: string): SqlError {
 export function wrongArgumentsError(name: string): SqlError {
   return sqlError('ER_WRONG_ARGUMENTS', `Incorrect arguments to ${name}`)
 }
+
+/** Key validation keeps its caller's column spelling and position among checks. */
+export function missingKeyColumn(name: string): SqlError {
+  return sqlError('ER_KEY_COLUMN_DOES_NOT_EXITS', `Key column '${name}' doesn't exist in table`)
+}

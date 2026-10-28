@@ -25,7 +25,7 @@ import { invalidGroupFunction } from './registry.ts'
 import { notSupported, wrongArgumentsError } from './errors.ts'
 import { clusteredIndex, indexParts } from './indexes.ts'
 import { collationInfoByName, encodeCollation } from '@myjs/charsets'
-import { ambiguousColumnError, unknownColumnError, requireSchema, safeResolve, TableScope } from './scope.ts'
+import { ambiguousColumnError, unknownColumnError, requireSchema, safeResolve, TableScope, columnIndex as indexOfColumn } from './scope.ts'
 import { holdsRead, planFrom, type DerivedPlan, type DerivedSource, type FromContext, type FromPlan, type JoinCondition } from './from.ts'
 import { firstKey, rowKey, valueKey } from './keys.ts'
 import { indexLookup, planNode, wrap, type PlanNode } from './explain.ts'
@@ -2369,7 +2369,7 @@ function checkFullGroupBy(
     for (const t of rollup ? [] : (scope?.tables ?? [])) {
       const def = t.def
       if (def === undefined) continue
-      const offsetOf = (name: string): number => t.offset + def.columns.findIndex((c) => c.name.toLowerCase() === name.toLowerCase())
+      const offsetOf = (name: string): number => t.offset + indexOfColumn(def.columns, name)
       if (!def.indexes.some((i) => uniqueKey(def, i) && (i.kind === 'primary' || i.parts.every((p) => p.prefix === undefined)) && i.parts.every((p) => determined.has(offsetOf(p.column))))) continue
       for (let i = 0; i < def.columns.length; i++) determined.add(t.offset + i)
     }

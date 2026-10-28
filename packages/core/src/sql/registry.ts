@@ -121,21 +121,35 @@ const GENERATOR_FUNCTION_ALIASES: Readonly<Record<string, string>> = {
   VERSION: 'version()',
 }
 
-/**
- * Functions whose value is not the row's alone (the statement's clock, the
- * session, the server), with their native diagnostic spelling. Generated
- * admission refuses these calls. CHECK currently consults this membership too;
- * its context-specific differences remain recorded in the roadmap.
- */
-export const NOT_ROW_DETERMINED: ReadonlyMap<string, string> = new Map([
+/** Diagnostic spelling for a native ASCII lookup key, independent of admission policy. */
+export function valueGeneratorFunctionName(name: string): string {
+  return GENERATOR_FUNCTION_ALIASES[name] ?? name.toLowerCase()
+}
+
+// These cohorts describe only the 39 verified names below, not CHECK or
+// a universal relation between the two contexts' prohibition policies.
+/** Prohibited in generated columns, permitted in DEFAULT admission. */
+const GENERATED_ONLY = [
   'RAND', 'UUID', 'UUID_SHORT', 'RANDOM_BYTES', 'NOW', 'CURRENT_TIMESTAMP',
   'LOCALTIME', 'LOCALTIMESTAMP', 'SYSDATE', 'CURDATE', 'CURRENT_DATE', 'CURTIME',
   'CURRENT_TIME', 'UTC_DATE', 'UTC_TIME', 'UTC_TIMESTAMP', 'UNIX_TIMESTAMP', 'CONNECTION_ID',
   'USER', 'CURRENT_USER', 'SESSION_USER', 'SYSTEM_USER', 'CURRENT_ROLE', 'DATABASE',
-  'SCHEMA', 'LAST_INSERT_ID', 'FOUND_ROWS', 'ROW_COUNT', 'SLEEP', 'GET_LOCK',
-  'RELEASE_LOCK', 'RELEASE_ALL_LOCKS', 'IS_FREE_LOCK', 'IS_USED_LOCK', 'BENCHMARK', 'LOAD_FILE',
-  'MASTER_POS_WAIT', 'SOURCE_POS_WAIT', 'VERSION',
-].map((name) => [name, GENERATOR_FUNCTION_ALIASES[name] ?? name.toLowerCase()] as const))
+  'SCHEMA',
+] as const
+
+/** Independently verified as prohibited in both generated and DEFAULT expressions. */
+const GENERATED_AND_DEFAULT = [
+  'LAST_INSERT_ID', 'FOUND_ROWS', 'ROW_COUNT', 'SLEEP', 'GET_LOCK', 'RELEASE_LOCK',
+  'RELEASE_ALL_LOCKS', 'IS_FREE_LOCK', 'IS_USED_LOCK', 'BENCHMARK', 'LOAD_FILE', 'MASTER_POS_WAIT',
+  'SOURCE_POS_WAIT', 'VERSION',
+] as const
+
+export const DISALLOWED_DEFAULT_FUNCTIONS: ReadonlySet<string> = new Set(GENERATED_AND_DEFAULT)
+
+/** Native generated-column diagnostic spelling; CHECK's distinct permissions remain separate. */
+export const NOT_ROW_DETERMINED: ReadonlyMap<string, string> = new Map(
+  [...GENERATED_ONLY, ...GENERATED_AND_DEFAULT].map((name) => [name, valueGeneratorFunctionName(name)] as const),
+)
 
 /** The functions that are conditions themselves, as a comparison is: a CHECK may be one alone. */
 export const CONDITION_FUNCTIONS: ReadonlySet<string> = new Set(['JSON_VALID', 'REGEXP_LIKE', 'ISNULL', 'STRCMP', 'JSON_CONTAINS', 'JSON_CONTAINS_PATH', 'JSON_OVERLAPS'])

@@ -24,6 +24,12 @@ import { messages, sqlError, type SqlError } from '@myjs/protocol'
 import type { Scope } from './compile.ts'
 import { columnResultType, type ResultType } from './meta.ts'
 
+/** First case-insensitive column match; callers retain qualification and error precedence. */
+export function columnIndex(columns: readonly { readonly name: string }[], name: string): number {
+  const lower = name.toLowerCase()
+  return columns.findIndex((column) => column.name.toLowerCase() === lower)
+}
+
 /** The resolver supplies the same raw name and clause on multiple matches. */
 export function ambiguousColumnError(column: string, clause: string): SqlError {
   return sqlError('ER_NON_UNIQ_ERROR', messages.ambiguousColumn(column, clause))
@@ -159,7 +165,7 @@ function resolveIn(
   clause: string,
   parent: Scope | undefined,
 ): { readonly index: number; readonly type: ResultType; readonly depth?: number } {
-  const column = (parts[parts.length - 1] as string).toLowerCase()
+  const column = parts[parts.length - 1] as string
   const tableName = parts.length >= 2 ? parts[parts.length - 2] : undefined
   const schemaName = parts.length === 3 ? parts[0] : undefined
   const found: { index: number; type: ResultType }[] = []
@@ -173,7 +179,7 @@ function resolveIn(
     // or a CTE has no schema, and any qualifier passes it (8.4.11: `zz.d.c`
     // over `(SELECT …) d` reads d.c).
     if (schemaName !== undefined && t.schema !== '' && t.schema !== schemaName && !(system && schemaName.toLowerCase() === 'information_schema')) continue
-    const i = t.columns.findIndex((c) => c.name.toLowerCase() === column)
+    const i = columnIndex(t.columns, column)
     if (i < 0) continue
     found.push({ index: t.offset + i, type: (t.columns[i] as ScopeColumn).type })
   }

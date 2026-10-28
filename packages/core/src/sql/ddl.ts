@@ -17,7 +17,7 @@
 //
 // What the engine does not interpret rides in `attributes`: a column's
 // `DEFAULT` and `ON UPDATE` as SQL text, compiled when a row needs them.
-import { notSupported } from './errors.ts'
+import { notSupported, missingKeyColumn } from './errors.ts'
 import { CHARSET_BINARY, FIELD_TYPE } from '@myjs/bytes'
 import { requireCollationInfo } from '@myjs/charsets'
 import { clusteredIndexOf, type ColumnDef, type EngineName, type IndexDef, type TableSpec } from '@myjs/engine'
@@ -314,7 +314,7 @@ export function createTableSpec(node: CreateTableNode, schemaCollation: number, 
   }
   const known = (name: string): string => {
     const c = declared.get(name.toLowerCase())
-    if (c === undefined) throw sqlError('ER_KEY_COLUMN_DOES_NOT_EXITS', `Key column '${name}' doesn't exist in table`)
+    if (c === undefined) throw missingKeyColumn(name)
     return c
   }
 

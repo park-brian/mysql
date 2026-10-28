@@ -160,8 +160,8 @@ resolution phases or explicit-name handling. The 378-command capture protects
 Native function classification now shares an ASCII spelling key and the existing
 call-role flag. Quoted/spaced lexer names retain collision grammar, and Unicode
 lookalikes bypass native binding before argument effects. The 6,084-command
-capture now protects 5,367 complete matches with unchanged native answers;
-all 717 remaining outcomes stay recorded. Generated-column execution admission now checks arguments before calls, then
+capture now protects 5,430 complete matches with unchanged native answers;
+all 654 remaining outcomes stay recorded. Generated-column execution admission now checks arguments before calls, then
 references, aggregates and windows in written order through its existing owner.
 The 3,276-command capture now protects 1,792 complete matches without losing
 protected facts; definitions and existing rows are checked on every frame.
@@ -174,15 +174,21 @@ expression admission, without resolving columns/aggregates or executing DDL. It
 rejects variables, subqueries, placeholders and prohibited calls after system-name
 binding, preserving SQL mode and generated/DEFAULT precedence. All 48 generated
 execute/PREPARE gaps in the older function capture close. A new 685-command capture
-protects 252 complete matches and 670 primary diagnostics across five modes.
+protects 256 complete matches and 680 primary diagnostics across five modes.
 Ordered statement admission now rejects generated expressions before DDL dispatch,
 so prior writes remain rollbackable. Column compatibility and name binding retain
 native order; later reference/aggregate/window failures retain implicit commit.
 Native diagnostic spelling is shared across 39 fixed keys with explicit aliases.
-Five new captures preserve 2,538 observations; 90 transaction boundaries and nine
-missing-database cases pass against both engines. DEFAULT early admission is next;
-ALTER SET DEFAULT retains its late execution boundary. CHECK permissions/namespace,
-ANSI SHOW CREATE and other function gaps remain open.
+Five captures preserve 2,538 observations. DEFAULT now shares early ordered
+admission with its own prohibition policy; clocks, randomness and session
+functions remain admitted. A pure postorder check shares only traversal and native
+diagnostic construction with generated columns. ALTER SET DEFAULT retains its
+late execution boundary and non-executing PREPARE behavior. The extended tests
+pass 153 transaction boundaries and nine missing-database cases against both
+engines. Nineteen admission captures enforce 33,678/39,368 complete commands,
+with unchanged native answers and 5,690 open outcomes. CHECK permissions/namespace,
+malformed declaration ordering, ANSI SHOW CREATE and other function gaps remain
+open. M5.10 stays partial.
 CAST/CONVERT targets leave internal COLLATE to the syntax boundary while column
 datatype readers retain it. Cursor string reading concatenates adjacent literals
 only when expression or ENUM/SET grammar requests it; ordinary callers consume

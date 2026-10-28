@@ -116,7 +116,7 @@ import { castAsJson } from './json.ts'
 import { jsonPathFunction, memberOf, unquote } from './json-path.ts'
 import { regexpLike } from './regexp.ts'
 import { valueKey } from './keys.ts'
-import { requireSchema, safeResolve, TableScope, unknownColumnError } from './scope.ts'
+import { requireSchema, safeResolve, TableScope, unknownColumnError, columnIndex as indexOfColumn } from './scope.ts'
 import { bitBytes } from './wire.ts'
 import { badAgainst, booleanRank, Corpus, foldFor, fulltextOf, naturalRank, noExpansion, noIndex, parseBoolean, queryText, wordsOf, type Term } from './fulltext.ts'
 import { windowNotAllowed } from './window.ts'
@@ -2789,7 +2789,7 @@ function defaultFunction(e: CallNode, ctx: CompileContext): Compiled {
   const r = scope.resolve(arg.parts, ctx.clause)
   const at = scope instanceof TableScope && (r.depth ?? 0) === 0 ? scope.columnAt(r.index) : undefined
   const def = at?.table.def
-  const column = def?.columns.find((c) => c.name.toLowerCase() === (at?.column.name ?? '').toLowerCase())
+  const column = def?.columns[indexOfColumn(def.columns, at?.column.name ?? '')]
   if (column === undefined) throw notSupported('DEFAULT() of a column that is not a base table\'s')
   const type = { ...r.type, nullable: true }
   const text = column.attributes?.['default']
@@ -2861,7 +2861,7 @@ function matchAgainst(e: MatchNode, ctx: CompileContext): Compiled {
   // A constant query is parsed before any row is read, so its errors come
   // from an empty table too (8.4.11: 33 nested groups is 209 there).
   if (boolean && constantNode(e.against)) parseBoolean(queryText(against.eval([], constantEnv(ctx))), fold)
-  const positions = index.columns.map((c) => def.columns.findIndex((x) => x.name.toLowerCase() === c.toLowerCase()))
+  const positions = index.columns.map((c) => indexOfColumn(def.columns, c))
   const wordsIn = (values: readonly Value[], raw?: Map<string, string>) => values.flatMap((v) => (v === null ? [] : wordsOf(toText(v), fold, raw)))
   // Read once a statement: the query reads no row's column, so a correlated run shares it through the memo.
   let preparedFor: object | undefined

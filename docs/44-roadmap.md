@@ -650,15 +650,45 @@ source proof covers 457 test files/fixtures, 205 runtime sources and tooling
 before cleanup. Core/facade measure 334,354/334,241 B gzipped; raw output is
 391 B smaller than e79ce89, whose eleven required CI jobs pass.
 
-**Next bounded slice:** complete DEFAULT's own early expression admission through
-this ordered owner, and retain its late execution validator for ALTER SET DEFAULT.
-Use the committed DEFAULT and boundary captures as the ratchet. Clocks, randomness
-and session functions are positive controls; DEFAULT's prohibited set must remain
-independent of generated-column membership. Reuse verified diagnostic spelling
-without moving reference checks or evaluation earlier. CHECK still has distinct
-permissions (including native RANDOM_BYTES/SYSDATE acceptance), namespace/folding
-and ordering gaps. Malformed declaration ordering, ANSI SHOW CREATE and other
-function gaps remain open. M5.10 stays partial; totals remain 144/190 and M5 42/53.
+**DEFAULT admission, verified (2026-10-28):** ordered
+CREATE/ALTER column admission now applies DEFAULT's independent prohibition policy
+before DDL effects. ALTER SET DEFAULT retains its late execution validator and
+non-executing PREPARE behavior. The shared pure postorder algorithm receives a
+closed diagnostic context and a source-owned prohibited set; reference resolution,
+evaluation and transaction writes remain outside it. Native print identity remains
+independent of membership. The verified 39 names have explicit generated-only and
+generated-plus-DEFAULT cohorts; this is not a universal relation between policies.
+Twenty-one column-name lookups now share first-match case folding, preserving
+qualification, caller errors and validation phases. Missing-key-column errors
+share construction at four existing sites. All nine unchanged size caps pass:
+core/facade are 334,313/334,214 B gzipped and raw output is 686 B smaller than
+4a60141. All 39,368 admission observations preserve every matching fact; 625 more
+commands agree completely, strengthening seven captures with unchanged native
+answer pools. Nineteen captures now enforce 33,678 complete commands, retain
+5,690 open outcomes and protect 168,357 individual conditions. All 738 DEFAULT
+primary errors agree. The extended native/current transaction tests pass 153
+boundaries plus nine missing-database cases; the actual 4a60141 baseline fails
+DEFAULT SLEEP admission. Seeded executor fuzzing passes 20,000 statements. Repeated actual census is byte-identical at 17,530/17,589. All official-suite
+file outcomes and 37 shared passes remain unchanged; default_as_expr now reaches
+the later unsupported UUID conversion control (1235 instead of 1406), replacing
+its repaired missing-3770 refusal. The recorded failure reasons are refreshed.
+All 23 focused tests and all 2,538 permanent native replays pass. Fresh Docker
+--reference passes 1,496 main tests, four latency tests, typecheck, lint, all nine
+unchanged caps, package/typed smoke, the real client and all seven pinned corpora.
+Frozen-source proof covers 457 test files/fixtures, 206 runtime sources and tooling
+before cleanup. A later comment-only header move preserves identical compiled
+JavaScript; the final source proof includes it and the refreshed official fixture.
+All 24 parser sources remain byte-identical to 4a60141.
+The preceding 4a60141 CI passed all eleven required jobs. CHECK permissions/
+namespace, malformed declaration ordering, ANSI SHOW CREATE and other function
+gaps remain open; M5.10 stays partial.
+
+**Next bounded slice:** repair CHECK's independently verified RANDOM_BYTES and
+SYSDATE permission differences using its existing validator. Preserve generated
+and DEFAULT permissions, raw/native function identity, diagnostic aliases and
+validation timing. Keep namespace/order differences separate until native probes
+establish their behavior. Then continue the bounded function work before the
+remaining M5.47, M5.49 and M5.50 strategies and browser work.
 
 Keep function, keyword and value namespaces distinct. Charset-value validation,
 separate event behavior, valid-AST warnings/limits, later binding failures,

@@ -37,7 +37,7 @@ function capturedValue(value: unknown): unknown {
   return value
 }
 
-for (const [reference, total, matched] of [[literalAdmission, 1623, 1521], [conditionHistories, 198, 192], [castDatatype, 480, 398], [castModifiers, 16648, 16274], [warningAdmission, 325, 248], [modifierDeprecation, 1008, 764], [keywordIdentity, 150, 146], [keywordSelectors, 1850, 1670], [shorthandWarnings, 552, 396], [schemaPresence, 378, 177], [functionIdentity, 6084, 5367], [generatedAdmission, 3276, 1792], [functionQuoting, 3573, 2820], [generatedPrepare, 685, 252], [expressionDefaults, 738, 298], [columnBoundaries, 1017, 252], [columnOrder, 63, 34], [columnUsage, 18, 10], [functionDiagnostics, 702, 442]] as const) test('M5.10: admission preserves primary errors, condition histories, headers and effects: ' + reference.schema, async () => {
+for (const [reference, total, matched] of [[literalAdmission, 1623, 1521], [conditionHistories, 198, 192], [castDatatype, 480, 398], [castModifiers, 16648, 16274], [warningAdmission, 325, 248], [modifierDeprecation, 1008, 764], [keywordIdentity, 150, 146], [keywordSelectors, 1850, 1670], [shorthandWarnings, 552, 396], [schemaPresence, 378, 189], [functionIdentity, 6084, 5430], [generatedAdmission, 3276, 1792], [functionQuoting, 3573, 2820], [generatedPrepare, 685, 256], [expressionDefaults, 738, 476], [columnBoundaries, 1017, 610], [columnOrder, 63, 42], [columnUsage, 18, 12], [functionDiagnostics, 702, 442]] as const) test('M5.10: admission preserves primary errors, condition histories, headers and effects: ' + reference.schema, async () => {
   const host = process.env.MYSQL_REFERENCE_HOST
   const db = host === undefined ? await MySQL.open(':memory:', { multipleStatements: true }) : undefined
   const transport = db === undefined
