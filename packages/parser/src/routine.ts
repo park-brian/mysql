@@ -162,9 +162,8 @@ export function parseCreateEvent(c: Cursor, mode: SqlMode, statement: StatementP
   } else {
     c.expectWord('EVERY')
     const every = parseExpressionFrom(c, mode)
-    const u = c.peek()
-    const unit = u.text.toUpperCase()
-    if (u.kind !== TOKEN.IDENTIFIER || u.quoted === true || !INTERVAL_UNITS.has(unit)) c.fail()
+    const unit = keywordText(c.peek())
+    if (!INTERVAL_UNITS.has(unit)) c.fail()
     c.skip()
     const starts = c.takeWord('STARTS') ? parseExpressionFrom(c, mode) : undefined
     const ends = c.takeWord('ENDS') ? parseExpressionFrom(c, mode) : undefined

@@ -143,9 +143,12 @@ repair passes Docker verification. The migrated grammar readers share one token
 owner for unquoted ASCII keyword identity, retaining Unicode identifier spelling.
 Native-rejected Unicode-lookalike SET/INSERT and DROP/CREATE now fail before
 execution. A 150-command capture enforces 134 complete matches while retaining
-sixteen function-name and charset-value gaps. Remaining direct interval,
-event-schedule and resource-limit keyword selectors need a native audit next;
-failed-admission ASCII/UNICODE warnings follow, with their native timing retained.
+sixteen function-name and charset-value gaps. Interval units, event-schedule units
+and first/subsequent resource selectors now share that owner too. Their capture
+improves 1,046 to 1,670 complete outcomes of 1,850, with all 180 separate event
+outcomes retained. Quoted interval units are refused, and actual DROP results
+guard event storage. Failed-admission ASCII/UNICODE warnings are next, with their
+native timing retained.
 CAST/CONVERT targets leave internal COLLATE to the syntax boundary while column
 datatype readers retain it. Cursor string reading concatenates adjacent literals
 only when expression or ENUM/SET grammar requests it; ordinary callers consume

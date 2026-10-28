@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { Cursor, NODE, NO_SQL_MODE, ParseError, atDataType, lex, parseDataType, parseExpression, parseStatement } from '@myjs/parser'
+import { Cursor, NODE, NO_SQL_MODE, ParseError, atDataType, lex, parseDataType, parseExpression, parseSqlMode, parseStatement } from '@myjs/parser'
 
 test('ASCII keywords and Unicode identifiers keep distinct identities', () => {
   for (const word of ['ſelect', 'ıf', 'falſe', 'caſe', 'unıcode', 'bıNARY']) {
@@ -39,4 +39,32 @@ test('datatype admission uses the same keyword identity without consuming an inv
   assert.throws(() => parseDataType(c, NO_SQL_MODE), { errno: 1064 })
   assert.equal(c.at, 0)
   assert.equal(parseDataType(new Cursor(lex('bInArY(2)')), NO_SQL_MODE).name, 'BINARY')
+})
+
+test('interval units share keyword identity and retain their canonical spelling', () => {
+  const e = parseExpression("DATE_ADD('2001-02-03',INTERVAL 1 dAy)")
+  assert.ok(e.kind === NODE.CALL)
+  const interval = e.args[1]
+  assert.ok(interval?.kind === NODE.INTERVAL)
+  assert.equal(interval.unit, 'DAY')
+  for (const mode of ['', 'ANSI_QUOTES']) for (const unit of ['`DAY`', '"DAY"', 'MıNUTE', 'ſECOND']) {
+    assert.throws(() => parseStatement("SELECT DATE_ADD('2001-02-03',INTERVAL 1 " + unit + ')', { sqlMode: parseSqlMode(mode) }), { errno: 1064 })
+  }
+})
+
+test('event schedules refuse Unicode keyword lookalikes before storing a program', () => {
+  parseStatement('CREATE EVENT e ON SCHEDULE EVERY 1 mInUtE DISABLE DO SET @x=1')
+  for (const unit of ['MıNUTE', 'ſECOND', '`DAY`']) {
+    assert.throws(() => parseStatement('CREATE EVENT e ON SCHEDULE EVERY 1 ' + unit + ' DISABLE DO SET @x=1'), { errno: 1064 })
+  }
+})
+
+test('resource selectors use the same keyword rule for first and subsequent limits', () => {
+  for (const name of ['MAX_QUERIES_PER_HOUR', 'MAX_UPDATES_PER_HOUR', 'MAX_CONNECTIONS_PER_HOUR', 'MAX_USER_CONNECTIONS']) {
+    parseStatement("CREATE USER u WITH " + name.toLowerCase() + ' 1')
+    const lookalike = name.replaceAll('S', 'ſ').replaceAll('I', 'ı')
+    for (const prefix of ['', 'MAX_QUERIES_PER_HOUR 2 ']) {
+      assert.throws(() => parseStatement('CREATE USER u WITH ' + prefix + lookalike + ' 1'), { errno: 1064 })
+    }
+  }
 })

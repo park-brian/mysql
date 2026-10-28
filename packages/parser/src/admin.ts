@@ -68,7 +68,7 @@ import {
   type UnlockTablesNode,
   type UserSpec,
 } from './statement-ast.ts'
-import { TOKEN } from './tokens.ts'
+import { TOKEN, keywordText } from './tokens.ts'
 import type { SqlMode } from './sql-mode.ts'
 
 // --- small pieces --------------------------------------------------------------
@@ -754,12 +754,11 @@ function accountOptions(c: Cursor): AccountOptions {
   if (c.takeWord('WITH')) {
     resources = []
     do {
-      const t = c.peek()
-      const name = t.text.toUpperCase()
-      if (t.kind !== TOKEN.IDENTIFIER || t.quoted === true || !RESOURCES.has(name)) c.fail()
+      const name = keywordText(c.peek())
+      if (!RESOURCES.has(name)) c.fail()
       c.skip()
       resources.push({ name, value: unsigned(c, true) })
-    } while (RESOURCES.has(c.peek().text.toUpperCase()) && c.peek().kind === TOKEN.IDENTIFIER && c.peek().quoted !== true)
+    } while (RESOURCES.has(keywordText(c.peek())))
   }
   const passwordOptions: string[] = []
   for (let o = passwordOption(c); o !== undefined; o = passwordOption(c)) passwordOptions.push(o)

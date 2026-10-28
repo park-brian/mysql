@@ -424,10 +424,10 @@ class ExpressionParser {
         cursor.skip()
         value = this.#binary(COMPARISON_LEVEL + 1)
       }
-      const unit = cursor.peek()
-      if (unit.kind !== TOKEN.IDENTIFIER || !INTERVAL_UNITS.has(unit.text.toUpperCase())) cursor.fail()
+      const unit = keywordText(cursor.peek())
+      if (!INTERVAL_UNITS.has(unit)) cursor.fail()
       cursor.skip()
-      return { kind: NODE.INTERVAL, value, unit: unit.text.toUpperCase(), at: t.start }
+      return { kind: NODE.INTERVAL, value, unit, at: t.start }
     }
     return this.#postfixCollate(this.#primary())
   }
