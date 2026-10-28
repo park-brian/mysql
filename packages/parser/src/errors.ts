@@ -16,6 +16,7 @@
 // symbols and SQLSTATEs, never MySQL's English text, because that text is
 // GPLv2 and this project is MIT.
 import { MyjsError } from '@myjs/bytes'
+import { utf8ErrorLabel } from '@myjs/charsets'
 
 /** Grammar conditions, independent of the executor's diagnostic area. */
 export interface ParseCondition {
@@ -82,22 +83,16 @@ export function unknownCharset(charset: string): ParseError {
 
 /** A repeated WITH name; native formatting clips 192 UTF-8 bytes, replacing partial bytes. */
 export function duplicateTable(name: string): ParseError {
-  return new ParseError('ER_NONUNIQ_TABLE', `Not unique table/alias: '${errorLabel(name, 192)}'`, {
+  return new ParseError('ER_NONUNIQ_TABLE', `Not unique table/alias: '${utf8ErrorLabel(name, 192)}'`, {
     errno: 1066,
     sqlState: '42000',
   })
 }
 
-/** Native byte limits preserve complete UTF-8 characters and replace partial bytes. */
-function errorLabel(text: string, limit: number): string {
-  const { read, written } = new TextEncoder().encodeInto(text, new Uint8Array(limit))
-  return text.slice(0, read) + '?'.repeat(read < text.length ? limit - written : 0)
-}
-
 /** An unresolved COLLATE name is refused when its grammar production completes. */
 export function unknownCollation(name: string): ParseError {
   const label = name.split('\0', 1)[0]!.replace(/[\u{10000}-\u{10FFFF}]/gu, '?')
-  return new ParseError('ER_UNKNOWN_COLLATION', `Unknown collation: '${errorLabel(label, 64)}'`, {
+  return new ParseError('ER_UNKNOWN_COLLATION', `Unknown collation: '${utf8ErrorLabel(label, 64)}'`, {
     errno: 1273,
     sqlState: 'HY000',
   })
@@ -105,7 +100,7 @@ export function unknownCollation(name: string): ParseError {
 
 /** A DOUBLE literal's overflow precedes resolution and retains its original spelling. */
 export function illegalDouble(text: string): ParseError {
-  return new ParseError('ER_ILLEGAL_VALUE_FOR_TYPE', `Illegal double '${errorLabel(text, 192)}' value found during parsing`, {
+  return new ParseError('ER_ILLEGAL_VALUE_FOR_TYPE', `Illegal double '${utf8ErrorLabel(text, 192)}' value found during parsing`, {
     errno: 1367,
     sqlState: '22007',
   })

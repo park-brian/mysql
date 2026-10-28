@@ -6,6 +6,7 @@
 // `@myjs/protocol`, and `engine-errors.test.ts` checks these against the
 // generated table so the copy cannot drift.
 import { MyjsError } from '@myjs/bytes'
+import { utf8ErrorLabel } from '@myjs/charsets'
 
 export class EngineError extends MyjsError {}
 
@@ -94,7 +95,8 @@ export const unknownDb = (db: string) => sqlError('ER_BAD_DB_ERROR', 1049, '4200
 export const tableExists = (table: string) => sqlError('ER_TABLE_EXISTS_ERROR', 1050, '42S01', `Table '${table}' already exists`)
 export const unknownTable = (table: string) => sqlError('ER_BAD_TABLE_ERROR', 1051, '42S02', `Unknown table '${table}'`)
 export const noSuchTable = (db: string, table: string) => sqlError('ER_NO_SUCH_TABLE', 1146, '42S02', `Table '${db}.${table}' doesn't exist`)
-export const tooLongIdent = (name: string) => sqlError('ER_TOO_LONG_IDENT', 1059, '42000', `Identifier name '${name}' is too long`)
+/** Identifier diagnostics share the native byte-bound rendering used by parser errors. */
+export const tooLongIdent = (name: string) => sqlError('ER_TOO_LONG_IDENT', 1059, '42000', `Identifier name '${utf8ErrorLabel(name, 100)}' is too long`)
 export const dupFieldName = (name: string) => sqlError('ER_DUP_FIELDNAME', 1060, '42S21', `Duplicate column name '${name}'`)
 export const dupKeyName = (name: string) => sqlError('ER_DUP_KEYNAME', 1061, '42000', `Duplicate key name '${name}'`)
 export const wrongFieldSpec = (name: string) => sqlError('ER_WRONG_FIELD_SPEC', 1063, '42000', `Incorrect column specifier for column '${name}'`)

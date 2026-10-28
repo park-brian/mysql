@@ -24,7 +24,7 @@ test('grammar warnings precede a fatal error without replacing its identity or J
   assert.throws(() => c.checked(() => { throw overflow() }), (error: unknown) => error instanceof ParseError && error.conditions === undefined)
 })
 
-test('warning collection is scoped, nested and discarded on success or an untyped failure', () => {
+test('warning collection is scoped, nested and never publishes successful or untyped results', () => {
   const c = new Cursor(lex(''))
   c.warn(3720, NATIONAL_DEPRECATION)
   const ast = { valid: true }
@@ -163,4 +163,37 @@ test('charset values are not shorthand warnings and failed charset clauses suppr
   for (const modifier of ['BINARY CHARACTER SET unknown', 'BINARY CHARACTER what', 'BINARY CHARACTER SET']) {
     assert.throws(() => parseStatement("SELECT CAST('x' AS CHAR " + modifier + ')'), (error: unknown) => error instanceof ParseError && !error.conditions?.some(e => e.errno === 1287))
   }
+})
+
+
+test('successful grammar warnings are readonly provenance outside AST serialization', () => {
+  const ast = parseStatement("SELECT CAST('x' AS NCHAR),CAST('y' AS CHAR BINARY)")
+  const history = Cursor.conditions(ast)
+  assert.deepEqual(history?.map(c => [c.errno, c.level]), [[3720, 'Warning'], [1287, 'Warning']])
+  assert.ok(Object.isFrozen(history))
+  assert.equal(Cursor.conditions(ast), history, 'reading a cached root does not consume its provenance')
+  assert.equal(Cursor.conditions({ ...ast }), undefined, 'a clone has no parser provenance')
+  assert.equal(Cursor.conditions(JSON.parse(JSON.stringify(ast)) as object), undefined)
+  assert.ok(Reflect.ownKeys(ast).every(key => typeof key === 'string' && !['conditions', 'warnings', 'grammarWarnings'].includes(key)))
+  assert.equal(Cursor.conditions(parseStatement("SELECT 'plain'")), undefined)
+})
+
+test('statement sequences retain independent warning snapshots when their cursor advances', () => {
+  const sequence = parseStatementSequence("SELECT CAST('x' AS NCHAR); SELECT 'plain'; SELECT CAST('y' AS CHAR BINARY)")
+  const first = sequence.next()
+  assert.equal(first.done, false)
+  if (first.done) throw new Error('expected first statement')
+  const history = Cursor.conditions(first.value.statement)
+  assert.deepEqual(history?.map(c => c.errno), [3720])
+  const second = sequence.next()
+  assert.equal(second.done, false)
+  if (second.done) throw new Error('expected second statement')
+  assert.equal(Cursor.conditions(second.value.statement), undefined)
+  const third = sequence.next()
+  assert.equal(third.done, false)
+  if (third.done) throw new Error('expected third statement')
+  assert.deepEqual(Cursor.conditions(third.value.statement)?.map(c => c.errno), [1287])
+  assert.equal(sequence.next().done, true)
+  assert.equal(Cursor.conditions(first.value.statement), history)
+  assert.deepEqual(history?.map(c => c.errno), [3720], 'later parsing cannot append to an earlier history')
 })

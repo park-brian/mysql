@@ -4,7 +4,7 @@
 // rule 3): every function here runs to completion with no `await`, so a page
 // split can never be interleaved with anything. Only the index layer knows what
 // a key or a record *means*; below it, keys are `memcmp`-ordered bytes (D-42).
-export { EngineError } from './errors.ts'
+export { EngineError, tooLongIdent, wrongDbName } from './errors.ts'
 export { crc32c } from './crc32c.ts'
 export { FRAME_HEADER, FRAME_TRAILER, PAGE_TYPE, initPage, pageLsn, pageNumber, pageType, sealPage, setPageLsn, verifyPage } from './page.ts'
 export type { PageType } from './page.ts'

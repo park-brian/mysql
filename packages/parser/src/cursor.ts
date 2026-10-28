@@ -69,7 +69,14 @@ export function checkTreeDepth(root: object): void {
   }
 }
 
+const grammarWarnings = new WeakMap<object, readonly ParseCondition[]>()
+
 export class Cursor {
+  /** Successful grammar provenance belongs to this exact root and is never consumed. */
+  static conditions(root: object): readonly ParseCondition[] | undefined {
+    return grammarWarnings.get(root)
+  }
+
   readonly tokens: readonly Token[]
   /**
    * The decoded statement the tokens came from, for the one construct whose
@@ -106,6 +113,7 @@ export class Cursor {
       const result = parse()
       if (this.#primary !== undefined) throw this.#primary
       checkTreeDepth(result)
+      if (this.#conditions.length > 0) grammarWarnings.set(result, Object.freeze(this.#conditions))
       return result
     } catch (error) {
       if (!(error instanceof ParseError) || this.#conditions.length === 0) throw error
@@ -128,8 +136,7 @@ export class Cursor {
    * out-of-bounds read.
    */
   peek(ahead = 0): Token {
-    const i = Math.min(this.at + ahead, this.tokens.length - 1)
-    return this.tokens[i] as Token
+    return this.tokens[this.at + ahead] ?? this.tokens[this.tokens.length - 1]!
   }
 
   /** Consume and return the current token. `EOF` is never consumed. */
@@ -141,7 +148,7 @@ export class Cursor {
 
   /** Advance one token unconditionally — for callers that already matched. */
   skip(): void {
-    if (this.peek().kind !== TOKEN.EOF) this.at++
+    this.take()
   }
 
   atEnd(): boolean {

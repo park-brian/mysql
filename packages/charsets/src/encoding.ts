@@ -107,6 +107,12 @@ export const APPROXIMATE_CHARSETS: readonly string[] = ['cp932', 'gb2312']
 const decoders = new Map<string, TextDecoder>()
 const encoder = new TextEncoder()
 
+/** Error text keeps complete UTF-8 characters and replaces each truncated byte. */
+export function utf8ErrorLabel(text: string, limit: number): string {
+  const { read, written } = encoder.encodeInto(text, new Uint8Array(limit))
+  return text.slice(0, read) + '?'.repeat(read < text.length ? limit - written : 0)
+}
+
 // --- the generated single-byte tables --------------------------------------
 
 /** `charset -> 256 code points`, expanded from the packed table on first use. */

@@ -976,16 +976,46 @@ proof covers 472 test files/fixtures and 206 runtime sources. Core/facade/parser
 measure 334,193/334,121/45,617 B gzipped; raw core is 92 B below 04a4710. Its eleven
 required CI jobs pass. M5.10 stays partial; totals remain 144/190 and M5 42/53.
 
-**Next bounded slice:** audit qualified identifier constructor limits and diagnostic
-timing against the pinned engine before repairing the measured 65-character name
-mismatch. Preserve separate schema/name components, generic grammar, conditions and
-preceding batch effects. Mixed CHECK column/variable/native-function precedence,
-native aggregate permission and long-name/later-warning/result-metadata profiles
-remain open. Establish SYSDATE/RANDOM_BYTES constructor behavior before changing
-CHECK's native permission cohort. Prepared temporal metadata, JSON extraction,
-consumer-specific range warnings and declaration phase remain open, alongside
-string nullability, merged temporal charset and ANSI SHOW CREATE. Continue bounded
-function work before M5.47, M5.49, M5.50 and browser work.
+**Function-reference constructors, verified (2026-10-28):** ordered statement
+admission now validates schema before routine, retaining the native empty-name,
+trailing-space and audited 64-character ASCII/BMP limits. Grammar errors and
+warnings complete first; earlier variables and CREATE's database prerequisite
+retain their order. Identifier diagnostics share the parser's existing UTF-8
+byte-bound renderer, including both partial-byte suffixes. Successful grammar
+warning provenance belongs to the exact parsed root and never changes AST
+serialization; only typed constructor failures transfer it into diagnostics.
+Cached roots, repeated execution and independent sessions retain that history.
+Native grammar/constructor transfer counts only the retained prefix, even when
+that prefix contains no error although the command returns ERR. Ordinary runtime
+counters stay complete. Retention now honors max_error_count at statement entry,
+including SET statements that change the limit while producing warnings.
+Four native captures cover 1,188 commands across three APIs/four modes and improve
+303 to 807 complete matches without losing matching facts; every native answer
+reconstructs exactly. Another 90 prefix, 16 SET and 12 mixed-batch controls match.
+Thirty-eight admission captures enforce 49,313/61,898 complete commands and 182,225
+conditions; 12,585 outcomes remain open. Shared UTC parameter conversion, row-writer
+transaction/count handling and direct view-reference refusal remove redundant
+mechanics under all nine unchanged caps. Core/facade/parser measure
+334,322/334,258/45,513 B gzipped. Fresh Docker --reference passes 1,526 main and four
+latency tests, typecheck, lint, package/typed smoke, the real client and all seven
+pinned corpora. All 57 admission/provenance tests, four new native fixture replays,
+repeated-session counter tests, one million seeded parser inputs and 20,000 seeded
+executor statements pass; archived 507e753 fails all four new fixture regressions.
+The actual parser census and the entire official result remain byte-identical,
+with all 37 shared passes. Frozen-source proofs cover 477 test files/fixtures and
+206 runtime sources. Predecessor CI's eleven required jobs pass. M5.10 remains
+partial; totals remain 144/190 and M5 42/53.
+
+**Next bounded slice:** establish the missing RANDOM_BYTES evaluator against the
+pinned engine, including length conversion, NULL, diagnostics, protocol metadata
+and repeated execution, before changing CHECK permissions. Keep SYSDATE precision
+construction and mixed CHECK column/variable/native-function precedence open;
+the unchanged SLEEP(SYSDATE(7)) guard still protects parent/child timing.
+Supplementary identifier transcoding and ordinary table-name refusal are separate
+open gaps. Prepared temporal metadata, JSON extraction, consumer-specific range
+warnings and declaration phase remain open, alongside string nullability, merged
+temporal charset and ANSI SHOW CREATE. Continue bounded function work before
+M5.47, M5.49, M5.50 and browser work.
 
 Keep function, keyword and value namespaces distinct. Charset-value validation,
 separate event behavior, valid-AST warnings/limits, later binding failures,

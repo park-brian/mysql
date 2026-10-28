@@ -20,6 +20,7 @@ export {
   canDecode,
   decodeCharset,
   encodeCharset,
+  utf8ErrorLabel,
   decodeCollation,
   encodeCollation,
   rejectsLatin1Substitute,

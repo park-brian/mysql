@@ -17,13 +17,14 @@ import { requireSchema } from './scope.ts'
 import { FIELD_TYPE, MyjsError, expectTyped } from '@myjs/bytes'
 import { someNode } from './ast.ts'
 import { collationInfoByName, defaultCollationOf, requireCollationInfo } from '@myjs/charsets'
-import { collationsOf, type Catalog, type TableDef, type ViewDef } from '@myjs/engine'
+import { tooLongIdent, wrongDbName, collationsOf, type Catalog, type TableDef, type ViewDef } from '@myjs/engine'
 import {
   NODE,
   QUERY,
   REF,
   parseStatementSequence,
   ParseError,
+  Cursor,
   KEY,
   STATEMENT,
   TOKEN,
@@ -34,6 +35,8 @@ import {
   type CreateTableNode,
   type ExplainNode,
   type InsertNode,
+  type UpdateNode,
+  type DeleteNode,
   type ParseCondition,
   type CreateViewNode,
   type DropNode,
@@ -49,6 +52,7 @@ import {
 import {
   CHARSET_UTF8MB4_0900_AI_CI,
   defaultStatistics,
+  dateToMysql,
   SqlError,
   messages,
   sqlError,
@@ -114,7 +118,7 @@ function parameterValue(p: Parameter, session: Session): Value {
   if (typeof v === 'boolean') return intValue(v ? 1n : 0n)
   if (typeof v === 'string') return stringValue(v, session.characterSet)
   if (v instanceof Date) {
-    return { kind: 'datetime', v: { year: v.getUTCFullYear(), month: v.getUTCMonth() + 1, day: v.getUTCDate(), hour: v.getUTCHours(), minute: v.getUTCMinutes(), second: v.getUTCSeconds(), microsecond: v.getUTCMilliseconds() * 1000 }, type: 'DATETIME', fsp: 6 }
+    return { kind: 'datetime', v: dateToMysql(v), type: 'DATETIME', fsp: 6 }
   }
   if ('negative' in v) return { kind: 'time', v, fsp: v.microsecond === 0 ? 0 : 6 }
   const date = v.hour === 0 && v.minute === 0 && v.second === 0 && v.microsecond === 0 && p.type === FIELD_TYPE.DATE
@@ -132,7 +136,7 @@ export function toSqlError(e: unknown): SqlError {
 }
 
 /** Whether a statement can change rows: the ones that may not simply be run again after failing part-way. */
-const writes = (statement: Statement): boolean =>
+const writes = (statement: Statement): statement is InsertNode | UpdateNode | DeleteNode =>
   statement.kind === STATEMENT.INSERT || statement.kind === STATEMENT.UPDATE || statement.kind === STATEMENT.DELETE
 
 const sleep = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms))
@@ -172,29 +176,49 @@ function isDiagnostic(statement: Statement): boolean {
   return statement.kind === STATEMENT.SHOW && (statement.what === 'WARNINGS' || statement.what === 'ERRORS')
 }
 
-/** `max_error_count`'s default: how many conditions SHOW WARNINGS keeps. */
-const MAX_ERROR_COUNT = 1024
+/** Constructor failures retain grammar warnings; publication appends the primary error. */
+const grammarFailures = new WeakMap<MyjsError, readonly ParseCondition[]>()
+
+function conditionLimit(state: SqlSession): number {
+  // The compiled system-variable registry supplies this nonnullable integer.
+  return Number(toInteger(state.systemVariable('max_error_count', undefined, state.session)!))
+}
 
 /** One owner for the kept condition prefix and the command's complete counters. */
-function recordDiagnostics(state: SqlSession, conditions: readonly Condition[], warnings = 0): number {
+function recordDiagnostics(state: SqlSession, conditions: readonly Condition[], limit: number, warnings = 0): number {
   warnings = Math.max(warnings, conditions.length)
   let errors = 0
   for (const condition of conditions) if (condition.level === 'Error') errors++
-  state.diagnostics = { conditions: conditions.slice(0, MAX_ERROR_COUNT), warnings, errors }
+  state.diagnostics = { conditions: conditions.slice(0, limit), warnings, errors }
   return warnings
 }
 
 /** Protocol admission without a SQL condition area clears diagnostics. */
-function recordFailure(state: SqlSession, conditions: Condition[] | undefined, failure: unknown): SqlError {
+function recordFailure(state: SqlSession, conditions: Condition[] | undefined, failure: unknown, limit = conditionLimit(state)): SqlError {
   const error = toSqlError(failure)
   if (!promotedError(conditions, error)) {
-    const parsing = failure instanceof ParseError ? failure.conditions : undefined
+    let parsing: readonly ParseCondition[] | undefined
+    if (failure instanceof ParseError) parsing = failure.conditions ?? [error]
+    else if (failure instanceof MyjsError) {
+      const warnings = grammarFailures.get(failure)
+      if (warnings !== undefined) parsing = [...warnings, error]
+    }
     // A full parser prefix may contain only warnings even when it returns ERR.
-    const kept: readonly ParseCondition[] = parsing?.slice(0, MAX_ERROR_COUNT) ?? [error]
-    for (const e of kept) conditions?.push({ level: parsing ? e.level ?? 'Error' : 'Error', code: e.errno, message: e.message })
+    const kept: readonly ParseCondition[] = parsing?.slice(0, limit) ?? [error]
+    for (const e of kept) conditions?.push({ level: e.level ?? 'Error', code: e.errno, message: e.message })
   }
-  recordDiagnostics(state, conditions ?? [])
+  recordDiagnostics(state, conditions ?? [], limit)
   return error
+}
+
+/** Reference parts share cardinality; invalid names retain their database/routine identity. */
+function functionIdentifierError(name: string, kind: 'database' | 'routine'): MyjsError | undefined {
+  if (name === '' || name.endsWith(' ')) {
+    if (kind === 'database') return wrongDbName(name)
+    return sqlError('ER_SP_WRONG_NAME', `Incorrect routine name '${name}'`)
+  }
+  if (/^.{65}/su.test(name)) return tooLongIdent(name)
+  return undefined
 }
 
 /** How many parsed statements `SqlExecutor` keeps. */
@@ -276,6 +300,7 @@ export class SqlExecutor implements Executor {
   async prepare(session: Session, sql: string): Promise<PreparedInfo> {
     this.#alive(session)
     const state = this.#state(session)
+    const limit = conditionLimit(state)
     let conditions: Condition[] | undefined = []
     try {
       let started = performance.now()
@@ -309,9 +334,9 @@ export class SqlExecutor implements Executor {
       // Every supported statement may have a large parameter response.
       if (paramCount >= MANY_PARAMETERS) await pause()
       this.#alive(session)
-      return { paramCount, columns, warnings: recordDiagnostics(state, conditions) }
+      return { paramCount, columns, warnings: recordDiagnostics(state, conditions, limit) }
     } catch (e) {
-      throw recordFailure(state, conditions, e)
+      throw recordFailure(state, conditions, e, limit)
     }
   }
 
@@ -323,6 +348,15 @@ export class SqlExecutor implements Executor {
     const bind = (node: object): undefined => {
       const e = node as Expression
       if (view && (e.kind === NODE.VARIABLE || e.kind === NODE.PLACEHOLDER)) throw sqlError('ER_VIEW_SELECT_VARIABLE', "View's SELECT contains a variable or parameter")
+      if (e.kind === NODE.CALL) {
+        const error = (e.schema === undefined ? undefined : functionIdentifierError(e.schema, 'database'))
+          ?? functionIdentifierError(e.name, 'routine')
+        if (error !== undefined) {
+          // Only typed constructor refusals carry the retained grammar snapshot.
+          grammarFailures.set(error, Cursor.conditions(statement) ?? [])
+          throw error
+        }
+      }
       if (e.kind === NODE.VARIABLE) {
         const name = systemVariable(e, state, session)?.name
         if (name === 'warning_count' || name === 'error_count') diagnostic = true
@@ -510,7 +544,7 @@ export class SqlExecutor implements Executor {
       return results
     }
     if (parsed === null) {
-      recordDiagnostics(state, [])
+      recordDiagnostics(state, [], conditionLimit(state))
       return { affectedRows: 0 }
     }
     // Keep the single result streaming, including a multi-enabled connection.
@@ -527,6 +561,7 @@ export class SqlExecutor implements Executor {
     await this.#preload(session, statement)
     this.#alive(session)
     const state = this.#state(session)
+    const limit = conditionLimit(state)
     state.question()
     // SHOW WARNINGS, SHOW ERRORS and their counts read the diagnostics area
     // and leave it; every other statement starts a new one (8.4.11).
@@ -540,11 +575,11 @@ export class SqlExecutor implements Executor {
         this.#purgeLater()
         if (diagnostic) return result
         // A count no condition stands for is still the count (`warning_count`).
-        const warnings = recordDiagnostics(state, conditions, result.warnings)
+        const warnings = recordDiagnostics(state, conditions, limit, result.warnings)
         return warnings === (result.warnings ?? 0) ? result : { ...result, warnings }
       }
       // The error is a condition too, after any the statement raised first.
-      const failed = (e: unknown): SqlError => diagnostic ? toSqlError(e) : recordFailure(state, conditions, e)
+      const failed = (e: unknown): SqlError => diagnostic ? toSqlError(e) : recordFailure(state, conditions, e, limit)
       try {
         this.#admitStatement(statement, state, session)
         const run = this.#run(session, sql, params, known, protocol, conditions)
@@ -753,19 +788,13 @@ export class SqlExecutor implements Executor {
   #dispatch(run: Run, statement: Statement, emit?: (batch: ResultSet) => void): StatementResult | Generator<void, StatementResult> {
     const { state } = run
     const session = run.env.session
+    if (writes(statement)) return this.#write(run, statement)
     switch (statement.kind) {
       case STATEMENT.QUERY: {
         const plan = planQuery(run, statement)
         if (this.catalog === undefined) return resultSet(run, plan, undefined)
         return state.steps(this.catalog.store, plan.locking, (trx) => resultSteps(run, plan, trx, emit))
       }
-      case STATEMENT.INSERT:
-        return this.#counted(run, state.steps(this.#catalog(run).store, true, (trx) => insert(run, statement, trx)))
-      case STATEMENT.UPDATE:
-        return this.#counted(run, state.steps(this.#catalog(run).store, true, (trx) => update(run, statement, trx)))
-      case STATEMENT.DELETE:
-        return this.#counted(run, state.steps(this.#catalog(run).store, true, (trx) => remove(run, statement, trx)))
-
       case STATEMENT.CREATE_TABLE: {
         const catalog = this.#catalog(run)
         const schema = requireSchema(statement.table.schema ?? session.database)
@@ -865,17 +894,19 @@ export class SqlExecutor implements Executor {
         // AUTO_INCREMENT from 1 (8.4.11; ER_NO_SUCH_TABLE for a missing one).
         const schema = requireSchema(statement.table.schema ?? session.database)
         state.commit()
-        if (foreignKeyChecks(run)) {
-          const by = referencingKeys(this.#catalog(run), schema, statement.table.name).find((r) => r.child.schema !== schema || r.child.name !== statement.table.name)
+        const checks = foreignKeyChecks(run)
+        const catalog = this.#catalog(run)
+        if (checks) {
+          const by = referencingKeys(catalog, schema, statement.table.name).find((r) => r.child.schema !== schema || r.child.name !== statement.table.name)
           if (by !== undefined) throw sqlError('ER_TRUNCATE_ILLEGAL_FK', `Cannot truncate a table referenced in a foreign key constraint (\`${by.child.schema}\`.\`${by.child.name}\`, CONSTRAINT \`${by.fk.name}\`)`)
         }
-        const before = this.#catalog(run).definition(schema, statement.table.name).id
-        const truncated = this.#catalog(run).truncateTable(schema, statement.table.name)
-        keepShown(this.#catalog(run).store, before, truncated.id)
+        const before = catalog.definition(schema, statement.table.name).id
+        const truncated = catalog.truncateTable(schema, statement.table.name)
+        keepShown(catalog.store, before, truncated.id)
         // An emptied table's statistics are an empty table's, until it is analysed again (M5.45).
         if (truncated.options['stats'] !== undefined) {
           const { stats: _stats, ...options } = truncated.options
-          this.#catalog(run).setTableOptions(schema, statement.table.name, options)
+          catalog.setTableOptions(schema, statement.table.name, options)
         }
         return { affectedRows: 0 }
       }
@@ -955,9 +986,13 @@ export class SqlExecutor implements Executor {
     }
   }
 
-  /** A DML result's counters, recorded for `ROW_COUNT()` and the session's warning count. */
-  *#counted(run: Run, steps: Generator<void, OkResult>): Generator<void, OkResult> {
-    const result = yield* steps
+  /** Row writers share one transaction and completed-counter boundary. */
+  *#write(run: Run, statement: InsertNode | UpdateNode | DeleteNode): Generator<void, OkResult> {
+    const result = yield* run.state.steps(this.#catalog(run).store, true, (trx) => {
+      if (statement.kind === STATEMENT.INSERT) return insert(run, statement, trx)
+      if (statement.kind === STATEMENT.UPDATE) return update(run, statement, trx)
+      return remove(run, statement, trx)
+    })
     run.state.rowCount = BigInt(result.affectedRows ?? 0)
     run.env.session.warnings = result.warnings ?? 0
     return result
@@ -1010,15 +1045,14 @@ export class SqlExecutor implements Executor {
     const catalog = this.#catalog(run)
     catalog.schema(schema)
     // A view may not read a temporary table (8.4.11: 1352).
-    let temporary: string | undefined
     someNode(statement.query, (node) => {
-      const n = node as { kind?: string }
-      const t = n.kind === REF.TABLE ? (n as unknown as { table: TableName }).table : undefined
-      const at = t?.schema ?? session.database
-      if (t !== undefined && temporary === undefined && at !== null && catalog.temporary?.has(at, t.name) === true) temporary = t.name
+      const ref = node as TableReference
+      if (ref.kind === REF.TABLE) {
+        const schema = ref.table.schema ?? session.database
+        if (schema !== null && catalog.temporary?.has(schema, ref.table.name) === true) throw sqlError('ER_VIEW_SELECT_TMPTABLE', `View's SELECT refers to a temporary table '${ref.table.name}'`)
+      }
       return undefined
     })
-    if (temporary !== undefined) throw sqlError('ER_VIEW_SELECT_TMPTABLE', `View's SELECT refers to a temporary table '${temporary}'`)
     const def: ViewDef = {
       schema,
       name: statement.view.name,
@@ -1181,8 +1215,7 @@ export class SqlExecutor implements Executor {
       const schema = requireSchema(t.schema ?? run.env.session.database)
       const name = `${schema}.${t.name}`
       const catalog = this.catalog
-      const exists = catalog?.tables().some((x) => x.schema === schema && x.name === t.name) === true
-      if (exists && catalog !== undefined) {
+      if (catalog?.tables().some((x) => x.schema === schema && x.name === t.name) === true) {
         // ANALYZE commits, as DDL does, and keeps what it counted in the table's definition (M5.45).
         run.state.commit()
         const def = catalog.definition(schema, t.name)

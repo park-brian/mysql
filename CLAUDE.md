@@ -185,8 +185,8 @@ functions remain admitted. A pure postorder check shares only traversal and nati
 diagnostic construction with generated columns. ALTER SET DEFAULT retains its
 late execution boundary and non-executing PREPARE behavior. The extended tests
 pass 153 transaction boundaries and nine missing-database cases against both
-engines. Thirty-four admission captures enforce 48,506/60,710 complete commands,
-with unchanged native answers and 12,204 open outcomes. CHECK permissions/namespace,
+engines. Thirty-eight admission captures enforce 49,313/61,898 complete commands,
+with unchanged native answers and 12,585 open outcomes. CHECK permissions/namespace,
 malformed declaration ordering, ANSI SHOW CREATE and other function gaps remain
 open. A CHECK permission-only trial was withdrawn: native clock precision and
 RANDOM_BYTES evaluation must be repaired first. A deterministic 702-command
@@ -230,9 +230,20 @@ list and postorder declaration readers remove duplicate mechanics. A 2,172-comma
 native audit improves 253 to 1,559 complete matches without losing matching facts.
 Mixed CHECK prerequisites and native constructor/permission behavior remain open;
 a broader phase reorder was removed after the existing SYSDATE guard rejected it.
-Long identifiers, later warnings, result/prepared temporal metadata, JSON extraction,
-consumer range warnings, declaration phase, string nullability and merged temporal
-charset remain open. Bare DEFAULT/ON UPDATE now use their four timestamp aliases, require NOW
+Ordered admission now validates function-reference schema/name boundaries and
+preserves completed grammar warnings before typed constructor refusal. A 1,188-command
+native audit improves 303 to 807 complete matches without losing matching facts.
+Grammar provenance stays with the exact parsed root, outside AST serialization;
+cached/repeated/two-session use retains it. Grammar and constructor diagnostics
+transfer the same kept prefix, while ordinary runtime counters stay complete.
+Diagnostic retention uses max_error_count at statement entry, including SET's own
+changes. Ninety prefix, sixteen SET and twelve mixed-batch controls match native.
+The existing UTF-8 diagnostic renderer now serves identifier errors too; parameter
+Dates share the protocol converter, and row writers share their transaction/count
+boundary. Supplementary identifier conversion, ordinary table-name refusal, later
+warnings, result/prepared temporal metadata, JSON extraction, consumer range
+warnings, declaration phase, string nullability and merged temporal charset remain
+open. Bare DEFAULT/ON UPDATE now use their four timestamp aliases, require NOW
 parentheses and validate the NUM token before BigInt conversion, producing typed
 syntax errors for malformed precision. A shared integer-token reader preserves
 caller bounds, raw spelling, conversions and AST ownership. Three native captures
