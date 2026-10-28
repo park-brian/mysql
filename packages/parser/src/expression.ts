@@ -84,6 +84,22 @@ const NILADIC = new Set([
   'LOCALTIME', 'LOCALTIMESTAMP', 'UTC_DATE', 'UTC_TIME', 'UTC_TIMESTAMP',
 ])
 
+/** Native clocks with one optional unsigned NUM31; other bare-call roles stay independent. */
+export const FRACTIONAL_CLOCKS: ReadonlySet<string> = new Set([
+  'NOW', 'CURRENT_TIMESTAMP', 'LOCALTIME', 'LOCALTIMESTAMP', 'SYSDATE',
+  'CURTIME', 'CURRENT_TIME', 'UTC_TIME', 'UTC_TIMESTAMP',
+])
+
+/** Already after '(': one optional NUM31 and ')', without semantic precision validation. */
+export function fractionalClockArguments(c: Cursor): Expression[] {
+  const at = c.peek().start
+  const args: Expression[] = c.atOp(')') ? [] : [
+    { kind: NODE.LITERAL, type: LITERAL.INT, value: BigInt(unsignedValue(c, 0x7fffffff)), at },
+  ]
+  c.expectOp(')')
+  return args
+}
+
 /**
  * The builtins whose names the server's lexer recognises as function tokens
  * only when `(` follows at once, or anywhere under IGNORE_SPACE: the list in
@@ -651,7 +667,7 @@ class ExpressionParser {
     let separator: string | undefined
     let using: string | undefined
     if (upper === 'GROUP_CONCAT') {
-      if (cursor.atWord('ORDER') && cursor.atWord('BY', 1)) orderBy = parseOrderBy(cursor, this.#mode)
+      if (cursor.atWords('ORDER', 'BY')) orderBy = parseOrderBy(cursor, this.#mode)
       if (cursor.takeWord('SEPARATOR')) separator = cursor.expectString(true)
     }
     if (upper === 'CHAR' && cursor.takeWord('USING')) using = charsetName(cursor).toLowerCase()
@@ -693,10 +709,15 @@ class ExpressionParser {
   #specialCall(upper: string): Expression | null {
     const cursor = this.#c
     const t = cursor.peek()
+    // The caller proved identifier + '('; only recognized productions consume it.
+    if (FRACTIONAL_CLOCKS.has(upper)) {
+      cursor.at += 2
+      const args = fractionalClockArguments(cursor)
+      return { kind: NODE.CALL, name: t.text, args, ...opt('over', this.#over()), at: t.start }
+    }
     switch (upper) {
       case 'CAST': {
-        cursor.skip()
-        cursor.expectOp('(')
+        cursor.at += 2
         const expr = this.#binary(0)
         let timeZone: string | undefined
         if (cursor.takeWord('AT')) {
@@ -712,8 +733,7 @@ class ExpressionParser {
         return { kind: NODE.CAST, expr, type, ...flag('array', array), ...opt('timeZone', timeZone), at: t.start }
       }
       case 'CONVERT': {
-        cursor.skip()
-        cursor.expectOp('(')
+        cursor.at += 2
         const expr = this.#binary(0)
         if (cursor.takeWord('USING')) {
           const charset = charsetName(cursor).toLowerCase()
@@ -726,8 +746,7 @@ class ExpressionParser {
         return { kind: NODE.CAST, expr, type, at: t.start }
       }
       case 'EXTRACT': {
-        cursor.skip()
-        cursor.expectOp('(')
+        cursor.at += 2
         const unit = this.#unitKeyword()
         cursor.expectWord('FROM')
         const expr = this.#binary(0)
@@ -736,29 +755,27 @@ class ExpressionParser {
       }
       case 'TIMESTAMPADD':
       case 'TIMESTAMPDIFF': {
-        cursor.skip()
-        cursor.expectOp('(')
+        cursor.at += 2
         const args: Expression[] = [this.#unitKeyword(true)]
         while (cursor.takeOp(',')) args.push(this.#binary(0))
         cursor.expectOp(')')
         return { kind: NODE.CALL, name: t.text, args, at: t.start }
       }
       case 'GET_FORMAT': {
-        cursor.skip()
-        cursor.expectOp('(')
+        cursor.at += 2
         const k = cursor.peek()
-        if (!['DATE', 'TIME', 'DATETIME', 'TIMESTAMP'].some((w) => cursor.atWord(w))) cursor.fail()
+        const word = keywordText(k)
+        if (!['DATE', 'TIME', 'DATETIME', 'TIMESTAMP'].includes(word)) cursor.fail()
         cursor.skip()
         cursor.expectOp(',')
-        const args: Expression[] = [{ kind: NODE.KEYWORD, word: k.text.toUpperCase(), at: k.start }, this.#binary(0)]
+        const args: Expression[] = [{ kind: NODE.KEYWORD, word, at: k.start }, this.#binary(0)]
         cursor.expectOp(')')
         return { kind: NODE.CALL, name: t.text, args, at: t.start }
       }
       case 'POSITION': {
         // `POSITION(a IN b)`: `a` is read above the comparison level, or its
         // `IN` would be taken for the membership predicate.
-        cursor.skip()
-        cursor.expectOp('(')
+        cursor.at += 2
         const needle = this.#binary(COMPARISON_LEVEL + 1)
         cursor.expectWord('IN')
         const haystack = this.#binary(0)
@@ -768,8 +785,7 @@ class ExpressionParser {
       case 'SUBSTRING':
       case 'SUBSTR': {
         if (!this.#substringHasFrom()) return null
-        cursor.skip()
-        cursor.expectOp('(')
+        cursor.at += 2
         const args: Expression[] = [this.#binary(0)]
         cursor.expectWord('FROM')
         args.push(this.#binary(0))
@@ -780,8 +796,7 @@ class ExpressionParser {
       case 'TRIM': {
         // `TRIM(s)`, `TRIM(r FROM s)`, `TRIM(LEADING [r] FROM s)`. The side is
         // a keyword argument first; the string being trimmed is always last.
-        cursor.skip()
-        cursor.expectOp('(')
+        cursor.at += 2
         const args: Expression[] = []
         const side = cursor.peek()
         if (cursor.atWord('LEADING') || cursor.atWord('TRAILING') || cursor.atWord('BOTH')) {
@@ -803,8 +818,7 @@ class ExpressionParser {
         // two keyword-ish arguments rather than a CAST node, because it is not
         // one — it changes the length the weights are computed over, not the
         // value's type.
-        cursor.skip()
-        cursor.expectOp('(')
+        cursor.at += 2
         const args: Expression[] = [this.#binary(0)]
         if (cursor.takeWord('AS')) {
           const k = cursor.peek()
@@ -828,14 +842,15 @@ class ExpressionParser {
   /** Whether `SUBSTRING(` uses the `FROM` form, by finding `FROM` before the closing paren. */
   #substringHasFrom(): boolean {
     const cursor = this.#c
-    let depth = 0
-    for (let i = 1; ; i++) {
+    // The special-call dispatcher already proved the opening parenthesis.
+    let depth = 1
+    for (let i = 2; ; i++) {
       const t = cursor.peek(i)
       if (t.kind === TOKEN.EOF) return false
       if (t.kind === TOKEN.OPERATOR && t.text === '(') depth++
       else if (t.kind === TOKEN.OPERATOR && t.text === ')') {
         if (--depth === 0) return false
-      } else if (depth === 1 && cursor.atWord('FROM', i)) return true
+      } else if (depth === 1 && keywordText(t) === 'FROM') return true
     }
   }
 

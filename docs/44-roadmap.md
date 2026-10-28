@@ -765,13 +765,46 @@ byte-identical at 17,530/17,589 and all 37 shared passes. Frozen-source proof co
 Core/facade/parser measure 334,292/334,199/45,593 B gzipped; raw core/parser output
 is 389/399 B below 69176a2, whose eleven required CI jobs passed. M5.10 stays partial.
 
-**Next bounded slice:** repair the independently captured ordinary fractional-clock
-argument grammar under existing caps. Its 2,376 native observations and an unshipped
-prototype remain research evidence; the larger combined trial was withheld for
-exceeding the parser cap. Preserve quoted/spaced generic-call roles, OVER fields,
-valid ASTs and each source's precision-error precedence. Remaining precision timing
-and RANDOM_BYTES evaluation still precede CHECK permission repairs; continue
-bounded function work before M5.47, M5.49, M5.50 and browser work.
+**Ordinary fractional-clock grammar, verified (2026-10-28):** the nine native
+clock functions now read one optional unsigned decimal NUM through 2,147,483,647,
+sharing that grammar production with the four bare column-clock aliases.
+The ordinary function and bare DEFAULT permissions remain separate; precision
+0..6 and execution/storage checks stay later. Quoted names and whitespace-sensitive
+stored calls retain generic arguments, written names and OVER fields retain their
+ASTs, and literal-only DEFAULT refuses forbidden clocks before reading arguments.
+Special-function dispatch consumes only its already-proved name/opening prefix;
+unknown calls and comma-form SUBSTRING consume nothing there. Existing keyword
+readers avoid redundant token lookup, and bit literals reuse the hex byte decoder
+instead of shifting/unshifting their integer value. Empty and zero bit literals
+retain one zero byte, while leading zero digits do not add width.
+Two independent native captures retain 2,619 commands through query, execute and
+PREPARE in three modes. Complete matches improve 510 to 1,728 with no previously
+matching component, error attribute, condition, field, PREPARE count or effect lost.
+Native answer pools reconstruct exactly independently of guard selection; all
+older fixtures remain unchanged. Twenty-six captures enforce 36,840/46,055
+complete commands, retain 9,215 open outcomes and protect 172,407 conditions.
+All 201 focused tests and the 2,619 permanent native replays pass. Across 270,228
+parser contracts, every still-admitted AST is byte-identical, no new input is
+admitted and all 2,215 changed parser-error tuples match captured native errors.
+The decoder comparison preserves 135,076 bit cases and 196,609 hex cases against
+4031e3f, including empty, odd-width, leading-zero and large values.
+Fresh Docker --reference passes 1,506 main tests, four latency tests, typecheck,
+lint, all nine unchanged caps, package/typed smoke, the real client and all seven
+pinned corpora. One million parser inputs and 20,000 executor statements seeded
+20261010 pass. Repeated actual census and the entire official fixture remain
+byte-identical at 17,530/17,589 and all 37 shared passes. Frozen-source proof covers
+464 test files/fixtures, 206 runtime sources and reference tooling before cleanup.
+Core/facade/parser measure 334,336/334,225/45,613 B gzipped. The preceding 4031e3f
+passes all eleven required CI jobs. M5.10 stays partial; totals remain 144/190 and
+M5 42/53.
+
+**Next bounded slice:** repair the captured context-dependent clock precision
+precedence through the existing compiler/value-generator owners. Preserve missing
+table/column priority, generated/CHECK admission and DEFAULT timing; syntax through
+NUM31 does not imply semantic precision acceptance. In particular, SYSDATE(7)
+precision, forbidden function admission and enclosing-function diagnostic labels
+remain separate measured gaps. RANDOM_BYTES evaluation follows before CHECK
+permission repairs, then bounded function work, M5.47, M5.49, M5.50 and browser work.
 
 Keep function, keyword and value namespaces distinct. Charset-value validation,
 separate event behavior, valid-AST warnings/limits, later binding failures,

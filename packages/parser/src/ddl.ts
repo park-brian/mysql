@@ -19,7 +19,7 @@ import { flag, opt, wordOrString, type Cursor, unsignedValue } from './cursor.ts
 import { charsetName, collationName } from './names.ts'
 import { TOKEN, keywordText } from './tokens.ts'
 import { NODE, type Expression } from './ast.ts'
-import { parseExpressionFrom } from './expression.ts'
+import { FRACTIONAL_CLOCKS, fractionalClockArguments, parseExpressionFrom } from './expression.ts'
 import { parseDataType } from './data-type.ts'
 import { atParenthesisedQuery, atQueryStart, parseQueryFrom } from './query.ts'
 import { parsePartitioning } from './partition.ts'
@@ -624,6 +624,7 @@ export function defaultExpression(c: Cursor, options: DdlOptions, now = true): E
   // `ALTER … SET DEFAULT` takes no `NOW()`: 8.4.11 refuses it there.
   const call = now ? nowFunction(c) : undefined
   if (call !== undefined) return call
+  if (c.atOp('(', 1) && FRACTIONAL_CLOCKS.has(keywordText(c.peek()))) c.fail()
   // Otherwise a literal, or a signed number — `DEFAULT 1 + 1`, `DEFAULT c`
   // and `DEFAULT ~1` are all ER_PARSE_ERROR on 8.4.11, and an earlier
   // version of this function accepted them, since it read any expression.
@@ -652,14 +653,7 @@ function nowFunction(c: Cursor): Expression | undefined {
   const word = keywordText(t)
   if (!['CURRENT_TIMESTAMP', 'NOW', 'LOCALTIME', 'LOCALTIMESTAMP'].includes(word) || (word === 'NOW' && !c.atOp('(', 1))) return undefined
   c.skip()
-  const args: Expression[] = []
-  if (c.takeOp('(')) {
-    if (!c.atOp(')')) {
-      const token = c.peek()
-      args.push({ kind: NODE.LITERAL, type: 'int', value: BigInt(unsignedValue(c, 0x7fffffff)), at: token.start })
-    }
-    c.expectOp(')')
-  }
+  const args = c.takeOp('(') ? fractionalClockArguments(c) : []
   // The name as written, as the expression parser records it — so
   // `DEFAULT now()` and `DEFAULT (now())` are the same call.
   return { kind: NODE.CALL, name: t.text, args, at: t.start }

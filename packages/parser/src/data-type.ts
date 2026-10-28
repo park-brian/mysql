@@ -469,17 +469,11 @@ function valueList(c: Cursor): (string | Uint8Array)[] {
 export function hexBytes(digits: string): Uint8Array {
   const even = digits.length % 2 === 0 ? digits : '0' + digits
   const out = new Uint8Array(even.length / 2)
-  for (let i = 0; i < out.length; i++) out[i] = Number.parseInt(even.slice(i * 2, i * 2 + 2), 16)
+  for (let i = 0; i < even.length; i += 2) out[i / 2] = Number.parseInt(even.slice(i, i + 2), 16)
   return out
 }
 
 /** `b'1001001'` as bytes, big-endian and as short as the value allows. */
 export function bitBytes(digits: string): Uint8Array {
-  let value = digits === '' ? 0n : BigInt('0b' + digits)
-  const out: number[] = []
-  do {
-    out.unshift(Number(value & 0xffn))
-    value >>= 8n
-  } while (value > 0n)
-  return Uint8Array.from(out)
+  return hexBytes(BigInt('0b0' + digits).toString(16))
 }

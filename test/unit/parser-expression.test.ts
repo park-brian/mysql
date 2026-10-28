@@ -296,3 +296,51 @@ test('function grammar separates spelling, quoting and aggregate modifiers', () 
     }
   }
 })
+
+test('M5.10: native fractional clocks require one optional unsigned NUM31', () => {
+  for (const mode of ['', 'IGNORE_SPACE', 'ANSI_QUOTES,IGNORE_SPACE']) {
+    const options = { sqlMode: parseSqlMode(mode) }
+    for (const name of ['NOW', 'CURRENT_TIMESTAMP', 'LOCALTIME', 'LOCALTIMESTAMP', 'SYSDATE', 'CURTIME', 'CURRENT_TIME', 'UTC_TIME', 'UTC_TIMESTAMP']) {
+      for (const value of ['-1', '+1', '1.5', '7e0', '1e309', 'NULL', '?', '0x01', "b'1'", '(1)', '2147483648']) {
+        const sql = `${name}(${value})`
+        assert.throws(() => parseExpression(sql, options), (error: unknown) => {
+          assert.ok(error instanceof ParseError, sql)
+          assert.equal(error.errno, 1064, sql)
+          assert.equal(error.sqlState, '42000', sql)
+          assert.equal(error.offset, name.length + 1, sql)
+          return true
+        })
+      }
+      for (const suffix of ['1+1', '1,2']) {
+        const sql = `${name}(${suffix})`
+        assert.throws(() => parseExpression(sql, options), (error: unknown) => {
+          assert.ok(error instanceof ParseError, sql)
+          assert.equal(error.offset, name.length + 2, sql)
+          return true
+        })
+      }
+      for (const value of ['', '0', '6', '7', '0006', '2147483647']) {
+        const sql = `${name.toLowerCase()}(${value}) OVER ()`
+        const call = parseExpression(sql, options)
+        assert.equal(call.kind, NODE.CALL, sql)
+        if (call.kind !== NODE.CALL) continue
+        assert.equal(call.name, name.toLowerCase(), sql)
+        assert.ok(call.over, sql)
+        assert.deepEqual(call.args, value === '' ? [] : [{ kind: NODE.LITERAL, type: 'int', value: BigInt(value), at: name.length + 1 }], sql)
+      }
+      // Quoted names use the existing generic call grammar.
+      assert.equal(parseExpression('`' + name + '`(1.5)', options).kind, NODE.CALL)
+    }
+    for (const name of ['NOW', 'SYSDATE', 'CURTIME']) {
+      const sql = `${name} (1.5)`
+      if (mode === '') assert.equal(parseExpression(sql, options).kind, NODE.CALL)
+      else assert.throws(() => parseExpression(sql, options), ParseError)
+    }
+    const sql = 'ALTER TABLE r ALTER COLUMN v SET DEFAULT NOW(1.5)'
+    assert.throws(() => parseStatement(sql, options), (error: unknown) => {
+      assert.ok(error instanceof ParseError)
+      assert.equal(error.offset, sql.indexOf('NOW'))
+      return true
+    })
+  }
+})
