@@ -30,6 +30,7 @@ import { messages, sqlError } from '@myjs/protocol'
 import {
   COERCIBILITY,
   DAY_NAMES,
+  TIME_MAX_SECONDS,
   MAX_DAY_NUMBER,
   MONTH_NAMES,
   dateOf,
@@ -47,11 +48,17 @@ import {
   temporalDeprecation,
   monthToPeriod,
   parseTime,
+  roundTime,
+  roundFraction,
+  renderDateTime,
+  renderTime,
   periodToMonth,
   scanDateTime,
   stringValue,
   timeDiff,
   timeOf,
+  timeOrdinal,
+  timeFromSeconds,
   timeStructOf,
   toDecimal,
   toInteger,
@@ -64,16 +71,17 @@ import {
   type Converted,
   type DateFlags,
   type TimeStruct,
+  type TimeValue,
   type Value,
 } from '@myjs/types'
-import { asNumber, compile, constantNode, raise, rowNumber, type Compiled, type CompileContext, type Env, constantEnv } from './compile.ts'
+import { asNumber, compile, constantNode, raise, rowNumber, timeCast, type Compiled, type CompileContext, type Env, constantEnv } from './compile.ts'
 import { dateAdd } from './interval.ts'
 import { charWidth, datetimeType, decimalType, intType, stringType, type ResultType } from './meta.ts'
 import { nativeArity, unregistered } from './registry.ts'
+import { modeOf } from './mode.ts'
 
 type Row = Parameters<Compiled['eval']>[0]
 
-const TIME_MAX_SECONDS = 838 * 3600 + 59 * 60 + 59
 /** The last second FROM_UNIXTIME takes: 3001-01-18 23:59:59 UTC (`MYTIME_MAX_VALUE`). */
 const MYTIME_MAX_VALUE = 32536771199n
 const US_PER_DAY = 86_400_000_000n
@@ -107,17 +115,11 @@ export function settle<T>(c: Converted<T>, env: Env): T | null {
 }
 
 const dateReader = (x: Compiled, flags: DateFlags) => (r: Row, env: Env): MysqlDateTime | null => settle(dateOf(x.eval(r, env), flags, today(env)), env)
-const timeReader = (x: Compiled) => (r: Row, env: Env): MysqlTime | null => settle(timeOf(x.eval(r, env)), env)
+const timeReader = (x: Compiled) => (r: Row, env: Env): MysqlTime | null => settle(timeOf(x.eval(r, env), modeOf(env.session.sqlMode).truncateFractional), env)
 /** `get_time` with its type kept: a column of a date type keeps its date. */
 const structReader = (x: Compiled) => {
   const field = x.type.column !== undefined
-  return (r: Row, env: Env): TimeStruct | null => settle(timeStructOf(x.eval(r, env), field), env)
-}
-
-/** A TIME as signed microseconds. */
-const timeMicros = (t: MysqlTime): bigint => {
-  const us = BigInt((((t.days * 24 + t.hour) * 60 + t.minute) * 60 + t.second) * 1_000_000 + t.microsecond)
-  return t.negative ? -us : us
+  return (r: Row, env: Env): TimeStruct | null => settle(timeStructOf(x.eval(r, env), field, modeOf(env.session.sqlMode).truncateFractional), env)
 }
 
 /** Signed microseconds as a TIME, or undefined past 838:59:59.999999. */
@@ -126,12 +128,11 @@ export function microsToTime(us: bigint): MysqlTime | undefined {
   const a = negative ? -us : us
   if (a > BigInt(TIME_MAX_SECONDS) * 1_000_000n + 999_999n) return undefined
   const seconds = Number(a / 1_000_000n)
-  const hours = Math.floor(seconds / 3600)
-  return { negative: negative && a > 0n, days: Math.floor(hours / 24), hour: hours % 24, minute: Math.floor(seconds / 60) % 60, second: seconds % 60, microsecond: Number(a % 1_000_000n) }
+  return timeFromSeconds(negative, seconds, Number(a % 1_000_000n))
 }
 
 /** The extreme TIME of a sign: ±838:59:59. */
-const extremeTime = (negative: boolean): MysqlTime => ({ negative, days: 34, hour: 22, minute: 59, second: 59, microsecond: 0 })
+const extremeTime = (negative: boolean): MysqlTime => timeFromSeconds(negative, TIME_MAX_SECONDS, 0)
 
 /** A datetime as microseconds from day 0. */
 const datetimeMicros = (v: MysqlDateTime): bigint =>
@@ -149,22 +150,17 @@ function microsToDatetime(us: bigint): MysqlDateTime | undefined {
 
 const datetimeValue = (v: MysqlDateTime, fsp: number): Value => ({ kind: 'datetime', v, type: 'DATETIME', fsp })
 const dateValue = (v: Pick<MysqlDateTime, 'year' | 'month' | 'day'>): Value => ({ kind: 'datetime', v: { year: v.year, month: v.month, day: v.day, hour: 0, minute: 0, second: 0, microsecond: 0 }, type: 'DATE', fsp: 0 })
-const timeValue = (v: MysqlTime, fsp: number): Value => ({ kind: 'time', v: roundTime(v, fsp), fsp })
-
-/** A TIME's fraction cut to `fsp` digits, rounding. */
-function roundTime(v: MysqlTime, fsp: number): MysqlTime {
-  if (fsp >= 6) return v
-  const unit = 10 ** (6 - fsp)
-  const us = Math.round(v.microsecond / unit) * unit
-  if (us < 1_000_000) return { ...v, microsecond: us }
-  return microsToTime(timeMicros({ ...v, microsecond: 0 }) + (v.negative ? -1_000_000n : 1_000_000n)) ?? extremeTime(v.negative)
+/** A TIME result retains its declared precision and the native result range. */
+export function timeValue(v: MysqlTime, fsp: number, truncate = false): TimeValue {
+  let rounded = roundTime(v, fsp, truncate)
+  if (Math.abs(Number(timeOrdinal(rounded))) > TIME_MAX_SECONDS * 1_000_000) rounded = extremeTime(rounded.negative)
+  return { kind: 'time', v: rounded, fsp }
 }
 
 /** A datetime's fraction cut to `fsp` digits, rounding. */
 function roundDatetime(v: MysqlDateTime, fsp: number): MysqlDateTime | undefined {
   if (fsp >= 6) return v
-  const unit = 10 ** (6 - fsp)
-  const us = Math.round(v.microsecond / unit) * unit
+  const us = roundFraction(v.microsecond, fsp)
   if (us < 1_000_000) return { ...v, microsecond: us }
   return microsToDatetime(datetimeMicros({ ...v, microsecond: 0 }) + 1_000_000n)
 }
@@ -180,26 +176,14 @@ function constantOf(e: Expression, c: Compiled, ctx: CompileContext): Value | un
   }
 }
 
-/** `Item::datetime_precision`: the fraction digits an argument brings as a datetime. */
-function datetimePrecision(c: Compiled, constant: Value | undefined): number {
+/** Native temporal precision inference keeps the time/date scanners distinct. */
+function temporalPrecision(c: Compiled, constant: Value | undefined, time = false): number {
   const t = c.type
   if (t.kind === 'datetime' || t.kind === 'time') return t.scale
-  if (t.kind === 'string' || t.kind === 'bytes') {
+  if (t.kind === 'string' || t.kind === 'bytes' || (time && t.kind === 'json')) {
     if (constant === null) return 0
-    const s = constant === undefined ? 'unreadable' : scanDateTime(toText(constant))
-    return typeof s === 'string' ? 6 : Math.min(s.fsp, 6)
-  }
-  return Math.min(t.kind === 'null' ? 0 : t.scale, 6)
-}
-
-/** `Item::time_precision`: the fraction digits an argument brings as a time. */
-function timePrecision(c: Compiled, constant: Value | undefined): number {
-  const t = c.type
-  if (t.kind === 'datetime' || t.kind === 'time') return t.scale
-  if (t.kind === 'string' || t.kind === 'bytes') {
-    if (constant === null) return 0
-    const p = constant === undefined ? undefined : parseTime(toText(constant))
-    return p === undefined ? 6 : Math.min(p.fsp, 6)
+    const s = constant === undefined ? undefined : (time ? parseTime(toText(constant)) : scanDateTime(toText(constant)))
+    return s === undefined || typeof s === 'string' ? 6 : Math.min(s.fsp, 6)
   }
   return Math.min(t.kind === 'null' ? 0 : t.scale, 6)
 }
@@ -218,29 +202,25 @@ const brokenOfDatetime = (v: MysqlDateTime): Broken => ({ negative: false, ...v 
 
 const INT = (width: number, nullable = true): ResultType => intType(width, nullable)
 
-/** An integer function of one date: its width, the reading it asks for, and the number it makes. */
-function ofDate(x: Compiled, width: number, flags: DateFlags, f: (d: MysqlDateTime) => number | bigint | null, nullable = true): Compiled {
-  const read = dateReader(x, flags)
+/** Integer projections share result writing; date/time input policies stay with their readers. */
+function integerProjection<T>(read: (r: Row, env: Env) => T | null, width: number, f: (v: T) => number | bigint | null, nullable = true): Compiled {
   return {
     eval: (r, env) => {
-      const d = read(r, env)
-      if (d === null) return null
-      const n = f(d)
+      const value = read(r, env)
+      if (value === null) return null
+      const n = f(value)
       return n === null ? null : intValue(BigInt(n))
     },
     type: INT(width, nullable),
   }
 }
 
+function ofDate(x: Compiled, width: number, flags: DateFlags, f: (d: MysqlDateTime) => number | bigint | null, nullable?: boolean): Compiled {
+  return integerProjection(dateReader(x, flags), width, f, nullable)
+}
+
 function ofTime(x: Compiled, width: number, f: (t: MysqlTime) => number | bigint): Compiled {
-  const read = timeReader(x)
-  return {
-    eval: (r, env) => {
-      const t = read(r, env)
-      return t === null ? null : intValue(BigInt(f(t)))
-    },
-    type: INT(width),
-  }
+  return integerProjection(timeReader(x), width, f)
 }
 
 /** UNIX_TIMESTAMP's seconds for a UTC datetime; 0 outside 1970-01-01 00:00:00 … 3001-01-18 23:59:59. */
@@ -320,21 +300,14 @@ export function temporalFunction(name: string, e: CallNode, ctx: CompileContext)
     case 'TIME': {
       count(1)
       const x = arg(0)
-      const fsp = timePrecision(x, constant(0, x))
-      const read = timeReader(x)
-      return {
-        eval: (r, env) => {
-          const t = read(r, env)
-          return t === null ? null : timeValue(t, fsp)
-        },
-        type: datetimeType(FIELD_TYPE.TIME, fsp, true),
-      }
+      const fsp = temporalPrecision(x, constant(0, x), true)
+      return timeCast(x, e.args[0] as Expression, fsp, ctx)
     }
     case 'TIMESTAMP': {
       count(1, 2)
       const x = arg(0)
       if (e.args.length === 1) {
-        const fsp = datetimePrecision(x, constant(0, x))
+        const fsp = temporalPrecision(x, constant(0, x))
         const read = dateReader(x, FUZZY)
         return {
           eval: (r, env) => {
@@ -347,7 +320,7 @@ export function temporalFunction(name: string, e: CallNode, ctx: CompileContext)
         }
       }
       const y = arg(1)
-      return addTime(x, y, false, 'datetime', Math.max(datetimePrecision(x, constant(0, x)), timePrecision(y, constant(1, y))), conn)
+      return addTime(x, y, false, 'datetime', Math.max(temporalPrecision(x, constant(0, x)), temporalPrecision(y, constant(1, y), true)), conn)
     }
     case 'YEAR': {
       count(1)
@@ -514,12 +487,12 @@ export function temporalTextFunction(name: string, e: CallNode, ctx: CompileCont
     }
     case 'STR_TO_DATE':
       count(2)
-      return strToDate(arg(0), arg(1), constant(1, arg(1)), ctx)
+      return strToDate(arg(0), arg(1), constant(1, arg(1)))
     case 'UNIX_TIMESTAMP': {
       count(0, 1)
       if (e.args.length === 0) return { eval: (_r, env) => intValue(BigInt(Math.floor(env.now.getTime() / 1000))), type: INT(21, false) }
       const x = arg(0)
-      const fsp = datetimePrecision(x, constant(0, x))
+      const fsp = temporalPrecision(x, constant(0, x))
       const nullable = x.type.nullable
       return {
         eval: (r, env) => {
@@ -596,7 +569,7 @@ export function temporalTextFunction(name: string, e: CallNode, ctx: CompileCont
     case 'CONVERT_TZ': {
       count(3)
       const x = arg(0)
-      const fsp = datetimePrecision(x, constant(0, x))
+      const fsp = temporalPrecision(x, constant(0, x))
       const read = dateReader(x, NO_ZERO)
       const from = arg(1)
       const to = arg(2)
@@ -648,7 +621,7 @@ export function temporalArithmetic(name: string, e: CallNode, ctx: CompileContex
       count(2)
       const x = arg(0)
       const y = arg(1)
-      const fsp = Math.max(timePrecision(x, constant(0, x)), timePrecision(y, constant(1, y)))
+      const fsp = Math.max(temporalPrecision(x, constant(0, x), true), temporalPrecision(y, constant(1, y), true))
       // A date against a TIME is no difference; a date on either side reads both as dates, else both as times.
       const dated = x.type.kind === 'datetime' || y.type.kind === 'datetime'
       const never = (x.type.kind === 'datetime' && y.type.kind === 'time') || (y.type.kind === 'datetime' && x.type.kind === 'time')
@@ -702,8 +675,8 @@ export function temporalArithmetic(name: string, e: CallNode, ctx: CompileContex
       const x = arg(0)
       const y = arg(1)
       const sub = name === 'SUBTIME'
-      if (x.type.kind === 'time') return addTime(x, y, sub, 'time', Math.max(timePrecision(x, constant(0, x)), timePrecision(y, constant(1, y))), conn)
-      if (x.type.kind === 'datetime') return addTime(x, y, sub, 'datetime', Math.max(datetimePrecision(x, constant(0, x)), timePrecision(y, constant(1, y))), conn)
+      if (x.type.kind === 'time') return addTime(x, y, sub, 'time', Math.max(temporalPrecision(x, constant(0, x), true), temporalPrecision(y, constant(1, y), true)), conn)
+      if (x.type.kind === 'datetime') return addTime(x, y, sub, 'datetime', Math.max(temporalPrecision(x, constant(0, x)), temporalPrecision(y, constant(1, y), true)), conn)
       return addTime(x, y, sub, 'text', 6, conn)
     }
     case 'MAKEDATE': {
@@ -764,7 +737,7 @@ export function temporalArithmetic(name: string, e: CallNode, ctx: CompileContex
           const total = ((ah * 60n + minute) * 60n + whole) * 1_000_000n + us
           const t = microsToTime(negative ? -total : total)
           if (t === undefined) {
-            raise(env, 1292, `Truncated incorrect time value: '${negative ? '-' : ''}${ah}:${String(minute).padStart(2, '0')}:${String(whole).padStart(2, '0')}'`)
+            warnTime(env, `${negative ? '-' : ''}${ah}:${String(minute).padStart(2, '0')}:${String(whole).padStart(2, '0')}`)
             return timeValue(extremeTime(negative), fsp)
           }
           return timeValue(t, fsp)
@@ -787,7 +760,7 @@ export function temporalArithmetic(name: string, e: CallNode, ctx: CompileContex
           const scaled = d.v * 1_000_000n
           const t = microsToTime(d.scale > 6 ? (scaled + (d.v < 0n ? -unit / 2n : unit / 2n)) / unit : scaled / unit)
           if (t === undefined) {
-            raise(env, 1292, `Truncated incorrect time value: '${toText(v)}'`)
+            warnTime(env, toText(v))
             return timeValue(extremeTime(d.v < 0n), fsp)
           }
           return timeValue(t, fsp)
@@ -902,14 +875,19 @@ function extract(unit: string, v: Broken): bigint {
   return 0n
 }
 
+/** Range adjustments share their diagnostic text; callers choose its source spelling. */
+function warnTime(env: Env, text: string): void {
+  raise(env, 1292, `Truncated incorrect time value: '${text}'`)
+}
+
 /** A TIME of signed microseconds, clamped to ±838:59:59 with a 1292 warning (`adjust_time_range_with_warn`). */
-function clampedTime(us: bigint, fsp: number, env: Env): Value {
+function clampedTime(us: bigint, fsp: number, env: Env): TimeValue {
   const t = microsToTime(us)
   if (t !== undefined) return timeValue(t, fsp)
   const abs = us < 0n ? -us : us
   const seconds = abs / 1_000_000n
   const frac = fsp === 0 ? '' : `.${String(abs % 1_000_000n).padStart(6, '0').slice(0, fsp)}`
-  raise(env, 1292, `Truncated incorrect time value: '${us < 0n ? '-' : ''}${seconds / 3600n}:${p2(Number((seconds / 60n) % 60n))}:${p2(Number(seconds % 60n))}${frac}'`)
+  warnTime(env, `${us < 0n ? '-' : ''}${seconds / 3600n}:${p2(Number((seconds / 60n) % 60n))}:${p2(Number(seconds % 60n))}${frac}`)
   return timeValue(extremeTime(us < 0n), fsp)
 }
 
@@ -950,12 +928,12 @@ function addTime(x: Compiled, y: Compiled, sub: boolean, shape: 'datetime' | 'ti
           return null
         }
         if (out.day === 0) return null
-        if (shape === 'text') return stringValue(renderDatetime(out), conn, COERCIBILITY.COERCIBLE)
+        if (shape === 'text') return stringValue(renderDateTime(out, 'DATETIME', out.microsecond === 0 ? 0 : 6), conn, COERCIBILITY.COERCIBLE)
         const v = roundDatetime(out, fsp)
         return v === undefined ? null : datetimeValue(v, fsp)
       }
       const t = clampedTime(negative ? -abs : abs, shape === 'text' ? 6 : fsp, env)
-      if (shape === 'text') return stringValue(renderTimeText((t as { v: MysqlTime }).v), conn, COERCIBILITY.COERCIBLE)
+      if (shape === 'text') return stringValue(renderTime(t.v, t.v.microsecond === 0 ? 0 : 6), conn, COERCIBILITY.COERCIBLE)
       return t
     },
     type,
@@ -963,16 +941,13 @@ function addTime(x: Compiled, y: Compiled, sub: boolean, shape: 'datetime' | 'ti
 }
 
 const p2 = (n: number): string => String(n).padStart(2, '0')
-const fraction = (us: number): string => (us === 0 ? '' : `.${String(us).padStart(6, '0')}`)
-const renderDatetime = (v: MysqlDateTime): string => `${String(v.year).padStart(4, '0')}-${p2(v.month)}-${p2(v.day)} ${p2(v.hour)}:${p2(v.minute)}:${p2(v.second)}${fraction(v.microsecond)}`
-const renderTimeText = (t: MysqlTime): string => `${t.negative ? '-' : ''}${p2(t.days * 24 + t.hour)}:${p2(t.minute)}:${p2(t.second)}${fraction(t.microsecond)}`
 
 /**
  * STR_TO_DATE: its type is decided by a constant format, a DATE, a TIME or
  * a DATETIME, six digits if it reads `%f`; with any other format a
  * DATETIME(6). A string it cannot read is NULL and a 1411 warning.
  */
-function strToDate(s: Compiled, f: Compiled, fixed: Value | undefined, ctx: CompileContext): Compiled {
+function strToDate(s: Compiled, f: Compiled, fixed: Value | undefined): Compiled {
   let field: number = FIELD_TYPE.DATETIME
   let fsp = 6
   if (fixed !== undefined && fixed !== null) {
@@ -980,7 +955,6 @@ function strToDate(s: Compiled, f: Compiled, fixed: Value | undefined, ctx: Comp
     fsp = shape.fraction ? 6 : 0
     field = shape.date && shape.time ? FIELD_TYPE.DATETIME : shape.date ? FIELD_TYPE.DATE : shape.time ? FIELD_TYPE.TIME : FIELD_TYPE.DATETIME
   }
-  void ctx
   const kind = field === FIELD_TYPE.DATE ? 'date' : field === FIELD_TYPE.TIME ? 'time' : 'datetime'
   return {
     eval: (r, env) => {
@@ -991,13 +965,13 @@ function strToDate(s: Compiled, f: Compiled, fixed: Value | undefined, ctx: Comp
       const text = toText(v)
       const out = extractDateTime(text, toText(fv), { noZeroDate: false, noZeroInDate: false })
       if (out === undefined) {
-        raise(env, 1411, `Incorrect ${kind === 'time' ? 'time' : kind === 'date' ? 'date' : 'datetime'} value: '${text}' for function str_to_date`)
+        raise(env, 1411, `Incorrect ${kind} value: '${text}' for function str_to_date`)
         return null
       }
       if (out.truncated) raise(env, 1292, `Truncated incorrect ${kind} value: '${text}'`)
       const d = out.v
       if (kind === 'date') return dateValue(d)
-      if (kind === 'time') return timeValue({ negative: false, days: 0, hour: d.hour, minute: d.minute, second: d.second, microsecond: d.microsecond }, fsp)
+      if (kind === 'time') return timeValue(timeFromSeconds(false, (d.hour * 60 + d.minute) * 60 + d.second, d.microsecond), fsp)
       return datetimeValue(d, fsp)
     },
     type: datetimeType(field, fsp, true),

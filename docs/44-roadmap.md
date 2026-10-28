@@ -854,9 +854,42 @@ smaller than f319f66, whose eleven required CI jobs pass. M5.10 stays partial;
 totals remain 144/190 and M5 42/53. String nullability, merged temporal charset,
 TIME CAST fractional text and ANSI SHOW CREATE gaps remain explicitly open.
 
-**Next bounded slice:** repair the measured TIME CAST fractional-value reader at
-its existing cast writer, preserving copied fields and numeric readers. Then address
-context-dependent precision precedence through the existing compiler/value-generator
+**TIME CAST values, verified (2026-10-28):** TIME() and CAST AS TIME now share
+input conversion and result normalization while retaining their own precision
+inference. Declared fractional precision belongs to the returned value, so raw,
+text and numeric readers agree. Ordinary input conversion respects
+TIME_TRUNCATE_FRACTIONAL, nanosecond rounding, carry and the native TIME limit.
+JSON temporal TIME and complete strings retain their separate conversion and
+3156 diagnostics, including source names and row numbers. Raw negative zero
+survives expression reading; actual derived/window fields and packed MIN/MAX/JSON
+values canonicalize zero. Metadata flags do not stand in for a writer.
+Shared seconds decomposition, calendar carry, fraction rounding, integer projection
+and text rendering remove duplicated mechanics; callers retain range, warning,
+date-versus-time and field-copy policies. Core datetime rounding retains its
+separate calendar and overflow behavior.
+The fixed-clock 3,756-command capture covers query/execute/PREPARE in four modes,
+all fractional precisions, positive/negative carry and limits, numeric/text/JSON
+inputs, casts, copies, aggregate/window controls and namespace precedence. Complete
+matches improve 1,934 to 3,592 without losing any matching component, condition,
+error attribute, field attribute or effect. Native answer pools reconstruct exactly.
+The preceding 244ce57 fails the fractional text regression. Twenty-nine captures
+enforce 42,986/53,582 complete commands and 174,601 conditions; 10,596 outcomes
+remain open. Fresh Docker --reference passes 1,509 main tests, four latency tests,
+typecheck, lint, all nine unchanged caps, package/typed smoke, the real client and
+all seven pinned corpora. All 3,756 native replays, seventeen existing targeted
+tests and seeded 20,000-statement executor fuzz pass. Repeated actual census and
+the entire official fixture remain byte-identical, including all 37 shared passes.
+Frozen-source proof covers 467 test files/fixtures and 206 runtime sources.
+Core/facade/parser measure 334,266/334,193/45,613 B gzipped; raw core is 1,261 B
+smaller than 244ce57, whose eleven required CI jobs pass. M5.10 stays partial;
+totals remain 144/190 and M5 42/53.
+
+**Next bounded slice:** repair CAST temporal precision 1426 admission after closed
+target syntax and before namespace lookup, through the existing grammar/admission
+owner. Do not approximate its phase in value evaluation. Prepared temporal metadata,
+JSON extraction and consumer-specific temporal range warnings remain open, as do
+string nullability, merged temporal charset and ANSI SHOW CREATE. Then address
+context-dependent clock precision precedence through existing compiler/value-generator
 owners, retaining missing table/column priority and DEFAULT/generated/CHECK timing.
 SYSDATE constructor validation and enclosing diagnostic labels remain open;
 RANDOM_BYTES evaluation precedes CHECK permission repairs. Continue bounded

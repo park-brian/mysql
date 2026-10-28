@@ -11,7 +11,7 @@
 // What is not here yet is refused by name rather than approximated: an
 // unknown function in a selected schema is ER_SP_DOES_NOT_EXIST; a builtin we
 // have not written is ER_NOT_SUPPORTED_YET naming it (M5.10 owns the rest).
-import { CHARSET_BINARY, COLUMN_FLAG, FIELD_TYPE, expectTyped, equalBytes } from '@myjs/bytes'
+import { CHARSET_BINARY, COLUMN_FLAG, FIELD_TYPE, expectTyped, equalBytes, type MysqlTime } from '@myjs/bytes'
 import { nativeCallName, someNode } from './ast.ts'
 import { notSupported } from './errors.ts'
 import { resolveCollation } from './collation.ts'
@@ -72,6 +72,8 @@ import {
   toText,
   toTime,
   timeOrdinal,
+  timeFieldValue,
+  timeOf,
   truth,
   valInt,
   type Condition,
@@ -89,6 +91,7 @@ import {
   temporalDeprecation,
   mergeTypes,
   type MergeType,
+  type JsonDoc,
 } from '@myjs/types'
 import {
   CHARSET_UTF8MB4_BIN,
@@ -125,6 +128,7 @@ import { printString, printExpression, Unprintable } from './print.ts'
 import { modeOf } from './mode.ts'
 import { NOT_YET, VARIES_PER_EVALUATION, functionCompiler, invalidGroupFunction } from './registry.ts'
 import { clock, escapedBytes, hexOf } from './builtins.ts'
+import { settle, timeValue } from './temporal-functions.ts'
 import { systemVariableInfo } from './variables.ts'
 
 /** One row as operators pass it: a value per column of the scope. */
@@ -300,10 +304,23 @@ function jsonAsNumber(c: Compiled, kind: 'DOUBLE' | 'INTEGER' | 'DECIMAL'): Comp
       if (v === null || v.kind !== 'json') return v
       const d = v.v
       const number = d.t === 'int' || d.t === 'uint' || d.t === 'double' || d.t === 'decimal' || d.t === 'bool' || (d.t === 'string' && numericPrefix(d.v).complete)
-      if (!number) raise(env, 3156, `Invalid JSON value for CAST to ${kind} from column ${name} at row ${rowNumber(env)}`)
+      if (!number) jsonCastWarning(env, kind, name)
       return v
     },
   }
+}
+
+function jsonCastWarning(env: Env, target: string, name: string): void {
+  raise(env, 3156, `Invalid JSON value for CAST to ${target} from column ${name} at row ${rowNumber(env)}`)
+}
+
+/** JSON TIME values and complete strings have their own native conversion policy. */
+function jsonTime(value: JsonDoc, name: string, env: Env): MysqlTime | null {
+  if (value.t === 'time') return value.v
+  const parsed = value.t === 'string' ? parseTime(value.v, true) : undefined
+  if (parsed !== undefined && !parsed.truncated && !parsed.clamped) return parsed.v
+  jsonCastWarning(env, 'DATE/TIME/DATETIME/TIMESTAMP', name)
+  return null
 }
 
 /** `asNumber`'s check, for one value. */
@@ -2288,6 +2305,8 @@ export function convertTo(v: Value, t: ResultType): Value {
       return doubleOf(v, t)
     case 'bytes':
       return withoutHex(v)
+    case 'time':
+      return v.kind === 'time' ? timeFieldValue(timeValue(v.v, t.scale)) : v
     case 'string':
       // A function's string is a string: an ENUM's index stays with the column.
       return v.kind === 'string' ? (v.ordinal === undefined ? v : stringValue(v.v, v.collationId, v.coercibility)) : stringValue(toText(v), t.collationId)
@@ -2454,6 +2473,20 @@ function call(e: CallNode, ctx: CompileContext): Compiled {
 
 const FLT_MAX = 3.4028234663852886e38
 
+/** TIME() and CAST AS TIME share conversion and result normalization, not precision inference. */
+export function timeCast(inner: Compiled, source: Expression, fsp: number, ctx: CompileContext): Compiled {
+  const truncate = modeOf(ctx.session.sqlMode).truncateFractional
+  const name = inner.type.column?.orgName ?? inner.type.names?.orgName ?? (source.kind === NODE.CAST ? 'cast_as_json' : source.kind === NODE.CALL ? nativeCallName(source).toLowerCase() : '?')
+  return {
+    eval: (r, env) => {
+      const value = inner.eval(r, env)
+      const read = value?.kind === 'json' ? jsonTime(value.v, name, env) : settle(timeOf(value, truncate), env)
+      return read === null ? null : timeValue(read, fsp, truncate)
+    },
+    type: datetimeType(FIELD_TYPE.TIME, fsp, true),
+  }
+}
+
 function cast(e: CastNode, ctx: CompileContext): Compiled {
   const raw = compile(e.expr, ctx)
   if (e.type.national === true) warnAtCompile(ctx, 3720, NATIONAL_DEPRECATION)
@@ -2600,7 +2633,7 @@ function cast(e: CastNode, ctx: CompileContext): Compiled {
       }
     }
     case 'TIME':
-      return { eval: (r, env) => { const v = x(r, env); return v === null ? null : (toTime(v) ?? null) }, type: datetimeType(FIELD_TYPE.TIME, t.length ?? 0, true) }
+      return timeCast(inner, e.expr, t.length ?? 0, ctx)
     default:
       throw notSupported(`CAST AS ${t.name}`)
   }

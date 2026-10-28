@@ -15,6 +15,7 @@ export interface Mode extends SqlMode {
   readonly noZeroInDate: boolean
   readonly errorForDivisionByZero: boolean
   readonly onlyFullGroupBy: boolean
+  readonly truncateFractional: boolean
 }
 
 const modes = new Map<string, Mode>()
@@ -31,6 +32,7 @@ export function modeOf(text: string): Mode {
       noZeroInDate: has('NO_ZERO_IN_DATE'),
       errorForDivisionByZero: has('ERROR_FOR_DIVISION_BY_ZERO'),
       onlyFullGroupBy: has('ONLY_FULL_GROUP_BY'),
+      truncateFractional: has('TIME_TRUNCATE_FRACTIONAL'),
     }
     // An expression can build any number of distinct texts; keep the cache small.
     if (modes.size >= 64) modes.clear()

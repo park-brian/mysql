@@ -19,6 +19,9 @@ export { encodeFloat, decodeFloat, encodeDouble, decodeDouble, compareFloat } fr
 export {
   DATETIMEF_INT_OFS,
   TIMEF_INT_OFS,
+  timeFromSeconds,
+  TIME_MAX_SECONDS,
+  roundFraction,
   fractionalBytes,
   datetimeBinSize,
   encodeDatetime2,
@@ -134,6 +137,7 @@ export {
   string as stringValue,
   textOf,
   timeOrdinal,
+  timeFieldValue,
   temporalOrdinal,
   toDateTime,
   toDecimal,

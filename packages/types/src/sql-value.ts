@@ -17,6 +17,7 @@ import { encodeCollation } from '@myjs/charsets'
 import { renderJson, type JsonDoc } from './json-doc.ts'
 import { scanDateTime, scanTime, type Deprecation, type ScanFlags } from './temporal-scan.ts'
 import { daysInMonth } from './calendar.ts'
+import { timeFromSeconds, addDateTimeSeconds, TIME_MAX_SECONDS } from './temporal.ts'
 
 const UTF8 = new TextEncoder()
 
@@ -521,25 +522,10 @@ export function parseDateTime(
   const s = scanDateTime(text, flags)
   if (typeof s === 'string') return undefined
   let v = s.v
-  if (s.nanoseconds >= 500) v = addSeconds(v, 0, 1)
+  if (s.nanoseconds >= 500) v = addDateTimeSeconds(v, 0, 1)
   // A displacement is converted into the session's zone, UTC here.
-  if (s.displacement !== undefined) v = addSeconds(v, -s.displacement, 0)
+  if (s.displacement !== undefined) v = addDateTimeSeconds(v, -s.displacement, 0)
   return { v, hasTime: s.fields > 3, fsp: s.fsp, truncated: s.truncated, ...(s.deprecation === undefined ? {} : { deprecation: s.deprecation }) }
-}
-
-/** A datetime moved by whole seconds and microseconds, the calendar carrying. */
-function addSeconds(v: MysqlDateTime, seconds: number, microseconds: number): MysqlDateTime {
-  let us = v.microsecond + microseconds
-  let carry = seconds
-  if (us >= 1_000_000) {
-    us -= 1_000_000
-    carry++
-  }
-  if (carry === 0) return { ...v, microsecond: us }
-  const d = new Date(0)
-  d.setUTCFullYear(v.year, v.month - 1, v.day)
-  d.setUTCHours(v.hour, v.minute, v.second + carry, 0)
-  return { year: d.getUTCFullYear(), month: d.getUTCMonth() + 1, day: d.getUTCDate(), hour: d.getUTCHours(), minute: d.getUTCMinutes(), second: d.getUTCSeconds(), microsecond: us }
 }
 
 /** MySQL's default `sql_mode` refuses an invalid day for its month, but allows the zero date's parts only when they are all zero. */
@@ -558,24 +544,25 @@ export function validDate(v: Pick<MysqlDateTime, 'year' | 'month' | 'day'>): boo
  */
 export function parseTime(
   text: string,
+  truncate = false,
 ): { readonly v: MysqlTime; readonly fsp: number; readonly truncated: boolean; readonly clamped: boolean; readonly dateDropped: boolean; readonly deprecation?: Deprecation } | undefined {
   const s = scanTime(text)
   if (typeof s === 'string') return undefined
   let us = s.microsecond
   let seconds = (s.hours * 60 + s.minute) * 60 + s.second
-  if (s.nanoseconds >= 500 && !s.clamped) {
+  if (!truncate && s.nanoseconds >= 500 && !s.clamped) {
     us++
     if (us === 1_000_000) {
       us = 0
       seconds++
     }
   }
-  const hours = Math.floor(seconds / 3600)
+  const clamped = s.clamped || seconds > TIME_MAX_SECONDS || (seconds === TIME_MAX_SECONDS && us > 0)
   return {
-    v: { negative: s.negative && (seconds > 0 || us > 0), days: Math.floor(hours / 24), hour: hours % 24, minute: Math.floor(seconds / 60) % 60, second: seconds % 60, microsecond: us },
+    v: timeFromSeconds(s.negative, clamped ? TIME_MAX_SECONDS : seconds, clamped ? 0 : us),
     fsp: s.fsp,
     truncated: s.truncated,
-    clamped: s.clamped,
+    clamped,
     dateDropped: s.datetime !== undefined && (s.datetime.v.year !== 0 || s.datetime.v.month !== 0 || s.datetime.v.day !== 0),
     ...(s.deprecation === undefined ? {} : { deprecation: s.deprecation }),
   }
@@ -590,6 +577,11 @@ export function temporalOrdinal(v: MysqlDateTime): bigint {
 export function timeOrdinal(t: MysqlTime): bigint {
   const us = (((BigInt(t.days) * 24n + BigInt(t.hour)) * 60n + BigInt(t.minute)) * 60n + BigInt(t.second)) * 1_000_000n + BigInt(t.microsecond)
   return t.negative ? -us : us
+}
+
+/** Packed TIME fields and caches cannot retain a negative zero. */
+export function timeFieldValue(value: TimeValue): TimeValue {
+  return value.v.negative && timeOrdinal(value.v) === 0n ? { ...value, v: { ...value.v, negative: false } } : value
 }
 
 /** A value as a datetime of `type`, as an implicit cast does; `undefined` when it is not one. */

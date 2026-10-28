@@ -75,6 +75,9 @@ import {
   encodeTime2,
   encodeTimestamp2,
   encodeYear,
+  timeFromSeconds,
+  addDateTimeSeconds,
+  roundFraction,
 } from './temporal.ts'
 
 /** A column as the store sees it. */
@@ -412,25 +415,16 @@ function encodeDecimalField(v: Exclude<Value, null>, column: FieldColumn, ctx: S
  * off by default). Truncating, as this first did, was found by review.
  */
 function roundDateTime(v: MysqlDateTime, fsp: number): MysqlDateTime {
-  const unit = 10 ** (6 - fsp)
-  const us = Math.round(v.microsecond / unit) * unit
-  if (us < 1_000_000) return { ...v, microsecond: us }
-  // One second more. `Date` does the calendar; years below 100 are set
-  // explicitly, since `Date.UTC` reads them as 1900 + y.
-  const d = new Date(0)
-  d.setUTCFullYear(v.year, v.month - 1, v.day)
-  d.setUTCHours(v.hour, v.minute, v.second + 1, 0)
-  return { year: d.getUTCFullYear(), month: d.getUTCMonth() + 1, day: d.getUTCDate(), hour: d.getUTCHours(), minute: d.getUTCMinutes(), second: d.getUTCSeconds(), microsecond: 0 }
+  const us = roundFraction(v.microsecond, fsp)
+  return addDateTimeSeconds(v, 0, us - v.microsecond)
 }
 
 /** A TIME rounded the same way: `'10:00:59.5'` into a TIME is `10:01:00`. */
-export function roundTime(t: MysqlTime, fsp: number): MysqlTime {
-  const unit = 10 ** (6 - fsp)
+export function roundTime(t: MysqlTime, fsp: number, truncate = false): MysqlTime {
+  if (fsp >= 6) return t
   const seconds = ((t.days * 24 + t.hour) * 60 + t.minute) * 60 + t.second
-  const total = Math.round((seconds * 1_000_000 + t.microsecond) / unit) * unit
-  const s = Math.floor(total / 1_000_000)
-  const hours = Math.floor(s / 3600)
-  return { negative: t.negative, days: Math.floor(hours / 24), hour: hours % 24, minute: Math.floor(s / 60) % 60, second: s % 60, microsecond: total % 1_000_000 }
+  const us = roundFraction(t.microsecond, fsp, truncate)
+  return timeFromSeconds(t.negative, seconds + Math.floor(us / 1_000_000), us % 1_000_000)
 }
 
 const ZERO_DATE: MysqlDateTime = { year: 0, month: 0, day: 0, hour: 0, minute: 0, second: 0, microsecond: 0 }

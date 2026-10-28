@@ -7,12 +7,16 @@
 import type { MysqlDateTime, MysqlTime } from '@myjs/bytes'
 import { scanDateTime, scanTime, type Deprecation } from './temporal-scan.ts'
 import { parseTime, textOf, toDecimal, toText, type Value } from './sql-value.ts'
+import { timeFromSeconds, addDateTimeSeconds, TIME_MAX_SECONDS } from './temporal.ts'
+import { daysInMonth } from './calendar.ts'
 
 export interface DateFlags {
   /** NO_ZERO_DATE: '0000-00-00' is no date. */
   readonly noZeroDate?: boolean
   /** NO_ZERO_IN_DATE: a zero month or day is none either. */
   readonly noZeroInDate?: boolean
+  /** Keep the first six fraction digits instead of rounding nanoseconds. */
+  readonly truncateFractional?: boolean
 }
 
 /** A conversion's value, or NULL, and the warning it raises, if any. */
@@ -26,7 +30,6 @@ export interface Converted<T> {
 }
 
 const ZERO_TIME: MysqlTime = { negative: false, days: 0, hour: 0, minute: 0, second: 0, microsecond: 0 }
-const TIME_MAX_SECONDS = 838 * 3600 + 59 * 60 + 59
 
 const incorrect = (what: string, text: string): string => `Incorrect ${what} value: '${text}'`
 const truncated = (what: string, text: string): string => `Truncated incorrect ${what} value: '${text}'`
@@ -66,11 +69,10 @@ export function numberToDateTime(n: bigint): MysqlDateTime | undefined {
     microsecond: 0,
   }
   if (v.year > 9999 || v.month > 12 || v.day > 31 || v.hour > 23 || v.minute > 59 || v.second > 59) return undefined
-  if (!isZero(v) && v.month !== 0 && v.day !== 0 && v.day > daysIn(v.year, v.month)) return undefined
+  if (!isZero(v) && v.month !== 0 && v.day !== 0 && v.day > daysInMonth(v.year, v.month)) return undefined
   return v
 }
 
-const daysIn = (y: number, m: number): number => (m === 2 ? ((y % 4 === 0 && y % 100 !== 0) || y % 400 === 0 ? 29 : 28) : [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31][m - 1] as number)
 
 /** A number's whole part and its fraction in nanoseconds, both carrying its sign: `my_decimal2lldiv_t`. */
 function wholeAndNanos(v: Exclude<Value, null>): { readonly whole: bigint; readonly nanos: bigint } | undefined {
@@ -86,14 +88,13 @@ function wholeAndNanos(v: Exclude<Value, null>): { readonly whole: bigint; reado
   return { whole, nanos }
 }
 
+/** The native nanosecond rounding boundary; sign, carry and range belong to callers. */
+const microsFromNanos = (nanos: bigint, truncate: boolean): number => Number((nanos + (truncate ? 0n : 500n)) / 1000n)
+
 /** A datetime moved forward by microseconds that may carry into the second, minute, hour or day. */
 function carry(v: MysqlDateTime, us: number): MysqlDateTime | undefined {
-  if (us < 1_000_000) return { ...v, microsecond: us }
-  const d = new Date(0)
-  d.setUTCFullYear(v.year, v.month - 1, v.day)
-  d.setUTCHours(v.hour, v.minute, v.second + 1, 0)
-  if (d.getUTCFullYear() > 9999) return undefined
-  return { year: d.getUTCFullYear(), month: d.getUTCMonth() + 1, day: d.getUTCDate(), hour: d.getUTCHours(), minute: d.getUTCMinutes(), second: d.getUTCSeconds(), microsecond: 0 }
+  const out = addDateTimeSeconds(v, 0, us - v.microsecond)
+  return out.year > 9999 ? undefined : out
 }
 
 /**
@@ -122,7 +123,7 @@ export function dateOf(value: Value, flags: DateFlags, today: () => MysqlDateTim
       if (typeof s === 'string') return { v: null, warning: incorrect('datetime', text) }
       const noted = s.deprecation === undefined ? {} : { deprecation: { d: s.deprecation, text } }
       let v = s.v
-      if (s.nanoseconds >= 500) {
+      if (!flags.truncateFractional && s.nanoseconds >= 500) {
         const c = carry(v, v.microsecond + 1)
         if (c === undefined) return { v: null, warning: incorrect('datetime', text), ...noted }
         v = c
@@ -138,16 +139,10 @@ export function dateOf(value: Value, flags: DateFlags, today: () => MysqlDateTim
       if (n.nanos === 0n) return { v, fsp: 0 }
       // A date has no fraction to keep: it is dropped, with a word (8.4.11: '101112.5').
       if (n.whole !== 0n && n.whole <= 99991231n) return { v, fsp: 0, warning: truncated('date', text) }
-      const c = carry(v, Number((n.nanos + 500n) / 1000n))
+      const c = carry(v, microsFromNanos(n.nanos, flags.truncateFractional === true))
       return c === undefined ? { v: null, warning: incorrect('datetime', text) } : { v: c, fsp: 6 }
     }
   }
-}
-
-/** A count of seconds and microseconds as a TIME, its sign kept. */
-function timeOfSeconds(negative: boolean, seconds: number, microsecond: number): MysqlTime {
-  const hours = Math.floor(seconds / 3600)
-  return { negative: negative && (seconds > 0 || microsecond > 0), days: Math.floor(hours / 24), hour: hours % 24, minute: Math.floor(seconds / 60) % 60, second: seconds % 60, microsecond }
 }
 
 /** `int_to_time`: HHMMSS, signed, or past 838:59:59 a datetime's time of day, or clamped. */
@@ -158,18 +153,17 @@ function numberToTime(n: bigint): { readonly v: MysqlTime; readonly bad: boolean
       const dt = numberToDateTime(n)
       if (dt !== undefined) return { v: { ...ZERO_TIME, hour: dt.hour, minute: dt.minute, second: dt.second }, bad: false, clamped: false }
     }
-    return { v: timeOfSeconds(false, TIME_MAX_SECONDS, 0), bad: false, clamped: true }
   }
-  if (n < -MAX) return { v: timeOfSeconds(true, TIME_MAX_SECONDS, 0), bad: false, clamped: true }
+  if (n > MAX || n < -MAX) return { v: timeFromSeconds(n < 0n, TIME_MAX_SECONDS, 0), bad: false, clamped: true }
   const negative = n < 0n
   const a = negative ? -n : n
   if (a % 100n >= 60n || (a / 100n) % 100n >= 60n) return { v: ZERO_TIME, bad: true, clamped: false }
   const seconds = Number(a / 10000n) * 3600 + Number((a / 100n) % 100n) * 60 + Number(a % 100n)
-  return { v: timeOfSeconds(negative, seconds, 0), bad: false, clamped: false }
+  return { v: timeFromSeconds(negative, seconds, 0), bad: false, clamped: false }
 }
 
 /** `Item::get_time`: a value as a TIME. A datetime is its time of day. */
-export function timeOf(value: Value): Converted<MysqlTime> {
+export function timeOf(value: Value, truncate = false): Converted<MysqlTime> {
   if (value === null) return { v: null }
   switch (value.kind) {
     case 'time':
@@ -180,9 +174,9 @@ export function timeOf(value: Value): Converted<MysqlTime> {
     case 'bytes':
     case 'json': {
       const text = value.kind === 'json' ? toText(value) : textOf(value)
-      const p = parseTime(text)
+      const p = parseTime(text, truncate)
       if (p === undefined) return { v: null, warning: truncated('time', text) }
-      return p.truncated || p.clamped ? { v: p.v, fsp: p.fsp, warning: truncated('time', text) } : { v: p.v, fsp: p.fsp }
+      return { v: p.v, fsp: p.fsp, ...(p.truncated || p.clamped ? { warning: truncated('time', text) } : {}) }
     }
     default: {
       const text = toText(value)
@@ -193,11 +187,11 @@ export function timeOf(value: Value): Converted<MysqlTime> {
       if (t.bad || t.clamped) return { v: null, warning: truncated('time', text) }
       if (n.nanos === 0n) return { v: t.v, fsp: 0 }
       // The fraction rounds at the microsecond, carrying into the second.
-      const us = Number(((n.nanos < 0n ? -n.nanos : n.nanos) + 500n) / 1000n)
+      const us = microsFromNanos(n.nanos < 0n ? -n.nanos : n.nanos, truncate)
       const negative = t.v.negative || n.whole < 0n || n.nanos < 0n
       const seconds = ((t.v.days * 24 + t.v.hour) * 60 + t.v.minute) * 60 + t.v.second + (us === 1_000_000 ? 1 : 0)
-      if (seconds > TIME_MAX_SECONDS) return { v: timeOfSeconds(negative, TIME_MAX_SECONDS, 0), fsp: 6, warning: truncated('time', text) }
-      return { v: timeOfSeconds(negative, seconds, us === 1_000_000 ? 0 : us), fsp: 6 }
+      if (seconds > TIME_MAX_SECONDS || (truncate && seconds === TIME_MAX_SECONDS && us > 0)) return { v: timeFromSeconds(negative, TIME_MAX_SECONDS, 0), fsp: 6, warning: truncated('time', text) }
+      return { v: timeFromSeconds(negative, seconds, us === 1_000_000 ? 0 : us), fsp: 6 }
     }
   }
 }
@@ -243,41 +237,41 @@ export function dateStructOf(value: Value, flags: DateFlags, today: () => MysqlD
 }
 
 /** `get_time` with its type: a TIME, or a DATE or DATETIME a long text or number turned out to be. */
-export function timeStructOf(value: Value, field = false): Converted<TimeStruct> {
+export function timeStructOf(value: Value, field = false, truncate = false): Converted<TimeStruct> {
   if (value === null) return { v: null }
   switch (value.kind) {
     case 'datetime':
       // A column keeps its date (`Field::get_time`); any other date-valued expression is its time of day.
-      if (!field) return { v: { type: 'TIME', negative: false, year: 0, month: 0, day: 0, hour: value.v.hour, minute: value.v.minute, second: value.v.second, microsecond: value.v.microsecond }, fsp: value.fsp }
-      return { v: fromDateTime(value.v, value.type === 'DATE' ? 'DATE' : 'DATETIME'), fsp: value.fsp }
+      if (field) return { v: fromDateTime(value.v, value.type === 'DATE' ? 'DATE' : 'DATETIME'), fsp: value.fsp }
+      break
     case 'time':
-      return { v: fromTime(value.v), fsp: value.fsp }
+      break
     case 'string':
     case 'bytes':
     case 'json': {
       const text = value.kind === 'json' ? toText(value) : textOf(value)
       const s = scanTime(text)
       if (typeof s !== 'string' && s.datetime !== undefined) {
-        const d = dateOf(value, {}, () => s.datetime?.v as MysqlDateTime)
+        const d = dateOf(value, { truncateFractional: truncate }, () => s.datetime?.v as MysqlDateTime)
         if (d.v !== null) return { ...d, v: fromDateTime(d.v, 'DATETIME') }
       }
-      const c = timeOf(value)
-      return c.v === null ? failed(c) : { ...c, v: fromTime(c.v) }
+      break
     }
     default: {
       const n = wholeAndNanos(value)
       if (n !== undefined && n.whole > 8385959n && n.whole >= 10000000000n) {
         const dt = numberToDateTime(n.whole)
         if (dt !== undefined) {
-          const us = n.nanos === 0n ? 0 : Number((n.nanos + 500n) / 1000n)
+          const us = microsFromNanos(n.nanos, truncate)
           const v = carry(dt, us)
           if (v !== undefined) return { v: fromDateTime(v, 'DATETIME'), fsp: n.nanos === 0n ? 0 : 6 }
         }
       }
-      const c = timeOf(value)
-      return c.v === null ? failed(c) : { ...c, v: fromTime(c.v) }
+      break
     }
   }
+  const c = timeOf(value, truncate)
+  return c.v === null ? failed(c) : { ...c, v: fromTime(c.v) }
 }
 
 /**

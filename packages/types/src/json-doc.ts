@@ -28,7 +28,7 @@ import { decodeDecimal, encodeDecimal } from './decimal.ts'
 import { invalidJson } from './errors.ts'
 import { JSON_TYPE, compareJsonKeys, isInlined, varint, writeVarint } from './json.ts'
 import { compareDecimals } from './compare.ts'
-import { parseDecimal, renderDecimal, renderDouble, type DecimalValue, type Value } from './sql-value.ts'
+import { parseDecimal, renderDecimal, renderDouble, timeFieldValue, type DecimalValue, type Value } from './sql-value.ts'
 
 export type JsonDoc =
   | { readonly t: 'null' }
@@ -867,7 +867,7 @@ export function toJsonDoc(v: Exclude<Value, null>): JsonDoc {
     case 'datetime':
       return { t: v.type === 'DATE' ? 'date' : v.type === 'TIMESTAMP' ? 'timestamp' : 'datetime', v: v.v }
     case 'time':
-      return { t: 'time', v: v.v }
+      return { t: 'time', v: timeFieldValue(v).v }
   }
 }
 

@@ -155,8 +155,8 @@ export class WindowSink {
     // A field of the window's temporary table: a number there carries no BINARY.
     return { eval: (row) => {
       const v = row[this.base + slot] ?? null
-      // A window AVG reads its final field, not the grouped sum/count intermediate.
-      return name === 'AVG' && type.kind === 'decimal' ? convertTo(v, type) : v
+      // AVG reads its final field; TIME fields also lose the raw expression's negative zero.
+      return (name === 'AVG' && type.kind === 'decimal') || type.kind === 'time' ? convertTo(v, type) : v
     }, type: { ...type, length: copiedLength(type), temporary: 'stream' } }
   }
 

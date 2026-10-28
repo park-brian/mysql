@@ -185,8 +185,8 @@ functions remain admitted. A pure postorder check shares only traversal and nati
 diagnostic construction with generated columns. ALTER SET DEFAULT retains its
 late execution boundary and non-executing PREPARE behavior. The extended tests
 pass 153 transaction boundaries and nine missing-database cases against both
-engines. Twenty-eight admission captures enforce 39,394/49,826 complete commands,
-with unchanged native answers and 10,432 open outcomes. CHECK permissions/namespace,
+engines. Twenty-nine admission captures enforce 42,986/53,582 complete commands,
+with unchanged native answers and 10,596 open outcomes. CHECK permissions/namespace,
 malformed declaration ordering, ANSI SHOW CREATE and other function gaps remain
 open. A CHECK permission-only trial was withdrawn: native clock precision and
 RANDOM_BYTES evaluation must be repaired first. A deterministic 702-command
@@ -205,8 +205,13 @@ the general ten-character base through their existing writers. A fixed-clock
 1,458-command audit improves 452 to 698 complete matches without losing matching
 facts or changing native answers. The precision reader uses its parser-guaranteed
 NUM31 literal directly; numeric classification shares the existing predicate.
-All nine unchanged size caps pass. String nullability, merged temporal charset
-and TIME CAST fractional text remain open. Bare DEFAULT/ON UPDATE now use their four timestamp aliases, require NOW
+TIME() and TIME CAST now share conversion and result precision, preserving mode,
+JSON diagnostics and raw versus packed negative zero at actual field writers.
+A 3,756-command native audit improves 1,934 to 3,592 complete matches without
+losing matched facts; native answers reconstruct exactly. Shared temporal
+arithmetic and text renderers remove duplicated mechanics under all nine unchanged
+size caps. CAST precision admission, prepared temporal metadata, JSON extraction,
+consumer range warnings, string nullability and merged temporal charset remain open. Bare DEFAULT/ON UPDATE now use their four timestamp aliases, require NOW
 parentheses and validate the NUM token before BigInt conversion, producing typed
 syntax errors for malformed precision. A shared integer-token reader preserves
 caller bounds, raw spelling, conversions and AST ownership. Three native captures

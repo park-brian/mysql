@@ -20,6 +20,36 @@ import type { MysqlDateTime, MysqlTime } from '@myjs/bytes'
 import { badValue, outOfRange } from './errors.ts'
 import { decodeInt, encodeInt } from './integers.ts'
 
+/** The largest whole-second magnitude of a MySQL TIME. */
+export const TIME_MAX_SECONDS = 838 * 3600 + 59 * 60 + 59
+
+/** Whole seconds and a fraction as TIME components, preserving the supplied sign. */
+export function timeFromSeconds(negative: boolean, seconds: number, microsecond: number): MysqlTime {
+  const hours = Math.floor(seconds / 3600)
+  return { negative, days: Math.floor(hours / 24), hour: hours % 24, minute: Math.floor(seconds / 60) % 60, second: seconds % 60, microsecond }
+}
+
+/** Quantize a nonnegative microsecond fraction; callers own any second carry. */
+export function roundFraction(microsecond: number, fsp: number, truncate = false): number {
+  const unit = 10 ** (6 - fsp)
+  return (truncate ? Math.trunc : Math.round)(microsecond / unit) * unit
+}
+
+/** A datetime moved by whole seconds and microseconds, the calendar carrying. */
+export function addDateTimeSeconds(v: MysqlDateTime, seconds: number, microseconds: number): MysqlDateTime {
+  let us = v.microsecond + microseconds
+  let carry = seconds
+  if (us >= 1_000_000) {
+    us -= 1_000_000
+    carry++
+  }
+  if (carry === 0) return { ...v, microsecond: us }
+  const d = new Date(0)
+  d.setUTCFullYear(v.year, v.month - 1, v.day)
+  d.setUTCHours(v.hour, v.minute, v.second + carry, 0)
+  return { year: d.getUTCFullYear(), month: d.getUTCMonth() + 1, day: d.getUTCDate(), hour: d.getUTCHours(), minute: d.getUTCMinutes(), second: d.getUTCSeconds(), microsecond: us }
+}
+
 /** `#define DATETIMEF_INT_OFS 0x8000000000LL` — makes the packed value unsigned so it sorts. */
 export const DATETIMEF_INT_OFS = 0x8000000000n
 
