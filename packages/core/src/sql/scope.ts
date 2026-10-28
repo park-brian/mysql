@@ -17,6 +17,7 @@
 //
 // An `ON` sees only the tables of its own join (`restrict`): in
 // `a, b JOIN c ON a.x = c.x` the comma binds last, so `a.x` is 1054 there.
+import { unknownTableError } from './errors.ts'
 import type { TableDef } from '@myjs/engine'
 import { expectTyped } from '@myjs/bytes'
 import { messages, sqlError, type SqlError } from '@myjs/protocol'
@@ -140,7 +141,7 @@ export class TableScope implements Scope {
       matched = true
       t.columns.forEach((c, i) => out.push({ index: t.offset + i, name: c.name, type: c.type }))
     }
-    if (table !== undefined && !matched) throw sqlError('ER_BAD_TABLE_ERROR', `Unknown table '${table}'`)
+    if (table !== undefined && !matched) throw unknownTableError(table)
     return out
   }
 

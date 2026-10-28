@@ -40,7 +40,7 @@
 // takes rows in the order they were inserted, where this takes them in
 // the table's; after a sync to disk a prefix scans its words in order; and
 // MATCH over a derived table, which the server merges, is 1191 here.
-import { notSupported, wrongUsage } from './errors.ts'
+import { notSupported, wrongUsage, wrongArgumentsError } from './errors.ts'
 import { CHARSET_BINARY, FIELD_TYPE } from '@myjs/bytes'
 import { collation, encodeCollation, requireCollationInfo } from '@myjs/charsets'
 import type { ColumnDef, TableDef } from '@myjs/engine'
@@ -565,7 +565,7 @@ function termRank(corpus: Corpus, t: Term, words: readonly string[]): number | u
 export const queryText = (v: Value): string => (v === null ? '' : toText(v))
 
 export const noIndex = () => sqlError('ER_FT_MATCHING_KEY_NOT_FOUND', "Can't find FULLTEXT index matching the column list")
-export const badAgainst = () => sqlError('ER_WRONG_ARGUMENTS', 'Incorrect arguments to AGAINST')
+export const badAgainst = () => wrongArgumentsError('AGAINST')
 export const noExpansion = () => notSupported('WITH QUERY EXPANSION')
 
 /** The fold a set of columns' words take: their collation's. */

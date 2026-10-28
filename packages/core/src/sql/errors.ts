@@ -9,3 +9,18 @@ export function notSupported(what: string): SqlError {
 export function wrongUsage(first: string, second: string): SqlError {
   return sqlError('ER_WRONG_USAGE', `Incorrect usage of ${first} and ${second}`)
 }
+
+/** Callers decide existence and retain the spelling of the table they report. */
+export function tableExistsError(name: string): SqlError {
+  return sqlError('ER_TABLE_EXISTS_ERROR', `Table '${name}' already exists`)
+}
+
+/** A qualified list or an unresolved table alias, already formatted by its caller. */
+export function unknownTableError(name: string): SqlError {
+  return sqlError('ER_BAD_TABLE_ERROR', `Unknown table '${name}'`)
+}
+
+/** The caller retains native spelling and decides when argument validation has failed. */
+export function wrongArgumentsError(name: string): SqlError {
+  return sqlError('ER_WRONG_ARGUMENTS', `Incorrect arguments to ${name}`)
+}

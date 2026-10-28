@@ -17,6 +17,7 @@
 //
 // A named divergence: ICU folds case fully, so `'Straße' REGEXP 'STRASSE'` is
 // 1 there; the engine folds code point by code point, and it is 0 here.
+import { wrongArgumentsError } from './errors.ts'
 import { CHARSET_BINARY } from '@myjs/bytes'
 import { decodeCharset, requireCollationInfo } from '@myjs/charsets'
 import { sqlError } from '@myjs/protocol'
@@ -85,7 +86,7 @@ export function matchType(text: string, fn: string): MatchType {
     else if (ch === 'i') insensitive = true
     else if (ch === 'm') multiline = true
     else if (ch === 'n') dotAll = true
-    else if (ch !== 'u') throw sqlError('ER_WRONG_ARGUMENTS', `Incorrect arguments to ${fn}`)
+    else if (ch !== 'u') throw wrongArgumentsError(fn)
   }
   return insensitive === undefined ? { multiline, dotAll } : { insensitive, multiline, dotAll }
 }

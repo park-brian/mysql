@@ -23,6 +23,7 @@
 //     constant string's as written, a decimal's scale, six for other text.
 //   - The session's time zone is UTC (`clock` in `compile.ts`): UNIX_TIMESTAMP
 //     and FROM_UNIXTIME count from 1970-01-01 00:00:00 there.
+import { wrongArgumentsError } from './errors.ts'
 import { FIELD_TYPE, type MysqlDateTime, type MysqlTime, expectTyped } from '@myjs/bytes'
 import { NODE, type CallNode, type Expression } from '@myjs/parser'
 import { messages, sqlError } from '@myjs/protocol'
@@ -808,7 +809,7 @@ export function temporalArithmetic(name: string, e: CallNode, ctx: CompileContex
           if (p === null) return null
           const q = b(r, env)
           if (q === null) return null
-          if (!validPeriod(p) || (name === 'PERIOD_DIFF' && !validPeriod(q))) throw sqlError('ER_WRONG_ARGUMENTS', `Incorrect arguments to ${fn}`)
+          if (!validPeriod(p) || (name === 'PERIOD_DIFF' && !validPeriod(q))) throw wrongArgumentsError(fn)
           if (name === 'PERIOD_DIFF') return intValue(periodToMonth(p) - periodToMonth(q))
           return intValue(BigInt.asIntN(64, monthToPeriod(BigInt.asUintN(64, periodToMonth(p) + q))))
         },

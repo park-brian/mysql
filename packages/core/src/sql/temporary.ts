@@ -22,6 +22,7 @@
 //     subquery, is 1137 (`Can't reopen table`).
 //   - A view may not read it (1352), it may have no FULLTEXT key (1796), and
 //     no foreign key may name it or be its own (1215).
+import { tableExistsError } from './errors.ts'
 import { expectTyped } from '@myjs/bytes'
 import type { Catalog, SchemaDef, Table, TableDef, TableSpec, Trx } from '@myjs/engine'
 import { messages, sqlError } from '@myjs/protocol'
@@ -101,7 +102,7 @@ export class TemporaryTables {
 
   create(schema: string, spec: TableSpec): TableDef {
     this.#base.schema(schema)
-    if (this.has(schema, spec.name)) throw sqlError('ER_TABLE_EXISTS_ERROR', `Table '${spec.name}' already exists`)
+    if (this.has(schema, spec.name)) throw tableExistsError(spec.name)
     const hidden = this.#holder(schema)
     const trx = this.#trx()
     this.#base.createSchema(hidden, { ifNotExists: true, ...(trx === undefined ? {} : { trx }) })
@@ -152,7 +153,7 @@ export class TemporaryTables {
   }
 
   rebuild(schema: string, name: string, spec: TableSpec, copy: Parameters<Catalog['rebuildTable']>[3]): TableDef {
-    if (spec.name !== name && this.has(schema, spec.name)) throw sqlError('ER_TABLE_EXISTS_ERROR', `Table '${spec.name}' already exists`)
+    if (spec.name !== name && this.has(schema, spec.name)) throw tableExistsError(spec.name)
     const hidden = this.#holder(schema)
     const def = this.#base.rebuildTable(hidden, name, spec, copy)
     const names = this.#names.get(schema) as Set<string>

@@ -13,7 +13,7 @@
 // (keys, foreign keys on both sides, CHECKs, FULLTEXT), then keys renamed,
 // columns added, indexes and foreign keys added. One not here is refused by
 // name.
-import { notSupported } from './errors.ts'
+import { notSupported, tableExistsError } from './errors.ts'
 import { unknownColumnError, requireSchema } from './scope.ts'
 import { nativeCallName } from './ast.ts'
 import { FIELD_TYPE, MyjsError, expectTyped } from '@myjs/bytes'
@@ -338,7 +338,7 @@ export function alterTable(run: Run, catalog: CatalogApi, statement: AlterTableN
   const renameSchema = renameTo === undefined ? schema : (renameTo.schema ?? run.env.session.database ?? schema)
   if (renameSchema !== schema) throw notSupported('ALTER TABLE … RENAME to another schema beside other changes')
   const name = renameTo?.name ?? def.name
-  if (!same(name, def.name) && (catalog.tables(schema).some((t) => same(t.name, name)) || catalog.view(schema, name) !== undefined)) throw sqlError('ER_TABLE_EXISTS_ERROR', `Table '${name}' already exists`)
+  if (!same(name, def.name) && (catalog.tables(schema).some((t) => same(t.name, name)) || catalog.view(schema, name) !== undefined)) throw tableExistsError(name)
   const optionOf = (key: string) => Object.entries(statement.options).find(([k]) => k.toUpperCase() === key)?.[1]
 
   // --- foreign keys ---

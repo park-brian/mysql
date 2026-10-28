@@ -32,7 +32,7 @@
 //     or an ON (3593), DISTINCT in one (1235), GROUP_CONCAT as one (1235),
 //     NTILE or NTH_VALUE of a count below 1 (1210), a frame that ends before it
 //     starts (3586), RANGE n PRECEDING over anything but one numeric key (3587).
-import { notSupported } from './errors.ts'
+import { notSupported, wrongArgumentsError } from './errors.ts'
 import { FIELD_TYPE } from '@myjs/bytes'
 import { nativeCallName, someNode } from './ast.ts'
 import { NODE, type CallNode, type Expression, type FrameBound, type WindowSpec } from '@myjs/parser'
@@ -111,7 +111,7 @@ export class WindowSink {
     const constant = (x: Expression, fn: string): number => {
       const v = compile(x, ctx).eval([], constantEnv(ctx))
       const n = v === null || (v.kind !== 'int' && v.kind !== 'decimal' && v.kind !== 'double') ? undefined : Number(toInteger(v))
-      if (n === undefined || n < (fn === 'LAG' || fn === 'LEAD' ? 0 : 1)) throw sqlError('ER_WRONG_ARGUMENTS', `Incorrect arguments to ${fn.toLowerCase()}`)
+      if (n === undefined || n < (fn === 'LAG' || fn === 'LEAD' ? 0 : 1)) throw wrongArgumentsError(fn.toLowerCase())
       return n
     }
     let type: ResultType

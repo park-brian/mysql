@@ -129,8 +129,9 @@ export function withChecks(catalog: CatalogApi, schema: string, spec: TableSpec,
         throw sqlError('ER_CHECK_CONSTRAINT_FUNCTION_IS_NOT_ALLOWED', `An expression of a check constraint '${name}' contains disallowed function.`)
       } else if (node.kind === NODE.VARIABLE) {
         throw sqlError('ER_CHECK_CONSTRAINT_VARIABLES', `An expression of a check constraint '${name}' cannot refer to a user or system variable.`)
-      } else if (node.kind === NODE.CALL && NOT_ROW_DETERMINED.has(node.name.toUpperCase())) {
-        throw sqlError('ER_CHECK_CONSTRAINT_NAMED_FUNCTION_IS_NOT_ALLOWED', `An expression of a check constraint '${name}' contains disallowed function: ${node.name.toLowerCase()}.`)
+      } else if (node.kind === NODE.CALL) {
+        const named = NOT_ROW_DETERMINED.get(node.name.toUpperCase())
+        if (named !== undefined) throw sqlError('ER_CHECK_CONSTRAINT_NAMED_FUNCTION_IS_NOT_ALLOWED', `An expression of a check constraint '${name}' contains disallowed function: ${named}.`)
       }
       return undefined
     })

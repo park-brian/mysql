@@ -12,7 +12,7 @@
 // statement again later is the same as having waited. Past
 // `innodb_lock_wait_timeout` the answer is ER_LOCK_WAIT_TIMEOUT (1205), which
 // rolls back the statement and not the transaction, as InnoDB's does.
-import { notSupported } from './errors.ts'
+import { notSupported, tableExistsError, unknownTableError } from './errors.ts'
 import { requireSchema } from './scope.ts'
 import { FIELD_TYPE, MyjsError, expectTyped } from '@myjs/bytes'
 import { someNode } from './ast.ts'
@@ -75,7 +75,7 @@ import { analyze, keepShown } from './stats.ts'
 import { alterTable } from './alter.ts'
 import { checkClauses, checkForeignKeyActions, withChecks } from './checks.ts'
 import { showCreateTable } from './show-create.ts'
-import { DEFAULT_COLLATION, createTableSpec, deprecationWarnings, duplicateKeys, duplicateKeyText, resolveOptionsCollation } from './ddl.ts'
+import { DEFAULT_COLLATION, createTableSpec, deprecationWarnings, duplicateKeys, duplicateKeyText, resolveCollation, resolveOptionsCollation } from './ddl.ts'
 import { foreignKeyChecks, foreignKeyClause, foreignKeysOf, referencingKeys, withForeignKeys } from './foreign-keys.ts'
 import { checkDefaults, insert, remove, update } from './dml.ts'
 import { fulltextOf } from './fulltext.ts'
@@ -296,18 +296,8 @@ export class SqlExecutor implements Executor {
       // own: the other connections go next, before its EXECUTE does (D-77).
       if (performance.now() - started > SLICE_MS) await pause()
       this.#alive(session)
-      // Bind system names first; generated admission precedes diagnostic-count
-      // PREPARE refusal without resolving columns or opening tables.
-      const diagnostic = statement !== null && this.#variables(statement, state, session)
-      if (statement !== null && (statement.kind === STATEMENT.CREATE_TABLE || statement.kind === STATEMENT.ALTER_TABLE)) {
-        someNode(statement, (node) => {
-          const column = node as ParsedColumnDefinition
-          if (column.generated === undefined) return undefined
-          checkGeneratedDefault(column)
-          checkGeneratedAdmission(column.generated.expr, column.name, modeOf(session.sqlMode))
-          return false
-        })
-      }
+      // Admit the AST before metadata or diagnostic-count PREPARE refusal.
+      const diagnostic = statement !== null && this.#admitStatement(statement, state, session)
       if (statement === null || diagnostic || isDiagnostic(statement)) throw sqlError('ER_UNSUPPORTED_PS', 'This command is not supported in the prepared statement protocol yet')
       await this.#preload(session, statement)
       this.#alive(session)
@@ -325,12 +315,12 @@ export class SqlExecutor implements Executor {
     }
   }
 
-  /** Bind all system names before expression resolution and PREPARE admission. */
-  #variables(statement: Statement, state: SqlSession, session: Session): boolean {
+  /** Ordered AST admission before effects; return whether diagnostic counters are read. */
+  #admitStatement(statement: Statement, state: SqlSession, session: Session): boolean {
     const view = statement.kind === STATEMENT.CREATE_VIEW
     if (view && someNode(statement.query, (n) => ((n as QueryExpression).kind === QUERY.QUERY && (n as QueryExpression).into !== undefined) || undefined)) throw sqlError('ER_VIEW_SELECT_CLAUSE', "View's SELECT contains a 'INTO' clause")
     let diagnostic = false
-    someNode(statement, (node) => {
+    const bind = (node: object): undefined => {
       const e = node as Expression
       if (view && (e.kind === NODE.VARIABLE || e.kind === NODE.PLACEHOLDER)) throw sqlError('ER_VIEW_SELECT_VARIABLE', "View's SELECT contains a variable or parameter")
       if (e.kind === NODE.VARIABLE) {
@@ -338,7 +328,28 @@ export class SqlExecutor implements Executor {
         if (name === 'warning_count' || name === 'error_count') diagnostic = true
       }
       return undefined
-    })
+    }
+    const admitColumn = (column: ParsedColumnDefinition): void => {
+      checkGeneratedDefault(column)
+      resolveCollation(column.type.charset, column.type.collation, DEFAULT_COLLATION)
+      const { generated, default: value, ...remaining } = column
+      const expression = generated?.expr ?? value
+      if (expression !== undefined) someNode(expression, bind)
+      if (generated !== undefined) checkGeneratedAdmission(generated.expr, column.name, modeOf(session.sqlMode))
+      someNode(remaining, bind)
+    }
+    if (statement.kind === STATEMENT.CREATE_TABLE) {
+      requireSchema(statement.table.schema ?? session.database)
+      for (const column of statement.columns) admitColumn(column)
+      const { columns: _columns, ...remaining } = statement
+      someNode(remaining, bind)
+    } else if (statement.kind === STATEMENT.ALTER_TABLE) {
+      requireSchema(statement.table.schema ?? session.database)
+      for (const action of statement.actions) {
+        if (action.type === 'addColumn' || action.type === 'changeColumn') admitColumn(action.column)
+        else someNode(action, bind)
+      }
+    } else someNode(statement, bind)
     if (statement.kind === STATEMENT.SET) for (const item of statement.items) {
       if (item.type === 'system' || item.type === 'name') this.server.assignment(item)
     }
@@ -534,7 +545,7 @@ export class SqlExecutor implements Executor {
       // The error is a condition too, after any the statement raised first.
       const failed = (e: unknown): SqlError => diagnostic ? toSqlError(e) : recordFailure(state, conditions, e)
       try {
-        this.#variables(statement, state, session)
+        this.#admitStatement(statement, state, session)
         const run = this.#run(session, sql, params, known, protocol, conditions)
         const batches: ResultSet[] | undefined = stream ? [] : undefined
         const dispatched = this.#dispatch(run, statement, batches === undefined ? undefined : (batch) => batches.push(batch))
@@ -784,7 +795,7 @@ export class SqlExecutor implements Executor {
         if (run.protocol === 'text') for (const d of deprecationWarnings(statement)) raise(run.env, d.code, d.message)
         checkDefaults(run, spec.columns)
         if (temporary !== undefined) {
-          if (exists && statement.ifNotExists !== true) throw sqlError('ER_TABLE_EXISTS_ERROR', `Table '${spec.name}' already exists`)
+          if (exists && statement.ifNotExists !== true) throw tableExistsError(spec.name)
           if (!exists) {
             // Under autocommit = 0 the creation belongs to the transaction the session is in, begun here if nothing has begun it.
             if (!session.autocommit && state.trx === undefined) state.begin(catalog.store)
@@ -979,7 +990,7 @@ export class SqlExecutor implements Executor {
     const name = statement.table.name
     const exists = temporary !== undefined ? temporary.has(schema, name) : catalog.tables(schema).some((t) => t.name === name)
     if (exists) {
-      if (statement.ifNotExists !== true) throw sqlError('ER_TABLE_EXISTS_ERROR', `Table '${name}' already exists`)
+      if (statement.ifNotExists !== true) throw tableExistsError(name)
       raise(run.env, 1050, `Table '${name}' already exists`, 'Note')
       return { affectedRows: 0 }
     }
@@ -1078,7 +1089,7 @@ export class SqlExecutor implements Executor {
     const temporary = catalog.temporary
     if (statement.temporary === true) {
       const missing = names.filter((n) => temporary?.has(n.schema, n.name) !== true)
-      if (missing.length > 0 && statement.ifExists !== true) throw sqlError('ER_BAD_TABLE_ERROR', `Unknown table '${missing.map((m) => `${m.schema}.${m.name}`).join(',')}'`)
+      if (missing.length > 0 && statement.ifExists !== true) throw unknownTableError(missing.map((m) => `${m.schema}.${m.name}`).join(','))
       for (const n of names) temporary?.drop(n.schema, n.name)
       for (const m of missing) raise(run.env, 1051, `Unknown table '${m.schema}.${m.name}'`, 'Note')
       return { affectedRows: 0 }
@@ -1088,7 +1099,7 @@ export class SqlExecutor implements Executor {
     // and nothing is dropped.
     if (statement.ifExists !== true) {
       const missing = names.filter((n) => !held(n))
-      if (missing.length > 0) throw sqlError('ER_BAD_TABLE_ERROR', `Unknown table '${missing.map((m) => `${m.schema}.${m.name}`).join(',')}'`)
+      if (missing.length > 0) throw unknownTableError(missing.map((m) => `${m.schema}.${m.name}`).join(','))
     }
     // A parent goes only with its children, or with the checks off (8.4.11: 3730).
     if (foreignKeyChecks(run)) {

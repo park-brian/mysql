@@ -18,6 +18,11 @@ import generatedAdmission from './fixtures/diagnostics/generated-column-admissio
 import functionIdentity from './fixtures/diagnostics/function-identity.json' with { type: 'json' }
 import schemaPresence from './fixtures/diagnostics/schema-presence.json' with { type: 'json' }
 import shorthandWarnings from './fixtures/diagnostics/shorthand-warning-admission.json' with { type: 'json' }
+import expressionDefaults from './fixtures/diagnostics/expression-default-admission.json' with { type: 'json' }
+import columnBoundaries from './fixtures/diagnostics/column-expression-boundaries.json' with { type: 'json' }
+import columnOrder from './fixtures/diagnostics/column-expression-order.json' with { type: 'json' }
+import columnUsage from './fixtures/diagnostics/column-expression-usage.json' with { type: 'json' }
+import functionDiagnostics from './fixtures/diagnostics/function-diagnostic-names.json' with { type: 'json' }
 
 /** Restore dates, binary rows and numeric facts that JSON cannot represent directly. */
 function capturedValue(value: unknown): unknown {
@@ -32,7 +37,7 @@ function capturedValue(value: unknown): unknown {
   return value
 }
 
-for (const [reference, total, matched] of [[literalAdmission, 1623, 1521], [conditionHistories, 198, 192], [castDatatype, 480, 398], [castModifiers, 16648, 16274], [warningAdmission, 325, 248], [modifierDeprecation, 1008, 764], [keywordIdentity, 150, 146], [keywordSelectors, 1850, 1670], [shorthandWarnings, 552, 396], [schemaPresence, 378, 177], [functionIdentity, 6084, 5367], [generatedAdmission, 3276, 1786], [functionQuoting, 3573, 2820], [generatedPrepare, 685, 252]] as const) test('M5.10: admission preserves primary errors, condition histories, headers and effects: ' + reference.schema, async () => {
+for (const [reference, total, matched] of [[literalAdmission, 1623, 1521], [conditionHistories, 198, 192], [castDatatype, 480, 398], [castModifiers, 16648, 16274], [warningAdmission, 325, 248], [modifierDeprecation, 1008, 764], [keywordIdentity, 150, 146], [keywordSelectors, 1850, 1670], [shorthandWarnings, 552, 396], [schemaPresence, 378, 177], [functionIdentity, 6084, 5367], [generatedAdmission, 3276, 1792], [functionQuoting, 3573, 2820], [generatedPrepare, 685, 252], [expressionDefaults, 738, 298], [columnBoundaries, 1017, 252], [columnOrder, 63, 34], [columnUsage, 18, 10], [functionDiagnostics, 702, 442]] as const) test('M5.10: admission preserves primary errors, condition histories, headers and effects: ' + reference.schema, async () => {
   const host = process.env.MYSQL_REFERENCE_HOST
   const db = host === undefined ? await MySQL.open(':memory:', { multipleStatements: true }) : undefined
   const transport = db === undefined

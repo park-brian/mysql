@@ -22,7 +22,7 @@ import { distinct, filter, limit, project, sort, type SortKey } from './operator
 import { isConstant, optimizerEnabled, splitAnd, tableColumn } from './plan.ts'
 import { and, columnRefs, integerLiteral, nativeCallName, someNode } from './ast.ts'
 import { invalidGroupFunction } from './registry.ts'
-import { notSupported } from './errors.ts'
+import { notSupported, wrongArgumentsError } from './errors.ts'
 import { clusteredIndex, indexParts } from './indexes.ts'
 import { collationInfoByName, encodeCollation } from '@myjs/charsets'
 import { ambiguousColumnError, unknownColumnError, requireSchema, safeResolve, TableScope } from './scope.ts'
@@ -2533,7 +2533,7 @@ export function limitValue(run: Run, e: Expression, what = 'LIMIT'): number {
   const v = compile(e, compileContext(run, EMPTY_SCOPE, what)).eval([], run.env)
   // Invalid representations and negative counts have the same argument error.
   const n = v === null || (v.kind === 'double' && !Number.isInteger(v.v)) || v.kind === 'decimal' || v.kind === 'datetime' || v.kind === 'time' ? -1n : toInteger(v)
-  if (n < 0n) throw sqlError('ER_WRONG_ARGUMENTS', `Incorrect arguments to ${e.kind === NODE.PLACEHOLDER ? 'mysqld_stmt_execute' : what}`)
+  if (n < 0n) throw wrongArgumentsError(e.kind === NODE.PLACEHOLDER ? 'mysqld_stmt_execute' : what)
   return Math.min(Number.MAX_SAFE_INTEGER, Number(n))
 }
 

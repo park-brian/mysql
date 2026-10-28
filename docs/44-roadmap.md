@@ -613,12 +613,52 @@ shared passes. Frozen-source proof covers 451 test files/fixtures, 205 runtime
 sources and tooling before cleanup. Core/facade measure 334,341/334,260 B gzipped;
 core raw output is 44 B above 20321fd, whose eleven required CI jobs passed.
 
-**Next bounded slice:** audit CREATE expression-default admission during PREPARE
-through its existing owner. Native CREATE refuses the retained SLEEP default with
-3770, while ALTER SET DEFAULT still admits it during PREPARE. Keep those contexts
-separate. Malformed generated-column declaration ordering, ANSI SHOW CREATE,
-CHECK, ASCII function availability and other function gaps remain open. M5.10
-stays partial; totals remain 144/190 and M5 42/53.
+**Ordered column admission and diagnostic names, verified (2026-10-28):** the
+existing statement preflight now admits generated expressions before DDL dispatch,
+so rejection cannot implicitly commit prior writes. Missing default database
+wins first. Within each actual CREATE column or ALTER ADD/CHANGE definition,
+generated/DEFAULT exclusion precedes explicit charset/collation compatibility,
+expression name binding and generated admission; remaining subtrees retain binding
+coverage. An earlier column's refusal wins over later binding or compatibility
+errors. Reference, aggregate/window, width/type conversion and default evaluation
+retain their existing execution owners and commit boundary. VIEW/SET admission
+and diagnostic-count behavior retain their existing path.
+Native diagnostic metadata now preserves all 39 lookup keys and their order,
+deriving ordinary ASCII print names once with explicit aliases. SESSION_USER,
+SYSTEM_USER, MASTER_POS_WAIT and VERSION diagnostics are corrected. CHECK reads
+that same print-name metadata without changing its current prohibition set.
+Standard table-exists, unknown-table and argument errors share construction while
+caller predicates, phases, formatting inputs and custom messages remain unchanged.
+Five new pinned captures retain 2,538 observations: DEFAULT positive/prohibited
+controls, all-API datatype/expression boundaries, written column order,
+generated/DEFAULT exclusion and all 39 generated/CHECK print names. They improve
+930 to 1,036 complete matches without losing a matching component, condition,
+field, primary-error attribute, PREPARE count or effect. The older generated
+capture strengthens 1,786 to 1,792 with unchanged native answers. Nineteen captures
+enforce 33,053/39,368 complete commands, retain 6,315 open outcomes and protect
+167,477 condition facts. All 23 focused tests pass, and all 2,538 new commands
+replay against 8.4.11. Two additional native protocol tests verify 90 transaction
+boundaries and nine missing-database cases: early failures stay rollbackable;
+late resolution and ALTER SET DEFAULT retain native implicit commit. The actual
+e79ce89 baseline fails the rollbackability regression.
+Fresh Docker --reference passes 1,496 main tests, four latency tests, typecheck,
+lint, all nine unchanged caps, package/typed smoke, the real client and all seven
+pinned corpora. Executor fuzzing passes 20,000 statements seeded 20261010. All 24
+parser sources remain unchanged. Repeated actual census and the entire official
+fixture remain byte-identical at 17,530/17,589 and all 37 shared passes. Frozen
+source proof covers 457 test files/fixtures, 205 runtime sources and tooling
+before cleanup. Core/facade measure 334,354/334,241 B gzipped; raw output is
+391 B smaller than e79ce89, whose eleven required CI jobs pass.
+
+**Next bounded slice:** complete DEFAULT's own early expression admission through
+this ordered owner, and retain its late execution validator for ALTER SET DEFAULT.
+Use the committed DEFAULT and boundary captures as the ratchet. Clocks, randomness
+and session functions are positive controls; DEFAULT's prohibited set must remain
+independent of generated-column membership. Reuse verified diagnostic spelling
+without moving reference checks or evaluation earlier. CHECK still has distinct
+permissions (including native RANDOM_BYTES/SYSDATE acceptance), namespace/folding
+and ordering gaps. Malformed declaration ordering, ANSI SHOW CREATE and other
+function gaps remain open. M5.10 stays partial; totals remain 144/190 and M5 42/53.
 
 Keep function, keyword and value namespaces distinct. Charset-value validation,
 separate event behavior, valid-AST warnings/limits, later binding failures,
@@ -6913,7 +6953,7 @@ code that moves it (doc 43 §8). A claim without a number is marketing.
 | Statements executing the way a real MySQL 8.4 executed them | 3,629 / 3,629 — 400 generated scripts through `mysql2`, 250 of their statements upserts, REPLACEs or IGNOREs: rows and order, column metadata, `affectedRows`/`insertId`/`info`, errno and SQLSTATE. Three further seeds, 46,346 statements and not committed, agree except four `SELECT DISTINCT` metadata cases that need the range optimizer (M5.7, which owns it since M5.5 closed) | every statement the executor accepts |
 | InnoDB round-trip, by type | 0 / 17 | 17 / 17 |
 | Crash injection points, inconsistencies | 10,000 points, 0 inconsistencies — CI's `crash` job runs `CRASH_POINTS=10000`, and `npm test` 300 of them | 10,000 points, 0 |
-| Core bundle, gzipped | 334,341 B (326.5 KiB) for the browser entry chunk, measured on 2026-10-28; the facade is 334,260 B. The two deferred UCA chunks total 184,654 B raw. `tools/size-budget.mjs` measures each package including its workspace dependencies, so package figures do not add up. The M5.2 coercion and M5.10 function fixes pass the existing stabilization budgets without raising them | < 500 KB |
+| Core bundle, gzipped | 334,354 B (326.5 KiB) for the browser entry chunk, measured on 2026-10-28; the facade is 334,241 B. The two deferred UCA chunks total 184,654 B raw. `tools/size-budget.mjs` measures each package including its workspace dependencies, so package figures do not add up. The M5.2 coercion and M5.10 function fixes pass the existing stabilization budgets without raising them | < 500 KB |
 | Function calls returning what a real MySQL 8.4 returned | 8,765 / 8,765 — the string and numeric slices (2,091 / 2,091, including GREATEST and LEAST over text and a DATETIME), the date and time slice (3,463 / 3,463) and the rest of the string, math, hashing and network functions (3,211 / 3,211), both protocols, metadata and warning counts | every function in the library |
 | Implicit coercion | 3,148 / 3,148 captured statements agree, with 0 refusals; warning counts agree on 1,737 / 1,737 queries. All observations are compared with zero disagreements (M5.2 complete) | every captured value, metadata field and warning count |
 | Relational statements executing the way a real MySQL 8.4 executed them | 5,635 / 5,635 agree and none are refused, over 300 multi-table scripts through `mysql2`, both protocols. `queries.json` through the executor: 1,200 / 1,200. Rows are compared in order wherever the statement or an agreeing plan fixes it | every statement the executor accepts, and no refusals |

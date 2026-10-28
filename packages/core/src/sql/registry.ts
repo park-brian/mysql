@@ -107,23 +107,35 @@ export const VARIES_PER_EVALUATION: ReadonlySet<string> = new Set([
   'RAND', 'UUID', 'UUID_SHORT', 'SYSDATE', 'RANDOM_BYTES', 'SLEEP', 'LAST_INSERT_ID', 'ROW_COUNT', 'FOUND_ROWS', 'GET_LOCK', 'RELEASE_LOCK',
 ])
 
+/** Native diagnostic spelling differs from the lookup key only for these aliases. */
+const GENERATOR_FUNCTION_ALIASES: Readonly<Record<string, string>> = {
+  CURRENT_TIMESTAMP: 'now',
+  LOCALTIME: 'now',
+  LOCALTIMESTAMP: 'now',
+  CURRENT_DATE: 'curdate',
+  CURRENT_TIME: 'curtime',
+  SCHEMA: 'database',
+  SESSION_USER: 'user',
+  SYSTEM_USER: 'user',
+  MASTER_POS_WAIT: 'source_pos_wait',
+  VERSION: 'version()',
+}
+
 /**
  * Functions whose value is not the row's alone (the statement's clock, the
- * session, the server): refused in a CHECK (3814) and in a generated column
- * (3763), each under the name the server prints for it there.
+ * session, the server), with their native diagnostic spelling. Generated
+ * admission refuses these calls. CHECK currently consults this membership too;
+ * its context-specific differences remain recorded in the roadmap.
  */
 export const NOT_ROW_DETERMINED: ReadonlyMap<string, string> = new Map([
-  ['RAND', 'rand'], ['UUID', 'uuid'], ['UUID_SHORT', 'uuid_short'], ['RANDOM_BYTES', 'random_bytes'],
-  ['NOW', 'now'], ['CURRENT_TIMESTAMP', 'now'], ['LOCALTIME', 'now'], ['LOCALTIMESTAMP', 'now'], ['SYSDATE', 'sysdate'],
-  ['CURDATE', 'curdate'], ['CURRENT_DATE', 'curdate'], ['CURTIME', 'curtime'], ['CURRENT_TIME', 'curtime'],
-  ['UTC_DATE', 'utc_date'], ['UTC_TIME', 'utc_time'], ['UTC_TIMESTAMP', 'utc_timestamp'], ['UNIX_TIMESTAMP', 'unix_timestamp'],
-  ['CONNECTION_ID', 'connection_id'], ['USER', 'user'], ['CURRENT_USER', 'current_user'], ['SESSION_USER', 'session_user'],
-  ['SYSTEM_USER', 'system_user'], ['CURRENT_ROLE', 'current_role'], ['DATABASE', 'database'], ['SCHEMA', 'database'],
-  ['LAST_INSERT_ID', 'last_insert_id'], ['FOUND_ROWS', 'found_rows'], ['ROW_COUNT', 'row_count'],
-  ['SLEEP', 'sleep'], ['GET_LOCK', 'get_lock'], ['RELEASE_LOCK', 'release_lock'], ['RELEASE_ALL_LOCKS', 'release_all_locks'],
-  ['IS_FREE_LOCK', 'is_free_lock'], ['IS_USED_LOCK', 'is_used_lock'], ['BENCHMARK', 'benchmark'], ['LOAD_FILE', 'load_file'],
-  ['MASTER_POS_WAIT', 'master_pos_wait'], ['SOURCE_POS_WAIT', 'source_pos_wait'], ['VERSION', 'version'],
-])
+  'RAND', 'UUID', 'UUID_SHORT', 'RANDOM_BYTES', 'NOW', 'CURRENT_TIMESTAMP',
+  'LOCALTIME', 'LOCALTIMESTAMP', 'SYSDATE', 'CURDATE', 'CURRENT_DATE', 'CURTIME',
+  'CURRENT_TIME', 'UTC_DATE', 'UTC_TIME', 'UTC_TIMESTAMP', 'UNIX_TIMESTAMP', 'CONNECTION_ID',
+  'USER', 'CURRENT_USER', 'SESSION_USER', 'SYSTEM_USER', 'CURRENT_ROLE', 'DATABASE',
+  'SCHEMA', 'LAST_INSERT_ID', 'FOUND_ROWS', 'ROW_COUNT', 'SLEEP', 'GET_LOCK',
+  'RELEASE_LOCK', 'RELEASE_ALL_LOCKS', 'IS_FREE_LOCK', 'IS_USED_LOCK', 'BENCHMARK', 'LOAD_FILE',
+  'MASTER_POS_WAIT', 'SOURCE_POS_WAIT', 'VERSION',
+].map((name) => [name, GENERATOR_FUNCTION_ALIASES[name] ?? name.toLowerCase()] as const))
 
 /** The functions that are conditions themselves, as a comparison is: a CHECK may be one alone. */
 export const CONDITION_FUNCTIONS: ReadonlySet<string> = new Set(['JSON_VALID', 'REGEXP_LIKE', 'ISNULL', 'STRCMP', 'JSON_CONTAINS', 'JSON_CONTAINS_PATH', 'JSON_OVERLAPS'])
