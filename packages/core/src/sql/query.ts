@@ -21,9 +21,10 @@ import { FIELD_TYPE, expectTyped } from '@myjs/bytes'
 import { distinct, filter, limit, project, sort, type SortKey } from './operators.ts'
 import { isConstant, optimizerEnabled, splitAnd, tableColumn } from './plan.ts'
 import { and, columnRefs, integerLiteral, nativeCallName, someNode } from './ast.ts'
+import { invalidGroupFunction } from './registry.ts'
 import { clusteredIndex, indexParts } from './indexes.ts'
 import { collationInfoByName, encodeCollation } from '@myjs/charsets'
-import { requireSchema, safeResolve, TableScope } from './scope.ts'
+import { unknownColumnError, requireSchema, safeResolve, TableScope } from './scope.ts'
 import { holdsRead, planFrom, type DerivedPlan, type DerivedSource, type FromContext, type FromPlan, type JoinCondition } from './from.ts'
 import { firstKey, rowKey, valueKey } from './keys.ts'
 import { indexLookup, planNode, wrap, type PlanNode } from './explain.ts'
@@ -1669,7 +1670,7 @@ function orderedResult(run: Run, q: QueryExpression, plan: SelectPlan): SelectPl
     const e = o.expr
     if (integerLiteral(e)) {
       const n = Number(e.value as bigint)
-      if (n < 1 || n > plan.columns.length) throw sqlError('ER_BAD_FIELD_ERROR', messages.unknownColumn(String(n), 'order clause'))
+      if (n < 1 || n > plan.columns.length) throw unknownColumnError(String(n), 'order clause')
       return { expr: readSlot(n - 1, (plan.columns[n - 1] as { type: ResultType }).type), desc: o.desc === true }
     }
     if (e.kind === NODE.COLUMN && e.parts.length >= 2) {
@@ -1954,7 +1955,7 @@ function planGrouped(
       return readSlot(width + j, { ...type, nullable: true })
     },
     grouping(args, ctx) {
-      if (!rollup) throw sqlError('ER_INVALID_GROUP_FUNC_USE', 'Invalid use of group function')
+      if (!rollup) throw invalidGroupFunction()
       const { groupKeys: _groupKeys, ...binding } = ctx
       for (const arg of args) compile(arg, binding)
       const positions = args.map((a) => descriptions.findIndex((key) => matchesKey(a, key)))
@@ -1990,7 +1991,7 @@ function planGrouped(
   const groupCtx = compileContext(run, lookup, 'group statement')
   for (const key of descriptions) {
     const expr = key.expr
-    if (expr === undefined) throw sqlError('ER_BAD_FIELD_ERROR', messages.unknownColumn(deparse(key.written), 'group statement'))
+    if (expr === undefined) throw unknownColumnError(deparse(key.written), 'group statement')
     if (containsAggregate(expr)) throw sqlError('ER_WRONG_GROUP_FIELD', `Can't group on '${deparse(key.written)}'`)
     key.compiled ??= compile(expr, groupCtx)
   }
@@ -2276,7 +2277,7 @@ function selectedOnly(lookup: Scope, items: readonly { readonly expr: Expression
     resolve(parts, clause) {
       const r = lookup.resolve(parts, clause)
       // An enclosing query's column is a constant here, and always visible.
-      if ((r.depth ?? 0) === 0 && !allowed.has(r.index)) throw sqlError('ER_BAD_FIELD_ERROR', messages.unknownColumn(parts.join('.'), clause))
+      if ((r.depth ?? 0) === 0 && !allowed.has(r.index)) throw unknownColumnError(parts.join('.'), clause)
       return r
     },
   }
@@ -2509,7 +2510,7 @@ function impossiblePredicate(e: Expression, columnOf: (e: Expression) => ColumnD
 function orderKey(o: OrderItem, items: readonly { name: string; compiled: Compiled; alias?: string }[], ctx: CompileContext): SortKey {
   const e = o.expr
   const item = selectedItem(e, items)
-  if (integerLiteral(e) && item === undefined) throw sqlError('ER_BAD_FIELD_ERROR', messages.unknownColumn(String(Number(e.value as bigint)), 'order clause'))
+  if (integerLiteral(e) && item === undefined) throw unknownColumnError(String(Number(e.value as bigint)), 'order clause')
   // The caller supplies its aggregate/window context for unbound expressions.
   return { expr: item?.compiled ?? compile(e, ctx), desc: o.desc === true }
 }

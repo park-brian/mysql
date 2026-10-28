@@ -161,8 +161,12 @@ Native function classification now shares an ASCII spelling key and the existing
 call-role flag. Quoted/spaced lexer names retain collision grammar, and Unicode
 lookalikes bypass native binding before argument effects. The 6,084-command
 capture improves 2,916 to 5,295 complete matches without losing protected facts;
-all 789 remaining outcomes stay recorded. Native table-expression admission is
-next, retaining generated/default/CHECK precedence and their existing owners.
+all 789 remaining outcomes stay recorded. Generated-column execution admission now checks arguments before calls, then
+references, aggregates and windows in written order through its existing owner.
+The 3,276-command capture improves 658 to 1,106 complete matches without losing
+protected facts; definitions and existing rows are checked on every frame.
+ANSI quote formatting and PREPARE admission remain open. DEFAULT and CHECK
+admission keep their separate follow-ups.
 CAST/CONVERT targets leave internal COLLATE to the syntax boundary while column
 datatype readers retain it. Cursor string reading concatenates adjacent literals
 only when expression or ENUM/SET grammar requests it; ordinary callers consume

@@ -13,7 +13,7 @@
 // (keys, foreign keys on both sides, CHECKs, FULLTEXT), then keys renamed,
 // columns added, indexes and foreign keys added. One not here is refused by
 // name.
-import { requireSchema } from './scope.ts'
+import { unknownColumnError, requireSchema } from './scope.ts'
 import { nativeCallName } from './ast.ts'
 import { FIELD_TYPE, MyjsError, expectTyped } from '@myjs/bytes'
 import { sqlError, messages, type OkResult } from '@myjs/protocol'
@@ -83,7 +83,7 @@ export function alterTable(run: Run, catalog: CatalogApi, statement: AlterTableN
   const renamed = new Map<string, string>()
   const columnAt = (name: string): number => {
     const i = columns.findIndex((c) => c.name.toLowerCase() === name.toLowerCase())
-    if (i < 0) throw sqlError('ER_BAD_FIELD_ERROR', `Unknown column '${name}' in '${def.name}'`)
+    if (i < 0) throw unknownColumnError(name, def.name)
     return i
   }
   const move = (i: number, position: Extract<AlterAction, { type: 'changeColumn' }>['position']) => {
@@ -93,7 +93,7 @@ export function alterTable(run: Run, catalog: CatalogApi, statement: AlterTableN
     let at = 0
     if (position !== 'FIRST') {
       const j = columns.findIndex((x) => x.name.toLowerCase() === position.after.toLowerCase())
-      if (j < 0) throw sqlError('ER_BAD_FIELD_ERROR', messages.unknownColumn(position.after, 'table definition'))
+      if (j < 0) throw unknownColumnError(position.after, 'table definition')
       at = j + 1
     }
     columns.splice(at, 0, c as ColumnDef)
@@ -271,7 +271,7 @@ export function alterTable(run: Run, catalog: CatalogApi, statement: AlterTableN
     else if (a.position !== undefined) {
       const after = a.position.after
       const i = columns.findIndex((c) => c.name.toLowerCase() === after.toLowerCase())
-      if (i < 0) throw sqlError('ER_BAD_FIELD_ERROR', messages.unknownColumn(after, 'table definition'))
+      if (i < 0) throw unknownColumnError(after, 'table definition')
       at = i + 1
     }
     columns.splice(at, 0, made)

@@ -19,9 +19,14 @@
 // `a, b JOIN c ON a.x = c.x` the comma binds last, so `a.x` is 1054 there.
 import type { TableDef } from '@myjs/engine'
 import { expectTyped } from '@myjs/bytes'
-import { messages, sqlError } from '@myjs/protocol'
+import { messages, sqlError, type SqlError } from '@myjs/protocol'
 import type { Scope } from './compile.ts'
 import { columnResultType, type ResultType } from './meta.ts'
+
+/** Callers retain resolution timing and the native clause spelling. */
+export function unknownColumnError(column: string, clause: string): SqlError {
+  return sqlError('ER_BAD_FIELD_ERROR', messages.unknownColumn(column, clause))
+}
 
 /** A resolved schema is required here; explicit names are returned unchanged. */
 export function requireSchema(schema: string | null | undefined): string {
@@ -176,5 +181,5 @@ function resolveIn(
   const hit = found[0]
   if (hit !== undefined) return hit
   if (parent !== undefined) return parent.resolve(parts, clause)
-  throw sqlError('ER_BAD_FIELD_ERROR', messages.unknownColumn(parts.join('.'), clause))
+  throw unknownColumnError(parts.join('.'), clause)
 }

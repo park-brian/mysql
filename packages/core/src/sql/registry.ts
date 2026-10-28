@@ -30,6 +30,11 @@ export function wrongParameterCount(name: string): SqlError {
   return sqlError('ER_WRONG_PARAMCOUNT_TO_NATIVE_FCT', `Incorrect parameter count in the call to native function '${name}'`)
 }
 
+/** An aggregate in a forbidden context; callers retain admission timing. */
+export function invalidGroupFunction(): SqlError {
+  return sqlError('ER_INVALID_GROUP_FUNC_USE', 'Invalid use of group function')
+}
+
 /** Build a count check; the caller decides when binding has reached arity validation. */
 export function nativeArity(name: string, count: number): (min: number, max?: number) => void {
   return (min, max = min) => {

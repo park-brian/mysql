@@ -34,6 +34,7 @@ import { encodeCollation, requireCollationInfo } from '@myjs/charsets'
 import type { TableDef } from '@myjs/engine'
 import { NODE, deparse, type CallNode, type Expression } from '@myjs/parser'
 import { nativeCallName, someNode } from './ast.ts'
+import { unknownColumnError } from './scope.ts'
 import { clusteredIndex, indexParts } from './indexes.ts'
 import { messages, sqlError } from '@myjs/protocol'
 import {
@@ -371,7 +372,7 @@ function groupConcat(e: CallNode, args: readonly Compiled[], type: ResultType, d
     // A position names an argument, as in `GROUP_CONCAT(a ORDER BY 1)`.
     if (o.expr.kind === NODE.LITERAL && o.expr.type === 'int') {
       const arg = args[Number(o.expr.value as bigint) - 1]
-      if (arg === undefined) throw sqlError('ER_BAD_FIELD_ERROR', messages.unknownColumn(String(o.expr.value), 'order clause'))
+      if (arg === undefined) throw unknownColumnError(String(o.expr.value), 'order clause')
       return { expr: arg, desc: o.desc === true }
     }
     return { expr: compile(o.expr, ctx), desc: o.desc === true }

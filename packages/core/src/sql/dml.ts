@@ -22,7 +22,7 @@ import { CLIENT, hasCap, messages, sqlError, symbolOf, type OkResult } from '@my
 import type { ColumnDef, FieldBytes, IndexDef, RowId, Table, TableDef, Trx } from '@myjs/engine'
 import { EngineError } from '@myjs/engine'
 import { NODE, QUERY, REF, parseExpression, type Assignment, type ColumnNode, type DeleteNode, type Expression, type InsertNode, type TableName, type UpdateNode } from '@myjs/parser'
-import { generationOf, type Generation } from './generated.ts'
+import { columnVariableError, generationOf, type Generation } from './generated.ts'
 import { decodeField, encodeEnum, encodeField, integerRange, intValue, toInteger, toText, warn, type Condition, type StoreContext, type Value } from '@myjs/types'
 import { compile, EMPTY_SCOPE, type Compiled, type Row, type Scope } from './compile.ts'
 import { checker, checkViolated } from './checks.ts'
@@ -32,7 +32,7 @@ import { accessRows, filter, limit, sort, type ScannedRow } from './operators.ts
 import { chooseAccess } from './plan.ts'
 import { checkTargetNotRead, compileContext, fromContext, limitValue, openTable, planQuery, withClause, type Run } from './query.ts'
 import { planFrom, type FromPlan, type FromTable, type JoinedRow } from './from.ts'
-import { TableScope } from './scope.ts'
+import { unknownColumnError, TableScope } from './scope.ts'
 import { firstKey } from './keys.ts'
 import { NULL_TYPE, type ResultType } from './meta.ts'
 import { modeOf } from './mode.ts'
@@ -114,12 +114,12 @@ function checkExpressionDefault(column: ColumnDef, e: Expression, table: readonl
   someNode(e, (x) => {
     const n = x as Expression
     if (n.kind === NODE.SUBQUERY) throw sqlError('ER_DEFAULT_VAL_GENERATED_FUNCTION_IS_NOT_ALLOWED', `Default value expression of column '${column.name}' contains a disallowed function.`)
-    if (n.kind === NODE.VARIABLE) throw sqlError('ER_DEFAULT_VAL_GENERATED_VARIABLES', `Default value expression of column '${column.name}' cannot refer user or system variables.`)
+    if (n.kind === NODE.VARIABLE) throw columnVariableError(column.name)
     if (n.kind === NODE.COLUMN) {
       const parts = n.parts
       const name = parts[parts.length - 1] as string
       const i = table.findIndex((c) => c.name.toLowerCase() === name.toLowerCase())
-      if (i < 0) throw sqlError('ER_BAD_FIELD_ERROR', `Unknown column '${name}' in 'default value expression'`)
+      if (i < 0) throw unknownColumnError(name, 'default value expression')
       const other = table[i] as ColumnDef
       if (other.autoIncrement === true) throw sqlError('ER_DEFAULT_VAL_GENERATED_REF_AUTO_INC', `Default value expression of column '${column.name}' cannot refer to an auto-increment column.`)
       if (i >= at && other.attributes?.['defaultExpression'] === true) {
@@ -444,7 +444,7 @@ function compileUpsert(run: Run, def: TableDef, node: InsertNode, targets: reado
   const insertValues = {
     resolve: (name: string) => {
       const i = def.columns.findIndex((c) => c.name.toLowerCase() === name.toLowerCase())
-      if (i < 0) throw sqlError('ER_BAD_FIELD_ERROR', messages.unknownColumn(name, 'field list'))
+      if (i < 0) throw unknownColumnError(name, 'field list')
       return { index: tried + i, type: own.resolve([name], 'field list').type }
     },
     calls: 0,
@@ -510,7 +510,7 @@ function insertSource(run: Run, node: InsertNode, def: TableDef, trx: Trx): {
 } {
   const columnIndex = (name: string): number => {
     const i = def.columns.findIndex((c) => c.name.toLowerCase() === name.toLowerCase())
-    if (i < 0) throw sqlError('ER_BAD_FIELD_ERROR', messages.unknownColumn(name, 'field list'))
+    if (i < 0) throw unknownColumnError(name, 'field list')
     return i
   }
 

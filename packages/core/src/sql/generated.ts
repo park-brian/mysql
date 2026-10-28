@@ -12,7 +12,8 @@
 //     generated column at or after its own place (3107), an AUTO_INCREMENT
 //     column (3109);
 //   - a subquery (3102), a variable (3772, in DEFAULT's words), a function
-//     whose value is not the row's alone (3763, naming it).
+//     whose value is not the row's alone (3763, naming it);
+//   - an aggregate (1111) or window function (3593).
 //
 // A value written to one is 3105, unless it is DEFAULT. A virtual column takes
 // no foreign key (3733), and a column one names may not be dropped (3108).
@@ -22,16 +23,24 @@
 // it, and is an error to a strict UPDATE or DELETE reading the row; here the
 // value is computed once, as the row is written.
 import type { ColumnDef } from '@myjs/engine'
-import { NODE, parseExpression, type Expression } from '@myjs/parser'
-import { sqlError } from '@myjs/protocol'
-import { someNode } from './ast.ts'
+import { NODE, parseExpression, quoteName, type Expression } from '@myjs/parser'
+import { sqlError, type SqlError } from '@myjs/protocol'
+import { nativeCallName, someNode } from './ast.ts'
+import { unknownColumnError } from './scope.ts'
+import { isAggregate } from './group.ts'
+import { windowNotAllowed } from './window.ts'
 import { escapePrinted, printTableExpression, Unprintable } from './print.ts'
-import { NOT_ROW_DETERMINED } from './registry.ts'
+import { invalidGroupFunction, NOT_ROW_DETERMINED } from './registry.ts'
 
 export interface Generation {
   /** The expression as written. */
   readonly text: string
   readonly stored: boolean
+}
+
+/** Native 3772 is shared by expression defaults and generated columns. */
+export function columnVariableError(column: string): SqlError {
+  return sqlError('ER_DEFAULT_VAL_GENERATED_VARIABLES', `Default value expression of column '${column}' cannot refer user or system variables.`)
 }
 
 /** A column's generation, if it is a generated column. */
@@ -68,27 +77,39 @@ export function checkGenerated(columns: readonly ColumnDef[]): void {
   columns.forEach((column, at) => {
     const generation = generationOf(column)
     if (generation === undefined) return
-    someNode(parseExpression(generation.text), (e) => {
+    const expression = parseExpression(generation.text)
+    const invalid = `Expression of generated column '${column.name}' contains a disallowed function`
+    // Admission visits arguments before calls, before binding table references.
+    const admission = (value: unknown): void => {
+      if (value === null || typeof value !== 'object') return
+      for (const child of Object.values(value)) admission(child)
+      const n = value as Expression
+      if (n.kind === NODE.SUBQUERY) throw sqlError('ER_GENERATED_COLUMN_FUNCTION_IS_NOT_ALLOWED', invalid + '.')
+      if (n.kind === NODE.VARIABLE) throw columnVariableError(column.name)
+      if (n.kind === NODE.CALL) {
+        const name = nativeCallName(n)
+        const named = name === '' ? quoteName(n.name) : NOT_ROW_DETERMINED.get(name)
+        if (named !== undefined) throw sqlError('ER_GENERATED_COLUMN_NAMED_FUNCTION_IS_NOT_ALLOWED', `${invalid}: ${named}.`)
+      }
+    }
+    admission(expression)
+    someNode(expression, (e) => {
       const n = e as Expression
       switch (n.kind) {
         case NODE.COLUMN: {
-          const name = (n.parts[n.parts.length - 1] as string).toLowerCase()
+          const rawName = n.parts[n.parts.length - 1] as string
+          const name = rawName.toLowerCase()
           const i = columns.findIndex((c) => c.name.toLowerCase() === name)
-          if (i < 0) throw sqlError('ER_BAD_FIELD_ERROR', `Unknown column '${n.parts[n.parts.length - 1] as string}' in 'generated column function'`)
+          if (i < 0) throw unknownColumnError(rawName, 'generated column function')
           const other = columns[i] as ColumnDef
           if (generationOf(other) !== undefined && i >= at) throw sqlError('ER_GENERATED_COLUMN_NON_PRIOR', 'Generated column can refer only to generated columns defined prior to it.')
           if (other.autoIncrement === true) throw sqlError('ER_GENERATED_COLUMN_REF_AUTO_INC', `Generated column '${column.name}' cannot refer to auto-increment column.`)
           return false
         }
-        case NODE.SUBQUERY:
-          throw sqlError('ER_GENERATED_COLUMN_FUNCTION_IS_NOT_ALLOWED', `Expression of generated column '${column.name}' contains a disallowed function.`)
-        case NODE.VARIABLE:
-          throw sqlError('ER_DEFAULT_VAL_GENERATED_VARIABLES', `Default value expression of column '${column.name}' cannot refer user or system variables.`)
-        case NODE.CALL: {
-          const named = NOT_ROW_DETERMINED.get(String(n.name).toUpperCase())
-          if (named !== undefined) throw sqlError('ER_GENERATED_COLUMN_NAMED_FUNCTION_IS_NOT_ALLOWED', `Expression of generated column '${column.name}' contains a disallowed function: ${named}.`)
+        case NODE.CALL:
+          if (n.over !== undefined) windowNotAllowed(n)
+          if (isAggregate(n)) throw invalidGroupFunction()
           break
-        }
       }
       return undefined
     })

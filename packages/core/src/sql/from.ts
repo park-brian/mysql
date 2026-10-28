@@ -51,7 +51,7 @@ import { clusteredIndex, forwardKeyColumn, indexParts } from './indexes.ts'
 import { accessRows, distinct, sort as sortRows, type SortKey } from './operators.ts'
 import { neverEqual, nullRejected } from './optimize.ts'
 import type { TableStatistics } from './stats.ts'
-import { safeResolve, TableScope, type ScopeColumn, type ScopeTableSpec } from './scope.ts'
+import { unknownColumnError, safeResolve, TableScope, type ScopeColumn, type ScopeTableSpec } from './scope.ts'
 
 /** A table the FROM reads: a base table, or (M5.1) a derived one. */
 export interface FromTable extends ScopeTableSpec {
@@ -348,7 +348,7 @@ export function planFrom(refs: readonly TableReference[], ctx: FromContext, wher
         if (names !== undefined) {
           const pickFrom = (side: number[], name: string): number => {
             const i = side.find((x) => columnName(x).toLowerCase() === name.toLowerCase())
-            if (i === undefined) throw sqlError('ER_BAD_FIELD_ERROR', messages.unknownColumn(name, 'from clause'))
+            if (i === undefined) throw unknownColumnError(name, 'from clause')
             return i
           }
           const merged: number[] = []

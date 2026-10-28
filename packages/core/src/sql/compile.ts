@@ -11,7 +11,6 @@
 // What is not here yet is refused by name rather than approximated: an
 // unknown function in a selected schema is ER_SP_DOES_NOT_EXIST; a builtin we
 // have not written is ER_NOT_SUPPORTED_YET naming it (M5.10 owns the rest).
-import { requireSchema } from './scope.ts'
 import { CHARSET_BINARY, COLUMN_FLAG, FIELD_TYPE, expectTyped, equalBytes } from '@myjs/bytes'
 import { nativeCallName, someNode } from './ast.ts'
 import { resolveCollation } from './collation.ts'
@@ -116,14 +115,14 @@ import { castAsJson } from './json.ts'
 import { jsonPathFunction, memberOf, unquote } from './json-path.ts'
 import { regexpLike } from './regexp.ts'
 import { valueKey } from './keys.ts'
-import { safeResolve, TableScope } from './scope.ts'
+import { requireSchema, safeResolve, TableScope, unknownColumnError } from './scope.ts'
 import { bitBytes } from './wire.ts'
 import { badAgainst, booleanRank, Corpus, foldFor, fulltextOf, naturalRank, noExpansion, noIndex, parseBoolean, queryText, wordsOf, type Term } from './fulltext.ts'
 import { windowNotAllowed } from './window.ts'
 import { dateAdd, isInterval, onToday } from './interval.ts'
 import { printString, printExpression, Unprintable } from './print.ts'
 import { modeOf } from './mode.ts'
-import { NOT_YET, VARIES_PER_EVALUATION, functionCompiler } from './registry.ts'
+import { NOT_YET, VARIES_PER_EVALUATION, functionCompiler, invalidGroupFunction } from './registry.ts'
 import { clock, escapedBytes, hexOf } from './builtins.ts'
 import { systemVariableInfo } from './variables.ts'
 
@@ -564,7 +563,7 @@ export interface SubqueryPlan {
 
 export const EMPTY_SCOPE: Scope = {
   resolve(parts, clause) {
-    throw sqlError('ER_BAD_FIELD_ERROR', messages.unknownColumn(parts.join('.'), clause))
+    throw unknownColumnError(parts.join('.'), clause)
   },
 }
 
@@ -2430,11 +2429,11 @@ function call(e: CallNode, ctx: CompileContext): Compiled {
       // makes it aggregate (8.4.11: `SELECT (SELECT COUNT(t1.x) FROM t2) FROM
       // t1` is one row). Refused by name until the outer query can take it.
       if (outerOnly(e.args, ctx)) throw sqlError('ER_NOT_SUPPORTED_YET', messages.notSupported("An aggregate of an enclosing query's columns"))
-      if (ctx.aggregates === undefined || ctx.inAggregate === true) throw sqlError('ER_INVALID_GROUP_FUNC_USE', 'Invalid use of group function')
+      if (ctx.aggregates === undefined || ctx.inAggregate === true) throw invalidGroupFunction()
       return ctx.aggregates.register(e, ctx)
     }
     if (name === 'GROUPING') {
-      if (ctx.groupKeys === undefined || ctx.inAggregate === true) throw sqlError('ER_INVALID_GROUP_FUNC_USE', 'Invalid use of group function')
+      if (ctx.groupKeys === undefined || ctx.inAggregate === true) throw invalidGroupFunction()
       return ctx.groupKeys.grouping(e.args, ctx)
     }
     if (name === 'DEFAULT' && e.args.length === 1) return defaultFunction(e, ctx)
