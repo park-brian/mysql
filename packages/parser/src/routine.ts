@@ -29,7 +29,7 @@ import {
   type Statement,
   type TableName,
 } from './statement-ast.ts'
-import { TOKEN } from './tokens.ts'
+import { TOKEN, keywordText } from './tokens.ts'
 
 /** Parses one statement from the cursor: the dispatcher, passed in to keep the import graph acyclic. */
 export type StatementParser = (c: Cursor) => Statement
@@ -243,7 +243,7 @@ function body(c: Cursor, mode: SqlMode, statement: StatementParser, returns: boo
   const first = c.peek()
   if (first.kind === TOKEN.EOF || (first.kind === TOKEN.OPERATOR && first.text === ';')) c.fail()
   const before = c.tokens[c.at - 1]
-  const word = first.kind === TOKEN.IDENTIFIER && first.quoted !== true ? first.text.toUpperCase() : ''
+  const word = keywordText(first)
   // A label — `l1: LOOP … END LOOP l1` — opens a compound statement too.
   if (PROGRAM_ONLY.has(word) || (first.kind === TOKEN.IDENTIFIER && c.atOp(':', 1))) skipProgramStatement(c)
   else if (word === 'RETURN') {
@@ -273,7 +273,7 @@ function skipProgramStatement(c: Cursor): void {
       return
     }
     if (open.length === 0 && !first && t.kind === TOKEN.OPERATOR && t.text === ';') return
-    const word = t.kind === TOKEN.IDENTIFIER && t.quoted !== true ? t.text.toUpperCase() : ''
+    const word = keywordText(t)
     if (word === 'END') {
       c.skip()
       const kind = ['IF', 'CASE', 'LOOP', 'WHILE', 'REPEAT'].find((k) => c.atWord(k)) ?? ''

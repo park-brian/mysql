@@ -52,7 +52,7 @@ import {
   type UseNode,
   type VariableScope,
 } from './statement-ast.ts'
-import { TOKEN } from './tokens.ts'
+import { TOKEN, keywordText } from './tokens.ts'
 import { unsupportedStatement } from './errors.ts'
 
 // --- SET -----------------------------------------------------------------------
@@ -182,12 +182,13 @@ const VALUE_KEYWORDS = new Set(['DEFAULT', 'ON', 'ALL', 'BINARY', 'ROW', 'SYSTEM
 function assigned(c: Cursor, mode: SqlMode, system: boolean): Expression | KeywordNode {
   if (!c.takeOp('=')) c.expectOp(':=')
   const t = c.peek()
+  const word = keywordText(t)
   // Only where the item ends: `BINARY 'a'`, `ROW(1, 2)` and `DEFAULT(a)` are
   // expressions, and a reserved word cannot be a name, so this is never
   // ambiguous.
-  if (system && t.kind === TOKEN.IDENTIFIER && t.quoted !== true && VALUE_KEYWORDS.has(t.text.toUpperCase()) && atItemEnd(c, 1)) {
+  if (system && VALUE_KEYWORDS.has(word) && atItemEnd(c, 1)) {
     c.skip()
-    return { kind: NODE.KEYWORD, word: t.text.toUpperCase(), at: t.start }
+    return { kind: NODE.KEYWORD, word, at: t.start }
   }
   return parseExpressionFrom(c, mode)
 }

@@ -17,7 +17,7 @@
 // `CHARACTER SET` and produces a table that stores different bytes.
 import { flag, opt, wordOrString, type Cursor } from './cursor.ts'
 import { charsetName, collationName } from './names.ts'
-import { TOKEN } from './tokens.ts'
+import { TOKEN, keywordText } from './tokens.ts'
 import { NODE, type Expression } from './ast.ts'
 import { parseExpressionFrom } from './expression.ts'
 import { parseDataType } from './data-type.ts'
@@ -649,8 +649,7 @@ export function defaultExpression(c: Cursor, options: DdlOptions, now = true): E
  */
 function nowFunction(c: Cursor): Expression | undefined {
   const t = c.peek()
-  if (t.kind !== TOKEN.IDENTIFIER || t.quoted === true) return undefined
-  const word = t.text.toUpperCase()
+  const word = keywordText(t)
   if (!['CURRENT_TIMESTAMP', 'NOW', 'LOCALTIME', 'LOCALTIMESTAMP', 'CURRENT_DATE', 'CURRENT_TIME', 'UTC_TIMESTAMP'].includes(word)) return undefined
   c.skip()
   const args: Expression[] = []
@@ -830,8 +829,7 @@ export function tableOption(c: Cursor, out: Record<string, string>): boolean {
     return true
   }
   const t = c.peek()
-  if (t.kind !== TOKEN.IDENTIFIER || t.quoted === true) return false
-  const word = t.text.toUpperCase()
+  const word = keywordText(t)
   if (!TABLE_OPTIONS.has(word)) return false
   c.skip()
   // `DATA DIRECTORY` and `INDEX DIRECTORY` are two words; `START TRANSACTION`

@@ -1599,8 +1599,13 @@ Default column readers retain their grammar. A warning-filled 1,024-condition pr
 retained errors. Valid-AST warning limits and later binding failures remain open.
 The BINARY attribute warning now survives failed CAST/CONVERT admission only after
 its optional charset succeeds; the parser and DDL share its text. This bounded
-repair passes Docker verification. Failed-admission ASCII/UNICODE warnings are
-next, with their captured native timing retained.
+repair passes Docker verification. The migrated grammar readers share one token
+owner for unquoted ASCII keyword identity, retaining Unicode identifier spelling.
+Native-rejected Unicode-lookalike SET/INSERT and DROP/CREATE now fail before
+execution. A 150-command capture enforces 134 complete matches while retaining
+sixteen function-name and charset-value gaps. Remaining direct interval,
+event-schedule and resource-limit keyword selectors need a native audit next;
+failed-admission ASCII/UNICODE warnings follow, with their native timing retained.
 CAST/CONVERT targets leave internal COLLATE to the syntax boundary while column
 datatype readers retain it. Cursor string reading concatenates adjacent literals
 only when expression or ENUM/SET grammar requests it; ordinary callers consume

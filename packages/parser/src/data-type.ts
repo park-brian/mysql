@@ -39,7 +39,7 @@ import { FIELD_TYPE, type FieldTypeCode } from '@myjs/bytes'
 import { flag, opt, type Cursor } from './cursor.ts'
 import { BINARY_DEPRECATION, NATIONAL_DEPRECATION } from './errors.ts'
 import { charsetName, collationName } from './names.ts'
-import { TOKEN } from './tokens.ts'
+import { TOKEN, keywordText } from './tokens.ts'
 import type { SqlMode } from './sql-mode.ts'
 
 /**
@@ -245,9 +245,8 @@ export interface DataType {
 
 /** True if the cursor is at something that could start a column type. */
 export function atDataType(c: Cursor): boolean {
-  const t = c.peek()
-  if (t.kind !== TOKEN.IDENTIFIER || t.quoted === true) return false
-  return TYPES[t.text.toUpperCase()] !== undefined || MULTI_WORD.some((words) => c.atWords(...words))
+  const name = keywordText(c.peek())
+  return name !== '' && (TYPES[name] !== undefined || MULTI_WORD.some((words) => c.atWords(...words)))
 }
 
 /**
@@ -403,10 +402,8 @@ function typeName(c: Cursor, column: boolean): string | null {
   for (const words of MULTI_WORD) {
     if (c.takeWords(...words)) return words.join(' ')
   }
-  const t = c.peek()
-  if (t.kind !== TOKEN.IDENTIFIER || t.quoted === true) return null
-  const name = t.text.toUpperCase()
-  if (TYPES[name] === undefined) return null
+  const name = keywordText(c.peek())
+  if (name === '' || TYPES[name] === undefined) return null
   c.skip()
   return name
 }

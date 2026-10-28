@@ -24,7 +24,7 @@
 //     of the `ON`'s reach says ER_BAD_FIELD_ERROR.
 import { duplicateTable, unsupportedStatement } from './errors.ts'
 import { flag, opt, wordOrString, type Cursor } from './cursor.ts'
-import { TOKEN } from './tokens.ts'
+import { TOKEN, keywordText } from './tokens.ts'
 import { NODE, type Expression } from './ast.ts'
 import { parseExpressionFrom } from './expression.ts'
 import type { SqlMode } from './sql-mode.ts'
@@ -329,10 +329,10 @@ class QueryParser {
         continue
       }
       if (c.takeWord('ALL')) continue
-      const t = c.peek()
-      if (t.kind === TOKEN.IDENTIFIER && t.quoted !== true && SELECT_OPTIONS.has(t.text.toUpperCase())) {
+      const word = keywordText(c.peek())
+      if (SELECT_OPTIONS.has(word)) {
         c.skip()
-        options.push(t.text.toUpperCase())
+        options.push(word)
         continue
       }
       break

@@ -18,7 +18,7 @@
 import { systemVariableParts } from './variable.ts'
 import { Cursor, flag, opt } from './cursor.ts'
 import { RESERVED } from './keywords.ts'
-import { TOKEN } from './tokens.ts'
+import { TOKEN, keywordText } from './tokens.ts'
 import { NODE, LITERAL, type Expression, type LiteralType } from './ast.ts'
 import { lex, type LexOptions } from './lexer.ts'
 import { hexBytes, parseDataType, type DataType } from './data-type.ts'
@@ -194,12 +194,10 @@ class ExpressionParser {
     if (level >= LEVELS.length) return null
     const ops = LEVELS[level] as readonly string[]
     if (t.kind === TOKEN.OPERATOR) return ops.includes(t.text) ? t.text : null
-    if (t.kind === TOKEN.IDENTIFIER && t.quoted !== true) {
-      const word = t.text.toUpperCase()
-      // A word operator must be a word MySQL treats as one; otherwise `a b` is
-      // two expressions, not an application of an operator named `b`.
-      if (WORD_OPERATORS.has(word) && ops.includes(word)) return word
-    }
+    const word = keywordText(t)
+    // A word operator must be a word MySQL treats as one; otherwise `a b` is
+    // two expressions, not an application of an operator named `b`.
+    if (WORD_OPERATORS.has(word) && ops.includes(word)) return word
     return null
   }
 
@@ -244,7 +242,7 @@ class ExpressionParser {
   #quantifiedSubquery(): Expression | null {
     const cursor = this.#c
     const t = cursor.peek()
-    const word = t.kind === TOKEN.IDENTIFIER && t.quoted !== true ? t.text.toUpperCase() : ''
+    const word = keywordText(t)
     if ((word !== 'ANY' && word !== 'SOME' && word !== 'ALL') || !cursor.atOp('(', 1)) return null
     cursor.skip()
     const quantifier = word === 'ALL' ? 'ALL' : 'ANY'
@@ -519,18 +517,19 @@ class ExpressionParser {
   #identifierLike(): Expression {
     const cursor = this.#c
     const t = cursor.peek()
-    const upper = t.text.toUpperCase()
+    const keyword = keywordText(t)
+    const upper = keyword || t.text.toUpperCase()
 
     if (t.quoted !== true) {
-      if (upper === 'NULL') {
+      if (keyword === 'NULL') {
         cursor.skip()
         return { kind: NODE.LITERAL, type: LITERAL.NULL, value: null, at: t.start }
       }
-      if (upper === 'TRUE' || upper === 'FALSE') {
+      if (keyword === 'TRUE' || keyword === 'FALSE') {
         cursor.skip()
         return { kind: NODE.LITERAL, type: LITERAL.BOOL, value: upper === 'TRUE', at: t.start }
       }
-      if (upper === 'CASE') return this.#case()
+      if (keyword === 'CASE') return this.#case()
       // Only a registered charset makes an introducer; otherwise this is a name.
       const next = cursor.peek(1).kind
       if (t.text.startsWith('_') && (next === TOKEN.STRING || next === TOKEN.HEX || next === TOKEN.BIT)) {
@@ -543,18 +542,18 @@ class ExpressionParser {
         }
       }
       // `N'x'` is the national charset's literal, which MySQL defines as utf8mb3.
-      if (upper === 'N' && next === TOKEN.STRING && cursor.peek(1).start === t.end) {
+      if (keyword === 'N' && next === TOKEN.STRING && cursor.peek(1).start === t.end) {
         cursor.skip()
         return { kind: NODE.LITERAL, type: LITERAL.STRING, value: cursor.expectString(true), charset: 'utf8mb3', at: t.start }
       }
-      if (upper === 'EXISTS' && cursor.atOp('(', 1)) {
+      if (keyword === 'EXISTS' && cursor.atOp('(', 1)) {
         cursor.skip()
         const open = cursor.peek().start
         const operand = { kind: NODE.SUBQUERY, query: this.#parenthesisedQuery(), at: open } as const
         return { kind: NODE.UNARY, op: 'EXISTS', operand, at: t.start }
       }
       // `ROW(1, 2)` is the row constructor `(1, 2)` spelled out.
-      if (upper === 'ROW' && cursor.atOp('(', 1)) {
+      if (keyword === 'ROW' && cursor.atOp('(', 1)) {
         cursor.skip()
         const open = cursor.take()
         const items: Expression[] = []
@@ -563,13 +562,13 @@ class ExpressionParser {
         cursor.expectOp(')')
         return { kind: NODE.ROW, items, at: open.start }
       }
-      if (upper === 'MATCH' && (cursor.atOp('(', 1) || cursor.peek(1).kind === TOKEN.IDENTIFIER)) return this.#match()
+      if (keyword === 'MATCH' && (cursor.atOp('(', 1) || cursor.peek(1).kind === TOKEN.IDENTIFIER)) return this.#match()
       if (cursor.atOp('(', 1)) {
         // One of the builtins the lexer knows by name, a space before its
         // `(`, and IGNORE_SPACE off: not the builtin, but a stored function
         // of that name (8.4.11: `COUNT (*)` is 1064, `NOW ()` is 1630).
         if (SPACE_SENSITIVE.has(upper) && !this.#mode.ignoreSpace && cursor.peek(1).start !== t.start + t.text.length) return this.#storedCall()
-        const special = this.#specialCall(upper)
+        const special = this.#specialCall(keyword)
         if (special !== null) return special
       }
       // A typed temporal literal: `DATE'2019-10-01'`, and its `TIME` and
@@ -577,21 +576,21 @@ class ExpressionParser {
       // is a DATE rather than the string it is written with — which is why
       // `DEFAULT DATE'…'` is legal on a DATE column where a bare string is
       // not. Found by M3.11's census in `default.test`.
-      if (TEMPORAL_KEYWORDS.has(upper) && cursor.peek(1).kind === TOKEN.STRING) {
+      if (TEMPORAL_KEYWORDS.has(keyword) && cursor.peek(1).kind === TOKEN.STRING) {
         cursor.skip()
         const s = cursor.take()
-        return { kind: NODE.LITERAL, type: LITERAL.TEMPORAL, value: s.text, unit: upper, at: t.start }
+        return { kind: NODE.LITERAL, type: LITERAL.TEMPORAL, value: s.text, unit: keyword, at: t.start }
       }
       // A reserved word is never a column reference (M3.15). It may be a
       // builtin function — `IF(`, `LEFT(`, or `CURRENT_TIMESTAMP` with or
       // without its parentheses — and is otherwise where the expression ends,
       // which is what lets `SELECT a FROM t` stop at `FROM`.
-      if (RESERVED.has(upper)) {
-        if (NILADIC.has(upper) && !cursor.atOp('(', 1)) {
+      if (RESERVED.has(keyword)) {
+        if (NILADIC.has(keyword) && !cursor.atOp('(', 1)) {
           cursor.skip()
           return { kind: NODE.CALL, name: t.text, args: [], at: t.start }
         }
-        if (!RESERVED_FUNCTIONS.has(upper) || !cursor.atOp('(', 1)) cursor.fail()
+        if (!RESERVED_FUNCTIONS.has(keyword) || !cursor.atOp('(', 1)) cursor.fail()
         return this.#call()
       }
     }
@@ -874,9 +873,9 @@ class ExpressionParser {
   #unitKeyword(odbc = false): Expression {
     const cursor = this.#c
     const u = cursor.peek()
-    const word = u.text.toUpperCase()
+    const word = keywordText(u)
     const unit = odbc && word.startsWith('SQL_TSI_') ? word.slice('SQL_TSI_'.length) : word
-    if (u.kind !== TOKEN.IDENTIFIER || u.quoted === true || !INTERVAL_UNITS.has(unit)) cursor.fail()
+    if (!INTERVAL_UNITS.has(unit)) cursor.fail()
     cursor.skip()
     return { kind: NODE.KEYWORD, word, at: u.start }
   }

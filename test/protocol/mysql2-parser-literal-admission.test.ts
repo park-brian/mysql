@@ -10,6 +10,7 @@ import castDatatype from './fixtures/diagnostics/cast-datatype-grammar.json' wit
 import castModifiers from './fixtures/diagnostics/cast-modifier-grammar.json' with { type: 'json' }
 import warningAdmission from './fixtures/diagnostics/parser-warning-admission.json' with { type: 'json' }
 import modifierDeprecation from './fixtures/diagnostics/modifier-deprecation-admission.json' with { type: 'json' }
+import keywordIdentity from './fixtures/diagnostics/keyword-identity.json' with { type: 'json' }
 
 /** Restore binary rows and numeric facts that JSON cannot represent directly. */
 function capturedValue(value: unknown): unknown {
@@ -23,7 +24,7 @@ function capturedValue(value: unknown): unknown {
   return value
 }
 
-for (const [reference, total, matched] of [[literalAdmission, 1623, 1521], [conditionHistories, 198, 192], [castDatatype, 480, 398], [castModifiers, 16648, 15874], [warningAdmission, 325, 248], [modifierDeprecation, 1008, 362]] as const) test('M5.10: admission preserves primary errors, condition histories, headers and effects: ' + reference.schema, async () => {
+for (const [reference, total, matched] of [[literalAdmission, 1623, 1521], [conditionHistories, 198, 192], [castDatatype, 480, 398], [castModifiers, 16648, 15874], [warningAdmission, 325, 248], [modifierDeprecation, 1008, 362], [keywordIdentity, 150, 134]] as const) test('M5.10: admission preserves primary errors, condition histories, headers and effects: ' + reference.schema, async () => {
   const host = process.env.MYSQL_REFERENCE_HOST
   const db = host === undefined ? await MySQL.open(':memory:', { multipleStatements: true }) : undefined
   const transport = db === undefined
@@ -35,6 +36,8 @@ for (const [reference, total, matched] of [[literalAdmission, 1623, 1521], [cond
   assert.equal(reference.observations.length, total)
   assert.equal(strict.size, matched)
   let created = false
+  const victim = 'victim' in reference ? reference.victim : undefined
+  let victimCreated = false
   let compared = 0
   try {
     await conn.connect()
@@ -43,16 +46,24 @@ for (const [reference, total, matched] of [[literalAdmission, 1623, 1521], [cond
     created = true
     await conn.query('USE ' + reference.schema)
     await conn.query('CREATE TABLE t(v INT)')
+    if (victim !== undefined) {
+      await conn.query('CREATE DATABASE ' + victim)
+      victimCreated = true
+    }
     for (const [i, entry] of reference.observations.entries()) {
       await conn.query('SET sql_mode=?', [reference.modes[entry.mode]!])
+      if ('resetResults' in reference && reference.resetResults) await conn.query('SET character_set_results=utf8mb4')
+      const expectedEffects: Readonly<Record<string, unknown>> = reference.effects[entry.effects]!
       if (entry.stateful) {
         await conn.query('TRUNCATE TABLE t')
         await conn.query('INSERT INTO t VALUES(1),(2)')
         await conn.query('SET @x=3')
         await conn.query('DROP VIEW IF EXISTS w')
         await conn.query('DROP TABLE IF EXISTS u')
-        await conn.query('DROP TABLE IF EXISTS r')
-        await conn.query('CREATE TABLE r(v INT)')
+        if ('columns' in expectedEffects) {
+          await conn.query('DROP TABLE IF EXISTS r')
+          await conn.query('CREATE TABLE r(v INT)')
+        }
       }
       const sql = reference.commands[entry.sql]!
       const api = reference.apis[entry.api]!
@@ -102,17 +113,23 @@ for (const [reference, total, matched] of [[literalAdmission, 1623, 1521], [cond
       if (entry.stateful) {
         const after = (await conn.query({ sql: 'SELECT * FROM t', rowsAsArray: true }))[0]
         const variable = (await conn.query<mysql.RowDataPacket[]>('SELECT CAST(@x AS CHAR) AS v'))[0][0]!.v as string
-        const columns = (await conn.query<mysql.RowDataPacket[]>('SHOW COLUMNS FROM r'))[0].map(row => row.Field as string)
-        const view = (await conn.query("SHOW FULL TABLES LIKE 'w'"))[0] as unknown[]
-        const effects = { after, variable, columns, view: view.length }
-        const expectedEffects = reference.effects[entry.effects]!
+        const effects: Record<string, unknown> = { after, variable }
+        if ('columns' in expectedEffects) effects.columns = (await conn.query<mysql.RowDataPacket[]>('SHOW COLUMNS FROM r'))[0].map(row => row.Field as string)
+        if ('view' in expectedEffects) effects.view = ((await conn.query("SHOW FULL TABLES LIKE 'w'"))[0] as unknown[]).length
+        if ('schemas' in expectedEffects) {
+          assert.ok(victim !== undefined, label + ': owned schema')
+          effects.schemas = ((await conn.query('SHOW DATABASES LIKE ?', [victim]))[0] as unknown[]).length
+        }
+        if ('tables' in expectedEffects) effects.tables = (await conn.query('SHOW FULL TABLES'))[0]
+        assert.deepEqual(Object.keys(effects).sort(), Object.keys(expectedEffects).sort(), label + ': effect shape')
         const keys = complete ? Object.keys(effects) : reference.effectChecks[entry.effectChecks]!
-        for (const key of keys as (keyof typeof effects)[]) assert.deepEqual(effects[key], expectedEffects[key], label + ': effect ' + key)
+        for (const key of keys) assert.deepEqual(effects[key], expectedEffects[key], label + ': effect ' + key)
       }
       if (db !== undefined) assert.equal(db.catalog!.store.transactions.stats().openViews, views, label + ': readers released')
     }
     assert.equal(compared, db === undefined ? reference.observations.length : strict.size)
   } finally {
+    if (victimCreated) await conn.query('DROP DATABASE IF EXISTS ' + victim)
     if (created) await conn.query('DROP DATABASE ' + reference.schema)
     await conn.end()
     await db?.end()

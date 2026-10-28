@@ -13,7 +13,7 @@
 // that its SQL is malformed.
 import { unsupportedStatement } from './errors.ts'
 import { Cursor } from './cursor.ts'
-import { TOKEN, type Token } from './tokens.ts'
+import { TOKEN, keywordText, type Token } from './tokens.ts'
 import { decodeStatement, lex, type LexOptions } from './lexer.ts'
 import { NO_SQL_MODE, type SqlMode } from './sql-mode.ts'
 import { parseCreateDatabase, parseCreateTable, parseCreateView, parseDefiner, parseDrop } from './ddl.ts'
@@ -171,20 +171,11 @@ function dispatch(c: Cursor, sqlMode: SqlMode): Statement {
     const save = c.at
     c.skip()
     c.takeWord('TEMPORARY')
-    const known =
-      c.atWord('TABLE') ||
-      c.atWord('TABLES') ||
-      c.atWord('VIEW') ||
-      c.atWord('INDEX') ||
-      c.atWord('DATABASE') ||
-      c.atWord('SCHEMA') ||
-      c.atWord('PROCEDURE') ||
-      c.atWord('FUNCTION') ||
-      c.atWord('TRIGGER') ||
-      c.atWord('EVENT')
-    const object = c.peek().text.toUpperCase()
+    const token = c.peek()
+    const object = keywordText(token)
     c.at = save
-    if (known) return parseDrop(c)
+    if (object === '') c.fail(token)
+    if (DROP_OBJECTS.has(object)) return parseDrop(c)
     throw unsupportedStatement(`DROP ${object}`)
   }
 
@@ -194,6 +185,8 @@ function dispatch(c: Cursor, sqlMode: SqlMode): Statement {
   if (!STATEMENT_WORDS.has(first(c))) c.fail()
   throw unsupportedStatement(first(c))
 }
+
+const DROP_OBJECTS = new Set(['TABLE', 'TABLES', 'VIEW', 'INDEX', 'DATABASE', 'SCHEMA', 'PROCEDURE', 'FUNCTION', 'TRIGGER', 'EVENT'])
 
 /** The words a statement can begin with: `simple_statement`'s alternatives in `sql_yacc.yy`, and BEGIN. */
 const STATEMENT_WORDS = new Set([
@@ -237,7 +230,7 @@ function createObject(c: Cursor): string {
       }
       break
     }
-    return c.peek().kind === TOKEN.IDENTIFIER ? c.peek().text.toUpperCase() : c.peek().text
+    return keywordText(c.peek()) || c.fail()
   } finally {
     c.at = save
   }
@@ -246,7 +239,7 @@ function createObject(c: Cursor): string {
 /** The leading word of the statement, for a refusal that names it. */
 function first(c: Cursor): string {
   const t = c.peek()
-  return t.kind === TOKEN.IDENTIFIER ? t.text.toUpperCase() : t.text
+  return keywordText(t) || (t.kind === TOKEN.OPERATOR ? t.text : '')
 }
 
 export { STATEMENT }

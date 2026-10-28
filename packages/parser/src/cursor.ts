@@ -11,7 +11,7 @@
 // modelling as a base class.
 import { ParseError, parseError, tooDeep, type ParseCondition } from './errors.ts'
 import { RESERVED } from './keywords.ts'
-import { TOKEN, type Token } from './tokens.ts'
+import { TOKEN, keywordText, type Token } from './tokens.ts'
 import type { TableName } from './statement-ast.ts'
 
 /**
@@ -166,8 +166,7 @@ export class Cursor {
    * identifier was written rather than normalising it away.
    */
   atWord(word: string, ahead = 0): boolean {
-    const t = this.peek(ahead)
-    return t.kind === TOKEN.IDENTIFIER && t.quoted !== true && t.text.toUpperCase() === word
+    return word !== '' && keywordText(this.peek(ahead)) === word
   }
 
   takeWord(word: string): boolean {
@@ -212,7 +211,7 @@ export class Cursor {
    */
   atIdentifier(ahead = 0): boolean {
     const t = this.peek(ahead)
-    return t.kind === TOKEN.IDENTIFIER && (t.quoted === true || !RESERVED.has(t.text.toUpperCase()))
+    return t.kind === TOKEN.IDENTIFIER && !RESERVED.has(keywordText(t))
   }
 
   /**
