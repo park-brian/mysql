@@ -147,8 +147,13 @@ sixteen function-name and charset-value gaps. Interval units, event-schedule uni
 and first/subsequent resource selectors now share that owner too. Their capture
 improves 1,046 to 1,670 complete outcomes of 1,850, with all 180 separate event
 outcomes retained. Quoted interval units are refused, and actual DROP results
-guard event storage. Failed-admission ASCII/UNICODE warnings are next, with their
-native timing retained.
+guard event storage. Failed CAST/CONVERT admission now retains ASCII/UNICODE
+warnings around BINARY in written order at the existing datatype reduction phases.
+Unknown charsets and malformed clauses suppress attributes; named charset values
+are not shorthand modifiers. All 276 failed-grammar controls agree in the
+552-command capture, while its 156 valid-outcome gaps stay open. Valid-AST warning
+publication and runtime limits retain their existing owners. Function-name identity
+is next, starting with the retained Unicode SUM and spaced-call controls.
 CAST/CONVERT targets leave internal COLLATE to the syntax boundary while column
 datatype readers retain it. Cursor string reading concatenates adjacent literals
 only when expression or ENUM/SET grammar requests it; ordinary callers consume

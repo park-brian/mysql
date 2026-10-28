@@ -136,3 +136,31 @@ test('local structural limits preserve an existing native error and release thei
   assert.equal(descend(100), 1)
   assert.equal(parseExpression('1').kind, NODE.LITERAL)
 })
+
+test('failed CAST shorthand warnings retain written order around BINARY', () => {
+  for (const [modifier, names] of [
+    ['ASCII', ['ASCII']], ['UNICODE', ['UNICODE']],
+    ['BINARY ASCII', ['BINARY as attribute of a type', 'ASCII']],
+    ['ASCII BINARY', ['ASCII', 'BINARY as attribute of a type']],
+    ['BINARY UNICODE', ['BINARY as attribute of a type', 'UNICODE']],
+  ] as const) for (const form of ['CAST', 'CONVERT']) {
+    const expression = form === 'CAST' ? "CAST('x' AS CHAR " + modifier + ')' : "CONVERT('x', CHAR " + modifier + ')'
+    assert.throws(() => parseStatement('SELECT ' + expression + ' FROM'), (error: unknown) => {
+      assert.ok(error instanceof ParseError)
+      assert.equal(error.errno, 1064)
+      const warnings = error.conditions?.filter(e => e.level === 'Warning') ?? []
+      assert.deepEqual(warnings.map(e => e.errno), names.map(() => 1287))
+      assert.deepEqual(warnings.map(e => e.message.split("'")[1]), names)
+      return true
+    })
+  }
+})
+
+test('charset values are not shorthand warnings and failed charset clauses suppress attributes', () => {
+  for (const modifier of ['CHARACTER SET ascii', 'CHARSET "ascii"', 'CHARACTER SET binary']) {
+    assert.throws(() => parseStatement("SELECT CAST('x' AS CHAR " + modifier + ') FROM'), (error: unknown) => error instanceof ParseError && error.errno === 1064 && !error.conditions?.some(e => e.errno === 1287))
+  }
+  for (const modifier of ['BINARY CHARACTER SET unknown', 'BINARY CHARACTER what', 'BINARY CHARACTER SET']) {
+    assert.throws(() => parseStatement("SELECT CAST('x' AS CHAR " + modifier + ')'), (error: unknown) => error instanceof ParseError && !error.conditions?.some(e => e.errno === 1287))
+  }
+})

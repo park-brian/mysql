@@ -436,11 +436,43 @@ Frozen-source proof matches 445 test files/fixtures, 204 runtime sources and
 reference/generator/census/helper tooling before cleanup; code and tests remained
 frozen throughout. Preceding e5db2a4 passed all eleven required CI jobs.
 
-**Next bounded slice:** failed-admission ASCII/UNICODE warning publication using
-the retained timing captures. Function-name identity and charset-value validation,
-event microsecond/PREPARE/warning behavior, valid-AST warning limits, later binding
-failures, lexical lookahead and other CAST metadata/conversion and function gaps
-remain open. M5.10 stays partial.
+**Failed-admission shorthand warnings verified:** CAST/CONVERT now publishes
+leading BINARY, ASCII/UNICODE shorthand and trailing BINARY at their existing
+datatype reduction phases, in written order. A captured token identifies the
+shorthand without re-reading a token window or classifying charset values as
+attributes. Unknown charsets and malformed CHARACTER clauses still suppress
+attribute warnings. Public APIs, ASTs, valid-AST publication and ordinary runtime
+warning limits retain their existing contracts.
+The modifier capture improves 15,874 to 16,274 complete matches and the
+deprecation capture improves 362 to 764. Every previously matching component,
+condition, primary-error attribute, header, field, PREPARE count and effect is
+preserved; native answer pools remain unchanged. A fresh 552-command capture
+reproduces retained native answers exactly and improves 324 to 396 complete
+matches. All 276 failed-grammar controls agree; all 156 remaining valid-outcome
+gaps stay recorded. It covers named charsets, quoted names, Unicode lookalikes,
+ASCII case, both forms and modes, all three APIs and valid/failed grammar.
+Nine admission captures now enforce 21,597 complete commands of 22,834, retain
+1,237 open outcomes and protect 155,907 individual condition facts. All 35
+focused tests pass; 4f29ace fails the actual ASCII/BINARY warning-order regression.
+All 179,725 AST/error contracts and 10,224 raw column contracts remain
+byte-identical. One million parser inputs and 20,000 executor statements seeded
+20261010 pass. Fresh Docker --reference passes 1,480 main tests, four latency
+tests, typecheck, lint, all nine unchanged caps, package/typed smoke, the real
+client and all seven pinned corpora. Core/facade measure 334,322/334,256 B
+gzipped; raw output is 221 B above 4f29ace. Native replay passes all 22,834
+commands plus both negotiated command modes. The repeated census remains
+byte-identical at 17,530/17,589, and the entire official-suite fixture is unchanged
+with all 37 shared passes preserved. Frozen-source proof matches 446 test files/
+fixtures, 204 runtime sources and reference/generator/census/helper tooling
+before cleanup; code and tests remained frozen throughout. Preceding 4f29ace
+passed all eleven required CI jobs.
+
+**Next bounded slice:** audit function-name identity against the retained
+Unicode SUM and spaced-call controls, then repair builtin classification through
+the existing parser/binder owners. Preserve function, keyword and value namespace
+contracts. Charset-value validation, separate event behavior, valid-AST warnings
+and their limits, later binding failures, lexical lookahead and other CAST
+metadata/conversion and function gaps remain open. M5.10 stays partial.
 
 The positive literal/typed-integer-NULL source proof now includes plain
 SIGNED/UNSIGNED casts of integer, boolean and text literals under unchanged
@@ -6730,7 +6762,7 @@ code that moves it (doc 43 §8). A claim without a number is marketing.
 | Statements executing the way a real MySQL 8.4 executed them | 3,629 / 3,629 — 400 generated scripts through `mysql2`, 250 of their statements upserts, REPLACEs or IGNOREs: rows and order, column metadata, `affectedRows`/`insertId`/`info`, errno and SQLSTATE. Three further seeds, 46,346 statements and not committed, agree except four `SELECT DISTINCT` metadata cases that need the range optimizer (M5.7, which owns it since M5.5 closed) | every statement the executor accepts |
 | InnoDB round-trip, by type | 0 / 17 | 17 / 17 |
 | Crash injection points, inconsistencies | 10,000 points, 0 inconsistencies — CI's `crash` job runs `CRASH_POINTS=10000`, and `npm test` 300 of them | 10,000 points, 0 |
-| Core bundle, gzipped | 334,248 B (326.4 KiB) for the browser entry chunk, measured on 2026-10-27; the facade is 334,182 B. The two deferred UCA chunks total 184,654 B raw. `tools/size-budget.mjs` measures each package including its workspace dependencies, so package figures do not add up. The M5.2 coercion and M5.10 function fixes pass the existing stabilization budgets without raising them | < 500 KB |
+| Core bundle, gzipped | 334,322 B (326.5 KiB) for the browser entry chunk, measured on 2026-10-27; the facade is 334,256 B. The two deferred UCA chunks total 184,654 B raw. `tools/size-budget.mjs` measures each package including its workspace dependencies, so package figures do not add up. The M5.2 coercion and M5.10 function fixes pass the existing stabilization budgets without raising them | < 500 KB |
 | Function calls returning what a real MySQL 8.4 returned | 8,765 / 8,765 — the string and numeric slices (2,091 / 2,091, including GREATEST and LEAST over text and a DATETIME), the date and time slice (3,463 / 3,463) and the rest of the string, math, hashing and network functions (3,211 / 3,211), both protocols, metadata and warning counts | every function in the library |
 | Implicit coercion | 3,148 / 3,148 captured statements agree, with 0 refusals; warning counts agree on 1,737 / 1,737 queries. All observations are compared with zero disagreements (M5.2 complete) | every captured value, metadata field and warning count |
 | Relational statements executing the way a real MySQL 8.4 executed them | 5,635 / 5,635 agree and none are refused, over 300 multi-table scripts through `mysql2`, both protocols. `queries.json` through the executor: 1,200 / 1,200. Rows are compared in order wherever the statement or an agreeing plan fixes it | every statement the executor accepts, and no refusals |

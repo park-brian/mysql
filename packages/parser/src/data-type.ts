@@ -361,14 +361,21 @@ export function parseDataType(c: Cursor, mode: SqlMode, column = true): DataType
     // CAST permits one charset clause and one BINARY, before or after it.
     // National and non-character targets take no column modifiers.
     binaryModifier = c.takeWord('BINARY')
+    const charsetToken = c.peek()
     const specifiedCharset = typeCharset(c)
+    // An invalid charset suppresses attribute warnings. After it succeeds,
+    // publish leading BINARY, shorthand and trailing BINARY in written order.
+    if (specifiedCharset === undefined && c.takeWord('CHARACTER')) c.fail()
+    if (binaryModifier) c.warn(1287, BINARY_DEPRECATION)
     if (specifiedCharset !== undefined) {
       charset = specifiedCharset
-      binaryModifier ||= c.takeWord('BINARY')
+      const shorthand = keywordText(charsetToken)
+      if (shorthand === 'ASCII' || shorthand === 'UNICODE') c.warn(1287, `'${shorthand}' is deprecated and will be removed in a future release. Please use CHARACTER SET charset_name instead`)
+      if (!binaryModifier && c.takeWord('BINARY')) {
+        binaryModifier = true
+        c.warn(1287, BINARY_DEPRECATION)
+      }
     } else if (!binaryModifier && c.takeWord('BYTE')) charset = 'binary'
-    else if (c.takeWord('CHARACTER')) c.fail()
-    // BINARY reduces after its optional charset; an invalid clause suppresses it.
-    if (binaryModifier) c.warn(1287, BINARY_DEPRECATION)
   }
 
   return {
