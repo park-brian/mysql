@@ -6,7 +6,7 @@
 // "not mine".
 import { CHARSET_BINARY, FIELD_TYPE, hex, type MysqlDateTime } from '@myjs/bytes'
 import { encodeCollation, requireCollationInfo } from '@myjs/charsets'
-import { NODE, deparse, type CallNode, type Expression } from '@myjs/parser'
+import { NODE, deparse, type CallNode, type Expression, type LiteralNode } from '@myjs/parser'
 import { messages, sqlError } from '@myjs/protocol'
 import {
   COERCIBILITY,
@@ -83,6 +83,7 @@ import {
   doubleType,
   floatLength,
   intType,
+  isNumber,
   stringType,
   stringResultType,
   type ResultType,
@@ -283,7 +284,7 @@ export function builtinFunction(name: string, e: CallNode, ctx: CompileContext):
       arity(1)
       const [x] = args() as [Compiled]
       const t = x.type
-      const numeric = t.kind === 'int' || t.kind === 'decimal' || t.kind === 'double'
+      const numeric = isNumber(t)
       const bytes = byteWidth(t)
       return {
         eval: (r, env) => {
@@ -386,7 +387,7 @@ export function controlFunction(name: string, e: CallNode, ctx: CompileContext):
     case 'NULLIF': {
       arity(2)
       const [first, y] = args() as [Compiled, Compiled]
-      if (first.type.kind === 'int' || first.type.kind === 'decimal' || first.type.kind === 'double') columnConstantDiagnostics(first, e.args[0] as Expression, y, e.args[1] as Expression, ctx)
+      if (isNumber(first.type)) columnConstantDiagnostics(first, e.args[0] as Expression, y, e.args[1] as Expression, ctx)
       const converted = nullifTemporalConstant(first, y, e.args[0] as Expression, ctx)
       const x = converted?.comparison ?? asBigintConstant(first, y, e.args[0] as Expression, ctx) ?? first
       const [a, b] = temporalOperands(e.args[0] as Expression, e.args[1] as Expression, x, y, ctx)
@@ -614,19 +615,19 @@ export function regexpFunction(name: string, e: CallNode, ctx: CompileContext): 
 
 /** The session's clock and date arithmetic: NOW and its spellings, SYSDATE, CURDATE, CURTIME, DATE_ADD and DATE_SUB. */
 export function clockFunction(name: string, e: CallNode, ctx: CompileContext): Compiled {
-  const { arity } = callOf(e, ctx)
+  const arity = nativeArity(e.name, e.args.length)
   switch (name) {
     case 'NOW':
     case 'CURRENT_TIMESTAMP':
     case 'LOCALTIME':
     case 'LOCALTIMESTAMP':
     case 'UTC_TIMESTAMP': {
-      const fsp = fspArgument(e, ctx)
+      const fsp = fspArgument(e)
       return { eval: (_r, env) => ({ kind: 'datetime', v: clock(env.now, fsp), type: 'DATETIME', fsp }), type: datetimeType(FIELD_TYPE.DATETIME, fsp, false) }
     }
     case 'SYSDATE': {
       // The time of evaluation, not the statement's start (`Item_func_sysdate_local`).
-      const fsp = fspArgument(e, ctx)
+      const fsp = fspArgument(e)
       return { eval: () => ({ kind: 'datetime', v: clock(new Date(), fsp), type: 'DATETIME', fsp }), type: datetimeType(FIELD_TYPE.DATETIME, fsp, false) }
     }
     case 'DATE_ADD':
@@ -649,13 +650,13 @@ export function clockFunction(name: string, e: CallNode, ctx: CompileContext): C
     case 'CURTIME':
     case 'CURRENT_TIME':
     case 'UTC_TIME': {
-      const fsp = fspArgument(e, ctx)
+      const fsp = fspArgument(e)
       return {
         eval: (_r, env) => {
           const d = clock(env.now, fsp)
           return { kind: 'time', v: { negative: false, days: 0, hour: d.hour, minute: d.minute, second: d.second, microsecond: d.microsecond }, fsp }
         },
-        type: datetimeType(FIELD_TYPE.TIME, fsp, false),
+        type: { ...datetimeType(FIELD_TYPE.TIME, fsp, false), length: 8 },
       }
     }
     default:
@@ -663,11 +664,11 @@ export function clockFunction(name: string, e: CallNode, ctx: CompileContext): C
   }
 }
 
-function fspArgument(e: CallNode, ctx: CompileContext): number {
-  if (e.args.length === 0) return 0
-  const v = compile(e.args[0] as Expression, ctx).eval([], constantEnv(ctx))
+function fspArgument(e: CallNode): number {
+  // The parser has already admitted only an optional unsigned NUM31 literal.
+  const argument = e.args[0] as LiteralNode | undefined
   // Native clock constructors retain one precision byte before validating 0..6.
-  const n = (v === null ? 0 : Number(toInteger(v))) & 0xff
+  const n = Number(argument?.value ?? 0) & 0xff
   if (n > 6) throw sqlError('ER_TOO_BIG_PRECISION', `Too-big precision ${n} specified for '${canonicalFunctionName(e.name.toUpperCase())}'. Maximum is 6.`)
   return n
 }
@@ -758,7 +759,7 @@ function nullifTemporalConstant(x: Compiled, y: Compiled, written: Expression, c
     if (t === undefined) return undefined
     converted = { ...t, v: roundTime(t.v, y.type.scale), fsp: y.type.scale }
     packed = packTime(converted.v)
-  } else if (y.type.kind === 'datetime' && (x.type.kind === 'int' || x.type.kind === 'decimal' || x.type.kind === 'double')) {
+  } else if (y.type.kind === 'datetime' && isNumber(x.type)) {
     const t = toDateTime(v, y.type.field === FIELD_TYPE.DATE ? 'DATE' : 'DATETIME')
     if (t === undefined) return undefined
     converted = t

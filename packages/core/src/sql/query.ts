@@ -16,7 +16,7 @@ import { MAX_UNSIGNED, MIN_SIGNED, intValue, storageWidth, toInteger, truth, wit
 import { compile, constantNode, memoValue, logicalOperand, convertTo, decimalField, EMPTY_SCOPE, readSlot, type CompileContext, type Compiled, type Env, type GroupKeys, type QuantifiedSubquery, type Scope, type SubqueryPlan } from './compile.ts'
 import { AggregateSink, chooseStrategy, containsAggregate, groupRows, isAggregate } from './group.ts'
 import { WindowSink, applyWindows, containsWindow } from './window.ts'
-import { CHARSET_UTF8MB4_BIN, EMPTY_NAMES, columnDefinition, intType, type ResultType } from './meta.ts'
+import { CHARSET_UTF8MB4_BIN, EMPTY_NAMES, columnDefinition, copiedLength, intType, type ResultType } from './meta.ts'
 import { FIELD_TYPE, expectTyped } from '@myjs/bytes'
 import { distinct, filter, limit, project, sort, type SortKey } from './operators.ts'
 import { isConstant, optimizerEnabled, splitAnd, tableColumn } from './plan.ts'
@@ -1393,7 +1393,10 @@ function derivedTable(run: Run, query: QueryExpression, alias: string, names: re
           ? { ...derived, schema: '', orgTable: view.name, viewSchema: view.schema }
           : { ...derived, schema: view.schema, orgTable: view.name }
     } else type.column = { ...column, ...derived, ...(merged && view !== undefined ? { schema: view.schema, orgTable: view.name } : {}) }
-    if (!merged) type.temporary = 'stream'
+    if (!merged) {
+      type.temporary = 'stream'
+      type.length = copiedLength(type)
+    }
     return type
   })
   // Memoization can cache a merged query too; only an unmerged table copies fields.
@@ -2093,14 +2096,14 @@ function planGrouped(
         // …and so is one the WHERE holds to a constant over a join (8.4.11: `FROM p, q WHERE p.g = 1 GROUP BY q.t, p.g`).
         const keyed = (isKey || isKeyExpression) && refersToRow(e, lookup, fixed) && !(source === undefined && e.kind === NODE.COLUMN && pinnedByWhere(node.where, e.parts))
         if (strategy === 'temp' || copiedAverage) {
-          patchType(item, { temporary: !copiedAverage && keyed ? true : 'pinned', ownInTemporary: !copiedAverage && t.ownInTemporary === true, ...(aggregateCall ? { names: EMPTY_NAMES } : {}) })
+          patchType(item, { temporary: !copiedAverage && keyed ? true : 'pinned', ownInTemporary: !copiedAverage && t.ownInTemporary === true, length: copiedLength(t), ...(aggregateCall ? { names: EMPTY_NAMES } : {}) })
           // AVG and similar aggregates retain an intermediate, not this final value.
           if (copiedAverage || t.ownInTemporary !== true) item.compiled = decimalField(item.compiled)
         }
         else if (stream || (source === undefined && from !== undefined && strategy === 'sort' && firstOrder !== 'index' && t.column !== undefined)) {
           // Streamed output and sort-based grouping expose copied column metadata;
           // an ordered first-table index without an output sort keeps source flags.
-          patchType(item, { temporary: 'stream' })
+          patchType(item, { temporary: 'stream', length: copiedLength(t) })
         }
       }
       dataColumns = copiedColumns(run, facts, own, items)

@@ -185,8 +185,8 @@ functions remain admitted. A pure postorder check shares only traversal and nati
 diagnostic construction with generated columns. ALTER SET DEFAULT retains its
 late execution boundary and non-executing PREPARE behavior. The extended tests
 pass 153 transaction boundaries and nine missing-database cases against both
-engines. Twenty-seven admission captures enforce 38,615/48,368 complete commands,
-with unchanged native answers and 9,753 open outcomes. CHECK permissions/namespace,
+engines. Twenty-eight admission captures enforce 39,394/49,826 complete commands,
+with unchanged native answers and 10,432 open outcomes. CHECK permissions/namespace,
 malformed declaration ordering, ANSI SHOW CREATE and other function gaps remain
 open. A CHECK permission-only trial was withdrawn: native clock precision and
 RANDOM_BYTES evaluation must be repaired first. A deterministic 702-command
@@ -199,8 +199,14 @@ generic quoted/spaced roles, OVER fields and semantic precision timing remain in
 Two native captures retain 2,619 commands and improve 510 to 1,728 complete matches
 without losing earlier matching facts. The clock compiler now narrows precision to
 a byte before checking 0..6, preserving existing admission and resolution timing.
-A further 2,313-command capture improves 857 to 1,775 complete matches; empty-result
-controls retain the separate TIME display-width gap. All nine unchanged size caps pass. Bare DEFAULT/ON UPDATE now use their four timestamp aliases, require NOW
+The 2,313-command precision capture now protects 1,856 complete matches. Raw clock
+TIME widths use an eight-character base, while actual copied TIME fields retain
+the general ten-character base through their existing writers. A fixed-clock
+1,458-command audit improves 452 to 698 complete matches without losing matching
+facts or changing native answers. The precision reader uses its parser-guaranteed
+NUM31 literal directly; numeric classification shares the existing predicate.
+All nine unchanged size caps pass. String nullability, merged temporal charset
+and TIME CAST fractional text remain open. Bare DEFAULT/ON UPDATE now use their four timestamp aliases, require NOW
 parentheses and validate the NUM token before BigInt conversion, producing typed
 syntax errors for malformed precision. A shared integer-token reader preserves
 caller bounds, raw spelling, conversions and AST ownership. Three native captures

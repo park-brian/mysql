@@ -73,6 +73,8 @@ export interface ResultType {
   /**
    * An integer's display width, its sign included (`INT` is 11, `1` is 2); a
    * DECIMAL's precision; characters for a string; bytes for a binary string.
+   * A TIME expression's base text width, before its fraction; zero uses the
+   * general TIME field width of ten, while clock expressions use eight.
    */
   readonly length: number
   /** A DECIMAL's scale, a temporal's fractional digits. */
@@ -296,6 +298,9 @@ export const datetimeType = (field: number, fsp: number, nullable: boolean): Res
   collationId: CHARSET_BINARY,
 })
 
+/** A copied TIME field uses the general base width; other lengths survive copying. */
+export const copiedLength = (t: ResultType): number => t.kind === 'time' ? 0 : t.length
+
 /** The key flags a column has from the indexes it is in. */
 export function keyFlags(def: TableDef, name: string): number {
   let flags = 0
@@ -400,7 +405,7 @@ export function charWidth(t: ResultType): number {
     case 'datetime':
       return t.field === FIELD_TYPE.DATE ? 10 : 19 + (t.scale > 0 ? t.scale + 1 : 0)
     case 'time':
-      return 10 + (t.scale > 0 ? t.scale + 1 : 0)
+      return (t.length || 10) + (t.scale > 0 ? t.scale + 1 : 0)
     case 'null':
       return 0
     default:
@@ -456,7 +461,7 @@ export function columnDefinition(name: string, t: ResultType, resultsCollation: 
   const binaryString = t.kind === 'string' && requireCollationInfo(t.collationId).name.endsWith('_bin')
   // A bare column of a number type carries no BINARY flag; every other
   // non-text result does, a literal and an expression included.
-  const numericColumn = column !== undefined && (t.kind === 'int' || t.kind === 'decimal' || t.kind === 'double')
+  const numericColumn = column !== undefined && isNumber(t)
   // A BIT, column or expression (MAX(b), COALESCE(b)), carries none either (8.4.11).
   if (!isText && !numericColumn && !(t.field === FIELD_TYPE.BIT && t.kind === 'int')) flags |= COLUMN_FLAG.BINARY
   // A string in a `_bin` collation is flagged binary too, column or expression.

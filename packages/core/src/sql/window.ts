@@ -43,7 +43,7 @@ import { AggregateSink, type AggregateSpec } from './group.ts'
 import { warnNonScalar } from './operators.ts'
 import { isInterval } from './interval.ts'
 import { microsToTime } from './temporal-functions.ts'
-import { doubleType, intType, type ResultType } from './meta.ts'
+import { copiedLength, doubleType, intType, type ResultType } from './meta.ts'
 
 const RANKING = new Set(['ROW_NUMBER', 'RANK', 'DENSE_RANK', 'PERCENT_RANK', 'CUME_DIST', 'NTILE'])
 const OFFSET = new Set(['LAG', 'LEAD'])
@@ -157,7 +157,7 @@ export class WindowSink {
       const v = row[this.base + slot] ?? null
       // A window AVG reads its final field, not the grouped sum/count intermediate.
       return name === 'AVG' && type.kind === 'decimal' ? convertTo(v, type) : v
-    }, type: { ...type, temporary: 'stream' } }
+    }, type: { ...type, length: copiedLength(type), temporary: 'stream' } }
   }
 
   /** The window a call names: its own, or a named one, or a named one it extends. */

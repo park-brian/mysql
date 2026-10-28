@@ -825,14 +825,42 @@ Core/facade/parser measure 334,340/334,227/45,613 B gzipped. The preceding 0c089
 passes all eleven required CI jobs. M5.10 stays partial; totals remain 144/190 and
 M5 42/53.
 
-**Next bounded slice:** resolve the newly measured ordinary clock TIME display
-width through its existing result-type owner, preserving general TIME holders and
-fractional scale. Then repair context-dependent precision precedence through the
-existing compiler/value-generator owners. Preserve missing table/column priority,
-generated/CHECK admission and DEFAULT timing: SYSDATE constructor validation and
-enclosing-function diagnostic labels remain open. RANDOM_BYTES evaluation follows
-before CHECK permission repairs, then bounded function work, M5.47, M5.49, M5.50
-and browser work.
+**Clock TIME widths, verified (2026-10-28):** raw CURTIME/CURRENT_TIME/UTC_TIME
+expressions now carry their eight-character base width in the existing result type.
+The shared text-width reader adds fractional width; actual derived/CTE, grouped
+and window result-field writers normalize copied TIME to its general ten-character
+base. Raw clocks beside windows and constant DISTINCT retain their own width;
+homogeneous temporal UNION and recursive holders retain their existing constructor.
+A small copied-length rule serves real writers, without interpreting planner markers.
+Native clock precision now reads the parser-guaranteed optional NUM31 literal
+without redundant expression compilation. Byte narrowing and compiler error timing
+remain unchanged. Existing numeric predicates replace four duplicated classifications.
+The new fixed-clock capture retains 1,458 commands through query/execute/PREPARE
+and three modes, including actual nonempty copies, casts, string readers, MIN/MAX,
+grouping, windows, recursive CTEs and mixed unions. Complete matches improve
+452 to 698; the previous precision capture strengthens 1,775 to 1,856. Every prior
+matching component, field attribute, condition, error and effect survives. All native
+answer pools remain unchanged and reconstruct exactly independently of guard choice.
+The f319f66 regression fails on raw CURTIME's width. Twenty-eight captures enforce
+39,394/49,826 complete commands and 173,325 conditions, with 10,432 outcomes open.
+Fresh Docker --reference passes 1,508 main tests, four latency tests, typecheck,
+lint, all nine unchanged caps, package/typed smoke, the real client and all seven
+pinned corpora. Both focused regressions, all 3,771 native replays and seeded
+20,000-statement executor fuzz pass. Repeated actual census and the entire official
+fixture remain byte-identical at 17,530/17,589 and all 37 shared passes. Frozen-source
+proof covers 466 test files/fixtures, 206 runtime sources and reference tooling.
+Core/facade/parser measure 334,348/334,243/45,613 B gzipped; raw core output is 160 B
+smaller than f319f66, whose eleven required CI jobs pass. M5.10 stays partial;
+totals remain 144/190 and M5 42/53. String nullability, merged temporal charset,
+TIME CAST fractional text and ANSI SHOW CREATE gaps remain explicitly open.
+
+**Next bounded slice:** repair the measured TIME CAST fractional-value reader at
+its existing cast writer, preserving copied fields and numeric readers. Then address
+context-dependent precision precedence through the existing compiler/value-generator
+owners, retaining missing table/column priority and DEFAULT/generated/CHECK timing.
+SYSDATE constructor validation and enclosing diagnostic labels remain open;
+RANDOM_BYTES evaluation precedes CHECK permission repairs. Continue bounded
+function work before M5.47, M5.49, M5.50 and browser work.
 
 Keep function, keyword and value namespaces distinct. Charset-value validation,
 separate event behavior, valid-AST warnings/limits, later binding failures,
