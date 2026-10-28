@@ -82,3 +82,17 @@ test('adjacent literal reading is explicit, while ENUM preserves text and byte m
   assert.deepEqual(type.values, ['ab', Uint8Array.of(99), Uint8Array.of(100)])
   assert.throws(() => parseStatement("CREATE TABLE t(a INT COMMENT 'a' 'b')"), { errno: 1064 })
 })
+
+test('public modifier-only datatype reading remains separate from CAST target admission', () => {
+  const c = new Cursor(lex('INT(4) UNSIGNED'))
+  const type = parseDataType(c, NO_SQL_MODE, false)
+  assert.equal(type.name, 'INT')
+  assert.equal(type.length, 4)
+  assert.equal(type.unsigned, undefined)
+  assert.equal(c.atWord('UNSIGNED'), true)
+  assert.throws(() => parseExpression('CAST(1 AS INT(4))'), { errno: 1064 })
+  for (const name of ['SIGNED', 'UNSIGNED']) {
+    assert.throws(() => parseDataType(new Cursor(lex(name)), NO_SQL_MODE, false), { errno: 1064 })
+    assert.equal(parseExpression(`CAST(1 AS ${name} INTEGER)`).kind, 'cast')
+  }
+})

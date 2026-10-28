@@ -33,6 +33,7 @@ import fractionalClockLiteralBoundaries from './fixtures/diagnostics/fractional-
 import clockPrecisionByte from './fixtures/diagnostics/clock-precision-byte.json' with { type: 'json' }
 import clockTimeWidth from './fixtures/diagnostics/clock-time-width.json' with { type: 'json' }
 import timeCastValues from './fixtures/diagnostics/time-cast-values.json' with { type: 'json' }
+import temporalCastAdmission from './fixtures/diagnostics/cast-temporal-admission.json' with { type: 'json' }
 
 /** Restore dates, binary rows and numeric facts that JSON cannot represent directly. */
 function capturedValue(value: unknown): unknown {
@@ -47,7 +48,7 @@ function capturedValue(value: unknown): unknown {
   return value
 }
 
-for (const [reference, total, matched] of [[literalAdmission, 1623, 1521], [conditionHistories, 198, 192], [castDatatype, 480, 398], [castModifiers, 16648, 16274], [warningAdmission, 325, 248], [modifierDeprecation, 1008, 764], [keywordIdentity, 150, 146], [keywordSelectors, 1850, 1670], [shorthandWarnings, 552, 396], [schemaPresence, 378, 189], [functionIdentity, 6084, 5430], [generatedAdmission, 3276, 1792], [functionQuoting, 3573, 2820], [generatedPrepare, 685, 256], [expressionDefaults, 738, 476], [columnBoundaries, 1017, 610], [columnOrder, 63, 42], [columnUsage, 18, 12], [functionDiagnostics, 702, 442], [checkPrerequisites, 702, 224], [clockPrecision, 1566, 490], [columnClockGrammar, 756, 396], [columnClockRoles, 504, 204], [columnClockBounds, 540, 120], [fractionalClockGrammar, 2376, 1584], [fractionalClockLiteralBoundaries, 243, 144], [clockPrecisionByte, 2313, 1856], [clockTimeWidth, 1458, 698], [timeCastValues, 3756, 3592]] as const) test('M5.10: admission preserves primary errors, condition histories, headers and effects: ' + reference.schema, async () => {
+for (const [reference, total, matched] of [[literalAdmission, 1623, 1521], [conditionHistories, 198, 192], [castDatatype, 480, 398], [castModifiers, 16648, 16274], [warningAdmission, 325, 248], [modifierDeprecation, 1008, 764], [keywordIdentity, 150, 146], [keywordSelectors, 1850, 1670], [shorthandWarnings, 552, 396], [schemaPresence, 378, 189], [functionIdentity, 6084, 5430], [generatedAdmission, 3276, 1792], [functionQuoting, 3573, 2820], [generatedPrepare, 685, 256], [expressionDefaults, 738, 476], [columnBoundaries, 1017, 610], [columnOrder, 63, 42], [columnUsage, 18, 12], [functionDiagnostics, 702, 442], [checkPrerequisites, 702, 224], [clockPrecision, 1566, 490], [columnClockGrammar, 756, 396], [columnClockRoles, 504, 204], [columnClockBounds, 540, 120], [fractionalClockGrammar, 2376, 1584], [fractionalClockLiteralBoundaries, 243, 144], [clockPrecisionByte, 2313, 1856], [clockTimeWidth, 1458, 698], [timeCastValues, 3756, 3640], [temporalCastAdmission, 3228, 2752]] as const) test('M5.10: admission preserves primary errors, condition histories, headers and effects: ' + reference.schema, async () => {
   const host = process.env.MYSQL_REFERENCE_HOST
   const db = host === undefined ? await MySQL.open(':memory:', { multipleStatements: true }) : undefined
   const transport = db === undefined

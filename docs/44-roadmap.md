@@ -884,16 +884,50 @@ Core/facade/parser measure 334,266/334,193/45,613 B gzipped; raw core is 1,261 B
 smaller than 244ce57, whose eleven required CI jobs pass. M5.10 stays partial;
 totals remain 144/190 and M5 42/53.
 
-**Next bounded slice:** repair CAST temporal precision 1426 admission after closed
-target syntax and before namespace lookup, through the existing grammar/admission
-owner. Do not approximate its phase in value evaluation. Prepared temporal metadata,
-JSON extraction and consumer-specific temporal range warnings remain open, as do
-string nullability, merged temporal charset and ANSI SHOW CREATE. Then address
-context-dependent clock precision precedence through existing compiler/value-generator
-owners, retaining missing table/column priority and DEFAULT/generated/CHECK timing.
-SYSDATE constructor validation and enclosing diagnostic labels remain open;
-RANDOM_BYTES evaluation precedes CHECK permission repairs. Continue bounded
-function work before M5.47, M5.49, M5.50 and browser work.
+**Temporal CAST admission, verified (2026-10-28):** TIME/DATETIME CAST and
+CONVERT now refuse precision above six after their outer closing parenthesis,
+before namespace lookup. Earlier conditions survive, later parsing stops, and an
+earlier DOUBLE overflow remains primary with 1426 appended. FSP tokens above NUM31
+are syntax errors at the token; constructor precision does not share clock byte
+narrowing. Ordinary declaration validation retains its own phase and labels.
+The public modifier-only datatype API is unchanged. An internal CAST reader owns
+target eligibility and SIGNED/UNSIGNED; a direct contract regression protects both
+entry points. Native call branches share closing/publication while retaining their
+argument grammars. Predicate spelling and binary-word membership share their actual
+owners; full-text modifiers come from successfully consumed canonical keywords.
+SUBSTRING/SUBSTR/MID now read comma/FROM arguments sequentially instead of scanning
+the rest of the call. This repairs malformed-token positions and MID FROM while
+preserving quoted/spaced roles and FROM-form OVER refusal. Empty/comma-window
+admission and result metadata remain open.
+A fixed-clock 3,228-command capture covers query/execute/PREPARE across seven modes,
+including strict/truncation, IGNORE_SPACE and ANSI_QUOTES. Complete matches improve
+961 to 2,752 with every matching component, condition, error attribute, field
+attribute and effect retained. Typed Date capture preserves client value identity;
+its legacy projection reproduces every prior observation. The prior TIME capture
+strengthens 3,592 to 3,640 with all native pools unchanged. Thirty captures enforce
+45,786/56,810 complete commands and 177,517 conditions; 11,024 outcomes remain open.
+Fresh Docker --reference passes 1,511 main tests, four latency tests, typecheck,
+lint, all nine unchanged caps, package/typed smoke, the real client and all seven
+pinned corpora. Both focused regressions, all 3,228 native replays, one million
+seeded parser inputs and 20,000 seeded executor statements pass. The 5ffffe0
+baseline fails the new admission regression. Repeated actual census records
+17,529 ASTs plus one newly matched annotated native 1426 refusal, preserving
+coverage. The entire official result remains byte-identical with all 37 shared
+passes. Frozen-source proof covers 468 test files/fixtures and 206 runtime sources.
+Core/facade/parser measure 334,292/334,211/45,617 B gzipped; raw core is 754 B
+smaller than 5ffffe0, whose eleven required CI jobs pass. M5.10 stays partial;
+totals remain 144/190 and M5 42/53.
+
+**Next bounded slice:** audit and repair SUBSTRING-family constructor arity and
+OVER admission at its existing lexical-function boundary, preserving quoted/spaced
+roles, namespace precedence and earlier/later conditions. Prepared temporal metadata,
+JSON extraction and consumer-specific range warnings remain open, as do temporal
+declaration phase, string nullability, merged temporal charset and ANSI SHOW CREATE.
+Then address context-dependent clock precision precedence through existing compiler
+and value-generator owners, retaining missing table/column priority and
+DEFAULT/generated/CHECK timing. SYSDATE constructor validation and enclosing labels
+remain open; RANDOM_BYTES evaluation precedes CHECK permission repairs. Continue
+bounded function work before M5.47, M5.49, M5.50 and browser work.
 
 Keep function, keyword and value namespaces distinct. Charset-value validation,
 separate event behavior, valid-AST warnings/limits, later binding failures,

@@ -49,7 +49,7 @@ interface Census {
 const census = (): Census => JSON.parse(readFileSync(FIXTURE, 'utf8')) as Census
 
 test('native-annotated non-syntax admission refusals remain visible in the census', () => {
-  assert.deepEqual(census().annotatedAdmissionRefusals, { ER_ILLEGAL_VALUE_FOR_TYPE: 2, ER_UNKNOWN_COLLATION: 2 })
+  assert.deepEqual(census().annotatedAdmissionRefusals, { ER_ILLEGAL_VALUE_FOR_TYPE: 2, ER_TOO_BIG_PRECISION: 1, ER_UNKNOWN_COLLATION: 2 })
 })
 
 test('M3.11: the census is committed and says its numbers out loud', () => {

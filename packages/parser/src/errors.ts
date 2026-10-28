@@ -111,6 +111,14 @@ export function illegalDouble(text: string): ParseError {
   })
 }
 
+/** 1426: a completed temporal CAST exceeds its fractional precision limit. */
+export function castPrecisionError(precision: number): ParseError {
+  return new ParseError('ER_TOO_BIG_PRECISION', `Too-big precision ${precision} specified for 'CAST'. Maximum is 6.`, {
+    errno: 1426,
+    sqlState: '42000',
+  })
+}
+
 /**
  * An expression nested deeper than this parser will recurse.
  *

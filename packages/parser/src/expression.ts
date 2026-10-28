@@ -21,7 +21,7 @@ import { RESERVED } from './keywords.ts'
 import { TOKEN, asciiWord, keywordText } from './tokens.ts'
 import { NODE, LITERAL, type Expression, type LiteralType } from './ast.ts'
 import { lex, type LexOptions } from './lexer.ts'
-import { hexBytes, parseDataType, type DataType } from './data-type.ts'
+import { hexBytes, parseCastType } from './data-type.ts'
 import {
   atQueryContinuation,
   atQueryStart,
@@ -30,9 +30,8 @@ import {
   parseQueryFrom,
   parseWindowSpec,
 } from './query.ts'
-import { FIELD_TYPE } from '@myjs/bytes'
 import { defaultCollationOf } from '@myjs/charsets'
-import { illegalDouble } from './errors.ts'
+import { illegalDouble, castPrecisionError } from './errors.ts'
 import { charsetName, collationName } from './names.ts'
 import { NO_SQL_MODE, type SqlMode } from './sql-mode.ts'
 
@@ -67,9 +66,6 @@ const LEVELS: readonly (readonly string[])[] = [
 const COMPARISON_LEVEL = 4
 /** Where `NOT` sits by default: just below comparison. */
 const NOT_LEVEL = 4
-
-/** Words that are operators rather than identifiers. */
-const WORD_OPERATORS = new Set(['AND', 'OR', 'XOR', 'DIV', 'MOD', 'NOT', 'IS', 'BETWEEN', 'IN', 'LIKE', 'REGEXP', 'RLIKE'])
 
 /** Keywords that type the string literal after them — `DATE'2019-10-01'`. */
 const TEMPORAL_KEYWORDS = new Set(['DATE', 'TIME', 'TIMESTAMP'])
@@ -141,12 +137,6 @@ export const INTERVAL_UNITS: ReadonlySet<string> = new Set([
   'HOUR_MINUTE', 'DAY_MICROSECOND', 'DAY_SECOND', 'DAY_MINUTE', 'DAY_HOUR', 'YEAR_MONTH',
 ])
 
-/** The types a `CAST` may name, by their canonical names. */
-const CAST_TYPES = new Set([
-  'BINARY', 'CHAR', 'DATE', 'DATETIME', 'TIME', 'DECIMAL', 'DOUBLE', 'FLOAT', 'JSON', 'YEAR',
-  'GEOMETRY', 'POINT', 'LINESTRING', 'POLYGON', 'MULTIPOINT', 'MULTILINESTRING', 'MULTIPOLYGON', 'GEOMETRYCOLLECTION',
-])
-
 export interface ParseExpressionOptions extends LexOptions {
   readonly sqlMode?: SqlMode
 }
@@ -210,9 +200,8 @@ class ExpressionParser {
     const ops = LEVELS[level] as readonly string[]
     if (t.kind === TOKEN.OPERATOR) return ops.includes(t.text) ? t.text : null
     const word = keywordText(t)
-    // A word operator must be a word MySQL treats as one; otherwise `a b` is
-    // two expressions, not an application of an operator named `b`.
-    if (WORD_OPERATORS.has(word) && ops.includes(word)) return word
+    // The precedence table owns word-operator membership; quoted names fail keywordText.
+    if (ops.includes(word)) return word
     return null
   }
 
@@ -288,12 +277,10 @@ class ExpressionParser {
 
       if (cursor.takeWord('IS')) {
         const negated = cursor.takeWord('NOT')
-        let op = 'IS'
-        if (cursor.takeWord('NULL')) op = negated ? 'IS NOT NULL' : 'IS NULL'
-        else if (cursor.takeWord('TRUE')) op = negated ? 'IS NOT TRUE' : 'IS TRUE'
-        else if (cursor.takeWord('FALSE')) op = negated ? 'IS NOT FALSE' : 'IS FALSE'
-        else if (cursor.takeWord('UNKNOWN')) op = negated ? 'IS NOT UNKNOWN' : 'IS UNKNOWN'
-        else cursor.fail()
+        const word = keywordText(cursor.peek())
+        if (!['NULL', 'TRUE', 'FALSE', 'UNKNOWN'].includes(word)) cursor.fail()
+        cursor.skip()
+        const op = negated ? `IS NOT ${word}` : `IS ${word}`
         left = { kind: NODE.UNARY, op, operand: left, at }
         continue
       }
@@ -301,30 +288,32 @@ class ExpressionParser {
       // `NOT` here is the start of `NOT BETWEEN` / `NOT IN` / `NOT LIKE` /
       // `NOT REGEXP`, and nothing else — so it is only consumed once one of
       // those follows.
-      const negated =
-        cursor.atWord('NOT') &&
-        (cursor.atWord('BETWEEN', 1) || cursor.atWord('IN', 1) || cursor.atWord('LIKE', 1) || cursor.atWord('REGEXP', 1) || cursor.atWord('RLIKE', 1))
+      const negated = cursor.atWord('NOT') && ['BETWEEN', 'IN', 'LIKE', 'REGEXP', 'RLIKE'].includes(keywordText(cursor.peek(1)))
       if (negated) cursor.skip()
+      const word = keywordText(cursor.peek())
+      const op = (negated ? 'NOT ' : '') + (word === 'RLIKE' ? 'REGEXP' : word)
 
-      if (cursor.takeWord('BETWEEN')) {
+      if (word === 'BETWEEN') {
+        cursor.skip()
         // The upper bound is parsed *above* the AND level, or the `AND` that
         // separates the bounds would be read as a conjunction and swallow the
         // rest of the expression.
         const lower = this.#binary(COMPARISON_LEVEL + 1)
         cursor.expectWord('AND')
         const upper = this.#binary(COMPARISON_LEVEL + 1)
-        left = { kind: NODE.BINARY, op: negated ? 'NOT BETWEEN' : 'BETWEEN', left, right: lower, extra: upper, at }
+        left = { kind: NODE.BINARY, op, left, right: lower, extra: upper, at }
         continue
       }
 
-      if (cursor.takeWord('IN')) {
+      if (word === 'IN') {
+        cursor.skip()
         // `IN (SELECT …)` is a membership test against a subquery's rows, not
         // a list holding one scalar subquery — which is what `IN ((SELECT …))`
         // is. The two are told apart by the token after the parenthesis.
         if (cursor.atOp('(') && atQueryStart(cursor, 1)) {
           const open = cursor.peek().start
           const right = { kind: NODE.SUBQUERY, query: this.#parenthesisedQuery(), at: open } as const
-          left = { kind: NODE.BINARY, op: negated ? 'NOT IN' : 'IN', left, right, at }
+          left = { kind: NODE.BINARY, op, left, right, at }
           continue
         }
         // At least one item: `a IN ()` is a syntax error.
@@ -335,7 +324,7 @@ class ExpressionParser {
         cursor.expectOp(')')
         left = {
           kind: NODE.BINARY,
-          op: negated ? 'NOT IN' : 'IN',
+          op,
           left,
           right: { kind: NODE.ROW, items, at },
           at,
@@ -343,19 +332,20 @@ class ExpressionParser {
         continue
       }
 
-      if (cursor.takeWord('LIKE')) {
+      if (word === 'LIKE') {
+        cursor.skip()
         const pattern = this.#binary(COMPARISON_LEVEL + 1)
-        const node = { kind: NODE.BINARY, op: negated ? 'NOT LIKE' : 'LIKE', left, right: pattern, at } as const
+        const node = { kind: NODE.BINARY, op, left, right: pattern, at } as const
         left = cursor.takeWord('ESCAPE')
           ? { ...node, extra: this.#binary(COMPARISON_LEVEL + 1) }
           : node
         continue
       }
 
-      if (cursor.atWord('REGEXP') || cursor.atWord('RLIKE')) {
+      if (word === 'REGEXP' || word === 'RLIKE') {
         cursor.skip()
         const pattern = this.#binary(COMPARISON_LEVEL + 1)
-        left = { kind: NODE.BINARY, op: negated ? 'NOT REGEXP' : 'REGEXP', left, right: pattern, at }
+        left = { kind: NODE.BINARY, op, left, right: pattern, at }
         continue
       }
 
@@ -651,6 +641,7 @@ class ExpressionParser {
     // `SUM(ALL a)` is `SUM(a)`: `ALL` is the default an aggregate may spell out.
     if (aggregate && !distinct) cursor.takeWord('ALL')
     const args: Expression[] = []
+    let substringFrom = false
     if (upper === 'COUNT' && !distinct && cursor.takeOp('*')) {
       // `COUNT(*)` — the only place a bare star is an argument.
       args.push({ kind: NODE.COLUMN, parts: ['*'], at: cursor.peek().start })
@@ -659,6 +650,12 @@ class ExpressionParser {
         // LAG's and LEAD's distance is a number as written or a `?`, nothing signed (8.4.11: `LAG(v, -1)` is 1064 at the `-`).
         if (args.length === 1 && (upper === 'LAG' || upper === 'LEAD') && cursor.peek().kind !== TOKEN.NUMBER && cursor.peek().kind !== TOKEN.PLACEHOLDER) cursor.fail()
         args.push(this.#binary(0))
+        if (args.length === 1 && ['SUBSTRING', 'SUBSTR', 'MID'].includes(upper) && cursor.takeWord('FROM')) {
+          substringFrom = true
+          args.push(this.#binary(0))
+          if (cursor.takeWord('FOR')) args.push(this.#binary(0))
+          break
+        }
       } while (cursor.takeOp(','))
     }
     // `GROUP_CONCAT` is the one aggregate with clauses inside its parentheses,
@@ -672,7 +669,7 @@ class ExpressionParser {
     }
     if (upper === 'CHAR' && cursor.takeWord('USING')) using = charsetName(cursor).toLowerCase()
     cursor.expectOp(')')
-    const over = LEXICAL_FUNCTIONS.has(upper) ? this.#over() : undefined
+    const over = !substringFrom && LEXICAL_FUNCTIONS.has(upper) ? this.#over() : undefined
     return {
       kind: NODE.CALL,
       name: name.text,
@@ -715,51 +712,48 @@ class ExpressionParser {
       const args = fractionalClockArguments(cursor)
       return { kind: NODE.CALL, name: t.text, args, ...opt('over', this.#over()), at: t.start }
     }
+    let args: Expression[]
     switch (upper) {
-      case 'CAST': {
+      case 'CAST':
+      case 'CONVERT': {
+        const convert = upper === 'CONVERT'
         cursor.at += 2
         const expr = this.#binary(0)
+        if (convert && cursor.takeWord('USING')) {
+          const charset = charsetName(cursor).toLowerCase()
+          cursor.expectOp(')')
+          return { kind: NODE.CONVERT, expr, charset, at: t.start }
+        }
         let timeZone: string | undefined
-        if (cursor.takeWord('AT')) {
+        if (!convert && cursor.takeWord('AT')) {
           cursor.expectWord('TIME')
           cursor.expectWord('ZONE')
           cursor.takeWord('INTERVAL')
           timeZone = cursor.expectString(true)
         }
-        cursor.expectWord('AS')
-        const type = this.#castType()
-        const array = cursor.takeWord('ARRAY')
+        if (convert) cursor.expectOp(',')
+        else cursor.expectWord('AS')
+        const type = parseCastType(cursor, this.#mode)
+        const array = !convert && cursor.takeWord('ARRAY')
         cursor.expectOp(')')
+        // Native CAST construction stops parsing here, retaining earlier conditions.
+        if ((type.name === 'TIME' || type.name === 'DATETIME') && (type.length ?? 0) > 6) throw castPrecisionError(type.length!)
         return { kind: NODE.CAST, expr, type, ...flag('array', array), ...opt('timeZone', timeZone), at: t.start }
-      }
-      case 'CONVERT': {
-        cursor.at += 2
-        const expr = this.#binary(0)
-        if (cursor.takeWord('USING')) {
-          const charset = charsetName(cursor).toLowerCase()
-          cursor.expectOp(')')
-          return { kind: NODE.CONVERT, expr, charset, at: t.start }
-        }
-        cursor.expectOp(',')
-        const type = this.#castType()
-        cursor.expectOp(')')
-        return { kind: NODE.CAST, expr, type, at: t.start }
       }
       case 'EXTRACT': {
         cursor.at += 2
         const unit = this.#unitKeyword()
         cursor.expectWord('FROM')
         const expr = this.#binary(0)
-        cursor.expectOp(')')
-        return { kind: NODE.CALL, name: t.text, args: [unit, expr], at: t.start }
+        args = [unit, expr]
+        break
       }
       case 'TIMESTAMPADD':
       case 'TIMESTAMPDIFF': {
         cursor.at += 2
-        const args: Expression[] = [this.#unitKeyword(true)]
+        args = [this.#unitKeyword(true)]
         while (cursor.takeOp(',')) args.push(this.#binary(0))
-        cursor.expectOp(')')
-        return { kind: NODE.CALL, name: t.text, args, at: t.start }
+        break
       }
       case 'GET_FORMAT': {
         cursor.at += 2
@@ -768,9 +762,8 @@ class ExpressionParser {
         if (!['DATE', 'TIME', 'DATETIME', 'TIMESTAMP'].includes(word)) cursor.fail()
         cursor.skip()
         cursor.expectOp(',')
-        const args: Expression[] = [{ kind: NODE.KEYWORD, word, at: k.start }, this.#binary(0)]
-        cursor.expectOp(')')
-        return { kind: NODE.CALL, name: t.text, args, at: t.start }
+        args = [{ kind: NODE.KEYWORD, word, at: k.start }, this.#binary(0)]
+        break
       }
       case 'POSITION': {
         // `POSITION(a IN b)`: `a` is read above the comparison level, or its
@@ -779,25 +772,14 @@ class ExpressionParser {
         const needle = this.#binary(COMPARISON_LEVEL + 1)
         cursor.expectWord('IN')
         const haystack = this.#binary(0)
-        cursor.expectOp(')')
-        return { kind: NODE.CALL, name: t.text, args: [needle, haystack], at: t.start }
-      }
-      case 'SUBSTRING':
-      case 'SUBSTR': {
-        if (!this.#substringHasFrom()) return null
-        cursor.at += 2
-        const args: Expression[] = [this.#binary(0)]
-        cursor.expectWord('FROM')
-        args.push(this.#binary(0))
-        if (cursor.takeWord('FOR')) args.push(this.#binary(0))
-        cursor.expectOp(')')
-        return { kind: NODE.CALL, name: t.text, args, at: t.start }
+        args = [needle, haystack]
+        break
       }
       case 'TRIM': {
         // `TRIM(s)`, `TRIM(r FROM s)`, `TRIM(LEADING [r] FROM s)`. The side is
         // a keyword argument first; the string being trimmed is always last.
         cursor.at += 2
-        const args: Expression[] = []
+        args = []
         const side = cursor.peek()
         if (cursor.atWord('LEADING') || cursor.atWord('TRAILING') || cursor.atWord('BOTH')) {
           cursor.skip()
@@ -809,8 +791,7 @@ class ExpressionParser {
           args.push(this.#binary(0))
           if (cursor.takeWord('FROM')) args.push(this.#binary(0))
         }
-        cursor.expectOp(')')
-        return { kind: NODE.CALL, name: t.text, args, at: t.start }
+        break
       }
       case 'WEIGHT_STRING': {
         // `WEIGHT_STRING(s AS CHAR(n))` pads or truncates `s` to `n`
@@ -819,7 +800,7 @@ class ExpressionParser {
         // one — it changes the length the weights are computed over, not the
         // value's type.
         cursor.at += 2
-        const args: Expression[] = [this.#binary(0)]
+        args = [this.#binary(0)]
         if (cursor.takeWord('AS')) {
           const k = cursor.peek()
           if (!cursor.atWord('CHAR') && !cursor.atWord('BINARY')) cursor.fail()
@@ -831,27 +812,13 @@ class ExpressionParser {
           cursor.expectOp(')')
         }
         while (cursor.takeOp(',')) args.push(this.#binary(0))
-        cursor.expectOp(')')
-        return { kind: NODE.CALL, name: t.text, args, at: t.start }
+        break
       }
       default:
         return null
     }
-  }
-
-  /** Whether `SUBSTRING(` uses the `FROM` form, by finding `FROM` before the closing paren. */
-  #substringHasFrom(): boolean {
-    const cursor = this.#c
-    // The special-call dispatcher already proved the opening parenthesis.
-    let depth = 1
-    for (let i = 2; ; i++) {
-      const t = cursor.peek(i)
-      if (t.kind === TOKEN.EOF) return false
-      if (t.kind === TOKEN.OPERATOR && t.text === '(') depth++
-      else if (t.kind === TOKEN.OPERATOR && t.text === ')') {
-        if (--depth === 0) return false
-      } else if (depth === 1 && keywordText(t) === 'FROM') return true
-    }
+    cursor.expectOp(')')
+    return { kind: NODE.CALL, name: t.text, args, at: t.start }
   }
 
   /**
@@ -867,28 +834,6 @@ class ExpressionParser {
     if (!INTERVAL_UNITS.has(unit)) cursor.fail()
     cursor.skip()
     return { kind: NODE.KEYWORD, word, at: u.start }
-  }
-
-  /**
-   * A `CAST` target. Narrower than a column type — `CAST(x AS INT)` is a
-   * syntax error — and with two targets a column cannot have: `SIGNED` and
-   * `UNSIGNED`, each optionally followed by `INT` or `INTEGER`.
-   */
-  #castType(): DataType {
-    const cursor = this.#c
-    const t = cursor.peek()
-    if (cursor.takeWord('SIGNED') || cursor.takeWord('UNSIGNED')) {
-      const name = t.text.toUpperCase()
-      cursor.takeWord('INTEGER') || cursor.takeWord('INT')
-      return { name, code: FIELD_TYPE.LONGLONG, at: t.start }
-    }
-    const type = parseDataType(cursor, this.#mode, false)
-    if (!CAST_TYPES.has(type.name)) cursor.fail()
-    // `FLOAT(p)` is a precision and becomes FLOAT or DOUBLE; `FLOAT(m,d)`,
-    // `DOUBLE(m)` and `REAL(m)` are column syntax a `CAST` refuses — the
-    // corpus's `cast.test` marks all five spellings ER_PARSE_ERROR.
-    if ((type.name === 'FLOAT' || type.name === 'DOUBLE') && type.length !== undefined) cursor.fail()
-    return type
   }
 
   /** `MATCH (a, b) AGAINST ('x' [IN NATURAL LANGUAGE MODE | IN BOOLEAN MODE] [WITH QUERY EXPANSION])`. */
@@ -915,11 +860,10 @@ class ExpressionParser {
     cursor.expectWord('AGAINST')
     cursor.expectOp('(')
     const against = this.#binary(COMPARISON_LEVEL + 1)
-    let modifier: string | undefined
-    if (cursor.takeWords('IN', 'NATURAL', 'LANGUAGE', 'MODE')) {
-      modifier = cursor.takeWords('WITH', 'QUERY', 'EXPANSION') ? 'IN NATURAL LANGUAGE MODE WITH QUERY EXPANSION' : 'IN NATURAL LANGUAGE MODE'
-    } else if (cursor.takeWords('IN', 'BOOLEAN', 'MODE')) modifier = 'IN BOOLEAN MODE'
-    else if (cursor.takeWords('WITH', 'QUERY', 'EXPANSION')) modifier = 'WITH QUERY EXPANSION'
+    const modeStart = cursor.at
+    if (cursor.takeWords('IN', 'NATURAL', 'LANGUAGE', 'MODE')) cursor.takeWords('WITH', 'QUERY', 'EXPANSION')
+    else if (!cursor.takeWords('IN', 'BOOLEAN', 'MODE')) cursor.takeWords('WITH', 'QUERY', 'EXPANSION')
+    const modifier = cursor.at === modeStart ? undefined : cursor.tokens.slice(modeStart, cursor.at).map(keywordText).join(' ')
     cursor.expectOp(')')
     return { kind: NODE.MATCH, columns, against, ...opt('modifier', modifier), at: t.start }
   }

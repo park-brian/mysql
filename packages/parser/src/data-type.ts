@@ -70,6 +70,12 @@ const SHAPE = {
   NONE: 'none',
 } as const
 
+/** The types a `CAST` may name, by their canonical names. */
+const CAST_TYPES = new Set([
+  'BINARY', 'CHAR', 'DATE', 'DATETIME', 'TIME', 'DECIMAL', 'DOUBLE', 'FLOAT', 'JSON', 'YEAR',
+  'GEOMETRY', 'POINT', 'LINESTRING', 'POLYGON', 'MULTIPOINT', 'MULTILINESTRING', 'MULTIPOLYGON', 'GEOMETRYCOLLECTION',
+])
+
 type Shape = (typeof SHAPE)[keyof typeof SHAPE]
 
 interface TypeSpec {
@@ -249,6 +255,20 @@ export function atDataType(c: Cursor): boolean {
   return name !== '' && (TYPES[name] !== undefined || MULTI_WORD.some((words) => c.atWords(...words)))
 }
 
+/** Internal CAST target grammar; the public datatype reader keeps modifier-only mode. */
+export function parseCastType(c: Cursor, mode: SqlMode): DataType {
+  const t = c.peek()
+  const at = t.start
+  if (c.takeWord('SIGNED') || c.takeWord('UNSIGNED')) {
+    const name = t.text.toUpperCase()
+    c.takeWord('INTEGER') || c.takeWord('INT')
+    return { name, code: FIELD_TYPE.LONGLONG, at }
+  }
+  const type = parseDataType(c, mode, false)
+  if (!CAST_TYPES.has(type.name) || ((type.name === 'FLOAT' || type.name === 'DOUBLE') && type.length !== undefined)) c.fail()
+  return type
+}
+
 /**
  * Parse a column type and everything that belongs to it.
  *
@@ -302,7 +322,7 @@ export function parseDataType(c: Cursor, mode: SqlMode, column = true): DataType
     case SHAPE.WIDTH:
     case SHAPE.TEXT:
     case SHAPE.BYTES:
-      [length] = numberList(c, 1)
+      [length] = numberList(c, 1, spec.shape === SHAPE.FSP ? 2147483647 : undefined)
       break
     case SHAPE.NONE:
       break
@@ -424,11 +444,11 @@ function typeCharset(c: Cursor): string | undefined {
 }
 
 /** `(1)` or `(10, 2)` — up to `max` integers, or nothing at all. */
-function numberList(c: Cursor, max: number): number[] {
+function numberList(c: Cursor, max: number, maxValue?: number): number[] {
   if (!c.takeOp('(')) return []
   const out: number[] = []
   do {
-    out.push(Number(unsignedValue(c)))
+    out.push(Number(unsignedValue(c, maxValue)))
   } while (c.takeOp(','))
   c.expectOp(')')
   if (out.length > max) c.fail()

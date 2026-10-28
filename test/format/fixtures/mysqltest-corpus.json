@@ -131,15 +131,15 @@
     "statements": 17589,
     "lexed": 17588,
     "refusedAtLex": 1,
-    "parsed": 17530,
+    "parsed": 17529,
     "skippedWithVariables": 27,
     "directives": 13031,
     "unreadLines": 69,
     "unreadCharsets": [
       "binary"
     ],
-    "expectedToFail": 59,
-    "expectedToFailAndDid": 58
+    "expectedToFail": 60,
+    "expectedToFailAndDid": 59
   },
   "byKeyword": {
     "SELECT": 6158,
@@ -177,7 +177,7 @@
     "RENAME": 1
   },
   "parsedByKeyword": {
-    "SELECT": 6125,
+    "SELECT": 6124,
     "INSERT": 3304,
     "CREATE": 2659,
     "DROP": 1946,
@@ -218,6 +218,7 @@
   "parseFailuresByKeyword": {},
   "annotatedAdmissionRefusals": {
     "ER_ILLEGAL_VALUE_FOR_TYPE": 2,
+    "ER_TOO_BIG_PRECISION": 1,
     "ER_UNKNOWN_COLLATION": 2
   },
   "wronglyAcceptedByKeyword": {
