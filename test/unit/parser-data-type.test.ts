@@ -31,6 +31,30 @@ test('ZEROFILL always supplies the signedness that CAST refuses, including repea
   }
 })
 
+test('CAST character modifiers are bounded independently of column modifiers', () => {
+  for (const text of ['CHAR BINARY', 'CHAR ASCII', 'CHAR BYTE', 'CHAR CHARACTER SET utf8mb4 BINARY', 'CHAR BINARY CHARSET utf8mb4']) {
+    assert.doesNotThrow(() => parseExpression("CAST('x' AS " + text + ')'))
+    assert.doesNotThrow(() => parseExpression("CONVERT('x', " + text + ')'))
+  }
+  for (const text of ['CHAR BINARY BINARY', 'CHAR ASCII ASCII', 'CHAR BYTE BINARY', 'CHAR BINARY CHARACTER SET utf8mb4 BINARY', 'CHAR CHARACTER SET utf8mb4 CHARACTER SET unknown', 'NCHAR BINARY', 'NCHAR CHARACTER SET unknown', 'DECIMAL SIGNED', 'FLOAT UNSIGNED', 'BINARY BYTE']) {
+    for (const sql of ["CAST('x' AS " + text + ')', "CONVERT('x', " + text + ')']) assert.throws(() => parseExpression(sql), { errno: 1064 })
+  }
+  const byte = parseDataType(new Cursor(lex('CHAR(2) BYTE')), NO_SQL_MODE, false)
+  assert.equal(byte.charset, 'binary')
+  assert.equal(byte.binary, undefined)
+  assert.equal(parseDataType(new Cursor(lex('CHAR BYTE')), NO_SQL_MODE, false).name, 'BINARY')
+  const column = new Cursor(lex('CHAR ASCII ASCII BINARY BINARY'))
+  assert.equal(parseDataType(column, NO_SQL_MODE).binary, true)
+  assert.equal(column.atEnd(), true)
+})
+
+test('modifier refusal keeps preceding warnings and stops before later charset lookup', () => {
+  for (const expression of ["CAST('x' AS NCHAR CHARACTER SET unknown)", "CONVERT('x', NCHAR BINARY)"]) {
+    assert.throws(() => parseExpression(expression), (error: unknown) => error instanceof ParseError && error.errno === 1064 && String(error.conditions?.map(c => c.errno)) === '3720,1064')
+  }
+  assert.throws(() => parseStatement("SELECT 1 COLLATE earlier,CAST('x' AS CHAR CHARACTER SET utf8mb4 CHARACTER SET unknown),1e309"), (error: unknown) => error instanceof ParseError && error.errno === 1273 && String(error.conditions?.map(c => c.errno)) === '1273,1064')
+})
+
 test('adjacent literal reading is explicit, while ENUM preserves text and byte members', () => {
   const single = new Cursor(lex("'a' /* separator */ 'b'"))
   assert.equal(single.expectString(), 'a')

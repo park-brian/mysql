@@ -1592,8 +1592,10 @@ totals. Cursor scopes release their history and nesting counters after failures.
 Admission fixtures protect individual matching conditions and primary-error
 attributes even when a whole outcome remains open. The current parser-warning
 repair retains NCHAR warning 3720 on checked grammar failures; valid ASTs keep
-their existing publisher. Docker verification is complete; bounded modifier
-tightening is next. A warning-filled 1,024-condition prefix can accompany ERR with zero
+their existing publisher. Bounded CAST/CONVERT modifier admission now passes
+Docker verification: character targets take one charset clause and at most one
+BINARY, while national/numeric targets leave column modifiers for syntax refusal.
+Default column readers retain their grammar. A warning-filled 1,024-condition prefix can accompany ERR with zero
 retained errors. Valid-AST warning limits and later binding failures remain open.
 CAST/CONVERT targets leave internal COLLATE to the syntax boundary while column
 datatype readers retain it. Cursor string reading concatenates adjacent literals

@@ -22,7 +22,7 @@ function capturedValue(value: unknown): unknown {
   return value
 }
 
-for (const [reference, total, matched] of [[literalAdmission, 1623, 1521], [conditionHistories, 198, 192], [castDatatype, 480, 302], [castModifiers, 16648, 9220], [warningAdmission, 325, 248]] as const) test('M5.10: admission preserves primary errors, condition histories, headers and effects: ' + reference.schema, async () => {
+for (const [reference, total, matched] of [[literalAdmission, 1623, 1521], [conditionHistories, 198, 192], [castDatatype, 480, 398], [castModifiers, 16648, 15710], [warningAdmission, 325, 248]] as const) test('M5.10: admission preserves primary errors, condition histories, headers and effects: ' + reference.schema, async () => {
   const host = process.env.MYSQL_REFERENCE_HOST
   const db = host === undefined ? await MySQL.open(':memory:', { multipleStatements: true }) : undefined
   const transport = db === undefined

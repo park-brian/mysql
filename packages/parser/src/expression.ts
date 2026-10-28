@@ -889,13 +889,13 @@ class ExpressionParser {
   #castType(): DataType {
     const cursor = this.#c
     const t = cursor.peek()
-    if (cursor.atWord('SIGNED') || cursor.atWord('UNSIGNED')) {
-      const name = cursor.take().text.toUpperCase()
+    if (cursor.takeWord('SIGNED') || cursor.takeWord('UNSIGNED')) {
+      const name = t.text.toUpperCase()
       cursor.takeWord('INTEGER') || cursor.takeWord('INT')
       return { name, code: FIELD_TYPE.LONGLONG, at: t.start }
     }
     const type = parseDataType(cursor, this.#mode, false)
-    if (!CAST_TYPES.has(type.name) || type.unsigned !== undefined) cursor.fail()
+    if (!CAST_TYPES.has(type.name)) cursor.fail()
     // `FLOAT(p)` is a precision and becomes FLOAT or DOUBLE; `FLOAT(m,d)`,
     // `DOUBLE(m)` and `REAL(m)` are column syntax a `CAST` refuses — the
     // corpus's `cast.test` marks all five spellings ER_PARSE_ERROR.

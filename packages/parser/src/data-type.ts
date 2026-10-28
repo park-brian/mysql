@@ -254,7 +254,7 @@ export function atDataType(c: Cursor): boolean {
  * Parse a column type and everything that belongs to it.
  *
  * Modifiers such as `UNSIGNED`, `CHARACTER SET`, `COLLATE` and `BINARY` belong
- * on the type node. CAST targets leave COLLATE to their closing-delimiter check.
+ * on the type node. CAST uses its narrower modifier grammar in the same reader.
  */
 export function parseDataType(c: Cursor, mode: SqlMode, column = true): DataType {
   const at = c.peek().start
@@ -317,49 +317,56 @@ export function parseDataType(c: Cursor, mode: SqlMode, column = true): DataType
   let collation: string | undefined
   let binaryModifier = false
 
-  // Collect modifiers until the next grammar token. Some ordering restrictions
-  // remain open in the native capture. `ZEROFILL` implies `UNSIGNED`, a real rule
-  // and not a convenience: `INT(4) ZEROFILL` is an unsigned column.
-  for (;;) {
-    if (c.takeWord('UNSIGNED')) {
-      unsigned = true
-      continue
-    }
-    if (c.takeWord('SIGNED')) {
-      unsigned = false
-      continue
-    }
-    if (c.takeWord('ZEROFILL')) {
-      zerofill = true
-      unsigned = true
-      continue
-    }
-    if (spec.shape === SHAPE.TEXT || spec.shape === SHAPE.VALUES) {
-      // `BINARY` here is the *binary collation of the charset*, not the BINARY
-      // type: `VARCHAR(10) BINARY` is a VARCHAR that compares byte-wise. A
-      // parser that read it as a type would produce a column of the wrong
-      // class entirely.
-      // `BYTE` is `BINARY`'s older spelling in this position, and MySQL still
-      // accepts it: `ENUM('a','b') BYTE`.
-      if (c.takeWord('BINARY') || c.takeWord('BYTE')) {
-        binaryModifier = true
+  if (column) {
+    // Collect modifiers until the next grammar token. Some ordering restrictions
+    // remain open in the native capture. `ZEROFILL` implies `UNSIGNED`, a real rule
+    // and not a convenience: `INT(4) ZEROFILL` is an unsigned column.
+    for (;;) {
+      if (c.takeWord('UNSIGNED')) {
+        unsigned = true
         continue
       }
-      const shorthand = shorthandCharset(c)
-      if (shorthand !== null) {
-        charset = shorthand
+      if (c.takeWord('SIGNED')) {
+        unsigned = false
         continue
       }
-      if (c.takeWords('CHARACTER', 'SET') || c.takeWord('CHARSET')) {
-        charset = charsetName(c).toLowerCase()
+      if (c.takeWord('ZEROFILL')) {
+        zerofill = true
+        unsigned = true
         continue
       }
-      if (column && c.takeWord('COLLATE')) {
-        collation = collationName(c).toLowerCase()
-        continue
+      if (spec.shape === SHAPE.TEXT || spec.shape === SHAPE.VALUES) {
+        // `BINARY` here is the *binary collation of the charset*, not the BINARY
+        // type: `VARCHAR(10) BINARY` is a VARCHAR that compares byte-wise. A
+        // parser that read it as a type would produce a column of the wrong
+        // class entirely.
+        // `BYTE` is `BINARY`'s older spelling in this position, and MySQL still
+        // accepts it: `ENUM('a','b') BYTE`.
+        if (c.takeWord('BINARY') || c.takeWord('BYTE')) {
+          binaryModifier = true
+          continue
+        }
+        const specifiedCharset = typeCharset(c)
+        if (specifiedCharset !== undefined) {
+          charset = specifiedCharset
+          continue
+        }
+        if (c.takeWord('COLLATE')) {
+          collation = collationName(c).toLowerCase()
+          continue
+        }
       }
+      break
     }
-    break
+  } else if (canonical === 'CHAR' && spec.charset === undefined) {
+    // CAST permits one charset clause and one BINARY, before or after it.
+    // National and non-character targets take no column modifiers.
+    binaryModifier = c.takeWord('BINARY')
+    const specifiedCharset = typeCharset(c)
+    if (specifiedCharset !== undefined) {
+      charset = specifiedCharset
+      binaryModifier ||= c.takeWord('BINARY')
+    } else if (!binaryModifier && c.takeWord('BYTE')) charset = 'binary'
   }
 
   return {
@@ -401,17 +408,12 @@ function typeName(c: Cursor, column: boolean): string | null {
   return name
 }
 
-/**
- * `ASCII` or `UNICODE` used as a charset shorthand.
- *
- * Only when it is not followed by something that would make it a type name in
- * its own right — `CHAR(10) ASCII` is latin1, but `ASCII` never starts a type,
- * so a bare match is safe here.
- */
-function shorthandCharset(c: Cursor): string | null {
+/** A named charset or its ASCII/UNICODE shorthand, only when present. */
+function typeCharset(c: Cursor): string | undefined {
   if (c.takeWord('ASCII')) return 'latin1'
   if (c.takeWord('UNICODE')) return 'ucs2'
-  return null
+  if (c.takeWords('CHARACTER', 'SET') || c.takeWord('CHARSET')) return charsetName(c).toLowerCase()
+  return undefined
 }
 
 /** `(1)` or `(10, 2)` — up to `max` integers, or nothing at all. */
