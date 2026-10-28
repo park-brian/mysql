@@ -185,8 +185,8 @@ functions remain admitted. A pure postorder check shares only traversal and nati
 diagnostic construction with generated columns. ALTER SET DEFAULT retains its
 late execution boundary and non-executing PREPARE behavior. The extended tests
 pass 153 transaction boundaries and nine missing-database cases against both
-engines. Thirty admission captures enforce 45,786/56,810 complete commands,
-with unchanged native answers and 11,024 open outcomes. CHECK permissions/namespace,
+engines. Thirty-one admission captures enforce 46,947/58,538 complete commands,
+with unchanged native answers and 11,591 open outcomes. CHECK permissions/namespace,
 malformed declaration ordering, ANSI SHOW CREATE and other function gaps remain
 open. A CHECK permission-only trial was withdrawn: native clock precision and
 RANDOM_BYTES evaluation must be repaired first. A deterministic 702-command
@@ -214,12 +214,17 @@ size caps. Temporal CAST precision now refuses after the closed constructor,
 while FSP token grammar enforces NUM31 and the public datatype API retains its
 modifier-only contract. Sequential SUBSTRING-family argument reading removes
 forward lookahead; shared grammar completion preserves role boundaries. A new
-3,228-command native audit improves 961 to 2,752 complete matches, including
+3,228-command native audit now protects 2,806 complete matches, including
 typed client Dates, without losing matching facts. The repeated census adds one
 correct annotated 1426 refusal, preserving coverage and the entire official result.
-SUBSTRING empty/comma-window admission, prepared temporal metadata, JSON extraction,
-consumer range warnings, declaration phase, string nullability and merged temporal
-charset remain open. Bare DEFAULT/ON UPDATE now use their four timestamp aliases, require NOW
+SUBSTRING-family native grammar now requires two arguments with an optional third
+and refuses OVER before later admission or binding. Stored roles retain their own
+grammar; preceding batch writes and conditions survive. A 1,728-command audit
+improves 324 to 1,107 complete matches without losing earlier matching facts.
+Existing name/operator readers and mandatory CASE construction remove redundant
+mechanics under unchanged caps. Qualified function calls, result metadata, prepared
+temporal metadata, JSON extraction, consumer range warnings, declaration phase,
+string nullability and merged temporal charset remain open. Bare DEFAULT/ON UPDATE now use their four timestamp aliases, require NOW
 parentheses and validate the NUM token before BigInt conversion, producing typed
 syntax errors for malformed precision. A shared integer-token reader preserves
 caller bounds, raw spelling, conversions and AST ownership. Three native captures

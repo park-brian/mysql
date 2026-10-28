@@ -918,16 +918,45 @@ Core/facade/parser measure 334,292/334,211/45,617 B gzipped; raw core is 754 B
 smaller than 5ffffe0, whose eleven required CI jobs pass. M5.10 stays partial;
 totals remain 144/190 and M5 42/53.
 
-**Next bounded slice:** audit and repair SUBSTRING-family constructor arity and
-OVER admission at its existing lexical-function boundary, preserving quoted/spaced
-roles, namespace precedence and earlier/later conditions. Prepared temporal metadata,
-JSON extraction and consumer-specific range warnings remain open, as do temporal
-declaration phase, string nullability, merged temporal charset and ANSI SHOW CREATE.
-Then address context-dependent clock precision precedence through existing compiler
-and value-generator owners, retaining missing table/column priority and
-DEFAULT/generated/CHECK timing. SYSDATE constructor validation and enclosing labels
-remain open; RANDOM_BYTES evaluation precedes CHECK permission repairs. Continue
-bounded function work before M5.47, M5.49, M5.50 and browser work.
+**SUBSTRING admission, verified (2026-10-28):** native SUBSTRING/SUBSTR/MID
+require two arguments and permit one optional third, through comma or FROM/FOR
+grammar. Missing/excess arguments and OVER now fail at their native token boundary,
+before namespace lookup or later conditions. Quoted/spaced stored-function roles
+retain their separate grammar; valid calls retain their existing AST and result
+readers. Earlier statements' writes survive a later failed call. The existing
+reader owns this rule without an extra admission pass or forward lookahead.
+Small existing grammar readers now share name and compound-word checks, canonical
+operator lookup and mandatory CASE construction. Function adjacency uses the
+lexer's token end. These changes fund the repair under all unchanged caps.
+A 1,728-command fixed-clock capture covers query/execute/PREPARE in four modes,
+including alias/arity/OVER variants, quoted/spaced/qualified roles, namespace and
+condition precedence, INSERT/defaults and multi-statement effects. Complete matches
+improve 324 to 1,107 with every earlier matching component, condition, error
+attribute, field attribute and effect preserved. The prior 3,228-command capture
+strengthens 2,752 to 2,806; every native answer pool and earlier guard is retained.
+Thirty-one captures enforce 46,947/58,538 complete commands and 179,191 conditions;
+11,591 outcomes remain open. Fresh Docker --reference passes 1,512 main tests,
+four latency tests, typecheck, lint, all nine unchanged caps, package/typed smoke,
+the real client and all seven pinned corpora. Both focused regressions, all 1,728
+native replays, one million seeded parser inputs and 20,000 seeded executor
+statements pass. The c198c05 baseline fails on empty SUBSTRING admission. Repeated
+actual census and the entire official result remain byte-identical at 17,529 ASTs
+from 17,589 statements and all 37 shared passes. Frozen-source proof covers 469
+test files/fixtures, 206 runtime sources and reference tooling. Core/facade/parser
+measure 334,304/334,206/45,615 B gzipped; raw core is 101 B below c198c05, whose
+eleven required CI jobs pass. M5.10 stays partial; totals remain 144/190 and M5 42/53.
+
+**Next bounded slice:** audit and repair qualified function-name admission and
+resolution through the existing name/parser/compiler owners. Preserve explicit
+stored namespaces, quoted/spaced roles, native collision labels, namespace and
+condition priority, and the public AST contract. Qualified calls and result metadata
+remain open in the new audit. Prepared temporal metadata, JSON extraction,
+consumer-specific range warnings and declaration phase remain open, alongside
+string nullability, merged temporal charset and ANSI SHOW CREATE. Then address
+context-dependent clock precision through existing compiler/value-generator owners,
+retaining DEFAULT/generated/CHECK timing. SYSDATE constructor validation and
+enclosing labels remain open; RANDOM_BYTES evaluation precedes CHECK permission
+repairs. Continue bounded function work before M5.47, M5.49, M5.50 and browser work.
 
 Keep function, keyword and value namespaces distinct. Charset-value validation,
 separate event behavior, valid-AST warnings/limits, later binding failures,

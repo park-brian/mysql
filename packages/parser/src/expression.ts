@@ -196,13 +196,11 @@ class ExpressionParser {
     }
     // The extra level exists only for `||`; every other operator is in the
     // table, so anything reaching here past the end has none.
-    if (level >= LEVELS.length) return null
-    const ops = LEVELS[level] as readonly string[]
-    if (t.kind === TOKEN.OPERATOR) return ops.includes(t.text) ? t.text : null
-    const word = keywordText(t)
-    // The precedence table owns word-operator membership; quoted names fail keywordText.
-    if (ops.includes(word)) return word
-    return null
+    const ops = LEVELS[level]
+    if (ops === undefined) return null
+    // The precedence table owns membership; quoted names fail keywordText.
+    const op = t.kind === TOKEN.OPERATOR ? t.text : keywordText(t)
+    return ops.includes(op) ? op : null
   }
 
   /**
@@ -351,18 +349,14 @@ class ExpressionParser {
 
       // `a MEMBER OF (json)` (8.0.17) and `a SOUNDS LIKE b`, neither of which
       // takes a `NOT`.
-      if (!negated && cursor.atWord('MEMBER') && cursor.atWord('OF', 1)) {
-        cursor.skip()
-        cursor.skip()
+      if (!negated && cursor.takeWords('MEMBER', 'OF')) {
         cursor.expectOp('(')
         const right = this.#binary(0)
         cursor.expectOp(')')
         left = { kind: NODE.BINARY, op: 'MEMBER OF', left, right, at }
         continue
       }
-      if (!negated && cursor.atWord('SOUNDS') && cursor.atWord('LIKE', 1)) {
-        cursor.skip()
-        cursor.skip()
+      if (!negated && cursor.takeWords('SOUNDS', 'LIKE')) {
         left = { kind: NODE.BINARY, op: 'SOUNDS LIKE', left, right: this.#binary(COMPARISON_LEVEL + 1), at }
         continue
       }
@@ -394,9 +388,9 @@ class ExpressionParser {
     if (this.#mode.highNotPrecedence && cursor.takeWord('NOT')) {
       return { kind: NODE.UNARY, op: 'NOT', operand: this.#unary(), at: t.start }
     }
-    if (cursor.atOp('-') || cursor.atOp('+') || cursor.atOp('~') || cursor.atOp('!')) {
-      const op = cursor.take().text
-      return { kind: NODE.UNARY, op, operand: this.#unary(), at: t.start }
+    if (t.kind === TOKEN.OPERATOR && ['-', '+', '~', '!'].includes(t.text)) {
+      cursor.skip()
+      return { kind: NODE.UNARY, op: t.text, operand: this.#unary(), at: t.start }
     }
     if (cursor.takeWord('BINARY')) {
       return { kind: NODE.UNARY, op: 'BINARY', operand: this.#unary(), at: t.start }
@@ -570,7 +564,7 @@ class ExpressionParser {
         // One of the builtins the lexer knows by name, a space before its
         // `(`, and IGNORE_SPACE off: not the builtin, but a stored function
         // of that name (8.4.11: `COUNT (*)` is 1064, `NOW ()` is 1630).
-        if (SPACE_SENSITIVE.has(upper) && !this.#mode.ignoreSpace && cursor.peek(1).start !== t.start + t.text.length) return this.#call(true)
+        if (SPACE_SENSITIVE.has(upper) && !this.#mode.ignoreSpace && cursor.peek(1).start !== t.end) return this.#call(true)
         const special = this.#specialCall(upper)
         if (special !== null) return special
         if (RESERVED.has(upper) && !LEXICAL_FUNCTIONS.has(upper)) cursor.fail()
@@ -640,9 +634,15 @@ class ExpressionParser {
     const distinct = aggregate && cursor.takeWord('DISTINCT')
     // `SUM(ALL a)` is `SUM(a)`: `ALL` is the default an aggregate may spell out.
     if (aggregate && !distinct) cursor.takeWord('ALL')
+    const substring = ['SUBSTRING', 'SUBSTR', 'MID'].includes(upper)
     const args: Expression[] = []
-    let substringFrom = false
-    if (upper === 'COUNT' && !distinct && cursor.takeOp('*')) {
+    if (substring) {
+      args.push(this.#binary(0))
+      const from = cursor.takeWord('FROM')
+      if (!from) cursor.expectOp(',')
+      args.push(this.#binary(0))
+      if (from ? cursor.takeWord('FOR') : cursor.takeOp(',')) args.push(this.#binary(0))
+    } else if (upper === 'COUNT' && !distinct && cursor.takeOp('*')) {
       // `COUNT(*)` — the only place a bare star is an argument.
       args.push({ kind: NODE.COLUMN, parts: ['*'], at: cursor.peek().start })
     } else if (!cursor.atOp(')')) {
@@ -650,12 +650,6 @@ class ExpressionParser {
         // LAG's and LEAD's distance is a number as written or a `?`, nothing signed (8.4.11: `LAG(v, -1)` is 1064 at the `-`).
         if (args.length === 1 && (upper === 'LAG' || upper === 'LEAD') && cursor.peek().kind !== TOKEN.NUMBER && cursor.peek().kind !== TOKEN.PLACEHOLDER) cursor.fail()
         args.push(this.#binary(0))
-        if (args.length === 1 && ['SUBSTRING', 'SUBSTR', 'MID'].includes(upper) && cursor.takeWord('FROM')) {
-          substringFrom = true
-          args.push(this.#binary(0))
-          if (cursor.takeWord('FOR')) args.push(this.#binary(0))
-          break
-        }
       } while (cursor.takeOp(','))
     }
     // `GROUP_CONCAT` is the one aggregate with clauses inside its parentheses,
@@ -669,7 +663,7 @@ class ExpressionParser {
     }
     if (upper === 'CHAR' && cursor.takeWord('USING')) using = charsetName(cursor).toLowerCase()
     cursor.expectOp(')')
-    const over = !substringFrom && LEXICAL_FUNCTIONS.has(upper) ? this.#over() : undefined
+    const over = !substring && LEXICAL_FUNCTIONS.has(upper) ? this.#over() : undefined
     return {
       kind: NODE.CALL,
       name: name.text,
@@ -847,9 +841,7 @@ class ExpressionParser {
     const columns: Expression[] = []
     do {
       const c = cursor.peek()
-      if (c.kind !== TOKEN.IDENTIFIER) cursor.fail()
-      cursor.skip()
-      const parts = [c.text]
+      const parts = [cursor.expectNamePart()]
       while (cursor.atOp('.') && parts.length < 3) {
         cursor.skip()
         parts.push(cursor.expectNamePart())
@@ -875,12 +867,12 @@ class ExpressionParser {
     // apart by whether an expression follows `CASE`.
     const operand = cursor.atWord('WHEN') ? undefined : this.#binary(0)
     const whens: { when: Expression; then: Expression }[] = []
-    while (cursor.takeWord('WHEN')) {
+    cursor.expectWord('WHEN')
+    do {
       const when = this.#binary(0)
       cursor.expectWord('THEN')
       whens.push({ when, then: this.#binary(0) })
-    }
-    if (whens.length === 0) cursor.fail()
+    } while (cursor.takeWord('WHEN'))
     const otherwise = cursor.takeWord('ELSE') ? this.#binary(0) : undefined
     cursor.expectWord('END')
     return {
