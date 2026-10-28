@@ -25,6 +25,7 @@ import {
   parseStatementSequence,
   ParseError,
   Cursor,
+  BINARY_DEPRECATION,
   KEY,
   STATEMENT,
   TOKEN,
@@ -193,6 +194,11 @@ function recordDiagnostics(state: SqlSession, conditions: readonly Condition[], 
   return warnings
 }
 
+/** Translate parser conditions once, retaining order and their warning/error distinction. */
+function appendConditions(conditions: Condition[] | undefined, parsed: readonly ParseCondition[]): void {
+  for (const c of parsed) conditions?.push({ level: c.level ?? 'Error', code: c.errno, message: c.message })
+}
+
 /** Protocol admission without a SQL condition area clears diagnostics. */
 function recordFailure(state: SqlSession, conditions: Condition[] | undefined, failure: unknown, limit = conditionLimit(state)): SqlError {
   const error = toSqlError(failure)
@@ -205,7 +211,7 @@ function recordFailure(state: SqlSession, conditions: Condition[] | undefined, f
     }
     // A full parser prefix may contain only warnings even when it returns ERR.
     const kept: readonly ParseCondition[] = parsing?.slice(0, limit) ?? [error]
-    for (const e of kept) conditions?.push({ level: e.level ?? 'Error', code: e.errno, message: e.message })
+    appendConditions(conditions, kept)
   }
   recordDiagnostics(state, conditions ?? [], limit)
   return error
@@ -219,6 +225,18 @@ function functionIdentifierError(name: string, kind: 'database' | 'routine'): My
   }
   if (/^.{65}/su.test(name)) return tooLongIdent(name)
   return undefined
+}
+
+/** Own complete source-free BINARY declarations; mixed histories and charset conversion keep their publishers. */
+function binaryDeclarations(statement: Statement, conditions: Condition[], limit: number): void {
+  if (statement.kind !== STATEMENT.QUERY) return
+  const grammar = Cursor.conditions(statement)
+  if (grammar === undefined || !grammar.every(c => c.errno === 1287 && c.message === BINARY_DEPRECATION)) return
+  if (someNode(statement, n => {
+    const kind = (n as { kind?: string }).kind
+    return kind === REF.TABLE || kind === NODE.CONVERT || undefined
+  })) return
+  appendConditions(conditions, grammar.slice(0, limit))
 }
 
 /** How many parsed statements `SqlExecutor` keeps. */
@@ -324,6 +342,7 @@ export class SqlExecutor implements Executor {
       // Admit the AST before metadata or diagnostic-count PREPARE refusal.
       const diagnostic = statement !== null && this.#admitStatement(statement, state, session)
       if (statement === null || diagnostic || isDiagnostic(statement)) throw sqlError('ER_UNSUPPORTED_PS', 'This command is not supported in the prepared statement protocol yet')
+      binaryDeclarations(statement, conditions, limit)
       await this.#preload(session, statement)
       this.#alive(session)
       let columns: PreparedInfo['columns'] = []
@@ -582,6 +601,7 @@ export class SqlExecutor implements Executor {
       const failed = (e: unknown): SqlError => diagnostic ? toSqlError(e) : recordFailure(state, conditions, e, limit)
       try {
         this.#admitStatement(statement, state, session)
+        if (protocol === 'text') binaryDeclarations(statement, conditions, limit)
         const run = this.#run(session, sql, params, known, protocol, conditions)
         const batches: ResultSet[] | undefined = stream ? [] : undefined
         const dispatched = this.#dispatch(run, statement, batches === undefined ? undefined : (batch) => batches.push(batch))

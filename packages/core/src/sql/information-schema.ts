@@ -26,7 +26,7 @@ import { CHARSET_BINARY, FIELD_TYPE, expectTyped } from '@myjs/bytes'
 import { collationInfoByName, requireCollationInfo } from '@myjs/charsets'
 import type { ColumnDef, TableDef, ViewDef } from '@myjs/engine'
 import { parseExpression, type TableName } from '@myjs/parser'
-import { sqlError } from '@myjs/protocol'
+import { dateToMysql, sqlError } from '@myjs/protocol'
 import { COERCIBILITY, decodeField, encodeField, intValue, stringValue, toText, type Value } from '@myjs/types'
 import { compile, EMPTY_SCOPE } from './compile.ts'
 import type { DerivedSource } from './from.ts'
@@ -357,8 +357,7 @@ const ROWS: Readonly<Record<string, (run: Run) => Iterable<readonly Value[]>>> =
     const engine = run.state.engine()
     if (engine === undefined) return
     const { figures: f, started } = engine
-    const at = new Date(started)
-    const enabled: Value = { kind: 'datetime', v: { year: at.getUTCFullYear(), month: at.getUTCMonth() + 1, day: at.getUTCDate(), hour: at.getUTCHours(), minute: at.getUTCMinutes(), second: at.getUTCSeconds(), microsecond: 0 }, type: 'DATETIME', fsp: 0 }
+    const enabled: Value = { kind: 'datetime', v: { ...dateToMysql(new Date(started)), microsecond: 0 }, type: 'DATETIME', fsp: 0 }
     const [count, max, min] = [n(f.historyLength), n(f.historyMax), n(f.historyMin)]
     yield [s('trx_rseg_history_len'), s('transaction'), count, max, min, null, count, max, min, null, enabled, null, n(Math.floor((Date.now() - started) / 1000)), null, s('enabled'), s('value'), s('Length of the TRX_RSEG_HISTORY list')]
   },

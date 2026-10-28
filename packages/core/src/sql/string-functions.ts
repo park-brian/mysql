@@ -84,6 +84,7 @@ import {
 import { NULL_TYPE, charWidth, decimalType, doubleType, intType, stringType, stringResultType, type ResultType } from './meta.ts'
 import { nativeArity, unregistered } from './registry.ts'
 import { modeOf } from './mode.ts'
+import { today } from './temporal-functions.ts'
 
 type V = Exclude<Value, null>
 
@@ -728,7 +729,7 @@ function datetimeExtremum(xs: readonly Compiled[], type: ResultType, greatest: b
         values.push(v)
         let converted = toDateTime(v, 'DATETIME')
         if (v.kind === 'time') {
-          const anchored = dateOf(v, {}, () => ({ year: env.now.getUTCFullYear(), month: env.now.getUTCMonth() + 1, day: env.now.getUTCDate(), hour: 0, minute: 0, second: 0, microsecond: 0 }))
+          const anchored = dateOf(v, {}, today(env))
           if (anchored.v !== null) converted = { kind: 'datetime', v: anchored.v, type: 'DATETIME', fsp: v.fsp }
         }
         const packed = converted === undefined ? 0n : temporalOrdinal(converted.v)

@@ -7,8 +7,7 @@
 // result that is not finite is 1690 naming the expression as written, and a
 // logarithm of a non-positive number is NULL with 3020.
 import { deparse, type CallNode } from '@myjs/parser'
-import { sqlError } from '@myjs/protocol'
-import { doubleValue, intValue, toDouble } from '@myjs/types'
+import { doubleValue, intValue, toDouble, valueOutOfRange } from '@myjs/types'
 import { asNumber, compile, raise, type CompileContext, type Compiled, type Env, type Row } from './compile.ts'
 import { doubleType, intType, type ResultType } from './meta.ts'
 import { nativeArity, unregistered } from './registry.ts'
@@ -27,9 +26,6 @@ function doubleReader(c: Compiled): (r: Row, env: Env) => number | null {
     return v === null ? null : toDouble(v)
   }
 }
-
-/** ER_DATA_OUT_OF_RANGE for a double that is infinite or not a number, naming the expression as written. */
-const doubleOutOfRange = (expr: string) => sqlError('ER_DATA_OUT_OF_RANGE', `DOUBLE value is out of range in '${expr}'`)
 
 export function mathFunction(name: string, e: CallNode, ctx: CompileContext): Compiled {
   const xs = e.args.map((a) => compile(a, ctx))
@@ -70,7 +66,7 @@ export function mathFunction(name: string, e: CallNode, ctx: CompileContext): Co
         if (v === null) return null
         const out = f(v)
         if (out === null) return null
-        if (!Number.isFinite(out)) throw doubleOutOfRange(label)
+        if (!Number.isFinite(out)) throw valueOutOfRange('DOUBLE', label)
         return doubleValue(out)
       },
       type: dbl(nullable),
@@ -167,7 +163,7 @@ export function mathFunction(name: string, e: CallNode, ctx: CompileContext): Co
           const y = b(r, env)
           if (x === null || y === null) return null
           const out = pow ? Math.pow(x, y) : Math.atan2(x, y)
-          if (!Number.isFinite(out)) throw doubleOutOfRange(label)
+          if (!Number.isFinite(out)) throw valueOutOfRange('DOUBLE', label)
           return doubleValue(out)
         },
         type: dbl(),

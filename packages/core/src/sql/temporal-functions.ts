@@ -99,7 +99,7 @@ export const TEMPORAL_TEXT_FUNCTIONS: ReadonlySet<string> = new Set(['DATE_FORMA
 export const TEMPORAL_ARITHMETIC: ReadonlySet<string> = new Set(['DATEDIFF', 'TIMEDIFF', 'TIMESTAMPDIFF', 'TIMESTAMPADD', 'ADDTIME', 'SUBTIME', 'MAKEDATE', 'FROM_DAYS', 'MAKETIME', 'SEC_TO_TIME', 'PERIOD_ADD', 'PERIOD_DIFF'])
 
 /** The statement's date, in UTC: where a TIME read as a date lands. */
-function today(env: Env): () => MysqlDateTime {
+export function today(env: Env): () => MysqlDateTime {
   return () => ({ year: env.now.getUTCFullYear(), month: env.now.getUTCMonth() + 1, day: env.now.getUTCDate(), hour: 0, minute: 0, second: 0, microsecond: 0 })
 }
 

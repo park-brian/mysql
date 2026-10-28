@@ -1008,16 +1008,52 @@ regression to LF; its four Docker tests and the staged whitespace check pass.
 Predecessor CI's eleven required jobs pass. M5.10 remains
 partial; totals remain 144/190 and M5 42/53.
 
-**Next bounded slice:** establish the missing RANDOM_BYTES evaluator against the
-pinned engine, including length conversion, NULL, diagnostics, protocol metadata
-and repeated execution, before changing CHECK permissions. Keep SYSDATE precision
-construction and mixed CHECK column/variable/native-function precedence open;
-the unchanged SLEEP(SYSDATE(7)) guard still protects parent/child timing.
-Supplementary identifier transcoding and ordinary table-name refusal are separate
-open gaps. Prepared temporal metadata, JSON extraction, consumer-specific range
-warnings and declaration phase remain open, alongside string nullability, merged
-temporal charset and ANSI SHOW CREATE. Continue bounded function work before
-M5.47, M5.49, M5.50 and browser work.
+**RANDOM_BYTES and bounded declaration warnings, verified (2026-10-28):**
+RANDOM_BYTES now uses the existing secure random source and integer reader.
+It checks arity before binding its argument, validates the 1..1,024 length before
+allocation, returns NULL for SQL NULL and generates fresh bytes at evaluation.
+PREPARE does not read randomness. Binary metadata retains the 1,024-byte width and
+argument-dependent nullability; the existing volatility inventory prevents folding.
+The prerequisite BINARY declaration publisher uses the exact parsed root history
+only for supported PREPARE and text query, after successful admission. Every
+recorded condition must be the canonical BINARY deprecation, and the tree must
+contain neither table references nor charset-conversion nodes. Grammar transfer
+is clipped under the initial max_error_count before ordinary runtime conditions;
+a later runtime error keeps its complete error count. EXECUTE does not republish
+these declarations. Grouping recompilation and cached roots cannot multiply them.
+Mixed recorded histories, table/view diagnostic replacement, legacy conversion
+warnings and unsupported PREPARE retain their existing owners. The compiler-warning
+trial was rejected after lost facts; the final command boundary preserves them.
+Six native captures retain 1,791 commands across three APIs/modes, bound parameters,
+empty sources, grouping, namespaces, views, conversions and retained limits.
+Complete normalized command matches improve 78 to 944 without losing any matched
+component, error attribute, condition or field. Binary results are compared by
+type/length; a deterministic secure-source test checks actual bytes, per-row and
+repeated execution, and absence of generation during PREPARE/NULL/refusal.
+All six native pools reconstruct exactly. Forty-four admission captures protect
+50,257/63,689 complete normalized commands and 183,074 conditions; 13,432 outcomes
+remain open. The UTC/date, range-error and condition adapters now share their
+existing kernels. Core/facade/parser measure 334,324/334,260/45,513 B gzipped under
+all nine unchanged caps; raw core is 132 B smaller than f956bab.
+Fresh Docker --reference passes 1,535 main tests, four latency tests, typecheck,
+lint, package/typed smoke, the real client and all seven pinned corpora. All 66
+focused tests, six native fixtures plus two lifecycle tests, one million seeded
+parser inputs and 20,000 seeded executor statements pass. Archived f956bab fails
+all six new fixture regressions. The actual parser census and entire official
+fact result remain byte-identical, retaining all 37 shared passes. Frozen-source
+proofs cover 485 tests/fixtures and 206 runtime sources. Both preceding commits'
+eleven required CI jobs pass. M5.10 remains partial; totals stay 144/190 and M5 42/53.
+
+**Next bounded slice:** audit temporal integer-reader rounding and carry through
+RANDOM_BYTES, CHAR and BIT_COUNT against pinned MySQL, then repair the existing
+shared reader. SQL text must retain its distinct prefix conversion. DECIMAL
+integer overflow warnings, JSON diagnostic labels, bound-parameter metadata,
+CAST BINARY collation/nullability and broader declaration publication remain open.
+CHECK permissions and SYSDATE construction/parent timing are unchanged, including
+the SLEEP(SYSDATE(7)) guard. Supplementary identifiers, ordinary table-name refusal,
+prepared temporal metadata, JSON extraction, consumer-specific range warnings,
+string nullability, merged temporal charset and ANSI SHOW CREATE remain open.
+Continue bounded function work before M5.47, M5.49, M5.50 and browser work.
 
 Keep function, keyword and value namespaces distinct. Charset-value validation,
 separate event behavior, valid-AST warnings/limits, later binding failures,

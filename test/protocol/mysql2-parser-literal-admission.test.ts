@@ -46,6 +46,14 @@ import functionIdentifiersNoDatabase from './fixtures/diagnostics/function-ident
 import functionIdentifierOrder from './fixtures/diagnostics/function-identifier-order.json' with { type: 'json' }
 import functionIdentifierOrderNoDatabase from './fixtures/diagnostics/function-identifier-order-no-database.json' with { type: 'json' }
 
+import randomBytesValues from './fixtures/diagnostics/random-bytes-values.json' with { type: 'json' }
+import binaryDeclarationWarnings from './fixtures/diagnostics/binary-declaration-warnings.json' with { type: 'json' }
+import binaryDeclarationBoundaries from './fixtures/diagnostics/binary-declaration-boundaries.json' with { type: 'json' }
+import binaryDeclarationLimits from './fixtures/diagnostics/binary-declaration-limits.json' with { type: 'json' }
+import randomBytesParameters from './fixtures/diagnostics/random-bytes-parameters.json' with { type: 'json' }
+
+import binaryDeclarationCompilerBoundaries from './fixtures/diagnostics/binary-declaration-compiler-boundaries.json' with { type: 'json' }
+
 /** Restore dates, binary rows and numeric facts that JSON cannot represent directly. */
 function capturedValue(value: unknown): unknown {
   if (Array.isArray(value)) return value.map(capturedValue)
@@ -59,7 +67,13 @@ function capturedValue(value: unknown): unknown {
   return value
 }
 
-for (const [reference, total, matched] of [[literalAdmission, 1623, 1521], [conditionHistories, 198, 192], [castDatatype, 480, 398], [castModifiers, 16648, 16274], [warningAdmission, 325, 248], [modifierDeprecation, 1008, 764], [keywordIdentity, 150, 146], [keywordSelectors, 1850, 1670], [shorthandWarnings, 552, 396], [schemaPresence, 378, 189], [functionIdentity, 6084, 5430], [generatedAdmission, 3276, 1792], [functionQuoting, 3573, 2820], [generatedPrepare, 685, 256], [expressionDefaults, 738, 476], [columnBoundaries, 1017, 610], [columnOrder, 63, 42], [columnUsage, 18, 12], [functionDiagnostics, 702, 442], [checkPrerequisites, 702, 224], [clockPrecision, 1566, 490], [columnClockGrammar, 756, 396], [columnClockRoles, 504, 204], [columnClockBounds, 540, 120], [fractionalClockGrammar, 2376, 1584], [fractionalClockLiteralBoundaries, 243, 144], [clockPrecisionByte, 2313, 1856], [clockTimeWidth, 1458, 698], [timeCastValues, 3756, 3640], [temporalCastAdmission, 3228, 2806], [substringAdmission, 1728, 1107], [qualifiedFunctions, 1284, 918], [qualifiedWithoutDatabase, 384, 315], [qualifiedDeclarations, 504, 326], [functionIdentifiers, 756, 459], [functionIdentifiersNoDatabase, 120, 108], [functionIdentifierOrder, 252, 180], [functionIdentifierOrderNoDatabase, 60, 60]] as const) test('M5.10: admission preserves primary errors, condition histories, headers and effects: ' + reference.schema, async () => {
+/** Random bytes are observed by type and length; their contents are intentionally unpredictable. */
+function binaryLengths(value: unknown): unknown {
+  if (value instanceof Uint8Array) return { binaryLength: value.length }
+  return Array.isArray(value) ? value.map(binaryLengths) : value
+}
+
+for (const [reference, total, matched] of [[literalAdmission, 1623, 1521], [conditionHistories, 198, 192], [castDatatype, 480, 398], [castModifiers, 16648, 16274], [warningAdmission, 325, 248], [modifierDeprecation, 1008, 764], [keywordIdentity, 150, 146], [keywordSelectors, 1850, 1670], [shorthandWarnings, 552, 396], [schemaPresence, 378, 189], [functionIdentity, 6084, 5430], [generatedAdmission, 3276, 1792], [functionQuoting, 3573, 2820], [generatedPrepare, 685, 256], [expressionDefaults, 738, 476], [columnBoundaries, 1017, 610], [columnOrder, 63, 42], [columnUsage, 18, 12], [functionDiagnostics, 702, 442], [checkPrerequisites, 702, 224], [clockPrecision, 1566, 490], [columnClockGrammar, 756, 396], [columnClockRoles, 504, 204], [columnClockBounds, 540, 120], [fractionalClockGrammar, 2376, 1584], [fractionalClockLiteralBoundaries, 243, 144], [clockPrecisionByte, 2313, 1856], [clockTimeWidth, 1458, 698], [timeCastValues, 3756, 3640], [temporalCastAdmission, 3228, 2806], [substringAdmission, 1728, 1107], [qualifiedFunctions, 1284, 918], [qualifiedWithoutDatabase, 384, 315], [qualifiedDeclarations, 504, 326], [functionIdentifiers, 756, 459], [functionIdentifiersNoDatabase, 120, 108], [functionIdentifierOrder, 252, 180], [functionIdentifierOrderNoDatabase, 60, 60], [randomBytesValues, 1089, 728], [binaryDeclarationWarnings, 270, 63], [binaryDeclarationBoundaries, 108, 21], [binaryDeclarationLimits, 72, 24], [randomBytesParameters, 180, 108], [binaryDeclarationCompilerBoundaries, 72, 0]] as const) test('M5.10: admission preserves primary errors, condition histories, headers and effects: ' + reference.schema, async () => {
   const host = process.env.MYSQL_REFERENCE_HOST
   const db = host === undefined ? await MySQL.open(':memory:', { multipleStatements: true }) : undefined
   const transport = db === undefined
@@ -84,6 +98,7 @@ for (const [reference, total, matched] of [[literalAdmission, 1623, 1521], [cond
     created = true
     if (!noDatabase) await conn.query('USE ' + reference.schema)
     await conn.query('CREATE TABLE ' + prefix + 't(v INT)')
+    if ('setup' in reference) for (const sql of reference.setup as readonly string[]) await conn.query(sql)
     if (noDatabase) assert.equal((await conn.query<mysql.RowDataPacket[]>('SELECT DATABASE() AS v'))[0][0]!.v, null)
     if (victim !== undefined) {
       await conn.query('CREATE DATABASE ' + victim)
@@ -91,6 +106,7 @@ for (const [reference, total, matched] of [[literalAdmission, 1623, 1521], [cond
     }
     for (const [i, entry] of reference.observations.entries()) {
       await conn.query('SET sql_mode=?', [reference.modes[entry.mode]!])
+      if ('maxErrorCount' in entry) await conn.query('SET max_error_count=?', [entry.maxErrorCount])
       if ('resetResults' in reference && reference.resetResults) await conn.query('SET character_set_results=utf8mb4')
       const expectedEffects: Readonly<Record<string, unknown>> = reference.effects[entry.effects]!
       if (entry.stateful) {
@@ -111,7 +127,9 @@ for (const [reference, total, matched] of [[literalAdmission, 1623, 1521], [cond
       const api = reference.apis[entry.api]!
       const label = sql + ' [' + api + ', ' + reference.modes[entry.mode] + ']'
       const views = db?.catalog!.store.transactions.stats().openViews
-      const observed = await observeCommand(raw, conn, transport, { sql, api })
+      const params = 'params' in entry ? capturedValue(entry.params) as mysql.ExecuteValues[] : undefined
+      const observed = await observeCommand(raw, conn, transport, { sql, api, ...(params === undefined ? {} : { params }) })
+      if ('binaryLengths' in reference && reference.binaryLengths === true) observed.outcome.rows = binaryLengths(observed.outcome.rows) as unknown[] | null
       const expected = reference.outcomes[entry.outcome]!
       const outcome = {
         ...expected,

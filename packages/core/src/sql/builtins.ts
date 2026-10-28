@@ -7,7 +7,7 @@
 import { CHARSET_BINARY, FIELD_TYPE, hex, type MysqlDateTime } from '@myjs/bytes'
 import { encodeCollation, requireCollationInfo } from '@myjs/charsets'
 import { NODE, deparse, type CallNode, type Expression, type LiteralNode } from '@myjs/parser'
-import { messages, sqlError } from '@myjs/protocol'
+import { dateToMysql, messages, sqlError, webCryptoRandom } from '@myjs/protocol'
 import {
   COERCIBILITY,
   MAX_SIGNED,
@@ -33,6 +33,7 @@ import {
   truth,
   type Value,
   valueBytes,
+  valueOutOfRange,
 } from '@myjs/types'
 import {
   aggregate,
@@ -91,9 +92,11 @@ import {
 import { matchType, regexpInstr, regexpLike, regexpReplace, regexpSubstr } from './regexp.ts'
 import { canonicalFunctionName, nativeArity, unregistered } from './registry.ts'
 import { bitBytes } from './wire.ts'
+import { intReader } from './string-functions.ts'
+import { today } from './temporal-functions.ts'
 
 /** The names `builtinFunction` compiles. */
-export const BUILTINS: ReadonlySet<string> = new Set(['MOD', 'STRCMP', 'RAND', 'CONCAT', 'LENGTH', 'OCTET_LENGTH', 'CHAR_LENGTH', 'CHARACTER_LENGTH', 'LOWER', 'LCASE', 'UPPER', 'UCASE', 'BIN', 'OCT', 'HEX', 'UNHEX', 'ABS'])
+export const BUILTINS: ReadonlySet<string> = new Set(['MOD', 'STRCMP', 'RAND', 'RANDOM_BYTES', 'CONCAT', 'LENGTH', 'OCTET_LENGTH', 'CHAR_LENGTH', 'CHARACTER_LENGTH', 'LOWER', 'LCASE', 'UPPER', 'UCASE', 'BIN', 'OCT', 'HEX', 'UNHEX', 'ABS'])
 
 /** The names `controlFunction` compiles. */
 export const CONTROL_FUNCTIONS: ReadonlySet<string> = new Set(['IF', 'IFNULL', 'COALESCE', 'ANY_VALUE', 'NULLIF', 'ISNULL', 'INTERVAL'])
@@ -149,6 +152,20 @@ export function builtinFunction(name: string, e: CallNode, ctx: CompileContext):
           return intValue(BigInt(Math.sign(compareValues(asString(a), asString(b)) ?? 0)))
         },
         type: intType(2, x.type.nullable || y.type.nullable),
+      }
+    }
+    case 'RANDOM_BYTES': {
+      arity(1)
+      const [length] = args() as [Compiled]
+      const read = intReader(length)
+      return {
+        eval: (r, env) => {
+          const n = read(r, env)
+          if (n === null) return null
+          if (n < 1n || n > 1024n) throw valueOutOfRange('length', 'random_bytes')
+          return bytesValue(webCryptoRandom.getRandomValues(new Uint8Array(Number(n))))
+        },
+        type: stringType(1024, CHARSET_BINARY, length.type.nullable),
       }
     }
     case 'RAND': {
@@ -517,7 +534,7 @@ export function informationFunction(name: string, e: CallNode, ctx: CompileConte
           // An integer past 64 bits is a DECIMAL to MySQL, so it saturates too.
           if (v !== null && (v.kind !== 'int' || n > MAX_UNSIGNED || n < MIN_SIGNED)) {
             if (n > MAX_SIGNED) n = MAX_SIGNED
-            else if (n < MIN_SIGNED) throw sqlError('ER_DATA_OUT_OF_RANGE', `BIGINT value is out of range in '${self}'`)
+            else if (n < MIN_SIGNED) throw valueOutOfRange('BIGINT', self)
           }
           env.state.lastInsertId = BigInt.asUintN(64, n)
           env.state.insertIdSet = true
@@ -646,7 +663,7 @@ export function clockFunction(name: string, e: CallNode, ctx: CompileContext): C
     case 'CURRENT_DATE':
     case 'UTC_DATE':
       arity(0)
-      return { eval: (_r, env) => ({ kind: 'datetime', v: { ...clock(env.now, 0), hour: 0, minute: 0, second: 0 }, type: 'DATE', fsp: 0 }), type: datetimeType(FIELD_TYPE.DATE, 0, false) }
+      return { eval: (_r, env) => ({ kind: 'datetime', v: today(env)(), type: 'DATE', fsp: 0 }), type: datetimeType(FIELD_TYPE.DATE, 0, false) }
     case 'CURTIME':
     case 'CURRENT_TIME':
     case 'UTC_TIME': {
@@ -675,17 +692,9 @@ function fspArgument(e: CallNode): number {
 
 /** The session's clock, in UTC (the `time_zone` this executor runs in). */
 export function clock(now: Date, fsp: number): MysqlDateTime {
-  const us = (now.getUTCMilliseconds() * 1000)
+  const date = dateToMysql(now)
   const unit = 10 ** (6 - fsp)
-  return {
-    year: now.getUTCFullYear(),
-    month: now.getUTCMonth() + 1,
-    day: now.getUTCDate(),
-    hour: now.getUTCHours(),
-    minute: now.getUTCMinutes(),
-    second: now.getUTCSeconds(),
-    microsecond: Math.floor(us / unit) * unit,
-  }
+  return { ...date, microsecond: Math.floor(date.microsecond / unit) * unit }
 }
 
 /** RAND's state: MySQL's `rand_struct`. */

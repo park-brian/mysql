@@ -19,7 +19,7 @@ import type { Expression, IntervalNode } from '@myjs/parser'
 import { messages, sqlError } from '@myjs/protocol'
 import { addInterval, dateStructOf, type TimeStruct, intervalFsp, intervalOf, isDateUnit, isIntervalUnit, isTimeUnit, renderMysqlDateTime, stringValue, timeOrdinal, COERCIBILITY } from '@myjs/types'
 import { asNumber, compile, raise, type CompileContext, type Compiled, type Env } from './compile.ts'
-import { settle } from './temporal-functions.ts'
+import { settle, today } from './temporal-functions.ts'
 import { datetimeType, stringType, type ResultType } from './meta.ts'
 
 /** `arg ± INTERVAL value unit`; `negate` for `-`, DATE_SUB and SUBDATE. */
@@ -57,7 +57,7 @@ export function dateAdd(arg: Expression, value: Expression, unit: string, negate
       // The date is read first, and warns, before the interval is.
       let text: TimeStruct | undefined
       if (shape === 'string') {
-        const d = settle(dateStructOf(v, { noZeroDate: true }, () => ({ year: env.now.getUTCFullYear(), month: env.now.getUTCMonth() + 1, day: env.now.getUTCDate(), hour: 0, minute: 0, second: 0, microsecond: 0 })), env)
+        const d = settle(dateStructOf(v, { noZeroDate: true }, today(env)), env)
         if (d === null) return null
         text = d
       }
