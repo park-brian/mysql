@@ -1115,13 +1115,43 @@ pass fresh-container typecheck, callback tests and package/typed smoke.
 All eleven required fea7b68 CI jobs pass. M5.10 remains partial at 144/190 overall
 and M5 42/53.
 
-**Next bounded slice:** audit raw TIME field forwarding through IF/CASE under
-fractional truncation mode, then repair the smallest actual reader boundary.
-Do not infer field ownership from temporary/keepField/fromField metadata.
-Then address DATETIME integer rounding, calendar carry, zero dates and
-maximum-year overflow diagnostics without JavaScript Date normalization of zero
-dates. Mixed-type/cache payloads, user-variable representation and assignment
-expressions, DECIMAL integer overflow warnings, JSON diagnostic labels,
+**Raw TIME field forwarding, verified (2026-10-28):** actual stored-byte
+TIME decoding now establishes the integer reading that IF/CASE forwards. Integer
+argument readers consume that value trait without inferring ownership from column
+metadata. CAST/COALESCE reconstruction and scalar/MIN cache replacement retain
+their separately verified rules; copied fields keep their existing conversion and
+range clamp. Generic numeric conversion and temporal payloads remain unchanged.
+Exported decoded TIME `Value` objects now have an enumerable optional bigint
+`integer`; callers inspecting keys or serializing those objects must account for
+that representation change. Tests explicitly protect it and show generic
+`toInteger` still reads 59 while the field reads 100 and a cache reads 60.
+A 6,264-command pinned MySQL 8.4.11 audit improves 5,020 to 5,184 complete
+matches, losing no matching component, error attribute, condition, field or packet
+fact. It covers raw/merged/copied branches, constructors, caches, mixed types,
+negative zero, NULL, DEFAULT, generated fields and both maximum TIME boundaries,
+including literal copies, through both modes and all three APIs. The fixture sets
+its capture mode before admitting out-of-range setup controls. All 6,264 native
+answers reconstruct and replay exactly; all forty-six predecessor fixtures and
+thresholds remain unchanged. Forty-seven captures now protect 65,563/82,403
+complete normalized commands and 186,248 conditions, retaining 16,840 open
+outcomes. Native/local lifecycle regressions cover cached query/execute, rebinding,
+mode changes, defaults, virtual/stored generated fields, UPDATE, CHECK acceptance
+and rejection, and released readers. Archived 9764ad8 fails both new regressions.
+Small numeric-reader cleanups share existing integer/boolean construction and
+identical truth/conversion branches. All nine unchanged caps pass: core/facade/
+types are 334,360/334,260/52,599 B gzipped; raw core is 46 B below 9764ad8.
+Fresh Docker --reference passes 1,546 main tests, four latency tests, typecheck,
+lint, package/typed smoke, the real client and all seven pinned corpora. All 64
+focused tests and 20,000 seeded executor statements pass; 90,432 archived temporal
+rendering/numeric facts remain identical. The entire official-suite fact result is
+byte-identical to the committed report, retaining all 37 shared passes.
+Source proofs cover 493 tests/fixtures and 206 runtime files. All eleven required 9764ad8 CI jobs pass. M5.10 remains
+partial at 144/190 overall and M5 42/53.
+
+**Next bounded slice:** audit DATETIME integer rounding, calendar carry, zero
+dates and maximum-year overflow diagnostics without JavaScript Date normalization of zero
+dates. NULLIF temporal integer readers and diagnostics, packet publication, mixed
+type and cache payloads, user-variable representation and assignment expressions, DECIMAL integer overflow warnings, JSON diagnostic labels,
 bound-parameter metadata, CAST BINARY collation/nullability and broader declaration
 publication remain open. CHECK permissions and SYSDATE construction/parent timing
 are unchanged, including SLEEP(SYSDATE(7)). Supplementary identifiers, ordinary
@@ -7423,7 +7453,7 @@ code that moves it (doc 43 §8). A claim without a number is marketing.
 | Statements executing the way a real MySQL 8.4 executed them | 3,629 / 3,629 — 400 generated scripts through `mysql2`, 250 of their statements upserts, REPLACEs or IGNOREs: rows and order, column metadata, `affectedRows`/`insertId`/`info`, errno and SQLSTATE. Three further seeds, 46,346 statements and not committed, agree except four `SELECT DISTINCT` metadata cases that need the range optimizer (M5.7, which owns it since M5.5 closed) | every statement the executor accepts |
 | InnoDB round-trip, by type | 0 / 17 | 17 / 17 |
 | Crash injection points, inconsistencies | 10,000 points, 0 inconsistencies — CI's `crash` job runs `CRASH_POINTS=10000`, and `npm test` 300 of them | 10,000 points, 0 |
-| Core bundle, gzipped | 334,354 B (326.5 KiB) for the browser entry chunk, measured on 2026-10-28; the facade is 334,241 B. The two deferred UCA chunks total 184,654 B raw. `tools/size-budget.mjs` measures each package including its workspace dependencies, so package figures do not add up. The M5.2 coercion and M5.10 function fixes pass the existing stabilization budgets without raising them | < 500 KB |
+| Core bundle, gzipped | 334,360 B (326.5 KiB) for the browser entry chunk, measured on 2026-10-28; the facade is 334,260 B. The two deferred UCA chunks total 184,654 B raw. `tools/size-budget.mjs` measures each package including its workspace dependencies, so package figures do not add up. The M5.2 coercion and M5.10 function fixes pass the existing stabilization budgets without raising them | < 500 KB |
 | Function calls returning what a real MySQL 8.4 returned | 8,765 / 8,765 — the string and numeric slices (2,091 / 2,091, including GREATEST and LEAST over text and a DATETIME), the date and time slice (3,463 / 3,463) and the rest of the string, math, hashing and network functions (3,211 / 3,211), both protocols, metadata and warning counts | every function in the library |
 | Implicit coercion | 3,148 / 3,148 captured statements agree, with 0 refusals; warning counts agree on 1,737 / 1,737 queries. All observations are compared with zero disagreements (M5.2 complete) | every captured value, metadata field and warning count |
 | Relational statements executing the way a real MySQL 8.4 executed them | 5,635 / 5,635 agree and none are refused, over 300 multi-table scripts through `mysql2`, both protocols. `queries.json` through the executor: 1,200 / 1,200. Rows are compared in order wherever the statement or an agreeing plan fixes it | every statement the executor accepts, and no refusals |

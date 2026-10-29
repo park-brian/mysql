@@ -185,8 +185,8 @@ functions remain admitted. A pure postorder check shares only traversal and nati
 diagnostic construction with generated columns. ALTER SET DEFAULT retains its
 late execution boundary and non-executing PREPARE behavior. The extended tests
 pass 153 transaction boundaries and nine missing-database cases against both
-engines. Forty-six admission captures enforce 60,379/76,139 complete normalized commands,
-with unchanged native answer pools and 15,760 open outcomes. CHECK permissions/namespace,
+engines. Forty-seven admission captures enforce 65,563/82,403 complete normalized commands,
+with unchanged native answer pools and 16,840 open outcomes. CHECK permissions/namespace,
 malformed declaration ordering, ANSI SHOW CREATE and other function gaps remain
 open. A CHECK permission-only trial was withdrawn because native clock precision
 and RANDOM_BYTES evaluation were prerequisites. RANDOM_BYTES now has a bounded
@@ -265,12 +265,17 @@ their distinct policies. A 9,570-command native audit improves 7,236 to 7,958
 complete matches without losing a matching fact. Payload/sign and earlier MIN
 negative-zero normalization stay separate. Shared byte temporal formatting keeps
 legacy two-argument and callback behavior, verified over 90,432 baseline facts.
-All nine unchanged caps pass; the final fresh Docker build passes 1,543 main
-tests, four latency tests and seven pinned corpora. Raw-field forwarding,
-DATETIME integer rounding/overflow, mixed-type/cache and user-variable payloads,
-assignment expressions, DECIMAL overflow warnings, JSON labels, bound-parameter
-metadata, CAST BINARY collation/nullability and broader
-warning publication remain open. Supplementary identifiers, ordinary table-name
+Stored TIME decoding now establishes the reading forwarded through IF/CASE,
+removing column-origin inference from integer argument readers. The optional
+enumerable bigint changes the exported decoded TIME Value shape; payloads and
+generic conversion remain unchanged. A 6,264-command native capture improves
+5,020 to 5,184 matches with no matching fact lost. Native/local cached DML,
+DEFAULT, generated fields and CHECK controls pass. Fresh Docker verifies 1,546
+tests and all seven corpora, under all nine unchanged caps. NULLIF temporal
+readers/diagnostics, packet publication, DATETIME integer rounding/overflow,
+mixed-type/cache and user-variable payloads, assignment expressions, DECIMAL
+overflow warnings, JSON labels, bound-parameter metadata, CAST BINARY
+collation/nullability and broader warning publication remain open. Supplementary identifiers, ordinary table-name
 refusal, result/prepared temporal metadata, JSON extraction, consumer range warnings,
 declaration phase, string nullability and merged temporal charset also remain open.
 Bare DEFAULT/ON UPDATE now use their four timestamp aliases, require NOW

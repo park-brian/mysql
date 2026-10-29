@@ -166,7 +166,7 @@ export const MIN_SIGNED = -(1n << 63n)
 export const MAX_UNSIGNED = (1n << 64n) - 1n
 
 export const int = (v: bigint, unsigned = false): IntValue => ({ kind: 'int', v, unsigned })
-export const bool = (b: boolean): IntValue => ({ kind: 'int', v: b ? 1n : 0n, unsigned: false })
+export const bool = (b: boolean): IntValue => int(b ? 1n : 0n)
 export const double = (v: number): DoubleValue => ({ kind: 'double', v })
 export const decimal = (v: bigint, scale: number, display = scale): DecimalValue =>
   display === scale ? { kind: 'decimal', v, scale } : { kind: 'decimal', v, scale, display }
@@ -301,11 +301,10 @@ function jsonNumberText(v: JsonDocValue): string {
 /** A JSON number as the SQL number it is; undefined for anything else (`val_real` and friends then read its text). */
 function jsonNumber(v: JsonDocValue): Exclude<Value, null> | undefined {
   const d = v.v
-  if (d.t === 'int') return int(d.v)
-  if (d.t === 'uint') return int(d.v, true)
+  if (d.t === 'int' || d.t === 'uint') return int(d.v, d.t === 'uint')
   if (d.t === 'double') return double(d.v)
   if (d.t === 'decimal') return d.v
-  if (d.t === 'bool') return int(d.v ? 1n : 0n)
+  if (d.t === 'bool') return bool(d.v)
   return undefined
 }
 
@@ -383,10 +382,8 @@ export function toInteger(v: Exclude<Value, null>): bigint {
     case 'datetime':
     case 'time':
       return BigInt(temporalNumber(v).split('.')[0] as string)
-    case 'json': {
-      const n = jsonNumber(v)
-      return n === undefined ? toInteger(string(jsonNumberText(v), 255)) : toInteger(n)
-    }
+    case 'json':
+      return toInteger(jsonNumber(v) ?? string(jsonNumberText(v), 255))
   }
 }
 
@@ -416,7 +413,6 @@ export function truth(v: Value): boolean | null {
   if (v === null) return null
   switch (v.kind) {
     case 'int':
-      return v.v !== 0n
     case 'decimal':
       return v.v !== 0n
     default:

@@ -827,7 +827,7 @@ export function intReader(c: Compiled): (r: Row, env: Env) => bigint | null {
       return rounded > MAX_SIGNED ? MAX_SIGNED : rounded < MIN_SIGNED ? MIN_SIGNED : rounded
     }
     // Fields round independently of sql_mode; computed TIME readers honor truncation.
-    if (v.kind === 'time') return v.integer ?? toInteger(timeValue(v.v, 0, c.type.column === undefined && modeOf(env.session.sqlMode).truncateFractional))
+    if (v.kind === 'time') return v.integer ?? toInteger(timeValue(v.v, 0, modeOf(env.session.sqlMode).truncateFractional))
     return valInt(v)
   }
 }

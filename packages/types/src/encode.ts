@@ -625,8 +625,11 @@ export function decodeField(field: Uint8Array | null, t: ColumnType): Value {
       return { kind: 'datetime', v, type: 'TIMESTAMP', fsp: t.decimals ?? 0 }
     }
     case FIELD_TYPE.TIME:
-    case FIELD_TYPE.TIME2:
-      return { kind: 'time', v: decodeTime2(field, t.decimals ?? 0), fsp: t.decimals ?? 0 }
+    case FIELD_TYPE.TIME2: {
+      const v = decodeTime2(field, t.decimals ?? 0)
+      // A stored field keeps its integer reading when IF/CASE forwards the value.
+      return { kind: 'time', v, fsp: t.decimals ?? 0, integer: toInteger({ kind: 'time', v: roundTime(v, 0), fsp: 0 }) }
+    }
     case FIELD_TYPE.ENUM: {
       const i = decodeEnum(field)
       return { ...string(i === 0 ? '' : (enumMember(i, t.members ?? []) ?? ''), t.collationId ?? 255, COERCIBILITY.IMPLICIT), ordinal: BigInt(i) }
