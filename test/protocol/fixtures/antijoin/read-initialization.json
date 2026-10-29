@@ -1,0 +1,5582 @@
+{
+  "mysqlVersion": "8.4.11",
+  "predecessor": "66ab11115e40b53686a80aa91afeb153578f53b7",
+  "outcomes": 240,
+  "native": [
+    {
+      "rows": [
+        [
+          "one"
+        ]
+      ],
+      "fields": [
+        [
+          "name",
+          253,
+          48,
+          20485,
+          0,
+          224,
+          "dependent223_ddl",
+          "pa",
+          "pa",
+          "name"
+        ]
+      ],
+      "fieldEvents": [
+        [
+          [
+            "name",
+            253,
+            48,
+            20485,
+            0,
+            224,
+            "dependent223_ddl",
+            "pa",
+            "pa",
+            "name"
+          ]
+        ]
+      ],
+      "warnings": []
+    },
+    {
+      "rows": [
+        {
+          "name": "one"
+        }
+      ],
+      "fields": [
+        [
+          "name",
+          253,
+          48,
+          20485,
+          0,
+          224,
+          "dependent223_ddl",
+          "pa",
+          "pa",
+          "name"
+        ]
+      ],
+      "fieldEvents": [
+        [
+          [
+            "name",
+            253,
+            48,
+            20485,
+            0,
+            224,
+            "dependent223_ddl",
+            "pa",
+            "pa",
+            "name"
+          ]
+        ]
+      ],
+      "warnings": []
+    },
+    {
+      "rows": [],
+      "fields": [
+        [
+          "name",
+          253,
+          48,
+          20485,
+          0,
+          224,
+          "dependent223_ddl",
+          "pa",
+          "pa",
+          "name"
+        ]
+      ],
+      "fieldEvents": [
+        [
+          [
+            "name",
+            253,
+            48,
+            20485,
+            0,
+            224,
+            "dependent223_ddl",
+            "pa",
+            "pa",
+            "name"
+          ]
+        ]
+      ],
+      "warnings": []
+    },
+    {
+      "error": {
+        "code": "ER_TABLE_DEF_CHANGED",
+        "errno": 1412,
+        "state": "HY000",
+        "message": "Table definition has changed, please retry transaction"
+      },
+      "fieldEvents": [
+        [
+          [
+            "name",
+            253,
+            48,
+            20485,
+            0,
+            224,
+            "dependent223_ddl",
+            "pa",
+            "pa",
+            "name"
+          ]
+        ]
+      ],
+      "warnings": [
+        {
+          "Level": "Warning",
+          "Code": 159,
+          "Message": "InnoDB: insufficient history for index 1"
+        },
+        {
+          "Level": "Error",
+          "Code": 1412,
+          "Message": "Table definition has changed, please retry transaction"
+        }
+      ]
+    },
+    {
+      "error": {
+        "code": "ER_NO_SUCH_TABLE",
+        "errno": 1146,
+        "state": "42S02",
+        "message": "Table 'dependent223_ddl.ch' doesn't exist"
+      },
+      "fieldEvents": [],
+      "warnings": [
+        {
+          "Level": "Error",
+          "Code": 1146,
+          "Message": "Table 'dependent223_ddl.ch' doesn't exist"
+        }
+      ]
+    },
+    {
+      "rows": [
+        [
+          "one"
+        ]
+      ],
+      "fields": [
+        [
+          "name",
+          253,
+          48,
+          20485,
+          0,
+          224,
+          "dependent223_sorted",
+          "pa",
+          "pa",
+          "name"
+        ]
+      ],
+      "fieldEvents": [
+        [
+          [
+            "name",
+            253,
+            48,
+            20485,
+            0,
+            224,
+            "dependent223_sorted",
+            "pa",
+            "pa",
+            "name"
+          ]
+        ]
+      ],
+      "warnings": []
+    },
+    {
+      "rows": [
+        {
+          "name": "one"
+        }
+      ],
+      "fields": [
+        [
+          "name",
+          253,
+          48,
+          20485,
+          0,
+          224,
+          "dependent223_sorted",
+          "pa",
+          "pa",
+          "name"
+        ]
+      ],
+      "fieldEvents": [
+        [
+          [
+            "name",
+            253,
+            48,
+            20485,
+            0,
+            224,
+            "dependent223_sorted",
+            "pa",
+            "pa",
+            "name"
+          ]
+        ]
+      ],
+      "warnings": []
+    },
+    {
+      "rows": [],
+      "fields": [
+        [
+          "name",
+          253,
+          48,
+          20485,
+          0,
+          224,
+          "dependent223_sorted",
+          "pa",
+          "pa",
+          "name"
+        ]
+      ],
+      "fieldEvents": [
+        [
+          [
+            "name",
+            253,
+            48,
+            20485,
+            0,
+            224,
+            "dependent223_sorted",
+            "pa",
+            "pa",
+            "name"
+          ]
+        ]
+      ],
+      "warnings": []
+    },
+    {
+      "error": {
+        "code": "ER_TABLE_DEF_CHANGED",
+        "errno": 1412,
+        "state": "HY000",
+        "message": "Table definition has changed, please retry transaction"
+      },
+      "fieldEvents": [
+        [
+          [
+            "name",
+            253,
+            48,
+            20485,
+            0,
+            224,
+            "dependent223_sorted",
+            "pa",
+            "pa",
+            "name"
+          ]
+        ]
+      ],
+      "warnings": [
+        {
+          "Level": "Warning",
+          "Code": 159,
+          "Message": "InnoDB: insufficient history for index 1"
+        },
+        {
+          "Level": "Error",
+          "Code": 1412,
+          "Message": "Table definition has changed, please retry transaction"
+        }
+      ]
+    },
+    {
+      "error": {
+        "code": "ER_NO_SUCH_TABLE",
+        "errno": 1146,
+        "state": "42S02",
+        "message": "Table 'dependent223_sorted.ch' doesn't exist"
+      },
+      "fieldEvents": [],
+      "warnings": [
+        {
+          "Level": "Error",
+          "Code": 1146,
+          "Message": "Table 'dependent223_sorted.ch' doesn't exist"
+        }
+      ]
+    },
+    {
+      "error": {
+        "code": "ER_TABLE_DEF_CHANGED",
+        "errno": 1412,
+        "state": "HY000",
+        "message": "Table definition has changed, please retry transaction"
+      },
+      "fieldEvents": [
+        [
+          [
+            "name",
+            253,
+            48,
+            20485,
+            0,
+            224,
+            "dependent223_sorted",
+            "pa",
+            "pa",
+            "name"
+          ]
+        ]
+      ],
+      "warnings": [
+        {
+          "Level": "Warning",
+          "Code": 159,
+          "Message": "InnoDB: insufficient history for index 0"
+        },
+        {
+          "Level": "Error",
+          "Code": 1412,
+          "Message": "Table definition has changed, please retry transaction"
+        }
+      ]
+    },
+    {
+      "error": {
+        "code": "ER_NO_SUCH_TABLE",
+        "errno": 1146,
+        "state": "42S02",
+        "message": "Table 'dependent223_sorted.pa' doesn't exist"
+      },
+      "fieldEvents": [],
+      "warnings": [
+        {
+          "Level": "Error",
+          "Code": 1146,
+          "Message": "Table 'dependent223_sorted.pa' doesn't exist"
+        }
+      ]
+    },
+    {
+      "physicalPlan": "-> Limit: 1 row(s)  (cost=0.65 rows=1)\n    -> Sort: pa.`name`, limit input to 1 row(s) per chunk  (cost=0.65 rows=4)\n        -> Filter: exists(select #2) is false  (cost=0.65 rows=4)\n            -> Table scan on pa  (cost=0.65 rows=4)\n            -> Select #2 (subquery in condition; dependent)\n                -> Limit: 1 row(s)  (cost=0.45 rows=1)\n                    -> Covering index lookup on ch using g (g=pa.g)  (cost=0.45 rows=2)\n",
+      "rows": [
+        [
+          "n001"
+        ]
+      ],
+      "fields": [
+        [
+          "name",
+          253,
+          48,
+          20485,
+          0,
+          224,
+          "dependent223_sorted4",
+          "pa",
+          "pa",
+          "name"
+        ]
+      ],
+      "fieldEvents": [
+        [
+          [
+            "name",
+            253,
+            48,
+            20485,
+            0,
+            224,
+            "dependent223_sorted4",
+            "pa",
+            "pa",
+            "name"
+          ]
+        ]
+      ],
+      "warnings": []
+    },
+    {
+      "physicalPlan": "-> Limit: 1 row(s)  (cost=0.65 rows=1)\n    -> Sort: pa.`name`, limit input to 1 row(s) per chunk  (cost=0.65 rows=4)\n        -> Filter: exists(select #2) is false  (cost=0.65 rows=4)\n            -> Table scan on pa  (cost=0.65 rows=4)\n            -> Select #2 (subquery in condition; dependent)\n                -> Limit: 1 row(s)  (cost=0.45 rows=1)\n                    -> Covering index lookup on ch using g (g=pa.g)  (cost=0.45 rows=2)\n",
+      "rows": [
+        {
+          "name": "n001"
+        }
+      ],
+      "fields": [
+        [
+          "name",
+          253,
+          48,
+          20485,
+          0,
+          224,
+          "dependent223_sorted4",
+          "pa",
+          "pa",
+          "name"
+        ]
+      ],
+      "fieldEvents": [
+        [
+          [
+            "name",
+            253,
+            48,
+            20485,
+            0,
+            224,
+            "dependent223_sorted4",
+            "pa",
+            "pa",
+            "name"
+          ]
+        ]
+      ],
+      "warnings": []
+    },
+    {
+      "physicalPlan": "-> Limit: 1 row(s)  (cost=0.65 rows=1)\n    -> Sort: pa.`name`, limit input to 1 row(s) per chunk  (cost=0.65 rows=4)\n        -> Filter: exists(select #2) is false  (cost=0.65 rows=4)\n            -> Table scan on pa  (cost=0.65 rows=4)\n            -> Select #2 (subquery in condition; dependent)\n                -> Limit: 1 row(s)  (cost=0.45 rows=1)\n                    -> Covering index lookup on ch using g (g=pa.g)  (cost=0.45 rows=2)\n",
+      "error": {
+        "code": "ER_TABLE_DEF_CHANGED",
+        "errno": 1412,
+        "state": "HY000",
+        "message": "Table definition has changed, please retry transaction"
+      },
+      "fieldEvents": [
+        [
+          [
+            "name",
+            253,
+            48,
+            20485,
+            0,
+            224,
+            "dependent223_sorted4",
+            "pa",
+            "pa",
+            "name"
+          ]
+        ]
+      ],
+      "warnings": [
+        {
+          "Level": "Warning",
+          "Code": 159,
+          "Message": "InnoDB: insufficient history for index 1"
+        },
+        {
+          "Level": "Error",
+          "Code": 1412,
+          "Message": "Table definition has changed, please retry transaction"
+        }
+      ]
+    },
+    {
+      "physicalPlan": "-> Limit: 1 row(s)  (cost=0.65 rows=1)\n    -> Sort: pa.`name`, limit input to 1 row(s) per chunk  (cost=0.65 rows=4)\n        -> Filter: exists(select #2) is false  (cost=0.65 rows=4)\n            -> Table scan on pa  (cost=0.65 rows=4)\n            -> Select #2 (subquery in condition; dependent)\n                -> Limit: 1 row(s)  (cost=0.45 rows=1)\n                    -> Covering index lookup on ch using g (g=pa.g)  (cost=0.45 rows=2)\n",
+      "error": {
+        "code": "ER_TABLE_DEF_CHANGED",
+        "errno": 1412,
+        "state": "HY000",
+        "message": "Table definition has changed, please retry transaction"
+      },
+      "fieldEvents": [
+        [
+          [
+            "name",
+            253,
+            48,
+            20485,
+            0,
+            224,
+            "dependent223_sorted4",
+            "pa",
+            "pa",
+            "name"
+          ]
+        ]
+      ],
+      "warnings": [
+        {
+          "Level": "Warning",
+          "Code": 159,
+          "Message": "InnoDB: insufficient history for index 0"
+        },
+        {
+          "Level": "Error",
+          "Code": 1412,
+          "Message": "Table definition has changed, please retry transaction"
+        }
+      ]
+    },
+    {
+      "physicalPlan": "-> Limit: 1 row(s)  (cost=2.45 rows=1)\n    -> Nested loop antijoin  (cost=2.45 rows=8)\n        -> Sort: pa.`name`  (cost=0.65 rows=4)\n            -> Table scan on pa  (cost=0.65 rows=4)\n        -> Covering index lookup on ch using g (g=pa.g)  (cost=0.601 rows=2)\n",
+      "rows": [
+        [
+          "n001"
+        ]
+      ],
+      "fields": [
+        [
+          "name",
+          253,
+          48,
+          20485,
+          0,
+          224,
+          "dependent223_sorted4",
+          "pa",
+          "pa",
+          "name"
+        ]
+      ],
+      "fieldEvents": [
+        [
+          [
+            "name",
+            253,
+            48,
+            20485,
+            0,
+            224,
+            "dependent223_sorted4",
+            "pa",
+            "pa",
+            "name"
+          ]
+        ]
+      ],
+      "warnings": []
+    },
+    {
+      "physicalPlan": "-> Limit: 1 row(s)  (cost=2.45 rows=1)\n    -> Nested loop antijoin  (cost=2.45 rows=8)\n        -> Sort: pa.`name`  (cost=0.65 rows=4)\n            -> Table scan on pa  (cost=0.65 rows=4)\n        -> Covering index lookup on ch using g (g=pa.g)  (cost=0.601 rows=2)\n",
+      "rows": [
+        {
+          "name": "n001"
+        }
+      ],
+      "fields": [
+        [
+          "name",
+          253,
+          48,
+          20485,
+          0,
+          224,
+          "dependent223_sorted4",
+          "pa",
+          "pa",
+          "name"
+        ]
+      ],
+      "fieldEvents": [
+        [
+          [
+            "name",
+            253,
+            48,
+            20485,
+            0,
+            224,
+            "dependent223_sorted4",
+            "pa",
+            "pa",
+            "name"
+          ]
+        ]
+      ],
+      "warnings": []
+    },
+    {
+      "physicalPlan": "-> Limit: 1 row(s)  (cost=2.45 rows=1)\n    -> Nested loop antijoin  (cost=2.45 rows=8)\n        -> Sort: pa.`name`  (cost=0.65 rows=4)\n            -> Table scan on pa  (cost=0.65 rows=4)\n        -> Covering index lookup on ch using g (g=pa.g)  (cost=0.601 rows=2)\n",
+      "error": {
+        "code": "ER_TABLE_DEF_CHANGED",
+        "errno": 1412,
+        "state": "HY000",
+        "message": "Table definition has changed, please retry transaction"
+      },
+      "fieldEvents": [
+        [
+          [
+            "name",
+            253,
+            48,
+            20485,
+            0,
+            224,
+            "dependent223_sorted4",
+            "pa",
+            "pa",
+            "name"
+          ]
+        ]
+      ],
+      "warnings": [
+        {
+          "Level": "Warning",
+          "Code": 159,
+          "Message": "InnoDB: insufficient history for index 1"
+        },
+        {
+          "Level": "Error",
+          "Code": 1412,
+          "Message": "Table definition has changed, please retry transaction"
+        }
+      ]
+    },
+    {
+      "physicalPlan": "-> Limit: 1 row(s)  (cost=2.45 rows=1)\n    -> Nested loop antijoin  (cost=2.45 rows=8)\n        -> Sort: pa.`name`  (cost=0.65 rows=4)\n            -> Table scan on pa  (cost=0.65 rows=4)\n        -> Covering index lookup on ch using g (g=pa.g)  (cost=0.601 rows=2)\n",
+      "error": {
+        "code": "ER_TABLE_DEF_CHANGED",
+        "errno": 1412,
+        "state": "HY000",
+        "message": "Table definition has changed, please retry transaction"
+      },
+      "fieldEvents": [
+        [
+          [
+            "name",
+            253,
+            48,
+            20485,
+            0,
+            224,
+            "dependent223_sorted4",
+            "pa",
+            "pa",
+            "name"
+          ]
+        ]
+      ],
+      "warnings": [
+        {
+          "Level": "Warning",
+          "Code": 159,
+          "Message": "InnoDB: insufficient history for index 0"
+        },
+        {
+          "Level": "Error",
+          "Code": 1412,
+          "Message": "Table definition has changed, please retry transaction"
+        }
+      ]
+    },
+    {
+      "rows": [
+        [
+          "n004"
+        ],
+        [
+          "n003"
+        ],
+        [
+          "n002"
+        ],
+        [
+          "n001"
+        ]
+      ],
+      "fields": [
+        [
+          "name",
+          253,
+          48,
+          20485,
+          0,
+          224,
+          "dependent223_ctor",
+          "pa",
+          "pa",
+          "name"
+        ]
+      ],
+      "fieldEvents": [
+        [
+          [
+            "name",
+            253,
+            48,
+            20485,
+            0,
+            224,
+            "dependent223_ctor",
+            "pa",
+            "pa",
+            "name"
+          ]
+        ]
+      ],
+      "warnings": []
+    },
+    {
+      "rows": [
+        [
+          "n001"
+        ]
+      ],
+      "fields": [
+        [
+          "name",
+          253,
+          48,
+          20485,
+          0,
+          224,
+          "dependent223_ctor",
+          "pa",
+          "pa",
+          "name"
+        ]
+      ],
+      "fieldEvents": [
+        [
+          [
+            "name",
+            253,
+            48,
+            20485,
+            0,
+            224,
+            "dependent223_ctor",
+            "pa",
+            "pa",
+            "name"
+          ]
+        ]
+      ],
+      "warnings": []
+    },
+    {
+      "error": {
+        "code": "ER_DATA_OUT_OF_RANGE",
+        "errno": 1690,
+        "state": "22003",
+        "message": "BIGINT UNSIGNED value is out of range in '(`dependent223_ctor`.`pa`.`id` + 1)'"
+      },
+      "fieldEvents": [
+        [
+          [
+            "name",
+            253,
+            48,
+            20485,
+            0,
+            224,
+            "dependent223_ctor",
+            "pa",
+            "pa",
+            "name"
+          ]
+        ]
+      ],
+      "warnings": [
+        {
+          "Level": "Error",
+          "Code": 1690,
+          "Message": "BIGINT UNSIGNED value is out of range in '(`dependent223_ctor`.`pa`.`id` + 1)'"
+        }
+      ]
+    },
+    {
+      "error": {
+        "code": "ER_DATA_OUT_OF_RANGE",
+        "errno": 1690,
+        "state": "22003",
+        "message": "BIGINT UNSIGNED value is out of range in '(`dependent223_ctor`.`pa`.`id` + 1)'"
+      },
+      "fieldEvents": [
+        [
+          [
+            "id+1",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      ],
+      "warnings": [
+        {
+          "Level": "Error",
+          "Code": 1690,
+          "Message": "BIGINT UNSIGNED value is out of range in '(`dependent223_ctor`.`pa`.`id` + 1)'"
+        }
+      ]
+    },
+    {
+      "rows": [
+        [
+          "n004"
+        ],
+        [
+          "n003"
+        ],
+        [
+          "n002"
+        ],
+        [
+          "n001"
+        ]
+      ],
+      "fields": [
+        [
+          "CAST(name AS CHAR)",
+          253,
+          48,
+          0,
+          31,
+          224,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "fieldEvents": [
+        [
+          [
+            "CAST(name AS CHAR)",
+            253,
+            48,
+            0,
+            31,
+            224,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      ],
+      "warnings": []
+    },
+    {
+      "rows": [
+        [
+          "n001"
+        ]
+      ],
+      "fields": [
+        [
+          "CAST(name AS CHAR)",
+          253,
+          48,
+          0,
+          31,
+          224,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "fieldEvents": [
+        [
+          [
+            "CAST(name AS CHAR)",
+            253,
+            48,
+            0,
+            31,
+            224,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      ],
+      "warnings": []
+    },
+    {
+      "error": {
+        "code": "ER_DATA_OUT_OF_RANGE",
+        "errno": 1690,
+        "state": "22003",
+        "message": "BIGINT UNSIGNED value is out of range in '(`dependent223_ctor`.`pa`.`id` + 1)'"
+      },
+      "fieldEvents": [
+        [
+          [
+            "CAST(name AS CHAR)",
+            253,
+            48,
+            0,
+            31,
+            224,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      ],
+      "warnings": [
+        {
+          "Level": "Error",
+          "Code": 1690,
+          "Message": "BIGINT UNSIGNED value is out of range in '(`dependent223_ctor`.`pa`.`id` + 1)'"
+        }
+      ]
+    },
+    {
+      "error": {
+        "code": "ER_TOO_BIG_PRECISION",
+        "errno": 1426,
+        "state": "42000",
+        "message": "Too-big precision 66 specified for 'id+1'. Maximum is 65."
+      },
+      "fieldEvents": [],
+      "warnings": [
+        {
+          "Level": "Error",
+          "Code": 1426,
+          "Message": "Too-big precision 66 specified for 'id+1'. Maximum is 65."
+        }
+      ]
+    },
+    {
+      "error": {
+        "code": "ER_TOO_BIG_PRECISION",
+        "errno": 1426,
+        "state": "42000",
+        "message": "Too-big precision 7 specified for 'CAST'. Maximum is 6."
+      },
+      "fieldEvents": [],
+      "warnings": [
+        {
+          "Level": "Error",
+          "Code": 1426,
+          "Message": "Too-big precision 7 specified for 'CAST'. Maximum is 6."
+        }
+      ]
+    },
+    {
+      "error": {
+        "code": "ER_TABLE_DEF_CHANGED",
+        "errno": 1412,
+        "state": "HY000",
+        "message": "Table definition has changed, please retry transaction"
+      },
+      "fieldEvents": [
+        [
+          [
+            "name",
+            253,
+            48,
+            20485,
+            0,
+            224,
+            "dependent223_ctor",
+            "pa",
+            "pa",
+            "name"
+          ]
+        ]
+      ],
+      "warnings": [
+        {
+          "Level": "Warning",
+          "Code": 159,
+          "Message": "InnoDB: insufficient history for index 1"
+        },
+        {
+          "Level": "Error",
+          "Code": 1412,
+          "Message": "Table definition has changed, please retry transaction"
+        }
+      ]
+    },
+    {
+      "error": {
+        "code": "ER_TABLE_DEF_CHANGED",
+        "errno": 1412,
+        "state": "HY000",
+        "message": "Table definition has changed, please retry transaction"
+      },
+      "fieldEvents": [
+        [
+          [
+            "id+1",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      ],
+      "warnings": [
+        {
+          "Level": "Warning",
+          "Code": 159,
+          "Message": "InnoDB: insufficient history for index 1"
+        },
+        {
+          "Level": "Error",
+          "Code": 1412,
+          "Message": "Table definition has changed, please retry transaction"
+        }
+      ]
+    },
+    {
+      "error": {
+        "code": "ER_TABLE_DEF_CHANGED",
+        "errno": 1412,
+        "state": "HY000",
+        "message": "Table definition has changed, please retry transaction"
+      },
+      "fieldEvents": [
+        [
+          [
+            "CAST(name AS CHAR)",
+            253,
+            48,
+            0,
+            31,
+            224,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      ],
+      "warnings": [
+        {
+          "Level": "Warning",
+          "Code": 159,
+          "Message": "InnoDB: insufficient history for index 1"
+        },
+        {
+          "Level": "Error",
+          "Code": 1412,
+          "Message": "Table definition has changed, please retry transaction"
+        }
+      ]
+    },
+    {
+      "physicalPlan": "-> Limit: 1 row(s)  (cost=2.45 rows=1)\n    -> Nested loop antijoin  (cost=2.45 rows=8)\n        -> Sort: pa.`name` DESC  (cost=0.65 rows=4)\n            -> Table scan on pa  (cost=0.65 rows=4)\n        -> Covering index lookup on ch using g (g=pa.g)  (cost=0.601 rows=2)\n",
+      "rows": [
+        [
+          1,
+          "n004"
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "readinit223_ordinal",
+          "pa",
+          "pa",
+          "id"
+        ],
+        [
+          "name",
+          253,
+          48,
+          20485,
+          0,
+          224,
+          "readinit223_ordinal",
+          "pa",
+          "pa",
+          "name"
+        ]
+      ],
+      "fieldEvents": [
+        [
+          [
+            "id",
+            3,
+            11,
+            20483,
+            0,
+            63,
+            "readinit223_ordinal",
+            "pa",
+            "pa",
+            "id"
+          ],
+          [
+            "name",
+            253,
+            48,
+            20485,
+            0,
+            224,
+            "readinit223_ordinal",
+            "pa",
+            "pa",
+            "name"
+          ]
+        ]
+      ],
+      "warnings": []
+    },
+    {
+      "physicalPlan": "-> Limit: 1 row(s)  (cost=2.45 rows=1)\n    -> Nested loop antijoin  (cost=2.45 rows=8)\n        -> Sort: pa.`name` DESC  (cost=0.65 rows=4)\n            -> Table scan on pa  (cost=0.65 rows=4)\n        -> Covering index lookup on ch using g (g=pa.g)  (cost=0.601 rows=2)\n",
+      "rows": [
+        {
+          "id": 1,
+          "name": "n004"
+        }
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "readinit223_ordinal",
+          "pa",
+          "pa",
+          "id"
+        ],
+        [
+          "name",
+          253,
+          48,
+          20485,
+          0,
+          224,
+          "readinit223_ordinal",
+          "pa",
+          "pa",
+          "name"
+        ]
+      ],
+      "fieldEvents": [
+        [
+          [
+            "id",
+            3,
+            11,
+            20483,
+            0,
+            63,
+            "readinit223_ordinal",
+            "pa",
+            "pa",
+            "id"
+          ],
+          [
+            "name",
+            253,
+            48,
+            20485,
+            0,
+            224,
+            "readinit223_ordinal",
+            "pa",
+            "pa",
+            "name"
+          ]
+        ]
+      ],
+      "warnings": []
+    },
+    {
+      "physicalPlan": "-> Limit: 1 row(s)  (cost=2.45 rows=1)\n    -> Nested loop antijoin  (cost=2.45 rows=8)\n        -> Sort: pa.`name` DESC  (cost=0.65 rows=4)\n            -> Table scan on pa  (cost=0.65 rows=4)\n        -> Covering index lookup on ch using g (g=pa.g)  (cost=0.601 rows=2)\n",
+      "error": {
+        "code": "ER_TABLE_DEF_CHANGED",
+        "errno": 1412,
+        "state": "HY000",
+        "message": "Table definition has changed, please retry transaction"
+      },
+      "fieldEvents": [
+        [
+          [
+            "id",
+            3,
+            11,
+            20483,
+            0,
+            63,
+            "readinit223_ordinal",
+            "pa",
+            "pa",
+            "id"
+          ],
+          [
+            "name",
+            253,
+            48,
+            20485,
+            0,
+            224,
+            "readinit223_ordinal",
+            "pa",
+            "pa",
+            "name"
+          ]
+        ]
+      ],
+      "warnings": [
+        {
+          "Level": "Warning",
+          "Code": 159,
+          "Message": "InnoDB: insufficient history for index 1"
+        },
+        {
+          "Level": "Error",
+          "Code": 1412,
+          "Message": "Table definition has changed, please retry transaction"
+        }
+      ]
+    },
+    {
+      "physicalPlan": "-> Limit: 1 row(s)  (cost=2.45 rows=1)\n    -> Nested loop antijoin  (cost=2.45 rows=8)\n        -> Sort: pa.`name` DESC  (cost=0.65 rows=4)\n            -> Table scan on pa  (cost=0.65 rows=4)\n        -> Covering index lookup on ch using g (g=pa.g)  (cost=0.601 rows=2)\n",
+      "error": {
+        "code": "ER_TABLE_DEF_CHANGED",
+        "errno": 1412,
+        "state": "HY000",
+        "message": "Table definition has changed, please retry transaction"
+      },
+      "fieldEvents": [
+        [
+          [
+            "id",
+            3,
+            11,
+            20483,
+            0,
+            63,
+            "readinit223_ordinal",
+            "pa",
+            "pa",
+            "id"
+          ],
+          [
+            "name",
+            253,
+            48,
+            20485,
+            0,
+            224,
+            "readinit223_ordinal",
+            "pa",
+            "pa",
+            "name"
+          ]
+        ]
+      ],
+      "warnings": [
+        {
+          "Level": "Warning",
+          "Code": 159,
+          "Message": "InnoDB: insufficient history for index 1"
+        },
+        {
+          "Level": "Error",
+          "Code": 1412,
+          "Message": "Table definition has changed, please retry transaction"
+        }
+      ]
+    },
+    {
+      "physicalPlan": "-> Limit: 1 row(s)  (cost=2.45 rows=1)\n    -> Nested loop antijoin  (cost=2.45 rows=8)\n        -> Sort: pa.`name` DESC  (cost=0.65 rows=4)\n            -> Table scan on pa  (cost=0.65 rows=4)\n        -> Covering index lookup on ch using g (g=pa.g)  (cost=0.601 rows=2)\n",
+      "rows": [
+        [
+          1,
+          "n004"
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "readinit223_ordinal",
+          "pa",
+          "pa",
+          "id"
+        ],
+        [
+          "name",
+          253,
+          48,
+          20485,
+          0,
+          224,
+          "readinit223_ordinal",
+          "pa",
+          "pa",
+          "name"
+        ]
+      ],
+      "fieldEvents": [
+        [
+          [
+            "id",
+            3,
+            11,
+            20483,
+            0,
+            63,
+            "readinit223_ordinal",
+            "pa",
+            "pa",
+            "id"
+          ],
+          [
+            "name",
+            253,
+            48,
+            20485,
+            0,
+            224,
+            "readinit223_ordinal",
+            "pa",
+            "pa",
+            "name"
+          ]
+        ]
+      ],
+      "warnings": []
+    },
+    {
+      "physicalPlan": "-> Limit: 1 row(s)  (cost=2.45 rows=1)\n    -> Nested loop antijoin  (cost=2.45 rows=8)\n        -> Sort: pa.`name` DESC  (cost=0.65 rows=4)\n            -> Table scan on pa  (cost=0.65 rows=4)\n        -> Covering index lookup on ch using g (g=pa.g)  (cost=0.601 rows=2)\n",
+      "rows": [
+        {
+          "id": 1,
+          "name": "n004"
+        }
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "readinit223_ordinal",
+          "pa",
+          "pa",
+          "id"
+        ],
+        [
+          "name",
+          253,
+          48,
+          20485,
+          0,
+          224,
+          "readinit223_ordinal",
+          "pa",
+          "pa",
+          "name"
+        ]
+      ],
+      "fieldEvents": [
+        [
+          [
+            "id",
+            3,
+            11,
+            20483,
+            0,
+            63,
+            "readinit223_ordinal",
+            "pa",
+            "pa",
+            "id"
+          ],
+          [
+            "name",
+            253,
+            48,
+            20485,
+            0,
+            224,
+            "readinit223_ordinal",
+            "pa",
+            "pa",
+            "name"
+          ]
+        ]
+      ],
+      "warnings": []
+    },
+    {
+      "physicalPlan": "-> Limit: 1 row(s)  (cost=2.45 rows=1)\n    -> Nested loop antijoin  (cost=2.45 rows=8)\n        -> Sort: pa.`name` DESC  (cost=0.65 rows=4)\n            -> Table scan on pa  (cost=0.65 rows=4)\n        -> Covering index lookup on ch using g (g=pa.g)  (cost=0.601 rows=2)\n",
+      "error": {
+        "code": "ER_TABLE_DEF_CHANGED",
+        "errno": 1412,
+        "state": "HY000",
+        "message": "Table definition has changed, please retry transaction"
+      },
+      "fieldEvents": [
+        [
+          [
+            "id",
+            3,
+            11,
+            20483,
+            0,
+            63,
+            "readinit223_ordinal",
+            "pa",
+            "pa",
+            "id"
+          ],
+          [
+            "name",
+            253,
+            48,
+            20485,
+            0,
+            224,
+            "readinit223_ordinal",
+            "pa",
+            "pa",
+            "name"
+          ]
+        ]
+      ],
+      "warnings": [
+        {
+          "Level": "Warning",
+          "Code": 159,
+          "Message": "InnoDB: insufficient history for index 0"
+        },
+        {
+          "Level": "Error",
+          "Code": 1412,
+          "Message": "Table definition has changed, please retry transaction"
+        }
+      ]
+    },
+    {
+      "physicalPlan": "-> Limit: 1 row(s)  (cost=2.45 rows=1)\n    -> Nested loop antijoin  (cost=2.45 rows=8)\n        -> Sort: pa.`name` DESC  (cost=0.65 rows=4)\n            -> Table scan on pa  (cost=0.65 rows=4)\n        -> Covering index lookup on ch using g (g=pa.g)  (cost=0.601 rows=2)\n",
+      "error": {
+        "code": "ER_TABLE_DEF_CHANGED",
+        "errno": 1412,
+        "state": "HY000",
+        "message": "Table definition has changed, please retry transaction"
+      },
+      "fieldEvents": [
+        [
+          [
+            "id",
+            3,
+            11,
+            20483,
+            0,
+            63,
+            "readinit223_ordinal",
+            "pa",
+            "pa",
+            "id"
+          ],
+          [
+            "name",
+            253,
+            48,
+            20485,
+            0,
+            224,
+            "readinit223_ordinal",
+            "pa",
+            "pa",
+            "name"
+          ]
+        ]
+      ],
+      "warnings": [
+        {
+          "Level": "Warning",
+          "Code": 159,
+          "Message": "InnoDB: insufficient history for index 0"
+        },
+        {
+          "Level": "Error",
+          "Code": 1412,
+          "Message": "Table definition has changed, please retry transaction"
+        }
+      ]
+    }
+  ],
+  "baseline": [
+    {
+      "rows": [
+        [
+          "one"
+        ]
+      ],
+      "fields": [
+        [
+          "name",
+          253,
+          48,
+          20485,
+          0,
+          224,
+          "dependent223_ddl",
+          "pa",
+          "pa",
+          "name"
+        ]
+      ],
+      "fieldEvents": [
+        [
+          [
+            "name",
+            253,
+            48,
+            20485,
+            0,
+            224,
+            "dependent223_ddl",
+            "pa",
+            "pa",
+            "name"
+          ]
+        ]
+      ],
+      "warnings": []
+    },
+    {
+      "rows": [
+        {
+          "name": "one"
+        }
+      ],
+      "fields": [
+        [
+          "name",
+          253,
+          48,
+          20485,
+          0,
+          224,
+          "dependent223_ddl",
+          "pa",
+          "pa",
+          "name"
+        ]
+      ],
+      "fieldEvents": [
+        [
+          [
+            "name",
+            253,
+            48,
+            20485,
+            0,
+            224,
+            "dependent223_ddl",
+            "pa",
+            "pa",
+            "name"
+          ]
+        ]
+      ],
+      "warnings": []
+    },
+    {
+      "rows": [],
+      "fields": [
+        [
+          "name",
+          253,
+          48,
+          20485,
+          0,
+          224,
+          "dependent223_ddl",
+          "pa",
+          "pa",
+          "name"
+        ]
+      ],
+      "fieldEvents": [
+        [
+          [
+            "name",
+            253,
+            48,
+            20485,
+            0,
+            224,
+            "dependent223_ddl",
+            "pa",
+            "pa",
+            "name"
+          ]
+        ]
+      ],
+      "warnings": []
+    },
+    {
+      "error": {
+        "code": "ER_TABLE_DEF_CHANGED",
+        "errno": 1412,
+        "state": "HY000",
+        "message": "Table definition has changed, please retry transaction"
+      },
+      "fieldEvents": [],
+      "warnings": [
+        {
+          "Level": "Error",
+          "Code": 1412,
+          "Message": "Table definition has changed, please retry transaction"
+        }
+      ]
+    },
+    {
+      "error": {
+        "code": "ER_NO_SUCH_TABLE",
+        "errno": 1146,
+        "state": "42S02",
+        "message": "Table 'dependent223_ddl.ch' doesn't exist"
+      },
+      "fieldEvents": [],
+      "warnings": [
+        {
+          "Level": "Error",
+          "Code": 1146,
+          "Message": "Table 'dependent223_ddl.ch' doesn't exist"
+        }
+      ]
+    },
+    {
+      "rows": [
+        [
+          "one"
+        ]
+      ],
+      "fields": [
+        [
+          "name",
+          253,
+          48,
+          20485,
+          0,
+          224,
+          "dependent223_sorted",
+          "pa",
+          "pa",
+          "name"
+        ]
+      ],
+      "fieldEvents": [
+        [
+          [
+            "name",
+            253,
+            48,
+            20485,
+            0,
+            224,
+            "dependent223_sorted",
+            "pa",
+            "pa",
+            "name"
+          ]
+        ]
+      ],
+      "warnings": []
+    },
+    {
+      "rows": [
+        {
+          "name": "one"
+        }
+      ],
+      "fields": [
+        [
+          "name",
+          253,
+          48,
+          20485,
+          0,
+          224,
+          "dependent223_sorted",
+          "pa",
+          "pa",
+          "name"
+        ]
+      ],
+      "fieldEvents": [
+        [
+          [
+            "name",
+            253,
+            48,
+            20485,
+            0,
+            224,
+            "dependent223_sorted",
+            "pa",
+            "pa",
+            "name"
+          ]
+        ]
+      ],
+      "warnings": []
+    },
+    {
+      "rows": [],
+      "fields": [
+        [
+          "name",
+          253,
+          48,
+          20485,
+          0,
+          224,
+          "dependent223_sorted",
+          "pa",
+          "pa",
+          "name"
+        ]
+      ],
+      "fieldEvents": [
+        [
+          [
+            "name",
+            253,
+            48,
+            20485,
+            0,
+            224,
+            "dependent223_sorted",
+            "pa",
+            "pa",
+            "name"
+          ]
+        ]
+      ],
+      "warnings": []
+    },
+    {
+      "error": {
+        "code": "ER_NO_SUCH_TABLE",
+        "errno": 1146,
+        "state": "42S02",
+        "message": "Table 'dependent223_sorted.ch' doesn't exist"
+      },
+      "fieldEvents": [],
+      "warnings": [
+        {
+          "Level": "Error",
+          "Code": 1146,
+          "Message": "Table 'dependent223_sorted.ch' doesn't exist"
+        }
+      ]
+    },
+    {
+      "error": {
+        "code": "ER_NO_SUCH_TABLE",
+        "errno": 1146,
+        "state": "42S02",
+        "message": "Table 'dependent223_sorted.pa' doesn't exist"
+      },
+      "fieldEvents": [],
+      "warnings": [
+        {
+          "Level": "Error",
+          "Code": 1146,
+          "Message": "Table 'dependent223_sorted.pa' doesn't exist"
+        }
+      ]
+    },
+    {
+      "physicalPlan": "-> Limit\n    -> Sort\n        -> Filter\n            -> Table scan on pa\n            -> Select #2\n                -> Covering index lookup on ch using g\n",
+      "rows": [
+        [
+          "n001"
+        ]
+      ],
+      "fields": [
+        [
+          "name",
+          253,
+          48,
+          20485,
+          0,
+          224,
+          "dependent223_sorted4",
+          "pa",
+          "pa",
+          "name"
+        ]
+      ],
+      "fieldEvents": [
+        [
+          [
+            "name",
+            253,
+            48,
+            20485,
+            0,
+            224,
+            "dependent223_sorted4",
+            "pa",
+            "pa",
+            "name"
+          ]
+        ]
+      ],
+      "warnings": []
+    },
+    {
+      "physicalPlan": "-> Limit\n    -> Sort\n        -> Filter\n            -> Table scan on pa\n            -> Select #2\n                -> Covering index lookup on ch using g\n",
+      "rows": [
+        {
+          "name": "n001"
+        }
+      ],
+      "fields": [
+        [
+          "name",
+          253,
+          48,
+          20485,
+          0,
+          224,
+          "dependent223_sorted4",
+          "pa",
+          "pa",
+          "name"
+        ]
+      ],
+      "fieldEvents": [
+        [
+          [
+            "name",
+            253,
+            48,
+            20485,
+            0,
+            224,
+            "dependent223_sorted4",
+            "pa",
+            "pa",
+            "name"
+          ]
+        ]
+      ],
+      "warnings": []
+    },
+    {
+      "physicalPlan": "-> Limit\n    -> Sort\n        -> Filter\n            -> Table scan on pa\n            -> Select #2\n                -> Covering index lookup on ch using g\n",
+      "error": {
+        "code": "ER_TABLE_DEF_CHANGED",
+        "errno": 1412,
+        "state": "HY000",
+        "message": "Table definition has changed, please retry transaction"
+      },
+      "fieldEvents": [],
+      "warnings": [
+        {
+          "Level": "Error",
+          "Code": 1412,
+          "Message": "Table definition has changed, please retry transaction"
+        }
+      ]
+    },
+    {
+      "physicalPlan": "-> Limit\n    -> Nested loop antijoin\n        -> Sort\n            -> Table scan on pa\n        -> Covering index lookup on ch using g\n",
+      "rows": [
+        [
+          "n001"
+        ]
+      ],
+      "fields": [
+        [
+          "name",
+          253,
+          48,
+          20485,
+          0,
+          224,
+          "dependent223_sorted4",
+          "pa",
+          "pa",
+          "name"
+        ]
+      ],
+      "fieldEvents": [
+        [
+          [
+            "name",
+            253,
+            48,
+            20485,
+            0,
+            224,
+            "dependent223_sorted4",
+            "pa",
+            "pa",
+            "name"
+          ]
+        ]
+      ],
+      "warnings": []
+    },
+    {
+      "physicalPlan": "-> Limit\n    -> Nested loop antijoin\n        -> Sort\n            -> Table scan on pa\n        -> Covering index lookup on ch using g\n",
+      "rows": [
+        {
+          "name": "n001"
+        }
+      ],
+      "fields": [
+        [
+          "name",
+          253,
+          48,
+          20485,
+          0,
+          224,
+          "dependent223_sorted4",
+          "pa",
+          "pa",
+          "name"
+        ]
+      ],
+      "fieldEvents": [
+        [
+          [
+            "name",
+            253,
+            48,
+            20485,
+            0,
+            224,
+            "dependent223_sorted4",
+            "pa",
+            "pa",
+            "name"
+          ]
+        ]
+      ],
+      "warnings": []
+    },
+    {
+      "physicalPlan": "-> Limit\n    -> Nested loop antijoin\n        -> Sort\n            -> Table scan on pa\n        -> Covering index lookup on ch using g\n",
+      "error": {
+        "code": "ER_TABLE_DEF_CHANGED",
+        "errno": 1412,
+        "state": "HY000",
+        "message": "Table definition has changed, please retry transaction"
+      },
+      "fieldEvents": [],
+      "warnings": [
+        {
+          "Level": "Error",
+          "Code": 1412,
+          "Message": "Table definition has changed, please retry transaction"
+        }
+      ]
+    },
+    {
+      "rows": [
+        [
+          "n004"
+        ],
+        [
+          "n003"
+        ],
+        [
+          "n002"
+        ],
+        [
+          "n001"
+        ]
+      ],
+      "fields": [
+        [
+          "name",
+          253,
+          48,
+          20485,
+          0,
+          224,
+          "dependent223_ctor",
+          "pa",
+          "pa",
+          "name"
+        ]
+      ],
+      "fieldEvents": [
+        [
+          [
+            "name",
+            253,
+            48,
+            20485,
+            0,
+            224,
+            "dependent223_ctor",
+            "pa",
+            "pa",
+            "name"
+          ]
+        ]
+      ],
+      "warnings": []
+    },
+    {
+      "rows": [
+        [
+          "n001"
+        ]
+      ],
+      "fields": [
+        [
+          "name",
+          253,
+          48,
+          20485,
+          0,
+          224,
+          "dependent223_ctor",
+          "pa",
+          "pa",
+          "name"
+        ]
+      ],
+      "fieldEvents": [
+        [
+          [
+            "name",
+            253,
+            48,
+            20485,
+            0,
+            224,
+            "dependent223_ctor",
+            "pa",
+            "pa",
+            "name"
+          ]
+        ]
+      ],
+      "warnings": []
+    },
+    {
+      "error": {
+        "code": "ER_DATA_OUT_OF_RANGE",
+        "errno": 1690,
+        "state": "22003",
+        "message": "BIGINT UNSIGNED value is out of range in '(`dependent223_ctor`.`pa`.`id` + 1)'"
+      },
+      "fieldEvents": [],
+      "warnings": [
+        {
+          "Level": "Error",
+          "Code": 1690,
+          "Message": "BIGINT UNSIGNED value is out of range in '(`dependent223_ctor`.`pa`.`id` + 1)'"
+        }
+      ]
+    },
+    {
+      "error": {
+        "code": "ER_DATA_OUT_OF_RANGE",
+        "errno": 1690,
+        "state": "22003",
+        "message": "BIGINT UNSIGNED value is out of range in '(`dependent223_ctor`.`pa`.`id` + 1)'"
+      },
+      "fieldEvents": [
+        [
+          [
+            "id+1",
+            8,
+            21,
+            161,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      ],
+      "warnings": [
+        {
+          "Level": "Error",
+          "Code": 1690,
+          "Message": "BIGINT UNSIGNED value is out of range in '(`dependent223_ctor`.`pa`.`id` + 1)'"
+        }
+      ]
+    },
+    {
+      "rows": [
+        [
+          "n004"
+        ],
+        [
+          "n003"
+        ],
+        [
+          "n002"
+        ],
+        [
+          "n001"
+        ]
+      ],
+      "fields": [
+        [
+          "CAST(name AS CHAR)",
+          253,
+          48,
+          0,
+          31,
+          224,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "fieldEvents": [
+        [
+          [
+            "CAST(name AS CHAR)",
+            253,
+            48,
+            0,
+            31,
+            224,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      ],
+      "warnings": []
+    },
+    {
+      "rows": [
+        [
+          "n001"
+        ]
+      ],
+      "fields": [
+        [
+          "CAST(name AS CHAR)",
+          253,
+          48,
+          0,
+          31,
+          224,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "fieldEvents": [
+        [
+          [
+            "CAST(name AS CHAR)",
+            253,
+            48,
+            0,
+            31,
+            224,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      ],
+      "warnings": []
+    },
+    {
+      "error": {
+        "code": "ER_DATA_OUT_OF_RANGE",
+        "errno": 1690,
+        "state": "22003",
+        "message": "BIGINT UNSIGNED value is out of range in '(`dependent223_ctor`.`pa`.`id` + 1)'"
+      },
+      "fieldEvents": [
+        [
+          [
+            "CAST(id+1 AS DECIMAL(66,0))",
+            246,
+            66,
+            129,
+            0,
+            63,
+            "",
+            "",
+            "",
+            ""
+          ]
+        ]
+      ],
+      "warnings": [
+        {
+          "Level": "Error",
+          "Code": 1690,
+          "Message": "BIGINT UNSIGNED value is out of range in '(`dependent223_ctor`.`pa`.`id` + 1)'"
+        }
+      ]
+    },
+    {
+      "error": {
+        "code": "ER_TOO_BIG_PRECISION",
+        "errno": 1426,
+        "state": "42000",
+        "message": "Too-big precision 7 specified for 'CAST'. Maximum is 6."
+      },
+      "fieldEvents": [],
+      "warnings": [
+        {
+          "Level": "Error",
+          "Code": 1426,
+          "Message": "Too-big precision 7 specified for 'CAST'. Maximum is 6."
+        }
+      ]
+    },
+    {
+      "physicalPlan": "-> Limit\n    -> Nested loop antijoin\n        -> Sort\n            -> Table scan on pa\n        -> Covering index lookup on ch using g\n",
+      "rows": [
+        [
+          1,
+          "n004"
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "readinit223_ordinal",
+          "pa",
+          "pa",
+          "id"
+        ],
+        [
+          "name",
+          253,
+          48,
+          20485,
+          0,
+          224,
+          "readinit223_ordinal",
+          "pa",
+          "pa",
+          "name"
+        ]
+      ],
+      "fieldEvents": [
+        [
+          [
+            "id",
+            3,
+            11,
+            20483,
+            0,
+            63,
+            "readinit223_ordinal",
+            "pa",
+            "pa",
+            "id"
+          ],
+          [
+            "name",
+            253,
+            48,
+            20485,
+            0,
+            224,
+            "readinit223_ordinal",
+            "pa",
+            "pa",
+            "name"
+          ]
+        ]
+      ],
+      "warnings": []
+    },
+    {
+      "physicalPlan": "-> Limit\n    -> Nested loop antijoin\n        -> Sort\n            -> Table scan on pa\n        -> Covering index lookup on ch using g\n",
+      "rows": [
+        {
+          "id": 1,
+          "name": "n004"
+        }
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "readinit223_ordinal",
+          "pa",
+          "pa",
+          "id"
+        ],
+        [
+          "name",
+          253,
+          48,
+          20485,
+          0,
+          224,
+          "readinit223_ordinal",
+          "pa",
+          "pa",
+          "name"
+        ]
+      ],
+      "fieldEvents": [
+        [
+          [
+            "id",
+            3,
+            11,
+            20483,
+            0,
+            63,
+            "readinit223_ordinal",
+            "pa",
+            "pa",
+            "id"
+          ],
+          [
+            "name",
+            253,
+            48,
+            20485,
+            0,
+            224,
+            "readinit223_ordinal",
+            "pa",
+            "pa",
+            "name"
+          ]
+        ]
+      ],
+      "warnings": []
+    },
+    {
+      "physicalPlan": "-> Limit\n    -> Nested loop antijoin\n        -> Sort\n            -> Table scan on pa\n        -> Covering index lookup on ch using g\n",
+      "rows": [
+        [
+          1,
+          "n004"
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "readinit223_ordinal",
+          "pa",
+          "pa",
+          "id"
+        ],
+        [
+          "name",
+          253,
+          48,
+          20485,
+          0,
+          224,
+          "readinit223_ordinal",
+          "pa",
+          "pa",
+          "name"
+        ]
+      ],
+      "fieldEvents": [
+        [
+          [
+            "id",
+            3,
+            11,
+            20483,
+            0,
+            63,
+            "readinit223_ordinal",
+            "pa",
+            "pa",
+            "id"
+          ],
+          [
+            "name",
+            253,
+            48,
+            20485,
+            0,
+            224,
+            "readinit223_ordinal",
+            "pa",
+            "pa",
+            "name"
+          ]
+        ]
+      ],
+      "warnings": []
+    },
+    {
+      "physicalPlan": "-> Limit\n    -> Nested loop antijoin\n        -> Sort\n            -> Table scan on pa\n        -> Covering index lookup on ch using g\n",
+      "rows": [
+        {
+          "id": 1,
+          "name": "n004"
+        }
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "readinit223_ordinal",
+          "pa",
+          "pa",
+          "id"
+        ],
+        [
+          "name",
+          253,
+          48,
+          20485,
+          0,
+          224,
+          "readinit223_ordinal",
+          "pa",
+          "pa",
+          "name"
+        ]
+      ],
+      "fieldEvents": [
+        [
+          [
+            "id",
+            3,
+            11,
+            20483,
+            0,
+            63,
+            "readinit223_ordinal",
+            "pa",
+            "pa",
+            "id"
+          ],
+          [
+            "name",
+            253,
+            48,
+            20485,
+            0,
+            224,
+            "readinit223_ordinal",
+            "pa",
+            "pa",
+            "name"
+          ]
+        ]
+      ],
+      "warnings": []
+    },
+    {
+      "physicalPlan": "-> Limit\n    -> Nested loop antijoin\n        -> Sort\n            -> Table scan on pa\n        -> Covering index lookup on ch using g\n",
+      "rows": [
+        [
+          1,
+          "n004"
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "readinit223_ordinal",
+          "pa",
+          "pa",
+          "id"
+        ],
+        [
+          "name",
+          253,
+          48,
+          20485,
+          0,
+          224,
+          "readinit223_ordinal",
+          "pa",
+          "pa",
+          "name"
+        ]
+      ],
+      "fieldEvents": [
+        [
+          [
+            "id",
+            3,
+            11,
+            20483,
+            0,
+            63,
+            "readinit223_ordinal",
+            "pa",
+            "pa",
+            "id"
+          ],
+          [
+            "name",
+            253,
+            48,
+            20485,
+            0,
+            224,
+            "readinit223_ordinal",
+            "pa",
+            "pa",
+            "name"
+          ]
+        ]
+      ],
+      "warnings": []
+    },
+    {
+      "physicalPlan": "-> Limit\n    -> Nested loop antijoin\n        -> Sort\n            -> Table scan on pa\n        -> Covering index lookup on ch using g\n",
+      "rows": [
+        {
+          "id": 1,
+          "name": "n004"
+        }
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          20483,
+          0,
+          63,
+          "readinit223_ordinal",
+          "pa",
+          "pa",
+          "id"
+        ],
+        [
+          "name",
+          253,
+          48,
+          20485,
+          0,
+          224,
+          "readinit223_ordinal",
+          "pa",
+          "pa",
+          "name"
+        ]
+      ],
+      "fieldEvents": [
+        [
+          [
+            "id",
+            3,
+            11,
+            20483,
+            0,
+            63,
+            "readinit223_ordinal",
+            "pa",
+            "pa",
+            "id"
+          ],
+          [
+            "name",
+            253,
+            48,
+            20485,
+            0,
+            224,
+            "readinit223_ordinal",
+            "pa",
+            "pa",
+            "name"
+          ]
+        ]
+      ],
+      "warnings": []
+    },
+    {
+      "physicalPlan": "-> Limit\n    -> Nested loop antijoin\n        -> Sort\n            -> Table scan on pa\n        -> Covering index lookup on ch using g\n",
+      "error": {
+        "code": "ER_TABLE_DEF_CHANGED",
+        "errno": 1412,
+        "state": "HY000",
+        "message": "Table definition has changed, please retry transaction"
+      },
+      "fieldEvents": [],
+      "warnings": [
+        {
+          "Level": "Error",
+          "Code": 1412,
+          "Message": "Table definition has changed, please retry transaction"
+        }
+      ]
+    },
+    {
+      "physicalPlan": "-> Limit\n    -> Nested loop antijoin\n        -> Sort\n            -> Table scan on pa\n        -> Covering index lookup on ch using g\n",
+      "error": {
+        "code": "ER_TABLE_DEF_CHANGED",
+        "errno": 1412,
+        "state": "HY000",
+        "message": "Table definition has changed, please retry transaction"
+      },
+      "fieldEvents": [],
+      "warnings": [
+        {
+          "Level": "Error",
+          "Code": 1412,
+          "Message": "Table definition has changed, please retry transaction"
+        }
+      ]
+    }
+  ],
+  "cases": [
+    {
+      "group": "plain",
+      "switches": "default,semijoin=off",
+      "target": "ch",
+      "mutation": "none",
+      "key": null,
+      "method": "query",
+      "projection": "name",
+      "order": "",
+      "native": 0,
+      "baseline": 0
+    },
+    {
+      "group": "plain",
+      "switches": "default,semijoin=off",
+      "target": "ch",
+      "mutation": "none",
+      "key": null,
+      "method": "execute",
+      "projection": "name",
+      "order": "",
+      "native": 1,
+      "baseline": 1
+    },
+    {
+      "group": "plain",
+      "switches": "default,semijoin=off",
+      "target": "ch",
+      "mutation": "none",
+      "key": 1,
+      "method": "query",
+      "projection": "name",
+      "order": "",
+      "native": 2,
+      "baseline": 2
+    },
+    {
+      "group": "plain",
+      "switches": "default,semijoin=off",
+      "target": "ch",
+      "mutation": "none",
+      "key": 1,
+      "method": "execute",
+      "projection": "name",
+      "order": "",
+      "native": 2,
+      "baseline": 2
+    },
+    {
+      "group": "plain",
+      "switches": "default,semijoin=off",
+      "target": "ch",
+      "mutation": "none",
+      "key": 9,
+      "method": "query",
+      "projection": "name",
+      "order": "",
+      "native": 0,
+      "baseline": 0
+    },
+    {
+      "group": "plain",
+      "switches": "default,semijoin=off",
+      "target": "ch",
+      "mutation": "none",
+      "key": 9,
+      "method": "execute",
+      "projection": "name",
+      "order": "",
+      "native": 1,
+      "baseline": 1
+    },
+    {
+      "group": "plain",
+      "switches": "default,semijoin=off",
+      "target": "ch",
+      "mutation": "truncate",
+      "key": null,
+      "method": "query",
+      "projection": "name",
+      "order": "",
+      "native": 3,
+      "baseline": 3
+    },
+    {
+      "group": "plain",
+      "switches": "default,semijoin=off",
+      "target": "ch",
+      "mutation": "truncate",
+      "key": null,
+      "method": "execute",
+      "projection": "name",
+      "order": "",
+      "native": 3,
+      "baseline": 3
+    },
+    {
+      "group": "plain",
+      "switches": "default,semijoin=off",
+      "target": "ch",
+      "mutation": "truncate",
+      "key": 1,
+      "method": "query",
+      "projection": "name",
+      "order": "",
+      "native": 3,
+      "baseline": 3
+    },
+    {
+      "group": "plain",
+      "switches": "default,semijoin=off",
+      "target": "ch",
+      "mutation": "truncate",
+      "key": 1,
+      "method": "execute",
+      "projection": "name",
+      "order": "",
+      "native": 3,
+      "baseline": 3
+    },
+    {
+      "group": "plain",
+      "switches": "default,semijoin=off",
+      "target": "ch",
+      "mutation": "truncate",
+      "key": 9,
+      "method": "query",
+      "projection": "name",
+      "order": "",
+      "native": 3,
+      "baseline": 3
+    },
+    {
+      "group": "plain",
+      "switches": "default,semijoin=off",
+      "target": "ch",
+      "mutation": "truncate",
+      "key": 9,
+      "method": "execute",
+      "projection": "name",
+      "order": "",
+      "native": 3,
+      "baseline": 3
+    },
+    {
+      "group": "plain",
+      "switches": "default,semijoin=off",
+      "target": "ch",
+      "mutation": "drop-create",
+      "key": null,
+      "method": "query",
+      "projection": "name",
+      "order": "",
+      "native": 3,
+      "baseline": 3
+    },
+    {
+      "group": "plain",
+      "switches": "default,semijoin=off",
+      "target": "ch",
+      "mutation": "drop-create",
+      "key": null,
+      "method": "execute",
+      "projection": "name",
+      "order": "",
+      "native": 3,
+      "baseline": 3
+    },
+    {
+      "group": "plain",
+      "switches": "default,semijoin=off",
+      "target": "ch",
+      "mutation": "drop-create",
+      "key": 1,
+      "method": "query",
+      "projection": "name",
+      "order": "",
+      "native": 3,
+      "baseline": 3
+    },
+    {
+      "group": "plain",
+      "switches": "default,semijoin=off",
+      "target": "ch",
+      "mutation": "drop-create",
+      "key": 1,
+      "method": "execute",
+      "projection": "name",
+      "order": "",
+      "native": 3,
+      "baseline": 3
+    },
+    {
+      "group": "plain",
+      "switches": "default,semijoin=off",
+      "target": "ch",
+      "mutation": "drop-create",
+      "key": 9,
+      "method": "query",
+      "projection": "name",
+      "order": "",
+      "native": 3,
+      "baseline": 3
+    },
+    {
+      "group": "plain",
+      "switches": "default,semijoin=off",
+      "target": "ch",
+      "mutation": "drop-create",
+      "key": 9,
+      "method": "execute",
+      "projection": "name",
+      "order": "",
+      "native": 3,
+      "baseline": 3
+    },
+    {
+      "group": "plain",
+      "switches": "default,semijoin=off",
+      "target": "ch",
+      "mutation": "alter-copy",
+      "key": null,
+      "method": "query",
+      "projection": "name",
+      "order": "",
+      "native": 3,
+      "baseline": 3
+    },
+    {
+      "group": "plain",
+      "switches": "default,semijoin=off",
+      "target": "ch",
+      "mutation": "alter-copy",
+      "key": null,
+      "method": "execute",
+      "projection": "name",
+      "order": "",
+      "native": 3,
+      "baseline": 3
+    },
+    {
+      "group": "plain",
+      "switches": "default,semijoin=off",
+      "target": "ch",
+      "mutation": "alter-copy",
+      "key": 1,
+      "method": "query",
+      "projection": "name",
+      "order": "",
+      "native": 3,
+      "baseline": 3
+    },
+    {
+      "group": "plain",
+      "switches": "default,semijoin=off",
+      "target": "ch",
+      "mutation": "alter-copy",
+      "key": 1,
+      "method": "execute",
+      "projection": "name",
+      "order": "",
+      "native": 3,
+      "baseline": 3
+    },
+    {
+      "group": "plain",
+      "switches": "default,semijoin=off",
+      "target": "ch",
+      "mutation": "alter-copy",
+      "key": 9,
+      "method": "query",
+      "projection": "name",
+      "order": "",
+      "native": 3,
+      "baseline": 3
+    },
+    {
+      "group": "plain",
+      "switches": "default,semijoin=off",
+      "target": "ch",
+      "mutation": "alter-copy",
+      "key": 9,
+      "method": "execute",
+      "projection": "name",
+      "order": "",
+      "native": 3,
+      "baseline": 3
+    },
+    {
+      "group": "plain",
+      "switches": "default,semijoin=off",
+      "target": "ch",
+      "mutation": "drop",
+      "key": null,
+      "method": "query",
+      "projection": "name",
+      "order": "",
+      "native": 4,
+      "baseline": 4
+    },
+    {
+      "group": "plain",
+      "switches": "default,semijoin=off",
+      "target": "ch",
+      "mutation": "drop",
+      "key": null,
+      "method": "execute",
+      "projection": "name",
+      "order": "",
+      "native": 4,
+      "baseline": 4
+    },
+    {
+      "group": "plain",
+      "switches": "default,semijoin=off",
+      "target": "ch",
+      "mutation": "drop",
+      "key": 1,
+      "method": "query",
+      "projection": "name",
+      "order": "",
+      "native": 4,
+      "baseline": 4
+    },
+    {
+      "group": "plain",
+      "switches": "default,semijoin=off",
+      "target": "ch",
+      "mutation": "drop",
+      "key": 1,
+      "method": "execute",
+      "projection": "name",
+      "order": "",
+      "native": 4,
+      "baseline": 4
+    },
+    {
+      "group": "plain",
+      "switches": "default,semijoin=off",
+      "target": "ch",
+      "mutation": "drop",
+      "key": 9,
+      "method": "query",
+      "projection": "name",
+      "order": "",
+      "native": 4,
+      "baseline": 4
+    },
+    {
+      "group": "plain",
+      "switches": "default,semijoin=off",
+      "target": "ch",
+      "mutation": "drop",
+      "key": 9,
+      "method": "execute",
+      "projection": "name",
+      "order": "",
+      "native": 4,
+      "baseline": 4
+    },
+    {
+      "group": "plain",
+      "switches": "default,materialization=off",
+      "target": "ch",
+      "mutation": "none",
+      "key": null,
+      "method": "query",
+      "projection": "name",
+      "order": "",
+      "native": 0,
+      "baseline": 0
+    },
+    {
+      "group": "plain",
+      "switches": "default,materialization=off",
+      "target": "ch",
+      "mutation": "none",
+      "key": null,
+      "method": "execute",
+      "projection": "name",
+      "order": "",
+      "native": 1,
+      "baseline": 1
+    },
+    {
+      "group": "plain",
+      "switches": "default,materialization=off",
+      "target": "ch",
+      "mutation": "none",
+      "key": 1,
+      "method": "query",
+      "projection": "name",
+      "order": "",
+      "native": 2,
+      "baseline": 2
+    },
+    {
+      "group": "plain",
+      "switches": "default,materialization=off",
+      "target": "ch",
+      "mutation": "none",
+      "key": 1,
+      "method": "execute",
+      "projection": "name",
+      "order": "",
+      "native": 2,
+      "baseline": 2
+    },
+    {
+      "group": "plain",
+      "switches": "default,materialization=off",
+      "target": "ch",
+      "mutation": "none",
+      "key": 9,
+      "method": "query",
+      "projection": "name",
+      "order": "",
+      "native": 0,
+      "baseline": 0
+    },
+    {
+      "group": "plain",
+      "switches": "default,materialization=off",
+      "target": "ch",
+      "mutation": "none",
+      "key": 9,
+      "method": "execute",
+      "projection": "name",
+      "order": "",
+      "native": 1,
+      "baseline": 1
+    },
+    {
+      "group": "plain",
+      "switches": "default,materialization=off",
+      "target": "ch",
+      "mutation": "truncate",
+      "key": null,
+      "method": "query",
+      "projection": "name",
+      "order": "",
+      "native": 3,
+      "baseline": 0
+    },
+    {
+      "group": "plain",
+      "switches": "default,materialization=off",
+      "target": "ch",
+      "mutation": "truncate",
+      "key": null,
+      "method": "execute",
+      "projection": "name",
+      "order": "",
+      "native": 3,
+      "baseline": 1
+    },
+    {
+      "group": "plain",
+      "switches": "default,materialization=off",
+      "target": "ch",
+      "mutation": "truncate",
+      "key": 1,
+      "method": "query",
+      "projection": "name",
+      "order": "",
+      "native": 3,
+      "baseline": 3
+    },
+    {
+      "group": "plain",
+      "switches": "default,materialization=off",
+      "target": "ch",
+      "mutation": "truncate",
+      "key": 1,
+      "method": "execute",
+      "projection": "name",
+      "order": "",
+      "native": 3,
+      "baseline": 3
+    },
+    {
+      "group": "plain",
+      "switches": "default,materialization=off",
+      "target": "ch",
+      "mutation": "truncate",
+      "key": 9,
+      "method": "query",
+      "projection": "name",
+      "order": "",
+      "native": 3,
+      "baseline": 3
+    },
+    {
+      "group": "plain",
+      "switches": "default,materialization=off",
+      "target": "ch",
+      "mutation": "truncate",
+      "key": 9,
+      "method": "execute",
+      "projection": "name",
+      "order": "",
+      "native": 3,
+      "baseline": 3
+    },
+    {
+      "group": "plain",
+      "switches": "default,materialization=off",
+      "target": "ch",
+      "mutation": "drop-create",
+      "key": null,
+      "method": "query",
+      "projection": "name",
+      "order": "",
+      "native": 3,
+      "baseline": 0
+    },
+    {
+      "group": "plain",
+      "switches": "default,materialization=off",
+      "target": "ch",
+      "mutation": "drop-create",
+      "key": null,
+      "method": "execute",
+      "projection": "name",
+      "order": "",
+      "native": 3,
+      "baseline": 1
+    },
+    {
+      "group": "plain",
+      "switches": "default,materialization=off",
+      "target": "ch",
+      "mutation": "drop-create",
+      "key": 1,
+      "method": "query",
+      "projection": "name",
+      "order": "",
+      "native": 3,
+      "baseline": 3
+    },
+    {
+      "group": "plain",
+      "switches": "default,materialization=off",
+      "target": "ch",
+      "mutation": "drop-create",
+      "key": 1,
+      "method": "execute",
+      "projection": "name",
+      "order": "",
+      "native": 3,
+      "baseline": 3
+    },
+    {
+      "group": "plain",
+      "switches": "default,materialization=off",
+      "target": "ch",
+      "mutation": "drop-create",
+      "key": 9,
+      "method": "query",
+      "projection": "name",
+      "order": "",
+      "native": 3,
+      "baseline": 3
+    },
+    {
+      "group": "plain",
+      "switches": "default,materialization=off",
+      "target": "ch",
+      "mutation": "drop-create",
+      "key": 9,
+      "method": "execute",
+      "projection": "name",
+      "order": "",
+      "native": 3,
+      "baseline": 3
+    },
+    {
+      "group": "plain",
+      "switches": "default,materialization=off",
+      "target": "ch",
+      "mutation": "alter-copy",
+      "key": null,
+      "method": "query",
+      "projection": "name",
+      "order": "",
+      "native": 3,
+      "baseline": 0
+    },
+    {
+      "group": "plain",
+      "switches": "default,materialization=off",
+      "target": "ch",
+      "mutation": "alter-copy",
+      "key": null,
+      "method": "execute",
+      "projection": "name",
+      "order": "",
+      "native": 3,
+      "baseline": 1
+    },
+    {
+      "group": "plain",
+      "switches": "default,materialization=off",
+      "target": "ch",
+      "mutation": "alter-copy",
+      "key": 1,
+      "method": "query",
+      "projection": "name",
+      "order": "",
+      "native": 3,
+      "baseline": 3
+    },
+    {
+      "group": "plain",
+      "switches": "default,materialization=off",
+      "target": "ch",
+      "mutation": "alter-copy",
+      "key": 1,
+      "method": "execute",
+      "projection": "name",
+      "order": "",
+      "native": 3,
+      "baseline": 3
+    },
+    {
+      "group": "plain",
+      "switches": "default,materialization=off",
+      "target": "ch",
+      "mutation": "alter-copy",
+      "key": 9,
+      "method": "query",
+      "projection": "name",
+      "order": "",
+      "native": 3,
+      "baseline": 3
+    },
+    {
+      "group": "plain",
+      "switches": "default,materialization=off",
+      "target": "ch",
+      "mutation": "alter-copy",
+      "key": 9,
+      "method": "execute",
+      "projection": "name",
+      "order": "",
+      "native": 3,
+      "baseline": 3
+    },
+    {
+      "group": "plain",
+      "switches": "default,materialization=off",
+      "target": "ch",
+      "mutation": "drop",
+      "key": null,
+      "method": "query",
+      "projection": "name",
+      "order": "",
+      "native": 4,
+      "baseline": 4
+    },
+    {
+      "group": "plain",
+      "switches": "default,materialization=off",
+      "target": "ch",
+      "mutation": "drop",
+      "key": null,
+      "method": "execute",
+      "projection": "name",
+      "order": "",
+      "native": 4,
+      "baseline": 4
+    },
+    {
+      "group": "plain",
+      "switches": "default,materialization=off",
+      "target": "ch",
+      "mutation": "drop",
+      "key": 1,
+      "method": "query",
+      "projection": "name",
+      "order": "",
+      "native": 4,
+      "baseline": 4
+    },
+    {
+      "group": "plain",
+      "switches": "default,materialization=off",
+      "target": "ch",
+      "mutation": "drop",
+      "key": 1,
+      "method": "execute",
+      "projection": "name",
+      "order": "",
+      "native": 4,
+      "baseline": 4
+    },
+    {
+      "group": "plain",
+      "switches": "default,materialization=off",
+      "target": "ch",
+      "mutation": "drop",
+      "key": 9,
+      "method": "query",
+      "projection": "name",
+      "order": "",
+      "native": 4,
+      "baseline": 4
+    },
+    {
+      "group": "plain",
+      "switches": "default,materialization=off",
+      "target": "ch",
+      "mutation": "drop",
+      "key": 9,
+      "method": "execute",
+      "projection": "name",
+      "order": "",
+      "native": 4,
+      "baseline": 4
+    },
+    {
+      "group": "sorted",
+      "switches": "default,semijoin=off",
+      "target": "ch",
+      "mutation": "none",
+      "key": null,
+      "method": "query",
+      "projection": "name",
+      "order": "",
+      "native": 5,
+      "baseline": 5
+    },
+    {
+      "group": "sorted",
+      "switches": "default,semijoin=off",
+      "target": "ch",
+      "mutation": "none",
+      "key": null,
+      "method": "execute",
+      "projection": "name",
+      "order": "",
+      "native": 6,
+      "baseline": 6
+    },
+    {
+      "group": "sorted",
+      "switches": "default,semijoin=off",
+      "target": "ch",
+      "mutation": "none",
+      "key": 1,
+      "method": "query",
+      "projection": "name",
+      "order": "",
+      "native": 7,
+      "baseline": 7
+    },
+    {
+      "group": "sorted",
+      "switches": "default,semijoin=off",
+      "target": "ch",
+      "mutation": "none",
+      "key": 1,
+      "method": "execute",
+      "projection": "name",
+      "order": "",
+      "native": 7,
+      "baseline": 7
+    },
+    {
+      "group": "sorted",
+      "switches": "default,semijoin=off",
+      "target": "ch",
+      "mutation": "truncate",
+      "key": null,
+      "method": "query",
+      "projection": "name",
+      "order": "",
+      "native": 8,
+      "baseline": 3
+    },
+    {
+      "group": "sorted",
+      "switches": "default,semijoin=off",
+      "target": "ch",
+      "mutation": "truncate",
+      "key": null,
+      "method": "execute",
+      "projection": "name",
+      "order": "",
+      "native": 8,
+      "baseline": 3
+    },
+    {
+      "group": "sorted",
+      "switches": "default,semijoin=off",
+      "target": "ch",
+      "mutation": "truncate",
+      "key": 1,
+      "method": "query",
+      "projection": "name",
+      "order": "",
+      "native": 8,
+      "baseline": 3
+    },
+    {
+      "group": "sorted",
+      "switches": "default,semijoin=off",
+      "target": "ch",
+      "mutation": "truncate",
+      "key": 1,
+      "method": "execute",
+      "projection": "name",
+      "order": "",
+      "native": 8,
+      "baseline": 3
+    },
+    {
+      "group": "sorted",
+      "switches": "default,semijoin=off",
+      "target": "ch",
+      "mutation": "drop-create",
+      "key": null,
+      "method": "query",
+      "projection": "name",
+      "order": "",
+      "native": 8,
+      "baseline": 3
+    },
+    {
+      "group": "sorted",
+      "switches": "default,semijoin=off",
+      "target": "ch",
+      "mutation": "drop-create",
+      "key": null,
+      "method": "execute",
+      "projection": "name",
+      "order": "",
+      "native": 8,
+      "baseline": 3
+    },
+    {
+      "group": "sorted",
+      "switches": "default,semijoin=off",
+      "target": "ch",
+      "mutation": "drop-create",
+      "key": 1,
+      "method": "query",
+      "projection": "name",
+      "order": "",
+      "native": 8,
+      "baseline": 3
+    },
+    {
+      "group": "sorted",
+      "switches": "default,semijoin=off",
+      "target": "ch",
+      "mutation": "drop-create",
+      "key": 1,
+      "method": "execute",
+      "projection": "name",
+      "order": "",
+      "native": 8,
+      "baseline": 3
+    },
+    {
+      "group": "sorted",
+      "switches": "default,semijoin=off",
+      "target": "ch",
+      "mutation": "alter-copy",
+      "key": null,
+      "method": "query",
+      "projection": "name",
+      "order": "",
+      "native": 8,
+      "baseline": 3
+    },
+    {
+      "group": "sorted",
+      "switches": "default,semijoin=off",
+      "target": "ch",
+      "mutation": "alter-copy",
+      "key": null,
+      "method": "execute",
+      "projection": "name",
+      "order": "",
+      "native": 8,
+      "baseline": 3
+    },
+    {
+      "group": "sorted",
+      "switches": "default,semijoin=off",
+      "target": "ch",
+      "mutation": "alter-copy",
+      "key": 1,
+      "method": "query",
+      "projection": "name",
+      "order": "",
+      "native": 8,
+      "baseline": 3
+    },
+    {
+      "group": "sorted",
+      "switches": "default,semijoin=off",
+      "target": "ch",
+      "mutation": "alter-copy",
+      "key": 1,
+      "method": "execute",
+      "projection": "name",
+      "order": "",
+      "native": 8,
+      "baseline": 3
+    },
+    {
+      "group": "sorted",
+      "switches": "default,semijoin=off",
+      "target": "ch",
+      "mutation": "drop",
+      "key": null,
+      "method": "query",
+      "projection": "name",
+      "order": "",
+      "native": 9,
+      "baseline": 8
+    },
+    {
+      "group": "sorted",
+      "switches": "default,semijoin=off",
+      "target": "ch",
+      "mutation": "drop",
+      "key": null,
+      "method": "execute",
+      "projection": "name",
+      "order": "",
+      "native": 9,
+      "baseline": 8
+    },
+    {
+      "group": "sorted",
+      "switches": "default,semijoin=off",
+      "target": "ch",
+      "mutation": "drop",
+      "key": 1,
+      "method": "query",
+      "projection": "name",
+      "order": "",
+      "native": 9,
+      "baseline": 8
+    },
+    {
+      "group": "sorted",
+      "switches": "default,semijoin=off",
+      "target": "ch",
+      "mutation": "drop",
+      "key": 1,
+      "method": "execute",
+      "projection": "name",
+      "order": "",
+      "native": 9,
+      "baseline": 8
+    },
+    {
+      "group": "sorted",
+      "switches": "default,semijoin=off",
+      "target": "pa",
+      "mutation": "none",
+      "key": null,
+      "method": "query",
+      "projection": "name",
+      "order": "",
+      "native": 5,
+      "baseline": 5
+    },
+    {
+      "group": "sorted",
+      "switches": "default,semijoin=off",
+      "target": "pa",
+      "mutation": "none",
+      "key": null,
+      "method": "execute",
+      "projection": "name",
+      "order": "",
+      "native": 6,
+      "baseline": 6
+    },
+    {
+      "group": "sorted",
+      "switches": "default,semijoin=off",
+      "target": "pa",
+      "mutation": "none",
+      "key": 1,
+      "method": "query",
+      "projection": "name",
+      "order": "",
+      "native": 7,
+      "baseline": 7
+    },
+    {
+      "group": "sorted",
+      "switches": "default,semijoin=off",
+      "target": "pa",
+      "mutation": "none",
+      "key": 1,
+      "method": "execute",
+      "projection": "name",
+      "order": "",
+      "native": 7,
+      "baseline": 7
+    },
+    {
+      "group": "sorted",
+      "switches": "default,semijoin=off",
+      "target": "pa",
+      "mutation": "truncate",
+      "key": null,
+      "method": "query",
+      "projection": "name",
+      "order": "",
+      "native": 10,
+      "baseline": 3
+    },
+    {
+      "group": "sorted",
+      "switches": "default,semijoin=off",
+      "target": "pa",
+      "mutation": "truncate",
+      "key": null,
+      "method": "execute",
+      "projection": "name",
+      "order": "",
+      "native": 10,
+      "baseline": 3
+    },
+    {
+      "group": "sorted",
+      "switches": "default,semijoin=off",
+      "target": "pa",
+      "mutation": "truncate",
+      "key": 1,
+      "method": "query",
+      "projection": "name",
+      "order": "",
+      "native": 10,
+      "baseline": 3
+    },
+    {
+      "group": "sorted",
+      "switches": "default,semijoin=off",
+      "target": "pa",
+      "mutation": "truncate",
+      "key": 1,
+      "method": "execute",
+      "projection": "name",
+      "order": "",
+      "native": 10,
+      "baseline": 3
+    },
+    {
+      "group": "sorted",
+      "switches": "default,semijoin=off",
+      "target": "pa",
+      "mutation": "drop-create",
+      "key": null,
+      "method": "query",
+      "projection": "name",
+      "order": "",
+      "native": 10,
+      "baseline": 3
+    },
+    {
+      "group": "sorted",
+      "switches": "default,semijoin=off",
+      "target": "pa",
+      "mutation": "drop-create",
+      "key": null,
+      "method": "execute",
+      "projection": "name",
+      "order": "",
+      "native": 10,
+      "baseline": 3
+    },
+    {
+      "group": "sorted",
+      "switches": "default,semijoin=off",
+      "target": "pa",
+      "mutation": "drop-create",
+      "key": 1,
+      "method": "query",
+      "projection": "name",
+      "order": "",
+      "native": 10,
+      "baseline": 3
+    },
+    {
+      "group": "sorted",
+      "switches": "default,semijoin=off",
+      "target": "pa",
+      "mutation": "drop-create",
+      "key": 1,
+      "method": "execute",
+      "projection": "name",
+      "order": "",
+      "native": 10,
+      "baseline": 3
+    },
+    {
+      "group": "sorted",
+      "switches": "default,semijoin=off",
+      "target": "pa",
+      "mutation": "alter-copy",
+      "key": null,
+      "method": "query",
+      "projection": "name",
+      "order": "",
+      "native": 10,
+      "baseline": 3
+    },
+    {
+      "group": "sorted",
+      "switches": "default,semijoin=off",
+      "target": "pa",
+      "mutation": "alter-copy",
+      "key": null,
+      "method": "execute",
+      "projection": "name",
+      "order": "",
+      "native": 10,
+      "baseline": 3
+    },
+    {
+      "group": "sorted",
+      "switches": "default,semijoin=off",
+      "target": "pa",
+      "mutation": "alter-copy",
+      "key": 1,
+      "method": "query",
+      "projection": "name",
+      "order": "",
+      "native": 10,
+      "baseline": 3
+    },
+    {
+      "group": "sorted",
+      "switches": "default,semijoin=off",
+      "target": "pa",
+      "mutation": "alter-copy",
+      "key": 1,
+      "method": "execute",
+      "projection": "name",
+      "order": "",
+      "native": 10,
+      "baseline": 3
+    },
+    {
+      "group": "sorted",
+      "switches": "default,semijoin=off",
+      "target": "pa",
+      "mutation": "drop",
+      "key": null,
+      "method": "query",
+      "projection": "name",
+      "order": "",
+      "native": 11,
+      "baseline": 9
+    },
+    {
+      "group": "sorted",
+      "switches": "default,semijoin=off",
+      "target": "pa",
+      "mutation": "drop",
+      "key": null,
+      "method": "execute",
+      "projection": "name",
+      "order": "",
+      "native": 11,
+      "baseline": 9
+    },
+    {
+      "group": "sorted",
+      "switches": "default,semijoin=off",
+      "target": "pa",
+      "mutation": "drop",
+      "key": 1,
+      "method": "query",
+      "projection": "name",
+      "order": "",
+      "native": 11,
+      "baseline": 9
+    },
+    {
+      "group": "sorted",
+      "switches": "default,semijoin=off",
+      "target": "pa",
+      "mutation": "drop",
+      "key": 1,
+      "method": "execute",
+      "projection": "name",
+      "order": "",
+      "native": 11,
+      "baseline": 9
+    },
+    {
+      "group": "sorted",
+      "switches": "default,materialization=off",
+      "target": "ch",
+      "mutation": "none",
+      "key": null,
+      "method": "query",
+      "projection": "name",
+      "order": "",
+      "native": 5,
+      "baseline": 5
+    },
+    {
+      "group": "sorted",
+      "switches": "default,materialization=off",
+      "target": "ch",
+      "mutation": "none",
+      "key": null,
+      "method": "execute",
+      "projection": "name",
+      "order": "",
+      "native": 6,
+      "baseline": 6
+    },
+    {
+      "group": "sorted",
+      "switches": "default,materialization=off",
+      "target": "ch",
+      "mutation": "none",
+      "key": 1,
+      "method": "query",
+      "projection": "name",
+      "order": "",
+      "native": 7,
+      "baseline": 7
+    },
+    {
+      "group": "sorted",
+      "switches": "default,materialization=off",
+      "target": "ch",
+      "mutation": "none",
+      "key": 1,
+      "method": "execute",
+      "projection": "name",
+      "order": "",
+      "native": 7,
+      "baseline": 7
+    },
+    {
+      "group": "sorted",
+      "switches": "default,materialization=off",
+      "target": "ch",
+      "mutation": "truncate",
+      "key": null,
+      "method": "query",
+      "projection": "name",
+      "order": "",
+      "native": 8,
+      "baseline": 5
+    },
+    {
+      "group": "sorted",
+      "switches": "default,materialization=off",
+      "target": "ch",
+      "mutation": "truncate",
+      "key": null,
+      "method": "execute",
+      "projection": "name",
+      "order": "",
+      "native": 8,
+      "baseline": 6
+    },
+    {
+      "group": "sorted",
+      "switches": "default,materialization=off",
+      "target": "ch",
+      "mutation": "truncate",
+      "key": 1,
+      "method": "query",
+      "projection": "name",
+      "order": "",
+      "native": 8,
+      "baseline": 3
+    },
+    {
+      "group": "sorted",
+      "switches": "default,materialization=off",
+      "target": "ch",
+      "mutation": "truncate",
+      "key": 1,
+      "method": "execute",
+      "projection": "name",
+      "order": "",
+      "native": 8,
+      "baseline": 3
+    },
+    {
+      "group": "sorted",
+      "switches": "default,materialization=off",
+      "target": "ch",
+      "mutation": "drop-create",
+      "key": null,
+      "method": "query",
+      "projection": "name",
+      "order": "",
+      "native": 8,
+      "baseline": 5
+    },
+    {
+      "group": "sorted",
+      "switches": "default,materialization=off",
+      "target": "ch",
+      "mutation": "drop-create",
+      "key": null,
+      "method": "execute",
+      "projection": "name",
+      "order": "",
+      "native": 8,
+      "baseline": 6
+    },
+    {
+      "group": "sorted",
+      "switches": "default,materialization=off",
+      "target": "ch",
+      "mutation": "drop-create",
+      "key": 1,
+      "method": "query",
+      "projection": "name",
+      "order": "",
+      "native": 8,
+      "baseline": 3
+    },
+    {
+      "group": "sorted",
+      "switches": "default,materialization=off",
+      "target": "ch",
+      "mutation": "drop-create",
+      "key": 1,
+      "method": "execute",
+      "projection": "name",
+      "order": "",
+      "native": 8,
+      "baseline": 3
+    },
+    {
+      "group": "sorted",
+      "switches": "default,materialization=off",
+      "target": "ch",
+      "mutation": "alter-copy",
+      "key": null,
+      "method": "query",
+      "projection": "name",
+      "order": "",
+      "native": 8,
+      "baseline": 5
+    },
+    {
+      "group": "sorted",
+      "switches": "default,materialization=off",
+      "target": "ch",
+      "mutation": "alter-copy",
+      "key": null,
+      "method": "execute",
+      "projection": "name",
+      "order": "",
+      "native": 8,
+      "baseline": 6
+    },
+    {
+      "group": "sorted",
+      "switches": "default,materialization=off",
+      "target": "ch",
+      "mutation": "alter-copy",
+      "key": 1,
+      "method": "query",
+      "projection": "name",
+      "order": "",
+      "native": 8,
+      "baseline": 3
+    },
+    {
+      "group": "sorted",
+      "switches": "default,materialization=off",
+      "target": "ch",
+      "mutation": "alter-copy",
+      "key": 1,
+      "method": "execute",
+      "projection": "name",
+      "order": "",
+      "native": 8,
+      "baseline": 3
+    },
+    {
+      "group": "sorted",
+      "switches": "default,materialization=off",
+      "target": "ch",
+      "mutation": "drop",
+      "key": null,
+      "method": "query",
+      "projection": "name",
+      "order": "",
+      "native": 9,
+      "baseline": 8
+    },
+    {
+      "group": "sorted",
+      "switches": "default,materialization=off",
+      "target": "ch",
+      "mutation": "drop",
+      "key": null,
+      "method": "execute",
+      "projection": "name",
+      "order": "",
+      "native": 9,
+      "baseline": 8
+    },
+    {
+      "group": "sorted",
+      "switches": "default,materialization=off",
+      "target": "ch",
+      "mutation": "drop",
+      "key": 1,
+      "method": "query",
+      "projection": "name",
+      "order": "",
+      "native": 9,
+      "baseline": 8
+    },
+    {
+      "group": "sorted",
+      "switches": "default,materialization=off",
+      "target": "ch",
+      "mutation": "drop",
+      "key": 1,
+      "method": "execute",
+      "projection": "name",
+      "order": "",
+      "native": 9,
+      "baseline": 8
+    },
+    {
+      "group": "sorted",
+      "switches": "default,materialization=off",
+      "target": "pa",
+      "mutation": "none",
+      "key": null,
+      "method": "query",
+      "projection": "name",
+      "order": "",
+      "native": 5,
+      "baseline": 5
+    },
+    {
+      "group": "sorted",
+      "switches": "default,materialization=off",
+      "target": "pa",
+      "mutation": "none",
+      "key": null,
+      "method": "execute",
+      "projection": "name",
+      "order": "",
+      "native": 6,
+      "baseline": 6
+    },
+    {
+      "group": "sorted",
+      "switches": "default,materialization=off",
+      "target": "pa",
+      "mutation": "none",
+      "key": 1,
+      "method": "query",
+      "projection": "name",
+      "order": "",
+      "native": 7,
+      "baseline": 7
+    },
+    {
+      "group": "sorted",
+      "switches": "default,materialization=off",
+      "target": "pa",
+      "mutation": "none",
+      "key": 1,
+      "method": "execute",
+      "projection": "name",
+      "order": "",
+      "native": 7,
+      "baseline": 7
+    },
+    {
+      "group": "sorted",
+      "switches": "default,materialization=off",
+      "target": "pa",
+      "mutation": "truncate",
+      "key": null,
+      "method": "query",
+      "projection": "name",
+      "order": "",
+      "native": 10,
+      "baseline": 3
+    },
+    {
+      "group": "sorted",
+      "switches": "default,materialization=off",
+      "target": "pa",
+      "mutation": "truncate",
+      "key": null,
+      "method": "execute",
+      "projection": "name",
+      "order": "",
+      "native": 10,
+      "baseline": 3
+    },
+    {
+      "group": "sorted",
+      "switches": "default,materialization=off",
+      "target": "pa",
+      "mutation": "truncate",
+      "key": 1,
+      "method": "query",
+      "projection": "name",
+      "order": "",
+      "native": 10,
+      "baseline": 3
+    },
+    {
+      "group": "sorted",
+      "switches": "default,materialization=off",
+      "target": "pa",
+      "mutation": "truncate",
+      "key": 1,
+      "method": "execute",
+      "projection": "name",
+      "order": "",
+      "native": 10,
+      "baseline": 3
+    },
+    {
+      "group": "sorted",
+      "switches": "default,materialization=off",
+      "target": "pa",
+      "mutation": "drop-create",
+      "key": null,
+      "method": "query",
+      "projection": "name",
+      "order": "",
+      "native": 10,
+      "baseline": 3
+    },
+    {
+      "group": "sorted",
+      "switches": "default,materialization=off",
+      "target": "pa",
+      "mutation": "drop-create",
+      "key": null,
+      "method": "execute",
+      "projection": "name",
+      "order": "",
+      "native": 10,
+      "baseline": 3
+    },
+    {
+      "group": "sorted",
+      "switches": "default,materialization=off",
+      "target": "pa",
+      "mutation": "drop-create",
+      "key": 1,
+      "method": "query",
+      "projection": "name",
+      "order": "",
+      "native": 10,
+      "baseline": 3
+    },
+    {
+      "group": "sorted",
+      "switches": "default,materialization=off",
+      "target": "pa",
+      "mutation": "drop-create",
+      "key": 1,
+      "method": "execute",
+      "projection": "name",
+      "order": "",
+      "native": 10,
+      "baseline": 3
+    },
+    {
+      "group": "sorted",
+      "switches": "default,materialization=off",
+      "target": "pa",
+      "mutation": "alter-copy",
+      "key": null,
+      "method": "query",
+      "projection": "name",
+      "order": "",
+      "native": 10,
+      "baseline": 3
+    },
+    {
+      "group": "sorted",
+      "switches": "default,materialization=off",
+      "target": "pa",
+      "mutation": "alter-copy",
+      "key": null,
+      "method": "execute",
+      "projection": "name",
+      "order": "",
+      "native": 10,
+      "baseline": 3
+    },
+    {
+      "group": "sorted",
+      "switches": "default,materialization=off",
+      "target": "pa",
+      "mutation": "alter-copy",
+      "key": 1,
+      "method": "query",
+      "projection": "name",
+      "order": "",
+      "native": 10,
+      "baseline": 3
+    },
+    {
+      "group": "sorted",
+      "switches": "default,materialization=off",
+      "target": "pa",
+      "mutation": "alter-copy",
+      "key": 1,
+      "method": "execute",
+      "projection": "name",
+      "order": "",
+      "native": 10,
+      "baseline": 3
+    },
+    {
+      "group": "sorted",
+      "switches": "default,materialization=off",
+      "target": "pa",
+      "mutation": "drop",
+      "key": null,
+      "method": "query",
+      "projection": "name",
+      "order": "",
+      "native": 11,
+      "baseline": 9
+    },
+    {
+      "group": "sorted",
+      "switches": "default,materialization=off",
+      "target": "pa",
+      "mutation": "drop",
+      "key": null,
+      "method": "execute",
+      "projection": "name",
+      "order": "",
+      "native": 11,
+      "baseline": 9
+    },
+    {
+      "group": "sorted",
+      "switches": "default,materialization=off",
+      "target": "pa",
+      "mutation": "drop",
+      "key": 1,
+      "method": "query",
+      "projection": "name",
+      "order": "",
+      "native": 11,
+      "baseline": 9
+    },
+    {
+      "group": "sorted",
+      "switches": "default,materialization=off",
+      "target": "pa",
+      "mutation": "drop",
+      "key": 1,
+      "method": "execute",
+      "projection": "name",
+      "order": "",
+      "native": 11,
+      "baseline": 9
+    },
+    {
+      "group": "sort4",
+      "switches": "default,semijoin=off",
+      "target": "ch",
+      "mutation": "none",
+      "key": null,
+      "method": "query",
+      "projection": "name",
+      "order": "",
+      "native": 12,
+      "baseline": 10
+    },
+    {
+      "group": "sort4",
+      "switches": "default,semijoin=off",
+      "target": "ch",
+      "mutation": "none",
+      "key": null,
+      "method": "execute",
+      "projection": "name",
+      "order": "",
+      "native": 13,
+      "baseline": 11
+    },
+    {
+      "group": "sort4",
+      "switches": "default,semijoin=off",
+      "target": "ch",
+      "mutation": "truncate",
+      "key": null,
+      "method": "query",
+      "projection": "name",
+      "order": "",
+      "native": 14,
+      "baseline": 12
+    },
+    {
+      "group": "sort4",
+      "switches": "default,semijoin=off",
+      "target": "ch",
+      "mutation": "truncate",
+      "key": null,
+      "method": "execute",
+      "projection": "name",
+      "order": "",
+      "native": 14,
+      "baseline": 12
+    },
+    {
+      "group": "sort4",
+      "switches": "default,semijoin=off",
+      "target": "ch",
+      "mutation": "drop-create",
+      "key": null,
+      "method": "query",
+      "projection": "name",
+      "order": "",
+      "native": 14,
+      "baseline": 12
+    },
+    {
+      "group": "sort4",
+      "switches": "default,semijoin=off",
+      "target": "ch",
+      "mutation": "drop-create",
+      "key": null,
+      "method": "execute",
+      "projection": "name",
+      "order": "",
+      "native": 14,
+      "baseline": 12
+    },
+    {
+      "group": "sort4",
+      "switches": "default,semijoin=off",
+      "target": "ch",
+      "mutation": "alter-copy",
+      "key": null,
+      "method": "query",
+      "projection": "name",
+      "order": "",
+      "native": 14,
+      "baseline": 12
+    },
+    {
+      "group": "sort4",
+      "switches": "default,semijoin=off",
+      "target": "ch",
+      "mutation": "alter-copy",
+      "key": null,
+      "method": "execute",
+      "projection": "name",
+      "order": "",
+      "native": 14,
+      "baseline": 12
+    },
+    {
+      "group": "sort4",
+      "switches": "default,semijoin=off",
+      "target": "pa",
+      "mutation": "none",
+      "key": null,
+      "method": "query",
+      "projection": "name",
+      "order": "",
+      "native": 12,
+      "baseline": 10
+    },
+    {
+      "group": "sort4",
+      "switches": "default,semijoin=off",
+      "target": "pa",
+      "mutation": "none",
+      "key": null,
+      "method": "execute",
+      "projection": "name",
+      "order": "",
+      "native": 13,
+      "baseline": 11
+    },
+    {
+      "group": "sort4",
+      "switches": "default,semijoin=off",
+      "target": "pa",
+      "mutation": "truncate",
+      "key": null,
+      "method": "query",
+      "projection": "name",
+      "order": "",
+      "native": 15,
+      "baseline": 12
+    },
+    {
+      "group": "sort4",
+      "switches": "default,semijoin=off",
+      "target": "pa",
+      "mutation": "truncate",
+      "key": null,
+      "method": "execute",
+      "projection": "name",
+      "order": "",
+      "native": 15,
+      "baseline": 12
+    },
+    {
+      "group": "sort4",
+      "switches": "default,semijoin=off",
+      "target": "pa",
+      "mutation": "drop-create",
+      "key": null,
+      "method": "query",
+      "projection": "name",
+      "order": "",
+      "native": 15,
+      "baseline": 12
+    },
+    {
+      "group": "sort4",
+      "switches": "default,semijoin=off",
+      "target": "pa",
+      "mutation": "drop-create",
+      "key": null,
+      "method": "execute",
+      "projection": "name",
+      "order": "",
+      "native": 15,
+      "baseline": 12
+    },
+    {
+      "group": "sort4",
+      "switches": "default,semijoin=off",
+      "target": "pa",
+      "mutation": "alter-copy",
+      "key": null,
+      "method": "query",
+      "projection": "name",
+      "order": "",
+      "native": 15,
+      "baseline": 12
+    },
+    {
+      "group": "sort4",
+      "switches": "default,semijoin=off",
+      "target": "pa",
+      "mutation": "alter-copy",
+      "key": null,
+      "method": "execute",
+      "projection": "name",
+      "order": "",
+      "native": 15,
+      "baseline": 12
+    },
+    {
+      "group": "sort4",
+      "switches": "default,materialization=off",
+      "target": "ch",
+      "mutation": "none",
+      "key": null,
+      "method": "query",
+      "projection": "name",
+      "order": "",
+      "native": 16,
+      "baseline": 13
+    },
+    {
+      "group": "sort4",
+      "switches": "default,materialization=off",
+      "target": "ch",
+      "mutation": "none",
+      "key": null,
+      "method": "execute",
+      "projection": "name",
+      "order": "",
+      "native": 17,
+      "baseline": 14
+    },
+    {
+      "group": "sort4",
+      "switches": "default,materialization=off",
+      "target": "ch",
+      "mutation": "truncate",
+      "key": null,
+      "method": "query",
+      "projection": "name",
+      "order": "",
+      "native": 18,
+      "baseline": 15
+    },
+    {
+      "group": "sort4",
+      "switches": "default,materialization=off",
+      "target": "ch",
+      "mutation": "truncate",
+      "key": null,
+      "method": "execute",
+      "projection": "name",
+      "order": "",
+      "native": 18,
+      "baseline": 15
+    },
+    {
+      "group": "sort4",
+      "switches": "default,materialization=off",
+      "target": "ch",
+      "mutation": "drop-create",
+      "key": null,
+      "method": "query",
+      "projection": "name",
+      "order": "",
+      "native": 18,
+      "baseline": 15
+    },
+    {
+      "group": "sort4",
+      "switches": "default,materialization=off",
+      "target": "ch",
+      "mutation": "drop-create",
+      "key": null,
+      "method": "execute",
+      "projection": "name",
+      "order": "",
+      "native": 18,
+      "baseline": 15
+    },
+    {
+      "group": "sort4",
+      "switches": "default,materialization=off",
+      "target": "ch",
+      "mutation": "alter-copy",
+      "key": null,
+      "method": "query",
+      "projection": "name",
+      "order": "",
+      "native": 18,
+      "baseline": 15
+    },
+    {
+      "group": "sort4",
+      "switches": "default,materialization=off",
+      "target": "ch",
+      "mutation": "alter-copy",
+      "key": null,
+      "method": "execute",
+      "projection": "name",
+      "order": "",
+      "native": 18,
+      "baseline": 15
+    },
+    {
+      "group": "sort4",
+      "switches": "default,materialization=off",
+      "target": "pa",
+      "mutation": "none",
+      "key": null,
+      "method": "query",
+      "projection": "name",
+      "order": "",
+      "native": 16,
+      "baseline": 13
+    },
+    {
+      "group": "sort4",
+      "switches": "default,materialization=off",
+      "target": "pa",
+      "mutation": "none",
+      "key": null,
+      "method": "execute",
+      "projection": "name",
+      "order": "",
+      "native": 17,
+      "baseline": 14
+    },
+    {
+      "group": "sort4",
+      "switches": "default,materialization=off",
+      "target": "pa",
+      "mutation": "truncate",
+      "key": null,
+      "method": "query",
+      "projection": "name",
+      "order": "",
+      "native": 19,
+      "baseline": 15
+    },
+    {
+      "group": "sort4",
+      "switches": "default,materialization=off",
+      "target": "pa",
+      "mutation": "truncate",
+      "key": null,
+      "method": "execute",
+      "projection": "name",
+      "order": "",
+      "native": 19,
+      "baseline": 15
+    },
+    {
+      "group": "sort4",
+      "switches": "default,materialization=off",
+      "target": "pa",
+      "mutation": "drop-create",
+      "key": null,
+      "method": "query",
+      "projection": "name",
+      "order": "",
+      "native": 19,
+      "baseline": 15
+    },
+    {
+      "group": "sort4",
+      "switches": "default,materialization=off",
+      "target": "pa",
+      "mutation": "drop-create",
+      "key": null,
+      "method": "execute",
+      "projection": "name",
+      "order": "",
+      "native": 19,
+      "baseline": 15
+    },
+    {
+      "group": "sort4",
+      "switches": "default,materialization=off",
+      "target": "pa",
+      "mutation": "alter-copy",
+      "key": null,
+      "method": "query",
+      "projection": "name",
+      "order": "",
+      "native": 19,
+      "baseline": 15
+    },
+    {
+      "group": "sort4",
+      "switches": "default,materialization=off",
+      "target": "pa",
+      "mutation": "alter-copy",
+      "key": null,
+      "method": "execute",
+      "projection": "name",
+      "order": "",
+      "native": 19,
+      "baseline": 15
+    },
+    {
+      "group": "constructors",
+      "switches": "default,materialization=off",
+      "target": "ch",
+      "mutation": "none",
+      "key": null,
+      "method": "query",
+      "projection": "name",
+      "order": "",
+      "native": 20,
+      "baseline": 16
+    },
+    {
+      "group": "constructors",
+      "switches": "default,materialization=off",
+      "target": "ch",
+      "mutation": "none",
+      "key": null,
+      "method": "query",
+      "projection": "name",
+      "order": " ORDER BY name LIMIT 1",
+      "native": 21,
+      "baseline": 17
+    },
+    {
+      "group": "constructors",
+      "switches": "default,materialization=off",
+      "target": "ch",
+      "mutation": "none",
+      "key": null,
+      "method": "query",
+      "projection": "name",
+      "order": " ORDER BY id+1 LIMIT 1",
+      "native": 22,
+      "baseline": 18
+    },
+    {
+      "group": "constructors",
+      "switches": "default,materialization=off",
+      "target": "ch",
+      "mutation": "none",
+      "key": null,
+      "method": "query",
+      "projection": "id+1",
+      "order": "",
+      "native": 23,
+      "baseline": 19
+    },
+    {
+      "group": "constructors",
+      "switches": "default,materialization=off",
+      "target": "ch",
+      "mutation": "none",
+      "key": null,
+      "method": "query",
+      "projection": "id+1",
+      "order": " ORDER BY name LIMIT 1",
+      "native": 23,
+      "baseline": 18
+    },
+    {
+      "group": "constructors",
+      "switches": "default,materialization=off",
+      "target": "ch",
+      "mutation": "none",
+      "key": null,
+      "method": "query",
+      "projection": "id+1",
+      "order": " ORDER BY id+1 LIMIT 1",
+      "native": 23,
+      "baseline": 18
+    },
+    {
+      "group": "constructors",
+      "switches": "default,materialization=off",
+      "target": "ch",
+      "mutation": "none",
+      "key": null,
+      "method": "query",
+      "projection": "CAST(name AS CHAR)",
+      "order": "",
+      "native": 24,
+      "baseline": 20
+    },
+    {
+      "group": "constructors",
+      "switches": "default,materialization=off",
+      "target": "ch",
+      "mutation": "none",
+      "key": null,
+      "method": "query",
+      "projection": "CAST(name AS CHAR)",
+      "order": " ORDER BY name LIMIT 1",
+      "native": 25,
+      "baseline": 21
+    },
+    {
+      "group": "constructors",
+      "switches": "default,materialization=off",
+      "target": "ch",
+      "mutation": "none",
+      "key": null,
+      "method": "query",
+      "projection": "CAST(name AS CHAR)",
+      "order": " ORDER BY id+1 LIMIT 1",
+      "native": 26,
+      "baseline": 18
+    },
+    {
+      "group": "constructors",
+      "switches": "default,materialization=off",
+      "target": "ch",
+      "mutation": "none",
+      "key": null,
+      "method": "query",
+      "projection": "CAST(id+1 AS DECIMAL(66,0))",
+      "order": "",
+      "native": 27,
+      "baseline": 22
+    },
+    {
+      "group": "constructors",
+      "switches": "default,materialization=off",
+      "target": "ch",
+      "mutation": "none",
+      "key": null,
+      "method": "query",
+      "projection": "CAST(id+1 AS DECIMAL(66,0))",
+      "order": " ORDER BY name LIMIT 1",
+      "native": 27,
+      "baseline": 18
+    },
+    {
+      "group": "constructors",
+      "switches": "default,materialization=off",
+      "target": "ch",
+      "mutation": "none",
+      "key": null,
+      "method": "query",
+      "projection": "CAST(id+1 AS DECIMAL(66,0))",
+      "order": " ORDER BY id+1 LIMIT 1",
+      "native": 27,
+      "baseline": 18
+    },
+    {
+      "group": "constructors",
+      "switches": "default,materialization=off",
+      "target": "ch",
+      "mutation": "none",
+      "key": null,
+      "method": "query",
+      "projection": "CAST(name AS DATETIME(7))",
+      "order": "",
+      "native": 28,
+      "baseline": 23
+    },
+    {
+      "group": "constructors",
+      "switches": "default,materialization=off",
+      "target": "ch",
+      "mutation": "none",
+      "key": null,
+      "method": "query",
+      "projection": "CAST(name AS DATETIME(7))",
+      "order": " ORDER BY name LIMIT 1",
+      "native": 28,
+      "baseline": 23
+    },
+    {
+      "group": "constructors",
+      "switches": "default,materialization=off",
+      "target": "ch",
+      "mutation": "none",
+      "key": null,
+      "method": "query",
+      "projection": "CAST(name AS DATETIME(7))",
+      "order": " ORDER BY id+1 LIMIT 1",
+      "native": 28,
+      "baseline": 23
+    },
+    {
+      "group": "constructors",
+      "switches": "default,materialization=off",
+      "target": "ch",
+      "mutation": "truncate",
+      "key": null,
+      "method": "query",
+      "projection": "name",
+      "order": "",
+      "native": 29,
+      "baseline": 3
+    },
+    {
+      "group": "constructors",
+      "switches": "default,materialization=off",
+      "target": "ch",
+      "mutation": "truncate",
+      "key": null,
+      "method": "query",
+      "projection": "name",
+      "order": " ORDER BY name LIMIT 1",
+      "native": 29,
+      "baseline": 3
+    },
+    {
+      "group": "constructors",
+      "switches": "default,materialization=off",
+      "target": "ch",
+      "mutation": "truncate",
+      "key": null,
+      "method": "query",
+      "projection": "name",
+      "order": " ORDER BY id+1 LIMIT 1",
+      "native": 22,
+      "baseline": 18
+    },
+    {
+      "group": "constructors",
+      "switches": "default,materialization=off",
+      "target": "ch",
+      "mutation": "truncate",
+      "key": null,
+      "method": "query",
+      "projection": "id+1",
+      "order": "",
+      "native": 30,
+      "baseline": 3
+    },
+    {
+      "group": "constructors",
+      "switches": "default,materialization=off",
+      "target": "ch",
+      "mutation": "truncate",
+      "key": null,
+      "method": "query",
+      "projection": "id+1",
+      "order": " ORDER BY name LIMIT 1",
+      "native": 30,
+      "baseline": 3
+    },
+    {
+      "group": "constructors",
+      "switches": "default,materialization=off",
+      "target": "ch",
+      "mutation": "truncate",
+      "key": null,
+      "method": "query",
+      "projection": "id+1",
+      "order": " ORDER BY id+1 LIMIT 1",
+      "native": 23,
+      "baseline": 18
+    },
+    {
+      "group": "constructors",
+      "switches": "default,materialization=off",
+      "target": "ch",
+      "mutation": "truncate",
+      "key": null,
+      "method": "query",
+      "projection": "CAST(name AS CHAR)",
+      "order": "",
+      "native": 31,
+      "baseline": 3
+    },
+    {
+      "group": "constructors",
+      "switches": "default,materialization=off",
+      "target": "ch",
+      "mutation": "truncate",
+      "key": null,
+      "method": "query",
+      "projection": "CAST(name AS CHAR)",
+      "order": " ORDER BY name LIMIT 1",
+      "native": 31,
+      "baseline": 3
+    },
+    {
+      "group": "constructors",
+      "switches": "default,materialization=off",
+      "target": "ch",
+      "mutation": "truncate",
+      "key": null,
+      "method": "query",
+      "projection": "CAST(name AS CHAR)",
+      "order": " ORDER BY id+1 LIMIT 1",
+      "native": 26,
+      "baseline": 18
+    },
+    {
+      "group": "constructors",
+      "switches": "default,materialization=off",
+      "target": "ch",
+      "mutation": "truncate",
+      "key": null,
+      "method": "query",
+      "projection": "CAST(id+1 AS DECIMAL(66,0))",
+      "order": "",
+      "native": 27,
+      "baseline": 3
+    },
+    {
+      "group": "constructors",
+      "switches": "default,materialization=off",
+      "target": "ch",
+      "mutation": "truncate",
+      "key": null,
+      "method": "query",
+      "projection": "CAST(id+1 AS DECIMAL(66,0))",
+      "order": " ORDER BY name LIMIT 1",
+      "native": 27,
+      "baseline": 3
+    },
+    {
+      "group": "constructors",
+      "switches": "default,materialization=off",
+      "target": "ch",
+      "mutation": "truncate",
+      "key": null,
+      "method": "query",
+      "projection": "CAST(id+1 AS DECIMAL(66,0))",
+      "order": " ORDER BY id+1 LIMIT 1",
+      "native": 27,
+      "baseline": 18
+    },
+    {
+      "group": "constructors",
+      "switches": "default,materialization=off",
+      "target": "ch",
+      "mutation": "truncate",
+      "key": null,
+      "method": "query",
+      "projection": "CAST(name AS DATETIME(7))",
+      "order": "",
+      "native": 28,
+      "baseline": 23
+    },
+    {
+      "group": "constructors",
+      "switches": "default,materialization=off",
+      "target": "ch",
+      "mutation": "truncate",
+      "key": null,
+      "method": "query",
+      "projection": "CAST(name AS DATETIME(7))",
+      "order": " ORDER BY name LIMIT 1",
+      "native": 28,
+      "baseline": 23
+    },
+    {
+      "group": "constructors",
+      "switches": "default,materialization=off",
+      "target": "ch",
+      "mutation": "truncate",
+      "key": null,
+      "method": "query",
+      "projection": "CAST(name AS DATETIME(7))",
+      "order": " ORDER BY id+1 LIMIT 1",
+      "native": 28,
+      "baseline": 23
+    },
+    {
+      "group": "constructors",
+      "switches": "default,semijoin=off",
+      "target": "ch",
+      "mutation": "none",
+      "key": null,
+      "method": "query",
+      "projection": "name",
+      "order": "",
+      "native": 20,
+      "baseline": 16
+    },
+    {
+      "group": "constructors",
+      "switches": "default,semijoin=off",
+      "target": "ch",
+      "mutation": "none",
+      "key": null,
+      "method": "query",
+      "projection": "name",
+      "order": " ORDER BY name LIMIT 1",
+      "native": 21,
+      "baseline": 17
+    },
+    {
+      "group": "constructors",
+      "switches": "default,semijoin=off",
+      "target": "ch",
+      "mutation": "none",
+      "key": null,
+      "method": "query",
+      "projection": "name",
+      "order": " ORDER BY id+1 LIMIT 1",
+      "native": 22,
+      "baseline": 18
+    },
+    {
+      "group": "constructors",
+      "switches": "default,semijoin=off",
+      "target": "ch",
+      "mutation": "none",
+      "key": null,
+      "method": "query",
+      "projection": "id+1",
+      "order": "",
+      "native": 23,
+      "baseline": 19
+    },
+    {
+      "group": "constructors",
+      "switches": "default,semijoin=off",
+      "target": "ch",
+      "mutation": "none",
+      "key": null,
+      "method": "query",
+      "projection": "id+1",
+      "order": " ORDER BY name LIMIT 1",
+      "native": 23,
+      "baseline": 18
+    },
+    {
+      "group": "constructors",
+      "switches": "default,semijoin=off",
+      "target": "ch",
+      "mutation": "none",
+      "key": null,
+      "method": "query",
+      "projection": "id+1",
+      "order": " ORDER BY id+1 LIMIT 1",
+      "native": 23,
+      "baseline": 18
+    },
+    {
+      "group": "constructors",
+      "switches": "default,semijoin=off",
+      "target": "ch",
+      "mutation": "none",
+      "key": null,
+      "method": "query",
+      "projection": "CAST(name AS CHAR)",
+      "order": "",
+      "native": 24,
+      "baseline": 20
+    },
+    {
+      "group": "constructors",
+      "switches": "default,semijoin=off",
+      "target": "ch",
+      "mutation": "none",
+      "key": null,
+      "method": "query",
+      "projection": "CAST(name AS CHAR)",
+      "order": " ORDER BY name LIMIT 1",
+      "native": 25,
+      "baseline": 21
+    },
+    {
+      "group": "constructors",
+      "switches": "default,semijoin=off",
+      "target": "ch",
+      "mutation": "none",
+      "key": null,
+      "method": "query",
+      "projection": "CAST(name AS CHAR)",
+      "order": " ORDER BY id+1 LIMIT 1",
+      "native": 26,
+      "baseline": 18
+    },
+    {
+      "group": "constructors",
+      "switches": "default,semijoin=off",
+      "target": "ch",
+      "mutation": "none",
+      "key": null,
+      "method": "query",
+      "projection": "CAST(id+1 AS DECIMAL(66,0))",
+      "order": "",
+      "native": 27,
+      "baseline": 22
+    },
+    {
+      "group": "constructors",
+      "switches": "default,semijoin=off",
+      "target": "ch",
+      "mutation": "none",
+      "key": null,
+      "method": "query",
+      "projection": "CAST(id+1 AS DECIMAL(66,0))",
+      "order": " ORDER BY name LIMIT 1",
+      "native": 27,
+      "baseline": 18
+    },
+    {
+      "group": "constructors",
+      "switches": "default,semijoin=off",
+      "target": "ch",
+      "mutation": "none",
+      "key": null,
+      "method": "query",
+      "projection": "CAST(id+1 AS DECIMAL(66,0))",
+      "order": " ORDER BY id+1 LIMIT 1",
+      "native": 27,
+      "baseline": 18
+    },
+    {
+      "group": "constructors",
+      "switches": "default,semijoin=off",
+      "target": "ch",
+      "mutation": "none",
+      "key": null,
+      "method": "query",
+      "projection": "CAST(name AS DATETIME(7))",
+      "order": "",
+      "native": 28,
+      "baseline": 23
+    },
+    {
+      "group": "constructors",
+      "switches": "default,semijoin=off",
+      "target": "ch",
+      "mutation": "none",
+      "key": null,
+      "method": "query",
+      "projection": "CAST(name AS DATETIME(7))",
+      "order": " ORDER BY name LIMIT 1",
+      "native": 28,
+      "baseline": 23
+    },
+    {
+      "group": "constructors",
+      "switches": "default,semijoin=off",
+      "target": "ch",
+      "mutation": "none",
+      "key": null,
+      "method": "query",
+      "projection": "CAST(name AS DATETIME(7))",
+      "order": " ORDER BY id+1 LIMIT 1",
+      "native": 28,
+      "baseline": 23
+    },
+    {
+      "group": "constructors",
+      "switches": "default,semijoin=off",
+      "target": "ch",
+      "mutation": "truncate",
+      "key": null,
+      "method": "query",
+      "projection": "name",
+      "order": "",
+      "native": 29,
+      "baseline": 3
+    },
+    {
+      "group": "constructors",
+      "switches": "default,semijoin=off",
+      "target": "ch",
+      "mutation": "truncate",
+      "key": null,
+      "method": "query",
+      "projection": "name",
+      "order": " ORDER BY name LIMIT 1",
+      "native": 29,
+      "baseline": 3
+    },
+    {
+      "group": "constructors",
+      "switches": "default,semijoin=off",
+      "target": "ch",
+      "mutation": "truncate",
+      "key": null,
+      "method": "query",
+      "projection": "name",
+      "order": " ORDER BY id+1 LIMIT 1",
+      "native": 29,
+      "baseline": 3
+    },
+    {
+      "group": "constructors",
+      "switches": "default,semijoin=off",
+      "target": "ch",
+      "mutation": "truncate",
+      "key": null,
+      "method": "query",
+      "projection": "id+1",
+      "order": "",
+      "native": 30,
+      "baseline": 3
+    },
+    {
+      "group": "constructors",
+      "switches": "default,semijoin=off",
+      "target": "ch",
+      "mutation": "truncate",
+      "key": null,
+      "method": "query",
+      "projection": "id+1",
+      "order": " ORDER BY name LIMIT 1",
+      "native": 30,
+      "baseline": 3
+    },
+    {
+      "group": "constructors",
+      "switches": "default,semijoin=off",
+      "target": "ch",
+      "mutation": "truncate",
+      "key": null,
+      "method": "query",
+      "projection": "id+1",
+      "order": " ORDER BY id+1 LIMIT 1",
+      "native": 30,
+      "baseline": 3
+    },
+    {
+      "group": "constructors",
+      "switches": "default,semijoin=off",
+      "target": "ch",
+      "mutation": "truncate",
+      "key": null,
+      "method": "query",
+      "projection": "CAST(name AS CHAR)",
+      "order": "",
+      "native": 31,
+      "baseline": 3
+    },
+    {
+      "group": "constructors",
+      "switches": "default,semijoin=off",
+      "target": "ch",
+      "mutation": "truncate",
+      "key": null,
+      "method": "query",
+      "projection": "CAST(name AS CHAR)",
+      "order": " ORDER BY name LIMIT 1",
+      "native": 31,
+      "baseline": 3
+    },
+    {
+      "group": "constructors",
+      "switches": "default,semijoin=off",
+      "target": "ch",
+      "mutation": "truncate",
+      "key": null,
+      "method": "query",
+      "projection": "CAST(name AS CHAR)",
+      "order": " ORDER BY id+1 LIMIT 1",
+      "native": 31,
+      "baseline": 3
+    },
+    {
+      "group": "constructors",
+      "switches": "default,semijoin=off",
+      "target": "ch",
+      "mutation": "truncate",
+      "key": null,
+      "method": "query",
+      "projection": "CAST(id+1 AS DECIMAL(66,0))",
+      "order": "",
+      "native": 27,
+      "baseline": 3
+    },
+    {
+      "group": "constructors",
+      "switches": "default,semijoin=off",
+      "target": "ch",
+      "mutation": "truncate",
+      "key": null,
+      "method": "query",
+      "projection": "CAST(id+1 AS DECIMAL(66,0))",
+      "order": " ORDER BY name LIMIT 1",
+      "native": 27,
+      "baseline": 3
+    },
+    {
+      "group": "constructors",
+      "switches": "default,semijoin=off",
+      "target": "ch",
+      "mutation": "truncate",
+      "key": null,
+      "method": "query",
+      "projection": "CAST(id+1 AS DECIMAL(66,0))",
+      "order": " ORDER BY id+1 LIMIT 1",
+      "native": 27,
+      "baseline": 3
+    },
+    {
+      "group": "constructors",
+      "switches": "default,semijoin=off",
+      "target": "ch",
+      "mutation": "truncate",
+      "key": null,
+      "method": "query",
+      "projection": "CAST(name AS DATETIME(7))",
+      "order": "",
+      "native": 28,
+      "baseline": 23
+    },
+    {
+      "group": "constructors",
+      "switches": "default,semijoin=off",
+      "target": "ch",
+      "mutation": "truncate",
+      "key": null,
+      "method": "query",
+      "projection": "CAST(name AS DATETIME(7))",
+      "order": " ORDER BY name LIMIT 1",
+      "native": 28,
+      "baseline": 23
+    },
+    {
+      "group": "constructors",
+      "switches": "default,semijoin=off",
+      "target": "ch",
+      "mutation": "truncate",
+      "key": null,
+      "method": "query",
+      "projection": "CAST(name AS DATETIME(7))",
+      "order": " ORDER BY id+1 LIMIT 1",
+      "native": 28,
+      "baseline": 23
+    },
+    {
+      "group": "ordinal",
+      "switches": "default,materialization=off",
+      "target": "ch",
+      "mutation": "none",
+      "key": null,
+      "method": "query",
+      "projection": "id,name",
+      "order": " ORDER BY 2 DESC LIMIT 1",
+      "native": 32,
+      "baseline": 24
+    },
+    {
+      "group": "ordinal",
+      "switches": "default,materialization=off",
+      "target": "ch",
+      "mutation": "none",
+      "key": null,
+      "method": "execute",
+      "projection": "id,name",
+      "order": " ORDER BY 2 DESC LIMIT 1",
+      "native": 33,
+      "baseline": 25
+    },
+    {
+      "group": "ordinal",
+      "switches": "default,materialization=off",
+      "target": "ch",
+      "mutation": "truncate",
+      "key": null,
+      "method": "query",
+      "projection": "id,name",
+      "order": " ORDER BY 2 DESC LIMIT 1",
+      "native": 34,
+      "baseline": 26
+    },
+    {
+      "group": "ordinal",
+      "switches": "default,materialization=off",
+      "target": "ch",
+      "mutation": "truncate",
+      "key": null,
+      "method": "execute",
+      "projection": "id,name",
+      "order": " ORDER BY 2 DESC LIMIT 1",
+      "native": 35,
+      "baseline": 27
+    },
+    {
+      "group": "ordinal",
+      "switches": "default,materialization=off",
+      "target": "pa",
+      "mutation": "none",
+      "key": null,
+      "method": "query",
+      "projection": "id,name",
+      "order": " ORDER BY 2 DESC LIMIT 1",
+      "native": 36,
+      "baseline": 28
+    },
+    {
+      "group": "ordinal",
+      "switches": "default,materialization=off",
+      "target": "pa",
+      "mutation": "none",
+      "key": null,
+      "method": "execute",
+      "projection": "id,name",
+      "order": " ORDER BY 2 DESC LIMIT 1",
+      "native": 37,
+      "baseline": 29
+    },
+    {
+      "group": "ordinal",
+      "switches": "default,materialization=off",
+      "target": "pa",
+      "mutation": "truncate",
+      "key": null,
+      "method": "query",
+      "projection": "id,name",
+      "order": " ORDER BY 2 DESC LIMIT 1",
+      "native": 38,
+      "baseline": 30
+    },
+    {
+      "group": "ordinal",
+      "switches": "default,materialization=off",
+      "target": "pa",
+      "mutation": "truncate",
+      "key": null,
+      "method": "execute",
+      "projection": "id,name",
+      "order": " ORDER BY 2 DESC LIMIT 1",
+      "native": 39,
+      "baseline": 31
+    }
+  ]
+}

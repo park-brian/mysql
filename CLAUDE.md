@@ -47,8 +47,7 @@ NULL-safe equality and materialized first-NULL builds retain their paths. Generi
 EXISTS, excluded profiles and broader strategies remain open.
 With FirstMatch disabled and weedout enabled, a proved materialized winner now
 uses the same deferred build. Full cost accumulation and replacement priority
-follow MySQL; rounded trace prices do not decide ties. Weedout winners and other
-unsupported switch combinations retain their paths. When weedout is disabled,
+follow MySQL; rounded trace prices do not decide ties. When weedout is disabled,
 the same proved profile can materialize without beating its disabled competitor.
 With materialization disabled and weedout enabled, the proved correlated reader
 now sorts before probing, skips NULL and stops at its first qualified hit;
@@ -57,7 +56,12 @@ full native costs now select that same reader for proved weedout winners.
 Distribution changes can still select a first-NULL materialized build, including
 on cached executions. With every competing strategy disabled, the same physically
 proved fallback now retains that bound and outer ordering. Semijoin-off execution
-remains open.
+remains open. A bounded canonical-column cohort now validates NULL-key source
+visibility through the actual bound table under the invocation transaction.
+Headers publish after reader construction and before deferred reads/sort fill;
+missing validation capability retains the qualified reader. Native warning 159
+before retained-view error 1412 and broader constructor readiness remain open.
+The dependent-subquery audit requires filtering before outer sorting.
 M5.19 field copying now shares the
 BLOB promotion rule with metadata. Actual DISTINCT/group/derived writers now
 normalize stored DECIMAL values, closing the measured streamed-join copy gaps.

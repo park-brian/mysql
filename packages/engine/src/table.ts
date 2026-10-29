@@ -61,6 +61,8 @@ export interface TableStats {
 
 export interface Table {
   readonly def: TableDef
+  /** Validate a read without consuming a row. Absence does not imply a successful check. */
+  checkRead?(trx?: Trx, mode?: ReadMode): void
   /** Add a row; ER_DUP_ENTRY naming the index it collides in. Returns its id. */
   insert(row: Row, trx?: Trx): RowId
   /** Replace a row. A changed clustered key moves it, and the new id is returned; `undefined` if there is no row `id`. */
@@ -259,6 +261,10 @@ class NativeTable implements Table {
   get(id: RowId, trx?: Trx, mode: ReadMode = 'consistent'): FieldBytes[] | undefined {
     this.#visible(trx, mode)
     return this.#strip(this.#clustered.get(id, trx, mode))
+  }
+
+  checkRead(trx?: Trx, mode: ReadMode = 'consistent'): void {
+    this.#visible(trx, mode)
   }
 
   *scan(range: KeyRange = {}, trx?: Trx, mode: ReadMode = 'consistent'): Generator<[RowId, FieldBytes[]]> {
@@ -503,6 +509,10 @@ class MemoryTable implements Table {
   get(id: RowId): FieldBytes[] | undefined {
     const r = this.#data.rows[this.#find(id)]
     return r === undefined ? undefined : this.#strip(r.row)
+  }
+
+  checkRead(): void {
+    // MEMORY has no read-view initialization barrier.
   }
 
   *scan(range: KeyRange = {}): Generator<[RowId, FieldBytes[]]> {

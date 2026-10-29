@@ -88,6 +88,8 @@ export function compileContext(run: Run, scope: Scope, clause: string, windows?:
     subquery: (q, outer) => {
       let correlated = false
       const plan = planQuery({ ...run, parent: enclosing(outer, () => (correlated = true)) }, q)
+      const table = plan.source?.table
+      const checkRead = table?.checkRead?.bind(table)
       const bound: BoundSubquery = {
         clause,
         query: q,
@@ -97,6 +99,7 @@ export function compileContext(run: Run, scope: Scope, clause: string, windows?:
           return correlated
         },
         hasFrom: hasFrom(q),
+        ...(checkRead === undefined ? {} : { checkRead: (env: Env) => checkRead(env.trx, plan.locking ? 'current' : 'consistent') }),
         rows: (env) => plan.rows(env.trx, env),
       }
       run.subqueries?.push(bound)
@@ -372,6 +375,8 @@ function planSelect(run: Run, q: QueryExpression, node: SelectNode): SelectPlan 
   // Read through the windows' temporary table: every column a field of it (8.4.11: `id` loses PRI).
   windowColumns(items, windows)
   const [limitCount, offset] = queryLimit(run, q)
+  const checkedOutput = anti?.kind === 'correlated' && checkedCorrelatedOutput(node, q, source, items, anti.query)
+  let checkedWhere = false
   let whereCtx = compileContext(run, lookup, 'where clause')
   if (anti?.kind === 'correlated') {
     const key = compile(anti.key, whereCtx)
@@ -381,14 +386,21 @@ function planSelect(run: Run, q: QueryExpression, node: SelectNode): SelectPlan 
       // Keep original binding/registration; stop only this proved source,
       // after its equality qualifies a row, before asking for another.
       if (query !== anti.query) return source
+      const checked = checkedOutput && source.checkRead !== undefined
+      checkedWhere = checked
       return {
         columns: source.columns,
         get correlated() { return source.correlated },
         hasFrom: source.hasFrom,
         rows(env) {
           const outer = env.outer?.[0]
-          // This proved '=' cannot match NULL; binding above still runs.
-          if (outer !== undefined && key.eval(outer, env) === null) return []
+          if (outer !== undefined && key.eval(outer, env) === null) {
+            // Broader projection startup remains a separate migration. In the
+            // checked cohort, validate before suppressing a NULL-key search.
+            if (!checkedOutput) return []
+            if (checked) { source.checkRead!(env); return [] }
+            // A source without the capability retains its qualified reader.
+          }
           return limit(source.rows(env), 0, 1)
         },
       }
@@ -579,9 +591,9 @@ function planSelect(run: Run, q: QueryExpression, node: SelectNode): SelectPlan 
   // Ordinary readers apply LIMIT after sorting and before SELECT evaluation.
   // Multi-table copies, written HAVING and windows retain their materialization boundary.
   const limitFirst = !windowed && !node.distinct && !loopSemijoin && (ordered === undefined ? !node.having && (source !== undefined || !streamed) : having === undefined)
-  const readerReady = !windowed && wholeReaderReady(q, node) && (from === undefined
+  const readerReady = !windowed && (wholeReaderReady(q, node) || checkedWhere) && (from === undefined
     ? !order.length
-    : !node.distinct && ((base && (!order.length || rowOrder)) || (!order.length && !q.with && !node.options && from.tables.length === 1 && from.tables[0]?.derived)))
+    : !node.distinct && ((base && (!order.length || rowOrder || (checkedWhere && sortedFirst))) || (!order.length && !q.with && !node.options && from.tables.length === 1 && from.tables[0]?.derived)))
   const take = q.limit && limitStage(offset, limitCount)
   const stages: Stage[] = [
     ...(from === undefined && node.where !== undefined ? [filterStage(resolved.predicates)] : []),
@@ -882,6 +894,21 @@ function unhintedBase(q: QueryExpression, node: SelectNode) {
 function wholeReaderReady(q: QueryExpression, node: SelectNode): boolean {
   return !node.where && !node.having && !node.windows && !q.locking?.length &&
     !someNode([node, q.orderBy], (n) => (n as Expression).kind === NODE.MATCH || undefined)
+}
+
+/** Joint visibility/header migration: bound canonical columns, no alias constructors. */
+function checkedCorrelatedOutput(node: SelectNode, q: QueryExpression, source: FromPlan['single'], items: readonly { readonly expr: Expression; readonly alias?: string; readonly compiled: Compiled }[], query: QueryExpression): boolean {
+  const parent = node.from?.[0]
+  const body = boundedSubquery(query)
+  const inner = body?.from[0]
+  if (source === undefined || parent?.kind !== REF.TABLE || inner?.kind !== REF.TABLE || node.windows !== undefined || parent.alias !== undefined || inner.alias !== undefined || body?.items[0].alias !== undefined) return false
+  const simple = (name: string): boolean => /^[A-Za-z_][A-Za-z0-9_]*$/.test(name)
+  if (parent.table.name !== source.def.name || ![source.def.schema, parent.table.name, parent.table.schema, inner.table.name, inner.table.schema].every((name) => name === undefined || simple(name))) return false
+  const equality = body?.where
+  if (equality?.kind !== NODE.BINARY || ![equality.left, equality.right].every((e) => e.kind === NODE.COLUMN && e.parts.every(simple))) return false
+  const column = (e: Expression): boolean => e.kind === NODE.COLUMN && e.parts.length === 1 && simple(e.parts[0]!) && source.def.columns.some((c) => c.name === e.parts[0])
+  if (!items.length || !items.every((i) => i.alias === undefined && i.compiled.type.column !== undefined && column(i.expr))) return false
+  return (q.orderBy ?? []).every(({ expr }) => column(expr) || (expr.kind === NODE.LITERAL && expr.type === LITERAL.INT && typeof expr.value === 'bigint' && expr.value > 0n && expr.value <= BigInt(items.length)))
 }
 
 type QualifiedColumn = Extract<Expression, { kind: typeof NODE.COLUMN }> & { readonly parts: readonly [string, string] }

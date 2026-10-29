@@ -576,6 +576,8 @@ export interface SubqueryPlan {
   readonly correlated: boolean
   /** Whether it has a FROM: one without is a constant row, never empty. */
   readonly hasFrom: boolean
+  /** Check base-table read visibility under this invocation; not full plan initialization. */
+  checkRead?(env: Env): void
   rows(env: Env): Iterable<readonly Value[]>
 }
 

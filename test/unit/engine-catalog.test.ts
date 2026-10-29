@@ -219,6 +219,8 @@ test('M4.23: a DROP under an older view leaves its trees until purge, but no way
   assert.equal([...catalog.table('s', 't').scan()].length, 0)
   refused(() => [...t.scan()], 'ER_NO_SUCH_TABLE')
   refused(() => t.get(i32(1)), 'ER_NO_SUCH_TABLE')
+  assert.ok(t.checkRead)
+  refused(() => t.checkRead!(), 'ER_NO_SUCH_TABLE')
   refused(() => t.delete(i32(1)), 'ER_NO_SUCH_TABLE')
 })
 
@@ -263,6 +265,10 @@ test('M4.23: a view older than a table reads ER_TABLE_DEF_CHANGED, and may still
   t.insert([i32(1), utf8('a'), null])
   refused(() => t.get(i32(1), old), 'ER_TABLE_DEF_CHANGED')
   refused(() => [...t.scan(undefined, old)], 'ER_TABLE_DEF_CHANGED')
+  assert.ok(t.checkRead)
+  refused(() => t.checkRead!(old), 'ER_TABLE_DEF_CHANGED')
+  assert.doesNotThrow(() => t.checkRead!(old, 'current'))
+  assert.doesNotThrow(() => t.checkRead!())
   // As in MySQL, the write succeeds: it reads the current version.
   t.insert([i32(2), utf8('b'), null], old)
   assert.ok(t.get(i32(2), old, 'current') !== undefined)

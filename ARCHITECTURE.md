@@ -1780,7 +1780,7 @@ The full Docker gates, pinned-reference audits and 10,000 crash points pass.
 `db.stream()` streams a million rows within a few MB of the heap's baseline (M5.40). Next is the
 remaining function and planner work, then the browser. The coercion corpus
 now agrees on all 3,148 observations and all 1,737 warning counts. The core entry bundle
-is 330,054 bytes gzipped (322.3 KiB), against the 500 KB release target,
+is 330,470 bytes gzipped (322.7 KiB), against the 500 KB release target,
 with the UCA weights in a separate chunk loaded on demand.
 The private generated error table records sequential range starts instead of
 repeating each number. Its 2,132 facts, provenance and public lookups remain
@@ -1803,9 +1803,8 @@ With FirstMatch disabled, the bounded integer profile now admits materialization
 when its full cost wins against enabled weedout. The comparator preserves native
 binary-double accumulation and the earlier materialized candidate on a genuine
 tie; equal rounded trace values can still select weedout. It reuses the deferred
-build and retains its first-NULL, failure and LIMIT behavior. Weedout winners and
-unsupported switch combinations remain on their previous paths. Disabling
-weedout admits the same physically proved build even when its cost is higher;
+build and retains its first-NULL, failure and LIMIT behavior. Disabling weedout
+admits the same physically proved build even when its cost is higher;
 materialization-off with weedout enabled now reuses the proved correlated
 reader after outer sorting. It skips NULL and stops after its first qualified
 hit, with an explicit physical one-row Limit in its plan. Full native costs now
@@ -1813,7 +1812,15 @@ select the same reader when enabled materialization loses. Distribution changes
 retain materialized winners and their first-NULL build, including on cached
 executions. Disabling all competing strategies now admits the same physically
 proved fallback, retaining its bound, NULL shortcut and outer ordering. Semijoin-off
-execution remains open.
+execution remains open. Canonical-column correlated output now migrates NULL-key
+visibility and header readiness together. An optional no-row table capability
+shares the existing engine visibility/presence authority; binding forwards the
+actual table and invocation transaction. Capability absence delegates to the
+original qualified reader. Headers precede deferred reads and physical sort fill,
+matching native activity captures. CAST/arithmetic/alias constructors retain their
+previous boundary until their initialization owner and native phase tests justify
+removing the temporary fence. Warning 159 before retained-view error 1412 remains
+open. Dependent subqueries require filtering before outer sorting.
 
 The release plan gives each stage something to ship:
 
