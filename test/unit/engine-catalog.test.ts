@@ -286,6 +286,67 @@ test('M4.23: a view older than a table reads ER_TABLE_DEF_CHANGED, and may still
   assert.equal([...t.scan()].length, 2)
 })
 
+test('catalog options keep physical identity readable through retained history, across handles and rollback', async () => {
+  const { store, catalog } = await fresh()
+  catalog.createSchema('s')
+  catalog.createTable('s', { ...spec(), options: { comment: 'x'.repeat(5000) } })
+  const before = catalog.table('s', 't')
+  before.insert([i32(1), utf8('one'), null])
+  const reader = store.begin()
+  assert.equal([...before.scan(undefined, reader)].length, 1)
+  const rewrite = (value: number) => catalog.setTableOptions('s', 't', { ...catalog.definition('s', 't').options, test: value })
+  for (let n = 1; n <= 3; n++) {
+    rewrite(n)
+    const after = catalog.table('s', 't')
+    assert.equal(after.def.id, before.def.id)
+    for (const handle of [before, after]) {
+      assert.doesNotThrow(() => handle.checkRead!(reader, 'consistent', 'v'))
+      assert.deepEqual([...handle.indexScan('v', undefined, reader)].map(([, r]) => r[1]), [utf8('one')])
+      assert.deepEqual(handle.get(i32(1), reader)?.[1], utf8('one'))
+    }
+  }
+  const writer = store.begin()
+  const savepoint = writer.savepoint()
+  catalog.setTableOptions('s', 't', { test: 'uncommitted' }, { trx: writer })
+  const during = catalog.table('s', 't', writer)
+  assert.equal([...during.scan(undefined, reader)].length, 1)
+  writer.rollbackTo(savepoint)
+  assert.equal([...during.scan(undefined, reader)].length, 1)
+  writer.rollback()
+  const noCapability = catalog.engines.native.open(catalog.definition('s', 't'), { definedBy: Number.MAX_SAFE_INTEGER, alive: () => {} })
+  refused(() => noCapability.checkRead!(reader), 'ER_TABLE_DEF_CHANGED')
+  assert.doesNotThrow(() => noCapability.checkRead!(reader, 'current'))
+  const latest = catalog.table('s', 't')
+  reader.view.expired = true
+  refused(() => latest.checkRead!(reader), 'ER_LOCK_DEADLOCK')
+  reader.rollback()
+  store.purge()
+  verifyStore(store, catalog.verifyOptions())
+})
+
+for (const replace of ['create', 'truncate', 'rebuild'] as const) test('catalog options do not hide a physical definition change: ' + replace, async () => {
+  const { store, catalog } = await fresh()
+  catalog.createSchema('s')
+  if (replace !== 'create') catalog.createTable('s', spec())
+  const old = store.begin()
+  old.view
+  if (replace === 'create') catalog.createTable('s', spec())
+  else {
+    catalog.setTableOptions('s', 't', { test: 'before' })
+    if (replace === 'truncate') catalog.truncateTable('s', 't')
+    else catalog.rebuildTable('s', 't', spec(), (row) => row)
+  }
+  catalog.setTableOptions('s', 't', { test: 'after' })
+  const handle = catalog.table('s', 't')
+  assert.throws(() => handle.checkRead!(old, 'consistent', 'v'), (e: unknown) => e instanceof EngineError && e.code === 'ER_TABLE_DEF_CHANGED' && e.readIndex === 1)
+  assert.doesNotThrow(() => handle.checkRead!(old, 'current', 'v'))
+  old.rollback()
+  catalog.dropTable('s', 't')
+  store.purge()
+  refused(() => handle.checkRead!(), 'ER_NO_SUCH_TABLE')
+  verifyStore(store, catalog.verifyOptions())
+})
+
 /** Run DDL on a fault-injecting VFS armed to crash at `crashAt`; return the VFS, and the writes the DDL made. */
 async function crashing(crashAt: number | undefined, ddl: (c: Catalog) => void, setup: (c: Catalog) => void = () => {}) {
   const vfs = new FaultInjectingVfs({ pageSize: PAGE, seed: crashAt ?? 7, ...(crashAt === undefined ? {} : { crashAt }) })

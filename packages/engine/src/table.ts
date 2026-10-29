@@ -95,8 +95,10 @@ export interface Table {
 export interface TableHooks {
   /** Refuse a write to a table its catalog no longer holds (ER_NO_SUCH_TABLE). */
   alive(trx: Trx | undefined): void
-  /** The transaction that last wrote the definition: a view that cannot see it reads ER_TABLE_DEF_CHANGED. */
+  /** The latest catalog revision: visibility proves this physical definition is readable. */
   readonly definedBy: number
+  /** Whether the retained view holds this physical definition despite a later options rewrite. */
+  definitionVisible?(trx: Trx): boolean
 }
 
 export interface StorageEngine {
@@ -329,7 +331,7 @@ class NativeTable implements Table {
   /** A consistent read through a view older than the definition is InnoDB's 1412, not an empty table. */
   #visible(trx: Trx | undefined, mode: ReadMode, index = this.def.clustered): void {
     this.#present()
-    if (trx !== undefined && mode === 'consistent' && !trx.view.isVisible(this.#hooks.definedBy)) throw tableDefChanged(nativeReadIndex(this.def, index))
+    if (trx !== undefined && mode === 'consistent' && !trx.view.isVisible(this.#hooks.definedBy) && this.#hooks.definitionVisible?.(trx) !== true) throw tableDefChanged(nativeReadIndex(this.def, index))
   }
 
   #strip(row: FieldBytes[] | undefined): FieldBytes[] | undefined {

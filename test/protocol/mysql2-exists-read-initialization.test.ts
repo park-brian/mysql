@@ -46,8 +46,8 @@ for (const fixture of [negativeVisibility, positiveVisibility]) test(fixture.out
     const four = constructor || sample.group === 'sort4' || sample.group === 'ordinal'
     const sql = 'SELECT ' + sample.projection + ' FROM pa WHERE ' + (sample.group === 'positive' ? '' : 'NOT ') + 'EXISTS(SELECT 1 FROM ch WHERE ch.g=pa.g)'
       + (constructor || sample.group === 'ordinal' ? sample.order : sample.group === 'plain' || sample.group === 'positive' ? '' : ' ORDER BY name LIMIT 1')
-    const createParent = () => b.query('CREATE TABLE pa(id ' + (constructor ? 'BIGINT UNSIGNED' : 'INT') + ' PRIMARY KEY,name VARCHAR(12) NOT NULL,g INT,UNIQUE KEY(name))')
-    const createInner = () => b.query('CREATE TABLE ch(id INT PRIMARY KEY,g INT,KEY(g))')
+    const createParent = () => b.query('CREATE TABLE pa(id ' + (constructor ? 'BIGINT UNSIGNED' : 'INT') + ' PRIMARY KEY,name VARCHAR(12) NOT NULL,g INT,UNIQUE KEY(name)) STATS_AUTO_RECALC=0')
+    const createInner = () => b.query('CREATE TABLE ch(id INT PRIMARY KEY,g INT,KEY(g)) STATS_AUTO_RECALC=0')
     const parentValues = constructor
       ? Array.from({ length: 4 }, (_, i) => `(${18446744073709551612n + BigInt(i)},'n00${4 - i}',9)`).join(',')
       : four ? `(1,'n004',${sample.key ?? 'NULL'}),(2,'n003',1),(3,'n002',2),(4,'n001',9)`
@@ -60,6 +60,7 @@ for (const fixture of [negativeVisibility, positiveVisibility]) test(fixture.out
       await a.query('USE ' + schema); await b.query('USE ' + schema)
       await b.query('CREATE TABLE anchor(id INT PRIMARY KEY)'); await b.query('INSERT INTO anchor VALUES(1)')
       await createParent(); await fillParent(); await createInner(); await fillInner()
+      await b.query('ANALYZE TABLE pa,ch')
       await a.query('SET optimizer_switch=' + mysql.escape(sample.switches))
       await b.query('SET SESSION lock_wait_timeout=2')
       if (sample.method === 'execute') statement = await a.prepare(sql)
@@ -74,6 +75,7 @@ for (const fixture of [negativeVisibility, positiveVisibility]) test(fixture.out
       } else if (sample.mutation === 'alter-copy') {
         await b.query('ALTER TABLE ' + sample.target + ' ADD COLUMN extra INT DEFAULT 0, ALGORITHM=COPY')
       } else if (sample.mutation === 'drop') await b.query('DROP TABLE ' + sample.target)
+      if (sample.mutation !== 'drop') await b.query('ANALYZE TABLE pa,ch')
       const actual: Outcome = {}
       if (sample.group === 'sort4' || sample.group === 'ordinal') {
         try { actual.physicalPlan = (await a.query<mysql.RowDataPacket[]>('EXPLAIN FORMAT=TREE ' + sql))[0][0]?.EXPLAIN }

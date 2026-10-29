@@ -219,8 +219,13 @@ never a view's:
 
 - A `Table` handle re-checks its row before every write. A write cannot land
   in a tree that purge is about to drop: `ER_NO_SUCH_TABLE`.
-- A consistent read through a view older than the definition is
-  `ER_TABLE_DEF_CHANGED` (1412), InnoDB's answer.
+- A consistent read through a view older than the physical definition is
+  `ER_TABLE_DEF_CHANGED` (1412), InnoDB's answer. Statistics and other options
+  rewrites retain that physical ID. If the latest catalog revision is invisible,
+  the native read check compares the ID in the existing MVCC-visible catalog
+  record; it does not resolve the table using an old schema or deserialize the
+  old definition. CREATE, TRUNCATE and copy rebuilds have different IDs and still
+  fail. Current reads and write liveness keep their existing rules.
 
 **Versioning, the done-when.** The version is a row, and `CATALOG_VERSION` is
 1.

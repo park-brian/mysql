@@ -28,7 +28,7 @@
 // MySQL's data dictionary, behind its metadata locks, does. A table handle
 // re-checks before every write that its table is still the one in the
 // catalog, so a write cannot land in a tree purge is about to drop; a
-// consistent read through a view older than the definition is
+// consistent read through a view older than the physical definition is
 // `ER_TABLE_DEF_CHANGED`, InnoDB's answer (review, M4.23).
 //
 // **Versioning is M4.23's done-when.** The catalog's version is a row. Opening
@@ -562,6 +562,11 @@ export class Catalog {
     let seen: { trx: Trx; generation: number; rollbacks: number } | undefined
     return this.#engine(def).open(def, {
       definedBy: versionOf(value).trxId,
+      // Options can change without replacing the trees; compare the retained physical id only.
+      definitionVisible: (trx) => {
+        const record = this.#tables.recordAt(key, trx.view)
+        return record !== undefined && readBe32(decodeRecord(SYSTEM.TABLES.layout, record)[2] as Uint8Array) === def.id
+      },
       alive: (trx) => {
         if (trx !== undefined && seen !== undefined && seen.trx === trx && seen.generation === this.#generation && seen.rollbacks === trx.rollbacks) return
         // The id field only: the definition may be off-page, and a write needs none of it.

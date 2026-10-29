@@ -1853,6 +1853,11 @@ now retain the written name at introducers, CONVERT USING and CAST CHAR. Charset
 resolution stays shared; DDL/SET owners and successful provenance are unchanged.
 Written utf8 alias warning histories remain open under the existing size caps.
 
+Catalog statistics rewrites preserve physical table identity. A retained view
+that cannot see the latest catalog revision checks its existing MVCC-visible ID;
+CREATE/TRUNCATE/rebuild still fail with 1412. The latest-revision fast path,
+current reads, write liveness and post-purge absence retain their existing rules.
+
 The release plan gives each stage something to ship:
 
 | Release | Ships | Unlocked by |

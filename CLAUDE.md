@@ -485,6 +485,11 @@ into a column — are `@myjs/types`', not the executor's. Below the executor, th
 storage seam is `Catalog` and `Table` in `@myjs/engine` (doc 30 §Our engines):
 rows as storage-encoded field bytes, DDL as transactions.
 
+Catalog statistics rewrites preserve physical table identity. If a retained view
+cannot see the latest catalog revision, the native read check compares its
+existing MVCC-visible physical ID; CREATE/TRUNCATE/rebuild still fail with 1412.
+Current reads, write liveness and post-purge absence retain their existing rules.
+
 ## Ground rules
 
 From the roadmap, which states them once so no work item repeats them:
