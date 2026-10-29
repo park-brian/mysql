@@ -374,6 +374,7 @@ function planSelect(run: Run, q: QueryExpression, node: SelectNode): SelectPlan 
   const [limitCount, offset] = queryLimit(run, q)
   let whereCtx = compileContext(run, lookup, 'where clause')
   if (anti?.kind === 'correlated') {
+    const key = compile(anti.key, whereCtx)
     const subquery = whereCtx.subquery!
     whereCtx = { ...whereCtx, subquery(query, outer) {
       const source = subquery(query, outer)
@@ -384,7 +385,12 @@ function planSelect(run: Run, q: QueryExpression, node: SelectNode): SelectPlan 
         columns: source.columns,
         get correlated() { return source.correlated },
         hasFrom: source.hasFrom,
-        rows: (env) => limit(source.rows(env), 0, 1),
+        rows(env) {
+          const outer = env.outer?.[0]
+          // This proved '=' cannot match NULL; binding above still runs.
+          if (outer !== undefined && key.eval(outer, env) === null) return []
+          return limit(source.rows(env), 0, 1)
+        },
       }
     } }
   }
@@ -987,7 +993,7 @@ function costedIntegerSemijoin(run: Run, q: QueryExpression, node: SelectNode, f
 }
 
 /** One decorrelatable integer antijoin, costed through the existing preserved-side join planner. */
-type Antijoin = { readonly kind: 'correlated'; readonly query: QueryExpression }
+type Antijoin = { readonly kind: 'correlated'; readonly query: QueryExpression; readonly key: QualifiedColumn }
   | { readonly kind: 'materialized'; readonly read: Compiled; readonly plan: PlanNode }
   | { readonly kind: 'lookup' | 'hash'; readonly key: Compiled; readonly inner: SelectPlan; readonly plan: PlanNode }
 
@@ -1037,7 +1043,7 @@ function costedAntijoin(run: Run, q: QueryExpression, node: SelectNode, from: Fr
       if (strategy === undefined) return undefined
       // The proved FirstMatch keeps its original correlated predicate, with
       // the same outer access/sort placement as the materialized alternative.
-      if (strategy === 'lookup') return { kind: 'correlated', query: sub }
+      if (strategy === 'lookup') return { kind: 'correlated', query: sub, key: outerKey }
       const { where: _correlation, ...source } = body
       const projected: QueryExpression = { ...sub, body: { ...source, items: [{ expr: innerKey }] } }
       const plan = planQuery(run, projected)
