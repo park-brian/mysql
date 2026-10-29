@@ -1780,7 +1780,7 @@ The full Docker gates, pinned-reference audits and 10,000 crash points pass.
 `db.stream()` streams a million rows within a few MB of the heap's baseline (M5.40). Next is the
 remaining function and planner work, then the browser. The coercion corpus
 now agrees on all 3,148 observations and all 1,737 warning counts. The core entry bundle
-is 330,701 bytes gzipped (322.9 KiB), against the 500 KB release target,
+is 330,737 bytes gzipped (323.0 KiB), against the 500 KB release target,
 with the UCA weights in a separate chunk loaded on demand.
 The private generated error table records sequential range starts instead of
 repeating each number. Its 2,132 facts, provenance and public lookups remain
@@ -1839,8 +1839,10 @@ and unary-BINARY warnings in failure history without adding them to successful-r
 provenance.
 Nested parsing shares the history; statement completion clears both histories.
 Unary-BINARY warns after operand construction, preserving earlier recoverable
-errors and stopping behind a failed inner constructor. Explicit charset warning
-histories remain open.
+errors and stopping behind a failed inner constructor. Explicit utf8mb3 warnings
+now retain the written name at introducers, CONVERT USING and CAST CHAR. Charset
+resolution stays shared; DDL/SET owners and successful provenance are unchanged.
+Written utf8 alias warning histories remain open under the existing size caps.
 
 The release plan gives each stage something to ship:
 

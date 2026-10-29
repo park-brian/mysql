@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { Cursor, NATIONAL_DEPRECATION, NODE, NO_SQL_MODE, ParseError, lex, parseCreateTable, parseExpression, parseStatement, parseStatementBytes, parseStatementSequence } from '@myjs/parser'
+import { BINARY_DEPRECATION, Cursor, NATIONAL_DEPRECATION, NODE, NO_SQL_MODE, ParseError, lex, parseCreateTable, parseExpression, parseStatement, parseStatementBytes, parseStatementSequence } from '@myjs/parser'
 
 const unknown = () => new ParseError('ER_UNKNOWN_COLLATION', "Unknown collation: 'missing'", { errno: 1273, sqlState: 'HY000' })
 const overflow = () => new ParseError('ER_ILLEGAL_VALUE_FOR_TYPE', "Illegal double '1e309' value found during parsing", { errno: 1367, sqlState: '22007' })
@@ -258,6 +258,34 @@ test('unary BINARY warns after operand construction and preserves legacy success
     assert.ok(error instanceof ParseError)
     assert.equal(error.errno, 1273)
     assert.deepEqual(error.conditions?.map(e => [e.errno, e.level ?? 'Error']), [[3720, 'Warning'], [1273, 'Error'], [1287, 'Warning'], [1426, 'Error']])
+    return true
+  })
+})
+
+test('explicit utf8mb3 warnings belong to expression construction, not successful provenance or charset resolution', () => {
+  const expressions = ["_Utf8mb3'1'", "_utf8mb3 X'31'", "_utf8mb3 B'1'", "CONVERT('1' USING `Utf8mb3`)", "CAST('1' AS CHAR CHARSET 'UTF8MB3')"]
+  for (const expression of expressions) {
+    assert.equal(Cursor.conditions(parseStatement('SELECT ' + expression)), undefined, expression)
+    const mixed = parseStatement("SELECT CAST('x' AS CHAR BINARY)," + expression + ",CAST('y' AS NCHAR)")
+    assert.deepEqual(Cursor.conditions(mixed)?.map(e => e.message), [BINARY_DEPRECATION, NATIONAL_DEPRECATION], expression)
+    assert.throws(() => parseExpression(expression + '+CAST(1 AS TIME(7))'), (error: unknown) => {
+      assert.ok(error instanceof ParseError)
+      assert.equal(error.errno, 1426)
+      assert.deepEqual(error.conditions?.map(e => e.errno), [1287, 1426])
+      assert.match(error.conditions![0]!.message, /^'utf8mb3' is deprecated/)
+      return true
+    })
+  }
+  for (const sql of ['CREATE TABLE t(v CHAR CHARSET utf8mb3)', 'SET NAMES utf8mb3']) {
+    assert.equal(Cursor.conditions(parseStatement(sql)), undefined, 'independent charset owner: ' + sql)
+  }
+  for (const sql of ["SELECT _utf8'1',CAST(1 AS TIME(7))", "SELECT CONVERT('1' USING utf8),CAST(1 AS TIME(7))", "SELECT CAST('1' AS CHAR CHARSET utf8),CAST(1 AS TIME(7))"]) {
+    assert.throws(() => parseStatement(sql), (error: unknown) => error instanceof ParseError && !error.conditions?.some(e => e.errno === 1287 && e.message.startsWith("'utf8mb3'")), 'written utf8 remains distinct')
+  }
+  assert.throws(() => parseStatement("SELECT _utf8mb3'1',CAST('1' AS CHAR BINARY CHARSET missing)"), (error: unknown) => {
+    assert.ok(error instanceof ParseError)
+    assert.equal(error.errno, 1115)
+    assert.deepEqual(error.conditions?.map(e => e.errno), [1287, 1115], 'unknown charset suppresses its BINARY attribute warning')
     return true
   })
 })

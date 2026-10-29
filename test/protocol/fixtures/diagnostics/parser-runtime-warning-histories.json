@@ -48,7 +48,22 @@
     "SELECT BINARY FROM",
     "SELECT N'1',BINARY FROM",
     "SELECT BINARY (BINARY '1'),CAST(1 AS DATETIME(7))",
-    "SELECT BINARY (@x:=CAST(1 AS DATETIME(7)))"
+    "SELECT BINARY (@x:=CAST(1 AS DATETIME(7)))",
+    "SELECT CAST(CONVERT('1' USING utf8mb3) AS DATETIME(7))",
+    "SELECT CONVERT('1' USING utf8mb3 FROM",
+    "SELECT CAST(_utf8mb3'1' AS DATETIME(7))",
+    "SELECT CAST(CAST('1' AS CHAR CHARACTER SET utf8mb3) AS DATETIME(7))",
+    "SELECT CAST('1' AS CHAR BINARY CHARACTER SET utf8mb3),CAST(1 AS DATETIME(7))",
+    "SELECT CAST('1' AS CHAR CHARACTER SET utf8mb3 BINARY),CAST(1 AS DATETIME(7))",
+    "SELECT CAST('1' AS CHAR CHARACTER SET utf8mb3 FROM",
+    "SELECT CAST(_Utf8mb3'1' AS DATETIME(7))",
+    "SELECT CAST(_utf8mb3 X'31' AS DATETIME(7))",
+    "SELECT CAST(_utf8mb3 B'1' AS DATETIME(7))",
+    "SELECT CAST(_utf8mb3 0b1 AS DATETIME(7))",
+    "SELECT CONVERT('1' USING `Utf8mb3`),CAST(1 AS DATETIME(7))",
+    "SELECT CAST('1' AS CHAR CHARSET `Utf8mb3`),CAST(1 AS DATETIME(7))",
+    "SELECT CAST(_utf8mb3 X'FF' AS DATETIME(7))",
+    "SELECT CAST(_utf8mb3'🐻' AS DATETIME(7))"
   ],
   "apis": [
     "query",
@@ -2393,6 +2408,291 @@
           "Level": "Warning",
           "Code": 1287,
           "Message": "'BINARY expr' is deprecated and will be removed in a future release. Please use CAST instead"
+        },
+        {
+          "Level": "Error",
+          "Code": 1426,
+          "Message": "Too-big precision 7 specified for 'CAST'. Maximum is 6."
+        }
+      ],
+      "warningCount": 3,
+      "errorCount": 1,
+      "state": [
+        {
+          "v": 9,
+          "y": 9
+        }
+      ]
+    },
+    {
+      "params": [],
+      "error": {
+        "code": "ER_TOO_BIG_PRECISION",
+        "errno": 1426,
+        "state": "42000",
+        "message": "Too-big precision 7 specified for 'CAST'. Maximum is 6."
+      },
+      "fieldEvents": [],
+      "warnings": [
+        {
+          "Level": "Warning",
+          "Code": 1287,
+          "Message": "'utf8mb3' is deprecated and will be removed in a future release. Please use utf8mb4 instead"
+        }
+      ],
+      "warningCount": 1,
+      "errorCount": 0,
+      "state": [
+        {
+          "v": 9,
+          "y": 9
+        }
+      ]
+    },
+    {
+      "params": [],
+      "error": {
+        "code": "ER_TOO_BIG_PRECISION",
+        "errno": 1426,
+        "state": "42000",
+        "message": "Too-big precision 7 specified for 'CAST'. Maximum is 6."
+      },
+      "warnings": [
+        {
+          "Level": "Warning",
+          "Code": 1287,
+          "Message": "'utf8mb3' is deprecated and will be removed in a future release. Please use utf8mb4 instead"
+        }
+      ],
+      "warningCount": 1,
+      "errorCount": 0,
+      "state": [
+        {
+          "v": 9,
+          "y": 9
+        }
+      ]
+    },
+    {
+      "params": [],
+      "error": {
+        "code": "ER_PARSE_ERROR",
+        "errno": 1064,
+        "state": "42000",
+        "message": "You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'FROM' at line 1"
+      },
+      "fieldEvents": [],
+      "warnings": [
+        {
+          "Level": "Warning",
+          "Code": 1287,
+          "Message": "'utf8mb3' is deprecated and will be removed in a future release. Please use utf8mb4 instead"
+        }
+      ],
+      "warningCount": 1,
+      "errorCount": 0,
+      "state": [
+        {
+          "v": 9,
+          "y": 9
+        }
+      ]
+    },
+    {
+      "params": [],
+      "error": {
+        "code": "ER_PARSE_ERROR",
+        "errno": 1064,
+        "state": "42000",
+        "message": "You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'FROM' at line 1"
+      },
+      "warnings": [
+        {
+          "Level": "Warning",
+          "Code": 1287,
+          "Message": "'utf8mb3' is deprecated and will be removed in a future release. Please use utf8mb4 instead"
+        }
+      ],
+      "warningCount": 1,
+      "errorCount": 0,
+      "state": [
+        {
+          "v": 9,
+          "y": 9
+        }
+      ]
+    },
+    {
+      "params": [],
+      "error": {
+        "code": "ER_TOO_BIG_PRECISION",
+        "errno": 1426,
+        "state": "42000",
+        "message": "Too-big precision 7 specified for 'CAST'. Maximum is 6."
+      },
+      "fieldEvents": [],
+      "warnings": [
+        {
+          "Level": "Warning",
+          "Code": 1287,
+          "Message": "'utf8mb3' is deprecated and will be removed in a future release. Please use utf8mb4 instead"
+        },
+        {
+          "Level": "Error",
+          "Code": 1426,
+          "Message": "Too-big precision 7 specified for 'CAST'. Maximum is 6."
+        }
+      ],
+      "warningCount": 2,
+      "errorCount": 1,
+      "state": [
+        {
+          "v": 9,
+          "y": 9
+        }
+      ]
+    },
+    {
+      "params": [],
+      "error": {
+        "code": "ER_TOO_BIG_PRECISION",
+        "errno": 1426,
+        "state": "42000",
+        "message": "Too-big precision 7 specified for 'CAST'. Maximum is 6."
+      },
+      "warnings": [
+        {
+          "Level": "Warning",
+          "Code": 1287,
+          "Message": "'utf8mb3' is deprecated and will be removed in a future release. Please use utf8mb4 instead"
+        },
+        {
+          "Level": "Error",
+          "Code": 1426,
+          "Message": "Too-big precision 7 specified for 'CAST'. Maximum is 6."
+        }
+      ],
+      "warningCount": 2,
+      "errorCount": 1,
+      "state": [
+        {
+          "v": 9,
+          "y": 9
+        }
+      ]
+    },
+    {
+      "params": [],
+      "error": {
+        "code": "ER_PARSE_ERROR",
+        "errno": 1064,
+        "state": "42000",
+        "message": "You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'FROM' at line 1"
+      },
+      "fieldEvents": [],
+      "warnings": [
+        {
+          "Level": "Warning",
+          "Code": 1287,
+          "Message": "'utf8mb3' is deprecated and will be removed in a future release. Please use utf8mb4 instead"
+        },
+        {
+          "Level": "Error",
+          "Code": 1064,
+          "Message": "You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'FROM' at line 1"
+        }
+      ],
+      "warningCount": 2,
+      "errorCount": 1,
+      "state": [
+        {
+          "v": 9,
+          "y": 9
+        }
+      ]
+    },
+    {
+      "params": [],
+      "error": {
+        "code": "ER_PARSE_ERROR",
+        "errno": 1064,
+        "state": "42000",
+        "message": "You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'FROM' at line 1"
+      },
+      "warnings": [
+        {
+          "Level": "Warning",
+          "Code": 1287,
+          "Message": "'utf8mb3' is deprecated and will be removed in a future release. Please use utf8mb4 instead"
+        },
+        {
+          "Level": "Error",
+          "Code": 1064,
+          "Message": "You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'FROM' at line 1"
+        }
+      ],
+      "warningCount": 2,
+      "errorCount": 1,
+      "state": [
+        {
+          "v": 9,
+          "y": 9
+        }
+      ]
+    },
+    {
+      "params": [],
+      "error": {
+        "code": "ER_TOO_BIG_PRECISION",
+        "errno": 1426,
+        "state": "42000",
+        "message": "Too-big precision 7 specified for 'CAST'. Maximum is 6."
+      },
+      "fieldEvents": [],
+      "warnings": [
+        {
+          "Level": "Warning",
+          "Code": 1287,
+          "Message": "'utf8mb3' is deprecated and will be removed in a future release. Please use utf8mb4 instead"
+        },
+        {
+          "Level": "Warning",
+          "Code": 1287,
+          "Message": "'BINARY as attribute of a type' is deprecated and will be removed in a future release. Please use a CHARACTER SET clause with _bin collation instead"
+        },
+        {
+          "Level": "Error",
+          "Code": 1426,
+          "Message": "Too-big precision 7 specified for 'CAST'. Maximum is 6."
+        }
+      ],
+      "warningCount": 3,
+      "errorCount": 1,
+      "state": [
+        {
+          "v": 9,
+          "y": 9
+        }
+      ]
+    },
+    {
+      "params": [],
+      "error": {
+        "code": "ER_TOO_BIG_PRECISION",
+        "errno": 1426,
+        "state": "42000",
+        "message": "Too-big precision 7 specified for 'CAST'. Maximum is 6."
+      },
+      "warnings": [
+        {
+          "Level": "Warning",
+          "Code": 1287,
+          "Message": "'utf8mb3' is deprecated and will be removed in a future release. Please use utf8mb4 instead"
+        },
+        {
+          "Level": "Warning",
+          "Code": 1287,
+          "Message": "'BINARY as attribute of a type' is deprecated and will be removed in a future release. Please use a CHARACTER SET clause with _bin collation instead"
         },
         {
           "Level": "Error",
@@ -4948,6 +5248,816 @@
       2,
       2,
       15
+    ],
+    [
+      47,
+      0,
+      0,
+      0
+    ],
+    [
+      47,
+      1,
+      0,
+      0
+    ],
+    [
+      47,
+      2,
+      0,
+      1
+    ],
+    [
+      48,
+      0,
+      0,
+      10
+    ],
+    [
+      48,
+      1,
+      0,
+      10
+    ],
+    [
+      48,
+      2,
+      0,
+      11
+    ],
+    [
+      49,
+      0,
+      0,
+      0
+    ],
+    [
+      49,
+      1,
+      0,
+      0
+    ],
+    [
+      49,
+      2,
+      0,
+      1
+    ],
+    [
+      50,
+      0,
+      0,
+      0
+    ],
+    [
+      50,
+      1,
+      0,
+      0
+    ],
+    [
+      50,
+      2,
+      0,
+      1
+    ],
+    [
+      51,
+      0,
+      0,
+      0
+    ],
+    [
+      51,
+      1,
+      0,
+      0
+    ],
+    [
+      51,
+      2,
+      0,
+      1
+    ],
+    [
+      52,
+      0,
+      0,
+      0
+    ],
+    [
+      52,
+      1,
+      0,
+      0
+    ],
+    [
+      52,
+      2,
+      0,
+      1
+    ],
+    [
+      53,
+      0,
+      0,
+      10
+    ],
+    [
+      53,
+      1,
+      0,
+      10
+    ],
+    [
+      53,
+      2,
+      0,
+      11
+    ],
+    [
+      47,
+      0,
+      1,
+      84
+    ],
+    [
+      47,
+      1,
+      1,
+      84
+    ],
+    [
+      47,
+      2,
+      1,
+      85
+    ],
+    [
+      48,
+      0,
+      1,
+      86
+    ],
+    [
+      48,
+      1,
+      1,
+      86
+    ],
+    [
+      48,
+      2,
+      1,
+      87
+    ],
+    [
+      49,
+      0,
+      1,
+      84
+    ],
+    [
+      49,
+      1,
+      1,
+      84
+    ],
+    [
+      49,
+      2,
+      1,
+      85
+    ],
+    [
+      50,
+      0,
+      1,
+      84
+    ],
+    [
+      50,
+      1,
+      1,
+      84
+    ],
+    [
+      50,
+      2,
+      1,
+      85
+    ],
+    [
+      51,
+      0,
+      1,
+      84
+    ],
+    [
+      51,
+      1,
+      1,
+      84
+    ],
+    [
+      51,
+      2,
+      1,
+      85
+    ],
+    [
+      52,
+      0,
+      1,
+      84
+    ],
+    [
+      52,
+      1,
+      1,
+      84
+    ],
+    [
+      52,
+      2,
+      1,
+      85
+    ],
+    [
+      53,
+      0,
+      1,
+      86
+    ],
+    [
+      53,
+      1,
+      1,
+      86
+    ],
+    [
+      53,
+      2,
+      1,
+      87
+    ],
+    [
+      47,
+      0,
+      2,
+      88
+    ],
+    [
+      47,
+      1,
+      2,
+      88
+    ],
+    [
+      47,
+      2,
+      2,
+      89
+    ],
+    [
+      48,
+      0,
+      2,
+      90
+    ],
+    [
+      48,
+      1,
+      2,
+      90
+    ],
+    [
+      48,
+      2,
+      2,
+      91
+    ],
+    [
+      49,
+      0,
+      2,
+      88
+    ],
+    [
+      49,
+      1,
+      2,
+      88
+    ],
+    [
+      49,
+      2,
+      2,
+      89
+    ],
+    [
+      50,
+      0,
+      2,
+      88
+    ],
+    [
+      50,
+      1,
+      2,
+      88
+    ],
+    [
+      50,
+      2,
+      2,
+      89
+    ],
+    [
+      51,
+      0,
+      2,
+      92
+    ],
+    [
+      51,
+      1,
+      2,
+      92
+    ],
+    [
+      51,
+      2,
+      2,
+      93
+    ],
+    [
+      52,
+      0,
+      2,
+      92
+    ],
+    [
+      52,
+      1,
+      2,
+      92
+    ],
+    [
+      52,
+      2,
+      2,
+      93
+    ],
+    [
+      53,
+      0,
+      2,
+      90
+    ],
+    [
+      53,
+      1,
+      2,
+      90
+    ],
+    [
+      53,
+      2,
+      2,
+      91
+    ],
+    [
+      54,
+      0,
+      0,
+      0
+    ],
+    [
+      54,
+      1,
+      0,
+      0
+    ],
+    [
+      54,
+      2,
+      0,
+      1
+    ],
+    [
+      55,
+      0,
+      0,
+      0
+    ],
+    [
+      55,
+      1,
+      0,
+      0
+    ],
+    [
+      55,
+      2,
+      0,
+      1
+    ],
+    [
+      56,
+      0,
+      0,
+      0
+    ],
+    [
+      56,
+      1,
+      0,
+      0
+    ],
+    [
+      56,
+      2,
+      0,
+      1
+    ],
+    [
+      57,
+      0,
+      0,
+      0
+    ],
+    [
+      57,
+      1,
+      0,
+      0
+    ],
+    [
+      57,
+      2,
+      0,
+      1
+    ],
+    [
+      58,
+      0,
+      0,
+      0
+    ],
+    [
+      58,
+      1,
+      0,
+      0
+    ],
+    [
+      58,
+      2,
+      0,
+      1
+    ],
+    [
+      59,
+      0,
+      0,
+      0
+    ],
+    [
+      59,
+      1,
+      0,
+      0
+    ],
+    [
+      59,
+      2,
+      0,
+      1
+    ],
+    [
+      60,
+      0,
+      0,
+      0
+    ],
+    [
+      60,
+      1,
+      0,
+      0
+    ],
+    [
+      60,
+      2,
+      0,
+      1
+    ],
+    [
+      61,
+      0,
+      0,
+      0
+    ],
+    [
+      61,
+      1,
+      0,
+      0
+    ],
+    [
+      61,
+      2,
+      0,
+      1
+    ],
+    [
+      54,
+      0,
+      1,
+      84
+    ],
+    [
+      54,
+      1,
+      1,
+      84
+    ],
+    [
+      54,
+      2,
+      1,
+      85
+    ],
+    [
+      55,
+      0,
+      1,
+      84
+    ],
+    [
+      55,
+      1,
+      1,
+      84
+    ],
+    [
+      55,
+      2,
+      1,
+      85
+    ],
+    [
+      56,
+      0,
+      1,
+      84
+    ],
+    [
+      56,
+      1,
+      1,
+      84
+    ],
+    [
+      56,
+      2,
+      1,
+      85
+    ],
+    [
+      57,
+      0,
+      1,
+      84
+    ],
+    [
+      57,
+      1,
+      1,
+      84
+    ],
+    [
+      57,
+      2,
+      1,
+      85
+    ],
+    [
+      58,
+      0,
+      1,
+      84
+    ],
+    [
+      58,
+      1,
+      1,
+      84
+    ],
+    [
+      58,
+      2,
+      1,
+      85
+    ],
+    [
+      59,
+      0,
+      1,
+      84
+    ],
+    [
+      59,
+      1,
+      1,
+      84
+    ],
+    [
+      59,
+      2,
+      1,
+      85
+    ],
+    [
+      60,
+      0,
+      1,
+      84
+    ],
+    [
+      60,
+      1,
+      1,
+      84
+    ],
+    [
+      60,
+      2,
+      1,
+      85
+    ],
+    [
+      61,
+      0,
+      1,
+      84
+    ],
+    [
+      61,
+      1,
+      1,
+      84
+    ],
+    [
+      61,
+      2,
+      1,
+      85
+    ],
+    [
+      54,
+      0,
+      2,
+      88
+    ],
+    [
+      54,
+      1,
+      2,
+      88
+    ],
+    [
+      54,
+      2,
+      2,
+      89
+    ],
+    [
+      55,
+      0,
+      2,
+      88
+    ],
+    [
+      55,
+      1,
+      2,
+      88
+    ],
+    [
+      55,
+      2,
+      2,
+      89
+    ],
+    [
+      56,
+      0,
+      2,
+      88
+    ],
+    [
+      56,
+      1,
+      2,
+      88
+    ],
+    [
+      56,
+      2,
+      2,
+      89
+    ],
+    [
+      57,
+      0,
+      2,
+      88
+    ],
+    [
+      57,
+      1,
+      2,
+      88
+    ],
+    [
+      57,
+      2,
+      2,
+      89
+    ],
+    [
+      58,
+      0,
+      2,
+      88
+    ],
+    [
+      58,
+      1,
+      2,
+      88
+    ],
+    [
+      58,
+      2,
+      2,
+      89
+    ],
+    [
+      59,
+      0,
+      2,
+      88
+    ],
+    [
+      59,
+      1,
+      2,
+      88
+    ],
+    [
+      59,
+      2,
+      2,
+      89
+    ],
+    [
+      60,
+      0,
+      2,
+      88
+    ],
+    [
+      60,
+      1,
+      2,
+      88
+    ],
+    [
+      60,
+      2,
+      2,
+      89
+    ],
+    [
+      61,
+      0,
+      2,
+      88
+    ],
+    [
+      61,
+      1,
+      2,
+      88
+    ],
+    [
+      61,
+      2,
+      2,
+      89
     ]
   ]
 }

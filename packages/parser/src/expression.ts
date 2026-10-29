@@ -32,7 +32,7 @@ import {
 } from './query.ts'
 import { defaultCollationOf } from '@myjs/charsets'
 import { illegalDouble, castPrecisionError, NATIONAL_DEPRECATION } from './errors.ts'
-import { charsetName, collationName } from './names.ts'
+import { charsetName, collationName, warnUtf8mb3 } from './names.ts'
 import { NO_SQL_MODE, type SqlMode } from './sql-mode.ts'
 
 /**
@@ -529,6 +529,7 @@ class ExpressionParser {
       if (t.text.startsWith('_') && (next === TOKEN.STRING || next === TOKEN.HEX || next === TOKEN.BIT)) {
         const charset = t.text.slice(1).toLowerCase()
         if (defaultCollationOf(charset) !== undefined) {
+          warnUtf8mb3(cursor, charset)
           cursor.skip()
           if (next === TOKEN.STRING) return { kind: NODE.LITERAL, type: LITERAL.STRING, value: cursor.expectString(true), charset, at: t.start }
           const lit = this.#primary()
@@ -717,6 +718,7 @@ class ExpressionParser {
         const expr = this.#binary(0)
         if (convert && cursor.takeWord('USING')) {
           const charset = charsetName(cursor).toLowerCase()
+          warnUtf8mb3(cursor, charset)
           cursor.expectOp(')')
           return { kind: NODE.CONVERT, expr, charset, at: t.start }
         }

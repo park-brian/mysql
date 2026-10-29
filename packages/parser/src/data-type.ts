@@ -38,7 +38,7 @@
 import { FIELD_TYPE, type FieldTypeCode } from '@myjs/bytes'
 import { flag, opt, type Cursor, unsignedValue } from './cursor.ts'
 import { BINARY_DEPRECATION, NATIONAL_DEPRECATION } from './errors.ts'
-import { charsetName, collationName } from './names.ts'
+import { charsetName, collationName, warnUtf8mb3 } from './names.ts'
 import { TOKEN, keywordText } from './tokens.ts'
 import type { SqlMode } from './sql-mode.ts'
 
@@ -347,6 +347,8 @@ export function parseDataType(c: Cursor, mode: SqlMode, column = true): DataType
     binaryModifier = c.takeWord('BINARY')
     const charsetToken = c.peek()
     const specifiedCharset = typeCharset(c)
+    // The charset name reduces before BINARY attributes, even when written after them.
+    warnUtf8mb3(c, specifiedCharset)
     // An invalid charset suppresses attribute warnings. After it succeeds,
     // publish leading BINARY, shorthand and trailing BINARY in written order.
     if (specifiedCharset === undefined && c.takeWord('CHARACTER')) c.fail()

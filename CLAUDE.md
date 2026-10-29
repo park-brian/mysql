@@ -23,7 +23,9 @@ Some function behavior and optimizer strategies remain partial. Datatype aliases
 now reuse complete private facts, preserving national charsets and exceptional
 shapes. National-literal, completed-assignment and unary-BINARY parser warnings now
 survive failure without changing successful-root provenance. Native CAST
-precision admission still needs explicit charset warning histories before promotion. M5.1 naming and
+precision admission still needs written utf8 alias warning histories before
+promotion. Explicit utf8mb3 warnings now follow their three expression construction
+phases; successful-root provenance and DDL/SET charset owners are unchanged. M5.1 naming and
 M5.5 aggregate precision are reopened by native probes in the roadmap. M5.19 numeric
 set-operation holders now agree with the expanded native audits, including
 default/fixed FLOAT behavior. Raw BIT with VARCHAR/VARBINARY now shares the

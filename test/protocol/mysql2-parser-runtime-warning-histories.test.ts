@@ -23,7 +23,7 @@ test('runtime-owned parser warnings precede construction failures without execut
     await conn.query('CREATE TABLE t(v INT)')
     await conn.query('INSERT INTO t VALUES(1)')
     await conn.query('CREATE TABLE empty_t LIKE t')
-    assert.equal(reference.observations.length, 423)
+    assert.equal(reference.observations.length, 558)
     for (const [sqlIndex, apiIndex, limitIndex, outcomeIndex] of reference.observations) {
       const sql = reference.sql[sqlIndex!]!
       const api = reference.apis[apiIndex!]!
