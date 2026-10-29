@@ -8,7 +8,10 @@
 import { MyjsError } from '@myjs/bytes'
 import { utf8ErrorLabel } from '@myjs/charsets'
 
-export class EngineError extends MyjsError {}
+export class EngineError extends MyjsError {
+  /** Native handler key number on a retained-view failure; nonenumerable. */
+  declare readonly readIndex?: number
+}
 
 /** A page that failed verification, or whose contents contradict its header. */
 export function corrupt(pageNo: number, what: string): EngineError {
@@ -112,9 +115,13 @@ export const wrongColumnName = (name: string) => sqlError('ER_WRONG_COLUMN_NAME'
 export const notSupportedYet = (what: string) => sqlError('ER_NOT_SUPPORTED_YET', 1235, '42000', `This version of myjs doesn't yet support '${what}'`)
 export const unknownEngine = (name: string) => sqlError('ER_UNKNOWN_STORAGE_ENGINE', 1286, '42000', `Unknown storage engine '${name}'`)
 export const wrongIndexName = (name: string) => sqlError('ER_WRONG_NAME_FOR_INDEX', 1280, '42000', `Incorrect index name '${name}'`)
-/** A consistent read through a view older than the table's definition: InnoDB's answer, and MySQL's retry signal. */
 export const notAView = (db: string, name: string) => sqlError('ER_WRONG_OBJECT', 1347, 'HY000', `'${db}.${name}' is not VIEW`)
-export const tableDefChanged = () => sqlError('ER_TABLE_DEF_CHANGED', 1412, 'HY000', 'Table definition has changed, please retry transaction')
+/** A consistent read through a view older than the table's definition: InnoDB's answer, and MySQL's retry signal. */
+export const tableDefChanged = (readIndex?: number): EngineError => {
+  const error = sqlError('ER_TABLE_DEF_CHANGED', 1412, 'HY000', 'Table definition has changed, please retry transaction')
+  if (readIndex !== undefined) Object.defineProperty(error, 'readIndex', { value: readIndex })
+  return error
+}
 
 /** A catalog row or definition that does not decode, or does not describe the store it is in. */
 export function corruptCatalog(what: string): EngineError {

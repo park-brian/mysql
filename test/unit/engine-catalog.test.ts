@@ -267,6 +267,16 @@ test('M4.23: a view older than a table reads ER_TABLE_DEF_CHANGED, and may still
   refused(() => [...t.scan(undefined, old)], 'ER_TABLE_DEF_CHANGED')
   assert.ok(t.checkRead)
   refused(() => t.checkRead!(old), 'ER_TABLE_DEF_CHANGED')
+  assert.throws(() => t.checkRead!(old), (failure: unknown) => {
+    assert.ok(failure instanceof EngineError)
+    assert.equal(failure.readIndex, 0)
+    assert.equal(Object.getOwnPropertyDescriptor(failure, 'readIndex')?.enumerable, false)
+    assert.ok(!Object.keys(failure).includes('readIndex'))
+    assert.ok(!Object.hasOwn(JSON.parse(JSON.stringify(failure)), 'readIndex'))
+    assert.equal(failure.cause, undefined)
+    return true
+  })
+  assert.throws(() => t.checkRead!(old, 'consistent', 'V'), (failure: unknown) => failure instanceof EngineError && failure.readIndex === 1)
   assert.doesNotThrow(() => t.checkRead!(old, 'current'))
   assert.doesNotThrow(() => t.checkRead!())
   // As in MySQL, the write succeeds: it reads the current version.

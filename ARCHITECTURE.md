@@ -1780,7 +1780,7 @@ The full Docker gates, pinned-reference audits and 10,000 crash points pass.
 `db.stream()` streams a million rows within a few MB of the heap's baseline (M5.40). Next is the
 remaining function and planner work, then the browser. The coercion corpus
 now agrees on all 3,148 observations and all 1,737 warning counts. The core entry bundle
-is 330,470 bytes gzipped (322.7 KiB), against the 500 KB release target,
+is 330,665 bytes gzipped (322.9 KiB), against the 500 KB release target,
 with the UCA weights in a separate chunk loaded on demand.
 The private generated error table records sequential range starts instead of
 repeating each number. Its 2,132 facts, provenance and public lookups remain
@@ -1819,8 +1819,14 @@ actual table and invocation transaction. Capability absence delegates to the
 original qualified reader. Headers precede deferred reads and physical sort fill,
 matching native activity captures. CAST/arithmetic/alias constructors retain their
 previous boundary until their initialization owner and native phase tests justify
-removing the temporary fence. Warning 159 before retained-view error 1412 remains
-open. Dependent subqueries require filtering before outer sorting.
+removing the temporary fence. Canonical retained-view failures now carry their
+selected handler key on the original typed error without changing serialization;
+the normal diagnostics owner publishes warning 159 before 1412 once, preserving
+prefix limits and complete counters. Plan validation resolves the actual access
+under the invocation, including NULL-suppressed searches. Handler key numbering
+includes invisible indexes and the hidden-cluster sentinel; optimizer priorities
+retain their own existing behavior. Retained-view locking reads after TRUNCATE
+remain open. Dependent subqueries require filtering before outer sorting.
 
 The release plan gives each stage something to ship:
 

@@ -88,8 +88,7 @@ export function compileContext(run: Run, scope: Scope, clause: string, windows?:
     subquery: (q, outer) => {
       let correlated = false
       const plan = planQuery({ ...run, parent: enclosing(outer, () => (correlated = true)) }, q)
-      const table = plan.source?.table
-      const checkRead = table?.checkRead?.bind(table)
+      const checkRead = plan.checkRead?.bind(plan)
       const bound: BoundSubquery = {
         clause,
         query: q,
@@ -99,7 +98,7 @@ export function compileContext(run: Run, scope: Scope, clause: string, windows?:
           return correlated
         },
         hasFrom: hasFrom(q),
-        ...(checkRead === undefined ? {} : { checkRead: (env: Env) => checkRead(env.trx, plan.locking ? 'current' : 'consistent') }),
+        ...(checkRead === undefined ? {} : { checkRead }),
         rows: (env) => plan.rows(env.trx, env),
       }
       run.subqueries?.push(bound)
@@ -269,6 +268,8 @@ function itemTexts(run: Run, node: SelectNode): (string | undefined)[] {
 export interface SelectPlan {
   /** An ordinary SELECT's bound single base source; opaque or grouped sources supply no such proof. */
   readonly source?: FromPlan['single']
+  /** Validate the bound base source through this invocation's selected access. */
+  checkRead?(env: Env): void
   /** Per-result optimization under the delivery transaction, before metadata or iterator initialization. */
   optimize?(trx: Trx | undefined): void
   readonly columns: readonly { readonly name: string; readonly type: ResultType }[]
@@ -610,6 +611,9 @@ function planSelect(run: Run, q: QueryExpression, node: SelectNode): SelectPlan 
     ...resultColumns(items, dataColumns),
     source,
     locking,
+    ...(source?.table.checkRead === undefined ? {} : {
+      checkRead(env: Env) { source.table.checkRead!(env.trx, locking ? 'current' : 'consistent', from!.access(env).index) },
+    }),
     optimize(trx) {
       if (!initialize.length) return
       const env = executionEnv(run, trx)

@@ -1,0 +1,4728 @@
+{
+  "mysqlVersion": "8.4.11",
+  "predecessor": "f904ce7c1021941eab18ff29ee7b66be4bb75fc7",
+  "indexes": [
+    {
+      "name": "primary-first",
+      "definition": "id INT NOT NULL,g INT,h INT,PRIMARY KEY(id),KEY g(g)",
+      "access": "scan",
+      "method": "query",
+      "indexes": [
+        [
+          "PRIMARY",
+          1,
+          "id",
+          0
+        ],
+        [
+          "g",
+          1,
+          "g",
+          1
+        ]
+      ],
+      "plan": "-> Table scan on t  (cost=0.45 rows=2)\n",
+      "error": {
+        "code": "ER_TABLE_DEF_CHANGED",
+        "errno": 1412,
+        "state": "HY000",
+        "message": "Table definition has changed, please retry transaction"
+      },
+      "warnings": [
+        {
+          "Level": "Warning",
+          "Code": 159,
+          "Message": "InnoDB: insufficient history for index 0"
+        },
+        {
+          "Level": "Error",
+          "Code": 1412,
+          "Message": "Table definition has changed, please retry transaction"
+        }
+      ]
+    },
+    {
+      "name": "primary-first",
+      "definition": "id INT NOT NULL,g INT,h INT,PRIMARY KEY(id),KEY g(g)",
+      "access": "scan",
+      "method": "execute",
+      "indexes": [
+        [
+          "PRIMARY",
+          1,
+          "id",
+          0
+        ],
+        [
+          "g",
+          1,
+          "g",
+          1
+        ]
+      ],
+      "plan": "-> Table scan on t  (cost=0.45 rows=2)\n",
+      "error": {
+        "code": "ER_TABLE_DEF_CHANGED",
+        "errno": 1412,
+        "state": "HY000",
+        "message": "Table definition has changed, please retry transaction"
+      },
+      "warnings": [
+        {
+          "Level": "Warning",
+          "Code": 159,
+          "Message": "InnoDB: insufficient history for index 0"
+        },
+        {
+          "Level": "Error",
+          "Code": 1412,
+          "Message": "Table definition has changed, please retry transaction"
+        }
+      ]
+    },
+    {
+      "name": "primary-first",
+      "definition": "id INT NOT NULL,g INT,h INT,PRIMARY KEY(id),KEY g(g)",
+      "access": "g",
+      "method": "query",
+      "indexes": [
+        [
+          "PRIMARY",
+          1,
+          "id",
+          0
+        ],
+        [
+          "g",
+          1,
+          "g",
+          1
+        ]
+      ],
+      "plan": "-> Index lookup on t using g (g=1)  (cost=0.7 rows=2)\n",
+      "error": {
+        "code": "ER_TABLE_DEF_CHANGED",
+        "errno": 1412,
+        "state": "HY000",
+        "message": "Table definition has changed, please retry transaction"
+      },
+      "warnings": [
+        {
+          "Level": "Warning",
+          "Code": 159,
+          "Message": "InnoDB: insufficient history for index 1"
+        },
+        {
+          "Level": "Error",
+          "Code": 1412,
+          "Message": "Table definition has changed, please retry transaction"
+        }
+      ]
+    },
+    {
+      "name": "primary-first",
+      "definition": "id INT NOT NULL,g INT,h INT,PRIMARY KEY(id),KEY g(g)",
+      "access": "g",
+      "method": "execute",
+      "indexes": [
+        [
+          "PRIMARY",
+          1,
+          "id",
+          0
+        ],
+        [
+          "g",
+          1,
+          "g",
+          1
+        ]
+      ],
+      "plan": "-> Index lookup on t using g (g=1)  (cost=0.7 rows=2)\n",
+      "error": {
+        "code": "ER_TABLE_DEF_CHANGED",
+        "errno": 1412,
+        "state": "HY000",
+        "message": "Table definition has changed, please retry transaction"
+      },
+      "warnings": [
+        {
+          "Level": "Warning",
+          "Code": 159,
+          "Message": "InnoDB: insufficient history for index 1"
+        },
+        {
+          "Level": "Error",
+          "Code": 1412,
+          "Message": "Table definition has changed, please retry transaction"
+        }
+      ]
+    },
+    {
+      "name": "primary-last",
+      "definition": "id INT NOT NULL,g INT,h INT,KEY g(g),PRIMARY KEY(id)",
+      "access": "scan",
+      "method": "query",
+      "indexes": [
+        [
+          "PRIMARY",
+          1,
+          "id",
+          0
+        ],
+        [
+          "g",
+          1,
+          "g",
+          1
+        ]
+      ],
+      "plan": "-> Table scan on t  (cost=0.45 rows=2)\n",
+      "error": {
+        "code": "ER_TABLE_DEF_CHANGED",
+        "errno": 1412,
+        "state": "HY000",
+        "message": "Table definition has changed, please retry transaction"
+      },
+      "warnings": [
+        {
+          "Level": "Warning",
+          "Code": 159,
+          "Message": "InnoDB: insufficient history for index 0"
+        },
+        {
+          "Level": "Error",
+          "Code": 1412,
+          "Message": "Table definition has changed, please retry transaction"
+        }
+      ]
+    },
+    {
+      "name": "primary-last",
+      "definition": "id INT NOT NULL,g INT,h INT,KEY g(g),PRIMARY KEY(id)",
+      "access": "scan",
+      "method": "execute",
+      "indexes": [
+        [
+          "PRIMARY",
+          1,
+          "id",
+          0
+        ],
+        [
+          "g",
+          1,
+          "g",
+          1
+        ]
+      ],
+      "plan": "-> Table scan on t  (cost=0.45 rows=2)\n",
+      "error": {
+        "code": "ER_TABLE_DEF_CHANGED",
+        "errno": 1412,
+        "state": "HY000",
+        "message": "Table definition has changed, please retry transaction"
+      },
+      "warnings": [
+        {
+          "Level": "Warning",
+          "Code": 159,
+          "Message": "InnoDB: insufficient history for index 0"
+        },
+        {
+          "Level": "Error",
+          "Code": 1412,
+          "Message": "Table definition has changed, please retry transaction"
+        }
+      ]
+    },
+    {
+      "name": "primary-last",
+      "definition": "id INT NOT NULL,g INT,h INT,KEY g(g),PRIMARY KEY(id)",
+      "access": "g",
+      "method": "query",
+      "indexes": [
+        [
+          "PRIMARY",
+          1,
+          "id",
+          0
+        ],
+        [
+          "g",
+          1,
+          "g",
+          1
+        ]
+      ],
+      "plan": "-> Index lookup on t using g (g=1)  (cost=0.7 rows=2)\n",
+      "error": {
+        "code": "ER_TABLE_DEF_CHANGED",
+        "errno": 1412,
+        "state": "HY000",
+        "message": "Table definition has changed, please retry transaction"
+      },
+      "warnings": [
+        {
+          "Level": "Warning",
+          "Code": 159,
+          "Message": "InnoDB: insufficient history for index 1"
+        },
+        {
+          "Level": "Error",
+          "Code": 1412,
+          "Message": "Table definition has changed, please retry transaction"
+        }
+      ]
+    },
+    {
+      "name": "primary-last",
+      "definition": "id INT NOT NULL,g INT,h INT,KEY g(g),PRIMARY KEY(id)",
+      "access": "g",
+      "method": "execute",
+      "indexes": [
+        [
+          "PRIMARY",
+          1,
+          "id",
+          0
+        ],
+        [
+          "g",
+          1,
+          "g",
+          1
+        ]
+      ],
+      "plan": "-> Index lookup on t using g (g=1)  (cost=0.7 rows=2)\n",
+      "error": {
+        "code": "ER_TABLE_DEF_CHANGED",
+        "errno": 1412,
+        "state": "HY000",
+        "message": "Table definition has changed, please retry transaction"
+      },
+      "warnings": [
+        {
+          "Level": "Warning",
+          "Code": 159,
+          "Message": "InnoDB: insufficient history for index 1"
+        },
+        {
+          "Level": "Error",
+          "Code": 1412,
+          "Message": "Table definition has changed, please retry transaction"
+        }
+      ]
+    },
+    {
+      "name": "promoted-first",
+      "definition": "id INT NOT NULL,g INT,h INT,UNIQUE KEY u(id),KEY g(g)",
+      "access": "scan",
+      "method": "query",
+      "indexes": [
+        [
+          "u",
+          1,
+          "id",
+          0
+        ],
+        [
+          "g",
+          1,
+          "g",
+          1
+        ]
+      ],
+      "plan": "-> Table scan on t  (cost=0.45 rows=2)\n",
+      "error": {
+        "code": "ER_TABLE_DEF_CHANGED",
+        "errno": 1412,
+        "state": "HY000",
+        "message": "Table definition has changed, please retry transaction"
+      },
+      "warnings": [
+        {
+          "Level": "Warning",
+          "Code": 159,
+          "Message": "InnoDB: insufficient history for index 0"
+        },
+        {
+          "Level": "Error",
+          "Code": 1412,
+          "Message": "Table definition has changed, please retry transaction"
+        }
+      ]
+    },
+    {
+      "name": "promoted-first",
+      "definition": "id INT NOT NULL,g INT,h INT,UNIQUE KEY u(id),KEY g(g)",
+      "access": "scan",
+      "method": "execute",
+      "indexes": [
+        [
+          "u",
+          1,
+          "id",
+          0
+        ],
+        [
+          "g",
+          1,
+          "g",
+          1
+        ]
+      ],
+      "plan": "-> Table scan on t  (cost=0.45 rows=2)\n",
+      "error": {
+        "code": "ER_TABLE_DEF_CHANGED",
+        "errno": 1412,
+        "state": "HY000",
+        "message": "Table definition has changed, please retry transaction"
+      },
+      "warnings": [
+        {
+          "Level": "Warning",
+          "Code": 159,
+          "Message": "InnoDB: insufficient history for index 0"
+        },
+        {
+          "Level": "Error",
+          "Code": 1412,
+          "Message": "Table definition has changed, please retry transaction"
+        }
+      ]
+    },
+    {
+      "name": "promoted-first",
+      "definition": "id INT NOT NULL,g INT,h INT,UNIQUE KEY u(id),KEY g(g)",
+      "access": "g",
+      "method": "query",
+      "indexes": [
+        [
+          "u",
+          1,
+          "id",
+          0
+        ],
+        [
+          "g",
+          1,
+          "g",
+          1
+        ]
+      ],
+      "plan": "-> Index lookup on t using g (g=1)  (cost=0.7 rows=2)\n",
+      "error": {
+        "code": "ER_TABLE_DEF_CHANGED",
+        "errno": 1412,
+        "state": "HY000",
+        "message": "Table definition has changed, please retry transaction"
+      },
+      "warnings": [
+        {
+          "Level": "Warning",
+          "Code": 159,
+          "Message": "InnoDB: insufficient history for index 1"
+        },
+        {
+          "Level": "Error",
+          "Code": 1412,
+          "Message": "Table definition has changed, please retry transaction"
+        }
+      ]
+    },
+    {
+      "name": "promoted-first",
+      "definition": "id INT NOT NULL,g INT,h INT,UNIQUE KEY u(id),KEY g(g)",
+      "access": "g",
+      "method": "execute",
+      "indexes": [
+        [
+          "u",
+          1,
+          "id",
+          0
+        ],
+        [
+          "g",
+          1,
+          "g",
+          1
+        ]
+      ],
+      "plan": "-> Index lookup on t using g (g=1)  (cost=0.7 rows=2)\n",
+      "error": {
+        "code": "ER_TABLE_DEF_CHANGED",
+        "errno": 1412,
+        "state": "HY000",
+        "message": "Table definition has changed, please retry transaction"
+      },
+      "warnings": [
+        {
+          "Level": "Warning",
+          "Code": 159,
+          "Message": "InnoDB: insufficient history for index 1"
+        },
+        {
+          "Level": "Error",
+          "Code": 1412,
+          "Message": "Table definition has changed, please retry transaction"
+        }
+      ]
+    },
+    {
+      "name": "promoted-last",
+      "definition": "id INT NOT NULL,g INT,h INT,KEY g(g),UNIQUE KEY u(id)",
+      "access": "scan",
+      "method": "query",
+      "indexes": [
+        [
+          "u",
+          1,
+          "id",
+          0
+        ],
+        [
+          "g",
+          1,
+          "g",
+          1
+        ]
+      ],
+      "plan": "-> Table scan on t  (cost=0.45 rows=2)\n",
+      "error": {
+        "code": "ER_TABLE_DEF_CHANGED",
+        "errno": 1412,
+        "state": "HY000",
+        "message": "Table definition has changed, please retry transaction"
+      },
+      "warnings": [
+        {
+          "Level": "Warning",
+          "Code": 159,
+          "Message": "InnoDB: insufficient history for index 0"
+        },
+        {
+          "Level": "Error",
+          "Code": 1412,
+          "Message": "Table definition has changed, please retry transaction"
+        }
+      ]
+    },
+    {
+      "name": "promoted-last",
+      "definition": "id INT NOT NULL,g INT,h INT,KEY g(g),UNIQUE KEY u(id)",
+      "access": "scan",
+      "method": "execute",
+      "indexes": [
+        [
+          "u",
+          1,
+          "id",
+          0
+        ],
+        [
+          "g",
+          1,
+          "g",
+          1
+        ]
+      ],
+      "plan": "-> Table scan on t  (cost=0.45 rows=2)\n",
+      "error": {
+        "code": "ER_TABLE_DEF_CHANGED",
+        "errno": 1412,
+        "state": "HY000",
+        "message": "Table definition has changed, please retry transaction"
+      },
+      "warnings": [
+        {
+          "Level": "Warning",
+          "Code": 159,
+          "Message": "InnoDB: insufficient history for index 0"
+        },
+        {
+          "Level": "Error",
+          "Code": 1412,
+          "Message": "Table definition has changed, please retry transaction"
+        }
+      ]
+    },
+    {
+      "name": "promoted-last",
+      "definition": "id INT NOT NULL,g INT,h INT,KEY g(g),UNIQUE KEY u(id)",
+      "access": "g",
+      "method": "query",
+      "indexes": [
+        [
+          "u",
+          1,
+          "id",
+          0
+        ],
+        [
+          "g",
+          1,
+          "g",
+          1
+        ]
+      ],
+      "plan": "-> Index lookup on t using g (g=1)  (cost=0.7 rows=2)\n",
+      "error": {
+        "code": "ER_TABLE_DEF_CHANGED",
+        "errno": 1412,
+        "state": "HY000",
+        "message": "Table definition has changed, please retry transaction"
+      },
+      "warnings": [
+        {
+          "Level": "Warning",
+          "Code": 159,
+          "Message": "InnoDB: insufficient history for index 1"
+        },
+        {
+          "Level": "Error",
+          "Code": 1412,
+          "Message": "Table definition has changed, please retry transaction"
+        }
+      ]
+    },
+    {
+      "name": "promoted-last",
+      "definition": "id INT NOT NULL,g INT,h INT,KEY g(g),UNIQUE KEY u(id)",
+      "access": "g",
+      "method": "execute",
+      "indexes": [
+        [
+          "u",
+          1,
+          "id",
+          0
+        ],
+        [
+          "g",
+          1,
+          "g",
+          1
+        ]
+      ],
+      "plan": "-> Index lookup on t using g (g=1)  (cost=0.7 rows=2)\n",
+      "error": {
+        "code": "ER_TABLE_DEF_CHANGED",
+        "errno": 1412,
+        "state": "HY000",
+        "message": "Table definition has changed, please retry transaction"
+      },
+      "warnings": [
+        {
+          "Level": "Warning",
+          "Code": 159,
+          "Message": "InnoDB: insufficient history for index 1"
+        },
+        {
+          "Level": "Error",
+          "Code": 1412,
+          "Message": "Table definition has changed, please retry transaction"
+        }
+      ]
+    },
+    {
+      "name": "hidden",
+      "definition": "id INT,g INT,h INT,KEY g(g)",
+      "access": "scan",
+      "method": "query",
+      "indexes": [
+        [
+          "g",
+          1,
+          "g",
+          1
+        ]
+      ],
+      "plan": "-> Table scan on t  (cost=0.45 rows=2)\n",
+      "error": {
+        "code": "ER_TABLE_DEF_CHANGED",
+        "errno": 1412,
+        "state": "HY000",
+        "message": "Table definition has changed, please retry transaction"
+      },
+      "warnings": [
+        {
+          "Level": "Warning",
+          "Code": 159,
+          "Message": "InnoDB: insufficient history for index 64"
+        },
+        {
+          "Level": "Error",
+          "Code": 1412,
+          "Message": "Table definition has changed, please retry transaction"
+        }
+      ]
+    },
+    {
+      "name": "hidden",
+      "definition": "id INT,g INT,h INT,KEY g(g)",
+      "access": "scan",
+      "method": "execute",
+      "indexes": [
+        [
+          "g",
+          1,
+          "g",
+          1
+        ]
+      ],
+      "plan": "-> Table scan on t  (cost=0.45 rows=2)\n",
+      "error": {
+        "code": "ER_TABLE_DEF_CHANGED",
+        "errno": 1412,
+        "state": "HY000",
+        "message": "Table definition has changed, please retry transaction"
+      },
+      "warnings": [
+        {
+          "Level": "Warning",
+          "Code": 159,
+          "Message": "InnoDB: insufficient history for index 64"
+        },
+        {
+          "Level": "Error",
+          "Code": 1412,
+          "Message": "Table definition has changed, please retry transaction"
+        }
+      ]
+    },
+    {
+      "name": "hidden",
+      "definition": "id INT,g INT,h INT,KEY g(g)",
+      "access": "g",
+      "method": "query",
+      "indexes": [
+        [
+          "g",
+          1,
+          "g",
+          1
+        ]
+      ],
+      "plan": "-> Index lookup on t using g (g=1)  (cost=0.7 rows=2)\n",
+      "error": {
+        "code": "ER_TABLE_DEF_CHANGED",
+        "errno": 1412,
+        "state": "HY000",
+        "message": "Table definition has changed, please retry transaction"
+      },
+      "warnings": [
+        {
+          "Level": "Warning",
+          "Code": 159,
+          "Message": "InnoDB: insufficient history for index 0"
+        },
+        {
+          "Level": "Error",
+          "Code": 1412,
+          "Message": "Table definition has changed, please retry transaction"
+        }
+      ]
+    },
+    {
+      "name": "hidden",
+      "definition": "id INT,g INT,h INT,KEY g(g)",
+      "access": "g",
+      "method": "execute",
+      "indexes": [
+        [
+          "g",
+          1,
+          "g",
+          1
+        ]
+      ],
+      "plan": "-> Index lookup on t using g (g=1)  (cost=0.7 rows=2)\n",
+      "error": {
+        "code": "ER_TABLE_DEF_CHANGED",
+        "errno": 1412,
+        "state": "HY000",
+        "message": "Table definition has changed, please retry transaction"
+      },
+      "warnings": [
+        {
+          "Level": "Warning",
+          "Code": 159,
+          "Message": "InnoDB: insufficient history for index 0"
+        },
+        {
+          "Level": "Error",
+          "Code": 1412,
+          "Message": "Table definition has changed, please retry transaction"
+        }
+      ]
+    },
+    {
+      "name": "hidden-nullable-unique",
+      "definition": "id INT,g INT,h INT,UNIQUE KEY u(id),KEY g(g)",
+      "access": "scan",
+      "method": "query",
+      "indexes": [
+        [
+          "u",
+          1,
+          "id",
+          0
+        ],
+        [
+          "g",
+          1,
+          "g",
+          1
+        ]
+      ],
+      "plan": "-> Table scan on t  (cost=0.45 rows=2)\n",
+      "error": {
+        "code": "ER_TABLE_DEF_CHANGED",
+        "errno": 1412,
+        "state": "HY000",
+        "message": "Table definition has changed, please retry transaction"
+      },
+      "warnings": [
+        {
+          "Level": "Warning",
+          "Code": 159,
+          "Message": "InnoDB: insufficient history for index 64"
+        },
+        {
+          "Level": "Error",
+          "Code": 1412,
+          "Message": "Table definition has changed, please retry transaction"
+        }
+      ]
+    },
+    {
+      "name": "hidden-nullable-unique",
+      "definition": "id INT,g INT,h INT,UNIQUE KEY u(id),KEY g(g)",
+      "access": "scan",
+      "method": "execute",
+      "indexes": [
+        [
+          "u",
+          1,
+          "id",
+          0
+        ],
+        [
+          "g",
+          1,
+          "g",
+          1
+        ]
+      ],
+      "plan": "-> Table scan on t  (cost=0.45 rows=2)\n",
+      "error": {
+        "code": "ER_TABLE_DEF_CHANGED",
+        "errno": 1412,
+        "state": "HY000",
+        "message": "Table definition has changed, please retry transaction"
+      },
+      "warnings": [
+        {
+          "Level": "Warning",
+          "Code": 159,
+          "Message": "InnoDB: insufficient history for index 64"
+        },
+        {
+          "Level": "Error",
+          "Code": 1412,
+          "Message": "Table definition has changed, please retry transaction"
+        }
+      ]
+    },
+    {
+      "name": "hidden-nullable-unique",
+      "definition": "id INT,g INT,h INT,UNIQUE KEY u(id),KEY g(g)",
+      "access": "g",
+      "method": "query",
+      "indexes": [
+        [
+          "u",
+          1,
+          "id",
+          0
+        ],
+        [
+          "g",
+          1,
+          "g",
+          1
+        ]
+      ],
+      "plan": "-> Index lookup on t using g (g=1)  (cost=0.7 rows=2)\n",
+      "error": {
+        "code": "ER_TABLE_DEF_CHANGED",
+        "errno": 1412,
+        "state": "HY000",
+        "message": "Table definition has changed, please retry transaction"
+      },
+      "warnings": [
+        {
+          "Level": "Warning",
+          "Code": 159,
+          "Message": "InnoDB: insufficient history for index 1"
+        },
+        {
+          "Level": "Error",
+          "Code": 1412,
+          "Message": "Table definition has changed, please retry transaction"
+        }
+      ]
+    },
+    {
+      "name": "hidden-nullable-unique",
+      "definition": "id INT,g INT,h INT,UNIQUE KEY u(id),KEY g(g)",
+      "access": "g",
+      "method": "execute",
+      "indexes": [
+        [
+          "u",
+          1,
+          "id",
+          0
+        ],
+        [
+          "g",
+          1,
+          "g",
+          1
+        ]
+      ],
+      "plan": "-> Index lookup on t using g (g=1)  (cost=0.7 rows=2)\n",
+      "error": {
+        "code": "ER_TABLE_DEF_CHANGED",
+        "errno": 1412,
+        "state": "HY000",
+        "message": "Table definition has changed, please retry transaction"
+      },
+      "warnings": [
+        {
+          "Level": "Warning",
+          "Code": 159,
+          "Message": "InnoDB: insufficient history for index 1"
+        },
+        {
+          "Level": "Error",
+          "Code": 1412,
+          "Message": "Table definition has changed, please retry transaction"
+        }
+      ]
+    },
+    {
+      "name": "two-secondary",
+      "definition": "id INT NOT NULL,g INT,h INT,KEY h(h),KEY g(g),PRIMARY KEY(id)",
+      "access": "scan",
+      "method": "query",
+      "indexes": [
+        [
+          "PRIMARY",
+          1,
+          "id",
+          0
+        ],
+        [
+          "h",
+          1,
+          "h",
+          1
+        ],
+        [
+          "g",
+          1,
+          "g",
+          1
+        ]
+      ],
+      "plan": "-> Table scan on t  (cost=0.45 rows=2)\n",
+      "error": {
+        "code": "ER_TABLE_DEF_CHANGED",
+        "errno": 1412,
+        "state": "HY000",
+        "message": "Table definition has changed, please retry transaction"
+      },
+      "warnings": [
+        {
+          "Level": "Warning",
+          "Code": 159,
+          "Message": "InnoDB: insufficient history for index 0"
+        },
+        {
+          "Level": "Error",
+          "Code": 1412,
+          "Message": "Table definition has changed, please retry transaction"
+        }
+      ]
+    },
+    {
+      "name": "two-secondary",
+      "definition": "id INT NOT NULL,g INT,h INT,KEY h(h),KEY g(g),PRIMARY KEY(id)",
+      "access": "scan",
+      "method": "execute",
+      "indexes": [
+        [
+          "PRIMARY",
+          1,
+          "id",
+          0
+        ],
+        [
+          "h",
+          1,
+          "h",
+          1
+        ],
+        [
+          "g",
+          1,
+          "g",
+          1
+        ]
+      ],
+      "plan": "-> Table scan on t  (cost=0.45 rows=2)\n",
+      "error": {
+        "code": "ER_TABLE_DEF_CHANGED",
+        "errno": 1412,
+        "state": "HY000",
+        "message": "Table definition has changed, please retry transaction"
+      },
+      "warnings": [
+        {
+          "Level": "Warning",
+          "Code": 159,
+          "Message": "InnoDB: insufficient history for index 0"
+        },
+        {
+          "Level": "Error",
+          "Code": 1412,
+          "Message": "Table definition has changed, please retry transaction"
+        }
+      ]
+    },
+    {
+      "name": "two-secondary",
+      "definition": "id INT NOT NULL,g INT,h INT,KEY h(h),KEY g(g),PRIMARY KEY(id)",
+      "access": "g",
+      "method": "query",
+      "indexes": [
+        [
+          "PRIMARY",
+          1,
+          "id",
+          0
+        ],
+        [
+          "h",
+          1,
+          "h",
+          1
+        ],
+        [
+          "g",
+          1,
+          "g",
+          1
+        ]
+      ],
+      "plan": "-> Index lookup on t using g (g=1)  (cost=0.7 rows=2)\n",
+      "error": {
+        "code": "ER_TABLE_DEF_CHANGED",
+        "errno": 1412,
+        "state": "HY000",
+        "message": "Table definition has changed, please retry transaction"
+      },
+      "warnings": [
+        {
+          "Level": "Warning",
+          "Code": 159,
+          "Message": "InnoDB: insufficient history for index 2"
+        },
+        {
+          "Level": "Error",
+          "Code": 1412,
+          "Message": "Table definition has changed, please retry transaction"
+        }
+      ]
+    },
+    {
+      "name": "two-secondary",
+      "definition": "id INT NOT NULL,g INT,h INT,KEY h(h),KEY g(g),PRIMARY KEY(id)",
+      "access": "g",
+      "method": "execute",
+      "indexes": [
+        [
+          "PRIMARY",
+          1,
+          "id",
+          0
+        ],
+        [
+          "h",
+          1,
+          "h",
+          1
+        ],
+        [
+          "g",
+          1,
+          "g",
+          1
+        ]
+      ],
+      "plan": "-> Index lookup on t using g (g=1)  (cost=0.7 rows=2)\n",
+      "error": {
+        "code": "ER_TABLE_DEF_CHANGED",
+        "errno": 1412,
+        "state": "HY000",
+        "message": "Table definition has changed, please retry transaction"
+      },
+      "warnings": [
+        {
+          "Level": "Warning",
+          "Code": 159,
+          "Message": "InnoDB: insufficient history for index 2"
+        },
+        {
+          "Level": "Error",
+          "Code": 1412,
+          "Message": "Table definition has changed, please retry transaction"
+        }
+      ]
+    },
+    {
+      "name": "reversed-secondary",
+      "definition": "id INT NOT NULL,g INT,h INT,KEY g(g),KEY h(h),PRIMARY KEY(id)",
+      "access": "scan",
+      "method": "query",
+      "indexes": [
+        [
+          "PRIMARY",
+          1,
+          "id",
+          0
+        ],
+        [
+          "g",
+          1,
+          "g",
+          1
+        ],
+        [
+          "h",
+          1,
+          "h",
+          1
+        ]
+      ],
+      "plan": "-> Table scan on t  (cost=0.45 rows=2)\n",
+      "error": {
+        "code": "ER_TABLE_DEF_CHANGED",
+        "errno": 1412,
+        "state": "HY000",
+        "message": "Table definition has changed, please retry transaction"
+      },
+      "warnings": [
+        {
+          "Level": "Warning",
+          "Code": 159,
+          "Message": "InnoDB: insufficient history for index 0"
+        },
+        {
+          "Level": "Error",
+          "Code": 1412,
+          "Message": "Table definition has changed, please retry transaction"
+        }
+      ]
+    },
+    {
+      "name": "reversed-secondary",
+      "definition": "id INT NOT NULL,g INT,h INT,KEY g(g),KEY h(h),PRIMARY KEY(id)",
+      "access": "scan",
+      "method": "execute",
+      "indexes": [
+        [
+          "PRIMARY",
+          1,
+          "id",
+          0
+        ],
+        [
+          "g",
+          1,
+          "g",
+          1
+        ],
+        [
+          "h",
+          1,
+          "h",
+          1
+        ]
+      ],
+      "plan": "-> Table scan on t  (cost=0.45 rows=2)\n",
+      "error": {
+        "code": "ER_TABLE_DEF_CHANGED",
+        "errno": 1412,
+        "state": "HY000",
+        "message": "Table definition has changed, please retry transaction"
+      },
+      "warnings": [
+        {
+          "Level": "Warning",
+          "Code": 159,
+          "Message": "InnoDB: insufficient history for index 0"
+        },
+        {
+          "Level": "Error",
+          "Code": 1412,
+          "Message": "Table definition has changed, please retry transaction"
+        }
+      ]
+    },
+    {
+      "name": "reversed-secondary",
+      "definition": "id INT NOT NULL,g INT,h INT,KEY g(g),KEY h(h),PRIMARY KEY(id)",
+      "access": "g",
+      "method": "query",
+      "indexes": [
+        [
+          "PRIMARY",
+          1,
+          "id",
+          0
+        ],
+        [
+          "g",
+          1,
+          "g",
+          1
+        ],
+        [
+          "h",
+          1,
+          "h",
+          1
+        ]
+      ],
+      "plan": "-> Index lookup on t using g (g=1)  (cost=0.7 rows=2)\n",
+      "error": {
+        "code": "ER_TABLE_DEF_CHANGED",
+        "errno": 1412,
+        "state": "HY000",
+        "message": "Table definition has changed, please retry transaction"
+      },
+      "warnings": [
+        {
+          "Level": "Warning",
+          "Code": 159,
+          "Message": "InnoDB: insufficient history for index 1"
+        },
+        {
+          "Level": "Error",
+          "Code": 1412,
+          "Message": "Table definition has changed, please retry transaction"
+        }
+      ]
+    },
+    {
+      "name": "reversed-secondary",
+      "definition": "id INT NOT NULL,g INT,h INT,KEY g(g),KEY h(h),PRIMARY KEY(id)",
+      "access": "g",
+      "method": "execute",
+      "indexes": [
+        [
+          "PRIMARY",
+          1,
+          "id",
+          0
+        ],
+        [
+          "g",
+          1,
+          "g",
+          1
+        ],
+        [
+          "h",
+          1,
+          "h",
+          1
+        ]
+      ],
+      "plan": "-> Index lookup on t using g (g=1)  (cost=0.7 rows=2)\n",
+      "error": {
+        "code": "ER_TABLE_DEF_CHANGED",
+        "errno": 1412,
+        "state": "HY000",
+        "message": "Table definition has changed, please retry transaction"
+      },
+      "warnings": [
+        {
+          "Level": "Warning",
+          "Code": 159,
+          "Message": "InnoDB: insufficient history for index 1"
+        },
+        {
+          "Level": "Error",
+          "Code": 1412,
+          "Message": "Table definition has changed, please retry transaction"
+        }
+      ]
+    },
+    {
+      "name": "no-index",
+      "definition": "id INT,g INT,h INT",
+      "access": "scan",
+      "method": "query",
+      "indexes": [],
+      "plan": "-> Table scan on t  (cost=0.45 rows=2)\n",
+      "error": {
+        "code": "ER_TABLE_DEF_CHANGED",
+        "errno": 1412,
+        "state": "HY000",
+        "message": "Table definition has changed, please retry transaction"
+      },
+      "warnings": [
+        {
+          "Level": "Warning",
+          "Code": 159,
+          "Message": "InnoDB: insufficient history for index 64"
+        },
+        {
+          "Level": "Error",
+          "Code": 1412,
+          "Message": "Table definition has changed, please retry transaction"
+        }
+      ]
+    },
+    {
+      "name": "no-index",
+      "definition": "id INT,g INT,h INT",
+      "access": "scan",
+      "method": "execute",
+      "indexes": [],
+      "plan": "-> Table scan on t  (cost=0.45 rows=2)\n",
+      "error": {
+        "code": "ER_TABLE_DEF_CHANGED",
+        "errno": 1412,
+        "state": "HY000",
+        "message": "Table definition has changed, please retry transaction"
+      },
+      "warnings": [
+        {
+          "Level": "Warning",
+          "Code": 159,
+          "Message": "InnoDB: insufficient history for index 64"
+        },
+        {
+          "Level": "Error",
+          "Code": 1412,
+          "Message": "Table definition has changed, please retry transaction"
+        }
+      ]
+    },
+    {
+      "name": "invisible-first",
+      "definition": "id INT NOT NULL,g INT,h INT,KEY h(h) INVISIBLE,KEY g(g),PRIMARY KEY(id)",
+      "access": "scan",
+      "method": "query",
+      "indexes": [
+        [
+          "PRIMARY",
+          1,
+          "id",
+          0
+        ],
+        [
+          "h",
+          1,
+          "h",
+          1
+        ],
+        [
+          "g",
+          1,
+          "g",
+          1
+        ]
+      ],
+      "plan": "-> Table scan on t  (cost=0.45 rows=2)\n",
+      "error": {
+        "code": "ER_TABLE_DEF_CHANGED",
+        "errno": 1412,
+        "state": "HY000",
+        "message": "Table definition has changed, please retry transaction"
+      },
+      "warnings": [
+        {
+          "Level": "Warning",
+          "Code": 159,
+          "Message": "InnoDB: insufficient history for index 0"
+        },
+        {
+          "Level": "Error",
+          "Code": 1412,
+          "Message": "Table definition has changed, please retry transaction"
+        }
+      ]
+    },
+    {
+      "name": "invisible-first",
+      "definition": "id INT NOT NULL,g INT,h INT,KEY h(h) INVISIBLE,KEY g(g),PRIMARY KEY(id)",
+      "access": "scan",
+      "method": "execute",
+      "indexes": [
+        [
+          "PRIMARY",
+          1,
+          "id",
+          0
+        ],
+        [
+          "h",
+          1,
+          "h",
+          1
+        ],
+        [
+          "g",
+          1,
+          "g",
+          1
+        ]
+      ],
+      "plan": "-> Table scan on t  (cost=0.45 rows=2)\n",
+      "error": {
+        "code": "ER_TABLE_DEF_CHANGED",
+        "errno": 1412,
+        "state": "HY000",
+        "message": "Table definition has changed, please retry transaction"
+      },
+      "warnings": [
+        {
+          "Level": "Warning",
+          "Code": 159,
+          "Message": "InnoDB: insufficient history for index 0"
+        },
+        {
+          "Level": "Error",
+          "Code": 1412,
+          "Message": "Table definition has changed, please retry transaction"
+        }
+      ]
+    },
+    {
+      "name": "invisible-first",
+      "definition": "id INT NOT NULL,g INT,h INT,KEY h(h) INVISIBLE,KEY g(g),PRIMARY KEY(id)",
+      "access": "g",
+      "method": "query",
+      "indexes": [
+        [
+          "PRIMARY",
+          1,
+          "id",
+          0
+        ],
+        [
+          "h",
+          1,
+          "h",
+          1
+        ],
+        [
+          "g",
+          1,
+          "g",
+          1
+        ]
+      ],
+      "plan": "-> Index lookup on t using g (g=1)  (cost=0.7 rows=2)\n",
+      "error": {
+        "code": "ER_TABLE_DEF_CHANGED",
+        "errno": 1412,
+        "state": "HY000",
+        "message": "Table definition has changed, please retry transaction"
+      },
+      "warnings": [
+        {
+          "Level": "Warning",
+          "Code": 159,
+          "Message": "InnoDB: insufficient history for index 2"
+        },
+        {
+          "Level": "Error",
+          "Code": 1412,
+          "Message": "Table definition has changed, please retry transaction"
+        }
+      ]
+    },
+    {
+      "name": "invisible-first",
+      "definition": "id INT NOT NULL,g INT,h INT,KEY h(h) INVISIBLE,KEY g(g),PRIMARY KEY(id)",
+      "access": "g",
+      "method": "execute",
+      "indexes": [
+        [
+          "PRIMARY",
+          1,
+          "id",
+          0
+        ],
+        [
+          "h",
+          1,
+          "h",
+          1
+        ],
+        [
+          "g",
+          1,
+          "g",
+          1
+        ]
+      ],
+      "plan": "-> Index lookup on t using g (g=1)  (cost=0.7 rows=2)\n",
+      "error": {
+        "code": "ER_TABLE_DEF_CHANGED",
+        "errno": 1412,
+        "state": "HY000",
+        "message": "Table definition has changed, please retry transaction"
+      },
+      "warnings": [
+        {
+          "Level": "Warning",
+          "Code": 159,
+          "Message": "InnoDB: insufficient history for index 2"
+        },
+        {
+          "Level": "Error",
+          "Code": 1412,
+          "Message": "Table definition has changed, please retry transaction"
+        }
+      ]
+    },
+    {
+      "name": "unique-before-primary",
+      "definition": "id INT NOT NULL,g INT,h INT NOT NULL,UNIQUE KEY u(h),KEY g(g),PRIMARY KEY(id)",
+      "access": "scan",
+      "method": "query",
+      "indexes": [
+        [
+          "PRIMARY",
+          1,
+          "id",
+          0
+        ],
+        [
+          "u",
+          1,
+          "h",
+          0
+        ],
+        [
+          "g",
+          1,
+          "g",
+          1
+        ]
+      ],
+      "plan": "-> Table scan on t  (cost=0.45 rows=2)\n",
+      "error": {
+        "code": "ER_TABLE_DEF_CHANGED",
+        "errno": 1412,
+        "state": "HY000",
+        "message": "Table definition has changed, please retry transaction"
+      },
+      "warnings": [
+        {
+          "Level": "Warning",
+          "Code": 159,
+          "Message": "InnoDB: insufficient history for index 0"
+        },
+        {
+          "Level": "Error",
+          "Code": 1412,
+          "Message": "Table definition has changed, please retry transaction"
+        }
+      ]
+    },
+    {
+      "name": "unique-before-primary",
+      "definition": "id INT NOT NULL,g INT,h INT NOT NULL,UNIQUE KEY u(h),KEY g(g),PRIMARY KEY(id)",
+      "access": "scan",
+      "method": "execute",
+      "indexes": [
+        [
+          "PRIMARY",
+          1,
+          "id",
+          0
+        ],
+        [
+          "u",
+          1,
+          "h",
+          0
+        ],
+        [
+          "g",
+          1,
+          "g",
+          1
+        ]
+      ],
+      "plan": "-> Table scan on t  (cost=0.45 rows=2)\n",
+      "error": {
+        "code": "ER_TABLE_DEF_CHANGED",
+        "errno": 1412,
+        "state": "HY000",
+        "message": "Table definition has changed, please retry transaction"
+      },
+      "warnings": [
+        {
+          "Level": "Warning",
+          "Code": 159,
+          "Message": "InnoDB: insufficient history for index 0"
+        },
+        {
+          "Level": "Error",
+          "Code": 1412,
+          "Message": "Table definition has changed, please retry transaction"
+        }
+      ]
+    },
+    {
+      "name": "unique-before-primary",
+      "definition": "id INT NOT NULL,g INT,h INT NOT NULL,UNIQUE KEY u(h),KEY g(g),PRIMARY KEY(id)",
+      "access": "g",
+      "method": "query",
+      "indexes": [
+        [
+          "PRIMARY",
+          1,
+          "id",
+          0
+        ],
+        [
+          "u",
+          1,
+          "h",
+          0
+        ],
+        [
+          "g",
+          1,
+          "g",
+          1
+        ]
+      ],
+      "plan": "-> Index lookup on t using g (g=1)  (cost=0.7 rows=2)\n",
+      "error": {
+        "code": "ER_TABLE_DEF_CHANGED",
+        "errno": 1412,
+        "state": "HY000",
+        "message": "Table definition has changed, please retry transaction"
+      },
+      "warnings": [
+        {
+          "Level": "Warning",
+          "Code": 159,
+          "Message": "InnoDB: insufficient history for index 2"
+        },
+        {
+          "Level": "Error",
+          "Code": 1412,
+          "Message": "Table definition has changed, please retry transaction"
+        }
+      ]
+    },
+    {
+      "name": "unique-before-primary",
+      "definition": "id INT NOT NULL,g INT,h INT NOT NULL,UNIQUE KEY u(h),KEY g(g),PRIMARY KEY(id)",
+      "access": "g",
+      "method": "execute",
+      "indexes": [
+        [
+          "PRIMARY",
+          1,
+          "id",
+          0
+        ],
+        [
+          "u",
+          1,
+          "h",
+          0
+        ],
+        [
+          "g",
+          1,
+          "g",
+          1
+        ]
+      ],
+      "plan": "-> Index lookup on t using g (g=1)  (cost=0.7 rows=2)\n",
+      "error": {
+        "code": "ER_TABLE_DEF_CHANGED",
+        "errno": 1412,
+        "state": "HY000",
+        "message": "Table definition has changed, please retry transaction"
+      },
+      "warnings": [
+        {
+          "Level": "Warning",
+          "Code": 159,
+          "Message": "InnoDB: insufficient history for index 2"
+        },
+        {
+          "Level": "Error",
+          "Code": 1412,
+          "Message": "Table definition has changed, please retry transaction"
+        }
+      ]
+    },
+    {
+      "name": "prefix-unique",
+      "definition": "id INT NOT NULL,g INT,h VARCHAR(12) NOT NULL,KEY g(g),UNIQUE KEY hp(h(1)),UNIQUE KEY u(id)",
+      "access": "scan",
+      "method": "query",
+      "indexes": [
+        [
+          "u",
+          1,
+          "id",
+          0
+        ],
+        [
+          "hp",
+          1,
+          "h",
+          0
+        ],
+        [
+          "g",
+          1,
+          "g",
+          1
+        ]
+      ],
+      "plan": "-> Table scan on t  (cost=0.45 rows=2)\n",
+      "error": {
+        "code": "ER_TABLE_DEF_CHANGED",
+        "errno": 1412,
+        "state": "HY000",
+        "message": "Table definition has changed, please retry transaction"
+      },
+      "warnings": [
+        {
+          "Level": "Warning",
+          "Code": 159,
+          "Message": "InnoDB: insufficient history for index 0"
+        },
+        {
+          "Level": "Error",
+          "Code": 1412,
+          "Message": "Table definition has changed, please retry transaction"
+        }
+      ]
+    },
+    {
+      "name": "prefix-unique",
+      "definition": "id INT NOT NULL,g INT,h VARCHAR(12) NOT NULL,KEY g(g),UNIQUE KEY hp(h(1)),UNIQUE KEY u(id)",
+      "access": "scan",
+      "method": "execute",
+      "indexes": [
+        [
+          "u",
+          1,
+          "id",
+          0
+        ],
+        [
+          "hp",
+          1,
+          "h",
+          0
+        ],
+        [
+          "g",
+          1,
+          "g",
+          1
+        ]
+      ],
+      "plan": "-> Table scan on t  (cost=0.45 rows=2)\n",
+      "error": {
+        "code": "ER_TABLE_DEF_CHANGED",
+        "errno": 1412,
+        "state": "HY000",
+        "message": "Table definition has changed, please retry transaction"
+      },
+      "warnings": [
+        {
+          "Level": "Warning",
+          "Code": 159,
+          "Message": "InnoDB: insufficient history for index 0"
+        },
+        {
+          "Level": "Error",
+          "Code": 1412,
+          "Message": "Table definition has changed, please retry transaction"
+        }
+      ]
+    },
+    {
+      "name": "prefix-unique",
+      "definition": "id INT NOT NULL,g INT,h VARCHAR(12) NOT NULL,KEY g(g),UNIQUE KEY hp(h(1)),UNIQUE KEY u(id)",
+      "access": "g",
+      "method": "query",
+      "indexes": [
+        [
+          "u",
+          1,
+          "id",
+          0
+        ],
+        [
+          "hp",
+          1,
+          "h",
+          0
+        ],
+        [
+          "g",
+          1,
+          "g",
+          1
+        ]
+      ],
+      "plan": "-> Index lookup on t using g (g=1)  (cost=0.7 rows=2)\n",
+      "error": {
+        "code": "ER_TABLE_DEF_CHANGED",
+        "errno": 1412,
+        "state": "HY000",
+        "message": "Table definition has changed, please retry transaction"
+      },
+      "warnings": [
+        {
+          "Level": "Warning",
+          "Code": 159,
+          "Message": "InnoDB: insufficient history for index 2"
+        },
+        {
+          "Level": "Error",
+          "Code": 1412,
+          "Message": "Table definition has changed, please retry transaction"
+        }
+      ]
+    },
+    {
+      "name": "prefix-unique",
+      "definition": "id INT NOT NULL,g INT,h VARCHAR(12) NOT NULL,KEY g(g),UNIQUE KEY hp(h(1)),UNIQUE KEY u(id)",
+      "access": "g",
+      "method": "execute",
+      "indexes": [
+        [
+          "u",
+          1,
+          "id",
+          0
+        ],
+        [
+          "hp",
+          1,
+          "h",
+          0
+        ],
+        [
+          "g",
+          1,
+          "g",
+          1
+        ]
+      ],
+      "plan": "-> Index lookup on t using g (g=1)  (cost=0.7 rows=2)\n",
+      "error": {
+        "code": "ER_TABLE_DEF_CHANGED",
+        "errno": 1412,
+        "state": "HY000",
+        "message": "Table definition has changed, please retry transaction"
+      },
+      "warnings": [
+        {
+          "Level": "Warning",
+          "Code": 159,
+          "Message": "InnoDB: insufficient history for index 2"
+        },
+        {
+          "Level": "Error",
+          "Code": 1412,
+          "Message": "Table definition has changed, please retry transaction"
+        }
+      ]
+    },
+    {
+      "name": "fulltext-first",
+      "definition": "id INT NOT NULL,g INT,h VARCHAR(12),FULLTEXT KEY ft(h),KEY g(g),PRIMARY KEY(id)",
+      "access": "scan",
+      "method": "query",
+      "indexes": [
+        [
+          "PRIMARY",
+          1,
+          "id",
+          0
+        ],
+        [
+          "g",
+          1,
+          "g",
+          1
+        ],
+        [
+          "ft",
+          1,
+          "h",
+          1
+        ]
+      ],
+      "plan": "-> Table scan on t  (cost=0.45 rows=2)\n",
+      "error": {
+        "code": "ER_TABLE_DEF_CHANGED",
+        "errno": 1412,
+        "state": "HY000",
+        "message": "Table definition has changed, please retry transaction"
+      },
+      "warnings": [
+        {
+          "Level": "Warning",
+          "Code": 159,
+          "Message": "InnoDB: insufficient history for index 0"
+        },
+        {
+          "Level": "Error",
+          "Code": 1412,
+          "Message": "Table definition has changed, please retry transaction"
+        }
+      ]
+    },
+    {
+      "name": "fulltext-first",
+      "definition": "id INT NOT NULL,g INT,h VARCHAR(12),FULLTEXT KEY ft(h),KEY g(g),PRIMARY KEY(id)",
+      "access": "scan",
+      "method": "execute",
+      "indexes": [
+        [
+          "PRIMARY",
+          1,
+          "id",
+          0
+        ],
+        [
+          "g",
+          1,
+          "g",
+          1
+        ],
+        [
+          "ft",
+          1,
+          "h",
+          1
+        ]
+      ],
+      "plan": "-> Table scan on t  (cost=0.45 rows=2)\n",
+      "error": {
+        "code": "ER_TABLE_DEF_CHANGED",
+        "errno": 1412,
+        "state": "HY000",
+        "message": "Table definition has changed, please retry transaction"
+      },
+      "warnings": [
+        {
+          "Level": "Warning",
+          "Code": 159,
+          "Message": "InnoDB: insufficient history for index 0"
+        },
+        {
+          "Level": "Error",
+          "Code": 1412,
+          "Message": "Table definition has changed, please retry transaction"
+        }
+      ]
+    },
+    {
+      "name": "fulltext-first",
+      "definition": "id INT NOT NULL,g INT,h VARCHAR(12),FULLTEXT KEY ft(h),KEY g(g),PRIMARY KEY(id)",
+      "access": "g",
+      "method": "query",
+      "indexes": [
+        [
+          "PRIMARY",
+          1,
+          "id",
+          0
+        ],
+        [
+          "g",
+          1,
+          "g",
+          1
+        ],
+        [
+          "ft",
+          1,
+          "h",
+          1
+        ]
+      ],
+      "plan": "-> Index lookup on t using g (g=1)  (cost=0.7 rows=2)\n",
+      "error": {
+        "code": "ER_TABLE_DEF_CHANGED",
+        "errno": 1412,
+        "state": "HY000",
+        "message": "Table definition has changed, please retry transaction"
+      },
+      "warnings": [
+        {
+          "Level": "Warning",
+          "Code": 159,
+          "Message": "InnoDB: insufficient history for index 1"
+        },
+        {
+          "Level": "Error",
+          "Code": 1412,
+          "Message": "Table definition has changed, please retry transaction"
+        }
+      ]
+    },
+    {
+      "name": "fulltext-first",
+      "definition": "id INT NOT NULL,g INT,h VARCHAR(12),FULLTEXT KEY ft(h),KEY g(g),PRIMARY KEY(id)",
+      "access": "g",
+      "method": "execute",
+      "indexes": [
+        [
+          "PRIMARY",
+          1,
+          "id",
+          0
+        ],
+        [
+          "g",
+          1,
+          "g",
+          1
+        ],
+        [
+          "ft",
+          1,
+          "h",
+          1
+        ]
+      ],
+      "plan": "-> Index lookup on t using g (g=1)  (cost=0.7 rows=2)\n",
+      "error": {
+        "code": "ER_TABLE_DEF_CHANGED",
+        "errno": 1412,
+        "state": "HY000",
+        "message": "Table definition has changed, please retry transaction"
+      },
+      "warnings": [
+        {
+          "Level": "Warning",
+          "Code": 159,
+          "Message": "InnoDB: insufficient history for index 1"
+        },
+        {
+          "Level": "Error",
+          "Code": 1412,
+          "Message": "Table definition has changed, please retry transaction"
+        }
+      ]
+    }
+  ],
+  "conditions": [
+    {
+      "shape": "ordinary",
+      "limit": 0,
+      "method": "query",
+      "sql": "SELECT id FROM ch FORCE INDEX(g) WHERE g=1",
+      "rounds": [
+        {
+          "error": {
+            "code": "ER_TABLE_DEF_CHANGED",
+            "errno": 1412,
+            "state": "HY000",
+            "message": "Table definition has changed, please retry transaction"
+          },
+          "fieldEvents": [
+            [
+              [
+                "id",
+                3,
+                11,
+                20483,
+                0,
+                63,
+                "warning224_conditions",
+                "ch",
+                "ch",
+                "id"
+              ]
+            ]
+          ],
+          "warnings": [],
+          "warningCount": 2,
+          "errorCount": 1
+        },
+        {
+          "error": {
+            "code": "ER_TABLE_DEF_CHANGED",
+            "errno": 1412,
+            "state": "HY000",
+            "message": "Table definition has changed, please retry transaction"
+          },
+          "fieldEvents": [
+            [
+              [
+                "id",
+                3,
+                11,
+                20483,
+                0,
+                63,
+                "warning224_conditions",
+                "ch",
+                "ch",
+                "id"
+              ]
+            ]
+          ],
+          "warnings": [],
+          "warningCount": 2,
+          "errorCount": 1
+        }
+      ],
+      "current": {
+        "error": {
+          "code": "ER_TABLE_DEF_CHANGED",
+          "errno": 1412,
+          "state": "HY000",
+          "message": "Table definition has changed, please retry transaction"
+        },
+        "fieldEvents": [
+          [
+            [
+              "id",
+              3,
+              11,
+              20483,
+              0,
+              63,
+              "warning224_conditions",
+              "ch",
+              "ch",
+              "id"
+            ]
+          ]
+        ],
+        "warnings": [],
+        "warningCount": 2,
+        "errorCount": 1
+      }
+    },
+    {
+      "shape": "ordinary",
+      "limit": 0,
+      "method": "execute",
+      "sql": "SELECT id FROM ch FORCE INDEX(g) WHERE g=1",
+      "rounds": [
+        {
+          "error": {
+            "code": "ER_TABLE_DEF_CHANGED",
+            "errno": 1412,
+            "state": "HY000",
+            "message": "Table definition has changed, please retry transaction"
+          },
+          "fieldEvents": [
+            [
+              [
+                "id",
+                3,
+                11,
+                20483,
+                0,
+                63,
+                "warning224_conditions",
+                "ch",
+                "ch",
+                "id"
+              ]
+            ]
+          ],
+          "warnings": [],
+          "warningCount": 2,
+          "errorCount": 1
+        },
+        {
+          "error": {
+            "code": "ER_TABLE_DEF_CHANGED",
+            "errno": 1412,
+            "state": "HY000",
+            "message": "Table definition has changed, please retry transaction"
+          },
+          "fieldEvents": [
+            [
+              [
+                "id",
+                3,
+                11,
+                20483,
+                0,
+                63,
+                "warning224_conditions",
+                "ch",
+                "ch",
+                "id"
+              ]
+            ]
+          ],
+          "warnings": [],
+          "warningCount": 2,
+          "errorCount": 1
+        }
+      ],
+      "current": {
+        "error": {
+          "code": "ER_TABLE_DEF_CHANGED",
+          "errno": 1412,
+          "state": "HY000",
+          "message": "Table definition has changed, please retry transaction"
+        },
+        "fieldEvents": [
+          [
+            [
+              "id",
+              3,
+              11,
+              20483,
+              0,
+              63,
+              "warning224_conditions",
+              "ch",
+              "ch",
+              "id"
+            ]
+          ]
+        ],
+        "warnings": [],
+        "warningCount": 2,
+        "errorCount": 1
+      }
+    },
+    {
+      "shape": "ordinary",
+      "limit": 1,
+      "method": "query",
+      "sql": "SELECT id FROM ch FORCE INDEX(g) WHERE g=1",
+      "rounds": [
+        {
+          "error": {
+            "code": "ER_TABLE_DEF_CHANGED",
+            "errno": 1412,
+            "state": "HY000",
+            "message": "Table definition has changed, please retry transaction"
+          },
+          "fieldEvents": [
+            [
+              [
+                "id",
+                3,
+                11,
+                20483,
+                0,
+                63,
+                "warning224_conditions",
+                "ch",
+                "ch",
+                "id"
+              ]
+            ]
+          ],
+          "warnings": [
+            {
+              "Level": "Warning",
+              "Code": 159,
+              "Message": "InnoDB: insufficient history for index 1"
+            }
+          ],
+          "warningCount": 2,
+          "errorCount": 1
+        },
+        {
+          "error": {
+            "code": "ER_TABLE_DEF_CHANGED",
+            "errno": 1412,
+            "state": "HY000",
+            "message": "Table definition has changed, please retry transaction"
+          },
+          "fieldEvents": [
+            [
+              [
+                "id",
+                3,
+                11,
+                20483,
+                0,
+                63,
+                "warning224_conditions",
+                "ch",
+                "ch",
+                "id"
+              ]
+            ]
+          ],
+          "warnings": [
+            {
+              "Level": "Warning",
+              "Code": 159,
+              "Message": "InnoDB: insufficient history for index 1"
+            }
+          ],
+          "warningCount": 2,
+          "errorCount": 1
+        }
+      ],
+      "current": {
+        "error": {
+          "code": "ER_TABLE_DEF_CHANGED",
+          "errno": 1412,
+          "state": "HY000",
+          "message": "Table definition has changed, please retry transaction"
+        },
+        "fieldEvents": [
+          [
+            [
+              "id",
+              3,
+              11,
+              20483,
+              0,
+              63,
+              "warning224_conditions",
+              "ch",
+              "ch",
+              "id"
+            ]
+          ]
+        ],
+        "warnings": [
+          {
+            "Level": "Warning",
+            "Code": 159,
+            "Message": "InnoDB: insufficient history for index 1"
+          }
+        ],
+        "warningCount": 2,
+        "errorCount": 1
+      }
+    },
+    {
+      "shape": "ordinary",
+      "limit": 1,
+      "method": "execute",
+      "sql": "SELECT id FROM ch FORCE INDEX(g) WHERE g=1",
+      "rounds": [
+        {
+          "error": {
+            "code": "ER_TABLE_DEF_CHANGED",
+            "errno": 1412,
+            "state": "HY000",
+            "message": "Table definition has changed, please retry transaction"
+          },
+          "fieldEvents": [
+            [
+              [
+                "id",
+                3,
+                11,
+                20483,
+                0,
+                63,
+                "warning224_conditions",
+                "ch",
+                "ch",
+                "id"
+              ]
+            ]
+          ],
+          "warnings": [
+            {
+              "Level": "Warning",
+              "Code": 159,
+              "Message": "InnoDB: insufficient history for index 1"
+            }
+          ],
+          "warningCount": 2,
+          "errorCount": 1
+        },
+        {
+          "error": {
+            "code": "ER_TABLE_DEF_CHANGED",
+            "errno": 1412,
+            "state": "HY000",
+            "message": "Table definition has changed, please retry transaction"
+          },
+          "fieldEvents": [
+            [
+              [
+                "id",
+                3,
+                11,
+                20483,
+                0,
+                63,
+                "warning224_conditions",
+                "ch",
+                "ch",
+                "id"
+              ]
+            ]
+          ],
+          "warnings": [
+            {
+              "Level": "Warning",
+              "Code": 159,
+              "Message": "InnoDB: insufficient history for index 1"
+            }
+          ],
+          "warningCount": 2,
+          "errorCount": 1
+        }
+      ],
+      "current": {
+        "error": {
+          "code": "ER_TABLE_DEF_CHANGED",
+          "errno": 1412,
+          "state": "HY000",
+          "message": "Table definition has changed, please retry transaction"
+        },
+        "fieldEvents": [
+          [
+            [
+              "id",
+              3,
+              11,
+              20483,
+              0,
+              63,
+              "warning224_conditions",
+              "ch",
+              "ch",
+              "id"
+            ]
+          ]
+        ],
+        "warnings": [
+          {
+            "Level": "Warning",
+            "Code": 159,
+            "Message": "InnoDB: insufficient history for index 1"
+          }
+        ],
+        "warningCount": 2,
+        "errorCount": 1
+      }
+    },
+    {
+      "shape": "ordinary",
+      "limit": 64,
+      "method": "query",
+      "sql": "SELECT id FROM ch FORCE INDEX(g) WHERE g=1",
+      "rounds": [
+        {
+          "error": {
+            "code": "ER_TABLE_DEF_CHANGED",
+            "errno": 1412,
+            "state": "HY000",
+            "message": "Table definition has changed, please retry transaction"
+          },
+          "fieldEvents": [
+            [
+              [
+                "id",
+                3,
+                11,
+                20483,
+                0,
+                63,
+                "warning224_conditions",
+                "ch",
+                "ch",
+                "id"
+              ]
+            ]
+          ],
+          "warnings": [
+            {
+              "Level": "Warning",
+              "Code": 159,
+              "Message": "InnoDB: insufficient history for index 1"
+            },
+            {
+              "Level": "Error",
+              "Code": 1412,
+              "Message": "Table definition has changed, please retry transaction"
+            }
+          ],
+          "warningCount": 2,
+          "errorCount": 1
+        },
+        {
+          "error": {
+            "code": "ER_TABLE_DEF_CHANGED",
+            "errno": 1412,
+            "state": "HY000",
+            "message": "Table definition has changed, please retry transaction"
+          },
+          "fieldEvents": [
+            [
+              [
+                "id",
+                3,
+                11,
+                20483,
+                0,
+                63,
+                "warning224_conditions",
+                "ch",
+                "ch",
+                "id"
+              ]
+            ]
+          ],
+          "warnings": [
+            {
+              "Level": "Warning",
+              "Code": 159,
+              "Message": "InnoDB: insufficient history for index 1"
+            },
+            {
+              "Level": "Error",
+              "Code": 1412,
+              "Message": "Table definition has changed, please retry transaction"
+            }
+          ],
+          "warningCount": 2,
+          "errorCount": 1
+        }
+      ],
+      "current": {
+        "error": {
+          "code": "ER_TABLE_DEF_CHANGED",
+          "errno": 1412,
+          "state": "HY000",
+          "message": "Table definition has changed, please retry transaction"
+        },
+        "fieldEvents": [
+          [
+            [
+              "id",
+              3,
+              11,
+              20483,
+              0,
+              63,
+              "warning224_conditions",
+              "ch",
+              "ch",
+              "id"
+            ]
+          ]
+        ],
+        "warnings": [
+          {
+            "Level": "Warning",
+            "Code": 159,
+            "Message": "InnoDB: insufficient history for index 1"
+          },
+          {
+            "Level": "Error",
+            "Code": 1412,
+            "Message": "Table definition has changed, please retry transaction"
+          }
+        ],
+        "warningCount": 2,
+        "errorCount": 1
+      }
+    },
+    {
+      "shape": "ordinary",
+      "limit": 64,
+      "method": "execute",
+      "sql": "SELECT id FROM ch FORCE INDEX(g) WHERE g=1",
+      "rounds": [
+        {
+          "error": {
+            "code": "ER_TABLE_DEF_CHANGED",
+            "errno": 1412,
+            "state": "HY000",
+            "message": "Table definition has changed, please retry transaction"
+          },
+          "fieldEvents": [
+            [
+              [
+                "id",
+                3,
+                11,
+                20483,
+                0,
+                63,
+                "warning224_conditions",
+                "ch",
+                "ch",
+                "id"
+              ]
+            ]
+          ],
+          "warnings": [
+            {
+              "Level": "Warning",
+              "Code": 159,
+              "Message": "InnoDB: insufficient history for index 1"
+            },
+            {
+              "Level": "Error",
+              "Code": 1412,
+              "Message": "Table definition has changed, please retry transaction"
+            }
+          ],
+          "warningCount": 2,
+          "errorCount": 1
+        },
+        {
+          "error": {
+            "code": "ER_TABLE_DEF_CHANGED",
+            "errno": 1412,
+            "state": "HY000",
+            "message": "Table definition has changed, please retry transaction"
+          },
+          "fieldEvents": [
+            [
+              [
+                "id",
+                3,
+                11,
+                20483,
+                0,
+                63,
+                "warning224_conditions",
+                "ch",
+                "ch",
+                "id"
+              ]
+            ]
+          ],
+          "warnings": [
+            {
+              "Level": "Warning",
+              "Code": 159,
+              "Message": "InnoDB: insufficient history for index 1"
+            },
+            {
+              "Level": "Error",
+              "Code": 1412,
+              "Message": "Table definition has changed, please retry transaction"
+            }
+          ],
+          "warningCount": 2,
+          "errorCount": 1
+        }
+      ],
+      "current": {
+        "error": {
+          "code": "ER_TABLE_DEF_CHANGED",
+          "errno": 1412,
+          "state": "HY000",
+          "message": "Table definition has changed, please retry transaction"
+        },
+        "fieldEvents": [
+          [
+            [
+              "id",
+              3,
+              11,
+              20483,
+              0,
+              63,
+              "warning224_conditions",
+              "ch",
+              "ch",
+              "id"
+            ]
+          ]
+        ],
+        "warnings": [
+          {
+            "Level": "Warning",
+            "Code": 159,
+            "Message": "InnoDB: insufficient history for index 1"
+          },
+          {
+            "Level": "Error",
+            "Code": 1412,
+            "Message": "Table definition has changed, please retry transaction"
+          }
+        ],
+        "warningCount": 2,
+        "errorCount": 1
+      }
+    },
+    {
+      "shape": "lookup-null",
+      "limit": 0,
+      "method": "query",
+      "sql": "SELECT name FROM pa WHERE NOT EXISTS(SELECT 1 FROM ch WHERE ch.g=pa.g)",
+      "rounds": [
+        {
+          "error": {
+            "code": "ER_TABLE_DEF_CHANGED",
+            "errno": 1412,
+            "state": "HY000",
+            "message": "Table definition has changed, please retry transaction"
+          },
+          "fieldEvents": [
+            [
+              [
+                "name",
+                253,
+                48,
+                20485,
+                0,
+                224,
+                "warning224_conditions",
+                "pa",
+                "pa",
+                "name"
+              ]
+            ]
+          ],
+          "warnings": [],
+          "warningCount": 2,
+          "errorCount": 1
+        },
+        {
+          "error": {
+            "code": "ER_TABLE_DEF_CHANGED",
+            "errno": 1412,
+            "state": "HY000",
+            "message": "Table definition has changed, please retry transaction"
+          },
+          "fieldEvents": [
+            [
+              [
+                "name",
+                253,
+                48,
+                20485,
+                0,
+                224,
+                "warning224_conditions",
+                "pa",
+                "pa",
+                "name"
+              ]
+            ]
+          ],
+          "warnings": [],
+          "warningCount": 2,
+          "errorCount": 1
+        }
+      ]
+    },
+    {
+      "shape": "lookup-null",
+      "limit": 0,
+      "method": "execute",
+      "sql": "SELECT name FROM pa WHERE NOT EXISTS(SELECT 1 FROM ch WHERE ch.g=pa.g)",
+      "rounds": [
+        {
+          "error": {
+            "code": "ER_TABLE_DEF_CHANGED",
+            "errno": 1412,
+            "state": "HY000",
+            "message": "Table definition has changed, please retry transaction"
+          },
+          "fieldEvents": [
+            [
+              [
+                "name",
+                253,
+                48,
+                20485,
+                0,
+                224,
+                "warning224_conditions",
+                "pa",
+                "pa",
+                "name"
+              ]
+            ]
+          ],
+          "warnings": [],
+          "warningCount": 2,
+          "errorCount": 1
+        },
+        {
+          "error": {
+            "code": "ER_TABLE_DEF_CHANGED",
+            "errno": 1412,
+            "state": "HY000",
+            "message": "Table definition has changed, please retry transaction"
+          },
+          "fieldEvents": [
+            [
+              [
+                "name",
+                253,
+                48,
+                20485,
+                0,
+                224,
+                "warning224_conditions",
+                "pa",
+                "pa",
+                "name"
+              ]
+            ]
+          ],
+          "warnings": [],
+          "warningCount": 2,
+          "errorCount": 1
+        }
+      ]
+    },
+    {
+      "shape": "lookup-null",
+      "limit": 1,
+      "method": "query",
+      "sql": "SELECT name FROM pa WHERE NOT EXISTS(SELECT 1 FROM ch WHERE ch.g=pa.g)",
+      "rounds": [
+        {
+          "error": {
+            "code": "ER_TABLE_DEF_CHANGED",
+            "errno": 1412,
+            "state": "HY000",
+            "message": "Table definition has changed, please retry transaction"
+          },
+          "fieldEvents": [
+            [
+              [
+                "name",
+                253,
+                48,
+                20485,
+                0,
+                224,
+                "warning224_conditions",
+                "pa",
+                "pa",
+                "name"
+              ]
+            ]
+          ],
+          "warnings": [
+            {
+              "Level": "Warning",
+              "Code": 159,
+              "Message": "InnoDB: insufficient history for index 1"
+            }
+          ],
+          "warningCount": 2,
+          "errorCount": 1
+        },
+        {
+          "error": {
+            "code": "ER_TABLE_DEF_CHANGED",
+            "errno": 1412,
+            "state": "HY000",
+            "message": "Table definition has changed, please retry transaction"
+          },
+          "fieldEvents": [
+            [
+              [
+                "name",
+                253,
+                48,
+                20485,
+                0,
+                224,
+                "warning224_conditions",
+                "pa",
+                "pa",
+                "name"
+              ]
+            ]
+          ],
+          "warnings": [
+            {
+              "Level": "Warning",
+              "Code": 159,
+              "Message": "InnoDB: insufficient history for index 1"
+            }
+          ],
+          "warningCount": 2,
+          "errorCount": 1
+        }
+      ]
+    },
+    {
+      "shape": "lookup-null",
+      "limit": 1,
+      "method": "execute",
+      "sql": "SELECT name FROM pa WHERE NOT EXISTS(SELECT 1 FROM ch WHERE ch.g=pa.g)",
+      "rounds": [
+        {
+          "error": {
+            "code": "ER_TABLE_DEF_CHANGED",
+            "errno": 1412,
+            "state": "HY000",
+            "message": "Table definition has changed, please retry transaction"
+          },
+          "fieldEvents": [
+            [
+              [
+                "name",
+                253,
+                48,
+                20485,
+                0,
+                224,
+                "warning224_conditions",
+                "pa",
+                "pa",
+                "name"
+              ]
+            ]
+          ],
+          "warnings": [
+            {
+              "Level": "Warning",
+              "Code": 159,
+              "Message": "InnoDB: insufficient history for index 1"
+            }
+          ],
+          "warningCount": 2,
+          "errorCount": 1
+        },
+        {
+          "error": {
+            "code": "ER_TABLE_DEF_CHANGED",
+            "errno": 1412,
+            "state": "HY000",
+            "message": "Table definition has changed, please retry transaction"
+          },
+          "fieldEvents": [
+            [
+              [
+                "name",
+                253,
+                48,
+                20485,
+                0,
+                224,
+                "warning224_conditions",
+                "pa",
+                "pa",
+                "name"
+              ]
+            ]
+          ],
+          "warnings": [
+            {
+              "Level": "Warning",
+              "Code": 159,
+              "Message": "InnoDB: insufficient history for index 1"
+            }
+          ],
+          "warningCount": 2,
+          "errorCount": 1
+        }
+      ]
+    },
+    {
+      "shape": "lookup-null",
+      "limit": 64,
+      "method": "query",
+      "sql": "SELECT name FROM pa WHERE NOT EXISTS(SELECT 1 FROM ch WHERE ch.g=pa.g)",
+      "rounds": [
+        {
+          "error": {
+            "code": "ER_TABLE_DEF_CHANGED",
+            "errno": 1412,
+            "state": "HY000",
+            "message": "Table definition has changed, please retry transaction"
+          },
+          "fieldEvents": [
+            [
+              [
+                "name",
+                253,
+                48,
+                20485,
+                0,
+                224,
+                "warning224_conditions",
+                "pa",
+                "pa",
+                "name"
+              ]
+            ]
+          ],
+          "warnings": [
+            {
+              "Level": "Warning",
+              "Code": 159,
+              "Message": "InnoDB: insufficient history for index 1"
+            },
+            {
+              "Level": "Error",
+              "Code": 1412,
+              "Message": "Table definition has changed, please retry transaction"
+            }
+          ],
+          "warningCount": 2,
+          "errorCount": 1
+        },
+        {
+          "error": {
+            "code": "ER_TABLE_DEF_CHANGED",
+            "errno": 1412,
+            "state": "HY000",
+            "message": "Table definition has changed, please retry transaction"
+          },
+          "fieldEvents": [
+            [
+              [
+                "name",
+                253,
+                48,
+                20485,
+                0,
+                224,
+                "warning224_conditions",
+                "pa",
+                "pa",
+                "name"
+              ]
+            ]
+          ],
+          "warnings": [
+            {
+              "Level": "Warning",
+              "Code": 159,
+              "Message": "InnoDB: insufficient history for index 1"
+            },
+            {
+              "Level": "Error",
+              "Code": 1412,
+              "Message": "Table definition has changed, please retry transaction"
+            }
+          ],
+          "warningCount": 2,
+          "errorCount": 1
+        }
+      ]
+    },
+    {
+      "shape": "lookup-null",
+      "limit": 64,
+      "method": "execute",
+      "sql": "SELECT name FROM pa WHERE NOT EXISTS(SELECT 1 FROM ch WHERE ch.g=pa.g)",
+      "rounds": [
+        {
+          "error": {
+            "code": "ER_TABLE_DEF_CHANGED",
+            "errno": 1412,
+            "state": "HY000",
+            "message": "Table definition has changed, please retry transaction"
+          },
+          "fieldEvents": [
+            [
+              [
+                "name",
+                253,
+                48,
+                20485,
+                0,
+                224,
+                "warning224_conditions",
+                "pa",
+                "pa",
+                "name"
+              ]
+            ]
+          ],
+          "warnings": [
+            {
+              "Level": "Warning",
+              "Code": 159,
+              "Message": "InnoDB: insufficient history for index 1"
+            },
+            {
+              "Level": "Error",
+              "Code": 1412,
+              "Message": "Table definition has changed, please retry transaction"
+            }
+          ],
+          "warningCount": 2,
+          "errorCount": 1
+        },
+        {
+          "error": {
+            "code": "ER_TABLE_DEF_CHANGED",
+            "errno": 1412,
+            "state": "HY000",
+            "message": "Table definition has changed, please retry transaction"
+          },
+          "fieldEvents": [
+            [
+              [
+                "name",
+                253,
+                48,
+                20485,
+                0,
+                224,
+                "warning224_conditions",
+                "pa",
+                "pa",
+                "name"
+              ]
+            ]
+          ],
+          "warnings": [
+            {
+              "Level": "Warning",
+              "Code": 159,
+              "Message": "InnoDB: insufficient history for index 1"
+            },
+            {
+              "Level": "Error",
+              "Code": 1412,
+              "Message": "Table definition has changed, please retry transaction"
+            }
+          ],
+          "warningCount": 2,
+          "errorCount": 1
+        }
+      ]
+    },
+    {
+      "shape": "dependent-null",
+      "limit": 0,
+      "method": "query",
+      "sql": "SELECT name FROM pa WHERE NOT EXISTS(SELECT 1 FROM ch WHERE ch.g=pa.g)",
+      "rounds": [
+        {
+          "error": {
+            "code": "ER_TABLE_DEF_CHANGED",
+            "errno": 1412,
+            "state": "HY000",
+            "message": "Table definition has changed, please retry transaction"
+          },
+          "fieldEvents": [
+            [
+              [
+                "name",
+                253,
+                48,
+                20485,
+                0,
+                224,
+                "warning224_conditions",
+                "pa",
+                "pa",
+                "name"
+              ]
+            ]
+          ],
+          "warnings": [],
+          "warningCount": 2,
+          "errorCount": 1
+        },
+        {
+          "error": {
+            "code": "ER_TABLE_DEF_CHANGED",
+            "errno": 1412,
+            "state": "HY000",
+            "message": "Table definition has changed, please retry transaction"
+          },
+          "fieldEvents": [
+            [
+              [
+                "name",
+                253,
+                48,
+                20485,
+                0,
+                224,
+                "warning224_conditions",
+                "pa",
+                "pa",
+                "name"
+              ]
+            ]
+          ],
+          "warnings": [],
+          "warningCount": 2,
+          "errorCount": 1
+        }
+      ]
+    },
+    {
+      "shape": "dependent-null",
+      "limit": 0,
+      "method": "execute",
+      "sql": "SELECT name FROM pa WHERE NOT EXISTS(SELECT 1 FROM ch WHERE ch.g=pa.g)",
+      "rounds": [
+        {
+          "error": {
+            "code": "ER_TABLE_DEF_CHANGED",
+            "errno": 1412,
+            "state": "HY000",
+            "message": "Table definition has changed, please retry transaction"
+          },
+          "fieldEvents": [
+            [
+              [
+                "name",
+                253,
+                48,
+                20485,
+                0,
+                224,
+                "warning224_conditions",
+                "pa",
+                "pa",
+                "name"
+              ]
+            ]
+          ],
+          "warnings": [],
+          "warningCount": 2,
+          "errorCount": 1
+        },
+        {
+          "error": {
+            "code": "ER_TABLE_DEF_CHANGED",
+            "errno": 1412,
+            "state": "HY000",
+            "message": "Table definition has changed, please retry transaction"
+          },
+          "fieldEvents": [
+            [
+              [
+                "name",
+                253,
+                48,
+                20485,
+                0,
+                224,
+                "warning224_conditions",
+                "pa",
+                "pa",
+                "name"
+              ]
+            ]
+          ],
+          "warnings": [],
+          "warningCount": 2,
+          "errorCount": 1
+        }
+      ]
+    },
+    {
+      "shape": "dependent-null",
+      "limit": 1,
+      "method": "query",
+      "sql": "SELECT name FROM pa WHERE NOT EXISTS(SELECT 1 FROM ch WHERE ch.g=pa.g)",
+      "rounds": [
+        {
+          "error": {
+            "code": "ER_TABLE_DEF_CHANGED",
+            "errno": 1412,
+            "state": "HY000",
+            "message": "Table definition has changed, please retry transaction"
+          },
+          "fieldEvents": [
+            [
+              [
+                "name",
+                253,
+                48,
+                20485,
+                0,
+                224,
+                "warning224_conditions",
+                "pa",
+                "pa",
+                "name"
+              ]
+            ]
+          ],
+          "warnings": [
+            {
+              "Level": "Warning",
+              "Code": 159,
+              "Message": "InnoDB: insufficient history for index 1"
+            }
+          ],
+          "warningCount": 2,
+          "errorCount": 1
+        },
+        {
+          "error": {
+            "code": "ER_TABLE_DEF_CHANGED",
+            "errno": 1412,
+            "state": "HY000",
+            "message": "Table definition has changed, please retry transaction"
+          },
+          "fieldEvents": [
+            [
+              [
+                "name",
+                253,
+                48,
+                20485,
+                0,
+                224,
+                "warning224_conditions",
+                "pa",
+                "pa",
+                "name"
+              ]
+            ]
+          ],
+          "warnings": [
+            {
+              "Level": "Warning",
+              "Code": 159,
+              "Message": "InnoDB: insufficient history for index 1"
+            }
+          ],
+          "warningCount": 2,
+          "errorCount": 1
+        }
+      ]
+    },
+    {
+      "shape": "dependent-null",
+      "limit": 1,
+      "method": "execute",
+      "sql": "SELECT name FROM pa WHERE NOT EXISTS(SELECT 1 FROM ch WHERE ch.g=pa.g)",
+      "rounds": [
+        {
+          "error": {
+            "code": "ER_TABLE_DEF_CHANGED",
+            "errno": 1412,
+            "state": "HY000",
+            "message": "Table definition has changed, please retry transaction"
+          },
+          "fieldEvents": [
+            [
+              [
+                "name",
+                253,
+                48,
+                20485,
+                0,
+                224,
+                "warning224_conditions",
+                "pa",
+                "pa",
+                "name"
+              ]
+            ]
+          ],
+          "warnings": [
+            {
+              "Level": "Warning",
+              "Code": 159,
+              "Message": "InnoDB: insufficient history for index 1"
+            }
+          ],
+          "warningCount": 2,
+          "errorCount": 1
+        },
+        {
+          "error": {
+            "code": "ER_TABLE_DEF_CHANGED",
+            "errno": 1412,
+            "state": "HY000",
+            "message": "Table definition has changed, please retry transaction"
+          },
+          "fieldEvents": [
+            [
+              [
+                "name",
+                253,
+                48,
+                20485,
+                0,
+                224,
+                "warning224_conditions",
+                "pa",
+                "pa",
+                "name"
+              ]
+            ]
+          ],
+          "warnings": [
+            {
+              "Level": "Warning",
+              "Code": 159,
+              "Message": "InnoDB: insufficient history for index 1"
+            }
+          ],
+          "warningCount": 2,
+          "errorCount": 1
+        }
+      ]
+    },
+    {
+      "shape": "dependent-null",
+      "limit": 64,
+      "method": "query",
+      "sql": "SELECT name FROM pa WHERE NOT EXISTS(SELECT 1 FROM ch WHERE ch.g=pa.g)",
+      "rounds": [
+        {
+          "error": {
+            "code": "ER_TABLE_DEF_CHANGED",
+            "errno": 1412,
+            "state": "HY000",
+            "message": "Table definition has changed, please retry transaction"
+          },
+          "fieldEvents": [
+            [
+              [
+                "name",
+                253,
+                48,
+                20485,
+                0,
+                224,
+                "warning224_conditions",
+                "pa",
+                "pa",
+                "name"
+              ]
+            ]
+          ],
+          "warnings": [
+            {
+              "Level": "Warning",
+              "Code": 159,
+              "Message": "InnoDB: insufficient history for index 1"
+            },
+            {
+              "Level": "Error",
+              "Code": 1412,
+              "Message": "Table definition has changed, please retry transaction"
+            }
+          ],
+          "warningCount": 2,
+          "errorCount": 1
+        },
+        {
+          "error": {
+            "code": "ER_TABLE_DEF_CHANGED",
+            "errno": 1412,
+            "state": "HY000",
+            "message": "Table definition has changed, please retry transaction"
+          },
+          "fieldEvents": [
+            [
+              [
+                "name",
+                253,
+                48,
+                20485,
+                0,
+                224,
+                "warning224_conditions",
+                "pa",
+                "pa",
+                "name"
+              ]
+            ]
+          ],
+          "warnings": [
+            {
+              "Level": "Warning",
+              "Code": 159,
+              "Message": "InnoDB: insufficient history for index 1"
+            },
+            {
+              "Level": "Error",
+              "Code": 1412,
+              "Message": "Table definition has changed, please retry transaction"
+            }
+          ],
+          "warningCount": 2,
+          "errorCount": 1
+        }
+      ]
+    },
+    {
+      "shape": "dependent-null",
+      "limit": 64,
+      "method": "execute",
+      "sql": "SELECT name FROM pa WHERE NOT EXISTS(SELECT 1 FROM ch WHERE ch.g=pa.g)",
+      "rounds": [
+        {
+          "error": {
+            "code": "ER_TABLE_DEF_CHANGED",
+            "errno": 1412,
+            "state": "HY000",
+            "message": "Table definition has changed, please retry transaction"
+          },
+          "fieldEvents": [
+            [
+              [
+                "name",
+                253,
+                48,
+                20485,
+                0,
+                224,
+                "warning224_conditions",
+                "pa",
+                "pa",
+                "name"
+              ]
+            ]
+          ],
+          "warnings": [
+            {
+              "Level": "Warning",
+              "Code": 159,
+              "Message": "InnoDB: insufficient history for index 1"
+            },
+            {
+              "Level": "Error",
+              "Code": 1412,
+              "Message": "Table definition has changed, please retry transaction"
+            }
+          ],
+          "warningCount": 2,
+          "errorCount": 1
+        },
+        {
+          "error": {
+            "code": "ER_TABLE_DEF_CHANGED",
+            "errno": 1412,
+            "state": "HY000",
+            "message": "Table definition has changed, please retry transaction"
+          },
+          "fieldEvents": [
+            [
+              [
+                "name",
+                253,
+                48,
+                20485,
+                0,
+                224,
+                "warning224_conditions",
+                "pa",
+                "pa",
+                "name"
+              ]
+            ]
+          ],
+          "warnings": [
+            {
+              "Level": "Warning",
+              "Code": 159,
+              "Message": "InnoDB: insufficient history for index 1"
+            },
+            {
+              "Level": "Error",
+              "Code": 1412,
+              "Message": "Table definition has changed, please retry transaction"
+            }
+          ],
+          "warningCount": 2,
+          "errorCount": 1
+        }
+      ]
+    }
+  ],
+  "baselineConditions": [
+    {
+      "shape": "ordinary",
+      "limit": 0,
+      "method": "query",
+      "sql": "SELECT id FROM ch FORCE INDEX(g) WHERE g=1",
+      "rounds": [
+        {
+          "error": {
+            "code": "ER_TABLE_DEF_CHANGED",
+            "errno": 1412,
+            "state": "HY000",
+            "message": "Table definition has changed, please retry transaction"
+          },
+          "fieldEvents": [],
+          "warnings": [],
+          "warningCount": 1,
+          "errorCount": 1
+        },
+        {
+          "error": {
+            "code": "ER_TABLE_DEF_CHANGED",
+            "errno": 1412,
+            "state": "HY000",
+            "message": "Table definition has changed, please retry transaction"
+          },
+          "fieldEvents": [],
+          "warnings": [],
+          "warningCount": 1,
+          "errorCount": 1
+        }
+      ],
+      "current": {
+        "rows": [
+          [
+            1
+          ],
+          [
+            2
+          ]
+        ],
+        "fields": [
+          [
+            "id",
+            3,
+            11,
+            20483,
+            0,
+            63,
+            "warning224_conditions",
+            "ch",
+            "ch",
+            "id"
+          ]
+        ],
+        "fieldEvents": [
+          [
+            [
+              "id",
+              3,
+              11,
+              20483,
+              0,
+              63,
+              "warning224_conditions",
+              "ch",
+              "ch",
+              "id"
+            ]
+          ]
+        ],
+        "warnings": [],
+        "warningCount": 0,
+        "errorCount": 0
+      }
+    },
+    {
+      "shape": "ordinary",
+      "limit": 0,
+      "method": "execute",
+      "sql": "SELECT id FROM ch FORCE INDEX(g) WHERE g=1",
+      "rounds": [
+        {
+          "error": {
+            "code": "ER_TABLE_DEF_CHANGED",
+            "errno": 1412,
+            "state": "HY000",
+            "message": "Table definition has changed, please retry transaction"
+          },
+          "fieldEvents": [],
+          "warnings": [],
+          "warningCount": 1,
+          "errorCount": 1
+        },
+        {
+          "error": {
+            "code": "ER_TABLE_DEF_CHANGED",
+            "errno": 1412,
+            "state": "HY000",
+            "message": "Table definition has changed, please retry transaction"
+          },
+          "fieldEvents": [],
+          "warnings": [],
+          "warningCount": 1,
+          "errorCount": 1
+        }
+      ],
+      "current": {
+        "rows": [
+          {
+            "id": 1
+          },
+          {
+            "id": 2
+          }
+        ],
+        "fields": [
+          [
+            "id",
+            3,
+            11,
+            20483,
+            0,
+            63,
+            "warning224_conditions",
+            "ch",
+            "ch",
+            "id"
+          ]
+        ],
+        "fieldEvents": [
+          [
+            [
+              "id",
+              3,
+              11,
+              20483,
+              0,
+              63,
+              "warning224_conditions",
+              "ch",
+              "ch",
+              "id"
+            ]
+          ]
+        ],
+        "warnings": [],
+        "warningCount": 0,
+        "errorCount": 0
+      }
+    },
+    {
+      "shape": "ordinary",
+      "limit": 1,
+      "method": "query",
+      "sql": "SELECT id FROM ch FORCE INDEX(g) WHERE g=1",
+      "rounds": [
+        {
+          "error": {
+            "code": "ER_TABLE_DEF_CHANGED",
+            "errno": 1412,
+            "state": "HY000",
+            "message": "Table definition has changed, please retry transaction"
+          },
+          "fieldEvents": [],
+          "warnings": [
+            {
+              "Level": "Error",
+              "Code": 1412,
+              "Message": "Table definition has changed, please retry transaction"
+            }
+          ],
+          "warningCount": 1,
+          "errorCount": 1
+        },
+        {
+          "error": {
+            "code": "ER_TABLE_DEF_CHANGED",
+            "errno": 1412,
+            "state": "HY000",
+            "message": "Table definition has changed, please retry transaction"
+          },
+          "fieldEvents": [],
+          "warnings": [
+            {
+              "Level": "Error",
+              "Code": 1412,
+              "Message": "Table definition has changed, please retry transaction"
+            }
+          ],
+          "warningCount": 1,
+          "errorCount": 1
+        }
+      ],
+      "current": {
+        "rows": [
+          [
+            1
+          ],
+          [
+            2
+          ]
+        ],
+        "fields": [
+          [
+            "id",
+            3,
+            11,
+            20483,
+            0,
+            63,
+            "warning224_conditions",
+            "ch",
+            "ch",
+            "id"
+          ]
+        ],
+        "fieldEvents": [
+          [
+            [
+              "id",
+              3,
+              11,
+              20483,
+              0,
+              63,
+              "warning224_conditions",
+              "ch",
+              "ch",
+              "id"
+            ]
+          ]
+        ],
+        "warnings": [],
+        "warningCount": 0,
+        "errorCount": 0
+      }
+    },
+    {
+      "shape": "ordinary",
+      "limit": 1,
+      "method": "execute",
+      "sql": "SELECT id FROM ch FORCE INDEX(g) WHERE g=1",
+      "rounds": [
+        {
+          "error": {
+            "code": "ER_TABLE_DEF_CHANGED",
+            "errno": 1412,
+            "state": "HY000",
+            "message": "Table definition has changed, please retry transaction"
+          },
+          "fieldEvents": [],
+          "warnings": [
+            {
+              "Level": "Error",
+              "Code": 1412,
+              "Message": "Table definition has changed, please retry transaction"
+            }
+          ],
+          "warningCount": 1,
+          "errorCount": 1
+        },
+        {
+          "error": {
+            "code": "ER_TABLE_DEF_CHANGED",
+            "errno": 1412,
+            "state": "HY000",
+            "message": "Table definition has changed, please retry transaction"
+          },
+          "fieldEvents": [],
+          "warnings": [
+            {
+              "Level": "Error",
+              "Code": 1412,
+              "Message": "Table definition has changed, please retry transaction"
+            }
+          ],
+          "warningCount": 1,
+          "errorCount": 1
+        }
+      ],
+      "current": {
+        "rows": [
+          {
+            "id": 1
+          },
+          {
+            "id": 2
+          }
+        ],
+        "fields": [
+          [
+            "id",
+            3,
+            11,
+            20483,
+            0,
+            63,
+            "warning224_conditions",
+            "ch",
+            "ch",
+            "id"
+          ]
+        ],
+        "fieldEvents": [
+          [
+            [
+              "id",
+              3,
+              11,
+              20483,
+              0,
+              63,
+              "warning224_conditions",
+              "ch",
+              "ch",
+              "id"
+            ]
+          ]
+        ],
+        "warnings": [],
+        "warningCount": 0,
+        "errorCount": 0
+      }
+    },
+    {
+      "shape": "ordinary",
+      "limit": 64,
+      "method": "query",
+      "sql": "SELECT id FROM ch FORCE INDEX(g) WHERE g=1",
+      "rounds": [
+        {
+          "error": {
+            "code": "ER_TABLE_DEF_CHANGED",
+            "errno": 1412,
+            "state": "HY000",
+            "message": "Table definition has changed, please retry transaction"
+          },
+          "fieldEvents": [],
+          "warnings": [
+            {
+              "Level": "Error",
+              "Code": 1412,
+              "Message": "Table definition has changed, please retry transaction"
+            }
+          ],
+          "warningCount": 1,
+          "errorCount": 1
+        },
+        {
+          "error": {
+            "code": "ER_TABLE_DEF_CHANGED",
+            "errno": 1412,
+            "state": "HY000",
+            "message": "Table definition has changed, please retry transaction"
+          },
+          "fieldEvents": [],
+          "warnings": [
+            {
+              "Level": "Error",
+              "Code": 1412,
+              "Message": "Table definition has changed, please retry transaction"
+            }
+          ],
+          "warningCount": 1,
+          "errorCount": 1
+        }
+      ],
+      "current": {
+        "rows": [
+          [
+            1
+          ],
+          [
+            2
+          ]
+        ],
+        "fields": [
+          [
+            "id",
+            3,
+            11,
+            20483,
+            0,
+            63,
+            "warning224_conditions",
+            "ch",
+            "ch",
+            "id"
+          ]
+        ],
+        "fieldEvents": [
+          [
+            [
+              "id",
+              3,
+              11,
+              20483,
+              0,
+              63,
+              "warning224_conditions",
+              "ch",
+              "ch",
+              "id"
+            ]
+          ]
+        ],
+        "warnings": [],
+        "warningCount": 0,
+        "errorCount": 0
+      }
+    },
+    {
+      "shape": "ordinary",
+      "limit": 64,
+      "method": "execute",
+      "sql": "SELECT id FROM ch FORCE INDEX(g) WHERE g=1",
+      "rounds": [
+        {
+          "error": {
+            "code": "ER_TABLE_DEF_CHANGED",
+            "errno": 1412,
+            "state": "HY000",
+            "message": "Table definition has changed, please retry transaction"
+          },
+          "fieldEvents": [],
+          "warnings": [
+            {
+              "Level": "Error",
+              "Code": 1412,
+              "Message": "Table definition has changed, please retry transaction"
+            }
+          ],
+          "warningCount": 1,
+          "errorCount": 1
+        },
+        {
+          "error": {
+            "code": "ER_TABLE_DEF_CHANGED",
+            "errno": 1412,
+            "state": "HY000",
+            "message": "Table definition has changed, please retry transaction"
+          },
+          "fieldEvents": [],
+          "warnings": [
+            {
+              "Level": "Error",
+              "Code": 1412,
+              "Message": "Table definition has changed, please retry transaction"
+            }
+          ],
+          "warningCount": 1,
+          "errorCount": 1
+        }
+      ],
+      "current": {
+        "rows": [
+          {
+            "id": 1
+          },
+          {
+            "id": 2
+          }
+        ],
+        "fields": [
+          [
+            "id",
+            3,
+            11,
+            20483,
+            0,
+            63,
+            "warning224_conditions",
+            "ch",
+            "ch",
+            "id"
+          ]
+        ],
+        "fieldEvents": [
+          [
+            [
+              "id",
+              3,
+              11,
+              20483,
+              0,
+              63,
+              "warning224_conditions",
+              "ch",
+              "ch",
+              "id"
+            ]
+          ]
+        ],
+        "warnings": [],
+        "warningCount": 0,
+        "errorCount": 0
+      }
+    },
+    {
+      "shape": "lookup-null",
+      "limit": 0,
+      "method": "query",
+      "sql": "SELECT name FROM pa WHERE NOT EXISTS(SELECT 1 FROM ch WHERE ch.g=pa.g)",
+      "rounds": [
+        {
+          "error": {
+            "code": "ER_TABLE_DEF_CHANGED",
+            "errno": 1412,
+            "state": "HY000",
+            "message": "Table definition has changed, please retry transaction"
+          },
+          "fieldEvents": [
+            [
+              [
+                "name",
+                253,
+                48,
+                20485,
+                0,
+                224,
+                "warning224_conditions",
+                "pa",
+                "pa",
+                "name"
+              ]
+            ]
+          ],
+          "warnings": [],
+          "warningCount": 1,
+          "errorCount": 1
+        },
+        {
+          "error": {
+            "code": "ER_TABLE_DEF_CHANGED",
+            "errno": 1412,
+            "state": "HY000",
+            "message": "Table definition has changed, please retry transaction"
+          },
+          "fieldEvents": [
+            [
+              [
+                "name",
+                253,
+                48,
+                20485,
+                0,
+                224,
+                "warning224_conditions",
+                "pa",
+                "pa",
+                "name"
+              ]
+            ]
+          ],
+          "warnings": [],
+          "warningCount": 1,
+          "errorCount": 1
+        }
+      ]
+    },
+    {
+      "shape": "lookup-null",
+      "limit": 0,
+      "method": "execute",
+      "sql": "SELECT name FROM pa WHERE NOT EXISTS(SELECT 1 FROM ch WHERE ch.g=pa.g)",
+      "rounds": [
+        {
+          "error": {
+            "code": "ER_TABLE_DEF_CHANGED",
+            "errno": 1412,
+            "state": "HY000",
+            "message": "Table definition has changed, please retry transaction"
+          },
+          "fieldEvents": [
+            [
+              [
+                "name",
+                253,
+                48,
+                20485,
+                0,
+                224,
+                "warning224_conditions",
+                "pa",
+                "pa",
+                "name"
+              ]
+            ]
+          ],
+          "warnings": [],
+          "warningCount": 1,
+          "errorCount": 1
+        },
+        {
+          "error": {
+            "code": "ER_TABLE_DEF_CHANGED",
+            "errno": 1412,
+            "state": "HY000",
+            "message": "Table definition has changed, please retry transaction"
+          },
+          "fieldEvents": [
+            [
+              [
+                "name",
+                253,
+                48,
+                20485,
+                0,
+                224,
+                "warning224_conditions",
+                "pa",
+                "pa",
+                "name"
+              ]
+            ]
+          ],
+          "warnings": [],
+          "warningCount": 1,
+          "errorCount": 1
+        }
+      ]
+    },
+    {
+      "shape": "lookup-null",
+      "limit": 1,
+      "method": "query",
+      "sql": "SELECT name FROM pa WHERE NOT EXISTS(SELECT 1 FROM ch WHERE ch.g=pa.g)",
+      "rounds": [
+        {
+          "error": {
+            "code": "ER_TABLE_DEF_CHANGED",
+            "errno": 1412,
+            "state": "HY000",
+            "message": "Table definition has changed, please retry transaction"
+          },
+          "fieldEvents": [
+            [
+              [
+                "name",
+                253,
+                48,
+                20485,
+                0,
+                224,
+                "warning224_conditions",
+                "pa",
+                "pa",
+                "name"
+              ]
+            ]
+          ],
+          "warnings": [
+            {
+              "Level": "Error",
+              "Code": 1412,
+              "Message": "Table definition has changed, please retry transaction"
+            }
+          ],
+          "warningCount": 1,
+          "errorCount": 1
+        },
+        {
+          "error": {
+            "code": "ER_TABLE_DEF_CHANGED",
+            "errno": 1412,
+            "state": "HY000",
+            "message": "Table definition has changed, please retry transaction"
+          },
+          "fieldEvents": [
+            [
+              [
+                "name",
+                253,
+                48,
+                20485,
+                0,
+                224,
+                "warning224_conditions",
+                "pa",
+                "pa",
+                "name"
+              ]
+            ]
+          ],
+          "warnings": [
+            {
+              "Level": "Error",
+              "Code": 1412,
+              "Message": "Table definition has changed, please retry transaction"
+            }
+          ],
+          "warningCount": 1,
+          "errorCount": 1
+        }
+      ]
+    },
+    {
+      "shape": "lookup-null",
+      "limit": 1,
+      "method": "execute",
+      "sql": "SELECT name FROM pa WHERE NOT EXISTS(SELECT 1 FROM ch WHERE ch.g=pa.g)",
+      "rounds": [
+        {
+          "error": {
+            "code": "ER_TABLE_DEF_CHANGED",
+            "errno": 1412,
+            "state": "HY000",
+            "message": "Table definition has changed, please retry transaction"
+          },
+          "fieldEvents": [
+            [
+              [
+                "name",
+                253,
+                48,
+                20485,
+                0,
+                224,
+                "warning224_conditions",
+                "pa",
+                "pa",
+                "name"
+              ]
+            ]
+          ],
+          "warnings": [
+            {
+              "Level": "Error",
+              "Code": 1412,
+              "Message": "Table definition has changed, please retry transaction"
+            }
+          ],
+          "warningCount": 1,
+          "errorCount": 1
+        },
+        {
+          "error": {
+            "code": "ER_TABLE_DEF_CHANGED",
+            "errno": 1412,
+            "state": "HY000",
+            "message": "Table definition has changed, please retry transaction"
+          },
+          "fieldEvents": [
+            [
+              [
+                "name",
+                253,
+                48,
+                20485,
+                0,
+                224,
+                "warning224_conditions",
+                "pa",
+                "pa",
+                "name"
+              ]
+            ]
+          ],
+          "warnings": [
+            {
+              "Level": "Error",
+              "Code": 1412,
+              "Message": "Table definition has changed, please retry transaction"
+            }
+          ],
+          "warningCount": 1,
+          "errorCount": 1
+        }
+      ]
+    },
+    {
+      "shape": "lookup-null",
+      "limit": 64,
+      "method": "query",
+      "sql": "SELECT name FROM pa WHERE NOT EXISTS(SELECT 1 FROM ch WHERE ch.g=pa.g)",
+      "rounds": [
+        {
+          "error": {
+            "code": "ER_TABLE_DEF_CHANGED",
+            "errno": 1412,
+            "state": "HY000",
+            "message": "Table definition has changed, please retry transaction"
+          },
+          "fieldEvents": [
+            [
+              [
+                "name",
+                253,
+                48,
+                20485,
+                0,
+                224,
+                "warning224_conditions",
+                "pa",
+                "pa",
+                "name"
+              ]
+            ]
+          ],
+          "warnings": [
+            {
+              "Level": "Error",
+              "Code": 1412,
+              "Message": "Table definition has changed, please retry transaction"
+            }
+          ],
+          "warningCount": 1,
+          "errorCount": 1
+        },
+        {
+          "error": {
+            "code": "ER_TABLE_DEF_CHANGED",
+            "errno": 1412,
+            "state": "HY000",
+            "message": "Table definition has changed, please retry transaction"
+          },
+          "fieldEvents": [
+            [
+              [
+                "name",
+                253,
+                48,
+                20485,
+                0,
+                224,
+                "warning224_conditions",
+                "pa",
+                "pa",
+                "name"
+              ]
+            ]
+          ],
+          "warnings": [
+            {
+              "Level": "Error",
+              "Code": 1412,
+              "Message": "Table definition has changed, please retry transaction"
+            }
+          ],
+          "warningCount": 1,
+          "errorCount": 1
+        }
+      ]
+    },
+    {
+      "shape": "lookup-null",
+      "limit": 64,
+      "method": "execute",
+      "sql": "SELECT name FROM pa WHERE NOT EXISTS(SELECT 1 FROM ch WHERE ch.g=pa.g)",
+      "rounds": [
+        {
+          "error": {
+            "code": "ER_TABLE_DEF_CHANGED",
+            "errno": 1412,
+            "state": "HY000",
+            "message": "Table definition has changed, please retry transaction"
+          },
+          "fieldEvents": [
+            [
+              [
+                "name",
+                253,
+                48,
+                20485,
+                0,
+                224,
+                "warning224_conditions",
+                "pa",
+                "pa",
+                "name"
+              ]
+            ]
+          ],
+          "warnings": [
+            {
+              "Level": "Error",
+              "Code": 1412,
+              "Message": "Table definition has changed, please retry transaction"
+            }
+          ],
+          "warningCount": 1,
+          "errorCount": 1
+        },
+        {
+          "error": {
+            "code": "ER_TABLE_DEF_CHANGED",
+            "errno": 1412,
+            "state": "HY000",
+            "message": "Table definition has changed, please retry transaction"
+          },
+          "fieldEvents": [
+            [
+              [
+                "name",
+                253,
+                48,
+                20485,
+                0,
+                224,
+                "warning224_conditions",
+                "pa",
+                "pa",
+                "name"
+              ]
+            ]
+          ],
+          "warnings": [
+            {
+              "Level": "Error",
+              "Code": 1412,
+              "Message": "Table definition has changed, please retry transaction"
+            }
+          ],
+          "warningCount": 1,
+          "errorCount": 1
+        }
+      ]
+    },
+    {
+      "shape": "dependent-null",
+      "limit": 0,
+      "method": "query",
+      "sql": "SELECT name FROM pa WHERE NOT EXISTS(SELECT 1 FROM ch WHERE ch.g=pa.g)",
+      "rounds": [
+        {
+          "error": {
+            "code": "ER_TABLE_DEF_CHANGED",
+            "errno": 1412,
+            "state": "HY000",
+            "message": "Table definition has changed, please retry transaction"
+          },
+          "fieldEvents": [],
+          "warnings": [],
+          "warningCount": 1,
+          "errorCount": 1
+        },
+        {
+          "error": {
+            "code": "ER_TABLE_DEF_CHANGED",
+            "errno": 1412,
+            "state": "HY000",
+            "message": "Table definition has changed, please retry transaction"
+          },
+          "fieldEvents": [],
+          "warnings": [],
+          "warningCount": 1,
+          "errorCount": 1
+        }
+      ]
+    },
+    {
+      "shape": "dependent-null",
+      "limit": 0,
+      "method": "execute",
+      "sql": "SELECT name FROM pa WHERE NOT EXISTS(SELECT 1 FROM ch WHERE ch.g=pa.g)",
+      "rounds": [
+        {
+          "error": {
+            "code": "ER_TABLE_DEF_CHANGED",
+            "errno": 1412,
+            "state": "HY000",
+            "message": "Table definition has changed, please retry transaction"
+          },
+          "fieldEvents": [],
+          "warnings": [],
+          "warningCount": 1,
+          "errorCount": 1
+        },
+        {
+          "error": {
+            "code": "ER_TABLE_DEF_CHANGED",
+            "errno": 1412,
+            "state": "HY000",
+            "message": "Table definition has changed, please retry transaction"
+          },
+          "fieldEvents": [],
+          "warnings": [],
+          "warningCount": 1,
+          "errorCount": 1
+        }
+      ]
+    },
+    {
+      "shape": "dependent-null",
+      "limit": 1,
+      "method": "query",
+      "sql": "SELECT name FROM pa WHERE NOT EXISTS(SELECT 1 FROM ch WHERE ch.g=pa.g)",
+      "rounds": [
+        {
+          "error": {
+            "code": "ER_TABLE_DEF_CHANGED",
+            "errno": 1412,
+            "state": "HY000",
+            "message": "Table definition has changed, please retry transaction"
+          },
+          "fieldEvents": [],
+          "warnings": [
+            {
+              "Level": "Error",
+              "Code": 1412,
+              "Message": "Table definition has changed, please retry transaction"
+            }
+          ],
+          "warningCount": 1,
+          "errorCount": 1
+        },
+        {
+          "error": {
+            "code": "ER_TABLE_DEF_CHANGED",
+            "errno": 1412,
+            "state": "HY000",
+            "message": "Table definition has changed, please retry transaction"
+          },
+          "fieldEvents": [],
+          "warnings": [
+            {
+              "Level": "Error",
+              "Code": 1412,
+              "Message": "Table definition has changed, please retry transaction"
+            }
+          ],
+          "warningCount": 1,
+          "errorCount": 1
+        }
+      ]
+    },
+    {
+      "shape": "dependent-null",
+      "limit": 1,
+      "method": "execute",
+      "sql": "SELECT name FROM pa WHERE NOT EXISTS(SELECT 1 FROM ch WHERE ch.g=pa.g)",
+      "rounds": [
+        {
+          "error": {
+            "code": "ER_TABLE_DEF_CHANGED",
+            "errno": 1412,
+            "state": "HY000",
+            "message": "Table definition has changed, please retry transaction"
+          },
+          "fieldEvents": [],
+          "warnings": [
+            {
+              "Level": "Error",
+              "Code": 1412,
+              "Message": "Table definition has changed, please retry transaction"
+            }
+          ],
+          "warningCount": 1,
+          "errorCount": 1
+        },
+        {
+          "error": {
+            "code": "ER_TABLE_DEF_CHANGED",
+            "errno": 1412,
+            "state": "HY000",
+            "message": "Table definition has changed, please retry transaction"
+          },
+          "fieldEvents": [],
+          "warnings": [
+            {
+              "Level": "Error",
+              "Code": 1412,
+              "Message": "Table definition has changed, please retry transaction"
+            }
+          ],
+          "warningCount": 1,
+          "errorCount": 1
+        }
+      ]
+    },
+    {
+      "shape": "dependent-null",
+      "limit": 64,
+      "method": "query",
+      "sql": "SELECT name FROM pa WHERE NOT EXISTS(SELECT 1 FROM ch WHERE ch.g=pa.g)",
+      "rounds": [
+        {
+          "error": {
+            "code": "ER_TABLE_DEF_CHANGED",
+            "errno": 1412,
+            "state": "HY000",
+            "message": "Table definition has changed, please retry transaction"
+          },
+          "fieldEvents": [],
+          "warnings": [
+            {
+              "Level": "Error",
+              "Code": 1412,
+              "Message": "Table definition has changed, please retry transaction"
+            }
+          ],
+          "warningCount": 1,
+          "errorCount": 1
+        },
+        {
+          "error": {
+            "code": "ER_TABLE_DEF_CHANGED",
+            "errno": 1412,
+            "state": "HY000",
+            "message": "Table definition has changed, please retry transaction"
+          },
+          "fieldEvents": [],
+          "warnings": [
+            {
+              "Level": "Error",
+              "Code": 1412,
+              "Message": "Table definition has changed, please retry transaction"
+            }
+          ],
+          "warningCount": 1,
+          "errorCount": 1
+        }
+      ]
+    },
+    {
+      "shape": "dependent-null",
+      "limit": 64,
+      "method": "execute",
+      "sql": "SELECT name FROM pa WHERE NOT EXISTS(SELECT 1 FROM ch WHERE ch.g=pa.g)",
+      "rounds": [
+        {
+          "error": {
+            "code": "ER_TABLE_DEF_CHANGED",
+            "errno": 1412,
+            "state": "HY000",
+            "message": "Table definition has changed, please retry transaction"
+          },
+          "fieldEvents": [],
+          "warnings": [
+            {
+              "Level": "Error",
+              "Code": 1412,
+              "Message": "Table definition has changed, please retry transaction"
+            }
+          ],
+          "warningCount": 1,
+          "errorCount": 1
+        },
+        {
+          "error": {
+            "code": "ER_TABLE_DEF_CHANGED",
+            "errno": 1412,
+            "state": "HY000",
+            "message": "Table definition has changed, please retry transaction"
+          },
+          "fieldEvents": [],
+          "warnings": [
+            {
+              "Level": "Error",
+              "Code": 1412,
+              "Message": "Table definition has changed, please retry transaction"
+            }
+          ],
+          "warningCount": 1,
+          "errorCount": 1
+        }
+      ]
+    }
+  ]
+}

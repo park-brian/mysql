@@ -62,7 +62,7 @@ export interface TableStats {
 export interface Table {
   readonly def: TableDef
   /** Validate a read without consuming a row. Absence does not imply a successful check. */
-  checkRead?(trx?: Trx, mode?: ReadMode): void
+  checkRead?(trx?: Trx, mode?: ReadMode, index?: string): void
   /** Add a row; ER_DUP_ENTRY naming the index it collides in. Returns its id. */
   insert(row: Row, trx?: Trx): RowId
   /** Replace a row. A changed clustered key moves it, and the new id is returned; `undefined` if there is no row `id`. */
@@ -263,8 +263,8 @@ class NativeTable implements Table {
     return this.#strip(this.#clustered.get(id, trx, mode))
   }
 
-  checkRead(trx?: Trx, mode: ReadMode = 'consistent'): void {
-    this.#visible(trx, mode)
+  checkRead(trx?: Trx, mode: ReadMode = 'consistent', index?: string): void {
+    this.#visible(trx, mode, index === undefined ? undefined : indexOf(this.def, index).name)
   }
 
   *scan(range: KeyRange = {}, trx?: Trx, mode: ReadMode = 'consistent'): Generator<[RowId, FieldBytes[]]> {
@@ -280,7 +280,7 @@ class NativeTable implements Table {
       yield* this.scan(range, trx, mode)
       return
     }
-    this.#visible(trx, mode)
+    this.#visible(trx, mode, name)
     const s = this.#secondaries.find((x) => x.name === name) as SecondaryIndex
     const r = encodeRange(range, s.columns)
     if (r === undefined) return
@@ -327,9 +327,9 @@ class NativeTable implements Table {
   }
 
   /** A consistent read through a view older than the definition is InnoDB's 1412, not an empty table. */
-  #visible(trx: Trx | undefined, mode: ReadMode): void {
+  #visible(trx: Trx | undefined, mode: ReadMode, index = this.def.clustered): void {
     this.#present()
-    if (trx !== undefined && mode === 'consistent' && !trx.view.isVisible(this.#hooks.definedBy)) throw tableDefChanged()
+    if (trx !== undefined && mode === 'consistent' && !trx.view.isVisible(this.#hooks.definedBy)) throw tableDefChanged(nativeReadIndex(this.def, index))
   }
 
   #strip(row: FieldBytes[] | undefined): FieldBytes[] | undefined {
@@ -340,6 +340,21 @@ class NativeTable implements Table {
     if (trx !== undefined) return trx.write(() => change(trx))
     return this.#store.transactions.autocommit((t) => t.write(() => change(t)))
   }
+}
+
+/** Handler key numbers include invisible keys; hidden clustered reads use MAX_KEY. */
+function nativeReadIndex(def: TableDef, name: string | null): number {
+  if (name === null) return 64
+  const rank = (index: IndexDef): number => {
+    if (index.kind === 'primary') return 0
+    if (index.kind !== 'unique') return 3
+    const fullNotNull = index.parts.every((part) => {
+      const column = def.columns.find((c) => c.name.toLowerCase() === part.column.toLowerCase())
+      return part.prefix === undefined && column?.nullable === false
+    })
+    return fullNotNull ? 1 : 2
+  }
+  return [...def.indexes].sort((a, b) => rank(a) - rank(b)).findIndex((index) => index.name === name)
 }
 
 function indexOf(def: TableDef, name: string): IndexDef {

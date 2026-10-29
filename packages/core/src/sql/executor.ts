@@ -17,7 +17,7 @@ import { requireSchema } from './scope.ts'
 import { FIELD_TYPE, MyjsError, expectTyped } from '@myjs/bytes'
 import { someNode } from './ast.ts'
 import { collationInfoByName, defaultCollationOf, requireCollationInfo } from '@myjs/charsets'
-import { tooLongIdent, wrongDbName, collationsOf, type Catalog, type TableDef, type ViewDef } from '@myjs/engine'
+import { EngineError, tooLongIdent, wrongDbName, collationsOf, type Catalog, type TableDef, type ViewDef } from '@myjs/engine'
 import {
   NODE,
   QUERY,
@@ -203,6 +203,9 @@ function appendConditions(conditions: Condition[] | undefined, parsed: readonly 
 function recordFailure(state: SqlSession, conditions: Condition[] | undefined, failure: unknown, limit = conditionLimit(state)): SqlError {
   const error = toSqlError(failure)
   if (!promotedError(conditions, error)) {
+    if (failure instanceof EngineError && failure.readIndex !== undefined) {
+      conditions?.push({ level: 'Warning', code: 159, message: `InnoDB: insufficient history for index ${failure.readIndex}` })
+    }
     let parsing: readonly ParseCondition[] | undefined
     if (failure instanceof ParseError) parsing = failure.conditions ?? [error]
     else if (failure instanceof MyjsError) {

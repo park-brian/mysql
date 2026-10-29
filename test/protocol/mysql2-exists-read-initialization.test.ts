@@ -29,7 +29,7 @@ test('proved correlated sources validate retained views without losing headers o
   assert.equal(fixture.mysqlVersion, '8.4.11')
   assert.equal(fixture.cases.length, 240)
   assert.equal(fixture.outcomes, 240)
-  let errorMatches = 0, headerMatches = 0
+  let errorMatches = 0, headerMatches = 0, warningMatches = 0, completeMatches = 0
   for (const sample of fixture.cases) {
     const db = host === undefined ? await MySQL.open(':memory:') : undefined
     const options = () => ({
@@ -98,15 +98,21 @@ test('proved correlated sources validate retained views without losing headers o
         }
         const admitted = !sample.switches.includes('semijoin=off') && (!constructor || (sample.projection === 'name' && sample.order !== ' ORDER BY id+1 LIMIT 1'))
         if (admitted) {
-          // Native warning159 remains recorded and open; errors, rows and all
-          // header/plan facts are now mandatory for the admitted cohort.
-          const { warnings: _actual, ...answer } = observed
-          const { warnings: _native, ...native } = expected
-          assert.deepEqual(answer, native, label)
-          if (!(expected.warnings as { Code: number }[]).some((w) => w.Code === 159)) assert.deepEqual(observed.warnings, expected.warnings, label)
-        } else assert.deepEqual(observed, previous, label + ': excluded phase profile')
+          assert.deepEqual(observed, expected, label)
+        } else {
+          const { warnings, ...answer } = observed
+          const { warnings: previousWarnings, ...priorAnswer } = previous
+          assert.deepEqual(answer, priorAnswer, label + ': excluded phase profile')
+          // Excluded constructors retain their primary/phase debt. A canonical
+          // retained-view failure still publishes its native companion warning.
+          const retained = (previous.error as { errno?: number } | undefined)?.errno === 1412
+          const prefix = { Level: 'Warning', Code: 159, Message: `InnoDB: insufficient history for index ${sample.target === 'pa' ? 0 : 1}` }
+          assert.deepEqual(warnings, retained ? [prefix, ...(previousWarnings as unknown[])] : previousWarnings, label)
+        }
         errorMatches += Number(same(observed.error, expected.error))
         headerMatches += Number(same(observed.fieldEvents, expected.fieldEvents))
+        warningMatches += Number(same(observed.warnings, expected.warnings))
+        completeMatches += Number(Object.entries(expected).every(([key, value]) => same(observed[key], value)))
       }
     } finally {
       await a.rollback(); await statement?.close(); await a.end()
@@ -116,6 +122,8 @@ test('proved correlated sources validate retained views without losing headers o
   if (host === undefined) {
     assert.equal(errorMatches, 228)
     assert.equal(headerMatches, 160)
+    assert.equal(warningMatches, 228)
+    assert.equal(completeMatches, 146)
   }
 })
 
@@ -137,11 +145,12 @@ test('NULL validation uses the bound invocation and closes the parent on failure
       if (schema !== 'readinit223_control') return table
       if (name === 'ch') {
         const validate = table.checkRead!.bind(table)
-        if (capable) table.checkRead = (transaction, mode) => {
+        if (capable) table.checkRead = (transaction, mode, index) => {
           checks++
           assert.ok(transaction, 'the execution transaction reaches the actual table')
           assert.equal(mode, 'consistent')
-          validate(transaction, mode)
+          assert.equal(index, 'g', 'the actual selected access reaches the bound table')
+          validate(transaction, mode, index)
           if (fail) throw new SqlError('ER_QUERY_INTERRUPTED', 'injected read validation failure')
         }
         else Object.defineProperty(table, 'checkRead', { value: undefined })

@@ -59,9 +59,11 @@ proved fallback now retains that bound and outer ordering. Semijoin-off executio
 remains open. A bounded canonical-column cohort now validates NULL-key source
 visibility through the actual bound table under the invocation transaction.
 Headers publish after reader construction and before deferred reads/sort fill;
-missing validation capability retains the qualified reader. Native warning 159
-before retained-view error 1412 and broader constructor readiness remain open.
-The dependent-subquery audit requires filtering before outer sorting.
+missing validation capability retains the qualified reader. Canonical retained-view
+failures now carry their actual handler key and publish warning 159 before 1412,
+retaining condition-prefix limits and full totals. Broader constructor readiness
+and retained-view locking reads after TRUNCATE remain open. The dependent-subquery
+audit requires filtering before outer sorting.
 M5.19 field copying now shares the
 BLOB promotion rule with metadata. Actual DISTINCT/group/derived writers now
 normalize stored DECIMAL values, closing the measured streamed-join copy gaps.
