@@ -93,15 +93,16 @@ test('FirstMatch-off follows native materialization and weedout cost choices', a
   type Case = [string, number, number, string, string, number, number, number, number, number, boolean]
   try {
     assert.equal(firstMatchOff.mysqlVersion, '8.4.11')
-    assert.equal(firstMatchOff.cases.length, 980)
-    assert.equal(firstMatchOff.outcomes, 1960)
+    assert.equal(firstMatchOff.cases.length, 1540)
+    assert.equal(firstMatchOff.outcomes, 3080)
     assert.equal(firstMatchOff.baselineComplete, 0)
-    assert.equal(firstMatchOff.complete, 552)
+    assert.equal(firstMatchOff.predecessorComplete, 552)
+    assert.equal(firstMatchOff.complete, 1672)
     await conn.query('CREATE DATABASE anti213'); await conn.query('USE anti213')
     await conn.query('CREATE TABLE pa(id INT PRIMARY KEY,name VARCHAR(12) NOT NULL,g INT,UNIQUE KEY(name)) STATS_AUTO_RECALC=0')
     await conn.query('CREATE TABLE ch(id INT PRIMARY KEY,pa_id INT,label VARCHAR(10),qty INT NOT NULL,KEY(pa_id)) STATS_AUTO_RECALC=0')
     let population = ''
-    let guarded = 0, equalReported = 0
+    let guarded = 0, equalReported = 0, forced = 0, disabledCheaper = 0
     for (const raw of firstMatchOff.cases) {
       const [key, outer, inner, switches, suffix, rows, fields, warnings, plan, cost, guard] = raw as Case
       if (population !== outer + ':' + inner) {
@@ -109,7 +110,7 @@ test('FirstMatch-off follows native materialization and weedout cost choices', a
         population = outer + ':' + inner
       }
       const nativePlan = firstMatchOff.plans[plan]!
-      const supported = !switches.includes('semijoin=off') && !switches.includes('materialization=off') && !switches.includes('duplicateweedout=off')
+      const supported = !switches.includes('semijoin=off') && !switches.includes('materialization=off')
       assert.equal(guard, supported && nativePlan.includes('Materialize with deduplication'))
       if (supported) {
         const decision = firstMatchOff.costs[cost]!
@@ -117,8 +118,14 @@ test('FirstMatch-off follows native materialization and weedout cost choices', a
         assert.equal(typeof decision.weedout, 'number')
         assert.equal(decision.chosen, guard ? 'MaterializeLookup' : 'DuplicateWeedout')
         // These trace prices are rounded observations, not comparator inputs.
-        if (guard) assert.ok(decision.materialized! <= decision.weedout!)
-        if (decision.materialized === decision.weedout) { equalReported++; assert.equal(guard, false) }
+        if (switches.includes('duplicateweedout=off')) {
+          assert.equal(guard, true)
+          forced++
+          if (decision.materialized! > decision.weedout!) disabledCheaper++
+        } else {
+          if (guard) assert.ok(decision.materialized! <= decision.weedout!)
+          if (decision.materialized === decision.weedout) { equalReported++; assert.equal(guard, false) }
+        }
       }
       await conn.query('SET optimizer_switch=' + mysql.escape(switches))
       const sql = 'SELECT name FROM pa WHERE NOT EXISTS(SELECT 1 FROM ch WHERE ch.pa_id=pa.' + key + ')' + suffix
@@ -127,8 +134,10 @@ test('FirstMatch-off follows native materialization and weedout cost choices', a
       if (guard) guarded++
       await check(conn, sql, firstMatchOff.rows[rows], firstMatchOff.fields[fields], firstMatchOff.warnings[warnings])
     }
-    assert.equal(guarded * 2, 552)
+    assert.equal(guarded * 2, 1672)
     assert.equal(equalReported, 48)
+    assert.equal(forced, 560)
+    assert.equal(disabledCheaper, 128)
   } finally {
     await conn.query('DROP DATABASE IF EXISTS anti213'); await conn.end(); await db?.end()
   }
@@ -167,7 +176,13 @@ test('FirstMatch-off materialization builds on the first NULL row and skips LIMI
       return table
     }
     const fields = [['name', 253, 48, 20485, 0, 224, 'firstoff218', 'pa', 'pa', 'name']]
-    for (const switches of ['default,firstmatch=off', 'default,firstmatch=off,block_nested_loop=off', 'default,firstmatch=off,loosescan=off']) {
+    for (const switches of [
+      'default,firstmatch=off', 'default,firstmatch=off,block_nested_loop=off', 'default,firstmatch=off,loosescan=off',
+      'default,firstmatch=off,duplicateweedout=off',
+      'default,firstmatch=off,duplicateweedout=off,block_nested_loop=off',
+      'default,firstmatch=off,duplicateweedout=off,loosescan=off',
+      'default,firstmatch=off,duplicateweedout=off,block_nested_loop=off,loosescan=off',
+    ]) {
       await conn.query('SET optimizer_switch=' + mysql.escape(switches))
       const [explain] = await conn.query<mysql.RowDataPacket[]>('EXPLAIN FORMAT=TREE ' + sql)
       assert.equal((String(explain[0]?.EXPLAIN).match(/Materialize with deduplication/g) ?? []).length, 1)

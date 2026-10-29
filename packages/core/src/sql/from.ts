@@ -650,7 +650,7 @@ export function planFrom(refs: readonly TableReference[], ctx: FromContext, wher
       const plan = joinPlan()
       const firstMatch = optimizerEnabled(ctx.env, 'firstmatch')
       const materialization = optimizerEnabled(ctx.env, 'materialization')
-      if (!plan?.lookups.has(alias) || (!firstMatch && (!materialization || !optimizerEnabled(ctx.env, 'duplicateweedout')))) return undefined
+      if (!plan?.lookups.has(alias) || (!firstMatch && !materialization)) return undefined
       const node = plan.node
       const [outer, probe] = plan.positions
       if (node.kind !== 'join' || !node.left || node.outer.kind !== 'leaf' || node.inner.kind !== 'leaf' || outer === undefined || probe === undefined) return undefined
@@ -659,6 +659,8 @@ export function planFrom(refs: readonly TableReference[], ctx: FromContext, wher
       const stats = table.def === undefined || table.table === undefined ? undefined : ctx.statistics?.(table.def, table.table)
       if (stats === undefined || table.def === undefined || index?.kind !== 'index' || index.parts.length !== 1 || index.parts[0]?.descending === true || !holdsRead(table.def, index, settings.read.get(alias) ?? 'all')) return undefined
       if (!materialization) return 'lookup'
+      // A proved materialized candidate need not beat disabled weedout.
+      if (!firstMatch && !optimizerEnabled(ctx.env, 'duplicateweedout')) return 'materialized'
       const built = placeTable(table, undefined, NONE, NONE, scope, settings, stats)
       if (!firstMatch) return materializedAntijoinWins(outer, probe, built) ? 'materialized' : undefined
       const rows = outer.fetched * outer.filter

@@ -48,7 +48,9 @@ EXISTS, excluded profiles and broader strategies remain open.
 With FirstMatch disabled and weedout enabled, a proved materialized winner now
 uses the same deferred build. Full cost accumulation and replacement priority
 follow MySQL; rounded trace prices do not decide ties. Weedout winners and other
-unsupported switch combinations retain their paths.
+unsupported switch combinations retain their paths. When weedout is disabled,
+the same proved profile can materialize without beating its disabled competitor.
+Materialization-off and semijoin-off retain their exclusions.
 M5.19 field copying now shares the
 BLOB promotion rule with metadata. Actual DISTINCT/group/derived writers now
 normalize stored DECIMAL values, closing the measured streamed-join copy gaps.
