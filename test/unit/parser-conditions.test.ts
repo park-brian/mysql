@@ -244,3 +244,20 @@ test('runtime-owned warnings enter failure history without changing successful r
   assert.throws(() => sequence.next(), (error: unknown) => error instanceof ParseError && String(error.conditions?.map(e => e.errno)) === '3720,1287,1426')
   assert.deepEqual(Cursor.conditions(second.value.statement)?.map(e => e.errno), [1287])
 })
+
+test('unary BINARY warns after operand construction and preserves legacy successful provenance', () => {
+  for (const expression of ["BINARY 'x'", "BINARY N'x'", 'BINARY (@x:=1)', "BINARY BINARY 'x'"]) {
+    assert.equal(Cursor.conditions(parseStatement('SELECT ' + expression)), undefined, expression)
+    const mixed = parseStatement("SELECT CAST('x' AS CHAR BINARY)," + expression + ",CAST('y' AS NCHAR)")
+    assert.deepEqual(Cursor.conditions(mixed)?.map(e => e.errno), [1287, 3720], expression)
+  }
+  for (const expression of ['BINARY CAST(1 AS TIME(7))', 'BINARY (@x:=CAST(1 AS TIME(7)))']) {
+    assert.throws(() => parseExpression(expression), (error: unknown) => error instanceof ParseError && error.errno === 1426 && error.conditions === undefined)
+  }
+  assert.throws(() => parseStatement("SELECT BINARY N'x' COLLATE missing,CAST(1 AS TIME(7))"), (error: unknown) => {
+    assert.ok(error instanceof ParseError)
+    assert.equal(error.errno, 1273)
+    assert.deepEqual(error.conditions?.map(e => [e.errno, e.level ?? 'Error']), [[3720, 'Warning'], [1273, 'Error'], [1287, 'Warning'], [1426, 'Error']])
+    return true
+  })
+})

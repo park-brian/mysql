@@ -378,7 +378,9 @@ class ExpressionParser {
     const prefix = t.kind === TOKEN.OPERATOR && ['-', '+', '~', '!'].includes(t.text)
     if (prefix || word === 'BINARY' || (this.#mode.highNotPrecedence && word === 'NOT')) {
       cursor.skip()
-      return { kind: NODE.UNARY, op: word || t.text, operand: this.#unary(), at: t.start }
+      const operand = this.#unary()
+      if (word === 'BINARY') cursor.warn(1287, "'BINARY expr' is deprecated and will be removed in a future release. Please use CAST instead", true)
+      return { kind: NODE.UNARY, op: word || t.text, operand, at: t.start }
     }
     if (cursor.atWord('INTERVAL')) {
       // `INTERVAL(n, a, b, …)` is a function — the index of the first bound

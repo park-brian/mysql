@@ -21,9 +21,9 @@ unmodified `mysql2`. The committed execution and relational corpora agree
 with 8.4.11; the committed coercion corpus also agrees completely (M5.2).
 Some function behavior and optimizer strategies remain partial. Datatype aliases
 now reuse complete private facts, preserving national charsets and exceptional
-shapes. National-literal and completed-assignment parser warnings now survive failure
-without changing successful-root provenance. Native CAST precision admission
-still needs unary-BINARY and charset warning histories before promotion. M5.1 naming and
+shapes. National-literal, completed-assignment and unary-BINARY parser warnings now
+survive failure without changing successful-root provenance. Native CAST
+precision admission still needs explicit charset warning histories before promotion. M5.1 naming and
 M5.5 aggregate precision are reopened by native probes in the roadmap. M5.19 numeric
 set-operation holders now agree with the expanded native audits, including
 default/fixed FLOAT behavior. Raw BIT with VARCHAR/VARBINARY now shares the
