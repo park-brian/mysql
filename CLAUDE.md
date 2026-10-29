@@ -55,7 +55,9 @@ now sorts before probing, skips NULL and stops at its first qualified hit;
 EXPLAIN shows its physical one-row inner Limit. With materialization enabled,
 full native costs now select that same reader for proved weedout winners.
 Distribution changes can still select a first-NULL materialized build, including
-on cached executions. Last-resort fallback and semijoin-off execution remain open.
+on cached executions. With every competing strategy disabled, the same physically
+proved fallback now retains that bound and outer ordering. Semijoin-off execution
+remains open.
 M5.19 field copying now shares the
 BLOB promotion rule with metadata. Actual DISTINCT/group/derived writers now
 normalize stored DECIMAL values, closing the measured streamed-join copy gaps.

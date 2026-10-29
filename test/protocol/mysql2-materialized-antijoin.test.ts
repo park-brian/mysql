@@ -9,6 +9,7 @@ import integers from './fixtures/antijoin/materialized-integers.json' with { typ
 import firstHit from './fixtures/antijoin/first-hit.json' with { type: 'json' }
 import firstMatchOff from './fixtures/antijoin/firstmatch-off.json' with { type: 'json' }
 import weedoutHit from './fixtures/antijoin/weedout-hit.json' with { type: 'json' }
+import fallbackHit from './fixtures/antijoin/fallback-hit.json' with { type: 'json' }
 // @ts-expect-error — share the capture's normalization without its runner.
 import { planSkeleton } from '../../tools/capture-relational.mjs'
 
@@ -95,8 +96,8 @@ test('FirstMatch-off follows native materialization and weedout cost choices', a
     assert.equal(firstMatchOff.cases.length, 1540)
     assert.equal(firstMatchOff.outcomes, 3080)
     assert.equal(firstMatchOff.baselineComplete, 0)
-    assert.equal(firstMatchOff.predecessorComplete, 1952)
-    assert.equal(firstMatchOff.complete, 2240)
+    assert.equal(firstMatchOff.predecessorComplete, 2240)
+    assert.equal(firstMatchOff.complete, 2520)
     await conn.query('CREATE DATABASE anti213'); await conn.query('USE anti213')
     await conn.query('CREATE TABLE pa(id INT PRIMARY KEY,name VARCHAR(12) NOT NULL,g INT,UNIQUE KEY(name)) STATS_AUTO_RECALC=0')
     await conn.query('CREATE TABLE ch(id INT PRIMARY KEY,pa_id INT,label VARCHAR(10),qty INT NOT NULL,KEY(pa_id)) STATS_AUTO_RECALC=0')
@@ -110,7 +111,7 @@ test('FirstMatch-off follows native materialization and weedout cost choices', a
       }
       const nativePlan = firstMatchOff.plans[plan]!
       const supported = !switches.includes('semijoin=off') && !switches.includes('materialization=off')
-      const limited = !switches.includes('semijoin=off') && switches.includes('materialization=off') && !switches.includes('duplicateweedout=off')
+      const limited = !switches.includes('semijoin=off') && switches.includes('materialization=off')
       assert.equal(guard, limited || supported)
       if (supported) {
         const decision = firstMatchOff.costs[cost]!
@@ -135,7 +136,7 @@ test('FirstMatch-off follows native materialization and weedout cost choices', a
       if (guard) guarded++
       await check(conn, sql, firstMatchOff.rows[rows], firstMatchOff.fields[fields], firstMatchOff.warnings[warnings])
     }
-    assert.equal(guarded * 2, 2240)
+    assert.equal(guarded * 2, 2520)
     assert.equal(equalReported, 48)
     assert.equal(forced, 560)
     assert.equal(disabledCheaper, 128)
@@ -383,7 +384,7 @@ test('materialized membership builds on the first NULL probe and closes failed o
   }
 })
 
-test('proved FirstMatch sorts its outer source before correlated probes and preserves excluded switches', async () => {
+test('proved correlated antijoins sort before probes and preserve semijoin-off placement', async () => {
   const { db, conn } = await connect()
   const sql = 'SELECT name FROM pa WHERE NOT EXISTS(SELECT 1 FROM ch WHERE ch.pa_id=pa.g) ORDER BY name LIMIT 1'
   const open = db?.catalog!.table.bind(db.catalog)
@@ -400,14 +401,19 @@ test('proved FirstMatch sorts its outer source before correlated probes and pres
     assert.equal(planSkeleton(explain[0]?.EXPLAIN), 'Limit\n    Nested loop antijoin\n        Sort\n            Table scan on pa\n        Covering index lookup on ch using pa_id')
     const fields = [['name', 253, 48, 20485, 0, 224, 'firstmatch215', 'pa', 'pa', 'name']]
     await check(conn, sql, [['n001']], fields, [])
-    await conn.query("SET optimizer_switch='default,firstmatch=off,materialization=off'")
-    const [limited] = await conn.query<mysql.RowDataPacket[]>('EXPLAIN FORMAT=TREE ' + sql)
-    assert.equal(planSkeleton(limited[0]?.EXPLAIN), planSkeleton(weedoutHit.nativeSortActivity))
-    await check(conn, sql, [['n001']], fields, [])
-    if (host !== undefined) {
-      const [analyze] = await conn.query<mysql.RowDataPacket[]>('EXPLAIN ANALYZE ' + sql)
-      const scan = String(analyze[0]?.EXPLAIN).split('\n').find((line) => line.includes('Table scan on pa'))
-      assert.match(scan ?? '', /\(actual time=[^)]* rows=4 loops=1\)/)
+    for (const { switches, capture } of [
+      { switches: 'default,firstmatch=off,materialization=off', capture: weedoutHit },
+      { switches: 'default,firstmatch=off,materialization=off,duplicateweedout=off', capture: fallbackHit },
+    ]) {
+      await conn.query('SET optimizer_switch=' + mysql.escape(switches))
+      const [limited] = await conn.query<mysql.RowDataPacket[]>('EXPLAIN FORMAT=TREE ' + sql)
+      assert.equal(planSkeleton(limited[0]?.EXPLAIN), planSkeleton(capture.nativeSortActivity))
+      await check(conn, sql, [['n001']], fields, [])
+      if (host !== undefined) {
+        const [analyze] = await conn.query<mysql.RowDataPacket[]>('EXPLAIN ANALYZE ' + sql)
+        const scan = String(analyze[0]?.EXPLAIN).split('\n').find((line) => line.includes('Table scan on pa'))
+        assert.match(scan ?? '', /\(actual time=[^)]* rows=4 loops=1\)/)
+      }
     }
     await conn.query("SET optimizer_switch='default'")
     if (db === undefined || open === undefined) return
@@ -438,7 +444,10 @@ test('proved FirstMatch sorts its outer source before correlated probes and pres
       }
       return table
     }
-    for (const switches of ['default', 'default,materialization=off', 'default,firstmatch=off,materialization=off']) {
+    for (const switches of [
+      'default', 'default,materialization=off', 'default,firstmatch=off,materialization=off',
+      'default,firstmatch=off,materialization=off,duplicateweedout=off',
+    ]) {
       await conn.query('SET optimizer_switch=' + mysql.escape(switches))
       events.length = 0
       assert.deepEqual((await conn.query({ sql, rowsAsArray: true }))[0], [['n001']])
@@ -448,13 +457,11 @@ test('proved FirstMatch sorts its outer source before correlated probes and pres
       assert.deepEqual(events, ['pa:open', 'pa:row', 'pa:row', 'pa:close'])
       fail = false
     }
-    for (const switches of ['default,firstmatch=off,materialization=off,duplicateweedout=off', 'default,semijoin=off']) {
-      await conn.query('SET optimizer_switch=' + mysql.escape(switches))
-      events.length = 0
-      assert.deepEqual((await conn.query({ sql, rowsAsArray: true }))[0], [['n001']])
-      assert.ok(events.indexOf('ch:open') < events.lastIndexOf('pa:row'), switches + ': retain the original reader placement')
-      assert.equal(events.filter((e) => e === 'ch:open').length, events.filter((e) => e === 'ch:close').length)
-    }
+    await conn.query("SET optimizer_switch='default,semijoin=off'")
+    events.length = 0
+    assert.deepEqual((await conn.query({ sql, rowsAsArray: true }))[0], [['n001']])
+    assert.ok(events.indexOf('ch:open') < events.lastIndexOf('pa:row'), 'semijoin-off retains the original reader placement')
+    assert.equal(events.filter((e) => e === 'ch:open').length, events.filter((e) => e === 'ch:close').length)
   } finally {
     if (db !== undefined && open !== undefined) db.catalog!.table = open
     await conn.query('DROP DATABASE IF EXISTS firstmatch215'); await conn.end(); await db?.end()
@@ -466,6 +473,9 @@ test('admitted correlated antijoins skip NULL searches and close after their fir
 
 test('proved materialization-off weedout uses the correlated reader and its one-row limit',
   () => checkCorrelatedAntijoins('default,firstmatch=off,materialization=off', weedoutHit))
+
+test('proved last-resort antijoins retain the correlated source bound with all alternatives disabled',
+  () => checkCorrelatedAntijoins('default,firstmatch=off,materialization=off,duplicateweedout=off', fallbackHit))
 
 async function checkCorrelatedAntijoins(switches: string, capture: typeof firstHit) {
   const { db, conn } = await connect()
@@ -578,12 +588,12 @@ async function checkCorrelatedAntijoins(switches: string, capture: typeof firstH
     if (db !== undefined) assert.deepEqual([opened, visited, closed], [0, 0, 0])
     conn.unprepare(options)
     failAfter = undefined
-    if (db !== undefined) for (const switches of ['default,firstmatch=off,materialization=off,duplicateweedout=off', 'default,semijoin=off,materialization=off']) {
-      await conn.query('SET optimizer_switch=' + mysql.escape(switches))
+    if (db !== undefined) {
+      await conn.query("SET optimizer_switch='default,semijoin=off,materialization=off'")
       reset()
       assert.deepEqual((await conn.query({ sql, rowsAsArray: true }))[0], [['one']])
-      // These excluded profiles retain their existing source; broader inner
-      // early termination remains open rather than being admitted implicitly.
+      // Semijoin-off retains its existing source; broader early termination
+      // remains open rather than being admitted implicitly.
       assert.deepEqual([opened, visited, closed], [1, 100, 1])
     }
     await conn.query('SET optimizer_switch=' + mysql.escape(switches))
