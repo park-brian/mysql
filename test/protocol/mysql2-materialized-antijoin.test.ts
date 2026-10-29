@@ -40,7 +40,8 @@ test('pure integer antijoins choose materialization by cost and preserve outer o
     assert.equal(costs.mysqlVersion, '8.4.11')
     assert.equal(costs.cases.length, 700)
     assert.equal(costs.baselineComplete, 474)
-    assert.equal(costs.complete, 682)
+    assert.equal(costs.predecessorComplete, 682)
+    assert.equal(costs.complete, 840)
     assert.equal(costs.outcomes, 1400)
     await conn.query('CREATE DATABASE anti213')
     await conn.query('USE anti213')
@@ -64,18 +65,16 @@ test('pure integer antijoins choose materialization by cost and preserve outer o
       const [explain] = await conn.query<mysql.RowDataPacket[]>('EXPLAIN FORMAT=TREE ' + sql)
       const nativePlan = costs.plans[plan]!
       // The supported cohorts come from switches and the native strategy,
-      // independently of current output. FirstMatch-off/semijoin-off remain
-      // open, as does moving the nullable-key lookup below its outer sort.
+      // independently of current output. FirstMatch-off/semijoin-off remain open.
       const supportedSwitches = !switches.includes('firstmatch=off') && !switches.includes('semijoin=off')
-      const supportedOrder = key === 'id' || suffix === '' || nativePlan.includes('Materialize with deduplication')
-      assert.equal(guard, supportedSwitches && supportedOrder, 'captured plan guard: ' + sql)
+      assert.equal(guard, supportedSwitches, 'captured plan guard: ' + sql)
       // Every native answer is retained. The remaining strategy gaps stay open;
       // all predecessor matching plans and the newly repaired plans are guarded.
       if (host !== undefined || guard) assert.equal(planSkeleton(explain[0]?.EXPLAIN), nativePlan, sql)
       if (guard) guarded++
       await check(conn, sql, costs.rows[rows], costs.fields[fields], costs.warnings[warnings])
     }
-    assert.equal(guarded * 2, 682)
+    assert.equal(guarded * 2, 840)
   } finally {
     await conn.query('DROP DATABASE IF EXISTS anti213'); await conn.end(); await db?.end()
   }
@@ -250,5 +249,72 @@ test('materialized membership builds on the first NULL probe and closes failed o
   } finally {
     db.catalog!.table = open
     await db.end()
+  }
+})
+
+test('proved FirstMatch sorts its outer source before correlated probes and preserves excluded switches', async () => {
+  const { db, conn } = await connect()
+  const sql = 'SELECT name FROM pa WHERE NOT EXISTS(SELECT 1 FROM ch WHERE ch.pa_id=pa.g) ORDER BY name LIMIT 1'
+  const open = db?.catalog!.table.bind(db.catalog)
+  const events: string[] = []
+  let fail = false
+  try {
+    await conn.query('CREATE DATABASE firstmatch215'); await conn.query('USE firstmatch215')
+    await conn.query('CREATE TABLE pa(id INT PRIMARY KEY,name VARCHAR(12) NOT NULL,g INT,UNIQUE KEY(name)) STATS_AUTO_RECALC=0')
+    await conn.query('CREATE TABLE ch(id INT PRIMARY KEY,pa_id INT,label VARCHAR(10),qty INT NOT NULL,KEY(pa_id)) STATS_AUTO_RECALC=0')
+    await conn.query("INSERT INTO pa VALUES(1,'n004',NULL),(2,'n003',1),(3,'n002',2),(4,'n001',9)")
+    await conn.query('INSERT INTO ch VALUES' + Array.from({ length: 80 }, (_, i) => `(${i + 1},${i % 4 === 0 ? 'NULL' : i % 4},'same',1)`).join(','))
+    await conn.query('ANALYZE TABLE pa,ch')
+    const [explain] = await conn.query<mysql.RowDataPacket[]>('EXPLAIN FORMAT=TREE ' + sql)
+    assert.equal(planSkeleton(explain[0]?.EXPLAIN), 'Limit\n    Nested loop antijoin\n        Sort\n            Table scan on pa\n        Covering index lookup on ch using pa_id')
+    await check(conn, sql, [['n001']], [['name', 253, 48, 20485, 0, 224, 'firstmatch215', 'pa', 'pa', 'name']], [])
+    if (db === undefined || open === undefined) return
+    db.catalog!.table = (schema, name, trx) => {
+      const table = open(schema, name, trx)
+      if (schema === 'firstmatch215' && name === 'pa') {
+        const scan = table.scan.bind(table)
+        table.scan = function*(range, transaction, mode) {
+          events.push('pa:open')
+          let read = 0
+          try {
+            for (const row of scan(range, transaction, mode)) {
+              events.push('pa:row')
+              read++
+              if (fail && read === 2) throw new SqlError('ER_QUERY_INTERRUPTED', 'injected outer sort failure')
+              yield row
+            }
+          } finally { events.push('pa:close') }
+        }
+      }
+      if (schema === 'firstmatch215' && name === 'ch') {
+        const scan = table.indexScan.bind(table)
+        table.indexScan = function*(index, range, transaction, mode) {
+          events.push('ch:open')
+          try { for (const row of scan(index, range, transaction, mode)) { events.push('ch:row'); yield row } }
+          finally { events.push('ch:close') }
+        }
+      }
+      return table
+    }
+    for (const switches of ['default', 'default,materialization=off']) {
+      await conn.query('SET optimizer_switch=' + mysql.escape(switches))
+      events.length = 0
+      assert.deepEqual((await conn.query({ sql, rowsAsArray: true }))[0], [['n001']])
+      assert.deepEqual(events, ['pa:open', 'pa:row', 'pa:row', 'pa:row', 'pa:row', 'pa:close', 'ch:open', 'ch:close'])
+      events.length = 0; fail = true
+      await assert.rejects(conn.query(sql), /injected outer sort failure/)
+      assert.deepEqual(events, ['pa:open', 'pa:row', 'pa:row', 'pa:close'])
+      fail = false
+    }
+    for (const switches of ['default,firstmatch=off', 'default,semijoin=off']) {
+      await conn.query('SET optimizer_switch=' + mysql.escape(switches))
+      events.length = 0
+      assert.deepEqual((await conn.query({ sql, rowsAsArray: true }))[0], [['n001']])
+      assert.ok(events.indexOf('ch:open') < events.lastIndexOf('pa:row'), switches + ': retain the original reader placement')
+      assert.equal(events.filter((e) => e === 'ch:open').length, events.filter((e) => e === 'ch:close').length)
+    }
+  } finally {
+    if (db !== undefined && open !== undefined) db.catalog!.table = open
+    await conn.query('DROP DATABASE IF EXISTS firstmatch215'); await conn.end(); await db?.end()
   }
 })

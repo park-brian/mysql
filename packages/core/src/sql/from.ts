@@ -172,8 +172,8 @@ export interface FromPlan {
   filter(where: Expression | undefined, compile: (e: Expression) => Pick<Compiled, 'eval'>, semijoin?: (e: Expression) => PlanNode | undefined): void
   /** The cost model's choice for a table joined after the preserved side. */
   usesLookup(alias: string): boolean
-  /** Price the pure integer antijoin's build against its preserved-side lookup. */
-  materializesAntijoin(alias: string): boolean
+  /** Price a proved pure integer antijoin; undefined leaves unsupported profiles alone. */
+  antijoinStrategy(alias: string): 'lookup' | 'materialized' | undefined
   /** Build integer membership once, preserving only unmatched outer rows. */
   hashAntijoin(key: Compiled, rows: (trx: Trx | undefined, env: Env) => Iterable<readonly Value[]>, describe: () => PlanNode): void
   /** The one table an ORDER BY or GROUP BY reads, and the rows a LIMIT keeps: what the join order pays a sort for (M5.7). Given before the plan is first asked for. */
@@ -646,21 +646,23 @@ export function planFrom(refs: readonly TableReference[], ctx: FromContext, wher
     usesLookup(alias) {
       return joinPlan()?.lookups.has(alias) === true
     },
-    materializesAntijoin(alias) {
+    antijoinStrategy(alias) {
       const plan = joinPlan()
-      if (!plan?.lookups.has(alias) || !optimizerEnabled(ctx.env, 'materialization') || !optimizerEnabled(ctx.env, 'firstmatch')) return false
+      if (!plan?.lookups.has(alias) || !optimizerEnabled(ctx.env, 'firstmatch')) return undefined
       const node = plan.node
       const [outer, probe] = plan.positions
-      if (node.kind !== 'join' || !node.left || node.outer.kind !== 'leaf' || node.inner.kind !== 'leaf' || outer === undefined || probe === undefined) return false
+      if (node.kind !== 'join' || !node.left || node.outer.kind !== 'leaf' || node.inner.kind !== 'leaf' || outer === undefined || probe === undefined) return undefined
       const table = node.inner.table
       const index = node.lookup?.index
       const stats = table.def === undefined || table.table === undefined ? undefined : ctx.statistics?.(table.def, table.table)
-      if (stats === undefined || table.def === undefined || index?.kind !== 'index' || index.parts.length !== 1 || index.parts[0]?.descending === true || !holdsRead(table.def, index, settings.read.get(alias) ?? 'all')) return false
+      if (stats === undefined || table.def === undefined || index?.kind !== 'index' || index.parts.length !== 1 || index.parts[0]?.descending === true || !holdsRead(table.def, index, settings.read.get(alias) ?? 'all')) return undefined
+      if (!optimizerEnabled(ctx.env, 'materialization')) return 'lookup'
       const built = placeTable(table, undefined, NONE, NONE, scope, settings, stats)
       const rows = outer.fetched * outer.filter
       // Probe work does not multiply the preserved-side output cardinality.
       return built.read + ROW_EVALUATE * built.fetched * 2 + MEMORY_CREATE + ROW_EVALUATE * rows
         < probe.read + ROW_EVALUATE * rows * probe.fetched
+        ? 'materialized' : 'lookup'
     },
     hashAntijoin(key, rows, describe) {
       const input = physicalTree()

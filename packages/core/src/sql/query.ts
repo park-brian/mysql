@@ -487,7 +487,7 @@ function planSelect(run: Run, q: QueryExpression, node: SelectNode): SelectPlan 
     if (semi !== undefined) {
       const whereCtx = compileContext(run, semi.from.scope, 'where clause')
       from.filter(semi.where, (e) => resolved.read(e, whereCtx))
-    } else if (anti?.kind === 'materialized') {
+    } else if (anti?.kind === 'materialized' || anti?.kind === 'correlated') {
       from.filter(undefined, resolved.read)
     } else if (anti?.kind === 'hash') {
       from.filter(undefined, resolved.read)
@@ -530,7 +530,7 @@ function planSelect(run: Run, q: QueryExpression, node: SelectNode): SelectPlan 
   // An ORDER BY the index the table is read by already gives: read in its order, and nothing to sort.
   const read = source && from!.access(run.env)
   // Windows and hash antijoins still sort their delivered rows, even over an ordered index.
-  const outerLoop = (semi?.innerFirst === false || anti?.kind === 'materialized') && source !== undefined && sortBy === source.alias
+  const outerLoop = (semi?.innerFirst === false || anti?.kind === 'materialized' || anti?.kind === 'correlated') && source !== undefined && sortBy === source.alias
   // Reconsider PRIMARY for ordinary scans and the modeled outer-first loop.
   // A proved UNIQUE projection can reconsider PRIMARY as an ordinary scan does.
   const ordered = source !== undefined && !deduplicated && !windowed && (anti === undefined || anti.kind !== 'hash') && match === undefined && keys.length > 0 && read!.ranges === undefined ? orderingIndex(source.def, source.alias, order, items, lookup, read!.index, (outerLoop || (!loopSemijoin && !deduplicate)) && optimizerEnabled(run.env, 'prefer_ordering_index')) : undefined
@@ -564,6 +564,8 @@ function planSelect(run: Run, q: QueryExpression, node: SelectNode): SelectPlan 
   const stages: Stage[] = [
     ...(from === undefined && node.where !== undefined ? [filterStage(resolved.predicates)] : []),
     ...(anti?.kind === 'materialized' ? [filterStage(anti.read, undefined, anti.plan)] : []),
+    // Retain the clause's bound correlated reader above its physical outer sort.
+    ...(anti?.kind === 'correlated' ? [filterStage(resolved.predicates, undefined, semijoinNode(run, node.where!)?.children[0])] : []),
     // HAVING without grouping filters the rows WHERE kept, before any window sees them.
     ...(having === undefined ? [] : [filterStage(having, run)]),
     ...(windows === undefined || windows.windows.length === 0 ? [] : [windowStage(windows)]),
@@ -969,7 +971,8 @@ function costedIntegerSemijoin(run: Run, q: QueryExpression, node: SelectNode, f
 }
 
 /** One decorrelatable integer antijoin, costed through the existing preserved-side join planner. */
-type Antijoin = { readonly kind: 'materialized'; readonly read: Compiled; readonly plan: PlanNode }
+type Antijoin = { readonly kind: 'correlated' }
+  | { readonly kind: 'materialized'; readonly read: Compiled; readonly plan: PlanNode }
   | { readonly kind: 'lookup' | 'hash'; readonly key: Compiled; readonly inner: SelectPlan; readonly plan: PlanNode }
 
 function costedAntijoin(run: Run, q: QueryExpression, node: SelectNode, from: FromPlan): Antijoin | undefined {
@@ -1014,7 +1017,11 @@ function costedAntijoin(run: Run, q: QueryExpression, node: SelectNode, from: Fr
     read.set(innerAlias, keyReads(keyColumn, extra))
     alternative.reads(read)
     if (extra === undefined) {
-      if (!alternative.materializesAntijoin(innerAlias)) return undefined
+      const strategy = alternative.antijoinStrategy(innerAlias)
+      if (strategy === undefined) return undefined
+      // The proved FirstMatch keeps its original correlated predicate, with
+      // the same outer access/sort placement as the materialized alternative.
+      if (strategy === 'lookup') return { kind: 'correlated' }
       const { where: _correlation, ...source } = body
       const projected: QueryExpression = { ...sub, body: { ...source, items: [{ expr: innerKey }] } }
       const plan = planQuery(run, projected)
