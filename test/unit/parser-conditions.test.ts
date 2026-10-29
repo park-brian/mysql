@@ -197,3 +197,50 @@ test('statement sequences retain independent warning snapshots when their cursor
   assert.equal(Cursor.conditions(first.value.statement), history)
   assert.deepEqual(history?.map(c => c.errno), [3720], 'later parsing cannot append to an earlier history')
 })
+
+test('runtime-owned warnings enter failure history without changing successful root provenance', () => {
+  const c = new Cursor(lex(''))
+  c.warn(1287, 'outside checked parsing', true)
+  const root = c.checked(() => {
+    c.warn(3720, NATIONAL_DEPRECATION)
+    c.checked(() => { c.warn(1287, 'runtime only', true); return {} })
+    return {}
+  })
+  const history = Cursor.conditions(root)
+  assert.deepEqual(history, [{ errno: 3720, message: NATIONAL_DEPRECATION, level: 'Warning' }])
+  assert.ok(Object.isFrozen(history))
+  assert.equal(Cursor.conditions(c.checked(() => { c.warn(1287, 'runtime only', true); return {} })), undefined)
+  const fatal = unknown()
+  assert.throws(() => c.checked(() => {
+    c.warn(1287, 'runtime only', true)
+    c.report(fatal)
+    c.warn(3720, NATIONAL_DEPRECATION)
+    throw overflow()
+  }), (error: unknown) => error === fatal)
+  assert.deepEqual(fatal.conditions?.map(e => e.errno), [1287, 1273, 3720, 1367])
+  assert.equal(Cursor.conditions(c.checked(() => ({}))), undefined)
+  assert.equal(Cursor.conditions(root), history, 'later success and failure do not consume cached provenance')
+
+  for (const expression of ["N'x'", "N'x' 'y'", '@x:=1', '@x:=@y:=1', "@x:=N'x'"]) {
+    assert.equal(Cursor.conditions(parseStatement('SELECT ' + expression)), undefined, expression)
+    assert.equal(Cursor.conditions(parseExpression(expression)), undefined, expression)
+    const mixed = parseStatement("SELECT CAST('x' AS CHAR BINARY)," + expression + ",CAST('y' AS NCHAR)")
+    assert.deepEqual(Cursor.conditions(mixed)?.map(e => e.errno), [1287, 3720], expression)
+    assert.throws(() => parseExpression(expression + '+CAST(1 AS DATETIME(7))'), (error: unknown) => {
+      assert.ok(error instanceof ParseError)
+      assert.equal(error.errno, 1426)
+      const warnings = error.conditions?.filter(e => e.level === 'Warning') ?? []
+      assert.deepEqual(warnings.map(e => e.errno), expression.includes("N'") ? [3720] : [], 'assignment warns only after its RHS completes')
+      return true
+    })
+  }
+  const sequence = parseStatementSequence("SELECT N'x'; SELECT @x:=1,CAST('x' AS CHAR BINARY); SELECT @x:=N'x',CAST(1 AS TIME(7))")
+  const first = sequence.next(), second = sequence.next()
+  assert.equal(first.done, false)
+  assert.equal(second.done, false)
+  if (first.done || second.done) throw new Error('expected completed prefix')
+  assert.equal(Cursor.conditions(first.value.statement), undefined)
+  assert.deepEqual(Cursor.conditions(second.value.statement)?.map(e => e.errno), [1287])
+  assert.throws(() => sequence.next(), (error: unknown) => error instanceof ParseError && String(error.conditions?.map(e => e.errno)) === '3720,1287,1426')
+  assert.deepEqual(Cursor.conditions(second.value.statement)?.map(e => e.errno), [1287])
+})

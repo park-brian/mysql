@@ -31,7 +31,7 @@ import {
   parseWindowSpec,
 } from './query.ts'
 import { defaultCollationOf } from '@myjs/charsets'
-import { illegalDouble, castPrecisionError } from './errors.ts'
+import { illegalDouble, castPrecisionError, NATIONAL_DEPRECATION } from './errors.ts'
 import { charsetName, collationName } from './names.ts'
 import { NO_SQL_MODE, type SqlMode } from './sql-mode.ts'
 
@@ -242,6 +242,7 @@ class ExpressionParser {
       // assigns 1 to both. Its right side is read at its own level.
       let right = quantified ?? this.#binary(op === ':=' ? level : level + 1)
       if (level === COMPARISON_LEVEL && quantified === null) right = this.#predicate(right)
+      if (op === ':=') cursor.warn(1287, "Setting user variables within expressions is deprecated and will be removed in a future release. Consider alternatives: 'SET variable=expression, ...', or 'SELECT expression(s) INTO variables(s)'.", true)
       left = { kind: NODE.BINARY, op, left, right, at: t.start }
     }
   }
@@ -535,7 +536,9 @@ class ExpressionParser {
       // `N'x'` is the national charset's literal, which MySQL defines as utf8mb3.
       if (upper === 'N' && next === TOKEN.STRING && cursor.peek(1).start === t.end) {
         cursor.skip()
-        return { kind: NODE.LITERAL, type: LITERAL.STRING, value: cursor.expectString(true), charset: 'utf8mb3', at: t.start }
+        const value = cursor.expectString(true)
+        cursor.warn(3720, NATIONAL_DEPRECATION, true)
+        return { kind: NODE.LITERAL, type: LITERAL.STRING, value, charset: 'utf8mb3', at: t.start }
       }
       if (upper === 'EXISTS' && followedByParen) {
         cursor.skip()

@@ -87,6 +87,8 @@ export class Cursor {
   #depth = 0
   #primary: ParseError | undefined
   #conditions: ParseCondition[] | undefined
+  /** Legacy successful-root provenance excludes runtime-owned failure warnings. */
+  #warnings: ParseCondition[] | undefined
 
   constructor(tokens: readonly Token[], source = '') {
     this.tokens = tokens
@@ -100,9 +102,12 @@ export class Cursor {
     this.#conditions.push({ errno: error.errno!, message: error.message })
   }
 
-  /** Retain grammar warnings for failure; valid ASTs keep their existing publisher. */
-  warn(errno: number, message: string): void {
-    this.#conditions?.push({ errno, message, level: 'Warning' })
+  /** Runtime-owned warnings survive failure without changing valid-AST provenance. */
+  warn(errno: number, message: string, failureOnly = false): void {
+    if (!this.#conditions) return
+    const condition: ParseCondition = { errno, message, level: 'Warning' }
+    this.#conditions.push(condition)
+    if (!failureOnly) (this.#warnings ??= []).push(condition)
   }
 
   /** Refuse an invalid statement before its AST reaches a consumer. */
@@ -113,7 +118,7 @@ export class Cursor {
       const result = parse()
       if (this.#primary !== undefined) throw this.#primary
       checkTreeDepth(result)
-      if (this.#conditions.length > 0) grammarWarnings.set(result, Object.freeze(this.#conditions))
+      if (this.#warnings) grammarWarnings.set(result, Object.freeze(this.#warnings))
       return result
     } catch (error) {
       if (!(error instanceof ParseError) || this.#conditions.length === 0) throw error
@@ -124,6 +129,7 @@ export class Cursor {
     } finally {
       this.#primary = undefined
       this.#conditions = undefined
+      this.#warnings = undefined
     }
   }
 

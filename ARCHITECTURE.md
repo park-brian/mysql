@@ -1780,7 +1780,7 @@ The full Docker gates, pinned-reference audits and 10,000 crash points pass.
 `db.stream()` streams a million rows within a few MB of the heap's baseline (M5.40). Next is the
 remaining function and planner work, then the browser. The coercion corpus
 now agrees on all 3,148 observations and all 1,737 warning counts. The core entry bundle
-is 330,568 bytes gzipped (322.8 KiB), against the 500 KB release target,
+is 330,674 bytes gzipped (322.9 KiB), against the 500 KB release target,
 with the UCA weights in a separate chunk loaded on demand.
 The private generated error table records sequential range starts instead of
 repeating each number. Its 2,132 facts, provenance and public lookups remain
@@ -1834,6 +1834,10 @@ VARBINARY keep their exceptional shapes. Spatial names share their storage facts
 and existing CAST eligibility, while private argument-shape discriminants need no
 runtime object. All public datatype parse outcomes remain unchanged. Invalid
 DECIMAL CAST admission is still pending complete parser-warning provenance.
+The cursor now retains runtime-owned national-literal and completed-assignment
+warnings in failure history without adding them to successful-root provenance.
+Nested parsing shares the history; statement completion clears both histories.
+Unary-BINARY and explicit charset warning histories remain open.
 
 The release plan gives each stage something to ship:
 
