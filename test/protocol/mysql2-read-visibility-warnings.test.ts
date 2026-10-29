@@ -97,7 +97,7 @@ test('read warnings retain prefix caps, full totals and once-only streamed publi
         assert.deepEqual(actual.error, expected.error)
         assert.deepEqual(actual.warnings, expected.warnings)
         assert.equal(actual.warningCount, expected.warningCount); assert.equal(actual.errorCount, expected.errorCount)
-        assert.deepEqual(actual.fieldEvents, host !== undefined ? expected.fieldEvents : prior.fieldEvents)
+        assert.deepEqual(actual.fieldEvents, host !== undefined || sample.shape === 'dependent-null' ? expected.fieldEvents : prior.fieldEvents)
       }
       if ('current' in sample && 'current' in baseline) {
         // Native locking reads after TRUNCATE expose a separate visibility gap;

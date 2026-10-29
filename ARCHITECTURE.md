@@ -1780,7 +1780,7 @@ The full Docker gates, pinned-reference audits and 10,000 crash points pass.
 `db.stream()` streams a million rows within a few MB of the heap's baseline (M5.40). Next is the
 remaining function and planner work, then the browser. The coercion corpus
 now agrees on all 3,148 observations and all 1,737 warning counts. The core entry bundle
-is 330,737 bytes gzipped (323.0 KiB), against the 500 KB release target,
+is 331,217 bytes gzipped (323.5 KiB), against the 500 KB release target,
 with the UCA weights in a separate chunk loaded on demand.
 The private generated error table records sequential range starts instead of
 repeating each number. Its 2,132 facts, provenance and public lookups remain
@@ -1827,6 +1827,13 @@ under the invocation, including NULL-suppressed searches. Handler key numbering
 includes invisible indexes and the hidden-cluster sentinel; optimizer priorities
 retain their own existing behavior. Retained-view locking reads after TRUNCATE
 remain open. Dependent subqueries require filtering before outer sorting.
+
+A closed semijoin-off cohort now finalizes the original bound dependent reader
+before registration. Its execution and Select #2/Limit description share one
+qualified one-row bound. Correlation stays live, NULL validation uses the current
+invocation and original capability, and filtering remains before the outer Sort.
+Actual independent sources, same-name shadowing and unproved constructor/type/index
+profiles retain their prior readers. This migration adds no storage read policy.
 
 Private datatype facts now define equivalent spellings once. Complete immutable
 specs retain canonical aliases and national charsets; BOOL, SERIAL and LONG

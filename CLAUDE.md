@@ -61,15 +61,16 @@ EXPLAIN shows its physical one-row inner Limit. With materialization enabled,
 full native costs now select that same reader for proved weedout winners.
 Distribution changes can still select a first-NULL materialized build, including
 on cached executions. With every competing strategy disabled, the same physically
-proved fallback now retains that bound and outer ordering. Semijoin-off execution
-remains open. A bounded canonical-column cohort now validates NULL-key source
+proved fallback now retains that bound and outer ordering. The closed semijoin-off dependent profile now retains its original binding and
+qualified one-row reader; filtering precedes outer sorting. Same-name shadowing
+remains independent, and generic EXISTS and broader dependent profiles stay open. A bounded canonical-column cohort now validates NULL-key source
 visibility through the actual bound table under the invocation transaction.
 Headers publish after reader construction and before deferred reads/sort fill;
 missing validation capability retains the qualified reader. Canonical retained-view
 failures now carry their actual handler key and publish warning 159 before 1412,
 retaining condition-prefix limits and full totals. Broader constructor readiness
-and retained-view locking reads after TRUNCATE remain open. The dependent-subquery
-audit requires filtering before outer sorting.
+and retained-view locking reads after TRUNCATE remain open. The proved dependent-subquery
+profile now filters before outer sorting; broader readiness remains deferred.
 M5.19 field copying now shares the
 BLOB promotion rule with metadata. Actual DISTINCT/group/derived writers now
 normalize stored DECIMAL values, closing the measured streamed-join copy gaps.

@@ -96,7 +96,7 @@ test('proved correlated sources validate retained views without losing headers o
         for (const [key, value] of Object.entries(expected)) {
           if (Object.hasOwn(previous, key) && same(previous[key], value)) assert.deepEqual(observed[key], value, label + ':' + key)
         }
-        const admitted = !sample.switches.includes('semijoin=off') && (!constructor || (sample.projection === 'name' && sample.order !== ' ORDER BY id+1 LIMIT 1'))
+        const admitted = !constructor || (sample.projection === 'name' && sample.order !== ' ORDER BY id+1 LIMIT 1')
         if (admitted) {
           assert.deepEqual(observed, expected, label)
         } else {
@@ -121,13 +121,13 @@ test('proved correlated sources validate retained views without losing headers o
   }
   if (host === undefined) {
     assert.equal(errorMatches, 228)
-    assert.equal(headerMatches, 160)
+    assert.equal(headerMatches, 216)
     assert.equal(warningMatches, 228)
-    assert.equal(completeMatches, 146)
+    assert.equal(completeMatches, 206)
   }
 })
 
-test('NULL validation uses the bound invocation and closes the parent on failure', { skip: host !== undefined }, async () => {
+for (const switches of ['default,materialization=off', 'default,semijoin=off']) test('NULL validation uses the bound invocation and closes the parent on failure: ' + switches, { skip: host !== undefined }, async () => {
   const db = await MySQL.open(':memory:')
   const conn = mysql.createConnection({ stream: db.createStream(), user: 'root' }).promise()
   const open = db.catalog!.table.bind(db.catalog)
@@ -139,7 +139,7 @@ test('NULL validation uses the bound invocation and closes the parent on failure
     await conn.query('CREATE TABLE pa(id INT PRIMARY KEY,name VARCHAR(12) NOT NULL,g INT,UNIQUE KEY(name))')
     await conn.query('CREATE TABLE ch(id INT PRIMARY KEY,g INT,KEY(g))')
     await conn.query("INSERT INTO pa VALUES(1,'one',NULL)"); await conn.query('INSERT INTO ch VALUES(1,1)')
-    await conn.query("SET optimizer_switch='default,materialization=off'")
+    await conn.query('SET optimizer_switch=' + mysql.escape(switches))
     db.catalog!.table = (schema, name, trx) => {
       const table = open(schema, name, trx)
       if (schema !== 'readinit223_control') return table
@@ -189,5 +189,49 @@ test('NULL validation uses the bound invocation and closes the parent on failure
   } finally {
     db.catalog!.table = open
     await conn.end(); await db.end()
+  }
+})
+
+test('an inner table that shadows the parent name retains its independent reader', async () => {
+  const db = host === undefined ? await MySQL.open(':memory:') : undefined
+  const conn = mysql.createConnection({
+    ...(db === undefined ? { host: host ?? 'reference', port: Number(process.env.MYSQL_REFERENCE_PORT ?? 3306), password: process.env.MYSQL_REFERENCE_PASSWORD ?? 'root' } : { stream: db.createStream() }),
+    user: 'root',
+  }).promise()
+  const open = db?.catalog!.table.bind(db.catalog)
+  let checks = 0, visited = 0
+  const sql = 'SELECT name FROM pa WHERE NOT EXISTS(SELECT 1 FROM pa WHERE pa.g=pa.g)'
+  try {
+    await conn.query('CREATE DATABASE dependent229_shadow')
+    await conn.query('USE dependent229_shadow')
+    await conn.query('CREATE TABLE pa(id INT PRIMARY KEY,name VARCHAR(12) NOT NULL,g INT,KEY(g))')
+    await conn.query("INSERT INTO pa VALUES(1,'null',NULL),(2,'one',1),(3,'two',1)")
+    await conn.query('ANALYZE TABLE pa')
+    await conn.query("SET optimizer_switch='default,semijoin=off'")
+    if (db !== undefined && open !== undefined) db.catalog!.table = (schema, name, trx) => {
+      const table = open(schema, name, trx)
+      if (schema !== 'dependent229_shadow') return table
+      const validate = table.checkRead!.bind(table)
+      table.checkRead = (...args) => { checks++; validate(...args) }
+      const scan = table.indexScan.bind(table)
+      table.indexScan = function*(...args) { for (const row of scan(...args)) { visited++; yield row } }
+      return table
+    }
+    for (const method of ['query', 'execute'] as const) {
+      checks = visited = 0
+      const options = { sql, rowsAsArray: true }
+      const [rows] = method === 'query' ? await conn.query(options) : await conn.execute(options)
+      assert.deepEqual(rows, [])
+      assert.deepEqual((await conn.query('SHOW WARNINGS'))[0], [])
+      if (db !== undefined) {
+        assert.equal(checks, 0, 'no dependent NULL validation role is granted to an independent source')
+        assert.ok(visited > 1, 'the unproved independent source retains its qualified reader')
+      }
+      conn.unprepare(options)
+    }
+  } finally {
+    if (db !== undefined && open !== undefined) db.catalog!.table = open
+    await conn.query('DROP DATABASE IF EXISTS dependent229_shadow')
+    await conn.end(); await db?.end()
   }
 })

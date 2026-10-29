@@ -16,7 +16,7 @@ import { MAX_UNSIGNED, MIN_SIGNED, intValue, storageWidth, toInteger, truth, wit
 import { compile, constantNode, memoValue, logicalOperand, convertTo, fieldValue, decimalField, EMPTY_SCOPE, readSlot, type CompileContext, type Compiled, type Env, type GroupKeys, type QuantifiedSubquery, type Scope, type SubqueryPlan } from './compile.ts'
 import { AggregateSink, chooseStrategy, containsAggregate, groupRows, isAggregate } from './group.ts'
 import { WindowSink, applyWindows, containsWindow } from './window.ts'
-import { CHARSET_UTF8MB4_BIN, EMPTY_NAMES, columnDefinition, copiedLength, intType, type ResultType } from './meta.ts'
+import { CHARSET_UTF8MB4_BIN, EMPTY_NAMES, columnDefinition, columnResultType, copiedLength, intType, type ResultType } from './meta.ts'
 import { FIELD_TYPE, expectTyped } from '@myjs/bytes'
 import { distinct, filter, limit, project, sort, type SortKey } from './operators.ts'
 import { isConstant, optimizerEnabled, splitAnd, tableColumn } from './plan.ts'
@@ -75,7 +75,7 @@ export interface Run {
   readonly clauses?: Readonly<Record<string, Expression | undefined>>
 }
 
-export function compileContext(run: Run, scope: Scope, clause: string, windows?: WindowSink): CompileContext {
+export function compileContext(run: Run, scope: Scope, clause: string, windows?: WindowSink, finalize?: (bound: BoundSubquery) => BoundSubquery): CompileContext {
   const { env: { session, conditions }, params } = run
   return {
     scope,
@@ -89,7 +89,7 @@ export function compileContext(run: Run, scope: Scope, clause: string, windows?:
       let correlated = false
       const plan = planQuery({ ...run, parent: enclosing(outer, () => (correlated = true)) }, q)
       const checkRead = plan.checkRead?.bind(plan)
-      const bound: BoundSubquery = {
+      let bound: BoundSubquery = {
         clause,
         query: q,
         plan,
@@ -101,6 +101,7 @@ export function compileContext(run: Run, scope: Scope, clause: string, windows?:
         ...(checkRead === undefined ? {} : { checkRead }),
         rows: (env) => plan.rows(env.trx, env),
       }
+      bound = finalize?.(bound) ?? bound
       run.subqueries?.push(bound)
       return bound
     },
@@ -378,7 +379,11 @@ function planSelect(run: Run, q: QueryExpression, node: SelectNode): SelectPlan 
   const [limitCount, offset] = queryLimit(run, q)
   const checkedOutput = anti?.kind === 'correlated' && checkedCorrelatedOutput(node, q, source, items, anti.query)
   let checkedWhere = false
-  let whereCtx = compileContext(run, lookup, 'where clause')
+  let whereCtx = compileContext(run, lookup, 'where clause', undefined, semijoin ? undefined : (bound) => {
+    const finalized = dependentReader(run, q, node, from, items, bound)
+    if (finalized !== bound) checkedWhere = bound.checkRead !== undefined
+    return finalized
+  })
   if (anti?.kind === 'correlated') {
     const key = compile(anti.key, whereCtx)
     const subquery = whereCtx.subquery!
@@ -913,6 +918,47 @@ function checkedCorrelatedOutput(node: SelectNode, q: QueryExpression, source: F
   const column = (e: Expression): boolean => e.kind === NODE.COLUMN && e.parts.length === 1 && simple(e.parts[0]!) && source.def.columns.some((c) => c.name === e.parts[0])
   if (!items.length || !items.every((i) => i.alias === undefined && i.compiled.type.column !== undefined && column(i.expr))) return false
   return (q.orderBy ?? []).every(({ expr }) => column(expr) || (expr.kind === NODE.LITERAL && expr.type === LITERAL.INT && typeof expr.value === 'bigint' && expr.value > 0n && expr.value <= BigInt(items.length)))
+}
+
+/** A closed dependent cohort keeps its original binding and filters before the outer sort. */
+function dependentReader(run: Run, q: QueryExpression, node: SelectNode, from: FromPlan | undefined, items: readonly { readonly expr: Expression; readonly alias?: string; readonly compiled: Compiled }[], bound: BoundSubquery): BoundSubquery {
+  if (from === undefined || !bound.correlated || run.preparing === true || q.locking !== undefined || node.distinct === true || node.having !== undefined) return bound
+  const outer = joinOuter(run, q, node, from)
+  const query = negativeExistsSubquery(node.where)
+  const body = query === undefined ? undefined : boundedSubquery(query)
+  if (outer === undefined || query !== bound.query || body === undefined || !integerLiteral(body.items[0].expr) || !checkedCorrelatedOutput(node, q, from.single, items, query)) return bound
+  if (body.from[0].table.name.toLowerCase() === outer.table.name.toLowerCase()) return bound
+  const pair = correlatedPair(body.where, body.from[0].table.name, outer.table.name)
+  const inner = bound.plan.source
+  if (pair === undefined || pair.extra !== undefined || inner === undefined || inner.def.name !== body.from[0].table.name || inner.def.schema !== from.single!.def.schema || isTemporary(inner.def)) return bound
+  if ([from.single!.def, inner.def].some((def) => def.columns.some((c) => c.attributes?.['generated'] !== undefined))) return bound
+  const column = inner.def.columns.find((c) => c.name === pair.innerKey.parts[1])
+  const key = compile(pair.outerKey, compileContext(run, from.scope, 'where clause'))
+  if (column === undefined || !exactInteger(key) || !exactInteger({ type: columnResultType(inner.def, column, inner.alias) })) return bound
+  if (!inner.def.indexes.some((index) => {
+    const part = index.parts[0]
+    return index.kind === 'index' && index.invisible !== true && index.parts.length === 1 && part?.column === column.name && part.prefix === undefined && part.descending !== true && holdsRead(inner.def, index, new Set([column.name]))
+  })) return bound
+  const original = bound.plan
+  const rows: SelectPlan['rows'] = (trx, given, ready) => {
+    const env = executionEnv(run, trx, given)
+    const outer = env.outer?.[0]
+    if (bound.checkRead !== undefined && outer !== undefined && key.eval(outer, env) === null) {
+      bound.checkRead(env)
+      ready?.()
+      return []
+    }
+    return limit(original.rows(trx, env, ready), 0, 1)
+  }
+  const plan: SelectPlan = {
+    ...original,
+    rows,
+    explain() {
+      const roots = original.explain?.()
+      return roots === undefined ? undefined : [planNode('Limit: 1 row(s)', roots)]
+    },
+  }
+  return { ...bound, get correlated() { return bound.correlated }, plan, rows: (env) => plan.rows(env.trx, env) }
 }
 
 type QualifiedColumn = Extract<Expression, { kind: typeof NODE.COLUMN }> & { readonly parts: readonly [string, string] }
