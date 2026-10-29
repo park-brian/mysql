@@ -41,8 +41,9 @@ integer bounds under the existing caps. Pure correlated integer NOT EXISTS now
 prices deferred membership against lookup, reusing the invocation's existing
 membership cache after outer sorting. NULL first probes build; empty outer input
 and LIMIT 0 skip the build. Proved lookup profiles now retain their bound
-correlated reader after the outer sort too. Duplicate-key inner early termination
-and broader semijoin/antijoin strategies remain open.
+correlated reader after the outer sort too. Its admitted pure source now stops
+after its first qualified row. Generic EXISTS,
+excluded profiles, NULL-key access suppression and broader strategies remain open.
 M5.19 field copying now shares the
 BLOB promotion rule with metadata. Actual DISTINCT/group/derived writers now
 normalize stored DECIMAL values, closing the measured streamed-join copy gaps.

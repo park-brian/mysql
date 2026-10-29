@@ -1780,7 +1780,7 @@ The full Docker gates, pinned-reference audits and 10,000 crash points pass.
 `db.stream()` streams a million rows within a few MB of the heap's baseline (M5.40). Next is the
 remaining function and planner work, then the browser. The coercion corpus
 now agrees on all 3,148 observations and all 1,737 warning counts. The core entry bundle
-is 329,773 bytes gzipped (322.0 KiB), against the 500 KB release target,
+is 329,851 bytes gzipped (322.1 KiB), against the 500 KB release target,
 with the UCA weights in a separate chunk loaded on demand.
 The private generated error table records sequential range starts instead of
 repeating each number. Its 2,132 facts, provenance and public lookups remain
@@ -1791,9 +1791,10 @@ statement's keyed membership reader after the chosen outer access/sort. The firs
 outer row builds even when its key is NULL; empty outer input and LIMIT 0 skip it.
 Failed builds publish no partial set, and cancellation closes the iterators.
 The correlated alternative now keeps its original bound reader after the same
-outer access/sort; an outer-sort failure opens no inner lookup. That reader still
-exhausts duplicate-bearing inner results. Early termination and other
-antijoin/semijoin strategy gaps remain open in the roadmap.
+outer access/sort; an outer-sort failure opens no inner lookup. Its admitted pure
+form now bounds the original qualified source with the shared limit iterator,
+closing after the first hit and leaving later-row failures unread. Generic EXISTS,
+excluded profiles, NULL-key access suppression and broader strategies remain open.
 
 The release plan gives each stage something to ship:
 

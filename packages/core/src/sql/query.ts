@@ -372,7 +372,23 @@ function planSelect(run: Run, q: QueryExpression, node: SelectNode): SelectPlan 
   // Read through the windows' temporary table: every column a field of it (8.4.11: `id` loses PRI).
   windowColumns(items, windows)
   const [limitCount, offset] = queryLimit(run, q)
-  const resolved = resolveCondition(run, compileContext(run, lookup, 'where clause'), node.where, limitCount)
+  let whereCtx = compileContext(run, lookup, 'where clause')
+  if (anti?.kind === 'correlated') {
+    const subquery = whereCtx.subquery!
+    whereCtx = { ...whereCtx, subquery(query, outer) {
+      const source = subquery(query, outer)
+      // Keep original binding/registration; stop only this proved source,
+      // after its equality qualifies a row, before asking for another.
+      if (query !== anti.query) return source
+      return {
+        columns: source.columns,
+        get correlated() { return source.correlated },
+        hasFrom: source.hasFrom,
+        rows: (env) => limit(source.rows(env), 0, 1),
+      }
+    } }
+  }
+  const resolved = resolveCondition(run, whereCtx, node.where, limitCount)
   const constants = constRows(run, from, node)
 
   // An ORDER BY item that reads only a STRAIGHT_JOIN's const tables is a constant, which nothing sorts by (8.4.11).
@@ -971,7 +987,7 @@ function costedIntegerSemijoin(run: Run, q: QueryExpression, node: SelectNode, f
 }
 
 /** One decorrelatable integer antijoin, costed through the existing preserved-side join planner. */
-type Antijoin = { readonly kind: 'correlated' }
+type Antijoin = { readonly kind: 'correlated'; readonly query: QueryExpression }
   | { readonly kind: 'materialized'; readonly read: Compiled; readonly plan: PlanNode }
   | { readonly kind: 'lookup' | 'hash'; readonly key: Compiled; readonly inner: SelectPlan; readonly plan: PlanNode }
 
@@ -1021,7 +1037,7 @@ function costedAntijoin(run: Run, q: QueryExpression, node: SelectNode, from: Fr
       if (strategy === undefined) return undefined
       // The proved FirstMatch keeps its original correlated predicate, with
       // the same outer access/sort placement as the materialized alternative.
-      if (strategy === 'lookup') return { kind: 'correlated' }
+      if (strategy === 'lookup') return { kind: 'correlated', query: sub }
       const { where: _correlation, ...source } = body
       const projected: QueryExpression = { ...sub, body: { ...source, items: [{ expr: innerKey }] } }
       const plan = planQuery(run, projected)

@@ -6,6 +6,7 @@ import { MySQL } from '@myjs/core'
 import { SqlError } from '@myjs/protocol'
 import costs from './fixtures/antijoin/materialized.json' with { type: 'json' }
 import integers from './fixtures/antijoin/materialized-integers.json' with { type: 'json' }
+import firstHit from './fixtures/antijoin/first-hit.json' with { type: 'json' }
 // @ts-expect-error — share the capture's normalization without its runner.
 import { planSkeleton } from '../../tools/capture-relational.mjs'
 
@@ -316,5 +317,102 @@ test('proved FirstMatch sorts its outer source before correlated probes and pres
   } finally {
     if (db !== undefined && open !== undefined) db.catalog!.table = open
     await conn.query('DROP DATABASE IF EXISTS firstmatch215'); await conn.end(); await db?.end()
+  }
+})
+
+test('admitted correlated antijoins close after their first qualified hit without reading a later failure', async () => {
+  const { db, conn } = await connect()
+  const sql = 'SELECT name FROM pa WHERE NOT EXISTS(SELECT 1 FROM ch WHERE ch.g=pa.g)'
+  const open = db?.catalog!.table.bind(db.catalog)
+  let opened = 0, visited = 0, closed = 0
+  let failAfter: number | undefined
+  const reset = () => { opened = visited = closed = 0 }
+  const activity = (text: string) => {
+    const lookup = text.split('\n').find((line) => line.includes('Covering index lookup on ch using g'))
+    const counts = /\(actual time=[^)]* rows=(\d+) loops=(\d+)\)/.exec(lookup ?? '')
+    assert.ok(counts, 'captured inner activity: ' + text)
+    return [Number(counts[1]), Number(counts[2])]
+  }
+  try {
+    assert.equal(firstHit.mysqlVersion, '8.4.11')
+    assert.equal(firstHit.outcomes, 24)
+    assert.equal(firstHit.cases.length, 12)
+    if (host !== undefined) assert.equal((await conn.query<mysql.RowDataPacket[]>('SELECT VERSION() AS v'))[0][0]?.v.split('-')[0], firstHit.mysqlVersion)
+    await conn.query('CREATE DATABASE firstmatch216'); await conn.query('USE firstmatch216')
+    await conn.query('CREATE TABLE pa(id INT PRIMARY KEY,name VARCHAR(12) NOT NULL,g INT,UNIQUE KEY(name)) STATS_AUTO_RECALC=0')
+    await conn.query('CREATE TABLE ch(id INT PRIMARY KEY,g INT,KEY(g)) STATS_AUTO_RECALC=0')
+    await conn.query("SET optimizer_switch='default,materialization=off'")
+    if (db !== undefined && open !== undefined) db.catalog!.table = (schema, name, trx) => {
+      const table = open(schema, name, trx)
+      if (schema === 'firstmatch216' && name === 'ch') {
+        const scan = table.indexScan.bind(table)
+        table.indexScan = function*(index, range, transaction, mode) {
+          opened++
+          try {
+            for (const row of scan(index, range, transaction, mode)) {
+              visited++
+              if (visited === failAfter) throw new SqlError('ER_QUERY_INTERRUPTED', 'injected later matching row failure')
+              yield row
+            }
+          } finally { closed++ }
+        }
+      }
+      return table
+    }
+    for (const sample of firstHit.cases) {
+      await conn.query('DELETE FROM ch'); await conn.query('DELETE FROM pa')
+      if (sample.inner !== 'empty') await conn.query('INSERT INTO ch VALUES' + Array.from({ length: 100 }, (_, i) =>
+        `(${i + 1},${sample.inner === 'all-null' || sample.inner === 'mixed-null' && i % 2 === 0 ? 'NULL' : 1})`).join(','))
+      await conn.query(`INSERT INTO pa VALUES(1,'one',${sample.outer ?? 'NULL'})`)
+      await conn.query('ANALYZE TABLE pa,ch')
+      assert.deepEqual(activity(sample.nativeActivity), [sample.innerRows, 1])
+      const [explain] = await conn.query<mysql.RowDataPacket[]>('EXPLAIN FORMAT=TREE ' + sql)
+      assert.equal(planSkeleton(explain[0]?.EXPLAIN), planSkeleton(sample.nativeActivity))
+      if (host !== undefined) {
+        const [analyze] = await conn.query<mysql.RowDataPacket[]>('EXPLAIN ANALYZE ' + sql)
+        assert.deepEqual(activity(String(analyze[0]?.EXPLAIN)), [sample.innerRows, 1])
+      }
+      reset()
+      await check(conn, sql, firstHit.rows[sample.rows], firstHit.fields[sample.fields], firstHit.warnings[sample.warnings])
+      if (db !== undefined) {
+        assert.equal(opened, closed)
+        // NULL-key access suppression is separate; hold the native results
+        // without claiming that its raw inner reads already agree.
+        if (sample.outer !== null) assert.deepEqual([opened, visited, closed], [2, sample.innerRows * 2, 2])
+      }
+    }
+    await conn.query('UPDATE pa SET g=1')
+    await conn.query('DELETE FROM ch')
+    await conn.query('INSERT INTO ch VALUES' + Array.from({ length: 100 }, (_, i) => `(${i + 1},1)`).join(','))
+    const options = { sql: sql + ' LIMIT ?', rowsAsArray: true }
+    const run = async (limit: number, rows: unknown, reads: number) => {
+      reset()
+      const [actual, fields] = await conn.execute(options, [limit])
+      assert.deepEqual(actual, rows)
+      assert.deepEqual(fieldFacts(fields), firstHit.fields[0])
+      assert.deepEqual((await conn.query('SHOW WARNINGS'))[0], [])
+      if (db !== undefined) assert.deepEqual([opened, visited, closed], limit === 0 ? [0, 0, 0] : [1, reads, 1])
+    }
+    // A second matching row would fail if the source were exhausted.
+    failAfter = 2
+    for (const limit of [0, 1, 5]) await run(limit, [], limit === 0 ? 0 : 1)
+    await conn.query('UPDATE pa SET g=9'); await run(1, [['one']], 0)
+    await conn.query('UPDATE ch SET g=9'); await run(1, [], 1)
+    await conn.beginTransaction()
+    await conn.query('UPDATE ch SET g=1'); await run(1, [['one']], 0)
+    await conn.rollback(); await run(1, [], 1)
+    conn.unprepare(options)
+    failAfter = undefined
+    if (db !== undefined) for (const switches of ['default,firstmatch=off,materialization=off', 'default,semijoin=off,materialization=off']) {
+      await conn.query('SET optimizer_switch=' + mysql.escape(switches))
+      reset()
+      assert.deepEqual((await conn.query({ sql, rowsAsArray: true }))[0], [])
+      // These excluded profiles retain their existing source; broader inner
+      // early termination remains open rather than being admitted implicitly.
+      assert.deepEqual([opened, visited, closed], [1, 100, 1])
+    }
+  } finally {
+    if (db !== undefined && open !== undefined) db.catalog!.table = open
+    await conn.query('DROP DATABASE IF EXISTS firstmatch216'); await conn.end(); await db?.end()
   }
 })
