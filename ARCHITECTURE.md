@@ -1645,8 +1645,8 @@ functions remain admitted. A pure postorder check shares only traversal and nati
 diagnostic construction with generated columns. ALTER SET DEFAULT retains its
 late execution boundary and non-executing PREPARE behavior. The extended tests
 pass 153 transaction boundaries and nine missing-database cases against both
-engines. Forty-seven admission captures enforce 65,563/82,403 complete normalized commands,
-with unchanged native answer pools and 16,840 open outcomes. CHECK permissions/namespace,
+engines. Forty-eight admission captures enforce 66,881/84,587 complete normalized commands,
+with unchanged native answer pools and 17,706 open outcomes. CHECK permissions/namespace,
 malformed declaration ordering, ANSI SHOW CREATE and other function gaps remain
 open. A CHECK permission-only trial was withdrawn because native clock precision
 and RANDOM_BYTES evaluation were prerequisites. RANDOM_BYTES now has a bounded
@@ -1731,11 +1731,16 @@ enumerable bigint changes the exported decoded TIME Value shape; payloads and
 generic conversion remain unchanged. A 6,264-command native capture improves
 5,020 to 5,184 matches with no matching fact lost. Native/local cached DML,
 DEFAULT, generated fields and CHECK controls pass. Fresh Docker verifies 1,546
-tests and all seven corpora, under all nine unchanged caps. NULLIF temporal
-readers/diagnostics, packet publication, DATETIME integer rounding/overflow,
-mixed-type/cache and user-variable payloads, assignment expressions, DECIMAL
-overflow warnings, JSON labels, bound-parameter metadata, CAST BINARY
-collation/nullability and broader warning publication remain open. Supplementary identifiers, ordinary table-name
+tests and all seven corpora, under all nine unchanged caps. The bounded DATETIME
+follow-up retains 2,184 native commands, 1,318 complete current matches and 866
+open outcomes without changing runtime code. Calendar versus numeric-cache
+carry, zero parts and deferred 1441 warnings need separate reader rules. Fresh
+Docker passes 1,547 tests; the next implementation returns to captured M5.47
+strategies. NULLIF temporal readers/diagnostics, packet publication, DATETIME
+integer rounding/overflow, mixed-type/cache and user-variable payloads,
+assignment expressions, DECIMAL overflow warnings, JSON labels, bound-parameter
+metadata, CAST BINARY collation/nullability and broader warning publication
+remain open. Supplementary identifiers, ordinary table-name
 refusal, result/prepared temporal metadata, JSON extraction, consumer range warnings,
 declaration phase, string nullability and merged temporal charset also remain open.
 Bare DEFAULT/ON UPDATE now use their four timestamp aliases, require NOW

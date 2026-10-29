@@ -1148,9 +1148,48 @@ byte-identical to the committed report, retaining all 37 shared passes.
 Source proofs cover 493 tests/fixtures and 206 runtime files. All eleven required 9764ad8 CI jobs pass. M5.10 remains
 partial at 144/190 overall and M5 42/53.
 
-**Next bounded slice:** audit DATETIME integer rounding, calendar carry, zero
-dates and maximum-year overflow diagnostics without JavaScript Date normalization of zero
-dates. NULLIF temporal integer readers and diagnostics, packet publication, mixed
+**DATETIME integer-reader checkpoint, native contract retained (2026-10-28):**
+The bounded follow-up captures 2,184 commands across query/execute/prepare and
+both fractional modes. All 1,318 complete current matches and every matching
+component, error attribute, condition, field and packet fact are enforced without
+a runtime change. The other 866 complete outcomes remain explicitly open,
+including reader behavior and existing metadata differences. All native answers
+reconstruct and replay against MySQL 8.4.11; all forty-seven predecessor fixtures
+and thresholds remain unchanged. Forty-eight captures protect 66,881/84,587
+complete normalized commands and 186,248 conditions, retaining 17,706 open
+outcomes.
+
+The audit rules out a single generic rounding shortcut. A raw field and an IF
+branch forwarding it retain calendar carry independently of fractional truncation;
+computed CAST/literal readers honor that mode. MIN/scalar caches instead round
+the decimal-number representation. For 00:00:59.5, a raw DATETIME carries to
+00:01:00 while its MIN cache increments the numeric seconds to 60. Zero parts
+have their own carry refusal: a zero date at 00:00:00.5 reads 1, but at
+23:59:59.5 the raw reader keeps the uncarried integer. Maximum-year raw/literal
+carry publishes warning 1441, `Datetime function: datetime field overflow`;
+its numeric cache carries without that warning. Existing Date/day-number helpers
+cannot preserve all these rules, and a warning emitted during decoding would
+incorrectly affect ordinary display and caches. A future repair needs an integer
+reader owned by the invocation, explicit field/cache/computed reading rules,
+zero-part carry and warning-cardinality controls across branches, repeated
+consumers, rows and cached execution. The measured contract records the
+prerequisites for the deferred repair.
+
+Fresh Docker verifies 1,547 main tests, four latency tests, typecheck, lint,
+all nine unchanged caps and package/typed smoke. The new fixture also passes
+all 2,184 native commands and local preservation checks. Source proofs cover
+494 tests/fixtures and 206 runtime files; runtime packages are byte-identical to
+a63ca2c, whose full pinned-reference Docker gate and all eleven required CI jobs
+passed. This closes the bounded function batch checkpoint, not M5.10: totals remain 144/190 and M5 42/53.
+
+**Next bounded slice:** resume M5.47. Refresh its latest captured materialization
+and threshold controls against the current tree before selecting the smallest
+remaining strategy gap; use current native facts rather than older snapshot
+counts. Preserve the existing execution/build/probe owners, matching rows, full
+fields, warnings, complete plans and unchanged plan floor. M5.49 and M5.50 retain
+their existing acceptance criteria; browser work follows the remaining executor
+work. DATETIME integer rounding/calendar/zero/max-overflow prerequisites,
+NULLIF temporal integer readers and diagnostics, packet publication, mixed
 type and cache payloads, user-variable representation and assignment expressions, DECIMAL integer overflow warnings, JSON diagnostic labels,
 bound-parameter metadata, CAST BINARY collation/nullability and broader declaration
 publication remain open. CHECK permissions and SYSDATE construction/parent timing
