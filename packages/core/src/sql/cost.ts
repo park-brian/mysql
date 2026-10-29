@@ -170,6 +170,24 @@ export interface Positioned extends Position {
   readonly read: number
 }
 
+/** Pure outer-first antijoin temporary costs, in native binary-double order. */
+export function materializedAntijoinWins(outer: Positioned, probe: Positioned, built: Positioned): boolean {
+  const rows = outer.fetched * outer.filter
+  const joined = rows * probe.fetched
+  const prefix = outer.read + outer.fetched * ROW_EVALUATE
+  // Inner prefix, creation and writes precede the outer lookup probes.
+  let materialized = built.read + built.fetched * ROW_EVALUATE
+  materialized += MEMORY_CREATE
+  materialized += built.fetched * ROW_EVALUATE
+  materialized = prefix + (materialized + rows * ROW_EVALUATE)
+  // Weedout evaluates its join, then creates and uses its temporary table.
+  let weedout = prefix + (probe.read + joined * ROW_EVALUATE)
+  weedout += MEMORY_CREATE
+  weedout += (rows + joined) * ROW_EVALUATE
+  // Later weedout replaces materialization only for a strictly lower cost.
+  return materialized <= weedout
+}
+
 /** A table in a freely reorderable inner join. */
 export interface Candidate {
   readonly alias: string

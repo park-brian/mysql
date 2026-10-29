@@ -1780,7 +1780,7 @@ The full Docker gates, pinned-reference audits and 10,000 crash points pass.
 `db.stream()` streams a million rows within a few MB of the heap's baseline (M5.40). Next is the
 remaining function and planner work, then the browser. The coercion corpus
 now agrees on all 3,148 observations and all 1,737 warning counts. The core entry bundle
-is 329,891 bytes gzipped (322.2 KiB), against the 500 KB release target,
+is 330,035 bytes gzipped (322.3 KiB), against the 500 KB release target,
 with the UCA weights in a separate chunk loaded on demand.
 The private generated error table records sequential range starts instead of
 repeating each number. Its 2,132 facts, provenance and public lookups remain
@@ -1798,6 +1798,13 @@ integer equality now skips NULL-key searches after normal source binding, using
 the current parent row. NULL-safe equality, materialized first-NULL construction
 and excluded profiles retain their paths. Generic EXISTS and broader strategies
 remain open.
+
+With FirstMatch disabled, the bounded integer profile now admits materialization
+when its full cost wins against enabled weedout. The comparator preserves native
+binary-double accumulation and the earlier materialized candidate on a genuine
+tie; equal rounded trace values can still select weedout. It reuses the deferred
+build and retains its first-NULL, failure and LIMIT behavior. Weedout winners and
+unsupported switch combinations remain on their previous paths.
 
 The release plan gives each stage something to ship:
 

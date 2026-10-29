@@ -44,7 +44,7 @@ import { integerBytes, truth, type Value } from '@myjs/types'
 import type { Compiled, Env, Row, Scope } from './compile.ts'
 import { indexLookup, planNode, wrap, type PlanNode } from './explain.ts'
 import { FULL_SCAN, chooseAccess, dynamicAccess, keyOrder, optimizerEnabled, pointAccess, splitAnd, type Access, type InferredRange, type OuterColumn, type RangeCosting } from './plan.ts'
-import { MEMORY_CREATE, ROW_EVALUATE, bestAccess, floorFilter, indexScanCost, joinOrder, type Candidate, type FirstMatch, type KeyChoice, type Positioned, type RangeRead } from './cost.ts'
+import { MEMORY_CREATE, ROW_EVALUATE, bestAccess, floorFilter, indexScanCost, joinOrder, materializedAntijoinWins, type Candidate, type FirstMatch, type KeyChoice, type Positioned, type RangeRead } from './cost.ts'
 import { rowKey } from './keys.ts'
 import { columnResultType } from './meta.ts'
 import { chooseStrategy } from './group.ts'
@@ -648,7 +648,9 @@ export function planFrom(refs: readonly TableReference[], ctx: FromContext, wher
     },
     antijoinStrategy(alias) {
       const plan = joinPlan()
-      if (!plan?.lookups.has(alias) || !optimizerEnabled(ctx.env, 'firstmatch')) return undefined
+      const firstMatch = optimizerEnabled(ctx.env, 'firstmatch')
+      const materialization = optimizerEnabled(ctx.env, 'materialization')
+      if (!plan?.lookups.has(alias) || (!firstMatch && (!materialization || !optimizerEnabled(ctx.env, 'duplicateweedout')))) return undefined
       const node = plan.node
       const [outer, probe] = plan.positions
       if (node.kind !== 'join' || !node.left || node.outer.kind !== 'leaf' || node.inner.kind !== 'leaf' || outer === undefined || probe === undefined) return undefined
@@ -656,12 +658,15 @@ export function planFrom(refs: readonly TableReference[], ctx: FromContext, wher
       const index = node.lookup?.index
       const stats = table.def === undefined || table.table === undefined ? undefined : ctx.statistics?.(table.def, table.table)
       if (stats === undefined || table.def === undefined || index?.kind !== 'index' || index.parts.length !== 1 || index.parts[0]?.descending === true || !holdsRead(table.def, index, settings.read.get(alias) ?? 'all')) return undefined
-      if (!optimizerEnabled(ctx.env, 'materialization')) return 'lookup'
+      if (!materialization) return 'lookup'
       const built = placeTable(table, undefined, NONE, NONE, scope, settings, stats)
+      if (!firstMatch) return materializedAntijoinWins(outer, probe, built) ? 'materialized' : undefined
       const rows = outer.fetched * outer.filter
+      const buildCost = built.read + ROW_EVALUATE * built.fetched * 2
+      const evaluate = ROW_EVALUATE * rows * probe.fetched
       // Probe work does not multiply the preserved-side output cardinality.
-      return built.read + ROW_EVALUATE * built.fetched * 2 + MEMORY_CREATE + ROW_EVALUATE * rows
-        < probe.read + ROW_EVALUATE * rows * probe.fetched
+      return buildCost + MEMORY_CREATE + ROW_EVALUATE * rows
+        < probe.read + evaluate
         ? 'materialized' : 'lookup'
     },
     hashAntijoin(key, rows, describe) {

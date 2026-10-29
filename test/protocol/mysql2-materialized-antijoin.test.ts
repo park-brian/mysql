@@ -7,6 +7,7 @@ import { SqlError } from '@myjs/protocol'
 import costs from './fixtures/antijoin/materialized.json' with { type: 'json' }
 import integers from './fixtures/antijoin/materialized-integers.json' with { type: 'json' }
 import firstHit from './fixtures/antijoin/first-hit.json' with { type: 'json' }
+import firstMatchOff from './fixtures/antijoin/firstmatch-off.json' with { type: 'json' }
 // @ts-expect-error — share the capture's normalization without its runner.
 import { planSkeleton } from '../../tools/capture-relational.mjs'
 
@@ -34,6 +35,15 @@ async function check(conn: mysql.Connection, sql: string, rows: unknown, fields:
   }
 }
 
+async function populateCostTables(conn: mysql.Connection, outer: number, inner: number) {
+  await conn.query('DELETE FROM pa'); await conn.query('DELETE FROM ch')
+  if (outer > 0) await conn.query('INSERT INTO pa VALUES' + Array.from({ length: outer }, (_, i) =>
+    `(${i + 1},'n${String(outer - i).padStart(3, '0')}',${i % 4 === 0 ? 'NULL' : i % 4})`).join(','))
+  if (inner > 0) await conn.query('INSERT INTO ch VALUES' + Array.from({ length: inner }, (_, i) =>
+    `(${i + 1},${i % 4 === 0 ? 'NULL' : i % 4},'same',${i % 5 + 1})`).join(','))
+  await conn.query('ANALYZE TABLE pa,ch')
+}
+
 test('pure integer antijoins choose materialization by cost and preserve outer ordering', async () => {
   const { db, conn } = await connect()
   type Case = [string, number, number, string, string, number, number, number, number, boolean]
@@ -41,8 +51,8 @@ test('pure integer antijoins choose materialization by cost and preserve outer o
     assert.equal(costs.mysqlVersion, '8.4.11')
     assert.equal(costs.cases.length, 700)
     assert.equal(costs.baselineComplete, 474)
-    assert.equal(costs.predecessorComplete, 682)
-    assert.equal(costs.complete, 840)
+    assert.equal(costs.predecessorComplete, 840)
+    assert.equal(costs.complete, 1024)
     assert.equal(costs.outcomes, 1400)
     await conn.query('CREATE DATABASE anti213')
     await conn.query('USE anti213')
@@ -53,12 +63,7 @@ test('pure integer antijoins choose materialization by cost and preserve outer o
     for (const raw of costs.cases) {
       const [key, outer, inner, switches, suffix, rows, fields, warnings, plan, guard] = raw as Case
       if (population !== outer + ':' + inner) {
-        await conn.query('DELETE FROM pa'); await conn.query('DELETE FROM ch')
-        if (outer > 0) await conn.query('INSERT INTO pa VALUES' + Array.from({ length: outer }, (_, i) =>
-          `(${i + 1},'n${String(outer - i).padStart(3, '0')}',${i % 4 === 0 ? 'NULL' : i % 4})`).join(','))
-        if (inner > 0) await conn.query('INSERT INTO ch VALUES' + Array.from({ length: inner }, (_, i) =>
-          `(${i + 1},${i % 4 === 0 ? 'NULL' : i % 4},'same',${i % 5 + 1})`).join(','))
-        await conn.query('ANALYZE TABLE pa,ch')
+        await populateCostTables(conn, outer, inner)
         population = outer + ':' + inner
       }
       await conn.query('SET optimizer_switch=' + mysql.escape(switches))
@@ -66,18 +71,127 @@ test('pure integer antijoins choose materialization by cost and preserve outer o
       const [explain] = await conn.query<mysql.RowDataPacket[]>('EXPLAIN FORMAT=TREE ' + sql)
       const nativePlan = costs.plans[plan]!
       // The supported cohorts come from switches and the native strategy,
-      // independently of current output. FirstMatch-off/semijoin-off remain open.
-      const supportedSwitches = !switches.includes('firstmatch=off') && !switches.includes('semijoin=off')
-      assert.equal(guard, supportedSwitches, 'captured plan guard: ' + sql)
+      // independently of current output. FirstMatch-off admits only a native
+      // materialized winner; weedout winners and semijoin-off remain separate.
+      const first = !switches.includes('firstmatch=off')
+      const materialized = !switches.includes('materialization=off') && !switches.includes('duplicateweedout=off') && nativePlan.includes('Materialize with deduplication')
+      assert.equal(guard, !switches.includes('semijoin=off') && (first || materialized), 'captured plan guard: ' + sql)
       // Every native answer is retained. The remaining strategy gaps stay open;
       // all predecessor matching plans and the newly repaired plans are guarded.
       if (host !== undefined || guard) assert.equal(planSkeleton(explain[0]?.EXPLAIN), nativePlan, sql)
       if (guard) guarded++
       await check(conn, sql, costs.rows[rows], costs.fields[fields], costs.warnings[warnings])
     }
-    assert.equal(guarded * 2, 840)
+    assert.equal(guarded * 2, 1024)
   } finally {
     await conn.query('DROP DATABASE IF EXISTS anti213'); await conn.end(); await db?.end()
+  }
+})
+
+test('FirstMatch-off follows native materialization and weedout cost choices', async () => {
+  const { db, conn } = await connect()
+  type Case = [string, number, number, string, string, number, number, number, number, number, boolean]
+  try {
+    assert.equal(firstMatchOff.mysqlVersion, '8.4.11')
+    assert.equal(firstMatchOff.cases.length, 980)
+    assert.equal(firstMatchOff.outcomes, 1960)
+    assert.equal(firstMatchOff.baselineComplete, 0)
+    assert.equal(firstMatchOff.complete, 552)
+    await conn.query('CREATE DATABASE anti213'); await conn.query('USE anti213')
+    await conn.query('CREATE TABLE pa(id INT PRIMARY KEY,name VARCHAR(12) NOT NULL,g INT,UNIQUE KEY(name)) STATS_AUTO_RECALC=0')
+    await conn.query('CREATE TABLE ch(id INT PRIMARY KEY,pa_id INT,label VARCHAR(10),qty INT NOT NULL,KEY(pa_id)) STATS_AUTO_RECALC=0')
+    let population = ''
+    let guarded = 0, equalReported = 0
+    for (const raw of firstMatchOff.cases) {
+      const [key, outer, inner, switches, suffix, rows, fields, warnings, plan, cost, guard] = raw as Case
+      if (population !== outer + ':' + inner) {
+        await populateCostTables(conn, outer, inner)
+        population = outer + ':' + inner
+      }
+      const nativePlan = firstMatchOff.plans[plan]!
+      const supported = !switches.includes('semijoin=off') && !switches.includes('materialization=off') && !switches.includes('duplicateweedout=off')
+      assert.equal(guard, supported && nativePlan.includes('Materialize with deduplication'))
+      if (supported) {
+        const decision = firstMatchOff.costs[cost]!
+        assert.equal(typeof decision.materialized, 'number')
+        assert.equal(typeof decision.weedout, 'number')
+        assert.equal(decision.chosen, guard ? 'MaterializeLookup' : 'DuplicateWeedout')
+        // These trace prices are rounded observations, not comparator inputs.
+        if (guard) assert.ok(decision.materialized! <= decision.weedout!)
+        if (decision.materialized === decision.weedout) { equalReported++; assert.equal(guard, false) }
+      }
+      await conn.query('SET optimizer_switch=' + mysql.escape(switches))
+      const sql = 'SELECT name FROM pa WHERE NOT EXISTS(SELECT 1 FROM ch WHERE ch.pa_id=pa.' + key + ')' + suffix
+      const [explain] = await conn.query<mysql.RowDataPacket[]>('EXPLAIN FORMAT=TREE ' + sql)
+      if (host !== undefined || guard) assert.equal(planSkeleton(explain[0]?.EXPLAIN), nativePlan, sql)
+      if (guard) guarded++
+      await check(conn, sql, firstMatchOff.rows[rows], firstMatchOff.fields[fields], firstMatchOff.warnings[warnings])
+    }
+    assert.equal(guarded * 2, 552)
+    assert.equal(equalReported, 48)
+  } finally {
+    await conn.query('DROP DATABASE IF EXISTS anti213'); await conn.end(); await db?.end()
+  }
+})
+
+test('FirstMatch-off materialization builds on the first NULL row and skips LIMIT 0', async () => {
+  const { db, conn } = await connect()
+  const open = db?.catalog!.table.bind(db.catalog)
+  let opened = 0, visited = 0, closed = 0
+  let fail = false
+  const reset = () => { opened = visited = closed = 0 }
+  const sql = 'SELECT name FROM pa WHERE NOT EXISTS(SELECT 1 FROM ch WHERE ch.g=pa.g)'
+  try {
+    await conn.query('CREATE DATABASE firstoff218'); await conn.query('USE firstoff218')
+    await conn.query('CREATE TABLE pa(id INT PRIMARY KEY,name VARCHAR(12) NOT NULL,g INT,UNIQUE KEY(name)) STATS_AUTO_RECALC=0')
+    await conn.query('CREATE TABLE ch(id INT PRIMARY KEY,g INT,KEY(g)) STATS_AUTO_RECALC=0')
+    const names = Array.from({ length: 20 }, (_, i) => 'n' + String(20 - i).padStart(3, '0'))
+    await conn.query('INSERT INTO pa VALUES' + names.map((name, i) => `(${i + 1},'${name}',NULL)`).join(','))
+    await conn.query('INSERT INTO ch VALUES' + Array.from({ length: 8 }, (_, i) => `(${i + 1},${i % 4 === 0 ? 'NULL' : i % 4})`).join(','))
+    await conn.query('ANALYZE TABLE pa,ch')
+    if (db !== undefined && open !== undefined) db.catalog!.table = (schema, name, trx) => {
+      const table = open(schema, name, trx)
+      if (schema === 'firstoff218' && name === 'ch') {
+        const scan = table.indexScan.bind(table)
+        table.indexScan = function*(index, range, transaction, mode) {
+          opened++
+          try {
+            for (const row of scan(index, range, transaction, mode)) {
+              visited++
+              if (fail) throw new SqlError('ER_QUERY_INTERRUPTED', 'injected FirstMatch-off build failure')
+              yield row
+            }
+          } finally { closed++ }
+        }
+      }
+      return table
+    }
+    const fields = [['name', 253, 48, 20485, 0, 224, 'firstoff218', 'pa', 'pa', 'name']]
+    for (const switches of ['default,firstmatch=off', 'default,firstmatch=off,block_nested_loop=off', 'default,firstmatch=off,loosescan=off']) {
+      await conn.query('SET optimizer_switch=' + mysql.escape(switches))
+      const [explain] = await conn.query<mysql.RowDataPacket[]>('EXPLAIN FORMAT=TREE ' + sql)
+      assert.equal((String(explain[0]?.EXPLAIN).match(/Materialize with deduplication/g) ?? []).length, 1)
+      if (host !== undefined) {
+        const [analyze] = await conn.query<mysql.RowDataPacket[]>('EXPLAIN ANALYZE ' + sql)
+        const build = String(analyze[0]?.EXPLAIN).split('\n').find((line) => line.includes('Materialize with deduplication'))
+        assert.match(build ?? '', /\(actual time=[^)]* rows=3 loops=1\)/)
+      }
+      reset()
+      await check(conn, sql, names.map((name) => [name]), fields, [])
+      if (db !== undefined) assert.deepEqual([opened, visited, closed], [2, 16, 2])
+      reset(); fail = true
+      if (db !== undefined) {
+        await assert.rejects(conn.query(sql + ' LIMIT 1'), /injected FirstMatch-off build failure/)
+        assert.deepEqual([opened, visited, closed], [1, 1, 1])
+      }
+      reset()
+      await check(conn, sql + ' LIMIT 0', [], fields, [])
+      if (db !== undefined) assert.deepEqual([opened, visited, closed], [0, 0, 0])
+      fail = false
+    }
+  } finally {
+    if (db !== undefined && open !== undefined) db.catalog!.table = open
+    await conn.query('DROP DATABASE IF EXISTS firstoff218'); await conn.end(); await db?.end()
   }
 })
 
@@ -307,7 +421,7 @@ test('proved FirstMatch sorts its outer source before correlated probes and pres
       assert.deepEqual(events, ['pa:open', 'pa:row', 'pa:row', 'pa:close'])
       fail = false
     }
-    for (const switches of ['default,firstmatch=off', 'default,semijoin=off']) {
+    for (const switches of ['default,firstmatch=off,materialization=off', 'default,semijoin=off']) {
       await conn.query('SET optimizer_switch=' + mysql.escape(switches))
       events.length = 0
       assert.deepEqual((await conn.query({ sql, rowsAsArray: true }))[0], [['n001']])

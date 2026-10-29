@@ -45,6 +45,10 @@ correlated reader after the outer sort too. Its admitted pure source now stops
 after its first qualified row and skips NULL-key searches after normal binding.
 NULL-safe equality and materialized first-NULL builds retain their paths. Generic
 EXISTS, excluded profiles and broader strategies remain open.
+With FirstMatch disabled and weedout enabled, a proved materialized winner now
+uses the same deferred build. Full cost accumulation and replacement priority
+follow MySQL; rounded trace prices do not decide ties. Weedout winners and other
+unsupported switch combinations retain their paths.
 M5.19 field copying now shares the
 BLOB promotion rule with metadata. Actual DISTINCT/group/derived writers now
 normalize stored DECIMAL values, closing the measured streamed-join copy gaps.
