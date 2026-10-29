@@ -662,7 +662,7 @@ export function planFrom(refs: readonly TableReference[], ctx: FromContext, wher
       // A proved materialized candidate need not beat disabled weedout.
       if (!firstMatch && !optimizerEnabled(ctx.env, 'duplicateweedout')) return 'materialized'
       const built = placeTable(table, undefined, NONE, NONE, scope, settings, stats)
-      if (!firstMatch) return materializedAntijoinWins(outer, probe, built) ? 'materialized' : undefined
+      if (!firstMatch) return materializedAntijoinWins(outer, probe, built) ? 'materialized' : 'lookup'
       const rows = outer.fetched * outer.filter
       const buildCost = built.read + ROW_EVALUATE * built.fetched * 2
       const evaluate = ROW_EVALUATE * rows * probe.fetched

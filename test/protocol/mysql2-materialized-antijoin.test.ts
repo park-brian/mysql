@@ -52,8 +52,8 @@ test('pure integer antijoins choose materialization by cost and preserve outer o
     assert.equal(costs.mysqlVersion, '8.4.11')
     assert.equal(costs.cases.length, 700)
     assert.equal(costs.baselineComplete, 474)
-    assert.equal(costs.predecessorComplete, 840)
-    assert.equal(costs.complete, 1024)
+    assert.equal(costs.predecessorComplete, 1024)
+    assert.equal(costs.complete, 1120)
     assert.equal(costs.outcomes, 1400)
     await conn.query('CREATE DATABASE anti213')
     await conn.query('USE anti213')
@@ -72,18 +72,16 @@ test('pure integer antijoins choose materialization by cost and preserve outer o
       const [explain] = await conn.query<mysql.RowDataPacket[]>('EXPLAIN FORMAT=TREE ' + sql)
       const nativePlan = costs.plans[plan]!
       // The supported cohorts come from switches and the native strategy,
-      // independently of current output. FirstMatch-off admits only a native
-      // materialized winner; weedout winners and semijoin-off remain separate.
-      const first = !switches.includes('firstmatch=off')
-      const materialized = !switches.includes('materialization=off') && !switches.includes('duplicateweedout=off') && nativePlan.includes('Materialize with deduplication')
-      assert.equal(guard, !switches.includes('semijoin=off') && (first || materialized), 'captured plan guard: ' + sql)
+      // independently of current output. FirstMatch-off now admits both
+      // proved native choices here; semijoin-off remains separate.
+      assert.equal(guard, !switches.includes('semijoin=off'), 'captured plan guard: ' + sql)
       // Every native answer is retained. The remaining strategy gaps stay open;
       // all predecessor matching plans and the newly repaired plans are guarded.
       if (host !== undefined || guard) assert.equal(planSkeleton(explain[0]?.EXPLAIN), nativePlan, sql)
       if (guard) guarded++
       await check(conn, sql, costs.rows[rows], costs.fields[fields], costs.warnings[warnings])
     }
-    assert.equal(guarded * 2, 1024)
+    assert.equal(guarded * 2, 1120)
   } finally {
     await conn.query('DROP DATABASE IF EXISTS anti213'); await conn.end(); await db?.end()
   }
@@ -97,8 +95,8 @@ test('FirstMatch-off follows native materialization and weedout cost choices', a
     assert.equal(firstMatchOff.cases.length, 1540)
     assert.equal(firstMatchOff.outcomes, 3080)
     assert.equal(firstMatchOff.baselineComplete, 0)
-    assert.equal(firstMatchOff.predecessorComplete, 1672)
-    assert.equal(firstMatchOff.complete, 1952)
+    assert.equal(firstMatchOff.predecessorComplete, 1952)
+    assert.equal(firstMatchOff.complete, 2240)
     await conn.query('CREATE DATABASE anti213'); await conn.query('USE anti213')
     await conn.query('CREATE TABLE pa(id INT PRIMARY KEY,name VARCHAR(12) NOT NULL,g INT,UNIQUE KEY(name)) STATS_AUTO_RECALC=0')
     await conn.query('CREATE TABLE ch(id INT PRIMARY KEY,pa_id INT,label VARCHAR(10),qty INT NOT NULL,KEY(pa_id)) STATS_AUTO_RECALC=0')
@@ -113,20 +111,21 @@ test('FirstMatch-off follows native materialization and weedout cost choices', a
       const nativePlan = firstMatchOff.plans[plan]!
       const supported = !switches.includes('semijoin=off') && !switches.includes('materialization=off')
       const limited = !switches.includes('semijoin=off') && switches.includes('materialization=off') && !switches.includes('duplicateweedout=off')
-      assert.equal(guard, limited || supported && nativePlan.includes('Materialize with deduplication'))
+      assert.equal(guard, limited || supported)
       if (supported) {
         const decision = firstMatchOff.costs[cost]!
         assert.equal(typeof decision.materialized, 'number')
         assert.equal(typeof decision.weedout, 'number')
-        assert.equal(decision.chosen, guard ? 'MaterializeLookup' : 'DuplicateWeedout')
+        const materialized = nativePlan.includes('Materialize with deduplication')
+        assert.equal(decision.chosen, materialized ? 'MaterializeLookup' : 'DuplicateWeedout')
         // These trace prices are rounded observations, not comparator inputs.
         if (switches.includes('duplicateweedout=off')) {
           assert.equal(guard, true)
           forced++
           if (decision.materialized! > decision.weedout!) disabledCheaper++
         } else {
-          if (guard) assert.ok(decision.materialized! <= decision.weedout!)
-          if (decision.materialized === decision.weedout) { equalReported++; assert.equal(guard, false) }
+          if (materialized) assert.ok(decision.materialized! <= decision.weedout!)
+          if (decision.materialized === decision.weedout) { equalReported++; assert.equal(materialized, false) }
         }
       }
       await conn.query('SET optimizer_switch=' + mysql.escape(switches))
@@ -136,7 +135,7 @@ test('FirstMatch-off follows native materialization and weedout cost choices', a
       if (guard) guarded++
       await check(conn, sql, firstMatchOff.rows[rows], firstMatchOff.fields[fields], firstMatchOff.warnings[warnings])
     }
-    assert.equal(guarded * 2, 1952)
+    assert.equal(guarded * 2, 2240)
     assert.equal(equalReported, 48)
     assert.equal(forced, 560)
     assert.equal(disabledCheaper, 128)

@@ -1780,7 +1780,7 @@ The full Docker gates, pinned-reference audits and 10,000 crash points pass.
 `db.stream()` streams a million rows within a few MB of the heap's baseline (M5.40). Next is the
 remaining function and planner work, then the browser. The coercion corpus
 now agrees on all 3,148 observations and all 1,737 warning counts. The core entry bundle
-is 330,071 bytes gzipped (322.3 KiB), against the 500 KB release target,
+is 330,069 bytes gzipped (322.3 KiB), against the 500 KB release target,
 with the UCA weights in a separate chunk loaded on demand.
 The private generated error table records sequential range starts instead of
 repeating each number. Its 2,132 facts, provenance and public lookups remain
@@ -1808,8 +1808,10 @@ unsupported switch combinations remain on their previous paths. Disabling
 weedout admits the same physically proved build even when its cost is higher;
 materialization-off with weedout enabled now reuses the proved correlated
 reader after outer sorting. It skips NULL and stops after its first qualified
-hit, with an explicit physical one-row Limit in its plan. Cost-selected weedout,
-last-resort fallback and semijoin-off execution remain open.
+hit, with an explicit physical one-row Limit in its plan. Full native costs now
+select the same reader when enabled materialization loses. Distribution changes
+retain materialized winners and their first-NULL build, including on cached
+executions. Last-resort fallback and semijoin-off execution remain open.
 
 The release plan gives each stage something to ship:
 
