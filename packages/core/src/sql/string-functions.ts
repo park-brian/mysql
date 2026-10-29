@@ -46,6 +46,7 @@ import {
   intValue,
   md5,
   parseTime,
+  roundHalfEven,
   sha1,
   sha256,
   sha512,
@@ -84,7 +85,7 @@ import {
 import { NULL_TYPE, charWidth, decimalType, doubleType, intType, stringType, stringResultType, type ResultType } from './meta.ts'
 import { nativeArity, unregistered } from './registry.ts'
 import { modeOf } from './mode.ts'
-import { today } from './temporal-functions.ts'
+import { timeValue, today } from './temporal-functions.ts'
 
 type V = Exclude<Value, null>
 
@@ -789,11 +790,8 @@ function myDoubleRound(value: number, places: bigint, truncate: boolean): number
   const div = value / tmp
   if (negative && !Number.isFinite(tmp)) return 0
   if (!negative && !Number.isFinite(mul)) return value
-  if (truncate) {
-    if (value >= 0) return negative ? Math.floor(div) * tmp : Math.floor(mul) / tmp
-    return negative ? Math.ceil(div) * tmp : Math.ceil(mul) / tmp
-  }
-  return negative ? rint(div) * tmp : rint(mul) / tmp
+  const round = truncate ? Math.trunc : roundHalfEven
+  return negative ? round(div) * tmp : round(mul) / tmp
 }
 
 // --- The second string slice, and the digests -------------------------------
@@ -823,18 +821,16 @@ export function intReader(c: Compiled): (r: Row, env: Env) => bigint | null {
     // Empty text is no integer either, here (8.4.11: CHAR('') warns).
     if ((v.kind === 'string' && v.ordinal === undefined && v.v.trim() === '') || (v.kind === 'bytes' && v.hex !== true && v.v.every((b) => b === 0x20))) raise(env, 1292, `Truncated incorrect INTEGER value: '${warnedText(v)}'`)
     // A double is `rint`-ed, halves to even (8.4.11: CHAR(2.5e0) is 0x02).
-    if (v.kind === 'double') return Number.isFinite(v.v) ? clamp64(BigInt(rint(v.v))) : v.v > 0 ? (1n << 63n) - 1n : -(1n << 63n)
+    if (v.kind === 'double') {
+      if (!Number.isFinite(v.v)) return v.v > 0 ? MAX_SIGNED : MIN_SIGNED
+      const rounded = BigInt(roundHalfEven(v.v))
+      return rounded > MAX_SIGNED ? MAX_SIGNED : rounded < MIN_SIGNED ? MIN_SIGNED : rounded
+    }
+    // Fields round independently of sql_mode; computed TIME readers honor truncation.
+    if (v.kind === 'time') return toInteger(timeValue(v.v, 0, c.type.column === undefined && modeOf(env.session.sqlMode).truncateFractional))
     return valInt(v)
   }
 }
-
-/** C's `rint`: the nearest integer, halves to the even neighbour, and -0 kept (MySQL prints `ROUND(-0.25)` as -0). */
-function rint(x: number): number {
-  const r = Math.round(x)
-  return r - x === 0.5 && r % 2 !== 0 ? r - 1 : r
-}
-
-const clamp64 = (n: bigint): bigint => (n > MAX_SIGNED ? MAX_SIGNED : n < MIN_SIGNED ? MIN_SIGNED : n)
 
 /** An argument's width in characters, which a binary result counts too (8.4.11: ELT and MAKE_SET over bytes). */
 const charsOf = (t: ResultType): number => widthOf(t, false)

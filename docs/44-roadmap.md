@@ -1044,11 +1044,42 @@ fact result remain byte-identical, retaining all 37 shared passes. Frozen-source
 proofs cover 485 tests/fixtures and 206 runtime sources. Both preceding commits'
 eleven required CI jobs pass. M5.10 remains partial; totals stay 144/190 and M5 42/53.
 
-**Next bounded slice:** audit temporal integer-reader rounding and carry through
-RANDOM_BYTES, CHAR and BIT_COUNT against pinned MySQL, then repair the existing
-shared reader. SQL text must retain its distinct prefix conversion. DECIMAL
-integer overflow warnings, JSON diagnostic labels, bound-parameter metadata,
-CAST BINARY collation/nullability and broader declaration publication remain open.
+**TIME integer readers, verified (2026-10-28):** the existing shared function
+reader now rounds fractional TIME values with second/minute/hour carry and sign
+preserved. Bare source fields and unary-plus field readings round independently
+of TIME_TRUNCATE_FRACTIONAL; computed readings honor the session mode. The reader
+reuses the existing temporal rounding/range owner. Text keeps its distinct integer
+prefix conversion, and global integer conversion and DATETIME behavior do not
+change. The existing half-even kernel now serves field storage and function
+readers without a duplicate implementation. DOUBLE truncation shares one scaling
+tail and uses Math.trunc, preserving signed zero and existing range guards.
+A 2,880-command MySQL 8.4.11 capture covers four strict/truncation combinations,
+three APIs, RANDOM_BYTES length, CHAR, BIT_COUNT and INET_NTOA, signed boundaries,
+fractional carry, literal/field/cast/copy readers, NULL and text controls. Complete
+matches improve 1,878 to 2,164 without losing a matched component, condition,
+primary-error attribute or field. All native answers reconstruct exactly; the
+prior forty-four fixture files and thresholds remain unchanged. Forty-five
+captures protect 52,421/66,569 complete normalized commands and 183,714 conditions,
+leaving 14,148 open outcomes. A separate cached-execution test verifies repeated
+query/execute behavior across mode changes and reader release, on native and local
+servers. Archived ff08b0c fails both new regressions for the expected TIME value.
+All 51 focused tests, 2,880 native fixture replays, one million seeded parser inputs
+and 20,000 seeded executor statements pass. Fresh Docker --reference passes 1,537
+main tests, four latency tests, typecheck, lint, all nine unchanged caps,
+package/typed smoke, the real client and all seven pinned corpora. Core/facade/types
+measure 334,325/334,241/52,586 B gzipped; raw core is four bytes above ff08b0c.
+The actual census and entire official-suite fact result remain byte-identical,
+retaining all 37 shared passes. Source proofs cover 487 tests/fixtures and 206
+runtime sources. All eleven required ff08b0c CI jobs pass. M5.10 remains partial;
+totals stay 144/190 and M5 42/53.
+
+**Next bounded slice:** audit copied TIME integer readers under fractional
+truncation mode and repair the smallest existing holder/reader boundary. The new
+capture retains their unresolved UNION-copy outcomes. Then address DATETIME
+integer rounding, calendar carry, zero dates and maximum-year overflow diagnostics;
+do not route zero dates through JavaScript Date normalization. DECIMAL integer
+overflow warnings, JSON diagnostic labels, bound-parameter metadata, CAST BINARY
+collation/nullability and broader declaration publication remain open.
 CHECK permissions and SYSDATE construction/parent timing are unchanged, including
 the SLEEP(SYSDATE(7)) guard. Supplementary identifiers, ordinary table-name refusal,
 prepared temporal metadata, JSON extraction, consumer-specific range warnings,

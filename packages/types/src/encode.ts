@@ -510,7 +510,7 @@ function deprecated(ctx: StoreContext, d: Deprecation, text: string, column: str
 }
 
 /** C's `rint` in the default rounding mode: halves go to the even neighbour. */
-function roundHalfEven(x: number): number {
+export function roundHalfEven(x: number): number {
   const r = Math.round(x)
   return r - x === 0.5 && r % 2 !== 0 ? r - 1 : r
 }

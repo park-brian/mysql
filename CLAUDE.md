@@ -185,8 +185,8 @@ functions remain admitted. A pure postorder check shares only traversal and nati
 diagnostic construction with generated columns. ALTER SET DEFAULT retains its
 late execution boundary and non-executing PREPARE behavior. The extended tests
 pass 153 transaction boundaries and nine missing-database cases against both
-engines. Forty-four admission captures enforce 50,257/63,689 complete normalized commands,
-with unchanged native answer pools and 13,432 open outcomes. CHECK permissions/namespace,
+engines. Forty-five admission captures enforce 52,421/66,569 complete normalized commands,
+with unchanged native answer pools and 14,148 open outcomes. CHECK permissions/namespace,
 malformed declaration ordering, ANSI SHOW CREATE and other function gaps remain
 open. A CHECK permission-only trial was withdrawn because native clock precision
 and RANDOM_BYTES evaluation were prerequisites. RANDOM_BYTES now has a bounded
@@ -252,8 +252,14 @@ Six native captures improve 78 to 944 complete normalized matches across 1,791
 commands without losing matching facts. Secure-source and two-session tests cover
 actual bytes, cached execution, repeated preparation and retained limits. Existing
 UTC/date, range-error and condition kernels remove duplicate mechanics under all
-nine unchanged size caps. Temporal integer rounding, DECIMAL overflow warnings,
-JSON labels, bound-parameter metadata, CAST BINARY collation/nullability and broader
+nine unchanged size caps. The shared function reader now rounds fractional TIME
+with carry, distinguishing bare source fields from computed readings under
+TIME_TRUNCATE_FRACTIONAL. A 2,880-command native capture improves 1,878 to 2,164
+complete matches without losing a matching fact. Cached mode changes preserve
+field rounding and release readers; the existing half-even storage/function
+kernel now has one implementation. Copied TIME holders under truncation mode,
+DATETIME integer rounding/overflow, DECIMAL overflow warnings, JSON labels,
+bound-parameter metadata, CAST BINARY collation/nullability and broader
 warning publication remain open. Supplementary identifiers, ordinary table-name
 refusal, result/prepared temporal metadata, JSON extraction, consumer range warnings,
 declaration phase, string nullability and merged temporal charset also remain open.
