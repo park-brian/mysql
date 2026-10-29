@@ -1471,19 +1471,53 @@ runtime files. Core/facade are 330,665/330,579 B gzipped; engine is 56,845 B.
 Prior f904ce7 passes all eleven required CI jobs. M5.47 stays partial; totals
 remain 144/190 overall and M5 42/53.
 
-**Next bounded slice:** audit retained-view locking reads across table creation,
-TRUNCATE, copy ALTER and drop/recreate, distinguishing an existing read view from
-current access without constructing a new view. A 280-command native audit
-now shows SELECT FOR UPDATE, FOR SHARE and UPDATE reject changed definitions
-under an existing snapshot/anchor view, including reads after an own INSERT.
-INSERT itself succeeds, and BEGIN without a view or autocommit reads succeed.
-Eight additional explicit-column INSERT controls after copy ALTER also succeed;
-the original eight column-count refusals remain captured separately. Repair only
-the smallest proved visibility mismatch through the canonical physical-read check. Internal current-row
-access used by INSERT conflict handling must retain its write lifetime; do not
-broaden a shared mode blindly. Preserve write/current read lifetimes, error identity, complete conditions, DROP and PREPARE boundaries.
-The prefix-UNIQUE/full-UNIQUE native key-order discrepancy remains a separate
-optimizer audit; do not silently change estimator priorities in a diagnostics fix.
+**M5.10 datatype fact sharing, verified:** equivalent spellings
+now copy complete immutable base facts, preserving canonical names, national
+charsets and shape-changing BOOL/SERIAL/LONG VARBINARY distinctions. Spatial
+names share storage facts and the existing CAST allowlist; private argument shapes
+are string discriminants without a runtime lookup object. All 71 private facts
+are identical, and 2,840 public AST/admission/provenance outcomes remain byte-exact.
+The incomplete CAST-admission prototype is preserved separately and is not part
+of this cleanup. All nine unchanged caps pass; parser/core/facade are
+45,387/330,568/330,497 B gzipped, 126/97/82 bytes smaller. One million seeded
+parser inputs and 20,000 executor statements pass. Fresh Docker --reference passes
+1,565 main and four latency tests, typecheck, lint, all nine unchanged caps,
+package/typed smoke, the real client and all seven pinned corpora, including
+1,737 coercion warning counts. Source proof covers 508 tests/fixtures and 206
+runtime files. Prior 5b34d30 passes all eleven required CI jobs. M5.10 remains
+partial; totals stay 144/190 overall and M5 42/53.
+
+**Next bounded slice:** preserve native warning histories at the actual grammar
+construction owners before admitting invalid DECIMAL CAST targets. Native probes
+place precision 66 refusal at the completed parser CAST production, before later
+syntax, source lookup or compiler validation, with inner invalid casts winning
+first. Extend the existing temporal CAST hook only after prior national, assignment,
+unary-BINARY and charset warnings are retained in order, including clipped-prefix
+counts. Runtime-owned warnings must not change successful-AST provenance or the
+existing BINARY publisher. Keep incomplete closing syntax before admission and
+preserve raw argument spelling, native whitespace endpoints and UTF-8 clipping.
+Do not place throws in generic metadata factories. Scale limits, M<D and valid
+parameter metadata retain their separate open gaps. The initial prototype is
+withheld because omitted preceding warnings can lose previously matching capped
+error counts; preserve every native fact and existing cap before promotion.
+
+The retained-view locking-read contract now has 280 general, 320 INSERT-family
+and 600 RR/RC startup captures. Under an existing view, changed definitions refuse
+SQL reads and UPDATE, including reads after an own INSERT; no-view/autocommit
+reads succeed. VALUES and IGNORE retain normal success/1062, but actual REPLACE
+and upsert conflicts can raise 1412. PRIMARY hit/missing-point optimization fails
+before headers; secondary, empty-range and actual Sort failures follow one header.
+WHERE FALSE and LIMIT0 skip initialization; bad constructors refuse before headers.
+Eight explicit-column INSERT-after-copy controls supplement eight captured arity
+refusals. The 600-case predecessor agrees on 460 primary errors/results and 492
+header profiles; its 60 DECIMAL66 cases wrongly succeed. This supports fixing
+constructor admission before a joint visibility/readiness migration. Keep
+constraint identification distinct from fetching a conflicting row, and probe
+REPLACE through a non-final UNIQUE key before changing shared current-read
+semantics. Use noncreating inspection of an existing transaction view; retain
+write effects across statement failure. Do not broaden a shared mode blindly.
+The prefix-UNIQUE/full-UNIQUE key-order discrepancy remains a separate optimizer
+audit; do not silently change estimator priorities in a diagnostics repair.
 Then resume the semijoin-off dependent-source repair, preserving its predicate
 before outer sort and sharing the actual bounded source with registered EXPLAIN.
 Remove the temporary column-only readiness fence once the initialization owner

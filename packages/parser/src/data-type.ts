@@ -48,35 +48,19 @@ import type { SqlMode } from './sql-mode.ts'
  * Not the same as the storage class: `TEXT` and `BLOB` share a storage class
  * and differ exactly in whether a charset may follow, which is the distinction
  * that matters here.
+ * `float` gives a single argument its mantissa meaning; `decimal` reads width
+ * and scale. `fsp` has the temporal bound, while `none` consumes no arguments.
  */
-const SHAPE = {
-  /** `(M)` display width, then `UNSIGNED` / `ZEROFILL`. */
-  INTEGER: 'integer',
-  /** `(M[,D])`, then `UNSIGNED` / `ZEROFILL`. */
-  DECIMAL: 'decimal',
-  /** `(p)` or `(M,D)` — the two mean different things. */
-  FLOAT: 'float',
-  /** `(fsp)`, 0..6. */
-  FSP: 'fsp',
-  /** `(M)`, then a charset. */
-  TEXT: 'text',
-  /** `(M)`, no charset — the byte-string types. */
-  BYTES: 'bytes',
-  /** `('a','b')`, then a charset. */
-  VALUES: 'values',
-  /** `(M)` and nothing else. */
-  WIDTH: 'width',
-  /** No arguments at all. */
-  NONE: 'none',
-} as const
+type Shape = 'integer' | 'decimal' | 'float' | 'fsp' | 'text' | 'bytes' | 'values' | 'width' | 'none'
+
+/** Spatial spellings share storage facts and CAST eligibility. */
+const SPATIAL_TYPES = ['GEOMETRY', 'POINT', 'LINESTRING', 'POLYGON', 'MULTIPOINT', 'MULTILINESTRING', 'MULTIPOLYGON', 'GEOMETRYCOLLECTION']
 
 /** The types a `CAST` may name, by their canonical names. */
 const CAST_TYPES = new Set([
   'BINARY', 'CHAR', 'DATE', 'DATETIME', 'TIME', 'DECIMAL', 'DOUBLE', 'FLOAT', 'JSON', 'YEAR',
-  'GEOMETRY', 'POINT', 'LINESTRING', 'POLYGON', 'MULTIPOINT', 'MULTILINESTRING', 'MULTIPOLYGON', 'GEOMETRYCOLLECTION',
+  ...SPATIAL_TYPES,
 ])
-
-type Shape = (typeof SHAPE)[keyof typeof SHAPE]
 
 interface TypeSpec {
   readonly code: FieldTypeCode
@@ -93,103 +77,86 @@ interface TypeSpec {
  * Multi-word names are spelled with single spaces and matched by
  * `#typeName` below, which joins the words it consumed the same way.
  */
-const TYPES: Readonly<Record<string, TypeSpec>> = {
-  BIT: { code: FIELD_TYPE.BIT, shape: SHAPE.WIDTH },
+const TYPES: Record<string, TypeSpec> = {
+  BIT: { code: FIELD_TYPE.BIT, shape: 'width' },
 
-  TINYINT: { code: FIELD_TYPE.TINY, shape: SHAPE.INTEGER },
-  INT1: { code: FIELD_TYPE.TINY, shape: SHAPE.INTEGER, as: 'TINYINT' },
+  TINYINT: { code: FIELD_TYPE.TINY, shape: 'integer' },
   // `BOOL` is a TINYINT(1) — a distinct spelling of the same type, not a
   // distinct type. MySQL reports `tinyint(1)` for it.
-  BOOL: { code: FIELD_TYPE.TINY, shape: SHAPE.NONE, as: 'TINYINT' },
-  BOOLEAN: { code: FIELD_TYPE.TINY, shape: SHAPE.NONE, as: 'TINYINT' },
-  SMALLINT: { code: FIELD_TYPE.SHORT, shape: SHAPE.INTEGER },
-  INT2: { code: FIELD_TYPE.SHORT, shape: SHAPE.INTEGER, as: 'SMALLINT' },
-  MEDIUMINT: { code: FIELD_TYPE.INT24, shape: SHAPE.INTEGER },
-  INT3: { code: FIELD_TYPE.INT24, shape: SHAPE.INTEGER, as: 'MEDIUMINT' },
-  MIDDLEINT: { code: FIELD_TYPE.INT24, shape: SHAPE.INTEGER, as: 'MEDIUMINT' },
-  INT: { code: FIELD_TYPE.LONG, shape: SHAPE.INTEGER },
-  INTEGER: { code: FIELD_TYPE.LONG, shape: SHAPE.INTEGER, as: 'INT' },
-  INT4: { code: FIELD_TYPE.LONG, shape: SHAPE.INTEGER, as: 'INT' },
-  BIGINT: { code: FIELD_TYPE.LONGLONG, shape: SHAPE.INTEGER },
-  INT8: { code: FIELD_TYPE.LONGLONG, shape: SHAPE.INTEGER, as: 'BIGINT' },
+  BOOL: { code: FIELD_TYPE.TINY, shape: 'none', as: 'TINYINT' },
+  SMALLINT: { code: FIELD_TYPE.SHORT, shape: 'integer' },
+  MEDIUMINT: { code: FIELD_TYPE.INT24, shape: 'integer' },
+  INT: { code: FIELD_TYPE.LONG, shape: 'integer' },
+  BIGINT: { code: FIELD_TYPE.LONGLONG, shape: 'integer' },
 
-  DECIMAL: { code: FIELD_TYPE.NEWDECIMAL, shape: SHAPE.DECIMAL },
-  DEC: { code: FIELD_TYPE.NEWDECIMAL, shape: SHAPE.DECIMAL, as: 'DECIMAL' },
-  NUMERIC: { code: FIELD_TYPE.NEWDECIMAL, shape: SHAPE.DECIMAL, as: 'DECIMAL' },
-  FIXED: { code: FIELD_TYPE.NEWDECIMAL, shape: SHAPE.DECIMAL, as: 'DECIMAL' },
+  DECIMAL: { code: FIELD_TYPE.NEWDECIMAL, shape: 'decimal' },
 
-  FLOAT: { code: FIELD_TYPE.FLOAT, shape: SHAPE.FLOAT },
-  FLOAT4: { code: FIELD_TYPE.FLOAT, shape: SHAPE.FLOAT, as: 'FLOAT' },
-  DOUBLE: { code: FIELD_TYPE.DOUBLE, shape: SHAPE.DECIMAL },
-  'DOUBLE PRECISION': { code: FIELD_TYPE.DOUBLE, shape: SHAPE.DECIMAL, as: 'DOUBLE' },
-  FLOAT8: { code: FIELD_TYPE.DOUBLE, shape: SHAPE.DECIMAL, as: 'DOUBLE' },
-  // REAL is DOUBLE unless REAL_AS_FLOAT, handled in `parseDataType`.
-  REAL: { code: FIELD_TYPE.DOUBLE, shape: SHAPE.DECIMAL, as: 'DOUBLE' },
+  FLOAT: { code: FIELD_TYPE.FLOAT, shape: 'float' },
+  DOUBLE: { code: FIELD_TYPE.DOUBLE, shape: 'decimal' },
 
-  DATE: { code: FIELD_TYPE.DATE, shape: SHAPE.NONE },
-  TIME: { code: FIELD_TYPE.TIME, shape: SHAPE.FSP },
-  TIMESTAMP: { code: FIELD_TYPE.TIMESTAMP, shape: SHAPE.FSP },
-  DATETIME: { code: FIELD_TYPE.DATETIME, shape: SHAPE.FSP },
-  YEAR: { code: FIELD_TYPE.YEAR, shape: SHAPE.WIDTH },
+  DATE: { code: FIELD_TYPE.DATE, shape: 'none' },
+  TIME: { code: FIELD_TYPE.TIME, shape: 'fsp' },
+  TIMESTAMP: { code: FIELD_TYPE.TIMESTAMP, shape: 'fsp' },
+  DATETIME: { code: FIELD_TYPE.DATETIME, shape: 'fsp' },
+  YEAR: { code: FIELD_TYPE.YEAR, shape: 'width' },
 
-  CHAR: { code: FIELD_TYPE.STRING, shape: SHAPE.TEXT },
-  CHARACTER: { code: FIELD_TYPE.STRING, shape: SHAPE.TEXT, as: 'CHAR' },
-  VARCHAR: { code: FIELD_TYPE.VAR_STRING, shape: SHAPE.TEXT },
-  'CHARACTER VARYING': { code: FIELD_TYPE.VAR_STRING, shape: SHAPE.TEXT, as: 'VARCHAR' },
-  'CHAR VARYING': { code: FIELD_TYPE.VAR_STRING, shape: SHAPE.TEXT, as: 'VARCHAR' },
+  CHAR: { code: FIELD_TYPE.STRING, shape: 'text' },
+  VARCHAR: { code: FIELD_TYPE.VAR_STRING, shape: 'text' },
   // The `NATIONAL` family is utf8mb3 by definition — MySQL's chosen "national"
   // charset — and that is part of the type rather than a clause after it.
-  NCHAR: { code: FIELD_TYPE.STRING, shape: SHAPE.TEXT, as: 'CHAR', charset: 'utf8mb3' },
-  'NATIONAL CHAR': { code: FIELD_TYPE.STRING, shape: SHAPE.TEXT, as: 'CHAR', charset: 'utf8mb3' },
-  'NATIONAL CHARACTER': { code: FIELD_TYPE.STRING, shape: SHAPE.TEXT, as: 'CHAR', charset: 'utf8mb3' },
-  NVARCHAR: { code: FIELD_TYPE.VAR_STRING, shape: SHAPE.TEXT, as: 'VARCHAR', charset: 'utf8mb3' },
-  'NATIONAL VARCHAR': { code: FIELD_TYPE.VAR_STRING, shape: SHAPE.TEXT, as: 'VARCHAR', charset: 'utf8mb3' },
-  'NCHAR VARCHAR': { code: FIELD_TYPE.VAR_STRING, shape: SHAPE.TEXT, as: 'VARCHAR', charset: 'utf8mb3' },
-  'NCHAR VARYING': { code: FIELD_TYPE.VAR_STRING, shape: SHAPE.TEXT, as: 'VARCHAR', charset: 'utf8mb3' },
-  'NATIONAL CHARACTER VARYING': {
-    code: FIELD_TYPE.VAR_STRING,
-    shape: SHAPE.TEXT,
-    as: 'VARCHAR',
-    charset: 'utf8mb3',
-  },
+  NCHAR: { code: FIELD_TYPE.STRING, shape: 'text', as: 'CHAR', charset: 'utf8mb3' },
+  NVARCHAR: { code: FIELD_TYPE.VAR_STRING, shape: 'text', as: 'VARCHAR', charset: 'utf8mb3' },
 
-  BINARY: { code: FIELD_TYPE.STRING, shape: SHAPE.BYTES },
-  'CHAR BYTE': { code: FIELD_TYPE.STRING, shape: SHAPE.BYTES, as: 'BINARY' },
-  VARBINARY: { code: FIELD_TYPE.VAR_STRING, shape: SHAPE.BYTES },
+  BINARY: { code: FIELD_TYPE.STRING, shape: 'bytes' },
+  VARBINARY: { code: FIELD_TYPE.VAR_STRING, shape: 'bytes' },
 
-  TINYBLOB: { code: FIELD_TYPE.TINY_BLOB, shape: SHAPE.NONE },
-  BLOB: { code: FIELD_TYPE.BLOB, shape: SHAPE.BYTES },
-  MEDIUMBLOB: { code: FIELD_TYPE.MEDIUM_BLOB, shape: SHAPE.NONE },
-  LONGBLOB: { code: FIELD_TYPE.LONG_BLOB, shape: SHAPE.NONE },
-  TINYTEXT: { code: FIELD_TYPE.TINY_BLOB, shape: SHAPE.TEXT },
-  TEXT: { code: FIELD_TYPE.BLOB, shape: SHAPE.TEXT },
-  MEDIUMTEXT: { code: FIELD_TYPE.MEDIUM_BLOB, shape: SHAPE.TEXT },
-  LONGTEXT: { code: FIELD_TYPE.LONG_BLOB, shape: SHAPE.TEXT },
-  // `LONG` alone, and `LONG VARCHAR`, are MEDIUMTEXT — a compatibility spelling
-  // old enough that a reader will not guess it.
-  LONG: { code: FIELD_TYPE.MEDIUM_BLOB, shape: SHAPE.TEXT, as: 'MEDIUMTEXT' },
-  'LONG VARCHAR': { code: FIELD_TYPE.MEDIUM_BLOB, shape: SHAPE.TEXT, as: 'MEDIUMTEXT' },
-  'LONG CHAR VARYING': { code: FIELD_TYPE.MEDIUM_BLOB, shape: SHAPE.TEXT, as: 'MEDIUMTEXT' },
-  'LONG VARBINARY': { code: FIELD_TYPE.MEDIUM_BLOB, shape: SHAPE.BYTES, as: 'MEDIUMBLOB' },
+  TINYBLOB: { code: FIELD_TYPE.TINY_BLOB, shape: 'none' },
+  BLOB: { code: FIELD_TYPE.BLOB, shape: 'bytes' },
+  MEDIUMBLOB: { code: FIELD_TYPE.MEDIUM_BLOB, shape: 'none' },
+  LONGBLOB: { code: FIELD_TYPE.LONG_BLOB, shape: 'none' },
+  TINYTEXT: { code: FIELD_TYPE.TINY_BLOB, shape: 'text' },
+  TEXT: { code: FIELD_TYPE.BLOB, shape: 'text' },
+  MEDIUMTEXT: { code: FIELD_TYPE.MEDIUM_BLOB, shape: 'text' },
+  LONGTEXT: { code: FIELD_TYPE.LONG_BLOB, shape: 'text' },
+  'LONG VARBINARY': { code: FIELD_TYPE.MEDIUM_BLOB, shape: 'bytes', as: 'MEDIUMBLOB' },
 
-  ENUM: { code: FIELD_TYPE.ENUM, shape: SHAPE.VALUES },
-  SET: { code: FIELD_TYPE.SET, shape: SHAPE.VALUES },
-  JSON: { code: FIELD_TYPE.JSON, shape: SHAPE.NONE },
+  ENUM: { code: FIELD_TYPE.ENUM, shape: 'values' },
+  SET: { code: FIELD_TYPE.SET, shape: 'values' },
+  JSON: { code: FIELD_TYPE.JSON, shape: 'none' },
 
-  GEOMETRY: { code: FIELD_TYPE.GEOMETRY, shape: SHAPE.NONE },
-  POINT: { code: FIELD_TYPE.GEOMETRY, shape: SHAPE.NONE },
-  LINESTRING: { code: FIELD_TYPE.GEOMETRY, shape: SHAPE.NONE },
-  POLYGON: { code: FIELD_TYPE.GEOMETRY, shape: SHAPE.NONE },
-  MULTIPOINT: { code: FIELD_TYPE.GEOMETRY, shape: SHAPE.NONE },
-  MULTILINESTRING: { code: FIELD_TYPE.GEOMETRY, shape: SHAPE.NONE },
-  MULTIPOLYGON: { code: FIELD_TYPE.GEOMETRY, shape: SHAPE.NONE },
-  GEOMETRYCOLLECTION: { code: FIELD_TYPE.GEOMETRY, shape: SHAPE.NONE },
-  GEOMCOLLECTION: { code: FIELD_TYPE.GEOMETRY, shape: SHAPE.NONE, as: 'GEOMETRYCOLLECTION' },
+  GEOMETRY: { code: FIELD_TYPE.GEOMETRY, shape: 'none' },
 
   // Not a type but an alias for a type *and four column attributes*. Recorded
   // as what it stands for, with `serial` set so the column parser can apply the
   // rest.
-  SERIAL: { code: FIELD_TYPE.LONGLONG, shape: SHAPE.NONE, as: 'BIGINT' },
+  SERIAL: { code: FIELD_TYPE.LONGLONG, shape: 'none', as: 'BIGINT' },
+}
+
+// Spatial names share storage facts while keeping their own canonical names.
+for (const name of SPATIAL_TYPES) TYPES[name] = TYPES.GEOMETRY!
+
+// Equivalent spellings copy complete facts; shape-changing synonyms stay above.
+// REAL's written-name-dependent mode handling remains in parseDataType.
+for (const [base, names] of Object.entries({
+  TINYINT: ['INT1'],
+  BOOL: ['BOOLEAN'],
+  SMALLINT: ['INT2'],
+  MEDIUMINT: ['INT3', 'MIDDLEINT'],
+  INT: ['INTEGER', 'INT4'],
+  BIGINT: ['INT8'],
+  DECIMAL: ['DEC', 'NUMERIC', 'FIXED'],
+  FLOAT: ['FLOAT4'],
+  DOUBLE: ['DOUBLE PRECISION', 'FLOAT8', 'REAL'],
+  CHAR: ['CHARACTER'],
+  VARCHAR: ['CHARACTER VARYING', 'CHAR VARYING'],
+  NCHAR: ['NATIONAL CHAR', 'NATIONAL CHARACTER'],
+  NVARCHAR: ['NATIONAL VARCHAR', 'NCHAR VARCHAR', 'NCHAR VARYING', 'NATIONAL CHARACTER VARYING'],
+  BINARY: ['CHAR BYTE'],
+  MEDIUMTEXT: ['LONG', 'LONG VARCHAR', 'LONG CHAR VARYING'],
+  GEOMETRYCOLLECTION: ['GEOMCOLLECTION'],
+})) {
+  const alias = { as: base, ...TYPES[base]! }
+  for (const name of names) TYPES[name] = alias
 }
 
 /**
@@ -258,11 +225,10 @@ export function atDataType(c: Cursor): boolean {
 /** Internal CAST target grammar; the public datatype reader keeps modifier-only mode. */
 export function parseCastType(c: Cursor, mode: SqlMode): DataType {
   const t = c.peek()
-  const at = t.start
   if (c.takeWord('SIGNED') || c.takeWord('UNSIGNED')) {
     const name = t.text.toUpperCase()
     c.takeWord('INTEGER') || c.takeWord('INT')
-    return { name, code: FIELD_TYPE.LONGLONG, at }
+    return { name, code: FIELD_TYPE.LONGLONG, at: t.start }
   }
   const type = parseDataType(c, mode, false)
   if (!CAST_TYPES.has(type.name) || ((type.name === 'FLOAT' || type.name === 'DOUBLE') && type.length !== undefined)) c.fail()
@@ -296,13 +262,13 @@ export function parseDataType(c: Cursor, mode: SqlMode, column = true): DataType
   }
 
   switch (spec.shape) {
-    case SHAPE.VALUES:
+    case 'values':
       values = valueList(c)
       break
-    case SHAPE.FLOAT:
-    case SHAPE.DECIMAL: {
+    case 'float':
+    case 'decimal': {
       const args = numberList(c, 2)
-      if (spec.shape === SHAPE.FLOAT && args.length === 1) {
+      if (spec.shape === 'float' && args.length === 1) {
         // **The trap.** One argument to `FLOAT` is a *precision* in bits of
         // mantissa, not a display width, and above 24 makes the column a
         // DOUBLE. `FLOAT(25)` and `FLOAT(25,2)` are different types; 24 is
@@ -317,14 +283,12 @@ export function parseDataType(c: Cursor, mode: SqlMode, column = true): DataType
       }
       break
     }
-    case SHAPE.INTEGER:
-    case SHAPE.FSP:
-    case SHAPE.WIDTH:
-    case SHAPE.TEXT:
-    case SHAPE.BYTES:
-      [length] = numberList(c, 1, spec.shape === SHAPE.FSP ? 2147483647 : undefined)
-      break
-    case SHAPE.NONE:
+    case 'integer':
+    case 'fsp':
+    case 'width':
+    case 'text':
+    case 'bytes':
+      [length] = numberList(c, 1, spec.shape === 'fsp' ? 2147483647 : undefined)
       break
   }
 
@@ -354,7 +318,7 @@ export function parseDataType(c: Cursor, mode: SqlMode, column = true): DataType
         unsigned = true
         continue
       }
-      if (spec.shape === SHAPE.TEXT || spec.shape === SHAPE.VALUES) {
+      if (spec.shape === 'text' || spec.shape === 'values') {
         // `BINARY` here is the *binary collation of the charset*, not the BINARY
         // type: `VARCHAR(10) BINARY` is a VARCHAR that compares byte-wise. A
         // parser that read it as a type would produce a column of the wrong
