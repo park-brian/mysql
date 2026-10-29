@@ -44,7 +44,7 @@ import { integerBytes, truth, type Value } from '@myjs/types'
 import type { Compiled, Env, Row, Scope } from './compile.ts'
 import { indexLookup, planNode, wrap, type PlanNode } from './explain.ts'
 import { FULL_SCAN, chooseAccess, dynamicAccess, keyOrder, optimizerEnabled, pointAccess, splitAnd, type Access, type InferredRange, type OuterColumn, type RangeCosting } from './plan.ts'
-import { bestAccess, floorFilter, indexScanCost, joinOrder, type Candidate, type FirstMatch, type KeyChoice, type Positioned, type RangeRead } from './cost.ts'
+import { MEMORY_CREATE, ROW_EVALUATE, bestAccess, floorFilter, indexScanCost, joinOrder, type Candidate, type FirstMatch, type KeyChoice, type Positioned, type RangeRead } from './cost.ts'
 import { rowKey } from './keys.ts'
 import { columnResultType } from './meta.ts'
 import { chooseStrategy } from './group.ts'
@@ -172,6 +172,8 @@ export interface FromPlan {
   filter(where: Expression | undefined, compile: (e: Expression) => Pick<Compiled, 'eval'>, semijoin?: (e: Expression) => PlanNode | undefined): void
   /** The cost model's choice for a table joined after the preserved side. */
   usesLookup(alias: string): boolean
+  /** Price the pure integer antijoin's build against its preserved-side lookup. */
+  materializesAntijoin(alias: string): boolean
   /** Build integer membership once, preserving only unmatched outer rows. */
   hashAntijoin(key: Compiled, rows: (trx: Trx | undefined, env: Env) => Iterable<readonly Value[]>, describe: () => PlanNode): void
   /** The one table an ORDER BY or GROUP BY reads, and the rows a LIMIT keeps: what the join order pays a sort for (M5.7). Given before the plan is first asked for. */
@@ -458,7 +460,7 @@ export function planFrom(refs: readonly TableReference[], ctx: FromContext, wher
   const joinPlan = (materialization = false): JoinPlan | undefined => {
     if (tree === undefined) return undefined
     // A FROM of one table has no join to plan.
-    if (tree.node.kind === 'leaf') planned ??= { node: tree.node, lookups: new Set(), on: [], dynamic: new Set() }
+    if (tree.node.kind === 'leaf') planned ??= { node: tree.node, positions: NONE, lookups: new Set(), on: [], dynamic: new Set() }
     const env = ctx.env
     const rangeOf = (t: FromTable, conditions: readonly Weighed[]): RangeEstimate | undefined =>
       env === undefined ? undefined : rangeEstimate(t, conditions, tables, scope, (e) => ctx.compileOn(e, preliminary.restrict(new Set([t.alias]))), env, width, settings)
@@ -643,6 +645,22 @@ export function planFrom(refs: readonly TableReference[], ctx: FromContext, wher
     },
     usesLookup(alias) {
       return joinPlan()?.lookups.has(alias) === true
+    },
+    materializesAntijoin(alias) {
+      const plan = joinPlan()
+      if (!plan?.lookups.has(alias) || !optimizerEnabled(ctx.env, 'materialization') || !optimizerEnabled(ctx.env, 'firstmatch')) return false
+      const node = plan.node
+      const [outer, probe] = plan.positions
+      if (node.kind !== 'join' || !node.left || node.outer.kind !== 'leaf' || node.inner.kind !== 'leaf' || outer === undefined || probe === undefined) return false
+      const table = node.inner.table
+      const index = node.lookup?.index
+      const stats = table.def === undefined || table.table === undefined ? undefined : ctx.statistics?.(table.def, table.table)
+      if (stats === undefined || table.def === undefined || index?.kind !== 'index' || index.parts.length !== 1 || index.parts[0]?.descending === true || !holdsRead(table.def, index, settings.read.get(alias) ?? 'all')) return false
+      const built = placeTable(table, undefined, NONE, NONE, scope, settings, stats)
+      const rows = outer.fetched * outer.filter
+      // Probe work does not multiply the preserved-side output cardinality.
+      return built.read + ROW_EVALUATE * built.fetched * 2 + MEMORY_CREATE + ROW_EVALUATE * rows
+        < probe.read + ROW_EVALUATE * rows * probe.fetched
     },
     hashAntijoin(key, rows, describe) {
       const input = physicalTree()
@@ -1181,6 +1199,7 @@ type Weighed = Pick<Placed, 'e' | 'aliases'>
 /** The joins as they run: in the order chosen, each later table read by its lookup or hashed, and the ON conditions a reordered tree applies above its joins. */
 interface JoinPlan {
   readonly node: Node
+  readonly positions: readonly Positioned[]
   readonly lookups: ReadonlySet<string>
   readonly on: readonly Placed[]
   /** The tables whose range is re-planned for each row before them (`finish` in `planJoins`). */
@@ -1289,7 +1308,7 @@ function planJoins(root: Node, where: readonly Weighed[], scope: TableScope, set
       walk(inner)
     }
     walk(node)
-    return { node, lookups, on, dynamic }
+    return { node, positions, lookups, on, dynamic }
   }
 }
 

@@ -31,6 +31,8 @@ import type { TableStatistics } from './stats.ts'
 export const ROW_EVALUATE = 0.1
 /** `memory_block_read_cost`: a page of a table in the buffer pool. */
 export const PAGE_READ = 0.25
+/** `memory_temptable_create_cost`. */
+export const MEMORY_CREATE = 1
 /** `join_buffer_size`'s default, in bytes. */
 const JOIN_BUFFER = 262_144
 /** InnoDB's page size, half of which an index's records are reckoned to fill. */
@@ -266,7 +268,7 @@ export function joinOrder(candidates: readonly Candidate[], sort?: { readonly al
   let material: Positioned | undefined
   if (materialization && candidates.length === 2) {
     const built = step(undefined, (candidates[1] as Candidate).place([]))
-    material = { ...built, read: built.cost + 1 + ROW_EVALUATE * built.rows, lookup: 'materialized-scan', fetched: built.rows, filter: 1 }
+    material = { ...built, read: built.cost + MEMORY_CREATE + ROW_EVALUATE * built.rows, lookup: 'materialized-scan', fetched: built.rows, filter: 1 }
   }
   const sortCost = (rows: number): number => sort !== undefined && plan[0]?.alias !== sortBy ? rows : 0
   // Lookup probes after the outer prefix; scan builds before the outer scan.
@@ -297,7 +299,7 @@ export function joinOrder(candidates: readonly Candidate[], sort?: { readonly al
     if (semijoin !== undefined && (first.alias === semijoin ? loose === undefined : firstMatch?.enabled !== true)) {
       rows = Math.min(rows, (candidates[0] as Candidate).rows * last.filter)
       // Native charges creation before row operations; the grouping decides exact ties.
-      cost += weedout || lastResort ? 1 : Infinity
+      cost += weedout || lastResort ? MEMORY_CREATE : Infinity
       cost += 0.1 * (rows + last.rows)
     }
     const alternative = materialPlan(cost)

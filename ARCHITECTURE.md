@@ -1780,11 +1780,17 @@ The full Docker gates, pinned-reference audits and 10,000 crash points pass.
 `db.stream()` streams a million rows within a few MB of the heap's baseline (M5.40). Next is the
 remaining function and planner work, then the browser. The coercion corpus
 now agrees on all 3,148 observations and all 1,737 warning counts. The core entry bundle
-is 329,045 bytes gzipped (321.3 KiB), against the 500 KB release target,
+is 329,703 bytes gzipped (322.0 KiB), against the 500 KB release target,
 with the UCA weights in a separate chunk loaded on demand.
 The private generated error table records sequential range starts instead of
 repeating each number. Its 2,132 facts, provenance and public lookups remain
 unchanged; both lookup maps still publish together after lazy expansion.
+Pure correlated integer NOT EXISTS now compares a deferred membership build
+against correlated lookup using the preserved outer cardinality. It reuses the
+statement's keyed membership reader after the chosen outer access/sort. The first
+outer row builds even when its key is NULL; empty outer input and LIMIT 0 skip it.
+Failed builds publish no partial set, and cancellation closes the iterators.
+Other antijoin/semijoin strategy gaps remain open in the roadmap.
 
 The release plan gives each stage something to ship:
 

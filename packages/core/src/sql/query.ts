@@ -394,7 +394,7 @@ function planSelect(run: Run, q: QueryExpression, node: SelectNode): SelectPlan 
     from = semi.from
     if (semi.innerFirst) source = undefined
   }
-  const loopSemijoin = semijoin && scope !== undefined && (semi !== undefined || anti?.lookup === true || nestedLoopSemijoin(node.where, scope))
+  const loopSemijoin = semijoin && scope !== undefined && (semi !== undefined || (anti !== undefined && anti.kind !== 'hash') || nestedLoopSemijoin(node.where, scope))
   if (from !== undefined) from.sortedBy(sortBy, keep)
   if (from !== undefined && node.distinct === true) from.distinctReads(keyAliases(items.map((i) => i.expr), items, scope!))
   const facts = source === undefined ? undefined : resolved.facts(source.def, source.alias)
@@ -487,7 +487,9 @@ function planSelect(run: Run, q: QueryExpression, node: SelectNode): SelectPlan 
     if (semi !== undefined) {
       const whereCtx = compileContext(run, semi.from.scope, 'where clause')
       from.filter(semi.where, (e) => resolved.read(e, whereCtx))
-    } else if (anti !== undefined && !anti.lookup) {
+    } else if (anti?.kind === 'materialized') {
+      from.filter(undefined, resolved.read)
+    } else if (anti?.kind === 'hash') {
       from.filter(undefined, resolved.read)
       from.hashAntijoin(anti.key, (trx, env) => anti.inner.rows(trx, env), () => anti.plan)
     } else {
@@ -528,10 +530,10 @@ function planSelect(run: Run, q: QueryExpression, node: SelectNode): SelectPlan 
   // An ORDER BY the index the table is read by already gives: read in its order, and nothing to sort.
   const read = source && from!.access(run.env)
   // Windows and hash antijoins still sort their delivered rows, even over an ordered index.
-  const outerLoop = semi?.innerFirst === false && source !== undefined && sortBy === source.alias
+  const outerLoop = (semi?.innerFirst === false || anti?.kind === 'materialized') && source !== undefined && sortBy === source.alias
   // Reconsider PRIMARY for ordinary scans and the modeled outer-first loop.
   // A proved UNIQUE projection can reconsider PRIMARY as an ordinary scan does.
-  const ordered = source !== undefined && !deduplicated && !windowed && (anti === undefined || anti.lookup) && match === undefined && keys.length > 0 && read!.ranges === undefined ? orderingIndex(source.def, source.alias, order, items, lookup, read!.index, (outerLoop || (!loopSemijoin && !deduplicate)) && optimizerEnabled(run.env, 'prefer_ordering_index')) : undefined
+  const ordered = source !== undefined && !deduplicated && !windowed && (anti === undefined || anti.kind !== 'hash') && match === undefined && keys.length > 0 && read!.ranges === undefined ? orderingIndex(source.def, source.alias, order, items, lookup, read!.index, (outerLoop || (!loopSemijoin && !deduplicate)) && optimizerEnabled(run.env, 'prefer_ordering_index')) : undefined
   if (ordered !== undefined) from!.readInOrder(ordered.index, false, ordered.reverse, source!.alias)
   // Only whole scans can be replaced above, so this selected range is final.
   // A pinned complete PRIMARY point binds ORDER but needs none of its readers.
@@ -561,6 +563,7 @@ function planSelect(run: Run, q: QueryExpression, node: SelectNode): SelectPlan 
   const take = q.limit && limitStage(offset, limitCount)
   const stages: Stage[] = [
     ...(from === undefined && node.where !== undefined ? [filterStage(resolved.predicates)] : []),
+    ...(anti?.kind === 'materialized' ? [filterStage(anti.read, undefined, anti.plan)] : []),
     // HAVING without grouping filters the rows WHERE kept, before any window sees them.
     ...(having === undefined ? [] : [filterStage(having, run)]),
     ...(windows === undefined || windows.windows.length === 0 ? [] : [windowStage(windows)]),
@@ -592,7 +595,8 @@ function planSelect(run: Run, q: QueryExpression, node: SelectNode): SelectPlan 
     rows(trx, given, ready) {
       // A zero count with no offset has no iterator to initialize, including its sort.
       if (keep === 0 && !windowed) return []
-      const env = executionEnv(run, trx, given)
+      let env = executionEnv(run, trx, given)
+      if (anti?.kind === 'materialized' && env.memo === undefined) env = { ...env, memo: new Map() }
       let rows: Iterable<Rowed>
       if (from === undefined) {
         rows = [{ row: [] }]
@@ -632,11 +636,12 @@ function pushCountCondition(run: Run, node: SelectNode): SelectNode {
 
 // --- the stages above the FROM (M5.43) -----------------------------------------------
 
-/** A Filter, including the clause's subquery plans when it is a HAVING. */
-function filterStage(condition: Pick<Compiled, 'eval'> | readonly Pick<Compiled, 'eval'>[], having?: Run): Stage {
+/** A Filter or keyed antijoin; HAVING includes the clause's subquery plans. */
+function filterStage(condition: Pick<Compiled, 'eval'> | readonly Pick<Compiled, 'eval'>[], having?: Run, antijoin?: PlanNode): Stage {
   return {
     run: (rows, env) => filter(rows, condition, env),
     describe(n) {
+      if (antijoin !== undefined) return planNode('Nested loop antijoin', [n, antijoin])
       const out = planNode('Filter', [n])
       return having === undefined ? out : withSubqueries(having, out, 'having clause')
     },
@@ -964,7 +969,10 @@ function costedIntegerSemijoin(run: Run, q: QueryExpression, node: SelectNode, f
 }
 
 /** One decorrelatable integer antijoin, costed through the existing preserved-side join planner. */
-function costedAntijoin(run: Run, q: QueryExpression, node: SelectNode, from: FromPlan): { readonly lookup: boolean; readonly key: Compiled; readonly inner: SelectPlan; readonly plan: PlanNode } | undefined {
+type Antijoin = { readonly kind: 'materialized'; readonly read: Compiled; readonly plan: PlanNode }
+  | { readonly kind: 'lookup' | 'hash'; readonly key: Compiled; readonly inner: SelectPlan; readonly plan: PlanNode }
+
+function costedAntijoin(run: Run, q: QueryExpression, node: SelectNode, from: FromPlan): Antijoin | undefined {
   const outer = joinOuter(run, q, node, from)
   const where = node.where
   if (outer === undefined) return undefined
@@ -982,10 +990,15 @@ function costedAntijoin(run: Run, q: QueryExpression, node: SelectNode, from: Fr
   const pair = correlatedPair(body.where, innerAlias, outerAlias, true)
   if (pair === undefined) return undefined
   const { innerKey, outerKey, extra } = pair
-  if (extra?.kind !== NODE.BINARY || !['=', '<>', '!=', '<', '<=', '>', '>='].includes(extra.op)) return undefined
-  if (!isQualifiedColumn(extra.left, innerAlias, true) || !integerLiteral(extra.right)) return undefined
+  if (extra !== undefined) {
+    if (extra.kind !== NODE.BINARY || !['=', '<>', '!=', '<', '<=', '>', '>='].includes(extra.op)) return undefined
+    if (!isQualifiedColumn(extra.left, innerAlias, true) || !integerLiteral(extra.right)) return undefined
+  } else if (run.preparing === true || run.env.memo === undefined || q.locking !== undefined || node.distinct === true || node.having !== undefined || someNode([node.items, q.orderBy], (n) => {
+    const kind = (n as Expression).kind
+    return kind === NODE.SUBQUERY || kind === NODE.MATCH || kind === NODE.CALL || kind === NODE.VARIABLE || undefined
+  })) return undefined
   const keyColumn = innerKey.parts[1]
-  const predicateColumn = extra.left.parts[1]
+  const predicateColumn = extra === undefined ? undefined : (extra.left as QualifiedColumn).parts[1]
   try {
     const definition = nonTemporaryDefinition(run, inner.table)
     if (definition === undefined) return undefined
@@ -993,17 +1006,35 @@ function costedAntijoin(run: Run, q: QueryExpression, node: SelectNode, from: Fr
     // An outer join's ON does not reduce its build estimate, as for this antijoin.
     const alternative = planFrom([{ kind: REF.JOIN, type: 'LEFT', left: outer, right: inner, on: body.where, at: where.at }], fromContext(run))
     const innerTable = alternative.tables.find((t) => t.alias === innerAlias)
-    if (innerTable?.def === undefined || innerTable.table === undefined || innerTable.def.indexes.some((i) => i.parts.some((p) => p.column.toLowerCase() === predicateColumn.toLowerCase()))) return undefined
+    if (innerTable?.def === undefined || innerTable.table === undefined || (predicateColumn !== undefined && innerTable.def.indexes.some((i) => i.parts.some((p) => p.column.toLowerCase() === predicateColumn.toLowerCase())))) return undefined
+    if (extra === undefined && [from.single!.def, definition].some((d) => d.columns.some((c) => c.attributes?.['generated'] !== undefined))) return undefined
     const ctx = compileContext(run, alternative.scope, 'where clause')
-    if (!exactInteger(compile(innerKey, ctx)) || !exactInteger(compile(outerKey, ctx)) || !exactInteger(compile(extra.left, ctx))) return undefined
+    if (!exactInteger(compile(innerKey, ctx)) || !exactInteger(compile(outerKey, ctx)) || (extra !== undefined && !exactInteger(compile(extra.left, ctx)))) return undefined
     const read = columnsRead(from.scope, node, q)
     read.set(innerAlias, keyReads(keyColumn, extra))
     alternative.reads(read)
+    if (extra === undefined) {
+      if (!alternative.materializesAntijoin(innerAlias)) return undefined
+      const { where: _correlation, ...source } = body
+      const projected: QueryExpression = { ...sub, body: { ...source, items: [{ expr: innerKey }] } }
+      const plan = planQuery(run, projected)
+      const described = plan.explain?.()?.[0]
+      if (described === undefined) return undefined
+      // Exact one-column equality: IN's FALSE and UNKNOWN both mean no matching row.
+      // Reuse its invocation-owned membership build, including NULL and failed-build rules.
+      const { quantified: _quantified, ...context } = compileContext(run, from.scope, 'where clause')
+      const read = compile({ kind: NODE.UNARY, op: 'IS NOT TRUE', at: where.at, operand: {
+        kind: NODE.BINARY, op: 'IN', left: outerKey, at: where.at,
+        right: { kind: NODE.SUBQUERY, query: projected, at: sub.at },
+      } }, { ...context, subquery: () => ({ columns: plan.columns, correlated: false, hasFrom: true, rows: (env) => plan.rows(env.trx, env) }) })
+      const nullable = definition.columns.find((c) => c.name.toLowerCase() === keyColumn.toLowerCase())?.nullable === true
+      return { kind: 'materialized', read, plan: indexLookup('<subquery2>', '<auto_distinct_key>', true, false, [planNode('Materialize with deduplication', [wrap(nullable, 'Filter', described)])]) }
+    }
     const projected: QueryExpression = { ...sub, body: { ...body, items: [{ expr: innerKey }], where: extra } }
     const plan = planQuery(run, projected)
     const described = plan.explain?.()?.[0]
     if (described === undefined) return undefined
-    return { lookup: alternative.usesLookup(innerAlias), key: compile(outerKey, compileContext(run, from.scope, 'where clause')), inner: plan, plan: described }
+    return { kind: alternative.usesLookup(innerAlias) ? 'lookup' : 'hash', key: compile(outerKey, compileContext(run, from.scope, 'where clause')), inner: plan, plan: described }
   } catch (error) {
     expectTyped(error)
     // The ordinary compiler owns errors and their original clause names.

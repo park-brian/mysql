@@ -37,7 +37,11 @@ Doc 42's query API
 protocol, its values `mysql2`'s (M5.36, D-76). The roadmap's **Next** section
 says what comes next: 0.3 packaging is staged (`npm run pack`, D-79/D-80);
 publication remains pending. Bounded FirstMatch now omits physically proved
-integer bounds under the existing caps. M5.19 field copying now shares the
+integer bounds under the existing caps. Pure correlated integer NOT EXISTS now
+prices deferred membership against lookup, reusing the invocation's existing
+membership cache after outer sorting. NULL first probes build; empty outer input
+and LIMIT 0 skip the build. Broader semijoin/antijoin strategies remain partial.
+M5.19 field copying now shares the
 BLOB promotion rule with metadata. Actual DISTINCT/group/derived writers now
 normalize stored DECIMAL values, closing the measured streamed-join copy gaps.
 Grouped AVG arithmetic now retains quotient digits while actual window and
