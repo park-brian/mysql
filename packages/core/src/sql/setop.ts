@@ -37,7 +37,7 @@ import { requireCollationInfo } from '@myjs/charsets'
 import type { SetOperationNode } from '@myjs/parser'
 import { sqlError } from '@myjs/protocol'
 import { COERCIBILITY, bytesValue, intValue, plainValue, stringValue, toDateTime, toText, valueBytes, withoutHex, type Value } from '@myjs/types'
-import { aggregate, aggregateCollations, aggregateTypes, convertTo } from './compile.ts'
+import { aggregate, aggregateCollations, aggregateTypes, fieldValue } from './compile.ts'
 import { rowKey } from './keys.ts'
 import { charWidth, jsonAsText, jsonType, isNumber, promotesToBlob, stringType, type ResultType } from './meta.ts'
 import { bitBytes } from './wire.ts'
@@ -137,7 +137,7 @@ export function convert(v: Value, t: ResultType): Value {
   if (t.kind === 'string') return stringValue(toText(v), t.collationId, COERCIBILITY.IMPLICIT)
   if (t.kind === 'datetime' && v.kind === 'datetime' && t.field === FIELD_TYPE.DATETIME && v.type === 'DATE') return toDateTime(v, 'DATETIME') ?? v
   if (t.kind === 'bytes' && v.kind !== 'bytes') return bytesValue(valueBytes(v))
-  const converted = convertTo(v, t)
+  const converted = fieldValue(v, t)
   // Comparisons use the stored FLOAT, not the double read from a branch.
   return converted?.kind === 'double' && converted.float === true ? { ...converted, v: Math.fround(converted.v) } : converted
 }

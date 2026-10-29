@@ -1073,18 +1073,62 @@ retaining all 37 shared passes. Source proofs cover 487 tests/fixtures and 206
 runtime sources. All eleven required ff08b0c CI jobs pass. M5.10 remains partial;
 totals stay 144/190 and M5 42/53.
 
-**Next bounded slice:** audit copied TIME integer readers under fractional
-truncation mode and repair the smallest existing holder/reader boundary. The new
-capture retains their unresolved UNION-copy outcomes. Then address DATETIME
-integer rounding, calendar carry, zero dates and maximum-year overflow diagnostics;
-do not route zero dates through JavaScript Date normalization. DECIMAL integer
-overflow warnings, JSON diagnostic labels, bound-parameter metadata, CAST BINARY
-collation/nullability and broader declaration publication remain open.
-CHECK permissions and SYSDATE construction/parent timing are unchanged, including
-the SLEEP(SYSDATE(7)) guard. Supplementary identifiers, ordinary table-name refusal,
-prepared temporal metadata, JSON extraction, consumer-specific range warnings,
-string nullability, merged temporal charset and ANSI SHOW CREATE remain open.
-Continue bounded function work before M5.47, M5.49, M5.50 and browser work.
+**TIME field and cache readers, verified (2026-10-28):** actual unmerged
+derived fields and set-operation holders establish their temporal-carry integer
+reading after value conversion. MIN/MAX and actual scalar TIME caches establish
+their numeric-decimal reading instead: 59.5 becomes 100 in a field and 60 in a
+cache. The optional reading travels with the value, independently of column-origin
+metadata. IF/CASE forwards the selected reading; CAST/COALESCE reconstruction
+drops it. Source-free scalar projections reduce to their item, while HAVING keeps
+a cache. This is a bounded native-proved classification, separate from row
+memoization. The existing `plainValue` trait normalizer removes inherited TIME
+readings and establishes the cache reading only with the caller's declared-TIME
+proof. MIN/MAX keeps its existing negative-zero normalization; scalar payload/sign
+is unchanged. Decoder and global integer-conversion policies do not change.
+The initial boolean-field trial was rejected after leaking into caches and losing
+three packet facts. The final 9,570-command MySQL 8.4.11 audit improves 7,236 to
+7,958 complete matches with no matching component, error attribute, condition,
+field or packet fact lost. It covers merged/materialized/nested copies, every
+set-operation family, ORDER/LIMIT, groups, windows, correlated/repeated scalars,
+reduction/HAVING, IF/CASE, casts, COALESCE, boundaries, NULL, negative zero,
+SET, assignment expressions and repeated variable reads through both modes and
+all three APIs. Divergent or unsupported outcomes stay visible in the native pool.
+Forty-six captures protect 60,379/76,139 complete normalized commands and 185,072
+conditions, retaining 15,760 open outcomes. All native answers reconstruct exactly;
+all forty-five predecessor fixture files and thresholds remain unchanged.
+Date, duration and fraction rendering share the existing byte-level kernels,
+with explicit SQL shape/hour padding and unchanged legacy defaults. Overloads
+and literal type checks preserve callback use such as Array.map; 90,432 archived
+baseline rendering/numeric comparisons and callback regressions pass. Scalar
+metadata needs one copy, and aggregate precision work runs only where needed.
+All nine unchanged caps pass: core/facade/bytes/types measure
+334,359/334,259/2,933/52,593 B gzipped; raw core is 195 B below fea7b68.
+Fresh Docker --reference passes 1,543 main tests, four latency tests, typecheck,
+lint, package/typed smoke, the real client and all seven pinned corpora. All 57
+focused tests, all 9,570 native fixture replays and the native cached/rebinding
+lifecycle test pass. Archived fea7b68 fails both new behavioral regressions.
+One million seeded parser inputs and 20,000 executor statements pass. The actual
+census and entire official-suite fact result remain byte-identical with all 37
+shared passes. Final source proofs cover 490 tests/fixtures and 206 runtime files.
+The final type-only legacy accumulator overload and its callback assertion also
+pass fresh-container typecheck, callback tests and package/typed smoke.
+All eleven required fea7b68 CI jobs pass. M5.10 remains partial at 144/190 overall
+and M5 42/53.
+
+**Next bounded slice:** audit raw TIME field forwarding through IF/CASE under
+fractional truncation mode, then repair the smallest actual reader boundary.
+Do not infer field ownership from temporary/keepField/fromField metadata.
+Then address DATETIME integer rounding, calendar carry, zero dates and
+maximum-year overflow diagnostics without JavaScript Date normalization of zero
+dates. Mixed-type/cache payloads, user-variable representation and assignment
+expressions, DECIMAL integer overflow warnings, JSON diagnostic labels,
+bound-parameter metadata, CAST BINARY collation/nullability and broader declaration
+publication remain open. CHECK permissions and SYSDATE construction/parent timing
+are unchanged, including SLEEP(SYSDATE(7)). Supplementary identifiers, ordinary
+table-name refusal, prepared temporal metadata, JSON extraction, consumer-specific
+range warnings, string nullability, merged temporal charset and ANSI SHOW CREATE
+remain open. Continue bounded function work before M5.47, M5.49, M5.50 and browser
+work.
 
 Keep function, keyword and value namespaces distinct. Charset-value validation,
 separate event behavior, valid-AST warnings/limits, later binding failures,

@@ -333,32 +333,23 @@ function jsonAggregate(name: string, args: readonly Compiled[], type: ResultType
 }
 
 function accumulator(name: string, t: ResultType, temporary?: boolean): Accumulator {
-  const shape = exactShape(t)
   switch (name) {
     case 'SUM':
-      return sumAccumulator(shape !== undefined)
-    case 'AVG':
+      return sumAccumulator(exactShape(t) !== undefined)
+    case 'AVG': {
+      const shape = exactShape(t)
       return avgAccumulator(shape !== undefined, shape?.scale ?? 0, temporary ? shape?.scale : undefined)
+    }
     case 'MIN':
-      return extremeAccumulator(false)
     case 'MAX':
-      return extremeAccumulator(true)
+      return extremeAccumulator(name === 'MAX', t.kind === 'time')
     case 'BIT_AND':
-      return bitAccumulator('AND')
     case 'BIT_OR':
-      return bitAccumulator('OR')
     case 'BIT_XOR':
-      return bitAccumulator('XOR')
-    case 'VAR_SAMP':
-      return varianceAccumulator(true, false)
-    case 'STDDEV_SAMP':
-      return varianceAccumulator(true, true)
-    case 'VARIANCE':
-    case 'VAR_POP':
-      return varianceAccumulator(false, false)
+      return bitAccumulator(name.slice(4) as 'AND' | 'OR' | 'XOR')
     default:
-      // STD, STDDEV, STDDEV_POP.
-      return varianceAccumulator(false, true)
+      // The VAR/STD families share the sample suffix and standard-deviation prefix.
+      return varianceAccumulator(name.endsWith('_SAMP'), name.startsWith('STD'))
   }
 }
 

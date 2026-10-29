@@ -70,13 +70,15 @@ export function isMysqlTime(v: unknown): v is MysqlTime {
  * It also collapses a duplication rather than adding to one: `renderDateTime`
  * and `binaryValueToText` in `@myjs/protocol` were two independent renderers
  * of the same value, reached from different directions.
+ * A supplied `dateOnly` selects the declared shape; omission keeps the
+ * original zero-clock inference for callers without that type information.
  */
-export function renderMysqlDateTime(v: MysqlDateTime, decimals = 0): string {
+export function renderMysqlDateTime(v: MysqlDateTime, decimals: number | undefined, dateOnly: boolean): string
+export function renderMysqlDateTime(v: MysqlDateTime, decimals?: number): string
+export function renderMysqlDateTime(v: MysqlDateTime, decimals = 0, dateOnly?: boolean): string {
   const date = `${pad(v.year, 4)}-${pad(v.month, 2)}-${pad(v.day, 2)}`
-  if (decimals <= 0 && v.hour === 0 && v.minute === 0 && v.second === 0 && v.microsecond === 0) return date
-  const time = `${pad(v.hour, 2)}:${pad(v.minute, 2)}:${pad(v.second, 2)}`
-  if (decimals <= 0) return `${date} ${time}`
-  return `${date} ${time}.${pad(v.microsecond, 6).slice(0, decimals)}`
+  if (typeof dateOnly === 'boolean' ? dateOnly : decimals <= 0 && v.hour === 0 && v.minute === 0 && v.second === 0 && v.microsecond === 0) return date
+  return `${date} ${pad(v.hour, 2)}:${pad(v.minute, 2)}:${pad(v.second, 2)}${fraction(v, decimals)}`
 }
 
 /**
@@ -85,12 +87,17 @@ export function renderMysqlDateTime(v: MysqlDateTime, decimals = 0): string {
  * A duration, not a clock time: the hours field carries `days * 24 + hour`
  * and may exceed 24, and the whole value may be negative — which is why doc 15
  * says mapping TIME to a `Date` is wrong and D-15 maps it to a string.
+ * `hourWidth` changes only minimum hour padding; zero keeps the original output.
  */
-export function renderMysqlTime(v: MysqlTime, decimals = 0): string {
+export function renderMysqlTime(v: MysqlTime, decimals: number | undefined, hourWidth: number): string
+export function renderMysqlTime(v: MysqlTime, decimals?: number): string
+export function renderMysqlTime(v: MysqlTime, decimals = 0, hourWidth = 0): string {
   const hours = v.days * 24 + v.hour
-  const base = `${v.negative ? '-' : ''}${hours}:${pad(v.minute, 2)}:${pad(v.second, 2)}`
-  if (decimals <= 0) return base
-  return `${base}.${pad(v.microsecond, 6).slice(0, decimals)}`
+  return `${v.negative ? '-' : ''}${pad(hours, typeof hourWidth === 'number' ? hourWidth : 0)}:${pad(v.minute, 2)}:${pad(v.second, 2)}${fraction(v, decimals)}`
+}
+
+function fraction(v: { readonly microsecond: number }, decimals: number): string {
+  return decimals <= 0 ? '' : `.${pad(v.microsecond, 6).slice(0, decimals)}`
 }
 
 function pad(n: number, width: number): string {

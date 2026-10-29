@@ -12,7 +12,7 @@
 //
 // A DECIMAL is an unscaled `bigint` and a scale, so arithmetic is exact and
 // needs no decimal library: `12.50` is `{ v: 1250n, scale: 2 }`.
-import type { MysqlDateTime, MysqlTime } from '@myjs/bytes'
+import { renderMysqlDateTime, renderMysqlTime, type MysqlDateTime, type MysqlTime } from '@myjs/bytes'
 import { encodeCollation } from '@myjs/charsets'
 import { renderJson, type JsonDoc } from './json-doc.ts'
 import { scanDateTime, scanTime, type Deprecation, type ScanFlags } from './temporal-scan.ts'
@@ -110,11 +110,20 @@ export function withoutHex(v: Value): Value {
   return v !== null && v.kind === 'bytes' && v.hex === true ? { kind: 'bytes', v: v.v } : v
 }
 
-/** A value with no trace of the item it came from: no hex literal's number, no ENUM's index — what a user variable or a scalar subquery hands on. */
-export function plainValue(v: Value): Value {
-  if (v !== null && v.kind === 'string' && v.ordinal !== undefined) return { kind: 'string', v: v.v, collationId: v.collationId, coercibility: v.coercibility }
-  if (v !== null && v.kind === 'double' && (v.float !== undefined || v.decimals !== undefined)) return { kind: 'double', v: v.v }
-  if (v !== null && v.kind === 'int' && v.str !== undefined) return { kind: 'int', v: v.v, unsigned: v.unsigned }
+/** Remove inherited item traits; a declared TIME cache establishes its own numeric integer reading. */
+export function plainValue(v: Value, readTimeInteger: boolean): Value
+export function plainValue(v: Value): Value
+export function plainValue(v: Value, readTimeInteger = false): Value {
+  if (v === null) return null
+  if (v.kind === 'string' && v.ordinal !== undefined) return { kind: 'string', v: v.v, collationId: v.collationId, coercibility: v.coercibility }
+  if (v.kind === 'double' && (v.float !== undefined || v.decimals !== undefined)) return { kind: 'double', v: v.v }
+  if (v.kind === 'int' && v.str !== undefined) return { kind: 'int', v: v.v, unsigned: v.unsigned }
+  if (v.kind === 'time') {
+    const cached = { ...v }
+    if (readTimeInteger === true) cached.integer = rescale(toDecimal(v), 0).v
+    else delete cached.integer
+    return cached
+  }
   return withoutHex(v)
 }
 
@@ -139,6 +148,8 @@ export interface TimeValue {
   readonly kind: 'time'
   readonly v: MysqlTime
   readonly fsp: number
+  /** The integer reading established by this value's field or cache writer. */
+  readonly integer?: bigint
 }
 
 /** A JSON value (M5.21): what a JSON column holds and a JSON function returns. */
@@ -273,9 +284,8 @@ export function toDouble(v: Exclude<Value, null>): number {
       if (v.kind === 'bytes' && v.hex === true) return Number(hexNumber(v.v))
       return clampedDouble(Number(numericPrefix(textOf(v)).text))
     case 'datetime':
-      return Number(temporalNumber(v))
     case 'time':
-      return Number(timeNumber(v.v, v.fsp))
+      return Number(temporalNumber(v))
     case 'json': {
       const n = jsonNumber(v)
       return n === undefined ? Number(numericPrefix(jsonNumberText(v)).text) : toDouble(n)
@@ -330,9 +340,8 @@ export function toDecimal(v: Exclude<Value, null>): DecimalValue {
       return /[eE]/.test(p.text) ? doubleToDecimal(Number(p.text)) : parseDecimal(p.text)
     }
     case 'datetime':
-      return parseDecimal(temporalNumber(v))
     case 'time':
-      return parseDecimal(timeNumber(v.v, v.fsp))
+      return parseDecimal(temporalNumber(v))
     case 'json': {
       const n = jsonNumber(v)
       return n === undefined ? parseDecimal(numericPrefix(jsonNumberText(v)).text.replace(/[eE].*$/, '') || '0') : toDecimal(n)
@@ -372,9 +381,8 @@ export function toInteger(v: Exclude<Value, null>): bigint {
       return p.fractional ? (/[eE]/.test(p.text) ? roundDouble(Number(p.text)) : rescale(parseDecimal(p.text), 0).v) : BigInt(p.text.replace(/^\+/, ''))
     }
     case 'datetime':
-      return BigInt(temporalNumber(v).split('.')[0] as string)
     case 'time':
-      return BigInt(timeNumber(v.v, v.fsp).split('.')[0] as string)
+      return BigInt(temporalNumber(v).split('.')[0] as string)
     case 'json': {
       const n = jsonNumber(v)
       return n === undefined ? toInteger(string(jsonNumberText(v), 255)) : toInteger(n)
@@ -421,30 +429,21 @@ export function truth(v: Value): boolean | null {
 const pad = (n: number, width: number): string => String(n).padStart(width, '0')
 
 export function renderDateTime(v: MysqlDateTime, type: TemporalType, fsp: number): string {
-  const date = `${pad(v.year, 4)}-${pad(v.month, 2)}-${pad(v.day, 2)}`
-  if (type === 'DATE') return date
-  const frac = fsp > 0 ? `.${pad(v.microsecond, 6).slice(0, fsp)}` : ''
-  return `${date} ${pad(v.hour, 2)}:${pad(v.minute, 2)}:${pad(v.second, 2)}${frac}`
+  return renderMysqlDateTime(v, fsp || 0, type === 'DATE')
 }
 
 export function renderTime(v: MysqlTime, fsp: number): string {
-  const hours = v.days * 24 + v.hour
-  const frac = fsp > 0 ? `.${pad(v.microsecond, 6).slice(0, fsp)}` : ''
-  return `${v.negative ? '-' : ''}${pad(hours, 2)}:${pad(v.minute, 2)}:${pad(v.second, 2)}${frac}`
+  return renderMysqlTime(v, fsp || 0, 2)
 }
 
 /** `2024-01-02 03:04:05` as the number `20240102030405`, which is what a temporal is in a numeric context. */
-function temporalNumber(v: DateTimeValue): string {
+function temporalNumber(v: DateTimeValue | TimeValue): string {
+  if (v.kind === 'time') return renderMysqlTime(v.v, v.fsp || 0).replaceAll(':', '')
   const d = v.v
   const date = `${d.year}${pad(d.month, 2)}${pad(d.day, 2)}`
   if (v.type === 'DATE') return date
   const frac = v.fsp > 0 ? `.${pad(d.microsecond, 6).slice(0, v.fsp)}` : ''
   return `${date}${pad(d.hour, 2)}${pad(d.minute, 2)}${pad(d.second, 2)}${frac}`
-}
-
-function timeNumber(t: MysqlTime, fsp: number): string {
-  const frac = fsp > 0 ? `.${pad(t.microsecond, 6).slice(0, fsp)}` : ''
-  return `${t.negative ? '-' : ''}${t.days * 24 + t.hour}${pad(t.minute, 2)}${pad(t.second, 2)}${frac}`
 }
 
 /** A value as text, as `val_str()`. */

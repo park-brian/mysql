@@ -1,8 +1,15 @@
-import { LITERAL, NODE, nativeFunctionWord, type CallNode, type Expression, type LiteralNode } from '@myjs/parser'
+import { LITERAL, NODE, QUERY, nativeFunctionWord, type CallNode, type Expression, type LiteralNode, type QueryBody, type QueryExpression } from '@myjs/parser'
 
 /** Lookup eligibility, not existence; raw names and collision roles stay on the AST. */
 export function nativeCallName(e: Pick<CallNode, 'name' | 'stored' | 'schema'>): string {
   return e.stored || e.schema !== undefined ? '' : nativeFunctionWord(e.name)
+}
+
+/** The innermost body; wrapper ORDER, LIMIT and WITH clauses remain on their query nodes. */
+export function queryBody(query: QueryExpression): Exclude<QueryBody, QueryExpression> {
+  let body = query.body
+  while (body.kind === QUERY.QUERY) body = body.body
+  return body
 }
 
 /** Read-only AST proofs: true matches, false prunes, undefined visits children. */

@@ -13,14 +13,14 @@ import type { ColumnDef, IndexDef, Table, TableDef, ViewDef } from '@myjs/engine
 import { LITERAL, NODE, QUERY, REF, TOKEN, deparse, lex, parseStatement, type CallNode, type Expression, type OrderItem, type QueryBody, type QueryExpression, type SelectNode, type TableReference, type SetOperationNode, type TableName, type Token } from '@myjs/parser'
 import { messages, sqlError, type ColumnDefinition, type ResultSet, type RowValue } from '@myjs/protocol'
 import { MAX_UNSIGNED, MIN_SIGNED, intValue, storageWidth, toInteger, truth, withoutHex, type Value } from '@myjs/types'
-import { compile, constantNode, memoValue, logicalOperand, convertTo, decimalField, EMPTY_SCOPE, readSlot, type CompileContext, type Compiled, type Env, type GroupKeys, type QuantifiedSubquery, type Scope, type SubqueryPlan } from './compile.ts'
+import { compile, constantNode, memoValue, logicalOperand, convertTo, fieldValue, decimalField, EMPTY_SCOPE, readSlot, type CompileContext, type Compiled, type Env, type GroupKeys, type QuantifiedSubquery, type Scope, type SubqueryPlan } from './compile.ts'
 import { AggregateSink, chooseStrategy, containsAggregate, groupRows, isAggregate } from './group.ts'
 import { WindowSink, applyWindows, containsWindow } from './window.ts'
 import { CHARSET_UTF8MB4_BIN, EMPTY_NAMES, columnDefinition, copiedLength, intType, type ResultType } from './meta.ts'
 import { FIELD_TYPE, expectTyped } from '@myjs/bytes'
 import { distinct, filter, limit, project, sort, type SortKey } from './operators.ts'
 import { isConstant, optimizerEnabled, splitAnd, tableColumn } from './plan.ts'
-import { and, columnRefs, integerLiteral, nativeCallName, someNode } from './ast.ts'
+import { and, columnRefs, integerLiteral, nativeCallName, queryBody, someNode } from './ast.ts'
 import { invalidGroupFunction } from './registry.ts'
 import { notSupported, wrongArgumentsError } from './errors.ts'
 import { clusteredIndex, indexParts } from './indexes.ts'
@@ -1343,10 +1343,8 @@ interface BoundSubquery extends SubqueryPlan {
 
 /** Whether a query reads a table: one with no FROM is a constant row. */
 function hasFrom(q: QueryExpression): boolean {
-  const body = q.body
-  if (body.kind === QUERY.SELECT) return (body.from?.length ?? 0) > 0
-  if (body.kind === QUERY.QUERY) return hasFrom(body)
-  return true
+  const body = queryBody(q)
+  return body.kind !== QUERY.SELECT || (body.from?.length ?? 0) > 0
 }
 
 /**
@@ -1404,7 +1402,7 @@ function derivedTable(run: Run, query: QueryExpression, alias: string, names: re
     const given = lateral === undefined || row === undefined ? env : { ...env, outer: [row, ...(env.outer ?? [])] }
     for (const r of plan.rows(trx, given)) yield r.map((v, i) => {
       const type = columns[i]!.type
-      return withoutHex(!merged && (type.kind === 'decimal' || type.kind === 'time') ? convertTo(v, type) : v)
+      return withoutHex(!merged && (type.kind === 'decimal' || type.kind === 'time') ? fieldValue(v, type) : v)
     })
   }
   // Read once per statement unless it reads an enclosing query: so an UPDATE

@@ -88,7 +88,9 @@ export function avgAccumulator(exact: boolean, argScale: number, storedScale?: n
 }
 
 /** `MIN` and `MAX`, ordering as the values' own comparison does — a string by its collation. */
-export function extremeAccumulator(max: boolean): Accumulator {
+export function extremeAccumulator(max: boolean, timeInteger: boolean): Accumulator
+export function extremeAccumulator(max: boolean): Accumulator
+export function extremeAccumulator(max: boolean, timeInteger = false): Accumulator {
   let best: Exclude<Value, null> | undefined
   return {
     add(v) {
@@ -99,7 +101,7 @@ export function extremeAccumulator(max: boolean): Accumulator {
       }
     },
     // MIN and MAX hand on a value: a hex literal's number and an ENUM's index are gone.
-    result: () => (best === undefined ? null : best.kind === 'time' ? timeFieldValue(best) : plainValue(best)),
+    result: () => plainValue(best?.kind === 'time' ? timeFieldValue(best) : best ?? null, timeInteger),
   }
 }
 

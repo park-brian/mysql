@@ -12,7 +12,7 @@
 // unknown function in a selected schema is ER_SP_DOES_NOT_EXIST; a builtin we
 // have not written is ER_NOT_SUPPORTED_YET naming it (M5.10 owns the rest).
 import { CHARSET_BINARY, COLUMN_FLAG, FIELD_TYPE, expectTyped, equalBytes, type MysqlTime } from '@myjs/bytes'
-import { nativeCallName, someNode } from './ast.ts'
+import { nativeCallName, queryBody, someNode } from './ast.ts'
 import { notSupported } from './errors.ts'
 import { resolveCollation } from './collation.ts'
 import { decodeCollation, defaultCollationOf, encodeCollation, requireCollationInfo } from '@myjs/charsets'
@@ -2315,6 +2315,13 @@ export function convertTo(v: Value, t: ResultType): Value {
   }
 }
 
+/** An actual result field establishes its own integer reading after value conversion. */
+export function fieldValue(v: Value, t: ResultType): Value {
+  const value = convertTo(v, t)
+  if (t.kind === 'time' && value?.kind === 'time') return { ...value, integer: toInteger(timeValue(value.v, 0)) }
+  return value
+}
+
 /** A stored DECIMAL reads its declared value, not the original item's branch reader. */
 export function decimalField(item: Compiled): Compiled {
   return item.type.kind === 'decimal' ? { type: item.type, eval: (row, env) => convertTo(item.eval(row, env), item.type) } : item
@@ -2685,16 +2692,21 @@ function scalarSubquery(e: SubqueryNode, ctx: CompileContext): Compiled {
   if (plan.columns.length !== 1) throw operandColumnsError(1)
   const t = (plan.columns[0] as { type: ResultType }).type
   const key = {}
+  const body = queryBody(e.query)
+  // Source-free scalar projections reduce to their item unless HAVING retains a cache.
+  const cached = plan.hasFrom || ('having' in body && body.having)
+  const { column: _column, blobBytes: _blobBytes, fieldFlags: _fieldFlags, ownInTemporary: _ownInTemporary, ...type } = t
   return {
     eval: (row, env) => {
       const rows = rowsOf(plan, key, row, env)
       if (rows.length > 1) throw sqlError('ER_SUBQUERY_NO_1_ROW', 'Subquery returns more than 1 row')
       // An ENUM's index is the column's, not the subquery's; a hex literal keeps its number (8.4.11).
       const v = rows[0]?.[0] ?? null
-      return v !== null && v.kind === 'string' && v.ordinal !== undefined ? plainValue(v) : v
+      if (cached && v?.kind === 'time') return plainValue(v, t.kind === 'time')
+      return v?.kind === 'string' && v.ordinal !== undefined ? plainValue(v) : v
     },
     // Its own item, not its inner one: a MIN of a column inside keeps none of that column's flags here.
-    type: (({ fieldFlags: _f, ownInTemporary: _o, ...rest }) => ({ ...rest, nullable: t.nullable || plan.hasFrom }))(expressionOf(t)),
+    type: { ...type, nullable: t.nullable || plan.hasFrom },
   }
 }
 
