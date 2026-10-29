@@ -50,7 +50,10 @@ uses the same deferred build. Full cost accumulation and replacement priority
 follow MySQL; rounded trace prices do not decide ties. Weedout winners and other
 unsupported switch combinations retain their paths. When weedout is disabled,
 the same proved profile can materialize without beating its disabled competitor.
-Materialization-off and semijoin-off retain their exclusions.
+With materialization disabled and weedout enabled, the proved correlated reader
+now sorts before probing, skips NULL and stops at its first qualified hit;
+EXPLAIN shows its physical one-row inner Limit. Cost-selected weedout, last-resort
+fallback and semijoin-off execution remain open.
 M5.19 field copying now shares the
 BLOB promotion rule with metadata. Actual DISTINCT/group/derived writers now
 normalize stored DECIMAL values, closing the measured streamed-join copy gaps.

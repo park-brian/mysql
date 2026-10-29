@@ -8,6 +8,7 @@ import costs from './fixtures/antijoin/materialized.json' with { type: 'json' }
 import integers from './fixtures/antijoin/materialized-integers.json' with { type: 'json' }
 import firstHit from './fixtures/antijoin/first-hit.json' with { type: 'json' }
 import firstMatchOff from './fixtures/antijoin/firstmatch-off.json' with { type: 'json' }
+import weedoutHit from './fixtures/antijoin/weedout-hit.json' with { type: 'json' }
 // @ts-expect-error — share the capture's normalization without its runner.
 import { planSkeleton } from '../../tools/capture-relational.mjs'
 
@@ -96,8 +97,8 @@ test('FirstMatch-off follows native materialization and weedout cost choices', a
     assert.equal(firstMatchOff.cases.length, 1540)
     assert.equal(firstMatchOff.outcomes, 3080)
     assert.equal(firstMatchOff.baselineComplete, 0)
-    assert.equal(firstMatchOff.predecessorComplete, 552)
-    assert.equal(firstMatchOff.complete, 1672)
+    assert.equal(firstMatchOff.predecessorComplete, 1672)
+    assert.equal(firstMatchOff.complete, 1952)
     await conn.query('CREATE DATABASE anti213'); await conn.query('USE anti213')
     await conn.query('CREATE TABLE pa(id INT PRIMARY KEY,name VARCHAR(12) NOT NULL,g INT,UNIQUE KEY(name)) STATS_AUTO_RECALC=0')
     await conn.query('CREATE TABLE ch(id INT PRIMARY KEY,pa_id INT,label VARCHAR(10),qty INT NOT NULL,KEY(pa_id)) STATS_AUTO_RECALC=0')
@@ -111,7 +112,8 @@ test('FirstMatch-off follows native materialization and weedout cost choices', a
       }
       const nativePlan = firstMatchOff.plans[plan]!
       const supported = !switches.includes('semijoin=off') && !switches.includes('materialization=off')
-      assert.equal(guard, supported && nativePlan.includes('Materialize with deduplication'))
+      const limited = !switches.includes('semijoin=off') && switches.includes('materialization=off') && !switches.includes('duplicateweedout=off')
+      assert.equal(guard, limited || supported && nativePlan.includes('Materialize with deduplication'))
       if (supported) {
         const decision = firstMatchOff.costs[cost]!
         assert.equal(typeof decision.materialized, 'number')
@@ -134,7 +136,7 @@ test('FirstMatch-off follows native materialization and weedout cost choices', a
       if (guard) guarded++
       await check(conn, sql, firstMatchOff.rows[rows], firstMatchOff.fields[fields], firstMatchOff.warnings[warnings])
     }
-    assert.equal(guarded * 2, 1672)
+    assert.equal(guarded * 2, 1952)
     assert.equal(equalReported, 48)
     assert.equal(forced, 560)
     assert.equal(disabledCheaper, 128)
@@ -397,7 +399,18 @@ test('proved FirstMatch sorts its outer source before correlated probes and pres
     await conn.query('ANALYZE TABLE pa,ch')
     const [explain] = await conn.query<mysql.RowDataPacket[]>('EXPLAIN FORMAT=TREE ' + sql)
     assert.equal(planSkeleton(explain[0]?.EXPLAIN), 'Limit\n    Nested loop antijoin\n        Sort\n            Table scan on pa\n        Covering index lookup on ch using pa_id')
-    await check(conn, sql, [['n001']], [['name', 253, 48, 20485, 0, 224, 'firstmatch215', 'pa', 'pa', 'name']], [])
+    const fields = [['name', 253, 48, 20485, 0, 224, 'firstmatch215', 'pa', 'pa', 'name']]
+    await check(conn, sql, [['n001']], fields, [])
+    await conn.query("SET optimizer_switch='default,firstmatch=off,materialization=off'")
+    const [limited] = await conn.query<mysql.RowDataPacket[]>('EXPLAIN FORMAT=TREE ' + sql)
+    assert.equal(planSkeleton(limited[0]?.EXPLAIN), planSkeleton(weedoutHit.nativeSortActivity))
+    await check(conn, sql, [['n001']], fields, [])
+    if (host !== undefined) {
+      const [analyze] = await conn.query<mysql.RowDataPacket[]>('EXPLAIN ANALYZE ' + sql)
+      const scan = String(analyze[0]?.EXPLAIN).split('\n').find((line) => line.includes('Table scan on pa'))
+      assert.match(scan ?? '', /\(actual time=[^)]* rows=4 loops=1\)/)
+    }
+    await conn.query("SET optimizer_switch='default'")
     if (db === undefined || open === undefined) return
     db.catalog!.table = (schema, name, trx) => {
       const table = open(schema, name, trx)
@@ -426,7 +439,7 @@ test('proved FirstMatch sorts its outer source before correlated probes and pres
       }
       return table
     }
-    for (const switches of ['default', 'default,materialization=off']) {
+    for (const switches of ['default', 'default,materialization=off', 'default,firstmatch=off,materialization=off']) {
       await conn.query('SET optimizer_switch=' + mysql.escape(switches))
       events.length = 0
       assert.deepEqual((await conn.query({ sql, rowsAsArray: true }))[0], [['n001']])
@@ -436,7 +449,7 @@ test('proved FirstMatch sorts its outer source before correlated probes and pres
       assert.deepEqual(events, ['pa:open', 'pa:row', 'pa:row', 'pa:close'])
       fail = false
     }
-    for (const switches of ['default,firstmatch=off,materialization=off', 'default,semijoin=off']) {
+    for (const switches of ['default,firstmatch=off,materialization=off,duplicateweedout=off', 'default,semijoin=off']) {
       await conn.query('SET optimizer_switch=' + mysql.escape(switches))
       events.length = 0
       assert.deepEqual((await conn.query({ sql, rowsAsArray: true }))[0], [['n001']])
@@ -449,7 +462,13 @@ test('proved FirstMatch sorts its outer source before correlated probes and pres
   }
 })
 
-test('admitted correlated antijoins skip NULL searches and close after their first qualified hit', async () => {
+test('admitted correlated antijoins skip NULL searches and close after their first qualified hit',
+  () => checkCorrelatedAntijoins('default,materialization=off', firstHit))
+
+test('proved materialization-off weedout uses the correlated reader and its one-row limit',
+  () => checkCorrelatedAntijoins('default,firstmatch=off,materialization=off', weedoutHit))
+
+async function checkCorrelatedAntijoins(switches: string, capture: typeof firstHit) {
   const { db, conn } = await connect()
   const sql = 'SELECT name FROM pa WHERE NOT EXISTS(SELECT 1 FROM ch WHERE ch.g=pa.g)'
   const open = db?.catalog!.table.bind(db.catalog)
@@ -465,14 +484,14 @@ test('admitted correlated antijoins skip NULL searches and close after their fir
     return [Number(counts[1]), Number(counts[2])]
   }
   try {
-    assert.equal(firstHit.mysqlVersion, '8.4.11')
-    assert.equal(firstHit.outcomes, 24)
-    assert.equal(firstHit.cases.length, 12)
-    if (host !== undefined) assert.equal((await conn.query<mysql.RowDataPacket[]>('SELECT VERSION() AS v'))[0][0]?.v.split('-')[0], firstHit.mysqlVersion)
+    assert.equal(capture.mysqlVersion, '8.4.11')
+    assert.equal(capture.outcomes, 24)
+    assert.equal(capture.cases.length, 12)
+    if (host !== undefined) assert.equal((await conn.query<mysql.RowDataPacket[]>('SELECT VERSION() AS v'))[0][0]?.v.split('-')[0], capture.mysqlVersion)
     await conn.query('CREATE DATABASE firstmatch216'); await conn.query('USE firstmatch216')
     await conn.query('CREATE TABLE pa(id INT PRIMARY KEY,name VARCHAR(12) NOT NULL,g INT,UNIQUE KEY(name)) STATS_AUTO_RECALC=0')
     await conn.query('CREATE TABLE ch(id INT PRIMARY KEY,g INT,KEY(g)) STATS_AUTO_RECALC=0')
-    await conn.query("SET optimizer_switch='default,materialization=off'")
+    await conn.query('SET optimizer_switch=' + mysql.escape(switches))
     if (db !== undefined && open !== undefined) db.catalog!.table = (schema, name, trx) => {
       const table = open(schema, name, trx)
       if (schema === 'firstmatch216' && name === 'ch') {
@@ -490,7 +509,7 @@ test('admitted correlated antijoins skip NULL searches and close after their fir
       }
       return table
     }
-    for (const sample of firstHit.cases) {
+    for (const sample of capture.cases) {
       await conn.query('DELETE FROM ch'); await conn.query('DELETE FROM pa')
       if (sample.inner !== 'empty') await conn.query('INSERT INTO ch VALUES' + Array.from({ length: 100 }, (_, i) =>
         `(${i + 1},${sample.inner === 'all-null' || sample.inner === 'mixed-null' && i % 2 === 0 ? 'NULL' : 1})`).join(','))
@@ -509,9 +528,9 @@ test('admitted correlated antijoins skip NULL searches and close after their fir
         const before = host === undefined ? undefined : await handlers()
         reset()
         const [rows, fields] = method === 'query' ? await conn.query(options) : await conn.execute(options)
-        assert.deepEqual(rows, firstHit.rows[sample.rows], method + ': rows')
-        assert.deepEqual(fieldFacts(fields), firstHit.fields[sample.fields], method + ': fields')
-        assert.deepEqual((await conn.query('SHOW WARNINGS'))[0], firstHit.warnings[sample.warnings], method + ': warnings')
+        assert.deepEqual(rows, capture.rows[sample.rows], method + ': rows')
+        assert.deepEqual(fieldFacts(fields), capture.fields[sample.fields], method + ': fields')
+        assert.deepEqual((await conn.query('SHOW WARNINGS'))[0], capture.warnings[sample.warnings], method + ': warnings')
         if (before !== undefined) {
           const after = await handlers()
           const delta = Object.fromEntries(Object.keys(before).map((name) => [name, after[name]! - before[name]!]))
@@ -529,7 +548,7 @@ test('admitted correlated antijoins skip NULL searches and close after their fir
       reset()
       const [actual, fields] = await conn.execute(options, [limit])
       assert.deepEqual(actual, rows)
-      assert.deepEqual(fieldFacts(fields), firstHit.fields[0])
+      assert.deepEqual(fieldFacts(fields), capture.fields[0])
       assert.deepEqual((await conn.query('SHOW WARNINGS'))[0], [])
       if (db !== undefined) assert.deepEqual([opened, visited, closed], limit === 0 ? [0, 0, 0] : [1, reads, 1])
     }
@@ -547,7 +566,7 @@ test('admitted correlated antijoins skip NULL searches and close after their fir
     reset()
     const [nullRows, nullFields] = await conn.execute(options, [1])
     assert.deepEqual(nullRows, [['one']])
-    assert.deepEqual(fieldFacts(nullFields), firstHit.fields[0])
+    assert.deepEqual(fieldFacts(nullFields), capture.fields[0])
     assert.deepEqual((await conn.query('SHOW WARNINGS'))[0], [])
     if (db !== undefined) assert.deepEqual([opened, visited, closed], [0, 0, 0])
     await conn.beginTransaction()
@@ -560,7 +579,7 @@ test('admitted correlated antijoins skip NULL searches and close after their fir
     if (db !== undefined) assert.deepEqual([opened, visited, closed], [0, 0, 0])
     conn.unprepare(options)
     failAfter = undefined
-    if (db !== undefined) for (const switches of ['default,firstmatch=off,materialization=off', 'default,semijoin=off,materialization=off']) {
+    if (db !== undefined) for (const switches of ['default,firstmatch=off,materialization=off,duplicateweedout=off', 'default,semijoin=off,materialization=off']) {
       await conn.query('SET optimizer_switch=' + mysql.escape(switches))
       reset()
       assert.deepEqual((await conn.query({ sql, rowsAsArray: true }))[0], [['one']])
@@ -568,9 +587,9 @@ test('admitted correlated antijoins skip NULL searches and close after their fir
       // early termination remains open rather than being admitted implicitly.
       assert.deepEqual([opened, visited, closed], [1, 100, 1])
     }
-    await conn.query("SET optimizer_switch='default,materialization=off'")
+    await conn.query('SET optimizer_switch=' + mysql.escape(switches))
     await conn.query('INSERT INTO ch VALUES(101,NULL)')
-    await check(conn, sql.replace('ch.g=pa.g', 'ch.g<=>pa.g'), [], firstHit.fields[0], [])
+    await check(conn, sql.replace('ch.g=pa.g', 'ch.g<=>pa.g'), [], capture.fields[0], [])
     // Source binding still precedes execution suppression for a NULL key.
     await assert.rejects(conn.query(sql.replace('ch.g=pa.g', 'ch.missing=pa.g')), { code: 'ER_BAD_FIELD_ERROR', errno: 1054, sqlState: '42S22' })
     await conn.query('DROP TABLE ch')
@@ -579,4 +598,4 @@ test('admitted correlated antijoins skip NULL searches and close after their fir
     if (db !== undefined && open !== undefined) db.catalog!.table = open
     await conn.query('DROP DATABASE IF EXISTS firstmatch216'); await conn.end(); await db?.end()
   }
-})
+}

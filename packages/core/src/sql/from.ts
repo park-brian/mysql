@@ -650,7 +650,7 @@ export function planFrom(refs: readonly TableReference[], ctx: FromContext, wher
       const plan = joinPlan()
       const firstMatch = optimizerEnabled(ctx.env, 'firstmatch')
       const materialization = optimizerEnabled(ctx.env, 'materialization')
-      if (!plan?.lookups.has(alias) || (!firstMatch && !materialization)) return undefined
+      if (!plan?.lookups.has(alias) || (!firstMatch && !materialization && !optimizerEnabled(ctx.env, 'duplicateweedout'))) return undefined
       const node = plan.node
       const [outer, probe] = plan.positions
       if (node.kind !== 'join' || !node.left || node.outer.kind !== 'leaf' || node.inner.kind !== 'leaf' || outer === undefined || probe === undefined) return undefined

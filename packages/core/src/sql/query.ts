@@ -587,7 +587,7 @@ function planSelect(run: Run, q: QueryExpression, node: SelectNode): SelectPlan 
     ...(from === undefined && node.where !== undefined ? [filterStage(resolved.predicates)] : []),
     ...(anti?.kind === 'materialized' ? [filterStage(anti.read, undefined, anti.plan)] : []),
     // Retain the clause's bound correlated reader above its physical outer sort.
-    ...(anti?.kind === 'correlated' ? [filterStage(resolved.predicates, undefined, semijoinNode(run, node.where!)?.children[0])] : []),
+    ...(anti?.kind === 'correlated' ? [filterStage(resolved.predicates, undefined, semijoinNode(run, node.where!, anti.explicitLimit)?.children[0])] : []),
     // HAVING without grouping filters the rows WHERE kept, before any window sees them.
     ...(having === undefined ? [] : [filterStage(having, run)]),
     ...(windows === undefined || windows.windows.length === 0 ? [] : [windowStage(windows)]),
@@ -993,7 +993,7 @@ function costedIntegerSemijoin(run: Run, q: QueryExpression, node: SelectNode, f
 }
 
 /** One decorrelatable integer antijoin, costed through the existing preserved-side join planner. */
-type Antijoin = { readonly kind: 'correlated'; readonly query: QueryExpression; readonly key: QualifiedColumn }
+type Antijoin = { readonly kind: 'correlated'; readonly query: QueryExpression; readonly key: QualifiedColumn; readonly explicitLimit: boolean }
   | { readonly kind: 'materialized'; readonly read: Compiled; readonly plan: PlanNode }
   | { readonly kind: 'lookup' | 'hash'; readonly key: Compiled; readonly inner: SelectPlan; readonly plan: PlanNode }
 
@@ -1041,9 +1041,9 @@ function costedAntijoin(run: Run, q: QueryExpression, node: SelectNode, from: Fr
     if (extra === undefined) {
       const strategy = alternative.antijoinStrategy(innerAlias)
       if (strategy === undefined) return undefined
-      // The proved FirstMatch keeps its original correlated predicate, with
+      // The proved correlated alternative keeps its original predicate, with
       // the same outer access/sort placement as the materialized alternative.
-      if (strategy === 'lookup') return { kind: 'correlated', query: sub, key: outerKey }
+      if (strategy === 'lookup') return { kind: 'correlated', query: sub, key: outerKey, explicitLimit: !optimizerEnabled(run.env, 'firstmatch') }
       const { where: _correlation, ...source } = body
       const projected: QueryExpression = { ...sub, body: { ...source, items: [{ expr: innerKey }] } }
       const plan = planQuery(run, projected)
@@ -1072,12 +1072,12 @@ function costedAntijoin(run: Run, q: QueryExpression, node: SelectNode, from: Fr
 }
 
 /** A nested-loop EXISTS conjunct with its real correlated subquery as the inner iterator. */
-function semijoinNode(run: Run, e: Expression): PlanNode | undefined {
+function semijoinNode(run: Run, e: Expression, explicitLimit = false): PlanNode | undefined {
   const anti = negativeExistsSubquery(e)
   const query = anti ?? (e.kind === NODE.UNARY && e.op === 'EXISTS' ? positiveSubquery(e) : undefined)
   if (query === undefined) return undefined
   const sub = (run.subqueries ?? []).find((s) => s.query === query)?.plan.explain?.()?.[0]
-  return sub === undefined ? undefined : planNode(anti !== undefined ? 'Nested loop antijoin' : 'Nested loop semijoin', [sub])
+  return sub === undefined ? undefined : planNode(anti !== undefined ? 'Nested loop antijoin' : 'Nested loop semijoin', [wrap(explicitLimit, 'Limit: 1 row(s)', sub)])
 }
 
 /** A Filter with a clause's subqueries beside its input, as the server lists them; anything else as it is. */
