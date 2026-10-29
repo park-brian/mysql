@@ -34,17 +34,21 @@ function load(): { bySymbol: Map<string, Entry>; byErrno: Map<number, Entry> } {
   if (bySymbol === null || byErrno === null) {
     const s = new Map<string, Entry>()
     const n = new Map<number, Entry>()
+    let errno = 0
     for (const line of PACKED_ERROR_TABLE.split('\n')) {
       if (line === '') continue
-      const sp1 = line.indexOf(' ')
-      const sp2 = line.indexOf(' ', sp1 + 1)
-      const errno = Number(line.slice(0, sp1))
-      const symbol = sp2 === -1 ? line.slice(sp1 + 1) : line.slice(sp1 + 1, sp2)
-      const sqlState = sp2 === -1 ? DEFAULT_SQLSTATE : line.slice(sp2 + 1)
+      if (line.startsWith('@')) {
+        errno = Number(line.slice(1))
+        continue
+      }
+      const space = line.indexOf(' ')
+      const symbol = space === -1 ? line : line.slice(0, space)
+      const sqlState = space === -1 ? DEFAULT_SQLSTATE : line.slice(space + 1)
       const entry: Entry = { errno, symbol, sqlState }
       s.set(symbol, entry)
       // Some symbols share a number (aliases); the first wins for errno lookup.
       if (!n.has(errno)) n.set(errno, entry)
+      errno++
     }
     bySymbol = s
     byErrno = n

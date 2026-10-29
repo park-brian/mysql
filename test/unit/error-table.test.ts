@@ -7,6 +7,7 @@
 // rather than the file's freshness.
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
+import { createHash } from 'node:crypto'
 import {
   errnoOf,
   symbolOf,
@@ -93,6 +94,29 @@ test('the table is large enough to be the real thing, and records its provenance
   assert.ok(ERROR_TABLE_SIZE > 1500, `expected the full table, got ${ERROR_TABLE_SIZE} entries`)
   assert.match(ERROR_TABLE_SOURCE, /^mysql\/mysql-server@[0-9a-f]+ share\/messages_to_clients\.txt$/)
   assert.match(ERROR_TABLE_SOURCE_SHA256, /^[0-9a-f]{64}$/)
+})
+
+test('all pinned error facts survive range packing, including reserved gaps', () => {
+  // Digest of the public mappings before range packing, independently of the
+  // private representation. Includes obsolete symbols and all six ranges.
+  const facts = createHash('sha256')
+  let entries = 0
+  for (let errno = 0; errno < 10_000; errno++) {
+    const symbol = symbolOf(errno)
+    if (symbol === undefined) {
+      assert.equal(sqlStateOf(errno), 'HY000')
+      continue
+    }
+    const state = sqlStateOf(errno)
+    assert.equal(errnoOf(symbol), errno, symbol)
+    assert.equal(sqlStateOf(symbol), state, symbol)
+    assert.equal(hasErrorSymbol(symbol), true, symbol)
+    facts.update(`${errno} ${symbol} ${state}\n`)
+    entries++
+  }
+  assert.equal(entries, 2132)
+  assert.equal(entries, ERROR_TABLE_SIZE)
+  assert.equal(facts.digest('hex'), '4943fe7e4cd62a9d9f6f01f22aa340a504e7604de3399c59da4b7863e9e2442a')
 })
 
 test('SqlError carries mysql2s exact shape', () => {

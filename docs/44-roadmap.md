@@ -1182,9 +1182,42 @@ all 2,184 native commands and local preservation checks. Source proofs cover
 a63ca2c, whose full pinned-reference Docker gate and all eleven required CI jobs
 passed. This closes the bounded function batch checkpoint, not M5.10: totals remain 144/190 and M5 42/53.
 
-**Next bounded slice:** resume M5.47. Refresh its latest captured materialization
-and threshold controls against the current tree before selecting the smallest
-remaining strategy gap; use current native facts rather than older snapshot
+**M5.47 refresh, repair in progress:** fresh MySQL 8.4.11 results are identical
+to the historical native answers: the materialization matrix now agrees on all
+144/144 commands and the threshold matrix on all 2,160/2,160. Current base controls
+agree on 288/288, fresh controls on 337/352 complete outcomes with 340 matching
+field sets, and all 192 earlier fresh plus 2,243 older controls survive. The
+relational corpus agrees on 2,126/2,248 plans; its floor remains unchanged.
+The next bounded candidate is cost-selected materialization of a pure correlated
+integer NOT EXISTS equality. Preserve correlated lookup when native costs select
+it, and keep eager hash construction separate from deferred materialization.
+A 1,400-outcome native cost matrix preserves all rows/full fields/warnings
+(474 complete plans currently match). For 20 outer/8 inner rows, FirstMatch
+costs 11.2555 and MaterializeLookup 7.1; at 1/8, FirstMatch costs 0.800274
+and materialization 3.3. Native activity proves construction on the first outer
+row even when its key is NULL; empty outer input and LIMIT 0 skip it. Keep
+unbuilt distinct from built-empty and preserve the eager hash path separately. Noncovered inner
+residuals, NOT IN null semantics and LEFT JOIN anti rewriting remain separate.
+
+**M5.47 size prerequisite, complete:** the materialized-antijoin prototype
+improves the new matrix from 474 to 682 complete plans while retaining every
+matching fact, but exceeds the unchanged core/facade caps. It is parked separately
+while the generated error table adopts sequential range starts. All 2,132 ordered
+facts, source hashes, strict membership and public lookup behavior are unchanged;
+obsolete entries still consume codes. The lazy loader retains its map publication
+and alias precedence. Core/facade shrink from 334,360/334,260 to 329,045/328,946 B
+gzipped, without changing budgets, lazy chunks or dependencies. Regeneration is
+byte-exact and an exhaustive public-mapping regression pins the predecessor facts.
+Fresh Docker --full --reference passes 1,548 main tests, four latency tests,
+typecheck, lint, all nine caps, package/typed smoke, all four seeded fuzzers,
+10,000 crash points, the real client and all seven pinned MySQL 8.4.11 corpora,
+including 1,737 coercion warning counts. Source proofs cover 494 tests/fixtures
+and all 206 runtime files. No planner behavior changes in this prerequisite;
+M5.47 and totals remain partial at 144/190 overall and M5 42/53.
+
+**Next bounded slice:** resume the parked M5.47 pure correlated integer NOT EXISTS
+repair under the existing caps. Keep all refreshed controls
+and the 1,400 native outcomes; use current native facts rather than older snapshot
 counts. Preserve the existing execution/build/probe owners, matching rows, full
 fields, warnings, complete plans and unchanged plan floor. M5.49 and M5.50 retain
 their existing acceptance criteria; browser work follows the remaining executor
@@ -1196,8 +1229,7 @@ publication remain open. CHECK permissions and SYSDATE construction/parent timin
 are unchanged, including SLEEP(SYSDATE(7)). Supplementary identifiers, ordinary
 table-name refusal, prepared temporal metadata, JSON extraction, consumer-specific
 range warnings, string nullability, merged temporal charset and ANSI SHOW CREATE
-remain open. Continue bounded function work before M5.47, M5.49, M5.50 and browser
-work.
+remain open. Resume M5.47 now; keep these function gaps recorded for a later bounded batch.
 
 Keep function, keyword and value namespaces distinct. Charset-value validation,
 separate event behavior, valid-AST warnings/limits, later binding failures,

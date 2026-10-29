@@ -1471,7 +1471,7 @@ a blocker and one without is just a note.
 
 ## 21. Where we are
 
-*A snapshot as of 2026-10-28. The [roadmap](./docs/44-roadmap.md) is the live
+*A snapshot as of 2026-10-29. The [roadmap](./docs/44-roadmap.md) is the live
 version, and wins wherever it disagrees with this section.*
 
 ```mermaid
@@ -1780,8 +1780,11 @@ The full Docker gates, pinned-reference audits and 10,000 crash points pass.
 `db.stream()` streams a million rows within a few MB of the heap's baseline (M5.40). Next is the
 remaining function and planner work, then the browser. The coercion corpus
 now agrees on all 3,148 observations and all 1,737 warning counts. The core entry bundle
-is 334,360 bytes gzipped (326.5 KiB), against the 500 KB release target,
+is 329,045 bytes gzipped (321.3 KiB), against the 500 KB release target,
 with the UCA weights in a separate chunk loaded on demand.
+The private generated error table records sequential range starts instead of
+repeating each number. Its 2,132 facts, provenance and public lookups remain
+unchanged; both lookup maps still publish together after lazy expansion.
 
 The release plan gives each stage something to ship:
 

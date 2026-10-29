@@ -99,12 +99,17 @@ if (strictSymbols.length !== 23 || new Set(strictSymbols).size !== 23 || strictS
 }
 const strictCodes = strictSymbols.map((s) => bySymbol.get(s).errno)
 
-// Packed one entry per line: `errno symbol [sqlstate]`. A minified object
-// literal of 1,400 entries costs far more in the bundle than a string the
-// consumer expands lazily on first lookup.
-const packed = entries
-  .map((e) => (e.sqlState === null ? `${e.errno} ${e.symbol}` : `${e.errno} ${e.symbol} ${e.sqlState}`))
-  .join('\n')
+// Error numbers advance sequentially within each upstream range. Store a
+// range start rather than repeating a number on every row; a reset also
+// preserves any future gap or alias without changing entry order.
+const lines = []
+let expected = null
+for (const entry of entries) {
+  if (entry.errno !== expected) lines.push(`@${entry.errno}`)
+  lines.push(entry.sqlState === null ? entry.symbol : `${entry.symbol} ${entry.sqlState}`)
+  expected = entry.errno + 1
+}
+const packed = lines.join('\n')
 
 const out = `// GENERATED FILE — do not edit by hand. Run \`npm run gen:errors\`.
 //
@@ -135,9 +140,9 @@ export const STRICT_ERROR_SOURCE_SHA256 = '${strictSha256}'
 export const STRICT_ERROR_CODES: ReadonlySet<number> = new Set([${strictCodes.join(', ')}])
 
 /**
- * One entry per line: \`errno symbol\` with an optional trailing SQLSTATE.
- * Expanded lazily by \`errors.ts\` — a minified object literal of ${entries.length}
- * entries costs several times this in the bundle.
+ * \`@errno\` starts a sequential range; each following line consumes one code.
+ * Entry lines contain a symbol and an optional SQLSTATE. Expanded lazily by
+ * \`errors/index.ts\`; order preserves symbol and number alias precedence.
  */
 export const PACKED_ERROR_TABLE = \`${packed}\`
 `
