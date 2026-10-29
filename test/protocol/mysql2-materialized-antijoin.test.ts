@@ -12,6 +12,8 @@ import weedoutHit from './fixtures/antijoin/weedout-hit.json' with { type: 'json
 import fallbackHit from './fixtures/antijoin/fallback-hit.json' with { type: 'json' }
 import dependentHit from './fixtures/antijoin/dependent-hit.json' with { type: 'json' }
 import dependentOrder from './fixtures/antijoin/dependent-order.json' with { type: 'json' }
+import positiveHit from './fixtures/antijoin/positive-dependent-hit.json' with { type: 'json' }
+import positiveOrder from './fixtures/antijoin/positive-dependent-order.json' with { type: 'json' }
 // @ts-expect-error — share the capture's normalization without its runner.
 import { planSkeleton } from '../../tools/capture-relational.mjs'
 
@@ -471,26 +473,29 @@ test('proved correlated antijoins sort before probes and preserve semijoin-off p
 })
 
 test('admitted correlated antijoins skip NULL searches and close after their first qualified hit',
-  () => checkCorrelatedAntijoins('default,materialization=off', firstHit))
+  () => checkCorrelatedExists('default,materialization=off', firstHit))
 
 test('proved materialization-off weedout uses the correlated reader and its one-row limit',
-  () => checkCorrelatedAntijoins('default,firstmatch=off,materialization=off', weedoutHit))
+  () => checkCorrelatedExists('default,firstmatch=off,materialization=off', weedoutHit))
 
 test('proved last-resort antijoins retain the correlated source bound with all alternatives disabled',
-  () => checkCorrelatedAntijoins('default,firstmatch=off,materialization=off,duplicateweedout=off', fallbackHit))
+  () => checkCorrelatedExists('default,firstmatch=off,materialization=off,duplicateweedout=off', fallbackHit))
 
 for (const { switches, capture } of dependentHit.variants) test('dependent reader closes at its first qualified hit: ' + switches,
-  () => checkCorrelatedAntijoins(switches, capture))
+  () => checkCorrelatedExists(switches, capture))
 
-test('dependent filtering precedes outer sorting, including faults and cached execution', async () => {
+for (const { switches, capture } of positiveHit.variants) test('positive dependent reader closes at its first qualified hit: ' + switches,
+  () => checkCorrelatedExists(switches, capture, true))
+
+for (const reference of [dependentOrder, positiveOrder]) test(reference.schema + ': dependent filtering precedes outer sorting, including faults and cached execution', async () => {
   const { db, conn } = await connect()
   const open = db?.catalog!.table.bind(db.catalog)
   const events: string[] = []
   let failOuter = false
   try {
-    if (host !== undefined) assert.equal((await conn.query<mysql.RowDataPacket[]>('SELECT VERSION() v'))[0][0]!.v.split('-')[0], dependentOrder.mysqlVersion)
-    await conn.query('CREATE DATABASE ' + dependentOrder.schema)
-    await conn.query('USE ' + dependentOrder.schema)
+    if (host !== undefined) assert.equal((await conn.query<mysql.RowDataPacket[]>('SELECT VERSION() v'))[0][0]!.v.split('-')[0], reference.mysqlVersion)
+    await conn.query('CREATE DATABASE ' + reference.schema)
+    await conn.query('USE ' + reference.schema)
     await conn.query('CREATE TABLE pa(id INT PRIMARY KEY,name VARCHAR(12) NOT NULL,g INT,UNIQUE KEY(name)) STATS_AUTO_RECALC=0')
     await conn.query('CREATE TABLE ch(id INT PRIMARY KEY,pa_id INT,label VARCHAR(10),qty INT NOT NULL,KEY(pa_id)) STATS_AUTO_RECALC=0')
     await conn.query("INSERT INTO pa VALUES(1,'n004',NULL),(2,'n003',1),(3,'n002',2),(4,'n001',9)")
@@ -499,7 +504,7 @@ test('dependent filtering precedes outer sorting, including faults and cached ex
     await conn.query("SET optimizer_switch='default,semijoin=off'")
     if (db !== undefined && open !== undefined) db.catalog!.table = (schema, name, trx) => {
       const table = open(schema, name, trx)
-      if (schema !== dependentOrder.schema) return table
+      if (schema !== reference.schema) return table
       if (name === 'pa') {
         const scan = table.scan.bind(table)
         table.scan = function*(...args) {
@@ -529,12 +534,12 @@ test('dependent filtering precedes outer sorting, including faults and cached ex
       }
       return table
     }
-    const [explain] = await conn.query<mysql.RowDataPacket[]>('EXPLAIN FORMAT=TREE ' + dependentOrder.sql)
-    assert.equal(planSkeleton(explain[0]!.EXPLAIN), planSkeleton(dependentOrder.nativeActivity))
+    const [explain] = await conn.query<mysql.RowDataPacket[]>('EXPLAIN FORMAT=TREE ' + reference.sql)
+    assert.equal(planSkeleton(explain[0]!.EXPLAIN), planSkeleton(reference.nativeActivity))
     assert.doesNotMatch(String(explain[0]!.EXPLAIN), /Nested loop antijoin/)
-    for (const sample of dependentOrder.outcomes) {
+    for (const sample of reference.outcomes) {
       events.length = 0
-      const options = { sql: dependentOrder.sql, rowsAsArray: true }
+      const options = { sql: reference.sql, rowsAsArray: true }
       const [rows, fields] = sample.method === 'query' ? await conn.query(options) : await conn.execute(options)
       assert.deepEqual(rows, sample.rows)
       assert.deepEqual(fieldFacts(fields), sample.fields)
@@ -548,23 +553,24 @@ test('dependent filtering precedes outer sorting, including faults and cached ex
       await conn.query('UPDATE pa SET g=1 WHERE id=1')
       failOuter = true
       events.length = 0
-      await assert.rejects(conn.execute({ sql: dependentOrder.sql, rowsAsArray: true }), /injected dependent outer failure/)
+      await assert.rejects(conn.execute({ sql: reference.sql, rowsAsArray: true }), /injected dependent outer failure/)
       assert.deepEqual(events, ['pa:open', 'pa:row', 'ch:open', 'ch:row', 'ch:close', 'pa:row', 'pa:close'])
       failOuter = false
       events.length = 0
-      assert.deepEqual((await conn.execute({ sql: dependentOrder.sql, rowsAsArray: true }))[0], [['n001']])
+      assert.deepEqual((await conn.execute({ sql: reference.sql, rowsAsArray: true }))[0], reference.outcomes[0]!.rows)
       assert.equal(events.filter(e => e === 'ch:open').length, events.filter(e => e === 'ch:close').length)
     }
   } finally {
     if (db !== undefined && open !== undefined) db.catalog!.table = open
-    await conn.query('DROP DATABASE IF EXISTS ' + dependentOrder.schema)
+    await conn.query('DROP DATABASE IF EXISTS ' + reference.schema)
     await conn.end(); await db?.end()
   }
 })
 
-async function checkCorrelatedAntijoins(switches: string, capture: typeof firstHit) {
+async function checkCorrelatedExists(switches: string, capture: typeof firstHit, positive = false) {
   const { db, conn } = await connect()
-  const sql = 'SELECT name FROM pa WHERE NOT EXISTS(SELECT 1 FROM ch WHERE ch.g=pa.g)'
+  const sql = 'SELECT name FROM pa WHERE ' + (positive ? '' : 'NOT ') + 'EXISTS(SELECT 1 FROM ch WHERE ch.g=pa.g)'
+  const answer = (matched: boolean) => matched === positive ? [['one']] : []
   const open = db?.catalog!.table.bind(db.catalog)
   let opened = 0, visited = 0, closed = 0
   let failAfter: number | undefined
@@ -638,45 +644,45 @@ async function checkCorrelatedAntijoins(switches: string, capture: typeof firstH
     await conn.query('DELETE FROM ch')
     await conn.query('INSERT INTO ch VALUES' + Array.from({ length: 100 }, (_, i) => `(${i + 1},1)`).join(','))
     const options = { sql: sql + ' LIMIT ?', rowsAsArray: true }
-    const run = async (limit: number, rows: unknown, reads: number) => {
+    const run = async (limit: number, matched: boolean, reads: number) => {
       reset()
       const [actual, fields] = await conn.execute(options, [limit])
-      assert.deepEqual(actual, rows)
+      assert.deepEqual(actual, limit === 0 ? [] : answer(matched))
       assert.deepEqual(fieldFacts(fields), capture.fields[0])
       assert.deepEqual((await conn.query('SHOW WARNINGS'))[0], [])
       if (db !== undefined) assert.deepEqual([opened, visited, closed], limit === 0 ? [0, 0, 0] : [1, reads, 1])
     }
     // A second matching row would fail if the source were exhausted.
     failAfter = 2
-    for (const limit of [0, 1, 5]) await run(limit, [], limit === 0 ? 0 : 1)
-    await conn.query('UPDATE pa SET g=9'); await run(1, [['one']], 0)
-    await conn.query('UPDATE ch SET g=9'); await run(1, [], 1)
+    for (const limit of [0, 1, 5]) await run(limit, true, limit === 0 ? 0 : 1)
+    await conn.query('UPDATE pa SET g=9'); await run(1, false, 0)
+    await conn.query('UPDATE ch SET g=9'); await run(1, true, 1)
     await conn.beginTransaction()
-    await conn.query('UPDATE ch SET g=1'); await run(1, [['one']], 0)
-    await conn.rollback(); await run(1, [], 1)
+    await conn.query('UPDATE ch SET g=1'); await run(1, false, 0)
+    await conn.rollback(); await run(1, true, 1)
     // NULL skips even a failing first read, including on the cached statement.
     await conn.query('UPDATE pa SET g=NULL')
     failAfter = 1
     reset()
     const [nullRows, nullFields] = await conn.execute(options, [1])
-    assert.deepEqual(nullRows, [['one']])
+    assert.deepEqual(nullRows, answer(false))
     assert.deepEqual(fieldFacts(nullFields), capture.fields[0])
     assert.deepEqual((await conn.query('SHOW WARNINGS'))[0], [])
     if (db !== undefined) assert.deepEqual([opened, visited, closed], [0, 0, 0])
     await conn.beginTransaction()
     await conn.query('UPDATE pa SET g=9')
     if (db !== undefined) await assert.rejects(conn.execute(options, [1]), /injected later matching row failure/)
-    else await run(1, [], 1)
+    else await run(1, true, 1)
     await conn.rollback()
     reset()
-    assert.deepEqual((await conn.execute(options, [1]))[0], [['one']])
+    assert.deepEqual((await conn.execute(options, [1]))[0], answer(false))
     if (db !== undefined) assert.deepEqual([opened, visited, closed], [0, 0, 0])
     conn.unprepare(options)
     failAfter = undefined
     if (db !== undefined) {
       await conn.query("SET optimizer_switch='default,semijoin=off,materialization=off'")
       reset()
-      assert.deepEqual((await conn.query({ sql, rowsAsArray: true }))[0], [['one']])
+      assert.deepEqual((await conn.query({ sql, rowsAsArray: true }))[0], answer(false))
       assert.deepEqual([opened, visited, closed], [0, 0, 0], 'the proved dependent source validates then skips NULL')
       reset()
       await conn.query(sql.replace('SELECT name ', 'SELECT name AS n '))
@@ -684,7 +690,7 @@ async function checkCorrelatedAntijoins(switches: string, capture: typeof firstH
     }
     await conn.query('SET optimizer_switch=' + mysql.escape(switches))
     await conn.query('INSERT INTO ch VALUES(101,NULL)')
-    await check(conn, sql.replace('ch.g=pa.g', 'ch.g<=>pa.g'), [], capture.fields[0], [])
+    await check(conn, sql.replace('ch.g=pa.g', 'ch.g<=>pa.g'), answer(true), capture.fields[0], [])
     // Source binding still precedes execution suppression for a NULL key.
     await assert.rejects(conn.query(sql.replace('ch.g=pa.g', 'ch.missing=pa.g')), { code: 'ER_BAD_FIELD_ERROR', errno: 1054, sqlState: '42S22' })
     await conn.query('DROP TABLE ch')

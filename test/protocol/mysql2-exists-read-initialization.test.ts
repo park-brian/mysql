@@ -4,7 +4,8 @@ import assert from 'node:assert/strict'
 import mysql, { type FieldPacket, type QueryError } from 'mysql2'
 import { MySQL } from '@myjs/core'
 import { SqlError } from '@myjs/protocol'
-import fixture from './fixtures/antijoin/read-initialization.json' with { type: 'json' }
+import negativeVisibility from './fixtures/antijoin/read-initialization.json' with { type: 'json' }
+import positiveVisibility from './fixtures/antijoin/positive-read-initialization.json' with { type: 'json' }
 // @ts-expect-error — use the reference's plan normalization without its runner.
 import { planSkeleton } from '../../tools/capture-relational.mjs'
 
@@ -23,12 +24,13 @@ const schemas: Record<string, string> = {
   plain: 'dependent223_ddl', sorted: 'dependent223_sorted',
   sort4: 'dependent223_sorted4', constructors: 'dependent223_ctor',
   ordinal: 'readinit223_ordinal',
+  positive: 'positive230_ddl',
 }
 
-test('proved correlated sources validate retained views without losing headers or earlier facts', async () => {
+for (const fixture of [negativeVisibility, positiveVisibility]) test(fixture.outcomes + ': proved correlated sources validate retained views without losing headers or earlier facts', async () => {
   assert.equal(fixture.mysqlVersion, '8.4.11')
-  assert.equal(fixture.cases.length, 240)
-  assert.equal(fixture.outcomes, 240)
+  assert.equal(fixture.cases.length, fixture === negativeVisibility ? 240 : 30)
+  assert.equal(fixture.outcomes, fixture.cases.length)
   let errorMatches = 0, headerMatches = 0, warningMatches = 0, completeMatches = 0
   for (const sample of fixture.cases) {
     const db = host === undefined ? await MySQL.open(':memory:') : undefined
@@ -42,8 +44,8 @@ test('proved correlated sources validate retained views without losing headers o
     const schema = schemas[sample.group]!
     const constructor = sample.group === 'constructors'
     const four = constructor || sample.group === 'sort4' || sample.group === 'ordinal'
-    const sql = 'SELECT ' + sample.projection + ' FROM pa WHERE NOT EXISTS(SELECT 1 FROM ch WHERE ch.g=pa.g)'
-      + (constructor || sample.group === 'ordinal' ? sample.order : sample.group === 'plain' ? '' : ' ORDER BY name LIMIT 1')
+    const sql = 'SELECT ' + sample.projection + ' FROM pa WHERE ' + (sample.group === 'positive' ? '' : 'NOT ') + 'EXISTS(SELECT 1 FROM ch WHERE ch.g=pa.g)'
+      + (constructor || sample.group === 'ordinal' ? sample.order : sample.group === 'plain' || sample.group === 'positive' ? '' : ' ORDER BY name LIMIT 1')
     const createParent = () => b.query('CREATE TABLE pa(id ' + (constructor ? 'BIGINT UNSIGNED' : 'INT') + ' PRIMARY KEY,name VARCHAR(12) NOT NULL,g INT,UNIQUE KEY(name))')
     const createInner = () => b.query('CREATE TABLE ch(id INT PRIMARY KEY,g INT,KEY(g))')
     const parentValues = constructor
@@ -120,20 +122,17 @@ test('proved correlated sources validate retained views without losing headers o
     }
   }
   if (host === undefined) {
-    assert.equal(errorMatches, 228)
-    assert.equal(headerMatches, 216)
-    assert.equal(warningMatches, 228)
-    assert.equal(completeMatches, 206)
+    assert.deepEqual([errorMatches, headerMatches, warningMatches, completeMatches], fixture === negativeVisibility ? [228, 216, 228, 206] : [30, 30, 30, 30])
   }
 })
 
-for (const switches of ['default,materialization=off', 'default,semijoin=off']) test('NULL validation uses the bound invocation and closes the parent on failure: ' + switches, { skip: host !== undefined }, async () => {
+for (const [switches, positive] of [['default,materialization=off', false], ['default,semijoin=off', false], ['default,semijoin=off', true]] as const) test('NULL validation uses the bound invocation and closes the parent on failure: ' + switches + (positive ? ' EXISTS' : ' NOT EXISTS'), { skip: host !== undefined }, async () => {
   const db = await MySQL.open(':memory:')
   const conn = mysql.createConnection({ stream: db.createStream(), user: 'root' }).promise()
   const open = db.catalog!.table.bind(db.catalog)
   let checks = 0, searches = 0, parentOpens = 0, parentCloses = 0
   let capable = true, fail = false
-  const sql = 'SELECT name FROM pa WHERE NOT EXISTS(SELECT 1 FROM ch WHERE ch.g=pa.g)'
+  const sql = 'SELECT name FROM pa WHERE ' + (positive ? '' : 'NOT ') + 'EXISTS(SELECT 1 FROM ch WHERE ch.g=pa.g)'
   try {
     await conn.query('CREATE DATABASE readinit223_control'); await conn.query('USE readinit223_control')
     await conn.query('CREATE TABLE pa(id INT PRIMARY KEY,name VARCHAR(12) NOT NULL,g INT,UNIQUE KEY(name))')
@@ -192,7 +191,7 @@ for (const switches of ['default,materialization=off', 'default,semijoin=off']) 
   }
 })
 
-test('an inner table that shadows the parent name retains its independent reader', async () => {
+for (const positive of [false, true]) test('an inner table that shadows the parent name retains its independent reader: ' + (positive ? 'EXISTS' : 'NOT EXISTS'), async () => {
   const db = host === undefined ? await MySQL.open(':memory:') : undefined
   const conn = mysql.createConnection({
     ...(db === undefined ? { host: host ?? 'reference', port: Number(process.env.MYSQL_REFERENCE_PORT ?? 3306), password: process.env.MYSQL_REFERENCE_PASSWORD ?? 'root' } : { stream: db.createStream() }),
@@ -200,7 +199,7 @@ test('an inner table that shadows the parent name retains its independent reader
   }).promise()
   const open = db?.catalog!.table.bind(db.catalog)
   let checks = 0, visited = 0
-  const sql = 'SELECT name FROM pa WHERE NOT EXISTS(SELECT 1 FROM pa WHERE pa.g=pa.g)'
+  const sql = 'SELECT name FROM pa WHERE ' + (positive ? '' : 'NOT ') + 'EXISTS(SELECT 1 FROM pa WHERE pa.g=pa.g)'
   try {
     await conn.query('CREATE DATABASE dependent229_shadow')
     await conn.query('USE dependent229_shadow')
@@ -221,7 +220,7 @@ test('an inner table that shadows the parent name retains its independent reader
       checks = visited = 0
       const options = { sql, rowsAsArray: true }
       const [rows] = method === 'query' ? await conn.query(options) : await conn.execute(options)
-      assert.deepEqual(rows, [])
+      assert.deepEqual(rows, positive ? [['null'], ['one'], ['two']] : [])
       assert.deepEqual((await conn.query('SHOW WARNINGS'))[0], [])
       if (db !== undefined) {
         assert.equal(checks, 0, 'no dependent NULL validation role is granted to an independent source')

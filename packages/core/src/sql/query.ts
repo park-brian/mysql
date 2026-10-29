@@ -924,7 +924,8 @@ function checkedCorrelatedOutput(node: SelectNode, q: QueryExpression, source: F
 function dependentReader(run: Run, q: QueryExpression, node: SelectNode, from: FromPlan | undefined, items: readonly { readonly expr: Expression; readonly alias?: string; readonly compiled: Compiled }[], bound: BoundSubquery): BoundSubquery {
   if (from === undefined || !bound.correlated || run.preparing === true || q.locking !== undefined || node.distinct === true || node.having !== undefined) return bound
   const outer = joinOuter(run, q, node, from)
-  const query = negativeExistsSubquery(node.where)
+  const where = node.where
+  const query = where?.kind === NODE.UNARY && where.op === 'EXISTS' && where.operand.kind === NODE.SUBQUERY ? where.operand.query : negativeExistsSubquery(where)
   const body = query === undefined ? undefined : boundedSubquery(query)
   if (outer === undefined || query !== bound.query || body === undefined || !integerLiteral(body.items[0].expr) || !checkedCorrelatedOutput(node, q, from.single, items, query)) return bound
   if (body.from[0].table.name.toLowerCase() === outer.table.name.toLowerCase()) return bound
