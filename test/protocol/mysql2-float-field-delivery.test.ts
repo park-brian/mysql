@@ -10,6 +10,7 @@ import blobs from './fixtures/functions/real-blob-copies.json' with { type: 'jso
 import parentheses from './fixtures/functions/set-parentheses-expanded.json' with { type: 'json' }
 import nonnull from './fixtures/functions/set-parentheses-notnull.json' with { type: 'json' }
 import sorts from './fixtures/functions/set-sort-holders.json' with { type: 'json' }
+import wrappers from './fixtures/functions/set-wrapper-context.json' with { type: 'json' }
 
 interface FloatReference {
   readonly mysqlVersion: string
@@ -21,6 +22,7 @@ interface FloatReference {
     readonly rows: readonly (readonly unknown[])[]
     readonly fields: readonly (readonly unknown[])[]
     readonly warnings: readonly { readonly Level: string; readonly Code: number; readonly Message: string }[]
+    readonly error?: { readonly code: string; readonly errno: number; readonly state: string; readonly message: string }
   }[]
   readonly checks: readonly { readonly rows: readonly number[]; readonly fields: readonly number[]; readonly warnings: readonly number[]; readonly rowCount?: false; readonly missingRows?: readonly number[]; readonly unorderedRows?: true; readonly warningCount?: false }[]
   readonly observations: readonly (readonly number[])[]
@@ -60,7 +62,24 @@ test('partial REAL comparisons retain present rows even when every value is mask
   assert.throws(() => checkCells([[3]], expected, [0, 1], 'matching cell lost', false, [1]), /matching cell/)
 })
 
-for (const [capture, total, matched] of [[delivery, 952, 776], [readers.cases[0], 506, 506], [readers.cases[1], 230, 218], [readers.cases[2], 72, 72], [readers.cases[3], 36, 36], [readers.cases[4], 960, 960], [widths, 2340, 2293], [copies, 3664, 3568], [blobs, 1368, 1224], [parentheses, 10368, 10368], [nonnull, 27648, 27648], [sorts, 1380, 1380]] as const) test('REAL readers and field delivery preserve native boundaries: ' + capture!.schema, async () => {
+for (const [capture, total, matched] of [
+  [delivery, 952, 776],
+  [readers.cases[0], 506, 506],
+  [readers.cases[1], 230, 218],
+  [readers.cases[2], 72, 72],
+  [readers.cases[3], 36, 36],
+  [readers.cases[4], 960, 960],
+  [widths, 2340, 2293],
+  [copies, 3664, 3568],
+  [blobs, 1368, 1224],
+  [parentheses, 10368, 10368],
+  [nonnull, 27648, 27648],
+  [sorts, 1380, 1380],
+  [wrappers.cases[0], 1032, 1032],
+  [wrappers.cases[1], 992, 992],
+  [wrappers.cases[2], 1412, 1412],
+  [wrappers.cases[3], 24, 24],
+] as const) test('REAL readers and field delivery preserve native boundaries: ' + capture!.schema, async () => {
   const reference = capture as FloatReference
   const host = process.env.MYSQL_REFERENCE_HOST
   const db = host === undefined ? await MySQL.open(':memory:') : undefined
@@ -86,21 +105,38 @@ for (const [capture, total, matched] of [[delivery, 952, 776], [readers.cases[0]
       const sql = reference.sql[sqlIndex!]!
       const api = reference.apis[apiIndex!]!
       const options = { sql, rowsAsArray: true }
+      const expected = reference.outcomes[outcomeIndex!]!
+      let matchedError = false
       const observed = await (api === 'query' ? conn.query(options) : conn.execute(options)).catch((error: unknown) => {
+        if (expected.error !== undefined) {
+          assert.ok(error !== null && typeof error === 'object')
+          const packet = error as { code?: unknown; errno?: unknown; sqlState?: unknown; sqlMessage?: unknown }
+          assert.deepEqual({ code: packet.code, errno: packet.errno, state: packet.sqlState, message: packet.sqlMessage }, expected.error, api + ': ' + sql)
+          matchedError = true
+          return undefined
+        }
         // Correlated source-free DEFAULT is recorded natively; its binding remains unsupported.
         if (db === undefined || !deferred.has(i)) throw error
         assert.ok(error !== null && typeof error === 'object' && 'code' in error)
         assert.equal(error.code, 'ER_NOT_SUPPORTED_YET', api + ': ' + sql)
         return undefined
       })
-      if (observed === undefined) { conn.unprepare(options); continue }
+      if (observed === undefined) {
+        if (matchedError) {
+          const warnings = (await conn.query<mysql.RowDataPacket[]>('SHOW WARNINGS'))[0].map(w => [w.Level, w.Code, w.Message])
+          assert.deepEqual(warnings, expected.warnings.map(w => [w.Level, w.Code, w.Message]), api + ': ' + sql)
+          complete++
+        }
+        conn.unprepare(options)
+        continue
+      }
+      assert.equal(expected.error, undefined, api + ': expected native error: ' + sql)
       const [rows, fields] = observed
       const actual = {
         rows: canonical(rows) as unknown[][],
         fields: fields.map(f => [f.name, f.columnType, f.columnLength, f.flags, f.decimals, f.characterSet, f.schema, f.table, f.orgTable, f.orgName]),
         warnings: (await conn.query<mysql.RowDataPacket[]>('SHOW WARNINGS'))[0].map(w => [w.Level, w.Code, w.Message] as unknown[]),
       }
-      const expected = reference.outcomes[outcomeIndex!]!
       const warnings = expected.warnings.map(w => [w.Level, w.Code, w.Message])
       const label = api + ': ' + sql
       if (db === undefined || strict.has(i) || deferred.has(i)) {

@@ -1900,8 +1900,10 @@ numeric field store. Transparent set parentheses now retain the enclosing
 holder and operator context, preserving nullability. Query blocks with their own
 clauses retain their owners. Ordered nested sets now lazily convert rows
 through the shared set writer before sorting/limiting, retaining reported
-metadata and operator/nullability authority. WITH/ORDER-owning wrapper context
-and inherited-holder collation admission remain open, alongside grouped readers/
+metadata and operator/nullability authority. WITH/ORDER-owning set wrappers now retain the same holder and operator context,
+binding CTEs through their existing lexical Run. Plain SELECTs retain numeric
+sorting. Leading-WITH ownership, plain SELECT naming and inherited-holder
+collation admission remain open, alongside grouped readers/
 order, width-limited and large
 fixed-scale formatting, DECIMAL diagnostics, aggregate metadata and
 separate warning timing/labels remain open. UTF-16 writing still reaches the

@@ -54,7 +54,10 @@ derived fields keep it. Transparent set parentheses now retain the enclosing
 holder and operator/nullability context; clause-owning blocks keep their owners.
 The 96 recorded nested numeric-copy gaps close. Ordered nested sets now read
 stored enclosing-holder values; all 38,016 holder/parentheses observations agree.
-WITH/ORDER-owning wrapper context and inherited-holder collation admission
+WITH/ORDER-owning set wrappers now retain the same holder and operator context,
+binding CTEs through their existing lexical Run. Plain SELECTs retain numeric
+sorting. Leading-WITH ownership, plain SELECT naming and inherited-holder
+collation admission
 remain open, alongside grouped readers/order, width-limited and large
 fixed-scale formatting, DECIMAL diagnostics, warning timing and aggregate
 metadata remain open. UTF-16 writes still hit the existing encoder

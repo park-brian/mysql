@@ -1744,13 +1744,17 @@ function planSetOperation(run: Run, node: SetOperationNode, parent?: { readonly 
   // The getter is read only during execution, after every branch is typed.
   const comparisonTypes = (): readonly ResultType[] => parent?.types() ?? op.columns.map((c) => c.type)
   const context = { op: node.op, types: comparisonTypes }
-  const branch = (b: QueryBody): SelectPlan => {
+  const hasSetBody = (b: QueryBody): boolean => b.kind === QUERY.SET_OPERATION || (b.kind === QUERY.QUERY && hasSetBody(b.body))
+  const branch = (b: QueryBody, scope = run): SelectPlan => {
     // Redundant parentheses retain this branch's holder and operator context.
-    if (b.kind === QUERY.QUERY && b.with === undefined && b.into === undefined && b.locking === undefined && b.orderBy === undefined && b.limit === undefined) return branch(b.body)
-    if (b.kind === QUERY.SET_OPERATION) return planSetOperation(run, b, context)
-    // A parenthesised set operation is still a branch of this one.
-    if (b.kind === QUERY.QUERY && b.body.kind === QUERY.SET_OPERATION && b.with === undefined) return orderedResult(run, b, planSetOperation(run, b.body, context), comparisonTypes)
-    return planQuery(run, asQuery(b))
+    if (b.kind === QUERY.QUERY && b.with === undefined && b.into === undefined && b.locking === undefined && b.orderBy === undefined && b.limit === undefined) return branch(b.body, scope)
+    if (b.kind === QUERY.SET_OPERATION) return planSetOperation(scope, b, context)
+    // Clause owners keep their scope; only set bodies use the enclosing holder.
+    if (b.kind === QUERY.QUERY && b.into === undefined && hasSetBody(b.body)) {
+      const inner = b.with === undefined ? scope : withClause(scope, b.with)
+      return orderedResult(inner, b, branch(b.body, inner), comparisonTypes)
+    }
+    return planQuery(scope, asQuery(b))
   }
   const left = branch(node.left)
   const right = branch(node.right)

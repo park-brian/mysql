@@ -58,25 +58,26 @@ The ORM review measured Drizzle's 487 passes and Prisma's 1,122 passes with the
 same reference snapshot failure at two workers. Browser work remains M6;
 InnoDB interchange remains M7, outside the staged Node release.
 
-**Current bounded function work:** nested set sorting now reads converted
-values from the enclosing holder, preserving operator/nullability context and
-reported metadata. All 38,016 parentheses/holder observations agree completely;
-the last 432 descending text-sort gaps close. A further 30,240-observation audit
-improves 26,584 to 26,752 complete matches while preserving every previously
-matching cell and row shape. Its 168 newly repaired outcomes and 1,212 unchanged
-complete controls become focused regressions. The earlier native pools remain
-intact and their checks only strengthen.
+**Current bounded function work:** nested set bodies now retain the enclosing
+holder and operator context through WITH and ORDER-owning query wrappers. WITH
+still binds through its existing lexical Run; each ordering/limit owner remains
+in place. Plain SELECT bodies keep their numeric sort scope: native 2/10
+controls distinguish them from sets sorted in the final text holder. The new
+20,772 wrapper/plain/diagnostic observations and earlier 30,240 sort observations
+improve 45,188 to 47,520 complete matches. All previous matching facts hold.
+Every newly repaired outcome and focused controls form 3,460 strict regressions.
 
-Next preserve holder context through WITH and ORDER-owning query wrappers while
-retaining their lexical/ordering owners. Separate collation admission against
-the inherited holder remains open: 1,152 new native errors are still accepted
-locally. The audit also retains the distinct fixed-FLOAT query-formatting gap;
-physical derived-table boundaries keep their own conversion. Grouped readers/
-order, correlated DEFAULT binding, width-limited/large fixed-scale formatting,
-DECIMAL diagnostics and warning timing remain open. The complete DECIMAL
-constructor rehearsal stays parked above the unchanged parser cap; grammar,
-diagnostics and refusal must ship together before presence/projection expansion.
-M2.3's codec scope remains explicit below. Totals remain 144/190 and M5 42/53.
+Next audit expression-key typing and collation admission in the inherited holder,
+including constructor error precedence and LIMIT 0 before changing binding.
+The 1,152 native collation errors still accepted locally remain open. Plain
+SELECT alias/expression and qualified-wrapper naming, leading WITH ownership
+when its first operand has another WITH, and fixed-FLOAT query formatting are
+separate gaps. Grouped readers/order, correlated DEFAULT binding, width-limited/
+large fixed-scale formatting, DECIMAL diagnostics and warning timing also remain
+open. The complete DECIMAL constructor rehearsal stays parked above the unchanged
+parser cap; grammar, diagnostics and refusal must ship together before presence/
+projection expansion. M2.3's codec scope remains explicit below. Totals remain
+144/190 and M5 42/53.
 
 **Measured compatibility.** M5.2's committed coercion gate is complete:
 3,148 observations and 1,737 warning counts agree through both protocols.
@@ -2066,6 +2067,44 @@ proof checks 531 tests/fixtures and 206 runtime sources plus tooling. Parser,
 core and facade are 45,491/331,450/331,374 B gzipped under unchanged caps.
 Preceding c93a334 passes all eleven required CI jobs. M5.10/M5.19 remain partial;
 totals stay 144/190 and M5 42/53.
+
+**M5.19 clause-owning set wrappers, verified:** branch planning distinguishes
+set bodies from ordinary SELECTs through their query wrappers. A set wrapper's
+WITH binds through the existing lexical Run, while its ORDER BY/LIMIT remains
+attached to that node. The same enclosing holder getter and parent operator
+context flow to its set body. Plain SELECTs keep their own source sort; INTO
+owners retain the existing typed refusal. No CTE resolver, public API, wire
+format or stored representation changes.
+
+The 13,824-outcome context audit improves 12,404 to 12,884, and 6,912 numeric
+2/10 controls improve 6,008 to 6,448. They cover mixed exact/REAL sources,
+nullable/non-null fields, all three ALL operators, merged/stored CTEs, shadowing,
+nested ordering, plain SELECT controls, both operand orders/protocols and LIMIT
+0/2. The earlier 30,240-outcome sort audit improves 26,752 to 28,164. A further
+36 diagnostic observations retain all 24 previously complete matches, including
+qualified names, unknown columns, duplicate/unused CTEs, locking and error/LIMIT
+precedence. Combined 51,012 observations improve 45,188 to 47,520.
+
+The new strict corpus records all 2,332 repaired outcomes, 1,104 unchanged complete
+controls and 24 diagnostic controls. Fourteen expected errors check code, errno,
+SQL state, message and complete warning vectors. An expected error cannot pass
+as success; old deferred bindings retain their original code check. Every
+previously matching SQL cell, row presence/width/count, field, warning and error
+fact holds across 65,522 differential observations, alongside all 38,016 older
+fully asserted holder cases. Native pools and existing assertions are intact.
+
+Seventeen local/native cases pass, replaying all 52,984 committed outcomes
+against 8.4.11. Typecheck, 20,000 executor statements seeded 20261010, plans
+2,127/2,248 under the unchanged 2,118 floor and all nine size caps pass. Actual
+4e7c303 fails the three repaired groups and retains the matching diagnostic
+group. Fresh Docker --reference passes 1,628 main and four latency tests,
+lint/typecheck, package/typed smoke, the real client and all seven pinned
+corpora, including 1,737 coercion warning counts. The early fresh-container
+source proof checks 532 tests/fixtures and 206 runtime sources plus tooling.
+Parser/core/facade are 45,491/331,491/331,388 B gzipped; caps are unchanged.
+Preceding 4e7c303 passes all eleven required CI jobs. Inherited-holder collation
+admission, plain SELECT naming, leading-WITH ownership and fixed-FLOAT query
+formatting remain explicit; M5.10/M5.19 stay partial at 144/190 and M5 42/53.
 
 **Next prerequisite: constructor admission before presence execution.** Complete
 the existing CAST work: with written utf8 warning 3719 now retained, refuse
