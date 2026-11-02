@@ -1615,7 +1615,12 @@ function renamed(columns: readonly { readonly name: string; readonly type: Resul
   const seen = new Set<string>()
   for (const [i, column] of columns.entries()) {
     const name = names?.[i] ?? column.name
-    if (!firstKey(seen, name.toLowerCase())) throw sqlError('ER_DUP_FIELDNAME', `Duplicate column name '${name}'`)
+    const key = name.toLowerCase()
+    if (!firstKey(seen, key)) {
+      // Declaration lists report the first spelling; copied fields report the later one.
+      const duplicate = names?.find(n => n.toLowerCase() === key) ?? name
+      throw sqlError('ER_DUP_FIELDNAME', `Duplicate column name '${duplicate}'`)
+    }
   }
   // Validate every name before a caller's metadata conversion can fail.
   return columns.map((c, i) => {

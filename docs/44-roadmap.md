@@ -2528,14 +2528,47 @@ duplicate-name spelling, broader structural and scoped-reference classification,
 CTE metadata and non-query contexts remain open. Totals remain 144/190 and
 M5 42/53; M5.10 stays partial.
 
-Next repair duplicate-column spelling only for explicit declaration lists at
-the existing renaming owner. A 60-command native audit matches 19 completely:
-CTE/recursive/view explicit lists report the first spelling, while raw copied
-SELECT names in derived tables and views report the later one. Both orders and
-accented case pairs prove that a global first-name replacement would regress
-correct copied-name diagnostics. Explicit derived-table lists confirm the same
-first-spelling rule. View PREPARE timing remains a separate gap.
-Keep earlier duplicate-field binding and cardinality priorities separate.
+**Explicit duplicate-column spelling, verified (2026-11-02):** the existing
+renaming failure branch now looks up the first matching declaration spelling.
+It keeps the same Set and lowercase detection, and retains the later spelling
+when names come from copied SELECT fields. The lookup runs only on failure;
+there is no additional map, resolver or validation phase.
+
+The 60-command native audit improves 19→56 complete matches across explicit
+CTE, recursive, derived and view lists. Both orders, accented case pairs and
+three-name duplicates agree. Raw copied derived/view names and valid alias
+overrides retain their correct results; all four view PREPARE admission gaps
+remain captured. Across 4,498 observations complete matches improve 3,679→3,719,
+preserving all 48,371 prior matching protocol facts without exceptions.
+
+All 56 new strict observations pass natively and locally with full rows,
+headers, fields, errors and diagnostics. The shared runner safely creates its
+optional schema and drops it only after successful creation, and now records
+unexpected successful DDL headers directly. The existing 531 observations are
+byte-unchanged. Five native and eight local protocol cases pass, including the
+current-area controls. Actual 7d299d4 passes the prior fixtures and fails the new
+spelling fixture; the warm runtime is restored afterwards.
+
+Fresh Docker --reference passes 1,645 main tests, four latency tests, typecheck,
+lint, all nine unchanged caps, package/typed smoke, the real client and all seven
+pinned corpora including 1,737 coercion warning counts. The unchanged long-IN
+assertion passes, with warm jobs completed before the fresh run. Early source
+proof matches 543 tests/fixtures and 206 runtime sources plus tooling. Parser/
+core/facade are 45,599/332,399/332,313 B gzipped. Twenty thousand executor
+statements seeded 20261010 pass; plans remain 2,127/2,248 under the unchanged
+2,118 floor. The full official suite retains all 38 passing identities and its
+native baseline; the measured fixture is unchanged. All eleven required
+7d299d4 CI jobs pass. Totals stay 144/190 and M5 42/53; M5.10 remains partial.
+
+Next prove view-body validation during PREPARE through a read-only definition
+owner, keeping catalog writes, target-schema existence and temporary-table
+prohibition at their execution boundary. A 123-command native baseline matches
+78 completely across ordinary, temporary, utility, no-database and priority
+controls. Missing target schemas and existing target tables can still PREPARE;
+active temporary sources can bind during PREPARE too. A blanket call to the
+current create helper would regress those correct successes. No-database target
+presence precedes variable, INTO and routine-identity checks. Keep unused-CTE
+policies, cached revalidation and MERGE-algorithm warnings explicitly separate.
 
 **Next prerequisite: constructor admission before presence execution.** Complete
 the existing CAST work: with written utf8 warning 3719 now retained, refuse

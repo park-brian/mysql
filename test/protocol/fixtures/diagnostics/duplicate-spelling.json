@@ -1,0 +1,1144 @@
+{
+  "mysqlVersion": "8.4.11",
+  "schema": "myjs_dup254",
+  "sqlMode": "ERROR_FOR_DIVISION_BY_ZERO",
+  "seed": "SELECT 1/0,CAST('x' AS DECIMAL)",
+  "observations": [
+    {
+      "sql": "WITH c(a,A) AS(SELECT 1 x,2 y) SELECT * FROM c",
+      "api": "query",
+      "error": {
+        "code": "ER_DUP_FIELDNAME",
+        "errno": 1060,
+        "state": "42S21",
+        "message": "Duplicate column name 'a'"
+      },
+      "warnings": [
+        [
+          "Error",
+          1060,
+          "Duplicate column name 'a'"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "WITH c(a,A) AS(SELECT 1 x,2 y) SELECT * FROM c",
+      "api": "execute",
+      "error": {
+        "code": "ER_DUP_FIELDNAME",
+        "errno": 1060,
+        "state": "42S21",
+        "message": "Duplicate column name 'a'"
+      },
+      "warnings": [
+        [
+          "Error",
+          1060,
+          "Duplicate column name 'a'"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "WITH c(a,A) AS(SELECT 1 x,2 y) SELECT * FROM c",
+      "api": "prepare",
+      "error": {
+        "code": "ER_DUP_FIELDNAME",
+        "errno": 1060,
+        "state": "42S21",
+        "message": "Duplicate column name 'a'"
+      },
+      "warnings": [
+        [
+          "Error",
+          1060,
+          "Duplicate column name 'a'"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "WITH c(A,a) AS(SELECT 1 x,2 y) SELECT * FROM c",
+      "api": "query",
+      "error": {
+        "code": "ER_DUP_FIELDNAME",
+        "errno": 1060,
+        "state": "42S21",
+        "message": "Duplicate column name 'A'"
+      },
+      "warnings": [
+        [
+          "Error",
+          1060,
+          "Duplicate column name 'A'"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "WITH c(A,a) AS(SELECT 1 x,2 y) SELECT * FROM c",
+      "api": "execute",
+      "error": {
+        "code": "ER_DUP_FIELDNAME",
+        "errno": 1060,
+        "state": "42S21",
+        "message": "Duplicate column name 'A'"
+      },
+      "warnings": [
+        [
+          "Error",
+          1060,
+          "Duplicate column name 'A'"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "WITH c(A,a) AS(SELECT 1 x,2 y) SELECT * FROM c",
+      "api": "prepare",
+      "error": {
+        "code": "ER_DUP_FIELDNAME",
+        "errno": 1060,
+        "state": "42S21",
+        "message": "Duplicate column name 'A'"
+      },
+      "warnings": [
+        [
+          "Error",
+          1060,
+          "Duplicate column name 'A'"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "WITH c(aB,Ab) AS(SELECT 1 x,2 y) SELECT * FROM c",
+      "api": "query",
+      "error": {
+        "code": "ER_DUP_FIELDNAME",
+        "errno": 1060,
+        "state": "42S21",
+        "message": "Duplicate column name 'aB'"
+      },
+      "warnings": [
+        [
+          "Error",
+          1060,
+          "Duplicate column name 'aB'"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "WITH c(aB,Ab) AS(SELECT 1 x,2 y) SELECT * FROM c",
+      "api": "execute",
+      "error": {
+        "code": "ER_DUP_FIELDNAME",
+        "errno": 1060,
+        "state": "42S21",
+        "message": "Duplicate column name 'aB'"
+      },
+      "warnings": [
+        [
+          "Error",
+          1060,
+          "Duplicate column name 'aB'"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "WITH c(aB,Ab) AS(SELECT 1 x,2 y) SELECT * FROM c",
+      "api": "prepare",
+      "error": {
+        "code": "ER_DUP_FIELDNAME",
+        "errno": 1060,
+        "state": "42S21",
+        "message": "Duplicate column name 'aB'"
+      },
+      "warnings": [
+        [
+          "Error",
+          1060,
+          "Duplicate column name 'aB'"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "WITH c(`\u00e9`,`\u00c9`) AS(SELECT 1 x,2 y) SELECT * FROM c",
+      "api": "query",
+      "error": {
+        "code": "ER_DUP_FIELDNAME",
+        "errno": 1060,
+        "state": "42S21",
+        "message": "Duplicate column name '\u00e9'"
+      },
+      "warnings": [
+        [
+          "Error",
+          1060,
+          "Duplicate column name '\u00e9'"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "WITH c(`\u00e9`,`\u00c9`) AS(SELECT 1 x,2 y) SELECT * FROM c",
+      "api": "execute",
+      "error": {
+        "code": "ER_DUP_FIELDNAME",
+        "errno": 1060,
+        "state": "42S21",
+        "message": "Duplicate column name '\u00e9'"
+      },
+      "warnings": [
+        [
+          "Error",
+          1060,
+          "Duplicate column name '\u00e9'"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "WITH c(`\u00e9`,`\u00c9`) AS(SELECT 1 x,2 y) SELECT * FROM c",
+      "api": "prepare",
+      "error": {
+        "code": "ER_DUP_FIELDNAME",
+        "errno": 1060,
+        "state": "42S21",
+        "message": "Duplicate column name '\u00e9'"
+      },
+      "warnings": [
+        [
+          "Error",
+          1060,
+          "Duplicate column name '\u00e9'"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "SELECT * FROM (SELECT 1 a,2 A) d",
+      "api": "query",
+      "error": {
+        "code": "ER_DUP_FIELDNAME",
+        "errno": 1060,
+        "state": "42S21",
+        "message": "Duplicate column name 'A'"
+      },
+      "warnings": [
+        [
+          "Error",
+          1060,
+          "Duplicate column name 'A'"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "SELECT * FROM (SELECT 1 a,2 A) d",
+      "api": "execute",
+      "error": {
+        "code": "ER_DUP_FIELDNAME",
+        "errno": 1060,
+        "state": "42S21",
+        "message": "Duplicate column name 'A'"
+      },
+      "warnings": [
+        [
+          "Error",
+          1060,
+          "Duplicate column name 'A'"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "SELECT * FROM (SELECT 1 a,2 A) d",
+      "api": "prepare",
+      "error": {
+        "code": "ER_DUP_FIELDNAME",
+        "errno": 1060,
+        "state": "42S21",
+        "message": "Duplicate column name 'A'"
+      },
+      "warnings": [
+        [
+          "Error",
+          1060,
+          "Duplicate column name 'A'"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "SELECT * FROM (SELECT 1 A,2 a) d",
+      "api": "query",
+      "error": {
+        "code": "ER_DUP_FIELDNAME",
+        "errno": 1060,
+        "state": "42S21",
+        "message": "Duplicate column name 'a'"
+      },
+      "warnings": [
+        [
+          "Error",
+          1060,
+          "Duplicate column name 'a'"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "SELECT * FROM (SELECT 1 A,2 a) d",
+      "api": "execute",
+      "error": {
+        "code": "ER_DUP_FIELDNAME",
+        "errno": 1060,
+        "state": "42S21",
+        "message": "Duplicate column name 'a'"
+      },
+      "warnings": [
+        [
+          "Error",
+          1060,
+          "Duplicate column name 'a'"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "SELECT * FROM (SELECT 1 A,2 a) d",
+      "api": "prepare",
+      "error": {
+        "code": "ER_DUP_FIELDNAME",
+        "errno": 1060,
+        "state": "42S21",
+        "message": "Duplicate column name 'a'"
+      },
+      "warnings": [
+        [
+          "Error",
+          1060,
+          "Duplicate column name 'a'"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "SELECT * FROM (SELECT 1 `\u00e9`,2 `\u00c9`) d",
+      "api": "query",
+      "error": {
+        "code": "ER_DUP_FIELDNAME",
+        "errno": 1060,
+        "state": "42S21",
+        "message": "Duplicate column name '\u00c9'"
+      },
+      "warnings": [
+        [
+          "Error",
+          1060,
+          "Duplicate column name '\u00c9'"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "SELECT * FROM (SELECT 1 `\u00e9`,2 `\u00c9`) d",
+      "api": "execute",
+      "error": {
+        "code": "ER_DUP_FIELDNAME",
+        "errno": 1060,
+        "state": "42S21",
+        "message": "Duplicate column name '\u00c9'"
+      },
+      "warnings": [
+        [
+          "Error",
+          1060,
+          "Duplicate column name '\u00c9'"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "SELECT * FROM (SELECT 1 `\u00e9`,2 `\u00c9`) d",
+      "api": "prepare",
+      "error": {
+        "code": "ER_DUP_FIELDNAME",
+        "errno": 1060,
+        "state": "42S21",
+        "message": "Duplicate column name '\u00c9'"
+      },
+      "warnings": [
+        [
+          "Error",
+          1060,
+          "Duplicate column name '\u00c9'"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "WITH RECURSIVE c(a,A) AS(SELECT 1 x,2 y UNION ALL SELECT a,a FROM c WHERE FALSE) SELECT * FROM c",
+      "api": "query",
+      "error": {
+        "code": "ER_DUP_FIELDNAME",
+        "errno": 1060,
+        "state": "42S21",
+        "message": "Duplicate column name 'a'"
+      },
+      "warnings": [
+        [
+          "Error",
+          1060,
+          "Duplicate column name 'a'"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "WITH RECURSIVE c(a,A) AS(SELECT 1 x,2 y UNION ALL SELECT a,a FROM c WHERE FALSE) SELECT * FROM c",
+      "api": "execute",
+      "error": {
+        "code": "ER_DUP_FIELDNAME",
+        "errno": 1060,
+        "state": "42S21",
+        "message": "Duplicate column name 'a'"
+      },
+      "warnings": [
+        [
+          "Error",
+          1060,
+          "Duplicate column name 'a'"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "WITH RECURSIVE c(a,A) AS(SELECT 1 x,2 y UNION ALL SELECT a,a FROM c WHERE FALSE) SELECT * FROM c",
+      "api": "prepare",
+      "error": {
+        "code": "ER_DUP_FIELDNAME",
+        "errno": 1060,
+        "state": "42S21",
+        "message": "Duplicate column name 'a'"
+      },
+      "warnings": [
+        [
+          "Error",
+          1060,
+          "Duplicate column name 'a'"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "WITH RECURSIVE c(A,a) AS(SELECT 1 x,2 y UNION ALL SELECT a,a FROM c WHERE FALSE) SELECT * FROM c",
+      "api": "query",
+      "error": {
+        "code": "ER_DUP_FIELDNAME",
+        "errno": 1060,
+        "state": "42S21",
+        "message": "Duplicate column name 'A'"
+      },
+      "warnings": [
+        [
+          "Error",
+          1060,
+          "Duplicate column name 'A'"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "WITH RECURSIVE c(A,a) AS(SELECT 1 x,2 y UNION ALL SELECT a,a FROM c WHERE FALSE) SELECT * FROM c",
+      "api": "execute",
+      "error": {
+        "code": "ER_DUP_FIELDNAME",
+        "errno": 1060,
+        "state": "42S21",
+        "message": "Duplicate column name 'A'"
+      },
+      "warnings": [
+        [
+          "Error",
+          1060,
+          "Duplicate column name 'A'"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "WITH RECURSIVE c(A,a) AS(SELECT 1 x,2 y UNION ALL SELECT a,a FROM c WHERE FALSE) SELECT * FROM c",
+      "api": "prepare",
+      "error": {
+        "code": "ER_DUP_FIELDNAME",
+        "errno": 1060,
+        "state": "42S21",
+        "message": "Duplicate column name 'A'"
+      },
+      "warnings": [
+        [
+          "Error",
+          1060,
+          "Duplicate column name 'A'"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "CREATE VIEW v254(a,A) AS SELECT 1 x,2 y",
+      "api": "query",
+      "error": {
+        "code": "ER_DUP_FIELDNAME",
+        "errno": 1060,
+        "state": "42S21",
+        "message": "Duplicate column name 'a'"
+      },
+      "warnings": [
+        [
+          "Error",
+          1060,
+          "Duplicate column name 'a'"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "CREATE VIEW v254(a,A) AS SELECT 1 x,2 y",
+      "api": "execute",
+      "error": {
+        "code": "ER_DUP_FIELDNAME",
+        "errno": 1060,
+        "state": "42S21",
+        "message": "Duplicate column name 'a'"
+      },
+      "warnings": [
+        [
+          "Error",
+          1060,
+          "Duplicate column name 'a'"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "CREATE VIEW v254(A,a) AS SELECT 1 x,2 y",
+      "api": "query",
+      "error": {
+        "code": "ER_DUP_FIELDNAME",
+        "errno": 1060,
+        "state": "42S21",
+        "message": "Duplicate column name 'A'"
+      },
+      "warnings": [
+        [
+          "Error",
+          1060,
+          "Duplicate column name 'A'"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "CREATE VIEW v254(A,a) AS SELECT 1 x,2 y",
+      "api": "execute",
+      "error": {
+        "code": "ER_DUP_FIELDNAME",
+        "errno": 1060,
+        "state": "42S21",
+        "message": "Duplicate column name 'A'"
+      },
+      "warnings": [
+        [
+          "Error",
+          1060,
+          "Duplicate column name 'A'"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "CREATE VIEW v254 AS SELECT 1 a,2 A",
+      "api": "query",
+      "error": {
+        "code": "ER_DUP_FIELDNAME",
+        "errno": 1060,
+        "state": "42S21",
+        "message": "Duplicate column name 'A'"
+      },
+      "warnings": [
+        [
+          "Error",
+          1060,
+          "Duplicate column name 'A'"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "CREATE VIEW v254 AS SELECT 1 a,2 A",
+      "api": "execute",
+      "error": {
+        "code": "ER_DUP_FIELDNAME",
+        "errno": 1060,
+        "state": "42S21",
+        "message": "Duplicate column name 'A'"
+      },
+      "warnings": [
+        [
+          "Error",
+          1060,
+          "Duplicate column name 'A'"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "CREATE VIEW v254 AS SELECT 1 A,2 a",
+      "api": "query",
+      "error": {
+        "code": "ER_DUP_FIELDNAME",
+        "errno": 1060,
+        "state": "42S21",
+        "message": "Duplicate column name 'a'"
+      },
+      "warnings": [
+        [
+          "Error",
+          1060,
+          "Duplicate column name 'a'"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "CREATE VIEW v254 AS SELECT 1 A,2 a",
+      "api": "execute",
+      "error": {
+        "code": "ER_DUP_FIELDNAME",
+        "errno": 1060,
+        "state": "42S21",
+        "message": "Duplicate column name 'a'"
+      },
+      "warnings": [
+        [
+          "Error",
+          1060,
+          "Duplicate column name 'a'"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "SELECT 1 a,2 A",
+      "api": "query",
+      "rows": [
+        [
+          1,
+          2
+        ]
+      ],
+      "fields": [
+        [
+          "a",
+          8,
+          2,
+          129,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ],
+        [
+          "A",
+          8,
+          2,
+          129,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT 1 a,2 A",
+      "api": "execute",
+      "rows": [
+        [
+          1,
+          2
+        ]
+      ],
+      "fields": [
+        [
+          "a",
+          8,
+          2,
+          129,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ],
+        [
+          "A",
+          8,
+          2,
+          129,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT 1 a,2 A",
+      "api": "prepare",
+      "parameters": [],
+      "fields": [
+        [
+          "a",
+          8,
+          2,
+          129,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ],
+        [
+          "A",
+          8,
+          2,
+          129,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT * FROM (SELECT 1 x,2 y) d(a,A)",
+      "api": "query",
+      "error": {
+        "code": "ER_DUP_FIELDNAME",
+        "errno": 1060,
+        "state": "42S21",
+        "message": "Duplicate column name 'a'"
+      },
+      "warnings": [
+        [
+          "Error",
+          1060,
+          "Duplicate column name 'a'"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "SELECT * FROM (SELECT 1 x,2 y) d(a,A)",
+      "api": "execute",
+      "error": {
+        "code": "ER_DUP_FIELDNAME",
+        "errno": 1060,
+        "state": "42S21",
+        "message": "Duplicate column name 'a'"
+      },
+      "warnings": [
+        [
+          "Error",
+          1060,
+          "Duplicate column name 'a'"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "SELECT * FROM (SELECT 1 x,2 y) d(a,A)",
+      "api": "prepare",
+      "error": {
+        "code": "ER_DUP_FIELDNAME",
+        "errno": 1060,
+        "state": "42S21",
+        "message": "Duplicate column name 'a'"
+      },
+      "warnings": [
+        [
+          "Error",
+          1060,
+          "Duplicate column name 'a'"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "SELECT * FROM (SELECT 1 x,2 y) d(A,a)",
+      "api": "query",
+      "error": {
+        "code": "ER_DUP_FIELDNAME",
+        "errno": 1060,
+        "state": "42S21",
+        "message": "Duplicate column name 'A'"
+      },
+      "warnings": [
+        [
+          "Error",
+          1060,
+          "Duplicate column name 'A'"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "SELECT * FROM (SELECT 1 x,2 y) d(A,a)",
+      "api": "execute",
+      "error": {
+        "code": "ER_DUP_FIELDNAME",
+        "errno": 1060,
+        "state": "42S21",
+        "message": "Duplicate column name 'A'"
+      },
+      "warnings": [
+        [
+          "Error",
+          1060,
+          "Duplicate column name 'A'"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "SELECT * FROM (SELECT 1 x,2 y) d(A,a)",
+      "api": "prepare",
+      "error": {
+        "code": "ER_DUP_FIELDNAME",
+        "errno": 1060,
+        "state": "42S21",
+        "message": "Duplicate column name 'A'"
+      },
+      "warnings": [
+        [
+          "Error",
+          1060,
+          "Duplicate column name 'A'"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "SELECT * FROM (SELECT 1 x,2 y,3 z) d(b,A,a)",
+      "api": "query",
+      "error": {
+        "code": "ER_DUP_FIELDNAME",
+        "errno": 1060,
+        "state": "42S21",
+        "message": "Duplicate column name 'A'"
+      },
+      "warnings": [
+        [
+          "Error",
+          1060,
+          "Duplicate column name 'A'"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "SELECT * FROM (SELECT 1 x,2 y,3 z) d(b,A,a)",
+      "api": "execute",
+      "error": {
+        "code": "ER_DUP_FIELDNAME",
+        "errno": 1060,
+        "state": "42S21",
+        "message": "Duplicate column name 'A'"
+      },
+      "warnings": [
+        [
+          "Error",
+          1060,
+          "Duplicate column name 'A'"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "SELECT * FROM (SELECT 1 x,2 y,3 z) d(b,A,a)",
+      "api": "prepare",
+      "error": {
+        "code": "ER_DUP_FIELDNAME",
+        "errno": 1060,
+        "state": "42S21",
+        "message": "Duplicate column name 'A'"
+      },
+      "warnings": [
+        [
+          "Error",
+          1060,
+          "Duplicate column name 'A'"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "SELECT * FROM (SELECT 1 x,2 y,3 z) d(a,A,a)",
+      "api": "query",
+      "error": {
+        "code": "ER_DUP_FIELDNAME",
+        "errno": 1060,
+        "state": "42S21",
+        "message": "Duplicate column name 'a'"
+      },
+      "warnings": [
+        [
+          "Error",
+          1060,
+          "Duplicate column name 'a'"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "SELECT * FROM (SELECT 1 x,2 y,3 z) d(a,A,a)",
+      "api": "execute",
+      "error": {
+        "code": "ER_DUP_FIELDNAME",
+        "errno": 1060,
+        "state": "42S21",
+        "message": "Duplicate column name 'a'"
+      },
+      "warnings": [
+        [
+          "Error",
+          1060,
+          "Duplicate column name 'a'"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "SELECT * FROM (SELECT 1 x,2 y,3 z) d(a,A,a)",
+      "api": "prepare",
+      "error": {
+        "code": "ER_DUP_FIELDNAME",
+        "errno": 1060,
+        "state": "42S21",
+        "message": "Duplicate column name 'a'"
+      },
+      "warnings": [
+        [
+          "Error",
+          1060,
+          "Duplicate column name 'a'"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "SELECT 1 FROM (SELECT 1 a,2 A) d(x,y)",
+      "api": "query",
+      "rows": [
+        [
+          1
+        ]
+      ],
+      "fields": [
+        [
+          "1",
+          8,
+          2,
+          129,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT 1 FROM (SELECT 1 a,2 A) d(x,y)",
+      "api": "execute",
+      "rows": [
+        [
+          1
+        ]
+      ],
+      "fields": [
+        [
+          "1",
+          8,
+          2,
+          129,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT 1 FROM (SELECT 1 a,2 A) d(x,y)",
+      "api": "prepare",
+      "parameters": [],
+      "fields": [
+        [
+          "1",
+          8,
+          2,
+          129,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "WITH c(b,A,a) AS(SELECT 1 x,2 y,3 z) SELECT * FROM c",
+      "api": "query",
+      "error": {
+        "code": "ER_DUP_FIELDNAME",
+        "errno": 1060,
+        "state": "42S21",
+        "message": "Duplicate column name 'A'"
+      },
+      "warnings": [
+        [
+          "Error",
+          1060,
+          "Duplicate column name 'A'"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "WITH c(b,A,a) AS(SELECT 1 x,2 y,3 z) SELECT * FROM c",
+      "api": "execute",
+      "error": {
+        "code": "ER_DUP_FIELDNAME",
+        "errno": 1060,
+        "state": "42S21",
+        "message": "Duplicate column name 'A'"
+      },
+      "warnings": [
+        [
+          "Error",
+          1060,
+          "Duplicate column name 'A'"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "WITH c(b,A,a) AS(SELECT 1 x,2 y,3 z) SELECT * FROM c",
+      "api": "prepare",
+      "error": {
+        "code": "ER_DUP_FIELDNAME",
+        "errno": 1060,
+        "state": "42S21",
+        "message": "Duplicate column name 'A'"
+      },
+      "warnings": [
+        [
+          "Error",
+          1060,
+          "Duplicate column name 'A'"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    }
+  ]
+}

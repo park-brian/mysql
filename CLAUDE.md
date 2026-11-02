@@ -78,8 +78,10 @@ pre-declaration namespace. Otherwise valid flat recursive members now reject
 misplaced anchors after existing planning. Scoped and mixed query owners retain
 their paths. Ordered anchors with unique original names now bind recursive
 steps before rejecting a mismatched column-name list. Duplicate-anchor paths
-keep their earlier check. Earlier recursive validation order, duplicate-name
-behavior, non-query contexts and CHAR CAST flags remain open.
+keep their earlier check. Explicit duplicate-name lists now report their first
+spelling, while copied SELECT labels keep the later spelling. Earlier recursive
+validation order, duplicate binding timing, view PREPARE metadata, non-query
+contexts and CHAR CAST flags remain open.
 Invalid definitions preserve schema and rollbackability; general SELECT, query-body
 and CHECK constructor timing remain open. Leading-WITH ownership, plain SELECT
 naming, inherited-holder collation admission, grouped readers/order, width-limited
