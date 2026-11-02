@@ -264,8 +264,9 @@ async function handle(command: number, payload: Uint8Array, ctx: DispatchContext
     // --- prepared statements ----------------------------------------------
     case COM.STMT_PREPARE: {
       const sql = sqlText(session, parseComStmtPrepare(payload))
+      const sqlMode = session.sqlMode
       const info = await executor.prepare(session, sql)
-      const stmt = session.statements.create(sql, info.paramCount, info.columns)
+      const stmt = session.statements.create(sql, info.paramCount, info.columns, sqlMode)
       return { packets: preparePackets(caps, stmt.id, info.paramCount, info.columns, info.warnings) }
     }
 

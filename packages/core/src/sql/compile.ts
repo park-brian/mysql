@@ -389,6 +389,12 @@ export function invalidString(env: Env, text: string, fn: string): null {
 /** An environment for evaluating a constant while compiling: no row, the statement's parameters. */
 export const constantEnv = (ctx: CompileContext): Env => ({ params: ctx.params ?? [], now: ctx.state.clock?.() ?? new Date(), session: ctx.session, state: ctx.state })
 
+/** The session byte limit used by string result sizing and packet checks. */
+export function maxPacket(env: Env): number {
+  const v = env.state.systemVariable('max_allowed_packet', undefined, env.session)
+  return v === undefined || v === null ? 67_108_864 : Number(toInteger(v))
+}
+
 /**
  * An argument as `Item::print` shows it in a message that quotes one —
  * INET_ATON's and INET_NTOA's 1411: a column as `schema`.`table`.`column`,
@@ -605,6 +611,8 @@ export interface CompileContext {
   /** The clause being compiled, for "Unknown column 'x' in 'where clause'". */
   readonly clause: string
   readonly session: Session
+  /** The open prepared instance owns string-result metadata across SQL-mode changes. */
+  readonly preparedSqlMode?: string | undefined
   readonly state: SessionValues
   readonly serverVersion: string
   /**
@@ -756,7 +764,8 @@ export function compile(e: Expression, ctx: CompileContext): Compiled {
       const known = ctx.params?.[e.index]
       const index = e.index
       // Unbound — a prepare — `?` reports a 16,383-character string, as 8.4.11 does.
-      return { eval: (_row, env) => env.params[index] ?? null, type: known === undefined ? stringType(16383, ctx.connectionCollation, true) : typeOfValue(known) }
+      // A marker remains nullable across executions even when this binding is non-NULL.
+      return { eval: (_row, env) => env.params[index] ?? null, type: known === undefined ? stringType(16383, ctx.connectionCollation, true) : { ...typeOfValue(known), nullable: true } }
     }
 
     case NODE.COLUMN: {
@@ -1115,6 +1124,15 @@ function unary(op: string, a: Compiled, exists: boolean, constant: false | Expre
     case '+':
       return a
     case '~': {
+      if (a.type.kind === 'bytes' && a.type.literalInt === undefined) {
+        return {
+          eval: (r, env) => {
+            const value = at(r, env)
+            return value === null ? null : bytesValue(valueBytes(value).map((byte) => byte ^ 255))
+          },
+          type: { ...stringResultType(byteWidth(a.type), true, CHARSET_BINARY, COERCIBILITY.COERCIBLE), nullable: a.type.nullable },
+        }
+      }
       const x = asNumber(a, 'INTEGER').eval
       return { eval: (r, env) => bitNot(x(r, env)), type: intType(21, a.type.nullable, true) }
     }
@@ -1129,7 +1147,7 @@ function unary(op: string, a: Compiled, exists: boolean, constant: false | Expre
           const v = at(r, env)
           return v === null ? null : v.kind === 'bytes' ? v : bytesValue(valueBytes(v))
         },
-        type: { ...stringType(byteWidth(a.type), CHARSET_BINARY, true), coercibility: COERCIBILITY.IMPLICIT },
+        type: { ...stringType(byteWidth(a.type), CHARSET_BINARY, a.type.nullable || (ctx !== undefined && modeOf(ctx.preparedSqlMode ?? ctx.session.sqlMode).strict)), coercibility: COERCIBILITY.IMPLICIT },
       }
     case 'IS NULL':
       return { eval: (r, env) => bool(at(r, env) === null), type: boolType(false) }
@@ -2515,6 +2533,24 @@ export function timeCast(inner: Compiled, source: Expression, fsp: number, ctx: 
   }
 }
 
+/** CHAR with binary charset and BINARY share byte truncation and zero padding. */
+function binaryCast(inner: Compiled, length: number | undefined, ctx: CompileContext): Compiled {
+  return {
+    eval: (r, env) => {
+      const value = inner.eval(r, env)
+      if (value === null) return null
+      const bytes = valueBytes(value)
+      if (length === undefined) return bytesValue(bytes)
+      if (bytes.length > length) truncated(env, `BINARY(${length})`, toText(value))
+      const result = new Uint8Array(length)
+      result.set(bytes.subarray(0, length))
+      return bytesValue(result)
+    },
+    decimalPrefix: true,
+    type: { ...stringType(length ?? byteWidth(inner.type), CHARSET_BINARY, inner.type.nullable || modeOf(ctx.preparedSqlMode ?? ctx.session.sqlMode).strict), coercibility: COERCIBILITY.IMPLICIT },
+  }
+}
+
 function cast(e: CastNode, ctx: CompileContext): Compiled {
   const raw = compile(e.expr, ctx)
   if (e.type.national === true) warnAtCompile(ctx, 3720, NATIONAL_DEPRECATION)
@@ -2529,6 +2565,7 @@ function cast(e: CastNode, ctx: CompileContext): Compiled {
     case 'NCHAR':
     case 'VARCHAR': {
       const id = (t.charset ? defaultCollationOf(t.charset)?.id : undefined) ?? ctx.connectionCollation
+      if (id === CHARSET_BINARY) return binaryCast(inner, t.length, ctx)
       return {
         eval: (r, env) => {
           const v = x(r, env)
@@ -2556,22 +2593,7 @@ function cast(e: CastNode, ctx: CompileContext): Compiled {
     case 'JSON':
       return castAsJson(inner)
     case 'BINARY':
-      return {
-        eval: (r, env) => {
-          const v = x(r, env)
-          if (v === null) return null
-          const b = valueBytes(v)
-          if (t.length === undefined) return bytesValue(b)
-          // BINARY(N) is N bytes: cut, or padded with zero bytes (8.4.11).
-          if (b.length > t.length) truncated(env, `BINARY(${t.length})`, toText(v))
-          const out = new Uint8Array(t.length)
-          out.set(b.subarray(0, t.length))
-          return bytesValue(out)
-        },
-        decimalPrefix: true,
-        // As wide as its argument's bytes, and nullable whatever it is (8.4.11).
-        type: { ...stringType(t.length ?? byteWidth(inner.type), CHARSET_BINARY, true), coercibility: COERCIBILITY.IMPLICIT },
-      }
+      return binaryCast(inner, t.length, ctx)
     case 'SIGNED':
     case 'UNSIGNED':
     case 'INT':

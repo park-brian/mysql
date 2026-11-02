@@ -95,8 +95,14 @@ for stored view/table expressions and diagnostic labels, preserving existing
 qualifiers, introducers and literal spellings. Own ORDER BY window calls now
 mark view metadata non-updatable through the shared subquery-pruning AST reader;
 independent scalar windows and existing source/wrapper fences retain their paths.
-General updatability, definition normalization and schema-driven automatic
-reprepare remain open. Parser-level body refusals,
+Binary-string unary NOT now uses the shared byte reader while raw hex/bit
+provenance retains numeric mode. Binary casts share padding/truncation and
+preserve source nullability plus the strict SQL-mode fence; bounded string-result
+and marker nullability now follow native metadata. An open prepared statement
+retains its SQL mode for string metadata while text queries use the current mode.
+Untyped marker inference and wider binary operators remain open. General
+updatability, definition normalization and schema-driven automatic reprepare
+remain open. Parser-level body refusals,
 earlier recursive validation, duplicate binding timing, view PREPARE body
 metadata, non-query contexts and CHAR CAST flags remain open.
 Invalid definitions preserve schema and rollbackability; general SELECT, query-body

@@ -81,6 +81,7 @@ import {
   type Compiled,
   type Env,
   constantEnv,
+  maxPacket,
 } from './compile.ts'
 import { NULL_TYPE, charWidth, decimalType, doubleType, intType, stringType, stringResultType, type ResultType } from './meta.ts'
 import { nativeArity, unregistered } from './registry.ts'
@@ -217,12 +218,6 @@ const READS_DOUBLE: ReadonlySet<string> = new Set(['FLOOR', 'CEIL', 'CEILING', '
 /** The arguments that are counts and positions, read as integers (1292 "INTEGER"). */
 const READS_INTEGER: Readonly<Record<string, readonly number[]>> = { SUBSTRING: [1, 2], SUBSTR: [1, 2], MID: [1, 2], LEFT: [1], RIGHT: [1], LPAD: [1], RPAD: [1], REPEAT: [1], SPACE: [0] }
 
-/** `max_allowed_packet`: the largest string LPAD, RPAD, REPEAT and SPACE build. */
-function maxPacket(env: Env): number {
-  const v = env.state.systemVariable('max_allowed_packet', undefined, env.session)
-  return v === undefined || v === null ? 67_108_864 : Number(toInteger(v))
-}
-
 /** A result too large to build: NULL, and 1301 naming the function (8.4.11). */
 function packetOverflow(env: Env, name: string): null {
   raise(env, 1301, `Result of ${name.toLowerCase()}() was larger than max_allowed_packet (${maxPacket(env)}) - truncated`)
@@ -356,7 +351,10 @@ function libraryFunction(name: string, args: readonly Compiled[], callName: stri
           if (BigInt(byteLength(s, binary, collation)) * (count > INT_MAX32 ? INT_MAX32 : count) > BigInt(maxPacket(env))) return packetOverflow(env, name)
           return result(Array.from({ length: Number(count) }, () => s).flat(), binary, collation, coercibility)
         },
-        type: stringResultType(width, binary, collation, coercibility, width !== undefined),
+        type: {
+          ...stringResultType(width, binary, collation, coercibility, width !== undefined),
+          nullable: modeOf(ctx.preparedSqlMode ?? ctx.session.sqlMode).strict || xs.some((x) => x.type.nullable) || width === undefined || width * (binary ? 1 : requireCollationInfo(collation).mbmaxlen) > maxPacket(constantEnv(ctx)),
+        },
       }
     }
     case 'REVERSE':

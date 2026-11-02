@@ -1,0 +1,3972 @@
+{
+  "mysqlVersion": "8.4.11",
+  "seed": "SELECT CAST('x' AS DECIMAL)",
+  "observations": [
+    {
+      "sql": "SELECT CONCAT('a','b') AS v",
+      "initial": "ERROR_FOR_DIVISION_BY_ZERO",
+      "api": "prepare",
+      "parameters": [],
+      "fields": [
+        [
+          "v",
+          253,
+          8,
+          1,
+          31,
+          224,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT CONCAT('a','b') AS v",
+      "initial": "ERROR_FOR_DIVISION_BY_ZERO",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "api": "execute",
+      "rows": [
+        [
+          "ab"
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          253,
+          8,
+          1,
+          31,
+          224,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT CONCAT('a','b') AS v",
+      "initial": "ERROR_FOR_DIVISION_BY_ZERO",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "api": "query",
+      "rows": [
+        [
+          "ab"
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          253,
+          8,
+          1,
+          31,
+          224,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT CONCAT('a','b') AS v",
+      "initial": "ERROR_FOR_DIVISION_BY_ZERO",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "api": "execute",
+      "rows": [
+        [
+          "ab"
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          253,
+          8,
+          1,
+          31,
+          224,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT CONCAT('a','b') AS v",
+      "initial": "ERROR_FOR_DIVISION_BY_ZERO",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "api": "query",
+      "rows": [
+        [
+          "ab"
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          253,
+          8,
+          1,
+          31,
+          224,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT CONCAT('a','b') AS v",
+      "initial": "ERROR_FOR_DIVISION_BY_ZERO",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO,NO_ZERO_DATE,NO_ZERO_IN_DATE,STRICT_TRANS_TABLES",
+      "api": "execute",
+      "rows": [
+        [
+          "ab"
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          253,
+          8,
+          1,
+          31,
+          224,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT CONCAT('a','b') AS v",
+      "initial": "ERROR_FOR_DIVISION_BY_ZERO",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO,NO_ZERO_DATE,NO_ZERO_IN_DATE,STRICT_TRANS_TABLES",
+      "api": "query",
+      "rows": [
+        [
+          "ab"
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          253,
+          8,
+          0,
+          31,
+          224,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT CONCAT('a','b') AS v",
+      "initial": "ERROR_FOR_DIVISION_BY_ZERO",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO,NO_ZERO_DATE,NO_ZERO_IN_DATE,STRICT_ALL_TABLES",
+      "api": "execute",
+      "rows": [
+        [
+          "ab"
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          253,
+          8,
+          1,
+          31,
+          224,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT CONCAT('a','b') AS v",
+      "initial": "ERROR_FOR_DIVISION_BY_ZERO",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO,NO_ZERO_DATE,NO_ZERO_IN_DATE,STRICT_ALL_TABLES",
+      "api": "query",
+      "rows": [
+        [
+          "ab"
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          253,
+          8,
+          0,
+          31,
+          224,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT CONCAT('a','b') AS v",
+      "initial": "ERROR_FOR_DIVISION_BY_ZERO",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "api": "execute",
+      "rows": [
+        [
+          "ab"
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          253,
+          8,
+          1,
+          31,
+          224,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT CONCAT('a','b') AS v",
+      "initial": "ERROR_FOR_DIVISION_BY_ZERO",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "api": "query",
+      "rows": [
+        [
+          "ab"
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          253,
+          8,
+          1,
+          31,
+          224,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT HEX(CAST('123' AS BINARY)) AS v",
+      "initial": "ERROR_FOR_DIVISION_BY_ZERO",
+      "api": "prepare",
+      "parameters": [],
+      "fields": [
+        [
+          "v",
+          253,
+          96,
+          1,
+          31,
+          224,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT HEX(CAST('123' AS BINARY)) AS v",
+      "initial": "ERROR_FOR_DIVISION_BY_ZERO",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "api": "execute",
+      "rows": [
+        [
+          "313233"
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          253,
+          96,
+          1,
+          31,
+          224,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT HEX(CAST('123' AS BINARY)) AS v",
+      "initial": "ERROR_FOR_DIVISION_BY_ZERO",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "api": "query",
+      "rows": [
+        [
+          "313233"
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          253,
+          96,
+          1,
+          31,
+          224,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT HEX(CAST('123' AS BINARY)) AS v",
+      "initial": "ERROR_FOR_DIVISION_BY_ZERO",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "api": "execute",
+      "rows": [
+        [
+          "313233"
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          253,
+          96,
+          1,
+          31,
+          224,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT HEX(CAST('123' AS BINARY)) AS v",
+      "initial": "ERROR_FOR_DIVISION_BY_ZERO",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "api": "query",
+      "rows": [
+        [
+          "313233"
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          253,
+          96,
+          1,
+          31,
+          224,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT HEX(CAST('123' AS BINARY)) AS v",
+      "initial": "ERROR_FOR_DIVISION_BY_ZERO",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO,NO_ZERO_DATE,NO_ZERO_IN_DATE,STRICT_TRANS_TABLES",
+      "api": "execute",
+      "rows": [
+        [
+          "313233"
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          253,
+          96,
+          1,
+          31,
+          224,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT HEX(CAST('123' AS BINARY)) AS v",
+      "initial": "ERROR_FOR_DIVISION_BY_ZERO",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO,NO_ZERO_DATE,NO_ZERO_IN_DATE,STRICT_TRANS_TABLES",
+      "api": "query",
+      "rows": [
+        [
+          "313233"
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          253,
+          96,
+          0,
+          31,
+          224,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT HEX(CAST('123' AS BINARY)) AS v",
+      "initial": "ERROR_FOR_DIVISION_BY_ZERO",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO,NO_ZERO_DATE,NO_ZERO_IN_DATE,STRICT_ALL_TABLES",
+      "api": "execute",
+      "rows": [
+        [
+          "313233"
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          253,
+          96,
+          1,
+          31,
+          224,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT HEX(CAST('123' AS BINARY)) AS v",
+      "initial": "ERROR_FOR_DIVISION_BY_ZERO",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO,NO_ZERO_DATE,NO_ZERO_IN_DATE,STRICT_ALL_TABLES",
+      "api": "query",
+      "rows": [
+        [
+          "313233"
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          253,
+          96,
+          0,
+          31,
+          224,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT HEX(CAST('123' AS BINARY)) AS v",
+      "initial": "ERROR_FOR_DIVISION_BY_ZERO",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "api": "execute",
+      "rows": [
+        [
+          "313233"
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          253,
+          96,
+          1,
+          31,
+          224,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT HEX(CAST('123' AS BINARY)) AS v",
+      "initial": "ERROR_FOR_DIVISION_BY_ZERO",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "api": "query",
+      "rows": [
+        [
+          "313233"
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          253,
+          96,
+          1,
+          31,
+          224,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT ~CAST(X'00FF' AS BINARY(2)) AS v",
+      "initial": "ERROR_FOR_DIVISION_BY_ZERO",
+      "api": "prepare",
+      "parameters": [],
+      "fields": [
+        [
+          "v",
+          253,
+          2,
+          129,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT ~CAST(X'00FF' AS BINARY(2)) AS v",
+      "initial": "ERROR_FOR_DIVISION_BY_ZERO",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "api": "execute",
+      "rows": [
+        [
+          {
+            "type": "Buffer",
+            "data": [
+              255,
+              0
+            ]
+          }
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          253,
+          2,
+          129,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT ~CAST(X'00FF' AS BINARY(2)) AS v",
+      "initial": "ERROR_FOR_DIVISION_BY_ZERO",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "api": "query",
+      "rows": [
+        [
+          {
+            "type": "Buffer",
+            "data": [
+              255,
+              0
+            ]
+          }
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          253,
+          2,
+          129,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT ~CAST(X'00FF' AS BINARY(2)) AS v",
+      "initial": "ERROR_FOR_DIVISION_BY_ZERO",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "api": "execute",
+      "rows": [
+        [
+          {
+            "type": "Buffer",
+            "data": [
+              255,
+              0
+            ]
+          }
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          253,
+          2,
+          129,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT ~CAST(X'00FF' AS BINARY(2)) AS v",
+      "initial": "ERROR_FOR_DIVISION_BY_ZERO",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "api": "query",
+      "rows": [
+        [
+          {
+            "type": "Buffer",
+            "data": [
+              255,
+              0
+            ]
+          }
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          253,
+          2,
+          129,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT ~CAST(X'00FF' AS BINARY(2)) AS v",
+      "initial": "ERROR_FOR_DIVISION_BY_ZERO",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO,NO_ZERO_DATE,NO_ZERO_IN_DATE,STRICT_TRANS_TABLES",
+      "api": "execute",
+      "rows": [
+        [
+          {
+            "type": "Buffer",
+            "data": [
+              255,
+              0
+            ]
+          }
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          253,
+          2,
+          129,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT ~CAST(X'00FF' AS BINARY(2)) AS v",
+      "initial": "ERROR_FOR_DIVISION_BY_ZERO",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO,NO_ZERO_DATE,NO_ZERO_IN_DATE,STRICT_TRANS_TABLES",
+      "api": "query",
+      "rows": [
+        [
+          {
+            "type": "Buffer",
+            "data": [
+              255,
+              0
+            ]
+          }
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          253,
+          2,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT ~CAST(X'00FF' AS BINARY(2)) AS v",
+      "initial": "ERROR_FOR_DIVISION_BY_ZERO",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO,NO_ZERO_DATE,NO_ZERO_IN_DATE,STRICT_ALL_TABLES",
+      "api": "execute",
+      "rows": [
+        [
+          {
+            "type": "Buffer",
+            "data": [
+              255,
+              0
+            ]
+          }
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          253,
+          2,
+          129,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT ~CAST(X'00FF' AS BINARY(2)) AS v",
+      "initial": "ERROR_FOR_DIVISION_BY_ZERO",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO,NO_ZERO_DATE,NO_ZERO_IN_DATE,STRICT_ALL_TABLES",
+      "api": "query",
+      "rows": [
+        [
+          {
+            "type": "Buffer",
+            "data": [
+              255,
+              0
+            ]
+          }
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          253,
+          2,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT ~CAST(X'00FF' AS BINARY(2)) AS v",
+      "initial": "ERROR_FOR_DIVISION_BY_ZERO",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "api": "execute",
+      "rows": [
+        [
+          {
+            "type": "Buffer",
+            "data": [
+              255,
+              0
+            ]
+          }
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          253,
+          2,
+          129,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT ~CAST(X'00FF' AS BINARY(2)) AS v",
+      "initial": "ERROR_FOR_DIVISION_BY_ZERO",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "api": "query",
+      "rows": [
+        [
+          {
+            "type": "Buffer",
+            "data": [
+              255,
+              0
+            ]
+          }
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          253,
+          2,
+          129,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT REPEAT(_binary'a',1) AS v",
+      "initial": "ERROR_FOR_DIVISION_BY_ZERO",
+      "api": "prepare",
+      "parameters": [],
+      "fields": [
+        [
+          "v",
+          253,
+          1,
+          129,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT REPEAT(_binary'a',1) AS v",
+      "initial": "ERROR_FOR_DIVISION_BY_ZERO",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "api": "execute",
+      "rows": [
+        [
+          {
+            "type": "Buffer",
+            "data": [
+              97
+            ]
+          }
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          253,
+          1,
+          129,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT REPEAT(_binary'a',1) AS v",
+      "initial": "ERROR_FOR_DIVISION_BY_ZERO",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "api": "query",
+      "rows": [
+        [
+          {
+            "type": "Buffer",
+            "data": [
+              97
+            ]
+          }
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          253,
+          1,
+          129,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT REPEAT(_binary'a',1) AS v",
+      "initial": "ERROR_FOR_DIVISION_BY_ZERO",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "api": "execute",
+      "rows": [
+        [
+          {
+            "type": "Buffer",
+            "data": [
+              97
+            ]
+          }
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          253,
+          1,
+          129,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT REPEAT(_binary'a',1) AS v",
+      "initial": "ERROR_FOR_DIVISION_BY_ZERO",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "api": "query",
+      "rows": [
+        [
+          {
+            "type": "Buffer",
+            "data": [
+              97
+            ]
+          }
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          253,
+          1,
+          129,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT REPEAT(_binary'a',1) AS v",
+      "initial": "ERROR_FOR_DIVISION_BY_ZERO",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO,NO_ZERO_DATE,NO_ZERO_IN_DATE,STRICT_TRANS_TABLES",
+      "api": "execute",
+      "rows": [
+        [
+          {
+            "type": "Buffer",
+            "data": [
+              97
+            ]
+          }
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          253,
+          1,
+          129,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT REPEAT(_binary'a',1) AS v",
+      "initial": "ERROR_FOR_DIVISION_BY_ZERO",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO,NO_ZERO_DATE,NO_ZERO_IN_DATE,STRICT_TRANS_TABLES",
+      "api": "query",
+      "rows": [
+        [
+          {
+            "type": "Buffer",
+            "data": [
+              97
+            ]
+          }
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          253,
+          1,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT REPEAT(_binary'a',1) AS v",
+      "initial": "ERROR_FOR_DIVISION_BY_ZERO",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO,NO_ZERO_DATE,NO_ZERO_IN_DATE,STRICT_ALL_TABLES",
+      "api": "execute",
+      "rows": [
+        [
+          {
+            "type": "Buffer",
+            "data": [
+              97
+            ]
+          }
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          253,
+          1,
+          129,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT REPEAT(_binary'a',1) AS v",
+      "initial": "ERROR_FOR_DIVISION_BY_ZERO",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO,NO_ZERO_DATE,NO_ZERO_IN_DATE,STRICT_ALL_TABLES",
+      "api": "query",
+      "rows": [
+        [
+          {
+            "type": "Buffer",
+            "data": [
+              97
+            ]
+          }
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          253,
+          1,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT REPEAT(_binary'a',1) AS v",
+      "initial": "ERROR_FOR_DIVISION_BY_ZERO",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "api": "execute",
+      "rows": [
+        [
+          {
+            "type": "Buffer",
+            "data": [
+              97
+            ]
+          }
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          253,
+          1,
+          129,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT REPEAT(_binary'a',1) AS v",
+      "initial": "ERROR_FOR_DIVISION_BY_ZERO",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "api": "query",
+      "rows": [
+        [
+          {
+            "type": "Buffer",
+            "data": [
+              97
+            ]
+          }
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          253,
+          1,
+          129,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT CONCAT('a','b') AS v",
+      "initial": "ERROR_FOR_DIVISION_BY_ZERO,NO_ZERO_DATE,NO_ZERO_IN_DATE,STRICT_TRANS_TABLES",
+      "api": "prepare",
+      "parameters": [],
+      "fields": [
+        [
+          "v",
+          253,
+          8,
+          0,
+          31,
+          224,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT CONCAT('a','b') AS v",
+      "initial": "ERROR_FOR_DIVISION_BY_ZERO,NO_ZERO_DATE,NO_ZERO_IN_DATE,STRICT_TRANS_TABLES",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO,NO_ZERO_DATE,NO_ZERO_IN_DATE,STRICT_TRANS_TABLES",
+      "api": "execute",
+      "rows": [
+        [
+          "ab"
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          253,
+          8,
+          0,
+          31,
+          224,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT CONCAT('a','b') AS v",
+      "initial": "ERROR_FOR_DIVISION_BY_ZERO,NO_ZERO_DATE,NO_ZERO_IN_DATE,STRICT_TRANS_TABLES",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO,NO_ZERO_DATE,NO_ZERO_IN_DATE,STRICT_TRANS_TABLES",
+      "api": "query",
+      "rows": [
+        [
+          "ab"
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          253,
+          8,
+          0,
+          31,
+          224,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT CONCAT('a','b') AS v",
+      "initial": "ERROR_FOR_DIVISION_BY_ZERO,NO_ZERO_DATE,NO_ZERO_IN_DATE,STRICT_TRANS_TABLES",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "api": "execute",
+      "rows": [
+        [
+          "ab"
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          253,
+          8,
+          0,
+          31,
+          224,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT CONCAT('a','b') AS v",
+      "initial": "ERROR_FOR_DIVISION_BY_ZERO,NO_ZERO_DATE,NO_ZERO_IN_DATE,STRICT_TRANS_TABLES",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "api": "query",
+      "rows": [
+        [
+          "ab"
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          253,
+          8,
+          1,
+          31,
+          224,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT CONCAT('a','b') AS v",
+      "initial": "ERROR_FOR_DIVISION_BY_ZERO,NO_ZERO_DATE,NO_ZERO_IN_DATE,STRICT_TRANS_TABLES",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO,NO_ZERO_DATE,NO_ZERO_IN_DATE,STRICT_TRANS_TABLES",
+      "api": "execute",
+      "rows": [
+        [
+          "ab"
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          253,
+          8,
+          0,
+          31,
+          224,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT CONCAT('a','b') AS v",
+      "initial": "ERROR_FOR_DIVISION_BY_ZERO,NO_ZERO_DATE,NO_ZERO_IN_DATE,STRICT_TRANS_TABLES",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO,NO_ZERO_DATE,NO_ZERO_IN_DATE,STRICT_TRANS_TABLES",
+      "api": "query",
+      "rows": [
+        [
+          "ab"
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          253,
+          8,
+          0,
+          31,
+          224,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT CONCAT('a','b') AS v",
+      "initial": "ERROR_FOR_DIVISION_BY_ZERO,NO_ZERO_DATE,NO_ZERO_IN_DATE,STRICT_TRANS_TABLES",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO,NO_ZERO_DATE,NO_ZERO_IN_DATE,STRICT_ALL_TABLES",
+      "api": "execute",
+      "rows": [
+        [
+          "ab"
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          253,
+          8,
+          0,
+          31,
+          224,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT CONCAT('a','b') AS v",
+      "initial": "ERROR_FOR_DIVISION_BY_ZERO,NO_ZERO_DATE,NO_ZERO_IN_DATE,STRICT_TRANS_TABLES",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO,NO_ZERO_DATE,NO_ZERO_IN_DATE,STRICT_ALL_TABLES",
+      "api": "query",
+      "rows": [
+        [
+          "ab"
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          253,
+          8,
+          0,
+          31,
+          224,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT CONCAT('a','b') AS v",
+      "initial": "ERROR_FOR_DIVISION_BY_ZERO,NO_ZERO_DATE,NO_ZERO_IN_DATE,STRICT_TRANS_TABLES",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO,NO_ZERO_DATE,NO_ZERO_IN_DATE,STRICT_TRANS_TABLES",
+      "api": "execute",
+      "rows": [
+        [
+          "ab"
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          253,
+          8,
+          0,
+          31,
+          224,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT CONCAT('a','b') AS v",
+      "initial": "ERROR_FOR_DIVISION_BY_ZERO,NO_ZERO_DATE,NO_ZERO_IN_DATE,STRICT_TRANS_TABLES",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO,NO_ZERO_DATE,NO_ZERO_IN_DATE,STRICT_TRANS_TABLES",
+      "api": "query",
+      "rows": [
+        [
+          "ab"
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          253,
+          8,
+          0,
+          31,
+          224,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT HEX(CAST('123' AS BINARY)) AS v",
+      "initial": "ERROR_FOR_DIVISION_BY_ZERO,NO_ZERO_DATE,NO_ZERO_IN_DATE,STRICT_TRANS_TABLES",
+      "api": "prepare",
+      "parameters": [],
+      "fields": [
+        [
+          "v",
+          253,
+          96,
+          0,
+          31,
+          224,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT HEX(CAST('123' AS BINARY)) AS v",
+      "initial": "ERROR_FOR_DIVISION_BY_ZERO,NO_ZERO_DATE,NO_ZERO_IN_DATE,STRICT_TRANS_TABLES",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO,NO_ZERO_DATE,NO_ZERO_IN_DATE,STRICT_TRANS_TABLES",
+      "api": "execute",
+      "rows": [
+        [
+          "313233"
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          253,
+          96,
+          0,
+          31,
+          224,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT HEX(CAST('123' AS BINARY)) AS v",
+      "initial": "ERROR_FOR_DIVISION_BY_ZERO,NO_ZERO_DATE,NO_ZERO_IN_DATE,STRICT_TRANS_TABLES",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO,NO_ZERO_DATE,NO_ZERO_IN_DATE,STRICT_TRANS_TABLES",
+      "api": "query",
+      "rows": [
+        [
+          "313233"
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          253,
+          96,
+          0,
+          31,
+          224,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT HEX(CAST('123' AS BINARY)) AS v",
+      "initial": "ERROR_FOR_DIVISION_BY_ZERO,NO_ZERO_DATE,NO_ZERO_IN_DATE,STRICT_TRANS_TABLES",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "api": "execute",
+      "rows": [
+        [
+          "313233"
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          253,
+          96,
+          0,
+          31,
+          224,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT HEX(CAST('123' AS BINARY)) AS v",
+      "initial": "ERROR_FOR_DIVISION_BY_ZERO,NO_ZERO_DATE,NO_ZERO_IN_DATE,STRICT_TRANS_TABLES",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "api": "query",
+      "rows": [
+        [
+          "313233"
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          253,
+          96,
+          1,
+          31,
+          224,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT HEX(CAST('123' AS BINARY)) AS v",
+      "initial": "ERROR_FOR_DIVISION_BY_ZERO,NO_ZERO_DATE,NO_ZERO_IN_DATE,STRICT_TRANS_TABLES",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO,NO_ZERO_DATE,NO_ZERO_IN_DATE,STRICT_TRANS_TABLES",
+      "api": "execute",
+      "rows": [
+        [
+          "313233"
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          253,
+          96,
+          0,
+          31,
+          224,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT HEX(CAST('123' AS BINARY)) AS v",
+      "initial": "ERROR_FOR_DIVISION_BY_ZERO,NO_ZERO_DATE,NO_ZERO_IN_DATE,STRICT_TRANS_TABLES",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO,NO_ZERO_DATE,NO_ZERO_IN_DATE,STRICT_TRANS_TABLES",
+      "api": "query",
+      "rows": [
+        [
+          "313233"
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          253,
+          96,
+          0,
+          31,
+          224,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT HEX(CAST('123' AS BINARY)) AS v",
+      "initial": "ERROR_FOR_DIVISION_BY_ZERO,NO_ZERO_DATE,NO_ZERO_IN_DATE,STRICT_TRANS_TABLES",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO,NO_ZERO_DATE,NO_ZERO_IN_DATE,STRICT_ALL_TABLES",
+      "api": "execute",
+      "rows": [
+        [
+          "313233"
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          253,
+          96,
+          0,
+          31,
+          224,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT HEX(CAST('123' AS BINARY)) AS v",
+      "initial": "ERROR_FOR_DIVISION_BY_ZERO,NO_ZERO_DATE,NO_ZERO_IN_DATE,STRICT_TRANS_TABLES",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO,NO_ZERO_DATE,NO_ZERO_IN_DATE,STRICT_ALL_TABLES",
+      "api": "query",
+      "rows": [
+        [
+          "313233"
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          253,
+          96,
+          0,
+          31,
+          224,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT HEX(CAST('123' AS BINARY)) AS v",
+      "initial": "ERROR_FOR_DIVISION_BY_ZERO,NO_ZERO_DATE,NO_ZERO_IN_DATE,STRICT_TRANS_TABLES",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO,NO_ZERO_DATE,NO_ZERO_IN_DATE,STRICT_TRANS_TABLES",
+      "api": "execute",
+      "rows": [
+        [
+          "313233"
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          253,
+          96,
+          0,
+          31,
+          224,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT HEX(CAST('123' AS BINARY)) AS v",
+      "initial": "ERROR_FOR_DIVISION_BY_ZERO,NO_ZERO_DATE,NO_ZERO_IN_DATE,STRICT_TRANS_TABLES",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO,NO_ZERO_DATE,NO_ZERO_IN_DATE,STRICT_TRANS_TABLES",
+      "api": "query",
+      "rows": [
+        [
+          "313233"
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          253,
+          96,
+          0,
+          31,
+          224,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT ~CAST(X'00FF' AS BINARY(2)) AS v",
+      "initial": "ERROR_FOR_DIVISION_BY_ZERO,NO_ZERO_DATE,NO_ZERO_IN_DATE,STRICT_TRANS_TABLES",
+      "api": "prepare",
+      "parameters": [],
+      "fields": [
+        [
+          "v",
+          253,
+          2,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT ~CAST(X'00FF' AS BINARY(2)) AS v",
+      "initial": "ERROR_FOR_DIVISION_BY_ZERO,NO_ZERO_DATE,NO_ZERO_IN_DATE,STRICT_TRANS_TABLES",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO,NO_ZERO_DATE,NO_ZERO_IN_DATE,STRICT_TRANS_TABLES",
+      "api": "execute",
+      "rows": [
+        [
+          {
+            "type": "Buffer",
+            "data": [
+              255,
+              0
+            ]
+          }
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          253,
+          2,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT ~CAST(X'00FF' AS BINARY(2)) AS v",
+      "initial": "ERROR_FOR_DIVISION_BY_ZERO,NO_ZERO_DATE,NO_ZERO_IN_DATE,STRICT_TRANS_TABLES",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO,NO_ZERO_DATE,NO_ZERO_IN_DATE,STRICT_TRANS_TABLES",
+      "api": "query",
+      "rows": [
+        [
+          {
+            "type": "Buffer",
+            "data": [
+              255,
+              0
+            ]
+          }
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          253,
+          2,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT ~CAST(X'00FF' AS BINARY(2)) AS v",
+      "initial": "ERROR_FOR_DIVISION_BY_ZERO,NO_ZERO_DATE,NO_ZERO_IN_DATE,STRICT_TRANS_TABLES",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "api": "execute",
+      "rows": [
+        [
+          {
+            "type": "Buffer",
+            "data": [
+              255,
+              0
+            ]
+          }
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          253,
+          2,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT ~CAST(X'00FF' AS BINARY(2)) AS v",
+      "initial": "ERROR_FOR_DIVISION_BY_ZERO,NO_ZERO_DATE,NO_ZERO_IN_DATE,STRICT_TRANS_TABLES",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "api": "query",
+      "rows": [
+        [
+          {
+            "type": "Buffer",
+            "data": [
+              255,
+              0
+            ]
+          }
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          253,
+          2,
+          129,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT ~CAST(X'00FF' AS BINARY(2)) AS v",
+      "initial": "ERROR_FOR_DIVISION_BY_ZERO,NO_ZERO_DATE,NO_ZERO_IN_DATE,STRICT_TRANS_TABLES",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO,NO_ZERO_DATE,NO_ZERO_IN_DATE,STRICT_TRANS_TABLES",
+      "api": "execute",
+      "rows": [
+        [
+          {
+            "type": "Buffer",
+            "data": [
+              255,
+              0
+            ]
+          }
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          253,
+          2,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT ~CAST(X'00FF' AS BINARY(2)) AS v",
+      "initial": "ERROR_FOR_DIVISION_BY_ZERO,NO_ZERO_DATE,NO_ZERO_IN_DATE,STRICT_TRANS_TABLES",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO,NO_ZERO_DATE,NO_ZERO_IN_DATE,STRICT_TRANS_TABLES",
+      "api": "query",
+      "rows": [
+        [
+          {
+            "type": "Buffer",
+            "data": [
+              255,
+              0
+            ]
+          }
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          253,
+          2,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT ~CAST(X'00FF' AS BINARY(2)) AS v",
+      "initial": "ERROR_FOR_DIVISION_BY_ZERO,NO_ZERO_DATE,NO_ZERO_IN_DATE,STRICT_TRANS_TABLES",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO,NO_ZERO_DATE,NO_ZERO_IN_DATE,STRICT_ALL_TABLES",
+      "api": "execute",
+      "rows": [
+        [
+          {
+            "type": "Buffer",
+            "data": [
+              255,
+              0
+            ]
+          }
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          253,
+          2,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT ~CAST(X'00FF' AS BINARY(2)) AS v",
+      "initial": "ERROR_FOR_DIVISION_BY_ZERO,NO_ZERO_DATE,NO_ZERO_IN_DATE,STRICT_TRANS_TABLES",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO,NO_ZERO_DATE,NO_ZERO_IN_DATE,STRICT_ALL_TABLES",
+      "api": "query",
+      "rows": [
+        [
+          {
+            "type": "Buffer",
+            "data": [
+              255,
+              0
+            ]
+          }
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          253,
+          2,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT ~CAST(X'00FF' AS BINARY(2)) AS v",
+      "initial": "ERROR_FOR_DIVISION_BY_ZERO,NO_ZERO_DATE,NO_ZERO_IN_DATE,STRICT_TRANS_TABLES",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO,NO_ZERO_DATE,NO_ZERO_IN_DATE,STRICT_TRANS_TABLES",
+      "api": "execute",
+      "rows": [
+        [
+          {
+            "type": "Buffer",
+            "data": [
+              255,
+              0
+            ]
+          }
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          253,
+          2,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT ~CAST(X'00FF' AS BINARY(2)) AS v",
+      "initial": "ERROR_FOR_DIVISION_BY_ZERO,NO_ZERO_DATE,NO_ZERO_IN_DATE,STRICT_TRANS_TABLES",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO,NO_ZERO_DATE,NO_ZERO_IN_DATE,STRICT_TRANS_TABLES",
+      "api": "query",
+      "rows": [
+        [
+          {
+            "type": "Buffer",
+            "data": [
+              255,
+              0
+            ]
+          }
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          253,
+          2,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT REPEAT(_binary'a',1) AS v",
+      "initial": "ERROR_FOR_DIVISION_BY_ZERO,NO_ZERO_DATE,NO_ZERO_IN_DATE,STRICT_TRANS_TABLES",
+      "api": "prepare",
+      "parameters": [],
+      "fields": [
+        [
+          "v",
+          253,
+          1,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT REPEAT(_binary'a',1) AS v",
+      "initial": "ERROR_FOR_DIVISION_BY_ZERO,NO_ZERO_DATE,NO_ZERO_IN_DATE,STRICT_TRANS_TABLES",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO,NO_ZERO_DATE,NO_ZERO_IN_DATE,STRICT_TRANS_TABLES",
+      "api": "execute",
+      "rows": [
+        [
+          {
+            "type": "Buffer",
+            "data": [
+              97
+            ]
+          }
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          253,
+          1,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT REPEAT(_binary'a',1) AS v",
+      "initial": "ERROR_FOR_DIVISION_BY_ZERO,NO_ZERO_DATE,NO_ZERO_IN_DATE,STRICT_TRANS_TABLES",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO,NO_ZERO_DATE,NO_ZERO_IN_DATE,STRICT_TRANS_TABLES",
+      "api": "query",
+      "rows": [
+        [
+          {
+            "type": "Buffer",
+            "data": [
+              97
+            ]
+          }
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          253,
+          1,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT REPEAT(_binary'a',1) AS v",
+      "initial": "ERROR_FOR_DIVISION_BY_ZERO,NO_ZERO_DATE,NO_ZERO_IN_DATE,STRICT_TRANS_TABLES",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "api": "execute",
+      "rows": [
+        [
+          {
+            "type": "Buffer",
+            "data": [
+              97
+            ]
+          }
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          253,
+          1,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT REPEAT(_binary'a',1) AS v",
+      "initial": "ERROR_FOR_DIVISION_BY_ZERO,NO_ZERO_DATE,NO_ZERO_IN_DATE,STRICT_TRANS_TABLES",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "api": "query",
+      "rows": [
+        [
+          {
+            "type": "Buffer",
+            "data": [
+              97
+            ]
+          }
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          253,
+          1,
+          129,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT REPEAT(_binary'a',1) AS v",
+      "initial": "ERROR_FOR_DIVISION_BY_ZERO,NO_ZERO_DATE,NO_ZERO_IN_DATE,STRICT_TRANS_TABLES",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO,NO_ZERO_DATE,NO_ZERO_IN_DATE,STRICT_TRANS_TABLES",
+      "api": "execute",
+      "rows": [
+        [
+          {
+            "type": "Buffer",
+            "data": [
+              97
+            ]
+          }
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          253,
+          1,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT REPEAT(_binary'a',1) AS v",
+      "initial": "ERROR_FOR_DIVISION_BY_ZERO,NO_ZERO_DATE,NO_ZERO_IN_DATE,STRICT_TRANS_TABLES",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO,NO_ZERO_DATE,NO_ZERO_IN_DATE,STRICT_TRANS_TABLES",
+      "api": "query",
+      "rows": [
+        [
+          {
+            "type": "Buffer",
+            "data": [
+              97
+            ]
+          }
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          253,
+          1,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT REPEAT(_binary'a',1) AS v",
+      "initial": "ERROR_FOR_DIVISION_BY_ZERO,NO_ZERO_DATE,NO_ZERO_IN_DATE,STRICT_TRANS_TABLES",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO,NO_ZERO_DATE,NO_ZERO_IN_DATE,STRICT_ALL_TABLES",
+      "api": "execute",
+      "rows": [
+        [
+          {
+            "type": "Buffer",
+            "data": [
+              97
+            ]
+          }
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          253,
+          1,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT REPEAT(_binary'a',1) AS v",
+      "initial": "ERROR_FOR_DIVISION_BY_ZERO,NO_ZERO_DATE,NO_ZERO_IN_DATE,STRICT_TRANS_TABLES",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO,NO_ZERO_DATE,NO_ZERO_IN_DATE,STRICT_ALL_TABLES",
+      "api": "query",
+      "rows": [
+        [
+          {
+            "type": "Buffer",
+            "data": [
+              97
+            ]
+          }
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          253,
+          1,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT REPEAT(_binary'a',1) AS v",
+      "initial": "ERROR_FOR_DIVISION_BY_ZERO,NO_ZERO_DATE,NO_ZERO_IN_DATE,STRICT_TRANS_TABLES",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO,NO_ZERO_DATE,NO_ZERO_IN_DATE,STRICT_TRANS_TABLES",
+      "api": "execute",
+      "rows": [
+        [
+          {
+            "type": "Buffer",
+            "data": [
+              97
+            ]
+          }
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          253,
+          1,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT REPEAT(_binary'a',1) AS v",
+      "initial": "ERROR_FOR_DIVISION_BY_ZERO,NO_ZERO_DATE,NO_ZERO_IN_DATE,STRICT_TRANS_TABLES",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO,NO_ZERO_DATE,NO_ZERO_IN_DATE,STRICT_TRANS_TABLES",
+      "api": "query",
+      "rows": [
+        [
+          {
+            "type": "Buffer",
+            "data": [
+              97
+            ]
+          }
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          253,
+          1,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT CONCAT('a','b') AS v",
+      "initial": "ERROR_FOR_DIVISION_BY_ZERO,NO_ZERO_DATE,NO_ZERO_IN_DATE,STRICT_ALL_TABLES",
+      "api": "prepare",
+      "parameters": [],
+      "fields": [
+        [
+          "v",
+          253,
+          8,
+          0,
+          31,
+          224,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT CONCAT('a','b') AS v",
+      "initial": "ERROR_FOR_DIVISION_BY_ZERO,NO_ZERO_DATE,NO_ZERO_IN_DATE,STRICT_ALL_TABLES",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO,NO_ZERO_DATE,NO_ZERO_IN_DATE,STRICT_ALL_TABLES",
+      "api": "execute",
+      "rows": [
+        [
+          "ab"
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          253,
+          8,
+          0,
+          31,
+          224,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT CONCAT('a','b') AS v",
+      "initial": "ERROR_FOR_DIVISION_BY_ZERO,NO_ZERO_DATE,NO_ZERO_IN_DATE,STRICT_ALL_TABLES",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO,NO_ZERO_DATE,NO_ZERO_IN_DATE,STRICT_ALL_TABLES",
+      "api": "query",
+      "rows": [
+        [
+          "ab"
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          253,
+          8,
+          0,
+          31,
+          224,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT CONCAT('a','b') AS v",
+      "initial": "ERROR_FOR_DIVISION_BY_ZERO,NO_ZERO_DATE,NO_ZERO_IN_DATE,STRICT_ALL_TABLES",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "api": "execute",
+      "rows": [
+        [
+          "ab"
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          253,
+          8,
+          0,
+          31,
+          224,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT CONCAT('a','b') AS v",
+      "initial": "ERROR_FOR_DIVISION_BY_ZERO,NO_ZERO_DATE,NO_ZERO_IN_DATE,STRICT_ALL_TABLES",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "api": "query",
+      "rows": [
+        [
+          "ab"
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          253,
+          8,
+          1,
+          31,
+          224,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT CONCAT('a','b') AS v",
+      "initial": "ERROR_FOR_DIVISION_BY_ZERO,NO_ZERO_DATE,NO_ZERO_IN_DATE,STRICT_ALL_TABLES",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO,NO_ZERO_DATE,NO_ZERO_IN_DATE,STRICT_TRANS_TABLES",
+      "api": "execute",
+      "rows": [
+        [
+          "ab"
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          253,
+          8,
+          0,
+          31,
+          224,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT CONCAT('a','b') AS v",
+      "initial": "ERROR_FOR_DIVISION_BY_ZERO,NO_ZERO_DATE,NO_ZERO_IN_DATE,STRICT_ALL_TABLES",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO,NO_ZERO_DATE,NO_ZERO_IN_DATE,STRICT_TRANS_TABLES",
+      "api": "query",
+      "rows": [
+        [
+          "ab"
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          253,
+          8,
+          0,
+          31,
+          224,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT CONCAT('a','b') AS v",
+      "initial": "ERROR_FOR_DIVISION_BY_ZERO,NO_ZERO_DATE,NO_ZERO_IN_DATE,STRICT_ALL_TABLES",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO,NO_ZERO_DATE,NO_ZERO_IN_DATE,STRICT_ALL_TABLES",
+      "api": "execute",
+      "rows": [
+        [
+          "ab"
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          253,
+          8,
+          0,
+          31,
+          224,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT CONCAT('a','b') AS v",
+      "initial": "ERROR_FOR_DIVISION_BY_ZERO,NO_ZERO_DATE,NO_ZERO_IN_DATE,STRICT_ALL_TABLES",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO,NO_ZERO_DATE,NO_ZERO_IN_DATE,STRICT_ALL_TABLES",
+      "api": "query",
+      "rows": [
+        [
+          "ab"
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          253,
+          8,
+          0,
+          31,
+          224,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT CONCAT('a','b') AS v",
+      "initial": "ERROR_FOR_DIVISION_BY_ZERO,NO_ZERO_DATE,NO_ZERO_IN_DATE,STRICT_ALL_TABLES",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO,NO_ZERO_DATE,NO_ZERO_IN_DATE,STRICT_ALL_TABLES",
+      "api": "execute",
+      "rows": [
+        [
+          "ab"
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          253,
+          8,
+          0,
+          31,
+          224,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT CONCAT('a','b') AS v",
+      "initial": "ERROR_FOR_DIVISION_BY_ZERO,NO_ZERO_DATE,NO_ZERO_IN_DATE,STRICT_ALL_TABLES",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO,NO_ZERO_DATE,NO_ZERO_IN_DATE,STRICT_ALL_TABLES",
+      "api": "query",
+      "rows": [
+        [
+          "ab"
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          253,
+          8,
+          0,
+          31,
+          224,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT HEX(CAST('123' AS BINARY)) AS v",
+      "initial": "ERROR_FOR_DIVISION_BY_ZERO,NO_ZERO_DATE,NO_ZERO_IN_DATE,STRICT_ALL_TABLES",
+      "api": "prepare",
+      "parameters": [],
+      "fields": [
+        [
+          "v",
+          253,
+          96,
+          0,
+          31,
+          224,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT HEX(CAST('123' AS BINARY)) AS v",
+      "initial": "ERROR_FOR_DIVISION_BY_ZERO,NO_ZERO_DATE,NO_ZERO_IN_DATE,STRICT_ALL_TABLES",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO,NO_ZERO_DATE,NO_ZERO_IN_DATE,STRICT_ALL_TABLES",
+      "api": "execute",
+      "rows": [
+        [
+          "313233"
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          253,
+          96,
+          0,
+          31,
+          224,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT HEX(CAST('123' AS BINARY)) AS v",
+      "initial": "ERROR_FOR_DIVISION_BY_ZERO,NO_ZERO_DATE,NO_ZERO_IN_DATE,STRICT_ALL_TABLES",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO,NO_ZERO_DATE,NO_ZERO_IN_DATE,STRICT_ALL_TABLES",
+      "api": "query",
+      "rows": [
+        [
+          "313233"
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          253,
+          96,
+          0,
+          31,
+          224,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT HEX(CAST('123' AS BINARY)) AS v",
+      "initial": "ERROR_FOR_DIVISION_BY_ZERO,NO_ZERO_DATE,NO_ZERO_IN_DATE,STRICT_ALL_TABLES",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "api": "execute",
+      "rows": [
+        [
+          "313233"
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          253,
+          96,
+          0,
+          31,
+          224,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT HEX(CAST('123' AS BINARY)) AS v",
+      "initial": "ERROR_FOR_DIVISION_BY_ZERO,NO_ZERO_DATE,NO_ZERO_IN_DATE,STRICT_ALL_TABLES",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "api": "query",
+      "rows": [
+        [
+          "313233"
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          253,
+          96,
+          1,
+          31,
+          224,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT HEX(CAST('123' AS BINARY)) AS v",
+      "initial": "ERROR_FOR_DIVISION_BY_ZERO,NO_ZERO_DATE,NO_ZERO_IN_DATE,STRICT_ALL_TABLES",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO,NO_ZERO_DATE,NO_ZERO_IN_DATE,STRICT_TRANS_TABLES",
+      "api": "execute",
+      "rows": [
+        [
+          "313233"
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          253,
+          96,
+          0,
+          31,
+          224,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT HEX(CAST('123' AS BINARY)) AS v",
+      "initial": "ERROR_FOR_DIVISION_BY_ZERO,NO_ZERO_DATE,NO_ZERO_IN_DATE,STRICT_ALL_TABLES",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO,NO_ZERO_DATE,NO_ZERO_IN_DATE,STRICT_TRANS_TABLES",
+      "api": "query",
+      "rows": [
+        [
+          "313233"
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          253,
+          96,
+          0,
+          31,
+          224,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT HEX(CAST('123' AS BINARY)) AS v",
+      "initial": "ERROR_FOR_DIVISION_BY_ZERO,NO_ZERO_DATE,NO_ZERO_IN_DATE,STRICT_ALL_TABLES",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO,NO_ZERO_DATE,NO_ZERO_IN_DATE,STRICT_ALL_TABLES",
+      "api": "execute",
+      "rows": [
+        [
+          "313233"
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          253,
+          96,
+          0,
+          31,
+          224,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT HEX(CAST('123' AS BINARY)) AS v",
+      "initial": "ERROR_FOR_DIVISION_BY_ZERO,NO_ZERO_DATE,NO_ZERO_IN_DATE,STRICT_ALL_TABLES",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO,NO_ZERO_DATE,NO_ZERO_IN_DATE,STRICT_ALL_TABLES",
+      "api": "query",
+      "rows": [
+        [
+          "313233"
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          253,
+          96,
+          0,
+          31,
+          224,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT HEX(CAST('123' AS BINARY)) AS v",
+      "initial": "ERROR_FOR_DIVISION_BY_ZERO,NO_ZERO_DATE,NO_ZERO_IN_DATE,STRICT_ALL_TABLES",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO,NO_ZERO_DATE,NO_ZERO_IN_DATE,STRICT_ALL_TABLES",
+      "api": "execute",
+      "rows": [
+        [
+          "313233"
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          253,
+          96,
+          0,
+          31,
+          224,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT HEX(CAST('123' AS BINARY)) AS v",
+      "initial": "ERROR_FOR_DIVISION_BY_ZERO,NO_ZERO_DATE,NO_ZERO_IN_DATE,STRICT_ALL_TABLES",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO,NO_ZERO_DATE,NO_ZERO_IN_DATE,STRICT_ALL_TABLES",
+      "api": "query",
+      "rows": [
+        [
+          "313233"
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          253,
+          96,
+          0,
+          31,
+          224,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT ~CAST(X'00FF' AS BINARY(2)) AS v",
+      "initial": "ERROR_FOR_DIVISION_BY_ZERO,NO_ZERO_DATE,NO_ZERO_IN_DATE,STRICT_ALL_TABLES",
+      "api": "prepare",
+      "parameters": [],
+      "fields": [
+        [
+          "v",
+          253,
+          2,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT ~CAST(X'00FF' AS BINARY(2)) AS v",
+      "initial": "ERROR_FOR_DIVISION_BY_ZERO,NO_ZERO_DATE,NO_ZERO_IN_DATE,STRICT_ALL_TABLES",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO,NO_ZERO_DATE,NO_ZERO_IN_DATE,STRICT_ALL_TABLES",
+      "api": "execute",
+      "rows": [
+        [
+          {
+            "type": "Buffer",
+            "data": [
+              255,
+              0
+            ]
+          }
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          253,
+          2,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT ~CAST(X'00FF' AS BINARY(2)) AS v",
+      "initial": "ERROR_FOR_DIVISION_BY_ZERO,NO_ZERO_DATE,NO_ZERO_IN_DATE,STRICT_ALL_TABLES",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO,NO_ZERO_DATE,NO_ZERO_IN_DATE,STRICT_ALL_TABLES",
+      "api": "query",
+      "rows": [
+        [
+          {
+            "type": "Buffer",
+            "data": [
+              255,
+              0
+            ]
+          }
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          253,
+          2,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT ~CAST(X'00FF' AS BINARY(2)) AS v",
+      "initial": "ERROR_FOR_DIVISION_BY_ZERO,NO_ZERO_DATE,NO_ZERO_IN_DATE,STRICT_ALL_TABLES",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "api": "execute",
+      "rows": [
+        [
+          {
+            "type": "Buffer",
+            "data": [
+              255,
+              0
+            ]
+          }
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          253,
+          2,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT ~CAST(X'00FF' AS BINARY(2)) AS v",
+      "initial": "ERROR_FOR_DIVISION_BY_ZERO,NO_ZERO_DATE,NO_ZERO_IN_DATE,STRICT_ALL_TABLES",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "api": "query",
+      "rows": [
+        [
+          {
+            "type": "Buffer",
+            "data": [
+              255,
+              0
+            ]
+          }
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          253,
+          2,
+          129,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT ~CAST(X'00FF' AS BINARY(2)) AS v",
+      "initial": "ERROR_FOR_DIVISION_BY_ZERO,NO_ZERO_DATE,NO_ZERO_IN_DATE,STRICT_ALL_TABLES",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO,NO_ZERO_DATE,NO_ZERO_IN_DATE,STRICT_TRANS_TABLES",
+      "api": "execute",
+      "rows": [
+        [
+          {
+            "type": "Buffer",
+            "data": [
+              255,
+              0
+            ]
+          }
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          253,
+          2,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT ~CAST(X'00FF' AS BINARY(2)) AS v",
+      "initial": "ERROR_FOR_DIVISION_BY_ZERO,NO_ZERO_DATE,NO_ZERO_IN_DATE,STRICT_ALL_TABLES",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO,NO_ZERO_DATE,NO_ZERO_IN_DATE,STRICT_TRANS_TABLES",
+      "api": "query",
+      "rows": [
+        [
+          {
+            "type": "Buffer",
+            "data": [
+              255,
+              0
+            ]
+          }
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          253,
+          2,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT ~CAST(X'00FF' AS BINARY(2)) AS v",
+      "initial": "ERROR_FOR_DIVISION_BY_ZERO,NO_ZERO_DATE,NO_ZERO_IN_DATE,STRICT_ALL_TABLES",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO,NO_ZERO_DATE,NO_ZERO_IN_DATE,STRICT_ALL_TABLES",
+      "api": "execute",
+      "rows": [
+        [
+          {
+            "type": "Buffer",
+            "data": [
+              255,
+              0
+            ]
+          }
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          253,
+          2,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT ~CAST(X'00FF' AS BINARY(2)) AS v",
+      "initial": "ERROR_FOR_DIVISION_BY_ZERO,NO_ZERO_DATE,NO_ZERO_IN_DATE,STRICT_ALL_TABLES",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO,NO_ZERO_DATE,NO_ZERO_IN_DATE,STRICT_ALL_TABLES",
+      "api": "query",
+      "rows": [
+        [
+          {
+            "type": "Buffer",
+            "data": [
+              255,
+              0
+            ]
+          }
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          253,
+          2,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT ~CAST(X'00FF' AS BINARY(2)) AS v",
+      "initial": "ERROR_FOR_DIVISION_BY_ZERO,NO_ZERO_DATE,NO_ZERO_IN_DATE,STRICT_ALL_TABLES",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO,NO_ZERO_DATE,NO_ZERO_IN_DATE,STRICT_ALL_TABLES",
+      "api": "execute",
+      "rows": [
+        [
+          {
+            "type": "Buffer",
+            "data": [
+              255,
+              0
+            ]
+          }
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          253,
+          2,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT ~CAST(X'00FF' AS BINARY(2)) AS v",
+      "initial": "ERROR_FOR_DIVISION_BY_ZERO,NO_ZERO_DATE,NO_ZERO_IN_DATE,STRICT_ALL_TABLES",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO,NO_ZERO_DATE,NO_ZERO_IN_DATE,STRICT_ALL_TABLES",
+      "api": "query",
+      "rows": [
+        [
+          {
+            "type": "Buffer",
+            "data": [
+              255,
+              0
+            ]
+          }
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          253,
+          2,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT REPEAT(_binary'a',1) AS v",
+      "initial": "ERROR_FOR_DIVISION_BY_ZERO,NO_ZERO_DATE,NO_ZERO_IN_DATE,STRICT_ALL_TABLES",
+      "api": "prepare",
+      "parameters": [],
+      "fields": [
+        [
+          "v",
+          253,
+          1,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT REPEAT(_binary'a',1) AS v",
+      "initial": "ERROR_FOR_DIVISION_BY_ZERO,NO_ZERO_DATE,NO_ZERO_IN_DATE,STRICT_ALL_TABLES",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO,NO_ZERO_DATE,NO_ZERO_IN_DATE,STRICT_ALL_TABLES",
+      "api": "execute",
+      "rows": [
+        [
+          {
+            "type": "Buffer",
+            "data": [
+              97
+            ]
+          }
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          253,
+          1,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT REPEAT(_binary'a',1) AS v",
+      "initial": "ERROR_FOR_DIVISION_BY_ZERO,NO_ZERO_DATE,NO_ZERO_IN_DATE,STRICT_ALL_TABLES",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO,NO_ZERO_DATE,NO_ZERO_IN_DATE,STRICT_ALL_TABLES",
+      "api": "query",
+      "rows": [
+        [
+          {
+            "type": "Buffer",
+            "data": [
+              97
+            ]
+          }
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          253,
+          1,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT REPEAT(_binary'a',1) AS v",
+      "initial": "ERROR_FOR_DIVISION_BY_ZERO,NO_ZERO_DATE,NO_ZERO_IN_DATE,STRICT_ALL_TABLES",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "api": "execute",
+      "rows": [
+        [
+          {
+            "type": "Buffer",
+            "data": [
+              97
+            ]
+          }
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          253,
+          1,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT REPEAT(_binary'a',1) AS v",
+      "initial": "ERROR_FOR_DIVISION_BY_ZERO,NO_ZERO_DATE,NO_ZERO_IN_DATE,STRICT_ALL_TABLES",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO",
+      "api": "query",
+      "rows": [
+        [
+          {
+            "type": "Buffer",
+            "data": [
+              97
+            ]
+          }
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          253,
+          1,
+          129,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT REPEAT(_binary'a',1) AS v",
+      "initial": "ERROR_FOR_DIVISION_BY_ZERO,NO_ZERO_DATE,NO_ZERO_IN_DATE,STRICT_ALL_TABLES",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO,NO_ZERO_DATE,NO_ZERO_IN_DATE,STRICT_TRANS_TABLES",
+      "api": "execute",
+      "rows": [
+        [
+          {
+            "type": "Buffer",
+            "data": [
+              97
+            ]
+          }
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          253,
+          1,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT REPEAT(_binary'a',1) AS v",
+      "initial": "ERROR_FOR_DIVISION_BY_ZERO,NO_ZERO_DATE,NO_ZERO_IN_DATE,STRICT_ALL_TABLES",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO,NO_ZERO_DATE,NO_ZERO_IN_DATE,STRICT_TRANS_TABLES",
+      "api": "query",
+      "rows": [
+        [
+          {
+            "type": "Buffer",
+            "data": [
+              97
+            ]
+          }
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          253,
+          1,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT REPEAT(_binary'a',1) AS v",
+      "initial": "ERROR_FOR_DIVISION_BY_ZERO,NO_ZERO_DATE,NO_ZERO_IN_DATE,STRICT_ALL_TABLES",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO,NO_ZERO_DATE,NO_ZERO_IN_DATE,STRICT_ALL_TABLES",
+      "api": "execute",
+      "rows": [
+        [
+          {
+            "type": "Buffer",
+            "data": [
+              97
+            ]
+          }
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          253,
+          1,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT REPEAT(_binary'a',1) AS v",
+      "initial": "ERROR_FOR_DIVISION_BY_ZERO,NO_ZERO_DATE,NO_ZERO_IN_DATE,STRICT_ALL_TABLES",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO,NO_ZERO_DATE,NO_ZERO_IN_DATE,STRICT_ALL_TABLES",
+      "api": "query",
+      "rows": [
+        [
+          {
+            "type": "Buffer",
+            "data": [
+              97
+            ]
+          }
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          253,
+          1,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT REPEAT(_binary'a',1) AS v",
+      "initial": "ERROR_FOR_DIVISION_BY_ZERO,NO_ZERO_DATE,NO_ZERO_IN_DATE,STRICT_ALL_TABLES",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO,NO_ZERO_DATE,NO_ZERO_IN_DATE,STRICT_ALL_TABLES",
+      "api": "execute",
+      "rows": [
+        [
+          {
+            "type": "Buffer",
+            "data": [
+              97
+            ]
+          }
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          253,
+          1,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT REPEAT(_binary'a',1) AS v",
+      "initial": "ERROR_FOR_DIVISION_BY_ZERO,NO_ZERO_DATE,NO_ZERO_IN_DATE,STRICT_ALL_TABLES",
+      "mode": "ERROR_FOR_DIVISION_BY_ZERO,NO_ZERO_DATE,NO_ZERO_IN_DATE,STRICT_ALL_TABLES",
+      "api": "query",
+      "rows": [
+        [
+          {
+            "type": "Buffer",
+            "data": [
+              97
+            ]
+          }
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          253,
+          1,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    }
+  ]
+}

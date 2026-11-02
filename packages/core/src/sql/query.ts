@@ -11,7 +11,7 @@
 // returns a column called `1+1`, spaces and all, which only the text has.
 import type { ColumnDef, IndexDef, Table, TableDef, ViewDef } from '@myjs/engine'
 import { LITERAL, NODE, QUERY, REF, TOKEN, deparse, lex, parseStatement, type CallNode, type Expression, type OrderItem, type QueryBody, type QueryExpression, type SelectNode, type TableReference, type SetOperationNode, type TableName, type Token } from '@myjs/parser'
-import { messages, sqlError, type ColumnDefinition, type ResultSet, type RowValue } from '@myjs/protocol'
+import { messages, sqlError, PreparedStatement, type ColumnDefinition, type ResultSet, type RowValue } from '@myjs/protocol'
 import { MAX_UNSIGNED, MIN_SIGNED, intValue, storageWidth, toInteger, truth, withoutHex, type Value } from '@myjs/types'
 import { compile, constantNode, memoValue, logicalOperand, convertTo, fieldValue, decimalField, EMPTY_SCOPE, readSlot, type CompileContext, type Compiled, type Env, type GroupKeys, type QuantifiedSubquery, type Scope, type SubqueryPlan } from './compile.ts'
 import { AggregateSink, chooseStrategy, containsAggregate, groupRows, isAggregate } from './group.ts'
@@ -85,6 +85,7 @@ export function compileContext(run: Run, scope: Scope, clause: string, windows?:
     scope,
     clause,
     connectionCollation: session.characterSet,
+    preparedSqlMode: run.prepared instanceof PreparedStatement ? run.prepared.sqlMode : undefined,
     session,
     state: run.state,
     serverVersion: run.serverVersion,

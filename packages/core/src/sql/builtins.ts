@@ -47,6 +47,7 @@ import {
   compile,
   memoValue,
   constantEnv,
+  maxPacket,
   constantNode,
   numberConstant,
   columnConstantDiagnostics,
@@ -91,6 +92,7 @@ import {
 } from './meta.ts'
 import { matchType, regexpInstr, regexpLike, regexpReplace, regexpSubstr } from './regexp.ts'
 import { canonicalFunctionName, lengthArity, nativeArity, unregistered } from './registry.ts'
+import { modeOf } from './mode.ts'
 import { bitBytes } from './wire.ts'
 import { intReader } from './string-functions.ts'
 import { today } from './temporal-functions.ts'
@@ -225,9 +227,11 @@ export function builtinFunction(name: string, e: CallNode, ctx: CompileContext):
           }
           return bytesValue(out)
         },
-        // Always nullable on 8.4.11, NOT NULL arguments or not: a result past
-        // `max_allowed_packet` is NULL.
-        type: { ...stringResultType(width, binary, id, coercibility, true), coercibility },
+        // String functions can also return NULL for ill-formed results in strict mode.
+        type: {
+          ...stringResultType(width, binary, id, coercibility, true), coercibility,
+          nullable: modeOf(ctx.preparedSqlMode ?? ctx.session.sqlMode).strict || types.some((t) => t.nullable) || width * (binary ? 1 : requireCollationInfo(id).mbmaxlen) > maxPacket(constantEnv(ctx)),
+        },
         decimalPrefix: true,
       }
     }
@@ -315,7 +319,7 @@ export function builtinFunction(name: string, e: CallNode, ctx: CompileContext):
           const raw = valueBytes(v)
           return stringValue(hexOf(raw), conn)
         },
-        type: stringResultType(numeric ? 16 : bytes * 2, false, conn, COERCIBILITY.COERCIBLE),
+        type: { ...stringResultType(numeric ? 16 : bytes * 2, false, conn, COERCIBILITY.COERCIBLE), nullable: t.nullable || modeOf(ctx.preparedSqlMode ?? ctx.session.sqlMode).strict },
       }
     }
     case 'UNHEX': {

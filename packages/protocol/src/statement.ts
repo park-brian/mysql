@@ -36,6 +36,8 @@ export class PreparedStatement {
   readonly sql: string
   readonly paramCount: number
   readonly columns: readonly ColumnDefinition[]
+  /** SQL mode captured when this open statement was prepared. */
+  readonly sqlMode: string | undefined
 
   /** Types from the last execution, for `new_params_bind_flag === 0`. */
   lastBoundTypes: readonly BoundType[] | null = null
@@ -43,11 +45,12 @@ export class PreparedStatement {
   readonly longData = new Map<number, Uint8Array[]>()
   cursor: Cursor | null = null
 
-  constructor(id: number, sql: string, paramCount: number, columns: readonly ColumnDefinition[]) {
+  constructor(id: number, sql: string, paramCount: number, columns: readonly ColumnDefinition[], sqlMode?: string) {
     this.id = id
     this.sql = sql
     this.paramCount = paramCount
     this.columns = columns
+    this.sqlMode = sqlMode
   }
 
   appendLongData(parameterId: number, data: Uint8Array, limit: number): void {
@@ -105,14 +108,14 @@ export class StatementTable {
     return this.#statements.size
   }
 
-  create(sql: string, paramCount: number, columns: readonly ColumnDefinition[]): PreparedStatement {
+  create(sql: string, paramCount: number, columns: readonly ColumnDefinition[], sqlMode?: string): PreparedStatement {
     if (this.#statements.size >= this.maxStatements) {
       throw sqlError('ER_MAX_PREPARED_STMT_COUNT_REACHED', messages.maxPreparedStmtCount(this.maxStatements))
     }
     // A monotonically increasing 32-bit counter (doc 16).
     const id = this.#nextId
     this.#nextId = (this.#nextId + 1) >>> 0 || 1
-    const stmt = new PreparedStatement(id, sql, paramCount, columns)
+    const stmt = new PreparedStatement(id, sql, paramCount, columns, sqlMode)
     this.#statements.set(id, stmt)
     return stmt
   }

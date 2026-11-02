@@ -27,6 +27,13 @@ import plusDiagnostics from './fixtures/diagnostics/unary-plus-diagnostics.json'
 import plusReuse from './fixtures/diagnostics/unary-plus-diagnostic-reuse.json' with { type: 'json' }
 import updatabilityOwners from './fixtures/diagnostics/view-updatability-owners.json' with { type: 'json' }
 import updatabilityOrder from './fixtures/diagnostics/view-updatability-order.json' with { type: 'json' }
+import binaryNotValues from './fixtures/diagnostics/binary-not-values.json' with { type: 'json' }
+import binaryNotParameters from './fixtures/diagnostics/binary-not-parameters.json' with { type: 'json' }
+import binaryNotCasts from './fixtures/diagnostics/binary-not-casts.json' with { type: 'json' }
+import binaryNotBytes from './fixtures/diagnostics/binary-not-bytes.json' with { type: 'json' }
+import binaryNotStrictTrans from './fixtures/diagnostics/binary-not-strict-trans.json' with { type: 'json' }
+import binaryNotStrictAll from './fixtures/diagnostics/binary-not-strict-all.json' with { type: 'json' }
+import binaryNotModes from './fixtures/diagnostics/binary-not-modes.json' with { type: 'json' }
 import effects from './fixtures/diagnostics/view-target-effects.json' with { type: 'json' }
 
 const fieldsOf = (fields: readonly mysql.FieldPacket[]) => fields.map(f => [f.name, f.columnType, f.columnLength, f.flags, f.decimals, f.characterSet, f.schema, f.table, f.orgTable, f.orgName])
@@ -60,7 +67,15 @@ function rowsOf(value: unknown): unknown {
   return Array.isArray(value) ? value.map(rowsOf) : value
 }
 
-async function observe(c: mysql.Connection, sql: string, api: string) {
+function parametersOf(values: readonly unknown[]): (string | number | null | Buffer)[] {
+  return values.map((value) => {
+    if (value === null || typeof value === 'string' || typeof value === 'number') return value
+    if (typeof value === 'object' && 'type' in value && value.type === 'Buffer' && 'data' in value && Array.isArray(value.data)) return Buffer.from(value.data)
+    throw new Error('Unsupported fixture parameter')
+  })
+}
+
+async function observe(c: mysql.Connection, sql: string, api: string, parameters: (string | number | null | Buffer)[] = []) {
   let result: object
   try {
     if (api === 'prepare') {
@@ -70,20 +85,61 @@ async function observe(c: mysql.Connection, sql: string, api: string) {
         result = { parameters: fieldsOf(statement.parameters), fields: fieldsOf(statement.columns) }
       } finally { await prepared.close(); c.unprepare(sql) }
     } else {
-      const [rows, fields] = api === 'query' ? await c.query(sql) : await c.execute(sql)
+      const [rows, fields] = api === 'query' ? await c.query(sql, parameters) : await c.execute(sql, parameters)
       result = fields === undefined ? { header: { ...rows } } : { rows: rowsOf(rows), fields: fieldsOf(fields) }
     }
   } catch (e) {
     const error = e as QueryError & { sqlMessage?: string }
     result = { error: { code: error.code, errno: error.errno, state: error.sqlState, message: error.sqlMessage } }
   }
+  return { sql, api, ...result, ...await conditionsOf(c) }
+}
+
+async function conditionsOf(c: mysql.Connection) {
   const [warnings] = await c.query('SHOW WARNINGS')
   const warningCount = String((await c.query<RowDataPacket[]>('SHOW COUNT(*) WARNINGS'))[0][0]![0])
   const errorCount = String((await c.query<RowDataPacket[]>('SHOW COUNT(*) ERRORS'))[0][0]![0])
-  return { sql, api, ...result, warnings, warningCount, errorCount }
+  return { warnings, warningCount, errorCount }
 }
 
-for (const [name, fixture] of [['nonrecursive', nonrecursive], ['recursive', recursive], ['order', order], ['names', names], ['spelling', spelling], ['view-target-no-db', noDatabase], ['view-target-controls', controls], ['view-merge', merge], ['view-merge-reuse', mergeReuse], ['view-check', check], ['view-check-reuse', checkReuse], ['view-check-projections', projections], ['view-check-projection-reuse', projectionReuse], ['view-check-fields-admission', fieldAdmission], ['view-updatability', updatability], ['view-updatability-types', updatabilityTypes], ['unary-plus-print', plusPrint], ['unary-plus-diagnostics', plusDiagnostics], ['unary-plus-diagnostic-reuse', plusReuse], ['view-updatability-owners', updatabilityOwners], ['view-updatability-order', updatabilityOrder]] as const) test('M5.10: SQL admission matches native: ' + name, async () => {
+test('M5.10: prepared string metadata retains its SQL mode while text queries use the current mode', async () => {
+  const { c, db } = await connection()
+  let statement: mysql.PreparedStatementInfo | undefined
+  let activeSql = ''
+  try {
+    assert.equal(binaryNotModes.mysqlVersion, '8.4.11')
+    if (!db) assert.equal(String((await c.query<RowDataPacket[]>('SELECT VERSION()'))[0][0]![0]).split('-')[0], binaryNotModes.mysqlVersion)
+    for (const expected of binaryNotModes.observations) {
+      const { sql, initial, api } = expected
+      let actual: object
+      if (api === 'prepare') {
+        await statement?.close()
+        c.unprepare(activeSql)
+        await c.query('SET sql_mode=?', [initial])
+        await c.query(binaryNotModes.seed)
+        activeSql = sql
+        statement = await c.prepare(sql)
+        const prepared = statement as mysql.PreparedStatementInfo & { statement: { parameters: mysql.FieldPacket[]; columns: mysql.FieldPacket[] } }
+        actual = { parameters: fieldsOf(prepared.statement.parameters), fields: fieldsOf(prepared.statement.columns) }
+      } else {
+        assert.ok(statement)
+        assert.ok('mode' in expected)
+        await c.query('SET sql_mode=?', [expected.mode])
+        await c.query(binaryNotModes.seed)
+        const [rows, fields] = api === 'execute' ? await statement.execute([]) : await c.query(sql)
+        actual = { rows: rowsOf(rows), fields: fieldsOf(fields ?? []) }
+      }
+      assert.deepEqual({ sql, initial, ...('mode' in expected ? { mode: expected.mode } : {}), api, ...actual, ...await conditionsOf(c) }, expected, `${initial}: ${sql} [${api}]`)
+    }
+  } finally {
+    await statement?.close()
+    c.unprepare(activeSql)
+    await c.end()
+    await db?.end()
+  }
+})
+
+for (const [name, fixture] of [['nonrecursive', nonrecursive], ['recursive', recursive], ['order', order], ['names', names], ['spelling', spelling], ['view-target-no-db', noDatabase], ['view-target-controls', controls], ['view-merge', merge], ['view-merge-reuse', mergeReuse], ['view-check', check], ['view-check-reuse', checkReuse], ['view-check-projections', projections], ['view-check-projection-reuse', projectionReuse], ['view-check-fields-admission', fieldAdmission], ['view-updatability', updatability], ['view-updatability-types', updatabilityTypes], ['unary-plus-print', plusPrint], ['unary-plus-diagnostics', plusDiagnostics], ['unary-plus-diagnostic-reuse', plusReuse], ['view-updatability-owners', updatabilityOwners], ['view-updatability-order', updatabilityOrder], ['binary-not-values', binaryNotValues], ['binary-not-parameters', binaryNotParameters], ['binary-not-casts', binaryNotCasts], ['binary-not-bytes', binaryNotBytes], ['binary-not-strict-trans', binaryNotStrictTrans], ['binary-not-strict-all', binaryNotStrictAll]] as const) test('M5.10: SQL admission matches native: ' + name, async () => {
   const { c, db } = await connection()
   const schema = 'schema' in fixture ? fixture.schema : undefined
   let created = false
@@ -109,7 +165,8 @@ for (const [name, fixture] of [['nonrecursive', nonrecursive], ['recursive', rec
       const limit = 'limit' in expected ? expected.limit : 64
       await c.query('SET max_error_count=?', [limit])
       await c.query(fixture.seed)
-      const actual = await observe(c, sql, api)
+      const parameters = 'params' in expected ? parametersOf(expected.params) : []
+      const actual = await observe(c, sql, api, parameters)
       let data: unknown = null
       if ('definitions' in fixture && 'kind' in expected) {
         const name = expected.kind === 'VIEW' ? fixture.definitions.view : fixture.definitions.table
@@ -123,7 +180,7 @@ for (const [name, fixture] of [['nonrecursive', nonrecursive], ['recursive', rec
         const [rows, fields] = await c.query(fixture.inspect)
         data = { rows: rowsOf(rows), fields: fieldsOf(fields ?? []) }
       } else if ('view' in fixture) data = await storedView(c, fixture.view)
-      assert.deepEqual({ ...actual, ...('limit' in expected ? { limit } : {}), ...('existing' in expected ? { existing: expected.existing } : {}), ...('view' in fixture || 'inspect' in fixture || 'definitions' in fixture ? { data } : {}), ...('type' in expected ? { type: expected.type } : {}), ...('kind' in expected ? { kind: expected.kind } : {}) }, expected, `${sql} [${api}]`)
+      assert.deepEqual({ ...actual, ...('limit' in expected ? { limit } : {}), ...('existing' in expected ? { existing: expected.existing } : {}), ...('view' in fixture || 'inspect' in fixture || 'definitions' in fixture ? { data } : {}), ...('type' in expected ? { type: expected.type } : {}), ...('kind' in expected ? { kind: expected.kind } : {}), ...('params' in expected ? { params: expected.params } : {}) }, expected, `${sql} [${api}]`)
       if (!('reuse' in fixture) || !fixture.reuse) c.unprepare(sql)
     }
   } finally {

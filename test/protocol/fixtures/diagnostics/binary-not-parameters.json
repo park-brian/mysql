@@ -1,0 +1,2257 @@
+{
+  "mysqlVersion": "8.4.11",
+  "schema": "myjs_bitwise262",
+  "sqlMode": "ERROR_FOR_DIVISION_BY_ZERO",
+  "seed": "SELECT 1/0,CAST('x' AS DECIMAL)",
+  "setup": [
+    "CREATE TABLE base260(b VARCHAR(16),n BIGINT UNSIGNED)",
+    "INSERT INTO base260 VALUES('g',18446744073709551615)"
+  ],
+  "beforeEach": [
+    "DROP VIEW IF EXISTS v256"
+  ],
+  "observations": [
+    {
+      "sql": "SELECT ~? AS v",
+      "api": "query",
+      "params": [
+        {
+          "type": "Buffer",
+          "data": [
+            49,
+            50,
+            51
+          ]
+        }
+      ],
+      "existing": false,
+      "rows": [
+        [
+          18446744073706328000
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          8,
+          21,
+          161,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT ~? AS v",
+      "api": "query",
+      "params": [
+        {
+          "type": "Buffer",
+          "data": [
+            0,
+            255
+          ]
+        }
+      ],
+      "existing": false,
+      "rows": [
+        [
+          18446744073709552000
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          8,
+          21,
+          161,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT ~? AS v",
+      "api": "query",
+      "params": [
+        "123"
+      ],
+      "existing": false,
+      "rows": [
+        [
+          18446744073709552000
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          8,
+          21,
+          161,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT ~? AS v",
+      "api": "query",
+      "params": [
+        123
+      ],
+      "existing": false,
+      "rows": [
+        [
+          18446744073709552000
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          8,
+          21,
+          161,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT ~? AS v",
+      "api": "execute",
+      "params": [
+        123
+      ],
+      "existing": false,
+      "rows": [
+        [
+          18446744073709552000
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          8,
+          21,
+          160,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT ~? AS v",
+      "api": "query",
+      "params": [
+        null
+      ],
+      "existing": false,
+      "rows": [
+        [
+          null
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          8,
+          21,
+          160,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT HEX(~?) AS v",
+      "api": "query",
+      "params": [
+        {
+          "type": "Buffer",
+          "data": [
+            49,
+            50,
+            51
+          ]
+        }
+      ],
+      "existing": false,
+      "rows": [
+        [
+          "FFFFFFFFFFCECDCC"
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          253,
+          64,
+          1,
+          31,
+          224,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT HEX(~?) AS v",
+      "api": "query",
+      "params": [
+        {
+          "type": "Buffer",
+          "data": [
+            0,
+            255
+          ]
+        }
+      ],
+      "existing": false,
+      "rows": [
+        [
+          "FFFFFFFFFFFFFF00"
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          253,
+          64,
+          1,
+          31,
+          224,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT HEX(~?) AS v",
+      "api": "query",
+      "params": [
+        "123"
+      ],
+      "existing": false,
+      "rows": [
+        [
+          "FFFFFFFFFFFFFF84"
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          253,
+          64,
+          1,
+          31,
+          224,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT HEX(~?) AS v",
+      "api": "query",
+      "params": [
+        123
+      ],
+      "existing": false,
+      "rows": [
+        [
+          "FFFFFFFFFFFFFF84"
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          253,
+          64,
+          1,
+          31,
+          224,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT HEX(~?) AS v",
+      "api": "execute",
+      "params": [
+        123
+      ],
+      "existing": false,
+      "rows": [
+        [
+          "FFFFFFFFFFFFFF84"
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          253,
+          64,
+          0,
+          31,
+          224,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT HEX(~?) AS v",
+      "api": "query",
+      "params": [
+        null
+      ],
+      "existing": false,
+      "rows": [
+        [
+          null
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          253,
+          64,
+          0,
+          31,
+          224,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT ~CAST(? AS BINARY(2)) AS v",
+      "api": "query",
+      "params": [
+        {
+          "type": "Buffer",
+          "data": [
+            49,
+            50,
+            51
+          ]
+        }
+      ],
+      "existing": false,
+      "rows": [
+        [
+          {
+            "type": "Buffer",
+            "data": [
+              206,
+              205
+            ]
+          }
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          253,
+          2,
+          129,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [
+        [
+          "Warning",
+          1292,
+          "Truncated incorrect BINARY(2) value: '123'"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT ~CAST(? AS BINARY(2)) AS v",
+      "api": "execute",
+      "params": [
+        {
+          "type": "Buffer",
+          "data": [
+            49,
+            50,
+            51
+          ]
+        }
+      ],
+      "existing": false,
+      "rows": [
+        [
+          {
+            "type": "Buffer",
+            "data": [
+              206,
+              205
+            ]
+          }
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          253,
+          2,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [
+        [
+          "Warning",
+          1292,
+          "Truncated incorrect BINARY(2) value: '123'"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT ~CAST(? AS BINARY(2)) AS v",
+      "api": "query",
+      "params": [
+        {
+          "type": "Buffer",
+          "data": [
+            0,
+            255
+          ]
+        }
+      ],
+      "existing": false,
+      "rows": [
+        [
+          {
+            "type": "Buffer",
+            "data": [
+              255,
+              0
+            ]
+          }
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          253,
+          2,
+          129,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT ~CAST(? AS BINARY(2)) AS v",
+      "api": "query",
+      "params": [
+        "123"
+      ],
+      "existing": false,
+      "rows": [
+        [
+          {
+            "type": "Buffer",
+            "data": [
+              206,
+              205
+            ]
+          }
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          253,
+          2,
+          129,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [
+        [
+          "Warning",
+          1292,
+          "Truncated incorrect BINARY(2) value: '123'"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT ~CAST(? AS BINARY(2)) AS v",
+      "api": "execute",
+      "params": [
+        "123"
+      ],
+      "existing": false,
+      "rows": [
+        [
+          {
+            "type": "Buffer",
+            "data": [
+              206,
+              205
+            ]
+          }
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          253,
+          2,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [
+        [
+          "Warning",
+          1292,
+          "Truncated incorrect BINARY(2) value: '123'"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT ~CAST(? AS BINARY(2)) AS v",
+      "api": "query",
+      "params": [
+        123
+      ],
+      "existing": false,
+      "rows": [
+        [
+          {
+            "type": "Buffer",
+            "data": [
+              206,
+              205
+            ]
+          }
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          253,
+          2,
+          129,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [
+        [
+          "Warning",
+          1292,
+          "Truncated incorrect BINARY(2) value: '123'"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT ~CAST(? AS BINARY(2)) AS v",
+      "api": "execute",
+      "params": [
+        123
+      ],
+      "existing": false,
+      "rows": [
+        [
+          {
+            "type": "Buffer",
+            "data": [
+              206,
+              205
+            ]
+          }
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          253,
+          2,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [
+        [
+          "Warning",
+          1292,
+          "Truncated incorrect BINARY(2) value: '123'"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT ~CAST(? AS BINARY(2)) AS v",
+      "api": "query",
+      "params": [
+        null
+      ],
+      "existing": false,
+      "rows": [
+        [
+          null
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          253,
+          2,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT ~CAST(? AS BINARY(2)) AS v",
+      "api": "execute",
+      "params": [
+        null
+      ],
+      "existing": false,
+      "rows": [
+        [
+          null
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          253,
+          2,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT HEX(~CAST(? AS BINARY(2))) AS v",
+      "api": "query",
+      "params": [
+        {
+          "type": "Buffer",
+          "data": [
+            49,
+            50,
+            51
+          ]
+        }
+      ],
+      "existing": false,
+      "rows": [
+        [
+          "CECD"
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          253,
+          16,
+          1,
+          31,
+          224,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [
+        [
+          "Warning",
+          1292,
+          "Truncated incorrect BINARY(2) value: '123'"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT HEX(~CAST(? AS BINARY(2))) AS v",
+      "api": "execute",
+      "params": [
+        {
+          "type": "Buffer",
+          "data": [
+            49,
+            50,
+            51
+          ]
+        }
+      ],
+      "existing": false,
+      "rows": [
+        [
+          "CECD"
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          253,
+          16,
+          0,
+          31,
+          224,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [
+        [
+          "Warning",
+          1292,
+          "Truncated incorrect BINARY(2) value: '123'"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT HEX(~CAST(? AS BINARY(2))) AS v",
+      "api": "query",
+      "params": [
+        {
+          "type": "Buffer",
+          "data": [
+            0,
+            255
+          ]
+        }
+      ],
+      "existing": false,
+      "rows": [
+        [
+          "FF00"
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          253,
+          16,
+          1,
+          31,
+          224,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT HEX(~CAST(? AS BINARY(2))) AS v",
+      "api": "query",
+      "params": [
+        "123"
+      ],
+      "existing": false,
+      "rows": [
+        [
+          "CECD"
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          253,
+          16,
+          1,
+          31,
+          224,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [
+        [
+          "Warning",
+          1292,
+          "Truncated incorrect BINARY(2) value: '123'"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT HEX(~CAST(? AS BINARY(2))) AS v",
+      "api": "execute",
+      "params": [
+        "123"
+      ],
+      "existing": false,
+      "rows": [
+        [
+          "CECD"
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          253,
+          16,
+          0,
+          31,
+          224,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [
+        [
+          "Warning",
+          1292,
+          "Truncated incorrect BINARY(2) value: '123'"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT HEX(~CAST(? AS BINARY(2))) AS v",
+      "api": "query",
+      "params": [
+        123
+      ],
+      "existing": false,
+      "rows": [
+        [
+          "CECD"
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          253,
+          16,
+          1,
+          31,
+          224,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [
+        [
+          "Warning",
+          1292,
+          "Truncated incorrect BINARY(2) value: '123'"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT HEX(~CAST(? AS BINARY(2))) AS v",
+      "api": "execute",
+      "params": [
+        123
+      ],
+      "existing": false,
+      "rows": [
+        [
+          "CECD"
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          253,
+          16,
+          0,
+          31,
+          224,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [
+        [
+          "Warning",
+          1292,
+          "Truncated incorrect BINARY(2) value: '123'"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT HEX(~CAST(? AS BINARY(2))) AS v",
+      "api": "query",
+      "params": [
+        null
+      ],
+      "existing": false,
+      "rows": [
+        [
+          null
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          253,
+          16,
+          0,
+          31,
+          224,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT HEX(~CAST(? AS BINARY(2))) AS v",
+      "api": "execute",
+      "params": [
+        null
+      ],
+      "existing": false,
+      "rows": [
+        [
+          null
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          253,
+          16,
+          0,
+          31,
+          224,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT ? AS v",
+      "api": "query",
+      "params": [
+        "123"
+      ],
+      "existing": false,
+      "rows": [
+        [
+          "123"
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          253,
+          12,
+          1,
+          31,
+          224,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT ? AS v",
+      "api": "query",
+      "params": [
+        123
+      ],
+      "existing": false,
+      "rows": [
+        [
+          123
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          8,
+          4,
+          129,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT ? AS v",
+      "api": "execute",
+      "params": [
+        123
+      ],
+      "existing": false,
+      "rows": [
+        [
+          123
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          5,
+          23,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT ? AS v",
+      "api": "query",
+      "params": [
+        null
+      ],
+      "existing": false,
+      "rows": [
+        [
+          null
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          6,
+          0,
+          128,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT ? AS v",
+      "api": "query",
+      "params": [
+        {
+          "type": "Buffer",
+          "data": [
+            49,
+            50,
+            51
+          ]
+        }
+      ],
+      "existing": false,
+      "rows": [
+        [
+          {
+            "type": "Buffer",
+            "data": [
+              49,
+              50,
+              51
+            ]
+          }
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          253,
+          3,
+          161,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT HEX(?) AS v",
+      "api": "query",
+      "params": [
+        "123"
+      ],
+      "existing": false,
+      "rows": [
+        [
+          "313233"
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          253,
+          96,
+          1,
+          31,
+          224,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT HEX(?) AS v",
+      "api": "query",
+      "params": [
+        123
+      ],
+      "existing": false,
+      "rows": [
+        [
+          "7B"
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          253,
+          64,
+          1,
+          31,
+          224,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT HEX(?) AS v",
+      "api": "execute",
+      "params": [
+        123
+      ],
+      "existing": false,
+      "rows": [
+        [
+          "7B"
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          253,
+          64,
+          0,
+          31,
+          224,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT HEX(?) AS v",
+      "api": "query",
+      "params": [
+        null
+      ],
+      "existing": false,
+      "rows": [
+        [
+          null
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          253,
+          0,
+          0,
+          31,
+          224,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT HEX(?) AS v",
+      "api": "query",
+      "params": [
+        {
+          "type": "Buffer",
+          "data": [
+            49,
+            50,
+            51
+          ]
+        }
+      ],
+      "existing": false,
+      "rows": [
+        [
+          "313233"
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          253,
+          24,
+          1,
+          31,
+          224,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT CAST(? AS BINARY(2)) AS v",
+      "api": "query",
+      "params": [
+        "123"
+      ],
+      "existing": false,
+      "rows": [
+        [
+          {
+            "type": "Buffer",
+            "data": [
+              49,
+              50
+            ]
+          }
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          253,
+          2,
+          129,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [
+        [
+          "Warning",
+          1292,
+          "Truncated incorrect BINARY(2) value: '123'"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT CAST(? AS BINARY(2)) AS v",
+      "api": "execute",
+      "params": [
+        "123"
+      ],
+      "existing": false,
+      "rows": [
+        [
+          {
+            "type": "Buffer",
+            "data": [
+              49,
+              50
+            ]
+          }
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          253,
+          2,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [
+        [
+          "Warning",
+          1292,
+          "Truncated incorrect BINARY(2) value: '123'"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT CAST(? AS BINARY(2)) AS v",
+      "api": "query",
+      "params": [
+        123
+      ],
+      "existing": false,
+      "rows": [
+        [
+          {
+            "type": "Buffer",
+            "data": [
+              49,
+              50
+            ]
+          }
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          253,
+          2,
+          129,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [
+        [
+          "Warning",
+          1292,
+          "Truncated incorrect BINARY(2) value: '123'"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT CAST(? AS BINARY(2)) AS v",
+      "api": "execute",
+      "params": [
+        123
+      ],
+      "existing": false,
+      "rows": [
+        [
+          {
+            "type": "Buffer",
+            "data": [
+              49,
+              50
+            ]
+          }
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          253,
+          2,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [
+        [
+          "Warning",
+          1292,
+          "Truncated incorrect BINARY(2) value: '123'"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT CAST(? AS BINARY(2)) AS v",
+      "api": "query",
+      "params": [
+        null
+      ],
+      "existing": false,
+      "rows": [
+        [
+          null
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          253,
+          2,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT CAST(? AS BINARY(2)) AS v",
+      "api": "execute",
+      "params": [
+        null
+      ],
+      "existing": false,
+      "rows": [
+        [
+          null
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          253,
+          2,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT CAST(? AS BINARY(2)) AS v",
+      "api": "query",
+      "params": [
+        {
+          "type": "Buffer",
+          "data": [
+            49,
+            50,
+            51
+          ]
+        }
+      ],
+      "existing": false,
+      "rows": [
+        [
+          {
+            "type": "Buffer",
+            "data": [
+              49,
+              50
+            ]
+          }
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          253,
+          2,
+          129,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [
+        [
+          "Warning",
+          1292,
+          "Truncated incorrect BINARY(2) value: '123'"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT CAST(? AS BINARY(2)) AS v",
+      "api": "execute",
+      "params": [
+        {
+          "type": "Buffer",
+          "data": [
+            49,
+            50,
+            51
+          ]
+        }
+      ],
+      "existing": false,
+      "rows": [
+        [
+          {
+            "type": "Buffer",
+            "data": [
+              49,
+              50
+            ]
+          }
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          253,
+          2,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [
+        [
+          "Warning",
+          1292,
+          "Truncated incorrect BINARY(2) value: '123'"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT ?+1 AS v",
+      "api": "query",
+      "params": [
+        "123"
+      ],
+      "existing": false,
+      "rows": [
+        [
+          124
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          5,
+          23,
+          129,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT ?+1 AS v",
+      "api": "query",
+      "params": [
+        123
+      ],
+      "existing": false,
+      "rows": [
+        [
+          124
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          8,
+          5,
+          129,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT ?+1 AS v",
+      "api": "query",
+      "params": [
+        null
+      ],
+      "existing": false,
+      "rows": [
+        [
+          null
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          5,
+          2,
+          128,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT ?+1 AS v",
+      "api": "query",
+      "params": [
+        {
+          "type": "Buffer",
+          "data": [
+            49,
+            50,
+            51
+          ]
+        }
+      ],
+      "existing": false,
+      "rows": [
+        [
+          3224116
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          8,
+          9,
+          161,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT ?=1 AS v",
+      "api": "query",
+      "params": [
+        "123"
+      ],
+      "existing": false,
+      "rows": [
+        [
+          0
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          8,
+          1,
+          129,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT ?=1 AS v",
+      "api": "execute",
+      "params": [
+        "123"
+      ],
+      "existing": false,
+      "rows": [
+        [
+          0
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          8,
+          1,
+          128,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT ?=1 AS v",
+      "api": "query",
+      "params": [
+        123
+      ],
+      "existing": false,
+      "rows": [
+        [
+          0
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          8,
+          1,
+          129,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT ?=1 AS v",
+      "api": "execute",
+      "params": [
+        123
+      ],
+      "existing": false,
+      "rows": [
+        [
+          0
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          8,
+          1,
+          128,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT ?=1 AS v",
+      "api": "query",
+      "params": [
+        null
+      ],
+      "existing": false,
+      "rows": [
+        [
+          null
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          8,
+          1,
+          128,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT ?=1 AS v",
+      "api": "execute",
+      "params": [
+        null
+      ],
+      "existing": false,
+      "rows": [
+        [
+          null
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          8,
+          1,
+          128,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT ?=1 AS v",
+      "api": "query",
+      "params": [
+        {
+          "type": "Buffer",
+          "data": [
+            49,
+            50,
+            51
+          ]
+        }
+      ],
+      "existing": false,
+      "rows": [
+        [
+          0
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          8,
+          1,
+          129,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT ?=1 AS v",
+      "api": "execute",
+      "params": [
+        {
+          "type": "Buffer",
+          "data": [
+            49,
+            50,
+            51
+          ]
+        }
+      ],
+      "existing": false,
+      "rows": [
+        [
+          0
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          8,
+          1,
+          128,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT COALESCE(?,1) AS v",
+      "api": "query",
+      "params": [
+        "123"
+      ],
+      "existing": false,
+      "rows": [
+        [
+          "123"
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          253,
+          12,
+          1,
+          31,
+          224,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT COALESCE(?,1) AS v",
+      "api": "query",
+      "params": [
+        123
+      ],
+      "existing": false,
+      "rows": [
+        [
+          123
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          8,
+          4,
+          129,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT COALESCE(?,1) AS v",
+      "api": "query",
+      "params": [
+        null
+      ],
+      "existing": false,
+      "rows": [
+        [
+          1
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          8,
+          2,
+          129,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT COALESCE(?,1) AS v",
+      "api": "query",
+      "params": [
+        {
+          "type": "Buffer",
+          "data": [
+            49,
+            50,
+            51
+          ]
+        }
+      ],
+      "existing": false,
+      "rows": [
+        [
+          {
+            "type": "Buffer",
+            "data": [
+              49,
+              50,
+              51
+            ]
+          }
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          253,
+          3,
+          129,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    }
+  ]
+}
