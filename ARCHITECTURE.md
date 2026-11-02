@@ -1857,8 +1857,13 @@ temporal bounds remain explicit; all public datatype records are preserved.
 The charset fallback table now contains only host codecs actually used;
 generated single-byte tables retain authority and TIS620 retains its fallback.
 
-Excessive DECIMAL precision admission remains the next constructor prerequisite
-under the existing size caps.
+CAST/CONVERT now bound integer DECIMAL/DEC argument pairs to NUM31,
+keeping their single integer field lengths separate. NUMERIC/FIXED remain column aliases but are refused as CAST targets;
+AT TIME ZONE requires DATETIME and forbids ARRAY. The public modifier-only type
+reader retains its existing behavior. The new 702-observation native capture
+matches 477 completely, retaining fractional-grammar and precision gaps with
+their native diagnostics. Excessive DECIMAL precision admission remains the next constructor
+prerequisite under the existing size caps.
 
 Catalog statistics rewrites preserve physical table identity. A retained view
 that cannot see the latest catalog revision checks its existing MVCC-visible ID;

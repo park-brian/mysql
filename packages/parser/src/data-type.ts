@@ -49,11 +49,11 @@ import type { SqlMode } from './sql-mode.ts'
  * and differ exactly in whether a charset may follow, which is the distinction
  * that matters here.
  * `width` covers every one-argument numeric or binary declaration; storage
- * meaning belongs to the type code. `text` adds charset clauses, `float` gives
- * one argument its mantissa meaning, and `decimal` reads width and scale.
- * `fsp` has the temporal bound, while `none` consumes no arguments.
+ * meaning belongs to the type code. `text` adds charset clauses, and `decimal`
+ * reads up to two numeric arguments. The original FLOAT code gives one argument
+ * its mantissa meaning. `fsp` has the temporal bound; absence consumes no arguments.
  */
-type Shape = 'decimal' | 'float' | 'fsp' | 'text' | 'values' | 'width' | 'none'
+type Shape = 'decimal' | 'fsp' | 'text' | 'values' | 'width'
 
 /** Spatial spellings share storage facts and CAST eligibility. */
 const SPATIAL_TYPES = ['GEOMETRY', 'POINT', 'LINESTRING', 'POLYGON', 'MULTIPOINT', 'MULTILINESTRING', 'MULTIPOLYGON', 'GEOMETRYCOLLECTION']
@@ -66,7 +66,7 @@ const CAST_TYPES = new Set([
 
 interface TypeSpec {
   readonly code: FieldTypeCode
-  readonly shape: Shape
+  readonly shape?: Shape
   /** The canonical name recorded on the node, when it differs from what was written. */
   readonly as?: string
   /** A charset the type name itself implies — `NCHAR` is utf8mb3. */
@@ -85,7 +85,7 @@ const TYPES: Record<string, TypeSpec> = {
   TINYINT: { code: FIELD_TYPE.TINY, shape: 'width' },
   // `BOOL` is a TINYINT(1) — a distinct spelling of the same type, not a
   // distinct type. MySQL reports `tinyint(1)` for it.
-  BOOL: { code: FIELD_TYPE.TINY, shape: 'none', as: 'TINYINT' },
+  BOOL: { code: FIELD_TYPE.TINY, as: 'TINYINT' },
   SMALLINT: { code: FIELD_TYPE.SHORT, shape: 'width' },
   MEDIUMINT: { code: FIELD_TYPE.INT24, shape: 'width' },
   INT: { code: FIELD_TYPE.LONG, shape: 'width' },
@@ -93,10 +93,10 @@ const TYPES: Record<string, TypeSpec> = {
 
   DECIMAL: { code: FIELD_TYPE.NEWDECIMAL, shape: 'decimal' },
 
-  FLOAT: { code: FIELD_TYPE.FLOAT, shape: 'float' },
+  FLOAT: { code: FIELD_TYPE.FLOAT, shape: 'decimal' },
   DOUBLE: { code: FIELD_TYPE.DOUBLE, shape: 'decimal' },
 
-  DATE: { code: FIELD_TYPE.DATE, shape: 'none' },
+  DATE: { code: FIELD_TYPE.DATE },
   TIME: { code: FIELD_TYPE.TIME, shape: 'fsp' },
   TIMESTAMP: { code: FIELD_TYPE.TIMESTAMP, shape: 'fsp' },
   DATETIME: { code: FIELD_TYPE.DATETIME, shape: 'fsp' },
@@ -112,10 +112,10 @@ const TYPES: Record<string, TypeSpec> = {
   BINARY: { code: FIELD_TYPE.STRING, shape: 'width' },
   VARBINARY: { code: FIELD_TYPE.VAR_STRING, shape: 'width' },
 
-  TINYBLOB: { code: FIELD_TYPE.TINY_BLOB, shape: 'none' },
+  TINYBLOB: { code: FIELD_TYPE.TINY_BLOB },
   BLOB: { code: FIELD_TYPE.BLOB, shape: 'width' },
-  MEDIUMBLOB: { code: FIELD_TYPE.MEDIUM_BLOB, shape: 'none' },
-  LONGBLOB: { code: FIELD_TYPE.LONG_BLOB, shape: 'none' },
+  MEDIUMBLOB: { code: FIELD_TYPE.MEDIUM_BLOB },
+  LONGBLOB: { code: FIELD_TYPE.LONG_BLOB },
   TINYTEXT: { code: FIELD_TYPE.TINY_BLOB, shape: 'text' },
   TEXT: { code: FIELD_TYPE.BLOB, shape: 'text' },
   MEDIUMTEXT: { code: FIELD_TYPE.MEDIUM_BLOB, shape: 'text' },
@@ -124,14 +124,14 @@ const TYPES: Record<string, TypeSpec> = {
 
   ENUM: { code: FIELD_TYPE.ENUM, shape: 'values' },
   SET: { code: FIELD_TYPE.SET, shape: 'values' },
-  JSON: { code: FIELD_TYPE.JSON, shape: 'none' },
+  JSON: { code: FIELD_TYPE.JSON },
 
-  GEOMETRY: { code: FIELD_TYPE.GEOMETRY, shape: 'none' },
+  GEOMETRY: { code: FIELD_TYPE.GEOMETRY },
 
   // Not a type but an alias for a type *and four column attributes*. Recorded
   // as what it stands for, with `serial` set so the column parser can apply the
   // rest.
-  SERIAL: { code: FIELD_TYPE.LONGLONG, shape: 'none', as: 'BIGINT' },
+  SERIAL: { code: FIELD_TYPE.LONGLONG, as: 'BIGINT' },
 }
 
 // Spatial names share storage facts while keeping their own canonical names.
@@ -221,7 +221,7 @@ export interface DataType {
 /** True if the cursor is at something that could start a column type. */
 export function atDataType(c: Cursor): boolean {
   const name = keywordText(c.peek())
-  return name !== '' && (TYPES[name] !== undefined || MULTI_WORD.some((words) => c.atWords(...words)))
+  return TYPES[name] !== undefined || MULTI_WORD.some((words) => c.atWords(...words))
 }
 
 /** Internal CAST target grammar; the public datatype reader keeps modifier-only mode. */
@@ -232,9 +232,27 @@ export function parseCastType(c: Cursor, mode: SqlMode): DataType {
     c.takeWord('INTEGER') || c.takeWord('INT')
     return { name, code: FIELD_TYPE.LONGLONG, at: t.start }
   }
-  const type = parseDataType(c, mode, false)
+  // Column synonyms NUMERIC/FIXED are not CAST target spellings.
+  if (c.atWord('NUMERIC') || c.atWord('FIXED')) c.fail()
+  const type = TYPES[keywordText(t)]?.code === FIELD_TYPE.NEWDECIMAL ? castDecimal(c) : parseDataType(c, mode, false)
   if (!CAST_TYPES.has(type.name) || ((type.name === 'FLOAT' || type.name === 'DOUBLE') && type.length !== undefined)) c.fail()
   return type
+}
+
+/** CAST integer field lengths, with the stricter NUM31 bound on argument pairs. */
+function castDecimal(c: Cursor): DataType {
+  const at = c.take().start
+  let length: number | undefined, scale: number | undefined
+  if (c.takeOp('(')) {
+    length = Number(unsignedValue(c))
+    if (c.atOp(',')) {
+      if (length > 0x7fffffff) c.fail()
+      c.skip()
+      scale = Number(unsignedValue(c, 0x7fffffff))
+    }
+    c.expectOp(')')
+  }
+  return { name: 'DECIMAL', code: FIELD_TYPE.NEWDECIMAL, ...opt('length', length), ...opt('scale', scale), at }
 }
 
 /**
@@ -264,9 +282,9 @@ export function parseDataType(c: Cursor, mode: SqlMode, column = true): DataType
   }
 
   if (spec.shape === 'values') values = valueList(c)
-  else if (spec.shape !== 'none') {
-    const args = numberList(c, spec.shape === 'float' || spec.shape === 'decimal' ? 2 : 1, spec.shape === 'fsp' ? 2147483647 : undefined)
-    if (spec.shape === 'float' && args.length === 1) {
+  else if (spec.shape !== undefined) {
+    const args = numberList(c, spec.shape === 'decimal' ? 2 : 1, spec.shape === 'fsp' ? 2147483647 : undefined)
+    if (spec.code === FIELD_TYPE.FLOAT && args.length === 1) {
       // FLOAT(p)'s single argument is mantissa bits; FLOAT(p,s) is width/scale.
       precision = args[0] as number
       if (precision > 24) {
@@ -380,7 +398,7 @@ function typeName(c: Cursor, column: boolean): string | null {
     if (c.takeWords(...words)) return words.join(' ')
   }
   const name = keywordText(c.peek())
-  if (name === '' || TYPES[name] === undefined) return null
+  if (TYPES[name] === undefined) return null
   c.skip()
   return name
 }

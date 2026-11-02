@@ -731,8 +731,9 @@ class ExpressionParser {
         }
         if (convert) cursor.expectOp(',')
         else cursor.expectWord('AS')
+        if (timeZone !== undefined && !cursor.atWord('DATETIME')) cursor.fail()
         const type = parseCastType(cursor, this.#mode)
-        const array = !convert && cursor.takeWord('ARRAY')
+        const array = !convert && timeZone === undefined && cursor.takeWord('ARRAY')
         cursor.expectOp(')')
         // Native CAST construction stops parsing here, retaining earlier conditions.
         if ((type.name === 'TIME' || type.name === 'DATETIME') && (type.length ?? 0) > 6) throw castPrecisionError(type.length!)

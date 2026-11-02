@@ -96,3 +96,24 @@ test('public modifier-only datatype reading remains separate from CAST target ad
     assert.equal(parseExpression(`CAST(1 AS ${name} INTEGER)`).kind, 'cast')
   }
 })
+
+test('CAST decimal argument grammar leaves column and public datatype reading unchanged', () => {
+  for (const name of ['DECIMAL', 'DEC', 'NUMERIC', 'FIXED']) {
+    for (const column of [false, true]) {
+      const type = parseDataType(new Cursor(lex(name + '(10,2)')), NO_SQL_MODE, column)
+      assert.equal(type.name, 'DECIMAL')
+      assert.equal(type.length, 10)
+      assert.equal(type.scale, 2)
+      assert.throws(() => parseDataType(new Cursor(lex(name + '(1.9)')), NO_SQL_MODE, column), { errno: 1064 })
+    }
+  }
+  for (const name of ['DECIMAL', 'DEC']) {
+    const cast = parseExpression('CAST(1 AS ' + name + '(10,2))')
+    assert.ok(cast.kind === 'cast')
+    assert.equal(cast.type.length, 10)
+    assert.equal(cast.type.scale, 2)
+  }
+  for (const name of ['NUMERIC', 'FIXED']) {
+    assert.throws(() => parseExpression('CAST(1 AS ' + name + '(1))'), { errno: 1064 })
+  }
+})

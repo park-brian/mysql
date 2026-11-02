@@ -23,7 +23,9 @@ Some function behavior and optimizer strategies remain partial. Datatype aliases
 now reuse complete private facts, preserving national charsets and exceptional
 shapes. National-literal, completed-assignment and unary-BINARY parser warnings now
 survive failure without changing successful-root provenance. Native CAST
-precision admission remains open. Explicit utf8 and utf8mb3 warnings now follow
+precision admission remains open. CAST/CONVERT now bound integer DECIMAL
+argument pairs to NUM31, refuse NUMERIC/FIXED targets and keep AT TIME ZONE
+exclusive to DATETIME without ARRAY. Their public datatype reader is unchanged. Explicit utf8 and utf8mb3 warnings now follow
 their three expression construction phases; successful-root provenance and
 DDL/SET charset owners are unchanged. Numeric datatype arguments share one
 reader, preserving all public type facts and FLOAT/temporal distinctions. Generated
