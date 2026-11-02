@@ -37,6 +37,10 @@ const cases = [
   ['ALTER TABLE t MODIFY COLUMN v INT DEFAULT(SLEEP(0))', 3770, false],
   ['ALTER TABLE t ALTER COLUMN v SET DEFAULT(SLEEP(0))', 3770, true],
   ['ALTER TABLE t ALTER COLUMN v SET DEFAULT((SELECT 1))', 3769, true],
+  ...['LENGTH', 'OCTET_LENGTH', 'CHAR_LENGTH', 'CHARACTER_LENGTH'].flatMap(name => [
+    [`CREATE TABLE u(v INT DEFAULT(${name}()))`, 1582, false],
+    [`ALTER TABLE t ADD COLUMN g INT AS(${name}(v,1))`, 1582, false],
+  ] as const),
 ] as const
 const apis = ['query', 'execute', 'prepare'] as const
 
@@ -100,4 +104,64 @@ test('M5.10: a missing default database precedes column-expression admission', a
       await assert.rejects(command(conn, sql, api), (e: mysql.QueryError) => e.errno === 1046, `${sql} [${api}]`)
     }
   } finally { await conn.end(); await db?.end() }
+})
+
+// Captured against MySQL 8.4.11. Direct column roots reject arity before
+// resolving arguments/table names; nested SELECT/CHECK construction is separate.
+test('M5.10: direct length column constructors preserve native diagnostics and schema', async () => {
+  const { conn, db } = await connection()
+  let created = false
+  try {
+    await conn.query('CREATE DATABASE column245arity')
+    created = true
+    await conn.query('USE column245arity')
+    await conn.query('CREATE TABLE t(v INT)')
+    const definition = (await conn.query<mysql.RowDataPacket[]>('SHOW CREATE TABLE t'))[0][0]!['Create Table']
+    for (const name of ['LENGTH', 'OCTET_LENGTH', 'CHAR_LENGTH', 'CHARACTER_LENGTH']) {
+      for (const spelling of [name, name.toLowerCase(), `\`${name}\``]) {
+        const written = spelling.replaceAll('`', '')
+        const message = `Incorrect parameter count in the call to native function '${written}'`
+        for (const args of ['', 'missing,1', 'LENGTH(),1']) {
+          const call = `${spelling}(${args})`
+          for (const sql of [
+            `CREATE TABLE u(v INT DEFAULT(${call}))`,
+            `CREATE TABLE u(v INT,g INT AS(${call}))`,
+            `ALTER TABLE t ADD COLUMN g INT DEFAULT(${call})`,
+            `ALTER TABLE t MODIFY COLUMN v INT AS(${call})`,
+            `ALTER TABLE absent_table ADD COLUMN g INT AS(${call})`,
+          ]) for (const api of apis) {
+            const label = `${sql} [${api}]`
+            await assert.rejects(command(conn, sql, api), (error: mysql.QueryError & { sqlMessage?: string }) => {
+              assert.equal(error.errno, 1582, label)
+              assert.equal(error.code, 'ER_WRONG_PARAMCOUNT_TO_NATIVE_FCT', label)
+              assert.equal(error.sqlState, '42000', label)
+              assert.equal(error.sqlMessage, message, label)
+              return true
+            })
+            assert.deepEqual((await conn.query('SHOW WARNINGS'))[0], [{ Level: 'Error', Code: 1582, Message: message }], label)
+          }
+        }
+      }
+    }
+    for (const name of ['LENGTH', 'OCTET_LENGTH', 'CHAR_LENGTH', 'CHARACTER_LENGTH']) {
+      for (const [expression, code] of [
+        [`v INT DEFAULT(column245arity.${name}())`, 3770],
+        [`v INT,g INT AS(column245arity.${name}())`, 3763],
+      ] as const) for (const api of apis) {
+        await assert.rejects(command(conn, `CREATE TABLE u(${expression})`, api), (error: mysql.QueryError) => error.errno === code)
+      }
+    }
+    assert.equal((await conn.query<mysql.RowDataPacket[]>('SHOW CREATE TABLE t'))[0][0]!['Create Table'], definition)
+    assert.equal((await conn.query<mysql.RowDataPacket[]>('SHOW FULL TABLES'))[0].length, 1)
+    for (const api of ['query', 'execute'] as const) {
+      await command(conn, "CREATE TABLE u(v INT DEFAULT(LENGTH('é')),g INT AS(CHARACTER_LENGTH('é')))", api)
+      await conn.query('INSERT INTO u() VALUES()')
+      assert.deepEqual((await conn.query({ sql: 'SELECT * FROM u', rowsAsArray: true }))[0], [[2, 1]])
+      await conn.query('DROP TABLE u')
+    }
+  } finally {
+    if (created) await conn.query('DROP DATABASE column245arity')
+    await conn.end()
+    await db?.end()
+  }
 })

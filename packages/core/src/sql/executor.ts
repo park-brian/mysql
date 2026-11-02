@@ -86,6 +86,7 @@ import { checkDefaultAdmission, checkDefaults, insert, remove, update } from './
 import { fulltextOf } from './fulltext.ts'
 import { columnDefinition, intType, stringType } from './meta.ts'
 import { columnsOf, compileContext, planQuery, resultSet, resultSteps, viewTable, type Run } from './query.ts'
+import { lengthArity } from './registry.ts'
 import { SqlSession, finish, isolationOf } from './session.ts'
 import { dropOrphans, sessionCatalog, TemporaryTables, type CatalogApi } from './temporary.ts'
 import { likeSpec, mergedColumns, selectColumns, withCollations } from './create-select.ts'
@@ -390,6 +391,7 @@ export class SqlExecutor implements Executor {
       resolveCollation(column.type.charset, column.type.collation, DEFAULT_COLLATION)
       const { generated, default: value, ...remaining } = column
       const expression = generated?.expr ?? value
+      if (expression?.kind === NODE.CALL) lengthArity(expression)
       if (expression !== undefined) someNode(expression, bind)
       if (generated !== undefined) checkGeneratedAdmission(generated.expr, column.name, modeOf(session.sqlMode))
       else if (column.defaultExpression === true && value !== undefined) checkDefaultAdmission(value, column.name, modeOf(session.sqlMode))

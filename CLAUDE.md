@@ -58,11 +58,13 @@ WITH/ORDER-owning set wrappers now retain the same holder and operator context,
 binding CTEs through their existing lexical Run. Plain SELECTs retain numeric
 sorting. Unneeded set-branch sorting is now removed while an enclosing LIMIT
 can retain it; a replacing ORDER BY overrides it. Admission and zero-limit
-evaluation remain separate. Leading-WITH ownership, plain SELECT naming and inherited-holder
-collation admission
-remain open, alongside grouped readers/order, width-limited and large
-fixed-scale formatting, DECIMAL diagnostics, warning timing and aggregate
-metadata remain open. UTF-16 writes still hit the existing encoder
+evaluation remain separate. Direct length-function roots in DEFAULT/generated columns now fail
+through the existing column-admission stage and share the compiler count rule.
+Invalid definitions preserve schema and rollbackability; general SELECT, nested
+and CHECK constructor timing remain open. Leading-WITH ownership, plain SELECT
+naming, inherited-holder collation admission, grouped readers/order, width-limited
+and large fixed-scale formatting, DECIMAL diagnostics, warning timing and aggregate
+metadata also remain open. UTF-16 writes still hit the existing encoder
 refusal. M2.3 covers UTF-8/generated single-byte encoding and supported decoding
 with typed refusals elsewhere, as recorded in doc 29 and the roadmap.
 M5's ORM exit criterion holds with recorded test configuration; default

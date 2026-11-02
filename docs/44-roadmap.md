@@ -67,11 +67,22 @@ with every prior matching fact preserved. All 4,386 repaired outcomes and
 near 2^53 already agrees after stored-value conversion, and limited/derived
 controls retain their field boundary.
 
-Next repair admission separately. Unbounded UNION ALL can discard key-name
-binding, while materialized/unary owners still bind; their COLLATE checks need
-the inherited holder. The constructor-phase audit also distinguishes early
-unknown-collation/builtin-arity admission from later global-key binding and
-right-leaf errors. Establish that phase order before moving compilation.
+Direct LENGTH/OCTET_LENGTH/CHAR_LENGTH/CHARACTER_LENGTH roots in DEFAULT
+and generated-column definitions now share the compiler count rule at the
+existing column-admission owner. CREATE/ALTER audits gain 240 complete native
+matches, preserving prior matching facts. Invalid definitions preserve schema
+and rollbackability; qualified stored calls retain their policy diagnostics.
+SELECT, nested calls and CHECK constructor admission remain open.
+
+Next validate nested scalar column constructors through the existing admission
+walk, preserving subquery/unused-CTE ownership and outer-before-inner count
+priority. A new 384-outcome native probe currently matches 80 complete outcomes;
+subquery policy controls must stay intact. Then return to set admission:
+unbounded UNION ALL can discard key-name binding, while materialized/unary
+owners still bind; their COLLATE checks need the inherited holder. Native constructors validate outer arity before nested
+calls, after syntax/charset construction, and leave unused CTE bodies dormant.
+A closing-call parser callback loses these priorities; do not adopt it or move
+compilation into row execution.
 Zero-limit value evaluation and plain SELECT unbounded ordering remain open.
 Plain SELECT naming, leading-WITH ownership, fixed-FLOAT query formatting,
 grouped readers/order, correlated DEFAULT binding, width-limited/large fixed-
@@ -2141,6 +2152,35 @@ facade are 45,491/331,535/331,432 B gzipped under unchanged caps. Preceding
 12d7c8e passes all eleven required CI jobs. Admission, zero-limit evaluation and
 plain SELECT unbounded ordering remain separate; M5.10/M5.19 stay partial at
 144/190 and M5 42/53.
+
+**M5.10 direct length column constructors, verified:** malformed root calls to
+LENGTH, OCTET_LENGTH, CHAR_LENGTH and CHARACTER_LENGTH now fail at the existing
+column-admission stage, before argument/table resolution or DDL effects. The
+registry owns one name/count rule shared with the compiler; late validation
+remains for existing/synthetic ASTs. There is no parser hook or additional AST
+walk. Qualified stored calls keep DEFAULT/generated policy diagnostics.
+
+Pinned MySQL 8.4.11 audits cover CREATE (432 outcomes, 180→276 complete), ALTER
+(512, 296→440) and general construction (1,536, unchanged 836). Every one of
+23,188 previously matching facts survives, including successful command headers,
+fields, warnings and error details. The new protocol regressions cover all four
+names, original/lowercase/backtick spellings, empty/excess/nested-invalid
+arguments, missing tables, query/execute/prepare, complete diagnostics and
+unchanged schema. Expanded transaction controls verify refusal before implicit
+commit in three SQL modes; valid Unicode defaults/generated columns still run.
+Actual 87ca7fe fails both new regression groups. SELECT/global-key, nested and
+CHECK construction remain open: native outer arity precedes nested validation,
+syntax/charset construction can fail earlier, and unused CTE bodies stay dormant.
+The discarded closing-call callback lost 80 previously matching outcomes; it
+was not adopted. Twenty-four targeted local cases pass, retaining all 62,502
+older fixture outcomes. Twenty thousand executor statements seeded 20261010
+and plans 2,127/2,248 under the unchanged 2,118 floor pass. Fresh Docker
+--reference passes 1,633 main/four latency tests, typecheck, lint, nine unchanged
+size caps, package/typed smoke, the real client and all seven pinned corpora,
+including 1,737 coercion warning counts. Early source proof covers 533 tests/
+fixtures and 206 runtime sources plus tooling. Parser/core/facade are
+45,491/331,567/331,478 B gzipped. All eleven required 87ca7fe CI jobs pass.
+M5.10 remains partial; totals stay 144/190 and M5 42/53.
 
 **Next prerequisite: constructor admission before presence execution.** Complete
 the existing CAST work: with written utf8 warning 3719 now retained, refuse

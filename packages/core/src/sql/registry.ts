@@ -16,6 +16,7 @@
 import { MyjsError } from '@myjs/bytes'
 import { sqlError, type SqlError } from '@myjs/protocol'
 import type { CallNode } from '@myjs/parser'
+import { nativeCallName } from './ast.ts'
 import { BUILTINS, CLOCK_FUNCTIONS, CONTROL_FUNCTIONS, INFORMATION_FUNCTIONS, REGEXP_FUNCTIONS, builtinFunction, clockFunction, controlFunction, informationFunction, regexpFunction } from './builtins.ts'
 import { compile, type CompileContext, type Compiled } from './compile.ts'
 import { JSON_PATH_FUNCTIONS, jsonPathFunction } from './json-path.ts'
@@ -28,6 +29,11 @@ import { TEMPORAL_ARITHMETIC, TEMPORAL_FUNCTIONS, TEMPORAL_TEXT_FUNCTIONS, tempo
 /** Native-call arity failures retain the spelling of the written function name. */
 export function wrongParameterCount(name: string): SqlError {
   return sqlError('ER_WRONG_PARAMCOUNT_TO_NATIVE_FCT', `Incorrect parameter count in the call to native function '${name}'`)
+}
+
+/** Verified direct native length constructors and compiled ASTs share one count rule. */
+export function lengthArity(call: CallNode): void {
+  if (call.args.length !== 1 && /^(LENGTH|OCTET_LENGTH|CHAR(ACTER)?_LENGTH)$/.test(nativeCallName(call))) throw wrongParameterCount(call.name)
 }
 
 /** An aggregate in a forbidden context; callers retain admission timing. */

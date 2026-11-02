@@ -90,7 +90,7 @@ import {
   type ResultType,
 } from './meta.ts'
 import { matchType, regexpInstr, regexpLike, regexpReplace, regexpSubstr } from './regexp.ts'
-import { canonicalFunctionName, nativeArity, unregistered } from './registry.ts'
+import { canonicalFunctionName, lengthArity, nativeArity, unregistered } from './registry.ts'
 import { bitBytes } from './wire.ts'
 import { intReader } from './string-functions.ts'
 import { today } from './temporal-functions.ts'
@@ -235,7 +235,7 @@ export function builtinFunction(name: string, e: CallNode, ctx: CompileContext):
     case 'OCTET_LENGTH':
     case 'CHAR_LENGTH':
     case 'CHARACTER_LENGTH': {
-      arity(1)
+      lengthArity(e)
       const [x] = args() as [Compiled]
       const chars = name.startsWith('CHAR')
       return {
