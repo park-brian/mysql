@@ -1903,7 +1903,10 @@ through the shared set writer before sorting/limiting, retaining reported
 metadata and operator/nullability authority. WITH/ORDER-owning set wrappers now retain the same holder and operator context,
 binding CTEs through their existing lexical Run. Plain SELECTs retain numeric
 sorting. Leading-WITH ownership, plain SELECT naming and inherited-holder
-collation admission remain open, alongside grouped readers/
+collation admission remain open. Unneeded set-branch sorting is now removed
+while an enclosing LIMIT can retain it; a replacing ORDER BY overrides it.
+Admission, zero-limit evaluation and plain SELECT unbounded ordering remain
+separate, alongside grouped readers/
 order, width-limited and large
 fixed-scale formatting, DECIMAL diagnostics, aggregate metadata and
 separate warning timing/labels remain open. UTF-16 writing still reaches the

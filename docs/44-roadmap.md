@@ -58,23 +58,25 @@ The ORM review measured Drizzle's 487 passes and Prisma's 1,122 passes with the
 same reference snapshot failure at two workers. Browser work remains M6;
 InnoDB interchange remains M7, outside the staged Node release.
 
-**Current bounded function work:** nested set bodies now retain the enclosing
-holder and operator context through WITH and ORDER-owning query wrappers. WITH
-still binds through its existing lexical Run; each ordering/limit owner remains
-in place. Plain SELECT bodies keep their numeric sort scope: native 2/10
-controls distinguish them from sets sorted in the final text holder. The new
-20,772 wrapper/plain/diagnostic observations and earlier 30,240 sort observations
-improve 45,188 to 47,520 complete matches. All previous matching facts hold.
-Every newly repaired outcome and focused controls form 3,460 strict regressions.
+**Current bounded function work:** unused set-branch row ordering is now
+removed after the existing admission path. An enclosing LIMIT can retain an
+inner order; an outer ORDER BY overrides it. Plain SELECTs keep their current
+path. The 30,274-observation audit improves 23,116 to 27,502 complete matches,
+with every prior matching fact preserved. All 4,386 repaired outcomes and
+5,132 unchanged complete controls form 9,518 strict regressions. Arithmetic
+near 2^53 already agrees after stored-value conversion, and limited/derived
+controls retain their field boundary.
 
-Next audit expression-key typing and collation admission in the inherited holder,
-including constructor error precedence and LIMIT 0 before changing binding.
-The 1,152 native collation errors still accepted locally remain open. Plain
-SELECT alias/expression and qualified-wrapper naming, leading WITH ownership
-when its first operand has another WITH, and fixed-FLOAT query formatting are
-separate gaps. Grouped readers/order, correlated DEFAULT binding, width-limited/
-large fixed-scale formatting, DECIMAL diagnostics and warning timing also remain
-open. The complete DECIMAL constructor rehearsal stays parked above the unchanged
+Next repair admission separately. Unbounded UNION ALL can discard key-name
+binding, while materialized/unary owners still bind; their COLLATE checks need
+the inherited holder. The constructor-phase audit also distinguishes early
+unknown-collation/builtin-arity admission from later global-key binding and
+right-leaf errors. Establish that phase order before moving compilation.
+Zero-limit value evaluation and plain SELECT unbounded ordering remain open.
+Plain SELECT naming, leading-WITH ownership, fixed-FLOAT query formatting,
+grouped readers/order, correlated DEFAULT binding, width-limited/large fixed-
+scale formatting, DECIMAL diagnostics and warning timing also remain open.
+The complete DECIMAL constructor rehearsal stays parked above the unchanged
 parser cap; grammar, diagnostics and refusal must ship together before presence/
 projection expansion. M2.3's codec scope remains explicit below. Totals remain
 144/190 and M5 42/53.
@@ -2105,6 +2107,40 @@ Parser/core/facade are 45,491/331,491/331,388 B gzipped; caps are unchanged.
 Preceding 4e7c303 passes all eleven required CI jobs. Inherited-holder collation
 admission, plain SELECT naming, leading-WITH ownership and fixed-FLOAT query
 formatting remain explicit; M5.10/M5.19 stay partial at 144/190 and M5 42/53.
+
+**M5.19 unused branch ordering, verified:** the branch compiler records whether
+an enclosing query can need an otherwise unbounded order. A LIMIT retains that
+order, while a replacing ORDER BY does not. After the existing binding path,
+an unused set-branch order returns its underlying plan, preserving streaming/
+flattening and avoiding value evaluation. Bounded orders and ordinary SELECT
+paths remain unchanged. This is a private query-ownership fact, not a new Run
+flag or public API.
+
+The 25,920-outcome key/type audit improves 20,352 to 24,288 complete matches.
+It includes arithmetic ties around 2^53, exact/approximate keys, COLLATE and
+function/CHAR-cast controls, both protocols/orders, WITH/unary/derived owners
+and no limit/LIMIT 0/LIMIT 2. Its 1,632 remaining cases are collation admission.
+A 2,880-outcome extension covers the two remaining DISTINCT operators and
+runtime warning/cardinality expressions, improving 1,860 to 2,280. Nested owner
+controls improve 16/34 to 26; the 1,440-outcome error-phase matrix improves 888
+to 908. Combined 30,274 improve 23,116 to 27,502.
+
+All 4,386 repaired outcomes and 5,132 unchanged complete controls are strict in
+the new corpus, including 1,460 complete native error packets/warning vectors.
+Every previously matching SQL cell, row presence/width/count, field, warning
+and error fact holds across 44,784 differential observations and all 17 earlier
+regression groups. Old native pools and assertions are unchanged. Twenty-one
+local/native cases pass, replaying all 62,502 committed outcomes against 8.4.11.
+Typecheck, 20,000 executor statements seeded 20261010, plans 2,127/2,248 under
+the unchanged 2,118 floor and all nine size caps pass. Actual 12d7c8e fails all
+four new regression groups. Fresh Docker --reference passes 1,632 main and four
+latency tests, lint/typecheck, package/typed smoke, the real client and all seven
+pinned corpora, including 1,737 coercion warning counts. Its early source proof
+checks 533 tests/fixtures and 206 runtime sources plus tooling. Parser/core/
+facade are 45,491/331,535/331,432 B gzipped under unchanged caps. Preceding
+12d7c8e passes all eleven required CI jobs. Admission, zero-limit evaluation and
+plain SELECT unbounded ordering remain separate; M5.10/M5.19 stay partial at
+144/190 and M5 42/53.
 
 **Next prerequisite: constructor admission before presence execution.** Complete
 the existing CAST work: with written utf8 warning 3719 now retained, refuse

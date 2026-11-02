@@ -11,6 +11,7 @@ import parentheses from './fixtures/functions/set-parentheses-expanded.json' wit
 import nonnull from './fixtures/functions/set-parentheses-notnull.json' with { type: 'json' }
 import sorts from './fixtures/functions/set-sort-holders.json' with { type: 'json' }
 import wrappers from './fixtures/functions/set-wrapper-context.json' with { type: 'json' }
+import orders from './fixtures/functions/set-unused-order.json' with { type: 'json' }
 
 interface FloatReference {
   readonly mysqlVersion: string
@@ -79,6 +80,10 @@ for (const [capture, total, matched] of [
   [wrappers.cases[1], 992, 992],
   [wrappers.cases[2], 1412, 1412],
   [wrappers.cases[3], 24, 24],
+  [orders.cases[0], 7536, 7536],
+  [orders.cases[1], 1048, 1048],
+  [orders.cases[2], 26, 26],
+  [orders.cases[3], 908, 908],
 ] as const) test('REAL readers and field delivery preserve native boundaries: ' + capture!.schema, async () => {
   const reference = capture as FloatReference
   const host = process.env.MYSQL_REFERENCE_HOST

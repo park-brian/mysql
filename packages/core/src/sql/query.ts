@@ -1745,14 +1745,14 @@ function planSetOperation(run: Run, node: SetOperationNode, parent?: { readonly 
   const comparisonTypes = (): readonly ResultType[] => parent?.types() ?? op.columns.map((c) => c.type)
   const context = { op: node.op, types: comparisonTypes }
   const hasSetBody = (b: QueryBody): boolean => b.kind === QUERY.SET_OPERATION || (b.kind === QUERY.QUERY && hasSetBody(b.body))
-  const branch = (b: QueryBody, scope = run): SelectPlan => {
+  const branch = (b: QueryBody, scope = run, retainOrder = false): SelectPlan => {
     // Redundant parentheses retain this branch's holder and operator context.
-    if (b.kind === QUERY.QUERY && b.with === undefined && b.into === undefined && b.locking === undefined && b.orderBy === undefined && b.limit === undefined) return branch(b.body, scope)
+    if (b.kind === QUERY.QUERY && b.with === undefined && b.into === undefined && b.locking === undefined && b.orderBy === undefined && b.limit === undefined) return branch(b.body, scope, retainOrder)
     if (b.kind === QUERY.SET_OPERATION) return planSetOperation(scope, b, context)
     // Clause owners keep their scope; only set bodies use the enclosing holder.
     if (b.kind === QUERY.QUERY && b.into === undefined && hasSetBody(b.body)) {
       const inner = b.with === undefined ? scope : withClause(scope, b.with)
-      return orderedResult(inner, b, branch(b.body, inner), comparisonTypes)
+      return orderedResult(inner, b, branch(b.body, inner, b.orderBy === undefined && (b.limit !== undefined || retainOrder)), comparisonTypes, retainOrder)
     }
     return planQuery(scope, asQuery(b))
   }
@@ -1811,7 +1811,7 @@ function setOperationNode(m: SetMembers, materialized: boolean): PlanNode {
  * — a set operation's, or a parenthesised query's. It sees only the result's
  * columns, by position or name; a table-qualified name is 1250.
  */
-function orderedResult(run: Run, q: QueryExpression, plan: SelectPlan, holder?: () => readonly ResultType[]): SelectPlan {
+function orderedResult(run: Run, q: QueryExpression, plan: SelectPlan, holder?: () => readonly ResultType[], retainOrder = false): SelectPlan {
   if (q.orderBy === undefined && q.limit === undefined) return plan
   const scope = new TableScope([{ alias: '\u0000result', columns: plan.columns }])
   const keys = (q.orderBy ?? []).map((o): SortKey => {
@@ -1826,6 +1826,8 @@ function orderedResult(run: Run, q: QueryExpression, plan: SelectPlan, holder?: 
     }
     return { expr: compile(e, compileContext(run, scope, 'order clause')), desc: o.desc === true }
   })
+  // Eliminate unused ordering after admission; an enclosing LIMIT can need it.
+  if (holder !== undefined && q.limit === undefined && !retainOrder) return plan
   const [limitCount, offset] = queryLimit(run, q)
   const stages: Stage[] = []
   if (keys.length > 0) stages.push({ run: (rows, env) => sort(rows, keys, env), describe: (n) => planNode('Sort', [n]) })

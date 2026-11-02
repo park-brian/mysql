@@ -56,7 +56,9 @@ The 96 recorded nested numeric-copy gaps close. Ordered nested sets now read
 stored enclosing-holder values; all 38,016 holder/parentheses observations agree.
 WITH/ORDER-owning set wrappers now retain the same holder and operator context,
 binding CTEs through their existing lexical Run. Plain SELECTs retain numeric
-sorting. Leading-WITH ownership, plain SELECT naming and inherited-holder
+sorting. Unneeded set-branch sorting is now removed while an enclosing LIMIT
+can retain it; a replacing ORDER BY overrides it. Admission and zero-limit
+evaluation remain separate. Leading-WITH ownership, plain SELECT naming and inherited-holder
 collation admission
 remain open, alongside grouped readers/order, width-limited and large
 fixed-scale formatting, DECIMAL diagnostics, warning timing and aggregate
