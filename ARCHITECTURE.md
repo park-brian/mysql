@@ -1896,7 +1896,10 @@ retains its separate path. REAL values carry a field-copy reading established
 by decoded/stored fields and cleared by canonical functions/caches. This
 preserves reduced scalar and actual derived/window field copies independently
 of their reported metadata. NULLIF forwards SQL readers while retaining its own
-numeric field store. Grouped/nested-set field copies, width-limited and large
+numeric field store. Transparent set parentheses now retain the enclosing
+holder and operator context, preserving nullability. Query blocks with their own
+clauses retain their owners. Numeric-to-text sorting before nested LIMIT,
+grouped readers/order, width-limited and large
 fixed-scale formatting, DECIMAL diagnostics, aggregate metadata and
 separate warning timing/labels remain open. UTF-16 writing still reaches the
 existing encoder refusal; decoder availability is a separate capability.

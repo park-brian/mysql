@@ -58,21 +58,22 @@ The ORM review measured Drizzle's 487 passes and Prisma's 1,122 passes with the
 same reference snapshot failure at two workers. Browser work remains M6;
 InnoDB interchange remains M7, outside the staged Node release.
 
-**Current bounded function work:** REAL values now carry their field-copy
-reading independently of SQL display precision and reported metadata. Stored
-fields retain text formatting for BLOB copies; computed REAL items store their
-number. Functions and canonical caches clear that reading, while reduced scalar
-fields and actual window/derived fields preserve it. The combined 10,128 native
-observations improve 8,945 to 9,557 complete matches against ed39768. Every
-previously checked SQL cell and row-shape assertion holds. Fresh release
-verification passes. Grouped/nested-set field copies, width-limited formatting,
-large fixed-scale formatting, DECIMAL diagnostics and separate warning timing
-remain open. Next audit the actual numeric field writer in nested sets with
-LIMIT, retaining source-free reduction and physical-field controls. M2.3's codec
-scope remains explicit below. The complete DECIMAL constructor rehearsal stays
-parked above the unchanged parser cap; grammar, diagnostics and refusal must
-ship together before presence/projection expansion. Totals remain 144/190 and
-M5 42/53.
+**Current bounded function work:** REAL field-copy readers and transparent
+parentheses now preserve their actual enclosing set holder. Query blocks with
+no WITH, INTO, locking, ORDER BY or LIMIT retain both inherited types and the
+operator context that determines nullability. The 38,016 new native observations
+improve 34,164 to 37,584 complete matches, and all 96 older nested numeric-copy
+gaps close. The combined 48,144 observations improve 43,721 to 47,237, preserving
+every previously matching SQL cell and row-shape assertion. The remaining 432
+new mismatches concern numeric-to-text conversion before a nested descending
+sort and LIMIT. Audit that physical sort boundary next, including expression
+sort keys and explicit query-block owners; preserve reported metadata and
+operator/nullability authority. Grouped readers/order, correlated DEFAULT
+binding, width-limited and large fixed-scale formatting, DECIMAL diagnostics
+and warning timing remain open. The complete DECIMAL constructor rehearsal
+stays parked above the unchanged parser cap; grammar, diagnostics and refusal
+must ship together before presence/projection expansion. M2.3's codec scope
+remains explicit below. Totals remain 144/190 and M5 42/53.
 
 **Measured compatibility.** M5.2's committed coercion gate is complete:
 3,148 observations and 1,737 warning counts agree through both protocols.
@@ -1996,6 +1997,37 @@ including 1,737 coercion warning counts. Its tested-container proof checks 528
 tests/fixtures and 206 runtime sources plus tooling. Parser/core/facade are
 45,491/331,397/331,309 B; types/engine are 52,473/56,722 B. All eleven required
 ed39768 CI jobs pass. M5.10/M5.19 remain partial; totals stay 144/190 and M5 42/53.
+
+**M5.19 transparent set parentheses, verified:** branch planning now descends
+through query wrappers that own no clauses, carrying the same enclosing holder
+and operator context. It does not invent a new holder at an extra pair of
+parentheses or discard the parent operator used for nullability. WITH, INTO,
+locking, ORDER BY and LIMIT blocks retain their existing owners. Public APIs,
+wire formats and metadata rules are unchanged.
+
+Two native captures cover 38,016 observations: nullable BLOB/VARCHAR targets
+improve 9,156/10,368 to 10,224, and NOT NULL targets improve 25,008/27,648 to
+27,360. They include mixed exact/REAL sources, nullable/non-null integers, all
+six inner operators, all six outer operators in the non-null audit, both branch
+orders, redundant parentheses, LIMIT 0/3, descending bounded sorts and both
+protocols. All field and warning vectors agree. The 432 remaining cases retain
+full native outcomes and every currently matching cell; numeric-to-text sort
+conversion is a separate repair. The older 96 nested numeric-copy gaps close,
+raising that capture to 1,224/1,368. Every previously matching SQL cell and row
+presence/width/count holds across the new audit, 10,128 older REAL observations
+and 4,382 legacy controls. Native outcome pools and old assertion profiles are
+unchanged; checks only strengthen. Actual 1ee3bfc fails both new regressions.
+
+Twelve targeted cases pass locally and against pinned MySQL 8.4.11, which checks
+all 48,144 outcomes completely. Typecheck, 20,000 seeded executor statements,
+the 2,127/2,248 plan agreement under its unchanged 2,118 floor and all nine size
+caps pass. Fresh Docker --reference passes 1,623 main and four latency tests,
+lint/typecheck, package/typed smoke, the real client and all seven pinned
+corpora, including 1,737 coercion warning counts. The fresh-container source
+proof covers 530 tests/fixtures and 206 runtime sources plus tooling. Parser,
+core and facade are 45,491/331,424/331,337 B gzipped; all nine caps are unchanged.
+Preceding 1ee3bfc passes all eleven required CI jobs. M5.10/M5.19 remain partial;
+totals stay 144/190 overall and M5 42/53.
 
 **Next prerequisite: constructor admission before presence execution.** Complete
 the existing CAST work: with written utf8 warning 3719 now retained, refuse

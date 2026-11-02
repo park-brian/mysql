@@ -50,7 +50,10 @@ REAL copies into non-BLOB text/binary fields now use canonical numeric readings
 through the existing set writer. REAL field-copy readings now preserve physical
 BLOB formatting independently of SQL display metadata; computed items and
 canonical caches clear that reading. Reduced scalar fields and actual window/
-derived fields keep it. Grouped/nested-set field copies, width-limited and large
+derived fields keep it. Transparent set parentheses now retain the enclosing
+holder and operator/nullability context; clause-owning blocks keep their owners.
+The 96 recorded nested numeric-copy gaps close. Numeric-to-text sorting before
+nested LIMIT, grouped readers/order, width-limited and large
 fixed-scale formatting, DECIMAL diagnostics, warning timing and aggregate
 metadata remain open. UTF-16 writes still hit the existing encoder
 refusal. M2.3 covers UTF-8/generated single-byte encoding and supported decoding

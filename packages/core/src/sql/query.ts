@@ -1745,6 +1745,8 @@ function planSetOperation(run: Run, node: SetOperationNode, parent?: { readonly 
   const comparisonTypes = (): readonly ResultType[] => parent?.types() ?? op.columns.map((c) => c.type)
   const context = { op: node.op, types: comparisonTypes }
   const branch = (b: QueryBody): SelectPlan => {
+    // Redundant parentheses retain this branch's holder and operator context.
+    if (b.kind === QUERY.QUERY && b.with === undefined && b.into === undefined && b.locking === undefined && b.orderBy === undefined && b.limit === undefined) return branch(b.body)
     if (b.kind === QUERY.SET_OPERATION) return planSetOperation(run, b, context)
     // A parenthesised set operation is still a branch of this one.
     if (b.kind === QUERY.QUERY && b.body.kind === QUERY.SET_OPERATION && b.with === undefined) return orderedResult(run, b, planSetOperation(run, b.body, context))
