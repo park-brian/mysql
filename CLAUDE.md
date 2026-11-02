@@ -60,7 +60,10 @@ sorting. Unneeded set-branch sorting is now removed while an enclosing LIMIT
 can retain it; a replacing ORDER BY overrides it. Admission and zero-limit
 evaluation remain separate. Length calls in scalar DEFAULT/generated expressions now share the compiler
 count rule during the existing column-admission walk. Outer counts precede
-children; query bodies retain their own admission path.
+children; query bodies retain their own admission path. Column/CHECK
+constructors now follow written attribute/declaration order before each column's
+policy. Type/charset checks, query fences and functional-key refusals keep their
+owners.
 Invalid definitions preserve schema and rollbackability; general SELECT, query-body
 and CHECK constructor timing remain open. Leading-WITH ownership, plain SELECT
 naming, inherited-holder collation admission, grouped readers/order, width-limited

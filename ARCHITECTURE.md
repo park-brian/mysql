@@ -1908,7 +1908,10 @@ while an enclosing LIMIT can retain it; a replacing ORDER BY overrides it.
 Admission, zero-limit evaluation and plain SELECT unbounded ordering remain
 separate. Length calls in scalar DEFAULT/generated expressions now share the compiler
 count rule during the existing column-admission walk. Outer counts precede
-children; query bodies retain their own admission path.
+children; query bodies retain their own admission path. Column/CHECK
+constructors now follow written attribute/declaration order before each column's
+policy. Type/charset checks, query fences and functional-key refusals keep their
+owners.
 Invalid definitions preserve schema and rollbackability. General SELECT, query-body
 and CHECK constructor timing, grouped readers/order, width-limited and large
 fixed-scale formatting, DECIMAL diagnostics, aggregate metadata and separate

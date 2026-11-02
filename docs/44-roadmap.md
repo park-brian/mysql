@@ -77,12 +77,20 @@ SELECT, nested calls and CHECK constructor admission remain open.
 Nested scalar column constructors now validate counts through the existing
 admission walk, preserving subquery/unused-CTE ownership and outer-before-inner
 priority. Across 2,960 observations, complete matches improve 1,642 to 1,910,
-with every prior matching fact preserved.
+with every prior matching protocol fact preserved.
 
-Next audit CHECK constructor admission through the existing DDL walk. A further
-262 native observations distinguish written DEFAULT/CHECK order, column/table
-ownership, policy failures and CREATE AS/unused-CTE fences. Resolve that priority
-before extending the visitor; do not apply it to an entire query statement.
+Current CHECK slice merges supported column/CHECK declarations by existing
+source positions and checks each column's expression attributes in source order
+before its policy. Native audits improve 2,032 to 2,358 complete matches across
+3,248 outcomes, preserving 21,706 prior protocol facts. Column/type, system-name,
+query/unused-CTE and functional-key controls retain their boundaries. New local/
+native protocol regressions pass through query/execute/prepare. Fresh release,
+seeded gates and actual-predecessor proof pass as recorded below. Charset-warning
+histories and earlier malformed functional-key constructors remain open.
+Next audit the warning publisher for explicit utf8/utf8mb3 CASTs nested in
+length calls: a new 96-outcome probe matches 48, with missing prefixes in valid
+and failing SELECT/DDL calls. Keep successful-root provenance, DDL/SET owners and
+error/header priority distinct; do not publish all grammar warnings globally.
 Then return to set admission: unbounded UNION ALL can discard key-name binding, while materialized/unary
 owners still bind; their COLLATE checks need the inherited holder. Native constructors validate outer arity before nested
 calls, after syntax/charset construction, and leave unused CTE bodies dormant.
@@ -2167,7 +2175,7 @@ walk. Qualified stored calls keep DEFAULT/generated policy diagnostics.
 
 Pinned MySQL 8.4.11 audits cover CREATE (432 outcomes, 180→276 complete), ALTER
 (512, 296→440) and general construction (1,536, unchanged 836). Every one of
-23,188 previously matching facts survives, including successful command headers,
+15,748 previously matching protocol facts survives, including successful command headers,
 fields, warnings and error details. The new protocol regressions cover all four
 names, original/lowercase/backtick spellings, empty/excess/nested-invalid
 arguments, missing tables, query/execute/prepare, complete diagnostics and
@@ -2187,6 +2195,11 @@ fixtures and 206 runtime sources plus tooling. Parser/core/facade are
 45,491/331,567/331,478 B gzipped. All eleven required 87ca7fe CI jobs pass.
 M5.10 remains partial; totals stay 144/190 and M5 42/53.
 
+Preservation counts in these living summaries exclude capture identity fields
+(case index, SQL and API). Earlier totals of 23,188 and 27,536 included 7,440
+and 8,880 identity facts respectively; all protocol assertions remain intact.
+Historical changelog entries retain their original totals.
+
 **M5.10 nested scalar column constructors, verified:** the existing DEFAULT/
 generated expression admission walk now checks the shared length rule before
 visiting a call's children. Query-expression nodes keep their existing bind-only
@@ -2196,8 +2209,8 @@ change, global validation pass, row-time compilation or duplicate arity list.
 The 384-outcome scalar/query-fence audit improves 80→240 complete matches; 96
 additional controls improve 10→38. Earlier CREATE and ALTER audits strengthen
 276→292/432 and 440→504/512; general construction retains 836/1,536. Combined
-2,960 observations improve 1,642→1,910, with all 27,536 previously matching facts
-held, including headers, warnings and error details. The added regressions pin
+2,960 observations improve 1,642→1,910, with all 18,656 previously matching protocol
+facts held, including headers, warnings and error details. The added regressions pin
 outer-before-inner priority, IF/CASE inactive branches, prohibited/stored parents,
 unknown system variables, original/lowercase/backtick spelling, all three APIs,
 missing tables, valid nested Unicode expressions and refusal before effects.
@@ -2212,6 +2225,37 @@ pinned corpora including 1,737 coercion warning counts. Early source proof cover
 533 tests/fixtures and 206 runtime sources plus tooling. Parser/core/facade are
 45,491/331,592/331,503 B gzipped. All eleven required c47d975 CI jobs pass. Totals
 stay 144/190 and M5 42/53; M5.10 remains partial.
+
+**M5.10 ordered column/CHECK constructor admission:** CREATE merges column and
+CHECK declarations by their existing source positions. Within each column,
+DEFAULT/generated and inline CHECK expressions are admitted in written order
+before column policy. ALTER retains its action order and admits added CHECKs
+through the same scalar visitor. Query bodies retain their bind-only path;
+CREATE AS keeps its query owner. No parser change or global constructor pass.
+
+The 224-outcome CHECK audit now agrees completely, as do 26 declaration/query
+owners and twelve attribute/policy-priority controls. Functional-key controls
+improve 2→8/12; earlier malformed functional-key constructor precedence stays
+open. Fourteen charset/type/system-name controls improve 4→10; four missing
+utf8-warning histories stay open. Earlier scalar/CREATE controls strengthen too.
+Across 3,248 outcomes, complete matches improve 2,032→2,358 with all 21,706
+previously matching protocol facts held (capture identity excluded).
+
+Local/native regressions cover query/execute/prepare, complete errors/warnings,
+source ordering, missing tables, schema preservation, ordinary CHECK execution,
+CREATE AS unused CTEs and transaction effects. Count refusal precedes implicit
+commit. Forbidden CHECK subqueries retain their later 3815 failure and successful
+PREPARE, unlike DEFAULT/generated policy admission. Earlier DEFAULT policy still
+wins before a later declaration's CHECK or functional-key construction.
+Actual 4c7f2a9 fails both new regression groups. Twenty-six targeted local cases
+pass with all 62,502 older fixture outcomes retained. Twenty thousand executor
+statements seeded 20261010 and plans 2,127/2,248 under the unchanged 2,118 floor
+pass. Fresh Docker --reference passes 1,635 main/four latency tests, typecheck,
+lint, nine unchanged caps, package/typed smoke, the real client and all seven
+pinned corpora including 1,737 coercion warning counts. Early source proof covers
+533 tests/fixtures and 206 runtime sources plus tooling. Parser/core/facade are
+45,491/331,685/331,595 B gzipped. All eleven required 4c7f2a9 CI jobs pass.
+M5.10 remains partial; totals stay 144/190 and M5 42/53.
 
 **Next prerequisite: constructor admission before presence execution.** Complete
 the existing CAST work: with written utf8 warning 3719 now retained, refuse

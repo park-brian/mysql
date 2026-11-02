@@ -41,6 +41,12 @@ const cases = [
   ['CREATE TABLE u(v INT,g INT AS(ABS(OCTET_LENGTH(v,1))))', 1582, false],
   ['CREATE TABLE u(v INT DEFAULT((WITH c AS(SELECT LENGTH()) SELECT 1)))', 3769, false],
   ['CREATE TABLE u(v INT,g INT AS((WITH c AS(SELECT LENGTH()) SELECT 1)))', 3102, false],
+  ['CREATE TABLE u(v INT CHECK(LENGTH()>0) DEFAULT(SLEEP(0)))', 1582, false],
+  ['CREATE TABLE u(v INT DEFAULT(SLEEP(0)) CHECK(LENGTH()>0))', 1582, false],
+  ['CREATE TABLE u(v INT DEFAULT(SLEEP(0)),CHECK(LENGTH()>0))', 3770, false],
+  ['CREATE TABLE u(CHECK(LENGTH()>0),v INT DEFAULT(SLEEP(0)))', 1582, false],
+  ['CREATE TABLE u(v INT DEFAULT(SLEEP(0)),KEY k((LENGTH())),CHECK(OCTET_LENGTH()>0))', 3770, false],
+  ['CREATE TABLE u(v INT,CHECK((WITH c AS(SELECT LENGTH()) SELECT 1)>0))', 3815, true],
   ...['LENGTH', 'OCTET_LENGTH', 'CHAR_LENGTH', 'CHARACTER_LENGTH'].flatMap(name => [
     [`CREATE TABLE u(v INT DEFAULT(${name}()))`, 1582, false],
     [`ALTER TABLE t ADD COLUMN g INT AS(${name}(v,1))`, 1582, false],
@@ -213,6 +219,48 @@ test('M5.10: nested scalar column arity precedes policy and binding with query f
     assert.deepEqual((await conn.query({ sql: 'SELECT * FROM u', rowsAsArray: true }))[0], [[2, 1]])
   } finally {
     if (created) await conn.query('DROP DATABASE column246arity')
+    await conn.end()
+    await db?.end()
+  }
+})
+
+test('M5.10: CHECK arity retains attribute and declaration order', async () => {
+  const { conn, db } = await connection()
+  let created = false
+  try {
+    await conn.query('CREATE DATABASE column247arity')
+    created = true
+    await conn.query('USE column247arity')
+    await conn.query('CREATE TABLE t(v INT)')
+    const cases = [
+      ['CREATE TABLE u(v INT,CHECK(LENGTH()>0))', 'LENGTH'],
+      ['CREATE TABLE u(v INT CHECK(ABS(CHAR_LENGTH())>0))', 'CHAR_LENGTH'],
+      ['CREATE TABLE u(v INT CHECK(LENGTH()>0) DEFAULT(OCTET_LENGTH()))', 'LENGTH'],
+      ['CREATE TABLE u(v INT DEFAULT(OCTET_LENGTH()) CHECK(LENGTH()>0))', 'OCTET_LENGTH'],
+      ['CREATE TABLE u(CHECK(LENGTH()>0),v INT DEFAULT(OCTET_LENGTH()))', 'LENGTH'],
+      ['CREATE TABLE u(v INT DEFAULT(OCTET_LENGTH()),CHECK(LENGTH()>0))', 'OCTET_LENGTH'],
+      ['CREATE TABLE u(CHECK(LENGTH()>0),v VARCHAR(3) CHARACTER SET latin1 COLLATE utf8mb4_bin)', 'LENGTH'],
+      ['CREATE TABLE u(v INT CHECK(LENGTH()>0) DEFAULT(@@no_such_247))', 'LENGTH'],
+      ['ALTER TABLE t ADD CHECK(CHARACTER_LENGTH()>0)', 'CHARACTER_LENGTH'],
+      ['ALTER TABLE absent_table ADD CHECK(LENGTH()>0)', 'LENGTH'],
+      ['ALTER TABLE t ADD CHECK(LENGTH()>0),ADD COLUMN g INT DEFAULT(OCTET_LENGTH())', 'LENGTH'],
+      ['ALTER TABLE t ADD COLUMN g INT DEFAULT(OCTET_LENGTH()),ADD CHECK(LENGTH()>0)', 'OCTET_LENGTH'],
+    ] as const
+    for (const [sql, name] of cases) for (const api of apis) {
+      const message = `Incorrect parameter count in the call to native function '${name}'`
+      const label = `${sql} [${api}]`
+      await assert.rejects(command(conn, sql, api), { errno: 1582, code: 'ER_WRONG_PARAMCOUNT_TO_NATIVE_FCT', sqlState: '42000', sqlMessage: message }, label)
+      assert.deepEqual((await conn.query('SHOW WARNINGS'))[0], [{ Level: 'Error', Code: 1582, Message: message }], label)
+    }
+    assert.equal((await conn.query<mysql.RowDataPacket[]>('SHOW FULL TABLES'))[0].length, 1)
+    await conn.query('ALTER TABLE t ADD CHECK(LENGTH(v)>0)')
+    await conn.query('INSERT INTO t VALUES(1)')
+    assert.deepEqual((await conn.query({ sql: 'SELECT * FROM t', rowsAsArray: true }))[0], [[1]])
+    // CREATE AS retains its query-declaration owner; unused bodies stay dormant.
+    await conn.query('CREATE TABLE u AS WITH c AS(SELECT LENGTH()) SELECT 1 AS v')
+    assert.deepEqual((await conn.query({ sql: 'SELECT * FROM u', rowsAsArray: true }))[0], [[1]])
+  } finally {
+    if (created) await conn.query('DROP DATABASE column247arity')
     await conn.end()
     await db?.end()
   }

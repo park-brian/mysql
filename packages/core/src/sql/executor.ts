@@ -399,23 +399,28 @@ export class SqlExecutor implements Executor {
     const admitColumn = (column: ParsedColumnDefinition): void => {
       checkGeneratedDefault(column)
       resolveCollation(column.type.charset, column.type.collation, DEFAULT_COLLATION)
-      const { generated, default: value, ...remaining } = column
-      const expression = generated?.expr ?? value
-      if (expression !== undefined) someNode(expression, bindColumnExpression)
+      const { generated, default: value, check, ...remaining } = column
+      const expressions = [generated?.expr ?? value, check?.expr]
+        .filter(e => e !== undefined).sort((a, b) => a.at - b.at)
+      for (const expression of expressions) someNode(expression, bindColumnExpression)
       if (generated !== undefined) checkGeneratedAdmission(generated.expr, column.name, modeOf(session.sqlMode))
       else if (column.defaultExpression === true && value !== undefined) checkDefaultAdmission(value, column.name, modeOf(session.sqlMode))
       someNode(remaining, bind)
     }
     if (statement.kind === STATEMENT.CREATE_TABLE) {
       requireSchema(statement.table.schema ?? session.database)
-      for (const column of statement.columns) admitColumn(column)
-      const { columns: _columns, ...remaining } = statement
+      const declarations = [...statement.columns, ...statement.checks].sort((a, b) => a.at - b.at)
+      for (const declaration of declarations) {
+        if ('type' in declaration) admitColumn(declaration)
+        else someNode(declaration, bindColumnExpression)
+      }
+      const { columns: _columns, checks: _checks, ...remaining } = statement
       someNode(remaining, bind)
     } else if (statement.kind === STATEMENT.ALTER_TABLE) {
       requireSchema(statement.table.schema ?? session.database)
       for (const action of statement.actions) {
         if (action.type === 'addColumn' || action.type === 'changeColumn') admitColumn(action.column)
-        else someNode(action, bind)
+        else someNode(action, action.type === 'addCheck' ? bindColumnExpression : bind)
       }
     } else someNode(statement, bind)
     if (statement.kind === STATEMENT.SET) for (const item of statement.items) {
