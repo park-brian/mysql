@@ -1849,10 +1849,13 @@ and unary-BINARY warnings in failure history without adding them to successful-r
 provenance.
 Nested parsing shares the history; statement completion clears both histories.
 Unary-BINARY warns after operand construction, preserving earlier recoverable
-errors and stopping behind a failed inner constructor. Explicit utf8mb3 warnings
-now retain the written name at introducers, CONVERT USING and CAST CHAR. Charset
-resolution stays shared; DDL/SET owners and successful provenance are unchanged.
-Written utf8 alias warning histories remain open under the existing size caps.
+errors and stopping behind a failed inner constructor. Explicit utf8 and utf8mb3
+warnings retain the written name at introducers, CONVERT USING and CAST CHAR.
+Charset resolution stays shared; DDL/SET owners and successful provenance are
+unchanged. Numeric datatype arguments use one reader while FLOAT's mantissa and
+temporal bounds remain explicit; all public datatype records are preserved.
+Excessive DECIMAL precision admission remains the next constructor prerequisite
+under the existing size caps.
 
 Catalog statistics rewrites preserve physical table identity. A retained view
 that cannot see the latest catalog revision checks its existing MVCC-visible ID;

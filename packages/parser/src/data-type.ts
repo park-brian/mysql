@@ -38,7 +38,7 @@
 import { FIELD_TYPE, type FieldTypeCode } from '@myjs/bytes'
 import { flag, opt, type Cursor, unsignedValue } from './cursor.ts'
 import { BINARY_DEPRECATION, NATIONAL_DEPRECATION } from './errors.ts'
-import { charsetName, collationName, warnUtf8mb3 } from './names.ts'
+import { charsetName, collationName, warnCharset } from './names.ts'
 import { TOKEN, keywordText } from './tokens.ts'
 import type { SqlMode } from './sql-mode.ts'
 
@@ -48,10 +48,12 @@ import type { SqlMode } from './sql-mode.ts'
  * Not the same as the storage class: `TEXT` and `BLOB` share a storage class
  * and differ exactly in whether a charset may follow, which is the distinction
  * that matters here.
- * `float` gives a single argument its mantissa meaning; `decimal` reads width
- * and scale. `fsp` has the temporal bound, while `none` consumes no arguments.
+ * `width` covers every one-argument numeric or binary declaration; storage
+ * meaning belongs to the type code. `text` adds charset clauses, `float` gives
+ * one argument its mantissa meaning, and `decimal` reads width and scale.
+ * `fsp` has the temporal bound, while `none` consumes no arguments.
  */
-type Shape = 'integer' | 'decimal' | 'float' | 'fsp' | 'text' | 'bytes' | 'values' | 'width' | 'none'
+type Shape = 'decimal' | 'float' | 'fsp' | 'text' | 'values' | 'width' | 'none'
 
 /** Spatial spellings share storage facts and CAST eligibility. */
 const SPATIAL_TYPES = ['GEOMETRY', 'POINT', 'LINESTRING', 'POLYGON', 'MULTIPOINT', 'MULTILINESTRING', 'MULTIPOLYGON', 'GEOMETRYCOLLECTION']
@@ -80,14 +82,14 @@ interface TypeSpec {
 const TYPES: Record<string, TypeSpec> = {
   BIT: { code: FIELD_TYPE.BIT, shape: 'width' },
 
-  TINYINT: { code: FIELD_TYPE.TINY, shape: 'integer' },
+  TINYINT: { code: FIELD_TYPE.TINY, shape: 'width' },
   // `BOOL` is a TINYINT(1) — a distinct spelling of the same type, not a
   // distinct type. MySQL reports `tinyint(1)` for it.
   BOOL: { code: FIELD_TYPE.TINY, shape: 'none', as: 'TINYINT' },
-  SMALLINT: { code: FIELD_TYPE.SHORT, shape: 'integer' },
-  MEDIUMINT: { code: FIELD_TYPE.INT24, shape: 'integer' },
-  INT: { code: FIELD_TYPE.LONG, shape: 'integer' },
-  BIGINT: { code: FIELD_TYPE.LONGLONG, shape: 'integer' },
+  SMALLINT: { code: FIELD_TYPE.SHORT, shape: 'width' },
+  MEDIUMINT: { code: FIELD_TYPE.INT24, shape: 'width' },
+  INT: { code: FIELD_TYPE.LONG, shape: 'width' },
+  BIGINT: { code: FIELD_TYPE.LONGLONG, shape: 'width' },
 
   DECIMAL: { code: FIELD_TYPE.NEWDECIMAL, shape: 'decimal' },
 
@@ -107,18 +109,18 @@ const TYPES: Record<string, TypeSpec> = {
   NCHAR: { code: FIELD_TYPE.STRING, shape: 'text', as: 'CHAR', charset: 'utf8mb3' },
   NVARCHAR: { code: FIELD_TYPE.VAR_STRING, shape: 'text', as: 'VARCHAR', charset: 'utf8mb3' },
 
-  BINARY: { code: FIELD_TYPE.STRING, shape: 'bytes' },
-  VARBINARY: { code: FIELD_TYPE.VAR_STRING, shape: 'bytes' },
+  BINARY: { code: FIELD_TYPE.STRING, shape: 'width' },
+  VARBINARY: { code: FIELD_TYPE.VAR_STRING, shape: 'width' },
 
   TINYBLOB: { code: FIELD_TYPE.TINY_BLOB, shape: 'none' },
-  BLOB: { code: FIELD_TYPE.BLOB, shape: 'bytes' },
+  BLOB: { code: FIELD_TYPE.BLOB, shape: 'width' },
   MEDIUMBLOB: { code: FIELD_TYPE.MEDIUM_BLOB, shape: 'none' },
   LONGBLOB: { code: FIELD_TYPE.LONG_BLOB, shape: 'none' },
   TINYTEXT: { code: FIELD_TYPE.TINY_BLOB, shape: 'text' },
   TEXT: { code: FIELD_TYPE.BLOB, shape: 'text' },
   MEDIUMTEXT: { code: FIELD_TYPE.MEDIUM_BLOB, shape: 'text' },
   LONGTEXT: { code: FIELD_TYPE.LONG_BLOB, shape: 'text' },
-  'LONG VARBINARY': { code: FIELD_TYPE.MEDIUM_BLOB, shape: 'bytes', as: 'MEDIUMBLOB' },
+  'LONG VARBINARY': { code: FIELD_TYPE.MEDIUM_BLOB, shape: 'width', as: 'MEDIUMBLOB' },
 
   ENUM: { code: FIELD_TYPE.ENUM, shape: 'values' },
   SET: { code: FIELD_TYPE.SET, shape: 'values' },
@@ -261,35 +263,17 @@ export function parseDataType(c: Cursor, mode: SqlMode, column = true): DataType
     canonical = 'FLOAT'
   }
 
-  switch (spec.shape) {
-    case 'values':
-      values = valueList(c)
-      break
-    case 'float':
-    case 'decimal': {
-      const args = numberList(c, 2)
-      if (spec.shape === 'float' && args.length === 1) {
-        // **The trap.** One argument to `FLOAT` is a *precision* in bits of
-        // mantissa, not a display width, and above 24 makes the column a
-        // DOUBLE. `FLOAT(25)` and `FLOAT(25,2)` are different types; 24 is
-        // still a FLOAT (8.4.11).
-        precision = args[0] as number
-        if (precision > 24) {
-          code = FIELD_TYPE.DOUBLE
-          canonical = 'DOUBLE'
-        }
-      } else {
-        [length, scale] = args
+  if (spec.shape === 'values') values = valueList(c)
+  else if (spec.shape !== 'none') {
+    const args = numberList(c, spec.shape === 'float' || spec.shape === 'decimal' ? 2 : 1, spec.shape === 'fsp' ? 2147483647 : undefined)
+    if (spec.shape === 'float' && args.length === 1) {
+      // FLOAT(p)'s single argument is mantissa bits; FLOAT(p,s) is width/scale.
+      precision = args[0] as number
+      if (precision > 24) {
+        code = FIELD_TYPE.DOUBLE
+        canonical = 'DOUBLE'
       }
-      break
-    }
-    case 'integer':
-    case 'fsp':
-    case 'width':
-    case 'text':
-    case 'bytes':
-      [length] = numberList(c, 1, spec.shape === 'fsp' ? 2147483647 : undefined)
-      break
+    } else [length, scale] = args
   }
 
   if (spec.charset !== undefined && (column || canonical === 'CHAR')) c.warn(3720, NATIONAL_DEPRECATION)
@@ -348,7 +332,7 @@ export function parseDataType(c: Cursor, mode: SqlMode, column = true): DataType
     const charsetToken = c.peek()
     const specifiedCharset = typeCharset(c)
     // The charset name reduces before BINARY attributes, even when written after them.
-    warnUtf8mb3(c, specifiedCharset)
+    warnCharset(c, specifiedCharset)
     // An invalid charset suppresses attribute warnings. After it succeeds,
     // publish leading BINARY, shorthand and trailing BINARY in written order.
     if (specifiedCharset === undefined && c.takeWord('CHARACTER')) c.fail()

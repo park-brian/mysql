@@ -21,9 +21,10 @@ export function charsetName(c: Cursor): string {
   return name
 }
 
-/** Explicit utf8mb3 expression declarations retain their warning on failure. */
-export function warnUtf8mb3(c: Cursor, name: string | undefined): void {
-  if (name === 'utf8mb3') c.warn(1287, "'utf8mb3' is deprecated and will be removed in a future release. Please use utf8mb4 instead", true)
+/** Expression construction retains written charset warnings only on failure. */
+export function warnCharset(c: Cursor, name: string | undefined): void {
+  if (name === 'utf8') c.warn(3719, "'utf8' is currently an alias for the character set UTF8MB3, but will be an alias for UTF8MB4 in a future release. Please consider using UTF8MB4 in order to be unambiguous.", true)
+  else if (name === 'utf8mb3') c.warn(1287, "'utf8mb3' is deprecated and will be removed in a future release. Please use utf8mb4 instead", true)
 }
 
 /** DDL permits BINARY as a collation name; expression COLLATE excludes it. */
