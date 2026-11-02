@@ -1915,7 +1915,11 @@ owners. Isolated CAST/introducer charset construction warnings now retain
 separate immutable records: text and PREPARE publish the bounded prefix; cached
 EXECUTE does not repeat it. Legacy provenance and mixed publishers keep their
 paths. Four existing unused-order 1305 failures still follow the newly correct
-warning prefix; their previously coincidental counts change.
+warning prefix; their previously coincidental counts change. Diagnostic-count items now
+read the live statement area when construction selected it, otherwise the prior
+snapshot. Their first reads use the existing memo; recording retires live views.
+Ordinary diagnostic SELECT clearing is verified correct. Unused diagnostic CTE
+PREPARE admission and CHAR CAST flags remain open.
 Invalid definitions preserve schema and rollbackability. General SELECT, query-body
 and CHECK constructor timing, grouped readers/order, width-limited and large
 fixed-scale formatting, DECIMAL diagnostics, aggregate metadata and separate

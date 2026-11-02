@@ -1,5 +1,5 @@
-// A strict mode's other half: in a statement that changes data, the
-// warnings that say a value was not what it should have been are errors.
+// One invocation owns its condition stream, strict promotion and live counts.
+// Completed diagnostics copy that stream and retire its live view.
 //
 // MySQL does this in one place, `Strict_error_handler` (sql/error_handler.cc),
 // which every condition passes through on its way into the diagnostics area:
@@ -14,11 +14,29 @@ import { isStrictErrorCode, sqlError, symbolOf, type SqlError } from '@myjs/prot
 import { STATEMENT, type Statement } from '@myjs/parser'
 import type { Condition } from '@myjs/types'
 import { modeOf } from './mode.ts'
+import type { Diagnostics } from './session.ts'
 
-/** A statement's conditions, where a warning of an escalated code is thrown rather than kept. */
-class StrictConditions extends Array<Condition> {
+/** One append-only statement area, optionally enforcing the strict handler. */
+export class StatementConditions extends Array<Condition> {
   /** The promoted primary error, by identity, for publication after a later condition. */
   declare primary?: SqlError
+  readonly #strict: boolean
+  #errors = 0
+
+  constructor(strict = false) {
+    super()
+    this.#strict = strict
+  }
+
+  /** A live view of this invocation's area, retired when diagnostics are recorded. */
+  get diagnostics(): Diagnostics {
+    const area = this
+    return {
+      conditions: area,
+      get warnings(): number { return area.length },
+      get errors(): number { return area.#errors },
+    }
+  }
   // `slice` and `map` make plain lists: only the statement's own list escalates.
   static override get [Symbol.species](): ArrayConstructor {
     return Array
@@ -26,11 +44,13 @@ class StrictConditions extends Array<Condition> {
 
   override push(...items: Condition[]): number {
     for (const c of items) {
-      if (c.level === 'Warning' && isStrictErrorCode(c.code)) {
+      if (this.#strict && c.level === 'Warning' && isStrictErrorCode(c.code)) {
         this.primary ??= sqlError(symbolOf(c.code) ?? 'ER_UNKNOWN_ERROR', c.message)
+        this.#errors++
         super.push({ ...c, level: 'Error' })
         throw this.primary
       }
+      if (c.level === 'Error') this.#errors++
       super.push(c)
     }
     return this.length
@@ -39,7 +59,7 @@ class StrictConditions extends Array<Condition> {
 
 /** Whether this statement's strict handler already recorded this exact failure. */
 export function promotedError(conditions: readonly Condition[] | undefined, error: unknown): boolean {
-  return conditions instanceof StrictConditions && conditions.primary !== undefined && conditions.primary === error
+  return conditions instanceof StatementConditions && conditions.primary !== undefined && conditions.primary === error
 }
 
 /** Whether the handler applies: a strict mode, and a statement that changes data without IGNORE. */
@@ -61,5 +81,5 @@ function escalates(statement: Statement, sqlMode: string): boolean {
 }
 
 /** The list a statement's conditions go into. */
-export const conditionsFor = (statement: Statement, sqlMode: string): Condition[] => (escalates(statement, sqlMode) ? new StrictConditions() : [])
+export const conditionsFor = (statement: Statement, sqlMode: string): StatementConditions => new StatementConditions(escalates(statement, sqlMode))
 

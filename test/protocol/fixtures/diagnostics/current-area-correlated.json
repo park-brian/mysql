@@ -1,0 +1,1291 @@
+{
+ "mysqlVersion": "8.4.11",
+ "schema": "diag249e",
+ "setup": [
+  "CREATE TABLE a(v INT)",
+  "INSERT INTO a VALUES(1),(2)",
+  "SET sql_mode='ERROR_FOR_DIVISION_BY_ZERO'"
+ ],
+ "seeds": {
+  "warning": "SELECT 1/0,CAST('x' AS DECIMAL)",
+  "empty": "SELECT 1"
+ },
+ "observations": [
+  {
+   "limit": 0,
+   "seed": "warning",
+   "sql": "WITH c AS(SELECT CAST('x' AS CHAR CHARSET utf8)) SELECT v,(SELECT @@warning_count WHERE a.v>0),1/(v-v),(SELECT @@warning_count WHERE a.v>0) FROM a",
+   "api": "query",
+   "rows": [
+    [
+     1,
+     0,
+     null,
+     1
+    ],
+    [
+     2,
+     0,
+     null,
+     1
+    ]
+   ],
+   "fields": [
+    [
+     "v",
+     3,
+     11,
+     0,
+     0,
+     63,
+     "diag249e",
+     "a",
+     "a",
+     "v"
+    ],
+    [
+     "(SELECT @@warning_count WHERE a.v>0)",
+     8,
+     21,
+     160,
+     0,
+     63,
+     "",
+     "",
+     "",
+     ""
+    ],
+    [
+     "1/(v-v)",
+     246,
+     7,
+     128,
+     4,
+     63,
+     "",
+     "",
+     "",
+     ""
+    ],
+    [
+     "(SELECT @@warning_count WHERE a.v>0)",
+     8,
+     21,
+     160,
+     0,
+     63,
+     "",
+     "",
+     "",
+     ""
+    ]
+   ],
+   "warnings": [],
+   "warningCount": "2",
+   "errorCount": "0"
+  },
+  {
+   "limit": 0,
+   "seed": "warning",
+   "sql": "WITH c AS(SELECT CAST('x' AS CHAR CHARSET utf8)) SELECT v,(SELECT @@warning_count WHERE a.v>0),1/(v-v),(SELECT @@warning_count WHERE a.v>0) FROM a",
+   "api": "execute",
+   "rows": [
+    [
+     1,
+     0,
+     null,
+     1
+    ],
+    [
+     2,
+     0,
+     null,
+     1
+    ]
+   ],
+   "fields": [
+    [
+     "v",
+     3,
+     11,
+     0,
+     0,
+     63,
+     "diag249e",
+     "a",
+     "a",
+     "v"
+    ],
+    [
+     "(SELECT @@warning_count WHERE a.v>0)",
+     8,
+     21,
+     160,
+     0,
+     63,
+     "",
+     "",
+     "",
+     ""
+    ],
+    [
+     "1/(v-v)",
+     246,
+     7,
+     128,
+     4,
+     63,
+     "",
+     "",
+     "",
+     ""
+    ],
+    [
+     "(SELECT @@warning_count WHERE a.v>0)",
+     8,
+     21,
+     160,
+     0,
+     63,
+     "",
+     "",
+     "",
+     ""
+    ]
+   ],
+   "warnings": [],
+   "warningCount": "2",
+   "errorCount": "0"
+  },
+  {
+   "limit": 0,
+   "seed": "warning",
+   "sql": "WITH c AS(SELECT CAST('x' AS CHAR CHARSET utf8)) SELECT v,1/(v-v),(SELECT @@warning_count WHERE a.v>0),(SELECT @@error_count WHERE a.v>0) FROM a",
+   "api": "query",
+   "rows": [
+    [
+     1,
+     null,
+     1,
+     0
+    ],
+    [
+     2,
+     null,
+     1,
+     0
+    ]
+   ],
+   "fields": [
+    [
+     "v",
+     3,
+     11,
+     0,
+     0,
+     63,
+     "diag249e",
+     "a",
+     "a",
+     "v"
+    ],
+    [
+     "1/(v-v)",
+     246,
+     7,
+     128,
+     4,
+     63,
+     "",
+     "",
+     "",
+     ""
+    ],
+    [
+     "(SELECT @@warning_count WHERE a.v>0)",
+     8,
+     21,
+     160,
+     0,
+     63,
+     "",
+     "",
+     "",
+     ""
+    ],
+    [
+     "(SELECT @@error_count WHERE a.v>0)",
+     8,
+     21,
+     160,
+     0,
+     63,
+     "",
+     "",
+     "",
+     ""
+    ]
+   ],
+   "warnings": [],
+   "warningCount": "2",
+   "errorCount": "0"
+  },
+  {
+   "limit": 0,
+   "seed": "warning",
+   "sql": "WITH c AS(SELECT CAST('x' AS CHAR CHARSET utf8)) SELECT v,1/(v-v),(SELECT @@warning_count WHERE a.v>0),(SELECT @@error_count WHERE a.v>0) FROM a",
+   "api": "execute",
+   "rows": [
+    [
+     1,
+     null,
+     1,
+     0
+    ],
+    [
+     2,
+     null,
+     1,
+     0
+    ]
+   ],
+   "fields": [
+    [
+     "v",
+     3,
+     11,
+     0,
+     0,
+     63,
+     "diag249e",
+     "a",
+     "a",
+     "v"
+    ],
+    [
+     "1/(v-v)",
+     246,
+     7,
+     128,
+     4,
+     63,
+     "",
+     "",
+     "",
+     ""
+    ],
+    [
+     "(SELECT @@warning_count WHERE a.v>0)",
+     8,
+     21,
+     160,
+     0,
+     63,
+     "",
+     "",
+     "",
+     ""
+    ],
+    [
+     "(SELECT @@error_count WHERE a.v>0)",
+     8,
+     21,
+     160,
+     0,
+     63,
+     "",
+     "",
+     "",
+     ""
+    ]
+   ],
+   "warnings": [],
+   "warningCount": "2",
+   "errorCount": "0"
+  },
+  {
+   "limit": 0,
+   "seed": "empty",
+   "sql": "WITH c AS(SELECT CAST('x' AS CHAR CHARSET utf8)) SELECT v,(SELECT @@warning_count WHERE a.v>0),1/(v-v),(SELECT @@warning_count WHERE a.v>0) FROM a",
+   "api": "query",
+   "rows": [
+    [
+     1,
+     0,
+     null,
+     1
+    ],
+    [
+     2,
+     0,
+     null,
+     1
+    ]
+   ],
+   "fields": [
+    [
+     "v",
+     3,
+     11,
+     0,
+     0,
+     63,
+     "diag249e",
+     "a",
+     "a",
+     "v"
+    ],
+    [
+     "(SELECT @@warning_count WHERE a.v>0)",
+     8,
+     21,
+     160,
+     0,
+     63,
+     "",
+     "",
+     "",
+     ""
+    ],
+    [
+     "1/(v-v)",
+     246,
+     7,
+     128,
+     4,
+     63,
+     "",
+     "",
+     "",
+     ""
+    ],
+    [
+     "(SELECT @@warning_count WHERE a.v>0)",
+     8,
+     21,
+     160,
+     0,
+     63,
+     "",
+     "",
+     "",
+     ""
+    ]
+   ],
+   "warnings": [],
+   "warningCount": "2",
+   "errorCount": "0"
+  },
+  {
+   "limit": 0,
+   "seed": "empty",
+   "sql": "WITH c AS(SELECT CAST('x' AS CHAR CHARSET utf8)) SELECT v,(SELECT @@warning_count WHERE a.v>0),1/(v-v),(SELECT @@warning_count WHERE a.v>0) FROM a",
+   "api": "execute",
+   "rows": [
+    [
+     1,
+     0,
+     null,
+     1
+    ],
+    [
+     2,
+     0,
+     null,
+     1
+    ]
+   ],
+   "fields": [
+    [
+     "v",
+     3,
+     11,
+     0,
+     0,
+     63,
+     "diag249e",
+     "a",
+     "a",
+     "v"
+    ],
+    [
+     "(SELECT @@warning_count WHERE a.v>0)",
+     8,
+     21,
+     160,
+     0,
+     63,
+     "",
+     "",
+     "",
+     ""
+    ],
+    [
+     "1/(v-v)",
+     246,
+     7,
+     128,
+     4,
+     63,
+     "",
+     "",
+     "",
+     ""
+    ],
+    [
+     "(SELECT @@warning_count WHERE a.v>0)",
+     8,
+     21,
+     160,
+     0,
+     63,
+     "",
+     "",
+     "",
+     ""
+    ]
+   ],
+   "warnings": [],
+   "warningCount": "2",
+   "errorCount": "0"
+  },
+  {
+   "limit": 0,
+   "seed": "empty",
+   "sql": "WITH c AS(SELECT CAST('x' AS CHAR CHARSET utf8)) SELECT v,1/(v-v),(SELECT @@warning_count WHERE a.v>0),(SELECT @@error_count WHERE a.v>0) FROM a",
+   "api": "query",
+   "rows": [
+    [
+     1,
+     null,
+     1,
+     0
+    ],
+    [
+     2,
+     null,
+     1,
+     0
+    ]
+   ],
+   "fields": [
+    [
+     "v",
+     3,
+     11,
+     0,
+     0,
+     63,
+     "diag249e",
+     "a",
+     "a",
+     "v"
+    ],
+    [
+     "1/(v-v)",
+     246,
+     7,
+     128,
+     4,
+     63,
+     "",
+     "",
+     "",
+     ""
+    ],
+    [
+     "(SELECT @@warning_count WHERE a.v>0)",
+     8,
+     21,
+     160,
+     0,
+     63,
+     "",
+     "",
+     "",
+     ""
+    ],
+    [
+     "(SELECT @@error_count WHERE a.v>0)",
+     8,
+     21,
+     160,
+     0,
+     63,
+     "",
+     "",
+     "",
+     ""
+    ]
+   ],
+   "warnings": [],
+   "warningCount": "2",
+   "errorCount": "0"
+  },
+  {
+   "limit": 0,
+   "seed": "empty",
+   "sql": "WITH c AS(SELECT CAST('x' AS CHAR CHARSET utf8)) SELECT v,1/(v-v),(SELECT @@warning_count WHERE a.v>0),(SELECT @@error_count WHERE a.v>0) FROM a",
+   "api": "execute",
+   "rows": [
+    [
+     1,
+     null,
+     1,
+     0
+    ],
+    [
+     2,
+     null,
+     1,
+     0
+    ]
+   ],
+   "fields": [
+    [
+     "v",
+     3,
+     11,
+     0,
+     0,
+     63,
+     "diag249e",
+     "a",
+     "a",
+     "v"
+    ],
+    [
+     "1/(v-v)",
+     246,
+     7,
+     128,
+     4,
+     63,
+     "",
+     "",
+     "",
+     ""
+    ],
+    [
+     "(SELECT @@warning_count WHERE a.v>0)",
+     8,
+     21,
+     160,
+     0,
+     63,
+     "",
+     "",
+     "",
+     ""
+    ],
+    [
+     "(SELECT @@error_count WHERE a.v>0)",
+     8,
+     21,
+     160,
+     0,
+     63,
+     "",
+     "",
+     "",
+     ""
+    ]
+   ],
+   "warnings": [],
+   "warningCount": "2",
+   "errorCount": "0"
+  },
+  {
+   "limit": 64,
+   "seed": "warning",
+   "sql": "WITH c AS(SELECT CAST('x' AS CHAR CHARSET utf8)) SELECT v,(SELECT @@warning_count WHERE a.v>0),1/(v-v),(SELECT @@warning_count WHERE a.v>0) FROM a",
+   "api": "query",
+   "rows": [
+    [
+     1,
+     1,
+     null,
+     2
+    ],
+    [
+     2,
+     1,
+     null,
+     2
+    ]
+   ],
+   "fields": [
+    [
+     "v",
+     3,
+     11,
+     0,
+     0,
+     63,
+     "diag249e",
+     "a",
+     "a",
+     "v"
+    ],
+    [
+     "(SELECT @@warning_count WHERE a.v>0)",
+     8,
+     21,
+     160,
+     0,
+     63,
+     "",
+     "",
+     "",
+     ""
+    ],
+    [
+     "1/(v-v)",
+     246,
+     7,
+     128,
+     4,
+     63,
+     "",
+     "",
+     "",
+     ""
+    ],
+    [
+     "(SELECT @@warning_count WHERE a.v>0)",
+     8,
+     21,
+     160,
+     0,
+     63,
+     "",
+     "",
+     "",
+     ""
+    ]
+   ],
+   "warnings": [
+    [
+     "Warning",
+     3719,
+     "'utf8' is currently an alias for the character set UTF8MB3, but will be an alias for UTF8MB4 in a future release. Please consider using UTF8MB4 in order to be unambiguous."
+    ],
+    [
+     "Warning",
+     1365,
+     "Division by 0"
+    ],
+    [
+     "Warning",
+     1365,
+     "Division by 0"
+    ]
+   ],
+   "warningCount": "3",
+   "errorCount": "0"
+  },
+  {
+   "limit": 64,
+   "seed": "warning",
+   "sql": "WITH c AS(SELECT CAST('x' AS CHAR CHARSET utf8)) SELECT v,(SELECT @@warning_count WHERE a.v>0),1/(v-v),(SELECT @@warning_count WHERE a.v>0) FROM a",
+   "api": "execute",
+   "rows": [
+    [
+     1,
+     0,
+     null,
+     1
+    ],
+    [
+     2,
+     0,
+     null,
+     1
+    ]
+   ],
+   "fields": [
+    [
+     "v",
+     3,
+     11,
+     0,
+     0,
+     63,
+     "diag249e",
+     "a",
+     "a",
+     "v"
+    ],
+    [
+     "(SELECT @@warning_count WHERE a.v>0)",
+     8,
+     21,
+     160,
+     0,
+     63,
+     "",
+     "",
+     "",
+     ""
+    ],
+    [
+     "1/(v-v)",
+     246,
+     7,
+     128,
+     4,
+     63,
+     "",
+     "",
+     "",
+     ""
+    ],
+    [
+     "(SELECT @@warning_count WHERE a.v>0)",
+     8,
+     21,
+     160,
+     0,
+     63,
+     "",
+     "",
+     "",
+     ""
+    ]
+   ],
+   "warnings": [
+    [
+     "Warning",
+     1365,
+     "Division by 0"
+    ],
+    [
+     "Warning",
+     1365,
+     "Division by 0"
+    ]
+   ],
+   "warningCount": "2",
+   "errorCount": "0"
+  },
+  {
+   "limit": 64,
+   "seed": "warning",
+   "sql": "WITH c AS(SELECT CAST('x' AS CHAR CHARSET utf8)) SELECT v,1/(v-v),(SELECT @@warning_count WHERE a.v>0),(SELECT @@error_count WHERE a.v>0) FROM a",
+   "api": "query",
+   "rows": [
+    [
+     1,
+     null,
+     2,
+     0
+    ],
+    [
+     2,
+     null,
+     2,
+     0
+    ]
+   ],
+   "fields": [
+    [
+     "v",
+     3,
+     11,
+     0,
+     0,
+     63,
+     "diag249e",
+     "a",
+     "a",
+     "v"
+    ],
+    [
+     "1/(v-v)",
+     246,
+     7,
+     128,
+     4,
+     63,
+     "",
+     "",
+     "",
+     ""
+    ],
+    [
+     "(SELECT @@warning_count WHERE a.v>0)",
+     8,
+     21,
+     160,
+     0,
+     63,
+     "",
+     "",
+     "",
+     ""
+    ],
+    [
+     "(SELECT @@error_count WHERE a.v>0)",
+     8,
+     21,
+     160,
+     0,
+     63,
+     "",
+     "",
+     "",
+     ""
+    ]
+   ],
+   "warnings": [
+    [
+     "Warning",
+     3719,
+     "'utf8' is currently an alias for the character set UTF8MB3, but will be an alias for UTF8MB4 in a future release. Please consider using UTF8MB4 in order to be unambiguous."
+    ],
+    [
+     "Warning",
+     1365,
+     "Division by 0"
+    ],
+    [
+     "Warning",
+     1365,
+     "Division by 0"
+    ]
+   ],
+   "warningCount": "3",
+   "errorCount": "0"
+  },
+  {
+   "limit": 64,
+   "seed": "warning",
+   "sql": "WITH c AS(SELECT CAST('x' AS CHAR CHARSET utf8)) SELECT v,1/(v-v),(SELECT @@warning_count WHERE a.v>0),(SELECT @@error_count WHERE a.v>0) FROM a",
+   "api": "execute",
+   "rows": [
+    [
+     1,
+     null,
+     1,
+     0
+    ],
+    [
+     2,
+     null,
+     1,
+     0
+    ]
+   ],
+   "fields": [
+    [
+     "v",
+     3,
+     11,
+     0,
+     0,
+     63,
+     "diag249e",
+     "a",
+     "a",
+     "v"
+    ],
+    [
+     "1/(v-v)",
+     246,
+     7,
+     128,
+     4,
+     63,
+     "",
+     "",
+     "",
+     ""
+    ],
+    [
+     "(SELECT @@warning_count WHERE a.v>0)",
+     8,
+     21,
+     160,
+     0,
+     63,
+     "",
+     "",
+     "",
+     ""
+    ],
+    [
+     "(SELECT @@error_count WHERE a.v>0)",
+     8,
+     21,
+     160,
+     0,
+     63,
+     "",
+     "",
+     "",
+     ""
+    ]
+   ],
+   "warnings": [
+    [
+     "Warning",
+     1365,
+     "Division by 0"
+    ],
+    [
+     "Warning",
+     1365,
+     "Division by 0"
+    ]
+   ],
+   "warningCount": "2",
+   "errorCount": "0"
+  },
+  {
+   "limit": 64,
+   "seed": "empty",
+   "sql": "WITH c AS(SELECT CAST('x' AS CHAR CHARSET utf8)) SELECT v,(SELECT @@warning_count WHERE a.v>0),1/(v-v),(SELECT @@warning_count WHERE a.v>0) FROM a",
+   "api": "query",
+   "rows": [
+    [
+     1,
+     1,
+     null,
+     2
+    ],
+    [
+     2,
+     1,
+     null,
+     2
+    ]
+   ],
+   "fields": [
+    [
+     "v",
+     3,
+     11,
+     0,
+     0,
+     63,
+     "diag249e",
+     "a",
+     "a",
+     "v"
+    ],
+    [
+     "(SELECT @@warning_count WHERE a.v>0)",
+     8,
+     21,
+     160,
+     0,
+     63,
+     "",
+     "",
+     "",
+     ""
+    ],
+    [
+     "1/(v-v)",
+     246,
+     7,
+     128,
+     4,
+     63,
+     "",
+     "",
+     "",
+     ""
+    ],
+    [
+     "(SELECT @@warning_count WHERE a.v>0)",
+     8,
+     21,
+     160,
+     0,
+     63,
+     "",
+     "",
+     "",
+     ""
+    ]
+   ],
+   "warnings": [
+    [
+     "Warning",
+     3719,
+     "'utf8' is currently an alias for the character set UTF8MB3, but will be an alias for UTF8MB4 in a future release. Please consider using UTF8MB4 in order to be unambiguous."
+    ],
+    [
+     "Warning",
+     1365,
+     "Division by 0"
+    ],
+    [
+     "Warning",
+     1365,
+     "Division by 0"
+    ]
+   ],
+   "warningCount": "3",
+   "errorCount": "0"
+  },
+  {
+   "limit": 64,
+   "seed": "empty",
+   "sql": "WITH c AS(SELECT CAST('x' AS CHAR CHARSET utf8)) SELECT v,(SELECT @@warning_count WHERE a.v>0),1/(v-v),(SELECT @@warning_count WHERE a.v>0) FROM a",
+   "api": "execute",
+   "rows": [
+    [
+     1,
+     0,
+     null,
+     1
+    ],
+    [
+     2,
+     0,
+     null,
+     1
+    ]
+   ],
+   "fields": [
+    [
+     "v",
+     3,
+     11,
+     0,
+     0,
+     63,
+     "diag249e",
+     "a",
+     "a",
+     "v"
+    ],
+    [
+     "(SELECT @@warning_count WHERE a.v>0)",
+     8,
+     21,
+     160,
+     0,
+     63,
+     "",
+     "",
+     "",
+     ""
+    ],
+    [
+     "1/(v-v)",
+     246,
+     7,
+     128,
+     4,
+     63,
+     "",
+     "",
+     "",
+     ""
+    ],
+    [
+     "(SELECT @@warning_count WHERE a.v>0)",
+     8,
+     21,
+     160,
+     0,
+     63,
+     "",
+     "",
+     "",
+     ""
+    ]
+   ],
+   "warnings": [
+    [
+     "Warning",
+     1365,
+     "Division by 0"
+    ],
+    [
+     "Warning",
+     1365,
+     "Division by 0"
+    ]
+   ],
+   "warningCount": "2",
+   "errorCount": "0"
+  },
+  {
+   "limit": 64,
+   "seed": "empty",
+   "sql": "WITH c AS(SELECT CAST('x' AS CHAR CHARSET utf8)) SELECT v,1/(v-v),(SELECT @@warning_count WHERE a.v>0),(SELECT @@error_count WHERE a.v>0) FROM a",
+   "api": "query",
+   "rows": [
+    [
+     1,
+     null,
+     2,
+     0
+    ],
+    [
+     2,
+     null,
+     2,
+     0
+    ]
+   ],
+   "fields": [
+    [
+     "v",
+     3,
+     11,
+     0,
+     0,
+     63,
+     "diag249e",
+     "a",
+     "a",
+     "v"
+    ],
+    [
+     "1/(v-v)",
+     246,
+     7,
+     128,
+     4,
+     63,
+     "",
+     "",
+     "",
+     ""
+    ],
+    [
+     "(SELECT @@warning_count WHERE a.v>0)",
+     8,
+     21,
+     160,
+     0,
+     63,
+     "",
+     "",
+     "",
+     ""
+    ],
+    [
+     "(SELECT @@error_count WHERE a.v>0)",
+     8,
+     21,
+     160,
+     0,
+     63,
+     "",
+     "",
+     "",
+     ""
+    ]
+   ],
+   "warnings": [
+    [
+     "Warning",
+     3719,
+     "'utf8' is currently an alias for the character set UTF8MB3, but will be an alias for UTF8MB4 in a future release. Please consider using UTF8MB4 in order to be unambiguous."
+    ],
+    [
+     "Warning",
+     1365,
+     "Division by 0"
+    ],
+    [
+     "Warning",
+     1365,
+     "Division by 0"
+    ]
+   ],
+   "warningCount": "3",
+   "errorCount": "0"
+  },
+  {
+   "limit": 64,
+   "seed": "empty",
+   "sql": "WITH c AS(SELECT CAST('x' AS CHAR CHARSET utf8)) SELECT v,1/(v-v),(SELECT @@warning_count WHERE a.v>0),(SELECT @@error_count WHERE a.v>0) FROM a",
+   "api": "execute",
+   "rows": [
+    [
+     1,
+     null,
+     1,
+     0
+    ],
+    [
+     2,
+     null,
+     1,
+     0
+    ]
+   ],
+   "fields": [
+    [
+     "v",
+     3,
+     11,
+     0,
+     0,
+     63,
+     "diag249e",
+     "a",
+     "a",
+     "v"
+    ],
+    [
+     "1/(v-v)",
+     246,
+     7,
+     128,
+     4,
+     63,
+     "",
+     "",
+     "",
+     ""
+    ],
+    [
+     "(SELECT @@warning_count WHERE a.v>0)",
+     8,
+     21,
+     160,
+     0,
+     63,
+     "",
+     "",
+     "",
+     ""
+    ],
+    [
+     "(SELECT @@error_count WHERE a.v>0)",
+     8,
+     21,
+     160,
+     0,
+     63,
+     "",
+     "",
+     "",
+     ""
+    ]
+   ],
+   "warnings": [
+    [
+     "Warning",
+     1365,
+     "Division by 0"
+    ],
+    [
+     "Warning",
+     1365,
+     "Division by 0"
+    ]
+   ],
+   "warningCount": "2",
+   "errorCount": "0"
+  }
+ ]
+}

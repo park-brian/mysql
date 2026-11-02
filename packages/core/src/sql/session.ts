@@ -67,7 +67,7 @@ export class SqlSession implements SessionValues {
   sqlModeAssigned = false
   /** The last statement's diagnostics, which SHOW WARNINGS and SHOW ERRORS read and leave alone. */
   diagnostics: Diagnostics = NO_DIAGNOSTICS
-  /** The diagnostics as the running statement began: what `@@warning_count` reads (8.4.11). */
+  /** The prior snapshot or current construction area read by diagnostic-count items. */
   previous: Diagnostics = NO_DIAGNOSTICS
   /** Statements this session has sent, for SHOW SESSION STATUS. */
   questions = 0

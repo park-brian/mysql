@@ -97,8 +97,12 @@ previous complete match lost. Four previously coincidental warning-vector counts
 change: unused-order queries still return an erroneous 1305, now after their
 correct native warning prefix. Keep those primary binding gaps explicit; every
 other previously matching protocol fact is retained. Final protocol, provenance and release gates pass as recorded below. The
-unused-order name-binding gap and diagnostic-count SELECT lifetime remain open;
-new warning publication does not close those independent boundaries.
+unused-order name-binding gap remains open. The later native audit corrects the
+earlier clearing suspicion: ordinary diagnostic-count SELECTs already clear
+conditions correctly. The measured gap is selection of the current live area
+after construction warnings, versus the prior snapshot otherwise. Isolated
+construction histories also alter PREPARE admission; unused-CTE diagnostic
+references retain a separate admission gap.
 Then return to set admission: unbounded UNION ALL can discard key-name binding, while materialized/unary
 owners still bind; their COLLATE checks need the inherited holder. Native constructors validate outer arity before nested
 calls, after syntax/charset construction, and leave unused CTE bodies dormant.
@@ -2318,6 +2322,64 @@ Parser/core/facade are 45,599/331,866/331,778 B gzipped under unchanged caps.
 All eleven required 41edb82 CI jobs pass. Mixed publishers, unused-order name
 binding, CONVERT USING histories and broader constructor timing remain open.
 Totals stay 144/190 and M5 42/53; M5.10 remains partial.
+
+**Current diagnostic-area slice:** native 96-command seed/read controls match
+87 completely; a 192-command construction/limit extension matches 44. Ordinary
+clearing is correct, including after a parse-warning seed. With construction
+warnings, counter values observe that current area and subsequent runtime
+conditions, even when max_error_count retained no parser warnings. Without
+construction warnings they read the preceding snapshot. Native also permits
+prepared counter reads when an isolated construction history selected the area;
+unused diagnostic CTE references are an independent PREPARE false positive.
+Repair the existing condition owner and retire live views at completion, then
+validate snapshots, current reads, limits and failure/prepare paths. The existing statement-conditions owner now supplies a live view, retires it
+when diagnostics are recorded and caches each counter item's first read through
+the existing memo. The 3,772-outcome rehearsal improves 3,028→3,086 complete
+matches and retains all 35,334 previously matching protocol facts. Independent CHAR CAST declaration
+nullability, UPDATE status flags and unused-CTE PREPARE admission stay open.
+Final production-source, protocol and Docker verification pass as recorded below.
+
+**M5.10 current construction-diagnostics area:** the existing statement-condition
+list now owns strict promotion, error counts and a live diagnostic view. Ordinary
+statements keep the previous snapshot; isolated construction histories select the
+current area, even when the retained parser prefix is empty. Text publishes the
+prefix; cached EXECUTE starts the current area empty. Each diagnostic-count item
+uses the existing memo for its first read, independently of other occurrences
+and later rows. Completed diagnostics and failures retire live views to bounded
+snapshots; 1582's copied construction history retains its separate bound.
+
+Native audits confirm ordinary diagnostic-count SELECT clearing was already
+correct; the earlier general-clearing inference was wrong. Native also permits
+prepared diagnostic references when construction history selected the current
+area. Unused diagnostic CTE references still expose a separate PREPARE false
+positive. No parser or wire API changes are needed.
+
+The combined 3,772-outcome audit improves 3,028→3,086 complete matches, retaining
+all 35,334 previously matching protocol facts, including diagnostic totals and
+command effects. Forty-eight new multirow/correlated outcomes agree completely
+and are strict reference regressions with full rows, fields, errors, warnings
+and counts. Explicit tests cover preceding/current areas, zero retention,
+repeated prepared execution, completion, failure and memo lifetimes. Three native
+protocol cases and nine local cases pass. Actual 8f0301b fails the new strict
+regressions. Typecheck, 20,000 executor statements seeded 20261010 and plans
+2,127/2,248 under the unchanged 2,118 floor pass. An explicit Diagnostics return
+type fixes declaration emission without changing runtime behavior. Final fresh
+Docker --reference passes 1,640 main/four latency tests, lint/typecheck, nine
+unchanged caps, installed-package/typed smoke, the real client and all seven
+pinned corpora including 1,737 coercion warning counts. Early final-source proof
+covers 537 tests/fixtures and 206 runtime sources plus tooling. Parser/core/
+facade are 45,599/332,015/331,933 B gzipped. The full 1,459-file official suite
+retains all 38 passing identities and the unchanged native baseline. All eleven
+required 8f0301b CI jobs pass. CHAR CAST declaration flags, UPDATE status flags,
+unused-CTE PREPARE admission, mixed histories and broader context ownership
+remain open. Totals stay 144/190 and M5 42/53; M5.10 remains partial.
+
+Next audit CTE demand at the existing query-context owner. A 78-command native
+query/execute/PREPARE probe matches 30 completely: unused diagnostic references
+can wrongly refuse PREPARE, and unknown system variables in unused definitions
+can wrongly refuse every API. Used diagnostic definitions retain native 1295.
+Preserve active-variable error priority before missing tables, syntax identifier
+checks and lexical CTE shadowing; do not prune all declaration checks globally.
 
 **Next prerequisite: constructor admission before presence execution.** Complete
 the existing CAST work: with written utf8 warning 3719 now retained, refuse

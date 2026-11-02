@@ -985,7 +985,12 @@ function variable(node: VariableNode, ctx: CompileContext): Compiled {
   const ref = systemVariable(node, ctx.state, ctx.session)
   if (ref !== undefined) {
     const { name, scope, value } = ref
-    return { eval: (_row, env) => env.state.systemVariable(name, scope, env.session) ?? null, type: typeOfSystemVariable(name, value, ctx) }
+    const type = typeOfSystemVariable(name, value, ctx)
+    if (name === 'warning_count' || name === 'error_count') {
+      const cache = {}
+      return { eval: (_row, env) => memoValue(env.memo, cache, () => env.state.systemVariable(name, scope, env.session) ?? null), type }
+    }
+    return { eval: (_row, env) => env.state.systemVariable(name, scope, env.session) ?? null, type }
   }
   const key = node.name.slice(1).toLowerCase()
   // A user variable's text is IMPLICIT, whatever it was set from (8.4.11).
@@ -2544,7 +2549,7 @@ function cast(e: CastNode, ctx: CompileContext): Compiled {
           return stringValue(read, id, COERCIBILITY.IMPLICIT)
         },
         decimalPrefix: true,
-        // Nullable whatever its argument, as 8.4.11 reports it.
+        // Invalid decoding may produce NULL; native declaration flags need broader coverage.
         type: stringType(t.length ?? charWidth(inner.type), id, true),
       }
     }

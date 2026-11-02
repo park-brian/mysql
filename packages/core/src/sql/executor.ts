@@ -68,7 +68,7 @@ import {
   type StatementResult,
   type StreamedResultSet,
 } from '@myjs/protocol'
-import { conditionsFor, promotedError } from './strict.ts'
+import { StatementConditions, conditionsFor, promotedError } from './strict.ts'
 import { renameTables } from './rename.ts'
 import { showCreateView, showQuery, shownColumns, tableStatusQuery, variablesColumns, variablesQuery } from './show.ts'
 import { COERCIBILITY, doubleValue, intValue, parseDecimal, plainValue, stringValue, toInteger, toText, type Condition, type Value } from '@myjs/types'
@@ -192,6 +192,7 @@ function recordDiagnostics(state: SqlSession, conditions: readonly Condition[], 
   let errors = 0
   for (const condition of conditions) if (condition.level === 'Error') errors++
   state.diagnostics = { conditions: conditions.slice(0, limit), warnings, errors }
+  if (state.previous.conditions === conditions) state.previous = state.diagnostics
   return warnings
 }
 
@@ -220,6 +221,7 @@ function recordFailure(state: SqlSession, conditions: Condition[] | undefined, f
   // Native argument-count refusal belongs to construction's bounded diagnostics area.
   const history = error.errno === 1582 ? conditions?.slice(0, limit) : conditions
   recordDiagnostics(state, history ?? [], limit)
+  if (state.previous.conditions === conditions) state.previous = state.diagnostics
   return error
 }
 
@@ -325,7 +327,7 @@ export class SqlExecutor implements Executor {
     this.#alive(session)
     const state = this.#state(session)
     const limit = conditionLimit(state)
-    let conditions: Condition[] | undefined = []
+    let conditions: StatementConditions | undefined = new StatementConditions()
     try {
       let started = performance.now()
       const tokens = lex(sql, { sqlMode: modeOf(session.sqlMode) })
@@ -346,9 +348,13 @@ export class SqlExecutor implements Executor {
       if (performance.now() - started > SLICE_MS) await pause()
       this.#alive(session)
       // Admit the AST before metadata or diagnostic-count PREPARE refusal.
-      if (statement !== null) appendConditions(conditions, Cursor.constructionConditions(statement)?.slice(0, limit) ?? [])
+      const construction = statement === null ? undefined : Cursor.constructionConditions(statement)
+      if (construction !== undefined) {
+        appendConditions(conditions, construction.slice(0, limit))
+        state.previous = conditions.diagnostics
+      }
       const diagnostic = statement !== null && this.#admitStatement(statement, state, session)
-      if (statement === null || diagnostic || isDiagnostic(statement)) throw sqlError('ER_UNSUPPORTED_PS', 'This command is not supported in the prepared statement protocol yet')
+      if (statement === null || (diagnostic && construction === undefined) || isDiagnostic(statement)) throw sqlError('ER_UNSUPPORTED_PS', 'This command is not supported in the prepared statement protocol yet')
       binaryDeclarations(statement, conditions, limit)
       await this.#preload(session, statement)
       this.#alive(session)
@@ -622,7 +628,11 @@ export class SqlExecutor implements Executor {
       // The error is a condition too, after any the statement raised first.
       const failed = (e: unknown): SqlError => diagnostic ? toSqlError(e) : recordFailure(state, conditions, e, limit)
       try {
-        if (protocol === 'text') appendConditions(conditions, Cursor.constructionConditions(statement)?.slice(0, limit) ?? [])
+        const construction = Cursor.constructionConditions(statement)
+        if (construction !== undefined) {
+          if (protocol === 'text') appendConditions(conditions, construction.slice(0, limit))
+          state.previous = conditions.diagnostics
+        }
         this.#admitStatement(statement, state, session)
         if (protocol === 'text') binaryDeclarations(statement, conditions, limit)
         const run = this.#run(session, sql, params, known, protocol, conditions)
