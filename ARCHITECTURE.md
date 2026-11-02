@@ -1940,7 +1940,10 @@ fields, direct CTE/derived references and transparent unary plus. INFORMATION_SC
 now shares the direct-reference criterion while retaining its other source/query
 fences. Unary plus now prints its operand through the shared expression printer
 for stored view/table expressions and diagnostic labels, preserving existing
-qualifiers, introducers and literal spellings. General updatability, definition normalization and schema-driven automatic
+qualifiers, introducers and literal spellings. Own ORDER BY window calls now
+mark view metadata non-updatable through the shared subquery-pruning AST reader;
+independent scalar windows and existing source/wrapper fences retain their paths.
+General updatability, definition normalization and schema-driven automatic
 reprepare remain open. Parser-level body refusals,
 earlier recursive validation, duplicate binding timing, view PREPARE body
 metadata, non-query contexts and CHAR CAST flags remain open.

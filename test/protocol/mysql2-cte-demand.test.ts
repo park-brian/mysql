@@ -25,6 +25,8 @@ import updatabilityTypes from './fixtures/diagnostics/view-updatability-types.js
 import plusPrint from './fixtures/diagnostics/unary-plus-print.json' with { type: 'json' }
 import plusDiagnostics from './fixtures/diagnostics/unary-plus-diagnostics.json' with { type: 'json' }
 import plusReuse from './fixtures/diagnostics/unary-plus-diagnostic-reuse.json' with { type: 'json' }
+import updatabilityOwners from './fixtures/diagnostics/view-updatability-owners.json' with { type: 'json' }
+import updatabilityOrder from './fixtures/diagnostics/view-updatability-order.json' with { type: 'json' }
 import effects from './fixtures/diagnostics/view-target-effects.json' with { type: 'json' }
 
 const fieldsOf = (fields: readonly mysql.FieldPacket[]) => fields.map(f => [f.name, f.columnType, f.columnLength, f.flags, f.decimals, f.characterSet, f.schema, f.table, f.orgTable, f.orgName])
@@ -81,7 +83,7 @@ async function observe(c: mysql.Connection, sql: string, api: string) {
   return { sql, api, ...result, warnings, warningCount, errorCount }
 }
 
-for (const [name, fixture] of [['nonrecursive', nonrecursive], ['recursive', recursive], ['order', order], ['names', names], ['spelling', spelling], ['view-target-no-db', noDatabase], ['view-target-controls', controls], ['view-merge', merge], ['view-merge-reuse', mergeReuse], ['view-check', check], ['view-check-reuse', checkReuse], ['view-check-projections', projections], ['view-check-projection-reuse', projectionReuse], ['view-check-fields-admission', fieldAdmission], ['view-updatability', updatability], ['view-updatability-types', updatabilityTypes], ['unary-plus-print', plusPrint], ['unary-plus-diagnostics', plusDiagnostics], ['unary-plus-diagnostic-reuse', plusReuse]] as const) test('M5.10: SQL admission matches native: ' + name, async () => {
+for (const [name, fixture] of [['nonrecursive', nonrecursive], ['recursive', recursive], ['order', order], ['names', names], ['spelling', spelling], ['view-target-no-db', noDatabase], ['view-target-controls', controls], ['view-merge', merge], ['view-merge-reuse', mergeReuse], ['view-check', check], ['view-check-reuse', checkReuse], ['view-check-projections', projections], ['view-check-projection-reuse', projectionReuse], ['view-check-fields-admission', fieldAdmission], ['view-updatability', updatability], ['view-updatability-types', updatabilityTypes], ['unary-plus-print', plusPrint], ['unary-plus-diagnostics', plusDiagnostics], ['unary-plus-diagnostic-reuse', plusReuse], ['view-updatability-owners', updatabilityOwners], ['view-updatability-order', updatabilityOrder]] as const) test('M5.10: SQL admission matches native: ' + name, async () => {
   const { c, db } = await connection()
   const schema = 'schema' in fixture ? fixture.schema : undefined
   let created = false

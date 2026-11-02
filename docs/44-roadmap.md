@@ -2797,18 +2797,53 @@ after the final test reader fix; warm heavy checks finished before this run.
 All eleven required a49aa15 CI jobs pass. Totals stay 144/190 and M5 42/53;
 M5.10 remains partial.
 
-Next audit query-owner boundaries in view-updatability metadata. A 60-outcome
-native profile currently agrees on 36 and exposes both transparent-wrapper and
-own-ORDER-window gaps. Blind wrapper delegation would inherit wrong results
-from the existing bare-query predicate, including same-base subqueries and
-ORDER windows. A further 42-outcome profile agrees on 30: own ROW_NUMBER,
-SUM OVER and named-window calls report NO natively and YES here; unused windows,
-ordinary ordering and an independent scalar window subquery retain YES.
-Together the two profiles cover 102 outcomes (66 complete baseline matches).
-Prove the smallest own-order refusal first using the existing window reader's
-subquery boundary, retaining wrapper, CTE/source and subquery fences until
-independently verified. Keep full PREPARE
-binding, stored-query owner normalization and general updatability open.
+**Own-ORDER window metadata, verified (2026-11-02):** view
+IS_UPDATABLE now declines a window call owned by its ORDER BY. The unchanged
+window-presence reader moves to ast.ts, keeping its subquery pruning and a
+compatibility re-export from window.ts. Metadata imports the pure reader rather
+than the window engine. Wrapper, CTE/source and existing subquery fences are
+unchanged; independent scalar windows, unused definitions and ordinary ordering
+retain their existing results.
+
+Two native profiles improve 66/102 to 76/102 complete outcomes. Two permanent
+fixtures retain all 76 full row/field observations, with all 1,953 earlier golden
+observations unchanged. Twenty-six focused cases pass natively and locally;
+removing a leftover unused parser import also passes final typecheck and both
+new focused groups. Actual 18ce716 passes the twenty-four earlier cases and
+fails both new groups; the official runtime is restored afterwards.
+
+Across 6,161 outcomes complete agreement improves 5,184→5,194, retaining all
+70,132 earlier matching protocol facts. The 26 remaining new-audit outcomes
+retain wrapper/source eligibility, same-base scalar subqueries and independent
+creation-phase gaps. Blind wrapper delegation remains deferred: it would
+inherit incorrect bare-query results and lose previously correct refusals.
+
+Final typecheck/lint, 20,000 executor statements seeded 20261010, and plans at
+2,127/2,248 under the unchanged 2,118 floor pass. Nine unchanged caps pass at
+parser/core/facade 45,599/332,783/332,715 B gzipped. The full official suite
+retains all 38 passing identities and its native baseline. Fresh Docker
+--reference passes 1,666 main tests, four latency tests, typecheck, lint, all
+nine unchanged caps, package/typed smoke, the real client and all seven pinned
+corpora including 1,737 coercion warning counts. The unchanged long-IN assertion
+passes. Early source proof matches 562 tests/fixtures and 206 runtime sources
+plus tooling after final import cleanup; warm heavy checks finished before this
+run. All eleven required 18ce716 CI jobs pass.
+Totals stay 144/190 and M5 42/53; M5.10 remains partial.
+
+Next audit unary bitwise NOT's binary-string coercion against numeric mode.
+A 30-outcome native profile currently agrees on 12: raw hex literals retain
+numeric mode, while explicit binary strings and binary casts return inverted
+bytes natively but an integer here. HEX exposes the value difference directly.
+Preserve hex/bit-literal provenance, NULL behavior, metadata, warnings, both
+protocols and existing numeric semantics. An independent numeric-text metadata
+gap remains open. Three additional profiles bring the audit to 180 outcomes
+with 23 complete baseline matches: scalar raw-hex caches remain numeric,
+physical derived fields and conditional/function results use binary mode,
+coercibility is 4, and empty/NULL through 65,536-byte subjects retain their
+lengths. Query Buffer parameters become numeric hex literals; execute Buffer
+and string parameters can use binary mode, so untyped parameter inference
+requires its own proof. Prove the bounded byte reader before changing execution;
+keep bitwise printing and wider binary operators under their own tests.
 
 **Next prerequisite: constructor admission before presence execution.** Complete
 the existing CAST work: with written utf8 warning 3719 now retained, refuse

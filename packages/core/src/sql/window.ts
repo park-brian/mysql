@@ -34,8 +34,8 @@
 //     starts (3586), RANGE n PRECEDING over anything but one numeric key (3587).
 import { notSupported, wrongArgumentsError } from './errors.ts'
 import { FIELD_TYPE } from '@myjs/bytes'
-import { nativeCallName, someNode } from './ast.ts'
-import { NODE, type CallNode, type Expression, type FrameBound, type WindowSpec } from '@myjs/parser'
+import { nativeCallName } from './ast.ts'
+import type { CallNode, Expression, FrameBound, WindowSpec } from '@myjs/parser'
 import { messages, sqlError } from '@myjs/protocol'
 import { add, addInterval, compareValues, doubleValue, intValue, intervalOf, sortValues, timeOrdinal, toInteger, type Interval, type Value } from '@myjs/types'
 import { AGGREGATE_NAMES, aggregate as resultTypeOf, compile, constantEnv, convertTo, fieldValue, type CompileContext, type Compiled, type Env, type Row } from './compile.ts'
@@ -390,11 +390,4 @@ function shifted(key: Exclude<Value, null>, by: Interval, back: boolean): Value 
 }
 
 /** Whether `e` calls a window function outside its own subqueries. */
-export function containsWindow(e: unknown): boolean {
-  return someNode(e, (value) => {
-    const n = value as { kind?: string; over?: unknown }
-    if (n.kind === NODE.SUBQUERY) return false
-    if (n.kind === NODE.CALL && n.over !== undefined) return true
-    return undefined
-  })
-}
+export { containsWindow } from './ast.ts'

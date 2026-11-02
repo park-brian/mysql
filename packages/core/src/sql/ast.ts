@@ -26,6 +26,16 @@ export function someNode(e: unknown, check: (node: object) => boolean | undefine
   if (e === null || typeof e !== 'object') return false
   return check(e) ?? Object.values(e).flat().some((child) => someNode(child, check))
 }
+/** Window calls owned here; subqueries retain their own window scope. */
+export function containsWindow(e: unknown): boolean {
+  return someNode(e, (value) => {
+    const n = value as { kind?: string; over?: unknown }
+    if (n.kind === NODE.SUBQUERY) return false
+    if (n.kind === NODE.CALL && n.over !== undefined) return true
+    return undefined
+  })
+}
+
 /** Declaration admission visits children before the enclosing expression. */
 export function visitPostorder(value: unknown, check: (node: object) => void): void {
   if (value === null || typeof value !== 'object' || value instanceof Uint8Array) return

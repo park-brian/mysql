@@ -18,7 +18,7 @@
 import type { TableDef } from '@myjs/engine'
 import { NODE, QUERY, REF, type Expression, type QueryExpression, type TableReference, quoteName } from '@myjs/parser'
 import { Unprintable, printString, printExpression } from './print.ts'
-import { hasDirectFields, nativeCallName, someNode } from './ast.ts'
+import { containsWindow, hasDirectFields, nativeCallName, someNode } from './ast.ts'
 import { AGGREGATE_NAMES } from './compile.ts'
 
 
@@ -99,7 +99,7 @@ export function viewDefinition(query: QueryExpression, names: readonly string[],
 /** IS_UPDATABLE: one table, no grouping, aggregate, window, DISTINCT or LIMIT, and a plain column among its items (8.4.11). */
 export function viewUpdatable(query: QueryExpression): boolean {
   const body = query.body
-  if (body.kind !== QUERY.SELECT || query.limit !== undefined || query.with !== undefined) return false
+  if (body.kind !== QUERY.SELECT || query.limit !== undefined || query.with !== undefined || containsWindow(query.orderBy)) return false
   if (body.groupBy !== undefined || body.having !== undefined || body.distinct === true) return false
   const from = body.from ?? []
   if (from.length !== 1 || from[0]?.kind !== REF.TABLE) return false
