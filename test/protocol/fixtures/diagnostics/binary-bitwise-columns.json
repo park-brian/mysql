@@ -1,0 +1,7133 @@
+{
+  "mysqlVersion": "8.4.11",
+  "schema": "myjs_bitwise263",
+  "sqlMode": "ERROR_FOR_DIVISION_BY_ZERO",
+  "seed": "SELECT 1/0,CAST('x' AS DECIMAL)",
+  "setup": [
+    "CREATE TABLE base260(b VARCHAR(16),n BIGINT UNSIGNED)",
+    "INSERT INTO base260 VALUES('g',18446744073709551615)",
+    "CREATE TABLE bit263(id INT PRIMARY KEY,b VARBINARY(16),c VARBINARY(16) NOT NULL,w BLOB,t BIT(16))",
+    "INSERT INTO bit263 VALUES(1,X'00FF',X'F00F',X'00FF',b'10101010'),(2,NULL,X'',NULL,NULL),(3,X'',X'',X'',b'0'),(4,X'00',X'00FF',X'000000',b'1')"
+  ],
+  "beforeEach": [
+    "DROP VIEW IF EXISTS v256"
+  ],
+  "observations": [
+    {
+      "sql": "SELECT b & c AS v FROM bit263 WHERE id=1",
+      "api": "query",
+      "existing": false,
+      "rows": [
+        [
+          {
+            "type": "Buffer",
+            "data": [
+              0,
+              15
+            ]
+          }
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          253,
+          16,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT b & c AS v FROM bit263 WHERE id=1",
+      "api": "execute",
+      "existing": false,
+      "rows": [
+        [
+          {
+            "type": "Buffer",
+            "data": [
+              0,
+              15
+            ]
+          }
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          253,
+          16,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT b & c AS v FROM bit263 WHERE id=1",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "v",
+          253,
+          16,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT b & c AS v FROM bit263 WHERE id=2",
+      "api": "query",
+      "existing": false,
+      "rows": [
+        [
+          null
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          253,
+          16,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT b & c AS v FROM bit263 WHERE id=2",
+      "api": "execute",
+      "existing": false,
+      "rows": [
+        [
+          null
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          253,
+          16,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT b & c AS v FROM bit263 WHERE id=2",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "v",
+          253,
+          16,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT b & c AS v FROM bit263 WHERE id=3",
+      "api": "query",
+      "existing": false,
+      "rows": [
+        [
+          {
+            "type": "Buffer",
+            "data": []
+          }
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          253,
+          16,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT b & c AS v FROM bit263 WHERE id=3",
+      "api": "execute",
+      "existing": false,
+      "rows": [
+        [
+          {
+            "type": "Buffer",
+            "data": []
+          }
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          253,
+          16,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT b & c AS v FROM bit263 WHERE id=3",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "v",
+          253,
+          16,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT b & c AS v FROM bit263 WHERE id=4",
+      "api": "query",
+      "existing": false,
+      "error": {
+        "code": "ER_INVALID_BITWISE_OPERANDS_SIZE",
+        "errno": 3513,
+        "state": "HY000",
+        "message": "Binary operands of bitwise operators must be of equal length"
+      },
+      "warnings": [
+        [
+          "Error",
+          3513,
+          "Binary operands of bitwise operators must be of equal length"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "SELECT b & c AS v FROM bit263 WHERE id=4",
+      "api": "execute",
+      "existing": false,
+      "error": {
+        "code": "ER_INVALID_BITWISE_OPERANDS_SIZE",
+        "errno": 3513,
+        "state": "HY000",
+        "message": "Binary operands of bitwise operators must be of equal length"
+      },
+      "warnings": [
+        [
+          "Error",
+          3513,
+          "Binary operands of bitwise operators must be of equal length"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "SELECT b & c AS v FROM bit263 WHERE id=4",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "v",
+          253,
+          16,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT _binary X'00FF' & b AS v FROM bit263 WHERE id=1",
+      "api": "query",
+      "existing": false,
+      "rows": [
+        [
+          {
+            "type": "Buffer",
+            "data": [
+              0,
+              255
+            ]
+          }
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          253,
+          16,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT _binary X'00FF' & b AS v FROM bit263 WHERE id=1",
+      "api": "execute",
+      "existing": false,
+      "rows": [
+        [
+          {
+            "type": "Buffer",
+            "data": [
+              0,
+              255
+            ]
+          }
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          253,
+          16,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT _binary X'00FF' & b AS v FROM bit263 WHERE id=1",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "v",
+          253,
+          16,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT _binary X'00FF' & b AS v FROM bit263 WHERE id=2",
+      "api": "query",
+      "existing": false,
+      "rows": [
+        [
+          null
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          253,
+          16,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT _binary X'00FF' & b AS v FROM bit263 WHERE id=2",
+      "api": "execute",
+      "existing": false,
+      "rows": [
+        [
+          null
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          253,
+          16,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT _binary X'00FF' & b AS v FROM bit263 WHERE id=2",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "v",
+          253,
+          16,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT _binary X'00FF' & b AS v FROM bit263 WHERE id=3",
+      "api": "query",
+      "existing": false,
+      "error": {
+        "code": "ER_INVALID_BITWISE_OPERANDS_SIZE",
+        "errno": 3513,
+        "state": "HY000",
+        "message": "Binary operands of bitwise operators must be of equal length"
+      },
+      "warnings": [
+        [
+          "Error",
+          3513,
+          "Binary operands of bitwise operators must be of equal length"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "SELECT _binary X'00FF' & b AS v FROM bit263 WHERE id=3",
+      "api": "execute",
+      "existing": false,
+      "error": {
+        "code": "ER_INVALID_BITWISE_OPERANDS_SIZE",
+        "errno": 3513,
+        "state": "HY000",
+        "message": "Binary operands of bitwise operators must be of equal length"
+      },
+      "warnings": [
+        [
+          "Error",
+          3513,
+          "Binary operands of bitwise operators must be of equal length"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "SELECT _binary X'00FF' & b AS v FROM bit263 WHERE id=3",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "v",
+          253,
+          16,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT _binary X'00FF' & b AS v FROM bit263 WHERE id=4",
+      "api": "query",
+      "existing": false,
+      "error": {
+        "code": "ER_INVALID_BITWISE_OPERANDS_SIZE",
+        "errno": 3513,
+        "state": "HY000",
+        "message": "Binary operands of bitwise operators must be of equal length"
+      },
+      "warnings": [
+        [
+          "Error",
+          3513,
+          "Binary operands of bitwise operators must be of equal length"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "SELECT _binary X'00FF' & b AS v FROM bit263 WHERE id=4",
+      "api": "execute",
+      "existing": false,
+      "error": {
+        "code": "ER_INVALID_BITWISE_OPERANDS_SIZE",
+        "errno": 3513,
+        "state": "HY000",
+        "message": "Binary operands of bitwise operators must be of equal length"
+      },
+      "warnings": [
+        [
+          "Error",
+          3513,
+          "Binary operands of bitwise operators must be of equal length"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "SELECT _binary X'00FF' & b AS v FROM bit263 WHERE id=4",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "v",
+          253,
+          16,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT b & _binary X'00FF' AS v FROM bit263 WHERE id=1",
+      "api": "query",
+      "existing": false,
+      "rows": [
+        [
+          {
+            "type": "Buffer",
+            "data": [
+              0,
+              255
+            ]
+          }
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          253,
+          16,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT b & _binary X'00FF' AS v FROM bit263 WHERE id=1",
+      "api": "execute",
+      "existing": false,
+      "rows": [
+        [
+          {
+            "type": "Buffer",
+            "data": [
+              0,
+              255
+            ]
+          }
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          253,
+          16,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT b & _binary X'00FF' AS v FROM bit263 WHERE id=1",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "v",
+          253,
+          16,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT b & _binary X'00FF' AS v FROM bit263 WHERE id=2",
+      "api": "query",
+      "existing": false,
+      "rows": [
+        [
+          null
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          253,
+          16,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT b & _binary X'00FF' AS v FROM bit263 WHERE id=2",
+      "api": "execute",
+      "existing": false,
+      "rows": [
+        [
+          null
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          253,
+          16,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT b & _binary X'00FF' AS v FROM bit263 WHERE id=2",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "v",
+          253,
+          16,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT b & _binary X'00FF' AS v FROM bit263 WHERE id=3",
+      "api": "query",
+      "existing": false,
+      "error": {
+        "code": "ER_INVALID_BITWISE_OPERANDS_SIZE",
+        "errno": 3513,
+        "state": "HY000",
+        "message": "Binary operands of bitwise operators must be of equal length"
+      },
+      "warnings": [
+        [
+          "Error",
+          3513,
+          "Binary operands of bitwise operators must be of equal length"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "SELECT b & _binary X'00FF' AS v FROM bit263 WHERE id=3",
+      "api": "execute",
+      "existing": false,
+      "error": {
+        "code": "ER_INVALID_BITWISE_OPERANDS_SIZE",
+        "errno": 3513,
+        "state": "HY000",
+        "message": "Binary operands of bitwise operators must be of equal length"
+      },
+      "warnings": [
+        [
+          "Error",
+          3513,
+          "Binary operands of bitwise operators must be of equal length"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "SELECT b & _binary X'00FF' AS v FROM bit263 WHERE id=3",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "v",
+          253,
+          16,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT b & _binary X'00FF' AS v FROM bit263 WHERE id=4",
+      "api": "query",
+      "existing": false,
+      "error": {
+        "code": "ER_INVALID_BITWISE_OPERANDS_SIZE",
+        "errno": 3513,
+        "state": "HY000",
+        "message": "Binary operands of bitwise operators must be of equal length"
+      },
+      "warnings": [
+        [
+          "Error",
+          3513,
+          "Binary operands of bitwise operators must be of equal length"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "SELECT b & _binary X'00FF' AS v FROM bit263 WHERE id=4",
+      "api": "execute",
+      "existing": false,
+      "error": {
+        "code": "ER_INVALID_BITWISE_OPERANDS_SIZE",
+        "errno": 3513,
+        "state": "HY000",
+        "message": "Binary operands of bitwise operators must be of equal length"
+      },
+      "warnings": [
+        [
+          "Error",
+          3513,
+          "Binary operands of bitwise operators must be of equal length"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "SELECT b & _binary X'00FF' AS v FROM bit263 WHERE id=4",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "v",
+          253,
+          16,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT b & w AS v FROM bit263 WHERE id=1",
+      "api": "query",
+      "existing": false,
+      "rows": [
+        [
+          {
+            "type": "Buffer",
+            "data": [
+              0,
+              255
+            ]
+          }
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          253,
+          65535,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT b & w AS v FROM bit263 WHERE id=1",
+      "api": "execute",
+      "existing": false,
+      "rows": [
+        [
+          {
+            "type": "Buffer",
+            "data": [
+              0,
+              255
+            ]
+          }
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          253,
+          65535,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT b & w AS v FROM bit263 WHERE id=1",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "v",
+          253,
+          65535,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT b & w AS v FROM bit263 WHERE id=2",
+      "api": "query",
+      "existing": false,
+      "rows": [
+        [
+          null
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          253,
+          65535,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT b & w AS v FROM bit263 WHERE id=2",
+      "api": "execute",
+      "existing": false,
+      "rows": [
+        [
+          null
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          253,
+          65535,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT b & w AS v FROM bit263 WHERE id=2",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "v",
+          253,
+          65535,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT b & w AS v FROM bit263 WHERE id=3",
+      "api": "query",
+      "existing": false,
+      "rows": [
+        [
+          {
+            "type": "Buffer",
+            "data": []
+          }
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          253,
+          65535,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT b & w AS v FROM bit263 WHERE id=3",
+      "api": "execute",
+      "existing": false,
+      "rows": [
+        [
+          {
+            "type": "Buffer",
+            "data": []
+          }
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          253,
+          65535,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT b & w AS v FROM bit263 WHERE id=3",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "v",
+          253,
+          65535,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT b & w AS v FROM bit263 WHERE id=4",
+      "api": "query",
+      "existing": false,
+      "error": {
+        "code": "ER_INVALID_BITWISE_OPERANDS_SIZE",
+        "errno": 3513,
+        "state": "HY000",
+        "message": "Binary operands of bitwise operators must be of equal length"
+      },
+      "warnings": [
+        [
+          "Error",
+          3513,
+          "Binary operands of bitwise operators must be of equal length"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "SELECT b & w AS v FROM bit263 WHERE id=4",
+      "api": "execute",
+      "existing": false,
+      "error": {
+        "code": "ER_INVALID_BITWISE_OPERANDS_SIZE",
+        "errno": 3513,
+        "state": "HY000",
+        "message": "Binary operands of bitwise operators must be of equal length"
+      },
+      "warnings": [
+        [
+          "Error",
+          3513,
+          "Binary operands of bitwise operators must be of equal length"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "SELECT b & w AS v FROM bit263 WHERE id=4",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "v",
+          253,
+          65535,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT w & c AS v FROM bit263 WHERE id=1",
+      "api": "query",
+      "existing": false,
+      "rows": [
+        [
+          {
+            "type": "Buffer",
+            "data": [
+              0,
+              15
+            ]
+          }
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          253,
+          65535,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT w & c AS v FROM bit263 WHERE id=1",
+      "api": "execute",
+      "existing": false,
+      "rows": [
+        [
+          {
+            "type": "Buffer",
+            "data": [
+              0,
+              15
+            ]
+          }
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          253,
+          65535,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT w & c AS v FROM bit263 WHERE id=1",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "v",
+          253,
+          65535,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT w & c AS v FROM bit263 WHERE id=2",
+      "api": "query",
+      "existing": false,
+      "rows": [
+        [
+          null
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          253,
+          65535,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT w & c AS v FROM bit263 WHERE id=2",
+      "api": "execute",
+      "existing": false,
+      "rows": [
+        [
+          null
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          253,
+          65535,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT w & c AS v FROM bit263 WHERE id=2",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "v",
+          253,
+          65535,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT w & c AS v FROM bit263 WHERE id=3",
+      "api": "query",
+      "existing": false,
+      "rows": [
+        [
+          {
+            "type": "Buffer",
+            "data": []
+          }
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          253,
+          65535,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT w & c AS v FROM bit263 WHERE id=3",
+      "api": "execute",
+      "existing": false,
+      "rows": [
+        [
+          {
+            "type": "Buffer",
+            "data": []
+          }
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          253,
+          65535,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT w & c AS v FROM bit263 WHERE id=3",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "v",
+          253,
+          65535,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT w & c AS v FROM bit263 WHERE id=4",
+      "api": "query",
+      "existing": false,
+      "error": {
+        "code": "ER_INVALID_BITWISE_OPERANDS_SIZE",
+        "errno": 3513,
+        "state": "HY000",
+        "message": "Binary operands of bitwise operators must be of equal length"
+      },
+      "warnings": [
+        [
+          "Error",
+          3513,
+          "Binary operands of bitwise operators must be of equal length"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "SELECT w & c AS v FROM bit263 WHERE id=4",
+      "api": "execute",
+      "existing": false,
+      "error": {
+        "code": "ER_INVALID_BITWISE_OPERANDS_SIZE",
+        "errno": 3513,
+        "state": "HY000",
+        "message": "Binary operands of bitwise operators must be of equal length"
+      },
+      "warnings": [
+        [
+          "Error",
+          3513,
+          "Binary operands of bitwise operators must be of equal length"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "SELECT w & c AS v FROM bit263 WHERE id=4",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "v",
+          253,
+          65535,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT t & t AS v FROM bit263 WHERE id=1",
+      "api": "query",
+      "existing": false,
+      "rows": [
+        [
+          170
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          8,
+          21,
+          160,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT t & t AS v FROM bit263 WHERE id=1",
+      "api": "execute",
+      "existing": false,
+      "rows": [
+        [
+          170
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          8,
+          21,
+          160,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT t & t AS v FROM bit263 WHERE id=1",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "v",
+          8,
+          21,
+          160,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT t & t AS v FROM bit263 WHERE id=2",
+      "api": "query",
+      "existing": false,
+      "rows": [
+        [
+          null
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          8,
+          21,
+          160,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT t & t AS v FROM bit263 WHERE id=2",
+      "api": "execute",
+      "existing": false,
+      "rows": [
+        [
+          null
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          8,
+          21,
+          160,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT t & t AS v FROM bit263 WHERE id=2",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "v",
+          8,
+          21,
+          160,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT t & t AS v FROM bit263 WHERE id=3",
+      "api": "query",
+      "existing": false,
+      "rows": [
+        [
+          0
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          8,
+          21,
+          160,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT t & t AS v FROM bit263 WHERE id=3",
+      "api": "execute",
+      "existing": false,
+      "rows": [
+        [
+          0
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          8,
+          21,
+          160,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT t & t AS v FROM bit263 WHERE id=3",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "v",
+          8,
+          21,
+          160,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT t & t AS v FROM bit263 WHERE id=4",
+      "api": "query",
+      "existing": false,
+      "rows": [
+        [
+          1
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          8,
+          21,
+          160,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT t & t AS v FROM bit263 WHERE id=4",
+      "api": "execute",
+      "existing": false,
+      "rows": [
+        [
+          1
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          8,
+          21,
+          160,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT t & t AS v FROM bit263 WHERE id=4",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "v",
+          8,
+          21,
+          160,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT b | c AS v FROM bit263 WHERE id=1",
+      "api": "query",
+      "existing": false,
+      "rows": [
+        [
+          {
+            "type": "Buffer",
+            "data": [
+              240,
+              255
+            ]
+          }
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          253,
+          16,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT b | c AS v FROM bit263 WHERE id=1",
+      "api": "execute",
+      "existing": false,
+      "rows": [
+        [
+          {
+            "type": "Buffer",
+            "data": [
+              240,
+              255
+            ]
+          }
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          253,
+          16,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT b | c AS v FROM bit263 WHERE id=1",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "v",
+          253,
+          16,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT b | c AS v FROM bit263 WHERE id=2",
+      "api": "query",
+      "existing": false,
+      "rows": [
+        [
+          null
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          253,
+          16,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT b | c AS v FROM bit263 WHERE id=2",
+      "api": "execute",
+      "existing": false,
+      "rows": [
+        [
+          null
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          253,
+          16,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT b | c AS v FROM bit263 WHERE id=2",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "v",
+          253,
+          16,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT b | c AS v FROM bit263 WHERE id=3",
+      "api": "query",
+      "existing": false,
+      "rows": [
+        [
+          {
+            "type": "Buffer",
+            "data": []
+          }
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          253,
+          16,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT b | c AS v FROM bit263 WHERE id=3",
+      "api": "execute",
+      "existing": false,
+      "rows": [
+        [
+          {
+            "type": "Buffer",
+            "data": []
+          }
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          253,
+          16,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT b | c AS v FROM bit263 WHERE id=3",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "v",
+          253,
+          16,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT b | c AS v FROM bit263 WHERE id=4",
+      "api": "query",
+      "existing": false,
+      "error": {
+        "code": "ER_INVALID_BITWISE_OPERANDS_SIZE",
+        "errno": 3513,
+        "state": "HY000",
+        "message": "Binary operands of bitwise operators must be of equal length"
+      },
+      "warnings": [
+        [
+          "Error",
+          3513,
+          "Binary operands of bitwise operators must be of equal length"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "SELECT b | c AS v FROM bit263 WHERE id=4",
+      "api": "execute",
+      "existing": false,
+      "error": {
+        "code": "ER_INVALID_BITWISE_OPERANDS_SIZE",
+        "errno": 3513,
+        "state": "HY000",
+        "message": "Binary operands of bitwise operators must be of equal length"
+      },
+      "warnings": [
+        [
+          "Error",
+          3513,
+          "Binary operands of bitwise operators must be of equal length"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "SELECT b | c AS v FROM bit263 WHERE id=4",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "v",
+          253,
+          16,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT _binary X'00FF' | b AS v FROM bit263 WHERE id=1",
+      "api": "query",
+      "existing": false,
+      "rows": [
+        [
+          {
+            "type": "Buffer",
+            "data": [
+              0,
+              255
+            ]
+          }
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          253,
+          16,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT _binary X'00FF' | b AS v FROM bit263 WHERE id=1",
+      "api": "execute",
+      "existing": false,
+      "rows": [
+        [
+          {
+            "type": "Buffer",
+            "data": [
+              0,
+              255
+            ]
+          }
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          253,
+          16,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT _binary X'00FF' | b AS v FROM bit263 WHERE id=1",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "v",
+          253,
+          16,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT _binary X'00FF' | b AS v FROM bit263 WHERE id=2",
+      "api": "query",
+      "existing": false,
+      "rows": [
+        [
+          null
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          253,
+          16,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT _binary X'00FF' | b AS v FROM bit263 WHERE id=2",
+      "api": "execute",
+      "existing": false,
+      "rows": [
+        [
+          null
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          253,
+          16,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT _binary X'00FF' | b AS v FROM bit263 WHERE id=2",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "v",
+          253,
+          16,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT _binary X'00FF' | b AS v FROM bit263 WHERE id=3",
+      "api": "query",
+      "existing": false,
+      "error": {
+        "code": "ER_INVALID_BITWISE_OPERANDS_SIZE",
+        "errno": 3513,
+        "state": "HY000",
+        "message": "Binary operands of bitwise operators must be of equal length"
+      },
+      "warnings": [
+        [
+          "Error",
+          3513,
+          "Binary operands of bitwise operators must be of equal length"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "SELECT _binary X'00FF' | b AS v FROM bit263 WHERE id=3",
+      "api": "execute",
+      "existing": false,
+      "error": {
+        "code": "ER_INVALID_BITWISE_OPERANDS_SIZE",
+        "errno": 3513,
+        "state": "HY000",
+        "message": "Binary operands of bitwise operators must be of equal length"
+      },
+      "warnings": [
+        [
+          "Error",
+          3513,
+          "Binary operands of bitwise operators must be of equal length"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "SELECT _binary X'00FF' | b AS v FROM bit263 WHERE id=3",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "v",
+          253,
+          16,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT _binary X'00FF' | b AS v FROM bit263 WHERE id=4",
+      "api": "query",
+      "existing": false,
+      "error": {
+        "code": "ER_INVALID_BITWISE_OPERANDS_SIZE",
+        "errno": 3513,
+        "state": "HY000",
+        "message": "Binary operands of bitwise operators must be of equal length"
+      },
+      "warnings": [
+        [
+          "Error",
+          3513,
+          "Binary operands of bitwise operators must be of equal length"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "SELECT _binary X'00FF' | b AS v FROM bit263 WHERE id=4",
+      "api": "execute",
+      "existing": false,
+      "error": {
+        "code": "ER_INVALID_BITWISE_OPERANDS_SIZE",
+        "errno": 3513,
+        "state": "HY000",
+        "message": "Binary operands of bitwise operators must be of equal length"
+      },
+      "warnings": [
+        [
+          "Error",
+          3513,
+          "Binary operands of bitwise operators must be of equal length"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "SELECT _binary X'00FF' | b AS v FROM bit263 WHERE id=4",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "v",
+          253,
+          16,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT b | _binary X'00FF' AS v FROM bit263 WHERE id=1",
+      "api": "query",
+      "existing": false,
+      "rows": [
+        [
+          {
+            "type": "Buffer",
+            "data": [
+              0,
+              255
+            ]
+          }
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          253,
+          16,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT b | _binary X'00FF' AS v FROM bit263 WHERE id=1",
+      "api": "execute",
+      "existing": false,
+      "rows": [
+        [
+          {
+            "type": "Buffer",
+            "data": [
+              0,
+              255
+            ]
+          }
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          253,
+          16,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT b | _binary X'00FF' AS v FROM bit263 WHERE id=1",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "v",
+          253,
+          16,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT b | _binary X'00FF' AS v FROM bit263 WHERE id=2",
+      "api": "query",
+      "existing": false,
+      "rows": [
+        [
+          null
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          253,
+          16,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT b | _binary X'00FF' AS v FROM bit263 WHERE id=2",
+      "api": "execute",
+      "existing": false,
+      "rows": [
+        [
+          null
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          253,
+          16,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT b | _binary X'00FF' AS v FROM bit263 WHERE id=2",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "v",
+          253,
+          16,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT b | _binary X'00FF' AS v FROM bit263 WHERE id=3",
+      "api": "query",
+      "existing": false,
+      "error": {
+        "code": "ER_INVALID_BITWISE_OPERANDS_SIZE",
+        "errno": 3513,
+        "state": "HY000",
+        "message": "Binary operands of bitwise operators must be of equal length"
+      },
+      "warnings": [
+        [
+          "Error",
+          3513,
+          "Binary operands of bitwise operators must be of equal length"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "SELECT b | _binary X'00FF' AS v FROM bit263 WHERE id=3",
+      "api": "execute",
+      "existing": false,
+      "error": {
+        "code": "ER_INVALID_BITWISE_OPERANDS_SIZE",
+        "errno": 3513,
+        "state": "HY000",
+        "message": "Binary operands of bitwise operators must be of equal length"
+      },
+      "warnings": [
+        [
+          "Error",
+          3513,
+          "Binary operands of bitwise operators must be of equal length"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "SELECT b | _binary X'00FF' AS v FROM bit263 WHERE id=3",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "v",
+          253,
+          16,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT b | _binary X'00FF' AS v FROM bit263 WHERE id=4",
+      "api": "query",
+      "existing": false,
+      "error": {
+        "code": "ER_INVALID_BITWISE_OPERANDS_SIZE",
+        "errno": 3513,
+        "state": "HY000",
+        "message": "Binary operands of bitwise operators must be of equal length"
+      },
+      "warnings": [
+        [
+          "Error",
+          3513,
+          "Binary operands of bitwise operators must be of equal length"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "SELECT b | _binary X'00FF' AS v FROM bit263 WHERE id=4",
+      "api": "execute",
+      "existing": false,
+      "error": {
+        "code": "ER_INVALID_BITWISE_OPERANDS_SIZE",
+        "errno": 3513,
+        "state": "HY000",
+        "message": "Binary operands of bitwise operators must be of equal length"
+      },
+      "warnings": [
+        [
+          "Error",
+          3513,
+          "Binary operands of bitwise operators must be of equal length"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "SELECT b | _binary X'00FF' AS v FROM bit263 WHERE id=4",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "v",
+          253,
+          16,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT b | w AS v FROM bit263 WHERE id=1",
+      "api": "query",
+      "existing": false,
+      "rows": [
+        [
+          {
+            "type": "Buffer",
+            "data": [
+              0,
+              255
+            ]
+          }
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          253,
+          65535,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT b | w AS v FROM bit263 WHERE id=1",
+      "api": "execute",
+      "existing": false,
+      "rows": [
+        [
+          {
+            "type": "Buffer",
+            "data": [
+              0,
+              255
+            ]
+          }
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          253,
+          65535,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT b | w AS v FROM bit263 WHERE id=1",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "v",
+          253,
+          65535,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT b | w AS v FROM bit263 WHERE id=2",
+      "api": "query",
+      "existing": false,
+      "rows": [
+        [
+          null
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          253,
+          65535,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT b | w AS v FROM bit263 WHERE id=2",
+      "api": "execute",
+      "existing": false,
+      "rows": [
+        [
+          null
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          253,
+          65535,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT b | w AS v FROM bit263 WHERE id=2",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "v",
+          253,
+          65535,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT b | w AS v FROM bit263 WHERE id=3",
+      "api": "query",
+      "existing": false,
+      "rows": [
+        [
+          {
+            "type": "Buffer",
+            "data": []
+          }
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          253,
+          65535,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT b | w AS v FROM bit263 WHERE id=3",
+      "api": "execute",
+      "existing": false,
+      "rows": [
+        [
+          {
+            "type": "Buffer",
+            "data": []
+          }
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          253,
+          65535,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT b | w AS v FROM bit263 WHERE id=3",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "v",
+          253,
+          65535,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT b | w AS v FROM bit263 WHERE id=4",
+      "api": "query",
+      "existing": false,
+      "error": {
+        "code": "ER_INVALID_BITWISE_OPERANDS_SIZE",
+        "errno": 3513,
+        "state": "HY000",
+        "message": "Binary operands of bitwise operators must be of equal length"
+      },
+      "warnings": [
+        [
+          "Error",
+          3513,
+          "Binary operands of bitwise operators must be of equal length"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "SELECT b | w AS v FROM bit263 WHERE id=4",
+      "api": "execute",
+      "existing": false,
+      "error": {
+        "code": "ER_INVALID_BITWISE_OPERANDS_SIZE",
+        "errno": 3513,
+        "state": "HY000",
+        "message": "Binary operands of bitwise operators must be of equal length"
+      },
+      "warnings": [
+        [
+          "Error",
+          3513,
+          "Binary operands of bitwise operators must be of equal length"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "SELECT b | w AS v FROM bit263 WHERE id=4",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "v",
+          253,
+          65535,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT w | c AS v FROM bit263 WHERE id=1",
+      "api": "query",
+      "existing": false,
+      "rows": [
+        [
+          {
+            "type": "Buffer",
+            "data": [
+              240,
+              255
+            ]
+          }
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          253,
+          65535,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT w | c AS v FROM bit263 WHERE id=1",
+      "api": "execute",
+      "existing": false,
+      "rows": [
+        [
+          {
+            "type": "Buffer",
+            "data": [
+              240,
+              255
+            ]
+          }
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          253,
+          65535,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT w | c AS v FROM bit263 WHERE id=1",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "v",
+          253,
+          65535,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT w | c AS v FROM bit263 WHERE id=2",
+      "api": "query",
+      "existing": false,
+      "rows": [
+        [
+          null
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          253,
+          65535,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT w | c AS v FROM bit263 WHERE id=2",
+      "api": "execute",
+      "existing": false,
+      "rows": [
+        [
+          null
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          253,
+          65535,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT w | c AS v FROM bit263 WHERE id=2",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "v",
+          253,
+          65535,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT w | c AS v FROM bit263 WHERE id=3",
+      "api": "query",
+      "existing": false,
+      "rows": [
+        [
+          {
+            "type": "Buffer",
+            "data": []
+          }
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          253,
+          65535,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT w | c AS v FROM bit263 WHERE id=3",
+      "api": "execute",
+      "existing": false,
+      "rows": [
+        [
+          {
+            "type": "Buffer",
+            "data": []
+          }
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          253,
+          65535,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT w | c AS v FROM bit263 WHERE id=3",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "v",
+          253,
+          65535,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT w | c AS v FROM bit263 WHERE id=4",
+      "api": "query",
+      "existing": false,
+      "error": {
+        "code": "ER_INVALID_BITWISE_OPERANDS_SIZE",
+        "errno": 3513,
+        "state": "HY000",
+        "message": "Binary operands of bitwise operators must be of equal length"
+      },
+      "warnings": [
+        [
+          "Error",
+          3513,
+          "Binary operands of bitwise operators must be of equal length"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "SELECT w | c AS v FROM bit263 WHERE id=4",
+      "api": "execute",
+      "existing": false,
+      "error": {
+        "code": "ER_INVALID_BITWISE_OPERANDS_SIZE",
+        "errno": 3513,
+        "state": "HY000",
+        "message": "Binary operands of bitwise operators must be of equal length"
+      },
+      "warnings": [
+        [
+          "Error",
+          3513,
+          "Binary operands of bitwise operators must be of equal length"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "SELECT w | c AS v FROM bit263 WHERE id=4",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "v",
+          253,
+          65535,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT t | t AS v FROM bit263 WHERE id=1",
+      "api": "query",
+      "existing": false,
+      "rows": [
+        [
+          170
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          8,
+          21,
+          160,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT t | t AS v FROM bit263 WHERE id=1",
+      "api": "execute",
+      "existing": false,
+      "rows": [
+        [
+          170
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          8,
+          21,
+          160,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT t | t AS v FROM bit263 WHERE id=1",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "v",
+          8,
+          21,
+          160,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT t | t AS v FROM bit263 WHERE id=2",
+      "api": "query",
+      "existing": false,
+      "rows": [
+        [
+          null
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          8,
+          21,
+          160,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT t | t AS v FROM bit263 WHERE id=2",
+      "api": "execute",
+      "existing": false,
+      "rows": [
+        [
+          null
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          8,
+          21,
+          160,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT t | t AS v FROM bit263 WHERE id=2",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "v",
+          8,
+          21,
+          160,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT t | t AS v FROM bit263 WHERE id=3",
+      "api": "query",
+      "existing": false,
+      "rows": [
+        [
+          0
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          8,
+          21,
+          160,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT t | t AS v FROM bit263 WHERE id=3",
+      "api": "execute",
+      "existing": false,
+      "rows": [
+        [
+          0
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          8,
+          21,
+          160,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT t | t AS v FROM bit263 WHERE id=3",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "v",
+          8,
+          21,
+          160,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT t | t AS v FROM bit263 WHERE id=4",
+      "api": "query",
+      "existing": false,
+      "rows": [
+        [
+          1
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          8,
+          21,
+          160,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT t | t AS v FROM bit263 WHERE id=4",
+      "api": "execute",
+      "existing": false,
+      "rows": [
+        [
+          1
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          8,
+          21,
+          160,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT t | t AS v FROM bit263 WHERE id=4",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "v",
+          8,
+          21,
+          160,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT b ^ c AS v FROM bit263 WHERE id=1",
+      "api": "query",
+      "existing": false,
+      "rows": [
+        [
+          {
+            "type": "Buffer",
+            "data": [
+              240,
+              240
+            ]
+          }
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          253,
+          16,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT b ^ c AS v FROM bit263 WHERE id=1",
+      "api": "execute",
+      "existing": false,
+      "rows": [
+        [
+          {
+            "type": "Buffer",
+            "data": [
+              240,
+              240
+            ]
+          }
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          253,
+          16,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT b ^ c AS v FROM bit263 WHERE id=1",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "v",
+          253,
+          16,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT b ^ c AS v FROM bit263 WHERE id=2",
+      "api": "query",
+      "existing": false,
+      "rows": [
+        [
+          null
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          253,
+          16,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT b ^ c AS v FROM bit263 WHERE id=2",
+      "api": "execute",
+      "existing": false,
+      "rows": [
+        [
+          null
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          253,
+          16,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT b ^ c AS v FROM bit263 WHERE id=2",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "v",
+          253,
+          16,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT b ^ c AS v FROM bit263 WHERE id=3",
+      "api": "query",
+      "existing": false,
+      "rows": [
+        [
+          {
+            "type": "Buffer",
+            "data": []
+          }
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          253,
+          16,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT b ^ c AS v FROM bit263 WHERE id=3",
+      "api": "execute",
+      "existing": false,
+      "rows": [
+        [
+          {
+            "type": "Buffer",
+            "data": []
+          }
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          253,
+          16,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT b ^ c AS v FROM bit263 WHERE id=3",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "v",
+          253,
+          16,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT b ^ c AS v FROM bit263 WHERE id=4",
+      "api": "query",
+      "existing": false,
+      "error": {
+        "code": "ER_INVALID_BITWISE_OPERANDS_SIZE",
+        "errno": 3513,
+        "state": "HY000",
+        "message": "Binary operands of bitwise operators must be of equal length"
+      },
+      "warnings": [
+        [
+          "Error",
+          3513,
+          "Binary operands of bitwise operators must be of equal length"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "SELECT b ^ c AS v FROM bit263 WHERE id=4",
+      "api": "execute",
+      "existing": false,
+      "error": {
+        "code": "ER_INVALID_BITWISE_OPERANDS_SIZE",
+        "errno": 3513,
+        "state": "HY000",
+        "message": "Binary operands of bitwise operators must be of equal length"
+      },
+      "warnings": [
+        [
+          "Error",
+          3513,
+          "Binary operands of bitwise operators must be of equal length"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "SELECT b ^ c AS v FROM bit263 WHERE id=4",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "v",
+          253,
+          16,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT _binary X'00FF' ^ b AS v FROM bit263 WHERE id=1",
+      "api": "query",
+      "existing": false,
+      "rows": [
+        [
+          {
+            "type": "Buffer",
+            "data": [
+              0,
+              0
+            ]
+          }
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          253,
+          16,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT _binary X'00FF' ^ b AS v FROM bit263 WHERE id=1",
+      "api": "execute",
+      "existing": false,
+      "rows": [
+        [
+          {
+            "type": "Buffer",
+            "data": [
+              0,
+              0
+            ]
+          }
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          253,
+          16,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT _binary X'00FF' ^ b AS v FROM bit263 WHERE id=1",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "v",
+          253,
+          16,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT _binary X'00FF' ^ b AS v FROM bit263 WHERE id=2",
+      "api": "query",
+      "existing": false,
+      "rows": [
+        [
+          null
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          253,
+          16,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT _binary X'00FF' ^ b AS v FROM bit263 WHERE id=2",
+      "api": "execute",
+      "existing": false,
+      "rows": [
+        [
+          null
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          253,
+          16,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT _binary X'00FF' ^ b AS v FROM bit263 WHERE id=2",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "v",
+          253,
+          16,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT _binary X'00FF' ^ b AS v FROM bit263 WHERE id=3",
+      "api": "query",
+      "existing": false,
+      "error": {
+        "code": "ER_INVALID_BITWISE_OPERANDS_SIZE",
+        "errno": 3513,
+        "state": "HY000",
+        "message": "Binary operands of bitwise operators must be of equal length"
+      },
+      "warnings": [
+        [
+          "Error",
+          3513,
+          "Binary operands of bitwise operators must be of equal length"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "SELECT _binary X'00FF' ^ b AS v FROM bit263 WHERE id=3",
+      "api": "execute",
+      "existing": false,
+      "error": {
+        "code": "ER_INVALID_BITWISE_OPERANDS_SIZE",
+        "errno": 3513,
+        "state": "HY000",
+        "message": "Binary operands of bitwise operators must be of equal length"
+      },
+      "warnings": [
+        [
+          "Error",
+          3513,
+          "Binary operands of bitwise operators must be of equal length"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "SELECT _binary X'00FF' ^ b AS v FROM bit263 WHERE id=3",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "v",
+          253,
+          16,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT _binary X'00FF' ^ b AS v FROM bit263 WHERE id=4",
+      "api": "query",
+      "existing": false,
+      "error": {
+        "code": "ER_INVALID_BITWISE_OPERANDS_SIZE",
+        "errno": 3513,
+        "state": "HY000",
+        "message": "Binary operands of bitwise operators must be of equal length"
+      },
+      "warnings": [
+        [
+          "Error",
+          3513,
+          "Binary operands of bitwise operators must be of equal length"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "SELECT _binary X'00FF' ^ b AS v FROM bit263 WHERE id=4",
+      "api": "execute",
+      "existing": false,
+      "error": {
+        "code": "ER_INVALID_BITWISE_OPERANDS_SIZE",
+        "errno": 3513,
+        "state": "HY000",
+        "message": "Binary operands of bitwise operators must be of equal length"
+      },
+      "warnings": [
+        [
+          "Error",
+          3513,
+          "Binary operands of bitwise operators must be of equal length"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "SELECT _binary X'00FF' ^ b AS v FROM bit263 WHERE id=4",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "v",
+          253,
+          16,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT b ^ _binary X'00FF' AS v FROM bit263 WHERE id=1",
+      "api": "query",
+      "existing": false,
+      "rows": [
+        [
+          {
+            "type": "Buffer",
+            "data": [
+              0,
+              0
+            ]
+          }
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          253,
+          16,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT b ^ _binary X'00FF' AS v FROM bit263 WHERE id=1",
+      "api": "execute",
+      "existing": false,
+      "rows": [
+        [
+          {
+            "type": "Buffer",
+            "data": [
+              0,
+              0
+            ]
+          }
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          253,
+          16,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT b ^ _binary X'00FF' AS v FROM bit263 WHERE id=1",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "v",
+          253,
+          16,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT b ^ _binary X'00FF' AS v FROM bit263 WHERE id=2",
+      "api": "query",
+      "existing": false,
+      "rows": [
+        [
+          null
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          253,
+          16,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT b ^ _binary X'00FF' AS v FROM bit263 WHERE id=2",
+      "api": "execute",
+      "existing": false,
+      "rows": [
+        [
+          null
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          253,
+          16,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT b ^ _binary X'00FF' AS v FROM bit263 WHERE id=2",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "v",
+          253,
+          16,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT b ^ _binary X'00FF' AS v FROM bit263 WHERE id=3",
+      "api": "query",
+      "existing": false,
+      "error": {
+        "code": "ER_INVALID_BITWISE_OPERANDS_SIZE",
+        "errno": 3513,
+        "state": "HY000",
+        "message": "Binary operands of bitwise operators must be of equal length"
+      },
+      "warnings": [
+        [
+          "Error",
+          3513,
+          "Binary operands of bitwise operators must be of equal length"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "SELECT b ^ _binary X'00FF' AS v FROM bit263 WHERE id=3",
+      "api": "execute",
+      "existing": false,
+      "error": {
+        "code": "ER_INVALID_BITWISE_OPERANDS_SIZE",
+        "errno": 3513,
+        "state": "HY000",
+        "message": "Binary operands of bitwise operators must be of equal length"
+      },
+      "warnings": [
+        [
+          "Error",
+          3513,
+          "Binary operands of bitwise operators must be of equal length"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "SELECT b ^ _binary X'00FF' AS v FROM bit263 WHERE id=3",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "v",
+          253,
+          16,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT b ^ _binary X'00FF' AS v FROM bit263 WHERE id=4",
+      "api": "query",
+      "existing": false,
+      "error": {
+        "code": "ER_INVALID_BITWISE_OPERANDS_SIZE",
+        "errno": 3513,
+        "state": "HY000",
+        "message": "Binary operands of bitwise operators must be of equal length"
+      },
+      "warnings": [
+        [
+          "Error",
+          3513,
+          "Binary operands of bitwise operators must be of equal length"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "SELECT b ^ _binary X'00FF' AS v FROM bit263 WHERE id=4",
+      "api": "execute",
+      "existing": false,
+      "error": {
+        "code": "ER_INVALID_BITWISE_OPERANDS_SIZE",
+        "errno": 3513,
+        "state": "HY000",
+        "message": "Binary operands of bitwise operators must be of equal length"
+      },
+      "warnings": [
+        [
+          "Error",
+          3513,
+          "Binary operands of bitwise operators must be of equal length"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "SELECT b ^ _binary X'00FF' AS v FROM bit263 WHERE id=4",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "v",
+          253,
+          16,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT b ^ w AS v FROM bit263 WHERE id=1",
+      "api": "query",
+      "existing": false,
+      "rows": [
+        [
+          {
+            "type": "Buffer",
+            "data": [
+              0,
+              0
+            ]
+          }
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          253,
+          65535,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT b ^ w AS v FROM bit263 WHERE id=1",
+      "api": "execute",
+      "existing": false,
+      "rows": [
+        [
+          {
+            "type": "Buffer",
+            "data": [
+              0,
+              0
+            ]
+          }
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          253,
+          65535,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT b ^ w AS v FROM bit263 WHERE id=1",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "v",
+          253,
+          65535,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT b ^ w AS v FROM bit263 WHERE id=2",
+      "api": "query",
+      "existing": false,
+      "rows": [
+        [
+          null
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          253,
+          65535,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT b ^ w AS v FROM bit263 WHERE id=2",
+      "api": "execute",
+      "existing": false,
+      "rows": [
+        [
+          null
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          253,
+          65535,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT b ^ w AS v FROM bit263 WHERE id=2",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "v",
+          253,
+          65535,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT b ^ w AS v FROM bit263 WHERE id=3",
+      "api": "query",
+      "existing": false,
+      "rows": [
+        [
+          {
+            "type": "Buffer",
+            "data": []
+          }
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          253,
+          65535,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT b ^ w AS v FROM bit263 WHERE id=3",
+      "api": "execute",
+      "existing": false,
+      "rows": [
+        [
+          {
+            "type": "Buffer",
+            "data": []
+          }
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          253,
+          65535,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT b ^ w AS v FROM bit263 WHERE id=3",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "v",
+          253,
+          65535,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT b ^ w AS v FROM bit263 WHERE id=4",
+      "api": "query",
+      "existing": false,
+      "error": {
+        "code": "ER_INVALID_BITWISE_OPERANDS_SIZE",
+        "errno": 3513,
+        "state": "HY000",
+        "message": "Binary operands of bitwise operators must be of equal length"
+      },
+      "warnings": [
+        [
+          "Error",
+          3513,
+          "Binary operands of bitwise operators must be of equal length"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "SELECT b ^ w AS v FROM bit263 WHERE id=4",
+      "api": "execute",
+      "existing": false,
+      "error": {
+        "code": "ER_INVALID_BITWISE_OPERANDS_SIZE",
+        "errno": 3513,
+        "state": "HY000",
+        "message": "Binary operands of bitwise operators must be of equal length"
+      },
+      "warnings": [
+        [
+          "Error",
+          3513,
+          "Binary operands of bitwise operators must be of equal length"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "SELECT b ^ w AS v FROM bit263 WHERE id=4",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "v",
+          253,
+          65535,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT w ^ c AS v FROM bit263 WHERE id=1",
+      "api": "query",
+      "existing": false,
+      "rows": [
+        [
+          {
+            "type": "Buffer",
+            "data": [
+              240,
+              240
+            ]
+          }
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          253,
+          65535,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT w ^ c AS v FROM bit263 WHERE id=1",
+      "api": "execute",
+      "existing": false,
+      "rows": [
+        [
+          {
+            "type": "Buffer",
+            "data": [
+              240,
+              240
+            ]
+          }
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          253,
+          65535,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT w ^ c AS v FROM bit263 WHERE id=1",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "v",
+          253,
+          65535,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT w ^ c AS v FROM bit263 WHERE id=2",
+      "api": "query",
+      "existing": false,
+      "rows": [
+        [
+          null
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          253,
+          65535,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT w ^ c AS v FROM bit263 WHERE id=2",
+      "api": "execute",
+      "existing": false,
+      "rows": [
+        [
+          null
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          253,
+          65535,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT w ^ c AS v FROM bit263 WHERE id=2",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "v",
+          253,
+          65535,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT w ^ c AS v FROM bit263 WHERE id=3",
+      "api": "query",
+      "existing": false,
+      "rows": [
+        [
+          {
+            "type": "Buffer",
+            "data": []
+          }
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          253,
+          65535,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT w ^ c AS v FROM bit263 WHERE id=3",
+      "api": "execute",
+      "existing": false,
+      "rows": [
+        [
+          {
+            "type": "Buffer",
+            "data": []
+          }
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          253,
+          65535,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT w ^ c AS v FROM bit263 WHERE id=3",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "v",
+          253,
+          65535,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT w ^ c AS v FROM bit263 WHERE id=4",
+      "api": "query",
+      "existing": false,
+      "error": {
+        "code": "ER_INVALID_BITWISE_OPERANDS_SIZE",
+        "errno": 3513,
+        "state": "HY000",
+        "message": "Binary operands of bitwise operators must be of equal length"
+      },
+      "warnings": [
+        [
+          "Error",
+          3513,
+          "Binary operands of bitwise operators must be of equal length"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "SELECT w ^ c AS v FROM bit263 WHERE id=4",
+      "api": "execute",
+      "existing": false,
+      "error": {
+        "code": "ER_INVALID_BITWISE_OPERANDS_SIZE",
+        "errno": 3513,
+        "state": "HY000",
+        "message": "Binary operands of bitwise operators must be of equal length"
+      },
+      "warnings": [
+        [
+          "Error",
+          3513,
+          "Binary operands of bitwise operators must be of equal length"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "SELECT w ^ c AS v FROM bit263 WHERE id=4",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "v",
+          253,
+          65535,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT t ^ t AS v FROM bit263 WHERE id=1",
+      "api": "query",
+      "existing": false,
+      "rows": [
+        [
+          0
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          8,
+          21,
+          160,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT t ^ t AS v FROM bit263 WHERE id=1",
+      "api": "execute",
+      "existing": false,
+      "rows": [
+        [
+          0
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          8,
+          21,
+          160,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT t ^ t AS v FROM bit263 WHERE id=1",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "v",
+          8,
+          21,
+          160,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT t ^ t AS v FROM bit263 WHERE id=2",
+      "api": "query",
+      "existing": false,
+      "rows": [
+        [
+          null
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          8,
+          21,
+          160,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT t ^ t AS v FROM bit263 WHERE id=2",
+      "api": "execute",
+      "existing": false,
+      "rows": [
+        [
+          null
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          8,
+          21,
+          160,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT t ^ t AS v FROM bit263 WHERE id=2",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "v",
+          8,
+          21,
+          160,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT t ^ t AS v FROM bit263 WHERE id=3",
+      "api": "query",
+      "existing": false,
+      "rows": [
+        [
+          0
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          8,
+          21,
+          160,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT t ^ t AS v FROM bit263 WHERE id=3",
+      "api": "execute",
+      "existing": false,
+      "rows": [
+        [
+          0
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          8,
+          21,
+          160,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT t ^ t AS v FROM bit263 WHERE id=3",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "v",
+          8,
+          21,
+          160,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT t ^ t AS v FROM bit263 WHERE id=4",
+      "api": "query",
+      "existing": false,
+      "rows": [
+        [
+          0
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          8,
+          21,
+          160,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT t ^ t AS v FROM bit263 WHERE id=4",
+      "api": "execute",
+      "existing": false,
+      "rows": [
+        [
+          0
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          8,
+          21,
+          160,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT t ^ t AS v FROM bit263 WHERE id=4",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "v",
+          8,
+          21,
+          160,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT HEX(b),HEX(c),HEX(b&c),HEX(b),HEX(c),HEX(b|c),HEX(b^c),HEX(b),HEX(c) FROM bit263 WHERE id=1",
+      "api": "query",
+      "existing": false,
+      "rows": [
+        [
+          "00FF",
+          "F00F",
+          "000F",
+          "00FF",
+          "F00F",
+          "F0FF",
+          "F0F0",
+          "00FF",
+          "F00F"
+        ]
+      ],
+      "fields": [
+        [
+          "HEX(b)",
+          253,
+          128,
+          0,
+          31,
+          224,
+          "",
+          "",
+          "",
+          ""
+        ],
+        [
+          "HEX(c)",
+          253,
+          128,
+          1,
+          31,
+          224,
+          "",
+          "",
+          "",
+          ""
+        ],
+        [
+          "HEX(b&c)",
+          253,
+          128,
+          0,
+          31,
+          224,
+          "",
+          "",
+          "",
+          ""
+        ],
+        [
+          "HEX(b)",
+          253,
+          128,
+          0,
+          31,
+          224,
+          "",
+          "",
+          "",
+          ""
+        ],
+        [
+          "HEX(c)",
+          253,
+          128,
+          1,
+          31,
+          224,
+          "",
+          "",
+          "",
+          ""
+        ],
+        [
+          "HEX(b|c)",
+          253,
+          128,
+          0,
+          31,
+          224,
+          "",
+          "",
+          "",
+          ""
+        ],
+        [
+          "HEX(b^c)",
+          253,
+          128,
+          0,
+          31,
+          224,
+          "",
+          "",
+          "",
+          ""
+        ],
+        [
+          "HEX(b)",
+          253,
+          128,
+          0,
+          31,
+          224,
+          "",
+          "",
+          "",
+          ""
+        ],
+        [
+          "HEX(c)",
+          253,
+          128,
+          1,
+          31,
+          224,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT HEX(b),HEX(c),HEX(b&c),HEX(b),HEX(c),HEX(b|c),HEX(b^c),HEX(b),HEX(c) FROM bit263 WHERE id=1",
+      "api": "execute",
+      "existing": false,
+      "rows": [
+        [
+          "00FF",
+          "F00F",
+          "000F",
+          "00FF",
+          "F00F",
+          "F0FF",
+          "F0F0",
+          "00FF",
+          "F00F"
+        ]
+      ],
+      "fields": [
+        [
+          "HEX(b)",
+          253,
+          128,
+          0,
+          31,
+          224,
+          "",
+          "",
+          "",
+          ""
+        ],
+        [
+          "HEX(c)",
+          253,
+          128,
+          1,
+          31,
+          224,
+          "",
+          "",
+          "",
+          ""
+        ],
+        [
+          "HEX(b&c)",
+          253,
+          128,
+          0,
+          31,
+          224,
+          "",
+          "",
+          "",
+          ""
+        ],
+        [
+          "HEX(b)",
+          253,
+          128,
+          0,
+          31,
+          224,
+          "",
+          "",
+          "",
+          ""
+        ],
+        [
+          "HEX(c)",
+          253,
+          128,
+          1,
+          31,
+          224,
+          "",
+          "",
+          "",
+          ""
+        ],
+        [
+          "HEX(b|c)",
+          253,
+          128,
+          0,
+          31,
+          224,
+          "",
+          "",
+          "",
+          ""
+        ],
+        [
+          "HEX(b^c)",
+          253,
+          128,
+          0,
+          31,
+          224,
+          "",
+          "",
+          "",
+          ""
+        ],
+        [
+          "HEX(b)",
+          253,
+          128,
+          0,
+          31,
+          224,
+          "",
+          "",
+          "",
+          ""
+        ],
+        [
+          "HEX(c)",
+          253,
+          128,
+          1,
+          31,
+          224,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT HEX(b),HEX(c),HEX(b&c),HEX(b),HEX(c),HEX(b|c),HEX(b^c),HEX(b),HEX(c) FROM bit263 WHERE id=1",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "HEX(b)",
+          253,
+          128,
+          0,
+          31,
+          224,
+          "",
+          "",
+          "",
+          ""
+        ],
+        [
+          "HEX(c)",
+          253,
+          128,
+          1,
+          31,
+          224,
+          "",
+          "",
+          "",
+          ""
+        ],
+        [
+          "HEX(b&c)",
+          253,
+          128,
+          0,
+          31,
+          224,
+          "",
+          "",
+          "",
+          ""
+        ],
+        [
+          "HEX(b)",
+          253,
+          128,
+          0,
+          31,
+          224,
+          "",
+          "",
+          "",
+          ""
+        ],
+        [
+          "HEX(c)",
+          253,
+          128,
+          1,
+          31,
+          224,
+          "",
+          "",
+          "",
+          ""
+        ],
+        [
+          "HEX(b|c)",
+          253,
+          128,
+          0,
+          31,
+          224,
+          "",
+          "",
+          "",
+          ""
+        ],
+        [
+          "HEX(b^c)",
+          253,
+          128,
+          0,
+          31,
+          224,
+          "",
+          "",
+          "",
+          ""
+        ],
+        [
+          "HEX(b)",
+          253,
+          128,
+          0,
+          31,
+          224,
+          "",
+          "",
+          "",
+          ""
+        ],
+        [
+          "HEX(c)",
+          253,
+          128,
+          1,
+          31,
+          224,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT HEX(b),HEX(c),HEX(b&c),HEX(b),HEX(c),HEX(b|c),HEX(b^c),HEX(b),HEX(c) FROM bit263 WHERE id=2",
+      "api": "query",
+      "existing": false,
+      "rows": [
+        [
+          null,
+          "",
+          null,
+          null,
+          "",
+          null,
+          null,
+          null,
+          ""
+        ]
+      ],
+      "fields": [
+        [
+          "HEX(b)",
+          253,
+          128,
+          0,
+          31,
+          224,
+          "",
+          "",
+          "",
+          ""
+        ],
+        [
+          "HEX(c)",
+          253,
+          128,
+          1,
+          31,
+          224,
+          "",
+          "",
+          "",
+          ""
+        ],
+        [
+          "HEX(b&c)",
+          253,
+          128,
+          0,
+          31,
+          224,
+          "",
+          "",
+          "",
+          ""
+        ],
+        [
+          "HEX(b)",
+          253,
+          128,
+          0,
+          31,
+          224,
+          "",
+          "",
+          "",
+          ""
+        ],
+        [
+          "HEX(c)",
+          253,
+          128,
+          1,
+          31,
+          224,
+          "",
+          "",
+          "",
+          ""
+        ],
+        [
+          "HEX(b|c)",
+          253,
+          128,
+          0,
+          31,
+          224,
+          "",
+          "",
+          "",
+          ""
+        ],
+        [
+          "HEX(b^c)",
+          253,
+          128,
+          0,
+          31,
+          224,
+          "",
+          "",
+          "",
+          ""
+        ],
+        [
+          "HEX(b)",
+          253,
+          128,
+          0,
+          31,
+          224,
+          "",
+          "",
+          "",
+          ""
+        ],
+        [
+          "HEX(c)",
+          253,
+          128,
+          1,
+          31,
+          224,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT HEX(b),HEX(c),HEX(b&c),HEX(b),HEX(c),HEX(b|c),HEX(b^c),HEX(b),HEX(c) FROM bit263 WHERE id=2",
+      "api": "execute",
+      "existing": false,
+      "rows": [
+        [
+          null,
+          "",
+          null,
+          null,
+          "",
+          null,
+          null,
+          null,
+          ""
+        ]
+      ],
+      "fields": [
+        [
+          "HEX(b)",
+          253,
+          128,
+          0,
+          31,
+          224,
+          "",
+          "",
+          "",
+          ""
+        ],
+        [
+          "HEX(c)",
+          253,
+          128,
+          1,
+          31,
+          224,
+          "",
+          "",
+          "",
+          ""
+        ],
+        [
+          "HEX(b&c)",
+          253,
+          128,
+          0,
+          31,
+          224,
+          "",
+          "",
+          "",
+          ""
+        ],
+        [
+          "HEX(b)",
+          253,
+          128,
+          0,
+          31,
+          224,
+          "",
+          "",
+          "",
+          ""
+        ],
+        [
+          "HEX(c)",
+          253,
+          128,
+          1,
+          31,
+          224,
+          "",
+          "",
+          "",
+          ""
+        ],
+        [
+          "HEX(b|c)",
+          253,
+          128,
+          0,
+          31,
+          224,
+          "",
+          "",
+          "",
+          ""
+        ],
+        [
+          "HEX(b^c)",
+          253,
+          128,
+          0,
+          31,
+          224,
+          "",
+          "",
+          "",
+          ""
+        ],
+        [
+          "HEX(b)",
+          253,
+          128,
+          0,
+          31,
+          224,
+          "",
+          "",
+          "",
+          ""
+        ],
+        [
+          "HEX(c)",
+          253,
+          128,
+          1,
+          31,
+          224,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT HEX(b),HEX(c),HEX(b&c),HEX(b),HEX(c),HEX(b|c),HEX(b^c),HEX(b),HEX(c) FROM bit263 WHERE id=2",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "HEX(b)",
+          253,
+          128,
+          0,
+          31,
+          224,
+          "",
+          "",
+          "",
+          ""
+        ],
+        [
+          "HEX(c)",
+          253,
+          128,
+          1,
+          31,
+          224,
+          "",
+          "",
+          "",
+          ""
+        ],
+        [
+          "HEX(b&c)",
+          253,
+          128,
+          0,
+          31,
+          224,
+          "",
+          "",
+          "",
+          ""
+        ],
+        [
+          "HEX(b)",
+          253,
+          128,
+          0,
+          31,
+          224,
+          "",
+          "",
+          "",
+          ""
+        ],
+        [
+          "HEX(c)",
+          253,
+          128,
+          1,
+          31,
+          224,
+          "",
+          "",
+          "",
+          ""
+        ],
+        [
+          "HEX(b|c)",
+          253,
+          128,
+          0,
+          31,
+          224,
+          "",
+          "",
+          "",
+          ""
+        ],
+        [
+          "HEX(b^c)",
+          253,
+          128,
+          0,
+          31,
+          224,
+          "",
+          "",
+          "",
+          ""
+        ],
+        [
+          "HEX(b)",
+          253,
+          128,
+          0,
+          31,
+          224,
+          "",
+          "",
+          "",
+          ""
+        ],
+        [
+          "HEX(c)",
+          253,
+          128,
+          1,
+          31,
+          224,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT HEX(b),HEX(c),HEX(b&c),HEX(b),HEX(c),HEX(b|c),HEX(b^c),HEX(b),HEX(c) FROM bit263 WHERE id=3",
+      "api": "query",
+      "existing": false,
+      "rows": [
+        [
+          "",
+          "",
+          "",
+          "",
+          "",
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "fields": [
+        [
+          "HEX(b)",
+          253,
+          128,
+          0,
+          31,
+          224,
+          "",
+          "",
+          "",
+          ""
+        ],
+        [
+          "HEX(c)",
+          253,
+          128,
+          1,
+          31,
+          224,
+          "",
+          "",
+          "",
+          ""
+        ],
+        [
+          "HEX(b&c)",
+          253,
+          128,
+          0,
+          31,
+          224,
+          "",
+          "",
+          "",
+          ""
+        ],
+        [
+          "HEX(b)",
+          253,
+          128,
+          0,
+          31,
+          224,
+          "",
+          "",
+          "",
+          ""
+        ],
+        [
+          "HEX(c)",
+          253,
+          128,
+          1,
+          31,
+          224,
+          "",
+          "",
+          "",
+          ""
+        ],
+        [
+          "HEX(b|c)",
+          253,
+          128,
+          0,
+          31,
+          224,
+          "",
+          "",
+          "",
+          ""
+        ],
+        [
+          "HEX(b^c)",
+          253,
+          128,
+          0,
+          31,
+          224,
+          "",
+          "",
+          "",
+          ""
+        ],
+        [
+          "HEX(b)",
+          253,
+          128,
+          0,
+          31,
+          224,
+          "",
+          "",
+          "",
+          ""
+        ],
+        [
+          "HEX(c)",
+          253,
+          128,
+          1,
+          31,
+          224,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT HEX(b),HEX(c),HEX(b&c),HEX(b),HEX(c),HEX(b|c),HEX(b^c),HEX(b),HEX(c) FROM bit263 WHERE id=3",
+      "api": "execute",
+      "existing": false,
+      "rows": [
+        [
+          "",
+          "",
+          "",
+          "",
+          "",
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "fields": [
+        [
+          "HEX(b)",
+          253,
+          128,
+          0,
+          31,
+          224,
+          "",
+          "",
+          "",
+          ""
+        ],
+        [
+          "HEX(c)",
+          253,
+          128,
+          1,
+          31,
+          224,
+          "",
+          "",
+          "",
+          ""
+        ],
+        [
+          "HEX(b&c)",
+          253,
+          128,
+          0,
+          31,
+          224,
+          "",
+          "",
+          "",
+          ""
+        ],
+        [
+          "HEX(b)",
+          253,
+          128,
+          0,
+          31,
+          224,
+          "",
+          "",
+          "",
+          ""
+        ],
+        [
+          "HEX(c)",
+          253,
+          128,
+          1,
+          31,
+          224,
+          "",
+          "",
+          "",
+          ""
+        ],
+        [
+          "HEX(b|c)",
+          253,
+          128,
+          0,
+          31,
+          224,
+          "",
+          "",
+          "",
+          ""
+        ],
+        [
+          "HEX(b^c)",
+          253,
+          128,
+          0,
+          31,
+          224,
+          "",
+          "",
+          "",
+          ""
+        ],
+        [
+          "HEX(b)",
+          253,
+          128,
+          0,
+          31,
+          224,
+          "",
+          "",
+          "",
+          ""
+        ],
+        [
+          "HEX(c)",
+          253,
+          128,
+          1,
+          31,
+          224,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT HEX(b),HEX(c),HEX(b&c),HEX(b),HEX(c),HEX(b|c),HEX(b^c),HEX(b),HEX(c) FROM bit263 WHERE id=3",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "HEX(b)",
+          253,
+          128,
+          0,
+          31,
+          224,
+          "",
+          "",
+          "",
+          ""
+        ],
+        [
+          "HEX(c)",
+          253,
+          128,
+          1,
+          31,
+          224,
+          "",
+          "",
+          "",
+          ""
+        ],
+        [
+          "HEX(b&c)",
+          253,
+          128,
+          0,
+          31,
+          224,
+          "",
+          "",
+          "",
+          ""
+        ],
+        [
+          "HEX(b)",
+          253,
+          128,
+          0,
+          31,
+          224,
+          "",
+          "",
+          "",
+          ""
+        ],
+        [
+          "HEX(c)",
+          253,
+          128,
+          1,
+          31,
+          224,
+          "",
+          "",
+          "",
+          ""
+        ],
+        [
+          "HEX(b|c)",
+          253,
+          128,
+          0,
+          31,
+          224,
+          "",
+          "",
+          "",
+          ""
+        ],
+        [
+          "HEX(b^c)",
+          253,
+          128,
+          0,
+          31,
+          224,
+          "",
+          "",
+          "",
+          ""
+        ],
+        [
+          "HEX(b)",
+          253,
+          128,
+          0,
+          31,
+          224,
+          "",
+          "",
+          "",
+          ""
+        ],
+        [
+          "HEX(c)",
+          253,
+          128,
+          1,
+          31,
+          224,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT b,c,b&c,b,c,b|c,b^c,b,c FROM bit263 WHERE id=1",
+      "api": "query",
+      "existing": false,
+      "rows": [
+        [
+          {
+            "type": "Buffer",
+            "data": [
+              0,
+              255
+            ]
+          },
+          {
+            "type": "Buffer",
+            "data": [
+              240,
+              15
+            ]
+          },
+          {
+            "type": "Buffer",
+            "data": [
+              0,
+              15
+            ]
+          },
+          {
+            "type": "Buffer",
+            "data": [
+              0,
+              255
+            ]
+          },
+          {
+            "type": "Buffer",
+            "data": [
+              240,
+              15
+            ]
+          },
+          {
+            "type": "Buffer",
+            "data": [
+              240,
+              255
+            ]
+          },
+          {
+            "type": "Buffer",
+            "data": [
+              240,
+              240
+            ]
+          },
+          {
+            "type": "Buffer",
+            "data": [
+              0,
+              255
+            ]
+          },
+          {
+            "type": "Buffer",
+            "data": [
+              240,
+              15
+            ]
+          }
+        ]
+      ],
+      "fields": [
+        [
+          "b",
+          253,
+          16,
+          128,
+          0,
+          63,
+          "myjs_bitwise263",
+          "bit263",
+          "bit263",
+          "b"
+        ],
+        [
+          "c",
+          253,
+          16,
+          4225,
+          0,
+          63,
+          "myjs_bitwise263",
+          "bit263",
+          "bit263",
+          "c"
+        ],
+        [
+          "b&c",
+          253,
+          16,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ],
+        [
+          "b",
+          253,
+          16,
+          128,
+          0,
+          63,
+          "myjs_bitwise263",
+          "bit263",
+          "bit263",
+          "b"
+        ],
+        [
+          "c",
+          253,
+          16,
+          4225,
+          0,
+          63,
+          "myjs_bitwise263",
+          "bit263",
+          "bit263",
+          "c"
+        ],
+        [
+          "b|c",
+          253,
+          16,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ],
+        [
+          "b^c",
+          253,
+          16,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ],
+        [
+          "b",
+          253,
+          16,
+          128,
+          0,
+          63,
+          "myjs_bitwise263",
+          "bit263",
+          "bit263",
+          "b"
+        ],
+        [
+          "c",
+          253,
+          16,
+          4225,
+          0,
+          63,
+          "myjs_bitwise263",
+          "bit263",
+          "bit263",
+          "c"
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT b,c,b&c,b,c,b|c,b^c,b,c FROM bit263 WHERE id=1",
+      "api": "execute",
+      "existing": false,
+      "rows": [
+        [
+          {
+            "type": "Buffer",
+            "data": [
+              0,
+              255
+            ]
+          },
+          {
+            "type": "Buffer",
+            "data": [
+              240,
+              15
+            ]
+          },
+          {
+            "type": "Buffer",
+            "data": [
+              0,
+              15
+            ]
+          },
+          {
+            "type": "Buffer",
+            "data": [
+              0,
+              255
+            ]
+          },
+          {
+            "type": "Buffer",
+            "data": [
+              240,
+              15
+            ]
+          },
+          {
+            "type": "Buffer",
+            "data": [
+              240,
+              255
+            ]
+          },
+          {
+            "type": "Buffer",
+            "data": [
+              240,
+              240
+            ]
+          },
+          {
+            "type": "Buffer",
+            "data": [
+              0,
+              255
+            ]
+          },
+          {
+            "type": "Buffer",
+            "data": [
+              240,
+              15
+            ]
+          }
+        ]
+      ],
+      "fields": [
+        [
+          "b",
+          253,
+          16,
+          128,
+          0,
+          63,
+          "myjs_bitwise263",
+          "bit263",
+          "bit263",
+          "b"
+        ],
+        [
+          "c",
+          253,
+          16,
+          4225,
+          0,
+          63,
+          "myjs_bitwise263",
+          "bit263",
+          "bit263",
+          "c"
+        ],
+        [
+          "b&c",
+          253,
+          16,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ],
+        [
+          "b",
+          253,
+          16,
+          128,
+          0,
+          63,
+          "myjs_bitwise263",
+          "bit263",
+          "bit263",
+          "b"
+        ],
+        [
+          "c",
+          253,
+          16,
+          4225,
+          0,
+          63,
+          "myjs_bitwise263",
+          "bit263",
+          "bit263",
+          "c"
+        ],
+        [
+          "b|c",
+          253,
+          16,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ],
+        [
+          "b^c",
+          253,
+          16,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ],
+        [
+          "b",
+          253,
+          16,
+          128,
+          0,
+          63,
+          "myjs_bitwise263",
+          "bit263",
+          "bit263",
+          "b"
+        ],
+        [
+          "c",
+          253,
+          16,
+          4225,
+          0,
+          63,
+          "myjs_bitwise263",
+          "bit263",
+          "bit263",
+          "c"
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT b,c,b&c,b,c,b|c,b^c,b,c FROM bit263 WHERE id=1",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "b",
+          253,
+          16,
+          128,
+          0,
+          63,
+          "myjs_bitwise263",
+          "bit263",
+          "bit263",
+          "b"
+        ],
+        [
+          "c",
+          253,
+          16,
+          4225,
+          0,
+          63,
+          "myjs_bitwise263",
+          "bit263",
+          "bit263",
+          "c"
+        ],
+        [
+          "b&c",
+          253,
+          16,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ],
+        [
+          "b",
+          253,
+          16,
+          128,
+          0,
+          63,
+          "myjs_bitwise263",
+          "bit263",
+          "bit263",
+          "b"
+        ],
+        [
+          "c",
+          253,
+          16,
+          4225,
+          0,
+          63,
+          "myjs_bitwise263",
+          "bit263",
+          "bit263",
+          "c"
+        ],
+        [
+          "b|c",
+          253,
+          16,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ],
+        [
+          "b^c",
+          253,
+          16,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ],
+        [
+          "b",
+          253,
+          16,
+          128,
+          0,
+          63,
+          "myjs_bitwise263",
+          "bit263",
+          "bit263",
+          "b"
+        ],
+        [
+          "c",
+          253,
+          16,
+          4225,
+          0,
+          63,
+          "myjs_bitwise263",
+          "bit263",
+          "bit263",
+          "c"
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    }
+  ]
+}

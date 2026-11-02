@@ -2900,8 +2900,48 @@ prepared-mode extension; final seeded executor fuzz and the complete official
 suite were repeated after it. All eleven required f195935 CI jobs pass.
 Totals stay 144/190 and M5 42/53; M5.10 remains partial.
 
-Next audit binary-string AND/OR/XOR and shifts at the existing binary operator
-compiler. Preserve raw literal provenance and numeric mode; verify mixed
+**Binary-string AND/OR/XOR, verified (2026-11-02):** the existing
+binary compiler now reads byte operands directly when both inputs are binary
+strings or NULL and at least one concrete binary input is not a raw hex/bit
+literal. Other inputs retain their numeric reader. It reads left before right,
+returns on NULL without reading the remaining input, checks equal byte lengths
+before allocating, and returns a fresh byte array. Native 3513 errors retain
+preceding truncation warnings. Metadata uses the larger declared byte width,
+shared binary result factory and argument nullability; coercibility is four.
+
+Six native profiles cover 891 complete outcomes, improving 219 to 786 while
+retaining every previous complete match. They include all 256 bytes, large
+operands through 65,536 bytes, raw literal/scalar/collation provenance, unequal
+lengths, nullable VARBINARY/BLOB fields, physical BIT numeric controls, input
+immutability and both protocols. Six new fixtures retain the 786 complete
+responses; all older pools and expectations stay unchanged. Across 7,691 outcomes,
+complete matches improve 5,961 to 6,528 with all 94,655 earlier matching facts held.
+All 39 focused groups pass locally and natively; actual ee18407 passes the 33
+older groups and fails all six additions. Typecheck, lint, 20,000 executor
+statements seeded 20261010 and plans at 2,127/2,248 under the unchanged 2,118
+floor pass. The complete official suite retains all 38 passing identities and
+its native baseline. All nine unchanged caps pass at parser/core/facade
+45,599/333,214/333,129 B gzipped. Final fresh Docker --reference passes 1,679
+main and four latency tests, typecheck, lint, package/typed smoke, the real
+client and all seven pinned corpora, including 1,737 coercion warning counts.
+Source proof exactly matches 575 tests/fixtures and 206 runtime sources plus
+tooling.
+
+The other 105 outcomes remain explicit: 48 binary shifts, twelve existing mixed
+numeric diagnostic outcomes, eighteen CHARSET/COLLATION nullability outcomes,
+and 27 parameter definition/byte-decoding/warning-format outcomes. For example,
+a non-ASCII Buffer bound into CAST AS BINARY loses raw bytes before the operator;
+control-byte truncation warnings also retain a separate formatting gap. This
+slice does not claim to repair those reader owners. M5.10 and the roadmap totals
+stay partial at 144/190 and M5 42/53. All eleven required ee18407 CI jobs pass.
+
+Next verify the byte-function DOUBLE reader before expanding the operator
+surface. A separate 81-outcome numeric-consumer audit already matches 69,
+including DECIMAL and unsigned casts; twelve query/execute outcomes emit extra
+1292 DOUBLE warnings. For example, `(_binary'123x' & _binary X'FFFFFFFF') + 0`
+returns 123 quietly on 8.4.11. Repair its actual numeric-reader policy without
+changing the underlying bytes, metadata or the verified DECIMAL/INTEGER readers.
+Then audit binary-string shifts at the existing binary operator compiler. Preserve raw literal provenance and numeric mode; verify mixed
 operands, NULL, equal-length errors, shift counts, result metadata, input
 immutability and both protocols before choosing a repair. Keep untyped marker
 inference, CONCAT packet overflow and bitwise expression printing explicitly

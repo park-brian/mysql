@@ -1482,6 +1482,22 @@ function binary(op: string, left: Expression, right: Expression, extra: Expressi
     case '^':
     case '<<':
     case '>>': {
+      const types = [a.type, b.type]
+      if (op !== '<<' && op !== '>>' && types.every((t) => t.kind === 'bytes' || t.kind === 'null') && types.some((t) => t.kind === 'bytes' && t.literalInt === undefined)) {
+        return {
+          eval: (r, env) => {
+            const first = at(r, env)
+            if (first === null) return null
+            const second = bt(r, env)
+            if (second === null) return null
+            const bytes = valueBytes(first)
+            const other = valueBytes(second)
+            if (bytes.length !== other.length) throw sqlError('ER_INVALID_BITWISE_OPERANDS_SIZE', 'Binary operands of bitwise operators must be of equal length')
+            return bytesValue(bytes.map((byte, i) => op === '&' ? byte & other[i]! : op === '|' ? byte | other[i]! : byte ^ other[i]!))
+          },
+          type: { ...stringResultType(Math.max(byteWidth(a.type), byteWidth(b.type)), true, CHARSET_BINARY, COERCIBILITY.COERCIBLE), nullable },
+        }
+      }
       // Text is read as an unsigned integer, warning as it goes.
       const x = asNumber(ca, 'INTEGER').eval
       const y = asNumber(cb, 'INTEGER').eval

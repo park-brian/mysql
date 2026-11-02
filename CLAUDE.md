@@ -100,7 +100,9 @@ provenance retains numeric mode. Binary casts share padding/truncation and
 preserve source nullability plus the strict SQL-mode fence; bounded string-result
 and marker nullability now follow native metadata. An open prepared statement
 retains its SQL mode for string metadata while text queries use the current mode.
-Untyped marker inference and wider binary operators remain open. General
+Binary-string AND/OR/XOR now retains native bytes, length errors, NULL order,
+metadata and input immutability within its verified boundary. Untyped marker inference, raw parameter
+byte decoding, byte-function DOUBLE diagnostics and binary shifts remain open. General
 updatability, definition normalization and schema-driven automatic reprepare
 remain open. Parser-level body refusals,
 earlier recursive validation, duplicate binding timing, view PREPARE body

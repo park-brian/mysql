@@ -1,0 +1,1791 @@
+{
+  "mysqlVersion": "8.4.11",
+  "schema": "myjs_bitwise263",
+  "sqlMode": "ERROR_FOR_DIVISION_BY_ZERO",
+  "seed": "SELECT 1/0,CAST('x' AS DECIMAL)",
+  "setup": [
+    "CREATE TABLE base260(b VARCHAR(16),n BIGINT UNSIGNED)",
+    "INSERT INTO base260 VALUES('g',18446744073709551615)"
+  ],
+  "beforeEach": [
+    "DROP VIEW IF EXISTS v256"
+  ],
+  "observations": [
+    {
+      "sql": "SELECT (CAST(NULL AS BINARY(2))) & (CAST(18446744073709551615+1 AS BINARY(2))) AS v",
+      "api": "query",
+      "existing": false,
+      "rows": [
+        [
+          null
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          253,
+          2,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT (CAST(NULL AS BINARY(2))) & (CAST(18446744073709551615+1 AS BINARY(2))) AS v",
+      "api": "execute",
+      "existing": false,
+      "rows": [
+        [
+          null
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          253,
+          2,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT (CAST(NULL AS BINARY(2))) & (CAST(18446744073709551615+1 AS BINARY(2))) AS v",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "v",
+          253,
+          2,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT (CAST(NULL AS BINARY(2))) | (CAST(18446744073709551615+1 AS BINARY(2))) AS v",
+      "api": "query",
+      "existing": false,
+      "rows": [
+        [
+          null
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          253,
+          2,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT (CAST(NULL AS BINARY(2))) | (CAST(18446744073709551615+1 AS BINARY(2))) AS v",
+      "api": "execute",
+      "existing": false,
+      "rows": [
+        [
+          null
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          253,
+          2,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT (CAST(NULL AS BINARY(2))) | (CAST(18446744073709551615+1 AS BINARY(2))) AS v",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "v",
+          253,
+          2,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT (CAST(NULL AS BINARY(2))) ^ (CAST(18446744073709551615+1 AS BINARY(2))) AS v",
+      "api": "query",
+      "existing": false,
+      "rows": [
+        [
+          null
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          253,
+          2,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT (CAST(NULL AS BINARY(2))) ^ (CAST(18446744073709551615+1 AS BINARY(2))) AS v",
+      "api": "execute",
+      "existing": false,
+      "rows": [
+        [
+          null
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          253,
+          2,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT (CAST(NULL AS BINARY(2))) ^ (CAST(18446744073709551615+1 AS BINARY(2))) AS v",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "v",
+          253,
+          2,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT (CAST(18446744073709551615+1 AS BINARY(2))) & (CAST(NULL AS BINARY(2))) AS v",
+      "api": "query",
+      "existing": false,
+      "error": {
+        "code": "ER_DATA_OUT_OF_RANGE",
+        "errno": 1690,
+        "state": "22003",
+        "message": "BIGINT UNSIGNED value is out of range in '(18446744073709551615 + 1)'"
+      },
+      "warnings": [
+        [
+          "Error",
+          1690,
+          "BIGINT UNSIGNED value is out of range in '(18446744073709551615 + 1)'"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "SELECT (CAST(18446744073709551615+1 AS BINARY(2))) & (CAST(NULL AS BINARY(2))) AS v",
+      "api": "execute",
+      "existing": false,
+      "error": {
+        "code": "ER_DATA_OUT_OF_RANGE",
+        "errno": 1690,
+        "state": "22003",
+        "message": "BIGINT UNSIGNED value is out of range in '(18446744073709551615 + 1)'"
+      },
+      "warnings": [
+        [
+          "Error",
+          1690,
+          "BIGINT UNSIGNED value is out of range in '(18446744073709551615 + 1)'"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "SELECT (CAST(18446744073709551615+1 AS BINARY(2))) & (CAST(NULL AS BINARY(2))) AS v",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "v",
+          253,
+          2,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT (CAST(18446744073709551615+1 AS BINARY(2))) | (CAST(NULL AS BINARY(2))) AS v",
+      "api": "query",
+      "existing": false,
+      "error": {
+        "code": "ER_DATA_OUT_OF_RANGE",
+        "errno": 1690,
+        "state": "22003",
+        "message": "BIGINT UNSIGNED value is out of range in '(18446744073709551615 + 1)'"
+      },
+      "warnings": [
+        [
+          "Error",
+          1690,
+          "BIGINT UNSIGNED value is out of range in '(18446744073709551615 + 1)'"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "SELECT (CAST(18446744073709551615+1 AS BINARY(2))) | (CAST(NULL AS BINARY(2))) AS v",
+      "api": "execute",
+      "existing": false,
+      "error": {
+        "code": "ER_DATA_OUT_OF_RANGE",
+        "errno": 1690,
+        "state": "22003",
+        "message": "BIGINT UNSIGNED value is out of range in '(18446744073709551615 + 1)'"
+      },
+      "warnings": [
+        [
+          "Error",
+          1690,
+          "BIGINT UNSIGNED value is out of range in '(18446744073709551615 + 1)'"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "SELECT (CAST(18446744073709551615+1 AS BINARY(2))) | (CAST(NULL AS BINARY(2))) AS v",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "v",
+          253,
+          2,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT (CAST(18446744073709551615+1 AS BINARY(2))) ^ (CAST(NULL AS BINARY(2))) AS v",
+      "api": "query",
+      "existing": false,
+      "error": {
+        "code": "ER_DATA_OUT_OF_RANGE",
+        "errno": 1690,
+        "state": "22003",
+        "message": "BIGINT UNSIGNED value is out of range in '(18446744073709551615 + 1)'"
+      },
+      "warnings": [
+        [
+          "Error",
+          1690,
+          "BIGINT UNSIGNED value is out of range in '(18446744073709551615 + 1)'"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "SELECT (CAST(18446744073709551615+1 AS BINARY(2))) ^ (CAST(NULL AS BINARY(2))) AS v",
+      "api": "execute",
+      "existing": false,
+      "error": {
+        "code": "ER_DATA_OUT_OF_RANGE",
+        "errno": 1690,
+        "state": "22003",
+        "message": "BIGINT UNSIGNED value is out of range in '(18446744073709551615 + 1)'"
+      },
+      "warnings": [
+        [
+          "Error",
+          1690,
+          "BIGINT UNSIGNED value is out of range in '(18446744073709551615 + 1)'"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "SELECT (CAST(18446744073709551615+1 AS BINARY(2))) ^ (CAST(NULL AS BINARY(2))) AS v",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "v",
+          253,
+          2,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT (CAST(NULL AS BINARY(2))) & (CAST('abc' AS BINARY(1))) AS v",
+      "api": "query",
+      "existing": false,
+      "rows": [
+        [
+          null
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          253,
+          2,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT (CAST(NULL AS BINARY(2))) & (CAST('abc' AS BINARY(1))) AS v",
+      "api": "execute",
+      "existing": false,
+      "rows": [
+        [
+          null
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          253,
+          2,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT (CAST(NULL AS BINARY(2))) & (CAST('abc' AS BINARY(1))) AS v",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "v",
+          253,
+          2,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT (CAST(NULL AS BINARY(2))) | (CAST('abc' AS BINARY(1))) AS v",
+      "api": "query",
+      "existing": false,
+      "rows": [
+        [
+          null
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          253,
+          2,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT (CAST(NULL AS BINARY(2))) | (CAST('abc' AS BINARY(1))) AS v",
+      "api": "execute",
+      "existing": false,
+      "rows": [
+        [
+          null
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          253,
+          2,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT (CAST(NULL AS BINARY(2))) | (CAST('abc' AS BINARY(1))) AS v",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "v",
+          253,
+          2,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT (CAST(NULL AS BINARY(2))) ^ (CAST('abc' AS BINARY(1))) AS v",
+      "api": "query",
+      "existing": false,
+      "rows": [
+        [
+          null
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          253,
+          2,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT (CAST(NULL AS BINARY(2))) ^ (CAST('abc' AS BINARY(1))) AS v",
+      "api": "execute",
+      "existing": false,
+      "rows": [
+        [
+          null
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          253,
+          2,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT (CAST(NULL AS BINARY(2))) ^ (CAST('abc' AS BINARY(1))) AS v",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "v",
+          253,
+          2,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT (CAST('abc' AS BINARY(1))) & (CAST(NULL AS BINARY(2))) AS v",
+      "api": "query",
+      "existing": false,
+      "rows": [
+        [
+          null
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          253,
+          2,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [
+        [
+          "Warning",
+          1292,
+          "Truncated incorrect BINARY(1) value: 'abc'"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT (CAST('abc' AS BINARY(1))) & (CAST(NULL AS BINARY(2))) AS v",
+      "api": "execute",
+      "existing": false,
+      "rows": [
+        [
+          null
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          253,
+          2,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [
+        [
+          "Warning",
+          1292,
+          "Truncated incorrect BINARY(1) value: 'abc'"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT (CAST('abc' AS BINARY(1))) & (CAST(NULL AS BINARY(2))) AS v",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "v",
+          253,
+          2,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT (CAST('abc' AS BINARY(1))) | (CAST(NULL AS BINARY(2))) AS v",
+      "api": "query",
+      "existing": false,
+      "rows": [
+        [
+          null
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          253,
+          2,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [
+        [
+          "Warning",
+          1292,
+          "Truncated incorrect BINARY(1) value: 'abc'"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT (CAST('abc' AS BINARY(1))) | (CAST(NULL AS BINARY(2))) AS v",
+      "api": "execute",
+      "existing": false,
+      "rows": [
+        [
+          null
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          253,
+          2,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [
+        [
+          "Warning",
+          1292,
+          "Truncated incorrect BINARY(1) value: 'abc'"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT (CAST('abc' AS BINARY(1))) | (CAST(NULL AS BINARY(2))) AS v",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "v",
+          253,
+          2,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT (CAST('abc' AS BINARY(1))) ^ (CAST(NULL AS BINARY(2))) AS v",
+      "api": "query",
+      "existing": false,
+      "rows": [
+        [
+          null
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          253,
+          2,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [
+        [
+          "Warning",
+          1292,
+          "Truncated incorrect BINARY(1) value: 'abc'"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT (CAST('abc' AS BINARY(1))) ^ (CAST(NULL AS BINARY(2))) AS v",
+      "api": "execute",
+      "existing": false,
+      "rows": [
+        [
+          null
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          253,
+          2,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [
+        [
+          "Warning",
+          1292,
+          "Truncated incorrect BINARY(1) value: 'abc'"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT (CAST('abc' AS BINARY(1))) ^ (CAST(NULL AS BINARY(2))) AS v",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "v",
+          253,
+          2,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT (_binary X'00FF') & (CAST('abc' AS BINARY(1))) AS v",
+      "api": "query",
+      "existing": false,
+      "error": {
+        "code": "ER_INVALID_BITWISE_OPERANDS_SIZE",
+        "errno": 3513,
+        "state": "HY000",
+        "message": "Binary operands of bitwise operators must be of equal length"
+      },
+      "warnings": [
+        [
+          "Warning",
+          1292,
+          "Truncated incorrect BINARY(1) value: 'abc'"
+        ],
+        [
+          "Error",
+          3513,
+          "Binary operands of bitwise operators must be of equal length"
+        ]
+      ],
+      "warningCount": "2",
+      "errorCount": "1"
+    },
+    {
+      "sql": "SELECT (_binary X'00FF') & (CAST('abc' AS BINARY(1))) AS v",
+      "api": "execute",
+      "existing": false,
+      "error": {
+        "code": "ER_INVALID_BITWISE_OPERANDS_SIZE",
+        "errno": 3513,
+        "state": "HY000",
+        "message": "Binary operands of bitwise operators must be of equal length"
+      },
+      "warnings": [
+        [
+          "Warning",
+          1292,
+          "Truncated incorrect BINARY(1) value: 'abc'"
+        ],
+        [
+          "Error",
+          3513,
+          "Binary operands of bitwise operators must be of equal length"
+        ]
+      ],
+      "warningCount": "2",
+      "errorCount": "1"
+    },
+    {
+      "sql": "SELECT (_binary X'00FF') & (CAST('abc' AS BINARY(1))) AS v",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "v",
+          253,
+          2,
+          129,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT (_binary X'00FF') | (CAST('abc' AS BINARY(1))) AS v",
+      "api": "query",
+      "existing": false,
+      "error": {
+        "code": "ER_INVALID_BITWISE_OPERANDS_SIZE",
+        "errno": 3513,
+        "state": "HY000",
+        "message": "Binary operands of bitwise operators must be of equal length"
+      },
+      "warnings": [
+        [
+          "Warning",
+          1292,
+          "Truncated incorrect BINARY(1) value: 'abc'"
+        ],
+        [
+          "Error",
+          3513,
+          "Binary operands of bitwise operators must be of equal length"
+        ]
+      ],
+      "warningCount": "2",
+      "errorCount": "1"
+    },
+    {
+      "sql": "SELECT (_binary X'00FF') | (CAST('abc' AS BINARY(1))) AS v",
+      "api": "execute",
+      "existing": false,
+      "error": {
+        "code": "ER_INVALID_BITWISE_OPERANDS_SIZE",
+        "errno": 3513,
+        "state": "HY000",
+        "message": "Binary operands of bitwise operators must be of equal length"
+      },
+      "warnings": [
+        [
+          "Warning",
+          1292,
+          "Truncated incorrect BINARY(1) value: 'abc'"
+        ],
+        [
+          "Error",
+          3513,
+          "Binary operands of bitwise operators must be of equal length"
+        ]
+      ],
+      "warningCount": "2",
+      "errorCount": "1"
+    },
+    {
+      "sql": "SELECT (_binary X'00FF') | (CAST('abc' AS BINARY(1))) AS v",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "v",
+          253,
+          2,
+          129,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT (_binary X'00FF') ^ (CAST('abc' AS BINARY(1))) AS v",
+      "api": "query",
+      "existing": false,
+      "error": {
+        "code": "ER_INVALID_BITWISE_OPERANDS_SIZE",
+        "errno": 3513,
+        "state": "HY000",
+        "message": "Binary operands of bitwise operators must be of equal length"
+      },
+      "warnings": [
+        [
+          "Warning",
+          1292,
+          "Truncated incorrect BINARY(1) value: 'abc'"
+        ],
+        [
+          "Error",
+          3513,
+          "Binary operands of bitwise operators must be of equal length"
+        ]
+      ],
+      "warningCount": "2",
+      "errorCount": "1"
+    },
+    {
+      "sql": "SELECT (_binary X'00FF') ^ (CAST('abc' AS BINARY(1))) AS v",
+      "api": "execute",
+      "existing": false,
+      "error": {
+        "code": "ER_INVALID_BITWISE_OPERANDS_SIZE",
+        "errno": 3513,
+        "state": "HY000",
+        "message": "Binary operands of bitwise operators must be of equal length"
+      },
+      "warnings": [
+        [
+          "Warning",
+          1292,
+          "Truncated incorrect BINARY(1) value: 'abc'"
+        ],
+        [
+          "Error",
+          3513,
+          "Binary operands of bitwise operators must be of equal length"
+        ]
+      ],
+      "warningCount": "2",
+      "errorCount": "1"
+    },
+    {
+      "sql": "SELECT (_binary X'00FF') ^ (CAST('abc' AS BINARY(1))) AS v",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "v",
+          253,
+          2,
+          129,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT (CAST('abc' AS BINARY(1))) & (_binary X'00FF') AS v",
+      "api": "query",
+      "existing": false,
+      "error": {
+        "code": "ER_INVALID_BITWISE_OPERANDS_SIZE",
+        "errno": 3513,
+        "state": "HY000",
+        "message": "Binary operands of bitwise operators must be of equal length"
+      },
+      "warnings": [
+        [
+          "Warning",
+          1292,
+          "Truncated incorrect BINARY(1) value: 'abc'"
+        ],
+        [
+          "Error",
+          3513,
+          "Binary operands of bitwise operators must be of equal length"
+        ]
+      ],
+      "warningCount": "2",
+      "errorCount": "1"
+    },
+    {
+      "sql": "SELECT (CAST('abc' AS BINARY(1))) & (_binary X'00FF') AS v",
+      "api": "execute",
+      "existing": false,
+      "error": {
+        "code": "ER_INVALID_BITWISE_OPERANDS_SIZE",
+        "errno": 3513,
+        "state": "HY000",
+        "message": "Binary operands of bitwise operators must be of equal length"
+      },
+      "warnings": [
+        [
+          "Warning",
+          1292,
+          "Truncated incorrect BINARY(1) value: 'abc'"
+        ],
+        [
+          "Error",
+          3513,
+          "Binary operands of bitwise operators must be of equal length"
+        ]
+      ],
+      "warningCount": "2",
+      "errorCount": "1"
+    },
+    {
+      "sql": "SELECT (CAST('abc' AS BINARY(1))) & (_binary X'00FF') AS v",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "v",
+          253,
+          2,
+          129,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT (CAST('abc' AS BINARY(1))) | (_binary X'00FF') AS v",
+      "api": "query",
+      "existing": false,
+      "error": {
+        "code": "ER_INVALID_BITWISE_OPERANDS_SIZE",
+        "errno": 3513,
+        "state": "HY000",
+        "message": "Binary operands of bitwise operators must be of equal length"
+      },
+      "warnings": [
+        [
+          "Warning",
+          1292,
+          "Truncated incorrect BINARY(1) value: 'abc'"
+        ],
+        [
+          "Error",
+          3513,
+          "Binary operands of bitwise operators must be of equal length"
+        ]
+      ],
+      "warningCount": "2",
+      "errorCount": "1"
+    },
+    {
+      "sql": "SELECT (CAST('abc' AS BINARY(1))) | (_binary X'00FF') AS v",
+      "api": "execute",
+      "existing": false,
+      "error": {
+        "code": "ER_INVALID_BITWISE_OPERANDS_SIZE",
+        "errno": 3513,
+        "state": "HY000",
+        "message": "Binary operands of bitwise operators must be of equal length"
+      },
+      "warnings": [
+        [
+          "Warning",
+          1292,
+          "Truncated incorrect BINARY(1) value: 'abc'"
+        ],
+        [
+          "Error",
+          3513,
+          "Binary operands of bitwise operators must be of equal length"
+        ]
+      ],
+      "warningCount": "2",
+      "errorCount": "1"
+    },
+    {
+      "sql": "SELECT (CAST('abc' AS BINARY(1))) | (_binary X'00FF') AS v",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "v",
+          253,
+          2,
+          129,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT (CAST('abc' AS BINARY(1))) ^ (_binary X'00FF') AS v",
+      "api": "query",
+      "existing": false,
+      "error": {
+        "code": "ER_INVALID_BITWISE_OPERANDS_SIZE",
+        "errno": 3513,
+        "state": "HY000",
+        "message": "Binary operands of bitwise operators must be of equal length"
+      },
+      "warnings": [
+        [
+          "Warning",
+          1292,
+          "Truncated incorrect BINARY(1) value: 'abc'"
+        ],
+        [
+          "Error",
+          3513,
+          "Binary operands of bitwise operators must be of equal length"
+        ]
+      ],
+      "warningCount": "2",
+      "errorCount": "1"
+    },
+    {
+      "sql": "SELECT (CAST('abc' AS BINARY(1))) ^ (_binary X'00FF') AS v",
+      "api": "execute",
+      "existing": false,
+      "error": {
+        "code": "ER_INVALID_BITWISE_OPERANDS_SIZE",
+        "errno": 3513,
+        "state": "HY000",
+        "message": "Binary operands of bitwise operators must be of equal length"
+      },
+      "warnings": [
+        [
+          "Warning",
+          1292,
+          "Truncated incorrect BINARY(1) value: 'abc'"
+        ],
+        [
+          "Error",
+          3513,
+          "Binary operands of bitwise operators must be of equal length"
+        ]
+      ],
+      "warningCount": "2",
+      "errorCount": "1"
+    },
+    {
+      "sql": "SELECT (CAST('abc' AS BINARY(1))) ^ (_binary X'00FF') AS v",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "v",
+          253,
+          2,
+          129,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT (CAST(NULL AS BINARY(2))) & ((_binary X'00FF' & _binary X'00')) AS v",
+      "api": "query",
+      "existing": false,
+      "rows": [
+        [
+          null
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          253,
+          2,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT (CAST(NULL AS BINARY(2))) & ((_binary X'00FF' & _binary X'00')) AS v",
+      "api": "execute",
+      "existing": false,
+      "rows": [
+        [
+          null
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          253,
+          2,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT (CAST(NULL AS BINARY(2))) & ((_binary X'00FF' & _binary X'00')) AS v",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "v",
+          253,
+          2,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT (CAST(NULL AS BINARY(2))) | ((_binary X'00FF' & _binary X'00')) AS v",
+      "api": "query",
+      "existing": false,
+      "rows": [
+        [
+          null
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          253,
+          2,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT (CAST(NULL AS BINARY(2))) | ((_binary X'00FF' & _binary X'00')) AS v",
+      "api": "execute",
+      "existing": false,
+      "rows": [
+        [
+          null
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          253,
+          2,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT (CAST(NULL AS BINARY(2))) | ((_binary X'00FF' & _binary X'00')) AS v",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "v",
+          253,
+          2,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT (CAST(NULL AS BINARY(2))) ^ ((_binary X'00FF' & _binary X'00')) AS v",
+      "api": "query",
+      "existing": false,
+      "rows": [
+        [
+          null
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          253,
+          2,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT (CAST(NULL AS BINARY(2))) ^ ((_binary X'00FF' & _binary X'00')) AS v",
+      "api": "execute",
+      "existing": false,
+      "rows": [
+        [
+          null
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          253,
+          2,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT (CAST(NULL AS BINARY(2))) ^ ((_binary X'00FF' & _binary X'00')) AS v",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "v",
+          253,
+          2,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT ((_binary X'00FF' & _binary X'00')) & (CAST(NULL AS BINARY(2))) AS v",
+      "api": "query",
+      "existing": false,
+      "error": {
+        "code": "ER_INVALID_BITWISE_OPERANDS_SIZE",
+        "errno": 3513,
+        "state": "HY000",
+        "message": "Binary operands of bitwise operators must be of equal length"
+      },
+      "warnings": [
+        [
+          "Error",
+          3513,
+          "Binary operands of bitwise operators must be of equal length"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "SELECT ((_binary X'00FF' & _binary X'00')) & (CAST(NULL AS BINARY(2))) AS v",
+      "api": "execute",
+      "existing": false,
+      "error": {
+        "code": "ER_INVALID_BITWISE_OPERANDS_SIZE",
+        "errno": 3513,
+        "state": "HY000",
+        "message": "Binary operands of bitwise operators must be of equal length"
+      },
+      "warnings": [
+        [
+          "Error",
+          3513,
+          "Binary operands of bitwise operators must be of equal length"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "SELECT ((_binary X'00FF' & _binary X'00')) & (CAST(NULL AS BINARY(2))) AS v",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "v",
+          253,
+          2,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT ((_binary X'00FF' & _binary X'00')) | (CAST(NULL AS BINARY(2))) AS v",
+      "api": "query",
+      "existing": false,
+      "error": {
+        "code": "ER_INVALID_BITWISE_OPERANDS_SIZE",
+        "errno": 3513,
+        "state": "HY000",
+        "message": "Binary operands of bitwise operators must be of equal length"
+      },
+      "warnings": [
+        [
+          "Error",
+          3513,
+          "Binary operands of bitwise operators must be of equal length"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "SELECT ((_binary X'00FF' & _binary X'00')) | (CAST(NULL AS BINARY(2))) AS v",
+      "api": "execute",
+      "existing": false,
+      "error": {
+        "code": "ER_INVALID_BITWISE_OPERANDS_SIZE",
+        "errno": 3513,
+        "state": "HY000",
+        "message": "Binary operands of bitwise operators must be of equal length"
+      },
+      "warnings": [
+        [
+          "Error",
+          3513,
+          "Binary operands of bitwise operators must be of equal length"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "SELECT ((_binary X'00FF' & _binary X'00')) | (CAST(NULL AS BINARY(2))) AS v",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "v",
+          253,
+          2,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT ((_binary X'00FF' & _binary X'00')) ^ (CAST(NULL AS BINARY(2))) AS v",
+      "api": "query",
+      "existing": false,
+      "error": {
+        "code": "ER_INVALID_BITWISE_OPERANDS_SIZE",
+        "errno": 3513,
+        "state": "HY000",
+        "message": "Binary operands of bitwise operators must be of equal length"
+      },
+      "warnings": [
+        [
+          "Error",
+          3513,
+          "Binary operands of bitwise operators must be of equal length"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "SELECT ((_binary X'00FF' & _binary X'00')) ^ (CAST(NULL AS BINARY(2))) AS v",
+      "api": "execute",
+      "existing": false,
+      "error": {
+        "code": "ER_INVALID_BITWISE_OPERANDS_SIZE",
+        "errno": 3513,
+        "state": "HY000",
+        "message": "Binary operands of bitwise operators must be of equal length"
+      },
+      "warnings": [
+        [
+          "Error",
+          3513,
+          "Binary operands of bitwise operators must be of equal length"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "SELECT ((_binary X'00FF' & _binary X'00')) ^ (CAST(NULL AS BINARY(2))) AS v",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [
+        [
+          "v",
+          253,
+          2,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    }
+  ]
+}
