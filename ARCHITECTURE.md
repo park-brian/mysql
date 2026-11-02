@@ -1869,8 +1869,21 @@ FLOAT result fields now narrow to 32 bits at the shared delivery boundary,
 before fixed/default text formatting, as the binary writer already does.
 COALESCE/IFNULL and selected MIN/MAX outputs agree without narrowing their SQL
 numeric or string readings. The 952-observation capture improves 721 to 760
-complete matches while preserving every earlier matching native fact. Default
-FLOAT function string/DECIMAL readings and independent metadata gaps stay open.
+complete matches while preserving every earlier matching native fact.
+
+REAL values now carry their SQL string reading independently of their number
+and result-field descriptor. Canonical functions establish DOUBLE string
+precision; conditionals retain a selected source's original reading, including
+exact BIGINT text, padded YEAR and binary BIT bytes. Binary origins remain bytes
+until a consuming charset decodes them. Actual derived/set/window fields reset
+these traits and store FLOAT at 32 bits; scalar caches own canonical REAL text.
+Set-operation copies read the real number independently of conditional source
+text; raw BIT fields retain their packed bytes. The writer retains its separate
+delivery rule. The expanded 2,756-observation
+capture improves 1,758 to 2,368 complete matches without losing earlier matching
+facts. Large fixed-scale formatting, DECIMAL diagnostics, computed DOUBLE binary
+widths, raw FLOAT copying into non-BLOB string holders and aggregate metadata
+remain separate open gaps.
 
 Catalog statistics rewrites preserve physical table identity. A retained view
 that cannot see the latest catalog revision checks its existing MVCC-visible ID;

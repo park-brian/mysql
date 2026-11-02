@@ -1542,7 +1542,7 @@ function derivedTable(run: Run, query: QueryExpression, alias: string, names: re
     const given = lateral === undefined || row === undefined ? env : { ...env, outer: [row, ...(env.outer ?? [])] }
     for (const r of plan.rows(trx, given)) yield r.map((v, i) => {
       const type = columns[i]!.type
-      return withoutHex(!merged && (type.kind === 'decimal' || type.kind === 'time') ? fieldValue(v, type) : v)
+      return withoutHex(!merged && (type.kind === 'decimal' || type.kind === 'time' || type.kind === 'double') ? fieldValue(v, type) : v)
     })
   }
   // Read once per statement unless it reads an enclosing query: so an UPDATE

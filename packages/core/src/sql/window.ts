@@ -38,7 +38,7 @@ import { nativeCallName, someNode } from './ast.ts'
 import { NODE, type CallNode, type Expression, type FrameBound, type WindowSpec } from '@myjs/parser'
 import { messages, sqlError } from '@myjs/protocol'
 import { add, addInterval, compareValues, doubleValue, intValue, intervalOf, sortValues, timeOrdinal, toInteger, type Interval, type Value } from '@myjs/types'
-import { AGGREGATE_NAMES, aggregate as resultTypeOf, compile, constantEnv, convertTo, type CompileContext, type Compiled, type Env, type Row } from './compile.ts'
+import { AGGREGATE_NAMES, aggregate as resultTypeOf, compile, constantEnv, convertTo, fieldValue, type CompileContext, type Compiled, type Env, type Row } from './compile.ts'
 import { AggregateSink, type AggregateSpec } from './group.ts'
 import { warnNonScalar } from './operators.ts'
 import { isInterval } from './interval.ts'
@@ -155,6 +155,8 @@ export class WindowSink {
     // A field of the window's temporary table: a number there carries no BINARY.
     return { eval: (row) => {
       const v = row[this.base + slot] ?? null
+      // The temporary field owns its real reading, not the argument's forwarded text.
+      if (type.kind === 'double') return fieldValue(v, type)
       // AVG reads its final field; TIME fields also lose the raw expression's negative zero.
       return (name === 'AVG' && type.kind === 'decimal') || type.kind === 'time' ? convertTo(v, type) : v
     }, type: { ...type, length: copiedLength(type), temporary: 'stream' } }

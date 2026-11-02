@@ -58,10 +58,15 @@ The ORM review measured Drizzle's 487 passes and Prisma's 1,122 passes with the
 same reference snapshot failure at two workers. Browser work remains M6;
 InnoDB interchange remains M7, outside the staged Node release.
 
-**Current bounded function work:** the FLOAT result-field delivery repair is
-verified below. SQL numeric and string readers retain their own values; the
-wider capture still exposes default-FLOAT function string/DECIMAL readings and
-metadata gaps. Keep those independent repairs bounded. The complete DECIMAL
+**Current bounded function work:** FLOAT result-field delivery is verified
+below. The SQL string-reader repair now passes 2,756 pinned native observations
+through query/execute: 1,758 to 2,368 complete matches, retaining every earlier
+matching value. Canonical REAL functions, conditional source strings and actual
+field/cache copies now keep their separate readings. Fresh release verification
+passes; large fixed-scale formatting, DECIMAL diagnostics, computed DOUBLE
+binary widths and aggregate metadata remain explicit independent gaps. Next audit
+the existing numeric byte-width owner: computed DOUBLE binary holders report 22
+where the native item reports 23, while text widths have separate rules. The complete DECIMAL
 constructor rehearsal remains parked above the unchanged parser cap; its
 grammar, diagnostics and refusal must ship together before presence/projection
 expansion. No function-specific serialization exceptions or speculative
@@ -117,8 +122,9 @@ explicit text overrides, across all six operators and both operand orders.
 BLOB width selection also now agrees with the expanded native matrix below.
 Raw BIT-to-binary-BLOB copying is repaired below. Explicit text-BLOB
 transcoding, numeric-merged computed BIT reads and width-dependent FLOAT
-formatting remain open. FLOAT result-field delivery is repaired below;
-separate default-FLOAT function string/DECIMAL readings remain open. The requested
+formatting remain open. FLOAT result-field delivery and the measured SQL
+string-reader boundaries are repaired below; large fixed-scale formatting,
+DECIMAL diagnostics and independent metadata gaps remain open. The requested
 bounded physical FirstMatch repair is verified under unchanged caps; M5.49/M5.50
 and browser work follow the outstanding engine/planner work. Remaining function
 boundaries stay open for separate verification. The current state and remaining
@@ -1792,6 +1798,48 @@ package/typed smoke, the real client and all seven pinned corpora, including
 Its tested-container source proof checks 524 tests/fixtures and 206 runtime
 sources plus tooling. Prior 448402c passes all eleven required CI jobs. M5.10 remains
 partial; totals stay 144/190 overall and M5 42/53.
+
+**M5.10 FLOAT SQL string readers, verified:**
+the shared REAL value now keeps a conditional's original SQL string reading
+independently of its numeric reading and send descriptor. COALESCE/IFNULL and
+ANY_VALUE establish canonical REAL text instead of inferring FLOAT formatting
+from output metadata. IF/CASE retain selected source strings, including exact
+BIGINT above 2^53, YEAR zero padding and binary BIT bytes. CAST CHAR, CONVERT USING
+and binary holders share the original byte reader; latin1 numeric text and a
+consumer's charset retain their distinct decoding rules. Actual derived/set and
+window fields reset forwarded text and narrow stored FLOAT in the existing
+field conversion; cached scalar subqueries reset their own canonical REAL text.
+Source-free scalar reductions retain the item. Set-operation field copies
+discard conditional source text and read the independently typed real number;
+raw BIT fields keep their packed bytes. MIN/MAX's existing plain-value
+cache already clears the trait. The shared wire writer is unchanged.
+
+The complete 2,756-observation native replay covers both protocols, raw FLOAT,
+canonical functions, nested conditionals, numeric/DECIMAL/string/binary readers,
+materialized and merged derived tables/CTEs, windows, scalar caches, aggregates,
+BIT/YEAR and default/fixed FLOAT widths. Complete matches improve 1,758 to 2,368:
+506 reader cases 240 to 486; 952 delivery cases 760 to 776; 230 boundary cases
+82 to 198; 72 BIT/YEAR cases 32 to 56; all 36 ANY_VALUE width cases now agree
+(previously 20); 960 numeric field-copy cases improve 624 to 816. All earlier
+matching facts hold, including containers and lengths. Native outcomes remain intact; local assertions only strengthen.
+The original delivery capture now agrees on every field vector. The remaining
+388 incomplete cases retain large fixed-scale REAL formatting, DECIMAL conversion
+diagnostics, computed DOUBLE binary widths, raw FLOAT copying into non-BLOB
+string holders and MIN/MAX metadata/cache gaps.
+
+All 3,598 older fixed-FLOAT, numeric, temporal and BIT/BLOB set-operation controls
+retain their earlier matching native facts against the actual predecessor.
+The predecessor fails all six strengthened/new regression cases. Seven focused
+local tests and the complete pinned-native FLOAT replay pass. The existing
+4,080-observation numeric BIT-copy regression also passes unchanged. Typecheck,
+20,000 executor statements seeded 20261010 and the unchanged 2,118 plan floor pass
+(2,127/2,248). Fresh Docker --reference passes 1,617 main and four latency tests,
+typecheck, lint, all nine unchanged caps, package/typed smoke, the real client and
+all seven pinned corpora, including 1,737 coercion warning counts. Parser/core/facade
+are 45,491/331,389/331,309 B; types/engine are 52,460/56,722 B. Its tested-container
+source proof covers 525 tests/fixtures and 206 runtime sources plus tooling.
+Prior 4f31dcb passes all eleven required CI jobs.
+M5.10 remains partial; totals stay 144/190 overall and M5 42/53.
 
 **Next prerequisite: constructor admission before presence execution.** Complete
 the existing CAST work: with written utf8 warning 3719 now retained, refuse

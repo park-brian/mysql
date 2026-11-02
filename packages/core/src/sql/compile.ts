@@ -78,12 +78,12 @@ import {
   valInt,
   type Condition,
   type DecimalValue,
+  type DoubleValue,
   type Derived,
   type StringValue,
   type Value,
   valueOutOfRange,
   valueBytes,
-  renderFloat,
   jsonTruth,
   numberToDateTime,
   toInteger,
@@ -452,7 +452,7 @@ function convertUsing(e: ConvertNode, ctx: CompileContext): Compiled {
     eval: (r, env) => {
       const v = x.eval(r, env)
       if (v === null) return null
-      const bytes = v.kind === 'bytes' ? v.v : v.kind === 'int' && isBits(x.type) ? bitBytes(v.v, x.type.length) : undefined
+      const bytes = binaryStringBytes(v, x.type)
       if (id === CHARSET_BINARY) return bytesValue(bytes ?? valueBytes(v))
       let text = bytes === undefined ? decodeCollation(encodeCollation(toText(v), id), id) : textIn(bytes, id, env)
       if (bytes === undefined && charset === 'utf8mb3' && text !== null) text = bmpText(text)
@@ -473,6 +473,14 @@ const bitsOrBytesWidth = (t: ResultType): number => (isBits(t) ? Math.ceil(t.len
 
 /** A BIT column's value, or an expression's that keeps its type: bytes in a string context. */
 export const isBits = (t: ResultType): boolean => t.field === FIELD_TYPE.BIT && t.kind === 'int'
+
+/** Binary origins stay bytes until a string consumer chooses a charset. */
+function binaryStringBytes(v: Exclude<Value, null>, type: ResultType): Uint8Array | undefined {
+  if (v.kind === 'bytes') return v.v
+  if (v.kind === 'int' && isBits(type)) return bitBytes(v.v, type.length)
+  if (v.kind === 'double' && v.str instanceof Uint8Array) return v.str
+  return undefined
+}
 
 /**
  * Bytes read as text in a collation's charset: NULL, with 1300 naming the
@@ -2278,14 +2286,13 @@ function holderOf(types: readonly ResultType[], nullable: boolean, connectionCol
   return { ...intType(Math.max(...live.map((t) => t.length)), nullable, live.every((t) => t.unsigned)), field }
 }
 
-/** A value as a double of this type: a FLOAT's text, or a fixed number of decimals, or neither. */
-export function doubleOf(v: Value, t: ResultType): Value {
+/** A real value with SQL string traits; canonical functions can override FLOAT text. */
+export function doubleOf(v: Value, t: ResultType, floatText = t.field === FIELD_TYPE.FLOAT): DoubleValue | null {
   if (v === null) return null
   const n = v.kind === 'double' ? v.v : toDouble(v)
-  const float = t.field === FIELD_TYPE.FLOAT
   const decimals = t.scale < 31 ? t.scale : undefined
-  if (v.kind === 'double' && (v.float === true) === float && v.decimals === decimals) return v
-  return { kind: 'double', v: n, ...(float ? { float: true as const } : {}), ...(decimals === undefined ? {} : { decimals }) }
+  if (v.kind === 'double' && v.str === undefined && (v.float === true) === floatText && v.decimals === decimals) return v
+  return { kind: 'double', v: n, ...(floatText ? { float: true as const } : {}), ...(decimals === undefined ? {} : { decimals }) }
 }
 
 /** Typed DECIMAL results discard expression-only display precision, even at equal scales. */
@@ -2304,7 +2311,8 @@ export function convertTo(v: Value, t: ResultType): Value {
     case 'decimal':
       return v.kind === 'int' || v.kind === 'decimal' ? decimalAt(v, t.scale) : v
     case 'double':
-      return doubleOf(v, t)
+      // Canonical REAL functions use DOUBLE text, independently of their send descriptor.
+      return doubleOf(v, t, false)
     case 'bytes':
       return withoutHex(v)
     case 'time':
@@ -2317,9 +2325,10 @@ export function convertTo(v: Value, t: ResultType): Value {
   }
 }
 
-/** An actual result field establishes its own integer reading after value conversion. */
+/** An actual field establishes its stored real or integer reading after conversion. */
 export function fieldValue(v: Value, t: ResultType): Value {
-  const value = convertTo(v, t)
+  const value = t.kind === 'double' ? doubleOf(v, t) : convertTo(v, t)
+  if (t.field === FIELD_TYPE.FLOAT && value?.kind === 'double') return { ...value, v: Math.fround(value.v) }
   if (t.kind === 'time' && value?.kind === 'time') return { ...value, integer: toInteger(timeValue(value.v, 0)) }
   return value
 }
@@ -2329,21 +2338,22 @@ export function decimalField(item: Compiled): Compiled {
   return item.type.kind === 'decimal' ? { type: item.type, eval: (row, env) => convertTo(item.eval(row, env), item.type) } : item
 }
 
-/** A value's text as its type shows it: a YEAR is four digits, `0000` for zero; a FLOAT has a float's digits (8.4.11). */
+/** A YEAR column has four digits; real values carry their own SQL string reading. */
 export function textOf(v: Exclude<Value, null>, t: ResultType): string {
   if (t.field === FIELD_TYPE.YEAR && t.column !== undefined && v.kind === 'int') return v.v.toString().padStart(4, '0')
-  if (t.field === FIELD_TYPE.FLOAT && v.kind === 'double' && t.scale >= 31) return renderFloat(v.v)
   return toText(v)
 }
 
-/** Whether a branch of this type, in a string result, is text of its own kind rather than its value's (`textOf`). */
-export const ownText = (t: ResultType): boolean => (t.field === FIELD_TYPE.YEAR && t.column !== undefined) || (t.field === FIELD_TYPE.FLOAT && t.scale >= 31)
+/** Numeric source formats survive when a string or binary holder takes the branch. */
+export const ownText = (t: ResultType): boolean => (t.field === FIELD_TYPE.YEAR && t.column !== undefined) || t.kind === 'double'
 
 /**
  * A branch's value as a binary result holds it: text in its own charset's
  * bytes (8.4.11: a latin1 'café' is 63 61 66 E9), a YEAR or FLOAT as its text.
  */
 export function asBinary(v: Exclude<Value, null>, from: ResultType): Value {
+  const bytes = binaryStringBytes(v, from)
+  if (bytes !== undefined) return bytesValue(bytes)
   if (ownText(from)) return bytesValue(new TextEncoder().encode(textOf(v, from)))
   return v.kind === 'string' ? bytesValue(encodeCollation(v.v, v.collationId)) : v
 }
@@ -2369,6 +2379,12 @@ export function branchOf(x: Compiled, result: ResultType): Compiled['eval'] {
     }
   }
   if (result.kind === 'datetime' && (x.type.kind === 'datetime' || x.type.kind === 'time') && x.type.field !== result.field) return (r, env) => asMerged(x.eval(r, env), result, env)
+  if (result.kind === 'double') return (r, env) => {
+    const v = x.eval(r, env)
+    if (v === null) return null
+    const str = binaryStringBytes(v, x.type) ?? textOf(v, x.type)
+    return { ...doubleOf(v, result)!, str }
+  }
   if (!isBits(x.type) || !(result.kind === 'decimal' || result.kind === 'bytes' || isBits(result))) return x.eval
   const bits = x.type.length
   return (r, env) => {
@@ -2383,7 +2399,7 @@ export function choiceOf(xs: readonly Compiled[], select: (row: Row, env: Env) =
   const merged = reader(xs.map((x) => branchOf(x, type)))
   return {
     type,
-    eval: type.kind === 'double' ? (r, env) => doubleOf(merged(r, env), type) : merged,
+    eval: merged,
     decimalOf: (once) => reader(xs.map((x) => asNumber(x, 'DECIMAL', once).eval)),
   }
 }
@@ -2516,7 +2532,7 @@ function cast(e: CastNode, ctx: CompileContext): Compiled {
           if (v === null) return null
           // Bytes, a BIT's included, are read in the target charset: NULL and
           // 1300 when they are no text in it (8.4.11: CAST(X'C3A9' AS CHAR) is 'é').
-          const bytes = v.kind === 'bytes' ? v.v : v.kind === 'int' && isBits(inner.type) ? bitBytes(v.v, inner.type.length) : undefined
+          const bytes = binaryStringBytes(v, inner.type)
           let read = bytes === undefined ? toText(v) : textIn(bytes, id, env)
           if (read === null) return null
           if (t.length !== undefined) {
@@ -2704,6 +2720,7 @@ function scalarSubquery(e: SubqueryNode, ctx: CompileContext): Compiled {
       if (rows.length > 1) throw sqlError('ER_SUBQUERY_NO_1_ROW', 'Subquery returns more than 1 row')
       // An ENUM's index is the column's, not the subquery's; a hex literal keeps its number (8.4.11).
       const v = rows[0]?.[0] ?? null
+      if (cached && t.kind === 'double') return convertTo(v, t)
       if (cached && v?.kind === 'time') return plainValue(v, t.kind === 'time')
       return v?.kind === 'string' && v.ordinal !== undefined ? plainValue(v) : v
     },

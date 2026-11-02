@@ -128,6 +128,11 @@ export function nestedNullability(op: SetOperationNode['op'], left: boolean, rig
  */
 export function convert(v: Value, t: ResultType): Value {
   if (v === null) return null
+  // A numeric field copy reads the real number, not a conditional's source string.
+  if (v.kind === 'double' && v.str !== undefined) {
+    const { str: _str, ...number } = v
+    v = number
+  }
   // YEAR may meet a TINYINT without widening it. Its temporary field quietly
   // saturates at the TINYINT maximum, before DISTINCT compares the rows.
   if (t.field === FIELD_TYPE.TINY && v.kind === 'int') {
@@ -137,9 +142,7 @@ export function convert(v: Value, t: ResultType): Value {
   if (t.kind === 'string') return stringValue(toText(v), t.collationId, COERCIBILITY.IMPLICIT)
   if (t.kind === 'datetime' && v.kind === 'datetime' && t.field === FIELD_TYPE.DATETIME && v.type === 'DATE') return toDateTime(v, 'DATETIME') ?? v
   if (t.kind === 'bytes' && v.kind !== 'bytes') return bytesValue(valueBytes(v))
-  const converted = fieldValue(v, t)
-  // Comparisons use the stored FLOAT, not the double read from a branch.
-  return converted?.kind === 'double' && converted.float === true ? { ...converted, v: Math.fround(converted.v) } : converted
+  return fieldValue(v, t)
 }
 
 /**

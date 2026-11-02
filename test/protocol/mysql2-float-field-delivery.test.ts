@@ -2,7 +2,24 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import mysql from 'mysql2/promise'
 import { MySQL } from '@myjs/core'
-import reference from './fixtures/functions/float-field-delivery.json' with { type: 'json' }
+import delivery from './fixtures/functions/float-field-delivery.json' with { type: 'json' }
+import readers from './fixtures/functions/float-sql-readers.json' with { type: 'json' }
+
+interface FloatReference {
+  readonly mysqlVersion: string
+  readonly schema: string
+  readonly setup: readonly string[]
+  readonly sql: readonly string[]
+  readonly apis: readonly string[]
+  readonly outcomes: readonly {
+    readonly rows: readonly (readonly unknown[])[]
+    readonly fields: readonly (readonly unknown[])[]
+    readonly warnings: readonly { readonly Level: string; readonly Code: number; readonly Message: string }[]
+  }[]
+  readonly checks: readonly { readonly rows: readonly number[]; readonly fields: readonly number[]; readonly warnings: readonly number[] }[]
+  readonly observations: readonly (readonly number[])[]
+  readonly strict: readonly number[]
+}
 
 /** Retain signed zero and nonfinite numbers instead of silently changing them in JSON. */
 function canonical(value: unknown): unknown {
@@ -22,7 +39,8 @@ function checkCells(actual: readonly (readonly unknown[])[], expected: readonly 
   }
 }
 
-test('FLOAT fields narrow at delivery while SQL readers retain their original values', async () => {
+for (const [capture, total, matched] of [[delivery, 952, 776], [readers.cases[0], 506, 486], [readers.cases[1], 230, 198], [readers.cases[2], 72, 56], [readers.cases[3], 36, 36], [readers.cases[4], 960, 816]] as const) test('FLOAT readers and field delivery preserve native boundaries: ' + capture!.schema, async () => {
+  const reference = capture as FloatReference
   const host = process.env.MYSQL_REFERENCE_HOST
   const db = host === undefined ? await MySQL.open(':memory:') : undefined
   const conn = await mysql.createConnection(db === undefined
@@ -34,8 +52,8 @@ test('FLOAT fields narrow at delivery while SQL readers retain their original va
   try {
     assert.equal(reference.mysqlVersion, '8.4.11')
     if (db === undefined) assert.equal((await conn.query<mysql.RowDataPacket[]>('SELECT VERSION() v'))[0][0]!.v, reference.mysqlVersion)
-    assert.equal(reference.observations.length, 952)
-    assert.equal(strict.size, 760)
+    assert.equal(reference.observations.length, total)
+    assert.equal(strict.size, matched)
     await conn.query('CREATE DATABASE ' + reference.schema)
     created = true
     await conn.query('USE ' + reference.schema)
@@ -65,7 +83,7 @@ test('FLOAT fields narrow at delivery while SQL readers retain their original va
       }
       conn.unprepare(options)
     }
-    assert.equal(complete, db === undefined ? 952 : 760)
+    assert.equal(complete, db === undefined ? total : matched)
   } finally {
     try { if (created) await conn.query('DROP DATABASE ' + reference.schema) }
     finally { await conn.end(); await db?.end() }

@@ -399,7 +399,9 @@ export function controlFunction(name: string, e: CallNode, ctx: CompileContext):
       // A value from the group, with ONLY_FULL_GROUP_BY's check switched off for it.
       arity(1)
       const [x] = args() as [Compiled]
-      return { eval: x.eval, type: expressionOf(x.type), decimalPrefix: true }
+      let type = expressionOf(x.type)
+      if (type.kind === 'double') type = { ...type, length: type.scale < 31 ? type.length : doubleType(type.nullable).length, unsigned: false }
+      return { eval: type.kind === 'double' ? (r, env) => convertTo(x.eval(r, env), type) : x.eval, type, decimalPrefix: true }
     }
     case 'NULLIF': {
       arity(2)

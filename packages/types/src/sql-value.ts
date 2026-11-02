@@ -13,17 +13,22 @@
 // A DECIMAL is an unscaled `bigint` and a scale, so arithmetic is exact and
 // needs no decimal library: `12.50` is `{ v: 1250n, scale: 2 }`.
 import { renderMysqlDateTime, renderMysqlTime, type MysqlDateTime, type MysqlTime } from '@myjs/bytes'
-import { encodeCollation } from '@myjs/charsets'
+import { decodeCollation, encodeCollation } from '@myjs/charsets'
 import { renderJson, type JsonDoc } from './json-doc.ts'
 import { scanDateTime, scanTime, type Deprecation, type ScanFlags } from './temporal-scan.ts'
 import { daysInMonth } from './calendar.ts'
 import { timeFromSeconds, addDateTimeSeconds, TIME_MAX_SECONDS } from './temporal.ts'
 
 const UTF8 = new TextEncoder()
+/** MySQL's numeric strings use latin1_swedish_ci. */
+const NUMERIC_COLLATION = 8
 
 /** A value's bytes as a function of bytes reads them: a binary string's own, a string's in its charset, anything else its text in UTF-8. */
 export function valueBytes(v: Exclude<Value, null>): Uint8Array {
-  return v.kind === 'bytes' ? v.v : v.kind === 'string' ? encodeCollation(v.v, v.collationId) : UTF8.encode(toText(v))
+  if (v.kind === 'bytes') return v.v
+  if (v.kind === 'double' && v.str instanceof Uint8Array) return v.str
+  if (v.kind === 'string') return encodeCollation(v.v, v.collationId)
+  return UTF8.encode(toText(v))
 }
 
 export type Value =
@@ -70,6 +75,8 @@ export interface DecimalValue {
 export interface DoubleValue {
   readonly kind: 'double'
   readonly v: number
+  /** A conditional's original string reading; bytes retain a binary origin independently of the real number. */
+  readonly str?: string | Uint8Array
   /** Read from a FLOAT column: as text, six significant digits (`FLT_DIG`). */
   readonly float?: true
   /** A FLOAT(M,D)'s D, and arithmetic's over one: as text, exactly this many decimals. */
@@ -116,7 +123,7 @@ export function plainValue(v: Value): Value
 export function plainValue(v: Value, readTimeInteger = false): Value {
   if (v === null) return null
   if (v.kind === 'string' && v.ordinal !== undefined) return { kind: 'string', v: v.v, collationId: v.collationId, coercibility: v.coercibility }
-  if (v.kind === 'double' && (v.float !== undefined || v.decimals !== undefined)) return { kind: 'double', v: v.v }
+  if (v.kind === 'double' && (v.float !== undefined || v.decimals !== undefined || v.str !== undefined)) return { kind: 'double', v: v.v }
   if (v.kind === 'int' && v.str !== undefined) return { kind: 'int', v: v.v, unsigned: v.unsigned }
   if (v.kind === 'time') {
     const cached = { ...v }
@@ -451,6 +458,7 @@ export function toText(v: Exclude<Value, null>): string {
     case 'decimal':
       return renderDecimal(v)
     case 'double':
+      if (v.str !== undefined) return typeof v.str === 'string' ? v.str : decodeCollation(v.str, NUMERIC_COLLATION)
       if (v.decimals !== undefined && Number.isFinite(v.v) && Math.abs(v.v) < 1e21) return `${Object.is(v.v, -0) ? '-' : ''}${v.v.toFixed(v.decimals)}`
       return v.float === true ? renderFloat(v.v) : renderDouble(v.v)
     case 'string':

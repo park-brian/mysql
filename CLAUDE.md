@@ -40,9 +40,12 @@ Binary BLOB copies now distinguish raw packed BIT fields from computed
 numeric readings, with reference coverage for nested LIMIT sorts and derived
 DECIMAL fields. Source-to-text FLOAT, explicit text-BLOB transcoding, non-BLOB
 computed BIT readers remain open, alongside nested
-set ordering/multiplicity and separate M5.10 default-FLOAT function text/DECIMAL
-readings. FLOAT result fields now narrow at delivery through the shared writer,
-preserving wider SQL readers and matching binary output.
+set ordering/multiplicity. FLOAT result fields now narrow at delivery through
+the shared writer. SQL string readers now distinguish canonical REAL functions
+from conditional source readings, including exact BIGINT text, YEAR padding and
+BIT bytes. Actual derived, set and window fields and scalar caches establish
+their own readings. Large fixed-scale formatting, DECIMAL diagnostics, computed
+DOUBLE binary widths and aggregate metadata remain open under M5.10/M5.5.
 M5's ORM exit criterion holds with recorded test configuration; default
 parallel runs can lose interactive-transaction tests to scheduling delays.
 Doc 42's query API

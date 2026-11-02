@@ -401,7 +401,7 @@ export function charWidth(t: ResultType): number {
     case 'double':
       // A FLOAT(M,D) column is M wide as text (8.4.11: CONCAT of a FLOAT(5,2) is 20 bytes over utf8mb4).
       if (t.column !== undefined && t.scale < 31) return t.length
-      return t.field === FIELD_TYPE.FLOAT ? 12 : 22
+      return t.field === FIELD_TYPE.FLOAT ? t.length : 22
     case 'datetime':
       return t.field === FIELD_TYPE.DATE ? 10 : 19 + (t.scale > 0 ? t.scale + 1 : 0)
     case 'time':
