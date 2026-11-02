@@ -1,0 +1,2666 @@
+{
+  "mysqlVersion": "8.4.11",
+  "schema": "myjs_viewmeta259",
+  "sqlMode": "ERROR_FOR_DIVISION_BY_ZERO",
+  "seed": "SELECT 1/0,CAST('x' AS DECIMAL)",
+  "setup": [
+    "CREATE TABLE base256(a INT)"
+  ],
+  "beforeEach": [
+    "DROP VIEW IF EXISTS v256"
+  ],
+  "inspect": "SELECT IS_UPDATABLE FROM information_schema.VIEWS WHERE TABLE_SCHEMA='myjs_viewmeta259' AND TABLE_NAME='v256'",
+  "table": "base256",
+  "observations": [
+    {
+      "sql": "CREATE ALGORITHM=MERGE VIEW v256 AS SELECT +a b FROM base256",
+      "api": "query",
+      "type": "VARCHAR(8)",
+      "existing": false,
+      "header": {
+        "fieldCount": 0,
+        "affectedRows": 0,
+        "insertId": 0,
+        "info": "",
+        "serverStatus": 2,
+        "warningStatus": 0,
+        "changedRows": 0
+      },
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            "YES"
+          ]
+        ],
+        "fields": [
+          [
+            "IS_UPDATABLE",
+            254,
+            12,
+            384,
+            0,
+            224,
+            "information_schema",
+            "VIEWS",
+            "VIEWS",
+            "IS_UPDATABLE"
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "CREATE ALGORITHM=MERGE VIEW v256 AS SELECT +a b FROM base256",
+      "api": "execute",
+      "type": "VARCHAR(8)",
+      "existing": false,
+      "header": {
+        "fieldCount": 0,
+        "affectedRows": 0,
+        "insertId": 0,
+        "info": "",
+        "serverStatus": 2,
+        "warningStatus": 0,
+        "changedRows": 0
+      },
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            "YES"
+          ]
+        ],
+        "fields": [
+          [
+            "IS_UPDATABLE",
+            254,
+            12,
+            384,
+            0,
+            224,
+            "information_schema",
+            "VIEWS",
+            "VIEWS",
+            "IS_UPDATABLE"
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "CREATE ALGORITHM=MERGE VIEW v256 AS SELECT +a b FROM base256",
+      "api": "prepare",
+      "type": "VARCHAR(8)",
+      "existing": false,
+      "parameters": [],
+      "fields": [],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [],
+        "fields": [
+          [
+            "IS_UPDATABLE",
+            254,
+            12,
+            384,
+            0,
+            224,
+            "information_schema",
+            "VIEWS",
+            "VIEWS",
+            "IS_UPDATABLE"
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "CREATE ALGORITHM=MERGE VIEW v256 AS SELECT ++a b FROM base256",
+      "api": "query",
+      "type": "VARCHAR(8)",
+      "existing": false,
+      "header": {
+        "fieldCount": 0,
+        "affectedRows": 0,
+        "insertId": 0,
+        "info": "",
+        "serverStatus": 2,
+        "warningStatus": 0,
+        "changedRows": 0
+      },
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            "YES"
+          ]
+        ],
+        "fields": [
+          [
+            "IS_UPDATABLE",
+            254,
+            12,
+            384,
+            0,
+            224,
+            "information_schema",
+            "VIEWS",
+            "VIEWS",
+            "IS_UPDATABLE"
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "CREATE ALGORITHM=MERGE VIEW v256 AS SELECT ++a b FROM base256",
+      "api": "execute",
+      "type": "VARCHAR(8)",
+      "existing": false,
+      "header": {
+        "fieldCount": 0,
+        "affectedRows": 0,
+        "insertId": 0,
+        "info": "",
+        "serverStatus": 2,
+        "warningStatus": 0,
+        "changedRows": 0
+      },
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            "YES"
+          ]
+        ],
+        "fields": [
+          [
+            "IS_UPDATABLE",
+            254,
+            12,
+            384,
+            0,
+            224,
+            "information_schema",
+            "VIEWS",
+            "VIEWS",
+            "IS_UPDATABLE"
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "CREATE ALGORITHM=MERGE VIEW v256 AS SELECT ++a b FROM base256",
+      "api": "prepare",
+      "type": "VARCHAR(8)",
+      "existing": false,
+      "parameters": [],
+      "fields": [],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [],
+        "fields": [
+          [
+            "IS_UPDATABLE",
+            254,
+            12,
+            384,
+            0,
+            224,
+            "information_schema",
+            "VIEWS",
+            "VIEWS",
+            "IS_UPDATABLE"
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "CREATE ALGORITHM=MERGE VIEW v256 AS SELECT a b FROM base256",
+      "api": "query",
+      "type": "VARCHAR(8)",
+      "existing": false,
+      "header": {
+        "fieldCount": 0,
+        "affectedRows": 0,
+        "insertId": 0,
+        "info": "",
+        "serverStatus": 2,
+        "warningStatus": 0,
+        "changedRows": 0
+      },
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            "YES"
+          ]
+        ],
+        "fields": [
+          [
+            "IS_UPDATABLE",
+            254,
+            12,
+            384,
+            0,
+            224,
+            "information_schema",
+            "VIEWS",
+            "VIEWS",
+            "IS_UPDATABLE"
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "CREATE ALGORITHM=MERGE VIEW v256 AS SELECT a b FROM base256",
+      "api": "execute",
+      "type": "VARCHAR(8)",
+      "existing": false,
+      "header": {
+        "fieldCount": 0,
+        "affectedRows": 0,
+        "insertId": 0,
+        "info": "",
+        "serverStatus": 2,
+        "warningStatus": 0,
+        "changedRows": 0
+      },
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            "YES"
+          ]
+        ],
+        "fields": [
+          [
+            "IS_UPDATABLE",
+            254,
+            12,
+            384,
+            0,
+            224,
+            "information_schema",
+            "VIEWS",
+            "VIEWS",
+            "IS_UPDATABLE"
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "CREATE ALGORITHM=MERGE VIEW v256 AS SELECT a b FROM base256",
+      "api": "prepare",
+      "type": "VARCHAR(8)",
+      "existing": false,
+      "parameters": [],
+      "fields": [],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [],
+        "fields": [
+          [
+            "IS_UPDATABLE",
+            254,
+            12,
+            384,
+            0,
+            224,
+            "information_schema",
+            "VIEWS",
+            "VIEWS",
+            "IS_UPDATABLE"
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "CREATE ALGORITHM=MERGE VIEW v256 AS SELECT -a b FROM base256",
+      "api": "query",
+      "type": "VARCHAR(8)",
+      "existing": false,
+      "header": {
+        "fieldCount": 0,
+        "affectedRows": 0,
+        "insertId": 0,
+        "info": "",
+        "serverStatus": 2,
+        "warningStatus": 0,
+        "changedRows": 0
+      },
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            "NO"
+          ]
+        ],
+        "fields": [
+          [
+            "IS_UPDATABLE",
+            254,
+            12,
+            384,
+            0,
+            224,
+            "information_schema",
+            "VIEWS",
+            "VIEWS",
+            "IS_UPDATABLE"
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "CREATE ALGORITHM=MERGE VIEW v256 AS SELECT -a b FROM base256",
+      "api": "execute",
+      "type": "VARCHAR(8)",
+      "existing": false,
+      "header": {
+        "fieldCount": 0,
+        "affectedRows": 0,
+        "insertId": 0,
+        "info": "",
+        "serverStatus": 2,
+        "warningStatus": 0,
+        "changedRows": 0
+      },
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            "NO"
+          ]
+        ],
+        "fields": [
+          [
+            "IS_UPDATABLE",
+            254,
+            12,
+            384,
+            0,
+            224,
+            "information_schema",
+            "VIEWS",
+            "VIEWS",
+            "IS_UPDATABLE"
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "CREATE ALGORITHM=MERGE VIEW v256 AS SELECT -a b FROM base256",
+      "api": "prepare",
+      "type": "VARCHAR(8)",
+      "existing": false,
+      "parameters": [],
+      "fields": [],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [],
+        "fields": [
+          [
+            "IS_UPDATABLE",
+            254,
+            12,
+            384,
+            0,
+            224,
+            "information_schema",
+            "VIEWS",
+            "VIEWS",
+            "IS_UPDATABLE"
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "CREATE ALGORITHM=MERGE VIEW v256 AS SELECT CAST(a AS CHAR) b FROM base256",
+      "api": "query",
+      "type": "VARCHAR(8)",
+      "existing": false,
+      "header": {
+        "fieldCount": 0,
+        "affectedRows": 0,
+        "insertId": 0,
+        "info": "",
+        "serverStatus": 2,
+        "warningStatus": 0,
+        "changedRows": 0
+      },
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            "NO"
+          ]
+        ],
+        "fields": [
+          [
+            "IS_UPDATABLE",
+            254,
+            12,
+            384,
+            0,
+            224,
+            "information_schema",
+            "VIEWS",
+            "VIEWS",
+            "IS_UPDATABLE"
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "CREATE ALGORITHM=MERGE VIEW v256 AS SELECT CAST(a AS CHAR) b FROM base256",
+      "api": "execute",
+      "type": "VARCHAR(8)",
+      "existing": false,
+      "header": {
+        "fieldCount": 0,
+        "affectedRows": 0,
+        "insertId": 0,
+        "info": "",
+        "serverStatus": 2,
+        "warningStatus": 0,
+        "changedRows": 0
+      },
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            "NO"
+          ]
+        ],
+        "fields": [
+          [
+            "IS_UPDATABLE",
+            254,
+            12,
+            384,
+            0,
+            224,
+            "information_schema",
+            "VIEWS",
+            "VIEWS",
+            "IS_UPDATABLE"
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "CREATE ALGORITHM=MERGE VIEW v256 AS SELECT CAST(a AS CHAR) b FROM base256",
+      "api": "prepare",
+      "type": "VARCHAR(8)",
+      "existing": false,
+      "parameters": [],
+      "fields": [],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [],
+        "fields": [
+          [
+            "IS_UPDATABLE",
+            254,
+            12,
+            384,
+            0,
+            224,
+            "information_schema",
+            "VIEWS",
+            "VIEWS",
+            "IS_UPDATABLE"
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "CREATE ALGORITHM=MERGE VIEW v256 AS SELECT +a b FROM base256",
+      "api": "query",
+      "type": "DECIMAL(10,2)",
+      "existing": false,
+      "header": {
+        "fieldCount": 0,
+        "affectedRows": 0,
+        "insertId": 0,
+        "info": "",
+        "serverStatus": 2,
+        "warningStatus": 0,
+        "changedRows": 0
+      },
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            "YES"
+          ]
+        ],
+        "fields": [
+          [
+            "IS_UPDATABLE",
+            254,
+            12,
+            384,
+            0,
+            224,
+            "information_schema",
+            "VIEWS",
+            "VIEWS",
+            "IS_UPDATABLE"
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "CREATE ALGORITHM=MERGE VIEW v256 AS SELECT +a b FROM base256",
+      "api": "execute",
+      "type": "DECIMAL(10,2)",
+      "existing": false,
+      "header": {
+        "fieldCount": 0,
+        "affectedRows": 0,
+        "insertId": 0,
+        "info": "",
+        "serverStatus": 2,
+        "warningStatus": 0,
+        "changedRows": 0
+      },
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            "YES"
+          ]
+        ],
+        "fields": [
+          [
+            "IS_UPDATABLE",
+            254,
+            12,
+            384,
+            0,
+            224,
+            "information_schema",
+            "VIEWS",
+            "VIEWS",
+            "IS_UPDATABLE"
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "CREATE ALGORITHM=MERGE VIEW v256 AS SELECT +a b FROM base256",
+      "api": "prepare",
+      "type": "DECIMAL(10,2)",
+      "existing": false,
+      "parameters": [],
+      "fields": [],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [],
+        "fields": [
+          [
+            "IS_UPDATABLE",
+            254,
+            12,
+            384,
+            0,
+            224,
+            "information_schema",
+            "VIEWS",
+            "VIEWS",
+            "IS_UPDATABLE"
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "CREATE ALGORITHM=MERGE VIEW v256 AS SELECT ++a b FROM base256",
+      "api": "query",
+      "type": "DECIMAL(10,2)",
+      "existing": false,
+      "header": {
+        "fieldCount": 0,
+        "affectedRows": 0,
+        "insertId": 0,
+        "info": "",
+        "serverStatus": 2,
+        "warningStatus": 0,
+        "changedRows": 0
+      },
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            "YES"
+          ]
+        ],
+        "fields": [
+          [
+            "IS_UPDATABLE",
+            254,
+            12,
+            384,
+            0,
+            224,
+            "information_schema",
+            "VIEWS",
+            "VIEWS",
+            "IS_UPDATABLE"
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "CREATE ALGORITHM=MERGE VIEW v256 AS SELECT ++a b FROM base256",
+      "api": "execute",
+      "type": "DECIMAL(10,2)",
+      "existing": false,
+      "header": {
+        "fieldCount": 0,
+        "affectedRows": 0,
+        "insertId": 0,
+        "info": "",
+        "serverStatus": 2,
+        "warningStatus": 0,
+        "changedRows": 0
+      },
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            "YES"
+          ]
+        ],
+        "fields": [
+          [
+            "IS_UPDATABLE",
+            254,
+            12,
+            384,
+            0,
+            224,
+            "information_schema",
+            "VIEWS",
+            "VIEWS",
+            "IS_UPDATABLE"
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "CREATE ALGORITHM=MERGE VIEW v256 AS SELECT ++a b FROM base256",
+      "api": "prepare",
+      "type": "DECIMAL(10,2)",
+      "existing": false,
+      "parameters": [],
+      "fields": [],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [],
+        "fields": [
+          [
+            "IS_UPDATABLE",
+            254,
+            12,
+            384,
+            0,
+            224,
+            "information_schema",
+            "VIEWS",
+            "VIEWS",
+            "IS_UPDATABLE"
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "CREATE ALGORITHM=MERGE VIEW v256 AS SELECT a b FROM base256",
+      "api": "query",
+      "type": "DECIMAL(10,2)",
+      "existing": false,
+      "header": {
+        "fieldCount": 0,
+        "affectedRows": 0,
+        "insertId": 0,
+        "info": "",
+        "serverStatus": 2,
+        "warningStatus": 0,
+        "changedRows": 0
+      },
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            "YES"
+          ]
+        ],
+        "fields": [
+          [
+            "IS_UPDATABLE",
+            254,
+            12,
+            384,
+            0,
+            224,
+            "information_schema",
+            "VIEWS",
+            "VIEWS",
+            "IS_UPDATABLE"
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "CREATE ALGORITHM=MERGE VIEW v256 AS SELECT a b FROM base256",
+      "api": "execute",
+      "type": "DECIMAL(10,2)",
+      "existing": false,
+      "header": {
+        "fieldCount": 0,
+        "affectedRows": 0,
+        "insertId": 0,
+        "info": "",
+        "serverStatus": 2,
+        "warningStatus": 0,
+        "changedRows": 0
+      },
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            "YES"
+          ]
+        ],
+        "fields": [
+          [
+            "IS_UPDATABLE",
+            254,
+            12,
+            384,
+            0,
+            224,
+            "information_schema",
+            "VIEWS",
+            "VIEWS",
+            "IS_UPDATABLE"
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "CREATE ALGORITHM=MERGE VIEW v256 AS SELECT a b FROM base256",
+      "api": "prepare",
+      "type": "DECIMAL(10,2)",
+      "existing": false,
+      "parameters": [],
+      "fields": [],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [],
+        "fields": [
+          [
+            "IS_UPDATABLE",
+            254,
+            12,
+            384,
+            0,
+            224,
+            "information_schema",
+            "VIEWS",
+            "VIEWS",
+            "IS_UPDATABLE"
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "CREATE ALGORITHM=MERGE VIEW v256 AS SELECT -a b FROM base256",
+      "api": "query",
+      "type": "DECIMAL(10,2)",
+      "existing": false,
+      "header": {
+        "fieldCount": 0,
+        "affectedRows": 0,
+        "insertId": 0,
+        "info": "",
+        "serverStatus": 2,
+        "warningStatus": 0,
+        "changedRows": 0
+      },
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            "NO"
+          ]
+        ],
+        "fields": [
+          [
+            "IS_UPDATABLE",
+            254,
+            12,
+            384,
+            0,
+            224,
+            "information_schema",
+            "VIEWS",
+            "VIEWS",
+            "IS_UPDATABLE"
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "CREATE ALGORITHM=MERGE VIEW v256 AS SELECT -a b FROM base256",
+      "api": "execute",
+      "type": "DECIMAL(10,2)",
+      "existing": false,
+      "header": {
+        "fieldCount": 0,
+        "affectedRows": 0,
+        "insertId": 0,
+        "info": "",
+        "serverStatus": 2,
+        "warningStatus": 0,
+        "changedRows": 0
+      },
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            "NO"
+          ]
+        ],
+        "fields": [
+          [
+            "IS_UPDATABLE",
+            254,
+            12,
+            384,
+            0,
+            224,
+            "information_schema",
+            "VIEWS",
+            "VIEWS",
+            "IS_UPDATABLE"
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "CREATE ALGORITHM=MERGE VIEW v256 AS SELECT -a b FROM base256",
+      "api": "prepare",
+      "type": "DECIMAL(10,2)",
+      "existing": false,
+      "parameters": [],
+      "fields": [],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [],
+        "fields": [
+          [
+            "IS_UPDATABLE",
+            254,
+            12,
+            384,
+            0,
+            224,
+            "information_schema",
+            "VIEWS",
+            "VIEWS",
+            "IS_UPDATABLE"
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "CREATE ALGORITHM=MERGE VIEW v256 AS SELECT CAST(a AS CHAR) b FROM base256",
+      "api": "query",
+      "type": "DECIMAL(10,2)",
+      "existing": false,
+      "header": {
+        "fieldCount": 0,
+        "affectedRows": 0,
+        "insertId": 0,
+        "info": "",
+        "serverStatus": 2,
+        "warningStatus": 0,
+        "changedRows": 0
+      },
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            "NO"
+          ]
+        ],
+        "fields": [
+          [
+            "IS_UPDATABLE",
+            254,
+            12,
+            384,
+            0,
+            224,
+            "information_schema",
+            "VIEWS",
+            "VIEWS",
+            "IS_UPDATABLE"
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "CREATE ALGORITHM=MERGE VIEW v256 AS SELECT CAST(a AS CHAR) b FROM base256",
+      "api": "execute",
+      "type": "DECIMAL(10,2)",
+      "existing": false,
+      "header": {
+        "fieldCount": 0,
+        "affectedRows": 0,
+        "insertId": 0,
+        "info": "",
+        "serverStatus": 2,
+        "warningStatus": 0,
+        "changedRows": 0
+      },
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            "NO"
+          ]
+        ],
+        "fields": [
+          [
+            "IS_UPDATABLE",
+            254,
+            12,
+            384,
+            0,
+            224,
+            "information_schema",
+            "VIEWS",
+            "VIEWS",
+            "IS_UPDATABLE"
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "CREATE ALGORITHM=MERGE VIEW v256 AS SELECT CAST(a AS CHAR) b FROM base256",
+      "api": "prepare",
+      "type": "DECIMAL(10,2)",
+      "existing": false,
+      "parameters": [],
+      "fields": [],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [],
+        "fields": [
+          [
+            "IS_UPDATABLE",
+            254,
+            12,
+            384,
+            0,
+            224,
+            "information_schema",
+            "VIEWS",
+            "VIEWS",
+            "IS_UPDATABLE"
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "CREATE ALGORITHM=MERGE VIEW v256 AS SELECT +a b FROM base256",
+      "api": "query",
+      "type": "BIT(8)",
+      "existing": false,
+      "header": {
+        "fieldCount": 0,
+        "affectedRows": 0,
+        "insertId": 0,
+        "info": "",
+        "serverStatus": 2,
+        "warningStatus": 0,
+        "changedRows": 0
+      },
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            "YES"
+          ]
+        ],
+        "fields": [
+          [
+            "IS_UPDATABLE",
+            254,
+            12,
+            384,
+            0,
+            224,
+            "information_schema",
+            "VIEWS",
+            "VIEWS",
+            "IS_UPDATABLE"
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "CREATE ALGORITHM=MERGE VIEW v256 AS SELECT +a b FROM base256",
+      "api": "execute",
+      "type": "BIT(8)",
+      "existing": false,
+      "header": {
+        "fieldCount": 0,
+        "affectedRows": 0,
+        "insertId": 0,
+        "info": "",
+        "serverStatus": 2,
+        "warningStatus": 0,
+        "changedRows": 0
+      },
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            "YES"
+          ]
+        ],
+        "fields": [
+          [
+            "IS_UPDATABLE",
+            254,
+            12,
+            384,
+            0,
+            224,
+            "information_schema",
+            "VIEWS",
+            "VIEWS",
+            "IS_UPDATABLE"
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "CREATE ALGORITHM=MERGE VIEW v256 AS SELECT +a b FROM base256",
+      "api": "prepare",
+      "type": "BIT(8)",
+      "existing": false,
+      "parameters": [],
+      "fields": [],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [],
+        "fields": [
+          [
+            "IS_UPDATABLE",
+            254,
+            12,
+            384,
+            0,
+            224,
+            "information_schema",
+            "VIEWS",
+            "VIEWS",
+            "IS_UPDATABLE"
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "CREATE ALGORITHM=MERGE VIEW v256 AS SELECT ++a b FROM base256",
+      "api": "query",
+      "type": "BIT(8)",
+      "existing": false,
+      "header": {
+        "fieldCount": 0,
+        "affectedRows": 0,
+        "insertId": 0,
+        "info": "",
+        "serverStatus": 2,
+        "warningStatus": 0,
+        "changedRows": 0
+      },
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            "YES"
+          ]
+        ],
+        "fields": [
+          [
+            "IS_UPDATABLE",
+            254,
+            12,
+            384,
+            0,
+            224,
+            "information_schema",
+            "VIEWS",
+            "VIEWS",
+            "IS_UPDATABLE"
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "CREATE ALGORITHM=MERGE VIEW v256 AS SELECT ++a b FROM base256",
+      "api": "execute",
+      "type": "BIT(8)",
+      "existing": false,
+      "header": {
+        "fieldCount": 0,
+        "affectedRows": 0,
+        "insertId": 0,
+        "info": "",
+        "serverStatus": 2,
+        "warningStatus": 0,
+        "changedRows": 0
+      },
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            "YES"
+          ]
+        ],
+        "fields": [
+          [
+            "IS_UPDATABLE",
+            254,
+            12,
+            384,
+            0,
+            224,
+            "information_schema",
+            "VIEWS",
+            "VIEWS",
+            "IS_UPDATABLE"
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "CREATE ALGORITHM=MERGE VIEW v256 AS SELECT ++a b FROM base256",
+      "api": "prepare",
+      "type": "BIT(8)",
+      "existing": false,
+      "parameters": [],
+      "fields": [],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [],
+        "fields": [
+          [
+            "IS_UPDATABLE",
+            254,
+            12,
+            384,
+            0,
+            224,
+            "information_schema",
+            "VIEWS",
+            "VIEWS",
+            "IS_UPDATABLE"
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "CREATE ALGORITHM=MERGE VIEW v256 AS SELECT a b FROM base256",
+      "api": "query",
+      "type": "BIT(8)",
+      "existing": false,
+      "header": {
+        "fieldCount": 0,
+        "affectedRows": 0,
+        "insertId": 0,
+        "info": "",
+        "serverStatus": 2,
+        "warningStatus": 0,
+        "changedRows": 0
+      },
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            "YES"
+          ]
+        ],
+        "fields": [
+          [
+            "IS_UPDATABLE",
+            254,
+            12,
+            384,
+            0,
+            224,
+            "information_schema",
+            "VIEWS",
+            "VIEWS",
+            "IS_UPDATABLE"
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "CREATE ALGORITHM=MERGE VIEW v256 AS SELECT a b FROM base256",
+      "api": "execute",
+      "type": "BIT(8)",
+      "existing": false,
+      "header": {
+        "fieldCount": 0,
+        "affectedRows": 0,
+        "insertId": 0,
+        "info": "",
+        "serverStatus": 2,
+        "warningStatus": 0,
+        "changedRows": 0
+      },
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            "YES"
+          ]
+        ],
+        "fields": [
+          [
+            "IS_UPDATABLE",
+            254,
+            12,
+            384,
+            0,
+            224,
+            "information_schema",
+            "VIEWS",
+            "VIEWS",
+            "IS_UPDATABLE"
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "CREATE ALGORITHM=MERGE VIEW v256 AS SELECT a b FROM base256",
+      "api": "prepare",
+      "type": "BIT(8)",
+      "existing": false,
+      "parameters": [],
+      "fields": [],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [],
+        "fields": [
+          [
+            "IS_UPDATABLE",
+            254,
+            12,
+            384,
+            0,
+            224,
+            "information_schema",
+            "VIEWS",
+            "VIEWS",
+            "IS_UPDATABLE"
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "CREATE ALGORITHM=MERGE VIEW v256 AS SELECT -a b FROM base256",
+      "api": "query",
+      "type": "BIT(8)",
+      "existing": false,
+      "header": {
+        "fieldCount": 0,
+        "affectedRows": 0,
+        "insertId": 0,
+        "info": "",
+        "serverStatus": 2,
+        "warningStatus": 0,
+        "changedRows": 0
+      },
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            "NO"
+          ]
+        ],
+        "fields": [
+          [
+            "IS_UPDATABLE",
+            254,
+            12,
+            384,
+            0,
+            224,
+            "information_schema",
+            "VIEWS",
+            "VIEWS",
+            "IS_UPDATABLE"
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "CREATE ALGORITHM=MERGE VIEW v256 AS SELECT -a b FROM base256",
+      "api": "execute",
+      "type": "BIT(8)",
+      "existing": false,
+      "header": {
+        "fieldCount": 0,
+        "affectedRows": 0,
+        "insertId": 0,
+        "info": "",
+        "serverStatus": 2,
+        "warningStatus": 0,
+        "changedRows": 0
+      },
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            "NO"
+          ]
+        ],
+        "fields": [
+          [
+            "IS_UPDATABLE",
+            254,
+            12,
+            384,
+            0,
+            224,
+            "information_schema",
+            "VIEWS",
+            "VIEWS",
+            "IS_UPDATABLE"
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "CREATE ALGORITHM=MERGE VIEW v256 AS SELECT -a b FROM base256",
+      "api": "prepare",
+      "type": "BIT(8)",
+      "existing": false,
+      "parameters": [],
+      "fields": [],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [],
+        "fields": [
+          [
+            "IS_UPDATABLE",
+            254,
+            12,
+            384,
+            0,
+            224,
+            "information_schema",
+            "VIEWS",
+            "VIEWS",
+            "IS_UPDATABLE"
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "CREATE ALGORITHM=MERGE VIEW v256 AS SELECT CAST(a AS CHAR) b FROM base256",
+      "api": "query",
+      "type": "BIT(8)",
+      "existing": false,
+      "header": {
+        "fieldCount": 0,
+        "affectedRows": 0,
+        "insertId": 0,
+        "info": "",
+        "serverStatus": 2,
+        "warningStatus": 0,
+        "changedRows": 0
+      },
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            "NO"
+          ]
+        ],
+        "fields": [
+          [
+            "IS_UPDATABLE",
+            254,
+            12,
+            384,
+            0,
+            224,
+            "information_schema",
+            "VIEWS",
+            "VIEWS",
+            "IS_UPDATABLE"
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "CREATE ALGORITHM=MERGE VIEW v256 AS SELECT CAST(a AS CHAR) b FROM base256",
+      "api": "execute",
+      "type": "BIT(8)",
+      "existing": false,
+      "header": {
+        "fieldCount": 0,
+        "affectedRows": 0,
+        "insertId": 0,
+        "info": "",
+        "serverStatus": 2,
+        "warningStatus": 0,
+        "changedRows": 0
+      },
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            "NO"
+          ]
+        ],
+        "fields": [
+          [
+            "IS_UPDATABLE",
+            254,
+            12,
+            384,
+            0,
+            224,
+            "information_schema",
+            "VIEWS",
+            "VIEWS",
+            "IS_UPDATABLE"
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "CREATE ALGORITHM=MERGE VIEW v256 AS SELECT CAST(a AS CHAR) b FROM base256",
+      "api": "prepare",
+      "type": "BIT(8)",
+      "existing": false,
+      "parameters": [],
+      "fields": [],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [],
+        "fields": [
+          [
+            "IS_UPDATABLE",
+            254,
+            12,
+            384,
+            0,
+            224,
+            "information_schema",
+            "VIEWS",
+            "VIEWS",
+            "IS_UPDATABLE"
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "CREATE ALGORITHM=MERGE VIEW v256 AS SELECT +a b FROM base256",
+      "api": "query",
+      "type": "DATE",
+      "existing": false,
+      "header": {
+        "fieldCount": 0,
+        "affectedRows": 0,
+        "insertId": 0,
+        "info": "",
+        "serverStatus": 2,
+        "warningStatus": 0,
+        "changedRows": 0
+      },
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            "YES"
+          ]
+        ],
+        "fields": [
+          [
+            "IS_UPDATABLE",
+            254,
+            12,
+            384,
+            0,
+            224,
+            "information_schema",
+            "VIEWS",
+            "VIEWS",
+            "IS_UPDATABLE"
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "CREATE ALGORITHM=MERGE VIEW v256 AS SELECT +a b FROM base256",
+      "api": "execute",
+      "type": "DATE",
+      "existing": false,
+      "header": {
+        "fieldCount": 0,
+        "affectedRows": 0,
+        "insertId": 0,
+        "info": "",
+        "serverStatus": 2,
+        "warningStatus": 0,
+        "changedRows": 0
+      },
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            "YES"
+          ]
+        ],
+        "fields": [
+          [
+            "IS_UPDATABLE",
+            254,
+            12,
+            384,
+            0,
+            224,
+            "information_schema",
+            "VIEWS",
+            "VIEWS",
+            "IS_UPDATABLE"
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "CREATE ALGORITHM=MERGE VIEW v256 AS SELECT +a b FROM base256",
+      "api": "prepare",
+      "type": "DATE",
+      "existing": false,
+      "parameters": [],
+      "fields": [],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [],
+        "fields": [
+          [
+            "IS_UPDATABLE",
+            254,
+            12,
+            384,
+            0,
+            224,
+            "information_schema",
+            "VIEWS",
+            "VIEWS",
+            "IS_UPDATABLE"
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "CREATE ALGORITHM=MERGE VIEW v256 AS SELECT ++a b FROM base256",
+      "api": "query",
+      "type": "DATE",
+      "existing": false,
+      "header": {
+        "fieldCount": 0,
+        "affectedRows": 0,
+        "insertId": 0,
+        "info": "",
+        "serverStatus": 2,
+        "warningStatus": 0,
+        "changedRows": 0
+      },
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            "YES"
+          ]
+        ],
+        "fields": [
+          [
+            "IS_UPDATABLE",
+            254,
+            12,
+            384,
+            0,
+            224,
+            "information_schema",
+            "VIEWS",
+            "VIEWS",
+            "IS_UPDATABLE"
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "CREATE ALGORITHM=MERGE VIEW v256 AS SELECT ++a b FROM base256",
+      "api": "execute",
+      "type": "DATE",
+      "existing": false,
+      "header": {
+        "fieldCount": 0,
+        "affectedRows": 0,
+        "insertId": 0,
+        "info": "",
+        "serverStatus": 2,
+        "warningStatus": 0,
+        "changedRows": 0
+      },
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            "YES"
+          ]
+        ],
+        "fields": [
+          [
+            "IS_UPDATABLE",
+            254,
+            12,
+            384,
+            0,
+            224,
+            "information_schema",
+            "VIEWS",
+            "VIEWS",
+            "IS_UPDATABLE"
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "CREATE ALGORITHM=MERGE VIEW v256 AS SELECT ++a b FROM base256",
+      "api": "prepare",
+      "type": "DATE",
+      "existing": false,
+      "parameters": [],
+      "fields": [],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [],
+        "fields": [
+          [
+            "IS_UPDATABLE",
+            254,
+            12,
+            384,
+            0,
+            224,
+            "information_schema",
+            "VIEWS",
+            "VIEWS",
+            "IS_UPDATABLE"
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "CREATE ALGORITHM=MERGE VIEW v256 AS SELECT a b FROM base256",
+      "api": "query",
+      "type": "DATE",
+      "existing": false,
+      "header": {
+        "fieldCount": 0,
+        "affectedRows": 0,
+        "insertId": 0,
+        "info": "",
+        "serverStatus": 2,
+        "warningStatus": 0,
+        "changedRows": 0
+      },
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            "YES"
+          ]
+        ],
+        "fields": [
+          [
+            "IS_UPDATABLE",
+            254,
+            12,
+            384,
+            0,
+            224,
+            "information_schema",
+            "VIEWS",
+            "VIEWS",
+            "IS_UPDATABLE"
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "CREATE ALGORITHM=MERGE VIEW v256 AS SELECT a b FROM base256",
+      "api": "execute",
+      "type": "DATE",
+      "existing": false,
+      "header": {
+        "fieldCount": 0,
+        "affectedRows": 0,
+        "insertId": 0,
+        "info": "",
+        "serverStatus": 2,
+        "warningStatus": 0,
+        "changedRows": 0
+      },
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            "YES"
+          ]
+        ],
+        "fields": [
+          [
+            "IS_UPDATABLE",
+            254,
+            12,
+            384,
+            0,
+            224,
+            "information_schema",
+            "VIEWS",
+            "VIEWS",
+            "IS_UPDATABLE"
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "CREATE ALGORITHM=MERGE VIEW v256 AS SELECT a b FROM base256",
+      "api": "prepare",
+      "type": "DATE",
+      "existing": false,
+      "parameters": [],
+      "fields": [],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [],
+        "fields": [
+          [
+            "IS_UPDATABLE",
+            254,
+            12,
+            384,
+            0,
+            224,
+            "information_schema",
+            "VIEWS",
+            "VIEWS",
+            "IS_UPDATABLE"
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "CREATE ALGORITHM=MERGE VIEW v256 AS SELECT -a b FROM base256",
+      "api": "query",
+      "type": "DATE",
+      "existing": false,
+      "header": {
+        "fieldCount": 0,
+        "affectedRows": 0,
+        "insertId": 0,
+        "info": "",
+        "serverStatus": 2,
+        "warningStatus": 0,
+        "changedRows": 0
+      },
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            "NO"
+          ]
+        ],
+        "fields": [
+          [
+            "IS_UPDATABLE",
+            254,
+            12,
+            384,
+            0,
+            224,
+            "information_schema",
+            "VIEWS",
+            "VIEWS",
+            "IS_UPDATABLE"
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "CREATE ALGORITHM=MERGE VIEW v256 AS SELECT -a b FROM base256",
+      "api": "execute",
+      "type": "DATE",
+      "existing": false,
+      "header": {
+        "fieldCount": 0,
+        "affectedRows": 0,
+        "insertId": 0,
+        "info": "",
+        "serverStatus": 2,
+        "warningStatus": 0,
+        "changedRows": 0
+      },
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            "NO"
+          ]
+        ],
+        "fields": [
+          [
+            "IS_UPDATABLE",
+            254,
+            12,
+            384,
+            0,
+            224,
+            "information_schema",
+            "VIEWS",
+            "VIEWS",
+            "IS_UPDATABLE"
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "CREATE ALGORITHM=MERGE VIEW v256 AS SELECT -a b FROM base256",
+      "api": "prepare",
+      "type": "DATE",
+      "existing": false,
+      "parameters": [],
+      "fields": [],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [],
+        "fields": [
+          [
+            "IS_UPDATABLE",
+            254,
+            12,
+            384,
+            0,
+            224,
+            "information_schema",
+            "VIEWS",
+            "VIEWS",
+            "IS_UPDATABLE"
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "CREATE ALGORITHM=MERGE VIEW v256 AS SELECT CAST(a AS CHAR) b FROM base256",
+      "api": "query",
+      "type": "DATE",
+      "existing": false,
+      "header": {
+        "fieldCount": 0,
+        "affectedRows": 0,
+        "insertId": 0,
+        "info": "",
+        "serverStatus": 2,
+        "warningStatus": 0,
+        "changedRows": 0
+      },
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            "NO"
+          ]
+        ],
+        "fields": [
+          [
+            "IS_UPDATABLE",
+            254,
+            12,
+            384,
+            0,
+            224,
+            "information_schema",
+            "VIEWS",
+            "VIEWS",
+            "IS_UPDATABLE"
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "CREATE ALGORITHM=MERGE VIEW v256 AS SELECT CAST(a AS CHAR) b FROM base256",
+      "api": "execute",
+      "type": "DATE",
+      "existing": false,
+      "header": {
+        "fieldCount": 0,
+        "affectedRows": 0,
+        "insertId": 0,
+        "info": "",
+        "serverStatus": 2,
+        "warningStatus": 0,
+        "changedRows": 0
+      },
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            "NO"
+          ]
+        ],
+        "fields": [
+          [
+            "IS_UPDATABLE",
+            254,
+            12,
+            384,
+            0,
+            224,
+            "information_schema",
+            "VIEWS",
+            "VIEWS",
+            "IS_UPDATABLE"
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "CREATE ALGORITHM=MERGE VIEW v256 AS SELECT CAST(a AS CHAR) b FROM base256",
+      "api": "prepare",
+      "type": "DATE",
+      "existing": false,
+      "parameters": [],
+      "fields": [],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [],
+        "fields": [
+          [
+            "IS_UPDATABLE",
+            254,
+            12,
+            384,
+            0,
+            224,
+            "information_schema",
+            "VIEWS",
+            "VIEWS",
+            "IS_UPDATABLE"
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "CREATE ALGORITHM=MERGE VIEW v256 AS SELECT +a b FROM base256",
+      "api": "query",
+      "type": "JSON",
+      "existing": false,
+      "header": {
+        "fieldCount": 0,
+        "affectedRows": 0,
+        "insertId": 0,
+        "info": "",
+        "serverStatus": 2,
+        "warningStatus": 0,
+        "changedRows": 0
+      },
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            "YES"
+          ]
+        ],
+        "fields": [
+          [
+            "IS_UPDATABLE",
+            254,
+            12,
+            384,
+            0,
+            224,
+            "information_schema",
+            "VIEWS",
+            "VIEWS",
+            "IS_UPDATABLE"
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "CREATE ALGORITHM=MERGE VIEW v256 AS SELECT +a b FROM base256",
+      "api": "execute",
+      "type": "JSON",
+      "existing": false,
+      "header": {
+        "fieldCount": 0,
+        "affectedRows": 0,
+        "insertId": 0,
+        "info": "",
+        "serverStatus": 2,
+        "warningStatus": 0,
+        "changedRows": 0
+      },
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            "YES"
+          ]
+        ],
+        "fields": [
+          [
+            "IS_UPDATABLE",
+            254,
+            12,
+            384,
+            0,
+            224,
+            "information_schema",
+            "VIEWS",
+            "VIEWS",
+            "IS_UPDATABLE"
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "CREATE ALGORITHM=MERGE VIEW v256 AS SELECT +a b FROM base256",
+      "api": "prepare",
+      "type": "JSON",
+      "existing": false,
+      "parameters": [],
+      "fields": [],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [],
+        "fields": [
+          [
+            "IS_UPDATABLE",
+            254,
+            12,
+            384,
+            0,
+            224,
+            "information_schema",
+            "VIEWS",
+            "VIEWS",
+            "IS_UPDATABLE"
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "CREATE ALGORITHM=MERGE VIEW v256 AS SELECT ++a b FROM base256",
+      "api": "query",
+      "type": "JSON",
+      "existing": false,
+      "header": {
+        "fieldCount": 0,
+        "affectedRows": 0,
+        "insertId": 0,
+        "info": "",
+        "serverStatus": 2,
+        "warningStatus": 0,
+        "changedRows": 0
+      },
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            "YES"
+          ]
+        ],
+        "fields": [
+          [
+            "IS_UPDATABLE",
+            254,
+            12,
+            384,
+            0,
+            224,
+            "information_schema",
+            "VIEWS",
+            "VIEWS",
+            "IS_UPDATABLE"
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "CREATE ALGORITHM=MERGE VIEW v256 AS SELECT ++a b FROM base256",
+      "api": "execute",
+      "type": "JSON",
+      "existing": false,
+      "header": {
+        "fieldCount": 0,
+        "affectedRows": 0,
+        "insertId": 0,
+        "info": "",
+        "serverStatus": 2,
+        "warningStatus": 0,
+        "changedRows": 0
+      },
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            "YES"
+          ]
+        ],
+        "fields": [
+          [
+            "IS_UPDATABLE",
+            254,
+            12,
+            384,
+            0,
+            224,
+            "information_schema",
+            "VIEWS",
+            "VIEWS",
+            "IS_UPDATABLE"
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "CREATE ALGORITHM=MERGE VIEW v256 AS SELECT ++a b FROM base256",
+      "api": "prepare",
+      "type": "JSON",
+      "existing": false,
+      "parameters": [],
+      "fields": [],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [],
+        "fields": [
+          [
+            "IS_UPDATABLE",
+            254,
+            12,
+            384,
+            0,
+            224,
+            "information_schema",
+            "VIEWS",
+            "VIEWS",
+            "IS_UPDATABLE"
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "CREATE ALGORITHM=MERGE VIEW v256 AS SELECT a b FROM base256",
+      "api": "query",
+      "type": "JSON",
+      "existing": false,
+      "header": {
+        "fieldCount": 0,
+        "affectedRows": 0,
+        "insertId": 0,
+        "info": "",
+        "serverStatus": 2,
+        "warningStatus": 0,
+        "changedRows": 0
+      },
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            "YES"
+          ]
+        ],
+        "fields": [
+          [
+            "IS_UPDATABLE",
+            254,
+            12,
+            384,
+            0,
+            224,
+            "information_schema",
+            "VIEWS",
+            "VIEWS",
+            "IS_UPDATABLE"
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "CREATE ALGORITHM=MERGE VIEW v256 AS SELECT a b FROM base256",
+      "api": "execute",
+      "type": "JSON",
+      "existing": false,
+      "header": {
+        "fieldCount": 0,
+        "affectedRows": 0,
+        "insertId": 0,
+        "info": "",
+        "serverStatus": 2,
+        "warningStatus": 0,
+        "changedRows": 0
+      },
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            "YES"
+          ]
+        ],
+        "fields": [
+          [
+            "IS_UPDATABLE",
+            254,
+            12,
+            384,
+            0,
+            224,
+            "information_schema",
+            "VIEWS",
+            "VIEWS",
+            "IS_UPDATABLE"
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "CREATE ALGORITHM=MERGE VIEW v256 AS SELECT a b FROM base256",
+      "api": "prepare",
+      "type": "JSON",
+      "existing": false,
+      "parameters": [],
+      "fields": [],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [],
+        "fields": [
+          [
+            "IS_UPDATABLE",
+            254,
+            12,
+            384,
+            0,
+            224,
+            "information_schema",
+            "VIEWS",
+            "VIEWS",
+            "IS_UPDATABLE"
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "CREATE ALGORITHM=MERGE VIEW v256 AS SELECT -a b FROM base256",
+      "api": "query",
+      "type": "JSON",
+      "existing": false,
+      "header": {
+        "fieldCount": 0,
+        "affectedRows": 0,
+        "insertId": 0,
+        "info": "",
+        "serverStatus": 2,
+        "warningStatus": 0,
+        "changedRows": 0
+      },
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            "NO"
+          ]
+        ],
+        "fields": [
+          [
+            "IS_UPDATABLE",
+            254,
+            12,
+            384,
+            0,
+            224,
+            "information_schema",
+            "VIEWS",
+            "VIEWS",
+            "IS_UPDATABLE"
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "CREATE ALGORITHM=MERGE VIEW v256 AS SELECT -a b FROM base256",
+      "api": "execute",
+      "type": "JSON",
+      "existing": false,
+      "header": {
+        "fieldCount": 0,
+        "affectedRows": 0,
+        "insertId": 0,
+        "info": "",
+        "serverStatus": 2,
+        "warningStatus": 0,
+        "changedRows": 0
+      },
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            "NO"
+          ]
+        ],
+        "fields": [
+          [
+            "IS_UPDATABLE",
+            254,
+            12,
+            384,
+            0,
+            224,
+            "information_schema",
+            "VIEWS",
+            "VIEWS",
+            "IS_UPDATABLE"
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "CREATE ALGORITHM=MERGE VIEW v256 AS SELECT -a b FROM base256",
+      "api": "prepare",
+      "type": "JSON",
+      "existing": false,
+      "parameters": [],
+      "fields": [],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [],
+        "fields": [
+          [
+            "IS_UPDATABLE",
+            254,
+            12,
+            384,
+            0,
+            224,
+            "information_schema",
+            "VIEWS",
+            "VIEWS",
+            "IS_UPDATABLE"
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "CREATE ALGORITHM=MERGE VIEW v256 AS SELECT CAST(a AS CHAR) b FROM base256",
+      "api": "query",
+      "type": "JSON",
+      "existing": false,
+      "header": {
+        "fieldCount": 0,
+        "affectedRows": 0,
+        "insertId": 0,
+        "info": "",
+        "serverStatus": 2,
+        "warningStatus": 0,
+        "changedRows": 0
+      },
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            "NO"
+          ]
+        ],
+        "fields": [
+          [
+            "IS_UPDATABLE",
+            254,
+            12,
+            384,
+            0,
+            224,
+            "information_schema",
+            "VIEWS",
+            "VIEWS",
+            "IS_UPDATABLE"
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "CREATE ALGORITHM=MERGE VIEW v256 AS SELECT CAST(a AS CHAR) b FROM base256",
+      "api": "execute",
+      "type": "JSON",
+      "existing": false,
+      "header": {
+        "fieldCount": 0,
+        "affectedRows": 0,
+        "insertId": 0,
+        "info": "",
+        "serverStatus": 2,
+        "warningStatus": 0,
+        "changedRows": 0
+      },
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [
+          [
+            "NO"
+          ]
+        ],
+        "fields": [
+          [
+            "IS_UPDATABLE",
+            254,
+            12,
+            384,
+            0,
+            224,
+            "information_schema",
+            "VIEWS",
+            "VIEWS",
+            "IS_UPDATABLE"
+          ]
+        ]
+      }
+    },
+    {
+      "sql": "CREATE ALGORITHM=MERGE VIEW v256 AS SELECT CAST(a AS CHAR) b FROM base256",
+      "api": "prepare",
+      "type": "JSON",
+      "existing": false,
+      "parameters": [],
+      "fields": [],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "rows": [],
+        "fields": [
+          [
+            "IS_UPDATABLE",
+            254,
+            12,
+            384,
+            0,
+            224,
+            "information_schema",
+            "VIEWS",
+            "VIEWS",
+            "IS_UPDATABLE"
+          ]
+        ]
+      }
+    }
+  ]
+}

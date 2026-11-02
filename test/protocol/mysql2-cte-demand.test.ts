@@ -20,6 +20,8 @@ import projections from './fixtures/diagnostics/view-check-projections.json' wit
 import projectionReuse from './fixtures/diagnostics/view-check-projection-reuse.json' with { type: 'json' }
 import projectionEffects from './fixtures/diagnostics/view-check-projection-effects.json' with { type: 'json' }
 import fieldAdmission from './fixtures/diagnostics/view-check-fields-admission.json' with { type: 'json' }
+import updatability from './fixtures/diagnostics/view-updatability.json' with { type: 'json' }
+import updatabilityTypes from './fixtures/diagnostics/view-updatability-types.json' with { type: 'json' }
 import effects from './fixtures/diagnostics/view-target-effects.json' with { type: 'json' }
 
 const fieldsOf = (fields: readonly mysql.FieldPacket[]) => fields.map(f => [f.name, f.columnType, f.columnLength, f.flags, f.decimals, f.characterSet, f.schema, f.table, f.orgTable, f.orgName])
@@ -71,7 +73,7 @@ async function observe(c: mysql.Connection, sql: string, api: string) {
   return { sql, api, ...result, warnings, warningCount, errorCount }
 }
 
-for (const [name, fixture] of [['nonrecursive', nonrecursive], ['recursive', recursive], ['order', order], ['names', names], ['spelling', spelling], ['view-target-no-db', noDatabase], ['view-target-controls', controls], ['view-merge', merge], ['view-merge-reuse', mergeReuse], ['view-check', check], ['view-check-reuse', checkReuse], ['view-check-projections', projections], ['view-check-projection-reuse', projectionReuse], ['view-check-fields-admission', fieldAdmission]] as const) test('M5.10: SQL admission matches native: ' + name, async () => {
+for (const [name, fixture] of [['nonrecursive', nonrecursive], ['recursive', recursive], ['order', order], ['names', names], ['spelling', spelling], ['view-target-no-db', noDatabase], ['view-target-controls', controls], ['view-merge', merge], ['view-merge-reuse', mergeReuse], ['view-check', check], ['view-check-reuse', checkReuse], ['view-check-projections', projections], ['view-check-projection-reuse', projectionReuse], ['view-check-fields-admission', fieldAdmission], ['view-updatability', updatability], ['view-updatability-types', updatabilityTypes]] as const) test('M5.10: SQL admission matches native: ' + name, async () => {
   const { c, db } = await connection()
   const schema = 'schema' in fixture ? fixture.schema : undefined
   let created = false
@@ -89,13 +91,21 @@ for (const [name, fixture] of [['nonrecursive', nonrecursive], ['recursive', rec
       const { sql, api } = expected
       if (!('reuse' in fixture) || !fixture.reuse) c.unprepare(sql)
       if ('beforeEach' in fixture) for (const setup of fixture.beforeEach) await c.query(setup)
+      if ('table' in fixture && 'type' in expected) {
+        await c.query('DROP TABLE ' + fixture.table)
+        await c.query('CREATE TABLE ' + fixture.table + '(a ' + expected.type + ')')
+      }
       if ('existing' in expected && expected.existing) await c.query('CREATE VIEW ' + ('view' in fixture ? fixture.view : '') + ' AS SELECT 1')
       const limit = 'limit' in expected ? expected.limit : 64
       await c.query('SET max_error_count=?', [limit])
       await c.query(fixture.seed)
       const actual = await observe(c, sql, api)
-      const data = 'view' in fixture ? await storedView(c, fixture.view) : null
-      assert.deepEqual({ ...actual, ...('limit' in expected ? { limit } : {}), ...('existing' in expected ? { existing: expected.existing } : {}), ...('view' in fixture ? { data } : {}) }, expected, `${sql} [${api}]`)
+      let data: object | null = null
+      if ('inspect' in fixture) {
+        const [rows, fields] = await c.query(fixture.inspect)
+        data = { rows, fields: fieldsOf(fields ?? []) }
+      } else if ('view' in fixture) data = await storedView(c, fixture.view)
+      assert.deepEqual({ ...actual, ...('limit' in expected ? { limit } : {}), ...('existing' in expected ? { existing: expected.existing } : {}), ...('view' in fixture || 'inspect' in fixture ? { data } : {}), ...('type' in expected ? { type: expected.type } : {}) }, expected, `${sql} [${api}]`)
       if (!('reuse' in fixture) || !fixture.reuse) c.unprepare(sql)
     }
   } finally {

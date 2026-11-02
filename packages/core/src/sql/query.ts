@@ -1524,15 +1524,6 @@ export function viewMergeable(query: QueryExpression): boolean {
   return body.groupBy === undefined && body.having === undefined && body.distinct !== true && !containsAggregate(body.items) && !containsWindow(body.items)
 }
 
-/** Direct outer references can be checked even when their source fields are computed. */
-export function viewHasDirectFields(query: QueryExpression): boolean {
-  const body = queryBody(query)
-  return body.kind === QUERY.SELECT && body.items.some(({ expr }) => {
-    while (expr.kind === NODE.UNARY && expr.op === '+') expr = expr.operand
-    return expr.kind === NODE.COLUMN
-  })
-}
-
 /** A derived table, or one reference to a CTE: its columns as the outer query sees them, and its rows. */
 function derivedTable(run: Run, query: QueryExpression, alias: string, names: readonly string[] | undefined, lateral: Scope | undefined, view?: ViewDef, cte?: string): DerivedSource {
   let correlated = false

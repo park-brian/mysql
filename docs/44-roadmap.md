@@ -2732,17 +2732,52 @@ and 206 runtime sources plus tooling; warm heavy checks finished before this
 run. All eleven required 1cb3de3 CI jobs pass.
 Totals stay 144/190 and M5 42/53; M5.10 remains partial.
 
-Next audit the existing INFORMATION_SCHEMA view-updatability projection check
-against these direct-field controls, preserving its separate source/query fences.
-Prove metadata behavior before sharing the direct-reference criterion; its
-current top-level column check does not account for transparent unary plus.
-Two native metadata profiles cover 153 outcomes with 121 complete baseline
-matches. Unary-plus rows report YES natively and NO here with identical field
-metadata, including VARCHAR, DECIMAL, BIT, DATE and JSON controls. Derived/CTE/
-query-wrapper metadata and a separate BINARY warning mismatch stay open. Share
-only the proven direct-reference criterion first.
-Keep same-base subquery analysis, SHOW CREATE formatting, full PREPARE binding
-and schema-driven reprepare under independent proofs.
+**Shared view projection metadata, verified (2026-11-02):** the
+proven direct-reference criterion now lives in ast.ts. View CHECK OPTION
+admission and INFORMATION_SCHEMA's final projection check share it, keeping
+unary plus transparent across VARCHAR, DECIMAL, BIT, DATE and JSON. The metadata
+reader retains all other source/query fences. The pure helper adds no planner
+import to view text and changes no AST, source fields, algorithm eligibility
+or writable-view policy.
+
+Two native profiles improve 121/153 to 143/153 complete observations, including
+complete INFORMATION_SCHEMA row/field packets. Ordinary and typed regression
+fixtures add all 143 outcomes; all 1,442 earlier golden observations are
+unchanged. Twenty-one focused cases pass natively and locally. Actual 12b0723
+passes the nineteen earlier cases and fails both new metadata groups; the
+official runtime is restored afterwards.
+
+Across 5,691 outcomes complete agreement improves 4,710→4,732, preserving all
+62,280 earlier matching protocol facts. Ten new-audit outcomes remain open for
+CTE/derived/query-wrapper metadata and independent BINARY warning behavior.
+The M5.12 completion claim remains limited to its passing introspection corpus;
+this repair does not claim general view-updatability closure.
+
+Typecheck/lint and nine unchanged caps pass at parser/core/facade
+45,599/332,796/332,713 B gzipped. All 20,000 executor statements seeded
+20261010 pass; plans retain 2,127/2,248 matches under the unchanged 2,118 floor.
+The full official suite retains all 38 passing identities and its native
+baseline. Fresh Docker --reference passes 1,661 main tests, four latency tests,
+typecheck, lint, all nine unchanged caps, package/typed smoke, the real client
+and all seven pinned corpora including 1,737 coercion warning counts. The
+unchanged long-IN assertion passes. Early source proof matches 557 tests/fixtures
+and 206 runtime sources plus tooling; warm heavy checks finished before this
+run. All eleven required 12b0723 CI jobs pass.
+Totals stay 144/190 and M5 42/53; M5.10 remains partial.
+
+Next audit unary-plus expression printing. The shared printer currently falls
+back on this transparent operator, leaving the measured SHOW CREATE gaps.
+Prove its stored spelling in views, generated/default expressions and CHECK
+clauses before changing the common printer. A 57-outcome native audit currently
+agrees completely on 19, with unary-plus spelling gaps in all four contexts.
+A second 30-outcome audit matches 12 completely and exposes the same printer
+boundary in UNHEX/network warnings and arithmetic/FLOAT errors. These retain
+full result/error/condition packets. Preserve charset introducers, qualified
+field names, literal spellings and outer labels when printing the operand.
+Warning-limit and cached-execution controls add 200 outcomes (80 complete
+baseline matches), covering limits 0/1/8/64. The four profiles total 287
+outcomes with 111 complete baseline matches. Keep output labels, query-owner
+normalization, general updatability and PREPARE binding under separate proofs.
 
 **Next prerequisite: constructor admission before presence execution.** Complete
 the existing CAST work: with written utf8 warning 3719 now retained, refuse

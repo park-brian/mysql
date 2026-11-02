@@ -12,6 +12,15 @@ export function queryBody(query: QueryExpression): Exclude<QueryBody, QueryExpre
   return body
 }
 
+/** A direct SELECT field, including stars and transparent unary plus, at its own query owner. */
+export function hasDirectFields(query: QueryExpression): boolean {
+  const body = queryBody(query)
+  return body.kind === QUERY.SELECT && body.items.some(({ expr }) => {
+    while (expr.kind === NODE.UNARY && expr.op === '+') expr = expr.operand
+    return expr.kind === NODE.COLUMN
+  })
+}
+
 /** Read-only AST proofs: true matches, false prunes, undefined visits children. */
 export function someNode(e: unknown, check: (node: object) => boolean | undefined): boolean {
   if (e === null || typeof e !== 'object') return false

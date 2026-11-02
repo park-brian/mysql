@@ -18,7 +18,7 @@
 import type { TableDef } from '@myjs/engine'
 import { NODE, QUERY, REF, type Expression, type QueryExpression, type TableReference, quoteName } from '@myjs/parser'
 import { Unprintable, printString, printExpression } from './print.ts'
-import { nativeCallName, someNode } from './ast.ts'
+import { hasDirectFields, nativeCallName, someNode } from './ast.ts'
 import { AGGREGATE_NAMES } from './compile.ts'
 
 
@@ -107,5 +107,5 @@ export function viewUpdatable(query: QueryExpression): boolean {
     const e = value as Expression
     return e.kind === NODE.CALL && (e.over !== undefined || AGGREGATE_NAMES.has(nativeCallName(e))) || undefined
   })) return false
-  return body.items.some((i) => i.expr.kind === NODE.COLUMN)
+  return hasDirectFields(query)
 }
