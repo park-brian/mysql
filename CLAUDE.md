@@ -44,8 +44,10 @@ set ordering/multiplicity. FLOAT result fields now narrow at delivery through
 the shared writer. SQL string readers now distinguish canonical REAL functions
 from conditional source readings, including exact BIGINT text, YEAR padding and
 BIT bytes. Actual derived, set and window fields and scalar caches establish
-their own readings. Large fixed-scale formatting, DECIMAL diagnostics, computed
-DOUBLE binary widths and aggregate metadata remain open under M5.10/M5.5.
+their own readings. Numeric binary consumers now share the item's byte bound,
+separately from numeric character width; the literal-only flag is removed.
+Large fixed-scale formatting, DECIMAL diagnostics, raw REAL copying into non-BLOB
+string holders, warning timing and aggregate metadata remain open under M5.10/M5.5.
 M5's ORM exit criterion holds with recorded test configuration; default
 parallel runs can lose interactive-transaction tests to scheduling delays.
 Doc 42's query API

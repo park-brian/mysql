@@ -58,15 +58,15 @@ The ORM review measured Drizzle's 487 passes and Prisma's 1,122 passes with the
 same reference snapshot failure at two workers. Browser work remains M6;
 InnoDB interchange remains M7, outside the staged Node release.
 
-**Current bounded function work:** FLOAT result-field delivery is verified
-below. The SQL string-reader repair now passes 2,756 pinned native observations
-through query/execute: 1,758 to 2,368 complete matches, retaining every earlier
-matching value. Canonical REAL functions, conditional source strings and actual
-field/cache copies now keep their separate readings. Fresh release verification
-passes; large fixed-scale formatting, DECIMAL diagnostics, computed DOUBLE
-binary widths and aggregate metadata remain explicit independent gaps. Next audit
-the existing numeric byte-width owner: computed DOUBLE binary holders report 22
-where the native item reports 23, while text widths have separate rules. The complete DECIMAL
+**Current bounded function work:** FLOAT field delivery and SQL string-reader
+ownership are verified below. Numeric byte-width metadata now reuses the item's
+existing bound, independently of character width, removing the literal-only
+flag. The combined 5,096 native observations improve 3,811 to 4,681 complete
+matches against 5c11958; every earlier matching fact holds. Fresh release
+verification passes. Large fixed-scale formatting, DECIMAL diagnostics, raw REAL copying
+into non-BLOB string holders, aggregate metadata and separate warning timing
+remain open. Next audit the existing numeric copy boundary for those non-BLOB
+holders, preserving BLOB source formatting. The complete DECIMAL
 constructor rehearsal remains parked above the unchanged parser cap; its
 grammar, diagnostics and refusal must ship together before presence/projection
 expansion. No function-specific serialization exceptions or speculative
@@ -1840,6 +1840,43 @@ are 45,491/331,389/331,309 B; types/engine are 52,460/56,722 B. Its tested-conta
 source proof covers 525 tests/fixtures and 206 runtime sources plus tooling.
 Prior 4f31dcb passes all eleven required CI jobs.
 M5.10 remains partial; totals stay 144/190 overall and M5 42/53.
+
+**M5.10 numeric byte bounds, verified:**
+the existing `byteWidth` reader now uses a REAL item's declared bound, including
+its literal spelling or computed width. CAST BINARY, unary BINARY, CONVERT USING
+binary, binary conditionals/extrema, non-BLOB binary set holders and UNHEX share
+that bound. Numeric character width remains separate: DOUBLE uses 22 even for a
+fixed (M,D) physical column, while FLOAT retains its item width. The redundant
+DOUBLE-literal flag and the function-specific width exception are removed.
+Value readers, numeric conversion, warnings and the wire writer are unchanged.
+
+The new 2,340-observation native/current capture covers default/fixed FLOAT and
+DOUBLE, raw fields, unary/ABS/COALESCE/IF/CASE/ANY_VALUE/arithmetic, literal REAL,
+BIGINT and DECIMAL controls; binary and text casts, explicit lengths, CONVERT,
+CONCAT, extrema, conditional holders, mixed BIT, HEX/UNHEX and set operations
+through query/execute. Complete agreement improves 1,443 to 2,161 and every one
+of the 2,340 field vectors now agrees. Every row and warning vector is unchanged
+from the predecessor. All earlier matching native facts hold. The 179 incomplete
+observations retain 136 numeric string/copy value gaps, 39 successful unary-BINARY
+warning-count gaps and four UNHEX diagnostic-label gaps. Every full native
+outcome remains captured. Local profiles check every matching cell; the new 39
+unmatched warning counts are explicit and every prior count assertion remains
+active. Native replay checks all outcomes completely.
+
+The earlier 2,756 REAL observations improve 2,368 to 2,520 complete matches;
+native outcomes remain unchanged and local assertions only strengthen.
+Combined, 5,096 observations improve 3,811 to 4,681 complete matches. All 4,382
+older numeric/fixed/temporal/BIT-BLOB controls retain their prior matching facts.
+Seven strengthened/new REAL cases pass locally and natively; actual 5c11958
+fails the new regression. The existing numeric BIT-copy test also passes.
+Typecheck, 20,000 executor statements seeded 20261010 and plans 2,127/2,248 under
+the unchanged 2,118 floor pass. Fresh Docker --reference passes 1,618 main and four
+latency tests, typecheck, lint, all nine unchanged caps, package/typed smoke, the
+real client and all seven pinned corpora, including 1,737 coercion warning counts.
+Parser/core/facade are 45,491/331,296/331,203 B; core/facade are 93/106 B smaller
+than 5c11958. Its tested-container proof checks 526 tests/fixtures and 206 runtime
+sources plus tooling. All eleven required 5c11958 CI jobs pass.
+M5.10 remains partial; totals remain 144/190 overall and M5 42/53.
 
 **Next prerequisite: constructor admission before presence execution.** Complete
 the existing CAST work: with written utf8 warning 3719 now retained, refuse

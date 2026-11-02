@@ -73,6 +73,8 @@ export interface ResultType {
   /**
    * An integer's display width, its sign included (`INT` is 11, `1` is 2); a
    * DECIMAL's precision; characters for a string; bytes for a binary string.
+   * A REAL item's byte bound: a field's declared width, a computed result's
+   * bound, or a literal's written width; its numeric text has a separate bound.
    * A TIME expression's base text width, before its fraction; zero uses the
    * general TIME field width of ten, while clock expressions use eight.
    */
@@ -83,8 +85,6 @@ export interface ResultType {
   readonly collationId: number
   /** How strongly a string holds its collation (`COERCIBILITY`): a column's is 2, a literal's 4, the default. */
   readonly coercibility?: number
-  /** A DOUBLE literal: as wide as text as it was written (`Item_float`'s max_length), where a computed double is 22; what a CASE or COALESCE result sizes it by. */
-  readonly literalDouble?: true
   /** A string literal's text, which collation aggregation must be able to convert into the collation it chooses (1267, 1270). */
   readonly literalText?: string
   /** The column it is, when the expression is a bare column reference. */
@@ -399,8 +399,7 @@ export function charWidth(t: ResultType): number {
     case 'decimal':
       return t.length + (t.scale > 0 ? 1 : 0) + (t.unsigned ? 0 : 1)
     case 'double':
-      // A FLOAT(M,D) column is M wide as text (8.4.11: CONCAT of a FLOAT(5,2) is 20 bytes over utf8mb4).
-      if (t.column !== undefined && t.scale < 31) return t.length
+      // FLOAT keeps its item's bound; DOUBLE text uses 22 even for an (M,D) column.
       return t.field === FIELD_TYPE.FLOAT ? t.length : 22
     case 'datetime':
       return t.field === FIELD_TYPE.DATE ? 10 : 19 + (t.scale > 0 ? t.scale + 1 : 0)

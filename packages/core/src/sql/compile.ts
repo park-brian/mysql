@@ -447,7 +447,8 @@ function convertUsing(e: ConvertNode, ctx: CompileContext): Compiled {
   const { id, charset } = info
   if (charset === 'utf8mb3') warnAtCompile(ctx, 1287, UTF8MB3_DEPRECATION)
   // Characters, or bytes as many as the text could take when the result is bytes.
-  const width = x.type.kind === 'bytes' || isBits(x.type) ? bitsOrBytesWidth(x.type) : charWidth(x.type) * (id === CHARSET_BINARY && x.type.kind === 'string' ? requireCollationInfo(x.type.collationId).mbmaxlen : 1)
+  const widthOf = id === CHARSET_BINARY ? byteWidth : charWidth
+  const width = x.type.kind === 'bytes' || isBits(x.type) ? bitsOrBytesWidth(x.type) : widthOf(x.type)
   return {
     eval: (r, env) => {
       const v = x.eval(r, env)
@@ -898,7 +899,7 @@ function literal(e: LiteralNode, ctx: CompileContext): Compiled {
       return lit(d, decimalType(Math.max(digits, d.scale + 1), d.scale, false))
     }
     case LITERAL.DOUBLE:
-      return lit(doubleValue(e.value as number), { ...doubleType(false, (e.text ?? String(e.value).replace('+', '')).length), literalDouble: true })
+      return lit(doubleValue(e.value as number), doubleType(false, (e.text ?? String(e.value).replace('+', '')).length))
     case LITERAL.STRING: {
       const id = introducerCollation(e, ctx)
       let text = e.value as string
@@ -2144,7 +2145,7 @@ export function aggregate(types: readonly ResultType[], nullable: boolean, conne
     case 'STRING':
     case 'VARCHAR':
       // A BIT among temporals or numbers that merge to a string makes it a binary one, as wide as the widest (8.4.11: `COALESCE(tm, bt, 1.5)` is VARBINARY(10)).
-      if (type.kind === 'string' && live.some(isBits)) return { ...stringType(Math.max(...live.map((t) => (isBits(t) ? t.length : charWidth(t)))), CHARSET_BINARY, nullable), field, coercibility: COERCIBILITY.IMPLICIT }
+      if (type.kind === 'string' && live.some(isBits)) return { ...stringType(Math.max(...live.map((t) => (isBits(t) ? t.length : byteWidth(t)))), CHARSET_BINARY, nullable), field, coercibility: COERCIBILITY.IMPLICIT }
       return type.kind === 'string' || type.kind === 'bytes' ? { ...type, field } : type
     case 'ENUM':
     case 'SET':
@@ -2256,12 +2257,9 @@ function holderOf(types: readonly ResultType[], nullable: boolean, connectionCol
     const binary = derived !== undefined ? derived.collationId === CHARSET_BINARY : texts.some((t) => t.kind === 'bytes' && coercibilityOf(t) === least)
     const collation = binary ? CHARSET_BINARY : (derived?.collationId ?? aggregateTypes(live, connectionCollation))
     const tagged = (t: ResultType): ResultType => (derived === undefined || binary ? t : { ...t, coercibility: derived.derivation })
-    // In a binary CASE, IF, IFNULL or COALESCE a DOUBLE literal is as wide as
-    // it was written (8.4.11: `IF(c, 2.5e0, 0x61)` is VARBINARY(5)); in a text
-    // one, and in GREATEST and LEAST, it is 22, as a computed double is.
-    const holder = binary && (operation === 'case' || operation === 'if' || operation === 'ifnull' || operation === 'coalesce')
-    const textWidth = (t: ResultType): number => (holder && t.literalDouble === true ? t.length : charWidth(t))
-    const width = Math.max(...live.map((t) => (binary && t.kind === 'string' ? charWidth(t) * requireCollationInfo(t.collationId).mbmaxlen : textWidth(t))))
+    // Binary holders use the item's byte bound, including a DOUBLE literal's
+    // written width; text holders keep the separate numeric character bound.
+    const width = Math.max(...live.map(binary ? byteWidth : charWidth))
     const blob = Math.max(0, ...live.map((t) => t.blobBytes ?? 0))
     if (blob > 0 && !binary) return tagged({ ...stringType(width, collation, nullable), field: FIELD_TYPE.BLOB, blobBytes: blob * requireCollationInfo(collation).mbmaxlen })
     return tagged(stringType(width, collation, nullable))
@@ -2833,8 +2831,9 @@ function quantified(op: string, quantifier: 'ANY' | 'ALL', left: Expression, rig
   }
 }
 
-/** A result's width in bytes: a string's characters at its charset's widest, anything else its characters. */
+/** A result's byte bound: REAL items keep their declared bound; strings use their charset's widest encoding. */
 export function byteWidth(t: ResultType): number {
+  if (t.kind === 'double') return t.length
   return charWidth(t) * (t.kind === 'string' ? requireCollationInfo(t.collationId).mbmaxlen : 1)
 }
 

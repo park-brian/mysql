@@ -37,7 +37,7 @@ import { requireCollationInfo } from '@myjs/charsets'
 import type { SetOperationNode } from '@myjs/parser'
 import { sqlError } from '@myjs/protocol'
 import { COERCIBILITY, bytesValue, intValue, plainValue, stringValue, toDateTime, toText, valueBytes, withoutHex, type Value } from '@myjs/types'
-import { aggregate, aggregateCollations, aggregateTypes, fieldValue } from './compile.ts'
+import { aggregate, aggregateCollations, aggregateTypes, byteWidth, fieldValue } from './compile.ts'
 import { rowKey } from './keys.ts'
 import { charWidth, jsonAsText, jsonType, isNumber, promotesToBlob, stringType, type ResultType } from './meta.ts'
 import { bitBytes } from './wire.ts'
@@ -103,7 +103,7 @@ export function setOperationType(types: readonly ResultType[], connectionCollati
   // Binary: as wide as the widest branch in its own bytes — a string's
   // characters at its charset's widest, bytes as they are (8.4.11:
   // VARBINARY(10) UNION 'k' is 10, UNION a 13-character literal 52).
-  const width = Math.max(...live.map((t) => charWidth(t) * (binary && t.kind === 'string' ? requireCollationInfo(t.collationId).mbmaxlen : 1)))
+  const width = Math.max(...live.map(binary ? byteWidth : charWidth))
   const text = stringType(width, collationId, nullable)
   return done(sameField ? { ...text, field: FIELD_TYPE.STRING } : text)
 }
