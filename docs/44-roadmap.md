@@ -1695,6 +1695,25 @@ CI jobs. DECIMAL precision admission remains the next constructor step; its
 candidate is saved separately while it exceeds the parser cap. Totals remain
 144/190 overall and M5 42/53.
 
+**M5.10 charset backend cleanup, verified:** the private host-label
+table now lists only actual fallback codecs. Generated single-byte maps bypass
+the removed labels; unsupported null declarations have the same typed-absence
+result. The 46 public charset profiles remain byte-exact across all 256 input
+bytes, encode/decode, the BMP input sequence and astral substitutions. TIS620 has
+no generated map and retains its checked host fallback, with an explicit
+regression. The encoding documentation now describes the actual split. Nine
+unchanged caps pass: charsets/parser are 18,103/45,418 B, freeing parser room
+without changing its budget; core/facade are 331,132/331,067 B. Local focused
+checks pass 32 tests, including small-ICU controls; both native regex tests pass.
+Twenty thousand seeded executor statements pass; plans remain 2,127/2,248 under
+the unchanged 2,118 floor. Fresh Docker --reference passes 1,609 main and four
+latency tests, typecheck, lint, package/typed smoke, the real client and all seven
+pinned corpora, including 1,737 coercion warning counts. A separate replay of the
+same read-only copy contract checks 520 tests/fixtures and 206 runtime sources.
+Prior 28f4b53 passes all eleven required CI jobs. This is a separate dependency
+cleanup; the CAST candidate stays saved until its grammar, diagnostic edges and
+size all pass. Totals remain 144/190 overall and M5 42/53.
+
 **Next prerequisite: constructor admission before presence execution.** Complete
 the existing CAST work: with written utf8 warning 3719 now retained, refuse
 excessive DECIMAL precision at the completed parser production. Preserve native prefix
@@ -1728,6 +1747,12 @@ native whitespace endpoints and UTF-8 clipping. Do not throw from generic
 metadata factories. Scale limits, M<D and valid parameter metadata retain their
 separate open gaps. The saved precision candidate still exceeds the parser cap;
 its current prefix histories need verification before promotion.
+The new 66-command edge audit also distinguishes single field lengths from
+NUM31 pairs, signed 32-bit diagnostic formatting from unsigned length reading,
+precision from ARRAY admission and DATETIME-only AT TIME ZONE syntax. Follow the
+[pinned CAST and field-length grammar](https://raw.githubusercontent.com/mysql/mysql-server/mysql-8.4.11/sql/sql_yacc.yy)
+and [constructor error ordering](https://raw.githubusercontent.com/mysql/mysql-server/mysql-8.4.11/sql/item_create.cc),
+then verify each affected form in Docker before admission.
 
 The retained-view locking-read contract now has 280 general, 320 INSERT-family
 and 600 RR/RC startup captures. Under an existing view, changed definitions refuse

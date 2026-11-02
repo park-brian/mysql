@@ -47,8 +47,7 @@ test('utf8mb4 carries the astral plane, which is the whole point of the mb4', ()
 test('M2.3: a charset we cannot decode raises a typed error, never a wrong decode', () => {
   assert.equal(canDecode('utf8mb4'), true)
   assert.equal(canDecode('latin1'), true)
-  // B0: the generated tables cover every single-byte charset MySQL's struct
-  // names, so seven charsets that used to be undecodable now decode — `swe7`
+  // B0: generated tables make seven formerly undecodable charsets portable — `swe7`
   // among them, which this test previously asserted could *not* be decoded.
   // The assertion got stronger, not weaker.
   for (const cs of ['swe7', 'dec8', 'hp8', 'armscii8', 'geostd8', 'keybcs2', 'cp852']) {
@@ -60,6 +59,15 @@ test('M2.3: a charset we cannot decode raises a typed error, never a wrong decod
   // `filename` is a MySQL internal, never a column or connection charset.
   assert.equal(canDecode('filename'), false)
   assert.throws(() => decodeCharset(Uint8Array.from([1]), 'filename'), CharsetError)
+})
+
+test('TIS620 retains its checked host decoder until a generated map exists', () => {
+  let available = false
+  try { available = rejectsLatin1Substitute(new TextDecoder('windows-874')) } catch { /* The host may lack this codec. */ }
+  assert.equal(canDecode('tis620'), available)
+  const bytes = Uint8Array.of(0xa1, 0xa2, 0xa4)
+  if (available) assert.equal(decodeCharset(bytes, 'tis620'), 'กขค')
+  else assert.throws(() => decodeCharset(bytes, 'tis620'), CharsetError)
 })
 
 test('B0: latin1 decodes from the generated table, not from the runtime', async () => {

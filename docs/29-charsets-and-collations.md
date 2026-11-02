@@ -156,11 +156,13 @@ Beyond collation, the *encodings* themselves:
 | `ucs2`, `utf16`, `utf16le`, `utf32` | 2–4 | supported in columns, **not usable as a connection charset** |
 | `gbk`, `big5`, `sjis`, `cp932`, `euckr`, … | 1–2 | East Asian legacy sets |
 
-`TextDecoder`/`TextEncoder` handle `utf-8`, `utf-16`, and most legacy encodings
-natively in both Node and browsers, so the encoding layer is mostly a matter of
-mapping MySQL charset names to WHATWG labels. `latin1` is the one to be careful
-with: MySQL's `latin1` is cp1252 (`windows-1252`), *not* `iso-8859-1`, and the
-difference is real characters in the 0x80–0x9F range.
+The runtime uses generated maps for 24 single-byte charsets, including MySQL's
+`latin1` (cp1252, not ISO-8859-1). Those maps and their inverses make byte reading
+and writing independent of host ICU. UTF-8 has its own encoder; the host-decoder
+fallback table covers Unicode and legacy codecs still used by the decoder,
+including TIS620, which does not have a generated map yet. Every host decoder
+must pass the substitution check before use. Missing decoders and unavailable
+inverse encoders raise typed errors rather than guessing a mapping.
 
 The multi-byte sets that `TextDecoder` does not cover need generated tables.
 `gbk` and `sjis` also have a security dimension — the classic

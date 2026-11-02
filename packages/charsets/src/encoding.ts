@@ -13,15 +13,15 @@
 // error was raised anywhere, and the wrong character reached the application
 // as data. The reverse table built from that decoder then encoded `€` as `?`.
 //
-// So the single-byte charsets no longer go through `TextDecoder` at all: their
-// byte -> code point tables are generated from MySQL's own `CHARSET_INFO`
+// Charsets with generated single-byte tables bypass `TextDecoder`: their
+// byte -> code point maps come from MySQL's own `CHARSET_INFO`
 // (`encodings.ts`), which makes them correct on every runtime and identical on
 // all of them. That is the argument D-23 makes about `Intl.Collator`, applied
 // one layer down: bytes that land in a database must not depend on which build
 // of which engine wrote them.
 //
-// What remains on `TextDecoder` is UTF-8, the UTF-16 family, and the
-// multi-byte legacy charsets, which are far too large to carry. Those are
+// The remaining host decoders cover UTF-8, the UTF-16 family, legacy
+// multibyte charsets and TIS620, which has no generated map yet. They are
 // probed rather than trusted — see `rejectsLatin1Substitute` below.
 import { unsupportedCharset } from './errors.ts'
 import { requireCollationInfo } from './collation.ts'
@@ -29,51 +29,20 @@ import { PACKED_CHARSET_TO_UNI } from './encodings.ts'
 import { expandRuns } from './runs.ts'
 
 /**
- * MySQL charset name → WHATWG encoding label.
- *
- * `null` marks a charset `TextDecoder` cannot do and that therefore needs a
- * generated table before it can be supported (doc 29 names `gb18030` and the
- * `filename` internal charset among them). A `null` here produces a typed
- * error, never a silently wrong decode.
+ * Fallback decoders only: generated single-byte tables are authoritative.
+ * A charset without a generated table or a listed host decoder is refused
+ * with a typed error; unsupported labels cannot silently substitute a codec.
  */
-const WHATWG_LABEL: Readonly<Record<string, string | null>> = {
+const WHATWG_LABEL: Readonly<Record<string, string>> = {
   // Unicode.
   utf8mb4: 'utf-8',
   utf8mb3: 'utf-8', // deprecated; 3-byte subset, so utf-8 decodes it correctly
   utf16: 'utf-16be',
   utf16le: 'utf-16le',
   ucs2: 'utf-16be', // BMP-only in MySQL, but the byte layout is UTF-16BE
-  utf32: null, // WHATWG dropped UTF-32 entirely
 
-  // Single-byte.
-  // MySQL's `latin1` is cp1252: `0x80` is `€`. Not `iso-8859-1`. Served by
-  // the generated table, not by this label — the label is kept only so that
-  // `WHATWG_LABEL` stays a complete statement of what each charset is.
-  latin1: 'windows-1252',
-  latin2: 'iso-8859-2',
-  latin5: 'iso-8859-9',
-  latin7: 'iso-8859-13',
-  ascii: 'windows-1252', // ASCII is a subset; the high half is never valid input
-  cp1250: 'windows-1250',
-  cp1251: 'windows-1251',
-  cp1256: 'windows-1256',
-  cp1257: 'windows-1257',
-  cp850: 'ibm866', // not exact — see UNSUPPORTED below
-  cp852: null,
-  cp866: 'ibm866',
-  koi8r: 'koi8-r',
-  koi8u: 'koi8-u',
-  greek: 'iso-8859-7',
-  hebrew: 'iso-8859-8',
+  // TIS620 has no generated single-byte map yet.
   tis620: 'windows-874',
-  macroman: 'macintosh',
-  macce: 'x-mac-cyrillic', // not exact — see UNSUPPORTED below
-  dec8: null,
-  hp8: null,
-  swe7: null,
-  armscii8: null,
-  geostd8: null,
-  keybcs2: null,
 
   // East Asian.
   big5: 'big5',
@@ -86,9 +55,6 @@ const WHATWG_LABEL: Readonly<Record<string, string | null>> = {
   eucjpms: 'euc-jp',
   euckr: 'euc-kr',
 
-  // MySQL internals, never a column or connection charset.
-  binary: null,
-  filename: null,
 }
 
 /**
@@ -178,7 +144,7 @@ function decoderFor(charset: string): TextDecoder {
   const cached = decoders.get(charset)
   if (cached !== undefined) return cached
   const label = WHATWG_LABEL[charset]
-  if (label === null || label === undefined) throw unsupportedCharset(charset)
+  if (label === undefined) throw unsupportedCharset(charset)
   let decoder: TextDecoder
   try {
     decoder = new TextDecoder(label)

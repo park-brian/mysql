@@ -26,7 +26,9 @@ survive failure without changing successful-root provenance. Native CAST
 precision admission remains open. Explicit utf8 and utf8mb3 warnings now follow
 their three expression construction phases; successful-root provenance and
 DDL/SET charset owners are unchanged. Numeric datatype arguments share one
-reader, preserving all public type facts and FLOAT/temporal distinctions. M5.1 naming and
+reader, preserving all public type facts and FLOAT/temporal distinctions. Generated
+single-byte charset tables bypass obsolete host labels; the remaining fallback
+list retains TIS620 and preserves codec availability and byte mappings. M5.1 naming and
 M5.5 aggregate precision are reopened by native probes in the roadmap. M5.19 numeric
 set-operation holders now agree with the expanded native audits, including
 default/fixed FLOAT behavior. Raw BIT with VARCHAR/VARBINARY now shares the

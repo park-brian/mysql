@@ -1854,6 +1854,9 @@ warnings retain the written name at introducers, CONVERT USING and CAST CHAR.
 Charset resolution stays shared; DDL/SET owners and successful provenance are
 unchanged. Numeric datatype arguments use one reader while FLOAT's mantissa and
 temporal bounds remain explicit; all public datatype records are preserved.
+The charset fallback table now contains only host codecs actually used;
+generated single-byte tables retain authority and TIS620 retains its fallback.
+
 Excessive DECIMAL precision admission remains the next constructor prerequisite
 under the existing size caps.
 
