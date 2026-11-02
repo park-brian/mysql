@@ -2765,19 +2765,50 @@ and 206 runtime sources plus tooling; warm heavy checks finished before this
 run. All eleven required 12b0723 CI jobs pass.
 Totals stay 144/190 and M5 42/53; M5.10 remains partial.
 
-Next audit unary-plus expression printing. The shared printer currently falls
-back on this transparent operator, leaving the measured SHOW CREATE gaps.
-Prove its stored spelling in views, generated/default expressions and CHECK
-clauses before changing the common printer. A 57-outcome native audit currently
-agrees completely on 19, with unary-plus spelling gaps in all four contexts.
-A second 30-outcome audit matches 12 completely and exposes the same printer
-boundary in UNHEX/network warnings and arithmetic/FLOAT errors. These retain
-full result/error/condition packets. Preserve charset introducers, qualified
-field names, literal spellings and outer labels when printing the operand.
-Warning-limit and cached-execution controls add 200 outcomes (80 complete
-baseline matches), covering limits 0/1/8/64. The four profiles total 287
-outcomes with 111 complete baseline matches. Keep output labels, query-owner
-normalization, general updatability and PREPARE binding under separate proofs.
+**Transparent unary-plus printing, verified (2026-11-02):** one
+branch in the existing recursive expression printer now prints unary plus's
+operand. Views, generated/default expressions, CHECK clauses and diagnostic
+argument labels retain their existing formatting owners. Qualified names,
+charset introducers, literal exponent spellings and outer labels are preserved;
+there is no alternate printer, mode flag or error whitelist.
+
+Six native profiles cover 368 complete outcomes: agreement improves 192→368.
+These include 81 negative/other-operator controls that already agreed, complete
+stored DDL text, full result/error/condition packets, cached execution and
+warning limits 0/1/8/64. Three permanent fixtures add all 368 observations; all
+1,585 earlier golden observations are unchanged. Twenty-four focused cases pass
+natively and locally. The first permanent run exposed missing Buffer-to-JSON
+conversion in the test reader. Lossless Buffer.toJSON comparison now preserves
+every byte and leaves other scalar values intact; the original failed logs
+remain available. Actual a49aa15 passes the twenty-one earlier cases and fails
+all three new groups with the final reader; the official runtime is restored.
+
+Across 6,059 outcomes complete agreement improves 4,924→5,118, retaining all
+67,568 earlier matching protocol facts. Typecheck/lint, 20,000 executor
+statements seeded 20261010 and plans at 2,127/2,248 under the unchanged 2,118
+floor pass. Nine unchanged caps pass at parser/core/facade
+45,599/332,808/332,724 B gzipped. The full official suite retains all 38 passing
+identities and its native baseline. Fresh Docker --reference passes 1,664 main
+tests, four latency tests, typecheck, lint, all nine unchanged caps,
+package/typed smoke, the real client and all seven pinned corpora including
+1,737 coercion warning counts. The unchanged long-IN assertion passes. Early
+source proof matches 560 tests/fixtures and 206 runtime sources plus tooling,
+after the final test reader fix; warm heavy checks finished before this run.
+All eleven required a49aa15 CI jobs pass. Totals stay 144/190 and M5 42/53;
+M5.10 remains partial.
+
+Next audit query-owner boundaries in view-updatability metadata. A 60-outcome
+native profile currently agrees on 36 and exposes both transparent-wrapper and
+own-ORDER-window gaps. Blind wrapper delegation would inherit wrong results
+from the existing bare-query predicate, including same-base subqueries and
+ORDER windows. A further 42-outcome profile agrees on 30: own ROW_NUMBER,
+SUM OVER and named-window calls report NO natively and YES here; unused windows,
+ordinary ordering and an independent scalar window subquery retain YES.
+Together the two profiles cover 102 outcomes (66 complete baseline matches).
+Prove the smallest own-order refusal first using the existing window reader's
+subquery boundary, retaining wrapper, CTE/source and subquery fences until
+independently verified. Keep full PREPARE
+binding, stored-query owner normalization and general updatability open.
 
 **Next prerequisite: constructor admission before presence execution.** Complete
 the existing CAST work: with written utf8 warning 3719 now retained, refuse

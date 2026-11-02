@@ -75,6 +75,7 @@ export function printExpression(e: Expression, o: PrintOptions): string {
       }
       break
     case NODE.UNARY:
+      if (e.op === '+') return p(e.operand)
       if (e.op === '-') return `-(${p(e.operand)})`
       // The optimizer's rewrite is what is stored: NOT c is (0 = c).
       if (e.op === 'NOT' || e.op === '!') return e.operand.kind === NODE.COLUMN ? `(0 = ${p(e.operand)})` : `(not(${p(e.operand)}))`

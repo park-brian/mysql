@@ -1,0 +1,1711 @@
+{
+  "mysqlVersion": "8.4.11",
+  "sqlMode": "ERROR_FOR_DIVISION_BY_ZERO",
+  "seed": "SELECT 1/0,CAST('x' AS DECIMAL)",
+  "schema": "myjs_print260",
+  "setup": [
+    "CREATE TABLE base260(a INT)"
+  ],
+  "beforeEach": [
+    "DROP VIEW IF EXISTS vp260",
+    "DROP TABLE IF EXISTS tp260"
+  ],
+  "definitions": {
+    "view": "vp260",
+    "table": "tp260"
+  },
+  "observations": [
+    {
+      "sql": "CREATE VIEW vp260 AS SELECT +a b FROM base260",
+      "api": "query",
+      "kind": "VIEW",
+      "header": {
+        "fieldCount": 0,
+        "affectedRows": 0,
+        "insertId": 0,
+        "info": "",
+        "serverStatus": 2,
+        "warningStatus": 0,
+        "changedRows": 0
+      },
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": "CREATE ALGORITHM=UNDEFINED DEFINER=`root`@`%` SQL SECURITY DEFINER VIEW `vp260` AS select `base260`.`a` AS `b` from `base260`"
+    },
+    {
+      "sql": "CREATE VIEW vp260 AS SELECT +a b FROM base260",
+      "api": "execute",
+      "kind": "VIEW",
+      "header": {
+        "fieldCount": 0,
+        "affectedRows": 0,
+        "insertId": 0,
+        "info": "",
+        "serverStatus": 2,
+        "warningStatus": 0,
+        "changedRows": 0
+      },
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": "CREATE ALGORITHM=UNDEFINED DEFINER=`root`@`%` SQL SECURITY DEFINER VIEW `vp260` AS select `base260`.`a` AS `b` from `base260`"
+    },
+    {
+      "sql": "CREATE VIEW vp260 AS SELECT +a b FROM base260",
+      "api": "prepare",
+      "kind": "VIEW",
+      "parameters": [],
+      "fields": [],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": null
+    },
+    {
+      "sql": "CREATE VIEW vp260 AS SELECT ++a b FROM base260",
+      "api": "query",
+      "kind": "VIEW",
+      "header": {
+        "fieldCount": 0,
+        "affectedRows": 0,
+        "insertId": 0,
+        "info": "",
+        "serverStatus": 2,
+        "warningStatus": 0,
+        "changedRows": 0
+      },
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": "CREATE ALGORITHM=UNDEFINED DEFINER=`root`@`%` SQL SECURITY DEFINER VIEW `vp260` AS select `base260`.`a` AS `b` from `base260`"
+    },
+    {
+      "sql": "CREATE VIEW vp260 AS SELECT ++a b FROM base260",
+      "api": "execute",
+      "kind": "VIEW",
+      "header": {
+        "fieldCount": 0,
+        "affectedRows": 0,
+        "insertId": 0,
+        "info": "",
+        "serverStatus": 2,
+        "warningStatus": 0,
+        "changedRows": 0
+      },
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": "CREATE ALGORITHM=UNDEFINED DEFINER=`root`@`%` SQL SECURITY DEFINER VIEW `vp260` AS select `base260`.`a` AS `b` from `base260`"
+    },
+    {
+      "sql": "CREATE VIEW vp260 AS SELECT ++a b FROM base260",
+      "api": "prepare",
+      "kind": "VIEW",
+      "parameters": [],
+      "fields": [],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": null
+    },
+    {
+      "sql": "CREATE VIEW vp260 AS SELECT +(a+1) b FROM base260",
+      "api": "query",
+      "kind": "VIEW",
+      "header": {
+        "fieldCount": 0,
+        "affectedRows": 0,
+        "insertId": 0,
+        "info": "",
+        "serverStatus": 2,
+        "warningStatus": 0,
+        "changedRows": 0
+      },
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": "CREATE ALGORITHM=UNDEFINED DEFINER=`root`@`%` SQL SECURITY DEFINER VIEW `vp260` AS select (`base260`.`a` + 1) AS `b` from `base260`"
+    },
+    {
+      "sql": "CREATE VIEW vp260 AS SELECT +(a+1) b FROM base260",
+      "api": "execute",
+      "kind": "VIEW",
+      "header": {
+        "fieldCount": 0,
+        "affectedRows": 0,
+        "insertId": 0,
+        "info": "",
+        "serverStatus": 2,
+        "warningStatus": 0,
+        "changedRows": 0
+      },
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": "CREATE ALGORITHM=UNDEFINED DEFINER=`root`@`%` SQL SECURITY DEFINER VIEW `vp260` AS select (`base260`.`a` + 1) AS `b` from `base260`"
+    },
+    {
+      "sql": "CREATE VIEW vp260 AS SELECT +(a+1) b FROM base260",
+      "api": "prepare",
+      "kind": "VIEW",
+      "parameters": [],
+      "fields": [],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": null
+    },
+    {
+      "sql": "CREATE VIEW vp260 AS SELECT +ABS(a) b FROM base260",
+      "api": "query",
+      "kind": "VIEW",
+      "header": {
+        "fieldCount": 0,
+        "affectedRows": 0,
+        "insertId": 0,
+        "info": "",
+        "serverStatus": 2,
+        "warningStatus": 0,
+        "changedRows": 0
+      },
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": "CREATE ALGORITHM=UNDEFINED DEFINER=`root`@`%` SQL SECURITY DEFINER VIEW `vp260` AS select abs(`base260`.`a`) AS `b` from `base260`"
+    },
+    {
+      "sql": "CREATE VIEW vp260 AS SELECT +ABS(a) b FROM base260",
+      "api": "execute",
+      "kind": "VIEW",
+      "header": {
+        "fieldCount": 0,
+        "affectedRows": 0,
+        "insertId": 0,
+        "info": "",
+        "serverStatus": 2,
+        "warningStatus": 0,
+        "changedRows": 0
+      },
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": "CREATE ALGORITHM=UNDEFINED DEFINER=`root`@`%` SQL SECURITY DEFINER VIEW `vp260` AS select abs(`base260`.`a`) AS `b` from `base260`"
+    },
+    {
+      "sql": "CREATE VIEW vp260 AS SELECT +ABS(a) b FROM base260",
+      "api": "prepare",
+      "kind": "VIEW",
+      "parameters": [],
+      "fields": [],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": null
+    },
+    {
+      "sql": "CREATE VIEW vp260 AS SELECT +'x' b FROM base260",
+      "api": "query",
+      "kind": "VIEW",
+      "header": {
+        "fieldCount": 0,
+        "affectedRows": 0,
+        "insertId": 0,
+        "info": "",
+        "serverStatus": 2,
+        "warningStatus": 0,
+        "changedRows": 0
+      },
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": "CREATE ALGORITHM=UNDEFINED DEFINER=`root`@`%` SQL SECURITY DEFINER VIEW `vp260` AS select 'x' AS `b` from `base260`"
+    },
+    {
+      "sql": "CREATE VIEW vp260 AS SELECT +'x' b FROM base260",
+      "api": "execute",
+      "kind": "VIEW",
+      "header": {
+        "fieldCount": 0,
+        "affectedRows": 0,
+        "insertId": 0,
+        "info": "",
+        "serverStatus": 2,
+        "warningStatus": 0,
+        "changedRows": 0
+      },
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": "CREATE ALGORITHM=UNDEFINED DEFINER=`root`@`%` SQL SECURITY DEFINER VIEW `vp260` AS select 'x' AS `b` from `base260`"
+    },
+    {
+      "sql": "CREATE VIEW vp260 AS SELECT +'x' b FROM base260",
+      "api": "prepare",
+      "kind": "VIEW",
+      "parameters": [],
+      "fields": [],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": null
+    },
+    {
+      "sql": "CREATE VIEW vp260 AS SELECT +1.50 b FROM base260",
+      "api": "query",
+      "kind": "VIEW",
+      "header": {
+        "fieldCount": 0,
+        "affectedRows": 0,
+        "insertId": 0,
+        "info": "",
+        "serverStatus": 2,
+        "warningStatus": 0,
+        "changedRows": 0
+      },
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": "CREATE ALGORITHM=UNDEFINED DEFINER=`root`@`%` SQL SECURITY DEFINER VIEW `vp260` AS select 1.50 AS `b` from `base260`"
+    },
+    {
+      "sql": "CREATE VIEW vp260 AS SELECT +1.50 b FROM base260",
+      "api": "execute",
+      "kind": "VIEW",
+      "header": {
+        "fieldCount": 0,
+        "affectedRows": 0,
+        "insertId": 0,
+        "info": "",
+        "serverStatus": 2,
+        "warningStatus": 0,
+        "changedRows": 0
+      },
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": "CREATE ALGORITHM=UNDEFINED DEFINER=`root`@`%` SQL SECURITY DEFINER VIEW `vp260` AS select 1.50 AS `b` from `base260`"
+    },
+    {
+      "sql": "CREATE VIEW vp260 AS SELECT +1.50 b FROM base260",
+      "api": "prepare",
+      "kind": "VIEW",
+      "parameters": [],
+      "fields": [],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": null
+    },
+    {
+      "sql": "CREATE VIEW vp260 AS SELECT +1e0 b FROM base260",
+      "api": "query",
+      "kind": "VIEW",
+      "header": {
+        "fieldCount": 0,
+        "affectedRows": 0,
+        "insertId": 0,
+        "info": "",
+        "serverStatus": 2,
+        "warningStatus": 0,
+        "changedRows": 0
+      },
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": "CREATE ALGORITHM=UNDEFINED DEFINER=`root`@`%` SQL SECURITY DEFINER VIEW `vp260` AS select 1e0 AS `b` from `base260`"
+    },
+    {
+      "sql": "CREATE VIEW vp260 AS SELECT +1e0 b FROM base260",
+      "api": "execute",
+      "kind": "VIEW",
+      "header": {
+        "fieldCount": 0,
+        "affectedRows": 0,
+        "insertId": 0,
+        "info": "",
+        "serverStatus": 2,
+        "warningStatus": 0,
+        "changedRows": 0
+      },
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": "CREATE ALGORITHM=UNDEFINED DEFINER=`root`@`%` SQL SECURITY DEFINER VIEW `vp260` AS select 1e0 AS `b` from `base260`"
+    },
+    {
+      "sql": "CREATE VIEW vp260 AS SELECT +1e0 b FROM base260",
+      "api": "prepare",
+      "kind": "VIEW",
+      "parameters": [],
+      "fields": [],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": null
+    },
+    {
+      "sql": "CREATE TABLE tp260(a INT,b INT GENERATED ALWAYS AS (+a) STORED)",
+      "api": "query",
+      "kind": "TABLE",
+      "header": {
+        "fieldCount": 0,
+        "affectedRows": 0,
+        "insertId": 0,
+        "info": "",
+        "serverStatus": 2,
+        "warningStatus": 0,
+        "changedRows": 0
+      },
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": "CREATE TABLE `tp260` (\n  `a` int DEFAULT NULL,\n  `b` int GENERATED ALWAYS AS (`a`) STORED\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci"
+    },
+    {
+      "sql": "CREATE TABLE tp260(a INT,b INT GENERATED ALWAYS AS (+a) STORED)",
+      "api": "execute",
+      "kind": "TABLE",
+      "header": {
+        "fieldCount": 0,
+        "affectedRows": 0,
+        "insertId": 0,
+        "info": "",
+        "serverStatus": 2,
+        "warningStatus": 0,
+        "changedRows": 0
+      },
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": "CREATE TABLE `tp260` (\n  `a` int DEFAULT NULL,\n  `b` int GENERATED ALWAYS AS (`a`) STORED\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci"
+    },
+    {
+      "sql": "CREATE TABLE tp260(a INT,b INT GENERATED ALWAYS AS (+a) STORED)",
+      "api": "prepare",
+      "kind": "TABLE",
+      "parameters": [],
+      "fields": [],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": null
+    },
+    {
+      "sql": "CREATE TABLE tp260(a INT,b INT GENERATED ALWAYS AS (++a) STORED)",
+      "api": "query",
+      "kind": "TABLE",
+      "header": {
+        "fieldCount": 0,
+        "affectedRows": 0,
+        "insertId": 0,
+        "info": "",
+        "serverStatus": 2,
+        "warningStatus": 0,
+        "changedRows": 0
+      },
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": "CREATE TABLE `tp260` (\n  `a` int DEFAULT NULL,\n  `b` int GENERATED ALWAYS AS (`a`) STORED\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci"
+    },
+    {
+      "sql": "CREATE TABLE tp260(a INT,b INT GENERATED ALWAYS AS (++a) STORED)",
+      "api": "execute",
+      "kind": "TABLE",
+      "header": {
+        "fieldCount": 0,
+        "affectedRows": 0,
+        "insertId": 0,
+        "info": "",
+        "serverStatus": 2,
+        "warningStatus": 0,
+        "changedRows": 0
+      },
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": "CREATE TABLE `tp260` (\n  `a` int DEFAULT NULL,\n  `b` int GENERATED ALWAYS AS (`a`) STORED\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci"
+    },
+    {
+      "sql": "CREATE TABLE tp260(a INT,b INT GENERATED ALWAYS AS (++a) STORED)",
+      "api": "prepare",
+      "kind": "TABLE",
+      "parameters": [],
+      "fields": [],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": null
+    },
+    {
+      "sql": "CREATE TABLE tp260(a INT,b INT GENERATED ALWAYS AS (+(a+1)) STORED)",
+      "api": "query",
+      "kind": "TABLE",
+      "header": {
+        "fieldCount": 0,
+        "affectedRows": 0,
+        "insertId": 0,
+        "info": "",
+        "serverStatus": 2,
+        "warningStatus": 0,
+        "changedRows": 0
+      },
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": "CREATE TABLE `tp260` (\n  `a` int DEFAULT NULL,\n  `b` int GENERATED ALWAYS AS ((`a` + 1)) STORED\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci"
+    },
+    {
+      "sql": "CREATE TABLE tp260(a INT,b INT GENERATED ALWAYS AS (+(a+1)) STORED)",
+      "api": "execute",
+      "kind": "TABLE",
+      "header": {
+        "fieldCount": 0,
+        "affectedRows": 0,
+        "insertId": 0,
+        "info": "",
+        "serverStatus": 2,
+        "warningStatus": 0,
+        "changedRows": 0
+      },
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": "CREATE TABLE `tp260` (\n  `a` int DEFAULT NULL,\n  `b` int GENERATED ALWAYS AS ((`a` + 1)) STORED\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci"
+    },
+    {
+      "sql": "CREATE TABLE tp260(a INT,b INT GENERATED ALWAYS AS (+(a+1)) STORED)",
+      "api": "prepare",
+      "kind": "TABLE",
+      "parameters": [],
+      "fields": [],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": null
+    },
+    {
+      "sql": "CREATE TABLE tp260(a INT,b INT GENERATED ALWAYS AS (+ABS(a)) STORED)",
+      "api": "query",
+      "kind": "TABLE",
+      "header": {
+        "fieldCount": 0,
+        "affectedRows": 0,
+        "insertId": 0,
+        "info": "",
+        "serverStatus": 2,
+        "warningStatus": 0,
+        "changedRows": 0
+      },
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": "CREATE TABLE `tp260` (\n  `a` int DEFAULT NULL,\n  `b` int GENERATED ALWAYS AS (abs(`a`)) STORED\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci"
+    },
+    {
+      "sql": "CREATE TABLE tp260(a INT,b INT GENERATED ALWAYS AS (+ABS(a)) STORED)",
+      "api": "execute",
+      "kind": "TABLE",
+      "header": {
+        "fieldCount": 0,
+        "affectedRows": 0,
+        "insertId": 0,
+        "info": "",
+        "serverStatus": 2,
+        "warningStatus": 0,
+        "changedRows": 0
+      },
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": "CREATE TABLE `tp260` (\n  `a` int DEFAULT NULL,\n  `b` int GENERATED ALWAYS AS (abs(`a`)) STORED\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci"
+    },
+    {
+      "sql": "CREATE TABLE tp260(a INT,b INT GENERATED ALWAYS AS (+ABS(a)) STORED)",
+      "api": "prepare",
+      "kind": "TABLE",
+      "parameters": [],
+      "fields": [],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": null
+    },
+    {
+      "sql": "CREATE TABLE tp260(a INT,CHECK (+a>0))",
+      "api": "query",
+      "kind": "TABLE",
+      "header": {
+        "fieldCount": 0,
+        "affectedRows": 0,
+        "insertId": 0,
+        "info": "",
+        "serverStatus": 2,
+        "warningStatus": 0,
+        "changedRows": 0
+      },
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": "CREATE TABLE `tp260` (\n  `a` int DEFAULT NULL,\n  CONSTRAINT `tp260_chk_1` CHECK ((`a` > 0))\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci"
+    },
+    {
+      "sql": "CREATE TABLE tp260(a INT,CHECK (+a>0))",
+      "api": "execute",
+      "kind": "TABLE",
+      "header": {
+        "fieldCount": 0,
+        "affectedRows": 0,
+        "insertId": 0,
+        "info": "",
+        "serverStatus": 2,
+        "warningStatus": 0,
+        "changedRows": 0
+      },
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": "CREATE TABLE `tp260` (\n  `a` int DEFAULT NULL,\n  CONSTRAINT `tp260_chk_1` CHECK ((`a` > 0))\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci"
+    },
+    {
+      "sql": "CREATE TABLE tp260(a INT,CHECK (+a>0))",
+      "api": "prepare",
+      "kind": "TABLE",
+      "parameters": [],
+      "fields": [],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": null
+    },
+    {
+      "sql": "CREATE TABLE tp260(a INT,CHECK (++a>0))",
+      "api": "query",
+      "kind": "TABLE",
+      "header": {
+        "fieldCount": 0,
+        "affectedRows": 0,
+        "insertId": 0,
+        "info": "",
+        "serverStatus": 2,
+        "warningStatus": 0,
+        "changedRows": 0
+      },
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": "CREATE TABLE `tp260` (\n  `a` int DEFAULT NULL,\n  CONSTRAINT `tp260_chk_1` CHECK ((`a` > 0))\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci"
+    },
+    {
+      "sql": "CREATE TABLE tp260(a INT,CHECK (++a>0))",
+      "api": "execute",
+      "kind": "TABLE",
+      "header": {
+        "fieldCount": 0,
+        "affectedRows": 0,
+        "insertId": 0,
+        "info": "",
+        "serverStatus": 2,
+        "warningStatus": 0,
+        "changedRows": 0
+      },
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": "CREATE TABLE `tp260` (\n  `a` int DEFAULT NULL,\n  CONSTRAINT `tp260_chk_1` CHECK ((`a` > 0))\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci"
+    },
+    {
+      "sql": "CREATE TABLE tp260(a INT,CHECK (++a>0))",
+      "api": "prepare",
+      "kind": "TABLE",
+      "parameters": [],
+      "fields": [],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": null
+    },
+    {
+      "sql": "CREATE TABLE tp260(a INT,CHECK (+(a+1)>0))",
+      "api": "query",
+      "kind": "TABLE",
+      "header": {
+        "fieldCount": 0,
+        "affectedRows": 0,
+        "insertId": 0,
+        "info": "",
+        "serverStatus": 2,
+        "warningStatus": 0,
+        "changedRows": 0
+      },
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": "CREATE TABLE `tp260` (\n  `a` int DEFAULT NULL,\n  CONSTRAINT `tp260_chk_1` CHECK (((`a` + 1) > 0))\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci"
+    },
+    {
+      "sql": "CREATE TABLE tp260(a INT,CHECK (+(a+1)>0))",
+      "api": "execute",
+      "kind": "TABLE",
+      "header": {
+        "fieldCount": 0,
+        "affectedRows": 0,
+        "insertId": 0,
+        "info": "",
+        "serverStatus": 2,
+        "warningStatus": 0,
+        "changedRows": 0
+      },
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": "CREATE TABLE `tp260` (\n  `a` int DEFAULT NULL,\n  CONSTRAINT `tp260_chk_1` CHECK (((`a` + 1) > 0))\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci"
+    },
+    {
+      "sql": "CREATE TABLE tp260(a INT,CHECK (+(a+1)>0))",
+      "api": "prepare",
+      "kind": "TABLE",
+      "parameters": [],
+      "fields": [],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": null
+    },
+    {
+      "sql": "CREATE TABLE tp260(a INT DEFAULT (+1))",
+      "api": "query",
+      "kind": "TABLE",
+      "header": {
+        "fieldCount": 0,
+        "affectedRows": 0,
+        "insertId": 0,
+        "info": "",
+        "serverStatus": 2,
+        "warningStatus": 0,
+        "changedRows": 0
+      },
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": "CREATE TABLE `tp260` (\n  `a` int DEFAULT (1)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci"
+    },
+    {
+      "sql": "CREATE TABLE tp260(a INT DEFAULT (+1))",
+      "api": "execute",
+      "kind": "TABLE",
+      "header": {
+        "fieldCount": 0,
+        "affectedRows": 0,
+        "insertId": 0,
+        "info": "",
+        "serverStatus": 2,
+        "warningStatus": 0,
+        "changedRows": 0
+      },
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": "CREATE TABLE `tp260` (\n  `a` int DEFAULT (1)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci"
+    },
+    {
+      "sql": "CREATE TABLE tp260(a INT DEFAULT (+1))",
+      "api": "prepare",
+      "kind": "TABLE",
+      "parameters": [],
+      "fields": [],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": null
+    },
+    {
+      "sql": "CREATE TABLE tp260(a INT DEFAULT (++1))",
+      "api": "query",
+      "kind": "TABLE",
+      "header": {
+        "fieldCount": 0,
+        "affectedRows": 0,
+        "insertId": 0,
+        "info": "",
+        "serverStatus": 2,
+        "warningStatus": 0,
+        "changedRows": 0
+      },
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": "CREATE TABLE `tp260` (\n  `a` int DEFAULT (1)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci"
+    },
+    {
+      "sql": "CREATE TABLE tp260(a INT DEFAULT (++1))",
+      "api": "execute",
+      "kind": "TABLE",
+      "header": {
+        "fieldCount": 0,
+        "affectedRows": 0,
+        "insertId": 0,
+        "info": "",
+        "serverStatus": 2,
+        "warningStatus": 0,
+        "changedRows": 0
+      },
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": "CREATE TABLE `tp260` (\n  `a` int DEFAULT (1)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci"
+    },
+    {
+      "sql": "CREATE TABLE tp260(a INT DEFAULT (++1))",
+      "api": "prepare",
+      "kind": "TABLE",
+      "parameters": [],
+      "fields": [],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": null
+    },
+    {
+      "sql": "CREATE TABLE tp260(a INT DEFAULT (+ABS(1)))",
+      "api": "query",
+      "kind": "TABLE",
+      "header": {
+        "fieldCount": 0,
+        "affectedRows": 0,
+        "insertId": 0,
+        "info": "",
+        "serverStatus": 2,
+        "warningStatus": 0,
+        "changedRows": 0
+      },
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": "CREATE TABLE `tp260` (\n  `a` int DEFAULT (abs(1))\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci"
+    },
+    {
+      "sql": "CREATE TABLE tp260(a INT DEFAULT (+ABS(1)))",
+      "api": "execute",
+      "kind": "TABLE",
+      "header": {
+        "fieldCount": 0,
+        "affectedRows": 0,
+        "insertId": 0,
+        "info": "",
+        "serverStatus": 2,
+        "warningStatus": 0,
+        "changedRows": 0
+      },
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": "CREATE TABLE `tp260` (\n  `a` int DEFAULT (abs(1))\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci"
+    },
+    {
+      "sql": "CREATE TABLE tp260(a INT DEFAULT (+ABS(1)))",
+      "api": "prepare",
+      "kind": "TABLE",
+      "parameters": [],
+      "fields": [],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": null
+    },
+    {
+      "sql": "CREATE TABLE tp260(a DECIMAL(4,2) DEFAULT (+1.50))",
+      "api": "query",
+      "kind": "TABLE",
+      "header": {
+        "fieldCount": 0,
+        "affectedRows": 0,
+        "insertId": 0,
+        "info": "",
+        "serverStatus": 2,
+        "warningStatus": 0,
+        "changedRows": 0
+      },
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": "CREATE TABLE `tp260` (\n  `a` decimal(4,2) DEFAULT (1.50)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci"
+    },
+    {
+      "sql": "CREATE TABLE tp260(a DECIMAL(4,2) DEFAULT (+1.50))",
+      "api": "execute",
+      "kind": "TABLE",
+      "header": {
+        "fieldCount": 0,
+        "affectedRows": 0,
+        "insertId": 0,
+        "info": "",
+        "serverStatus": 2,
+        "warningStatus": 0,
+        "changedRows": 0
+      },
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": "CREATE TABLE `tp260` (\n  `a` decimal(4,2) DEFAULT (1.50)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci"
+    },
+    {
+      "sql": "CREATE TABLE tp260(a DECIMAL(4,2) DEFAULT (+1.50))",
+      "api": "prepare",
+      "kind": "TABLE",
+      "parameters": [],
+      "fields": [],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": null
+    },
+    {
+      "sql": "CREATE TABLE tp260(a VARCHAR(8) DEFAULT (+'x'))",
+      "api": "query",
+      "kind": "TABLE",
+      "header": {
+        "fieldCount": 0,
+        "affectedRows": 0,
+        "insertId": 0,
+        "info": "",
+        "serverStatus": 2,
+        "warningStatus": 0,
+        "changedRows": 0
+      },
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": "CREATE TABLE `tp260` (\n  `a` varchar(8) DEFAULT (_utf8mb4'x')\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci"
+    },
+    {
+      "sql": "CREATE TABLE tp260(a VARCHAR(8) DEFAULT (+'x'))",
+      "api": "execute",
+      "kind": "TABLE",
+      "header": {
+        "fieldCount": 0,
+        "affectedRows": 0,
+        "insertId": 0,
+        "info": "",
+        "serverStatus": 2,
+        "warningStatus": 0,
+        "changedRows": 0
+      },
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": "CREATE TABLE `tp260` (\n  `a` varchar(8) DEFAULT (_utf8mb4'x')\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci"
+    },
+    {
+      "sql": "CREATE TABLE tp260(a VARCHAR(8) DEFAULT (+'x'))",
+      "api": "prepare",
+      "kind": "TABLE",
+      "parameters": [],
+      "fields": [],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": null
+    },
+    {
+      "sql": "CREATE VIEW vp260 AS SELECT a b FROM base260",
+      "api": "query",
+      "kind": "VIEW",
+      "header": {
+        "fieldCount": 0,
+        "affectedRows": 0,
+        "insertId": 0,
+        "info": "",
+        "serverStatus": 2,
+        "warningStatus": 0,
+        "changedRows": 0
+      },
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": "CREATE ALGORITHM=UNDEFINED DEFINER=`root`@`%` SQL SECURITY DEFINER VIEW `vp260` AS select `base260`.`a` AS `b` from `base260`"
+    },
+    {
+      "sql": "CREATE VIEW vp260 AS SELECT a b FROM base260",
+      "api": "execute",
+      "kind": "VIEW",
+      "header": {
+        "fieldCount": 0,
+        "affectedRows": 0,
+        "insertId": 0,
+        "info": "",
+        "serverStatus": 2,
+        "warningStatus": 0,
+        "changedRows": 0
+      },
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": "CREATE ALGORITHM=UNDEFINED DEFINER=`root`@`%` SQL SECURITY DEFINER VIEW `vp260` AS select `base260`.`a` AS `b` from `base260`"
+    },
+    {
+      "sql": "CREATE VIEW vp260 AS SELECT a b FROM base260",
+      "api": "prepare",
+      "kind": "VIEW",
+      "parameters": [],
+      "fields": [],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": null
+    },
+    {
+      "sql": "CREATE VIEW vp260 AS SELECT -a b FROM base260",
+      "api": "query",
+      "kind": "VIEW",
+      "header": {
+        "fieldCount": 0,
+        "affectedRows": 0,
+        "insertId": 0,
+        "info": "",
+        "serverStatus": 2,
+        "warningStatus": 0,
+        "changedRows": 0
+      },
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": "CREATE ALGORITHM=UNDEFINED DEFINER=`root`@`%` SQL SECURITY DEFINER VIEW `vp260` AS select -(`base260`.`a`) AS `b` from `base260`"
+    },
+    {
+      "sql": "CREATE VIEW vp260 AS SELECT -a b FROM base260",
+      "api": "execute",
+      "kind": "VIEW",
+      "header": {
+        "fieldCount": 0,
+        "affectedRows": 0,
+        "insertId": 0,
+        "info": "",
+        "serverStatus": 2,
+        "warningStatus": 0,
+        "changedRows": 0
+      },
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": "CREATE ALGORITHM=UNDEFINED DEFINER=`root`@`%` SQL SECURITY DEFINER VIEW `vp260` AS select -(`base260`.`a`) AS `b` from `base260`"
+    },
+    {
+      "sql": "CREATE VIEW vp260 AS SELECT -a b FROM base260",
+      "api": "prepare",
+      "kind": "VIEW",
+      "parameters": [],
+      "fields": [],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": null
+    },
+    {
+      "sql": "CREATE VIEW vp260 AS SELECT ABS(a) b FROM base260",
+      "api": "query",
+      "kind": "VIEW",
+      "header": {
+        "fieldCount": 0,
+        "affectedRows": 0,
+        "insertId": 0,
+        "info": "",
+        "serverStatus": 2,
+        "warningStatus": 0,
+        "changedRows": 0
+      },
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": "CREATE ALGORITHM=UNDEFINED DEFINER=`root`@`%` SQL SECURITY DEFINER VIEW `vp260` AS select abs(`base260`.`a`) AS `b` from `base260`"
+    },
+    {
+      "sql": "CREATE VIEW vp260 AS SELECT ABS(a) b FROM base260",
+      "api": "execute",
+      "kind": "VIEW",
+      "header": {
+        "fieldCount": 0,
+        "affectedRows": 0,
+        "insertId": 0,
+        "info": "",
+        "serverStatus": 2,
+        "warningStatus": 0,
+        "changedRows": 0
+      },
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": "CREATE ALGORITHM=UNDEFINED DEFINER=`root`@`%` SQL SECURITY DEFINER VIEW `vp260` AS select abs(`base260`.`a`) AS `b` from `base260`"
+    },
+    {
+      "sql": "CREATE VIEW vp260 AS SELECT ABS(a) b FROM base260",
+      "api": "prepare",
+      "kind": "VIEW",
+      "parameters": [],
+      "fields": [],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": null
+    },
+    {
+      "sql": "CREATE VIEW vp260 AS SELECT a+1 b FROM base260",
+      "api": "query",
+      "kind": "VIEW",
+      "header": {
+        "fieldCount": 0,
+        "affectedRows": 0,
+        "insertId": 0,
+        "info": "",
+        "serverStatus": 2,
+        "warningStatus": 0,
+        "changedRows": 0
+      },
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": "CREATE ALGORITHM=UNDEFINED DEFINER=`root`@`%` SQL SECURITY DEFINER VIEW `vp260` AS select (`base260`.`a` + 1) AS `b` from `base260`"
+    },
+    {
+      "sql": "CREATE VIEW vp260 AS SELECT a+1 b FROM base260",
+      "api": "execute",
+      "kind": "VIEW",
+      "header": {
+        "fieldCount": 0,
+        "affectedRows": 0,
+        "insertId": 0,
+        "info": "",
+        "serverStatus": 2,
+        "warningStatus": 0,
+        "changedRows": 0
+      },
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": "CREATE ALGORITHM=UNDEFINED DEFINER=`root`@`%` SQL SECURITY DEFINER VIEW `vp260` AS select (`base260`.`a` + 1) AS `b` from `base260`"
+    },
+    {
+      "sql": "CREATE VIEW vp260 AS SELECT a+1 b FROM base260",
+      "api": "prepare",
+      "kind": "VIEW",
+      "parameters": [],
+      "fields": [],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": null
+    },
+    {
+      "sql": "CREATE VIEW vp260 AS SELECT NOT a b FROM base260",
+      "api": "query",
+      "kind": "VIEW",
+      "header": {
+        "fieldCount": 0,
+        "affectedRows": 0,
+        "insertId": 0,
+        "info": "",
+        "serverStatus": 2,
+        "warningStatus": 0,
+        "changedRows": 0
+      },
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": "CREATE ALGORITHM=UNDEFINED DEFINER=`root`@`%` SQL SECURITY DEFINER VIEW `vp260` AS select (0 = `base260`.`a`) AS `b` from `base260`"
+    },
+    {
+      "sql": "CREATE VIEW vp260 AS SELECT NOT a b FROM base260",
+      "api": "execute",
+      "kind": "VIEW",
+      "header": {
+        "fieldCount": 0,
+        "affectedRows": 0,
+        "insertId": 0,
+        "info": "",
+        "serverStatus": 2,
+        "warningStatus": 0,
+        "changedRows": 0
+      },
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": "CREATE ALGORITHM=UNDEFINED DEFINER=`root`@`%` SQL SECURITY DEFINER VIEW `vp260` AS select (0 = `base260`.`a`) AS `b` from `base260`"
+    },
+    {
+      "sql": "CREATE VIEW vp260 AS SELECT NOT a b FROM base260",
+      "api": "prepare",
+      "kind": "VIEW",
+      "parameters": [],
+      "fields": [],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": null
+    },
+    {
+      "sql": "CREATE TABLE tp260(a INT,b INT GENERATED ALWAYS AS (a) STORED)",
+      "api": "query",
+      "kind": "TABLE",
+      "header": {
+        "fieldCount": 0,
+        "affectedRows": 0,
+        "insertId": 0,
+        "info": "",
+        "serverStatus": 2,
+        "warningStatus": 0,
+        "changedRows": 0
+      },
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": "CREATE TABLE `tp260` (\n  `a` int DEFAULT NULL,\n  `b` int GENERATED ALWAYS AS (`a`) STORED\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci"
+    },
+    {
+      "sql": "CREATE TABLE tp260(a INT,b INT GENERATED ALWAYS AS (a) STORED)",
+      "api": "execute",
+      "kind": "TABLE",
+      "header": {
+        "fieldCount": 0,
+        "affectedRows": 0,
+        "insertId": 0,
+        "info": "",
+        "serverStatus": 2,
+        "warningStatus": 0,
+        "changedRows": 0
+      },
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": "CREATE TABLE `tp260` (\n  `a` int DEFAULT NULL,\n  `b` int GENERATED ALWAYS AS (`a`) STORED\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci"
+    },
+    {
+      "sql": "CREATE TABLE tp260(a INT,b INT GENERATED ALWAYS AS (a) STORED)",
+      "api": "prepare",
+      "kind": "TABLE",
+      "parameters": [],
+      "fields": [],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": null
+    },
+    {
+      "sql": "CREATE TABLE tp260(a INT,b INT GENERATED ALWAYS AS (-a) STORED)",
+      "api": "query",
+      "kind": "TABLE",
+      "header": {
+        "fieldCount": 0,
+        "affectedRows": 0,
+        "insertId": 0,
+        "info": "",
+        "serverStatus": 2,
+        "warningStatus": 0,
+        "changedRows": 0
+      },
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": "CREATE TABLE `tp260` (\n  `a` int DEFAULT NULL,\n  `b` int GENERATED ALWAYS AS (-(`a`)) STORED\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci"
+    },
+    {
+      "sql": "CREATE TABLE tp260(a INT,b INT GENERATED ALWAYS AS (-a) STORED)",
+      "api": "execute",
+      "kind": "TABLE",
+      "header": {
+        "fieldCount": 0,
+        "affectedRows": 0,
+        "insertId": 0,
+        "info": "",
+        "serverStatus": 2,
+        "warningStatus": 0,
+        "changedRows": 0
+      },
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": "CREATE TABLE `tp260` (\n  `a` int DEFAULT NULL,\n  `b` int GENERATED ALWAYS AS (-(`a`)) STORED\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci"
+    },
+    {
+      "sql": "CREATE TABLE tp260(a INT,b INT GENERATED ALWAYS AS (-a) STORED)",
+      "api": "prepare",
+      "kind": "TABLE",
+      "parameters": [],
+      "fields": [],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": null
+    },
+    {
+      "sql": "CREATE TABLE tp260(a INT,b INT GENERATED ALWAYS AS (a+1) STORED)",
+      "api": "query",
+      "kind": "TABLE",
+      "header": {
+        "fieldCount": 0,
+        "affectedRows": 0,
+        "insertId": 0,
+        "info": "",
+        "serverStatus": 2,
+        "warningStatus": 0,
+        "changedRows": 0
+      },
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": "CREATE TABLE `tp260` (\n  `a` int DEFAULT NULL,\n  `b` int GENERATED ALWAYS AS ((`a` + 1)) STORED\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci"
+    },
+    {
+      "sql": "CREATE TABLE tp260(a INT,b INT GENERATED ALWAYS AS (a+1) STORED)",
+      "api": "execute",
+      "kind": "TABLE",
+      "header": {
+        "fieldCount": 0,
+        "affectedRows": 0,
+        "insertId": 0,
+        "info": "",
+        "serverStatus": 2,
+        "warningStatus": 0,
+        "changedRows": 0
+      },
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": "CREATE TABLE `tp260` (\n  `a` int DEFAULT NULL,\n  `b` int GENERATED ALWAYS AS ((`a` + 1)) STORED\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci"
+    },
+    {
+      "sql": "CREATE TABLE tp260(a INT,b INT GENERATED ALWAYS AS (a+1) STORED)",
+      "api": "prepare",
+      "kind": "TABLE",
+      "parameters": [],
+      "fields": [],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": null
+    },
+    {
+      "sql": "CREATE TABLE tp260(a INT,b INT GENERATED ALWAYS AS (ABS(a)) STORED)",
+      "api": "query",
+      "kind": "TABLE",
+      "header": {
+        "fieldCount": 0,
+        "affectedRows": 0,
+        "insertId": 0,
+        "info": "",
+        "serverStatus": 2,
+        "warningStatus": 0,
+        "changedRows": 0
+      },
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": "CREATE TABLE `tp260` (\n  `a` int DEFAULT NULL,\n  `b` int GENERATED ALWAYS AS (abs(`a`)) STORED\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci"
+    },
+    {
+      "sql": "CREATE TABLE tp260(a INT,b INT GENERATED ALWAYS AS (ABS(a)) STORED)",
+      "api": "execute",
+      "kind": "TABLE",
+      "header": {
+        "fieldCount": 0,
+        "affectedRows": 0,
+        "insertId": 0,
+        "info": "",
+        "serverStatus": 2,
+        "warningStatus": 0,
+        "changedRows": 0
+      },
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": "CREATE TABLE `tp260` (\n  `a` int DEFAULT NULL,\n  `b` int GENERATED ALWAYS AS (abs(`a`)) STORED\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci"
+    },
+    {
+      "sql": "CREATE TABLE tp260(a INT,b INT GENERATED ALWAYS AS (ABS(a)) STORED)",
+      "api": "prepare",
+      "kind": "TABLE",
+      "parameters": [],
+      "fields": [],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": null
+    },
+    {
+      "sql": "CREATE TABLE tp260(a INT,CHECK (a>0))",
+      "api": "query",
+      "kind": "TABLE",
+      "header": {
+        "fieldCount": 0,
+        "affectedRows": 0,
+        "insertId": 0,
+        "info": "",
+        "serverStatus": 2,
+        "warningStatus": 0,
+        "changedRows": 0
+      },
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": "CREATE TABLE `tp260` (\n  `a` int DEFAULT NULL,\n  CONSTRAINT `tp260_chk_1` CHECK ((`a` > 0))\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci"
+    },
+    {
+      "sql": "CREATE TABLE tp260(a INT,CHECK (a>0))",
+      "api": "execute",
+      "kind": "TABLE",
+      "header": {
+        "fieldCount": 0,
+        "affectedRows": 0,
+        "insertId": 0,
+        "info": "",
+        "serverStatus": 2,
+        "warningStatus": 0,
+        "changedRows": 0
+      },
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": "CREATE TABLE `tp260` (\n  `a` int DEFAULT NULL,\n  CONSTRAINT `tp260_chk_1` CHECK ((`a` > 0))\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci"
+    },
+    {
+      "sql": "CREATE TABLE tp260(a INT,CHECK (a>0))",
+      "api": "prepare",
+      "kind": "TABLE",
+      "parameters": [],
+      "fields": [],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": null
+    },
+    {
+      "sql": "CREATE TABLE tp260(a INT,CHECK (-a>0))",
+      "api": "query",
+      "kind": "TABLE",
+      "header": {
+        "fieldCount": 0,
+        "affectedRows": 0,
+        "insertId": 0,
+        "info": "",
+        "serverStatus": 2,
+        "warningStatus": 0,
+        "changedRows": 0
+      },
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": "CREATE TABLE `tp260` (\n  `a` int DEFAULT NULL,\n  CONSTRAINT `tp260_chk_1` CHECK ((-(`a`) > 0))\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci"
+    },
+    {
+      "sql": "CREATE TABLE tp260(a INT,CHECK (-a>0))",
+      "api": "execute",
+      "kind": "TABLE",
+      "header": {
+        "fieldCount": 0,
+        "affectedRows": 0,
+        "insertId": 0,
+        "info": "",
+        "serverStatus": 2,
+        "warningStatus": 0,
+        "changedRows": 0
+      },
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": "CREATE TABLE `tp260` (\n  `a` int DEFAULT NULL,\n  CONSTRAINT `tp260_chk_1` CHECK ((-(`a`) > 0))\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci"
+    },
+    {
+      "sql": "CREATE TABLE tp260(a INT,CHECK (-a>0))",
+      "api": "prepare",
+      "kind": "TABLE",
+      "parameters": [],
+      "fields": [],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": null
+    },
+    {
+      "sql": "CREATE TABLE tp260(a INT,CHECK (a+1>0))",
+      "api": "query",
+      "kind": "TABLE",
+      "header": {
+        "fieldCount": 0,
+        "affectedRows": 0,
+        "insertId": 0,
+        "info": "",
+        "serverStatus": 2,
+        "warningStatus": 0,
+        "changedRows": 0
+      },
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": "CREATE TABLE `tp260` (\n  `a` int DEFAULT NULL,\n  CONSTRAINT `tp260_chk_1` CHECK (((`a` + 1) > 0))\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci"
+    },
+    {
+      "sql": "CREATE TABLE tp260(a INT,CHECK (a+1>0))",
+      "api": "execute",
+      "kind": "TABLE",
+      "header": {
+        "fieldCount": 0,
+        "affectedRows": 0,
+        "insertId": 0,
+        "info": "",
+        "serverStatus": 2,
+        "warningStatus": 0,
+        "changedRows": 0
+      },
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": "CREATE TABLE `tp260` (\n  `a` int DEFAULT NULL,\n  CONSTRAINT `tp260_chk_1` CHECK (((`a` + 1) > 0))\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci"
+    },
+    {
+      "sql": "CREATE TABLE tp260(a INT,CHECK (a+1>0))",
+      "api": "prepare",
+      "kind": "TABLE",
+      "parameters": [],
+      "fields": [],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": null
+    },
+    {
+      "sql": "CREATE TABLE tp260(a INT DEFAULT (1))",
+      "api": "query",
+      "kind": "TABLE",
+      "header": {
+        "fieldCount": 0,
+        "affectedRows": 0,
+        "insertId": 0,
+        "info": "",
+        "serverStatus": 2,
+        "warningStatus": 0,
+        "changedRows": 0
+      },
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": "CREATE TABLE `tp260` (\n  `a` int DEFAULT (1)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci"
+    },
+    {
+      "sql": "CREATE TABLE tp260(a INT DEFAULT (1))",
+      "api": "execute",
+      "kind": "TABLE",
+      "header": {
+        "fieldCount": 0,
+        "affectedRows": 0,
+        "insertId": 0,
+        "info": "",
+        "serverStatus": 2,
+        "warningStatus": 0,
+        "changedRows": 0
+      },
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": "CREATE TABLE `tp260` (\n  `a` int DEFAULT (1)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci"
+    },
+    {
+      "sql": "CREATE TABLE tp260(a INT DEFAULT (1))",
+      "api": "prepare",
+      "kind": "TABLE",
+      "parameters": [],
+      "fields": [],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": null
+    },
+    {
+      "sql": "CREATE TABLE tp260(a INT DEFAULT (-1))",
+      "api": "query",
+      "kind": "TABLE",
+      "header": {
+        "fieldCount": 0,
+        "affectedRows": 0,
+        "insertId": 0,
+        "info": "",
+        "serverStatus": 2,
+        "warningStatus": 0,
+        "changedRows": 0
+      },
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": "CREATE TABLE `tp260` (\n  `a` int DEFAULT (-(1))\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci"
+    },
+    {
+      "sql": "CREATE TABLE tp260(a INT DEFAULT (-1))",
+      "api": "execute",
+      "kind": "TABLE",
+      "header": {
+        "fieldCount": 0,
+        "affectedRows": 0,
+        "insertId": 0,
+        "info": "",
+        "serverStatus": 2,
+        "warningStatus": 0,
+        "changedRows": 0
+      },
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": "CREATE TABLE `tp260` (\n  `a` int DEFAULT (-(1))\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci"
+    },
+    {
+      "sql": "CREATE TABLE tp260(a INT DEFAULT (-1))",
+      "api": "prepare",
+      "kind": "TABLE",
+      "parameters": [],
+      "fields": [],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": null
+    },
+    {
+      "sql": "CREATE TABLE tp260(a INT DEFAULT (ABS(1)))",
+      "api": "query",
+      "kind": "TABLE",
+      "header": {
+        "fieldCount": 0,
+        "affectedRows": 0,
+        "insertId": 0,
+        "info": "",
+        "serverStatus": 2,
+        "warningStatus": 0,
+        "changedRows": 0
+      },
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": "CREATE TABLE `tp260` (\n  `a` int DEFAULT (abs(1))\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci"
+    },
+    {
+      "sql": "CREATE TABLE tp260(a INT DEFAULT (ABS(1)))",
+      "api": "execute",
+      "kind": "TABLE",
+      "header": {
+        "fieldCount": 0,
+        "affectedRows": 0,
+        "insertId": 0,
+        "info": "",
+        "serverStatus": 2,
+        "warningStatus": 0,
+        "changedRows": 0
+      },
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": "CREATE TABLE `tp260` (\n  `a` int DEFAULT (abs(1))\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci"
+    },
+    {
+      "sql": "CREATE TABLE tp260(a INT DEFAULT (ABS(1)))",
+      "api": "prepare",
+      "kind": "TABLE",
+      "parameters": [],
+      "fields": [],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": null
+    },
+    {
+      "sql": "CREATE TABLE tp260(a DECIMAL(4,2) DEFAULT (1.50))",
+      "api": "query",
+      "kind": "TABLE",
+      "header": {
+        "fieldCount": 0,
+        "affectedRows": 0,
+        "insertId": 0,
+        "info": "",
+        "serverStatus": 2,
+        "warningStatus": 0,
+        "changedRows": 0
+      },
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": "CREATE TABLE `tp260` (\n  `a` decimal(4,2) DEFAULT (1.50)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci"
+    },
+    {
+      "sql": "CREATE TABLE tp260(a DECIMAL(4,2) DEFAULT (1.50))",
+      "api": "execute",
+      "kind": "TABLE",
+      "header": {
+        "fieldCount": 0,
+        "affectedRows": 0,
+        "insertId": 0,
+        "info": "",
+        "serverStatus": 2,
+        "warningStatus": 0,
+        "changedRows": 0
+      },
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": "CREATE TABLE `tp260` (\n  `a` decimal(4,2) DEFAULT (1.50)\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci"
+    },
+    {
+      "sql": "CREATE TABLE tp260(a DECIMAL(4,2) DEFAULT (1.50))",
+      "api": "prepare",
+      "kind": "TABLE",
+      "parameters": [],
+      "fields": [],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": null
+    },
+    {
+      "sql": "CREATE TABLE tp260(a VARCHAR(8) DEFAULT ('x'))",
+      "api": "query",
+      "kind": "TABLE",
+      "header": {
+        "fieldCount": 0,
+        "affectedRows": 0,
+        "insertId": 0,
+        "info": "",
+        "serverStatus": 2,
+        "warningStatus": 0,
+        "changedRows": 0
+      },
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": "CREATE TABLE `tp260` (\n  `a` varchar(8) DEFAULT (_utf8mb4'x')\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci"
+    },
+    {
+      "sql": "CREATE TABLE tp260(a VARCHAR(8) DEFAULT ('x'))",
+      "api": "execute",
+      "kind": "TABLE",
+      "header": {
+        "fieldCount": 0,
+        "affectedRows": 0,
+        "insertId": 0,
+        "info": "",
+        "serverStatus": 2,
+        "warningStatus": 0,
+        "changedRows": 0
+      },
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": "CREATE TABLE `tp260` (\n  `a` varchar(8) DEFAULT (_utf8mb4'x')\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci"
+    },
+    {
+      "sql": "CREATE TABLE tp260(a VARCHAR(8) DEFAULT ('x'))",
+      "api": "prepare",
+      "kind": "TABLE",
+      "parameters": [],
+      "fields": [],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": null
+    }
+  ]
+}

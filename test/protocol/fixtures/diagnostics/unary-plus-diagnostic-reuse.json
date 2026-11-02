@@ -1,0 +1,2380 @@
+{
+  "mysqlVersion": "8.4.11",
+  "sqlMode": "ERROR_FOR_DIVISION_BY_ZERO",
+  "seed": "SELECT 1/0,CAST('x' AS DECIMAL)",
+  "schema": "myjs_print_diag260",
+  "setup": [
+    "CREATE TABLE base260(b VARCHAR(16),n BIGINT UNSIGNED)",
+    "INSERT INTO base260 VALUES('g',18446744073709551615)"
+  ],
+  "beforeEach": [
+    "DROP VIEW IF EXISTS v256"
+  ],
+  "reuse": true,
+  "observations": [
+    {
+      "sql": "SELECT UNHEX(+'g') AS v",
+      "api": "execute",
+      "limit": 0,
+      "existing": false,
+      "rows": [
+        [
+          null
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          253,
+          2,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "1",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT UNHEX(+'g') AS v",
+      "api": "execute",
+      "limit": 0,
+      "existing": false,
+      "rows": [
+        [
+          null
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          253,
+          2,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "1",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT UNHEX(+b) AS v FROM base260",
+      "api": "execute",
+      "limit": 0,
+      "existing": false,
+      "rows": [
+        [
+          null
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          253,
+          32,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "1",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT UNHEX(+b) AS v FROM base260",
+      "api": "execute",
+      "limit": 0,
+      "existing": false,
+      "rows": [
+        [
+          null
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          253,
+          32,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "1",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT INET_ATON(+'bad') AS v",
+      "api": "execute",
+      "limit": 0,
+      "existing": false,
+      "rows": [
+        [
+          null
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          8,
+          21,
+          160,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "1",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT INET_ATON(+'bad') AS v",
+      "api": "execute",
+      "limit": 0,
+      "existing": false,
+      "rows": [
+        [
+          null
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          8,
+          21,
+          160,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "1",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT INET_NTOA(+-1) AS v",
+      "api": "execute",
+      "limit": 0,
+      "existing": false,
+      "rows": [
+        [
+          null
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          253,
+          124,
+          0,
+          31,
+          224,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "1",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT INET_NTOA(+-1) AS v",
+      "api": "execute",
+      "limit": 0,
+      "existing": false,
+      "rows": [
+        [
+          null
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          253,
+          124,
+          0,
+          31,
+          224,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "1",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT CAST(+1e100 AS FLOAT) AS v",
+      "api": "execute",
+      "limit": 0,
+      "existing": false,
+      "error": {
+        "code": "ER_DATA_OUT_OF_RANGE",
+        "errno": 1690,
+        "state": "22003",
+        "message": "DOUBLE value is out of range in 'cast(1e100 as float)'"
+      },
+      "warnings": [],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "SELECT CAST(+1e100 AS FLOAT) AS v",
+      "api": "execute",
+      "limit": 0,
+      "existing": false,
+      "error": {
+        "code": "ER_DATA_OUT_OF_RANGE",
+        "errno": 1690,
+        "state": "22003",
+        "message": "DOUBLE value is out of range in 'cast(1e100 as float)'"
+      },
+      "warnings": [],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "SELECT +18446744073709551615 + 1 AS v",
+      "api": "execute",
+      "limit": 0,
+      "existing": false,
+      "error": {
+        "code": "ER_DATA_OUT_OF_RANGE",
+        "errno": 1690,
+        "state": "22003",
+        "message": "BIGINT UNSIGNED value is out of range in '(18446744073709551615 + 1)'"
+      },
+      "warnings": [],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "SELECT +18446744073709551615 + 1 AS v",
+      "api": "execute",
+      "limit": 0,
+      "existing": false,
+      "error": {
+        "code": "ER_DATA_OUT_OF_RANGE",
+        "errno": 1690,
+        "state": "22003",
+        "message": "BIGINT UNSIGNED value is out of range in '(18446744073709551615 + 1)'"
+      },
+      "warnings": [],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "SELECT +n+1 AS v FROM base260",
+      "api": "execute",
+      "limit": 0,
+      "existing": false,
+      "error": {
+        "code": "ER_DATA_OUT_OF_RANGE",
+        "errno": 1690,
+        "state": "22003",
+        "message": "BIGINT UNSIGNED value is out of range in '(`myjs_print_diag260`.`base260`.`n` + 1)'"
+      },
+      "warnings": [],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "SELECT +n+1 AS v FROM base260",
+      "api": "execute",
+      "limit": 0,
+      "existing": false,
+      "error": {
+        "code": "ER_DATA_OUT_OF_RANGE",
+        "errno": 1690,
+        "state": "22003",
+        "message": "BIGINT UNSIGNED value is out of range in '(`myjs_print_diag260`.`base260`.`n` + 1)'"
+      },
+      "warnings": [],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "SELECT INET_NTOA(+n) AS v FROM base260",
+      "api": "execute",
+      "limit": 0,
+      "existing": false,
+      "rows": [
+        [
+          null
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          253,
+          124,
+          0,
+          31,
+          224,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "1",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT INET_NTOA(+n) AS v FROM base260",
+      "api": "execute",
+      "limit": 0,
+      "existing": false,
+      "rows": [
+        [
+          null
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          253,
+          124,
+          0,
+          31,
+          224,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "1",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT UNHEX(ABS(+n)) AS v FROM base260",
+      "api": "execute",
+      "limit": 0,
+      "existing": false,
+      "rows": [
+        [
+          {
+            "type": "Buffer",
+            "data": [
+              24,
+              68,
+              103,
+              68,
+              7,
+              55,
+              9,
+              85,
+              22,
+              21
+            ]
+          }
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          253,
+          10,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT UNHEX(ABS(+n)) AS v FROM base260",
+      "api": "execute",
+      "limit": 0,
+      "existing": false,
+      "rows": [
+        [
+          {
+            "type": "Buffer",
+            "data": [
+              24,
+              68,
+              103,
+              68,
+              7,
+              55,
+              9,
+              85,
+              22,
+              21
+            ]
+          }
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          253,
+          10,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT UNHEX(+_latin1'g') AS v",
+      "api": "execute",
+      "limit": 0,
+      "existing": false,
+      "rows": [
+        [
+          null
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          253,
+          1,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "1",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT UNHEX(+_latin1'g') AS v",
+      "api": "execute",
+      "limit": 0,
+      "existing": false,
+      "rows": [
+        [
+          null
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          253,
+          1,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "1",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT UNHEX(+'g') AS v",
+      "api": "execute",
+      "limit": 1,
+      "existing": false,
+      "rows": [
+        [
+          null
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          253,
+          2,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [
+        [
+          "Warning",
+          1411,
+          "Incorrect string value: ''g'' for function unhex"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT UNHEX(+'g') AS v",
+      "api": "execute",
+      "limit": 1,
+      "existing": false,
+      "rows": [
+        [
+          null
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          253,
+          2,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [
+        [
+          "Warning",
+          1411,
+          "Incorrect string value: ''g'' for function unhex"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT UNHEX(+b) AS v FROM base260",
+      "api": "execute",
+      "limit": 1,
+      "existing": false,
+      "rows": [
+        [
+          null
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          253,
+          32,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [
+        [
+          "Warning",
+          1411,
+          "Incorrect string value: '`myjs_print_diag260`.`base260`.`b`' for function unhex"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT UNHEX(+b) AS v FROM base260",
+      "api": "execute",
+      "limit": 1,
+      "existing": false,
+      "rows": [
+        [
+          null
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          253,
+          32,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [
+        [
+          "Warning",
+          1411,
+          "Incorrect string value: '`myjs_print_diag260`.`base260`.`b`' for function unhex"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT INET_ATON(+'bad') AS v",
+      "api": "execute",
+      "limit": 1,
+      "existing": false,
+      "rows": [
+        [
+          null
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          8,
+          21,
+          160,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [
+        [
+          "Warning",
+          1411,
+          "Incorrect string value: ''bad'' for function inet_aton"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT INET_ATON(+'bad') AS v",
+      "api": "execute",
+      "limit": 1,
+      "existing": false,
+      "rows": [
+        [
+          null
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          8,
+          21,
+          160,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [
+        [
+          "Warning",
+          1411,
+          "Incorrect string value: ''bad'' for function inet_aton"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT INET_NTOA(+-1) AS v",
+      "api": "execute",
+      "limit": 1,
+      "existing": false,
+      "rows": [
+        [
+          null
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          253,
+          124,
+          0,
+          31,
+          224,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [
+        [
+          "Warning",
+          1411,
+          "Incorrect integer value: '-(1)' for function inet_ntoa"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT INET_NTOA(+-1) AS v",
+      "api": "execute",
+      "limit": 1,
+      "existing": false,
+      "rows": [
+        [
+          null
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          253,
+          124,
+          0,
+          31,
+          224,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [
+        [
+          "Warning",
+          1411,
+          "Incorrect integer value: '-(1)' for function inet_ntoa"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT CAST(+1e100 AS FLOAT) AS v",
+      "api": "execute",
+      "limit": 1,
+      "existing": false,
+      "error": {
+        "code": "ER_DATA_OUT_OF_RANGE",
+        "errno": 1690,
+        "state": "22003",
+        "message": "DOUBLE value is out of range in 'cast(1e100 as float)'"
+      },
+      "warnings": [
+        [
+          "Error",
+          1690,
+          "DOUBLE value is out of range in 'cast(1e100 as float)'"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "SELECT CAST(+1e100 AS FLOAT) AS v",
+      "api": "execute",
+      "limit": 1,
+      "existing": false,
+      "error": {
+        "code": "ER_DATA_OUT_OF_RANGE",
+        "errno": 1690,
+        "state": "22003",
+        "message": "DOUBLE value is out of range in 'cast(1e100 as float)'"
+      },
+      "warnings": [
+        [
+          "Error",
+          1690,
+          "DOUBLE value is out of range in 'cast(1e100 as float)'"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "SELECT +18446744073709551615 + 1 AS v",
+      "api": "execute",
+      "limit": 1,
+      "existing": false,
+      "error": {
+        "code": "ER_DATA_OUT_OF_RANGE",
+        "errno": 1690,
+        "state": "22003",
+        "message": "BIGINT UNSIGNED value is out of range in '(18446744073709551615 + 1)'"
+      },
+      "warnings": [
+        [
+          "Error",
+          1690,
+          "BIGINT UNSIGNED value is out of range in '(18446744073709551615 + 1)'"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "SELECT +18446744073709551615 + 1 AS v",
+      "api": "execute",
+      "limit": 1,
+      "existing": false,
+      "error": {
+        "code": "ER_DATA_OUT_OF_RANGE",
+        "errno": 1690,
+        "state": "22003",
+        "message": "BIGINT UNSIGNED value is out of range in '(18446744073709551615 + 1)'"
+      },
+      "warnings": [
+        [
+          "Error",
+          1690,
+          "BIGINT UNSIGNED value is out of range in '(18446744073709551615 + 1)'"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "SELECT +n+1 AS v FROM base260",
+      "api": "execute",
+      "limit": 1,
+      "existing": false,
+      "error": {
+        "code": "ER_DATA_OUT_OF_RANGE",
+        "errno": 1690,
+        "state": "22003",
+        "message": "BIGINT UNSIGNED value is out of range in '(`myjs_print_diag260`.`base260`.`n` + 1)'"
+      },
+      "warnings": [
+        [
+          "Error",
+          1690,
+          "BIGINT UNSIGNED value is out of range in '(`myjs_print_diag260`.`base260`.`n` + 1)'"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "SELECT +n+1 AS v FROM base260",
+      "api": "execute",
+      "limit": 1,
+      "existing": false,
+      "error": {
+        "code": "ER_DATA_OUT_OF_RANGE",
+        "errno": 1690,
+        "state": "22003",
+        "message": "BIGINT UNSIGNED value is out of range in '(`myjs_print_diag260`.`base260`.`n` + 1)'"
+      },
+      "warnings": [
+        [
+          "Error",
+          1690,
+          "BIGINT UNSIGNED value is out of range in '(`myjs_print_diag260`.`base260`.`n` + 1)'"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "SELECT INET_NTOA(+n) AS v FROM base260",
+      "api": "execute",
+      "limit": 1,
+      "existing": false,
+      "rows": [
+        [
+          null
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          253,
+          124,
+          0,
+          31,
+          224,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [
+        [
+          "Warning",
+          1411,
+          "Incorrect integer value: '`myjs_print_diag260`.`base260`.`n`' for function inet_ntoa"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT INET_NTOA(+n) AS v FROM base260",
+      "api": "execute",
+      "limit": 1,
+      "existing": false,
+      "rows": [
+        [
+          null
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          253,
+          124,
+          0,
+          31,
+          224,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [
+        [
+          "Warning",
+          1411,
+          "Incorrect integer value: '`myjs_print_diag260`.`base260`.`n`' for function inet_ntoa"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT UNHEX(ABS(+n)) AS v FROM base260",
+      "api": "execute",
+      "limit": 1,
+      "existing": false,
+      "rows": [
+        [
+          {
+            "type": "Buffer",
+            "data": [
+              24,
+              68,
+              103,
+              68,
+              7,
+              55,
+              9,
+              85,
+              22,
+              21
+            ]
+          }
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          253,
+          10,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT UNHEX(ABS(+n)) AS v FROM base260",
+      "api": "execute",
+      "limit": 1,
+      "existing": false,
+      "rows": [
+        [
+          {
+            "type": "Buffer",
+            "data": [
+              24,
+              68,
+              103,
+              68,
+              7,
+              55,
+              9,
+              85,
+              22,
+              21
+            ]
+          }
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          253,
+          10,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT UNHEX(+_latin1'g') AS v",
+      "api": "execute",
+      "limit": 1,
+      "existing": false,
+      "rows": [
+        [
+          null
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          253,
+          1,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [
+        [
+          "Warning",
+          1411,
+          "Incorrect string value: '_latin1'g'' for function unhex"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT UNHEX(+_latin1'g') AS v",
+      "api": "execute",
+      "limit": 1,
+      "existing": false,
+      "rows": [
+        [
+          null
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          253,
+          1,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [
+        [
+          "Warning",
+          1411,
+          "Incorrect string value: '_latin1'g'' for function unhex"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT UNHEX(+'g') AS v",
+      "api": "execute",
+      "limit": 8,
+      "existing": false,
+      "rows": [
+        [
+          null
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          253,
+          2,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [
+        [
+          "Warning",
+          1411,
+          "Incorrect string value: ''g'' for function unhex"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT UNHEX(+'g') AS v",
+      "api": "execute",
+      "limit": 8,
+      "existing": false,
+      "rows": [
+        [
+          null
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          253,
+          2,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [
+        [
+          "Warning",
+          1411,
+          "Incorrect string value: ''g'' for function unhex"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT UNHEX(+b) AS v FROM base260",
+      "api": "execute",
+      "limit": 8,
+      "existing": false,
+      "rows": [
+        [
+          null
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          253,
+          32,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [
+        [
+          "Warning",
+          1411,
+          "Incorrect string value: '`myjs_print_diag260`.`base260`.`b`' for function unhex"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT UNHEX(+b) AS v FROM base260",
+      "api": "execute",
+      "limit": 8,
+      "existing": false,
+      "rows": [
+        [
+          null
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          253,
+          32,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [
+        [
+          "Warning",
+          1411,
+          "Incorrect string value: '`myjs_print_diag260`.`base260`.`b`' for function unhex"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT INET_ATON(+'bad') AS v",
+      "api": "execute",
+      "limit": 8,
+      "existing": false,
+      "rows": [
+        [
+          null
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          8,
+          21,
+          160,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [
+        [
+          "Warning",
+          1411,
+          "Incorrect string value: ''bad'' for function inet_aton"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT INET_ATON(+'bad') AS v",
+      "api": "execute",
+      "limit": 8,
+      "existing": false,
+      "rows": [
+        [
+          null
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          8,
+          21,
+          160,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [
+        [
+          "Warning",
+          1411,
+          "Incorrect string value: ''bad'' for function inet_aton"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT INET_NTOA(+-1) AS v",
+      "api": "execute",
+      "limit": 8,
+      "existing": false,
+      "rows": [
+        [
+          null
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          253,
+          124,
+          0,
+          31,
+          224,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [
+        [
+          "Warning",
+          1411,
+          "Incorrect integer value: '-(1)' for function inet_ntoa"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT INET_NTOA(+-1) AS v",
+      "api": "execute",
+      "limit": 8,
+      "existing": false,
+      "rows": [
+        [
+          null
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          253,
+          124,
+          0,
+          31,
+          224,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [
+        [
+          "Warning",
+          1411,
+          "Incorrect integer value: '-(1)' for function inet_ntoa"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT CAST(+1e100 AS FLOAT) AS v",
+      "api": "execute",
+      "limit": 8,
+      "existing": false,
+      "error": {
+        "code": "ER_DATA_OUT_OF_RANGE",
+        "errno": 1690,
+        "state": "22003",
+        "message": "DOUBLE value is out of range in 'cast(1e100 as float)'"
+      },
+      "warnings": [
+        [
+          "Error",
+          1690,
+          "DOUBLE value is out of range in 'cast(1e100 as float)'"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "SELECT CAST(+1e100 AS FLOAT) AS v",
+      "api": "execute",
+      "limit": 8,
+      "existing": false,
+      "error": {
+        "code": "ER_DATA_OUT_OF_RANGE",
+        "errno": 1690,
+        "state": "22003",
+        "message": "DOUBLE value is out of range in 'cast(1e100 as float)'"
+      },
+      "warnings": [
+        [
+          "Error",
+          1690,
+          "DOUBLE value is out of range in 'cast(1e100 as float)'"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "SELECT +18446744073709551615 + 1 AS v",
+      "api": "execute",
+      "limit": 8,
+      "existing": false,
+      "error": {
+        "code": "ER_DATA_OUT_OF_RANGE",
+        "errno": 1690,
+        "state": "22003",
+        "message": "BIGINT UNSIGNED value is out of range in '(18446744073709551615 + 1)'"
+      },
+      "warnings": [
+        [
+          "Error",
+          1690,
+          "BIGINT UNSIGNED value is out of range in '(18446744073709551615 + 1)'"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "SELECT +18446744073709551615 + 1 AS v",
+      "api": "execute",
+      "limit": 8,
+      "existing": false,
+      "error": {
+        "code": "ER_DATA_OUT_OF_RANGE",
+        "errno": 1690,
+        "state": "22003",
+        "message": "BIGINT UNSIGNED value is out of range in '(18446744073709551615 + 1)'"
+      },
+      "warnings": [
+        [
+          "Error",
+          1690,
+          "BIGINT UNSIGNED value is out of range in '(18446744073709551615 + 1)'"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "SELECT +n+1 AS v FROM base260",
+      "api": "execute",
+      "limit": 8,
+      "existing": false,
+      "error": {
+        "code": "ER_DATA_OUT_OF_RANGE",
+        "errno": 1690,
+        "state": "22003",
+        "message": "BIGINT UNSIGNED value is out of range in '(`myjs_print_diag260`.`base260`.`n` + 1)'"
+      },
+      "warnings": [
+        [
+          "Error",
+          1690,
+          "BIGINT UNSIGNED value is out of range in '(`myjs_print_diag260`.`base260`.`n` + 1)'"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "SELECT +n+1 AS v FROM base260",
+      "api": "execute",
+      "limit": 8,
+      "existing": false,
+      "error": {
+        "code": "ER_DATA_OUT_OF_RANGE",
+        "errno": 1690,
+        "state": "22003",
+        "message": "BIGINT UNSIGNED value is out of range in '(`myjs_print_diag260`.`base260`.`n` + 1)'"
+      },
+      "warnings": [
+        [
+          "Error",
+          1690,
+          "BIGINT UNSIGNED value is out of range in '(`myjs_print_diag260`.`base260`.`n` + 1)'"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "SELECT INET_NTOA(+n) AS v FROM base260",
+      "api": "execute",
+      "limit": 8,
+      "existing": false,
+      "rows": [
+        [
+          null
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          253,
+          124,
+          0,
+          31,
+          224,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [
+        [
+          "Warning",
+          1411,
+          "Incorrect integer value: '`myjs_print_diag260`.`base260`.`n`' for function inet_ntoa"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT INET_NTOA(+n) AS v FROM base260",
+      "api": "execute",
+      "limit": 8,
+      "existing": false,
+      "rows": [
+        [
+          null
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          253,
+          124,
+          0,
+          31,
+          224,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [
+        [
+          "Warning",
+          1411,
+          "Incorrect integer value: '`myjs_print_diag260`.`base260`.`n`' for function inet_ntoa"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT UNHEX(ABS(+n)) AS v FROM base260",
+      "api": "execute",
+      "limit": 8,
+      "existing": false,
+      "rows": [
+        [
+          {
+            "type": "Buffer",
+            "data": [
+              24,
+              68,
+              103,
+              68,
+              7,
+              55,
+              9,
+              85,
+              22,
+              21
+            ]
+          }
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          253,
+          10,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT UNHEX(ABS(+n)) AS v FROM base260",
+      "api": "execute",
+      "limit": 8,
+      "existing": false,
+      "rows": [
+        [
+          {
+            "type": "Buffer",
+            "data": [
+              24,
+              68,
+              103,
+              68,
+              7,
+              55,
+              9,
+              85,
+              22,
+              21
+            ]
+          }
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          253,
+          10,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT UNHEX(+_latin1'g') AS v",
+      "api": "execute",
+      "limit": 8,
+      "existing": false,
+      "rows": [
+        [
+          null
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          253,
+          1,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [
+        [
+          "Warning",
+          1411,
+          "Incorrect string value: '_latin1'g'' for function unhex"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT UNHEX(+_latin1'g') AS v",
+      "api": "execute",
+      "limit": 8,
+      "existing": false,
+      "rows": [
+        [
+          null
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          253,
+          1,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [
+        [
+          "Warning",
+          1411,
+          "Incorrect string value: '_latin1'g'' for function unhex"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT UNHEX(+'g') AS v",
+      "api": "execute",
+      "limit": 64,
+      "existing": false,
+      "rows": [
+        [
+          null
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          253,
+          2,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [
+        [
+          "Warning",
+          1411,
+          "Incorrect string value: ''g'' for function unhex"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT UNHEX(+'g') AS v",
+      "api": "execute",
+      "limit": 64,
+      "existing": false,
+      "rows": [
+        [
+          null
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          253,
+          2,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [
+        [
+          "Warning",
+          1411,
+          "Incorrect string value: ''g'' for function unhex"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT UNHEX(+b) AS v FROM base260",
+      "api": "execute",
+      "limit": 64,
+      "existing": false,
+      "rows": [
+        [
+          null
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          253,
+          32,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [
+        [
+          "Warning",
+          1411,
+          "Incorrect string value: '`myjs_print_diag260`.`base260`.`b`' for function unhex"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT UNHEX(+b) AS v FROM base260",
+      "api": "execute",
+      "limit": 64,
+      "existing": false,
+      "rows": [
+        [
+          null
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          253,
+          32,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [
+        [
+          "Warning",
+          1411,
+          "Incorrect string value: '`myjs_print_diag260`.`base260`.`b`' for function unhex"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT INET_ATON(+'bad') AS v",
+      "api": "execute",
+      "limit": 64,
+      "existing": false,
+      "rows": [
+        [
+          null
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          8,
+          21,
+          160,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [
+        [
+          "Warning",
+          1411,
+          "Incorrect string value: ''bad'' for function inet_aton"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT INET_ATON(+'bad') AS v",
+      "api": "execute",
+      "limit": 64,
+      "existing": false,
+      "rows": [
+        [
+          null
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          8,
+          21,
+          160,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [
+        [
+          "Warning",
+          1411,
+          "Incorrect string value: ''bad'' for function inet_aton"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT INET_NTOA(+-1) AS v",
+      "api": "execute",
+      "limit": 64,
+      "existing": false,
+      "rows": [
+        [
+          null
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          253,
+          124,
+          0,
+          31,
+          224,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [
+        [
+          "Warning",
+          1411,
+          "Incorrect integer value: '-(1)' for function inet_ntoa"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT INET_NTOA(+-1) AS v",
+      "api": "execute",
+      "limit": 64,
+      "existing": false,
+      "rows": [
+        [
+          null
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          253,
+          124,
+          0,
+          31,
+          224,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [
+        [
+          "Warning",
+          1411,
+          "Incorrect integer value: '-(1)' for function inet_ntoa"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT CAST(+1e100 AS FLOAT) AS v",
+      "api": "execute",
+      "limit": 64,
+      "existing": false,
+      "error": {
+        "code": "ER_DATA_OUT_OF_RANGE",
+        "errno": 1690,
+        "state": "22003",
+        "message": "DOUBLE value is out of range in 'cast(1e100 as float)'"
+      },
+      "warnings": [
+        [
+          "Error",
+          1690,
+          "DOUBLE value is out of range in 'cast(1e100 as float)'"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "SELECT CAST(+1e100 AS FLOAT) AS v",
+      "api": "execute",
+      "limit": 64,
+      "existing": false,
+      "error": {
+        "code": "ER_DATA_OUT_OF_RANGE",
+        "errno": 1690,
+        "state": "22003",
+        "message": "DOUBLE value is out of range in 'cast(1e100 as float)'"
+      },
+      "warnings": [
+        [
+          "Error",
+          1690,
+          "DOUBLE value is out of range in 'cast(1e100 as float)'"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "SELECT +18446744073709551615 + 1 AS v",
+      "api": "execute",
+      "limit": 64,
+      "existing": false,
+      "error": {
+        "code": "ER_DATA_OUT_OF_RANGE",
+        "errno": 1690,
+        "state": "22003",
+        "message": "BIGINT UNSIGNED value is out of range in '(18446744073709551615 + 1)'"
+      },
+      "warnings": [
+        [
+          "Error",
+          1690,
+          "BIGINT UNSIGNED value is out of range in '(18446744073709551615 + 1)'"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "SELECT +18446744073709551615 + 1 AS v",
+      "api": "execute",
+      "limit": 64,
+      "existing": false,
+      "error": {
+        "code": "ER_DATA_OUT_OF_RANGE",
+        "errno": 1690,
+        "state": "22003",
+        "message": "BIGINT UNSIGNED value is out of range in '(18446744073709551615 + 1)'"
+      },
+      "warnings": [
+        [
+          "Error",
+          1690,
+          "BIGINT UNSIGNED value is out of range in '(18446744073709551615 + 1)'"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "SELECT +n+1 AS v FROM base260",
+      "api": "execute",
+      "limit": 64,
+      "existing": false,
+      "error": {
+        "code": "ER_DATA_OUT_OF_RANGE",
+        "errno": 1690,
+        "state": "22003",
+        "message": "BIGINT UNSIGNED value is out of range in '(`myjs_print_diag260`.`base260`.`n` + 1)'"
+      },
+      "warnings": [
+        [
+          "Error",
+          1690,
+          "BIGINT UNSIGNED value is out of range in '(`myjs_print_diag260`.`base260`.`n` + 1)'"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "SELECT +n+1 AS v FROM base260",
+      "api": "execute",
+      "limit": 64,
+      "existing": false,
+      "error": {
+        "code": "ER_DATA_OUT_OF_RANGE",
+        "errno": 1690,
+        "state": "22003",
+        "message": "BIGINT UNSIGNED value is out of range in '(`myjs_print_diag260`.`base260`.`n` + 1)'"
+      },
+      "warnings": [
+        [
+          "Error",
+          1690,
+          "BIGINT UNSIGNED value is out of range in '(`myjs_print_diag260`.`base260`.`n` + 1)'"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "SELECT INET_NTOA(+n) AS v FROM base260",
+      "api": "execute",
+      "limit": 64,
+      "existing": false,
+      "rows": [
+        [
+          null
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          253,
+          124,
+          0,
+          31,
+          224,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [
+        [
+          "Warning",
+          1411,
+          "Incorrect integer value: '`myjs_print_diag260`.`base260`.`n`' for function inet_ntoa"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT INET_NTOA(+n) AS v FROM base260",
+      "api": "execute",
+      "limit": 64,
+      "existing": false,
+      "rows": [
+        [
+          null
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          253,
+          124,
+          0,
+          31,
+          224,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [
+        [
+          "Warning",
+          1411,
+          "Incorrect integer value: '`myjs_print_diag260`.`base260`.`n`' for function inet_ntoa"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT UNHEX(ABS(+n)) AS v FROM base260",
+      "api": "execute",
+      "limit": 64,
+      "existing": false,
+      "rows": [
+        [
+          {
+            "type": "Buffer",
+            "data": [
+              24,
+              68,
+              103,
+              68,
+              7,
+              55,
+              9,
+              85,
+              22,
+              21
+            ]
+          }
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          253,
+          10,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT UNHEX(ABS(+n)) AS v FROM base260",
+      "api": "execute",
+      "limit": 64,
+      "existing": false,
+      "rows": [
+        [
+          {
+            "type": "Buffer",
+            "data": [
+              24,
+              68,
+              103,
+              68,
+              7,
+              55,
+              9,
+              85,
+              22,
+              21
+            ]
+          }
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          253,
+          10,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT UNHEX(+_latin1'g') AS v",
+      "api": "execute",
+      "limit": 64,
+      "existing": false,
+      "rows": [
+        [
+          null
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          253,
+          1,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [
+        [
+          "Warning",
+          1411,
+          "Incorrect string value: '_latin1'g'' for function unhex"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT UNHEX(+_latin1'g') AS v",
+      "api": "execute",
+      "limit": 64,
+      "existing": false,
+      "rows": [
+        [
+          null
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          253,
+          1,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [
+        [
+          "Warning",
+          1411,
+          "Incorrect string value: '_latin1'g'' for function unhex"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "0"
+    }
+  ]
+}

@@ -90,7 +90,9 @@ CHECK OPTION refusals now follow atomic target checks and precede catalog writes
 Computed-only outer projections now reject there too, preserving stars, mixed
 fields, direct CTE/derived references and transparent unary plus. INFORMATION_SCHEMA
 now shares the direct-reference criterion while retaining its other source/query
-fences. General updatability, definition normalization and schema-driven automatic
+fences. Unary plus now prints its operand through the shared expression printer
+for stored view/table expressions and diagnostic labels, preserving existing
+qualifiers, introducers and literal spellings. General updatability, definition normalization and schema-driven automatic
 reprepare remain open. Parser-level body refusals,
 earlier recursive validation, duplicate binding timing, view PREPARE body
 metadata, non-query contexts and CHAR CAST flags remain open.
