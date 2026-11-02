@@ -1833,8 +1833,9 @@ before registration. Its execution and Select #2/Limit description share one
 qualified one-row bound. Correlation stays live, NULL validation uses the current
 invocation and original capability, and filtering remains before the outer Sort.
 Actual independent sources, same-name shadowing and unproved constructor/type/index
-profiles retain their prior readers. The same boundary now serves closed positive EXISTS as well as NOT EXISTS;
-syntax admits neither IN/ALL/ANY nor independent sources. This migration adds
+profiles retain their prior readers. The same boundary now serves closed positive EXISTS as well as NOT EXISTS.
+Direct projection of the covered equality key shares that reader after original
+binding. Other projections, IN/ALL/ANY and independent sources stay outside it. This migration adds
 no storage read policy.
 
 Private datatype facts now define equivalent spellings once. Complete immutable

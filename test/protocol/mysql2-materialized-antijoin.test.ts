@@ -14,6 +14,8 @@ import dependentHit from './fixtures/antijoin/dependent-hit.json' with { type: '
 import dependentOrder from './fixtures/antijoin/dependent-order.json' with { type: 'json' }
 import positiveHit from './fixtures/antijoin/positive-dependent-hit.json' with { type: 'json' }
 import positiveOrder from './fixtures/antijoin/positive-dependent-order.json' with { type: 'json' }
+import keyHit from './fixtures/antijoin/key-dependent-hit.json' with { type: 'json' }
+import keyOrder from './fixtures/antijoin/key-dependent-order.json' with { type: 'json' }
 // @ts-expect-error — share the capture's normalization without its runner.
 import { planSkeleton } from '../../tools/capture-relational.mjs'
 
@@ -485,9 +487,12 @@ for (const { switches, capture } of dependentHit.variants) test('dependent reade
   () => checkCorrelatedExists(switches, capture))
 
 for (const { switches, capture } of positiveHit.variants) test('positive dependent reader closes at its first qualified hit: ' + switches,
-  () => checkCorrelatedExists(switches, capture, true))
+  () => checkCorrelatedExists(switches, capture, { positive: true }))
 
-for (const reference of [dependentOrder, positiveOrder]) test(reference.schema + ': dependent filtering precedes outer sorting, including faults and cached execution', async () => {
+for (const { switches, capture, positive } of keyHit.variants) test('covered-key dependent reader closes at its first qualified hit: ' + switches + (positive ? ' EXISTS' : ' NOT EXISTS'),
+  () => checkCorrelatedExists(switches, capture, { positive, projectKey: true }))
+
+for (const reference of [dependentOrder, positiveOrder, ...keyOrder.cases]) test(reference.schema + ': dependent filtering precedes outer sorting, including faults and cached execution', async () => {
   const { db, conn } = await connect()
   const open = db?.catalog!.table.bind(db.catalog)
   const events: string[] = []
@@ -567,9 +572,9 @@ for (const reference of [dependentOrder, positiveOrder]) test(reference.schema +
   }
 })
 
-async function checkCorrelatedExists(switches: string, capture: typeof firstHit, positive = false) {
+async function checkCorrelatedExists(switches: string, capture: typeof firstHit, { positive = false, projectKey = false }: { readonly positive?: boolean; readonly projectKey?: boolean } = {}) {
   const { db, conn } = await connect()
-  const sql = 'SELECT name FROM pa WHERE ' + (positive ? '' : 'NOT ') + 'EXISTS(SELECT 1 FROM ch WHERE ch.g=pa.g)'
+  const sql = 'SELECT name FROM pa WHERE ' + (positive ? '' : 'NOT ') + 'EXISTS(SELECT ' + (projectKey ? 'ch.g' : '1') + ' FROM ch WHERE ch.g=pa.g)'
   const answer = (matched: boolean) => matched === positive ? [['one']] : []
   const open = db?.catalog!.table.bind(db.catalog)
   let opened = 0, visited = 0, closed = 0
@@ -687,10 +692,16 @@ async function checkCorrelatedExists(switches: string, capture: typeof firstHit,
       reset()
       await conn.query(sql.replace('SELECT name ', 'SELECT name AS n '))
       assert.deepEqual([opened, visited, closed], [1, 100, 1], 'excluded alias construction delegates to its original reader')
+      if (projectKey) {
+        reset()
+        await conn.query(sql.replace('SELECT ch.g FROM', 'SELECT ch.id FROM'))
+        assert.deepEqual([opened, visited, closed], [1, 100, 1], 'another projected column retains its unproved reader')
+      }
     }
     await conn.query('SET optimizer_switch=' + mysql.escape(switches))
     await conn.query('INSERT INTO ch VALUES(101,NULL)')
     await check(conn, sql.replace('ch.g=pa.g', 'ch.g<=>pa.g'), answer(true), capture.fields[0], [])
+    if (projectKey) await assert.rejects(conn.query(sql.replace('SELECT ch.g FROM', 'SELECT ch.missing FROM')), { code: 'ER_BAD_FIELD_ERROR', errno: 1054, sqlState: '42S22' })
     // Source binding still precedes execution suppression for a NULL key.
     await assert.rejects(conn.query(sql.replace('ch.g=pa.g', 'ch.missing=pa.g')), { code: 'ER_BAD_FIELD_ERROR', errno: 1054, sqlState: '42S22' })
     await conn.query('DROP TABLE ch')

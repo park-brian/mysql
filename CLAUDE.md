@@ -71,7 +71,8 @@ failures now carry their actual handler key and publish warning 159 before 1412,
 retaining condition-prefix limits and full totals. Broader constructor readiness
 and retained-view locking reads after TRUNCATE remain open. The proved dependent-subquery
 profile now filters before outer sorting; the same finalizer also serves the
-closed positive EXISTS cohort. IN/ALL/ANY and broader readiness remain deferred.
+closed positive EXISTS cohort. Both polarities admit direct qualified projection
+of the covered inner equality key. Other projection evaluation, IN/ALL/ANY and broader readiness remain deferred.
 M5.19 field copying now shares the
 BLOB promotion rule with metadata. Actual DISTINCT/group/derived writers now
 normalize stored DECIMAL values, closing the measured streamed-join copy gaps.

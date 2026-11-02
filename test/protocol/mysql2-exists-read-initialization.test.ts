@@ -6,6 +6,7 @@ import { MySQL } from '@myjs/core'
 import { SqlError } from '@myjs/protocol'
 import negativeVisibility from './fixtures/antijoin/read-initialization.json' with { type: 'json' }
 import positiveVisibility from './fixtures/antijoin/positive-read-initialization.json' with { type: 'json' }
+import keyVisibility from './fixtures/antijoin/key-read-initialization.json' with { type: 'json' }
 // @ts-expect-error — use the reference's plan normalization without its runner.
 import { planSkeleton } from '../../tools/capture-relational.mjs'
 
@@ -25,11 +26,12 @@ const schemas: Record<string, string> = {
   sort4: 'dependent223_sorted4', constructors: 'dependent223_ctor',
   ordinal: 'readinit223_ordinal',
   positive: 'positive230_ddl',
+  'key-negative': 'key231neg_ddl', 'key-positive': 'key231pos_ddl',
 }
 
-for (const fixture of [negativeVisibility, positiveVisibility]) test(fixture.outcomes + ': proved correlated sources validate retained views without losing headers or earlier facts', async () => {
+for (const fixture of [negativeVisibility, positiveVisibility, keyVisibility]) test(fixture.outcomes + ': proved correlated sources validate retained views without losing headers or earlier facts', async () => {
   assert.equal(fixture.mysqlVersion, '8.4.11')
-  assert.equal(fixture.cases.length, fixture === negativeVisibility ? 240 : 30)
+  assert.equal(fixture.cases.length, fixture === negativeVisibility ? 240 : fixture === keyVisibility ? 60 : 30)
   assert.equal(fixture.outcomes, fixture.cases.length)
   let errorMatches = 0, headerMatches = 0, warningMatches = 0, completeMatches = 0
   for (const sample of fixture.cases) {
@@ -44,8 +46,10 @@ for (const fixture of [negativeVisibility, positiveVisibility]) test(fixture.out
     const schema = schemas[sample.group]!
     const constructor = sample.group === 'constructors'
     const four = constructor || sample.group === 'sort4' || sample.group === 'ordinal'
-    const sql = 'SELECT ' + sample.projection + ' FROM pa WHERE ' + (sample.group === 'positive' ? '' : 'NOT ') + 'EXISTS(SELECT 1 FROM ch WHERE ch.g=pa.g)'
-      + (constructor || sample.group === 'ordinal' ? sample.order : sample.group === 'plain' || sample.group === 'positive' ? '' : ' ORDER BY name LIMIT 1')
+    const innerProjection = 'innerProjection' in fixture ? fixture.innerProjection : '1'
+    const positive = sample.group === 'positive' || sample.group === 'key-positive'
+    const sql = 'SELECT ' + sample.projection + ' FROM pa WHERE ' + (positive ? '' : 'NOT ') + 'EXISTS(SELECT ' + innerProjection + ' FROM ch WHERE ch.g=pa.g)'
+      + (constructor || sample.group === 'ordinal' ? sample.order : sample.group === 'plain' || sample.group === 'positive' || sample.group.startsWith('key-') ? '' : ' ORDER BY name LIMIT 1')
     const createParent = () => b.query('CREATE TABLE pa(id ' + (constructor ? 'BIGINT UNSIGNED' : 'INT') + ' PRIMARY KEY,name VARCHAR(12) NOT NULL,g INT,UNIQUE KEY(name)) STATS_AUTO_RECALC=0')
     const createInner = () => b.query('CREATE TABLE ch(id INT PRIMARY KEY,g INT,KEY(g)) STATS_AUTO_RECALC=0')
     const parentValues = constructor
@@ -124,17 +128,21 @@ for (const fixture of [negativeVisibility, positiveVisibility]) test(fixture.out
     }
   }
   if (host === undefined) {
-    assert.deepEqual([errorMatches, headerMatches, warningMatches, completeMatches], fixture === negativeVisibility ? [228, 216, 228, 206] : [30, 30, 30, 30])
+    assert.deepEqual([errorMatches, headerMatches, warningMatches, completeMatches], fixture === negativeVisibility ? [228, 216, 228, 206] : new Array(4).fill(fixture.outcomes))
   }
 })
 
-for (const [switches, positive] of [['default,materialization=off', false], ['default,semijoin=off', false], ['default,semijoin=off', true]] as const) test('NULL validation uses the bound invocation and closes the parent on failure: ' + switches + (positive ? ' EXISTS' : ' NOT EXISTS'), { skip: host !== undefined }, async () => {
+for (const [switches, positive, projectKey] of [
+  ['default,materialization=off', false, false],
+  ['default,semijoin=off', false, false], ['default,semijoin=off', true, false],
+  ['default,semijoin=off', false, true], ['default,semijoin=off', true, true],
+] as const) test('NULL validation uses the bound invocation and closes the parent on failure: ' + switches + (positive ? ' EXISTS' : ' NOT EXISTS') + (projectKey ? ' projected key' : ''), { skip: host !== undefined }, async () => {
   const db = await MySQL.open(':memory:')
   const conn = mysql.createConnection({ stream: db.createStream(), user: 'root' }).promise()
   const open = db.catalog!.table.bind(db.catalog)
   let checks = 0, searches = 0, parentOpens = 0, parentCloses = 0
   let capable = true, fail = false
-  const sql = 'SELECT name FROM pa WHERE ' + (positive ? '' : 'NOT ') + 'EXISTS(SELECT 1 FROM ch WHERE ch.g=pa.g)'
+  const sql = 'SELECT name FROM pa WHERE ' + (positive ? '' : 'NOT ') + 'EXISTS(SELECT ' + (projectKey ? 'ch.g' : '1') + ' FROM ch WHERE ch.g=pa.g)'
   try {
     await conn.query('CREATE DATABASE readinit223_control'); await conn.query('USE readinit223_control')
     await conn.query('CREATE TABLE pa(id INT PRIMARY KEY,name VARCHAR(12) NOT NULL,g INT,UNIQUE KEY(name))')
@@ -193,7 +201,7 @@ for (const [switches, positive] of [['default,materialization=off', false], ['de
   }
 })
 
-for (const positive of [false, true]) test('an inner table that shadows the parent name retains its independent reader: ' + (positive ? 'EXISTS' : 'NOT EXISTS'), async () => {
+for (const positive of [false, true]) for (const projection of ['1', 'pa.g']) test('an inner table that shadows the parent name retains its independent reader: ' + (positive ? 'EXISTS' : 'NOT EXISTS') + ' ' + projection, async () => {
   const db = host === undefined ? await MySQL.open(':memory:') : undefined
   const conn = mysql.createConnection({
     ...(db === undefined ? { host: host ?? 'reference', port: Number(process.env.MYSQL_REFERENCE_PORT ?? 3306), password: process.env.MYSQL_REFERENCE_PASSWORD ?? 'root' } : { stream: db.createStream() }),
@@ -201,7 +209,7 @@ for (const positive of [false, true]) test('an inner table that shadows the pare
   }).promise()
   const open = db?.catalog!.table.bind(db.catalog)
   let checks = 0, visited = 0
-  const sql = 'SELECT name FROM pa WHERE ' + (positive ? '' : 'NOT ') + 'EXISTS(SELECT 1 FROM pa WHERE pa.g=pa.g)'
+  const sql = 'SELECT name FROM pa WHERE ' + (positive ? '' : 'NOT ') + 'EXISTS(SELECT ' + projection + ' FROM pa WHERE pa.g=pa.g)'
   try {
     await conn.query('CREATE DATABASE dependent229_shadow')
     await conn.query('USE dependent229_shadow')

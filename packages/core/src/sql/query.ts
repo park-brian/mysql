@@ -927,11 +927,13 @@ function dependentReader(run: Run, q: QueryExpression, node: SelectNode, from: F
   const where = node.where
   const query = where?.kind === NODE.UNARY && where.op === 'EXISTS' && where.operand.kind === NODE.SUBQUERY ? where.operand.query : negativeExistsSubquery(where)
   const body = query === undefined ? undefined : boundedSubquery(query)
-  if (outer === undefined || query !== bound.query || body === undefined || !integerLiteral(body.items[0].expr) || !checkedCorrelatedOutput(node, q, from.single, items, query)) return bound
+  if (outer === undefined || query !== bound.query || body === undefined || !checkedCorrelatedOutput(node, q, from.single, items, query)) return bound
   if (body.from[0].table.name.toLowerCase() === outer.table.name.toLowerCase()) return bound
   const pair = correlatedPair(body.where, body.from[0].table.name, outer.table.name)
   const inner = bound.plan.source
   if (pair === undefined || pair.extra !== undefined || inner === undefined || inner.def.name !== body.from[0].table.name || inner.def.schema !== from.single!.def.schema || isTemporary(inner.def)) return bound
+  const projection = body.items[0].expr
+  if (!integerLiteral(projection) && !(isQualifiedColumn(projection, inner.alias) && projection.parts[1] === pair.innerKey.parts[1])) return bound
   if ([from.single!.def, inner.def].some((def) => def.columns.some((c) => c.attributes?.['generated'] !== undefined))) return bound
   const column = inner.def.columns.find((c) => c.name === pair.innerKey.parts[1])
   const key = compile(pair.outerKey, compileContext(run, from.scope, 'where clause'))
