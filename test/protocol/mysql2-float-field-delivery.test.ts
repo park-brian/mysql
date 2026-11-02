@@ -18,7 +18,7 @@ interface FloatReference {
     readonly fields: readonly (readonly unknown[])[]
     readonly warnings: readonly { readonly Level: string; readonly Code: number; readonly Message: string }[]
   }[]
-  readonly checks: readonly { readonly rows: readonly number[]; readonly fields: readonly number[]; readonly warnings: readonly number[]; readonly rowCount?: false; readonly warningCount?: false }[]
+  readonly checks: readonly { readonly rows: readonly number[]; readonly fields: readonly number[]; readonly warnings: readonly number[]; readonly rowCount?: false; readonly missingRows?: readonly number[]; readonly warningCount?: false }[]
   readonly observations: readonly (readonly number[])[]
   readonly strict: readonly number[]
 }
@@ -33,15 +33,27 @@ function canonical(value: unknown): unknown {
   }))
 }
 
-function checkCells(actual: readonly (readonly unknown[])[], expected: readonly (readonly unknown[])[], masks: readonly number[], label: string, count = true): void {
+function checkCells(actual: readonly (readonly unknown[])[], expected: readonly (readonly unknown[])[], masks: readonly number[], label: string, count = true, missing: readonly number[] = []): void {
   if (count) assert.equal(actual.length, expected.length, label + ': count')
   for (const [i, row] of expected.entries()) {
-    // A recorded count mismatch can omit only absent rows with no matching cell.
-    if (!count && actual[i] === undefined && masks[i] === 0) continue
+    // Only a recorded missing row can be absent; masked values still retain their row width.
+    if (!count && missing.includes(i) && actual[i] === undefined) {
+      assert.equal(masks[i], 0, label + ': missing row has a matching cell ' + i)
+      continue
+    }
     assert.equal(actual[i]?.length, row.length, label + ': width ' + i)
     for (let j = 0; j < row.length; j++) if (masks[i]! & (1 << j)) assert.deepEqual(actual[i]![j], row[j], label + ': ' + i + '/' + j)
   }
 }
+
+test('partial REAL comparisons retain present rows even when every value is masked', () => {
+  const expected = [[1], [2]]
+  checkCells([[3]], expected, [0, 0], 'recorded missing', false, [1])
+  checkCells([[3], [2]], expected, [0, 0], 'missing row repaired', false, [1])
+  assert.throws(() => checkCells([], expected, [0, 0], 'present row lost', false, [1]), /width 0/)
+  assert.throws(() => checkCells([[3]], expected, [0, 0], 'unrecorded missing', false), /width 1/)
+  assert.throws(() => checkCells([[3]], expected, [0, 1], 'matching cell lost', false, [1]), /matching cell/)
+})
 
 for (const [capture, total, matched] of [[delivery, 952, 776], [readers.cases[0], 506, 506], [readers.cases[1], 230, 218], [readers.cases[2], 72, 72], [readers.cases[3], 36, 36], [readers.cases[4], 960, 960], [widths, 2340, 2257], [copies, 3664, 3376]] as const) test('REAL readers and field delivery preserve native boundaries: ' + capture!.schema, async () => {
   const reference = capture as FloatReference
@@ -81,7 +93,7 @@ for (const [capture, total, matched] of [[delivery, 952, 776], [readers.cases[0]
       } else {
         // The full native outcomes remain captured; assert every currently matching cell.
         const checks = reference.checks[checksIndex!]!
-        checkCells(actual.rows, expected.rows, checks.rows, label + ': rows', checks.rowCount !== false)
+        checkCells(actual.rows, expected.rows, checks.rows, label + ': rows', checks.rowCount !== false, checks.missingRows)
         checkCells(actual.fields, expected.fields, checks.fields, label + ': fields')
         if (checks.warningCount === false) {
           // New unary-BINARY captures retain a native warning that execution does not yet publish.

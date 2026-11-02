@@ -67,8 +67,8 @@ source formatting, metadata and diagnostics retain their separate ownership.
 Width-limited REAL formatting, computed REAL BLOB copies, large fixed-scale
 formatting, DECIMAL diagnostics, aggregate metadata and separate warning timing
 remain open. Next audit computed REAL BLOB copies against actual source-field
-boundaries. The UTF-16 encoder refusal found during charset setup is recorded
-below for a separate M2.3 completion-scope review. The complete DECIMAL
+boundaries. M2.3's completed codec scope is explicit below; UTF-16 encoding
+continues to use its documented typed refusal. The complete DECIMAL
 constructor rehearsal remains parked above the unchanged parser cap; its
 grammar, diagnostics and refusal must ship together before presence/projection
 expansion. No function-specific serialization exceptions or speculative
@@ -1924,7 +1924,28 @@ then explicitly refuses other encoders. Its UTF-16 decoder is a separate host
 capability. `CREATE TABLE t(s VARCHAR(20) CHARACTER SET utf16); INSERT INTO t
 VALUES('1')` reproduces that existing write refusal. This copy repair uses the
 supported latin1/utf8mb3/utf8mb4 encoders; it claims no UTF-16 write support.
-Review M2.3's completion scope separately before declaring the roadmap complete.
+M2.3's completed scope is UTF-8/generated single-byte encoding and supported
+decoding with explicit refusals elsewhere, as documented in doc 29. This
+capability limit does not reopen that scoped milestone or change the totals.
+
+**REAL partial-result presence checks, review repair verified:** the
+reference helper now skips an absent row only when its index is explicitly
+recorded as missing. A zero value mask still requires every currently present
+row and its matching width. This protects 304 matching presence/width facts
+inside the 160 already-unmatched count cases. Exactly 64 genuinely absent row
+slots are recorded across 64 observations; all other indices remain required.
+Native outcomes, strict cases, value masks and older fixture assertions are
+unchanged. A negative regression distinguishes masked values, required rows,
+known missing rows and subsequently repaired rows. The actual committed old
+helper fails that regression. Nine affected tests pass locally and against the
+pinned native server; all 8,760 native outcomes are checked completely. Fresh
+Docker --reference passes 1,620 main and four latency tests, typecheck, lint,
+all nine unchanged caps, package/typed smoke, the real client and all seven
+pinned corpora, including 1,737 coercion warning counts. Runtime code and package
+sizes are unchanged; the targeted replay's tested-container proof compares 527
+tests/fixtures and 206 runtime sources plus tooling. All eleven required
+7b805bc CI jobs pass. The independent review also confirms M2.3's documented codec scope above;
+UTF-16 encoding remains an explicit refusal. Totals remain 144/190 and M5 42/53.
 
 **Next prerequisite: constructor admission before presence execution.** Complete
 the existing CAST work: with written utf8 warning 3719 now retained, refuse
@@ -4843,7 +4864,7 @@ they ran (E-12).
 |---|---|---|---|---|---|---|
 | M2.1 | Collation registry and the `Collation` interface (`sortKey`, `compare`, `padAttribute`) | charsets | [29](./29-charsets-and-collations.md) | M2.17 | ☑ | ids 8, 33, 45, 46, 63, 224, 246, 255, 278 resolve to a collation or a typed "unsupported" |
 | M2.2 | `binary` (63) and `utf8mb4_bin` (46) — pure `memcmp` | charsets | [29](./29-charsets-and-collations.md) | M2.1 | ☑ | enough to build and test the entire B+tree; ordering equals `memcmp` on arbitrary bytes. Corrected by M2.21: "the sort key is the value" holds for every *8-bit* `*_bin` collation and not for the Unicode ones — `utf8mb4_bin` writes three big-endian bytes per code point and `utf8mb3_bin` two (E-12). Which collations those are is now generated from MySQL's own `MY_COLLATION_HANDLER` structs (`BIN_KEY_WIDTHS`), not from a list, because `utf8mb3_bin` and `utf8mb4_bin` carry identical flags and have different key widths |
-| M2.3 | Charset encode/decode over `TextEncoder`/`TextDecoder`; MySQL name → WHATWG label | charsets | [29](./29-charsets-and-collations.md) | M2.1 | ☑ | `latin1` maps to `windows-1252`, so `0x80` decodes to `€` |
+| M2.3 | Charset encode/decode over `TextEncoder`/`TextDecoder`; MySQL name → WHATWG label | charsets | [29](./29-charsets-and-collations.md) | M2.1 | ☑ | Completed scope: UTF-8/generated single-byte encoding and supported decoding through checked host fallbacks; unavailable encoders/decoders refuse explicitly (doc 29). Generated MySQL `latin1` maps `0x80` to `€`; UTF-16 encoding remains a documented refusal. |
 | M2.4 | `mbminlen`/`mbmaxlen` table and the limits it drives | charsets, protocol | [29](./29-charsets-and-collations.md) | M2.17 | ☑ | `VARCHAR(16383)` is the utf8mb4 row-limit boundary; `KEY (col(255))` budgets 1020 bytes |
 | M2.5 | Weight-table generator for the **simple** collations, re-runnable, source hash checked in. UCA is M2.20 | charsets | [29](./29-charsets-and-collations.md) | M2.17 | ☑ | re-running against the pinned MySQL tree reproduces the committed tables bit for bit |
 | M2.6 | `utf8mb4_general_ci` and `latin1_swedish_ci` (PAD SPACE) | charsets | [29](./29-charsets-and-collations.md) | M2.5 | ☑ | `'ä' = 'a'` and `'ß' ≠ 'ss'`; `'a' = 'a '` is true |

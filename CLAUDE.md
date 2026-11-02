@@ -50,7 +50,8 @@ REAL copies into non-BLOB text/binary fields now use canonical numeric readings
 through the existing set writer. Width-limited formatting, computed REAL BLOB
 copies, large fixed-scale formatting, DECIMAL diagnostics, warning timing and
 aggregate metadata remain open. UTF-16 writes still hit the existing encoder
-refusal; the roadmap records a separate M2.3 scope review.
+refusal. M2.3 covers UTF-8/generated single-byte encoding and supported decoding
+with typed refusals elsewhere, as recorded in doc 29 and the roadmap.
 M5's ORM exit criterion holds with recorded test configuration; default
 parallel runs can lose interactive-transaction tests to scheduling delays.
 Doc 42's query API
