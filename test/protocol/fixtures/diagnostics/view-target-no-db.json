@@ -1,0 +1,1758 @@
+{
+  "mysqlVersion": "8.4.11",
+  "sqlMode": "ERROR_FOR_DIVISION_BY_ZERO",
+  "seed": "SELECT 1/0,CAST('x' AS DECIMAL)",
+  "schema": "myjs_view255",
+  "useSchema": false,
+  "setup": [
+    "CREATE TABLE myjs_view255.base255(a INT)"
+  ],
+  "beforeEach": [
+    "DROP VIEW IF EXISTS myjs_view255.v255"
+  ],
+  "observations": [
+    {
+      "sql": "CREATE VIEW myjs_view255.v255 AS SELECT 1",
+      "api": "query",
+      "header": {
+        "fieldCount": 0,
+        "affectedRows": 0,
+        "insertId": 0,
+        "info": "",
+        "serverStatus": 2,
+        "warningStatus": 0,
+        "changedRows": 0
+      },
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "CREATE VIEW myjs_view255.v255 AS SELECT 1",
+      "api": "execute",
+      "header": {
+        "fieldCount": 0,
+        "affectedRows": 0,
+        "insertId": 0,
+        "info": "",
+        "serverStatus": 2,
+        "warningStatus": 0,
+        "changedRows": 0
+      },
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "CREATE VIEW myjs_view255.v255 AS SELECT 1",
+      "api": "prepare",
+      "parameters": [],
+      "fields": [],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "CREATE VIEW myjs_view255.v255 AS SELECT a FROM base255",
+      "api": "query",
+      "error": {
+        "code": "ER_NO_DB_ERROR",
+        "errno": 1046,
+        "state": "3D000",
+        "message": "No database selected"
+      },
+      "warnings": [
+        [
+          "Error",
+          1046,
+          "No database selected"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "CREATE VIEW myjs_view255.v255 AS SELECT a FROM base255",
+      "api": "execute",
+      "error": {
+        "code": "ER_NO_DB_ERROR",
+        "errno": 1046,
+        "state": "3D000",
+        "message": "No database selected"
+      },
+      "warnings": [
+        [
+          "Error",
+          1046,
+          "No database selected"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "CREATE VIEW myjs_view255.v255 AS SELECT a FROM myjs_view255.base255",
+      "api": "query",
+      "header": {
+        "fieldCount": 0,
+        "affectedRows": 0,
+        "insertId": 0,
+        "info": "",
+        "serverStatus": 2,
+        "warningStatus": 0,
+        "changedRows": 0
+      },
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "CREATE VIEW myjs_view255.v255 AS SELECT a FROM myjs_view255.base255",
+      "api": "execute",
+      "header": {
+        "fieldCount": 0,
+        "affectedRows": 0,
+        "insertId": 0,
+        "info": "",
+        "serverStatus": 2,
+        "warningStatus": 0,
+        "changedRows": 0
+      },
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "CREATE VIEW myjs_view255.v255 AS SELECT a FROM myjs_view255.base255",
+      "api": "prepare",
+      "parameters": [],
+      "fields": [],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "CREATE VIEW v255 AS SELECT 1",
+      "api": "query",
+      "error": {
+        "code": "ER_NO_DB_ERROR",
+        "errno": 1046,
+        "state": "3D000",
+        "message": "No database selected"
+      },
+      "warnings": [
+        [
+          "Error",
+          1046,
+          "No database selected"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "CREATE VIEW v255 AS SELECT 1",
+      "api": "execute",
+      "error": {
+        "code": "ER_NO_DB_ERROR",
+        "errno": 1046,
+        "state": "3D000",
+        "message": "No database selected"
+      },
+      "warnings": [
+        [
+          "Error",
+          1046,
+          "No database selected"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "CREATE VIEW v255 AS SELECT 1",
+      "api": "prepare",
+      "error": {
+        "code": "ER_NO_DB_ERROR",
+        "errno": 1046,
+        "state": "3D000",
+        "message": "No database selected"
+      },
+      "warnings": [
+        [
+          "Error",
+          1046,
+          "No database selected"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "CREATE VIEW v255 AS SELECT LENGTH()",
+      "api": "query",
+      "error": {
+        "code": "ER_NO_DB_ERROR",
+        "errno": 1046,
+        "state": "3D000",
+        "message": "No database selected"
+      },
+      "warnings": [
+        [
+          "Error",
+          1046,
+          "No database selected"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "CREATE VIEW v255 AS SELECT LENGTH()",
+      "api": "execute",
+      "error": {
+        "code": "ER_NO_DB_ERROR",
+        "errno": 1046,
+        "state": "3D000",
+        "message": "No database selected"
+      },
+      "warnings": [
+        [
+          "Error",
+          1046,
+          "No database selected"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "CREATE VIEW v255 AS SELECT LENGTH()",
+      "api": "prepare",
+      "error": {
+        "code": "ER_NO_DB_ERROR",
+        "errno": 1046,
+        "state": "3D000",
+        "message": "No database selected"
+      },
+      "warnings": [
+        [
+          "Error",
+          1046,
+          "No database selected"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "CREATE VIEW v255 AS SELECT @@warning_count",
+      "api": "query",
+      "error": {
+        "code": "ER_NO_DB_ERROR",
+        "errno": 1046,
+        "state": "3D000",
+        "message": "No database selected"
+      },
+      "warnings": [
+        [
+          "Error",
+          1046,
+          "No database selected"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "CREATE VIEW v255 AS SELECT @@warning_count",
+      "api": "execute",
+      "error": {
+        "code": "ER_NO_DB_ERROR",
+        "errno": 1046,
+        "state": "3D000",
+        "message": "No database selected"
+      },
+      "warnings": [
+        [
+          "Error",
+          1046,
+          "No database selected"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "CREATE VIEW v255 AS SELECT @@warning_count",
+      "api": "prepare",
+      "error": {
+        "code": "ER_NO_DB_ERROR",
+        "errno": 1046,
+        "state": "3D000",
+        "message": "No database selected"
+      },
+      "warnings": [
+        [
+          "Error",
+          1046,
+          "No database selected"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "CREATE VIEW v255 AS SELECT qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq()",
+      "api": "query",
+      "error": {
+        "code": "ER_NO_DB_ERROR",
+        "errno": 1046,
+        "state": "3D000",
+        "message": "No database selected"
+      },
+      "warnings": [
+        [
+          "Error",
+          1046,
+          "No database selected"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "CREATE VIEW v255 AS SELECT qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq()",
+      "api": "execute",
+      "error": {
+        "code": "ER_NO_DB_ERROR",
+        "errno": 1046,
+        "state": "3D000",
+        "message": "No database selected"
+      },
+      "warnings": [
+        [
+          "Error",
+          1046,
+          "No database selected"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "CREATE VIEW v255 AS SELECT qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq()",
+      "api": "prepare",
+      "error": {
+        "code": "ER_NO_DB_ERROR",
+        "errno": 1046,
+        "state": "3D000",
+        "message": "No database selected"
+      },
+      "warnings": [
+        [
+          "Error",
+          1046,
+          "No database selected"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "CREATE VIEW v255 AS SELECT `bad `()",
+      "api": "query",
+      "error": {
+        "code": "ER_NO_DB_ERROR",
+        "errno": 1046,
+        "state": "3D000",
+        "message": "No database selected"
+      },
+      "warnings": [
+        [
+          "Error",
+          1046,
+          "No database selected"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "CREATE VIEW v255 AS SELECT `bad `()",
+      "api": "execute",
+      "error": {
+        "code": "ER_NO_DB_ERROR",
+        "errno": 1046,
+        "state": "3D000",
+        "message": "No database selected"
+      },
+      "warnings": [
+        [
+          "Error",
+          1046,
+          "No database selected"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "CREATE VIEW v255 AS SELECT `bad `()",
+      "api": "prepare",
+      "error": {
+        "code": "ER_NO_DB_ERROR",
+        "errno": 1046,
+        "state": "3D000",
+        "message": "No database selected"
+      },
+      "warnings": [
+        [
+          "Error",
+          1046,
+          "No database selected"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "CREATE VIEW v255 AS SELECT 1 INTO @a",
+      "api": "query",
+      "error": {
+        "code": "ER_NO_DB_ERROR",
+        "errno": 1046,
+        "state": "3D000",
+        "message": "No database selected"
+      },
+      "warnings": [
+        [
+          "Error",
+          1046,
+          "No database selected"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "CREATE VIEW v255 AS SELECT 1 INTO @a",
+      "api": "execute",
+      "error": {
+        "code": "ER_NO_DB_ERROR",
+        "errno": 1046,
+        "state": "3D000",
+        "message": "No database selected"
+      },
+      "warnings": [
+        [
+          "Error",
+          1046,
+          "No database selected"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "CREATE VIEW v255 AS SELECT 1 INTO @a",
+      "api": "prepare",
+      "error": {
+        "code": "ER_NO_DB_ERROR",
+        "errno": 1046,
+        "state": "3D000",
+        "message": "No database selected"
+      },
+      "warnings": [
+        [
+          "Error",
+          1046,
+          "No database selected"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "CREATE VIEW v255(a,A) AS SELECT 1 x,2 y",
+      "api": "query",
+      "error": {
+        "code": "ER_NO_DB_ERROR",
+        "errno": 1046,
+        "state": "3D000",
+        "message": "No database selected"
+      },
+      "warnings": [
+        [
+          "Error",
+          1046,
+          "No database selected"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "CREATE VIEW v255(a,A) AS SELECT 1 x,2 y",
+      "api": "execute",
+      "error": {
+        "code": "ER_NO_DB_ERROR",
+        "errno": 1046,
+        "state": "3D000",
+        "message": "No database selected"
+      },
+      "warnings": [
+        [
+          "Error",
+          1046,
+          "No database selected"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "CREATE VIEW v255(a,A) AS SELECT 1 x,2 y",
+      "api": "prepare",
+      "error": {
+        "code": "ER_NO_DB_ERROR",
+        "errno": 1046,
+        "state": "3D000",
+        "message": "No database selected"
+      },
+      "warnings": [
+        [
+          "Error",
+          1046,
+          "No database selected"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "CREATE VIEW v255 AS WITH c AS(SELECT @@warning_count) SELECT 1",
+      "api": "query",
+      "error": {
+        "code": "ER_NO_DB_ERROR",
+        "errno": 1046,
+        "state": "3D000",
+        "message": "No database selected"
+      },
+      "warnings": [
+        [
+          "Error",
+          1046,
+          "No database selected"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "CREATE VIEW v255 AS WITH c AS(SELECT @@warning_count) SELECT 1",
+      "api": "execute",
+      "error": {
+        "code": "ER_NO_DB_ERROR",
+        "errno": 1046,
+        "state": "3D000",
+        "message": "No database selected"
+      },
+      "warnings": [
+        [
+          "Error",
+          1046,
+          "No database selected"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "CREATE VIEW v255 AS WITH c AS(SELECT @@warning_count) SELECT 1",
+      "api": "prepare",
+      "error": {
+        "code": "ER_NO_DB_ERROR",
+        "errno": 1046,
+        "state": "3D000",
+        "message": "No database selected"
+      },
+      "warnings": [
+        [
+          "Error",
+          1046,
+          "No database selected"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "CREATE VIEW v255 AS SELECT CAST(1 AS DECIMAL(66))",
+      "api": "query",
+      "error": {
+        "code": "ER_NO_DB_ERROR",
+        "errno": 1046,
+        "state": "3D000",
+        "message": "No database selected"
+      },
+      "warnings": [
+        [
+          "Error",
+          1046,
+          "No database selected"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "CREATE VIEW v255 AS SELECT CAST(1 AS DECIMAL(66))",
+      "api": "execute",
+      "error": {
+        "code": "ER_NO_DB_ERROR",
+        "errno": 1046,
+        "state": "3D000",
+        "message": "No database selected"
+      },
+      "warnings": [
+        [
+          "Error",
+          1046,
+          "No database selected"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "CREATE VIEW v255 AS SELECT CAST(1 AS DECIMAL(66))",
+      "api": "prepare",
+      "error": {
+        "code": "ER_NO_DB_ERROR",
+        "errno": 1046,
+        "state": "3D000",
+        "message": "No database selected"
+      },
+      "warnings": [
+        [
+          "Error",
+          1046,
+          "No database selected"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "CREATE VIEW v255 AS SELECT CAST('x' AS CHAR CHARSET utf8)",
+      "api": "query",
+      "limit": 0,
+      "error": {
+        "code": "ER_NO_DB_ERROR",
+        "errno": 1046,
+        "state": "3D000",
+        "message": "No database selected"
+      },
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "CREATE VIEW v255 AS SELECT CAST('x' AS CHAR CHARSET utf8)",
+      "api": "execute",
+      "limit": 0,
+      "error": {
+        "code": "ER_NO_DB_ERROR",
+        "errno": 1046,
+        "state": "3D000",
+        "message": "No database selected"
+      },
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "CREATE VIEW v255 AS SELECT CAST('x' AS CHAR CHARSET utf8)",
+      "api": "prepare",
+      "limit": 0,
+      "error": {
+        "code": "ER_NO_DB_ERROR",
+        "errno": 1046,
+        "state": "3D000",
+        "message": "No database selected"
+      },
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "CREATE VIEW v255 AS SELECT BINARY 'x'",
+      "api": "query",
+      "limit": 0,
+      "error": {
+        "code": "ER_NO_DB_ERROR",
+        "errno": 1046,
+        "state": "3D000",
+        "message": "No database selected"
+      },
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "CREATE VIEW v255 AS SELECT BINARY 'x'",
+      "api": "execute",
+      "limit": 0,
+      "error": {
+        "code": "ER_NO_DB_ERROR",
+        "errno": 1046,
+        "state": "3D000",
+        "message": "No database selected"
+      },
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "CREATE VIEW v255 AS SELECT BINARY 'x'",
+      "api": "prepare",
+      "limit": 0,
+      "error": {
+        "code": "ER_NO_DB_ERROR",
+        "errno": 1046,
+        "state": "3D000",
+        "message": "No database selected"
+      },
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "CREATE VIEW v255 AS SELECT CAST('x' AS CHAR CHARSET utf8),qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq()",
+      "api": "query",
+      "limit": 0,
+      "error": {
+        "code": "ER_NO_DB_ERROR",
+        "errno": 1046,
+        "state": "3D000",
+        "message": "No database selected"
+      },
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "CREATE VIEW v255 AS SELECT CAST('x' AS CHAR CHARSET utf8),qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq()",
+      "api": "execute",
+      "limit": 0,
+      "error": {
+        "code": "ER_NO_DB_ERROR",
+        "errno": 1046,
+        "state": "3D000",
+        "message": "No database selected"
+      },
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "CREATE VIEW v255 AS SELECT CAST('x' AS CHAR CHARSET utf8),qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq()",
+      "api": "prepare",
+      "limit": 0,
+      "error": {
+        "code": "ER_NO_DB_ERROR",
+        "errno": 1046,
+        "state": "3D000",
+        "message": "No database selected"
+      },
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "CREATE VIEW v255 AS SELECT BINARY 'x',qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq()",
+      "api": "query",
+      "limit": 0,
+      "error": {
+        "code": "ER_NO_DB_ERROR",
+        "errno": 1046,
+        "state": "3D000",
+        "message": "No database selected"
+      },
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "CREATE VIEW v255 AS SELECT BINARY 'x',qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq()",
+      "api": "execute",
+      "limit": 0,
+      "error": {
+        "code": "ER_NO_DB_ERROR",
+        "errno": 1046,
+        "state": "3D000",
+        "message": "No database selected"
+      },
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "CREATE VIEW v255 AS SELECT BINARY 'x',qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq()",
+      "api": "prepare",
+      "limit": 0,
+      "error": {
+        "code": "ER_NO_DB_ERROR",
+        "errno": 1046,
+        "state": "3D000",
+        "message": "No database selected"
+      },
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "CREATE VIEW v255 AS WITH c AS(SELECT CAST('x' AS CHAR CHARSET utf8)) SELECT 1",
+      "api": "query",
+      "limit": 0,
+      "error": {
+        "code": "ER_NO_DB_ERROR",
+        "errno": 1046,
+        "state": "3D000",
+        "message": "No database selected"
+      },
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "CREATE VIEW v255 AS WITH c AS(SELECT CAST('x' AS CHAR CHARSET utf8)) SELECT 1",
+      "api": "execute",
+      "limit": 0,
+      "error": {
+        "code": "ER_NO_DB_ERROR",
+        "errno": 1046,
+        "state": "3D000",
+        "message": "No database selected"
+      },
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "CREATE VIEW v255 AS WITH c AS(SELECT CAST('x' AS CHAR CHARSET utf8)) SELECT 1",
+      "api": "prepare",
+      "limit": 0,
+      "error": {
+        "code": "ER_NO_DB_ERROR",
+        "errno": 1046,
+        "state": "3D000",
+        "message": "No database selected"
+      },
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "CREATE VIEW v255 AS SELECT CAST('x' AS CHAR CHARSET utf8)",
+      "api": "query",
+      "limit": 1,
+      "error": {
+        "code": "ER_NO_DB_ERROR",
+        "errno": 1046,
+        "state": "3D000",
+        "message": "No database selected"
+      },
+      "warnings": [
+        [
+          "Error",
+          1046,
+          "No database selected"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "CREATE VIEW v255 AS SELECT CAST('x' AS CHAR CHARSET utf8)",
+      "api": "execute",
+      "limit": 1,
+      "error": {
+        "code": "ER_NO_DB_ERROR",
+        "errno": 1046,
+        "state": "3D000",
+        "message": "No database selected"
+      },
+      "warnings": [
+        [
+          "Error",
+          1046,
+          "No database selected"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "CREATE VIEW v255 AS SELECT CAST('x' AS CHAR CHARSET utf8)",
+      "api": "prepare",
+      "limit": 1,
+      "error": {
+        "code": "ER_NO_DB_ERROR",
+        "errno": 1046,
+        "state": "3D000",
+        "message": "No database selected"
+      },
+      "warnings": [
+        [
+          "Error",
+          1046,
+          "No database selected"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "CREATE VIEW v255 AS SELECT BINARY 'x'",
+      "api": "query",
+      "limit": 1,
+      "error": {
+        "code": "ER_NO_DB_ERROR",
+        "errno": 1046,
+        "state": "3D000",
+        "message": "No database selected"
+      },
+      "warnings": [
+        [
+          "Error",
+          1046,
+          "No database selected"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "CREATE VIEW v255 AS SELECT BINARY 'x'",
+      "api": "execute",
+      "limit": 1,
+      "error": {
+        "code": "ER_NO_DB_ERROR",
+        "errno": 1046,
+        "state": "3D000",
+        "message": "No database selected"
+      },
+      "warnings": [
+        [
+          "Error",
+          1046,
+          "No database selected"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "CREATE VIEW v255 AS SELECT BINARY 'x'",
+      "api": "prepare",
+      "limit": 1,
+      "error": {
+        "code": "ER_NO_DB_ERROR",
+        "errno": 1046,
+        "state": "3D000",
+        "message": "No database selected"
+      },
+      "warnings": [
+        [
+          "Error",
+          1046,
+          "No database selected"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "CREATE VIEW v255 AS SELECT CAST('x' AS CHAR CHARSET utf8),qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq()",
+      "api": "query",
+      "limit": 1,
+      "error": {
+        "code": "ER_NO_DB_ERROR",
+        "errno": 1046,
+        "state": "3D000",
+        "message": "No database selected"
+      },
+      "warnings": [
+        [
+          "Error",
+          1046,
+          "No database selected"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "CREATE VIEW v255 AS SELECT CAST('x' AS CHAR CHARSET utf8),qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq()",
+      "api": "execute",
+      "limit": 1,
+      "error": {
+        "code": "ER_NO_DB_ERROR",
+        "errno": 1046,
+        "state": "3D000",
+        "message": "No database selected"
+      },
+      "warnings": [
+        [
+          "Error",
+          1046,
+          "No database selected"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "CREATE VIEW v255 AS SELECT CAST('x' AS CHAR CHARSET utf8),qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq()",
+      "api": "prepare",
+      "limit": 1,
+      "error": {
+        "code": "ER_NO_DB_ERROR",
+        "errno": 1046,
+        "state": "3D000",
+        "message": "No database selected"
+      },
+      "warnings": [
+        [
+          "Error",
+          1046,
+          "No database selected"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "CREATE VIEW v255 AS SELECT BINARY 'x',qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq()",
+      "api": "query",
+      "limit": 1,
+      "error": {
+        "code": "ER_NO_DB_ERROR",
+        "errno": 1046,
+        "state": "3D000",
+        "message": "No database selected"
+      },
+      "warnings": [
+        [
+          "Error",
+          1046,
+          "No database selected"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "CREATE VIEW v255 AS SELECT BINARY 'x',qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq()",
+      "api": "execute",
+      "limit": 1,
+      "error": {
+        "code": "ER_NO_DB_ERROR",
+        "errno": 1046,
+        "state": "3D000",
+        "message": "No database selected"
+      },
+      "warnings": [
+        [
+          "Error",
+          1046,
+          "No database selected"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "CREATE VIEW v255 AS SELECT BINARY 'x',qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq()",
+      "api": "prepare",
+      "limit": 1,
+      "error": {
+        "code": "ER_NO_DB_ERROR",
+        "errno": 1046,
+        "state": "3D000",
+        "message": "No database selected"
+      },
+      "warnings": [
+        [
+          "Error",
+          1046,
+          "No database selected"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "CREATE VIEW v255 AS WITH c AS(SELECT CAST('x' AS CHAR CHARSET utf8)) SELECT 1",
+      "api": "query",
+      "limit": 1,
+      "error": {
+        "code": "ER_NO_DB_ERROR",
+        "errno": 1046,
+        "state": "3D000",
+        "message": "No database selected"
+      },
+      "warnings": [
+        [
+          "Error",
+          1046,
+          "No database selected"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "CREATE VIEW v255 AS WITH c AS(SELECT CAST('x' AS CHAR CHARSET utf8)) SELECT 1",
+      "api": "execute",
+      "limit": 1,
+      "error": {
+        "code": "ER_NO_DB_ERROR",
+        "errno": 1046,
+        "state": "3D000",
+        "message": "No database selected"
+      },
+      "warnings": [
+        [
+          "Error",
+          1046,
+          "No database selected"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "CREATE VIEW v255 AS WITH c AS(SELECT CAST('x' AS CHAR CHARSET utf8)) SELECT 1",
+      "api": "prepare",
+      "limit": 1,
+      "error": {
+        "code": "ER_NO_DB_ERROR",
+        "errno": 1046,
+        "state": "3D000",
+        "message": "No database selected"
+      },
+      "warnings": [
+        [
+          "Error",
+          1046,
+          "No database selected"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "CREATE VIEW v255 AS SELECT CAST('x' AS CHAR CHARSET utf8)",
+      "api": "query",
+      "limit": 8,
+      "error": {
+        "code": "ER_NO_DB_ERROR",
+        "errno": 1046,
+        "state": "3D000",
+        "message": "No database selected"
+      },
+      "warnings": [
+        [
+          "Error",
+          1046,
+          "No database selected"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "CREATE VIEW v255 AS SELECT CAST('x' AS CHAR CHARSET utf8)",
+      "api": "execute",
+      "limit": 8,
+      "error": {
+        "code": "ER_NO_DB_ERROR",
+        "errno": 1046,
+        "state": "3D000",
+        "message": "No database selected"
+      },
+      "warnings": [
+        [
+          "Error",
+          1046,
+          "No database selected"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "CREATE VIEW v255 AS SELECT CAST('x' AS CHAR CHARSET utf8)",
+      "api": "prepare",
+      "limit": 8,
+      "error": {
+        "code": "ER_NO_DB_ERROR",
+        "errno": 1046,
+        "state": "3D000",
+        "message": "No database selected"
+      },
+      "warnings": [
+        [
+          "Error",
+          1046,
+          "No database selected"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "CREATE VIEW v255 AS SELECT BINARY 'x'",
+      "api": "query",
+      "limit": 8,
+      "error": {
+        "code": "ER_NO_DB_ERROR",
+        "errno": 1046,
+        "state": "3D000",
+        "message": "No database selected"
+      },
+      "warnings": [
+        [
+          "Error",
+          1046,
+          "No database selected"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "CREATE VIEW v255 AS SELECT BINARY 'x'",
+      "api": "execute",
+      "limit": 8,
+      "error": {
+        "code": "ER_NO_DB_ERROR",
+        "errno": 1046,
+        "state": "3D000",
+        "message": "No database selected"
+      },
+      "warnings": [
+        [
+          "Error",
+          1046,
+          "No database selected"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "CREATE VIEW v255 AS SELECT BINARY 'x'",
+      "api": "prepare",
+      "limit": 8,
+      "error": {
+        "code": "ER_NO_DB_ERROR",
+        "errno": 1046,
+        "state": "3D000",
+        "message": "No database selected"
+      },
+      "warnings": [
+        [
+          "Error",
+          1046,
+          "No database selected"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "CREATE VIEW v255 AS SELECT CAST('x' AS CHAR CHARSET utf8),qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq()",
+      "api": "query",
+      "limit": 8,
+      "error": {
+        "code": "ER_NO_DB_ERROR",
+        "errno": 1046,
+        "state": "3D000",
+        "message": "No database selected"
+      },
+      "warnings": [
+        [
+          "Error",
+          1046,
+          "No database selected"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "CREATE VIEW v255 AS SELECT CAST('x' AS CHAR CHARSET utf8),qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq()",
+      "api": "execute",
+      "limit": 8,
+      "error": {
+        "code": "ER_NO_DB_ERROR",
+        "errno": 1046,
+        "state": "3D000",
+        "message": "No database selected"
+      },
+      "warnings": [
+        [
+          "Error",
+          1046,
+          "No database selected"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "CREATE VIEW v255 AS SELECT CAST('x' AS CHAR CHARSET utf8),qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq()",
+      "api": "prepare",
+      "limit": 8,
+      "error": {
+        "code": "ER_NO_DB_ERROR",
+        "errno": 1046,
+        "state": "3D000",
+        "message": "No database selected"
+      },
+      "warnings": [
+        [
+          "Error",
+          1046,
+          "No database selected"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "CREATE VIEW v255 AS SELECT BINARY 'x',qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq()",
+      "api": "query",
+      "limit": 8,
+      "error": {
+        "code": "ER_NO_DB_ERROR",
+        "errno": 1046,
+        "state": "3D000",
+        "message": "No database selected"
+      },
+      "warnings": [
+        [
+          "Error",
+          1046,
+          "No database selected"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "CREATE VIEW v255 AS SELECT BINARY 'x',qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq()",
+      "api": "execute",
+      "limit": 8,
+      "error": {
+        "code": "ER_NO_DB_ERROR",
+        "errno": 1046,
+        "state": "3D000",
+        "message": "No database selected"
+      },
+      "warnings": [
+        [
+          "Error",
+          1046,
+          "No database selected"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "CREATE VIEW v255 AS SELECT BINARY 'x',qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq()",
+      "api": "prepare",
+      "limit": 8,
+      "error": {
+        "code": "ER_NO_DB_ERROR",
+        "errno": 1046,
+        "state": "3D000",
+        "message": "No database selected"
+      },
+      "warnings": [
+        [
+          "Error",
+          1046,
+          "No database selected"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "CREATE VIEW v255 AS WITH c AS(SELECT CAST('x' AS CHAR CHARSET utf8)) SELECT 1",
+      "api": "query",
+      "limit": 8,
+      "error": {
+        "code": "ER_NO_DB_ERROR",
+        "errno": 1046,
+        "state": "3D000",
+        "message": "No database selected"
+      },
+      "warnings": [
+        [
+          "Error",
+          1046,
+          "No database selected"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "CREATE VIEW v255 AS WITH c AS(SELECT CAST('x' AS CHAR CHARSET utf8)) SELECT 1",
+      "api": "execute",
+      "limit": 8,
+      "error": {
+        "code": "ER_NO_DB_ERROR",
+        "errno": 1046,
+        "state": "3D000",
+        "message": "No database selected"
+      },
+      "warnings": [
+        [
+          "Error",
+          1046,
+          "No database selected"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "CREATE VIEW v255 AS WITH c AS(SELECT CAST('x' AS CHAR CHARSET utf8)) SELECT 1",
+      "api": "prepare",
+      "limit": 8,
+      "error": {
+        "code": "ER_NO_DB_ERROR",
+        "errno": 1046,
+        "state": "3D000",
+        "message": "No database selected"
+      },
+      "warnings": [
+        [
+          "Error",
+          1046,
+          "No database selected"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "CREATE VIEW v255 AS SELECT CAST('x' AS CHAR CHARSET utf8)",
+      "api": "query",
+      "limit": 64,
+      "error": {
+        "code": "ER_NO_DB_ERROR",
+        "errno": 1046,
+        "state": "3D000",
+        "message": "No database selected"
+      },
+      "warnings": [
+        [
+          "Error",
+          1046,
+          "No database selected"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "CREATE VIEW v255 AS SELECT CAST('x' AS CHAR CHARSET utf8)",
+      "api": "execute",
+      "limit": 64,
+      "error": {
+        "code": "ER_NO_DB_ERROR",
+        "errno": 1046,
+        "state": "3D000",
+        "message": "No database selected"
+      },
+      "warnings": [
+        [
+          "Error",
+          1046,
+          "No database selected"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "CREATE VIEW v255 AS SELECT CAST('x' AS CHAR CHARSET utf8)",
+      "api": "prepare",
+      "limit": 64,
+      "error": {
+        "code": "ER_NO_DB_ERROR",
+        "errno": 1046,
+        "state": "3D000",
+        "message": "No database selected"
+      },
+      "warnings": [
+        [
+          "Error",
+          1046,
+          "No database selected"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "CREATE VIEW v255 AS SELECT BINARY 'x'",
+      "api": "query",
+      "limit": 64,
+      "error": {
+        "code": "ER_NO_DB_ERROR",
+        "errno": 1046,
+        "state": "3D000",
+        "message": "No database selected"
+      },
+      "warnings": [
+        [
+          "Error",
+          1046,
+          "No database selected"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "CREATE VIEW v255 AS SELECT BINARY 'x'",
+      "api": "execute",
+      "limit": 64,
+      "error": {
+        "code": "ER_NO_DB_ERROR",
+        "errno": 1046,
+        "state": "3D000",
+        "message": "No database selected"
+      },
+      "warnings": [
+        [
+          "Error",
+          1046,
+          "No database selected"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "CREATE VIEW v255 AS SELECT BINARY 'x'",
+      "api": "prepare",
+      "limit": 64,
+      "error": {
+        "code": "ER_NO_DB_ERROR",
+        "errno": 1046,
+        "state": "3D000",
+        "message": "No database selected"
+      },
+      "warnings": [
+        [
+          "Error",
+          1046,
+          "No database selected"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "CREATE VIEW v255 AS SELECT CAST('x' AS CHAR CHARSET utf8),qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq()",
+      "api": "query",
+      "limit": 64,
+      "error": {
+        "code": "ER_NO_DB_ERROR",
+        "errno": 1046,
+        "state": "3D000",
+        "message": "No database selected"
+      },
+      "warnings": [
+        [
+          "Error",
+          1046,
+          "No database selected"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "CREATE VIEW v255 AS SELECT CAST('x' AS CHAR CHARSET utf8),qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq()",
+      "api": "execute",
+      "limit": 64,
+      "error": {
+        "code": "ER_NO_DB_ERROR",
+        "errno": 1046,
+        "state": "3D000",
+        "message": "No database selected"
+      },
+      "warnings": [
+        [
+          "Error",
+          1046,
+          "No database selected"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "CREATE VIEW v255 AS SELECT CAST('x' AS CHAR CHARSET utf8),qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq()",
+      "api": "prepare",
+      "limit": 64,
+      "error": {
+        "code": "ER_NO_DB_ERROR",
+        "errno": 1046,
+        "state": "3D000",
+        "message": "No database selected"
+      },
+      "warnings": [
+        [
+          "Error",
+          1046,
+          "No database selected"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "CREATE VIEW v255 AS SELECT BINARY 'x',qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq()",
+      "api": "query",
+      "limit": 64,
+      "error": {
+        "code": "ER_NO_DB_ERROR",
+        "errno": 1046,
+        "state": "3D000",
+        "message": "No database selected"
+      },
+      "warnings": [
+        [
+          "Error",
+          1046,
+          "No database selected"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "CREATE VIEW v255 AS SELECT BINARY 'x',qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq()",
+      "api": "execute",
+      "limit": 64,
+      "error": {
+        "code": "ER_NO_DB_ERROR",
+        "errno": 1046,
+        "state": "3D000",
+        "message": "No database selected"
+      },
+      "warnings": [
+        [
+          "Error",
+          1046,
+          "No database selected"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "CREATE VIEW v255 AS SELECT BINARY 'x',qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq()",
+      "api": "prepare",
+      "limit": 64,
+      "error": {
+        "code": "ER_NO_DB_ERROR",
+        "errno": 1046,
+        "state": "3D000",
+        "message": "No database selected"
+      },
+      "warnings": [
+        [
+          "Error",
+          1046,
+          "No database selected"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "CREATE VIEW v255 AS WITH c AS(SELECT CAST('x' AS CHAR CHARSET utf8)) SELECT 1",
+      "api": "query",
+      "limit": 64,
+      "error": {
+        "code": "ER_NO_DB_ERROR",
+        "errno": 1046,
+        "state": "3D000",
+        "message": "No database selected"
+      },
+      "warnings": [
+        [
+          "Error",
+          1046,
+          "No database selected"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "CREATE VIEW v255 AS WITH c AS(SELECT CAST('x' AS CHAR CHARSET utf8)) SELECT 1",
+      "api": "execute",
+      "limit": 64,
+      "error": {
+        "code": "ER_NO_DB_ERROR",
+        "errno": 1046,
+        "state": "3D000",
+        "message": "No database selected"
+      },
+      "warnings": [
+        [
+          "Error",
+          1046,
+          "No database selected"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "CREATE VIEW v255 AS WITH c AS(SELECT CAST('x' AS CHAR CHARSET utf8)) SELECT 1",
+      "api": "prepare",
+      "limit": 64,
+      "error": {
+        "code": "ER_NO_DB_ERROR",
+        "errno": 1046,
+        "state": "3D000",
+        "message": "No database selected"
+      },
+      "warnings": [
+        [
+          "Error",
+          1046,
+          "No database selected"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    }
+  ]
+}

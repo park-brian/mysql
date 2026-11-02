@@ -1,0 +1,1261 @@
+{
+  "mysqlVersion": "8.4.11",
+  "sqlMode": "ERROR_FOR_DIVISION_BY_ZERO",
+  "seed": "SELECT 1/0,CAST('x' AS DECIMAL)",
+  "schema": "myjs_view255",
+  "setup": [
+    "CREATE TABLE base255(a INT)",
+    "CREATE TEMPORARY TABLE tmp255(a INT)",
+    "CREATE TABLE shadow255(a INT)",
+    "CREATE TEMPORARY TABLE shadow255(b INT)"
+  ],
+  "beforeEach": [
+    "DROP VIEW IF EXISTS myjs_view255.v255"
+  ],
+  "observations": [
+    {
+      "sql": "CREATE VIEW v255 AS SELECT 1",
+      "api": "query",
+      "header": {
+        "fieldCount": 0,
+        "affectedRows": 0,
+        "insertId": 0,
+        "info": "",
+        "serverStatus": 2,
+        "warningStatus": 0,
+        "changedRows": 0
+      },
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "CREATE VIEW v255 AS SELECT 1",
+      "api": "execute",
+      "header": {
+        "fieldCount": 0,
+        "affectedRows": 0,
+        "insertId": 0,
+        "info": "",
+        "serverStatus": 2,
+        "warningStatus": 0,
+        "changedRows": 0
+      },
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "CREATE VIEW v255 AS SELECT 1",
+      "api": "prepare",
+      "parameters": [],
+      "fields": [],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "CREATE VIEW v255(a,A) AS SELECT 1 x,2 y",
+      "api": "query",
+      "error": {
+        "code": "ER_DUP_FIELDNAME",
+        "errno": 1060,
+        "state": "42S21",
+        "message": "Duplicate column name 'a'"
+      },
+      "warnings": [
+        [
+          "Error",
+          1060,
+          "Duplicate column name 'a'"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "CREATE VIEW v255(a,A) AS SELECT 1 x,2 y",
+      "api": "execute",
+      "error": {
+        "code": "ER_DUP_FIELDNAME",
+        "errno": 1060,
+        "state": "42S21",
+        "message": "Duplicate column name 'a'"
+      },
+      "warnings": [
+        [
+          "Error",
+          1060,
+          "Duplicate column name 'a'"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "CREATE VIEW v255 AS SELECT 1 a,2 A",
+      "api": "query",
+      "error": {
+        "code": "ER_DUP_FIELDNAME",
+        "errno": 1060,
+        "state": "42S21",
+        "message": "Duplicate column name 'A'"
+      },
+      "warnings": [
+        [
+          "Error",
+          1060,
+          "Duplicate column name 'A'"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "CREATE VIEW v255 AS SELECT 1 a,2 A",
+      "api": "execute",
+      "error": {
+        "code": "ER_DUP_FIELDNAME",
+        "errno": 1060,
+        "state": "42S21",
+        "message": "Duplicate column name 'A'"
+      },
+      "warnings": [
+        [
+          "Error",
+          1060,
+          "Duplicate column name 'A'"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "CREATE VIEW v255 AS SELECT LENGTH()",
+      "api": "query",
+      "error": {
+        "code": "ER_WRONG_PARAMCOUNT_TO_NATIVE_FCT",
+        "errno": 1582,
+        "state": "42000",
+        "message": "Incorrect parameter count in the call to native function 'LENGTH'"
+      },
+      "warnings": [
+        [
+          "Error",
+          1582,
+          "Incorrect parameter count in the call to native function 'LENGTH'"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "CREATE VIEW v255 AS SELECT LENGTH()",
+      "api": "execute",
+      "error": {
+        "code": "ER_WRONG_PARAMCOUNT_TO_NATIVE_FCT",
+        "errno": 1582,
+        "state": "42000",
+        "message": "Incorrect parameter count in the call to native function 'LENGTH'"
+      },
+      "warnings": [
+        [
+          "Error",
+          1582,
+          "Incorrect parameter count in the call to native function 'LENGTH'"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "CREATE VIEW v255 AS SELECT missing",
+      "api": "query",
+      "error": {
+        "code": "ER_BAD_FIELD_ERROR",
+        "errno": 1054,
+        "state": "42S22",
+        "message": "Unknown column 'missing' in 'field list'"
+      },
+      "warnings": [
+        [
+          "Error",
+          1054,
+          "Unknown column 'missing' in 'field list'"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "CREATE VIEW v255 AS SELECT missing",
+      "api": "execute",
+      "error": {
+        "code": "ER_BAD_FIELD_ERROR",
+        "errno": 1054,
+        "state": "42S22",
+        "message": "Unknown column 'missing' in 'field list'"
+      },
+      "warnings": [
+        [
+          "Error",
+          1054,
+          "Unknown column 'missing' in 'field list'"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "CREATE VIEW v255 AS SELECT a FROM missing",
+      "api": "query",
+      "error": {
+        "code": "ER_NO_SUCH_TABLE",
+        "errno": 1146,
+        "state": "42S02",
+        "message": "Table 'myjs_view255.missing' doesn't exist"
+      },
+      "warnings": [
+        [
+          "Error",
+          1146,
+          "Table 'myjs_view255.missing' doesn't exist"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "CREATE VIEW v255 AS SELECT a FROM missing",
+      "api": "execute",
+      "error": {
+        "code": "ER_NO_SUCH_TABLE",
+        "errno": 1146,
+        "state": "42S02",
+        "message": "Table 'myjs_view255.missing' doesn't exist"
+      },
+      "warnings": [
+        [
+          "Error",
+          1146,
+          "Table 'myjs_view255.missing' doesn't exist"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "CREATE VIEW v255(a,b) AS SELECT 1",
+      "api": "query",
+      "error": {
+        "code": "ER_VIEW_WRONG_LIST",
+        "errno": 1353,
+        "state": "HY000",
+        "message": "In definition of view, derived table or common table expression, SELECT list and column names list have different column counts"
+      },
+      "warnings": [
+        [
+          "Error",
+          1353,
+          "In definition of view, derived table or common table expression, SELECT list and column names list have different column counts"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "CREATE VIEW v255(a,b) AS SELECT 1",
+      "api": "execute",
+      "error": {
+        "code": "ER_VIEW_WRONG_LIST",
+        "errno": 1353,
+        "state": "HY000",
+        "message": "In definition of view, derived table or common table expression, SELECT list and column names list have different column counts"
+      },
+      "warnings": [
+        [
+          "Error",
+          1353,
+          "In definition of view, derived table or common table expression, SELECT list and column names list have different column counts"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "CREATE VIEW v255(a,A) AS SELECT LENGTH() x,1 y",
+      "api": "query",
+      "error": {
+        "code": "ER_WRONG_PARAMCOUNT_TO_NATIVE_FCT",
+        "errno": 1582,
+        "state": "42000",
+        "message": "Incorrect parameter count in the call to native function 'LENGTH'"
+      },
+      "warnings": [
+        [
+          "Error",
+          1582,
+          "Incorrect parameter count in the call to native function 'LENGTH'"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "CREATE VIEW v255(a,A) AS SELECT LENGTH() x,1 y",
+      "api": "execute",
+      "error": {
+        "code": "ER_WRONG_PARAMCOUNT_TO_NATIVE_FCT",
+        "errno": 1582,
+        "state": "42000",
+        "message": "Incorrect parameter count in the call to native function 'LENGTH'"
+      },
+      "warnings": [
+        [
+          "Error",
+          1582,
+          "Incorrect parameter count in the call to native function 'LENGTH'"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "CREATE VIEW v255 AS SELECT @@warning_count",
+      "api": "query",
+      "error": {
+        "code": "ER_VIEW_SELECT_VARIABLE",
+        "errno": 1351,
+        "state": "HY000",
+        "message": "View's SELECT contains a variable or parameter"
+      },
+      "warnings": [
+        [
+          "Error",
+          1351,
+          "View's SELECT contains a variable or parameter"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "CREATE VIEW v255 AS SELECT @@warning_count",
+      "api": "execute",
+      "error": {
+        "code": "ER_VIEW_SELECT_VARIABLE",
+        "errno": 1351,
+        "state": "HY000",
+        "message": "View's SELECT contains a variable or parameter"
+      },
+      "warnings": [
+        [
+          "Error",
+          1351,
+          "View's SELECT contains a variable or parameter"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "CREATE VIEW v255 AS SELECT @@warning_count",
+      "api": "prepare",
+      "error": {
+        "code": "ER_VIEW_SELECT_VARIABLE",
+        "errno": 1351,
+        "state": "HY000",
+        "message": "View's SELECT contains a variable or parameter"
+      },
+      "warnings": [
+        [
+          "Error",
+          1351,
+          "View's SELECT contains a variable or parameter"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "CREATE VIEW v255 AS SELECT ?",
+      "api": "query",
+      "error": {
+        "code": "ER_PARSE_ERROR",
+        "errno": 1064,
+        "state": "42000",
+        "message": "You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near '?' at line 1"
+      },
+      "warnings": [
+        [
+          "Error",
+          1064,
+          "You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near '?' at line 1"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "CREATE VIEW v255 AS SELECT ?",
+      "api": "execute",
+      "error": {
+        "code": "ER_VIEW_SELECT_VARIABLE",
+        "errno": 1351,
+        "state": "HY000",
+        "message": "View's SELECT contains a variable or parameter"
+      },
+      "warnings": [
+        [
+          "Error",
+          1351,
+          "View's SELECT contains a variable or parameter"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "CREATE VIEW v255 AS SELECT ?",
+      "api": "prepare",
+      "error": {
+        "code": "ER_VIEW_SELECT_VARIABLE",
+        "errno": 1351,
+        "state": "HY000",
+        "message": "View's SELECT contains a variable or parameter"
+      },
+      "warnings": [
+        [
+          "Error",
+          1351,
+          "View's SELECT contains a variable or parameter"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "CREATE VIEW v255 AS SELECT 1 INTO @a",
+      "api": "query",
+      "error": {
+        "code": "ER_VIEW_SELECT_CLAUSE",
+        "errno": 1350,
+        "state": "HY000",
+        "message": "View's SELECT contains a 'INTO' clause"
+      },
+      "warnings": [
+        [
+          "Error",
+          1350,
+          "View's SELECT contains a 'INTO' clause"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "CREATE VIEW v255 AS SELECT 1 INTO @a",
+      "api": "execute",
+      "error": {
+        "code": "ER_VIEW_SELECT_CLAUSE",
+        "errno": 1350,
+        "state": "HY000",
+        "message": "View's SELECT contains a 'INTO' clause"
+      },
+      "warnings": [
+        [
+          "Error",
+          1350,
+          "View's SELECT contains a 'INTO' clause"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "CREATE VIEW v255 AS SELECT 1 INTO @a",
+      "api": "prepare",
+      "error": {
+        "code": "ER_VIEW_SELECT_CLAUSE",
+        "errno": 1350,
+        "state": "HY000",
+        "message": "View's SELECT contains a 'INTO' clause"
+      },
+      "warnings": [
+        [
+          "Error",
+          1350,
+          "View's SELECT contains a 'INTO' clause"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "CREATE VIEW v255 AS SELECT SUM(1)",
+      "api": "query",
+      "header": {
+        "fieldCount": 0,
+        "affectedRows": 0,
+        "insertId": 0,
+        "info": "",
+        "serverStatus": 2,
+        "warningStatus": 0,
+        "changedRows": 0
+      },
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "CREATE VIEW v255 AS SELECT SUM(1)",
+      "api": "execute",
+      "header": {
+        "fieldCount": 0,
+        "affectedRows": 0,
+        "insertId": 0,
+        "info": "",
+        "serverStatus": 2,
+        "warningStatus": 0,
+        "changedRows": 0
+      },
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "CREATE VIEW v255 AS SELECT SUM(1)",
+      "api": "prepare",
+      "parameters": [],
+      "fields": [],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "CREATE ALGORITHM=MERGE VIEW v255 AS SELECT SUM(1)",
+      "api": "prepare",
+      "parameters": [],
+      "fields": [],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "CREATE VIEW v255 AS SELECT CAST('x' AS CHAR CHARSET utf8)",
+      "api": "query",
+      "header": {
+        "fieldCount": 0,
+        "affectedRows": 0,
+        "insertId": 0,
+        "info": "",
+        "serverStatus": 2,
+        "warningStatus": 1,
+        "changedRows": 0
+      },
+      "warnings": [
+        [
+          "Warning",
+          3719,
+          "'utf8' is currently an alias for the character set UTF8MB3, but will be an alias for UTF8MB4 in a future release. Please consider using UTF8MB4 in order to be unambiguous."
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "0"
+    },
+    {
+      "sql": "CREATE VIEW v255 AS SELECT CAST('x' AS CHAR CHARSET utf8)",
+      "api": "execute",
+      "header": {
+        "fieldCount": 0,
+        "affectedRows": 0,
+        "insertId": 0,
+        "info": "",
+        "serverStatus": 2,
+        "warningStatus": 0,
+        "changedRows": 0
+      },
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "CREATE VIEW v255 AS SELECT CAST('x' AS CHAR CHARSET utf8)",
+      "api": "prepare",
+      "parameters": [],
+      "fields": [],
+      "warnings": [
+        [
+          "Warning",
+          3719,
+          "'utf8' is currently an alias for the character set UTF8MB3, but will be an alias for UTF8MB4 in a future release. Please consider using UTF8MB4 in order to be unambiguous."
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "0"
+    },
+    {
+      "sql": "CREATE VIEW v255 AS SELECT * FROM tmp255",
+      "api": "query",
+      "error": {
+        "code": "ER_VIEW_SELECT_TMPTABLE",
+        "errno": 1352,
+        "state": "HY000",
+        "message": "View's SELECT refers to a temporary table 'tmp255'"
+      },
+      "warnings": [
+        [
+          "Error",
+          1352,
+          "View's SELECT refers to a temporary table 'tmp255'"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "CREATE VIEW v255 AS SELECT * FROM tmp255",
+      "api": "execute",
+      "error": {
+        "code": "ER_VIEW_SELECT_TMPTABLE",
+        "errno": 1352,
+        "state": "HY000",
+        "message": "View's SELECT refers to a temporary table 'tmp255'"
+      },
+      "warnings": [
+        [
+          "Error",
+          1352,
+          "View's SELECT refers to a temporary table 'tmp255'"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "CREATE VIEW v255 AS SELECT * FROM tmp255",
+      "api": "prepare",
+      "parameters": [],
+      "fields": [],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "CREATE VIEW v255 AS WITH c AS(SELECT * FROM tmp255) SELECT 1",
+      "api": "prepare",
+      "parameters": [],
+      "fields": [],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "CREATE VIEW v255 AS WITH c AS(SELECT a FROM missing) SELECT 1",
+      "api": "query",
+      "header": {
+        "fieldCount": 0,
+        "affectedRows": 0,
+        "insertId": 0,
+        "info": "",
+        "serverStatus": 2,
+        "warningStatus": 0,
+        "changedRows": 0
+      },
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "CREATE VIEW v255 AS WITH c AS(SELECT a FROM missing) SELECT 1",
+      "api": "execute",
+      "header": {
+        "fieldCount": 0,
+        "affectedRows": 0,
+        "insertId": 0,
+        "info": "",
+        "serverStatus": 2,
+        "warningStatus": 0,
+        "changedRows": 0
+      },
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "CREATE VIEW v255 AS WITH c AS(SELECT a FROM missing) SELECT 1",
+      "api": "prepare",
+      "parameters": [],
+      "fields": [],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "CREATE VIEW v255 AS WITH c AS(SELECT LENGTH()) SELECT 1",
+      "api": "query",
+      "header": {
+        "fieldCount": 0,
+        "affectedRows": 0,
+        "insertId": 0,
+        "info": "",
+        "serverStatus": 2,
+        "warningStatus": 0,
+        "changedRows": 0
+      },
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "CREATE VIEW v255 AS WITH c AS(SELECT LENGTH()) SELECT 1",
+      "api": "execute",
+      "header": {
+        "fieldCount": 0,
+        "affectedRows": 0,
+        "insertId": 0,
+        "info": "",
+        "serverStatus": 2,
+        "warningStatus": 0,
+        "changedRows": 0
+      },
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "CREATE VIEW v255 AS WITH c AS(SELECT LENGTH()) SELECT 1",
+      "api": "prepare",
+      "parameters": [],
+      "fields": [],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "CREATE VIEW v255 AS WITH tmp255 AS(SELECT 1 a) SELECT * FROM tmp255",
+      "api": "prepare",
+      "parameters": [],
+      "fields": [],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "CREATE VIEW v255 AS SELECT a FROM shadow255",
+      "api": "query",
+      "error": {
+        "code": "ER_VIEW_SELECT_TMPTABLE",
+        "errno": 1352,
+        "state": "HY000",
+        "message": "View's SELECT refers to a temporary table 'shadow255'"
+      },
+      "warnings": [
+        [
+          "Error",
+          1352,
+          "View's SELECT refers to a temporary table 'shadow255'"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "CREATE VIEW v255 AS SELECT a FROM base255",
+      "api": "query",
+      "header": {
+        "fieldCount": 0,
+        "affectedRows": 0,
+        "insertId": 0,
+        "info": "",
+        "serverStatus": 2,
+        "warningStatus": 0,
+        "changedRows": 0
+      },
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "CREATE VIEW v255 AS SELECT a FROM base255",
+      "api": "execute",
+      "header": {
+        "fieldCount": 0,
+        "affectedRows": 0,
+        "insertId": 0,
+        "info": "",
+        "serverStatus": 2,
+        "warningStatus": 0,
+        "changedRows": 0
+      },
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "CREATE VIEW v255 AS SELECT a FROM base255",
+      "api": "prepare",
+      "parameters": [],
+      "fields": [],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "CREATE VIEW myjs_absent255.v255 AS SELECT 1",
+      "api": "query",
+      "error": {
+        "code": "ER_BAD_DB_ERROR",
+        "errno": 1049,
+        "state": "42000",
+        "message": "Unknown database 'myjs_absent255'"
+      },
+      "warnings": [
+        [
+          "Error",
+          1049,
+          "Unknown database 'myjs_absent255'"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "CREATE VIEW myjs_absent255.v255 AS SELECT 1",
+      "api": "execute",
+      "error": {
+        "code": "ER_BAD_DB_ERROR",
+        "errno": 1049,
+        "state": "42000",
+        "message": "Unknown database 'myjs_absent255'"
+      },
+      "warnings": [
+        [
+          "Error",
+          1049,
+          "Unknown database 'myjs_absent255'"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "CREATE VIEW myjs_absent255.v255 AS SELECT 1",
+      "api": "prepare",
+      "parameters": [],
+      "fields": [],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "CREATE VIEW base255 AS SELECT 1",
+      "api": "query",
+      "error": {
+        "code": "ER_TABLE_EXISTS_ERROR",
+        "errno": 1050,
+        "state": "42S01",
+        "message": "Table 'base255' already exists"
+      },
+      "warnings": [
+        [
+          "Error",
+          1050,
+          "Table 'base255' already exists"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "CREATE VIEW base255 AS SELECT 1",
+      "api": "execute",
+      "error": {
+        "code": "ER_TABLE_EXISTS_ERROR",
+        "errno": 1050,
+        "state": "42S01",
+        "message": "Table 'base255' already exists"
+      },
+      "warnings": [
+        [
+          "Error",
+          1050,
+          "Table 'base255' already exists"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "CREATE VIEW base255 AS SELECT 1",
+      "api": "prepare",
+      "parameters": [],
+      "fields": [],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "CREATE OR REPLACE VIEW base255 AS SELECT 1",
+      "api": "query",
+      "error": {
+        "code": "ER_WRONG_OBJECT",
+        "errno": 1347,
+        "state": "HY000",
+        "message": "'myjs_view255.base255' is not VIEW"
+      },
+      "warnings": [
+        [
+          "Error",
+          1347,
+          "'myjs_view255.base255' is not VIEW"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "CREATE OR REPLACE VIEW base255 AS SELECT 1",
+      "api": "execute",
+      "error": {
+        "code": "ER_WRONG_OBJECT",
+        "errno": 1347,
+        "state": "HY000",
+        "message": "'myjs_view255.base255' is not VIEW"
+      },
+      "warnings": [
+        [
+          "Error",
+          1347,
+          "'myjs_view255.base255' is not VIEW"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "CREATE OR REPLACE VIEW base255 AS SELECT 1",
+      "api": "prepare",
+      "parameters": [],
+      "fields": [],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "CREATE VIEW v255(a,A) AS SELECT LENGTH() x,1 y",
+      "api": "query",
+      "error": {
+        "code": "ER_WRONG_PARAMCOUNT_TO_NATIVE_FCT",
+        "errno": 1582,
+        "state": "42000",
+        "message": "Incorrect parameter count in the call to native function 'LENGTH'"
+      },
+      "warnings": [
+        [
+          "Error",
+          1582,
+          "Incorrect parameter count in the call to native function 'LENGTH'"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "CREATE VIEW v255(a,A) AS SELECT LENGTH() x,1 y",
+      "api": "execute",
+      "error": {
+        "code": "ER_WRONG_PARAMCOUNT_TO_NATIVE_FCT",
+        "errno": 1582,
+        "state": "42000",
+        "message": "Incorrect parameter count in the call to native function 'LENGTH'"
+      },
+      "warnings": [
+        [
+          "Error",
+          1582,
+          "Incorrect parameter count in the call to native function 'LENGTH'"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "CREATE VIEW v255 AS SELECT 1",
+      "api": "query",
+      "header": {
+        "fieldCount": 0,
+        "affectedRows": 0,
+        "insertId": 0,
+        "info": "",
+        "serverStatus": 2,
+        "warningStatus": 0,
+        "changedRows": 0
+      },
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "CREATE VIEW v255 AS SELECT 1",
+      "api": "execute",
+      "header": {
+        "fieldCount": 0,
+        "affectedRows": 0,
+        "insertId": 0,
+        "info": "",
+        "serverStatus": 2,
+        "warningStatus": 0,
+        "changedRows": 0
+      },
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "CREATE VIEW v255 AS SELECT 1",
+      "api": "prepare",
+      "parameters": [],
+      "fields": [],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "CREATE VIEW v255 AS SELECT UUID()",
+      "api": "prepare",
+      "parameters": [],
+      "fields": [],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "CREATE VIEW v255 AS SELECT UUID_SHORT()",
+      "api": "prepare",
+      "parameters": [],
+      "fields": [],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "CREATE VIEW v255 AS SELECT SLEEP(0)",
+      "api": "prepare",
+      "parameters": [],
+      "fields": [],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "CREATE VIEW v255 AS SELECT BENCHMARK(0,1)",
+      "api": "prepare",
+      "parameters": [],
+      "fields": [],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "CREATE VIEW v255 AS SELECT LOAD_FILE('/myjs_missing255')",
+      "api": "prepare",
+      "parameters": [],
+      "fields": [],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "CREATE VIEW v255 AS SELECT IS_FREE_LOCK('myjs_view255')",
+      "api": "prepare",
+      "parameters": [],
+      "fields": [],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "CREATE VIEW v255 AS SELECT FORMAT(1,2)",
+      "api": "query",
+      "header": {
+        "fieldCount": 0,
+        "affectedRows": 0,
+        "insertId": 0,
+        "info": "",
+        "serverStatus": 2,
+        "warningStatus": 0,
+        "changedRows": 0
+      },
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "CREATE VIEW v255 AS SELECT FORMAT(1,2)",
+      "api": "execute",
+      "header": {
+        "fieldCount": 0,
+        "affectedRows": 0,
+        "insertId": 0,
+        "info": "",
+        "serverStatus": 2,
+        "warningStatus": 0,
+        "changedRows": 0
+      },
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "CREATE VIEW v255 AS SELECT FORMAT(1,2)",
+      "api": "prepare",
+      "parameters": [],
+      "fields": [],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "CREATE VIEW v255 AS SELECT CONV('10',10,16)",
+      "api": "query",
+      "header": {
+        "fieldCount": 0,
+        "affectedRows": 0,
+        "insertId": 0,
+        "info": "",
+        "serverStatus": 2,
+        "warningStatus": 0,
+        "changedRows": 0
+      },
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "CREATE VIEW v255 AS SELECT CONV('10',10,16)",
+      "api": "execute",
+      "header": {
+        "fieldCount": 0,
+        "affectedRows": 0,
+        "insertId": 0,
+        "info": "",
+        "serverStatus": 2,
+        "warningStatus": 0,
+        "changedRows": 0
+      },
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "CREATE VIEW v255 AS SELECT CONV('10',10,16)",
+      "api": "prepare",
+      "parameters": [],
+      "fields": [],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "CREATE VIEW v255 AS SELECT SOUNDEX('abc')",
+      "api": "query",
+      "header": {
+        "fieldCount": 0,
+        "affectedRows": 0,
+        "insertId": 0,
+        "info": "",
+        "serverStatus": 2,
+        "warningStatus": 0,
+        "changedRows": 0
+      },
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "CREATE VIEW v255 AS SELECT SOUNDEX('abc')",
+      "api": "execute",
+      "header": {
+        "fieldCount": 0,
+        "affectedRows": 0,
+        "insertId": 0,
+        "info": "",
+        "serverStatus": 2,
+        "warningStatus": 0,
+        "changedRows": 0
+      },
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "CREATE VIEW v255 AS SELECT SOUNDEX('abc')",
+      "api": "prepare",
+      "parameters": [],
+      "fields": [],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "CREATE VIEW v255 AS SELECT TO_BASE64('x')",
+      "api": "query",
+      "header": {
+        "fieldCount": 0,
+        "affectedRows": 0,
+        "insertId": 0,
+        "info": "",
+        "serverStatus": 2,
+        "warningStatus": 0,
+        "changedRows": 0
+      },
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "CREATE VIEW v255 AS SELECT TO_BASE64('x')",
+      "api": "execute",
+      "header": {
+        "fieldCount": 0,
+        "affectedRows": 0,
+        "insertId": 0,
+        "info": "",
+        "serverStatus": 2,
+        "warningStatus": 0,
+        "changedRows": 0
+      },
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "CREATE VIEW v255 AS SELECT TO_BASE64('x')",
+      "api": "prepare",
+      "parameters": [],
+      "fields": [],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "CREATE VIEW v255 AS SELECT GTID_SUBSET('','')",
+      "api": "prepare",
+      "parameters": [],
+      "fields": [],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "CREATE VIEW v255 AS SELECT UNCOMPRESSED_LENGTH('x')",
+      "api": "prepare",
+      "parameters": [],
+      "fields": [],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    }
+  ]
+}

@@ -2560,15 +2560,60 @@ statements seeded 20261010 pass; plans remain 2,127/2,248 under the unchanged
 native baseline; the measured fixture is unchanged. All eleven required
 7d299d4 CI jobs pass. Totals stay 144/190 and M5 42/53; M5.10 remains partial.
 
-Next prove view-body validation during PREPARE through a read-only definition
-owner, keeping catalog writes, target-schema existence and temporary-table
-prohibition at their execution boundary. A 123-command native baseline matches
-78 completely across ordinary, temporary, utility, no-database and priority
-controls. Missing target schemas and existing target tables can still PREPARE;
-active temporary sources can bind during PREPARE too. A blanket call to the
-current create helper would regress those correct successes. No-database target
-presence precedes variable, INTO and routine-identity checks. Keep unused-CTE
-policies, cached revalidation and MERGE-algorithm warnings explicitly separate.
+**View target-schema presence, verified (2026-11-02):** a shared
+admission check now resolves the view's target schema before body policies,
+history publication and implicit commit. It uses the existing requireSchema
+owner and marks the missing-schema refusal as a constructor failure with no
+preceding body history. The existing bounded failure stream retains zero
+conditions/counts at max_error_count=0. Schema existence, target-object checks
+and catalog writes remain in the writer; PREPARE still creates no view.
+
+The full-binder proposal was rejected after 36 function controls exposed eight
+fully correct PREPARE successes for functions the execution compiler does not
+model. These successes remain strict controls; there is no error swallowing,
+function-presence proxy or synthetic metadata. Body binding still requires a
+proven capability boundary.
+
+The 244-command native audit improves 115→190 complete matches. No-database
+controls improve 12→17 of 18, priority controls 4→18 of 18, transaction/effect
+controls 5→13 of 13, and warning/retention controls 12→60 of 72. Ordinary,
+temporary, utility and function controls retain all previously correct results.
+The 54 remaining outcomes stay captured, including twelve parser-level double
+refusals that prevent an AST before admission can run.
+
+Across 4,742 observations complete matches improve 3,834→3,909, retaining all
+49,918 prior matching protocol facts. All 190 new strict observations pass
+natively and locally; eight native and eleven local cases include current-area
+controls. The shared capture/connection helpers serve ordinary and transaction
+flows; optional schema selection, setup and before-case cleanup preserve the
+native contexts. Existing 587 observations remain byte-unchanged. Actual ef805a6
+passes the old five fixtures and fails the new no-database/effect tests; the
+warm runtime is restored afterwards.
+
+The effects proof retains rollbackability after bare-view 1046, fixing a former
+unwanted commit. Qualified absent-schema 1049 and existing-table 1050 executions
+still commit preceding work as native does, while their PREPARE successes
+remain read-only. Body charset/BINARY history does not precede the target error.
+
+Typecheck, 20,000 executor statements seeded 20261010, and plans at 2,127/2,248
+under the unchanged 2,118 floor pass. Nine unchanged caps pass at parser/core/
+facade 45,599/332,446/332,373 B gzipped. The official suite retains all 38 passing
+identities and its native baseline, with the measured fixture unchanged. Fresh
+Docker --reference passes 1,648 main tests, four latency tests, typecheck, lint,
+all nine unchanged caps, package/typed smoke, the real client and all seven
+pinned corpora including 1,737 coercion warning counts. The unchanged long-IN
+assertion passes, with warm jobs finished before this run. Early source proof
+matches 546 tests/fixtures and 206 runtime sources plus tooling. All eleven
+required ef805a6 CI jobs pass. Totals stay 144/190 and M5 42/53; M5.10 remains partial.
+
+Next repair MERGE-algorithm warning 1354 and the persisted fallback at the
+existing view writer. A 48-command baseline matches 24 completely. Native warns
+before an existing-target 1050 but emits no execution warning during PREPARE.
+It stores UNDEFINED for unmergeable definitions. Logical view eligibility
+accepts WITH where the current physical derived-table merge proof declines it;
+blindly reusing that physical result would regress correct CTE behavior. Keep
+window/set/wrapper definition normalization and full PREPARE body binding behind
+their independent proofs.
 
 **Next prerequisite: constructor admission before presence execution.** Complete
 the existing CAST work: with written utf8 warning 3719 now retained, refuse

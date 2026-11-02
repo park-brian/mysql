@@ -182,6 +182,17 @@ function isDiagnostic(statement: Statement): boolean {
 /** Constructor failures retain grammar warnings; publication appends the primary error. */
 const grammarFailures = new WeakMap<MyjsError, readonly ParseCondition[]>()
 
+/** View targets resolve before body construction; no body history precedes 1046. */
+function admitViewTarget(statement: Statement | null, session: Session): void {
+  if (statement?.kind !== STATEMENT.CREATE_VIEW) return
+  try {
+    requireSchema(statement.view.schema ?? session.database)
+  } catch (e) {
+    if (e instanceof MyjsError) grammarFailures.set(e, [])
+    throw e
+  }
+}
+
 function conditionLimit(state: SqlSession): number {
   // The compiled system-variable registry supplies this nonnullable integer.
   return Number(toInteger(state.systemVariable('max_error_count', undefined, state.session)!))
@@ -349,6 +360,7 @@ export class SqlExecutor implements Executor {
       if (performance.now() - started > SLICE_MS) await pause()
       this.#alive(session)
       // Admit the AST before metadata or diagnostic-count PREPARE refusal.
+      admitViewTarget(statement, session)
       const construction = statement === null ? undefined : Cursor.constructionConditions(statement)
       if (construction !== undefined) {
         appendConditions(conditions, construction.slice(0, limit))
@@ -659,6 +671,7 @@ export class SqlExecutor implements Executor {
       // The error is a condition too, after any the statement raised first.
       const failed = (e: unknown): SqlError => diagnostic ? toSqlError(e) : recordFailure(state, conditions, e, limit)
       try {
+        admitViewTarget(statement, session)
         const construction = Cursor.constructionConditions(statement)
         if (construction !== undefined) {
           if (protocol === 'text') appendConditions(conditions, construction.slice(0, limit))
