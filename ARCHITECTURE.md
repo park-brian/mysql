@@ -1921,7 +1921,9 @@ snapshot. Their first reads use the existing memo; recording retires live views.
 Ordinary diagnostic SELECT clearing is verified correct. Nonrecursive CTE admission
 now follows the existing demand resolver: projection checks precede sources;
 remaining clauses follow them. Unused variable/routine checks stay dormant.
-Recursive eagerness, non-query contexts and CHAR CAST flags remain open.
+Recursive sources now initialize on first demand within a snapshot of the
+pre-declaration namespace. Demanded recursive validation order, non-query
+contexts and CHAR CAST flags remain open.
 Invalid definitions preserve schema and rollbackability. General SELECT, query-body
 and CHECK constructor timing, grouped readers/order, width-limited and large
 fixed-scale formatting, DECIMAL diagnostics, aggregate metadata and separate

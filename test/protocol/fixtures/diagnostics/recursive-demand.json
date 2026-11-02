@@ -1,0 +1,2045 @@
+{
+  "mysqlVersion": "8.4.11",
+  "sqlMode": "ERROR_FOR_DIVISION_BY_ZERO",
+  "seed": "SELECT 1/0,CAST('x' AS DECIMAL)",
+  "observations": [
+    {
+      "sql": "WITH RECURSIVE c AS(SELECT v FROM c) SELECT 1",
+      "api": "query",
+      "rows": [
+        [
+          1
+        ]
+      ],
+      "fields": [
+        [
+          "1",
+          8,
+          2,
+          129,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "WITH RECURSIVE c AS(SELECT v FROM c) SELECT 1",
+      "api": "execute",
+      "rows": [
+        [
+          1
+        ]
+      ],
+      "fields": [
+        [
+          "1",
+          8,
+          2,
+          129,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "WITH RECURSIVE c AS(SELECT v FROM c) SELECT 1",
+      "api": "prepare",
+      "parameters": [],
+      "fields": [
+        [
+          "1",
+          8,
+          2,
+          129,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "WITH RECURSIVE c AS(SELECT v FROM c) SELECT * FROM c",
+      "api": "query",
+      "error": {
+        "code": "ER_CTE_RECURSIVE_REQUIRES_UNION",
+        "errno": 3573,
+        "state": "HY000",
+        "message": "Recursive Common Table Expression 'c' should contain a UNION"
+      },
+      "warnings": [
+        [
+          "Error",
+          3573,
+          "Recursive Common Table Expression 'c' should contain a UNION"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "WITH RECURSIVE c AS(SELECT v FROM c) SELECT * FROM c",
+      "api": "execute",
+      "error": {
+        "code": "ER_CTE_RECURSIVE_REQUIRES_UNION",
+        "errno": 3573,
+        "state": "HY000",
+        "message": "Recursive Common Table Expression 'c' should contain a UNION"
+      },
+      "warnings": [
+        [
+          "Error",
+          3573,
+          "Recursive Common Table Expression 'c' should contain a UNION"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "WITH RECURSIVE c AS(SELECT v FROM c) SELECT * FROM c",
+      "api": "prepare",
+      "error": {
+        "code": "ER_CTE_RECURSIVE_REQUIRES_UNION",
+        "errno": 3573,
+        "state": "HY000",
+        "message": "Recursive Common Table Expression 'c' should contain a UNION"
+      },
+      "warnings": [
+        [
+          "Error",
+          3573,
+          "Recursive Common Table Expression 'c' should contain a UNION"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "WITH RECURSIVE c AS(SELECT @@bad_anchor_251 v UNION ALL SELECT v FROM c) SELECT 1",
+      "api": "query",
+      "rows": [
+        [
+          1
+        ]
+      ],
+      "fields": [
+        [
+          "1",
+          8,
+          2,
+          129,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "WITH RECURSIVE c AS(SELECT @@bad_anchor_251 v UNION ALL SELECT v FROM c) SELECT 1",
+      "api": "execute",
+      "rows": [
+        [
+          1
+        ]
+      ],
+      "fields": [
+        [
+          "1",
+          8,
+          2,
+          129,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "WITH RECURSIVE c AS(SELECT @@bad_anchor_251 v UNION ALL SELECT v FROM c) SELECT 1",
+      "api": "prepare",
+      "parameters": [],
+      "fields": [
+        [
+          "1",
+          8,
+          2,
+          129,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "WITH RECURSIVE c AS(SELECT @@bad_anchor_251 v UNION ALL SELECT v FROM c) SELECT * FROM c",
+      "api": "query",
+      "error": {
+        "code": "ER_UNKNOWN_SYSTEM_VARIABLE",
+        "errno": 1193,
+        "state": "HY000",
+        "message": "Unknown system variable 'bad_anchor_251'"
+      },
+      "warnings": [
+        [
+          "Error",
+          1193,
+          "Unknown system variable 'bad_anchor_251'"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "WITH RECURSIVE c AS(SELECT @@bad_anchor_251 v UNION ALL SELECT v FROM c) SELECT * FROM c",
+      "api": "execute",
+      "error": {
+        "code": "ER_UNKNOWN_SYSTEM_VARIABLE",
+        "errno": 1193,
+        "state": "HY000",
+        "message": "Unknown system variable 'bad_anchor_251'"
+      },
+      "warnings": [
+        [
+          "Error",
+          1193,
+          "Unknown system variable 'bad_anchor_251'"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "WITH RECURSIVE c AS(SELECT @@bad_anchor_251 v UNION ALL SELECT v FROM c) SELECT * FROM c",
+      "api": "prepare",
+      "error": {
+        "code": "ER_UNKNOWN_SYSTEM_VARIABLE",
+        "errno": 1193,
+        "state": "HY000",
+        "message": "Unknown system variable 'bad_anchor_251'"
+      },
+      "warnings": [
+        [
+          "Error",
+          1193,
+          "Unknown system variable 'bad_anchor_251'"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "WITH RECURSIVE c AS(SELECT @@bad_anchor_251 v UNION ALL SELECT v FROM c) SELECT @@bad_main_251 FROM c",
+      "api": "query",
+      "error": {
+        "code": "ER_UNKNOWN_SYSTEM_VARIABLE",
+        "errno": 1193,
+        "state": "HY000",
+        "message": "Unknown system variable 'bad_main_251'"
+      },
+      "warnings": [
+        [
+          "Error",
+          1193,
+          "Unknown system variable 'bad_main_251'"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "WITH RECURSIVE c AS(SELECT @@bad_anchor_251 v UNION ALL SELECT v FROM c) SELECT @@bad_main_251 FROM c",
+      "api": "execute",
+      "error": {
+        "code": "ER_UNKNOWN_SYSTEM_VARIABLE",
+        "errno": 1193,
+        "state": "HY000",
+        "message": "Unknown system variable 'bad_main_251'"
+      },
+      "warnings": [
+        [
+          "Error",
+          1193,
+          "Unknown system variable 'bad_main_251'"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "WITH RECURSIVE c AS(SELECT @@bad_anchor_251 v UNION ALL SELECT v FROM c) SELECT @@bad_main_251 FROM c",
+      "api": "prepare",
+      "error": {
+        "code": "ER_UNKNOWN_SYSTEM_VARIABLE",
+        "errno": 1193,
+        "state": "HY000",
+        "message": "Unknown system variable 'bad_main_251'"
+      },
+      "warnings": [
+        [
+          "Error",
+          1193,
+          "Unknown system variable 'bad_main_251'"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "WITH RECURSIVE c AS(SELECT @@bad_anchor_251 v UNION ALL SELECT v FROM c) SELECT 1 FROM missing JOIN c",
+      "api": "query",
+      "error": {
+        "code": "ER_NO_DB_ERROR",
+        "errno": 1046,
+        "state": "3D000",
+        "message": "No database selected"
+      },
+      "warnings": [
+        [
+          "Error",
+          1046,
+          "No database selected"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "WITH RECURSIVE c AS(SELECT @@bad_anchor_251 v UNION ALL SELECT v FROM c) SELECT 1 FROM missing JOIN c",
+      "api": "execute",
+      "error": {
+        "code": "ER_NO_DB_ERROR",
+        "errno": 1046,
+        "state": "3D000",
+        "message": "No database selected"
+      },
+      "warnings": [
+        [
+          "Error",
+          1046,
+          "No database selected"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "WITH RECURSIVE c AS(SELECT @@bad_anchor_251 v UNION ALL SELECT v FROM c) SELECT 1 FROM missing JOIN c",
+      "api": "prepare",
+      "error": {
+        "code": "ER_NO_DB_ERROR",
+        "errno": 1046,
+        "state": "3D000",
+        "message": "No database selected"
+      },
+      "warnings": [
+        [
+          "Error",
+          1046,
+          "No database selected"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "WITH RECURSIVE c AS(SELECT @@bad_anchor_251 v UNION ALL SELECT v FROM c) SELECT 1 FROM c JOIN missing",
+      "api": "query",
+      "error": {
+        "code": "ER_UNKNOWN_SYSTEM_VARIABLE",
+        "errno": 1193,
+        "state": "HY000",
+        "message": "Unknown system variable 'bad_anchor_251'"
+      },
+      "warnings": [
+        [
+          "Error",
+          1193,
+          "Unknown system variable 'bad_anchor_251'"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "WITH RECURSIVE c AS(SELECT @@bad_anchor_251 v UNION ALL SELECT v FROM c) SELECT 1 FROM c JOIN missing",
+      "api": "execute",
+      "error": {
+        "code": "ER_UNKNOWN_SYSTEM_VARIABLE",
+        "errno": 1193,
+        "state": "HY000",
+        "message": "Unknown system variable 'bad_anchor_251'"
+      },
+      "warnings": [
+        [
+          "Error",
+          1193,
+          "Unknown system variable 'bad_anchor_251'"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "WITH RECURSIVE c AS(SELECT @@bad_anchor_251 v UNION ALL SELECT v FROM c) SELECT 1 FROM c JOIN missing",
+      "api": "prepare",
+      "error": {
+        "code": "ER_UNKNOWN_SYSTEM_VARIABLE",
+        "errno": 1193,
+        "state": "HY000",
+        "message": "Unknown system variable 'bad_anchor_251'"
+      },
+      "warnings": [
+        [
+          "Error",
+          1193,
+          "Unknown system variable 'bad_anchor_251'"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "WITH RECURSIVE c AS(SELECT 1 v UNION ALL SELECT v+1 FROM c WHERE v<2) SELECT 1",
+      "api": "query",
+      "rows": [
+        [
+          1
+        ]
+      ],
+      "fields": [
+        [
+          "1",
+          8,
+          2,
+          129,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "WITH RECURSIVE c AS(SELECT 1 v UNION ALL SELECT v+1 FROM c WHERE v<2) SELECT 1",
+      "api": "execute",
+      "rows": [
+        [
+          1
+        ]
+      ],
+      "fields": [
+        [
+          "1",
+          8,
+          2,
+          129,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "WITH RECURSIVE c AS(SELECT 1 v UNION ALL SELECT v+1 FROM c WHERE v<2) SELECT 1",
+      "api": "prepare",
+      "parameters": [],
+      "fields": [
+        [
+          "1",
+          8,
+          2,
+          129,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "WITH RECURSIVE c AS(SELECT 1 v UNION ALL SELECT v+1 FROM c WHERE v<2) SELECT * FROM c",
+      "api": "query",
+      "rows": [
+        [
+          1
+        ],
+        [
+          2
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          8,
+          2,
+          0,
+          0,
+          63,
+          "",
+          "c",
+          "",
+          "v"
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "WITH RECURSIVE c AS(SELECT 1 v UNION ALL SELECT v+1 FROM c WHERE v<2) SELECT * FROM c",
+      "api": "execute",
+      "rows": [
+        [
+          1
+        ],
+        [
+          2
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          8,
+          2,
+          0,
+          0,
+          63,
+          "",
+          "c",
+          "",
+          "v"
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "WITH RECURSIVE c AS(SELECT 1 v UNION ALL SELECT v+1 FROM c WHERE v<2) SELECT * FROM c",
+      "api": "prepare",
+      "parameters": [],
+      "fields": [
+        [
+          "v",
+          8,
+          2,
+          0,
+          0,
+          63,
+          "",
+          "c",
+          "",
+          "v"
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "WITH RECURSIVE c AS(SELECT 1 v UNION ALL SELECT v+1 FROM c WHERE v<2) SELECT * FROM c LIMIT 0",
+      "api": "query",
+      "rows": [],
+      "fields": [
+        [
+          "v",
+          8,
+          2,
+          0,
+          0,
+          63,
+          "",
+          "c",
+          "",
+          "v"
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "WITH RECURSIVE c AS(SELECT 1 v UNION ALL SELECT v+1 FROM c WHERE v<2) SELECT * FROM c LIMIT 0",
+      "api": "execute",
+      "rows": [],
+      "fields": [
+        [
+          "v",
+          8,
+          2,
+          0,
+          0,
+          63,
+          "",
+          "c",
+          "",
+          "v"
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "WITH RECURSIVE c AS(SELECT 1 v UNION ALL SELECT v+1 FROM c WHERE v<2) SELECT * FROM c LIMIT 0",
+      "api": "prepare",
+      "parameters": [],
+      "fields": [
+        [
+          "v",
+          8,
+          2,
+          0,
+          0,
+          63,
+          "",
+          "c",
+          "",
+          "v"
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "WITH RECURSIVE c AS(SELECT 1 v UNION ALL SELECT @@bad_step_251 FROM c WHERE v<2) SELECT 1",
+      "api": "query",
+      "rows": [
+        [
+          1
+        ]
+      ],
+      "fields": [
+        [
+          "1",
+          8,
+          2,
+          129,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "WITH RECURSIVE c AS(SELECT 1 v UNION ALL SELECT @@bad_step_251 FROM c WHERE v<2) SELECT 1",
+      "api": "execute",
+      "rows": [
+        [
+          1
+        ]
+      ],
+      "fields": [
+        [
+          "1",
+          8,
+          2,
+          129,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "WITH RECURSIVE c AS(SELECT 1 v UNION ALL SELECT @@bad_step_251 FROM c WHERE v<2) SELECT 1",
+      "api": "prepare",
+      "parameters": [],
+      "fields": [
+        [
+          "1",
+          8,
+          2,
+          129,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "WITH RECURSIVE c AS(SELECT 1 v UNION ALL SELECT @@bad_step_251 FROM c WHERE v<2) SELECT * FROM c",
+      "api": "query",
+      "error": {
+        "code": "ER_UNKNOWN_SYSTEM_VARIABLE",
+        "errno": 1193,
+        "state": "HY000",
+        "message": "Unknown system variable 'bad_step_251'"
+      },
+      "warnings": [
+        [
+          "Error",
+          1193,
+          "Unknown system variable 'bad_step_251'"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "WITH RECURSIVE c AS(SELECT 1 v UNION ALL SELECT @@bad_step_251 FROM c WHERE v<2) SELECT * FROM c",
+      "api": "execute",
+      "error": {
+        "code": "ER_UNKNOWN_SYSTEM_VARIABLE",
+        "errno": 1193,
+        "state": "HY000",
+        "message": "Unknown system variable 'bad_step_251'"
+      },
+      "warnings": [
+        [
+          "Error",
+          1193,
+          "Unknown system variable 'bad_step_251'"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "WITH RECURSIVE c AS(SELECT 1 v UNION ALL SELECT @@bad_step_251 FROM c WHERE v<2) SELECT * FROM c",
+      "api": "prepare",
+      "error": {
+        "code": "ER_UNKNOWN_SYSTEM_VARIABLE",
+        "errno": 1193,
+        "state": "HY000",
+        "message": "Unknown system variable 'bad_step_251'"
+      },
+      "warnings": [
+        [
+          "Error",
+          1193,
+          "Unknown system variable 'bad_step_251'"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "WITH RECURSIVE c(a,b) AS(SELECT 1 UNION ALL SELECT a FROM c) SELECT 1",
+      "api": "query",
+      "rows": [
+        [
+          1
+        ]
+      ],
+      "fields": [
+        [
+          "1",
+          8,
+          2,
+          129,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "WITH RECURSIVE c(a,b) AS(SELECT 1 UNION ALL SELECT a FROM c) SELECT 1",
+      "api": "execute",
+      "rows": [
+        [
+          1
+        ]
+      ],
+      "fields": [
+        [
+          "1",
+          8,
+          2,
+          129,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "WITH RECURSIVE c(a,b) AS(SELECT 1 UNION ALL SELECT a FROM c) SELECT 1",
+      "api": "prepare",
+      "parameters": [],
+      "fields": [
+        [
+          "1",
+          8,
+          2,
+          129,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "WITH RECURSIVE c AS(SELECT v FROM c),d AS(SELECT * FROM c) SELECT 1",
+      "api": "query",
+      "rows": [
+        [
+          1
+        ]
+      ],
+      "fields": [
+        [
+          "1",
+          8,
+          2,
+          129,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "WITH RECURSIVE c AS(SELECT v FROM c),d AS(SELECT * FROM c) SELECT 1",
+      "api": "execute",
+      "rows": [
+        [
+          1
+        ]
+      ],
+      "fields": [
+        [
+          "1",
+          8,
+          2,
+          129,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "WITH RECURSIVE c AS(SELECT v FROM c),d AS(SELECT * FROM c) SELECT 1",
+      "api": "prepare",
+      "parameters": [],
+      "fields": [
+        [
+          "1",
+          8,
+          2,
+          129,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "WITH RECURSIVE c AS(SELECT v FROM c) SELECT 1 FROM (WITH c AS(SELECT 1 v) SELECT * FROM c) d",
+      "api": "query",
+      "rows": [
+        [
+          1
+        ]
+      ],
+      "fields": [
+        [
+          "1",
+          8,
+          2,
+          129,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "WITH RECURSIVE c AS(SELECT v FROM c) SELECT 1 FROM (WITH c AS(SELECT 1 v) SELECT * FROM c) d",
+      "api": "execute",
+      "rows": [
+        [
+          1
+        ]
+      ],
+      "fields": [
+        [
+          "1",
+          8,
+          2,
+          129,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "WITH RECURSIVE c AS(SELECT v FROM c) SELECT 1 FROM (WITH c AS(SELECT 1 v) SELECT * FROM c) d",
+      "api": "prepare",
+      "parameters": [],
+      "fields": [
+        [
+          "1",
+          8,
+          2,
+          129,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "WITH RECURSIVE c AS(SELECT @@warning_count v UNION ALL SELECT v FROM c WHERE FALSE) SELECT 1",
+      "api": "query",
+      "rows": [
+        [
+          1
+        ]
+      ],
+      "fields": [
+        [
+          "1",
+          8,
+          2,
+          129,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "WITH RECURSIVE c AS(SELECT @@warning_count v UNION ALL SELECT v FROM c WHERE FALSE) SELECT 1",
+      "api": "execute",
+      "rows": [
+        [
+          1
+        ]
+      ],
+      "fields": [
+        [
+          "1",
+          8,
+          2,
+          129,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "WITH RECURSIVE c AS(SELECT @@warning_count v UNION ALL SELECT v FROM c WHERE FALSE) SELECT 1",
+      "api": "prepare",
+      "parameters": [],
+      "fields": [
+        [
+          "1",
+          8,
+          2,
+          129,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "WITH RECURSIVE c AS(SELECT @@warning_count v UNION ALL SELECT v FROM c WHERE FALSE) SELECT * FROM c",
+      "api": "query",
+      "rows": [
+        [
+          2
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          8,
+          21,
+          32,
+          0,
+          63,
+          "",
+          "c",
+          "",
+          "v"
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "WITH RECURSIVE c AS(SELECT @@warning_count v UNION ALL SELECT v FROM c WHERE FALSE) SELECT * FROM c",
+      "api": "execute",
+      "error": {
+        "code": "ER_UNSUPPORTED_PS",
+        "errno": 1295,
+        "state": "HY000",
+        "message": "This command is not supported in the prepared statement protocol yet"
+      },
+      "warnings": [
+        [
+          "Error",
+          1295,
+          "This command is not supported in the prepared statement protocol yet"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "WITH RECURSIVE c AS(SELECT @@warning_count v UNION ALL SELECT v FROM c WHERE FALSE) SELECT * FROM c",
+      "api": "prepare",
+      "error": {
+        "code": "ER_UNSUPPORTED_PS",
+        "errno": 1295,
+        "state": "HY000",
+        "message": "This command is not supported in the prepared statement protocol yet"
+      },
+      "warnings": [
+        [
+          "Error",
+          1295,
+          "This command is not supported in the prepared statement protocol yet"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "WITH RECURSIVE c AS(SELECT 1 v UNION DISTINCT SELECT v FROM c) SELECT * FROM c",
+      "api": "query",
+      "rows": [
+        [
+          1
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          8,
+          2,
+          0,
+          0,
+          63,
+          "",
+          "c",
+          "",
+          "v"
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "WITH RECURSIVE c AS(SELECT 1 v UNION DISTINCT SELECT v FROM c) SELECT * FROM c",
+      "api": "execute",
+      "rows": [
+        [
+          1
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          8,
+          2,
+          0,
+          0,
+          63,
+          "",
+          "c",
+          "",
+          "v"
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "WITH RECURSIVE c AS(SELECT 1 v UNION DISTINCT SELECT v FROM c) SELECT * FROM c",
+      "api": "prepare",
+      "parameters": [],
+      "fields": [
+        [
+          "v",
+          8,
+          2,
+          0,
+          0,
+          63,
+          "",
+          "c",
+          "",
+          "v"
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "WITH RECURSIVE c AS(SELECT v FROM missing UNION ALL SELECT v FROM c) SELECT 1",
+      "api": "query",
+      "rows": [
+        [
+          1
+        ]
+      ],
+      "fields": [
+        [
+          "1",
+          8,
+          2,
+          129,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "WITH RECURSIVE c AS(SELECT v FROM missing UNION ALL SELECT v FROM c) SELECT 1",
+      "api": "execute",
+      "rows": [
+        [
+          1
+        ]
+      ],
+      "fields": [
+        [
+          "1",
+          8,
+          2,
+          129,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "WITH RECURSIVE c AS(SELECT v FROM missing UNION ALL SELECT v FROM c) SELECT 1",
+      "api": "prepare",
+      "parameters": [],
+      "fields": [
+        [
+          "1",
+          8,
+          2,
+          129,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "WITH RECURSIVE c AS(SELECT v FROM missing UNION ALL SELECT v FROM c) SELECT * FROM c",
+      "api": "query",
+      "error": {
+        "code": "ER_NO_DB_ERROR",
+        "errno": 1046,
+        "state": "3D000",
+        "message": "No database selected"
+      },
+      "warnings": [
+        [
+          "Error",
+          1046,
+          "No database selected"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "WITH RECURSIVE c AS(SELECT v FROM missing UNION ALL SELECT v FROM c) SELECT * FROM c",
+      "api": "execute",
+      "error": {
+        "code": "ER_NO_DB_ERROR",
+        "errno": 1046,
+        "state": "3D000",
+        "message": "No database selected"
+      },
+      "warnings": [
+        [
+          "Error",
+          1046,
+          "No database selected"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "WITH RECURSIVE c AS(SELECT v FROM missing UNION ALL SELECT v FROM c) SELECT * FROM c",
+      "api": "prepare",
+      "error": {
+        "code": "ER_NO_DB_ERROR",
+        "errno": 1046,
+        "state": "3D000",
+        "message": "No database selected"
+      },
+      "warnings": [
+        [
+          "Error",
+          1046,
+          "No database selected"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "WITH RECURSIVE c AS(SELECT v FROM c UNION ALL SELECT 1) SELECT 1",
+      "api": "query",
+      "rows": [
+        [
+          1
+        ]
+      ],
+      "fields": [
+        [
+          "1",
+          8,
+          2,
+          129,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "WITH RECURSIVE c AS(SELECT v FROM c UNION ALL SELECT 1) SELECT 1",
+      "api": "execute",
+      "rows": [
+        [
+          1
+        ]
+      ],
+      "fields": [
+        [
+          "1",
+          8,
+          2,
+          129,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "WITH RECURSIVE c AS(SELECT v FROM c UNION ALL SELECT 1) SELECT 1",
+      "api": "prepare",
+      "parameters": [],
+      "fields": [
+        [
+          "1",
+          8,
+          2,
+          129,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "WITH RECURSIVE c AS(SELECT 1 v UNION ALL SELECT v FROM c ORDER BY v) SELECT 1",
+      "api": "query",
+      "rows": [
+        [
+          1
+        ]
+      ],
+      "fields": [
+        [
+          "1",
+          8,
+          2,
+          129,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "WITH RECURSIVE c AS(SELECT 1 v UNION ALL SELECT v FROM c ORDER BY v) SELECT 1",
+      "api": "execute",
+      "rows": [
+        [
+          1
+        ]
+      ],
+      "fields": [
+        [
+          "1",
+          8,
+          2,
+          129,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "WITH RECURSIVE c AS(SELECT 1 v UNION ALL SELECT v FROM c ORDER BY v) SELECT 1",
+      "api": "prepare",
+      "parameters": [],
+      "fields": [
+        [
+          "1",
+          8,
+          2,
+          129,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "WITH RECURSIVE c AS(SELECT 1 v UNION ALL SELECT v FROM c ORDER BY v) SELECT * FROM c",
+      "api": "query",
+      "error": {
+        "code": "ER_NOT_SUPPORTED_YET",
+        "errno": 1235,
+        "state": "42000",
+        "message": "This version of MySQL doesn't yet support 'ORDER BY over UNION in recursive Common Table Expression'"
+      },
+      "warnings": [
+        [
+          "Error",
+          1235,
+          "This version of MySQL doesn't yet support 'ORDER BY over UNION in recursive Common Table Expression'"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "WITH RECURSIVE c AS(SELECT 1 v UNION ALL SELECT v FROM c ORDER BY v) SELECT * FROM c",
+      "api": "execute",
+      "error": {
+        "code": "ER_NOT_SUPPORTED_YET",
+        "errno": 1235,
+        "state": "42000",
+        "message": "This version of MySQL doesn't yet support 'ORDER BY over UNION in recursive Common Table Expression'"
+      },
+      "warnings": [
+        [
+          "Error",
+          1235,
+          "This version of MySQL doesn't yet support 'ORDER BY over UNION in recursive Common Table Expression'"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "WITH RECURSIVE c AS(SELECT 1 v UNION ALL SELECT v FROM c ORDER BY v) SELECT * FROM c",
+      "api": "prepare",
+      "error": {
+        "code": "ER_NOT_SUPPORTED_YET",
+        "errno": 1235,
+        "state": "42000",
+        "message": "This version of MySQL doesn't yet support 'ORDER BY over UNION in recursive Common Table Expression'"
+      },
+      "warnings": [
+        [
+          "Error",
+          1235,
+          "This version of MySQL doesn't yet support 'ORDER BY over UNION in recursive Common Table Expression'"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "WITH RECURSIVE c AS(SELECT 1 v UNION ALL SELECT v+1 FROM c WHERE v<3) SELECT 1 FROM (WITH c AS(SELECT 2 v) SELECT * FROM c) d",
+      "api": "query",
+      "rows": [
+        [
+          1
+        ]
+      ],
+      "fields": [
+        [
+          "1",
+          8,
+          2,
+          129,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "WITH RECURSIVE c AS(SELECT 1 v UNION ALL SELECT v+1 FROM c WHERE v<3) SELECT 1 FROM (WITH c AS(SELECT 2 v) SELECT * FROM c) d",
+      "api": "execute",
+      "rows": [
+        [
+          1
+        ]
+      ],
+      "fields": [
+        [
+          "1",
+          8,
+          2,
+          129,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "WITH RECURSIVE c AS(SELECT 1 v UNION ALL SELECT v+1 FROM c WHERE v<3) SELECT 1 FROM (WITH c AS(SELECT 2 v) SELECT * FROM c) d",
+      "api": "prepare",
+      "parameters": [],
+      "fields": [
+        [
+          "1",
+          8,
+          2,
+          129,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "WITH RECURSIVE c AS(SELECT @@bad_outer_251 v UNION ALL SELECT v FROM c) SELECT 1 WHERE EXISTS(WITH c AS(SELECT 1 v) SELECT * FROM c)",
+      "api": "query",
+      "rows": [
+        [
+          1
+        ]
+      ],
+      "fields": [
+        [
+          "1",
+          8,
+          2,
+          129,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "WITH RECURSIVE c AS(SELECT @@bad_outer_251 v UNION ALL SELECT v FROM c) SELECT 1 WHERE EXISTS(WITH c AS(SELECT 1 v) SELECT * FROM c)",
+      "api": "execute",
+      "rows": [
+        [
+          1
+        ]
+      ],
+      "fields": [
+        [
+          "1",
+          8,
+          2,
+          129,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "WITH RECURSIVE c AS(SELECT @@bad_outer_251 v UNION ALL SELECT v FROM c) SELECT 1 WHERE EXISTS(WITH c AS(SELECT 1 v) SELECT * FROM c)",
+      "api": "prepare",
+      "parameters": [],
+      "fields": [
+        [
+          "1",
+          8,
+          2,
+          129,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "WITH RECURSIVE c AS(SELECT v FROM d UNION ALL SELECT v FROM c WHERE FALSE),d AS(SELECT 1 v) SELECT * FROM c",
+      "api": "query",
+      "error": {
+        "code": "ER_NO_DB_ERROR",
+        "errno": 1046,
+        "state": "3D000",
+        "message": "No database selected"
+      },
+      "warnings": [
+        [
+          "Error",
+          1046,
+          "No database selected"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "WITH RECURSIVE c AS(SELECT v FROM d UNION ALL SELECT v FROM c WHERE FALSE),d AS(SELECT 1 v) SELECT * FROM c",
+      "api": "execute",
+      "error": {
+        "code": "ER_NO_DB_ERROR",
+        "errno": 1046,
+        "state": "3D000",
+        "message": "No database selected"
+      },
+      "warnings": [
+        [
+          "Error",
+          1046,
+          "No database selected"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "WITH RECURSIVE c AS(SELECT v FROM d UNION ALL SELECT v FROM c WHERE FALSE),d AS(SELECT 1 v) SELECT * FROM c",
+      "api": "prepare",
+      "error": {
+        "code": "ER_NO_DB_ERROR",
+        "errno": 1046,
+        "state": "3D000",
+        "message": "No database selected"
+      },
+      "warnings": [
+        [
+          "Error",
+          1046,
+          "No database selected"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "WITH RECURSIVE c AS(SELECT v FROM d UNION ALL SELECT v FROM c WHERE FALSE),d AS(SELECT 1 v) SELECT 1",
+      "api": "query",
+      "rows": [
+        [
+          1
+        ]
+      ],
+      "fields": [
+        [
+          "1",
+          8,
+          2,
+          129,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "WITH RECURSIVE c AS(SELECT v FROM d UNION ALL SELECT v FROM c WHERE FALSE),d AS(SELECT 1 v) SELECT 1",
+      "api": "execute",
+      "rows": [
+        [
+          1
+        ]
+      ],
+      "fields": [
+        [
+          "1",
+          8,
+          2,
+          129,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "WITH RECURSIVE c AS(SELECT v FROM d UNION ALL SELECT v FROM c WHERE FALSE),d AS(SELECT 1 v) SELECT 1",
+      "api": "prepare",
+      "parameters": [],
+      "fields": [
+        [
+          "1",
+          8,
+          2,
+          129,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "WITH c AS(SELECT v FROM d),d AS(SELECT 1 v) SELECT * FROM c",
+      "api": "query",
+      "error": {
+        "code": "ER_NO_DB_ERROR",
+        "errno": 1046,
+        "state": "3D000",
+        "message": "No database selected"
+      },
+      "warnings": [
+        [
+          "Error",
+          1046,
+          "No database selected"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "WITH c AS(SELECT v FROM d),d AS(SELECT 1 v) SELECT * FROM c",
+      "api": "execute",
+      "error": {
+        "code": "ER_NO_DB_ERROR",
+        "errno": 1046,
+        "state": "3D000",
+        "message": "No database selected"
+      },
+      "warnings": [
+        [
+          "Error",
+          1046,
+          "No database selected"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "WITH c AS(SELECT v FROM d),d AS(SELECT 1 v) SELECT * FROM c",
+      "api": "prepare",
+      "error": {
+        "code": "ER_NO_DB_ERROR",
+        "errno": 1046,
+        "state": "3D000",
+        "message": "No database selected"
+      },
+      "warnings": [
+        [
+          "Error",
+          1046,
+          "No database selected"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "WITH c AS(SELECT v FROM d),d AS(SELECT 1 v) SELECT 1",
+      "api": "query",
+      "rows": [
+        [
+          1
+        ]
+      ],
+      "fields": [
+        [
+          "1",
+          8,
+          2,
+          129,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "WITH c AS(SELECT v FROM d),d AS(SELECT 1 v) SELECT 1",
+      "api": "execute",
+      "rows": [
+        [
+          1
+        ]
+      ],
+      "fields": [
+        [
+          "1",
+          8,
+          2,
+          129,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "WITH c AS(SELECT v FROM d),d AS(SELECT 1 v) SELECT 1",
+      "api": "prepare",
+      "parameters": [],
+      "fields": [
+        [
+          "1",
+          8,
+          2,
+          129,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "WITH c AS(SELECT 2 v) SELECT * FROM (WITH RECURSIVE c AS(SELECT v FROM c UNION ALL SELECT 1 v) SELECT 1) x",
+      "api": "query",
+      "rows": [
+        [
+          1
+        ]
+      ],
+      "fields": [
+        [
+          "1",
+          3,
+          2,
+          1,
+          0,
+          63,
+          "",
+          "x",
+          "",
+          "1"
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "WITH c AS(SELECT 2 v) SELECT * FROM (WITH RECURSIVE c AS(SELECT v FROM c UNION ALL SELECT 1 v) SELECT 1) x",
+      "api": "execute",
+      "rows": [
+        [
+          1
+        ]
+      ],
+      "fields": [
+        [
+          "1",
+          3,
+          2,
+          1,
+          0,
+          63,
+          "",
+          "x",
+          "",
+          "1"
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "WITH c AS(SELECT 2 v) SELECT * FROM (WITH RECURSIVE c AS(SELECT v FROM c UNION ALL SELECT 1 v) SELECT 1) x",
+      "api": "prepare",
+      "parameters": [],
+      "fields": [
+        [
+          "1",
+          3,
+          2,
+          1,
+          0,
+          63,
+          "",
+          "x",
+          "",
+          "1"
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    }
+  ]
+}

@@ -1624,12 +1624,15 @@ function renamed(columns: readonly { readonly name: string; readonly type: Resul
 /** The CTEs a WITH defines, each visible to the ones after it and to the query. */
 export function withClause(run: Run, w: NonNullable<QueryExpression['with']>): Run {
   const ctes = new Map(run.ctes)
-  let at: Run = { ...run, ctes }
+  let at: Run = { ...run, ctes: new Map(ctes) }
   for (const cte of w.tables) {
     const before: Run = at
     const recursive = w.recursive === true && references(cte.query, cte.name)
-    const source = recursive ? recursiveCte(before, cte) : undefined
-    ctes.set(cte.name, () => source ?? derivedTable(before, cte.query, cte.name, cte.columns, undefined, undefined, cte.name))
+    let source: DerivedSource | undefined
+    ctes.set(cte.name, () => {
+      if (recursive) return source ??= recursiveCte(before, cte)
+      return derivedTable(before, cte.query, cte.name, cte.columns, undefined, undefined, cte.name)
+    })
     at = { ...run, ctes: new Map(ctes) }
   }
   return at

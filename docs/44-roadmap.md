@@ -105,8 +105,10 @@ construction histories also alter PREPARE admission. Nonrecursive CTE admission
 now follows existing lazy factories: projections precede FROM demand, remaining
 clauses follow it, and unused variable/routine checks remain dormant. The new
 4,006-outcome audit improves 3,202→3,315 complete matches with all 40,814 prior
-matching protocol facts retained. Recursive eagerness and non-query contexts
-remain open.
+matching protocol facts retained. Recursive sources now initialize lazily from
+their pre-declaration namespace. The 4,117-outcome continuation improves 3,364
+to 3,411 complete matches, retaining all 43,276 prior matching protocol facts.
+Demanded recursive validation order, metadata and non-query contexts remain open.
 Then return to set admission: unbounded UNION ALL can discard key-name binding, while materialized/unary
 owners still bind; their COLLATE checks need the inherited holder. Native constructors validate outer arity before nested
 calls, after syntax/charset construction, and leave unused CTE bodies dormant.
@@ -2397,8 +2399,8 @@ warnings, diagnostic totals and effects. All 195 new strict observations pass
 against MySQL 8.4.11 and locally with full metadata and diagnostics. Actual
 97de124 fails the new test; the warm container is restored afterwards.
 
-Recursive CTEs still initialize eagerly; four nonrecursive field-metadata
-outcomes remain different. These and the six BINARY-prefix controls are retained
+At this slice boundary recursive CTEs still initialized eagerly; the following
+slice closes that gap. Four nonrecursive field-metadata outcomes remain different. These and the six BINARY-prefix controls are retained
 in the audit, with no expected-answer changes. Keep non-query context demand,
 CHAR CAST flags, UPDATE status flags and mixed publishers explicitly open.
 Twenty thousand executor statements seeded 20261010 pass; plans retain
@@ -2414,9 +2416,45 @@ Early final-source proof matches
 passed all eleven required jobs. Totals stay 144/190 and M5 42/53; M5.10 remains
 partial.
 
-Next bound recursive CTE initialization to the same source-demand factory,
-with native proofs for unused malformed definitions, demanded recursion,
-error priority and lexical shadowing. Preserve anchor/step typing and execution.
+**Recursive CTE demand, verified (2026-11-02):** initialization
+now waits inside the existing source factory. Recursive sources remain memoized;
+nonrecursive sources remain fresh. The initial Run snapshots the pre-declaration
+namespace, matching later declarations' existing snapshots. This prevents a lazy
+first source from seeing forward declarations or replacing an outer binding
+with a later local name. No new namespace or resolver is introduced.
+
+The 48-command recursive audit improves 24→45 complete matches, 36 owner/reuse
+controls improve 16→30, and 27 lexical controls improve 9→15. Across 4,117 total
+observations complete matches improve 3,364→3,411, retaining all 43,276 previously
+matching protocol facts. Ninety new strict observations cover unused malformed
+and diagnostic definitions, active recursion, missing sources, forward-reference
+refusals, source order and shadowing through query/execute/PREPARE. Both native
+protocol cases and five local cases, including current-area controls, pass.
+Actual c597420 fails the new recursive fixture; the warm runtime is restored.
+The existing nonrecursive fixture is byte-unchanged and its runner is reused.
+
+Demanded column-count and recursive-first error precedence remain separate;
+repeated-reference, chained and nested CTE field metadata also remain open.
+The 21 unrepaired outcomes in the new audits stay captured. Twenty thousand
+executor statements seeded 20261010 pass; plans retain 2,127/2,248 under the
+unchanged 2,118 floor. All nine unchanged caps pass: parser/core/facade are
+45,599/332,224/332,145 B gzipped. The full official suite retains all 38 passing
+identities and the unchanged native baseline; the measured fixture stays
+unchanged. Fresh Docker --reference passes 1,642 main tests, four latency tests,
+typecheck, lint, all nine unchanged caps, package/typed smoke, the real client
+and all seven pinned corpora including 1,737 coercion warning counts. Early
+final-source proof matches 540 tests/fixtures and
+206 runtime sources plus tooling. All eleven required c597420 CI jobs pass. Totals stay 144/190 and M5 42/53; M5.10 remains partial.
+
+Next audit demanded recursive validation order at its existing constructor.
+A 36-command native baseline matches 27 completely; a further 36 priority
+controls match 17. MySQL's misplaced-branch refusal is missing here. Anchor
+binding errors still win, and some recursive constructor errors require earlier
+contextualization than the current planner provides. Start with rejecting
+misplaced branches after successful existing binding, preserving every current
+binding error; keep the earlier structural/aggregation priorities, demanded
+column-count and CTE metadata boundaries explicitly separate. Do not add a
+second resolver or move errors ahead of native anchor failures.
 
 **Next prerequisite: constructor admission before presence execution.** Complete
 the existing CAST work: with written utf8 warning 3719 now retained, refuse
