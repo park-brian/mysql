@@ -22,7 +22,8 @@ function textOf(v: Exclude<Value, null>, t: ResultType): string {
   // A FLOAT(M,D), and arithmetic over one, prints exactly D decimals, as
   // `my_fcvt` does (8.4.11: a FLOAT(3,1) holding 1.25 is `1.2`).
   if (t.kind === 'double' && t.scale < 31 && (v.kind === 'double' || v.kind === 'int' || v.kind === 'decimal')) {
-    const n = toDouble(v)
+    // FLOAT narrows at field delivery, independently of SQL's numeric/string readers.
+    const n = t.field === FIELD_TYPE.FLOAT ? Math.fround(toDouble(v)) : toDouble(v)
     // Negative zero keeps its sign, as `my_fcvt` writes it (8.4.11: `-TIME'00:00:00'` is `-0`).
     if (Number.isFinite(n) && Math.abs(n) < 1e21) return `${Object.is(n, -0) ? '-' : ''}${n.toFixed(t.scale)}`
   }
@@ -30,7 +31,7 @@ function textOf(v: Exclude<Value, null>, t: ResultType): string {
   if (t.field === FIELD_TYPE.YEAR && t.column !== undefined && v.kind === 'int') return v.v.toString().padStart(4, '0')
   switch (v.kind) {
     case 'double':
-      return t.field === FIELD_TYPE.FLOAT ? renderFloat(v.v) : renderDouble(v.v)
+      return t.field === FIELD_TYPE.FLOAT ? renderFloat(Math.fround(v.v)) : renderDouble(v.v)
     case 'decimal':
       return renderDecimal(v)
     case 'datetime':

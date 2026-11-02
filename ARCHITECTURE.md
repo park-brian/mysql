@@ -1865,6 +1865,13 @@ matches 477 completely, retaining fractional-grammar and precision gaps with
 their native diagnostics. Excessive DECIMAL precision admission remains the next constructor
 prerequisite under the existing size caps.
 
+FLOAT result fields now narrow to 32 bits at the shared delivery boundary,
+before fixed/default text formatting, as the binary writer already does.
+COALESCE/IFNULL and selected MIN/MAX outputs agree without narrowing their SQL
+numeric or string readings. The 952-observation capture improves 721 to 760
+complete matches while preserving every earlier matching native fact. Default
+FLOAT function string/DECIMAL readings and independent metadata gaps stay open.
+
 Catalog statistics rewrites preserve physical table identity. A retained view
 that cannot see the latest catalog revision checks its existing MVCC-visible ID;
 CREATE/TRUNCATE/rebuild still fail with 1412. The latest-revision fast path,
