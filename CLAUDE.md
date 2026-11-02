@@ -58,9 +58,10 @@ WITH/ORDER-owning set wrappers now retain the same holder and operator context,
 binding CTEs through their existing lexical Run. Plain SELECTs retain numeric
 sorting. Unneeded set-branch sorting is now removed while an enclosing LIMIT
 can retain it; a replacing ORDER BY overrides it. Admission and zero-limit
-evaluation remain separate. Direct length-function roots in DEFAULT/generated columns now fail
-through the existing column-admission stage and share the compiler count rule.
-Invalid definitions preserve schema and rollbackability; general SELECT, nested
+evaluation remain separate. Length calls in scalar DEFAULT/generated expressions now share the compiler
+count rule during the existing column-admission walk. Outer counts precede
+children; query bodies retain their own admission path.
+Invalid definitions preserve schema and rollbackability; general SELECT, query-body
 and CHECK constructor timing remain open. Leading-WITH ownership, plain SELECT
 naming, inherited-holder collation admission, grouped readers/order, width-limited
 and large fixed-scale formatting, DECIMAL diagnostics, warning timing and aggregate

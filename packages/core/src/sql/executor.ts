@@ -386,13 +386,22 @@ export class SqlExecutor implements Executor {
       }
       return undefined
     }
+    const bindColumnExpression = (node: object): boolean | undefined => {
+      const e = node as Expression
+      // Query bodies retain their existing admission and declaration ownership.
+      if (e.kind === NODE.SUBQUERY) {
+        someNode(e, bind)
+        return false
+      }
+      if (e.kind === NODE.CALL) lengthArity(e)
+      return bind(node)
+    }
     const admitColumn = (column: ParsedColumnDefinition): void => {
       checkGeneratedDefault(column)
       resolveCollation(column.type.charset, column.type.collation, DEFAULT_COLLATION)
       const { generated, default: value, ...remaining } = column
       const expression = generated?.expr ?? value
-      if (expression?.kind === NODE.CALL) lengthArity(expression)
-      if (expression !== undefined) someNode(expression, bind)
+      if (expression !== undefined) someNode(expression, bindColumnExpression)
       if (generated !== undefined) checkGeneratedAdmission(generated.expr, column.name, modeOf(session.sqlMode))
       else if (column.defaultExpression === true && value !== undefined) checkDefaultAdmission(value, column.name, modeOf(session.sqlMode))
       someNode(remaining, bind)

@@ -37,6 +37,10 @@ const cases = [
   ['ALTER TABLE t MODIFY COLUMN v INT DEFAULT(SLEEP(0))', 3770, false],
   ['ALTER TABLE t ALTER COLUMN v SET DEFAULT(SLEEP(0))', 3770, true],
   ['ALTER TABLE t ALTER COLUMN v SET DEFAULT((SELECT 1))', 3769, true],
+  ['CREATE TABLE u(v INT DEFAULT(IF(TRUE,@x:=@x+1,LENGTH())))', 1582, false],
+  ['CREATE TABLE u(v INT,g INT AS(ABS(OCTET_LENGTH(v,1))))', 1582, false],
+  ['CREATE TABLE u(v INT DEFAULT((WITH c AS(SELECT LENGTH()) SELECT 1)))', 3769, false],
+  ['CREATE TABLE u(v INT,g INT AS((WITH c AS(SELECT LENGTH()) SELECT 1)))', 3102, false],
   ...['LENGTH', 'OCTET_LENGTH', 'CHAR_LENGTH', 'CHARACTER_LENGTH'].flatMap(name => [
     [`CREATE TABLE u(v INT DEFAULT(${name}()))`, 1582, false],
     [`ALTER TABLE t ADD COLUMN g INT AS(${name}(v,1))`, 1582, false],
@@ -161,6 +165,54 @@ test('M5.10: direct length column constructors preserve native diagnostics and s
     }
   } finally {
     if (created) await conn.query('DROP DATABASE column245arity')
+    await conn.end()
+    await db?.end()
+  }
+})
+
+test('M5.10: nested scalar column arity precedes policy and binding with query fences intact', async () => {
+  const { conn, db } = await connection()
+  let created = false
+  try {
+    await conn.query('CREATE DATABASE column246arity')
+    created = true
+    await conn.query('USE column246arity')
+    await conn.query('CREATE TABLE t(v INT)')
+    const calls = [
+      ['ABS(LENGTH())', 'LENGTH'],
+      ['ABS(OCTET_LENGTH(missing,1))', 'OCTET_LENGTH'],
+      ['IF(TRUE,1,CHAR_LENGTH())', 'CHAR_LENGTH'],
+      ['CASE WHEN FALSE THEN CHARACTER_LENGTH() ELSE 1 END', 'CHARACTER_LENGTH'],
+      ['ABS(char_length(LENGTH(),1))', 'char_length'],
+      ['ABS(`CHAR_LENGTH`(LENGTH(),1))', 'CHAR_LENGTH'],
+      ['IF(TRUE,LENGTH(),OCTET_LENGTH())', 'LENGTH'],
+      ['CASE WHEN FALSE THEN CHAR_LENGTH() ELSE CHARACTER_LENGTH() END', 'CHAR_LENGTH'],
+      ['SLEEP(LENGTH())', 'LENGTH'],
+      ['stored_fn(LENGTH())', 'LENGTH'],
+      ['ABS(LENGTH(@@no_such_246,1))', 'LENGTH'],
+    ] as const
+    for (const [call, name] of calls) {
+      const message = `Incorrect parameter count in the call to native function '${name}'`
+      for (const sql of [
+        `CREATE TABLE u(v INT DEFAULT(${call}))`,
+        `CREATE TABLE u(v INT,g INT AS(${call}))`,
+        `ALTER TABLE t ADD COLUMN g INT DEFAULT(${call})`,
+        `ALTER TABLE absent_table ADD COLUMN g INT AS(${call})`,
+      ]) for (const api of apis) {
+        const label = `${sql} [${api}]`
+        await assert.rejects(command(conn, sql, api), {
+          errno: 1582, code: 'ER_WRONG_PARAMCOUNT_TO_NATIVE_FCT', sqlState: '42000', sqlMessage: message,
+        }, label)
+        assert.deepEqual((await conn.query('SHOW WARNINGS'))[0], [{ Level: 'Error', Code: 1582, Message: message }], label)
+      }
+    }
+    assert.deepEqual((await conn.query({ sql: 'SELECT * FROM t', rowsAsArray: true }))[0], [])
+    assert.equal((await conn.query<mysql.RowDataPacket[]>('SHOW FULL TABLES'))[0].length, 1)
+    await conn.query("CREATE TABLE u(v INT DEFAULT(ABS(LENGTH('é'))),g INT AS(IF(TRUE,CHAR_LENGTH('é'),1)))")
+    await conn.query('INSERT INTO u() VALUES()')
+    assert.deepEqual((await conn.query({ sql: 'SELECT * FROM u', rowsAsArray: true }))[0], [[2, 1]])
+  } finally {
+    if (created) await conn.query('DROP DATABASE column246arity')
     await conn.end()
     await db?.end()
   }

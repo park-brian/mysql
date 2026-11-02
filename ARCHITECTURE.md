@@ -1906,9 +1906,10 @@ sorting. Leading-WITH ownership, plain SELECT naming and inherited-holder
 collation admission remain open. Unneeded set-branch sorting is now removed
 while an enclosing LIMIT can retain it; a replacing ORDER BY overrides it.
 Admission, zero-limit evaluation and plain SELECT unbounded ordering remain
-separate. Direct length-function roots in DEFAULT/generated columns now fail
-through the existing column-admission stage and share the compiler count rule.
-Invalid definitions preserve schema and rollbackability. General SELECT, nested
+separate. Length calls in scalar DEFAULT/generated expressions now share the compiler
+count rule during the existing column-admission walk. Outer counts precede
+children; query bodies retain their own admission path.
+Invalid definitions preserve schema and rollbackability. General SELECT, query-body
 and CHECK constructor timing, grouped readers/order, width-limited and large
 fixed-scale formatting, DECIMAL diagnostics, aggregate metadata and separate
 warning timing/labels remain open. UTF-16 writing still reaches the

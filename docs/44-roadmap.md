@@ -74,11 +74,16 @@ matches, preserving prior matching facts. Invalid definitions preserve schema
 and rollbackability; qualified stored calls retain their policy diagnostics.
 SELECT, nested calls and CHECK constructor admission remain open.
 
-Next validate nested scalar column constructors through the existing admission
-walk, preserving subquery/unused-CTE ownership and outer-before-inner count
-priority. A new 384-outcome native probe currently matches 80 complete outcomes;
-subquery policy controls must stay intact. Then return to set admission:
-unbounded UNION ALL can discard key-name binding, while materialized/unary
+Nested scalar column constructors now validate counts through the existing
+admission walk, preserving subquery/unused-CTE ownership and outer-before-inner
+priority. Across 2,960 observations, complete matches improve 1,642 to 1,910,
+with every prior matching fact preserved.
+
+Next audit CHECK constructor admission through the existing DDL walk. A further
+262 native observations distinguish written DEFAULT/CHECK order, column/table
+ownership, policy failures and CREATE AS/unused-CTE fences. Resolve that priority
+before extending the visitor; do not apply it to an entire query statement.
+Then return to set admission: unbounded UNION ALL can discard key-name binding, while materialized/unary
 owners still bind; their COLLATE checks need the inherited holder. Native constructors validate outer arity before nested
 calls, after syntax/charset construction, and leave unused CTE bodies dormant.
 A closing-call parser callback loses these priorities; do not adopt it or move
@@ -2168,8 +2173,8 @@ names, original/lowercase/backtick spellings, empty/excess/nested-invalid
 arguments, missing tables, query/execute/prepare, complete diagnostics and
 unchanged schema. Expanded transaction controls verify refusal before implicit
 commit in three SQL modes; valid Unicode defaults/generated columns still run.
-Actual 87ca7fe fails both new regression groups. SELECT/global-key, nested and
-CHECK construction remain open: native outer arity precedes nested validation,
+Actual 87ca7fe fails both new regression groups. Nested scalar columns are
+extended below; SELECT/global-key, query-body and CHECK construction remain open: native outer arity precedes nested validation,
 syntax/charset construction can fail earlier, and unused CTE bodies stay dormant.
 The discarded closing-call callback lost 80 previously matching outcomes; it
 was not adopted. Twenty-four targeted local cases pass, retaining all 62,502
@@ -2181,6 +2186,32 @@ including 1,737 coercion warning counts. Early source proof covers 533 tests/
 fixtures and 206 runtime sources plus tooling. Parser/core/facade are
 45,491/331,567/331,478 B gzipped. All eleven required 87ca7fe CI jobs pass.
 M5.10 remains partial; totals stay 144/190 and M5 42/53.
+
+**M5.10 nested scalar column constructors, verified:** the existing DEFAULT/
+generated expression admission walk now checks the shared length rule before
+visiting a call's children. Query-expression nodes keep their existing bind-only
+path, so unused CTE declarations are not newly activated. There is no parser
+change, global validation pass, row-time compilation or duplicate arity list.
+
+The 384-outcome scalar/query-fence audit improves 80→240 complete matches; 96
+additional controls improve 10→38. Earlier CREATE and ALTER audits strengthen
+276→292/432 and 440→504/512; general construction retains 836/1,536. Combined
+2,960 observations improve 1,642→1,910, with all 27,536 previously matching facts
+held, including headers, warnings and error details. The added regressions pin
+outer-before-inner priority, IF/CASE inactive branches, prohibited/stored parents,
+unknown system variables, original/lowercase/backtick spelling, all three APIs,
+missing tables, valid nested Unicode expressions and refusal before effects.
+Unused-CTE subquery policy/rollback controls remain intact. CHECK, SELECT/query-
+body constructor timing and charset-warning histories remain open. Actual
+c47d975 fails both new regression groups. Twenty-five targeted local cases pass
+with all 62,502 older fixture outcomes retained. Twenty thousand executor
+statements seeded 20261010 and plans 2,127/2,248 under the unchanged 2,118 floor
+pass. Fresh Docker --reference passes 1,634 main/four latency tests, typecheck,
+lint, nine unchanged caps, package/typed smoke, the real client and all seven
+pinned corpora including 1,737 coercion warning counts. Early source proof covers
+533 tests/fixtures and 206 runtime sources plus tooling. Parser/core/facade are
+45,491/331,592/331,503 B gzipped. All eleven required c47d975 CI jobs pass. Totals
+stay 144/190 and M5 42/53; M5.10 remains partial.
 
 **Next prerequisite: constructor admission before presence execution.** Complete
 the existing CAST work: with written utf8 warning 3719 now retained, refuse
