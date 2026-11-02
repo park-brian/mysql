@@ -6,10 +6,11 @@ import type { QueryError, RowDataPacket } from 'mysql2'
 import { MySQL } from '@myjs/core'
 import nonrecursive from './fixtures/diagnostics/cte-demand.json' with { type: 'json' }
 import recursive from './fixtures/diagnostics/recursive-demand.json' with { type: 'json' }
+import order from './fixtures/diagnostics/recursive-order.json' with { type: 'json' }
 
 const fieldsOf = (fields: readonly mysql.FieldPacket[]) => fields.map(f => [f.name, f.columnType, f.columnLength, f.flags, f.decimals, f.characterSet, f.schema, f.table, f.orgTable, f.orgName])
 
-for (const [name, fixture] of [['nonrecursive', nonrecursive], ['recursive', recursive]] as const) test('M5.10: CTE admission follows demand, lexical scope and source order: ' + name, async () => {
+for (const [name, fixture] of [['nonrecursive', nonrecursive], ['recursive', recursive], ['order', order]] as const) test('M5.10: CTE admission follows demand, lexical scope and source order: ' + name, async () => {
   const host = process.env.MYSQL_REFERENCE_HOST
   const db = host === undefined ? await MySQL.open(':memory:') : undefined
   const c = await mysql.createConnection({

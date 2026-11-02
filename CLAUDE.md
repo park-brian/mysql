@@ -74,8 +74,10 @@ Ordinary diagnostic SELECT clearing is verified correct. Nonrecursive CTE admiss
 now follows the existing demand resolver: projection checks precede sources;
 remaining clauses follow them. Unused variable/routine checks stay dormant.
 Recursive sources now initialize on first demand within a snapshot of the
-pre-declaration namespace. Demanded recursive validation order, non-query
-contexts and CHAR CAST flags remain open.
+pre-declaration namespace. Otherwise valid flat recursive members now reject
+misplaced anchors after existing planning. Scoped and mixed query owners retain
+their paths. Earlier recursive validation order, non-query contexts and CHAR
+CAST flags remain open.
 Invalid definitions preserve schema and rollbackability; general SELECT, query-body
 and CHECK constructor timing remain open. Leading-WITH ownership, plain SELECT
 naming, inherited-holder collation admission, grouped readers/order, width-limited

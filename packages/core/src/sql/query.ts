@@ -1656,6 +1656,7 @@ function references(q: unknown, name: string): boolean {
  */
 function recursiveCte(run: Run, cte: NonNullable<QueryExpression['with']>['tables'][number]): DerivedSource {
   const notYet = (what: string): Error => sqlError('ER_NOT_SUPPORTED_YET', `This version of MySQL doesn't yet support '${what}'`)
+  const nonrecursiveFirst = (): Error => sqlError('ER_CTE_RECURSIVE_REQUIRES_NONRECURSIVE_FIRST', `Recursive Common Table Expression '${cte.name}' should have one or more non-recursive query blocks followed by one or more recursive ones`)
   // `AS ((SELECT 1 UNION ALL …))` is the same query (8.4.11).
   let query: QueryExpression = cte.query
   while (query.body.kind === QUERY.QUERY && query.with === undefined && query.orderBy === undefined && query.limit === undefined) query = query.body
@@ -1678,7 +1679,14 @@ function recursiveCte(run: Run, cte: NonNullable<QueryExpression['with']>['table
   flatten(body)
   const recursive: QueryBody[] = []
   const anchors: QueryBody[] = []
-  for (const member of members) (references(member, cte.name) ? recursive : anchors).push(member)
+  let ordered = true
+  for (const member of members) {
+    if (references(member, cte.name)) recursive.push(member)
+    else {
+      if (recursive.length > 0) ordered = false
+      anchors.push(member)
+    }
+  }
   for (const m of recursive) {
     const select = m.kind === QUERY.QUERY ? m.body : m
     if (m.kind === QUERY.QUERY && (m.orderBy !== undefined || m.limit !== undefined)) throw notYet('ORDER BY / LIMIT / SELECT DISTINCT in recursive query block of Common Table Expression')
@@ -1690,7 +1698,7 @@ function recursiveCte(run: Run, cte: NonNullable<QueryExpression['with']>['table
   }
   const anchorPlans = anchors.map((a) => planQuery(run, asQuery(a)))
   const anchor = anchorPlans[0]
-  if (anchor === undefined) throw sqlError('ER_CTE_RECURSIVE_REQUIRES_NONRECURSIVE_FIRST', `Recursive Common Table Expression '${cte.name}' should have one or more non-recursive query blocks followed by one or more recursive ones`)
+  if (anchor === undefined) throw nonrecursiveFirst()
   // A recursive CTE's table is typed as a set operation's column is, from the anchor alone, and nullable.
   const columns = renamed(anchor.columns, cte.columns, (name, type) => ({ ...setOperationType([type], run.env.session.characterSet), nullable: true, names: { schema: '', table: cte.name, orgTable: '', orgName: name } }))
   let working: readonly (readonly Value[])[] = []
@@ -1705,6 +1713,8 @@ function recursiveCte(run: Run, cte: NonNullable<QueryExpression['with']>['table
   const [limitCount, offset] = queryLimit(run, query)
   const enough = offset + (limitCount ?? Infinity)
   const types = columns.map((c) => c.type)
+  // Flat members prove direct self-reference; other query owners keep their path.
+  if (!ordered && query.with === undefined && members.every(m => m.kind === QUERY.SELECT && !someNode(m, n => (n as QueryExpression).kind === QUERY.QUERY || undefined))) throw nonrecursiveFirst()
   return {
     columns,
     // The anchors once, then the recursive members until a round adds nothing.

@@ -2446,15 +2446,57 @@ and all seven pinned corpora including 1,737 coercion warning counts. Early
 final-source proof matches 540 tests/fixtures and
 206 runtime sources plus tooling. All eleven required c597420 CI jobs pass. Totals stay 144/190 and M5 42/53; M5.10 remains partial.
 
-Next audit demanded recursive validation order at its existing constructor.
-A 36-command native baseline matches 27 completely; a further 36 priority
-controls match 17. MySQL's misplaced-branch refusal is missing here. Anchor
-binding errors still win, and some recursive constructor errors require earlier
-contextualization than the current planner provides. Start with rejecting
-misplaced branches after successful existing binding, preserving every current
-binding error; keep the earlier structural/aggregation priorities, demanded
-column-count and CTE metadata boundaries explicitly separate. Do not add a
-second resolver or move errors ahead of native anchor failures.
+**Flat recursive-member order, verified (2026-11-02):** the
+existing constructor now rejects misplaced nonrecursive members after its
+anchor, step, width and LIMIT planning. Written order is retained while the
+existing classifier partitions members. The existing 3574 error has one local
+factory. Existing binding failures keep their priority.
+
+The role proof is intentionally closed: every member is a SELECT, the
+definition's query has no WITH, and no member contains a nested query node.
+Only there do syntactic unqualified references establish direct self-reference.
+Scoped, derived, scalar-subquery and mixed parenthesized members keep their
+existing route. There is no second namespace resolver or parser shortcut.
+
+The 126-outcome native audit improves 59→78 complete matches. Order controls
+improve 27→33 of 36; priority controls improve 17→18 of 36; flat/clause/alias/join
+controls improve 6→18 of 24. All six strictly matching shadow/unused-definition
+controls survive; the other 24 shadow/parenthesis controls retain three complete
+matches and every previously matching fact. An unrestricted guard would have
+broken those six strict controls. The 48 open outcomes remain captured.
+
+Across 4,243 observations complete matches improve 3,470→3,489, retaining all
+45,249 prior matching protocol facts. All 78 new strict observations pass
+against MySQL 8.4.11 and locally with full packets, metadata and diagnostics.
+Three native and six local protocol cases pass, including current-area controls.
+Actual eb1841c passes the old CTE fixtures and fails the new order fixture;
+the warm runtime is restored afterwards. The two old native fixtures are
+unchanged and share the same runner.
+
+Twenty thousand executor statements seeded 20261010 pass; plans retain
+2,127/2,248 under the unchanged 2,118 floor. All nine unchanged caps pass:
+parser/core/facade are 45,599/332,276/332,199 B gzipped. The full official suite retains all 38
+passing identities and its native baseline; the measured fixture is unchanged.
+The first fresh release run passed 1,642 tests but failed the unchanged
+1,200 ms long-IN assertion at 1,338 ms. Its SQL never enters the changed recursive
+constructor. Both isolated Docker tests pass unchanged. The complete fresh retry,
+without concurrent benchmark/official-suite jobs, passes all 1,643 main tests,
+four latency tests, typecheck, lint, nine unchanged caps, package/typed smoke,
+the real client and all seven pinned corpora including 1,737 coercion warning
+counts. The failed log is retained. Early final-source proof matches 541 tests/fixtures and 206 runtime sources plus tooling. All eleven required
+eb1841c CI jobs pass. Earlier structural/aggregation priorities, demanded
+column-count, scoped reference classification and CTE metadata remain separate
+open work. Totals stay 144/190 and M5 42/53; M5.10 remains partial.
+
+Next prove the recursive column-name cardinality boundary against native.
+A 39-command baseline matches 22 completely: mismatched name lists leave anchor
+names available to recursive-step binding, and field/SELECT-width errors can
+precede 1353. Preserve correct aliases and existing count errors. Duplicate-name
+validation exposes a separate earlier-field precedence gap. A further 36
+controls match 21 completely: duplicate raw anchor names must not turn a
+currently correct 1353 into 1060/1052 during provisional binding. Preserve those
+controls and keep duplicate-name, earlier structural and scoped-classification
+repairs independent.
 
 **Next prerequisite: constructor admission before presence execution.** Complete
 the existing CAST work: with written utf8 warning 3719 now retained, refuse

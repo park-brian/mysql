@@ -1,0 +1,1671 @@
+{
+  "mysqlVersion": "8.4.11",
+  "sqlMode": "ERROR_FOR_DIVISION_BY_ZERO",
+  "seed": "SELECT 1/0,CAST('x' AS DECIMAL)",
+  "observations": [
+    {
+      "sql": "WITH RECURSIVE c AS(SELECT v FROM c UNION ALL SELECT 1 v) SELECT * FROM c",
+      "api": "query",
+      "error": {
+        "code": "ER_CTE_RECURSIVE_REQUIRES_NONRECURSIVE_FIRST",
+        "errno": 3574,
+        "state": "HY000",
+        "message": "Recursive Common Table Expression 'c' should have one or more non-recursive query blocks followed by one or more recursive ones"
+      },
+      "warnings": [
+        [
+          "Error",
+          3574,
+          "Recursive Common Table Expression 'c' should have one or more non-recursive query blocks followed by one or more recursive ones"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "WITH RECURSIVE c AS(SELECT v FROM c UNION ALL SELECT 1 v) SELECT * FROM c",
+      "api": "execute",
+      "error": {
+        "code": "ER_CTE_RECURSIVE_REQUIRES_NONRECURSIVE_FIRST",
+        "errno": 3574,
+        "state": "HY000",
+        "message": "Recursive Common Table Expression 'c' should have one or more non-recursive query blocks followed by one or more recursive ones"
+      },
+      "warnings": [
+        [
+          "Error",
+          3574,
+          "Recursive Common Table Expression 'c' should have one or more non-recursive query blocks followed by one or more recursive ones"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "WITH RECURSIVE c AS(SELECT v FROM c UNION ALL SELECT 1 v) SELECT * FROM c",
+      "api": "prepare",
+      "error": {
+        "code": "ER_CTE_RECURSIVE_REQUIRES_NONRECURSIVE_FIRST",
+        "errno": 3574,
+        "state": "HY000",
+        "message": "Recursive Common Table Expression 'c' should have one or more non-recursive query blocks followed by one or more recursive ones"
+      },
+      "warnings": [
+        [
+          "Error",
+          3574,
+          "Recursive Common Table Expression 'c' should have one or more non-recursive query blocks followed by one or more recursive ones"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "WITH RECURSIVE c AS(SELECT v FROM c UNION ALL SELECT 1 v) SELECT 1",
+      "api": "query",
+      "rows": [
+        [
+          1
+        ]
+      ],
+      "fields": [
+        [
+          "1",
+          8,
+          2,
+          129,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "WITH RECURSIVE c AS(SELECT v FROM c UNION ALL SELECT 1 v) SELECT 1",
+      "api": "execute",
+      "rows": [
+        [
+          1
+        ]
+      ],
+      "fields": [
+        [
+          "1",
+          8,
+          2,
+          129,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "WITH RECURSIVE c AS(SELECT v FROM c UNION ALL SELECT 1 v) SELECT 1",
+      "api": "prepare",
+      "parameters": [],
+      "fields": [
+        [
+          "1",
+          8,
+          2,
+          129,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "WITH RECURSIVE c AS(SELECT 1 v UNION ALL SELECT v FROM c WHERE FALSE UNION ALL SELECT 2 v) SELECT * FROM c",
+      "api": "query",
+      "error": {
+        "code": "ER_CTE_RECURSIVE_REQUIRES_NONRECURSIVE_FIRST",
+        "errno": 3574,
+        "state": "HY000",
+        "message": "Recursive Common Table Expression 'c' should have one or more non-recursive query blocks followed by one or more recursive ones"
+      },
+      "warnings": [
+        [
+          "Error",
+          3574,
+          "Recursive Common Table Expression 'c' should have one or more non-recursive query blocks followed by one or more recursive ones"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "WITH RECURSIVE c AS(SELECT 1 v UNION ALL SELECT v FROM c WHERE FALSE UNION ALL SELECT 2 v) SELECT * FROM c",
+      "api": "execute",
+      "error": {
+        "code": "ER_CTE_RECURSIVE_REQUIRES_NONRECURSIVE_FIRST",
+        "errno": 3574,
+        "state": "HY000",
+        "message": "Recursive Common Table Expression 'c' should have one or more non-recursive query blocks followed by one or more recursive ones"
+      },
+      "warnings": [
+        [
+          "Error",
+          3574,
+          "Recursive Common Table Expression 'c' should have one or more non-recursive query blocks followed by one or more recursive ones"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "WITH RECURSIVE c AS(SELECT 1 v UNION ALL SELECT v FROM c WHERE FALSE UNION ALL SELECT 2 v) SELECT * FROM c",
+      "api": "prepare",
+      "error": {
+        "code": "ER_CTE_RECURSIVE_REQUIRES_NONRECURSIVE_FIRST",
+        "errno": 3574,
+        "state": "HY000",
+        "message": "Recursive Common Table Expression 'c' should have one or more non-recursive query blocks followed by one or more recursive ones"
+      },
+      "warnings": [
+        [
+          "Error",
+          3574,
+          "Recursive Common Table Expression 'c' should have one or more non-recursive query blocks followed by one or more recursive ones"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "WITH RECURSIVE c AS(SELECT 1 v UNION ALL SELECT v FROM c WHERE FALSE UNION ALL SELECT 2 v) SELECT 1",
+      "api": "query",
+      "rows": [
+        [
+          1
+        ]
+      ],
+      "fields": [
+        [
+          "1",
+          8,
+          2,
+          129,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "WITH RECURSIVE c AS(SELECT 1 v UNION ALL SELECT v FROM c WHERE FALSE UNION ALL SELECT 2 v) SELECT 1",
+      "api": "execute",
+      "rows": [
+        [
+          1
+        ]
+      ],
+      "fields": [
+        [
+          "1",
+          8,
+          2,
+          129,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "WITH RECURSIVE c AS(SELECT 1 v UNION ALL SELECT v FROM c WHERE FALSE UNION ALL SELECT 2 v) SELECT 1",
+      "api": "prepare",
+      "parameters": [],
+      "fields": [
+        [
+          "1",
+          8,
+          2,
+          129,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "WITH RECURSIVE c AS(SELECT v FROM c UNION ALL SELECT v FROM missing) SELECT * FROM c",
+      "api": "query",
+      "error": {
+        "code": "ER_NO_DB_ERROR",
+        "errno": 1046,
+        "state": "3D000",
+        "message": "No database selected"
+      },
+      "warnings": [
+        [
+          "Error",
+          1046,
+          "No database selected"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "WITH RECURSIVE c AS(SELECT v FROM c UNION ALL SELECT v FROM missing) SELECT * FROM c",
+      "api": "execute",
+      "error": {
+        "code": "ER_NO_DB_ERROR",
+        "errno": 1046,
+        "state": "3D000",
+        "message": "No database selected"
+      },
+      "warnings": [
+        [
+          "Error",
+          1046,
+          "No database selected"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "WITH RECURSIVE c AS(SELECT v FROM c UNION ALL SELECT v FROM missing) SELECT * FROM c",
+      "api": "prepare",
+      "error": {
+        "code": "ER_NO_DB_ERROR",
+        "errno": 1046,
+        "state": "3D000",
+        "message": "No database selected"
+      },
+      "warnings": [
+        [
+          "Error",
+          1046,
+          "No database selected"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "WITH RECURSIVE c AS(SELECT v FROM c UNION ALL SELECT @@bad_anchor_252 v) SELECT * FROM c",
+      "api": "query",
+      "error": {
+        "code": "ER_UNKNOWN_SYSTEM_VARIABLE",
+        "errno": 1193,
+        "state": "HY000",
+        "message": "Unknown system variable 'bad_anchor_252'"
+      },
+      "warnings": [
+        [
+          "Error",
+          1193,
+          "Unknown system variable 'bad_anchor_252'"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "WITH RECURSIVE c AS(SELECT v FROM c UNION ALL SELECT @@bad_anchor_252 v) SELECT * FROM c",
+      "api": "execute",
+      "error": {
+        "code": "ER_UNKNOWN_SYSTEM_VARIABLE",
+        "errno": 1193,
+        "state": "HY000",
+        "message": "Unknown system variable 'bad_anchor_252'"
+      },
+      "warnings": [
+        [
+          "Error",
+          1193,
+          "Unknown system variable 'bad_anchor_252'"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "WITH RECURSIVE c AS(SELECT v FROM c UNION ALL SELECT @@bad_anchor_252 v) SELECT * FROM c",
+      "api": "prepare",
+      "error": {
+        "code": "ER_UNKNOWN_SYSTEM_VARIABLE",
+        "errno": 1193,
+        "state": "HY000",
+        "message": "Unknown system variable 'bad_anchor_252'"
+      },
+      "warnings": [
+        [
+          "Error",
+          1193,
+          "Unknown system variable 'bad_anchor_252'"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "WITH RECURSIVE c AS(SELECT 1 v UNION ALL SELECT v FROM c WHERE FALSE UNION ALL SELECT @@bad_later_252 v) SELECT * FROM c",
+      "api": "query",
+      "error": {
+        "code": "ER_UNKNOWN_SYSTEM_VARIABLE",
+        "errno": 1193,
+        "state": "HY000",
+        "message": "Unknown system variable 'bad_later_252'"
+      },
+      "warnings": [
+        [
+          "Error",
+          1193,
+          "Unknown system variable 'bad_later_252'"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "WITH RECURSIVE c AS(SELECT 1 v UNION ALL SELECT v FROM c WHERE FALSE UNION ALL SELECT @@bad_later_252 v) SELECT * FROM c",
+      "api": "execute",
+      "error": {
+        "code": "ER_UNKNOWN_SYSTEM_VARIABLE",
+        "errno": 1193,
+        "state": "HY000",
+        "message": "Unknown system variable 'bad_later_252'"
+      },
+      "warnings": [
+        [
+          "Error",
+          1193,
+          "Unknown system variable 'bad_later_252'"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "WITH RECURSIVE c AS(SELECT 1 v UNION ALL SELECT v FROM c WHERE FALSE UNION ALL SELECT @@bad_later_252 v) SELECT * FROM c",
+      "api": "prepare",
+      "error": {
+        "code": "ER_UNKNOWN_SYSTEM_VARIABLE",
+        "errno": 1193,
+        "state": "HY000",
+        "message": "Unknown system variable 'bad_later_252'"
+      },
+      "warnings": [
+        [
+          "Error",
+          1193,
+          "Unknown system variable 'bad_later_252'"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "WITH RECURSIVE c AS(SELECT 1 v UNION ALL SELECT v FROM c WHERE FALSE UNION ALL SELECT v FROM missing) SELECT * FROM c",
+      "api": "query",
+      "error": {
+        "code": "ER_NO_DB_ERROR",
+        "errno": 1046,
+        "state": "3D000",
+        "message": "No database selected"
+      },
+      "warnings": [
+        [
+          "Error",
+          1046,
+          "No database selected"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "WITH RECURSIVE c AS(SELECT 1 v UNION ALL SELECT v FROM c WHERE FALSE UNION ALL SELECT v FROM missing) SELECT * FROM c",
+      "api": "execute",
+      "error": {
+        "code": "ER_NO_DB_ERROR",
+        "errno": 1046,
+        "state": "3D000",
+        "message": "No database selected"
+      },
+      "warnings": [
+        [
+          "Error",
+          1046,
+          "No database selected"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "WITH RECURSIVE c AS(SELECT 1 v UNION ALL SELECT v FROM c WHERE FALSE UNION ALL SELECT v FROM missing) SELECT * FROM c",
+      "api": "prepare",
+      "error": {
+        "code": "ER_NO_DB_ERROR",
+        "errno": 1046,
+        "state": "3D000",
+        "message": "No database selected"
+      },
+      "warnings": [
+        [
+          "Error",
+          1046,
+          "No database selected"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "WITH RECURSIVE c AS(SELECT v FROM c UNION ALL SELECT 1 v) SELECT @@bad_main_252 FROM c",
+      "api": "query",
+      "error": {
+        "code": "ER_UNKNOWN_SYSTEM_VARIABLE",
+        "errno": 1193,
+        "state": "HY000",
+        "message": "Unknown system variable 'bad_main_252'"
+      },
+      "warnings": [
+        [
+          "Error",
+          1193,
+          "Unknown system variable 'bad_main_252'"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "WITH RECURSIVE c AS(SELECT v FROM c UNION ALL SELECT 1 v) SELECT @@bad_main_252 FROM c",
+      "api": "execute",
+      "error": {
+        "code": "ER_UNKNOWN_SYSTEM_VARIABLE",
+        "errno": 1193,
+        "state": "HY000",
+        "message": "Unknown system variable 'bad_main_252'"
+      },
+      "warnings": [
+        [
+          "Error",
+          1193,
+          "Unknown system variable 'bad_main_252'"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "WITH RECURSIVE c AS(SELECT v FROM c UNION ALL SELECT 1 v) SELECT @@bad_main_252 FROM c",
+      "api": "prepare",
+      "error": {
+        "code": "ER_UNKNOWN_SYSTEM_VARIABLE",
+        "errno": 1193,
+        "state": "HY000",
+        "message": "Unknown system variable 'bad_main_252'"
+      },
+      "warnings": [
+        [
+          "Error",
+          1193,
+          "Unknown system variable 'bad_main_252'"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "WITH RECURSIVE c AS(SELECT 1 v UNION ALL SELECT v FROM c WHERE FALSE) SELECT * FROM c",
+      "api": "query",
+      "rows": [
+        [
+          1
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          8,
+          2,
+          0,
+          0,
+          63,
+          "",
+          "c",
+          "",
+          "v"
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "WITH RECURSIVE c AS(SELECT 1 v UNION ALL SELECT v FROM c WHERE FALSE) SELECT * FROM c",
+      "api": "execute",
+      "rows": [
+        [
+          1
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          8,
+          2,
+          0,
+          0,
+          63,
+          "",
+          "c",
+          "",
+          "v"
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "WITH RECURSIVE c AS(SELECT 1 v UNION ALL SELECT v FROM c WHERE FALSE) SELECT * FROM c",
+      "api": "prepare",
+      "parameters": [],
+      "fields": [
+        [
+          "v",
+          8,
+          2,
+          0,
+          0,
+          63,
+          "",
+          "c",
+          "",
+          "v"
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "WITH RECURSIVE c AS(SELECT 1 v UNION ALL SELECT 2 v UNION ALL SELECT v FROM c WHERE FALSE) SELECT * FROM c",
+      "api": "query",
+      "rows": [
+        [
+          1
+        ],
+        [
+          2
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          8,
+          2,
+          0,
+          0,
+          63,
+          "",
+          "c",
+          "",
+          "v"
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "WITH RECURSIVE c AS(SELECT 1 v UNION ALL SELECT 2 v UNION ALL SELECT v FROM c WHERE FALSE) SELECT * FROM c",
+      "api": "execute",
+      "rows": [
+        [
+          1
+        ],
+        [
+          2
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          8,
+          2,
+          0,
+          0,
+          63,
+          "",
+          "c",
+          "",
+          "v"
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "WITH RECURSIVE c AS(SELECT 1 v UNION ALL SELECT 2 v UNION ALL SELECT v FROM c WHERE FALSE) SELECT * FROM c",
+      "api": "prepare",
+      "parameters": [],
+      "fields": [
+        [
+          "v",
+          8,
+          2,
+          0,
+          0,
+          63,
+          "",
+          "c",
+          "",
+          "v"
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "WITH RECURSIVE c AS(SELECT 1 v UNION ALL SELECT SUM(v) FROM c) SELECT * FROM c",
+      "api": "query",
+      "error": {
+        "code": "ER_CTE_RECURSIVE_FORBIDS_AGGREGATION",
+        "errno": 3575,
+        "state": "HY000",
+        "message": "Recursive Common Table Expression 'c' can contain neither aggregation nor window functions in recursive query block"
+      },
+      "warnings": [
+        [
+          "Error",
+          3575,
+          "Recursive Common Table Expression 'c' can contain neither aggregation nor window functions in recursive query block"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "WITH RECURSIVE c AS(SELECT 1 v UNION ALL SELECT SUM(v) FROM c) SELECT * FROM c",
+      "api": "execute",
+      "error": {
+        "code": "ER_CTE_RECURSIVE_FORBIDS_AGGREGATION",
+        "errno": 3575,
+        "state": "HY000",
+        "message": "Recursive Common Table Expression 'c' can contain neither aggregation nor window functions in recursive query block"
+      },
+      "warnings": [
+        [
+          "Error",
+          3575,
+          "Recursive Common Table Expression 'c' can contain neither aggregation nor window functions in recursive query block"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "WITH RECURSIVE c AS(SELECT 1 v UNION ALL SELECT SUM(v) FROM c) SELECT * FROM c",
+      "api": "prepare",
+      "error": {
+        "code": "ER_CTE_RECURSIVE_FORBIDS_AGGREGATION",
+        "errno": 3575,
+        "state": "HY000",
+        "message": "Recursive Common Table Expression 'c' can contain neither aggregation nor window functions in recursive query block"
+      },
+      "warnings": [
+        [
+          "Error",
+          3575,
+          "Recursive Common Table Expression 'c' can contain neither aggregation nor window functions in recursive query block"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "WITH RECURSIVE c AS(SELECT v FROM c UNION ALL SELECT v FROM c) SELECT * FROM c",
+      "api": "query",
+      "error": {
+        "code": "ER_CTE_RECURSIVE_REQUIRES_NONRECURSIVE_FIRST",
+        "errno": 3574,
+        "state": "HY000",
+        "message": "Recursive Common Table Expression 'c' should have one or more non-recursive query blocks followed by one or more recursive ones"
+      },
+      "warnings": [
+        [
+          "Error",
+          3574,
+          "Recursive Common Table Expression 'c' should have one or more non-recursive query blocks followed by one or more recursive ones"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "WITH RECURSIVE c AS(SELECT v FROM c UNION ALL SELECT v FROM c) SELECT * FROM c",
+      "api": "execute",
+      "error": {
+        "code": "ER_CTE_RECURSIVE_REQUIRES_NONRECURSIVE_FIRST",
+        "errno": 3574,
+        "state": "HY000",
+        "message": "Recursive Common Table Expression 'c' should have one or more non-recursive query blocks followed by one or more recursive ones"
+      },
+      "warnings": [
+        [
+          "Error",
+          3574,
+          "Recursive Common Table Expression 'c' should have one or more non-recursive query blocks followed by one or more recursive ones"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "WITH RECURSIVE c AS(SELECT v FROM c UNION ALL SELECT v FROM c) SELECT * FROM c",
+      "api": "prepare",
+      "error": {
+        "code": "ER_CTE_RECURSIVE_REQUIRES_NONRECURSIVE_FIRST",
+        "errno": 3574,
+        "state": "HY000",
+        "message": "Recursive Common Table Expression 'c' should have one or more non-recursive query blocks followed by one or more recursive ones"
+      },
+      "warnings": [
+        [
+          "Error",
+          3574,
+          "Recursive Common Table Expression 'c' should have one or more non-recursive query blocks followed by one or more recursive ones"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "WITH RECURSIVE c AS(SELECT @@bad_step_252 FROM c UNION ALL SELECT 1 v) SELECT * FROM c",
+      "api": "query",
+      "error": {
+        "code": "ER_UNKNOWN_SYSTEM_VARIABLE",
+        "errno": 1193,
+        "state": "HY000",
+        "message": "Unknown system variable 'bad_step_252'"
+      },
+      "warnings": [
+        [
+          "Error",
+          1193,
+          "Unknown system variable 'bad_step_252'"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "WITH RECURSIVE c AS(SELECT @@bad_step_252 FROM c UNION ALL SELECT 1 v) SELECT * FROM c",
+      "api": "execute",
+      "error": {
+        "code": "ER_UNKNOWN_SYSTEM_VARIABLE",
+        "errno": 1193,
+        "state": "HY000",
+        "message": "Unknown system variable 'bad_step_252'"
+      },
+      "warnings": [
+        [
+          "Error",
+          1193,
+          "Unknown system variable 'bad_step_252'"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "WITH RECURSIVE c AS(SELECT @@bad_step_252 FROM c UNION ALL SELECT 1 v) SELECT * FROM c",
+      "api": "prepare",
+      "error": {
+        "code": "ER_UNKNOWN_SYSTEM_VARIABLE",
+        "errno": 1193,
+        "state": "HY000",
+        "message": "Unknown system variable 'bad_step_252'"
+      },
+      "warnings": [
+        [
+          "Error",
+          1193,
+          "Unknown system variable 'bad_step_252'"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "WITH RECURSIVE c AS(SELECT v FROM missing UNION ALL SELECT @@bad_step_252 FROM c) SELECT * FROM c",
+      "api": "query",
+      "error": {
+        "code": "ER_NO_DB_ERROR",
+        "errno": 1046,
+        "state": "3D000",
+        "message": "No database selected"
+      },
+      "warnings": [
+        [
+          "Error",
+          1046,
+          "No database selected"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "WITH RECURSIVE c AS(SELECT v FROM missing UNION ALL SELECT @@bad_step_252 FROM c) SELECT * FROM c",
+      "api": "execute",
+      "error": {
+        "code": "ER_NO_DB_ERROR",
+        "errno": 1046,
+        "state": "3D000",
+        "message": "No database selected"
+      },
+      "warnings": [
+        [
+          "Error",
+          1046,
+          "No database selected"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "WITH RECURSIVE c AS(SELECT v FROM missing UNION ALL SELECT @@bad_step_252 FROM c) SELECT * FROM c",
+      "api": "prepare",
+      "error": {
+        "code": "ER_NO_DB_ERROR",
+        "errno": 1046,
+        "state": "3D000",
+        "message": "No database selected"
+      },
+      "warnings": [
+        [
+          "Error",
+          1046,
+          "No database selected"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "WITH RECURSIVE c AS(SELECT @@warning_count FROM c UNION ALL SELECT 1 v) SELECT * FROM c",
+      "api": "query",
+      "error": {
+        "code": "ER_CTE_RECURSIVE_REQUIRES_NONRECURSIVE_FIRST",
+        "errno": 3574,
+        "state": "HY000",
+        "message": "Recursive Common Table Expression 'c' should have one or more non-recursive query blocks followed by one or more recursive ones"
+      },
+      "warnings": [
+        [
+          "Error",
+          3574,
+          "Recursive Common Table Expression 'c' should have one or more non-recursive query blocks followed by one or more recursive ones"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "WITH RECURSIVE c AS(SELECT @@warning_count FROM c UNION ALL SELECT 1 v) SELECT * FROM c",
+      "api": "execute",
+      "error": {
+        "code": "ER_UNSUPPORTED_PS",
+        "errno": 1295,
+        "state": "HY000",
+        "message": "This command is not supported in the prepared statement protocol yet"
+      },
+      "warnings": [
+        [
+          "Error",
+          1295,
+          "This command is not supported in the prepared statement protocol yet"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "WITH RECURSIVE c AS(SELECT @@warning_count FROM c UNION ALL SELECT 1 v) SELECT * FROM c",
+      "api": "prepare",
+      "error": {
+        "code": "ER_UNSUPPORTED_PS",
+        "errno": 1295,
+        "state": "HY000",
+        "message": "This command is not supported in the prepared statement protocol yet"
+      },
+      "warnings": [
+        [
+          "Error",
+          1295,
+          "This command is not supported in the prepared statement protocol yet"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "WITH RECURSIVE c AS(SELECT 1 v UNION ALL SELECT SUM(v) FROM c) SELECT 1",
+      "api": "query",
+      "rows": [
+        [
+          1
+        ]
+      ],
+      "fields": [
+        [
+          "1",
+          8,
+          2,
+          129,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "WITH RECURSIVE c AS(SELECT 1 v UNION ALL SELECT SUM(v) FROM c) SELECT 1",
+      "api": "execute",
+      "rows": [
+        [
+          1
+        ]
+      ],
+      "fields": [
+        [
+          "1",
+          8,
+          2,
+          129,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "WITH RECURSIVE c AS(SELECT 1 v UNION ALL SELECT SUM(v) FROM c) SELECT 1",
+      "api": "prepare",
+      "parameters": [],
+      "fields": [
+        [
+          "1",
+          8,
+          2,
+          129,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "WITH RECURSIVE c AS((SELECT 1 v UNION ALL SELECT 2 v) UNION ALL SELECT v FROM c WHERE FALSE) SELECT * FROM c",
+      "api": "query",
+      "rows": [
+        [
+          1
+        ],
+        [
+          2
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          8,
+          2,
+          0,
+          0,
+          63,
+          "",
+          "c",
+          "",
+          "v"
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "WITH RECURSIVE c AS((SELECT 1 v UNION ALL SELECT 2 v) UNION ALL SELECT v FROM c WHERE FALSE) SELECT * FROM c",
+      "api": "execute",
+      "rows": [
+        [
+          1
+        ],
+        [
+          2
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          8,
+          2,
+          0,
+          0,
+          63,
+          "",
+          "c",
+          "",
+          "v"
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "WITH RECURSIVE c AS((SELECT 1 v UNION ALL SELECT 2 v) UNION ALL SELECT v FROM c WHERE FALSE) SELECT * FROM c",
+      "api": "prepare",
+      "parameters": [],
+      "fields": [
+        [
+          "v",
+          8,
+          2,
+          0,
+          0,
+          63,
+          "",
+          "c",
+          "",
+          "v"
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "WITH RECURSIVE c AS((WITH c AS(SELECT 1 v) SELECT * FROM c) UNION SELECT 1 v) SELECT 1 FROM c",
+      "api": "query",
+      "rows": [
+        [
+          1
+        ]
+      ],
+      "fields": [
+        [
+          "1",
+          8,
+          2,
+          129,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "WITH RECURSIVE c AS((WITH c AS(SELECT 1 v) SELECT * FROM c) UNION SELECT 1 v) SELECT 1 FROM c",
+      "api": "execute",
+      "rows": [
+        [
+          1
+        ]
+      ],
+      "fields": [
+        [
+          "1",
+          8,
+          2,
+          129,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "WITH RECURSIVE c AS((WITH c AS(SELECT 1 v) SELECT * FROM c) UNION SELECT 1 v) SELECT 1 FROM c",
+      "api": "prepare",
+      "parameters": [],
+      "fields": [
+        [
+          "1",
+          8,
+          2,
+          129,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "WITH RECURSIVE c AS((WITH d AS(SELECT * FROM c) SELECT 1 v) UNION SELECT 1 v) SELECT 1 FROM c",
+      "api": "query",
+      "rows": [
+        [
+          1
+        ]
+      ],
+      "fields": [
+        [
+          "1",
+          8,
+          2,
+          129,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "WITH RECURSIVE c AS((WITH d AS(SELECT * FROM c) SELECT 1 v) UNION SELECT 1 v) SELECT 1 FROM c",
+      "api": "execute",
+      "rows": [
+        [
+          1
+        ]
+      ],
+      "fields": [
+        [
+          "1",
+          8,
+          2,
+          129,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "WITH RECURSIVE c AS((WITH d AS(SELECT * FROM c) SELECT 1 v) UNION SELECT 1 v) SELECT 1 FROM c",
+      "api": "prepare",
+      "parameters": [],
+      "fields": [
+        [
+          "1",
+          8,
+          2,
+          129,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "WITH RECURSIVE c AS(SELECT x.v FROM c x UNION ALL SELECT 1 v) SELECT 1 FROM c",
+      "api": "query",
+      "error": {
+        "code": "ER_CTE_RECURSIVE_REQUIRES_NONRECURSIVE_FIRST",
+        "errno": 3574,
+        "state": "HY000",
+        "message": "Recursive Common Table Expression 'c' should have one or more non-recursive query blocks followed by one or more recursive ones"
+      },
+      "warnings": [
+        [
+          "Error",
+          3574,
+          "Recursive Common Table Expression 'c' should have one or more non-recursive query blocks followed by one or more recursive ones"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "WITH RECURSIVE c AS(SELECT x.v FROM c x UNION ALL SELECT 1 v) SELECT 1 FROM c",
+      "api": "execute",
+      "error": {
+        "code": "ER_CTE_RECURSIVE_REQUIRES_NONRECURSIVE_FIRST",
+        "errno": 3574,
+        "state": "HY000",
+        "message": "Recursive Common Table Expression 'c' should have one or more non-recursive query blocks followed by one or more recursive ones"
+      },
+      "warnings": [
+        [
+          "Error",
+          3574,
+          "Recursive Common Table Expression 'c' should have one or more non-recursive query blocks followed by one or more recursive ones"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "WITH RECURSIVE c AS(SELECT x.v FROM c x UNION ALL SELECT 1 v) SELECT 1 FROM c",
+      "api": "prepare",
+      "error": {
+        "code": "ER_CTE_RECURSIVE_REQUIRES_NONRECURSIVE_FIRST",
+        "errno": 3574,
+        "state": "HY000",
+        "message": "Recursive Common Table Expression 'c' should have one or more non-recursive query blocks followed by one or more recursive ones"
+      },
+      "warnings": [
+        [
+          "Error",
+          3574,
+          "Recursive Common Table Expression 'c' should have one or more non-recursive query blocks followed by one or more recursive ones"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "WITH RECURSIVE c AS(SELECT 1 v UNION ALL SELECT x.v FROM c x WHERE FALSE UNION ALL SELECT 2 v) SELECT 1 FROM c",
+      "api": "query",
+      "error": {
+        "code": "ER_CTE_RECURSIVE_REQUIRES_NONRECURSIVE_FIRST",
+        "errno": 3574,
+        "state": "HY000",
+        "message": "Recursive Common Table Expression 'c' should have one or more non-recursive query blocks followed by one or more recursive ones"
+      },
+      "warnings": [
+        [
+          "Error",
+          3574,
+          "Recursive Common Table Expression 'c' should have one or more non-recursive query blocks followed by one or more recursive ones"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "WITH RECURSIVE c AS(SELECT 1 v UNION ALL SELECT x.v FROM c x WHERE FALSE UNION ALL SELECT 2 v) SELECT 1 FROM c",
+      "api": "execute",
+      "error": {
+        "code": "ER_CTE_RECURSIVE_REQUIRES_NONRECURSIVE_FIRST",
+        "errno": 3574,
+        "state": "HY000",
+        "message": "Recursive Common Table Expression 'c' should have one or more non-recursive query blocks followed by one or more recursive ones"
+      },
+      "warnings": [
+        [
+          "Error",
+          3574,
+          "Recursive Common Table Expression 'c' should have one or more non-recursive query blocks followed by one or more recursive ones"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "WITH RECURSIVE c AS(SELECT 1 v UNION ALL SELECT x.v FROM c x WHERE FALSE UNION ALL SELECT 2 v) SELECT 1 FROM c",
+      "api": "prepare",
+      "error": {
+        "code": "ER_CTE_RECURSIVE_REQUIRES_NONRECURSIVE_FIRST",
+        "errno": 3574,
+        "state": "HY000",
+        "message": "Recursive Common Table Expression 'c' should have one or more non-recursive query blocks followed by one or more recursive ones"
+      },
+      "warnings": [
+        [
+          "Error",
+          3574,
+          "Recursive Common Table Expression 'c' should have one or more non-recursive query blocks followed by one or more recursive ones"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "WITH RECURSIVE d AS(SELECT 2 v),c AS(SELECT x.v FROM c x JOIN d ON x.v=d.v UNION ALL SELECT 1 v) SELECT 1 FROM c",
+      "api": "query",
+      "error": {
+        "code": "ER_CTE_RECURSIVE_REQUIRES_NONRECURSIVE_FIRST",
+        "errno": 3574,
+        "state": "HY000",
+        "message": "Recursive Common Table Expression 'c' should have one or more non-recursive query blocks followed by one or more recursive ones"
+      },
+      "warnings": [
+        [
+          "Error",
+          3574,
+          "Recursive Common Table Expression 'c' should have one or more non-recursive query blocks followed by one or more recursive ones"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "WITH RECURSIVE d AS(SELECT 2 v),c AS(SELECT x.v FROM c x JOIN d ON x.v=d.v UNION ALL SELECT 1 v) SELECT 1 FROM c",
+      "api": "execute",
+      "error": {
+        "code": "ER_CTE_RECURSIVE_REQUIRES_NONRECURSIVE_FIRST",
+        "errno": 3574,
+        "state": "HY000",
+        "message": "Recursive Common Table Expression 'c' should have one or more non-recursive query blocks followed by one or more recursive ones"
+      },
+      "warnings": [
+        [
+          "Error",
+          3574,
+          "Recursive Common Table Expression 'c' should have one or more non-recursive query blocks followed by one or more recursive ones"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "WITH RECURSIVE d AS(SELECT 2 v),c AS(SELECT x.v FROM c x JOIN d ON x.v=d.v UNION ALL SELECT 1 v) SELECT 1 FROM c",
+      "api": "prepare",
+      "error": {
+        "code": "ER_CTE_RECURSIVE_REQUIRES_NONRECURSIVE_FIRST",
+        "errno": 3574,
+        "state": "HY000",
+        "message": "Recursive Common Table Expression 'c' should have one or more non-recursive query blocks followed by one or more recursive ones"
+      },
+      "warnings": [
+        [
+          "Error",
+          3574,
+          "Recursive Common Table Expression 'c' should have one or more non-recursive query blocks followed by one or more recursive ones"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "WITH RECURSIVE d AS(SELECT 2 v),c AS(SELECT v FROM d UNION ALL SELECT v FROM c WHERE FALSE) SELECT 1 FROM c",
+      "api": "query",
+      "rows": [
+        [
+          1
+        ]
+      ],
+      "fields": [
+        [
+          "1",
+          8,
+          2,
+          129,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "WITH RECURSIVE d AS(SELECT 2 v),c AS(SELECT v FROM d UNION ALL SELECT v FROM c WHERE FALSE) SELECT 1 FROM c",
+      "api": "execute",
+      "rows": [
+        [
+          1
+        ]
+      ],
+      "fields": [
+        [
+          "1",
+          8,
+          2,
+          129,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "WITH RECURSIVE d AS(SELECT 2 v),c AS(SELECT v FROM d UNION ALL SELECT v FROM c WHERE FALSE) SELECT 1 FROM c",
+      "api": "prepare",
+      "parameters": [],
+      "fields": [
+        [
+          "1",
+          8,
+          2,
+          129,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "WITH RECURSIVE c AS(SELECT 1 v UNION ALL SELECT v FROM c WHERE LENGTH(0x78)=0 UNION ALL SELECT 2 v) SELECT 1 FROM c",
+      "api": "query",
+      "error": {
+        "code": "ER_CTE_RECURSIVE_REQUIRES_NONRECURSIVE_FIRST",
+        "errno": 3574,
+        "state": "HY000",
+        "message": "Recursive Common Table Expression 'c' should have one or more non-recursive query blocks followed by one or more recursive ones"
+      },
+      "warnings": [
+        [
+          "Error",
+          3574,
+          "Recursive Common Table Expression 'c' should have one or more non-recursive query blocks followed by one or more recursive ones"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "WITH RECURSIVE c AS(SELECT 1 v UNION ALL SELECT v FROM c WHERE LENGTH(0x78)=0 UNION ALL SELECT 2 v) SELECT 1 FROM c",
+      "api": "execute",
+      "error": {
+        "code": "ER_CTE_RECURSIVE_REQUIRES_NONRECURSIVE_FIRST",
+        "errno": 3574,
+        "state": "HY000",
+        "message": "Recursive Common Table Expression 'c' should have one or more non-recursive query blocks followed by one or more recursive ones"
+      },
+      "warnings": [
+        [
+          "Error",
+          3574,
+          "Recursive Common Table Expression 'c' should have one or more non-recursive query blocks followed by one or more recursive ones"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "WITH RECURSIVE c AS(SELECT 1 v UNION ALL SELECT v FROM c WHERE LENGTH(0x78)=0 UNION ALL SELECT 2 v) SELECT 1 FROM c",
+      "api": "prepare",
+      "error": {
+        "code": "ER_CTE_RECURSIVE_REQUIRES_NONRECURSIVE_FIRST",
+        "errno": 3574,
+        "state": "HY000",
+        "message": "Recursive Common Table Expression 'c' should have one or more non-recursive query blocks followed by one or more recursive ones"
+      },
+      "warnings": [
+        [
+          "Error",
+          3574,
+          "Recursive Common Table Expression 'c' should have one or more non-recursive query blocks followed by one or more recursive ones"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "WITH RECURSIVE c AS(SELECT 1 v UNION ALL SELECT v FROM c WHERE FALSE) SELECT 1 FROM c",
+      "api": "query",
+      "rows": [
+        [
+          1
+        ]
+      ],
+      "fields": [
+        [
+          "1",
+          8,
+          2,
+          129,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "WITH RECURSIVE c AS(SELECT 1 v UNION ALL SELECT v FROM c WHERE FALSE) SELECT 1 FROM c",
+      "api": "execute",
+      "rows": [
+        [
+          1
+        ]
+      ],
+      "fields": [
+        [
+          "1",
+          8,
+          2,
+          129,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "WITH RECURSIVE c AS(SELECT 1 v UNION ALL SELECT v FROM c WHERE FALSE) SELECT 1 FROM c",
+      "api": "prepare",
+      "parameters": [],
+      "fields": [
+        [
+          "1",
+          8,
+          2,
+          129,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    }
+  ]
+}
