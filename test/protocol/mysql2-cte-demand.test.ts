@@ -7,10 +7,11 @@ import { MySQL } from '@myjs/core'
 import nonrecursive from './fixtures/diagnostics/cte-demand.json' with { type: 'json' }
 import recursive from './fixtures/diagnostics/recursive-demand.json' with { type: 'json' }
 import order from './fixtures/diagnostics/recursive-order.json' with { type: 'json' }
+import names from './fixtures/diagnostics/recursive-names.json' with { type: 'json' }
 
 const fieldsOf = (fields: readonly mysql.FieldPacket[]) => fields.map(f => [f.name, f.columnType, f.columnLength, f.flags, f.decimals, f.characterSet, f.schema, f.table, f.orgTable, f.orgName])
 
-for (const [name, fixture] of [['nonrecursive', nonrecursive], ['recursive', recursive], ['order', order]] as const) test('M5.10: CTE admission follows demand, lexical scope and source order: ' + name, async () => {
+for (const [name, fixture] of [['nonrecursive', nonrecursive], ['recursive', recursive], ['order', order], ['names', names]] as const) test('M5.10: CTE admission follows demand, lexical scope and source order: ' + name, async () => {
   const host = process.env.MYSQL_REFERENCE_HOST
   const db = host === undefined ? await MySQL.open(':memory:') : undefined
   const c = await mysql.createConnection({
@@ -24,6 +25,8 @@ for (const [name, fixture] of [['nonrecursive', nonrecursive], ['recursive', rec
     for (const expected of fixture.observations) {
       const { sql, api } = expected
       c.unprepare(sql)
+      const limit = 'limit' in expected ? expected.limit : 64
+      await c.query('SET max_error_count=?', [limit])
       await c.query(fixture.seed)
       let result: object
       try {
@@ -45,7 +48,7 @@ for (const [name, fixture] of [['nonrecursive', nonrecursive], ['recursive', rec
       const [warnings] = await c.query('SHOW WARNINGS')
       const warningCount = String((await c.query<RowDataPacket[]>('SHOW COUNT(*) WARNINGS'))[0][0]![0])
       const errorCount = String((await c.query<RowDataPacket[]>('SHOW COUNT(*) ERRORS'))[0][0]![0])
-      assert.deepEqual({ sql, api, ...result, warnings, warningCount, errorCount }, expected, `${sql} [${api}]`)
+      assert.deepEqual({ sql, api, ...('limit' in expected ? { limit } : {}), ...result, warnings, warningCount, errorCount }, expected, `${sql} [${api}]`)
       c.unprepare(sql)
     }
   } finally { await c.end(); await db?.end() }

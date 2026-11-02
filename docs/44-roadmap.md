@@ -2488,15 +2488,54 @@ eb1841c CI jobs pass. Earlier structural/aggregation priorities, demanded
 column-count, scoped reference classification and CTE metadata remain separate
 open work. Totals stay 144/190 and M5 42/53; M5.10 remains partial.
 
-Next prove the recursive column-name cardinality boundary against native.
-A 39-command baseline matches 22 completely: mismatched name lists leave anchor
-names available to recursive-step binding, and field/SELECT-width errors can
-precede 1353. Preserve correct aliases and existing count errors. Duplicate-name
-validation exposes a separate earlier-field precedence gap. A further 36
-controls match 21 completely: duplicate raw anchor names must not turn a
-currently correct 1353 into 1060/1052 during provisional binding. Preserve those
-controls and keep duplicate-name, earlier structural and scoped-classification
-repairs independent.
+**Recursive name-list cardinality, verified (2026-11-02):**
+ordered members with unique original anchor names now bind their recursive
+steps before a mismatched name list is rejected. The same lowercase name fold
+establishes uniqueness. Provisional fields retain their actual anchor names;
+correct-cardinality aliases and duplicate-anchor paths retain their owner.
+A shared cardinality check supplies 1353 both in ordinary renaming and after
+recursive binding, width, PREPARE, ordering and LIMIT admission. No synthetic
+fields or additional resolver is introduced.
+
+The initial unique-anchor-only prototype lost three previously matching
+SQLSTATE facts by exposing a field error ahead of native recursive-order 3574.
+The ordered-member prerequisite retains that independent gap on its old path;
+the failed preservation output is kept. Duplicate raw anchor controls also
+retain their correct 1353, rather than prematurely producing 1060/1052.
+
+The 195-observation native audit improves 112→168 complete matches: 39 name
+controls improve 22→36, 36 declaration controls improve 15→30, 36 priority
+controls retain 21, twelve scoped controls improve 6→9, and 72 construction-
+warning controls improve 48→72 at limits 0/1/8/64. All 27 remaining outcomes
+are retained, including misordered, duplicate and spelling differences.
+Across 4,438 observations complete matches improve 3,601→3,660, preserving
+all 47,428 prior matching protocol facts without exceptions. All 168 new strict
+observations pass natively and locally with complete metadata and diagnostics;
+the existing three fixtures stay unchanged. Four native and seven local cases
+pass, including current-area controls. Actual f30055a fails the new names
+fixture after passing the prior fixtures; the warm runtime is restored.
+
+Typecheck, 20,000 executor statements seeded 20261010, and plans at 2,127/2,248
+under the unchanged 2,118 floor pass. All nine unchanged caps pass at parser/
+core/facade 45,599/332,370/332,285 B gzipped. The full official suite retains all
+38 passing identities and its native baseline; the measurement is unchanged.
+Fresh Docker verification started after all warm jobs finished. It passes
+1,644 main tests, four latency tests, typecheck, lint, all nine unchanged caps,
+package/typed smoke, the real client and all seven pinned corpora including
+1,737 coercion warning counts. The unchanged long-IN timing assertion passes. Early source proof matches 542 tests/fixtures and
+206 runtime sources plus tooling. All eleven required f30055a CI jobs pass. Correct-count duplicate-field timing,
+duplicate-name spelling, broader structural and scoped-reference classification,
+CTE metadata and non-query contexts remain open. Totals remain 144/190 and
+M5 42/53; M5.10 stays partial.
+
+Next repair duplicate-column spelling only for explicit declaration lists at
+the existing renaming owner. A 60-command native audit matches 19 completely:
+CTE/recursive/view explicit lists report the first spelling, while raw copied
+SELECT names in derived tables and views report the later one. Both orders and
+accented case pairs prove that a global first-name replacement would regress
+correct copied-name diagnostics. Explicit derived-table lists confirm the same
+first-spelling rule. View PREPARE timing remains a separate gap.
+Keep earlier duplicate-field binding and cardinality priorities separate.
 
 **Next prerequisite: constructor admission before presence execution.** Complete
 the existing CAST work: with written utf8 warning 3719 now retained, refuse

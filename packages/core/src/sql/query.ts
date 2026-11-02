@@ -1602,11 +1602,16 @@ function sourceInteger(e: Expression): bigint | undefined {
   return undefined
 }
 
-/** Owned field types and names: 1353 for a mismatched list, 1060 for a name twice. */
-function renamed(columns: readonly { readonly name: string; readonly type: ResultType }[], names: readonly string[] | undefined, fieldType: (name: string, type: { -readonly [K in keyof ResultType]: ResultType[K] }) => ResultType) {
-  if (names !== undefined && names.length !== columns.length) {
+/** The same declaration-list cardinality applies before or after field binding. */
+function checkNameCount(length: number, names: readonly string[] | undefined): void {
+  if (names !== undefined && names.length !== length) {
     throw sqlError('ER_VIEW_WRONG_LIST', 'In definition of view, derived table or common table expression, SELECT list and column names list have different column counts')
   }
+}
+
+/** Owned field types and names: 1353 for a mismatched list, 1060 for a name twice. */
+function renamed(columns: readonly { readonly name: string; readonly type: ResultType }[], names: readonly string[] | undefined, fieldType: (name: string, type: { -readonly [K in keyof ResultType]: ResultType[K] }) => ResultType) {
+  checkNameCount(columns.length, names)
   const seen = new Set<string>()
   for (const [i, column] of columns.entries()) {
     const name = names?.[i] ?? column.name
@@ -1700,7 +1705,11 @@ function recursiveCte(run: Run, cte: NonNullable<QueryExpression['with']>['table
   const anchor = anchorPlans[0]
   if (anchor === undefined) throw nonrecursiveFirst()
   // A recursive CTE's table is typed as a set operation's column is, from the anchor alone, and nullable.
-  const columns = renamed(anchor.columns, cte.columns, (name, type) => ({ ...setOperationType([type], run.env.session.characterSet), nullable: true, names: { schema: '', table: cte.name, orgTable: '', orgName: name } }))
+  // A mismatched list supplies no aliases while steps bind. Duplicate anchors
+  // retain their existing admission rather than constructing ambiguous fields.
+  const deferredNames = ordered && cte.columns !== undefined && cte.columns.length !== anchor.columns.length
+    && new Set(anchor.columns.map(c => c.name.toLowerCase())).size === anchor.columns.length
+  const columns = renamed(anchor.columns, deferredNames ? undefined : cte.columns, (name, type) => ({ ...setOperationType([type], run.env.session.characterSet), nullable: true, names: { schema: '', table: cte.name, orgTable: '', orgName: name } }))
   let working: readonly (readonly Value[])[] = []
   // What a recursive member reads of the CTE: the rows the last round added.
   const workingTable: DerivedSource = { columns, rows: () => working, explain: () => ({ merged: true, node: planNode(`Scan new records on ${cte.name}`) }) }
@@ -1715,6 +1724,7 @@ function recursiveCte(run: Run, cte: NonNullable<QueryExpression['with']>['table
   const types = columns.map((c) => c.type)
   // Flat members prove direct self-reference; other query owners keep their path.
   if (!ordered && query.with === undefined && members.every(m => m.kind === QUERY.SELECT && !someNode(m, n => (n as QueryExpression).kind === QUERY.QUERY || undefined))) throw nonrecursiveFirst()
+  if (deferredNames) checkNameCount(columns.length, cte.columns)
   return {
     columns,
     // The anchors once, then the recursive members until a round adds nothing.

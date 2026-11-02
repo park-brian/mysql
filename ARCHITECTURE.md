@@ -1924,8 +1924,10 @@ remaining clauses follow them. Unused variable/routine checks stay dormant.
 Recursive sources now initialize on first demand within a snapshot of the
 pre-declaration namespace. Otherwise valid flat recursive members now reject
 misplaced anchors after existing planning. Scoped and mixed query owners retain
-their paths. Earlier recursive validation order, non-query contexts and CHAR
-CAST flags remain open.
+their paths. Ordered anchors with unique original names now bind recursive
+steps before rejecting a mismatched column-name list. Duplicate-anchor paths
+keep their earlier check. Earlier recursive validation order, duplicate-name
+behavior, non-query contexts and CHAR CAST flags remain open.
 Invalid definitions preserve schema and rollbackability. General SELECT, query-body
 and CHECK constructor timing, grouped readers/order, width-limited and large
 fixed-scale formatting, DECIMAL diagnostics, aggregate metadata and separate

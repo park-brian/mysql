@@ -1,0 +1,3579 @@
+{
+  "mysqlVersion": "8.4.11",
+  "sqlMode": "ERROR_FOR_DIVISION_BY_ZERO",
+  "seed": "SELECT 1/0,CAST('x' AS DECIMAL)",
+  "observations": [
+    {
+      "sql": "WITH RECURSIVE c(a,b) AS(SELECT 1 x UNION ALL SELECT a FROM c WHERE FALSE) SELECT * FROM c",
+      "api": "query",
+      "error": {
+        "code": "ER_BAD_FIELD_ERROR",
+        "errno": 1054,
+        "state": "42S22",
+        "message": "Unknown column 'a' in 'field list'"
+      },
+      "warnings": [
+        [
+          "Error",
+          1054,
+          "Unknown column 'a' in 'field list'"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "WITH RECURSIVE c(a,b) AS(SELECT 1 x UNION ALL SELECT a FROM c WHERE FALSE) SELECT * FROM c",
+      "api": "execute",
+      "error": {
+        "code": "ER_BAD_FIELD_ERROR",
+        "errno": 1054,
+        "state": "42S22",
+        "message": "Unknown column 'a' in 'field list'"
+      },
+      "warnings": [
+        [
+          "Error",
+          1054,
+          "Unknown column 'a' in 'field list'"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "WITH RECURSIVE c(a,b) AS(SELECT 1 x UNION ALL SELECT a FROM c WHERE FALSE) SELECT * FROM c",
+      "api": "prepare",
+      "error": {
+        "code": "ER_BAD_FIELD_ERROR",
+        "errno": 1054,
+        "state": "42S22",
+        "message": "Unknown column 'a' in 'field list'"
+      },
+      "warnings": [
+        [
+          "Error",
+          1054,
+          "Unknown column 'a' in 'field list'"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "WITH RECURSIVE c(a,b) AS(SELECT 1 x UNION ALL SELECT x FROM c WHERE FALSE) SELECT * FROM c",
+      "api": "query",
+      "error": {
+        "code": "ER_VIEW_WRONG_LIST",
+        "errno": 1353,
+        "state": "HY000",
+        "message": "In definition of view, derived table or common table expression, SELECT list and column names list have different column counts"
+      },
+      "warnings": [
+        [
+          "Error",
+          1353,
+          "In definition of view, derived table or common table expression, SELECT list and column names list have different column counts"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "WITH RECURSIVE c(a,b) AS(SELECT 1 x UNION ALL SELECT x FROM c WHERE FALSE) SELECT * FROM c",
+      "api": "execute",
+      "error": {
+        "code": "ER_VIEW_WRONG_LIST",
+        "errno": 1353,
+        "state": "HY000",
+        "message": "In definition of view, derived table or common table expression, SELECT list and column names list have different column counts"
+      },
+      "warnings": [
+        [
+          "Error",
+          1353,
+          "In definition of view, derived table or common table expression, SELECT list and column names list have different column counts"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "WITH RECURSIVE c(a,b) AS(SELECT 1 x UNION ALL SELECT x FROM c WHERE FALSE) SELECT * FROM c",
+      "api": "prepare",
+      "error": {
+        "code": "ER_VIEW_WRONG_LIST",
+        "errno": 1353,
+        "state": "HY000",
+        "message": "In definition of view, derived table or common table expression, SELECT list and column names list have different column counts"
+      },
+      "warnings": [
+        [
+          "Error",
+          1353,
+          "In definition of view, derived table or common table expression, SELECT list and column names list have different column counts"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "WITH RECURSIVE c(a,b) AS(SELECT 1 x UNION ALL SELECT 1 FROM c WHERE FALSE) SELECT * FROM c",
+      "api": "query",
+      "error": {
+        "code": "ER_VIEW_WRONG_LIST",
+        "errno": 1353,
+        "state": "HY000",
+        "message": "In definition of view, derived table or common table expression, SELECT list and column names list have different column counts"
+      },
+      "warnings": [
+        [
+          "Error",
+          1353,
+          "In definition of view, derived table or common table expression, SELECT list and column names list have different column counts"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "WITH RECURSIVE c(a,b) AS(SELECT 1 x UNION ALL SELECT 1 FROM c WHERE FALSE) SELECT * FROM c",
+      "api": "execute",
+      "error": {
+        "code": "ER_VIEW_WRONG_LIST",
+        "errno": 1353,
+        "state": "HY000",
+        "message": "In definition of view, derived table or common table expression, SELECT list and column names list have different column counts"
+      },
+      "warnings": [
+        [
+          "Error",
+          1353,
+          "In definition of view, derived table or common table expression, SELECT list and column names list have different column counts"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "WITH RECURSIVE c(a,b) AS(SELECT 1 x UNION ALL SELECT 1 FROM c WHERE FALSE) SELECT * FROM c",
+      "api": "prepare",
+      "error": {
+        "code": "ER_VIEW_WRONG_LIST",
+        "errno": 1353,
+        "state": "HY000",
+        "message": "In definition of view, derived table or common table expression, SELECT list and column names list have different column counts"
+      },
+      "warnings": [
+        [
+          "Error",
+          1353,
+          "In definition of view, derived table or common table expression, SELECT list and column names list have different column counts"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "WITH RECURSIVE c(a,b) AS(SELECT 1 x UNION ALL SELECT 1,2 FROM c WHERE FALSE) SELECT * FROM c",
+      "api": "query",
+      "error": {
+        "code": "ER_WRONG_NUMBER_OF_COLUMNS_IN_SELECT",
+        "errno": 1222,
+        "state": "21000",
+        "message": "The used SELECT statements have a different number of columns"
+      },
+      "warnings": [
+        [
+          "Error",
+          1222,
+          "The used SELECT statements have a different number of columns"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "WITH RECURSIVE c(a,b) AS(SELECT 1 x UNION ALL SELECT 1,2 FROM c WHERE FALSE) SELECT * FROM c",
+      "api": "execute",
+      "error": {
+        "code": "ER_WRONG_NUMBER_OF_COLUMNS_IN_SELECT",
+        "errno": 1222,
+        "state": "21000",
+        "message": "The used SELECT statements have a different number of columns"
+      },
+      "warnings": [
+        [
+          "Error",
+          1222,
+          "The used SELECT statements have a different number of columns"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "WITH RECURSIVE c(a,b) AS(SELECT 1 x UNION ALL SELECT 1,2 FROM c WHERE FALSE) SELECT * FROM c",
+      "api": "prepare",
+      "error": {
+        "code": "ER_WRONG_NUMBER_OF_COLUMNS_IN_SELECT",
+        "errno": 1222,
+        "state": "21000",
+        "message": "The used SELECT statements have a different number of columns"
+      },
+      "warnings": [
+        [
+          "Error",
+          1222,
+          "The used SELECT statements have a different number of columns"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "WITH RECURSIVE c(a) AS(SELECT 1 x,2 y UNION ALL SELECT a,a FROM c WHERE FALSE) SELECT * FROM c",
+      "api": "query",
+      "error": {
+        "code": "ER_BAD_FIELD_ERROR",
+        "errno": 1054,
+        "state": "42S22",
+        "message": "Unknown column 'a' in 'field list'"
+      },
+      "warnings": [
+        [
+          "Error",
+          1054,
+          "Unknown column 'a' in 'field list'"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "WITH RECURSIVE c(a) AS(SELECT 1 x,2 y UNION ALL SELECT a,a FROM c WHERE FALSE) SELECT * FROM c",
+      "api": "execute",
+      "error": {
+        "code": "ER_BAD_FIELD_ERROR",
+        "errno": 1054,
+        "state": "42S22",
+        "message": "Unknown column 'a' in 'field list'"
+      },
+      "warnings": [
+        [
+          "Error",
+          1054,
+          "Unknown column 'a' in 'field list'"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "WITH RECURSIVE c(a) AS(SELECT 1 x,2 y UNION ALL SELECT a,a FROM c WHERE FALSE) SELECT * FROM c",
+      "api": "prepare",
+      "error": {
+        "code": "ER_BAD_FIELD_ERROR",
+        "errno": 1054,
+        "state": "42S22",
+        "message": "Unknown column 'a' in 'field list'"
+      },
+      "warnings": [
+        [
+          "Error",
+          1054,
+          "Unknown column 'a' in 'field list'"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "WITH RECURSIVE c(a) AS(SELECT 1 x,2 y UNION ALL SELECT x,y FROM c WHERE FALSE) SELECT * FROM c",
+      "api": "query",
+      "error": {
+        "code": "ER_VIEW_WRONG_LIST",
+        "errno": 1353,
+        "state": "HY000",
+        "message": "In definition of view, derived table or common table expression, SELECT list and column names list have different column counts"
+      },
+      "warnings": [
+        [
+          "Error",
+          1353,
+          "In definition of view, derived table or common table expression, SELECT list and column names list have different column counts"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "WITH RECURSIVE c(a) AS(SELECT 1 x,2 y UNION ALL SELECT x,y FROM c WHERE FALSE) SELECT * FROM c",
+      "api": "execute",
+      "error": {
+        "code": "ER_VIEW_WRONG_LIST",
+        "errno": 1353,
+        "state": "HY000",
+        "message": "In definition of view, derived table or common table expression, SELECT list and column names list have different column counts"
+      },
+      "warnings": [
+        [
+          "Error",
+          1353,
+          "In definition of view, derived table or common table expression, SELECT list and column names list have different column counts"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "WITH RECURSIVE c(a) AS(SELECT 1 x,2 y UNION ALL SELECT x,y FROM c WHERE FALSE) SELECT * FROM c",
+      "api": "prepare",
+      "error": {
+        "code": "ER_VIEW_WRONG_LIST",
+        "errno": 1353,
+        "state": "HY000",
+        "message": "In definition of view, derived table or common table expression, SELECT list and column names list have different column counts"
+      },
+      "warnings": [
+        [
+          "Error",
+          1353,
+          "In definition of view, derived table or common table expression, SELECT list and column names list have different column counts"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "WITH RECURSIVE c(a) AS(SELECT 1 x,2 y UNION ALL SELECT 1 FROM c WHERE FALSE) SELECT * FROM c",
+      "api": "query",
+      "error": {
+        "code": "ER_WRONG_NUMBER_OF_COLUMNS_IN_SELECT",
+        "errno": 1222,
+        "state": "21000",
+        "message": "The used SELECT statements have a different number of columns"
+      },
+      "warnings": [
+        [
+          "Error",
+          1222,
+          "The used SELECT statements have a different number of columns"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "WITH RECURSIVE c(a) AS(SELECT 1 x,2 y UNION ALL SELECT 1 FROM c WHERE FALSE) SELECT * FROM c",
+      "api": "execute",
+      "error": {
+        "code": "ER_WRONG_NUMBER_OF_COLUMNS_IN_SELECT",
+        "errno": 1222,
+        "state": "21000",
+        "message": "The used SELECT statements have a different number of columns"
+      },
+      "warnings": [
+        [
+          "Error",
+          1222,
+          "The used SELECT statements have a different number of columns"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "WITH RECURSIVE c(a) AS(SELECT 1 x,2 y UNION ALL SELECT 1 FROM c WHERE FALSE) SELECT * FROM c",
+      "api": "prepare",
+      "error": {
+        "code": "ER_WRONG_NUMBER_OF_COLUMNS_IN_SELECT",
+        "errno": 1222,
+        "state": "21000",
+        "message": "The used SELECT statements have a different number of columns"
+      },
+      "warnings": [
+        [
+          "Error",
+          1222,
+          "The used SELECT statements have a different number of columns"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "WITH RECURSIVE c(a,a) AS(SELECT 1 x,2 y UNION ALL SELECT a,a FROM c WHERE FALSE) SELECT * FROM c",
+      "api": "query",
+      "error": {
+        "code": "ER_DUP_FIELDNAME",
+        "errno": 1060,
+        "state": "42S21",
+        "message": "Duplicate column name 'a'"
+      },
+      "warnings": [
+        [
+          "Error",
+          1060,
+          "Duplicate column name 'a'"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "WITH RECURSIVE c(a,a) AS(SELECT 1 x,2 y UNION ALL SELECT a,a FROM c WHERE FALSE) SELECT * FROM c",
+      "api": "execute",
+      "error": {
+        "code": "ER_DUP_FIELDNAME",
+        "errno": 1060,
+        "state": "42S21",
+        "message": "Duplicate column name 'a'"
+      },
+      "warnings": [
+        [
+          "Error",
+          1060,
+          "Duplicate column name 'a'"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "WITH RECURSIVE c(a,a) AS(SELECT 1 x,2 y UNION ALL SELECT a,a FROM c WHERE FALSE) SELECT * FROM c",
+      "api": "prepare",
+      "error": {
+        "code": "ER_DUP_FIELDNAME",
+        "errno": 1060,
+        "state": "42S21",
+        "message": "Duplicate column name 'a'"
+      },
+      "warnings": [
+        [
+          "Error",
+          1060,
+          "Duplicate column name 'a'"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "WITH RECURSIVE c(a,b) AS(SELECT 1 x,2 y UNION ALL SELECT a,b FROM c WHERE FALSE) SELECT * FROM c",
+      "api": "query",
+      "rows": [
+        [
+          1,
+          2
+        ]
+      ],
+      "fields": [
+        [
+          "a",
+          8,
+          2,
+          0,
+          0,
+          63,
+          "",
+          "c",
+          "",
+          "a"
+        ],
+        [
+          "b",
+          8,
+          2,
+          0,
+          0,
+          63,
+          "",
+          "c",
+          "",
+          "b"
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "WITH RECURSIVE c(a,b) AS(SELECT 1 x,2 y UNION ALL SELECT a,b FROM c WHERE FALSE) SELECT * FROM c",
+      "api": "execute",
+      "rows": [
+        [
+          1,
+          2
+        ]
+      ],
+      "fields": [
+        [
+          "a",
+          8,
+          2,
+          0,
+          0,
+          63,
+          "",
+          "c",
+          "",
+          "a"
+        ],
+        [
+          "b",
+          8,
+          2,
+          0,
+          0,
+          63,
+          "",
+          "c",
+          "",
+          "b"
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "WITH RECURSIVE c(a,b) AS(SELECT 1 x,2 y UNION ALL SELECT a,b FROM c WHERE FALSE) SELECT * FROM c",
+      "api": "prepare",
+      "parameters": [],
+      "fields": [
+        [
+          "a",
+          8,
+          2,
+          0,
+          0,
+          63,
+          "",
+          "c",
+          "",
+          "a"
+        ],
+        [
+          "b",
+          8,
+          2,
+          0,
+          0,
+          63,
+          "",
+          "c",
+          "",
+          "b"
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "WITH RECURSIVE c(a,b) AS(SELECT 1 x UNION ALL SELECT @@warning_count FROM c WHERE FALSE) SELECT * FROM c",
+      "api": "query",
+      "error": {
+        "code": "ER_VIEW_WRONG_LIST",
+        "errno": 1353,
+        "state": "HY000",
+        "message": "In definition of view, derived table or common table expression, SELECT list and column names list have different column counts"
+      },
+      "warnings": [
+        [
+          "Error",
+          1353,
+          "In definition of view, derived table or common table expression, SELECT list and column names list have different column counts"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "WITH RECURSIVE c(a,b) AS(SELECT 1 x UNION ALL SELECT @@warning_count FROM c WHERE FALSE) SELECT * FROM c",
+      "api": "execute",
+      "error": {
+        "code": "ER_UNSUPPORTED_PS",
+        "errno": 1295,
+        "state": "HY000",
+        "message": "This command is not supported in the prepared statement protocol yet"
+      },
+      "warnings": [
+        [
+          "Error",
+          1295,
+          "This command is not supported in the prepared statement protocol yet"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "WITH RECURSIVE c(a,b) AS(SELECT 1 x UNION ALL SELECT @@warning_count FROM c WHERE FALSE) SELECT * FROM c",
+      "api": "prepare",
+      "error": {
+        "code": "ER_UNSUPPORTED_PS",
+        "errno": 1295,
+        "state": "HY000",
+        "message": "This command is not supported in the prepared statement protocol yet"
+      },
+      "warnings": [
+        [
+          "Error",
+          1295,
+          "This command is not supported in the prepared statement protocol yet"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "WITH RECURSIVE c(a,b) AS(SELECT 1 x UNION ALL SELECT x FROM c WHERE FALSE) SELECT 1",
+      "api": "query",
+      "rows": [
+        [
+          1
+        ]
+      ],
+      "fields": [
+        [
+          "1",
+          8,
+          2,
+          129,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "WITH RECURSIVE c(a,b) AS(SELECT 1 x UNION ALL SELECT x FROM c WHERE FALSE) SELECT 1",
+      "api": "execute",
+      "rows": [
+        [
+          1
+        ]
+      ],
+      "fields": [
+        [
+          "1",
+          8,
+          2,
+          129,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "WITH RECURSIVE c(a,b) AS(SELECT 1 x UNION ALL SELECT x FROM c WHERE FALSE) SELECT 1",
+      "api": "prepare",
+      "parameters": [],
+      "fields": [
+        [
+          "1",
+          8,
+          2,
+          129,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "WITH RECURSIVE c(a,b) AS(SELECT 1 x UNION ALL SELECT a FROM c WHERE FALSE) SELECT @@bad_main_253 FROM c",
+      "api": "query",
+      "error": {
+        "code": "ER_UNKNOWN_SYSTEM_VARIABLE",
+        "errno": 1193,
+        "state": "HY000",
+        "message": "Unknown system variable 'bad_main_253'"
+      },
+      "warnings": [
+        [
+          "Error",
+          1193,
+          "Unknown system variable 'bad_main_253'"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "WITH RECURSIVE c(a,b) AS(SELECT 1 x UNION ALL SELECT a FROM c WHERE FALSE) SELECT @@bad_main_253 FROM c",
+      "api": "execute",
+      "error": {
+        "code": "ER_UNKNOWN_SYSTEM_VARIABLE",
+        "errno": 1193,
+        "state": "HY000",
+        "message": "Unknown system variable 'bad_main_253'"
+      },
+      "warnings": [
+        [
+          "Error",
+          1193,
+          "Unknown system variable 'bad_main_253'"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "WITH RECURSIVE c(a,b) AS(SELECT 1 x UNION ALL SELECT a FROM c WHERE FALSE) SELECT @@bad_main_253 FROM c",
+      "api": "prepare",
+      "error": {
+        "code": "ER_UNKNOWN_SYSTEM_VARIABLE",
+        "errno": 1193,
+        "state": "HY000",
+        "message": "Unknown system variable 'bad_main_253'"
+      },
+      "warnings": [
+        [
+          "Error",
+          1193,
+          "Unknown system variable 'bad_main_253'"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "WITH RECURSIVE c(a,b,c) AS(SELECT 1 x,2 x UNION ALL SELECT 1,2 FROM c WHERE FALSE) SELECT * FROM c",
+      "api": "query",
+      "error": {
+        "code": "ER_VIEW_WRONG_LIST",
+        "errno": 1353,
+        "state": "HY000",
+        "message": "In definition of view, derived table or common table expression, SELECT list and column names list have different column counts"
+      },
+      "warnings": [
+        [
+          "Error",
+          1353,
+          "In definition of view, derived table or common table expression, SELECT list and column names list have different column counts"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "WITH RECURSIVE c(a,b,c) AS(SELECT 1 x,2 x UNION ALL SELECT 1,2 FROM c WHERE FALSE) SELECT * FROM c",
+      "api": "execute",
+      "error": {
+        "code": "ER_VIEW_WRONG_LIST",
+        "errno": 1353,
+        "state": "HY000",
+        "message": "In definition of view, derived table or common table expression, SELECT list and column names list have different column counts"
+      },
+      "warnings": [
+        [
+          "Error",
+          1353,
+          "In definition of view, derived table or common table expression, SELECT list and column names list have different column counts"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "WITH RECURSIVE c(a,b,c) AS(SELECT 1 x,2 x UNION ALL SELECT 1,2 FROM c WHERE FALSE) SELECT * FROM c",
+      "api": "prepare",
+      "error": {
+        "code": "ER_VIEW_WRONG_LIST",
+        "errno": 1353,
+        "state": "HY000",
+        "message": "In definition of view, derived table or common table expression, SELECT list and column names list have different column counts"
+      },
+      "warnings": [
+        [
+          "Error",
+          1353,
+          "In definition of view, derived table or common table expression, SELECT list and column names list have different column counts"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "WITH RECURSIVE c(a,b,c) AS(SELECT 1 x,2 x UNION ALL SELECT x,x FROM c WHERE FALSE) SELECT * FROM c",
+      "api": "query",
+      "error": {
+        "code": "ER_VIEW_WRONG_LIST",
+        "errno": 1353,
+        "state": "HY000",
+        "message": "In definition of view, derived table or common table expression, SELECT list and column names list have different column counts"
+      },
+      "warnings": [
+        [
+          "Error",
+          1353,
+          "In definition of view, derived table or common table expression, SELECT list and column names list have different column counts"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "WITH RECURSIVE c(a,b,c) AS(SELECT 1 x,2 x UNION ALL SELECT x,x FROM c WHERE FALSE) SELECT * FROM c",
+      "api": "execute",
+      "error": {
+        "code": "ER_VIEW_WRONG_LIST",
+        "errno": 1353,
+        "state": "HY000",
+        "message": "In definition of view, derived table or common table expression, SELECT list and column names list have different column counts"
+      },
+      "warnings": [
+        [
+          "Error",
+          1353,
+          "In definition of view, derived table or common table expression, SELECT list and column names list have different column counts"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "WITH RECURSIVE c(a,b,c) AS(SELECT 1 x,2 x UNION ALL SELECT x,x FROM c WHERE FALSE) SELECT * FROM c",
+      "api": "prepare",
+      "error": {
+        "code": "ER_VIEW_WRONG_LIST",
+        "errno": 1353,
+        "state": "HY000",
+        "message": "In definition of view, derived table or common table expression, SELECT list and column names list have different column counts"
+      },
+      "warnings": [
+        [
+          "Error",
+          1353,
+          "In definition of view, derived table or common table expression, SELECT list and column names list have different column counts"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "WITH RECURSIVE c(a,b) AS(SELECT 1 x,2 x UNION ALL SELECT a,b FROM c WHERE FALSE) SELECT * FROM c",
+      "api": "query",
+      "rows": [
+        [
+          1,
+          2
+        ]
+      ],
+      "fields": [
+        [
+          "a",
+          8,
+          2,
+          0,
+          0,
+          63,
+          "",
+          "c",
+          "",
+          "a"
+        ],
+        [
+          "b",
+          8,
+          2,
+          0,
+          0,
+          63,
+          "",
+          "c",
+          "",
+          "b"
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "WITH RECURSIVE c(a,b) AS(SELECT 1 x,2 x UNION ALL SELECT a,b FROM c WHERE FALSE) SELECT * FROM c",
+      "api": "execute",
+      "rows": [
+        [
+          1,
+          2
+        ]
+      ],
+      "fields": [
+        [
+          "a",
+          8,
+          2,
+          0,
+          0,
+          63,
+          "",
+          "c",
+          "",
+          "a"
+        ],
+        [
+          "b",
+          8,
+          2,
+          0,
+          0,
+          63,
+          "",
+          "c",
+          "",
+          "b"
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "WITH RECURSIVE c(a,b) AS(SELECT 1 x,2 x UNION ALL SELECT a,b FROM c WHERE FALSE) SELECT * FROM c",
+      "api": "prepare",
+      "parameters": [],
+      "fields": [
+        [
+          "a",
+          8,
+          2,
+          0,
+          0,
+          63,
+          "",
+          "c",
+          "",
+          "a"
+        ],
+        [
+          "b",
+          8,
+          2,
+          0,
+          0,
+          63,
+          "",
+          "c",
+          "",
+          "b"
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "WITH RECURSIVE c AS(SELECT 1 x,2 x UNION ALL SELECT x,x FROM c WHERE FALSE) SELECT * FROM c",
+      "api": "query",
+      "error": {
+        "code": "ER_DUP_FIELDNAME",
+        "errno": 1060,
+        "state": "42S21",
+        "message": "Duplicate column name 'x'"
+      },
+      "warnings": [
+        [
+          "Error",
+          1060,
+          "Duplicate column name 'x'"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "WITH RECURSIVE c AS(SELECT 1 x,2 x UNION ALL SELECT x,x FROM c WHERE FALSE) SELECT * FROM c",
+      "api": "execute",
+      "error": {
+        "code": "ER_DUP_FIELDNAME",
+        "errno": 1060,
+        "state": "42S21",
+        "message": "Duplicate column name 'x'"
+      },
+      "warnings": [
+        [
+          "Error",
+          1060,
+          "Duplicate column name 'x'"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "WITH RECURSIVE c AS(SELECT 1 x,2 x UNION ALL SELECT x,x FROM c WHERE FALSE) SELECT * FROM c",
+      "api": "prepare",
+      "error": {
+        "code": "ER_DUP_FIELDNAME",
+        "errno": 1060,
+        "state": "42S21",
+        "message": "Duplicate column name 'x'"
+      },
+      "warnings": [
+        [
+          "Error",
+          1060,
+          "Duplicate column name 'x'"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "WITH RECURSIVE c(a,a) AS(SELECT 1 x,2 y UNION ALL SELECT a,a FROM c WHERE FALSE) SELECT * FROM c",
+      "api": "query",
+      "error": {
+        "code": "ER_DUP_FIELDNAME",
+        "errno": 1060,
+        "state": "42S21",
+        "message": "Duplicate column name 'a'"
+      },
+      "warnings": [
+        [
+          "Error",
+          1060,
+          "Duplicate column name 'a'"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "WITH RECURSIVE c(a,a) AS(SELECT 1 x,2 y UNION ALL SELECT a,a FROM c WHERE FALSE) SELECT * FROM c",
+      "api": "execute",
+      "error": {
+        "code": "ER_DUP_FIELDNAME",
+        "errno": 1060,
+        "state": "42S21",
+        "message": "Duplicate column name 'a'"
+      },
+      "warnings": [
+        [
+          "Error",
+          1060,
+          "Duplicate column name 'a'"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "WITH RECURSIVE c(a,a) AS(SELECT 1 x,2 y UNION ALL SELECT a,a FROM c WHERE FALSE) SELECT * FROM c",
+      "api": "prepare",
+      "error": {
+        "code": "ER_DUP_FIELDNAME",
+        "errno": 1060,
+        "state": "42S21",
+        "message": "Duplicate column name 'a'"
+      },
+      "warnings": [
+        [
+          "Error",
+          1060,
+          "Duplicate column name 'a'"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "WITH RECURSIVE c(a,b,c) AS(SELECT 1 x,2 x UNION ALL SELECT 1,2 FROM c WHERE FALSE) SELECT 1",
+      "api": "query",
+      "rows": [
+        [
+          1
+        ]
+      ],
+      "fields": [
+        [
+          "1",
+          8,
+          2,
+          129,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "WITH RECURSIVE c(a,b,c) AS(SELECT 1 x,2 x UNION ALL SELECT 1,2 FROM c WHERE FALSE) SELECT 1",
+      "api": "execute",
+      "rows": [
+        [
+          1
+        ]
+      ],
+      "fields": [
+        [
+          "1",
+          8,
+          2,
+          129,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "WITH RECURSIVE c(a,b,c) AS(SELECT 1 x,2 x UNION ALL SELECT 1,2 FROM c WHERE FALSE) SELECT 1",
+      "api": "prepare",
+      "parameters": [],
+      "fields": [
+        [
+          "1",
+          8,
+          2,
+          129,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "WITH RECURSIVE c(a,b) AS(SELECT 1 x UNION ALL SELECT x FROM c WHERE FALSE) SELECT 1 FROM missing JOIN c",
+      "api": "query",
+      "error": {
+        "code": "ER_NO_DB_ERROR",
+        "errno": 1046,
+        "state": "3D000",
+        "message": "No database selected"
+      },
+      "warnings": [
+        [
+          "Error",
+          1046,
+          "No database selected"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "WITH RECURSIVE c(a,b) AS(SELECT 1 x UNION ALL SELECT x FROM c WHERE FALSE) SELECT 1 FROM missing JOIN c",
+      "api": "execute",
+      "error": {
+        "code": "ER_NO_DB_ERROR",
+        "errno": 1046,
+        "state": "3D000",
+        "message": "No database selected"
+      },
+      "warnings": [
+        [
+          "Error",
+          1046,
+          "No database selected"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "WITH RECURSIVE c(a,b) AS(SELECT 1 x UNION ALL SELECT x FROM c WHERE FALSE) SELECT 1 FROM missing JOIN c",
+      "api": "prepare",
+      "error": {
+        "code": "ER_NO_DB_ERROR",
+        "errno": 1046,
+        "state": "3D000",
+        "message": "No database selected"
+      },
+      "warnings": [
+        [
+          "Error",
+          1046,
+          "No database selected"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "WITH RECURSIVE c(a,b) AS(SELECT 1 `zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz` UNION ALL SELECT a FROM c WHERE FALSE) SELECT * FROM c",
+      "api": "query",
+      "error": {
+        "code": "ER_BAD_FIELD_ERROR",
+        "errno": 1054,
+        "state": "42S22",
+        "message": "Unknown column 'a' in 'field list'"
+      },
+      "warnings": [
+        [
+          "Error",
+          1054,
+          "Unknown column 'a' in 'field list'"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "WITH RECURSIVE c(a,b) AS(SELECT 1 `zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz` UNION ALL SELECT a FROM c WHERE FALSE) SELECT * FROM c",
+      "api": "execute",
+      "error": {
+        "code": "ER_BAD_FIELD_ERROR",
+        "errno": 1054,
+        "state": "42S22",
+        "message": "Unknown column 'a' in 'field list'"
+      },
+      "warnings": [
+        [
+          "Error",
+          1054,
+          "Unknown column 'a' in 'field list'"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "WITH RECURSIVE c(a,b) AS(SELECT 1 `zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz` UNION ALL SELECT a FROM c WHERE FALSE) SELECT * FROM c",
+      "api": "prepare",
+      "error": {
+        "code": "ER_BAD_FIELD_ERROR",
+        "errno": 1054,
+        "state": "42S22",
+        "message": "Unknown column 'a' in 'field list'"
+      },
+      "warnings": [
+        [
+          "Error",
+          1054,
+          "Unknown column 'a' in 'field list'"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "WITH RECURSIVE c(a,b) AS(SELECT 1 `zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz` UNION ALL SELECT `zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz` FROM c WHERE FALSE) SELECT * FROM c",
+      "api": "query",
+      "error": {
+        "code": "ER_VIEW_WRONG_LIST",
+        "errno": 1353,
+        "state": "HY000",
+        "message": "In definition of view, derived table or common table expression, SELECT list and column names list have different column counts"
+      },
+      "warnings": [
+        [
+          "Error",
+          1353,
+          "In definition of view, derived table or common table expression, SELECT list and column names list have different column counts"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "WITH RECURSIVE c(a,b) AS(SELECT 1 `zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz` UNION ALL SELECT `zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz` FROM c WHERE FALSE) SELECT * FROM c",
+      "api": "execute",
+      "error": {
+        "code": "ER_VIEW_WRONG_LIST",
+        "errno": 1353,
+        "state": "HY000",
+        "message": "In definition of view, derived table or common table expression, SELECT list and column names list have different column counts"
+      },
+      "warnings": [
+        [
+          "Error",
+          1353,
+          "In definition of view, derived table or common table expression, SELECT list and column names list have different column counts"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "WITH RECURSIVE c(a,b) AS(SELECT 1 `zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz` UNION ALL SELECT `zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz` FROM c WHERE FALSE) SELECT * FROM c",
+      "api": "prepare",
+      "error": {
+        "code": "ER_VIEW_WRONG_LIST",
+        "errno": 1353,
+        "state": "HY000",
+        "message": "In definition of view, derived table or common table expression, SELECT list and column names list have different column counts"
+      },
+      "warnings": [
+        [
+          "Error",
+          1353,
+          "In definition of view, derived table or common table expression, SELECT list and column names list have different column counts"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "WITH RECURSIVE c(`zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz`,a) AS(SELECT 1 x UNION ALL SELECT a FROM c WHERE FALSE) SELECT * FROM c",
+      "api": "query",
+      "error": {
+        "code": "ER_BAD_FIELD_ERROR",
+        "errno": 1054,
+        "state": "42S22",
+        "message": "Unknown column 'a' in 'field list'"
+      },
+      "warnings": [
+        [
+          "Error",
+          1054,
+          "Unknown column 'a' in 'field list'"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "WITH RECURSIVE c(`zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz`,a) AS(SELECT 1 x UNION ALL SELECT a FROM c WHERE FALSE) SELECT * FROM c",
+      "api": "execute",
+      "error": {
+        "code": "ER_BAD_FIELD_ERROR",
+        "errno": 1054,
+        "state": "42S22",
+        "message": "Unknown column 'a' in 'field list'"
+      },
+      "warnings": [
+        [
+          "Error",
+          1054,
+          "Unknown column 'a' in 'field list'"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "WITH RECURSIVE c(`zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz`,a) AS(SELECT 1 x UNION ALL SELECT a FROM c WHERE FALSE) SELECT * FROM c",
+      "api": "prepare",
+      "error": {
+        "code": "ER_BAD_FIELD_ERROR",
+        "errno": 1054,
+        "state": "42S22",
+        "message": "Unknown column 'a' in 'field list'"
+      },
+      "warnings": [
+        [
+          "Error",
+          1054,
+          "Unknown column 'a' in 'field list'"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "WITH RECURSIVE c(a,b,c) AS(SELECT 1 X,2 x UNION ALL SELECT x,x FROM c WHERE FALSE) SELECT * FROM c",
+      "api": "query",
+      "error": {
+        "code": "ER_VIEW_WRONG_LIST",
+        "errno": 1353,
+        "state": "HY000",
+        "message": "In definition of view, derived table or common table expression, SELECT list and column names list have different column counts"
+      },
+      "warnings": [
+        [
+          "Error",
+          1353,
+          "In definition of view, derived table or common table expression, SELECT list and column names list have different column counts"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "WITH RECURSIVE c(a,b,c) AS(SELECT 1 X,2 x UNION ALL SELECT x,x FROM c WHERE FALSE) SELECT * FROM c",
+      "api": "execute",
+      "error": {
+        "code": "ER_VIEW_WRONG_LIST",
+        "errno": 1353,
+        "state": "HY000",
+        "message": "In definition of view, derived table or common table expression, SELECT list and column names list have different column counts"
+      },
+      "warnings": [
+        [
+          "Error",
+          1353,
+          "In definition of view, derived table or common table expression, SELECT list and column names list have different column counts"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "WITH RECURSIVE c(a,b,c) AS(SELECT 1 X,2 x UNION ALL SELECT x,x FROM c WHERE FALSE) SELECT * FROM c",
+      "api": "prepare",
+      "error": {
+        "code": "ER_VIEW_WRONG_LIST",
+        "errno": 1353,
+        "state": "HY000",
+        "message": "In definition of view, derived table or common table expression, SELECT list and column names list have different column counts"
+      },
+      "warnings": [
+        [
+          "Error",
+          1353,
+          "In definition of view, derived table or common table expression, SELECT list and column names list have different column counts"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "WITH RECURSIVE c(a,b,c) AS(SELECT 1,2 UNION ALL SELECT `1`,`2` FROM c WHERE FALSE) SELECT * FROM c",
+      "api": "query",
+      "error": {
+        "code": "ER_VIEW_WRONG_LIST",
+        "errno": 1353,
+        "state": "HY000",
+        "message": "In definition of view, derived table or common table expression, SELECT list and column names list have different column counts"
+      },
+      "warnings": [
+        [
+          "Error",
+          1353,
+          "In definition of view, derived table or common table expression, SELECT list and column names list have different column counts"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "WITH RECURSIVE c(a,b,c) AS(SELECT 1,2 UNION ALL SELECT `1`,`2` FROM c WHERE FALSE) SELECT * FROM c",
+      "api": "execute",
+      "error": {
+        "code": "ER_VIEW_WRONG_LIST",
+        "errno": 1353,
+        "state": "HY000",
+        "message": "In definition of view, derived table or common table expression, SELECT list and column names list have different column counts"
+      },
+      "warnings": [
+        [
+          "Error",
+          1353,
+          "In definition of view, derived table or common table expression, SELECT list and column names list have different column counts"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "WITH RECURSIVE c(a,b,c) AS(SELECT 1,2 UNION ALL SELECT `1`,`2` FROM c WHERE FALSE) SELECT * FROM c",
+      "api": "prepare",
+      "error": {
+        "code": "ER_VIEW_WRONG_LIST",
+        "errno": 1353,
+        "state": "HY000",
+        "message": "In definition of view, derived table or common table expression, SELECT list and column names list have different column counts"
+      },
+      "warnings": [
+        [
+          "Error",
+          1353,
+          "In definition of view, derived table or common table expression, SELECT list and column names list have different column counts"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "WITH RECURSIVE c(a,b,c) AS(SELECT 1,2 UNION ALL SELECT a,b FROM c WHERE FALSE) SELECT * FROM c",
+      "api": "query",
+      "error": {
+        "code": "ER_BAD_FIELD_ERROR",
+        "errno": 1054,
+        "state": "42S22",
+        "message": "Unknown column 'a' in 'field list'"
+      },
+      "warnings": [
+        [
+          "Error",
+          1054,
+          "Unknown column 'a' in 'field list'"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "WITH RECURSIVE c(a,b,c) AS(SELECT 1,2 UNION ALL SELECT a,b FROM c WHERE FALSE) SELECT * FROM c",
+      "api": "execute",
+      "error": {
+        "code": "ER_BAD_FIELD_ERROR",
+        "errno": 1054,
+        "state": "42S22",
+        "message": "Unknown column 'a' in 'field list'"
+      },
+      "warnings": [
+        [
+          "Error",
+          1054,
+          "Unknown column 'a' in 'field list'"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "WITH RECURSIVE c(a,b,c) AS(SELECT 1,2 UNION ALL SELECT a,b FROM c WHERE FALSE) SELECT * FROM c",
+      "api": "prepare",
+      "error": {
+        "code": "ER_BAD_FIELD_ERROR",
+        "errno": 1054,
+        "state": "42S22",
+        "message": "Unknown column 'a' in 'field list'"
+      },
+      "warnings": [
+        [
+          "Error",
+          1054,
+          "Unknown column 'a' in 'field list'"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "WITH RECURSIVE c(a,a,a) AS(SELECT 1 x,2 y UNION ALL SELECT a,a FROM c WHERE FALSE) SELECT * FROM c",
+      "api": "query",
+      "error": {
+        "code": "ER_BAD_FIELD_ERROR",
+        "errno": 1054,
+        "state": "42S22",
+        "message": "Unknown column 'a' in 'field list'"
+      },
+      "warnings": [
+        [
+          "Error",
+          1054,
+          "Unknown column 'a' in 'field list'"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "WITH RECURSIVE c(a,a,a) AS(SELECT 1 x,2 y UNION ALL SELECT a,a FROM c WHERE FALSE) SELECT * FROM c",
+      "api": "execute",
+      "error": {
+        "code": "ER_BAD_FIELD_ERROR",
+        "errno": 1054,
+        "state": "42S22",
+        "message": "Unknown column 'a' in 'field list'"
+      },
+      "warnings": [
+        [
+          "Error",
+          1054,
+          "Unknown column 'a' in 'field list'"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "WITH RECURSIVE c(a,a,a) AS(SELECT 1 x,2 y UNION ALL SELECT a,a FROM c WHERE FALSE) SELECT * FROM c",
+      "api": "prepare",
+      "error": {
+        "code": "ER_BAD_FIELD_ERROR",
+        "errno": 1054,
+        "state": "42S22",
+        "message": "Unknown column 'a' in 'field list'"
+      },
+      "warnings": [
+        [
+          "Error",
+          1054,
+          "Unknown column 'a' in 'field list'"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "WITH RECURSIVE c(a,b) AS(SELECT missing UNION ALL SELECT a FROM c WHERE FALSE) SELECT * FROM c",
+      "api": "query",
+      "error": {
+        "code": "ER_BAD_FIELD_ERROR",
+        "errno": 1054,
+        "state": "42S22",
+        "message": "Unknown column 'missing' in 'field list'"
+      },
+      "warnings": [
+        [
+          "Error",
+          1054,
+          "Unknown column 'missing' in 'field list'"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "WITH RECURSIVE c(a,b) AS(SELECT missing UNION ALL SELECT a FROM c WHERE FALSE) SELECT * FROM c",
+      "api": "execute",
+      "error": {
+        "code": "ER_BAD_FIELD_ERROR",
+        "errno": 1054,
+        "state": "42S22",
+        "message": "Unknown column 'missing' in 'field list'"
+      },
+      "warnings": [
+        [
+          "Error",
+          1054,
+          "Unknown column 'missing' in 'field list'"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "WITH RECURSIVE c(a,b) AS(SELECT missing UNION ALL SELECT a FROM c WHERE FALSE) SELECT * FROM c",
+      "api": "prepare",
+      "error": {
+        "code": "ER_BAD_FIELD_ERROR",
+        "errno": 1054,
+        "state": "42S22",
+        "message": "Unknown column 'missing' in 'field list'"
+      },
+      "warnings": [
+        [
+          "Error",
+          1054,
+          "Unknown column 'missing' in 'field list'"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "WITH RECURSIVE c(a,b) AS(SELECT 1 x UNION ALL SELECT 1,2 UNION ALL SELECT x FROM c WHERE FALSE) SELECT * FROM c",
+      "api": "query",
+      "error": {
+        "code": "ER_WRONG_NUMBER_OF_COLUMNS_IN_SELECT",
+        "errno": 1222,
+        "state": "21000",
+        "message": "The used SELECT statements have a different number of columns"
+      },
+      "warnings": [
+        [
+          "Error",
+          1222,
+          "The used SELECT statements have a different number of columns"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "WITH RECURSIVE c(a,b) AS(SELECT 1 x UNION ALL SELECT 1,2 UNION ALL SELECT x FROM c WHERE FALSE) SELECT * FROM c",
+      "api": "execute",
+      "error": {
+        "code": "ER_WRONG_NUMBER_OF_COLUMNS_IN_SELECT",
+        "errno": 1222,
+        "state": "21000",
+        "message": "The used SELECT statements have a different number of columns"
+      },
+      "warnings": [
+        [
+          "Error",
+          1222,
+          "The used SELECT statements have a different number of columns"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "WITH RECURSIVE c(a,b) AS(SELECT 1 x UNION ALL SELECT 1,2 UNION ALL SELECT x FROM c WHERE FALSE) SELECT * FROM c",
+      "api": "prepare",
+      "error": {
+        "code": "ER_WRONG_NUMBER_OF_COLUMNS_IN_SELECT",
+        "errno": 1222,
+        "state": "21000",
+        "message": "The used SELECT statements have a different number of columns"
+      },
+      "warnings": [
+        [
+          "Error",
+          1222,
+          "The used SELECT statements have a different number of columns"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "WITH RECURSIVE c(`bad `,b) AS(SELECT 1 x UNION ALL SELECT x FROM c WHERE FALSE) SELECT * FROM c",
+      "api": "query",
+      "error": {
+        "code": "ER_VIEW_WRONG_LIST",
+        "errno": 1353,
+        "state": "HY000",
+        "message": "In definition of view, derived table or common table expression, SELECT list and column names list have different column counts"
+      },
+      "warnings": [
+        [
+          "Error",
+          1353,
+          "In definition of view, derived table or common table expression, SELECT list and column names list have different column counts"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "WITH RECURSIVE c(`bad `,b) AS(SELECT 1 x UNION ALL SELECT x FROM c WHERE FALSE) SELECT * FROM c",
+      "api": "execute",
+      "error": {
+        "code": "ER_VIEW_WRONG_LIST",
+        "errno": 1353,
+        "state": "HY000",
+        "message": "In definition of view, derived table or common table expression, SELECT list and column names list have different column counts"
+      },
+      "warnings": [
+        [
+          "Error",
+          1353,
+          "In definition of view, derived table or common table expression, SELECT list and column names list have different column counts"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "WITH RECURSIVE c(`bad `,b) AS(SELECT 1 x UNION ALL SELECT x FROM c WHERE FALSE) SELECT * FROM c",
+      "api": "prepare",
+      "error": {
+        "code": "ER_VIEW_WRONG_LIST",
+        "errno": 1353,
+        "state": "HY000",
+        "message": "In definition of view, derived table or common table expression, SELECT list and column names list have different column counts"
+      },
+      "warnings": [
+        [
+          "Error",
+          1353,
+          "In definition of view, derived table or common table expression, SELECT list and column names list have different column counts"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "WITH RECURSIVE c(a,b) AS(WITH d AS(SELECT 1 x) SELECT 1 x UNION (WITH e AS(SELECT * FROM c) SELECT x FROM d)) SELECT * FROM c",
+      "api": "query",
+      "error": {
+        "code": "ER_NO_DB_ERROR",
+        "errno": 1046,
+        "state": "3D000",
+        "message": "No database selected"
+      },
+      "warnings": [
+        [
+          "Error",
+          1046,
+          "No database selected"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "WITH RECURSIVE c(a,b) AS(WITH d AS(SELECT 1 x) SELECT 1 x UNION (WITH e AS(SELECT * FROM c) SELECT x FROM d)) SELECT * FROM c",
+      "api": "execute",
+      "error": {
+        "code": "ER_NO_DB_ERROR",
+        "errno": 1046,
+        "state": "3D000",
+        "message": "No database selected"
+      },
+      "warnings": [
+        [
+          "Error",
+          1046,
+          "No database selected"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "WITH RECURSIVE c(a,b) AS(WITH d AS(SELECT 1 x) SELECT 1 x UNION (WITH e AS(SELECT * FROM c) SELECT x FROM d)) SELECT * FROM c",
+      "api": "prepare",
+      "error": {
+        "code": "ER_NO_DB_ERROR",
+        "errno": 1046,
+        "state": "3D000",
+        "message": "No database selected"
+      },
+      "warnings": [
+        [
+          "Error",
+          1046,
+          "No database selected"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "WITH RECURSIVE c(a,b) AS((WITH c AS(SELECT 1 x) SELECT x FROM c) UNION SELECT 1 x) SELECT * FROM c",
+      "api": "query",
+      "error": {
+        "code": "ER_VIEW_WRONG_LIST",
+        "errno": 1353,
+        "state": "HY000",
+        "message": "In definition of view, derived table or common table expression, SELECT list and column names list have different column counts"
+      },
+      "warnings": [
+        [
+          "Error",
+          1353,
+          "In definition of view, derived table or common table expression, SELECT list and column names list have different column counts"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "WITH RECURSIVE c(a,b) AS((WITH c AS(SELECT 1 x) SELECT x FROM c) UNION SELECT 1 x) SELECT * FROM c",
+      "api": "execute",
+      "error": {
+        "code": "ER_VIEW_WRONG_LIST",
+        "errno": 1353,
+        "state": "HY000",
+        "message": "In definition of view, derived table or common table expression, SELECT list and column names list have different column counts"
+      },
+      "warnings": [
+        [
+          "Error",
+          1353,
+          "In definition of view, derived table or common table expression, SELECT list and column names list have different column counts"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "WITH RECURSIVE c(a,b) AS((WITH c AS(SELECT 1 x) SELECT x FROM c) UNION SELECT 1 x) SELECT * FROM c",
+      "api": "prepare",
+      "error": {
+        "code": "ER_VIEW_WRONG_LIST",
+        "errno": 1353,
+        "state": "HY000",
+        "message": "In definition of view, derived table or common table expression, SELECT list and column names list have different column counts"
+      },
+      "warnings": [
+        [
+          "Error",
+          1353,
+          "In definition of view, derived table or common table expression, SELECT list and column names list have different column counts"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "WITH RECURSIVE c(a,b) AS(SELECT 1 x UNION (WITH c AS(SELECT 1 x) SELECT x FROM c)) SELECT * FROM c",
+      "api": "query",
+      "error": {
+        "code": "ER_VIEW_WRONG_LIST",
+        "errno": 1353,
+        "state": "HY000",
+        "message": "In definition of view, derived table or common table expression, SELECT list and column names list have different column counts"
+      },
+      "warnings": [
+        [
+          "Error",
+          1353,
+          "In definition of view, derived table or common table expression, SELECT list and column names list have different column counts"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "WITH RECURSIVE c(a,b) AS(SELECT 1 x UNION (WITH c AS(SELECT 1 x) SELECT x FROM c)) SELECT * FROM c",
+      "api": "execute",
+      "error": {
+        "code": "ER_VIEW_WRONG_LIST",
+        "errno": 1353,
+        "state": "HY000",
+        "message": "In definition of view, derived table or common table expression, SELECT list and column names list have different column counts"
+      },
+      "warnings": [
+        [
+          "Error",
+          1353,
+          "In definition of view, derived table or common table expression, SELECT list and column names list have different column counts"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "WITH RECURSIVE c(a,b) AS(SELECT 1 x UNION (WITH c AS(SELECT 1 x) SELECT x FROM c)) SELECT * FROM c",
+      "api": "prepare",
+      "error": {
+        "code": "ER_VIEW_WRONG_LIST",
+        "errno": 1353,
+        "state": "HY000",
+        "message": "In definition of view, derived table or common table expression, SELECT list and column names list have different column counts"
+      },
+      "warnings": [
+        [
+          "Error",
+          1353,
+          "In definition of view, derived table or common table expression, SELECT list and column names list have different column counts"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "WITH RECURSIVE c(a,b) AS(SELECT CAST('x' AS CHAR CHARSET utf8) x UNION ALL SELECT a FROM c WHERE FALSE) SELECT * FROM c",
+      "api": "query",
+      "limit": 0,
+      "error": {
+        "code": "ER_BAD_FIELD_ERROR",
+        "errno": 1054,
+        "state": "42S22",
+        "message": "Unknown column 'a' in 'field list'"
+      },
+      "warnings": [],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "WITH RECURSIVE c(a,b) AS(SELECT CAST('x' AS CHAR CHARSET utf8) x UNION ALL SELECT a FROM c WHERE FALSE) SELECT * FROM c",
+      "api": "execute",
+      "limit": 0,
+      "error": {
+        "code": "ER_BAD_FIELD_ERROR",
+        "errno": 1054,
+        "state": "42S22",
+        "message": "Unknown column 'a' in 'field list'"
+      },
+      "warnings": [],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "WITH RECURSIVE c(a,b) AS(SELECT CAST('x' AS CHAR CHARSET utf8) x UNION ALL SELECT a FROM c WHERE FALSE) SELECT * FROM c",
+      "api": "prepare",
+      "limit": 0,
+      "error": {
+        "code": "ER_BAD_FIELD_ERROR",
+        "errno": 1054,
+        "state": "42S22",
+        "message": "Unknown column 'a' in 'field list'"
+      },
+      "warnings": [],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "WITH RECURSIVE c(a,b) AS(SELECT CAST('x' AS CHAR CHARSET utf8) x UNION ALL SELECT x FROM c WHERE FALSE) SELECT * FROM c",
+      "api": "query",
+      "limit": 0,
+      "error": {
+        "code": "ER_VIEW_WRONG_LIST",
+        "errno": 1353,
+        "state": "HY000",
+        "message": "In definition of view, derived table or common table expression, SELECT list and column names list have different column counts"
+      },
+      "warnings": [],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "WITH RECURSIVE c(a,b) AS(SELECT CAST('x' AS CHAR CHARSET utf8) x UNION ALL SELECT x FROM c WHERE FALSE) SELECT * FROM c",
+      "api": "execute",
+      "limit": 0,
+      "error": {
+        "code": "ER_VIEW_WRONG_LIST",
+        "errno": 1353,
+        "state": "HY000",
+        "message": "In definition of view, derived table or common table expression, SELECT list and column names list have different column counts"
+      },
+      "warnings": [],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "WITH RECURSIVE c(a,b) AS(SELECT CAST('x' AS CHAR CHARSET utf8) x UNION ALL SELECT x FROM c WHERE FALSE) SELECT * FROM c",
+      "api": "prepare",
+      "limit": 0,
+      "error": {
+        "code": "ER_VIEW_WRONG_LIST",
+        "errno": 1353,
+        "state": "HY000",
+        "message": "In definition of view, derived table or common table expression, SELECT list and column names list have different column counts"
+      },
+      "warnings": [],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "WITH RECURSIVE c(a,b) AS(SELECT CAST('x' AS CHAR CHARSET utf8) x UNION ALL SELECT 1,2 FROM c WHERE FALSE) SELECT * FROM c",
+      "api": "query",
+      "limit": 0,
+      "error": {
+        "code": "ER_WRONG_NUMBER_OF_COLUMNS_IN_SELECT",
+        "errno": 1222,
+        "state": "21000",
+        "message": "The used SELECT statements have a different number of columns"
+      },
+      "warnings": [],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "WITH RECURSIVE c(a,b) AS(SELECT CAST('x' AS CHAR CHARSET utf8) x UNION ALL SELECT 1,2 FROM c WHERE FALSE) SELECT * FROM c",
+      "api": "execute",
+      "limit": 0,
+      "error": {
+        "code": "ER_WRONG_NUMBER_OF_COLUMNS_IN_SELECT",
+        "errno": 1222,
+        "state": "21000",
+        "message": "The used SELECT statements have a different number of columns"
+      },
+      "warnings": [],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "WITH RECURSIVE c(a,b) AS(SELECT CAST('x' AS CHAR CHARSET utf8) x UNION ALL SELECT 1,2 FROM c WHERE FALSE) SELECT * FROM c",
+      "api": "prepare",
+      "limit": 0,
+      "error": {
+        "code": "ER_WRONG_NUMBER_OF_COLUMNS_IN_SELECT",
+        "errno": 1222,
+        "state": "21000",
+        "message": "The used SELECT statements have a different number of columns"
+      },
+      "warnings": [],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "WITH RECURSIVE c(a,b) AS(SELECT CAST('x' AS CHAR CHARSET utf8) x UNION ALL SELECT @@warning_count FROM c WHERE FALSE) SELECT * FROM c",
+      "api": "query",
+      "limit": 0,
+      "error": {
+        "code": "ER_VIEW_WRONG_LIST",
+        "errno": 1353,
+        "state": "HY000",
+        "message": "In definition of view, derived table or common table expression, SELECT list and column names list have different column counts"
+      },
+      "warnings": [],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "WITH RECURSIVE c(a,b) AS(SELECT CAST('x' AS CHAR CHARSET utf8) x UNION ALL SELECT @@warning_count FROM c WHERE FALSE) SELECT * FROM c",
+      "api": "execute",
+      "limit": 0,
+      "error": {
+        "code": "ER_VIEW_WRONG_LIST",
+        "errno": 1353,
+        "state": "HY000",
+        "message": "In definition of view, derived table or common table expression, SELECT list and column names list have different column counts"
+      },
+      "warnings": [],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "WITH RECURSIVE c(a,b) AS(SELECT CAST('x' AS CHAR CHARSET utf8) x UNION ALL SELECT @@warning_count FROM c WHERE FALSE) SELECT * FROM c",
+      "api": "prepare",
+      "limit": 0,
+      "error": {
+        "code": "ER_VIEW_WRONG_LIST",
+        "errno": 1353,
+        "state": "HY000",
+        "message": "In definition of view, derived table or common table expression, SELECT list and column names list have different column counts"
+      },
+      "warnings": [],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "WITH RECURSIVE c(a,b,c) AS(SELECT CAST('x' AS CHAR CHARSET utf8) x,2 x UNION ALL SELECT x,x FROM c WHERE FALSE) SELECT * FROM c",
+      "api": "query",
+      "limit": 0,
+      "error": {
+        "code": "ER_VIEW_WRONG_LIST",
+        "errno": 1353,
+        "state": "HY000",
+        "message": "In definition of view, derived table or common table expression, SELECT list and column names list have different column counts"
+      },
+      "warnings": [],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "WITH RECURSIVE c(a,b,c) AS(SELECT CAST('x' AS CHAR CHARSET utf8) x,2 x UNION ALL SELECT x,x FROM c WHERE FALSE) SELECT * FROM c",
+      "api": "execute",
+      "limit": 0,
+      "error": {
+        "code": "ER_VIEW_WRONG_LIST",
+        "errno": 1353,
+        "state": "HY000",
+        "message": "In definition of view, derived table or common table expression, SELECT list and column names list have different column counts"
+      },
+      "warnings": [],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "WITH RECURSIVE c(a,b,c) AS(SELECT CAST('x' AS CHAR CHARSET utf8) x,2 x UNION ALL SELECT x,x FROM c WHERE FALSE) SELECT * FROM c",
+      "api": "prepare",
+      "limit": 0,
+      "error": {
+        "code": "ER_VIEW_WRONG_LIST",
+        "errno": 1353,
+        "state": "HY000",
+        "message": "In definition of view, derived table or common table expression, SELECT list and column names list have different column counts"
+      },
+      "warnings": [],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "WITH RECURSIVE c(a,b) AS(SELECT CAST('x' AS CHAR CHARSET utf8) x UNION ALL SELECT a FROM c WHERE FALSE) SELECT 1",
+      "api": "query",
+      "limit": 0,
+      "rows": [
+        [
+          1
+        ]
+      ],
+      "fields": [
+        [
+          "1",
+          8,
+          2,
+          129,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "WITH RECURSIVE c(a,b) AS(SELECT CAST('x' AS CHAR CHARSET utf8) x UNION ALL SELECT a FROM c WHERE FALSE) SELECT 1",
+      "api": "execute",
+      "limit": 0,
+      "rows": [
+        [
+          1
+        ]
+      ],
+      "fields": [
+        [
+          "1",
+          8,
+          2,
+          129,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "WITH RECURSIVE c(a,b) AS(SELECT CAST('x' AS CHAR CHARSET utf8) x UNION ALL SELECT a FROM c WHERE FALSE) SELECT 1",
+      "api": "prepare",
+      "limit": 0,
+      "parameters": [],
+      "fields": [
+        [
+          "1",
+          8,
+          2,
+          129,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "WITH RECURSIVE c(a,b) AS(SELECT CAST('x' AS CHAR CHARSET utf8) x UNION ALL SELECT a FROM c WHERE FALSE) SELECT * FROM c",
+      "api": "query",
+      "limit": 1,
+      "error": {
+        "code": "ER_BAD_FIELD_ERROR",
+        "errno": 1054,
+        "state": "42S22",
+        "message": "Unknown column 'a' in 'field list'"
+      },
+      "warnings": [
+        [
+          "Warning",
+          3719,
+          "'utf8' is currently an alias for the character set UTF8MB3, but will be an alias for UTF8MB4 in a future release. Please consider using UTF8MB4 in order to be unambiguous."
+        ]
+      ],
+      "warningCount": "2",
+      "errorCount": "1"
+    },
+    {
+      "sql": "WITH RECURSIVE c(a,b) AS(SELECT CAST('x' AS CHAR CHARSET utf8) x UNION ALL SELECT a FROM c WHERE FALSE) SELECT * FROM c",
+      "api": "execute",
+      "limit": 1,
+      "error": {
+        "code": "ER_BAD_FIELD_ERROR",
+        "errno": 1054,
+        "state": "42S22",
+        "message": "Unknown column 'a' in 'field list'"
+      },
+      "warnings": [
+        [
+          "Warning",
+          3719,
+          "'utf8' is currently an alias for the character set UTF8MB3, but will be an alias for UTF8MB4 in a future release. Please consider using UTF8MB4 in order to be unambiguous."
+        ]
+      ],
+      "warningCount": "2",
+      "errorCount": "1"
+    },
+    {
+      "sql": "WITH RECURSIVE c(a,b) AS(SELECT CAST('x' AS CHAR CHARSET utf8) x UNION ALL SELECT a FROM c WHERE FALSE) SELECT * FROM c",
+      "api": "prepare",
+      "limit": 1,
+      "error": {
+        "code": "ER_BAD_FIELD_ERROR",
+        "errno": 1054,
+        "state": "42S22",
+        "message": "Unknown column 'a' in 'field list'"
+      },
+      "warnings": [
+        [
+          "Warning",
+          3719,
+          "'utf8' is currently an alias for the character set UTF8MB3, but will be an alias for UTF8MB4 in a future release. Please consider using UTF8MB4 in order to be unambiguous."
+        ]
+      ],
+      "warningCount": "2",
+      "errorCount": "1"
+    },
+    {
+      "sql": "WITH RECURSIVE c(a,b) AS(SELECT CAST('x' AS CHAR CHARSET utf8) x UNION ALL SELECT x FROM c WHERE FALSE) SELECT * FROM c",
+      "api": "query",
+      "limit": 1,
+      "error": {
+        "code": "ER_VIEW_WRONG_LIST",
+        "errno": 1353,
+        "state": "HY000",
+        "message": "In definition of view, derived table or common table expression, SELECT list and column names list have different column counts"
+      },
+      "warnings": [
+        [
+          "Warning",
+          3719,
+          "'utf8' is currently an alias for the character set UTF8MB3, but will be an alias for UTF8MB4 in a future release. Please consider using UTF8MB4 in order to be unambiguous."
+        ]
+      ],
+      "warningCount": "2",
+      "errorCount": "1"
+    },
+    {
+      "sql": "WITH RECURSIVE c(a,b) AS(SELECT CAST('x' AS CHAR CHARSET utf8) x UNION ALL SELECT x FROM c WHERE FALSE) SELECT * FROM c",
+      "api": "execute",
+      "limit": 1,
+      "error": {
+        "code": "ER_VIEW_WRONG_LIST",
+        "errno": 1353,
+        "state": "HY000",
+        "message": "In definition of view, derived table or common table expression, SELECT list and column names list have different column counts"
+      },
+      "warnings": [
+        [
+          "Warning",
+          3719,
+          "'utf8' is currently an alias for the character set UTF8MB3, but will be an alias for UTF8MB4 in a future release. Please consider using UTF8MB4 in order to be unambiguous."
+        ]
+      ],
+      "warningCount": "2",
+      "errorCount": "1"
+    },
+    {
+      "sql": "WITH RECURSIVE c(a,b) AS(SELECT CAST('x' AS CHAR CHARSET utf8) x UNION ALL SELECT x FROM c WHERE FALSE) SELECT * FROM c",
+      "api": "prepare",
+      "limit": 1,
+      "error": {
+        "code": "ER_VIEW_WRONG_LIST",
+        "errno": 1353,
+        "state": "HY000",
+        "message": "In definition of view, derived table or common table expression, SELECT list and column names list have different column counts"
+      },
+      "warnings": [
+        [
+          "Warning",
+          3719,
+          "'utf8' is currently an alias for the character set UTF8MB3, but will be an alias for UTF8MB4 in a future release. Please consider using UTF8MB4 in order to be unambiguous."
+        ]
+      ],
+      "warningCount": "2",
+      "errorCount": "1"
+    },
+    {
+      "sql": "WITH RECURSIVE c(a,b) AS(SELECT CAST('x' AS CHAR CHARSET utf8) x UNION ALL SELECT 1,2 FROM c WHERE FALSE) SELECT * FROM c",
+      "api": "query",
+      "limit": 1,
+      "error": {
+        "code": "ER_WRONG_NUMBER_OF_COLUMNS_IN_SELECT",
+        "errno": 1222,
+        "state": "21000",
+        "message": "The used SELECT statements have a different number of columns"
+      },
+      "warnings": [
+        [
+          "Warning",
+          3719,
+          "'utf8' is currently an alias for the character set UTF8MB3, but will be an alias for UTF8MB4 in a future release. Please consider using UTF8MB4 in order to be unambiguous."
+        ]
+      ],
+      "warningCount": "2",
+      "errorCount": "1"
+    },
+    {
+      "sql": "WITH RECURSIVE c(a,b) AS(SELECT CAST('x' AS CHAR CHARSET utf8) x UNION ALL SELECT 1,2 FROM c WHERE FALSE) SELECT * FROM c",
+      "api": "execute",
+      "limit": 1,
+      "error": {
+        "code": "ER_WRONG_NUMBER_OF_COLUMNS_IN_SELECT",
+        "errno": 1222,
+        "state": "21000",
+        "message": "The used SELECT statements have a different number of columns"
+      },
+      "warnings": [
+        [
+          "Warning",
+          3719,
+          "'utf8' is currently an alias for the character set UTF8MB3, but will be an alias for UTF8MB4 in a future release. Please consider using UTF8MB4 in order to be unambiguous."
+        ]
+      ],
+      "warningCount": "2",
+      "errorCount": "1"
+    },
+    {
+      "sql": "WITH RECURSIVE c(a,b) AS(SELECT CAST('x' AS CHAR CHARSET utf8) x UNION ALL SELECT 1,2 FROM c WHERE FALSE) SELECT * FROM c",
+      "api": "prepare",
+      "limit": 1,
+      "error": {
+        "code": "ER_WRONG_NUMBER_OF_COLUMNS_IN_SELECT",
+        "errno": 1222,
+        "state": "21000",
+        "message": "The used SELECT statements have a different number of columns"
+      },
+      "warnings": [
+        [
+          "Warning",
+          3719,
+          "'utf8' is currently an alias for the character set UTF8MB3, but will be an alias for UTF8MB4 in a future release. Please consider using UTF8MB4 in order to be unambiguous."
+        ]
+      ],
+      "warningCount": "2",
+      "errorCount": "1"
+    },
+    {
+      "sql": "WITH RECURSIVE c(a,b) AS(SELECT CAST('x' AS CHAR CHARSET utf8) x UNION ALL SELECT @@warning_count FROM c WHERE FALSE) SELECT * FROM c",
+      "api": "query",
+      "limit": 1,
+      "error": {
+        "code": "ER_VIEW_WRONG_LIST",
+        "errno": 1353,
+        "state": "HY000",
+        "message": "In definition of view, derived table or common table expression, SELECT list and column names list have different column counts"
+      },
+      "warnings": [
+        [
+          "Warning",
+          3719,
+          "'utf8' is currently an alias for the character set UTF8MB3, but will be an alias for UTF8MB4 in a future release. Please consider using UTF8MB4 in order to be unambiguous."
+        ]
+      ],
+      "warningCount": "2",
+      "errorCount": "1"
+    },
+    {
+      "sql": "WITH RECURSIVE c(a,b) AS(SELECT CAST('x' AS CHAR CHARSET utf8) x UNION ALL SELECT @@warning_count FROM c WHERE FALSE) SELECT * FROM c",
+      "api": "execute",
+      "limit": 1,
+      "error": {
+        "code": "ER_VIEW_WRONG_LIST",
+        "errno": 1353,
+        "state": "HY000",
+        "message": "In definition of view, derived table or common table expression, SELECT list and column names list have different column counts"
+      },
+      "warnings": [
+        [
+          "Warning",
+          3719,
+          "'utf8' is currently an alias for the character set UTF8MB3, but will be an alias for UTF8MB4 in a future release. Please consider using UTF8MB4 in order to be unambiguous."
+        ]
+      ],
+      "warningCount": "2",
+      "errorCount": "1"
+    },
+    {
+      "sql": "WITH RECURSIVE c(a,b) AS(SELECT CAST('x' AS CHAR CHARSET utf8) x UNION ALL SELECT @@warning_count FROM c WHERE FALSE) SELECT * FROM c",
+      "api": "prepare",
+      "limit": 1,
+      "error": {
+        "code": "ER_VIEW_WRONG_LIST",
+        "errno": 1353,
+        "state": "HY000",
+        "message": "In definition of view, derived table or common table expression, SELECT list and column names list have different column counts"
+      },
+      "warnings": [
+        [
+          "Warning",
+          3719,
+          "'utf8' is currently an alias for the character set UTF8MB3, but will be an alias for UTF8MB4 in a future release. Please consider using UTF8MB4 in order to be unambiguous."
+        ]
+      ],
+      "warningCount": "2",
+      "errorCount": "1"
+    },
+    {
+      "sql": "WITH RECURSIVE c(a,b,c) AS(SELECT CAST('x' AS CHAR CHARSET utf8) x,2 x UNION ALL SELECT x,x FROM c WHERE FALSE) SELECT * FROM c",
+      "api": "query",
+      "limit": 1,
+      "error": {
+        "code": "ER_VIEW_WRONG_LIST",
+        "errno": 1353,
+        "state": "HY000",
+        "message": "In definition of view, derived table or common table expression, SELECT list and column names list have different column counts"
+      },
+      "warnings": [
+        [
+          "Warning",
+          3719,
+          "'utf8' is currently an alias for the character set UTF8MB3, but will be an alias for UTF8MB4 in a future release. Please consider using UTF8MB4 in order to be unambiguous."
+        ]
+      ],
+      "warningCount": "2",
+      "errorCount": "1"
+    },
+    {
+      "sql": "WITH RECURSIVE c(a,b,c) AS(SELECT CAST('x' AS CHAR CHARSET utf8) x,2 x UNION ALL SELECT x,x FROM c WHERE FALSE) SELECT * FROM c",
+      "api": "execute",
+      "limit": 1,
+      "error": {
+        "code": "ER_VIEW_WRONG_LIST",
+        "errno": 1353,
+        "state": "HY000",
+        "message": "In definition of view, derived table or common table expression, SELECT list and column names list have different column counts"
+      },
+      "warnings": [
+        [
+          "Warning",
+          3719,
+          "'utf8' is currently an alias for the character set UTF8MB3, but will be an alias for UTF8MB4 in a future release. Please consider using UTF8MB4 in order to be unambiguous."
+        ]
+      ],
+      "warningCount": "2",
+      "errorCount": "1"
+    },
+    {
+      "sql": "WITH RECURSIVE c(a,b,c) AS(SELECT CAST('x' AS CHAR CHARSET utf8) x,2 x UNION ALL SELECT x,x FROM c WHERE FALSE) SELECT * FROM c",
+      "api": "prepare",
+      "limit": 1,
+      "error": {
+        "code": "ER_VIEW_WRONG_LIST",
+        "errno": 1353,
+        "state": "HY000",
+        "message": "In definition of view, derived table or common table expression, SELECT list and column names list have different column counts"
+      },
+      "warnings": [
+        [
+          "Warning",
+          3719,
+          "'utf8' is currently an alias for the character set UTF8MB3, but will be an alias for UTF8MB4 in a future release. Please consider using UTF8MB4 in order to be unambiguous."
+        ]
+      ],
+      "warningCount": "2",
+      "errorCount": "1"
+    },
+    {
+      "sql": "WITH RECURSIVE c(a,b) AS(SELECT CAST('x' AS CHAR CHARSET utf8) x UNION ALL SELECT a FROM c WHERE FALSE) SELECT 1",
+      "api": "query",
+      "limit": 1,
+      "rows": [
+        [
+          1
+        ]
+      ],
+      "fields": [
+        [
+          "1",
+          8,
+          2,
+          129,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [
+        [
+          "Warning",
+          3719,
+          "'utf8' is currently an alias for the character set UTF8MB3, but will be an alias for UTF8MB4 in a future release. Please consider using UTF8MB4 in order to be unambiguous."
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "0"
+    },
+    {
+      "sql": "WITH RECURSIVE c(a,b) AS(SELECT CAST('x' AS CHAR CHARSET utf8) x UNION ALL SELECT a FROM c WHERE FALSE) SELECT 1",
+      "api": "execute",
+      "limit": 1,
+      "rows": [
+        [
+          1
+        ]
+      ],
+      "fields": [
+        [
+          "1",
+          8,
+          2,
+          129,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "WITH RECURSIVE c(a,b) AS(SELECT CAST('x' AS CHAR CHARSET utf8) x UNION ALL SELECT a FROM c WHERE FALSE) SELECT 1",
+      "api": "prepare",
+      "limit": 1,
+      "parameters": [],
+      "fields": [
+        [
+          "1",
+          8,
+          2,
+          129,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [
+        [
+          "Warning",
+          3719,
+          "'utf8' is currently an alias for the character set UTF8MB3, but will be an alias for UTF8MB4 in a future release. Please consider using UTF8MB4 in order to be unambiguous."
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "0"
+    },
+    {
+      "sql": "WITH RECURSIVE c(a,b) AS(SELECT CAST('x' AS CHAR CHARSET utf8) x UNION ALL SELECT a FROM c WHERE FALSE) SELECT * FROM c",
+      "api": "query",
+      "limit": 8,
+      "error": {
+        "code": "ER_BAD_FIELD_ERROR",
+        "errno": 1054,
+        "state": "42S22",
+        "message": "Unknown column 'a' in 'field list'"
+      },
+      "warnings": [
+        [
+          "Warning",
+          3719,
+          "'utf8' is currently an alias for the character set UTF8MB3, but will be an alias for UTF8MB4 in a future release. Please consider using UTF8MB4 in order to be unambiguous."
+        ],
+        [
+          "Error",
+          1054,
+          "Unknown column 'a' in 'field list'"
+        ]
+      ],
+      "warningCount": "2",
+      "errorCount": "1"
+    },
+    {
+      "sql": "WITH RECURSIVE c(a,b) AS(SELECT CAST('x' AS CHAR CHARSET utf8) x UNION ALL SELECT a FROM c WHERE FALSE) SELECT * FROM c",
+      "api": "execute",
+      "limit": 8,
+      "error": {
+        "code": "ER_BAD_FIELD_ERROR",
+        "errno": 1054,
+        "state": "42S22",
+        "message": "Unknown column 'a' in 'field list'"
+      },
+      "warnings": [
+        [
+          "Warning",
+          3719,
+          "'utf8' is currently an alias for the character set UTF8MB3, but will be an alias for UTF8MB4 in a future release. Please consider using UTF8MB4 in order to be unambiguous."
+        ],
+        [
+          "Error",
+          1054,
+          "Unknown column 'a' in 'field list'"
+        ]
+      ],
+      "warningCount": "2",
+      "errorCount": "1"
+    },
+    {
+      "sql": "WITH RECURSIVE c(a,b) AS(SELECT CAST('x' AS CHAR CHARSET utf8) x UNION ALL SELECT a FROM c WHERE FALSE) SELECT * FROM c",
+      "api": "prepare",
+      "limit": 8,
+      "error": {
+        "code": "ER_BAD_FIELD_ERROR",
+        "errno": 1054,
+        "state": "42S22",
+        "message": "Unknown column 'a' in 'field list'"
+      },
+      "warnings": [
+        [
+          "Warning",
+          3719,
+          "'utf8' is currently an alias for the character set UTF8MB3, but will be an alias for UTF8MB4 in a future release. Please consider using UTF8MB4 in order to be unambiguous."
+        ],
+        [
+          "Error",
+          1054,
+          "Unknown column 'a' in 'field list'"
+        ]
+      ],
+      "warningCount": "2",
+      "errorCount": "1"
+    },
+    {
+      "sql": "WITH RECURSIVE c(a,b) AS(SELECT CAST('x' AS CHAR CHARSET utf8) x UNION ALL SELECT x FROM c WHERE FALSE) SELECT * FROM c",
+      "api": "query",
+      "limit": 8,
+      "error": {
+        "code": "ER_VIEW_WRONG_LIST",
+        "errno": 1353,
+        "state": "HY000",
+        "message": "In definition of view, derived table or common table expression, SELECT list and column names list have different column counts"
+      },
+      "warnings": [
+        [
+          "Warning",
+          3719,
+          "'utf8' is currently an alias for the character set UTF8MB3, but will be an alias for UTF8MB4 in a future release. Please consider using UTF8MB4 in order to be unambiguous."
+        ],
+        [
+          "Error",
+          1353,
+          "In definition of view, derived table or common table expression, SELECT list and column names list have different column counts"
+        ]
+      ],
+      "warningCount": "2",
+      "errorCount": "1"
+    },
+    {
+      "sql": "WITH RECURSIVE c(a,b) AS(SELECT CAST('x' AS CHAR CHARSET utf8) x UNION ALL SELECT x FROM c WHERE FALSE) SELECT * FROM c",
+      "api": "execute",
+      "limit": 8,
+      "error": {
+        "code": "ER_VIEW_WRONG_LIST",
+        "errno": 1353,
+        "state": "HY000",
+        "message": "In definition of view, derived table or common table expression, SELECT list and column names list have different column counts"
+      },
+      "warnings": [
+        [
+          "Warning",
+          3719,
+          "'utf8' is currently an alias for the character set UTF8MB3, but will be an alias for UTF8MB4 in a future release. Please consider using UTF8MB4 in order to be unambiguous."
+        ],
+        [
+          "Error",
+          1353,
+          "In definition of view, derived table or common table expression, SELECT list and column names list have different column counts"
+        ]
+      ],
+      "warningCount": "2",
+      "errorCount": "1"
+    },
+    {
+      "sql": "WITH RECURSIVE c(a,b) AS(SELECT CAST('x' AS CHAR CHARSET utf8) x UNION ALL SELECT x FROM c WHERE FALSE) SELECT * FROM c",
+      "api": "prepare",
+      "limit": 8,
+      "error": {
+        "code": "ER_VIEW_WRONG_LIST",
+        "errno": 1353,
+        "state": "HY000",
+        "message": "In definition of view, derived table or common table expression, SELECT list and column names list have different column counts"
+      },
+      "warnings": [
+        [
+          "Warning",
+          3719,
+          "'utf8' is currently an alias for the character set UTF8MB3, but will be an alias for UTF8MB4 in a future release. Please consider using UTF8MB4 in order to be unambiguous."
+        ],
+        [
+          "Error",
+          1353,
+          "In definition of view, derived table or common table expression, SELECT list and column names list have different column counts"
+        ]
+      ],
+      "warningCount": "2",
+      "errorCount": "1"
+    },
+    {
+      "sql": "WITH RECURSIVE c(a,b) AS(SELECT CAST('x' AS CHAR CHARSET utf8) x UNION ALL SELECT 1,2 FROM c WHERE FALSE) SELECT * FROM c",
+      "api": "query",
+      "limit": 8,
+      "error": {
+        "code": "ER_WRONG_NUMBER_OF_COLUMNS_IN_SELECT",
+        "errno": 1222,
+        "state": "21000",
+        "message": "The used SELECT statements have a different number of columns"
+      },
+      "warnings": [
+        [
+          "Warning",
+          3719,
+          "'utf8' is currently an alias for the character set UTF8MB3, but will be an alias for UTF8MB4 in a future release. Please consider using UTF8MB4 in order to be unambiguous."
+        ],
+        [
+          "Error",
+          1222,
+          "The used SELECT statements have a different number of columns"
+        ]
+      ],
+      "warningCount": "2",
+      "errorCount": "1"
+    },
+    {
+      "sql": "WITH RECURSIVE c(a,b) AS(SELECT CAST('x' AS CHAR CHARSET utf8) x UNION ALL SELECT 1,2 FROM c WHERE FALSE) SELECT * FROM c",
+      "api": "execute",
+      "limit": 8,
+      "error": {
+        "code": "ER_WRONG_NUMBER_OF_COLUMNS_IN_SELECT",
+        "errno": 1222,
+        "state": "21000",
+        "message": "The used SELECT statements have a different number of columns"
+      },
+      "warnings": [
+        [
+          "Warning",
+          3719,
+          "'utf8' is currently an alias for the character set UTF8MB3, but will be an alias for UTF8MB4 in a future release. Please consider using UTF8MB4 in order to be unambiguous."
+        ],
+        [
+          "Error",
+          1222,
+          "The used SELECT statements have a different number of columns"
+        ]
+      ],
+      "warningCount": "2",
+      "errorCount": "1"
+    },
+    {
+      "sql": "WITH RECURSIVE c(a,b) AS(SELECT CAST('x' AS CHAR CHARSET utf8) x UNION ALL SELECT 1,2 FROM c WHERE FALSE) SELECT * FROM c",
+      "api": "prepare",
+      "limit": 8,
+      "error": {
+        "code": "ER_WRONG_NUMBER_OF_COLUMNS_IN_SELECT",
+        "errno": 1222,
+        "state": "21000",
+        "message": "The used SELECT statements have a different number of columns"
+      },
+      "warnings": [
+        [
+          "Warning",
+          3719,
+          "'utf8' is currently an alias for the character set UTF8MB3, but will be an alias for UTF8MB4 in a future release. Please consider using UTF8MB4 in order to be unambiguous."
+        ],
+        [
+          "Error",
+          1222,
+          "The used SELECT statements have a different number of columns"
+        ]
+      ],
+      "warningCount": "2",
+      "errorCount": "1"
+    },
+    {
+      "sql": "WITH RECURSIVE c(a,b) AS(SELECT CAST('x' AS CHAR CHARSET utf8) x UNION ALL SELECT @@warning_count FROM c WHERE FALSE) SELECT * FROM c",
+      "api": "query",
+      "limit": 8,
+      "error": {
+        "code": "ER_VIEW_WRONG_LIST",
+        "errno": 1353,
+        "state": "HY000",
+        "message": "In definition of view, derived table or common table expression, SELECT list and column names list have different column counts"
+      },
+      "warnings": [
+        [
+          "Warning",
+          3719,
+          "'utf8' is currently an alias for the character set UTF8MB3, but will be an alias for UTF8MB4 in a future release. Please consider using UTF8MB4 in order to be unambiguous."
+        ],
+        [
+          "Error",
+          1353,
+          "In definition of view, derived table or common table expression, SELECT list and column names list have different column counts"
+        ]
+      ],
+      "warningCount": "2",
+      "errorCount": "1"
+    },
+    {
+      "sql": "WITH RECURSIVE c(a,b) AS(SELECT CAST('x' AS CHAR CHARSET utf8) x UNION ALL SELECT @@warning_count FROM c WHERE FALSE) SELECT * FROM c",
+      "api": "execute",
+      "limit": 8,
+      "error": {
+        "code": "ER_VIEW_WRONG_LIST",
+        "errno": 1353,
+        "state": "HY000",
+        "message": "In definition of view, derived table or common table expression, SELECT list and column names list have different column counts"
+      },
+      "warnings": [
+        [
+          "Warning",
+          3719,
+          "'utf8' is currently an alias for the character set UTF8MB3, but will be an alias for UTF8MB4 in a future release. Please consider using UTF8MB4 in order to be unambiguous."
+        ],
+        [
+          "Error",
+          1353,
+          "In definition of view, derived table or common table expression, SELECT list and column names list have different column counts"
+        ]
+      ],
+      "warningCount": "2",
+      "errorCount": "1"
+    },
+    {
+      "sql": "WITH RECURSIVE c(a,b) AS(SELECT CAST('x' AS CHAR CHARSET utf8) x UNION ALL SELECT @@warning_count FROM c WHERE FALSE) SELECT * FROM c",
+      "api": "prepare",
+      "limit": 8,
+      "error": {
+        "code": "ER_VIEW_WRONG_LIST",
+        "errno": 1353,
+        "state": "HY000",
+        "message": "In definition of view, derived table or common table expression, SELECT list and column names list have different column counts"
+      },
+      "warnings": [
+        [
+          "Warning",
+          3719,
+          "'utf8' is currently an alias for the character set UTF8MB3, but will be an alias for UTF8MB4 in a future release. Please consider using UTF8MB4 in order to be unambiguous."
+        ],
+        [
+          "Error",
+          1353,
+          "In definition of view, derived table or common table expression, SELECT list and column names list have different column counts"
+        ]
+      ],
+      "warningCount": "2",
+      "errorCount": "1"
+    },
+    {
+      "sql": "WITH RECURSIVE c(a,b,c) AS(SELECT CAST('x' AS CHAR CHARSET utf8) x,2 x UNION ALL SELECT x,x FROM c WHERE FALSE) SELECT * FROM c",
+      "api": "query",
+      "limit": 8,
+      "error": {
+        "code": "ER_VIEW_WRONG_LIST",
+        "errno": 1353,
+        "state": "HY000",
+        "message": "In definition of view, derived table or common table expression, SELECT list and column names list have different column counts"
+      },
+      "warnings": [
+        [
+          "Warning",
+          3719,
+          "'utf8' is currently an alias for the character set UTF8MB3, but will be an alias for UTF8MB4 in a future release. Please consider using UTF8MB4 in order to be unambiguous."
+        ],
+        [
+          "Error",
+          1353,
+          "In definition of view, derived table or common table expression, SELECT list and column names list have different column counts"
+        ]
+      ],
+      "warningCount": "2",
+      "errorCount": "1"
+    },
+    {
+      "sql": "WITH RECURSIVE c(a,b,c) AS(SELECT CAST('x' AS CHAR CHARSET utf8) x,2 x UNION ALL SELECT x,x FROM c WHERE FALSE) SELECT * FROM c",
+      "api": "execute",
+      "limit": 8,
+      "error": {
+        "code": "ER_VIEW_WRONG_LIST",
+        "errno": 1353,
+        "state": "HY000",
+        "message": "In definition of view, derived table or common table expression, SELECT list and column names list have different column counts"
+      },
+      "warnings": [
+        [
+          "Warning",
+          3719,
+          "'utf8' is currently an alias for the character set UTF8MB3, but will be an alias for UTF8MB4 in a future release. Please consider using UTF8MB4 in order to be unambiguous."
+        ],
+        [
+          "Error",
+          1353,
+          "In definition of view, derived table or common table expression, SELECT list and column names list have different column counts"
+        ]
+      ],
+      "warningCount": "2",
+      "errorCount": "1"
+    },
+    {
+      "sql": "WITH RECURSIVE c(a,b,c) AS(SELECT CAST('x' AS CHAR CHARSET utf8) x,2 x UNION ALL SELECT x,x FROM c WHERE FALSE) SELECT * FROM c",
+      "api": "prepare",
+      "limit": 8,
+      "error": {
+        "code": "ER_VIEW_WRONG_LIST",
+        "errno": 1353,
+        "state": "HY000",
+        "message": "In definition of view, derived table or common table expression, SELECT list and column names list have different column counts"
+      },
+      "warnings": [
+        [
+          "Warning",
+          3719,
+          "'utf8' is currently an alias for the character set UTF8MB3, but will be an alias for UTF8MB4 in a future release. Please consider using UTF8MB4 in order to be unambiguous."
+        ],
+        [
+          "Error",
+          1353,
+          "In definition of view, derived table or common table expression, SELECT list and column names list have different column counts"
+        ]
+      ],
+      "warningCount": "2",
+      "errorCount": "1"
+    },
+    {
+      "sql": "WITH RECURSIVE c(a,b) AS(SELECT CAST('x' AS CHAR CHARSET utf8) x UNION ALL SELECT a FROM c WHERE FALSE) SELECT 1",
+      "api": "query",
+      "limit": 8,
+      "rows": [
+        [
+          1
+        ]
+      ],
+      "fields": [
+        [
+          "1",
+          8,
+          2,
+          129,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [
+        [
+          "Warning",
+          3719,
+          "'utf8' is currently an alias for the character set UTF8MB3, but will be an alias for UTF8MB4 in a future release. Please consider using UTF8MB4 in order to be unambiguous."
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "0"
+    },
+    {
+      "sql": "WITH RECURSIVE c(a,b) AS(SELECT CAST('x' AS CHAR CHARSET utf8) x UNION ALL SELECT a FROM c WHERE FALSE) SELECT 1",
+      "api": "execute",
+      "limit": 8,
+      "rows": [
+        [
+          1
+        ]
+      ],
+      "fields": [
+        [
+          "1",
+          8,
+          2,
+          129,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "WITH RECURSIVE c(a,b) AS(SELECT CAST('x' AS CHAR CHARSET utf8) x UNION ALL SELECT a FROM c WHERE FALSE) SELECT 1",
+      "api": "prepare",
+      "limit": 8,
+      "parameters": [],
+      "fields": [
+        [
+          "1",
+          8,
+          2,
+          129,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [
+        [
+          "Warning",
+          3719,
+          "'utf8' is currently an alias for the character set UTF8MB3, but will be an alias for UTF8MB4 in a future release. Please consider using UTF8MB4 in order to be unambiguous."
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "0"
+    },
+    {
+      "sql": "WITH RECURSIVE c(a,b) AS(SELECT CAST('x' AS CHAR CHARSET utf8) x UNION ALL SELECT a FROM c WHERE FALSE) SELECT * FROM c",
+      "api": "query",
+      "limit": 64,
+      "error": {
+        "code": "ER_BAD_FIELD_ERROR",
+        "errno": 1054,
+        "state": "42S22",
+        "message": "Unknown column 'a' in 'field list'"
+      },
+      "warnings": [
+        [
+          "Warning",
+          3719,
+          "'utf8' is currently an alias for the character set UTF8MB3, but will be an alias for UTF8MB4 in a future release. Please consider using UTF8MB4 in order to be unambiguous."
+        ],
+        [
+          "Error",
+          1054,
+          "Unknown column 'a' in 'field list'"
+        ]
+      ],
+      "warningCount": "2",
+      "errorCount": "1"
+    },
+    {
+      "sql": "WITH RECURSIVE c(a,b) AS(SELECT CAST('x' AS CHAR CHARSET utf8) x UNION ALL SELECT a FROM c WHERE FALSE) SELECT * FROM c",
+      "api": "execute",
+      "limit": 64,
+      "error": {
+        "code": "ER_BAD_FIELD_ERROR",
+        "errno": 1054,
+        "state": "42S22",
+        "message": "Unknown column 'a' in 'field list'"
+      },
+      "warnings": [
+        [
+          "Warning",
+          3719,
+          "'utf8' is currently an alias for the character set UTF8MB3, but will be an alias for UTF8MB4 in a future release. Please consider using UTF8MB4 in order to be unambiguous."
+        ],
+        [
+          "Error",
+          1054,
+          "Unknown column 'a' in 'field list'"
+        ]
+      ],
+      "warningCount": "2",
+      "errorCount": "1"
+    },
+    {
+      "sql": "WITH RECURSIVE c(a,b) AS(SELECT CAST('x' AS CHAR CHARSET utf8) x UNION ALL SELECT a FROM c WHERE FALSE) SELECT * FROM c",
+      "api": "prepare",
+      "limit": 64,
+      "error": {
+        "code": "ER_BAD_FIELD_ERROR",
+        "errno": 1054,
+        "state": "42S22",
+        "message": "Unknown column 'a' in 'field list'"
+      },
+      "warnings": [
+        [
+          "Warning",
+          3719,
+          "'utf8' is currently an alias for the character set UTF8MB3, but will be an alias for UTF8MB4 in a future release. Please consider using UTF8MB4 in order to be unambiguous."
+        ],
+        [
+          "Error",
+          1054,
+          "Unknown column 'a' in 'field list'"
+        ]
+      ],
+      "warningCount": "2",
+      "errorCount": "1"
+    },
+    {
+      "sql": "WITH RECURSIVE c(a,b) AS(SELECT CAST('x' AS CHAR CHARSET utf8) x UNION ALL SELECT x FROM c WHERE FALSE) SELECT * FROM c",
+      "api": "query",
+      "limit": 64,
+      "error": {
+        "code": "ER_VIEW_WRONG_LIST",
+        "errno": 1353,
+        "state": "HY000",
+        "message": "In definition of view, derived table or common table expression, SELECT list and column names list have different column counts"
+      },
+      "warnings": [
+        [
+          "Warning",
+          3719,
+          "'utf8' is currently an alias for the character set UTF8MB3, but will be an alias for UTF8MB4 in a future release. Please consider using UTF8MB4 in order to be unambiguous."
+        ],
+        [
+          "Error",
+          1353,
+          "In definition of view, derived table or common table expression, SELECT list and column names list have different column counts"
+        ]
+      ],
+      "warningCount": "2",
+      "errorCount": "1"
+    },
+    {
+      "sql": "WITH RECURSIVE c(a,b) AS(SELECT CAST('x' AS CHAR CHARSET utf8) x UNION ALL SELECT x FROM c WHERE FALSE) SELECT * FROM c",
+      "api": "execute",
+      "limit": 64,
+      "error": {
+        "code": "ER_VIEW_WRONG_LIST",
+        "errno": 1353,
+        "state": "HY000",
+        "message": "In definition of view, derived table or common table expression, SELECT list and column names list have different column counts"
+      },
+      "warnings": [
+        [
+          "Warning",
+          3719,
+          "'utf8' is currently an alias for the character set UTF8MB3, but will be an alias for UTF8MB4 in a future release. Please consider using UTF8MB4 in order to be unambiguous."
+        ],
+        [
+          "Error",
+          1353,
+          "In definition of view, derived table or common table expression, SELECT list and column names list have different column counts"
+        ]
+      ],
+      "warningCount": "2",
+      "errorCount": "1"
+    },
+    {
+      "sql": "WITH RECURSIVE c(a,b) AS(SELECT CAST('x' AS CHAR CHARSET utf8) x UNION ALL SELECT x FROM c WHERE FALSE) SELECT * FROM c",
+      "api": "prepare",
+      "limit": 64,
+      "error": {
+        "code": "ER_VIEW_WRONG_LIST",
+        "errno": 1353,
+        "state": "HY000",
+        "message": "In definition of view, derived table or common table expression, SELECT list and column names list have different column counts"
+      },
+      "warnings": [
+        [
+          "Warning",
+          3719,
+          "'utf8' is currently an alias for the character set UTF8MB3, but will be an alias for UTF8MB4 in a future release. Please consider using UTF8MB4 in order to be unambiguous."
+        ],
+        [
+          "Error",
+          1353,
+          "In definition of view, derived table or common table expression, SELECT list and column names list have different column counts"
+        ]
+      ],
+      "warningCount": "2",
+      "errorCount": "1"
+    },
+    {
+      "sql": "WITH RECURSIVE c(a,b) AS(SELECT CAST('x' AS CHAR CHARSET utf8) x UNION ALL SELECT 1,2 FROM c WHERE FALSE) SELECT * FROM c",
+      "api": "query",
+      "limit": 64,
+      "error": {
+        "code": "ER_WRONG_NUMBER_OF_COLUMNS_IN_SELECT",
+        "errno": 1222,
+        "state": "21000",
+        "message": "The used SELECT statements have a different number of columns"
+      },
+      "warnings": [
+        [
+          "Warning",
+          3719,
+          "'utf8' is currently an alias for the character set UTF8MB3, but will be an alias for UTF8MB4 in a future release. Please consider using UTF8MB4 in order to be unambiguous."
+        ],
+        [
+          "Error",
+          1222,
+          "The used SELECT statements have a different number of columns"
+        ]
+      ],
+      "warningCount": "2",
+      "errorCount": "1"
+    },
+    {
+      "sql": "WITH RECURSIVE c(a,b) AS(SELECT CAST('x' AS CHAR CHARSET utf8) x UNION ALL SELECT 1,2 FROM c WHERE FALSE) SELECT * FROM c",
+      "api": "execute",
+      "limit": 64,
+      "error": {
+        "code": "ER_WRONG_NUMBER_OF_COLUMNS_IN_SELECT",
+        "errno": 1222,
+        "state": "21000",
+        "message": "The used SELECT statements have a different number of columns"
+      },
+      "warnings": [
+        [
+          "Warning",
+          3719,
+          "'utf8' is currently an alias for the character set UTF8MB3, but will be an alias for UTF8MB4 in a future release. Please consider using UTF8MB4 in order to be unambiguous."
+        ],
+        [
+          "Error",
+          1222,
+          "The used SELECT statements have a different number of columns"
+        ]
+      ],
+      "warningCount": "2",
+      "errorCount": "1"
+    },
+    {
+      "sql": "WITH RECURSIVE c(a,b) AS(SELECT CAST('x' AS CHAR CHARSET utf8) x UNION ALL SELECT 1,2 FROM c WHERE FALSE) SELECT * FROM c",
+      "api": "prepare",
+      "limit": 64,
+      "error": {
+        "code": "ER_WRONG_NUMBER_OF_COLUMNS_IN_SELECT",
+        "errno": 1222,
+        "state": "21000",
+        "message": "The used SELECT statements have a different number of columns"
+      },
+      "warnings": [
+        [
+          "Warning",
+          3719,
+          "'utf8' is currently an alias for the character set UTF8MB3, but will be an alias for UTF8MB4 in a future release. Please consider using UTF8MB4 in order to be unambiguous."
+        ],
+        [
+          "Error",
+          1222,
+          "The used SELECT statements have a different number of columns"
+        ]
+      ],
+      "warningCount": "2",
+      "errorCount": "1"
+    },
+    {
+      "sql": "WITH RECURSIVE c(a,b) AS(SELECT CAST('x' AS CHAR CHARSET utf8) x UNION ALL SELECT @@warning_count FROM c WHERE FALSE) SELECT * FROM c",
+      "api": "query",
+      "limit": 64,
+      "error": {
+        "code": "ER_VIEW_WRONG_LIST",
+        "errno": 1353,
+        "state": "HY000",
+        "message": "In definition of view, derived table or common table expression, SELECT list and column names list have different column counts"
+      },
+      "warnings": [
+        [
+          "Warning",
+          3719,
+          "'utf8' is currently an alias for the character set UTF8MB3, but will be an alias for UTF8MB4 in a future release. Please consider using UTF8MB4 in order to be unambiguous."
+        ],
+        [
+          "Error",
+          1353,
+          "In definition of view, derived table or common table expression, SELECT list and column names list have different column counts"
+        ]
+      ],
+      "warningCount": "2",
+      "errorCount": "1"
+    },
+    {
+      "sql": "WITH RECURSIVE c(a,b) AS(SELECT CAST('x' AS CHAR CHARSET utf8) x UNION ALL SELECT @@warning_count FROM c WHERE FALSE) SELECT * FROM c",
+      "api": "execute",
+      "limit": 64,
+      "error": {
+        "code": "ER_VIEW_WRONG_LIST",
+        "errno": 1353,
+        "state": "HY000",
+        "message": "In definition of view, derived table or common table expression, SELECT list and column names list have different column counts"
+      },
+      "warnings": [
+        [
+          "Warning",
+          3719,
+          "'utf8' is currently an alias for the character set UTF8MB3, but will be an alias for UTF8MB4 in a future release. Please consider using UTF8MB4 in order to be unambiguous."
+        ],
+        [
+          "Error",
+          1353,
+          "In definition of view, derived table or common table expression, SELECT list and column names list have different column counts"
+        ]
+      ],
+      "warningCount": "2",
+      "errorCount": "1"
+    },
+    {
+      "sql": "WITH RECURSIVE c(a,b) AS(SELECT CAST('x' AS CHAR CHARSET utf8) x UNION ALL SELECT @@warning_count FROM c WHERE FALSE) SELECT * FROM c",
+      "api": "prepare",
+      "limit": 64,
+      "error": {
+        "code": "ER_VIEW_WRONG_LIST",
+        "errno": 1353,
+        "state": "HY000",
+        "message": "In definition of view, derived table or common table expression, SELECT list and column names list have different column counts"
+      },
+      "warnings": [
+        [
+          "Warning",
+          3719,
+          "'utf8' is currently an alias for the character set UTF8MB3, but will be an alias for UTF8MB4 in a future release. Please consider using UTF8MB4 in order to be unambiguous."
+        ],
+        [
+          "Error",
+          1353,
+          "In definition of view, derived table or common table expression, SELECT list and column names list have different column counts"
+        ]
+      ],
+      "warningCount": "2",
+      "errorCount": "1"
+    },
+    {
+      "sql": "WITH RECURSIVE c(a,b,c) AS(SELECT CAST('x' AS CHAR CHARSET utf8) x,2 x UNION ALL SELECT x,x FROM c WHERE FALSE) SELECT * FROM c",
+      "api": "query",
+      "limit": 64,
+      "error": {
+        "code": "ER_VIEW_WRONG_LIST",
+        "errno": 1353,
+        "state": "HY000",
+        "message": "In definition of view, derived table or common table expression, SELECT list and column names list have different column counts"
+      },
+      "warnings": [
+        [
+          "Warning",
+          3719,
+          "'utf8' is currently an alias for the character set UTF8MB3, but will be an alias for UTF8MB4 in a future release. Please consider using UTF8MB4 in order to be unambiguous."
+        ],
+        [
+          "Error",
+          1353,
+          "In definition of view, derived table or common table expression, SELECT list and column names list have different column counts"
+        ]
+      ],
+      "warningCount": "2",
+      "errorCount": "1"
+    },
+    {
+      "sql": "WITH RECURSIVE c(a,b,c) AS(SELECT CAST('x' AS CHAR CHARSET utf8) x,2 x UNION ALL SELECT x,x FROM c WHERE FALSE) SELECT * FROM c",
+      "api": "execute",
+      "limit": 64,
+      "error": {
+        "code": "ER_VIEW_WRONG_LIST",
+        "errno": 1353,
+        "state": "HY000",
+        "message": "In definition of view, derived table or common table expression, SELECT list and column names list have different column counts"
+      },
+      "warnings": [
+        [
+          "Warning",
+          3719,
+          "'utf8' is currently an alias for the character set UTF8MB3, but will be an alias for UTF8MB4 in a future release. Please consider using UTF8MB4 in order to be unambiguous."
+        ],
+        [
+          "Error",
+          1353,
+          "In definition of view, derived table or common table expression, SELECT list and column names list have different column counts"
+        ]
+      ],
+      "warningCount": "2",
+      "errorCount": "1"
+    },
+    {
+      "sql": "WITH RECURSIVE c(a,b,c) AS(SELECT CAST('x' AS CHAR CHARSET utf8) x,2 x UNION ALL SELECT x,x FROM c WHERE FALSE) SELECT * FROM c",
+      "api": "prepare",
+      "limit": 64,
+      "error": {
+        "code": "ER_VIEW_WRONG_LIST",
+        "errno": 1353,
+        "state": "HY000",
+        "message": "In definition of view, derived table or common table expression, SELECT list and column names list have different column counts"
+      },
+      "warnings": [
+        [
+          "Warning",
+          3719,
+          "'utf8' is currently an alias for the character set UTF8MB3, but will be an alias for UTF8MB4 in a future release. Please consider using UTF8MB4 in order to be unambiguous."
+        ],
+        [
+          "Error",
+          1353,
+          "In definition of view, derived table or common table expression, SELECT list and column names list have different column counts"
+        ]
+      ],
+      "warningCount": "2",
+      "errorCount": "1"
+    },
+    {
+      "sql": "WITH RECURSIVE c(a,b) AS(SELECT CAST('x' AS CHAR CHARSET utf8) x UNION ALL SELECT a FROM c WHERE FALSE) SELECT 1",
+      "api": "query",
+      "limit": 64,
+      "rows": [
+        [
+          1
+        ]
+      ],
+      "fields": [
+        [
+          "1",
+          8,
+          2,
+          129,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [
+        [
+          "Warning",
+          3719,
+          "'utf8' is currently an alias for the character set UTF8MB3, but will be an alias for UTF8MB4 in a future release. Please consider using UTF8MB4 in order to be unambiguous."
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "0"
+    },
+    {
+      "sql": "WITH RECURSIVE c(a,b) AS(SELECT CAST('x' AS CHAR CHARSET utf8) x UNION ALL SELECT a FROM c WHERE FALSE) SELECT 1",
+      "api": "execute",
+      "limit": 64,
+      "rows": [
+        [
+          1
+        ]
+      ],
+      "fields": [
+        [
+          "1",
+          8,
+          2,
+          129,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "WITH RECURSIVE c(a,b) AS(SELECT CAST('x' AS CHAR CHARSET utf8) x UNION ALL SELECT a FROM c WHERE FALSE) SELECT 1",
+      "api": "prepare",
+      "limit": 64,
+      "parameters": [],
+      "fields": [
+        [
+          "1",
+          8,
+          2,
+          129,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [
+        [
+          "Warning",
+          3719,
+          "'utf8' is currently an alias for the character set UTF8MB3, but will be an alias for UTF8MB4 in a future release. Please consider using UTF8MB4 in order to be unambiguous."
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "0"
+    }
+  ]
+}
