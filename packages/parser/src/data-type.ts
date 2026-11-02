@@ -350,7 +350,7 @@ export function parseDataType(c: Cursor, mode: SqlMode, column = true): DataType
     const charsetToken = c.peek()
     const specifiedCharset = typeCharset(c)
     // The charset name reduces before BINARY attributes, even when written after them.
-    warnCharset(c, specifiedCharset)
+    warnCharset(c, specifiedCharset, true)
     // An invalid charset suppresses attribute warnings. After it succeeds,
     // publish leading BINARY, shorthand and trailing BINARY in written order.
     if (specifiedCharset === undefined && c.takeWord('CHARACTER')) c.fail()

@@ -289,3 +289,24 @@ test('explicit utf8mb3 warnings belong to expression construction, not successfu
     return true
   })
 })
+
+test('isolated construction histories preserve legacy provenance and immutable reuse', () => {
+  const sql = "SELECT LENGTH(CAST('x' AS CHAR CHARSET utf8)),LENGTH(_utf8mb3'x')"
+  const root = parseStatement(sql)
+  const keys = Reflect.ownKeys(root), json = JSON.stringify(root)
+  assert.equal(Cursor.conditions(root), undefined)
+  const construction = Cursor.constructionConditions(root)
+  assert.deepEqual(construction?.map(c => [c.errno, c.level]), [[3719, 'Warning'], [1287, 'Warning']])
+  assert.equal(Object.isFrozen(construction), true)
+  assert.equal(Object.isFrozen(construction?.[0]), true)
+  assert.equal(Reflect.set(construction![0]!, 'message', 'changed'), false)
+  assert.equal(Cursor.constructionConditions(root), construction)
+  assert.equal(Cursor.conditions(root), undefined)
+  assert.deepEqual(Reflect.ownKeys(root), keys)
+  assert.equal(JSON.stringify(root), json)
+  const mixed = parseStatement("SELECT CAST(N'x' AS CHAR CHARSET utf8)")
+  assert.equal(Cursor.constructionConditions(mixed), undefined)
+  assert.equal(Cursor.conditions(mixed), undefined)
+  const next = parseStatement('SELECT 1')
+  assert.equal(Cursor.constructionConditions(next), undefined)
+})

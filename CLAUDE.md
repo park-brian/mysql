@@ -63,7 +63,11 @@ count rule during the existing column-admission walk. Outer counts precede
 children; query bodies retain their own admission path. Column/CHECK
 constructors now follow written attribute/declaration order before each column's
 policy. Type/charset checks, query fences and functional-key refusals keep their
-owners.
+owners. Isolated CAST/introducer charset construction warnings now retain
+separate immutable records: text and PREPARE publish the bounded prefix; cached
+EXECUTE does not repeat it. Legacy provenance and mixed publishers keep their
+paths. Four existing unused-order 1305 failures still follow the newly correct
+warning prefix; their previously coincidental counts change.
 Invalid definitions preserve schema and rollbackability; general SELECT, query-body
 and CHECK constructor timing remain open. Leading-WITH ownership, plain SELECT
 naming, inherited-holder collation admission, grouped readers/order, width-limited

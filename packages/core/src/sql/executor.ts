@@ -217,7 +217,9 @@ function recordFailure(state: SqlSession, conditions: Condition[] | undefined, f
     const kept: readonly ParseCondition[] = parsing?.slice(0, limit) ?? [error]
     appendConditions(conditions, kept)
   }
-  recordDiagnostics(state, conditions ?? [], limit)
+  // Native argument-count refusal belongs to construction's bounded diagnostics area.
+  const history = error.errno === 1582 ? conditions?.slice(0, limit) : conditions
+  recordDiagnostics(state, history ?? [], limit)
   return error
 }
 
@@ -344,6 +346,7 @@ export class SqlExecutor implements Executor {
       if (performance.now() - started > SLICE_MS) await pause()
       this.#alive(session)
       // Admit the AST before metadata or diagnostic-count PREPARE refusal.
+      if (statement !== null) appendConditions(conditions, Cursor.constructionConditions(statement)?.slice(0, limit) ?? [])
       const diagnostic = statement !== null && this.#admitStatement(statement, state, session)
       if (statement === null || diagnostic || isDiagnostic(statement)) throw sqlError('ER_UNSUPPORTED_PS', 'This command is not supported in the prepared statement protocol yet')
       binaryDeclarations(statement, conditions, limit)
@@ -619,6 +622,7 @@ export class SqlExecutor implements Executor {
       // The error is a condition too, after any the statement raised first.
       const failed = (e: unknown): SqlError => diagnostic ? toSqlError(e) : recordFailure(state, conditions, e, limit)
       try {
+        if (protocol === 'text') appendConditions(conditions, Cursor.constructionConditions(statement)?.slice(0, limit) ?? [])
         this.#admitStatement(statement, state, session)
         if (protocol === 'text') binaryDeclarations(statement, conditions, limit)
         const run = this.#run(session, sql, params, known, protocol, conditions)

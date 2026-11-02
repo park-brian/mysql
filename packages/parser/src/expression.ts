@@ -529,7 +529,7 @@ class ExpressionParser {
       if (t.text.startsWith('_') && (next === TOKEN.STRING || next === TOKEN.HEX || next === TOKEN.BIT)) {
         const charset = t.text.slice(1).toLowerCase()
         if (defaultCollationOf(charset) !== undefined) {
-          warnCharset(cursor, charset)
+          warnCharset(cursor, charset, true)
           cursor.skip()
           if (next === TOKEN.STRING) return { kind: NODE.LITERAL, type: LITERAL.STRING, value: cursor.expectString(true), charset, at: t.start }
           const lit = this.#primary()

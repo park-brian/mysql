@@ -87,10 +87,18 @@ query/unused-CTE and functional-key controls retain their boundaries. New local/
 native protocol regressions pass through query/execute/prepare. Fresh release,
 seeded gates and actual-predecessor proof pass as recorded below. Charset-warning
 histories and earlier malformed functional-key constructors remain open.
-Next audit the warning publisher for explicit utf8/utf8mb3 CASTs nested in
-length calls: a new 96-outcome probe matches 48, with missing prefixes in valid
-and failing SELECT/DDL calls. Keep successful-root provenance, DDL/SET owners and
-error/header priority distinct; do not publish all grammar warnings globally.
+Current warning slice retains isolated explicit utf8/utf8mb3 CAST/introducer
+construction histories separately from legacy successful-root provenance. Text
+commands and PREPARE publish them; cached EXECUTE does not repeat parse-time
+warnings. Mixed publishers retain their existing path. The original 96-outcome
+audit improves 48→96 complete matches; sixty mixed-history controls improve
+16→38. Across 3,404 observations, complete matches improve 2,422→2,866 with no
+previous complete match lost. Four previously coincidental warning-vector counts
+change: unused-order queries still return an erroneous 1305, now after their
+correct native warning prefix. Keep those primary binding gaps explicit; every
+other previously matching protocol fact is retained. Final protocol, provenance and release gates pass as recorded below. The
+unused-order name-binding gap and diagnostic-count SELECT lifetime remain open;
+new warning publication does not close those independent boundaries.
 Then return to set admission: unbounded UNION ALL can discard key-name binding, while materialized/unary
 owners still bind; their COLLATE checks need the inherited holder. Native constructors validate outer arity before nested
 calls, after syntax/charset construction, and leave unused CTE bodies dormant.
@@ -2256,6 +2264,49 @@ pinned corpora including 1,737 coercion warning counts. Early source proof cover
 533 tests/fixtures and 206 runtime sources plus tooling. Parser/core/facade are
 45,491/331,685/331,595 B gzipped. All eleven required 4c7f2a9 CI jobs pass.
 M5.10 remains partial; totals stay 144/190 and M5 42/53.
+
+**M5.10 isolated charset construction warnings:** the cursor retains command-
+construction records separately from legacy grammar provenance, in its existing
+root WeakMap. Explicit CAST targets and registered literal introducers opt in.
+Records, condition objects and arrays are immutable; mixed publishers keep their
+previous path. Public datatype facts and Cursor.conditions() are unchanged.
+There is no new AST scan or generic grammar-warning publisher. CONVERT USING,
+DDL datatype and SET charset publishers retain their ownership.
+
+Text commands and each PREPARE publish the retained parser prefix. Cached
+EXECUTE does not repeat parse-time warnings, and repeated PREPARE reuses the
+immutable record. The copied prefix respects max_error_count. Native 1582
+argument-count refusals also use construction's bounded diagnostics area, while
+the primary ERR packet remains unchanged even when omitted from that area.
+Sixteen 300-warning success/failure controls agree for limits 0, 1, 8 and 64,
+including warning/error totals and an unretained primary error.
+
+The initial 96-outcome audit improves 48→96 complete matches. Sixty mixed-history
+controls improve 16→38. Across 3,404 observations, complete matches improve
+2,422→2,866; no previously complete match is lost. Of 25,503 previously matching
+protocol facts, 25,499 remain. Four warning-count coincidences change: native
+success has one warning, but core still raises the pre-existing unused-order
+stored-function 1305. Its old one-error vector becomes the exact native warning
+prefix followed by that same erroneous 1305. Those four primary binding gaps
+remain explicit; no fixture, assertion mask or threshold is weakened. The raw
+preservation report retains all four changes and the separate verifier checks
+the unchanged primary, exact new prefix and every prior complete outcome.
+
+Native/local protocol tests cover repeated text/PREPARE, cached execution,
+SELECT/DEFAULT/generated/CHECK values, exact errors/warnings, PREPARE without
+DDL effects and long histories. Parser tests verify immutable reuse, legacy
+provenance, mixed fences and no AST properties. All 2,840 public datatype AST/
+error/offset/provenance records remain identical after capture line-ending
+normalization. Typecheck, all nine unchanged caps, 20,000 executor statements
+seeded 20261010 and plans 2,127/2,248 under the unchanged 2,118 floor pass.
+Actual 41edb82 fails the new protocol regression. Fresh Docker --reference passes
+1,637 main/four latency tests, lint/typecheck, package/typed smoke, the real client
+and all seven pinned corpora including 1,737 coercion warning counts. Early
+source proof covers 534 tests/fixtures and 206 runtime sources plus tooling.
+Parser/core/facade are 45,599/331,866/331,778 B gzipped under unchanged caps.
+All eleven required 41edb82 CI jobs pass. Mixed publishers, unused-order name
+binding, CONVERT USING histories and broader constructor timing remain open.
+Totals stay 144/190 and M5 42/53; M5.10 remains partial.
 
 **Next prerequisite: constructor admission before presence execution.** Complete
 the existing CAST work: with written utf8 warning 3719 now retained, refuse

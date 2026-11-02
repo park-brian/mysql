@@ -69,12 +69,21 @@ export function checkTreeDepth(root: object): void {
   }
 }
 
-const grammarWarnings = new WeakMap<object, readonly ParseCondition[]>()
+interface RootWarnings {
+  readonly grammar?: readonly ParseCondition[]
+  readonly construction?: readonly ParseCondition[]
+}
+const grammarWarnings = new WeakMap<object, RootWarnings>()
 
 export class Cursor {
   /** Successful grammar provenance belongs to this exact root and is never consumed. */
   static conditions(root: object): readonly ParseCondition[] | undefined {
-    return grammarWarnings.get(root)
+    return grammarWarnings.get(root)?.grammar
+  }
+
+  /** Command construction warnings are distinct from legacy grammar provenance. */
+  static constructionConditions(root: object): readonly ParseCondition[] | undefined {
+    return grammarWarnings.get(root)?.construction
   }
 
   readonly tokens: readonly Token[]
@@ -87,8 +96,8 @@ export class Cursor {
   #depth = 0
   #primary: ParseError | undefined
   #conditions: ParseCondition[] | undefined
-  /** Legacy successful-root provenance excludes runtime-owned failure warnings. */
-  #warnings: ParseCondition[] | undefined
+  /** Legacy provenance and isolated construction histories have separate publishers. */
+  #warnings: { grammar?: ParseCondition[]; construction?: ParseCondition[] } | undefined
 
   constructor(tokens: readonly Token[], source = '') {
     this.tokens = tokens
@@ -102,12 +111,17 @@ export class Cursor {
     this.#conditions.push({ errno: error.errno!, message: error.message })
   }
 
-  /** Runtime-owned warnings survive failure without changing valid-AST provenance. */
-  warn(errno: number, message: string, failureOnly = false): void {
+  /** True retains failures only; construction also records its isolated command history. */
+  warn(errno: number, message: string, failureOnly: boolean | 'construction' = false): void {
     if (!this.#conditions) return
     const condition: ParseCondition = { errno, message, level: 'Warning' }
     this.#conditions.push(condition)
-    if (!failureOnly) (this.#warnings ??= []).push(condition)
+    if (failureOnly !== true) {
+      const owner = failureOnly === 'construction' ? 'construction' : 'grammar'
+      const warnings = this.#warnings ??= {}
+      const list = warnings[owner] ??= []
+      list.push(condition)
+    }
   }
 
   /** Refuse an invalid statement before its AST reaches a consumer. */
@@ -118,7 +132,13 @@ export class Cursor {
       const result = parse()
       if (this.#primary !== undefined) throw this.#primary
       checkTreeDepth(result)
-      if (this.#warnings) grammarWarnings.set(result, Object.freeze(this.#warnings))
+      if (this.#warnings) {
+        // Mixed publishers retain their existing warning ownership.
+        if (this.#conditions.length !== this.#warnings.construction?.length) delete this.#warnings.construction
+        this.#warnings.construction?.forEach(Object.freeze)
+        for (const warnings of Object.values(this.#warnings)) Object.freeze(warnings)
+        grammarWarnings.set(result, Object.freeze(this.#warnings))
+      }
       return result
     } catch (error) {
       if (!(error instanceof ParseError) || this.#conditions.length === 0) throw error
