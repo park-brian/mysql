@@ -129,9 +129,13 @@ export function nestedNullability(op: SetOperationNode['op'], left: boolean, rig
 export function convert(v: Value, t: ResultType): Value {
   if (v === null) return null
   // A numeric field copy reads the real number, not a conditional's source string.
-  if (v.kind === 'double' && v.str !== undefined) {
-    const { str: _str, ...number } = v
-    v = number
+  if (v.kind === 'double') {
+    // Non-BLOB string fields store the number, independently of source display precision.
+    if ((t.kind === 'string' || t.kind === 'bytes') && t.field !== FIELD_TYPE.BLOB && !promotesToBlob(t)) v = plainValue(v)!
+    else if (v.str !== undefined) {
+      const { str: _str, ...number } = v
+      v = number
+    }
   }
   // YEAR may meet a TINYINT without widening it. Its temporary field quietly
   // saturates at the TINYINT maximum, before DISTINCT compares the rows.

@@ -46,8 +46,11 @@ from conditional source readings, including exact BIGINT text, YEAR padding and
 BIT bytes. Actual derived, set and window fields and scalar caches establish
 their own readings. Numeric binary consumers now share the item's byte bound,
 separately from numeric character width; the literal-only flag is removed.
-Large fixed-scale formatting, DECIMAL diagnostics, raw REAL copying into non-BLOB
-string holders, warning timing and aggregate metadata remain open under M5.10/M5.5.
+REAL copies into non-BLOB text/binary fields now use canonical numeric readings
+through the existing set writer. Width-limited formatting, computed REAL BLOB
+copies, large fixed-scale formatting, DECIMAL diagnostics, warning timing and
+aggregate metadata remain open. UTF-16 writes still hit the existing encoder
+refusal; the roadmap records a separate M2.3 scope review.
 M5's ORM exit criterion holds with recorded test configuration; default
 parallel runs can lose interactive-transaction tests to scheduling delays.
 Doc 42's query API

@@ -58,15 +58,17 @@ The ORM review measured Drizzle's 487 passes and Prisma's 1,122 passes with the
 same reference snapshot failure at two workers. Browser work remains M6;
 InnoDB interchange remains M7, outside the staged Node release.
 
-**Current bounded function work:** FLOAT field delivery and SQL string-reader
-ownership are verified below. Numeric byte-width metadata now reuses the item's
-existing bound, independently of character width, removing the literal-only
-flag. The combined 5,096 native observations improve 3,811 to 4,681 complete
-matches against 5c11958; every earlier matching fact holds. Fresh release
-verification passes. Large fixed-scale formatting, DECIMAL diagnostics, raw REAL copying
-into non-BLOB string holders, aggregate metadata and separate warning timing
-remain open. Next audit the existing numeric copy boundary for those non-BLOB
-holders, preserving BLOB source formatting. The complete DECIMAL
+**Current bounded function work:** REAL numeric copies into non-BLOB string
+fields now clear source display precision through the existing field converter,
+sharing physical BLOB promotion with metadata. The combined 8,760 native
+observations improve 7,265 to 8,201 complete matches against 094dd95; every earlier
+matching fact holds. Fresh release verification passes. SQL readers, BLOB
+source formatting, metadata and diagnostics retain their separate ownership.
+Width-limited REAL formatting, computed REAL BLOB copies, large fixed-scale
+formatting, DECIMAL diagnostics, aggregate metadata and separate warning timing
+remain open. Next audit computed REAL BLOB copies against actual source-field
+boundaries. The UTF-16 encoder refusal found during charset setup is recorded
+below for a separate M2.3 completion-scope review. The complete DECIMAL
 constructor rehearsal remains parked above the unchanged parser cap; its
 grammar, diagnostics and refusal must ship together before presence/projection
 expansion. No function-specific serialization exceptions or speculative
@@ -1877,6 +1879,52 @@ Parser/core/facade are 45,491/331,296/331,203 B; core/facade are 93/106 B smalle
 than 5c11958. Its tested-container proof checks 526 tests/fixtures and 206 runtime
 sources plus tooling. All eleven required 5c11958 CI jobs pass.
 M5.10 remains partial; totals remain 144/190 overall and M5 42/53.
+
+**M5.10/M5.19 REAL non-BLOB string copies, verified:**
+the existing set-operation converter now gives REAL numbers their canonical
+reading when a non-BLOB text or binary field stores them. It reuses `plainValue`
+and the existing physical BLOB-promotion rule; source FLOAT display precision,
+fixed decimals and conditional source strings do not leak into that store.
+The BLOB path, raw BIT copies, SQL string/numeric readers, metadata and shared
+wire writer retain their owners. Conditional copies clear traits once.
+
+The new 3,664-observation native audit covers raw/default/fixed FLOAT and DOUBLE,
+canonical and conditional functions, BIGINT above 2^53, NULL, signed zero, negative
+and large values; every set operator, both operand orders and protocols; merged
+and materialized sources; latin1/utf8mb3/utf8mb4; 20/512/513-character or byte
+destinations, physical BLOB/TEXT and computed collation expressions. Direct SQL
+string controls remain unchanged. Complete agreement improves 2,584 to 3,376;
+all 3,664 metadata and diagnostic vectors already agree and remain unchanged.
+The remaining 288 cases retain width-limited formatting and computed REAL BLOB
+copy gaps. Of those, 160 already have different row counts: their full native
+outcomes remain recorded, and local profiles assert every matching cell while
+leaving those unmatched counts explicit. Every older count assertion remains
+active. Native replay checks all outcomes completely.
+
+Earlier REAL captures improve 4,681 to 4,825 complete matches: all 960 original
+copy observations now agree, and the 2,340 byte-bound observations improve 2,161
+to 2,257. Combined, 8,760 observations improve 7,265 to 8,201. All 514,305 earlier
+matching native facts, including containers and lengths, hold across those
+captures and 4,382 older numeric/fixed/temporal/BIT-BLOB controls. Old outcomes
+are unchanged and assertions only strengthen. Eight REAL cases pass locally
+and natively; the existing numeric BIT-copy test also passes. Actual 094dd95
+fails the strengthened regression. Typecheck, 20,000 executor statements seeded
+20261010 and plans 2,127/2,248 under the unchanged 2,118 floor pass. Fresh Docker
+--reference passes 1,619 main and four latency tests, typecheck, lint, all nine
+unchanged caps, package/typed smoke, the real client and all seven pinned corpora,
+including 1,737 coercion warning counts. Parser/core/facade are
+45,491/331,324/331,236 B; types/engine stay 52,460/56,722 B. Its tested-container
+proof checks 527 tests/fixtures and 206 runtime sources plus tooling. All eleven
+required 094dd95 CI jobs pass.
+M5.10/M5.19 remain partial; totals remain 144/190 overall and M5 42/53.
+
+**Charset capability follow-up:** the initial UTF-16 audit failed during INSERT
+because `encodeCharset` currently handles UTF-8 and generated single-byte maps,
+then explicitly refuses other encoders. Its UTF-16 decoder is a separate host
+capability. `CREATE TABLE t(s VARCHAR(20) CHARACTER SET utf16); INSERT INTO t
+VALUES('1')` reproduces that existing write refusal. This copy repair uses the
+supported latin1/utf8mb3/utf8mb4 encoders; it claims no UTF-16 write support.
+Review M2.3's completion scope separately before declaring the roadmap complete.
 
 **Next prerequisite: constructor admission before presence execution.** Complete
 the existing CAST work: with written utf8 warning 3719 now retained, refuse

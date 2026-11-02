@@ -5,6 +5,7 @@ import { MySQL } from '@myjs/core'
 import delivery from './fixtures/functions/float-field-delivery.json' with { type: 'json' }
 import readers from './fixtures/functions/float-sql-readers.json' with { type: 'json' }
 import widths from './fixtures/functions/real-byte-widths.json' with { type: 'json' }
+import copies from './fixtures/functions/real-string-copies.json' with { type: 'json' }
 
 interface FloatReference {
   readonly mysqlVersion: string
@@ -17,7 +18,7 @@ interface FloatReference {
     readonly fields: readonly (readonly unknown[])[]
     readonly warnings: readonly { readonly Level: string; readonly Code: number; readonly Message: string }[]
   }[]
-  readonly checks: readonly { readonly rows: readonly number[]; readonly fields: readonly number[]; readonly warnings: readonly number[]; readonly warningCount?: false }[]
+  readonly checks: readonly { readonly rows: readonly number[]; readonly fields: readonly number[]; readonly warnings: readonly number[]; readonly rowCount?: false; readonly warningCount?: false }[]
   readonly observations: readonly (readonly number[])[]
   readonly strict: readonly number[]
 }
@@ -32,15 +33,17 @@ function canonical(value: unknown): unknown {
   }))
 }
 
-function checkCells(actual: readonly (readonly unknown[])[], expected: readonly (readonly unknown[])[], masks: readonly number[], label: string): void {
-  assert.equal(actual.length, expected.length, label + ': count')
+function checkCells(actual: readonly (readonly unknown[])[], expected: readonly (readonly unknown[])[], masks: readonly number[], label: string, count = true): void {
+  if (count) assert.equal(actual.length, expected.length, label + ': count')
   for (const [i, row] of expected.entries()) {
-    assert.equal(actual[i]!.length, row.length, label + ': width ' + i)
+    // A recorded count mismatch can omit only absent rows with no matching cell.
+    if (!count && actual[i] === undefined && masks[i] === 0) continue
+    assert.equal(actual[i]?.length, row.length, label + ': width ' + i)
     for (let j = 0; j < row.length; j++) if (masks[i]! & (1 << j)) assert.deepEqual(actual[i]![j], row[j], label + ': ' + i + '/' + j)
   }
 }
 
-for (const [capture, total, matched] of [[delivery, 952, 776], [readers.cases[0], 506, 506], [readers.cases[1], 230, 218], [readers.cases[2], 72, 72], [readers.cases[3], 36, 36], [readers.cases[4], 960, 912], [widths, 2340, 2161]] as const) test('REAL readers and field delivery preserve native boundaries: ' + capture!.schema, async () => {
+for (const [capture, total, matched] of [[delivery, 952, 776], [readers.cases[0], 506, 506], [readers.cases[1], 230, 218], [readers.cases[2], 72, 72], [readers.cases[3], 36, 36], [readers.cases[4], 960, 960], [widths, 2340, 2257], [copies, 3664, 3376]] as const) test('REAL readers and field delivery preserve native boundaries: ' + capture!.schema, async () => {
   const reference = capture as FloatReference
   const host = process.env.MYSQL_REFERENCE_HOST
   const db = host === undefined ? await MySQL.open(':memory:') : undefined
@@ -78,7 +81,7 @@ for (const [capture, total, matched] of [[delivery, 952, 776], [readers.cases[0]
       } else {
         // The full native outcomes remain captured; assert every currently matching cell.
         const checks = reference.checks[checksIndex!]!
-        checkCells(actual.rows, expected.rows, checks.rows, label + ': rows')
+        checkCells(actual.rows, expected.rows, checks.rows, label + ': rows', checks.rowCount !== false)
         checkCells(actual.fields, expected.fields, checks.fields, label + ': fields')
         if (checks.warningCount === false) {
           // New unary-BINARY captures retain a native warning that execution does not yet publish.

@@ -1880,7 +1880,7 @@ these traits and store FLOAT at 32 bits; scalar caches own canonical REAL text.
 Set-operation copies read the real number independently of conditional source
 text; raw BIT fields retain their packed bytes. The writer retains its separate
 delivery rule. The expanded REAL captures now
-cover 5,096 observations, with 4,681 complete matches and every earlier matching
+cover 8,760 observations, with 8,201 complete matches and every earlier matching
 fact retained.
 
 Binary metadata now reuses the existing item's byte bound: a physical REAL
@@ -1889,9 +1889,13 @@ The same reader serves casts, binary conversion and holders, extrema and UNHEX;
 the special DOUBLE-literal flag is removed. Character width remains separate:
 DOUBLE uses 22 even for fixed (M,D) fields; FLOAT keeps its item bound. All 2,340
 field vectors in the new audit agree. Value readers and warnings are unchanged.
-Large fixed-scale formatting, DECIMAL diagnostics, raw REAL copying into
-non-BLOB string holders, aggregate metadata and separate warning timing/labels
-remain open.
+Non-BLOB text and binary field copies now use canonical REAL numbers through
+the existing set-operation converter, sharing physical BLOB promotion with
+metadata. SQL display traits stay with their original readers; BLOB copying
+retains its separate path. Width-limited formatting, computed REAL BLOB copies,
+large fixed-scale formatting, DECIMAL diagnostics, aggregate metadata and
+separate warning timing/labels remain open. UTF-16 writing still reaches the
+existing encoder refusal; decoder availability is a separate capability.
 
 Catalog statistics rewrites preserve physical table identity. A retained view
 that cannot see the latest catalog revision checks its existing MVCC-visible ID;
