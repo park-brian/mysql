@@ -486,16 +486,20 @@ export class Catalog {
    * shares with tables. `orReplace` replaces a view; over a table it is
    * ER_WRONG_OBJECT, as 8.4.11 answers.
    */
-  createView(view: ViewDef, options: { readonly orReplace?: boolean } = {}): void {
+  createView(view: ViewDef, options: { readonly orReplace?: boolean; readonly validate?: () => void } = {}): void {
     checkName(view.name, wrongTableName)
     ddl(this.store, undefined, (trx) => {
       const s = this.#schemaOf(view.schema, trx)
       if (s === undefined) throw unknownDb(view.schema)
       const row = this.#row(s.id, view.name, trx)
+      if (row !== undefined) {
+        if (options.orReplace !== true) throw tableExists(view.name)
+        if (!isView(row)) throw notAView(view.schema, view.name)
+      }
+      // Synchronous definition admission follows target checks, before any catalog write.
+      options.validate?.()
       const value: (Uint8Array | null)[] = [be32(s.id), utf8.encode(view.name), be32(VIEW_ID), encodeViewDef(view)]
       if (row === undefined) return void this.#changing().insert(value, trx)
-      if (options.orReplace !== true) throw tableExists(view.name)
-      if (!isView(row)) throw notAView(view.schema, view.name)
       this.#changing().update(value, trx)
     })
   }

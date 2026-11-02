@@ -2649,19 +2649,59 @@ counts. The unchanged long-IN assertion passes. Early source proof matches
 finished before this run. All eleven required 5713cfd CI jobs pass.
 Totals stay 144/190 and M5 42/53; M5.10 remains partial.
 
-Next audit CHECK OPTION admission at the same writer, separating proven
-non-updatability from logical merge eligibility and physical materialization.
-A 156-outcome native audit currently matches 75 completely: 1354 precedes
-existing-target 1050, which precedes CHECK OPTION 1368. Missing schema and body
-binding errors precede the fallback warning. Derived aggregate sources can
-retain CHECK OPTION although aggregate root blocks cannot. Preserve these
-distinctions at the catalog admission/effect boundary; creating then dropping
-an invalid view is not admission. Verify implicit commits, retention limits and
-prepared reuse before choosing the smallest repair. Four profiles now cover
-314 outcomes, with 143 complete baseline matches. Transaction controls show
-invalid execution still commits preceding work; a failed OR REPLACE preserves
-the previous view definition. Full PREPARE
-body binding and definition normalization retain their independent proofs.
+**Bounded view CHECK OPTION admission, verified (2026-11-02):**
+Catalog.createView now runs synchronous definition validation inside its existing
+DDL transaction after schema/target checks and before insert/update. The SQL
+writer supplies the proven root/TEMPTABLE refusals through this boundary.
+Namespace checks retain their atomic owner; SQL policy stays in core. There is
+no duplicated target resolution, invalid intermediate view or create-then-drop.
+Logical mergeability supplies bounded negative evidence, not a complete
+updatability classifier.
+
+Five native profiles cover 338 complete outcomes, improving 153→309. Body and
+schema errors still precede fallback warning 1354; the warning precedes target
+1050, which precedes CHECK OPTION 1368. Failed OR REPLACE retains the old view
+and invalid execution retains native implicit commits. PREPARE stays free of
+writes. Cached success/failure controls preserve first-fallback consumption,
+warning limits 0/1/8/64 and constructor-prefix ordering. Aggregate CTE/derived
+sources remain distinct from aggregate roots; unused windows and mixed direct
+fields/computed items retain their existing results.
+
+Across 5,286 outcomes complete agreement improves 4,221→4,379, retaining all
+54,484 earlier matching protocol facts. Three strict fixtures add 309 complete
+observations, preserving all 931 prior golden observations. Effect input IDs
+retain the original native command positions and all rows/definitions are
+compared. Fifteen focused cases pass natively and locally. Actual 5ae7ff0
+passes the twelve earlier cases and fails all three new groups; the official
+suite container is then restored to the current source.
+
+The remaining 29 outcomes are explicit: computed/scalar-only projection and
+same-base WHERE-subquery updatability, independent SHOW CREATE formatting,
+view PREPARE body binding, and valid-view header flags. Missing-column prepared
+execution still has a separate implicit-commit mismatch because PREPARE does
+not bind the body. No prior expectation, warning count or metadata is masked.
+
+Typecheck/lint and all nine unchanged caps pass at parser/core/facade
+45,599/332,724/332,650 B gzipped. All 20,000 executor statements seeded
+20261010 pass. Plans retain 2,127/2,248 matches under the unchanged 2,118 floor;
+the full official suite retains all 38 passing identities and its native
+baseline. Fresh Docker --reference passes 1,655 main tests, four latency tests,
+typecheck, lint, all nine unchanged caps, package/typed smoke, the real client
+and all seven pinned corpora including 1,737 coercion warning counts. The
+unchanged long-IN assertion passes. Early source proof matches 551 tests/fixtures
+and 206 runtime sources plus tooling; warm heavy checks finished before this
+run. All eleven required 5ae7ff0 CI jobs pass.
+Totals stay 144/190 and M5 42/53; M5.10 remains partial.
+
+Next audit computed/scalar-only CHECK OPTION projections at their actual
+query-block owner. Prove the difference between direct field references,
+computed copies, stars and fields from CTE/derived sources before extending the
+bounded predicate. Three read-only profiles cover 198 outcomes (79 complete
+baseline matches). Native treats unary plus and parentheses around a field as
+transparent, permits a direct reference to a computed CTE/derived field, and
+rejects computed-only outer projections. A raw top-level AST-kind check would
+regress the unary-plus control. Keep same-base subquery analysis, metadata
+formatting, full PREPARE binding and schema-driven reprepare under independent proofs.
 
 **Next prerequisite: constructor admission before presence execution.** Complete
 the existing CAST work: with written utf8 warning 3719 now retained, refuse

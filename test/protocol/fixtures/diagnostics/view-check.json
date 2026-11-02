@@ -1,0 +1,4495 @@
+{
+  "mysqlVersion": "8.4.11",
+  "schema": "myjs_check257",
+  "sqlMode": "ERROR_FOR_DIVISION_BY_ZERO",
+  "seed": "SELECT 1/0,CAST('x' AS DECIMAL)",
+  "setup": [
+    "CREATE TABLE base256(a INT)"
+  ],
+  "beforeEach": [
+    "DROP VIEW IF EXISTS v256"
+  ],
+  "view": "v256",
+  "observations": [
+    {
+      "sql": "CREATE VIEW v256 AS SELECT 1 WITH CHECK OPTION",
+      "api": "query",
+      "existing": false,
+      "error": {
+        "code": "ER_VIEW_NONUPD_CHECK",
+        "errno": 1368,
+        "state": "HY000",
+        "message": "CHECK OPTION on non-updatable view 'myjs_check257.v256'"
+      },
+      "warnings": [
+        [
+          "Error",
+          1368,
+          "CHECK OPTION on non-updatable view 'myjs_check257.v256'"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1",
+      "data": null
+    },
+    {
+      "sql": "CREATE VIEW v256 AS SELECT 1 WITH CHECK OPTION",
+      "api": "execute",
+      "existing": false,
+      "error": {
+        "code": "ER_VIEW_NONUPD_CHECK",
+        "errno": 1368,
+        "state": "HY000",
+        "message": "CHECK OPTION on non-updatable view 'myjs_check257.v256'"
+      },
+      "warnings": [
+        [
+          "Error",
+          1368,
+          "CHECK OPTION on non-updatable view 'myjs_check257.v256'"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1",
+      "data": null
+    },
+    {
+      "sql": "CREATE VIEW v256 AS SELECT 1 WITH CHECK OPTION",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": null
+    },
+    {
+      "sql": "CREATE VIEW v256 AS SELECT SUM(a) FROM base256 WITH CHECK OPTION",
+      "api": "query",
+      "existing": false,
+      "error": {
+        "code": "ER_VIEW_NONUPD_CHECK",
+        "errno": 1368,
+        "state": "HY000",
+        "message": "CHECK OPTION on non-updatable view 'myjs_check257.v256'"
+      },
+      "warnings": [
+        [
+          "Error",
+          1368,
+          "CHECK OPTION on non-updatable view 'myjs_check257.v256'"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1",
+      "data": null
+    },
+    {
+      "sql": "CREATE VIEW v256 AS SELECT SUM(a) FROM base256 WITH CHECK OPTION",
+      "api": "execute",
+      "existing": false,
+      "error": {
+        "code": "ER_VIEW_NONUPD_CHECK",
+        "errno": 1368,
+        "state": "HY000",
+        "message": "CHECK OPTION on non-updatable view 'myjs_check257.v256'"
+      },
+      "warnings": [
+        [
+          "Error",
+          1368,
+          "CHECK OPTION on non-updatable view 'myjs_check257.v256'"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1",
+      "data": null
+    },
+    {
+      "sql": "CREATE VIEW v256 AS SELECT SUM(a) FROM base256 WITH CHECK OPTION",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": null
+    },
+    {
+      "sql": "CREATE VIEW v256 AS SELECT DISTINCT a FROM base256 WITH CHECK OPTION",
+      "api": "query",
+      "existing": false,
+      "error": {
+        "code": "ER_VIEW_NONUPD_CHECK",
+        "errno": 1368,
+        "state": "HY000",
+        "message": "CHECK OPTION on non-updatable view 'myjs_check257.v256'"
+      },
+      "warnings": [
+        [
+          "Error",
+          1368,
+          "CHECK OPTION on non-updatable view 'myjs_check257.v256'"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1",
+      "data": null
+    },
+    {
+      "sql": "CREATE VIEW v256 AS SELECT DISTINCT a FROM base256 WITH CHECK OPTION",
+      "api": "execute",
+      "existing": false,
+      "error": {
+        "code": "ER_VIEW_NONUPD_CHECK",
+        "errno": 1368,
+        "state": "HY000",
+        "message": "CHECK OPTION on non-updatable view 'myjs_check257.v256'"
+      },
+      "warnings": [
+        [
+          "Error",
+          1368,
+          "CHECK OPTION on non-updatable view 'myjs_check257.v256'"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1",
+      "data": null
+    },
+    {
+      "sql": "CREATE VIEW v256 AS SELECT DISTINCT a FROM base256 WITH CHECK OPTION",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": null
+    },
+    {
+      "sql": "CREATE VIEW v256 AS SELECT a FROM base256 GROUP BY a WITH CHECK OPTION",
+      "api": "query",
+      "existing": false,
+      "error": {
+        "code": "ER_VIEW_NONUPD_CHECK",
+        "errno": 1368,
+        "state": "HY000",
+        "message": "CHECK OPTION on non-updatable view 'myjs_check257.v256'"
+      },
+      "warnings": [
+        [
+          "Error",
+          1368,
+          "CHECK OPTION on non-updatable view 'myjs_check257.v256'"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1",
+      "data": null
+    },
+    {
+      "sql": "CREATE VIEW v256 AS SELECT a FROM base256 GROUP BY a WITH CHECK OPTION",
+      "api": "execute",
+      "existing": false,
+      "error": {
+        "code": "ER_VIEW_NONUPD_CHECK",
+        "errno": 1368,
+        "state": "HY000",
+        "message": "CHECK OPTION on non-updatable view 'myjs_check257.v256'"
+      },
+      "warnings": [
+        [
+          "Error",
+          1368,
+          "CHECK OPTION on non-updatable view 'myjs_check257.v256'"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1",
+      "data": null
+    },
+    {
+      "sql": "CREATE VIEW v256 AS SELECT a FROM base256 GROUP BY a WITH CHECK OPTION",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": null
+    },
+    {
+      "sql": "CREATE VIEW v256 AS SELECT a FROM base256 HAVING a>=0 WITH CHECK OPTION",
+      "api": "query",
+      "existing": false,
+      "error": {
+        "code": "ER_VIEW_NONUPD_CHECK",
+        "errno": 1368,
+        "state": "HY000",
+        "message": "CHECK OPTION on non-updatable view 'myjs_check257.v256'"
+      },
+      "warnings": [
+        [
+          "Error",
+          1368,
+          "CHECK OPTION on non-updatable view 'myjs_check257.v256'"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1",
+      "data": null
+    },
+    {
+      "sql": "CREATE VIEW v256 AS SELECT a FROM base256 HAVING a>=0 WITH CHECK OPTION",
+      "api": "execute",
+      "existing": false,
+      "error": {
+        "code": "ER_VIEW_NONUPD_CHECK",
+        "errno": 1368,
+        "state": "HY000",
+        "message": "CHECK OPTION on non-updatable view 'myjs_check257.v256'"
+      },
+      "warnings": [
+        [
+          "Error",
+          1368,
+          "CHECK OPTION on non-updatable view 'myjs_check257.v256'"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1",
+      "data": null
+    },
+    {
+      "sql": "CREATE VIEW v256 AS SELECT a FROM base256 HAVING a>=0 WITH CHECK OPTION",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": null
+    },
+    {
+      "sql": "CREATE VIEW v256 AS SELECT a FROM base256 LIMIT 1 WITH CHECK OPTION",
+      "api": "query",
+      "existing": false,
+      "error": {
+        "code": "ER_VIEW_NONUPD_CHECK",
+        "errno": 1368,
+        "state": "HY000",
+        "message": "CHECK OPTION on non-updatable view 'myjs_check257.v256'"
+      },
+      "warnings": [
+        [
+          "Error",
+          1368,
+          "CHECK OPTION on non-updatable view 'myjs_check257.v256'"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1",
+      "data": null
+    },
+    {
+      "sql": "CREATE VIEW v256 AS SELECT a FROM base256 LIMIT 1 WITH CHECK OPTION",
+      "api": "execute",
+      "existing": false,
+      "error": {
+        "code": "ER_VIEW_NONUPD_CHECK",
+        "errno": 1368,
+        "state": "HY000",
+        "message": "CHECK OPTION on non-updatable view 'myjs_check257.v256'"
+      },
+      "warnings": [
+        [
+          "Error",
+          1368,
+          "CHECK OPTION on non-updatable view 'myjs_check257.v256'"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1",
+      "data": null
+    },
+    {
+      "sql": "CREATE VIEW v256 AS SELECT a FROM base256 LIMIT 1 WITH CHECK OPTION",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": null
+    },
+    {
+      "sql": "CREATE VIEW v256 AS SELECT a FROM base256 WITH CHECK OPTION",
+      "api": "query",
+      "existing": false,
+      "header": {
+        "fieldCount": 0,
+        "affectedRows": 0,
+        "insertId": 0,
+        "info": "",
+        "serverStatus": 2,
+        "warningStatus": 0,
+        "changedRows": 0
+      },
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "algorithm": "UNDEFINED",
+        "definition": "CREATE ALGORITHM=UNDEFINED DEFINER=`root`@`%` SQL SECURITY DEFINER VIEW `v256` AS select `base256`.`a` AS `a` from `base256` WITH CASCADED CHECK OPTION"
+      }
+    },
+    {
+      "sql": "CREATE VIEW v256 AS SELECT a FROM base256 WITH CHECK OPTION",
+      "api": "execute",
+      "existing": false,
+      "header": {
+        "fieldCount": 0,
+        "affectedRows": 0,
+        "insertId": 0,
+        "info": "",
+        "serverStatus": 2,
+        "warningStatus": 0,
+        "changedRows": 0
+      },
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "algorithm": "UNDEFINED",
+        "definition": "CREATE ALGORITHM=UNDEFINED DEFINER=`root`@`%` SQL SECURITY DEFINER VIEW `v256` AS select `base256`.`a` AS `a` from `base256` WITH CASCADED CHECK OPTION"
+      }
+    },
+    {
+      "sql": "CREATE VIEW v256 AS SELECT a FROM base256 WITH CHECK OPTION",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": null
+    },
+    {
+      "sql": "CREATE VIEW v256 AS SELECT a FROM base256 WHERE a>0 WITH CHECK OPTION",
+      "api": "query",
+      "existing": false,
+      "header": {
+        "fieldCount": 0,
+        "affectedRows": 0,
+        "insertId": 0,
+        "info": "",
+        "serverStatus": 2,
+        "warningStatus": 0,
+        "changedRows": 0
+      },
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "algorithm": "UNDEFINED",
+        "definition": "CREATE ALGORITHM=UNDEFINED DEFINER=`root`@`%` SQL SECURITY DEFINER VIEW `v256` AS select `base256`.`a` AS `a` from `base256` where (`base256`.`a` > 0) WITH CASCADED CHECK OPTION"
+      }
+    },
+    {
+      "sql": "CREATE VIEW v256 AS SELECT a FROM base256 WHERE a>0 WITH CHECK OPTION",
+      "api": "execute",
+      "existing": false,
+      "header": {
+        "fieldCount": 0,
+        "affectedRows": 0,
+        "insertId": 0,
+        "info": "",
+        "serverStatus": 2,
+        "warningStatus": 0,
+        "changedRows": 0
+      },
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "algorithm": "UNDEFINED",
+        "definition": "CREATE ALGORITHM=UNDEFINED DEFINER=`root`@`%` SQL SECURITY DEFINER VIEW `v256` AS select `base256`.`a` AS `a` from `base256` where (`base256`.`a` > 0) WITH CASCADED CHECK OPTION"
+      }
+    },
+    {
+      "sql": "CREATE VIEW v256 AS SELECT a FROM base256 WHERE a>0 WITH CHECK OPTION",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": null
+    },
+    {
+      "sql": "CREATE VIEW v256 AS SELECT a FROM base256 ORDER BY a WITH CHECK OPTION",
+      "api": "query",
+      "existing": false,
+      "header": {
+        "fieldCount": 0,
+        "affectedRows": 0,
+        "insertId": 0,
+        "info": "",
+        "serverStatus": 2,
+        "warningStatus": 0,
+        "changedRows": 0
+      },
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "algorithm": "UNDEFINED",
+        "definition": "CREATE ALGORITHM=UNDEFINED DEFINER=`root`@`%` SQL SECURITY DEFINER VIEW `v256` AS select `base256`.`a` AS `a` from `base256` order by `base256`.`a` WITH CASCADED CHECK OPTION"
+      }
+    },
+    {
+      "sql": "CREATE VIEW v256 AS SELECT a FROM base256 ORDER BY a WITH CHECK OPTION",
+      "api": "execute",
+      "existing": false,
+      "header": {
+        "fieldCount": 0,
+        "affectedRows": 0,
+        "insertId": 0,
+        "info": "",
+        "serverStatus": 2,
+        "warningStatus": 0,
+        "changedRows": 0
+      },
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "algorithm": "UNDEFINED",
+        "definition": "CREATE ALGORITHM=UNDEFINED DEFINER=`root`@`%` SQL SECURITY DEFINER VIEW `v256` AS select `base256`.`a` AS `a` from `base256` order by `base256`.`a` WITH CASCADED CHECK OPTION"
+      }
+    },
+    {
+      "sql": "CREATE VIEW v256 AS SELECT a FROM base256 ORDER BY a WITH CHECK OPTION",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": null
+    },
+    {
+      "sql": "CREATE VIEW v256 AS SELECT a FROM base256 WINDOW w AS () WITH CHECK OPTION",
+      "api": "query",
+      "existing": false,
+      "header": {
+        "fieldCount": 0,
+        "affectedRows": 0,
+        "insertId": 0,
+        "info": "",
+        "serverStatus": 2,
+        "warningStatus": 0,
+        "changedRows": 0
+      },
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "algorithm": "UNDEFINED",
+        "definition": "CREATE ALGORITHM=UNDEFINED DEFINER=`root`@`%` SQL SECURITY DEFINER VIEW `v256` AS select `base256`.`a` AS `a` from `base256` WITH CASCADED CHECK OPTION"
+      }
+    },
+    {
+      "sql": "CREATE VIEW v256 AS SELECT a FROM base256 WINDOW w AS () WITH CHECK OPTION",
+      "api": "execute",
+      "existing": false,
+      "header": {
+        "fieldCount": 0,
+        "affectedRows": 0,
+        "insertId": 0,
+        "info": "",
+        "serverStatus": 2,
+        "warningStatus": 0,
+        "changedRows": 0
+      },
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "algorithm": "UNDEFINED",
+        "definition": "CREATE ALGORITHM=UNDEFINED DEFINER=`root`@`%` SQL SECURITY DEFINER VIEW `v256` AS select `base256`.`a` AS `a` from `base256` WITH CASCADED CHECK OPTION"
+      }
+    },
+    {
+      "sql": "CREATE VIEW v256 AS SELECT a FROM base256 WINDOW w AS () WITH CHECK OPTION",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": null
+    },
+    {
+      "sql": "CREATE VIEW v256 AS SELECT ROW_NUMBER() OVER() n FROM base256 WITH CHECK OPTION",
+      "api": "query",
+      "existing": false,
+      "error": {
+        "code": "ER_VIEW_NONUPD_CHECK",
+        "errno": 1368,
+        "state": "HY000",
+        "message": "CHECK OPTION on non-updatable view 'myjs_check257.v256'"
+      },
+      "warnings": [
+        [
+          "Error",
+          1368,
+          "CHECK OPTION on non-updatable view 'myjs_check257.v256'"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1",
+      "data": null
+    },
+    {
+      "sql": "CREATE VIEW v256 AS SELECT ROW_NUMBER() OVER() n FROM base256 WITH CHECK OPTION",
+      "api": "execute",
+      "existing": false,
+      "error": {
+        "code": "ER_VIEW_NONUPD_CHECK",
+        "errno": 1368,
+        "state": "HY000",
+        "message": "CHECK OPTION on non-updatable view 'myjs_check257.v256'"
+      },
+      "warnings": [
+        [
+          "Error",
+          1368,
+          "CHECK OPTION on non-updatable view 'myjs_check257.v256'"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1",
+      "data": null
+    },
+    {
+      "sql": "CREATE VIEW v256 AS SELECT ROW_NUMBER() OVER() n FROM base256 WITH CHECK OPTION",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": null
+    },
+    {
+      "sql": "CREATE VIEW v256 AS SELECT a FROM base256 UNION ALL SELECT a FROM base256 WITH CHECK OPTION",
+      "api": "query",
+      "existing": false,
+      "error": {
+        "code": "ER_VIEW_NONUPD_CHECK",
+        "errno": 1368,
+        "state": "HY000",
+        "message": "CHECK OPTION on non-updatable view 'myjs_check257.v256'"
+      },
+      "warnings": [
+        [
+          "Error",
+          1368,
+          "CHECK OPTION on non-updatable view 'myjs_check257.v256'"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1",
+      "data": null
+    },
+    {
+      "sql": "CREATE VIEW v256 AS SELECT a FROM base256 UNION ALL SELECT a FROM base256 WITH CHECK OPTION",
+      "api": "execute",
+      "existing": false,
+      "error": {
+        "code": "ER_VIEW_NONUPD_CHECK",
+        "errno": 1368,
+        "state": "HY000",
+        "message": "CHECK OPTION on non-updatable view 'myjs_check257.v256'"
+      },
+      "warnings": [
+        [
+          "Error",
+          1368,
+          "CHECK OPTION on non-updatable view 'myjs_check257.v256'"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1",
+      "data": null
+    },
+    {
+      "sql": "CREATE VIEW v256 AS SELECT a FROM base256 UNION ALL SELECT a FROM base256 WITH CHECK OPTION",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": null
+    },
+    {
+      "sql": "CREATE VIEW v256 AS SELECT a FROM (SELECT a FROM base256) d WITH CHECK OPTION",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": null
+    },
+    {
+      "sql": "CREATE VIEW v256 AS SELECT b FROM (SELECT SUM(a) b FROM base256) d WITH CHECK OPTION",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": null
+    },
+    {
+      "sql": "CREATE VIEW v256 AS SELECT (SELECT 1) b FROM base256 WITH CHECK OPTION",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": null
+    },
+    {
+      "sql": "CREATE VIEW v256 AS SELECT a+1 b FROM base256 WITH CHECK OPTION",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": null
+    },
+    {
+      "sql": "CREATE ALGORITHM=MERGE VIEW v256 AS SELECT 1 WITH CHECK OPTION",
+      "api": "query",
+      "existing": false,
+      "error": {
+        "code": "ER_VIEW_NONUPD_CHECK",
+        "errno": 1368,
+        "state": "HY000",
+        "message": "CHECK OPTION on non-updatable view 'myjs_check257.v256'"
+      },
+      "warnings": [
+        [
+          "Warning",
+          1354,
+          "View merge algorithm can't be used here for now (assumed undefined algorithm)"
+        ],
+        [
+          "Error",
+          1368,
+          "CHECK OPTION on non-updatable view 'myjs_check257.v256'"
+        ]
+      ],
+      "warningCount": "2",
+      "errorCount": "1",
+      "data": null
+    },
+    {
+      "sql": "CREATE ALGORITHM=MERGE VIEW v256 AS SELECT 1 WITH CHECK OPTION",
+      "api": "execute",
+      "existing": false,
+      "error": {
+        "code": "ER_VIEW_NONUPD_CHECK",
+        "errno": 1368,
+        "state": "HY000",
+        "message": "CHECK OPTION on non-updatable view 'myjs_check257.v256'"
+      },
+      "warnings": [
+        [
+          "Warning",
+          1354,
+          "View merge algorithm can't be used here for now (assumed undefined algorithm)"
+        ],
+        [
+          "Error",
+          1368,
+          "CHECK OPTION on non-updatable view 'myjs_check257.v256'"
+        ]
+      ],
+      "warningCount": "2",
+      "errorCount": "1",
+      "data": null
+    },
+    {
+      "sql": "CREATE ALGORITHM=MERGE VIEW v256 AS SELECT 1 WITH CHECK OPTION",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": null
+    },
+    {
+      "sql": "CREATE ALGORITHM=MERGE VIEW v256 AS SELECT SUM(a) FROM base256 WITH CHECK OPTION",
+      "api": "query",
+      "existing": false,
+      "error": {
+        "code": "ER_VIEW_NONUPD_CHECK",
+        "errno": 1368,
+        "state": "HY000",
+        "message": "CHECK OPTION on non-updatable view 'myjs_check257.v256'"
+      },
+      "warnings": [
+        [
+          "Warning",
+          1354,
+          "View merge algorithm can't be used here for now (assumed undefined algorithm)"
+        ],
+        [
+          "Error",
+          1368,
+          "CHECK OPTION on non-updatable view 'myjs_check257.v256'"
+        ]
+      ],
+      "warningCount": "2",
+      "errorCount": "1",
+      "data": null
+    },
+    {
+      "sql": "CREATE ALGORITHM=MERGE VIEW v256 AS SELECT SUM(a) FROM base256 WITH CHECK OPTION",
+      "api": "execute",
+      "existing": false,
+      "error": {
+        "code": "ER_VIEW_NONUPD_CHECK",
+        "errno": 1368,
+        "state": "HY000",
+        "message": "CHECK OPTION on non-updatable view 'myjs_check257.v256'"
+      },
+      "warnings": [
+        [
+          "Warning",
+          1354,
+          "View merge algorithm can't be used here for now (assumed undefined algorithm)"
+        ],
+        [
+          "Error",
+          1368,
+          "CHECK OPTION on non-updatable view 'myjs_check257.v256'"
+        ]
+      ],
+      "warningCount": "2",
+      "errorCount": "1",
+      "data": null
+    },
+    {
+      "sql": "CREATE ALGORITHM=MERGE VIEW v256 AS SELECT SUM(a) FROM base256 WITH CHECK OPTION",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": null
+    },
+    {
+      "sql": "CREATE ALGORITHM=MERGE VIEW v256 AS SELECT DISTINCT a FROM base256 WITH CHECK OPTION",
+      "api": "query",
+      "existing": false,
+      "error": {
+        "code": "ER_VIEW_NONUPD_CHECK",
+        "errno": 1368,
+        "state": "HY000",
+        "message": "CHECK OPTION on non-updatable view 'myjs_check257.v256'"
+      },
+      "warnings": [
+        [
+          "Warning",
+          1354,
+          "View merge algorithm can't be used here for now (assumed undefined algorithm)"
+        ],
+        [
+          "Error",
+          1368,
+          "CHECK OPTION on non-updatable view 'myjs_check257.v256'"
+        ]
+      ],
+      "warningCount": "2",
+      "errorCount": "1",
+      "data": null
+    },
+    {
+      "sql": "CREATE ALGORITHM=MERGE VIEW v256 AS SELECT DISTINCT a FROM base256 WITH CHECK OPTION",
+      "api": "execute",
+      "existing": false,
+      "error": {
+        "code": "ER_VIEW_NONUPD_CHECK",
+        "errno": 1368,
+        "state": "HY000",
+        "message": "CHECK OPTION on non-updatable view 'myjs_check257.v256'"
+      },
+      "warnings": [
+        [
+          "Warning",
+          1354,
+          "View merge algorithm can't be used here for now (assumed undefined algorithm)"
+        ],
+        [
+          "Error",
+          1368,
+          "CHECK OPTION on non-updatable view 'myjs_check257.v256'"
+        ]
+      ],
+      "warningCount": "2",
+      "errorCount": "1",
+      "data": null
+    },
+    {
+      "sql": "CREATE ALGORITHM=MERGE VIEW v256 AS SELECT DISTINCT a FROM base256 WITH CHECK OPTION",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": null
+    },
+    {
+      "sql": "CREATE ALGORITHM=MERGE VIEW v256 AS SELECT a FROM base256 GROUP BY a WITH CHECK OPTION",
+      "api": "query",
+      "existing": false,
+      "error": {
+        "code": "ER_VIEW_NONUPD_CHECK",
+        "errno": 1368,
+        "state": "HY000",
+        "message": "CHECK OPTION on non-updatable view 'myjs_check257.v256'"
+      },
+      "warnings": [
+        [
+          "Warning",
+          1354,
+          "View merge algorithm can't be used here for now (assumed undefined algorithm)"
+        ],
+        [
+          "Error",
+          1368,
+          "CHECK OPTION on non-updatable view 'myjs_check257.v256'"
+        ]
+      ],
+      "warningCount": "2",
+      "errorCount": "1",
+      "data": null
+    },
+    {
+      "sql": "CREATE ALGORITHM=MERGE VIEW v256 AS SELECT a FROM base256 GROUP BY a WITH CHECK OPTION",
+      "api": "execute",
+      "existing": false,
+      "error": {
+        "code": "ER_VIEW_NONUPD_CHECK",
+        "errno": 1368,
+        "state": "HY000",
+        "message": "CHECK OPTION on non-updatable view 'myjs_check257.v256'"
+      },
+      "warnings": [
+        [
+          "Warning",
+          1354,
+          "View merge algorithm can't be used here for now (assumed undefined algorithm)"
+        ],
+        [
+          "Error",
+          1368,
+          "CHECK OPTION on non-updatable view 'myjs_check257.v256'"
+        ]
+      ],
+      "warningCount": "2",
+      "errorCount": "1",
+      "data": null
+    },
+    {
+      "sql": "CREATE ALGORITHM=MERGE VIEW v256 AS SELECT a FROM base256 GROUP BY a WITH CHECK OPTION",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": null
+    },
+    {
+      "sql": "CREATE ALGORITHM=MERGE VIEW v256 AS SELECT a FROM base256 HAVING a>=0 WITH CHECK OPTION",
+      "api": "query",
+      "existing": false,
+      "error": {
+        "code": "ER_VIEW_NONUPD_CHECK",
+        "errno": 1368,
+        "state": "HY000",
+        "message": "CHECK OPTION on non-updatable view 'myjs_check257.v256'"
+      },
+      "warnings": [
+        [
+          "Warning",
+          1354,
+          "View merge algorithm can't be used here for now (assumed undefined algorithm)"
+        ],
+        [
+          "Error",
+          1368,
+          "CHECK OPTION on non-updatable view 'myjs_check257.v256'"
+        ]
+      ],
+      "warningCount": "2",
+      "errorCount": "1",
+      "data": null
+    },
+    {
+      "sql": "CREATE ALGORITHM=MERGE VIEW v256 AS SELECT a FROM base256 HAVING a>=0 WITH CHECK OPTION",
+      "api": "execute",
+      "existing": false,
+      "error": {
+        "code": "ER_VIEW_NONUPD_CHECK",
+        "errno": 1368,
+        "state": "HY000",
+        "message": "CHECK OPTION on non-updatable view 'myjs_check257.v256'"
+      },
+      "warnings": [
+        [
+          "Warning",
+          1354,
+          "View merge algorithm can't be used here for now (assumed undefined algorithm)"
+        ],
+        [
+          "Error",
+          1368,
+          "CHECK OPTION on non-updatable view 'myjs_check257.v256'"
+        ]
+      ],
+      "warningCount": "2",
+      "errorCount": "1",
+      "data": null
+    },
+    {
+      "sql": "CREATE ALGORITHM=MERGE VIEW v256 AS SELECT a FROM base256 HAVING a>=0 WITH CHECK OPTION",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": null
+    },
+    {
+      "sql": "CREATE ALGORITHM=MERGE VIEW v256 AS SELECT a FROM base256 LIMIT 1 WITH CHECK OPTION",
+      "api": "query",
+      "existing": false,
+      "error": {
+        "code": "ER_VIEW_NONUPD_CHECK",
+        "errno": 1368,
+        "state": "HY000",
+        "message": "CHECK OPTION on non-updatable view 'myjs_check257.v256'"
+      },
+      "warnings": [
+        [
+          "Warning",
+          1354,
+          "View merge algorithm can't be used here for now (assumed undefined algorithm)"
+        ],
+        [
+          "Error",
+          1368,
+          "CHECK OPTION on non-updatable view 'myjs_check257.v256'"
+        ]
+      ],
+      "warningCount": "2",
+      "errorCount": "1",
+      "data": null
+    },
+    {
+      "sql": "CREATE ALGORITHM=MERGE VIEW v256 AS SELECT a FROM base256 LIMIT 1 WITH CHECK OPTION",
+      "api": "execute",
+      "existing": false,
+      "error": {
+        "code": "ER_VIEW_NONUPD_CHECK",
+        "errno": 1368,
+        "state": "HY000",
+        "message": "CHECK OPTION on non-updatable view 'myjs_check257.v256'"
+      },
+      "warnings": [
+        [
+          "Warning",
+          1354,
+          "View merge algorithm can't be used here for now (assumed undefined algorithm)"
+        ],
+        [
+          "Error",
+          1368,
+          "CHECK OPTION on non-updatable view 'myjs_check257.v256'"
+        ]
+      ],
+      "warningCount": "2",
+      "errorCount": "1",
+      "data": null
+    },
+    {
+      "sql": "CREATE ALGORITHM=MERGE VIEW v256 AS SELECT a FROM base256 LIMIT 1 WITH CHECK OPTION",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": null
+    },
+    {
+      "sql": "CREATE ALGORITHM=MERGE VIEW v256 AS SELECT a FROM base256 WITH CHECK OPTION",
+      "api": "query",
+      "existing": false,
+      "header": {
+        "fieldCount": 0,
+        "affectedRows": 0,
+        "insertId": 0,
+        "info": "",
+        "serverStatus": 2,
+        "warningStatus": 0,
+        "changedRows": 0
+      },
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "algorithm": "MERGE",
+        "definition": "CREATE ALGORITHM=MERGE DEFINER=`root`@`%` SQL SECURITY DEFINER VIEW `v256` AS select `base256`.`a` AS `a` from `base256` WITH CASCADED CHECK OPTION"
+      }
+    },
+    {
+      "sql": "CREATE ALGORITHM=MERGE VIEW v256 AS SELECT a FROM base256 WITH CHECK OPTION",
+      "api": "execute",
+      "existing": false,
+      "header": {
+        "fieldCount": 0,
+        "affectedRows": 0,
+        "insertId": 0,
+        "info": "",
+        "serverStatus": 2,
+        "warningStatus": 0,
+        "changedRows": 0
+      },
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "algorithm": "MERGE",
+        "definition": "CREATE ALGORITHM=MERGE DEFINER=`root`@`%` SQL SECURITY DEFINER VIEW `v256` AS select `base256`.`a` AS `a` from `base256` WITH CASCADED CHECK OPTION"
+      }
+    },
+    {
+      "sql": "CREATE ALGORITHM=MERGE VIEW v256 AS SELECT a FROM base256 WITH CHECK OPTION",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": null
+    },
+    {
+      "sql": "CREATE ALGORITHM=MERGE VIEW v256 AS SELECT a FROM base256 WHERE a>0 WITH CHECK OPTION",
+      "api": "query",
+      "existing": false,
+      "header": {
+        "fieldCount": 0,
+        "affectedRows": 0,
+        "insertId": 0,
+        "info": "",
+        "serverStatus": 2,
+        "warningStatus": 0,
+        "changedRows": 0
+      },
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "algorithm": "MERGE",
+        "definition": "CREATE ALGORITHM=MERGE DEFINER=`root`@`%` SQL SECURITY DEFINER VIEW `v256` AS select `base256`.`a` AS `a` from `base256` where (`base256`.`a` > 0) WITH CASCADED CHECK OPTION"
+      }
+    },
+    {
+      "sql": "CREATE ALGORITHM=MERGE VIEW v256 AS SELECT a FROM base256 WHERE a>0 WITH CHECK OPTION",
+      "api": "execute",
+      "existing": false,
+      "header": {
+        "fieldCount": 0,
+        "affectedRows": 0,
+        "insertId": 0,
+        "info": "",
+        "serverStatus": 2,
+        "warningStatus": 0,
+        "changedRows": 0
+      },
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "algorithm": "MERGE",
+        "definition": "CREATE ALGORITHM=MERGE DEFINER=`root`@`%` SQL SECURITY DEFINER VIEW `v256` AS select `base256`.`a` AS `a` from `base256` where (`base256`.`a` > 0) WITH CASCADED CHECK OPTION"
+      }
+    },
+    {
+      "sql": "CREATE ALGORITHM=MERGE VIEW v256 AS SELECT a FROM base256 WHERE a>0 WITH CHECK OPTION",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": null
+    },
+    {
+      "sql": "CREATE ALGORITHM=MERGE VIEW v256 AS SELECT a FROM base256 ORDER BY a WITH CHECK OPTION",
+      "api": "query",
+      "existing": false,
+      "header": {
+        "fieldCount": 0,
+        "affectedRows": 0,
+        "insertId": 0,
+        "info": "",
+        "serverStatus": 2,
+        "warningStatus": 0,
+        "changedRows": 0
+      },
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "algorithm": "MERGE",
+        "definition": "CREATE ALGORITHM=MERGE DEFINER=`root`@`%` SQL SECURITY DEFINER VIEW `v256` AS select `base256`.`a` AS `a` from `base256` order by `base256`.`a` WITH CASCADED CHECK OPTION"
+      }
+    },
+    {
+      "sql": "CREATE ALGORITHM=MERGE VIEW v256 AS SELECT a FROM base256 ORDER BY a WITH CHECK OPTION",
+      "api": "execute",
+      "existing": false,
+      "header": {
+        "fieldCount": 0,
+        "affectedRows": 0,
+        "insertId": 0,
+        "info": "",
+        "serverStatus": 2,
+        "warningStatus": 0,
+        "changedRows": 0
+      },
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "algorithm": "MERGE",
+        "definition": "CREATE ALGORITHM=MERGE DEFINER=`root`@`%` SQL SECURITY DEFINER VIEW `v256` AS select `base256`.`a` AS `a` from `base256` order by `base256`.`a` WITH CASCADED CHECK OPTION"
+      }
+    },
+    {
+      "sql": "CREATE ALGORITHM=MERGE VIEW v256 AS SELECT a FROM base256 ORDER BY a WITH CHECK OPTION",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": null
+    },
+    {
+      "sql": "CREATE ALGORITHM=MERGE VIEW v256 AS SELECT a FROM base256 WINDOW w AS () WITH CHECK OPTION",
+      "api": "query",
+      "existing": false,
+      "header": {
+        "fieldCount": 0,
+        "affectedRows": 0,
+        "insertId": 0,
+        "info": "",
+        "serverStatus": 2,
+        "warningStatus": 0,
+        "changedRows": 0
+      },
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "algorithm": "MERGE",
+        "definition": "CREATE ALGORITHM=MERGE DEFINER=`root`@`%` SQL SECURITY DEFINER VIEW `v256` AS select `base256`.`a` AS `a` from `base256` WITH CASCADED CHECK OPTION"
+      }
+    },
+    {
+      "sql": "CREATE ALGORITHM=MERGE VIEW v256 AS SELECT a FROM base256 WINDOW w AS () WITH CHECK OPTION",
+      "api": "execute",
+      "existing": false,
+      "header": {
+        "fieldCount": 0,
+        "affectedRows": 0,
+        "insertId": 0,
+        "info": "",
+        "serverStatus": 2,
+        "warningStatus": 0,
+        "changedRows": 0
+      },
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "algorithm": "MERGE",
+        "definition": "CREATE ALGORITHM=MERGE DEFINER=`root`@`%` SQL SECURITY DEFINER VIEW `v256` AS select `base256`.`a` AS `a` from `base256` WITH CASCADED CHECK OPTION"
+      }
+    },
+    {
+      "sql": "CREATE ALGORITHM=MERGE VIEW v256 AS SELECT a FROM base256 WINDOW w AS () WITH CHECK OPTION",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": null
+    },
+    {
+      "sql": "CREATE ALGORITHM=MERGE VIEW v256 AS SELECT ROW_NUMBER() OVER() n FROM base256 WITH CHECK OPTION",
+      "api": "query",
+      "existing": false,
+      "error": {
+        "code": "ER_VIEW_NONUPD_CHECK",
+        "errno": 1368,
+        "state": "HY000",
+        "message": "CHECK OPTION on non-updatable view 'myjs_check257.v256'"
+      },
+      "warnings": [
+        [
+          "Warning",
+          1354,
+          "View merge algorithm can't be used here for now (assumed undefined algorithm)"
+        ],
+        [
+          "Error",
+          1368,
+          "CHECK OPTION on non-updatable view 'myjs_check257.v256'"
+        ]
+      ],
+      "warningCount": "2",
+      "errorCount": "1",
+      "data": null
+    },
+    {
+      "sql": "CREATE ALGORITHM=MERGE VIEW v256 AS SELECT ROW_NUMBER() OVER() n FROM base256 WITH CHECK OPTION",
+      "api": "execute",
+      "existing": false,
+      "error": {
+        "code": "ER_VIEW_NONUPD_CHECK",
+        "errno": 1368,
+        "state": "HY000",
+        "message": "CHECK OPTION on non-updatable view 'myjs_check257.v256'"
+      },
+      "warnings": [
+        [
+          "Warning",
+          1354,
+          "View merge algorithm can't be used here for now (assumed undefined algorithm)"
+        ],
+        [
+          "Error",
+          1368,
+          "CHECK OPTION on non-updatable view 'myjs_check257.v256'"
+        ]
+      ],
+      "warningCount": "2",
+      "errorCount": "1",
+      "data": null
+    },
+    {
+      "sql": "CREATE ALGORITHM=MERGE VIEW v256 AS SELECT ROW_NUMBER() OVER() n FROM base256 WITH CHECK OPTION",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": null
+    },
+    {
+      "sql": "CREATE ALGORITHM=MERGE VIEW v256 AS SELECT a FROM base256 UNION ALL SELECT a FROM base256 WITH CHECK OPTION",
+      "api": "query",
+      "existing": false,
+      "error": {
+        "code": "ER_VIEW_NONUPD_CHECK",
+        "errno": 1368,
+        "state": "HY000",
+        "message": "CHECK OPTION on non-updatable view 'myjs_check257.v256'"
+      },
+      "warnings": [
+        [
+          "Warning",
+          1354,
+          "View merge algorithm can't be used here for now (assumed undefined algorithm)"
+        ],
+        [
+          "Error",
+          1368,
+          "CHECK OPTION on non-updatable view 'myjs_check257.v256'"
+        ]
+      ],
+      "warningCount": "2",
+      "errorCount": "1",
+      "data": null
+    },
+    {
+      "sql": "CREATE ALGORITHM=MERGE VIEW v256 AS SELECT a FROM base256 UNION ALL SELECT a FROM base256 WITH CHECK OPTION",
+      "api": "execute",
+      "existing": false,
+      "error": {
+        "code": "ER_VIEW_NONUPD_CHECK",
+        "errno": 1368,
+        "state": "HY000",
+        "message": "CHECK OPTION on non-updatable view 'myjs_check257.v256'"
+      },
+      "warnings": [
+        [
+          "Warning",
+          1354,
+          "View merge algorithm can't be used here for now (assumed undefined algorithm)"
+        ],
+        [
+          "Error",
+          1368,
+          "CHECK OPTION on non-updatable view 'myjs_check257.v256'"
+        ]
+      ],
+      "warningCount": "2",
+      "errorCount": "1",
+      "data": null
+    },
+    {
+      "sql": "CREATE ALGORITHM=MERGE VIEW v256 AS SELECT a FROM base256 UNION ALL SELECT a FROM base256 WITH CHECK OPTION",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": null
+    },
+    {
+      "sql": "CREATE ALGORITHM=MERGE VIEW v256 AS SELECT a FROM (SELECT a FROM base256) d WITH CHECK OPTION",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": null
+    },
+    {
+      "sql": "CREATE ALGORITHM=MERGE VIEW v256 AS SELECT b FROM (SELECT SUM(a) b FROM base256) d WITH CHECK OPTION",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": null
+    },
+    {
+      "sql": "CREATE ALGORITHM=MERGE VIEW v256 AS SELECT (SELECT 1) b FROM base256 WITH CHECK OPTION",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": null
+    },
+    {
+      "sql": "CREATE ALGORITHM=MERGE VIEW v256 AS SELECT a+1 b FROM base256 WITH CHECK OPTION",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": null
+    },
+    {
+      "sql": "CREATE ALGORITHM=TEMPTABLE VIEW v256 AS SELECT 1 WITH CHECK OPTION",
+      "api": "query",
+      "existing": false,
+      "error": {
+        "code": "ER_VIEW_NONUPD_CHECK",
+        "errno": 1368,
+        "state": "HY000",
+        "message": "CHECK OPTION on non-updatable view 'myjs_check257.v256'"
+      },
+      "warnings": [
+        [
+          "Error",
+          1368,
+          "CHECK OPTION on non-updatable view 'myjs_check257.v256'"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1",
+      "data": null
+    },
+    {
+      "sql": "CREATE ALGORITHM=TEMPTABLE VIEW v256 AS SELECT 1 WITH CHECK OPTION",
+      "api": "execute",
+      "existing": false,
+      "error": {
+        "code": "ER_VIEW_NONUPD_CHECK",
+        "errno": 1368,
+        "state": "HY000",
+        "message": "CHECK OPTION on non-updatable view 'myjs_check257.v256'"
+      },
+      "warnings": [
+        [
+          "Error",
+          1368,
+          "CHECK OPTION on non-updatable view 'myjs_check257.v256'"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1",
+      "data": null
+    },
+    {
+      "sql": "CREATE ALGORITHM=TEMPTABLE VIEW v256 AS SELECT 1 WITH CHECK OPTION",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": null
+    },
+    {
+      "sql": "CREATE ALGORITHM=TEMPTABLE VIEW v256 AS SELECT SUM(a) FROM base256 WITH CHECK OPTION",
+      "api": "query",
+      "existing": false,
+      "error": {
+        "code": "ER_VIEW_NONUPD_CHECK",
+        "errno": 1368,
+        "state": "HY000",
+        "message": "CHECK OPTION on non-updatable view 'myjs_check257.v256'"
+      },
+      "warnings": [
+        [
+          "Error",
+          1368,
+          "CHECK OPTION on non-updatable view 'myjs_check257.v256'"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1",
+      "data": null
+    },
+    {
+      "sql": "CREATE ALGORITHM=TEMPTABLE VIEW v256 AS SELECT SUM(a) FROM base256 WITH CHECK OPTION",
+      "api": "execute",
+      "existing": false,
+      "error": {
+        "code": "ER_VIEW_NONUPD_CHECK",
+        "errno": 1368,
+        "state": "HY000",
+        "message": "CHECK OPTION on non-updatable view 'myjs_check257.v256'"
+      },
+      "warnings": [
+        [
+          "Error",
+          1368,
+          "CHECK OPTION on non-updatable view 'myjs_check257.v256'"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1",
+      "data": null
+    },
+    {
+      "sql": "CREATE ALGORITHM=TEMPTABLE VIEW v256 AS SELECT SUM(a) FROM base256 WITH CHECK OPTION",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": null
+    },
+    {
+      "sql": "CREATE ALGORITHM=TEMPTABLE VIEW v256 AS SELECT DISTINCT a FROM base256 WITH CHECK OPTION",
+      "api": "query",
+      "existing": false,
+      "error": {
+        "code": "ER_VIEW_NONUPD_CHECK",
+        "errno": 1368,
+        "state": "HY000",
+        "message": "CHECK OPTION on non-updatable view 'myjs_check257.v256'"
+      },
+      "warnings": [
+        [
+          "Error",
+          1368,
+          "CHECK OPTION on non-updatable view 'myjs_check257.v256'"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1",
+      "data": null
+    },
+    {
+      "sql": "CREATE ALGORITHM=TEMPTABLE VIEW v256 AS SELECT DISTINCT a FROM base256 WITH CHECK OPTION",
+      "api": "execute",
+      "existing": false,
+      "error": {
+        "code": "ER_VIEW_NONUPD_CHECK",
+        "errno": 1368,
+        "state": "HY000",
+        "message": "CHECK OPTION on non-updatable view 'myjs_check257.v256'"
+      },
+      "warnings": [
+        [
+          "Error",
+          1368,
+          "CHECK OPTION on non-updatable view 'myjs_check257.v256'"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1",
+      "data": null
+    },
+    {
+      "sql": "CREATE ALGORITHM=TEMPTABLE VIEW v256 AS SELECT DISTINCT a FROM base256 WITH CHECK OPTION",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": null
+    },
+    {
+      "sql": "CREATE ALGORITHM=TEMPTABLE VIEW v256 AS SELECT a FROM base256 GROUP BY a WITH CHECK OPTION",
+      "api": "query",
+      "existing": false,
+      "error": {
+        "code": "ER_VIEW_NONUPD_CHECK",
+        "errno": 1368,
+        "state": "HY000",
+        "message": "CHECK OPTION on non-updatable view 'myjs_check257.v256'"
+      },
+      "warnings": [
+        [
+          "Error",
+          1368,
+          "CHECK OPTION on non-updatable view 'myjs_check257.v256'"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1",
+      "data": null
+    },
+    {
+      "sql": "CREATE ALGORITHM=TEMPTABLE VIEW v256 AS SELECT a FROM base256 GROUP BY a WITH CHECK OPTION",
+      "api": "execute",
+      "existing": false,
+      "error": {
+        "code": "ER_VIEW_NONUPD_CHECK",
+        "errno": 1368,
+        "state": "HY000",
+        "message": "CHECK OPTION on non-updatable view 'myjs_check257.v256'"
+      },
+      "warnings": [
+        [
+          "Error",
+          1368,
+          "CHECK OPTION on non-updatable view 'myjs_check257.v256'"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1",
+      "data": null
+    },
+    {
+      "sql": "CREATE ALGORITHM=TEMPTABLE VIEW v256 AS SELECT a FROM base256 GROUP BY a WITH CHECK OPTION",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": null
+    },
+    {
+      "sql": "CREATE ALGORITHM=TEMPTABLE VIEW v256 AS SELECT a FROM base256 HAVING a>=0 WITH CHECK OPTION",
+      "api": "query",
+      "existing": false,
+      "error": {
+        "code": "ER_VIEW_NONUPD_CHECK",
+        "errno": 1368,
+        "state": "HY000",
+        "message": "CHECK OPTION on non-updatable view 'myjs_check257.v256'"
+      },
+      "warnings": [
+        [
+          "Error",
+          1368,
+          "CHECK OPTION on non-updatable view 'myjs_check257.v256'"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1",
+      "data": null
+    },
+    {
+      "sql": "CREATE ALGORITHM=TEMPTABLE VIEW v256 AS SELECT a FROM base256 HAVING a>=0 WITH CHECK OPTION",
+      "api": "execute",
+      "existing": false,
+      "error": {
+        "code": "ER_VIEW_NONUPD_CHECK",
+        "errno": 1368,
+        "state": "HY000",
+        "message": "CHECK OPTION on non-updatable view 'myjs_check257.v256'"
+      },
+      "warnings": [
+        [
+          "Error",
+          1368,
+          "CHECK OPTION on non-updatable view 'myjs_check257.v256'"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1",
+      "data": null
+    },
+    {
+      "sql": "CREATE ALGORITHM=TEMPTABLE VIEW v256 AS SELECT a FROM base256 HAVING a>=0 WITH CHECK OPTION",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": null
+    },
+    {
+      "sql": "CREATE ALGORITHM=TEMPTABLE VIEW v256 AS SELECT a FROM base256 LIMIT 1 WITH CHECK OPTION",
+      "api": "query",
+      "existing": false,
+      "error": {
+        "code": "ER_VIEW_NONUPD_CHECK",
+        "errno": 1368,
+        "state": "HY000",
+        "message": "CHECK OPTION on non-updatable view 'myjs_check257.v256'"
+      },
+      "warnings": [
+        [
+          "Error",
+          1368,
+          "CHECK OPTION on non-updatable view 'myjs_check257.v256'"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1",
+      "data": null
+    },
+    {
+      "sql": "CREATE ALGORITHM=TEMPTABLE VIEW v256 AS SELECT a FROM base256 LIMIT 1 WITH CHECK OPTION",
+      "api": "execute",
+      "existing": false,
+      "error": {
+        "code": "ER_VIEW_NONUPD_CHECK",
+        "errno": 1368,
+        "state": "HY000",
+        "message": "CHECK OPTION on non-updatable view 'myjs_check257.v256'"
+      },
+      "warnings": [
+        [
+          "Error",
+          1368,
+          "CHECK OPTION on non-updatable view 'myjs_check257.v256'"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1",
+      "data": null
+    },
+    {
+      "sql": "CREATE ALGORITHM=TEMPTABLE VIEW v256 AS SELECT a FROM base256 LIMIT 1 WITH CHECK OPTION",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": null
+    },
+    {
+      "sql": "CREATE ALGORITHM=TEMPTABLE VIEW v256 AS SELECT a FROM base256 WITH CHECK OPTION",
+      "api": "query",
+      "existing": false,
+      "error": {
+        "code": "ER_VIEW_NONUPD_CHECK",
+        "errno": 1368,
+        "state": "HY000",
+        "message": "CHECK OPTION on non-updatable view 'myjs_check257.v256'"
+      },
+      "warnings": [
+        [
+          "Error",
+          1368,
+          "CHECK OPTION on non-updatable view 'myjs_check257.v256'"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1",
+      "data": null
+    },
+    {
+      "sql": "CREATE ALGORITHM=TEMPTABLE VIEW v256 AS SELECT a FROM base256 WITH CHECK OPTION",
+      "api": "execute",
+      "existing": false,
+      "error": {
+        "code": "ER_VIEW_NONUPD_CHECK",
+        "errno": 1368,
+        "state": "HY000",
+        "message": "CHECK OPTION on non-updatable view 'myjs_check257.v256'"
+      },
+      "warnings": [
+        [
+          "Error",
+          1368,
+          "CHECK OPTION on non-updatable view 'myjs_check257.v256'"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1",
+      "data": null
+    },
+    {
+      "sql": "CREATE ALGORITHM=TEMPTABLE VIEW v256 AS SELECT a FROM base256 WITH CHECK OPTION",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": null
+    },
+    {
+      "sql": "CREATE ALGORITHM=TEMPTABLE VIEW v256 AS SELECT a FROM base256 WHERE a>0 WITH CHECK OPTION",
+      "api": "query",
+      "existing": false,
+      "error": {
+        "code": "ER_VIEW_NONUPD_CHECK",
+        "errno": 1368,
+        "state": "HY000",
+        "message": "CHECK OPTION on non-updatable view 'myjs_check257.v256'"
+      },
+      "warnings": [
+        [
+          "Error",
+          1368,
+          "CHECK OPTION on non-updatable view 'myjs_check257.v256'"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1",
+      "data": null
+    },
+    {
+      "sql": "CREATE ALGORITHM=TEMPTABLE VIEW v256 AS SELECT a FROM base256 WHERE a>0 WITH CHECK OPTION",
+      "api": "execute",
+      "existing": false,
+      "error": {
+        "code": "ER_VIEW_NONUPD_CHECK",
+        "errno": 1368,
+        "state": "HY000",
+        "message": "CHECK OPTION on non-updatable view 'myjs_check257.v256'"
+      },
+      "warnings": [
+        [
+          "Error",
+          1368,
+          "CHECK OPTION on non-updatable view 'myjs_check257.v256'"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1",
+      "data": null
+    },
+    {
+      "sql": "CREATE ALGORITHM=TEMPTABLE VIEW v256 AS SELECT a FROM base256 WHERE a>0 WITH CHECK OPTION",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": null
+    },
+    {
+      "sql": "CREATE ALGORITHM=TEMPTABLE VIEW v256 AS SELECT a FROM base256 ORDER BY a WITH CHECK OPTION",
+      "api": "query",
+      "existing": false,
+      "error": {
+        "code": "ER_VIEW_NONUPD_CHECK",
+        "errno": 1368,
+        "state": "HY000",
+        "message": "CHECK OPTION on non-updatable view 'myjs_check257.v256'"
+      },
+      "warnings": [
+        [
+          "Error",
+          1368,
+          "CHECK OPTION on non-updatable view 'myjs_check257.v256'"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1",
+      "data": null
+    },
+    {
+      "sql": "CREATE ALGORITHM=TEMPTABLE VIEW v256 AS SELECT a FROM base256 ORDER BY a WITH CHECK OPTION",
+      "api": "execute",
+      "existing": false,
+      "error": {
+        "code": "ER_VIEW_NONUPD_CHECK",
+        "errno": 1368,
+        "state": "HY000",
+        "message": "CHECK OPTION on non-updatable view 'myjs_check257.v256'"
+      },
+      "warnings": [
+        [
+          "Error",
+          1368,
+          "CHECK OPTION on non-updatable view 'myjs_check257.v256'"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1",
+      "data": null
+    },
+    {
+      "sql": "CREATE ALGORITHM=TEMPTABLE VIEW v256 AS SELECT a FROM base256 ORDER BY a WITH CHECK OPTION",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": null
+    },
+    {
+      "sql": "CREATE ALGORITHM=TEMPTABLE VIEW v256 AS SELECT a FROM base256 WINDOW w AS () WITH CHECK OPTION",
+      "api": "query",
+      "existing": false,
+      "error": {
+        "code": "ER_VIEW_NONUPD_CHECK",
+        "errno": 1368,
+        "state": "HY000",
+        "message": "CHECK OPTION on non-updatable view 'myjs_check257.v256'"
+      },
+      "warnings": [
+        [
+          "Error",
+          1368,
+          "CHECK OPTION on non-updatable view 'myjs_check257.v256'"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1",
+      "data": null
+    },
+    {
+      "sql": "CREATE ALGORITHM=TEMPTABLE VIEW v256 AS SELECT a FROM base256 WINDOW w AS () WITH CHECK OPTION",
+      "api": "execute",
+      "existing": false,
+      "error": {
+        "code": "ER_VIEW_NONUPD_CHECK",
+        "errno": 1368,
+        "state": "HY000",
+        "message": "CHECK OPTION on non-updatable view 'myjs_check257.v256'"
+      },
+      "warnings": [
+        [
+          "Error",
+          1368,
+          "CHECK OPTION on non-updatable view 'myjs_check257.v256'"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1",
+      "data": null
+    },
+    {
+      "sql": "CREATE ALGORITHM=TEMPTABLE VIEW v256 AS SELECT a FROM base256 WINDOW w AS () WITH CHECK OPTION",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": null
+    },
+    {
+      "sql": "CREATE ALGORITHM=TEMPTABLE VIEW v256 AS SELECT ROW_NUMBER() OVER() n FROM base256 WITH CHECK OPTION",
+      "api": "query",
+      "existing": false,
+      "error": {
+        "code": "ER_VIEW_NONUPD_CHECK",
+        "errno": 1368,
+        "state": "HY000",
+        "message": "CHECK OPTION on non-updatable view 'myjs_check257.v256'"
+      },
+      "warnings": [
+        [
+          "Error",
+          1368,
+          "CHECK OPTION on non-updatable view 'myjs_check257.v256'"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1",
+      "data": null
+    },
+    {
+      "sql": "CREATE ALGORITHM=TEMPTABLE VIEW v256 AS SELECT ROW_NUMBER() OVER() n FROM base256 WITH CHECK OPTION",
+      "api": "execute",
+      "existing": false,
+      "error": {
+        "code": "ER_VIEW_NONUPD_CHECK",
+        "errno": 1368,
+        "state": "HY000",
+        "message": "CHECK OPTION on non-updatable view 'myjs_check257.v256'"
+      },
+      "warnings": [
+        [
+          "Error",
+          1368,
+          "CHECK OPTION on non-updatable view 'myjs_check257.v256'"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1",
+      "data": null
+    },
+    {
+      "sql": "CREATE ALGORITHM=TEMPTABLE VIEW v256 AS SELECT ROW_NUMBER() OVER() n FROM base256 WITH CHECK OPTION",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": null
+    },
+    {
+      "sql": "CREATE ALGORITHM=TEMPTABLE VIEW v256 AS SELECT a FROM base256 UNION ALL SELECT a FROM base256 WITH CHECK OPTION",
+      "api": "query",
+      "existing": false,
+      "error": {
+        "code": "ER_VIEW_NONUPD_CHECK",
+        "errno": 1368,
+        "state": "HY000",
+        "message": "CHECK OPTION on non-updatable view 'myjs_check257.v256'"
+      },
+      "warnings": [
+        [
+          "Error",
+          1368,
+          "CHECK OPTION on non-updatable view 'myjs_check257.v256'"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1",
+      "data": null
+    },
+    {
+      "sql": "CREATE ALGORITHM=TEMPTABLE VIEW v256 AS SELECT a FROM base256 UNION ALL SELECT a FROM base256 WITH CHECK OPTION",
+      "api": "execute",
+      "existing": false,
+      "error": {
+        "code": "ER_VIEW_NONUPD_CHECK",
+        "errno": 1368,
+        "state": "HY000",
+        "message": "CHECK OPTION on non-updatable view 'myjs_check257.v256'"
+      },
+      "warnings": [
+        [
+          "Error",
+          1368,
+          "CHECK OPTION on non-updatable view 'myjs_check257.v256'"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1",
+      "data": null
+    },
+    {
+      "sql": "CREATE ALGORITHM=TEMPTABLE VIEW v256 AS SELECT a FROM base256 UNION ALL SELECT a FROM base256 WITH CHECK OPTION",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": null
+    },
+    {
+      "sql": "CREATE ALGORITHM=TEMPTABLE VIEW v256 AS SELECT a FROM (SELECT a FROM base256) d WITH CHECK OPTION",
+      "api": "query",
+      "existing": false,
+      "error": {
+        "code": "ER_VIEW_NONUPD_CHECK",
+        "errno": 1368,
+        "state": "HY000",
+        "message": "CHECK OPTION on non-updatable view 'myjs_check257.v256'"
+      },
+      "warnings": [
+        [
+          "Error",
+          1368,
+          "CHECK OPTION on non-updatable view 'myjs_check257.v256'"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1",
+      "data": null
+    },
+    {
+      "sql": "CREATE ALGORITHM=TEMPTABLE VIEW v256 AS SELECT a FROM (SELECT a FROM base256) d WITH CHECK OPTION",
+      "api": "execute",
+      "existing": false,
+      "error": {
+        "code": "ER_VIEW_NONUPD_CHECK",
+        "errno": 1368,
+        "state": "HY000",
+        "message": "CHECK OPTION on non-updatable view 'myjs_check257.v256'"
+      },
+      "warnings": [
+        [
+          "Error",
+          1368,
+          "CHECK OPTION on non-updatable view 'myjs_check257.v256'"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1",
+      "data": null
+    },
+    {
+      "sql": "CREATE ALGORITHM=TEMPTABLE VIEW v256 AS SELECT a FROM (SELECT a FROM base256) d WITH CHECK OPTION",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": null
+    },
+    {
+      "sql": "CREATE ALGORITHM=TEMPTABLE VIEW v256 AS SELECT b FROM (SELECT SUM(a) b FROM base256) d WITH CHECK OPTION",
+      "api": "query",
+      "existing": false,
+      "error": {
+        "code": "ER_VIEW_NONUPD_CHECK",
+        "errno": 1368,
+        "state": "HY000",
+        "message": "CHECK OPTION on non-updatable view 'myjs_check257.v256'"
+      },
+      "warnings": [
+        [
+          "Error",
+          1368,
+          "CHECK OPTION on non-updatable view 'myjs_check257.v256'"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1",
+      "data": null
+    },
+    {
+      "sql": "CREATE ALGORITHM=TEMPTABLE VIEW v256 AS SELECT b FROM (SELECT SUM(a) b FROM base256) d WITH CHECK OPTION",
+      "api": "execute",
+      "existing": false,
+      "error": {
+        "code": "ER_VIEW_NONUPD_CHECK",
+        "errno": 1368,
+        "state": "HY000",
+        "message": "CHECK OPTION on non-updatable view 'myjs_check257.v256'"
+      },
+      "warnings": [
+        [
+          "Error",
+          1368,
+          "CHECK OPTION on non-updatable view 'myjs_check257.v256'"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1",
+      "data": null
+    },
+    {
+      "sql": "CREATE ALGORITHM=TEMPTABLE VIEW v256 AS SELECT b FROM (SELECT SUM(a) b FROM base256) d WITH CHECK OPTION",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": null
+    },
+    {
+      "sql": "CREATE ALGORITHM=TEMPTABLE VIEW v256 AS SELECT (SELECT 1) b FROM base256 WITH CHECK OPTION",
+      "api": "query",
+      "existing": false,
+      "error": {
+        "code": "ER_VIEW_NONUPD_CHECK",
+        "errno": 1368,
+        "state": "HY000",
+        "message": "CHECK OPTION on non-updatable view 'myjs_check257.v256'"
+      },
+      "warnings": [
+        [
+          "Error",
+          1368,
+          "CHECK OPTION on non-updatable view 'myjs_check257.v256'"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1",
+      "data": null
+    },
+    {
+      "sql": "CREATE ALGORITHM=TEMPTABLE VIEW v256 AS SELECT (SELECT 1) b FROM base256 WITH CHECK OPTION",
+      "api": "execute",
+      "existing": false,
+      "error": {
+        "code": "ER_VIEW_NONUPD_CHECK",
+        "errno": 1368,
+        "state": "HY000",
+        "message": "CHECK OPTION on non-updatable view 'myjs_check257.v256'"
+      },
+      "warnings": [
+        [
+          "Error",
+          1368,
+          "CHECK OPTION on non-updatable view 'myjs_check257.v256'"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1",
+      "data": null
+    },
+    {
+      "sql": "CREATE ALGORITHM=TEMPTABLE VIEW v256 AS SELECT (SELECT 1) b FROM base256 WITH CHECK OPTION",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": null
+    },
+    {
+      "sql": "CREATE ALGORITHM=TEMPTABLE VIEW v256 AS SELECT a+1 b FROM base256 WITH CHECK OPTION",
+      "api": "query",
+      "existing": false,
+      "error": {
+        "code": "ER_VIEW_NONUPD_CHECK",
+        "errno": 1368,
+        "state": "HY000",
+        "message": "CHECK OPTION on non-updatable view 'myjs_check257.v256'"
+      },
+      "warnings": [
+        [
+          "Error",
+          1368,
+          "CHECK OPTION on non-updatable view 'myjs_check257.v256'"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1",
+      "data": null
+    },
+    {
+      "sql": "CREATE ALGORITHM=TEMPTABLE VIEW v256 AS SELECT a+1 b FROM base256 WITH CHECK OPTION",
+      "api": "execute",
+      "existing": false,
+      "error": {
+        "code": "ER_VIEW_NONUPD_CHECK",
+        "errno": 1368,
+        "state": "HY000",
+        "message": "CHECK OPTION on non-updatable view 'myjs_check257.v256'"
+      },
+      "warnings": [
+        [
+          "Error",
+          1368,
+          "CHECK OPTION on non-updatable view 'myjs_check257.v256'"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1",
+      "data": null
+    },
+    {
+      "sql": "CREATE ALGORITHM=TEMPTABLE VIEW v256 AS SELECT a+1 b FROM base256 WITH CHECK OPTION",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": null
+    },
+    {
+      "sql": "CREATE ALGORITHM=MERGE VIEW v256 AS SELECT SUM(a) FROM base256 WITH CHECK OPTION",
+      "api": "query",
+      "existing": true,
+      "error": {
+        "code": "ER_TABLE_EXISTS_ERROR",
+        "errno": 1050,
+        "state": "42S01",
+        "message": "Table 'v256' already exists"
+      },
+      "warnings": [
+        [
+          "Warning",
+          1354,
+          "View merge algorithm can't be used here for now (assumed undefined algorithm)"
+        ],
+        [
+          "Error",
+          1050,
+          "Table 'v256' already exists"
+        ]
+      ],
+      "warningCount": "2",
+      "errorCount": "1",
+      "data": {
+        "algorithm": "UNDEFINED",
+        "definition": "CREATE ALGORITHM=UNDEFINED DEFINER=`root`@`%` SQL SECURITY DEFINER VIEW `v256` AS select 1 AS `1`"
+      }
+    },
+    {
+      "sql": "CREATE ALGORITHM=MERGE VIEW v256 AS SELECT SUM(a) FROM base256 WITH CHECK OPTION",
+      "api": "execute",
+      "existing": true,
+      "error": {
+        "code": "ER_TABLE_EXISTS_ERROR",
+        "errno": 1050,
+        "state": "42S01",
+        "message": "Table 'v256' already exists"
+      },
+      "warnings": [
+        [
+          "Warning",
+          1354,
+          "View merge algorithm can't be used here for now (assumed undefined algorithm)"
+        ],
+        [
+          "Error",
+          1050,
+          "Table 'v256' already exists"
+        ]
+      ],
+      "warningCount": "2",
+      "errorCount": "1",
+      "data": {
+        "algorithm": "UNDEFINED",
+        "definition": "CREATE ALGORITHM=UNDEFINED DEFINER=`root`@`%` SQL SECURITY DEFINER VIEW `v256` AS select 1 AS `1`"
+      }
+    },
+    {
+      "sql": "CREATE ALGORITHM=MERGE VIEW v256 AS SELECT SUM(a) FROM base256 WITH CHECK OPTION",
+      "api": "prepare",
+      "existing": true,
+      "parameters": [],
+      "fields": [],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "algorithm": "UNDEFINED",
+        "definition": "CREATE ALGORITHM=UNDEFINED DEFINER=`root`@`%` SQL SECURITY DEFINER VIEW `v256` AS select 1 AS `1`"
+      }
+    },
+    {
+      "sql": "CREATE ALGORITHM=MERGE VIEW base256 AS SELECT SUM(a) FROM base256 WITH CHECK OPTION",
+      "api": "query",
+      "existing": false,
+      "error": {
+        "code": "ER_TABLE_EXISTS_ERROR",
+        "errno": 1050,
+        "state": "42S01",
+        "message": "Table 'base256' already exists"
+      },
+      "warnings": [
+        [
+          "Warning",
+          1354,
+          "View merge algorithm can't be used here for now (assumed undefined algorithm)"
+        ],
+        [
+          "Error",
+          1050,
+          "Table 'base256' already exists"
+        ]
+      ],
+      "warningCount": "2",
+      "errorCount": "1",
+      "data": null
+    },
+    {
+      "sql": "CREATE ALGORITHM=MERGE VIEW base256 AS SELECT SUM(a) FROM base256 WITH CHECK OPTION",
+      "api": "execute",
+      "existing": false,
+      "error": {
+        "code": "ER_TABLE_EXISTS_ERROR",
+        "errno": 1050,
+        "state": "42S01",
+        "message": "Table 'base256' already exists"
+      },
+      "warnings": [
+        [
+          "Warning",
+          1354,
+          "View merge algorithm can't be used here for now (assumed undefined algorithm)"
+        ],
+        [
+          "Error",
+          1050,
+          "Table 'base256' already exists"
+        ]
+      ],
+      "warningCount": "2",
+      "errorCount": "1",
+      "data": null
+    },
+    {
+      "sql": "CREATE ALGORITHM=MERGE VIEW base256 AS SELECT SUM(a) FROM base256 WITH CHECK OPTION",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": null
+    },
+    {
+      "sql": "CREATE ALGORITHM=MERGE VIEW myjs_absent256.v256 AS SELECT SUM(a) FROM base256 WITH CHECK OPTION",
+      "api": "query",
+      "existing": false,
+      "error": {
+        "code": "ER_BAD_DB_ERROR",
+        "errno": 1049,
+        "state": "42000",
+        "message": "Unknown database 'myjs_absent256'"
+      },
+      "warnings": [
+        [
+          "Error",
+          1049,
+          "Unknown database 'myjs_absent256'"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1",
+      "data": null
+    },
+    {
+      "sql": "CREATE ALGORITHM=MERGE VIEW myjs_absent256.v256 AS SELECT SUM(a) FROM base256 WITH CHECK OPTION",
+      "api": "execute",
+      "existing": false,
+      "error": {
+        "code": "ER_BAD_DB_ERROR",
+        "errno": 1049,
+        "state": "42000",
+        "message": "Unknown database 'myjs_absent256'"
+      },
+      "warnings": [
+        [
+          "Error",
+          1049,
+          "Unknown database 'myjs_absent256'"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1",
+      "data": null
+    },
+    {
+      "sql": "CREATE ALGORITHM=MERGE VIEW myjs_absent256.v256 AS SELECT SUM(a) FROM base256 WITH CHECK OPTION",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": null
+    },
+    {
+      "sql": "CREATE ALGORITHM=MERGE VIEW v256 AS SELECT SUM(missing) FROM base256 WITH CHECK OPTION",
+      "api": "query",
+      "existing": false,
+      "error": {
+        "code": "ER_BAD_FIELD_ERROR",
+        "errno": 1054,
+        "state": "42S22",
+        "message": "Unknown column 'missing' in 'field list'"
+      },
+      "warnings": [
+        [
+          "Error",
+          1054,
+          "Unknown column 'missing' in 'field list'"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1",
+      "data": null
+    },
+    {
+      "sql": "CREATE ALGORITHM=MERGE VIEW v256 AS SELECT SUM(missing) FROM base256 WITH CHECK OPTION",
+      "api": "execute",
+      "existing": false,
+      "error": {
+        "code": "ER_BAD_FIELD_ERROR",
+        "errno": 1054,
+        "state": "42S22",
+        "message": "Unknown column 'missing' in 'field list'"
+      },
+      "warnings": [
+        [
+          "Error",
+          1054,
+          "Unknown column 'missing' in 'field list'"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1",
+      "data": null
+    },
+    {
+      "sql": "CREATE ALGORITHM=MERGE VIEW v256 AS SELECT SUM(a) FROM base256 WITH CHECK OPTION",
+      "api": "query",
+      "limit": 0,
+      "existing": false,
+      "error": {
+        "code": "ER_VIEW_NONUPD_CHECK",
+        "errno": 1368,
+        "state": "HY000",
+        "message": "CHECK OPTION on non-updatable view 'myjs_check257.v256'"
+      },
+      "warnings": [],
+      "warningCount": "2",
+      "errorCount": "1",
+      "data": null
+    },
+    {
+      "sql": "CREATE ALGORITHM=MERGE VIEW v256 AS SELECT SUM(a) FROM base256 WITH CHECK OPTION",
+      "api": "execute",
+      "limit": 0,
+      "existing": false,
+      "error": {
+        "code": "ER_VIEW_NONUPD_CHECK",
+        "errno": 1368,
+        "state": "HY000",
+        "message": "CHECK OPTION on non-updatable view 'myjs_check257.v256'"
+      },
+      "warnings": [],
+      "warningCount": "2",
+      "errorCount": "1",
+      "data": null
+    },
+    {
+      "sql": "CREATE ALGORITHM=MERGE VIEW v256 AS SELECT SUM(a) FROM base256 WITH CHECK OPTION",
+      "api": "prepare",
+      "limit": 0,
+      "existing": false,
+      "parameters": [],
+      "fields": [],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": null
+    },
+    {
+      "sql": "CREATE VIEW v256 AS SELECT a FROM base256 LIMIT 1 WITH CHECK OPTION",
+      "api": "query",
+      "limit": 0,
+      "existing": false,
+      "error": {
+        "code": "ER_VIEW_NONUPD_CHECK",
+        "errno": 1368,
+        "state": "HY000",
+        "message": "CHECK OPTION on non-updatable view 'myjs_check257.v256'"
+      },
+      "warnings": [],
+      "warningCount": "1",
+      "errorCount": "1",
+      "data": null
+    },
+    {
+      "sql": "CREATE VIEW v256 AS SELECT a FROM base256 LIMIT 1 WITH CHECK OPTION",
+      "api": "execute",
+      "limit": 0,
+      "existing": false,
+      "error": {
+        "code": "ER_VIEW_NONUPD_CHECK",
+        "errno": 1368,
+        "state": "HY000",
+        "message": "CHECK OPTION on non-updatable view 'myjs_check257.v256'"
+      },
+      "warnings": [],
+      "warningCount": "1",
+      "errorCount": "1",
+      "data": null
+    },
+    {
+      "sql": "CREATE VIEW v256 AS SELECT a FROM base256 LIMIT 1 WITH CHECK OPTION",
+      "api": "prepare",
+      "limit": 0,
+      "existing": false,
+      "parameters": [],
+      "fields": [],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": null
+    },
+    {
+      "sql": "CREATE ALGORITHM=TEMPTABLE VIEW v256 AS SELECT a FROM base256 WITH CHECK OPTION",
+      "api": "query",
+      "limit": 0,
+      "existing": false,
+      "error": {
+        "code": "ER_VIEW_NONUPD_CHECK",
+        "errno": 1368,
+        "state": "HY000",
+        "message": "CHECK OPTION on non-updatable view 'myjs_check257.v256'"
+      },
+      "warnings": [],
+      "warningCount": "1",
+      "errorCount": "1",
+      "data": null
+    },
+    {
+      "sql": "CREATE ALGORITHM=TEMPTABLE VIEW v256 AS SELECT a FROM base256 WITH CHECK OPTION",
+      "api": "execute",
+      "limit": 0,
+      "existing": false,
+      "error": {
+        "code": "ER_VIEW_NONUPD_CHECK",
+        "errno": 1368,
+        "state": "HY000",
+        "message": "CHECK OPTION on non-updatable view 'myjs_check257.v256'"
+      },
+      "warnings": [],
+      "warningCount": "1",
+      "errorCount": "1",
+      "data": null
+    },
+    {
+      "sql": "CREATE ALGORITHM=TEMPTABLE VIEW v256 AS SELECT a FROM base256 WITH CHECK OPTION",
+      "api": "prepare",
+      "limit": 0,
+      "existing": false,
+      "parameters": [],
+      "fields": [],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": null
+    },
+    {
+      "sql": "CREATE ALGORITHM=MERGE VIEW v256 AS SELECT SUM(a) FROM base256 WITH CHECK OPTION",
+      "api": "query",
+      "limit": 0,
+      "existing": true,
+      "error": {
+        "code": "ER_TABLE_EXISTS_ERROR",
+        "errno": 1050,
+        "state": "42S01",
+        "message": "Table 'v256' already exists"
+      },
+      "warnings": [],
+      "warningCount": "2",
+      "errorCount": "1",
+      "data": {
+        "algorithm": "UNDEFINED",
+        "definition": "CREATE ALGORITHM=UNDEFINED DEFINER=`root`@`%` SQL SECURITY DEFINER VIEW `v256` AS select 1 AS `1`"
+      }
+    },
+    {
+      "sql": "CREATE ALGORITHM=MERGE VIEW v256 AS SELECT SUM(a) FROM base256 WITH CHECK OPTION",
+      "api": "execute",
+      "limit": 0,
+      "existing": true,
+      "error": {
+        "code": "ER_TABLE_EXISTS_ERROR",
+        "errno": 1050,
+        "state": "42S01",
+        "message": "Table 'v256' already exists"
+      },
+      "warnings": [],
+      "warningCount": "2",
+      "errorCount": "1",
+      "data": {
+        "algorithm": "UNDEFINED",
+        "definition": "CREATE ALGORITHM=UNDEFINED DEFINER=`root`@`%` SQL SECURITY DEFINER VIEW `v256` AS select 1 AS `1`"
+      }
+    },
+    {
+      "sql": "CREATE ALGORITHM=MERGE VIEW v256 AS SELECT SUM(a) FROM base256 WITH CHECK OPTION",
+      "api": "prepare",
+      "limit": 0,
+      "existing": true,
+      "parameters": [],
+      "fields": [],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "algorithm": "UNDEFINED",
+        "definition": "CREATE ALGORITHM=UNDEFINED DEFINER=`root`@`%` SQL SECURITY DEFINER VIEW `v256` AS select 1 AS `1`"
+      }
+    },
+    {
+      "sql": "CREATE OR REPLACE ALGORITHM=MERGE VIEW v256 AS SELECT SUM(a) FROM base256 WITH CHECK OPTION",
+      "api": "query",
+      "limit": 0,
+      "existing": true,
+      "error": {
+        "code": "ER_VIEW_NONUPD_CHECK",
+        "errno": 1368,
+        "state": "HY000",
+        "message": "CHECK OPTION on non-updatable view 'myjs_check257.v256'"
+      },
+      "warnings": [],
+      "warningCount": "2",
+      "errorCount": "1",
+      "data": {
+        "algorithm": "UNDEFINED",
+        "definition": "CREATE ALGORITHM=UNDEFINED DEFINER=`root`@`%` SQL SECURITY DEFINER VIEW `v256` AS select 1 AS `1`"
+      }
+    },
+    {
+      "sql": "CREATE OR REPLACE ALGORITHM=MERGE VIEW v256 AS SELECT SUM(a) FROM base256 WITH CHECK OPTION",
+      "api": "execute",
+      "limit": 0,
+      "existing": true,
+      "error": {
+        "code": "ER_VIEW_NONUPD_CHECK",
+        "errno": 1368,
+        "state": "HY000",
+        "message": "CHECK OPTION on non-updatable view 'myjs_check257.v256'"
+      },
+      "warnings": [],
+      "warningCount": "2",
+      "errorCount": "1",
+      "data": {
+        "algorithm": "UNDEFINED",
+        "definition": "CREATE ALGORITHM=UNDEFINED DEFINER=`root`@`%` SQL SECURITY DEFINER VIEW `v256` AS select 1 AS `1`"
+      }
+    },
+    {
+      "sql": "CREATE OR REPLACE ALGORITHM=MERGE VIEW v256 AS SELECT SUM(a) FROM base256 WITH CHECK OPTION",
+      "api": "prepare",
+      "limit": 0,
+      "existing": true,
+      "parameters": [],
+      "fields": [],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "algorithm": "UNDEFINED",
+        "definition": "CREATE ALGORITHM=UNDEFINED DEFINER=`root`@`%` SQL SECURITY DEFINER VIEW `v256` AS select 1 AS `1`"
+      }
+    },
+    {
+      "sql": "CREATE ALGORITHM=MERGE VIEW v256 AS SELECT a FROM base256 WHERE a>0 WITH LOCAL CHECK OPTION",
+      "api": "query",
+      "limit": 0,
+      "existing": false,
+      "header": {
+        "fieldCount": 0,
+        "affectedRows": 0,
+        "insertId": 0,
+        "info": "",
+        "serverStatus": 2,
+        "warningStatus": 0,
+        "changedRows": 0
+      },
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "algorithm": "MERGE",
+        "definition": "CREATE ALGORITHM=MERGE DEFINER=`root`@`%` SQL SECURITY DEFINER VIEW `v256` AS select `base256`.`a` AS `a` from `base256` where (`base256`.`a` > 0) WITH LOCAL CHECK OPTION"
+      }
+    },
+    {
+      "sql": "CREATE ALGORITHM=MERGE VIEW v256 AS SELECT a FROM base256 WHERE a>0 WITH LOCAL CHECK OPTION",
+      "api": "execute",
+      "limit": 0,
+      "existing": false,
+      "header": {
+        "fieldCount": 0,
+        "affectedRows": 0,
+        "insertId": 0,
+        "info": "",
+        "serverStatus": 2,
+        "warningStatus": 0,
+        "changedRows": 0
+      },
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "algorithm": "MERGE",
+        "definition": "CREATE ALGORITHM=MERGE DEFINER=`root`@`%` SQL SECURITY DEFINER VIEW `v256` AS select `base256`.`a` AS `a` from `base256` where (`base256`.`a` > 0) WITH LOCAL CHECK OPTION"
+      }
+    },
+    {
+      "sql": "CREATE ALGORITHM=MERGE VIEW v256 AS SELECT a FROM base256 WHERE a>0 WITH LOCAL CHECK OPTION",
+      "api": "prepare",
+      "limit": 0,
+      "existing": false,
+      "parameters": [],
+      "fields": [],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": null
+    },
+    {
+      "sql": "CREATE ALGORITHM=MERGE VIEW v256 AS SELECT CAST(1 AS CHAR CHARSET utf8) WITH CHECK OPTION",
+      "api": "query",
+      "limit": 0,
+      "existing": false,
+      "error": {
+        "code": "ER_VIEW_NONUPD_CHECK",
+        "errno": 1368,
+        "state": "HY000",
+        "message": "CHECK OPTION on non-updatable view 'myjs_check257.v256'"
+      },
+      "warnings": [],
+      "warningCount": "2",
+      "errorCount": "1",
+      "data": null
+    },
+    {
+      "sql": "CREATE ALGORITHM=MERGE VIEW v256 AS SELECT CAST(1 AS CHAR CHARSET utf8) WITH CHECK OPTION",
+      "api": "execute",
+      "limit": 0,
+      "existing": false,
+      "error": {
+        "code": "ER_VIEW_NONUPD_CHECK",
+        "errno": 1368,
+        "state": "HY000",
+        "message": "CHECK OPTION on non-updatable view 'myjs_check257.v256'"
+      },
+      "warnings": [],
+      "warningCount": "2",
+      "errorCount": "1",
+      "data": null
+    },
+    {
+      "sql": "CREATE ALGORITHM=MERGE VIEW v256 AS SELECT CAST(1 AS CHAR CHARSET utf8) WITH CHECK OPTION",
+      "api": "prepare",
+      "limit": 0,
+      "existing": false,
+      "parameters": [],
+      "fields": [],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": null
+    },
+    {
+      "sql": "CREATE ALGORITHM=MERGE VIEW v256 AS SELECT SUM(a) FROM base256 WITH CHECK OPTION",
+      "api": "query",
+      "limit": 1,
+      "existing": false,
+      "error": {
+        "code": "ER_VIEW_NONUPD_CHECK",
+        "errno": 1368,
+        "state": "HY000",
+        "message": "CHECK OPTION on non-updatable view 'myjs_check257.v256'"
+      },
+      "warnings": [
+        [
+          "Warning",
+          1354,
+          "View merge algorithm can't be used here for now (assumed undefined algorithm)"
+        ]
+      ],
+      "warningCount": "2",
+      "errorCount": "1",
+      "data": null
+    },
+    {
+      "sql": "CREATE ALGORITHM=MERGE VIEW v256 AS SELECT SUM(a) FROM base256 WITH CHECK OPTION",
+      "api": "execute",
+      "limit": 1,
+      "existing": false,
+      "error": {
+        "code": "ER_VIEW_NONUPD_CHECK",
+        "errno": 1368,
+        "state": "HY000",
+        "message": "CHECK OPTION on non-updatable view 'myjs_check257.v256'"
+      },
+      "warnings": [
+        [
+          "Warning",
+          1354,
+          "View merge algorithm can't be used here for now (assumed undefined algorithm)"
+        ]
+      ],
+      "warningCount": "2",
+      "errorCount": "1",
+      "data": null
+    },
+    {
+      "sql": "CREATE ALGORITHM=MERGE VIEW v256 AS SELECT SUM(a) FROM base256 WITH CHECK OPTION",
+      "api": "prepare",
+      "limit": 1,
+      "existing": false,
+      "parameters": [],
+      "fields": [],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": null
+    },
+    {
+      "sql": "CREATE VIEW v256 AS SELECT a FROM base256 LIMIT 1 WITH CHECK OPTION",
+      "api": "query",
+      "limit": 1,
+      "existing": false,
+      "error": {
+        "code": "ER_VIEW_NONUPD_CHECK",
+        "errno": 1368,
+        "state": "HY000",
+        "message": "CHECK OPTION on non-updatable view 'myjs_check257.v256'"
+      },
+      "warnings": [
+        [
+          "Error",
+          1368,
+          "CHECK OPTION on non-updatable view 'myjs_check257.v256'"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1",
+      "data": null
+    },
+    {
+      "sql": "CREATE VIEW v256 AS SELECT a FROM base256 LIMIT 1 WITH CHECK OPTION",
+      "api": "execute",
+      "limit": 1,
+      "existing": false,
+      "error": {
+        "code": "ER_VIEW_NONUPD_CHECK",
+        "errno": 1368,
+        "state": "HY000",
+        "message": "CHECK OPTION on non-updatable view 'myjs_check257.v256'"
+      },
+      "warnings": [
+        [
+          "Error",
+          1368,
+          "CHECK OPTION on non-updatable view 'myjs_check257.v256'"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1",
+      "data": null
+    },
+    {
+      "sql": "CREATE VIEW v256 AS SELECT a FROM base256 LIMIT 1 WITH CHECK OPTION",
+      "api": "prepare",
+      "limit": 1,
+      "existing": false,
+      "parameters": [],
+      "fields": [],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": null
+    },
+    {
+      "sql": "CREATE ALGORITHM=TEMPTABLE VIEW v256 AS SELECT a FROM base256 WITH CHECK OPTION",
+      "api": "query",
+      "limit": 1,
+      "existing": false,
+      "error": {
+        "code": "ER_VIEW_NONUPD_CHECK",
+        "errno": 1368,
+        "state": "HY000",
+        "message": "CHECK OPTION on non-updatable view 'myjs_check257.v256'"
+      },
+      "warnings": [
+        [
+          "Error",
+          1368,
+          "CHECK OPTION on non-updatable view 'myjs_check257.v256'"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1",
+      "data": null
+    },
+    {
+      "sql": "CREATE ALGORITHM=TEMPTABLE VIEW v256 AS SELECT a FROM base256 WITH CHECK OPTION",
+      "api": "execute",
+      "limit": 1,
+      "existing": false,
+      "error": {
+        "code": "ER_VIEW_NONUPD_CHECK",
+        "errno": 1368,
+        "state": "HY000",
+        "message": "CHECK OPTION on non-updatable view 'myjs_check257.v256'"
+      },
+      "warnings": [
+        [
+          "Error",
+          1368,
+          "CHECK OPTION on non-updatable view 'myjs_check257.v256'"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1",
+      "data": null
+    },
+    {
+      "sql": "CREATE ALGORITHM=TEMPTABLE VIEW v256 AS SELECT a FROM base256 WITH CHECK OPTION",
+      "api": "prepare",
+      "limit": 1,
+      "existing": false,
+      "parameters": [],
+      "fields": [],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": null
+    },
+    {
+      "sql": "CREATE ALGORITHM=MERGE VIEW v256 AS SELECT SUM(a) FROM base256 WITH CHECK OPTION",
+      "api": "query",
+      "limit": 1,
+      "existing": true,
+      "error": {
+        "code": "ER_TABLE_EXISTS_ERROR",
+        "errno": 1050,
+        "state": "42S01",
+        "message": "Table 'v256' already exists"
+      },
+      "warnings": [
+        [
+          "Warning",
+          1354,
+          "View merge algorithm can't be used here for now (assumed undefined algorithm)"
+        ]
+      ],
+      "warningCount": "2",
+      "errorCount": "1",
+      "data": {
+        "algorithm": "UNDEFINED",
+        "definition": "CREATE ALGORITHM=UNDEFINED DEFINER=`root`@`%` SQL SECURITY DEFINER VIEW `v256` AS select 1 AS `1`"
+      }
+    },
+    {
+      "sql": "CREATE ALGORITHM=MERGE VIEW v256 AS SELECT SUM(a) FROM base256 WITH CHECK OPTION",
+      "api": "execute",
+      "limit": 1,
+      "existing": true,
+      "error": {
+        "code": "ER_TABLE_EXISTS_ERROR",
+        "errno": 1050,
+        "state": "42S01",
+        "message": "Table 'v256' already exists"
+      },
+      "warnings": [
+        [
+          "Warning",
+          1354,
+          "View merge algorithm can't be used here for now (assumed undefined algorithm)"
+        ]
+      ],
+      "warningCount": "2",
+      "errorCount": "1",
+      "data": {
+        "algorithm": "UNDEFINED",
+        "definition": "CREATE ALGORITHM=UNDEFINED DEFINER=`root`@`%` SQL SECURITY DEFINER VIEW `v256` AS select 1 AS `1`"
+      }
+    },
+    {
+      "sql": "CREATE ALGORITHM=MERGE VIEW v256 AS SELECT SUM(a) FROM base256 WITH CHECK OPTION",
+      "api": "prepare",
+      "limit": 1,
+      "existing": true,
+      "parameters": [],
+      "fields": [],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "algorithm": "UNDEFINED",
+        "definition": "CREATE ALGORITHM=UNDEFINED DEFINER=`root`@`%` SQL SECURITY DEFINER VIEW `v256` AS select 1 AS `1`"
+      }
+    },
+    {
+      "sql": "CREATE OR REPLACE ALGORITHM=MERGE VIEW v256 AS SELECT SUM(a) FROM base256 WITH CHECK OPTION",
+      "api": "query",
+      "limit": 1,
+      "existing": true,
+      "error": {
+        "code": "ER_VIEW_NONUPD_CHECK",
+        "errno": 1368,
+        "state": "HY000",
+        "message": "CHECK OPTION on non-updatable view 'myjs_check257.v256'"
+      },
+      "warnings": [
+        [
+          "Warning",
+          1354,
+          "View merge algorithm can't be used here for now (assumed undefined algorithm)"
+        ]
+      ],
+      "warningCount": "2",
+      "errorCount": "1",
+      "data": {
+        "algorithm": "UNDEFINED",
+        "definition": "CREATE ALGORITHM=UNDEFINED DEFINER=`root`@`%` SQL SECURITY DEFINER VIEW `v256` AS select 1 AS `1`"
+      }
+    },
+    {
+      "sql": "CREATE OR REPLACE ALGORITHM=MERGE VIEW v256 AS SELECT SUM(a) FROM base256 WITH CHECK OPTION",
+      "api": "execute",
+      "limit": 1,
+      "existing": true,
+      "error": {
+        "code": "ER_VIEW_NONUPD_CHECK",
+        "errno": 1368,
+        "state": "HY000",
+        "message": "CHECK OPTION on non-updatable view 'myjs_check257.v256'"
+      },
+      "warnings": [
+        [
+          "Warning",
+          1354,
+          "View merge algorithm can't be used here for now (assumed undefined algorithm)"
+        ]
+      ],
+      "warningCount": "2",
+      "errorCount": "1",
+      "data": {
+        "algorithm": "UNDEFINED",
+        "definition": "CREATE ALGORITHM=UNDEFINED DEFINER=`root`@`%` SQL SECURITY DEFINER VIEW `v256` AS select 1 AS `1`"
+      }
+    },
+    {
+      "sql": "CREATE OR REPLACE ALGORITHM=MERGE VIEW v256 AS SELECT SUM(a) FROM base256 WITH CHECK OPTION",
+      "api": "prepare",
+      "limit": 1,
+      "existing": true,
+      "parameters": [],
+      "fields": [],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "algorithm": "UNDEFINED",
+        "definition": "CREATE ALGORITHM=UNDEFINED DEFINER=`root`@`%` SQL SECURITY DEFINER VIEW `v256` AS select 1 AS `1`"
+      }
+    },
+    {
+      "sql": "CREATE ALGORITHM=MERGE VIEW v256 AS SELECT a FROM base256 WHERE a>0 WITH LOCAL CHECK OPTION",
+      "api": "query",
+      "limit": 1,
+      "existing": false,
+      "header": {
+        "fieldCount": 0,
+        "affectedRows": 0,
+        "insertId": 0,
+        "info": "",
+        "serverStatus": 2,
+        "warningStatus": 0,
+        "changedRows": 0
+      },
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "algorithm": "MERGE",
+        "definition": "CREATE ALGORITHM=MERGE DEFINER=`root`@`%` SQL SECURITY DEFINER VIEW `v256` AS select `base256`.`a` AS `a` from `base256` where (`base256`.`a` > 0) WITH LOCAL CHECK OPTION"
+      }
+    },
+    {
+      "sql": "CREATE ALGORITHM=MERGE VIEW v256 AS SELECT a FROM base256 WHERE a>0 WITH LOCAL CHECK OPTION",
+      "api": "execute",
+      "limit": 1,
+      "existing": false,
+      "header": {
+        "fieldCount": 0,
+        "affectedRows": 0,
+        "insertId": 0,
+        "info": "",
+        "serverStatus": 2,
+        "warningStatus": 0,
+        "changedRows": 0
+      },
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "algorithm": "MERGE",
+        "definition": "CREATE ALGORITHM=MERGE DEFINER=`root`@`%` SQL SECURITY DEFINER VIEW `v256` AS select `base256`.`a` AS `a` from `base256` where (`base256`.`a` > 0) WITH LOCAL CHECK OPTION"
+      }
+    },
+    {
+      "sql": "CREATE ALGORITHM=MERGE VIEW v256 AS SELECT a FROM base256 WHERE a>0 WITH LOCAL CHECK OPTION",
+      "api": "prepare",
+      "limit": 1,
+      "existing": false,
+      "parameters": [],
+      "fields": [],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": null
+    },
+    {
+      "sql": "CREATE ALGORITHM=MERGE VIEW v256 AS SELECT CAST(1 AS CHAR CHARSET utf8) WITH CHECK OPTION",
+      "api": "query",
+      "limit": 1,
+      "existing": false,
+      "error": {
+        "code": "ER_VIEW_NONUPD_CHECK",
+        "errno": 1368,
+        "state": "HY000",
+        "message": "CHECK OPTION on non-updatable view 'myjs_check257.v256'"
+      },
+      "warnings": [
+        [
+          "Warning",
+          3719,
+          "'utf8' is currently an alias for the character set UTF8MB3, but will be an alias for UTF8MB4 in a future release. Please consider using UTF8MB4 in order to be unambiguous."
+        ]
+      ],
+      "warningCount": "3",
+      "errorCount": "1",
+      "data": null
+    },
+    {
+      "sql": "CREATE ALGORITHM=MERGE VIEW v256 AS SELECT CAST(1 AS CHAR CHARSET utf8) WITH CHECK OPTION",
+      "api": "execute",
+      "limit": 1,
+      "existing": false,
+      "error": {
+        "code": "ER_VIEW_NONUPD_CHECK",
+        "errno": 1368,
+        "state": "HY000",
+        "message": "CHECK OPTION on non-updatable view 'myjs_check257.v256'"
+      },
+      "warnings": [
+        [
+          "Warning",
+          1354,
+          "View merge algorithm can't be used here for now (assumed undefined algorithm)"
+        ]
+      ],
+      "warningCount": "2",
+      "errorCount": "1",
+      "data": null
+    },
+    {
+      "sql": "CREATE ALGORITHM=MERGE VIEW v256 AS SELECT CAST(1 AS CHAR CHARSET utf8) WITH CHECK OPTION",
+      "api": "prepare",
+      "limit": 1,
+      "existing": false,
+      "parameters": [],
+      "fields": [],
+      "warnings": [
+        [
+          "Warning",
+          3719,
+          "'utf8' is currently an alias for the character set UTF8MB3, but will be an alias for UTF8MB4 in a future release. Please consider using UTF8MB4 in order to be unambiguous."
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "0",
+      "data": null
+    },
+    {
+      "sql": "CREATE ALGORITHM=MERGE VIEW v256 AS SELECT SUM(a) FROM base256 WITH CHECK OPTION",
+      "api": "query",
+      "limit": 8,
+      "existing": false,
+      "error": {
+        "code": "ER_VIEW_NONUPD_CHECK",
+        "errno": 1368,
+        "state": "HY000",
+        "message": "CHECK OPTION on non-updatable view 'myjs_check257.v256'"
+      },
+      "warnings": [
+        [
+          "Warning",
+          1354,
+          "View merge algorithm can't be used here for now (assumed undefined algorithm)"
+        ],
+        [
+          "Error",
+          1368,
+          "CHECK OPTION on non-updatable view 'myjs_check257.v256'"
+        ]
+      ],
+      "warningCount": "2",
+      "errorCount": "1",
+      "data": null
+    },
+    {
+      "sql": "CREATE ALGORITHM=MERGE VIEW v256 AS SELECT SUM(a) FROM base256 WITH CHECK OPTION",
+      "api": "execute",
+      "limit": 8,
+      "existing": false,
+      "error": {
+        "code": "ER_VIEW_NONUPD_CHECK",
+        "errno": 1368,
+        "state": "HY000",
+        "message": "CHECK OPTION on non-updatable view 'myjs_check257.v256'"
+      },
+      "warnings": [
+        [
+          "Warning",
+          1354,
+          "View merge algorithm can't be used here for now (assumed undefined algorithm)"
+        ],
+        [
+          "Error",
+          1368,
+          "CHECK OPTION on non-updatable view 'myjs_check257.v256'"
+        ]
+      ],
+      "warningCount": "2",
+      "errorCount": "1",
+      "data": null
+    },
+    {
+      "sql": "CREATE ALGORITHM=MERGE VIEW v256 AS SELECT SUM(a) FROM base256 WITH CHECK OPTION",
+      "api": "prepare",
+      "limit": 8,
+      "existing": false,
+      "parameters": [],
+      "fields": [],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": null
+    },
+    {
+      "sql": "CREATE VIEW v256 AS SELECT a FROM base256 LIMIT 1 WITH CHECK OPTION",
+      "api": "query",
+      "limit": 8,
+      "existing": false,
+      "error": {
+        "code": "ER_VIEW_NONUPD_CHECK",
+        "errno": 1368,
+        "state": "HY000",
+        "message": "CHECK OPTION on non-updatable view 'myjs_check257.v256'"
+      },
+      "warnings": [
+        [
+          "Error",
+          1368,
+          "CHECK OPTION on non-updatable view 'myjs_check257.v256'"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1",
+      "data": null
+    },
+    {
+      "sql": "CREATE VIEW v256 AS SELECT a FROM base256 LIMIT 1 WITH CHECK OPTION",
+      "api": "execute",
+      "limit": 8,
+      "existing": false,
+      "error": {
+        "code": "ER_VIEW_NONUPD_CHECK",
+        "errno": 1368,
+        "state": "HY000",
+        "message": "CHECK OPTION on non-updatable view 'myjs_check257.v256'"
+      },
+      "warnings": [
+        [
+          "Error",
+          1368,
+          "CHECK OPTION on non-updatable view 'myjs_check257.v256'"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1",
+      "data": null
+    },
+    {
+      "sql": "CREATE VIEW v256 AS SELECT a FROM base256 LIMIT 1 WITH CHECK OPTION",
+      "api": "prepare",
+      "limit": 8,
+      "existing": false,
+      "parameters": [],
+      "fields": [],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": null
+    },
+    {
+      "sql": "CREATE ALGORITHM=TEMPTABLE VIEW v256 AS SELECT a FROM base256 WITH CHECK OPTION",
+      "api": "query",
+      "limit": 8,
+      "existing": false,
+      "error": {
+        "code": "ER_VIEW_NONUPD_CHECK",
+        "errno": 1368,
+        "state": "HY000",
+        "message": "CHECK OPTION on non-updatable view 'myjs_check257.v256'"
+      },
+      "warnings": [
+        [
+          "Error",
+          1368,
+          "CHECK OPTION on non-updatable view 'myjs_check257.v256'"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1",
+      "data": null
+    },
+    {
+      "sql": "CREATE ALGORITHM=TEMPTABLE VIEW v256 AS SELECT a FROM base256 WITH CHECK OPTION",
+      "api": "execute",
+      "limit": 8,
+      "existing": false,
+      "error": {
+        "code": "ER_VIEW_NONUPD_CHECK",
+        "errno": 1368,
+        "state": "HY000",
+        "message": "CHECK OPTION on non-updatable view 'myjs_check257.v256'"
+      },
+      "warnings": [
+        [
+          "Error",
+          1368,
+          "CHECK OPTION on non-updatable view 'myjs_check257.v256'"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1",
+      "data": null
+    },
+    {
+      "sql": "CREATE ALGORITHM=TEMPTABLE VIEW v256 AS SELECT a FROM base256 WITH CHECK OPTION",
+      "api": "prepare",
+      "limit": 8,
+      "existing": false,
+      "parameters": [],
+      "fields": [],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": null
+    },
+    {
+      "sql": "CREATE ALGORITHM=MERGE VIEW v256 AS SELECT SUM(a) FROM base256 WITH CHECK OPTION",
+      "api": "query",
+      "limit": 8,
+      "existing": true,
+      "error": {
+        "code": "ER_TABLE_EXISTS_ERROR",
+        "errno": 1050,
+        "state": "42S01",
+        "message": "Table 'v256' already exists"
+      },
+      "warnings": [
+        [
+          "Warning",
+          1354,
+          "View merge algorithm can't be used here for now (assumed undefined algorithm)"
+        ],
+        [
+          "Error",
+          1050,
+          "Table 'v256' already exists"
+        ]
+      ],
+      "warningCount": "2",
+      "errorCount": "1",
+      "data": {
+        "algorithm": "UNDEFINED",
+        "definition": "CREATE ALGORITHM=UNDEFINED DEFINER=`root`@`%` SQL SECURITY DEFINER VIEW `v256` AS select 1 AS `1`"
+      }
+    },
+    {
+      "sql": "CREATE ALGORITHM=MERGE VIEW v256 AS SELECT SUM(a) FROM base256 WITH CHECK OPTION",
+      "api": "execute",
+      "limit": 8,
+      "existing": true,
+      "error": {
+        "code": "ER_TABLE_EXISTS_ERROR",
+        "errno": 1050,
+        "state": "42S01",
+        "message": "Table 'v256' already exists"
+      },
+      "warnings": [
+        [
+          "Warning",
+          1354,
+          "View merge algorithm can't be used here for now (assumed undefined algorithm)"
+        ],
+        [
+          "Error",
+          1050,
+          "Table 'v256' already exists"
+        ]
+      ],
+      "warningCount": "2",
+      "errorCount": "1",
+      "data": {
+        "algorithm": "UNDEFINED",
+        "definition": "CREATE ALGORITHM=UNDEFINED DEFINER=`root`@`%` SQL SECURITY DEFINER VIEW `v256` AS select 1 AS `1`"
+      }
+    },
+    {
+      "sql": "CREATE ALGORITHM=MERGE VIEW v256 AS SELECT SUM(a) FROM base256 WITH CHECK OPTION",
+      "api": "prepare",
+      "limit": 8,
+      "existing": true,
+      "parameters": [],
+      "fields": [],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "algorithm": "UNDEFINED",
+        "definition": "CREATE ALGORITHM=UNDEFINED DEFINER=`root`@`%` SQL SECURITY DEFINER VIEW `v256` AS select 1 AS `1`"
+      }
+    },
+    {
+      "sql": "CREATE OR REPLACE ALGORITHM=MERGE VIEW v256 AS SELECT SUM(a) FROM base256 WITH CHECK OPTION",
+      "api": "query",
+      "limit": 8,
+      "existing": true,
+      "error": {
+        "code": "ER_VIEW_NONUPD_CHECK",
+        "errno": 1368,
+        "state": "HY000",
+        "message": "CHECK OPTION on non-updatable view 'myjs_check257.v256'"
+      },
+      "warnings": [
+        [
+          "Warning",
+          1354,
+          "View merge algorithm can't be used here for now (assumed undefined algorithm)"
+        ],
+        [
+          "Error",
+          1368,
+          "CHECK OPTION on non-updatable view 'myjs_check257.v256'"
+        ]
+      ],
+      "warningCount": "2",
+      "errorCount": "1",
+      "data": {
+        "algorithm": "UNDEFINED",
+        "definition": "CREATE ALGORITHM=UNDEFINED DEFINER=`root`@`%` SQL SECURITY DEFINER VIEW `v256` AS select 1 AS `1`"
+      }
+    },
+    {
+      "sql": "CREATE OR REPLACE ALGORITHM=MERGE VIEW v256 AS SELECT SUM(a) FROM base256 WITH CHECK OPTION",
+      "api": "execute",
+      "limit": 8,
+      "existing": true,
+      "error": {
+        "code": "ER_VIEW_NONUPD_CHECK",
+        "errno": 1368,
+        "state": "HY000",
+        "message": "CHECK OPTION on non-updatable view 'myjs_check257.v256'"
+      },
+      "warnings": [
+        [
+          "Warning",
+          1354,
+          "View merge algorithm can't be used here for now (assumed undefined algorithm)"
+        ],
+        [
+          "Error",
+          1368,
+          "CHECK OPTION on non-updatable view 'myjs_check257.v256'"
+        ]
+      ],
+      "warningCount": "2",
+      "errorCount": "1",
+      "data": {
+        "algorithm": "UNDEFINED",
+        "definition": "CREATE ALGORITHM=UNDEFINED DEFINER=`root`@`%` SQL SECURITY DEFINER VIEW `v256` AS select 1 AS `1`"
+      }
+    },
+    {
+      "sql": "CREATE OR REPLACE ALGORITHM=MERGE VIEW v256 AS SELECT SUM(a) FROM base256 WITH CHECK OPTION",
+      "api": "prepare",
+      "limit": 8,
+      "existing": true,
+      "parameters": [],
+      "fields": [],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "algorithm": "UNDEFINED",
+        "definition": "CREATE ALGORITHM=UNDEFINED DEFINER=`root`@`%` SQL SECURITY DEFINER VIEW `v256` AS select 1 AS `1`"
+      }
+    },
+    {
+      "sql": "CREATE ALGORITHM=MERGE VIEW v256 AS SELECT a FROM base256 WHERE a>0 WITH LOCAL CHECK OPTION",
+      "api": "query",
+      "limit": 8,
+      "existing": false,
+      "header": {
+        "fieldCount": 0,
+        "affectedRows": 0,
+        "insertId": 0,
+        "info": "",
+        "serverStatus": 2,
+        "warningStatus": 0,
+        "changedRows": 0
+      },
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "algorithm": "MERGE",
+        "definition": "CREATE ALGORITHM=MERGE DEFINER=`root`@`%` SQL SECURITY DEFINER VIEW `v256` AS select `base256`.`a` AS `a` from `base256` where (`base256`.`a` > 0) WITH LOCAL CHECK OPTION"
+      }
+    },
+    {
+      "sql": "CREATE ALGORITHM=MERGE VIEW v256 AS SELECT a FROM base256 WHERE a>0 WITH LOCAL CHECK OPTION",
+      "api": "execute",
+      "limit": 8,
+      "existing": false,
+      "header": {
+        "fieldCount": 0,
+        "affectedRows": 0,
+        "insertId": 0,
+        "info": "",
+        "serverStatus": 2,
+        "warningStatus": 0,
+        "changedRows": 0
+      },
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "algorithm": "MERGE",
+        "definition": "CREATE ALGORITHM=MERGE DEFINER=`root`@`%` SQL SECURITY DEFINER VIEW `v256` AS select `base256`.`a` AS `a` from `base256` where (`base256`.`a` > 0) WITH LOCAL CHECK OPTION"
+      }
+    },
+    {
+      "sql": "CREATE ALGORITHM=MERGE VIEW v256 AS SELECT a FROM base256 WHERE a>0 WITH LOCAL CHECK OPTION",
+      "api": "prepare",
+      "limit": 8,
+      "existing": false,
+      "parameters": [],
+      "fields": [],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": null
+    },
+    {
+      "sql": "CREATE ALGORITHM=MERGE VIEW v256 AS SELECT CAST(1 AS CHAR CHARSET utf8) WITH CHECK OPTION",
+      "api": "query",
+      "limit": 8,
+      "existing": false,
+      "error": {
+        "code": "ER_VIEW_NONUPD_CHECK",
+        "errno": 1368,
+        "state": "HY000",
+        "message": "CHECK OPTION on non-updatable view 'myjs_check257.v256'"
+      },
+      "warnings": [
+        [
+          "Warning",
+          3719,
+          "'utf8' is currently an alias for the character set UTF8MB3, but will be an alias for UTF8MB4 in a future release. Please consider using UTF8MB4 in order to be unambiguous."
+        ],
+        [
+          "Warning",
+          1354,
+          "View merge algorithm can't be used here for now (assumed undefined algorithm)"
+        ],
+        [
+          "Error",
+          1368,
+          "CHECK OPTION on non-updatable view 'myjs_check257.v256'"
+        ]
+      ],
+      "warningCount": "3",
+      "errorCount": "1",
+      "data": null
+    },
+    {
+      "sql": "CREATE ALGORITHM=MERGE VIEW v256 AS SELECT CAST(1 AS CHAR CHARSET utf8) WITH CHECK OPTION",
+      "api": "execute",
+      "limit": 8,
+      "existing": false,
+      "error": {
+        "code": "ER_VIEW_NONUPD_CHECK",
+        "errno": 1368,
+        "state": "HY000",
+        "message": "CHECK OPTION on non-updatable view 'myjs_check257.v256'"
+      },
+      "warnings": [
+        [
+          "Warning",
+          1354,
+          "View merge algorithm can't be used here for now (assumed undefined algorithm)"
+        ],
+        [
+          "Error",
+          1368,
+          "CHECK OPTION on non-updatable view 'myjs_check257.v256'"
+        ]
+      ],
+      "warningCount": "2",
+      "errorCount": "1",
+      "data": null
+    },
+    {
+      "sql": "CREATE ALGORITHM=MERGE VIEW v256 AS SELECT CAST(1 AS CHAR CHARSET utf8) WITH CHECK OPTION",
+      "api": "prepare",
+      "limit": 8,
+      "existing": false,
+      "parameters": [],
+      "fields": [],
+      "warnings": [
+        [
+          "Warning",
+          3719,
+          "'utf8' is currently an alias for the character set UTF8MB3, but will be an alias for UTF8MB4 in a future release. Please consider using UTF8MB4 in order to be unambiguous."
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "0",
+      "data": null
+    },
+    {
+      "sql": "CREATE ALGORITHM=MERGE VIEW v256 AS SELECT SUM(a) FROM base256 WITH CHECK OPTION",
+      "api": "query",
+      "limit": 64,
+      "existing": false,
+      "error": {
+        "code": "ER_VIEW_NONUPD_CHECK",
+        "errno": 1368,
+        "state": "HY000",
+        "message": "CHECK OPTION on non-updatable view 'myjs_check257.v256'"
+      },
+      "warnings": [
+        [
+          "Warning",
+          1354,
+          "View merge algorithm can't be used here for now (assumed undefined algorithm)"
+        ],
+        [
+          "Error",
+          1368,
+          "CHECK OPTION on non-updatable view 'myjs_check257.v256'"
+        ]
+      ],
+      "warningCount": "2",
+      "errorCount": "1",
+      "data": null
+    },
+    {
+      "sql": "CREATE ALGORITHM=MERGE VIEW v256 AS SELECT SUM(a) FROM base256 WITH CHECK OPTION",
+      "api": "execute",
+      "limit": 64,
+      "existing": false,
+      "error": {
+        "code": "ER_VIEW_NONUPD_CHECK",
+        "errno": 1368,
+        "state": "HY000",
+        "message": "CHECK OPTION on non-updatable view 'myjs_check257.v256'"
+      },
+      "warnings": [
+        [
+          "Warning",
+          1354,
+          "View merge algorithm can't be used here for now (assumed undefined algorithm)"
+        ],
+        [
+          "Error",
+          1368,
+          "CHECK OPTION on non-updatable view 'myjs_check257.v256'"
+        ]
+      ],
+      "warningCount": "2",
+      "errorCount": "1",
+      "data": null
+    },
+    {
+      "sql": "CREATE ALGORITHM=MERGE VIEW v256 AS SELECT SUM(a) FROM base256 WITH CHECK OPTION",
+      "api": "prepare",
+      "limit": 64,
+      "existing": false,
+      "parameters": [],
+      "fields": [],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": null
+    },
+    {
+      "sql": "CREATE VIEW v256 AS SELECT a FROM base256 LIMIT 1 WITH CHECK OPTION",
+      "api": "query",
+      "limit": 64,
+      "existing": false,
+      "error": {
+        "code": "ER_VIEW_NONUPD_CHECK",
+        "errno": 1368,
+        "state": "HY000",
+        "message": "CHECK OPTION on non-updatable view 'myjs_check257.v256'"
+      },
+      "warnings": [
+        [
+          "Error",
+          1368,
+          "CHECK OPTION on non-updatable view 'myjs_check257.v256'"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1",
+      "data": null
+    },
+    {
+      "sql": "CREATE VIEW v256 AS SELECT a FROM base256 LIMIT 1 WITH CHECK OPTION",
+      "api": "execute",
+      "limit": 64,
+      "existing": false,
+      "error": {
+        "code": "ER_VIEW_NONUPD_CHECK",
+        "errno": 1368,
+        "state": "HY000",
+        "message": "CHECK OPTION on non-updatable view 'myjs_check257.v256'"
+      },
+      "warnings": [
+        [
+          "Error",
+          1368,
+          "CHECK OPTION on non-updatable view 'myjs_check257.v256'"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1",
+      "data": null
+    },
+    {
+      "sql": "CREATE VIEW v256 AS SELECT a FROM base256 LIMIT 1 WITH CHECK OPTION",
+      "api": "prepare",
+      "limit": 64,
+      "existing": false,
+      "parameters": [],
+      "fields": [],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": null
+    },
+    {
+      "sql": "CREATE ALGORITHM=TEMPTABLE VIEW v256 AS SELECT a FROM base256 WITH CHECK OPTION",
+      "api": "query",
+      "limit": 64,
+      "existing": false,
+      "error": {
+        "code": "ER_VIEW_NONUPD_CHECK",
+        "errno": 1368,
+        "state": "HY000",
+        "message": "CHECK OPTION on non-updatable view 'myjs_check257.v256'"
+      },
+      "warnings": [
+        [
+          "Error",
+          1368,
+          "CHECK OPTION on non-updatable view 'myjs_check257.v256'"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1",
+      "data": null
+    },
+    {
+      "sql": "CREATE ALGORITHM=TEMPTABLE VIEW v256 AS SELECT a FROM base256 WITH CHECK OPTION",
+      "api": "execute",
+      "limit": 64,
+      "existing": false,
+      "error": {
+        "code": "ER_VIEW_NONUPD_CHECK",
+        "errno": 1368,
+        "state": "HY000",
+        "message": "CHECK OPTION on non-updatable view 'myjs_check257.v256'"
+      },
+      "warnings": [
+        [
+          "Error",
+          1368,
+          "CHECK OPTION on non-updatable view 'myjs_check257.v256'"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1",
+      "data": null
+    },
+    {
+      "sql": "CREATE ALGORITHM=TEMPTABLE VIEW v256 AS SELECT a FROM base256 WITH CHECK OPTION",
+      "api": "prepare",
+      "limit": 64,
+      "existing": false,
+      "parameters": [],
+      "fields": [],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": null
+    },
+    {
+      "sql": "CREATE ALGORITHM=MERGE VIEW v256 AS SELECT SUM(a) FROM base256 WITH CHECK OPTION",
+      "api": "query",
+      "limit": 64,
+      "existing": true,
+      "error": {
+        "code": "ER_TABLE_EXISTS_ERROR",
+        "errno": 1050,
+        "state": "42S01",
+        "message": "Table 'v256' already exists"
+      },
+      "warnings": [
+        [
+          "Warning",
+          1354,
+          "View merge algorithm can't be used here for now (assumed undefined algorithm)"
+        ],
+        [
+          "Error",
+          1050,
+          "Table 'v256' already exists"
+        ]
+      ],
+      "warningCount": "2",
+      "errorCount": "1",
+      "data": {
+        "algorithm": "UNDEFINED",
+        "definition": "CREATE ALGORITHM=UNDEFINED DEFINER=`root`@`%` SQL SECURITY DEFINER VIEW `v256` AS select 1 AS `1`"
+      }
+    },
+    {
+      "sql": "CREATE ALGORITHM=MERGE VIEW v256 AS SELECT SUM(a) FROM base256 WITH CHECK OPTION",
+      "api": "execute",
+      "limit": 64,
+      "existing": true,
+      "error": {
+        "code": "ER_TABLE_EXISTS_ERROR",
+        "errno": 1050,
+        "state": "42S01",
+        "message": "Table 'v256' already exists"
+      },
+      "warnings": [
+        [
+          "Warning",
+          1354,
+          "View merge algorithm can't be used here for now (assumed undefined algorithm)"
+        ],
+        [
+          "Error",
+          1050,
+          "Table 'v256' already exists"
+        ]
+      ],
+      "warningCount": "2",
+      "errorCount": "1",
+      "data": {
+        "algorithm": "UNDEFINED",
+        "definition": "CREATE ALGORITHM=UNDEFINED DEFINER=`root`@`%` SQL SECURITY DEFINER VIEW `v256` AS select 1 AS `1`"
+      }
+    },
+    {
+      "sql": "CREATE ALGORITHM=MERGE VIEW v256 AS SELECT SUM(a) FROM base256 WITH CHECK OPTION",
+      "api": "prepare",
+      "limit": 64,
+      "existing": true,
+      "parameters": [],
+      "fields": [],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "algorithm": "UNDEFINED",
+        "definition": "CREATE ALGORITHM=UNDEFINED DEFINER=`root`@`%` SQL SECURITY DEFINER VIEW `v256` AS select 1 AS `1`"
+      }
+    },
+    {
+      "sql": "CREATE OR REPLACE ALGORITHM=MERGE VIEW v256 AS SELECT SUM(a) FROM base256 WITH CHECK OPTION",
+      "api": "query",
+      "limit": 64,
+      "existing": true,
+      "error": {
+        "code": "ER_VIEW_NONUPD_CHECK",
+        "errno": 1368,
+        "state": "HY000",
+        "message": "CHECK OPTION on non-updatable view 'myjs_check257.v256'"
+      },
+      "warnings": [
+        [
+          "Warning",
+          1354,
+          "View merge algorithm can't be used here for now (assumed undefined algorithm)"
+        ],
+        [
+          "Error",
+          1368,
+          "CHECK OPTION on non-updatable view 'myjs_check257.v256'"
+        ]
+      ],
+      "warningCount": "2",
+      "errorCount": "1",
+      "data": {
+        "algorithm": "UNDEFINED",
+        "definition": "CREATE ALGORITHM=UNDEFINED DEFINER=`root`@`%` SQL SECURITY DEFINER VIEW `v256` AS select 1 AS `1`"
+      }
+    },
+    {
+      "sql": "CREATE OR REPLACE ALGORITHM=MERGE VIEW v256 AS SELECT SUM(a) FROM base256 WITH CHECK OPTION",
+      "api": "execute",
+      "limit": 64,
+      "existing": true,
+      "error": {
+        "code": "ER_VIEW_NONUPD_CHECK",
+        "errno": 1368,
+        "state": "HY000",
+        "message": "CHECK OPTION on non-updatable view 'myjs_check257.v256'"
+      },
+      "warnings": [
+        [
+          "Warning",
+          1354,
+          "View merge algorithm can't be used here for now (assumed undefined algorithm)"
+        ],
+        [
+          "Error",
+          1368,
+          "CHECK OPTION on non-updatable view 'myjs_check257.v256'"
+        ]
+      ],
+      "warningCount": "2",
+      "errorCount": "1",
+      "data": {
+        "algorithm": "UNDEFINED",
+        "definition": "CREATE ALGORITHM=UNDEFINED DEFINER=`root`@`%` SQL SECURITY DEFINER VIEW `v256` AS select 1 AS `1`"
+      }
+    },
+    {
+      "sql": "CREATE OR REPLACE ALGORITHM=MERGE VIEW v256 AS SELECT SUM(a) FROM base256 WITH CHECK OPTION",
+      "api": "prepare",
+      "limit": 64,
+      "existing": true,
+      "parameters": [],
+      "fields": [],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "algorithm": "UNDEFINED",
+        "definition": "CREATE ALGORITHM=UNDEFINED DEFINER=`root`@`%` SQL SECURITY DEFINER VIEW `v256` AS select 1 AS `1`"
+      }
+    },
+    {
+      "sql": "CREATE ALGORITHM=MERGE VIEW v256 AS SELECT a FROM base256 WHERE a>0 WITH LOCAL CHECK OPTION",
+      "api": "query",
+      "limit": 64,
+      "existing": false,
+      "header": {
+        "fieldCount": 0,
+        "affectedRows": 0,
+        "insertId": 0,
+        "info": "",
+        "serverStatus": 2,
+        "warningStatus": 0,
+        "changedRows": 0
+      },
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "algorithm": "MERGE",
+        "definition": "CREATE ALGORITHM=MERGE DEFINER=`root`@`%` SQL SECURITY DEFINER VIEW `v256` AS select `base256`.`a` AS `a` from `base256` where (`base256`.`a` > 0) WITH LOCAL CHECK OPTION"
+      }
+    },
+    {
+      "sql": "CREATE ALGORITHM=MERGE VIEW v256 AS SELECT a FROM base256 WHERE a>0 WITH LOCAL CHECK OPTION",
+      "api": "execute",
+      "limit": 64,
+      "existing": false,
+      "header": {
+        "fieldCount": 0,
+        "affectedRows": 0,
+        "insertId": 0,
+        "info": "",
+        "serverStatus": 2,
+        "warningStatus": 0,
+        "changedRows": 0
+      },
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "algorithm": "MERGE",
+        "definition": "CREATE ALGORITHM=MERGE DEFINER=`root`@`%` SQL SECURITY DEFINER VIEW `v256` AS select `base256`.`a` AS `a` from `base256` where (`base256`.`a` > 0) WITH LOCAL CHECK OPTION"
+      }
+    },
+    {
+      "sql": "CREATE ALGORITHM=MERGE VIEW v256 AS SELECT a FROM base256 WHERE a>0 WITH LOCAL CHECK OPTION",
+      "api": "prepare",
+      "limit": 64,
+      "existing": false,
+      "parameters": [],
+      "fields": [],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": null
+    },
+    {
+      "sql": "CREATE ALGORITHM=MERGE VIEW v256 AS SELECT CAST(1 AS CHAR CHARSET utf8) WITH CHECK OPTION",
+      "api": "query",
+      "limit": 64,
+      "existing": false,
+      "error": {
+        "code": "ER_VIEW_NONUPD_CHECK",
+        "errno": 1368,
+        "state": "HY000",
+        "message": "CHECK OPTION on non-updatable view 'myjs_check257.v256'"
+      },
+      "warnings": [
+        [
+          "Warning",
+          3719,
+          "'utf8' is currently an alias for the character set UTF8MB3, but will be an alias for UTF8MB4 in a future release. Please consider using UTF8MB4 in order to be unambiguous."
+        ],
+        [
+          "Warning",
+          1354,
+          "View merge algorithm can't be used here for now (assumed undefined algorithm)"
+        ],
+        [
+          "Error",
+          1368,
+          "CHECK OPTION on non-updatable view 'myjs_check257.v256'"
+        ]
+      ],
+      "warningCount": "3",
+      "errorCount": "1",
+      "data": null
+    },
+    {
+      "sql": "CREATE ALGORITHM=MERGE VIEW v256 AS SELECT CAST(1 AS CHAR CHARSET utf8) WITH CHECK OPTION",
+      "api": "execute",
+      "limit": 64,
+      "existing": false,
+      "error": {
+        "code": "ER_VIEW_NONUPD_CHECK",
+        "errno": 1368,
+        "state": "HY000",
+        "message": "CHECK OPTION on non-updatable view 'myjs_check257.v256'"
+      },
+      "warnings": [
+        [
+          "Warning",
+          1354,
+          "View merge algorithm can't be used here for now (assumed undefined algorithm)"
+        ],
+        [
+          "Error",
+          1368,
+          "CHECK OPTION on non-updatable view 'myjs_check257.v256'"
+        ]
+      ],
+      "warningCount": "2",
+      "errorCount": "1",
+      "data": null
+    },
+    {
+      "sql": "CREATE ALGORITHM=MERGE VIEW v256 AS SELECT CAST(1 AS CHAR CHARSET utf8) WITH CHECK OPTION",
+      "api": "prepare",
+      "limit": 64,
+      "existing": false,
+      "parameters": [],
+      "fields": [],
+      "warnings": [
+        [
+          "Warning",
+          3719,
+          "'utf8' is currently an alias for the character set UTF8MB3, but will be an alias for UTF8MB4 in a future release. Please consider using UTF8MB4 in order to be unambiguous."
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "0",
+      "data": null
+    },
+    {
+      "sql": "CREATE ALGORITHM=MERGE VIEW v256 AS SELECT a FROM base256 ORDER BY ROW_NUMBER() OVER() WITH CHECK OPTION",
+      "api": "query",
+      "existing": false,
+      "error": {
+        "code": "ER_VIEW_NONUPD_CHECK",
+        "errno": 1368,
+        "state": "HY000",
+        "message": "CHECK OPTION on non-updatable view 'myjs_check257.v256'"
+      },
+      "warnings": [
+        [
+          "Warning",
+          1354,
+          "View merge algorithm can't be used here for now (assumed undefined algorithm)"
+        ],
+        [
+          "Error",
+          1368,
+          "CHECK OPTION on non-updatable view 'myjs_check257.v256'"
+        ]
+      ],
+      "warningCount": "2",
+      "errorCount": "1",
+      "data": null
+    },
+    {
+      "sql": "CREATE ALGORITHM=MERGE VIEW v256 AS SELECT a FROM base256 ORDER BY ROW_NUMBER() OVER() WITH CHECK OPTION",
+      "api": "execute",
+      "existing": false,
+      "error": {
+        "code": "ER_VIEW_NONUPD_CHECK",
+        "errno": 1368,
+        "state": "HY000",
+        "message": "CHECK OPTION on non-updatable view 'myjs_check257.v256'"
+      },
+      "warnings": [
+        [
+          "Warning",
+          1354,
+          "View merge algorithm can't be used here for now (assumed undefined algorithm)"
+        ],
+        [
+          "Error",
+          1368,
+          "CHECK OPTION on non-updatable view 'myjs_check257.v256'"
+        ]
+      ],
+      "warningCount": "2",
+      "errorCount": "1",
+      "data": null
+    },
+    {
+      "sql": "CREATE ALGORITHM=MERGE VIEW v256 AS SELECT a FROM base256 ORDER BY ROW_NUMBER() OVER() WITH CHECK OPTION",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": null
+    },
+    {
+      "sql": "CREATE ALGORITHM=MERGE VIEW v256 AS (SELECT a FROM base256) LIMIT 1 WITH CHECK OPTION",
+      "api": "query",
+      "existing": false,
+      "error": {
+        "code": "ER_VIEW_NONUPD_CHECK",
+        "errno": 1368,
+        "state": "HY000",
+        "message": "CHECK OPTION on non-updatable view 'myjs_check257.v256'"
+      },
+      "warnings": [
+        [
+          "Warning",
+          1354,
+          "View merge algorithm can't be used here for now (assumed undefined algorithm)"
+        ],
+        [
+          "Error",
+          1368,
+          "CHECK OPTION on non-updatable view 'myjs_check257.v256'"
+        ]
+      ],
+      "warningCount": "2",
+      "errorCount": "1",
+      "data": null
+    },
+    {
+      "sql": "CREATE ALGORITHM=MERGE VIEW v256 AS (SELECT a FROM base256) LIMIT 1 WITH CHECK OPTION",
+      "api": "execute",
+      "existing": false,
+      "error": {
+        "code": "ER_VIEW_NONUPD_CHECK",
+        "errno": 1368,
+        "state": "HY000",
+        "message": "CHECK OPTION on non-updatable view 'myjs_check257.v256'"
+      },
+      "warnings": [
+        [
+          "Warning",
+          1354,
+          "View merge algorithm can't be used here for now (assumed undefined algorithm)"
+        ],
+        [
+          "Error",
+          1368,
+          "CHECK OPTION on non-updatable view 'myjs_check257.v256'"
+        ]
+      ],
+      "warningCount": "2",
+      "errorCount": "1",
+      "data": null
+    },
+    {
+      "sql": "CREATE ALGORITHM=MERGE VIEW v256 AS (SELECT a FROM base256) LIMIT 1 WITH CHECK OPTION",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": null
+    },
+    {
+      "sql": "CREATE ALGORITHM=MERGE VIEW v256 AS (SELECT a FROM base256 ORDER BY a) WITH CHECK OPTION",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": null
+    },
+    {
+      "sql": "CREATE ALGORITHM=MERGE VIEW v256 AS WITH c AS(SELECT SUM(a) b FROM base256) SELECT b FROM c WITH CHECK OPTION",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": null
+    },
+    {
+      "sql": "CREATE ALGORITHM=MERGE VIEW v256 AS WITH c AS(SELECT a FROM base256) SELECT SUM(a) FROM c WITH CHECK OPTION",
+      "api": "query",
+      "existing": false,
+      "error": {
+        "code": "ER_VIEW_NONUPD_CHECK",
+        "errno": 1368,
+        "state": "HY000",
+        "message": "CHECK OPTION on non-updatable view 'myjs_check257.v256'"
+      },
+      "warnings": [
+        [
+          "Warning",
+          1354,
+          "View merge algorithm can't be used here for now (assumed undefined algorithm)"
+        ],
+        [
+          "Error",
+          1368,
+          "CHECK OPTION on non-updatable view 'myjs_check257.v256'"
+        ]
+      ],
+      "warningCount": "2",
+      "errorCount": "1",
+      "data": null
+    },
+    {
+      "sql": "CREATE ALGORITHM=MERGE VIEW v256 AS WITH c AS(SELECT a FROM base256) SELECT SUM(a) FROM c WITH CHECK OPTION",
+      "api": "execute",
+      "existing": false,
+      "error": {
+        "code": "ER_VIEW_NONUPD_CHECK",
+        "errno": 1368,
+        "state": "HY000",
+        "message": "CHECK OPTION on non-updatable view 'myjs_check257.v256'"
+      },
+      "warnings": [
+        [
+          "Warning",
+          1354,
+          "View merge algorithm can't be used here for now (assumed undefined algorithm)"
+        ],
+        [
+          "Error",
+          1368,
+          "CHECK OPTION on non-updatable view 'myjs_check257.v256'"
+        ]
+      ],
+      "warningCount": "2",
+      "errorCount": "1",
+      "data": null
+    },
+    {
+      "sql": "CREATE ALGORITHM=MERGE VIEW v256 AS WITH c AS(SELECT a FROM base256) SELECT SUM(a) FROM c WITH CHECK OPTION",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": null
+    },
+    {
+      "sql": "CREATE ALGORITHM=MERGE VIEW v256 AS SELECT a FROM base256 WHERE a IN(SELECT SUM(a) FROM base256) WITH CHECK OPTION",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": null
+    },
+    {
+      "sql": "CREATE ALGORITHM=MERGE VIEW v256 AS SELECT a,(SELECT 1) b FROM base256 WITH CHECK OPTION",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": null
+    },
+    {
+      "sql": "CREATE ALGORITHM=MERGE VIEW v256 AS SELECT a,a+1 b FROM base256 WITH CHECK OPTION",
+      "api": "query",
+      "existing": false,
+      "header": {
+        "fieldCount": 0,
+        "affectedRows": 0,
+        "insertId": 0,
+        "info": "",
+        "serverStatus": 2,
+        "warningStatus": 0,
+        "changedRows": 0
+      },
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "algorithm": "MERGE",
+        "definition": "CREATE ALGORITHM=MERGE DEFINER=`root`@`%` SQL SECURITY DEFINER VIEW `v256` AS select `base256`.`a` AS `a`,(`base256`.`a` + 1) AS `b` from `base256` WITH CASCADED CHECK OPTION"
+      }
+    },
+    {
+      "sql": "CREATE ALGORITHM=MERGE VIEW v256 AS SELECT a,a+1 b FROM base256 WITH CHECK OPTION",
+      "api": "execute",
+      "existing": false,
+      "header": {
+        "fieldCount": 0,
+        "affectedRows": 0,
+        "insertId": 0,
+        "info": "",
+        "serverStatus": 2,
+        "warningStatus": 0,
+        "changedRows": 0
+      },
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "algorithm": "MERGE",
+        "definition": "CREATE ALGORITHM=MERGE DEFINER=`root`@`%` SQL SECURITY DEFINER VIEW `v256` AS select `base256`.`a` AS `a`,(`base256`.`a` + 1) AS `b` from `base256` WITH CASCADED CHECK OPTION"
+      }
+    },
+    {
+      "sql": "CREATE ALGORITHM=MERGE VIEW v256 AS SELECT a,a+1 b FROM base256 WITH CHECK OPTION",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": null
+    }
+  ]
+}

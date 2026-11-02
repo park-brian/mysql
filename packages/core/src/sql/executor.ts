@@ -1170,12 +1170,19 @@ export class SqlExecutor implements Executor {
     const planned = viewTable(run, { schema, name: def.name }, def.name, def)
     const columns = planned?.source.columns.map((c) => c.name) ?? def.columns
     // The writer selects the stored algorithm after binding, before target replacement.
-    const fallback = statement.algorithm === 'MERGE' && !viewMergeable(statement.query)
+    const mergeable = viewMergeable(statement.query)
+    const fallback = statement.algorithm === 'MERGE' && !mergeable
     if (fallback && (run.prepared === undefined || !this.#viewFallback.has(run.prepared))) {
       run.env.conditions?.push({ level: 'Warning', code: 1354, message: "View merge algorithm can't be used here for now (assumed undefined algorithm)" })
       if (run.prepared !== undefined) this.#viewFallback.add(run.prepared)
     }
-    catalog.createView({ ...def, ...(fallback ? { algorithm: 'UNDEFINED' as const } : {}), ...(columns === undefined ? {} : { columns }) }, { orReplace: statement.orReplace === true })
+    catalog.createView({ ...def, ...(fallback ? { algorithm: 'UNDEFINED' as const } : {}), ...(columns === undefined ? {} : { columns }) }, {
+      orReplace: statement.orReplace === true,
+      validate: () => {
+        // These are proven rejections, not a complete updatability classifier.
+        if (statement.checkOption !== undefined && (statement.algorithm === 'TEMPTABLE' || !mergeable)) throw sqlError('ER_VIEW_NONUPD_CHECK', `CHECK OPTION on non-updatable view '${schema}.${def.name}'`)
+      },
+    })
     return { affectedRows: 0 }
   }
 

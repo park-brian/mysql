@@ -1,0 +1,418 @@
+{
+  "mysqlVersion": "8.4.11",
+  "schema": "myjs_check_effect257",
+  "sqlMode": "ERROR_FOR_DIVISION_BY_ZERO",
+  "seed": "SELECT 1/0,CAST('x' AS DECIMAL)",
+  "useSchema": true,
+  "view": "v257",
+  "observations": [
+    {
+      "sql": "CREATE ALGORITHM=MERGE VIEW v257 AS SELECT SUM(id) FROM t WITH CHECK OPTION",
+      "api": "query",
+      "existing": false,
+      "definition": null,
+      "error": {
+        "code": "ER_VIEW_NONUPD_CHECK",
+        "errno": 1368,
+        "state": "HY000",
+        "message": "CHECK OPTION on non-updatable view 'myjs_check_effect257.v257'"
+      },
+      "warnings": [
+        [
+          "Warning",
+          1354,
+          "View merge algorithm can't be used here for now (assumed undefined algorithm)"
+        ],
+        [
+          "Error",
+          1368,
+          "CHECK OPTION on non-updatable view 'myjs_check_effect257.v257'"
+        ]
+      ],
+      "warningCount": "2",
+      "errorCount": "1",
+      "data": [
+        [
+          1
+        ]
+      ],
+      "views": [
+        [
+          0
+        ]
+      ],
+      "id": 1
+    },
+    {
+      "sql": "CREATE ALGORITHM=MERGE VIEW v257 AS SELECT SUM(id) FROM t WITH CHECK OPTION",
+      "api": "execute",
+      "existing": false,
+      "definition": null,
+      "error": {
+        "code": "ER_VIEW_NONUPD_CHECK",
+        "errno": 1368,
+        "state": "HY000",
+        "message": "CHECK OPTION on non-updatable view 'myjs_check_effect257.v257'"
+      },
+      "warnings": [
+        [
+          "Warning",
+          1354,
+          "View merge algorithm can't be used here for now (assumed undefined algorithm)"
+        ],
+        [
+          "Error",
+          1368,
+          "CHECK OPTION on non-updatable view 'myjs_check_effect257.v257'"
+        ]
+      ],
+      "warningCount": "2",
+      "errorCount": "1",
+      "data": [
+        [
+          2
+        ]
+      ],
+      "views": [
+        [
+          0
+        ]
+      ],
+      "id": 2
+    },
+    {
+      "sql": "CREATE ALGORITHM=MERGE VIEW v257 AS SELECT SUM(id) FROM t WITH CHECK OPTION",
+      "api": "prepare",
+      "existing": false,
+      "definition": null,
+      "parameters": [],
+      "fields": [],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": [],
+      "views": [
+        [
+          0
+        ]
+      ],
+      "id": 3
+    },
+    {
+      "sql": "CREATE OR REPLACE ALGORITHM=MERGE VIEW v257 AS SELECT SUM(id) FROM t WITH CHECK OPTION",
+      "api": "query",
+      "existing": true,
+      "definition": "CREATE ALGORITHM=UNDEFINED DEFINER=`root`@`%` SQL SECURITY DEFINER VIEW `v257` AS select 7 AS `7`",
+      "error": {
+        "code": "ER_VIEW_NONUPD_CHECK",
+        "errno": 1368,
+        "state": "HY000",
+        "message": "CHECK OPTION on non-updatable view 'myjs_check_effect257.v257'"
+      },
+      "warnings": [
+        [
+          "Warning",
+          1354,
+          "View merge algorithm can't be used here for now (assumed undefined algorithm)"
+        ],
+        [
+          "Error",
+          1368,
+          "CHECK OPTION on non-updatable view 'myjs_check_effect257.v257'"
+        ]
+      ],
+      "warningCount": "2",
+      "errorCount": "1",
+      "data": [
+        [
+          4
+        ]
+      ],
+      "views": [
+        [
+          1
+        ]
+      ],
+      "id": 4
+    },
+    {
+      "sql": "CREATE OR REPLACE ALGORITHM=MERGE VIEW v257 AS SELECT SUM(id) FROM t WITH CHECK OPTION",
+      "api": "execute",
+      "existing": true,
+      "definition": "CREATE ALGORITHM=UNDEFINED DEFINER=`root`@`%` SQL SECURITY DEFINER VIEW `v257` AS select 7 AS `7`",
+      "error": {
+        "code": "ER_VIEW_NONUPD_CHECK",
+        "errno": 1368,
+        "state": "HY000",
+        "message": "CHECK OPTION on non-updatable view 'myjs_check_effect257.v257'"
+      },
+      "warnings": [
+        [
+          "Warning",
+          1354,
+          "View merge algorithm can't be used here for now (assumed undefined algorithm)"
+        ],
+        [
+          "Error",
+          1368,
+          "CHECK OPTION on non-updatable view 'myjs_check_effect257.v257'"
+        ]
+      ],
+      "warningCount": "2",
+      "errorCount": "1",
+      "data": [
+        [
+          5
+        ]
+      ],
+      "views": [
+        [
+          1
+        ]
+      ],
+      "id": 5
+    },
+    {
+      "sql": "CREATE OR REPLACE ALGORITHM=MERGE VIEW v257 AS SELECT SUM(id) FROM t WITH CHECK OPTION",
+      "api": "prepare",
+      "existing": true,
+      "definition": "CREATE ALGORITHM=UNDEFINED DEFINER=`root`@`%` SQL SECURITY DEFINER VIEW `v257` AS select 7 AS `7`",
+      "parameters": [],
+      "fields": [],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": [],
+      "views": [
+        [
+          1
+        ]
+      ],
+      "id": 6
+    },
+    {
+      "sql": "CREATE ALGORITHM=MERGE VIEW t AS SELECT SUM(id) FROM t WITH CHECK OPTION",
+      "api": "query",
+      "existing": false,
+      "definition": null,
+      "error": {
+        "code": "ER_TABLE_EXISTS_ERROR",
+        "errno": 1050,
+        "state": "42S01",
+        "message": "Table 't' already exists"
+      },
+      "warnings": [
+        [
+          "Warning",
+          1354,
+          "View merge algorithm can't be used here for now (assumed undefined algorithm)"
+        ],
+        [
+          "Error",
+          1050,
+          "Table 't' already exists"
+        ]
+      ],
+      "warningCount": "2",
+      "errorCount": "1",
+      "data": [
+        [
+          7
+        ]
+      ],
+      "views": [
+        [
+          0
+        ]
+      ],
+      "id": 7
+    },
+    {
+      "sql": "CREATE ALGORITHM=MERGE VIEW t AS SELECT SUM(id) FROM t WITH CHECK OPTION",
+      "api": "execute",
+      "existing": false,
+      "definition": null,
+      "error": {
+        "code": "ER_TABLE_EXISTS_ERROR",
+        "errno": 1050,
+        "state": "42S01",
+        "message": "Table 't' already exists"
+      },
+      "warnings": [
+        [
+          "Warning",
+          1354,
+          "View merge algorithm can't be used here for now (assumed undefined algorithm)"
+        ],
+        [
+          "Error",
+          1050,
+          "Table 't' already exists"
+        ]
+      ],
+      "warningCount": "2",
+      "errorCount": "1",
+      "data": [
+        [
+          8
+        ]
+      ],
+      "views": [
+        [
+          0
+        ]
+      ],
+      "id": 8
+    },
+    {
+      "sql": "CREATE ALGORITHM=MERGE VIEW t AS SELECT SUM(id) FROM t WITH CHECK OPTION",
+      "api": "prepare",
+      "existing": false,
+      "definition": null,
+      "parameters": [],
+      "fields": [],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": [],
+      "views": [
+        [
+          0
+        ]
+      ],
+      "id": 9
+    },
+    {
+      "sql": "CREATE ALGORITHM=TEMPTABLE VIEW v257 AS SELECT id FROM t WITH CHECK OPTION",
+      "api": "query",
+      "existing": false,
+      "definition": null,
+      "error": {
+        "code": "ER_VIEW_NONUPD_CHECK",
+        "errno": 1368,
+        "state": "HY000",
+        "message": "CHECK OPTION on non-updatable view 'myjs_check_effect257.v257'"
+      },
+      "warnings": [
+        [
+          "Error",
+          1368,
+          "CHECK OPTION on non-updatable view 'myjs_check_effect257.v257'"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1",
+      "data": [
+        [
+          10
+        ]
+      ],
+      "views": [
+        [
+          0
+        ]
+      ],
+      "id": 10
+    },
+    {
+      "sql": "CREATE ALGORITHM=TEMPTABLE VIEW v257 AS SELECT id FROM t WITH CHECK OPTION",
+      "api": "execute",
+      "existing": false,
+      "definition": null,
+      "error": {
+        "code": "ER_VIEW_NONUPD_CHECK",
+        "errno": 1368,
+        "state": "HY000",
+        "message": "CHECK OPTION on non-updatable view 'myjs_check_effect257.v257'"
+      },
+      "warnings": [
+        [
+          "Error",
+          1368,
+          "CHECK OPTION on non-updatable view 'myjs_check_effect257.v257'"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1",
+      "data": [
+        [
+          11
+        ]
+      ],
+      "views": [
+        [
+          0
+        ]
+      ],
+      "id": 11
+    },
+    {
+      "sql": "CREATE ALGORITHM=TEMPTABLE VIEW v257 AS SELECT id FROM t WITH CHECK OPTION",
+      "api": "prepare",
+      "existing": false,
+      "definition": null,
+      "parameters": [],
+      "fields": [],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": [],
+      "views": [
+        [
+          0
+        ]
+      ],
+      "id": 12
+    },
+    {
+      "sql": "CREATE VIEW v257 AS SELECT id FROM t WHERE id>0 WITH LOCAL CHECK OPTION",
+      "api": "prepare",
+      "existing": false,
+      "definition": null,
+      "parameters": [],
+      "fields": [],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": [],
+      "views": [
+        [
+          0
+        ]
+      ],
+      "id": 15
+    },
+    {
+      "sql": "CREATE ALGORITHM=MERGE VIEW v257 AS SELECT SUM(missing) FROM t WITH CHECK OPTION",
+      "api": "query",
+      "existing": false,
+      "definition": null,
+      "error": {
+        "code": "ER_BAD_FIELD_ERROR",
+        "errno": 1054,
+        "state": "42S22",
+        "message": "Unknown column 'missing' in 'field list'"
+      },
+      "warnings": [
+        [
+          "Error",
+          1054,
+          "Unknown column 'missing' in 'field list'"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1",
+      "data": [
+        [
+          16
+        ]
+      ],
+      "views": [
+        [
+          0
+        ]
+      ],
+      "id": 16
+    }
+  ]
+}

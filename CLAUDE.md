@@ -85,8 +85,10 @@ qualified target existence stays in the writer. Explicit MERGE now falls back
 with warning 1354 and persists UNDEFINED at that writer. Logical view eligibility
 keeps physical WITH/window fences unchanged. Cached fallback state follows the
 open prepared instance through an optional execution identity, with retries
-retaining the first warning and shared ASTs immutable. CHECK OPTION, definition
-normalization and schema-driven automatic reprepare remain open. Parser-level body refusals,
+retaining the first warning and shared ASTs immutable. Proven root/TEMPTABLE
+CHECK OPTION refusals now follow atomic target checks and precede catalog writes.
+General updatability, definition normalization and schema-driven automatic
+reprepare remain open. Parser-level body refusals,
 earlier recursive validation, duplicate binding timing, view PREPARE body
 metadata, non-query contexts and CHAR CAST flags remain open.
 Invalid definitions preserve schema and rollbackability; general SELECT, query-body

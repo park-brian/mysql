@@ -13,6 +13,9 @@ import noDatabase from './fixtures/diagnostics/view-target-no-db.json' with { ty
 import controls from './fixtures/diagnostics/view-target-controls.json' with { type: 'json' }
 import merge from './fixtures/diagnostics/view-merge.json' with { type: 'json' }
 import mergeReuse from './fixtures/diagnostics/view-merge-reuse.json' with { type: 'json' }
+import check from './fixtures/diagnostics/view-check.json' with { type: 'json' }
+import checkReuse from './fixtures/diagnostics/view-check-reuse.json' with { type: 'json' }
+import checkEffects from './fixtures/diagnostics/view-check-effects.json' with { type: 'json' }
 import effects from './fixtures/diagnostics/view-target-effects.json' with { type: 'json' }
 
 const fieldsOf = (fields: readonly mysql.FieldPacket[]) => fields.map(f => [f.name, f.columnType, f.columnLength, f.flags, f.decimals, f.characterSet, f.schema, f.table, f.orgTable, f.orgName])
@@ -30,7 +33,7 @@ async function connection() {
   return { c: await driver(db), db }
 }
 
-async function storedView(c: mysql.Connection, name: string): Promise<object | null> {
+async function storedView(c: mysql.Connection, name: string): Promise<{ algorithm: string | undefined; definition: string } | null> {
   try {
     const [rows] = await c.query<RowDataPacket[]>('SHOW CREATE VIEW ' + name)
     const definition = String(rows[0]![1])
@@ -64,7 +67,7 @@ async function observe(c: mysql.Connection, sql: string, api: string) {
   return { sql, api, ...result, warnings, warningCount, errorCount }
 }
 
-for (const [name, fixture] of [['nonrecursive', nonrecursive], ['recursive', recursive], ['order', order], ['names', names], ['spelling', spelling], ['view-target-no-db', noDatabase], ['view-target-controls', controls], ['view-merge', merge], ['view-merge-reuse', mergeReuse]] as const) test('M5.10: SQL admission matches native: ' + name, async () => {
+for (const [name, fixture] of [['nonrecursive', nonrecursive], ['recursive', recursive], ['order', order], ['names', names], ['spelling', spelling], ['view-target-no-db', noDatabase], ['view-target-controls', controls], ['view-merge', merge], ['view-merge-reuse', mergeReuse], ['view-check', check], ['view-check-reuse', checkReuse]] as const) test('M5.10: SQL admission matches native: ' + name, async () => {
   const { c, db } = await connection()
   const schema = 'schema' in fixture ? fixture.schema : undefined
   let created = false
@@ -98,32 +101,37 @@ for (const [name, fixture] of [['nonrecursive', nonrecursive], ['recursive', rec
   }
 })
 
-test('M5.10: view target presence preserves transactions and PREPARE has no effects', async () => {
+for (const [name, fixture] of [['view target presence', effects], ['view CHECK OPTION', checkEffects]] as const) test('M5.10: ' + name + ' preserves transactions and PREPARE has no effects', async () => {
   const { c, db } = await connection()
-  const { schema } = effects
+  const { schema } = fixture
+  const target = 'view' in fixture ? fixture.view : 'v255'
   let created = false
   try {
-    assert.equal(effects.mysqlVersion, '8.4.11')
-    if (!db) assert.equal(String((await c.query<RowDataPacket[]>('SELECT VERSION()'))[0][0]![0]).split('-')[0], effects.mysqlVersion)
+    assert.equal(fixture.mysqlVersion, '8.4.11')
+    if (!db) assert.equal(String((await c.query<RowDataPacket[]>('SELECT VERSION()'))[0][0]![0]).split('-')[0], fixture.mysqlVersion)
     await c.query('CREATE DATABASE ' + schema)
     created = true
     await c.query('CREATE TABLE ' + schema + '.t(id INT PRIMARY KEY)')
-    await c.query('SET sql_mode=?', [effects.sqlMode])
+    if ('useSchema' in fixture && fixture.useSchema) await c.query('USE ' + schema)
+    await c.query('SET sql_mode=?', [fixture.sqlMode])
     let id = 0
-    for (const expected of effects.observations) {
+    for (const expected of fixture.observations) {
       const { sql, api } = expected
       c.unprepare(sql)
       await c.query('DELETE FROM ' + schema + '.t')
-      await c.query('DROP VIEW IF EXISTS ' + schema + '.v255')
+      await c.query('DROP VIEW IF EXISTS ' + schema + '.' + target)
+      if ('existing' in expected && expected.existing) await c.query('CREATE VIEW ' + schema + '.' + target + ' AS SELECT 7')
       await c.query('BEGIN')
-      await c.query('INSERT INTO ' + schema + '.t VALUES (' + (++id) + ')')
-      await c.query(effects.seed)
+      const inserted = 'id' in expected ? expected.id : ++id
+      await c.query('INSERT INTO ' + schema + '.t VALUES (' + inserted + ')')
+      await c.query(fixture.seed)
       const actual = await observe(c, sql, api)
       c.unprepare(sql)
       await c.query('ROLLBACK')
       const [data] = await c.query('SELECT id FROM ' + schema + '.t ORDER BY id')
-      const [views] = await c.query("SELECT COUNT(*) FROM information_schema.VIEWS WHERE TABLE_SCHEMA='" + schema + "' AND TABLE_NAME='v255'")
-      assert.deepEqual({ ...actual, data, views }, expected, `${sql} [${api}]`)
+      const [views] = await c.query("SELECT COUNT(*) FROM information_schema.VIEWS WHERE TABLE_SCHEMA='" + schema + "' AND TABLE_NAME='" + target + "'")
+      const definition = 'definition' in expected ? (await storedView(c, target))?.definition ?? null : undefined
+      assert.deepEqual({ ...actual, data, views, ...('existing' in expected ? { existing: expected.existing, definition, id: inserted } : {}) }, expected, `${sql} [${api}]`)
     }
   } finally {
     if (created) await c.query('DROP DATABASE ' + schema)
