@@ -2289,7 +2289,7 @@ export function doubleOf(v: Value, t: ResultType, floatText = t.field === FIELD_
   if (v === null) return null
   const n = v.kind === 'double' ? v.v : toDouble(v)
   const decimals = t.scale < 31 ? t.scale : undefined
-  if (v.kind === 'double' && v.str === undefined && (v.float === true) === floatText && v.decimals === decimals) return v
+  if (v.kind === 'double' && v.str === undefined && v.fieldCopy !== true && (v.float === true) === floatText && v.decimals === decimals) return v
   return { kind: 'double', v: n, ...(floatText ? { float: true as const } : {}), ...(decimals === undefined ? {} : { decimals }) }
 }
 
@@ -2326,7 +2326,7 @@ export function convertTo(v: Value, t: ResultType): Value {
 /** An actual field establishes its stored real or integer reading after conversion. */
 export function fieldValue(v: Value, t: ResultType): Value {
   const value = t.kind === 'double' ? doubleOf(v, t) : convertTo(v, t)
-  if (t.field === FIELD_TYPE.FLOAT && value?.kind === 'double') return { ...value, v: Math.fround(value.v) }
+  if (t.kind === 'double' && value?.kind === 'double') return { ...value, fieldCopy: true, v: t.field === FIELD_TYPE.FLOAT ? Math.fround(value.v) : value.v }
   if (t.kind === 'time' && value?.kind === 'time') return { ...value, integer: toInteger(timeValue(value.v, 0)) }
   return value
 }

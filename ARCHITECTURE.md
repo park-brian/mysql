@@ -1880,8 +1880,8 @@ these traits and store FLOAT at 32 bits; scalar caches own canonical REAL text.
 Set-operation copies read the real number independently of conditional source
 text; raw BIT fields retain their packed bytes. The writer retains its separate
 delivery rule. The expanded REAL captures now
-cover 8,760 observations, with 8,201 complete matches and every earlier matching
-fact retained.
+cover 10,128 observations, with 9,557 complete matches and every previously
+checked SQL cell and row-shape assertion retained.
 
 Binary metadata now reuses the existing item's byte bound: a physical REAL
 field's declared width, a computed result's bound or a literal's written width.
@@ -1892,8 +1892,12 @@ field vectors in the new audit agree. Value readers and warnings are unchanged.
 Non-BLOB text and binary field copies now use canonical REAL numbers through
 the existing set-operation converter, sharing physical BLOB promotion with
 metadata. SQL display traits stay with their original readers; BLOB copying
-retains its separate path. Width-limited formatting, computed REAL BLOB copies,
-large fixed-scale formatting, DECIMAL diagnostics, aggregate metadata and
+retains its separate path. REAL values carry a field-copy reading established
+by decoded/stored fields and cleared by canonical functions/caches. This
+preserves reduced scalar and actual derived/window field copies independently
+of their reported metadata. NULLIF forwards SQL readers while retaining its own
+numeric field store. Grouped/nested-set field copies, width-limited and large
+fixed-scale formatting, DECIMAL diagnostics, aggregate metadata and
 separate warning timing/labels remain open. UTF-16 writing still reaches the
 existing encoder refusal; decoder availability is a separate capability.
 

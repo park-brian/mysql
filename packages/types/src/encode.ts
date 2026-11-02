@@ -595,9 +595,9 @@ export function decodeField(field: Uint8Array | null, t: ColumnType): Value {
       return json(decodeJsonDoc(field))
     // A FLOAT's value prints as a float does, and a FLOAT(M,D)'s with its D.
     case FIELD_TYPE.FLOAT:
-      return { ...double(decodeFloat(field)), float: true, ...(t.precision !== undefined && t.scale !== undefined ? { decimals: t.scale } : {}) }
+      return { ...double(decodeFloat(field)), fieldCopy: true, float: true, ...(t.precision !== undefined && t.scale !== undefined ? { decimals: t.scale } : {}) }
     case FIELD_TYPE.DOUBLE:
-      return t.precision !== undefined && t.scale !== undefined ? { ...double(decodeDouble(field)), decimals: t.scale } : double(decodeDouble(field))
+      return { ...double(decodeDouble(field)), fieldCopy: true, ...(t.precision !== undefined && t.scale !== undefined ? { decimals: t.scale } : {}) }
     case FIELD_TYPE.YEAR:
       return int(BigInt(decodeYear(field)), true)
     case FIELD_TYPE.DATE:

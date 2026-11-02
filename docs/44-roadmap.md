@@ -58,21 +58,21 @@ The ORM review measured Drizzle's 487 passes and Prisma's 1,122 passes with the
 same reference snapshot failure at two workers. Browser work remains M6;
 InnoDB interchange remains M7, outside the staged Node release.
 
-**Current bounded function work:** REAL numeric copies into non-BLOB string
-fields now clear source display precision through the existing field converter,
-sharing physical BLOB promotion with metadata. The combined 8,760 native
-observations improve 7,265 to 8,201 complete matches against 094dd95; every earlier
-matching fact holds. Fresh release verification passes. SQL readers, BLOB
-source formatting, metadata and diagnostics retain their separate ownership.
-Width-limited REAL formatting, computed REAL BLOB copies, large fixed-scale
-formatting, DECIMAL diagnostics, aggregate metadata and separate warning timing
-remain open. Next audit computed REAL BLOB copies against actual source-field
-boundaries. M2.3's completed codec scope is explicit below; UTF-16 encoding
-continues to use its documented typed refusal. The complete DECIMAL
-constructor rehearsal remains parked above the unchanged parser cap; its
-grammar, diagnostics and refusal must ship together before presence/projection
-expansion. No function-specific serialization exceptions or speculative
-byte-funding changes are needed. Totals remain 144/190 and M5 42/53.
+**Current bounded function work:** REAL values now carry their field-copy
+reading independently of SQL display precision and reported metadata. Stored
+fields retain text formatting for BLOB copies; computed REAL items store their
+number. Functions and canonical caches clear that reading, while reduced scalar
+fields and actual window/derived fields preserve it. The combined 10,128 native
+observations improve 8,945 to 9,557 complete matches against ed39768. Every
+previously checked SQL cell and row-shape assertion holds. Fresh release
+verification passes. Grouped/nested-set field copies, width-limited formatting,
+large fixed-scale formatting, DECIMAL diagnostics and separate warning timing
+remain open. Next audit the actual numeric field writer in nested sets with
+LIMIT, retaining source-free reduction and physical-field controls. M2.3's codec
+scope remains explicit below. The complete DECIMAL constructor rehearsal stays
+parked above the unchanged parser cap; grammar, diagnostics and refusal must
+ship together before presence/projection expansion. Totals remain 144/190 and
+M5 42/53.
 
 **Measured compatibility.** M5.2's committed coercion gate is complete:
 3,148 observations and 1,737 warning counts agree through both protocols.
@@ -1946,6 +1946,56 @@ sizes are unchanged; the targeted replay's tested-container proof compares 527
 tests/fixtures and 206 runtime sources plus tooling. All eleven required
 7b805bc CI jobs pass. The independent review also confirms M2.3's documented codec scope above;
 UTF-16 encoding remains an explicit refusal. Totals remain 144/190 and M5 42/53.
+
+**M5.10/M5.19 REAL field-copy readers, verified:** a REAL value's optional
+`fieldCopy` reading records the stored field's BLOB-copy behavior. Decoded and
+actually converted fields establish it; canonical functions and plain caches
+clear it. The existing set converter uses that reading to distinguish a field's
+SQL text from a computed item's numeric store, independently of display
+metadata. NULLIF still forwards its SQL readers, but clears the field-copy
+reading for its own numeric store. Window fields retain their actual field
+reading. No serialization format, public method signature or wire rule changes.
+
+The nearest counterexamples are covered: `(SELECT f2)` without an inner FROM
+retains the original field despite stripped column metadata; COALESCE over that
+source does not. ANY_VALUE over a materialized field owns a computed numeric
+store despite inherited temporary metadata. An actual materialized derived
+field keeps its formatting. This earns a value-reader distinction rather than
+another inference from metadata or a function list in the writer.
+
+The original 1,104-observation audit improves 616 to 984 complete matches. The
+expanded 1,368-observation capture adds DEFAULT field reads and nested numeric
+sets with LIMIT, improving 744 to 1,128. It covers query/execute, both UNION
+orders, BLOB/TEXT and non-BLOB controls, raw/default/fixed FLOAT/DOUBLE,
+functions, scalar caches/reductions, derived fields, windows and groups. All
+1,344 supported field/diagnostic vectors remain matching. Remaining cases are
+120 grouped reader/order cases, 96 nested numeric-set field-copy cases and 24
+correlated source-free DEFAULT bindings. All native outcomes remain recorded;
+the last 24 execute locally with their existing typed unsupported refusal and
+are checked completely against native MySQL. A future successful local binding
+must match the full native outcome.
+
+Earlier 8,760 REAL observations improve 8,201 to 8,429 complete matches, including
+192 string-copy and 36 byte-bound cases. Combined 10,128 improve 8,945 to 9,557.
+Every previously matching SQL cell, row presence/width/count, field and diagnostic
+assertion holds, alongside 4,382 older controls. Binary SQL values are checked as
+whole cells. Eight coincidentally matching byte positions inside already-wrong
+ordered grouped cells change; their ANY_VALUE numeric row bags now agree while
+the separate branch-order gap remains open. Seventy-two additional row-bag
+assertions protect correct values in recorded order gaps without changing the
+native order. No existing assertion is weakened.
+Native outcomes and old check profiles remain intact; masks and strict sets only
+strengthen. Actual ed39768 fails the strengthened regression.
+
+Ten local/native REAL cases pass; native replay checks all 10,128 outcomes.
+Twenty-six focused numeric tests, typecheck, 20,000 executor statements seeded
+20261010 and plans 2,127/2,248 under the unchanged 2,118 floor pass. Fresh Docker
+--reference passes 1,621 main and four latency tests, lint/typecheck, all nine
+unchanged caps, package/typed smoke, the real client and all seven pinned corpora,
+including 1,737 coercion warning counts. Its tested-container proof checks 528
+tests/fixtures and 206 runtime sources plus tooling. Parser/core/facade are
+45,491/331,397/331,309 B; types/engine are 52,473/56,722 B. All eleven required
+ed39768 CI jobs pass. M5.10/M5.19 remain partial; totals stay 144/190 and M5 42/53.
 
 **Next prerequisite: constructor admission before presence execution.** Complete
 the existing CAST work: with written utf8 warning 3719 now retained, refuse

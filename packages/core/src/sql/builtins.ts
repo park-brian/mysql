@@ -432,7 +432,12 @@ export function controlFunction(name: string, e: CallNode, ctx: CompileContext):
       }
       return {
         eval: read((r, env) => {
-          const result = x.eval(r, env)
+          let result = x.eval(r, env)
+          // NULLIF forwards SQL readers, but its REAL field store reads a number.
+          if (result?.kind === 'double' && result.fieldCopy === true) {
+            const { fieldCopy: _field, ...item } = result
+            result = item
+          }
           return converted ? converted.result : text && result !== null ? stringValue(textOf(result, x.type), conn) : result
         }),
         decimalOf: (once) => read(asNumber(x, 'DECIMAL', once).eval),

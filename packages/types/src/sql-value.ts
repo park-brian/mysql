@@ -77,6 +77,8 @@ export interface DoubleValue {
   readonly v: number
   /** A conditional's original string reading; bytes retain a binary origin independently of the real number. */
   readonly str?: string | Uint8Array
+  /** BLOB copies read this stored field as text, rather than a REAL item as a number. */
+  readonly fieldCopy?: true
   /** Read from a FLOAT column: as text, six significant digits (`FLT_DIG`). */
   readonly float?: true
   /** A FLOAT(M,D)'s D, and arithmetic's over one: as text, exactly this many decimals. */
@@ -123,7 +125,7 @@ export function plainValue(v: Value): Value
 export function plainValue(v: Value, readTimeInteger = false): Value {
   if (v === null) return null
   if (v.kind === 'string' && v.ordinal !== undefined) return { kind: 'string', v: v.v, collationId: v.collationId, coercibility: v.coercibility }
-  if (v.kind === 'double' && (v.float !== undefined || v.decimals !== undefined || v.str !== undefined)) return { kind: 'double', v: v.v }
+  if (v.kind === 'double' && (v.float !== undefined || v.decimals !== undefined || v.str !== undefined || v.fieldCopy === true)) return { kind: 'double', v: v.v }
   if (v.kind === 'int' && v.str !== undefined) return { kind: 'int', v: v.v, unsigned: v.unsigned }
   if (v.kind === 'time') {
     const cached = { ...v }

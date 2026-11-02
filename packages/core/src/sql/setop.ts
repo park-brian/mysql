@@ -130,8 +130,9 @@ export function convert(v: Value, t: ResultType): Value {
   if (v === null) return null
   // A numeric field copy reads the real number, not a conditional's source string.
   if (v.kind === 'double') {
-    // Non-BLOB string fields store the number, independently of source display precision.
-    if ((t.kind === 'string' || t.kind === 'bytes') && t.field !== FIELD_TYPE.BLOB && !promotesToBlob(t)) v = plainValue(v)!
+    // Only a stored-field BLOB copy uses its SQL display precision.
+    const blob = t.field === FIELD_TYPE.BLOB || promotesToBlob(t)
+    if ((t.kind === 'string' || t.kind === 'bytes') && (!blob || v.fieldCopy !== true)) v = plainValue(v)!
     else if (v.str !== undefined) {
       const { str: _str, ...number } = v
       v = number

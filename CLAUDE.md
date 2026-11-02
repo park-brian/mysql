@@ -47,9 +47,12 @@ BIT bytes. Actual derived, set and window fields and scalar caches establish
 their own readings. Numeric binary consumers now share the item's byte bound,
 separately from numeric character width; the literal-only flag is removed.
 REAL copies into non-BLOB text/binary fields now use canonical numeric readings
-through the existing set writer. Width-limited formatting, computed REAL BLOB
-copies, large fixed-scale formatting, DECIMAL diagnostics, warning timing and
-aggregate metadata remain open. UTF-16 writes still hit the existing encoder
+through the existing set writer. REAL field-copy readings now preserve physical
+BLOB formatting independently of SQL display metadata; computed items and
+canonical caches clear that reading. Reduced scalar fields and actual window/
+derived fields keep it. Grouped/nested-set field copies, width-limited and large
+fixed-scale formatting, DECIMAL diagnostics, warning timing and aggregate
+metadata remain open. UTF-16 writes still hit the existing encoder
 refusal. M2.3 covers UTF-8/generated single-byte encoding and supported decoding
 with typed refusals elsewhere, as recorded in doc 29 and the roadmap.
 M5's ORM exit criterion holds with recorded test configuration; default

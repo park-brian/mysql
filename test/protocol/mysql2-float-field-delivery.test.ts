@@ -6,6 +6,7 @@ import delivery from './fixtures/functions/float-field-delivery.json' with { typ
 import readers from './fixtures/functions/float-sql-readers.json' with { type: 'json' }
 import widths from './fixtures/functions/real-byte-widths.json' with { type: 'json' }
 import copies from './fixtures/functions/real-string-copies.json' with { type: 'json' }
+import blobs from './fixtures/functions/real-blob-copies.json' with { type: 'json' }
 
 interface FloatReference {
   readonly mysqlVersion: string
@@ -18,9 +19,10 @@ interface FloatReference {
     readonly fields: readonly (readonly unknown[])[]
     readonly warnings: readonly { readonly Level: string; readonly Code: number; readonly Message: string }[]
   }[]
-  readonly checks: readonly { readonly rows: readonly number[]; readonly fields: readonly number[]; readonly warnings: readonly number[]; readonly rowCount?: false; readonly missingRows?: readonly number[]; readonly warningCount?: false }[]
+  readonly checks: readonly { readonly rows: readonly number[]; readonly fields: readonly number[]; readonly warnings: readonly number[]; readonly rowCount?: false; readonly missingRows?: readonly number[]; readonly unorderedRows?: true; readonly warningCount?: false }[]
   readonly observations: readonly (readonly number[])[]
   readonly strict: readonly number[]
+  readonly deferred?: readonly number[]
 }
 
 /** Retain signed zero and nonfinite numbers instead of silently changing them in JSON. */
@@ -55,7 +57,7 @@ test('partial REAL comparisons retain present rows even when every value is mask
   assert.throws(() => checkCells([[3]], expected, [0, 1], 'matching cell lost', false, [1]), /matching cell/)
 })
 
-for (const [capture, total, matched] of [[delivery, 952, 776], [readers.cases[0], 506, 506], [readers.cases[1], 230, 218], [readers.cases[2], 72, 72], [readers.cases[3], 36, 36], [readers.cases[4], 960, 960], [widths, 2340, 2257], [copies, 3664, 3376]] as const) test('REAL readers and field delivery preserve native boundaries: ' + capture!.schema, async () => {
+for (const [capture, total, matched] of [[delivery, 952, 776], [readers.cases[0], 506, 506], [readers.cases[1], 230, 218], [readers.cases[2], 72, 72], [readers.cases[3], 36, 36], [readers.cases[4], 960, 960], [widths, 2340, 2293], [copies, 3664, 3568], [blobs, 1368, 1128]] as const) test('REAL readers and field delivery preserve native boundaries: ' + capture!.schema, async () => {
   const reference = capture as FloatReference
   const host = process.env.MYSQL_REFERENCE_HOST
   const db = host === undefined ? await MySQL.open(':memory:') : undefined
@@ -63,13 +65,16 @@ for (const [capture, total, matched] of [[delivery, 952, 776], [readers.cases[0]
     ? { host: host!, port: Number(process.env.MYSQL_REFERENCE_PORT ?? 3306), user: 'root', password: process.env.MYSQL_REFERENCE_PASSWORD ?? 'root', supportBigNumbers: true, bigNumberStrings: true }
     : { stream: db.createStream(), user: 'root', supportBigNumbers: true, bigNumberStrings: true })
   const strict = new Set(reference.strict)
+  const deferred = new Set(reference.deferred)
   let created = false
   let complete = 0
+  let repaired = 0
   try {
     assert.equal(reference.mysqlVersion, '8.4.11')
     if (db === undefined) assert.equal((await conn.query<mysql.RowDataPacket[]>('SELECT VERSION() v'))[0][0]!.v, reference.mysqlVersion)
     assert.equal(reference.observations.length, total)
     assert.equal(strict.size, matched)
+    assert.equal(deferred.size, reference.schema === 'blob240' ? 24 : 0)
     await conn.query('CREATE DATABASE ' + reference.schema)
     created = true
     await conn.query('USE ' + reference.schema)
@@ -78,7 +83,15 @@ for (const [capture, total, matched] of [[delivery, 952, 776], [readers.cases[0]
       const sql = reference.sql[sqlIndex!]!
       const api = reference.apis[apiIndex!]!
       const options = { sql, rowsAsArray: true }
-      const [rows, fields] = api === 'query' ? await conn.query(options) : await conn.execute(options)
+      const observed = await (api === 'query' ? conn.query(options) : conn.execute(options)).catch((error: unknown) => {
+        // Correlated source-free DEFAULT is recorded natively; its binding remains unsupported.
+        if (db === undefined || !deferred.has(i)) throw error
+        assert.ok(error !== null && typeof error === 'object' && 'code' in error)
+        assert.equal(error.code, 'ER_NOT_SUPPORTED_YET', api + ': ' + sql)
+        return undefined
+      })
+      if (observed === undefined) { conn.unprepare(options); continue }
+      const [rows, fields] = observed
       const actual = {
         rows: canonical(rows) as unknown[][],
         fields: fields.map(f => [f.name, f.columnType, f.columnLength, f.flags, f.decimals, f.characterSet, f.schema, f.table, f.orgTable, f.orgName]),
@@ -87,13 +100,16 @@ for (const [capture, total, matched] of [[delivery, 952, 776], [readers.cases[0]
       const expected = reference.outcomes[outcomeIndex!]!
       const warnings = expected.warnings.map(w => [w.Level, w.Code, w.Message])
       const label = api + ': ' + sql
-      if (db === undefined || strict.has(i)) {
+      if (db === undefined || strict.has(i) || deferred.has(i)) {
         assert.deepEqual(actual, { ...expected, warnings }, label)
         complete++
+        if (db !== undefined && deferred.has(i)) repaired++
       } else {
         // The full native outcomes remain captured; assert every currently matching cell.
         const checks = reference.checks[checksIndex!]!
         checkCells(actual.rows, expected.rows, checks.rows, label + ': rows', checks.rowCount !== false, checks.missingRows)
+        // Preserve correct values in the recorded grouped-order gaps without changing native order.
+        if (checks.unorderedRows === true) assert.deepEqual(actual.rows.map(row => JSON.stringify(row)).sort(), expected.rows.map(row => JSON.stringify(row)).sort(), label + ': row bag')
         checkCells(actual.fields, expected.fields, checks.fields, label + ': fields')
         if (checks.warningCount === false) {
           // New unary-BINARY captures retain a native warning that execution does not yet publish.
@@ -103,7 +119,7 @@ for (const [capture, total, matched] of [[delivery, 952, 776], [readers.cases[0]
       }
       conn.unprepare(options)
     }
-    assert.equal(complete, db === undefined ? total : matched)
+    assert.equal(complete, db === undefined ? total : matched + repaired)
   } finally {
     try { if (created) await conn.query('DROP DATABASE ' + reference.schema) }
     finally { await conn.end(); await db?.end() }
