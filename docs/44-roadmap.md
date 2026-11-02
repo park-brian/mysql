@@ -2606,14 +2606,62 @@ assertion passes, with warm jobs finished before this run. Early source proof
 matches 546 tests/fixtures and 206 runtime sources plus tooling. All eleven
 required ef805a6 CI jobs pass. Totals stay 144/190 and M5 42/53; M5.10 remains partial.
 
-Next repair MERGE-algorithm warning 1354 and the persisted fallback at the
-existing view writer. A 48-command baseline matches 24 completely. Native warns
-before an existing-target 1050 but emits no execution warning during PREPARE.
-It stores UNDEFINED for unmergeable definitions. Logical view eligibility
-accepts WITH where the current physical derived-table merge proof declines it;
-blindly reusing that physical result would regress correct CTE behavior. Keep
-window/set/wrapper definition normalization and full PREPARE body binding behind
-their independent proofs.
+**View algorithm fallback, verified (2026-11-02):** the view writer
+now emits 1354 after body planning and before target creation, storing UNDEFINED
+for an explicit MERGE that cannot apply. The new logical eligibility predicate
+admits WITH and unused WINDOW declarations, visits clause-owning wrappers and
+checks actual window calls in SELECT/ORDER. Scalar and source subqueries retain
+their own owners. The physical derived/CTE merge proof is unchanged.
+
+Native cached execution exposed an independent lifetime: fallback warns once
+per open prepared statement, even if target creation then fails with 1050.
+The dispatcher now supplies its existing statement object as an optional fourth
+Executor.execute argument; existing callers and implementations may omit it.
+The writer keeps this state weakly by instance, never changing the shared AST.
+Close/reprepare and different connections remain independent. A real writer-busy
+regression proved that retries must restore the previously selected state when
+discarding an attempt's diagnostics; the repaired test retains the first warning.
+This does not implement schema-driven automatic reprepare.
+
+The six native profiles cover 206 complete outcomes: 96→159 agree. Together
+with earlier audits, 4,948 outcomes improve 4,005→4,068, preserving all 52,142
+previously matching protocol facts. Two new strict fixtures retain all 154
+complete observations, including 32 cached success/failure controls. All 777
+earlier golden observations are unchanged. Twelve focused cases pass natively
+and locally; the actual 5713cfd predecessor passes the eight old cases and fails
+the new fallback, reuse and cross-connection cases. The warm runtime is restored.
+
+The 47 remaining new-audit outcomes stay open: SHOW CREATE formatting for
+windows, sets, WITH, scalar subqueries, parentheses and CAST, plus CHECK OPTION
+validation. No field or definition mismatch is masked. Constructor charset
+warnings still precede the unbounded utility warning, including stored-condition
+limits 0/1/8/64. PREPARE itself still emits no fallback warning and creates no view.
+
+Typecheck and lint pass, as do 20,000 executor statements seeded 20261010 and
+plans at 2,127/2,248 under the unchanged 2,118 floor. Nine unchanged caps pass at
+parser/core/facade 45,599/332,646/332,576 B gzipped. The full 1,459-file official
+suite retains all 38 passing identities and its native baseline; the measured
+fixture is unchanged. Fresh Docker --reference passes 1,652 main tests, four
+latency tests, typecheck, lint, all nine unchanged caps, package/typed smoke,
+the real client and all seven pinned corpora including 1,737 coercion warning
+counts. The unchanged long-IN assertion passes. Early source proof matches
+548 tests/fixtures and 206 runtime sources plus tooling; warm heavy checks
+finished before this run. All eleven required 5713cfd CI jobs pass.
+Totals stay 144/190 and M5 42/53; M5.10 remains partial.
+
+Next audit CHECK OPTION admission at the same writer, separating proven
+non-updatability from logical merge eligibility and physical materialization.
+A 156-outcome native audit currently matches 75 completely: 1354 precedes
+existing-target 1050, which precedes CHECK OPTION 1368. Missing schema and body
+binding errors precede the fallback warning. Derived aggregate sources can
+retain CHECK OPTION although aggregate root blocks cannot. Preserve these
+distinctions at the catalog admission/effect boundary; creating then dropping
+an invalid view is not admission. Verify implicit commits, retention limits and
+prepared reuse before choosing the smallest repair. Four profiles now cover
+314 outcomes, with 143 complete baseline matches. Transaction controls show
+invalid execution still commits preceding work; a failed OR REPLACE preserves
+the previous view definition. Full PREPARE
+body binding and definition normalization retain their independent proofs.
 
 **Next prerequisite: constructor admission before presence execution.** Complete
 the existing CAST work: with written utf8 warning 3719 now retained, refuse

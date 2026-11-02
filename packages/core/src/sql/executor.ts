@@ -86,7 +86,7 @@ import { foreignKeyChecks, foreignKeyClause, foreignKeysOf, referencingKeys, wit
 import { checkDefaultAdmission, checkDefaults, insert, remove, update } from './dml.ts'
 import { fulltextOf } from './fulltext.ts'
 import { columnDefinition, intType, stringType } from './meta.ts'
-import { columnsOf, compileContext, planQuery, resultSet, resultSteps, viewTable, type Run } from './query.ts'
+import { columnsOf, compileContext, planQuery, resultSet, resultSteps, viewTable, viewMergeable, type Run } from './query.ts'
 import { lengthArity } from './registry.ts'
 import { SqlSession, finish, isolationOf } from './session.ts'
 import { dropOrphans, sessionCatalog, TemporaryTables, type CatalogApi } from './temporary.ts'
@@ -282,6 +282,8 @@ export class SqlExecutor implements Executor {
    * one frozen), so one can be handed out twice.
    */
   readonly #parsed = new Map<string, Statement>()
+  /** An executed fallback belongs to the open prepared instance, never its shared AST. */
+  readonly #viewFallback = new WeakSet<object>()
   /** Each session's temporary tables, dropped when it ends or is reset. */
   readonly #temporary = new WeakMap<Session, TemporaryTables>()
   #temporaries = 0
@@ -327,12 +329,12 @@ export class SqlExecutor implements Executor {
     return this.#statement(session, sql, [], undefined, 'text')
   }
 
-  async execute(session: Session, sql: string, parameters: readonly Parameter[]): Promise<StatementResult | StatementResult[]> {
+  async execute(session: Session, sql: string, parameters: readonly Parameter[], prepared?: object): Promise<StatementResult | StatementResult[]> {
     const params = parameters.filter((p) => p.name === '').map((p) => parameterValue(p, session))
     // Thousands of parameters took a slice to decode before this ran: the
     // other connections go next, before the statement does (D-77).
     if (params.length >= MANY_PARAMETERS) await pause()
-    return this.#statement(session, sql, params, params, 'binary')
+    return this.#statement(session, sql, params, params, 'binary', prepared)
   }
 
   async prepare(session: Session, sql: string): Promise<PreparedInfo> {
@@ -606,7 +608,7 @@ export class SqlExecutor implements Executor {
    * and answered as several results; the first error stops the rest, as it
    * does on MySQL.
    */
-  async #statement(session: Session, sql: string, params: readonly Value[], known: readonly Value[] | undefined, protocol: WireProtocol): Promise<StatementResult | StatementResult[]> {
+  async #statement(session: Session, sql: string, params: readonly Value[], known: readonly Value[] | undefined, protocol: WireProtocol, prepared?: object): Promise<StatementResult | StatementResult[]> {
     this.#alive(session)
     const state = this.#state(session)
     let parsed: Statement | ReturnType<typeof parseStatementSequence> | null
@@ -638,14 +640,14 @@ export class SqlExecutor implements Executor {
       return { affectedRows: 0 }
     }
     // Keep the single result streaming, including a multi-enabled connection.
-    return this.#one(session, sql, parsed, params, known, protocol)
+    return this.#one(session, sql, parsed, params, known, protocol, true, prepared)
   }
 
   /**
    * One statement. With `stream`, a resultset larger than a batch is answered
    * as a `StreamedResultSet` (M5.40), and its end recorded when it comes.
    */
-  async #one(session: Session, sql: string, statement: Statement, params: readonly Value[], known: readonly Value[] | undefined, protocol: WireProtocol, stream = true): Promise<StatementResult> {
+  async #one(session: Session, sql: string, statement: Statement, params: readonly Value[], known: readonly Value[] | undefined, protocol: WireProtocol, stream = true, prepared?: object): Promise<StatementResult> {
     const began = performance.now()
     this.#alive(session)
     await this.#preload(session, statement)
@@ -657,6 +659,7 @@ export class SqlExecutor implements Executor {
     // and leave it; every other statement starts a new one (8.4.11).
     const diagnostic = isDiagnostic(statement)
     if (!diagnostic) state.previous = state.diagnostics
+    const hadViewFallback = prepared !== undefined && this.#viewFallback.has(prepared)
     const started = Date.now()
     let wait = 1
     for (let attempt = 0; ; attempt++) {
@@ -679,7 +682,7 @@ export class SqlExecutor implements Executor {
         }
         const admission = this.#admitStatement(statement, state, session)
         if (protocol === 'text') binaryDeclarations(statement, conditions, limit)
-        const run = { ...this.#run(session, sql, params, known, protocol, conditions), admitQuery: admission.query }
+        const run = { ...this.#run(session, sql, params, known, protocol, conditions), admitQuery: admission.query, ...(prepared === undefined ? {} : { prepared }) }
         const batches: ResultSet[] | undefined = stream ? [] : undefined
         const dispatched = this.#dispatch(run, statement, batches === undefined ? undefined : (batch) => batches.push(batch))
         if (!isSteps(dispatched)) return settle(dispatched)
@@ -688,6 +691,8 @@ export class SqlExecutor implements Executor {
       } catch (e) {
         const code = e instanceof MyjsError ? e.code : undefined
         if (code === 'ENGINE_WRITER_BUSY') {
+          // Retrying discards this attempt's diagnostics, including an uncommitted fallback.
+          if (prepared !== undefined && !hadViewFallback) this.#viewFallback.delete(prepared)
           const timeout = Number(toInteger(state.systemVariable('innodb_lock_wait_timeout', undefined, session) ?? intValue(50n)))
           if (Date.now() - started >= timeout * 1000) throw sqlError('ER_LOCK_WAIT_TIMEOUT', messages.lockWaitTimeout())
           await sleep(wait)
@@ -1164,7 +1169,13 @@ export class SqlExecutor implements Executor {
     }
     const planned = viewTable(run, { schema, name: def.name }, def.name, def)
     const columns = planned?.source.columns.map((c) => c.name) ?? def.columns
-    catalog.createView({ ...def, ...(columns === undefined ? {} : { columns }) }, { orReplace: statement.orReplace === true })
+    // The writer selects the stored algorithm after binding, before target replacement.
+    const fallback = statement.algorithm === 'MERGE' && !viewMergeable(statement.query)
+    if (fallback && (run.prepared === undefined || !this.#viewFallback.has(run.prepared))) {
+      run.env.conditions?.push({ level: 'Warning', code: 1354, message: "View merge algorithm can't be used here for now (assumed undefined algorithm)" })
+      if (run.prepared !== undefined) this.#viewFallback.add(run.prepared)
+    }
+    catalog.createView({ ...def, ...(fallback ? { algorithm: 'UNDEFINED' as const } : {}), ...(columns === undefined ? {} : { columns }) }, { orReplace: statement.orReplace === true })
     return { affectedRows: 0 }
   }
 

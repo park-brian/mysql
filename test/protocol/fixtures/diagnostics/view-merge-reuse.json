@@ -1,0 +1,732 @@
+{
+  "mysqlVersion": "8.4.11",
+  "schema": "myjs_merge256",
+  "sqlMode": "ERROR_FOR_DIVISION_BY_ZERO",
+  "seed": "SELECT 1/0,CAST('x' AS DECIMAL)",
+  "setup": [
+    "CREATE TABLE base256(a INT)"
+  ],
+  "beforeEach": [
+    "DROP VIEW IF EXISTS v256"
+  ],
+  "view": "v256",
+  "reuse": true,
+  "observations": [
+    {
+      "sql": "CREATE OR REPLACE ALGORITHM=MERGE VIEW v256 AS SELECT 1",
+      "api": "execute",
+      "limit": 0,
+      "existing": false,
+      "header": {
+        "fieldCount": 0,
+        "affectedRows": 0,
+        "insertId": 0,
+        "info": "",
+        "serverStatus": 2,
+        "warningStatus": 1,
+        "changedRows": 0
+      },
+      "warnings": [],
+      "warningCount": "1",
+      "errorCount": "0",
+      "data": {
+        "algorithm": "UNDEFINED",
+        "definition": "CREATE ALGORITHM=UNDEFINED DEFINER=`root`@`%` SQL SECURITY DEFINER VIEW `v256` AS select 1 AS `1`"
+      }
+    },
+    {
+      "sql": "CREATE OR REPLACE ALGORITHM=MERGE VIEW v256 AS SELECT 1",
+      "api": "execute",
+      "limit": 0,
+      "existing": false,
+      "header": {
+        "fieldCount": 0,
+        "affectedRows": 0,
+        "insertId": 0,
+        "info": "",
+        "serverStatus": 2,
+        "warningStatus": 0,
+        "changedRows": 0
+      },
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "algorithm": "UNDEFINED",
+        "definition": "CREATE ALGORITHM=UNDEFINED DEFINER=`root`@`%` SQL SECURITY DEFINER VIEW `v256` AS select 1 AS `1`"
+      }
+    },
+    {
+      "sql": "CREATE OR REPLACE ALGORITHM=MERGE VIEW v256 AS SELECT SUM(a) FROM base256",
+      "api": "execute",
+      "limit": 0,
+      "existing": false,
+      "header": {
+        "fieldCount": 0,
+        "affectedRows": 0,
+        "insertId": 0,
+        "info": "",
+        "serverStatus": 2,
+        "warningStatus": 1,
+        "changedRows": 0
+      },
+      "warnings": [],
+      "warningCount": "1",
+      "errorCount": "0",
+      "data": {
+        "algorithm": "UNDEFINED",
+        "definition": "CREATE ALGORITHM=UNDEFINED DEFINER=`root`@`%` SQL SECURITY DEFINER VIEW `v256` AS select sum(`base256`.`a`) AS `SUM(a)` from `base256`"
+      }
+    },
+    {
+      "sql": "CREATE OR REPLACE ALGORITHM=MERGE VIEW v256 AS SELECT SUM(a) FROM base256",
+      "api": "execute",
+      "limit": 0,
+      "existing": false,
+      "header": {
+        "fieldCount": 0,
+        "affectedRows": 0,
+        "insertId": 0,
+        "info": "",
+        "serverStatus": 2,
+        "warningStatus": 0,
+        "changedRows": 0
+      },
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "algorithm": "UNDEFINED",
+        "definition": "CREATE ALGORITHM=UNDEFINED DEFINER=`root`@`%` SQL SECURITY DEFINER VIEW `v256` AS select sum(`base256`.`a`) AS `SUM(a)` from `base256`"
+      }
+    },
+    {
+      "sql": "CREATE OR REPLACE ALGORITHM=MERGE VIEW v256 AS SELECT a FROM base256",
+      "api": "execute",
+      "limit": 0,
+      "existing": false,
+      "header": {
+        "fieldCount": 0,
+        "affectedRows": 0,
+        "insertId": 0,
+        "info": "",
+        "serverStatus": 2,
+        "warningStatus": 0,
+        "changedRows": 0
+      },
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "algorithm": "MERGE",
+        "definition": "CREATE ALGORITHM=MERGE DEFINER=`root`@`%` SQL SECURITY DEFINER VIEW `v256` AS select `base256`.`a` AS `a` from `base256`"
+      }
+    },
+    {
+      "sql": "CREATE OR REPLACE ALGORITHM=MERGE VIEW v256 AS SELECT a FROM base256",
+      "api": "execute",
+      "limit": 0,
+      "existing": false,
+      "header": {
+        "fieldCount": 0,
+        "affectedRows": 0,
+        "insertId": 0,
+        "info": "",
+        "serverStatus": 2,
+        "warningStatus": 0,
+        "changedRows": 0
+      },
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "algorithm": "MERGE",
+        "definition": "CREATE ALGORITHM=MERGE DEFINER=`root`@`%` SQL SECURITY DEFINER VIEW `v256` AS select `base256`.`a` AS `a` from `base256`"
+      }
+    },
+    {
+      "sql": "CREATE OR REPLACE ALGORITHM=MERGE VIEW v256 AS SELECT 1",
+      "api": "execute",
+      "limit": 1,
+      "existing": false,
+      "header": {
+        "fieldCount": 0,
+        "affectedRows": 0,
+        "insertId": 0,
+        "info": "",
+        "serverStatus": 2,
+        "warningStatus": 0,
+        "changedRows": 0
+      },
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "algorithm": "UNDEFINED",
+        "definition": "CREATE ALGORITHM=UNDEFINED DEFINER=`root`@`%` SQL SECURITY DEFINER VIEW `v256` AS select 1 AS `1`"
+      }
+    },
+    {
+      "sql": "CREATE OR REPLACE ALGORITHM=MERGE VIEW v256 AS SELECT 1",
+      "api": "execute",
+      "limit": 1,
+      "existing": false,
+      "header": {
+        "fieldCount": 0,
+        "affectedRows": 0,
+        "insertId": 0,
+        "info": "",
+        "serverStatus": 2,
+        "warningStatus": 0,
+        "changedRows": 0
+      },
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "algorithm": "UNDEFINED",
+        "definition": "CREATE ALGORITHM=UNDEFINED DEFINER=`root`@`%` SQL SECURITY DEFINER VIEW `v256` AS select 1 AS `1`"
+      }
+    },
+    {
+      "sql": "CREATE OR REPLACE ALGORITHM=MERGE VIEW v256 AS SELECT SUM(a) FROM base256",
+      "api": "execute",
+      "limit": 1,
+      "existing": false,
+      "header": {
+        "fieldCount": 0,
+        "affectedRows": 0,
+        "insertId": 0,
+        "info": "",
+        "serverStatus": 2,
+        "warningStatus": 0,
+        "changedRows": 0
+      },
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "algorithm": "UNDEFINED",
+        "definition": "CREATE ALGORITHM=UNDEFINED DEFINER=`root`@`%` SQL SECURITY DEFINER VIEW `v256` AS select sum(`base256`.`a`) AS `SUM(a)` from `base256`"
+      }
+    },
+    {
+      "sql": "CREATE OR REPLACE ALGORITHM=MERGE VIEW v256 AS SELECT SUM(a) FROM base256",
+      "api": "execute",
+      "limit": 1,
+      "existing": false,
+      "header": {
+        "fieldCount": 0,
+        "affectedRows": 0,
+        "insertId": 0,
+        "info": "",
+        "serverStatus": 2,
+        "warningStatus": 0,
+        "changedRows": 0
+      },
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "algorithm": "UNDEFINED",
+        "definition": "CREATE ALGORITHM=UNDEFINED DEFINER=`root`@`%` SQL SECURITY DEFINER VIEW `v256` AS select sum(`base256`.`a`) AS `SUM(a)` from `base256`"
+      }
+    },
+    {
+      "sql": "CREATE OR REPLACE ALGORITHM=MERGE VIEW v256 AS SELECT a FROM base256",
+      "api": "execute",
+      "limit": 1,
+      "existing": false,
+      "header": {
+        "fieldCount": 0,
+        "affectedRows": 0,
+        "insertId": 0,
+        "info": "",
+        "serverStatus": 2,
+        "warningStatus": 0,
+        "changedRows": 0
+      },
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "algorithm": "MERGE",
+        "definition": "CREATE ALGORITHM=MERGE DEFINER=`root`@`%` SQL SECURITY DEFINER VIEW `v256` AS select `base256`.`a` AS `a` from `base256`"
+      }
+    },
+    {
+      "sql": "CREATE OR REPLACE ALGORITHM=MERGE VIEW v256 AS SELECT a FROM base256",
+      "api": "execute",
+      "limit": 1,
+      "existing": false,
+      "header": {
+        "fieldCount": 0,
+        "affectedRows": 0,
+        "insertId": 0,
+        "info": "",
+        "serverStatus": 2,
+        "warningStatus": 0,
+        "changedRows": 0
+      },
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "algorithm": "MERGE",
+        "definition": "CREATE ALGORITHM=MERGE DEFINER=`root`@`%` SQL SECURITY DEFINER VIEW `v256` AS select `base256`.`a` AS `a` from `base256`"
+      }
+    },
+    {
+      "sql": "CREATE OR REPLACE ALGORITHM=MERGE VIEW v256 AS SELECT 1",
+      "api": "execute",
+      "limit": 8,
+      "existing": false,
+      "header": {
+        "fieldCount": 0,
+        "affectedRows": 0,
+        "insertId": 0,
+        "info": "",
+        "serverStatus": 2,
+        "warningStatus": 0,
+        "changedRows": 0
+      },
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "algorithm": "UNDEFINED",
+        "definition": "CREATE ALGORITHM=UNDEFINED DEFINER=`root`@`%` SQL SECURITY DEFINER VIEW `v256` AS select 1 AS `1`"
+      }
+    },
+    {
+      "sql": "CREATE OR REPLACE ALGORITHM=MERGE VIEW v256 AS SELECT 1",
+      "api": "execute",
+      "limit": 8,
+      "existing": false,
+      "header": {
+        "fieldCount": 0,
+        "affectedRows": 0,
+        "insertId": 0,
+        "info": "",
+        "serverStatus": 2,
+        "warningStatus": 0,
+        "changedRows": 0
+      },
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "algorithm": "UNDEFINED",
+        "definition": "CREATE ALGORITHM=UNDEFINED DEFINER=`root`@`%` SQL SECURITY DEFINER VIEW `v256` AS select 1 AS `1`"
+      }
+    },
+    {
+      "sql": "CREATE OR REPLACE ALGORITHM=MERGE VIEW v256 AS SELECT SUM(a) FROM base256",
+      "api": "execute",
+      "limit": 8,
+      "existing": false,
+      "header": {
+        "fieldCount": 0,
+        "affectedRows": 0,
+        "insertId": 0,
+        "info": "",
+        "serverStatus": 2,
+        "warningStatus": 0,
+        "changedRows": 0
+      },
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "algorithm": "UNDEFINED",
+        "definition": "CREATE ALGORITHM=UNDEFINED DEFINER=`root`@`%` SQL SECURITY DEFINER VIEW `v256` AS select sum(`base256`.`a`) AS `SUM(a)` from `base256`"
+      }
+    },
+    {
+      "sql": "CREATE OR REPLACE ALGORITHM=MERGE VIEW v256 AS SELECT SUM(a) FROM base256",
+      "api": "execute",
+      "limit": 8,
+      "existing": false,
+      "header": {
+        "fieldCount": 0,
+        "affectedRows": 0,
+        "insertId": 0,
+        "info": "",
+        "serverStatus": 2,
+        "warningStatus": 0,
+        "changedRows": 0
+      },
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "algorithm": "UNDEFINED",
+        "definition": "CREATE ALGORITHM=UNDEFINED DEFINER=`root`@`%` SQL SECURITY DEFINER VIEW `v256` AS select sum(`base256`.`a`) AS `SUM(a)` from `base256`"
+      }
+    },
+    {
+      "sql": "CREATE OR REPLACE ALGORITHM=MERGE VIEW v256 AS SELECT a FROM base256",
+      "api": "execute",
+      "limit": 8,
+      "existing": false,
+      "header": {
+        "fieldCount": 0,
+        "affectedRows": 0,
+        "insertId": 0,
+        "info": "",
+        "serverStatus": 2,
+        "warningStatus": 0,
+        "changedRows": 0
+      },
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "algorithm": "MERGE",
+        "definition": "CREATE ALGORITHM=MERGE DEFINER=`root`@`%` SQL SECURITY DEFINER VIEW `v256` AS select `base256`.`a` AS `a` from `base256`"
+      }
+    },
+    {
+      "sql": "CREATE OR REPLACE ALGORITHM=MERGE VIEW v256 AS SELECT a FROM base256",
+      "api": "execute",
+      "limit": 8,
+      "existing": false,
+      "header": {
+        "fieldCount": 0,
+        "affectedRows": 0,
+        "insertId": 0,
+        "info": "",
+        "serverStatus": 2,
+        "warningStatus": 0,
+        "changedRows": 0
+      },
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "algorithm": "MERGE",
+        "definition": "CREATE ALGORITHM=MERGE DEFINER=`root`@`%` SQL SECURITY DEFINER VIEW `v256` AS select `base256`.`a` AS `a` from `base256`"
+      }
+    },
+    {
+      "sql": "CREATE OR REPLACE ALGORITHM=MERGE VIEW v256 AS SELECT 1",
+      "api": "execute",
+      "limit": 64,
+      "existing": false,
+      "header": {
+        "fieldCount": 0,
+        "affectedRows": 0,
+        "insertId": 0,
+        "info": "",
+        "serverStatus": 2,
+        "warningStatus": 0,
+        "changedRows": 0
+      },
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "algorithm": "UNDEFINED",
+        "definition": "CREATE ALGORITHM=UNDEFINED DEFINER=`root`@`%` SQL SECURITY DEFINER VIEW `v256` AS select 1 AS `1`"
+      }
+    },
+    {
+      "sql": "CREATE OR REPLACE ALGORITHM=MERGE VIEW v256 AS SELECT 1",
+      "api": "execute",
+      "limit": 64,
+      "existing": false,
+      "header": {
+        "fieldCount": 0,
+        "affectedRows": 0,
+        "insertId": 0,
+        "info": "",
+        "serverStatus": 2,
+        "warningStatus": 0,
+        "changedRows": 0
+      },
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "algorithm": "UNDEFINED",
+        "definition": "CREATE ALGORITHM=UNDEFINED DEFINER=`root`@`%` SQL SECURITY DEFINER VIEW `v256` AS select 1 AS `1`"
+      }
+    },
+    {
+      "sql": "CREATE OR REPLACE ALGORITHM=MERGE VIEW v256 AS SELECT SUM(a) FROM base256",
+      "api": "execute",
+      "limit": 64,
+      "existing": false,
+      "header": {
+        "fieldCount": 0,
+        "affectedRows": 0,
+        "insertId": 0,
+        "info": "",
+        "serverStatus": 2,
+        "warningStatus": 0,
+        "changedRows": 0
+      },
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "algorithm": "UNDEFINED",
+        "definition": "CREATE ALGORITHM=UNDEFINED DEFINER=`root`@`%` SQL SECURITY DEFINER VIEW `v256` AS select sum(`base256`.`a`) AS `SUM(a)` from `base256`"
+      }
+    },
+    {
+      "sql": "CREATE OR REPLACE ALGORITHM=MERGE VIEW v256 AS SELECT SUM(a) FROM base256",
+      "api": "execute",
+      "limit": 64,
+      "existing": false,
+      "header": {
+        "fieldCount": 0,
+        "affectedRows": 0,
+        "insertId": 0,
+        "info": "",
+        "serverStatus": 2,
+        "warningStatus": 0,
+        "changedRows": 0
+      },
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "algorithm": "UNDEFINED",
+        "definition": "CREATE ALGORITHM=UNDEFINED DEFINER=`root`@`%` SQL SECURITY DEFINER VIEW `v256` AS select sum(`base256`.`a`) AS `SUM(a)` from `base256`"
+      }
+    },
+    {
+      "sql": "CREATE OR REPLACE ALGORITHM=MERGE VIEW v256 AS SELECT a FROM base256",
+      "api": "execute",
+      "limit": 64,
+      "existing": false,
+      "header": {
+        "fieldCount": 0,
+        "affectedRows": 0,
+        "insertId": 0,
+        "info": "",
+        "serverStatus": 2,
+        "warningStatus": 0,
+        "changedRows": 0
+      },
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "algorithm": "MERGE",
+        "definition": "CREATE ALGORITHM=MERGE DEFINER=`root`@`%` SQL SECURITY DEFINER VIEW `v256` AS select `base256`.`a` AS `a` from `base256`"
+      }
+    },
+    {
+      "sql": "CREATE OR REPLACE ALGORITHM=MERGE VIEW v256 AS SELECT a FROM base256",
+      "api": "execute",
+      "limit": 64,
+      "existing": false,
+      "header": {
+        "fieldCount": 0,
+        "affectedRows": 0,
+        "insertId": 0,
+        "info": "",
+        "serverStatus": 2,
+        "warningStatus": 0,
+        "changedRows": 0
+      },
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": {
+        "algorithm": "MERGE",
+        "definition": "CREATE ALGORITHM=MERGE DEFINER=`root`@`%` SQL SECURITY DEFINER VIEW `v256` AS select `base256`.`a` AS `a` from `base256`"
+      }
+    },
+    {
+      "sql": "CREATE ALGORITHM=MERGE VIEW v256 AS SELECT SUM(1)",
+      "api": "execute",
+      "limit": 0,
+      "existing": true,
+      "error": {
+        "code": "ER_TABLE_EXISTS_ERROR",
+        "errno": 1050,
+        "state": "42S01",
+        "message": "Table 'v256' already exists"
+      },
+      "warnings": [],
+      "warningCount": "2",
+      "errorCount": "1",
+      "data": {
+        "algorithm": "UNDEFINED",
+        "definition": "CREATE ALGORITHM=UNDEFINED DEFINER=`root`@`%` SQL SECURITY DEFINER VIEW `v256` AS select 1 AS `1`"
+      }
+    },
+    {
+      "sql": "CREATE ALGORITHM=MERGE VIEW v256 AS SELECT SUM(1)",
+      "api": "execute",
+      "limit": 0,
+      "existing": true,
+      "error": {
+        "code": "ER_TABLE_EXISTS_ERROR",
+        "errno": 1050,
+        "state": "42S01",
+        "message": "Table 'v256' already exists"
+      },
+      "warnings": [],
+      "warningCount": "1",
+      "errorCount": "1",
+      "data": {
+        "algorithm": "UNDEFINED",
+        "definition": "CREATE ALGORITHM=UNDEFINED DEFINER=`root`@`%` SQL SECURITY DEFINER VIEW `v256` AS select 1 AS `1`"
+      }
+    },
+    {
+      "sql": "CREATE ALGORITHM=MERGE VIEW v256 AS SELECT SUM(1)",
+      "api": "execute",
+      "limit": 1,
+      "existing": true,
+      "error": {
+        "code": "ER_TABLE_EXISTS_ERROR",
+        "errno": 1050,
+        "state": "42S01",
+        "message": "Table 'v256' already exists"
+      },
+      "warnings": [
+        [
+          "Error",
+          1050,
+          "Table 'v256' already exists"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1",
+      "data": {
+        "algorithm": "UNDEFINED",
+        "definition": "CREATE ALGORITHM=UNDEFINED DEFINER=`root`@`%` SQL SECURITY DEFINER VIEW `v256` AS select 1 AS `1`"
+      }
+    },
+    {
+      "sql": "CREATE ALGORITHM=MERGE VIEW v256 AS SELECT SUM(1)",
+      "api": "execute",
+      "limit": 1,
+      "existing": true,
+      "error": {
+        "code": "ER_TABLE_EXISTS_ERROR",
+        "errno": 1050,
+        "state": "42S01",
+        "message": "Table 'v256' already exists"
+      },
+      "warnings": [
+        [
+          "Error",
+          1050,
+          "Table 'v256' already exists"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1",
+      "data": {
+        "algorithm": "UNDEFINED",
+        "definition": "CREATE ALGORITHM=UNDEFINED DEFINER=`root`@`%` SQL SECURITY DEFINER VIEW `v256` AS select 1 AS `1`"
+      }
+    },
+    {
+      "sql": "CREATE ALGORITHM=MERGE VIEW v256 AS SELECT SUM(1)",
+      "api": "execute",
+      "limit": 8,
+      "existing": true,
+      "error": {
+        "code": "ER_TABLE_EXISTS_ERROR",
+        "errno": 1050,
+        "state": "42S01",
+        "message": "Table 'v256' already exists"
+      },
+      "warnings": [
+        [
+          "Error",
+          1050,
+          "Table 'v256' already exists"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1",
+      "data": {
+        "algorithm": "UNDEFINED",
+        "definition": "CREATE ALGORITHM=UNDEFINED DEFINER=`root`@`%` SQL SECURITY DEFINER VIEW `v256` AS select 1 AS `1`"
+      }
+    },
+    {
+      "sql": "CREATE ALGORITHM=MERGE VIEW v256 AS SELECT SUM(1)",
+      "api": "execute",
+      "limit": 8,
+      "existing": true,
+      "error": {
+        "code": "ER_TABLE_EXISTS_ERROR",
+        "errno": 1050,
+        "state": "42S01",
+        "message": "Table 'v256' already exists"
+      },
+      "warnings": [
+        [
+          "Error",
+          1050,
+          "Table 'v256' already exists"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1",
+      "data": {
+        "algorithm": "UNDEFINED",
+        "definition": "CREATE ALGORITHM=UNDEFINED DEFINER=`root`@`%` SQL SECURITY DEFINER VIEW `v256` AS select 1 AS `1`"
+      }
+    },
+    {
+      "sql": "CREATE ALGORITHM=MERGE VIEW v256 AS SELECT SUM(1)",
+      "api": "execute",
+      "limit": 64,
+      "existing": true,
+      "error": {
+        "code": "ER_TABLE_EXISTS_ERROR",
+        "errno": 1050,
+        "state": "42S01",
+        "message": "Table 'v256' already exists"
+      },
+      "warnings": [
+        [
+          "Error",
+          1050,
+          "Table 'v256' already exists"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1",
+      "data": {
+        "algorithm": "UNDEFINED",
+        "definition": "CREATE ALGORITHM=UNDEFINED DEFINER=`root`@`%` SQL SECURITY DEFINER VIEW `v256` AS select 1 AS `1`"
+      }
+    },
+    {
+      "sql": "CREATE ALGORITHM=MERGE VIEW v256 AS SELECT SUM(1)",
+      "api": "execute",
+      "limit": 64,
+      "existing": true,
+      "error": {
+        "code": "ER_TABLE_EXISTS_ERROR",
+        "errno": 1050,
+        "state": "42S01",
+        "message": "Table 'v256' already exists"
+      },
+      "warnings": [
+        [
+          "Error",
+          1050,
+          "Table 'v256' already exists"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1",
+      "data": {
+        "algorithm": "UNDEFINED",
+        "definition": "CREATE ALGORITHM=UNDEFINED DEFINER=`root`@`%` SQL SECURITY DEFINER VIEW `v256` AS select 1 AS `1`"
+      }
+    }
+  ]
+}

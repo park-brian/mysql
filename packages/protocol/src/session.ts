@@ -157,6 +157,8 @@ export interface Executor {
     session: Session,
     sql: string,
     parameters: readonly Parameter[],
+    /** Identity of this open prepared statement; direct executor callers may omit it. */
+    prepared?: object,
   ): Promise<StatementResult | StatementResult[]>
 
   /** `COM_FIELD_LIST`, deprecated but still used by old tools. */

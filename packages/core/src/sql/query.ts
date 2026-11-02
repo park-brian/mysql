@@ -50,6 +50,8 @@ export interface Run {
   readonly env: Env
   /** The statement's text, which names unaliased result columns. */
   readonly sql: string
+  /** The protocol-owned prepared instance, distinct from the shared parsed tree. */
+  readonly prepared?: object
   readonly protocol: WireProtocol
   readonly serverVersion: string
   /** Parameter values, when they are known (an execute rather than a prepare). */
@@ -1511,6 +1513,15 @@ function mergeable(q: QueryExpression): boolean {
   // A derived table with no FROM is a constant row MySQL materializes ("Rows fetched before execution").
   if (!hasFrom(q)) return false
   return body.groupBy === undefined && body.having === undefined && body.distinct !== true && body.windows === undefined && !containsAggregate(body.items) && !containsWindow(body.items)
+}
+
+/** Logical view algorithm eligibility; WITH and unused WINDOW declarations are not physical merge proofs. */
+export function viewMergeable(query: QueryExpression): boolean {
+  if (query.limit !== undefined || containsWindow(query.orderBy)) return false
+  const body = query.body
+  if (body.kind === QUERY.QUERY) return viewMergeable(body)
+  if (body.kind !== QUERY.SELECT || (body.from?.length ?? 0) === 0) return false
+  return body.groupBy === undefined && body.having === undefined && body.distinct !== true && !containsAggregate(body.items) && !containsWindow(body.items)
 }
 
 /** A derived table, or one reference to a CTE: its columns as the outer query sees them, and its rows. */

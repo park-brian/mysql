@@ -293,7 +293,7 @@ async function handle(command: number, payload: Uint8Array, ctx: DispatchContext
         return long === undefined ? p : { ...p, value: long }
       })
 
-      let results = await executor.execute(session, stmt.sql, parameters)
+      let results = await executor.execute(session, stmt.sql, parameters, stmt)
       const wantsCursor = (parsed.flags & CURSOR_TYPE.READ_ONLY) !== 0
       if (!Array.isArray(results) && isStreamed(results)) {
         if (!wantsCursor) return streamedResponse(ctx, results, true)
