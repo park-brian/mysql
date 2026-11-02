@@ -1,0 +1,696 @@
+{
+  "mysqlVersion": "8.4.11",
+  "schema": "myjs_projection258",
+  "sqlMode": "ERROR_FOR_DIVISION_BY_ZERO",
+  "seed": "SELECT 1/0,CAST('x' AS DECIMAL)",
+  "setup": [
+    "CREATE TABLE base256(a INT)"
+  ],
+  "beforeEach": [
+    "DROP VIEW IF EXISTS v256"
+  ],
+  "view": "v256",
+  "reuse": true,
+  "observations": [
+    {
+      "sql": "CREATE ALGORITHM=MERGE VIEW v256 AS SELECT a+1 b FROM base256 WITH CHECK OPTION",
+      "api": "execute",
+      "limit": 0,
+      "existing": false,
+      "error": {
+        "code": "ER_VIEW_NONUPD_CHECK",
+        "errno": 1368,
+        "state": "HY000",
+        "message": "CHECK OPTION on non-updatable view 'myjs_projection258.v256'"
+      },
+      "warnings": [],
+      "warningCount": "1",
+      "errorCount": "1",
+      "data": null
+    },
+    {
+      "sql": "CREATE ALGORITHM=MERGE VIEW v256 AS SELECT a+1 b FROM base256 WITH CHECK OPTION",
+      "api": "execute",
+      "limit": 0,
+      "existing": false,
+      "error": {
+        "code": "ER_VIEW_NONUPD_CHECK",
+        "errno": 1368,
+        "state": "HY000",
+        "message": "CHECK OPTION on non-updatable view 'myjs_projection258.v256'"
+      },
+      "warnings": [],
+      "warningCount": "1",
+      "errorCount": "1",
+      "data": null
+    },
+    {
+      "sql": "CREATE ALGORITHM=MERGE VIEW v256 AS SELECT CAST(a AS CHAR CHARSET utf8) b FROM base256 WITH CHECK OPTION",
+      "api": "execute",
+      "limit": 0,
+      "existing": false,
+      "error": {
+        "code": "ER_VIEW_NONUPD_CHECK",
+        "errno": 1368,
+        "state": "HY000",
+        "message": "CHECK OPTION on non-updatable view 'myjs_projection258.v256'"
+      },
+      "warnings": [],
+      "warningCount": "1",
+      "errorCount": "1",
+      "data": null
+    },
+    {
+      "sql": "CREATE ALGORITHM=MERGE VIEW v256 AS SELECT CAST(a AS CHAR CHARSET utf8) b FROM base256 WITH CHECK OPTION",
+      "api": "execute",
+      "limit": 0,
+      "existing": false,
+      "error": {
+        "code": "ER_VIEW_NONUPD_CHECK",
+        "errno": 1368,
+        "state": "HY000",
+        "message": "CHECK OPTION on non-updatable view 'myjs_projection258.v256'"
+      },
+      "warnings": [],
+      "warningCount": "1",
+      "errorCount": "1",
+      "data": null
+    },
+    {
+      "sql": "CREATE ALGORITHM=MERGE VIEW v256 AS SELECT -a b FROM base256 WITH CHECK OPTION",
+      "api": "execute",
+      "limit": 0,
+      "existing": false,
+      "error": {
+        "code": "ER_VIEW_NONUPD_CHECK",
+        "errno": 1368,
+        "state": "HY000",
+        "message": "CHECK OPTION on non-updatable view 'myjs_projection258.v256'"
+      },
+      "warnings": [],
+      "warningCount": "1",
+      "errorCount": "1",
+      "data": null
+    },
+    {
+      "sql": "CREATE ALGORITHM=MERGE VIEW v256 AS SELECT -a b FROM base256 WITH CHECK OPTION",
+      "api": "execute",
+      "limit": 0,
+      "existing": false,
+      "error": {
+        "code": "ER_VIEW_NONUPD_CHECK",
+        "errno": 1368,
+        "state": "HY000",
+        "message": "CHECK OPTION on non-updatable view 'myjs_projection258.v256'"
+      },
+      "warnings": [],
+      "warningCount": "1",
+      "errorCount": "1",
+      "data": null
+    },
+    {
+      "sql": "CREATE ALGORITHM=MERGE VIEW v256 AS SELECT a+1 b FROM base256 WITH CHECK OPTION",
+      "api": "execute",
+      "limit": 0,
+      "existing": true,
+      "error": {
+        "code": "ER_TABLE_EXISTS_ERROR",
+        "errno": 1050,
+        "state": "42S01",
+        "message": "Table 'v256' already exists"
+      },
+      "warnings": [],
+      "warningCount": "1",
+      "errorCount": "1",
+      "data": {
+        "algorithm": "UNDEFINED",
+        "definition": "CREATE ALGORITHM=UNDEFINED DEFINER=`root`@`%` SQL SECURITY DEFINER VIEW `v256` AS select 1 AS `1`"
+      }
+    },
+    {
+      "sql": "CREATE ALGORITHM=MERGE VIEW v256 AS SELECT a+1 b FROM base256 WITH CHECK OPTION",
+      "api": "execute",
+      "limit": 0,
+      "existing": true,
+      "error": {
+        "code": "ER_TABLE_EXISTS_ERROR",
+        "errno": 1050,
+        "state": "42S01",
+        "message": "Table 'v256' already exists"
+      },
+      "warnings": [],
+      "warningCount": "1",
+      "errorCount": "1",
+      "data": {
+        "algorithm": "UNDEFINED",
+        "definition": "CREATE ALGORITHM=UNDEFINED DEFINER=`root`@`%` SQL SECURITY DEFINER VIEW `v256` AS select 1 AS `1`"
+      }
+    },
+    {
+      "sql": "CREATE ALGORITHM=MERGE VIEW v256 AS SELECT a+1 b FROM base256 WITH CHECK OPTION",
+      "api": "execute",
+      "limit": 1,
+      "existing": false,
+      "error": {
+        "code": "ER_VIEW_NONUPD_CHECK",
+        "errno": 1368,
+        "state": "HY000",
+        "message": "CHECK OPTION on non-updatable view 'myjs_projection258.v256'"
+      },
+      "warnings": [
+        [
+          "Error",
+          1368,
+          "CHECK OPTION on non-updatable view 'myjs_projection258.v256'"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1",
+      "data": null
+    },
+    {
+      "sql": "CREATE ALGORITHM=MERGE VIEW v256 AS SELECT a+1 b FROM base256 WITH CHECK OPTION",
+      "api": "execute",
+      "limit": 1,
+      "existing": false,
+      "error": {
+        "code": "ER_VIEW_NONUPD_CHECK",
+        "errno": 1368,
+        "state": "HY000",
+        "message": "CHECK OPTION on non-updatable view 'myjs_projection258.v256'"
+      },
+      "warnings": [
+        [
+          "Error",
+          1368,
+          "CHECK OPTION on non-updatable view 'myjs_projection258.v256'"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1",
+      "data": null
+    },
+    {
+      "sql": "CREATE ALGORITHM=MERGE VIEW v256 AS SELECT CAST(a AS CHAR CHARSET utf8) b FROM base256 WITH CHECK OPTION",
+      "api": "execute",
+      "limit": 1,
+      "existing": false,
+      "error": {
+        "code": "ER_VIEW_NONUPD_CHECK",
+        "errno": 1368,
+        "state": "HY000",
+        "message": "CHECK OPTION on non-updatable view 'myjs_projection258.v256'"
+      },
+      "warnings": [
+        [
+          "Error",
+          1368,
+          "CHECK OPTION on non-updatable view 'myjs_projection258.v256'"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1",
+      "data": null
+    },
+    {
+      "sql": "CREATE ALGORITHM=MERGE VIEW v256 AS SELECT CAST(a AS CHAR CHARSET utf8) b FROM base256 WITH CHECK OPTION",
+      "api": "execute",
+      "limit": 1,
+      "existing": false,
+      "error": {
+        "code": "ER_VIEW_NONUPD_CHECK",
+        "errno": 1368,
+        "state": "HY000",
+        "message": "CHECK OPTION on non-updatable view 'myjs_projection258.v256'"
+      },
+      "warnings": [
+        [
+          "Error",
+          1368,
+          "CHECK OPTION on non-updatable view 'myjs_projection258.v256'"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1",
+      "data": null
+    },
+    {
+      "sql": "CREATE ALGORITHM=MERGE VIEW v256 AS SELECT -a b FROM base256 WITH CHECK OPTION",
+      "api": "execute",
+      "limit": 1,
+      "existing": false,
+      "error": {
+        "code": "ER_VIEW_NONUPD_CHECK",
+        "errno": 1368,
+        "state": "HY000",
+        "message": "CHECK OPTION on non-updatable view 'myjs_projection258.v256'"
+      },
+      "warnings": [
+        [
+          "Error",
+          1368,
+          "CHECK OPTION on non-updatable view 'myjs_projection258.v256'"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1",
+      "data": null
+    },
+    {
+      "sql": "CREATE ALGORITHM=MERGE VIEW v256 AS SELECT -a b FROM base256 WITH CHECK OPTION",
+      "api": "execute",
+      "limit": 1,
+      "existing": false,
+      "error": {
+        "code": "ER_VIEW_NONUPD_CHECK",
+        "errno": 1368,
+        "state": "HY000",
+        "message": "CHECK OPTION on non-updatable view 'myjs_projection258.v256'"
+      },
+      "warnings": [
+        [
+          "Error",
+          1368,
+          "CHECK OPTION on non-updatable view 'myjs_projection258.v256'"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1",
+      "data": null
+    },
+    {
+      "sql": "CREATE ALGORITHM=MERGE VIEW v256 AS SELECT a+1 b FROM base256 WITH CHECK OPTION",
+      "api": "execute",
+      "limit": 1,
+      "existing": true,
+      "error": {
+        "code": "ER_TABLE_EXISTS_ERROR",
+        "errno": 1050,
+        "state": "42S01",
+        "message": "Table 'v256' already exists"
+      },
+      "warnings": [
+        [
+          "Error",
+          1050,
+          "Table 'v256' already exists"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1",
+      "data": {
+        "algorithm": "UNDEFINED",
+        "definition": "CREATE ALGORITHM=UNDEFINED DEFINER=`root`@`%` SQL SECURITY DEFINER VIEW `v256` AS select 1 AS `1`"
+      }
+    },
+    {
+      "sql": "CREATE ALGORITHM=MERGE VIEW v256 AS SELECT a+1 b FROM base256 WITH CHECK OPTION",
+      "api": "execute",
+      "limit": 1,
+      "existing": true,
+      "error": {
+        "code": "ER_TABLE_EXISTS_ERROR",
+        "errno": 1050,
+        "state": "42S01",
+        "message": "Table 'v256' already exists"
+      },
+      "warnings": [
+        [
+          "Error",
+          1050,
+          "Table 'v256' already exists"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1",
+      "data": {
+        "algorithm": "UNDEFINED",
+        "definition": "CREATE ALGORITHM=UNDEFINED DEFINER=`root`@`%` SQL SECURITY DEFINER VIEW `v256` AS select 1 AS `1`"
+      }
+    },
+    {
+      "sql": "CREATE ALGORITHM=MERGE VIEW v256 AS SELECT a+1 b FROM base256 WITH CHECK OPTION",
+      "api": "execute",
+      "limit": 8,
+      "existing": false,
+      "error": {
+        "code": "ER_VIEW_NONUPD_CHECK",
+        "errno": 1368,
+        "state": "HY000",
+        "message": "CHECK OPTION on non-updatable view 'myjs_projection258.v256'"
+      },
+      "warnings": [
+        [
+          "Error",
+          1368,
+          "CHECK OPTION on non-updatable view 'myjs_projection258.v256'"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1",
+      "data": null
+    },
+    {
+      "sql": "CREATE ALGORITHM=MERGE VIEW v256 AS SELECT a+1 b FROM base256 WITH CHECK OPTION",
+      "api": "execute",
+      "limit": 8,
+      "existing": false,
+      "error": {
+        "code": "ER_VIEW_NONUPD_CHECK",
+        "errno": 1368,
+        "state": "HY000",
+        "message": "CHECK OPTION on non-updatable view 'myjs_projection258.v256'"
+      },
+      "warnings": [
+        [
+          "Error",
+          1368,
+          "CHECK OPTION on non-updatable view 'myjs_projection258.v256'"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1",
+      "data": null
+    },
+    {
+      "sql": "CREATE ALGORITHM=MERGE VIEW v256 AS SELECT CAST(a AS CHAR CHARSET utf8) b FROM base256 WITH CHECK OPTION",
+      "api": "execute",
+      "limit": 8,
+      "existing": false,
+      "error": {
+        "code": "ER_VIEW_NONUPD_CHECK",
+        "errno": 1368,
+        "state": "HY000",
+        "message": "CHECK OPTION on non-updatable view 'myjs_projection258.v256'"
+      },
+      "warnings": [
+        [
+          "Error",
+          1368,
+          "CHECK OPTION on non-updatable view 'myjs_projection258.v256'"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1",
+      "data": null
+    },
+    {
+      "sql": "CREATE ALGORITHM=MERGE VIEW v256 AS SELECT CAST(a AS CHAR CHARSET utf8) b FROM base256 WITH CHECK OPTION",
+      "api": "execute",
+      "limit": 8,
+      "existing": false,
+      "error": {
+        "code": "ER_VIEW_NONUPD_CHECK",
+        "errno": 1368,
+        "state": "HY000",
+        "message": "CHECK OPTION on non-updatable view 'myjs_projection258.v256'"
+      },
+      "warnings": [
+        [
+          "Error",
+          1368,
+          "CHECK OPTION on non-updatable view 'myjs_projection258.v256'"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1",
+      "data": null
+    },
+    {
+      "sql": "CREATE ALGORITHM=MERGE VIEW v256 AS SELECT -a b FROM base256 WITH CHECK OPTION",
+      "api": "execute",
+      "limit": 8,
+      "existing": false,
+      "error": {
+        "code": "ER_VIEW_NONUPD_CHECK",
+        "errno": 1368,
+        "state": "HY000",
+        "message": "CHECK OPTION on non-updatable view 'myjs_projection258.v256'"
+      },
+      "warnings": [
+        [
+          "Error",
+          1368,
+          "CHECK OPTION on non-updatable view 'myjs_projection258.v256'"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1",
+      "data": null
+    },
+    {
+      "sql": "CREATE ALGORITHM=MERGE VIEW v256 AS SELECT -a b FROM base256 WITH CHECK OPTION",
+      "api": "execute",
+      "limit": 8,
+      "existing": false,
+      "error": {
+        "code": "ER_VIEW_NONUPD_CHECK",
+        "errno": 1368,
+        "state": "HY000",
+        "message": "CHECK OPTION on non-updatable view 'myjs_projection258.v256'"
+      },
+      "warnings": [
+        [
+          "Error",
+          1368,
+          "CHECK OPTION on non-updatable view 'myjs_projection258.v256'"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1",
+      "data": null
+    },
+    {
+      "sql": "CREATE ALGORITHM=MERGE VIEW v256 AS SELECT a+1 b FROM base256 WITH CHECK OPTION",
+      "api": "execute",
+      "limit": 8,
+      "existing": true,
+      "error": {
+        "code": "ER_TABLE_EXISTS_ERROR",
+        "errno": 1050,
+        "state": "42S01",
+        "message": "Table 'v256' already exists"
+      },
+      "warnings": [
+        [
+          "Error",
+          1050,
+          "Table 'v256' already exists"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1",
+      "data": {
+        "algorithm": "UNDEFINED",
+        "definition": "CREATE ALGORITHM=UNDEFINED DEFINER=`root`@`%` SQL SECURITY DEFINER VIEW `v256` AS select 1 AS `1`"
+      }
+    },
+    {
+      "sql": "CREATE ALGORITHM=MERGE VIEW v256 AS SELECT a+1 b FROM base256 WITH CHECK OPTION",
+      "api": "execute",
+      "limit": 8,
+      "existing": true,
+      "error": {
+        "code": "ER_TABLE_EXISTS_ERROR",
+        "errno": 1050,
+        "state": "42S01",
+        "message": "Table 'v256' already exists"
+      },
+      "warnings": [
+        [
+          "Error",
+          1050,
+          "Table 'v256' already exists"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1",
+      "data": {
+        "algorithm": "UNDEFINED",
+        "definition": "CREATE ALGORITHM=UNDEFINED DEFINER=`root`@`%` SQL SECURITY DEFINER VIEW `v256` AS select 1 AS `1`"
+      }
+    },
+    {
+      "sql": "CREATE ALGORITHM=MERGE VIEW v256 AS SELECT a+1 b FROM base256 WITH CHECK OPTION",
+      "api": "execute",
+      "limit": 64,
+      "existing": false,
+      "error": {
+        "code": "ER_VIEW_NONUPD_CHECK",
+        "errno": 1368,
+        "state": "HY000",
+        "message": "CHECK OPTION on non-updatable view 'myjs_projection258.v256'"
+      },
+      "warnings": [
+        [
+          "Error",
+          1368,
+          "CHECK OPTION on non-updatable view 'myjs_projection258.v256'"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1",
+      "data": null
+    },
+    {
+      "sql": "CREATE ALGORITHM=MERGE VIEW v256 AS SELECT a+1 b FROM base256 WITH CHECK OPTION",
+      "api": "execute",
+      "limit": 64,
+      "existing": false,
+      "error": {
+        "code": "ER_VIEW_NONUPD_CHECK",
+        "errno": 1368,
+        "state": "HY000",
+        "message": "CHECK OPTION on non-updatable view 'myjs_projection258.v256'"
+      },
+      "warnings": [
+        [
+          "Error",
+          1368,
+          "CHECK OPTION on non-updatable view 'myjs_projection258.v256'"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1",
+      "data": null
+    },
+    {
+      "sql": "CREATE ALGORITHM=MERGE VIEW v256 AS SELECT CAST(a AS CHAR CHARSET utf8) b FROM base256 WITH CHECK OPTION",
+      "api": "execute",
+      "limit": 64,
+      "existing": false,
+      "error": {
+        "code": "ER_VIEW_NONUPD_CHECK",
+        "errno": 1368,
+        "state": "HY000",
+        "message": "CHECK OPTION on non-updatable view 'myjs_projection258.v256'"
+      },
+      "warnings": [
+        [
+          "Error",
+          1368,
+          "CHECK OPTION on non-updatable view 'myjs_projection258.v256'"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1",
+      "data": null
+    },
+    {
+      "sql": "CREATE ALGORITHM=MERGE VIEW v256 AS SELECT CAST(a AS CHAR CHARSET utf8) b FROM base256 WITH CHECK OPTION",
+      "api": "execute",
+      "limit": 64,
+      "existing": false,
+      "error": {
+        "code": "ER_VIEW_NONUPD_CHECK",
+        "errno": 1368,
+        "state": "HY000",
+        "message": "CHECK OPTION on non-updatable view 'myjs_projection258.v256'"
+      },
+      "warnings": [
+        [
+          "Error",
+          1368,
+          "CHECK OPTION on non-updatable view 'myjs_projection258.v256'"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1",
+      "data": null
+    },
+    {
+      "sql": "CREATE ALGORITHM=MERGE VIEW v256 AS SELECT -a b FROM base256 WITH CHECK OPTION",
+      "api": "execute",
+      "limit": 64,
+      "existing": false,
+      "error": {
+        "code": "ER_VIEW_NONUPD_CHECK",
+        "errno": 1368,
+        "state": "HY000",
+        "message": "CHECK OPTION on non-updatable view 'myjs_projection258.v256'"
+      },
+      "warnings": [
+        [
+          "Error",
+          1368,
+          "CHECK OPTION on non-updatable view 'myjs_projection258.v256'"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1",
+      "data": null
+    },
+    {
+      "sql": "CREATE ALGORITHM=MERGE VIEW v256 AS SELECT -a b FROM base256 WITH CHECK OPTION",
+      "api": "execute",
+      "limit": 64,
+      "existing": false,
+      "error": {
+        "code": "ER_VIEW_NONUPD_CHECK",
+        "errno": 1368,
+        "state": "HY000",
+        "message": "CHECK OPTION on non-updatable view 'myjs_projection258.v256'"
+      },
+      "warnings": [
+        [
+          "Error",
+          1368,
+          "CHECK OPTION on non-updatable view 'myjs_projection258.v256'"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1",
+      "data": null
+    },
+    {
+      "sql": "CREATE ALGORITHM=MERGE VIEW v256 AS SELECT a+1 b FROM base256 WITH CHECK OPTION",
+      "api": "execute",
+      "limit": 64,
+      "existing": true,
+      "error": {
+        "code": "ER_TABLE_EXISTS_ERROR",
+        "errno": 1050,
+        "state": "42S01",
+        "message": "Table 'v256' already exists"
+      },
+      "warnings": [
+        [
+          "Error",
+          1050,
+          "Table 'v256' already exists"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1",
+      "data": {
+        "algorithm": "UNDEFINED",
+        "definition": "CREATE ALGORITHM=UNDEFINED DEFINER=`root`@`%` SQL SECURITY DEFINER VIEW `v256` AS select 1 AS `1`"
+      }
+    },
+    {
+      "sql": "CREATE ALGORITHM=MERGE VIEW v256 AS SELECT a+1 b FROM base256 WITH CHECK OPTION",
+      "api": "execute",
+      "limit": 64,
+      "existing": true,
+      "error": {
+        "code": "ER_TABLE_EXISTS_ERROR",
+        "errno": 1050,
+        "state": "42S01",
+        "message": "Table 'v256' already exists"
+      },
+      "warnings": [
+        [
+          "Error",
+          1050,
+          "Table 'v256' already exists"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1",
+      "data": {
+        "algorithm": "UNDEFINED",
+        "definition": "CREATE ALGORITHM=UNDEFINED DEFINER=`root`@`%` SQL SECURITY DEFINER VIEW `v256` AS select 1 AS `1`"
+      }
+    }
+  ]
+}

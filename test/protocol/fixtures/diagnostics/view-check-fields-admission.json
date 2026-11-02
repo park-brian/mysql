@@ -1,0 +1,542 @@
+{
+  "mysqlVersion": "8.4.11",
+  "schema": "myjs_projection258",
+  "sqlMode": "ERROR_FOR_DIVISION_BY_ZERO",
+  "seed": "SELECT 1/0,CAST('x' AS DECIMAL)",
+  "setup": [
+    "CREATE TABLE base256(a INT)"
+  ],
+  "beforeEach": [
+    "DROP VIEW IF EXISTS v256"
+  ],
+  "observations": [
+    {
+      "sql": "CREATE ALGORITHM=MERGE VIEW v256 AS SELECT +a b FROM base256 WITH CHECK OPTION",
+      "api": "query",
+      "existing": false,
+      "header": {
+        "fieldCount": 0,
+        "affectedRows": 0,
+        "insertId": 0,
+        "info": "",
+        "serverStatus": 2,
+        "warningStatus": 0,
+        "changedRows": 0
+      },
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "CREATE ALGORITHM=MERGE VIEW v256 AS SELECT +a b FROM base256 WITH CHECK OPTION",
+      "api": "execute",
+      "existing": false,
+      "header": {
+        "fieldCount": 0,
+        "affectedRows": 0,
+        "insertId": 0,
+        "info": "",
+        "serverStatus": 2,
+        "warningStatus": 0,
+        "changedRows": 0
+      },
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "CREATE ALGORITHM=MERGE VIEW v256 AS SELECT +a b FROM base256 WITH CHECK OPTION",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "CREATE ALGORITHM=MERGE VIEW v256 AS SELECT ++a b FROM base256 WITH CHECK OPTION",
+      "api": "query",
+      "existing": false,
+      "header": {
+        "fieldCount": 0,
+        "affectedRows": 0,
+        "insertId": 0,
+        "info": "",
+        "serverStatus": 2,
+        "warningStatus": 0,
+        "changedRows": 0
+      },
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "CREATE ALGORITHM=MERGE VIEW v256 AS SELECT ++a b FROM base256 WITH CHECK OPTION",
+      "api": "execute",
+      "existing": false,
+      "header": {
+        "fieldCount": 0,
+        "affectedRows": 0,
+        "insertId": 0,
+        "info": "",
+        "serverStatus": 2,
+        "warningStatus": 0,
+        "changedRows": 0
+      },
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "CREATE ALGORITHM=MERGE VIEW v256 AS SELECT ++a b FROM base256 WITH CHECK OPTION",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "CREATE ALGORITHM=MERGE VIEW v256 AS SELECT +(a) b FROM base256 WITH CHECK OPTION",
+      "api": "query",
+      "existing": false,
+      "header": {
+        "fieldCount": 0,
+        "affectedRows": 0,
+        "insertId": 0,
+        "info": "",
+        "serverStatus": 2,
+        "warningStatus": 0,
+        "changedRows": 0
+      },
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "CREATE ALGORITHM=MERGE VIEW v256 AS SELECT +(a) b FROM base256 WITH CHECK OPTION",
+      "api": "execute",
+      "existing": false,
+      "header": {
+        "fieldCount": 0,
+        "affectedRows": 0,
+        "insertId": 0,
+        "info": "",
+        "serverStatus": 2,
+        "warningStatus": 0,
+        "changedRows": 0
+      },
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "CREATE ALGORITHM=MERGE VIEW v256 AS SELECT +(a) b FROM base256 WITH CHECK OPTION",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "CREATE ALGORITHM=MERGE VIEW v256 AS SELECT (a) b FROM base256 WITH CHECK OPTION",
+      "api": "query",
+      "existing": false,
+      "header": {
+        "fieldCount": 0,
+        "affectedRows": 0,
+        "insertId": 0,
+        "info": "",
+        "serverStatus": 2,
+        "warningStatus": 0,
+        "changedRows": 0
+      },
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "CREATE ALGORITHM=MERGE VIEW v256 AS SELECT (a) b FROM base256 WITH CHECK OPTION",
+      "api": "execute",
+      "existing": false,
+      "header": {
+        "fieldCount": 0,
+        "affectedRows": 0,
+        "insertId": 0,
+        "info": "",
+        "serverStatus": 2,
+        "warningStatus": 0,
+        "changedRows": 0
+      },
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "CREATE ALGORITHM=MERGE VIEW v256 AS SELECT (a) b FROM base256 WITH CHECK OPTION",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "CREATE ALGORITHM=MERGE VIEW v256 AS SELECT a AS b FROM base256 WITH CHECK OPTION",
+      "api": "query",
+      "existing": false,
+      "header": {
+        "fieldCount": 0,
+        "affectedRows": 0,
+        "insertId": 0,
+        "info": "",
+        "serverStatus": 2,
+        "warningStatus": 0,
+        "changedRows": 0
+      },
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "CREATE ALGORITHM=MERGE VIEW v256 AS SELECT a AS b FROM base256 WITH CHECK OPTION",
+      "api": "execute",
+      "existing": false,
+      "header": {
+        "fieldCount": 0,
+        "affectedRows": 0,
+        "insertId": 0,
+        "info": "",
+        "serverStatus": 2,
+        "warningStatus": 0,
+        "changedRows": 0
+      },
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "CREATE ALGORITHM=MERGE VIEW v256 AS SELECT a AS b FROM base256 WITH CHECK OPTION",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "CREATE ALGORITHM=MERGE VIEW v256 AS SELECT base256.* FROM base256 WITH CHECK OPTION",
+      "api": "query",
+      "existing": false,
+      "header": {
+        "fieldCount": 0,
+        "affectedRows": 0,
+        "insertId": 0,
+        "info": "",
+        "serverStatus": 2,
+        "warningStatus": 0,
+        "changedRows": 0
+      },
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "CREATE ALGORITHM=MERGE VIEW v256 AS SELECT base256.* FROM base256 WITH CHECK OPTION",
+      "api": "execute",
+      "existing": false,
+      "header": {
+        "fieldCount": 0,
+        "affectedRows": 0,
+        "insertId": 0,
+        "info": "",
+        "serverStatus": 2,
+        "warningStatus": 0,
+        "changedRows": 0
+      },
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "CREATE ALGORITHM=MERGE VIEW v256 AS SELECT base256.* FROM base256 WITH CHECK OPTION",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "CREATE ALGORITHM=MERGE VIEW v256 AS SELECT * FROM base256 WITH CHECK OPTION",
+      "api": "query",
+      "existing": false,
+      "header": {
+        "fieldCount": 0,
+        "affectedRows": 0,
+        "insertId": 0,
+        "info": "",
+        "serverStatus": 2,
+        "warningStatus": 0,
+        "changedRows": 0
+      },
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "CREATE ALGORITHM=MERGE VIEW v256 AS SELECT * FROM base256 WITH CHECK OPTION",
+      "api": "execute",
+      "existing": false,
+      "header": {
+        "fieldCount": 0,
+        "affectedRows": 0,
+        "insertId": 0,
+        "info": "",
+        "serverStatus": 2,
+        "warningStatus": 0,
+        "changedRows": 0
+      },
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "CREATE ALGORITHM=MERGE VIEW v256 AS SELECT * FROM base256 WITH CHECK OPTION",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "CREATE ALGORITHM=MERGE VIEW v256 AS SELECT 1 b,a FROM base256 WITH CHECK OPTION",
+      "api": "query",
+      "existing": false,
+      "header": {
+        "fieldCount": 0,
+        "affectedRows": 0,
+        "insertId": 0,
+        "info": "",
+        "serverStatus": 2,
+        "warningStatus": 0,
+        "changedRows": 0
+      },
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "CREATE ALGORITHM=MERGE VIEW v256 AS SELECT 1 b,a FROM base256 WITH CHECK OPTION",
+      "api": "execute",
+      "existing": false,
+      "header": {
+        "fieldCount": 0,
+        "affectedRows": 0,
+        "insertId": 0,
+        "info": "",
+        "serverStatus": 2,
+        "warningStatus": 0,
+        "changedRows": 0
+      },
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "CREATE ALGORITHM=MERGE VIEW v256 AS SELECT 1 b,a FROM base256 WITH CHECK OPTION",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "CREATE ALGORITHM=MERGE VIEW v256 AS SELECT a+1 b,a FROM base256 WITH CHECK OPTION",
+      "api": "query",
+      "existing": false,
+      "header": {
+        "fieldCount": 0,
+        "affectedRows": 0,
+        "insertId": 0,
+        "info": "",
+        "serverStatus": 2,
+        "warningStatus": 0,
+        "changedRows": 0
+      },
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "CREATE ALGORITHM=MERGE VIEW v256 AS SELECT a+1 b,a FROM base256 WITH CHECK OPTION",
+      "api": "execute",
+      "existing": false,
+      "header": {
+        "fieldCount": 0,
+        "affectedRows": 0,
+        "insertId": 0,
+        "info": "",
+        "serverStatus": 2,
+        "warningStatus": 0,
+        "changedRows": 0
+      },
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "CREATE ALGORITHM=MERGE VIEW v256 AS SELECT a+1 b,a FROM base256 WITH CHECK OPTION",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "CREATE ALGORITHM=MERGE VIEW v256 AS SELECT a,(SELECT 1) b FROM base256 WITH CHECK OPTION",
+      "api": "query",
+      "existing": false,
+      "header": {
+        "fieldCount": 0,
+        "affectedRows": 0,
+        "insertId": 0,
+        "info": "",
+        "serverStatus": 2,
+        "warningStatus": 0,
+        "changedRows": 0
+      },
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "CREATE ALGORITHM=MERGE VIEW v256 AS SELECT a,(SELECT 1) b FROM base256 WITH CHECK OPTION",
+      "api": "execute",
+      "existing": false,
+      "header": {
+        "fieldCount": 0,
+        "affectedRows": 0,
+        "insertId": 0,
+        "info": "",
+        "serverStatus": 2,
+        "warningStatus": 0,
+        "changedRows": 0
+      },
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "CREATE ALGORITHM=MERGE VIEW v256 AS SELECT a,(SELECT 1) b FROM base256 WITH CHECK OPTION",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "CREATE ALGORITHM=MERGE VIEW v256 AS SELECT b FROM(SELECT a+1 b FROM base256)d WITH CHECK OPTION",
+      "api": "query",
+      "existing": false,
+      "header": {
+        "fieldCount": 0,
+        "affectedRows": 0,
+        "insertId": 0,
+        "info": "",
+        "serverStatus": 2,
+        "warningStatus": 0,
+        "changedRows": 0
+      },
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "CREATE ALGORITHM=MERGE VIEW v256 AS SELECT b FROM(SELECT a+1 b FROM base256)d WITH CHECK OPTION",
+      "api": "execute",
+      "existing": false,
+      "header": {
+        "fieldCount": 0,
+        "affectedRows": 0,
+        "insertId": 0,
+        "info": "",
+        "serverStatus": 2,
+        "warningStatus": 0,
+        "changedRows": 0
+      },
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "CREATE ALGORITHM=MERGE VIEW v256 AS SELECT b FROM(SELECT a+1 b FROM base256)d WITH CHECK OPTION",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "CREATE ALGORITHM=MERGE VIEW v256 AS WITH c AS(SELECT a+1 b FROM base256) SELECT b FROM c WITH CHECK OPTION",
+      "api": "query",
+      "existing": false,
+      "header": {
+        "fieldCount": 0,
+        "affectedRows": 0,
+        "insertId": 0,
+        "info": "",
+        "serverStatus": 2,
+        "warningStatus": 0,
+        "changedRows": 0
+      },
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "CREATE ALGORITHM=MERGE VIEW v256 AS WITH c AS(SELECT a+1 b FROM base256) SELECT b FROM c WITH CHECK OPTION",
+      "api": "execute",
+      "existing": false,
+      "header": {
+        "fieldCount": 0,
+        "affectedRows": 0,
+        "insertId": 0,
+        "info": "",
+        "serverStatus": 2,
+        "warningStatus": 0,
+        "changedRows": 0
+      },
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "CREATE ALGORITHM=MERGE VIEW v256 AS WITH c AS(SELECT a+1 b FROM base256) SELECT b FROM c WITH CHECK OPTION",
+      "api": "prepare",
+      "existing": false,
+      "parameters": [],
+      "fields": [],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    }
+  ]
+}

@@ -2693,15 +2693,56 @@ and 206 runtime sources plus tooling; warm heavy checks finished before this
 run. All eleven required 5ae7ff0 CI jobs pass.
 Totals stay 144/190 and M5 42/53; M5.10 remains partial.
 
-Next audit computed/scalar-only CHECK OPTION projections at their actual
-query-block owner. Prove the difference between direct field references,
-computed copies, stars and fields from CTE/derived sources before extending the
-bounded predicate. Three read-only profiles cover 198 outcomes (79 complete
-baseline matches). Native treats unary plus and parentheses around a field as
-transparent, permits a direct reference to a computed CTE/derived field, and
-rejects computed-only outer projections. A raw top-level AST-kind check would
-regress the unary-plus control. Keep same-base subquery analysis, metadata
-formatting, full PREPARE binding and schema-driven reprepare under independent proofs.
+**View CHECK OPTION projection admission, verified (2026-11-02):**
+the existing catalog validation boundary now also rejects a projection with no
+direct outer field. Its query-body owner unwraps query parentheses, preserves
+stars and strips transparent unary plus locally without changing the AST.
+Direct references to computed CTE/derived fields remain distinct from computing
+those fields in the outer projection. The algorithm-eligibility predicate is
+unchanged: a computed-only projection adds no fallback warning 1354.
+
+Five native profiles cover 252 outcomes (123→202 complete matches). They include
+36 permanent admission controls for direct references, stars, mixed lists,
+CTE/derived fields, parentheses and repeated unary plus. These capture every
+statement packet, condition and count. The separate full SHOW CREATE audits
+retain their formatting gaps; no previous observation is filtered or changed.
+Four strict fixtures add 202 observations, with all 1,240 previous golden
+observations unchanged. Nineteen focused cases pass natively and locally.
+Actual 1cb3de3 passes sixteen cases, including all direct-field admission
+controls, and fails the three new computed-only groups; the official runtime
+is then restored to the current source.
+
+Across 5,538 outcomes complete agreement improves 4,502→4,589, retaining all
+57,869 earlier matching protocol facts. Existing-target priority, failed
+replacement retention, implicit commits, PREPARE effects and cached execution
+retain their native behavior, including warning limits 0/1/8/64 and CAST
+constructor warnings. Fifty new-audit outcomes remain open for SHOW CREATE
+formatting. Other previously documented metadata/PREPARE/updatability gaps
+remain independent; this is not a complete view-update classifier.
+
+Typecheck/lint and nine unchanged caps pass at parser/core/facade
+45,599/332,793/332,711 B gzipped. All 20,000 executor statements seeded
+20261010 pass, and plans retain 2,127/2,248 matches under the unchanged 2,118
+floor. The full official suite retains all 38 passing identities and its native
+baseline. Fresh Docker --reference passes 1,659 main tests, four latency tests,
+typecheck, lint, all nine unchanged caps, package/typed smoke, the real client
+and all seven pinned corpora including 1,737 coercion warning counts. The
+unchanged long-IN assertion passes. Early source proof matches 555 tests/fixtures
+and 206 runtime sources plus tooling; warm heavy checks finished before this
+run. All eleven required 1cb3de3 CI jobs pass.
+Totals stay 144/190 and M5 42/53; M5.10 remains partial.
+
+Next audit the existing INFORMATION_SCHEMA view-updatability projection check
+against these direct-field controls, preserving its separate source/query fences.
+Prove metadata behavior before sharing the direct-reference criterion; its
+current top-level column check does not account for transparent unary plus.
+Two native metadata profiles cover 153 outcomes with 121 complete baseline
+matches. Unary-plus rows report YES natively and NO here with identical field
+metadata, including VARCHAR, DECIMAL, BIT, DATE and JSON controls. Derived/CTE/
+query-wrapper metadata and a separate BINARY warning mismatch stay open. Share
+only the proven direct-reference criterion first.
+Keep same-base subquery analysis, SHOW CREATE formatting, full PREPARE binding
+and schema-driven reprepare under independent proofs.
 
 **Next prerequisite: constructor admission before presence execution.** Complete
 the existing CAST work: with written utf8 warning 3719 now retained, refuse

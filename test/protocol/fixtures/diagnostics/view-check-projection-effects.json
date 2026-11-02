@@ -1,0 +1,449 @@
+{
+  "mysqlVersion": "8.4.11",
+  "schema": "myjs_projection_effect258",
+  "sqlMode": "ERROR_FOR_DIVISION_BY_ZERO",
+  "seed": "SELECT 1/0,CAST('x' AS DECIMAL)",
+  "useSchema": true,
+  "view": "v258",
+  "observations": [
+    {
+      "sql": "CREATE ALGORITHM=MERGE VIEW v258 AS SELECT id+1 b FROM t WITH CHECK OPTION",
+      "api": "query",
+      "existing": false,
+      "definition": null,
+      "error": {
+        "code": "ER_VIEW_NONUPD_CHECK",
+        "errno": 1368,
+        "state": "HY000",
+        "message": "CHECK OPTION on non-updatable view 'myjs_projection_effect258.v258'"
+      },
+      "warnings": [
+        [
+          "Error",
+          1368,
+          "CHECK OPTION on non-updatable view 'myjs_projection_effect258.v258'"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1",
+      "data": [
+        [
+          1
+        ]
+      ],
+      "views": [
+        [
+          0
+        ]
+      ],
+      "id": 1
+    },
+    {
+      "sql": "CREATE ALGORITHM=MERGE VIEW v258 AS SELECT id+1 b FROM t WITH CHECK OPTION",
+      "api": "execute",
+      "existing": false,
+      "definition": null,
+      "error": {
+        "code": "ER_VIEW_NONUPD_CHECK",
+        "errno": 1368,
+        "state": "HY000",
+        "message": "CHECK OPTION on non-updatable view 'myjs_projection_effect258.v258'"
+      },
+      "warnings": [
+        [
+          "Error",
+          1368,
+          "CHECK OPTION on non-updatable view 'myjs_projection_effect258.v258'"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1",
+      "data": [
+        [
+          2
+        ]
+      ],
+      "views": [
+        [
+          0
+        ]
+      ],
+      "id": 2
+    },
+    {
+      "sql": "CREATE ALGORITHM=MERGE VIEW v258 AS SELECT id+1 b FROM t WITH CHECK OPTION",
+      "api": "prepare",
+      "existing": false,
+      "definition": null,
+      "parameters": [],
+      "fields": [],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": [],
+      "views": [
+        [
+          0
+        ]
+      ],
+      "id": 3
+    },
+    {
+      "sql": "CREATE OR REPLACE ALGORITHM=MERGE VIEW v258 AS SELECT id+1 b FROM t WITH CHECK OPTION",
+      "api": "query",
+      "existing": true,
+      "definition": "CREATE ALGORITHM=UNDEFINED DEFINER=`root`@`%` SQL SECURITY DEFINER VIEW `v258` AS select 7 AS `7`",
+      "error": {
+        "code": "ER_VIEW_NONUPD_CHECK",
+        "errno": 1368,
+        "state": "HY000",
+        "message": "CHECK OPTION on non-updatable view 'myjs_projection_effect258.v258'"
+      },
+      "warnings": [
+        [
+          "Error",
+          1368,
+          "CHECK OPTION on non-updatable view 'myjs_projection_effect258.v258'"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1",
+      "data": [
+        [
+          4
+        ]
+      ],
+      "views": [
+        [
+          1
+        ]
+      ],
+      "id": 4
+    },
+    {
+      "sql": "CREATE OR REPLACE ALGORITHM=MERGE VIEW v258 AS SELECT id+1 b FROM t WITH CHECK OPTION",
+      "api": "execute",
+      "existing": true,
+      "definition": "CREATE ALGORITHM=UNDEFINED DEFINER=`root`@`%` SQL SECURITY DEFINER VIEW `v258` AS select 7 AS `7`",
+      "error": {
+        "code": "ER_VIEW_NONUPD_CHECK",
+        "errno": 1368,
+        "state": "HY000",
+        "message": "CHECK OPTION on non-updatable view 'myjs_projection_effect258.v258'"
+      },
+      "warnings": [
+        [
+          "Error",
+          1368,
+          "CHECK OPTION on non-updatable view 'myjs_projection_effect258.v258'"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1",
+      "data": [
+        [
+          5
+        ]
+      ],
+      "views": [
+        [
+          1
+        ]
+      ],
+      "id": 5
+    },
+    {
+      "sql": "CREATE OR REPLACE ALGORITHM=MERGE VIEW v258 AS SELECT id+1 b FROM t WITH CHECK OPTION",
+      "api": "prepare",
+      "existing": true,
+      "definition": "CREATE ALGORITHM=UNDEFINED DEFINER=`root`@`%` SQL SECURITY DEFINER VIEW `v258` AS select 7 AS `7`",
+      "parameters": [],
+      "fields": [],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": [],
+      "views": [
+        [
+          1
+        ]
+      ],
+      "id": 6
+    },
+    {
+      "sql": "CREATE ALGORITHM=MERGE VIEW t AS SELECT id+1 b FROM t WITH CHECK OPTION",
+      "api": "query",
+      "existing": false,
+      "definition": null,
+      "error": {
+        "code": "ER_TABLE_EXISTS_ERROR",
+        "errno": 1050,
+        "state": "42S01",
+        "message": "Table 't' already exists"
+      },
+      "warnings": [
+        [
+          "Error",
+          1050,
+          "Table 't' already exists"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1",
+      "data": [
+        [
+          7
+        ]
+      ],
+      "views": [
+        [
+          0
+        ]
+      ],
+      "id": 7
+    },
+    {
+      "sql": "CREATE ALGORITHM=MERGE VIEW t AS SELECT id+1 b FROM t WITH CHECK OPTION",
+      "api": "execute",
+      "existing": false,
+      "definition": null,
+      "error": {
+        "code": "ER_TABLE_EXISTS_ERROR",
+        "errno": 1050,
+        "state": "42S01",
+        "message": "Table 't' already exists"
+      },
+      "warnings": [
+        [
+          "Error",
+          1050,
+          "Table 't' already exists"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1",
+      "data": [
+        [
+          8
+        ]
+      ],
+      "views": [
+        [
+          0
+        ]
+      ],
+      "id": 8
+    },
+    {
+      "sql": "CREATE ALGORITHM=MERGE VIEW t AS SELECT id+1 b FROM t WITH CHECK OPTION",
+      "api": "prepare",
+      "existing": false,
+      "definition": null,
+      "parameters": [],
+      "fields": [],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": [],
+      "views": [
+        [
+          0
+        ]
+      ],
+      "id": 9
+    },
+    {
+      "sql": "CREATE VIEW v258 AS SELECT (SELECT 1) b FROM t WITH CHECK OPTION",
+      "api": "query",
+      "existing": false,
+      "definition": null,
+      "error": {
+        "code": "ER_VIEW_NONUPD_CHECK",
+        "errno": 1368,
+        "state": "HY000",
+        "message": "CHECK OPTION on non-updatable view 'myjs_projection_effect258.v258'"
+      },
+      "warnings": [
+        [
+          "Error",
+          1368,
+          "CHECK OPTION on non-updatable view 'myjs_projection_effect258.v258'"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1",
+      "data": [
+        [
+          10
+        ]
+      ],
+      "views": [
+        [
+          0
+        ]
+      ],
+      "id": 10
+    },
+    {
+      "sql": "CREATE VIEW v258 AS SELECT (SELECT 1) b FROM t WITH CHECK OPTION",
+      "api": "execute",
+      "existing": false,
+      "definition": null,
+      "error": {
+        "code": "ER_VIEW_NONUPD_CHECK",
+        "errno": 1368,
+        "state": "HY000",
+        "message": "CHECK OPTION on non-updatable view 'myjs_projection_effect258.v258'"
+      },
+      "warnings": [
+        [
+          "Error",
+          1368,
+          "CHECK OPTION on non-updatable view 'myjs_projection_effect258.v258'"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1",
+      "data": [
+        [
+          11
+        ]
+      ],
+      "views": [
+        [
+          0
+        ]
+      ],
+      "id": 11
+    },
+    {
+      "sql": "CREATE VIEW v258 AS SELECT (SELECT 1) b FROM t WITH CHECK OPTION",
+      "api": "prepare",
+      "existing": false,
+      "definition": null,
+      "parameters": [],
+      "fields": [],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": [],
+      "views": [
+        [
+          0
+        ]
+      ],
+      "id": 12
+    },
+    {
+      "sql": "CREATE VIEW v258 AS SELECT +id b FROM t WITH CHECK OPTION",
+      "api": "prepare",
+      "existing": false,
+      "definition": null,
+      "parameters": [],
+      "fields": [],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0",
+      "data": [],
+      "views": [
+        [
+          0
+        ]
+      ],
+      "id": 15
+    },
+    {
+      "sql": "CREATE VIEW v258 AS SELECT CAST(id AS CHAR CHARSET utf8) b FROM t WITH CHECK OPTION",
+      "api": "query",
+      "existing": false,
+      "definition": null,
+      "error": {
+        "code": "ER_VIEW_NONUPD_CHECK",
+        "errno": 1368,
+        "state": "HY000",
+        "message": "CHECK OPTION on non-updatable view 'myjs_projection_effect258.v258'"
+      },
+      "warnings": [
+        [
+          "Warning",
+          3719,
+          "'utf8' is currently an alias for the character set UTF8MB3, but will be an alias for UTF8MB4 in a future release. Please consider using UTF8MB4 in order to be unambiguous."
+        ],
+        [
+          "Error",
+          1368,
+          "CHECK OPTION on non-updatable view 'myjs_projection_effect258.v258'"
+        ]
+      ],
+      "warningCount": "2",
+      "errorCount": "1",
+      "data": [
+        [
+          16
+        ]
+      ],
+      "views": [
+        [
+          0
+        ]
+      ],
+      "id": 16
+    },
+    {
+      "sql": "CREATE VIEW v258 AS SELECT CAST(id AS CHAR CHARSET utf8) b FROM t WITH CHECK OPTION",
+      "api": "execute",
+      "existing": false,
+      "definition": null,
+      "error": {
+        "code": "ER_VIEW_NONUPD_CHECK",
+        "errno": 1368,
+        "state": "HY000",
+        "message": "CHECK OPTION on non-updatable view 'myjs_projection_effect258.v258'"
+      },
+      "warnings": [
+        [
+          "Error",
+          1368,
+          "CHECK OPTION on non-updatable view 'myjs_projection_effect258.v258'"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1",
+      "data": [
+        [
+          17
+        ]
+      ],
+      "views": [
+        [
+          0
+        ]
+      ],
+      "id": 17
+    },
+    {
+      "sql": "CREATE VIEW v258 AS SELECT CAST(id AS CHAR CHARSET utf8) b FROM t WITH CHECK OPTION",
+      "api": "prepare",
+      "existing": false,
+      "definition": null,
+      "parameters": [],
+      "fields": [],
+      "warnings": [
+        [
+          "Warning",
+          3719,
+          "'utf8' is currently an alias for the character set UTF8MB3, but will be an alias for UTF8MB4 in a future release. Please consider using UTF8MB4 in order to be unambiguous."
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "0",
+      "data": [],
+      "views": [
+        [
+          0
+        ]
+      ],
+      "id": 18
+    }
+  ]
+}

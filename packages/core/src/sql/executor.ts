@@ -86,7 +86,7 @@ import { foreignKeyChecks, foreignKeyClause, foreignKeysOf, referencingKeys, wit
 import { checkDefaultAdmission, checkDefaults, insert, remove, update } from './dml.ts'
 import { fulltextOf } from './fulltext.ts'
 import { columnDefinition, intType, stringType } from './meta.ts'
-import { columnsOf, compileContext, planQuery, resultSet, resultSteps, viewTable, viewMergeable, type Run } from './query.ts'
+import { columnsOf, compileContext, planQuery, resultSet, resultSteps, viewTable, viewHasDirectFields, viewMergeable, type Run } from './query.ts'
 import { lengthArity } from './registry.ts'
 import { SqlSession, finish, isolationOf } from './session.ts'
 import { dropOrphans, sessionCatalog, TemporaryTables, type CatalogApi } from './temporary.ts'
@@ -1180,7 +1180,7 @@ export class SqlExecutor implements Executor {
       orReplace: statement.orReplace === true,
       validate: () => {
         // These are proven rejections, not a complete updatability classifier.
-        if (statement.checkOption !== undefined && (statement.algorithm === 'TEMPTABLE' || !mergeable)) throw sqlError('ER_VIEW_NONUPD_CHECK', `CHECK OPTION on non-updatable view '${schema}.${def.name}'`)
+        if (statement.checkOption !== undefined && (statement.algorithm === 'TEMPTABLE' || !mergeable || !viewHasDirectFields(statement.query))) throw sqlError('ER_VIEW_NONUPD_CHECK', `CHECK OPTION on non-updatable view '${schema}.${def.name}'`)
       },
     })
     return { affectedRows: 0 }
