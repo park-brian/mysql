@@ -52,8 +52,10 @@ BLOB formatting independently of SQL display metadata; computed items and
 canonical caches clear that reading. Reduced scalar fields and actual window/
 derived fields keep it. Transparent set parentheses now retain the enclosing
 holder and operator/nullability context; clause-owning blocks keep their owners.
-The 96 recorded nested numeric-copy gaps close. Numeric-to-text sorting before
-nested LIMIT, grouped readers/order, width-limited and large
+The 96 recorded nested numeric-copy gaps close. Ordered nested sets now read
+stored enclosing-holder values; all 38,016 holder/parentheses observations agree.
+WITH/ORDER-owning wrapper context and inherited-holder collation admission
+remain open, alongside grouped readers/order, width-limited and large
 fixed-scale formatting, DECIMAL diagnostics, warning timing and aggregate
 metadata remain open. UTF-16 writes still hit the existing encoder
 refusal. M2.3 covers UTF-8/generated single-byte encoding and supported decoding

@@ -9,6 +9,7 @@ import copies from './fixtures/functions/real-string-copies.json' with { type: '
 import blobs from './fixtures/functions/real-blob-copies.json' with { type: 'json' }
 import parentheses from './fixtures/functions/set-parentheses-expanded.json' with { type: 'json' }
 import nonnull from './fixtures/functions/set-parentheses-notnull.json' with { type: 'json' }
+import sorts from './fixtures/functions/set-sort-holders.json' with { type: 'json' }
 
 interface FloatReference {
   readonly mysqlVersion: string
@@ -59,7 +60,7 @@ test('partial REAL comparisons retain present rows even when every value is mask
   assert.throws(() => checkCells([[3]], expected, [0, 1], 'matching cell lost', false, [1]), /matching cell/)
 })
 
-for (const [capture, total, matched] of [[delivery, 952, 776], [readers.cases[0], 506, 506], [readers.cases[1], 230, 218], [readers.cases[2], 72, 72], [readers.cases[3], 36, 36], [readers.cases[4], 960, 960], [widths, 2340, 2293], [copies, 3664, 3568], [blobs, 1368, 1224], [parentheses, 10368, 10224], [nonnull, 27648, 27360]] as const) test('REAL readers and field delivery preserve native boundaries: ' + capture!.schema, async () => {
+for (const [capture, total, matched] of [[delivery, 952, 776], [readers.cases[0], 506, 506], [readers.cases[1], 230, 218], [readers.cases[2], 72, 72], [readers.cases[3], 36, 36], [readers.cases[4], 960, 960], [widths, 2340, 2293], [copies, 3664, 3568], [blobs, 1368, 1224], [parentheses, 10368, 10368], [nonnull, 27648, 27648], [sorts, 1380, 1380]] as const) test('REAL readers and field delivery preserve native boundaries: ' + capture!.schema, async () => {
   const reference = capture as FloatReference
   const host = process.env.MYSQL_REFERENCE_HOST
   const db = host === undefined ? await MySQL.open(':memory:') : undefined

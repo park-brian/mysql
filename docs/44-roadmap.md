@@ -58,22 +58,25 @@ The ORM review measured Drizzle's 487 passes and Prisma's 1,122 passes with the
 same reference snapshot failure at two workers. Browser work remains M6;
 InnoDB interchange remains M7, outside the staged Node release.
 
-**Current bounded function work:** REAL field-copy readers and transparent
-parentheses now preserve their actual enclosing set holder. Query blocks with
-no WITH, INTO, locking, ORDER BY or LIMIT retain both inherited types and the
-operator context that determines nullability. The 38,016 new native observations
-improve 34,164 to 37,584 complete matches, and all 96 older nested numeric-copy
-gaps close. The combined 48,144 observations improve 43,721 to 47,237, preserving
-every previously matching SQL cell and row-shape assertion. The remaining 432
-new mismatches concern numeric-to-text conversion before a nested descending
-sort and LIMIT. Audit that physical sort boundary next, including expression
-sort keys and explicit query-block owners; preserve reported metadata and
-operator/nullability authority. Grouped readers/order, correlated DEFAULT
-binding, width-limited and large fixed-scale formatting, DECIMAL diagnostics
-and warning timing remain open. The complete DECIMAL constructor rehearsal
-stays parked above the unchanged parser cap; grammar, diagnostics and refusal
-must ship together before presence/projection expansion. M2.3's codec scope
-remains explicit below. Totals remain 144/190 and M5 42/53.
+**Current bounded function work:** nested set sorting now reads converted
+values from the enclosing holder, preserving operator/nullability context and
+reported metadata. All 38,016 parentheses/holder observations agree completely;
+the last 432 descending text-sort gaps close. A further 30,240-observation audit
+improves 26,584 to 26,752 complete matches while preserving every previously
+matching cell and row shape. Its 168 newly repaired outcomes and 1,212 unchanged
+complete controls become focused regressions. The earlier native pools remain
+intact and their checks only strengthen.
+
+Next preserve holder context through WITH and ORDER-owning query wrappers while
+retaining their lexical/ordering owners. Separate collation admission against
+the inherited holder remains open: 1,152 new native errors are still accepted
+locally. The audit also retains the distinct fixed-FLOAT query-formatting gap;
+physical derived-table boundaries keep their own conversion. Grouped readers/
+order, correlated DEFAULT binding, width-limited/large fixed-scale formatting,
+DECIMAL diagnostics and warning timing remain open. The complete DECIMAL
+constructor rehearsal stays parked above the unchanged parser cap; grammar,
+diagnostics and refusal must ship together before presence/projection expansion.
+M2.3's codec scope remains explicit below. Totals remain 144/190 and M5 42/53.
 
 **Measured compatibility.** M5.2's committed coercion gate is complete:
 3,148 observations and 1,737 warning counts agree through both protocols.
@@ -2028,6 +2031,41 @@ proof covers 530 tests/fixtures and 206 runtime sources plus tooling. Parser,
 core and facade are 45,491/331,424/331,337 B gzipped; all nine caps are unchanged.
 Preceding 1ee3bfc passes all eleven required CI jobs. M5.10/M5.19 remain partial;
 totals stay 144/190 overall and M5 42/53.
+
+**M5.19 nested stored-value sorting, verified:** ordered nested sets receive
+the existing enclosing-holder type getter. Their lazy row reader converts each
+row with the shared set converter before sorting and limiting. Ordinary query
+blocks retain their existing reader. Columns, expression compilation, parent
+operator context and nullability remain unchanged; there is no new global flag,
+wire rule or public API.
+
+All 38,016 previous parentheses/holder outcomes now agree completely, closing
+432 remaining cases without changing any native outcome. A new 30,240-outcome
+native audit covers named/positional keys, arithmetic, CHAR casts, LENGTH,
+negation and COLLATE, including simple/redundant parentheses, WITH, an outer
+ORDER-owning wrapper and a derived-table boundary. It improves 26,584 to 26,752
+complete matches. The committed focused corpus includes every newly repaired
+outcome (168) and one unchanged complete control per owner/key/target/operator/
+protocol (1,212); all 1,380 are strict, with full native fields and diagnostics.
+The broader audit's 3,488 remaining mismatches are explicit: wrapper context,
+collation admission (1,152 native errors) and fixed-FLOAT query formatting remain
+separate work. This slice does not claim those broader cases as passing.
+
+Every previously matching SQL cell and row presence/width/count holds across
+82,766 audited observations, including 48,144 earlier REAL/set observations
+and 4,382 legacy controls. The combined old/new native audits improve 73,821 to
+74,421 complete matches out of 78,384. Existing native pools and check profiles
+are unchanged; masks/strict sets only strengthen. Thirteen targeted cases pass
+locally and natively, replaying all 49,524 committed outcomes against 8.4.11.
+Typecheck, 20,000 executor statements seeded 20261010, the unchanged 2,118 plan
+floor (2,127/2,248) and all nine size caps pass. Actual c93a334 fails all three
+strengthened regression groups. Fresh Docker --reference passes 1,624 main and
+four latency tests, lint/typecheck, package/typed smoke, the real client and all
+seven pinned corpora, including 1,737 coercion warning counts. Its early source
+proof checks 531 tests/fixtures and 206 runtime sources plus tooling. Parser,
+core and facade are 45,491/331,450/331,374 B gzipped under unchanged caps.
+Preceding c93a334 passes all eleven required CI jobs. M5.10/M5.19 remain partial;
+totals stay 144/190 and M5 42/53.
 
 **Next prerequisite: constructor admission before presence execution.** Complete
 the existing CAST work: with written utf8 warning 3719 now retained, refuse

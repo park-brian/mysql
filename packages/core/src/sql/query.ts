@@ -1749,7 +1749,7 @@ function planSetOperation(run: Run, node: SetOperationNode, parent?: { readonly 
     if (b.kind === QUERY.QUERY && b.with === undefined && b.into === undefined && b.locking === undefined && b.orderBy === undefined && b.limit === undefined) return branch(b.body)
     if (b.kind === QUERY.SET_OPERATION) return planSetOperation(run, b, context)
     // A parenthesised set operation is still a branch of this one.
-    if (b.kind === QUERY.QUERY && b.body.kind === QUERY.SET_OPERATION && b.with === undefined) return orderedResult(run, b, planSetOperation(run, b.body, context))
+    if (b.kind === QUERY.QUERY && b.body.kind === QUERY.SET_OPERATION && b.with === undefined) return orderedResult(run, b, planSetOperation(run, b.body, context), comparisonTypes)
     return planQuery(run, asQuery(b))
   }
   const left = branch(node.left)
@@ -1807,7 +1807,7 @@ function setOperationNode(m: SetMembers, materialized: boolean): PlanNode {
  * — a set operation's, or a parenthesised query's. It sees only the result's
  * columns, by position or name; a table-qualified name is 1250.
  */
-function orderedResult(run: Run, q: QueryExpression, plan: SelectPlan): SelectPlan {
+function orderedResult(run: Run, q: QueryExpression, plan: SelectPlan, holder?: () => readonly ResultType[]): SelectPlan {
   if (q.orderBy === undefined && q.limit === undefined) return plan
   const scope = new TableScope([{ alias: '\u0000result', columns: plan.columns }])
   const keys = (q.orderBy ?? []).map((o): SortKey => {
@@ -1839,7 +1839,13 @@ function orderedResult(run: Run, q: QueryExpression, plan: SelectPlan): SelectPl
     },
     rows(trx, given) {
       const env = executionEnv(run, trx, given)
-      return values(runStages(rowed(plan.rows(trx, given)), stages, env))
+      const rows = plan.rows(trx, given)
+      // A nested set sorts the enclosing holder's stored values, not raw items.
+      const stored = holder === undefined ? rows : (function* () {
+        const types = holder()
+        for (const row of rows) yield row.map((v, i) => convertSetValue(v, types[i] as ResultType))
+      })()
+      return values(runStages(rowed(stored), stages, env))
     },
   }
 }
