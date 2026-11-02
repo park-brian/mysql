@@ -43,6 +43,7 @@ import {
   type DropNode,
   type Expression,
   type QueryExpression,
+  type SelectNode,
   type SetNode,
   type ShowNode,
   type Statement,
@@ -353,14 +354,20 @@ export class SqlExecutor implements Executor {
         appendConditions(conditions, construction.slice(0, limit))
         state.previous = conditions.diagnostics
       }
-      const diagnostic = statement !== null && this.#admitStatement(statement, state, session)
-      if (statement === null || (diagnostic && construction === undefined) || isDiagnostic(statement)) throw sqlError('ER_UNSUPPORTED_PS', 'This command is not supported in the prepared statement protocol yet')
+      const admission = statement === null ? undefined : this.#admitStatement(statement, state, session)
+      if (statement === null || (admission?.diagnostic === true && construction === undefined) || isDiagnostic(statement)) throw sqlError('ER_UNSUPPORTED_PS', 'This command is not supported in the prepared statement protocol yet')
       binaryDeclarations(statement, conditions, limit)
       await this.#preload(session, statement)
       this.#alive(session)
       let columns: PreparedInfo['columns'] = []
       if (statement.kind === STATEMENT.QUERY) {
-        const run = { ...this.#run(session, sql, [], undefined, 'binary', conditions), preparing: true }
+        const run = {
+          ...this.#run(session, sql, [], undefined, 'binary', conditions), preparing: true,
+          admitQuery: (query: QueryExpression, sources?: boolean): void => {
+            admission?.query(query, sources)
+            if (admission?.diagnostic === true && construction === undefined) throw sqlError('ER_UNSUPPORTED_PS', 'This command is not supported in the prepared statement protocol yet')
+          },
+        }
         columns = columnsOf(run, planQuery(run, statement).columns)
       }
       // Every supported statement may have a large parameter response.
@@ -372,8 +379,8 @@ export class SqlExecutor implements Executor {
     }
   }
 
-  /** Ordered AST admission before effects; return whether diagnostic counters are read. */
-  #admitStatement(statement: Statement, state: SqlSession, session: Session): boolean {
+  /** Ordered admission before effects; CTE definitions join it when demanded. */
+  #admitStatement(statement: Statement, state: SqlSession, session: Session): { readonly diagnostic: boolean; readonly query: (query: QueryExpression, sources?: boolean) => void } {
     const view = statement.kind === STATEMENT.CREATE_VIEW
     if (view && someNode(statement.query, (n) => ((n as QueryExpression).kind === QUERY.QUERY && (n as QueryExpression).into !== undefined) || undefined)) throw sqlError('ER_VIEW_SELECT_CLAUSE', "View's SELECT contains a 'INTO' clause")
     let diagnostic = false
@@ -394,6 +401,30 @@ export class SqlExecutor implements Executor {
         if (name === 'warning_count' || name === 'error_count') diagnostic = true
       }
       return undefined
+    }
+    const admitted = new WeakSet<QueryExpression>()
+    const completed = new WeakSet<QueryExpression>()
+    const admitQuery = (query: QueryExpression, sources = false): void => {
+      const seen = sources ? completed : admitted
+      if (seen.has(query)) return
+      seen.add(query)
+      // The planner's lexical CTE factories own demand, including shadowing.
+      const { kind: _kind, with: _with, body, ...clauses } = query
+      someNode(sources ? { body, ...clauses } : body, sources ? visitComplete : visitQuery)
+    }
+    const visitComplete = (node: object): boolean | undefined => {
+      if ((node as QueryExpression).kind === QUERY.QUERY) {
+        admitQuery(node as QueryExpression)
+        return false
+      }
+      return bind(node)
+    }
+    const visitQuery = (node: object): boolean | undefined => {
+      if ((node as SelectNode).kind === QUERY.SELECT) {
+        someNode((node as SelectNode).items, visitComplete)
+        return false
+      }
+      return visitComplete(node)
     }
     const bindColumnExpression = (node: object): boolean | undefined => {
       const e = node as Expression
@@ -431,11 +462,11 @@ export class SqlExecutor implements Executor {
         if (action.type === 'addColumn' || action.type === 'changeColumn') admitColumn(action.column)
         else someNode(action, action.type === 'addCheck' ? bindColumnExpression : bind)
       }
-    } else someNode(statement, bind)
+    } else someNode(statement, statement.kind === STATEMENT.QUERY ? visitQuery : bind)
     if (statement.kind === STATEMENT.SET) for (const item of statement.items) {
       if (item.type === 'system' || item.type === 'name') this.server.assignment(item)
     }
-    return diagnostic
+    return { get diagnostic() { return diagnostic }, query: admitQuery }
   }
 
   async initDb(session: Session, database: string): Promise<void> {
@@ -633,9 +664,9 @@ export class SqlExecutor implements Executor {
           if (protocol === 'text') appendConditions(conditions, construction.slice(0, limit))
           state.previous = conditions.diagnostics
         }
-        this.#admitStatement(statement, state, session)
+        const admission = this.#admitStatement(statement, state, session)
         if (protocol === 'text') binaryDeclarations(statement, conditions, limit)
-        const run = this.#run(session, sql, params, known, protocol, conditions)
+        const run = { ...this.#run(session, sql, params, known, protocol, conditions), admitQuery: admission.query }
         const batches: ResultSet[] | undefined = stream ? [] : undefined
         const dispatched = this.#dispatch(run, statement, batches === undefined ? undefined : (batch) => batches.push(batch))
         if (!isSteps(dispatched)) return settle(dispatched)

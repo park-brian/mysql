@@ -1,0 +1,4273 @@
+{
+  "mysqlVersion": "8.4.11",
+  "sqlMode": "ERROR_FOR_DIVISION_BY_ZERO",
+  "seed": "SELECT 1/0,CAST('x' AS DECIMAL)",
+  "observations": [
+    {
+      "sql": "WITH c AS(SELECT @@warning_count AS v) SELECT 1 AS v",
+      "api": "query",
+      "rows": [
+        [
+          1
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          8,
+          2,
+          129,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "WITH c AS(SELECT @@warning_count AS v) SELECT 1 AS v",
+      "api": "execute",
+      "rows": [
+        [
+          1
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          8,
+          2,
+          129,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "WITH c AS(SELECT @@warning_count AS v) SELECT 1 AS v",
+      "api": "prepare",
+      "parameters": [],
+      "fields": [
+        [
+          "v",
+          8,
+          2,
+          129,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "WITH c AS(SELECT @@warning_count AS v) SELECT 1 AS v LIMIT 0",
+      "api": "query",
+      "rows": [],
+      "fields": [
+        [
+          "v",
+          8,
+          2,
+          129,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "WITH c AS(SELECT @@warning_count AS v) SELECT 1 AS v LIMIT 0",
+      "api": "execute",
+      "rows": [],
+      "fields": [
+        [
+          "v",
+          8,
+          2,
+          129,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "WITH c AS(SELECT @@warning_count AS v) SELECT 1 AS v LIMIT 0",
+      "api": "prepare",
+      "parameters": [],
+      "fields": [
+        [
+          "v",
+          8,
+          2,
+          129,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "WITH c AS(SELECT @@warning_count AS v) SELECT 1 AS v WHERE FALSE",
+      "api": "query",
+      "rows": [],
+      "fields": [
+        [
+          "v",
+          8,
+          2,
+          129,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "WITH c AS(SELECT @@warning_count AS v) SELECT 1 AS v WHERE FALSE",
+      "api": "execute",
+      "rows": [],
+      "fields": [
+        [
+          "v",
+          8,
+          2,
+          129,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "WITH c AS(SELECT @@warning_count AS v) SELECT 1 AS v WHERE FALSE",
+      "api": "prepare",
+      "parameters": [],
+      "fields": [
+        [
+          "v",
+          8,
+          2,
+          129,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "WITH c AS(SELECT @@warning_count AS v) SELECT 1 AS v ORDER BY v",
+      "api": "query",
+      "rows": [
+        [
+          1
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          8,
+          2,
+          129,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "WITH c AS(SELECT @@warning_count AS v) SELECT 1 AS v ORDER BY v",
+      "api": "execute",
+      "rows": [
+        [
+          1
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          8,
+          2,
+          129,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "WITH c AS(SELECT @@warning_count AS v) SELECT 1 AS v ORDER BY v",
+      "api": "prepare",
+      "parameters": [],
+      "fields": [
+        [
+          "v",
+          8,
+          2,
+          129,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "WITH c AS(SELECT @@warning_count AS v) SELECT (SELECT 1) AS v",
+      "api": "query",
+      "rows": [
+        [
+          1
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          8,
+          2,
+          129,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "WITH c AS(SELECT @@warning_count AS v) SELECT (SELECT 1) AS v",
+      "api": "execute",
+      "rows": [
+        [
+          1
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          8,
+          2,
+          129,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "WITH c AS(SELECT @@warning_count AS v) SELECT (SELECT 1) AS v",
+      "api": "prepare",
+      "parameters": [],
+      "fields": [
+        [
+          "v",
+          8,
+          2,
+          129,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "WITH c AS(SELECT @@warning_count AS v) SELECT v FROM c",
+      "api": "query",
+      "rows": [
+        [
+          2
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          8,
+          21,
+          32,
+          0,
+          63,
+          "",
+          "c",
+          "",
+          "v"
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "WITH c AS(SELECT @@warning_count AS v) SELECT v FROM c",
+      "api": "execute",
+      "error": {
+        "code": "ER_UNSUPPORTED_PS",
+        "errno": 1295,
+        "state": "HY000",
+        "message": "This command is not supported in the prepared statement protocol yet"
+      },
+      "warnings": [
+        [
+          "Error",
+          1295,
+          "This command is not supported in the prepared statement protocol yet"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "WITH c AS(SELECT @@warning_count AS v) SELECT v FROM c",
+      "api": "prepare",
+      "error": {
+        "code": "ER_UNSUPPORTED_PS",
+        "errno": 1295,
+        "state": "HY000",
+        "message": "This command is not supported in the prepared statement protocol yet"
+      },
+      "warnings": [
+        [
+          "Error",
+          1295,
+          "This command is not supported in the prepared statement protocol yet"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "WITH c AS(SELECT @@warning_count AS v) SELECT @@warning_count AS v",
+      "api": "query",
+      "rows": [
+        [
+          2
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          8,
+          21,
+          160,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "WITH c AS(SELECT @@warning_count AS v) SELECT @@warning_count AS v",
+      "api": "execute",
+      "error": {
+        "code": "ER_UNSUPPORTED_PS",
+        "errno": 1295,
+        "state": "HY000",
+        "message": "This command is not supported in the prepared statement protocol yet"
+      },
+      "warnings": [
+        [
+          "Error",
+          1295,
+          "This command is not supported in the prepared statement protocol yet"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "WITH c AS(SELECT @@warning_count AS v) SELECT @@warning_count AS v",
+      "api": "prepare",
+      "error": {
+        "code": "ER_UNSUPPORTED_PS",
+        "errno": 1295,
+        "state": "HY000",
+        "message": "This command is not supported in the prepared statement protocol yet"
+      },
+      "warnings": [
+        [
+          "Error",
+          1295,
+          "This command is not supported in the prepared statement protocol yet"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "WITH c AS(SELECT @@warning_count AS v) SELECT v FROM missing",
+      "api": "query",
+      "error": {
+        "code": "ER_NO_DB_ERROR",
+        "errno": 1046,
+        "state": "3D000",
+        "message": "No database selected"
+      },
+      "warnings": [
+        [
+          "Error",
+          1046,
+          "No database selected"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "WITH c AS(SELECT @@warning_count AS v) SELECT v FROM missing",
+      "api": "execute",
+      "error": {
+        "code": "ER_NO_DB_ERROR",
+        "errno": 1046,
+        "state": "3D000",
+        "message": "No database selected"
+      },
+      "warnings": [
+        [
+          "Error",
+          1046,
+          "No database selected"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "WITH c AS(SELECT @@warning_count AS v) SELECT v FROM missing",
+      "api": "prepare",
+      "error": {
+        "code": "ER_NO_DB_ERROR",
+        "errno": 1046,
+        "state": "3D000",
+        "message": "No database selected"
+      },
+      "warnings": [
+        [
+          "Error",
+          1046,
+          "No database selected"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "WITH c AS(SELECT @@error_count AS v) SELECT 1 AS v",
+      "api": "query",
+      "rows": [
+        [
+          1
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          8,
+          2,
+          129,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "WITH c AS(SELECT @@error_count AS v) SELECT 1 AS v",
+      "api": "execute",
+      "rows": [
+        [
+          1
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          8,
+          2,
+          129,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "WITH c AS(SELECT @@error_count AS v) SELECT 1 AS v",
+      "api": "prepare",
+      "parameters": [],
+      "fields": [
+        [
+          "v",
+          8,
+          2,
+          129,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "WITH c AS(SELECT @@error_count AS v) SELECT 1 AS v LIMIT 0",
+      "api": "query",
+      "rows": [],
+      "fields": [
+        [
+          "v",
+          8,
+          2,
+          129,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "WITH c AS(SELECT @@error_count AS v) SELECT 1 AS v LIMIT 0",
+      "api": "execute",
+      "rows": [],
+      "fields": [
+        [
+          "v",
+          8,
+          2,
+          129,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "WITH c AS(SELECT @@error_count AS v) SELECT 1 AS v LIMIT 0",
+      "api": "prepare",
+      "parameters": [],
+      "fields": [
+        [
+          "v",
+          8,
+          2,
+          129,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "WITH c AS(SELECT @@error_count AS v) SELECT 1 AS v WHERE FALSE",
+      "api": "query",
+      "rows": [],
+      "fields": [
+        [
+          "v",
+          8,
+          2,
+          129,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "WITH c AS(SELECT @@error_count AS v) SELECT 1 AS v WHERE FALSE",
+      "api": "execute",
+      "rows": [],
+      "fields": [
+        [
+          "v",
+          8,
+          2,
+          129,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "WITH c AS(SELECT @@error_count AS v) SELECT 1 AS v WHERE FALSE",
+      "api": "prepare",
+      "parameters": [],
+      "fields": [
+        [
+          "v",
+          8,
+          2,
+          129,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "WITH c AS(SELECT @@error_count AS v) SELECT 1 AS v ORDER BY v",
+      "api": "query",
+      "rows": [
+        [
+          1
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          8,
+          2,
+          129,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "WITH c AS(SELECT @@error_count AS v) SELECT 1 AS v ORDER BY v",
+      "api": "execute",
+      "rows": [
+        [
+          1
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          8,
+          2,
+          129,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "WITH c AS(SELECT @@error_count AS v) SELECT 1 AS v ORDER BY v",
+      "api": "prepare",
+      "parameters": [],
+      "fields": [
+        [
+          "v",
+          8,
+          2,
+          129,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "WITH c AS(SELECT @@error_count AS v) SELECT (SELECT 1) AS v",
+      "api": "query",
+      "rows": [
+        [
+          1
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          8,
+          2,
+          129,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "WITH c AS(SELECT @@error_count AS v) SELECT (SELECT 1) AS v",
+      "api": "execute",
+      "rows": [
+        [
+          1
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          8,
+          2,
+          129,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "WITH c AS(SELECT @@error_count AS v) SELECT (SELECT 1) AS v",
+      "api": "prepare",
+      "parameters": [],
+      "fields": [
+        [
+          "v",
+          8,
+          2,
+          129,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "WITH c AS(SELECT @@error_count AS v) SELECT v FROM c",
+      "api": "query",
+      "rows": [
+        [
+          0
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          8,
+          21,
+          32,
+          0,
+          63,
+          "",
+          "c",
+          "",
+          "v"
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "WITH c AS(SELECT @@error_count AS v) SELECT v FROM c",
+      "api": "execute",
+      "error": {
+        "code": "ER_UNSUPPORTED_PS",
+        "errno": 1295,
+        "state": "HY000",
+        "message": "This command is not supported in the prepared statement protocol yet"
+      },
+      "warnings": [
+        [
+          "Error",
+          1295,
+          "This command is not supported in the prepared statement protocol yet"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "WITH c AS(SELECT @@error_count AS v) SELECT v FROM c",
+      "api": "prepare",
+      "error": {
+        "code": "ER_UNSUPPORTED_PS",
+        "errno": 1295,
+        "state": "HY000",
+        "message": "This command is not supported in the prepared statement protocol yet"
+      },
+      "warnings": [
+        [
+          "Error",
+          1295,
+          "This command is not supported in the prepared statement protocol yet"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "WITH c AS(SELECT @@error_count AS v) SELECT @@warning_count AS v",
+      "api": "query",
+      "rows": [
+        [
+          2
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          8,
+          21,
+          160,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "WITH c AS(SELECT @@error_count AS v) SELECT @@warning_count AS v",
+      "api": "execute",
+      "error": {
+        "code": "ER_UNSUPPORTED_PS",
+        "errno": 1295,
+        "state": "HY000",
+        "message": "This command is not supported in the prepared statement protocol yet"
+      },
+      "warnings": [
+        [
+          "Error",
+          1295,
+          "This command is not supported in the prepared statement protocol yet"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "WITH c AS(SELECT @@error_count AS v) SELECT @@warning_count AS v",
+      "api": "prepare",
+      "error": {
+        "code": "ER_UNSUPPORTED_PS",
+        "errno": 1295,
+        "state": "HY000",
+        "message": "This command is not supported in the prepared statement protocol yet"
+      },
+      "warnings": [
+        [
+          "Error",
+          1295,
+          "This command is not supported in the prepared statement protocol yet"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "WITH c AS(SELECT @@error_count AS v) SELECT v FROM missing",
+      "api": "query",
+      "error": {
+        "code": "ER_NO_DB_ERROR",
+        "errno": 1046,
+        "state": "3D000",
+        "message": "No database selected"
+      },
+      "warnings": [
+        [
+          "Error",
+          1046,
+          "No database selected"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "WITH c AS(SELECT @@error_count AS v) SELECT v FROM missing",
+      "api": "execute",
+      "error": {
+        "code": "ER_NO_DB_ERROR",
+        "errno": 1046,
+        "state": "3D000",
+        "message": "No database selected"
+      },
+      "warnings": [
+        [
+          "Error",
+          1046,
+          "No database selected"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "WITH c AS(SELECT @@error_count AS v) SELECT v FROM missing",
+      "api": "prepare",
+      "error": {
+        "code": "ER_NO_DB_ERROR",
+        "errno": 1046,
+        "state": "3D000",
+        "message": "No database selected"
+      },
+      "warnings": [
+        [
+          "Error",
+          1046,
+          "No database selected"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "WITH c AS(SELECT @@no_such_250 AS v) SELECT 1 AS v",
+      "api": "query",
+      "rows": [
+        [
+          1
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          8,
+          2,
+          129,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "WITH c AS(SELECT @@no_such_250 AS v) SELECT 1 AS v",
+      "api": "execute",
+      "rows": [
+        [
+          1
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          8,
+          2,
+          129,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "WITH c AS(SELECT @@no_such_250 AS v) SELECT 1 AS v",
+      "api": "prepare",
+      "parameters": [],
+      "fields": [
+        [
+          "v",
+          8,
+          2,
+          129,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "WITH c AS(SELECT @@no_such_250 AS v) SELECT 1 AS v LIMIT 0",
+      "api": "query",
+      "rows": [],
+      "fields": [
+        [
+          "v",
+          8,
+          2,
+          129,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "WITH c AS(SELECT @@no_such_250 AS v) SELECT 1 AS v LIMIT 0",
+      "api": "execute",
+      "rows": [],
+      "fields": [
+        [
+          "v",
+          8,
+          2,
+          129,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "WITH c AS(SELECT @@no_such_250 AS v) SELECT 1 AS v LIMIT 0",
+      "api": "prepare",
+      "parameters": [],
+      "fields": [
+        [
+          "v",
+          8,
+          2,
+          129,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "WITH c AS(SELECT @@no_such_250 AS v) SELECT 1 AS v WHERE FALSE",
+      "api": "query",
+      "rows": [],
+      "fields": [
+        [
+          "v",
+          8,
+          2,
+          129,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "WITH c AS(SELECT @@no_such_250 AS v) SELECT 1 AS v WHERE FALSE",
+      "api": "execute",
+      "rows": [],
+      "fields": [
+        [
+          "v",
+          8,
+          2,
+          129,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "WITH c AS(SELECT @@no_such_250 AS v) SELECT 1 AS v WHERE FALSE",
+      "api": "prepare",
+      "parameters": [],
+      "fields": [
+        [
+          "v",
+          8,
+          2,
+          129,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "WITH c AS(SELECT @@no_such_250 AS v) SELECT 1 AS v ORDER BY v",
+      "api": "query",
+      "rows": [
+        [
+          1
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          8,
+          2,
+          129,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "WITH c AS(SELECT @@no_such_250 AS v) SELECT 1 AS v ORDER BY v",
+      "api": "execute",
+      "rows": [
+        [
+          1
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          8,
+          2,
+          129,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "WITH c AS(SELECT @@no_such_250 AS v) SELECT 1 AS v ORDER BY v",
+      "api": "prepare",
+      "parameters": [],
+      "fields": [
+        [
+          "v",
+          8,
+          2,
+          129,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "WITH c AS(SELECT @@no_such_250 AS v) SELECT (SELECT 1) AS v",
+      "api": "query",
+      "rows": [
+        [
+          1
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          8,
+          2,
+          129,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "WITH c AS(SELECT @@no_such_250 AS v) SELECT (SELECT 1) AS v",
+      "api": "execute",
+      "rows": [
+        [
+          1
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          8,
+          2,
+          129,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "WITH c AS(SELECT @@no_such_250 AS v) SELECT (SELECT 1) AS v",
+      "api": "prepare",
+      "parameters": [],
+      "fields": [
+        [
+          "v",
+          8,
+          2,
+          129,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "WITH c AS(SELECT @@no_such_250 AS v) SELECT v FROM c",
+      "api": "query",
+      "error": {
+        "code": "ER_UNKNOWN_SYSTEM_VARIABLE",
+        "errno": 1193,
+        "state": "HY000",
+        "message": "Unknown system variable 'no_such_250'"
+      },
+      "warnings": [
+        [
+          "Error",
+          1193,
+          "Unknown system variable 'no_such_250'"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "WITH c AS(SELECT @@no_such_250 AS v) SELECT v FROM c",
+      "api": "execute",
+      "error": {
+        "code": "ER_UNKNOWN_SYSTEM_VARIABLE",
+        "errno": 1193,
+        "state": "HY000",
+        "message": "Unknown system variable 'no_such_250'"
+      },
+      "warnings": [
+        [
+          "Error",
+          1193,
+          "Unknown system variable 'no_such_250'"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "WITH c AS(SELECT @@no_such_250 AS v) SELECT v FROM c",
+      "api": "prepare",
+      "error": {
+        "code": "ER_UNKNOWN_SYSTEM_VARIABLE",
+        "errno": 1193,
+        "state": "HY000",
+        "message": "Unknown system variable 'no_such_250'"
+      },
+      "warnings": [
+        [
+          "Error",
+          1193,
+          "Unknown system variable 'no_such_250'"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "WITH c AS(SELECT @@no_such_250 AS v) SELECT @@warning_count AS v",
+      "api": "query",
+      "rows": [
+        [
+          2
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          8,
+          21,
+          160,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "WITH c AS(SELECT @@no_such_250 AS v) SELECT @@warning_count AS v",
+      "api": "execute",
+      "error": {
+        "code": "ER_UNSUPPORTED_PS",
+        "errno": 1295,
+        "state": "HY000",
+        "message": "This command is not supported in the prepared statement protocol yet"
+      },
+      "warnings": [
+        [
+          "Error",
+          1295,
+          "This command is not supported in the prepared statement protocol yet"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "WITH c AS(SELECT @@no_such_250 AS v) SELECT @@warning_count AS v",
+      "api": "prepare",
+      "error": {
+        "code": "ER_UNSUPPORTED_PS",
+        "errno": 1295,
+        "state": "HY000",
+        "message": "This command is not supported in the prepared statement protocol yet"
+      },
+      "warnings": [
+        [
+          "Error",
+          1295,
+          "This command is not supported in the prepared statement protocol yet"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "WITH c AS(SELECT @@no_such_250 AS v) SELECT v FROM missing",
+      "api": "query",
+      "error": {
+        "code": "ER_NO_DB_ERROR",
+        "errno": 1046,
+        "state": "3D000",
+        "message": "No database selected"
+      },
+      "warnings": [
+        [
+          "Error",
+          1046,
+          "No database selected"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "WITH c AS(SELECT @@no_such_250 AS v) SELECT v FROM missing",
+      "api": "execute",
+      "error": {
+        "code": "ER_NO_DB_ERROR",
+        "errno": 1046,
+        "state": "3D000",
+        "message": "No database selected"
+      },
+      "warnings": [
+        [
+          "Error",
+          1046,
+          "No database selected"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "WITH c AS(SELECT @@no_such_250 AS v) SELECT v FROM missing",
+      "api": "prepare",
+      "error": {
+        "code": "ER_NO_DB_ERROR",
+        "errno": 1046,
+        "state": "3D000",
+        "message": "No database selected"
+      },
+      "warnings": [
+        [
+          "Error",
+          1046,
+          "No database selected"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "WITH c AS(SELECT @@warning_count v),d AS(SELECT * FROM c) SELECT 1",
+      "api": "query",
+      "rows": [
+        [
+          1
+        ]
+      ],
+      "fields": [
+        [
+          "1",
+          8,
+          2,
+          129,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "WITH c AS(SELECT @@warning_count v),d AS(SELECT * FROM c) SELECT 1",
+      "api": "execute",
+      "rows": [
+        [
+          1
+        ]
+      ],
+      "fields": [
+        [
+          "1",
+          8,
+          2,
+          129,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "WITH c AS(SELECT @@warning_count v),d AS(SELECT * FROM c) SELECT 1",
+      "api": "prepare",
+      "parameters": [],
+      "fields": [
+        [
+          "1",
+          8,
+          2,
+          129,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT @@bad_main_250 FROM missing",
+      "api": "query",
+      "error": {
+        "code": "ER_UNKNOWN_SYSTEM_VARIABLE",
+        "errno": 1193,
+        "state": "HY000",
+        "message": "Unknown system variable 'bad_main_250'"
+      },
+      "warnings": [
+        [
+          "Error",
+          1193,
+          "Unknown system variable 'bad_main_250'"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "SELECT @@bad_main_250 FROM missing",
+      "api": "execute",
+      "error": {
+        "code": "ER_UNKNOWN_SYSTEM_VARIABLE",
+        "errno": 1193,
+        "state": "HY000",
+        "message": "Unknown system variable 'bad_main_250'"
+      },
+      "warnings": [
+        [
+          "Error",
+          1193,
+          "Unknown system variable 'bad_main_250'"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "SELECT @@bad_main_250 FROM missing",
+      "api": "prepare",
+      "error": {
+        "code": "ER_UNKNOWN_SYSTEM_VARIABLE",
+        "errno": 1193,
+        "state": "HY000",
+        "message": "Unknown system variable 'bad_main_250'"
+      },
+      "warnings": [
+        [
+          "Error",
+          1193,
+          "Unknown system variable 'bad_main_250'"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "SELECT @@bad_main_250,aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa()",
+      "api": "query",
+      "error": {
+        "code": "ER_UNKNOWN_SYSTEM_VARIABLE",
+        "errno": 1193,
+        "state": "HY000",
+        "message": "Unknown system variable 'bad_main_250'"
+      },
+      "warnings": [
+        [
+          "Error",
+          1193,
+          "Unknown system variable 'bad_main_250'"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "SELECT @@bad_main_250,aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa()",
+      "api": "execute",
+      "error": {
+        "code": "ER_UNKNOWN_SYSTEM_VARIABLE",
+        "errno": 1193,
+        "state": "HY000",
+        "message": "Unknown system variable 'bad_main_250'"
+      },
+      "warnings": [
+        [
+          "Error",
+          1193,
+          "Unknown system variable 'bad_main_250'"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "SELECT @@bad_main_250,aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa()",
+      "api": "prepare",
+      "error": {
+        "code": "ER_UNKNOWN_SYSTEM_VARIABLE",
+        "errno": 1193,
+        "state": "HY000",
+        "message": "Unknown system variable 'bad_main_250'"
+      },
+      "warnings": [
+        [
+          "Error",
+          1193,
+          "Unknown system variable 'bad_main_250'"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "SELECT aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa(),@@bad_main_250",
+      "api": "query",
+      "error": {
+        "code": "ER_TOO_LONG_IDENT",
+        "errno": 1059,
+        "state": "42000",
+        "message": "Identifier name 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa' is too long"
+      },
+      "warnings": [
+        [
+          "Error",
+          1059,
+          "Identifier name 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa' is too long"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "SELECT aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa(),@@bad_main_250",
+      "api": "execute",
+      "error": {
+        "code": "ER_TOO_LONG_IDENT",
+        "errno": 1059,
+        "state": "42000",
+        "message": "Identifier name 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa' is too long"
+      },
+      "warnings": [
+        [
+          "Error",
+          1059,
+          "Identifier name 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa' is too long"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "SELECT aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa(),@@bad_main_250",
+      "api": "prepare",
+      "error": {
+        "code": "ER_TOO_LONG_IDENT",
+        "errno": 1059,
+        "state": "42000",
+        "message": "Identifier name 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa' is too long"
+      },
+      "warnings": [
+        [
+          "Error",
+          1059,
+          "Identifier name 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa' is too long"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "WITH c AS(SELECT @@bad_cte_250 v) SELECT @@bad_main_250 FROM c",
+      "api": "query",
+      "error": {
+        "code": "ER_UNKNOWN_SYSTEM_VARIABLE",
+        "errno": 1193,
+        "state": "HY000",
+        "message": "Unknown system variable 'bad_main_250'"
+      },
+      "warnings": [
+        [
+          "Error",
+          1193,
+          "Unknown system variable 'bad_main_250'"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "WITH c AS(SELECT @@bad_cte_250 v) SELECT @@bad_main_250 FROM c",
+      "api": "execute",
+      "error": {
+        "code": "ER_UNKNOWN_SYSTEM_VARIABLE",
+        "errno": 1193,
+        "state": "HY000",
+        "message": "Unknown system variable 'bad_main_250'"
+      },
+      "warnings": [
+        [
+          "Error",
+          1193,
+          "Unknown system variable 'bad_main_250'"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "WITH c AS(SELECT @@bad_cte_250 v) SELECT @@bad_main_250 FROM c",
+      "api": "prepare",
+      "error": {
+        "code": "ER_UNKNOWN_SYSTEM_VARIABLE",
+        "errno": 1193,
+        "state": "HY000",
+        "message": "Unknown system variable 'bad_main_250'"
+      },
+      "warnings": [
+        [
+          "Error",
+          1193,
+          "Unknown system variable 'bad_main_250'"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "WITH c AS(SELECT @@bad_cte_250 v) SELECT @@bad_main_250 FROM missing",
+      "api": "query",
+      "error": {
+        "code": "ER_UNKNOWN_SYSTEM_VARIABLE",
+        "errno": 1193,
+        "state": "HY000",
+        "message": "Unknown system variable 'bad_main_250'"
+      },
+      "warnings": [
+        [
+          "Error",
+          1193,
+          "Unknown system variable 'bad_main_250'"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "WITH c AS(SELECT @@bad_cte_250 v) SELECT @@bad_main_250 FROM missing",
+      "api": "execute",
+      "error": {
+        "code": "ER_UNKNOWN_SYSTEM_VARIABLE",
+        "errno": 1193,
+        "state": "HY000",
+        "message": "Unknown system variable 'bad_main_250'"
+      },
+      "warnings": [
+        [
+          "Error",
+          1193,
+          "Unknown system variable 'bad_main_250'"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "WITH c AS(SELECT @@bad_cte_250 v) SELECT @@bad_main_250 FROM missing",
+      "api": "prepare",
+      "error": {
+        "code": "ER_UNKNOWN_SYSTEM_VARIABLE",
+        "errno": 1193,
+        "state": "HY000",
+        "message": "Unknown system variable 'bad_main_250'"
+      },
+      "warnings": [
+        [
+          "Error",
+          1193,
+          "Unknown system variable 'bad_main_250'"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "WITH c AS(SELECT @@bad_cte_250 v) SELECT 1 FROM missing JOIN c",
+      "api": "query",
+      "error": {
+        "code": "ER_NO_DB_ERROR",
+        "errno": 1046,
+        "state": "3D000",
+        "message": "No database selected"
+      },
+      "warnings": [
+        [
+          "Error",
+          1046,
+          "No database selected"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "WITH c AS(SELECT @@bad_cte_250 v) SELECT 1 FROM missing JOIN c",
+      "api": "execute",
+      "error": {
+        "code": "ER_NO_DB_ERROR",
+        "errno": 1046,
+        "state": "3D000",
+        "message": "No database selected"
+      },
+      "warnings": [
+        [
+          "Error",
+          1046,
+          "No database selected"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "WITH c AS(SELECT @@bad_cte_250 v) SELECT 1 FROM missing JOIN c",
+      "api": "prepare",
+      "error": {
+        "code": "ER_NO_DB_ERROR",
+        "errno": 1046,
+        "state": "3D000",
+        "message": "No database selected"
+      },
+      "warnings": [
+        [
+          "Error",
+          1046,
+          "No database selected"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "WITH c AS(SELECT @@bad_cte_250 v) SELECT 1 FROM c JOIN missing",
+      "api": "query",
+      "error": {
+        "code": "ER_UNKNOWN_SYSTEM_VARIABLE",
+        "errno": 1193,
+        "state": "HY000",
+        "message": "Unknown system variable 'bad_cte_250'"
+      },
+      "warnings": [
+        [
+          "Error",
+          1193,
+          "Unknown system variable 'bad_cte_250'"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "WITH c AS(SELECT @@bad_cte_250 v) SELECT 1 FROM c JOIN missing",
+      "api": "execute",
+      "error": {
+        "code": "ER_UNKNOWN_SYSTEM_VARIABLE",
+        "errno": 1193,
+        "state": "HY000",
+        "message": "Unknown system variable 'bad_cte_250'"
+      },
+      "warnings": [
+        [
+          "Error",
+          1193,
+          "Unknown system variable 'bad_cte_250'"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "WITH c AS(SELECT @@bad_cte_250 v) SELECT 1 FROM c JOIN missing",
+      "api": "prepare",
+      "error": {
+        "code": "ER_UNKNOWN_SYSTEM_VARIABLE",
+        "errno": 1193,
+        "state": "HY000",
+        "message": "Unknown system variable 'bad_cte_250'"
+      },
+      "warnings": [
+        [
+          "Error",
+          1193,
+          "Unknown system variable 'bad_cte_250'"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "WITH c AS(SELECT @@bad_cte_250 v),d AS(SELECT @@bad_second_250 v) SELECT * FROM d JOIN c",
+      "api": "query",
+      "error": {
+        "code": "ER_UNKNOWN_SYSTEM_VARIABLE",
+        "errno": 1193,
+        "state": "HY000",
+        "message": "Unknown system variable 'bad_second_250'"
+      },
+      "warnings": [
+        [
+          "Error",
+          1193,
+          "Unknown system variable 'bad_second_250'"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "WITH c AS(SELECT @@bad_cte_250 v),d AS(SELECT @@bad_second_250 v) SELECT * FROM d JOIN c",
+      "api": "execute",
+      "error": {
+        "code": "ER_UNKNOWN_SYSTEM_VARIABLE",
+        "errno": 1193,
+        "state": "HY000",
+        "message": "Unknown system variable 'bad_second_250'"
+      },
+      "warnings": [
+        [
+          "Error",
+          1193,
+          "Unknown system variable 'bad_second_250'"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "WITH c AS(SELECT @@bad_cte_250 v),d AS(SELECT @@bad_second_250 v) SELECT * FROM d JOIN c",
+      "api": "prepare",
+      "error": {
+        "code": "ER_UNKNOWN_SYSTEM_VARIABLE",
+        "errno": 1193,
+        "state": "HY000",
+        "message": "Unknown system variable 'bad_second_250'"
+      },
+      "warnings": [
+        [
+          "Error",
+          1193,
+          "Unknown system variable 'bad_second_250'"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "WITH c AS(SELECT @@bad_cte_250 v) SELECT (SELECT @@bad_sub_250) FROM c",
+      "api": "query",
+      "error": {
+        "code": "ER_UNKNOWN_SYSTEM_VARIABLE",
+        "errno": 1193,
+        "state": "HY000",
+        "message": "Unknown system variable 'bad_sub_250'"
+      },
+      "warnings": [
+        [
+          "Error",
+          1193,
+          "Unknown system variable 'bad_sub_250'"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "WITH c AS(SELECT @@bad_cte_250 v) SELECT (SELECT @@bad_sub_250) FROM c",
+      "api": "execute",
+      "error": {
+        "code": "ER_UNKNOWN_SYSTEM_VARIABLE",
+        "errno": 1193,
+        "state": "HY000",
+        "message": "Unknown system variable 'bad_sub_250'"
+      },
+      "warnings": [
+        [
+          "Error",
+          1193,
+          "Unknown system variable 'bad_sub_250'"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "WITH c AS(SELECT @@bad_cte_250 v) SELECT (SELECT @@bad_sub_250) FROM c",
+      "api": "prepare",
+      "error": {
+        "code": "ER_UNKNOWN_SYSTEM_VARIABLE",
+        "errno": 1193,
+        "state": "HY000",
+        "message": "Unknown system variable 'bad_sub_250'"
+      },
+      "warnings": [
+        [
+          "Error",
+          1193,
+          "Unknown system variable 'bad_sub_250'"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "WITH c AS(SELECT aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa()) SELECT 1",
+      "api": "query",
+      "rows": [
+        [
+          1
+        ]
+      ],
+      "fields": [
+        [
+          "1",
+          8,
+          2,
+          129,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "WITH c AS(SELECT aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa()) SELECT 1",
+      "api": "execute",
+      "rows": [
+        [
+          1
+        ]
+      ],
+      "fields": [
+        [
+          "1",
+          8,
+          2,
+          129,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "WITH c AS(SELECT aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa()) SELECT 1",
+      "api": "prepare",
+      "parameters": [],
+      "fields": [
+        [
+          "1",
+          8,
+          2,
+          129,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "WITH c AS(SELECT aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa()) SELECT * FROM c",
+      "api": "query",
+      "error": {
+        "code": "ER_TOO_LONG_IDENT",
+        "errno": 1059,
+        "state": "42000",
+        "message": "Identifier name 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa' is too long"
+      },
+      "warnings": [
+        [
+          "Error",
+          1059,
+          "Identifier name 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa' is too long"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "WITH c AS(SELECT aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa()) SELECT * FROM c",
+      "api": "execute",
+      "error": {
+        "code": "ER_TOO_LONG_IDENT",
+        "errno": 1059,
+        "state": "42000",
+        "message": "Identifier name 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa' is too long"
+      },
+      "warnings": [
+        [
+          "Error",
+          1059,
+          "Identifier name 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa' is too long"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "WITH c AS(SELECT aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa()) SELECT * FROM c",
+      "api": "prepare",
+      "error": {
+        "code": "ER_TOO_LONG_IDENT",
+        "errno": 1059,
+        "state": "42000",
+        "message": "Identifier name 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa' is too long"
+      },
+      "warnings": [
+        [
+          "Error",
+          1059,
+          "Identifier name 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa' is too long"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "WITH c AS(SELECT `bad `()) SELECT 1",
+      "api": "query",
+      "rows": [
+        [
+          1
+        ]
+      ],
+      "fields": [
+        [
+          "1",
+          8,
+          2,
+          129,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "WITH c AS(SELECT `bad `()) SELECT 1",
+      "api": "execute",
+      "rows": [
+        [
+          1
+        ]
+      ],
+      "fields": [
+        [
+          "1",
+          8,
+          2,
+          129,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "WITH c AS(SELECT `bad `()) SELECT 1",
+      "api": "prepare",
+      "parameters": [],
+      "fields": [
+        [
+          "1",
+          8,
+          2,
+          129,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "WITH c AS(SELECT `bad `()) SELECT * FROM c",
+      "api": "query",
+      "error": {
+        "code": "ER_SP_WRONG_NAME",
+        "errno": 1458,
+        "state": "42000",
+        "message": "Incorrect routine name 'bad '"
+      },
+      "warnings": [
+        [
+          "Error",
+          1458,
+          "Incorrect routine name 'bad '"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "WITH c AS(SELECT `bad `()) SELECT * FROM c",
+      "api": "execute",
+      "error": {
+        "code": "ER_SP_WRONG_NAME",
+        "errno": 1458,
+        "state": "42000",
+        "message": "Incorrect routine name 'bad '"
+      },
+      "warnings": [
+        [
+          "Error",
+          1458,
+          "Incorrect routine name 'bad '"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "WITH c AS(SELECT `bad `()) SELECT * FROM c",
+      "api": "prepare",
+      "error": {
+        "code": "ER_SP_WRONG_NAME",
+        "errno": 1458,
+        "state": "42000",
+        "message": "Incorrect routine name 'bad '"
+      },
+      "warnings": [
+        [
+          "Error",
+          1458,
+          "Incorrect routine name 'bad '"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "WITH c AS(SELECT `aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa`.f()) SELECT 1",
+      "api": "query",
+      "rows": [
+        [
+          1
+        ]
+      ],
+      "fields": [
+        [
+          "1",
+          8,
+          2,
+          129,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "WITH c AS(SELECT `aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa`.f()) SELECT 1",
+      "api": "execute",
+      "rows": [
+        [
+          1
+        ]
+      ],
+      "fields": [
+        [
+          "1",
+          8,
+          2,
+          129,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "WITH c AS(SELECT `aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa`.f()) SELECT 1",
+      "api": "prepare",
+      "parameters": [],
+      "fields": [
+        [
+          "1",
+          8,
+          2,
+          129,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "WITH c AS(SELECT `aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa`.f()) SELECT * FROM c",
+      "api": "query",
+      "error": {
+        "code": "ER_TOO_LONG_IDENT",
+        "errno": 1059,
+        "state": "42000",
+        "message": "Identifier name 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa' is too long"
+      },
+      "warnings": [
+        [
+          "Error",
+          1059,
+          "Identifier name 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa' is too long"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "WITH c AS(SELECT `aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa`.f()) SELECT * FROM c",
+      "api": "execute",
+      "error": {
+        "code": "ER_TOO_LONG_IDENT",
+        "errno": 1059,
+        "state": "42000",
+        "message": "Identifier name 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa' is too long"
+      },
+      "warnings": [
+        [
+          "Error",
+          1059,
+          "Identifier name 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa' is too long"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "WITH c AS(SELECT `aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa`.f()) SELECT * FROM c",
+      "api": "prepare",
+      "error": {
+        "code": "ER_TOO_LONG_IDENT",
+        "errno": 1059,
+        "state": "42000",
+        "message": "Identifier name 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa' is too long"
+      },
+      "warnings": [
+        [
+          "Error",
+          1059,
+          "Identifier name 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa' is too long"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "WITH c AS(SELECT @@bad_outer_250) SELECT 1 FROM (WITH c AS(SELECT 1 v) SELECT * FROM c) d",
+      "api": "query",
+      "rows": [
+        [
+          1
+        ]
+      ],
+      "fields": [
+        [
+          "1",
+          8,
+          2,
+          129,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "WITH c AS(SELECT @@bad_outer_250) SELECT 1 FROM (WITH c AS(SELECT 1 v) SELECT * FROM c) d",
+      "api": "execute",
+      "rows": [
+        [
+          1
+        ]
+      ],
+      "fields": [
+        [
+          "1",
+          8,
+          2,
+          129,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "WITH c AS(SELECT @@bad_outer_250) SELECT 1 FROM (WITH c AS(SELECT 1 v) SELECT * FROM c) d",
+      "api": "prepare",
+      "parameters": [],
+      "fields": [
+        [
+          "1",
+          8,
+          2,
+          129,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "WITH c AS(SELECT @@bad_outer_250) SELECT 1 FROM (WITH c AS(SELECT @@bad_inner_250) SELECT 1) d",
+      "api": "query",
+      "rows": [
+        [
+          1
+        ]
+      ],
+      "fields": [
+        [
+          "1",
+          8,
+          2,
+          129,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "WITH c AS(SELECT @@bad_outer_250) SELECT 1 FROM (WITH c AS(SELECT @@bad_inner_250) SELECT 1) d",
+      "api": "execute",
+      "rows": [
+        [
+          1
+        ]
+      ],
+      "fields": [
+        [
+          "1",
+          8,
+          2,
+          129,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "WITH c AS(SELECT @@bad_outer_250) SELECT 1 FROM (WITH c AS(SELECT @@bad_inner_250) SELECT 1) d",
+      "api": "prepare",
+      "parameters": [],
+      "fields": [
+        [
+          "1",
+          8,
+          2,
+          129,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "WITH c AS(SELECT @@bad_outer_250) SELECT 1 WHERE EXISTS(WITH c AS(SELECT 1 v) SELECT * FROM c)",
+      "api": "query",
+      "rows": [
+        [
+          1
+        ]
+      ],
+      "fields": [
+        [
+          "1",
+          8,
+          2,
+          129,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "WITH c AS(SELECT @@bad_outer_250) SELECT 1 WHERE EXISTS(WITH c AS(SELECT 1 v) SELECT * FROM c)",
+      "api": "execute",
+      "rows": [
+        [
+          1
+        ]
+      ],
+      "fields": [
+        [
+          "1",
+          8,
+          2,
+          129,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "WITH c AS(SELECT @@bad_outer_250) SELECT 1 WHERE EXISTS(WITH c AS(SELECT 1 v) SELECT * FROM c)",
+      "api": "prepare",
+      "parameters": [],
+      "fields": [
+        [
+          "1",
+          8,
+          2,
+          129,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "WITH c AS(SELECT @@bad_outer_250) SELECT 1 WHERE EXISTS(WITH c AS(SELECT @@bad_inner_250 v) SELECT * FROM c)",
+      "api": "query",
+      "error": {
+        "code": "ER_UNKNOWN_SYSTEM_VARIABLE",
+        "errno": 1193,
+        "state": "HY000",
+        "message": "Unknown system variable 'bad_inner_250'"
+      },
+      "warnings": [
+        [
+          "Error",
+          1193,
+          "Unknown system variable 'bad_inner_250'"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "WITH c AS(SELECT @@bad_outer_250) SELECT 1 WHERE EXISTS(WITH c AS(SELECT @@bad_inner_250 v) SELECT * FROM c)",
+      "api": "execute",
+      "error": {
+        "code": "ER_UNKNOWN_SYSTEM_VARIABLE",
+        "errno": 1193,
+        "state": "HY000",
+        "message": "Unknown system variable 'bad_inner_250'"
+      },
+      "warnings": [
+        [
+          "Error",
+          1193,
+          "Unknown system variable 'bad_inner_250'"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "WITH c AS(SELECT @@bad_outer_250) SELECT 1 WHERE EXISTS(WITH c AS(SELECT @@bad_inner_250 v) SELECT * FROM c)",
+      "api": "prepare",
+      "error": {
+        "code": "ER_UNKNOWN_SYSTEM_VARIABLE",
+        "errno": 1193,
+        "state": "HY000",
+        "message": "Unknown system variable 'bad_inner_250'"
+      },
+      "warnings": [
+        [
+          "Error",
+          1193,
+          "Unknown system variable 'bad_inner_250'"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "WITH c AS(SELECT @@bad_cte_250 v) SELECT * FROM c WHERE @@bad_where_250",
+      "api": "query",
+      "error": {
+        "code": "ER_UNKNOWN_SYSTEM_VARIABLE",
+        "errno": 1193,
+        "state": "HY000",
+        "message": "Unknown system variable 'bad_cte_250'"
+      },
+      "warnings": [
+        [
+          "Error",
+          1193,
+          "Unknown system variable 'bad_cte_250'"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "WITH c AS(SELECT @@bad_cte_250 v) SELECT * FROM c WHERE @@bad_where_250",
+      "api": "execute",
+      "error": {
+        "code": "ER_UNKNOWN_SYSTEM_VARIABLE",
+        "errno": 1193,
+        "state": "HY000",
+        "message": "Unknown system variable 'bad_cte_250'"
+      },
+      "warnings": [
+        [
+          "Error",
+          1193,
+          "Unknown system variable 'bad_cte_250'"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "WITH c AS(SELECT @@bad_cte_250 v) SELECT * FROM c WHERE @@bad_where_250",
+      "api": "prepare",
+      "error": {
+        "code": "ER_UNKNOWN_SYSTEM_VARIABLE",
+        "errno": 1193,
+        "state": "HY000",
+        "message": "Unknown system variable 'bad_cte_250'"
+      },
+      "warnings": [
+        [
+          "Error",
+          1193,
+          "Unknown system variable 'bad_cte_250'"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "WITH c AS(SELECT @@bad_cte_250 v) SELECT * FROM c ORDER BY @@bad_order_250",
+      "api": "query",
+      "error": {
+        "code": "ER_UNKNOWN_SYSTEM_VARIABLE",
+        "errno": 1193,
+        "state": "HY000",
+        "message": "Unknown system variable 'bad_cte_250'"
+      },
+      "warnings": [
+        [
+          "Error",
+          1193,
+          "Unknown system variable 'bad_cte_250'"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "WITH c AS(SELECT @@bad_cte_250 v) SELECT * FROM c ORDER BY @@bad_order_250",
+      "api": "execute",
+      "error": {
+        "code": "ER_UNKNOWN_SYSTEM_VARIABLE",
+        "errno": 1193,
+        "state": "HY000",
+        "message": "Unknown system variable 'bad_cte_250'"
+      },
+      "warnings": [
+        [
+          "Error",
+          1193,
+          "Unknown system variable 'bad_cte_250'"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "WITH c AS(SELECT @@bad_cte_250 v) SELECT * FROM c ORDER BY @@bad_order_250",
+      "api": "prepare",
+      "error": {
+        "code": "ER_UNKNOWN_SYSTEM_VARIABLE",
+        "errno": 1193,
+        "state": "HY000",
+        "message": "Unknown system variable 'bad_cte_250'"
+      },
+      "warnings": [
+        [
+          "Error",
+          1193,
+          "Unknown system variable 'bad_cte_250'"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "WITH c AS(SELECT @@bad_cte_250 v) SELECT * FROM c HAVING @@bad_having_250",
+      "api": "query",
+      "error": {
+        "code": "ER_UNKNOWN_SYSTEM_VARIABLE",
+        "errno": 1193,
+        "state": "HY000",
+        "message": "Unknown system variable 'bad_cte_250'"
+      },
+      "warnings": [
+        [
+          "Error",
+          1193,
+          "Unknown system variable 'bad_cte_250'"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "WITH c AS(SELECT @@bad_cte_250 v) SELECT * FROM c HAVING @@bad_having_250",
+      "api": "execute",
+      "error": {
+        "code": "ER_UNKNOWN_SYSTEM_VARIABLE",
+        "errno": 1193,
+        "state": "HY000",
+        "message": "Unknown system variable 'bad_cte_250'"
+      },
+      "warnings": [
+        [
+          "Error",
+          1193,
+          "Unknown system variable 'bad_cte_250'"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "WITH c AS(SELECT @@bad_cte_250 v) SELECT * FROM c HAVING @@bad_having_250",
+      "api": "prepare",
+      "error": {
+        "code": "ER_UNKNOWN_SYSTEM_VARIABLE",
+        "errno": 1193,
+        "state": "HY000",
+        "message": "Unknown system variable 'bad_cte_250'"
+      },
+      "warnings": [
+        [
+          "Error",
+          1193,
+          "Unknown system variable 'bad_cte_250'"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "WITH c AS(SELECT @@bad_cte_250 v) SELECT 1 UNION ALL SELECT @@bad_set_250",
+      "api": "query",
+      "error": {
+        "code": "ER_UNKNOWN_SYSTEM_VARIABLE",
+        "errno": 1193,
+        "state": "HY000",
+        "message": "Unknown system variable 'bad_set_250'"
+      },
+      "warnings": [
+        [
+          "Error",
+          1193,
+          "Unknown system variable 'bad_set_250'"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "WITH c AS(SELECT @@bad_cte_250 v) SELECT 1 UNION ALL SELECT @@bad_set_250",
+      "api": "execute",
+      "error": {
+        "code": "ER_UNKNOWN_SYSTEM_VARIABLE",
+        "errno": 1193,
+        "state": "HY000",
+        "message": "Unknown system variable 'bad_set_250'"
+      },
+      "warnings": [
+        [
+          "Error",
+          1193,
+          "Unknown system variable 'bad_set_250'"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "WITH c AS(SELECT @@bad_cte_250 v) SELECT 1 UNION ALL SELECT @@bad_set_250",
+      "api": "prepare",
+      "error": {
+        "code": "ER_UNKNOWN_SYSTEM_VARIABLE",
+        "errno": 1193,
+        "state": "HY000",
+        "message": "Unknown system variable 'bad_set_250'"
+      },
+      "warnings": [
+        [
+          "Error",
+          1193,
+          "Unknown system variable 'bad_set_250'"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "WITH c AS(SELECT CAST('x' AS CHAR CHARSET utf8),@@bad_cte_250) SELECT 1",
+      "api": "query",
+      "rows": [
+        [
+          1
+        ]
+      ],
+      "fields": [
+        [
+          "1",
+          8,
+          2,
+          129,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [
+        [
+          "Warning",
+          3719,
+          "'utf8' is currently an alias for the character set UTF8MB3, but will be an alias for UTF8MB4 in a future release. Please consider using UTF8MB4 in order to be unambiguous."
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "0"
+    },
+    {
+      "sql": "WITH c AS(SELECT CAST('x' AS CHAR CHARSET utf8),@@bad_cte_250) SELECT 1",
+      "api": "execute",
+      "rows": [
+        [
+          1
+        ]
+      ],
+      "fields": [
+        [
+          "1",
+          8,
+          2,
+          129,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "WITH c AS(SELECT CAST('x' AS CHAR CHARSET utf8),@@bad_cte_250) SELECT 1",
+      "api": "prepare",
+      "parameters": [],
+      "fields": [
+        [
+          "1",
+          8,
+          2,
+          129,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [
+        [
+          "Warning",
+          3719,
+          "'utf8' is currently an alias for the character set UTF8MB3, but will be an alias for UTF8MB4 in a future release. Please consider using UTF8MB4 in order to be unambiguous."
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "0"
+    },
+    {
+      "sql": "WITH c AS(SELECT CAST('x' AS CHAR CHARSET utf8),@@bad_cte_250) SELECT * FROM c",
+      "api": "query",
+      "error": {
+        "code": "ER_UNKNOWN_SYSTEM_VARIABLE",
+        "errno": 1193,
+        "state": "HY000",
+        "message": "Unknown system variable 'bad_cte_250'"
+      },
+      "warnings": [
+        [
+          "Warning",
+          3719,
+          "'utf8' is currently an alias for the character set UTF8MB3, but will be an alias for UTF8MB4 in a future release. Please consider using UTF8MB4 in order to be unambiguous."
+        ],
+        [
+          "Error",
+          1193,
+          "Unknown system variable 'bad_cte_250'"
+        ]
+      ],
+      "warningCount": "2",
+      "errorCount": "1"
+    },
+    {
+      "sql": "WITH c AS(SELECT CAST('x' AS CHAR CHARSET utf8),@@bad_cte_250) SELECT * FROM c",
+      "api": "execute",
+      "error": {
+        "code": "ER_UNKNOWN_SYSTEM_VARIABLE",
+        "errno": 1193,
+        "state": "HY000",
+        "message": "Unknown system variable 'bad_cte_250'"
+      },
+      "warnings": [
+        [
+          "Warning",
+          3719,
+          "'utf8' is currently an alias for the character set UTF8MB3, but will be an alias for UTF8MB4 in a future release. Please consider using UTF8MB4 in order to be unambiguous."
+        ],
+        [
+          "Error",
+          1193,
+          "Unknown system variable 'bad_cte_250'"
+        ]
+      ],
+      "warningCount": "2",
+      "errorCount": "1"
+    },
+    {
+      "sql": "WITH c AS(SELECT CAST('x' AS CHAR CHARSET utf8),@@bad_cte_250) SELECT * FROM c",
+      "api": "prepare",
+      "error": {
+        "code": "ER_UNKNOWN_SYSTEM_VARIABLE",
+        "errno": 1193,
+        "state": "HY000",
+        "message": "Unknown system variable 'bad_cte_250'"
+      },
+      "warnings": [
+        [
+          "Warning",
+          3719,
+          "'utf8' is currently an alias for the character set UTF8MB3, but will be an alias for UTF8MB4 in a future release. Please consider using UTF8MB4 in order to be unambiguous."
+        ],
+        [
+          "Error",
+          1193,
+          "Unknown system variable 'bad_cte_250'"
+        ]
+      ],
+      "warningCount": "2",
+      "errorCount": "1"
+    },
+    {
+      "sql": "WITH c AS(SELECT CAST('x' AS CHAR CHARSET utf8),@@warning_count v) SELECT v FROM c",
+      "api": "query",
+      "rows": [
+        [
+          1
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          8,
+          21,
+          32,
+          0,
+          63,
+          "",
+          "c",
+          "",
+          "v"
+        ]
+      ],
+      "warnings": [
+        [
+          "Warning",
+          3719,
+          "'utf8' is currently an alias for the character set UTF8MB3, but will be an alias for UTF8MB4 in a future release. Please consider using UTF8MB4 in order to be unambiguous."
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "0"
+    },
+    {
+      "sql": "WITH c AS(SELECT CAST('x' AS CHAR CHARSET utf8),@@warning_count v) SELECT v FROM c",
+      "api": "execute",
+      "rows": [
+        [
+          0
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          8,
+          21,
+          32,
+          0,
+          63,
+          "",
+          "c",
+          "",
+          "v"
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "WITH c AS(SELECT CAST('x' AS CHAR CHARSET utf8),@@warning_count v) SELECT v FROM c",
+      "api": "prepare",
+      "parameters": [],
+      "fields": [
+        [
+          "v",
+          8,
+          21,
+          32,
+          0,
+          63,
+          "",
+          "c",
+          "",
+          "v"
+        ]
+      ],
+      "warnings": [
+        [
+          "Warning",
+          3719,
+          "'utf8' is currently an alias for the character set UTF8MB3, but will be an alias for UTF8MB4 in a future release. Please consider using UTF8MB4 in order to be unambiguous."
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "0"
+    },
+    {
+      "sql": "WITH c AS(SELECT @@warning_count v) SELECT v FROM c UNION ALL SELECT 2",
+      "api": "query",
+      "rows": [
+        [
+          "2"
+        ],
+        [
+          "2"
+        ]
+      ],
+      "fields": [
+        [
+          "v",
+          246,
+          22,
+          0,
+          0,
+          63,
+          "",
+          "",
+          "",
+          "v"
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "WITH c AS(SELECT @@warning_count v) SELECT v FROM c UNION ALL SELECT 2",
+      "api": "execute",
+      "error": {
+        "code": "ER_UNSUPPORTED_PS",
+        "errno": 1295,
+        "state": "HY000",
+        "message": "This command is not supported in the prepared statement protocol yet"
+      },
+      "warnings": [
+        [
+          "Error",
+          1295,
+          "This command is not supported in the prepared statement protocol yet"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "WITH c AS(SELECT @@warning_count v) SELECT v FROM c UNION ALL SELECT 2",
+      "api": "prepare",
+      "error": {
+        "code": "ER_UNSUPPORTED_PS",
+        "errno": 1295,
+        "state": "HY000",
+        "message": "This command is not supported in the prepared statement protocol yet"
+      },
+      "warnings": [
+        [
+          "Error",
+          1295,
+          "This command is not supported in the prepared statement protocol yet"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "WITH c AS(SELECT @@bad_cte_250 v) SELECT 1 LIMIT 0",
+      "api": "query",
+      "rows": [],
+      "fields": [
+        [
+          "1",
+          8,
+          2,
+          129,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "WITH c AS(SELECT @@bad_cte_250 v) SELECT 1 LIMIT 0",
+      "api": "execute",
+      "rows": [],
+      "fields": [
+        [
+          "1",
+          8,
+          2,
+          129,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "WITH c AS(SELECT @@bad_cte_250 v) SELECT 1 LIMIT 0",
+      "api": "prepare",
+      "parameters": [],
+      "fields": [
+        [
+          "1",
+          8,
+          2,
+          129,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "WITH c AS(SELECT @@bad_cte_250 v) SELECT * FROM c LIMIT 0",
+      "api": "query",
+      "error": {
+        "code": "ER_UNKNOWN_SYSTEM_VARIABLE",
+        "errno": 1193,
+        "state": "HY000",
+        "message": "Unknown system variable 'bad_cte_250'"
+      },
+      "warnings": [
+        [
+          "Error",
+          1193,
+          "Unknown system variable 'bad_cte_250'"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "WITH c AS(SELECT @@bad_cte_250 v) SELECT * FROM c LIMIT 0",
+      "api": "execute",
+      "error": {
+        "code": "ER_UNKNOWN_SYSTEM_VARIABLE",
+        "errno": 1193,
+        "state": "HY000",
+        "message": "Unknown system variable 'bad_cte_250'"
+      },
+      "warnings": [
+        [
+          "Error",
+          1193,
+          "Unknown system variable 'bad_cte_250'"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "WITH c AS(SELECT @@bad_cte_250 v) SELECT * FROM c LIMIT 0",
+      "api": "prepare",
+      "error": {
+        "code": "ER_UNKNOWN_SYSTEM_VARIABLE",
+        "errno": 1193,
+        "state": "HY000",
+        "message": "Unknown system variable 'bad_cte_250'"
+      },
+      "warnings": [
+        [
+          "Error",
+          1193,
+          "Unknown system variable 'bad_cte_250'"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "WITH c AS(SELECT @@bad_cte_250 v) SELECT 1 FROM c WHERE FALSE",
+      "api": "query",
+      "error": {
+        "code": "ER_UNKNOWN_SYSTEM_VARIABLE",
+        "errno": 1193,
+        "state": "HY000",
+        "message": "Unknown system variable 'bad_cte_250'"
+      },
+      "warnings": [
+        [
+          "Error",
+          1193,
+          "Unknown system variable 'bad_cte_250'"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "WITH c AS(SELECT @@bad_cte_250 v) SELECT 1 FROM c WHERE FALSE",
+      "api": "execute",
+      "error": {
+        "code": "ER_UNKNOWN_SYSTEM_VARIABLE",
+        "errno": 1193,
+        "state": "HY000",
+        "message": "Unknown system variable 'bad_cte_250'"
+      },
+      "warnings": [
+        [
+          "Error",
+          1193,
+          "Unknown system variable 'bad_cte_250'"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "WITH c AS(SELECT @@bad_cte_250 v) SELECT 1 FROM c WHERE FALSE",
+      "api": "prepare",
+      "error": {
+        "code": "ER_UNKNOWN_SYSTEM_VARIABLE",
+        "errno": 1193,
+        "state": "HY000",
+        "message": "Unknown system variable 'bad_cte_250'"
+      },
+      "warnings": [
+        [
+          "Error",
+          1193,
+          "Unknown system variable 'bad_cte_250'"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "WITH c AS(SELECT @@warning_count v) SELECT 1 FROM c WHERE FALSE",
+      "api": "query",
+      "rows": [],
+      "fields": [
+        [
+          "1",
+          8,
+          2,
+          129,
+          0,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "WITH c AS(SELECT @@warning_count v) SELECT 1 FROM c WHERE FALSE",
+      "api": "execute",
+      "error": {
+        "code": "ER_UNSUPPORTED_PS",
+        "errno": 1295,
+        "state": "HY000",
+        "message": "This command is not supported in the prepared statement protocol yet"
+      },
+      "warnings": [
+        [
+          "Error",
+          1295,
+          "This command is not supported in the prepared statement protocol yet"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "WITH c AS(SELECT @@warning_count v) SELECT 1 FROM c WHERE FALSE",
+      "api": "prepare",
+      "error": {
+        "code": "ER_UNSUPPORTED_PS",
+        "errno": 1295,
+        "state": "HY000",
+        "message": "This command is not supported in the prepared statement protocol yet"
+      },
+      "warnings": [
+        [
+          "Error",
+          1295,
+          "This command is not supported in the prepared statement protocol yet"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "SELECT CAST('x' AS CHAR CHARSET utf8) ORDER BY `bad `()",
+      "api": "query",
+      "error": {
+        "code": "ER_SP_WRONG_NAME",
+        "errno": 1458,
+        "state": "42000",
+        "message": "Incorrect routine name 'bad '"
+      },
+      "warnings": [
+        [
+          "Warning",
+          3719,
+          "'utf8' is currently an alias for the character set UTF8MB3, but will be an alias for UTF8MB4 in a future release. Please consider using UTF8MB4 in order to be unambiguous."
+        ],
+        [
+          "Error",
+          1458,
+          "Incorrect routine name 'bad '"
+        ]
+      ],
+      "warningCount": "2",
+      "errorCount": "1"
+    },
+    {
+      "sql": "SELECT CAST('x' AS CHAR CHARSET utf8) ORDER BY `bad `()",
+      "api": "execute",
+      "error": {
+        "code": "ER_SP_WRONG_NAME",
+        "errno": 1458,
+        "state": "42000",
+        "message": "Incorrect routine name 'bad '"
+      },
+      "warnings": [
+        [
+          "Warning",
+          3719,
+          "'utf8' is currently an alias for the character set UTF8MB3, but will be an alias for UTF8MB4 in a future release. Please consider using UTF8MB4 in order to be unambiguous."
+        ],
+        [
+          "Error",
+          1458,
+          "Incorrect routine name 'bad '"
+        ]
+      ],
+      "warningCount": "2",
+      "errorCount": "1"
+    },
+    {
+      "sql": "SELECT CAST('x' AS CHAR CHARSET utf8) ORDER BY `bad `()",
+      "api": "prepare",
+      "error": {
+        "code": "ER_SP_WRONG_NAME",
+        "errno": 1458,
+        "state": "42000",
+        "message": "Incorrect routine name 'bad '"
+      },
+      "warnings": [
+        [
+          "Warning",
+          3719,
+          "'utf8' is currently an alias for the character set UTF8MB3, but will be an alias for UTF8MB4 in a future release. Please consider using UTF8MB4 in order to be unambiguous."
+        ],
+        [
+          "Error",
+          1458,
+          "Incorrect routine name 'bad '"
+        ]
+      ],
+      "warningCount": "2",
+      "errorCount": "1"
+    },
+    {
+      "sql": "SELECT CAST('x' AS CHAR CHARSET utf8) WHERE `bad `()",
+      "api": "query",
+      "error": {
+        "code": "ER_SP_WRONG_NAME",
+        "errno": 1458,
+        "state": "42000",
+        "message": "Incorrect routine name 'bad '"
+      },
+      "warnings": [
+        [
+          "Warning",
+          3719,
+          "'utf8' is currently an alias for the character set UTF8MB3, but will be an alias for UTF8MB4 in a future release. Please consider using UTF8MB4 in order to be unambiguous."
+        ],
+        [
+          "Error",
+          1458,
+          "Incorrect routine name 'bad '"
+        ]
+      ],
+      "warningCount": "2",
+      "errorCount": "1"
+    },
+    {
+      "sql": "SELECT CAST('x' AS CHAR CHARSET utf8) WHERE `bad `()",
+      "api": "execute",
+      "error": {
+        "code": "ER_SP_WRONG_NAME",
+        "errno": 1458,
+        "state": "42000",
+        "message": "Incorrect routine name 'bad '"
+      },
+      "warnings": [
+        [
+          "Warning",
+          3719,
+          "'utf8' is currently an alias for the character set UTF8MB3, but will be an alias for UTF8MB4 in a future release. Please consider using UTF8MB4 in order to be unambiguous."
+        ],
+        [
+          "Error",
+          1458,
+          "Incorrect routine name 'bad '"
+        ]
+      ],
+      "warningCount": "2",
+      "errorCount": "1"
+    },
+    {
+      "sql": "SELECT CAST('x' AS CHAR CHARSET utf8) WHERE `bad `()",
+      "api": "prepare",
+      "error": {
+        "code": "ER_SP_WRONG_NAME",
+        "errno": 1458,
+        "state": "42000",
+        "message": "Incorrect routine name 'bad '"
+      },
+      "warnings": [
+        [
+          "Warning",
+          3719,
+          "'utf8' is currently an alias for the character set UTF8MB3, but will be an alias for UTF8MB4 in a future release. Please consider using UTF8MB4 in order to be unambiguous."
+        ],
+        [
+          "Error",
+          1458,
+          "Incorrect routine name 'bad '"
+        ]
+      ],
+      "warningCount": "2",
+      "errorCount": "1"
+    },
+    {
+      "sql": "SELECT _utf8'x' ORDER BY `bad `()",
+      "api": "query",
+      "error": {
+        "code": "ER_SP_WRONG_NAME",
+        "errno": 1458,
+        "state": "42000",
+        "message": "Incorrect routine name 'bad '"
+      },
+      "warnings": [
+        [
+          "Warning",
+          3719,
+          "'utf8' is currently an alias for the character set UTF8MB3, but will be an alias for UTF8MB4 in a future release. Please consider using UTF8MB4 in order to be unambiguous."
+        ],
+        [
+          "Error",
+          1458,
+          "Incorrect routine name 'bad '"
+        ]
+      ],
+      "warningCount": "2",
+      "errorCount": "1"
+    },
+    {
+      "sql": "SELECT _utf8'x' ORDER BY `bad `()",
+      "api": "execute",
+      "error": {
+        "code": "ER_SP_WRONG_NAME",
+        "errno": 1458,
+        "state": "42000",
+        "message": "Incorrect routine name 'bad '"
+      },
+      "warnings": [
+        [
+          "Warning",
+          3719,
+          "'utf8' is currently an alias for the character set UTF8MB3, but will be an alias for UTF8MB4 in a future release. Please consider using UTF8MB4 in order to be unambiguous."
+        ],
+        [
+          "Error",
+          1458,
+          "Incorrect routine name 'bad '"
+        ]
+      ],
+      "warningCount": "2",
+      "errorCount": "1"
+    },
+    {
+      "sql": "SELECT _utf8'x' ORDER BY `bad `()",
+      "api": "prepare",
+      "error": {
+        "code": "ER_SP_WRONG_NAME",
+        "errno": 1458,
+        "state": "42000",
+        "message": "Incorrect routine name 'bad '"
+      },
+      "warnings": [
+        [
+          "Warning",
+          3719,
+          "'utf8' is currently an alias for the character set UTF8MB3, but will be an alias for UTF8MB4 in a future release. Please consider using UTF8MB4 in order to be unambiguous."
+        ],
+        [
+          "Error",
+          1458,
+          "Incorrect routine name 'bad '"
+        ]
+      ],
+      "warningCount": "2",
+      "errorCount": "1"
+    },
+    {
+      "sql": "SELECT _utf8'x' WHERE `bad `()",
+      "api": "query",
+      "error": {
+        "code": "ER_SP_WRONG_NAME",
+        "errno": 1458,
+        "state": "42000",
+        "message": "Incorrect routine name 'bad '"
+      },
+      "warnings": [
+        [
+          "Warning",
+          3719,
+          "'utf8' is currently an alias for the character set UTF8MB3, but will be an alias for UTF8MB4 in a future release. Please consider using UTF8MB4 in order to be unambiguous."
+        ],
+        [
+          "Error",
+          1458,
+          "Incorrect routine name 'bad '"
+        ]
+      ],
+      "warningCount": "2",
+      "errorCount": "1"
+    },
+    {
+      "sql": "SELECT _utf8'x' WHERE `bad `()",
+      "api": "execute",
+      "error": {
+        "code": "ER_SP_WRONG_NAME",
+        "errno": 1458,
+        "state": "42000",
+        "message": "Incorrect routine name 'bad '"
+      },
+      "warnings": [
+        [
+          "Warning",
+          3719,
+          "'utf8' is currently an alias for the character set UTF8MB3, but will be an alias for UTF8MB4 in a future release. Please consider using UTF8MB4 in order to be unambiguous."
+        ],
+        [
+          "Error",
+          1458,
+          "Incorrect routine name 'bad '"
+        ]
+      ],
+      "warningCount": "2",
+      "errorCount": "1"
+    },
+    {
+      "sql": "SELECT _utf8'x' WHERE `bad `()",
+      "api": "prepare",
+      "error": {
+        "code": "ER_SP_WRONG_NAME",
+        "errno": 1458,
+        "state": "42000",
+        "message": "Incorrect routine name 'bad '"
+      },
+      "warnings": [
+        [
+          "Warning",
+          3719,
+          "'utf8' is currently an alias for the character set UTF8MB3, but will be an alias for UTF8MB4 in a future release. Please consider using UTF8MB4 in order to be unambiguous."
+        ],
+        [
+          "Error",
+          1458,
+          "Incorrect routine name 'bad '"
+        ]
+      ],
+      "warningCount": "2",
+      "errorCount": "1"
+    },
+    {
+      "sql": "WITH c AS(SELECT 1) SELECT CAST('x' AS CHAR CHARSET utf8) ORDER BY `bad `()",
+      "api": "query",
+      "error": {
+        "code": "ER_SP_WRONG_NAME",
+        "errno": 1458,
+        "state": "42000",
+        "message": "Incorrect routine name 'bad '"
+      },
+      "warnings": [
+        [
+          "Warning",
+          3719,
+          "'utf8' is currently an alias for the character set UTF8MB3, but will be an alias for UTF8MB4 in a future release. Please consider using UTF8MB4 in order to be unambiguous."
+        ],
+        [
+          "Error",
+          1458,
+          "Incorrect routine name 'bad '"
+        ]
+      ],
+      "warningCount": "2",
+      "errorCount": "1"
+    },
+    {
+      "sql": "WITH c AS(SELECT 1) SELECT CAST('x' AS CHAR CHARSET utf8) ORDER BY `bad `()",
+      "api": "execute",
+      "error": {
+        "code": "ER_SP_WRONG_NAME",
+        "errno": 1458,
+        "state": "42000",
+        "message": "Incorrect routine name 'bad '"
+      },
+      "warnings": [
+        [
+          "Warning",
+          3719,
+          "'utf8' is currently an alias for the character set UTF8MB3, but will be an alias for UTF8MB4 in a future release. Please consider using UTF8MB4 in order to be unambiguous."
+        ],
+        [
+          "Error",
+          1458,
+          "Incorrect routine name 'bad '"
+        ]
+      ],
+      "warningCount": "2",
+      "errorCount": "1"
+    },
+    {
+      "sql": "WITH c AS(SELECT 1) SELECT CAST('x' AS CHAR CHARSET utf8) ORDER BY `bad `()",
+      "api": "prepare",
+      "error": {
+        "code": "ER_SP_WRONG_NAME",
+        "errno": 1458,
+        "state": "42000",
+        "message": "Incorrect routine name 'bad '"
+      },
+      "warnings": [
+        [
+          "Warning",
+          3719,
+          "'utf8' is currently an alias for the character set UTF8MB3, but will be an alias for UTF8MB4 in a future release. Please consider using UTF8MB4 in order to be unambiguous."
+        ],
+        [
+          "Error",
+          1458,
+          "Incorrect routine name 'bad '"
+        ]
+      ],
+      "warningCount": "2",
+      "errorCount": "1"
+    },
+    {
+      "sql": "WITH c AS(SELECT CAST('x' AS CHAR CHARSET utf8)) SELECT 1 ORDER BY `bad `()",
+      "api": "query",
+      "error": {
+        "code": "ER_SP_WRONG_NAME",
+        "errno": 1458,
+        "state": "42000",
+        "message": "Incorrect routine name 'bad '"
+      },
+      "warnings": [
+        [
+          "Warning",
+          3719,
+          "'utf8' is currently an alias for the character set UTF8MB3, but will be an alias for UTF8MB4 in a future release. Please consider using UTF8MB4 in order to be unambiguous."
+        ],
+        [
+          "Error",
+          1458,
+          "Incorrect routine name 'bad '"
+        ]
+      ],
+      "warningCount": "2",
+      "errorCount": "1"
+    },
+    {
+      "sql": "WITH c AS(SELECT CAST('x' AS CHAR CHARSET utf8)) SELECT 1 ORDER BY `bad `()",
+      "api": "execute",
+      "error": {
+        "code": "ER_SP_WRONG_NAME",
+        "errno": 1458,
+        "state": "42000",
+        "message": "Incorrect routine name 'bad '"
+      },
+      "warnings": [
+        [
+          "Warning",
+          3719,
+          "'utf8' is currently an alias for the character set UTF8MB3, but will be an alias for UTF8MB4 in a future release. Please consider using UTF8MB4 in order to be unambiguous."
+        ],
+        [
+          "Error",
+          1458,
+          "Incorrect routine name 'bad '"
+        ]
+      ],
+      "warningCount": "2",
+      "errorCount": "1"
+    },
+    {
+      "sql": "WITH c AS(SELECT CAST('x' AS CHAR CHARSET utf8)) SELECT 1 ORDER BY `bad `()",
+      "api": "prepare",
+      "error": {
+        "code": "ER_SP_WRONG_NAME",
+        "errno": 1458,
+        "state": "42000",
+        "message": "Incorrect routine name 'bad '"
+      },
+      "warnings": [
+        [
+          "Warning",
+          3719,
+          "'utf8' is currently an alias for the character set UTF8MB3, but will be an alias for UTF8MB4 in a future release. Please consider using UTF8MB4 in order to be unambiguous."
+        ],
+        [
+          "Error",
+          1458,
+          "Incorrect routine name 'bad '"
+        ]
+      ],
+      "warningCount": "2",
+      "errorCount": "1"
+    },
+    {
+      "sql": "WITH c AS(SELECT @@bad_cte_250 v) SELECT _utf8'x' FROM c WHERE `bad `()",
+      "api": "query",
+      "error": {
+        "code": "ER_UNKNOWN_SYSTEM_VARIABLE",
+        "errno": 1193,
+        "state": "HY000",
+        "message": "Unknown system variable 'bad_cte_250'"
+      },
+      "warnings": [
+        [
+          "Warning",
+          3719,
+          "'utf8' is currently an alias for the character set UTF8MB3, but will be an alias for UTF8MB4 in a future release. Please consider using UTF8MB4 in order to be unambiguous."
+        ],
+        [
+          "Error",
+          1193,
+          "Unknown system variable 'bad_cte_250'"
+        ]
+      ],
+      "warningCount": "2",
+      "errorCount": "1"
+    },
+    {
+      "sql": "WITH c AS(SELECT @@bad_cte_250 v) SELECT _utf8'x' FROM c WHERE `bad `()",
+      "api": "execute",
+      "error": {
+        "code": "ER_UNKNOWN_SYSTEM_VARIABLE",
+        "errno": 1193,
+        "state": "HY000",
+        "message": "Unknown system variable 'bad_cte_250'"
+      },
+      "warnings": [
+        [
+          "Warning",
+          3719,
+          "'utf8' is currently an alias for the character set UTF8MB3, but will be an alias for UTF8MB4 in a future release. Please consider using UTF8MB4 in order to be unambiguous."
+        ],
+        [
+          "Error",
+          1193,
+          "Unknown system variable 'bad_cte_250'"
+        ]
+      ],
+      "warningCount": "2",
+      "errorCount": "1"
+    },
+    {
+      "sql": "WITH c AS(SELECT @@bad_cte_250 v) SELECT _utf8'x' FROM c WHERE `bad `()",
+      "api": "prepare",
+      "error": {
+        "code": "ER_UNKNOWN_SYSTEM_VARIABLE",
+        "errno": 1193,
+        "state": "HY000",
+        "message": "Unknown system variable 'bad_cte_250'"
+      },
+      "warnings": [
+        [
+          "Warning",
+          3719,
+          "'utf8' is currently an alias for the character set UTF8MB3, but will be an alias for UTF8MB4 in a future release. Please consider using UTF8MB4 in order to be unambiguous."
+        ],
+        [
+          "Error",
+          1193,
+          "Unknown system variable 'bad_cte_250'"
+        ]
+      ],
+      "warningCount": "2",
+      "errorCount": "1"
+    },
+    {
+      "sql": "SELECT 1 FROM missing WHERE @@bad_where_250",
+      "api": "query",
+      "error": {
+        "code": "ER_NO_DB_ERROR",
+        "errno": 1046,
+        "state": "3D000",
+        "message": "No database selected"
+      },
+      "warnings": [
+        [
+          "Error",
+          1046,
+          "No database selected"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "SELECT 1 FROM missing WHERE @@bad_where_250",
+      "api": "execute",
+      "error": {
+        "code": "ER_NO_DB_ERROR",
+        "errno": 1046,
+        "state": "3D000",
+        "message": "No database selected"
+      },
+      "warnings": [
+        [
+          "Error",
+          1046,
+          "No database selected"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "SELECT 1 FROM missing WHERE @@bad_where_250",
+      "api": "prepare",
+      "error": {
+        "code": "ER_NO_DB_ERROR",
+        "errno": 1046,
+        "state": "3D000",
+        "message": "No database selected"
+      },
+      "warnings": [
+        [
+          "Error",
+          1046,
+          "No database selected"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "SELECT 1 FROM missing ORDER BY @@warning_count",
+      "api": "query",
+      "error": {
+        "code": "ER_NO_DB_ERROR",
+        "errno": 1046,
+        "state": "3D000",
+        "message": "No database selected"
+      },
+      "warnings": [
+        [
+          "Error",
+          1046,
+          "No database selected"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "SELECT 1 FROM missing ORDER BY @@warning_count",
+      "api": "execute",
+      "error": {
+        "code": "ER_NO_DB_ERROR",
+        "errno": 1046,
+        "state": "3D000",
+        "message": "No database selected"
+      },
+      "warnings": [
+        [
+          "Error",
+          1046,
+          "No database selected"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    },
+    {
+      "sql": "SELECT 1 FROM missing ORDER BY @@warning_count",
+      "api": "prepare",
+      "error": {
+        "code": "ER_NO_DB_ERROR",
+        "errno": 1046,
+        "state": "3D000",
+        "message": "No database selected"
+      },
+      "warnings": [
+        [
+          "Error",
+          1046,
+          "No database selected"
+        ]
+      ],
+      "warningCount": "1",
+      "errorCount": "1"
+    }
+  ]
+}

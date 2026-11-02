@@ -60,6 +60,8 @@ export interface Run {
   readonly parent?: Scope
   /** The common table expressions in scope, by name. */
   readonly ctes?: ReadonlyMap<string, () => DerivedSource>
+  /** Admit query bodies as existing source factories demand them. */
+  readonly admitQuery?: (query: QueryExpression, sources?: boolean) => void
   /**
    * The database an unqualified table name is in, when it is not the
    * session's: inside a view, the one that was current at its CREATE VIEW.
@@ -315,17 +317,23 @@ interface SetMembers {
  * LIMIT, or a set operation, under the CTEs its WITH defines.
  */
 export function planQuery(run: Run, q: QueryExpression): SelectPlan {
+  run.admitQuery?.(q)
   if (q.into !== undefined) throw notSupported('SELECT … INTO')
   const r = q.with === undefined ? run : withClause(run, q.with)
   const body = q.body
   switch (body.kind) {
     case QUERY.SELECT:
       return planSelect({ ...r, subqueries: [], quantified: new Map(), clauses: { 'where clause': body.where, 'having clause': body.having } }, q, body)
-    case QUERY.QUERY:
-      if (q.orderBy === undefined && q.limit === undefined) return planQuery(r, body)
-      return orderedResult(r, q, planQuery(r, body))
-    case QUERY.SET_OPERATION:
-      return orderedResult(r, q, planSetOperation(r, body))
+    case QUERY.QUERY: {
+      const plan = planQuery(r, body)
+      r.admitQuery?.(q, true)
+      return q.orderBy === undefined && q.limit === undefined ? plan : orderedResult(r, q, plan)
+    }
+    case QUERY.SET_OPERATION: {
+      const plan = planSetOperation(r, body)
+      r.admitQuery?.(q, true)
+      return orderedResult(r, q, plan)
+    }
     default:
       throw notSupported(body.kind.toUpperCase())
   }
@@ -338,6 +346,7 @@ function planSelect(run: Run, q: QueryExpression, node: SelectNode): SelectPlan 
   // The parser normalizes unquoted DUAL; every retained reference names a table.
   const refs = node.from ?? []
   let from = refs.length === 0 ? undefined : planFrom(refs, fromContext(run), node.where, (node.options ?? []).includes('STRAIGHT_JOIN'))
+  run.admitQuery?.(q, true)
   const scope = from?.scope
   let source = from?.single
   const lookup: Scope = scope ?? run.parent ?? EMPTY_SCOPE

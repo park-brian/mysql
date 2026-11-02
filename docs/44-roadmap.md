@@ -101,8 +101,12 @@ unused-order name-binding gap remains open. The later native audit corrects the
 earlier clearing suspicion: ordinary diagnostic-count SELECTs already clear
 conditions correctly. The measured gap is selection of the current live area
 after construction warnings, versus the prior snapshot otherwise. Isolated
-construction histories also alter PREPARE admission; unused-CTE diagnostic
-references retain a separate admission gap.
+construction histories also alter PREPARE admission. Nonrecursive CTE admission
+now follows existing lazy factories: projections precede FROM demand, remaining
+clauses follow it, and unused variable/routine checks remain dormant. The new
+4,006-outcome audit improves 3,202→3,315 complete matches with all 40,814 prior
+matching protocol facts retained. Recursive eagerness and non-query contexts
+remain open.
 Then return to set admission: unbounded UNION ALL can discard key-name binding, while materialized/unary
 owners still bind; their COLLATE checks need the inherited holder. Native constructors validate outer arity before nested
 calls, after syntax/charset construction, and leave unused CTE bodies dormant.
@@ -2351,8 +2355,8 @@ snapshots; 1582's copied construction history retains its separate bound.
 Native audits confirm ordinary diagnostic-count SELECT clearing was already
 correct; the earlier general-clearing inference was wrong. Native also permits
 prepared diagnostic references when construction history selected the current
-area. Unused diagnostic CTE references still expose a separate PREPARE false
-positive. No parser or wire API changes are needed.
+area. The following CTE-demand slice addresses the separate unused-definition
+PREPARE false positive. No parser or wire API changes are needed.
 
 The combined 3,772-outcome audit improves 3,028→3,086 complete matches, retaining
 all 35,334 previously matching protocol facts, including diagnostic totals and
@@ -2371,15 +2375,48 @@ covers 537 tests/fixtures and 206 runtime sources plus tooling. Parser/core/
 facade are 45,599/332,015/331,933 B gzipped. The full 1,459-file official suite
 retains all 38 passing identities and the unchanged native baseline. All eleven
 required 8f0301b CI jobs pass. CHAR CAST declaration flags, UPDATE status flags,
-unused-CTE PREPARE admission, mixed histories and broader context ownership
-remain open. Totals stay 144/190 and M5 42/53; M5.10 remains partial.
+mixed histories and broader context ownership remain open; nonrecursive unused-CTE
+PREPARE admission is addressed immediately below. Totals stay 144/190 and M5 42/53; M5.10 remains partial.
 
-Next audit CTE demand at the existing query-context owner. A 78-command native
-query/execute/PREPARE probe matches 30 completely: unused diagnostic references
-can wrongly refuse PREPARE, and unknown system variables in unused definitions
-can wrongly refuse every API. Used diagnostic definitions retain native 1295.
-Preserve active-variable error priority before missing tables, syntax identifier
-checks and lexical CTE shadowing; do not prune all declaration checks globally.
+**CTE demand admission, verified (2026-11-02):** the existing
+lexical CTE factories now trigger query admission when they plan a definition.
+No second namespace or dependency resolver is introduced. Projection variable
+and routine-identity checks precede FROM sources; WHERE, HAVING and ORDER BY
+checks follow those sources. Invocation-local visited sets prevent repeated
+admission as the planner reuses a query. PREPARE applies its diagnostic-counter
+restriction to demanded definitions, preserving the construction-history rule.
+DDL, CHECK and view policies retain their existing admission paths.
+
+The initial 78-command native audit improves 30→77 complete matches. Priority
+controls improve 12→27 of 36, routine identities 9→18 of 18, scope/clause controls
+27→48 of 48, and warning/history controls 22→27 of 27. A second 27-command BINARY
+history control improves 16→21, retaining six pre-existing missing-prefix gaps.
+Across all 4,006 observations complete matches improve 3,202→3,315, preserving
+all 40,814 previously matching protocol facts, including parameter metadata,
+warnings, diagnostic totals and effects. All 195 new strict observations pass
+against MySQL 8.4.11 and locally with full metadata and diagnostics. Actual
+97de124 fails the new test; the warm container is restored afterwards.
+
+Recursive CTEs still initialize eagerly; four nonrecursive field-metadata
+outcomes remain different. These and the six BINARY-prefix controls are retained
+in the audit, with no expected-answer changes. Keep non-query context demand,
+CHAR CAST flags, UPDATE status flags and mixed publishers explicitly open.
+Twenty thousand executor statements seeded 20261010 pass; plans retain
+2,127/2,248 agreement under the unchanged 2,118 floor. All nine unchanged caps
+pass at parser/core/facade 45,599/332,218/332,138 B gzipped. The full 1,459-file
+official suite retains all 38 passing identities and the unchanged native baseline; the measured fixture stays unchanged. Fresh Docker
+--reference passes 1,641 main tests, four latency tests, typecheck, lint, all nine
+unchanged caps, package/typed smoke, the real client and all seven pinned corpora
+including 1,737 coercion warning counts. Initial type errors in the visitor cast
+and mysql2 private-metadata test access were corrected before this final run.
+Early final-source proof matches
+539 tests/fixtures and 206 runtime sources plus tooling. The 97de124 CI run
+passed all eleven required jobs. Totals stay 144/190 and M5 42/53; M5.10 remains
+partial.
+
+Next bound recursive CTE initialization to the same source-demand factory,
+with native proofs for unused malformed definitions, demanded recursion,
+error priority and lexical shadowing. Preserve anchor/step typing and execution.
 
 **Next prerequisite: constructor admission before presence execution.** Complete
 the existing CAST work: with written utf8 warning 3719 now retained, refuse
