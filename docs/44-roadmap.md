@@ -3445,15 +3445,43 @@ nine unchanged caps, package/client smoke and all seven pinned MySQL 8.4.11
 corpora. Source proof matches all 640 test files/fixtures and 206 runtime sources.
 Totals remain 144/190 and M5 42/53; M5.10 stays partial.
 
-**Next window metadata boundary: MIN/MAX result provenance.** Compare native
-complete packets for window MIN/MAX over physical versus computed aggregate
-fields, with constant and buffered materialization, PREPARE, empty/all-NULL
-input and retained writes. Establish the result item's actual origin owner;
-do not clear all origins or infer INTEGER conversion from metadata flags.
-Outer-limit propagation, correlated/lateral values and HAVING evaluation counts
-remain distinct gaps. Absence of a positive singleton proof still does not prove
-buffered conversion ownership. Then resume the constructor/presence prerequisite
-below before broader optimizer work.
+**MIN/MAX result provenance, verified boundary (2026-11-03):**
+The shared extreme-result type constructor now discards computed source names
+alongside physical column identity. Grouped and window MIN/MAX are expressions;
+subsequent temporary fields still establish their own delivered identity. The
+fix stays at the aggregate item owner, with no packet-wide name clearing and no
+changes to flags, result widths, value readers or INTEGER conversion.
+
+Three fresh native profiles retain 602 responses, improving 114 to 594 complete
+matches. All 330 ordinary and 192 empty/all-NULL observations now agree, including
+DOUBLE, INTEGER, DECIMAL and text expressions; physical versus computed fields;
+constant, buffered, grouped, rollup and nested materialization; and all three
+protocol phases. All 72 retained executions agree across writes and emptied/
+restored sources. Eight PREPARE parameter packets remain separate inference
+gaps, while their result fields now agree. Three fixtures pin all 594 complete
+responses without changing older expectations or thresholds. Sizes remain under
+all nine caps at parser/core/facade 45,599/334,352/334,254 B gzipped.
+Across 17,455 responses agreement improves 14,546 to 15,235, preserving all
+326,080 previously matching facts and every prior complete response. All 108
+focused local protocol/window tests, three new native groups, typecheck and lint
+pass. The actual 95387cd predecessor passes 104 protocol groups and fails all
+three new groups. The 20,000-statement executor run with seed 20261010 passes;
+plans remain 2,127/2,248 under the unchanged 2,118 floor. The full 1,459-file
+official run retains the same 38 passing IDs and exact native baseline. Totals
+remain 144/190 and M5 42/53; M5.10 stays partial. Fresh Docker verification
+passes all 1,747 tests plus four latency checks, typecheck, lint, nine unchanged
+caps, package/client smoke and all seven pinned MySQL 8.4.11 corpora. Source
+proof matches all 643 test files/fixtures and 206 runtime sources.
+
+**Next window reader boundary: INTEGER conversion after selected ownership.**
+Revisit the existing raw-versus-INTEGER native window audit now that constant
+input, bounded/implicit materialization and result provenance have independent
+proofs. Capture exact selected plans, checked/quiet conversions, diagnostics and
+retained executions across those owners before implementing a reader change.
+Do not infer conversion from metadata flags or treat absence of a singleton
+proof as a buffered-reader certificate. Keep HAVING activity, correlated/lateral
+values, outer-wrapper proof propagation, parameter inference, Note 1249 and
+SUM(NULL) shape distinct. Then resume the constructor/presence prerequisite below.
 
 **Next prerequisite: constructor admission before presence execution.** Complete
 the existing CAST work: with written utf8 warning 3719 now retained, refuse

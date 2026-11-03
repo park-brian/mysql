@@ -157,7 +157,7 @@ function aggregateType(name: string, args: readonly Compiled[], ctx: CompileCont
  * is type DATE, utf8mb4, 40 wide on 8.4.11.
  */
 function extremeType(t: ResultType): ResultType {
-  const { column, blobBytes, temporary: _t, ...rest } = t
+  const { column, blobBytes, temporary: _t, names: _n, ...rest } = t
   const fieldFlags = column === undefined ? {} : { fieldFlags: column.flags }
   if (t.kind === 'datetime' || t.kind === 'time') return { ...rest, ...fieldFlags, nullable: true, asText: true }
   if (blobBytes !== undefined && t.kind === 'string') return { ...rest, ...fieldFlags, nullable: true, length: blobBytes * requireCollationInfo(t.collationId).mbmaxlen }

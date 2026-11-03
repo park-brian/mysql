@@ -109,7 +109,8 @@ and NULLIF retaining selected-argument policies. REAL literals now own quiet INT
 clipping. Physical REAL field INTEGER readers now preserve native rounding, inclusive
 DOUBLE clipping/warnings and quiet FLOAT overflow within the verified boundary.
 Grouped numeric aggregates now retain checked INTEGER readers, while REAL
-MIN/MAX use quiet cache conversion. Window PREPARE now retains original item
+MIN/MAX use quiet cache conversion and now drop computed source names alongside
+physical column identity; later materialization supplies its own field names. Window PREPARE now retains original item
 metadata before execution result fields exist. BETWEEN key binding now shares
 original-item equality across access and const-table facts; derived sources,
 EXPLAIN and window output retain the resulting static proof while executions
