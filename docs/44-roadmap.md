@@ -3359,6 +3359,61 @@ and all seven pinned MySQL 8.4.11 corpora. Source proof matches all 626 test
 files/fixtures and 206 runtime sources. Totals remain 144/190
 and M5 42/53; M5.10 stays partial.
 
+**Materialized block LIMIT ownership, verified boundary (2026-11-03):**
+The selected plain or grouped query block carries its own LIMIT budget,
+including OFFSET. Noncorrelated materialization with a budget at most one
+shares the existing planning proof with EXPLAIN and window output metadata.
+The proof belongs to the block enforcing the limit: UNION and parenthesized
+outer limits do not forward it. LIMIT 1 OFFSET 1/99 and LIMIT 0 OFFSET 99 keep
+buffered ownership regardless of their observed output cardinality. Lateral
+and correlated sources remain excluded. Runtime INTEGER readers are unchanged.
+
+Eight native profiles retain 602 responses, improving 323 to 501 full matches.
+Eight protocol fixtures pin all 501 complete responses. Retained statements
+match all 72 executions across writes, deletions, inserted rows and emptied/
+restored input; their eight PREPARE parameter packets remain separate gaps.
+Parameterized LIMIT/OFFSET matches all 24 query/execute responses, with twelve
+PREPARE parameter packets still open. Callback field events measure actual
+header publication before failure, calibrated against SELECT 1. Existing
+buffered failure header timing remains open; bounded failures now agree.
+Group/ROLLUP evaluation activity, implicit aggregates without written LIMIT,
+NULL-bound emptiness, scalar forwarding, Note 1249 and INTEGER conversion
+remain explicit. Positive plan fixtures use the existing cost-independent
+structure/field contract; zero-row reasons and other buffered plan shapes
+remain in the raw native audit.
+
+The broad limit-stage prototype incorrectly forwarded proof through set and
+outer-wrapper owners and exceeded existing caps. OFFSET controls also rejected
+a row-count-only proof. The final implementation retains every previously
+matching fact across 16,289 responses: agreement improves 13,982 to 14,166,
+with all 279,993 prior matching facts and every prior complete outcome held.
+No expectations, fixtures or thresholds are weakened.
+
+All 101 focused local protocol/window tests, typecheck, lint and nine unchanged
+caps pass at parser/core/facade 45,599/334,343/334,245 B gzipped. All 99 protocol
+groups pass against pinned MySQL 8.4.11; ten focused native groups also pass,
+including the preceding plan group. The actual f51d717
+predecessor passes 90 groups and fails all nine new groups. The 20,000-statement
+executor run with seed 20261010 passes; plans remain 2,127/2,248 under the
+unchanged 2,118 floor. The full 1,459-file official run retains the same 38
+passing IDs and exact native baseline. The preceding f51d717 commit passed all
+eleven required GitHub jobs. Twelve positive EXPLAIN observations pin structure
+and result fields. Fresh Docker verification passes all 1,739 tests plus four
+latency checks, typecheck, lint, all nine unchanged caps, package/client smoke
+and all seven pinned MySQL 8.4.11 corpora. Source proof matches all 635 test
+files/fixtures and 206 runtime sources. Totals remain 144/190 and M5 42/53;
+M5.10 stays partial.
+
+**Next window ownership prerequisite: implicit aggregate materialization.**
+Capture fresh plans, complete packets, failure header timing and retained
+executions for a noncorrelated implicit aggregate without a written LIMIT.
+Establish its actual selected reader proof before changing window INTEGER
+conversion. Include explicit GROUP BY, HAVING, ROLLUP, empty/all-NULL input,
+correlated/lateral and outer-limit controls. Absence of a positive constant
+proof still does not prove buffered conversion ownership. Parameter inference,
+scalar/NULL forwarding, aggregate activity and diagnostic labels remain
+separate boundaries. Then resume the constructor/presence prerequisite below.
+
 **Next prerequisite: constructor admission before presence execution.** Complete
 the existing CAST work: with written utf8 warning 3719 now retained, refuse
 excessive DECIMAL precision at the completed parser production. Preserve native prefix

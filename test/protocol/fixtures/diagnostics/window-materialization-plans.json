@@ -1,0 +1,343 @@
+{
+  "mysqlVersion": "8.4.11",
+  "schema": "myjs_window272_plan_shapes",
+  "sqlMode": "ERROR_FOR_DIVISION_BY_ZERO",
+  "seed": "SELECT 1/0,CAST('x' AS DECIMAL)",
+  "setup": [
+    "CREATE TABLE base260(b VARCHAR(16),n BIGINT UNSIGNED)",
+    "INSERT INTO base260 VALUES('g',18446744073709551615)",
+    "CREATE TABLE real268(id INT PRIMARY KEY,d DOUBLE,f FLOAT,u DOUBLE UNSIGNED,v FLOAT UNSIGNED)",
+    "INSERT INTO real268 VALUES(1,2.5,2.5,2.5,2.5),(2,3.5,3.5,3.5,3.5),(3,-2.5,-2.5,2.5,2.5),(4,NULL,NULL,NULL,NULL)",
+    "CREATE TABLE keys271(id INT PRIMARY KEY,a INT,b INT UNIQUE,d DOUBLE,txt VARCHAR(8),KEY(a),UNIQUE(txt(2)))",
+    "INSERT INTO keys271 VALUES(1,2,1,2.5,'ab'),(2,2,2,3.5,'cd'),(3,3,NULL,-2.5,'ef'),(4,4,NULL,NULL,'gh')"
+  ],
+  "beforeEach": [
+    "DROP VIEW IF EXISTS v256"
+  ],
+  "observations": [
+    {
+      "sql": "EXPLAIN FORMAT=TREE SELECT q.id,SUM(q.d) OVER (PARTITION BY q.id) AS v FROM (SELECT id,d FROM real268 LIMIT 1) q ORDER BY q.id",
+      "api": "query",
+      "existing": false,
+      "rows": [
+        [
+          "-> Rows fetched before execution  (cost=0..0 rows=1)\n"
+        ]
+      ],
+      "fields": [
+        [
+          "EXPLAIN",
+          253,
+          312,
+          1,
+          31,
+          224,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "EXPLAIN FORMAT=TREE SELECT q.id,SUM(q.d) OVER (PARTITION BY q.id) AS v FROM (SELECT id,d FROM real268 ORDER BY id DESC LIMIT 1) q ORDER BY q.id",
+      "api": "query",
+      "existing": false,
+      "rows": [
+        [
+          "-> Rows fetched before execution  (cost=0..0 rows=1)\n"
+        ]
+      ],
+      "fields": [
+        [
+          "EXPLAIN",
+          253,
+          312,
+          1,
+          31,
+          224,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "EXPLAIN FORMAT=TREE SELECT q.id,SUM(q.d) OVER (PARTITION BY q.id) AS v FROM (SELECT id,d FROM real268 ORDER BY d LIMIT 1) q ORDER BY q.id",
+      "api": "query",
+      "existing": false,
+      "rows": [
+        [
+          "-> Rows fetched before execution  (cost=0..0 rows=1)\n"
+        ]
+      ],
+      "fields": [
+        [
+          "EXPLAIN",
+          253,
+          312,
+          1,
+          31,
+          224,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "EXPLAIN FORMAT=TREE SELECT q.id,SUM(q.d) OVER (PARTITION BY q.id) AS v FROM (SELECT id,d FROM real268 WHERE id>=2 LIMIT 1) q ORDER BY q.id",
+      "api": "query",
+      "existing": false,
+      "rows": [
+        [
+          "-> Rows fetched before execution  (cost=0..0 rows=1)\n"
+        ]
+      ],
+      "fields": [
+        [
+          "EXPLAIN",
+          253,
+          312,
+          1,
+          31,
+          224,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "EXPLAIN FORMAT=TREE SELECT q.id,SUM(q.d) OVER (PARTITION BY q.id) AS v FROM (SELECT id,d FROM real268 WHERE id=2 LIMIT 1) q ORDER BY q.id",
+      "api": "query",
+      "existing": false,
+      "rows": [
+        [
+          "-> Rows fetched before execution  (cost=0..0 rows=1)\n"
+        ]
+      ],
+      "fields": [
+        [
+          "EXPLAIN",
+          253,
+          312,
+          1,
+          31,
+          224,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "EXPLAIN FORMAT=TREE SELECT q.id,SUM(q.d) OVER (PARTITION BY q.id) AS v FROM (SELECT DISTINCT id,d FROM real268 LIMIT 1) q ORDER BY q.id",
+      "api": "query",
+      "existing": false,
+      "rows": [
+        [
+          "-> Rows fetched before execution  (cost=0..0 rows=1)\n"
+        ]
+      ],
+      "fields": [
+        [
+          "EXPLAIN",
+          253,
+          312,
+          1,
+          31,
+          224,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "EXPLAIN FORMAT=TREE SELECT q.id,SUM(q.d) OVER (PARTITION BY q.id) AS v FROM (SELECT id,d FROM real268 LIMIT 1 OFFSET 0) q ORDER BY q.id",
+      "api": "query",
+      "existing": false,
+      "rows": [
+        [
+          "-> Rows fetched before execution  (cost=0..0 rows=1)\n"
+        ]
+      ],
+      "fields": [
+        [
+          "EXPLAIN",
+          253,
+          312,
+          1,
+          31,
+          224,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "EXPLAIN FORMAT=TREE SELECT q.id,SUM(q.d) OVER (PARTITION BY q.id) AS v FROM (SELECT id,SUM(d) AS d FROM real268 GROUP BY id LIMIT 1) q ORDER BY q.id",
+      "api": "query",
+      "existing": false,
+      "rows": [
+        [
+          "-> Rows fetched before execution  (cost=0..0 rows=1)\n"
+        ]
+      ],
+      "fields": [
+        [
+          "EXPLAIN",
+          253,
+          312,
+          1,
+          31,
+          224,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "EXPLAIN FORMAT=TREE SELECT q.id,SUM(q.d) OVER (PARTITION BY q.id) AS v FROM (SELECT 0 AS id,SUM(d) AS d FROM real268 LIMIT 1) q ORDER BY q.id",
+      "api": "query",
+      "existing": false,
+      "rows": [
+        [
+          "-> Rows fetched before execution  (cost=0..0 rows=1)\n"
+        ]
+      ],
+      "fields": [
+        [
+          "EXPLAIN",
+          253,
+          312,
+          1,
+          31,
+          224,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "EXPLAIN FORMAT=TREE SELECT q.id,SUM(q.d) OVER (PARTITION BY q.id) AS v FROM (WITH t272 AS (SELECT id,d FROM real268) SELECT id,d FROM t272 LIMIT 1) q ORDER BY q.id",
+      "api": "query",
+      "existing": false,
+      "rows": [
+        [
+          "-> Rows fetched before execution  (cost=0..0 rows=1)\n"
+        ]
+      ],
+      "fields": [
+        [
+          "EXPLAIN",
+          253,
+          312,
+          1,
+          31,
+          224,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "EXPLAIN FORMAT=TREE SELECT q.id,SUM(q.d) OVER (PARTITION BY q.id) AS v FROM (SELECT id,d FROM (SELECT id,d FROM real268 LIMIT 1) i272 ORDER BY id) q ORDER BY q.id",
+      "api": "query",
+      "existing": false,
+      "rows": [
+        [
+          "-> Rows fetched before execution  (cost=0..0 rows=1)\n"
+        ]
+      ],
+      "fields": [
+        [
+          "EXPLAIN",
+          253,
+          312,
+          1,
+          31,
+          224,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "EXPLAIN FORMAT=TREE SELECT q.id,SUM(q.d) OVER (PARTITION BY q.id) AS v FROM (SELECT id,SUM(d) OVER (PARTITION BY id) AS d FROM real268 LIMIT 1) q ORDER BY q.id",
+      "api": "query",
+      "existing": false,
+      "rows": [
+        [
+          "-> Rows fetched before execution  (cost=0..0 rows=1)\n"
+        ]
+      ],
+      "fields": [
+        [
+          "EXPLAIN",
+          253,
+          312,
+          1,
+          31,
+          224,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    }
+  ]
+}

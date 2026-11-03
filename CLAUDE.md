@@ -113,7 +113,10 @@ MIN/MAX use quiet cache conversion. Window PREPARE now retains original item
 metadata before execution result fields exist. BETWEEN key binding now shares
 original-item equality across access and const-table facts; derived sources,
 EXPLAIN and window output retain the resulting static proof while executions
-read current rows. Plan-owned window readings, scalar caches
+read current rows. Materialized query blocks now carry their selected LIMIT
+budget including OFFSET; only a noncorrelated budget of at most one adds the
+planning proof. Set-expression limits, correlated sources and implicit aggregates
+without a written LIMIT retain their separate ownership. Plan-owned window readings, scalar caches
 and ROLLUP/query forwarding remain separate. Owned DOUBLE readers for byte
 functions, conditional branches and quiet string-result holders are verified
 within their measured boundary; scalar forwarding/cache remains separate. General

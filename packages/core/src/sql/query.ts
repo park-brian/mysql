@@ -274,6 +274,8 @@ function itemTexts(run: Run, node: SelectNode): (string | undefined)[] {
 export interface SelectPlan {
   /** Static input proof; row existence is checked by each execution. */
   readonly constant?: boolean
+  /** The selected query block's LIMIT budget before OFFSET. */
+  readonly blockLimit?: number | undefined
 
   /** An ordinary SELECT's bound single base source; opaque or grouped sources supply no such proof. */
   readonly source?: FromPlan['single']
@@ -639,6 +641,7 @@ function planSelect(run: Run, q: QueryExpression, node: SelectNode): SelectPlan 
   return {
     ...resultColumns(items, dataColumns),
     constant,
+    blockLimit: take && keep,
     source,
     locking,
     ...(source?.table.checkRead === undefined ? {} : {
@@ -1585,7 +1588,7 @@ function derivedTable(run: Run, query: QueryExpression, alias: string, names: re
   // a + (SELECT COUNT(*) FROM (SELECT a FROM t) d WHERE d.a > t.a)` is 3, 3, 3).
   const source: DerivedSource = {
     columns,
-    constant: lateral === undefined && !correlated && plan.constant === true,
+    constant: lateral === undefined && !correlated && (plan.constant === true || (plan.blockLimit ?? Infinity) <= 1),
     merged,
     explain: (): DerivedPlan | undefined => {
       const body = plan.explain?.()?.[0]
@@ -2374,6 +2377,7 @@ function planGrouped(
 
   return {
     ...resultColumns(items, dataColumns),
+    blockLimit: q.limit && keep,
     locking,
     explain() {
       // Implicit grouping answers one row even of nothing: proved empty, it is

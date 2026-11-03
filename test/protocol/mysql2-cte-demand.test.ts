@@ -2,7 +2,7 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { connect } from 'node:net'
 import mysql from 'mysql2/promise'
-import type { QueryError, RowDataPacket } from 'mysql2'
+import type { Connection as RawConnection, QueryError, QueryResult, RowDataPacket } from 'mysql2'
 import { MySQL } from '@myjs/core'
 import nonrecursive from './fixtures/diagnostics/cte-demand.json' with { type: 'json' }
 import recursive from './fixtures/diagnostics/recursive-demand.json' with { type: 'json' }
@@ -91,6 +91,15 @@ import windowPlanningMixed from './fixtures/diagnostics/window-planning-mixed.js
 import windowPlanningCollation from './fixtures/diagnostics/window-planning-collation.json' with { type: 'json' }
 import windowPlanningRetainedOutput from './fixtures/diagnostics/window-planning-retained-output.json' with { type: 'json' }
 import windowPlanningPlans from './fixtures/diagnostics/window-planning-plans.json' with { type: 'json' }
+import materializationMaterialized from './fixtures/diagnostics/window-materialization-materialized.json' with { type: 'json' }
+import materializationLimits from './fixtures/diagnostics/window-materialization-limits.json' with { type: 'json' }
+import materializationContexts from './fixtures/diagnostics/window-materialization-contexts.json' with { type: 'json' }
+import materializationEffects from './fixtures/diagnostics/window-materialization-effects.json' with { type: 'json' }
+import materializationRetained from './fixtures/diagnostics/window-materialization-retained.json' with { type: 'json' }
+import materializationFailures from './fixtures/diagnostics/window-materialization-failures.json' with { type: 'json' }
+import materializationGroupEffects from './fixtures/diagnostics/window-materialization-group-effects.json' with { type: 'json' }
+import materializationParameters from './fixtures/diagnostics/window-materialization-parameters.json' with { type: 'json' }
+import materializationPlans from './fixtures/diagnostics/window-materialization-plans.json' with { type: 'json' }
 import effects from './fixtures/diagnostics/view-target-effects.json' with { type: 'json' }
 
 const fieldsOf = (fields: readonly mysql.FieldPacket[]) => fields.map(f => [f.name, f.columnType, f.columnLength, f.flags, f.decimals, f.characterSet, f.schema, f.table, f.orgTable, f.orgName])
@@ -132,8 +141,9 @@ function parametersOf(values: readonly unknown[]): (string | number | null | Buf
   })
 }
 
-async function observe(c: mysql.Connection, sql: string, api: string, parameters: (string | number | null | Buffer)[] = []) {
+async function observe(c: mysql.Connection, sql: string, api: string, parameters: (string | number | null | Buffer)[] = [], measureHeaders = false) {
   let result: object
+  let headers = 0
   try {
     if (api === 'prepare') {
       const prepared = await c.prepare(sql)
@@ -142,14 +152,19 @@ async function observe(c: mysql.Connection, sql: string, api: string, parameters
         result = { parameters: fieldsOf(statement.parameters), fields: fieldsOf(statement.columns) }
       } finally { await prepared.close(); c.unprepare(sql) }
     } else {
-      const [rows, fields] = api === 'query' ? await c.query(sql, parameters) : await c.execute(sql, parameters)
+      const [rows, fields] = measureHeaders ? await new Promise<[QueryResult, mysql.FieldPacket[] | undefined]>((resolve, reject) => {
+        const done = (error: QueryError | null, rows: QueryResult, fields?: mysql.FieldPacket[]) => error ? reject(error) : resolve([rows, fields])
+        const raw = (c as mysql.Connection & { connection: RawConnection }).connection
+        const command = api === 'query' ? raw.query(sql, parameters, done) : raw.execute(sql, parameters, done)
+        command.on('fields', () => headers++)
+      }) : api === 'query' ? await c.query(sql, parameters) : await c.execute(sql, parameters)
       result = fields === undefined ? { header: { ...rows } } : { rows: rowsOf(rows), fields: fieldsOf(fields) }
     }
   } catch (e) {
     const error = e as QueryError & { sqlMessage?: string }
     result = { error: { code: error.code, errno: error.errno, state: error.sqlState, message: error.sqlMessage } }
   }
-  return { sql, api, ...result, ...await conditionsOf(c) }
+  return { sql, api, ...result, ...(measureHeaders ? { headers } : {}), ...await conditionsOf(c) }
 }
 
 async function conditionsOf(c: mysql.Connection) {
@@ -196,7 +211,7 @@ test('M5.10: prepared string metadata retains its SQL mode while text queries us
   }
 })
 
-for (const [name, fixture] of [['nonrecursive', nonrecursive], ['recursive', recursive], ['order', order], ['names', names], ['spelling', spelling], ['view-target-no-db', noDatabase], ['view-target-controls', controls], ['view-merge', merge], ['view-merge-reuse', mergeReuse], ['view-check', check], ['view-check-reuse', checkReuse], ['view-check-projections', projections], ['view-check-projection-reuse', projectionReuse], ['view-check-fields-admission', fieldAdmission], ['view-updatability', updatability], ['view-updatability-types', updatabilityTypes], ['unary-plus-print', plusPrint], ['unary-plus-diagnostics', plusDiagnostics], ['unary-plus-diagnostic-reuse', plusReuse], ['view-updatability-owners', updatabilityOwners], ['view-updatability-order', updatabilityOrder], ['binary-not-values', binaryNotValues], ['binary-not-parameters', binaryNotParameters], ['binary-not-casts', binaryNotCasts], ['binary-not-bytes', binaryNotBytes], ['binary-not-strict-trans', binaryNotStrictTrans], ['binary-not-strict-all', binaryNotStrictAll], ['binary-bitwise-controls', bitwiseControls], ['binary-bitwise-values', bitwiseValues], ['binary-bitwise-order', bitwiseOrder], ['binary-bitwise-columns', bitwiseColumns], ['binary-bitwise-parameters', bitwiseParameters], ['binary-bitwise-provenance', bitwiseProvenance], ['owned-real-direct', realDirect], ['owned-real-values', realValues], ['owned-real-wrappers', realWrappers], ['owned-real-scalars', realScalars], ['owned-real-readiness', realReadiness], ['owned-real-fields', realFields], ['owned-real-effects', realEffects], ['owned-real-mixed', realMixed], ['owned-real-json', realJson], ['owned-real-strict', realStrict], ['binary-shift-shifts', shiftShifts], ['binary-shift-counts', shiftCounts], ['binary-shift-fields', shiftFields], ['binary-shift-parameters', shiftParameters], ['binary-shift-rounding', shiftRounding], ['owned-integer-direct', integerDirect], ['owned-integer-fields', integerFields], ['owned-integer-scalars', integerScalars], ['owned-integer-parameters', integerParameters], ['owned-integer-wrappers', integerWrappers], ['owned-integer-casts', integerCasts], ['owned-integer-activity', integerActivity], ['literal-integer-direct', literalIntegerDirect], ['literal-integer-edges', literalIntegerEdges], ['literal-integer-holders', literalIntegerHolders], ['field-integer-fields', fieldIntegerFields], ['field-integer-contexts', fieldIntegerContexts], ['field-integer-strict-trans', fieldIntegerStrictTrans], ['field-integer-strict-all', fieldIntegerStrictAll], ['field-integer-activity', fieldIntegerActivity], ['field-integer-grouping', fieldIntegerGrouping], ['field-integer-bounds', fieldIntegerBounds], ['field-integer-nulls', fieldIntegerNulls], ['field-integer-fixed', fieldIntegerFixed], ['aggregate-integer-direct', aggregateIntegerDirect], ['aggregate-integer-frames', aggregateIntegerFrames], ['aggregate-integer-activity', aggregateIntegerActivity], ['aggregate-integer-statistics', aggregateIntegerStatistics], ['aggregate-integer-distinct', aggregateIntegerDistinct], ['aggregate-integer-bounds', aggregateIntegerBounds], ['aggregate-integer-strict', aggregateIntegerStrict], ['window-phase-owners', windowPhaseOwners], ['window-phase-metadata', windowPhaseMetadata], ['window-phase-activity', windowPhaseActivity], ['window-planning-planning', windowPlanningPlanning], ['window-planning-output', windowPlanningOutput], ['window-planning-edges', windowPlanningEdges], ['window-planning-mixed', windowPlanningMixed], ['window-planning-collation', windowPlanningCollation], ['window-planning-retained-output', windowPlanningRetainedOutput]] as const) test('M5.10: SQL admission matches native: ' + name, async () => {
+for (const [name, fixture] of [['nonrecursive', nonrecursive], ['recursive', recursive], ['order', order], ['names', names], ['spelling', spelling], ['view-target-no-db', noDatabase], ['view-target-controls', controls], ['view-merge', merge], ['view-merge-reuse', mergeReuse], ['view-check', check], ['view-check-reuse', checkReuse], ['view-check-projections', projections], ['view-check-projection-reuse', projectionReuse], ['view-check-fields-admission', fieldAdmission], ['view-updatability', updatability], ['view-updatability-types', updatabilityTypes], ['unary-plus-print', plusPrint], ['unary-plus-diagnostics', plusDiagnostics], ['unary-plus-diagnostic-reuse', plusReuse], ['view-updatability-owners', updatabilityOwners], ['view-updatability-order', updatabilityOrder], ['binary-not-values', binaryNotValues], ['binary-not-parameters', binaryNotParameters], ['binary-not-casts', binaryNotCasts], ['binary-not-bytes', binaryNotBytes], ['binary-not-strict-trans', binaryNotStrictTrans], ['binary-not-strict-all', binaryNotStrictAll], ['binary-bitwise-controls', bitwiseControls], ['binary-bitwise-values', bitwiseValues], ['binary-bitwise-order', bitwiseOrder], ['binary-bitwise-columns', bitwiseColumns], ['binary-bitwise-parameters', bitwiseParameters], ['binary-bitwise-provenance', bitwiseProvenance], ['owned-real-direct', realDirect], ['owned-real-values', realValues], ['owned-real-wrappers', realWrappers], ['owned-real-scalars', realScalars], ['owned-real-readiness', realReadiness], ['owned-real-fields', realFields], ['owned-real-effects', realEffects], ['owned-real-mixed', realMixed], ['owned-real-json', realJson], ['owned-real-strict', realStrict], ['binary-shift-shifts', shiftShifts], ['binary-shift-counts', shiftCounts], ['binary-shift-fields', shiftFields], ['binary-shift-parameters', shiftParameters], ['binary-shift-rounding', shiftRounding], ['owned-integer-direct', integerDirect], ['owned-integer-fields', integerFields], ['owned-integer-scalars', integerScalars], ['owned-integer-parameters', integerParameters], ['owned-integer-wrappers', integerWrappers], ['owned-integer-casts', integerCasts], ['owned-integer-activity', integerActivity], ['literal-integer-direct', literalIntegerDirect], ['literal-integer-edges', literalIntegerEdges], ['literal-integer-holders', literalIntegerHolders], ['field-integer-fields', fieldIntegerFields], ['field-integer-contexts', fieldIntegerContexts], ['field-integer-strict-trans', fieldIntegerStrictTrans], ['field-integer-strict-all', fieldIntegerStrictAll], ['field-integer-activity', fieldIntegerActivity], ['field-integer-grouping', fieldIntegerGrouping], ['field-integer-bounds', fieldIntegerBounds], ['field-integer-nulls', fieldIntegerNulls], ['field-integer-fixed', fieldIntegerFixed], ['aggregate-integer-direct', aggregateIntegerDirect], ['aggregate-integer-frames', aggregateIntegerFrames], ['aggregate-integer-activity', aggregateIntegerActivity], ['aggregate-integer-statistics', aggregateIntegerStatistics], ['aggregate-integer-distinct', aggregateIntegerDistinct], ['aggregate-integer-bounds', aggregateIntegerBounds], ['aggregate-integer-strict', aggregateIntegerStrict], ['window-phase-owners', windowPhaseOwners], ['window-phase-metadata', windowPhaseMetadata], ['window-phase-activity', windowPhaseActivity], ['window-planning-planning', windowPlanningPlanning], ['window-planning-output', windowPlanningOutput], ['window-planning-edges', windowPlanningEdges], ['window-planning-mixed', windowPlanningMixed], ['window-planning-collation', windowPlanningCollation], ['window-planning-retained-output', windowPlanningRetainedOutput], ['window-materialization-materialized', materializationMaterialized], ['window-materialization-limits', materializationLimits], ['window-materialization-contexts', materializationContexts], ['window-materialization-effects', materializationEffects], ['window-materialization-retained', materializationRetained], ['window-materialization-failures', materializationFailures], ['window-materialization-group-effects', materializationGroupEffects], ['window-materialization-parameters', materializationParameters]] as const) test('M5.10: SQL admission matches native: ' + name, async () => {
   const { c, db } = await connection()
   const schema = 'schema' in fixture ? fixture.schema : undefined
   let created = false
@@ -224,7 +239,7 @@ for (const [name, fixture] of [['nonrecursive', nonrecursive], ['recursive', rec
       await c.query('SET max_error_count=?', [limit])
       await c.query(fixture.seed)
       const parameters = 'params' in expected ? parametersOf(expected.params) : []
-      const actual = await observe(c, sql, api, parameters)
+      const actual = await observe(c, sql, api, parameters, 'headers' in expected)
       let data: unknown = null
       if ('definitions' in fixture && 'kind' in expected) {
         const name = expected.kind === 'VIEW' ? fixture.definitions.view : fixture.definitions.table
@@ -248,9 +263,8 @@ for (const [name, fixture] of [['nonrecursive', nonrecursive], ['recursive', rec
   }
 })
 
-test('M5.10: constant-input plan structure and fields match native', async () => {
+for (const fixture of [windowPlanningPlans, materializationPlans]) test('M5.10: constant-input plan structure and fields match native: ' + fixture.schema, async () => {
   const { c, db } = await connection()
-  const fixture = windowPlanningPlans
   const withoutCosts = (rows: unknown) => Array.isArray(rows) ? rows.map((row: unknown) => Array.isArray(row) ? row.map((cell: unknown) => typeof cell === 'string' ? cell.replace(/ {2}\(cost=[^)]*\)/g, '') : cell) : row) : rows
   let created = false
   try {

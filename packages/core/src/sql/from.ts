@@ -76,7 +76,7 @@ export interface DerivedSource {
    * rows through a temporary table, as over any join.
    */
   readonly joined?: boolean
-  /** A query with no FROM: one constant row at most, which the server reads while planning, as a constant table. */
+  /** Noncorrelated constant input or a proved singleton materialization reader, read while planning. */
   readonly constant?: boolean
   /** Merged into the query that reads it (`derived_merge`), rather than materialized. */
   readonly merged?: boolean

@@ -1,0 +1,3101 @@
+{
+  "mysqlVersion": "8.4.11",
+  "schema": "myjs_window272_retained",
+  "sqlMode": "ERROR_FOR_DIVISION_BY_ZERO",
+  "seed": "SELECT 1/0,CAST('x' AS DECIMAL)",
+  "setup": [
+    "CREATE TABLE t(id INT PRIMARY KEY,d DOUBLE)"
+  ],
+  "beforeEach": [],
+  "reuse": true,
+  "observations": [
+    {
+      "sql": "SELECT q.id,SUM(q.d) OVER (PARTITION BY q.id) AS v FROM (SELECT id,d FROM t WHERE id>? ORDER BY id LIMIT 0) q ORDER BY q.id",
+      "api": "execute",
+      "params": [
+        1
+      ],
+      "before": [
+        "DELETE FROM t",
+        "INSERT INTO t VALUES(1,2.5),(2,1e30),(3,-1e30),(4,NULL)"
+      ],
+      "rows": [],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          4097,
+          0,
+          63,
+          "myjs_window272_retained",
+          "q",
+          "t",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT q.id,SUM(q.d) OVER (PARTITION BY q.id) AS v FROM (SELECT id,d FROM t WHERE id>? ORDER BY id LIMIT 0) q ORDER BY q.id",
+      "api": "execute",
+      "params": [
+        2
+      ],
+      "before": [],
+      "rows": [],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          4097,
+          0,
+          63,
+          "myjs_window272_retained",
+          "q",
+          "t",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT q.id,SUM(q.d) OVER (PARTITION BY q.id) AS v FROM (SELECT id,d FROM t WHERE id>? ORDER BY id LIMIT 0) q ORDER BY q.id",
+      "api": "execute",
+      "params": [
+        98
+      ],
+      "before": [],
+      "rows": [],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          4097,
+          0,
+          63,
+          "myjs_window272_retained",
+          "q",
+          "t",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT q.id,SUM(q.d) OVER (PARTITION BY q.id) AS v FROM (SELECT id,d FROM t WHERE id>? ORDER BY id LIMIT 0) q ORDER BY q.id",
+      "api": "execute",
+      "params": [
+        1
+      ],
+      "before": [
+        "DELETE FROM t WHERE id=2"
+      ],
+      "rows": [],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          4097,
+          0,
+          63,
+          "myjs_window272_retained",
+          "q",
+          "t",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT q.id,SUM(q.d) OVER (PARTITION BY q.id) AS v FROM (SELECT id,d FROM t WHERE id>? ORDER BY id LIMIT 0) q ORDER BY q.id",
+      "api": "execute",
+      "params": [
+        1
+      ],
+      "before": [
+        "INSERT INTO t VALUES(2,2.5)"
+      ],
+      "rows": [],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          4097,
+          0,
+          63,
+          "myjs_window272_retained",
+          "q",
+          "t",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT q.id,SUM(q.d) OVER (PARTITION BY q.id) AS v FROM (SELECT id,d FROM t WHERE id>? ORDER BY id LIMIT 0) q ORDER BY q.id",
+      "api": "execute",
+      "params": [
+        1
+      ],
+      "before": [
+        "UPDATE t SET d=1e30 WHERE id=2"
+      ],
+      "rows": [],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          4097,
+          0,
+          63,
+          "myjs_window272_retained",
+          "q",
+          "t",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT q.id,SUM(q.d) OVER (PARTITION BY q.id) AS v FROM (SELECT id,d FROM t WHERE id>? ORDER BY id LIMIT 0) q ORDER BY q.id",
+      "api": "execute",
+      "params": [
+        1
+      ],
+      "before": [],
+      "rows": [],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          4097,
+          0,
+          63,
+          "myjs_window272_retained",
+          "q",
+          "t",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT q.id,SUM(q.d) OVER (PARTITION BY q.id) AS v FROM (SELECT id,d FROM t WHERE id>? ORDER BY id LIMIT 0) q ORDER BY q.id",
+      "api": "execute",
+      "params": [
+        1
+      ],
+      "before": [
+        "DELETE FROM t"
+      ],
+      "rows": [],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          4097,
+          0,
+          63,
+          "myjs_window272_retained",
+          "q",
+          "t",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT q.id,SUM(q.d) OVER (PARTITION BY q.id) AS v FROM (SELECT id,d FROM t WHERE id>? ORDER BY id LIMIT 0) q ORDER BY q.id",
+      "api": "execute",
+      "params": [
+        1
+      ],
+      "before": [
+        "INSERT INTO t VALUES(1,2.5),(2,-1e30)"
+      ],
+      "rows": [],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          4097,
+          0,
+          63,
+          "myjs_window272_retained",
+          "q",
+          "t",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT q.id,SUM(q.d) OVER (PARTITION BY q.id) AS v FROM (SELECT id,d FROM t WHERE id>? ORDER BY id LIMIT 1) q ORDER BY q.id",
+      "api": "execute",
+      "params": [
+        1
+      ],
+      "before": [
+        "DELETE FROM t",
+        "INSERT INTO t VALUES(1,2.5),(2,1e30),(3,-1e30),(4,NULL)"
+      ],
+      "rows": [
+        [
+          2,
+          1e+30
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          4097,
+          0,
+          63,
+          "myjs_window272_retained",
+          "q",
+          "t",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT q.id,SUM(q.d) OVER (PARTITION BY q.id) AS v FROM (SELECT id,d FROM t WHERE id>? ORDER BY id LIMIT 1) q ORDER BY q.id",
+      "api": "execute",
+      "params": [
+        2
+      ],
+      "before": [],
+      "rows": [
+        [
+          3,
+          -1e+30
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          4097,
+          0,
+          63,
+          "myjs_window272_retained",
+          "q",
+          "t",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT q.id,SUM(q.d) OVER (PARTITION BY q.id) AS v FROM (SELECT id,d FROM t WHERE id>? ORDER BY id LIMIT 1) q ORDER BY q.id",
+      "api": "execute",
+      "params": [
+        98
+      ],
+      "before": [],
+      "rows": [],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          4097,
+          0,
+          63,
+          "myjs_window272_retained",
+          "q",
+          "t",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT q.id,SUM(q.d) OVER (PARTITION BY q.id) AS v FROM (SELECT id,d FROM t WHERE id>? ORDER BY id LIMIT 1) q ORDER BY q.id",
+      "api": "execute",
+      "params": [
+        1
+      ],
+      "before": [
+        "DELETE FROM t WHERE id=2"
+      ],
+      "rows": [
+        [
+          3,
+          -1e+30
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          4097,
+          0,
+          63,
+          "myjs_window272_retained",
+          "q",
+          "t",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT q.id,SUM(q.d) OVER (PARTITION BY q.id) AS v FROM (SELECT id,d FROM t WHERE id>? ORDER BY id LIMIT 1) q ORDER BY q.id",
+      "api": "execute",
+      "params": [
+        1
+      ],
+      "before": [
+        "INSERT INTO t VALUES(2,2.5)"
+      ],
+      "rows": [
+        [
+          2,
+          2.5
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          4097,
+          0,
+          63,
+          "myjs_window272_retained",
+          "q",
+          "t",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT q.id,SUM(q.d) OVER (PARTITION BY q.id) AS v FROM (SELECT id,d FROM t WHERE id>? ORDER BY id LIMIT 1) q ORDER BY q.id",
+      "api": "execute",
+      "params": [
+        1
+      ],
+      "before": [
+        "UPDATE t SET d=1e30 WHERE id=2"
+      ],
+      "rows": [
+        [
+          2,
+          1e+30
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          4097,
+          0,
+          63,
+          "myjs_window272_retained",
+          "q",
+          "t",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT q.id,SUM(q.d) OVER (PARTITION BY q.id) AS v FROM (SELECT id,d FROM t WHERE id>? ORDER BY id LIMIT 1) q ORDER BY q.id",
+      "api": "execute",
+      "params": [
+        1
+      ],
+      "before": [],
+      "rows": [
+        [
+          2,
+          1e+30
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          4097,
+          0,
+          63,
+          "myjs_window272_retained",
+          "q",
+          "t",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT q.id,SUM(q.d) OVER (PARTITION BY q.id) AS v FROM (SELECT id,d FROM t WHERE id>? ORDER BY id LIMIT 1) q ORDER BY q.id",
+      "api": "execute",
+      "params": [
+        1
+      ],
+      "before": [
+        "DELETE FROM t"
+      ],
+      "rows": [],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          4097,
+          0,
+          63,
+          "myjs_window272_retained",
+          "q",
+          "t",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT q.id,SUM(q.d) OVER (PARTITION BY q.id) AS v FROM (SELECT id,d FROM t WHERE id>? ORDER BY id LIMIT 1) q ORDER BY q.id",
+      "api": "execute",
+      "params": [
+        1
+      ],
+      "before": [
+        "INSERT INTO t VALUES(1,2.5),(2,-1e30)"
+      ],
+      "rows": [
+        [
+          2,
+          -1e+30
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          4097,
+          0,
+          63,
+          "myjs_window272_retained",
+          "q",
+          "t",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT q.id,SUM(q.d) OVER (PARTITION BY q.id) AS v FROM (SELECT id,d FROM t WHERE id>? ORDER BY id LIMIT 2) q ORDER BY q.id",
+      "api": "execute",
+      "params": [
+        1
+      ],
+      "before": [
+        "DELETE FROM t",
+        "INSERT INTO t VALUES(1,2.5),(2,1e30),(3,-1e30),(4,NULL)"
+      ],
+      "rows": [
+        [
+          2,
+          1e+30
+        ],
+        [
+          3,
+          -1e+30
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          4097,
+          0,
+          63,
+          "myjs_window272_retained",
+          "q",
+          "t",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          0,
+          31,
+          63,
+          "",
+          "",
+          "",
+          "v"
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT q.id,SUM(q.d) OVER (PARTITION BY q.id) AS v FROM (SELECT id,d FROM t WHERE id>? ORDER BY id LIMIT 2) q ORDER BY q.id",
+      "api": "execute",
+      "params": [
+        2
+      ],
+      "before": [],
+      "rows": [
+        [
+          3,
+          -1e+30
+        ],
+        [
+          4,
+          null
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          4097,
+          0,
+          63,
+          "myjs_window272_retained",
+          "q",
+          "t",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          0,
+          31,
+          63,
+          "",
+          "",
+          "",
+          "v"
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT q.id,SUM(q.d) OVER (PARTITION BY q.id) AS v FROM (SELECT id,d FROM t WHERE id>? ORDER BY id LIMIT 2) q ORDER BY q.id",
+      "api": "execute",
+      "params": [
+        98
+      ],
+      "before": [],
+      "rows": [],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          4097,
+          0,
+          63,
+          "myjs_window272_retained",
+          "q",
+          "t",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          0,
+          31,
+          63,
+          "",
+          "",
+          "",
+          "v"
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT q.id,SUM(q.d) OVER (PARTITION BY q.id) AS v FROM (SELECT id,d FROM t WHERE id>? ORDER BY id LIMIT 2) q ORDER BY q.id",
+      "api": "execute",
+      "params": [
+        1
+      ],
+      "before": [
+        "DELETE FROM t WHERE id=2"
+      ],
+      "rows": [
+        [
+          3,
+          -1e+30
+        ],
+        [
+          4,
+          null
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          4097,
+          0,
+          63,
+          "myjs_window272_retained",
+          "q",
+          "t",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          0,
+          31,
+          63,
+          "",
+          "",
+          "",
+          "v"
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT q.id,SUM(q.d) OVER (PARTITION BY q.id) AS v FROM (SELECT id,d FROM t WHERE id>? ORDER BY id LIMIT 2) q ORDER BY q.id",
+      "api": "execute",
+      "params": [
+        1
+      ],
+      "before": [
+        "INSERT INTO t VALUES(2,2.5)"
+      ],
+      "rows": [
+        [
+          2,
+          2.5
+        ],
+        [
+          3,
+          -1e+30
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          4097,
+          0,
+          63,
+          "myjs_window272_retained",
+          "q",
+          "t",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          0,
+          31,
+          63,
+          "",
+          "",
+          "",
+          "v"
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT q.id,SUM(q.d) OVER (PARTITION BY q.id) AS v FROM (SELECT id,d FROM t WHERE id>? ORDER BY id LIMIT 2) q ORDER BY q.id",
+      "api": "execute",
+      "params": [
+        1
+      ],
+      "before": [
+        "UPDATE t SET d=1e30 WHERE id=2"
+      ],
+      "rows": [
+        [
+          2,
+          1e+30
+        ],
+        [
+          3,
+          -1e+30
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          4097,
+          0,
+          63,
+          "myjs_window272_retained",
+          "q",
+          "t",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          0,
+          31,
+          63,
+          "",
+          "",
+          "",
+          "v"
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT q.id,SUM(q.d) OVER (PARTITION BY q.id) AS v FROM (SELECT id,d FROM t WHERE id>? ORDER BY id LIMIT 2) q ORDER BY q.id",
+      "api": "execute",
+      "params": [
+        1
+      ],
+      "before": [],
+      "rows": [
+        [
+          2,
+          1e+30
+        ],
+        [
+          3,
+          -1e+30
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          4097,
+          0,
+          63,
+          "myjs_window272_retained",
+          "q",
+          "t",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          0,
+          31,
+          63,
+          "",
+          "",
+          "",
+          "v"
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT q.id,SUM(q.d) OVER (PARTITION BY q.id) AS v FROM (SELECT id,d FROM t WHERE id>? ORDER BY id LIMIT 2) q ORDER BY q.id",
+      "api": "execute",
+      "params": [
+        1
+      ],
+      "before": [
+        "DELETE FROM t"
+      ],
+      "rows": [],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          4097,
+          0,
+          63,
+          "myjs_window272_retained",
+          "q",
+          "t",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          0,
+          31,
+          63,
+          "",
+          "",
+          "",
+          "v"
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT q.id,SUM(q.d) OVER (PARTITION BY q.id) AS v FROM (SELECT id,d FROM t WHERE id>? ORDER BY id LIMIT 2) q ORDER BY q.id",
+      "api": "execute",
+      "params": [
+        1
+      ],
+      "before": [
+        "INSERT INTO t VALUES(1,2.5),(2,-1e30)"
+      ],
+      "rows": [
+        [
+          2,
+          -1e+30
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          4097,
+          0,
+          63,
+          "myjs_window272_retained",
+          "q",
+          "t",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          0,
+          31,
+          63,
+          "",
+          "",
+          "",
+          "v"
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT q.id,SUM(q.d) OVER (PARTITION BY q.id) AS v FROM (SELECT id,d FROM t WHERE id>? ORDER BY id LIMIT 1 OFFSET 1) q ORDER BY q.id",
+      "api": "execute",
+      "params": [
+        1
+      ],
+      "before": [
+        "DELETE FROM t",
+        "INSERT INTO t VALUES(1,2.5),(2,1e30),(3,-1e30),(4,NULL)"
+      ],
+      "rows": [
+        [
+          3,
+          -1e+30
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          4097,
+          0,
+          63,
+          "myjs_window272_retained",
+          "q",
+          "t",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          0,
+          31,
+          63,
+          "",
+          "",
+          "",
+          "v"
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT q.id,SUM(q.d) OVER (PARTITION BY q.id) AS v FROM (SELECT id,d FROM t WHERE id>? ORDER BY id LIMIT 1 OFFSET 1) q ORDER BY q.id",
+      "api": "execute",
+      "params": [
+        2
+      ],
+      "before": [],
+      "rows": [
+        [
+          4,
+          null
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          4097,
+          0,
+          63,
+          "myjs_window272_retained",
+          "q",
+          "t",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          0,
+          31,
+          63,
+          "",
+          "",
+          "",
+          "v"
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT q.id,SUM(q.d) OVER (PARTITION BY q.id) AS v FROM (SELECT id,d FROM t WHERE id>? ORDER BY id LIMIT 1 OFFSET 1) q ORDER BY q.id",
+      "api": "execute",
+      "params": [
+        98
+      ],
+      "before": [],
+      "rows": [],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          4097,
+          0,
+          63,
+          "myjs_window272_retained",
+          "q",
+          "t",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          0,
+          31,
+          63,
+          "",
+          "",
+          "",
+          "v"
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT q.id,SUM(q.d) OVER (PARTITION BY q.id) AS v FROM (SELECT id,d FROM t WHERE id>? ORDER BY id LIMIT 1 OFFSET 1) q ORDER BY q.id",
+      "api": "execute",
+      "params": [
+        1
+      ],
+      "before": [
+        "DELETE FROM t WHERE id=2"
+      ],
+      "rows": [
+        [
+          4,
+          null
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          4097,
+          0,
+          63,
+          "myjs_window272_retained",
+          "q",
+          "t",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          0,
+          31,
+          63,
+          "",
+          "",
+          "",
+          "v"
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT q.id,SUM(q.d) OVER (PARTITION BY q.id) AS v FROM (SELECT id,d FROM t WHERE id>? ORDER BY id LIMIT 1 OFFSET 1) q ORDER BY q.id",
+      "api": "execute",
+      "params": [
+        1
+      ],
+      "before": [
+        "INSERT INTO t VALUES(2,2.5)"
+      ],
+      "rows": [
+        [
+          3,
+          -1e+30
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          4097,
+          0,
+          63,
+          "myjs_window272_retained",
+          "q",
+          "t",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          0,
+          31,
+          63,
+          "",
+          "",
+          "",
+          "v"
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT q.id,SUM(q.d) OVER (PARTITION BY q.id) AS v FROM (SELECT id,d FROM t WHERE id>? ORDER BY id LIMIT 1 OFFSET 1) q ORDER BY q.id",
+      "api": "execute",
+      "params": [
+        1
+      ],
+      "before": [
+        "UPDATE t SET d=1e30 WHERE id=2"
+      ],
+      "rows": [
+        [
+          3,
+          -1e+30
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          4097,
+          0,
+          63,
+          "myjs_window272_retained",
+          "q",
+          "t",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          0,
+          31,
+          63,
+          "",
+          "",
+          "",
+          "v"
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT q.id,SUM(q.d) OVER (PARTITION BY q.id) AS v FROM (SELECT id,d FROM t WHERE id>? ORDER BY id LIMIT 1 OFFSET 1) q ORDER BY q.id",
+      "api": "execute",
+      "params": [
+        1
+      ],
+      "before": [],
+      "rows": [
+        [
+          3,
+          -1e+30
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          4097,
+          0,
+          63,
+          "myjs_window272_retained",
+          "q",
+          "t",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          0,
+          31,
+          63,
+          "",
+          "",
+          "",
+          "v"
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT q.id,SUM(q.d) OVER (PARTITION BY q.id) AS v FROM (SELECT id,d FROM t WHERE id>? ORDER BY id LIMIT 1 OFFSET 1) q ORDER BY q.id",
+      "api": "execute",
+      "params": [
+        1
+      ],
+      "before": [
+        "DELETE FROM t"
+      ],
+      "rows": [],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          4097,
+          0,
+          63,
+          "myjs_window272_retained",
+          "q",
+          "t",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          0,
+          31,
+          63,
+          "",
+          "",
+          "",
+          "v"
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT q.id,SUM(q.d) OVER (PARTITION BY q.id) AS v FROM (SELECT id,d FROM t WHERE id>? ORDER BY id LIMIT 1 OFFSET 1) q ORDER BY q.id",
+      "api": "execute",
+      "params": [
+        1
+      ],
+      "before": [
+        "INSERT INTO t VALUES(1,2.5),(2,-1e30)"
+      ],
+      "rows": [],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          4097,
+          0,
+          63,
+          "myjs_window272_retained",
+          "q",
+          "t",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          23,
+          0,
+          31,
+          63,
+          "",
+          "",
+          "",
+          "v"
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT q.id,MIN(q.d) OVER (PARTITION BY q.id) AS v FROM (SELECT id,d FROM t WHERE id>? ORDER BY id LIMIT 0) q ORDER BY q.id",
+      "api": "execute",
+      "params": [
+        1
+      ],
+      "before": [
+        "DELETE FROM t",
+        "INSERT INTO t VALUES(1,2.5),(2,1e30),(3,-1e30),(4,NULL)"
+      ],
+      "rows": [],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          4097,
+          0,
+          63,
+          "myjs_window272_retained",
+          "q",
+          "t",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          22,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT q.id,MIN(q.d) OVER (PARTITION BY q.id) AS v FROM (SELECT id,d FROM t WHERE id>? ORDER BY id LIMIT 0) q ORDER BY q.id",
+      "api": "execute",
+      "params": [
+        2
+      ],
+      "before": [],
+      "rows": [],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          4097,
+          0,
+          63,
+          "myjs_window272_retained",
+          "q",
+          "t",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          22,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT q.id,MIN(q.d) OVER (PARTITION BY q.id) AS v FROM (SELECT id,d FROM t WHERE id>? ORDER BY id LIMIT 0) q ORDER BY q.id",
+      "api": "execute",
+      "params": [
+        98
+      ],
+      "before": [],
+      "rows": [],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          4097,
+          0,
+          63,
+          "myjs_window272_retained",
+          "q",
+          "t",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          22,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT q.id,MIN(q.d) OVER (PARTITION BY q.id) AS v FROM (SELECT id,d FROM t WHERE id>? ORDER BY id LIMIT 0) q ORDER BY q.id",
+      "api": "execute",
+      "params": [
+        1
+      ],
+      "before": [
+        "DELETE FROM t WHERE id=2"
+      ],
+      "rows": [],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          4097,
+          0,
+          63,
+          "myjs_window272_retained",
+          "q",
+          "t",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          22,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT q.id,MIN(q.d) OVER (PARTITION BY q.id) AS v FROM (SELECT id,d FROM t WHERE id>? ORDER BY id LIMIT 0) q ORDER BY q.id",
+      "api": "execute",
+      "params": [
+        1
+      ],
+      "before": [
+        "INSERT INTO t VALUES(2,2.5)"
+      ],
+      "rows": [],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          4097,
+          0,
+          63,
+          "myjs_window272_retained",
+          "q",
+          "t",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          22,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT q.id,MIN(q.d) OVER (PARTITION BY q.id) AS v FROM (SELECT id,d FROM t WHERE id>? ORDER BY id LIMIT 0) q ORDER BY q.id",
+      "api": "execute",
+      "params": [
+        1
+      ],
+      "before": [
+        "UPDATE t SET d=1e30 WHERE id=2"
+      ],
+      "rows": [],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          4097,
+          0,
+          63,
+          "myjs_window272_retained",
+          "q",
+          "t",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          22,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT q.id,MIN(q.d) OVER (PARTITION BY q.id) AS v FROM (SELECT id,d FROM t WHERE id>? ORDER BY id LIMIT 0) q ORDER BY q.id",
+      "api": "execute",
+      "params": [
+        1
+      ],
+      "before": [],
+      "rows": [],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          4097,
+          0,
+          63,
+          "myjs_window272_retained",
+          "q",
+          "t",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          22,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT q.id,MIN(q.d) OVER (PARTITION BY q.id) AS v FROM (SELECT id,d FROM t WHERE id>? ORDER BY id LIMIT 0) q ORDER BY q.id",
+      "api": "execute",
+      "params": [
+        1
+      ],
+      "before": [
+        "DELETE FROM t"
+      ],
+      "rows": [],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          4097,
+          0,
+          63,
+          "myjs_window272_retained",
+          "q",
+          "t",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          22,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT q.id,MIN(q.d) OVER (PARTITION BY q.id) AS v FROM (SELECT id,d FROM t WHERE id>? ORDER BY id LIMIT 0) q ORDER BY q.id",
+      "api": "execute",
+      "params": [
+        1
+      ],
+      "before": [
+        "INSERT INTO t VALUES(1,2.5),(2,-1e30)"
+      ],
+      "rows": [],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          4097,
+          0,
+          63,
+          "myjs_window272_retained",
+          "q",
+          "t",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          22,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT q.id,MIN(q.d) OVER (PARTITION BY q.id) AS v FROM (SELECT id,d FROM t WHERE id>? ORDER BY id LIMIT 1) q ORDER BY q.id",
+      "api": "execute",
+      "params": [
+        1
+      ],
+      "before": [
+        "DELETE FROM t",
+        "INSERT INTO t VALUES(1,2.5),(2,1e30),(3,-1e30),(4,NULL)"
+      ],
+      "rows": [
+        [
+          2,
+          1e+30
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          4097,
+          0,
+          63,
+          "myjs_window272_retained",
+          "q",
+          "t",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          22,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT q.id,MIN(q.d) OVER (PARTITION BY q.id) AS v FROM (SELECT id,d FROM t WHERE id>? ORDER BY id LIMIT 1) q ORDER BY q.id",
+      "api": "execute",
+      "params": [
+        2
+      ],
+      "before": [],
+      "rows": [
+        [
+          3,
+          -1e+30
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          4097,
+          0,
+          63,
+          "myjs_window272_retained",
+          "q",
+          "t",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          22,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT q.id,MIN(q.d) OVER (PARTITION BY q.id) AS v FROM (SELECT id,d FROM t WHERE id>? ORDER BY id LIMIT 1) q ORDER BY q.id",
+      "api": "execute",
+      "params": [
+        98
+      ],
+      "before": [],
+      "rows": [],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          4097,
+          0,
+          63,
+          "myjs_window272_retained",
+          "q",
+          "t",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          22,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT q.id,MIN(q.d) OVER (PARTITION BY q.id) AS v FROM (SELECT id,d FROM t WHERE id>? ORDER BY id LIMIT 1) q ORDER BY q.id",
+      "api": "execute",
+      "params": [
+        1
+      ],
+      "before": [
+        "DELETE FROM t WHERE id=2"
+      ],
+      "rows": [
+        [
+          3,
+          -1e+30
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          4097,
+          0,
+          63,
+          "myjs_window272_retained",
+          "q",
+          "t",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          22,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT q.id,MIN(q.d) OVER (PARTITION BY q.id) AS v FROM (SELECT id,d FROM t WHERE id>? ORDER BY id LIMIT 1) q ORDER BY q.id",
+      "api": "execute",
+      "params": [
+        1
+      ],
+      "before": [
+        "INSERT INTO t VALUES(2,2.5)"
+      ],
+      "rows": [
+        [
+          2,
+          2.5
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          4097,
+          0,
+          63,
+          "myjs_window272_retained",
+          "q",
+          "t",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          22,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT q.id,MIN(q.d) OVER (PARTITION BY q.id) AS v FROM (SELECT id,d FROM t WHERE id>? ORDER BY id LIMIT 1) q ORDER BY q.id",
+      "api": "execute",
+      "params": [
+        1
+      ],
+      "before": [
+        "UPDATE t SET d=1e30 WHERE id=2"
+      ],
+      "rows": [
+        [
+          2,
+          1e+30
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          4097,
+          0,
+          63,
+          "myjs_window272_retained",
+          "q",
+          "t",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          22,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT q.id,MIN(q.d) OVER (PARTITION BY q.id) AS v FROM (SELECT id,d FROM t WHERE id>? ORDER BY id LIMIT 1) q ORDER BY q.id",
+      "api": "execute",
+      "params": [
+        1
+      ],
+      "before": [],
+      "rows": [
+        [
+          2,
+          1e+30
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          4097,
+          0,
+          63,
+          "myjs_window272_retained",
+          "q",
+          "t",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          22,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT q.id,MIN(q.d) OVER (PARTITION BY q.id) AS v FROM (SELECT id,d FROM t WHERE id>? ORDER BY id LIMIT 1) q ORDER BY q.id",
+      "api": "execute",
+      "params": [
+        1
+      ],
+      "before": [
+        "DELETE FROM t"
+      ],
+      "rows": [],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          4097,
+          0,
+          63,
+          "myjs_window272_retained",
+          "q",
+          "t",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          22,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT q.id,MIN(q.d) OVER (PARTITION BY q.id) AS v FROM (SELECT id,d FROM t WHERE id>? ORDER BY id LIMIT 1) q ORDER BY q.id",
+      "api": "execute",
+      "params": [
+        1
+      ],
+      "before": [
+        "INSERT INTO t VALUES(1,2.5),(2,-1e30)"
+      ],
+      "rows": [
+        [
+          2,
+          -1e+30
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          4097,
+          0,
+          63,
+          "myjs_window272_retained",
+          "q",
+          "t",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          22,
+          128,
+          31,
+          63,
+          "",
+          "",
+          "",
+          ""
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT q.id,MIN(q.d) OVER (PARTITION BY q.id) AS v FROM (SELECT id,d FROM t WHERE id>? ORDER BY id LIMIT 2) q ORDER BY q.id",
+      "api": "execute",
+      "params": [
+        1
+      ],
+      "before": [
+        "DELETE FROM t",
+        "INSERT INTO t VALUES(1,2.5),(2,1e30),(3,-1e30),(4,NULL)"
+      ],
+      "rows": [
+        [
+          2,
+          1e+30
+        ],
+        [
+          3,
+          -1e+30
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          4097,
+          0,
+          63,
+          "myjs_window272_retained",
+          "q",
+          "t",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          22,
+          0,
+          31,
+          63,
+          "",
+          "",
+          "",
+          "v"
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT q.id,MIN(q.d) OVER (PARTITION BY q.id) AS v FROM (SELECT id,d FROM t WHERE id>? ORDER BY id LIMIT 2) q ORDER BY q.id",
+      "api": "execute",
+      "params": [
+        2
+      ],
+      "before": [],
+      "rows": [
+        [
+          3,
+          -1e+30
+        ],
+        [
+          4,
+          null
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          4097,
+          0,
+          63,
+          "myjs_window272_retained",
+          "q",
+          "t",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          22,
+          0,
+          31,
+          63,
+          "",
+          "",
+          "",
+          "v"
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT q.id,MIN(q.d) OVER (PARTITION BY q.id) AS v FROM (SELECT id,d FROM t WHERE id>? ORDER BY id LIMIT 2) q ORDER BY q.id",
+      "api": "execute",
+      "params": [
+        98
+      ],
+      "before": [],
+      "rows": [],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          4097,
+          0,
+          63,
+          "myjs_window272_retained",
+          "q",
+          "t",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          22,
+          0,
+          31,
+          63,
+          "",
+          "",
+          "",
+          "v"
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT q.id,MIN(q.d) OVER (PARTITION BY q.id) AS v FROM (SELECT id,d FROM t WHERE id>? ORDER BY id LIMIT 2) q ORDER BY q.id",
+      "api": "execute",
+      "params": [
+        1
+      ],
+      "before": [
+        "DELETE FROM t WHERE id=2"
+      ],
+      "rows": [
+        [
+          3,
+          -1e+30
+        ],
+        [
+          4,
+          null
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          4097,
+          0,
+          63,
+          "myjs_window272_retained",
+          "q",
+          "t",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          22,
+          0,
+          31,
+          63,
+          "",
+          "",
+          "",
+          "v"
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT q.id,MIN(q.d) OVER (PARTITION BY q.id) AS v FROM (SELECT id,d FROM t WHERE id>? ORDER BY id LIMIT 2) q ORDER BY q.id",
+      "api": "execute",
+      "params": [
+        1
+      ],
+      "before": [
+        "INSERT INTO t VALUES(2,2.5)"
+      ],
+      "rows": [
+        [
+          2,
+          2.5
+        ],
+        [
+          3,
+          -1e+30
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          4097,
+          0,
+          63,
+          "myjs_window272_retained",
+          "q",
+          "t",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          22,
+          0,
+          31,
+          63,
+          "",
+          "",
+          "",
+          "v"
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT q.id,MIN(q.d) OVER (PARTITION BY q.id) AS v FROM (SELECT id,d FROM t WHERE id>? ORDER BY id LIMIT 2) q ORDER BY q.id",
+      "api": "execute",
+      "params": [
+        1
+      ],
+      "before": [
+        "UPDATE t SET d=1e30 WHERE id=2"
+      ],
+      "rows": [
+        [
+          2,
+          1e+30
+        ],
+        [
+          3,
+          -1e+30
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          4097,
+          0,
+          63,
+          "myjs_window272_retained",
+          "q",
+          "t",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          22,
+          0,
+          31,
+          63,
+          "",
+          "",
+          "",
+          "v"
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT q.id,MIN(q.d) OVER (PARTITION BY q.id) AS v FROM (SELECT id,d FROM t WHERE id>? ORDER BY id LIMIT 2) q ORDER BY q.id",
+      "api": "execute",
+      "params": [
+        1
+      ],
+      "before": [],
+      "rows": [
+        [
+          2,
+          1e+30
+        ],
+        [
+          3,
+          -1e+30
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          4097,
+          0,
+          63,
+          "myjs_window272_retained",
+          "q",
+          "t",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          22,
+          0,
+          31,
+          63,
+          "",
+          "",
+          "",
+          "v"
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT q.id,MIN(q.d) OVER (PARTITION BY q.id) AS v FROM (SELECT id,d FROM t WHERE id>? ORDER BY id LIMIT 2) q ORDER BY q.id",
+      "api": "execute",
+      "params": [
+        1
+      ],
+      "before": [
+        "DELETE FROM t"
+      ],
+      "rows": [],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          4097,
+          0,
+          63,
+          "myjs_window272_retained",
+          "q",
+          "t",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          22,
+          0,
+          31,
+          63,
+          "",
+          "",
+          "",
+          "v"
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT q.id,MIN(q.d) OVER (PARTITION BY q.id) AS v FROM (SELECT id,d FROM t WHERE id>? ORDER BY id LIMIT 2) q ORDER BY q.id",
+      "api": "execute",
+      "params": [
+        1
+      ],
+      "before": [
+        "INSERT INTO t VALUES(1,2.5),(2,-1e30)"
+      ],
+      "rows": [
+        [
+          2,
+          -1e+30
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          4097,
+          0,
+          63,
+          "myjs_window272_retained",
+          "q",
+          "t",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          22,
+          0,
+          31,
+          63,
+          "",
+          "",
+          "",
+          "v"
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT q.id,MIN(q.d) OVER (PARTITION BY q.id) AS v FROM (SELECT id,d FROM t WHERE id>? ORDER BY id LIMIT 1 OFFSET 1) q ORDER BY q.id",
+      "api": "execute",
+      "params": [
+        1
+      ],
+      "before": [
+        "DELETE FROM t",
+        "INSERT INTO t VALUES(1,2.5),(2,1e30),(3,-1e30),(4,NULL)"
+      ],
+      "rows": [
+        [
+          3,
+          -1e+30
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          4097,
+          0,
+          63,
+          "myjs_window272_retained",
+          "q",
+          "t",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          22,
+          0,
+          31,
+          63,
+          "",
+          "",
+          "",
+          "v"
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT q.id,MIN(q.d) OVER (PARTITION BY q.id) AS v FROM (SELECT id,d FROM t WHERE id>? ORDER BY id LIMIT 1 OFFSET 1) q ORDER BY q.id",
+      "api": "execute",
+      "params": [
+        2
+      ],
+      "before": [],
+      "rows": [
+        [
+          4,
+          null
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          4097,
+          0,
+          63,
+          "myjs_window272_retained",
+          "q",
+          "t",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          22,
+          0,
+          31,
+          63,
+          "",
+          "",
+          "",
+          "v"
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT q.id,MIN(q.d) OVER (PARTITION BY q.id) AS v FROM (SELECT id,d FROM t WHERE id>? ORDER BY id LIMIT 1 OFFSET 1) q ORDER BY q.id",
+      "api": "execute",
+      "params": [
+        98
+      ],
+      "before": [],
+      "rows": [],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          4097,
+          0,
+          63,
+          "myjs_window272_retained",
+          "q",
+          "t",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          22,
+          0,
+          31,
+          63,
+          "",
+          "",
+          "",
+          "v"
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT q.id,MIN(q.d) OVER (PARTITION BY q.id) AS v FROM (SELECT id,d FROM t WHERE id>? ORDER BY id LIMIT 1 OFFSET 1) q ORDER BY q.id",
+      "api": "execute",
+      "params": [
+        1
+      ],
+      "before": [
+        "DELETE FROM t WHERE id=2"
+      ],
+      "rows": [
+        [
+          4,
+          null
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          4097,
+          0,
+          63,
+          "myjs_window272_retained",
+          "q",
+          "t",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          22,
+          0,
+          31,
+          63,
+          "",
+          "",
+          "",
+          "v"
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT q.id,MIN(q.d) OVER (PARTITION BY q.id) AS v FROM (SELECT id,d FROM t WHERE id>? ORDER BY id LIMIT 1 OFFSET 1) q ORDER BY q.id",
+      "api": "execute",
+      "params": [
+        1
+      ],
+      "before": [
+        "INSERT INTO t VALUES(2,2.5)"
+      ],
+      "rows": [
+        [
+          3,
+          -1e+30
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          4097,
+          0,
+          63,
+          "myjs_window272_retained",
+          "q",
+          "t",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          22,
+          0,
+          31,
+          63,
+          "",
+          "",
+          "",
+          "v"
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT q.id,MIN(q.d) OVER (PARTITION BY q.id) AS v FROM (SELECT id,d FROM t WHERE id>? ORDER BY id LIMIT 1 OFFSET 1) q ORDER BY q.id",
+      "api": "execute",
+      "params": [
+        1
+      ],
+      "before": [
+        "UPDATE t SET d=1e30 WHERE id=2"
+      ],
+      "rows": [
+        [
+          3,
+          -1e+30
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          4097,
+          0,
+          63,
+          "myjs_window272_retained",
+          "q",
+          "t",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          22,
+          0,
+          31,
+          63,
+          "",
+          "",
+          "",
+          "v"
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT q.id,MIN(q.d) OVER (PARTITION BY q.id) AS v FROM (SELECT id,d FROM t WHERE id>? ORDER BY id LIMIT 1 OFFSET 1) q ORDER BY q.id",
+      "api": "execute",
+      "params": [
+        1
+      ],
+      "before": [],
+      "rows": [
+        [
+          3,
+          -1e+30
+        ]
+      ],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          4097,
+          0,
+          63,
+          "myjs_window272_retained",
+          "q",
+          "t",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          22,
+          0,
+          31,
+          63,
+          "",
+          "",
+          "",
+          "v"
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT q.id,MIN(q.d) OVER (PARTITION BY q.id) AS v FROM (SELECT id,d FROM t WHERE id>? ORDER BY id LIMIT 1 OFFSET 1) q ORDER BY q.id",
+      "api": "execute",
+      "params": [
+        1
+      ],
+      "before": [
+        "DELETE FROM t"
+      ],
+      "rows": [],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          4097,
+          0,
+          63,
+          "myjs_window272_retained",
+          "q",
+          "t",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          22,
+          0,
+          31,
+          63,
+          "",
+          "",
+          "",
+          "v"
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    },
+    {
+      "sql": "SELECT q.id,MIN(q.d) OVER (PARTITION BY q.id) AS v FROM (SELECT id,d FROM t WHERE id>? ORDER BY id LIMIT 1 OFFSET 1) q ORDER BY q.id",
+      "api": "execute",
+      "params": [
+        1
+      ],
+      "before": [
+        "INSERT INTO t VALUES(1,2.5),(2,-1e30)"
+      ],
+      "rows": [],
+      "fields": [
+        [
+          "id",
+          3,
+          11,
+          4097,
+          0,
+          63,
+          "myjs_window272_retained",
+          "q",
+          "t",
+          "id"
+        ],
+        [
+          "v",
+          5,
+          22,
+          0,
+          31,
+          63,
+          "",
+          "",
+          "",
+          "v"
+        ]
+      ],
+      "warnings": [],
+      "warningCount": "0",
+      "errorCount": "0"
+    }
+  ]
+}
